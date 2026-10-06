@@ -7,6 +7,7 @@ import createWorkspace from "@/api/handlers/workspaces/create";
 import addWorkspaceMember from "@/api/handlers/workspaces/members/add";
 import removeWorkspaceMember from "@/api/handlers/workspaces/members/remove";
 import updateWorkspace from "@/api/handlers/workspaces/update";
+import { createFeatureAccessSnapshot } from "@/api/lib/auth/feature-access/policy";
 import { toSafeId } from "@/api/lib/branded-types";
 import { createTestHandlerContext } from "@/api/tests/helpers/handler-context";
 
@@ -55,6 +56,14 @@ describe("account lifecycle handlers", () => {
             Parameters<typeof createWorkspace.handler>[0]
           >({
             user,
+            session: {
+              activeOrganizationId: toSafeId<"organization">("org_account"),
+            },
+            featureAccessSnapshot: createFeatureAccessSnapshot({
+              organizationId: "org_account",
+              userId: user.id,
+              decisions: new Map(),
+            }),
             body: {
               id: toSafeId<"workspace">("workspace_account"),
               clientId: toSafeId<"contact">("contact_account"),

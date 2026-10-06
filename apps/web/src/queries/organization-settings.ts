@@ -40,6 +40,10 @@ const fetchOrganizationSettings = async ({ signal }: QueryFunctionContext) => {
   return unwrapEden(response);
 };
 
+export type OrganizationSettings = Awaited<
+  ReturnType<typeof fetchOrganizationSettings>
+>;
+
 export const organizationSettingsOptions = ({
   organizationId,
   userId,

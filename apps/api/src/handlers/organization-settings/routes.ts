@@ -25,6 +25,7 @@ import previewOrganizationSettings from "@/api/handlers/organization-settings/pr
 import readAIConfig from "@/api/handlers/organization-settings/read-ai-config";
 import readDeepLConfig from "@/api/handlers/organization-settings/read-deepl-config";
 import readWebSearchConfig from "@/api/handlers/organization-settings/read-web-search-config";
+import updateSanctionsMonitoring from "@/api/handlers/organization-settings/sanctions-monitoring/update";
 import updateOrganizationSettings from "@/api/handlers/organization-settings/update";
 import updateAIConfig from "@/api/handlers/organization-settings/update-ai-config";
 import updateDeepLKey from "@/api/handlers/organization-settings/update-deepl-key";
@@ -117,6 +118,10 @@ export const organizationSettingsRoute = new Elysia({
   .post("/", updateOrganizationSettings.handler, {
     body: updateOrganizationSettings.config.body,
     permissions: updateOrganizationSettings.config.permissions,
+  })
+  .post("/sanctions-monitoring", updateSanctionsMonitoring.handler, {
+    permissions: updateSanctionsMonitoring.config.permissions,
+    body: updateSanctionsMonitoring.config.body,
   })
   .post("/practice-jurisdictions", updatePracticeJurisdictions.handler, {
     body: updatePracticeJurisdictions.config.body,

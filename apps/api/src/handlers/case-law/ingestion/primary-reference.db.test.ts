@@ -13,6 +13,12 @@ import { afterAll, beforeAll, expect, test } from "bun:test";
 import { and, asc, eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 
+import {
+  DECISION_TEXT_ABSENCE_METADATA_KEY,
+  DECISION_TEXT_ABSENCE_VERSION_METADATA_KEY,
+  DECISION_TEXT_ABSENCE_SCHEMA_VERSION,
+  DECISION_TEXT_FIELD,
+} from "@stll/api-contract/case-law-text-field";
 import { docketFamilyKeyOf } from "@stll/api-contract/decision-docket-reference";
 import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
 
@@ -334,7 +340,29 @@ test("a docket primary of an existing jurisdiction is stored as it always was", 
   expect(first.docketFamilyKey).toBe("21cdo1234/2020");
   expect(first.languageGroupKey).toBe(`${sourceId}:21 Cdo 1234/2020`);
   expect(first.caseNumberType).toBe(DECISION_IDENTIFIER_TYPES.CASE_NUMBER);
-  expect(first.metadata).toEqual({ chamber: "21" });
+  expect(first.metadata).toEqual({
+    chamber: "21",
+    [DECISION_TEXT_ABSENCE_VERSION_METADATA_KEY]:
+      DECISION_TEXT_ABSENCE_SCHEMA_VERSION,
+    [DECISION_TEXT_ABSENCE_METADATA_KEY]: [
+      {
+        field: DECISION_TEXT_FIELD.ABSTRACT,
+        reason: TEXT_ABSENCE_REASON.NOT_PUBLISHED,
+      },
+      {
+        field: DECISION_TEXT_FIELD.HEADNOTE,
+        reason: TEXT_ABSENCE_REASON.NOT_PUBLISHED,
+      },
+      {
+        field: DECISION_TEXT_FIELD.LEGAL_SENTENCE,
+        reason: TEXT_ABSENCE_REASON.NOT_PUBLISHED,
+      },
+      {
+        field: DECISION_TEXT_FIELD.SUMMARY,
+        reason: TEXT_ABSENCE_REASON.NOT_PUBLISHED,
+      },
+    ],
+  });
   expect(first.identifiers).toEqual([
     {
       type: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,

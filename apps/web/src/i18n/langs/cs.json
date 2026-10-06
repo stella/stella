@@ -54,6 +54,17 @@
       "polish": "Vylepšit znění"
     }
   },
+  "aiColumns": {
+    "countSummary": "{columns} sloupců × {rows} řádků = {answers, plural, one {# odpověď} few {# odpovědi} many {# odpovědi} other {# odpovědí}}. Odpovědi čerpají rozpočet.",
+    "refusedBudget": "Nespuštěno: rozpočet na odpovědi není k dispozici",
+    "rerunAllPage": "Spustit vše znovu (tato stránka)",
+    "rerunColumnPage": "Spustit sloupec znovu (tato stránka)",
+    "runColumnPage": "Spustit sloupec (tato stránka)",
+    "runPageRows": "Spustit pro {count, plural, one {# řádek na této stránce} few {# řádky na této stránce} many {# řádku na této stránce} other {# řádků na této stránce}}",
+    "runRemainingPage": "Spustit zbývající (tato stránka)",
+    "runSelectedRows": "Spustit pro {count, plural, one {# vybraný řádek} few {# vybrané řádky} many {# vybraného řádku} other {# vybraných řádků}}",
+    "selectedRun": "Spustit AI sloupce pro {count, plural, one {# řádek} few {# řádky} many {# řádku} other {# řádků}}"
+  },
   "appearance": {
     "calendar": "Kalendář",
     "calendarGregorian": "Gregoriánský",
@@ -264,6 +275,7 @@
     "runs": {
       "back": "Všechny dokumenty",
       "errors": {
+        "accessRevoked": "Ověřování bylo zastaveno, protože přístup není dostupný.",
         "aiUnavailable": "Pro ověření dokumentů není dostupný žádný model AI. Zkontrolujte nastavení AI organizace.",
         "enqueueFailed": "Ověření se nepodařilo spustit. Zkuste to znovu.",
         "extractionFailed": "Tvrzení v tomto dokumentu se nepodařilo extrahovat.",
@@ -796,6 +808,34 @@
       "unavailable": "Údaje o pokrytí nejsou momentálně k dispozici."
     },
     "decisionNotFound": "Rozhodnutí nenalezeno",
+    "decisionTypes": {
+      "administrative_decision": "Správní rozhodnutí",
+      "binding_excise_information": "Závazná informace o spotřební dani",
+      "binding_rate_information": "Závazná informace o sazbě DPH",
+      "court_direction": "Opatření",
+      "decision": "Rozhodnutí",
+      "finding": "Nález",
+      "general_tax_ruling": "Obecná daňová interpretace",
+      "individual_tax_ruling": "Individuální daňová interpretace",
+      "judgment": "Rozsudek",
+      "leave_refused": "Odmítnuto pro nedostatek zásadní právní otázky",
+      "merits_decision": "Rozhodnutí ve věci samé",
+      "ministry_of_justice_decision": "Rozhodnutí ministerstva spravedlnosti",
+      "minutes_extract": "Výpis z protokolu",
+      "opinion": "Stanovisko",
+      "order": "Usnesení",
+      "other": "Ostatní",
+      "payment_order": "Platební rozkaz",
+      "penal_order": "Trestní příkaz",
+      "principle_decision": "Zásadní rozhodnutí",
+      "protective_opinion": "Zajišťovací stanovisko",
+      "resolution": "Usnesení (uchwała)",
+      "signalling_decision": "Signalizační usnesení",
+      "statement_of_reasons": "Odůvodnění",
+      "tax_explanations": "Daňová vysvětlení",
+      "top_up_tax_opinion": "Stanovisko k dorovnávací dani",
+      "uniformity_decision": "Rozhodnutí o sjednocení judikatury"
+    },
     "emptyState": "Žádná rozhodnutí nenalezena. Nastavte zdroj a spusťte synchronizaci pro import judikatury.",
     "filters": {
       "remove": "Odebrat filtr {filter}"
@@ -841,6 +881,7 @@
       "subsection": "odst. {value}"
     },
     "reader": {
+      "expandProvisions": "Rozbalit ustanovení",
       "headMatter": "Úvodní část",
       "sourceAttribution": "Zdroj dat je volně dostupný na <link>{source}</link>."
     },
@@ -2310,6 +2351,8 @@
       "encryptedContent": "Obsah šifrovaného dokumentu nelze extrahovat. Odstraňte ze souboru heslo a zkuste to znovu.",
       "filePropertyTypeImmutable": "Typ souborové vlastnosti nelze změnit. Ponechte stávající typ; pro jiné hodnoty vytvořte vlastní vlastnost.",
       "forbidden": "K této akci nemáte oprávnění.",
+      "hostedCheckoutOpen": "Pro tuto organizaci už je otevřená objednávka. Dokončete ji, nebo začněte novou, až vyprší.",
+      "hostedSubscriptionLive": "Tato organizace už má předplatné. Změňte ho v části Spravovat hostované využití.",
       "internalServerError": "Něco se pokazilo. Zkuste to prosím znovu.",
       "legalSourceEntityLimitReached": "Tento spis dosáhl limitu položek, takže dokument nelze vytvořit.",
       "legalSourceFilePropertyMissing": "V tomto spisu chybí vlastnost souboru, takže dokument nelze vytvořit.",
@@ -3741,11 +3784,15 @@
     }
   },
   "lawHome": {
+    "clearRecent": "Vymazat nedávné",
     "enteringIntoForce": "Brzy nabude účinnosti",
     "inForceFrom": "Účinné od {date}",
-    "noRecentSearches": "Zatím žádná hledání",
+    "noRecent": "Zatím žádná nedávná aktivita",
     "noSignals": "Zatím žádné signály",
     "prompt": "Co hledáte?",
+    "recent": "Nedávné",
+    "recentCasesFilter": "Rozhodnutí",
+    "recentSearchFilter": "Hledání",
     "recentlyInForce": "Nedávno nabylo účinnosti",
     "searchLabel": "Hledat v právní databázi",
     "searchPlaceholder": "Spisová značka, číslo předpisu, ECLI nebo klíčová slova",
@@ -4637,6 +4684,7 @@
     "compareVersionMissing": "Verze k porovnání v historii tohoto předpisu není.",
     "compareWholeAct": "Porovnat celý předpis",
     "compareWithVersion": "Porovnat se zněním {version}",
+    "currentWording": "Aktuální znění",
     "description": "Veřejná databáze konsolidovaných právních předpisů, indexovatelných podle předpisu a jeho znění.",
     "diffInserted": "Vloženo:",
     "diffRemoved": "Vypuštěno:",
@@ -4686,7 +4734,9 @@
       "unknown": "Stav nejasný"
     },
     "title": "Právní předpisy",
-    "validity": "Platné od {from} do {to}"
+    "validity": "Platné od {from} do {to}",
+    "wordingValidFrom": "Znění účinné od {date}",
+    "wordingVersionUnknown": "Datum verze znění není k dispozici"
   },
   "styleSets": {
     "create": "Vytvořit",
@@ -5455,8 +5505,7 @@
         "signCurrent": "Podepsat ve stella desktop",
         "signNone": "Stáhněte stella desktop a podepište toto PDF",
         "signOutdated": "Aktualizujte stella desktop a podepisujte",
-        "signReason": "Podpis používá certifikát ve vašem počítači, proto probíhá ve stella desktop.",
-        "signShort": "Podepsat"
+        "signReason": "Podpis používá certifikát ve vašem počítači, proto probíhá ve stella desktop."
       },
       "downloadAs": "Stáhnout jako…",
       "downloadAsZip": "Stáhnout .zip soubor",
@@ -5998,7 +6047,6 @@
       "previewUnsupported": "Náhled není pro tento typ dokumentu podporovaný.",
       "readingFrom": "AI čerpá informace z",
       "referencesItself": "Vlastnost odkazuje sama na sebe přes jiné vlastnosti",
-      "rerunColumn": "Spustit znovu sloupec",
       "resultType": "Typ výsledku",
       "returnsLabel": "Formát",
       "scopeFile": "Aktuální soubor",

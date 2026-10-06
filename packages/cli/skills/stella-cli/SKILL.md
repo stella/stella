@@ -99,6 +99,7 @@ requires (request it at `stella auth login --scopes`).
 | capability | `stella capability invoke` | read |  |
 | capability | `stella capability list` | read | paginated |
 | case-law | `stella case-law citations` | read | paginated |
+| case-law | `stella case-law coverage` | read |  |
 | case-law | `stella case-law lookup` | read |  |
 | case-law | `stella case-law read` | read | paginated; per-entry cursor, no `--all` |
 | case-law | `stella case-law search` | search | paginated |
@@ -192,6 +193,8 @@ are omitted here. Input union keys are required unless marked `?`.
 - `stella case-law citations`
   - `--decision-id` — Case-law decision ID (string)
   - `--direction` — Which side of the citation graph to read: 'cites' for the decisions this decision cites, 'cited_by' for the decisions that cite it. Citing is not agreeing: both sides carry negative treatments. (enum: cites, cited_by)
+- `stella case-law coverage`
+  - optional: --country
 - `stella case-law lookup`
   - `--identifiers` — The references to resolve, at most 50 per call: a docket number as the court writes it (the sheet number after it is ignored) or an ECLI. Each is answered on its own. (string-array, repeatable)
   - `--country` — Required corpus country. Admitted: CZE. An ISO 3166-1 alpha-3 or alpha-2 code, or the country's name, is read. (string)
@@ -393,7 +396,7 @@ code (no envelope) still maps to 5; anything else falls to 4.
 
 ## Capability commands (full surface)
 
-Beyond the curated commands above, the CLI generates 403
+Beyond the curated commands above, the CLI generates 409
 capability commands from the server's capability catalog: every safe handler
 that is not a curated tool, reached through the generic `invoke_capability`
 path. Every generated command lives at `stella capability <domain> <action>`;

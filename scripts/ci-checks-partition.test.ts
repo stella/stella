@@ -2,6 +2,7 @@ import { panic } from "better-result";
 import { expect, test } from "bun:test";
 import fc from "fast-check";
 import { readFileSync } from "node:fs";
+import { isDeepStrictEqual } from "node:util";
 import { createContext, runInContext } from "node:vm";
 import * as v from "valibot";
 
@@ -9,27 +10,31 @@ import { compareCodeUnit } from "@stll/collation";
 import { assertProperty } from "@stll/property-testing";
 
 import { CUSTOM_LINT_TEST_ARGS } from "./check-oxlint-rule-coverage.ts";
-import {
-  CANONICAL_CANCEL_STEP,
-  isCanonicalFailureCancellation,
-} from "./ci-cancellation-contract";
+import { CANONICAL_CANCEL_STEP } from "./ci-cancellation-contract";
 import { jobCachePolicy } from "./workflow-cache-policy.ts";
 
-const jobSchema = v.pipe(
-  v.looseObject({
-    permissions: v.optional(v.record(v.string(), v.string())),
-    steps: v.array(v.looseObject({ name: v.string() })),
-  }),
-  v.transform((job) => {
-    if (!isCanonicalFailureCancellation(job.steps.at(-1))) {
-      return job;
-    }
-    expect(job.permissions?.["actions"]).toBe("write");
-    const permissions = { ...job.permissions };
-    delete permissions["actions"];
-    return { ...job, permissions, steps: job.steps.slice(0, -1) };
-  }),
-);
+const cancellationJobSchema = (canonical: object) =>
+  v.pipe(
+    v.looseObject({
+      permissions: v.optional(v.record(v.string(), v.string())),
+      steps: v.array(v.looseObject({ name: v.string() })),
+    }),
+    v.transform((job) => {
+      if (
+        !isDeepStrictEqual(job.steps.at(-1), {
+          ...canonical,
+          if: "failure() && github.event_name == 'merge_group'",
+        })
+      ) {
+        return job;
+      }
+      expect(job.permissions?.["actions"]).toBe("write");
+      const permissions = { ...job.permissions };
+      delete permissions["actions"];
+      return { ...job, permissions, steps: job.steps.slice(0, -1) };
+    }),
+  );
+const jobSchema = cancellationJobSchema(CANONICAL_CANCEL_STEP);
 const workflowSchema = v.object({ jobs: v.record(v.string(), v.unknown()) });
 const removalSchema = v.array(
   v.object({ name: v.string(), reason: v.pipe(v.string(), v.minLength(1)) }),
@@ -45,6 +50,18 @@ const git = (args: string[]) => {
   return result.stdout.toString().trim();
 };
 const mergeBase = git(["merge-base", "origin/main", "HEAD"]);
+const baseCancellationSource = new Bun.Transpiler({
+  loader: "ts",
+}).transformSync(
+  git(["show", `${mergeBase}:scripts/ci-cancellation-contract.ts`]),
+);
+const baseCancellation = v.parse(
+  v.object({ CANONICAL_CANCEL_STEP: v.record(v.string(), v.unknown()) }),
+  await import(
+    `data:text/javascript;base64,${Buffer.from(baseCancellationSource).toString("base64")}`
+  ),
+).CANONICAL_CANCEL_STEP;
+const baseJobSchema = cancellationJobSchema(baseCancellation);
 const parseJobs = (source: string) =>
   v.parse(workflowSchema, Bun.YAML.parse(source)).jobs;
 const jobs = parseJobs(
@@ -86,16 +103,19 @@ const prerequisites = new Set([
   "Prepare environment",
 ]);
 const partitions = partitionIds.map((id) => v.parse(jobSchema, jobs[id]));
-const readBaseline = (source: v.InferOutput<typeof workflowSchema>["jobs"]) => {
+const readBaseline = (
+  source: v.InferOutput<typeof workflowSchema>["jobs"],
+  schema = jobSchema,
+) => {
   if (source["ci-checks"] !== undefined) {
     for (const id of partitionIds) {
       expect(source).not.toHaveProperty(id);
     }
-    return [v.parse(jobSchema, source["ci-checks"])];
+    return [v.parse(schema, source["ci-checks"])];
   }
-  return partitionIds.map((id) => v.parse(jobSchema, source[id]));
+  return partitionIds.map((id) => v.parse(schema, source[id]));
 };
-const baseline = readBaseline(baseJobs);
+const baseline = readBaseline(baseJobs, baseJobSchema);
 
 type Step = v.InferOutput<typeof jobSchema>["steps"][number];
 // A full commit SHA pin is version metadata that dependency updates bump; the
@@ -214,9 +234,23 @@ const withInstallCache = (step: Step, job: Record<string, unknown>): Step => {
     with: { ...inputs, save: `\${{ github.ref == 'refs/heads/main' }}` },
   };
 };
+const PACKAGE_SCOPE = "needs.ci-plan.outputs.package_checks_required == 'true'";
+const DOCUMENTATION_CHECKS = new Set([
+  "Documentation source policy rule",
+  "Instruction references",
+]);
+// Documentation checks retain all prerequisites while widening beyond package scope.
+const documentationScope = (step: Step): Step => {
+  if (!DOCUMENTATION_CHECKS.has(step.name) || typeof step["if"] !== "string") {
+    return step;
+  }
+  return { ...step, if: step["if"].replace(` && (${PACKAGE_SCOPE})`, "") };
+};
+
 const ownedSteps = (steps: readonly Step[]) =>
   steps
     .filter(({ name }) => !prerequisites.has(name))
+    .map(documentationScope)
     .map(withoutContinuation)
     .map(withoutStepId)
     .map(withoutActionRef)
@@ -415,7 +449,19 @@ test("each CI check leg preserves merge-base setup, supply-chain protection and 
     const { steps, "timeout-minutes": timeout, ...scope } = partition;
     const originalSetup = setupSteps(originalSteps)
       .map(withIsolatedCachePort)
-      .map((step) => withInstallCache(step, base));
+      .map((step) => withInstallCache(step, base))
+      .map((step) => {
+        if (
+          partitionIds.at(index) !== "ci-checks-policy" ||
+          step.name !== "Install dependencies" ||
+          step["if"] !== PACKAGE_SCOPE
+        ) {
+          return step;
+        }
+        const widened = { ...step };
+        delete widened["if"];
+        return widened;
+      });
     if (!baseJobs["ci-checks"]) {
       const baseNames = new Set(originalSteps.map(({ name }) => name));
       expect(
@@ -674,16 +720,17 @@ const expectContinuation = (steps: readonly Step[], leg: string) => {
       );
     let prefix: string = CONTINUATION_PREFIXES.checkout;
     if (index > installIndex) {
-      prefix = packageDependent
-        ? CONTINUATION_PREFIXES.installPackages
-        : CONTINUATION_PREFIXES.install;
+      prefix =
+        packageDependent || DOCUMENTATION_CHECKS.has(step.name)
+          ? CONTINUATION_PREFIXES.installPackages
+          : CONTINUATION_PREFIXES.install;
     }
     expect(condition.startsWith(prefix), step.name).toBe(true);
     expect(withoutContinuation(step), step.name).not.toEqual(step);
     if (step.name === "Install dependencies") {
       const safety = leg === "ci-checks-rest" ? SAFETY_SUFFIX : "";
       expect(condition).toBe(
-        `${CONTINUATION_PREFIXES.checkout} && (needs.ci-plan.outputs.package_checks_required == 'true')${safety} }}`,
+        `${CONTINUATION_PREFIXES.checkout}${leg === "ci-checks-policy" ? "" : ` && (${PACKAGE_SCOPE})`}${safety} }}`,
       );
     }
     expect(continueOnError, step.name).toBeUndefined();
@@ -1106,4 +1153,51 @@ test("setup migration preserves runtime inputs and protected install policy", ()
   }
   const mutable = { ...setup, uses: "oven-sh/setup-bun@main" };
   expect(withInstallCache(mutable, { steps: [mutable] })).toEqual(mutable);
+});
+
+test("documentation policy widens only its package gate and retains successful installation", () => {
+  const policy = partitions[partitionIds.indexOf("ci-checks-policy")];
+  if (!policy) {
+    panic("Missing policy leg");
+  }
+  for (const name of DOCUMENTATION_CHECKS) {
+    const step = policy.steps.find((entry) => entry.name === name);
+    expect(step?.["if"]).toBe(`${CONTINUATION_PREFIXES.installPackages} }}`);
+    expect(step?.["run"]).toBeTruthy();
+    const base = {
+      name,
+      run: "bun guard.ts",
+      if: `${CONTINUATION_PREFIXES.installPackages} && (${PACKAGE_SCOPE}) }}`,
+    };
+    expect(documentationScope(base)).toEqual({
+      ...base,
+      if: `${CONTINUATION_PREFIXES.installPackages} }}`,
+    });
+    const unrelated = { ...base, name: "Unrelated guard" };
+    expect(documentationScope(unrelated)).toEqual(unrelated);
+  }
+});
+
+test("baseline cancellation normalization uses its own owner and rejects changed tails", () => {
+  for (const id of partitionIds) {
+    const raw = v.parse(
+      v.looseObject({ steps: v.array(v.looseObject({ name: v.string() })) }),
+      baseJobs[id],
+    );
+    const normalized = v.parse(baseJobSchema, baseJobs[id]);
+    expect(normalized.steps).toEqual(raw.steps.slice(0, -1));
+    const tail = raw.steps.at(-1);
+    if (!tail) {
+      panic("Baseline cancellation tail unavailable");
+    }
+    const original = v.parse(v.record(v.string(), v.unknown()), baseJobs[id]);
+    const mutated = {
+      ...original,
+      steps: [
+        ...raw.steps.slice(0, -1),
+        { ...tail, "continue-on-error": true },
+      ],
+    };
+    expect(v.parse(baseJobSchema, mutated).steps).toEqual(mutated.steps);
+  }
 });
