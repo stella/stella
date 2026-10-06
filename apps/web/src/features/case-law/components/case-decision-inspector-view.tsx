@@ -231,6 +231,7 @@ export const CaseDecisionInspectorView = ({
       {/* The composer floats over the text, bound to this decision, the way
           it floats over a PDF bound to that file. */}
       <LegalReaderAIChat
+        aiMode="enabled"
         activeLegal={activeLegalFromReaderTarget(annotationTarget)}
         className="min-h-0 flex-1"
       >

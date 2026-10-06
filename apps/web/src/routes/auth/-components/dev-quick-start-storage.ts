@@ -1,5 +1,6 @@
 import * as v from "valibot";
 
+import { deviceStorage } from "@/lib/account/browser-storage";
 import { readStoredJson, writeStoredJson } from "@/lib/stored-json";
 
 import {
@@ -28,22 +29,17 @@ export const parseDevQuickStartAttempt = (
 ): DevQuickStartAttempt | null =>
   readStoredJson(raw, devQuickStartAttemptSchema);
 
-export const readDevQuickStartAttempt = (): DevQuickStartAttempt | null => {
-  try {
-    return parseDevQuickStartAttempt(
-      sessionStorage.getItem(DEV_QUICK_START_STORAGE_KEY),
-    );
-  } catch {
-    return null;
-  }
-};
+export const readDevQuickStartAttempt = (): DevQuickStartAttempt | null =>
+  parseDevQuickStartAttempt(
+    deviceStorage("session").getItem(DEV_QUICK_START_STORAGE_KEY),
+  );
 
 export const writeDevQuickStartAttempt = (
   attempt: DevQuickStartAttempt,
 ): void => {
-  try {
-    writeStoredJson(sessionStorage, DEV_QUICK_START_STORAGE_KEY, attempt);
-  } catch {
-    // Storage can be unavailable or blocked; persistence is best-effort.
-  }
+  writeStoredJson(
+    deviceStorage("session"),
+    DEV_QUICK_START_STORAGE_KEY,
+    attempt,
+  );
 };

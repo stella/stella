@@ -89,9 +89,9 @@ test("no-use-before-define reports temporal dead zone reads, not hoisted functio
 });
 
 // The React convention (.ai/shared/modules/react.md) puts the root component
-// first: a helper below it is a function declaration, which the rule exempts,
-// and a `const` arrow helper there is reported.
-test("a helper below the root component passes as a function declaration, not as a const arrow", async () => {
+// first: helpers below it pass, whether function declarations (hoisted) or
+// `const` arrows read only when the component renders.
+test("a helper below the root component passes as a function declaration or a const arrow", async () => {
   const findings = await useBeforeDefineFindings("card.tsx", [
     "export const Card = ({ title }: { title: string }) => (",
     "  <section>",
@@ -105,7 +105,5 @@ test("a helper below the root component passes as a function declaration, not as
     "const formatCount = (count: number) => String(count);",
   ]);
 
-  expect(findings).toEqual([
-    "eslint(no-use-before-define): 'formatCount' was used before it was defined.",
-  ]);
+  expect(findings).toEqual([]);
 });

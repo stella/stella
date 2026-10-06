@@ -51,7 +51,6 @@ export const FileChatTitleSlot = ({
       {hasMessages && <QueryViewFeedback view={titleView} />}
       <ChatTitleRename
         hasMessages={hasMessages}
-        inputClassName="w-44 text-xs"
         ownsRenameCommand
         threadRef={threadRef}
         title={title}

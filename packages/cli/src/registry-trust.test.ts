@@ -1,6 +1,15 @@
 import { describe, expect, test } from "bun:test";
 
 import {
+  MCP_TOOL_NAME_MAX_LENGTH as SHARED_MCP_TOOL_NAME_MAX_LENGTH,
+  MCP_TOOL_NAME_PATTERN,
+} from "../../api-contract/src/mcp-tool-name.ts";
+import {
+  MCP_TOOL_NAME_MAX_LENGTH,
+  MCP_TOOL_NAME_PATTERN_FLAGS,
+  MCP_TOOL_NAME_PATTERN_SOURCE,
+} from "./generated/mcp-contract.js";
+import {
   MAX_ENUM,
   MAX_LISTING_BYTES,
   MAX_PROPS,
@@ -40,6 +49,12 @@ describe("validateFetchedToolsList: rule 1 (interpreted, no eval)", () => {
 });
 
 describe("validateFetchedToolsList: rule 2 (meta-schema)", () => {
+  test("the shipped name rule is derived from the shared contract", () => {
+    expect(MCP_TOOL_NAME_MAX_LENGTH).toBe(SHARED_MCP_TOOL_NAME_MAX_LENGTH);
+    expect(MCP_TOOL_NAME_PATTERN.source).toBe(MCP_TOOL_NAME_PATTERN_SOURCE);
+    expect(MCP_TOOL_NAME_PATTERN.flags).toBe(MCP_TOOL_NAME_PATTERN_FLAGS);
+  });
+
   test("a well-formed body validates and carries a sha256 hash", () => {
     const raw = body([validTool()]);
     const result = validateFetchedToolsList(raw);
@@ -51,22 +66,76 @@ describe("validateFetchedToolsList: rule 2 (meta-schema)", () => {
     }
   });
 
-  test("a name longer than 64 chars is rejected", () => {
-    const tool = validTool({ name: `a${"b".repeat(64)}` });
-    expect(validateFetchedToolsList(body([tool])).ok).toBe(false);
+  test("hyphenated skill names and maximum-length skill slugs remain in the fetched listing", () => {
+    const slug = `compare-${"a".repeat(56)}`;
+    expect(slug).toHaveLength(64);
+    const names = ["list_matters", "skill__compare-default", `skill__${slug}`];
+    expect(names.at(-1)).toHaveLength(MCP_TOOL_NAME_MAX_LENGTH);
+    const result = validateFetchedToolsList(
+      body(names.map((name) => validTool({ name }))),
+    );
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.listings.map(({ name }) => name)).toEqual(names);
+    }
   });
 
-  test("an uppercase name is rejected", () => {
-    expect(
-      validateFetchedToolsList(body([validTool({ name: "List" })])).ok,
-    ).toBe(false);
+  const invalidNames = [
+    "List",
+    "skill__compare default",
+    "../tool",
+    "1tool",
+    `a${"b".repeat(MCP_TOOL_NAME_MAX_LENGTH)}`,
+  ];
+
+  for (const name of invalidNames) {
+    test(`invalid tool name ${name} rejects the whole fetched listing`, () => {
+      expect(
+        validateFetchedToolsList(body([validTool(), validTool({ name })])),
+      ).toEqual({
+        ok: false,
+        violation: `tool name is invalid: ${name}`,
+      });
+    });
+  }
+
+  test("feature access tool identities accept the same hyphenated maximum-length names", () => {
+    const names = [
+      "skill__compare-default",
+      `skill__compare-${"a".repeat(56)}`,
+    ];
+    const result = validateFetchedToolsList(
+      JSON.stringify({
+        tools: [validTool()],
+        _meta: { featureAccess: { capabilities: [], tools: names } },
+      }),
+    );
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.featureAccess?.tools).toEqual(names);
+    }
   });
 
-  test("a name with a leading digit is rejected", () => {
-    expect(
-      validateFetchedToolsList(body([validTool({ name: "1tool" })])).ok,
-    ).toBe(false);
-  });
+  for (const name of invalidNames) {
+    test(`invalid feature access tool ${name} rejects the whole fetched listing`, () => {
+      expect(
+        validateFetchedToolsList(
+          JSON.stringify({
+            tools: [validTool()],
+            _meta: {
+              featureAccess: {
+                capabilities: [],
+                tools: ["list_matters", name],
+              },
+            },
+          }),
+        ),
+      ).toEqual({
+        ok: false,
+        violation: "feature access snapshot is invalid",
+      });
+    });
+  }
 
   test("a non-string description is rejected", () => {
     expect(

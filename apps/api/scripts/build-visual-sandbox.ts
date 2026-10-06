@@ -2,6 +2,7 @@ import { panic } from "better-result";
 import path from "node:path";
 
 import { escapeVisualScript } from "../src/handlers/visual-sandbox/srcdoc";
+import { VISUAL_RUNTIME_BUILD_OPTIONS } from "./visual-sandbox-build-options";
 
 const root = path.resolve(
   import.meta.dirname,
@@ -9,9 +10,7 @@ const root = path.resolve(
 );
 const result = await Bun.build({
   entrypoints: [path.join(root, "browser/runtime.ts")],
-  minify: true,
-  target: "browser",
-  format: "iife",
+  ...VISUAL_RUNTIME_BUILD_OPTIONS,
 });
 if (!result.success) {
   panic(result.logs.map(({ message }) => message).join("\n"));

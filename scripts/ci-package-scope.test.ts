@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 
 import {
+  requiresDesktopBrowser,
   requiresLandingBuild,
   requiresPackageChecks,
 } from "./ci-package-scope";
@@ -385,5 +386,120 @@ test("unrelated Markdown options cannot certify a computed loader pattern", () =
     expect(
       requiresPackageChecks({ root, changed: ["notes/consumed/new.md"] }),
     ).toBe(true);
+  });
+});
+
+const desktopLock = () => ({
+  workspaces: {
+    "apps/desktop": {
+      name: "@stll/desktop",
+      dependencies: { "@stll/ui": "workspace:*" },
+    },
+    "packages/ui": {
+      name: "@stll/ui",
+      devDependencies: { "@stll/base": "workspace:*" },
+    },
+    "packages/base": { name: "@stll/base" },
+    "packages/unrelated": { name: "@stll/unrelated" },
+  },
+  packages: {
+    "@stll/ui": ["@stll/ui@workspace:packages/ui"],
+    "@stll/base": ["@stll/base@workspace:packages/base"],
+    "@stll/unrelated": ["@stll/unrelated@workspace:packages/unrelated"],
+  },
+});
+const desktopRepository = (
+  run: (root: string, write: (file: string, text: string) => void) => void,
+) =>
+  repository((root, write) => {
+    write("bun.lock", JSON.stringify(desktopLock()));
+    write(
+      "turbo.json",
+      JSON.stringify({
+        tasks: {
+          "@stll/desktop#test:browser": {
+            inputs: ["$TURBO_DEFAULT$", "$TURBO_ROOT$/fixtures/browser/**"],
+          },
+        },
+      }),
+    );
+    run(root, write);
+  });
+
+test("desktop browser scope follows transitive workspace dependencies, declared browser inputs and global inputs", () => {
+  desktopRepository((root) => {
+    for (const file of [
+      "apps/desktop/src/new.unknown",
+      "apps/desktop/tests/browser/new.playwright.spec.ts",
+      "packages/ui/src/new.ts",
+      "packages/base/src/transitive.ts",
+      "fixtures/browser/deleted.html",
+      ".github/workflows/ci.yml",
+      "bun.lock",
+      "package.json",
+      "patches/new.patch",
+    ]) {
+      expect(requiresDesktopBrowser({ root, changed: [file] }), file).toBe(
+        true,
+      );
+    }
+    for (const changed of [
+      [],
+      ["docs/guide.md"],
+      ["apps/web/src/unrelated.ts"],
+      ["packages/unrelated/src/new.ts"],
+    ]) {
+      expect(
+        requiresDesktopBrowser({ root, changed }),
+        JSON.stringify(changed),
+      ).toBe(false);
+    }
+  });
+});
+
+test("a planted unclassified desktop file selects desktop browsers without changing the selector", () => {
+  desktopRepository((root, write) => {
+    expect(requiresDesktopBrowser({ root, changed: ["docs/guide.md"] })).toBe(
+      false,
+    );
+    const planted = "apps/desktop/new-subsystem/planted.unclassified";
+    write(planted, "new desktop input");
+    expect(requiresDesktopBrowser({ root, changed: [planted] })).toBe(true);
+  });
+});
+
+test("desktop browser scope fails closed on missing or malformed graph and input declarations", () => {
+  for (const [file, contents] of [
+    ["bun.lock", "{"],
+    ["bun.lock", JSON.stringify({ workspaces: {}, packages: {} })],
+    ["turbo.json", JSON.stringify({ tasks: {} })],
+    [
+      "turbo.json",
+      JSON.stringify({
+        tasks: { "@stll/desktop#test:browser": { inputs: [4] } },
+      }),
+    ],
+  ]) {
+    desktopRepository((root, write) => {
+      expect(requiresDesktopBrowser({ root, changed: ["docs/guide.md"] })).toBe(
+        false,
+      );
+      if (file === undefined || contents === undefined) {
+        throw new TypeError("Missing desktop scope mutation");
+      }
+      write(file, contents);
+      expect(requiresDesktopBrowser({ root, changed: ["docs/guide.md"] })).toBe(
+        true,
+      );
+    });
+  }
+  desktopRepository((root, write) => {
+    const lock = desktopLock();
+    const { "@stll/base": removed, ...packages } = lock.packages;
+    expect(removed).toBeDefined();
+    write("bun.lock", JSON.stringify({ ...lock, packages }));
+    expect(requiresDesktopBrowser({ root, changed: ["docs/guide.md"] })).toBe(
+      true,
+    );
   });
 });

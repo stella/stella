@@ -1,5 +1,4 @@
 import type { CallToolResult } from "@modelcontextprotocol/server";
-import { Result } from "better-result";
 import { Glob } from "bun";
 import { describe, expect, test } from "bun:test";
 import { Elysia, t } from "elysia";
@@ -14,8 +13,6 @@ import { expensesRoute } from "@/api/handlers/expenses/routes";
 import { invoicesRoute } from "@/api/handlers/invoices/routes";
 import { listsRoute } from "@/api/handlers/lists/routes";
 import { numberSeriesRoute } from "@/api/handlers/number-series/routes";
-import { readDeploymentFeatures } from "@/api/handlers/organization-settings/deployment-features/get";
-import { organizationSettingsRoute } from "@/api/handlers/organization-settings/routes";
 import { ratesRoute } from "@/api/handlers/rates/routes";
 import { savedTimeNarrativesRoute } from "@/api/handlers/saved-time-narratives/routes";
 import { sellerProfilesRoute } from "@/api/handlers/seller-profiles/routes";
@@ -26,12 +23,14 @@ import { memberTimeTargetsRoute } from "@/api/handlers/time-entries/members/rout
 import { timeEntriesRoute } from "@/api/handlers/time-entries/routes";
 import { timeTimersRoute } from "@/api/handlers/time-timers/routes";
 import { vatRateRoute } from "@/api/handlers/vat-rates/routes";
+import { featureAccessSnapshotFromAuthorization } from "@/api/lib/auth";
 import type { ValidateAuthValue } from "@/api/lib/auth";
 import {
   createFeatureAccessSnapshot,
   decideFeatureAccess,
 } from "@/api/lib/auth/feature-access/policy";
 import { featureAccessGate } from "@/api/lib/auth/feature-access/route";
+import { toSafeId } from "@/api/lib/branded-types";
 import { FEATURE_REGISTRY } from "@/api/lib/feature-access/registry";
 import { isRecord } from "@/api/lib/type-guards";
 import { featureOmittedCapabilityIds } from "@/api/mcp/capability-tools";
@@ -50,7 +49,6 @@ const FEATURE_ID = "time-billing";
 const ORGANIZATION_ID = "org_test";
 const USER_ID = "user_test";
 const PATH_ID = "00000000-0000-4000-8000-000000000001";
-const CALLER = { organizationId: ORGANIZATION_ID, userId: USER_ID };
 
 const snapshotFor = (enabled: boolean, deploymentEnabled = true) =>
   createFeatureAccessSnapshot({
@@ -247,9 +245,15 @@ describe("time billing admission census", () => {
             featureAccessGate(FEATURE_ID, {
               resolveAuth: async () => ({
                 ok: true,
-                value: createTestHandlerContext<ValidateAuthValue>(),
+                value: createTestHandlerContext<ValidateAuthValue>({
+                  featureAccessSnapshot: snapshot,
+                  // The member lookup already decided feature access: the
+                  // gate itself must not open a transaction or query.
+                  safeDb: async () => {
+                    throw new Error("the feature-access gate queried");
+                  },
+                }),
               }),
-              loadSnapshot: async () => Result.ok(snapshot),
             }),
           )
           .post(
@@ -451,58 +455,88 @@ describe("time billing on agent surfaces", () => {
   });
 });
 
-describe("time billing for the web client", () => {
-  test("the deployment features answer follows the flag the routes follow", async () => {
-    for (const enabled of [false, true]) {
-      const features = await withTimeBilling(enabled, async () =>
-        readDeploymentFeatures({
-          principal: CALLER,
-          snapshot: snapshotFor(true, enabled),
-        }),
-      );
-      expect(features.timeBilling).toBe(enabled);
+describe("feature access from the request's member lookup", () => {
+  const organizationId = toSafeId<"organization">(ORGANIZATION_ID);
+  const userId = toSafeId<"user">(USER_ID);
+  // What the standalone resolver decides from the same facts: a deleted
+  // account has no identity and no enrolments.
+  const resolverDecision = ({
+    deleted,
+    verified,
+    enrolled,
+  }: {
+    deleted: boolean;
+    verified: boolean;
+    enrolled: boolean;
+  }) =>
+    decideFeatureAccess({
+      registry: FEATURE_REGISTRY,
+      featureId: FEATURE_ID,
+      userId: USER_ID,
+      organizationId: ORGANIZATION_ID,
+      membership: !deleted,
+      user: deleted
+        ? null
+        : { email: "member@example.test", emailVerified: verified },
+      grants: {},
+      enrolments:
+        deleted || !enrolled
+          ? []
+          : [
+              {
+                userId: USER_ID,
+                organizationId: ORGANIZATION_ID,
+                featureId: FEATURE_ID,
+              },
+            ],
+      deploymentEnabled: true,
+    });
+
+  test("matches the standalone resolver for enrolled, unverified, unenrolled and deleted callers", async () => {
+    for (const deleted of [false, true]) {
+      for (const verified of [false, true]) {
+        for (const enrolled of [false, true]) {
+          const snapshot = await withTimeBilling(true, async () =>
+            featureAccessSnapshotFromAuthorization({
+              organizationId,
+              userId,
+              authorization: {
+                email: "member@example.test",
+                emailVerified: verified,
+                userDeleted: deleted,
+                enrolledFeatureIds: enrolled ? [FEATURE_ID] : [],
+              },
+            }),
+          );
+          expect({
+            deleted,
+            verified,
+            enrolled,
+            decision: snapshot.decisions.get(FEATURE_ID),
+          }).toEqual({
+            deleted,
+            verified,
+            enrolled,
+            decision: resolverDecision({ deleted, verified, enrolled }),
+          });
+        }
+      }
     }
   });
 
-  test("the deployment features answer is off for a caller who has not enrolled", async () => {
-    const features = await withTimeBilling(true, async () =>
-      readDeploymentFeatures({
-        principal: CALLER,
-        snapshot: snapshotFor(false),
+  test("a deleted account keeps no enrolment, so it is never enabled", async () => {
+    const snapshot = await withTimeBilling(true, async () =>
+      featureAccessSnapshotFromAuthorization({
+        organizationId,
+        userId,
+        authorization: {
+          email: "member@example.test",
+          emailVerified: true,
+          userDeleted: true,
+          enrolledFeatureIds: [FEATURE_ID],
+        },
       }),
     );
-    expect(features.timeBilling).toBe(false);
-  });
-
-  test("an enrolled snapshot resolved for another caller enables nothing", async () => {
-    for (const principal of [
-      { organizationId: ORGANIZATION_ID, userId: "user_other" },
-      { organizationId: "org_other", userId: USER_ID },
-      { organizationId: ORGANIZATION_ID, userId: null },
-    ]) {
-      const features = await withTimeBilling(true, async () =>
-        readDeploymentFeatures({ principal, snapshot: snapshotFor(true) }),
-      );
-      expect({ principal, timeBilling: features.timeBilling }).toEqual({
-        principal,
-        timeBilling: false,
-      });
-    }
-  });
-
-  test("the deployment features route is served whatever the flag says", async () => {
-    for (const enabled of [false, true]) {
-      const response = await withTimeBilling(
-        enabled,
-        async () =>
-          await organizationSettingsRoute.handle(
-            new Request(
-              "http://localhost/organization-settings/deployment-features",
-            ),
-          ),
-      );
-      // An unauthenticated probe stops at authentication, never at a flag.
-      expect(response.status).toBe(401);
-    }
+    expect(snapshot.decisions.get(FEATURE_ID)?.status).not.toBe("enabled");
   });
 });
