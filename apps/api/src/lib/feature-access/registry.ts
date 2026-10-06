@@ -8,6 +8,10 @@ type FeatureDefinition = {
     tableSchemaFiles: readonly string[];
     coreModules: readonly string[];
     conditionalModules?: readonly string[];
+    dispatchModules?: readonly (
+      | { type: "registry"; module: string; registry: string }
+      | { type: "admitted"; module: string; admission: string }
+    )[];
   };
 };
 
@@ -34,6 +38,27 @@ export const FEATURE_REGISTRY = {
       ],
       tableSchemaFiles: [],
       coreModules: [],
+      // Registries expose metadata; dispatch owners admit each selected tool.
+      // Their callers need no enrolment for unrelated chat.
+      dispatchModules: [
+        {
+          type: "registry",
+          module: "apps/api/src/mcp/static-tool-definitions.ts",
+          registry: "DEFAULT_MCP_TOOL_SETS",
+        },
+        {
+          type: "admitted",
+          module:
+            "apps/api/src/handlers/chat/tools/registry-adapter/run-registry-tool.ts",
+          admission: "isMcpDescriptorFeatureEnabled",
+        },
+        {
+          type: "admitted",
+          module:
+            "apps/api/src/handlers/chat/tools/registry-adapter/run-registry-write-tool.ts",
+          admission: "isMcpDescriptorFeatureEnabled",
+        },
+      ],
     },
   },
 } as const satisfies Record<
