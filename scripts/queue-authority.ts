@@ -926,8 +926,42 @@ const registeredTasks = (
         );
         continue;
       }
-      const value = valueIdentifier(property.initializer);
+      const initializer = unwrap(property.initializer);
+      const typedEntry = ts.isObjectLiteralExpression(initializer);
+      let value = valueIdentifier(property.initializer);
+      if (typedEntry) {
+        const taskProperty = initializer.properties.find(
+          (entry) =>
+            (ts.isPropertyAssignment(entry) ||
+              ts.isShorthandPropertyAssignment(entry)) &&
+            propertyName(entry.name) === "task",
+        );
+        value = null;
+        if (
+          taskProperty !== undefined &&
+          ts.isPropertyAssignment(taskProperty)
+        ) {
+          value = valueIdentifier(taskProperty.initializer);
+        }
+        if (
+          taskProperty !== undefined &&
+          ts.isShorthandPropertyAssignment(taskProperty)
+        ) {
+          value = valueIdentifier(taskProperty.name);
+        }
+      }
       const imported = value === null ? undefined : imports.get(value);
+      if (
+        typedEntry &&
+        (value === null ||
+          (imported === undefined &&
+            parameterIndex(enclosingFunction(property), value) < 0))
+      ) {
+        errors.push(
+          `Scheduler typed registry task not resolvable to one module: ${name}`,
+        );
+        continue;
+      }
       if (
         value === null ||
         imported !== undefined ||
@@ -1333,6 +1367,80 @@ const SELF_TEST_BOOT = `
   startLoop({ registry: createRegistry(createReap(db)) });
 `;
 
+const selfTestTypedSchedulerTasks = (
+  readFile: AuditInput["readFile"],
+  expectedTasks: readonly RegisteredTask[],
+): string[] => {
+  const failures: string[] = [];
+  const typedSource = SELF_TEST_REGISTRY.replace(
+    "[A_TASK]: runA,",
+    '[A_TASK]: { featureId: "fixture", task: runA },',
+  ).replace(
+    "[REAP_TASK]: reap,",
+    '[REAP_TASK]: { featureId: "fixture", task: reap },',
+  );
+  const typedReadFile = (file: string) =>
+    file === SCHEDULER_REGISTRY_FILE ? typedSource : readFile(file);
+  const typed = registeredTasks(SCHEDULER_REGISTRY_FILE, typedReadFile);
+  if (
+    JSON.stringify(typed) !==
+    JSON.stringify({ tasks: expectedTasks, errors: [] })
+  ) {
+    failures.push(
+      `typed task entries must resolve imported and boot tasks: ${JSON.stringify(typed)}`,
+    );
+  }
+  for (const [module, expectedErrors] of [
+    [`${SELF_TEST_TASKS}/a.ts`, []],
+    [
+      "stale.ts",
+      [
+        `Declared module is not the one the registry runs: a.run -> stale.ts (registry runs ${SELF_TEST_TASKS}/a.ts)`,
+      ],
+    ],
+  ] as const) {
+    const audited = auditSchedulerTaskAuthority({
+      tasks: typed.tasks.filter(({ name }) => name === "a.run"),
+      registry: {
+        "a.run": { authority: "org-automation", module, reason: "r" },
+      },
+      pinnedAllowed: new Set(),
+      readFile: typedReadFile,
+    });
+    if (JSON.stringify(audited.errors) !== JSON.stringify(expectedErrors)) {
+      failures.push(
+        `typed task authority must match ${module}: ${JSON.stringify(audited.errors)}`,
+      );
+    }
+  }
+  for (const initializer of [
+    '{ featureId: "fixture" }',
+    '{ featureId: "fixture", task: runA.missing }',
+    '{ featureId: "fixture", task: missingTask }',
+  ]) {
+    const invalid = registeredTasks(SCHEDULER_REGISTRY_FILE, (file) =>
+      file === SCHEDULER_REGISTRY_FILE
+        ? SELF_TEST_REGISTRY.replace(
+            "[A_TASK]: runA,",
+            () => `[A_TASK]: ${initializer},`,
+          )
+        : readFile(file),
+    );
+    if (
+      JSON.stringify(invalid.errors) !==
+        JSON.stringify([
+          "Scheduler typed registry task not resolvable to one module: a.run",
+        ]) ||
+      invalid.tasks.some(({ name }) => name === "a.run")
+    ) {
+      failures.push(
+        `typed entry with a missing or unresolvable task must error: ${initializer}: ${JSON.stringify(invalid)}`,
+      );
+    }
+  }
+  return failures;
+};
+
 const selfTestSchedulerTasks = (): string[] => {
   const failures: string[] = [];
   const files: Record<string, string> = {
@@ -1390,6 +1498,7 @@ const selfTestSchedulerTasks = (): string[] => {
       );
     }
   }
+  failures.push(...selfTestTypedSchedulerTasks(readFile, expectedTasks));
   const task = (name: string, module = "m.ts") => ({ name, module });
   const automation = (module = "m.ts", reason = "r") =>
     ({ authority: "org-automation", module, reason }) as const;

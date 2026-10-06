@@ -72,7 +72,6 @@
     "apps/web/src/components/workspaces/tasks/task-metadata.tsx::OwnerPicker::members": "pending migration to useQueryView",
     "apps/web/src/features/avt/fact-source.tsx::EvidenceFactSource::files": "pending migration to useQueryView",
     "apps/web/src/features/avt/verification-detail.tsx::VerificationDetail::files": "pending migration to useQueryView",
-    "apps/web/src/features/case-law/components/case-decision-details-inspector-view.tsx::CaseDecisionDetailsInspectorView::citationSummary": "pending migration to useQueryView",
     "apps/web/src/features/case-law/components/case-decision-details-inspector-view.tsx::CaseDecisionDetailsInspectorView::decision": "pending migration to useQueryView",
     "apps/web/src/features/case-law/components/case-decision-rail-icon.tsx::CaseDecisionRailIcon::decision": "pending migration to useQueryView",
     "apps/web/src/features/case-law/components/case-viewer/citation-header.tsx::CitationHeader::summary": "pending migration to useQueryView",
@@ -196,7 +195,6 @@
     "apps/web/src/routes/law/$country/statutes/index.tsx::PublicStatuteList::data": "pending migration to useQueryView",
     "apps/web/src/routes/law/$country/statutes/index.tsx::PublicStatuteList::facets": "pending migration to useQueryView",
     "apps/web/src/routes/law/-law-home/law-database-status.tsx::LawDatabaseStatus::status": "pending migration to useQueryView",
-    "apps/web/src/routes/law/cases/index.tsx::PublicCaseLawIndex::browseFacets": "pending migration to useQueryView",
     "apps/web/src/routes/law/index.tsx::LawHome::shelf": "pending migration to useQueryView",
     "apps/web/src/routes/onboarding/-components/onboarding-wizard.tsx::OnboardingWizard::nativeToolDeployAvailability": "pending migration to useQueryView",
     "apps/web/src/routes/onboarding/-components/onboarding-wizard.tsx::OnboardingWizard::sessionData": "pending migration to useQueryView"

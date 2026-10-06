@@ -5,6 +5,9 @@
 // a TTY), honoring `--output`/`--json`/`--table`. `nextCursor` hints and `--all`
 // truncation notices go to stderr so a piped JSON stdout stays clean.
 
+import { panic } from "better-result";
+
+import { EXIT_CODES, type ExitCode } from "./mcp-constants.js";
 import type { CompositeView } from "./route-types.js";
 
 export type OutputFormat = "json" | "table" | "jsonl";
@@ -55,8 +58,92 @@ export type RenderPlan =
   | { kind: "single"; payload: unknown }
   /** One record holding tables; see `ToolAnnotation.composite`. */
   | { kind: "composite"; payload: unknown; view: CompositeView }
-  | { kind: "windowed-text"; text: string; nextCursor: string | null }
+  | {
+      kind: "windowed-text";
+      text: string;
+      nextCursor: string | null;
+      url?: string | null;
+      source_url?: string;
+    }
+  /** A windowed-text read whose response holds no text; see `TEXT_UNAVAILABLE_REASONS`. */
+  | {
+      kind: "text-unavailable";
+      reason: TextUnavailableReason;
+      textPath: string;
+      payload: unknown;
+    }
   | { kind: "raw-text"; text: string };
+
+/**
+ * Why a windowed-text read printed no text. A closed set, emitted under
+ * `--json` as `textUnavailable.reason` beside `text: null`, so a script tells
+ * "no text" from "empty text" without parsing a message:
+ * - `no_text`: the server answered and stated there is no text (`null` at the
+ *   leaf's text path). The response's own fields say why (a withheld or
+ *   unavailable reason), so the whole response is kept beside the outcome.
+ * - `not_in_response`: the response carries nothing at the path this command
+ *   reads its text from. The command was built for a different response shape
+ *   than the server sent, usually an older CLI against a newer server.
+ */
+export const TEXT_UNAVAILABLE_REASONS = {
+  noText: "no_text",
+  notInResponse: "not_in_response",
+} as const;
+
+type TextUnavailableReason =
+  (typeof TEXT_UNAVAILABLE_REASONS)[keyof typeof TEXT_UNAVAILABLE_REASONS];
+
+/**
+ * The exit class of a rendered plan, when the plan itself decides one.
+ * `no_text` is an answer, so it exits 0 like every other outcome the server
+ * types per subject (a batch read's `not_found` entry exits 0 too).
+ * `not_in_response` means the CLI could not read the response it got: the
+ * documented "unexpected" class, never a silent success.
+ */
+export const renderPlanExitCode = (plan: RenderPlan): ExitCode | undefined => {
+  if (plan.kind !== "text-unavailable") {
+    return undefined;
+  }
+  switch (plan.reason) {
+    case TEXT_UNAVAILABLE_REASONS.noText: {
+      return EXIT_CODES.ok;
+    }
+    case TEXT_UNAVAILABLE_REASONS.notInResponse: {
+      return EXIT_CODES.unexpected;
+    }
+    default: {
+      plan.reason satisfies never;
+      return panic("Unhandled text-unavailable reason");
+    }
+  }
+};
+
+const textUnavailableMessage = (
+  reason: TextUnavailableReason,
+  textPath: string,
+): string => {
+  switch (reason) {
+    case TEXT_UNAVAILABLE_REASONS.noText: {
+      return `No text: the server states none for this read (\`${textPath}\` is null); the response fields say why.`;
+    }
+    case TEXT_UNAVAILABLE_REASONS.notInResponse: {
+      return `No text: the response has nothing at \`${textPath}\`, so this command expects a different response shape than the server sent. Upgrade with: npm i -g @stll/cli`;
+    }
+    default: {
+      reason satisfies never;
+      return panic("Unhandled text-unavailable reason");
+    }
+  }
+};
+
+/** The `--json` / JSONL shape of a read that has no text to print. */
+const textUnavailableEnvelope = (
+  plan: Extract<RenderPlan, { kind: "text-unavailable" }>,
+) => ({
+  text: null,
+  textUnavailable: { reason: plan.reason, textPath: plan.textPath },
+  response: plan.payload,
+});
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
@@ -119,9 +206,34 @@ export const buildRenderPlan = ({
   composite?: CompositeView | undefined;
 }): RenderPlan => {
   if (textPath !== undefined) {
+    const text = valueAtPath(payload, textPath);
+    // Only a string is text. Anything else printed as "" would read as a
+    // document that is empty, which is the one answer a missing or withheld
+    // text must never look like.
+    if (typeof text !== "string") {
+      return {
+        kind: "text-unavailable",
+        reason:
+          text === null
+            ? TEXT_UNAVAILABLE_REASONS.noText
+            : TEXT_UNAVAILABLE_REASONS.notInResponse,
+        textPath,
+        payload,
+      };
+    }
+    const containerPath = textPath.slice(
+      0,
+      Math.max(0, textPath.lastIndexOf(".")),
+    );
+    const container =
+      containerPath === "" ? payload : valueAtPath(payload, containerPath);
+    const url = fieldOf(container, "url");
+    const sourceUrl = fieldOf(container, "source_url");
     return {
       kind: "windowed-text",
-      text: asString(valueAtPath(payload, textPath)) ?? "",
+      ...(typeof url === "string" || url === null ? { url } : {}),
+      ...(typeof sourceUrl === "string" ? { source_url: sourceUrl } : {}),
+      text,
       nextCursor: asString(fieldOf(payload, "nextCursor")),
     };
   }
@@ -479,16 +591,35 @@ export const renderResult = ({
   }
 
   if (plan.kind === "windowed-text") {
+    const textResult = {
+      text: plan.text,
+      ...(plan.url === undefined ? {} : { url: plan.url }),
+      ...(plan.source_url === undefined ? {} : { source_url: plan.source_url }),
+    };
     if (format === "json") {
-      writers.stdout(`${JSON.stringify({ text: plan.text }, null, 2)}\n`);
+      writers.stdout(`${JSON.stringify(textResult, null, 2)}\n`);
     } else if (format === "jsonl") {
-      writers.stdout(jsonlLine({ text: plan.text }));
+      writers.stdout(jsonlLine(textResult));
     } else {
       writers.stdout(plan.text.endsWith("\n") ? plan.text : `${plan.text}\n`);
     }
     if (!allActive && plan.nextCursor !== null) {
       writers.stderr(`more: --cursor ${plan.nextCursor}\n`);
     }
+    return;
+  }
+
+  if (plan.kind === "text-unavailable") {
+    if (format === "json") {
+      writers.stdout(
+        `${JSON.stringify(textUnavailableEnvelope(plan), null, 2)}\n`,
+      );
+    } else if (format === "jsonl") {
+      writers.stdout(jsonlLine(textUnavailableEnvelope(plan)));
+    } else {
+      writers.stdout(`${renderKeyValue(plan.payload, width)}\n`);
+    }
+    writers.stderr(`${textUnavailableMessage(plan.reason, plan.textPath)}\n`);
     return;
   }
 
