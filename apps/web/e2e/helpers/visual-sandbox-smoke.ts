@@ -43,14 +43,23 @@ export const declareVisualSandboxSmoke = () => {
           const frame = document.createElement("iframe");
           frame.title = "Timeline";
           frame.src = frameUrl;
-          addEventListener("message", ({ source, data }: MessageEvent) => {
+          addEventListener("message", (event: MessageEvent<unknown>) => {
+            const { source, data } = event;
             if (
-              source === frame.contentWindow &&
-              typeof data === "object" &&
-              data !== null &&
-              data.type === "resize" &&
-              Number.isInteger(data.height) &&
-              data.height > 0
+              source !== frame.contentWindow ||
+              typeof data !== "object" ||
+              data === null ||
+              !("type" in data) ||
+              !("height" in data)
+            ) {
+              return;
+            }
+            const { type, height } = data;
+            if (
+              type === "resize" &&
+              typeof height === "number" &&
+              Number.isInteger(height) &&
+              height > 0
             ) {
               document.documentElement.dataset["visualResize"] = "received";
             }
