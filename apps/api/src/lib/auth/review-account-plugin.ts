@@ -22,8 +22,8 @@ import type {
   ReviewAccountOperation,
 } from "@/api/lib/auth/review-account-policy";
 import {
+  findReviewAccountTokenRedemption,
   isReviewAccountTokenRedemptionPath,
-  REVIEW_ACCOUNT_TOKEN_REDEMPTIONS,
 } from "@/api/lib/auth/review-account-token-subjects";
 import type { createAccountAttemptBudget } from "@/api/lib/rate-limit/otp-account-budget";
 import { isRecord } from "@/api/lib/type-guards";
@@ -188,12 +188,7 @@ export const createReviewAccountPlugin = ({
             path !== undefined &&
             isReviewAccountTokenRedemptionPath(path),
           handler: createAuthMiddleware(async (ctx) => {
-            const resolve = Object.hasOwn(
-              REVIEW_ACCOUNT_TOKEN_REDEMPTIONS,
-              ctx.path,
-            )
-              ? REVIEW_ACCOUNT_TOKEN_REDEMPTIONS[ctx.path]
-              : undefined;
+            const resolve = findReviewAccountTokenRedemption(ctx.path);
             const subjects =
               resolve === undefined
                 ? []

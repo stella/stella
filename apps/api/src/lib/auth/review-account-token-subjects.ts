@@ -144,5 +144,34 @@ export const REVIEW_ACCOUNT_TOKEN_REDEMPTIONS: Readonly<
   },
 };
 
+/**
+ * Whether an auth path matches a route template: segment by segment, with a
+ * `:param` segment matching any one segment. Hooks may see either the
+ * template (`/callback/:id`) or the concrete path (`/callback/google`).
+ */
+export const matchesAuthPathTemplate = (
+  template: string,
+  path: string,
+): boolean => {
+  const templateSegments = template.split("/");
+  const pathSegments = path.split("/");
+  return (
+    templateSegments.length === pathSegments.length &&
+    templateSegments.every(
+      (segment, index) =>
+        segment === pathSegments[index] ||
+        (segment.startsWith(":") && (pathSegments[index] ?? "").length > 0),
+    )
+  );
+};
+
+/** The subject resolver for a token-redeeming auth path, if it is one. */
+export const findReviewAccountTokenRedemption = (
+  path: string,
+): TokenSubjectResolver | undefined =>
+  Object.entries(REVIEW_ACCOUNT_TOKEN_REDEMPTIONS).find(([template]) =>
+    matchesAuthPathTemplate(template, path),
+  )?.[1];
+
 export const isReviewAccountTokenRedemptionPath = (path: string): boolean =>
-  Object.hasOwn(REVIEW_ACCOUNT_TOKEN_REDEMPTIONS, path);
+  findReviewAccountTokenRedemption(path) !== undefined;

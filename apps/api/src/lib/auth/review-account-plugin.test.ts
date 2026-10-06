@@ -15,7 +15,9 @@ import {
   resolveReviewAccountSessionOperation,
 } from "@/api/lib/auth/review-account-policy";
 import {
+  findReviewAccountTokenRedemption,
   isReviewAccountTokenRedemptionPath,
+  matchesAuthPathTemplate,
   REVIEW_ACCOUNT_TOKEN_REDEMPTIONS,
 } from "@/api/lib/auth/review-account-token-subjects";
 import { createAccountAttemptBudget } from "@/api/lib/rate-limit/otp-account-budget";
@@ -67,6 +69,13 @@ const createReviewAuth = async ({
       teamMember: [],
       organizationRole: [],
     }),
+    // A configured social provider, so its callback reaches the hooks.
+    socialProviders: {
+      google: {
+        clientId: "fixture-client-id",
+        clientSecret: "fixture-client-secret",
+      },
+    },
     emailAndPassword: resolveEmailAndPasswordOptions({
       localPasswordEnabled,
       reviewAccountConfigured: true,
@@ -489,13 +498,30 @@ describe("restricted review account password sign-in", () => {
       "/reset-password",
       "/verify-email",
     ]);
+    // A concrete request path for every template.
+    const concreteExamples: Readonly<Record<string, string>> = {
+      "/callback/:id": "/callback/google",
+    };
     for (const path of redemptions) {
       expect({ path, routed: routerPaths.has(path) }).toEqual({
         path,
         routed: true,
       });
       expect(REVIEWED_OPEN_AUTH_PATHS.has(path)).toBe(false);
+      const concrete = path.includes(":") ? concreteExamples[path] : path;
+      expect({ path, concrete }).toEqual({
+        path,
+        concrete: expect.any(String),
+      });
+      expect(findReviewAccountTokenRedemption(concrete ?? "")).toBe(
+        REVIEW_ACCOUNT_TOKEN_REDEMPTIONS[path],
+      );
     }
+    expect(matchesAuthPathTemplate("/callback/:id", "/callback/")).toBe(false);
+    expect(
+      matchesAuthPathTemplate("/callback/:id", "/callback/google/extra"),
+    ).toBe(false);
+    expect(isReviewAccountTokenRedemptionPath("/callback")).toBe(false);
   });
 
   test("refuses an email-change link issued before the account was restricted", async () => {
@@ -557,9 +583,26 @@ describe("restricted review account password sign-in", () => {
           headers: { origin: "http://localhost:3001" },
         }),
       );
-      expect({ path, status: response.status }).toEqual({ path, status: 403 });
+      // Refused by the account policy, not by a missing provider or token.
+      expect({
+        path,
+        status: response.status,
+        body: await response.json(),
+      }).toMatchObject({
+        path,
+        status: 403,
+        body: { code: "account_access_unavailable" },
+      });
     }
     expect(await context.internalAdapter.findUserById(userId)).not.toBeNull();
+    // A callback whose state links no restricted account is not refused here.
+    const ordinary = await auth.handler(
+      new Request(
+        "http://localhost:3001/api/auth/callback/google?state=unknown-state&code=fixture-code",
+        { headers: { origin: "http://localhost:3001" } },
+      ),
+    );
+    expect(ordinary.status).not.toBe(403);
   });
 
   test("checks the organization a request names, not only the session's", async () => {
