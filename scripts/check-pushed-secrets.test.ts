@@ -39,8 +39,10 @@ const run = (cwd: string, command: string[]): string => {
 // The fake scanner records the log options it was asked to read, one per
 // line, and every argument it received. Like gitleaks (`git log -p -U0
 // <log-opts>`), it reads the patch text Git prints for those options and
-// keeps it, so a test can see what a scan would have covered. It exits with
-// FAKE_GITLEAKS_EXIT (default 0).
+// keeps it, so a test can see what a scan would have covered. Like gitleaks,
+// it logs how many commits it read: FAKE_GITLEAKS_SCANNED when set ("none"
+// omits the line), otherwise the commits with a hunk in a kept file. It exits
+// with FAKE_GITLEAKS_EXIT (default 0).
 const bin = path.join(root, "bin");
 const log = path.join(root, "ranges.log");
 const argsLog = path.join(root, "args.log");
@@ -49,6 +51,7 @@ mkdirSync(bin);
 writeFileSync(
   path.join(bin, "gitleaks"),
   `#!/usr/bin/env bash
+scanned=0
 for arg in "$@"; do
   echo "$arg" >> "${argsLog}"
   case "$arg" in
@@ -57,9 +60,12 @@ for arg in "$@"; do
       echo "$opts" >> "${log}"
       read -r -a words <<<"$opts"
       git log -p -U0 "\${words[@]}" >> "${patchLog}" || exit 0
+      scanned="$(git log -p -U0 --format=%x01 "\${words[@]}" | awk '/^\\001/ { c = 0; next } /^diff --git / { d = 0; next } /^deleted file mode / { d = 1; next } /^@@ / && !d && !c { n++; c = 1 } END { print n + 0 }')"
       ;;
   esac
 done
+scanned="\${FAKE_GITLEAKS_SCANNED:-$scanned}"
+[[ "$scanned" == none ]] || echo "INF $scanned commits scanned." >&2
 exit "\${FAKE_GITLEAKS_EXIT:-0}"
 `,
 );
@@ -119,7 +125,13 @@ const head = run(repo, ["git", "rev-parse", "HEAD"]);
 /** The log options the script passes for a revision range. */
 const scanOf = (range: string): string => `--remerge-diff ${range}`;
 
-type ScanOptions = { cwd?: string; pathPrefix?: string; scannerExit?: number };
+type ScanOptions = {
+  cwd?: string;
+  pathPrefix?: string;
+  scannerExit?: number;
+  /** What the scanner logs as read: a count, or "none" for no line. */
+  scannerScanned?: string;
+};
 type ScanResult = {
   exitCode: number;
   patch: string;
@@ -129,7 +141,12 @@ type ScanResult = {
 
 const scan = (
   stdin: string,
-  { cwd = repo, pathPrefix = bin, scannerExit = 0 }: ScanOptions = {},
+  {
+    cwd = repo,
+    pathPrefix = bin,
+    scannerExit = 0,
+    scannerScanned,
+  }: ScanOptions = {},
 ): ScanResult => {
   rmSync(log, { force: true });
   rmSync(argsLog, { force: true });
@@ -139,6 +156,9 @@ const scan = (
     env: {
       ...process.env,
       FAKE_GITLEAKS_EXIT: String(scannerExit),
+      ...(scannerScanned === undefined
+        ? {}
+        : { FAKE_GITLEAKS_SCANNED: scannerScanned }),
       PATH: `${pathPrefix}:${bin}:${process.env["PATH"] ?? ""}`,
     },
     stdin: new TextEncoder().encode(stdin),
@@ -359,5 +379,59 @@ describe("a merge resolution", () => {
     );
     expect(result.exitCode).toBe(1);
     expect(result.ranges).toEqual([]);
+  });
+});
+
+describe("what the scanner read", () => {
+  const dir = initRepo("scanner-count");
+  const before = commitFile(dir, { file: "kept.txt", text: "one\n" });
+  publish(dir, { ref: "main", oid: before });
+  const changed = commitFile(dir, { file: "kept.txt", text: "two\n" });
+  const push = `refs/heads/x ${changed} refs/heads/x ${before}\n`;
+
+  test("a scanner that read fewer changed commits than the range refuses", () => {
+    const result = scan(push, { cwd: dir, scannerScanned: "0" });
+    expect(result.exitCode).toBe(1);
+    expect(result.stderr).toContain("read 0 of 1 changed commits");
+  });
+
+  test("a scanner that read only part of a multi-commit push refuses", () => {
+    const second = commitFile(dir, { file: "kept.txt", text: "three\n" });
+    const result = scan(`refs/heads/x ${second} refs/heads/x ${before}\n`, {
+      cwd: dir,
+      scannerScanned: "1",
+    });
+    expect(result.exitCode).toBe(1);
+    expect(result.stderr).toContain("read 1 of 2 changed commits");
+    run(dir, ["git", "reset", "-q", "--hard", changed]);
+  });
+
+  test("a scanner that reports no count refuses", () => {
+    const result = scan(push, { cwd: dir, scannerScanned: "none" });
+    expect(result.exitCode).toBe(1);
+    expect(result.stderr).toContain("did not report how many commits");
+  });
+
+  test("a scanner that read every changed commit passes", () => {
+    expect(scan(push, { cwd: dir }).exitCode).toBe(0);
+  });
+
+  // gitleaks counts none of these: no text line changes in a file it keeps.
+  test("commits without a text change in a kept file expect no scan", () => {
+    run(dir, ["git", "commit", "-q", "--allow-empty", "-m", "empty"]);
+    run(dir, ["git", "mv", "kept.txt", "moved.txt"]);
+    run(dir, ["git", "commit", "-q", "-m", "rename"]);
+    chmodSync(path.join(dir, "moved.txt"), 0o755);
+    run(dir, ["git", "commit", "-q", "-am", "mode"]);
+    writeFileSync(path.join(dir, "blob.bin"), Buffer.from([0, 1, 2]));
+    run(dir, ["git", "add", "blob.bin"]);
+    run(dir, ["git", "commit", "-q", "-m", "binary"]);
+    run(dir, ["git", "rm", "-q", "moved.txt"]);
+    run(dir, ["git", "commit", "-q", "-m", "delete"]);
+    const tip = run(dir, ["git", "rev-parse", "HEAD"]);
+    const result = scan(`refs/heads/x ${tip} refs/heads/x ${changed}\n`, {
+      cwd: dir,
+    });
+    expect(result.exitCode).toBe(0);
   });
 });
