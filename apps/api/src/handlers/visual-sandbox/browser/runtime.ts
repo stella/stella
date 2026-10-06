@@ -36,7 +36,7 @@ const bootGuest = () => {
       return;
     }
     const link = event.target.closest("a[data-stella-link]");
-    if (!link) {
+    if (!(link instanceof HTMLAnchorElement)) {
       return;
     }
     event.preventDefault();
