@@ -1,6 +1,10 @@
 import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
 
+import {
+  COURT_TIER_LOCALIZED_LABELS,
+  courtTierLabelsForLanguage,
+} from "@stll/api-contract/case-law-court-tier-locales";
 import { assertProperty } from "@stll/property-testing";
 
 import { courtYearFixture, treemapFixture } from "./treemap-fixture";
@@ -23,6 +27,20 @@ const bucket = (id: string, count = 1) =>
     court: "court",
     year: 2024,
   }) as const satisfies VisualTreemapTree;
+
+test.each([
+  ["cs", "cs"],
+  ["cs-CZ", "cs"],
+  ["CS-CZ", "cs"],
+  ["CS", "cs"],
+  ["PT-br", "pt-BR"],
+  ["SK-sk", "sk"],
+  ["unknown", "en"],
+] as const)("court-tier legends resolve %s through %s", (language, locale) => {
+  expect(courtTierLabelsForLanguage(language)).toEqual(
+    COURT_TIER_LOCALIZED_LABELS[locale],
+  );
+});
 
 describe("visual treemap hierarchy", () => {
   test("preserves court-year area and filter identity across zoom and back", () => {

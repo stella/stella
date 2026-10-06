@@ -4,7 +4,7 @@ import { treemap } from "@tanstack/charts/hierarchy/treemap";
 import { panic } from "better-result";
 import { scaleLinear, scaleOrdinal } from "d3-scale";
 
-import { COURT_TIER_LOCALIZED_LABELS as tierLabels } from "@stll/api-contract/case-law-court-tier-locales";
+import { courtTierLabelsForLanguage } from "@stll/api-contract/case-law-court-tier-locales";
 import { COURT_TIER_LABELS } from "@stll/api-contract/case-law-court-tiers";
 
 import {
@@ -41,14 +41,7 @@ const categoricalPalette = [8, 17, 26, 35].map(
 );
 
 const localizedTierLabel = (language: string, category: string) => {
-  const locale =
-    Object.entries(tierLabels).find(
-      ([key]) => key.toLowerCase() === language.toLowerCase(),
-    )?.[1] ??
-    Object.entries(tierLabels).find(
-      ([key]) => key === language.split("-").at(0),
-    )?.[1] ??
-    tierLabels.en;
+  const locale = courtTierLabelsForLanguage(language);
   const entry = Object.entries(locale).find(([key]) => key === category);
   if (!entry) {
     panic("Treemap selected an unknown court tier");
@@ -107,7 +100,7 @@ const renderTreemapLegend = ({
 }: RenderLegendOptions) => {
   const owner = legend.ownerDocument;
   legend.replaceChildren();
-  legend.dataset.colorMode = mode;
+  Object.assign(legend.dataset, { colorMode: mode });
   if (mode === "category") {
     for (const category of categories) {
       const item = owner.createElement("span");
