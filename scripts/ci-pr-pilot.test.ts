@@ -18,6 +18,7 @@ const schema = v.object({
             id: v.optional(v.string()),
             name: v.string(),
             run: v.optional(v.string()),
+            env: v.optional(v.record(v.string(), v.string())),
             with: v.optional(v.looseObject({ script: v.optional(v.string()) })),
           }),
         ),
@@ -42,8 +43,11 @@ const original = v.parse(
   ),
 );
 const planner = workflow.jobs["ci-plan"];
-const policy = planner?.steps.find((step) => step.id === "pilot")?.with?.script;
-if (!policy || !planner) {
+if (!planner) {
+  throw new Error("Missing pilot planner");
+}
+const policy = planner.steps.find((step) => step.id === "pilot")?.with?.script;
+if (!policy) {
   throw new Error("Missing pilot policy");
 }
 const fastJobs = (input: unknown) => {
@@ -170,7 +174,11 @@ const conditionContext = (profile: string, event: string, depth: string) => {
     /needs\.ci-plan\.outputs\.([a-z_]+_required)/gu,
   );
   for (const match of scopes) {
-    values[`needs.ci-plan.outputs.${match[1]}`] = "true";
+    const scope = match.at(1);
+    if (scope === undefined) {
+      throw new Error("Missing CI scope capture");
+    }
+    values[`needs.ci-plan.outputs.${scope}`] = "true";
   }
   return {
     values,
@@ -322,5 +330,75 @@ test("the prerequisite census rejects every undecided new job and every deferred
       status: "invalid",
       message: `Pilot prerequisite is deferred: ${dependency}`,
     });
+  }
+});
+
+test("pilot-fast aggregation requires its planned jobs and accepts deferred skips", () => {
+  const result = workflow.jobs["ci-result"];
+  const aggregation = result?.steps.find(
+    (step) => step.name === "Evaluate CI outcome",
+  );
+  if (!aggregation?.run || !aggregation.env || !Array.isArray(result?.needs)) {
+    throw new Error("Missing result aggregation contract");
+  }
+  const run = aggregation.run;
+  const selected = fastJobs(workflow);
+  expect(selected).toContain("ci-plan");
+  expect(selected).toContain("ci-result");
+  expect(result.needs).not.toContain("ci-result");
+  const selectedDependencies = result.needs.filter((job) =>
+    selected.includes(job),
+  );
+  const deferredDependencies = result.needs.filter(
+    (job) => !selected.includes(job),
+  );
+  expect(selectedDependencies.length).toBeGreaterThan(1);
+  expect(deferredDependencies.length).toBeGreaterThan(0);
+  const scopes = v.parse(
+    v.record(v.string(), v.nullable(v.string())),
+    JSON.parse(aggregation.env["JOB_SCOPES"] ?? "null"),
+  );
+  const plan = Object.fromEntries(
+    Object.values(scopes)
+      .filter((scope) => scope !== null)
+      .map((scope) => [scope, "true"]),
+  );
+  const successful = Object.fromEntries(
+    result.needs.map((job) => [
+      job,
+      { result: selected.includes(job) ? "success" : "skipped" },
+    ]),
+  );
+  const aggregate = (needs: typeof successful) =>
+    Bun.spawnSync(["bash", "-c", run], {
+      env: {
+        ...process.env,
+        ...aggregation.env,
+        COVERAGE_PROFILE: "pilot-fast-v1",
+        PILOT_FAST_JOBS: JSON.stringify(selected),
+        NEEDS: JSON.stringify(needs),
+        PLAN: JSON.stringify(plan),
+        PLAN_RESULT: "success",
+        TRUSTED: "true",
+        EVENT: "pull_request",
+        SUITE_DEPTH: "fast",
+        QUEUE_DEPTH: "full",
+        QUEUE_VALIDATION: "false",
+        HEAVY_ONLY: "false",
+        RUN_REQUIRED: "true",
+      },
+    });
+  // ci-result remains in the profile but is absent from its own dependency map.
+  expect(successful).not.toHaveProperty("ci-result");
+  const passed = aggregate(successful);
+  expect(passed.exitCode, passed.stderr.toString()).toBe(0);
+  for (const job of selectedDependencies) {
+    for (const outcome of ["skipped", "failure"]) {
+      const failed = aggregate({ ...successful, [job]: { result: outcome } });
+      expect(
+        failed.exitCode,
+        `${job}/${outcome}: ${failed.stdout.toString()}`,
+      ).toBe(1);
+    }
   }
 });
