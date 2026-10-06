@@ -37,8 +37,9 @@ import {
   buildSectionMap,
   flattenAnalysisHeadings,
   getCategoryVar,
+  getHeadingDisplayAnchorId,
 } from "@/features/case-law/components/case-viewer/analysis/types";
-import { useDecisionAnalysis } from "@/features/case-law/components/case-viewer/analysis/use-decision-analysis";
+import { useLazyDecisionAnalysis } from "@/features/case-law/components/case-viewer/analysis/use-lazy-decision-analysis";
 import type { ReaderMarksFilter } from "@/features/case-law/components/case-viewer/decision-annotation-surface.logic";
 import type { DecisionDocumentState } from "@/features/case-law/components/case-viewer/decision-body-state.logic";
 import { DecisionText } from "@/features/case-law/components/case-viewer/decision-text";
@@ -84,6 +85,7 @@ type DecisionWorkspaceDecision = Pick<
   | "judges"
   | "language"
   | "metadata"
+  | "source"
   | "sourceAttributionUrl"
   | "textFields"
   | "updatedAt"
@@ -128,14 +130,6 @@ type EnabledDecisionWorkspaceProps = DecisionWorkspaceBaseProps & {
 export type DecisionWorkspaceProps =
   | EnabledDecisionWorkspaceProps
   | GatedDecisionWorkspaceProps;
-
-const getHeadingDisplayAnchorId = ({
-  annotations,
-  startAnchorId,
-}: {
-  annotations: { startAnchorId: string }[];
-  startAnchorId: string;
-}) => annotations.at(0)?.startAnchorId ?? startAnchorId;
 
 /** What the margin's source filter means for the reader's own marks. */
 const MARKS_FOR_NOTES_FILTER = {
@@ -182,7 +176,6 @@ export const DecisionWorkspace = (props: DecisionWorkspaceProps) => {
   // below reads `analysisState` alone: a gated reader never starts a run, so
   // its state stays `idle` (the offer rather than an empty analysis column)
   // unless this session already fetched the finished analysis.
-  const analysisRunnable = props.aiMode === "enabled";
   const ensureAIAvailable =
     props.aiMode === "enabled" ? props.ensureAIAvailable : null;
 
@@ -221,9 +214,12 @@ export const DecisionWorkspace = (props: DecisionWorkspaceProps) => {
   );
 
   const { state: analysisState, generate: generateDecisionAnalysis } =
-    useDecisionAnalysis({
+    useLazyDecisionAnalysis({
       decisionId,
       decisionUpdatedAt: decision.updatedAt,
+      documentReady: ast !== null,
+      sourceAllowsDerivedAi: decision.source.allowsDerivedAi,
+      mode: props.aiMode,
     });
   const generate = useCallback(async () => {
     if (!ensureAIAvailable) {
@@ -395,12 +391,6 @@ export const DecisionWorkspace = (props: DecisionWorkspaceProps) => {
     ...exampleMarginItems,
     ...annotations.notes,
   ];
-
-  useExternalSyncEffect(() => {
-    if (analysisRunnable && ast && analysisState.status === "idle") {
-      detached(generate(), "decision-workspace.generate");
-    }
-  }, [analysisRunnable, analysisState.status, ast, generate]);
 
   const reset = useCaseSearchStore((s) => s.reset);
   useExternalSyncEffect(() => {

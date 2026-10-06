@@ -9,10 +9,13 @@ import {
   resolveInspectorDockWidth,
   useInspectorPaneWidth,
 } from "@stll/ui/inspector";
+import { Sheet, SheetHeader, SheetPopup, SheetTitle } from "@stll/ui/sheet";
 import { TOAST_RIGHT_OFFSET_VAR } from "@stll/ui/toast";
+import { useIsMobile } from "@stll/ui/use-mobile";
 import { useViewportWidth } from "@stll/ui/use-viewport-width";
 import { WorkspaceEndRail } from "@stll/ui/workspace-shell";
 
+import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
 import { inspectorPaneWidthStorageKey } from "@/components/inspector/pane-width-storage";
 import { useSidebarInlineSize } from "@/components/sidebar";
 import Tooltip from "@/components/tooltip";
@@ -75,6 +78,8 @@ export const PublicInspectorDock = ({
   children,
   expanded = false,
 }: PublicInspectorDockProps) => {
+  const isMobile = useIsMobile();
+  const setMinimized = useInspectorTabsStore((state) => state.setMinimized);
   const t = useTranslations();
   const sidebarWidth = useSidebarInlineSize();
   const viewportWidth = useViewportWidth();
@@ -88,7 +93,7 @@ export const PublicInspectorDock = ({
     paneWidth: width,
     showPaneContent: expanded,
   });
-  const widthPx = `${dockWidth}px`;
+  const widthPx = isMobile ? "0px" : `${dockWidth}px`;
 
   // Toasts and a document's find bar sit beside the dock, not beneath it.
   useExternalSyncEffect(() => {
@@ -105,6 +110,23 @@ export const PublicInspectorDock = ({
       );
     };
   }, [widthPx]);
+
+  if (isMobile) {
+    return (
+      <Sheet open={expanded} onOpenChange={(open) => setMinimized(!open)}>
+        <SheetPopup
+          className="h-dvh w-full max-w-none md:hidden"
+          showCloseButton={false}
+          side="inline-end"
+        >
+          <SheetHeader className="sr-only">
+            <SheetTitle>{t("inspector.title")}</SheetTitle>
+          </SheetHeader>
+          {children}
+        </SheetPopup>
+      </Sheet>
+    );
+  }
 
   return (
     <InspectorDock

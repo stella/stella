@@ -4,6 +4,19 @@ import path from "node:path";
 const REPO_ROOT = path.resolve(import.meta.dirname, "../../..");
 
 export default defineConfig({
+  reporter: process.env["CI"]
+    ? [
+        ["dot"],
+        [
+          "json",
+          {
+            outputFile:
+              process.env["PLAYWRIGHT_JSON_OUTPUT_FILE"] ??
+              ".cache/playwright-timings.json",
+          },
+        ],
+      ]
+    : [["list"]],
   testDir: "./marketing",
   fullyParallel: false,
   workers: 1,

@@ -9,7 +9,20 @@ export default defineConfig({
   fullyParallel: true,
   workers: 2,
   retries: 0,
-  reporter: IS_CI ? [["github"], ["list"]] : [["list"]],
+  reporter: IS_CI
+    ? [
+        ["github"],
+        ["list"],
+        [
+          "json",
+          {
+            outputFile:
+              process.env["PLAYWRIGHT_JSON_OUTPUT_FILE"] ??
+              ".cache/playwright-timings.json",
+          },
+        ],
+      ]
+    : [["list"]],
   timeout: 30_000,
   use: {
     baseURL: BASE_URL,

@@ -86,6 +86,7 @@ const absent = {
 const decision = {
   caseNumber: "1 As 1/2026",
   caseNumberType: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
+  country: "CZE",
   court: "Test court",
   courtAbbreviation: null,
   courtTier: "other",
