@@ -196,6 +196,8 @@ const RETAINED_MEMBER_COLUMNS = {
   "sanctions_screening_events.reviewer_id":
     "Screening decision history; attribution grants no membership or review authority.",
   "audit_logs.user_id": "Audit performer history.",
+  "feature_enrolments.user_id":
+    "The person's own feature opt-in; access also requires current membership, and the row cascades with the user and organization.",
   "audit_logs.trigger_user_id": "Audit trigger history.",
   "audit_logs.approved_by_user_id": "Audit approval history.",
   "buffer_object_cleanup_intents.writer_user_id":
@@ -447,6 +449,8 @@ const RETAINED_MEMBER_COLUMNS = {
  * the person stays a member of the organization.
  */
 const MATTER_REMOVAL_RETAINED_COLUMNS = {
+  "desktop_presence.user_id":
+    "Organization-scoped presence; the person stays an organization member.",
   "member.user_id": "Organization membership outlives a matter removal.",
   "contacts.originating_attorney_id":
     "Organization-level attorney; the person stays an organization member.",

@@ -57,7 +57,7 @@ type RunFinishedChunk = Extract<StreamChunk, { type: EventType.RUN_FINISHED }>;
  * The run error code of a response the model stopped writing because it
  * reached the output ceiling the request set (Anthropic, Gemini).
  */
-const TRUNCATED_AT_OUTPUT_CEILING_CODE = "max_tokens";
+export const TRUNCATED_AT_OUTPUT_CEILING_CODE = "max_tokens";
 /**
  * OpenAI's Responses adapter reports a response that ended incomplete with
  * this code, and the reason it ended as the message.

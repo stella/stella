@@ -36,6 +36,7 @@ export const RESULT_CONVENTION_ENABLED_GLOBS = [
   "apps/api/src/handlers/billing-codes/**/*.ts",
   "apps/api/src/handlers/clauses/**/*.ts",
   "apps/api/src/handlers/contacts/**/*.ts",
+  "apps/api/src/handlers/desktop-presence/**/*.ts",
   "apps/api/src/handlers/desktop-registry/**/*.ts",
   "apps/api/src/handlers/dev/**/*.ts",
   "apps/api/src/handlers/document-translations/**/*.ts",
@@ -177,6 +178,8 @@ export const RESULT_CONVENTION_ENABLED_GLOBS = [
 ] as const;
 
 export const RESULT_BOUNDARY_GLOBS = [
+  // Elysia consumes prevalidation feature denials through its error pipeline.
+  "apps/api/src/lib/auth/feature-access/route.ts",
   // TanStack Query consumes read failures through queryFn Promise rejection;
   // this adapter translates typed Result errors at that framework boundary.
   "apps/web/src/lib/errors/query-result.ts",

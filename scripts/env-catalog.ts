@@ -920,7 +920,6 @@ export const ENV_CREDENTIAL_CLASSIFICATION = {
   VITE_FEATURE_FOLIO_COLLAB: ENV_CREDENTIAL_KIND.notCredential,
   VITE_FEATURE_GOVERNED_WORKFLOW: ENV_CREDENTIAL_KIND.notCredential,
   VITE_FEATURE_INBOX: ENV_CREDENTIAL_KIND.notCredential,
-  VITE_FEATURE_TIME_BILLING: ENV_CREDENTIAL_KIND.notCredential,
   VITE_FEATURE_USAGE: ENV_CREDENTIAL_KIND.notCredential,
   VITE_POSTHOG_HOST: ENV_CREDENTIAL_KIND.notCredential,
   VITE_POSTHOG_KEY: ENV_CREDENTIAL_KIND.notCredential,
@@ -1187,21 +1186,6 @@ export const COLLAB_ENV_SCHEMA = envCollabServerSchema;
 
 export type WebEnvironmentName = keyof typeof WEB_ENV_SCHEMA;
 
-type DeploymentFlagPair = {
-  web: WebEnvironmentName;
-  api: ApiEnvironmentName;
-};
-
-/**
- * Web build flags that offer a feature only the paired API flag serves. A
- * deployment that turns the web flag on without the API flag shows pages
- * whose requests the API answers as absent routes, so the deployment
- * environment check refuses that combination.
- */
-export const DEPLOYMENT_FLAG_PAIRS = [
-  { web: "VITE_FEATURE_TIME_BILLING", api: "FEATURE_TIME_BILLING" },
-] as const satisfies readonly DeploymentFlagPair[];
-
 export const isActiveExampleEntry = (name: string) =>
   ACTIVE_EXAMPLE_KEYS.has(name);
 
@@ -1299,7 +1283,6 @@ export const DEPLOYMENT_ENV_KEYS = new Set([
   "TEXT_RECOGNITION_MODEL_SHA256",
   "TEXT_RECOGNITION_MODEL_URL",
   "VIRTUAL_ENV",
-  "VITE_FEATURE_TIME_BILLING",
 ]);
 
 export const TOOLING_ENV_KEYS = new Set([
@@ -1375,6 +1358,18 @@ export const TOOLING_ENV_KEYS = new Set([
   "EXPECTED_COMMIT",
   "GH_READ_TOKEN",
   "HEAD_SHA",
+  // Scheduled journey checks: endpoint overrides and bounded request/retry timing.
+  "JOURNEY_CLI_URL",
+  "JOURNEY_MAIN_REF",
+  "JOURNEY_MCP_URL",
+  "JOURNEY_NPM_REGISTRY_URL",
+  "JOURNEY_REGISTRY_TIMEOUT_MS",
+  "JOURNEY_RETRY_PAUSE_SECONDS",
+  "JOURNEY_TIMEOUT_SECONDS",
+  "JOURNEY_WEB_DECISION_URL",
+  "JOURNEY_WEB_SEARCH_URL",
+  "JOURNEY_WEB_STATUTES_URL",
+  "JOURNEY_WEB_URL",
   "LANDING_SITE",
   "MARKETING_CAPTURE",
   "MARKETING_COMMIT",
@@ -1457,8 +1452,10 @@ export const TOOLING_ENV_KEYS = new Set([
   "STELLA_COLLAB_TEST_REDIS_URL",
   // Private loopback endpoint passed to the isolated corpus-suite preload.
   "STELLA_CORPUS_ENGINE_TEST_ENDPOINT",
+  "STELLA_DESKTOP_DOWNLOAD_BASE_URL",
   "STELLA_DESKTOP_RELEASE_API_PATH",
   "STELLA_DESKTOP_RELEASE_EXPECTED_TAG",
+  "STELLA_DESKTOP_RETRY_PAUSE_SECONDS",
   "STELLA_DESKTOP_SMOKE_API_URL",
   "STELLA_DEV_INSTANCE",
   "STELLA_INFRA_OFFSET",

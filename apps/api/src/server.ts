@@ -37,6 +37,7 @@ import {
   clausesRoute,
 } from "@/api/handlers/clauses/routes";
 import { contactsRoute } from "@/api/handlers/contacts/routes";
+import { desktopPresenceRoute } from "@/api/handlers/desktop-presence/routes";
 import { desktopRegistryRoute } from "@/api/handlers/desktop-registry/routes";
 import { documentReviewPassagesRoute } from "@/api/handlers/document-reviews/passages-routes";
 import { documentReviewsRoute } from "@/api/handlers/document-reviews/routes";
@@ -560,7 +561,7 @@ const api = new Elysia()
   // TypeScript's instantiation limit for the browser's Eden client. The
   // signing route carries the version prefix itself.
   .use(feedbackRoute)
-  .use(pdfSigningSessionsRoute);
+  .use(new Elysia().use(pdfSigningSessionsRoute).use(desktopPresenceRoute));
 
 export default api;
 

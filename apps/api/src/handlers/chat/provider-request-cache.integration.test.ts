@@ -1,15 +1,21 @@
 import { toolDefinition } from "@tanstack/ai";
 import { panic } from "better-result";
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
-import { eq, inArray } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import * as v from "valibot";
 
 import { TANSTACK_AI_PROVIDERS } from "@stll/ai-catalog";
 import type { TanStackAIProvider } from "@stll/ai-catalog";
 import { propertyTestTimeout } from "@stll/property-testing";
 
+import { user as authUser } from "@/api/db/auth-schema";
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
-import { chatThreads, organizationSettings, userFiles } from "@/api/db/schema";
+import {
+  chatThreads,
+  featureEnrolments,
+  organizationSettings,
+  userFiles,
+} from "@/api/db/schema";
 import type { PracticeJurisdiction } from "@/api/db/schema";
 import { createScopedDb } from "@/api/db/scoped";
 import { env } from "@/api/env";
@@ -74,6 +80,7 @@ import {
   WIRE_PROMPT_SECTIONS,
 } from "@/api/tests/helpers/replayed-harness-model";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
+import { enrolTimeBilling } from "@/api/tests/helpers/time-billing-enrolment";
 import { toSafeDbMock } from "@/api/tests/scoped-db-mock";
 import {
   getRlsFixture,
@@ -475,9 +482,7 @@ const messageTextsOf = (
 
 /** The stable-prefix size each surface measured, for the ratchet test. */
 const measuredStablePrefixes = new Map<string, number>();
-/** The first member's extended-surface Anthropic request, for the per-tool
- *  budget. */
-let budgetedToolsBody: Record<string, unknown> | undefined;
+const BILLING_BUDGET_FEATURE_ID = "time-billing";
 
 /** Two members of the organization send `endpoint` the same tools and system
  *  prompt through its organization layer, marked where the provider caches at
@@ -540,9 +545,6 @@ const expectMembersShareThePrefix = async (
     estimatedWireTokens(toolsSectionOf(provider, a)) +
       estimatedTokens({ prose: cacheable }),
   );
-  if (endpoint.key === "anthropic" && tools === "extended") {
-    budgetedToolsBody = a;
-  }
 };
 
 describe("chat requests: the cached prefix", () => {
@@ -661,33 +663,69 @@ describe("chat requests: the cached prefix", () => {
     ]).toEqual([]);
   });
 
-  test("every tool fits its size budget or says why it does not", () => {
-    const body =
-      budgetedToolsBody ?? panic("The extended Anthropic surface was measured");
-    const { toolTokenBudget, toolsOverBudget } = readChatPromptBaseline();
-    const sizes = new Map(
-      anthropicToolEntriesOf(body).map(({ name, wire }) => [
-        name,
-        estimatedWireTokens(wire),
-      ]),
-    );
-    expect(sizes.size).toBeGreaterThan(0);
-    expect([
-      ...[...sizes]
-        .filter(
-          ([name, tokens]) =>
-            tokens > toolTokenBudget && toolsOverBudget[name] === undefined,
-        )
-        .map(
-          ([name, tokens]) =>
-            `${name}: ${String(tokens)} estimated tokens, over the ${String(toolTokenBudget)} budget; trim it or add a written reason to toolsOverBudget`,
-        ),
-      ...Object.keys(toolsOverBudget)
-        .filter((name) => (sizes.get(name) ?? 0) <= toolTokenBudget)
-        .map(
-          (name) =>
-            `${name}: listed over budget but ${String(sizes.get(name) ?? 0)} estimated tokens fit it; remove the entry`,
-        ),
-    ]).toEqual([]);
-  });
+  test(
+    "every tool fits its size budget or says why it does not",
+    async () => {
+      const identity =
+        (
+          await testDb
+            .select({ emailVerified: authUser.emailVerified })
+            .from(authUser)
+            .where(eq(authUser.id, firstMember.id))
+            .limit(1)
+        ).at(0) ?? panic("The budget caller exists");
+      // The shared-prefix fixtures stay unenrolled; budget the billing tools
+      // through a separate admitted request using the production policy.
+      try {
+        await enrolTimeBilling(testDb, [
+          { organizationId: ids.orgA, userId: firstMember.id },
+        ]);
+        const body = await firstTurnBody({
+          endpoint: { key: "anthropic", provider: "anthropic" },
+          member: { ...firstMember, matterId: ids.wsA2 },
+          tools: "extended",
+        });
+        const { toolTokenBudget, toolsOverBudget } = readChatPromptBaseline();
+        const sizes = new Map(
+          anthropicToolEntriesOf(body).map(({ name, wire }) => [
+            name,
+            estimatedWireTokens(wire),
+          ]),
+        );
+        expect(sizes.size).toBeGreaterThan(0);
+        expect([
+          ...[...sizes]
+            .filter(
+              ([name, tokens]) =>
+                tokens > toolTokenBudget && toolsOverBudget[name] === undefined,
+            )
+            .map(
+              ([name, tokens]) =>
+                `${name}: ${String(tokens)} estimated tokens, over the ${String(toolTokenBudget)} budget; trim it or add a written reason to toolsOverBudget`,
+            ),
+          ...Object.keys(toolsOverBudget)
+            .filter((name) => (sizes.get(name) ?? 0) <= toolTokenBudget)
+            .map(
+              (name) =>
+                `${name}: listed over budget but ${String(sizes.get(name) ?? 0)} estimated tokens fit it; remove the entry`,
+            ),
+        ]).toEqual([]);
+      } finally {
+        await testDb
+          .delete(featureEnrolments)
+          .where(
+            and(
+              eq(featureEnrolments.organizationId, ids.orgA),
+              eq(featureEnrolments.userId, firstMember.id),
+              eq(featureEnrolments.featureId, BILLING_BUDGET_FEATURE_ID),
+            ),
+          );
+        await testDb
+          .update(authUser)
+          .set({ emailVerified: identity.emailVerified })
+          .where(eq(authUser.id, firstMember.id));
+      }
+    },
+    propertyTestTimeout(CONVERSATION_TIMEOUT_MS),
+  );
 });

@@ -37,6 +37,8 @@ import { reportExportsKeys } from "@/lib/workspaces/queries/report-exports";
 import { timeEntriesKeys } from "@/lib/workspaces/queries/time-entries";
 import { viewTemplateKeys } from "@/lib/workspaces/queries/view-templates";
 import { workspaceMemberPreviewsOptions } from "@/lib/workspaces/queries/workspace-member-previews";
+import { deploymentFeaturesOptions } from "@/queries/deployment-features";
+import { featureEnrolmentsOptions } from "@/queries/feature-enrolments";
 import {
   organizationSettingsOptions,
   optionalOrganizationSettingsOptions,
@@ -97,6 +99,10 @@ const KEY_TYPE_HAS_USER = "the key argument's type requires userId";
 
 // Keyed by handler path under apps/api/src/handlers.
 const PER_USER_READS: Record<string, PerUserRead> = {
+  "desktop-presence/read.ts": {
+    kind: "no-web-caller",
+    calls: ["api.desktop.presence.get"],
+  },
   "views/list.ts": {
     kind: "caller-marker",
     reason:
@@ -124,6 +130,22 @@ const PER_USER_READS: Record<string, PerUserRead> = {
         organizationId: null,
         userId: USER,
       }).queryKey,
+    ],
+  },
+  "organization-settings/deployment-features/get.ts": {
+    kind: "keyed",
+    calls: ['api["organization-settings"]["deployment-features"].get'],
+    files: ["queries/deployment-features.ts"],
+    keys: () => [
+      deploymentFeaturesOptions({ organizationId: ORG, userId: USER }).queryKey,
+    ],
+  },
+  "organization-settings/feature-enrolments/get.ts": {
+    kind: "keyed",
+    calls: ['api["organization-settings"]["feature-enrolments"].get'],
+    files: ["queries/feature-enrolments.ts"],
+    keys: () => [
+      featureEnrolmentsOptions({ organizationId: ORG, userId: USER }).queryKey,
     ],
   },
   "audit-logs/export.ts": { kind: "not-per-user", reason: DOWNLOAD },

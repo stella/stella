@@ -4,8 +4,9 @@ import { eq, inArray } from "drizzle-orm";
 
 import { TIME_ENTRY_ACTIVITY_GROUP } from "@stll/api-contract";
 
+import { user as authUser } from "@/api/db/auth-schema";
 import type { ScopedDb } from "@/api/db/safe-db";
-import { invoices, timeEntries } from "@/api/db/schema";
+import { invoices, timeEntries, featureEnrolments } from "@/api/db/schema";
 import { createSafeDb, createScopedDb } from "@/api/db/scoped";
 import { exportCsvHandler } from "@/api/handlers/time-entries/csv/export";
 import { exportLedesHandler } from "@/api/handlers/time-entries/ledes/export";
@@ -35,6 +36,21 @@ beforeAll(async () => {
   const fixture = await getRlsFixture();
   db = fixture.testDb;
   ids = fixture.ids;
+
+  await db
+    .update(authUser)
+    .set({ emailVerified: true })
+    .where(inArray(authUser.id, [ids.userAdmin]));
+  await db
+    .insert(featureEnrolments)
+    .values([
+      {
+        organizationId: ids.orgA,
+        userId: ids.userAdmin,
+        featureId: "time-billing",
+      },
+    ])
+    .onConflictDoNothing();
 });
 afterAll(async () => {
   if (createdIds.length > 0) {

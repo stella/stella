@@ -22,6 +22,7 @@ const config = {
     "stops being offered.",
   permissions: { billingCode: ["delete"] },
   accountAccess: ACCOUNT_ACCESS.sandbox,
+  featureAccess: { featureId: "time-billing", type: "required" },
   realtime: billingCodeRealtimeUpdates,
   mcp: { type: "capability", reason: "billing_admin", consumesServices: false },
   body: deleteBillingCodeBodySchema,

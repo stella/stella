@@ -80,17 +80,7 @@ test("parsed verification grants resolve against current identity and deny absen
     { email: memberGrant.email, emailVerified: false },
     null,
   ]) {
-    const database = createScopedDbMock({
-      select: () => ({
-        from: () => ({
-          innerJoin: () => ({
-            where: () => ({
-              limit: async () => (identity === null ? [] : [identity]),
-            }),
-          }),
-        }),
-      }),
-    });
+    const database = createScopedDbMock({}, { featureAccess: { identity } });
     const snapshot = await database.scopedDb(
       async (tx) =>
         await resolveFeatureAccessSnapshot({
