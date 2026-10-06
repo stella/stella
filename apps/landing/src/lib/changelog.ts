@@ -19,7 +19,7 @@ export type ChangelogRelease = {
 // A `null` entry records a stable tag whose release was built but never
 // promoted to production: its notes file exists, and nothing here lists it.
 // Computed filesystem reads retain these repository Markdown inputs.
-export const CI_MARKDOWN_READER_INPUTS = ["docs/changelog/*.md"];
+export const CI_MARKDOWN_READER_INPUTS_CHANGELOG = ["docs/changelog/*.md"];
 
 const RELEASE_DATES: Partial<Record<string, string | null>> = releaseDates;
 

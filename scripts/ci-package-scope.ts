@@ -505,16 +505,36 @@ const declaredMarkdownInputs = (
   }
   const seen = new Set(options.seen);
   seen.add(text);
-  const expressions = identifierExpressions({ expression: text, code, source });
-  const results = expressions?.map((value) =>
+  // Reader metadata names may include their owner to avoid shared public exports.
+  const names =
+    text === "CI_MARKDOWN_READER_INPUTS"
+      ? [
+          ...new Set(
+            [
+              ...code.matchAll(
+                /\bconst\s+CI_MARKDOWN_READER_INPUTS(?:_[A-Za-z_$][\w$]*)?\b/gu,
+              ),
+            ].map((match) => match[0].replace(/^const\s+/u, "")),
+          ),
+        ]
+      : [text];
+  const expressions: string[] = [];
+  for (const name of names) {
+    const values = identifierExpressions({ expression: name, code, source });
+    if (values === undefined) {
+      return undefined;
+    }
+    expressions.push(...values);
+  }
+  const results = expressions.map((value) =>
     declaredMarkdownInputs({ ...options, expression: value, seen }),
   );
-  const first = results?.at(0);
+  const first = results.at(0);
   if (first === undefined) {
     return undefined;
   }
   if (
-    results?.some((value) => JSON.stringify(value) !== JSON.stringify(first))
+    results.some((value) => JSON.stringify(value) !== JSON.stringify(first))
   ) {
     throw new MarkdownReaderDeclarationError(
       `${file}: Markdown reader declarations disagree: ${text}`,
@@ -783,11 +803,11 @@ const sourceFunctionBodies = (code: string) => {
             code
               .slice(start, bodyStart)
               .slice(code.slice(start, bodyStart).indexOf("(")),
-          ).map((argument) => argument.match(/^\s*([A-Za-z_$][\w$]*)\b/u)?.[1])
+          ).map((argument) => /^\s*([A-Za-z_$][\w$]*)\b/u.exec(argument)?.[1])
         : [
-            code
-              .slice(start, bodyStart)
-              .match(/[=]\s*(?:async\s+)?([A-Za-z_$][\w$]*)\s*=>/u)?.[1],
+            /[=]\s*(?:async\s+)?([A-Za-z_$][\w$]*)\s*=>/u.exec(
+              code.slice(start, bodyStart),
+            )?.[1],
           ],
       body: code.slice(bodyStart, end === -1 ? code.length : end),
     });

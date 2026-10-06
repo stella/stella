@@ -847,6 +847,32 @@ test("imported Markdown constants and aliases remain named unresolved inputs", (
   });
 });
 
+test("owner-named Markdown declarations preserve input scope without duplicate public exports", () => {
+  for (const name of [
+    "CI_MARKDOWN_READER_INPUTS_CHANGELOG",
+    "CI_MARKDOWN_READER_INPUTS_REPORT",
+  ]) {
+    repository((root, write) => {
+      write(
+        "scripts/reader.ts",
+        `import { readFileSync } from "node:fs";
+        export const ${name} = ["docs/changelog/*.md"];
+        export const CI_MARKDOWN_READER_COMMAND = "bun scripts/reader.ts";
+        const INPUT = "docs/changelog/source.md";
+        function read(root: string) { readFileSync(path.join(root, INPUT)); }`,
+      );
+      expect(
+        markdownReaders(root).find(({ file }) => file === "scripts/reader.ts")
+          ?.inputs,
+      ).toEqual(["docs/changelog/*.md"]);
+      expect(
+        markdownChecks({ root, changed: ["docs/changelog/v1.md"] }),
+      ).toEqual([["bun", "scripts/reader.ts"]]);
+      expect(markdownChecks({ root, changed: ["README.md"] })).toEqual([]);
+    });
+  }
+});
+
 test("declared Markdown constants retain only their unresolved reader inputs", () => {
   repository((root, write) => {
     const reader = "scripts/imported-root.test.ts";
@@ -1276,7 +1302,7 @@ test("every tracked named Markdown input declaration enters the reader census", 
       /^(?:scripts|apps|packages)\/.+\.[cm]?[jt]sx?$/u.test(file),
     );
   const declared = files.filter((file) =>
-    /\bexport\s+const\s+CI_MARKDOWN_READER_INPUTS\b/u.test(
+    /\bexport\s+const\s+CI_MARKDOWN_READER_INPUTS(?:_[A-Za-z_$][\w$]*)?\b/u.test(
       maskSourceNonCode(readFileSync(path.join(root, file), "utf-8")),
     ),
   );
