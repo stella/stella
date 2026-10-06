@@ -104,6 +104,14 @@ export const TABLE_RETENTION = {
     boundedBy:
       "At most one claim per organization, taken over in place once expired and deleted with its owner.",
   },
+  organization_professional_use_acceptances: {
+    boundedBy:
+      "One acceptance per organization, written at creation and deleted with its owner.",
+  },
+  user_professional_use_acceptances: {
+    boundedBy:
+      "One acceptance per account, written at creation and deleted with the account.",
+  },
   usage_allocations: {
     boundedBy: "Organization-owned usage accounting and deletion.",
   },

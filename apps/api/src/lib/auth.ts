@@ -179,6 +179,10 @@ import {
   readAuthorizedMemberRole,
   sessionMemberRole,
 } from "@/api/lib/permission-authorization";
+import {
+  recordOrganizationProfessionalUse,
+  recordUserProfessionalUse,
+} from "@/api/lib/professional-use";
 import { createAuthRateLimitStorage } from "@/api/lib/rate-limit/auth-storage";
 import { createOtpAccountLimitPlugin } from "@/api/lib/rate-limit/otp-account-budget";
 import type { RateLimitContext } from "@/api/lib/rate-limit/rate-limit";
@@ -1140,6 +1144,16 @@ export const createAuth = (roleAssignmentPolicy = assignableRoles) => {
     // Idempotent via the (organization_id, key) unique. Runs on the owner
     // connection (`rootDb`), which bypasses RLS the same way the org row's
     // own creation did.
+    // Insert-once on the owner connection, audited in the same transaction.
+    recordProfessionalUse: async ({ organizationId, userId }: NewMembership) =>
+      await rootDb.transaction(
+        async (tx) =>
+          await recordOrganizationProfessionalUse({
+            tx,
+            organizationId,
+            userId,
+          }),
+      ),
     seedDefaultDocumentTypes: async (organizationId: SafeId<"organization">) =>
       await ensureDefaultDocumentTypes(organizationId, rootDb),
     // Once per membership, on the owner connection that wrote the membership
@@ -1604,6 +1618,15 @@ export const createAuth = (roleAssignmentPolicy = assignableRoles) => {
                 ? { ...data.value, detectedCountry }
                 : data.value,
             });
+          },
+          // Every account is created where the professional-use statement is
+          // shown, so creating it is the acceptance. Insert-once on the owner
+          // connection that wrote the user row.
+          after: async (user) => {
+            await recordUserProfessionalUse(
+              rootDb,
+              brandPersistedUserId(user.id),
+            );
           },
         },
         update: {

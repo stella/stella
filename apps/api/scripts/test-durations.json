@@ -6819,6 +6819,10 @@
     "seconds": 0.338459,
     "source": "estimated"
   },
+  "src/lib/professional-use.db.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
   "src/lib/prompt-safety.test.ts": {
     "seconds": 0.091345,
     "source": "estimated"
