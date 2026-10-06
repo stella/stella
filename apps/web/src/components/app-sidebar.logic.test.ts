@@ -4,6 +4,7 @@ import type { WorkspaceActivity } from "@/components/app-sidebar.logic";
 import {
   matterActivityIsKnownEmpty,
   matterActivityItemVisible,
+  matterActivityNeedsLegalListsDecision,
   resolveEntityActivityDestination,
   resolveAutomaticExpandedMatterId,
   resolveMatterNavigationTarget,
@@ -295,6 +296,25 @@ describe("sidebar list item admission", () => {
       });
     }
   }
+  test("only list items other than tasks need the Lists decision", () => {
+    expect(matterActivityNeedsLegalListsDecision([])).toBe(false);
+    expect(matterActivityNeedsLegalListsDecision([entity])).toBe(false);
+    expect(
+      matterActivityNeedsLegalListsDecision([
+        { ...entity, listItemType: "task" },
+      ]),
+    ).toBe(false);
+    for (const listItemType of LIST_ITEM_TYPES.filter(
+      (type) => type !== "task",
+    )) {
+      expect(
+        matterActivityNeedsLegalListsDecision([
+          entity,
+          { ...entity, id: "entity-b", listItemType },
+        ]),
+      ).toBe(true);
+    }
+  });
   test("documents and threads remain visible without Lists", () => {
     expect(
       matterActivityItemVisible(
