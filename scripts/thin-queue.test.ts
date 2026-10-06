@@ -421,9 +421,12 @@ test("failure-only cancellation jobs resolve both successful and failed dependen
           failed && event.event === "merge_group",
         );
         if (event.event === "merge_group") {
-          expect(() =>
-            selected(job.if, { ...value, failure: undefined }),
-          ).toThrow("Unresolved queue workflow expression");
+          const unresolved = Object.fromEntries(
+            Object.entries(value).filter(([key]) => key !== "failure"),
+          );
+          expect(() => selected(job.if, unresolved)).toThrow(
+            "Unresolved queue workflow expression",
+          );
         }
       }
     }
