@@ -4,6 +4,7 @@ import { eq, inArray } from "drizzle-orm";
 import { organization, user } from "@/api/db/auth-schema";
 import { featureEnrolments } from "@/api/db/schema";
 import { openMaintenanceDb } from "@/api/lib/db/maintenance-db";
+import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
 
 import { ensureOrganizationExists, ensureTestUsers } from "./seed-test-user";
 
@@ -12,8 +13,8 @@ const runPostgresTests = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
 describe.skipIf(!runPostgresTests)("test user seed (postgres)", () => {
   test("replays preserve the owner's enrolment without enrolling colleagues or another organization", async () => {
     const db = openMaintenanceDb({ readOnly: false });
-    const organizationId = Bun.randomUUIDv7();
-    const otherOrganizationId = Bun.randomUUIDv7();
+    const organizationId = mintAuthProviderId<"organization">();
+    const otherOrganizationId = mintAuthProviderId<"organization">();
     const organizationIds = [organizationId, otherOrganizationId];
     const readEnrolments = async () =>
       await db.transaction(

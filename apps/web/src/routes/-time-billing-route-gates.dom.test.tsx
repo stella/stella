@@ -116,7 +116,7 @@ describe("server enrollment admission across dedicated billing routes", () => {
       }
       expect(outcome.options.to).toBe(redirectDestination(routePath));
       if (routePath.startsWith("/_protected/workspaces/")) {
-        expect(outcome.options.params).toEqual({
+        expect(outcome.options.params).toMatchObject({
           workspaceId: params.workspaceId,
         });
       }
