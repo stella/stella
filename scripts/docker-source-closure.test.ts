@@ -202,6 +202,56 @@ describe("Docker source closure", () => {
     }
   });
 
+  test("filtered build scripts generate their declared sources before later commands", () => {
+    const fixtureRoot = mkdtempSync(path.join(root, "generated-filter-"));
+    const write = (file: string, source: string) => {
+      const target = path.join(fixtureRoot, file);
+      mkdirSync(path.dirname(target), { recursive: true });
+      writeFileSync(target, source);
+    };
+    const output = GENERATORS.find(({ id }) => id === "route-tree")?.outputs.at(
+      0,
+    );
+    if (output === undefined) {
+      throw new Error("Route tree output is missing");
+    }
+    write(output, "export const routeTree = {};");
+    const producer = "apps/web/scripts/generate-route-tree.ts";
+    const manifest = "apps/web/package.json";
+    const entry = "apps/web/src/entry.ts";
+    write(producer, "export const generated = true;");
+    write(
+      manifest,
+      JSON.stringify({
+        name: "@stll/web",
+        scripts: {
+          "generate:route-tree": "bun scripts/generate-route-tree.ts",
+          build: "bun run generate:route-tree && bun src/entry.ts",
+        },
+      }),
+    );
+    write(entry, 'import "./routeTree.gen";');
+    const context: SourceTree = new Map(
+      [producer, manifest, entry].map((file) => [`/${file}`, file]),
+    );
+    const source =
+      "FROM bun AS builder\nWORKDIR /app\nCOPY . .\nRUN bun --filter @stll/web build";
+    expect(checkDockerSource(fixtureRoot, source, context, new Map())).toEqual(
+      [],
+    );
+    expect(
+      checkDockerSource(
+        fixtureRoot,
+        source.replace(
+          "bun --filter @stll/web build",
+          "bun apps/web/src/entry.ts",
+        ),
+        context,
+        new Map(),
+      ).join("\n"),
+    ).toContain("routeTree.gen");
+  });
+
   test("runs after source hydration in the installed light job with a fixed total budget", () => {
     const workflow = v.parse(
       v.object({
