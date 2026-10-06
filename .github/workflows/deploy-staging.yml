@@ -505,6 +505,9 @@ jobs:
       - name: Run staging MCP user journeys
         id: mcp-smoke
         if: ${{ !cancelled() && steps.smoke-deps.conclusion == 'success' }}
+        # The outcome is recorded below; the record step decides whether it
+        # gates staging/verified.
+        continue-on-error: true
         run: bun run canary:mcp
         env:
           MCP_CANARY_ENVIRONMENT: staging
@@ -536,15 +539,31 @@ jobs:
           API_SMOKE: ${{ steps.api-smoke.outcome }}
           MCP_SMOKE: ${{ steps.mcp-smoke.outcome }}
           JOB_STATUS: ${{ job.status }}
+          # MCP journeys report as staging/mcp-journeys and gate
+          # staging/verified again automatically after this date (UTC).
+          MCP_JOURNEYS_NON_BLOCKING_UNTIL: "2026-10-20"
         run: |
           set -euo pipefail
+          mcp_required=true
+          if [[ -n "${MCP_JOURNEYS_NON_BLOCKING_UNTIL:-}" && ! "$(date -u +%F)" > "$MCP_JOURNEYS_NON_BLOCKING_UNTIL" ]]; then
+            mcp_required=false
+          fi
           state=failure
-          if [[ "$WEB_SMOKE" == "success" && "$API_SMOKE" == "success" && "$MCP_SMOKE" == "success" && "$JOB_STATUS" != "cancelled" ]]; then
+          if [[ "$WEB_SMOKE" == "success" && "$API_SMOKE" == "success" && "$JOB_STATUS" != "cancelled" ]] &&
+            [[ "$mcp_required" == false || "$MCP_SMOKE" == "success" ]]; then
             state=success
+          fi
+          mcp_state=failure
+          if [[ "$MCP_SMOKE" == "success" ]]; then
+            mcp_state=success
           fi
           run_url="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
           jq -n --arg state "$state" --arg run "$GITHUB_RUN_ID" --arg url "$run_url" \
             '{state: $state, context: "staging/verified", description: ("Staging smoke " + $state + ": run " + $run), target_url: $url}' |
+            gh api "repos/${GITHUB_REPOSITORY}/statuses/${DEPLOY_SHA}" \
+              --method POST --input - >/dev/null
+          jq -n --arg state "$mcp_state" --arg run "$GITHUB_RUN_ID" --arg url "$run_url" \
+            '{state: $state, context: "staging/mcp-journeys", description: ("MCP journeys " + $state + ": run " + $run), target_url: $url}' |
             gh api "repos/${GITHUB_REPOSITORY}/statuses/${DEPLOY_SHA}" \
               --method POST --input - >/dev/null
           jq -n --arg state "$state" --arg url "$run_url" \

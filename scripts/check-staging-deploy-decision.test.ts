@@ -448,12 +448,13 @@ describe("staging deploy commit", () => {
     const statusWrites = result.calls
       .split("\n")
       .filter((line) => line.includes("repos/stella/stella/statuses/"));
-    expect(statusWrites).toHaveLength(1);
-    expect(statusWrites[0]).toContain(
-      `repos/stella/stella/statuses/${baseSha} `,
-    );
+    expect(statusWrites).toHaveLength(2);
+    for (const write of statusWrites) {
+      expect(write).toContain(`repos/stella/stella/statuses/${baseSha} `);
+      expect(write).toContain('"state":"success"');
+    }
     expect(statusWrites[0]).toContain('"context":"staging/verified"');
-    expect(statusWrites[0]).toContain('"state":"success"');
+    expect(statusWrites[1]).toContain('"context":"staging/mcp-journeys"');
   });
 
   test("builds, promotes and verifies only the resolved commit", async () => {

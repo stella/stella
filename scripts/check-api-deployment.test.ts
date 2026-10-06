@@ -145,6 +145,32 @@ describe("API deployment health receipt", () => {
         })),
       ),
       { outcomes: { ...success, JOB_STATUS: "cancelled" }, state: "failure" },
+      // A dated exemption stops MCP journeys from gating staging/verified...
+      {
+        outcomes: {
+          ...success,
+          MCP_SMOKE: "failure",
+          MCP_JOURNEYS_NON_BLOCKING_UNTIL: "9999-12-31",
+        },
+        state: "success",
+      },
+      // ...but never web or API smokes, and never after its date.
+      {
+        outcomes: {
+          ...success,
+          WEB_SMOKE: "failure",
+          MCP_JOURNEYS_NON_BLOCKING_UNTIL: "9999-12-31",
+        },
+        state: "failure",
+      },
+      {
+        outcomes: {
+          ...success,
+          MCP_SMOKE: "failure",
+          MCP_JOURNEYS_NON_BLOCKING_UNTIL: "2000-01-01",
+        },
+        state: "failure",
+      },
     ];
     for (const { outcomes, state } of cases) {
       const result = Bun.spawnSync(
@@ -169,6 +195,26 @@ describe("API deployment health receipt", () => {
       expect(result.exitCode, JSON.stringify(outcomes)).toBe(0);
       expect(result.stdout.toString(), JSON.stringify(outcomes)).toBe(state);
     }
+  });
+
+  test("an MCP journey exemption is removed once its date has passed", async () => {
+    const workflow = Bun.YAML.parse(
+      await Bun.file(
+        new URL("../.github/workflows/deploy-staging.yml", import.meta.url),
+      ).text(),
+    );
+    const until = workflowSteps(workflow, "deploy-staging.yml").find(
+      ({ run }) => run.includes("state=failure"),
+    )?.env["MCP_JOURNEYS_NON_BLOCKING_UNTIL"];
+    if (until === undefined) {
+      return;
+    }
+    expect(until).toMatch(/^\d{4}-\d{2}-\d{2}$/u);
+    const today = new Date().toISOString().slice(0, 10);
+    expect(
+      today <= until,
+      `MCP journeys gate staging/verified again since ${until}: remove MCP_JOURNEYS_NON_BLOCKING_UNTIL`,
+    ).toBe(true);
   });
 
   test("uses only the existing canary and staging session secrets for MCP journeys", async () => {
