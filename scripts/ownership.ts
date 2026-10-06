@@ -178,6 +178,11 @@ export const ROOT_CONNECTION_DOORS = [
       specifiers: ["@/api/lib/business-registries/desktop/renewal"],
       allowed: [
         {
+          path: "apps/api/src/lib/business-registries/desktop/auth.ts",
+          reason:
+            "Checks the locked inactivity deadline before accepting a credential.",
+        },
+        {
           path: "apps/api/src/handlers/desktop-registry/renew.ts",
           reason: "Authorizes the native renewal or recovery request.",
         },

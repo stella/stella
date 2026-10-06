@@ -1,9 +1,19 @@
-import { defaultKeyHasher } from "@better-auth/api-key";
+import { apiKey, defaultKeyHasher } from "@better-auth/api-key";
+import { betterAuth } from "better-auth";
+import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { panic, Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 import { eq, sql, TransactionRollbackError } from "drizzle-orm";
 
-import { apikey, member, organization, user } from "@/api/db/auth-schema";
+import {
+  account,
+  apikey,
+  member,
+  organization,
+  session,
+  user,
+  verification,
+} from "@/api/db/auth-schema";
 import { auditLogs } from "@/api/db/schema";
 import type { TransactionOf } from "@/api/db/scoped";
 import { createAuditRecorder } from "@/api/lib/audit-log";
@@ -15,7 +25,10 @@ import {
   mintAuthProviderIdValue,
 } from "@/api/tests/helpers/auth-provider-id";
 
-import { DESKTOP_REGISTRY_KEY_CONFIG } from "./config";
+import {
+  DESKTOP_REGISTRY_KEY_CONFIG,
+  desktopRegistryKeyConfig,
+} from "./config";
 import { probeDesktopCredential, renewDesktopCredential } from "./renewal";
 import { revokeDesktopRegistryCredential } from "./revocation";
 
@@ -60,10 +73,15 @@ const seedFixture = async (db: FixtureDb) => {
     referenceId: userId,
     key: await defaultKeyHasher(CURRENT_KEY),
     enabled: true,
-    expiresAt: new Date(NOW.getTime() + LIFETIME_MS),
+    rateLimitEnabled: true,
+    rateLimitTimeWindow: 60_000,
+    rateLimitMax: 60,
+    requestCount: 0,
+    expiresAt: null,
     metadata: JSON.stringify({
       purpose: DESKTOP_REGISTRY_KEY_CONFIG,
       organizationId,
+      inactivityExpiresAt: new Date(NOW.getTime() + LIFETIME_MS).toISOString(),
     }),
   });
   const recordAuditEvent = createAuditRecorder({
@@ -93,6 +111,7 @@ const readKey = async (db: FixtureDb, keyId: string) => {
         key: apikey.key,
         enabled: apikey.enabled,
         expiresAt: apikey.expiresAt,
+        inactivityExpiresAt: sql<string>`${apikey.metadata}::text::jsonb ->> 'inactivityExpiresAt'`,
       })
       .from(apikey)
       .where(eq(apikey.id, keyId))
@@ -100,6 +119,7 @@ const readKey = async (db: FixtureDb, keyId: string) => {
   if (!row) {
     throw new TypeError("Renewal fixture key must exist");
   }
+  expect(row.expiresAt).toBeNull();
   return row;
 };
 const readAudit = async (db: FixtureDb, keyId: string) =>
@@ -251,7 +271,8 @@ describe.skipIf(!enabled || !databaseUrl)(
         expect(await readKey(db, fixture.keyId)).toEqual({
           key: await defaultKeyHasher(SUCCESSOR_KEY),
           enabled: true,
-          expiresAt: new Date(first.expiresAt),
+          expiresAt: null,
+          inactivityExpiresAt: first.expiresAt,
         });
         await expectUnauthorized(
           renewDesktopCredential({ ...input(db, fixture), now: firstUse }),
@@ -271,7 +292,8 @@ describe.skipIf(!enabled || !databaseUrl)(
         expect(await readKey(db, fixture.keyId)).toEqual({
           key: await defaultKeyHasher(THIRD_KEY),
           enabled: true,
-          expiresAt: new Date(second.expiresAt),
+          expiresAt: null,
+          inactivityExpiresAt: second.expiresAt,
         });
         expect(await readAudit(db, fixture.keyId)).toHaveLength(2);
       });
@@ -295,13 +317,27 @@ describe.skipIf(!enabled || !databaseUrl)(
             case "expired":
               await db
                 .update(apikey)
-                .set({ expiresAt: new Date(NOW.getTime() - 1) })
+                .set({
+                  metadata: JSON.stringify({
+                    purpose: DESKTOP_REGISTRY_KEY_CONFIG,
+                    organizationId: fixture.organizationId,
+                    inactivityExpiresAt: new Date(
+                      NOW.getTime() - 1,
+                    ).toISOString(),
+                  }),
+                })
                 .where(eq(apikey.id, fixture.keyId));
               break;
             case "expiry-boundary":
               await db
                 .update(apikey)
-                .set({ expiresAt: NOW })
+                .set({
+                  metadata: JSON.stringify({
+                    purpose: DESKTOP_REGISTRY_KEY_CONFIG,
+                    organizationId: fixture.organizationId,
+                    inactivityExpiresAt: NOW.toISOString(),
+                  }),
+                })
                 .where(eq(apikey.id, fixture.keyId));
               break;
             case "revoked":
@@ -365,6 +401,9 @@ describe.skipIf(!enabled || !databaseUrl)(
                   metadata: JSON.stringify({
                     purpose: "other",
                     organizationId: fixture.organizationId,
+                    inactivityExpiresAt: new Date(
+                      NOW.getTime() + LIFETIME_MS,
+                    ).toISOString(),
                   }),
                 })
                 .where(eq(apikey.id, fixture.keyId));
@@ -421,6 +460,203 @@ describe.skipIf(!enabled || !databaseUrl)(
         expect(await readAudit(db, fixture.keyId)).toHaveLength(1);
       });
     });
+
+    test("stale expiry cleanup cannot revoke a renewed successor generation", async () => {
+      await withRollbackFixture(async (db, fixture) => {
+        requireSuccess(
+          await renewDesktopCredential({
+            ...input(db, fixture),
+            now: new Date(NOW.getTime() + 20 * DAY_MS),
+          }),
+        );
+        await expectUnauthorized(
+          probeDesktopCredential({
+            db,
+            keyId: fixture.keyId,
+            userId: fixture.userId,
+            organizationId: fixture.organizationId,
+            currentKey: CURRENT_KEY,
+            now: new Date(NOW.getTime() + 31 * DAY_MS),
+          }),
+        );
+        const renewed = await readKey(db, fixture.keyId);
+        await revokeDesktopRegistryCredential({
+          db,
+          ...fixture,
+          expectedKeyHash: await defaultKeyHasher(CURRENT_KEY),
+        });
+        expect(await readKey(db, fixture.keyId)).toEqual(renewed);
+        expect(renewed.enabled).toBe(true);
+        expect(renewed.key).toBe(await defaultKeyHasher(SUCCESSOR_KEY));
+        expect(await readAudit(db, fixture.keyId)).toHaveLength(1);
+        expect(
+          requireSuccess(
+            await probeDesktopCredential({
+              db,
+              keyId: fixture.keyId,
+              userId: fixture.userId,
+              organizationId: fixture.organizationId,
+              currentKey: SUCCESSOR_KEY,
+              now: new Date(NOW.getTime() + 31 * DAY_MS),
+            }),
+          ).expiresAt,
+        ).toBe(new Date(NOW.getTime() + 50 * DAY_MS).toISOString());
+      });
+    });
+
+    test("real provider verification of an old snapshot cannot delete a renewed row or revive a revoked row", async () => {
+      if (!databaseUrl) {
+        panic("DATABASE_URL required");
+      }
+      await withGatedTestClients(databaseUrl, async ({ openClient }) => {
+        const db = openClient().db;
+        const providerDb = openClient().db;
+        const fixture = await db.transaction(
+          async (tx) => await seedFixture(tx),
+        );
+        let captured = Promise.withResolvers<undefined>();
+        let resume = Promise.withResolvers<undefined>();
+        let pauseNextLookup = true;
+        let observedSnapshot: unknown = null;
+        const adapterFactory = drizzleAdapter(providerDb, {
+          provider: "pg",
+          schema: { account, apikey, session, user, verification },
+        });
+        const controlledAdapter = (
+          ...options: Parameters<typeof adapterFactory>
+        ) => {
+          const adapter = adapterFactory(...options);
+          const findOne: typeof adapter.findOne = async <T>(
+            query: Parameters<typeof adapter.findOne>[0],
+          ) => {
+            const row = await adapter.findOne<T>(query);
+            if (query.model === "apikey" && row && pauseNextLookup) {
+              pauseNextLookup = false;
+              observedSnapshot = row;
+              captured.resolve(undefined);
+              await resume.promise;
+            }
+            return row;
+          };
+          return { ...adapter, findOne };
+        };
+        const auth = betterAuth({
+          secret: "desktop-provider-race-fixture-secret-at-least-32-characters",
+          baseURL: "http://localhost:3001",
+          database: controlledAdapter,
+          plugins: [apiKey([desktopRegistryKeyConfig])],
+        });
+        let pending: ReturnType<typeof auth.api.verifyApiKey> | undefined;
+        try {
+          for (const operation of ["renew", "revoke"] as const) {
+            captured = Promise.withResolvers<undefined>();
+            resume = Promise.withResolvers<undefined>();
+            pauseNextLookup = true;
+            const currentKey =
+              operation === "renew" ? CURRENT_KEY : SUCCESSOR_KEY;
+            pending = auth.api.verifyApiKey({
+              body: { configId: DESKTOP_REGISTRY_KEY_CONFIG, key: currentKey },
+            });
+            await Promise.race([
+              captured.promise,
+              pending.then(() =>
+                panic(
+                  "Provider verification must pause after its database snapshot",
+                ),
+              ),
+            ]);
+            expect(observedSnapshot).toMatchObject({
+              key: await defaultKeyHasher(currentKey),
+              enabled: true,
+              expiresAt: null,
+            });
+            if (operation === "renew") {
+              requireSuccess(
+                await renewDesktopCredential({
+                  ...input(db, fixture),
+                  now: new Date(NOW.getTime() + DAY_MS),
+                }),
+              );
+            } else {
+              await revokeDesktopRegistryCredential({ db, ...fixture });
+            }
+            const committed = await readKey(db, fixture.keyId);
+            resume.resolve(undefined);
+            // The provider may accept its already-read snapshot; the locked owner
+            // must reject that generation after either rotation or revocation.
+            expect(await pending).toMatchObject({ valid: true });
+            pending = undefined;
+            await expectUnauthorized(
+              probeDesktopCredential({
+                ...fixture,
+                db,
+                currentKey,
+                now: new Date(NOW.getTime() + DAY_MS),
+              }),
+            );
+            expect(await readKey(db, fixture.keyId)).toEqual(committed);
+            expect(committed.key).toBe(await defaultKeyHasher(SUCCESSOR_KEY));
+            expect(committed.inactivityExpiresAt).toBe(
+              new Date(NOW.getTime() + DAY_MS + LIFETIME_MS).toISOString(),
+            );
+            expect(committed.enabled).toBe(operation === "renew");
+            if (operation === "renew") {
+              expect(
+                await auth.api.verifyApiKey({
+                  body: {
+                    configId: DESKTOP_REGISTRY_KEY_CONFIG,
+                    key: CURRENT_KEY,
+                  },
+                }),
+              ).toMatchObject({ valid: false });
+              expect(
+                await auth.api.verifyApiKey({
+                  body: {
+                    configId: DESKTOP_REGISTRY_KEY_CONFIG,
+                    key: SUCCESSOR_KEY,
+                  },
+                }),
+              ).toMatchObject({ valid: true });
+              expect(
+                requireSuccess(
+                  await probeDesktopCredential({
+                    ...fixture,
+                    db,
+                    currentKey: SUCCESSOR_KEY,
+                    now: new Date(NOW.getTime() + DAY_MS),
+                  }),
+                ).expiresAt,
+              ).toBe(committed.inactivityExpiresAt);
+              expect(await readAudit(db, fixture.keyId)).toHaveLength(1);
+            } else {
+              expect(
+                await auth.api.verifyApiKey({
+                  body: {
+                    configId: DESKTOP_REGISTRY_KEY_CONFIG,
+                    key: SUCCESSOR_KEY,
+                  },
+                }),
+              ).toMatchObject({ valid: false });
+              expect(await readAudit(db, fixture.keyId)).toHaveLength(2);
+            }
+          }
+        } finally {
+          resume.resolve(undefined);
+          if (pending) {
+            await Promise.allSettled([pending]);
+          }
+          await db
+            .delete(auditLogs)
+            .where(eq(auditLogs.resourceId, fixture.keyId));
+          await db.delete(apikey).where(eq(apikey.id, fixture.keyId));
+          await db.delete(member).where(eq(member.id, fixture.memberId));
+          await db
+            .delete(organization)
+            .where(eq(organization.id, fixture.organizationId));
+          await db.delete(user).where(eq(user.id, fixture.userId));
+        }
+      });
+    }, 20_000);
 
     for (const competitor of ["renew", "revoke"] as const) {
       test(`competing renewal and ${competitor} serialize without stale-key revival`, async () => {
@@ -533,9 +769,19 @@ describe.skipIf(!enabled || !databaseUrl)(
                 await defaultKeyHasher(THIRD_KEY),
               ]).toContain(row.key);
               expect(row.enabled).toBe(true);
-              expect(row.expiresAt).toEqual(
-                new Date(NOW.getTime() + DAY_MS + LIFETIME_MS),
+              expect(row.inactivityExpiresAt).toBe(
+                new Date(NOW.getTime() + DAY_MS + LIFETIME_MS).toISOString(),
               );
+              expect(
+                requireSuccess(
+                  await probeDesktopCredential({
+                    ...fixture,
+                    db,
+                    currentKey: SUCCESSOR_KEY,
+                    now: new Date(NOW.getTime() + DAY_MS),
+                  }),
+                ).expiresAt,
+              ).toBe(committed.inactivityExpiresAt);
               expect(await readAudit(db, fixture.keyId)).toHaveLength(1);
             } else {
               const revocation = pending.at(1);
@@ -559,15 +805,15 @@ describe.skipIf(!enabled || !databaseUrl)(
               }
               if (renewal.value.isOk()) {
                 expect(row.key).toBe(await defaultKeyHasher(SUCCESSOR_KEY));
-                expect(row.expiresAt).toEqual(
-                  new Date(NOW.getTime() + DAY_MS + LIFETIME_MS),
+                expect(row.inactivityExpiresAt).toBe(
+                  new Date(NOW.getTime() + DAY_MS + LIFETIME_MS).toISOString(),
                 );
                 expect(await readAudit(db, fixture.keyId)).toHaveLength(2);
               } else {
                 expect(renewal.value.error.status).toBe(401);
                 expect(row.key).toBe(await defaultKeyHasher(CURRENT_KEY));
-                expect(row.expiresAt).toEqual(
-                  new Date(NOW.getTime() + LIFETIME_MS),
+                expect(row.inactivityExpiresAt).toBe(
+                  new Date(NOW.getTime() + LIFETIME_MS).toISOString(),
                 );
                 expect(await readAudit(db, fixture.keyId)).toHaveLength(1);
               }

@@ -366,13 +366,71 @@ const assertRenewalExports = (text: string) => {
   }
 };
 
+const assertRenewalDatabaseBoundary = (text: string) => {
+  const source = ts.createSourceFile(
+    RENEWAL_OWNER,
+    text,
+    ts.ScriptTarget.Latest,
+    true,
+    ts.ScriptKind.TS,
+  );
+  const tables = new Set<string>();
+  let updates = 0;
+  const visit = (node: ts.Node) => {
+    if (
+      ts.isCallExpression(node) &&
+      ts.isPropertyAccessExpression(node.expression)
+    ) {
+      const method = node.expression.name.text;
+      const receiver = node.expression.expression;
+      if (
+        ts.isIdentifier(receiver) &&
+        receiver.text === "tx" &&
+        method !== "select" &&
+        method !== "update"
+      ) {
+        throw new TypeError(
+          "Renewal transactions only select or CAS-update credentials",
+        );
+      }
+      if (method === "from" || method === "update") {
+        const table = node.arguments.at(0);
+        if (
+          !table ||
+          !ts.isIdentifier(table) ||
+          (table.text !== "apikey" && table.text !== "member")
+        ) {
+          throw new TypeError(
+            "Renewal database access is bounded to credential and membership rows",
+          );
+        }
+        tables.add(table.text);
+        if (method === "update") {
+          if (table.text !== "apikey") {
+            throw new TypeError("Renewal may only update the credential");
+          }
+          updates += 1;
+        }
+      }
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(source);
+  if (updates !== 1 || tables.size !== 2) {
+    throw new TypeError(
+      "Renewal must retain its membership read and single credential CAS",
+    );
+  }
+};
+
 describe("desktop renewal root connection door", () => {
-  test("confines the exact owner and specifier to two explicit callers", () => {
+  test("confines the exact owner and specifier to explicit authorized callers", () => {
     const door = renewalDoor();
     expect(door.owner).toEqual([RENEWAL_OWNER]);
     expect(door.enforcement.specifiers).toEqual([RENEWAL_SPECIFIER]);
     expect("names" in door.enforcement).toBe(false);
     expect(door.enforcement.allowed.map(({ path }) => path)).toEqual([
+      "apps/api/src/lib/business-registries/desktop/auth.ts",
       "apps/api/src/handlers/desktop-registry/renew.ts",
       "apps/api/src/lib/business-registries/desktop/renewal.postgres.test.ts",
     ]);
@@ -388,7 +446,19 @@ describe("desktop renewal root connection door", () => {
       `const renewalModule = await import("${RENEWAL_SPECIFIER}");`,
       'import { probeDesktopCredential } from "./renewal";',
     ].join("\n");
-    const ruleOptions = { entries: [door] };
+    // The lint harness writes outside the repository. Include the fixture's
+    // absolute owner module so relative imports resolve like repository files.
+    const ruleOptionsForRoot = (root: string) => ({
+      entries: [
+        {
+          ...door,
+          enforcement: {
+            ...door.enforcement,
+            specifiers: [RENEWAL_SPECIFIER, `${root}/${RENEWAL_OWNER}`],
+          },
+        },
+      ],
+    });
     for (const sourcePath of [
       door.owner.at(0),
       ...door.enforcement.allowed.map(({ path }) => path),
@@ -398,14 +468,14 @@ describe("desktop renewal root connection door", () => {
       }
       expect(
         await lintSingleRule("confine-owner", source, {
-          ruleOptions,
+          ruleOptionsForRoot,
           sourcePath,
         }),
       ).toEqual([]);
     }
     expect(
       await lintSingleRule("confine-owner", source, {
-        ruleOptions,
+        ruleOptionsForRoot,
         sourcePath:
           "apps/api/src/lib/business-registries/desktop/unapproved-renewal.ts",
       }),
@@ -418,6 +488,14 @@ describe("desktop renewal root connection door", () => {
       "utf-8",
     );
     assertRenewalExports(source);
+    assertRenewalDatabaseBoundary(source);
+    for (const mutation of [
+      source.replace(".update(apikey)", ".update(member)"),
+      `${source}\nconst escaped = tx.execute("select 1");`,
+      source.replace(".from(member)", ".from(user)"),
+    ]) {
+      expect(() => assertRenewalDatabaseBoundary(mutation)).toThrow(TypeError);
+    }
     for (const mutation of [
       `${source}\nexport { rootDb };`,
       `${source}\nexport * from "@/api/db/root";`,

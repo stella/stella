@@ -57,19 +57,27 @@ const loadAccount = async (identity: DesktopLinkIdentity) => {
 const mintCredential = async (identity: DesktopLinkIdentity) =>
   await Result.tryPromise({
     try: async () => {
+      const expiresAt = new Date(
+        Temporal.Now.instant().epochMilliseconds +
+          DESKTOP_REGISTRY_KEY_SECONDS * 1000,
+      );
       const minted = await getAuth().api.createApiKey({
         body: {
           configId: DESKTOP_REGISTRY_KEY_CONFIG,
           name: "Desktop account",
           userId: identity.userId,
-          expiresIn: DESKTOP_REGISTRY_KEY_SECONDS,
+          expiresIn: null,
           metadata: {
             purpose: DESKTOP_REGISTRY_KEY_CONFIG,
             organizationId: identity.organizationId,
+            inactivityExpiresAt: expiresAt.toISOString(),
           },
         },
       });
-      return { id: minted.id, key: minted.key, expiresAt: minted.expiresAt };
+      if (minted.expiresAt !== null) {
+        panic("Desktop credentials must not enter provider expiry cleanup");
+      }
+      return { id: minted.id, key: minted.key, expiresAt };
     },
     catch: () =>
       new HandlerError({

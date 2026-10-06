@@ -15,6 +15,7 @@ type RevokeDesktopRegistryCredentialOptions = {
   organizationId: SafeId<"organization">;
   userId: SafeId<"user">;
   recordAuditEvent: AuditRecorder;
+  expectedKeyHash?: string;
   db?: Pick<typeof rootDb, "transaction">;
 };
 
@@ -26,6 +27,7 @@ export const revokeDesktopRegistryCredential = async ({
   organizationId,
   userId,
   recordAuditEvent,
+  expectedKeyHash,
   db = rootDb,
 }: RevokeDesktopRegistryCredentialOptions) =>
   await db.transaction(async (tx) => {
@@ -40,6 +42,9 @@ export const revokeDesktopRegistryCredential = async ({
           eq(apikey.id, keyId),
           eq(apikey.referenceId, userId),
           eq(apikey.enabled, true),
+          expectedKeyHash === undefined
+            ? undefined
+            : eq(apikey.key, expectedKeyHash),
           desktopRegistryKeyOrganizationScope(organizationId),
         ),
       )

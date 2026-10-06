@@ -1,7 +1,9 @@
+import { Result } from "better-result";
 import * as v from "valibot";
 
 import { DESKTOP_ACCOUNT_POLICY } from "@stll/api-contract/desktop-registry";
 import type { PermissionInput } from "@stll/permissions";
+import { Temporal } from "@stll/time";
 
 export const DESKTOP_REGISTRY_KEY_CONFIG = "desktop-registry";
 export const DESKTOP_REGISTRY_KEY_PREFIX = DESKTOP_ACCOUNT_POLICY.keyPrefix;
@@ -24,7 +26,20 @@ export const DESKTOP_REGISTRY_PERMISSION = {
 export const desktopRegistryMetadata = v.strictObject({
   purpose: v.literal(DESKTOP_REGISTRY_KEY_CONFIG),
   organizationId: v.pipe(v.string(), v.nonEmpty()),
+  inactivityExpiresAt: v.pipe(
+    v.string(),
+    v.isoTimestamp(),
+    v.check((value) => Result.try(() => Temporal.Instant.from(value)).isOk()),
+  ),
 });
+
+export const parseDesktopRegistryMetadata = (metadata: unknown) => {
+  const decoded =
+    typeof metadata === "string"
+      ? Result.try((): unknown => JSON.parse(metadata)).unwrapOr(null)
+      : metadata;
+  return v.safeParse(desktopRegistryMetadata, decoded);
+};
 
 export const desktopRegistryKeyConfig = {
   configId: DESKTOP_REGISTRY_KEY_CONFIG,
@@ -36,7 +51,7 @@ export const desktopRegistryKeyConfig = {
   enableSessionForAPIKeys: false,
   rateLimit: { enabled: true, timeWindow: 60_000, maxRequests: 60 },
   keyExpiration: {
-    defaultExpiresIn: DESKTOP_REGISTRY_KEY_SECONDS,
+    defaultExpiresIn: null,
     minExpiresIn: DESKTOP_REGISTRY_KEY_SECONDS / 86_400,
     maxExpiresIn: DESKTOP_REGISTRY_KEY_SECONDS / 86_400,
   },

@@ -14,6 +14,7 @@ import {
   DESKTOP_REGISTRY_KEY_CONFIG,
   DESKTOP_REGISTRY_KEY_PREFIX,
   DESKTOP_REGISTRY_KEY_SECONDS,
+  parseDesktopRegistryMetadata,
 } from "@/api/lib/business-registries/desktop/config";
 import { desktopRegistryKeyOrganizationScope } from "@/api/lib/business-registries/desktop/scope";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -86,6 +87,7 @@ export const renewDesktopCredential = async ({
             hash: apikey.key,
             enabled: apikey.enabled,
             expiresAt: apikey.expiresAt,
+            metadata: apikey.metadata,
           })
           .from(apikey)
           .where(
@@ -98,12 +100,15 @@ export const renewDesktopCredential = async ({
           .for("update");
         const usedAt =
           now ?? new Date(Temporal.Now.instant().epochMilliseconds);
+        const metadata = parseDesktopRegistryMetadata(key?.metadata);
         if (
           !key ||
           key.hash !== currentHash ||
           !key.enabled ||
-          !key.expiresAt ||
-          key.expiresAt.getTime() <= usedAt.getTime()
+          key.expiresAt !== null ||
+          !metadata.success ||
+          Temporal.Instant.from(metadata.output.inactivityExpiresAt)
+            .epochMilliseconds <= usedAt.getTime()
         ) {
           return Result.err(rejected());
         }
@@ -118,7 +123,11 @@ export const renewDesktopCredential = async ({
               0,
               DESKTOP_REGISTRY_KEY_PREFIX.length + 6,
             ),
-            expiresAt,
+            expiresAt: null,
+            metadata: JSON.stringify({
+              ...metadata.output,
+              inactivityExpiresAt: expiresAt.toISOString(),
+            }),
             updatedAt: usedAt,
           })
           .where(
@@ -170,27 +179,40 @@ export const probeDesktopCredential = async ({
   organizationId,
   currentKey,
   db = rootDb,
-  now = new Date(Temporal.Now.instant().epochMilliseconds),
+  now,
 }: ProbeDesktopCredentialOptions) => {
   const hash = await defaultKeyHasher(currentKey);
   const queried = await Result.tryPromise({
     try: async () =>
-      await db.transaction(
-        async (tx) =>
-          await tx
-            .select({ expiresAt: apikey.expiresAt })
-            .from(apikey)
-            .where(
-              and(
-                eq(apikey.id, keyId),
-                eq(apikey.referenceId, userId),
-                eq(apikey.key, hash),
-                eq(apikey.enabled, true),
-                desktopRegistryKeyOrganizationScope(organizationId),
-              ),
-            )
-            .limit(1),
-      ),
+      await db.transaction(async (tx) => {
+        const [key] = await tx
+          .select({ expiresAt: apikey.expiresAt, metadata: apikey.metadata })
+          .from(apikey)
+          .where(
+            and(
+              eq(apikey.id, keyId),
+              eq(apikey.referenceId, userId),
+              eq(apikey.key, hash),
+              eq(apikey.enabled, true),
+              desktopRegistryKeyOrganizationScope(organizationId),
+            ),
+          )
+          .limit(1)
+          .for("update");
+        const metadata = parseDesktopRegistryMetadata(key?.metadata);
+        const checkedAt =
+          now ?? new Date(Temporal.Now.instant().epochMilliseconds);
+        if (
+          !key ||
+          key.expiresAt !== null ||
+          !metadata.success ||
+          Temporal.Instant.from(metadata.output.inactivityExpiresAt)
+            .epochMilliseconds <= checkedAt.getTime()
+        ) {
+          return Result.err(rejected());
+        }
+        return Result.ok({ expiresAt: metadata.output.inactivityExpiresAt });
+      }),
     catch: (cause) =>
       new HandlerError({
         status: 503,
@@ -198,12 +220,5 @@ export const probeDesktopCredential = async ({
         cause,
       }),
   });
-  if (queried.isErr()) {
-    return queried;
-  }
-  const key = queried.value.at(0);
-  if (!key?.expiresAt || key.expiresAt.getTime() <= now.getTime()) {
-    return Result.err(rejected());
-  }
-  return Result.ok({ expiresAt: key.expiresAt.toISOString() });
+  return queried.andThen((result) => result);
 };
