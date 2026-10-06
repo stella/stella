@@ -5928,6 +5928,18 @@
     inline-size: auto;
   }
 }
+[data-slot="inline-rename"][data-fill] {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+}
+[data-slot="inline-rename"][data-fill] > [data-slot="inline-rename-mirror"] {
+  display: none;
+}
+[data-slot="inline-rename"][data-fill] > [data-slot="inline-rename-input"] {
+  position: static;
+  field-sizing: fixed;
+  inline-size: 100%;
+}
 @keyframes skeleton-rtl {
   to {
     background-position: 200% 0;

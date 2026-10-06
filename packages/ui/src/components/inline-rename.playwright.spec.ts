@@ -245,3 +245,39 @@ test("a parent-supplied draft after a retained commit still commits on blur", as
   await page.getByRole("button", { name: "Outside" }).click();
   await expect(page.locator("output")).toHaveAttribute("data-commits", "2");
 });
+
+for (const { fallback, rtl } of [
+  { fallback: false, rtl: false },
+  { fallback: true, rtl: false },
+  { fallback: false, rtl: true },
+  { fallback: true, rtl: true },
+]) {
+  test(`a fill field spans its row whatever its text (fallback=${String(fallback)}, rtl=${String(rtl)})`, async ({
+    page,
+  }) => {
+    await page.goto(
+      `${fixturePath}?fill=true&fallback=${String(fallback)}&rtl=${String(rtl)}`,
+    );
+    const input = await openEditor(page);
+    await input.fill("A");
+    const { container, field, rowTop, fieldTop } = await input.evaluate(
+      (element) => {
+        const row = element.closest("[data-title-container]");
+        if (!(row instanceof HTMLElement)) {
+          throw new Error("the fill field is missing its row");
+        }
+        const rowBox = row.getBoundingClientRect();
+        const fieldBox = element.getBoundingClientRect();
+        return {
+          container: rowBox.width,
+          field: fieldBox.width,
+          rowTop: rowBox.top,
+          fieldTop: fieldBox.top,
+        };
+      },
+    );
+    expect(field).toBeGreaterThanOrEqual(container - TOLERANCE_PX);
+    // The field stays on the row's first line instead of below the mirror.
+    expect(Math.abs(fieldTop - rowTop)).toBeLessThanOrEqual(TOLERANCE_PX);
+  });
+}

@@ -14,6 +14,7 @@ document.documentElement.classList.toggle(
 );
 
 const empty = params.get("empty") === "true";
+const fill = params.get("fill") === "true";
 const initialTitle = rtl ? "مراجعة العقد" : "Contract review";
 
 const Fixture = () => {
@@ -50,6 +51,7 @@ const Fixture = () => {
                 }
               }}
               aria-label="Title"
+              fill={fill}
               {...(empty ? { placeholder: "Add reference" } : {})}
               value={draft}
               onValueChange={setDraft}
