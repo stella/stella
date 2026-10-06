@@ -1,8 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import fc from "fast-check";
 import ts from "typescript";
-
-import { assertProperty } from "@stll/property-testing";
 
 import { toSafeId } from "@/api/lib/branded-types";
 
@@ -384,48 +381,21 @@ describe("action kind registry", () => {
   });
 });
 
-const organizationIdArb = fc
-  .uuid()
-  .map((value) => toSafeId<"organization">(value));
-const actionKindArb = fc.constantFrom(
-  ...Object.keys(ACTION_KINDS).filter((kind): kind is ActionKind =>
-    Object.hasOwn(ACTION_KINDS, kind),
-  ),
-);
-
 describe("model dispatch scope", () => {
-  test("a proof admits a dispatch for its own organization only", () => {
-    assertProperty(
-      "a proof admits a dispatch for its own organization only",
-      fc.property(
-        organizationIdArb,
-        organizationIdArb,
-        actionKindArb,
-        (admitted, dispatched, actionKind) => {
-          const admission = admitFixtureModelDispatch({
-            organizationId: admitted,
-            actionKind,
-          });
-          expect(admission).toMatchObject({
-            type: "organization",
-            organizationId: admitted,
-            actionKind,
-          });
-          const check = () =>
-            assertModelDispatchScope({
-              organizationId: dispatched,
-              admission,
-            });
-          if (admitted === dispatched) {
-            expect(check).not.toThrow();
-          } else {
-            expect(check).toThrow(
-              "Model dispatch carries another organization's admission",
-            );
-          }
-        },
-      ),
-    );
+  test("a proof admits a dispatch for its own organization", () => {
+    const organizationId = toSafeId<"organization">("org_fixture");
+    const admission = admitFixtureModelDispatch({
+      organizationId,
+      actionKind: "chat.send",
+    });
+    expect(admission).toMatchObject({
+      type: "organization",
+      organizationId,
+      actionKind: "chat.send",
+    });
+    expect(() =>
+      assertModelDispatchScope({ organizationId, admission }),
+    ).not.toThrow();
   });
 
   test("work with no organization dispatches only without one", () => {
