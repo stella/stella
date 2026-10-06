@@ -314,6 +314,29 @@ type StreamChatProps = {
   workspaceId: SafeId<"workspace"> | null;
 };
 
+/** A pre-stream rejection retains its settlement code alongside its HTTP body. */
+export class ChatTurnFailureResponse extends Response {
+  readonly failureCode: ChatTurnFailureCode;
+  readonly retryable: boolean;
+
+  constructor({
+    failureCode,
+    payload,
+    status,
+  }: {
+    failureCode: ChatTurnFailureCode;
+    payload: { code?: string; message: string };
+    status: 422 | 500;
+  }) {
+    super(JSON.stringify(payload), {
+      headers: { "Content-Type": "application/json" },
+      status,
+    });
+    this.failureCode = failureCode;
+    this.retryable = status >= 500;
+  }
+}
+
 export const pruneOrphanedToolParts = (
   messages: readonly ChatMessage[],
 ): ChatMessage[] =>
@@ -736,29 +759,6 @@ export const streamChat = async ({
 
   return { type: "streaming", response: run.produce(output) };
 };
-
-/** A pre-stream rejection retains its settlement code alongside its HTTP body. */
-export class ChatTurnFailureResponse extends Response {
-  readonly failureCode: ChatTurnFailureCode;
-  readonly retryable: boolean;
-
-  constructor({
-    failureCode,
-    payload,
-    status,
-  }: {
-    failureCode: ChatTurnFailureCode;
-    payload: { code?: string; message: string };
-    status: 422 | 500;
-  }) {
-    super(JSON.stringify(payload), {
-      headers: { "Content-Type": "application/json" },
-      status,
-    });
-    this.failureCode = failureCode;
-    this.retryable = status >= 500;
-  }
-}
 
 const thirdPartyBoundaryRefusalResponse = (
   error: AnonymizationRefusal,

@@ -29,32 +29,6 @@ let cleanupInspectorBroadcast: (() => void) | null = null;
 let restoreTemporalNow: (() => void) | undefined;
 let previousWindowDescriptor: PropertyDescriptor | undefined;
 
-afterEach(() => {
-  cleanupInspectorBroadcast?.();
-  cleanupInspectorBroadcast = null;
-  restoreTemporalNow?.();
-  restoreTemporalNow = undefined;
-  FakeBroadcastChannel.reset();
-  if (previousWindowDescriptor) {
-    Object.defineProperty(globalThis, "window", previousWindowDescriptor);
-    previousWindowDescriptor = undefined;
-  } else {
-    Reflect.deleteProperty(globalThis, "window");
-  }
-  useInspectorTabsStore.setState({
-    tabs: [],
-    groups: [],
-    groupAssignments: {},
-    collapsedGroupIds: [],
-    activeId: null,
-    activationSeq: 0,
-    flashTabId: null,
-    flashSeq: 0,
-    minimized: false,
-    reviveSuggestion: null,
-  });
-});
-
 class FakeBroadcastChannel {
   static readonly channels = new Map<string, Set<FakeBroadcastChannel>>();
   static postError: Error | null = null;
@@ -130,6 +104,32 @@ class FakeBroadcastChannel {
     FakeBroadcastChannel.postError = null;
   }
 }
+
+afterEach(() => {
+  cleanupInspectorBroadcast?.();
+  cleanupInspectorBroadcast = null;
+  restoreTemporalNow?.();
+  restoreTemporalNow = undefined;
+  FakeBroadcastChannel.reset();
+  if (previousWindowDescriptor) {
+    Object.defineProperty(globalThis, "window", previousWindowDescriptor);
+    previousWindowDescriptor = undefined;
+  } else {
+    Reflect.deleteProperty(globalThis, "window");
+  }
+  useInspectorTabsStore.setState({
+    tabs: [],
+    groups: [],
+    groupAssignments: {},
+    collapsedGroupIds: [],
+    activeId: null,
+    activationSeq: 0,
+    flashTabId: null,
+    flashSeq: 0,
+    minimized: false,
+    reviveSuggestion: null,
+  });
+});
 
 class MemoryStorage implements Storage {
   private readonly values = new Map<string, string>();

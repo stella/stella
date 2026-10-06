@@ -598,6 +598,18 @@ const ingestionFailureStopKind = (
   }
 };
 
+/** Case-law adapter page-fetch failure; wrappers retain its operational kind. */
+export class AdapterFetchError extends TaggedError(
+  "AdapterFetchError",
+)<AdapterFetchErrorOptions> {
+  override readonly stopKind: IngestionStopKind;
+
+  constructor(options: AdapterFetchErrorOptions) {
+    super(options);
+    this.stopKind = options.stopKind ?? adapterFetchStopKind(options);
+  }
+}
+
 const ingestionFailureOf = (
   cause: unknown,
   fallback: "adapter" | "internal",
@@ -650,18 +662,6 @@ const adapterFetchStopKind = ({
       ? ingestionFailureOf(cause, "adapter")
       : { type: "publisher-response", httpStatus },
   );
-
-/** Case-law adapter page-fetch failure; wrappers retain its operational kind. */
-export class AdapterFetchError extends TaggedError(
-  "AdapterFetchError",
-)<AdapterFetchErrorOptions> {
-  override readonly stopKind: IngestionStopKind;
-
-  constructor(options: AdapterFetchErrorOptions) {
-    super(options);
-    this.stopKind = options.stopKind ?? adapterFetchStopKind(options);
-  }
-}
 
 /**
  * One source made no progress for a sustained run of ingestion cycles.
