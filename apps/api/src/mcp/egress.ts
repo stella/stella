@@ -5,8 +5,13 @@ import { loadAnonymizationGazetteerEntriesByWorkspace } from "@/api/lib/anonymiz
 import { failureSink } from "@/api/lib/observability/failure";
 import { observeFailure } from "@/api/lib/observability/observe-failure";
 import { emitAnonymizationRefusalMetric } from "@/api/lib/observability/request-metrics";
+import { projectionPayload } from "@/api/lib/projection-totality";
 import { anonymizeTextFields } from "@/api/mcp/anonymization";
 import type { AnonymizedTextFields } from "@/api/mcp/anonymization-core";
+import {
+  COMPAT_SEARCH_OUTPUT_SCHEMA,
+  COMPAT_FETCH_OUTPUT_SCHEMA,
+} from "@/api/mcp/compat-contract";
 import type { McpMode } from "@/api/mcp/constants";
 import type { McpRequestContext } from "@/api/mcp/context";
 import type { AnonymizedFieldBoundaryError } from "@/api/mcp/field-markers";
@@ -24,7 +29,7 @@ import {
   MCP_INTERNAL_ERROR_HINT,
   normalizeTextField,
   structuredErrorResult,
-  toolDataResult,
+  untypedToolDataResult,
   windowTextByCursor,
 } from "@/api/mcp/tool-utils";
 
@@ -341,7 +346,7 @@ const finalizeStructured = async ({
     plan.window.apply(textWindow);
   }
 
-  return toolDataResult(plan.payload);
+  return untypedToolDataResult(plan.payload);
 };
 
 const finalizeCompatSearch = async ({
@@ -357,10 +362,13 @@ const finalizeCompatSearch = async ({
 }): Promise<InternalToolResult> => {
   // `kind` and `workspaceId` are per-hit egress attribution; both are stripped
   // before the result reaches the client.
-  const results = plan.results.map(({ id, title, url }) => ({
-    id,
-    title,
-    url,
+  const results = plan.results.map((hit) => ({
+    id: hit.id,
+    title: hit.title,
+    url: hit.url,
+    ...(hit.kind === "corpus" && hit.source_url !== undefined
+      ? { source_url: hit.source_url }
+      : {}),
   }));
 
   // MCP access is for authorized Stella users only. In anonymized mode we still
@@ -395,13 +403,15 @@ const finalizeCompatSearch = async ({
     }
   }
 
-  return toolDataResult({
-    nextCursor: plan.nextCursor,
-    ...(plan.paginationOutcome === undefined
-      ? {}
-      : { paginationOutcome: plan.paginationOutcome }),
-    results,
-  });
+  return untypedToolDataResult(
+    projectionPayload(COMPAT_SEARCH_OUTPUT_SCHEMA, {
+      nextCursor: plan.nextCursor,
+      ...(plan.paginationOutcome === undefined
+        ? {}
+        : { paginationOutcome: plan.paginationOutcome }),
+      results,
+    }),
+  );
 };
 
 const finalizeCompatFetch = async ({
@@ -445,22 +455,27 @@ const finalizeCompatFetch = async ({
       return textWindow;
     }
 
-    return toolDataResult({
-      id: plan.id,
-      title: anonymized.title,
-      text: textWindow.text,
-      url: plan.url,
-      nextCursor: textWindow.nextCursor,
-      metadata: {
-        kind: "document",
-        anonymized: true,
-        anonymizedEntityCount: anonymized.anonymizedEntityCount,
-        charCount: textWindow.charCount,
-        source: "stella",
-        truncated: textWindow.truncated,
-        workspaceId,
-      },
-    });
+    return untypedToolDataResult(
+      projectionPayload(COMPAT_FETCH_OUTPUT_SCHEMA, {
+        id: plan.id,
+        title: anonymized.title,
+        text: textWindow.text,
+        url: plan.url,
+        ...(plan.source_url === undefined
+          ? {}
+          : { source_url: plan.source_url }),
+        nextCursor: textWindow.nextCursor,
+        metadata: {
+          kind: "document",
+          anonymized: true,
+          anonymizedEntityCount: anonymized.anonymizedEntityCount,
+          charCount: textWindow.charCount,
+          source: "stella",
+          truncated: textWindow.truncated,
+          workspaceId,
+        },
+      }),
+    );
   }
 
   const textWindow = windowTextByCursor({
@@ -472,19 +487,22 @@ const finalizeCompatFetch = async ({
     return textWindow;
   }
 
-  return toolDataResult({
-    id: plan.id,
-    title: plan.title,
-    text: textWindow.text,
-    url: plan.url,
-    nextCursor: textWindow.nextCursor,
-    metadata: {
-      ...compatFetchSubjectMetadata(plan.subject),
-      charCount: textWindow.charCount,
-      source: "stella",
-      truncated: textWindow.truncated,
-    },
-  });
+  return untypedToolDataResult(
+    projectionPayload(COMPAT_FETCH_OUTPUT_SCHEMA, {
+      id: plan.id,
+      title: plan.title,
+      text: textWindow.text,
+      url: plan.url,
+      ...(plan.source_url === undefined ? {} : { source_url: plan.source_url }),
+      nextCursor: textWindow.nextCursor,
+      metadata: {
+        ...compatFetchSubjectMetadata(plan.subject),
+        charCount: textWindow.charCount,
+        source: "stella",
+        truncated: textWindow.truncated,
+      },
+    }),
+  );
 };
 
 /**

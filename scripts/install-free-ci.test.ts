@@ -131,6 +131,32 @@ describe("shell lexing", () => {
     ).toEqual(["cat", "true"]);
   });
 
+  test("keeps only a standard-input heredoc as the command's stdin", () => {
+    const stdins = (source: string) =>
+      lexShell(source).flatMap((event) =>
+        event.type === "command" ? [event.stdin?.body] : [],
+      );
+    expect(
+      stdins(
+        [
+          "bun - <<'JS'",
+          'import "a";',
+          "JS",
+          "cat <<-EOF",
+          "\tindented",
+          "\tEOF",
+          "bun - 3<<EOF",
+          "x",
+          "EOF",
+          "bun - <<EOF < file",
+          "x",
+          "EOF",
+          "true",
+        ].join("\n"),
+      ),
+    ).toEqual(['import "a";', "indented", undefined, undefined, undefined]);
+  });
+
   test("reports an unterminated quote instead of guessing", () => {
     expect(lexShell("echo 'open").at(-1)).toEqual({
       reason: "unterminated single quote",
@@ -334,6 +360,7 @@ describe("install-free invocation classification", () => {
           "bun run absent",
           "bun --filter @fixture/none gen",
           "bun build scripts/check.ts",
+          "bun - < scripts/check.ts",
           "bash run-in-image.sh bun scripts/check.ts",
           'cd "$TARGET" && bun scripts/check.ts',
         ].join("\n"),
@@ -355,6 +382,7 @@ describe("install-free invocation classification", () => {
       ".#absent is not a package.json script",
       "--filter @fixture/none names no single workspace package",
       "bun build is not classified",
+      "reads code from a non-heredoc stdin",
       "bash runs Bun with arguments this check cannot follow",
       "scripts/check.ts is computed at run time",
     ]);
@@ -736,6 +764,28 @@ describe("install-free invocation classification", () => {
     ).toEqual(["install", "files", "files"]);
   });
 
+  test("checks code a heredoc feeds to `bun -` like inline code", () => {
+    expect(
+      classify(
+        ["bun --no-env-file - <<'JS'", 'import { z } from "zod";', "JS"].join(
+          "\n",
+        ),
+      ),
+    ).toEqual([
+      {
+        classification: {
+          code: 'import { z } from "zod";',
+          cwd: "",
+          type: "eval",
+        },
+        command: "bun --no-env-file -",
+      },
+    ]);
+    expect(
+      kinds(["bun -r ./scripts/pre.ts - <<'JS'", "1", "JS"].join("\n")),
+    ).toEqual(["unclassified"]);
+  });
+
   test("reports every installed package a file or inline code imports", () => {
     const root = repository("jobs: {}\n");
 
@@ -752,6 +802,84 @@ describe("install-free invocation classification", () => {
     expect(
       importProblems({ entries: ["scripts/check.test.ts"], root }),
     ).toEqual([]);
+  });
+  test("bounded installs and planner calls retain dependency coverage", () => {
+    for (const prefix of [
+      ...["0", "1.5", ".5", "1.", "2s", "3.5m", "4h", "5d"].map(
+        (duration) => `timeout ${duration}`,
+      ),
+      "timeout 120s",
+      "timeout --kill-after=10s 120s",
+      "timeout -k 10s 120s",
+      "timeout --signal TERM -- 120s",
+    ]) {
+      const root = repository(
+        [
+          "jobs:",
+          "  job:",
+          "    steps:",
+          `      - run: bash scripts/retry.sh ${prefix} bun ci --ignore-scripts`,
+          "        id: installed",
+          "        if: inputs.run == true",
+          `      - run: ${prefix} bun scripts/check.ts`,
+          "        if: steps.installed.outcome == 'success'",
+        ].join("\n"),
+      );
+      expect(
+        installFreeInvocations({ root, workflow: CI_WORKFLOW }).map(
+          ({ classification }) => classification.type,
+        ),
+      ).toEqual(["install"]);
+      expect(
+        classify(`${prefix} bun scripts/check.ts`).map(
+          ({ classification }) => classification.type,
+        ),
+      ).toEqual(["files"]);
+    }
+  });
+
+  test("timeout invalid durations and options cannot certify dependency installation", () => {
+    for (const option of [
+      "--help",
+      "--version",
+      "--unknown",
+      "invalid",
+      "1ss",
+      "1..5",
+      "1x",
+      "-1",
+      "--kill-after=invalid 120s",
+      "-k invalid 120s",
+      "-kinvalid 120s",
+    ]) {
+      const root = repository(
+        [
+          "jobs:",
+          "  job:",
+          "    steps:",
+          `      - run: timeout ${option} bun ci`,
+          "        id: installed",
+          "      - run: bun scripts/check.ts",
+          "        if: steps.installed.outcome == 'success'",
+        ].join("\n"),
+      );
+      const invocations = installFreeInvocations({
+        root,
+        workflow: CI_WORKFLOW,
+      });
+      expect(
+        invocations.some(
+          ({ classification }) => classification.type === "install",
+        ),
+      ).toBe(false);
+      expect(
+        invocations.some(
+          ({ classification }) =>
+            classification.type === "files" &&
+            classification.entries.includes("scripts/check.ts"),
+        ),
+      ).toBe(true);
+    }
   });
 });
 

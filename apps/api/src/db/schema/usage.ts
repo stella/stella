@@ -342,6 +342,60 @@ export const usageEntitlements = p.pgTable(
   ],
 );
 
+const currentUserOwnsHostedCheckoutClaims = sql`current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.hosted_checkout_claims'::regclass)`;
+
+/**
+ * The organization's open hosted subscription checkout, at most one. A
+ * checkout start claims the row before it calls the provider; the claim
+ * holds until the provider session expires, the start fails, or the
+ * subscription event arrives. An expired claim is taken over in place.
+ */
+export const hostedCheckoutClaims = p.pgTable(
+  "hosted_checkout_claims",
+  {
+    organizationId: safeOrganizationId("organization_id")
+      .primaryKey()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    /** Identifies one start, so a stale request releases only its own claim. */
+    claimId: safeUuid<"hostedCheckoutClaim">("claim_id").notNull(),
+    hostedSessionId: p.text("hosted_session_id"),
+    expiresAt: timestamptz("expires_at").notNull(),
+    createdAt: timestamptz("created_at").notNull().defaultNow(),
+  },
+  () => [
+    // Members with organization settings access start checkouts through the
+    // scoped connection; the webhook dispatcher clears claims on the owner
+    // connection.
+    p.pgPolicy("hosted_checkout_claims_owner", {
+      for: "all",
+      to: "public",
+      using: currentUserOwnsHostedCheckoutClaims,
+      withCheck: currentUserOwnsHostedCheckoutClaims,
+    }),
+    p.pgPolicy("hosted_checkout_claims_organization_select", {
+      for: "select",
+      to: stella,
+      using: organizationCheck,
+    }),
+    p.pgPolicy("hosted_checkout_claims_organization_insert", {
+      for: "insert",
+      to: stella,
+      withCheck: organizationCheck,
+    }),
+    p.pgPolicy("hosted_checkout_claims_organization_update", {
+      for: "update",
+      to: stella,
+      using: organizationCheck,
+      withCheck: organizationCheck,
+    }),
+    p.pgPolicy("hosted_checkout_claims_organization_delete", {
+      for: "delete",
+      to: stella,
+      using: organizationCheck,
+    }),
+  ],
+);
+
 /**
  * How an organization may reach the instance model provider.
  * `self_managed_keys` is recorded once for organizations that existed before

@@ -186,6 +186,7 @@ export const ACTIVITY_TARGET_SOURCE_BY_RESOURCE_TYPE = {
   legal_list_verification: null,
   legal_list_item: null,
   machine_api_key: null,
+  personal_api_key: null,
   mcp_gateway_tool: null,
   organization_settings: null,
   property: null,

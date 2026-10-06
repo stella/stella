@@ -19,7 +19,6 @@ type AuthenticatedCaseLawWorkspaceProps = {
   decision: ComponentProps<typeof DecisionWorkspace>["decision"];
   decisionId: SafeId<"caseLawDecision">;
   initialAnchorId?: string | undefined;
-  initialSearchQuery?: string | undefined;
   user: AuthenticatedUser;
 };
 
@@ -27,7 +26,6 @@ export const AuthenticatedCaseLawWorkspace = ({
   decision,
   decisionId,
   initialAnchorId,
-  initialSearchQuery,
   user,
 }: AuthenticatedCaseLawWorkspaceProps) => (
   <AuthenticatedUserProvider user={user}>
@@ -39,7 +37,6 @@ export const AuthenticatedCaseLawWorkspace = ({
               decision={decision}
               decisionId={decisionId}
               initialAnchorId={initialAnchorId}
-              initialSearchQuery={initialSearchQuery}
             />
           </div>
           {/* The law shell docks the inspector; the reader only seeds its tabs. */}
@@ -54,10 +51,9 @@ const AuthenticatedDecisionWorkspace = ({
   decision,
   decisionId,
   initialAnchorId,
-  initialSearchQuery,
 }: Pick<
   AuthenticatedCaseLawWorkspaceProps,
-  "decision" | "decisionId" | "initialAnchorId" | "initialSearchQuery"
+  "decision" | "decisionId" | "initialAnchorId"
 >) => {
   const { ensureAIAvailable } = useAIKeyGate();
 
@@ -68,7 +64,6 @@ const AuthenticatedDecisionWorkspace = ({
       decisionId={decisionId}
       ensureAIAvailable={ensureAIAvailable}
       initialAnchorId={initialAnchorId}
-      initialSearchQuery={initialSearchQuery}
     />
   );
 };

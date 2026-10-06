@@ -66,7 +66,10 @@ const freshnessReason = ({
   return null;
 };
 
-const loadSanctionsRows = async (db: SanctionsReadDb, ids: SanctionsSource[]) =>
+const loadSanctionsRows = async (
+  db: SanctionsReadDb,
+  ids: readonly SanctionsSource[],
+) =>
   await db(
     async (tx) =>
       await tx

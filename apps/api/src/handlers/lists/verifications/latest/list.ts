@@ -12,6 +12,7 @@ import { legalListClaims, legalListVerificationRuns } from "@/api/db/schema";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { tSafeId } from "@/api/lib/custom-schema";
+import { LIST_VERIFICATION_FEATURE_ID } from "@/api/lib/feature-access/registry";
 import { VERIFICATION_LIMITS } from "@/api/lib/lists/verification/contract";
 import {
   CLAIM_COUNT_COLUMNS,
@@ -29,6 +30,7 @@ import type {
 } from "@/api/lib/projection-totality";
 
 const config = {
+  featureAccess: { featureId: LIST_VERIFICATION_FEATURE_ID, type: "required" },
   description:
     "Read the latest list verification of each named document file (entity " +
     "id and file field id), in one call: its status, failure code, the list " +

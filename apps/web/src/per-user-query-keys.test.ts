@@ -97,6 +97,20 @@ const KEY_TYPE_HAS_USER = "the key argument's type requires userId";
 
 // Keyed by handler path under apps/api/src/handlers.
 const PER_USER_READS: Record<string, PerUserRead> = {
+  "views/list.ts": {
+    kind: "caller-marker",
+    reason:
+      "Shared view identities carry caller eligibility; session-cache-guard clears them on member changes.",
+  },
+  "workspaces/read-navigation.ts": {
+    kind: "caller-marker",
+    reason:
+      "Shared matter navigation chooses caller-eligible layouts; session-cache-guard clears it on member changes.",
+  },
+  "api-keys/personal/list.ts": {
+    kind: "no-web-caller",
+    calls: ['api["api-keys"].personal.get'],
+  },
   "organization-settings/get.ts": {
     kind: "keyed",
     calls: ['api["organization-settings"].get'],
