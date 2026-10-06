@@ -1,11 +1,11 @@
 import { expect, test } from "bun:test";
 
-import { VISUAL_INNER_POLICY } from "../apps/api/src/handlers/visual-sandbox/document";
-import runtime from "../apps/api/src/handlers/visual-sandbox/generated/runtime.js.txt" with { type: "text" };
-import { sanitizeVisualHtml } from "../apps/api/src/handlers/visual-sandbox/sanitize";
-import { composeVisualDocument } from "../apps/api/src/handlers/visual-sandbox/srcdoc";
-import { launchPreviewBrowser } from "../apps/visual-preview/browser/launch";
-import { renderVisual } from "../apps/visual-preview/src/render";
+import { VISUAL_INNER_POLICY } from "../../apps/api/src/handlers/visual-sandbox/document";
+import runtime from "../../apps/api/src/handlers/visual-sandbox/generated/runtime.js.txt" with { type: "text" };
+import { sanitizeVisualHtml } from "../../apps/api/src/handlers/visual-sandbox/sanitize";
+import { composeVisualDocument } from "../../apps/api/src/handlers/visual-sandbox/srcdoc";
+import { launchPreviewBrowser } from "../../apps/visual-preview/browser/launch";
+import { renderVisual } from "../../apps/visual-preview/src/render";
 
 // Repository integration joins the document producer and renderer without
 // making either application import the other's source.

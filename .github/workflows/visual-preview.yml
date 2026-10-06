@@ -3,7 +3,7 @@ on:
   pull_request:
     paths:
       - apps/visual-preview/**
-      - scripts/visual-preview-composition.browser.test.ts
+      - scripts/browser/**
       - apps/api/src/handlers/visual-sandbox/**
       - packages/api-contract/src/visual-sandbox.ts
       - packages/api-contract/src/visual-preview.ts
@@ -35,7 +35,7 @@ jobs:
             exit 0
           fi
           git fetch --no-tags --depth=1 origin "$BASE_SHA"
-          if git diff --name-only "$BASE_SHA" HEAD | rg '^(apps/visual-preview/|scripts/visual-preview-composition.browser.test.ts$|apps/api/src/handlers/visual-sandbox/|packages/api-contract/src/visual-sandbox.ts$|packages/api-contract/src/visual-preview|bun.lock$|.github/workflows/visual-preview.yml$)'; then
+          if git diff --name-only "$BASE_SHA" HEAD | rg '^(apps/visual-preview/|scripts/browser/|apps/api/src/handlers/visual-sandbox/|packages/api-contract/src/visual-sandbox.ts$|packages/api-contract/src/visual-preview|bun.lock$|.github/workflows/visual-preview.yml$)'; then
             echo 'required=true' >> "$GITHUB_OUTPUT"
           else
             echo 'required=false' >> "$GITHUB_OUTPUT"
