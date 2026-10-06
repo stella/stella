@@ -4,6 +4,7 @@ import { BILLING_STATUS } from "@/api/db/schema";
 import { toSafeId } from "@/api/lib/branded-types";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
+import { withTimeBillingEnrolment } from "@/api/tests/helpers/time-billing-enrolment";
 import {
   createScopedDbMock,
   createSelectQueryMock,
@@ -20,22 +21,24 @@ const createContext = ({
   safeDb: DeleteExpenseCtx["safeDb"];
   scopedDb: DeleteExpenseCtx["scopedDb"];
 }): DeleteExpenseCtx =>
-  asTestRaw<DeleteExpenseCtx>({
-    body: { id: toSafeId<"expense">("expense_test") },
-    request: new Request("https://example.test/v1/expenses/workspace_test", {
-      method: "DELETE",
+  withTimeBillingEnrolment(
+    asTestRaw<DeleteExpenseCtx>({
+      body: { id: toSafeId<"expense">("expense_test") },
+      request: new Request("https://example.test/v1/expenses/workspace_test", {
+        method: "DELETE",
+      }),
+      route: "/v1/expenses/:workspaceId",
+      safeDb,
+      scopedDb,
+      workspaceId: toSafeId<"workspace">("workspace_test"),
+      memberRole: sessionMemberRole("owner"),
+      session: {
+        activeOrganizationId: toSafeId<"organization">("org_test"),
+      },
+      user: { id: toSafeId<"user">("user_test") },
+      recordAuditEvent: async () => {},
     }),
-    route: "/v1/expenses/:workspaceId",
-    safeDb,
-    scopedDb,
-    workspaceId: toSafeId<"workspace">("workspace_test"),
-    memberRole: sessionMemberRole("owner"),
-    session: {
-      activeOrganizationId: toSafeId<"organization">("org_test"),
-    },
-    user: { id: toSafeId<"user">("user_test") },
-    recordAuditEvent: async () => {},
-  });
+  );
 
 describe("deleteExpense", () => {
   test("rejects deleting a billed expense", async () => {

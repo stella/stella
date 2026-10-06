@@ -14,7 +14,9 @@
  */
 
 import { panic, Result } from "better-result";
+import { getTableConfig } from "drizzle-orm/pg-core";
 
+import { caseLawProvisionCitations } from "@/api/db/schema";
 import { isRecord } from "@/api/lib/type-guards";
 
 import { inBackfillTransaction, PROVISION_BACKFILL_BUDGET } from "./step";
@@ -27,14 +29,9 @@ import type {
 
 const REPAIR_NAME = "case-law-provision-citation-checks";
 const TABLE_NAME = "case_law_provision_citations";
-const CONSTRAINT_NAMES = [
-  "provision_citations_span_role_values",
-  "provision_citations_selection_values",
-  "provision_citations_target_status_values",
-  "provision_citations_print_segment_shape",
-  "provision_citations_name_segment_shape",
-  "provision_citations_misprint_correction_shape",
-] as const;
+
+const getConstraintNames = () =>
+  getTableConfig(caseLawProvisionCitations).checks.map(({ name }) => name);
 
 // A short wait for the lock: vacuum or DDL holding the table means trying
 // again on the next run, not queueing behind it.
@@ -62,9 +59,13 @@ const READ_COMPLETION_SQL = `
 const readPendingConstraint = async (
   connection: ProvisionBackfillSession,
 ): Promise<string | undefined> => {
+  const constraintNames = getConstraintNames();
+  if (constraintNames.length === 0) {
+    return panic(`Backfill step ${REPAIR_NAME}: no owned CHECK constraints`);
+  }
   const rows = await connection.query(READ_COMPLETION_SQL, [
     TABLE_NAME,
-    CONSTRAINT_NAMES.join(","),
+    constraintNames.join(","),
   ]);
   const states = new Map<string, boolean>();
   for (const row of rows) {
@@ -79,7 +80,7 @@ const readPendingConstraint = async (
     }
     states.set(row["name"], row["isValidated"]);
   }
-  return CONSTRAINT_NAMES.find((constraintName) => {
+  return constraintNames.find((constraintName) => {
     const isValidated = states.get(constraintName);
     if (isValidated === undefined) {
       return panic(

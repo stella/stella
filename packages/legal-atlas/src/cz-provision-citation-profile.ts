@@ -191,6 +191,28 @@ const actTitleForms = (subject: string): readonly string[] => [
 export const CZ_PROFILE = {
   jurisdiction: "CZE",
   language: "cs",
+  versionGrammar: {
+    dateStatements: [
+      { prefix: "ve znění účinném do", relation: "until" },
+      { prefix: "ve znění účinném k", relation: "on" },
+      { prefix: "ve znění účinném od", relation: "from" },
+    ],
+    amendmentPrefixes: ["ve znění zákona č.", "ve znění novely č."],
+    monthNames: {
+      ledna: 1,
+      února: 2,
+      března: 3,
+      dubna: 4,
+      května: 5,
+      června: 6,
+      července: 7,
+      srpna: 8,
+      září: 9,
+      října: 10,
+      listopadu: 11,
+      prosince: 12,
+    },
+  },
 
   sectionTerms: [
     { text: "§§", unit: "section" },

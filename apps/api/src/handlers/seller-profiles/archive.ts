@@ -14,6 +14,7 @@ const config = {
     "The retained record remains available for historical references.",
   permissions: { organizationSettings: ["update"] },
   accountAccess: ACCOUNT_ACCESS.standard,
+  featureAccess: { featureId: "time-billing", type: "required" },
   mcp: { type: "capability", reason: "billing_admin", consumesServices: false },
   params: sellerProfileParams,
 } satisfies HandlerConfig;

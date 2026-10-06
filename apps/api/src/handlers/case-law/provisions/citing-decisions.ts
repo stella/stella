@@ -7,7 +7,6 @@ import {
   PUBLIC_CASE_LAW_COUNTRIES,
   publicCaseLawCountry,
 } from "@stll/api-contract/case-law-launch-readiness";
-import { DECISION_DATE_VERSION_BASIS } from "@stll/api-contract/provision-version-basis";
 
 import {
   caseLawDecisions,
@@ -32,6 +31,11 @@ import {
   isUuidPaginationCursorPart,
 } from "@/api/lib/pagination";
 import { normalizeTenantPageLimit } from "@/api/lib/rate-limit/action-size-limits";
+
+import {
+  PROVISION_VERSION_COLUMNS,
+  projectProvisionVersion,
+} from "./version-response";
 
 /**
  * The two keys a work is asked about by, and never both at once.
@@ -197,6 +201,8 @@ export const listCitingDecisionsHandler = async (
   const rows = await caseLawDb(async (tx) => {
     const mentions = tx
       .select({
+        ...PROVISION_VERSION_COLUMNS,
+        versionValidFrom: caseLawProvisionCitations.versionValidFrom,
         decisionId: caseLawProvisionCitations.decisionId,
         caseNumber: caseLawDecisions.caseNumber,
         // The decision's own address, so a reader can follow the citation
@@ -238,6 +244,17 @@ export const listCitingDecisionsHandler = async (
 
     const citing = await tx
       .select({
+        appliedVersionBasis: mentions.appliedVersionBasis,
+        appliedVersionDate: mentions.appliedVersionDate,
+        appliedVersionDateRelation: mentions.appliedVersionDateRelation,
+        appliedVersionAmendmentWorkIdentifier:
+          mentions.appliedVersionAmendmentWorkIdentifier,
+        appliedVersionExpressionDate: mentions.appliedVersionExpressionDate,
+        appliedVersionExpressionEli: mentions.appliedVersionExpressionEli,
+        versionEvidenceStart: mentions.versionEvidenceStart,
+        versionEvidenceEnd: mentions.versionEvidenceEnd,
+        versionEvidenceKind: mentions.versionEvidenceKind,
+        versionValidFrom: mentions.versionValidFrom,
         decisionId: mentions.decisionId,
         caseNumber: mentions.caseNumber,
         slug: mentions.slug,
@@ -294,11 +311,8 @@ export const listCitingDecisionsHandler = async (
     ...page,
     nextCursor: byAuthority ? null : page.nextCursor,
     items: page.items.map(
-      ({
-        anchor: _anchor,
-        decisionDateCursor: _decisionDateCursor,
-        ...item
-      }) => ({ ...item, versionBasis: DECISION_DATE_VERSION_BASIS }),
+      ({ anchor: _anchor, decisionDateCursor: _decisionDateCursor, ...item }) =>
+        projectProvisionVersion(item),
     ),
   };
 };

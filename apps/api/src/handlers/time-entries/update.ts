@@ -384,6 +384,7 @@ const updateTimeEntryById = createSafeHandler(
       "a conflict instead of overwriting.",
     permissions: { timeEntry: ["update"] },
     accountAccess: ACCOUNT_ACCESS.sandbox,
+    featureAccess: { featureId: "time-billing", type: "required" },
     realtime: timeEntryRealtimeUpdates,
     mcp: { type: "covered", by: "save_time_entry" },
     body: updateTimeEntryBodySchema,

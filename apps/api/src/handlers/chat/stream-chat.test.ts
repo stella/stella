@@ -26,7 +26,6 @@ import {
   CHAT_SEND_MODE,
   CHAT_TRANSPORT_ERROR_CODE,
 } from "@stll/anonymize-chat";
-import { BUILT_IN_CHAT_TOOL_POLICY_KINDS } from "@stll/api-contract";
 import {
   ACTION_ADMISSION_CODES,
   ACTION_ADMISSION_REFUSALS,
@@ -1396,8 +1395,11 @@ describe("native interrupt boundary persistence", () => {
   // the model omits `context` by sending `null`. The adapter streams that
   // wire string and hands the un-widened value on `TOOL_CALL_END`; the
   // persisted part must carry that value, or the persistence validator fails
-  // the turn in `onFinish` before the approval card renders.
-  test("pauses for approval on spawn_subagents when the model nulls its optional fields", async () => {
+  // the turn in `onFinish` before the approval card renders. The
+  // spawn_subagents schema has several nullable optional fields; delegation
+  // itself runs without approval, so the test pauses it under the mutation
+  // policy to keep a paused call with nulled fields covered.
+  test("persists a paused call whose model nulled its optional fields", async () => {
     const { safeDb } = createScopedDbMock({});
     const tools = createSpawnSubagentsTool({
       buildSubagentToolset: () => ({}),
@@ -1415,7 +1417,7 @@ describe("native interrupt boundary persistence", () => {
     });
     const spawnSubagents = applyChatToolPolicy(
       tools[SPAWN_SUBAGENTS_TOOL_NAME],
-      BUILT_IN_CHAT_TOOL_POLICY_KINDS[SPAWN_SUBAGENTS_TOOL_NAME],
+      CHAT_TOOL_POLICY_KIND.mutation,
     );
     expect(spawnSubagents).toMatchObject({ needsApproval: true });
 

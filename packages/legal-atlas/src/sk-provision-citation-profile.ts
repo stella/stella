@@ -68,6 +68,28 @@ const LABOUR_CODE_SUCCESSION = {
 export const SK_PROFILE = {
   jurisdiction: "SVK",
   language: "sk",
+  versionGrammar: {
+    dateStatements: [
+      { prefix: "v znení účinnom do", relation: "until" },
+      { prefix: "v znení účinnom k", relation: "on" },
+      { prefix: "v znení účinnom od", relation: "from" },
+    ],
+    amendmentPrefixes: ["v znení zákona č.", "v znení novely č."],
+    monthNames: {
+      januára: 1,
+      februára: 2,
+      marca: 3,
+      apríla: 4,
+      mája: 5,
+      júna: 6,
+      júla: 7,
+      augusta: 8,
+      septembra: 9,
+      októbra: 10,
+      novembra: 11,
+      decembra: 12,
+    },
+  },
 
   sectionTerms: [
     { text: "§§", unit: "section" },

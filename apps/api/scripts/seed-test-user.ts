@@ -24,6 +24,7 @@ import { chmodSync, mkdirSync, writeFileSync } from "node:fs";
 import path from "node:path";
 
 import { member, organization, session, user } from "@/api/db/auth-schema";
+import { featureEnrolments } from "@/api/db/schema";
 import { env } from "@/api/env";
 import { seedDefaultSkills } from "@/api/lib/agent-skills/default-skills";
 import { sessionCookieName } from "@/api/lib/auth/auth-cookie-name";
@@ -327,6 +328,17 @@ export async function ensureTestUsers(organizationId: string = TEST_ORG.id) {
     organizationId,
     userId: testUserId,
     role: OWNER_MEMBER_ROLE,
+  });
+  // The owner fixture exercises billing pages; other principals retain opt-in access.
+  await db.transaction(async (tx) => {
+    await tx
+      .insert(featureEnrolments)
+      .values({
+        organizationId: toSafeId<"organization">(organizationId),
+        userId: toSafeId<"user">(testUserId),
+        featureId: "time-billing",
+      })
+      .onConflictDoNothing();
   });
   const colleagueUserIds = await ensureSeedColleagueUsers();
 

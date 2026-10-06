@@ -25,6 +25,7 @@ mod keychain;
 mod logging;
 mod marker_file;
 mod pdf_signing;
+mod presence;
 mod registry;
 mod relaunch;
 mod session_manager;
@@ -359,6 +360,8 @@ pub fn run() {
           }
         }
       }
+
+      presence::start(handle.clone());
 
       // Check for updates in the background after launch settles.
       updater::schedule_startup_check(handle.clone(), Arc::clone(&manager));

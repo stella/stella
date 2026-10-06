@@ -1,6 +1,12 @@
 import { toolDefinition } from "@tanstack/ai";
 import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
+import * as v from "valibot";
+
+import {
+  BUILT_IN_CHAT_TOOL_POLICY_KINDS,
+  CHAT_TOOL_POLICY_REQUIRES_APPROVAL,
+} from "@stll/api-contract";
 
 import type { Transaction } from "@/api/db/root";
 import type { SafeDb } from "@/api/db/safe-db";
@@ -17,11 +23,24 @@ import {
 import {
   createSpawnSubagentsTool,
   resolveValidatedSubagentModelId,
+  SUBAGENT_FAILED_MESSAGE,
 } from "@/api/handlers/chat/tools/spawn-subagents-tool";
+import { SPAWN_SUBAGENTS_TOOL_NAME } from "@/api/handlers/chat/tools/subagent-tool-shared";
 import type { SubagentProposalSink } from "@/api/handlers/chat/tools/subagent-tool-shared";
+import { projectToolMapForSubagent } from "@/api/handlers/chat/tools/subagent-tools";
+import { toTanStackToolSchema } from "@/api/handlers/chat/tools/tanstack-tool-schema";
+import {
+  applyChatToolPolicy,
+  CHAT_TOOL_POLICY_KIND,
+  getChatToolPolicy,
+} from "@/api/handlers/chat/tools/tool-policy";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { ChatToolMap } from "@/api/lib/chat/chat-tool-types";
-import { UsageLimitExceededError } from "@/api/lib/errors/tagged-errors";
+import { ProviderCallError } from "@/api/lib/errors/provider-call-error";
+import {
+  HandlerError,
+  UsageLimitExceededError,
+} from "@/api/lib/errors/tagged-errors";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 // `spawn-subagents-tool.ts` calls `runSubagent` (a real provider/model call
@@ -167,12 +186,12 @@ const rawBoundary: ChatThirdPartyBoundary = { type: "raw" };
 const passthroughSafeDb: SafeDb = async (fn) =>
   Result.ok(await fn(asTestRaw<Transaction>({})));
 
-const buildTool = (
+const buildToolDefinition = (
   buildSubagentToolset: (
     sink: SubagentProposalSink,
   ) => ChatToolMap = (): ChatToolMap => ({}),
-) => {
-  const tools = createSpawnSubagentsTool({
+) =>
+  createSpawnSubagentsTool({
     buildSubagentToolset,
     organizationId,
     orgAIConfig: null,
@@ -188,6 +207,11 @@ const buildTool = (
       runSubagent: runSubagentForTest,
     },
   });
+
+const buildTool = (
+  buildSubagentToolset?: (sink: SubagentProposalSink) => ChatToolMap,
+) => {
+  const tools = buildToolDefinition(buildSubagentToolset);
   // SAFETY: test invokes the server tool's execute directly with a stub
   // call context, same pattern as template-tools.test.ts.
   // oxlint-disable-next-line typescript/no-unsafe-type-assertion
@@ -517,6 +541,143 @@ describe("createSpawnSubagentsTool — incomplete subagent runs", () => {
       expect(result.results[0]?.error).toStartWith(cutOff);
       expect(result.results[0]?.error).toContain(
         '1. update_field {"value":"x"}',
+      );
+    } finally {
+      env.USAGE_ENFORCEMENT_ENABLED = previousEnforcement;
+      env.AI_PROVIDER = previousProvider;
+      env.ANTHROPIC_API_KEY = previousAnthropicKey;
+    }
+  });
+});
+
+describe("createSpawnSubagentsTool — thrown subagent failures", () => {
+  const sentinel = "SENTINEL_SUBAGENT_THROWN_TEXT";
+  const thrown: { name: string; error: unknown; expected: string }[] = [
+    {
+      name: "a library error",
+      error: new Error(sentinel),
+      expected: SUBAGENT_FAILED_MESSAGE,
+    },
+    {
+      name: "a thrown string",
+      error: sentinel,
+      expected: SUBAGENT_FAILED_MESSAGE,
+    },
+    {
+      name: "a server-side handler error",
+      error: new HandlerError({ status: 502, message: sentinel }),
+      expected: SUBAGENT_FAILED_MESSAGE,
+    },
+    {
+      name: "a provider call error",
+      error: new ProviderCallError({
+        model: { provider: "openrouter", keySource: "instance" },
+        status: 502,
+        kind: "provider_unavailable",
+      }),
+      expected: SUBAGENT_FAILED_MESSAGE,
+    },
+    {
+      name: "a curated refusal",
+      error: new HandlerError({ status: 422, message: "Invalid brief" }),
+      expected: "Invalid brief",
+    },
+  ];
+
+  const runThrowing = async (failure: unknown) => {
+    const previousEnforcement = env.USAGE_ENFORCEMENT_ENABLED;
+    const previousProvider = env.AI_PROVIDER;
+    const previousAnthropicKey = env.ANTHROPIC_API_KEY;
+    env.USAGE_ENFORCEMENT_ENABLED = false;
+    env.AI_PROVIDER = "anthropic";
+    env.ANTHROPIC_API_KEY = "sk-test";
+    runSubagentImpl = async () => {
+      throw failure;
+    };
+    try {
+      return await buildTool()({ subagents: [{ task: "a" }] }, {});
+    } finally {
+      env.USAGE_ENFORCEMENT_ENABLED = previousEnforcement;
+      env.AI_PROVIDER = previousProvider;
+      env.ANTHROPIC_API_KEY = previousAnthropicKey;
+    }
+  };
+
+  for (const { name, error, expected } of thrown) {
+    test(`reports ${name} with application-owned text`, async () => {
+      const result = await runThrowing(error);
+
+      expect(result.results).toEqual([
+        { error: expected, index: 0, status: "failed" },
+      ]);
+      expect(JSON.stringify(result)).not.toContain(sentinel);
+    });
+  }
+});
+
+describe("createSpawnSubagentsTool — delegation without an approval pause", () => {
+  test("the delegation policy needs no approval, so the call starts at once", () => {
+    const policyKind =
+      BUILT_IN_CHAT_TOOL_POLICY_KINDS[SPAWN_SUBAGENTS_TOOL_NAME];
+    expect(CHAT_TOOL_POLICY_REQUIRES_APPROVAL[policyKind]).toBe(false);
+
+    const spawn = applyChatToolPolicy(
+      buildToolDefinition()[SPAWN_SUBAGENTS_TOOL_NAME],
+      policyKind,
+    );
+    expect(getChatToolPolicy(spawn).needsApproval).toBe(false);
+    expect(spawn.needsApproval).toBeUndefined();
+  });
+
+  test("a subagent's write still comes back as a proposal and never runs", async () => {
+    const sideEffects: string[] = [];
+    const saveMatter = applyChatToolPolicy(
+      toolDefinition({
+        name: "save_matter",
+        description: "save_matter",
+        inputSchema: toTanStackToolSchema(v.strictObject({ name: v.string() })),
+      }).server(async () => {
+        sideEffects.push("save_matter");
+        return await Promise.resolve({});
+      }),
+      CHAT_TOOL_POLICY_KIND.mutation,
+    );
+    const previousEnforcement = env.USAGE_ENFORCEMENT_ENABLED;
+    const previousProvider = env.AI_PROVIDER;
+    const previousAnthropicKey = env.ANTHROPIC_API_KEY;
+    env.USAGE_ENFORCEMENT_ENABLED = false;
+    env.AI_PROVIDER = "anthropic";
+    env.ANTHROPIC_API_KEY = "sk-test";
+    runSubagentCalls.length = 0;
+    // The fake subagent calls the write it was handed, as a model would.
+    runSubagentImpl = async (options) => {
+      await options.tools["save_matter"]?.execute?.(
+        { name: "Acme" },
+        undefined,
+      );
+      return {
+        outcome: "completed",
+        text: "drafted the matter",
+        usage: undefined,
+      };
+    };
+
+    try {
+      const execute = buildTool((sink) =>
+        projectToolMapForSubagent({ save_matter: saveMatter }, sink),
+      );
+      const result = await execute(
+        { subagents: [{ task: "create Acme" }] },
+        {},
+      );
+
+      expect(runSubagentCalls).toHaveLength(1);
+      expect(sideEffects).toEqual([]);
+      expect(result.results).toHaveLength(1);
+      expect(result.results[0]?.status).toBe("completed");
+      expect(result.results[0]?.result).toContain("PROPOSED WRITES");
+      expect(result.results[0]?.result).toContain(
+        '1. save_matter {"name":"Acme"}',
       );
     } finally {
       env.USAGE_ENFORCEMENT_ENABLED = previousEnforcement;

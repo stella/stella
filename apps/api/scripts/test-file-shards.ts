@@ -4,6 +4,7 @@ import { readFileSync } from "node:fs";
 import {
   assertTestDurations,
   durationSeconds,
+  MISSING_TEST_DURATION,
   readDurationWeights,
   readTimingArtifact,
 } from "./test-timings";
@@ -132,6 +133,7 @@ export const selectApiTestFiles = ({
   assertTestDurations({
     files,
     durations: weights,
+    missing: MISSING_TEST_DURATION.warn,
     ...(measurementPath === undefined
       ? {}
       : {

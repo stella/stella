@@ -960,6 +960,9 @@
     },
     "viewer": {
       "abstract": "Résumé",
+      "appliedVersionNotStated": "Version appliquée non précisée",
+      "appliedVersionStatedAmendment": "Rédaction modifiée par <reference>{amendment}</reference>",
+      "appliedVersionStatedDate": "{relation, select, on {Rédaction en vigueur au {date}} until {Rédaction en vigueur jusqu’au {date}} from {Rédaction en vigueur à compter du {date}} other {Rédaction en vigueur au {date}}}",
       "caseFileMayHoldOthers": "Ce dossier peut également contenir d’autres décisions.",
       "citedBy": "Cité par",
       "cites": "Cite",
@@ -1819,6 +1822,8 @@
     "notes": "Notes",
     "open": "Ouvrir",
     "openInNewTab": "Ouvrir dans un nouvel onglet",
+    "openInStella": "Ouvrir dans stella",
+    "openOriginalSource": "Ouvrir la source d’origine",
     "options": "Options",
     "or": "Ou",
     "organization": "Organisation",
@@ -4735,6 +4740,7 @@
     },
     "title": "Législation",
     "validity": "En vigueur du {from} au {to}",
+    "versionAppliedInDecision": "Version appliquée dans la décision <bdi>{court}</bdi> <bdi>{caseNumber}</bdi> (<bdi>{range}</bdi>) · {status}",
     "wordingValidFrom": "Rédaction en vigueur depuis le {date}",
     "wordingVersionUnknown": "Date de la version de la rédaction indisponible"
   },

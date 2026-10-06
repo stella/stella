@@ -2,6 +2,7 @@
 // parser-output-unchanged: Reconciliation revision projections classify listing inputs without changing parsed decision output.
 import { panic, Result } from "better-result";
 
+import type { SkCourtsSourceUrlStatus } from "@stll/api-contract/case-law-text-field";
 import { skCourtSuccessionReferences } from "@stll/api-contract/sk-court-succession";
 import { mapWithConcurrency } from "@stll/concurrency";
 import {
@@ -754,7 +755,7 @@ type SkCourtsMetadata = Record<string, unknown> & {
     | { type: "invalid-publisher-date"; value: string }
     | undefined;
   statedSourceUrl: string | undefined;
-  sourceUrlStatus: "published" | "not-published-by-source" | "rejected-url";
+  sourceUrlStatus: SkCourtsSourceUrlStatus;
 };
 
 type SkCourtsDecisionParts = {
@@ -883,6 +884,9 @@ export const assembleSkCourtsDecision = ({
   const statedSourceUrl = toOptionalValue(detail?.dokument?.url);
   const sourceUrl = sanitizeUrl(statedSourceUrl);
   const sourceUrlStatus = (() => {
+    if (detail === null) {
+      return "detail-unavailable";
+    }
     if (statedSourceUrl === undefined) {
       return "not-published-by-source";
     }

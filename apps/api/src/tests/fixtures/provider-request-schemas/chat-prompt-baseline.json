@@ -24,6 +24,10 @@
       {
         "reason": "Citation tools state the Stella reader link (url) and the publisher source (source_url) once, merged with main's prompt changes",
         "tokens": 34134
+      },
+      {
+        "reason": "time-billing tools are enrolment-gated and leave the shared prefix",
+        "tokens": 32647
       }
     ],
     "anthropic/extended": [
@@ -50,6 +54,10 @@
       {
         "reason": "Citation tools state the Stella reader link (url) and the publisher source (source_url) once, merged with main's prompt changes",
         "tokens": 34624
+      },
+      {
+        "reason": "time-billing tools are enrolment-gated and leave the shared prefix",
+        "tokens": 33138
       }
     ],
     "bedrock/default": [
@@ -76,6 +84,10 @@
       {
         "reason": "Citation tools state the Stella reader link (url) and the publisher source (source_url) once, merged with main's prompt changes",
         "tokens": 34367
+      },
+      {
+        "reason": "time-billing tools are enrolment-gated and leave the shared prefix",
+        "tokens": 32869
       }
     ],
     "bedrock/extended": [
@@ -102,6 +114,10 @@
       {
         "reason": "Citation tools state the Stella reader link (url) and the publisher source (source_url) once, merged with main's prompt changes",
         "tokens": 34855
+      },
+      {
+        "reason": "time-billing tools are enrolment-gated and leave the shared prefix",
+        "tokens": 33359
       }
     ],
     "google/default": [
@@ -128,6 +144,10 @@
       {
         "reason": "Citation tools state the Stella reader link (url) and the publisher source (source_url) once, merged with main's prompt changes",
         "tokens": 33264
+      },
+      {
+        "reason": "time-billing tools are enrolment-gated and leave the shared prefix",
+        "tokens": 31964
       }
     ],
     "google/extended": [
@@ -150,6 +170,10 @@
       {
         "reason": "Organization time-zone setting",
         "tokens": 33575
+      },
+      {
+        "reason": "time-billing tools are enrolment-gated and leave the shared prefix",
+        "tokens": 32443
       }
     ],
     "mistral/default": [
@@ -176,6 +200,10 @@
       {
         "reason": "Citation tools state the Stella reader link (url) and the publisher source (source_url) once, merged with main's prompt changes",
         "tokens": 35754
+      },
+      {
+        "reason": "time-billing tools are enrolment-gated and leave the shared prefix",
+        "tokens": 34121
       }
     ],
     "mistral/extended": [
@@ -202,6 +230,10 @@
       {
         "reason": "Citation tools state the Stella reader link (url) and the publisher source (source_url) once, merged with main's prompt changes",
         "tokens": 36280
+      },
+      {
+        "reason": "time-billing tools are enrolment-gated and leave the shared prefix",
+        "tokens": 34648
       }
     ],
     "openai/default": [
@@ -228,6 +260,10 @@
       {
         "reason": "Citation tools state the Stella reader link (url) and the publisher source (source_url) once, merged with main's prompt changes",
         "tokens": 35357
+      },
+      {
+        "reason": "time-billing tools are enrolment-gated and leave the shared prefix",
+        "tokens": 33734
       }
     ],
     "openai/extended": [
@@ -254,6 +290,10 @@
       {
         "reason": "Citation tools state the Stella reader link (url) and the publisher source (source_url) once, merged with main's prompt changes",
         "tokens": 35871
+      },
+      {
+        "reason": "time-billing tools are enrolment-gated and leave the shared prefix",
+        "tokens": 34250
       }
     ],
     "openrouter-anthropic/default": [
@@ -280,6 +320,10 @@
       {
         "reason": "Citation tools state the Stella reader link (url) and the publisher source (source_url) once, merged with main's prompt changes",
         "tokens": 35220
+      },
+      {
+        "reason": "time-billing tools are enrolment-gated and leave the shared prefix",
+        "tokens": 33682
       }
     ],
     "openrouter-anthropic/extended": [
@@ -306,6 +350,10 @@
       {
         "reason": "Citation tools state the Stella reader link (url) and the publisher source (source_url) once, merged with main's prompt changes",
         "tokens": 35719
+      },
+      {
+        "reason": "time-billing tools are enrolment-gated and leave the shared prefix",
+        "tokens": 34182
       }
     ],
     "openrouter/default": [
@@ -332,6 +380,10 @@
       {
         "reason": "Citation tools state the Stella reader link (url) and the publisher source (source_url) once, merged with main's prompt changes",
         "tokens": 35220
+      },
+      {
+        "reason": "time-billing tools are enrolment-gated and leave the shared prefix",
+        "tokens": 33682
       }
     ],
     "openrouter/extended": [
@@ -358,6 +410,10 @@
       {
         "reason": "Citation tools state the Stella reader link (url) and the publisher source (source_url) once, merged with main's prompt changes",
         "tokens": 35719
+      },
+      {
+        "reason": "time-billing tools are enrolment-gated and leave the shared prefix",
+        "tokens": 34182
       }
     ]
   },
