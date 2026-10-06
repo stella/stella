@@ -155,6 +155,22 @@ describe("unsignalled skip shapes", () => {
       "block comment allowance",
       "read().catch(() => undefined); /* unsignalled-skip-allow: reason */",
     ],
+    [
+      "discarded result error",
+      "try { read(); } catch (cause) { Result.err(cause); }",
+    ],
+    [
+      "discarded result try",
+      "try { read(); } catch (cause) { Result.try(() => cleanup()); }",
+    ],
+    [
+      "discarded typed result helper",
+      "const failure = cause => Result.err(cause); try { read(); } catch (cause) { failure(cause); }",
+    ],
+    [
+      "discarded hoisted typed result helper",
+      "try { read(); } catch (cause) { toFailure(cause); } function toFailure(cause) { return Result.err(cause); }",
+    ],
   ] as const;
   for (const [name, code] of counted) {
     test(name, () => expect(count(code)).toBe(1));
@@ -299,6 +315,22 @@ describe("unsignalled skip shapes", () => {
       "result catch option",
       "Result.tryPromise({ try: () => read(), catch: cause => cause });",
     ],
+    [
+      "returned result error",
+      "try { read(); } catch (cause) { return Result.err(cause); }",
+    ],
+    [
+      "returned typed result helper",
+      "const failure = cause => Result.err(cause); try { read(); } catch (cause) { return failure(cause); }",
+    ],
+    [
+      "collected result error",
+      "for (const row of rows) { try { read(row); } catch (cause) { results.push(Result.err(cause)); } }",
+    ],
+    [
+      "helper observes before building a result",
+      "const failure = cause => { captureException(cause); return Result.err(cause); }; try { read(); } catch (cause) { failure(cause); }",
+    ],
   ] as const;
   for (const [name, code] of sanctioned) {
     test(name, () => expect(count(code)).toBe(0));
@@ -341,6 +373,29 @@ describe("unsignalled skip shapes", () => {
   ]) {
     test(`observation expression ${signal}`, () =>
       expect(count(`try { read(); } catch (cause) { ${signal}; }`)).toBe(0));
+  }
+
+  // Equality is symmetric: the literal's side must not change the arm.
+  for (const [condition, expected] of [
+    ["parsed.success === false", 1],
+    ["false === parsed.success", 1],
+    ["parsed.success == false", 1],
+    ["false == parsed.success", 1],
+    ["parsed.success !== true", 1],
+    ["true !== parsed.success", 1],
+    ["parsed.success != true", 1],
+    ["true != parsed.success", 1],
+    ["parsed.success === true", 0],
+    ["true === parsed.success", 0],
+    ["parsed.success !== false", 0],
+    ["false !== parsed.success", 0],
+  ] as const) {
+    test(`boolean comparison ${condition}`, () =>
+      expect(
+        count(
+          `for (const row of rows) { const parsed = schema.safeParse(row); if (${condition}) continue; }`,
+        ),
+      ).toBe(expected));
   }
 
   test("sites are counted independently", () => {

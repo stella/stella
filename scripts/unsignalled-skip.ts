@@ -243,7 +243,7 @@ function isSignalCall(node: ts.CallExpression, depth: number): boolean {
   }
   if (ts.isIdentifier(callee) && depth < LOCAL_HELPER_DEPTH) {
     const body = localFunctionBody(callee);
-    if (body && !dropsWithoutSignal(body, depth + 1)) {
+    if (body && !dropsWithoutSignal(body, depth + 1, "observe")) {
       return true;
     }
   }
@@ -256,10 +256,29 @@ function isSignalCall(node: ts.CallExpression, depth: number): boolean {
       /(?:logger|log|console)$/iu.test(receiver)) ||
     (METRIC_METHODS.has(callee.name.text) &&
       /(?:metric|counter|skip|reject|fail)/iu.test(receiver)) ||
-    (callee.name.text === "push" && node.arguments.some(isTypedRecord)) ||
-    (receiver === "Result" &&
-      ["err", "ok", "try", "tryPromise"].includes(callee.name.text))
+    (callee.name.text === "push" &&
+      node.arguments.some((argument) => isTypedReturn(argument, depth)))
   );
+}
+
+// Building a typed outcome observes nothing: it counts only where the outcome
+// is returned or collected.
+const TYPED_OUTCOME_METHODS = new Set(["err", "ok", "try", "tryPromise"]);
+
+function isTypedOutcomeCall(node: ts.CallExpression, depth: number): boolean {
+  const callee = unwrap(node.expression);
+  if (
+    ts.isPropertyAccessExpression(callee) &&
+    callee.expression.getText() === "Result" &&
+    TYPED_OUTCOME_METHODS.has(callee.name.text)
+  ) {
+    return true;
+  }
+  if (!ts.isIdentifier(callee) || depth >= LOCAL_HELPER_DEPTH) {
+    return false;
+  }
+  const body = localFunctionBody(callee);
+  return body !== undefined && !dropsWithoutSignal(body, depth + 1, "outcome");
 }
 
 function hasSignal(node: ts.Node, depth = 0): boolean {
@@ -302,6 +321,14 @@ function hasSignal(node: ts.Node, depth = 0): boolean {
   ) {
     return true;
   }
+  // Assigning a typed outcome hands it on to the enclosing code.
+  if (
+    ts.isBinaryExpression(node) &&
+    node.operatorToken.kind === ts.SyntaxKind.EqualsToken &&
+    isTypedReturn(node.right, depth)
+  ) {
+    return true;
+  }
   if (
     ts.isBinaryExpression(node) &&
     node.operatorToken.kind === ts.SyntaxKind.PlusEqualsToken &&
@@ -324,7 +351,7 @@ function isTypedReturn(expression: ts.Expression, depth = 0): boolean {
     );
   }
   if (ts.isCallExpression(node)) {
-    return hasSignal(node, depth);
+    return isTypedOutcomeCall(node, depth) || hasSignal(node, depth);
   }
   if (ts.isIdentifier(node) && depth < LOCAL_HELPER_DEPTH) {
     const value = declarationValue(node);
@@ -337,21 +364,27 @@ type Flow = { live: boolean[]; unsignalledExit: boolean };
 
 // Track whether each reachable path has observed the failure. A signal in a
 // sibling branch or deferred callback does not cover an empty return.
+// "outcome": a returned typed outcome counts as handled (catch bodies, item
+// callbacks). "observe": only an observation counts (a helper called for its
+// effect, whose return value may be discarded).
+type FlowMode = "outcome" | "observe";
+
 type FlowOptions = {
   signalled?: boolean;
   depth?: number;
+  mode?: FlowMode;
 };
 
 function flow(
   statement: ts.Node,
-  { signalled = false, depth = 0 }: FlowOptions = {},
+  { signalled = false, depth = 0, mode = "outcome" }: FlowOptions = {},
 ): Flow {
   if (ts.isBlock(statement)) {
     let live = [signalled];
     let unsignalledExit = false;
     for (const child of statement.statements) {
       const next = live.map((state) =>
-        flow(child, { signalled: state, depth }),
+        flow(child, { signalled: state, depth, mode }),
       );
       live = [...new Set(next.flatMap((item) => item.live))];
       unsignalledExit ||= next.some((item) => item.unsignalledExit);
@@ -363,11 +396,12 @@ function flow(
     const yes = flow(statement.thenStatement, {
       signalled: state,
       depth,
+      mode,
     });
     const no =
       statement.elseStatement === undefined
         ? { live: [state], unsignalledExit: false }
-        : flow(statement.elseStatement, { signalled: state, depth });
+        : flow(statement.elseStatement, { signalled: state, depth, mode });
     return {
       live: [...yes.live, ...no.live],
       unsignalledExit: yes.unsignalledExit || no.unsignalledExit,
@@ -383,7 +417,7 @@ function flow(
       let unsignalledExit = false;
       for (const child of clause.statements) {
         const next = live.map((state) =>
-          flow(child, { signalled: state, depth }),
+          flow(child, { signalled: state, depth, mode }),
         );
         live = next.flatMap((item) => item.live);
         unsignalledExit ||= next.some((item) => item.unsignalledExit);
@@ -404,7 +438,9 @@ function flow(
       unsignalledExit:
         !signalled &&
         (statement.expression === undefined ||
-          !isTypedReturn(statement.expression, depth)),
+          (mode === "observe"
+            ? !hasSignal(statement.expression, depth)
+            : !isTypedReturn(statement.expression, depth))),
     };
   }
   if (ts.isContinueStatement(statement) || ts.isBreakStatement(statement)) {
@@ -419,11 +455,18 @@ function flow(
   return { live: [signalled || observed], unsignalledExit: false };
 }
 
-function dropsWithoutSignal(body: ts.Node, depth = 0): boolean {
+function dropsWithoutSignal(
+  body: ts.Node,
+  depth = 0,
+  mode: FlowMode = "outcome",
+): boolean {
   if (!ts.isBlock(body)) {
-    return !isTypedReturn(unwrapExpression(body), depth);
+    const expression = unwrapExpression(body);
+    return mode === "observe"
+      ? !hasSignal(expression, depth)
+      : !isTypedReturn(expression, depth);
   }
-  const result = flow(body, { depth });
+  const result = flow(body, { depth, mode });
   return result.unsignalledExit || result.live.includes(false);
 }
 
@@ -538,10 +581,12 @@ const failureArm = (expression: ts.Expression): "then" | "else" => {
       if (isAbsent(node.left) || isAbsent(node.right)) {
         return equality ? "then" : "else";
       }
-      if (node.right.kind === ts.SyntaxKind.FalseKeyword) {
+      // Equality is symmetric: the boolean literal may sit on either side.
+      const sides = [node.left.kind, node.right.kind];
+      if (sides.includes(ts.SyntaxKind.FalseKeyword)) {
         return equality ? "then" : "else";
       }
-      if (node.right.kind === ts.SyntaxKind.TrueKeyword) {
+      if (sides.includes(ts.SyntaxKind.TrueKeyword)) {
         return equality ? "else" : "then";
       }
     }
