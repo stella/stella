@@ -81,8 +81,8 @@ describe("visual presentation markup", () => {
     }
   });
 
-  test("visual presentation normalization reaches a fixed point", async () => {
-    await assertProperty(
+  test("visual presentation normalization reaches a fixed point", () => {
+    assertProperty(
       "visual presentation normalization reaches a fixed point",
       fc.property(
         fc.array(

@@ -41,7 +41,7 @@ const bootOuter = (runtime: string) => {
   });
   const parsedConfig = v.safeParse(
     configSchema,
-    JSON.parse(config.textContent ?? "null"),
+    JSON.parse(config.textContent),
   );
   if (!parsedConfig.success) {
     return;
