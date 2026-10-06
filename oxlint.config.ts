@@ -932,15 +932,15 @@ export default defineConfig({
       { ignorePrimitives: { string: true, boolean: true } },
     ],
     "typescript/return-await": ["error", "error-handling-correctness-only"],
-    // A `let`, `const` or class read before its declaration runs throws in
-    // the temporal dead zone. A function declaration is hoisted, so calling
-    // one declared further down is not a defect.
+    // Same-scope lexical reads retain temporal-dead-zone checks. References
+    // inside functions may name variables declared later; their call order
+    // decides when those reads run. Class ordering stays checked.
     "eslint/no-use-before-define": [
       "error",
       {
         functions: false,
         classes: true,
-        variables: true,
+        variables: false,
         allowNamedExports: false,
       },
     ],
@@ -1606,8 +1606,8 @@ export default defineConfig({
       },
     },
     {
-      // Plugin fixtures are inputs for the local rules' tests; route fixtures
-      // name their component before declaring it, as route modules do.
+      // Plugin fixtures include intentional lexical reads and class references
+      // before declaration to exercise rule diagnostics.
       files: [".oxlint-plugins/__fixtures__/**"],
       rules: { "eslint/no-use-before-define": "off" },
     },
