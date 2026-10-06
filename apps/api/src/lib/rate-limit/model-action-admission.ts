@@ -1,6 +1,7 @@
-import type { Result } from "better-result";
+import { panic, Result } from "better-result";
 
 import type { ScopedDb } from "@/api/db/safe-db";
+import { detached } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import {
@@ -14,7 +15,7 @@ import {
   type ModelDispatchAdmission,
 } from "@/api/lib/rate-limit/model-dispatch-admission";
 
-type AdmittedModelAction = {
+export type AdmittedModelAction = {
   signal: AbortSignal;
   admission: ModelDispatchAdmission;
 };
@@ -34,6 +35,8 @@ type CreateModelActionAdmitterOptions = {
   userId: SafeId<"user">;
   organizationStateDb: ScopedDb;
   actionKind: PeriodActionKind;
+  /** `independent` for work that outlives the caller's own admission. */
+  scope?: "inherit" | "independent";
   admit?: typeof withActionAdmission;
 };
 
@@ -43,6 +46,7 @@ export const createModelActionAdmitter =
     userId,
     organizationStateDb,
     actionKind,
+    scope,
     admit = withActionAdmission,
   }: CreateModelActionAdmitterOptions): ModelActionAdmitter =>
   async (run) =>
@@ -50,14 +54,84 @@ export const createModelActionAdmitter =
       organizationId,
       userId,
       organizationStateDb,
+      ...(scope === undefined ? {} : { scope }),
       // No client idempotency key: each admitted run is its own action.
       periodIdentity: { actionKind, logicalPhaseId: Bun.randomUUIDv7() },
       run: async (signal) =>
-        await run({
+        await admitModelDispatch({
+          organizationId,
+          actionKind,
           signal,
-          admission: admitModelDispatch({ organizationId, actionKind }),
+          run: async (admission) => await run({ signal, admission }),
         }),
     });
+
+type DetachedModelActionOptions<TStarted> = {
+  /** Runs admitted before the caller resumes; its value answers the caller. */
+  start: (admitted: AdmittedModelAction) => Promise<TStarted>;
+  /** Runs after the caller resumes; the action stays admitted until it settles. */
+  background: (
+    admitted: AdmittedModelAction,
+    started: TStarted,
+  ) => Promise<void>;
+  /** Names the background work in failure capture. */
+  label: string;
+};
+
+/**
+ * Starts a model action whose model work continues after the caller answers
+ * (a request that returns `generating` while the generation runs). Resolves
+ * once `start` settles: a refusal or a `start` failure comes back to the
+ * caller, and otherwise the admission stays held through `background`, so the
+ * work never runs past its slot or its lease.
+ */
+export type DetachedModelActionStarter = <TStarted>(
+  options: DetachedModelActionOptions<TStarted>,
+) => Promise<Result<TStarted, unknown>>;
+
+export const createDetachedModelActionStarter = (
+  options: Omit<CreateModelActionAdmitterOptions, "scope">,
+): DetachedModelActionStarter => {
+  // The caller's own admission settles before the background work does, so
+  // the work never joins it.
+  const admitModelAction = createModelActionAdmitter({
+    ...options,
+    scope: "independent",
+  });
+  return async <TStarted>({
+    start,
+    background,
+    label,
+  }: DetachedModelActionOptions<TStarted>) => {
+    const answered = Promise.withResolvers<Result<TStarted, unknown>>();
+    const phase: { status: "starting" | "continuing" } = { status: "starting" };
+    detached(
+      admitModelAction(async (admitted) => {
+        const started = await start(admitted);
+        phase.status = "continuing";
+        answered.resolve(Result.ok(started));
+        await background(admitted, started);
+      }).then((outcome) => {
+        if (Result.isOk(outcome)) {
+          return;
+        }
+        switch (phase.status) {
+          case "starting":
+            answered.resolve(Result.err(outcome.error));
+            return;
+          case "continuing":
+            // The caller already answered; the failure goes to capture.
+            throw outcome.error;
+          default:
+            phase.status satisfies never;
+            panic("Unhandled detached model action phase");
+        }
+      }),
+      label,
+    );
+    return await answered.promise;
+  };
+};
 
 /**
  * The answer for a model action that admission did not start: the refusal's

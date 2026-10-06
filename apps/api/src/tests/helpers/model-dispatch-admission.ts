@@ -4,7 +4,7 @@ import type { SafeId } from "@/api/lib/branded-types";
 import type { ActionKind } from "@/api/lib/rate-limit/action-kinds";
 import type { ModelActionAdmitter } from "@/api/lib/rate-limit/model-action-admission";
 import {
-  admitModelDispatch,
+  admitFixtureModelDispatch,
   type ModelDispatchAdmission,
 } from "@/api/lib/rate-limit/model-dispatch-admission";
 
@@ -15,7 +15,8 @@ import {
 export const testModelAdmission = (
   organizationId: SafeId<"organization">,
   actionKind: ActionKind = "chat.send",
-): ModelDispatchAdmission => admitModelDispatch({ organizationId, actionKind });
+): ModelDispatchAdmission =>
+  admitFixtureModelDispatch({ organizationId, actionKind });
 
 /** An admitter that admits every run, for code under test that starts one. */
 export const testModelActionAdmitter =

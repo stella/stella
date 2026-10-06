@@ -32,7 +32,9 @@ import { tSafeId } from "@/api/lib/custom-schema";
 import { ActionAdmissionError } from "@/api/lib/errors/action-admission-error";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import {
+  createDetachedModelActionStarter,
   createModelActionAdmitter,
+  type DetachedModelActionStarter,
   type ModelActionAdmitter,
 } from "@/api/lib/rate-limit/model-action-admission";
 import type { ModelDispatchAdmission } from "@/api/lib/rate-limit/model-dispatch-admission";
@@ -165,8 +167,10 @@ type GenerateAnalysisResponse = {
 };
 
 type GenerateAnalysisOptions = {
-  /** Admits a model run: a new generation or a significance refresh. */
+  /** Admits a background significance refresh. */
   admitModelAction: ModelActionAdmitter;
+  /** Admits a new generation, held until it settles after the response. */
+  startModelAction: DetachedModelActionStarter;
   decisionId: SafeId<"caseLawDecision">;
   scopedDb: ScopedDb;
   organizationId: SafeId<"organization">;
@@ -177,6 +181,7 @@ type GenerateAnalysisOptions = {
 
 export const generateAnalysis = async ({
   admitModelAction,
+  startModelAction,
   decisionId,
   scopedDb,
   organizationId,
@@ -275,22 +280,23 @@ export const generateAnalysis = async ({
     return Result.err(available.error);
   }
 
-  // The generation draws one action when it starts; its run continues in the
-  // background on the proof that admission handed out.
-  const started = await admitModelAction(async ({ admission }) => {
-    // Another request won the race: return generating.
-    const sentinel = await analysisStore().claim({
-      decisionId,
-      fingerprint: input.fingerprint,
-      observed,
-    });
-    if (sentinel === null) {
-      return;
-    }
-
-    // Fire-and-forget generation
-    detached(
-      runGeneration({
+  // The generation draws one action when it starts and holds it until the
+  // background run settles, after this request has answered.
+  const started = await startModelAction({
+    label: "analysis-generate.run-generation",
+    // Another request won the race when the claim returns null.
+    start: async () =>
+      await analysisStore().claim({
+        decisionId,
+        fingerprint: input.fingerprint,
+        observed,
+      }),
+    // The proof aborts the generation's model call if the lease is lost.
+    background: async ({ admission }, sentinel) => {
+      if (sentinel === null) {
+        return;
+      }
+      await runGeneration({
         admission,
         anchorIds,
         contentHash: decision.contentHash,
@@ -301,9 +307,8 @@ export const generateAnalysis = async ({
         organizationId,
         promptCachingEnabled,
         sentinel,
-      }),
-      "analysis-generate.run-generation",
-    );
+      });
+    },
   });
   if (Result.isError(started)) {
     return Result.err(
@@ -359,7 +364,15 @@ const generateDecisionAnalysis = createSafeRootHandler(
       Result.tryPromise(
         async () =>
           await generateAnalysis({
+            // Both runs continue after the response, outside its admission.
             admitModelAction: createModelActionAdmitter({
+              organizationId: session.activeOrganizationId,
+              userId: user.id,
+              organizationStateDb: scopedDb,
+              actionKind: "case-law.analysis",
+              scope: "independent",
+            }),
+            startModelAction: createDetachedModelActionStarter({
               organizationId: session.activeOrganizationId,
               userId: user.id,
               organizationStateDb: scopedDb,

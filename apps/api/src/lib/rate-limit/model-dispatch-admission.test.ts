@@ -12,7 +12,7 @@ import {
   type ActionKind,
 } from "./action-kinds";
 import {
-  admitModelDispatch,
+  admitFixtureModelDispatch,
   assertModelDispatchScope,
   NO_ORGANIZATION_MODEL_DISPATCH,
 } from "./model-dispatch-admission";
@@ -402,7 +402,7 @@ describe("model dispatch scope", () => {
         organizationIdArb,
         actionKindArb,
         (admitted, dispatched, actionKind) => {
-          const admission = admitModelDispatch({
+          const admission = admitFixtureModelDispatch({
             organizationId: admitted,
             actionKind,
           });

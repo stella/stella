@@ -1,4 +1,4 @@
-import { panic, Result } from "better-result";
+import { Result } from "better-result";
 import { t } from "elysia";
 
 import { memberAIAccessError } from "@/api/lib/ai-config-response";
@@ -26,9 +26,8 @@ import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { serverBuiltFileEncryption } from "@/api/lib/files/detect-file-encryption";
 import {
   createModelActionAdmitter,
-  modelActionRefusal,
+  type AdmittedModelAction,
 } from "@/api/lib/rate-limit/model-action-admission";
-import type { ModelDispatchAdmission } from "@/api/lib/rate-limit/model-dispatch-admission";
 import {
   DOCX_EXT_RE,
   sanitizeFilename,
@@ -44,7 +43,9 @@ import {
 import {
   fillTemplateDocx,
   loadStoredTemplateSource,
+  type AiFillAdmission,
 } from "@/api/lib/templates/template-fill-service";
+import { runAdmittedAiFill } from "@/api/lib/templates/template-fill-usage";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
 
 const fillToWorkspaceParamsSchema = workspaceParams({
@@ -157,9 +158,8 @@ const fillTemplateToWorkspace = createSafeHandler(
       }
     }
 
-    // The fill draws one action, at the preflight that precedes its first
-    // model call; the collaborators built after it carry the proof.
-    let admission: ModelDispatchAdmission | undefined;
+    // The fill draws one action after its preflight and holds it until the
+    // fill's last model call settles.
     const admitModelAction = createModelActionAdmitter({
       organizationId,
       userId: user.id,
@@ -169,7 +169,7 @@ const fillTemplateToWorkspace = createSafeHandler(
 
     // Built only when the manifest declares an AI field: the fill service
     // defers this, so a deterministic fill opens no metered trace.
-    const aiCollaborators = () => {
+    const aiCollaborators = ({ signal, admission }: AdmittedModelAction) => {
       const aiAnalytics = createTanStackAIAnalyticsCallbacks({
         dataClass: "customer",
         usageMetering: {
@@ -187,9 +187,8 @@ const fillTemplateToWorkspace = createSafeHandler(
         traceId: Bun.randomUUIDv7(),
       });
       const shared = {
-        admission:
-          admission ??
-          panic("template fill AI collaborators built before its admission"),
+        admission,
+        operationSignal: signal,
         orgAIConfig,
         managedAIResidency,
         organizationId,
@@ -226,24 +225,18 @@ const fillTemplateToWorkspace = createSafeHandler(
             })
         : undefined;
     const accessError = memberAIAccessError(orgAIConfigStatus);
-    const assertUsageAvailable = async (): Promise<HandlerError | null> => {
-      if (accessError !== null) {
-        return accessError;
-      }
-      const usageRejection =
-        checkUsage === undefined ? null : await checkUsage();
-      if (usageRejection !== null) {
-        return usageRejection;
-      }
-      const admitted = await admitModelAction(({ admission: granted }) =>
-        Promise.resolve(granted),
-      );
-      if (Result.isError(admitted)) {
-        return modelActionRefusal(admitted.error);
-      }
-      admission = admitted.value;
-      return null;
-    };
+    const aiFill: AiFillAdmission<HandlerError> = async (fill) =>
+      await runAdmittedAiFill({
+        admitModelAction,
+        preflight: async () => {
+          if (accessError !== null) {
+            return accessError;
+          }
+          return checkUsage === undefined ? null : await checkUsage();
+        },
+        collaborators: aiCollaborators,
+        fill,
+      });
 
     // A missing template is a 404, and a stored file the scan refuses (or a
     // scanner outage) answers as it would for an upload: 422 or 503.
@@ -263,8 +256,7 @@ const fillTemplateToWorkspace = createSafeHandler(
             workspaceId,
             requiredFields: "enforce",
             clauseOverrides: body.clauseOverrides,
-            assertUsageAvailable,
-            aiCollaborators,
+            aiFill,
           }),
         catch: (cause) =>
           new HandlerError({

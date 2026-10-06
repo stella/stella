@@ -16,6 +16,7 @@ import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
 import { withActionAdmission } from "./action-admission";
 import type { PeriodActionKind } from "./action-kinds";
 import {
+  createDetachedModelActionStarter,
   createModelActionAdmitter,
   modelActionRefusal,
 } from "./model-action-admission";
@@ -207,6 +208,85 @@ describe("model actions code starts on its own", () => {
       status: 503,
       code: "service_unavailable",
     });
+  });
+});
+
+describe("model actions that continue after their caller answers", () => {
+  // Counts the slots an admission holds, as the lease set does.
+  const slotAdmission = () => {
+    const slots = { held: 0, scopes: [] as (string | undefined)[] };
+    const released = Promise.withResolvers<void>();
+    const admit: typeof withActionAdmission = async ({ run, scope }) => {
+      slots.scopes.push(scope);
+      slots.held += 1;
+      try {
+        return Result.ok(
+          await run(new AbortController().signal, {
+            reservePeriod: async () => Result.ok(undefined),
+          }),
+        );
+      } catch (error) {
+        return Result.err(error);
+      } finally {
+        slots.held -= 1;
+        released.resolve();
+      }
+    };
+    return { slots, released: released.promise, admit };
+  };
+
+  test("a blocked generation keeps its slot after the caller answers, until it settles", async () => {
+    const { slots, released, admit } = slotAdmission();
+    const generation = Promise.withResolvers<void>();
+    const proofs: ModelDispatchAdmission[] = [];
+    const answered = await createDetachedModelActionStarter({
+      organizationId,
+      userId,
+      organizationStateDb: createScopedDbMock({}).scopedDb,
+      actionKind: "case-law.analysis",
+      admit,
+    })({
+      label: "test.generation",
+      start: async () => await Promise.resolve("generating"),
+      background: async ({ admission }) => {
+        proofs.push(admission);
+        await generation.promise;
+      },
+    });
+
+    expect(answered).toEqual(Result.ok("generating"));
+    expect(slots.held).toBe(1);
+    expect(proofs.at(0)?.signal.aborted).toBe(false);
+    // Detached work never joins the caller's admission, which settles first.
+    expect(slots.scopes).toEqual(["independent"]);
+    generation.resolve();
+    await released;
+    expect(slots.held).toBe(0);
+    expect(proofs.at(0)?.signal.aborted).toBe(true);
+  });
+
+  test("a refusal reaches the caller and starts nothing", async () => {
+    const refusal = new Error("busy");
+    let ran = false;
+    const answered = await createDetachedModelActionStarter({
+      organizationId,
+      userId,
+      organizationStateDb: createScopedDbMock({}).scopedDb,
+      actionKind: "case-law.analysis",
+      admit: async () => await Promise.resolve(Result.err(refusal)),
+    })({
+      label: "test.generation",
+      start: async () => {
+        ran = true;
+        return await Promise.resolve("generating");
+      },
+      background: async () => {
+        ran = true;
+        await Promise.resolve();
+      },
+    });
+    expect(answered).toEqual(Result.err(refusal));
+    expect(ran).toBe(false);
   });
 });
 

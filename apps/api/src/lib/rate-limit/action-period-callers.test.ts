@@ -166,7 +166,6 @@ describe("period identity coverage", () => {
       "handlers/bilingual-translations/prepare.ts",
       "handlers/case-law/decisions/search-expand.ts",
       "handlers/case-law/decisions/search-refine.ts",
-      "handlers/case-law/research/answers-run.ts",
       "handlers/case-law/research/columns-suggest-prompt.ts",
       "handlers/chat/improve-prompt.ts",
       "handlers/clauses/rewrite.ts",

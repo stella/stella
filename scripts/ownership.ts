@@ -964,8 +964,8 @@ const OWNERSHIP_DECLARATIONS = [
       "Every model dispatch for an organization carries a `ModelDispatchAdmission`, " +
       "which only the admission wrappers mint, inside the run they admitted. A step of " +
       "a larger action (a subagent, an in-turn compaction, a workflow batch) dispatches " +
-      "on its parent's proof and is never admitted again; " +
-      "`model-dispatch-admission.test.ts` enumerates every dispatch site.",
+      "on its parent's proof and is never admitted again. The proof lives only while " +
+      "its admitted run does; `model-dispatch-admission.test.ts` enumerates every dispatch site.",
     enforcement: {
       kind: "import",
       specifiers: ["@/api/lib/rate-limit/model-dispatch-admission"],
@@ -988,6 +988,21 @@ const OWNERSHIP_DECLARATIONS = [
           reason:
             "Model actions code starts on its own, for the run it admitted.",
         },
+      ],
+    },
+  },
+  {
+    id: "fixture-model-dispatch-admission",
+    capability: "Proving a fixture dispatch no admission holds",
+    owner: ["apps/api/src/lib/rate-limit/model-dispatch-admission.ts"],
+    summary:
+      "Production proofs live only inside the run an admission wrapper admitted; " +
+      "only offline evaluations (and tests) mint a standalone proof for a fixture organization.",
+    enforcement: {
+      kind: "import",
+      specifiers: ["@/api/lib/rate-limit/model-dispatch-admission"],
+      names: ["admitFixtureModelDispatch"],
+      allowed: [
         {
           path: "apps/api/evals/",
           reason: "Offline evaluations against a fixture organization.",

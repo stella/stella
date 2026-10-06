@@ -88,45 +88,49 @@ export const startExecutionAdmission = async ({
     organizationId,
     userId,
     ...(mode === "action" ? { mode, periodIdentity } : { mode }),
-    run: async (signal, control) => {
-      state.status = "executing";
-      const loss = () =>
-        observeFailure(signal.reason, { sink: EXECUTION_ADMISSION_FAILURE });
-      signal.addEventListener("abort", loss, { once: true });
-      ready.resolve(
-        Result.ok({
-          signal,
-          modelAdmission: admitModelDispatch({
-            organizationId,
-            actionKind:
-              mode === "action" ? periodIdentity.actionKind : actionKind,
-          }),
-          reservePeriod: async (identity, organizationStateDb) => {
-            const expectedKind =
-              mode === "action" ? periodIdentity.actionKind : actionKind;
-            if (identity.actionKind !== expectedKind) {
-              panic("Chat reservation changed its action kind");
-            }
-            const reserved = await control.reservePeriod(
-              identity,
-              organizationStateDb,
-            );
-            return Result.isError(reserved)
-              ? Result.err(executionAdmissionError(reserved.error))
-              : Result.ok(reserved.value);
-          },
-          release: async () => {
-            finished.resolve(undefined);
-            await completion;
-          },
-        }),
-      );
-      try {
-        await finished.promise;
-      } finally {
-        signal.removeEventListener("abort", loss);
-      }
-    },
+    run: async (signal, control) =>
+      await admitModelDispatch({
+        organizationId,
+        actionKind: mode === "action" ? periodIdentity.actionKind : actionKind,
+        signal,
+        run: async (modelAdmission) => {
+          state.status = "executing";
+          const loss = () =>
+            observeFailure(signal.reason, {
+              sink: EXECUTION_ADMISSION_FAILURE,
+            });
+          signal.addEventListener("abort", loss, { once: true });
+          ready.resolve(
+            Result.ok({
+              signal,
+              modelAdmission,
+              reservePeriod: async (identity, organizationStateDb) => {
+                const expectedKind =
+                  mode === "action" ? periodIdentity.actionKind : actionKind;
+                if (identity.actionKind !== expectedKind) {
+                  panic("Chat reservation changed its action kind");
+                }
+                const reserved = await control.reservePeriod(
+                  identity,
+                  organizationStateDb,
+                );
+                return Result.isError(reserved)
+                  ? Result.err(executionAdmissionError(reserved.error))
+                  : Result.ok(reserved.value);
+              },
+              release: async () => {
+                finished.resolve(undefined);
+                await completion;
+              },
+            }),
+          );
+          try {
+            await finished.promise;
+          } finally {
+            signal.removeEventListener("abort", loss);
+          }
+        },
+      }),
   }).then((outcome) => {
     if (Result.isError(outcome)) {
       if (state.status === "acquiring") {

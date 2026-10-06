@@ -1116,15 +1116,19 @@ const runAdmittedFiniteHandler = async function* <
                 }),
           );
         }
-        const admitted = Object.assign(ctx, {
-          actionSignal: AbortSignal.any([ctx.request.signal, signal]),
-          modelAdmission: admitModelDispatch({
-            organizationId: ctx.session.activeOrganizationId,
-            actionKind,
-          }),
+        const outcome = await admitModelDispatch({
+          organizationId: ctx.session.activeOrganizationId,
+          actionKind,
+          signal,
+          run: async (modelAdmission) => {
+            const admitted = Object.assign(ctx, {
+              actionSignal: AbortSignal.any([ctx.request.signal, signal]),
+              modelAdmission,
+            });
+            admitted.actionSignal.throwIfAborted();
+            return await Result.gen(() => handler(admitted));
+          },
         });
-        admitted.actionSignal.throwIfAborted();
-        const outcome = await Result.gen(() => handler(admitted));
         if (Result.isOk(outcome) && outcome.value instanceof Response) {
           // Cancel the producer too: a rejected stream must not keep running after release.
           await outcome.value.body?.cancel();

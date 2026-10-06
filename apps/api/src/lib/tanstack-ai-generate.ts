@@ -84,6 +84,7 @@ import {
   type ProviderSafeJsonSchemaProjectionOptions,
 } from "@/api/lib/provider-safe-json-schema";
 import {
+  admittedDispatchSignal,
   assertModelDispatchScope,
   type ModelDispatchScope,
 } from "@/api/lib/rate-limit/model-dispatch-admission";
@@ -270,12 +271,14 @@ const finishAccepted = (
 export const generateTanStackTextForRole = async (
   options: GenerateTanStackTextForRoleOptions,
 ): Promise<string> => {
+  // Checked before the model resolves: a dispatch on a settled proof panics.
+  const abortSignal = admittedDispatchSignal(options);
   const model = await (options.resolveTextModel ?? resolveTanStackTextModel)(
     options,
   );
   const requestMessages = guardedMessagesFromInput(options);
-  const abortController = options.abortSignal
-    ? abortControllerFromSignal(options.abortSignal)
+  const abortController = abortSignal
+    ? abortControllerFromSignal(abortSignal)
     : undefined;
   // Assigned from the stream callback, which control-flow analysis cannot
   // see; a property keeps the declared union instead of the initial branch.
@@ -300,7 +303,7 @@ export const generateTanStackTextForRole = async (
       output += delta;
     }
   } catch (error) {
-    if (isAbortRejection({ error, signal: options.abortSignal })) {
+    if (isAbortRejection({ error, signal: abortSignal })) {
       throw cancelledGenerationError();
     }
 
@@ -313,10 +316,7 @@ export const generateTanStackTextForRole = async (
   // this the same cancellation is sometimes an error and sometimes a truncated
   // answer the caller cannot tell from a whole one. A reported finish
   // separates the two: that run completed before the signal fired.
-  if (
-    run.finish.kind === "unfinished" &&
-    options.abortSignal?.aborted === true
-  ) {
+  if (run.finish.kind === "unfinished" && abortSignal?.aborted === true) {
     throw cancelledGenerationError();
   }
 
@@ -333,12 +333,14 @@ export const generateTanStackTextForRole = async (
 export const streamTanStackTextForRole = async function* (
   options: TanStackTextForRoleOptions,
 ): AsyncIterable<string> {
+  // Checked before the model resolves: a dispatch on a settled proof panics.
+  const abortSignal = admittedDispatchSignal(options);
   const model = await (options.resolveTextModel ?? resolveTanStackTextModel)(
     options,
   );
   const requestMessages = guardedMessagesFromInput(options);
-  const abortController = options.abortSignal
-    ? abortControllerFromSignal(options.abortSignal)
+  const abortController = abortSignal
+    ? abortControllerFromSignal(abortSignal)
     : undefined;
 
   yield* streamTanStackTextDeltas({
@@ -888,12 +890,14 @@ export const generateTanStackObjectForRole = async <
 }: GenerateTanStackObjectForRoleOptions<TSchema>): Promise<
   v.InferOutput<TSchema>
 > => {
+  // Checked before the model resolves: a dispatch on a settled proof panics.
+  const abortSignal = admittedDispatchSignal(options);
   const model = await (options.resolveTextModel ?? resolveTanStackTextModel)(
     options,
   );
   const requestMessages = guardedMessagesFromInput(options);
-  const abortController = options.abortSignal
-    ? abortControllerFromSignal(options.abortSignal)
+  const abortController = abortSignal
+    ? abortControllerFromSignal(abortSignal)
     : undefined;
   guardStructuredOutputBudget({ model, outputSchema });
   const tanStackOutputSchema = toTanStackValibotSchema(
@@ -939,7 +943,7 @@ export const generateTanStackObjectForRole = async <
     // A cancelled run ends without a structured result, and the SDK reports
     // that as a plain error rather than an abort. The caller's signal is what
     // tells the two apart, as for text generation.
-    if (options.abortSignal?.aborted === true) {
+    if (abortSignal?.aborted === true) {
       throw cancelledGenerationError();
     }
     throw generated.error;
@@ -957,12 +961,14 @@ export const streamTanStackObjectForRole = async function* <
 }: GenerateTanStackObjectForRoleOptions<TSchema>): AsyncIterable<
   TanStackStructuredOutputEvent<v.InferOutput<TSchema>>
 > {
+  // Checked before the model resolves: a dispatch on a settled proof panics.
+  const abortSignal = admittedDispatchSignal(options);
   const model = await (options.resolveTextModel ?? resolveTanStackTextModel)(
     options,
   );
   const requestMessages = guardedMessagesFromInput(options);
-  const abortController = options.abortSignal
-    ? abortControllerFromSignal(options.abortSignal)
+  const abortController = abortSignal
+    ? abortControllerFromSignal(abortSignal)
     : undefined;
 
   yield* streamTanStackStructuredOutput({

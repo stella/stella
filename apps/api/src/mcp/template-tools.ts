@@ -59,9 +59,8 @@ import {
 } from "@/api/lib/projection-totality";
 import {
   createModelActionAdmitter,
-  modelActionRefusal,
+  type AdmittedModelAction,
 } from "@/api/lib/rate-limit/model-action-admission";
-import type { ModelDispatchAdmission } from "@/api/lib/rate-limit/model-dispatch-admission";
 import {
   brandPersistedEntityId,
   brandPersistedTemplateId,
@@ -100,6 +99,8 @@ import {
   templateFillCompletionModeSchema,
 } from "@/api/lib/templates/template-fill-completion";
 import type {
+  AiFillAdmission,
+  AiFillCollaborators,
   DescribeTemplateResult,
   MissingRequiredField,
 } from "@/api/lib/templates/template-fill-service";
@@ -109,6 +110,7 @@ import {
   fillStoredTemplateWithText,
   fillStoredTemplateWithTextStrict,
 } from "@/api/lib/templates/template-fill-service";
+import { runAdmittedAiFill } from "@/api/lib/templates/template-fill-usage";
 import { writeStoredTemplate } from "@/api/lib/templates/write-template";
 import { withTimeout } from "@/api/lib/with-timeout";
 import { MCP_MAX_REQUEST_BODY_BYTES } from "@/api/mcp/constants";
@@ -1358,51 +1360,44 @@ const assertTemplateFillUsage = async ({
 };
 
 /**
- * A fill's usage preflight and the model proof its AI collaborators carry.
- * The proof is taken at the preflight, which the fill service runs only for
- * a manifest with AI fields and before the collaborators are built. Inside
- * the tool call's own admission it joins that action rather than drawing
- * another.
+ * A fill's AI admission: the usage preflight, then the fill inside one
+ * admitted action held until its last model call settles. The fill service
+ * runs it only for a manifest with AI fields. Inside the tool call's own
+ * admission it joins that action rather than drawing another.
  */
 const admitTemplateFillAi = ({
   context,
   readOrgAIConfig,
   workspaceId,
+  collaborators,
 }: {
   context: McpRequestContext;
   readOrgAIConfig: () => Promise<OrgAIConfigRead>;
   workspaceId: SafeId<"workspace"> | null;
-}) => {
-  let admission: ModelDispatchAdmission | undefined;
+  collaborators: (
+    admitted: AdmittedModelAction,
+  ) => Promise<AiFillCollaborators>;
+}): AiFillAdmission<
+  NonNullable<Awaited<ReturnType<typeof assertTemplateFillUsage>>>
+> => {
   const admitModelAction = createModelActionAdmitter({
     organizationId: context.organizationId,
     userId: context.userId,
     organizationStateDb: context.scopedDb,
     actionKind: "templates.fill",
   });
-  return {
-    assertUsageAvailable: async () => {
-      const usageRejection = await assertTemplateFillUsage({
-        context,
-        readOrgAIConfig,
-        workspaceId,
-      });
-      if (usageRejection !== null) {
-        return usageRejection;
-      }
-      const admitted = await admitModelAction(({ admission: granted }) =>
-        Promise.resolve(granted),
-      );
-      if (Result.isError(admitted)) {
-        return modelActionRefusal(admitted.error);
-      }
-      admission = admitted.value;
-      return null;
-    },
-    admission: () =>
-      admission ??
-      panic("template fill AI collaborators built before its admission"),
-  };
+  return async (fill) =>
+    await runAdmittedAiFill({
+      admitModelAction,
+      preflight: async () =>
+        await assertTemplateFillUsage({
+          context,
+          readOrgAIConfig,
+          workspaceId,
+        }),
+      collaborators,
+      fill,
+    });
 };
 
 const handleFillTemplateTool: McpToolHandler<
@@ -1425,18 +1420,17 @@ const handleFillTemplateTool: McpToolHandler<
   // leaves those fields unfilled rather than erroring. Read lazily: the fill
   // service asks for it only when the manifest declares an AI field.
   const readOrgAIConfig = deferOrgAIConfig(context);
-  const fillAi = admitTemplateFillAi({
-    context,
-    readOrgAIConfig,
-    workspaceId: null,
-  });
   // Built only when the manifest declares an AI field, so a deterministic fill
   // opens no metered trace. fill_template is org-scoped (no matter binding),
   // so there is no workspace id to redact tenant ids against.
-  const aiCollaborators = async () => {
+  const aiCollaborators = async ({
+    signal,
+    admission,
+  }: AdmittedModelAction) => {
     const orgAIConfig = await readConfigPastPreflight(readOrgAIConfig);
     const shared = {
-      admission: fillAi.admission(),
+      admission,
+      operationSignal: signal,
       orgAIConfig,
       managedAIResidency:
         await (context.testDependencies?.loadManagedAIResidency?.(
@@ -1472,7 +1466,12 @@ const handleFillTemplateTool: McpToolHandler<
     };
   };
 
-  const { assertUsageAvailable } = fillAi;
+  const aiFill = admitTemplateFillAi({
+    context,
+    readOrgAIConfig,
+    workspaceId: null,
+    collaborators: aiCollaborators,
+  });
 
   const fillStoredTemplate =
     parsed.output.allow_unused_values === true
@@ -1488,8 +1487,7 @@ const handleFillTemplateTool: McpToolHandler<
     thirdPartyOutboundPermit: context.thirdPartyOutboundPermit,
     requiredFields: "enforce",
     useRecording: "caller",
-    assertUsageAvailable,
-    aiCollaborators,
+    aiFill,
   });
   if ("usageRejection" in filled) {
     return errorResult(filled.usageRejection.message);
@@ -1883,8 +1881,6 @@ const handleSaveFilledTemplateTool: McpToolHandler<
   }
 
   const readOrgAIConfig = deferOrgAIConfig(context);
-  const fillAi = admitTemplateFillAi({ context, readOrgAIConfig, workspaceId });
-  const { assertUsageAvailable } = fillAi;
 
   const renderDeadline = AbortSignal.timeout(
     SAVE_FILLED_TEMPLATE_RENDER_TIMEOUT_MS,
@@ -1895,10 +1891,13 @@ const handleSaveFilledTemplateTool: McpToolHandler<
       : AbortSignal.any([context.request.signal, renderDeadline]);
   // Built only when the manifest declares an AI field: the fill service defers
   // this, so a deterministic fill opens no metered trace.
-  const aiCollaborators = async () => {
+  const aiCollaborators = async ({
+    signal,
+    admission,
+  }: AdmittedModelAction) => {
     const orgAIConfig = await readConfigPastPreflight(readOrgAIConfig);
     const shared = {
-      admission: fillAi.admission(),
+      admission,
       orgAIConfig,
       managedAIResidency:
         await (context.testDependencies?.loadManagedAIResidency?.(
@@ -1930,7 +1929,7 @@ const handleSaveFilledTemplateTool: McpToolHandler<
         properties: { organization_id: context.organizationId },
         traceId: Bun.randomUUIDv7(),
       }),
-      operationSignal,
+      operationSignal: AbortSignal.any([operationSignal, signal]),
       tenantWorkspaceIds: [workspaceId],
     };
     return {
@@ -1955,8 +1954,12 @@ const handleSaveFilledTemplateTool: McpToolHandler<
             workspaceId,
             requiredFields: "enforce",
             useRecording: "caller",
-            assertUsageAvailable,
-            aiCollaborators,
+            aiFill: admitTemplateFillAi({
+              context,
+              readOrgAIConfig,
+              workspaceId,
+              collaborators: aiCollaborators,
+            }),
           }),
         {
           label: "save filled template render",

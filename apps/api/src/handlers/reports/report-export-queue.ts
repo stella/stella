@@ -73,6 +73,7 @@ import {
   fillDiagnosticsOf,
 } from "@/api/lib/templates/template-fill-completion";
 import type {
+  AiFillAdmission,
   AiFillCollaborators,
   MissingRequiredField,
 } from "@/api/lib/templates/template-fill-service";
@@ -646,29 +647,37 @@ const renderSpecReport = async ({
   aiNarrative: boolean;
   linkBase: ReportLinkBase | undefined;
 }): Promise<FillReportResult> => {
+  const render = async (
+    generateAiValue: AiFillCollaborators["generateAiValue"],
+  ) =>
+    await renderReportSpec({
+      spec: builtin.spec,
+      report,
+      prompts: builtin.prompts,
+      generateAiValue,
+      aiNarrative,
+      linkBase,
+    });
+  // A spec report renders its narrative directly rather than through the fill
+  // service, so it runs its own AI admission, and only when a narrative
+  // section can actually call the generator.
+  const { aiFill } = generators;
+  let rendered: Awaited<ReturnType<typeof render>>;
   if (
     aiNarrative &&
-    generators.assertUsageAvailable &&
+    aiFill !== undefined &&
     hasNarrativeSection(builtin.spec.sections)
   ) {
-    const usageRejection = await generators.assertUsageAvailable();
-    if (usageRejection !== null) {
-      return { usageRejection };
+    const admitted = await aiFill(
+      async ({ generateAiValue }) => await render(generateAiValue),
+    );
+    if (admitted.type === "refused") {
+      return { usageRejection: admitted.rejection };
     }
+    rendered = admitted.value;
+  } else {
+    rendered = await render(undefined);
   }
-  // A spec report renders its narrative directly rather than through the fill
-  // service, so it resolves the collaborators itself — and only when the
-  // narrative is actually requested.
-  const rendered = await renderReportSpec({
-    spec: builtin.spec,
-    report,
-    prompts: builtin.prompts,
-    generateAiValue: aiNarrative
-      ? (await generators.aiCollaborators?.())?.generateAiValue
-      : undefined,
-    aiNarrative,
-    linkBase,
-  });
   if (Result.isError(rendered)) {
     return { error: rendered.error.message };
   }
@@ -679,13 +688,10 @@ const renderSpecReport = async ({
   };
 };
 
-/** The AI hooks passed into the fill pipeline; both are optional so a
+/** The AI admission passed into the fill pipeline; optional so a
  *  deterministic export can pass `{}`. */
 type ReportAiGenerators = {
-  aiCollaborators?:
-    | (() => AiFillCollaborators | Promise<AiFillCollaborators>)
-    | undefined;
-  assertUsageAvailable?: (() => Promise<unknown>) | undefined;
+  aiFill?: AiFillAdmission<unknown> | undefined;
 };
 
 /** Build the metered AI generators + usage preflight for a narrative export. */
@@ -744,14 +750,26 @@ const buildReportAiGenerators = ({
     tenantWorkspaceIds: [actor.workspaceId],
   };
   return {
-    // The fill service builds these only when the manifest declares an AI
-    // field, so a deterministic export never reaches the model layer.
-    aiCollaborators: () => ({
-      generateAiValue: buildAiFieldGenerator(shared),
-      decideAiCondition: buildAiConditionDecider(shared),
-      adaptAiValue: buildAiOccurrenceAdapter(shared),
-    }),
-    assertUsageAvailable,
+    // The fill service runs this only when the manifest declares an AI field,
+    // so a deterministic export never reaches the model layer. The job's
+    // background admission already holds the whole export.
+    aiFill: async (fill) => {
+      const usageRejection =
+        assertUsageAvailable === undefined
+          ? null
+          : await assertUsageAvailable();
+      if (usageRejection !== null) {
+        return { type: "refused", rejection: usageRejection };
+      }
+      return {
+        type: "admitted",
+        value: await fill({
+          generateAiValue: buildAiFieldGenerator(shared),
+          decideAiCondition: buildAiConditionDecider(shared),
+          adaptAiValue: buildAiOccurrenceAdapter(shared),
+        }),
+      };
+    },
   };
 };
 

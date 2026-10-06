@@ -111,10 +111,12 @@ export const runScheduledBackgroundWork = async <T>({
     execution: "background-job",
     actionKind,
     run: async (leaseSignal) =>
-      await run(
-        leaseSignal,
-        admitModelDispatch({ organizationId, actionKind }),
-      ),
+      await admitModelDispatch({
+        organizationId,
+        actionKind,
+        signal: leaseSignal,
+        run: async (modelAdmission) => await run(leaseSignal, modelAdmission),
+      }),
   });
 
 type BackgroundJobOptions<T> = {
@@ -157,10 +159,15 @@ export const runBackgroundJob = async <T>({
     actionKind,
     run: async (leaseSignal) => {
       executionState.phase = "started";
-      return await run(
-        AbortSignal.any([signal, leaseSignal]),
-        admitModelDispatch({ organizationId, actionKind }),
-      );
+      // Dispatches on the proof abort with the lease even where a job body
+      // discards the run signal.
+      return await admitModelDispatch({
+        organizationId,
+        actionKind,
+        signal: leaseSignal,
+        run: async (modelAdmission) =>
+          await run(AbortSignal.any([signal, leaseSignal]), modelAdmission),
+      });
     },
   });
   if (Result.isOk(result)) {

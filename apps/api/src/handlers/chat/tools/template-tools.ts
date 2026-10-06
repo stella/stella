@@ -295,7 +295,11 @@ export const createTemplateTools = ({
         thirdPartyOutboundPermit: grantThirdPartyOutboundPermit(),
         requiredFields: "enforce",
         useRecording: "caller",
-        aiCollaborators: () => aiCollaborators(unrestoredFields),
+        // The turn's admission already holds this tool call's model work.
+        aiFill: async (fill) => ({
+          type: "admitted",
+          value: await fill(aiCollaborators(unrestoredFields)),
+        }),
       });
       if ("requiredFieldsRejection" in result) {
         // A required, non-AI-fillable field was omitted or empty: reject
