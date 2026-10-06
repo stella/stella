@@ -29,7 +29,7 @@ import { CODE_OWNED_TABLES } from "../apps/api/src/db/code-owned-tables";
 import { HIGH_VOLUME_TABLES } from "../apps/api/src/db/high-volume-tables";
 // Statement hashes pin historical index work without exempting a whole file.
 // The corpus test requires exact findings and forbids additions to this snapshot.
-import indexFindingsSnapshot from "./migration-index-findings.json";
+import indexFindingsSnapshot from "./migration-index-findings.json" with { type: "json" };
 import type { MigrationSafetyRuleId } from "./migration-safety-rule-ids";
 
 type Statement = {

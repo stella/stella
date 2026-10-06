@@ -190,6 +190,8 @@
     "prosemirror-view": "1.42.5",
     "react-native-screens": "4.26.2",
     "seroval": "1.6.8",
+    "sharp": "0.35.5",
+    "shell-quote": "1.11.0",
     "svgo": "4.1.0",
     "undici": "8.10.2"
   },
