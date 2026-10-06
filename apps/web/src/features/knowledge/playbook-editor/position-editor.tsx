@@ -360,8 +360,30 @@ export const PositionEditor = ({
       ref={setCardRef}
     >
       <PositionHeader
+        // The severity and the card controls stay one group, which wraps
+        // below the title in a narrow pane rather than squeezing it.
         actions={
-          <>
+          <span className="ms-auto flex shrink-0 items-center gap-2">
+            {position.mode === "graded" ? (
+              <SeverityChip
+                onChange={(severity) => onChange({ ...position, severity })}
+                severity={position.severity}
+              />
+            ) : (
+              <span className={POSITION_HEADER_META_CLASS}>
+                {t("knowledge.playbooks.extractOnlyBadge")}
+              </span>
+            )}
+            {!open && position.mode === "graded" && (
+              <CollapsedTierDots position={position} />
+            )}
+            {!position.enabled && (
+              <span
+                className={cn(POSITION_HEADER_META_CLASS, "hidden @xl:inline")}
+              >
+                {t("knowledge.playbooks.disabledBadge")}
+              </span>
+            )}
             <Switch
               aria-label={t("knowledge.playbooks.enablePosition")}
               checked={position.enabled}
@@ -403,33 +425,10 @@ export const PositionEditor = ({
                 className={cn("transition-transform", open && "rotate-180")}
               />
             </Button>
-          </>
+          </span>
         }
+        className="flex-wrap"
         index={index}
-        label={
-          <>
-            {position.mode === "graded" ? (
-              <SeverityChip
-                onChange={(severity) => onChange({ ...position, severity })}
-                severity={position.severity}
-              />
-            ) : (
-              <span className={POSITION_HEADER_META_CLASS}>
-                {t("knowledge.playbooks.extractOnlyBadge")}
-              </span>
-            )}
-            {!open && position.mode === "graded" && (
-              <CollapsedTierDots position={position} />
-            )}
-            {!position.enabled && (
-              <span
-                className={cn(POSITION_HEADER_META_CLASS, "hidden @xl:inline")}
-              >
-                {t("knowledge.playbooks.disabledBadge")}
-              </span>
-            )}
-          </>
-        }
         leading={
           <Button
             aria-label={t("knowledge.playbooks.reorderPosition")}
@@ -457,6 +456,7 @@ export const PositionEditor = ({
             value={position.issue}
           />
         }
+        titleClassName="min-w-40 @md:min-w-56"
       />
 
       {open && (
@@ -1018,7 +1018,7 @@ const TierSection = ({
   const t = useTranslations();
   return (
     <section className={cn("rounded-lg border", TIER_TONE_CLASS[tone])}>
-      <div className="flex items-center gap-2 px-3 py-2">
+      <div className="flex flex-wrap items-center gap-2 px-3 py-2">
         <span
           className={cn(
             "flex size-4.5 items-center justify-center rounded",
@@ -1032,7 +1032,7 @@ const TierSection = ({
         >
           {title}
         </span>
-        <div className="ms-auto flex items-center gap-1">
+        <div className="ms-auto flex flex-wrap items-center justify-end gap-1">
           {trailingAction}
           <InlineAction onClick={onAddRule}>
             + {t("knowledge.playbooks.addRule")}
@@ -1061,12 +1061,12 @@ const RuleRow = ({
 }) => {
   const t = useTranslations();
   return (
-    <div className="flex items-start gap-2">
-      <span className="text-muted-foreground text-3xs w-11 shrink-0 pt-2 tracking-wide uppercase tabular-nums">
+    <div className="flex flex-wrap items-start gap-x-2 gap-y-1 @md:flex-nowrap">
+      <span className="text-muted-foreground text-3xs w-full shrink-0 tracking-wide uppercase tabular-nums @md:w-11 @md:pt-2">
         {label}
       </span>
       <Input
-        className="h-8 flex-1 text-sm"
+        className="h-8 min-w-0 flex-1 text-sm"
         onChange={(e) => onChange(e.target.value)}
         placeholder={placeholder}
         value={value}
@@ -1106,11 +1106,11 @@ const FallbackEntryRow = ({
 }) => {
   const t = useTranslations();
   return (
-    <div className="flex items-start gap-2">
-      <span className="text-muted-foreground text-3xs w-11 shrink-0 pt-2 tracking-wide uppercase tabular-nums">
+    <div className="flex flex-wrap items-start gap-x-2 gap-y-1 @md:flex-nowrap">
+      <span className="text-muted-foreground text-3xs w-full shrink-0 tracking-wide uppercase tabular-nums @md:w-11 @md:pt-2">
         {t("knowledge.playbooks.entryRank", { index: String(index + 1) })}
       </span>
-      <div className="flex-1 space-y-1.5">
+      <div className="min-w-0 flex-1 space-y-1.5">
         <Input
           className="h-8 text-sm"
           onChange={(e) => onChange({ ...entry, text: e.target.value })}
@@ -1177,8 +1177,8 @@ const IdealEditor = ({
 }) => {
   const t = useTranslations();
   return (
-    <div className="border-border ms-11 space-y-2 border-s-2 ps-3">
-      <div className="flex items-center gap-2">
+    <div className="border-border space-y-2 border-s-2 ps-3 @md:ms-11">
+      <div className="flex flex-wrap items-center gap-2">
         <span className="text-muted-foreground text-3xs tracking-wide uppercase">
           {t("knowledge.playbooks.idealLanguage")}
         </span>

@@ -597,13 +597,16 @@ const PlaybookEditorToolbar = ({
         )}
         {isEdit && (
           <Button
+            aria-label={t("knowledge.playbooks.versions.versionHistory")}
             onClick={onOpenVersionHistory}
             size="sm"
             type="button"
             variant="outline"
           >
             <HistoryIcon />
-            {t("knowledge.playbooks.versions.versionHistory")}
+            <span className="hidden @lg:inline">
+              {t("knowledge.playbooks.versions.versionHistory")}
+            </span>
           </Button>
         )}
         {isEdit && canApprove && (
