@@ -33,6 +33,7 @@ import {
   user,
   workspaceCheck,
   wsOrganizationPolicies,
+  wsOrganizationUserPolicies,
   wsPolicies,
 } from "./common";
 import { workspaces } from "./contacts";
@@ -162,6 +163,54 @@ export const legalListVerificationRuns = p.pgTable(
       withCheck: sql`current_user = (SELECT pg_catalog.pg_get_userbyid(relowner)
         FROM pg_catalog.pg_class WHERE oid = 'public.legal_list_verification_runs'::regclass)`,
     }),
+  ],
+);
+
+/** One durable receipt per reader/run; the audit log retains the daily events. */
+export const legalListVerificationReadReceipts = p.pgTable(
+  "legal_list_verification_read_receipts",
+  {
+    organizationId: safeOrganizationId("organization_id").notNull(),
+    workspaceId: safeWorkspaceId("workspace_id").notNull(),
+    runId: safeUuid<"legalListVerificationRun">("run_id").notNull(),
+    userId: p
+      .text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    auditedDay: p.date("audited_day", { mode: "string" }).notNull(),
+  },
+  (table) => [
+    p.primaryKey({
+      name: "verification_read_receipts_pk",
+      columns: [
+        table.organizationId,
+        table.workspaceId,
+        table.runId,
+        table.userId,
+      ],
+    }),
+    p
+      .foreignKey({
+        name: "verification_read_receipts_run_fk",
+        columns: [table.runId, table.workspaceId],
+        foreignColumns: [
+          legalListVerificationRuns.id,
+          legalListVerificationRuns.workspaceId,
+        ],
+      })
+      .onDelete("cascade"),
+    p
+      .foreignKey({
+        name: "verification_read_receipts_workspace_org_fk",
+        columns: [table.workspaceId, table.organizationId],
+        foreignColumns: [workspaces.id, workspaces.organizationId],
+      })
+      .onDelete("cascade"),
+    p
+      .index("verification_read_receipts_run_idx")
+      .on(table.workspaceId, table.runId),
+    p.index("verification_read_receipts_user_idx").on(table.userId),
+    ...wsOrganizationUserPolicies("legal_list_verification_read_receipts"),
   ],
 );
 

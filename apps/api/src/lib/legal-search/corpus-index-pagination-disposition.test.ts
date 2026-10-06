@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, expect, test } from "bun:test";
 import fc from "fast-check";
+import * as v from "valibot";
 
 import { assertProperty } from "@stll/property-testing";
 
@@ -45,7 +46,7 @@ const stubHits = (
       _input: Parameters<typeof fetch>[0],
       init?: Parameters<typeof fetch>[1],
     ) => {
-      const body = JSON.parse(String(init?.body));
+      const body = JSON.parse(v.parse(v.string(), init?.body));
       if (body.snippet_fields !== undefined) {
         return Response.json({
           num_hits: highlightHits.length,

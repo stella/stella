@@ -67,10 +67,12 @@ test.skipIf(!process.env["CI"])(
     const temporary = mkdtempSync(path.join(tmpdir(), "stella-shard-merge-"));
     const checkout = path.join(temporary, "checkout");
     const run = async (command: string[], cwd = checkout) => {
+      const env = { ...process.env };
+      delete env["CI_GENERATED_SOURCES_MANIFEST"];
       const child = Bun.spawn(command, {
         cwd,
         env: {
-          ...process.env,
+          ...env,
           GIT_CONFIG_NOSYSTEM: "1",
           GIT_CONFIG_GLOBAL: "/dev/null",
         },

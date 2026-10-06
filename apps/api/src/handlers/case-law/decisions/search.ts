@@ -1444,8 +1444,8 @@ export const readCaseLawPageDecisionRows = async ({
   }
   const read = await timeDbRead(
     async () =>
-      await caseLawDb((tx) =>
-        pageDecisionRowsQuery(tx, {
+      await caseLawDb(async (tx) =>
+        await pageDecisionRowsQuery(tx, {
           body,
           generation,
           ids: ids.map((id) => toSafeId<"caseLawDecision">(id)),
@@ -1582,8 +1582,8 @@ export const rehydrateCaseLawCandidates = async ({
       ? { rows: [], dispositions: [] }
       : await timeDbRead(
           async () =>
-            await caseLawDb((tx) =>
-              candidateDecisionRowsQuery(tx, {
+            await caseLawDb(async (tx) =>
+              await candidateDecisionRowsQuery(tx, {
                 body,
                 generation,
                 ids,

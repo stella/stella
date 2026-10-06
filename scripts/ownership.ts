@@ -2527,6 +2527,20 @@ const OWNERSHIP_DECLARATIONS = [
     enforcement: { kind: "none" },
   },
   {
+    id: "bullmq-worker",
+    capability:
+      "Constructing BullMQ workers with a shared failure record policy",
+    owner: ["apps/api/src/lib/bullmq-queue.ts"],
+    summary:
+      "BullMqWorker owns persisted job failure records while retaining original errors in worker events. All queue workers use this constructor.",
+    enforcement: {
+      kind: "import",
+      specifiers: ["bullmq"],
+      names: ["Worker"],
+      allowed: [],
+    },
+  },
+  {
     id: "deterministic-job-requeue",
     capability:
       "Re-enqueueing a row's work under its deterministic BullMQ job id",
@@ -2595,6 +2609,11 @@ const OWNERSHIP_DECLARATIONS = [
         "legislationCandidateRowsStatement",
       ],
       allowed: [
+        {
+          path: "apps/api/src/mcp/generated/capability-dispatch/legislation.search.ts",
+          reason:
+            "Lazy-loads the handler endpoint; does not invoke its canonical-read statement exports.",
+        },
         {
           path: "apps/api/src/tests/query-plans/registry.ts",
           reason:
