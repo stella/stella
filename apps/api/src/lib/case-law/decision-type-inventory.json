@@ -1,0 +1,236 @@
+{
+  "provenance": "jurisdictions: generated on 2026-10-05 from the corpus index's terms aggregation over document_type per jurisdiction (the aggregation the type facet runs), on opening passages of indexes case_law_v7_cs_sk, _eu, _hun and _pol; regenerable with the read-only engine probe. Lists are exact stored spellings, sorted. Decisions not in the index (unprojected or non-redistributable sources, and jurisdictions with no serving index: AUT, USA) are not covered.",
+  "jurisdictions": {
+    "CZE": [
+      "63 az 17/2026 - 28",
+      "72 ad 59/2025 - 26",
+      "8 a 17/2026 - 34",
+      "8 af 24/2025 - 50",
+      "jinak",
+      "ministery_of_justice_decision",
+      "ministery_of_justice_order",
+      "ministry_of_justice_decision",
+      "ministry_of_justice_resolution",
+      "none",
+      "nález",
+      "opatření",
+      "order_t",
+      "průzkum, rozbor a jiné materiály",
+      "přípis",
+      "rozhodnutí",
+      "rozs.",
+      "rozs.uzn",
+      "rozs.část.",
+      "rozsudek",
+      "stanovisko",
+      "stanovisko pléna",
+      "tr.příkaz",
+      "usn.",
+      "usnesení"
+    ],
+    "EU": ["judgment", "opinion", "order"],
+    "HUN": ["elvi határozat", "határozat", "végzés", "ítélet"],
+    "POL": [
+      "decyzja",
+      "informacja o odmowie wydania opinii zabezpieczającej",
+      "informacja o wydaniu opinii zabezpieczającej",
+      "interpretacja indywidualna",
+      "interpretacja ogólna",
+      "opinia",
+      "orzeczenie",
+      "postanowienie",
+      "postanowienie o odmowie wydania opinii w sprawie opodatkowania wyrównawczego",
+      "sygnalizacja",
+      "uchwała",
+      "uzasadnienie",
+      "uzasadnienie bez sentencji",
+      "wiążąca informacja akcyzowa",
+      "wyciąg z protokołu",
+      "wyrok",
+      "zarządzenie"
+    ],
+    "SVK": [
+      "Dopĺňacie uznesenie",
+      "Dopĺňací rozsudok",
+      "Európsky platobný rozkaz",
+      "Opravné uznesenie",
+      "Platobný rozkaz",
+      "Rozhodnutie",
+      "Rozsudok",
+      "Rozsudok bez odôvodnenia",
+      "Rozsudok pre uznanie",
+      "Rozsudok pre vzdanie",
+      "Rozsudok pre zmeškanie",
+      "Trestný rozkaz",
+      "Uznesenie",
+      "Uznesenie bez odôvodnenia",
+      "dopĺňacie uznesenie",
+      "dopĺňací rozsudok",
+      "európsky platobný rozkaz",
+      "medzitýmny rozsudok",
+      "nález",
+      "nález,nález",
+      "nález,nález,nález",
+      "nález,nález,nález,nález,nález",
+      "nález,nález,nález,nález,nález,nález,nález",
+      "opatrenie",
+      "opatrenie bez poučenia",
+      "opravné uznesenie",
+      "osvedčenie",
+      "platobný rozkaz",
+      "poverenie",
+      "príkaz",
+      "rozhodnutie",
+      "rozkaz na plnenie",
+      "rozsudok",
+      "rozsudok bez odôvodnenia",
+      "rozsudok pre uznanie",
+      "rozsudok pre vzdanie",
+      "rozsudok pre zmeškanie",
+      "rozsudok,rozsudok",
+      "trestný rozkaz",
+      "uznesenie",
+      "uznesenie bez odôvodnenia",
+      "uznesenie,nález",
+      "uznesenie,uznesenie",
+      "uznesenie,uznesenie,uznesenie",
+      "uznesenie,uznesenie,uznesenie,uznesenie",
+      "uznesenie,uznesenie,uznesenie,uznesenie,uznesenie",
+      "uznesenie,uznesenie,uznesenie,uznesenie,uznesenie,uznesenie",
+      "výzva",
+      "zmenkový platobný rozkaz",
+      "Čiastočný rozsudok",
+      "čiastočný rozsudok",
+      "šekový platobný rozkaz"
+    ]
+  },
+  "adapterVocabularyNote": "Values an adapter's closed vocabulary can state that the index held none of on 2026-10-05, kept so a mapped spelling is accounted for before it is first stored.",
+  "adapterVocabulary": {
+    "AUT": [
+      "bescheid",
+      "bescheidbeschwerde - einzel - erkenntnis",
+      "beschluss",
+      "erkenntnis",
+      "ordentliche erledigung (sachentscheidung)",
+      "zurückweisung mangels erheblicher rechtsfrage"
+    ],
+    "CZE": [
+      "příkaz ministerstva spravedlnosti",
+      "rozhodnutí ministerstva spravedlnosti",
+      "trestní příkaz",
+      "usnesení ministerstva spravedlnosti"
+    ],
+    "EU": ["unknown"],
+    "HUN": [
+      "jogegységi határozat",
+      "kollégiumi vélemény",
+      "kollégiumi állásfoglalás"
+    ],
+    "POL": [
+      "objaśnienia podatkowe",
+      "odmowa wydania wiążącej informacji akcyzowej",
+      "odmowa wydania wiążącej informacji stawkowej",
+      "opinia w sprawie opodatkowania wyrównawczego",
+      "postanowienie rozstrzygające spór o właściwość",
+      "rozstrzygnięcie",
+      "uchylenie odmowy wydania wiążącej informacji stawkowej",
+      "uchylenie wiążącej informacji akcyzowej",
+      "uchylenie wiążącej informacji stawkowej",
+      "wiążąca informacja stawkowa",
+      "zmiana interpretacji indywidualnej",
+      "zmiana interpretacji ogólnej",
+      "zmiana wiążącej informacji akcyzowej",
+      "zmiana wiążącej informacji stawkowej"
+    ],
+    "SVK": [],
+    "USA": ["decision", "opinion", "order"]
+  },
+  "sourcesNote": "case_law_sources.id -> adapter. Ids are generated by the database, so none appears in the repository; each adapter is inferred from the types the source states (evidence), to confirm with: select id, adapter_key from case_law_sources.",
+  "sources": {
+    "01a09340-e8ba-7356-af84-a8f679f57e89": {
+      "jurisdiction": "POL",
+      "adapter": "pl-sn",
+      "evidence": "opinia and wyciąg z protokołu, only pl-sn states them"
+    },
+    "01a0bb74-43ec-7438-b4ac-b91b650d26ff": {
+      "jurisdiction": "HUN",
+      "adapter": "hu-bhgy",
+      "evidence": "HU_DECISION_TYPES values"
+    },
+    "01a0e378-13b1-7702-bf6e-4c8cf70f9068": {
+      "jurisdiction": "POL",
+      "adapter": "pl-kio",
+      "evidence": "wyrok, postanowienie, uchwała only"
+    },
+    "01a0e378-13bc-761b-acdb-051344577721": {
+      "jurisdiction": "POL",
+      "adapter": "pl-tk",
+      "evidence": "sygnalizacja and orzeczenie, only pl-tk states sygnalizacja"
+    },
+    "01a0e378-13c1-70bc-a5ba-207401c3b7e8": {
+      "jurisdiction": "POL",
+      "adapter": "pl-nsa",
+      "evidence": "DECISION_KINDS incl. orzeczenie; largest Polish administrative corpus"
+    },
+    "01a0e378-13c5-70fd-a051-4e5618bfbcfc": {
+      "jurisdiction": "POL",
+      "adapter": "pl-ncourt",
+      "evidence": "uzasadnienie bez sentencji and zarządzenie from RULING_COMPONENTS"
+    },
+    "01a0e378-13c9-747f-9c52-e33eee81f596": {
+      "jurisdiction": "POL",
+      "adapter": "pl-kis",
+      "evidence": "PL_KIS_CATEGORIES values"
+    },
+    "01a0e378-13ce-72b9-ab7d-624104123a3c": {
+      "jurisdiction": "POL",
+      "adapter": "pl-uodo",
+      "evidence": "decyzja only (PL_UODO_DECISION_TYPE)"
+    },
+    "01a0e378-13e1-7784-af07-ada14a1b0252": {
+      "jurisdiction": "POL",
+      "adapter": "pl-uokik",
+      "evidence": "decyzja with attached court rulings"
+    },
+    "4c6a3fd0-27fc-4bde-80cf-48c084406975": {
+      "jurisdiction": "SVK",
+      "adapter": "sk-courts",
+      "evidence": "formaRozhodnutia vocabulary of the general courts (platobný rozkaz, trestný rozkaz)"
+    },
+    "635f8a0c-00cb-47b8-bd61-45bae1fdd025": {
+      "jurisdiction": "POL",
+      "adapter": "pl-courts",
+      "evidence": "uzasadnienie (pre-supplement legacy value) and zarządzenie from SAOS"
+    },
+    "65a183ec-63c0-4ac9-86a1-25a6e00261a3": {
+      "jurisdiction": "CZE",
+      "adapter": "cz-nss",
+      "evidence": "administrative-court dockets (Az, Ad, A, Af) read as the type"
+    },
+    "7449df27-2067-4827-b22f-3091f564ae50": {
+      "jurisdiction": "CZE",
+      "adapter": "cz-regional",
+      "evidence": "states the publisher's enum members lowercased (ministery_of_justice_*, order_t, none)"
+    },
+    "83bc85e4-fe67-4b1c-9bde-18969000888b": {
+      "jurisdiction": "CZE",
+      "adapter": "cz-us",
+      "evidence": "nález and stanovisko pléna, the Ústavní soud's forms"
+    },
+    "a4d8f134-e0d6-4dc0-afde-05e8afa665b2": {
+      "jurisdiction": "SVK",
+      "adapter": "sk-us",
+      "evidence": "nález and uznesenie, the Ústavný súd's forms"
+    },
+    "c10c9c5b-5958-47dd-9d0f-cb355a5e9f5e": {
+      "jurisdiction": "EU",
+      "adapter": "eu-ecj",
+      "evidence": "judgment, order, opinion: CDM_TYPE_MAP outputs"
+    },
+    "d6ecc585-b704-4a4c-b4c3-d81593d91529": {
+      "jurisdiction": "CZE",
+      "adapter": "cz-ns",
+      "evidence": "Nejvyšší soud abbreviations (usn., rozs., tr.příkaz) and stanovisko"
+    }
+  }
+}

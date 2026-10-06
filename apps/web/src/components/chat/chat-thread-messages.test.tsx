@@ -1,8 +1,9 @@
 import type { ReactNode } from "react";
-import { renderToStaticMarkup } from "react-dom/server";
+import { renderToReadableStream, renderToStaticMarkup } from "react-dom/server";
 
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { afterAll, describe, expect, test } from "bun:test";
+import { Window } from "happy-dom";
 import { IntlProvider } from "use-intl";
 
 import {
@@ -39,34 +40,50 @@ afterAll(() => {
   process.env["VITE_API_URL"] = previousApiUrl;
 });
 
-const renderWithProviders = (children: ReactNode) =>
-  renderToStaticMarkup(
-    <ChatThreadTestRouter>
-      <QueryClientProvider client={new QueryClient()}>
-        <IntlProvider locale="en" messages={messages} timeZone="UTC">
-          <ChatMattersContext
+const withProviders = (children: ReactNode) => (
+  <ChatThreadTestRouter>
+    <QueryClientProvider client={new QueryClient()}>
+      <IntlProvider locale="en" messages={messages} timeZone="UTC">
+        <ChatMattersContext
+          value={{
+            createDocumentMattersView: { type: "empty" },
+          }}
+        >
+          <ChatApprovalContext
             value={{
-              createDocumentMattersView: { type: "empty" },
+              activeOrganizationId: "test-active-organization",
+              alwaysApprovedTools: new Set(),
+              conversationApprovedTools: new Set(),
+              handleAllowInConversation: () => {},
+              handleAlwaysAllow: () => {},
+              handleApprove: () => {},
+              handleDeny: () => {},
             }}
           >
-            <ChatApprovalContext
-              value={{
-                activeOrganizationId: "test-active-organization",
-                alwaysApprovedTools: new Set(),
-                conversationApprovedTools: new Set(),
-                handleAllowInConversation: () => {},
-                handleAlwaysAllow: () => {},
-                handleApprove: () => {},
-                handleDeny: () => {},
-              }}
-            >
-              <ChatEditorProvider>{children}</ChatEditorProvider>
-            </ChatApprovalContext>
-          </ChatMattersContext>
-        </IntlProvider>
-      </QueryClientProvider>
-    </ChatThreadTestRouter>,
-  );
+            <ChatEditorProvider>{children}</ChatEditorProvider>
+          </ChatApprovalContext>
+        </ChatMattersContext>
+      </IntlProvider>
+    </QueryClientProvider>
+  </ChatThreadTestRouter>
+);
+
+const renderWithProviders = (children: ReactNode) =>
+  renderToStaticMarkup(withProviders(children));
+
+const renderWithLoadedMarkdown = async (children: ReactNode) => {
+  const stream = await renderToReadableStream(withProviders(children));
+  await stream.allReady;
+  return new Response(stream).text();
+};
+
+const renderedText = (html: string) => {
+  const window = new Window();
+  const root = window.document.createElement("div");
+  // safe-html: React renderToStaticMarkup/renderToReadableStream output from this test's own components, parsed in a detached happy-dom document.
+  root.innerHTML = html;
+  return root.textContent;
+};
 
 describe("chat thread messages", () => {
   test("renders every reloaded admission refusal with its recovery action", () => {
@@ -632,7 +649,7 @@ describe("chat thread messages", () => {
     expect(html).toContain("Here is the answer.");
   });
 
-  test("keeps streaming reasoning visible and immediately collapsible", () => {
+  test("keeps streaming reasoning visible and immediately collapsible", async () => {
     const chatMessages: ChatUIMessage[] = [
       {
         id: "message-A",
@@ -646,7 +663,7 @@ describe("chat thread messages", () => {
       },
     ];
 
-    const html = renderWithProviders(
+    const content = (
       <ChatThreadMessages
         approvalPendingMessageId={null}
         isGenerating
@@ -657,15 +674,22 @@ describe("chat thread messages", () => {
         streamdownComponents={{
           a: ({ children, ...props }) => <a {...props}>{children}</a>,
         }}
-      />,
+      />
     );
 
-    expect(html).toContain("<details");
-    expect(html).toContain('open=""');
-    expect(html).toContain("Reading cited documents with create-document.");
-    expect(html).not.toContain("**");
-    expect(html).not.toContain("animate-pulse");
-    expect(html).not.toContain("Working with context");
+    const html = renderWithProviders(content);
+    const loadedHtml = await renderWithLoadedMarkdown(content);
+    expect(loadedHtml).toContain('data-streamdown="strong"');
+    for (const output of [html, loadedHtml]) {
+      expect(output).toContain("<details");
+      expect(output).toContain('open=""');
+      expect(renderedText(output)).toContain(
+        "Reading cited documents with create-document.",
+      );
+      expect(output).not.toContain("**");
+      expect(output).not.toContain("animate-pulse");
+      expect(output).not.toContain("Working with context");
+    }
   });
 
   test("folds assistant reasoning once streaming settles, even before answer text starts", () => {
@@ -699,7 +723,7 @@ describe("chat thread messages", () => {
     expect(html).not.toContain("Working with context");
   });
 
-  test("preserves generated document filename casing in the preview", () => {
+  test("preserves generated document filename casing in the preview", async () => {
     const input = {
       name: "Dohoda_o_ochrane_duvernych_informaci_NDA",
       source:
@@ -722,7 +746,7 @@ describe("chat thread messages", () => {
       },
     ];
 
-    const html = renderWithProviders(
+    const content = (
       <ChatThreadMessages
         approvalPendingMessageId={null}
         messages={chatMessages}
@@ -732,13 +756,20 @@ describe("chat thread messages", () => {
         streamdownComponents={{
           a: ({ children, ...props }) => <a {...props}>{children}</a>,
         }}
-      />,
+      />
     );
 
-    expect(html).toContain("Dohoda_o_ochrane_duvernych_informaci_NDA.docx");
-    expect(html).toContain("Smluvní strany: Poskytovatel a příjemce");
-    expect(html).not.toContain("**Smluvní strany:**");
-    expect(html).not.toContain("tracking-wide uppercase");
+    const html = renderWithProviders(content);
+    const loadedHtml = await renderWithLoadedMarkdown(content);
+    expect(loadedHtml).toContain('data-streamdown="strong"');
+    for (const output of [html, loadedHtml]) {
+      expect(output).toContain("Dohoda_o_ochrane_duvernych_informaci_NDA.docx");
+      expect(renderedText(output)).toContain(
+        "Smluvní strany: Poskytovatel a příjemce",
+      );
+      expect(output).not.toContain("**Smluvní strany:**");
+      expect(output).not.toContain("tracking-wide uppercase");
+    }
   });
 
   test("renders a terminal generated-document state as a failure", () => {

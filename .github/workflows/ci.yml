@@ -1878,6 +1878,13 @@ jobs:
           bun test scripts/check-test-input-coverage.test.ts
           bun run check:test-input-coverage
 
+      - name: Chat mutation targets
+        if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
+        # Every API/web change validates all active targets; scenarios stay nightly.
+        run: |
+          bun test apps/api/scripts/chat-mutation-matrix.test.ts
+          bun apps/api/scripts/chat-mutation-matrix.ts --check
+
       - name: Desktop Rust inputs
         if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
         # The desktop native test task's turbo.json inputs, the files Rust

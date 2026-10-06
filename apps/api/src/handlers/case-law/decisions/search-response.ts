@@ -2,6 +2,7 @@ import { panic } from "better-result";
 import type { Static } from "elysia";
 
 import { COURT_TIER_LABELS } from "@stll/api-contract/case-law-court-tiers";
+import { DECISION_TYPE_KINDS } from "@stll/api-contract/case-law-decision-types";
 import { CASE_LAW_SEARCH_WARNING_CODES } from "@stll/api-contract/search";
 import { DECISION_IDENTIFIER_MAX_COUNT } from "@stll/legal-ast/decision-identifier";
 
@@ -135,9 +136,14 @@ export const projectCaseLawSearchResponse = (
           year: response.facets.year
             .slice(0, LIMITS.caseLawYearFacetLimit)
             .map(projectBucket),
+          // A kind is a short closed value, so only the label needs bounding.
           decisionType: response.facets.decisionType
-            .slice(0, LIMITS.caseLawYearFacetLimit)
-            .map(projectBucket),
+            .slice(0, DECISION_TYPE_KINDS.length)
+            .map(({ count, label, value }) => ({
+              value,
+              label: nullableText(label, bytes.label),
+              count,
+            })),
           source: response.facets.source
             .slice(0, LIMITS.caseLawYearFacetLimit)
             .map((bucket) =>

@@ -3,6 +3,7 @@ import { describe, expect, expectTypeOf, test } from "bun:test";
 import type { Static, UnwrapSchema } from "elysia";
 
 import { COURT_TIER_LABELS } from "@stll/api-contract/case-law-court-tiers";
+import { DECISION_TYPE_KINDS } from "@stll/api-contract/case-law-decision-types";
 import {
   TEXT_ABSENCE_REASON,
   TEXT_FIELD_TYPE,
@@ -89,7 +90,7 @@ const bucket = (value: string) => ({ value, label: null, count: 3 });
 const firstPageFacets = {
   court: [{ tierLabel: "supreme", courts: [bucket("Nejvyšší soud")] }],
   year: [bucket("2024")],
-  decisionType: [bucket("rozsudek")],
+  decisionType: [bucket("judgment")],
   source: [
     {
       value: "source-id",
@@ -261,6 +262,31 @@ describe("case-law search response schema", () => {
         nextCursor: "cursor",
       }),
     ).toBe(true);
+  });
+
+  // The type facet is the reader's vocabulary, not the publisher's: a stated
+  // spelling or an enum member on the wire is a raw value the web would draw.
+  test("the type facet carries canonical kinds and refuses a stated spelling", () => {
+    for (const kind of DECISION_TYPE_KINDS) {
+      expect(
+        Value.Check(searchDecisionsSuccessResponseSchema, {
+          ...validResponse,
+          facets: { ...firstPageFacets, decisionType: [bucket(kind)] },
+        }),
+      ).toBe(true);
+    }
+    for (const stated of [
+      "rozsudek",
+      "usn.",
+      "ministery_of_justice_decision",
+    ]) {
+      expect(
+        Value.Check(searchDecisionsSuccessResponseSchema, {
+          ...validResponse,
+          facets: { ...firstPageFacets, decisionType: [bucket(stated)] },
+        }),
+      ).toBe(false);
+    }
   });
 
   test("accepts every declared court tier", () => {
