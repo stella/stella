@@ -158,9 +158,7 @@ const conditionContext = (profile: string, event: string, depth: string) => {
     "inputs.heavy_only": false,
     "needs.ci-plan.outputs.coverage_profile": profile,
     "needs.ci-plan.outputs.run_required": "true",
-    "needs.ci-plan.outputs.pilot_fast_jobs": JSON.stringify(
-      pilotFastJobs(workflow),
-    ),
+    "needs.ci-plan.outputs.pilot_fast_jobs": JSON.stringify(fastJobs(workflow)),
     "needs.ci-plan.outputs.suite_depth": depth,
     "needs.ci-plan.outputs.queue_depth": "full",
     "needs.ci-plan.outputs.trusted": "true",
@@ -223,6 +221,15 @@ test("pilot pushes execute only the fast allowlist and its generated-input prere
   for (const [name, job] of Object.entries(workflow.jobs)) {
     if (!allowed.includes(name)) {
       expect(evaluate(job.if ?? "true", context), name).toBe(false);
+    }
+    if (
+      allowed.includes(name) &&
+      evaluate(
+        original.jobs[name]?.if ?? "true",
+        conditionContext("normal-v1", "pull_request", "fast"),
+      ) === true
+    ) {
+      expect(evaluate(job.if ?? "true", context), name).toBe(true);
     }
     if (!allowed.includes(name) || name === "ci-result") {
       continue;
