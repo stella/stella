@@ -1,5 +1,8 @@
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
+import { panic } from "better-result";
 import { afterAll, afterEach, expect, spyOn, test } from "bun:test";
+
+import { parseTimeZoneId } from "@stll/time";
 
 import arabicMessages from "@/i18n/langs/ar.json";
 import englishMessages from "@/i18n/langs/en.json";
@@ -62,7 +65,9 @@ const settings = {
   timeEditWindowDays: 30,
   timeLockedThroughMonth: null,
   timeNarrativeRequired: false,
-  timeZone: "UTC",
+  timeZone:
+    parseTimeZoneId("UTC") ??
+    panic("UTC fixture must be a supported time zone"),
   timeZoneSource: "organization",
 } satisfies OrganizationSettings;
 
