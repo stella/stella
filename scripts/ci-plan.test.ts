@@ -1903,6 +1903,33 @@ printf "%s\\n" "$package_checks_required"`,
   return new TextDecoder().decode(process.stdout).trim();
 };
 
+test("pull requests and merge groups use the same fail-closed package detector", () => {
+  for (const event of [EVENT.pullRequest, EVENT.mergeGroup]) {
+    for (const [fake, expected] of [
+      ["printf false", "false"],
+      ["printf true", "true"],
+      ["printf invalid", "true"],
+      ["return 1", "true"],
+    ]) {
+      const result = Bun.spawnSync(
+        [
+          "bash",
+          "-e",
+          "-c",
+          `bun() { ${fake}; }; changed_files=(docs/guide.md);\n${packageScope}\nprintf '%s' "$package_checks_required"`,
+        ],
+        {
+          env: { PATH: Bun.env["PATH"] ?? "", EVENT_NAME: event },
+          stdout: "pipe",
+          stderr: "pipe",
+        },
+      );
+      expect(result.exitCode, result.stderr.toString()).toBe(0);
+      expect(result.stdout.toString()).toBe(expected);
+    }
+  }
+});
+
 test("transfer read guard runs for API-only pull request changes", () => {
   const guard = jobSteps(ciJobs["ci-checks-rest"]).find(
     ({ name }) => name === "Transfer timeout and fixed read guard",
