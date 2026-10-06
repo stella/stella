@@ -1049,6 +1049,7 @@
       "toastDescription": "Pełnoekranowy czat zostanie udostępniony wraz z zapisanymi wątkami.",
       "toastTitle": "Pełny widok niedostępny"
     },
+    "activateGeneratedView": "Pracuj z tym widokiem",
     "aiPrompt": "Pole wiadomości AI",
     "aiThread": "Konwersacja AI",
     "analyzingSources": "Analizowanie źródeł",
@@ -1194,6 +1195,8 @@
     "forkedFromUnavailable": "Utworzono na podstawie czatu, który nie jest już dostępny",
     "forkedThread": "Z innego czatu",
     "forkingThread": "Tworzenie nowego czatu…",
+    "generatedView": "Wygenerowany widok",
+    "generatedViewDrill": "Wyszukaj orzeczenia z filtrem sądu {court} i rokiem {year}.",
     "greeting": "Nad czym chcesz pracować?",
     "greetingSubtitle": "Zacznij od sprawy, dokumentu albo prostego pytania.",
     "hideThread": "Ukryj konwersację",

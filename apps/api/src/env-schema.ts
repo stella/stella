@@ -72,6 +72,14 @@ export const resolveEmailProvider = ({
  */
 export const envApiServerSchema = {
   ...verificationRunCapEnvSchema,
+  VISUAL_PREVIEW_FUNCTION_NAME: v.optional(
+    v.pipe(
+      v.string(),
+      v.regex(
+        /^(?:[A-Za-z0-9_-]{1,64}(?::[A-Za-z0-9_-]+)?|arn:aws(?:-us-gov|-cn)?:lambda:[a-z0-9-]+:\d{12}:function:[A-Za-z0-9_-]+(?::[A-Za-z0-9_-]+)?)$/u,
+      ),
+    ),
+  ),
   PORT: v.optional(v.pipe(v.string(), v.digits())),
   STELLA_API_PORT: v.optional(v.pipe(v.string(), v.digits())),
   AI_PROVIDER: v.optional(
@@ -637,6 +645,7 @@ export const envApiServerSchema = {
     ),
   ),
   FEATURE_TIME_BILLING: featureFlagSchema,
+  FEATURE_GENERATED_VIEWS: featureFlagSchema,
   /** Dark-launch tenant-scoped AI memory until product and performance review. */
   FEATURE_AI_MEMORY: featureFlagSchema,
   /** Dark-launch first-class legal lists until the end-to-end workflow is complete. */

@@ -1410,7 +1410,7 @@
     "apps/api/src/handlers/catalogue/list.ts": 4,
     "apps/api/src/handlers/catalogue/skill-handles.ts": 8,
     "apps/api/src/handlers/chat/attachment-validation.ts": 2,
-    "apps/api/src/handlers/chat/chat-message-parts.ts": 70,
+    "apps/api/src/handlers/chat/chat-message-parts.ts": 60,
     "apps/api/src/handlers/chat/chat-message-persistence.ts": 3,
     "apps/api/src/handlers/chat/chat-prompt.ts": 42,
     "apps/api/src/handlers/chat/chat-schema.continuation.property.test.ts": 1,
