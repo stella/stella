@@ -179,7 +179,9 @@ describe("skill tool output contract", () => {
   test("the served listing, colliding skills included, passes the CLI's listing check", async () => {
     // One name outside the contract makes the CLI drop the whole listing.
     const tools = await listMcpTools(createContext(), "default", undefined);
-    expect(tools.some((tool) => tool.name === COLLIDING_NAME)).toBe(true);
+    const names = tools.map((tool) => tool.name);
+    expect(names).toContain(COLLIDING_NAME);
+    expect(new Set(names).size).toBe(names.length);
     expect(validateFetchedToolsList(JSON.stringify({ tools }))).toMatchObject({
       ok: true,
     });
