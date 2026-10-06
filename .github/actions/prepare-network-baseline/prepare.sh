@@ -22,9 +22,7 @@ base_tree="$RUNNER_TEMP/base-route-tree.gen.ts"
 head_tree="$RUNNER_TEMP/head-route-tree.gen.ts"
 repository=$(git rev-parse --show-toplevel)
 head=$(git rev-parse HEAD)
-bun apps/web/scripts/network-baseline-route-tree.ts "$repository" "$base" "$base_tree"
 bun apps/web/scripts/network-baseline-route-tree.ts "$repository" "$head" "$head_tree"
-git diff --name-only --no-renames "$base" HEAD > apps/web/e2e/.network-baseline-changed
 recorded=false
 recorded_source=''
 load_recording() {
@@ -72,6 +70,24 @@ fi
 # Bootstrap/retention fallback is pinned to the same merge base, never PR JSON.
 if [[ "$recorded" == false ]]; then
   echo "Network baseline: committed bootstrap at merge base $base (recording unavailable)" >> "$GITHUB_STEP_SUMMARY"
+fi
+since=$base
+if [[ "$purpose" == comparison && -n "$recorded_source" && "$recorded_source" != "$base" ]]; then
+  # Routes changed after the inherited recording have no recorded peak yet.
+  since=$recorded_source
+fi
+bun apps/web/scripts/network-baseline-route-tree.ts "$repository" "$since" "$base_tree"
+if [[ "$since" == "$base" ]]; then
+  git diff --name-only --no-renames "$base" HEAD > apps/web/e2e/.network-baseline-changed
+else
+  # Main's own baseline edits before the merge base are not PR edits.
+  {
+    git diff --name-only --no-renames "$since" "$base" -- . ':(exclude)apps/web/e2e/network-baseline.json'
+    git diff --name-only --no-renames "$base" HEAD
+  } | sort -u > apps/web/e2e/.network-baseline-changed
+fi
+if [[ "$purpose" == comparison ]]; then
+  echo "Network baseline: comparison exempts routes changed since $since" >> "$GITHUB_STEP_SUMMARY"
 fi
 if [[ "$purpose" == recording ]]; then
   # Each reviewed main commit can replace a route's declaration. Replay only
