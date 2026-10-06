@@ -26,6 +26,7 @@ import { selectApiTestImpact } from "./api-test-impact";
 import { requiresMalwareScan } from "./check-standalone-lockfiles";
 import { planCiApiTests } from "./ci-api-test-plan";
 import { CANONICAL_CANCEL_STEP } from "./ci-cancellation-contract";
+import { requiresLandingBuild } from "./ci-package-scope";
 import { extractPlanSelector } from "./ci-plan-selector";
 import { routeSmokeAffected } from "./detect-route-smoke-changes";
 import { serviceSuiteCliOutput } from "./detect-service-suite-changes";
@@ -164,6 +165,12 @@ const onlyOutcome = <T>(outcomes: readonly T[]): T => {
 // process, each answer comes from the same function the CLI prints; a bun
 // call the selector adds without an entry here fails the plan.
 const SELECTOR_BUN_CLIS = {
+  "scripts/ci-package-scope.ts": {
+    variable: "SERVED_LANDING_BUILD",
+    flag: "--landing-build",
+    output: (files: readonly string[]) =>
+      String(requiresLandingBuild({ changed: files })),
+  },
   "scripts/detect-service-suite-changes.ts": {
     variable: "SERVED_SERVICE_SUITE_SCOPES",
     flag: "--scopes",
@@ -1861,7 +1868,7 @@ test("API determinism runs only after installation for its selected scope", () =
 });
 
 const packageScopeStart = workflow.indexOf(
-  "          package_checks_required=false\n",
+  "          package_checks_required=true\n          if [[",
 );
 const packageScope = workflow.slice(packageScopeStart, selectorStart);
 
@@ -1877,7 +1884,7 @@ printf "%s\\n" "$package_checks_required"`,
       "ci-plan-test",
       ...files,
     ],
-    env: { PATH: Bun.env["PATH"] ?? "" },
+    env: { PATH: Bun.env["PATH"] ?? "", EVENT_NAME: "pull_request" },
     stdout: "pipe",
     stderr: "pipe",
   });
@@ -2792,9 +2799,12 @@ test("property-testing guards run only when dependencies are installed", () => {
     const steps = jobSteps(ciJobs[job]);
     const installCondition =
       "needs.ci-plan.outputs.package_checks_required == 'true'";
-    expect(
-      steps.find(({ name }) => name === "Install dependencies")?.if,
-    ).toContain(`(${installCondition})`);
+    const install = steps.find(({ name }) => name === "Install dependencies");
+    if (job === "ci-checks-policy") {
+      expect(install?.if).toContain("steps.checkout.outcome == 'success'");
+    } else {
+      expect(install?.if).toContain(`(${installCondition})`);
+    }
     const guards = steps.filter(({ run }) =>
       run?.includes("bun test packages/property-testing/"),
     );
@@ -4193,6 +4203,52 @@ test("the advisory base proof runs only for pull requests opting in with prove-f
         runsAtDepth(condition, { event, depth: SUITE_DEPTH.fast, proveFix }),
       ).toBe(event === EVENT.pullRequest && proveFix);
     }
+  }
+});
+
+test("documentation guards run independently of package checks", () => {
+  const steps = jobSteps(ciJobs["ci-checks-policy"]);
+  for (const name of [
+    "Install dependencies",
+    "Documentation source policy rule",
+    "Instruction references",
+  ]) {
+    const step = steps.find((entry) => entry.name === name);
+    expect(step?.if).not.toContain("package_checks_required");
+    expect(step?.if).toContain(
+      name === "Install dependencies"
+        ? "steps.checkout.outcome == 'success'"
+        : "steps.install.outcome == 'success'",
+    );
+  }
+});
+
+test("unavailable or malformed documentation and landing detectors widen workflow scopes", () => {
+  const landingStart = selector.indexOf(
+    "          landing_build_required=false\n",
+  );
+  const landingEnd = selector.indexOf(
+    "          legal_atlas_image_required=false",
+    landingStart,
+  );
+  expect(landingStart).toBeGreaterThan(-1);
+  expect(landingEnd).toBeGreaterThan(landingStart);
+  for (const fake of ["return 1", "printf invalid"]) {
+    const result = Bun.spawnSync(
+      [
+        "bash",
+        "-e",
+        "-c",
+        `bun() { ${fake}; }; changed_files=(docs/guide.md);\n${packageScope}\n${selector.slice(landingStart, landingEnd)}\nprintf '%s %s' "$package_checks_required" "$landing_build_required"`,
+      ],
+      {
+        env: { PATH: Bun.env["PATH"] ?? "", EVENT_NAME: "pull_request" },
+        stdout: "pipe",
+        stderr: "pipe",
+      },
+    );
+    expect(result.exitCode, result.stderr.toString()).toBe(0);
+    expect(result.stdout.toString()).toBe("true true");
   }
 });
 

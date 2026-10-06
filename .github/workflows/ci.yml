@@ -470,19 +470,13 @@ jobs:
           desktop_rust_checks_required=$(bash scripts/detect-tauri-rust-changes.sh "${changed_files[@]}")
           e2e_core_required=$(bash scripts/detect-e2e-changes.sh core "${changed_files[@]}")
           e2e_landing_required=$(bash scripts/detect-e2e-changes.sh landing "${changed_files[@]}")
-          package_checks_required=false
-          for file in "${changed_files[@]}"; do
-            case "$file" in
-              .provenance.yml|provenance/*)
-                ;;
-              *)
-                package_checks_required=true
-                ;;
-            esac
-            if [[ "$desktop_rust_checks_required" == "true" && "$package_checks_required" == "true" ]]; then
-              break
+          package_checks_required=true
+          if [[ "$EVENT_NAME" == pull_request ]]; then
+            package_scope=$(bun scripts/ci-package-scope.ts --package-checks "${changed_files[@]}") || package_scope=true
+            if [[ "$package_scope" == false ]]; then
+              package_checks_required=false
             fi
-          done
+          fi
 
           # Path scopes for the build/smoke jobs, computed here so a job whose
           # scope did not change is skipped entirely instead of scheduling a
@@ -509,6 +503,12 @@ jobs:
           api_image_smoke_required=false
           collab_redis_required=false
           landing_build_required=false
+          if [[ "$EVENT_NAME" == pull_request ]]; then
+            landing_build_required=$(bun scripts/ci-package-scope.ts --landing-build "${changed_files[@]}") || landing_build_required=true
+            if [[ "$landing_build_required" != false ]]; then
+              landing_build_required=true
+            fi
+          fi
           legal_atlas_image_required=false
           image_inputs_changed=false
           lockfile_ages_required=false
@@ -596,7 +596,9 @@ jobs:
             esac
             case "$file" in
               apps/landing/*|docs/changelog/*|VERSION|packages/*|patches/*|bun.lock|package.json|.github/workflows/ci.yml)
-                landing_build_required=true
+                if [[ "$EVENT_NAME" != pull_request ]]; then
+                  landing_build_required=true
+                fi
                 ;;
             esac
             case "$file" in
@@ -772,7 +774,7 @@ jobs:
           } >> "$GITHUB_OUTPUT"
 
           if [[ "$package_checks_required" != "true" ]]; then
-            echo "::notice::Only provenance files changed; skipping package CI checks."
+            echo "::notice::Only documentation or provenance changed; skipping package CI checks."
           fi
 
       - name: Install API test planner dependencies
@@ -1545,7 +1547,7 @@ jobs:
 
       - name: Install dependencies
         id: install
-        if: ${{ !cancelled() && steps.checkout.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
+        if: ${{ !cancelled() && steps.checkout.outcome == 'success' }}
         run: bash scripts/retry.sh bun ci --ignore-scripts
         env:
           # .npmrc references NPM_TOKEN, but PR installs must not expose
@@ -1654,13 +1656,13 @@ jobs:
           bun scripts/check-oxlint-rule-coverage.ts
 
       - name: Documentation source policy rule
-        if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
         # Every direct dependency must have an exact llms.txt source or a
         # time-bounded, explained quarantine.
         run: bun run check:docs-sources
 
       - name: Instruction references
-        if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
         # AGENTS.md and .claude/skills/*/SKILL.md name repository
         # paths, package scripts, module exports and oxlint rule ids that
         # nothing compiles, so a rename leaves the instruction quietly wrong and
@@ -2533,6 +2535,10 @@ jobs:
       - name: Test release image CI gate
         if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
         run: bun test scripts/ci-plan.test.ts
+
+      - name: Test documentation and landing CI scope
+        if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
+        run: bun test scripts/ci-package-scope.test.ts
 
       - name: Test main heavy workflow contracts
         if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
