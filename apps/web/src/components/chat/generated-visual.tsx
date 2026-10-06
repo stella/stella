@@ -78,6 +78,7 @@ const GeneratedVisualFrame = ({
       return v.parse(generatedVisualPageSchema, unwrapEden(response));
     },
     gcTime: 0,
+    staleTime: Infinity,
     retry: false,
   });
   const now = useLatestCallback(() => performance.now());
