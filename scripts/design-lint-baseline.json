@@ -957,7 +957,6 @@
     "apps/web/src/components/ai-suggestions/file-chat-overlay.tsx": 1,
     "apps/web/src/components/ai-suggestions/host.tsx": 1,
     "apps/web/src/components/app-sidebar.tsx": 1,
-    "apps/web/src/components/chat/chat-thread-messages.tsx": 1,
     "apps/web/src/components/chat/create-document-draft.logic.ts": 1,
     "apps/web/src/components/chat/tool-approval-card.tsx": 1,
     "apps/web/src/components/chat/tool-call-card.tsx": 1,
