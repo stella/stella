@@ -282,7 +282,7 @@ describe("desktop action gate uses observed presence", () => {
       if (action !== "edit-file" && action !== "sign-pdf") {
         panic(`Unexpected test action: ${action}`);
       }
-      const started = Result.ok<{ readonly status: "started" }, never>({
+      const started = Result.ok<{ readonly status: "started" }>({
         status: "started",
       });
       const connect = spyOn(
