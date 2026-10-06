@@ -938,6 +938,7 @@ describe("runIngestionPipeline — failure records", () => {
         },
         select: () => ({
           from: (table: unknown) => ({
+            // oxlint-disable-next-line typescript-eslint/promise-function-async -- returns awaitable rows with for/limit chains; async would discard those methods
             where: () =>
               Object.assign(Promise.resolve([]), {
                 for: () => ({ limit: async () => [] }),

@@ -703,6 +703,10 @@
     "seconds": 6.04177,
     "source": "estimated"
   },
+  "src/handlers/case-law/citation-width-writers.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
   "src/handlers/case-law/citations/decision-references.test.ts": {
     "seconds": 0.158883,
     "source": "estimated"
@@ -4267,6 +4271,14 @@
     "seconds": 1.92648,
     "source": "estimated"
   },
+  "src/lib/case-law/citation-storage-bounds.postgres.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
+  "src/lib/case-law/citation-storage-bounds.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
   "src/lib/case-law/citation-vocabulary.test.ts": {
     "seconds": 0.084637,
     "source": "estimated"
@@ -6177,6 +6189,14 @@
   },
   "src/lib/legal-search/index-naming.test.ts": {
     "seconds": 0.122416,
+    "source": "estimated"
+  },
+  "src/lib/legal-search/ingestion-normalization.property.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
+  "src/lib/legal-search/ingestion-normalization.test.ts": {
+    "seconds": 1,
     "source": "estimated"
   },
   "src/lib/legal-search/ingestion-plain-text.test.ts": {
