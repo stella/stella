@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 
 import { listApiTestPaths } from "../apps/api/scripts/api-test-plan";
-import durations from "../apps/api/scripts/test-durations.json";
+import durations from "../apps/api/scripts/test-durations.json" with { type: "json" };
 import {
   parseApiTestShard,
   partitionTestFiles,

@@ -6,7 +6,6 @@ import * as v from "valibot";
 
 const root = path.resolve(import.meta.dir, "..");
 const nightlyPath = ".github/workflows/nightly-test.yml";
-const advisoryMoveCommit = "bc81bdb1b1960a654993ad47f3aeb6ddca5f6244";
 const readWorkflow = (source: string) =>
   v.parse(
     v.object({ jobs: v.record(v.string(), v.unknown()) }),
@@ -46,8 +45,12 @@ const requiredSet = (jobs: Record<string, unknown>) => {
   };
 };
 
+// The commit that moved the advisory job into the nightly workflow. Commits are
+// immutable, so pinning it cannot drift. Searching history for it instead would
+// fetch every past blob of the workflow in the blobless CI checkout.
+const advisoryMoveCommit = "bc81bdb1b1960a654993ad47f3aeb6ddca5f6244";
+
 test("moving the advisory job preserves the exact required CI set", () => {
-  // Pin the actual move so a complete checkout never searches history at test time.
   git(["cat-file", "-e", `${advisoryMoveCommit}^{commit}`]);
   const before = readWorkflow(
     git(["show", `${advisoryMoveCommit}^:.github/workflows/ci.yml`]),
@@ -63,6 +66,9 @@ test("moving the advisory job preserves the exact required CI set", () => {
   );
   expect(nightlyBefore).not.toHaveProperty("migration-exact-base-upgrade");
   expect(nightlyAfter).toHaveProperty("migration-exact-base-upgrade");
+  expect(git(["show", `${advisoryMoveCommit}:${nightlyPath}`])).toContain(
+    "\n  migration-exact-base-upgrade:",
+  );
   expect(requiredSet(after)).toEqual(requiredSet(before));
   const advisory = "migration-exact-base-upgrade";
   expect(
@@ -78,7 +84,7 @@ test("moving the advisory job preserves the exact required CI set", () => {
     expect(required.scopes).not.toHaveProperty(advisory);
     expect(required.fast).not.toContain(advisory);
   }
-});
+}, 30_000);
 
 test("nightly rehearsal checks main and reports failures with isolated write permissions", () => {
   const job = v.parse(

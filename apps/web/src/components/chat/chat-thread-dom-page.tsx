@@ -119,8 +119,11 @@ const ChatThreadDomPage = ({
             onLoadOlder={session.loadOlder}
             onOpenCreateDocumentDraft={session.handleOpenCreateDocumentDraft}
             onOpenCreatedDocument={session.handleOpenCreatedDocument}
-            onRemoveQueuedMessage={session.removeQueuedMessage}
             onResend={session.resendLatestMessage}
+            queuedMessageActions={{
+              remove: session.removeQueuedMessage,
+              sendNow: session.sendQueuedMessageNow,
+            }}
             queuedMessages={session.queuedMessages}
             showThinkingIndicator
             streamdownComponents={session.streamdownComponents}
