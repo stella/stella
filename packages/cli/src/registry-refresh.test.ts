@@ -125,6 +125,37 @@ const writeCache = async (
 };
 
 describe("resolveCommandTree (S5.3)", () => {
+  test("feature-gated leaves retain their baked identity across caller admission states", async () => {
+    const env = await makeCacheEnv();
+    const toolName = "save_time_entry";
+    const spec = curatedLeavesForTool(generatedRouteMap, toolName).at(0);
+    expect(spec?.featureId).toBe("time-billing");
+    if (spec === undefined || spec.featureId === undefined) {
+      throw new Error("Missing real feature-gated command fixture");
+    }
+    const bakedTree = { kind: "leaf", spec } as const satisfies RouteNode;
+    const registry = await writeCache(env, {
+      listings: [{ ...listing(toolName), featureId: spec.featureId }],
+      delta: { added: [], removed: [], changed: [] },
+    });
+    for (const featureAccess of [
+      undefined,
+      { capabilities: [], tools: [] },
+      { capabilities: [], tools: [toolName] },
+    ]) {
+      const resolved = await resolveCommandTree({
+        serverOrigin: ORIGIN,
+        env,
+        registry,
+        bakedTree,
+        featureAccess,
+      });
+      expect(resolved.tree).toBe(bakedTree);
+      expect(resolved.drift).toBeUndefined();
+      expect(resolved.featureAccess).toBe(featureAccess);
+    }
+  });
+
   test("no cache -> baked-in tree, no drift", async () => {
     const env = await makeCacheEnv();
     const { tree, drift, disabled } = await resolveCommandTree({

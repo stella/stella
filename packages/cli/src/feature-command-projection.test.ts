@@ -24,6 +24,7 @@ import {
   writeCacheFile,
 } from "./registry-cache.js";
 import {
+  type ResolvedCommandTree,
   refreshRegistryCache,
   requiresFeatureAccessRefresh,
   resolveCommandTree,
@@ -98,6 +99,13 @@ const leafIds = (node: RouteNode): string[] => {
     }
   }
 };
+
+const callerLeafIds = ({
+  tree: commandTree,
+  featureAccess,
+}: ResolvedCommandTree) =>
+  leafIds(projectFeatureCommands({ tree: commandTree, featureAccess }));
+
 const invokeHelp = async (commandTree: RouteNode, argv: string[]) => {
   const stdout: string[] = [];
   const stderr: string[] = [];
@@ -288,19 +296,19 @@ test("only a current authenticated response enables feature commands over the ca
     featureAccess: outcome.featureAccess,
     registry: outcome.registry,
   });
-  expect(leafIds(current.tree)).toContain(CAPABILITY);
+  expect(callerLeafIds(current)).toContain(CAPABILITY);
   const offline = await resolveCommandTree(args);
-  expect(leafIds(offline.tree)).not.toContain(CAPABILITY);
-  expect(leafIds(offline.tree)).not.toContain(TOOL);
+  expect(callerLeafIds(offline)).not.toContain(CAPABILITY);
+  expect(callerLeafIds(offline)).not.toContain(TOOL);
   const snapshotWithoutResponse = await resolveCommandTree({
     ...args,
     featureAccess: enabled,
   });
-  expect(leafIds(snapshotWithoutResponse.tree)).not.toContain(CAPABILITY);
-  expect(leafIds(snapshotWithoutResponse.tree)).not.toContain(TOOL);
+  expect(callerLeafIds(snapshotWithoutResponse)).not.toContain(CAPABILITY);
+  expect(callerLeafIds(snapshotWithoutResponse)).not.toContain(TOOL);
   const denied = await resolveCommandTree({ ...args, featureAccess: hidden });
-  expect(leafIds(denied.tree)).not.toContain(CAPABILITY);
-  expect(leafIds(denied.tree)).not.toContain(TOOL);
+  expect(callerLeafIds(denied)).not.toContain(CAPABILITY);
+  expect(callerLeafIds(denied)).not.toContain(TOOL);
   expect(requiresFeatureAccessRefresh(tree)).toBe(true);
 });
 
@@ -345,7 +353,7 @@ test("callers and same-credential grant changes use fresh projections without cr
       loadCatalog: async () => entries,
       annotations,
     });
-    projections.push(leafIds(current.tree));
+    projections.push(callerLeafIds(current));
     const filePath = cachePathFor(ORIGIN, env);
     const contents = await Bun.file(filePath).text();
     persisted.push(`${filePath}\n${contents}`);
@@ -355,10 +363,10 @@ test("callers and same-credential grant changes use fresh projections without cr
       fetchedAt: "2026-10-02T10:00:00.000Z",
       ttlSeconds: DEFAULT_TTL_SECONDS,
     });
-    expect(leafIds(current.tree).includes(CAPABILITY)).toBe(
+    expect(callerLeafIds(current).includes(CAPABILITY)).toBe(
       snapshot === enabled,
     );
-    expect(leafIds(current.tree).includes(TOOL)).toBe(snapshot === enabled);
+    expect(callerLeafIds(current).includes(TOOL)).toBe(snapshot === enabled);
     const offline = await resolveCommandTree({
       serverOrigin: ORIGIN,
       env,
@@ -366,8 +374,8 @@ test("callers and same-credential grant changes use fresh projections without cr
       loadCatalog: async () => entries,
       annotations,
     });
-    expect(leafIds(offline.tree)).not.toContain(CAPABILITY);
-    expect(leafIds(offline.tree)).not.toContain(TOOL);
+    expect(callerLeafIds(offline)).not.toContain(CAPABILITY);
+    expect(callerLeafIds(offline)).not.toContain(TOOL);
   }
   expect(fetchedTokens).toEqual(cases.map(({ token }) => token));
   expect(new Set(persisted).size).toBe(1);
@@ -426,8 +434,8 @@ test("legacy caller projection caches cannot enable feature commands offline", a
     loadCatalog: async () => entries,
     annotations,
   });
-  expect(leafIds(offline.tree)).not.toContain(CAPABILITY);
-  expect(leafIds(offline.tree)).not.toContain(TOOL);
+  expect(callerLeafIds(offline)).not.toContain(CAPABILITY);
+  expect(callerLeafIds(offline)).not.toContain(TOOL);
 });
 
 test("invalid feature metadata rejects fetched registry admission", () => {
