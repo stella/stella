@@ -1049,6 +1049,7 @@
       "toastDescription": "El chat a pantalla completa llegará con conversaciones guardadas.",
       "toastTitle": "La vista completa aún no está disponible"
     },
+    "activateGeneratedView": "Interactuar con esta vista",
     "aiPrompt": "Campo de mensaje de IA",
     "aiThread": "Conversación de IA",
     "analyzingSources": "Analizando fuentes",
@@ -1194,6 +1195,8 @@
     "forkedFromUnavailable": "Creado a partir de un chat que ya no está disponible",
     "forkedThread": "De otro chat",
     "forkingThread": "Creando un chat nuevo…",
+    "generatedView": "Vista generada",
+    "generatedViewDrill": "Busca resoluciones con el filtro de tribunal {court} y el año {year}.",
     "greeting": "¿En qué le gustaría trabajar?",
     "greetingSubtitle": "Empiece con un asunto, un documento o una pregunta sencilla.",
     "hideThread": "Ocultar conversación",

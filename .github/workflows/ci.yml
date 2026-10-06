@@ -2772,6 +2772,11 @@ jobs:
         if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
         run: bun test scripts/stage-web-runtime.test.ts
 
+      - name: Check Docker source closure
+        if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
+        timeout-minutes: 1
+        run: timeout 30s bun test scripts/docker-source-closure.test.ts
+
       # The same transformation decides what every published tarball exports.
       # Its unit coverage is what keeps a malformed source map — a wildcard, a
       # conditions object, a target outside src, a missing root — out of a
@@ -3931,6 +3936,11 @@ jobs:
 
       - name: Projection totality
         run: bun run check:projection-totality
+
+      - name: Split-button census
+        run: |
+          bun run --cwd packages/scripts test ../../scripts/check-split-buttons.test.ts
+          bun run check:split-buttons
 
       - name: Database awaits in loops
         # Type-aware N+1 guard over the API source and scripts: an awaited

@@ -31,6 +31,11 @@ const generator = (id: string) => {
   return found ?? panic(`Missing generator ${id}`);
 };
 
+test("generation owners have unique identifiers", () => {
+  const ids = GENERATORS.map(({ id }) => id);
+  expect(new Set(ids).size).toBe(ids.length);
+});
+
 test("visual source changes select the frame bundle before API catalog generation", () => {
   const selected = orderGenerators(
     generatorsForFiles([

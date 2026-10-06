@@ -503,6 +503,11 @@ const PER_USER_READS: Record<string, PerUserRead> = {
       usageLaneOptions({ organizationId: ORG, userId: USER }).queryKey,
     ],
   },
+  "user-files/read-visual.ts": {
+    kind: "owned-id",
+    reason:
+      "Cached by attachment id; generated views are private and owner-filtered.",
+  },
   "user-files/read-content.ts": { kind: "owned-id", reason: OWNED_FILE },
   "user-files/read-thumbnail.ts": { kind: "owned-id", reason: OWNED_FILE },
   "view-templates/list.ts": {
