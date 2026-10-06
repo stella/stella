@@ -6199,8 +6199,7 @@ const unsignalledSkipSelfTestFailures = (): string[] => {
     ({ id }) => id === "unsignalled-skip",
   );
   if (
-    skipMetric === undefined ||
-    skipMetric.scope !== "file" ||
+    skipMetric?.scope !== "file" ||
     skipMetric.measurement === "role-sensitive"
   ) {
     failures.push("unsignalled-skip requires a file counter");
