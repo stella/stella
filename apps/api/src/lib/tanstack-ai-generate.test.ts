@@ -1,5 +1,6 @@
 import { EventType, convertSchemaToJsonSchema } from "@tanstack/ai";
 import type { AnyTextAdapter, StreamChunk } from "@tanstack/ai";
+import { Panic, TaggedError, UnhandledException } from "better-result";
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import fc from "fast-check";
 import * as v from "valibot";
@@ -2072,6 +2073,10 @@ const expectProviderJsonSchema = (schema: unknown): void => {
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null;
 
+class ForeignTaggedError extends TaggedError("ForeignTaggedError")<{
+  message: string;
+}> {}
+
 describe("provider status recovery preserves failure ownership", () => {
   for (const error of [
     new HandlerError({
@@ -2095,6 +2100,17 @@ describe("provider status recovery preserves failure ownership", () => {
     { name: "a thrown string", error: "SENTINEL_LIBRARY_TEXT" },
     { name: "a message object", error: { message: "SENTINEL_LIBRARY_TEXT" } },
     { name: "undefined", error: undefined },
+    {
+      name: "a foreign tagged error",
+      error: new ForeignTaggedError({ message: "SENTINEL_LIBRARY_TEXT" }),
+    },
+    { name: "a panic", error: new Panic({ message: "SENTINEL_LIBRARY_TEXT" }) },
+    {
+      name: "an unhandled exception",
+      error: new UnhandledException({
+        cause: new Error("SENTINEL_LIBRARY_TEXT"),
+      }),
+    },
   ]) {
     test(`replaces ${name} with a fixed-message model run error`, () => {
       const recovered = withRecoveredProviderStatus({

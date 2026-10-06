@@ -12,7 +12,7 @@ import type {
   SystemPrompt,
 } from "@tanstack/ai";
 import type { OpenAITextProviderOptions } from "@tanstack/ai-openai";
-import { isTaggedError, Result, panic } from "better-result";
+import { Result, panic } from "better-result";
 import * as v from "valibot";
 
 import { getOutputTokenLimit } from "@stll/ai-catalog";
@@ -80,6 +80,8 @@ import {
 } from "@/api/lib/errors/provider-call-failure";
 import {
   AIGenerationCancelledError,
+  ChatEmptyCompletionError,
+  ChatLoopDetectedError,
   HandlerError,
 } from "@/api/lib/errors/tagged-errors";
 import { logger } from "@/api/lib/observability/logger";
@@ -652,6 +654,17 @@ const PROVIDER_OWNED_ERROR_KIND = {
   unknown: false,
 } as const satisfies Record<AIErrorKind, boolean>;
 
+// Being tagged is not ownership: better-result's `Panic` and
+// `UnhandledException`, and any library's tagged class, carry foreign text.
+const OWNED_RUN_FAILURES = [
+  HandlerError,
+  ChatLoopDetectedError,
+  ChatEmptyCompletionError,
+] as const;
+
+const isOwnedRunFailure = (error: Error): boolean =>
+  OWNED_RUN_FAILURES.some((ErrorClass) => error instanceof ErrorClass);
+
 /**
  * The one exit of a failed model run. Every result carries a message Stella
  * owns: a provider failure becomes a `ProviderCallError`, an application
@@ -695,7 +708,7 @@ export const withRecoveredProviderStatus = ({
     !hasProviderFailureInCauseChain(evidence) &&
     !PROVIDER_OWNED_ERROR_KIND[kind]
   ) {
-    return isTaggedError(error) ? error : new ModelRunError({ model });
+    return isOwnedRunFailure(error) ? error : new ModelRunError({ model });
   }
   return createProviderCallError({
     model,
