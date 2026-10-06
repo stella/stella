@@ -98,8 +98,7 @@ export const resolveListVerificationAccess = async ({
       .limit(1)
   ).at(0);
   const workspaceAllowed =
-    identity !== undefined &&
-    identity.workspaceId === workspaceId &&
+    identity?.workspaceId === workspaceId &&
     canExecuteListVerificationInWorkspace({
       organizationRole: identity.role,
       workspaceMemberId: identity.workspaceMemberId,

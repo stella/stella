@@ -243,8 +243,9 @@ const usesAvtFeature = async ({
   if (workspaceId === undefined) {
     return false;
   }
-  return await scopedDb((tx) =>
-    operationUsesAvtLayout({ tx, workspaceId, body, params }),
+  return await scopedDb(
+    async (tx) =>
+      await operationUsesAvtLayout({ tx, workspaceId, body, params }),
   );
 };
 
@@ -257,6 +258,6 @@ export const AVT_LAYOUT_FEATURE_ACCESS = {
 export const AVT_LAYOUT_DISCOVERY_FEATURE_ACCESS = {
   featureId: LIST_VERIFICATION_FEATURE_ID,
   type: "conditional",
-  usesFeature: async () => false,
+  usesFeature: () => false,
   projectInputSchema: projectAvtViewInputSchemas,
 } as const satisfies FeatureAccessRequirement;

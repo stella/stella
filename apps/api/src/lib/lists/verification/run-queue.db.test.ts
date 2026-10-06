@@ -1,4 +1,4 @@
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import { afterAll, beforeAll, expect, test } from "bun:test";
 import { and, eq } from "drizzle-orm";
 import * as v from "valibot";
@@ -188,6 +188,9 @@ const revokeExecutionPrerequisite = async (kind: ExecutionRevocation) => {
           .set({ status: "active" })
           .where(eq(workspaces.id, workspaceId));
       };
+    default:
+      kind satisfies never;
+      return panic("Unknown execution prerequisite");
   }
 };
 
