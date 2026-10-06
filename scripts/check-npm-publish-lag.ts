@@ -48,6 +48,144 @@ const fail = (message: string): never => {
   throw new NpmPublishLagError(message);
 };
 
+export const DAY_SECONDS = 24 * 60 * 60;
+const SEMVER = /^\d+\.\d+\.\d+(?:-[\da-zA-Z.-]+)?(?:\+[\da-zA-Z.-]+)?$/u;
+
+export type RegistryResult =
+  | { status: "passed"; reason: "ok" }
+  | { status: "skipped"; reason: "publish_pending" }
+  | {
+      status: "failed";
+      reason: "http_status" | "timeout" | "contract_error" | "version_mismatch";
+    };
+
+export const versionBumpTime = (history: string): number | undefined => {
+  for (const commit of history.split("journey-commit ").slice(1)) {
+    const timestamp = Number(commit.split("\n").at(0));
+    const oldVersion = /^-\s*"version"\s*:\s*"([^"]+)"/mu.exec(commit)?.at(1);
+    const newVersion = /^\+\s*"version"\s*:\s*"([^"]+)"/mu.exec(commit)?.at(1);
+    if (
+      oldVersion &&
+      newVersion &&
+      oldVersion !== newVersion &&
+      Number.isFinite(timestamp)
+    ) {
+      return timestamp;
+    }
+  }
+  return undefined;
+};
+
+const PUBLISHED_VERSION_POLICY = {
+  release: "minimum",
+  journey: "exact",
+} as const;
+
+type ComparePublishedVersionOptions = {
+  latest: string | undefined;
+  target: string;
+} & (
+  | { policy: typeof PUBLISHED_VERSION_POLICY.release }
+  | {
+      policy: typeof PUBLISHED_VERSION_POLICY.journey;
+      bumpedAt: number | undefined;
+      now: number;
+    }
+);
+
+const comparePublishedVersion = ({
+  latest,
+  target,
+  ...options
+}: ComparePublishedVersionOptions): "current" | "pending" | "mismatch" => {
+  switch (options.policy) {
+    case PUBLISHED_VERSION_POLICY.release:
+      return latest !== undefined && Bun.semver.order(latest, target) >= 0
+        ? "current"
+        : "mismatch";
+    case PUBLISHED_VERSION_POLICY.journey:
+      if (latest === target) {
+        return "current";
+      }
+      return options.bumpedAt !== undefined &&
+        options.bumpedAt <= options.now &&
+        options.now - options.bumpedAt < DAY_SECONDS
+        ? "pending"
+        : "mismatch";
+    default: {
+      options satisfies never;
+      throw new NpmPublishLagError("Unhandled version policy");
+    }
+  }
+};
+
+type CheckRegistryOptions = {
+  name: string;
+  version: string;
+  bumpedAt: number | undefined;
+  now: number;
+  registry: string;
+  timeoutMs: number;
+};
+
+// This is the network boundary: exceptions become fixed, credential-free reasons.
+export const checkRegistry = async ({
+  name,
+  version,
+  bumpedAt,
+  now,
+  registry,
+  timeoutMs,
+}: CheckRegistryOptions): Promise<RegistryResult> => {
+  try {
+    const response = await fetch(
+      `${registry.replace(/\/$/u, "")}/${encodeURIComponent(name)}/latest`,
+      { signal: AbortSignal.timeout(timeoutMs) },
+    );
+    if (!response.ok) {
+      return { status: "failed", reason: "http_status" };
+    }
+    const payload: unknown = await response.json();
+    if (
+      typeof payload !== "object" ||
+      payload === null ||
+      !("version" in payload) ||
+      typeof payload.version !== "string" ||
+      !SEMVER.test(payload.version)
+    ) {
+      return { status: "failed", reason: "contract_error" };
+    }
+    const assessment = comparePublishedVersion({
+      latest: payload.version,
+      target: version,
+      policy: PUBLISHED_VERSION_POLICY.journey,
+      bumpedAt,
+      now,
+    });
+    switch (assessment) {
+      case "current":
+        return { status: "passed", reason: "ok" };
+      case "pending":
+        return { status: "skipped", reason: "publish_pending" };
+      case "mismatch":
+        return { status: "failed", reason: "version_mismatch" };
+      default: {
+        assessment satisfies never;
+        throw new NpmPublishLagError("Unhandled version assessment");
+      }
+    }
+  } catch (error) {
+    return {
+      status: "failed",
+      reason:
+        error instanceof DOMException &&
+        (error.name === "TimeoutError" || error.name === "AbortError")
+          ? "timeout"
+          : "contract_error",
+    };
+  }
+};
+
 /** What the registry says about one package name. */
 export type RegistryView =
   | {
@@ -95,7 +233,13 @@ export const classifyPackage = (
     };
   }
   const { latest, versions } = view;
-  if (latest !== undefined && Bun.semver.order(latest, pkg.version) >= 0) {
+  if (
+    comparePublishedVersion({
+      latest,
+      target: pkg.version,
+      policy: PUBLISHED_VERSION_POLICY.release,
+    }) === "current"
+  ) {
     return { ...pkg, npmLatest: latest, status: "current" };
   }
   return {
@@ -143,6 +287,46 @@ export const renderLagTable = (rows: readonly PackageLag[]): string => {
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
 
+type ReadPackageManifestOptions = {
+  directory: string;
+  text: string | undefined;
+  policy: "release" | "journey";
+};
+
+export const readPackageManifest = ({
+  directory,
+  text,
+  policy,
+}: ReadPackageManifestOptions): PublishablePackage | undefined => {
+  if (text === undefined) {
+    if (policy === "journey") {
+      return fail(`packages/${directory}/package.json is absent`);
+    }
+    return undefined;
+  }
+  const manifest: unknown = JSON.parse(text);
+  if (
+    !isRecord(manifest) ||
+    typeof manifest["name"] !== "string" ||
+    typeof manifest["version"] !== "string"
+  ) {
+    return fail(`packages/${directory}/package.json has no name or version`);
+  }
+  if (policy === "release" && manifest["private"] === true) {
+    return undefined;
+  }
+  if (
+    policy === "journey" &&
+    (manifest["name"] !== `@stll/${directory}` ||
+      !SEMVER.test(manifest["version"]))
+  ) {
+    return fail(
+      `packages/${directory}/package.json has an invalid name or version`,
+    );
+  }
+  return { directory, name: manifest["name"], version: manifest["version"] };
+};
+
 /**
  * The packages to check, read from manifests at one ref. A package missing at
  * the ref (added later) or marked `private` there is not expected on npm.
@@ -165,24 +349,12 @@ export const readPublishablePackages = ({
       ? known
       : known.filter((directory) => only.includes(directory));
   return selected.flatMap((directory) => {
-    const text = readManifest(directory);
-    if (text === undefined) {
-      return [];
-    }
-    const manifest: unknown = JSON.parse(text);
-    if (
-      !isRecord(manifest) ||
-      typeof manifest["name"] !== "string" ||
-      typeof manifest["version"] !== "string"
-    ) {
-      return fail(`packages/${directory}/package.json has no name or version`);
-    }
-    if (manifest["private"] === true) {
-      return [];
-    }
-    return [
-      { directory, name: manifest["name"], version: manifest["version"] },
-    ];
+    const pkg = readPackageManifest({
+      directory,
+      text: readManifest(directory),
+      policy: "release",
+    });
+    return pkg === undefined ? [] : [pkg];
   });
 };
 
