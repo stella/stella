@@ -8,6 +8,7 @@
   "exports": {
     ".": "./src/index.ts",
     "./currency-code": "./src/currency-code.ts",
+    "./visual-preview": "./src/visual-preview.ts",
     "./limits": "./src/limits.ts",
     "./action-admission": "./src/action-admission.ts",
     "./browser-control": "./src/browser-control.ts",
