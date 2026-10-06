@@ -1833,7 +1833,7 @@
     "apps/web/src/components/assistant-setup.tsx": 6,
     "apps/web/src/components/auth/inbox-quick-jump.tsx": 2,
     "apps/web/src/components/auth/otp-panel.tsx": 1,
-    "apps/web/src/components/auth/sign-in-panel.tsx": 10,
+    "apps/web/src/components/auth/sign-in-panel.tsx": 7,
     "apps/web/src/components/authenticated-case-law-workspace.tsx": 2,
     "apps/web/src/components/bilingual-review-glossary.tsx": 1,
     "apps/web/src/components/bilingual-review-rows.tsx": 1,

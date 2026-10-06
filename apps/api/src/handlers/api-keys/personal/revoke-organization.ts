@@ -8,7 +8,7 @@ import { personalApiKeyIdBodySchema } from "./schema";
 
 const config = {
   permissions: { organizationSettings: ["update"] },
-  accountAccess: ACCOUNT_ACCESS.standard,
+  accountAccess: ACCOUNT_ACCESS.accountControl,
   mcp: { type: "internal", reason: "provider_secret" },
   body: personalApiKeyIdBodySchema,
 } satisfies HandlerConfig;

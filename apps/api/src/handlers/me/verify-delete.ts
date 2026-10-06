@@ -30,7 +30,7 @@ export const deleteAccountVerifyBody = t.Object({
 });
 
 const config = {
-  accountAccess: ACCOUNT_ACCESS.standard,
+  accountAccess: ACCOUNT_ACCESS.accountControl,
   mcp: { type: "internal", reason: "account_lifecycle" },
   body: deleteAccountVerifyBody,
 } satisfies SessionHandlerConfig;

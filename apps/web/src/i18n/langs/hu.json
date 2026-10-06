@@ -145,6 +145,7 @@
       "useBackupCode": "Inkább biztonsági kód használata"
     },
     "useDifferentEmail": "Másik e-mail-cím használata",
+    "usePassword": "Bejelentkezés jelszóval",
     "weSentCodeTo": "Kódot küldtünk a következő címre: <email>{emailAddress}</email>"
   },
   "avt": {

@@ -36,6 +36,7 @@ afterAll(async () => {
 const capabilities = {
   emailOtp: true,
   localPassword: false,
+  reviewPasswordSignIn: false,
   bootstrap: false,
   social: { google: false, microsoft: false },
 } satisfies AuthCapabilities;
