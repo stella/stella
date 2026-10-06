@@ -1,6 +1,7 @@
 import { useId } from "react";
 import type { ReactNode } from "react";
 
+import { Result } from "better-result";
 import { useTranslations } from "use-intl";
 
 import { authClient } from "@/lib/auth-client";
@@ -10,13 +11,8 @@ import { authClient } from "@/lib/auth-client";
  * can throw where storage is blocked (sandboxed frames); then nothing is
  * emphasised.
  */
-export const readLastUsedLoginMethod = (): string | null => {
-  try {
-    return authClient.getLastUsedLoginMethod();
-  } catch {
-    return null;
-  }
-};
+export const readLastUsedLoginMethod = (): string | null =>
+  Result.try(() => authClient.getLastUsedLoginMethod()).unwrapOr(null);
 
 /**
  * Wraps one sign-in action and, when it is the last-used method, pins a
