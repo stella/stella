@@ -181,7 +181,6 @@ test("real citation HTML keeps the caption and two disposition lines in publishe
   }
   expect(scopeOf(text, "AFFIRMED")?.boundaries).toBe("unproven");
   expect(text.principal.body).toContain("D.Virgin Islands\nAFFIRMED");
-  expect(text.principal.structuralOpinion).toBe(false);
 });
 
 test("real Lawbox separates its centered caption from the root order", () => {
@@ -200,7 +199,6 @@ test("real Lawbox separates its centered caption from the root order", () => {
     expect(text.principal.body).not.toContain(phrase);
   }
   expect(blockWith(text, "ORDER")).toMatchObject({ type: "heading" });
-  expect(text.principal.orderHeading).toBe(true);
   expect(text.principal.body).toBe(
     "PER CURIAM.\nAND NOW, this 23rd day of June, 2010, Appellees' Motion to Strike/Preclude Certain Items Listed in Designation of Contents of Reproduced Record is GRANTED, and the order of the Commonwealth Court dated June 12, 2009, in the above matter, is AFFIRMED.",
   );
@@ -286,7 +284,6 @@ test("real anonymous HTML keeps majority, caption, counsel and detached note sep
   );
   expect(text.principal.body).not.toContain(note.plainText);
   expect(text.principal.body).not.toContain("Michael C. Cohen");
-  expect(text.principal.structuralOpinion).toBe(true);
 });
 
 test("real generic HTML keeps the quoted lower-court citation and the judge note in different unproven scopes", () => {

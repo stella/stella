@@ -79,8 +79,7 @@ export type DecisionAnalysisKey = {
   decisionId: string;
   /**
    * The decision's `updatedAt` as the public read answered it. Kept as given:
-   * the typed `Date` can arrive as the wire's ISO string, and the key hash
-   * serialises either to the same text, so no date method is called on it.
+   * the public API supplies the ISO string used by the query key.
    */
   decisionUpdatedAt: PublicCaseLawDecision["updatedAt"];
 };

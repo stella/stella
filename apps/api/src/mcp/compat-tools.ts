@@ -345,7 +345,8 @@ export const COMPAT_TOOL_DEFINITIONS = [
       "Search knowledge across accessible matters using the OpenAI-compatible " +
       "search tool shape. Where this deployment enables the public legal corpus, the same " +
       "query also returns case-law decisions and statutes from every jurisdiction the corpus " +
-      `holds, the organization's practice jurisdictions first. ${COMPAT_ID_VOCABULARY} Pass an id back to fetch verbatim.`,
+      `holds, the organization's practice jurisdictions first. ${COMPAT_ID_VOCABULARY} Pass an id back to fetch verbatim. ` +
+      "Use legal citation `url` for the reader and `source_url` for the publisher.",
     inputSchema: compatSearchArgsSchema,
     name: "search",
     scope: "stella:search",
@@ -367,13 +368,15 @@ export const COMPAT_TOOL_DEFINITIONS = [
         "Fetch one search result by id using the OpenAI-compatible fetch tool " +
         `shape. ${COMPAT_ID_VOCABULARY} A matter document is returned anonymized; a ` +
         "decision or a statute is published law and is returned as written. Long text is " +
-        "returned in windows; pass the returned nextCursor back as cursor to read more.",
+        "returned in windows; pass the returned nextCursor back as cursor to read more. " +
+        "Use legal citation `url` for the reader and `source_url` for the publisher.",
     },
     description:
       "Fetch one search result by id using the OpenAI-compatible fetch tool " +
       `shape. ${COMPAT_ID_VOCABULARY} \`metadata.kind\` says which of the three the ` +
       "answer is. Long text is returned in windows; pass the returned nextCursor back " +
-      "as cursor to read more.",
+      "as cursor to read more. " +
+      "Use legal citation `url` for the reader and `source_url` for the publisher.",
     inputSchema: compatFetchArgsSchema,
     name: "fetch",
     scope: "stella:read",

@@ -1,7 +1,6 @@
 import type React from "react";
 import { Fragment, isValidElement, useState } from "react";
 
-import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
 import {
@@ -15,34 +14,25 @@ import {
   GlobeIcon,
   MailIcon,
   PresentationIcon,
-  ScrollTextIcon,
 } from "@stll/ui/icons";
 import { stellaToast } from "@stll/ui/toast";
 import { cn } from "@stll/ui/utils";
 
-import {
-  classifyChatHttpLink,
-  type StatuteLink,
-} from "@/components/chat/chat-app-link.logic";
 import {
   openEmailCitationSource,
   openOfficeCitationSource,
   openSourceBoundEntityFile,
 } from "@/components/chat/entity-open";
 import { useExternalSourceStore } from "@/components/chat/external-source-store";
+import { LegalCitationLink } from "@/components/chat/legal-citation-link";
 import { activateSourceCitation } from "@/components/chat/source-citation-navigation";
-import { useOpenStatuteLink } from "@/components/chat/statute-open";
 import { InlinePill } from "@/components/inline-pill";
 import { useInspectorCommandStore } from "@/components/inspector/inspector-command-store";
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
-import {
-  MarkdownReferenceChip,
-  ReferenceChip,
-} from "@/components/references/reference-chip";
+import { MarkdownReferenceChip } from "@/components/references/reference-chip";
 import {
   isReferenceHref,
-  referenceFromDecisionId,
-  referenceFromDecisionRoute,
+  referenceFromHref,
 } from "@/components/references/reference.logic";
 import { env } from "@/env";
 import { useVerifiedEmailCitationTarget } from "@/hooks/use-verified-email-citation-target";
@@ -122,43 +112,54 @@ const getHttpUrl = (href: string): URL | null => {
   }
 };
 
-/**
- * The origins this app answers on: the page's own, and the deployment's
- * public app URL, which is not the page origin inside the desktop shell.
- */
-const getAppOrigins = (): ReadonlySet<string> =>
-  new Set([
-    new URL(env.VITE_PUBLIC_APP_URL).origin,
-    ...(typeof window === "undefined" ? [] : [window.location.origin]),
-  ]);
-
-/** A link to one of this app's statute pages: the act, opened in-app. */
-const StatuteChip = ({
-  label,
-  link,
-}: {
-  label: React.ReactNode;
-  link: StatuteLink;
-}) => {
-  const openStatuteLink = useOpenStatuteLink();
-  return (
-    <InlinePill
-      leadingIcon={<ScrollTextIcon className="size-3 shrink-0" />}
-      onActivate={() =>
-        detached(openStatuteLink(link), "streamdown-mention-link.open-statute")
-      }
-      truncate
-    >
-      {label}
-    </InlinePill>
-  );
-};
-
 type StreamdownMentionLinkProps =
   React.AnchorHTMLAttributes<HTMLAnchorElement> & {
     interactive: boolean;
     workspaceId?: string | undefined;
   };
+
+const ReferenceCitationLink = ({
+  href,
+  children,
+  interactive,
+  workspaceId,
+}: StreamdownMentionLinkProps & { href: string }) => {
+  const parsed = referenceFromHref(href, getPlainText(children) ?? "", {
+    renderWorkspaceId: workspaceId,
+  });
+  const decision =
+    parsed?.type === "reference" && parsed.reference.type === "decision"
+      ? parsed.reference
+      : null;
+  const ref = decision?.locator.type === "ref" ? decision.locator.ref : null;
+  const source = useExternalSourceStore((state) =>
+    ref === null ? undefined : state.getDecisionSource(ref),
+  );
+  const fallback = (
+    <MarkdownReferenceChip
+      href={href}
+      interactive={interactive}
+      workspaceId={workspaceId}
+    >
+      {children}
+    </MarkdownReferenceChip>
+  );
+  if (source === undefined) {
+    return fallback;
+  }
+  return (
+    <LegalCitationLink
+      appearance="inline"
+      anchorId={decision?.anchorId ?? undefined}
+      fallback={fallback}
+      interactive={interactive}
+      source={source}
+      workspaceId={workspaceId}
+    >
+      {children}
+    </LegalCitationLink>
+  );
+};
 
 export const StreamdownMentionLink = ({
   href,
@@ -227,53 +228,32 @@ export const StreamdownMentionLink = ({
   // Entities, matters, decisions, skills and people: the one reference chip.
   if (isReferenceHref(href)) {
     return (
-      <MarkdownReferenceChip
+      <ReferenceCitationLink
         href={href}
         interactive={interactive}
         workspaceId={workspaceId}
       >
         {children}
-      </MarkdownReferenceChip>
+      </ReferenceCitationLink>
     );
   }
 
-  if (!interactive) {
-    return (
-      <a href={sanitizeHref(href)} {...props}>
-        {children}
-      </a>
-    );
-  }
-
-  const httpUrl = getHttpUrl(href);
+  const httpUrl =
+    getHttpUrl(href) ??
+    (href.startsWith("/")
+      ? getHttpUrl(new URL(href, env.VITE_PUBLIC_APP_URL).toString())
+      : null);
   if (httpUrl) {
-    const link = classifyChatHttpLink(httpUrl, getAppOrigins());
-    switch (link.type) {
-      case "decision":
-        return (
-          <ReferenceChip
-            interactive
-            labelContent={children}
-            reference={referenceFromDecisionRoute(
-              link.params,
-              getPlainText(children) ?? "",
-            )}
-          />
-        );
-      case "statute":
-        return <StatuteChip label={children} link={link.link} />;
-      case "external":
-        return (
-          <FaviconCitationChip
-            children={children}
-            url={httpUrl}
-            workspaceId={workspaceId ?? null}
-          />
-        );
-      default:
-        link satisfies never;
-        return panic(`Unhandled chat link: ${String(link)}`);
-    }
+    return (
+      <FaviconCitationChip
+        href={href}
+        interactive={interactive}
+        url={httpUrl}
+        workspaceId={workspaceId ?? null}
+      >
+        {children}
+      </FaviconCitationChip>
+    );
   }
 
   return (
@@ -659,75 +639,37 @@ const isFootnoteLabel = (label: string, hostname: string): boolean =>
 
 const FaviconCitationChip = ({
   children,
+  href,
+  interactive,
   url,
   workspaceId,
 }: {
   children: React.ReactNode;
+  href: string;
+  interactive: boolean;
   url: URL;
   workspaceId: string | null;
 }) => {
   const hostname = url.hostname.replace(/^www\./u, "");
   const inlineLabel = (getPlainText(children) ?? "").trim();
-  const source = useExternalSourceStore((state) =>
-    state.getSource(url.toString()),
+  const source = useExternalSourceStore(
+    (state) => state.getSource(href) ?? state.getSource(url.toString()),
   );
   const showInlineLabel =
     inlineLabel.length > 0 && !isFootnoteLabel(inlineLabel, hostname);
-  // A publisher's URL for a decision stella holds opens that decision here.
-  if (source?.caseLawDecision) {
-    const { caseNumber, decisionId } = source.caseLawDecision;
-    return (
-      <ReferenceChip
-        interactive
-        labelContent={showInlineLabel ? children : undefined}
-        reference={referenceFromDecisionId(
-          decisionId,
-          showInlineLabel ? inlineLabel : caseNumber,
-        )}
-      />
-    );
-  }
-
   const hoverTitle = source?.title || inlineLabel || hostname;
-  const handleClick = () => {
-    useInspectorTabsStore.getState().openExternal({
-      url: url.toString(),
-      connectorSlug: source?.connectorSlug,
-      iconHref: source?.iconHref,
-      label: source?.title ?? inlineLabel,
-      provider: source?.provider,
-      snippet: source?.snippet,
-      sourceToolName: source?.sourceToolName,
-      text: source?.text,
-      workspaceId,
-    });
-  };
-
-  if (showInlineLabel) {
-    return (
-      <button
-        aria-label={`${hoverTitle} (${hostname})`}
-        className={cn(
-          "text-foreground decoration-border underline",
-          "underline-offset-2",
-          "hover:decoration-foreground cursor-pointer",
-          "inline-flex items-center gap-1",
-        )}
-        onClick={handleClick}
-        type="button"
-      >
-        <span>{children}</span>
-        <FaviconChip hostname={hostname} inline tooltipTitle={hoverTitle} />
-      </button>
-    );
-  }
-
   return (
-    <FaviconChip
-      hostname={hostname}
-      onClick={handleClick}
-      tooltipTitle={hoverTitle}
-    />
+    <LegalCitationLink
+      appearance="inline"
+      externalIcon={
+        <FaviconChip hostname={hostname} inline tooltipTitle={hoverTitle} />
+      }
+      interactive={interactive}
+      source={source ?? { title: hoverTitle, url: url.toString() }}
+      workspaceId={workspaceId}
+    >
+      {showInlineLabel ? children : (source?.title ?? hostname)}
+    </LegalCitationLink>
   );
 };
 
@@ -780,6 +722,7 @@ const FaviconChip = ({
           "opacity-0 transition-opacity duration-150",
           "group-focus-within/citation:opacity-100 group-hover/citation:opacity-100",
         )}
+        aria-hidden="true"
         role="tooltip"
       >
         {tooltipTitle}

@@ -79,6 +79,23 @@ exec "${REAL_GIT}" "$@"
 );
 chmodSync(path.join(oldGitBin, "git"), 0o755);
 
+// A Git that resolves every range but cannot print patches, as when a
+// partial clone's lazy blob fetch fails.
+const unreadableGitBin = path.join(root, "unreadable-git-bin");
+mkdirSync(unreadableGitBin);
+writeFileSync(
+  path.join(unreadableGitBin, "git"),
+  `#!/usr/bin/env bash
+if [[ "$1" == log ]]; then
+  for arg in "$@"; do
+    [[ "$arg" == -p ]] && { echo "fatal: remote error: upload-pack: not our ref" >&2; exit 128; }
+  done
+fi
+exec "${REAL_GIT}" "$@"
+`,
+);
+chmodSync(path.join(unreadableGitBin, "git"), 0o755);
+
 const initRepo = (name: string): string => {
   const dir = path.join(root, name);
   run(root, ["git", "init", "-q", "-b", "main", dir]);
@@ -222,6 +239,15 @@ describe("pushed-secret scan ranges", () => {
     expect(result.exitCode).toBe(1);
     expect(result.ranges).toEqual([]);
     expect(result.stderr).toContain("--remerge-diff is unsupported");
+  });
+
+  test("unreadable patches refuse the scan", () => {
+    const result = scan(`refs/heads/x ${head} refs/heads/x ${base}\n`, {
+      pathPrefix: unreadableGitBin,
+    });
+    expect(result.exitCode).toBe(1);
+    expect(result.ranges).toEqual([]);
+    expect(result.stderr).toContain("cannot read the patches");
   });
 });
 

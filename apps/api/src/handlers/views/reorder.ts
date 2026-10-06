@@ -13,6 +13,11 @@ import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import type { AuditEvent } from "@/api/lib/audit-log";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
+import {
+  AVT_LAYOUT_FEATURE_ACCESS,
+  avtViewAccessStatus,
+  isAvtLayoutVisible,
+} from "@/api/lib/auth/feature-access/view-eligibility";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
@@ -20,6 +25,7 @@ import { broadcastWorkspaceResourceChanges } from "@/api/lib/resource-realtime";
 import { sqlCaseFragment } from "@/api/lib/sql-case-expression";
 
 const config = {
+  featureAccess: AVT_LAYOUT_FEATURE_ACCESS,
   description:
     "Set the tab order of a matter's views. viewIds must name every view of " +
     "the matter exactly once in the order you want; a partial list, an " +
@@ -46,6 +52,9 @@ const reorderViews = createSafeHandler(
     workspaceId,
     body: { viewIds },
     recordAuditEvent,
+    featureAccessSnapshot,
+    session,
+    user,
   }) {
     if (new Set(viewIds).size !== viewIds.length) {
       return Result.err(
@@ -61,12 +70,29 @@ const reorderViews = createSafeHandler(
           .select({
             id: workspaceViews.id,
             position: workspaceViews.position,
+            layout: workspaceViews.layout,
           })
           .from(workspaceViews)
           .where(eq(workspaceViews.workspaceId, workspaceId)),
       ),
     );
 
+    const accessStatus = avtViewAccessStatus({
+      snapshot: featureAccessSnapshot,
+      organizationId: session.activeOrganizationId,
+      userId: user.id,
+    });
+    if (
+      existing.some(
+        (view) =>
+          viewIds.includes(view.id) &&
+          !isAvtLayoutVisible(view.layout, accessStatus),
+      )
+    ) {
+      return Result.err(
+        new HandlerError({ status: 404, message: "Not found" }),
+      );
+    }
     if (viewIds.length !== existing.length) {
       return Result.err(
         new HandlerError({

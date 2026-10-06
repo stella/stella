@@ -40,6 +40,8 @@ import {
   refetchFirstNotificationsPage,
 } from "@/lib/notification-queries";
 import type { Notification } from "@/lib/notification-queries";
+import { useCallerFeatureEnabled } from "@/lib/organization/feature-access/access";
+import { CALLER_FEATURE } from "@/lib/organization/feature-access/surfaces";
 import { toSafeId } from "@/lib/safe-id";
 import { useUnreadFaviconDot } from "@/lib/unread-favicon-dot";
 import { useUserEventsSSE } from "@/lib/user-events-sse";
@@ -356,10 +358,14 @@ const NotificationLink = ({
   onRead,
   target: { entityId, entityType, workspaceId },
 }: NotificationLinkProps) => {
+  const legalListsEnabled = useCallerFeatureEnabled(CALLER_FEATURE.legalLists);
   switch (entityType) {
     // Today's only producer is a mention on a list item, and the item's own
     // id addresses no route: Lists is the surface the comment lives on.
     case NOTIFICATION_ENTITY_TYPE.ENTITY:
+      if (!legalListsEnabled) {
+        return <span className={className}>{children}</span>;
+      }
       return (
         <PopoverClose
           render={
