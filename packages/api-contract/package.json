@@ -16,6 +16,7 @@
     "./visual-sandbox": "./src/visual-sandbox.ts",
     "./browser-control-json-schema": "./src/browser-control-json-schema.ts",
     "./chat": "./src/chat.ts",
+    "./spawn-subagents": "./src/spawn-subagents.ts",
     "./correspondence": "./src/correspondence.ts",
     "./json-schema-regex": "./src/json-schema-regex.ts",
     "./chat-docx-suggestions": "./src/chat-docx-suggestions.ts",
