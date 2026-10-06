@@ -113,6 +113,11 @@ const mount = () => {
             workYear: 1961,
             versionValidFrom: null,
             versionBasis: { type: "inferred", kind: "decision_date" },
+            inferredVersionCandidate: {
+              type: "inferred",
+              kind: "decision_date",
+              versionValidFrom: null,
+            },
             previewKey: null,
             spanRole: null,
             printPieceId: null,
