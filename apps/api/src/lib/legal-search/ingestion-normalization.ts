@@ -82,7 +82,10 @@ export const fitsDecisionSearchCandidateRow = (
     court: result.court,
     decisionType: result.decisionType,
     languageGroupKey: decisionLanguageGroupKey({
-      ...result,
+      caseNumber: result.caseNumber,
+      country: result.country,
+      ecli: result.ecli,
+      sourceDocumentId: result.sourceDocumentId,
       sourceId: BYTE_BUDGET_SOURCE_UUID,
     }),
   });

@@ -416,15 +416,17 @@ describe("building a ruling from its three pages", () => {
       }),
     );
     expect(Array.from(court).length).toBe(CITATION_STORAGE_WIDTHS.court);
-    expect(decision.court).toBe("");
-    expect(decision.sourceDocumentId).toBe("30308");
-    expect(decision.metadata["courtAsStated"]).toBe(court);
-    expect(decision.metadata["quarantineReason"]).toBe("court-too-long");
+    expect(decision.court === "").toBe(true);
+    expect(decision.sourceDocumentId === "30308").toBe(true);
+    expect(decision.metadata["courtAsStated"] === court).toBe(true);
+    expect(decision.metadata["quarantineReason"] === "court-too-long").toBe(
+      true,
+    );
     expect(decision.isListingOnly).toBe(true);
-    expect(sanitizeResult(decision).court).toBe("");
+    expect(sanitizeResult(decision).court === "").toBe(true);
   });
 
-  test("a docket that exhausts the byte budget does not quarantine the stated court", () => {
+  test("an oversized docket does not quarantine the stated court", () => {
     const court = "Krajowa Izba Odwoławcza";
     const decision = built(
       assemblePlKioDecision({
@@ -433,7 +435,7 @@ describe("building a ruling from its three pages", () => {
         documentHtml: undefined,
       }),
     );
-    expect(decision.court).toBe(court);
+    expect(decision.court === court).toBe(true);
     expect(decision.metadata["quarantineReason"]).toBeUndefined();
     expect(decision.metadata["courtAsStated"]).toBeUndefined();
     const refused = Result.try({
@@ -442,10 +444,10 @@ describe("building a ruling from its three pages", () => {
     });
     expect(refused.isErr()).toBe(true);
     if (refused.isOk()) {
-      throw new Error("Expected aggregate byte refusal");
+      throw new Error("Expected decision number storage refusal");
     }
     expect(refused.error).toMatchObject({
-      field: UNPERSISTABLE_DECISION_FIELDS.SEARCH_CANDIDATE_BYTES,
+      field: UNPERSISTABLE_DECISION_FIELDS.CASE_NUMBER_LENGTH,
     });
   });
 
