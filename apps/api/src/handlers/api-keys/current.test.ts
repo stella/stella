@@ -1,14 +1,19 @@
-import { describe, expect, test } from "bun:test";
+import { describe, expect, mock, test } from "bun:test";
 import Elysia from "elysia";
 
 import { createCurrentMachineApiKeyHandler } from "@/api/handlers/api-keys/current";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
-import { MACHINE_API_KEY_PREFIX } from "@/api/lib/machine-api-key-config";
+import {
+  API_KEY_KIND,
+  MACHINE_API_KEY_GRANTABLE_AUDIENCES,
+  MACHINE_API_KEY_PREFIX,
+  PERSONAL_API_KEY_AUDIENCES,
+} from "@/api/lib/machine-api-key-config";
 import {
   CACHE_CONTROL_HEADER,
   PRIVATE_CACHE_CONTROL,
 } from "@/api/lib/security-headers";
-import type { resolveMachineApiKeyCredential } from "@/api/mcp/api-key-auth";
+import { resolveMachineApiKeyCredential } from "@/api/mcp/api-key-auth";
 import { McpAuthenticationError } from "@/api/mcp/errors";
 
 type ResolveCredential = typeof resolveMachineApiKeyCredential;
@@ -112,4 +117,72 @@ describe("GET /current", () => {
     expect(unauthorized.status).toBe(401);
     expect(unavailable.status).toBe(503);
   });
+});
+
+describe("GET /current audience reach", () => {
+  const createdAt = new Date("2026-09-01T12:00:00.000Z");
+  const organizationId = "org-1";
+  const machineMetadata = [
+    { organizationId, scopes: ["stella:read"] },
+    ...MACHINE_API_KEY_GRANTABLE_AUDIENCES.map((audience) => ({
+      organizationId,
+      scopes: ["stella:read"],
+      audience,
+    })),
+  ];
+  const personalMetadata = PERSONAL_API_KEY_AUDIENCES.map((audience) => ({
+    organizationId,
+    kind: API_KEY_KIND.personal,
+    scopes: ["stella:read"],
+    audience,
+  }));
+
+  // Every key a holder can mint must be able to read its own expiry, whatever
+  // audience it is bound to; the binding limits resources, not self-metadata.
+  test.each([...machineMetadata, ...personalMetadata])(
+    "reads the expiry of a key with metadata %o",
+    async (metadata) => {
+      // Untyped like the security suite's mocks: both wrap the database.
+      const verifyApiKey = mock();
+      verifyApiKey.mockResolvedValue({
+        valid: true,
+        error: null,
+        key: {
+          id: "key-1",
+          name: "Canary",
+          enabled: true,
+          referenceId: "user-1",
+          metadata,
+          permissions: { workspace: ["read"] },
+          createdAt,
+          expiresAt,
+        },
+      });
+      const resolveAuthorization = mock();
+      resolveAuthorization.mockResolvedValue({
+        memberId: "member-1",
+        email: "member@example.test",
+        role: "member",
+        workspace: null,
+      });
+      const resolveCredential: ResolveCredential = async (
+        credential,
+        options,
+      ) =>
+        await resolveMachineApiKeyCredential(credential, {
+          ...options,
+          verifyApiKey,
+          resolveAuthorization,
+          resolvePersonalPolicy: async () => "enabled",
+        });
+      const response = await createApp(resolveCredential).handle(
+        requestCurrent(`Bearer ${presentedCredential}`),
+      );
+
+      expect(response.status).toBe(200);
+      expect(await response.json()).toEqual({
+        expiresAt: expiresAt.toISOString(),
+      });
+    },
+  );
 });

@@ -63,6 +63,13 @@ const rejectCredential = (): McpAuthenticationError =>
  */
 type MachineApiKeyCredential = { session: McpSession; expiresAt: Date | null };
 
+/**
+ * Where a key is presented to read its own expiry rather than to reach a
+ * resource. An audience binding limits what a key can reach; it never hides
+ * the key's own lifetime from its holder, so every audience is accepted here.
+ */
+export const KEY_SELF_INSPECTION = "self_inspection";
+
 export const resolveMachineApiKeyCredential = async (
   credential: string,
   {
@@ -71,7 +78,7 @@ export const resolveMachineApiKeyCredential = async (
     resolveAuthorization = resolveCredentialMemberAuthorization,
     resolvePersonalPolicy = readPersonalApiKeyPolicy,
   }: {
-    mode?: McpMode | undefined;
+    mode?: McpMode | typeof KEY_SELF_INSPECTION | undefined;
     verifyApiKey?: (
       ...args: Parameters<ReturnType<typeof getAuth>["api"]["verifyApiKey"]>
     ) => ReturnType<ReturnType<typeof getAuth>["api"]["verifyApiKey"]>;
@@ -108,10 +115,11 @@ export const resolveMachineApiKeyCredential = async (
   const metadata = v.safeParse(machineApiKeyMetadataSchema, key.metadata);
   if (
     !metadata.success ||
-    !isMachineApiKeyAudienceAllowed({
-      audience: metadata.output.audience,
-      mode,
-    })
+    (mode !== KEY_SELF_INSPECTION &&
+      !isMachineApiKeyAudienceAllowed({
+        audience: metadata.output.audience,
+        mode,
+      }))
   ) {
     throw rejectCredential();
   }
