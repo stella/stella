@@ -51,7 +51,7 @@
     "lint": "bun run codegen:runtime && cd ../.. && bun --bun oxlint -c oxlint.config.ts --report-unused-disable-directives-severity=error --type-aware --type-check packages/cli",
     "lint:fix": "bun run codegen:runtime && cd ../.. && bun --bun oxlint -c oxlint.config.ts --type-aware --fix packages/cli",
     "format": "bun ../../scripts/run-oxfmt.ts .",
-    "codegen:runtime": "bun run src/codegen.ts --runtime-only",
+    "codegen:runtime": "bun ../scripts/src/prepare-cli-runtime.ts",
     "prepublishOnly": "bun run build"
   },
   "dependencies": {

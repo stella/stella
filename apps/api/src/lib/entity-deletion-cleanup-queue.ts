@@ -1,11 +1,10 @@
 import { Result, UnhandledException } from "better-result";
-import { Worker } from "bullmq";
 
 import type { EntityDeletionCleanupStatus } from "@/api/db/schema";
 import { captureError, detached } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
 import { createBullMqJobId } from "@/api/lib/bullmq-job-id";
-import { createLazyBullMqQueue } from "@/api/lib/bullmq-queue";
+import { BullMqWorker, createLazyBullMqQueue } from "@/api/lib/bullmq-queue";
 import type { BullMqWorkerContext } from "@/api/lib/bullmq-queue";
 import { requeueDeterministicJob } from "@/api/lib/bullmq-requeue";
 import type { RequeueableQueue } from "@/api/lib/bullmq-requeue";
@@ -272,7 +271,7 @@ export const initEntityDeletionCleanupWorker = ({
   db,
 }: BullMqWorkerContext) => {
   const cleanupRequestDeps = createCleanupRequestDeps(db);
-  const worker = new Worker<EntityDeletionCleanupJobData>(
+  const worker = new BullMqWorker<EntityDeletionCleanupJobData>(
     QUEUE_NAME,
     async (job) => {
       await processEntityDeletionCleanupRequest(

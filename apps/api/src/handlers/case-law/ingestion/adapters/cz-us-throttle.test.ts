@@ -5,6 +5,7 @@ import {
   DOCUMENT_FETCH_EVENT,
   type DocumentStageObservation,
 } from "@stll/legal-atlas/document-fetch-diagnostics";
+import { INGESTION_STOP_KIND } from "@stll/legal-atlas/ingestion-cycle";
 import { DAY_IN_MS } from "@stll/time";
 
 import {
@@ -14,6 +15,8 @@ import {
 } from "@/api/handlers/case-law/ingestion/adapters/cz-us-throttle";
 import { NALUS_DAILY_REQUEST_LIMIT } from "@/api/handlers/case-law/ingestion/adapters/publisher-policy";
 import { rejectionOf } from "@/api/handlers/case-law/ingestion/adapters/test-utils";
+import { isReadRefusal } from "@/api/lib/errors/read-outcome";
+import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import { withDocumentStageWindow } from "@/api/lib/legal-search/document-stage-observation";
 import { ADAPTER_KEYS } from "@/api/lib/legal-search/ingestion-constants";
 import { asFetchMock } from "@/api/tests/helpers/test-tool-set";
@@ -50,6 +53,37 @@ describe("the NALUS publisher budget", () => {
   afterEach(() => {
     globalThis.fetch = originalFetch;
   });
+
+  test.each([401, 403, 451])(
+    "HTTP %i returns a typed refusal result",
+    async (status) => {
+      globalThis.fetch = asFetchMock(
+        async () => new Response(null, { status }),
+      );
+      const { fetchNalus, trace } = gatedFetch();
+      const result = await fetchNalus(
+        "https://nalus.usoud.cz/Search/GetText.aspx?sz=fixture",
+        { fetchStage: "listing" },
+      );
+      expect(result.isErr()).toBe(true);
+      if (result.isErr()) {
+        expect(result.error).toBeInstanceOf(AdapterFetchError);
+        expect(isReadRefusal(result.error.cause)).toBe(true);
+        expect(result.error.cause).toMatchObject({
+          type: "refused",
+          scope: "source",
+          status,
+        });
+        if (result.error instanceof AdapterFetchError) {
+          expect(result.error.stopKind).toBe(
+            INGESTION_STOP_KIND.PUBLISHER_REFUSAL,
+          );
+          expect(result.error.httpStatus).toBe(status);
+        }
+      }
+      expect(trace.reservations).toHaveLength(1);
+    },
+  );
 
   test("document requests emit typed publisher refusals while listing requests stay outside document accounting", async () => {
     for (const fetchStage of ["document", "listing"] as const) {

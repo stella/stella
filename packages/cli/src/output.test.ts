@@ -132,9 +132,8 @@ describe("buildRenderPlan (S4)", () => {
   });
 
   test("windowed-text follows a nested path to the text", () => {
-    // read_statute answers `{ nextCursor, statute: { text } }` and
-    // read_case_law_decision `{ nextCursor, decision: { text } }`: a leaf
-    // states where its window lives, so neither renders an empty string.
+    // read_statute answers `{ nextCursor, statute: { text } }`: a leaf
+    // states where its window lives, so it never renders an empty string.
     const plan = buildRenderPlan({
       payload: {
         nextCursor: "next",

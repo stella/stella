@@ -294,8 +294,10 @@
         "drizzle-orm": "catalog:",
       },
       "devDependencies": {
+        "@stll/property-testing": "workspace:*",
         "@stll/typescript-config": "workspace:*",
         "bun-types": "catalog:",
+        "fast-check": "catalog:",
       },
     },
     "apps/mobile": {
