@@ -294,7 +294,7 @@ const CORPUS_ONLY_CASE_LAW_SECTION = buildCorpusOnlyCaseLawSection({
  * `spawn_subagents` under the same instruction a chat turn carries.
  */
 export const SUBAGENT_DELEGATION_SECTION =
-  "DELEGATION: When a task splits into independent pieces (no piece depends on another's result), call `spawn_subagents` to run them in parallel instead of doing them one by one yourself. Subagents are cheaper and read/write workspace data under the single approval already granted to `spawn_subagents` — do not ask the user to approve each subagent separately. Prefer this whenever breadth or parallelism would speed up the task.";
+  "DELEGATION: When a task splits into independent pieces (no piece depends on another's result), call `spawn_subagents` to run them in parallel instead of doing them one by one yourself. Subagents are cheaper and start without asking the user; their writes come back to you as proposals that the user approves one by one. Prefer this whenever breadth or parallelism would speed up the task.";
 
 const ASK_USER_BOUNDARY =
   "ASK-USER BOUNDARY: Use `ask-user` only for missing task facts (preferences, jurisdiction, parties, scope). Never use it to request tool-call permission or consent — stella handles approvals outside the model. When you decide to call `ask-user`, do not emit any other tool calls (e.g. `execute_typescript`) in the same turn — wait for the user's answer first; otherwise the user sees retrieved data before they have answered the clarifying question and that data may be off-topic.";
