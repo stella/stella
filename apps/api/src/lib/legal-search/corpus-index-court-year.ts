@@ -97,16 +97,15 @@ export const parseCourtYearAggregation = ({
         return null;
       }
       const count = Math.round(value);
-      if (count === 0) {
-        continue;
-      }
       const key = range["key"];
       const year = typeof key === "string" ? years.get(key) : undefined;
-      if (year === undefined || court["key"].length === 0) {
-        truncated = true;
-        continue;
+      if (count > 0) {
+        if (year === undefined || court["key"].length === 0) {
+          truncated = true;
+        } else {
+          buckets.push({ court: court["key"], year, count });
+        }
       }
-      buckets.push({ court: court["key"], year, count });
     }
   }
   buckets.sort((a, b) => {
