@@ -143,12 +143,16 @@ export const renderVisual = async ({ input, launch }: RenderVisualOptions) => {
       return true;
     }, input.document);
     if (!initialized) {
-      throw new VisualRenderError({ message: "Preview frame missing" });
+      return Result.err(
+        new VisualRenderError({ message: "Preview frame missing" }),
+      );
     }
     const frameElement = await page.locator("iframe").elementHandle();
     const frame = await frameElement.contentFrame();
     if (!frame) {
-      throw new VisualRenderError({ message: "Preview frame unavailable" });
+      return Result.err(
+        new VisualRenderError({ message: "Preview frame unavailable" }),
+      );
     }
     await frame.waitForURL("about:srcdoc");
     await frame.waitForLoadState("load");
@@ -199,11 +203,11 @@ export const renderVisual = async ({ input, launch }: RenderVisualOptions) => {
       readyFired: Result.isOk(ready),
     });
     if (!output.success) {
-      throw new VisualRenderError({
-        message: "Preview output exceeds its bounds",
-      });
+      return Result.err(
+        new VisualRenderError({ message: "Preview output exceeds its bounds" }),
+      );
     }
-    return output.output;
+    return Result.ok(output.output);
   };
   const rendered = await Result.tryPromise({
     try: async () => Promise.race([render(), expired]),
@@ -221,5 +225,5 @@ export const renderVisual = async ({ input, launch }: RenderVisualOptions) => {
   if (Result.isError(closed)) {
     return Result.err(closed.error);
   }
-  return rendered;
+  return Result.isError(rendered) ? Result.err(rendered.error) : rendered.value;
 };
