@@ -4,10 +4,11 @@ import { panic } from "better-result";
 import path from "node:path";
 import postcss from "postcss";
 
+import MCP_APP_MESSAGES from "@stll/api-contract/mcp-app-messages";
+
 import { MCP_APP_OUTPUT_SCHEMAS } from "../src/mcp/app-contracts";
 import { MCP_APPS } from "../src/mcp/apps/manifest";
 import { defineChatProjectionMcpToolOutput } from "../src/mcp/valibot-tool-definition";
-import { buildMcpAppMessages } from "./lib/mcp-app-catalog";
 import { inspectMcpAppHtml } from "./lib/mcp-app-html-guard";
 
 const generatedRoot = path.resolve(
@@ -16,7 +17,7 @@ const generatedRoot = path.resolve(
 );
 await Bun.write(
   path.join(generatedRoot, "messages.json"),
-  `${JSON.stringify(await buildMcpAppMessages(), null, 2)}\n`,
+  `${JSON.stringify(MCP_APP_MESSAGES, null, 2)}\n`,
 );
 const schemas = Object.fromEntries(
   Object.entries(MCP_APP_OUTPUT_SCHEMAS).map(([name, schema]) => [

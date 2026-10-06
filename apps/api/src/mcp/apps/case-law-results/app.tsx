@@ -670,7 +670,7 @@ const ResultContent = ({ bridge }: { bridge: CaseLawBridge }) => {
           </Button>
         </div>
       );
-    case "success": {
+    case "ready": {
       const { view } = result;
       switch (view.type) {
         case "unavailable":

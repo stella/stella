@@ -181,7 +181,7 @@ Email.PreviewProps = {
   },
 } satisfies Props;
 
-const styles: Record<string, React.CSSProperties> = {
+const styles = {
   title: {
     margin: "0 0 16px",
     color: brand.foreground,
@@ -239,4 +239,4 @@ const styles: Record<string, React.CSSProperties> = {
     fontSize: "14px",
     lineHeight: "22px",
   },
-};
+} satisfies Record<string, React.CSSProperties>;

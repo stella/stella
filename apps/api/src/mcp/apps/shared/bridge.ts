@@ -15,7 +15,7 @@ import { appLocale } from "./locale";
 type ResultState<View> =
   | { status: "idle" }
   | { status: "loading" }
-  | { status: "success"; view: View }
+  | { status: "ready"; view: View }
   | { status: "error"; message: string | null };
 type ToolName = PresentationApp["callableTools"][number];
 type AppSnapshot<View> = {
@@ -72,7 +72,7 @@ export const createPresentationBridge = <View>({
     publish(
       view === undefined
         ? { status: "error", message: null }
-        : { status: "success", view },
+        : { status: "ready", view },
     );
   };
   const hostContext = (context: McpUiHostContext) => {

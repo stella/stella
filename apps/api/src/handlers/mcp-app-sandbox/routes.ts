@@ -5,6 +5,7 @@ import {
   MCP_APP_FRAME_TITLE_MAX_CHARS,
   MCP_APP_SANDBOX_PATH,
 } from "@stll/api-contract";
+import { MCP_APP_SANDBOX_CONTENT_DIRECTIVES } from "@stll/api-contract/mcp-app-sandbox-policy";
 
 import { env } from "@/api/env";
 import { frontendOrigins } from "@/api/lib/dev-origins";
@@ -13,8 +14,6 @@ import {
   PRIVATE_CACHE_CONTROL,
 } from "@/api/lib/security-headers";
 import { runtimeMode } from "@/api/runtime-mode";
-
-import { MCP_APP_SANDBOX_CONTENT_DIRECTIVES } from "./policy";
 
 const allowedHostOrigins = frontendOrigins({
   frontendUrl: env.FRONTEND_URL,

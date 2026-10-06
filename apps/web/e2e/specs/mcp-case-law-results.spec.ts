@@ -2,12 +2,12 @@ import { expect, test } from "@playwright/test";
 import type { Page } from "@playwright/test";
 import { readFile } from "node:fs/promises";
 
-import { MCP_APP_SANDBOX_CONTENT_DIRECTIVES } from "../../../api/src/handlers/mcp-app-sandbox/policy";
+import { MCP_APP_SANDBOX_CONTENT_DIRECTIVES } from "@stll/api-contract/mcp-app-sandbox-policy";
 import {
   APP_LOOKUP_FIXTURE,
   APP_SEARCH_FIXTURE,
   APP_UNAVAILABLE_FIXTURE,
-} from "../../../api/src/mcp/app-fixtures";
+} from "@stll/api-contract/mcp-app.fixtures";
 
 type AppFixtureHost = {
   appCalls: unknown[];
@@ -79,7 +79,16 @@ const mountApp = async ({
         ) {
           return;
         }
-        switch (data.method) {
+        const method = data.method;
+        if (
+          method !== "ui/initialize" &&
+          method !== "ui/notifications/initialized" &&
+          method !== "tools/call" &&
+          method !== "ui/open-link"
+        ) {
+          return;
+        }
+        switch (method) {
           case "ui/initialize":
             reply({
               jsonrpc: "2.0",
@@ -136,6 +145,8 @@ const mountApp = async ({
             links.push(data.params.url);
             reply({ jsonrpc: "2.0", id: data.id, result: {} });
             break;
+          default:
+            throw new Error(`Unhandled MCP fixture method: ${String(method)}`);
         }
       });
       globalThis.appFixtureHost = {
@@ -171,7 +182,7 @@ const mountApp = async ({
   return page.frameLocator("#app");
 };
 
-const hostHistory = (page: Page, key: "appCalls" | "appLinks") =>
+const hostHistory = async (page: Page, key: "appCalls" | "appLinks") =>
   page.evaluate((historyKey) => globalThis.appFixtureHost[historyKey], key);
 
 test("case-law app filters, pages and opens links through the MCP host", async ({
@@ -199,7 +210,7 @@ test("case-law app filters, pages and opens links through the MCP host", async (
     .getByRole("button", { name: "Open in stella", exact: true })
     .click();
   await expect
-    .poll(() => hostHistory(page, "appLinks"))
+    .poll(async () => hostHistory(page, "appLinks"))
     .toEqual([APP_SEARCH_FIXTURE.results.at(0)?.appUrl]);
   await page.evaluate((payload) => {
     const first = payload.results.at(0);
@@ -235,7 +246,7 @@ test("case-law app filters, pages and opens links through the MCP host", async (
   );
   await app.getByRole("button", { name: "Next", exact: true }).click();
   await expect
-    .poll(() => hostHistory(page, "appCalls"))
+    .poll(async () => hostHistory(page, "appCalls"))
     .toEqual([
       {
         name: "search_case_law",
@@ -301,7 +312,7 @@ test("court filters preserve multiple query phrasings until the search text is e
     .click();
   await app.getByRole("button", { name: "Filter", exact: true }).click();
   await expect
-    .poll(() => hostHistory(page, "appCalls"))
+    .poll(async () => hostHistory(page, "appCalls"))
     .toEqual([
       {
         name: "search_case_law",
@@ -359,7 +370,7 @@ test("a selected court tier survives a later response without facets", async ({
   await expect(app.locator("tbody tr")).toHaveCount(0);
   await app.getByRole("button", { name: "Filter", exact: true }).click();
   await expect
-    .poll(() => hostHistory(page, "appCalls"))
+    .poll(async () => hostHistory(page, "appCalls"))
     .toEqual([
       {
         name: "search_case_law",
@@ -395,7 +406,7 @@ test("lookup app renders every lookup status and surfaces recoverable errors", a
   await expect(app.getByRole("alert")).toContainText("Read unavailable.");
   await app.getByRole("button").click();
   await expect
-    .poll(() => hostHistory(page, "appCalls"))
+    .poll(async () => hostHistory(page, "appCalls"))
     .toEqual([
       {
         name: "lookup_case_law",
@@ -591,11 +602,11 @@ test("reader and publisher buttons open their own URLs only after a click", asyn
     expect(await hostHistory(page, "appLinks")).toEqual([]);
     await reader.first().click();
     await expect
-      .poll(() => hostHistory(page, "appLinks"))
+      .poll(async () => hostHistory(page, "appLinks"))
       .toEqual([first.appUrl]);
     await original.click();
     await expect
-      .poll(() => hostHistory(page, "appLinks"))
+      .poll(async () => hostHistory(page, "appLinks"))
       .toEqual([first.appUrl, sourceUrl]);
   }
 });

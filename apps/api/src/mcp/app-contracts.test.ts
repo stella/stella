@@ -1,16 +1,16 @@
 import { describe, expect, test } from "bun:test";
 import path from "node:path";
 
-import { UI_LOCALES } from "@stll/locales";
-
-import { buildMcpAppMessages } from "../../scripts/lib/mcp-app-catalog";
-import { MCP_APP_CONSUMED_FIELDS } from "./app-consumed-fields";
-import { MCP_APP_OUTPUT_SCHEMAS } from "./app-contracts";
+import MCP_APP_MESSAGES from "@stll/api-contract/mcp-app-messages";
 import {
   APP_LOOKUP_FIXTURE,
   APP_SEARCH_FIXTURE,
   APP_UNAVAILABLE_FIXTURE,
-} from "./app-fixtures";
+} from "@stll/api-contract/mcp-app.fixtures";
+import { UI_LOCALES } from "@stll/locales";
+
+import { MCP_APP_CONSUMED_FIELDS } from "./app-consumed-fields";
+import { MCP_APP_OUTPUT_SCHEMAS } from "./app-contracts";
 import { inspectAppManifest, inspectAppSchemas } from "./app-guards";
 import { isMcpAppAvailable } from "./app-policy";
 import { inspectAppSources } from "./app-source-guard";
@@ -29,7 +29,7 @@ import {
   DEFAULT_MCP_TOOL_DEFINITIONS,
   getStaticMcpToolOutputContract,
 } from "./static-tool-definitions";
-import { serializeToolResult, toolDataResult } from "./tool-utils";
+import { serializeToolResult, untypedToolDataResult } from "./tool-utils";
 
 APP_SEARCH_FIXTURE satisfies SearchResults;
 APP_LOOKUP_FIXTURE satisfies LookupResults;
@@ -208,11 +208,11 @@ describe("MCP app registry and contracts", () => {
       }),
     ).toContain("App schema differs from tool output: search_case_law");
   });
-  test("all shipped locales use the product catalog projection", async () => {
+  test("all shipped locales use the shared app catalog", async () => {
     const actual: unknown = await Bun.file(
       path.join(appRoot, "shared/generated/messages.json"),
     ).json();
-    const expected = await buildMcpAppMessages();
+    const expected = MCP_APP_MESSAGES;
     expect(Object.keys(expected).toSorted()).toEqual(
       [...UI_LOCALES].toSorted(),
     );
@@ -270,7 +270,6 @@ describe("MCP app registry and contracts", () => {
         {
           ...first,
           appUrl: null,
-          url: "https://example.org/publisher",
           source_url: "http://example.org/original",
         },
       ],
@@ -282,6 +281,14 @@ describe("MCP app registry and contracts", () => {
     expect(view.results.at(0)?.source_url).toBe("http://example.org/original");
   });
   test("filter changes restart the search without discarding unrelated filters", () => {
+    const expected = {
+      queries: ["náhrada škody"],
+      source_id: "source",
+      limit: 10,
+      country: "SVK",
+      court: "court",
+      date_from: "2024-01-01",
+    };
     expect(
       searchFilterInput({
         input: {
@@ -298,14 +305,7 @@ describe("MCP app registry and contracts", () => {
         from: "2024-01-01",
         to: "",
       }),
-    ).toEqual({
-      queries: ["náhrada škody"],
-      source_id: "source",
-      limit: 10,
-      country: "SVK",
-      court: "court",
-      date_from: "2024-01-01",
-    });
+    ).toEqual(expected);
   });
   test("filter controls use the shared wire readers", () => {
     expect(
@@ -398,7 +398,7 @@ describe("MCP app registry and contracts", () => {
       throw new Error("Missing found lookup fixture");
     }
     const result = serializeToolResult(
-      toolDataResult({ items: [found] }),
+      untypedToolDataResult({ items: [found] }),
       getStaticMcpToolOutputContract("lookup_case_law"),
       "lookup_case_law",
     );
@@ -417,7 +417,7 @@ describe("MCP app registry and contracts", () => {
     ] as const) {
       for (const fixture of fixtures) {
         const result = serializeToolResult(
-          toolDataResult(fixture),
+          untypedToolDataResult(fixture),
           getStaticMcpToolOutputContract(name),
           name,
         );
@@ -439,7 +439,7 @@ describe("MCP app registry and contracts", () => {
     };
     expect(
       serializeToolResult(
-        toolDataResult(empty),
+        untypedToolDataResult(empty),
         getStaticMcpToolOutputContract("search_case_law"),
       ),
     ).toMatchInlineSnapshot(`
