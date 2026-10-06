@@ -57,8 +57,8 @@ export const SplitButton = (props: SplitButtonProps) => {
   const triggerButton = (
     <Button
       className={cn(
-        "text-muted-foreground group-hover/split:bg-muted group-focus-within/split:bg-muted hover:bg-accent hover:text-foreground active:bg-accent/80 data-popup-open:bg-accent rounded-md [&_svg]:size-3",
-        size === "sm" ? "h-7 w-5 px-0 sm:h-7" : "h-8 w-6 px-0 sm:h-8",
+        "text-muted-foreground group-hover/split:bg-muted group-focus-within/split:bg-muted hover:bg-accent hover:text-foreground active:bg-accent/80 data-popup-open:bg-accent rounded-md [&_svg]:mx-0",
+        size === "sm" ? "h-7 w-3.5 px-0 sm:h-7" : "h-8 w-4 px-0 sm:h-8",
         "pointer-coarse:min-h-11 pointer-coarse:min-w-11",
       )}
       size="sm"
@@ -78,8 +78,8 @@ export const SplitButton = (props: SplitButtonProps) => {
         aria-describedby={primaryDescriptionId}
         aria-label={primaryLabel}
         className={cn(
-          "text-muted-foreground hover:text-foreground active:bg-accent/80 rounded-md [&_svg]:size-3.5",
-          size === "sm" ? "h-7 px-1.5 sm:h-7" : "h-8 px-2 sm:h-8",
+          "text-muted-foreground hover:text-foreground active:bg-accent/80 rounded-md [&_svg]:mx-0 [&_svg]:size-3.5 [&_svg:not([class*='size-'])]:size-3.5 sm:[&_svg:not([class*='size-'])]:size-3.5",
+          size === "sm" ? "h-7 ps-1.5 pe-0.5 sm:h-7" : "h-8 ps-2 pe-0.5 sm:h-8",
           "pointer-coarse:min-h-11 pointer-coarse:min-w-11",
         )}
         disabled={primaryDisabled}
@@ -96,7 +96,11 @@ export const SplitButton = (props: SplitButtonProps) => {
           disabled={menuDisabled}
           render={triggerButton}
         >
-          <ChevronDownIcon aria-hidden="true" />
+          <ChevronDownIcon
+            aria-hidden="true"
+            className="size-2.25"
+            strokeWidth={1.5}
+          />
         </PopoverTrigger>
       ) : (
         <MenuTrigger
@@ -105,7 +109,11 @@ export const SplitButton = (props: SplitButtonProps) => {
           disabled={menuDisabled}
           render={triggerButton}
         >
-          <ChevronDownIcon aria-hidden="true" />
+          <ChevronDownIcon
+            aria-hidden="true"
+            className="size-2.25"
+            strokeWidth={1.5}
+          />
         </MenuTrigger>
       )}
     </div>

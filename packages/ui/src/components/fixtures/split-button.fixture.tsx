@@ -3,6 +3,7 @@ import { createRoot } from "react-dom/client";
 
 import { panic } from "better-result";
 
+import { FileTextIcon } from "../../icons";
 import { MenuItem, MenuPopup } from "../menu";
 import { PopoverPopup } from "../popover";
 import { SplitButton } from "../split-button";
@@ -55,6 +56,7 @@ const SplitButtonFixture = () => {
           </PopoverPopup>
         }
       >
+        <FileTextIcon aria-hidden="true" />
         Create
       </SplitButton>
     );
@@ -85,6 +87,7 @@ const SplitButtonFixture = () => {
           </MenuPopup>
         }
       >
+        <FileTextIcon aria-hidden="true" />
         Create
       </SplitButton>
     );

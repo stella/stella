@@ -191,11 +191,23 @@ for (const size of ["sm", "md"] as const) {
       }
       expect(primaryBox.y).toBe(triggerBox.y);
       expect(primaryBox.height).toBe(triggerBox.height);
+      expect(triggerBox.width).toBe(size === "sm" ? 14 : 16);
       const gap =
         dir === "rtl"
           ? primaryBox.x - triggerBox.x - triggerBox.width
           : triggerBox.x - primaryBox.x - primaryBox.width;
       expect(Math.abs(gap)).toBeLessThanOrEqual(1);
+      const primaryIcon = primary.locator("svg");
+      const chevron = trigger.locator("svg");
+      const primaryIconBox = await primaryIcon.boundingBox();
+      const chevronBox = await chevron.boundingBox();
+      if (!primaryIconBox || !chevronBox) {
+        throw new Error("Both split button glyphs must have visible bounds");
+      }
+      const ratio = chevronBox.width / primaryIconBox.width;
+      expect(ratio).toBeGreaterThanOrEqual(0.6);
+      expect(ratio).toBeLessThanOrEqual(0.65);
+      await expect(chevron).toHaveAttribute("stroke-width", "1.5");
       await trigger.click();
       await expect(page.getByRole("menu")).toBeVisible();
       await expect(page.getByLabel("Primary actions")).toHaveAttribute(
