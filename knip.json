@@ -67,6 +67,8 @@
         "src/handlers/case-law/ingestion/adapters/health-check.ts",
         "src/handlers/case-law/ingestion/adapters/update-fixtures.ts",
         "src/tests/load/*.ts",
+        // Passed to Bun by the API test command builder.
+        "src/tests/publisher-gate-preload.ts",
         "drizzle.config.ts",
         "src/**/*.test.ts",
         "scripts/**/*.test.ts"

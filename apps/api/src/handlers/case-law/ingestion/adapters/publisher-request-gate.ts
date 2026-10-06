@@ -1,5 +1,6 @@
 // parser-output-unchanged: request scheduling and scoped fixture dependencies only; parsed response output is unchanged.
 // parser-output-unchanged: checked coordination clients and bounded immediate gate checks; response parsing and stored output are unchanged.
+// parser-output-unchanged: isolate default test gate state through a lightweight runner signal; production requests and parsed output are unchanged.
 import { panic, Result, TaggedError } from "better-result";
 import { AsyncLocalStorage } from "node:async_hooks";
 
@@ -8,6 +9,11 @@ import { Temporal } from "@stll/time";
 import type * as RedisClientModule from "@/api/lib/admission-redis";
 import { withTimeout } from "@/api/lib/with-timeout";
 import { isLocalDevOpen, isLocalTestRun } from "@/api/runtime-mode";
+
+import {
+  advancePublisherGateFixtureGeneration,
+  publisherGateFixtureGeneration,
+} from "./publisher-gate-fixture-state";
 
 const PUBLISHER_GATE_COMMAND_TIMEOUT_MS = 5000;
 
@@ -82,14 +88,12 @@ export type PublisherRequestGateDependencies = {
 const fixtureDependencies =
   new AsyncLocalStorage<PublisherRequestGateDependencies>();
 
-let localFixtureGeneration = 0;
-
 /** Invalidate default local gate state without replacing captured singleton slots. */
 export const resetPublisherGateFixtures = () => {
   if (!isLocalTestRun()) {
     panic("Publisher gate fixtures require a local test run");
   }
-  localFixtureGeneration += 1;
+  advancePublisherGateFixtureGeneration();
 };
 
 /** Exercise the actual shared and run-scoped gates without opening Redis. */
@@ -171,13 +175,13 @@ const defaultDependencies = (
   intervalMs: number,
   cooldown: PublisherRequestGateConfig["cooldown"],
 ): PublisherRequestGateDependencies => {
-  let generation = localFixtureGeneration;
+  let generation = publisherGateFixtureGeneration();
   let localNextRequestAt = 0;
   let localCooldownUntil = 0;
   const localRedis: PublisherGateClient = {
     send: (_command, args) => {
-      if (generation !== localFixtureGeneration) {
-        generation = localFixtureGeneration;
+      if (generation !== publisherGateFixtureGeneration()) {
+        generation = publisherGateFixtureGeneration();
         localNextRequestAt = 0;
         localCooldownUntil = 0;
       }

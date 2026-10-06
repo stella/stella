@@ -1,5 +1,3 @@
-import { afterEach, beforeEach } from "bun:test";
-
 import { configureTestDatabaseEnvironment } from "./test-database-environment";
 
 // Postgres fixtures are non-RDS: resolve telemetry before any env owner loads.
@@ -77,10 +75,3 @@ process.env["CORPUS_INDEX_Q09_SEARCH_ENDPOINT"] ??= "http://localhost:7291";
 process.env["GOTENBERG_URL"] ??= "http://localhost:3002";
 process.env["GOTENBERG_USERNAME"] ??= "test";
 process.env["GOTENBERG_PASSWORD"] ??= "test";
-
-// Resolve the runtime mode after the environment above, then isolate every
-// suite's default publisher gates, including slots captured by singletons.
-const { resetPublisherGateFixtures } =
-  await import("../handlers/case-law/ingestion/adapters/publisher-request-gate");
-beforeEach(resetPublisherGateFixtures);
-afterEach(resetPublisherGateFixtures);
