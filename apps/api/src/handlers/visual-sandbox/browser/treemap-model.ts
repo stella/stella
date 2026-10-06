@@ -161,7 +161,7 @@ export const treemapColorDomain = (
         0,
         ...rows.map(({ treatment }) => Math.abs(treatment ?? 0)),
       );
-      return [-extent, extent] as const;
+      return extent === 0 ? ([0, 0] as const) : ([-extent, extent] as const);
     }
     default: {
       mode satisfies never;
