@@ -43,7 +43,10 @@ const withRepository = (
     write("apps/api/src/unrelated.test.ts", "export const test = true;");
     write(
       "apps/api/scripts/test-durations.json",
-      JSON.stringify({ "src/handler.test.ts": 2, "src/unrelated.test.ts": 3 }),
+      JSON.stringify({
+        "src/handler.test.ts": { seconds: 2, source: "measured" },
+        "src/unrelated.test.ts": { seconds: 3, source: "estimated" },
+      }),
     );
     write(
       "packages/example/package.json",
@@ -226,9 +229,9 @@ test("duration budgeting uses selected work only and never creates an empty shar
       write(
         "apps/api/scripts/test-durations.json",
         JSON.stringify({
-          "src/handler.test.ts": seconds,
-          "src/second.test.ts": 0,
-          "src/unrelated.test.ts": 10_000,
+          "src/handler.test.ts": { seconds, source: "measured" },
+          "src/second.test.ts": { seconds: 0, source: "measured" },
+          "src/unrelated.test.ts": { seconds: 10_000, source: "measured" },
         }),
       );
       expect(
@@ -245,7 +248,9 @@ test("duration budgeting uses selected work only and never creates an empty shar
     ).toBe(4);
     write(
       "apps/api/scripts/test-durations.json",
-      JSON.stringify({ "src/handler.test.ts": -1 }),
+      JSON.stringify({
+        "src/handler.test.ts": { seconds: -1, source: "measured" },
+      }),
     );
     expect(
       selectApiTestImpact({ root, changed: ["apps/api/src/handler.ts"] }).mode,

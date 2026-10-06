@@ -296,7 +296,11 @@ describe("affected code-check planning", () => {
     }
     const commands = scopedCommands(planned);
 
-    expect(commands).toContainEqual(["bun", "run", "generate"]);
+    expect(commands).toContainEqual([
+      "bun",
+      "scripts/ci-generated-sources.ts",
+      "prepare",
+    ]);
     const oxc = commands.find((command) => command.includes("oxlint"));
     expect(oxc).toContain("--type-aware");
     expect(oxc).toContain("--type-check");
