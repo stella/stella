@@ -105,6 +105,45 @@ const versionIdentity = (basis: ProvisionVersionBasis): readonly string[] => {
   }
 };
 
+/** The most common basis labels the act; only exceptions need a row marker. */
+export const summarizeProvisionVersions = (
+  provisions: readonly ProvisionGroup[],
+) => {
+  const counts = new Map<
+    string,
+    { basis: ProvisionVersionBasis; count: number }
+  >();
+  for (const { versionBasis } of provisions) {
+    const key = versionIdentity(versionBasis).join(KEY_SEPARATOR);
+    const entry = counts.get(key);
+    if (entry === undefined) {
+      counts.set(key, { basis: versionBasis, count: 1 });
+    } else {
+      entry.count += 1;
+    }
+  }
+  const common =
+    [...counts.entries()]
+      .toSorted(
+        ([, left], [, right]) =>
+          right.count - left.count ||
+          Number(right.basis.type === "inferred") -
+            Number(left.basis.type === "inferred"),
+      )
+      .at(0) ?? panic("A cited act has no provisions");
+  return {
+    basis: common[1].basis,
+    exceptions: new Set(
+      provisions
+        .filter(
+          ({ versionBasis }) =>
+            versionIdentity(versionBasis).join(KEY_SEPARATOR) !== common[0],
+        )
+        .map(({ key }) => key),
+    ),
+  };
+};
+
 const provisionKey = (row: ProvisionRow): string =>
   [
     row.unit,

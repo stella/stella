@@ -7,11 +7,13 @@ import { BidiText } from "@stll/ui/bidi-text";
 import { formatValidityDate } from "@/features/statutes/statute-format";
 import { useFormatter } from "@/i18n/formatting-context";
 
-/** Kept beside each link so inference cannot read as a statement of applied law. */
+/** A shared label for a cited version, expanded in previews and quiet in lists. */
 export const ProvisionVersionBasisLabel = ({
   basis,
+  compact = false,
 }: {
   basis: ProvisionVersionBasis;
+  compact?: boolean;
 }) => {
   const t = useTranslations();
   const format = useFormatter();
@@ -19,31 +21,48 @@ export const ProvisionVersionBasisLabel = ({
     case "inferred":
       return (
         <span className="text-muted-foreground text-2xs">
-          {t("caseLaw.viewer.versionAtDecisionDateInferred")}
+          {t(
+            compact
+              ? "caseLaw.viewer.versionBasisInferredCompact"
+              : "caseLaw.viewer.versionAtDecisionDateInferred",
+          )}
         </span>
       );
     case "not_stated":
       return (
         <span className="text-muted-foreground text-2xs">
-          {t("caseLaw.viewer.appliedVersionNotStated")}
+          {t(
+            compact
+              ? "caseLaw.viewer.appliedVersionNotStatedCompact"
+              : "caseLaw.viewer.appliedVersionNotStated",
+          )}
         </span>
       );
     case "stated_date":
       return (
         <span className="text-muted-foreground text-2xs">
-          {t("caseLaw.viewer.appliedVersionStatedDate", {
-            date: formatValidityDate(basis.date, format) ?? basis.date,
-            relation: basis.relation,
-          })}
+          {t(
+            compact
+              ? "caseLaw.viewer.appliedVersionStatedDateCompact"
+              : "caseLaw.viewer.appliedVersionStatedDate",
+            {
+              date: formatValidityDate(basis.date, format) ?? basis.date,
+              relation: basis.relation,
+            },
+          )}
         </span>
       );
     case "stated_version":
       return (
         <span className="text-muted-foreground text-2xs">
-          {t.rich("caseLaw.viewer.appliedVersionStatedAmendment", {
-            amendment: basis.amendmentWorkIdentifier,
-            reference: (chunks) => <BidiText>{chunks}</BidiText>,
-          })}
+          {compact
+            ? t("caseLaw.viewer.appliedVersionStatedAmendmentCompact", {
+                amendment: basis.amendmentWorkIdentifier,
+              })
+            : t.rich("caseLaw.viewer.appliedVersionStatedAmendment", {
+                amendment: basis.amendmentWorkIdentifier,
+                reference: (chunks) => <BidiText>{chunks}</BidiText>,
+              })}
         </span>
       );
     default: {

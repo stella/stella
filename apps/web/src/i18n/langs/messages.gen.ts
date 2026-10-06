@@ -964,10 +964,14 @@ type Messages = {
     "viewer": {
       "abstract": "Abstract";
       "appliedVersionNotStated": "Applied version not stated";
+      "appliedVersionNotStatedCompact": "Version not stated";
       "appliedVersionStatedAmendment": "Wording as amended by <reference>{amendment}</reference>";
+      "appliedVersionStatedAmendmentCompact": "Stated: {amendment}";
       "appliedVersionStatedDate": "{relation, select, on {Wording effective on {date}} until {Wording effective through {date}} from {Wording effective from {date}} other {Wording effective on {date}}}";
+      "appliedVersionStatedDateCompact": "{relation, select, on {Stated: {date}} until {Stated: until {date}} from {Stated: from {date}} other {Stated: {date}}}";
       "caseFileMayHoldOthers": "This case file may contain other decisions as well.";
       "citedBy": "Cited by";
+      "citedDecisionPassage": "Passage in the decision";
       "cites": "Cites";
       "dissentByline": "Dissenting: <bdi>{names}</bdi>";
       "judgeRole": {
@@ -995,6 +999,8 @@ type Messages = {
       "textReadFailed": "The decision text could not be loaded";
       "textUnavailable": "No text is available for this decision";
       "versionAtDecisionDateInferred": "Version at decision date (inferred)";
+      "versionBasisInferredCompact": "Decision date · inferred";
+      "versionBasisInferredExplanation": "The version is inferred from the decision date. The decision does not state which wording applies.";
     };
   };
   "catalogue": {

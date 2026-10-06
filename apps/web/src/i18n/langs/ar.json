@@ -961,10 +961,14 @@
     "viewer": {
       "abstract": "الملخّص",
       "appliedVersionNotStated": "الصيغة المطبقة غير مذكورة",
+      "appliedVersionNotStatedCompact": "النسخة غير مذكورة",
       "appliedVersionStatedAmendment": "الصيغة المعدلة بموجب <reference>{amendment}</reference>",
+      "appliedVersionStatedAmendmentCompact": "المذكور: {amendment}",
       "appliedVersionStatedDate": "{relation, select, on {الصيغة السارية في {date}} until {الصيغة السارية حتى {date}} from {الصيغة السارية اعتبارًا من {date}} other {الصيغة السارية في {date}}}",
+      "appliedVersionStatedDateCompact": "{relation, select, on {المذكور: {date}} until {المذكور: حتى {date}} from {المذكور: ابتداءً من {date}} other {المذكور: {date}}}",
       "caseFileMayHoldOthers": "قد يتضمّن ملف هذه الدعوى قرارات أخرى أيضًا.",
       "citedBy": "مستشهَد به في",
+      "citedDecisionPassage": "مقطع من القرار",
       "cites": "يستشهد بـ",
       "dissentByline": "رأي مخالف: <bdi>{names}</bdi>",
       "judgeRole": {
@@ -991,7 +995,9 @@
       "textPending": "لا يزال جارٍ جلب نص الحكم",
       "textReadFailed": "تعذّر تحميل نص الحكم",
       "textUnavailable": "لا يتوفر نص لهذا الحكم",
-      "versionAtDecisionDateInferred": "الصيغة في تاريخ القرار (مستنتجة)"
+      "versionAtDecisionDateInferred": "الصيغة في تاريخ القرار (مستنتجة)",
+      "versionBasisInferredCompact": "تاريخ القرار · مستنتج",
+      "versionBasisInferredExplanation": "تُستنتج النسخة من تاريخ القرار. لا يحدد القرار الصياغة التي تنطبق."
     }
   },
   "catalogue": {

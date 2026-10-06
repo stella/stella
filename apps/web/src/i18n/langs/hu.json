@@ -961,10 +961,14 @@
     "viewer": {
       "abstract": "Kivonat",
       "appliedVersionNotStated": "Az alkalmazott változat nincs megadva",
+      "appliedVersionNotStatedCompact": "A változat nincs megadva",
       "appliedVersionStatedAmendment": "A <reference>{amendment}</reference> szerinti módosított szöveg",
+      "appliedVersionStatedAmendmentCompact": "Megadva: {amendment}",
       "appliedVersionStatedDate": "{relation, select, on {A {date} napján hatályos szöveg} until {A {date} napjáig hatályos szöveg} from {A {date} napjától hatályos szöveg} other {A {date} napján hatályos szöveg}}",
+      "appliedVersionStatedDateCompact": "{relation, select, on {Megadva: {date}} until {Megadva: {date} napjáig} from {Megadva: {date} napjától} other {Megadva: {date}}}",
       "caseFileMayHoldOthers": "Az ügy iratai további határozatokat is tartalmazhatnak.",
       "citedBy": "Hivatkozik rá",
+      "citedDecisionPassage": "Részlet a határozatból",
       "cites": "Hivatkozásai",
       "dissentByline": "Különvélemény: <bdi>{names}</bdi>",
       "judgeRole": {
@@ -991,7 +995,9 @@
       "textPending": "A határozat szövege még betöltés alatt áll",
       "textReadFailed": "A határozat szövegét nem sikerült betölteni",
       "textUnavailable": "Ehhez a határozathoz nem érhető el szöveg",
-      "versionAtDecisionDateInferred": "A határozat napján hatályos változat (következtetett)"
+      "versionAtDecisionDateInferred": "A határozat napján hatályos változat (következtetett)",
+      "versionBasisInferredCompact": "Határozat dátuma · következtetett",
+      "versionBasisInferredExplanation": "A változatot a határozat dátumából következtettük ki. A határozat nem jelöli meg az alkalmazandó szövegváltozatot."
     }
   },
   "catalogue": {

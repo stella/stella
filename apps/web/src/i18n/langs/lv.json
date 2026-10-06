@@ -961,10 +961,14 @@
     "viewer": {
       "abstract": "Kopsavilkums",
       "appliedVersionNotStated": "Piemērotā redakcija nav norādīta",
+      "appliedVersionNotStatedCompact": "Redakcija nav norādīta",
       "appliedVersionStatedAmendment": "Redakcija ar <reference>{amendment}</reference> grozījumiem",
+      "appliedVersionStatedAmendmentCompact": "Norādīts: {amendment}",
       "appliedVersionStatedDate": "{relation, select, on {{date} spēkā esošā redakcija} until {Līdz {date} spēkā esošā redakcija} from {No {date} spēkā esošā redakcija} other {{date} spēkā esošā redakcija}}",
+      "appliedVersionStatedDateCompact": "{relation, select, on {Norādīts: {date}} until {Norādīts: līdz {date}} from {Norādīts: no {date}} other {Norādīts: {date}}}",
       "caseFileMayHoldOthers": "Šajā lietā var būt arī citi nolēmumi.",
       "citedBy": "Atsaucas uz",
+      "citedDecisionPassage": "Fragments nolēmumā",
       "cites": "Citē",
       "dissentByline": "Atsevišķās domas: <bdi>{names}</bdi>",
       "judgeRole": {
@@ -991,7 +995,9 @@
       "textPending": "Nolēmuma teksts vēl tiek saņemts",
       "textReadFailed": "Nolēmuma tekstu neizdevās ielādēt",
       "textUnavailable": "Šim nolēmumam teksts nav pieejams",
-      "versionAtDecisionDateInferred": "Redakcija lēmuma datumā (izsecināta)"
+      "versionAtDecisionDateInferred": "Redakcija lēmuma datumā (izsecināta)",
+      "versionBasisInferredCompact": "Nolēmuma datums · izsecināts",
+      "versionBasisInferredExplanation": "Redakcija ir izsecināta no nolēmuma datuma. Nolēmumā nav norādīts, kura redakcija ir piemērojama."
     }
   },
   "catalogue": {
