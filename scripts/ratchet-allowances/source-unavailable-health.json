@@ -1,0 +1,5 @@
+{
+  "metric": "direct-third-party-declarations",
+  "delta": 1,
+  "reason": "Runner health property tests use fast-check from the shared workspace catalog."
+}

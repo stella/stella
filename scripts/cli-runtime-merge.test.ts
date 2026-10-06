@@ -105,7 +105,14 @@ test.skipIf(!process.env["CI"])(
     const checkout = path.join(temporary, "branches");
     const mergedCheckout = path.join(temporary, "merged");
     const run = async (command: string[], cwd: string) => {
-      const child = Bun.spawn(command, { cwd, stdout: "pipe", stderr: "pipe" });
+      const env = { ...process.env };
+      delete env["CI_GENERATED_SOURCES_MANIFEST"];
+      const child = Bun.spawn(command, {
+        cwd,
+        env,
+        stdout: "pipe",
+        stderr: "pipe",
+      });
       const [exitCode, stdout, stderr] = await Promise.all([
         child.exited,
         new Response(child.stdout).text(),

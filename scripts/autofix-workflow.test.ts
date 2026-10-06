@@ -1,6 +1,10 @@
 import { describe, expect, test } from "bun:test";
 
-import { GENERATORS, orderGenerators } from "./generated-files";
+import {
+  CI_GENERATION_COMMANDS,
+  GENERATORS,
+  orderGenerators,
+} from "./generated-files";
 
 const WORKFLOW_URL = new URL(
   "../.github/workflows/autofix.yml",
@@ -300,6 +304,11 @@ describe("changed-file autofix boundary", () => {
           .split("\n")
           .map((line) => line.trim().replace(/^run: /u, "")),
       );
+      if (commands.has("bun scripts/ci-generated-sources.ts prepare")) {
+        for (const command of CI_GENERATION_COMMANDS) {
+          commands.add(command.join(" "));
+        }
+      }
       // Runtime flags don't change what a command checks; an improvements-only
       // writer is guarded by the full check.
       const write = generator.write.filter(
