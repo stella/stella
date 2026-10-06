@@ -29,9 +29,9 @@ test("tool duration respects the selected numbering system", () => {
               type: "tool-call",
               id: "completed-search",
               name: "search-chat-history",
-              arguments: "{}",
-              input: {},
-              output: [],
+              arguments: '{"query":"synthetic"}',
+              input: { query: "synthetic" },
+              output: { query: "synthetic", results: [] },
               state: "complete",
             }}
           />
