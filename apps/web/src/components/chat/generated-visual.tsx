@@ -38,7 +38,10 @@ import { openIsolatedWindow } from "@/lib/open-isolated-window";
 import { toSafeId } from "@/lib/safe-id";
 
 import type { VisualInteraction } from "./generated-visual.logic";
-import { parseVisualHostMessage } from "./generated-visual.logic";
+import {
+  activateVisual,
+  parseVisualHostMessage,
+} from "./generated-visual.logic";
 import { createVisualShellSession } from "./visual-shell-session";
 
 type GeneratedVisualProps = {
@@ -60,7 +63,7 @@ const GeneratedVisualFrame = ({
   const frame = useRef<HTMLIFrameElement>(null);
   const [height, setHeight] = useState(320);
   const [interaction, setInteraction] = useState<VisualInteraction>({
-    status: "preview",
+    status: "loading",
   });
   const [confirmUrl, setConfirmUrl] = useState<string | null>(null);
   const { insertPastedTextIntoThread } = useChatEditorManager();
@@ -198,6 +201,14 @@ const GeneratedVisualFrame = ({
     window.addEventListener("message", receive);
     return () => window.removeEventListener("message", receive);
   }, [receive]);
+  const activate = () => {
+    const next = activateVisual(interaction, frame.current?.contentWindow);
+    if (next === interaction) {
+      return;
+    }
+    setInteraction(next);
+    requestAnimationFrame(() => frame.current?.focus());
+  };
   const loadShell = () => {
     setInteraction({ status: "preview" });
     const element = frame.current;
@@ -235,13 +246,11 @@ const GeneratedVisualFrame = ({
         <Button
           size="sm"
           variant="outline"
+          disabled={interaction.status === "loading"}
           onClick={(event) => {
-            const activatedFrame = frame.current?.contentWindow;
-            if (!event.nativeEvent.isTrusted || !activatedFrame) {
-              return;
+            if (event.nativeEvent.isTrusted) {
+              activate();
             }
-            setInteraction({ status: "interactive", activatedFrame });
-            requestAnimationFrame(() => frame.current?.focus());
           }}
         >
           {t("chat.activateGeneratedView")}
@@ -254,22 +263,20 @@ const GeneratedVisualFrame = ({
           referrerPolicy="no-referrer"
           sandbox="allow-scripts"
           onLoad={loadShell}
-          inert={interaction.status === "preview"}
+          inert={interaction.status !== "interactive"}
           className="block w-full border-0"
           style={{ height }}
         />
-        {interaction.status === "preview" && (
+        {interaction.status !== "interactive" && (
           <button
             type="button"
             className="absolute inset-0 cursor-pointer"
             aria-label={t("chat.activateGeneratedView")}
+            disabled={interaction.status === "loading"}
             onClick={(event) => {
-              const activatedFrame = frame.current?.contentWindow;
-              if (!event.nativeEvent.isTrusted || !activatedFrame) {
-                return;
+              if (event.nativeEvent.isTrusted) {
+                activate();
               }
-              setInteraction({ status: "interactive", activatedFrame });
-              requestAnimationFrame(() => frame.current?.focus());
             }}
           />
         )}
