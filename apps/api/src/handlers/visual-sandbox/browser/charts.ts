@@ -4,9 +4,9 @@ import { treemap } from "@tanstack/charts/hierarchy/treemap";
 import { panic } from "better-result";
 import { scaleLinear, scaleOrdinal } from "d3-scale";
 
+import { COURT_TIER_LOCALIZED_LABELS as tierLabels } from "@stll/api-contract/case-law-court-tier-locales";
 import { COURT_TIER_LABELS } from "@stll/api-contract/case-law-court-tiers";
 
-import tierLabels from "../generated/court-tier-labels.json";
 import {
   createTreemapModel,
   treemapCategoryValue,

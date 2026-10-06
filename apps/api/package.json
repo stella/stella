@@ -9,7 +9,7 @@
   },
   "scripts": {
     "build": "bun run generate:capability-runtime && bun run build:mcp-apps && bun run build:visual-sandbox",
-    "build:visual-sandbox": "bun scripts/build-visual-chart-locales.ts && bun scripts/build-visual-sandbox.ts",
+    "build:visual-sandbox": "bun scripts/build-visual-sandbox.ts",
     "build:mcp-apps": "bun scripts/build-mcp-apps.ts",
     "gen:chat-saved-state": "bun scripts/gen-chat-saved-state.ts",
     "gen:chat-transcripts": "bun scripts/gen-chat-transcripts.ts",
