@@ -13,10 +13,13 @@ import {
 import { courtTierLabel } from "@/api/lib/case-law/court-tiers";
 import {
   cappedSourceFacetBuckets,
+  decisionTypeKindBuckets,
+  foldStatedDecisionTypeBuckets,
   groupCourtsByTier,
   labelSourceBuckets,
   type SearchFacetBucket,
 } from "@/api/lib/case-law/decision-search-facets";
+import { STATED_DECISION_TYPE_KINDS } from "@/api/lib/case-law/decision-type-kind";
 import {
   HIGHEST_COURT_TIER,
   LOWEST_COURT_TIER,
@@ -243,4 +246,69 @@ test("source bucket lower bounds appear only above the cap and survive labelling
     );
     expect(output.label).toBe(`source-${index}`);
   }
+});
+
+test("two stored spellings of one type collapse into one canonical bucket with the summed count", () => {
+  expect(
+    foldStatedDecisionTypeBuckets([
+      bucket("usnesení", 5),
+      bucket("rozsudek", 6),
+      bucket("usn.", 2),
+      bucket("zzz-nepojmenovaný-typ", 1),
+    ]),
+  ).toEqual([
+    { value: "order", label: null, count: 7 },
+    { value: "judgment", label: null, count: 6 },
+    { value: "other", label: null, count: 1 },
+  ]);
+});
+
+test("stored casings, joined lists and docket numbers collapse safely into canonical buckets", () => {
+  expect(
+    foldStatedDecisionTypeBuckets([
+      bucket("uznesenie", 100),
+      bucket("Uznesenie", 20),
+      bucket("uznesenie,uznesenie", 7),
+      bucket("nález,nález", 3),
+      bucket("uznesenie,nález", 2),
+      bucket("63 az 17/2026 - 28", 1),
+    ]),
+  ).toEqual([
+    { value: "order", label: null, count: 127 },
+    { value: "finding", label: null, count: 3 },
+    { value: "other", label: null, count: 3 },
+  ]);
+});
+
+test("the type facet is cut to its limit after the fold, not before", () => {
+  // A full list of other kinds, each outranking either spelling of `order`
+  // alone: cutting spellings before folding would drop `order`, whose two
+  // spellings together outrank them all.
+  const otherKinds = new Map<string, string>();
+  for (const [stated, kind] of Object.entries(STATED_DECISION_TYPE_KINDS)) {
+    if (kind !== "order" && kind !== "other" && !otherKinds.has(kind)) {
+      otherKinds.set(kind, stated);
+    }
+  }
+  const filler = [...otherKinds.values()]
+    .slice(0, LIMITS.caseLawFacetLimit)
+    .map((stated) => bucket(stated, 3));
+  expect(filler.length).toBe(LIMITS.caseLawFacetLimit);
+
+  const folded = foldStatedDecisionTypeBuckets([
+    ...filler,
+    bucket("usnesení", 2),
+    bucket("usn.", 2),
+  ]);
+  expect(folded.at(0)).toEqual({ value: "order", label: null, count: 4 });
+  expect(folded.length).toBe(LIMITS.caseLawFacetLimit);
+});
+
+test("a Postgres type bucket that is not a kind is a broken statement", () => {
+  expect(decisionTypeKindBuckets([bucket("order", 3)])).toEqual([
+    { value: "order", label: null, count: 3 },
+  ]);
+  expect(() => decisionTypeKindBuckets([bucket("usn.", 3)])).toThrow(
+    "non-kind",
+  );
 });

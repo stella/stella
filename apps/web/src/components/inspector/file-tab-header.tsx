@@ -147,9 +147,7 @@ export const FileTabHeaderActions = ({
           workspaceId={tab.workspaceId}
         />
       ) : null}
-      {pdfSignTarget !== null ? (
-        <PdfSignButton presentation="icon" target={pdfSignTarget} />
-      ) : null}
+      {pdfSignTarget !== null ? <PdfSignButton target={pdfSignTarget} /> : null}
       {children}
     </>
   );

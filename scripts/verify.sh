@@ -507,4 +507,7 @@ run_step "Published package lists" bun run check:published-package-lists
 run_step "Bridge-version guard" bash scripts/check-bridge-version.sh
 run_step "Remaining repository script tests" bun scripts/run-unlisted-script-tests.ts
 
+run_step "CI service image mirror inventory" bun scripts/ci-service-images.ts
+run_step "CI service image mirror self-tests" bun test scripts/ci-service-images.test.ts
+
 finish_verification

@@ -5,7 +5,7 @@ import path from "node:path";
 
 import { compareCodeUnit } from "../packages/collation/src/collation";
 import { checkRegistry, versionBumpTime } from "./check-published-versions";
-import { ALL_PACKAGE_ORDER } from "./publish-package-order";
+import { ALL_PACKAGE_ORDER } from "./publish-packages";
 
 const NOW = 2_000_000_000;
 const SENTINEL = "registry-private-response";
@@ -55,10 +55,13 @@ describe("published registry versions", () => {
       new URL("publish-package-selection.ts", import.meta.url),
     ).text();
     expect(selection).toMatch(
-      /import\s*\{[^}]*ALL_PACKAGE_ORDER[^}]*\}\s*from "\.\/publish-package-order"/u,
+      /import\s*\{[^}]*ALL_PACKAGE_ORDER[^}]*\}\s*from "\.\/publish-packages"/u,
     );
-    expect(selection).toMatch(
-      /export\s*\{[^}]*ALL_PACKAGE_ORDER[^}]*\}\s*from "\.\/publish-package-order"/u,
+    const checker = await Bun.file(
+      new URL("check-published-versions.ts", import.meta.url),
+    ).text();
+    expect(checker).toMatch(
+      /import\s*\{[^}]*ALL_PACKAGE_ORDER[^}]*\}\s*from "\.\/publish-packages"/u,
     );
     expect(selection).toMatch(
       /if \(manualPackage === "all"\)\s*\{\s*return ALL_PACKAGE_ORDER;\s*\}/u,

@@ -1,5 +1,5 @@
 #!/usr/bin/env bun
-import { ALL_PACKAGE_ORDER } from "./publish-package-order";
+import { ALL_PACKAGE_ORDER } from "./publish-packages";
 
 const DAY_SECONDS = 24 * 60 * 60;
 const SEMVER = /^\d+\.\d+\.\d+(?:-[\da-zA-Z.-]+)?(?:\+[\da-zA-Z.-]+)?$/u;

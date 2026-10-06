@@ -4,6 +4,19 @@ const PORT = 4177;
 const BASE_URL = `http://127.0.0.1:${PORT}`;
 
 export default defineConfig({
+  reporter: process.env["CI"]
+    ? [
+        ["dot"],
+        [
+          "json",
+          {
+            outputFile:
+              process.env["PLAYWRIGHT_JSON_OUTPUT_FILE"] ??
+              ".cache/playwright-timings.json",
+          },
+        ],
+      ]
+    : [["list"]],
   testDir: "./tests/browser",
   testMatch: "**/*.playwright.spec.ts",
   fullyParallel: true,

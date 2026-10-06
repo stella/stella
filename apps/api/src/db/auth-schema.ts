@@ -391,6 +391,16 @@ export const apikey = pgTable(
     index("apikey_metadata_organization_id_idx")
       .on(sql`((${table.metadata}::jsonb ->> 'organizationId'))`)
       .where(sql`${table.metadata} IS NOT NULL`),
+    index("apikey_personal_owner_keyset_idx")
+      .on(
+        sql`((${table.metadata}::jsonb ->> 'organizationId'))`,
+        table.referenceId,
+        sql`${table.createdAt} DESC`,
+        sql`${table.id} DESC`,
+      )
+      .where(
+        sql`${table.metadata} IS NOT NULL AND ${table.metadata}::jsonb ->> 'kind' = 'personal'`,
+      ),
     index("apikey_org_keyset_idx")
       .on(
         sql`((${table.metadata}::jsonb ->> 'organizationId'))`,

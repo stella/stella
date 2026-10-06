@@ -1,14 +1,6 @@
 import { panic } from "better-result";
 
-import {
-  ALL_PACKAGE_ORDER,
-  LIBRARY_PACKAGE_ORDER,
-} from "./publish-package-order";
-
-export {
-  ALL_PACKAGE_ORDER,
-  LIBRARY_PACKAGE_ORDER,
-} from "./publish-package-order";
+import { ALL_PACKAGE_ORDER, LIBRARY_PACKAGE_ORDER } from "./publish-packages";
 
 type PublishEvent = "push" | "workflow_run" | "workflow_dispatch";
 
@@ -58,6 +50,34 @@ export const selectPublishPackages = ({
   return selected;
 };
 
+const FULL_SHA = /^[0-9a-f]{40}$/u;
+const NO_COMMIT = /^0{40}$/u;
+
+/**
+ * The paths one push changed. A merge queue can land several commits in one
+ * push, and the version commit is not necessarily the last: diffing only HEAD
+ * would then miss its changelogs and publish nothing. With the push's `before`
+ * SHA the whole pushed range counts; without one (a new branch, or a manual
+ * run) only HEAD does.
+ */
+export const changedPathsCommand = (
+  pushBefore: string | undefined,
+): readonly string[] =>
+  pushBefore !== undefined &&
+  FULL_SHA.test(pushBefore) &&
+  !NO_COMMIT.test(pushBefore)
+    ? ["git", "diff", "--name-only", pushBefore, "HEAD", "--", "packages"]
+    : [
+        "git",
+        "diff-tree",
+        "--no-commit-id",
+        "--name-only",
+        "-r",
+        "HEAD",
+        "--",
+        "packages",
+      ];
+
 if (import.meta.main) {
   const eventName = Bun.argv.at(2);
   const manualPackage = Bun.argv.at(3) ?? "all";
@@ -70,16 +90,7 @@ if (import.meta.main) {
   }
 
   const changedPaths = Bun.spawnSync(
-    [
-      "git",
-      "diff-tree",
-      "--no-commit-id",
-      "--name-only",
-      "-r",
-      "HEAD",
-      "--",
-      "packages",
-    ],
+    [...changedPathsCommand(process.env["PUSH_BEFORE"])],
     { stdout: "pipe", stderr: "pipe" },
   );
   if (changedPaths.exitCode !== 0) {
