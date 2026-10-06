@@ -6,6 +6,7 @@ import {
   mkdirSync,
   mkdtempSync,
   readFileSync,
+  realpathSync,
   rmSync,
   symlinkSync,
   writeFileSync,
@@ -1608,6 +1609,16 @@ test("path-scoped platform checks run in the merge group", () => {
   }
 });
 
+test("every bounded-install implementation and fixture selects Windows", () => {
+  const files = [...new Bun.Glob("scripts/ci-install*.ts").scanSync()];
+  expect(files.length).toBeGreaterThan(0);
+  for (const file of files) {
+    expect(runSelector([file], ["windows_scripts_required"]), file).toEqual([
+      "true",
+    ]);
+  }
+});
+
 test("a fast-depth run requires every selected fast-required job to run", () => {
   expect(fastRequired.length).toBeGreaterThan(0);
   const gates: ExpectedResultGate[] = [];
@@ -2590,7 +2601,9 @@ test("the Docker fold is planned by either original scope without changing the s
 });
 
 test("folded image checks preserve separate working directories for frozen installs and production smoke", () => {
-  const directory = mkdtempSync(nodePath.join(tmpdir(), "folded-image-deps-"));
+  const directory = realpathSync(
+    mkdtempSync(nodePath.join(tmpdir(), "folded-image-deps-")),
+  );
   const bin = nodePath.join(directory, "bin");
   mkdirSync(bin);
   mkdirSync(nodePath.join(directory, "apps"));
@@ -2624,17 +2637,21 @@ mkdir -p out-runner/full
   try {
     const result = Bun.spawnSync(["bash", "-eu", "-c", api?.run ?? "exit 1"], {
       cwd: directory,
-      env: { PATH: `${bin}:${process.env["PATH"] ?? ""}` },
+      // GitHub sets RUNNER_TEMP; bounded installs write their logs below it.
+      env: {
+        PATH: `${bin}:${process.env["PATH"] ?? ""}`,
+        RUNNER_TEMP: directory,
+      },
       stdout: "pipe",
       stderr: "pipe",
     });
     expect(result.exitCode, new TextDecoder().decode(result.stderr)).toBe(0);
     const commands = readFileSync(nodePath.join(bin, "bun.log"), "utf-8");
     expect(commands).toContain(
-      `${directory}/api-install:install --filter @stll/api --filter @stll/collab --filter @stll/legal-atlas-runner --frozen-lockfile --ignore-scripts`,
+      `${directory}/api-install:../scripts/ci-install.ts ${directory}/bun-install/api-image.log --filter @stll/api --filter @stll/collab --filter @stll/legal-atlas-runner --frozen-lockfile --ignore-scripts`,
     );
     expect(commands).toContain(
-      `${directory}/runner-install:install --filter @stll/legal-atlas-runner --production --frozen-lockfile --ignore-scripts`,
+      `${directory}/runner-install:../scripts/ci-install.ts ${directory}/bun-install/legal-atlas.log --filter @stll/legal-atlas-runner --production --frozen-lockfile --ignore-scripts`,
     );
     expect(commands).toContain(
       `${directory}/runner-install:apps/legal-atlas-runner/dist/index.js smoke`,
