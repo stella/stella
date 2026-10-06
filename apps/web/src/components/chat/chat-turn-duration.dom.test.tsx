@@ -14,6 +14,7 @@ const { act, cleanup, render } = await import("@testing-library/react");
 const { IntlProvider } = await import("use-intl");
 const { ChatTurnDuration } =
   await import("@/components/chat/chat-turn-duration");
+const { FormattingProvider } = await import("@/i18n/formatting-context");
 const messages = (await import("@/i18n/langs/en.json")).default;
 
 const START = "2026-01-01T00:00:00.000Z";
@@ -32,9 +33,11 @@ test("ticks only the active server span and freezes while awaiting a user", asyn
   setSystemTime(new Date(START));
   const view = render(
     <IntlProvider locale="en" messages={messages} timeZone="UTC">
-      <ChatTurnDuration
-        timing={{ status: "running", durationMs: 4000, startedAt: START }}
-      />
+      <FormattingProvider locale="en" timeZone="UTC">
+        <ChatTurnDuration
+          timing={{ status: "running", durationMs: 4000, startedAt: START }}
+        />
+      </FormattingProvider>
     </IntlProvider>,
   );
   expect(view.container.textContent).toBe("Worked for 4s");
@@ -45,7 +48,9 @@ test("ticks only the active server span and freezes while awaiting a user", asyn
   expect(view.container.textContent).toBe("Worked for 6s");
   view.rerender(
     <IntlProvider locale="en" messages={messages} timeZone="UTC">
-      <ChatTurnDuration timing={{ status: "finished", durationMs: 6000 }} />
+      <FormattingProvider locale="en" timeZone="UTC">
+        <ChatTurnDuration timing={{ status: "finished", durationMs: 6000 }} />
+      </FormattingProvider>
     </IntlProvider>,
   );
   await act(async () => {
@@ -55,13 +60,15 @@ test("ticks only the active server span and freezes while awaiting a user", asyn
   expect(view.container.textContent).toBe("Worked for 6s");
   view.rerender(
     <IntlProvider locale="en" messages={messages} timeZone="UTC">
-      <ChatTurnDuration
-        timing={{
-          status: "running",
-          durationMs: 6000,
-          startedAt: "2026-01-01T01:00:00.000Z",
-        }}
-      />
+      <FormattingProvider locale="en" timeZone="UTC">
+        <ChatTurnDuration
+          timing={{
+            status: "running",
+            durationMs: 6000,
+            startedAt: "2026-01-01T01:00:00.000Z",
+          }}
+        />
+      </FormattingProvider>
     </IntlProvider>,
   );
   await act(async () => {

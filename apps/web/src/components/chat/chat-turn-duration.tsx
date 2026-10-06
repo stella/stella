@@ -1,10 +1,11 @@
-import { useFormatter, useNow, useTranslations } from "use-intl";
+import { useNow, useTranslations } from "use-intl";
 
 import {
   getChatTurnDurationMs,
   getChatTurnDurationUnits,
 } from "@/components/chat/chat-turn-duration.logic";
 import type { ChatMessage } from "@/components/chat/chat-ui-tools";
+import { useFormatter } from "@/i18n/formatting-context";
 
 type ChatTurnDurationProps = {
   timing: NonNullable<NonNullable<ChatMessage["metadata"]>["turnTiming"]>;

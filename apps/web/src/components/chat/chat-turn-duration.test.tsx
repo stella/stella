@@ -8,6 +8,7 @@ import {
   getChatTurnDurationMs,
   getChatTurnDurationUnits,
 } from "@/components/chat/chat-turn-duration.logic";
+import { FormattingProvider } from "@/i18n/formatting-context";
 import arabicMessages from "@/i18n/langs/ar.json";
 import messages from "@/i18n/langs/en.json";
 
@@ -19,7 +20,9 @@ const renderDuration = (
 ) =>
   renderToStaticMarkup(
     <IntlProvider locale="en" messages={messages} now={NOW} timeZone="UTC">
-      <ChatTurnDuration timing={timing} />
+      <FormattingProvider locale="en" timeZone="UTC">
+        <ChatTurnDuration timing={timing} />
+      </FormattingProvider>
     </IntlProvider>,
   );
 
@@ -87,7 +90,7 @@ describe("assistant turn duration", () => {
   });
 });
 
-test("renders the Arabic sentence with localized narrow duration units", () => {
+test("uses the formatting preference for Arabic duration digits and units", () => {
   const html = renderToStaticMarkup(
     <IntlProvider
       locale="ar"
@@ -95,9 +98,11 @@ test("renders the Arabic sentence with localized narrow duration units", () => {
       now={NOW}
       timeZone="UTC"
     >
-      <ChatTurnDuration timing={{ status: "finished", durationMs: 4000 }} />
+      <FormattingProvider locale="ar-u-nu-arab" timeZone="UTC">
+        <ChatTurnDuration timing={{ status: "finished", durationMs: 4000 }} />
+      </FormattingProvider>
     </IntlProvider>,
   );
-  expect(html).toMatch(/مدة العمل: 4\s*ث/u);
+  expect(html).toMatch(/مدة العمل: ٤\s*ث/u);
   expect(html).not.toContain("Worked for");
 });
