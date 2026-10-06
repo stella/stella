@@ -1473,6 +1473,14 @@
       "toggleDetails": "Alternar detalhes",
       "unrestoredFields": "{count, plural, one {# campo não pôde ser preenchido} other {# campos não puderam ser preenchidos}} com valores reais no modo anonimizado. Revise: {fields}"
     },
+    "turnNotification": {
+      "failedBody": "Uma resposta do chat na stella não foi concluída.",
+      "failedTitle": "A resposta falhou",
+      "needsInputBody": "Um chat está aguardando sua aprovação ou resposta.",
+      "needsInputTitle": "A stella precisa de você",
+      "replyReadyBody": "A stella terminou de responder no seu chat.",
+      "replyReadyTitle": "Resposta pronta"
+    },
     "unsupportedFileType": "Tipo de arquivo não suportado",
     "uploadFailed": "Falha ao processar o arquivo",
     "usageFallbackNotice": "Cota diária de IA esgotada — as respostas continuam no modelo padrão.",
@@ -4371,6 +4379,11 @@
       "betaInbox": "Caixa de entrada e notificações",
       "betaInboxDescription": "Mostrar a caixa de entrada e o sino de notificações",
       "betaTimeBillingDescription": "Mostrar o controle de tempo, as faturas e as despesas",
+      "chatNotifications": "Notificações do chat",
+      "chatNotificationsBlocked": "As notificações da stella estão bloqueadas neste navegador. Permita-as nas configurações do site no navegador.",
+      "chatNotificationsDescription": "Receba uma notificação deste navegador quando uma resposta do chat terminar enquanto a stella estiver em segundo plano.",
+      "chatNotificationsToggle": "Avisar quando uma resposta estiver pronta ou precisar de mim",
+      "chatNotificationsUnsupported": "Este navegador não oferece suporte a notificações.",
       "confirmDelete": "Confirmar exclusão de conta",
       "dangerZone": "Zona de perigo",
       "dangerZoneDescription": "Excluir permanentemente o acesso à conta e os dados privados da conta.",

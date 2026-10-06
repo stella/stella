@@ -1473,6 +1473,14 @@
       "toggleDetails": "Részletek megjelenítése",
       "unrestoredFields": "Anonimizált módban {count, plural, one {# mezőt} other {# mezőt}} nem sikerült valódi értékekkel kitölteni. Ellenőrizze: {fields}"
     },
+    "turnNotification": {
+      "failedBody": "Egy stella-csevegés válasza nem fejeződött be.",
+      "failedTitle": "A válasz sikertelen",
+      "needsInputBody": "Egy csevegés az Ön jóváhagyására vagy válaszára vár.",
+      "needsInputTitle": "A stellának szüksége van Önre",
+      "replyReadyBody": "A stella befejezte a választ a csevegésben.",
+      "replyReadyTitle": "Kész a válasz"
+    },
     "unsupportedFileType": "Nem támogatott fájltípus",
     "uploadFailed": "A fájl feldolgozása sikertelen",
     "usageFallbackNotice": "A napi AI-keret elfogyott — a válaszok a normál modellen folytatódnak.",
@@ -4371,6 +4379,11 @@
       "betaInbox": "Beérkezett üzenetek és értesítések",
       "betaInboxDescription": "A Beérkezett üzenetek és az értesítési harang megjelenítése",
       "betaTimeBillingDescription": "Időkövetés, számlák és költségek megjelenítése",
+      "chatNotifications": "Csevegési értesítések",
+      "chatNotificationsBlocked": "A stella értesítései le vannak tiltva ebben a böngészőben. Engedélyezze őket a böngésző webhely-beállításaiban.",
+      "chatNotificationsDescription": "Értesítést kap ettől a böngészőtől, amikor egy csevegési válasz elkészül, miközben a stella a háttérben fut.",
+      "chatNotificationsToggle": "Értesítsen, ha egy válasz elkészült, vagy a közreműködésemre vár",
+      "chatNotificationsUnsupported": "Ez a böngésző nem támogatja az értesítéseket.",
       "confirmDelete": "Fiók törlésének megerősítése",
       "dangerZone": "Veszélyes zóna",
       "dangerZoneDescription": "Fiókhozzáférése és a fiók privát adatainak végleges törlése.",
