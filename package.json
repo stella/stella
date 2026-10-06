@@ -85,6 +85,7 @@
     "check:lockfile-ages": "bun scripts/check-lockfile-release-ages.ts",
     "check:dead-columns": "bun scripts/check-dead-columns.ts",
     "check:projection-totality": "bun scripts/check-projection-totality.ts",
+    "check:split-buttons": "bun scripts/check-split-buttons.ts",
     "check:result-boundary-enrolment": "bun scripts/check-result-boundary-enrolment.ts",
     "check:test-input-coverage": "bun scripts/check-test-input-coverage.ts",
     "check:desktop-rust-inputs": "bun scripts/check-desktop-rust-inputs.ts",
