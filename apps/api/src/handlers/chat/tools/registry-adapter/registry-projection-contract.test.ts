@@ -2480,7 +2480,7 @@ describe("decision text in chat projection", () => {
     } satisfies Awaited<ReturnType<typeof readGatedDecisionCitationDigest>>);
     const toolName = "read_case_law_decision";
     const refRegistry = createChatRefRegistry();
-    const { result, fetched } = await recordOutboundFetches(() =>
+    const { result, fetched } = await recordOutboundFetches(async () =>
       runRegistryReadTool({
         args: { decision_ids: [uid(54)] },
         context: contextFor(toolName, {}),
