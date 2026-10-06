@@ -1,4 +1,5 @@
 import { expect, test } from "bun:test";
+import { getColumns } from "drizzle-orm";
 
 import { entities, featureEnrolments } from "@/api/db/schema";
 import { resolveFeatureAccessSnapshot } from "@/api/lib/auth/feature-access/context";
@@ -65,23 +66,20 @@ test("shared admission fixtures resolve every registry size with empty or explic
 });
 
 test("default enrolment reads never consume a resource fixture with matching projection keys", async () => {
+  const resourceId = toSafeId<"entity">("resource");
   let resourceQueries = 0;
   const database = createScopedDbMock({
     select: () => {
       resourceQueries += 1;
       return {
         from: () => ({
-          where: () => ({ limit: async () => [{ featureId: "resource" }] }),
+          where: () => ({ limit: async () => [{ featureId: resourceId }] }),
         }),
       };
     },
   });
-  for (const selection of [
-    { featureId: featureEnrolments.featureId },
-    { organizationId: featureEnrolments.organizationId },
-    { userId: featureEnrolments.userId },
-    { createdAt: featureEnrolments.createdAt },
-  ]) {
+  for (const [name, column] of Object.entries(getColumns(featureEnrolments))) {
+    const selection = { [name]: column };
     const rows = await database.scopedDb(
       async (tx) =>
         await tx
@@ -101,6 +99,6 @@ test("default enrolment reads never consume a resource fixture with matching pro
         .where(undefined)
         .limit(1),
   );
-  expect(resourceRows).toEqual([{ featureId: "resource" }]);
+  expect(resourceRows).toEqual([{ featureId: resourceId }]);
   expect(resourceQueries).toBe(1);
 });
