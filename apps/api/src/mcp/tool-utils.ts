@@ -649,34 +649,6 @@ export const MCP_INTERNAL_ERROR_HINT =
 export const MCP_UPSTREAM_UNAVAILABLE_HINT =
   "Retry the same request. If the service remains unavailable, draft a report with prepare_feedback (put the request ID in context.request_id) and send it with submit_feedback once the human approves.";
 
-const SEARCH_INDEX_UNAVAILABLE_SINK = failureSink({
-  event: "mcp.search_index_unavailable",
-  expected: [],
-});
-
-/**
- * Envelope for a search whose index could not be reached. Every tool backed
- * by the public-law search index answers it the same way, whichever path the
- * refusal took to the boundary (a thrown handler error, a failed `Result`, a
- * safe handler's 503 body): the stable code to branch on, the cause in the
- * message, and a retry, because the arguments did not cause it. The cause
- * is still observed, so an index that stays away is seen.
- */
-export const searchIndexUnavailableResult = (
-  error: unknown,
-): InternalToolErrorResult => {
-  observeFailure(error, {
-    sink: SEARCH_INDEX_UNAVAILABLE_SINK,
-    ctx: { source: "mcp" },
-  });
-  return structuredErrorResult({
-    code: SEARCH_INDEX_UNAVAILABLE_CODE,
-    message: SEARCH_INDEX_UNAVAILABLE_MESSAGE,
-    hint: SEARCH_INDEX_UNAVAILABLE_HINT,
-    retryable: true,
-  });
-};
-
 /**
  * Preserve the caller's current grants while adding every scope required by an
  * operation. Explicit CLI scopes replace the default consent bundle, so a hint
@@ -819,6 +791,34 @@ export const notFoundResult = (
   hint?: string,
 ): InternalToolErrorResult =>
   structuredErrorResult({ code: "not_found", hint, message });
+
+const SEARCH_INDEX_UNAVAILABLE_SINK = failureSink({
+  event: "mcp.search_index_unavailable",
+  expected: [],
+});
+
+/**
+ * Envelope for a search whose index could not be reached. Every tool backed
+ * by the public-law search index answers it the same way, whichever path the
+ * refusal took to the boundary (a thrown handler error, a failed `Result`, a
+ * safe handler's 503 body): the stable code to branch on, the cause in the
+ * message, and a retry, because the arguments did not cause it. The cause
+ * is still observed, so an index that stays away is seen.
+ */
+export const searchIndexUnavailableResult = (
+  error: unknown,
+): InternalToolErrorResult => {
+  observeFailure(error, {
+    sink: SEARCH_INDEX_UNAVAILABLE_SINK,
+    ctx: { source: "mcp" },
+  });
+  return structuredErrorResult({
+    code: SEARCH_INDEX_UNAVAILABLE_CODE,
+    message: SEARCH_INDEX_UNAVAILABLE_MESSAGE,
+    hint: SEARCH_INDEX_UNAVAILABLE_HINT,
+    retryable: true,
+  });
+};
 
 /**
  * Envelope for a failed backing-handler `Result`, the single sink for the
