@@ -7,13 +7,13 @@ import {
 } from "@stll/api-contract/case-law-court-tier-locales";
 import { assertProperty } from "@stll/property-testing";
 
-import { courtYearFixture, treemapFixture } from "./treemap-fixture";
+import { courtYearFixture, treemapFixture } from "./browser/treemap-fixture";
 import {
   createTreemapModel,
   treemapColorDomain,
   treemapCategoryValue,
   type VisualTreemapTree,
-} from "./treemap-model";
+} from "./browser/treemap-model";
 
 const bucket = (id: string, count = 1) =>
   ({
