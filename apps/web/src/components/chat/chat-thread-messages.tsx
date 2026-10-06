@@ -51,6 +51,7 @@ import {
   EMPTY_RESTORATION_PAIRS,
   getFollowingAssistantRestorations,
   getMentionTagAttr,
+  sentinelIsAboveRoot,
   userMessageFallbackText,
 } from "@/components/chat/chat-thread-messages.logic";
 import { ChatTranscriptCopy } from "@/components/chat/chat-transcript-copy";
@@ -212,7 +213,7 @@ export const ChatThreadMessages = ({
 
     const observer = new IntersectionObserver(
       (entries) => {
-        const entry = entries.at(0);
+        const entry = entries.at(-1);
         if (!entry?.isIntersecting) {
           return;
         }
@@ -525,14 +526,10 @@ const StickyUserTurn = ({
     }
     const observer = new IntersectionObserver(
       (entries) => {
-        const entry = entries.at(0);
-        if (!entry) {
-          return;
+        const stuck = sentinelIsAboveRoot(entries);
+        if (stuck !== undefined) {
+          setIsStuck(stuck);
         }
-        const rootTop = entry.rootBounds?.top ?? 0;
-        setIsStuck(
-          !entry.isIntersecting && entry.boundingClientRect.top <= rootTop,
-        );
       },
       { root, rootMargin: "0px", threshold: [0] },
     );
