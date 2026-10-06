@@ -1,54 +1,44 @@
 import { describe, expect, test } from "bun:test";
 import * as v from "valibot";
 
-import {
-  generatedVisualInputSchema,
-  visualChartSpecSchema,
-} from "./generated-visual";
-
-const chart = {
-  mark: "bar",
-  dataset: "revenue",
-  x: { field: "month", type: "nominal", scale: "band" },
-  y: { field: "amount", type: "quantitative", scale: "linear" },
-  height: 360,
-} as const;
+import { generatedVisualInputSchema } from "./generated-visual";
 
 describe("generated visual contract", () => {
-  test("preserves a typed chart and finite JSON data", () => {
+  test("preserves bounded JSON, presentation text and optional decision links", () => {
     const input = {
       title: " Revenue ",
-      html: '<div id="chart-revenue"></div>',
-      data: { revenue: [{ month: "January", amount: 42 }] },
-      charts: [{ id: "chart-revenue", spec: chart }],
+      html: "<p>revenue</p>",
+      data: { revenue: 42 },
+      links: [{ id: "decision-one", decisionId: "case-one" }],
     };
     const parsed = v.parse(generatedVisualInputSchema, input);
     expect(parsed.title).toBe("Revenue");
-    expect(parsed.charts.at(0)?.spec).toEqual(chart);
     expect(parsed.data).toEqual(input.data);
-  });
-
-  test("rejects incompatible channel scales and unknown chart options", () => {
+    expect(parsed.links).toEqual(input.links);
     expect(
-      v.safeParse(visualChartSpecSchema, {
-        ...chart,
-        x: { field: "month", type: "nominal", scale: "linear" },
+      v.safeParse(generatedVisualInputSchema, {
+        ...input,
+        title: "x".repeat(121),
       }).success,
     ).toBe(false);
     expect(
-      v.safeParse(visualChartSpecSchema, { ...chart, renderer: "custom" })
-        .success,
+      v.safeParse(generatedVisualInputSchema, { ...input, charts: [] }).success,
     ).toBe(false);
     expect(
-      v.safeParse(visualChartSpecSchema, {
-        ...chart,
-        y: { field: "amount", type: "temporal", scale: "time" },
+      v.safeParse(generatedVisualInputSchema, {
+        ...input,
+        links: [{ id: "", decisionId: "case-one" }],
       }).success,
     ).toBe(false);
+    for (const data of [null, false, 42, "text", [1, 2]]) {
+      expect(
+        v.safeParse(generatedVisualInputSchema, { ...input, data }).success,
+      ).toBe(true);
+    }
   });
 
   test("bounds JSON values, nesting, node count and encoded bytes", () => {
-    const input = { title: "Table", html: "<p>Values</p>", charts: [] };
+    const input = { title: "Table", html: "<p>Values</p>" };
     for (const data of [
       { value: Number.NaN },
       { value: Infinity },

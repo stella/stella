@@ -6,44 +6,13 @@ export const GENERATED_VISUAL_LIMITS = {
   dataBytes: 1024 * 1024,
   dataDepth: 32,
   dataNodes: 50_000,
-  charts: 16,
-  chartRows: 10_000,
+  titleChars: 120,
+  links: 400,
+  linkIdChars: 128,
 } as const;
 
-const fieldNameSchema = v.pipe(v.string(), v.minLength(1), v.maxLength(128));
-const quantitativeChannelSchema = v.strictObject({
-  field: fieldNameSchema,
-  type: v.literal("quantitative"),
-  scale: v.picklist(["linear", "log"]),
-  label: v.optional(v.pipe(v.string(), v.maxLength(200))),
-});
-const horizontalChannelSchema = v.variant("type", [
-  quantitativeChannelSchema,
-  v.strictObject({
-    field: fieldNameSchema,
-    type: v.literal("nominal"),
-    scale: v.picklist(["band", "point"]),
-    label: v.optional(v.pipe(v.string(), v.maxLength(200))),
-  }),
-  v.strictObject({
-    field: fieldNameSchema,
-    type: v.literal("temporal"),
-    scale: v.literal("time"),
-    label: v.optional(v.pipe(v.string(), v.maxLength(200))),
-  }),
-]);
-
-export const visualChartSpecSchema = v.strictObject({
-  mark: v.picklist(["bar", "line", "point", "area"]),
-  dataset: fieldNameSchema,
-  x: horizontalChannelSchema,
-  y: quantitativeChannelSchema,
-  height: v.pipe(v.number(), v.integer(), v.minValue(120), v.maxValue(800)),
-});
-export type VisualChartSpec = v.InferOutput<typeof visualChartSpecSchema>;
-
 type VisualDataVisit = { value: unknown; depth: number };
-const isBoundedVisualData = (data: Record<string, unknown>) => {
+const isBoundedVisualData = (data: unknown) => {
   const pending: VisualDataVisit[] = [{ value: data, depth: 0 }];
   let nodes = 0;
   while (pending.length > 0) {
@@ -115,24 +84,30 @@ export const generatedVisualInputSchema = v.strictObject({
     v.string(),
     v.trim(),
     v.minLength(1),
-    v.maxLength(VISUAL_SANDBOX_LIMITS.titleChars),
+    v.maxLength(GENERATED_VISUAL_LIMITS.titleChars),
   ),
   html: v.pipe(v.string(), v.maxLength(VISUAL_SANDBOX_LIMITS.htmlBytes)),
   data: v.pipe(
-    v.record(fieldNameSchema, v.unknown()),
+    v.unknown(),
     v.check(
       isBoundedVisualData,
       "Use finite JSON values within the visual data size and nesting limits.",
     ),
   ),
-  charts: v.pipe(
-    v.array(
-      v.strictObject({
-        id: v.pipe(v.string(), v.regex(/^chart-[a-zA-Z0-9_-]{1,64}$/u)),
-        spec: visualChartSpecSchema,
-      }),
+  links: v.optional(
+    v.pipe(
+      v.array(
+        v.strictObject({
+          id: v.pipe(
+            v.string(),
+            v.minLength(1),
+            v.maxLength(GENERATED_VISUAL_LIMITS.linkIdChars),
+          ),
+          decisionId: v.pipe(v.string(), v.minLength(1), v.maxLength(256)),
+        }),
+      ),
+      v.maxLength(GENERATED_VISUAL_LIMITS.links),
     ),
-    v.maxLength(GENERATED_VISUAL_LIMITS.charts),
   ),
 });
 export type GeneratedVisualInput = v.InferOutput<
