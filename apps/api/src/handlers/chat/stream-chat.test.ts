@@ -1753,6 +1753,7 @@ describe("native interrupt boundary persistence", () => {
           arguments: JSON.stringify({
             subagents: [
               {
+                title: "List matters",
                 task: "list matters",
                 context: null,
                 expectedOutput: null,
@@ -1760,7 +1761,9 @@ describe("native interrupt boundary persistence", () => {
               },
             ],
           }),
-          input: { subagents: [{ task: "list matters" }] },
+          input: {
+            subagents: [{ title: "List matters", task: "list matters" }],
+          },
           toolName: SPAWN_SUBAGENTS_TOOL_NAME,
         }),
         agentLoopStrategy: maxIterations(3),
@@ -1784,9 +1787,11 @@ describe("native interrupt boundary persistence", () => {
     }
     expect(finish.responseMessage.parts).toMatchObject([
       {
-        arguments: JSON.stringify({ subagents: [{ task: "list matters" }] }),
+        arguments: JSON.stringify({
+          subagents: [{ title: "List matters", task: "list matters" }],
+        }),
         id: "call-1",
-        input: { subagents: [{ task: "list matters" }] },
+        input: { subagents: [{ title: "List matters", task: "list matters" }] },
         name: SPAWN_SUBAGENTS_TOOL_NAME,
         state: "approval-requested",
         type: "tool-call",
