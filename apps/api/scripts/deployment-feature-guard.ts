@@ -65,6 +65,10 @@ const ALWAYS_ON_ROUTE_FILES: ReadonlyMap<string, string> = new Map([
     "Desktop account presence supports handoff on every deployment",
   ],
   [
+    "apps/api/src/handlers/operator/routes.ts",
+    "Operator HTTP access is deployment-owned and refuses access when its credential is unset",
+  ],
+  [
     "apps/api/src/handlers/sanctions/public-routes.ts",
     "Public sanctions search is available on every deployment",
   ],

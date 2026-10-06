@@ -12,6 +12,17 @@
 
 /** Each run actor with the counts one of its runs reports. */
 export const SYSTEM_RUN_ACTOR_COUNTS = {
+  "system:sanctions-monitoring-fanout": [
+    "freshnessQueued",
+    "requestedOrganizations",
+    "fannedOrganizations",
+    "transitions",
+  ],
+  "system:operator-registrations": [
+    "sinceEpochMilliseconds",
+    "pageSize",
+    "returned",
+  ],
   "system:sanctions-refresh": [
     "activated",
     "activatedEntries",
@@ -68,6 +79,8 @@ export type SystemAuditCounts<A extends SystemRunActor> = Readonly<
 
 /** Actors stamped on organization audit rows no member performed. */
 export const TENANT_SYSTEM_ACTOR = {
+  sanctionsMonitoringDrain: "system:sanctions-monitoring-drain",
+  sanctionsMonitoringBackfill: "system:sanctions-monitoring-backfill",
   memoryCurator: "system:memory-curator",
   memoryExtractor: "system:memory-extractor",
   usageProvider: "system:usage-provider",

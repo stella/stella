@@ -35,6 +35,7 @@ import {
   serializeToolResult,
   structuredErrorResult,
   toolDataResult,
+  untypedToolDataResult,
 } from "@/api/mcp/tool-utils";
 import {
   getMcpToolDefinition,
@@ -376,22 +377,27 @@ describe("MCP calls emit one private-data-free outcome across dispatch paths", (
     test(`skill ${valid ? "success" : "output-contract failure"} is observed once`, async () => {
       const gatewayResult = {
         type: "internal",
-        result: toolDataResult(
-          valid
-            ? {
-                type: "skill",
-                body: PRIVATE_TEXT,
-                compatibility: null,
-                id: null,
-                license: null,
-                metadata: {},
-                name: "private-skill",
-                origin: "built-in",
-                resources: [],
-                version: null,
-              }
-            : { body: PRIVATE_TEXT },
-        ),
+        // The failure case stands in for a gateway that breaks its declared
+        // output at runtime; the checked constructor refuses that shape at
+        // compile time, so only this test asserts it into the declared type.
+        result: valid
+          ? toolDataResult({
+              type: "skill",
+              body: PRIVATE_TEXT,
+              compatibility: null,
+              id: null,
+              license: null,
+              metadata: {},
+              name: "private-skill",
+              origin: "built-in",
+              resources: [],
+              version: null,
+            })
+          : // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- stands in for a gateway that breaks its declared output at runtime
+            (untypedToolDataResult({ body: PRIVATE_TEXT }) as Extract<
+              GatewayDispatchResult,
+              { type: "internal" }
+            >["result"]),
       } satisfies GatewayDispatchResult;
       const result = await handleMcpToolCall({
         toolName: `skill__${PRIVATE_TEXT}`,

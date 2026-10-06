@@ -2,8 +2,7 @@ name: Deploy Landing
 
 # Deploys the landing site after every main merge that changes what the
 # landing build reads. The public repo cannot call private reusable workflows
-# directly, so this dispatches the private deploy workflow and watches the
-# resulting run.
+# directly, so this dispatches it and leaves the deploy result to that repo.
 
 on:
   push:
@@ -42,6 +41,7 @@ jobs:
       - name: Setup Bun
         uses: stella/.github/actions/setup-bun-cached@167fb396c6c0f4e07296ad2cd72e6ef15367c776
         with:
+          save: ${{ github.ref == 'refs/heads/main' }}
           bun-version-file: "package.json"
 
       # scripts/landing-deploy-scope.ts owns what the landing reads: its
@@ -91,6 +91,8 @@ jobs:
 
       - name: Setup Bun
         uses: stella/.github/actions/setup-bun-cached@167fb396c6c0f4e07296ad2cd72e6ef15367c776
+        with:
+          save: ${{ github.ref == 'refs/heads/main' }}
 
       - name: Install dependencies
         run: bash scripts/retry.sh bun ci --ignore-scripts
@@ -121,8 +123,7 @@ jobs:
   deploy:
     needs: build
     runs-on: ubuntu-latest
-    # Allows for the single retry below (a 3-minute wait plus a second deploy).
-    timeout-minutes: 30
+    timeout-minutes: 5
     permissions:
       contents: read
     # Release App key lives in this environment (main and v* tags only).
@@ -138,6 +139,7 @@ jobs:
       - name: Setup Bun
         uses: stella/.github/actions/setup-bun-cached@167fb396c6c0f4e07296ad2cd72e6ef15367c776
         with:
+          save: ${{ github.ref == 'refs/heads/main' }}
           bun-version-file: "package.json"
 
       # Builds finish in any order, so this job can start after a deploy for a
@@ -180,7 +182,7 @@ jobs:
           permission-actions: write
           permission-contents: read
 
-      - name: Dispatch and watch deploy-landing.yml
+      - name: Dispatch deploy-landing.yml
         if: steps.covered.outputs.covered != 'true'
         env:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
@@ -194,113 +196,16 @@ jobs:
           AWS_ROLE_ARN_DEPLOY: ${{ secrets.AWS_ROLE_ARN_DEPLOY }}
         run: |
 
-          # The dispatched private deploy occasionally fails on a transient
-          # blip. Wrap a single dispatch+watch in a function so it can be
-          # retried once before the deploy is failed. The private workflow
-          # refuses a build older than the live site, so a retry or a re-run
-          # can never put an older site in front of a newer one.
-          attempt_deploy() {
-            dispatched_at="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
-            # Must match the `run-name:` template in
-            # stella/private-workflows/.github/workflows/deploy-landing.yml.
-            expected_title="Deploy landing ${SOURCE_SHA}"
-            if ! dispatch_output="$(
-              gh workflow run deploy-landing.yml \
-                --repo "$PRIVATE_WORKFLOWS_REPO" \
-                --field source_repository="$SOURCE_REPOSITORY" \
-                --field source_ref="$SOURCE_REF" \
-                --field source_sha="$SOURCE_SHA" \
-                --field source_run_id="$SOURCE_RUN_ID" \
-                --field artifact_name="$ARTIFACT_NAME" \
-                --field artifact_digest="$ARTIFACT_DIGEST" \
-                --field aws_role_arn_deploy="$AWS_ROLE_ARN_DEPLOY" 2>&1
-            )"; then
-              printf '%s\n' "$dispatch_output" >&2
-              return 1
-            fi
-            printf '%s\n' "$dispatch_output"
-
-            run_id="$(
-              printf '%s\n' "$dispatch_output" \
-                | sed -nE 's#.*https://github.com/[^/]+/[^/]+/actions/runs/([0-9]+).*#\1#p' \
-                | head -n 1
-            )"
-
-            for _ in {1..30}; do
-              if [[ -n "$run_id" ]]; then
-                break
-              fi
-
-              run_id="$(
-                gh run list \
-                  --repo "$PRIVATE_WORKFLOWS_REPO" \
-                  --workflow deploy-landing.yml \
-                  --event workflow_dispatch \
-                  --json databaseId,createdAt,displayTitle \
-                  --jq ".[] | select(.createdAt >= \"$dispatched_at\") | select(.displayTitle == \"$expected_title\") | .databaseId" \
-                  --limit 10 \
-                  | head -n 1
-              )"
-
-              if [[ -z "$run_id" ]]; then
-                sleep 2
-              fi
-            done
-
-            if [[ -z "$run_id" ]]; then
-              echo "Could not find the dispatched landing deploy workflow run." >&2
-              return 1
-            fi
-
-            gh run watch "$run_id" \
-              --repo "$PRIVATE_WORKFLOWS_REPO" \
-              --compact \
-              --exit-status
-          }
-
-          # The private workflow runs one deploy at a time; a newer dispatch
-          # cancels the older run, which then ends as cancelled.
-          # A newer deploy that is still running or already succeeded covers
-          # this commit, so neither a failure nor a retry is warranted.
-          superseded() {
-            [[ -n "$run_id" ]] || return 1
-            local created_at newer
-            created_at="$(
-              gh run view "$run_id" \
-                --repo "$PRIVATE_WORKFLOWS_REPO" \
-                --json createdAt \
-                --jq .createdAt
-            )" || return 1
-            newer="$(
-              gh run list \
-                --repo "$PRIVATE_WORKFLOWS_REPO" \
-                --workflow deploy-landing.yml \
-                --limit 20 \
-                --json createdAt,status,conclusion \
-                --jq "[.[] | select(.createdAt > \"$created_at\") | select(.status != \"completed\" or .conclusion == \"success\")] | length"
-            )" || return 1
-            [[ "$newer" -gt 0 ]]
-          }
-
-          run_id=""
-          if attempt_deploy; then
-            exit 0
-          fi
-          if superseded; then
-            echo "::notice::A newer landing deploy supersedes ${SOURCE_SHA}."
-            exit 0
-          fi
-          echo "::warning::Landing deploy failed; retrying once in 3 minutes." >&2
-          sleep 180
-          run_id=""
-          if attempt_deploy; then
-            exit 0
-          fi
-          if superseded; then
-            echo "::notice::A newer landing deploy supersedes ${SOURCE_SHA}."
-            exit 0
-          fi
-          exit 1
+          gh workflow run deploy-landing.yml \
+            --repo "$PRIVATE_WORKFLOWS_REPO" \
+            --field source_repository="$SOURCE_REPOSITORY" \
+            --field source_ref="$SOURCE_REF" \
+            --field source_sha="$SOURCE_SHA" \
+            --field source_run_id="$SOURCE_RUN_ID" \
+            --field artifact_name="$ARTIFACT_NAME" \
+            --field artifact_digest="$ARTIFACT_DIGEST" \
+            --field aws_role_arn_deploy="$AWS_ROLE_ARN_DEPLOY"
+          echo "Landing deployment dispatched; the private workflow reports its result." >> "$GITHUB_STEP_SUMMARY"
 
       - name: Ping IndexNow with sitemap URLs
         # The key file is hosted at apps/landing/public/<key>.txt so
@@ -308,7 +213,7 @@ jobs:
         # public (it's served at https://stll.app/<key>.txt), so the
         # gitleaks generic-api-key match below is a false positive.
         # IndexNow is a best-effort SEO notification; a failure here must
-        # not fail the deploy, which has already succeeded by this point.
+        # not fail the accepted deployment dispatch.
         if: steps.covered.outputs.covered != 'true'
         continue-on-error: true
         env:

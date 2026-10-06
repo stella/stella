@@ -42,10 +42,13 @@ const createCapacityApp = () => {
     });
     return completion.promise;
   };
+  // Capacity cases: refuse at once, each request its own client.
   const middleware = publicCorpusConcurrencyLimit({
     observe: (event) => {
       observations.push(event);
     },
+    waitMsOf: () => 0,
+    clientOf: () => Bun.randomUUIDv7(),
   });
   const app = new Elysia()
     .use(middleware)
@@ -84,7 +87,10 @@ describe("public corpus active request capacity", () => {
       lines.push(line);
     });
     const completion = Promise.withResolvers<string>();
-    const middleware = publicCorpusConcurrencyLimit();
+    const middleware = publicCorpusConcurrencyLimit({
+      waitMsOf: () => 0,
+      clientOf: () => Bun.randomUUIDv7(),
+    });
     const app = new Elysia()
       .use(middleware)
       .post("/v1/case/decisions/search", async ({ request: incoming }) =>
@@ -350,6 +356,32 @@ describe("public corpus active request capacity", () => {
     expect(response.status).toBe(429);
     expect(pending).toEqual([]);
     expect(observations).toEqual([{ class: "search", outcome: "refused" }]);
+  });
+
+  test("one page's search and facets wait for each other instead of refusing", async () => {
+    const pending: (() => void)[] = [];
+    const work = async () => {
+      const completion = Promise.withResolvers<string>();
+      pending.push(() => completion.resolve("done"));
+      return await completion.promise;
+    };
+    // Production shape: one slot per task, so the facets must wait.
+    expect(getPublicCorpusClassPolicy().totalConcurrency).toBe(1);
+    // Production defaults: requests without an address share one client.
+    const app = new Elysia()
+      .use(publicCorpusConcurrencyLimit())
+      .post("/v1/case/decisions/search", work)
+      .get("/v1/case/decisions/facets", work);
+    const search = app.handle(request(searchPaths[1]));
+    const facets = app.handle(request(aggregatePaths[1]));
+    await Bun.sleep(10);
+    expect(pending).toHaveLength(1);
+    pending[0]?.();
+    expect((await search).status).toBe(200);
+    await Bun.sleep(10);
+    expect(pending).toHaveLength(2);
+    pending[1]?.();
+    expect((await facets).status).toBe(200);
   });
 
   test("the validated development switch skips capacity admission", async () => {

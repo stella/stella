@@ -68,8 +68,6 @@ export type TextUnit = {
    */
   readonly boundaries: "markup" | "layout";
   readonly blocks: readonly Block[];
-  /** The block that is the unit's root `ORDER` title, when it opens with one. */
-  readonly orderTitleBlockId: string | null;
 };
 
 /** Counts a reader of the parse can check against the source. */

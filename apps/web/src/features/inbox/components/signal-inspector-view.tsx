@@ -6,6 +6,7 @@ import { SIGNAL_KIND } from "@stll/api-contract/signals";
 import type { SignalEvidence } from "@stll/api-contract/signals";
 import { UserText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
+import { DetailsGrid, DetailsItem } from "@stll/ui/details-grid";
 import { AlertCircleIcon } from "@stll/ui/icons";
 import { ScrollArea } from "@stll/ui/scroll-area";
 import { Skeleton } from "@stll/ui/skeleton";
@@ -163,8 +164,8 @@ const EvidenceBody = ({ evidence, signal }: EvidenceBodyProps) => {
           <UserText as="p" className="text-pretty whitespace-pre-wrap">
             {evidence.description}
           </UserText>
-          <dl className="flex flex-col gap-2">
-            <Row label={t("emailViewer.attachments")}>
+          <DetailsGrid>
+            <DetailsItem label={t("emailViewer.attachments")}>
               {evidence.attachments.length === 0 ? (
                 <span className="text-muted-foreground">
                   {t("inbox.evidence.noAttachments")}
@@ -178,63 +179,63 @@ const EvidenceBody = ({ evidence, signal }: EvidenceBodyProps) => {
                   ))}
                 </ul>
               )}
-            </Row>
-          </dl>
+            </DetailsItem>
+          </DetailsGrid>
         </div>
       );
     case SIGNAL_KIND.HEARING_CHANGED:
       return (
-        <dl className="flex flex-col gap-2 text-sm">
-          <Row label={t("common.court")}>
+        <DetailsGrid>
+          <DetailsItem label={t("common.court")}>
             <UserText>{evidence.courtName}</UserText>
-          </Row>
-          <Row label={t("caseLaw.columns.caseNumber")}>
+          </DetailsItem>
+          <DetailsItem label={t("caseLaw.columns.caseNumber")}>
             <UserText>{evidence.caseNumber}</UserText>
-          </Row>
+          </DetailsItem>
           {evidence.previousAt !== null && (
-            <Row label={t("inbox.evidence.previous")}>
+            <DetailsItem label={t("inbox.evidence.previous")}>
               <s className="text-muted-foreground">
                 {formatDateTime(evidence.previousAt)}
               </s>
-            </Row>
+            </DetailsItem>
           )}
-          <Row label={t("inbox.evidence.current")}>
+          <DetailsItem label={t("inbox.evidence.current")}>
             {formatDateTime(evidence.currentAt)}
-          </Row>
+          </DetailsItem>
           {evidence.hearingType !== null && (
-            <Row label={t("inbox.evidence.hearingType")}>
+            <DetailsItem label={t("inbox.evidence.hearingType")}>
               <UserText>{evidence.hearingType}</UserText>
-            </Row>
+            </DetailsItem>
           )}
           {evidence.sourceUrl !== null && (
-            <Row label={t("common.source")}>
+            <DetailsItem label={t("common.source")} span="wide">
               <SourceLink url={evidence.sourceUrl} />
-            </Row>
+            </DetailsItem>
           )}
-        </dl>
+        </DetailsGrid>
       );
     case SIGNAL_KIND.DEADLINE_DETECTED:
       return (
-        <dl className="flex flex-col gap-2 text-sm">
-          <Row label={t("inbox.evidence.dueAt")}>
+        <DetailsGrid>
+          <DetailsItem label={t("inbox.evidence.dueAt")}>
             {format.dateTime(new Date(evidence.dueAt), { dateStyle: "long" })}
-          </Row>
-          <Row label={t("common.name")}>
+          </DetailsItem>
+          <DetailsItem label={t("common.name")}>
             <UserText>{evidence.label}</UserText>
-          </Row>
-          <Row label={t("common.document")}>
+          </DetailsItem>
+          <DetailsItem label={t("common.document")}>
             <DocumentRef
               entityId={evidence.entityId}
               name={evidence.entityName}
               signal={signal}
             />
-          </Row>
-          <Row label={t("inbox.evidence.quote")}>
+          </DetailsItem>
+          <DetailsItem label={t("inbox.evidence.quote")} span="wide">
             <blockquote className="border-s-2 ps-3 text-pretty italic">
               <UserText>{evidence.quote}</UserText>
             </blockquote>
-          </Row>
-        </dl>
+          </DetailsItem>
+        </DetailsGrid>
       );
     case SIGNAL_KIND.CONTRACT_REVIEWED:
       return (
@@ -293,32 +294,32 @@ const EvidenceBody = ({ evidence, signal }: EvidenceBodyProps) => {
       );
     case SIGNAL_KIND.WORK_UNACKNOWLEDGED:
       return (
-        <dl className="flex flex-col gap-2 text-sm">
-          <Row label={t("tasks.assigned")}>
+        <DetailsGrid>
+          <DetailsItem label={t("tasks.assigned")}>
             {formatDateTime(evidence.assignedAt)}
-          </Row>
-          <Row label={t("inbox.evidence.daysUnacknowledged")}>
+          </DetailsItem>
+          <DetailsItem label={t("inbox.evidence.daysUnacknowledged")}>
             {format.number(evidence.daysWaiting)}
-          </Row>
+          </DetailsItem>
           {evidence.workingTargetDate !== null && (
-            <Row label={t("tasks.workingTarget")}>
+            <DetailsItem label={t("tasks.workingTarget")}>
               {formatDate(evidence.workingTargetDate)}
-            </Row>
+            </DetailsItem>
           )}
           {evidence.hardDeadlineDate !== null && (
-            <Row label={t("tasks.hardDeadline")}>
+            <DetailsItem label={t("tasks.hardDeadline")}>
               {formatDate(evidence.hardDeadlineDate)}
-            </Row>
+            </DetailsItem>
           )}
-        </dl>
+        </DetailsGrid>
       );
     case SIGNAL_KIND.WORK_DEADLINE_AT_RISK:
       return (
-        <dl className="flex flex-col gap-2 text-sm">
-          <Row label={t("tasks.hardDeadline")}>
+        <DetailsGrid>
+          <DetailsItem label={t("tasks.hardDeadline")}>
             {formatDate(evidence.hardDeadlineDate)}
-          </Row>
-          <Row
+          </DetailsItem>
+          <DetailsItem
             label={t(
               evidence.daysUntilDeadline < 0
                 ? "inbox.evidence.daysOverdue"
@@ -326,16 +327,16 @@ const EvidenceBody = ({ evidence, signal }: EvidenceBodyProps) => {
             )}
           >
             {format.number(Math.abs(evidence.daysUntilDeadline))}
-          </Row>
+          </DetailsItem>
           {evidence.workingTargetDate !== null && (
-            <Row label={t("tasks.workingTarget")}>
+            <DetailsItem label={t("tasks.workingTarget")}>
               {formatDate(evidence.workingTargetDate)}
-            </Row>
+            </DetailsItem>
           )}
-          <Row label={t("tasks.status")}>
+          <DetailsItem label={t("tasks.status")}>
             {t(OPEN_WORK_STATUS_LABEL_KEY[evidence.obligationStatus])}
-          </Row>
-        </dl>
+          </DetailsItem>
+        </DetailsGrid>
       );
     default: {
       evidence satisfies never;

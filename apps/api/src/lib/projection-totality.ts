@@ -1,3 +1,5 @@
+import type * as v from "valibot";
+
 /**
  * A schema column can go silently unprojected: a handler hand-lists the
  * fields it sends to the client, a migration adds a column to the table, and
@@ -58,3 +60,88 @@ export type UnbackedProjectionKeys<
   Projection,
   Excused extends keyof Row = never,
 > = Exclude<keyof Projection, Exclude<keyof Row, Excused>>;
+
+// --- Compile-time payload ties -------------------------------------------------
+
+/**
+ * The field paths in `Payload` that `SchemaInput` does not declare, at any
+ * depth (arrays compared element-wise; a `Payload` union branch is compared
+ * only against the `SchemaInput` branches it is assignable to; an `unknown`
+ * schema field — stripped/unenumerated positions — admits any payload type
+ * without descending). Optional never fields synthesized by TypeScript when
+ * inferring heterogeneous arrays describe absent keys, so they are ignored.
+ * Required keys remain classified even when their value is undefined.
+ */
+type ProjectionScalar =
+  | string
+  | number
+  | boolean
+  | bigint
+  | symbol
+  | null
+  | undefined;
+
+type ExtraProjectionFields<Payload, SchemaInput> = unknown extends SchemaInput
+  ? never
+  : SchemaInput extends ProjectionScalar
+    ? never
+    : Payload extends readonly (infer Item)[]
+      ? SchemaInput extends readonly (infer ShapeItem)[]
+        ? ExtraProjectionFields<Item, ShapeItem>
+        : never
+      : Payload extends object
+        ? SchemaInput extends object
+          ? Payload extends SchemaInput
+            ? {
+                [K in keyof Payload]-?: K extends keyof SchemaInput
+                  ? ExtraProjectionFields<Payload[K], SchemaInput[K]>
+                  : Partial<Payload> extends Pick<Payload, K>
+                    ? [Required<Payload>[K]] extends [never]
+                      ? never
+                      : K
+                    : K;
+              }[keyof Payload]
+            : never
+          : never
+        : never;
+
+/**
+ * Compile-time exactness tie for a payload that is NOT built as an
+ * object literal (a shared helper's return value forwarded verbatim), where
+ * `satisfies v.InferInput<typeof X_PROJECTION>` gets no excess-property
+ * check. `AssertNoExtraFields<Payload, SchemaInput>` fails typecheck when
+ * `Payload` carries a field the projection schema does not classify, naming
+ * the offending keys. Use `projectionPayload` at construction sites to retain
+ * the producer type
+ * before a handler return annotation widens it.
+ */
+export type AssertNoExtraFields<
+  Payload extends ([ExtraProjectionFields<Payload, SchemaInput>] extends [never]
+    ? SchemaInput
+    : { unclassifiedFields: ExtraProjectionFields<Payload, SchemaInput> }),
+  SchemaInput,
+> = Payload;
+
+/**
+ * Bind inferred payloads before a handler return annotation can erase extra
+ * fields in forwarded domain objects. Unlike `satisfies`, this checks nested
+ * variables and spreads as well as fresh literals; runtime strict parsing
+ * remains the responsibility of the existing dispatch boundary.
+ */
+export const projectionPayload = <
+  TSchema extends v.GenericSchema,
+  TPayload extends v.InferInput<TSchema>,
+>(
+  _schema: TSchema,
+  payload: TPayload &
+    NoInfer<
+      [ExtraProjectionFields<TPayload, v.InferInput<TSchema>>] extends [never]
+        ? unknown
+        : {
+            unclassifiedFields: ExtraProjectionFields<
+              TPayload,
+              v.InferInput<TSchema>
+            >;
+          }
+    >,
+): TPayload => payload;

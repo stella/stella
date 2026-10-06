@@ -112,6 +112,7 @@ test("main SHA checks finish before any checkout in the validation job", () => {
   const names = validationSteps.map(({ name }) => name);
   expect(names).toEqual([
     "Validate merge queue depth",
+    "Select untested heavy SHA",
     "Validate SHA format",
     "Fetch main history",
     "Verify main ancestry",

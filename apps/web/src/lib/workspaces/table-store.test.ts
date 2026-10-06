@@ -1,6 +1,13 @@
 import { QueryClient } from "@tanstack/react-query";
 import { beforeEach, describe, expect, test } from "bun:test";
 
+import type { UnavailableWorkspaceView } from "@stll/api-contract";
+
+import type { WorkspaceView } from "@/lib/types";
+import {
+  selectAvailableWorkspaceView,
+  selectAvailableWorkspaceViews,
+} from "@/lib/workspaces/queries/views.logic";
 import {
   readPersistedTableState,
   TABLE_STORE_VERSION,
@@ -329,6 +336,59 @@ describe("reconciling the store against a matter's views", () => {
     for (const key of TABLE_VIEW_RECORD_KEYS) {
       expect(Object.keys(state[key]["ws-1"] ?? {})).toEqual(["v2"]);
       expect(Object.keys(state[key]["ws-2"] ?? {})).toEqual(["v1"]);
+    }
+  });
+
+  test("unavailable identities reconcile the raw cache while usable view selection excludes them", async () => {
+    seedEveryRecord([v1, v2, otherMatter]);
+    const unavailable = {
+      id: "v1",
+      layout: { type: "avt" },
+      eligibility: "unavailable",
+    } satisfies UnavailableWorkspaceView;
+    const ordinary = {
+      id: "v2",
+      version: 1,
+      name: "View",
+      position: 1,
+      createdAt: "2026-10-02T00:00:00.000Z",
+      layout: {
+        type: "filesystem",
+        version: 1,
+        filters: [],
+        sorts: [],
+        hiddenProperties: [],
+        calculations: [],
+      },
+    } satisfies WorkspaceView;
+    const queryClient = new QueryClient();
+    installTableStoreReconcile(queryClient);
+    const queryKey = ["views", "ws-1", "en"];
+    const selected = await queryClient.query({
+      queryFn: () => [unavailable, ordinary],
+      queryKey,
+      select: selectAvailableWorkspaceViews,
+    });
+    expect(selected).toEqual([ordinary]);
+    expect(
+      selectAvailableWorkspaceView([unavailable, ordinary], unavailable.id),
+    ).toBe(ordinary);
+    expect(
+      selectAvailableWorkspaceView([unavailable], unavailable.id),
+    ).toBeUndefined();
+    expect(selected.some((view) => view.id === unavailable.id)).toBe(false);
+    expect(queryClient.getQueryCache().find({ queryKey })?.state.data).toEqual([
+      unavailable,
+      ordinary,
+    ]);
+    for (const key of TABLE_VIEW_RECORD_KEYS) {
+      expect(Object.keys(useTableStore.getState()[key]["ws-1"] ?? {})).toEqual([
+        "v1",
+        "v2",
+      ]);
+      expect(Object.keys(useTableStore.getState()[key]["ws-2"] ?? {})).toEqual([
+        "v1",
+      ]);
     }
   });
 

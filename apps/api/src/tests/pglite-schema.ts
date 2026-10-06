@@ -726,6 +726,32 @@ export const installPglitePlaybookDocumentTypeKey = async (
   }
 };
 
+/** Install monitoring transition triggers from their owning migrations. */
+export const installPgliteSanctionsMonitoringTriggers = async (
+  db: PgliteSchemaDb,
+) => {
+  const statements = [
+    "20261003122900_sanctions_monitoring_marks",
+    "20261003123000_sanctions_monitoring_backfills",
+    "20261004120300_sanctions_drain_retry",
+  ]
+    .flatMap((migration) =>
+      readMigrationStatements(
+        nodePath.join(DRIZZLE_DIR, migration, "migration.sql"),
+      ),
+    )
+    .filter((statement) => {
+      const source = executableSql(statement);
+      return (
+        source.startsWith("CREATE FUNCTION") ||
+        source.startsWith("CREATE TRIGGER")
+      );
+    });
+  for (const statement of statements) {
+    await db.execute(sql.raw(statement));
+  }
+};
+
 export const installPgliteMigration = async ({
   db,
   migrationPath,

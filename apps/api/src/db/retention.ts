@@ -100,6 +100,10 @@ export const TABLE_RETENTION = {
   organization_file_usage: {
     boundedBy: "Organization-owned file accounting and deletion.",
   },
+  hosted_checkout_claims: {
+    boundedBy:
+      "At most one claim per organization, taken over in place once expired and deleted with its owner.",
+  },
   usage_allocations: {
     boundedBy: "Organization-owned usage accounting and deletion.",
   },
