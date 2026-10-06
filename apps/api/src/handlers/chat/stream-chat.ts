@@ -132,6 +132,7 @@ import type {
   PersistableTerminalAssistantMessage,
 } from "@/api/handlers/chat/types";
 import { hydrateFilePart } from "@/api/handlers/chat/upload-files";
+import type { VisualResourceOrigin } from "@/api/handlers/visual-sandbox/resource-origin";
 import type { CachingDecision, OrgAIConfig } from "@/api/lib/ai-config";
 import { resolveCaching } from "@/api/lib/ai-config";
 import {
@@ -208,6 +209,7 @@ import {
   safeTokenUsageFromTerminalChunk,
   tokenUsageFromTerminalChunk,
 } from "@/api/lib/tanstack-ai-usage";
+import { projectVisualPreviewStream } from "@/api/lib/visual-preview-stream";
 import { isLocalDevOpen } from "@/api/runtime-mode";
 
 const MAX_TOOL_STEPS = 100;
@@ -247,6 +249,7 @@ export type StreamChatFinishEvent = {
 };
 
 type StreamChatProps = {
+  visualOrigin?: Pick<VisualResourceOrigin, "accepts"> | undefined;
   /**
    * Explicit chat model override for this turn: the dev-only
    * `body.devModelId`, or (in prod) a validated per-thread selection
@@ -313,6 +316,29 @@ type StreamChatProps = {
   userId: SafeId<"user">;
   workspaceId: SafeId<"workspace"> | null;
 };
+
+/** A pre-stream rejection retains its settlement code alongside its HTTP body. */
+export class ChatTurnFailureResponse extends Response {
+  readonly failureCode: ChatTurnFailureCode;
+  readonly retryable: boolean;
+
+  constructor({
+    failureCode,
+    payload,
+    status,
+  }: {
+    failureCode: ChatTurnFailureCode;
+    payload: { code?: string; message: string };
+    status: 422 | 500;
+  }) {
+    super(JSON.stringify(payload), {
+      headers: { "Content-Type": "application/json" },
+      status,
+    });
+    this.failureCode = failureCode;
+    this.retryable = status >= 500;
+  }
+}
 
 export const pruneOrphanedToolParts = (
   messages: readonly ChatMessage[],
@@ -390,6 +416,7 @@ export type StreamChatOutcome =
   | { type: "refused"; response: ChatTurnFailureResponse };
 
 export const streamChat = async ({
+  visualOrigin,
   devModelId,
   latestMessageId,
   runId,
@@ -681,7 +708,7 @@ export const streamChat = async ({
         organizationId,
         runId,
       }),
-    source: stream,
+    source: projectVisualPreviewStream(stream),
   });
   const persistenceVisibleStream = transformPersistenceVisibleStream({
     boundary: thirdPartyBoundary,
@@ -697,6 +724,7 @@ export const streamChat = async ({
     source: shadow.source,
   });
   const processedStream = processTurnForPersistence({
+    visualOrigin,
     // The run's own signal, not the deadline's. Cancelling the response stream
     // aborts only this derived controller — that is the abort a client
     // disconnect delivers — while the deadline reaches both.
@@ -736,29 +764,6 @@ export const streamChat = async ({
 
   return { type: "streaming", response: run.produce(output) };
 };
-
-/** A pre-stream rejection retains its settlement code alongside its HTTP body. */
-export class ChatTurnFailureResponse extends Response {
-  readonly failureCode: ChatTurnFailureCode;
-  readonly retryable: boolean;
-
-  constructor({
-    failureCode,
-    payload,
-    status,
-  }: {
-    failureCode: ChatTurnFailureCode;
-    payload: { code?: string; message: string };
-    status: 422 | 500;
-  }) {
-    super(JSON.stringify(payload), {
-      headers: { "Content-Type": "application/json" },
-      status,
-    });
-    this.failureCode = failureCode;
-    this.retryable = status >= 500;
-  }
-}
 
 const thirdPartyBoundaryRefusalResponse = (
   error: AnonymizationRefusal,
@@ -1659,6 +1664,7 @@ type ProcessServerChatStreamProps = {
   deadlineSignal: AbortSignal;
   flushPendingSource?: (() => PublicStreamChunk[]) | undefined;
   getResponseMessage: () => ChatMessage | null;
+  visualOrigin?: Pick<VisualResourceOrigin, "accepts"> | undefined;
   /** The history the run starts from: the messages it may continue. */
   initialMessages: readonly ChatMessage[];
   mapMessageId: MessageIdMapper;
@@ -2520,6 +2526,7 @@ type ProcessTurnForPersistenceProps = Omit<
  * own copy.
  */
 const processTurnForPersistence = ({
+  visualOrigin,
   initialMessages,
   owningAssistantMessageId,
   restorationPairs,
@@ -2528,7 +2535,7 @@ const processTurnForPersistence = ({
   const { processor, message } = createStreamMessageCapture({
     initialMessages,
     capture: (streamed) => {
-      const convertedMessage = toChatMessage(streamed);
+      const convertedMessage = toChatMessage(streamed, visualOrigin);
       return convertedMessage === null
         ? null
         : attachRestorationMetadata({
@@ -3781,8 +3788,11 @@ export const chatMessageUsageFromTokenUsage = (
   };
 };
 
-export const toChatMessage = (message: UIMessage): ChatMessage | null => {
-  const parts = toChatParts(message.parts);
+export const toChatMessage = (
+  message: UIMessage,
+  visualOrigin?: Pick<VisualResourceOrigin, "accepts">,
+): ChatMessage | null => {
+  const parts = toChatParts(message.parts, visualOrigin);
   if (parts.length === 0) {
     return null;
   }
@@ -3800,10 +3810,11 @@ export const toChatMessage = (message: UIMessage): ChatMessage | null => {
 // assistant message can reach storage.
 const toChatParts = (
   parts: readonly UIMessage["parts"][number][],
+  visualOrigin: Pick<VisualResourceOrigin, "accepts"> | undefined,
 ): ChatPart[] => {
   const chatParts: ChatPart[] = [];
   for (const part of parts) {
-    const decision = classifyChatPartForPersistence(part);
+    const decision = classifyChatPartForPersistence(part, visualOrigin);
     if (decision.type === "persist") {
       chatParts.push(decision.part);
       continue;

@@ -70,9 +70,12 @@ export const ChatMentionProviders = ({
   children: React.ReactNode;
 }) => {
   const queryClient = useQueryClient();
-  const activeOrganizationId = useAuthenticatedUser().activeOrganizationId;
+  const { activeOrganizationId, id: userId } = useAuthenticatedUser();
   const workspacesQuery = useChromeQuery(
-    workspacesNavigationOptions(activeOrganizationId),
+    workspacesNavigationOptions({
+      organizationId: activeOrganizationId,
+      userId,
+    }),
   );
   const workspacesView = useQueryView(workspacesQuery);
   const workspaces =

@@ -66,6 +66,7 @@ const responseWithText = (text: string): SearchResponse => {
   return {
     hits: Array.from({ length: 2 }, () => hit),
     facets: {
+      courtYear: null,
       court: COURT_TIER_LABELS.map((tierLabel) => ({
         tierLabel,
         courts: Array.from(
@@ -161,3 +162,51 @@ test("case-law search caps a complete page envelope before serialization", () =>
     responseByteBound(searchDecisionsSuccessResponseSchema),
   );
 });
+
+test.each([false, true])(
+  "case-law search preserves populated court/year facets with truncated=%s",
+  (truncated) => {
+    const courtYear = {
+      buckets: [
+        {
+          court: "Nejvyšší soud",
+          courtName: "Nejvyšší soud",
+          courtAbbreviation: "NS",
+          tier: "supreme",
+          year: 2024,
+          count: 17,
+          citationSum: null,
+          treatment: null,
+        },
+        {
+          court: "Krajský soud v Brně",
+          courtName: "Krajský soud v Brně",
+          courtAbbreviation: null,
+          tier: "regional",
+          year: 2025,
+          count: 3,
+          citationSum: null,
+          treatment: null,
+        },
+      ],
+      truncated,
+    } as const satisfies NonNullable<
+      NonNullable<SearchResponse["facets"]>["courtYear"]
+    >;
+    const response = projectCaseLawSearchResponse({
+      ...responseWithText("ř"),
+      facets: {
+        court: [],
+        year: [],
+        decisionType: [],
+        source: [],
+        language: [],
+        courtYear,
+      },
+    });
+    expect(response.facets?.courtYear).toEqual(courtYear);
+    expect(Value.Check(searchDecisionsSuccessResponseSchema, response)).toBe(
+      true,
+    );
+  },
+);

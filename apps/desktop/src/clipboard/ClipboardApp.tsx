@@ -72,7 +72,7 @@ import {
   XIcon,
 } from "@stll/ui/icons";
 import type { LucideIcon } from "@stll/ui/icons";
-import { Input } from "@stll/ui/input";
+import { InlineRenameInput } from "@stll/ui/inline-rename";
 import {
   InputGroup,
   InputGroupAddon,
@@ -448,7 +448,6 @@ const ClipboardCard = ({
 }: ClipboardCardProps) => {
   const t = useTranslations("clipboard");
   const format = useFormatter();
-  const cancelNameEditRef = useRef(false);
   const [editingName, setEditingName] = useState(false);
   const [imagePreviewStatus, setImagePreviewStatus] =
     useState<ClipboardImagePreviewStatus>("loading");
@@ -597,7 +596,6 @@ const ClipboardCard = ({
   }
 
   const beginNameEdit = () => {
-    cancelNameEditRef.current = false;
     setNameDraft(item.name ?? "");
     setEditingName(true);
     onSelect(index);
@@ -605,11 +603,6 @@ const ClipboardCard = ({
 
   const finishNameEdit = () => {
     setEditingName(false);
-    if (cancelNameEditRef.current) {
-      cancelNameEditRef.current = false;
-      setNameDraft(item.name ?? "");
-      return;
-    }
     const nextName = nameDraft.trim();
     if (nextName !== (item.name ?? "")) {
       onRename(item.id, nextName);
@@ -675,26 +668,19 @@ const ClipboardCard = ({
           </span>
         )}
         {editingName ? (
-          <Input
+          <InlineRenameInput
             aria-label={t("editItem")}
-            autoFocus
             className="h-8 min-w-0 flex-1 rounded-lg px-2 text-sm font-semibold"
             data-clipboard-name-input=""
+            fill
             maxLength={MAX_ITEM_NAME_CHARACTERS}
-            onBlur={finishNameEdit}
-            onChange={(event) => setNameDraft(event.target.value)}
-            onFocus={() => onSelect(index)}
-            onKeyDown={(event) => {
-              event.stopPropagation();
-              if (event.key === "Enter") {
-                event.preventDefault();
-                event.currentTarget.blur();
-              } else if (event.key === "Escape") {
-                event.preventDefault();
-                cancelNameEditRef.current = true;
-                event.currentTarget.blur();
-              }
+            onCancel={() => {
+              setEditingName(false);
+              setNameDraft(item.name ?? "");
             }}
+            onCommit={finishNameEdit}
+            onFocus={() => onSelect(index)}
+            onValueChange={setNameDraft}
             value={nameDraft}
           />
         ) : (

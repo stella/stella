@@ -166,6 +166,9 @@ const derivedAttributeRuleOptions = {
 };
 
 const fixtureRuleOverrides = [
+  fixtureRuleOverride("require-json-import-attribute.fixture.ts", [
+    "require-json-import-attribute/require-json-import-attribute",
+  ]),
   fixtureRuleOverride("drizzle.fixture.ts", [
     "drizzle/enforce-delete-with-where",
     "drizzle/enforce-update-with-where",
@@ -248,6 +251,9 @@ const fixtureRuleOverrides = [
   ]),
   fixtureRuleOverride("no-inline-endpoint-in-routes.fixture.ts", [
     "no-inline-endpoint-in-routes/no-inline-endpoint-in-routes",
+  ]),
+  fixtureRuleOverride("no-ad-hoc-inline-rename.fixture.tsx", [
+    "no-ad-hoc-inline-rename/no-ad-hoc-inline-rename",
   ]),
   fixtureRuleOverride("no-inline-style-colors.fixture.tsx", [
     "no-inline-style-colors/no-inline-style-colors",
@@ -926,15 +932,15 @@ export default defineConfig({
       { ignorePrimitives: { string: true, boolean: true } },
     ],
     "typescript/return-await": ["error", "error-handling-correctness-only"],
-    // A `let`, `const` or class read before its declaration runs throws in
-    // the temporal dead zone. A function declaration is hoisted, so calling
-    // one declared further down is not a defect.
+    // Same-scope lexical reads retain temporal-dead-zone checks. References
+    // inside functions may name variables declared later; their call order
+    // decides when those reads run. Class ordering stays checked.
     "eslint/no-use-before-define": [
       "error",
       {
         functions: false,
         classes: true,
-        variables: true,
+        variables: false,
         allowNamedExports: false,
       },
     ],
@@ -1390,6 +1396,7 @@ export default defineConfig({
     "./.oxlint-plugins/no-unformatted-number.ts",
     "./.oxlint-plugins/no-literal-minor-unit-scale.ts",
     "./.oxlint-plugins/no-raw-foreground-opacity.ts",
+    "./.oxlint-plugins/no-ad-hoc-inline-rename.ts",
     "./.oxlint-plugins/no-inline-style-colors.ts",
     "./.oxlint-plugins/no-ad-hoc-find-shortcut.ts",
     "./.oxlint-plugins/no-hand-rolled-typed-character.ts",
@@ -1544,6 +1551,7 @@ export default defineConfig({
     "./.oxlint-plugins/no-imported-class-constant.ts",
     "./.oxlint-plugins/no-static-devtools-import.ts",
     "./.oxlint-plugins/no-static-catalogue-route-import.ts",
+    "./.oxlint-plugins/require-json-import-attribute.ts",
     "./.oxlint-plugins/no-workspace-field-value-drift.ts",
     "./.oxlint-plugins/icon-button-requires-tooltip.ts",
     "./.oxlint-plugins/no-disabled-tooltip-trigger.ts",
@@ -1566,6 +1574,7 @@ export default defineConfig({
     "./.oxlint-plugins/require-stable-editor-options.ts",
     "./.oxlint-plugins/require-use-shallow.ts",
     "./.oxlint-plugins/no-raw-stored-json.ts",
+    "./.oxlint-plugins/no-raw-browser-storage.ts",
     "./.oxlint-plugins/no-detached-void.ts",
     "./.oxlint-plugins/no-broad-translation-callable.ts",
     "./.oxlint-plugins/no-partial-record-satisfies.ts",
@@ -1591,8 +1600,14 @@ export default defineConfig({
 
   overrides: [
     {
-      // Plugin fixtures are inputs for the local rules' tests; route fixtures
-      // name their component before declaring it, as route modules do.
+      files: ["apps/web/e2e/**", "scripts/**"],
+      rules: {
+        "require-json-import-attribute/require-json-import-attribute": "error",
+      },
+    },
+    {
+      // Plugin fixtures include intentional lexical reads and class references
+      // before declaration to exercise rule diagnostics.
       files: [".oxlint-plugins/__fixtures__/**"],
       rules: { "eslint/no-use-before-define": "off" },
     },
@@ -2247,6 +2262,7 @@ export default defineConfig({
       rules: {
         "no-raw-colors/no-raw-colors": "error",
         "no-raw-foreground-opacity/no-raw-foreground-opacity": "error",
+        "no-ad-hoc-inline-rename/no-ad-hoc-inline-rename": "error",
         "no-inline-style-colors/no-inline-style-colors": "error",
         "no-physical-properties/no-physical-properties": "error",
         "no-layout-motion-classes/no-layout-motion-classes": [
@@ -2486,6 +2502,12 @@ export default defineConfig({
           "error",
           {
             approvedAdapters: [
+              {
+                path: "apps/api/src/handlers/case-law/decisions/search-schema.ts",
+                binding: "courtYearSchema",
+                reason:
+                  "Runtime JSON Schema and static type are derived from the same shared Valibot schema.",
+              },
               {
                 path: "apps/api/src/handlers/case-law/decisions/search-schema.ts",
                 binding: "decisionIdentifiersSchema",
@@ -2774,6 +2796,17 @@ export default defineConfig({
       ],
       rules: {
         "no-broad-translation-callable/no-broad-translation-callable": "error",
+      },
+    },
+    {
+      // All browser storage consumers use the account storage owners;
+      // the rule owns its documented, shrink-only owner allowlist.
+      files: [
+        "apps/web/src/**/*.{ts,tsx}",
+        ".oxlint-plugins/__fixtures__/no-raw-browser-storage.fixture.ts",
+      ],
+      rules: {
+        "no-raw-browser-storage/no-raw-browser-storage": "error",
       },
     },
     {

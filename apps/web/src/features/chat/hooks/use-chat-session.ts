@@ -28,6 +28,7 @@ import type {
 } from "@/components/chat/chat-ui-tools";
 import {
   getExternalMcpConnectorApprovalGrant,
+  getAwaitedAssistantMessageId,
   getChatAssistantTurnError,
   getCurrentApprovalPendingMessageId,
   getExternalMcpConnectorSlugFromToolName,
@@ -69,8 +70,8 @@ import {
   setCreateDocumentDraftPayloadStatus,
   terminalizeUnsettledCreateDocumentDraft,
 } from "@/components/chat/create-document-draft.logic";
-import "@/components/chat/create-document-draft-inspector";
 import { openEntityInInspector } from "@/components/chat/entity-open";
+import "@/components/chat/create-document-draft-inspector";
 import type { CreateDocumentDestination } from "@/components/chat/needs-matter-card";
 import { StreamdownMentionLink } from "@/components/chat/streamdown-mention-link";
 import { useInspectorCommandStore } from "@/components/inspector/inspector-command-store";
@@ -104,9 +105,17 @@ import {
   type SendQueueState,
 } from "@/features/chat/hooks/use-chat-session-send-queue.logic";
 import { fetchOlderMessages } from "@/features/chat/queries";
+import { getChatTurnPhase } from "@/features/chat/turn-notifications.logic";
+import { useChatTurnNotifications } from "@/features/chat/use-chat-turn-notifications";
 import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
-import { userStorageKey } from "@/lib/account/user-scoped-storage";
+import { browserStateStorage } from "@/lib/account/browser-storage";
+import { useOwnerScopedState } from "@/lib/account/use-owner-scoped-state";
+import {
+  isCurrentStorageOwner,
+  userStorageKey,
+} from "@/lib/account/user-scoped-storage";
+import type { StorageOwner } from "@/lib/account/user-scoped-storage";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
@@ -263,6 +272,8 @@ const resetAskUserToolCall = (
 
 const ignoreQueuedDispatchError = (_error: unknown): void => undefined;
 
+const emptyApprovedTools = () => new Set<ToolApprovalGrant>();
+
 export const useChatSession = ({
   chat,
   conversationId,
@@ -277,16 +288,52 @@ export const useChatSession = ({
 }: UseChatSessionOptions) => {
   useMountEffect(mountBrowserExtensionBridge);
   const t = useTranslations();
-  const organizationId = useAuthenticatedUser().activeOrganizationId;
+  const { activeOrganizationId: organizationId, id: userId } =
+    useAuthenticatedUser();
   const { data: mcpCatalog } = useQuery(mcpConnectorsOptions(organizationId));
   const mcpConnectorIdentities =
     mcpCatalog?.connectors ?? EMPTY_MCP_CONNECTOR_IDENTITIES;
-  const [conversationApprovedTools, setConversationApprovedTools] = useState(
-    () => readConversationApprovedTools(conversationId),
+  const readConversationGrants = useCallback(
+    (owner: StorageOwner) =>
+      readConversationApprovedTools(conversationId, owner),
+    [conversationId],
   );
-  const [alwaysApprovedTools, setAlwaysApprovedTools] = useState(() =>
-    readAlwaysApprovedTools({ organizationId, mcpConnectorIdentities: [] }),
+  const writeConversationGrants = useCallback(
+    (tools: Set<ToolApprovalGrant>, owner: StorageOwner) =>
+      writeStoredApprovedTools(
+        getConversationApprovedToolsStorageKey(conversationId, owner),
+        tools,
+        "session",
+      ),
+    [conversationId],
   );
+  const {
+    owner: conversationGrantsOwner,
+    value: conversationApprovedTools,
+    updateValue: updateConversationApprovedTools,
+    refresh: refreshConversationApprovedTools,
+  } = useOwnerScopedState({
+    getDefaultValue: emptyApprovedTools,
+    read: readConversationGrants,
+    write: writeConversationGrants,
+  });
+  const readAlwaysGrants = useCallback(
+    (owner: StorageOwner) =>
+      readAlwaysApprovedTools({
+        organizationId,
+        mcpConnectorIdentities,
+        owner,
+      }),
+    [organizationId, mcpConnectorIdentities],
+  );
+  const {
+    owner: alwaysGrantsOwner,
+    value: alwaysApprovedTools,
+    refresh: refreshAlwaysApprovedTools,
+  } = useOwnerScopedState({
+    read: readAlwaysGrants,
+    getDefaultValue: emptyApprovedTools,
+  });
 
   const snapshot = useSyncExternalStore(
     chat.subscribe,
@@ -737,6 +784,30 @@ export const useChatSession = ({
     [applySendQueueEvent],
   );
 
+  // "Send now" on a queued message: it moves to the front of the queue.
+  // During a turn the turn is stopped, and the queue drain sends it once
+  // the stop settles; with the queue held after a failed turn it is sent
+  // at once, like a manual send.
+  const sendQueuedMessageNow = useCallback(
+    (id: string) => {
+      applySendQueueEvent({ type: "queued-message-promoted", id });
+      if (sendQueueRef.current.isGenerating) {
+        stop();
+        return;
+      }
+      const dispatched = applySendQueueEvent({
+        type: "oldest-dispatch-started",
+      });
+      if (dispatched) {
+        detached(
+          dispatchQueuedMessage(dispatched).catch(ignoreQueuedDispatchError),
+          "use-chat-session.send-queued-message-now",
+        );
+      }
+    },
+    [applySendQueueEvent, dispatchQueuedMessage, stop],
+  );
+
   const resendLatestMessage = useCallback(
     async ({ messageId, sendMode }: ResendLatestMessageOptions = {}) => {
       const latestAssistant = messages.findLast(
@@ -769,14 +840,11 @@ export const useChatSession = ({
   );
   const handleAllowInConversation = useCallback(
     async (id: string, toolName: ApprovalToolName) => {
-      const next = new Set(conversationApprovedTools).add(
-        getToolApprovalGrant(toolName),
-      );
-      setConversationApprovedTools(next);
-      writeStoredApprovedTools(
-        getConversationApprovedToolsStorageKey(conversationId),
-        next,
-        "session",
+      if (!isCurrentStorageOwner(conversationGrantsOwner)) {
+        return;
+      }
+      updateConversationApprovedTools((previous) =>
+        new Set(previous).add(getToolApprovalGrant(toolName)),
       );
       dispatchApprovedToolsChanged({
         conversationId,
@@ -784,10 +852,18 @@ export const useChatSession = ({
       });
       await resolveToolApproval({ id, approved: true });
     },
-    [resolveToolApproval, conversationApprovedTools, conversationId],
+    [
+      resolveToolApproval,
+      conversationGrantsOwner,
+      updateConversationApprovedTools,
+      conversationId,
+    ],
   );
   const handleAlwaysAllow = useCallback(
     async (id: string, toolName: ApprovalToolName) => {
+      if (!isCurrentStorageOwner(alwaysGrantsOwner)) {
+        return;
+      }
       const approvalKey = getAlwaysApprovalKey({
         mcpConnectorIdentities,
         organizationId,
@@ -800,22 +876,27 @@ export const useChatSession = ({
 
       const nextStored = new Set(
         readStoredStrings(
-          userStorageKey(CHAT_ALWAYS_APPROVED_TOOLS_STORAGE_KEY),
+          userStorageKey(
+            CHAT_ALWAYS_APPROVED_TOOLS_STORAGE_KEY,
+            alwaysGrantsOwner,
+          ),
         ),
       ).add(approvalKey);
-      setAlwaysApprovedTools(
-        new Set(alwaysApprovedTools).add(getToolApprovalGrant(toolName)),
-      );
       writeStoredApprovedStrings(
-        userStorageKey(CHAT_ALWAYS_APPROVED_TOOLS_STORAGE_KEY),
+        userStorageKey(
+          CHAT_ALWAYS_APPROVED_TOOLS_STORAGE_KEY,
+          alwaysGrantsOwner,
+        ),
         nextStored,
       );
+      refreshAlwaysApprovedTools();
       dispatchApprovedToolsChanged({ scope: "local" });
       await resolveToolApproval({ id, approved: true });
     },
     [
       resolveToolApproval,
-      alwaysApprovedTools,
+      alwaysGrantsOwner,
+      refreshAlwaysApprovedTools,
       mcpConnectorIdentities,
       organizationId,
     ],
@@ -935,7 +1016,7 @@ export const useChatSession = ({
 
   const createDocumentMattersView = useQueryView(
     useQuery({
-      ...workspacesNavigationOptions(organizationId),
+      ...workspacesNavigationOptions({ organizationId, userId }),
       select: (navigation) =>
         navigation.workspaces.map((matter) => ({
           id: matter.id,
@@ -1306,6 +1387,14 @@ export const useChatSession = ({
   useExternalSyncEffect(() => {
     applySendQueueEvent({ type: "generation-status-synced", isGenerating });
   }, [applySendQueueEvent, isGenerating]);
+  useChatTurnNotifications({
+    conversationId,
+    phase: getChatTurnPhase({
+      awaitingUser: getAwaitedAssistantMessageId(messages) !== null,
+      hasError: error !== undefined,
+      isGenerating,
+    }),
+  });
 
   // Notify `onError` exactly once per new error instance. TanStack keeps
   // the same Error reference alive across renders until the turn is
@@ -1389,12 +1478,6 @@ export const useChatSession = ({
   ]);
 
   useExternalSyncEffect(() => {
-    setConversationApprovedTools(readConversationApprovedTools(conversationId));
-    setAlwaysApprovedTools(
-      readAlwaysApprovedTools({ organizationId, mcpConnectorIdentities }),
-    );
-  }, [conversationId, mcpConnectorIdentities, organizationId]);
-  useExternalSyncEffect(() => {
     const handleApprovedToolsChanged = (event: Event) => {
       const detail = getApprovedToolsChangedDetail(event);
       if (!detail) {
@@ -1402,9 +1485,7 @@ export const useChatSession = ({
       }
 
       if (detail.scope === "local") {
-        setAlwaysApprovedTools(
-          readAlwaysApprovedTools({ organizationId, mcpConnectorIdentities }),
-        );
+        refreshAlwaysApprovedTools();
         return;
       }
 
@@ -1412,20 +1493,20 @@ export const useChatSession = ({
         return;
       }
 
-      setConversationApprovedTools(
-        readConversationApprovedTools(conversationId),
-      );
+      refreshConversationApprovedTools();
     };
     const handleStorage = (event: StorageEvent) => {
       if (
-        event.key !== userStorageKey(CHAT_ALWAYS_APPROVED_TOOLS_STORAGE_KEY)
+        event.key !==
+        userStorageKey(
+          CHAT_ALWAYS_APPROVED_TOOLS_STORAGE_KEY,
+          alwaysGrantsOwner,
+        )
       ) {
         return;
       }
 
-      setAlwaysApprovedTools(
-        readAlwaysApprovedTools({ organizationId, mcpConnectorIdentities }),
-      );
+      refreshAlwaysApprovedTools();
     };
 
     window.addEventListener(
@@ -1441,7 +1522,12 @@ export const useChatSession = ({
       );
       window.removeEventListener("storage", handleStorage);
     };
-  }, [conversationId, mcpConnectorIdentities, organizationId]);
+  }, [
+    conversationId,
+    alwaysGrantsOwner,
+    refreshAlwaysApprovedTools,
+    refreshConversationApprovedTools,
+  ]);
 
   return {
     clientStatus: status,
@@ -1455,6 +1541,7 @@ export const useChatSession = ({
     sendMessage,
     queuedMessages,
     removeQueuedMessage,
+    sendQueuedMessageNow,
     stop,
     leave,
     isGenerating,
@@ -1493,23 +1580,34 @@ type ApprovedToolsChangedDetail =
       conversationId: string;
     };
 
-const getConversationApprovedToolsStorageKey = (conversationId: string) =>
-  `${CHAT_CONVERSATION_APPROVED_TOOLS_STORAGE_KEY_PREFIX}${conversationId}`;
+const getConversationApprovedToolsStorageKey = (
+  conversationId: string,
+  owner: StorageOwner,
+) =>
+  userStorageKey(
+    `${CHAT_CONVERSATION_APPROVED_TOOLS_STORAGE_KEY_PREFIX}${conversationId}`,
+    owner,
+  );
 
-const readConversationApprovedTools = (conversationId: string) =>
+const readConversationApprovedTools = (
+  conversationId: string,
+  owner: StorageOwner,
+) =>
   readStoredApprovedTools(
-    getConversationApprovedToolsStorageKey(conversationId),
+    getConversationApprovedToolsStorageKey(conversationId, owner),
   );
 
 const readAlwaysApprovedTools = ({
   mcpConnectorIdentities,
   organizationId,
+  owner,
 }: {
   mcpConnectorIdentities: readonly McpConnectorApprovalIdentity[];
   organizationId: string;
+  owner: StorageOwner;
 }) => {
   const stored = readStoredStrings(
-    userStorageKey(CHAT_ALWAYS_APPROVED_TOOLS_STORAGE_KEY),
+    userStorageKey(CHAT_ALWAYS_APPROVED_TOOLS_STORAGE_KEY, owner),
   );
   const approvedTools: ToolApprovalGrant[] = [];
 
@@ -1537,7 +1635,9 @@ const getStorage = (scope: "local" | "session") => {
     return null;
   }
 
-  return scope === "local" ? window.localStorage : window.sessionStorage;
+  return scope === "local"
+    ? browserStateStorage("local")
+    : browserStateStorage("session");
 };
 
 const readStoredApprovedTools = (

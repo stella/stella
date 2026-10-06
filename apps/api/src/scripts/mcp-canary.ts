@@ -510,6 +510,61 @@ export const runAuthenticatedStreamProbe = async (
   return headerResult;
 };
 
+const TOOL_FAILURE_DETAIL_MAX_LENGTH = 200;
+
+const jsonRpcErrorSchema = v.object({
+  error: v.object({
+    code: v.optional(v.number()),
+    message: v.optional(v.string()),
+  }),
+});
+
+const firstContentText = (result: Record<string, unknown>) => {
+  const parsed = v.safeParse(
+    v.object({ content: v.array(v.unknown()) }),
+    result,
+  );
+  if (!parsed.success) {
+    return undefined;
+  }
+  const first = v.safeParse(
+    v.object({ text: v.string() }),
+    parsed.output.content.at(0),
+  );
+  return first.success ? first.output.text : undefined;
+};
+
+/**
+ * One line saying why a tool call failed, so a red run names the cause: the
+ * HTTP status, the JSON-RPC error, the tool's own error text, or empty content.
+ */
+export const describeToolCallFailure = ({
+  status,
+  body,
+}: Pick<ProbeResponse, "body" | "status">): string => {
+  const reason = (() => {
+    if (status !== 200) {
+      return `HTTP ${String(status)}`;
+    }
+    if (v.is(jsonRpcErrorSchema, body)) {
+      const { code, message } = body.error;
+      return `JSON-RPC error ${code === undefined ? "" : String(code)} ${message ?? ""}`;
+    }
+    const result = jsonRpcResult(body);
+    if (!result) {
+      return "no JSON-RPC result";
+    }
+    if (result["isError"] === true) {
+      return `tool error: ${firstContentText(result) ?? "no error text"}`;
+    }
+    return "result without content";
+  })();
+  const line = reason.replaceAll(/\s+/gu, " ").trim();
+  return line.length > TOOL_FAILURE_DETAIL_MAX_LENGTH
+    ? `${line.slice(0, TOOL_FAILURE_DETAIL_MAX_LENGTH)}...`
+    : line;
+};
+
 export const evaluateToolCall = ({
   status,
   body,
@@ -526,7 +581,7 @@ export const evaluateToolCall = ({
   ) {
     return failed(
       PROBE_NAMES.toolCall,
-      "expected a non-error JSON-RPC tool result with content",
+      `expected a non-error JSON-RPC tool result with content (${describeToolCallFailure({ status, body })})`,
     );
   }
   return passed(
