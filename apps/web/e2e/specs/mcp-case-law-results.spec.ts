@@ -180,7 +180,7 @@ test("case-law app filters, pages and opens links through the MCP host", async (
   });
   await expect(app.getByRole("heading", { name: "Case Law" })).toBeVisible();
   await expect(
-    app.getByRole("cell").filter({ hasText: "Ústavní soud" }),
+    app.getByRole("cell").filter({ hasText: "I. ÚS 123/24" }),
   ).toBeVisible();
   await expect(app.locator(".snippet")).toHaveText(
     "Náhrada škody: <b>právní jistota</b>.",
@@ -238,7 +238,7 @@ test("case-law app filters, pages and opens links through the MCP host", async (
       },
     ]);
   await expect(
-    app.getByRole("cell").filter({ hasText: "Ústavní soud" }),
+    app.getByRole("cell").filter({ hasText: "I. ÚS 123/24" }),
   ).toBeVisible();
   await app.getByRole("combobox", { name: "Court", exact: true }).click();
   await app
@@ -288,7 +288,7 @@ test("lookup app renders every lookup status and surfaces recoverable errors", a
   ).toBeVisible();
   await expect(app.getByText("Lookup unavailable.")).toBeVisible();
   await expect(
-    app.getByRole("cell").filter({ hasText: "Ústavní soud" }),
+    app.getByRole("cell").filter({ hasText: "I. ÚS 123/24" }),
   ).toHaveCount(1);
   await page.evaluate(() => globalThis.appFixtureHost.sendAppError());
   await expect(app.getByRole("alert")).toContainText("Read unavailable.");
@@ -312,4 +312,79 @@ test("lookup app renders every lookup status and surfaces recoverable errors", a
     globalThis.appFixtureHost.sendAppResult({ unexpected: true }),
   );
   await expect(app.getByRole("alert")).toBeVisible();
+});
+
+test("desktop rows stay single-line with long references and summaries", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1200, height: 900 });
+  const app = await mountApp({
+    page,
+    locale: "cs",
+    tool: "search_case_law",
+    payload: APP_SEARCH_FIXTURE,
+  });
+  await expect(app.getByRole("heading")).toBeVisible();
+  await page.evaluate((payload) => {
+    const first = payload.results.at(0);
+    if (first === undefined) {
+      throw new Error("Missing search fixture");
+    }
+    globalThis.appFixtureHost.sendAppResult({
+      ...payload,
+      results: [
+        { ...first, snippet: "Náhrada škody." },
+        {
+          ...first,
+          decisionId: "long-reference",
+          courtAbbreviation: "KS Brno",
+          court: "Krajský soud v Brně",
+          caseNumber: "44 Co 123456/2024-1234",
+          snippet:
+            "Posouzení odpovědnosti a příčinné souvislosti při náhradě škody a dlouhé odůvodnění právního posouzení opakované pro ověření zkracování textu.",
+        },
+        {
+          ...first,
+          decisionId: "long-date",
+          courtAbbreviation: "NSS",
+          caseNumber: "6 As 123456/2024-1234",
+          decisionDate: "2024-12-31",
+          snippet: "Přezkum správního rozhodnutí a zásada proporcionality.",
+        },
+      ],
+    });
+  }, APP_SEARCH_FIXTURE);
+  await expect(app.locator("tbody tr")).toHaveCount(3);
+  const geometry = await app.locator("tbody tr").evaluateAll((rows) =>
+    rows.map((row) => {
+      const reference = row.querySelector("td bdi");
+      const snippet = row.querySelector(".snippet");
+      if (reference === null || snippet === null) {
+        throw new Error("Missing row text");
+      }
+      const referenceStyle = getComputedStyle(reference);
+      const snippetStyle = getComputedStyle(snippet);
+      return {
+        height: row.getBoundingClientRect().height,
+        referenceLines: reference.getClientRects().length,
+        nowrap: snippetStyle.whiteSpace,
+        ellipsis: snippetStyle.textOverflow,
+        referenceNowrap: referenceStyle.whiteSpace,
+      };
+    }),
+  );
+  expect(new Set(geometry.map(({ height }) => height)).size).toBe(1);
+  expect(
+    geometry.every(
+      ({ referenceLines, nowrap, ellipsis, referenceNowrap }) =>
+        referenceLines === 1 &&
+        nowrap === "nowrap" &&
+        referenceNowrap === "nowrap" &&
+        ellipsis === "ellipsis",
+    ),
+  ).toBe(true);
+  await expect(app.locator("tbody")).not.toContainText("ECLI:");
+  await expect(
+    app.getByText("Rozhodnutí", { exact: false }).first(),
+  ).toBeVisible();
 });

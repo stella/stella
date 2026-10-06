@@ -21,6 +21,7 @@ import {
   ExternalLinkIcon,
   SearchIcon,
 } from "@stll/ui/icons";
+import { Input } from "@stll/ui/input";
 import {
   Pagination,
   PaginationContent,
@@ -99,12 +100,12 @@ const ResultsTable = ({
     );
   }
   return (
-    <Table className="min-w-[640px]">
-      <TableHeader>
+    <Table className="table-fixed">
+      <TableHeader className="max-[480px]:hidden">
         <TableRow className="hover:bg-transparent">
-          <TableHead className="w-[48%] ps-4">{t("reference")}</TableHead>
-          <TableHead>{t("court")}</TableHead>
-          <TableHead className="whitespace-nowrap">{t("date")}</TableHead>
+          <TableHead className="w-72 ps-4">{t("reference")}</TableHead>
+          <TableHead>{t("summary")}</TableHead>
+          <TableHead className="w-28 whitespace-nowrap">{t("date")}</TableHead>
           <TableHead className="w-12">
             <span className="sr-only">{t("open")}</span>
           </TableHead>
@@ -120,76 +121,90 @@ const ResultsTable = ({
               }
             };
             return (
-              <TableRow key={row.decisionId}>
-                <TableCell className="py-4 ps-4 align-top">
-                  <PreviewCard>
-                    <PreviewCardTrigger
-                      render={
-                        <Button
-                          type="button"
-                          variant="link"
-                          className="h-auto p-0 text-start font-semibold"
-                          onClick={open}
-                        />
-                      }
-                    >
-                      <bdi>{row.caseNumber}</bdi>
-                    </PreviewCardTrigger>
-                    <PreviewCardPopup align="start" className="w-80 flex-col">
-                      <p className="font-semibold">
-                        <bdi>{row.caseNumber}</bdi>
-                      </p>
-                      <p className="text-muted-foreground text-xs">
-                        {row.court}
-                      </p>
-                      {row.snippet !== null && (
-                        <p className="text-sm leading-relaxed">{row.snippet}</p>
-                      )}
-                      {row.ecli !== null && (
-                        <p className="text-muted-foreground font-mono text-xs break-all">
-                          <bdi>{row.ecli}</bdi>
+              <TableRow
+                key={row.decisionId}
+                className="max-[480px]:flex max-[480px]:flex-wrap"
+              >
+                <TableCell className="py-3 ps-4 max-[480px]:w-full">
+                  <div className="flex min-w-0 items-center gap-2 whitespace-nowrap">
+                    {row.courtAbbreviation !== null && (
+                      <Tooltip>
+                        <TooltipTrigger
+                          render={
+                            <span className="inline-flex min-w-8 shrink-0" />
+                          }
+                        >
+                          <CourtBadge
+                            abbreviation={row.courtAbbreviation}
+                            weight="outline"
+                          />
+                        </TooltipTrigger>
+                        <TooltipPopup>{row.court}</TooltipPopup>
+                      </Tooltip>
+                    )}
+                    <PreviewCard>
+                      <PreviewCardTrigger
+                        render={
+                          <Button
+                            type="button"
+                            variant="link"
+                            className="h-auto min-w-0 p-0 text-start font-semibold tabular-nums"
+                            onClick={open}
+                          />
+                        }
+                      >
+                        <bdi className="truncate" title={row.caseNumber}>
+                          {row.caseNumber}
+                        </bdi>
+                      </PreviewCardTrigger>
+                      <PreviewCardPopup align="start" className="w-80 flex-col">
+                        <p className="font-semibold">
+                          <bdi>{row.caseNumber}</bdi>
                         </p>
-                      )}
-                      {url !== null && (
-                        <Button variant="outline" size="sm" onClick={open}>
-                          {t("open")}
-                          <ExternalLinkIcon />
-                        </Button>
-                      )}
-                    </PreviewCardPopup>
-                  </PreviewCard>
-                  {row.ecli !== null && (
+                        <p className="text-muted-foreground text-xs">
+                          {row.court}
+                        </p>
+                        {row.snippet !== null && (
+                          <p className="text-sm leading-relaxed">
+                            {row.snippet}
+                          </p>
+                        )}
+                        {row.ecli !== null && (
+                          <Input
+                            readOnly
+                            value={row.ecli}
+                            aria-label={`${t("copy")} ECLI`}
+                            className="font-mono text-xs"
+                            onFocus={(event) => event.currentTarget.select()}
+                          />
+                        )}
+                        {url !== null && (
+                          <Button variant="outline" size="sm" onClick={open}>
+                            {t("open")}
+                            <ExternalLinkIcon />
+                          </Button>
+                        )}
+                      </PreviewCardPopup>
+                    </PreviewCard>
+                  </div>
+                </TableCell>
+                <TableCell className="py-3 max-[480px]:order-last max-[480px]:w-full max-[480px]:pt-0">
+                  {row.snippet !== null && (
                     <Tooltip>
                       <TooltipTrigger
                         render={
-                          <div className="text-2xs text-muted-foreground mt-1 max-w-80 truncate font-mono" />
+                          <p className="snippet text-muted-foreground truncate text-sm" />
                         }
                       >
-                        <bdi>{row.ecli}</bdi>
+                        {row.snippet}
                       </TooltipTrigger>
-                      <TooltipPopup>
-                        <bdi>{row.ecli}</bdi>
+                      <TooltipPopup className="max-w-lg">
+                        {row.snippet}
                       </TooltipPopup>
                     </Tooltip>
                   )}
-                  {row.snippet !== null && (
-                    <p className="snippet text-muted-foreground mt-2 line-clamp-2 text-sm leading-relaxed">
-                      {row.snippet}
-                    </p>
-                  )}
                 </TableCell>
-                <TableCell className="py-4 align-top">
-                  <div className="flex items-start gap-2">
-                    {row.courtAbbreviation !== null && (
-                      <CourtBadge
-                        abbreviation={row.courtAbbreviation}
-                        weight="outline"
-                      />
-                    )}
-                    <span className="text-xs leading-5">{row.court}</span>
-                  </div>
-                </TableCell>
-                <TableCell className="py-4 align-top text-xs whitespace-nowrap tabular-nums">
+                <TableCell className="py-3 text-xs whitespace-nowrap tabular-nums max-[480px]:ps-4">
                   {row.decisionDate !== null && (
                     <bdi>
                       {format.dateTime(new Date(row.decisionDate), {
@@ -201,7 +216,7 @@ const ResultsTable = ({
                     </bdi>
                   )}
                 </TableCell>
-                <TableCell className="py-3 align-top">
+                <TableCell className="py-2 max-[480px]:ms-auto">
                   {url !== null && (
                     <Tooltip>
                       <TooltipTrigger
@@ -478,7 +493,7 @@ const SearchResults = ({
       )}
       <div className="bg-background overflow-hidden rounded-xl border shadow-xs">
         <div className="flex items-center justify-between gap-3 px-4 py-3">
-          <p className="text-muted-foreground text-xs font-medium">
+          <p className="text-muted-foreground shrink-0 text-xs font-medium whitespace-nowrap">
             {t("decisions")}{" "}
             <span className="ms-1 tabular-nums">{page.results.length}</span>
           </p>
@@ -498,7 +513,7 @@ const SearchResults = ({
               }
             }}
           >
-            <SelectTrigger aria-label={t("sort")} size="sm">
+            <SelectTrigger aria-label={t("sort")} size="sm" className="w-44">
               <SelectValue />
             </SelectTrigger>
             <SelectPopup>

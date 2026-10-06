@@ -17,6 +17,7 @@ type CatalogKey =
       }[keyof Catalog[Namespace]];
     }[keyof Catalog]
   | `caseLaw.courtTiers.${keyof Catalog["caseLaw"]["courtTiers"]}`
+  | `caseLaw.columns.${keyof Catalog["caseLaw"]["columns"]}`
   | `caseLaw.sort.${keyof Catalog["caseLaw"]["sort"]}`
   | `common.datePicker.${keyof Catalog["common"]["datePicker"]}`;
 
@@ -48,6 +49,8 @@ export const MCP_APP_MESSAGE_KEYS = {
   country: "common.country",
   date: "common.date",
   reference: "common.reference",
+  summary: "caseLaw.columns.summary",
+  copy: "common.copy",
   filter: "common.filter",
   all: "common.all",
   next: "common.next",
