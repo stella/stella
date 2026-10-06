@@ -1,4 +1,4 @@
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 import { eq, sql } from "drizzle-orm";
 import { customType, integer, pgTable, text } from "drizzle-orm/pg-core";
@@ -18,6 +18,8 @@ import { createSafeId } from "@/api/lib/branded-types";
 import { TRANSITIONS } from "@/api/lib/db/transition-specs";
 import { transitionTriggerSql } from "@/api/lib/db/transition-sql";
 import {
+  defineScopedTransitions,
+  transitionUpsertBatch,
   defineTransitions,
   permitsTransition,
   transition,
@@ -53,6 +55,83 @@ if (!databaseUrl || !enabled) {
   });
 } else {
   describe("status transitions (postgres)", () => {
+    test("scoped upserts enforce initial states and roll back the journal with failed audit", async () => {
+      await withGatedTestClients(databaseUrl, async ({ openClient }) => {
+        const { db } = openClient();
+        await db.transaction(async (tx) => {
+          await tx.execute(
+            sql`CREATE TEMPORARY TABLE transition_fenced_jobs (id text PRIMARY KEY, status text NOT NULL, attempt integer NOT NULL, lease_token text, claimed_at timestamptz, description text, payload jsonb, updated_at timestamptz) ON COMMIT DROP`,
+          );
+          await tx.execute(
+            sql`CREATE TEMPORARY TABLE transition_test_audit_events (status text NOT NULL) ON COMMIT DROP`,
+          );
+          const spec = defineScopedTransitions({
+            table: fencedJobs,
+            key: "id",
+            scope: [],
+            stateColumn: "status",
+            edges: jobEdges,
+            initial: ["queued"],
+            sameStateUpsert: "ignore",
+          });
+          const upsert = async (
+            status: "queued" | "running" | "done",
+            failAudit = false,
+          ) =>
+            await tx.transaction(
+              async (nested) =>
+                await transitionUpsertBatch({
+                  tx: nested,
+                  spec,
+                  values: [{ id: "job", status, attempt: 1 }],
+                  recordTransitionAuditEvent: async (auditTx, rows) => {
+                    for (const row of rows) {
+                      await auditTx.execute(
+                        sql`INSERT INTO transition_test_audit_events (status) VALUES (${row.status})`,
+                      );
+                    }
+                    if (failAudit) {
+                      panic("Synthetic transition audit failure");
+                    }
+                  },
+                }),
+            );
+          const census = async () => ({
+            rows: await tx.select().from(fencedJobs),
+            audit: await tx.execute(
+              sql`SELECT status FROM transition_test_audit_events ORDER BY status`,
+            ),
+          });
+          expect(
+            (
+              await Result.tryPromise(async () => await upsert("running"))
+            ).isErr(),
+          ).toBe(true);
+          expect(await census()).toEqual({ rows: [], audit: [] });
+          expect(await upsert("queued")).toHaveLength(1);
+          const initial = await census();
+          expect(initial.audit).toHaveLength(1);
+          expect(await upsert("queued")).toHaveLength(0);
+          expect(await census()).toEqual(initial);
+          expect(
+            (
+              await Result.tryPromise(async () => await upsert("running", true))
+            ).isErr(),
+          ).toBe(true);
+          expect(await census()).toEqual(initial);
+          expect(await upsert("running")).toHaveLength(1);
+          const running = await census();
+          expect(running.audit).toHaveLength(2);
+          expect(
+            (
+              await Result.tryPromise(async () => await upsert("queued"))
+            ).isErr(),
+          ).toBe(true);
+          expect(await census()).toEqual(running);
+        });
+      });
+    });
+
     test("competing transitions commit exactly one result and return stale for the loser", async () => {
       await withGatedTestClients(databaseUrl, async ({ openClient }) => {
         const { db } = openClient();
