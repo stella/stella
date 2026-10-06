@@ -46,7 +46,7 @@ import {
   SearchIcon,
   UsersIcon,
 } from "@stll/ui/icons";
-import { Input } from "@stll/ui/input";
+import { InlineRenameInput } from "@stll/ui/inline-rename";
 import { SIDE_RAIL_ICON_BUTTON_SIZE } from "@stll/ui/inspector";
 import {
   Menu,
@@ -1326,22 +1326,13 @@ const MatterItem = ({
             className="size-4 shrink-0"
             matter={{ id: ws.id, color: ws.color }}
           />
-          <Input
-            autoFocus
-            className="h-auto min-w-0 flex-1 border-0 bg-transparent p-0 text-sm shadow-none outline-none focus-visible:ring-0"
-            onBlur={() => {
+          <InlineRenameInput
+            className="text-sm"
+            onCommit={() => {
               detached(rename.commit(), "app-sidebar.commit");
             }}
-            onChange={(e) => rename.setDraft(e.currentTarget.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") {
-                e.currentTarget.blur();
-              }
-              if (e.key === "Escape") {
-                rename.cancel();
-                e.currentTarget.blur();
-              }
-            }}
+            onValueChange={rename.setDraft}
+            onCancel={rename.cancel}
             value={rename.state.draft}
           />
         </div>
@@ -1448,7 +1439,10 @@ const MatterItem = ({
               </MatterColorContextPicker>
             )}
             <span className="relative flex min-w-0 flex-col">
-              <BidiText as="span" className="truncate">
+              <BidiText
+                as="span"
+                className="overflow-hidden text-ellipsis whitespace-pre"
+              >
                 {ws.name}
               </BidiText>
               <Tooltip
