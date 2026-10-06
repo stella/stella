@@ -1184,7 +1184,7 @@ export const markdownReaders = (root = ROOT): readonly MarkdownReader[] => {
       ) &&
       !source.includes("astro/loaders") &&
       !/\bconst\s+CI_MARKDOWN_READER_INPUTS(?:_[A-Za-z_$][\w$]*)?\b/u.test(
-        maskSourceNonCode(source),
+        source,
       ) &&
       !/\b(?:from|import)\s*["'][^"'\n]+\.mdx?["']/u.test(source)
     ) {
