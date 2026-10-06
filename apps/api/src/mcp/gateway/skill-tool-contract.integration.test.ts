@@ -132,7 +132,7 @@ const SUMMARIZE_SLUG = `summarize-${RUN}`;
 const DOTTED_SLUG = `data.report-${RUN}`;
 const UNDERSCORED_SLUG = `data_report-${RUN}`;
 const MALFORMED_SLUG = `malformed-${RUN}`;
-const COLLIDING_NAME = `skill__data_report-${RUN}`;
+const COLLIDING_NAME = `skill__data_report_${RUN}`;
 
 const listSkillTools = async () =>
   (await listMcpTools(createContext(), "default", ["stella:skills"])).filter(
@@ -225,7 +225,7 @@ describe("skill tool output contract", () => {
     const result = await handleMcpToolCall({
       args: {},
       context: createContext(),
-      toolName: `skill__${MALFORMED_SLUG}`,
+      toolName: `skill__malformed_${RUN}`,
     });
 
     expect(result.isError).toBe(true);

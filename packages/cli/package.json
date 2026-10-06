@@ -34,6 +34,7 @@
     ".": "./src/cli.ts",
     "./capability-catalog-data": "./src/capability-catalog-data.ts",
     "./client-metadata-document": "./src/auth/client-metadata-document.ts",
+    "./registry-trust": "./src/registry-trust.ts",
     "./capabilities/*.json": "./capabilities/*.json"
   },
   "publishConfig": {
