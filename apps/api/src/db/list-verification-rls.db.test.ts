@@ -5,6 +5,7 @@ import { eq, sql, getColumns } from "drizzle-orm";
 import type { Transaction } from "@/api/db/root";
 import {
   auditLogs,
+  featureEnrolments,
   legalListClaims,
   legalListClaimReviewEvents,
   legalListVerificationRuns,
@@ -87,8 +88,16 @@ describe.skipIf(!enabled)("list verification row security", () => {
             )
             .join(", ")})`,
         );
+        // Feature access reads enrolments; this schema holds none.
         await client.unsafe(
-          `GRANT SELECT ON "user", member, workspace_members, workspaces TO stella, ${ownerRole}; GRANT INSERT, SELECT ON audit_logs TO stella, ${ownerRole}`,
+          `CREATE TABLE feature_enrolments (${Object.values(
+            getColumns(featureEnrolments),
+          )
+            .map((column) => `"${column.name}" ${column.getSQLType()}`)
+            .join(", ")})`,
+        );
+        await client.unsafe(
+          `GRANT SELECT ON "user", member, workspace_members, workspaces, feature_enrolments TO stella, ${ownerRole}; GRANT INSERT, SELECT ON audit_logs TO stella, ${ownerRole}`,
         );
         for (const migration of [
           "20260925220000_legal_list_verifications",
