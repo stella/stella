@@ -3767,6 +3767,22 @@
     "seconds": 3.147615,
     "source": "estimated"
   },
+  "src/handlers/visual-sandbox/bridge.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
+  "src/handlers/visual-sandbox/routes.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
+  "src/handlers/visual-sandbox/sanitize.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
+  "src/handlers/visual-sandbox/srcdoc.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
   "src/handlers/work-obligations/queues/list.integration.test.ts": {
     "seconds": 2.801835,
     "source": "estimated"
