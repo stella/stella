@@ -81,6 +81,7 @@ describe("the completed-search record", () => {
     roundCapHit: false,
     rounds: 1,
     highlightRounds: 1,
+    hitDispositions: { malformed: 3, excluded: 2, drift: 1 },
     scanAndFacetsMs: 97.1,
     totalMs: 130.2,
   };
@@ -104,6 +105,9 @@ describe("the completed-search record", () => {
       country: "cz",
       rounds: 1,
       highlightRounds: 1,
+      malformed: 3,
+      excluded: 2,
+      drift: 1,
       passagesScanned: 300,
       candidatesHydrated: 42,
       pageRowsRead: 20,

@@ -157,6 +157,7 @@ const readTimeEntries = createSafeHandler(
       "units), currency, narrative, and status.",
     permissions: { timeEntry: ["read"] },
     accountAccess: ACCOUNT_ACCESS.sandbox,
+    featureAccess: { featureId: "time-billing", type: "required" },
     mcp: { type: "tool", name: "list_time_entries" },
     access: "read",
     query: readTimeEntriesQuerySchema,

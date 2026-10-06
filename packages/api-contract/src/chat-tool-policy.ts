@@ -103,10 +103,11 @@ export const BUILT_IN_CHAT_TOOL_POLICY_KINDS = {
   // run unasked, after the user opts in for the tab session.
   "use-browser": CHAT_TOOL_POLICY_KIND.external,
   web_search: CHAT_TOOL_POLICY_KIND.external,
-  // The top-level delegation is approval-gated. Subagent writes remain
-  // non-executing proposals and return to the top-level loop for per-write
-  // approval; this grant never authorizes the proposed writes themselves.
-  spawn_subagents: CHAT_TOOL_POLICY_KIND.mutation,
+  // Delegation runs without asking: a subagent executes only tools that need
+  // no approval, and every approval-gated call it makes becomes a
+  // non-executing proposal that returns to the top-level loop for per-write
+  // approval.
+  spawn_subagents: CHAT_TOOL_POLICY_KIND.internal,
   ...MCP_CHAT_TOOL_POLICY_KINDS,
 } as const satisfies Record<string, ChatToolPolicyKind>;
 

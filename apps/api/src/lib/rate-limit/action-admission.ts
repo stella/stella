@@ -411,7 +411,7 @@ const createAdmissionExecutor = ({
           ...actionPeriodArguments(window),
         ]);
         return retried
-          .map((reply) => ({ reply, window }))
+          .map((retriedReply) => ({ reply: retriedReply, window }))
           .mapError((cause) =>
             ActionAdmissionError.is(cause)
               ? cause
@@ -1060,7 +1060,7 @@ const resolveExecutionBudget = async ({
     execution === "queued-kickoff"
       ? await resolveQueuedBudget(organizationBudgetOptions)
       : await resolveAdmissionBudget(organizationBudgetOptions);
-  return Result.map(resolved, admittedPeriodBudget);
+  return resolved.map(admittedPeriodBudget);
 };
 
 const settledAdmissionOutcome = <T>(

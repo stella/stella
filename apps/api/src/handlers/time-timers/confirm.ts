@@ -14,6 +14,7 @@ const confirmTimer = createSafeRootHandler(
       "Confirm your timer into a draft time entry and remove it. For client work, assign a matter with update first. Request activityGroup internal only for a timer without a matter; internal entries have zero billed minutes and cannot be billable. Rounds client billed minutes to the organization's minimum unit and enforces narrative and monthly locks. Retry with the same timer ID to get the original entry ID without creating another entry. timezoneId is an IANA timezone for the work date; timers without an effective rate default to non-billable.",
     permissions: { timeEntry: ["create"] },
     accountAccess: ACCOUNT_ACCESS.sandbox,
+    featureAccess: { featureId: "time-billing", type: "required" },
     mcp: {
       type: "capability",
       reason: "billing_admin",

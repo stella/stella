@@ -8,6 +8,7 @@ import { agentSkillResources, agentSkills, auditLogs } from "@/api/db/schema";
 import { createAuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId, SafeIdType } from "@/api/lib/branded-types";
 import { toSafeId } from "@/api/lib/branded-types";
+import { namespaceSkillToolName } from "@/api/lib/mcp-upstream/namespace";
 import type { McpRequestContext } from "@/api/mcp/context";
 import { dispatchGatewayToolCall } from "@/api/mcp/gateway/dispatch-call";
 import {
@@ -124,7 +125,7 @@ describe("MCP skill tools against the database", () => {
     const listing = createRecordingContext(ids.userA1);
     const tools = await loadVisibleSkillTools({ context: listing.context });
     expect(tools.map((tool) => tool.exposedName)).toContain(
-      `skill__${calledSlug}`,
+      namespaceSkillToolName(calledSlug),
     );
     expect(listing.bodiesRead()).toEqual([]);
 
@@ -133,7 +134,7 @@ describe("MCP skill tools against the database", () => {
       args: {},
       context: calling.context,
       mode: "default",
-      toolName: `skill__${calledSlug}`,
+      toolName: namespaceSkillToolName(calledSlug),
     });
     expect(dispatched?.type).toBe("internal");
     expect(calling.bodiesRead()).toEqual([`body of ${calledSlug}`]);
@@ -156,7 +157,7 @@ describe("MCP skill tools against the database", () => {
       sizeBytes: 19,
     });
     const { context } = createRecordingContext(ids.userA1);
-    const toolName = `skill__${slug}`;
+    const toolName = namespaceSkillToolName(slug);
 
     const skillRead = await handleMcpToolCall({ args: {}, context, toolName });
     expect(skillRead.isError).toBeUndefined();
@@ -203,7 +204,7 @@ describe("MCP skill tools against the database", () => {
       userId: ids.userA1,
     });
     const { context } = createRecordingContext(ids.userA1);
-    const toolName = `skill__${slug}`;
+    const toolName = namespaceSkillToolName(slug);
 
     await handleMcpToolCall({ args: {}, context, toolName });
     await handleMcpToolCall({
@@ -283,7 +284,7 @@ describe("MCP skill tools against the database", () => {
     const { context } = createRecordingContext(ids.userA1);
     const resolved = await resolveSkillTool({
       context,
-      toolName: `skill__${slug}`,
+      toolName: namespaceSkillToolName(slug),
     });
     if (resolved?.source !== "installed" || resolved.id !== privateSkillId) {
       throw new TypeError("expected the private skill to shadow the team one");

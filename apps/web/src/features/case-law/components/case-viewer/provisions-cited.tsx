@@ -4,6 +4,7 @@ import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { useTranslations } from "use-intl";
 
+import { provisionVersionAsOf } from "@stll/api-contract/provision-version-basis";
 import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
 import { ChevronRightIcon } from "@stll/ui/icons";
@@ -85,8 +86,9 @@ export const ProvisionsCited = ({
   const citedWorkByGroup = new Map<string, CitedWorkAtDate>();
   for (const group of groups) {
     const asOf =
-      group.provisions.find((provision) => provision.versionValidFrom !== null)
-        ?.versionValidFrom ?? decisionAsOf;
+      group.provisions
+        .map((provision) => provisionVersionAsOf(provision, decisionAsOf))
+        .find((date) => date !== null) ?? null;
     if (group.workEli !== null && asOf !== null) {
       citedWorkByGroup.set(group.key, {
         asOf,
@@ -140,6 +142,7 @@ export const ProvisionsCited = ({
         const citedWork = citedWorkByGroup.get(group.key);
         return (
           <WorkReferences
+            decisionAsOf={decisionAsOf}
             group={group}
             key={group.key}
             publisherInconsistent={
@@ -204,11 +207,13 @@ export const ProvisionsCited = ({
 };
 
 const WorkReferences = ({
+  decisionAsOf,
   group,
   publisherInconsistent,
   renderPart,
   statute,
 }: {
+  decisionAsOf: string | null;
   group: WorkGroup;
   /**
    * Whether the publisher's own inconsistent dates leave the cited date
@@ -224,7 +229,10 @@ const WorkReferences = ({
     ...statuteVersionsOptions(statute?.id ?? ""),
     enabled:
       statute !== undefined &&
-      referencesOutsideVersion(statute, group.provisions),
+      referencesOutsideVersion(statute, {
+        decisionAsOf,
+        references: group.provisions,
+      }),
   });
 
   /**
@@ -241,18 +249,18 @@ const WorkReferences = ({
     if (statute === undefined) {
       return null;
     }
-
-    if (provision.versionValidFrom === null) {
-      return statute;
+    const asOf = provisionVersionAsOf(provision, decisionAsOf);
+    if (asOf === null) {
+      return null;
     }
 
     // The wording in force is the inferred version for most references,
     // which is why the versions read is not started for them.
-    if (versionCoversDate(statute, provision.versionValidFrom)) {
+    if (versionCoversDate(statute, asOf)) {
       return statute;
     }
 
-    return pickVersionAt(optionalArray(versions), provision.versionValidFrom);
+    return pickVersionAt(optionalArray(versions), asOf);
   };
 
   return (

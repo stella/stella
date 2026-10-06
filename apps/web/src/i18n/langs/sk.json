@@ -960,6 +960,9 @@
     },
     "viewer": {
       "abstract": "Abstrakt",
+      "appliedVersionNotStated": "Použité znenie neuvedené",
+      "appliedVersionStatedAmendment": "Znenie podľa novely <reference>{amendment}</reference>",
+      "appliedVersionStatedDate": "{relation, select, on {Znenie účinné k {date}} until {Znenie účinné do {date}} from {Znenie účinné od {date}} other {Znenie účinné k {date}}}",
       "caseFileMayHoldOthers": "Tento spis môže obsahovať aj ďalšie rozhodnutia.",
       "citedBy": "Citované v",
       "cites": "Cituje",
@@ -1819,6 +1822,8 @@
     "notes": "Poznámky",
     "open": "Otvoriť",
     "openInNewTab": "Otvoriť na novej karte",
+    "openInStella": "Otvoriť v stelle",
+    "openOriginalSource": "Otvoriť originál",
     "options": "Možnosti",
     "or": "Alebo",
     "organization": "Organizácia",
@@ -4735,6 +4740,7 @@
     },
     "title": "Právne predpisy",
     "validity": "Platné od {from} do {to}",
+    "versionAppliedInDecision": "Znenie použité v rozhodnutí <bdi>{court}</bdi> <bdi>{caseNumber}</bdi> (<bdi>{range}</bdi>) · {status}",
     "wordingValidFrom": "Znenie účinné od {date}",
     "wordingVersionUnknown": "Dátum verzie znenia nie je k dispozícii"
   },

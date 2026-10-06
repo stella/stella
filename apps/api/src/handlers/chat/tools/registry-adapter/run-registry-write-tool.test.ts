@@ -17,6 +17,7 @@ import type { McpRequestContext } from "@/api/mcp/context";
 import { installRecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
 import type { RecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
+import { enrolledTimeBillingSnapshot } from "@/api/tests/helpers/time-billing-enrolment";
 import { toSafeDbMock } from "@/api/tests/scoped-db-mock";
 
 import { buildMcpContextFromChat } from "./mcp-chat-context";
@@ -129,7 +130,14 @@ describe("runRegistryWriteTool (orchestration)", () => {
         {
           toolName,
           args: {},
-          context: { ...buildContext(), userEmail: "limited@example.test" },
+          context: {
+            ...buildContext(),
+            userEmail: "limited@example.test",
+            featureAccessSnapshot: enrolledTimeBillingSnapshot({
+              userId: "user_1",
+              organizationId: "org_1",
+            }),
+          },
           refRegistry: createChatRefRegistry(),
         },
         {
@@ -258,11 +266,60 @@ describe("runRegistryWriteTool (orchestration)", () => {
     }
   });
 
-  test("refuses a feature-gated tool whose deploy flag is off", async () => {
+  test.each(["external", "intern"] as const)(
+    "denies %s before checking feature enrolment",
+    async (memberRole) => {
+      const deploymentGate = mock(() => false);
+      const result = await runRegistryWriteTool(
+        {
+          args: {},
+          context: { ...buildContext(), memberRole },
+          refRegistry: createChatRefRegistry(),
+          toolName: "delete_time_entry",
+        },
+        { isMcpToolFeatureEnabled: deploymentGate },
+      );
+      expect(Result.isError(result)).toBe(true);
+      if (Result.isError(result)) {
+        expect(result.error.kind).toBe("unavailable");
+        expect(result.error.message).toBe(
+          "Your member role does not permit delete_time_entry.",
+        );
+      }
+      expect(deploymentGate).not.toHaveBeenCalled();
+    },
+  );
+
+  test("withholds an unenrolled tool before revealing deployment availability", async () => {
+    const deploymentGate = mock(() => false);
     const result = await runRegistryWriteTool(
       {
         args: { time_entry_id: "te-1" },
         context: buildContext(),
+        refRegistry: createChatRefRegistry(),
+        toolName: "delete_time_entry",
+      },
+      { isMcpToolFeatureEnabled: deploymentGate },
+    );
+    expect(Result.isError(result)).toBe(true);
+    if (Result.isError(result)) {
+      expect(result.error.kind).toBe("unavailable");
+      expect(result.error.message).toBe("Tool is unavailable.");
+    }
+    expect(deploymentGate).not.toHaveBeenCalled();
+  });
+
+  test("refuses a feature-gated tool whose deploy flag is off", async () => {
+    const result = await runRegistryWriteTool(
+      {
+        args: { time_entry_id: "te-1" },
+        context: {
+          ...buildContext(),
+          featureAccessSnapshot: enrolledTimeBillingSnapshot({
+            userId: "user_1",
+            organizationId: "org_1",
+          }),
+        },
         refRegistry: createChatRefRegistry(),
         toolName: "delete_time_entry",
       },

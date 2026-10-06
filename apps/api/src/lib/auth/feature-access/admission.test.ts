@@ -17,10 +17,21 @@ import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
 
 const featureId = "fixture-access";
-// The fixture features are not registered (FeatureId is `never` while the
-// registry is empty), so handler configs name them through the test-only cast.
+// The fixture features are not registered, so handler configs name them
+// through the test-only cast.
 const requiredFeatureId = asTestRaw<FeatureId>(featureId);
 const registry = { [featureId]: { enrolment: "invitation" } } as const;
+// Recomputing against the production registry resolves the caller's identity
+// and enrolments; neither grants a fixture feature.
+const unenrolledDatabase = () =>
+  createScopedDbMock(
+    {},
+    {
+      featureAccess: {
+        identity: { email: "colleague@example.test", emailVerified: true },
+      },
+    },
+  );
 const snapshot = (userId: string, organizationId: string, invited: boolean) =>
   createFeatureAccessSnapshot({
     organizationId,
@@ -53,9 +64,8 @@ const snapshot = (userId: string, organizationId: string, invited: boolean) =>
   });
 
 describe("feature access safe-handler admission", () => {
-  test("required features are hidden without a supplied snapshot before handler reads or execution", async () => {
+  test("required features are hidden without a supplied snapshot before handler execution", async () => {
     let executions = 0;
-    let identityQueries = 0;
     const endpoint = createSafeRootHandler(
       {
         accountAccess: ACCOUNT_ACCESS.sandbox,
@@ -68,16 +78,10 @@ describe("feature access safe-handler admission", () => {
         return Result.ok({ ok: true });
       },
     );
-    const database = createScopedDbMock({
-      select: () => {
-        identityQueries += 1;
-        return {
-          from: () => ({
-            innerJoin: () => ({ where: () => ({ limit: async () => [] }) }),
-          }),
-        };
-      },
-    });
+    const database = createScopedDbMock(
+      {},
+      { featureAccess: { identity: null } },
+    );
     const result = await endpoint.handler(
       createTestHandlerContext<Parameters<typeof endpoint.handler>[0]>({
         safeDb: database.safeDb,
@@ -89,7 +93,6 @@ describe("feature access safe-handler admission", () => {
       response: { message: "Not found" },
     });
     expect(executions).toBe(0);
-    expect(identityQueries).toBe(1);
     expect(database.getCallCount()).toBe(1);
   });
 
@@ -112,13 +115,7 @@ describe("feature access safe-handler admission", () => {
           return Result.ok({ ok: true });
         },
       );
-      const database = createScopedDbMock({
-        select: () => ({
-          from: () => ({
-            innerJoin: () => ({ where: () => ({ limit: async () => [] }) }),
-          }),
-        }),
-      });
+      const database = unenrolledDatabase();
       const result = await endpoint.handler(
         createTestHandlerContext<Parameters<typeof endpoint.handler>[0]>({
           safeDb: database.safeDb,

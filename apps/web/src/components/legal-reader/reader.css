@@ -107,8 +107,10 @@
   min-width: 0;
   overflow-wrap: anywhere;
 
-  /* Queried by the page marker below, which hangs in a margin this canvas
-     only has when it is wider than the measure. */
+  /* Containment removes intrinsic inline size. A definite size keeps a flex
+     child with automatic inline margins from collapsing instead of stretching.
+     The page marker queries the space outside the reading measure. */
+  inline-size: 100%;
   container: reader-canvas / inline-size;
 }
 
@@ -134,6 +136,7 @@
    so a line in the pane is the same length whichever document is open.
    The pane slot comes from packages/ui/src/inspector/dock.tsx. */
 [data-slot="inspector-dock-pane"] :is(.reader-case-law, .reader-statute) {
+  inline-size: 100%;
   max-width: var(--reader-measure);
   margin-inline: auto;
 }

@@ -4,6 +4,7 @@ import { toSafeId } from "@/api/lib/branded-types";
 import { cents } from "@/api/lib/money";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
+import { withTimeBillingEnrolment } from "@/api/tests/helpers/time-billing-enrolment";
 import {
   createScopedDbMock,
   createSelectQueryMock,
@@ -45,24 +46,29 @@ const runUpdate = async (amountCents: number) => {
     }),
   });
   const result = await updateExpense.handler(
-    asTestRaw<UpdateExpenseCtx>({
-      body: {
-        id: toSafeId<"expense">("expense_test"),
-        currency: "KWD",
-      },
-      request: new Request("https://example.test/v1/expenses/workspace_test", {
-        method: "PATCH",
+    withTimeBillingEnrolment(
+      asTestRaw<UpdateExpenseCtx>({
+        body: {
+          id: toSafeId<"expense">("expense_test"),
+          currency: "KWD",
+        },
+        request: new Request(
+          "https://example.test/v1/expenses/workspace_test",
+          {
+            method: "PATCH",
+          },
+        ),
+        route: "/v1/expenses/:workspaceId",
+        safeDb,
+        workspaceId: toSafeId<"workspace">("workspace_test"),
+        memberRole: sessionMemberRole("owner"),
+        session: {
+          activeOrganizationId: toSafeId<"organization">("org_test"),
+        },
+        user: { id: toSafeId<"user">("user_test") },
+        recordAuditEvent: async () => {},
       }),
-      route: "/v1/expenses/:workspaceId",
-      safeDb,
-      workspaceId: toSafeId<"workspace">("workspace_test"),
-      memberRole: sessionMemberRole("owner"),
-      session: {
-        activeOrganizationId: toSafeId<"organization">("org_test"),
-      },
-      user: { id: toSafeId<"user">("user_test") },
-      recordAuditEvent: async () => {},
-    }),
+    ),
   );
   return { getCallCount, result, written };
 };

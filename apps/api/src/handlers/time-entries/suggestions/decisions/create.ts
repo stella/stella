@@ -295,6 +295,7 @@ const createTimeSuggestionDecision = createSafeHandler(
       "decision already stored, including an earlier accept.",
     permissions: { timeEntry: ["create"] },
     accountAccess: ACCOUNT_ACCESS.sandbox,
+    featureAccess: { featureId: "time-billing", type: "required" },
     realtime: timeEntryRealtimeUpdates,
     mcp: {
       type: "capability",

@@ -7,6 +7,7 @@ import type {
   AnyTextAdapter,
   ModelMessage,
   RunErrorEvent,
+  TokenUsage,
   StructuredOutputPart,
   SystemPrompt,
 } from "@tanstack/ai";
@@ -68,13 +69,19 @@ import type {
   StreamChatChunksOptions,
   TanStackTextFinishReason,
 } from "@/api/lib/chat/tanstack-chat-runtime";
-import { ProviderCallError } from "@/api/lib/errors/provider-call-error";
+import {
+  ModelRunError,
+  PROVIDER_CALL_ERROR_MESSAGE,
+  ProviderCallError,
+} from "@/api/lib/errors/provider-call-error";
 import {
   createProviderCallError,
   providerRequestIdFrom,
 } from "@/api/lib/errors/provider-call-failure";
 import {
   AIGenerationCancelledError,
+  ChatEmptyCompletionError,
+  ChatLoopDetectedError,
   HandlerError,
 } from "@/api/lib/errors/tagged-errors";
 import { logger } from "@/api/lib/observability/logger";
@@ -108,6 +115,7 @@ import type {
   TanStackModelOptions,
 } from "@/api/lib/tanstack-ai-models";
 import { toTanStackValibotSchema } from "@/api/lib/tanstack-ai-schema";
+import { tokenUsageFromTerminalChunk } from "@/api/lib/tanstack-ai-usage";
 
 type GenerateTanStackInputOptions =
   | {
@@ -654,6 +662,25 @@ const PROVIDER_OWNED_ERROR_KIND = {
   unknown: false,
 } as const satisfies Record<AIErrorKind, boolean>;
 
+// Being tagged is not ownership: better-result's `Panic` and
+// `UnhandledException`, and any library's tagged class, carry foreign text.
+const OWNED_RUN_FAILURES = [
+  HandlerError,
+  ChatLoopDetectedError,
+  ChatEmptyCompletionError,
+] as const;
+
+const isOwnedRunFailure = (error: Error): boolean =>
+  OWNED_RUN_FAILURES.some((ErrorClass) => error instanceof ErrorClass);
+
+/**
+ * The one exit of a failed model run. Every result carries a message Stella
+ * owns: a provider failure becomes a `ProviderCallError`, an application
+ * `TaggedError` (a curated refusal, a loop or empty-completion verdict) and
+ * the caller's own abort keep their identity, and anything else (a structured
+ * output the engine could not parse or validate, a library error thrown
+ * mid-run) becomes a `ModelRunError`, whose fixed message holds no model text.
+ */
 export const withRecoveredProviderStatus = ({
   error,
   model,
@@ -666,7 +693,7 @@ export const withRecoveredProviderStatus = ({
     return error;
   }
   if (!(error instanceof Error)) {
-    return error;
+    return new ModelRunError({ model });
   }
   if (hasManagedProviderUnavailableCode(error)) {
     return classifyFailure(
@@ -689,7 +716,7 @@ export const withRecoveredProviderStatus = ({
     !hasProviderFailureInCauseChain(evidence) &&
     !PROVIDER_OWNED_ERROR_KIND[kind]
   ) {
-    return error;
+    return isOwnedRunFailure(error) ? error : new ModelRunError({ model });
   }
   return createProviderCallError({
     model,
@@ -881,6 +908,26 @@ const guardStructuredOutputBudget = ({
   }
 };
 
+type ParseModelOutputOptions<TSchema extends v.GenericSchema> = {
+  model: ResolvedTanStackTextModel;
+  outputSchema: TSchema;
+  output: unknown;
+};
+
+// A Valibot issue message can quote the received value, which here is model
+// output, so a mismatch surfaces as the fixed-message `ModelRunError`.
+const parseModelOutput = <TSchema extends v.GenericSchema>({
+  model,
+  outputSchema,
+  output,
+}: ParseModelOutputOptions<TSchema>): v.InferOutput<TSchema> => {
+  const parsed = v.safeParse(outputSchema, output);
+  if (!parsed.success) {
+    throw new ModelRunError({ model });
+  }
+  return parsed.output;
+};
+
 export const generateTanStackObjectForRole = async <
   TSchema extends v.GenericSchema,
 >({
@@ -949,7 +996,7 @@ export const generateTanStackObjectForRole = async <
     throw generated.error;
   }
 
-  return v.parse(outputSchema, generated.value);
+  return parseModelOutput({ model, outputSchema, output: generated.value });
 };
 
 export const streamTanStackObjectForRole = async function* <
@@ -1135,7 +1182,11 @@ const streamTanStackStructuredOutput = async function* <
     completed = true;
     yield {
       type: "complete",
-      object: v.parse(outputSchema, chunk.value.object),
+      object: parseModelOutput({
+        model,
+        outputSchema,
+        output: chunk.value.object,
+      }),
       raw: chunk.value.raw,
       ...(chunk.value.reasoning === undefined
         ? {}
@@ -1618,3 +1669,103 @@ const googleServiceTierOptions = (
 ): Pick<TanStackModelOptions<"google">, "serviceTier"> => ({
   serviceTier: isDeferredServiceTier(serviceTier) ? "flex" : "standard",
 });
+
+/**
+ * A `RUN_ERROR` as a wrapped run hands it out: the fixed provider-call message
+ * and the classified kind as its code, plus the usage the provider billed
+ * before the run failed. The provider's own message, code and raw event stay
+ * behind, so a consumer that persists or forwards the chunk carries only these.
+ */
+type TanStackRunErrorChunk = Pick<RunErrorEvent, "type" | "timestamp"> & {
+  message: typeof PROVIDER_CALL_ERROR_MESSAGE;
+  code: AIErrorKind;
+  usage?: TokenUsage;
+};
+
+type TanStackChatRunChunk =
+  | Exclude<
+      PublicStreamChunk,
+      { type: EventType.RUN_ERROR } | { type: "RUN_ERROR" }
+    >
+  | TanStackRunErrorChunk;
+
+const tanStackRunErrorChunk = (
+  chunk: RunErrorEvent,
+  model: ResolvedTanStackTextModel,
+): TanStackRunErrorChunk => {
+  const usage = tokenUsageFromTerminalChunk(chunk);
+  return {
+    type: EventType.RUN_ERROR,
+    ...(chunk.timestamp === undefined ? {} : { timestamp: chunk.timestamp }),
+    message: PROVIDER_CALL_ERROR_MESSAGE,
+    code: tanStackRunError(chunk, model).kind,
+    ...(usage === undefined ? {} : { usage }),
+  };
+};
+
+/**
+ * Stream a chat run whose chunks a caller consumes itself (a subagent's tool
+ * loop). A `RUN_ERROR` arrives projected to {@link TanStackRunErrorChunk}, and
+ * a thrown failure leaves through `withRecoveredProviderStatus`, so neither
+ * carries provider text.
+ *
+ * @yields The run's chunks, with each `RUN_ERROR` projected.
+ */
+export const streamTanStackChatRun = async function* ({
+  model,
+  ...options
+}: StreamChatChunksOptions & {
+  model: ResolvedTanStackTextModel;
+}): AsyncIterable<TanStackChatRunChunk> {
+  try {
+    for await (const chunk of streamChatChunks(options)) {
+      yield chunk.type === EventType.RUN_ERROR
+        ? tanStackRunErrorChunk(chunk, model)
+        : chunk;
+    }
+  } catch (error) {
+    throw withRecoveredProviderStatus({
+      error,
+      model,
+      abortSignal: options.abortController?.signal,
+    });
+  }
+};
+
+type GenerateTanStackChatObjectOptions<TSchema extends v.GenericSchema> =
+  StreamChatChunksOptions & {
+    model: ResolvedTanStackTextModel;
+    outputSchema: TSchema;
+  };
+
+/**
+ * The awaited structured-output run for a caller that assembles its own chat
+ * options (tools, an agent loop). Failures leave through
+ * `withRecoveredProviderStatus` and the output is parsed against `outputSchema`.
+ */
+export const generateTanStackChatObject = async <
+  TSchema extends v.GenericSchema,
+>({
+  model,
+  outputSchema,
+  ...options
+}: GenerateTanStackChatObjectOptions<TSchema>): Promise<
+  v.InferOutput<TSchema>
+> => {
+  const result = await Result.tryPromise({
+    try: async () =>
+      await generateChatObject({
+        ...options,
+        outputSchema: toTanStackValibotSchema(outputSchema),
+      }),
+    catch: (error) => error,
+  });
+  if (Result.isError(result)) {
+    throw withRecoveredProviderStatus({
+      error: result.error,
+      model,
+      abortSignal: options.abortController?.signal,
+    });
+  }
+  return parseModelOutput({ model, outputSchema, output: result.value });
+};

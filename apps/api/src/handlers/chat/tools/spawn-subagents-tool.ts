@@ -24,6 +24,7 @@ import type { OrgAIConfig } from "@/api/lib/ai-config";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { ManagedAIResidency } from "@/api/lib/chat/ai-data-policy";
 import type { ChatToolMap } from "@/api/lib/chat/chat-tool-types";
+import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import {
   requireChatToolModelAdmission,
   type ModelDispatchAdmission,
@@ -53,6 +54,18 @@ export const SUBAGENT_DELEGATION_DEPTH_CAP = 1;
 
 /** Upper bound on how many subtasks one `spawn_subagents` call may batch. */
 const MAX_SUBAGENTS_PER_CALL = 8;
+
+export const SUBAGENT_FAILED_MESSAGE = "The subagent run failed.";
+
+/**
+ * The tool-result text for a run that threw. A curated 4xx `HandlerError`
+ * names a refusal the parent model can act on; anything else may carry
+ * library or provider text, so it is reported with a fixed message.
+ */
+const subagentThrownErrorMessage = (error: unknown): string =>
+  HandlerError.is(error) && error.status < 500
+    ? error.message
+    : SUBAGENT_FAILED_MESSAGE;
 
 /** Step budget for each subagent's own nested agentic loop. */
 const SUBAGENT_MAX_STEPS = 25;
@@ -503,7 +516,7 @@ export const createSpawnSubagentsTool = (
             return {
               index,
               status: "failed" as const,
-              error: error instanceof Error ? error.message : String(error),
+              error: subagentThrownErrorMessage(error),
             };
           }
         };

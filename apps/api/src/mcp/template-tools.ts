@@ -24,7 +24,7 @@ import {
   CREATE_TEMPLATE_PROJECTION,
   LIST_TEMPLATES_LIST_PROJECTION,
   LIST_TEMPLATES_PROJECTION,
-  type TEMPLATE_DESCRIBE_PROJECTION,
+  TEMPLATE_DESCRIBE_PROJECTION,
 } from "@/api/lib/chat/projections";
 import { clauseDirectiveWarningSchema } from "@/api/lib/clauses/clause-directives";
 import {
@@ -53,10 +53,7 @@ import {
   encodePaginationCursor,
   isUuidPaginationCursorPart,
 } from "@/api/lib/pagination";
-import {
-  type AssertNoExtraFields,
-  projectionPayload,
-} from "@/api/lib/projection-totality";
+import { projectionPayload } from "@/api/lib/projection-totality";
 import {
   createModelActionAdmitter,
   type AdmittedModelAction,
@@ -1378,7 +1375,8 @@ const admitTemplateFillAi = ({
     admitted: AdmittedModelAction,
   ) => Promise<AiFillCollaborators>;
 }): AiFillAdmission<
-  NonNullable<Awaited<ReturnType<typeof assertTemplateFillUsage>>>
+  | NonNullable<Awaited<ReturnType<typeof assertTemplateFillUsage>>>
+  | HandlerError<403 | 429 | 503>
 > => {
   const admitModelAction = createModelActionAdmitter({
     organizationId: context.organizationId,
@@ -2610,11 +2608,7 @@ const describeTemplateForAgent = async ({
       : storedTemplateFailureResult(described.storedTemplateError);
   }
   const payload = toTemplateDetailPayload(templateId, described);
-  type DescribedTemplatePayload = AssertNoExtraFields<
-    typeof payload,
-    v.InferInput<typeof TEMPLATE_DESCRIBE_PROJECTION>
-  >;
-  return payload satisfies DescribedTemplatePayload;
+  return projectionPayload(TEMPLATE_DESCRIBE_PROJECTION, payload);
 };
 
 /** `configure_template_fields`: overlay field configuration onto an existing
