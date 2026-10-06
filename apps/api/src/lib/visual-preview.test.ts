@@ -101,14 +101,17 @@ test("accepts maximum escaped diagnostics in the model text budget", () => {
 });
 
 describe("visual preview invocation", () => {
-  test("returns the shared bounded preview output", async () => {
+  test("decodes a Uint8Array Lambda payload and validates the shared output", async () => {
     const result = await previewVisual({
       document: "<html></html>",
       functionArn,
       invoke: async ({ input }) => {
         expect(input.viewport.width).toBe(1200);
         expect(input.document).toBe("<html></html>");
-        return { payload: payload(output) };
+        const bytes = payload(output);
+        expect(bytes).toBeInstanceOf(Uint8Array);
+        expect(Buffer.isBuffer(bytes)).toBe(false);
+        return { payload: bytes };
       },
     });
     expect(Result.isOk(result)).toBe(true);
@@ -135,7 +138,7 @@ describe("visual preview invocation", () => {
       document: "",
       functionArn,
       timeoutMs: 5,
-      invoke: ({ signal: invocationSignal }) => {
+      invoke: async ({ signal: invocationSignal }) => {
         signal = invocationSignal;
         return new Promise(() => {});
       },
