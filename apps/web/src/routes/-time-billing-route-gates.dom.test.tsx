@@ -7,7 +7,6 @@ GlobalRegistrator.register({ url: "http://localhost:3000/workspaces" });
 Object.assign(import.meta.env, {
   VITE_API_URL: "http://localhost:3001",
   VITE_BETA_FEATURES_ENABLED: "true",
-  VITE_FEATURE_TIME_BILLING: "true",
 });
 
 const originalFetch = globalThis.fetch;

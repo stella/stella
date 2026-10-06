@@ -29,7 +29,7 @@ import {
   MCP_INTERNAL_ERROR_HINT,
   normalizeTextField,
   structuredErrorResult,
-  toolDataResult,
+  untypedToolDataResult,
   windowTextByCursor,
 } from "@/api/mcp/tool-utils";
 
@@ -346,7 +346,7 @@ const finalizeStructured = async ({
     plan.window.apply(textWindow);
   }
 
-  return toolDataResult(plan.payload);
+  return untypedToolDataResult(plan.payload);
 };
 
 const finalizeCompatSearch = async ({
@@ -403,7 +403,7 @@ const finalizeCompatSearch = async ({
     }
   }
 
-  return toolDataResult(
+  return untypedToolDataResult(
     projectionPayload(COMPAT_SEARCH_OUTPUT_SCHEMA, {
       nextCursor: plan.nextCursor,
       ...(plan.paginationOutcome === undefined
@@ -455,7 +455,7 @@ const finalizeCompatFetch = async ({
       return textWindow;
     }
 
-    return toolDataResult(
+    return untypedToolDataResult(
       projectionPayload(COMPAT_FETCH_OUTPUT_SCHEMA, {
         id: plan.id,
         title: anonymized.title,
@@ -487,7 +487,7 @@ const finalizeCompatFetch = async ({
     return textWindow;
   }
 
-  return toolDataResult(
+  return untypedToolDataResult(
     projectionPayload(COMPAT_FETCH_OUTPUT_SCHEMA, {
       id: plan.id,
       title: plan.title,

@@ -106,7 +106,6 @@ import type {
 } from "@/api/mcp/tool-types";
 import { defineMcpToolSet } from "@/api/mcp/tool-types";
 import {
-  invalidCursorResult,
   bindWorkspaceRecorder,
   countryInputSchema,
   countryNormalization,
@@ -116,9 +115,11 @@ import {
   errorResult,
   getWorkspaceStatus,
   internalFailureResult,
+  invalidCursorResult,
   ISO_DATE_SCHEMA,
   notFoundResult,
   nullAsAbsent,
+  structuredEgressPlan,
   toolDataResult,
   uuidInputSchema,
   validationErrorResult,
@@ -1532,11 +1533,10 @@ const handleListTasksTool: TypedMcpToolHandler<
       },
     );
 
-    return {
-      egress: "structured",
+    return structuredEgressPlan({
       payload: projectionPayload(LIST_TASKS_DETAIL_PROJECTION, { task }),
       textFields,
-    };
+    });
   }
 
   // List mode: one matter when matter_id is given, otherwise every matter in
@@ -1581,14 +1581,13 @@ const handleListTasksTool: TypedMcpToolHandler<
   const tasks = listed.value.items;
   const textFields = runTextFieldSpecs(TASK_LIST_TEXT_FIELD_SPECS, { tasks });
 
-  return {
-    egress: "structured",
+  return structuredEgressPlan({
     payload: projectionPayload(LIST_TASKS_LIST_PROJECTION, {
       tasks,
       nextCursor: listed.value.nextCursor,
     }),
     textFields,
-  };
+  });
 };
 
 // --- save_task ----------------------------------------------------------

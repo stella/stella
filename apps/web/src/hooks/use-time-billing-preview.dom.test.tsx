@@ -2,11 +2,9 @@ import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { afterAll, afterEach, describe, expect, test } from "bun:test";
 
 GlobalRegistrator.register({ url: "http://localhost:3000/workspaces" });
-// A legacy enabled build flag must never override the caller's server decision.
 Object.assign(import.meta.env, {
   VITE_API_URL: "http://localhost:3001",
   VITE_BETA_FEATURES_ENABLED: "true",
-  VITE_FEATURE_TIME_BILLING: "true",
 });
 
 const originalFetch = globalThis.fetch;
