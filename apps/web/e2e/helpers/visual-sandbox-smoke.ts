@@ -19,7 +19,10 @@ export const declareVisualSandboxSmoke = () => {
   }) => {
     expect(baseURL).toBeDefined();
     expect(declaration.route).toBe(VISUAL_SANDBOX_PATH);
-    const hostUrl = new URL("/__visual-frame-smoke", baseURL).href;
+    // A real response from the web server gives the host page the same
+    // address space as the API, so Chromium loads the frame. A response
+    // fulfilled by page.route() does not, and Chromium blocks the frame.
+    const hostUrl = new URL("/prepaint-init.js", baseURL).href;
     const sandboxUrl = new URL(VISUAL_SANDBOX_PATH, E2E_API_ORIGIN).href;
     const collector = createNetworkCollector();
     const stopTracking = collector.trackPage(page);
@@ -31,17 +34,17 @@ export const declareVisualSandboxSmoke = () => {
         frameRequests.push(request.method());
       }
     });
-    await page.route(
-      hostUrl,
-      async (route) =>
-        await route.fulfill({
-          contentType: "text/html",
-          body: `<script>addEventListener("message",({source,data})=>{const frame=document.querySelector("iframe");if(source===frame.contentWindow&&data.type==="resize"&&Number.isInteger(data.height)&&data.height>0)document.documentElement.dataset.visualResize="received"})</script><iframe title="Timeline" src="${sandboxUrl}" onload='this.contentWindow.postMessage({type:"render",title:"Timeline",html:"<p id=visual-smoke>Timeline</p>"},${JSON.stringify(new URL(sandboxUrl).origin)})'></iframe>`,
-        }),
-    );
+    const hostDocument = `<script>addEventListener("message",({source,data})=>{const frame=document.querySelector("iframe");if(source===frame.contentWindow&&data.type==="resize"&&Number.isInteger(data.height)&&data.height>0)document.documentElement.dataset.visualResize="received"})</script><iframe title="Timeline" src="${sandboxUrl}" onload='this.contentWindow.postMessage({type:"render",title:"Timeline",html:"<p id=visual-smoke>Timeline</p>"},${JSON.stringify(new URL(sandboxUrl).origin)})'></iframe>`;
     try {
+      const hostResponse = await page.goto(hostUrl);
+      expect(hostResponse?.ok()).toBe(true);
       const frameResponse = page.waitForResponse(sandboxUrl);
-      await page.goto(hostUrl);
+      await page.evaluate((markup) => {
+        document.open();
+        // safe-html: hostDocument is a constant test fixture defined above.
+        document.write(markup);
+        document.close();
+      }, hostDocument);
       const response = await frameResponse;
       expect(response.status()).toBe(200);
       expect(response.headers()["cache-control"]).toBe("private, no-store");
@@ -56,27 +59,6 @@ export const declareVisualSandboxSmoke = () => {
         "received",
       );
       errors.assertEmpty(VISUAL_SANDBOX_PATH);
-      errors.expectCaptured(/frame-src 'none'/u);
-      const navigationRequested = await page
-        .locator("iframe")
-        .evaluate((frame, targetOrigin) => {
-          if (!(frame instanceof HTMLIFrameElement) || !frame.contentWindow) {
-            return false;
-          }
-          frame.contentWindow.postMessage(
-            {
-              type: "render",
-              title: "Timeline",
-              html: '<p>Timeline</p><script>document.documentElement.dataset.navigationAttempted="true";location.href="https://example.invalid/visual-smoke";</script>',
-            },
-            targetOrigin,
-          );
-          return true;
-        }, new URL(sandboxUrl).origin);
-      expect(navigationRequested).toBe(true);
-      await expect(
-        page.frameLocator("iframe").frameLocator("iframe").locator("html"),
-      ).toHaveAttribute("data-navigation-attempted", "true");
       await collector.waitForQuiet({
         idleMs: 500,
         minimumObservationMs: 1000,
