@@ -4964,7 +4964,7 @@ jobs:
     # them; QUEUE_BROWSER_SUITES=off turns that off without a commit.
     if: >-
       github.event_name != 'pull_request' && (
-      (needs.ci-plan.outputs.queue_depth != 'thin' || vars.QUEUE_BROWSER_SUITES != 'off')
+      (needs.ci-plan.outputs.queue_depth != 'thin' || (github.event_name == 'merge_group' && vars.QUEUE_BROWSER_SUITES != 'off'))
       && (always()
       && (github.event_name != 'merge_group' || !cancelled())
       && needs.ci-plan.outputs.trusted == 'true'
@@ -5111,7 +5111,7 @@ jobs:
     # Admitted to thin merge groups like route-smoke (see there).
     if: >-
       github.event_name != 'pull_request' && (
-      (needs.ci-plan.outputs.queue_depth != 'thin' || vars.QUEUE_BROWSER_SUITES != 'off')
+      (needs.ci-plan.outputs.queue_depth != 'thin' || (github.event_name == 'merge_group' && vars.QUEUE_BROWSER_SUITES != 'off'))
       && (always()
       && (github.event_name != 'merge_group' || !cancelled())
       && (needs.ci-plan.outputs.trusted == 'true'

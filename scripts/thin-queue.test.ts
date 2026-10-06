@@ -191,7 +191,8 @@ const expectedRouteSelection = (value: ReturnType<typeof context>) => {
     value.github.event_name !== "pull_request" &&
     (value.github.event_name !== "merge_group" || !value.cancelled()) &&
     (planner.outputs["queue_depth"] !== "thin" ||
-      value.vars.QUEUE_BROWSER_SUITES !== "off") &&
+      (value.github.event_name === "merge_group" &&
+        value.vars.QUEUE_BROWSER_SUITES !== "off")) &&
     planner.outputs["trusted"] === "true" &&
     planner.outputs["route_smoke_required"] === "true" &&
     (value.needs["web-build"]?.result === "success" ||
@@ -990,7 +991,7 @@ test("a browser suite without the queue switch drops out of thin merge groups", 
     panic("Missing route smoke condition");
   }
   smoke.if = smoke.if.replace(
-    "(needs.ci-plan.outputs.queue_depth != 'thin' || vars.QUEUE_BROWSER_SUITES != 'off')",
+    "(needs.ci-plan.outputs.queue_depth != 'thin' || (github.event_name == 'merge_group' && vars.QUEUE_BROWSER_SUITES != 'off'))",
     "needs.ci-plan.outputs.queue_depth != 'thin'",
   );
   expect(queueAdmittedJobs(mutated)).not.toContain("route-smoke");
@@ -1000,4 +1001,29 @@ test("a browser suite without the queue switch drops out of thin merge groups", 
     queueDepth: "thin",
   });
   expect(selected(smoke.if, value)).toBe(false);
+});
+
+test("the queue switch admits browser suites only in merge groups", () => {
+  for (const job of admitted) {
+    const scope = scopes[job];
+    if (!scope) {
+      panic(`Missing planner scope for ${job}`);
+    }
+    for (const event of events.filter(
+      (candidate) => candidate.event !== "merge_group",
+    )) {
+      // A thin depth outside a merge group is not emitted today; the condition
+      // must still refuse it rather than rely on the resolver.
+      const value = context({ event, variable: "thin", queueDepth: "thin" });
+      const planner = value.needs["ci-plan"];
+      if (!planner) {
+        panic(`Missing ${job} planner context`);
+      }
+      planner.outputs[scope] = "true";
+      expect(
+        selected(ci.jobs[job]?.if, value),
+        `${job}/${event.event}/${event.message}`,
+      ).toBe(false);
+    }
+  }
 });
