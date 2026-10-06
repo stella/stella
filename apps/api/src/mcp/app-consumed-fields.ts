@@ -12,6 +12,7 @@ export const MCP_APP_CONSUMED_FIELDS = {
   search_case_law: [
     ...decisionFields.map((field) => `results[].${field}`),
     "results[].snippet",
+    "results[].courtAbbreviation",
     "facets.court[].tierLabel",
     "facets.court[].courts[].value",
     "nextCursor",

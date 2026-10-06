@@ -1340,9 +1340,6 @@ export default defineConfig({
     "**/routeTree.gen.ts",
     // Printed API types, bound to the API by the generator's identity check.
     "apps/web/src/generated/api-routes.gen.ts",
-    // Ajv standalone code is regenerated from the advertised tool schemas;
-    // contract snapshots and the bundle guard bind this compiler output.
-    "apps/api/src/mcp/apps/shared/generated/validators.js",
     "**/*.config.js",
     // Module-augmentation files must use `interface` for declaration
     // merging; oxlint's --fix would rewrite it to `type` and break it.

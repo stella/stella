@@ -3,7 +3,7 @@ import type * as v from "valibot";
 import {
   LOOKUP_CASE_LAW_PROJECTION,
   SEARCH_CASE_LAW_PROJECTION,
-} from "../lib/chat/projections";
+} from "../lib/chat/case-law-result-projections";
 import type { PresentationApp } from "./apps/manifest";
 
 export const MCP_APP_OUTPUT_SCHEMAS = {

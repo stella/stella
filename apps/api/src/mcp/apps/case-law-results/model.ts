@@ -5,6 +5,7 @@ import {
   normalizeDateBound,
   normalizeStringList,
 } from "@stll/agent-input";
+import { compareCodeUnit, getCollator } from "@stll/collation";
 
 import type { LookupResults, SearchResults } from "../shared/contracts";
 
@@ -19,11 +20,12 @@ export type ResultRow = Pick<
   | "ecli"
   | "appUrl"
   | "url"
-> & { snippet: string | null };
+> & { snippet: string | null; courtAbbreviation: string | null };
 
 const resultRow = (
-  row: Omit<ResultRow, "snippet">,
+  row: Omit<ResultRow, "snippet" | "courtAbbreviation">,
   snippet: string | null,
+  courtAbbreviation: string | null,
 ): ResultRow => ({
   decisionId: row.decisionId,
   court: row.court,
@@ -33,6 +35,7 @@ const resultRow = (
   appUrl: row.appUrl,
   url: row.url,
   snippet,
+  courtAbbreviation,
 });
 
 export const lookupRows = (items: LookupPage["items"]) => {
@@ -41,10 +44,10 @@ export const lookupRows = (items: LookupPage["items"]) => {
   for (const item of items) {
     switch (item.status) {
       case "found":
-        rows.push(resultRow(item, null));
+        rows.push(resultRow(item, null, null));
         break;
       case "ambiguous":
-        rows.push(...item.candidates.map((row) => resultRow(row, null)));
+        rows.push(...item.candidates.map((row) => resultRow(row, null, null)));
         notices.push(item.message);
         break;
       case "not_found":
@@ -71,7 +74,9 @@ export const searchView = (data: SearchResults) => {
   }
   return {
     type: "search",
-    results: data.results.map((row) => resultRow(row, row.snippet)),
+    results: data.results.map((row) =>
+      resultRow(row, row.snippet, row.courtAbbreviation),
+    ),
     facets:
       data.facets === null
         ? null
@@ -155,11 +160,11 @@ export const filterDefaults = (input: Record<string, unknown>) => {
   if (!country.ok) {
     return { status: "invalid", message: country.hint } as const;
   }
-  const from = normalizeDateBound(input["date_from"], { bound: "start" });
+  const from = normalizeDateBound(input["date_from"] ?? "", { bound: "start" });
   if (from.ok === false) {
     return { status: "invalid", message: from.hint } as const;
   }
-  const to = normalizeDateBound(input["date_to"], { bound: "end" });
+  const to = normalizeDateBound(input["date_to"] ?? "", { bound: "end" });
   if (to.ok === false) {
     return { status: "invalid", message: to.hint } as const;
   }
@@ -178,4 +183,26 @@ export const filterDefaults = (input: Record<string, unknown>) => {
     courts: courts.value,
     court: typeof input["court"] === "string" ? input["court"] : "",
   } as const;
+};
+
+export type ResultSort = "relevance" | "court" | "date";
+export const sortResultRows = (
+  rows: readonly ResultRow[],
+  sort: ResultSort,
+  locale: string,
+): readonly ResultRow[] => {
+  switch (sort) {
+    case "relevance":
+      return rows;
+    case "court":
+      return rows.toSorted((left, right) =>
+        getCollator(locale).compare(left.court, right.court),
+      );
+    case "date":
+      return rows.toSorted((left, right) =>
+        compareCodeUnit(right.decisionDate ?? "", left.decisionDate ?? ""),
+      );
+    default:
+      return panic("Unknown result sort", sort satisfies never);
+  }
 };

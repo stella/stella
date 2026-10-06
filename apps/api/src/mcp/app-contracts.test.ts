@@ -19,7 +19,9 @@ import {
   lookupView,
   searchFilterInput,
   searchView,
+  sortResultRows,
 } from "./apps/case-law-results/model";
+import { createCaseLawParser } from "./apps/case-law-results/parse";
 import { CASE_LAW_RESULTS_APP, MCP_APPS } from "./apps/manifest";
 import type { LookupResults, SearchResults } from "./apps/shared/contracts";
 import type { McpMode } from "./constants";
@@ -299,6 +301,54 @@ describe("MCP app registry and contracts", () => {
     expect(filterDefaults({ country: "CZE", courts: [1] }).status).toBe(
       "invalid",
     );
+  });
+  test("browser validation strips fields the app does not render", () => {
+    const parse = createCaseLawParser();
+    const view = parse(
+      {
+        ...APP_SEARCH_FIXTURE,
+        total: "not consumed",
+        results: APP_SEARCH_FIXTURE.results.map((row) => ({
+          ...row,
+          citationAuthority: "not consumed",
+        })),
+      },
+      { country: "CZE" },
+    );
+    expect(view?.type).toBe("search");
+    expect(view).not.toHaveProperty("total");
+    expect(
+      parse(
+        {
+          ...APP_SEARCH_FIXTURE,
+          results: [{ ...APP_SEARCH_FIXTURE.results.at(0), court: 123 }],
+        },
+        {},
+      ),
+    ).toBeUndefined();
+  });
+  test("court and date sorts preserve the provider relevance order", () => {
+    const view = searchView(APP_SEARCH_FIXTURE);
+    if (view.type !== "search") {
+      throw new Error("Expected fixture results");
+    }
+    const first = view.results.at(0);
+    if (first === undefined) {
+      throw new Error("Expected fixture row");
+    }
+    const rows = [
+      { ...first, decisionId: "b", court: "Žilina", decisionDate: null },
+      { ...first, decisionId: "a", court: "Brno", decisionDate: "2024-01-01" },
+      { ...first, decisionId: "c", court: "Praha", decisionDate: "2025-01-01" },
+    ];
+    expect(sortResultRows(rows, "relevance", "cs")).toBe(rows);
+    expect(
+      sortResultRows(rows, "court", "cs").map(({ decisionId }) => decisionId),
+    ).toEqual(["a", "c", "b"]);
+    expect(
+      sortResultRows(rows, "date", "cs").map(({ decisionId }) => decisionId),
+    ).toEqual(["c", "a", "b"]);
+    expect(rows.map(({ decisionId }) => decisionId)).toEqual(["b", "a", "c"]);
   });
   test("linking an app leaves text and structured content byte-identical", () => {
     for (const [name, fixtures] of [

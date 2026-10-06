@@ -219,7 +219,7 @@ import {
 } from "@/api/mcp/valibot-tool-definition";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
 
-import { CASE_LAW_RESULTS_APP } from "./apps/manifest";
+import { CASE_LAW_RESULTS_RESOURCE_URI } from "./apps/resource-uri";
 
 const defaultReadWorkspaceHandler: typeof readWorkspaceHandler = async (
   input,
@@ -1095,7 +1095,7 @@ export const STELLA_TOOL_DEFINITIONS = [
     feature: "FEATURE_PUBLIC_LAW",
     _meta: {
       ui: {
-        resourceUri: CASE_LAW_RESULTS_APP.uri,
+        resourceUri: CASE_LAW_RESULTS_RESOURCE_URI,
         visibility: ["model", "app"],
       },
     },
@@ -1164,7 +1164,7 @@ export const STELLA_TOOL_DEFINITIONS = [
     feature: "FEATURE_PUBLIC_LAW",
     _meta: {
       ui: {
-        resourceUri: CASE_LAW_RESULTS_APP.uri,
+        resourceUri: CASE_LAW_RESULTS_RESOURCE_URI,
         visibility: ["model", "app"],
       },
     },

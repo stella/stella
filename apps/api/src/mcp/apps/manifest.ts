@@ -4,6 +4,7 @@ import {
 } from "@stll/api-contract";
 
 import type { DEFAULT_MCP_TOOL_DEFINITIONS } from "../static-tool-definitions";
+import { CASE_LAW_RESULTS_RESOURCE_URI } from "./resource-uri";
 
 type Tool = (typeof DEFAULT_MCP_TOOL_DEFINITIONS)[number];
 type ReadToolName = Extract<Tool, { access: "read" }>["name"];
@@ -41,7 +42,7 @@ export const MCP_APPS = [
   },
   {
     directory: "case-law-results",
-    uri: "ui://stella/case-law-results",
+    uri: CASE_LAW_RESULTS_RESOURCE_URI,
     linkedTools: ["search_case_law", "lookup_case_law"],
     type: "presentation",
     callableTools: ["search_case_law", "lookup_case_law"],

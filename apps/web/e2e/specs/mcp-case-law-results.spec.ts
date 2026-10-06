@@ -114,7 +114,10 @@ const mountApp = async ({ page, locale, tool, payload }: HostOptions) => {
             });
             break;
           case "tools/call":
-            history.push(data.params);
+            history.push({
+              name: data.params.name,
+              arguments: data.params.arguments,
+            });
             reply({
               jsonrpc: "2.0",
               id: data.id,
@@ -166,6 +169,7 @@ const hostHistory = (page: Page, key: "appCalls" | "appLinks") =>
 test("case-law app filters, pages and opens links through the MCP host", async ({
   page,
 }) => {
+  await page.clock.install({ time: new Date("2024-04-15T12:00:00Z") });
   const errors: string[] = [];
   page.on("pageerror", ({ message }) => errors.push(message));
   const app = await mountApp({
@@ -176,7 +180,7 @@ test("case-law app filters, pages and opens links through the MCP host", async (
   });
   await expect(app.getByRole("heading", { name: "Case Law" })).toBeVisible();
   await expect(
-    app.getByRole("cell", { name: "Ústavní soud", exact: true }),
+    app.getByRole("cell").filter({ hasText: "Ústavní soud" }),
   ).toBeVisible();
   await expect(app.locator(".snippet")).toHaveText(
     "Náhrada škody: <b>právní jistota</b>.",
@@ -187,6 +191,38 @@ test("case-law app filters, pages and opens links through the MCP host", async (
   await expect
     .poll(() => hostHistory(page, "appLinks"))
     .toEqual([APP_SEARCH_FIXTURE.results.at(0)?.appUrl]);
+  await page.evaluate((payload) => {
+    const first = payload.results.at(0);
+    if (first === undefined) {
+      throw new Error("Missing search fixture");
+    }
+    globalThis.appFixtureHost.sendAppResult({
+      ...payload,
+      results: [
+        first,
+        {
+          ...first,
+          decisionId: "fixture-sorted",
+          court: "Krajský soud",
+          decisionDate: "2025-01-01",
+          caseNumber: "44 Co 92/2022",
+        },
+      ],
+    });
+  }, APP_SEARCH_FIXTURE);
+  await app.getByRole("combobox", { name: "Sort", exact: true }).click();
+  await app.getByRole("option", { name: "Court", exact: true }).click();
+  await expect(app.locator("tbody tr").first()).toContainText("44 Co 92/2022");
+  await app.getByRole("combobox", { name: "Sort", exact: true }).click();
+  await app.getByRole("option", { name: "Newest", exact: true }).click();
+  await expect(app.locator("tbody tr").first()).toContainText("44 Co 92/2022");
+  await app.getByRole("combobox", { name: "Sort", exact: true }).click();
+  await app.getByRole("option", { name: "Most relevant", exact: true }).click();
+  await expect(app.locator("tbody tr").first()).toContainText("I. ÚS 123/24");
+  await page.evaluate(
+    (payload) => globalThis.appFixtureHost.sendAppResult(payload),
+    APP_SEARCH_FIXTURE,
+  );
   await app.getByRole("button", { name: "Next", exact: true }).click();
   await expect
     .poll(() => hostHistory(page, "appCalls"))
@@ -202,12 +238,14 @@ test("case-law app filters, pages and opens links through the MCP host", async (
       },
     ]);
   await expect(
-    app.getByRole("cell", { name: "Ústavní soud", exact: true }),
+    app.getByRole("cell").filter({ hasText: "Ústavní soud" }),
   ).toBeVisible();
+  await app.getByRole("combobox", { name: "Court", exact: true }).click();
   await app
-    .getByLabel("Court", { exact: true })
-    .selectOption("tier:constitutional");
-  await app.getByLabel("From", { exact: true }).fill("2024-01-01");
+    .getByRole("option", { name: "Constitutional courts", exact: true })
+    .click();
+  await app.getByRole("button", { name: /^From/u }).click();
+  await app.getByRole("button", { name: "Today", exact: true }).click();
   await app.getByRole("button", { name: "Filter", exact: true }).click();
   await expect
     .poll(async () => (await hostHistory(page, "appCalls")).at(-1))
@@ -218,7 +256,7 @@ test("case-law app filters, pages and opens links through the MCP host", async (
         country: "CZE",
         limit: 10,
         courts: ["Ústavní soud"],
-        date_from: "2024-01-01",
+        date_from: "2024-04-15",
       },
     });
   await page.evaluate(() =>
@@ -226,7 +264,12 @@ test("case-law app filters, pages and opens links through the MCP host", async (
   );
   await expect(app.locator("html")).toHaveAttribute("dir", "rtl");
   await expect(app.getByRole("heading")).not.toHaveText("Case Law");
-  await expect(app.locator("td bdi").first()).toContainText(/[٠-٩]/u);
+  await expect(
+    app
+      .locator("td")
+      .filter({ hasText: /[٠-٩]/u })
+      .first(),
+  ).toContainText(/[٠-٩]/u);
   expect(errors).toEqual([]);
 });
 
@@ -245,7 +288,7 @@ test("lookup app renders every lookup status and surfaces recoverable errors", a
   ).toBeVisible();
   await expect(app.getByText("Lookup unavailable.")).toBeVisible();
   await expect(
-    app.getByRole("cell", { name: "Ústavní soud", exact: true }),
+    app.getByRole("cell").filter({ hasText: "Ústavní soud" }),
   ).toHaveCount(1);
   await page.evaluate(() => globalThis.appFixtureHost.sendAppError());
   await expect(app.getByRole("alert")).toContainText("Read unavailable.");

@@ -78,6 +78,7 @@
     "@aws-sdk/client-sqs": "^3.1143.0",
     "@aws-sdk/client-sts": "^3.1143.0",
     "@aws-sdk/s3-request-presigner": "^3.1143.0",
+    "@base-ui/react": "catalog:",
     "@better-auth/api-key": "catalog:",
     "@better-auth/cimd": "catalog:",
     "@better-auth/core": "catalog:",
@@ -144,6 +145,7 @@
     "@stll/text-normalize": "workspace:*",
     "@stll/time": "workspace:*",
     "@stll/transactional": "workspace:*",
+    "@stll/ui": "workspace:*",
     "@stll/user-agent": "workspace:*",
     "@stll/uuid-codec": "workspace:*",
     "@t3-oss/env-core": "catalog:",
@@ -160,7 +162,6 @@
     "@tanstack/charts": "catalog:",
     "@tanstack/react-charts": "catalog:",
     "@valibot/to-json-schema": "^1.8.0",
-    "ajv": "catalog:",
     "asn1js": "3.0.10",
     "better-auth": "catalog:",
     "better-result": "catalog:",
@@ -204,14 +205,18 @@
     "@standard-schema/spec": "^1.1.0",
     "@stll/property-testing": "workspace:*",
     "@stll/typescript-config": "workspace:*",
+    "@tailwindcss/postcss": "catalog:",
     "@types/react": "catalog:react19",
     "@types/react-dom": "catalog:react19",
+    "ajv": "catalog:",
     "ajv-formats": "catalog:",
     "bun-types": "catalog:",
     "drizzle-kit": "catalog:",
     "fast-check": "catalog:",
     "openai": "6.49.0",
-    "pdfjs-dist": "^6.3.289"
+    "pdfjs-dist": "^6.3.289",
+    "postcss": "catalog:",
+    "tailwindcss": "catalog:"
   },
   "ciGateTestRunners": {
     "test:corpus": {

@@ -1,4 +1,6 @@
-import { isLookupResults, isSearchResults } from "../shared/contracts";
+import * as v from "valibot";
+
+import { APP_LOOKUP_SCHEMA, APP_SEARCH_SCHEMA } from "../shared/contracts";
 import { lookupView, searchView } from "./model";
 import type { CaseLawView } from "./model";
 
@@ -10,13 +12,15 @@ export const createCaseLawParser = () => {
     payload: unknown,
     input: Record<string, unknown>,
   ): CaseLawView | undefined => {
-    if (isLookupResults(payload)) {
-      return lookupView(payload);
+    const lookup = v.safeParse(APP_LOOKUP_SCHEMA, payload);
+    if (lookup.success) {
+      return lookupView(lookup.output);
     }
-    if (!isSearchResults(payload)) {
+    const search = v.safeParse(APP_SEARCH_SCHEMA, payload);
+    if (!search.success) {
       return undefined;
     }
-    const view = searchView(payload);
+    const view = searchView(search.output);
     if (view.type !== "search") {
       return view;
     }

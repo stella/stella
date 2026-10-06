@@ -16,7 +16,9 @@ type CatalogKey =
           : never;
       }[keyof Catalog[Namespace]];
     }[keyof Catalog]
-  | `caseLaw.courtTiers.${keyof Catalog["caseLaw"]["courtTiers"]}`;
+  | `caseLaw.courtTiers.${keyof Catalog["caseLaw"]["courtTiers"]}`
+  | `caseLaw.sort.${keyof Catalog["caseLaw"]["sort"]}`
+  | `common.datePicker.${keyof Catalog["common"]["datePicker"]}`;
 
 // Shared wording is projected from the product catalogs, including every locale.
 export const MCP_APP_MESSAGE_KEYS = {
@@ -25,6 +27,23 @@ export const MCP_APP_MESSAGE_KEYS = {
   regional: "caseLaw.courtTiers.regional",
   other: "caseLaw.courtTiers.other",
   title: "common.caseLaw",
+  relevance: "caseLaw.sort.relevance",
+  sort: "common.sort",
+  newest: "caseLaw.sort.newest",
+  search: "navigation.search",
+  searchPlaceholder: "common.search",
+  reset: "common.reset",
+  decisions: "common.decisions",
+  selectDate: "common.selectDate",
+  clearDate: "common.clearDate",
+  today: "common.today",
+  datePicker: "common.datePicker.label",
+  previousMonth: "common.datePicker.previousMonth",
+  nextMonth: "common.datePicker.nextMonth",
+  previousYear: "common.datePicker.previousYear",
+  nextYear: "common.datePicker.nextYear",
+  previousDecade: "common.datePicker.previousDecade",
+  nextDecade: "common.datePicker.nextDecade",
   court: "common.court",
   country: "common.country",
   date: "common.date",

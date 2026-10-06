@@ -93,6 +93,10 @@ export const createPresentationBridge = <View>({
     document.title = locale.messages.title;
     if (merged.theme !== undefined) {
       applyDocumentTheme(merged.theme);
+      document.documentElement.classList.toggle(
+        "dark",
+        merged.theme === "dark",
+      );
     }
     if (merged.styles?.variables !== undefined) {
       applyHostStyleVariables(merged.styles.variables);
