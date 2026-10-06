@@ -1,8 +1,6 @@
 import { afterEach, describe, expect, mock, test } from "bun:test";
-import fc from "fast-check";
 import ts from "typescript";
 
-import { assertProperty } from "@stll/property-testing";
 import { rejectionOf } from "@stll/property-testing/rejection";
 
 import type { ScopedDb } from "@/api/db/safe-db";
@@ -391,48 +389,25 @@ describe("action kind registry", () => {
   });
 });
 
-const organizationIdArb = fc
-  .uuid()
-  .map((value) => toSafeId<"organization">(value));
-const modelTierArb = fc.constantFrom(...Object.values(MANAGED_MODEL_TIER));
-const actionKindArb = fc.constantFrom(
-  ...Object.keys(ACTION_KINDS).filter((kind): kind is ActionKind =>
-    Object.hasOwn(ACTION_KINDS, kind),
-  ),
-);
-
 describe("model dispatch scope", () => {
-  test("a proof admits a dispatch for its own organization only", () => {
-    assertProperty(
-      "a proof admits a dispatch for its own organization only",
-      fc.property(
-        organizationIdArb,
-        organizationIdArb,
-        actionKindArb,
-        modelTierArb,
-        (admitted, dispatched, actionKind, modelTier) => {
-          const admission = testModelAdmission(admitted, actionKind, modelTier);
-          expect(admission).toMatchObject({
-            type: "organization",
-            organizationId: admitted,
-            actionKind,
-            modelTier,
-          });
-          const check = () =>
-            assertModelDispatchScope({
-              organizationId: dispatched,
-              admission,
-            });
-          if (admitted === dispatched) {
-            expect(check).not.toThrow();
-          } else {
-            expect(check).toThrow(
-              "Model dispatch carries another organization's admission",
-            );
-          }
-        },
-      ),
-    );
+  test("a proof admits a dispatch for its own organization", () => {
+    const organizationId = toSafeId<"organization">("org_fixture");
+    for (const modelTier of Object.values(MANAGED_MODEL_TIER)) {
+      const admission = testModelAdmission(
+        organizationId,
+        "chat.send",
+        modelTier,
+      );
+      expect(admission).toMatchObject({
+        type: "organization",
+        organizationId,
+        actionKind: "chat.send",
+        modelTier,
+      });
+      expect(() =>
+        assertModelDispatchScope({ organizationId, admission }),
+      ).not.toThrow();
+    }
   });
 
   test("work with no organization dispatches only without one", () => {

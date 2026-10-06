@@ -119,8 +119,8 @@ export const initReportExportWorker = ({ db }: BullMqWorkerContext) => {
         organizationStateDb: actor.writeDb,
         job,
         signal: new AbortController().signal,
-        run: async (_signal, admission) =>
-          await processReportExport(actor, { ...job.data, admission }),
+        run: async (signal, admission) =>
+          await processReportExport(actor, { ...job.data, admission, signal }),
       });
     },
     { connection: workerConnection, concurrency: WORKER_CONCURRENCY },
@@ -229,6 +229,8 @@ export const processReportExport = async (
   actor: ExportActor,
   data: Pick<ReportExportJobData, "aiNarrative" | "format"> & {
     admission: ModelDispatchAdmission;
+    /** The job's execution signal; aborts when its background lease is lost. */
+    signal: AbortSignal;
   },
 ): Promise<void> => {
   const { exportId } = actor;
@@ -266,6 +268,7 @@ export const processReportExport = async (
       await runExport({
         actor,
         admission: data.admission,
+        signal: data.signal,
         row,
         format: data.format,
         aiNarrative: data.aiNarrative ?? true,
@@ -353,12 +356,14 @@ export const buildReportDelivery = async ({
 const runExport = async ({
   actor,
   admission,
+  signal,
   row,
   format,
   aiNarrative,
 }: {
   actor: ExportActor;
   admission: ModelDispatchAdmission;
+  signal: AbortSignal;
   row: ExportRow;
   format: ReportExportFormat;
   aiNarrative: boolean;
@@ -419,6 +424,7 @@ const runExport = async ({
       : buildReportAiGenerators({
           actor,
           admission,
+          signal,
           ...orgAIConfigResult.value,
         });
   const filled = await fillReport({
@@ -699,11 +705,13 @@ type ReportAiGenerators = {
 const buildReportAiGenerators = ({
   actor,
   admission,
+  signal,
   orgAIConfig,
   managedAIResidency,
 }: {
   actor: ExportActor;
   admission: ModelDispatchAdmission;
+  signal: AbortSignal;
   orgAIConfig: OrgAIConfig | null;
   managedAIResidency: ManagedAIResidency;
 }): ReportAiGenerators => {
@@ -740,6 +748,7 @@ const buildReportAiGenerators = ({
 
   const shared = {
     admission,
+    operationSignal: signal,
     orgAIConfig,
     managedAIResidency,
     organizationId: actor.organizationId,

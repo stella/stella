@@ -158,6 +158,7 @@ afterAll(async () => {
 const expectStoppedBeforeReading = async () => {
   await processReportExport(actor, {
     admission: testModelAdmission(actor.organizationId),
+    signal: new AbortController().signal,
     format: "docx",
     aiNarrative: true,
   });
@@ -193,6 +194,7 @@ describe("report export run", () => {
       .where(eq(reportExports.id, exportId));
     await processReportExport(actor, {
       admission: testModelAdmission(actor.organizationId),
+      signal: new AbortController().signal,
       format: "docx",
       aiNarrative: false,
     });
@@ -276,6 +278,7 @@ describe("report export run", () => {
       .where(eq(reportExports.id, exportId));
     await processReportExport(actor, {
       admission: testModelAdmission(actor.organizationId),
+      signal: new AbortController().signal,
       format: "docx",
       aiNarrative: false,
     });
