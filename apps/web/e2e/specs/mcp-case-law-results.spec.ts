@@ -388,3 +388,35 @@ test("desktop rows stay single-line with long references and summaries", async (
     app.getByText("Rozhodnutí", { exact: false }).first(),
   ).toBeVisible();
 });
+
+test("filter labels align and date fields remain fixed when opened", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1200, height: 800 });
+  const app = await mountApp({
+    page,
+    locale: "en-GB",
+    tool: "search_case_law",
+    payload: APP_SEARCH_FIXTURE,
+  });
+  const labels = app.locator('[data-slot="field-label"]');
+  await expect(labels).toHaveCount(4);
+  const labelBoxes = await labels.evaluateAll((elements) =>
+    elements.map((element) => {
+      const { x, y, height } = element.getBoundingClientRect();
+      return { x, y, height };
+    }),
+  );
+  expect(new Set(labelBoxes.map(({ y, height }) => y + height)).size).toBe(1);
+  const trigger = app.getByRole("button", { name: /^To /u });
+  const label = labels.last();
+  const beforeTrigger = await trigger.boundingBox();
+  const beforeLabel = await label.boundingBox();
+  await trigger.click();
+  await expect(app.locator('[data-slot="date-picker-popup"]')).toBeVisible();
+  expect(await trigger.boundingBox()).toEqual(beforeTrigger);
+  expect(await label.boundingBox()).toEqual(beforeLabel);
+  await expect(
+    app.locator('[data-slot="date-picker-popup"] [aria-current="date"]'),
+  ).toBeFocused();
+});

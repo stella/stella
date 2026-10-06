@@ -15,6 +15,7 @@ import { PUBLIC_CASE_LAW_COUNTRIES } from "@stll/api-contract/case-law-launch-re
 import { Button } from "@stll/ui/button";
 import { CourtBadge } from "@stll/ui/court-badge";
 import { DatePickerPopover } from "@stll/ui/date-picker-popover";
+import { Field, FieldLabel } from "@stll/ui/field";
 import {
   CaseLawIcon,
   ChevronRightIcon,
@@ -344,8 +345,10 @@ const SearchControls = ({
         </Button>
       </div>
       <div className="grid grid-cols-2 items-end gap-3 sm:grid-cols-[minmax(0,1fr)_minmax(0,1.6fr)_minmax(0,1.2fr)_minmax(0,1.2fr)_auto]">
-        <div className="space-y-1.5">
-          <span className="text-muted-foreground text-xs">{t("country")}</span>
+        <Field className="gap-1.5">
+          <FieldLabel className="text-muted-foreground ps-3 text-xs">
+            {t("country")}
+          </FieldLabel>
           <Select
             value={country}
             onValueChange={(value) => {
@@ -365,9 +368,11 @@ const SearchControls = ({
               ))}
             </SelectPopup>
           </Select>
-        </div>
-        <div className="space-y-1.5">
-          <span className="text-muted-foreground text-xs">{t("court")}</span>
+        </Field>
+        <Field className="gap-1.5">
+          <FieldLabel className="text-muted-foreground ps-3 text-xs">
+            {t("court")}
+          </FieldLabel>
           <Select
             value={court}
             onValueChange={(value) => {
@@ -412,31 +417,36 @@ const SearchControls = ({
               ))}
             </SelectPopup>
           </Select>
-        </div>
-        <div className="space-y-1.5">
-          <span id={fromId} className="text-muted-foreground text-xs">
+        </Field>
+        <Field className="gap-1.5">
+          <FieldLabel
+            id={fromId}
+            className="text-muted-foreground ps-3 text-xs"
+          >
             {t("from")}
-          </span>
+          </FieldLabel>
           <DatePickerPopover
             {...dateLabels}
+            variant="field"
             value={from === "" ? null : from}
             onChange={(value) => setFrom(value ?? "")}
             labelledBy={fromId}
             className="w-full"
           />
-        </div>
-        <div className="space-y-1.5">
-          <span id={toId} className="text-muted-foreground text-xs">
+        </Field>
+        <Field className="gap-1.5">
+          <FieldLabel id={toId} className="text-muted-foreground ps-3 text-xs">
             {t("to")}
-          </span>
+          </FieldLabel>
           <DatePickerPopover
             {...dateLabels}
+            variant="field"
             value={to === "" ? null : to}
             onChange={(value) => setTo(value ?? "")}
             labelledBy={toId}
             className="w-full"
           />
-        </div>
+        </Field>
         <Button type="submit" variant="outline" className="max-sm:col-span-2">
           {t("filter")}
         </Button>
@@ -495,33 +505,50 @@ const SearchResults = ({
         <div className="flex items-center justify-between gap-3 px-4 py-3">
           <p className="text-muted-foreground shrink-0 text-xs font-medium whitespace-nowrap">
             {t("decisions")}{" "}
-            <span className="ms-1 tabular-nums">{page.results.length}</span>
+            <span className="bg-muted ms-1 rounded-md px-1.5 py-0.5 tabular-nums">
+              {page.results.length}
+            </span>
           </p>
-          <Select
-            value={sort}
-            onValueChange={(value) => {
-              switch (value) {
-                case "court":
-                case "date":
-                case "relevance":
-                  setSort(value);
-                  break;
-                case null:
-                  break;
-                default:
-                  panic("Unknown result sort", value satisfies never);
-              }
-            }}
-          >
-            <SelectTrigger aria-label={t("sort")} size="sm" className="w-44">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectPopup>
-              <SelectItem value="relevance">{t("relevance")}</SelectItem>
-              <SelectItem value="court">{t("court")}</SelectItem>
-              <SelectItem value="date">{t("newest")}</SelectItem>
-            </SelectPopup>
-          </Select>
+          <div className="ms-auto grid">
+            {[t("relevance"), t("court"), t("newest")].map((label) => (
+              <span
+                key={label}
+                aria-hidden="true"
+                className="invisible col-start-1 row-start-1 px-9 text-xs whitespace-nowrap"
+              >
+                {label}
+              </span>
+            ))}
+            <Select
+              value={sort}
+              onValueChange={(value) => {
+                switch (value) {
+                  case "court":
+                  case "date":
+                  case "relevance":
+                    setSort(value);
+                    break;
+                  case null:
+                    break;
+                  default:
+                    panic("Unknown result sort", value satisfies never);
+                }
+              }}
+            >
+              <SelectTrigger
+                aria-label={t("sort")}
+                size="sm"
+                className="col-start-1 row-start-1 w-auto min-w-0"
+              >
+                <SelectValue />
+              </SelectTrigger>
+              <SelectPopup>
+                <SelectItem value="relevance">{t("relevance")}</SelectItem>
+                <SelectItem value="court">{t("court")}</SelectItem>
+                <SelectItem value="date">{t("newest")}</SelectItem>
+              </SelectPopup>
+            </Select>
+          </div>
         </div>
         <ResultsTable rows={sorted} bridge={bridge} />
         <div className="border-t px-4 py-3">

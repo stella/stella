@@ -798,6 +798,10 @@ const DatePickerPopoverContent = (props: DatePickerPopoverContentProps) => {
   // Reset view state when the popover closes so reopening always shows the day grid
   const handleOpenChange = (open: boolean) => {
     onOpenChange?.(open);
+    if (open) {
+      setViewMonthOverride(null);
+      setFocusedDate(value || today);
+    }
     if (!open) {
       setView("days");
       setDecadeBaseOverride(decadeStart(viewYear));
@@ -836,7 +840,7 @@ const DatePickerPopoverContent = (props: DatePickerPopoverContentProps) => {
       >
         {showIcon && <CalendarIcon className="size-3.5 shrink-0" />}
         <span
-          className="min-w-0 flex-1 overflow-hidden text-start wrap-break-word text-ellipsis"
+          className="min-w-0 flex-1 truncate text-start"
           id={labelledBy ? displayValueId : undefined}
         >
           {displayLabel}
@@ -846,6 +850,11 @@ const DatePickerPopoverContent = (props: DatePickerPopoverContentProps) => {
         )}
       </PopoverTrigger>
       <PopoverPopup
+        initialFocus={() =>
+          gridRef.current?.querySelector<HTMLButtonElement>(
+            `[data-date="${value || today}"]`,
+          ) ?? gridRef.current
+        }
         // The entry scale would shrink the day cells below their touch and
         // compact sizes while the popup opens.
         className="data-starting-style:scale-100"
