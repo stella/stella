@@ -107,6 +107,10 @@ const PER_USER_READS: Record<string, PerUserRead> = {
     reason:
       "Shared matter navigation chooses caller-eligible layouts; session-cache-guard clears it on member changes.",
   },
+  "api-keys/personal/list.ts": {
+    kind: "no-web-caller",
+    calls: ['api["api-keys"].personal.get'],
+  },
   "organization-settings/get.ts": {
     kind: "keyed",
     calls: ['api["organization-settings"].get'],

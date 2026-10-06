@@ -78,6 +78,14 @@ type OnlineIndex = RequiredMigrationIndex & {
 
 export const ONLINE_MIGRATION_INDEXES: readonly OnlineIndex[] = [
   {
+    createSql: `CREATE INDEX CONCURRENTLY "apikey_personal_owner_keyset_idx" ON public."apikey" (((metadata::jsonb ->> 'organizationId')), reference_id, created_at DESC, id DESC) WHERE metadata IS NOT NULL AND metadata::jsonb ->> 'kind' = 'personal'`,
+    definitionBody:
+      "ON public.apikey USING btree ((((metadata)::jsonb ->> 'organizationId'::text)), reference_id, created_at DESC, id DESC) WHERE ((metadata IS NOT NULL) AND (((metadata)::jsonb ->> 'kind'::text) = 'personal'::text))",
+    isUnique: false,
+    name: "apikey_personal_owner_keyset_idx",
+    tableName: "apikey",
+  },
+  {
     createSql:
       'CREATE INDEX CONCURRENTLY "sanctions_contact_matches_org_open_cursor_idx" ON public."sanctions_contact_matches" USING btree ("organization_id", "state", "disposition", "contact_id", "source_id", "source_entry_id")',
     definitionBody:
