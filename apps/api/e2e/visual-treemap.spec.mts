@@ -33,7 +33,7 @@ test.beforeAll(async () => {
   const helpersBundle = path.join(bundleDir, "helpers.mjs");
   execFileSync("bun", [
     "build",
-    new URL("./visual-treemap.helpers.ts", import.meta.url).pathname,
+    new URL("visual-treemap.helpers.ts", import.meta.url).pathname,
     "--target=node",
     "--format=esm",
     `--outfile=${helpersBundle}`,
