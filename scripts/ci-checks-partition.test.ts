@@ -146,6 +146,16 @@ test("process budget guard rejects missing, inherited and step-level timeout vio
   expect(() => assertJobProcessBudgets(shortJob, true)).toThrow(
     "child budget must fit inside its job",
   );
+  for (const deadline of ["2700000", "2700001"]) {
+    const mutation = structuredClone(workflow);
+    mutation.env = {
+      ...workflow.env,
+      API_TEST_RUNNER_DEADLINE_MS: deadline,
+    };
+    expect(() => assertJobProcessBudgets(mutation, true)).toThrow(
+      "runner deadline must leave job cleanup time",
+    );
+  }
   for (const level of ["workflow", "job", "step"] as const) {
     const mutation = structuredClone(workflow);
     const environment = {
