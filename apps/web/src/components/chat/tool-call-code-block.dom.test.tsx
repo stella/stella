@@ -1,27 +1,42 @@
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
-import { afterAll, afterEach, describe, expect, test } from "bun:test";
+import {
+  afterAll,
+  afterEach,
+  describe,
+  expect,
+  mock,
+  spyOn,
+  test,
+} from "bun:test";
 
-import messages from "@/i18n/langs/en.json";
+import arabicMessages from "@/i18n/langs/ar.json" with { type: "json" };
+import messages from "@/i18n/langs/en.json" with { type: "json" };
 
 import type { ToolCallCodeTone } from "./tool-call-code-block";
 
 GlobalRegistrator.register({ url: "https://app.example.test" });
-const { cleanup, render, screen } = await import("@testing-library/react");
+const { cleanup, fireEvent, render, screen, waitFor } =
+  await import("@testing-library/react");
 const { IntlProvider } = await import("use-intl");
+const { stellaToast } = await import("@stll/ui/toast");
 const { ToolCallCodeBlock } = await import("./tool-call-code-block");
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  mock.restore();
+});
 afterAll(async () => {
   await GlobalRegistrator.unregister();
 });
 
-const mount = (tone: ToolCallCodeTone) =>
+const mount = (tone: ToolCallCodeTone, lineNumbers?: boolean) =>
   render(
     <IntlProvider locale="en" messages={messages}>
       <ToolCallCodeBlock
         code={'{\n  "query": "nájemní smlouva"\n}'}
         label="Input"
         language="json"
+        lineNumbers={lineNumbers}
         tone={tone}
       />
     </IntlProvider>,
@@ -50,9 +65,80 @@ describe("ToolCallCodeBlock", () => {
     expect(container.querySelector("pre")?.className).toContain("opacity-60");
   });
 
-  test("keeps the copy action", () => {
-    mount("result");
+  test("renders source line numbers without changing the code", () => {
+    render(
+      <IntlProvider locale="en" messages={messages}>
+        <ToolCallCodeBlock
+          code={"const answer = 42;\nreturn answer;"}
+          label="Source code"
+          language="typescript"
+          lineNumbers
+          tone="call"
+        />
+      </IntlProvider>,
+    );
 
-    expect(screen.getByRole("button", { name: "Copy" })).toBeDefined();
+    const region = screen.getByRole("region", { name: "Source code" });
+    expect(region.textContent).toContain("const answer = 42;");
+    expect(region.textContent).toContain("return answer;");
+    expect(region.querySelectorAll("[data-chat-copy-exclude]").length).toBe(3);
+    expect(screen.getByText("1")).toBeDefined();
+    expect(screen.getByText("2")).toBeDefined();
+  });
+
+  test("localizes the copy action in Arabic", () => {
+    render(
+      <IntlProvider locale="ar" messages={arabicMessages}>
+        <ToolCallCodeBlock
+          code="No matches"
+          label={arabicMessages.chat.toolCall.output}
+          language="text"
+          tone="result"
+        />
+      </IntlProvider>,
+    );
+
+    expect(
+      screen.getByRole("region", { name: arabicMessages.chat.toolCall.output })
+        .textContent,
+    ).toContain("No matches");
+    expect(
+      screen.getByRole("button", { name: arabicMessages.common.copy }),
+    ).toBeDefined();
+  });
+
+  test("copies the complete source without line numbers or labels", async () => {
+    const write = spyOn(navigator.clipboard, "writeText").mockResolvedValue();
+    const toast = spyOn(stellaToast, "add").mockReturnValue("copied");
+    mount("result", true);
+
+    fireEvent.click(screen.getByRole("button", { name: "Copy" }));
+
+    await waitFor(() =>
+      expect(toast).toHaveBeenCalledWith({
+        title: messages.common.copied,
+        type: "success",
+      }),
+    );
+    expect(write).toHaveBeenCalledWith('{\n  "query": "nájemní smlouva"\n}');
+  });
+
+  test("shows a failure when clipboard access is denied", async () => {
+    spyOn(navigator.clipboard, "writeText").mockRejectedValue(
+      new DOMException("Clipboard denied", "NotAllowedError"),
+    );
+    const toast = spyOn(stellaToast, "add").mockReturnValue("denied");
+    mount("call");
+
+    fireEvent.click(screen.getByRole("button", { name: "Copy" }));
+
+    await waitFor(() =>
+      expect(toast).toHaveBeenCalledWith(
+        expect.objectContaining({ type: "error" }),
+      ),
+    );
+    expect(toast).not.toHaveBeenCalledWith(
+      expect.objectContaining({ type: "success" }),
+    );
   });
 });

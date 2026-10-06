@@ -59,6 +59,18 @@ const TOOL_CODE_THEME = {
  */
 export type ToolCallCodeTone = "call" | "result";
 
+const getToneClassName = (tone: ToolCallCodeTone): string | undefined => {
+  switch (tone) {
+    case "call":
+      return undefined;
+    case "result":
+      return "opacity-60";
+    default:
+      tone satisfies never;
+      return panic("Unhandled tool call code tone");
+  }
+};
+
 export const ToolCallCodeBlock = ({
   code,
   label,
@@ -90,7 +102,7 @@ export const ToolCallCodeBlock = ({
   return (
     <section aria-label={label} className="group/code relative">
       <div
-        className="absolute end-1 top-1 opacity-0 transition-opacity duration-150 group-hover/code:opacity-100 focus-within:opacity-100"
+        className="absolute end-1 top-1 opacity-0 transition-opacity duration-150 group-hover/code:opacity-100 focus-within:opacity-100 motion-reduce:transition-none pointer-coarse:opacity-100"
         data-chat-copy-exclude
       >
         <Button
@@ -132,18 +144,6 @@ export const ToolCallCodeBlock = ({
       </pre>
     </section>
   );
-};
-
-const getToneClassName = (tone: ToolCallCodeTone): string | undefined => {
-  switch (tone) {
-    case "call":
-      return undefined;
-    case "result":
-      return "opacity-60";
-    default:
-      tone satisfies never;
-      return panic("Unhandled tool call code tone");
-  }
 };
 
 const addStableKeys = (lines: Token[][]) => {
