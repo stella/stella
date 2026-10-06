@@ -3,6 +3,8 @@ import type { APIRequestContext, Request } from "@playwright/test";
 import { panic } from "better-result";
 import * as v from "valibot";
 
+import { loadCatalogue } from "@stll/catalogue";
+
 import { getStagingReporterEnvironment } from "../staging/env";
 import { createNetworkCollector } from "./network";
 import {
@@ -118,7 +120,12 @@ export const declarePublicKnowledgeSmoke = ({
         if (current.status !== "ready") {
           panic("public route smoke ran without a ready catalogue");
         }
-        const route = await def.resolve(current.template);
+        const route = def.resolve(
+          current.template,
+          () =>
+            loadCatalogue().find(({ slug }) => slug === "contract-review") ??
+            panic("smoke catalogue entry missing"),
+        );
         const requests: string[] = [];
         const unauthorized: string[] = [];
         const forbidden: string[] = [];

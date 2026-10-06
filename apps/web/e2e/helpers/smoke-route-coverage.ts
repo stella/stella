@@ -14,7 +14,7 @@ export const networkBaselineKey = (def: {
       return def.template;
     default:
       throw new Error(
-        `Unknown smoke route expectation: ${def.expectation?.kind}`,
+        `Unknown smoke route expectation: ${String(def.expectation?.kind)}`,
       );
   }
 };

@@ -1973,7 +1973,7 @@ jobs:
           token: ${{ github.token }}
 
       - name: Route network manifest coverage
-        if: ${{ !cancelled() && steps.network_manifest_prepare.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
+        if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true' && steps.network_manifest_prepare.outcome == 'success') }}
         timeout-minutes: 1
         run: |
           timeout 30s bash -c '
@@ -1982,7 +1982,8 @@ jobs:
           '
 
       - name: Restore route network baseline
-        if: ${{ always() && steps.checkout.outcome == 'success' }}
+        # Continue after a failed prepare/check, only when preparation could run.
+        if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
         run: |
           git checkout -- apps/web/e2e/network-baseline.json
           rm -f apps/web/e2e/.network-baseline-*

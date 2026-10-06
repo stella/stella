@@ -1,4 +1,3 @@
-import { Generator, getConfig } from "@tanstack/router-generator";
 import { expect, test, beforeAll, afterAll } from "bun:test";
 import {
   existsSync,
@@ -12,13 +11,17 @@ import os from "node:os";
 import path from "node:path";
 
 import {
+  PUBLIC_VISITOR_ROUTE_DEFS,
+  type VisitorRoute,
+} from "../apps/web/e2e/helpers/public-visitor-route-defs";
+import {
   assertSmokeRouteCoverage,
   authenticatedRouteTemplates,
   networkBaselineKey,
   networkBaselineCoverageProblem,
 } from "../apps/web/e2e/helpers/smoke-route-coverage";
 import { SMOKE_ROUTE_DEFS } from "../apps/web/e2e/helpers/smoke-route-defs";
-import { ROUTE_TREE_OPTIONS } from "../apps/web/route-tree.config";
+import { generateRouteTree } from "../apps/web/scripts/generate-route-tree";
 import {
   networkBudgetDeclarationProblem,
   prepareComparisonBaseline,
@@ -33,20 +36,8 @@ const baseline = () =>
   );
 
 beforeAll(async () => {
-  const webRoot = path.resolve(import.meta.dirname, "../apps/web");
   const output = path.join(directory, "tree.ts");
-  const config = getConfig(
-    {
-      routesDirectory: path.join(
-        webRoot,
-        ROUTE_TREE_OPTIONS.srcDirectory,
-        ROUTE_TREE_OPTIONS.routesDirectory,
-      ),
-      generatedRouteTree: output,
-    },
-    webRoot,
-  );
-  await new Generator({ config, root: webRoot }).run();
+  await generateRouteTree(output);
   // Revision preparation generates beside route sources before copying the
   // tree. Give this relocated test output the same source-relative imports.
   routeTree = readFileSync(output, "utf-8").replaceAll(
@@ -328,7 +319,7 @@ test("light coverage prepares through the shared action before checking under th
   const afterCoverage = job?.slice(coverage).split("      - name: ")[1];
   expect(afterCoverage).toStartWith("Restore route network baseline");
   expect(afterCoverage).toContain(
-    "always() && steps.checkout.outcome == 'success'",
+    "!cancelled() && steps.install.outcome == 'success'",
   );
   expect(afterCoverage).toContain(
     "git checkout -- apps/web/e2e/network-baseline.json",
@@ -428,4 +419,28 @@ test("validation accepts a checkout without a network budget declaration directo
     { cwd: repository, stdout: "pipe", stderr: "pipe" },
   );
   expect(result.exitCode, result.stderr.toString()).toBe(0);
+});
+
+test("public visitor declarations resolve tools only when the tool route needs them", () => {
+  let calls = 0;
+  const resolveTool = () => {
+    calls += 1;
+    return { slug: "contract-review", displayName: "Contract review" };
+  };
+  const template = { id: "sample", title: "Sample template" };
+  const routes = PUBLIC_VISITOR_ROUTE_DEFS.map((def: VisitorRoute) =>
+    def.resolve(template, resolveTool),
+  );
+  expect(calls).toBe(1);
+  expect(routes.map((route) => route.path)).toEqual([
+    "/knowledge/templates/catalogue",
+    "/knowledge/templates/catalogue/general-legal/sample",
+    "/knowledge/tools/contract-review",
+    "/knowledge/tools/contribute",
+  ]);
+  expect(routes[2]).toEqual({
+    path: "/knowledge/tools/contract-review",
+    heading: "Contract review",
+    level: 2,
+  });
 });

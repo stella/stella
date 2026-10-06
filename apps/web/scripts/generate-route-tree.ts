@@ -11,7 +11,7 @@ const webRoot = fileURLToPath(new URL("..", import.meta.url));
 // The Start plugin resolves both paths under `srcDirectory`; so does this.
 const srcRoot = path.join(webRoot, ROUTE_TREE_OPTIONS.srcDirectory);
 const output = path.join(srcRoot, ROUTE_TREE_OPTIONS.generatedRouteTree);
-const generate = async (generatedRouteTree: string) => {
+export const generateRouteTree = async (generatedRouteTree: string) => {
   const config = getConfig(
     {
       routesDirectory: path.join(srcRoot, ROUTE_TREE_OPTIONS.routesDirectory),
@@ -60,10 +60,10 @@ if (import.meta.main) {
     panic("Usage: bun scripts/generate-route-tree.ts [--check]");
   }
   if (args.includes("--check")) {
-    await checkRouteTreeDeterminism(srcRoot, generate);
+    await checkRouteTreeDeterminism(srcRoot, generateRouteTree);
   } else if (
     !hasPreparedGeneratedSources(new URL("../../../", import.meta.url).pathname)
   ) {
-    await generate(output);
+    await generateRouteTree(output);
   }
 }

@@ -191,7 +191,13 @@ test("mutation proof: scoped-route growth still fails its budget assertion", () 
       "dir",
     );
     const file = path.join(directory, "network.ts");
-    writeFileSync(file, mutant);
+    // The relocated module must retain the shared coverage owner's import.
+    const relocated = mutant.replace('"./smoke-route-coverage"', () =>
+      JSON.stringify(
+        path.join(root, "apps/web/e2e/helpers/smoke-route-coverage.ts"),
+      ),
+    );
+    writeFileSync(file, relocated);
     const result = Bun.spawnSync([
       "bun",
       "-e",

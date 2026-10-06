@@ -1,5 +1,3 @@
-import { panic } from "better-result";
-
 import messages from "../../src/i18n/langs/en.json" with { type: "json" };
 
 export const PACK_ID = "general-legal";
@@ -9,7 +7,8 @@ export type VisitorRoute = {
   template: string;
   resolve: (
     template: CatalogueTemplate,
-  ) => VisitorDestination | Promise<VisitorDestination>;
+    resolveTool: () => { slug: string; displayName: string },
+  ) => VisitorDestination;
 };
 
 export const PUBLIC_VISITOR_ROUTE_DEFS = [
@@ -31,11 +30,8 @@ export const PUBLIC_VISITOR_ROUTE_DEFS = [
   },
   {
     template: "/knowledge/tools/$entry",
-    resolve: async () => {
-      const { loadCatalogue } = await import("@stll/catalogue");
-      const tool =
-        loadCatalogue().find(({ slug }) => slug === "contract-review") ??
-        panic("smoke catalogue entry missing");
+    resolve: (_template, resolveTool) => {
+      const tool = resolveTool();
       return {
         path: `/knowledge/tools/${tool.slug}`,
         heading: tool.displayName,
