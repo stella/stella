@@ -2333,6 +2333,9 @@
   .ps-\[calc\(--spacing\(3\)-1px\)\] {
     padding-inline-start: calc(calc(var(--spacing) * 3) - 1px);
   }
+  .pe-0 {
+    padding-inline-end: 0px;
+  }
   .pe-0\.5 {
     padding-inline-end: calc(var(--spacing) * 0.5);
   }
