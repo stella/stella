@@ -16,16 +16,17 @@ import type {
   serviceCredentials: "managed_service",
 }) satisfies ActionKindDefinition;
 
-// @ts-expect-error every admission kind must declare whether it consumes services
+// Missing-property diagnostics land on the `satisfies` line, so the directive sits directly above it.
 ({
   admission: "period",
   serviceCredentials: "organization_model",
+  // @ts-expect-error every admission kind must declare whether it consumes services
 }) satisfies ActionKindDefinition;
 
-// @ts-expect-error every admission kind must declare whose credentials serve it
 ({
   consumesServices: true,
   admission: "period",
+  // @ts-expect-error every admission kind must declare whose credentials serve it
 }) satisfies ActionKindDefinition;
 
 ({
