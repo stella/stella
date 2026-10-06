@@ -1351,3 +1351,16 @@ test("baseline cancellation normalization uses its own owner and rejects changed
     expect(v.parse(baseJobSchema, mutated).steps).toEqual(mutated.steps);
   }
 });
+
+test("already hydrated merge-base jobs retain their generated manifest environment", () => {
+  const base = {
+    if: "scope",
+    needs: ["ci-plan", "ci-generated-sources"],
+    env: {
+      CI_GENERATED_SOURCES_MANIFEST: `\${{ github.workspace }}/.cache/ci-generated-sources/manifest.json`,
+    },
+  };
+  expectScope({ current: base, base });
+  const { env: _env, ...missing } = base;
+  expect(() => expectScope({ current: missing, base })).toThrow("toEqual");
+});

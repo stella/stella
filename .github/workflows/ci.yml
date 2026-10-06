@@ -1963,6 +1963,31 @@ jobs:
         if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
         run: bun scripts/ci-generated-sources.ts restore "$RUNNER_TEMP/generated-sources"
 
+      - name: Prepare route network manifest
+        id: network_manifest_prepare
+        if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
+        timeout-minutes: 1
+        uses: ./.github/actions/prepare-network-baseline
+        with:
+          base-sha: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha || github.sha }}
+          token: ${{ github.token }}
+
+      - name: Route network manifest coverage
+        if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true' && steps.network_manifest_prepare.outcome == 'success') }}
+        timeout-minutes: 1
+        run: |
+          timeout 30s bash -c '
+            bun test scripts/network-baseline-coverage.test.ts &&
+            bun scripts/network-baseline-scope.ts validate apps/web/e2e/network-baseline.json --route-tree apps/web/src/routeTree.gen.ts --context apps/web/e2e/.network-baseline-context.json
+          '
+
+      - name: Restore route network baseline
+        # Continue after a failed prepare/check, only when preparation could run.
+        if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
+        run: |
+          git checkout -- apps/web/e2e/network-baseline.json
+          rm -f apps/web/e2e/.network-baseline-*
+
       - name: Workspace hygiene
         if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
         # Restored from the bun postinstall lifecycle, which is bypassed
