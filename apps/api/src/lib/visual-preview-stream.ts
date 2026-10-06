@@ -186,10 +186,16 @@ export const projectVisualPreviewStream = async function* (
       // Snapshots fan tool results out as AG-UI role:tool messages. Seed all
       // identities first, because a snapshot can arrive without prior events.
       for (const message of chunk.messages) {
-        if (message.role !== "assistant") {
+        if (
+          message.role === "tool" &&
+          message.name === VISUAL_PREVIEW_TOOL_NAME
+        ) {
+          previewCallIds.add(message.toolCallId);
+        }
+        if (message.role !== "assistant" || message.toolCalls === undefined) {
           continue;
         }
-        for (const call of message.toolCalls ?? []) {
+        for (const call of message.toolCalls) {
           if (call.function.name === VISUAL_PREVIEW_TOOL_NAME) {
             previewCallIds.add(call.id);
           }

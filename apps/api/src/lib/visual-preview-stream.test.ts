@@ -147,7 +147,7 @@ describe("transient preview wire projection", () => {
     expect(await project(projected)).toEqual(projected);
   });
 
-  test.each(["serialized", "parts"] as const)(
+  test.each(["serialized", "parts", "named-result"] as const)(
     "projects SDK snapshot %s and metadata without prior tool events",
     async (shape) => {
       const messages = uiMessagesToWire([
@@ -165,39 +165,44 @@ describe("transient preview wire projection", () => {
         {
           role: "tool",
           toolCallId: "preview-call",
+          name: VISUAL_PREVIEW_TOOL_NAME,
           content: output,
           metadata: {
             additional: output,
             tanstack: { result: output, output },
           },
         },
-      ]).map((message) => {
-        if (message.role !== "assistant") {
-          if (message.role !== "tool" || shape !== "parts") {
-            return message;
+      ])
+        .filter(
+          (message) => shape !== "named-result" || message.role === "tool",
+        )
+        .map((message) => {
+          if (message.role !== "assistant") {
+            if (message.role !== "tool" || shape !== "parts") {
+              return message;
+            }
+            return {
+              ...message,
+              result: output,
+              content: output.map((part) =>
+                part.type === "text"
+                  ? { type: part.type, text: part.content }
+                  : part,
+              ),
+            };
           }
           return {
             ...message,
             result: output,
-            content: output.map((part) =>
-              part.type === "text"
-                ? { type: part.type, text: part.content }
-                : part,
-            ),
+            metadata: { tanstack: { result: output, output } },
+            toolCalls: message.toolCalls?.map((call) => ({
+              ...call,
+              result: output,
+              metadata: { result: output },
+              function: { ...call.function, result: output },
+            })),
           };
-        }
-        return {
-          ...message,
-          result: output,
-          metadata: { tanstack: { result: output, output } },
-          toolCalls: message.toolCalls?.map((call) => ({
-            ...call,
-            result: output,
-            metadata: { result: output },
-            function: { ...call.function, result: output },
-          })),
-        };
-      });
+        });
       expect(JSON.stringify(messages)).toContain("iVBORw0KGgo=");
       const projected = await project([
         {
