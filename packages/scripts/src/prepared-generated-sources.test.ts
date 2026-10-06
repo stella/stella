@@ -223,6 +223,44 @@ test("restore validates the whole artifact before any writes and restores every 
   }
 });
 
+test("regeneration keeps its concrete file diff after a verified handoff is cleared", () => {
+  const { root, manifest, write } = fixture();
+  const previous = process.env["CI_GENERATED_SOURCES_MANIFEST"];
+  try {
+    write(
+      ".cache/ci-generated-sources/manifest.json",
+      JSON.stringify(manifest),
+    );
+    process.env["CI_GENERATED_SOURCES_MANIFEST"] = preparedManifestPath(root);
+    expect(hasPreparedGeneratedSources(root)).toBe(true);
+    write("input.ts", "export const input = 2;\n");
+    expect(() => hasPreparedGeneratedSources(root)).toThrow(
+      "Generated source artifact does not match this source and toolchain",
+    );
+    delete process.env["CI_GENERATED_SOURCES_MANIFEST"];
+    expect(hasPreparedGeneratedSources(root)).toBe(false);
+    process.env["CI_GENERATED_SOURCES_MANIFEST"] = "";
+    expect(hasPreparedGeneratedSources(root)).toBe(false);
+    const drift = Bun.spawnSync(
+      ["git", "diff", "--exit-code", "--", "input.ts"],
+      { cwd: root },
+    );
+    expect(drift.exitCode).toBe(1);
+    expect(drift.stdout.toString()).toContain(
+      "diff --git a/input.ts b/input.ts",
+    );
+    expect(drift.stdout.toString()).toContain("+export const input = 2;");
+    expect(drift.stderr.toString()).not.toContain("artifact");
+  } finally {
+    if (previous === undefined) {
+      delete process.env["CI_GENERATED_SOURCES_MANIFEST"];
+    } else {
+      process.env["CI_GENERATED_SOURCES_MANIFEST"] = previous;
+    }
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
 test("configured preparation fails closed and an ordinary checkout generates locally", () => {
   const { root, manifest, write } = fixture();
   const previous = process.env["CI_GENERATED_SOURCES_MANIFEST"];
