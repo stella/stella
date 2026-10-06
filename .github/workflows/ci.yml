@@ -76,7 +76,7 @@ jobs:
       trusted: ${{ steps.check.outputs.trusted }}
       playwright_image: ${{ steps.browser-image.outputs.image }}
       # Pull requests run lightweight guards, lint and type checks.
-      # Unit-test event policy stays pending until the test-runner rework.
+      # Test shards retain PR coverage and follow heavy merge-queue depth.
       # Builds, images, browsers and services certify the merge group.
       suite_depth: ${{ steps.depth.outputs.suite_depth }}
       queue_depth: ${{ steps.depth.outputs.queue_depth || 'full' }}
@@ -2413,7 +2413,8 @@ jobs:
   ci-tests:
     needs: ci-plan
     if: >-
-      inputs.heavy_only != true
+      (github.event_name != 'merge_group'
+       || needs.ci-plan.outputs.queue_depth != 'thin')
       && (
         needs.ci-plan.outputs.trusted == 'true'
         || github.event_name == 'workflow_dispatch'
@@ -2428,6 +2429,7 @@ jobs:
     timeout-minutes: 25
     permissions:
       contents: read
+      actions: write
     strategy:
       # Every shard's verdict, not just the first failure's: a cancelled shard
       # reports no result of its own, and one failing suite should not hide
@@ -2443,6 +2445,7 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
           submodules: true
+          ref: ${{ inputs.heavy_only == true && inputs.sha || '' }}
 
       - name: Setup Bun
         uses: stella/.github/actions/setup-bun-cached@167fb396c6c0f4e07296ad2cd72e6ef15367c776
@@ -2481,14 +2484,14 @@ jobs:
       - name: Compute affected flag
         if: needs.ci-plan.outputs.package_checks_required == 'true'
         id: affected
-        # Empty marks the workflow_dispatch full run. The test run scopes
-        # itself through scripts/test-scope.ts, which has to widen the
-        # affected set.
+        # Heavy runs and manual dispatches test the full source tree; other
+        # runs widen affected packages through scripts/test-scope.ts.
         env:
           BASE_REF: ${{ github.base_ref || 'main' }}
           EVENT_NAME: ${{ github.event_name }}
+          HEAVY_ONLY: ${{ inputs.heavy_only }}
         run: |
-          if [[ "$EVENT_NAME" == "workflow_dispatch" ]]; then
+          if [[ "$HEAVY_ONLY" == true || "$EVENT_NAME" == "workflow_dispatch" ]]; then
             echo "flag=" >> "$GITHUB_OUTPUT"
           else
             echo "flag=--affected" >> "$GITHUB_OUTPUT"
@@ -2580,6 +2583,17 @@ jobs:
             ${{ runner.temp }}/test-output-*.log
           retention-days: 7
           if-no-files-found: ignore
+
+      - name: Cancel failed merge-group run
+        if: failure() && github.event_name == 'merge_group'
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
+        with:
+          retries: 0
+          script: |
+            await github.rest.actions.cancelWorkflowRun({
+              ...context.repo,
+              run_id: context.runId,
+            });
 
   # The browser-backed suites. They share one Playwright install, so they stay
   # in a single job rather than one per suite.

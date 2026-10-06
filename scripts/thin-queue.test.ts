@@ -61,6 +61,22 @@ const eventPolicy = v.parse(
     readFileSync(path.join(root, ".github/ci-event-policy.json"), "utf-8"),
   ),
 ).jobs;
+const assertTestShardPartition = (workflow: typeof ci) => {
+  expect(mainHeavyJobs(workflow), "ci-tests").toContain("ci-tests");
+  expect(thinJobs(workflow)).not.toContain("ci-tests");
+};
+
+test("test shards follow the derived heavy partition and cannot retain a thin exception", () => {
+  assertTestShardPartition(ci);
+  const mutated = structuredClone(ci);
+  const tests = mutated.jobs["ci-tests"];
+  if (!tests?.if) {
+    panic("Missing test shard condition");
+  }
+  tests.if = `inputs.heavy_only != true && (${tests.if})`;
+  expect(() => assertTestShardPartition(mutated)).toThrow("ci-tests");
+});
+
 type StepOptions = { workflow: typeof ci; job: string; name: string };
 const step = ({ workflow, job, name }: StepOptions) => {
   const found = workflow.jobs[job]?.steps?.find((item) => item.name === name);
@@ -190,7 +206,6 @@ const expectedPrSelection = (
     case "pr-opt-in":
       return proveFix && baseline;
     case "pr-fast":
-    case "pending":
       return baseline;
     default:
       return panic(`Unexpected CI event disposition: ${job}/${disposition}`);
