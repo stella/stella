@@ -147,6 +147,10 @@ for (const key of ["Enter", "Space"] as const) {
     const dialog = page.getByRole("dialog", { name: "Document question" });
     await expect(dialog).toBeVisible();
     await expect(trigger).toHaveAttribute("aria-expanded", "true");
+    await expect(
+      dialog.getByRole("button", { name: "Use a preset" }),
+    ).toBeFocused();
+    await page.keyboard.press("Tab");
     const question = dialog.getByRole("textbox", { name: "Question" });
     await expect(question).toBeFocused();
     await question.fill("Explain this document");

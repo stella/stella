@@ -43,6 +43,12 @@ const SplitButtonFixture = () => {
                   setMenuCount((count) => count + 1);
                 }}
               >
+                <button
+                  type="button"
+                  onClick={() => setMenuCount((count) => count + 1)}
+                >
+                  Use a preset
+                </button>
                 <label htmlFor="question">Question</label>
                 <Textarea id="question" />
                 <button type="submit">Submit question</button>
