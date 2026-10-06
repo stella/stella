@@ -16,5 +16,6 @@
   "scripts/root-connection-shapes.ts",
   "scripts/schema-introspection.ts",
   "scripts/source-globs.ts",
-  "scripts/status-write-shapes.ts"
+  "scripts/status-write-shapes.ts",
+  "scripts/unsignalled-skip.ts"
 ]

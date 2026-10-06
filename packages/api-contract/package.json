@@ -52,6 +52,7 @@
     "./matter-activity": "./src/matter-activity.ts",
     "./notifications": "./src/notifications.ts",
     "./provision-key": "./src/provision-key.ts",
+    "./provision-applied-version": "./src/provision-applied-version.ts",
     "./provision-version-basis": "./src/provision-version-basis.ts",
     "./provision-link-status": "./src/provision-link-status.ts",
     "./property-policy": "./src/property-policy.ts",

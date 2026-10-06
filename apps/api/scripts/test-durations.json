@@ -423,6 +423,10 @@
     "seconds": 0.06332,
     "source": "estimated"
   },
+  "src/db/provision-applied-version.postgres.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
   "src/db/public-sanctions-reader.postgres.test.ts": {
     "seconds": 0.78131,
     "source": "estimated"
@@ -1745,6 +1749,10 @@
   },
   "src/handlers/case-law/provisions/response.test.ts": {
     "seconds": 0.975067,
+    "source": "estimated"
+  },
+  "src/handlers/case-law/provisions/version-response.test.ts": {
+    "seconds": 1,
     "source": "estimated"
   },
   "src/handlers/case-law/public-response-schemas.test.ts": {
@@ -6491,11 +6499,23 @@
     "seconds": 0.250833,
     "source": "estimated"
   },
+  "src/lib/lists/verification/run-caps.db.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
+  "src/lib/lists/verification/run-caps.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
   "src/lib/lists/verification/run-persistence.db.test.ts": {
     "seconds": 1.671187,
     "source": "estimated"
   },
   "src/lib/lists/verification/run-queue.db.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
+  "src/lib/lists/verification/run-start-census.test.ts": {
     "seconds": 1,
     "source": "estimated"
   },

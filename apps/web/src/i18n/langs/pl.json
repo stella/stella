@@ -960,6 +960,9 @@
     },
     "viewer": {
       "abstract": "Streszczenie",
+      "appliedVersionNotStated": "Nie podano zastosowanego brzmienia",
+      "appliedVersionStatedAmendment": "Brzmienie po nowelizacji <reference>{amendment}</reference>",
+      "appliedVersionStatedDate": "{relation, select, on {Brzmienie obowiązujące w dniu {date}} until {Brzmienie obowiązujące do {date}} from {Brzmienie obowiązujące od {date}} other {Brzmienie obowiązujące w dniu {date}}}",
       "caseFileMayHoldOthers": "Akta tej sprawy mogą zawierać także inne orzeczenia.",
       "citedBy": "Cytowane przez",
       "cites": "Cytuje",

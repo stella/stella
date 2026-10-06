@@ -960,6 +960,9 @@
     },
     "viewer": {
       "abstract": "الملخّص",
+      "appliedVersionNotStated": "الصيغة المطبقة غير مذكورة",
+      "appliedVersionStatedAmendment": "الصيغة المعدلة بموجب <reference>{amendment}</reference>",
+      "appliedVersionStatedDate": "{relation, select, on {الصيغة السارية في {date}} until {الصيغة السارية حتى {date}} from {الصيغة السارية اعتبارًا من {date}} other {الصيغة السارية في {date}}}",
       "caseFileMayHoldOthers": "قد يتضمّن ملف هذه الدعوى قرارات أخرى أيضًا.",
       "citedBy": "مستشهَد به في",
       "cites": "يستشهد بـ",
