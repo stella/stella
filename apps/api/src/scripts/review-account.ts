@@ -63,6 +63,13 @@ const createStore = async (): Promise<ReviewAccountStore> => {
         where: { id: { eq: organizationId } },
         columns: { id: true },
       })) !== undefined,
+    listOrganizationIdsForUser: async (userId) =>
+      (
+        await rootDb
+          .select({ organizationId: member.organizationId })
+          .from(member)
+          .where(eq(member.userId, userId))
+      ).map((row) => row.organizationId),
     listMemberUserIds: async (organizationId) =>
       (
         await rootDb

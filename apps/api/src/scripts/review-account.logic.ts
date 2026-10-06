@@ -21,6 +21,7 @@ export class ReviewAccountCommandError extends TaggedError(
     | "not-configured"
     | "demo-account"
     | "organization-has-other-members"
+    | "account-in-other-organization"
     | "account-missing"
     | "password-too-short"
     | "password-too-long"
@@ -38,6 +39,7 @@ export type ReviewAccountStore = {
   createUser: (email: string) => Promise<string>;
   organizationExists: (organizationId: string) => Promise<boolean>;
   listMemberUserIds: (organizationId: string) => Promise<string[]>;
+  listOrganizationIdsForUser: (userId: string) => Promise<string[]>;
   /** Creates the organization with this user as its only owner. */
   createOrganization: (options: {
     organizationId: string;
@@ -51,15 +53,25 @@ export type ReviewAccountStore = {
   setPassword: (options: { userId: string; password: string }) => Promise<void>;
   /** Ends the account's browser sessions; OAuth grants are left alone. */
   revokeSessions: (userId: string) => Promise<number>;
+  /** Deletes outstanding reset tokens and emailed codes for the account. */
+  revokeVerifications: (options: {
+    userId: string;
+    email: string;
+  }) => Promise<number>;
 };
 
 type AuthAccountStore = Pick<
   ReviewAccountStore,
-  "findUserIdByEmail" | "createUser" | "setPassword" | "revokeSessions"
+  | "findUserIdByEmail"
+  | "createUser"
+  | "setPassword"
+  | "revokeSessions"
+  | "revokeVerifications"
 >;
 
 /** The account half of the store, written through Better Auth itself. */
 export const createReviewAccountAuthStore = (context: {
+  adapter: Pick<AuthContext["adapter"], "deleteMany">;
   internalAdapter: AuthContext["internalAdapter"];
   password: Pick<AuthContext["password"], "hash">;
 }): AuthAccountStore => ({
@@ -96,6 +108,19 @@ export const createReviewAccountAuthStore = (context: {
     await context.internalAdapter.deleteUserSessions(userId);
     return sessions.length;
   },
+  // Reset tokens carry the user id as their value; emailed codes are keyed
+  // `<type>-otp-<email>` (change-email codes append the new address).
+  revokeVerifications: async ({ userId, email }) =>
+    (await context.adapter.deleteMany({
+      model: "verification",
+      where: [{ field: "value", value: userId }],
+    })) +
+    (await context.adapter.deleteMany({
+      model: "verification",
+      where: [
+        { field: "identifier", operator: "contains", value: `-otp-${email}` },
+      ],
+    })),
 });
 
 const normalize = (email: string) => email.trim().toLowerCase();
@@ -152,6 +177,21 @@ export const provisionReviewAccount = async ({
     ? await store.listMemberUserIds(organizationId)
     : null;
   const existingUserId = await store.findUserIdByEmail(email);
+  const otherOrganizations =
+    existingUserId === null
+      ? []
+      : (await store.listOrganizationIdsForUser(existingUserId)).filter(
+          (id) => id !== organizationId,
+        );
+  if (otherOrganizations.length > 0) {
+    return Result.err(
+      new ReviewAccountCommandError({
+        code: "account-in-other-organization",
+        message:
+          "The account belongs to another organization; the review account may belong to its own organization only.",
+      }),
+    );
+  }
   if (memberUserIds?.some((userId) => userId !== existingUserId) === true) {
     return Result.err(
       new ReviewAccountCommandError({
@@ -186,6 +226,7 @@ export const provisionReviewAccount = async ({
 type SetPasswordOutcome = {
   outcome: "password-set";
   sessionsRevoked: number;
+  verificationsRevoked: number;
 };
 
 export const setReviewAccountPassword = async ({
@@ -229,7 +270,16 @@ export const setReviewAccountPassword = async ({
   }
   await store.setPassword({ userId, password });
   const sessionsRevoked = await store.revokeSessions(userId);
-  return Result.ok({ outcome: "password-set", sessionsRevoked });
+  // A reset token or code issued earlier must not undo this password.
+  const verificationsRevoked = await store.revokeVerifications({
+    userId,
+    email: configured.value.email,
+  });
+  return Result.ok({
+    outcome: "password-set",
+    sessionsRevoked,
+    verificationsRevoked,
+  });
 };
 
 const decodeSecret = (

@@ -27,6 +27,19 @@ const SIGN_IN_EMAIL_PATH = "/sign-in/email";
 const GET_SESSION_PATH = "/get-session";
 const API_KEY_CREATE_PATH = "/api-key/create";
 const BUDGET_CONTEXT_KEY = "reviewAccountSignInBudgetKey";
+const RESET_PASSWORD_PATH = "/reset-password";
+
+/** Better Auth reads the body token first, then the query token. */
+const readResetToken = (body: unknown, query: unknown): string | undefined => {
+  const fromBody = isRecord(body) ? body["token"] : undefined;
+  if (typeof fromBody === "string" && fromBody.length > 0) {
+    return fromBody;
+  }
+  const fromQuery = isRecord(query) ? query["token"] : undefined;
+  return typeof fromQuery === "string" && fromQuery.length > 0
+    ? fromQuery
+    : undefined;
+};
 
 /** Failed password sign-ins one account may make in one window. */
 export const REVIEW_ACCOUNT_SIGN_IN_BUDGET = {
@@ -129,6 +142,37 @@ export const createReviewAccountPlugin = ({
               "UNAUTHORIZED",
               BASE_ERROR_CODES.INVALID_EMAIL_OR_PASSWORD,
             );
+          }),
+        },
+        {
+          // A reset token names its account only through the stored token, so
+          // one issued before the account was restricted is refused here.
+          matcher: ({ path }) => configured && path === RESET_PASSWORD_PATH,
+          handler: createAuthMiddleware(async (ctx) => {
+            const token = readResetToken(ctx.body, ctx.query);
+            if (token === undefined) {
+              return undefined;
+            }
+            const verification =
+              await ctx.context.internalAdapter.findVerificationValue(
+                `reset-password:${token}`,
+              );
+            if (!verification) {
+              return undefined;
+            }
+            const owner = await ctx.context.internalAdapter.findUserById(
+              verification.value,
+            );
+            if (owner) {
+              requireReviewAccountAccess(
+                checkReviewAccountAccess({
+                  email: owner.email,
+                  config,
+                  operation: REVIEW_ACCOUNT_OPERATION.changePassword,
+                }),
+              );
+            }
+            return undefined;
           }),
         },
         {

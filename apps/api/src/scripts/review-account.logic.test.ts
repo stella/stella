@@ -35,7 +35,11 @@ const chunks = (...parts: string[]): AsyncIterable<Uint8Array> => ({
 const createFakeStore = (
   accounts: Pick<
     ReviewAccountStore,
-    "findUserIdByEmail" | "createUser" | "setPassword" | "revokeSessions"
+    | "findUserIdByEmail"
+    | "createUser"
+    | "setPassword"
+    | "revokeSessions"
+    | "revokeVerifications"
   >,
 ) => {
   const organizations = new Map<string, string[]>();
@@ -48,6 +52,10 @@ const createFakeStore = (
     },
     organizationExists: async (id) => organizations.has(id),
     listMemberUserIds: async (id) => [...(organizations.get(id) ?? [])],
+    listOrganizationIdsForUser: async (userId) =>
+      [...organizations].flatMap(([id, members]) =>
+        members.includes(userId) ? [id] : [],
+      ),
     createOrganization: async ({ organizationId: id, ownerUserId }) => {
       writes.push("organization");
       organizations.set(id, [ownerUserId]);
@@ -73,6 +81,7 @@ const createMemoryAccounts = () => {
       },
       setPassword: async () => undefined,
       revokeSessions: async () => 0,
+      revokeVerifications: async () => 0,
     },
   };
 };
@@ -138,6 +147,27 @@ describe("review account provisioning", () => {
     expect(Result.isError(result) && result.error.code).toBe(
       "organization-has-other-members",
     );
+    expect(writes).toEqual([]);
+  });
+
+  test("refuses an account that belongs to another organization", async () => {
+    const { accounts } = createMemoryAccounts();
+    const { organizations, store, writes } = createFakeStore(accounts);
+    const userId = await accounts.createUser(reviewEmail);
+    organizations.set("org_elsewhere", [userId]);
+    for (const existing of [false, true]) {
+      if (existing) {
+        organizations.set(organizationId, [userId]);
+      }
+      const result = await provisionReviewAccount({
+        config,
+        demoEmail: undefined,
+        store,
+      });
+      expect(Result.isError(result) && result.error.code).toBe(
+        "account-in-other-organization",
+      );
+    }
     expect(writes).toEqual([]);
   });
 
@@ -266,21 +296,65 @@ describe("review account password command", () => {
       store,
     });
     expect(first.out).toEqual([
-      JSON.stringify({ outcome: "password-set", sessionsRevoked: 0 }),
+      JSON.stringify({
+        outcome: "password-set",
+        sessionsRevoked: 0,
+        verificationsRevoked: 0,
+      }),
     ]);
     expect(first.transcript).not.toContain(password);
     expect((await signIn(auth, password)).status).toBe(200);
 
-    // Rotation: the open session ends, the new password works, the old fails.
+    // Rotation: the open session ends, earlier reset tokens and emailed codes
+    // are deleted, the new password works, the old one fails.
+    const userId =
+      (await context.internalAdapter.findUserByEmail(reviewEmail))?.user.id ??
+      "";
+    const expiresAt = new Date(Date.now() + 60 * 60 * 1000);
+    await context.internalAdapter.createVerificationValue({
+      identifier: "reset-password:earlier-token",
+      value: userId,
+      expiresAt,
+    });
+    await context.internalAdapter.createVerificationValue({
+      identifier: `forget-password-otp-${reviewEmail}`,
+      value: "123456:0",
+      expiresAt,
+    });
+    await context.internalAdapter.createVerificationValue({
+      identifier: "sign-in-otp-member@example.test",
+      value: "654321:0",
+      expiresAt,
+    });
     const rotated = await runCommand({
       argv: ["set-password"],
       input: `${nextPassword}\n`,
       store,
     });
     expect(rotated.out).toEqual([
-      JSON.stringify({ outcome: "password-set", sessionsRevoked: 1 }),
+      JSON.stringify({
+        outcome: "password-set",
+        sessionsRevoked: 1,
+        verificationsRevoked: 2,
+      }),
     ]);
     expect(rotated.transcript).not.toContain(nextPassword);
+    expect(
+      await context.internalAdapter.findVerificationValue(
+        "reset-password:earlier-token",
+      ),
+    ).toBeNull();
+    expect(
+      await context.internalAdapter.findVerificationValue(
+        `forget-password-otp-${reviewEmail}`,
+      ),
+    ).toBeNull();
+    // Another account's code is untouched.
+    expect(
+      await context.internalAdapter.findVerificationValue(
+        "sign-in-otp-member@example.test",
+      ),
+    ).not.toBeNull();
     expect(
       await context.internalAdapter.listSessions(
         (await context.internalAdapter.findUserByEmail(reviewEmail))?.user.id ??

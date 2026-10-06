@@ -7,6 +7,7 @@ import {
   checkReviewAccountAccess,
   REVIEW_ACCOUNT_OPERATION,
 } from "@/api/lib/auth/review-account-policy";
+import type { SafeId } from "@/api/lib/branded-types";
 import type { HandlerError } from "@/api/lib/errors/tagged-errors";
 
 export const getReviewAccountConfig = () => ({
@@ -21,6 +22,20 @@ export const isReviewAccountConfigured = () =>
 export const checkConfiguredReviewAccountAccess = (
   options: Omit<Parameters<typeof checkReviewAccountAccess>[0], "config">,
 ) => checkReviewAccountAccess({ ...options, config: getReviewAccountConfig() });
+
+/** Whether this account may work in this organization at all. */
+export const checkReviewAccountOrganization = ({
+  email,
+  organizationId,
+}: {
+  email: string;
+  organizationId: SafeId<"organization">;
+}): Result<void, HandlerError> =>
+  checkConfiguredReviewAccountAccess({
+    email,
+    operation: REVIEW_ACCOUNT_OPERATION.session,
+    organizationId,
+  });
 
 /**
  * Whether this account may run an operation with the declared account

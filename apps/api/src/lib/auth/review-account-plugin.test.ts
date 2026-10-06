@@ -262,4 +262,55 @@ describe("restricted review account password sign-in", () => {
     );
     expect(refused.status).toBe(403);
   });
+
+  test("refuses a reset token issued before the account was restricted", async () => {
+    const auth = await createReviewAuth();
+    const context = await auth.$context;
+    const account = await context.internalAdapter.findUserByEmail(reviewEmail);
+    expect(account).not.toBeNull();
+    // A token issued earlier, as the reset email flow stores it.
+    await context.internalAdapter.createVerificationValue({
+      identifier: "reset-password:fixture-token",
+      value: account?.user.id ?? "",
+      expiresAt: new Date(Date.now() + 60 * 60 * 1000),
+    });
+    for (const request of [
+      {
+        body: { token: "fixture-token", newPassword: "a new fixture password" },
+      },
+      {
+        body: { newPassword: "a new fixture password" },
+        query: "fixture-token",
+      },
+    ]) {
+      const response = await auth.handler(
+        new Request(
+          `http://localhost:3001/api/auth/reset-password${
+            request.query === undefined ? "" : `?token=${request.query}`
+          }`,
+          {
+            method: "POST",
+            headers: {
+              "content-type": "application/json",
+              origin: "http://localhost:3001",
+            },
+            body: JSON.stringify(request.body),
+          },
+        ),
+      );
+      expect(response.status).toBe(403);
+    }
+    expect(
+      (
+        await postAuth(auth, "/sign-in/email", {
+          email: reviewEmail,
+          password: "a new fixture password",
+        })
+      ).status,
+    ).toBe(401);
+    expect(
+      (await postAuth(auth, "/sign-in/email", { email: reviewEmail, password }))
+        .status,
+    ).toBe(200);
+  });
 });

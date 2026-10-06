@@ -150,6 +150,80 @@ describe("MCP account authorization", () => {
     expect(accountChecks).toBe(1);
   });
 
+  test("refuses the review account in any organization but its own, whatever the credential", async () => {
+    const previous = {
+      reviewEmail: env.APP_REVIEW_ACCOUNT_EMAIL,
+      reviewOrganization: env.APP_REVIEW_ORGANIZATION_ID,
+    };
+    env.APP_REVIEW_ACCOUNT_EMAIL = "review@example.test";
+    env.APP_REVIEW_ORGANIZATION_ID = "org_review";
+    try {
+      for (const credentialCase of credentialCases) {
+        const outcomes: Record<string, string> = {};
+        for (const organizationId of ["org_review", "org_other"]) {
+          // A grant issued for another organization while the account was a
+          // member there: the token and the membership both still resolve.
+          const authenticated = await authenticateMcpRequest(
+            credentialCase.type === "machine_api_key"
+              ? `${MACHINE_API_KEY_PREFIX}fixture`
+              : "credential.fixture",
+            {
+              verifyToken: async () => ({
+                sub: "user_review",
+                org_id: organizationId,
+                scope: "stella:read",
+                ...credentialCase.claims,
+              }),
+              resolveApiKeySession: async () => ({
+                userId: "user_review",
+                organizationId,
+                scopes: ["stella:read"],
+                credential: {
+                  type: "machine_api_key",
+                  id: "key_one",
+                  name: "fixture",
+                  permissions: { workspace: ["read"] },
+                },
+              }),
+            },
+          );
+          expect(Result.isOk(authenticated)).toBe(true);
+          if (Result.isError(authenticated)) {
+            continue;
+          }
+          const resolved = await Result.tryPromise({
+            try: async () =>
+              await resolveMcpSessionContext(
+                { ...authenticated.value, memberId: "previous_member" },
+                {
+                  request: new Request("https://example.test/mcp"),
+                  resolveAuthorization: async () => ({
+                    memberId: "member_one",
+                    email: "Review@Example.Test",
+                    role: "owner",
+                    workspace: null,
+                  }),
+                },
+              ),
+            catch: (cause) => cause,
+          });
+          outcomes[organizationId] =
+            Result.isError(resolved) && resolved.error instanceof Error
+              ? resolved.error.message
+              : "resolved";
+        }
+        expect(outcomes).toEqual({
+          // Past the account checks, stopped by the stale membership fixture.
+          org_review: "Token was issued for a previous membership",
+          org_other: "This operation is unavailable for this account.",
+        });
+      }
+    } finally {
+      env.APP_REVIEW_ACCOUNT_EMAIL = previous.reviewEmail;
+      env.APP_REVIEW_ORGANIZATION_ID = previous.reviewOrganization;
+    }
+  });
+
   test("opens MCP for the restricted review account and still refuses the demo account", async () => {
     const previous = {
       demoEmail: env.DEMO_ACCOUNT_EMAIL,

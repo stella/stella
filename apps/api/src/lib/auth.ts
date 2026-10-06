@@ -1920,6 +1920,14 @@ export const createAuth = (roleAssignmentPolicy = assignableRoles) => {
             if (!referenceId || !user) {
               return { org_id: referenceId };
             }
+            // The review account's tokens open its own organization only.
+            requireReviewAccountAccess(
+              checkConfiguredReviewAccountAccess({
+                email: user.email,
+                operation: REVIEW_ACCOUNT_OPERATION.session,
+                organizationId: referenceId,
+              }),
+            );
             // `member_id` pins the token to the membership row that minted it,
             // so a later membership of the same user in the same organization
             // (removal followed by re-invitation) is a different identity.
