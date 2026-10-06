@@ -640,7 +640,7 @@
     },
     "@stll/api#test": {
       "dependsOn": ["@stll/cli#codegen:runtime", "generate:capability-runtime"],
-      "env": ["API_TEST_SHARD"],
+      "env": ["API_TEST_SHARD", "API_TEST_FILES"],
       // Lane count and diagnostics destination never change test results;
       // pass them through without entering the cache key.
       "passThroughEnv": ["API_TEST_ARTIFACT_DIR", "API_TEST_LANES"],

@@ -74,6 +74,9 @@ jobs:
       actions: write
     outputs:
       trusted: ${{ steps.check.outputs.trusted }}
+      ci_tests_matrix: ${{ steps.api-tests.outputs.ci_tests_matrix }}
+      api_test_files: ${{ steps.api-tests.outputs.api_test_files }}
+      api_test_shards: ${{ steps.api-tests.outputs.api_test_shards }}
       playwright_image: ${{ steps.browser-image.outputs.image }}
       # Pull requests run lightweight guards, lint and type checks.
       # Unit-test event policy stays pending until the test-runner rework.
@@ -354,6 +357,12 @@ jobs:
             fi
             rm -f "$changed_paths"
           fi
+
+          : > "$RUNNER_TEMP/api-test-changed-paths"
+          if (( ${#changed_files[@]} > 0 )); then
+            printf '%s\0' "${changed_files[@]}" > "$RUNNER_TEMP/api-test-changed-paths"
+          fi
+          echo "api_scope_unknown=$scope_unknown" >> "$GITHUB_OUTPUT"
 
           # An unreadable diff must widen every scope rather than skip checks.
           if [[ "$EVENT_NAME" == "workflow_dispatch" || "$scope_unknown" == "true" || "${HEAVY_ONLY:-false}" == true ]]; then
@@ -763,6 +772,34 @@ jobs:
 
           if [[ "$package_checks_required" != "true" ]]; then
             echo "::notice::Only provenance files changed; skipping package CI checks."
+          fi
+
+      - name: Install API test planner dependencies
+        if: >-
+          steps.check.outputs.trusted == 'true'
+          && github.event_name == 'pull_request'
+          && steps.changed-files.outputs.package_checks_required == 'true'
+        run: bash scripts/retry.sh bun ci --ignore-scripts
+        env:
+          NPM_TOKEN: ""
+
+      - name: Plan API test files and shards
+        if: steps.check.outputs.trusted == 'true' || github.event_name == 'workflow_dispatch'
+        id: api-tests
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          BASE_REF: ${{ github.base_ref || 'main' }}
+          API_SCOPE_UNKNOWN: ${{ steps.changed-files.outputs.api_scope_unknown }}
+          PACKAGE_CHECKS_REQUIRED: ${{ steps.changed-files.outputs.package_checks_required }}
+        run: |
+          if [[ "$EVENT_NAME" == pull_request && "$PACKAGE_CHECKS_REQUIRED" != true && "$API_SCOPE_UNKNOWN" != true ]]; then
+            echo 'ci_tests_matrix={"shard":["rest-web"]}' >> "$GITHUB_OUTPUT"
+            echo 'api_test_shards=0' >> "$GITHUB_OUTPUT"
+            echo 'api_test_files=' >> "$GITHUB_OUTPUT"
+          elif [[ "$EVENT_NAME" != pull_request || "$API_SCOPE_UNKNOWN" == true ]] || ! bun scripts/ci-api-test-plan.ts; then
+            echo 'ci_tests_matrix={"shard":["api-1","api-2","api-3","api-4","rest-web"]}' >> "$GITHUB_OUTPUT"
+            echo 'api_test_shards=4' >> "$GITHUB_OUTPUT"
+            echo 'api_test_files=' >> "$GITHUB_OUTPUT"
           fi
 
       - name: Cancel failed merge-group run
@@ -2433,8 +2470,7 @@ jobs:
       # reports no result of its own, and one failing suite should not hide
       # another.
       fail-fast: false
-      matrix:
-        shard: [api-1, api-2, api-3, api-4, rest-web]
+      matrix: ${{ fromJSON(needs.ci-plan.outputs.ci_tests_matrix) }}
 
     steps:
       - name: Checkout
@@ -2519,6 +2555,8 @@ jobs:
           BASE_REF: ${{ github.base_ref || 'main' }}
           SHARD: ${{ matrix.shard == 'rest-web' && 'rest' || matrix.shard }}
           API_TEST_ARTIFACT_DIR: ${{ runner.temp }}/api-test-${{ matrix.shard }}
+          API_TEST_FILES: ${{ needs.ci-plan.outputs.api_test_files }}
+          API_TEST_SHARD_COUNT: ${{ needs.ci-plan.outputs.api_test_shards }}
         # Not --affected: a suite that reads files outside its own package also
         # needs the packages its turbo.json test inputs name, and
         # `--affected --filter=X` intersects instead of widening.

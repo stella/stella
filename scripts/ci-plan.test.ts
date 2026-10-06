@@ -22,7 +22,9 @@ import eventPolicies from "../.github/ci-event-policy.json";
 import queuedJob from "./__fixtures__/ci-cancellation/queued-job.json";
 import supersessionAnnotations from "./__fixtures__/ci-cancellation/supersession.json";
 import timeoutAnnotations from "./__fixtures__/ci-cancellation/timeout.json";
+import { selectApiTestImpact } from "./api-test-impact";
 import { requiresMalwareScan } from "./check-standalone-lockfiles";
+import { planCiApiTests } from "./ci-api-test-plan";
 import { CANONICAL_CANCEL_STEP } from "./ci-cancellation-contract";
 import { extractPlanSelector } from "./ci-plan-selector";
 import { routeSmokeAffected } from "./detect-route-smoke-changes";
@@ -1622,6 +1624,7 @@ const jobSteps = (job: unknown) =>
           name: v.optional(v.string()),
           run: v.optional(v.string()),
           if: v.optional(v.string()),
+          env: v.optional(v.record(v.string(), v.string())),
         }),
       ),
     }),
@@ -2867,6 +2870,7 @@ const runChangedFilesStep = ({
       BASE_REF: baseRef,
       EVENT_NAME: "pull_request",
       GITHUB_OUTPUT: output,
+      RUNNER_TEMP: directory,
       PATH: gitShim
         ? `${nodePath.dirname(gitShim)}:${process.env["PATH"] ?? ""}`
         : (process.env["PATH"] ?? ""),
@@ -2880,6 +2884,11 @@ const runChangedFilesStep = ({
       stderr: "pipe",
     });
     expect(run.exitCode, new TextDecoder().decode(run.stderr)).toBe(0);
+    expect(
+      readFileSync(nodePath.join(directory, "api-test-changed-paths"), "utf-8")
+        .split("\0")
+        .filter(Boolean),
+    ).toEqual(baseRef === "main" && gitShim === undefined ? paths : []);
     return new Map(
       readFileSync(output, "utf-8")
         .trim()
@@ -4135,4 +4144,90 @@ test("the advisory base proof runs only for pull requests opting in with prove-f
       ).toBe(event === EVENT.pullRequest && proveFix);
     }
   }
+});
+
+test("API test matrix drops API shards for web-only scope and keeps four in merge groups", () => {
+  const web = planCiApiTests({
+    event: "pull_request",
+    scopeUnknown: false,
+    apiInScope: false,
+    select: () => selectApiTestImpact({ changed: ["apps/web/src/page.tsx"] }),
+  });
+  expect(web.matrix.shard).toEqual(["rest-web"]);
+  const queue = planCiApiTests({
+    event: "merge_group",
+    scopeUnknown: false,
+    apiInScope: false,
+    select: () => ({ mode: "none", files: [], shards: 0 }),
+  });
+  expect(queue.matrix.shard).toEqual([
+    "api-1",
+    "api-2",
+    "api-3",
+    "api-4",
+    "rest-web",
+  ]);
+  expect(workflow).toContain(
+    `matrix: \${{ fromJSON(needs.ci-plan.outputs.ci_tests_matrix) }}`,
+  );
+  const planner = jobSteps(ciJobs["ci-plan"]).find(
+    (step) => step.name === "Plan API test files and shards",
+  );
+  expect(planner?.run).toContain("! bun scripts/ci-api-test-plan.ts; then");
+  expect(planner?.run).toContain("api_test_shards=4");
+  const runner = jobSteps(ciJobs["ci-tests"]).find(
+    (step) => step.name === "Test API or rest",
+  );
+  expect(runner?.env?.["API_TEST_FILES"]).toBe(
+    `\${{ needs.ci-plan.outputs.api_test_files }}`,
+  );
+});
+
+test("a crashed API planner widens the real workflow outputs", () => {
+  const planner = jobSteps(ciJobs["ci-plan"]).find(
+    (step) => step.name === "Plan API test files and shards",
+  );
+  const directory = mkdtempSync(nodePath.join(tmpdir(), "api-plan-fallback-"));
+  const output = nodePath.join(directory, "output");
+  try {
+    const result = Bun.spawnSync(
+      [
+        "bash",
+        "-e",
+        "-c",
+        `bun() { return 1; }\n${planner?.run ?? panic("Missing API test planner")}`,
+      ],
+      {
+        env: { PATH: Bun.env["PATH"] ?? "", GITHUB_OUTPUT: output },
+        stdout: "pipe",
+        stderr: "pipe",
+      },
+    );
+    expect(result.exitCode, result.stderr.toString()).toBe(0);
+    const values = readFileSync(output, "utf-8");
+    expect(values).toContain(
+      'ci_tests_matrix={"shard":["api-1","api-2","api-3","api-4","rest-web"]}',
+    );
+    expect(values).toContain("api_test_shards=4");
+    expect(values).toContain("api_test_files=\n");
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test("nightly full tests retain the unrestricted API suite and selection enters its cache key", () => {
+  const nightly = readFileSync(
+    new URL("../.github/workflows/nightly-test.yml", import.meta.url),
+    "utf-8",
+  );
+  const steps = jobSteps(workflowJobs(nightly)["full-test"]);
+  const full = steps.find((step) => step.name === "Full test suite");
+  expect(full?.run).toBe("bun run test -- --concurrency=2");
+  expect(full?.env?.["TURBO_FORCE"]).toBe("true");
+  expect(nightly).not.toContain("API_TEST_FILES:");
+  const turbo = readFileSync(
+    new URL("../turbo.json", import.meta.url),
+    "utf-8",
+  );
+  expect(turbo).toContain('"env": ["API_TEST_SHARD", "API_TEST_FILES"]');
 });
