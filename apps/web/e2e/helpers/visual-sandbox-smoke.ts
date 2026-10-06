@@ -2,7 +2,7 @@ import { expect, test } from "@playwright/test";
 
 import { VISUAL_SANDBOX_PATH } from "@stll/api-contract/visual-sandbox";
 
-import baseline from "../visual-sandbox-network-baseline.json";
+import declaration from "../visual-sandbox-network-budgets/frame-shell.json";
 import { E2E_API_ORIGIN } from "./api";
 import {
   createNetworkCollector,
@@ -18,6 +18,7 @@ export const declareVisualSandboxSmoke = () => {
     baseURL,
   }) => {
     expect(baseURL).toBeDefined();
+    expect(declaration.route).toBe(VISUAL_SANDBOX_PATH);
     const hostUrl = new URL("/__visual-frame-smoke", baseURL).href;
     const sandboxUrl = new URL(VISUAL_SANDBOX_PATH, E2E_API_ORIGIN).href;
     const collector = createNetworkCollector();
@@ -60,13 +61,14 @@ export const declareVisualSandboxSmoke = () => {
       ]);
       expect(
         diffNetworkBaseline(
-          baseline satisfies Record<
+          { [VISUAL_SANDBOX_PATH]: declaration.budget } satisfies Record<
             typeof VISUAL_SANDBOX_PATH,
             NetworkBaselineEntry
           >,
           results,
           { requireAllRoutes: true },
         ).problems,
+        declaration.reason,
       ).toEqual([]);
       expect(frameRequests).toEqual(["GET"]);
       errors.assertEmpty(VISUAL_SANDBOX_PATH);
