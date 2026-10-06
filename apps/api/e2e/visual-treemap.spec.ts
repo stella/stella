@@ -46,7 +46,6 @@ for (const direction of ["ltr", "rtl"] as const) {
       page,
       request,
     }) => {
-      await page.emulateMedia({ colorScheme });
       const requests: string[] = [];
       const errors: string[] = [];
       page.on("request", (networkRequest) =>
@@ -81,6 +80,7 @@ for (const direction of ["ltr", "rtl"] as const) {
           )
           .join(";"),
       });
+      await page.emulateMedia({ colorScheme });
       await page.setContent(
         `<iframe title="Treemap" sandbox="allow-scripts" style="width:1000px;height:800px"></iframe>`,
       );
@@ -91,6 +91,12 @@ for (const direction of ["ltr", "rtl"] as const) {
       const guest = page.frameLocator("iframe");
       const svg = guest.locator("svg").first();
       await expect(svg).toHaveAttribute("aria-label", treemapFixture.label);
+      // Theme tokens resolve through light-dark(), so the inherited text
+      // colour proves which scheme the chart rendered in.
+      await expect(svg).toHaveCSS(
+        "color",
+        colorScheme === "dark" ? "rgb(245, 245, 245)" : "rgb(38, 38, 38)",
+      );
       await expect(svg.locator("text")).toContainText([
         "Nejvyšší soud",
         "Ústavní soud",
