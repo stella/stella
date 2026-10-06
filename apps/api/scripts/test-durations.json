@@ -3767,6 +3767,10 @@
     "seconds": 1.506288,
     "source": "estimated"
   },
+  "src/handlers/user-files/read-visual.test.ts": {
+    "seconds": 1.163,
+    "source": "measured"
+  },
   "src/handlers/view-templates/properties.test.ts": {
     "seconds": 0.166023,
     "source": "estimated"

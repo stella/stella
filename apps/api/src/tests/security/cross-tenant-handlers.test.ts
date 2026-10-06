@@ -119,13 +119,11 @@ import stopAdminTimer from "@/api/handlers/time-timers/admin/stop";
 import listMyTimeTimers from "@/api/handlers/time-timers/list";
 import readUserFileContent from "@/api/handlers/user-files/read-content";
 import readUserFileThumbnail from "@/api/handlers/user-files/read-thumbnail";
-import { createReadUserFileVisual } from "@/api/handlers/user-files/read-visual";
 import listVatRates from "@/api/handlers/vat-rates/list";
 import updateVatRate from "@/api/handlers/vat-rates/update";
 import listMyWork from "@/api/handlers/work-obligations/queues/list";
 import type { OrgAIConfig } from "@/api/lib/ai-config";
 import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
-import { createAuditRecorder } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -515,80 +513,7 @@ const savedSearchCriteria = (
   sort: "relevance",
 });
 
-type TestEndpoint<TContext> =
-  | { handler: (context: TContext) => Promise<unknown> }
-  | ((context: TContext) => Promise<unknown>);
-
-const runHandler = async <TContext>(
-  endpoint: TestEndpoint<TContext>,
-  context: TestHandlerContext,
-  requestShape: Partial<TContext> & Record<string, unknown>,
-): Promise<unknown> => {
-  const handler = typeof endpoint === "function" ? endpoint : endpoint.handler;
-
-  try {
-    return await handler(
-      asTestRaw<TContext>({
-        ...context,
-        ...requestShape,
-      }),
-    );
-  } catch (error) {
-    return error;
-  }
-};
-
-const visualAttachmentContext = (context: TestHandlerContext) => {
-  const recordAuditEvent = createAuditRecorder({
-    organizationId: context.session.activeOrganizationId,
-    workspaceId: context.workspaceId,
-    userId: context.user.id,
-    request: context.request,
-    server: null,
-  });
-  return {
-    ...context,
-    recordAuditEvent,
-    createAuditRecorder: () => recordAuditEvent,
-  };
-};
-
-const visualAttachmentReader = createReadUserFileVisual(async () =>
-  testScannedFile({
-    bytes: new TextEncoder().encode(
-      JSON.stringify({
-        title: "Court overview",
-        html: "<p>Overview</p>",
-        data: {},
-        links: [],
-      }),
-    ).buffer,
-    mimeType: "text/plain",
-  }),
-);
-
 const isolationCases: IsolationCase[] = [
-  {
-    name: "visual attachment across organizations",
-    runAAgainstB: async ({ ids: testIds, workspaceA }) =>
-      await runHandler(
-        visualAttachmentReader,
-        visualAttachmentContext(workspaceA),
-        {
-          params: { fileId: testIds.userFileWorkspaceB1UserA1 },
-        },
-      ),
-    runBPositive: async ({ ids: testIds, sameUserWorkspaceB }) =>
-      await runHandler(
-        visualAttachmentReader,
-        visualAttachmentContext(sameUserWorkspaceB),
-        {
-          params: { fileId: testIds.userFileWorkspaceB1UserA1 },
-        },
-      ),
-    expectDenied: expectStatus(404),
-    expectPositive: expectStatus(200),
-  },
   ...desktopPresenceIsolationCases(),
   {
     name: "user file content",
@@ -2396,6 +2321,29 @@ const createWorkspaceContext = ({
     user: { id: userId },
     workspaceId,
   };
+};
+
+type TestEndpoint<TContext> =
+  | { handler: (context: TContext) => Promise<unknown> }
+  | ((context: TContext) => Promise<unknown>);
+
+const runHandler = async <TContext>(
+  endpoint: TestEndpoint<TContext>,
+  context: TestHandlerContext,
+  requestShape: Partial<TContext> & Record<string, unknown>,
+): Promise<unknown> => {
+  const handler = typeof endpoint === "function" ? endpoint : endpoint.handler;
+
+  try {
+    return await handler(
+      asTestRaw<TContext>({
+        ...context,
+        ...requestShape,
+      }),
+    );
+  } catch (error) {
+    return error;
+  }
 };
 
 function desktopPresenceIsolationCases(): IsolationCase[] {
