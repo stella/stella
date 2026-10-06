@@ -47,7 +47,11 @@ import { isUuid } from "@stll/uuid-codec";
 
 import { member, user as authUser } from "@/api/db/auth-schema";
 import { rootDb, rlsDb } from "@/api/db/root";
-import { workspaceMembers, workspaces } from "@/api/db/schema";
+import {
+  featureEnrolments,
+  workspaceMembers,
+  workspaces,
+} from "@/api/db/schema";
 import {
   createMembershipSafeDb,
   createMembershipScopedDb,
@@ -91,6 +95,7 @@ import {
   createDemoSessionFilter,
   warnDemoAccountConfiguration,
 } from "@/api/lib/auth/demo-account-policy";
+import { buildFeatureAccessSnapshot } from "@/api/lib/auth/feature-access/context";
 import {
   createOAuthConsentInfoPlugin,
   getVerifiedOAuthOrigins,
@@ -2123,6 +2128,10 @@ const getSessionAndMemberAuthorization = async ({
           return {
             role: authorization.role,
             workspace: authorization.workspace,
+            email: authorization.email,
+            emailVerified: authorization.emailVerified,
+            userDeleted: authorization.userDeleted,
+            enrolledFeatureIds: authorization.enrolledFeatureIds,
           };
         })
       : Result.ok(null);
@@ -2215,6 +2224,26 @@ type MemberAuthorization = {
   /** Raw DB value; callers validate it with isMemberRole. */
   role: string;
   workspace: AccessibleWorkspace | null;
+  /**
+   * Feature-access facts read in the same statement, so gated routes decide
+   * feature access without a query of their own.
+   */
+  emailVerified: boolean;
+  userDeleted: boolean;
+  enrolledFeatureIds: readonly string[];
+};
+
+// Bounded by the enrolment primary key (user, organization, feature) and the
+// feature registry. The caller is read as the table owner, which the
+// enrolment owner policy admits.
+const enrolledFeatureIdsOfMember = sql<
+  string[]
+>`coalesce((select array_agg(${featureEnrolments.featureId}) from ${featureEnrolments} where ${featureEnrolments.organizationId} = ${member.organizationId} and ${featureEnrolments.userId} = ${member.userId}), '{}')`;
+
+const featureAccessColumns = {
+  emailVerified: authUser.emailVerified,
+  userDeleted: sql<boolean>`${authUser.deletedAt} is not null`,
+  enrolledFeatureIds: enrolledFeatureIdsOfMember,
 };
 
 const ACTIVE_WORKSPACE_STATUS = "active";
@@ -2225,7 +2254,12 @@ export const resolveMemberAuthorization = async (
 ): Promise<MemberAuthorization | null> => {
   if (!workspaceId) {
     const row = await db
-      .select({ memberId: member.id, role: member.role, email: authUser.email })
+      .select({
+        memberId: member.id,
+        role: member.role,
+        email: authUser.email,
+        ...featureAccessColumns,
+      })
       .from(member)
       .innerJoin(authUser, eq(authUser.id, member.userId))
       .where(
@@ -2243,6 +2277,9 @@ export const resolveMemberAuthorization = async (
           email: row.email,
           role: row.role,
           workspace: null,
+          emailVerified: row.emailVerified,
+          userDeleted: row.userDeleted,
+          enrolledFeatureIds: row.enrolledFeatureIds,
         }
       : null;
   }
@@ -2265,6 +2302,7 @@ export const resolveMemberAuthorization = async (
       role: member.role,
       workspaceId: workspaces.id,
       workspaceStatus: workspaces.status,
+      ...featureAccessColumns,
     })
     .from(member)
     .innerJoin(authUser, eq(authUser.id, member.userId))
@@ -2293,12 +2331,18 @@ export const resolveMemberAuthorization = async (
     return null;
   }
 
+  const featureFacts = {
+    emailVerified: row.emailVerified,
+    userDeleted: row.userDeleted,
+    enrolledFeatureIds: row.enrolledFeatureIds,
+  };
   if (row.workspaceId === null || row.workspaceStatus === null) {
     return {
       memberId: row.memberId,
       email: row.email,
       role: row.role,
       workspace: null,
+      ...featureFacts,
     };
   }
 
@@ -2307,6 +2351,7 @@ export const resolveMemberAuthorization = async (
     email: row.email,
     role: row.role,
     workspace: { id: row.workspaceId, status: row.workspaceStatus },
+    ...featureFacts,
   };
 };
 
@@ -2522,6 +2567,23 @@ const resolveValidateAuth = async ({
   const memberRole = sessionMemberRole(role);
   const activeOrganizationId = toSafeId<"organization">(rawOrgId);
   const userId = toSafeId<"user">(user.id);
+  // Feature access comes from the member lookup above, so gated routes and
+  // handlers reuse it instead of resolving it with queries of their own.
+  const featureAccessSnapshot = buildFeatureAccessSnapshot({
+    organizationId: activeOrganizationId,
+    userId,
+    identity: authorization.userDeleted
+      ? null
+      : {
+          email: authorization.email,
+          emailVerified: authorization.emailVerified,
+        },
+    enrolments: authorization.enrolledFeatureIds.map((featureId) => ({
+      featureId,
+      organizationId: activeOrganizationId,
+      userId,
+    })),
+  });
 
   enrichRequestContext(request, {
     posthogDistinctId: userId,
@@ -2673,6 +2735,7 @@ const resolveValidateAuth = async ({
       scopedDb,
       safeDb,
       memberRole,
+      featureAccessSnapshot,
       orgAIConfig,
       orgAIConfigStatus,
       promptCachingEnabled,

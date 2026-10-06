@@ -1,5 +1,4 @@
 import type { CallToolResult } from "@modelcontextprotocol/server";
-import { Result } from "better-result";
 import { Glob } from "bun";
 import { describe, expect, test } from "bun:test";
 import { Elysia, t } from "elysia";
@@ -247,9 +246,15 @@ describe("time billing admission census", () => {
             featureAccessGate(FEATURE_ID, {
               resolveAuth: async () => ({
                 ok: true,
-                value: createTestHandlerContext<ValidateAuthValue>(),
+                value: createTestHandlerContext<ValidateAuthValue>({
+                  featureAccessSnapshot: snapshot,
+                  // The member lookup already decided feature access: the
+                  // gate itself must not open a transaction or query.
+                  safeDb: async () => {
+                    throw new Error("the feature-access gate queried");
+                  },
+                }),
               }),
-              loadSnapshot: async () => Result.ok(snapshot),
             }),
           )
           .post(
