@@ -361,15 +361,17 @@ const emptyStringEnumPaths = (value: unknown, path = "request"): string[] => {
 describe("AI provider production chat tool matrix", () => {
   test("an unenrolled canary accounts for gated tools without requiring their admission", () => {
     const featureDefinitions = DEFAULT_MCP_TOOL_DEFINITIONS.filter(
-      ({ featureId }) => featureId !== undefined,
+      (definition) => "featureId" in definition,
     );
     for (const { featureId } of featureDefinitions) {
-      if (featureId !== undefined) {
-        expect(Object.hasOwn(FEATURE_REGISTRY, featureId)).toBe(true);
-      }
+      expect(Object.hasOwn(FEATURE_REGISTRY, featureId)).toBe(true);
     }
-    const gated = new Set(featureDefinitions.map(({ name }) => name));
     const catalogNames = Object.keys(BUILT_IN_CHAT_TOOL_POLICY_KINDS);
+    const gated = new Set(
+      catalogNames.filter((name) =>
+        featureDefinitions.some((definition) => definition.name === name),
+      ),
+    );
     expect(
       catalogNames.filter((name) => gated.has(name)).length,
     ).toBeGreaterThan(0);
