@@ -101,6 +101,42 @@ describe("createStatuteViewTab", () => {
     expect(isStatuteViewPayload(tab.payload)).toBe(true);
   });
 
+  test("search terms survive the inspector payload boundary", () => {
+    const tab = createStatuteViewTab({ ...target, searchQuery: "odpovědnost" });
+    expect(tab.payload.searchQuery).toBe("odpovědnost");
+    expect(isStatuteViewPayload(tab.payload)).toBe(true);
+    for (const searchQuery of ["", null, 123]) {
+      expect(isStatuteViewPayload({ ...payload, searchQuery })).toBe(false);
+    }
+  });
+
+  test("reopening the same search resets find within the same statute tab", () => {
+    const first = createStatuteViewTab({
+      ...target,
+      searchQuery: "odpovědnost",
+    });
+    const reopened = createStatuteViewTab({
+      ...target,
+      searchQuery: "odpovědnost",
+    });
+
+    expect(reopened.id).toBe(first.id);
+    expect(first.payload.findSessionId).toEqual(expect.any(String));
+    expect(reopened.payload.findSessionId).toEqual(expect.any(String));
+    expect(reopened.payload.findSessionId).not.toBe(
+      first.payload.findSessionId,
+    );
+    expect(isStatuteViewPayload(reopened.payload)).toBe(true);
+    for (const searchQuery of [undefined, "", " "]) {
+      expect(
+        createStatuteViewTab({ ...target, searchQuery }).payload.findSessionId,
+      ).toBeUndefined();
+    }
+    for (const findSessionId of ["", null, 123]) {
+      expect(isStatuteViewPayload({ ...payload, findSessionId })).toBe(false);
+    }
+  });
+
   test("a link that names a passage opens the tab at it", () => {
     const tab = createStatuteViewTab({ ...target, anchorId: "par_90-odst_5" });
 

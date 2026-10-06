@@ -6,6 +6,7 @@ import { useTranslations } from "use-intl";
 
 import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
+import { DetailsGrid, DetailsItem } from "@stll/ui/details-grid";
 import {
   Dialog,
   DialogFooter,
@@ -192,20 +193,17 @@ const VatRatesCardBody = ({ organizationId }: { organizationId: string }) => {
                     </p>
                     {/* Narrow screens hide the secondary columns; their values
                     stay readable here so the actions column fits on screen. */}
-                    <dl className="text-muted-foreground mt-1 grid grid-cols-[auto_1fr] gap-x-2 text-xs sm:hidden">
-                      <dt>{t("billing.vatRates.code")}</dt>
-                      <dd>
+                    <DetailsGrid className="mt-1 sm:hidden">
+                      <DetailsItem label={t("billing.vatRates.code")}>
                         <BidiText>{rate.code}</BidiText>
-                      </dd>
-                      <dt>{t("billing.vatRates.validFrom")}</dt>
-                      <dd>
+                      </DetailsItem>
+                      <DetailsItem label={t("billing.vatRates.validFrom")}>
                         <VatRateDate date={rate.validFrom} />
-                      </dd>
-                      <dt>{t("billing.vatRates.validTo")}</dt>
-                      <dd>
+                      </DetailsItem>
+                      <DetailsItem label={t("billing.vatRates.validTo")}>
                         <VatRateDate date={rate.validTo} />
-                      </dd>
-                    </dl>
+                      </DetailsItem>
+                    </DetailsGrid>
                   </TableCell>
                   <TableCell>
                     <VatRatePercentage rateBps={rate.rateBps} />

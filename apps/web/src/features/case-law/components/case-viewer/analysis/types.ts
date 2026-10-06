@@ -114,6 +114,13 @@ export const buildSectionMap = (
   return map;
 };
 
+/** The first annotation is where the reader displays the section heading. */
+export const getHeadingDisplayAnchorId = ({
+  annotations,
+  startAnchorId,
+}: Pick<AnalysisHeading, "annotations" | "startAnchorId">): string =>
+  annotations.at(0)?.startAnchorId ?? startAnchorId;
+
 export const flattenAnalysisHeadings = (
   headings: readonly AnalysisHeading[],
 ): FlatAnalysisHeading[] => {

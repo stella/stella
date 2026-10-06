@@ -16,7 +16,7 @@ import {
   CASE_LAW_DECISION_IDENTIFIER_BACKFILL_PHASES,
 } from "@/api/db/schema";
 import type { CaseLawDecisionIdentifierBackfillPhase } from "@/api/db/schema";
-import { lockCitationGraph } from "@/api/handlers/case-law/citation-resolution";
+import { runCitationGraphTransaction } from "@/api/handlers/case-law/citation-graph-transaction";
 import {
   CITATION_RESOLUTION_STATUS,
   effectiveCitationIdentifierTypeSql,
@@ -432,10 +432,8 @@ const projectDecisionPage = async (
       sql`, `,
     );
 
-    // Match ingestion's decision-row-then-graph lock order. NO KEY UPDATE
-    // excludes concurrent refreshes while remaining compatible with the
-    // resolver's foreign-key KEY SHARE checks.
-    await lockCitationGraph(tx);
+    // Graph acquisition precedes the decision page at the transaction owner.
+    // NO KEY UPDATE remains compatible with resolver KEY SHARE checks.
     const rewritten = await tx.execute(sql`
     WITH expected(decision_id, type, value, normalized_value) AS (
       VALUES ${expected}
@@ -524,8 +522,7 @@ const projectCitationPage = async (
   batchSize: number,
 ): Promise<DecisionIdentifierBackfillPageProgress> => {
   // audit: skip — rewrites derived public case-law identifiers; no workspace data
-  // Resolver batches take the graph lock before citation row locks too.
-  await lockCitationGraph(tx);
+  // The page transaction owns the graph before any row locks.
   const rows = readCitationRows(
     await tx.execute(citationRowsSql(checkpoint.cursorId, batchSize, true)),
   );
@@ -790,40 +787,90 @@ const verifyCitationPage = async (
 type BackfillPageResult =
   | { status: "progress"; progress: DecisionIdentifierBackfillPageProgress }
   | { status: "retry" }
+  | { status: "phase-changed" }
   | { status: "completed" };
 
 const runBackfillPage = async (
   rootDb: CaseLawRootHandle,
   batchSize: number,
-): Promise<BackfillPageResult> =>
-  await rootDb.transaction(async (tx) => {
+): Promise<BackfillPageResult> => {
+  const selected = await rootDb.transaction(
+    async (tx) => await loadCheckpoint(tx, "none"),
+  );
+  if (selected === null) {
+    return panic("Decision identifier backfill checkpoint is missing");
+  }
+  // Never acquire the graph while holding the checkpoint: another projector
+  // may already own the graph and be waiting for that checkpoint. A phase
+  // change between selection and FOR UPDATE instead starts a fresh turn.
+  const loadSelectedCheckpoint = async (tx: Transaction) => {
     const checkpoint = await loadCheckpoint(tx, "for-update");
     if (checkpoint === null) {
       return panic("Decision identifier backfill checkpoint is missing");
     }
-    switch (checkpoint.phase) {
-      case CASE_LAW_DECISION_IDENTIFIER_BACKFILL_PHASE.DECISIONS:
-        return {
-          status: "progress",
-          progress: await projectDecisionPage(tx, checkpoint, batchSize),
-        };
-      case CASE_LAW_DECISION_IDENTIFIER_BACKFILL_PHASE.CITATIONS:
-        return {
-          status: "progress",
-          progress: await projectCitationPage(tx, checkpoint, batchSize),
-        };
-      case CASE_LAW_DECISION_IDENTIFIER_BACKFILL_PHASE.VERIFY_DECISIONS:
-        return await verifyDecisionPage(tx, checkpoint, batchSize);
-      case CASE_LAW_DECISION_IDENTIFIER_BACKFILL_PHASE.VERIFY_CITATIONS:
-        return await verifyCitationPage(tx, checkpoint, batchSize);
-      case CASE_LAW_DECISION_IDENTIFIER_BACKFILL_PHASE.COMPLETE:
-        return { status: "completed" };
-      default: {
-        checkpoint satisfies never;
-        return panic(`Unhandled checkpoint: ${String(checkpoint)}`);
-      }
-    }
-  });
+    return checkpoint.phase === selected.phase ? checkpoint : null;
+  };
+  switch (selected.phase) {
+    case CASE_LAW_DECISION_IDENTIFIER_BACKFILL_PHASE.DECISIONS:
+    case CASE_LAW_DECISION_IDENTIFIER_BACKFILL_PHASE.CITATIONS:
+      return await runCitationGraphTransaction(
+        rootDb.transaction.bind(rootDb),
+        async (tx): Promise<BackfillPageResult> => {
+          const checkpoint = await loadSelectedCheckpoint(tx);
+          if (checkpoint === null) {
+            return { status: "phase-changed" };
+          }
+          switch (checkpoint.phase) {
+            case CASE_LAW_DECISION_IDENTIFIER_BACKFILL_PHASE.DECISIONS:
+              return {
+                status: "progress",
+                progress: await projectDecisionPage(tx, checkpoint, batchSize),
+              };
+            case CASE_LAW_DECISION_IDENTIFIER_BACKFILL_PHASE.CITATIONS:
+              return {
+                status: "progress",
+                progress: await projectCitationPage(tx, checkpoint, batchSize),
+              };
+            case CASE_LAW_DECISION_IDENTIFIER_BACKFILL_PHASE.COMPLETE:
+            case CASE_LAW_DECISION_IDENTIFIER_BACKFILL_PHASE.VERIFY_CITATIONS:
+            case CASE_LAW_DECISION_IDENTIFIER_BACKFILL_PHASE.VERIFY_DECISIONS:
+              return { status: "phase-changed" };
+            default:
+              checkpoint satisfies never;
+              return panic(`Unhandled checkpoint: ${String(checkpoint)}`);
+          }
+        },
+      );
+    case CASE_LAW_DECISION_IDENTIFIER_BACKFILL_PHASE.VERIFY_DECISIONS:
+    case CASE_LAW_DECISION_IDENTIFIER_BACKFILL_PHASE.VERIFY_CITATIONS:
+    case CASE_LAW_DECISION_IDENTIFIER_BACKFILL_PHASE.COMPLETE:
+      return await rootDb.transaction(
+        async (tx): Promise<BackfillPageResult> => {
+          const checkpoint = await loadSelectedCheckpoint(tx);
+          if (checkpoint === null) {
+            return { status: "phase-changed" };
+          }
+          switch (checkpoint.phase) {
+            case CASE_LAW_DECISION_IDENTIFIER_BACKFILL_PHASE.VERIFY_DECISIONS:
+              return await verifyDecisionPage(tx, checkpoint, batchSize);
+            case CASE_LAW_DECISION_IDENTIFIER_BACKFILL_PHASE.VERIFY_CITATIONS:
+              return await verifyCitationPage(tx, checkpoint, batchSize);
+            case CASE_LAW_DECISION_IDENTIFIER_BACKFILL_PHASE.COMPLETE:
+              return { status: "completed" };
+            case CASE_LAW_DECISION_IDENTIFIER_BACKFILL_PHASE.CITATIONS:
+            case CASE_LAW_DECISION_IDENTIFIER_BACKFILL_PHASE.DECISIONS:
+              return { status: "phase-changed" };
+            default:
+              checkpoint satisfies never;
+              return panic(`Unhandled checkpoint: ${String(checkpoint)}`);
+          }
+        },
+      );
+    default:
+      selected satisfies never;
+      return panic(`Unhandled checkpoint: ${String(selected)}`);
+  }
+};
 
 const normalizeBatchSize = (batchSize: number | undefined): number => {
   const normalized =
@@ -965,11 +1012,19 @@ const restartCompletedBackfill = async (
     { status: "backfill-required" }
   >,
 ): Promise<void> => {
-  if (verification.checkpoint === null) {
+  const expected = verification.checkpoint;
+  if (expected === null) {
     return;
   }
   await rootDb.transaction(async (tx) => {
-    await loadCheckpoint(tx, "for-update");
+    const checkpoint = await loadCheckpoint(tx, "for-update");
+    if (
+      checkpoint?.phase !==
+        CASE_LAW_DECISION_IDENTIFIER_BACKFILL_PHASE.COMPLETE ||
+      checkpoint.completedAt !== expected.completedAt
+    ) {
+      return;
+    }
     await resetCheckpoint(
       tx,
       verification.gaps.decisionIdentifierMismatches > 0
@@ -980,6 +1035,7 @@ const restartCompletedBackfill = async (
 };
 
 type BackfillIteration =
+  | { status: "phase-changed" }
   | { status: "progress"; progress: DecisionIdentifierBackfillPageProgress }
   | {
       status: "retry";
@@ -998,7 +1054,7 @@ const advanceBackfill = async (
   batchSize: number,
 ): Promise<BackfillIteration> => {
   const result = await runBackfillPage(rootDb, batchSize);
-  if (result.status === "progress") {
+  if (result.status === "progress" || result.status === "phase-changed") {
     return result;
   }
   const verification = await verifyDecisionIdentifierBackfill(
@@ -1042,10 +1098,20 @@ export const runDecisionIdentifierBackfill = async (
     return panic("Decision identifier backfill checkpoint was not created");
   }
   let retryCount = 0;
+  let phaseChangeCount = 0;
   for await (const result of backfillIterations(rootDb, batchSize)) {
     switch (result.status) {
       case "progress":
+        phaseChangeCount = 0;
         onProgress?.({ type: "page", progress: result.progress });
+        break;
+      case "phase-changed":
+        phaseChangeCount += 1;
+        if (phaseChangeCount > MAX_DECISION_IDENTIFIER_BACKFILL_RESTARTS) {
+          return panic(
+            `Decision identifier backfill phase changed without progress after ${MAX_DECISION_IDENTIFIER_BACKFILL_RESTARTS} retries`,
+          );
+        }
         break;
       case "retry": {
         retryCount += 1;

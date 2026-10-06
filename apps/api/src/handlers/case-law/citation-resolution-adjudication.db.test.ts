@@ -9,6 +9,7 @@ import {
   caseLawSources,
 } from "@/api/db/schema";
 import { CITATION_DECISION_TYPE_HINT } from "@/api/handlers/case-law/citation-decision-type-hint";
+import { runCitationGraphTransaction } from "@/api/handlers/case-law/citation-graph-transaction";
 import {
   type CitationResolutionCursor,
   readjudicateAmbiguousCitations,
@@ -371,7 +372,10 @@ const byRule = (counts: {
   );
 
 test("a key held by one nález and its procedural orders resolves to the nález", async () => {
-  const counts = await resolveCitationsForDecision(asTx(), citing);
+  const counts = await runCitationGraphTransaction(
+    db.transaction.bind(db),
+    async (tx) => resolveCitationsForDecision(tx, citing),
+  );
   expect(counts.resolvedByRule[CITATION_RESOLUTION_RULE.ONE_FILE_MERITS]).toBe(
     1,
   );
@@ -426,7 +430,10 @@ test("a key with as many holders as the resolver reads stays ambiguous", async (
 test("a citation older than the nález never takes it", async () => {
   // Only the first order predates the citing decision, so the time rule
   // leaves one candidate and uniqueness, not the one-file rule, links it.
-  const counts = await resolveCitationsForDecision(asTx(), lateCiting);
+  const counts = await runCitationGraphTransaction(
+    db.transaction.bind(db),
+    async (tx) => resolveCitationsForDecision(tx, lateCiting),
+  );
   expect(counts).toMatchObject({
     resolved: 1,
     resolvedByRule: byRule({ uniqueKey: 1 }),
@@ -457,7 +464,10 @@ test("the Slovak spelling of the file structure resolves the same way", async ()
     citationKey: "iiús40/16",
   });
 
-  const counts = await resolveCitationsForDecision(asTx(), skCiting);
+  const counts = await runCitationGraphTransaction(
+    db.transaction.bind(db),
+    async (tx) => resolveCitationsForDecision(tx, skCiting),
+  );
   expect(counts.resolvedByRule[CITATION_RESOLUTION_RULE.ONE_FILE_MERITS]).toBe(
     1,
   );
@@ -525,7 +535,10 @@ test("re-adjudication reopens settled ambiguous rows and is idempotent", async (
 });
 
 test("a hint names the order or the nález of a pair, whichever the text said", async () => {
-  const counts = await resolveCitationsForDecision(asTx(), hintCiting);
+  const counts = await runCitationGraphTransaction(
+    db.transaction.bind(db),
+    async (tx) => resolveCitationsForDecision(tx, hintCiting),
+  );
   // The two pair citations and the no-match fallback are adjudicated; the
   // two-orders and twin cases are not.
   expect(counts.resolvedByRule).toEqual(
@@ -572,7 +585,7 @@ test("reopening a resolved row clears the rule that drew its edge", async () => 
   expect((await rowOf(hintNalezCitation))?.rule).toBe(
     CITATION_RESOLUTION_RULE.TYPE_HINT,
   );
-  await scopedDb(async (tx) => {
+  await runCitationGraphTransaction(db.transaction.bind(db), async (tx) => {
     await reopenCitations(tx, [hintNalezCitation]);
   });
   expect(await rowOf(hintNalezCitation)).toEqual({

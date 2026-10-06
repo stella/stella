@@ -42,7 +42,11 @@ import {
   SnapshotBuildError,
 } from "./test-db-snapshot-cache";
 import durations from "./test-durations.json";
-import { API_TEST_SHARD_ENV, selectApiTestFiles } from "./test-file-shards";
+import {
+  API_TEST_SHARD_ENV,
+  restrictApiTestFiles,
+  selectApiTestFiles,
+} from "./test-file-shards";
 import {
   deriveTestLaneCount,
   laneRunExitCode,
@@ -67,7 +71,10 @@ const forwardedArguments = runnerArguments.filter(
   (argument) => argument !== PROPERTY_FLAG,
 );
 
-const allTestPaths = listApiTestPaths(apiRoot);
+const allTestPaths = restrictApiTestFiles(
+  listApiTestPaths(apiRoot),
+  process.env["API_TEST_FILES"],
+);
 const { testPaths, shard } = selectApiTestFiles({
   files: allTestPaths,
   durations,

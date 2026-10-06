@@ -68,6 +68,8 @@ export const OXLINT_CONFIGURATION_CACHE_INPUTS = [
   "$TURBO_ROOT$/scripts/status-write-shapes.ts",
   "$TURBO_ROOT$/scripts/parse-memo.ts",
   "$TURBO_ROOT$/apps/api/src/lib/db/status-tables.gen.ts",
+  "$TURBO_ROOT$/apps/api/src/lib/lists/sanctions/monitoring-transition-identities.ts",
+  "$TURBO_ROOT$/apps/api/src/lib/db/read-bounded.ts",
   "$TURBO_ROOT$/scripts/result-boundary-globs.ts",
   "$TURBO_ROOT$/scripts/sql-perf-detector.ts",
   "$TURBO_ROOT$/apps/api/src/db/high-volume-tables.ts",

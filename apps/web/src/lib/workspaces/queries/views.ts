@@ -5,8 +5,11 @@ import { api } from "@/lib/api";
 import { unwrapEden } from "@/lib/errors/api";
 import { ROUTE_QUERY_STALE_TIME_MS } from "@/lib/react-query";
 import { toSafeId } from "@/lib/safe-id";
-import type { WorkspaceView } from "@/lib/types";
-import { viewsRootKey } from "@/lib/workspaces/queries/views.logic";
+import {
+  type CachedWorkspaceView,
+  selectAvailableWorkspaceViews,
+  viewsRootKey,
+} from "@/lib/workspaces/queries/views.logic";
 
 export const viewsKeys = {
   // Locale-independent prefix. Mutations invalidate this so every cached locale
@@ -29,12 +32,13 @@ export const viewsKeys = {
 export const viewsOptions = (workspaceId: string) =>
   queryOptions({
     queryKey: viewsKeys.localized(workspaceId),
-    queryFn: async ({ signal }): Promise<WorkspaceView[]> => {
+    queryFn: async ({ signal }): Promise<CachedWorkspaceView[]> => {
       const response = await api
         .views({ workspaceId: toSafeId<"workspace">(workspaceId) })
         .get({ fetch: { signal } });
 
       return unwrapEden(response);
     },
+    select: selectAvailableWorkspaceViews,
     staleTime: ROUTE_QUERY_STALE_TIME_MS,
   });

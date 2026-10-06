@@ -8,8 +8,8 @@ import {
   caseLawDecisionIdentifiers,
   caseLawDecisions,
 } from "@/api/db/schema";
+import type { CitationGraphTransaction } from "@/api/handlers/case-law/citation-graph-transaction";
 import {
-  lockCitationGraph,
   reopenCitationsForKeys,
   reopenCitationsFrom,
   reopenCitationsResolvedTo,
@@ -48,7 +48,7 @@ type IdentifierType = DecisionWritePlan["identifierRows"][number]["type"];
 
 /** Decision state locked immediately before this transaction overwrites it. */
 const replacedDecisionState = async (
-  tx: Transaction,
+  tx: CitationGraphTransaction<Transaction>,
   id: SafeId<"caseLawDecision">,
 ): Promise<{
   citationKey: string | null;
@@ -225,7 +225,7 @@ const identifiersRewritten = (
 // The status of a write that another writer's row state turned away. The
 // payload fence is this observation's only when it still owns the row.
 export const lostRowWriteStatus = async (
-  tx: Transaction,
+  tx: CitationGraphTransaction<Transaction>,
   { observationOrder, rawWrites, sourceId }: DecisionRowWrite,
   id: SafeId<"caseLawDecision">,
   { payloadFenced }: { payloadFenced: boolean },
@@ -256,7 +256,7 @@ export const lostRowWriteStatus = async (
  * row. Reads the state it replaces, under a row lock; the caller runs it.
  */
 export const describeRowUpdateTx = async (
-  tx: Transaction,
+  tx: CitationGraphTransaction<Transaction>,
   write: DecisionRowWrite,
   existing: ExistingDecision,
 ) => {
@@ -435,7 +435,7 @@ export const describeRowUpdateTx = async (
  * Undefined when the row is gone or erased.
  */
 export const readDocumentlessPayloadStateTx = async (
-  tx: Transaction,
+  tx: CitationGraphTransaction<Transaction>,
   { plan: { payloadColumns } }: DecisionRowWrite,
   existing: ExistingDecision,
 ) =>
@@ -460,7 +460,7 @@ export const readDocumentlessPayloadStateTx = async (
  * pointing here, those it makes, and those keyed on its old or new key.
  */
 const reopenMovedIdentityTx = async (
-  tx: Transaction,
+  tx: CitationGraphTransaction<Transaction>,
   write: DecisionRowWrite,
   existing: ExistingDecision,
   replacedState: ReplacedDecisionState,
@@ -514,7 +514,7 @@ const reopenMovedIdentityTx = async (
  * then rewrite its citations under the citation-graph lock.
  */
 export const finishRefreshedRowTx = async (
-  tx: Transaction,
+  tx: CitationGraphTransaction<Transaction>,
   write: DecisionRowWrite,
   existing: ExistingDecision,
   replacedState: ReplacedDecisionState | null,
@@ -543,12 +543,7 @@ export const finishRefreshedRowTx = async (
     case "annotation-only":
       break;
     case "legacy-graph":
-      // The resolver locks the graph before it locks citation rows. Match
-      // that order even when the decision identity did not change; taking
-      // row locks first and the graph lock in resolve below can deadlock an
-      // overlapping resolver batch. Re-entrant when a reopen helper above
-      // already acquired it for this transaction.
-      await lockCitationGraph(tx);
+      // The row writer owns the graph before any decision or citation rows.
       await writeDecisionCitations(tx, {
         decisionId: existing.id,
         citations,
