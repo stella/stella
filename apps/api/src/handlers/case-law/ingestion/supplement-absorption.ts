@@ -1,3 +1,4 @@
+import { panic, Result } from "better-result";
 /**
  * Take a supplement's standalone decision row out of the corpus once its
  * judgment holds it.
@@ -27,8 +28,6 @@
  * next call. Should the supplement lose its judgment again, the supplement's
  * next ingest writes the row as a decision and every one of these reverts.
  */
-
-import { panic, Result } from "better-result";
 import { and, eq, isNull, ne } from "drizzle-orm";
 
 import type { ScopedDb } from "@/api/db/safe-db";
@@ -38,8 +37,8 @@ import {
   caseLawDecisionSupplements,
   caseLawDecisions,
 } from "@/api/db/schema";
+import { runCitationGraphTransaction } from "@/api/handlers/case-law/citation-graph-transaction";
 import {
-  lockCitationGraph,
   reopenCitationsForKeys,
   reopenCitationsResolvedTo,
 } from "@/api/handlers/case-law/citation-resolution";
@@ -260,6 +259,7 @@ type AbsorbStandaloneSupplementRowOptions = {
   observationOrder: bigint;
   /** Test seam; production withdraws through the corpus stores. */
   withdraw?: typeof withdrawCaseLawDecisionDocument;
+  eraseRaw?: typeof eraseRawDocument;
 };
 
 export const absorbStandaloneSupplementRow = async ({
@@ -270,6 +270,7 @@ export const absorbStandaloneSupplementRow = async ({
   judgmentId,
   observationOrder,
   withdraw = withdrawCaseLawDecisionDocument,
+  eraseRaw = eraseRawDocument,
 }: AbsorbStandaloneSupplementRowOptions): Promise<
   Result<AbsorbStandaloneSupplementRowOutcome, DatabaseError>
 > => {
@@ -339,7 +340,7 @@ export const absorbStandaloneSupplementRow = async ({
   // two finds the pointer and deletes again.
   const rawErased = await Result.tryPromise({
     try: async () =>
-      await eraseRawDocument({
+      await eraseRaw({
         family: RAW_SOURCE_FAMILY.CASE_LAW,
         sourceId,
         documentId: row.id,
@@ -361,9 +362,7 @@ export const absorbStandaloneSupplementRow = async ({
     });
   }
 
-  const written = await scopedDb(async (tx) => {
-    // The resolver takes the graph lock before citation rows; so does this.
-    await lockCitationGraph(tx);
+  const written = await runCitationGraphTransaction(scopedDb, async (tx) => {
     const locked = (
       await tx
         .select({
