@@ -200,60 +200,91 @@ export const bindReviewAccountOrganizationStore = (
 
 const normalize = (email: string) => email.trim().toLowerCase();
 
-const twoFactorRefusal = () =>
-  Result.err(
-    new ReviewAccountCommandError({
-      code: "two-factor-enabled",
-      message:
-        "The account has two-factor authentication enabled; the review account must not. Disable it through the owner path first, or configure another address.",
-    }),
-  );
+const refuse = (code: ReviewAccountCommandError["code"], message: string) =>
+  Result.err(new ReviewAccountCommandError({ code, message }));
 
-/** Refuses an existing account that could not serve as the review account. */
-const checkExistingAccount = async ({
-  organizationId,
-  store,
-  userId,
-}: {
+type ReviewAccountState = {
+  email: string;
   organizationId: string;
-  store: ReviewAccountStore;
-  userId: string;
-}): Promise<Result<void, ReviewAccountCommandError>> => {
-  if (await store.hasTwoFactorEnabled(userId)) {
-    return twoFactorRefusal();
-  }
-  const otherOrganizations = (
-    await store.listOrganizationIdsForUser(userId)
-  ).filter((id) => id !== organizationId);
-  return otherOrganizations.length > 0
-    ? Result.err(
-        new ReviewAccountCommandError({
-          code: "account-in-other-organization",
-          message:
-            "The account belongs to another organization; the review account may belong to its own organization only.",
-        }),
-      )
-    : Result.ok();
+  /** The account, when it exists. */
+  userId: string | null;
+  /** The organization's members, when the organization exists. */
+  memberUserIds: string[] | null;
 };
 
-const requireConfig = (
-  config: ReviewAccountConfig,
-): Result<
-  { email: string; organizationId: string },
-  ReviewAccountCommandError
-> =>
-  config.email === undefined || config.organizationId === undefined
-    ? Result.err(
-        new ReviewAccountCommandError({
-          code: "not-configured",
-          message:
-            "Set APP_REVIEW_ACCOUNT_EMAIL and APP_REVIEW_ORGANIZATION_ID first.",
-        }),
-      )
-    : Result.ok({
-        email: normalize(config.email),
-        organizationId: config.organizationId,
-      });
+/**
+ * The one precondition both commands share: the configured address may be,
+ * or already is, the restricted review account. It is not the demo account,
+ * has no second factor, belongs to no other organization, and the configured
+ * organization holds no one else. With `provisioned`, the account must also
+ * exist and be the organization's sole member already. Runs before any write.
+ */
+export const checkReviewAccountPreconditions = async ({
+  config,
+  demoEmail,
+  provisioned,
+  store,
+}: {
+  config: ReviewAccountConfig;
+  demoEmail: string | undefined;
+  provisioned: boolean;
+  store: ReviewAccountStore;
+}): Promise<Result<ReviewAccountState, ReviewAccountCommandError>> => {
+  if (config.email === undefined || config.organizationId === undefined) {
+    return refuse(
+      "not-configured",
+      "Set APP_REVIEW_ACCOUNT_EMAIL and APP_REVIEW_ORGANIZATION_ID first.",
+    );
+  }
+  const email = normalize(config.email);
+  const { organizationId } = config;
+  if (demoEmail !== undefined && normalize(demoEmail) === email) {
+    return refuse(
+      "demo-account",
+      "The review account must not be the demo account.",
+    );
+  }
+  const userId = await store.findUserIdByEmail(email);
+  const memberUserIds = (await store.organizationExists(organizationId))
+    ? await store.listMemberUserIds(organizationId)
+    : null;
+  if (userId !== null && (await store.hasTwoFactorEnabled(userId))) {
+    return refuse(
+      "two-factor-enabled",
+      "The account has two-factor authentication enabled; the review account must not. Disable it through the owner path first, or configure another address.",
+    );
+  }
+  const otherOrganizations =
+    userId === null
+      ? []
+      : (await store.listOrganizationIdsForUser(userId)).filter(
+          (id) => id !== organizationId,
+        );
+  if (otherOrganizations.length > 0) {
+    return refuse(
+      "account-in-other-organization",
+      "The account belongs to another organization; the review account may belong to its own organization only.",
+    );
+  }
+  if (memberUserIds?.some((memberId) => memberId !== userId) === true) {
+    return refuse(
+      "organization-has-other-members",
+      "The configured organization has other members; it must hold only the review account.",
+    );
+  }
+  if (
+    provisioned &&
+    (userId === null ||
+      memberUserIds === null ||
+      !memberUserIds.includes(userId))
+  ) {
+    return refuse(
+      "account-missing",
+      "The review account is not provisioned; run provision first.",
+    );
+  }
+  return Result.ok({ email, organizationId, userId, memberUserIds });
+};
 
 type ProvisionOutcome = {
   outcome: "provisioned";
@@ -272,42 +303,17 @@ export const provisionReviewAccount = async ({
   demoEmail: string | undefined;
   store: ReviewAccountStore;
 }): Promise<Result<ProvisionOutcome, ReviewAccountCommandError>> => {
-  const configured = requireConfig(config);
-  if (Result.isError(configured)) {
-    return configured;
+  const checked = await checkReviewAccountPreconditions({
+    config,
+    demoEmail,
+    provisioned: false,
+    store,
+  });
+  if (Result.isError(checked)) {
+    return checked;
   }
-  const { email, organizationId } = configured.value;
-  if (demoEmail !== undefined && normalize(demoEmail) === email) {
-    return Result.err(
-      new ReviewAccountCommandError({
-        code: "demo-account",
-        message: "The review account must not be the demo account.",
-      }),
-    );
-  }
-  const memberUserIds = (await store.organizationExists(organizationId))
-    ? await store.listMemberUserIds(organizationId)
-    : null;
-  const existingUserId = await store.findUserIdByEmail(email);
-  if (existingUserId !== null) {
-    const existing = await checkExistingAccount({
-      organizationId,
-      store,
-      userId: existingUserId,
-    });
-    if (Result.isError(existing)) {
-      return existing;
-    }
-  }
-  if (memberUserIds?.some((userId) => userId !== existingUserId) === true) {
-    return Result.err(
-      new ReviewAccountCommandError({
-        code: "organization-has-other-members",
-        message:
-          "The configured organization has other members; it must hold only the review account.",
-      }),
-    );
-  }
+  const { email, organizationId, memberUserIds } = checked.value;
+  const existingUserId = checked.value.userId;
   const userId = existingUserId ?? (await store.createUser(email));
   // Tokens and codes issued before the account was restricted must not be
   // redeemable afterwards.
@@ -346,52 +352,50 @@ type SetPasswordOutcome = {
 
 export const setReviewAccountPassword = async ({
   config,
+  demoEmail,
   password,
   store,
 }: {
   config: ReviewAccountConfig;
+  demoEmail: string | undefined;
   password: string;
   store: ReviewAccountStore;
 }): Promise<Result<SetPasswordOutcome, ReviewAccountCommandError>> => {
-  const configured = requireConfig(config);
-  if (Result.isError(configured)) {
-    return configured;
-  }
   // Messages state the rule, never anything about the value given.
   if (password.length < REVIEW_PASSWORD_MIN_LENGTH) {
-    return Result.err(
-      new ReviewAccountCommandError({
-        code: "password-too-short",
-        message: `The password must have at least ${REVIEW_PASSWORD_MIN_LENGTH} characters.`,
-      }),
+    return refuse(
+      "password-too-short",
+      `The password must have at least ${REVIEW_PASSWORD_MIN_LENGTH} characters.`,
     );
   }
   if (password.length > REVIEW_PASSWORD_MAX_LENGTH) {
-    return Result.err(
-      new ReviewAccountCommandError({
-        code: "password-too-long",
-        message: `The password must have at most ${REVIEW_PASSWORD_MAX_LENGTH} characters.`,
-      }),
+    return refuse(
+      "password-too-long",
+      `The password must have at most ${REVIEW_PASSWORD_MAX_LENGTH} characters.`,
     );
   }
-  const userId = await store.findUserIdByEmail(configured.value.email);
+  const checked = await checkReviewAccountPreconditions({
+    config,
+    demoEmail,
+    provisioned: true,
+    store,
+  });
+  if (Result.isError(checked)) {
+    return checked;
+  }
+  const { email, userId } = checked.value;
   if (userId === null) {
-    return Result.err(
-      new ReviewAccountCommandError({
-        code: "account-missing",
-        message: "Run provision before setting the password.",
-      }),
+    return refuse(
+      "account-missing",
+      "The review account is not provisioned; run provision first.",
     );
-  }
-  if (await store.hasTwoFactorEnabled(userId)) {
-    return twoFactorRefusal();
   }
   await store.setPassword({ userId, password });
   const sessionsRevoked = await store.revokeSessions(userId);
   // A reset token or code issued earlier must not undo this password.
   const verificationsRevoked = await store.revokeVerifications({
     userId,
-    email: configured.value.email,
+    email,
   });
   return Result.ok({
     outcome: "password-set",
@@ -506,6 +510,7 @@ export const runReviewAccountCommand = async ({
     return report(
       await setReviewAccountPassword({
         config,
+        demoEmail,
         password: password.value,
         store: await store(),
       }),

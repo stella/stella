@@ -470,4 +470,60 @@ describe("review account password command", () => {
       ),
     ).toBe(false);
   });
+
+  test("refuses to set the password of an account that belongs elsewhere", async () => {
+    const { auth, context } = await createPasswordAuth();
+    const { organizations, store } = createFakeStore(
+      createReviewAccountAuthStore(context),
+    );
+    await runCommand({ argv: ["provision"], input: "", store });
+    await runCommand({
+      argv: ["set-password"],
+      input: `${password}\n`,
+      store,
+    });
+    expect((await signIn(auth, password)).status).toBe(200);
+    const userId =
+      (await context.internalAdapter.findUserByEmail(reviewEmail))?.user.id ??
+      "";
+    const sessionsBefore = await context.internalAdapter.listSessions(userId);
+    expect(sessionsBefore.length).toBe(1);
+
+    // The account later joined another organization.
+    organizations.set("org_elsewhere", [userId]);
+    const refused = await runCommand({
+      argv: ["set-password"],
+      input: `${nextPassword}\n`,
+      store,
+    });
+    expect(refused.code).toBe(1);
+    expect(refused.err.join("")).toContain(
+      '"code":"account-in-other-organization"',
+    );
+    expect(refused.transcript).not.toContain(nextPassword);
+    expect(
+      (await context.internalAdapter.listSessions(userId)).map(
+        (session) => session.id,
+      ),
+    ).toEqual(sessionsBefore.map((session) => session.id));
+    expect((await signIn(auth, nextPassword)).status).toBe(401);
+    expect((await signIn(auth, password)).status).toBe(200);
+  });
+
+  test("refuses to set the password before the account is provisioned", async () => {
+    const { context } = await createPasswordAuth();
+    const { store } = createFakeStore(createReviewAccountAuthStore(context));
+    // The account exists but is not yet the organization's owner.
+    await context.internalAdapter.createUser(
+      { email: reviewEmail, name: "Existing", emailVerified: true },
+      { method: "admin" },
+    );
+    const result = await runCommand({
+      argv: ["set-password"],
+      input: `${password}\n`,
+      store,
+    });
+    expect(result.code).toBe(1);
+    expect(result.err.join("")).toContain("run provision first");
+  });
 });
