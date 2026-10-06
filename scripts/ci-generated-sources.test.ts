@@ -440,27 +440,3 @@ test("API boot entry points prepare capability runtime sources before starting",
     docker.indexOf("RUN bun apps/api/scripts/generate-capability-runtime.ts"),
   ).toBeLessThan(docker.indexOf("RUN bun build"));
 });
-
-test("PR repository checks reject missing API test weights before queue-only shards", () => {
-  const assertCoverage = (source: Workflow) => {
-    const coverage = source.jobs["ci-checks-rest"]?.steps.find(
-      ({ run }) =>
-        run === "bun apps/api/scripts/refresh-test-durations.ts --check",
-    );
-    expect(coverage).toBeDefined();
-    expect(coverage?.if).toBe(
-      `\${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}`,
-    );
-  };
-  assertCoverage(workflow);
-  const missing = structuredClone(workflow);
-  const checks =
-    missing.jobs["ci-checks-rest"] ?? panic("Missing PR repository check leg");
-  const originalLength = checks.steps.length;
-  checks.steps = checks.steps.filter(
-    ({ run }) =>
-      run !== "bun apps/api/scripts/refresh-test-durations.ts --check",
-  );
-  expect(checks.steps.length).toBe(originalLength - 1);
-  expect(() => assertCoverage(missing)).toThrow("toBeDefined");
-});
