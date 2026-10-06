@@ -10,6 +10,7 @@ import {
 } from "bun:test";
 import * as v from "valibot";
 
+import { validateFetchedToolsList } from "@stll/cli/registry-trust";
 import { listSkillMetadata, loadSkill } from "@stll/skills";
 
 import type { Transaction } from "@/api/db/root";
@@ -173,6 +174,15 @@ describe("skill tool output contract", () => {
         SKILL_TOOL_OUTPUT.outputSchema,
       );
     }
+  });
+
+  test("the served listing, colliding skills included, passes the CLI's listing check", async () => {
+    // One name outside the contract makes the CLI drop the whole listing.
+    const tools = await listMcpTools(createContext(), "default", undefined);
+    expect(tools.some((tool) => tool.name === COLLIDING_NAME)).toBe(true);
+    expect(validateFetchedToolsList(JSON.stringify({ tools }))).toMatchObject({
+      ok: true,
+    });
   });
 
   test("every skill tool is read-only, non-destructive and closed-world", async () => {
