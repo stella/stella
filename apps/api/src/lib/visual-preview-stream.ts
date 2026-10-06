@@ -188,6 +188,7 @@ export const projectVisualPreviewStream = async function* (
       for (const message of chunk.messages) {
         if (
           message.role === "tool" &&
+          "name" in message &&
           message.name === VISUAL_PREVIEW_TOOL_NAME
         ) {
           previewCallIds.add(message.toolCallId);
@@ -201,11 +202,24 @@ export const projectVisualPreviewStream = async function* (
           }
         }
       }
+      if (
+        !chunk.messages.some(
+          (message) =>
+            (message.role === "tool" &&
+              previewCallIds.has(message.toolCallId)) ||
+            (message.role === "assistant" &&
+              message.toolCalls?.some((call) => previewCallIds.has(call.id))),
+        )
+      ) {
+        yield chunk;
+        continue;
+      }
       const messages = chunk.messages.map((message) => {
         if (
           message.role === "assistant" &&
           message.toolCalls?.some((call) => previewCallIds.has(call.id))
         ) {
+          const metadata = historyMetadata(message.metadata);
           return {
             role: message.role,
             id: message.id,
@@ -232,9 +246,7 @@ export const projectVisualPreviewStream = async function* (
                   }
                 : call,
             ),
-            ...(message.metadata !== undefined && {
-              metadata: historyMetadata(message.metadata),
-            }),
+            ...(metadata !== undefined && { metadata }),
           };
         }
         if (
@@ -243,6 +255,7 @@ export const projectVisualPreviewStream = async function* (
         ) {
           return message;
         }
+        const metadata = historyMetadata(message.metadata);
         const content =
           typeof message.content === "string"
             ? historyWireContent(message.content)
@@ -260,14 +273,13 @@ export const projectVisualPreviewStream = async function* (
           id: message.id,
           toolCallId: message.toolCallId,
           content,
-          ...(message.name !== undefined && { name: message.name }),
+          ...("name" in message &&
+            typeof message.name === "string" && { name: message.name }),
           ...(message.error !== undefined && { error: message.error }),
           ...(message.subagentRunId !== undefined && {
             subagentRunId: message.subagentRunId,
           }),
-          ...(message.metadata !== undefined && {
-            metadata: historyMetadata(message.metadata),
-          }),
+          ...(metadata !== undefined && { metadata }),
         };
       });
       const projected = {
@@ -276,9 +288,6 @@ export const projectVisualPreviewStream = async function* (
       } satisfies PublicStreamChunk;
       if (chunk.timestamp !== undefined) {
         Object.assign(projected, { timestamp: chunk.timestamp });
-      }
-      if (chunk.subagentRunId !== undefined) {
-        Object.assign(projected, { subagentRunId: chunk.subagentRunId });
       }
       yield projected;
       continue;
