@@ -10,9 +10,11 @@ import {
   isBYOKProviderRoleSupported,
   MODEL_ROLES,
 } from "@stll/ai-catalog";
+import { AI_ERROR_KINDS, type AIErrorKind } from "@stll/api-contract";
 
 import { toTanStackToolSchema } from "@/api/handlers/chat/tools/tanstack-tool-schema";
 import type { CachingDecision } from "@/api/lib/ai-config";
+import { ProviderCallError } from "@/api/lib/errors/provider-call-error";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { generateTanStackTextForRole } from "@/api/lib/tanstack-ai-generate";
 import type { ResolvedTanStackTextModel } from "@/api/lib/tanstack-ai-models";
@@ -665,6 +667,76 @@ describe("AI provider canary retry contract", () => {
         signal,
       ),
     ).toBe(false);
+  });
+
+  test("uses ProviderCallError kind only after retryability facts and provider status", () => {
+    const signal = new AbortController().signal;
+    const expectedRetryability = {
+      quota_exhausted: true,
+      provider_billing: false,
+      provider_credentials_rejected: false,
+      model_unavailable: false,
+      provider_unavailable: true,
+      provider_stream_incomplete: true,
+      loop_detected: false,
+      empty_completion: false,
+      unknown: false,
+    } as const satisfies Record<AIErrorKind, boolean>;
+
+    expect(Object.keys(expectedRetryability).toSorted()).toEqual(
+      [...AI_ERROR_KINDS].toSorted(),
+    );
+    expect(
+      AI_ERROR_KINDS.map((kind) =>
+        isRetryableCanaryError(
+          new ProviderCallError({
+            model: { provider: "openai", keySource: "instance" },
+            status: 502,
+            code: "provider_error",
+            kind,
+          }),
+          signal,
+        ),
+      ),
+    ).toEqual(AI_ERROR_KINDS.map((kind) => expectedRetryability[kind]));
+
+    const statusResults = AI_ERROR_KINDS.flatMap((kind) =>
+      [503, 401].map((status) =>
+        isRetryableCanaryError(
+          new ProviderCallError({
+            model: { provider: "openai", keySource: "instance" },
+            status: 502,
+            code: "provider_error",
+            kind,
+            facts: { status },
+          }),
+          signal,
+        ),
+      ),
+    );
+    expect(statusResults).toEqual(AI_ERROR_KINDS.flatMap(() => [true, false]));
+
+    const explicitRetryabilityResults = AI_ERROR_KINDS.flatMap((kind) =>
+      [
+        { isRetryable: false, status: 503 },
+        { isRetryable: true, status: 401 },
+        { isRetryable: true, status: 400 },
+      ].map(({ isRetryable, status }) =>
+        isRetryableCanaryError(
+          new ProviderCallError({
+            model: { provider: "openai", keySource: "instance" },
+            status: 502,
+            code: "provider_error",
+            kind,
+            facts: { isRetryable, status },
+          }),
+          signal,
+        ),
+      ),
+    );
+    expect(explicitRetryabilityResults).toEqual(
+      AI_ERROR_KINDS.flatMap(() => [false, false, true]),
+    );
   });
 
   test("prefers a provider status nested beneath a generic transport wrapper", () => {

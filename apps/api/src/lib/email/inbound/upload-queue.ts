@@ -1,5 +1,4 @@
-import { Worker } from "bullmq";
-
+import { BullMqWorker } from "@/api/lib/bullmq-queue";
 import type { BullMqWorkerContext } from "@/api/lib/bullmq-queue";
 import { fileUploadedMail } from "@/api/lib/email/inbound/upload";
 import {
@@ -113,7 +112,7 @@ export const initUploadedMailCorrespondenceWorker = ({
   const workerConnection = createBullMqConnection({
     storeClass: "durable-coordination",
   });
-  const worker = new Worker<UploadedMailJobData>(
+  const worker = new BullMqWorker<UploadedMailJobData>(
     UPLOADED_MAIL_QUEUE_NAME,
     async (job) => {
       await processUploadedMailJob({ data: job.data, database: db });

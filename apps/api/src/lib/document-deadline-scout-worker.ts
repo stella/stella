@@ -1,6 +1,5 @@
-import { Worker } from "bullmq";
-
 import { captureError } from "@/api/lib/analytics/capture";
+import { BullMqWorker } from "@/api/lib/bullmq-queue";
 import type { BullMqWorkerContext } from "@/api/lib/bullmq-queue";
 import {
   DEADLINE_SCOUT_JOB_NAME,
@@ -17,7 +16,7 @@ const DEADLINE_SCOUT_WORKER_CONCURRENCY = 1;
 export const initDocumentDeadlineScoutWorker = ({
   db,
 }: BullMqWorkerContext) => {
-  const worker = new Worker<DocumentDeadlineScoutJobData>(
+  const worker = new BullMqWorker<DocumentDeadlineScoutJobData>(
     DEADLINE_SCOUT_QUEUE_NAME,
     async ({ data }) => {
       const { runDocumentDeadlineScout } =

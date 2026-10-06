@@ -1,5 +1,4 @@
 import { panic, Result } from "better-result";
-import { Worker } from "bullmq";
 import {
   and,
   asc,
@@ -40,6 +39,7 @@ import { envDocumentProcessingWorker } from "@/api/env-document-processing-worke
 import { captureError, detached } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
 import { createSafeId } from "@/api/lib/branded-types";
+import { BullMqWorker } from "@/api/lib/bullmq-queue";
 import type { BullMqWorkerContext } from "@/api/lib/bullmq-queue";
 import { encryptContent } from "@/api/lib/content-encryption";
 import {
@@ -3112,7 +3112,7 @@ export const initDocumentProcessingWorker = ({ db }: BullMqWorkerContext) => {
   const ocrConfigured = isLocalDocumentOcrConfigured();
   const reconciliationPhases = createWorkerReconciliationPhases(db);
 
-  const worker = new Worker<DocumentProcessingJobData>(
+  const worker = new BullMqWorker<DocumentProcessingJobData>(
     DOCUMENT_PROCESSING_QUEUE_NAME,
     async (job) => {
       try {
