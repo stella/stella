@@ -202,7 +202,11 @@ test("capability runtime cache manifests cover every file the producer writes", 
       v.object({
         tasks: v.record(
           v.string(),
-          v.looseObject({ outputs: v.optional(v.array(v.string())) }),
+          v.looseObject({
+            outputs: v.optional(v.array(v.string())),
+            inputs: v.optional(v.array(v.string())),
+            dependsOn: v.optional(v.array(v.string())),
+          }),
         ),
       }),
       Bun.JSONC.parse(
@@ -215,9 +219,25 @@ test("capability runtime cache manifests cover every file the producer writes", 
       ).toEqual(outputs);
       for (const output of outputs) {
         expect(tasks["@stll/api#typecheck"]?.outputs).toContain(output);
+        expect(tasks["@stll/web#generate:api-types"]?.inputs).toContain(
+          `!$TURBO_ROOT$/apps/api/${output}`,
+        );
       }
     };
     assertOutputs(config.tasks);
+    for (const output of outputs) {
+      const mutated = structuredClone(config.tasks);
+      const web = mutated["@stll/web#generate:api-types"];
+      if (web === undefined || web.inputs === undefined) {
+        panic("Missing web API generation inputs");
+      }
+      const originalLength = web.inputs.length;
+      web.inputs = web.inputs.filter(
+        (input) => input !== `!$TURBO_ROOT$/apps/api/${output}`,
+      );
+      expect(web.inputs.length).toBe(originalLength - 1);
+      expect(() => assertOutputs(mutated)).toThrow("toContain");
+    }
     for (const task of [
       "@stll/api#generate:capability-runtime",
       "@stll/api#typecheck",

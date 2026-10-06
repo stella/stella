@@ -12,6 +12,7 @@ import {
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { Script } from "node:vm";
+import * as v from "valibot";
 
 import { parseBunLockText } from "./bun-lock-text";
 
@@ -518,9 +519,41 @@ describe("detect-e2e-changes", () => {
       'echo "status=rate-limited" >> "$GITHUB_OUTPUT"',
     );
     expect(e2eStackSetup).toContain('echo "status=ready" >> "$GITHUB_OUTPUT"');
-    expect(
-      e2eStackSetup.match(/if: steps\.stack\.outputs\.status == 'ready'/gu),
-    ).toHaveLength(4);
+    const stackSteps = v.parse(
+      v.object({
+        runs: v.object({
+          steps: v.array(
+            v.looseObject({
+              name: v.optional(v.string()),
+              id: v.optional(v.string()),
+              if: v.optional(v.string()),
+            }),
+          ),
+        }),
+      }),
+      Bun.YAML.parse(e2eStackSetup),
+    ).runs.steps;
+    const stackIndex = stackSteps.findIndex((step) => step.id === "stack");
+    expect(stackIndex).toBeGreaterThanOrEqual(0);
+    const afterStack = stackSteps
+      .slice(stackIndex + 1)
+      .filter((step) => step.name !== "Log out of Docker Hub");
+    expect(afterStack.length).toBeGreaterThan(0);
+    const assertReady = (steps: typeof afterStack) => {
+      for (const step of steps) {
+        expect(step.if, step.name).toBe(
+          "steps.stack.outputs.status == 'ready'",
+        );
+      }
+    };
+    assertReady(afterStack);
+    for (const [index, step] of afterStack.entries()) {
+      const mutation = afterStack.map((entry, position) =>
+        position === index ? { ...entry, if: "always()" } : entry,
+      );
+      expect(mutation.at(index)?.if).not.toBe(step.if);
+      expect(() => assertReady(mutation)).toThrow("steps.stack.outputs.status");
+    }
 
     for (const stepName of [
       "Install Playwright browsers",

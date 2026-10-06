@@ -74,6 +74,9 @@
         "!$TURBO_ROOT$/packages/**/.env*",
         "!$TURBO_ROOT$/packages/**/.turbo/**",
         "!$TURBO_ROOT$/packages/**/*.tsbuildinfo",
+        "!$TURBO_ROOT$/apps/api/src/mcp/generated/capability-dispatch.ts",
+        "!$TURBO_ROOT$/apps/api/src/mcp/generated/capability-catalog.ts",
+        "!$TURBO_ROOT$/apps/api/src/mcp/generated/capability-feature-bindings.ts",
         "!src/generated/api-routes.gen.ts",
         "!src/routeTree.gen.ts"
       ],
