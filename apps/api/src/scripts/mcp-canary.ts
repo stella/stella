@@ -1485,7 +1485,7 @@ export const runReviewAccountJourney = async (
   let token: string | undefined;
   let createdTaskId: string | undefined;
 
-  const reject = (assertion: string): never => {
+  const reject: (assertion: string) => never = (assertion) => {
     throw new ReviewJourneyError({
       message: `HTTP ${lastResponse ? String(lastResponse.status) : "unavailable"}; envelope code ${reviewEnvelopeCode(lastResponse?.body)}; ${assertion}`,
     });
@@ -1493,7 +1493,10 @@ export const runReviewAccountJourney = async (
   const complete = () => {
     results.push(passed(reviewJourneyName(step), "assertions passed"));
   };
-  const request = async (url: string | URL, init: RequestInit = {}) => {
+  const request = async (
+    url: string | URL,
+    init: Pick<RequestInit, "body" | "headers" | "method"> = {},
+  ) => {
     lastResponse = undefined;
     const headers = new Headers(init.headers);
     if (cookies.size > 0) {
@@ -1760,7 +1763,7 @@ export const runReviewAccountJourney = async (
       if (!v.is(reviewTaskListSchema, read)) {
         reject("expected sample task records");
       }
-      const sampleNames = new Set(
+      const sampleNames: ReadonlySet<string> = new Set(
         SAMPLE_MATTERS.flatMap(({ tasks }) => tasks.map(({ name }) => name)),
       );
       const sample = read.tasks.find(({ name }) => sampleNames.has(name));

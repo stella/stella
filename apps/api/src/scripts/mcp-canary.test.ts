@@ -137,7 +137,7 @@ const reviewFetcher = (
 ): CanaryFetcher => {
   let writtenTaskName = "";
   const observed = options.observed ?? [];
-  return async (input, init = {}) => {
+  return async (input, init) => {
     const request = input instanceof Request ? input : undefined;
     const url = new URL(input instanceof Request ? input.url : input);
     const headers = new Headers(init.headers ?? request?.headers);
@@ -155,7 +155,7 @@ const reviewFetcher = (
     const json = (
       value: unknown,
       status = 200,
-      responseHeaders?: HeadersInit,
+      responseHeaders?: RequestInit["headers"],
     ) =>
       new Response(JSON.stringify(value), {
         status,
@@ -229,7 +229,12 @@ const reviewFetcher = (
           params: v.optional(
             v.object({
               name: v.optional(v.string()),
-              arguments: v.optional(v.record(v.string(), v.unknown())),
+              arguments: v.optional(
+                v.object({
+                  task_id: v.optional(v.string()),
+                  name: v.optional(v.string()),
+                }),
+              ),
             }),
           ),
         }),
