@@ -54,6 +54,7 @@ type Connection =
   | { status: "disconnected" }
   | { status: "unavailable" }
   | ({ status: "connected"; expiresAt: string } & DesktopRegistryConfig);
+export type DesktopConnectionStatus = Connection["status"] | "loading";
 type ResultCard = Omit<
   DesktopRegistrySearchResponse["results"][number],
   "rendered"
@@ -82,6 +83,10 @@ type RegistrySearchProps = {
   /** The shared search field; in registry scope ArrowUp and Enter act on the highlighted result. */
   searchInput: RefObject<HTMLInputElement | null>;
   children: (slots: {
+    connectionStatus: DesktopConnectionStatus;
+    connectionError: string | null;
+    connectControl: ReactNode;
+    retryConnection: () => void;
     controls: ReactNode;
     results: ReactNode;
     feedback: ReactNode;
@@ -100,7 +105,11 @@ export const RegistrySearch = ({
   children,
 }: RegistrySearchProps) => {
   const t = useTranslations("clipboard");
+  const settingsT = useTranslations("settings");
   const [connection, setConnection] = useState<Connection | null>(null);
+  const [connectionReadAttempt, setConnectionReadAttempt] = useState(0);
+  const retryConnection = () =>
+    setConnectionReadAttempt((current) => current + 1);
   const [registryId, setRegistryId] = useState("");
   const [searchState, setSearchState] = useState<SearchState>({
     status: "idle",
@@ -202,6 +211,13 @@ export const RegistrySearch = ({
     };
   }, [connectionError]);
 
+  useEffect(() => {
+    if (connectionReadAttempt === 0) {
+      return;
+    }
+    connectionRefresh.current();
+  }, [connectionReadAttempt]);
+
   const connectionExpiresAt =
     connection?.status === "connected" ? connection.expiresAt : null;
   useEffect(() => {
@@ -291,10 +307,11 @@ export const RegistrySearch = ({
     generation.current += 1;
     setSearchState({ status: "idle" });
     setError(null);
+    setConnectionFailure(null);
     onConnectionFlowChange("signIn");
     void onConnectAccount().catch(() => {
       onConnectionFlowChange("idle");
-      setError(t("registryErrorConnect"));
+      setConnectionFailure(t("registryErrorConnect"));
     });
   };
   const disconnect = () => {
@@ -734,10 +751,7 @@ export const RegistrySearch = ({
             </Button>
           ) : null}
           {connection?.status === "unavailable" ? (
-            <Button
-              className="min-h-11"
-              onClick={() => connectionRefresh.current()}
-            >
+            <Button className="min-h-11" onClick={retryConnection}>
               {t("registryRetry")}
             </Button>
           ) : null}
@@ -761,7 +775,19 @@ export const RegistrySearch = ({
       ) : null}
     </div>
   );
-  return children({ controls, results, feedback });
+  return children({
+    controls,
+    results,
+    feedback,
+    connectionStatus: connection?.status ?? "loading",
+    connectionError: connectionFailure,
+    connectControl: (
+      <Button className="min-h-11 rounded-xl" onClick={connect} type="button">
+        {settingsT("connectToStella")}
+      </Button>
+    ),
+    retryConnection,
+  });
 };
 
 type DefaultFormatItemProps = DesktopRegistryDefaultFormat & {
