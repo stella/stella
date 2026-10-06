@@ -2,6 +2,7 @@
 // parser-output-unchanged: HTTP 426 extends handoff response typing only; adapter stop kinds and parsed records are unchanged.
 // parser-output-unchanged: optional clause provenance affects template refusals only; adapter stop kinds and parsed records are unchanged.
 // parser-output-unchanged: adapter stop kinds and TimeoutError reexport preserve successful parsed records.
+// parser-output-unchanged: AdapterFetchError is declared before its first use; the class and its stop kinds are identical.
 import { panic, TaggedError } from "better-result";
 
 import type { ActionAdmissionRefusal } from "@stll/api-contract/action-admission";
