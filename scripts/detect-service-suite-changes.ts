@@ -9,6 +9,7 @@ const infrastructurePaths = new Set([
   "scripts/detect-service-suite-changes.ts",
   "scripts/detect-service-suite-changes.test.ts",
   "scripts/generated-files.ts",
+  "packages/scripts/src/generated-files.ts",
   "scripts/ci-plan.test.ts",
   ".npmrc",
   "scripts/retry.sh",
