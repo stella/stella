@@ -11,14 +11,15 @@
  */
 
 import { ASCII_FOLD_TABLE } from "./ascii-fold-table.js";
+import { SEARCH_DIACRITIC_SOURCE } from "./diacritics.js";
 
-// The table is matched before `\p{Diacritic}` so modifier letters that Unicode
+// The table is matched before the diacritic strip so modifier letters that Unicode
 // classifies as diacritics (`ʰ`, `ᴬ`) fold to their base letter the way
 // `unaccent` folds them, instead of being deleted by the mark strip. Every key
 // is a single code point outside the character-class metacharacter set, so the
 // class needs no escaping.
 const ASCII_FOLD_RE = new RegExp(
-  `[${Object.keys(ASCII_FOLD_TABLE).join("")}]|\\p{Diacritic}`,
+  `[${Object.keys(ASCII_FOLD_TABLE).join("")}]|${SEARCH_DIACRITIC_SOURCE}`,
   "gu",
 );
 
