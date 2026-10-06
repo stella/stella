@@ -72,7 +72,7 @@ if [[ "$recorded" == false ]]; then
   echo "Network baseline: committed bootstrap at merge base $base (recording unavailable)" >> "$GITHUB_STEP_SUMMARY"
 fi
 since=$base
-if [[ "$purpose" == comparison && -n "$recorded_source" && "$recorded_source" != "$base" ]]; then
+if [[ "$purpose" == comparison && "$recorded" == true && "$recorded_source" != "$base" ]]; then
   # Routes changed after the inherited recording have no recorded peak yet.
   since=$recorded_source
   if ! git merge-base --is-ancestor "$since" "$base"; then

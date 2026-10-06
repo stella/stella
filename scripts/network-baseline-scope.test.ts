@@ -1129,6 +1129,30 @@ esac
       expect(recording.changed).toEqual([]);
       expect(recording.context).toEqual([]);
       expect(recording.summary).not.toContain("comparison exempts");
+      // A PR atop an unrecorded main keeps its own changes in scope too.
+      checked(["git", "switch", "-q", "-c", "feature"]);
+      writeFileSync(path.join(directory, "feature.txt"), "feature\n");
+      checked(["git", "add", "feature.txt"]);
+      checked(["git", "commit", "-qm", "feature"]);
+      const pr = prepareRun(recorded, "comparison", head);
+      expect(pr.exitCode, pr.stderr.toString()).toBe(0);
+      expect(
+        read("apps/web/e2e/.network-baseline-changed")
+          .split("\n")
+          .filter(Boolean),
+      ).toEqual([chatRoute, "feature.txt"]);
+      // The PR's own baseline edit is still refused.
+      writeFileSync(
+        path.join(directory, "apps/web/e2e/network-baseline.json"),
+        JSON.stringify({ ...committed, "/pr": entry(1) }),
+      );
+      checked(["git", "commit", "-qam", "pr baseline edit"]);
+      const prEdit = prepareRun(recorded, "comparison", head);
+      expect(prEdit.exitCode).not.toBe(0);
+      expect(prEdit.stderr.toString()).toContain(
+        "PRs must declare network budget changes",
+      );
+      checked(["git", "switch", "-q", "main"]);
       // A recording far behind the compared commit fails instead of
       // exempting every route changed since it.
       writeFileSync(path.join(directory, chatRoute), "export const x = 2;\n");
