@@ -48,17 +48,27 @@ const ownsOrganizationAcceptances = sql`current_user = (SELECT pg_catalog.pg_get
 export const organizationProfessionalUseAcceptances = p.pgTable(
   "organization_professional_use_acceptances",
   {
-    organizationId: safeOrganizationId("organization_id")
-      .primaryKey()
-      .references(() => organization.id, { onDelete: "cascade" }),
-    acceptedByUserId: p
-      .text("accepted_by_user_id")
-      .references(() => user.id, { onDelete: "set null" }),
+    organizationId: safeOrganizationId("organization_id").primaryKey(),
+    acceptedByUserId: p.text("accepted_by_user_id"),
     statementVersion: p.text("statement_version").notNull(),
     termsVersion: p.text("terms_version").notNull(),
     acceptedAt: timestamptz("accepted_at").notNull().defaultNow(),
   },
   (table) => [
+    p
+      .foreignKey({
+        columns: [table.organizationId],
+        foreignColumns: [organization.id],
+        name: "organization_professional_use_acceptances_organization_fk",
+      })
+      .onDelete("cascade"),
+    p
+      .foreignKey({
+        columns: [table.acceptedByUserId],
+        foreignColumns: [user.id],
+        name: "organization_professional_use_acceptances_user_fk",
+      })
+      .onDelete("set null"),
     p
       .index("organization_professional_use_acceptances_user_idx")
       .on(table.acceptedByUserId),

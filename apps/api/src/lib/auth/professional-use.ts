@@ -30,6 +30,7 @@ export const recordUserProfessionalUse = async (
   db: Pick<Transaction, "insert">,
   userId: SafeId<"user">,
 ): Promise<void> => {
+  // audit: skip - audit rows are organization-scoped; the organization acceptance row is audited
   await db
     .insert(userProfessionalUseAcceptances)
     .values({

@@ -15,8 +15,8 @@ CREATE POLICY "user_professional_use_acceptances_owner_access" ON "user_professi
   WITH CHECK (current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.user_professional_use_acceptances'::regclass));--> statement-breakpoint
 CREATE POLICY "auth_no_stella_access" ON "user_professional_use_acceptances" FOR ALL TO stella USING (false) WITH CHECK (false);--> statement-breakpoint
 CREATE TABLE "organization_professional_use_acceptances" (
-  "organization_id" varchar(128) PRIMARY KEY NOT NULL CONSTRAINT "organization_professional_use_acceptances_organization_id_organization_id_fk" REFERENCES "organization"("id") ON DELETE cascade,
-  "accepted_by_user_id" text CONSTRAINT "organization_professional_use_acceptances_accepted_by_user_id_user_id_fk" REFERENCES "user"("id") ON DELETE set null,
+  "organization_id" varchar(128) PRIMARY KEY NOT NULL CONSTRAINT "organization_professional_use_acceptances_organization_fk" REFERENCES "organization"("id") ON DELETE cascade,
+  "accepted_by_user_id" text CONSTRAINT "organization_professional_use_acceptances_user_fk" REFERENCES "user"("id") ON DELETE set null,
   "statement_version" text NOT NULL,
   "terms_version" text NOT NULL,
   "accepted_at" timestamptz NOT NULL DEFAULT now()

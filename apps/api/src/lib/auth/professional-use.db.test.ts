@@ -15,6 +15,7 @@ import {
   PROFESSIONAL_USE_STATEMENT_VERSION,
   PROFESSIONAL_USE_TERMS_VERSION,
 } from "@stll/api-contract/professional-use";
+import { compareCodeUnit } from "@stll/collation";
 import { assertProperty } from "@stll/property-testing";
 
 import {
@@ -139,11 +140,11 @@ describe("professional-use acceptance", () => {
           );
           expect(
             organizations.toSorted((a, b) =>
-              a.organizationId.localeCompare(b.organizationId),
+              compareCodeUnit(a.organizationId, b.organizationId),
             ),
           ).toMatchObject(
             expectedOrganizations.toSorted((a, b) =>
-              a.organizationId.localeCompare(b.organizationId),
+              compareCodeUnit(a.organizationId, b.organizationId),
             ),
           );
 
