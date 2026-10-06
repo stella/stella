@@ -1430,7 +1430,7 @@ jobs:
         if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
         run: |
           (cd apps/api && bun run build:visual-sandbox)
-          git diff --exit-code -- apps/api/src/handlers/visual-sandbox/generated/runtime.js.txt
+          git diff --exit-code -- apps/api/src/handlers/visual-sandbox/generated/runtime.js.txt apps/api/src/handlers/visual-sandbox/generated/court-tier-labels.json
 
       - name: Capability catalog drift guard
         if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}

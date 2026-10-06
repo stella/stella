@@ -22,6 +22,7 @@
     "./sk-court-succession": "./src/sk-court-succession.ts",
     "./sk-court-tiers": "./src/sk-court-tiers.ts",
     "./case-law-court-tiers": "./src/case-law-court-tiers.ts",
+    "./case-law-court-tier-locales": "./src/case-law-court-tier-locales.ts",
     "./case-law-decision-types": "./src/case-law-decision-types.ts",
     "./case-law-decision-resolution": "./src/case-law-decision-resolution.ts",
     "./case-law-decision-route": "./src/case-law-decision-route.ts",

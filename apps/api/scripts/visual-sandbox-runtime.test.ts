@@ -1,7 +1,8 @@
 import { describe, expect, test } from "bun:test";
-import { readFileSync, readdirSync } from "node:fs";
+import { readFileSync } from "node:fs";
 import ts from "typescript";
 
+import { COURT_TIER_LOCALIZED_LABELS } from "@stll/api-contract/case-law-court-tier-locales";
 import { COURT_TIER_LABELS } from "@stll/api-contract/case-law-court-tiers";
 
 import { escapeVisualScript } from "../src/handlers/visual-sandbox/srcdoc";
@@ -147,11 +148,7 @@ describe("visual sandbox runtime asset", () => {
     expect(templateWrites).toBeGreaterThan(0);
   });
 
-  test("derives every tier legend label from every current UI locale", () => {
-    const catalogs = new URL(
-      "../../../apps/web/src/i18n/langs/",
-      import.meta.url,
-    );
+  test("derives every tier legend label from the shared locale catalog", () => {
     const generated: Record<string, Record<string, string>> = JSON.parse(
       readFileSync(
         new URL(
@@ -161,23 +158,11 @@ describe("visual sandbox runtime asset", () => {
         "utf-8",
       ),
     );
-    const names = readdirSync(catalogs)
-      .filter((name) => name.endsWith(".json"))
-      .toSorted();
-    expect(Object.keys(generated).toSorted()).toEqual(
-      names.map((name) => name.slice(0, -5)),
-    );
-    for (const name of names) {
-      const original: { caseLaw: { courtTiers: Record<string, string> } } =
-        JSON.parse(readFileSync(new URL(name, catalogs), "utf-8"));
-      const labels = generated[name.slice(0, -5)];
-      expect(labels).toBeDefined();
-      expect(Object.keys(labels ?? {}).toSorted()).toEqual(
+    expect(generated).toEqual(COURT_TIER_LOCALIZED_LABELS);
+    for (const labels of Object.values(generated)) {
+      expect(Object.keys(labels).toSorted()).toEqual(
         [...COURT_TIER_LABELS].toSorted(),
       );
-      for (const tier of COURT_TIER_LABELS) {
-        expect(labels?.[tier]).toBe(original.caseLaw.courtTiers[tier]);
-      }
     }
   });
 

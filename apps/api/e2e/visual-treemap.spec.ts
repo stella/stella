@@ -21,20 +21,23 @@ const runtime = readFileSync(
   "utf-8",
 );
 
-const harness = execFileSync(
-  "bun",
-  [
-    "build",
-    new URL(
-      "../src/handlers/visual-sandbox/browser/treemap.harness.ts",
-      import.meta.url,
-    ).pathname,
-    "--minify",
-    "--target=browser",
-    "--format=iife",
-  ],
-  { encoding: "utf-8" },
-);
+const harness = { source: "" };
+test.beforeAll(() => {
+  harness.source = execFileSync(
+    "bun",
+    [
+      "build",
+      new URL(
+        "../src/handlers/visual-sandbox/browser/treemap.harness.ts",
+        import.meta.url,
+      ).pathname,
+      "--minify",
+      "--target=browser",
+      "--format=iife",
+    ],
+    { encoding: "utf-8" },
+  );
+});
 
 for (const direction of ["ltr", "rtl"] as const) {
   for (const colorScheme of ["light", "dark"] as const) {
@@ -63,7 +66,7 @@ for (const direction of ["ltr", "rtl"] as const) {
         throw new TypeError("Sandbox response requires a policy");
       }
       const html = sanitizeVisualHtml(
-        `<div dir="${direction}" lang="cs" id="chart" style="width:900px"></div><button id="color">Barva</button><button id="citations">Citace</button><button id="category">Kategorie</button><button id="destroy">Zavřít</button><script>document.documentElement.dir=${escapeVisualJson(direction)};document.documentElement.lang="cs";${harness}</script>`,
+        `<div dir="${direction}" lang="cs" id="chart" style="width:900px"></div><button id="color">Barva</button><button id="citations">Citace</button><button id="category">Kategorie</button><button id="empty">Prázdný strom</button><button id="destroy">Zavřít</button><script>document.documentElement.dir=${escapeVisualJson(direction)};document.documentElement.lang="cs";${harness.source}</script>`,
       ).unwrap();
       const document = composeVisualDocument({
         html,
@@ -129,6 +132,16 @@ for (const direction of ["ltr", "rtl"] as const) {
       await guest.locator("#category").click();
       await expect(guest.locator('[data-color-mode="category"]')).toContainText(
         "Ústavní soudy",
+      );
+      await guest.locator("#empty").click();
+      await expect(svg).toHaveAttribute("aria-label", "empty-root");
+      await svg.focus();
+      await page.keyboard.press("Enter");
+      await page.keyboard.press("Space");
+      await svg.click({ position: { x: 100, y: 100 } });
+      await expect(svg).toHaveAttribute("aria-label", "empty-root");
+      await expect(guest.locator("#chart")).not.toHaveAttribute(
+        "data-selected",
       );
       await guest.locator("#destroy").click();
       await expect(guest.locator("#chart")).toBeEmpty();

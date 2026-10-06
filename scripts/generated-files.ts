@@ -217,7 +217,6 @@ export const GENERATORS = [
       "apps/api/scripts/build-visual-sandbox.ts",
       "apps/api/scripts/build-visual-chart-locales.ts",
       "apps/api/scripts/visual-sandbox-build-options.ts",
-      "apps/web/src/i18n/langs/*.json",
       "packages/api-contract/**",
       "bun.lock",
     ],
