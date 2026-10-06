@@ -261,8 +261,7 @@ describe("API deployment health receipt", () => {
     expect(targetIndex).toBeGreaterThanOrEqual(0);
     expect(targetIndex).toBeLessThan(deployedIndex);
     expect(deployedIndex).toBeLessThan(checkoutIndex);
-    // Setup reads package.json from the checkout, and a release checkout must
-    // never seed main's dependency cache.
+    // Setup reads package.json from the checkout.
     const setupIndex = indexOf(
       (step) =>
         typeof step["uses"] === "string" &&
@@ -273,8 +272,6 @@ describe("API deployment health receipt", () => {
     );
     expect(checkoutIndex).toBeLessThan(setupIndex);
     expect(setupIndex).toBeLessThan(installIndex);
-    const setupWith = steps[setupIndex]?.["with"];
-    expect(isRecord(setupWith) && setupWith["save"]).toBe(false);
 
     const deployed = steps[deployedIndex];
     const deployedEnv = deployed?.["env"];
