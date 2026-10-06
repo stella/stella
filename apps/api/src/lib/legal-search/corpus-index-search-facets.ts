@@ -118,8 +118,10 @@ export const CORPUS_SEARCH_FACET_SPEC = {
     display: LIMITS.caseLawFacetLimit,
   },
   year: { kind: "year_range", field: DECISION_TIMESTAMP_FIELD },
-} as const satisfies Record<CorpusSearchFacetName, CorpusFacetSpec> &
-  Record<Exclude<keyof DecisionSearchFacets, "courtYear">, CorpusFacetSpec>;
+} as const satisfies Record<
+  Exclude<keyof DecisionSearchFacets, "courtYear">,
+  CorpusFacetSpec
+>;
 
 /**
  * Oldest year a bucket is offered for. Everything below it falls into the one
