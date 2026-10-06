@@ -95,7 +95,7 @@ export const readOperatorRegistrationPage = async (query: RegistrationQuery) =>
  */
 export const createOwnerReviewAccountOrganizationStore = async () =>
   (
-    await import("@/api/lib/review-account/organization-store")
+    await import("@/api/lib/db/review-account-organization-store")
   ).createReviewAccountOrganizationStore(rootDb);
 
 type Database = typeof rootDb;
