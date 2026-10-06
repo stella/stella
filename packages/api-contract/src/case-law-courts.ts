@@ -1,3 +1,4 @@
+// parser-output-unchanged: Citation registries add short codes; existing ingestion court definitions and the derived ECLI court names are unchanged.
 /** Court names and citation short codes, shared by ingestion and readers. */
 export type RegisteredCourt = {
   name: string;

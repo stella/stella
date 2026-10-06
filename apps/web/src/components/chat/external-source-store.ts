@@ -2,7 +2,7 @@ import { create } from "zustand";
 
 import type { BusinessRegistrySlug } from "@stll/api-contract";
 
-import type { DecisionCitationMetadata } from "@/features/case-law/components/decision-citation-chip";
+import type { DecisionCitationMetadata } from "@/components/references/decision-citation-chip";
 
 export type BusinessRegistrySourceReference = {
   registry: BusinessRegistrySlug;

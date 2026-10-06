@@ -23,8 +23,8 @@ import { ZoomControls } from "@/components/inspector/zoom-controls";
 import { LegalReaderAIChat } from "@/components/legal-reader/legal-reader-ai-chat";
 import { OpenOriginalButton } from "@/components/legal-reader/open-original-button";
 import { useReaderTextScale } from "@/components/legal-reader/use-reader-text-scale";
-import { decisionCitationCourtLabel } from "@/features/case-law/components/decision-citation-chip.logic";
-import { decisionCitationPresentationsById } from "@/features/case-law/decision-citation-presentation.logic";
+import { decisionCitationCourtLabel } from "@/components/references/decision-citation-chip.logic";
+import { decisionCitationPresentationsById } from "@/components/references/decision-citation-presentation.logic";
 import {
   CitingDecisionItem,
   ProvisionCitingDecisions,

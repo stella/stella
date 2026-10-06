@@ -157,7 +157,7 @@ describe("directory generation rules", () => {
       build(
         [{ ...source("cal", "S", "California Supreme Court"), short_name: "" }],
         {},
-        { cal: "CA" },
+        { cal: "California" },
       ),
     ).toThrow("cal: source short_name is empty");
   });
@@ -171,7 +171,7 @@ describe("directory generation rules", () => {
         },
       ],
       {},
-      { cal: "CA" },
+      { cal: "California" },
     );
     expect(entries.at(0)).toMatchObject({ shortCode: "Cal." });
   });

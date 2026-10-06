@@ -101,9 +101,7 @@ export const chatAnswerDecisionTargets = ({
       if (link.type !== "decision") {
         continue;
       }
-      const id = extractCaseLawDecisionIdFromIdRouteParam(
-        link.params.caseNumber,
-      );
+      const id = extractCaseLawDecisionIdFromIdRouteParam(link.params.slug);
       if (id !== null && isCaseLawDecisionId(id)) {
         targets.set(id, { type: "id", decisionId: id });
       } else {

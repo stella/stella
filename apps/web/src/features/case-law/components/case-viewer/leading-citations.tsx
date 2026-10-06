@@ -14,6 +14,9 @@ import { cn } from "@stll/ui/utils";
 import { createCaseDecisionViewTab } from "@/components/inspector/case-decision-view";
 import { useInspectorView } from "@/components/inspector/use-inspector-view";
 import { CitedDecisionLink } from "@/components/legal-reader/cited-decision-link";
+import { decisionCitationCourtLabel } from "@/components/references/decision-citation-chip.logic";
+import { decisionCitationPresentationsById } from "@/components/references/decision-citation-presentation.logic";
+import type { DecisionCitationPresentation } from "@/components/references/decision-citation-presentation.logic";
 import type { CitationAnchorSource } from "@/features/case-law/citation-anchors";
 import {
   CITATION_TREATMENT_DOT,
@@ -34,9 +37,6 @@ import {
   DIRECTION_TITLE,
 } from "@/features/case-law/components/case-viewer/decision-citations";
 import { CitationTreatmentBar } from "@/features/case-law/components/citation-treatment-bar";
-import { decisionCitationCourtLabel } from "@/features/case-law/components/decision-citation-chip.logic";
-import { decisionCitationPresentationsById } from "@/features/case-law/decision-citation-presentation.logic";
-import type { DecisionCitationPresentation } from "@/features/case-law/decision-citation-presentation.logic";
 import {
   decisionCitationSummaryOptions,
   decisionLeadingCitationsOptions,

@@ -11,7 +11,7 @@ import type {
   CaseLawDecisionSourceReference,
   ExternalSourceReference,
 } from "@/components/chat/external-source-store";
-import { decisionCitationCourtLabel } from "@/features/case-law/components/decision-citation-chip.logic";
+import { decisionCitationCourtLabel } from "@/components/references/decision-citation-chip.logic";
 import type { ChatMessage, ChatSourceDocument } from "@/lib/api-contract";
 import { sanitizeHref } from "@/lib/sanitize-href";
 

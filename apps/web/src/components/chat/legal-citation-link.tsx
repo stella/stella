@@ -238,7 +238,7 @@ export const LegalCitationLink = (props: LegalCitationLinkProps) => {
   if (citation.type === "decision") {
     const decisionId =
       props.source.caseLawDecision?.decisionId ??
-      extractCaseLawDecisionIdFromIdRouteParam(citation.params.caseNumber);
+      extractCaseLawDecisionIdFromIdRouteParam(citation.params.slug);
     const decisionProps = {
       passage,
       anchorId: props.anchorId,

@@ -11,9 +11,9 @@ import { Skeleton } from "@stll/ui/skeleton";
 
 import { CitedDecisionLink } from "@/components/legal-reader/cited-decision-link";
 import { ProvisionVersionBasisLabel } from "@/components/provision-version-basis";
-import { decisionCitationCourtLabel } from "@/features/case-law/components/decision-citation-chip.logic";
-import { decisionCitationPresentationsById } from "@/features/case-law/decision-citation-presentation.logic";
-import type { DecisionCitationPresentation } from "@/features/case-law/decision-citation-presentation.logic";
+import { decisionCitationCourtLabel } from "@/components/references/decision-citation-chip.logic";
+import { decisionCitationPresentationsById } from "@/components/references/decision-citation-presentation.logic";
+import type { DecisionCitationPresentation } from "@/components/references/decision-citation-presentation.logic";
 import { filterCitingDecisions } from "@/features/statutes/provision-inspector.logic";
 import { citingDecisionsInfiniteOptions } from "@/features/statutes/queries/citing-decisions";
 import { formatValidityDate } from "@/features/statutes/statute-format";

@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
+import { panic } from "better-result";
 import { afterAll, afterEach, expect, test } from "bun:test";
 
 import { toChatDecisionPassageHref } from "@stll/api-contract";
@@ -11,6 +12,7 @@ import {
 import { toSafeId } from "@stll/api-contract/safe-id";
 
 import type { ChatUIMessage } from "@/components/chat/chat-ui-tools";
+import { publicCaseLawCountryFromParam } from "@/features/case-law/case-law-jurisdiction";
 import type { PublicCaseLawDecision } from "@/features/case-law/public-decision";
 
 import { dockedChatLegalPayloads } from "../../../e2e/helpers/docked-chat-legal-payloads";
@@ -47,7 +49,10 @@ const second = {
 const clients: InstanceType<typeof QueryClient>[] = [];
 const paragraph = "The court preserves the remedy.";
 const href = (decisionId: string) =>
-  toChatDecisionPassageHref({ decisionId, anchorId: "p-12" });
+  toChatDecisionPassageHref({
+    decisionId: toSafeId<"caseLawDecision">(decisionId),
+    anchorId: "p-12",
+  });
 const answer = (markdown: string) =>
   ({
     id: "answer",
@@ -167,7 +172,12 @@ test("a real slug cache read contributes its resolved canonical decision to answ
     decisionId: second.id,
   });
   client.setQueryData(
-    decisionBySlugOptions({ country: "CZE", slug: params.caseNumber }).queryKey,
+    decisionBySlugOptions({
+      country:
+        publicCaseLawCountryFromParam(params.country) ??
+        panic("Synthetic citation country must be public"),
+      slug: params.slug,
+    }).queryKey,
     second,
   );
   const path = createCaseLawDecisionPath(params);

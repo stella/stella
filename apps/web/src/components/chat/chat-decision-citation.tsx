@@ -21,11 +21,11 @@ import {
 import type { ChatUIMessage } from "@/components/chat/chat-ui-tools";
 import { useExternalSourceStore } from "@/components/chat/external-source-store";
 import { collectSourceChipEntries } from "@/components/chat/source-chips.logic";
+import { DecisionCitationChip } from "@/components/references/decision-citation-chip";
+import { decisionCitationPresentationsById } from "@/components/references/decision-citation-presentation.logic";
+import type { DecisionCitationPresentation } from "@/components/references/decision-citation-presentation.logic";
 import { env } from "@/env";
 import { publicCaseLawCountryFromParam } from "@/features/case-law/case-law-jurisdiction";
-import { DecisionCitationChip } from "@/features/case-law/components/decision-citation-chip";
-import { decisionCitationPresentationsById } from "@/features/case-law/decision-citation-presentation.logic";
-import type { DecisionCitationPresentation } from "@/features/case-law/decision-citation-presentation.logic";
 import { useOpenDecisionTab } from "@/features/case-law/open-decision-tab";
 import {
   decisionBySlugOptions,
@@ -241,7 +241,7 @@ export const ChatAnswerDecisionProvider = ({
             type: "route",
             options: decisionBySlugOptions({
               country,
-              slug: target.params.caseNumber,
+              slug: target.params.slug,
               ...(target.params.language === undefined
                 ? {}
                 : { language: target.params.language }),
@@ -312,7 +312,7 @@ export const ChatRouteDecisionCitation = ({
       params={params}
       options={decisionBySlugOptions({
         country,
-        slug: params.caseNumber,
+        slug: params.slug,
         ...(params.language === undefined ? {} : { language: params.language }),
       })}
     />

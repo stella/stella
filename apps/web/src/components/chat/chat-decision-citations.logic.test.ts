@@ -6,6 +6,7 @@ import {
   createCaseLawDecisionPath,
   createCaseLawDecisionRouteParams,
 } from "@stll/api-contract/case-law-decision-route";
+import { toSafeId } from "@stll/api-contract/safe-id";
 import { assertProperty } from "@stll/property-testing";
 
 import {
@@ -34,7 +35,10 @@ const sources = [
   },
 ] satisfies ExternalSourceReference[];
 const decisionHref = (decisionId: string) =>
-  toChatDecisionPassageHref({ decisionId, anchorId: "p-12" });
+  toChatDecisionPassageHref({
+    decisionId: toSafeId<"caseLawDecision">(decisionId),
+    anchorId: "p-12",
+  });
 const targets = (markdown: string) =>
   chatAnswerDecisionTargets({
     markdownDocuments: [markdown],

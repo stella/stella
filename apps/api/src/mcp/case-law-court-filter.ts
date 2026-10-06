@@ -2,7 +2,10 @@ import { panic, Result } from "better-result";
 
 import type { VocabularyEntry } from "@stll/agent-input";
 import { normalizeVocabularyValue } from "@stll/agent-input";
-import { courtAbbreviation } from "@stll/api-contract/case-law-court-abbreviations";
+import {
+  apexCourtAbbreviations,
+  courtAbbreviation,
+} from "@stll/api-contract/case-law-court-abbreviations";
 import { Temporal } from "@stll/time";
 
 import { readCourtNames } from "@/api/handlers/case-law/decisions/shelf-courts";
@@ -61,10 +64,10 @@ const LISTED_COURTS = 12;
 /**
  * One court as the corpus stores it. A publisher spells an apex court more
  * than one way ("Najvyšší súd", "Najvyšší súd Slovenskej republiky"), and the
- * court registry (`courtAbbreviation`) gives every spelling of one apex court
- * the same abbreviation, so spellings sharing it are one court. A court the
- * registry has no abbreviation for is identified by its spelling alone: two
- * such spellings are never merged on a guess.
+ * apex registry gives every spelling of one apex court the same abbreviation,
+ * so only those spellings share an identity. A regional or district citation
+ * code can name several courts: those remain separate identities, even when
+ * their display codes match.
  */
 export type StoredCourtIdentity = {
   abbreviation: string | undefined;
@@ -77,11 +80,12 @@ export const storedCourtIdentities = (
   country: string,
   courts: readonly string[],
 ): StoredCourtIdentity[] => {
+  const apexAbbreviations = new Set(apexCourtAbbreviations(country));
   const apex = new Map<string, [string, ...string[]]>();
   const byName: StoredCourtIdentity[] = [];
   for (const court of courts) {
     const abbreviation = courtAbbreviation({ country, court });
-    if (abbreviation === undefined) {
+    if (abbreviation === undefined || !apexAbbreviations.has(abbreviation)) {
       byName.push({ abbreviation, spellings: [court] });
       continue;
     }

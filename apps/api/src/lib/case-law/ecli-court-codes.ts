@@ -1,3 +1,4 @@
+// parser-output-unchanged: Registry-derived CZ, SK and EU court-name maps preserve all existing codes and names.
 import {
   CZ_ECLI_COURT_REGISTRY,
   SK_ECLI_COURT_REGISTRY,

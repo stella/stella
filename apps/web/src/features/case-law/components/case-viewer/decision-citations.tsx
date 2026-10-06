@@ -10,6 +10,9 @@ import { ChevronRightIcon } from "@stll/ui/icons";
 import { cn } from "@stll/ui/utils";
 
 import { CitedDecisionLink } from "@/components/legal-reader/cited-decision-link";
+import { decisionCitationCourtLabel } from "@/components/references/decision-citation-chip.logic";
+import { decisionCitationPresentationsById } from "@/components/references/decision-citation-presentation.logic";
+import type { DecisionCitationPresentation } from "@/components/references/decision-citation-presentation.logic";
 import {
   CITATION_TREATMENT_DOT,
   CITATION_TREATMENT_LABEL,
@@ -22,9 +25,6 @@ import type {
   CitedDecisionAddress,
   DecisionCitation,
 } from "@/features/case-law/citation-treatment";
-import { decisionCitationCourtLabel } from "@/features/case-law/components/decision-citation-chip.logic";
-import { decisionCitationPresentationsById } from "@/features/case-law/decision-citation-presentation.logic";
-import type { DecisionCitationPresentation } from "@/features/case-law/decision-citation-presentation.logic";
 import {
   CITATION_DIRECTIONS,
   decisionCitationsInfiniteOptions,

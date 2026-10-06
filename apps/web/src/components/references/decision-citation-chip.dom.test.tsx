@@ -1,8 +1,9 @@
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { afterAll, afterEach, expect, test } from "bun:test";
 
-import { DECISION_CITATION_PRESENTATION } from "@/features/case-law/decision-citation-presentation.logic";
-import type { DecisionCitationPresentation } from "@/features/case-law/decision-citation-presentation.logic";
+import { DECISION_CITATION_PRESENTATION } from "@/components/references/decision-citation-presentation.logic";
+import type { DecisionCitationPresentation } from "@/components/references/decision-citation-presentation.logic";
+import { env } from "@/env";
 
 GlobalRegistrator.register({ url: "http://localhost:3000/chat" });
 const { act, cleanup, fireEvent, render, screen, waitFor } =
@@ -18,7 +19,7 @@ const decision = {
   courtShortCode: "SYN",
   caseNumber: "SYN 12/2026",
   decisionDate: "2026-01-12",
-  readerUrl: "/law/case/cze/synthetic-decision",
+  readerUrl: "/law/cze/cases/synthetic-supreme-court/synthetic-decision",
   originalUrl: "https://publisher.example.test/synthetic-decision",
 };
 const sentence = "The remedy remains available.";
@@ -60,7 +61,9 @@ for (const presentation of Object.values(DECISION_CITATION_PRESENTATION)) {
     const trigger = view.getByRole("button", { name: reference });
     const paragraph = trigger.closest("p");
     expect(paragraph?.firstChild?.textContent).toBe(sentence);
-    expect(trigger.getAttribute("href")).toBe(decision.readerUrl);
+    expect(trigger.getAttribute("href")).toBe(
+      new URL(decision.readerUrl, env.VITE_PUBLIC_APP_URL).href,
+    );
     expect(trigger.dataset["citationPresentation"]).toBe(presentation);
     expect(trigger.textContent).toBe(
       presentation === DECISION_CITATION_PRESENTATION.compact
@@ -93,7 +96,7 @@ for (const activation of Object.values(ACTIVATION)) {
         screen
           .getByRole("link", { name: messages.caseLaw.citation.openInStella })
           .getAttribute("href"),
-      ).toBe(decision.readerUrl);
+      ).toBe(new URL(decision.readerUrl, env.VITE_PUBLIC_APP_URL).href);
       const original = screen.getByRole("link", {
         name: messages.inspector.external.openOriginal,
       });
@@ -143,6 +146,36 @@ test("an unavailable original remains a disabled action alongside the reader act
       screen
         .getByRole("link", { name: messages.caseLaw.citation.openInStella })
         .getAttribute("href"),
-    ).toBe(decision.readerUrl);
+    ).toBe(new URL(decision.readerUrl, env.VITE_PUBLIC_APP_URL).href);
   });
 });
+
+for (const protocol of ["javascript", "data"]) {
+  const originalUrl = `${protocol}:unsafe`;
+  test(`an unsafe publisher protocol ${originalUrl} cannot become a citation action`, async () => {
+    const view = mount(DECISION_CITATION_PRESENTATION.compact, originalUrl);
+    fireEvent.focus(view.getByRole("button", { name: reference }));
+    await waitFor(() => {
+      expect(
+        screen.queryByRole("link", {
+          name: messages.inspector.external.openOriginal,
+        }),
+      ).toBeNull();
+      expect(
+        screen
+          .getByRole("button", {
+            name: messages.inspector.external.openOriginal,
+          })
+          .hasAttribute("disabled"),
+      ).toBe(true);
+      expect(
+        screen
+          .getByRole("link", { name: messages.caseLaw.citation.openInStella })
+          .getAttribute("href"),
+      ).toBe(new URL(decision.readerUrl, env.VITE_PUBLIC_APP_URL).href);
+    });
+    expect(
+      view.container.querySelector('a[href^="javascript:"], a[href^="data:"]'),
+    ).toBeNull();
+  });
+}

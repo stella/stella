@@ -4,6 +4,7 @@ import type { ReactNode } from "react";
 import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
+import { resolveLegalCitationLinks } from "@stll/api-contract/legal-citation-links";
 import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
 import { CourtBadge } from "@stll/ui/court-badge";
@@ -13,8 +14,9 @@ import { ScrollArea } from "@stll/ui/scroll-area";
 import { containedEventHandler } from "@stll/ui/use-contained-handler";
 
 import { isPlainPrimaryClick } from "@/components/inspector/case-decision-view";
-import { DECISION_CITATION_PRESENTATION } from "@/features/case-law/decision-citation-presentation.logic";
-import type { DecisionCitationPresentation } from "@/features/case-law/decision-citation-presentation.logic";
+import { DECISION_CITATION_PRESENTATION } from "@/components/references/decision-citation-presentation.logic";
+import type { DecisionCitationPresentation } from "@/components/references/decision-citation-presentation.logic";
+import { env } from "@/env";
 import { useFormatter } from "@/i18n/formatting-context";
 import { formatDecisionDate } from "@/lib/decision-date";
 import { sanitizeHref } from "@/lib/sanitize-href";
@@ -84,7 +86,18 @@ export const DecisionCitationChip = ({
     caseNumber: decision.caseNumber,
     date,
   });
-  const originalUrl = sanitizeHref(decision.originalUrl ?? "");
+  const links = resolveLegalCitationLinks({
+    appUrl: decision.readerUrl,
+    sourceUrl: decision.originalUrl,
+    appOrigins: new Set([
+      new URL(env.VITE_PUBLIC_APP_URL).origin,
+      ...(typeof window === "undefined" ? [] : [window.location.origin]),
+    ]),
+  });
+  if (links.type !== "decision") {
+    return panic("Decision citation must resolve to its internal reader");
+  }
+  const originalUrl = sanitizeHref(links.source_url ?? "");
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
@@ -102,7 +115,7 @@ export const DecisionCitationChip = ({
         render={
           <a
             className="focus-visible:ring-ring inline-flex rounded align-baseline focus-visible:ring-2 focus-visible:outline-none"
-            href={sanitizeHref(decision.readerUrl)}
+            href={sanitizeHref(links.url)}
             ref={triggerRef}
             onClick={containedEventHandler((event) => {
               if (isPlainPrimaryClick(event)) {
@@ -150,7 +163,7 @@ export const DecisionCitationChip = ({
         )}
         <div className="flex flex-wrap gap-2">
           <Button
-            render={<a href={sanitizeHref(decision.readerUrl)} />}
+            render={<a href={sanitizeHref(links.url)} />}
             onClick={(event) => {
               if (onOpen !== undefined && isPlainPrimaryClick(event)) {
                 event.preventDefault();

@@ -46,6 +46,8 @@ import {
 } from "@/components/legal-reader/reader-landing";
 import type { SearchMatchRange } from "@/components/legal-reader/reader-search";
 import { SourceLinkPolicyProvider } from "@/components/legal-reader/source-link-policy";
+import { decisionCitationCourtLabel } from "@/components/references/decision-citation-chip.logic";
+import { decisionCitationPresentationsById } from "@/components/references/decision-citation-presentation.logic";
 import type { CitationAnchorSource } from "@/features/case-law/citation-anchors";
 import { decisionReferenceTintClassName } from "@/features/case-law/citation-treatment";
 import { DecisionBodyUnavailable } from "@/features/case-law/components/case-viewer/decision-body-state";
@@ -75,8 +77,6 @@ import { HeadnoteBlock } from "@/features/case-law/components/case-viewer/headno
 import type { HeadnoteOrigin } from "@/features/case-law/components/case-viewer/headnote-block";
 import type { DecisionProvisionAnchor } from "@/features/case-law/components/case-viewer/use-decision-provision-anchors";
 import type { DecisionStatuteCitationAnchor } from "@/features/case-law/components/case-viewer/use-decision-statute-citation-anchors";
-import { decisionCitationCourtLabel } from "@/features/case-law/components/decision-citation-chip.logic";
-import { decisionCitationPresentationsById } from "@/features/case-law/decision-citation-presentation.logic";
 import { dissentingJudges } from "@/features/case-law/decision-judges";
 import { locateExternalCjeuCitations } from "@/features/case-law/fallback-legal-anchors";
 import { locateProvisionAnchors } from "@/features/case-law/provision-anchors";

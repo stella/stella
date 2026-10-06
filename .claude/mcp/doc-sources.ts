@@ -378,6 +378,30 @@ export const DOC_SOURCE_EXCLUSIONS = [
   .map(noLlmsTxt)
   .concat(
     {
+      checkedAt: "2026-10-06T00:00:00.000Z",
+      dependency: "mdast-util-from-markdown",
+      explanation:
+        "https://unifiedjs.com/llms.txt and the canonical repository's raw llms.txt endpoint return 404. Use the parser API at https://github.com/syntax-tree/mdast-util-from-markdown directly.",
+      expiresAt: "2026-11-05T00:00:00.000Z",
+      reason: "no-llms-txt",
+    },
+    {
+      checkedAt: "2026-10-06T00:00:00.000Z",
+      dependency: "mdast-util-gfm",
+      explanation:
+        "https://unifiedjs.com/llms.txt and the canonical repository's raw llms.txt endpoint return 404. Use the GFM tree extension API at https://github.com/syntax-tree/mdast-util-gfm directly.",
+      expiresAt: "2026-11-05T00:00:00.000Z",
+      reason: "no-llms-txt",
+    },
+    {
+      checkedAt: "2026-10-06T00:00:00.000Z",
+      dependency: "micromark-extension-gfm",
+      explanation:
+        "https://unifiedjs.com/llms.txt and the canonical repository's raw llms.txt endpoint return 404. Use the GFM syntax extension API at https://github.com/micromark/micromark-extension-gfm directly.",
+      expiresAt: "2026-11-05T00:00:00.000Z",
+      reason: "no-llms-txt",
+    },
+    {
       checkedAt: "2026-09-30T00:00:00.000Z",
       dependency: "@standard-schema/spec",
       explanation:

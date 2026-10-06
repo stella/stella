@@ -4,9 +4,9 @@ import {
 } from "@stll/api-contract/case-law-decision-route";
 import { BidiText } from "@stll/ui/bidi-text";
 
+import { DecisionCitationChip } from "@/components/references/decision-citation-chip";
+import { decisionCitationCourtLabel } from "@/components/references/decision-citation-chip.logic";
 import type { Decision } from "@/features/case-law/components/decision-cells";
-import { DecisionCitationChip } from "@/features/case-law/components/decision-citation-chip";
-import { decisionCitationCourtLabel } from "@/features/case-law/components/decision-citation-chip.logic";
 import type { Citation } from "@/lib/citations";
 
 type DecisionPassageCitationProps = {

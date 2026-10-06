@@ -7,8 +7,8 @@ import {
 import { resolveLegalCitationLinks } from "@stll/api-contract/legal-citation-links";
 
 import type { ExternalSourceReference } from "@/components/chat/external-source-store";
-import type { DecisionCitationMetadata } from "@/features/case-law/components/decision-citation-chip";
-import { decisionCitationCourtLabel } from "@/features/case-law/components/decision-citation-chip.logic";
+import type { DecisionCitationMetadata } from "@/components/references/decision-citation-chip";
+import { decisionCitationCourtLabel } from "@/components/references/decision-citation-chip.logic";
 import type { PublicCaseLawDecision } from "@/features/case-law/public-decision";
 import type { QueryView } from "@/lib/query-view.logic";
 

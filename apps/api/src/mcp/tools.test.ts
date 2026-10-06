@@ -476,6 +476,8 @@ const createRelatedDecision = (
   citationAuthority: 0,
   country: "CZE",
   court: "Nejvyšší soud",
+  courtAbbreviation: "NS",
+  sourceUrl: null,
   decisionDate: "2025-01-15",
   decisionType: "rozsudek",
   ecli: null,

@@ -16,6 +16,9 @@ import {
   navigateToCaseDecisionMain,
 } from "@/components/inspector/case-decision-view";
 import { useInspectorView } from "@/components/inspector/use-inspector-view";
+import { DecisionCitationChip } from "@/components/references/decision-citation-chip";
+import { decisionCitationCourtLabel } from "@/components/references/decision-citation-chip.logic";
+import type { DecisionCitationPresentation } from "@/components/references/decision-citation-presentation.logic";
 import type { CitationAnchorSource } from "@/features/case-law/citation-anchors";
 import {
   CITATION_TREATMENT_DOT,
@@ -29,9 +32,6 @@ import {
   CitationPassageQuote,
   useCitationPassage,
 } from "@/features/case-law/components/case-viewer/citation-passage-preview";
-import { DecisionCitationChip } from "@/features/case-law/components/decision-citation-chip";
-import { decisionCitationCourtLabel } from "@/features/case-law/components/decision-citation-chip.logic";
-import type { DecisionCitationPresentation } from "@/features/case-law/decision-citation-presentation.logic";
 import { detached } from "@/lib/detached";
 
 type CitedDecisionTarget = Pick<

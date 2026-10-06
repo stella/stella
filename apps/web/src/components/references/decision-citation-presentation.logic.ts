@@ -21,11 +21,8 @@ export const decisionCitationPresentations = (
 ) => {
   const decisionsByCourt = new Map<string, Set<string>>();
   for (const { courtShortCode, decisionId } of citations) {
-    const decisions = decisionsByCourt.get(courtShortCode);
-    if (decisions === undefined) {
-      decisionsByCourt.set(courtShortCode, new Set([decisionId]));
-      continue;
-    }
+    const decisions = decisionsByCourt.get(courtShortCode) ?? new Set<string>();
+    decisionsByCourt.set(courtShortCode, decisions);
     decisions.add(decisionId);
   }
 
