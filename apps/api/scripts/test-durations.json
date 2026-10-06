@@ -6455,11 +6455,23 @@
     "seconds": 0.250833,
     "source": "estimated"
   },
+  "src/lib/lists/verification/run-caps.db.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
+  "src/lib/lists/verification/run-caps.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
   "src/lib/lists/verification/run-persistence.db.test.ts": {
     "seconds": 1.671187,
     "source": "estimated"
   },
   "src/lib/lists/verification/run-queue.db.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
+  "src/lib/lists/verification/run-start-census.test.ts": {
     "seconds": 1,
     "source": "estimated"
   },
