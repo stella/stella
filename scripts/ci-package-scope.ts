@@ -304,13 +304,13 @@ const declaredMarkdownInputs = (
     return readCallArguments(`(${text.slice(1, end)})`).map((entry) => {
       const codeExpression = maskSourceNonCode(entry).trim();
       const literals = readStringLiterals(entry);
-      const resolved = pathExpression({
-        ...options,
-        expression:
-          codeExpression === "" && literals.length === 1
-            ? JSON.stringify(literals.at(0)?.value)
-            : codeExpression,
-      });
+      let input = entry;
+      if (IDENTIFIER.test(codeExpression)) {
+        input = codeExpression;
+      } else if (codeExpression === "" && literals.length === 1) {
+        input = JSON.stringify(literals.at(0)?.value);
+      }
+      const resolved = pathExpression({ ...options, expression: input });
       if (resolved.kind !== "repository") {
         throw new MarkdownReaderDeclarationError(
           `${file}: Markdown reader input is unresolved: ${entry}`,

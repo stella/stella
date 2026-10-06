@@ -422,6 +422,65 @@ function scan(cwd: string) { return [...new Bun.Glob("**/*.{md,mdx}").scanSync({
   });
 });
 
+test("declared parameterized scan inputs resolve joined roots and retain the real source pattern", () => {
+  repository((root, write) => {
+    write(
+      "scripts/source-scan.ts",
+      `const ROOT = process.cwd();
+const APPS = path.join(ROOT, "apps");
+const PATTERN = "**/*.{md,mdx,ts}";
+export const CI_MARKDOWN_READER_INPUTS = [path.join(APPS, "*", "src", PATTERN)];
+function scan(cwd: string) { return [...new Bun.Glob(PATTERN).scanSync({ cwd: cwd })]; }`,
+    );
+    expect(
+      markdownReaders(root).find(
+        ({ file }) => file === "scripts/source-scan.ts",
+      )?.inputs,
+    ).toEqual(["apps/*/src/**/*.{md,mdx,ts}"]);
+    const errors = spyOn(console, "error").mockImplementation(() => {});
+    try {
+      expect(
+        requiresPackageChecks({
+          root,
+          changed: ["apps/example/src/content.md"],
+        }),
+      ).toBe(true);
+      expect(
+        requiresPackageChecks({ root, changed: ["apps/example/README.md"] }),
+      ).toBe(false);
+    } finally {
+      errors.mockRestore();
+    }
+  });
+});
+
+test("empty and computed scan declarations cannot certify an unknown cwd", () => {
+  for (const expression of [
+    "[]",
+    "computedInputs()",
+    "[unknownRoot]",
+    '["docs" + suffix]',
+  ]) {
+    repository((root, write) => {
+      write(
+        "scripts/invalid-scan.ts",
+        `export const CI_MARKDOWN_READER_INPUTS = ${expression}; function scan(cwd: string) { return new Bun.Glob("**/*.{md,mdx}").scanSync({cwd: cwd}); }`,
+      );
+      const errors = spyOn(console, "error").mockImplementation(() => {});
+      try {
+        expect(requiresPackageChecks({ root, changed: ["README.md"] })).toBe(
+          true,
+        );
+        expect(String(errors.mock.calls.at(0)?.at(1))).toContain(
+          "scripts/invalid-scan.ts",
+        );
+      } finally {
+        errors.mockRestore();
+      }
+    });
+  }
+});
+
 test("glob scans resolve cwd aliases through file URLs", () => {
   repository((root, write) => {
     write(
