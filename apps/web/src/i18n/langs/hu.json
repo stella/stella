@@ -126,6 +126,7 @@
     "orSignInWithEmail": "vagy jelentkezzen be e-maillel",
     "organizationNamePlaceholder": "Szervezetem",
     "password": "Jelszó",
+    "professionalUseStatement": "A fiók létrehozásával megerősíti, hogy a stellát szakmai célokra használja, és tudomásul veszi, hogy a stella jogi szakembereknek szóló eszköz, és nem helyettesíti a jogi tanácsadást.",
     "rateLimitExceeded": "Túl sok próbálkozás. Kérjük, próbálja újra később.",
     "resendCode": "Kód újraküldése erre: <email>{emailAddress}</email>",
     "selectOrganization": "Válasszon szervezetet",

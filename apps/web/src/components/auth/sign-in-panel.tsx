@@ -92,6 +92,7 @@ const SignInOptionsPanel = ({
   >(null);
   const lastMethod = authClient.getLastUsedLoginMethod();
   const {
+    accountCreation,
     showEmailOtp,
     showLocalPassword,
     showBootstrap,
@@ -298,6 +299,11 @@ const SignInOptionsPanel = ({
           terms: renderTermsLink,
         })}
       </p>
+      {accountCreation === "offered" && (
+        <p className="text-foreground-muted text-xs">
+          {t("auth.professionalUseStatement")}
+        </p>
+      )}
     </div>
   );
 };
