@@ -2658,7 +2658,7 @@ test("folded service suites preserve both scopes and independent verdicts", () =
     }
     const predicate = `needs.ci-plan.outputs.${scope} == 'true'`;
     expect(suite.if).toBe(
-      suite.run === "bun run test:postgres"
+      scope === "postgres_suites_required"
         ? predicate
         : `\${{ !cancelled() && ${predicate} }}`,
     );
