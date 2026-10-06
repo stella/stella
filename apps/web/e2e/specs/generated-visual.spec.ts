@@ -10,6 +10,10 @@ import { VISUAL_PREVIEW_TOOL_NAME } from "@stll/api-contract/visual-preview";
 
 import { installDockedChatHistory } from "../helpers/docked-chat-fixtures";
 import { dockedChatMessagePage } from "../helpers/docked-chat-history";
+import {
+  DOCKED_CHAT_LEGAL_ROUTES,
+  installDockedLegalFixtures,
+} from "../helpers/docked-chat-legal-fixtures";
 import { expect, test } from "../helpers/test";
 
 const threadId = "019a0000-0000-7000-8000-000000000001";
@@ -18,9 +22,9 @@ const externalUrl = "https://example.test/decision?language=cs&year=2026";
 const title = "Court timeline";
 const visual = v.parse(generatedVisualPageSchema, {
   title,
-  html: `<section class="stella-card"><button id="drill">Court year</button><a href="${externalUrl}">Decision source</a></section><script>const bucket=stella.data.courtYear.buckets[0];document.querySelector('#drill').addEventListener('click',()=>stella.drill({court:bucket.court,year:bucket.year}));stella.ready();</script>`,
+  html: `<section class="stella-card"><button id="drill">Court year</button><button id="internal">Open decision</button><a href="${externalUrl}">Decision source</a></section><script>const bucket=stella.data.courtYear.buckets[0];document.querySelector('#drill').addEventListener('click',()=>stella.drill({court:bucket.court,year:bucket.year}));document.querySelector('#internal').addEventListener('click',()=>stella.openDecision('decision'));stella.ready();</script>`,
   data: { courtYear: { buckets: [{ court: "CZ:ns", year: 2026 }] } },
-  links: [],
+  links: [{ id: "decision", decisionId: DOCKED_CHAT_LEGAL_ROUTES.decision.id }],
   literalLinks: [externalUrl],
 });
 const part = v.parse(generatedVisualPartSchema, {
@@ -39,6 +43,7 @@ test("generated view activates, reloads and offers user-controlled chat actions"
   context,
 }) => {
   await installDockedChatHistory(page);
+  await installDockedLegalFixtures(page);
   await page.route("**/v1/chat/threads/*/messages*", async (route) => {
     await route.fulfill({
       json: {
@@ -124,4 +129,9 @@ test("generated view activates, reloads and offers user-controlled chat actions"
   expect(reads).toBe(1);
   expect(sends).toEqual([]);
   await popup.close();
+  await page.setViewportSize({ width: 640, height: 900 });
+  await guest.getByRole("button", { name: "Open decision" }).click();
+  await expect(page).toHaveURL(
+    new URL(DOCKED_CHAT_LEGAL_ROUTES.decision.path, page.url()).href,
+  );
 });
