@@ -258,6 +258,17 @@ for (const [locale, messages, year] of [
             ?.textContent,
         ).toContain(label);
       });
+      // A pointer click lands after the focus that opened the preview.
+      fireEvent.click(chip);
+      await act(async () => {
+        await new Promise((resolve) => {
+          setTimeout(resolve, 0);
+        });
+      });
+      expect(
+        ui.baseElement.querySelector('[data-slot="preview-card-content"]')
+          ?.textContent,
+      ).toContain(label);
     });
   }
 }

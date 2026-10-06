@@ -70,7 +70,8 @@ export const ProvisionReferenceChip = ({
             size="xs"
             variant="secondary"
             className="h-auto max-w-full min-w-0 flex-wrap justify-start text-start"
-            onClick={() => setOpen(!open)}
+            // Focus already opens the preview; a click that follows it must not close it.
+            onClick={() => setOpen(true)}
           />
         }
       >
