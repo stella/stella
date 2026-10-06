@@ -54,6 +54,17 @@
       "polish": "Formulierung verbessern"
     }
   },
+  "aiColumns": {
+    "countSummary": "{columns} Spalten × {rows} Zeilen = {answers, plural, one {# Antwort} other {# Antworten}}. Antworten verbrauchen Budget.",
+    "refusedBudget": "Nicht ausgeführt: Antwortbudget nicht verfügbar",
+    "rerunAllPage": "Alle erneut ausführen (diese Seite)",
+    "rerunColumnPage": "Spalte erneut ausführen (diese Seite)",
+    "runColumnPage": "Spalte ausführen (diese Seite)",
+    "runPageRows": "Ausführen für {count, plural, one {# Zeile auf dieser Seite} other {# Zeilen auf dieser Seite}}",
+    "runRemainingPage": "Verbleibende ausführen (diese Seite)",
+    "runSelectedRows": "Ausführen für {count, plural, one {# ausgewählte Zeile} other {# ausgewählte Zeilen}}",
+    "selectedRun": "KI-Spalten ausführen für {count, plural, one {# Zeile} other {# Zeilen}}"
+  },
   "appearance": {
     "calendar": "Kalender",
     "calendarGregorian": "Gregorianisch",
@@ -264,6 +275,7 @@
     "runs": {
       "back": "Alle Dokumente",
       "errors": {
+        "accessRevoked": "Die Überprüfung wurde beendet, da kein Zugriff verfügbar ist.",
         "aiUnavailable": "Für die Dokumentenprüfung ist kein KI-Modell verfügbar. Prüfen Sie die KI-Einstellungen der Organisation.",
         "enqueueFailed": "Die Prüfung konnte nicht gestartet werden. Versuchen Sie es erneut.",
         "extractionFailed": "Die Behauptungen in diesem Dokument konnten nicht extrahiert werden.",
@@ -796,6 +808,34 @@
       "unavailable": "Die Abdeckungszahlen sind derzeit nicht verfügbar."
     },
     "decisionNotFound": "Entscheidung nicht gefunden",
+    "decisionTypes": {
+      "administrative_decision": "Bescheid",
+      "binding_excise_information": "Verbindliche Verbrauchsteuerauskunft",
+      "binding_rate_information": "Verbindliche Auskunft zum Umsatzsteuersatz",
+      "court_direction": "Verfügung",
+      "decision": "Entscheidung",
+      "finding": "Erkenntnis",
+      "general_tax_ruling": "Allgemeine Steuerauslegung",
+      "individual_tax_ruling": "Individuelle Steuerauskunft",
+      "judgment": "Urteil",
+      "leave_refused": "Zurückweisung mangels erheblicher Rechtsfrage",
+      "merits_decision": "Sachentscheidung",
+      "ministry_of_justice_decision": "Entscheidung des Justizministeriums",
+      "minutes_extract": "Protokollauszug",
+      "opinion": "Stellungnahme",
+      "order": "Beschluss",
+      "other": "Sonstige",
+      "payment_order": "Zahlungsbefehl",
+      "penal_order": "Strafbefehl",
+      "principle_decision": "Grundsatzentscheidung",
+      "protective_opinion": "Absichernde Stellungnahme",
+      "resolution": "Beschluss (Uchwała)",
+      "signalling_decision": "Signalisierungsbeschluss",
+      "statement_of_reasons": "Begründung",
+      "tax_explanations": "Steuerliche Erläuterungen",
+      "top_up_tax_opinion": "Stellungnahme zur Ergänzungssteuer",
+      "uniformity_decision": "Entscheidung zur Wahrung der Rechtseinheit"
+    },
     "emptyState": "Keine Entscheidungen gefunden. Konfigurieren Sie eine Quelle und führen Sie eine Synchronisierung durch, um Rechtsprechung zu importieren.",
     "filters": {
       "remove": "Filter {filter} entfernen"
@@ -841,6 +881,7 @@
       "subsection": "Abs. {value}"
     },
     "reader": {
+      "expandProvisions": "Bestimmungen aufklappen",
       "headMatter": "Rubrum",
       "sourceAttribution": "Die Quelldaten sind frei verfügbar unter <link>{source}</link>."
     },
@@ -1857,6 +1898,7 @@
     "unexpectedError": "Ein unerwarteter Fehler ist aufgetreten. Bitte kontaktieren Sie den Support.",
     "unknownUser": "Unbekannter Benutzer",
     "unpin": "Lösen",
+    "unsavedChangesEscape": "Ungespeicherte Änderungen. Erneut Esc drücken, um sie zu verwerfen",
     "unsavedLeaveConfirm": "Sie haben ungespeicherte Änderungen. Ohne Speichern verlassen?",
     "unverified": "Nicht verifiziert",
     "unverifiedCitationHint": "Dieses Zitat konnte dem Quelldokument nicht zugeordnet werden.",
@@ -2309,6 +2351,8 @@
       "encryptedContent": "Der Inhalt verschlüsselter Dokumente kann nicht extrahiert werden. Entfernen Sie das Passwort aus der Datei und versuchen Sie es erneut.",
       "filePropertyTypeImmutable": "Der Typ einer Dateieigenschaft kann nicht geändert werden. Behalten Sie den bestehenden Typ bei; erstellen Sie für andere Werte eine benutzerdefinierte Eigenschaft.",
       "forbidden": "Sie haben keine Berechtigung für diese Aktion.",
+      "hostedCheckoutOpen": "Für diese Organisation ist bereits ein Bezahlvorgang geöffnet. Schließen Sie ihn ab oder starten Sie nach seinem Ablauf einen neuen.",
+      "hostedSubscriptionLive": "Diese Organisation hat bereits ein Abonnement. Ändern Sie es unter „Gehostete Nutzung verwalten“.",
       "internalServerError": "Etwas ist schiefgelaufen. Bitte versuchen Sie es erneut.",
       "legalSourceEntityLimitReached": "Diese Akte hat das Limit für Einträge erreicht, daher konnte das Dokument nicht erstellt werden.",
       "legalSourceFilePropertyMissing": "In dieser Akte fehlt eine Dateieigenschaft, daher konnte das Dokument nicht erstellt werden.",
@@ -3740,11 +3784,15 @@
     }
   },
   "lawHome": {
+    "clearRecent": "Verlauf löschen",
     "enteringIntoForce": "Tritt demnächst in Kraft",
     "inForceFrom": "In Kraft ab {date}",
-    "noRecentSearches": "Noch keine Suchen",
+    "noRecent": "Noch keine kürzlichen Aktivitäten",
     "noSignals": "Noch keine Signale",
     "prompt": "Wonach suchen Sie?",
+    "recent": "Zuletzt verwendet",
+    "recentCasesFilter": "Entscheidungen",
+    "recentSearchFilter": "Suchen",
     "recentlyInForce": "Kürzlich in Kraft getreten",
     "searchLabel": "Rechtsdatenbank durchsuchen",
     "searchPlaceholder": "Aktenzeichen, Gesetzesnummer, ECLI oder Stichwörter",
@@ -4636,6 +4684,7 @@
     "compareVersionMissing": "Die Vergleichsfassung ist in der Historie dieses Gesetzes nicht vorhanden.",
     "compareWholeAct": "Ganzes Gesetz vergleichen",
     "compareWithVersion": "Mit Fassung {version} vergleichen",
+    "currentWording": "Aktueller Wortlaut",
     "description": "Öffentliche Datenbank konsolidierter Rechtsvorschriften, nach Rechtsakt und Fassung indexierbar.",
     "diffInserted": "Eingefügt:",
     "diffRemoved": "Gestrichen:",
@@ -4685,7 +4734,9 @@
       "unknown": "Status unklar"
     },
     "title": "Rechtsvorschriften",
-    "validity": "Gültig von {from} bis {to}"
+    "validity": "Gültig von {from} bis {to}",
+    "wordingValidFrom": "Wortlaut in Kraft seit {date}",
+    "wordingVersionUnknown": "Datum der Wortlautversion nicht verfügbar"
   },
   "styleSets": {
     "create": "Erstellen",
@@ -5422,6 +5473,7 @@
         "unknownLocation": "Vorlagenspeicherort: eine Adresse, die stella nicht prüfen kann"
       },
       "desktopEdit": {
+        "accountRequiredTitle": "Verbinden Sie stella desktop mit Ihrem Konto",
         "action": "Im Desktop bearbeiten",
         "authRequiredDescription": "Aktualisieren Sie stella und melden Sie sich erneut an, bevor Sie die Desktop-Bearbeitung verwenden.",
         "authRequiredTitle": "Ihre Sitzung ist abgelaufen",
@@ -5453,8 +5505,7 @@
         "signCurrent": "Mit stella desktop signieren",
         "signNone": "stella desktop herunterladen, um dieses PDF zu signieren",
         "signOutdated": "stella desktop aktualisieren, um zu signieren",
-        "signReason": "Die Signatur verwendet das Zertifikat auf Ihrem Computer und läuft daher in stella desktop.",
-        "signShort": "Signieren"
+        "signReason": "Die Signatur verwendet das Zertifikat auf Ihrem Computer und läuft daher in stella desktop."
       },
       "downloadAs": "Herunterladen als…",
       "downloadAsZip": "Als .zip herunterladen",
@@ -5996,7 +6047,6 @@
       "previewUnsupported": "Vorschau für diesen Dokumenttyp nicht unterstützt.",
       "readingFrom": "KI liest aus",
       "referencesItself": "Eigenschaft referenziert sich selbst über andere Eigenschaften",
-      "rerunColumn": "Spalte neu ausführen",
       "resultType": "Ergebnistyp",
       "returnsLabel": "Format",
       "scopeFile": "Aktuelle Datei",

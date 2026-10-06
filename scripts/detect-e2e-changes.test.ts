@@ -721,19 +721,18 @@ describe("detect-e2e-changes", () => {
                     cancelled: () => cancelled,
                   };
                   expect(Boolean(evaluateExpression(predicate, context))).toBe(
-                    planned &&
+                    event !== "pull_request" &&
+                      planned &&
                       (trusted || event === "workflow_dispatch") &&
                       (!buildRequired ||
                         webResult === "success" ||
                         heavyResult === "success") &&
                       (event !== "merge_group" || !cancelled),
                   );
-                  if (predicate.includes("queue_depth")) {
-                    context.needs["ci-plan"].outputs.queue_depth = "thin";
-                    expect(
-                      Boolean(evaluateExpression(predicate, context)),
-                    ).toBe(false);
-                  }
+                  context.needs["ci-plan"].outputs.queue_depth = "thin";
+                  expect(Boolean(evaluateExpression(predicate, context))).toBe(
+                    false,
+                  );
                 }
               }
             }
@@ -846,7 +845,15 @@ describe("detect-e2e-changes", () => {
     });
     const suites = mainHeavyContract.jobs["suites"];
     expect(suites?.with?.["heavy_only"]).toBe(true);
-    expect(suites?.if).toBe("needs.validate.result == 'success'");
+    for (const result of ["success", "failure", "cancelled", "skipped"]) {
+      for (const run of ["true", "false"]) {
+        expect(
+          evaluateExpression(requiredExpression(suites?.if), {
+            needs: { validate: { result, outputs: { run } } },
+          }),
+        ).toBe(result === "success" && run === "true");
+      }
+    }
     const callerSha = evaluateExpression(
       requiredExpression(suites?.with?.["sha"]),
       { needs: { validate: { outputs: { sha: forwardedSha } } } },
@@ -1046,18 +1053,17 @@ describe("detect-e2e-changes", () => {
                       Boolean(evaluateExpression(predicate, context)),
                       `${event}/${depth}/${planned}/${trusted}/${webResult}/${heavyResult}/${heavyOnly}/${cancelled}`,
                     ).toBe(
-                      planned &&
+                      event !== "pull_request" &&
+                        planned &&
                         (trusted || event === "workflow_dispatch") &&
                         (webResult === "success" ||
                           heavyResult === "success") &&
                         (event !== "merge_group" || !cancelled),
                     );
-                    if (predicate.includes("queue_depth")) {
-                      context.needs["ci-plan"].outputs.queue_depth = "thin";
-                      expect(
-                        Boolean(evaluateExpression(predicate, context)),
-                      ).toBe(false);
-                    }
+                    context.needs["ci-plan"].outputs.queue_depth = "thin";
+                    expect(
+                      Boolean(evaluateExpression(predicate, context)),
+                    ).toBe(false);
                   }
                 }
               }

@@ -13,6 +13,7 @@ import {
   type ContactImportTaxIdScheme,
   type ContactType,
 } from "@stll/api-contract";
+import { stableStringify } from "@stll/stable-stringify";
 import { Button } from "@stll/ui/button";
 import { Field, FieldLabel } from "@stll/ui/field";
 import { AlertTriangleIcon, CheckIcon, PlusIcon, XIcon } from "@stll/ui/icons";
@@ -185,6 +186,7 @@ type SeedArgs = {
 
 export type ImportReview = {
   rows: ImportReviewRow[];
+  isDirty: boolean;
   results: ImportReviewResult[] | null;
   validation: ImportReviewValidation;
   validCount: number;
@@ -217,6 +219,7 @@ export const useImportReview = ({
   });
 
   const [rows, setRows] = useState<ImportReviewRow[]>([]);
+  const [initialCandidates, setInitialCandidates] = useState("[]");
   const [taxIdScheme, setTaxIdScheme] =
     useState<ContactImportTaxIdScheme>("none");
   const [results, setResults] = useState<ImportReviewResult[] | null>(null);
@@ -280,6 +283,11 @@ export const useImportReview = ({
     validationGeneration.current += 1;
     scheduleValidation.cancel();
     setTaxIdScheme(scheme);
+    setInitialCandidates(
+      stableStringify(
+        seedRows.map(({ candidate, rowNumber }) => ({ candidate, rowNumber })),
+      ),
+    );
     setResults(null);
     setValidation({ status: "settled" });
     setRows(
@@ -335,6 +343,7 @@ export const useImportReview = ({
     validationGeneration.current += 1;
     scheduleValidation.cancel();
     setRows([]);
+    setInitialCandidates("[]");
     setResults(null);
     setValidation({ status: "settled" });
   };
@@ -400,6 +409,11 @@ export const useImportReview = ({
 
   return {
     rows,
+    isDirty:
+      results === null &&
+      stableStringify(
+        rows.map(({ candidate, rowNumber }) => ({ candidate, rowNumber })),
+      ) !== initialCandidates,
     results,
     validation,
     validCount: validRows.length,

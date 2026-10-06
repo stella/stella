@@ -22,7 +22,7 @@
  *   bun apps/api/src/scripts/normalize-case-numbers.ts --dry-run
  */
 
-import { lockCitationGraph } from "@/api/handlers/case-law/citation-resolution";
+import { runCitationGraphTransaction } from "@/api/handlers/case-law/citation-graph-transaction";
 import { enterCaseLawMaintenanceLane } from "@/api/lib/case-law/maintenance-lane";
 import { executedRows } from "@/api/lib/db/executed-rows";
 import { isRecord } from "@/api/lib/type-guards";
@@ -62,10 +62,10 @@ while (true) {
   // cleared can commit a `resolved` edge to a decision that no longer carries
   // that key, and nothing revisits it.
   // db-await-in-loop: bounded batch per iteration under the graph lock
-  const result = await rootDb.transaction(async (tx) => {
-    await lockCitationGraph(tx);
-    return await tx.execute(normalizeSheetNumbersStatement(BATCH));
-  });
+  const result = await runCitationGraphTransaction(
+    rootDb.transaction.bind(rootDb),
+    async (tx) => await tx.execute(normalizeSheetNumbersStatement(BATCH)),
+  );
   const batch = firstNumber(result, "normalized");
   if (batch === 0) {
     break;

@@ -209,7 +209,9 @@ describe("unavailable view mutation targets", () => {
     if (reorderResult.isErr()) {
       expect(reorderResult.error).toBeInstanceOf(APIError);
     }
-    expect(queryClient.getQueryData(queryKey)).toEqual(rows);
+    expect(queryClient.getQueryCache().find({ queryKey })?.state.data).toEqual(
+      rows,
+    );
     ensureViewMutationAvailable({
       queryClient,
       workspaceId: WORKSPACE_ID,

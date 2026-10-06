@@ -30,7 +30,7 @@ test("static conditional schemas project canonical inputs before public naming a
         if (schemas.body === undefined || !KindGuard.IsObject(schemas.body)) {
           throw new Error("Expected canonical TypeBox body");
         }
-        expect(schemas.body.properties.workspaceId).toBeDefined();
+        expect(schemas.body.properties["workspaceId"]).toBeDefined();
         return {
           body: Type.Object({
             ...schemas.body.properties,

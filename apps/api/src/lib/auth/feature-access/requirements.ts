@@ -19,6 +19,8 @@ export type FeatureAccessRequirement =
   | {
       featureId: FeatureId;
       type: "conditional";
-      usesFeature: (context: FeatureResourceContext) => Promise<boolean>;
+      usesFeature: (
+        context: FeatureResourceContext,
+      ) => boolean | Promise<boolean>;
       projectInputSchema: (schemas: AdvertisedSchemas) => AdvertisedSchemas;
     };

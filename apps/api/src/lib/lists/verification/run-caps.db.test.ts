@@ -132,8 +132,8 @@ const withFixture = async (
       `);
       for (const migration of [
         "20260925220000_legal_list_verifications",
-        "20261004120400_list_verification_access_revoked",
-        "20261005120200_list_verification_run_caps",
+        "20261005120300_list_verification_access_revoked",
+        "20261005120400_list_verification_run_caps",
       ]) {
         const source = await Bun.file(
           new URL(

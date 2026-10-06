@@ -348,7 +348,7 @@ export const gradeClaims = async ({
 
         const grades = new Map<string, ClaimGrade>();
         for (const batch of perBatch) {
-          if (Result.isError(batch)) {
+          if (batch.isErr()) {
             return Result.err(
               new WorkflowIntegrationError({
                 message: "Claim grading failed",

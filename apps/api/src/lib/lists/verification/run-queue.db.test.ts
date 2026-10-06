@@ -1,4 +1,4 @@
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import { afterAll, beforeAll, expect, test } from "bun:test";
 import { and, eq } from "drizzle-orm";
 import * as v from "valibot";
@@ -19,9 +19,9 @@ import {
 } from "@/api/db/schema";
 import type { RlsDatabase } from "@/api/db/scoped";
 import { env } from "@/api/env";
-import type { FeatureAccessGrants } from "@/api/lib/auth/feature-access/grants";
 import type { SafeId } from "@/api/lib/branded-types";
 import { createSafeId, toSafeId } from "@/api/lib/branded-types";
+import type { FeatureAccessGrants } from "@/api/lib/feature-access/grants-schema";
 import { LIST_VERIFICATION_FEATURE_ID } from "@/api/lib/feature-access/registry";
 import type { readVerificationDocument } from "@/api/lib/lists/verification/document-text";
 import {
@@ -58,7 +58,7 @@ const organizationMemberId = Bun.randomUUIDv7();
 const workspaceMemberId = createSafeId<"workspaceMember">();
 const grants = {
   [LIST_VERIFICATION_FEATURE_ID]: [{ type: "organization", organizationId }],
-} as const satisfies FeatureAccessGrants;
+} satisfies FeatureAccessGrants;
 
 beforeAll(async () => {
   db = await getTestDb();
@@ -188,6 +188,9 @@ const revokeExecutionPrerequisite = async (kind: ExecutionRevocation) => {
           .set({ status: "active" })
           .where(eq(workspaces.id, workspaceId));
       };
+    default:
+      kind satisfies never;
+      return panic("Unknown execution prerequisite");
   }
 };
 
@@ -282,7 +285,7 @@ const queueFixture = () => {
       getJob: async (id: string) =>
         jobs.has(id)
           ? {
-              getState: async () => "waiting",
+              getState: async () => "waiting" as const,
               remove: async () => {
                 jobs.delete(id);
               },

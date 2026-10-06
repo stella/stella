@@ -15,7 +15,7 @@ jobs:
       && github.event.workflow_run.head_branch == github.event.repository.default_branch
       && github.event.workflow_run.head_repository.full_name == github.repository
       && github.event.workflow_run.path == '.github/workflows/network-baseline-record.yml'
-      && contains(fromJSON('["push", "schedule", "workflow_dispatch"]'), github.event.workflow_run.event)
+      && contains(fromJSON('["schedule", "workflow_dispatch"]'), github.event.workflow_run.event)
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:

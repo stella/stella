@@ -224,7 +224,7 @@ export const extractClaims = async ({
         const unique = new Map<string, ExtractedClaim>();
         const resolved: ExtractedClaim[] = [];
         for (const window of perWindow) {
-          if (Result.isError(window)) {
+          if (window.isErr()) {
             return Result.err(
               new WorkflowIntegrationError({
                 message: "Claim extraction failed",

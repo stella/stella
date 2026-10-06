@@ -49,10 +49,10 @@ export const SANCTIONS_SOURCE_CONFIG = {
   { issuer: string; markerUrl: string; freshnessMs: number }
 >;
 
-const isSanctionsSource = (value: string): value is SanctionsSource =>
+export const isSanctionsSource = (value: string): value is SanctionsSource =>
   Object.hasOwn(SANCTIONS_SOURCE_CONFIG, value);
 
-export const sanctionsSourceIds = (): SanctionsSource[] => {
+export const sanctionsSourceIds = () => {
   const sources: SanctionsSource[] = [];
   for (const key of Object.keys(SANCTIONS_SOURCE_CONFIG)) {
     if (!isSanctionsSource(key)) {
@@ -60,5 +60,9 @@ export const sanctionsSourceIds = (): SanctionsSource[] => {
     }
     sources.push(key);
   }
-  return sources;
+  const [first, ...rest] = sources;
+  if (first === undefined) {
+    panic("Sanctions source registry is empty");
+  }
+  return [first, ...rest] as const;
 };
