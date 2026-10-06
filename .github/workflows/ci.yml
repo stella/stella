@@ -2248,6 +2248,13 @@ jobs:
           bun test apps/api/scripts/chat-mutation-matrix.test.ts
           bun apps/api/scripts/chat-mutation-matrix.ts --check
 
+      - name: API test duration weights
+        if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
+        # The API shards refuse a test file without a duration weight, but they
+        # run after merge. Checking every live file here, on each pull request
+        # and merge-queue entry, catches a file that lands next to the guard.
+        run: bun apps/api/scripts/refresh-test-durations.ts --check
+
       - name: Desktop Rust inputs
         if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
         # The desktop native test task's turbo.json inputs, the files Rust
