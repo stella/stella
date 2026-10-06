@@ -7,7 +7,7 @@ import {
 } from "@stll/api-contract/signals";
 import type { SignalKind, SignalSuggestion } from "@stll/api-contract/signals";
 
-import { abortableTx } from "@/api/db/safe-db";
+import { abortableTx, resultTx } from "@/api/db/safe-db";
 import type {
   SignalAcceptedResult,
   WorkObligationSource,
@@ -31,6 +31,7 @@ import {
   brandPersistedWorkspaceId,
 } from "@/api/lib/safe-id-boundaries";
 import { flushEntitySearchRepairs } from "@/api/lib/search/projection-repair-flush";
+import { withVisibleSignal } from "@/api/lib/signals/proofs/signal-visible-to";
 import {
   canTriageSignals,
   loadVisibleSignal,
@@ -144,76 +145,97 @@ export const createAcceptSignal = (
           };
 
           const created = yield* Result.await(
-            abortableTx(safeDb, async (tx) => {
-              const transition = await transitionSignal({
-                tx,
-                organizationId,
-                signalId: params.signalId,
-                actorUserId: user.id,
-                from: [SIGNAL_STATUS.NEW, SIGNAL_STATUS.SNOOZED],
-                set: {
-                  status: SIGNAL_STATUS.ACCEPTED,
-                  acceptedResult,
-                  snoozedUntil: null,
-                  resolvedAt: new Date(),
+            abortableTx(safeDb, async (transaction) => {
+              const outcome = await withVisibleSignal(
+                {
+                  tx: transaction,
+                  organizationId,
+                  actorUserId: user.id,
+                  memberRole,
+                  signalId: params.signalId,
+                  expectedUpdatedAt: existing.updatedAt,
                 },
-                event: {
-                  type: SIGNAL_EVENT_TYPE.ACCEPTED,
-                  payload: { ...acceptedResult },
-                },
-                audit: {
-                  recordAuditEvent,
-                  workspaceId: existing.workspaceId,
-                  previousStatus: existing.status,
-                  metadata: {
-                    kind: existing.kind,
-                    scoutKey: existing.scoutKey,
-                    suggestionKind: suggestion.kind,
-                  },
-                },
-              });
-              if (transition.isErr()) {
-                throw transition.error;
-              }
-
-              const task = await Result.gen(() =>
-                createTaskEntityHandler({
+                async ({
                   tx,
-                  workspaceId,
-                  userId: user.id,
-                  recordAuditEvent,
-                  entityId,
-                  body: {
-                    name: suggestion.name,
-                    agendaKind: isDeadline
-                      ? AGENDA_ITEM_KIND.DEADLINE
-                      : AGENDA_ITEM_KIND.TASK,
-                    dueDate: suggestion.dueAt
-                      ? toDateOnly(suggestion.dueAt)
-                      : null,
-                  },
-                  features: taskFeatures,
-                  ...(taskFeatures.governedWorkflow
-                    ? {
-                        workObligationSource: {
-                          type: SIGNAL_WORK_OBLIGATION_SOURCE[existing.kind],
-                          description: `Inbox signal ${existing.id}: ${existing.title}`,
-                          ...(existing.subject.type === "entity"
-                            ? {
-                                entityId: brandPersistedEntityId(
-                                  existing.subject.entityId,
-                                ),
-                              }
-                            : {}),
-                        },
-                      }
-                    : {}),
-                }),
+                  signal,
+                  actor,
+                  proof,
+                  existing: checkedSignal,
+                }) => {
+                  const transition = await transitionSignal({
+                    tx,
+                    visibility: proof,
+                    signalId: signal,
+                    actorUserId: actor,
+                    from: [SIGNAL_STATUS.NEW, SIGNAL_STATUS.SNOOZED],
+                    set: {
+                      status: SIGNAL_STATUS.ACCEPTED,
+                      acceptedResult,
+                      snoozedUntil: null,
+                      resolvedAt: new Date(),
+                    },
+                    event: {
+                      type: SIGNAL_EVENT_TYPE.ACCEPTED,
+                      payload: { ...acceptedResult },
+                    },
+                    audit: {
+                      recordAuditEvent,
+                      workspaceId: checkedSignal.workspaceId,
+                      previousStatus: checkedSignal.status,
+                      metadata: {
+                        kind: checkedSignal.kind,
+                        scoutKey: checkedSignal.scoutKey,
+                        suggestionKind: suggestion.kind,
+                      },
+                    },
+                  });
+                  if (transition.isErr()) {
+                    return Result.err(transition.error);
+                  }
+
+                  const task = await Result.gen(() =>
+                    createTaskEntityHandler({
+                      tx: tx.value,
+                      workspaceId,
+                      userId: user.id,
+                      recordAuditEvent,
+                      entityId,
+                      body: {
+                        name: suggestion.name,
+                        agendaKind: isDeadline
+                          ? AGENDA_ITEM_KIND.DEADLINE
+                          : AGENDA_ITEM_KIND.TASK,
+                        dueDate: suggestion.dueAt
+                          ? toDateOnly(suggestion.dueAt)
+                          : null,
+                      },
+                      features: taskFeatures,
+                      ...(taskFeatures.governedWorkflow
+                        ? {
+                            workObligationSource: {
+                              type: SIGNAL_WORK_OBLIGATION_SOURCE[
+                                checkedSignal.kind
+                              ],
+                              description: `Inbox signal ${checkedSignal.id}: ${checkedSignal.title}`,
+                              ...(checkedSignal.subject.type === "entity"
+                                ? {
+                                    entityId: brandPersistedEntityId(
+                                      checkedSignal.subject.entityId,
+                                    ),
+                                  }
+                                : {}),
+                            },
+                          }
+                        : {}),
+                    }),
+                  );
+                  return task;
+                },
               );
-              if (task.isErr()) {
-                throw task.error;
+              if (outcome.isErr()) {
+                throw outcome.error;
               }
-              return task.value;
+              return outcome.value;
             }),
           );
           dependencies
@@ -268,39 +290,50 @@ export const createAcceptSignal = (
         }
       }
 
-      const transition = yield* Result.await(
-        safeDb(async (tx) => {
-          const result = await transitionSignal({
-            tx,
-            organizationId,
-            signalId: params.signalId,
-            actorUserId: user.id,
-            from: [SIGNAL_STATUS.NEW, SIGNAL_STATUS.SNOOZED],
-            set: {
-              status: SIGNAL_STATUS.ACCEPTED,
-              acceptedResult,
-              snoozedUntil: null,
-              resolvedAt: new Date(),
+      yield* Result.await(
+        resultTx(safeDb, (transaction) =>
+          withVisibleSignal(
+            {
+              tx: transaction,
+              organizationId,
+              actorUserId: user.id,
+              memberRole,
+              signalId: params.signalId,
+              expectedUpdatedAt: existing.updatedAt,
             },
-            event: {
-              type: SIGNAL_EVENT_TYPE.ACCEPTED,
-              payload: { ...acceptedResult },
+            async ({ tx, signal, actor, proof, existing: checkedSignal }) => {
+              const result = await transitionSignal({
+                tx,
+                visibility: proof,
+                signalId: signal,
+                actorUserId: actor,
+                from: [SIGNAL_STATUS.NEW, SIGNAL_STATUS.SNOOZED],
+                set: {
+                  status: SIGNAL_STATUS.ACCEPTED,
+                  acceptedResult,
+                  snoozedUntil: null,
+                  resolvedAt: new Date(),
+                },
+                event: {
+                  type: SIGNAL_EVENT_TYPE.ACCEPTED,
+                  payload: { ...acceptedResult },
+                },
+                audit: {
+                  recordAuditEvent,
+                  workspaceId: checkedSignal.workspaceId,
+                  previousStatus: checkedSignal.status,
+                  metadata: {
+                    kind: checkedSignal.kind,
+                    scoutKey: checkedSignal.scoutKey,
+                    suggestionKind: suggestion.kind,
+                  },
+                },
+              });
+              return result;
             },
-            audit: {
-              recordAuditEvent,
-              workspaceId: existing.workspaceId,
-              previousStatus: existing.status,
-              metadata: {
-                kind: existing.kind,
-                scoutKey: existing.scoutKey,
-                suggestionKind: suggestion.kind,
-              },
-            },
-          });
-          return result;
-        }),
+          ),
+        ),
       );
-      yield* transition;
 
       const row = yield* yield* loadVisibleSignal({
         safeDb,

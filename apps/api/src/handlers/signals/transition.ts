@@ -14,12 +14,14 @@ import {
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import type { Named } from "@/api/lib/signals/proofs/core";
+import type { SignalVisibleTo } from "@/api/lib/signals/proofs/signal-visible-to";
 
-export type SignalTransitionArgs = {
-  tx: Transaction;
-  organizationId: SafeId<"organization">;
-  signalId: SafeId<"signal">;
-  actorUserId: SafeId<"user">;
+export type SignalTransitionArgs<U, S, T> = {
+  tx: Named<T, Transaction>;
+  visibility: SignalVisibleTo<NoInfer<U>, NoInfer<S>, NoInfer<T>>;
+  signalId: Named<S, SafeId<"signal">>;
+  actorUserId: Named<U, SafeId<"user">>;
   /** Statuses the row must currently be in; the UPDATE's WHERE closes the race. */
   from: readonly SignalStatus[];
   set: Partial<{
@@ -44,16 +46,20 @@ export type SignalTransitionArgs = {
  * Conditional state transition plus its audit event, in one transaction.
  * Returns a 409 when the row was no longer in an allowed `from` state.
  */
-export const transitionSignal = async ({
-  tx,
-  organizationId,
-  signalId,
-  actorUserId,
+export const transitionSignal = async <U, S, T>({
+  tx: transaction,
+  visibility,
+  signalId: signal,
+  actorUserId: actor,
   from,
   set,
   event,
   audit,
-}: SignalTransitionArgs) => {
+}: SignalTransitionArgs<U, S, T>) => {
+  const tx = transaction.value;
+  const signalId = signal.value;
+  const actorUserId = actor.value;
+  const organizationId = visibility.organizationId;
   const updated = await tx
     .update(signals)
     .set({ ...set, updatedAt: new Date() })
