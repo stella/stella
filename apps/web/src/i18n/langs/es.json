@@ -1328,6 +1328,7 @@
     "sendErrorQuotaExhausted": "Se agotó la cuota del proveedor de IA. Inténtalo de nuevo en un minuto o contacta con el administrador del espacio de trabajo.",
     "sendErrorStreamIncomplete": "La respuesta de la IA se cortó antes de terminar. Inténtalo de nuevo.",
     "sendPrompt": "Enviar mensaje",
+    "sendQueuedMessageNow": "Enviar ahora",
     "sendWithoutAnonymization": "Enviar sin anonimización",
     "skills": {
       "scope": {
@@ -1475,6 +1476,14 @@
       "sourceCode": "Código fuente",
       "toggleDetails": "Mostrar detalles",
       "unrestoredFields": "{count, plural, one {# campo no se pudo} other {# campos no se pudieron}} rellenar con valores reales en el modo anonimizado. Revise: {fields}"
+    },
+    "turnNotification": {
+      "failedBody": "Una respuesta del chat en stella no terminó.",
+      "failedTitle": "La respuesta falló",
+      "needsInputBody": "Un chat espera tu aprobación o respuesta.",
+      "needsInputTitle": "stella necesita tu respuesta",
+      "replyReadyBody": "stella terminó de responder en tu chat.",
+      "replyReadyTitle": "Respuesta lista"
     },
     "unsupportedFileType": "Tipo de archivo no compatible",
     "uploadFailed": "Error al procesar el archivo",
@@ -4374,6 +4383,11 @@
       "betaInbox": "Bandeja de entrada y notificaciones",
       "betaInboxDescription": "Mostrar la bandeja de entrada y la campana de notificaciones",
       "betaTimeBillingDescription": "Mostrar el registro de tiempo, las facturas y los gastos",
+      "chatNotifications": "Notificaciones del chat",
+      "chatNotificationsBlocked": "Las notificaciones de stella están bloqueadas en este navegador. Permítelas en la configuración del sitio del navegador.",
+      "chatNotificationsDescription": "Recibe una notificación de este navegador cuando una respuesta del chat termine mientras stella está en segundo plano.",
+      "chatNotificationsToggle": "Avisarme cuando una respuesta esté lista o necesite mi intervención",
+      "chatNotificationsUnsupported": "Este navegador no admite notificaciones.",
       "confirmDelete": "Confirmar eliminación de cuenta",
       "dangerZone": "Zona de peligro",
       "dangerZoneDescription": "Eliminar permanentemente el acceso a su cuenta y los datos privados de la cuenta.",

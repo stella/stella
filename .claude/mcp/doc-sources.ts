@@ -381,17 +381,17 @@ export const DOC_SOURCE_EXCLUSIONS = [
   .concat(
     {
       checkedAt: "2026-10-06T00:00:00.000Z",
-      dependency: "playwright-core",
+      dependency: "d3-scale",
       explanation:
-        "https://playwright.dev/llms.txt returns 404. Use the canonical documentation at https://playwright.dev/docs/api/class-browser directly.",
+        "https://d3js.org/llms.txt returns 404. Use the official scale API reference at https://d3js.org/d3-scale directly.",
       expiresAt: "2026-11-05T00:00:00.000Z",
       reason: "no-llms-txt",
     },
     {
       checkedAt: "2026-10-06T00:00:00.000Z",
-      dependency: "@sparticuz/chromium-min",
+      dependency: "@types/d3-scale",
       explanation:
-        "https://raw.githubusercontent.com/Sparticuz/chromium/main/llms.txt returns 404. Use the canonical documentation at https://github.com/Sparticuz/chromium directly.",
+        "Type declarations for d3-scale have no separate documentation site. https://d3js.org/llms.txt returns 404; use https://d3js.org/d3-scale and the declarations in @types/d3-scale directly.",
       expiresAt: "2026-11-05T00:00:00.000Z",
       reason: "no-llms-txt",
     },
@@ -405,9 +405,9 @@ export const DOC_SOURCE_EXCLUSIONS = [
     },
     {
       checkedAt: "2026-10-06T00:00:00.000Z",
-      dependency: "d3-scale",
+      dependency: "playwright-core",
       explanation:
-        "https://d3js.org/llms.txt returns 404. Use the official scale API reference at https://d3js.org/d3-scale directly.",
+        "https://playwright.dev/llms.txt returns 404. Use the canonical documentation at https://playwright.dev/docs/api/class-browser directly.",
       expiresAt: "2026-11-05T00:00:00.000Z",
       reason: "no-llms-txt",
     },
@@ -421,9 +421,9 @@ export const DOC_SOURCE_EXCLUSIONS = [
     },
     {
       checkedAt: "2026-10-06T00:00:00.000Z",
-      dependency: "@types/d3-scale",
+      dependency: "@sparticuz/chromium-min",
       explanation:
-        "Type declarations for d3-scale have no separate documentation site. https://d3js.org/llms.txt returns 404; use https://d3js.org/d3-scale and the declarations in @types/d3-scale directly.",
+        "https://raw.githubusercontent.com/Sparticuz/chromium/main/llms.txt returns 404. Use the canonical documentation at https://github.com/Sparticuz/chromium directly.",
       expiresAt: "2026-11-05T00:00:00.000Z",
       reason: "no-llms-txt",
     },

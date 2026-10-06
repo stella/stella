@@ -68,6 +68,11 @@ export const CHAT_USER_ACTIONS = {
   "select-matters": { via: "page" },
   "select-model": { via: "request" },
   send: { handler: "sendMessage", via: "session" },
+  /** Moves a queued message to the front and stops the running turn. */
+  "send-queued-message-now": {
+    handler: "sendQueuedMessageNow",
+    via: "session",
+  },
   stop: { handler: "stop", via: "session" },
   "toggle-anonymization": { via: "page" },
   "toggle-web-search": { via: "request" },
