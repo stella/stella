@@ -1,7 +1,7 @@
 diff --git a/dist/authorize-CLuqtSXQ.mjs b/dist/authorize-CLuqtSXQ.mjs
 --- a/dist/authorize-CLuqtSXQ.mjs
 +++ b/dist/authorize-CLuqtSXQ.mjs
-@@ -5438,12 +5438,26 @@
+@@ -5438,14 +5438,29 @@
  	const hasFragment = requested.includes("#");
  	const hasUserinfo = requestedUrl.username.length > 0 || requestedUrl.password.length > 0;
  	if (hasFragment || hasUserinfo) return;
@@ -14,23 +14,26 @@ diff --git a/dist/authorize-CLuqtSXQ.mjs b/dist/authorize-CLuqtSXQ.mjs
 +		if (!requestedLoopback) return false;
 +		return canonicalNativeLoopbackRedirect(url) === requestedLoopback;
  	});
-+}
-+/**
+ }
+ /**
 +* RFC 8252 sections 7.3 and 8.3: a native client's loopback redirect may use
-+* any port and any of the loopback hosts a native client may register
-+* (`localhost`, `127.0.0.1`, `[::1]`); the client binds whichever is available.
-+* Returns the redirect with port and loopback host folded to one form, or
-+* undefined when the URI is not a native http loopback redirect.
++* any port, and the loopback IP literals `127.0.0.1` and `[::1]` are one
++* interface the client binds on whichever IP version is available. `localhost`
++* (not recommended by section 8.3) keeps port-only matching.
++* Returns the redirect with port, and an IP-literal loopback host, folded to
++* one form, or undefined when the URI is not an http loopback redirect.
 +*/
 +function canonicalNativeLoopbackRedirect(uri) {
 +	const withoutPort = stripLoopbackRedirectPort(uri);
 +	if (!withoutPort) return;
-+	const match = /^http:\/\/(?:localhost|127\.0\.0\.1|\[::1\])(?=[/?#]|$)/u.exec(withoutPort);
-+	if (!match) return;
-+	return `http://loopback${withoutPort.slice(match[0].length)}`;
- }
- /**
++	const match = /^http:\/\/(?:127\.0\.0\.1|\[::1\])(?=[/?#]|$)/u.exec(withoutPort);
++	if (!match) return withoutPort;
++	return `http://loopback-ip${withoutPort.slice(match[0].length)}`;
++}
++/**
  * Loads the client, verifies it's enabled, and returns the requested
+ * redirect_uri when it matches a registered entry. Returns null whenever the
+ * RP cannot be safely reached, so callers can fall back to the server error
 diff --git a/dist/introspect-CbYi2MJT.mjs b/dist/introspect-CbYi2MJT.mjs
 index c8d635e57ca4cd3fe8f7cbfd5c769d61b7e96874..61814b7418ca78b61433eee5766e1a138e0fe12c 100644
 --- a/dist/introspect-CbYi2MJT.mjs

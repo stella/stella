@@ -228,34 +228,66 @@ describe("OAuth client ID metadata documents", () => {
   const NATIVE_DOCUMENT_URL =
     "https://native.example.com/oauth/client-metadata.json";
 
+  /** The redirect the sign-in hand-off will complete to, exactly as sent. */
+  const handedOffRedirect = (response: Response): string | null => {
+    expect(response.status).toBe(302);
+    const location = new URL(
+      v.parse(v.string(), response.headers.get("location")),
+      getAuthIssuerUrl(),
+    );
+    const oauthQuery =
+      location.searchParams.get("oauth_query") ??
+      new URLSearchParams(location.hash.slice(1)).get("oauth_query");
+    return new URLSearchParams(oauthQuery ?? "").get("redirect_uri");
+  };
+
   test.each([
     "http://localhost:49152/callback",
     "http://127.0.0.1:49152/callback",
     "http://[::1]:49152/callback",
     "http://[::1]/callback",
-  ])("accepts every loopback host form and port: %s", async (redirectUri) => {
-    nativeDocument(NATIVE_DOCUMENT_URL);
+  ])(
+    "accepts a listed loopback host, or the other IP literal, on any port: %s",
+    async (redirectUri) => {
+      nativeDocument(NATIVE_DOCUMENT_URL);
 
-    const response = await authorize(NATIVE_DOCUMENT_URL, redirectUri);
+      const response = await authorize(NATIVE_DOCUMENT_URL, redirectUri);
 
-    expect(response.status).toBe(302);
-    expect(response.headers.get("location")).toContain("oauth_query=");
-  });
+      expect(handedOffRedirect(response)).toBe(redirectUri);
+    },
+  );
 
-  test("accepts an IPv6 loopback callback for a declared native application", async () => {
+  test("an IPv4 literal listing admits IPv6 loopback but not localhost", async () => {
     const documentUrl = "https://native-app.example.com/oauth/client.json";
     nativeDocument(documentUrl, {
       application_type: "native",
-      redirect_uris: ["http://127.0.0.1/callback", "http://localhost/callback"],
+      redirect_uris: ["http://127.0.0.1/callback"],
     });
 
-    const response = await authorize(
-      documentUrl,
-      "http://[::1]:49152/callback",
-    );
+    expect(
+      handedOffRedirect(
+        await authorize(documentUrl, "http://[::1]:49152/callback"),
+      ),
+    ).toBe("http://[::1]:49152/callback");
+    expect(
+      await refusalFrom(
+        await authorize(documentUrl, "http://localhost:49152/callback"),
+      ),
+    ).toMatch(/invalid_re/u);
+  });
 
-    expect(response.status).toBe(302);
-    expect(response.headers.get("location")).toContain("oauth_query=");
+  test("a localhost-only listing keeps port-only matching", async () => {
+    const documentUrl =
+      "https://native-localhost.example.com/oauth/client.json";
+    nativeDocument(documentUrl, {
+      redirect_uris: ["http://localhost/callback"],
+    });
+
+    expect(
+      await refusalFrom(
+        await authorize(documentUrl, "http://[::1]:49152/callback"),
+      ),
+    ).toMatch(/invalid_re/u);
   });
 
   test.each([
