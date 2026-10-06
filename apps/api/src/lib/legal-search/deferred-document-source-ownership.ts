@@ -1,7 +1,8 @@
 // parser-output-unchanged: document ownership does not alter parsing.
 import { Result, TaggedError } from "better-result";
-import { and, eq, sql } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 
+import type { Transaction } from "@/api/db/root";
 import { abortTransaction, type ScopedDb } from "@/api/db/safe-db";
 import { caseLawDecisions, caseLawSources } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -52,7 +53,11 @@ const liveDecisionMergeLease = sql<boolean>`
   AND ${caseLawSources.ingestionLeaseExpiresAt} > clock_timestamp()
 `;
 
-/** All database effects validate ownership while holding the source row. */
+/**
+ * All database effects validate ownership while holding the source row. The
+ * epoch catches a merge that claimed and released the source between two
+ * checks (during a remote effect), which a live-lease test alone cannot see.
+ */
 export const withDeferredDocumentSourceOwnership = async <T>({
   decisionId,
   scopedDb,
@@ -78,7 +83,11 @@ export const withDeferredDocumentSourceOwnership = async <T>({
     }
     const source = (
       await tx
-        .select({ id: caseLawSources.id, mergeLease: liveDecisionMergeLease })
+        .select({
+          id: caseLawSources.id,
+          mergeLease: liveDecisionMergeLease,
+          mergeEpoch: caseLawSources.decisionMergeEpoch,
+        })
         .from(caseLawSources)
         .where(eq(caseLawSources.id, decision.sourceId))
         .for("update")
@@ -88,7 +97,11 @@ export const withDeferredDocumentSourceOwnership = async <T>({
     }
     return source.mergeLease
       ? ({ status: "busy" } as const)
-      : ({ status: "ready", sourceId: source.id } as const);
+      : ({
+          status: "ready",
+          sourceId: source.id,
+          mergeEpoch: source.mergeEpoch,
+        } as const);
   });
   if (initial.status !== "ready") {
     return initial;
@@ -109,56 +122,41 @@ export const withDeferredDocumentSourceOwnership = async <T>({
                 );
               }
             };
+            const assertNoMerge = async (tx: Transaction) => {
+              const owner = (
+                await tx
+                  .select({
+                    id: caseLawSources.id,
+                    mergeLease: liveDecisionMergeLease,
+                    mergeEpoch: caseLawSources.decisionMergeEpoch,
+                  })
+                  .from(caseLawSources)
+                  .where(eq(caseLawSources.id, initial.sourceId))
+                  .for("update")
+              ).at(0);
+              if (owner === undefined) {
+                abortTransaction(
+                  new DeferredDocumentFenceError({
+                    message: "Document source is missing",
+                  }),
+                );
+              }
+              if (owner.mergeLease || owner.mergeEpoch !== initial.mergeEpoch) {
+                abortTransaction(
+                  new DeferredDocumentOwnershipLostError({
+                    message: "Document source entered decision merge",
+                  }),
+                );
+              }
+            };
             const fencedDb: ScopedDb = async (run) => {
               assertActive();
               return await scopedDb(async (tx) => {
                 assertActive();
-                const owner = (
-                  await tx
-                    .select({
-                      id: caseLawSources.id,
-                      mergeLease: liveDecisionMergeLease,
-                    })
-                    .from(caseLawSources)
-                    .where(eq(caseLawSources.id, initial.sourceId))
-                    .for("update")
-                ).at(0);
-                if (owner === undefined) {
-                  abortTransaction(
-                    new DeferredDocumentFenceError({
-                      message: "Document source is missing",
-                    }),
-                  );
-                }
-                if (owner.mergeLease) {
-                  abortTransaction(
-                    new DeferredDocumentOwnershipLostError({
-                      message: "Document source is held for decision merge",
-                    }),
-                  );
-                }
+                await assertNoMerge(tx);
                 const value = await run(tx);
                 assertActive();
-                const mergeLease = (
-                  await tx
-                    .select({ id: caseLawSources.id })
-                    .from(caseLawSources)
-                    .where(
-                      and(
-                        eq(caseLawSources.id, initial.sourceId),
-                        liveDecisionMergeLease,
-                      ),
-                    )
-                    .limit(1)
-                ).at(0);
-                if (mergeLease !== undefined) {
-                  abortTransaction(
-                    new DeferredDocumentOwnershipLostError({
-                      message:
-                        "Document source entered decision merge during settlement",
-                    }),
-                  );
-                }
+                await assertNoMerge(tx);
                 assertActive();
                 return value;
               });

@@ -352,6 +352,12 @@ export const caseLawSources = p.pgTable(
       .text("ingestion_lease_purpose", { enum: CASE_LAW_SOURCE_LEASE_PURPOSES })
       .default("ingestion")
       .notNull(),
+    // Advances on every decision-merge claim, so a document writer detects a
+    // merge that started and finished while it was not looking.
+    decisionMergeEpoch: p
+      .bigint("decision_merge_epoch", { mode: "bigint" })
+      .default(0n)
+      .notNull(),
     config: jsonb().$type<Record<string, unknown>>().default({}),
     // License / redistribution terms. null = legacy source (public
     // court records, treated as redistributable); see corpus-source.ts. A

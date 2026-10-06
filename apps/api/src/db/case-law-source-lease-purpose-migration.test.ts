@@ -103,15 +103,18 @@ test("source lease purposes preserve existing owners and restrict persisted valu
   expect(
     (
       await db.query(
-        "SELECT ingestion_lease_purpose AS purpose FROM case_law_sources WHERE id = 3",
+        "SELECT ingestion_lease_purpose AS purpose, decision_merge_epoch::text AS epoch FROM case_law_sources WHERE id = 3",
       )
     ).rows,
-  ).toEqual([{ purpose: "ingestion" }]);
-  expect(
-    (
-      await db.query(
-        `SELECT has_column_privilege('stella_ingestion', 'case_law_sources', 'ingestion_lease_purpose', 'UPDATE') AS allowed`,
-      )
-    ).rows,
-  ).toEqual([{ allowed: true }]);
+  ).toEqual([{ purpose: "ingestion", epoch: "0" }]);
+  for (const column of ["ingestion_lease_purpose", "decision_merge_epoch"]) {
+    expect(
+      (
+        await db.query(
+          `SELECT has_column_privilege('stella_ingestion', 'case_law_sources', $1, 'UPDATE') AS allowed`,
+          [column],
+        )
+      ).rows,
+    ).toEqual([{ allowed: true }]);
+  }
 }, 90_000);

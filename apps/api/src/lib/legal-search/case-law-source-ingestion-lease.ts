@@ -23,6 +23,11 @@ export type CaseLawSourceIngestionLease = {
   source: typeof caseLawSources.$inferSelect;
 };
 
+const DECISION_MERGE_EPOCH_ADVANCE = {
+  ingestion: 0,
+  "decision-merge": 1,
+} as const satisfies Record<CaseLawSourceLeasePurpose, number>;
+
 type AcquireCaseLawSourceIngestionLeaseOptions = {
   scopedDb: ScopedDb;
   sourceId: SafeId<"caseLawSource">;
@@ -57,6 +62,7 @@ export const acquireCaseLawSourceIngestionLease = async ({
           ingestionLeaseExpiresAt: nextLeaseExpiry(),
           ingestionLeaseToken: leaseToken,
           ingestionLeasePurpose: purpose,
+          decisionMergeEpoch: sql`${caseLawSources.decisionMergeEpoch} + ${DECISION_MERGE_EPOCH_ADVANCE[purpose]}`,
           updatedAt: sql`${caseLawSources.updatedAt}`,
         })
         .where(

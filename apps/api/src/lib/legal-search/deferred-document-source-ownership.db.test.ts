@@ -107,6 +107,7 @@ if (!databaseUrl || !enabled) {
         where: { id: { eq: sourceId } },
         columns: {
           ingestionLeaseToken: true,
+          decisionMergeEpoch: true,
         },
       });
 
@@ -299,6 +300,59 @@ if (!databaseUrl || !enabled) {
       expect(result).toEqual({ status: "lost" });
       expect((await readDecision(decisionId))?.fulltext).toBeNull();
       expect((await readSource(sourceId))?.ingestionLeaseToken).toBeNull();
+    });
+
+    test("a decision merge that starts and ends during a remote effect blocks settlement", async () => {
+      const { sourceId, decisionId } = await fixture();
+      const epochBefore = (await readSource(sourceId))?.decisionMergeEpoch;
+      const result = await withDeferredDocumentSourceOwnership({
+        decisionId,
+        scopedDb,
+        timeoutMs: 1000,
+        operation: async (fence) => {
+          await fence.beforeRemoteEffect(async () => {
+            const merge = await acquireCaseLawSourceIngestionLease({
+              sourceId,
+              scopedDb,
+              purpose: "decision-merge",
+            });
+            if (merge === null) {
+              panic("decision merge fixture missing");
+            }
+            await merge.release();
+          });
+          await fence.scopedDb(async (tx) => {
+            await tx
+              .update(caseLawDecisions)
+              .set({ fulltext: "document" })
+              .where(eq(caseLawDecisions.id, decisionId));
+          });
+        },
+      });
+      expect(result).toEqual({ status: "lost" });
+      expect((await readDecision(decisionId))?.fulltext).toBeNull();
+      const source = await readSource(sourceId);
+      expect(source?.ingestionLeaseToken).toBeNull();
+      if (epochBefore === undefined) {
+        panic("source fixture missing");
+      }
+      expect(source?.decisionMergeEpoch).toBe(epochBefore + 1n);
+    });
+
+    test("an ingestion claim does not advance the decision merge epoch", async () => {
+      const { sourceId } = await fixture();
+      const epochBefore = (await readSource(sourceId))?.decisionMergeEpoch;
+      const ingestion = await acquireCaseLawSourceIngestionLease({
+        sourceId,
+        scopedDb,
+      });
+      if (ingestion === null) {
+        panic("ingestion lease fixture missing");
+      }
+      await ingestion.release();
+      expect((await readSource(sourceId))?.decisionMergeEpoch).toBe(
+        epochBefore,
+      );
     });
 
     test("every exported document mutation observes a decision merge owner", async () => {
