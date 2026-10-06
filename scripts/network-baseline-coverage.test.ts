@@ -77,17 +77,17 @@ test("canonical smoke keys and declarations cover the generated authenticated tr
   );
 });
 
-test("a render-in-place expectation rejects the former lists redirect key", () => {
+test("the gated lists redirect rejects the former render-in-place key", () => {
   const route = SMOKE_ROUTE_DEFS.find(
     (def) => def.template === "/workspaces/$workspaceId/lists",
   );
   expect(route).toBeDefined();
-  expect(route?.expectation?.kind).not.toBe("redirectsTo");
+  expect(route?.expectation?.kind).toBe("redirectsTo");
   const stale = baseline();
-  delete stale["/workspaces/$workspaceId/lists"];
-  stale["/workspaces/$workspaceId/lists target"] = entry;
+  delete stale["/workspaces/$workspaceId/lists target"];
+  stale["/workspaces/$workspaceId/lists"] = entry;
   expect(() => validate(stale)).toThrow(
-    'Network baseline route keys differ: missing=["/workspaces/$workspaceId/lists"] stale=["/workspaces/$workspaceId/lists target"]',
+    'Network baseline route keys differ: missing=["/workspaces/$workspaceId/lists target"] stale=["/workspaces/$workspaceId/lists"]',
   );
 });
 
@@ -153,7 +153,7 @@ test("reviewed declarations cannot retain inactive redirect keys", () => {
   expect(() =>
     validate(baseline(), [
       {
-        route: "/workspaces/$workspaceId/lists target",
+        route: "/workspaces/$workspaceId/lists",
         reason: "Reviewed budget",
         budget: entry,
       },
@@ -253,10 +253,10 @@ test("real prepared context exempts changed redirects and leaves unrelated stale
   const changedRedirect = baseline();
   delete changedRedirect["/settings target"];
   validate(changedRedirect, [], changedRoutes);
-  delete changedRedirect["/workspaces/$workspaceId/lists"];
-  changedRedirect["/workspaces/$workspaceId/lists target"] = entry;
+  delete changedRedirect["/workspaces/$workspaceId/lists target"];
+  changedRedirect["/workspaces/$workspaceId/lists"] = entry;
   expect(() => validate(changedRedirect, [], changedRoutes)).toThrow(
-    'missing=["/workspaces/$workspaceId/lists"] stale=["/workspaces/$workspaceId/lists target"]',
+    'missing=["/workspaces/$workspaceId/lists target"] stale=["/workspaces/$workspaceId/lists"]',
   );
 });
 
@@ -273,13 +273,7 @@ test("inherited declarations cannot manufacture a missing prepared baseline key"
 test("an expectation change needs a matching prepared recording", () => {
   const changedDefs = SMOKE_ROUTE_DEFS.map((def) =>
     def.template === "/workspaces/$workspaceId/lists"
-      ? {
-          ...def,
-          expectation: {
-            kind: "redirectsTo",
-            to: "/workspaces/$workspaceId/$viewId",
-          },
-        }
+      ? { template: def.template, path: def.path }
       : def,
   );
   assertSmokeRouteCoverage(routeTree, changedDefs);
@@ -290,11 +284,11 @@ test("an expectation change needs a matching prepared recording", () => {
       expectedKeys,
     }),
   ).toBe(
-    'Network baseline route keys differ: missing=["/workspaces/$workspaceId/lists target"] stale=["/workspaces/$workspaceId/lists"]',
+    'Network baseline route keys differ: missing=["/workspaces/$workspaceId/lists"] stale=["/workspaces/$workspaceId/lists target"]',
   );
   const recorded = baseline();
-  delete recorded["/workspaces/$workspaceId/lists"];
-  recorded["/workspaces/$workspaceId/lists target"] = entry;
+  delete recorded["/workspaces/$workspaceId/lists target"];
+  recorded["/workspaces/$workspaceId/lists"] = entry;
   expect(
     networkBaselineCoverageProblem({
       actualKeys: Object.keys(recorded),
