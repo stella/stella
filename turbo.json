@@ -20,6 +20,9 @@
   // package, not one task's declared inputs.
   "globalDependencies": ["patches/**"],
   "tasks": {
+    "@stll/desktop#test:browser": {
+      "inputs": ["$TURBO_DEFAULT$"]
+    },
     // Outputs are ignored by Git, but restored by Turbo on a cache hit.
     "@stll/web#generate:route-tree": {
       "inputs": [

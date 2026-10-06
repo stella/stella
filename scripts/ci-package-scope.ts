@@ -6,6 +6,7 @@ import {
   landingBuildRootInputs,
   landingClosure,
   parseLockfile,
+  workspaceClosure,
 } from "./landing-deploy-scope";
 import {
   readLiteralCallOptions,
@@ -252,11 +253,109 @@ export const requiresLandingBuild = ({
   }
 };
 
+export const requiresDesktopBrowser = ({
+  changed,
+  root = ROOT,
+}: ScopeOptions): boolean => {
+  try {
+    if (changed.some((file) => GLOBAL.test(file))) {
+      return true;
+    }
+    const lock = parseLockfile(
+      Bun.JSONC.parse(readFileSync(path.join(root, "bun.lock"), "utf-8")),
+    );
+    if (lock === undefined) {
+      return true;
+    }
+    const closure = workspaceClosure(lock, "@stll/desktop");
+    if (closure === undefined) {
+      return true;
+    }
+    for (const directory of closure.workspaceDirectories) {
+      const workspace = lock.workspaces[directory];
+      if (workspace === undefined) {
+        return true;
+      }
+      for (const kind of [
+        "dependencies",
+        "devDependencies",
+        "optionalDependencies",
+        "peerDependencies",
+      ]) {
+        const dependencies = workspace[kind];
+        if (dependencies === undefined) {
+          continue;
+        }
+        if (
+          typeof dependencies !== "object" ||
+          dependencies === null ||
+          Array.isArray(dependencies)
+        ) {
+          return true;
+        }
+        if (
+          Object.keys(dependencies).some(
+            (name) => lock.packages[name] === undefined,
+          )
+        ) {
+          return true;
+        }
+      }
+    }
+    const turbo: unknown = Bun.JSONC.parse(
+      readFileSync(path.join(root, "turbo.json"), "utf-8"),
+    );
+    if (typeof turbo !== "object" || turbo === null || !("tasks" in turbo)) {
+      return true;
+    }
+    const tasks = turbo.tasks;
+    if (
+      typeof tasks !== "object" ||
+      tasks === null ||
+      !("@stll/desktop#test:browser" in tasks)
+    ) {
+      return true;
+    }
+    const task = tasks["@stll/desktop#test:browser"];
+    if (typeof task !== "object" || task === null || !("inputs" in task)) {
+      return true;
+    }
+    const inputs = task.inputs;
+    if (
+      !Array.isArray(inputs) ||
+      inputs.length === 0 ||
+      inputs.some((input) => typeof input !== "string")
+    ) {
+      return true;
+    }
+    const rootInputs = inputs
+      .filter(
+        (input): input is string =>
+          typeof input === "string" && input.startsWith("$TURBO_ROOT$/"),
+      )
+      .map((input) => input.slice("$TURBO_ROOT$/".length));
+    return changed.some(
+      (file) =>
+        [...closure.workspaceDirectories].some(
+          (directory) => file === directory || file.startsWith(`${directory}/`),
+        ) || rootInputs.some((input) => matches(file, input)),
+    );
+  } catch (error) {
+    console.error(
+      "Desktop browser scope unavailable; running desktop browsers",
+      error,
+    );
+    return true;
+  }
+};
+
 if (import.meta.main) {
   const [kind, ...changed] = process.argv.slice(2);
   let required = true;
   if (kind === "--package-checks") {
     required = requiresPackageChecks({ changed });
+  } else if (kind === "--desktop-browser") {
+    required = requiresDesktopBrowser({ changed });
   } else if (kind === "--landing-build") {
     required = requiresLandingBuild({ changed });
   }

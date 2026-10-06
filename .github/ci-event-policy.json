@@ -111,7 +111,7 @@
     "ci.yml/ci-checks-policy": "pr-fast",
     "ci.yml/ci-checks-rest": "pr-fast",
     "ci.yml/ci-tests": "pr-fast",
-    "ci.yml/ci-browser": "queue",
+    "ci.yml/ci-browser": "pr-fast",
     "ci.yml/code-quality-api": "pr-fast",
     "ci.yml/code-quality-web": "pr-fast",
     "ci.yml/code-quality-rest": "pr-fast",
