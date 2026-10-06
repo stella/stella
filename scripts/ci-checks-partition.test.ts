@@ -480,13 +480,20 @@ const expectScope = ({ current, base }: ScopeOptions) => {
   }
   expect(migrated).toEqual(originalScope);
   const tokens = conditionTokens(v.parse(v.string(), condition));
+  const original = conditionTokens(v.parse(v.string(), originalCondition));
+  if (tokens === original) {
+    return;
+  }
   // Ordinary scope comparisons supply fresh-run evidence. Completion reuse
   // is exercised separately by the depth contract's true/false census.
-  const fresh =
-    /^needs\.ci-plan\.outputs\.run_required != 'false' && \(\s*(.*?)\s*\)$/u
-      .exec(tokens)
-      ?.at(1) ?? tokens;
-  const original = conditionTokens(v.parse(v.string(), originalCondition));
+  const completionWrapper =
+    /^needs\.ci-plan\.outputs\.run_required != 'false' && \(\s*(.*?)\s*\)$/u;
+  // A gate already owned by the baseline must stay exactly where it was.
+  if (completionWrapper.test(original)) {
+    expect(tokens).toBe(original);
+    return;
+  }
+  const fresh = completionWrapper.exec(tokens)?.at(1) ?? tokens;
   if (fresh === original) {
     return;
   }
@@ -765,6 +772,31 @@ test("CI check scope permits only the heavy-only wrapper around the unchanged co
   expect(() => expectScope({ current: missingCondition, base })).toThrow(
     "Invalid type",
   );
+});
+
+test("completion scope preserves already-owned gates and permits only a new reuse wrapper", () => {
+  const trusted = "needs.ci-plan.outputs.trusted == 'true'";
+  const heavy = `inputs.heavy_only != true && (${trusted})`;
+  const completion = (scope: string) =>
+    `needs.ci-plan.outputs.run_required != 'false' && (${scope})`;
+  for (const scope of [trusted, heavy]) {
+    const base = { if: scope };
+    const current = { if: completion(scope) };
+    expectScope({ current, base });
+    expectScope({ current, base: current });
+    for (const invalid of [
+      scope,
+      trusted,
+      completion("true"),
+      completion(completion(scope)),
+      ...(scope === heavy ? [completion(trusted)] : []),
+      completion(scope).replace("!= 'false'", "== 'false'"),
+    ]) {
+      expect(() =>
+        expectScope({ current: { if: invalid }, base: current }),
+      ).toThrow("toBe");
+    }
+  }
 });
 
 test("CI check scope migrates only the complete producer handoff and preserves an existing handoff", () => {
