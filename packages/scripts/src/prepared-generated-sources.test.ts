@@ -286,7 +286,7 @@ test("API runtime generation works with only packaged sources and rejects a root
     );
     write(
       "packages/cli/capabilities/widgets.list.json",
-      JSON.stringify({ id: "widgets.list" }),
+      JSON.stringify({ id: "widgets.list", featureId: "fixture-feature" }),
     );
     write(
       "apps/api/src/mcp/generated/capability-dispatch/widgets.list.ts",
@@ -316,6 +316,15 @@ test("API runtime generation works with only packaged sources and rejects a root
         "utf-8",
       ),
     ).toContain("widgets.list");
+    expect(
+      readFileSync(
+        path.join(
+          root,
+          "apps/api/src/mcp/generated/capability-feature-bindings.ts",
+        ),
+        "utf-8",
+      ),
+    ).toContain('["widgets.list","fixture-feature"]');
     const owner = "packages/scripts/src/prepared-generated-sources.ts";
     const source = readFileSync(path.join(root, owner), "utf-8");
     const mutated = source.replace(

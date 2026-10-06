@@ -44,7 +44,10 @@
       "cache": false
     },
     "@stll/web#generate:api-types": {
-      "dependsOn": ["generate:route-tree"],
+      "dependsOn": [
+        "generate:route-tree",
+        "@stll/api#generate:capability-runtime"
+      ],
       "inputs": [
         "$TURBO_ROOT$/apps/api/**",
         "$TURBO_ROOT$/packages/scripts/src/generated-files.ts",

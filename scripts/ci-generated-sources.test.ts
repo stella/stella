@@ -348,3 +348,95 @@ test("every preparation command resolves a real generator file or package script
     ]).length,
   ).toBeGreaterThan(0);
 });
+
+test("API boot entry points prepare capability runtime sources before starting", () => {
+  const action = v.parse(
+    v.object({ runs: v.object({ steps: v.array(stepSchema) }) }),
+    Bun.YAML.parse(
+      readFileSync(
+        new URL(
+          "../.github/actions/setup-e2e-stack/action.yml",
+          import.meta.url,
+        ),
+        "utf-8",
+      ),
+    ),
+  );
+  const assertPrepared = (steps: typeof action.runs.steps) => {
+    const preparation = steps.findIndex(
+      ({ run }) => run === "bun --filter @stll/api generate:capability-runtime",
+    );
+    const boot = steps.findIndex(({ name }) => name === "Start API server");
+    expect(preparation).toBeGreaterThanOrEqual(0);
+    expect(boot).toBeGreaterThan(preparation);
+    for (const name of ["Run database migrations", "Seed test user"]) {
+      expect(
+        steps.findIndex((step) => step.name === name),
+        name,
+      ).toBeGreaterThan(preparation);
+    }
+    expect(steps.at(preparation)?.if).toBe(steps.at(boot)?.if);
+  };
+  assertPrepared(action.runs.steps);
+  const missing = action.runs.steps.filter(
+    ({ run }) => run !== "bun --filter @stll/api generate:capability-runtime",
+  );
+  expect(missing.length).toBe(action.runs.steps.length - 1);
+  expect(() => assertPrepared(missing)).toThrow("toBeGreaterThanOrEqual");
+
+  const api = v.parse(
+    v.object({ scripts: v.record(v.string(), v.string()) }),
+    JSON.parse(
+      readFileSync(
+        new URL("../apps/api/package.json", import.meta.url),
+        "utf-8",
+      ),
+    ),
+  );
+  for (const command of [
+    "build",
+    "build:analyze",
+    "dev",
+    "test",
+    "test:property",
+    "typecheck",
+    "lint",
+    "lint:fix",
+  ]) {
+    expect(api.scripts[command], command).toContain(
+      "bun run generate:capability-runtime &&",
+    );
+  }
+  const root = v.parse(
+    v.object({ scripts: v.record(v.string(), v.string()) }),
+    JSON.parse(
+      readFileSync(new URL("../package.json", import.meta.url), "utf-8"),
+    ),
+  );
+  expect(root.scripts["generate"]).toContain("generate:capability-runtime");
+  expect(root.scripts["generate"]).toContain("--filter=@stll/api");
+  const turbo = v.parse(
+    v.object({
+      tasks: v.record(
+        v.string(),
+        v.looseObject({ dependsOn: v.optional(v.array(v.string())) }),
+      ),
+    }),
+    Bun.JSONC.parse(
+      readFileSync(new URL("../turbo.json", import.meta.url), "utf-8"),
+    ),
+  );
+  expect(turbo.tasks["@stll/web#generate:api-types"]?.dependsOn).toContain(
+    "@stll/api#generate:capability-runtime",
+  );
+  const docker = readFileSync(
+    new URL("../apps/api/Dockerfile", import.meta.url),
+    "utf-8",
+  );
+  expect(
+    docker.indexOf("RUN bun apps/api/scripts/generate-capability-runtime.ts"),
+  ).toBeGreaterThanOrEqual(0);
+  expect(
+    docker.indexOf("RUN bun apps/api/scripts/generate-capability-runtime.ts"),
+  ).toBeLessThan(docker.indexOf("RUN bun build"));
+});
