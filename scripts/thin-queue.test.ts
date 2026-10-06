@@ -12,7 +12,12 @@ import path from "node:path";
 import { Script } from "node:vm";
 import * as v from "valibot";
 
-import { mainHeavyJobs, THIN_JOBS } from "./main-heavy-plan";
+import {
+  contextFromNested,
+  evaluate as evaluateExpression,
+  UNKNOWN,
+} from "./github-expression";
+import { mainHeavyJobs, thinJobs } from "./main-heavy-plan";
 
 const root = new URL("../", import.meta.url).pathname;
 const stepSchema = v.looseObject({
@@ -47,8 +52,15 @@ const readWorkflow = (name: string) =>
     ),
   );
 const ci = readWorkflow("ci.yml");
+const THIN_JOBS = thinJobs(ci);
 const main = readWorkflow("main-heavy.yml");
 const heavy = mainHeavyJobs(ci);
+const eventPolicy = v.parse(
+  v.object({ jobs: v.record(v.string(), v.string()) }),
+  JSON.parse(
+    readFileSync(path.join(root, ".github/ci-event-policy.json"), "utf-8"),
+  ),
+).jobs;
 type StepOptions = { workflow: typeof ci; job: string; name: string };
 const step = ({ workflow, job, name }: StepOptions) => {
   const found = workflow.jobs[job]?.steps?.find((item) => item.name === name);
@@ -78,6 +90,14 @@ const plan = {
       scope === null ? [] : [[scope, "true"]],
     ),
   ),
+  ...Object.fromEntries(
+    Object.values(
+      v.parse(
+        v.record(v.string(), v.string()),
+        JSON.parse(outcome.env?.["FAST_JOB_SCOPES"] ?? ""),
+      ),
+    ).map((scope) => [scope, "true"]),
+  ),
   agent_sandbox_docker_required: "true",
   api_image_deps_required: "true",
   trusted: "true",
@@ -96,15 +116,23 @@ type ContextOptions = {
   event: (typeof events)[number];
   variable: string;
   queueDepth: string;
+  proveFix?: boolean;
 };
 const context = ({
   event: { event, message },
   variable,
   queueDepth,
+  proveFix = false,
 }: ContextOptions) => ({
   github: {
     event_name: event,
-    event: { head_commit: { message }, pull_request: { draft: false } },
+    event: {
+      head_commit: { message },
+      pull_request: {
+        draft: false,
+        labels: proveFix ? [{ name: "prove-fix" }] : [],
+      },
+    },
   },
   vars: { MERGE_QUEUE_DEPTH: variable },
   inputs: { heavy_only: false },
@@ -112,6 +140,9 @@ const context = ({
     needs.map((job) => {
       const outputs: Record<string, string> =
         job === "ci-plan" ? { ...plan, queue_depth: queueDepth } : {};
+      if (job === "ci-plan" && event === "pull_request") {
+        outputs["fix_tests_on_base_required"] = "true";
+      }
       return [job, { result: "success", outputs }];
     }),
   ),
@@ -120,13 +151,50 @@ const context = ({
   startsWith: (value: string, prefix: string) => value.startsWith(prefix),
 });
 const selected = (condition: string | undefined, value: object) => {
-  const expression = (condition ?? "true")
-    .replace(/^\s*\$\{\{([\s\S]*)\}\}\s*$/u, "$1")
-    .replaceAll(
-      /needs\.([\w-]+)/gu,
-      (_, job: string) => `needs[${JSON.stringify(job)}]`,
-    );
-  return new Script(`Boolean(${expression})`).runInNewContext(value);
+  const expression = condition ?? "true";
+  const result = evaluateExpression(expression, contextFromNested(value));
+  if (result === UNKNOWN) {
+    panic(`Unresolved queue workflow expression: ${expression}`);
+  }
+  return Boolean(result);
+};
+const expectedRouteSelection = (value: ReturnType<typeof context>) => {
+  const planner = value.needs["ci-plan"];
+  if (!planner) {
+    panic("Missing route smoke planner context");
+  }
+  return (
+    value.github.event_name !== "pull_request" &&
+    (value.github.event_name !== "merge_group" || !value.cancelled()) &&
+    planner.outputs["queue_depth"] !== "thin" &&
+    planner.outputs["trusted"] === "true" &&
+    planner.outputs["route_smoke_required"] === "true" &&
+    (value.needs["web-build"]?.result === "success" ||
+      value.needs["heavy-web-build"]?.result === "success") &&
+    (value.github.event_name === "merge_group" || value.inputs.heavy_only)
+  );
+};
+const expectedPrSelection = (
+  job: string,
+  baseline: boolean,
+  proveFix = false,
+) => {
+  const disposition = eventPolicy[`ci.yml/${job}`];
+  if (disposition === undefined) {
+    panic(`Missing CI event disposition: ${job}`);
+  }
+  switch (disposition) {
+    case "queue":
+    case "main":
+      return false;
+    case "pr-opt-in":
+      return proveFix && baseline;
+    case "pr-fast":
+    case "pending":
+      return baseline;
+    default:
+      return panic(`Unexpected CI event disposition: ${job}/${disposition}`);
+  }
 };
 const templateValue = (template: string, value: object) =>
   template.replaceAll(/\$\{\{([\s\S]*?)\}\}/gu, (_, expression: string) =>
@@ -323,7 +391,58 @@ const assertMainSelection = (workflow: typeof main) => {
   }
 };
 
-test("unset and full preserve CI job predicates and the main heavy job set", () => {
+test("route smoke certifies planned queue and heavy builds while skipping PRs", () => {
+  expect(eventPolicy["ci.yml/route-smoke"]).toBe("queue");
+  const cases = events
+    .flatMap((event) =>
+      ["full", "thin"].map((queueDepth) => ({ event, queueDepth })),
+    )
+    .flatMap((value) => [false, true].map((planned) => ({ ...value, planned })))
+    .flatMap((value) => [false, true].map((trusted) => ({ ...value, trusted })))
+    .flatMap((value) =>
+      [false, true].map((cancelled) => ({ ...value, cancelled })),
+    )
+    .flatMap((value) =>
+      [false, true].map((heavyOnly) => ({ ...value, heavyOnly })),
+    )
+    .flatMap((value) =>
+      ["success", "skipped", "failure"].map((webResult) => ({
+        ...value,
+        webResult,
+      })),
+    )
+    .flatMap((value) =>
+      ["success", "skipped", "failure"].map((heavyResult) => ({
+        ...value,
+        heavyResult,
+      })),
+    );
+  for (const scenario of cases) {
+    const value = context({
+      event: scenario.event,
+      variable: "full",
+      queueDepth: scenario.queueDepth,
+    });
+    const planner = value.needs["ci-plan"];
+    const web = value.needs["web-build"];
+    const heavyWeb = value.needs["heavy-web-build"];
+    if (!planner || !web || !heavyWeb) {
+      panic("Missing route smoke build context");
+    }
+    planner.outputs["route_smoke_required"] = String(scenario.planned);
+    planner.outputs["trusted"] = String(scenario.trusted);
+    value.inputs.heavy_only = scenario.heavyOnly;
+    value.cancelled = () => scenario.cancelled;
+    web.result = scenario.webResult;
+    heavyWeb.result = scenario.heavyResult;
+    expect(
+      selected(ci.jobs["route-smoke"]?.if, value),
+      JSON.stringify(scenario),
+    ).toBe(expectedRouteSelection(value));
+  }
+});
+
+test("unset and full preserve historical predicates except declared PR and route ownership changes", () => {
   const baseline = original("ci.yml");
   const baselineMain = original("main-heavy.yml");
   expect(Object.keys(main.jobs)).toEqual(Object.keys(baselineMain.jobs));
@@ -336,16 +455,27 @@ test("unset and full preserve CI job predicates and the main heavy job set", () 
     ]),
   );
   for (const event of events) {
-    for (const variable of ["", "full"]) {
-      const value = context({ event, variable, queueDepth: "full" });
+    for (const { variable, proveFix } of ["", "full"].flatMap((queueVariable) =>
+      [false, true].map((labelRequested) => ({
+        variable: queueVariable,
+        proveFix: labelRequested,
+      })),
+    )) {
+      const value = context({ event, variable, queueDepth: "full", proveFix });
       for (const [job, body] of Object.entries(baseline.jobs)) {
         if (job === "merge-group-fail-fast") {
           continue;
         }
+        let expected = selected(body.if, value);
+        if (job === "route-smoke") {
+          expected = expectedRouteSelection(value);
+        } else if (event.event === "pull_request") {
+          expected = expectedPrSelection(job, expected, proveFix);
+        }
         expect(
           selected(ci.jobs[job]?.if, value),
-          `${event.event}/${event.message}/${variable}/${job}`,
-        ).toBe(selected(body.if, value));
+          `${event.event}/${event.message}/${variable}/${proveFix}/${job}`,
+        ).toBe(expected);
       }
     }
   }
@@ -402,11 +532,17 @@ test("one variable moves only derived heavy jobs from merge groups to ordinary m
           );
           continue;
         }
-        expect(runs, `${event.event}/${variable}/${job}`).toBe(
-          resolved.exitCode !== 0 || (thinQueue && heavy.includes(job))
-            ? false
-            : selected(baseline.jobs[job]?.if, value),
-        );
+        if (resolved.exitCode !== 0 || (thinQueue && heavy.includes(job))) {
+          expect(runs, `${event.event}/${variable}/${job}`).toBe(false);
+          continue;
+        }
+        let expected = selected(baseline.jobs[job]?.if, value);
+        if (job === "route-smoke") {
+          expected = expectedRouteSelection(value);
+        } else if (event.event === "pull_request") {
+          expected = expectedPrSelection(job, expected);
+        }
+        expect(runs, `${event.event}/${variable}/${job}`).toBe(expected);
       }
     }
   }
