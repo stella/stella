@@ -1,10 +1,12 @@
 // parser-output-unchanged: Crawl listing availability controls checkpoints; stored decision parsing is unchanged.
 // parser-output-unchanged: fetch-stage telemetry and document-stage metadata only; parser decision fields are unchanged.
 // parser-output-unchanged: Reconciliation revision projections classify listing inputs without changing parsed decision output.
+// parser-output-unchanged: Publisher availability uses the shared contract without changing parsed values.
 // parser-output-unchanged: [sk-us] failed and refused publisher reads are typed outcomes; served and 404 reads build the same decision.
 import { Result, panic } from "better-result";
 import * as v from "valibot";
 
+import type { SkUsEcliAvailability } from "@stll/api-contract/case-law-text-field";
 /**
  * Slovak Constitutional Court (Ústavný súd SR) adapter.
  *
@@ -1451,10 +1453,6 @@ const skUsCollectionTextFields = (
       collection satisfies never;
       return panic("Unhandled ÚS collection identity state");
   }
-};
-
-type SkUsEcliAvailability = {
-  status: "published" | "not_published" | "not_stated";
 };
 
 const skUsEcliAvailability = (doc: SearchDocument): SkUsEcliAvailability => {

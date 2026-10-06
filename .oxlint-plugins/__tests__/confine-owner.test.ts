@@ -361,3 +361,30 @@ test("translation availability is consumed by the dialog owner", async () => {
     ).toEqual(sourcePath.endsWith("/translate-document-dialog.tsx") ? [] : [1]);
   }
 });
+
+test("desktop observations are confined to service and membership cleanup", async () => {
+  const entry = OWNERSHIP.find(
+    ({ id }) => id === "desktop-presence-observations",
+  );
+  if (entry?.enforcement.kind !== "import") {
+    throw new TypeError("Missing desktop presence ownership");
+  }
+  const source = 'import { desktopPresence } from "@/api/db/schema";';
+  expect(
+    await lintSingleRule("confine-owner", source, {
+      ruleOptions: { entries: [entry] },
+      sourcePath: "apps/api/src/handlers/desktop-presence/other.ts",
+    }),
+  ).toEqual([1]);
+  for (const sourcePath of [
+    ...entry.owner,
+    ...entry.enforcement.allowed.map(({ path: allowedPath }) => allowedPath),
+  ]) {
+    expect(
+      await lintSingleRule("confine-owner", source, {
+        ruleOptions: { entries: [entry] },
+        sourcePath,
+      }),
+    ).toEqual([]);
+  }
+});
