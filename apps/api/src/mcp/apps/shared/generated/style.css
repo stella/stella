@@ -1136,9 +1136,6 @@
   .w-\[44rem\] {
     width: 44rem;
   }
-  .w-\[48\%\] {
-    width: 48%;
-  }
   .w-\[140\%\] {
     width: 140%;
   }
@@ -1243,9 +1240,6 @@
   }
   .min-w-36 {
     min-width: calc(var(--spacing) * 36);
-  }
-  .min-w-\[640px\] {
-    min-width: 640px;
   }
   .min-w-max {
     min-width: max-content;

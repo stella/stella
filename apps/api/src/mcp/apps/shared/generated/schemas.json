@@ -367,6 +367,12 @@
             "court": {
               "type": "string"
             },
+            "courtAbbreviation": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
             "decisionDate": {
               "type": [
                 "string",
