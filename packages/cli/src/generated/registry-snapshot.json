@@ -4543,7 +4543,8 @@
       "command": ["time-entry", "list"],
       "scope": "read",
       "itemsKey": "entries",
-      "singleReadWhen": "time_entry_id"
+      "singleReadWhen": "time_entry_id",
+      "featureId": "time-billing"
     },
     "name": "list_time_entries",
     "description": "List time entries in a matter, or read one entry in detail. Pass time_entry_id to get a single entry. Otherwise pass matter_id to list the matter's entries, optionally filtered by entity_id (the item the time was logged against), user_id, a date-worked range (date_from/date_to, ISO YYYY-MM-DD), and status. Returns each entry's id, entity, user, date, minutes, rate (minor currency units), currency, narrative, and status. The response includes visibility: all_entries for billing reviewers, or own_entries when the caller can see only their own time; own_entries is not a matter total.",
@@ -4625,7 +4626,8 @@
   {
     "cli": {
       "command": ["time-entry", "save"],
-      "scope": "billing_write"
+      "scope": "billing_write",
+      "featureId": "time-billing"
     },
     "name": "save_time_entry",
     "description": "Create or update a time entry. Omit time_entry_id to create (matter_id, date_worked, timezone_id, duration_minutes, and narrative required; entity_id is optional context). Pass time_entry_id to update: set date_worked (with timezone_id), duration_minutes, narrative, invoice_narrative, billable, no_charge, entity_id (move the entry), task_code, and/or activity_code. The timekeeper's effective rate is resolved server-side. Durations are whole minutes. Returns the time entry ID.",
@@ -4750,7 +4752,8 @@
   {
     "cli": {
       "command": ["time-entry", "delete"],
-      "scope": "billing_write"
+      "scope": "billing_write",
+      "featureId": "time-billing"
     },
     "name": "delete_time_entry",
     "description": "Delete a time entry. A draft entry is permanently deleted; an approved entry is written off instead (kept for the audit trail, excluded from billing). A billed entry cannot be deleted until its invoice is reverted. Returns whether the entry was hard-deleted.",
@@ -4781,7 +4784,8 @@
   {
     "cli": {
       "command": ["rate", "resolve"],
-      "scope": "read"
+      "scope": "read",
+      "featureId": "time-billing"
     },
     "name": "resolve_rate",
     "description": "Resolve the effective hourly rate for a user on a given date in a matter, using its default rate table (user-specific rate first, then the table default). Returns the hourly rate in integer minor currency units (e.g. cents) and the currency, or nulls when no rate applies.",
@@ -4820,7 +4824,8 @@
       "command": ["invoice", "list"],
       "scope": "read",
       "itemsKey": "invoices",
-      "singleReadWhen": "invoice_id"
+      "singleReadWhen": "invoice_id",
+      "featureId": "time-billing"
     },
     "name": "list_invoices",
     "description": "List invoices in a matter, or read one invoice in detail. Pass invoice_id to get a single invoice with its lines, totals with the VAT breakdown, taxable supply date, seller profile id, buyer details, and attached time entries and expenses. Otherwise pass matter_id to list the matter's invoices. Returns each invoice's id, number (null before numbering), document type, original invoice id, reference, status, dates, currency, and total (integer minor currency units).",

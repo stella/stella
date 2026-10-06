@@ -27,6 +27,7 @@ import {
   mintAuthProviderIdValue,
 } from "@/api/tests/helpers/auth-provider-id";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
+import { enrolledTimeBillingSnapshot } from "@/api/tests/helpers/time-billing-enrolment";
 import { getTestDb, releaseTestDb } from "@/api/tests/security/test-utils";
 import type { TestDatabase } from "@/api/tests/security/test-utils";
 
@@ -434,6 +435,12 @@ const requestContext = async ({
     toolConfirmation: TOOL_CONFIRMATION.caller,
     userId,
     userEmail: "owner@example.test",
+    // Billing tools are enrolment-gated; the owner is enrolled so every
+    // runnable tool is exercised.
+    featureAccessSnapshot: enrolledTimeBillingSnapshot({
+      organizationId,
+      userId,
+    }),
   });
 };
 

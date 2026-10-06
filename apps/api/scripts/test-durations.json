@@ -167,6 +167,10 @@
     "seconds": 0.329369,
     "source": "estimated"
   },
+  "scripts/seed-test-user.postgres.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
   "scripts/seed-usage-policies-runner.postgres.test.ts": {
     "seconds": 0.593359,
     "source": "estimated"
@@ -314,6 +318,10 @@
   "src/db/entity-views-migration.test.ts": {
     "seconds": 3.9,
     "source": "measured"
+  },
+  "src/db/feature-enrolments.postgres.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
   },
   "src/db/folio-block-ids-in-range.db.test.ts": {
     "seconds": 4.5,
@@ -581,6 +589,10 @@
   },
   "src/handlers/agent-auth/routes.test.ts": {
     "seconds": 0.629006,
+    "source": "estimated"
+  },
+  "src/handlers/ai-autocomplete/stream.test.ts": {
+    "seconds": 1,
     "source": "estimated"
   },
   "src/handlers/ai-config/validate-provider.test.ts": {
@@ -5467,6 +5479,10 @@
     "seconds": 5.33138,
     "source": "estimated"
   },
+  "src/lib/errors/application-error-message.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
   "src/lib/errors/elysia-error.test.ts": {
     "seconds": 0.07064,
     "source": "estimated"
@@ -7391,6 +7407,10 @@
     "seconds": 3.996045,
     "source": "estimated"
   },
+  "src/lib/signals/scout.integration.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
   "src/lib/signup-abuse.test.ts": {
     "seconds": 0.208202,
     "source": "estimated"
@@ -8609,6 +8629,10 @@
   },
   "src/tests/query-plans/sk-document-candidates-plan.db.test.ts": {
     "seconds": 5.484195,
+    "source": "estimated"
+  },
+  "src/tests/scoped-db-mock.test.ts": {
+    "seconds": 1,
     "source": "estimated"
   },
   "src/tests/security/account-wide-auth-revocation.test.ts": {

@@ -920,7 +920,6 @@ export const ENV_CREDENTIAL_CLASSIFICATION = {
   VITE_FEATURE_FOLIO_COLLAB: ENV_CREDENTIAL_KIND.notCredential,
   VITE_FEATURE_GOVERNED_WORKFLOW: ENV_CREDENTIAL_KIND.notCredential,
   VITE_FEATURE_INBOX: ENV_CREDENTIAL_KIND.notCredential,
-  VITE_FEATURE_TIME_BILLING: ENV_CREDENTIAL_KIND.notCredential,
   VITE_FEATURE_USAGE: ENV_CREDENTIAL_KIND.notCredential,
   VITE_POSTHOG_HOST: ENV_CREDENTIAL_KIND.notCredential,
   VITE_POSTHOG_KEY: ENV_CREDENTIAL_KIND.notCredential,
@@ -1187,21 +1186,6 @@ export const COLLAB_ENV_SCHEMA = envCollabServerSchema;
 
 export type WebEnvironmentName = keyof typeof WEB_ENV_SCHEMA;
 
-type DeploymentFlagPair = {
-  web: WebEnvironmentName;
-  api: ApiEnvironmentName;
-};
-
-/**
- * Web build flags that offer a feature only the paired API flag serves. A
- * deployment that turns the web flag on without the API flag shows pages
- * whose requests the API answers as absent routes, so the deployment
- * environment check refuses that combination.
- */
-export const DEPLOYMENT_FLAG_PAIRS = [
-  { web: "VITE_FEATURE_TIME_BILLING", api: "FEATURE_TIME_BILLING" },
-] as const satisfies readonly DeploymentFlagPair[];
-
 export const isActiveExampleEntry = (name: string) =>
   ACTIVE_EXAMPLE_KEYS.has(name);
 
@@ -1299,7 +1283,6 @@ export const DEPLOYMENT_ENV_KEYS = new Set([
   "TEXT_RECOGNITION_MODEL_SHA256",
   "TEXT_RECOGNITION_MODEL_URL",
   "VIRTUAL_ENV",
-  "VITE_FEATURE_TIME_BILLING",
 ]);
 
 export const TOOLING_ENV_KEYS = new Set([
@@ -1336,11 +1319,13 @@ export const TOOLING_ENV_KEYS = new Set([
   "API_DEPLOYMENT_URL",
   "API_SCOPE_UNKNOWN",
   "API_TEST_ARTIFACT_DIR",
+  "API_TEST_CHILD_TIMEOUT_MS",
   "API_TEST_FILES",
   // Native Bun whole-file timing artifacts and optional drift measurements.
   "API_TEST_MEASUREMENTS",
-  "API_TEST_TIMINGS_DIR",
+  "API_TEST_RUNNER_DEADLINE_MS",
   "API_TEST_SHARD_COUNT",
+  "API_TEST_TIMINGS_DIR",
   "APP_VERSION",
   "AWS_ENDPOINT_URL_BEDROCK_RUNTIME",
   "BASE_REF",

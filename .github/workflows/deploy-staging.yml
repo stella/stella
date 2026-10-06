@@ -504,7 +504,7 @@ jobs:
 
       - name: Run staging MCP user journeys
         id: mcp-smoke
-        if: ${{ steps.current.outputs.promoted == 'true' && !cancelled() && steps.smoke-deps.conclusion == 'success' }}
+        if: ${{ !cancelled() && steps.smoke-deps.conclusion == 'success' }}
         run: bun run canary:mcp
         env:
           MCP_CANARY_ENVIRONMENT: staging

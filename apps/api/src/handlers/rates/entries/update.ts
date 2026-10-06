@@ -36,6 +36,7 @@ const updateRateEntry = createSafeHandler(
       "applies to cannot be changed here.",
     permissions: { rate: ["update"] },
     accountAccess: ACCOUNT_ACCESS.sandbox,
+    featureAccess: { featureId: "time-billing", type: "required" },
     realtime: rateRealtimeUpdates,
     mcp: {
       type: "capability",

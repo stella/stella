@@ -9,6 +9,7 @@ import * as v from "valibot";
 import { compareCodeUnit } from "@stll/collation";
 import { assertProperty } from "@stll/property-testing";
 
+import { testProcessBudgets } from "../apps/api/scripts/test-process-supervisor";
 import { CUSTOM_LINT_TEST_ARGS } from "./check-oxlint-rule-coverage.ts";
 import { CANONICAL_CANCEL_STEP } from "./ci-cancellation-contract";
 import { jobCachePolicy } from "./workflow-cache-policy.ts";
@@ -42,6 +43,142 @@ const removalSchema = v.array(
 const workflowPath = ".github/workflows/ci.yml";
 const removalsPath = "scripts/ci-checks-removed.json";
 const repository = new URL("../", import.meta.url).pathname;
+const processBudgetEnvSchema = v.optional(v.record(v.string(), v.unknown()));
+const processBudgetWorkflowSchema = v.looseObject({
+  env: processBudgetEnvSchema,
+  jobs: v.record(
+    v.string(),
+    v.looseObject({
+      env: processBudgetEnvSchema,
+      "timeout-minutes": v.optional(v.unknown()),
+      steps: v.optional(
+        v.array(v.looseObject({ env: processBudgetEnvSchema })),
+      ),
+    }),
+  ),
+});
+const declaredProcessBudgetsSchema = v.object({
+  API_TEST_CHILD_TIMEOUT_MS: v.optional(v.string()),
+  API_TEST_RUNNER_DEADLINE_MS: v.optional(v.string()),
+});
+
+const assertJobProcessBudgets = (
+  workflow: v.InferOutput<typeof processBudgetWorkflowSchema>,
+  requireNightlyBudget: boolean,
+) => {
+  for (const [name, job] of Object.entries(workflow.jobs)) {
+    for (const step of job.steps ?? [{}]) {
+      const declared = v.parse(declaredProcessBudgetsSchema, {
+        ...workflow.env,
+        ...job.env,
+        ...step.env,
+      });
+      if (requireNightlyBudget) {
+        expect(
+          declared.API_TEST_CHILD_TIMEOUT_MS,
+          `${name} needs an explicit nightly child budget`,
+        ).toBeDefined();
+        expect(
+          declared.API_TEST_RUNNER_DEADLINE_MS,
+          `${name} needs an explicit nightly runner deadline`,
+        ).toBeDefined();
+      }
+      if (
+        declared.API_TEST_CHILD_TIMEOUT_MS === undefined &&
+        declared.API_TEST_RUNNER_DEADLINE_MS === undefined
+      ) {
+        continue;
+      }
+      const timeout = v.parse(v.number(), job["timeout-minutes"]) * 60_000;
+      const limits = testProcessBudgets(declared);
+      expect(
+        limits.childTimeoutMs,
+        `${name} child budget must fit inside its job`,
+      ).toBeLessThan(timeout);
+      expect(
+        limits.deadlineMs,
+        `${name} runner deadline must leave job cleanup time`,
+      ).toBeLessThan(timeout);
+      if (requireNightlyBudget) {
+        expect(limits.childTimeoutMs).toBeGreaterThan(
+          testProcessBudgets({}).childTimeoutMs,
+        );
+      }
+    }
+  }
+};
+
+test("explicit API process budgets leave cleanup time in every consuming workflow job", () => {
+  for (const file of new Bun.Glob(".github/workflows/*.{yml,yaml}").scanSync({
+    cwd: repository,
+  })) {
+    const workflow = v.parse(
+      processBudgetWorkflowSchema,
+      Bun.YAML.parse(
+        readFileSync(new URL(`../${file}`, import.meta.url), "utf-8"),
+      ),
+    );
+    assertJobProcessBudgets(
+      workflow,
+      file === ".github/workflows/nightly-property-test.yml",
+    );
+  }
+});
+
+test("process budget guard rejects missing, inherited and step-level timeout violations", () => {
+  const workflow = v.parse(processBudgetWorkflowSchema, {
+    env: {
+      API_TEST_CHILD_TIMEOUT_MS: "1200000",
+      API_TEST_RUNNER_DEADLINE_MS: "2100000",
+    },
+    jobs: { property: { "timeout-minutes": 45, steps: [{ env: {} }] } },
+  });
+  assertJobProcessBudgets(workflow, true);
+  const missing = structuredClone(workflow);
+  delete missing.env?.["API_TEST_CHILD_TIMEOUT_MS"];
+  expect(() => assertJobProcessBudgets(missing, true)).toThrow(
+    "explicit nightly child budget",
+  );
+  const shortJob = structuredClone(workflow);
+  for (const job of Object.values(shortJob.jobs)) {
+    job["timeout-minutes"] = 20;
+  }
+  expect(() => assertJobProcessBudgets(shortJob, true)).toThrow(
+    "child budget must fit inside its job",
+  );
+  for (const deadline of ["2700000", "2700001"]) {
+    const mutation = structuredClone(workflow);
+    mutation.env = {
+      ...workflow.env,
+      API_TEST_RUNNER_DEADLINE_MS: deadline,
+    };
+    expect(() => assertJobProcessBudgets(mutation, true)).toThrow(
+      "runner deadline must leave job cleanup time",
+    );
+  }
+  for (const level of ["workflow", "job", "step"] as const) {
+    const mutation = structuredClone(workflow);
+    const environment = {
+      API_TEST_CHILD_TIMEOUT_MS: "2700000",
+      API_TEST_RUNNER_DEADLINE_MS: "3000000",
+    };
+    if (level === "workflow") {
+      mutation.env = environment;
+    }
+    for (const job of Object.values(mutation.jobs)) {
+      if (level === "job") {
+        job.env = environment;
+      }
+      if (level === "step") {
+        job.steps = [{ env: environment }];
+      }
+    }
+    expect(() => assertJobProcessBudgets(mutation, true)).toThrow(
+      "child budget must fit inside its job",
+    );
+  }
+});
+
 const git = (args: string[]) => {
   const result = Bun.spawnSync(["git", ...args], { cwd: repository });
   if (result.exitCode !== 0) {

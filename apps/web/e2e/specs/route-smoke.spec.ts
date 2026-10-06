@@ -14,7 +14,7 @@ import {
   partitionRoundRobin,
   resolveE2eExecutionProfile,
 } from "../execution-profile";
-import { apiDelete, apiPut } from "../helpers/api";
+import { apiDelete, E2E_API_ORIGIN, apiGet, apiPut } from "../helpers/api";
 import { ROUTE_ERROR_HEADING } from "../helpers/app-shell";
 import { findChromeDividerProblems } from "../helpers/chrome-divider";
 import {
@@ -38,6 +38,7 @@ import {
   summarizeCapture,
 } from "../helpers/network";
 import { declarePublicKnowledgeSmoke } from "../helpers/public-knowledge-smoke";
+import { signInWithEmailOtp } from "../helpers/sign-in";
 import {
   assertSmokeRouteCoverage,
   networkBaselineKey,
@@ -49,7 +50,12 @@ import {
   type RouteExpectation,
 } from "../helpers/smoke-route-defs";
 import { createBrowserErrorCollector } from "../helpers/test";
-import { createTestWorkspace, deleteTestWorkspace } from "../helpers/workspace";
+import { listTimeBillingRoutes } from "../helpers/time-billing-routes";
+import {
+  type TestWorkspace,
+  createTestWorkspace,
+  deleteTestWorkspace,
+} from "../helpers/workspace";
 
 // Every route retains the former one-second observation floor so delayed
 // warmups remain visible. After that floor, tracked API activity may finish
@@ -114,14 +120,37 @@ const resolveRoute = (def: SmokeRouteDef, world: SmokeWorld): SmokeRoute => {
   };
 };
 
+type TimeBillingRedirectDestinationOptions = {
+  template: string;
+  workspaceId: string;
+};
+
+const timeBillingRedirectDestination = ({
+  template,
+  workspaceId,
+}: TimeBillingRedirectDestinationOptions): string => {
+  if (template.startsWith("/workspaces/")) {
+    return `/workspaces/${workspaceId}`;
+  }
+  if (template.startsWith("/settings/organization/")) {
+    return "/settings/organization/members";
+  }
+  if (template === "/time") {
+    return "/workspaces";
+  }
+  throw new Error(`No unenrolled redirect expectation for ${template}`);
+};
+
 const declareRouteSmokeGroup = ({
   defs,
   name,
   requireAllRoutes,
+  checkUnenrolledRoutes,
 }: {
   defs: readonly SmokeRouteDef[];
   name: string;
   requireAllRoutes: boolean;
+  checkUnenrolledRoutes: boolean;
 }) => {
   // Serial within one fixture-owning group; separate groups are independent
   // Playwright scheduling units and can run on different workers or CI shards.
@@ -142,6 +171,14 @@ const declareRouteSmokeGroup = ({
         storageState: STORAGE_STATE,
       });
       browserForPages = browser;
+      const features = await apiGet<{ timeBilling: boolean }>(
+        apiRequest,
+        "/organization-settings/deployment-features",
+      );
+      expect(
+        features.timeBilling,
+        "the persisted smoke principal is enrolled and verified",
+      ).toBe(true);
 
       const workspace = await createTestWorkspace(apiRequest, "route-smoke");
       createdWorkspace = workspace;
@@ -218,6 +255,136 @@ const declareRouteSmokeGroup = ({
       declareRouteTest(def);
     }
 
+    if (checkUnenrolledRoutes) {
+      test("unenrolled callers leave every time-billing route before its loader", async () => {
+        test.setTimeout(180_000);
+        const negativeRequest = await apiRequestFactory.newContext({
+          extraHTTPHeaders: {
+            origin: new URL(
+              process.env["E2E_WEB_URL"] ?? "http://localhost:3000",
+            ).origin,
+          },
+        });
+        let negativeWorkspace: TestWorkspace | null = null;
+        let negativeOrganizationId: string | null = null;
+        const gatedRoutes = listTimeBillingRoutes();
+        expect(gatedRoutes.length).toBeGreaterThan(0);
+        try {
+          const token = randomUUID();
+          await signInWithEmailOtp(
+            negativeRequest,
+            `unenrolled-route-smoke-${token}@stella.dev`,
+          );
+          const organizationResponse = await negativeRequest.post(
+            `${E2E_API_ORIGIN}/api/auth/organization/create`,
+            {
+              data: {
+                name: `Unenrolled route smoke ${token}`,
+                slug: `unenrolled-smoke-${token}`,
+              },
+            },
+          );
+          expect(
+            organizationResponse.ok(),
+            await organizationResponse.text(),
+          ).toBe(true);
+          const organization: unknown = await organizationResponse.json();
+          if (
+            typeof organization !== "object" ||
+            organization === null ||
+            !("id" in organization) ||
+            typeof organization.id !== "string"
+          ) {
+            throw new Error("Organization creation returned no id");
+          }
+          negativeOrganizationId = organization.id;
+          const activation = await negativeRequest.post(
+            `${E2E_API_ORIGIN}/api/auth/organization/set-active`,
+            { data: { organizationId: negativeOrganizationId } },
+          );
+          expect(activation.ok(), await activation.text()).toBe(true);
+          const sessionResponse = await negativeRequest.get(
+            `${E2E_API_ORIGIN}/api/auth/get-session`,
+            { params: { disableCookieCache: "true" } },
+          );
+          expect(sessionResponse.ok()).toBe(true);
+          expect(await sessionResponse.json()).toMatchObject({
+            user: { emailVerified: true },
+            session: { activeOrganizationId: negativeOrganizationId },
+          });
+          negativeWorkspace = await createTestWorkspace(
+            negativeRequest,
+            "unenrolled-route-smoke",
+          );
+          const workspaceId = negativeWorkspace.id;
+          const storageState = await negativeRequest.storageState();
+          const features = await apiGet<{ timeBilling: boolean }>(
+            negativeRequest,
+            "/organization-settings/deployment-features",
+          );
+          expect(
+            features.timeBilling,
+            "the isolated verified principal is not enrolled",
+          ).toBe(false);
+          const isolatedBrowser = browserForPages;
+          for (const gatedRoute of gatedRoutes) {
+            const template = gatedRoute.routePath.replace("/_protected", "");
+            const routePath = template
+              .replace("$workspaceId", () => workspaceId)
+              .replace("$invoiceId", () => randomUUID());
+            const destination = timeBillingRedirectDestination({
+              template,
+              workspaceId,
+            });
+            await test.step(template, async () => {
+              const { context, page } = await openCleanPage(
+                isolatedBrowser,
+                storageState,
+              );
+              const browserErrors = createBrowserErrorCollector({
+                tolerateColdMountWarning: true,
+              });
+              const detachPage = browserErrors.trackPage(page);
+              try {
+                const route = {
+                  template,
+                  path: routePath,
+                  expectation: { kind: "redirectsTo", to: destination },
+                } as const satisfies SmokeRoute;
+                await renderSmokeRoute({ page, route });
+                assertFinalDestination(page, route);
+                await assertNoRouteBoundary(page, template);
+                browserErrors.assertEmpty(
+                  `unexpected browser errors on ${template}`,
+                );
+              } finally {
+                detachPage();
+                await context.close();
+              }
+            });
+          }
+        } finally {
+          try {
+            if (negativeWorkspace !== null) {
+              await deleteTestWorkspace(negativeRequest, negativeWorkspace.id);
+            }
+          } finally {
+            try {
+              if (negativeOrganizationId !== null) {
+                const deleted = await negativeRequest.post(
+                  `${E2E_API_ORIGIN}/api/auth/organization/delete`,
+                  { data: { organizationId: negativeOrganizationId } },
+                );
+                expect(deleted.ok(), await deleted.text()).toBe(true);
+              }
+            } finally {
+              await negativeRequest.dispose();
+            }
+          }
+        }
+      });
+    }
+
     test("network manifest matches the committed baseline", async () => {
       await test.info().attach("observed-network-baseline", {
         body: JSON.stringify(
@@ -252,6 +419,7 @@ if (baselineMode === "write" || baselineMode === "rewrite") {
     defs: SMOKE_ROUTE_DEFS,
     name: "authenticated routes render without browser errors",
     requireAllRoutes: true,
+    checkUnenrolledRoutes: true,
   });
 } else {
   const { routeSmokeGroupCount } = resolveE2eExecutionProfile(
@@ -263,6 +431,7 @@ if (baselineMode === "write" || baselineMode === "rewrite") {
       defs,
       name: `authenticated routes render without browser errors ${groupIndex + 1}/${groups.length}`,
       requireAllRoutes: false,
+      checkUnenrolledRoutes: groupIndex === 0,
     });
   }
 }
@@ -422,15 +591,22 @@ const assertRedirectRoute = async ({
 // authenticated storage state; server-side fixtures stay shared.
 const openCleanPage = async (
   browser: Browser,
+  storageState:
+    | string
+    | Awaited<ReturnType<APIRequestContext["storageState"]>> = STORAGE_STATE,
 ): Promise<{ context: BrowserContext; page: Page }> => {
-  const context = await browser.newContext({ storageState: STORAGE_STATE });
+  const context = await browser.newContext({ storageState });
   try {
     // Guards the clean start: the page must not inherit browser storage that
     // an earlier route wrote into a shared context.
     expect(
       storedKeys(await context.storageState()),
       "route-smoke pages must start from the seeded storage state only",
-    ).toEqual(await seededStorageKeys(browser));
+    ).toEqual(
+      typeof storageState === "string"
+        ? await seededStorageKeys(browser)
+        : storedKeys(storageState),
+    );
     return { context, page: await context.newPage() };
   } catch (error) {
     await context.close();

@@ -179,8 +179,8 @@ export type ResolvedCommandTree = {
 /**
  * Resolve this invocation without network. A current same-origin response can
  * rebuild and prune the tree by caller scope; disk supplies deployment metadata
- * only. Missing or invalid live data uses the baked-in baseline with feature
- * commands hidden.
+ * only. Caller feature admission projects the resolved tree using only the
+ * current response; missing or invalid live data hides feature commands.
  */
 export const resolveCommandTree = async ({
   serverOrigin,
@@ -210,7 +210,10 @@ export const resolveCommandTree = async ({
   const project = (tree: RouteNode) =>
     projectFeatureCommands({ tree, featureAccess: currentAccess });
   if (serverOrigin === undefined) {
-    return { tree: project(bakedTree), disabled: NO_DISABLED_COMMANDS };
+    return {
+      tree: project(bakedTree),
+      disabled: NO_DISABLED_COMMANDS,
+    };
   }
   const cached = await readCacheFile(cachePathFor(serverOrigin, env));
   const deployment = cached?.serverOrigin === serverOrigin ? cached : undefined;
@@ -284,7 +287,11 @@ export const resolveCommandTree = async ({
   }
   return isDeltaEmpty(delta)
     ? { tree: project(built.value), disabled }
-    : { tree: project(built.value), drift: delta, disabled };
+    : {
+        tree: project(built.value),
+        drift: delta,
+        disabled,
+      };
 };
 
 /** The outcome of a cache-refresh attempt (spec S5.3/S5.5 + addendum nudge). */
