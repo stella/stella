@@ -255,11 +255,11 @@ describe("published registry versions", () => {
   );
 });
 
-const POLICY_REASONS = {
-  passed: "ok",
-  skipped: "publish_pending",
-  failed: "version_mismatch",
-} as const satisfies Record<RegistryResult["status"], RegistryResult["reason"]>;
+const POLICY_RESULTS = {
+  passed: { status: "passed", reason: "ok" },
+  skipped: { status: "skipped", reason: "publish_pending" },
+  failed: { status: "failed", reason: "version_mismatch" },
+} as const satisfies Record<RegistryResult["status"], RegistryResult>;
 
 // Each row goes through both callers, including their different bump policies.
 const POLICY_MATRIX = [
@@ -298,10 +298,7 @@ describe("published version policy matrix", () => {
             registry: server.url.toString(),
             timeoutMs: 5000,
           });
-          expect(result).toEqual({
-            status: row[window],
-            reason: POLICY_REASONS[row[window]],
-          });
+          expect(result).toEqual(POLICY_RESULTS[row[window]]);
         } finally {
           await server.stop(true);
         }
