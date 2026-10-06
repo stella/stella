@@ -1,6 +1,5 @@
 {
   "metric": "audit-skip-directives",
-  "file": "apps/api/src/lib/business-registries/desktop/proof-store.ts",
   "delta": 2,
   "reason": "The confined owner writes only short-lived authentication proof receipts and prunes its own expired receipts in bounded batches. Receipt claims commit independently of later business operations; those operations retain their existing transactional audit recorders."
 }
