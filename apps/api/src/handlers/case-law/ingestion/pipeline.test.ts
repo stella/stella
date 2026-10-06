@@ -45,6 +45,8 @@ import { czNsAdapter } from "@/api/handlers/case-law/ingestion/adapters/cz-ns";
 import {
   bareCitationKey,
   decisionIdentifiersFromStoredMetadata,
+  extractCitations,
+  normalizeDecisionIdentifierValue,
 } from "@/api/handlers/case-law/ingestion/citation-extractor";
 import { runIngestionPipeline } from "@/api/handlers/case-law/ingestion/pipeline";
 import { processDecision } from "@/api/handlers/case-law/ingestion/pipeline/decision";
@@ -907,10 +909,9 @@ describe("runIngestionPipeline — failure records", () => {
   type FailureRow = typeof caseLawIngestionFailures.$inferInsert;
 
   /**
-   * A page of one decision whose write fails with an ordinary error, so the
-   * page collects one failure record. The first database call orders the
-   * observation; the second reads its source; the third is the decision's write; later calls reach the
-   * failure-record insert and the cursor update.
+   * Reject the third database call to simulate a decision failure after its
+   * observation and source read. With rejection disabled, planning reads reach
+   * the citation validation; both paths record the refusal and advance the cursor.
    */
   const failingDecisionDb = (
     insertError: Error | null,
@@ -919,7 +920,8 @@ describe("runIngestionPipeline — failure records", () => {
     const state: {
       persistedCursor: string | null | undefined;
       insertedRows: FailureRow[];
-    } = { persistedCursor: undefined, insertedRows: [] };
+      decisionWrites: number;
+    } = { persistedCursor: undefined, insertedRows: [], decisionWrites: 0 };
     let calls = 0;
     const scopedDb: ScopedDb = async (callback) => {
       calls++;
@@ -928,18 +930,30 @@ describe("runIngestionPipeline — failure records", () => {
       }
 
       const tx = {
+        query: {
+          caseLawDecisions: {
+            findFirst: async () => undefined,
+            findMany: async () => [],
+          },
+        },
         select: () => ({
           from: (table: unknown) => ({
-            where: () => ({
-              limit: async () =>
-                table === caseLawSources
-                  ? [{ adapterKey: ADAPTER_KEYS.CZ_NS }]
-                  : [],
-            }),
+            where: () =>
+              Object.assign(Promise.resolve([]), {
+                for: () => ({ limit: async () => [] }),
+                limit: async () =>
+                  table === caseLawSources
+                    ? [{ adapterKey: ADAPTER_KEYS.CZ_NS }]
+                    : [],
+              }),
           }),
         }),
-        insert: () => ({
+        insert: (table: unknown) => ({
           values: async (rows: FailureRow[]) => {
+            if (table === caseLawDecisions) {
+              state.decisionWrites++;
+              throw new Error("unexpected decision write");
+            }
             if (insertError !== null) {
               throw insertError;
             }
@@ -950,6 +964,9 @@ describe("runIngestionPipeline — failure records", () => {
         execute: async () => await Promise.resolve([]),
         update: (table: unknown) => ({
           set: (values: { syncCursor?: string | null }) => {
+            if (table === caseLawDecisions) {
+              state.decisionWrites++;
+            }
             if (table === caseLawSources) {
               state.persistedCursor = values.syncCursor;
             }
@@ -965,8 +982,8 @@ describe("runIngestionPipeline — failure records", () => {
         }),
       };
 
-      // SAFETY: this test exercises the failure-record insert and the final
-      // case_law_sources cursor update; the fake implements those chains.
+      // SAFETY: this fake implements identity and polarity reads, failure-record
+      // inserts and cursor updates; a decision insert fails explicitly.
       // oxlint-disable-next-line typescript/no-unsafe-type-assertion
       return await callback(tx as unknown as Transaction);
     };
@@ -1026,6 +1043,57 @@ describe("runIngestionPipeline — failure records", () => {
       expect(state.persistedCursor).toBe("cursor-2");
     });
   }
+
+  test.each(["text", "normalizedIdentifier"] as const)(
+    "records an extracted citation exceeding %s width before writing the decision and advances the cursor",
+    async (field) => {
+      const source = caseLawSourceRow({ name: "Citation failure source" });
+      const prefix = "ECLI:CZ:NS:2026:";
+      const citationText =
+        prefix + "1".repeat(CITATION_STORAGE_WIDTHS[field] + 1 - prefix.length);
+      const citations = extractCitations([{ index: 0, text: citationText }]);
+      expect(citations).toHaveLength(1);
+      const citation = citations.at(0);
+      expect(citation?.citationText).toBe(citationText);
+      if (citation === undefined) {
+        throw new Error("Expected an extracted citation");
+      }
+      const storedValue =
+        field === "text"
+          ? citation.citationText
+          : normalizeDecisionIdentifierValue(
+              citation.identifierType,
+              citation.identifierValue,
+            );
+      expect(storedValue.length).toBe(CITATION_STORAGE_WIDTHS[field] + 1);
+      const input = plainTextIngestionResult({
+        ...baseResult(EMPTY_AST),
+        fulltext: citationText,
+      });
+      czNsAdapter.fetchPage = async () =>
+        Result.ok({ decisions: [input], nextCursor: "cursor-2" });
+      const { scopedDb, state } = failingDecisionDb(null, false);
+
+      const result = await runIngestionPipeline({
+        acquireStoredTotalAdmission: async () => "held",
+        source,
+        sourceLease: testSourceLease(source),
+        scopedDb,
+        maxPages: 1,
+      });
+
+      expect(state.insertedRows).toHaveLength(1);
+      expect(state.insertedRows.at(0)?.errorMessage).toContain(
+        `Citation field ${field} exceeds its storage width`,
+      );
+      expect(state.decisionWrites).toBe(0);
+      expect(result.inserted).toBe(0);
+      expect(result.skipped).toBe(1);
+      expect(result.haltReason).toBeNull();
+      expect(result.nextCursor).toBe("cursor-2");
+      expect(state.persistedCursor).toBe("cursor-2");
+    },
+  );
 
   test("writes a failure record within the column limits and moves the cursor on", async () => {
     const source = caseLawSourceRow({ name: "Failure-record source" });
