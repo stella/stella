@@ -1,6 +1,6 @@
 import { panic } from "better-result";
 import { afterAll, beforeAll, expect, test } from "bun:test";
-import { eq, sql } from "drizzle-orm";
+import { eq, inArray, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 
 import {
@@ -14,6 +14,7 @@ import {
   CITATION_TIMELINE_MAX_YEARS,
   listDecisionCitationsHandler,
   listLeadingCitationsHandler,
+  listTopCitingDecisionsHandler,
   summarizeDecisionCitationsHandler,
   treatmentOf,
 } from "@/api/handlers/case-law/decisions/citation-graph";
@@ -497,14 +498,33 @@ test("incoming citations roll up by the citing decision's year within the bounde
 
 test("citation summary marks the first unseen row without counting it", async () => {
   const cappedSubjectId = createSafeId<"caseLawDecision">();
-  await db.insert(caseLawDecisions).values({
-    caseNumber: "capped-subject",
-    country: "CZE",
-    court: "Court",
-    id: cappedSubjectId,
-    language: "cs",
-    sourceId: openSourceId,
-  });
+  // Cites only past the window, with an authority that would lead it.
+  const lateCiterId = createSafeId<"caseLawDecision">();
+  await db.insert(caseLawDecisions).values([
+    {
+      caseNumber: "capped-subject",
+      country: "CZE",
+      court: "Court",
+      id: cappedSubjectId,
+      language: "cs",
+      sourceId: openSourceId,
+    },
+    {
+      caseNumber: "late-citer",
+      citationAuthority: 9,
+      country: "CZE",
+      court: "Court",
+      id: lateCiterId,
+      language: "cs",
+      sourceId: openSourceId,
+    },
+  ]);
+  const topCitingOf = async () =>
+    await withSubject(
+      cappedSubjectId,
+      async (subject) =>
+        await listTopCitingDecisionsHandler({ subject, limit: 5 }),
+    );
   try {
     await db.execute(sql`
       INSERT INTO ${caseLawCitations}
@@ -525,9 +545,11 @@ test("citation summary marks the first unseen row without counting it", async ()
     expect(atLimit.capped).toEqual({ incoming: false, outgoing: false });
     expect(atLimit.incoming.positive).toBe(CITATION_SUMMARY_SCAN_LIMIT - 1);
 
+    expect((await topCitingOf()).map(({ id }) => id)).toEqual([openRelatedId]);
+
     await db.insert(caseLawCitations).values({
       citedDecisionId: cappedSubjectId,
-      citingDecisionId: openRelatedId,
+      citingDecisionId: lateCiterId,
       citationText: "first-unseen-citation",
       id: citationId(10_000 + CITATION_SUMMARY_SCAN_LIMIT + 1),
       polarity: POLARITY.POSITIVE,
@@ -539,15 +561,34 @@ test("citation summary marks the first unseen row without counting it", async ()
     expect(beyondLimit.capped).toEqual({ incoming: true, outgoing: false });
     expect(beyondLimit.incoming).toEqual(atLimit.incoming);
     expect(beyondLimit.incomingByYear).toEqual(atLimit.incomingByYear);
+    // The top citers come from the counted window too: the decision citing
+    // only past it does not lead, and `capped` is what says so.
+    expect((await topCitingOf()).map(({ id }) => id)).toEqual([openRelatedId]);
   } finally {
     await db
       .delete(caseLawCitations)
       .where(eq(caseLawCitations.citedDecisionId, cappedSubjectId));
     await db
       .delete(caseLawDecisions)
-      .where(eq(caseLawDecisions.id, cappedSubjectId));
+      .where(inArray(caseLawDecisions.id, [cappedSubjectId, lateCiterId]));
   }
 }, 120_000);
+
+test("top citing decisions are one row per visible precedent citer", async () => {
+  // Fifty-four precedent citations from one decision are one row; the
+  // restricted, unavailable and procedural citers are not there at all.
+  const top = await withSubject(
+    subjectId,
+    async (subject) =>
+      await listTopCitingDecisionsHandler({ subject, limit: 5 }),
+  );
+  expect(top.map(({ id }) => id)).toEqual([openRelatedId]);
+  expect(top.at(0)).toMatchObject({
+    caseNumber: "open-related",
+    court: "Related court",
+    decisionDate: "2020-02-03",
+  });
+});
 
 test("a restricted subject decision cannot be resolved as a subject", async () => {
   // The closed decision cites the subject, so it has an outgoing edge that
@@ -635,6 +676,16 @@ test("a listing-only related decision is absent from every citation read even wi
       expect(alternateIds).not.toContain(listingOnlyRelatedId);
     }
   }
+
+  // Top citers: by authority, through the same gate, so the listing-only
+  // row does not lead however high its authority.
+  const top = await withSubject(
+    rankedSubjectId,
+    async (subject) =>
+      await listTopCitingDecisionsHandler({ subject, limit: 5 }),
+  );
+  expect(top.map(({ id }) => id)).toEqual(leaderOrder);
+  expect(thirdLeaderAlternateIds(top)).toContain(thirdLeaderSiblingId);
 
   const summary = await withSubject(
     rankedSubjectId,

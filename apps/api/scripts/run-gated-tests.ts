@@ -21,6 +21,34 @@ type RunGatedTestsOptions = {
 
 const apiRoot = path.resolve(import.meta.dir, "..");
 
+type DiscoverGatedTestFilesOptions = {
+  apiRoot: string;
+  testFileGlob: string;
+  gate: string;
+};
+
+export const discoverGatedTestFiles = async ({
+  apiRoot: testRoot,
+  testFileGlob,
+  gate,
+}: DiscoverGatedTestFilesOptions) => {
+  const files = [
+    ...new Bun.Glob(testFileGlob).scanSync({ cwd: testRoot, onlyFiles: true }),
+  ];
+  const sources = await Promise.all(
+    files.map(async (testFile) => ({
+      testFile,
+      isGated: (await Bun.file(path.join(testRoot, testFile)).text()).includes(
+        gate,
+      ),
+    })),
+  );
+  return sources
+    .filter(({ isGated }) => isGated)
+    .map(({ testFile }) => testFile)
+    .toSorted();
+};
+
 /**
  * Runs every test file that declares the script's gate, with the gate set.
  * Discovery reads the same `ciGateTestRunners` declaration the CI coverage
@@ -37,25 +65,11 @@ export const runGatedTests = async ({
     return 1;
   }
 
-  const discoveredTests = [
-    ...new Bun.Glob(runner.testFileGlob).scanSync({
-      cwd: apiRoot,
-      onlyFiles: true,
-    }),
-  ];
-  const discoveredGatedFiles = (
-    await Promise.all(
-      discoveredTests.map(async (testFile) => ({
-        isGated: (await Bun.file(path.join(apiRoot, testFile)).text()).includes(
-          runner.gate,
-        ),
-        testFile,
-      })),
-    )
-  )
-    .filter(({ isGated }) => isGated)
-    .map(({ testFile }) => testFile)
-    .toSorted();
+  const discoveredGatedFiles = await discoverGatedTestFiles({
+    apiRoot,
+    gate: runner.gate,
+    testFileGlob: runner.testFileGlob,
+  });
 
   const { bunArguments, patterns } = partitionRunnerArguments(
     Bun.argv.slice(2),

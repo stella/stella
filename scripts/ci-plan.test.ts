@@ -2693,7 +2693,10 @@ test("folded service suites preserve both scopes and independent verdicts", () =
     ciJobs["service-suites"],
   );
   const suites = services.steps.filter(
-    ({ run }) => run?.includes("test:") || run?.includes(" test "),
+    ({ run }) =>
+      run?.includes("test:") ||
+      run?.includes(" test ") ||
+      run === "bun scripts/run-corpus-engine-suites.ts",
   );
   expect(suites.map(({ name }) => name)).toEqual([
     "Run Postgres-gated API suites",
