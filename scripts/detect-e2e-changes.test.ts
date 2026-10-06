@@ -381,7 +381,7 @@ describe("detect-e2e-changes", () => {
       );
     }
     expect(workflowStep(plan, "Resolve browser image")).toContain(
-      "if: steps.check.outputs.trusted == 'true' || github.event_name == 'workflow_dispatch'",
+      "if: steps.completed-depth.outputs.run_required != 'false' && (steps.check.outputs.trusted == 'true' || github.event_name == 'workflow_dispatch')",
     );
     expect(workflow).not.toContain("needs.trust-check");
     expect(workflow).not.toContain("needs.ci-changes");
@@ -717,7 +717,7 @@ describe("detect-e2e-changes", () => {
       `marketing_screenshots_required: ${githubExpression("steps.marketing-release.outputs.required")}`,
     );
     expect(workflowStep(plan, "Plan release marketing screenshots")).toContain(
-      "if: steps.check.outputs.trusted == 'true' || github.event_name == 'workflow_dispatch'",
+      "if: steps.completed-depth.outputs.run_required != 'false' && (steps.check.outputs.trusted == 'true' || github.event_name == 'workflow_dispatch')",
     );
 
     const screenshots = workflowJob("marketing-screenshots");
@@ -746,6 +746,7 @@ describe("detect-e2e-changes", () => {
                       "ci-plan": {
                         outputs: {
                           queue_depth: "full",
+                          run_required: "true",
                           trusted: String(trusted),
                           marketing_screenshots_required: String(planned),
                           web_build_required: String(buildRequired),
@@ -1075,6 +1076,7 @@ describe("detect-e2e-changes", () => {
                           outputs: {
                             queue_depth: "full",
                             suite_depth: depth,
+                            run_required: "true",
                             trusted: String(trusted),
                             e2e_production_required: String(planned),
                           },

@@ -201,6 +201,7 @@ const QuickEntryDialog = () => {
                 <Label htmlFor={matterId}>{t("common.matter")}</Label>
                 <MatterCombobox
                   activeOrganizationId={user.activeOrganizationId}
+                  userId={user.id}
                   id={matterId}
                   order="recent"
                   onChange={(value) => {
