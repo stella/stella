@@ -348,7 +348,7 @@ if (!databaseUrl || !runPostgresTests) {
     test("concurrent identical starts share exactly one provider session", async () => {
       await withHostedEnv(async () => {
         await assertProperty(
-          "concurrent starts for one organization create exactly one provider session",
+          "concurrent identical starts share exactly one provider session",
           fc.asyncProperty(
             fc.integer({ min: 2, max: 6 }),
             fc.constantFrom("none", "expired"),
@@ -462,14 +462,13 @@ if (!databaseUrl || !runPostgresTests) {
           expect(await startCheckout({ fixture, safeDb })).toEqual(
             FIRST_SESSION,
           );
-          const [opened] = await readClaims(tx, fixture.organizationId);
+          const opened = await readClaims(tx, fixture.organizationId);
+          expect(opened).toHaveLength(1);
           expect(await startCheckout({ fixture, safeDb })).toEqual(
             FIRST_SESSION,
           );
           expect(provider.calls()).toBe(1);
-          expect(await readClaims(tx, fixture.organizationId)).toEqual([
-            opened,
-          ]);
+          expect(await readClaims(tx, fixture.organizationId)).toEqual(opened);
         } finally {
           provider.restore();
         }
