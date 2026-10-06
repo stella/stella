@@ -6,7 +6,7 @@ import { Button } from "@stll/ui/button";
 import { DialogFormState } from "@stll/ui/dialog";
 import { Loader2Icon, AiActionIcon } from "@stll/ui/icons";
 import { Label } from "@stll/ui/label";
-import { MenuItem, MenuPopup, MenuSeparator } from "@stll/ui/menu";
+import { PopoverPopup } from "@stll/ui/popover";
 import { SplitButton } from "@stll/ui/split-button";
 import { Textarea } from "@stll/ui/textarea";
 import { cn } from "@stll/ui/utils";
@@ -87,6 +87,7 @@ export const AiRewriteControl = ({
         onDiscard={() => setCustomInstruction("")}
       />
       <SplitButton
+        surface="popover"
         menuLabel={t("chooseRewriteInstruction")}
         menuDisabled={unavailable}
         onPrimaryClick={() => runRewrite(AI_REWRITE_PRESETS[0].instruction)}
@@ -96,17 +97,25 @@ export const AiRewriteControl = ({
         primaryLabel={actionLabel}
         size="sm"
         menu={
-          <MenuPopup align="end" className="w-80" side="bottom">
+          <PopoverPopup
+            aria-label={t("chooseRewriteInstruction")}
+            align="end"
+            className="w-80"
+            side="bottom"
+          >
             <div className="flex flex-col gap-1">
               {AI_REWRITE_PRESETS.map((preset) => (
-                <MenuItem
+                <Button
+                  className="w-full justify-start font-normal"
+                  size="sm"
+                  variant="ghost"
                   key={preset.id}
                   onClick={() => runRewrite(preset.instruction)}
                 >
                   {t(preset.labelKey)}
-                </MenuItem>
+                </Button>
               ))}
-              <MenuSeparator />
+              <div className="bg-border my-1 h-px" />
               <div className="flex flex-col gap-1">
                 <Label
                   className="text-muted-foreground px-1 text-xs font-medium"
@@ -121,10 +130,6 @@ export const AiRewriteControl = ({
                     setCustomInstruction(event.currentTarget.value)
                   }
                   onKeyDown={(event) => {
-                    // Keep native editing out of menu navigation and typeahead.
-                    if (event.key !== "Escape") {
-                      event.stopPropagation();
-                    }
                     if (
                       (event.metaKey || event.ctrlKey) &&
                       event.key === "Enter" &&
@@ -139,11 +144,6 @@ export const AiRewriteControl = ({
                 />
                 <Button
                   className="mt-1 self-end"
-                  onKeyDown={(event) => {
-                    if (event.key !== "Escape") {
-                      event.stopPropagation();
-                    }
-                  }}
                   disabled={customInstruction.trim().length === 0}
                   onClick={() => runRewrite(customInstruction.trim())}
                   size="sm"
@@ -154,7 +154,7 @@ export const AiRewriteControl = ({
                 </Button>
               </div>
             </div>
-          </MenuPopup>
+          </PopoverPopup>
         }
       >
         {isPending ? (

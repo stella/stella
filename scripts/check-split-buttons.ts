@@ -9,7 +9,11 @@ const OWNER = "packages/ui/src/components/split-button.tsx";
 const TRIGGER = /(?:Menu|Popover)Trigger$/u;
 const CHEVRON = /^(?:ChevronDown(?:Icon)?|CaretDown(?:Icon)?)$/u;
 
-export type SplitButtonFinding = { file: string; line: number };
+export type SplitButtonFinding = {
+  file: string;
+  line: number;
+  message: string;
+};
 
 const opening = (node: ts.Node) => {
   if (ts.isJsxElement(node)) {
@@ -203,6 +207,8 @@ export const findAdHocSplitButtons = (
               file,
               line:
                 source.getLineAndCharacterOfPosition(node.getStart()).line + 1,
+              message:
+                "adjacent primary action and chevron trigger must use SplitButton",
             });
             break;
           }
@@ -220,6 +226,132 @@ export const findAdHocSplitButtons = (
   return findings;
 };
 
+/** Menu keyboard navigation only owns menuitems; forms need a popover. */
+export const findSplitButtonMenuControls = (
+  file: string,
+  content: string,
+): SplitButtonFinding[] => {
+  if (file === OWNER || !content.includes("SplitButton")) {
+    return [];
+  }
+  const source = ts.createSourceFile(
+    file,
+    content,
+    ts.ScriptTarget.Latest,
+    true,
+    ts.ScriptKind.TSX,
+  );
+  const splitButtons = new Set(["SplitButton"]);
+  const menuItemNames = new Set([
+    "MenuItem",
+    "MenuCheckboxItem",
+    "MenuRadioItem",
+    "MenuSubTrigger",
+    "DropdownMenuItem",
+    "DropdownMenuCheckboxItem",
+    "DropdownMenuRadioItem",
+    "DropdownMenuSubTrigger",
+  ]);
+  const menuItemAliases = new Set<string>();
+  const controls = new Set([
+    "input",
+    "textarea",
+    "button",
+    "Input",
+    "Textarea",
+    "Button",
+  ]);
+  const definitions = new Map<string, ts.Node>();
+  const collect = (node: ts.Node): void => {
+    if (ts.isImportSpecifier(node)) {
+      const imported = (node.propertyName ?? node.name).text;
+      if (imported === "SplitButton") {
+        splitButtons.add(node.name.text);
+      }
+      if (controls.has(imported)) {
+        controls.add(node.name.text);
+      }
+      if (menuItemNames.has(imported)) {
+        menuItemAliases.add(node.name.text);
+      }
+    }
+    if (
+      ts.isVariableDeclaration(node) &&
+      ts.isIdentifier(node.name) &&
+      node.initializer
+    ) {
+      definitions.set(node.name.text, node.initializer);
+    }
+    if (ts.isFunctionDeclaration(node) && node.name && node.body) {
+      definitions.set(node.name.text, node.body);
+    }
+    ts.forEachChild(node, collect);
+  };
+  collect(source);
+  const findings: SplitButtonFinding[] = [];
+  const inspect = (node: ts.Node, seen: Set<ts.Node>): void => {
+    if (seen.has(node)) {
+      return;
+    }
+    seen.add(node);
+    const tag = opening(node)?.tagName.getText();
+    if (
+      tag &&
+      !menuItemAliases.has(tag) &&
+      (controls.has(tag) ||
+        tag.endsWith("Button") ||
+        tag.endsWith("Input") ||
+        tag.endsWith("Textarea"))
+    ) {
+      findings.push({
+        file,
+        line: source.getLineAndCharacterOfPosition(node.getStart()).line + 1,
+        message: `${tag} inside a SplitButton menu requires surface="popover"; menu surfaces contain menuitems`,
+      });
+      return;
+    }
+    if (tag) {
+      const definition = definitions.get(tag);
+      if (definition) {
+        inspect(definition, seen);
+      }
+    }
+    if (ts.isIdentifier(node)) {
+      const definition = definitions.get(node.text);
+      if (definition) {
+        inspect(definition, seen);
+      }
+    }
+    ts.forEachChild(node, (child) => inspect(child, seen));
+  };
+  const visit = (node: ts.Node): void => {
+    const element = opening(node);
+    if (element && splitButtons.has(element.tagName.getText())) {
+      const attributes = element.attributes.properties.filter(
+        ts.isJsxAttribute,
+      );
+      const surface = attributes.find(
+        (attribute) => attribute.name.getText() === "surface",
+      )?.initializer;
+      const surfaceValue =
+        surface && ts.isJsxExpression(surface) ? surface.expression : surface;
+      const isPopover =
+        surfaceValue &&
+        ts.isStringLiteral(surfaceValue) &&
+        surfaceValue.text === "popover";
+      const menu = attributes.find(
+        (attribute) => attribute.name.getText() === "menu",
+      )?.initializer;
+      if (!isPopover && menu && ts.isJsxExpression(menu) && menu.expression) {
+        inspect(menu.expression, new Set());
+      }
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(source);
+  return findings;
+};
+
 export const censusSplitButtons = (): SplitButtonFinding[] => {
   const files = execFileSync(
     "rg",
@@ -228,17 +360,19 @@ export const censusSplitButtons = (): SplitButtonFinding[] => {
   )
     .trim()
     .split("\n");
-  return files.flatMap((file) =>
-    findAdHocSplitButtons(file, readFileSync(path.join(ROOT, file), "utf-8")),
-  );
+  return files.flatMap((file) => {
+    const content = readFileSync(path.join(ROOT, file), "utf-8");
+    return [
+      ...findAdHocSplitButtons(file, content),
+      ...findSplitButtonMenuControls(file, content),
+    ];
+  });
 };
 
 if (import.meta.main) {
   const findings = censusSplitButtons();
-  for (const { file, line } of findings) {
-    process.stderr.write(
-      `${file}:${line}: adjacent primary action and chevron trigger must use SplitButton\n`,
-    );
+  for (const { file, line, message } of findings) {
+    process.stderr.write(`${file}:${line}: ${message}\n`);
   }
   if (findings.length > 0) {
     process.exitCode = 1;

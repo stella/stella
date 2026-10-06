@@ -120,6 +120,60 @@ test("disabled menu leaves the primary action available", async ({ page }) => {
   await expect(page.getByRole("menu")).toBeHidden();
 });
 
+for (const surface of ["menu", "popover"] as const) {
+  test(`preserves descriptions on both ${surface} actions`, async ({
+    page,
+  }) => {
+    await openFixture(page, `?surface=${surface}`);
+    await expect(
+      page.getByRole("button", { name: primaryName }),
+    ).toHaveAccessibleDescription("Creates a blank document");
+    await expect(
+      page.getByRole("button", { name: menuName }),
+    ).toHaveAccessibleDescription("Additional document actions");
+  });
+}
+
+for (const key of ["Enter", "Space"] as const) {
+  test(`opens a form popover with ${key} and keeps native keyboard navigation`, async ({
+    page,
+  }) => {
+    await openFixture(page, "?surface=popover");
+    const trigger = page.getByRole("button", { name: menuName });
+    await expect(trigger).toHaveAttribute("aria-haspopup", "dialog");
+    await expect(trigger).toHaveAttribute("aria-expanded", "false");
+    await trigger.focus();
+    await page.keyboard.press(key);
+    const dialog = page.getByRole("dialog", { name: "Document question" });
+    await expect(dialog).toBeVisible();
+    await expect(trigger).toHaveAttribute("aria-expanded", "true");
+    const question = dialog.getByRole("textbox", { name: "Question" });
+    await expect(question).toBeFocused();
+    await question.fill("Explain this document");
+    await page.keyboard.press("Tab");
+    const submit = dialog.getByRole("button", { name: "Submit question" });
+    await expect(submit).toBeFocused();
+    await page.keyboard.press("Enter");
+    await expect(page.getByLabel("Menu actions")).toHaveAttribute(
+      "data-count",
+      "1",
+    );
+    await expect(page.getByLabel("Primary actions")).toHaveAttribute(
+      "data-count",
+      "0",
+    );
+    await expect(dialog).toBeVisible();
+    await page.keyboard.press("Shift+Tab");
+    await expect(question).toBeFocused();
+    await expect(question).toHaveValue("Explain this document");
+    await page.keyboard.press("Escape");
+    await expect(dialog).toBeHidden();
+    await expect(trigger).toBeFocused();
+    await expect(trigger).toHaveAttribute("aria-expanded", "false");
+    await expect(page.getByLabel("Menu state")).toHaveText("closed");
+  });
+}
+
 for (const size of ["sm", "md"] as const) {
   for (const dir of ["ltr", "rtl"] as const) {
     test(`keeps both ${size} actions joined in ${dir}`, async ({ page }) => {

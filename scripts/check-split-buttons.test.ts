@@ -1,6 +1,9 @@
 import { expect, test } from "bun:test";
 
-import { findAdHocSplitButtons } from "./check-split-buttons.ts";
+import {
+  findAdHocSplitButtons,
+  findSplitButtonMenuControls,
+} from "./check-split-buttons.ts";
 
 const file = "apps/example/src/actions.tsx";
 const primary = `<Button onClick={save}>Save</Button>`;
@@ -56,4 +59,86 @@ test("exempts only the canonical split-button owner", () => {
       negativeFixture,
     ),
   ).toHaveLength(1);
+});
+
+test("requires popover surfaces for form controls in secondary content", () => {
+  const controls = [
+    `<input value={instruction} />`,
+    `<textarea value={instruction} />`,
+    `<button onClick={apply}>Apply</button>`,
+    `<Button onClick={apply}>Apply</Button>`,
+    `<Input value={instruction} />`,
+    `<Textarea value={instruction} />`,
+  ];
+  for (const control of controls) {
+    const menu = `<MenuPopup><div>${control}</div></MenuPopup>`;
+    const negativeFixture = `<SplitButton menu={${menu}} />`;
+    expect(findSplitButtonMenuControls(file, negativeFixture)).toHaveLength(1);
+    expect(
+      findSplitButtonMenuControls(
+        file,
+        `<SplitButton surface="menu" menu={${menu}} />`,
+      ),
+    ).toHaveLength(1);
+    expect(
+      findSplitButtonMenuControls(
+        file,
+        `<SplitButton surface="popover" menu={${menu}} />`,
+      ),
+    ).toEqual([]);
+    expect(
+      findSplitButtonMenuControls(
+        file,
+        `<SplitButton surface={"popover"} menu={${menu}} />`,
+      ),
+    ).toEqual([]);
+  }
+});
+
+test("resolves extracted secondary content and imported component aliases", () => {
+  const cases = [
+    `const popup = <MenuPopup><input /></MenuPopup>; const view = <SplitButton menu={popup} />;`,
+    `const Instructions = () => <Textarea />; const view = <SplitButton menu={<MenuPopup><Instructions /></MenuPopup>} />;`,
+    `function Instructions() { return <textarea />; } const view = <SplitButton menu={<MenuPopup><Instructions /></MenuPopup>} />;`,
+    `import { SplitButton as Split } from "@stll/ui/components/split-button"; import { Input as Field } from "@stll/ui/components/input"; const view = <Split menu={<MenuPopup><Field /></MenuPopup>} />;`,
+  ];
+  for (const content of cases) {
+    expect(findSplitButtonMenuControls(file, content)).toHaveLength(1);
+  }
+});
+
+test("permits menuitems and primary action content outside the secondary menu", () => {
+  expect(
+    findSplitButtonMenuControls(
+      file,
+      `<SplitButton menu={<MenuPopup><MenuItem onClick={apply}>Apply</MenuItem><MenuSeparator /><MenuRadioItem value="document">Document</MenuRadioItem></MenuPopup>}><Button onClick={primary}>Primary</Button></SplitButton>`,
+    ),
+  ).toEqual([]);
+  expect(
+    findSplitButtonMenuControls(file, `<MenuPopup><input /></MenuPopup>`),
+  ).toEqual([]);
+});
+
+test("permits imported menuitem aliases without hiding nested form controls", () => {
+  const primitives = [
+    "MenuItem",
+    "MenuCheckboxItem",
+    "MenuRadioItem",
+    "MenuSubTrigger",
+  ];
+  for (const primitive of primitives) {
+    const imports = `import { ${primitive} as ActionButton } from "@stll/ui/components/menu";`;
+    expect(
+      findSplitButtonMenuControls(
+        file,
+        `${imports} const view = <SplitButton menu={<MenuPopup><ActionButton>Apply</ActionButton></MenuPopup>} />;`,
+      ),
+    ).toEqual([]);
+    expect(
+      findSplitButtonMenuControls(
+        file,
+        `${imports} const view = <SplitButton menu={<MenuPopup><ActionButton><input /></ActionButton></MenuPopup>} />;`,
+      ),
+    ).toHaveLength(1);
+  }
 });
