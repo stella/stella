@@ -1,7 +1,7 @@
 import type { Static, TSchema } from "@sinclair/typebox";
 import type { Err } from "better-result";
 import { Result, UnhandledException } from "better-result";
-import type { Context, InputSchema, UnwrapRoute } from "elysia";
+import type { AnySchema, Context, InputSchema, UnwrapRoute } from "elysia";
 import { ElysiaCustomStatusResponse, status, t } from "elysia";
 
 import type { ModelRole } from "@stll/ai-catalog";
@@ -696,7 +696,7 @@ const SAFE_HANDLER_ERROR_RESPONSE_SCHEMAS = safeHandlerErrorResponseSchemas(
 );
 
 type SafeHandlerResponseSchemasFor<
-  TSuccessSchema extends TSchema,
+  TSuccessSchema extends AnySchema,
   TErrorSchema extends TSchema,
 > = {
   readonly [TStatus in 200 | HandlerErrorStatusCode]: TStatus extends 200
@@ -704,20 +704,20 @@ type SafeHandlerResponseSchemasFor<
     : TErrorSchema;
 };
 
-export type SafeHandlerResponseSchemas<TSuccessSchema extends TSchema> =
+export type SafeHandlerResponseSchemas<TSuccessSchema extends AnySchema> =
   SafeHandlerResponseSchemasFor<
     TSuccessSchema,
     typeof safeHandlerErrorResponseSchema
   >;
 
-export const safeHandlerResponseSchemas = <TSuccessSchema extends TSchema>(
+export const safeHandlerResponseSchemas = <TSuccessSchema extends AnySchema>(
   successSchema: TSuccessSchema,
 ): SafeHandlerResponseSchemas<TSuccessSchema> => ({
   200: successSchema,
   ...SAFE_HANDLER_ERROR_RESPONSE_SCHEMAS,
 });
 
-type SafeHandlerStatusTextResponseSchemas<TSuccessSchema extends TSchema> =
+type SafeHandlerStatusTextResponseSchemas<TSuccessSchema extends AnySchema> =
   SafeHandlerResponseSchemasFor<
     TSuccessSchema,
     typeof safeHandlerErrorOrStatusTextResponseSchema
@@ -727,7 +727,7 @@ const SAFE_HANDLER_STATUS_TEXT_RESPONSE_SCHEMAS =
   safeHandlerErrorResponseSchemas(safeHandlerErrorOrStatusTextResponseSchema);
 
 export const safeHandlerResponseSchemasWithStatusText = <
-  TSuccessSchema extends TSchema,
+  TSuccessSchema extends AnySchema,
 >(
   successSchema: TSuccessSchema,
 ): SafeHandlerStatusTextResponseSchemas<TSuccessSchema> => ({

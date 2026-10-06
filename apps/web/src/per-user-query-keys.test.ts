@@ -101,6 +101,10 @@ const PER_USER_READS: Record<string, PerUserRead> = {
     kind: "no-web-caller",
     calls: ['api["organization-settings"]["feature-access"].get'],
   },
+  "desktop-presence/read.ts": {
+    kind: "no-web-caller",
+    calls: ["api.desktop.presence.get"],
+  },
   "views/list.ts": {
     kind: "caller-marker",
     reason:

@@ -26,6 +26,7 @@ import {
   pdfSigningSessions,
   timeEntries,
   desktopEditSessions,
+  desktopPresence,
   flowRuns,
   flowDefinitions,
   flowRunSteps,
@@ -1439,6 +1440,14 @@ export const removeOrganizationMemberInTransaction = async (
     actorUserId,
   });
   await tx
+    .delete(desktopPresence)
+    .where(
+      and(
+        eq(desktopPresence.organizationId, organizationId),
+        eq(desktopPresence.userId, userId),
+      ),
+    );
+  await tx
     .delete(mcpUserConnections)
     .where(
       and(
@@ -1535,6 +1544,7 @@ export type MemberCleanupDisposition =
  */
 export const ORGANIZATION_MEMBER_CLEANUP_COLUMNS = [
   [member.userId, "cleared"],
+  [desktopPresence.userId, "cleared"],
   [workspaceMembers.userId, "cleared"],
   [taskAssignees.userId, "reassigned"],
   [workObligations.ownerUserId, "reassigned"],

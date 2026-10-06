@@ -75,7 +75,8 @@
     "./statute-acts": "./src/statute-acts.ts",
     "./statute-aliases": "./src/statute-aliases.ts",
     "./statute-query-capability": "./src/statute-query-capability.ts",
-    "./statute-query-intent": "./src/statute-query-intent.ts"
+    "./statute-query-intent": "./src/statute-query-intent.ts",
+    "./desktop-presence": "./src/desktop-presence.ts"
   },
   "scripts": {
     "clean": "git clean -xdf .cache .turbo node_modules",

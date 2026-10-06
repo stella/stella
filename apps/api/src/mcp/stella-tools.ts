@@ -117,10 +117,7 @@ import {
   encodePaginationCursor,
   isUuidPaginationCursorPart,
 } from "@/api/lib/pagination";
-import {
-  type AssertNoExtraFields,
-  projectionPayload,
-} from "@/api/lib/projection-totality";
+import { projectionPayload } from "@/api/lib/projection-totality";
 import {
   getTenantActionSizePolicy,
   normalizeTenantPageLimit as normalizePage,
@@ -1965,13 +1962,8 @@ const handleReadContentAcrossMattersTool: TypedMcpToolHandler<
   // cannot ride on the literal: a `satisfies` clause would contextually pin
   // `truncated` to `false`, which the mutation must be able to overwrite. Tie
   // the literal's own inferred type instead.
-  type ReadContentPayload = AssertNoExtraFields<
-    typeof payload,
-    v.InferInput<typeof READ_CONTENT_ACROSS_MATTERS_PROJECTION>
-  >;
-
   return structuredEgressPlan({
-    payload: payload satisfies ReadContentPayload,
+    payload: projectionPayload(READ_CONTENT_ACROSS_MATTERS_PROJECTION, payload),
     textFields: runTextFieldSpecs(
       READ_CONTENT_ACROSS_MATTERS_TEXT_FIELD_SPECS,
       payload,

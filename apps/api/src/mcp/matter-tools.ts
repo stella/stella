@@ -70,10 +70,7 @@ import { ENTITY_PRIORITIES, TASK_STATUSES } from "@/api/lib/entity-constants";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LEGAL_LISTS_FEATURE_ID } from "@/api/lib/feature-access/registry";
 import { LIMITS } from "@/api/lib/limits";
-import {
-  type AssertNoExtraFields,
-  projectionPayload,
-} from "@/api/lib/projection-totality";
+import { projectionPayload } from "@/api/lib/projection-totality";
 import {
   brandPersistedContactId,
   brandPersistedEntityId,
@@ -1051,11 +1048,9 @@ const handleLookupBusinessRegistryTool = withThirdPartyOutbound<
   // Passthrough: the output is public business-register data and the query is
   // caller-supplied, so no tenant-authored text needs redaction. Forwarded
   // verbatim, so the projection tie is on the shared lookup's return type.
-  type LookupBusinessRegistryPayload = AssertNoExtraFields<
-    typeof result.value,
-    v.InferInput<typeof LOOKUP_BUSINESS_REGISTRY_PROJECTION>
-  >;
-  return toolDataResult(result.value satisfies LookupBusinessRegistryPayload);
+  return toolDataResult(
+    projectionPayload(LOOKUP_BUSINESS_REGISTRY_PROJECTION, result.value),
+  );
 });
 
 // --- check_counterparty -------------------------------------------------
@@ -1270,11 +1265,9 @@ const handleCheckCounterpartyTool = withThirdPartyOutbound<
   }
   // Passthrough: public-register and public-list data about a subject the
   // caller named.
-  type CheckCounterpartyPayload = AssertNoExtraFields<
-    typeof result.value,
-    v.InferInput<typeof CHECK_COUNTERPARTY_PROJECTION>
-  >;
-  return toolDataResult(result.value satisfies CheckCounterpartyPayload);
+  return toolDataResult(
+    projectionPayload(CHECK_COUNTERPARTY_PROJECTION, result.value),
+  );
 });
 
 // --- list_tasks ---------------------------------------------------------

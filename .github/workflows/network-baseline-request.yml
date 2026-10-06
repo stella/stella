@@ -1,9 +1,12 @@
 name: Request network baseline
 
+# A pull request's own route and budget changes are exempt from its network
+# baseline check, so main needs a fresh recording once one merges. Label
+# requests and merged route changes both dispatch trusted main, never PR source.
 on:
-  pull_request_target: # zizmor: ignore[dangerous-triggers] label requests dispatch only trusted main, never PR source
+  pull_request_target: # zizmor: ignore[dangerous-triggers] requests dispatch only trusted main, never PR source
     branches: [main]
-    types: [labeled]
+    types: [labeled, closed]
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.label.name == 'baseline:record' && format('pr-{0}', github.event.pull_request.number) || format('event-{0}', github.run_id) }}
@@ -13,17 +16,42 @@ permissions: {}
 
 jobs:
   request:
-    if: github.event_name == 'pull_request_target' && github.event.label.name == 'baseline:record'
+    if: >-
+      github.event_name == 'pull_request_target'
+      && ((github.event.action == 'labeled' && github.event.label.name == 'baseline:record')
+      || (github.event.action == 'closed' && github.event.pull_request.merged == true))
     runs-on: ubuntu-latest
     timeout-minutes: 1
     permissions:
       actions: write
+      pull-requests: read
     steps:
       - name: Request main recording
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
         with:
           retries: 0
           script: |
+            // The paths whose changes the PR baseline check exempts: route
+            // sources, the route smoke definitions and budget declarations.
+            const exempt = (file) =>
+              typeof file === "string" &&
+              (file.startsWith("apps/web/src/routes/") ||
+                file === "apps/web/e2e/specs/route-smoke.spec.ts" ||
+                /^apps\/web\/e2e\/network-budgets\/[^/]+\.json$/u.test(file));
+            if (context.payload.action === "closed") {
+              const files = await github.paginate(github.rest.pulls.listFiles, {
+                ...context.repo,
+                pull_number: context.payload.pull_request.number,
+                per_page: 100,
+              });
+              if (
+                !files.some(
+                  (file) => exempt(file.filename) || exempt(file.previous_filename),
+                )
+              ) {
+                return;
+              }
+            }
             await github.rest.actions.createWorkflowDispatch({
               ...context.repo,
               workflow_id: "network-baseline-record.yml",

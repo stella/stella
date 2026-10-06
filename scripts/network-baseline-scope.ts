@@ -1,4 +1,10 @@
-import { existsSync, lstatSync, readFileSync, writeFileSync } from "node:fs";
+import {
+  existsSync,
+  lstatSync,
+  readdirSync,
+  readFileSync,
+  writeFileSync,
+} from "node:fs";
 import path from "node:path";
 
 const MAX_BASELINE_BYTES = 5 * 1024 * 1024;
@@ -184,26 +190,10 @@ const touchedRoutesInTree = (
   return touched;
 };
 
-export const prepareComparisonBaseline = ({
-  base,
-  changedPaths,
-  baseRouteTree,
-  routeTree,
-  declarations,
-}: {
-  base: Baseline;
-  changedPaths: string[];
-  baseRouteTree: string;
-  routeTree: string;
-  declarations: unknown[];
-}) => {
-  const changed = new Set(changedPaths.map(normalizeSource));
-  const changedRoutes = [
-    ...new Set([
-      ...touchedRoutesInTree(baseRouteTree, changed),
-      ...touchedRoutesInTree(routeTree, changed),
-    ]),
-  ].toSorted();
+const applyNetworkBudgetDeclarations = (
+  base: Baseline,
+  declarations: unknown[],
+) => {
   const baseline = { ...base };
   const declared = new Set<string>();
   const notices: string[] = [];
@@ -231,7 +221,53 @@ export const prepareComparisonBaseline = ({
     baseline[route] = declaration["budget"];
     notices.push(`- ${code(route)}: ${code(declaration["reason"])}`);
   }
-  return { baseline, changedRoutes, notices };
+  return { baseline, notices };
+};
+
+export const prepareComparisonBaseline = ({
+  base,
+  changedPaths,
+  baseRouteTree,
+  routeTree,
+  declarations,
+}: {
+  base: Baseline;
+  changedPaths: string[];
+  baseRouteTree: string;
+  routeTree: string;
+  declarations: unknown[];
+}) => {
+  const changed = new Set(changedPaths.map(normalizeSource));
+  const changedRoutes = [
+    ...new Set([
+      ...touchedRoutesInTree(baseRouteTree, changed),
+      ...touchedRoutesInTree(routeTree, changed),
+    ]),
+  ].toSorted();
+  return {
+    ...applyNetworkBudgetDeclarations(base, declarations),
+    changedRoutes,
+  };
+};
+
+export const networkBudgetDeclarationProblem = ({
+  expectedKeys,
+  declarations,
+}: {
+  expectedKeys: string[];
+  declarations: unknown[];
+}): string | null => {
+  // Validate without reapplying inherited allowances to a prepared recording.
+  applyNetworkBudgetDeclarations({}, declarations);
+  for (const declaration of declarations) {
+    if (
+      isRecord(declaration) &&
+      !expectedKeys.includes(String(declaration["route"]))
+    ) {
+      return `Network budget declaration names an inactive route: ${String(declaration["route"])}`;
+    }
+  }
+  return null;
 };
 
 // Render declaration text as inert code spans in the job summary.
@@ -240,7 +276,7 @@ const code = (value: string): string =>
 
 const usage = `Usage:
   bun scripts/network-baseline-scope.ts prepare --base FILE --changed FILE --base-route-tree FILE --route-tree FILE --output FILE --context FILE
-  bun scripts/network-baseline-scope.ts validate FILE
+  bun scripts/network-baseline-scope.ts validate FILE [--route-tree FILE --context FILE]
 
 prepare loads a merge-base budget, scopes new/removed routes, and applies only changed, reviewed declaration files. validate checks a main recording's schema and size.`;
 
@@ -253,7 +289,7 @@ const option = (args: string[], name: string): string => {
   return value;
 };
 
-const main = (): void => {
+const main = async (): Promise<void> => {
   const [command, ...args] = process.argv.slice(2);
   if (command === "--help" || command === "-h" || command === undefined) {
     console.log(usage);
@@ -264,7 +300,54 @@ const main = (): void => {
     if (!file) {
       fail(usage);
     }
-    validateBaselineFile(file);
+    const baseline = validateBaselineFile(file);
+    if (args.includes("--route-tree")) {
+      const directory = "apps/web/e2e/network-budgets";
+      const declarations = (existsSync(directory) ? readdirSync(directory) : [])
+        .filter((name) => name.endsWith(".json"))
+        .map((name): unknown => {
+          const declarationFile = path.join(directory, name);
+          if (
+            lstatSync(declarationFile).isSymbolicLink() ||
+            lstatSync(declarationFile).size > MAX_BASELINE_BYTES
+          ) {
+            fail(`Invalid network budget declaration file: ${declarationFile}`);
+          }
+          return JSON.parse(readFileSync(declarationFile, "utf-8"));
+        });
+      const {
+        assertSmokeRouteCoverage,
+        networkBaselineKey,
+        networkBaselineCoverageProblem,
+      } = await import("../apps/web/e2e/helpers/smoke-route-coverage");
+      const { SMOKE_ROUTE_DEFS } =
+        await import("../apps/web/e2e/helpers/smoke-route-defs");
+      assertSmokeRouteCoverage(
+        readFileSync(option(args, "--route-tree"), "utf-8"),
+      );
+      const context: unknown = JSON.parse(
+        readFileSync(option(args, "--context"), "utf-8"),
+      );
+      if (
+        !Array.isArray(context) ||
+        !context.every(
+          (route) => typeof route === "string" && route.startsWith("/"),
+        )
+      ) {
+        fail("Invalid network baseline changed-route context");
+      }
+      const expectedKeys = SMOKE_ROUTE_DEFS.map(networkBaselineKey);
+      const problem =
+        networkBudgetDeclarationProblem({ expectedKeys, declarations }) ??
+        networkBaselineCoverageProblem({
+          actualKeys: Object.keys(baseline),
+          expectedKeys,
+          changedRoutes: context,
+        });
+      if (problem !== null) {
+        fail(problem);
+      }
+    }
     return;
   }
   if (command === "prepare") {
@@ -317,5 +400,5 @@ const main = (): void => {
 };
 
 if (import.meta.main) {
-  main();
+  await main();
 }
