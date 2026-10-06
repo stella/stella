@@ -7,6 +7,7 @@ import { DatabaseError } from "@/api/lib/errors/tagged-errors";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { PG_ERROR } from "@/api/lib/pg-error";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
+import { withTimeBillingEnrolment } from "@/api/tests/helpers/time-billing-enrolment";
 import {
   createScopedDbMock,
   createSelectQueryMock,
@@ -37,22 +38,24 @@ const createContext = ({
   scopedDb: CreateInvoiceCtx["scopedDb"];
   recordAuditEvent?: CreateInvoiceCtx["recordAuditEvent"];
 }): CreateInvoiceCtx =>
-  asTestRaw<CreateInvoiceCtx>({
-    body,
-    request: new Request("https://example.test/v1/invoices/ws_test", {
-      method: "PUT",
+  withTimeBillingEnrolment(
+    asTestRaw<CreateInvoiceCtx>({
+      body,
+      request: new Request("https://example.test/v1/invoices/ws_test", {
+        method: "PUT",
+      }),
+      route: "/v1/invoices/:workspaceId",
+      safeDb,
+      scopedDb,
+      recordAuditEvent,
+      workspaceId: toSafeId<"workspace">("ws_test"),
+      memberRole: sessionMemberRole("owner"),
+      session: {
+        activeOrganizationId: toSafeId<"organization">("org_test"),
+      },
+      user: { id: toSafeId<"user">("user_test") },
     }),
-    route: "/v1/invoices/:workspaceId",
-    safeDb,
-    scopedDb,
-    recordAuditEvent,
-    workspaceId: toSafeId<"workspace">("ws_test"),
-    memberRole: sessionMemberRole("owner"),
-    session: {
-      activeOrganizationId: toSafeId<"organization">("org_test"),
-    },
-    user: { id: toSafeId<"user">("user_test") },
-  });
+  );
 
 const baseBody = (currency: string, ids: string[]): CreateInvoiceCtx["body"] =>
   asTestRaw<CreateInvoiceCtx["body"]>({

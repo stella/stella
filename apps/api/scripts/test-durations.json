@@ -167,6 +167,10 @@
     "seconds": 0.329369,
     "source": "estimated"
   },
+  "scripts/seed-test-user.postgres.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
   "scripts/seed-usage-policies-runner.postgres.test.ts": {
     "seconds": 0.593359,
     "source": "estimated"
@@ -314,6 +318,10 @@
   "src/db/entity-views-migration.test.ts": {
     "seconds": 3.9,
     "source": "measured"
+  },
+  "src/db/feature-enrolments.postgres.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
   },
   "src/db/folio-block-ids-in-range.db.test.ts": {
     "seconds": 4.5,
@@ -8609,6 +8617,10 @@
   },
   "src/tests/query-plans/sk-document-candidates-plan.db.test.ts": {
     "seconds": 5.484195,
+    "source": "estimated"
+  },
+  "src/tests/scoped-db-mock.test.ts": {
+    "seconds": 1,
     "source": "estimated"
   },
   "src/tests/security/account-wide-auth-revocation.test.ts": {

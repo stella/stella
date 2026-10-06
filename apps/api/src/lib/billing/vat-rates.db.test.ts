@@ -18,6 +18,7 @@ import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
+import { enrolTimeBilling } from "@/api/tests/helpers/time-billing-enrolment";
 import {
   getRlsFixture,
   releaseRlsFixture,
@@ -64,6 +65,9 @@ beforeAll(async () => {
   const fixture = await getRlsFixture();
   testDb = fixture.testDb;
   ids = fixture.ids;
+  await enrolTimeBilling(testDb, [
+    { userId: ids.userA1, organizationId: ids.orgA },
+  ]);
 });
 
 afterAll(async () => {

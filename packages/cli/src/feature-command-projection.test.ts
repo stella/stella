@@ -98,6 +98,7 @@ const leafIds = (node: RouteNode): string[] => {
     }
   }
 };
+
 const invokeHelp = async (commandTree: RouteNode, argv: string[]) => {
   const stdout: string[] = [];
   const stderr: string[] = [];

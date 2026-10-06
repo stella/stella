@@ -234,6 +234,7 @@ const buildMinimalPdf = (lines: readonly string[]): Uint8Array => {
 
 const config = {
   accountAccess: ACCOUNT_ACCESS.standard,
+  featureAccess: { featureId: "time-billing", type: "required" },
   description:
     "Render a matter's client time entries as a PDF timesheet report: one block per " +
     "entry plus total hours and totals per currency. Filter by date-worked " +

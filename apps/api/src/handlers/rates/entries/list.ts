@@ -64,6 +64,7 @@ const readRateEntries = createSafeHandler(
       "this matter returns an empty page rather than an error.",
     permissions: { rate: ["read"] },
     accountAccess: ACCOUNT_ACCESS.sandbox,
+    featureAccess: { featureId: "time-billing", type: "required" },
     mcp: {
       type: "capability",
       readClass: "tenant",

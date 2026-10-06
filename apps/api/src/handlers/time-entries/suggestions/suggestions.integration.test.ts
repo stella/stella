@@ -10,6 +10,7 @@ import { and, desc, eq, inArray } from "drizzle-orm";
 
 import { Temporal } from "@stll/time";
 
+import { user as authUser } from "@/api/db/auth-schema";
 import type { Transaction } from "@/api/db/root";
 import {
   auditLogs,
@@ -17,6 +18,7 @@ import {
   chatThreads,
   timeEntries,
   timeEntrySuggestions,
+  featureEnrolments,
 } from "@/api/db/schema";
 import { createSafeDb, createScopedDb } from "@/api/db/scoped";
 import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
@@ -124,6 +126,26 @@ beforeAll(async () => {
   const fixture = await getRlsFixture();
   testDb = fixture.testDb;
   ids = fixture.ids;
+
+  await testDb
+    .update(authUser)
+    .set({ emailVerified: true })
+    .where(inArray(authUser.id, [ids.userA1, ids.userA2]));
+  await testDb
+    .insert(featureEnrolments)
+    .values([
+      {
+        organizationId: ids.orgA,
+        userId: ids.userA1,
+        featureId: "time-billing",
+      },
+      {
+        organizationId: ids.orgA,
+        userId: ids.userA2,
+        featureId: "time-billing",
+      },
+    ])
+    .onConflictDoNothing();
 
   await testDb.insert(chatThreads).values({
     id: threadId,

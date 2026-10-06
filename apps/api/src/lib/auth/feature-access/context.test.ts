@@ -25,19 +25,14 @@ const grants = {
 } as const;
 
 test("the production feature snapshot resolves current identity once", async () => {
-  const database = createScopedDbMock({
-    select: () => ({
-      from: () => ({
-        innerJoin: () => ({
-          where: () => ({
-            limit: async () => [
-              { email: "member@example.test", emailVerified: true },
-            ],
-          }),
-        }),
-      }),
-    }),
-  });
+  const database = createScopedDbMock(
+    {},
+    {
+      featureAccess: {
+        identity: { email: "member@example.test", emailVerified: true },
+      },
+    },
+  );
   const result = await loadFeatureAccessSnapshot({
     safeDb: database.safeDb,
     organizationId,
@@ -88,6 +83,7 @@ test("feature snapshots batch current identity across every registered feature",
         grants,
       }),
   );
+  // Only the membership predicate delegates; the shared mock owns enrolments.
   expect(queries).toBe(1);
   expect([...snapshot.decisions.keys()]).toEqual(Object.keys(registry));
   expect(snapshot.decisions.get("fixture-one")?.status).toBe("enabled");
@@ -130,13 +126,10 @@ test("missing requesters and an empty registry do not query identity or grant ac
 });
 
 test("departed membership and unknown runtime feature ids resolve hidden", async () => {
-  const database = createScopedDbMock({
-    select: () => ({
-      from: () => ({
-        innerJoin: () => ({ where: () => ({ limit: async () => [] }) }),
-      }),
-    }),
-  });
+  const database = createScopedDbMock(
+    {},
+    { featureAccess: { identity: null } },
+  );
   for (const featureId of ["fixture-one", "unknown-feature"]) {
     const decision = await database.scopedDb(
       async (tx) =>
