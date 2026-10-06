@@ -34,8 +34,11 @@ export const dockerInstructions = (source: string): string[] => {
     panic("Unsupported Docker heredoc or escape directive");
   }
   return source
-    .replace(/\\\r?\n/gu, " ")
     .split(/\r?\n/u)
+    .filter((line) => !/^\s*#/u.test(line))
+    .join("\n")
+    .replace(/\\\n/gu, " ")
+    .split("\n")
     .map((line) => line.trim())
     .filter((line) => line !== "" && !line.startsWith("#"))
     .map((line) => line.replace(/^\w+/u, (keyword) => keyword.toUpperCase()));
@@ -658,6 +661,9 @@ const copyInstruction = (
   if (destination === undefined) {
     panic(`Unsupported COPY: ${body}`);
   }
+  if (paths.length > 1 && !destination.endsWith("/")) {
+    panic("Multiple COPY sources require a directory destination");
+  }
   const sourceTree = from === undefined ? context : stages.get(from)?.files;
   if (sourceTree === undefined) {
     panic(`Unknown COPY stage: ${from}`);
@@ -675,12 +681,7 @@ const copyInstruction = (
     const target =
       absolute(stage.cwd, destination.replaceAll("\\$", "$")) +
       (destination.endsWith("/") || destination === "." ? "/" : "");
-    copySource(
-      sourceTree,
-      stage.files,
-      sourcePath,
-      paths.length > 1 ? target + path.posix.basename(file) : target,
-    );
+    copySource(sourceTree, stage.files, sourcePath, target);
   }
 };
 
@@ -736,10 +737,7 @@ export const checkDockerSource = (
         }
         continue;
       }
-      if (
-        !/\b(?:bun|node|vite|npm|yarn|pnpm|npx|bunx|tsc)\b/u.test(body) ||
-        /\bbun install\b/u.test(body)
-      ) {
+      if (!/\b(?:bun|node|vite|npm|yarn|pnpm|npx|bunx|tsc)\b/u.test(body)) {
         continue;
       }
       const entries = commandEntries(root, stage.files, body, stage.cwd);

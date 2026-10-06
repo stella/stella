@@ -31,6 +31,66 @@ const tree = (files: readonly string[]): SourceTree =>
   new Map(files.map((file) => [`/app/${file}`, file]));
 
 describe("Docker source closure", () => {
+  test("keeps commands after comment lines in a continued instruction", () => {
+    for (const newline of ["\n", "\r\n"]) {
+      expect(
+        dockerInstructions(
+          ["RUN bun first.ts \\", "  # comment", "  && bun second.ts"].join(
+            newline,
+          ),
+        ),
+      ).toEqual(["RUN bun first.ts    && bun second.ts"]);
+    }
+  });
+
+  test("copies multiple source contents into one destination", () => {
+    const entry = put("multi-copy/apps/entry.ts", 'import "./dependency";');
+    const dependency = put(
+      "multi-copy/packages/dependency.ts",
+      "export const value = 1;",
+    );
+    const asset = put("multi-copy/data.json", "{}");
+    const context: SourceTree = new Map([
+      ["/apps/entry.ts", entry],
+      ["/packages/dependency.ts", dependency],
+      ["/data.json", asset],
+    ]);
+    const dockerfile =
+      "FROM bun AS builder\nWORKDIR /app\nCOPY apps packages data.json ./\nRUN bun entry.ts";
+    expect(checkDockerSource(root, dockerfile, context, new Map())).toEqual([]);
+    expect(() =>
+      checkDockerSource(
+        root,
+        dockerfile.replace("./", "destination"),
+        context,
+        new Map(),
+      ),
+    ).toThrow("Multiple COPY sources require a directory destination");
+    expect(
+      checkDockerSource(
+        root,
+        dockerfile.replace("bun entry.ts", "bun apps/entry.ts"),
+        context,
+        new Map(),
+      ),
+    ).toEqual(["Entry is unavailable: /app/apps/entry.ts"]);
+  });
+
+  test("checks builds following installs in the same instruction", () => {
+    const entry = put("after-install/entry.ts", 'import "./missing";');
+    const context: SourceTree = new Map([["/entry.ts", entry]]);
+    for (const install of [
+      "bun install --frozen-lockfile",
+      "bun i",
+      "bun add example",
+    ]) {
+      const source = `FROM bun AS builder\nWORKDIR /app\nCOPY . .\nRUN ${install} && bun entry.ts`;
+      expect(checkDockerSource(root, source, context, new Map())).toEqual([
+        `${entry} imports ./missing, unavailable in Docker stage`,
+      ]);
+    }
+  });
+
   test("runs after source hydration in the installed light job with a fixed total budget", () => {
     const workflow = Bun.YAML.parse(
       readFileSync(
