@@ -12,7 +12,6 @@ export const inOrder = async <T, E>(
   step: (item: T) => Promise<Result<void, E>>,
 ): Promise<Result<void, E>> => {
   for (const item of items) {
-    // db-await-in-loop: a bounded set of sample rows, each through its shared handler; sequential on purpose (see above)
     const outcome = await step(item);
     if (Result.isError(outcome)) {
       return outcome;

@@ -216,7 +216,7 @@ export const sweepReviewOrganization = async (
     )
     .returning({ id: userFiles.id });
   removed.set("user_files", attachments.length);
-  await inOrder(REVIEW_RESET_CLEARED_TABLES, async (name) => {
+  const swept = await inOrder(REVIEW_RESET_CLEARED_TABLES, async (name) => {
     // audit: skip - one table of the reset sweep; totals go to the system audit
     const rows = executedRows(
       await tx.execute(
@@ -226,5 +226,7 @@ export const sweepReviewOrganization = async (
     removed.set(name, removedCount(rows));
     return Result.ok(undefined);
   });
+  // Each table's delete either completes or throws out of the transaction.
+  swept.unwrap("The sweep's table deletes report no errors");
   return removed;
 };

@@ -27,6 +27,8 @@ import {
 } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
+import { readBounded } from "@/api/lib/db/read-bounded";
+import type { BoundedReadResult } from "@/api/lib/db/read-bounded";
 import { handoffCommittedEntityDeletionCleanupBatch } from "@/api/lib/entity-deletion-cleanup-handoff";
 import { enqueueEntityDeletionCleanup } from "@/api/lib/entity-deletion-cleanup-queue";
 import { LIMITS } from "@/api/lib/limits";
@@ -123,19 +125,24 @@ export const resolveReviewTarget = async (
       .from(organization)
       .where(eq(organization.id, config.organizationId))
       .limit(1);
-    const accountRows = await tx
-      .select({ id: user.id })
-      .from(user)
-      .where(sql`lower(${user.email}) = ${config.email}`)
-      .limit(2);
-    // Two rows are enough to tell "only the review account" from "anyone else".
-    const memberRows = await tx
-      .select({ userId: member.userId, role: member.role })
-      .from(member)
-      .where(eq(member.organizationId, config.organizationId))
-      .orderBy(asc(member.userId))
-      .limit(2);
-    return { organizationRows, accountRows, memberRows };
+    // At most one account and one member may match; a second of either is
+    // read as an overflow, never as a row to act on.
+    const accounts = await readBounded(
+      tx
+        .select({ id: user.id })
+        .from(user)
+        .where(sql`lower(${user.email}) = ${config.email}`),
+      1,
+    );
+    const members = await readBounded(
+      tx
+        .select({ userId: member.userId, role: member.role })
+        .from(member)
+        .where(eq(member.organizationId, config.organizationId))
+        .orderBy(asc(member.userId)),
+      1,
+    );
+    return { organizationRows, accounts, members };
   });
 
   if (facts.organizationRows.length === 0) {
@@ -144,26 +151,27 @@ export const resolveReviewTarget = async (
       "The review organization does not exist",
     );
   }
-  const account = facts.accountRows.length === 1 ? facts.accountRows[0] : null;
-  if (!account) {
+  const account =
+    facts.accounts.type === "complete" ? facts.accounts.rows.at(0) : undefined;
+  if (account === undefined) {
     return refuse(
       REVIEW_RESET_REFUSAL.accountMissing,
       "The review account does not exist",
     );
   }
-  const reviewMember = facts.memberRows.find(
+  if (facts.members.type === "overflow") {
+    return refuse(
+      REVIEW_RESET_REFUSAL.otherMembers,
+      "The review organization has members other than the review account",
+    );
+  }
+  const reviewMember = facts.members.rows.find(
     (row) => row.userId === account.id,
   );
   if (!reviewMember) {
     return refuse(
       REVIEW_RESET_REFUSAL.accountNotMember,
       "The review account is not a member of the review organization",
-    );
-  }
-  if (facts.memberRows.length !== 1) {
-    return refuse(
-      REVIEW_RESET_REFUSAL.otherMembers,
-      "The review organization has members other than the review account",
     );
   }
   if (!isMemberRole(reviewMember.role)) {
@@ -253,15 +261,19 @@ export const createMembershipFence = (
           .where(eq(organization.id, target.organizationId))
           .for("update");
       }
-      const rows = fence.tripped
-        ? []
-        : await tx
-            .select({ userId: member.userId })
-            .from(member)
-            .where(eq(member.organizationId, target.organizationId))
-            .orderBy(asc(member.userId))
-            .limit(2);
-      if (rows.length !== 1 || rows[0]?.userId !== target.userId) {
+      const members = fence.tripped
+        ? null
+        : await readBounded(
+            tx
+              .select({ userId: member.userId })
+              .from(member)
+              .where(eq(member.organizationId, target.organizationId))
+              .orderBy(asc(member.userId)),
+            1,
+          );
+      const sole =
+        members?.type === "complete" ? members.rows.at(0) : undefined;
+      if (sole?.userId !== target.userId) {
         fence.tripped = true;
         abortTransaction(
           new ReviewMembershipChangedError({
@@ -325,14 +337,28 @@ type ResetScope = {
 const deleteEach = async <TRow extends { id: string }>(
   scope: ResetScope,
   kind: ReviewResetKind,
-  rows: readonly TRow[],
+  read: BoundedReadResult<TRow>,
   remove: (row: TRow) => Promise<Result<unknown, unknown>>,
 ): Promise<{ deleted: number; failures: ReviewResetFailure[] }> => {
+  // Each kind reads at most its organization cap; more rows than the cap
+  // can hold means the organization is not in a state the reset knows.
+  if (read.type === "overflow") {
+    return {
+      deleted: 0,
+      failures: [
+        {
+          kind,
+          id: scope.target.organizationId,
+          reason: `more than ${read.cap} rows; none were deleted`,
+        },
+      ],
+    };
+  }
   let deleted = 0;
   const failures: ReviewResetFailure[] = [];
   // Every row goes through its kind's shared delete path, one short
   // transaction each; a failed row is reported and the next one still runs.
-  await inOrder(rows, async (row) => {
+  const settled = await inOrder(read.rows, async (row) => {
     if (scope.signal.aborted || scope.fence.tripped) {
       return Result.ok(undefined);
     }
@@ -344,6 +370,7 @@ const deleteEach = async <TRow extends { id: string }>(
     }
     return Result.ok(undefined);
   });
+  settled.unwrap("Row failures are reported, never returned");
   return { deleted, failures };
 };
 
@@ -351,12 +378,14 @@ const deleteMatters = async (scope: ResetScope) => {
   const { organizationId, userId } = scope.target;
   // Bounded by the organization's matter cap, as every enumeration below is
   // bounded by its own kind's cap.
-  const rows = await scope.db
-    .select({ id: workspaces.id, status: workspaces.status })
-    .from(workspaces)
-    .where(eq(workspaces.organizationId, organizationId))
-    .orderBy(asc(workspaces.id))
-    .limit(LIMITS.workspacesCount);
+  const rows = await readBounded(
+    scope.db
+      .select({ id: workspaces.id, status: workspaces.status })
+      .from(workspaces)
+      .where(eq(workspaces.organizationId, organizationId))
+      .orderBy(asc(workspaces.id)),
+    LIMITS.workspacesCount,
+  );
   return await deleteEach(scope, "matters", rows, async (matter) => {
     if (matter.status === "archived") {
       const unarchived = await Result.gen(() =>
@@ -396,12 +425,14 @@ const deleteMatters = async (scope: ResetScope) => {
 
 const deleteContacts = async (scope: ResetScope) => {
   const { organizationId } = scope.target;
-  const rows = await scope.db
-    .select({ id: contacts.id })
-    .from(contacts)
-    .where(eq(contacts.organizationId, organizationId))
-    .orderBy(asc(contacts.id))
-    .limit(LIMITS.contactsCount);
+  const rows = await readBounded(
+    scope.db
+      .select({ id: contacts.id })
+      .from(contacts)
+      .where(eq(contacts.organizationId, organizationId))
+      .orderBy(asc(contacts.id)),
+    LIMITS.contactsCount,
+  );
   return await deleteEach(
     scope,
     "contacts",
@@ -420,12 +451,14 @@ const deleteContacts = async (scope: ResetScope) => {
 
 const deleteClauses = async (scope: ResetScope) => {
   const { organizationId } = scope.target;
-  const rows = await scope.db
-    .select({ id: clauses.id })
-    .from(clauses)
-    .where(eq(clauses.organizationId, organizationId))
-    .orderBy(asc(clauses.id))
-    .limit(LIMITS.clausesPerOrganization);
+  const rows = await readBounded(
+    scope.db
+      .select({ id: clauses.id })
+      .from(clauses)
+      .where(eq(clauses.organizationId, organizationId))
+      .orderBy(asc(clauses.id)),
+    LIMITS.clausesPerOrganization,
+  );
   return await deleteEach(
     scope,
     "clauses",
@@ -444,12 +477,14 @@ const deleteClauses = async (scope: ResetScope) => {
 
 const deleteTemplates = async (scope: ResetScope) => {
   const { organizationId } = scope.target;
-  const rows = await scope.db
-    .select({ id: templates.id })
-    .from(templates)
-    .where(eq(templates.organizationId, organizationId))
-    .orderBy(asc(templates.id))
-    .limit(LIMITS.templatesCount);
+  const rows = await readBounded(
+    scope.db
+      .select({ id: templates.id })
+      .from(templates)
+      .where(eq(templates.organizationId, organizationId))
+      .orderBy(asc(templates.id)),
+    LIMITS.templatesCount,
+  );
   return await deleteEach(
     scope,
     "templates",
@@ -468,12 +503,14 @@ const deleteTemplates = async (scope: ResetScope) => {
 
 const deletePlaybooks = async (scope: ResetScope) => {
   const { organizationId } = scope.target;
-  const rows = await scope.db
-    .select({ id: playbookDefinitions.id, name: playbookDefinitions.name })
-    .from(playbookDefinitions)
-    .where(eq(playbookDefinitions.organizationId, organizationId))
-    .orderBy(asc(playbookDefinitions.id))
-    .limit(LIMITS.playbookDefinitionsCount);
+  const rows = await readBounded(
+    scope.db
+      .select({ id: playbookDefinitions.id, name: playbookDefinitions.name })
+      .from(playbookDefinitions)
+      .where(eq(playbookDefinitions.organizationId, organizationId))
+      .orderBy(asc(playbookDefinitions.id)),
+    LIMITS.playbookDefinitionsCount,
+  );
   const { recordOrganizationAuditEvent } = scope;
   // One playbook and its audit row per transaction, as the playbook delete
   // route writes them.
