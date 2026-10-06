@@ -77,7 +77,10 @@ export const ToolCallCodeBlock = ({
 
   return (
     <div className="bg-background/50 overflow-hidden rounded-lg border">
-      <div className="text-muted-foreground text-2xs flex h-9 items-center justify-between px-2.5">
+      <div
+        className="text-muted-foreground text-2xs flex h-9 items-center justify-between px-2.5"
+        data-chat-copy-exclude
+      >
         <span className="font-mono lowercase">{language}</span>
         <Button
           aria-label={t("common.copy")}
@@ -98,7 +101,10 @@ export const ToolCallCodeBlock = ({
         {keyedLines.map(({ key, lineNumber, tokens: lineTokens }) => (
           <span className="block" key={key}>
             {shouldShowLineNumbers && (
-              <span className="text-foreground-ghost me-4 inline-block w-5 text-end tabular-nums select-none">
+              <span
+                className="text-foreground-ghost me-4 inline-block w-5 text-end tabular-nums select-none"
+                data-chat-copy-exclude
+              >
                 {lineNumber}
               </span>
             )}
