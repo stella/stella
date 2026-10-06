@@ -42,7 +42,10 @@ const containsPrimaryAction = (
   if (tag && localActions.has(tag)) {
     return true;
   }
-  if (tag && /(?:^button$|Button$)/u.test(tag)) {
+  if (tag === "button") {
+    return true;
+  }
+  if (tag?.endsWith("Button")) {
     return hasAttribute(node, "onClick") || hasAttribute(node, "type");
   }
   // A sibling layout container owns a separate control group. Wrappers such
@@ -188,15 +191,21 @@ export const findAdHocSplitButtons = (
       let branch = node;
       // Menu/Popover roots, render props and conditionals may sit between the
       // trigger and the layout's child list. Stop at the first adjacent action.
-      while (branch.parent && !ts.isSourceFile(branch.parent)) {
+      while (!ts.isSourceFile(branch.parent)) {
         const parent = branch.parent;
         if (ts.isJsxElement(parent) || ts.isJsxFragment(parent)) {
           const siblings = parent.children.filter(
             (child) =>
-              !ts.isJsxText(child) &&
+              !(ts.isJsxText(child) && child.text.trim().length === 0) &&
               !(ts.isJsxExpression(child) && child.expression === undefined),
           );
-          const index = siblings.indexOf(branch);
+          const index =
+            ts.isJsxElement(branch) ||
+            ts.isJsxSelfClosingElement(branch) ||
+            ts.isJsxExpression(branch) ||
+            ts.isJsxFragment(branch)
+              ? siblings.indexOf(branch)
+              : -1;
           const previous = siblings.at(index - 1);
           if (
             index > 0 &&

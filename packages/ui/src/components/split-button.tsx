@@ -9,12 +9,10 @@ import { Menu, MenuTrigger } from "./menu";
 import { Popover, PopoverTrigger } from "./popover";
 
 type SplitButtonSharedProps = {
-  primaryLabel: string;
   menuLabel: string;
   primaryDescriptionId?: string;
   menuDescriptionId?: string;
   onPrimaryClick: NonNullable<ComponentProps<typeof Button>["onClick"]>;
-  children: ReactNode;
   menu: ReactNode;
   primaryDisabled?: boolean;
   menuDisabled?: boolean;
@@ -22,7 +20,12 @@ type SplitButtonSharedProps = {
   className?: string;
 };
 
+type SplitButtonPrimary =
+  | { children: ReactNode; primaryLabel: string }
+  | { children: string; primaryLabel?: never };
+
 type SplitButtonProps = SplitButtonSharedProps &
+  SplitButtonPrimary &
   (
     | {
         surface?: "menu";

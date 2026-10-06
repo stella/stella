@@ -361,12 +361,12 @@ export function UiPlayground() {
                     size="sm"
                     primaryLabel={t("common.download")}
                     menuLabel={t("workspaces.files.downloadAs")}
-                    onPrimaryClick={() =>
+                    onPrimaryClick={() => {
                       stellaToast.add({
                         title: t("common.download"),
                         type: "info",
-                      })
-                    }
+                      });
+                    }}
                     menu={
                       <MenuPopup>
                         <MenuItem>{t("workspaces.files.downloadPdf")}</MenuItem>
@@ -379,12 +379,12 @@ export function UiPlayground() {
                     size="md"
                     primaryLabel={t("common.download")}
                     menuLabel={t("workspaces.files.downloadAs")}
-                    onPrimaryClick={() =>
+                    onPrimaryClick={() => {
                       stellaToast.add({
                         title: t("common.download"),
                         type: "info",
-                      })
-                    }
+                      });
+                    }}
                     menu={
                       <MenuPopup>
                         <MenuItem>{t("workspaces.files.downloadPdf")}</MenuItem>

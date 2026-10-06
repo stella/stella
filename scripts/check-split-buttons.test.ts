@@ -16,6 +16,7 @@ test("rejects adjacent primary actions and chevron menus across production wrapp
     `<div><Tooltip render={${primary}} />{hasOptions && (${chevronMenu})}</div>`,
     `<div>{available ? (${primary}) : null}${chevronMenu}</div>`,
     `<div><button type="submit">Save</button>${chevronMenu}</div>`,
+    `<div><button>Save</button>${chevronMenu}</div>`,
     `<div>${primary}<Popover><PopoverTrigger render={<Button />}><ChevronDownIcon /></PopoverTrigger></Popover></div>`,
     `<div>${primary}<Menu><MenuTrigger render={<Button><ChevronDownIcon /></Button>} /></Menu></div>`,
     `const Primary = () => (${primary}); const view = <div><Primary />${chevronMenu}</div>;`,
@@ -37,6 +38,7 @@ test("excludes plain dropdowns, independent controls and chevron navigation", ()
     `<div><div>${primary}</div>${chevronMenu}</div>`,
     `<div>${primary}<Button onClick={next}><ChevronDownIcon /></Button></div>`,
     `<div>${primary}<span>Unrelated section</span>${chevronMenu}</div>`,
+    `<div>${primary}Unrelated section${chevronMenu}</div>`,
     `<SplitButton menuLabel="Save as" onClick={save}><MenuItem /></SplitButton>`,
   ];
   for (const content of cases) {

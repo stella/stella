@@ -205,3 +205,18 @@ for (const size of ["sm", "md"] as const) {
     });
   }
 }
+
+test("uses visible text as the primary name when no icon label is supplied", async ({
+  page,
+}) => {
+  await openFixture(page, "?label=content");
+  const primary = page.getByRole("button", { name: primaryName, exact: true });
+  await expect(primary).toHaveText(primaryName);
+  await expect(primary).not.toHaveAttribute("aria-label");
+  await primary.click();
+  await expect(page.getByLabel("Primary actions")).toHaveAttribute(
+    "data-count",
+    "1",
+  );
+  await expect(page.getByRole("menu")).toBeHidden();
+});
