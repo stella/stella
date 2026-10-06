@@ -35,8 +35,17 @@ import { sanitizeHref } from "@/lib/sanitize-href";
 import { schemaFormOptions, emailSchema, toFormErrors } from "@/lib/schema";
 import { useQueryView } from "@/lib/use-query-view";
 
-import { resolveSignInOptions } from "./sign-in-panel.logic";
-import type { AuthCapabilities } from "./sign-in-panel.logic";
+import {
+  LastUsedSignInFrame,
+  readLastUsedLoginMethod,
+} from "./last-used-sign-in";
+import {
+  resolveLastUsedSignInMethod,
+  resolveSignInOptions,
+  SIGN_IN_METHOD,
+  signInMethodVariant,
+} from "./sign-in-panel.logic";
+import type { AuthCapabilities, SignInMethod } from "./sign-in-panel.logic";
 
 type SignInPanelProps = {
   className?: string;
@@ -90,7 +99,13 @@ const SignInOptionsPanel = ({
   const [socialLoading, setSocialLoading] = useState<
     "google" | "microsoft" | null
   >(null);
-  const lastMethod = authClient.getLastUsedLoginMethod();
+  const signInOptions = resolveSignInOptions({
+    authCapabilities,
+    socialProviderFlags: {
+      google: env.VITE_AUTH_GOOGLE,
+      microsoft: env.VITE_AUTH_MICROSOFT,
+    },
+  });
   const {
     showEmailOtp,
     showLocalPassword,
@@ -99,12 +114,10 @@ const SignInOptionsPanel = ({
     showMicrosoft,
     showSocialProviders,
     hasAboveEmailOptions,
-  } = resolveSignInOptions({
-    authCapabilities,
-    socialProviderFlags: {
-      google: env.VITE_AUTH_GOOGLE,
-      microsoft: env.VITE_AUTH_MICROSOFT,
-    },
+  } = signInOptions;
+  const lastUsed = resolveLastUsedSignInMethod({
+    stored: readLastUsedLoginMethod(),
+    options: signInOptions,
   });
 
   const handleOtpSent = async (email: string) => {
@@ -195,8 +208,8 @@ const SignInOptionsPanel = ({
               disabled={socialLoading !== null}
               icon={<GoogleIcon />}
               label={t("auth.continueWithGoogle")}
-              lastUsed={lastMethod === "google"}
-              lastUsedLabel={t("auth.lastUsed")}
+              lastUsed={lastUsed}
+              method={SIGN_IN_METHOD.google}
               loading={socialLoading === "google"}
               onClick={() => {
                 handleSocialSignIn("google").catch((error: unknown) => {
@@ -213,8 +226,8 @@ const SignInOptionsPanel = ({
               disabled={socialLoading !== null}
               icon={<MicrosoftIcon />}
               label={t("auth.continueWithMicrosoft")}
-              lastUsed={lastMethod === "microsoft"}
-              lastUsedLabel={t("auth.lastUsed")}
+              lastUsed={lastUsed}
+              method={SIGN_IN_METHOD.microsoft}
               loading={socialLoading === "microsoft"}
               onClick={() => {
                 handleSocialSignIn("microsoft").catch((error: unknown) => {
@@ -239,6 +252,7 @@ const SignInOptionsPanel = ({
       {showLocalPassword && !showBootstrap && (
         <PasswordSignInForm
           hasSocialProviders={showSocialProviders}
+          lastUsed={lastUsed}
           redirectTo={redirectTo}
         />
       )}
@@ -281,14 +295,26 @@ const SignInOptionsPanel = ({
             })}
           >
             {({ isSubmitting, canSubmit, email }) => (
-              <Button
-                className="w-full"
-                disabled={!canSubmit || email.trim().length === 0}
-                loading={isSubmitting}
-                type="submit"
+              <LastUsedSignInFrame
+                lastUsed={lastUsed === SIGN_IN_METHOD.emailOtp}
               >
-                {t("auth.continueWithEmail")}
-              </Button>
+                {(describedBy) => (
+                  <Button
+                    aria-describedby={describedBy}
+                    className="w-full"
+                    disabled={!canSubmit || email.trim().length === 0}
+                    loading={isSubmitting}
+                    type="submit"
+                    variant={signInMethodVariant({
+                      method: SIGN_IN_METHOD.emailOtp,
+                      lastUsed,
+                      fallback: "default",
+                    })}
+                  >
+                    {t("auth.continueWithEmail")}
+                  </Button>
+                )}
+              </LastUsedSignInFrame>
             )}
           </form.Subscribe>
         </Form>
@@ -359,9 +385,11 @@ const SecretCredentialField = ({
 
 const PasswordSignInForm = ({
   hasSocialProviders,
+  lastUsed,
   redirectTo,
 }: {
   hasSocialProviders: boolean;
+  lastUsed: SignInMethod | null;
   redirectTo: string;
 }) => {
   const t = useTranslations();
@@ -445,18 +473,28 @@ const PasswordSignInForm = ({
         })}
       >
         {({ isSubmitting, canSubmit, email, password }) => (
-          <Button
-            className="w-full"
-            disabled={
-              !canSubmit ||
-              email.trim().length === 0 ||
-              password.trim().length === 0
-            }
-            loading={isSubmitting}
-            type="submit"
-          >
-            {t("auth.signInWithPassword")}
-          </Button>
+          <LastUsedSignInFrame lastUsed={lastUsed === SIGN_IN_METHOD.password}>
+            {(describedBy) => (
+              <Button
+                aria-describedby={describedBy}
+                className="w-full"
+                disabled={
+                  !canSubmit ||
+                  email.trim().length === 0 ||
+                  password.trim().length === 0
+                }
+                loading={isSubmitting}
+                type="submit"
+                variant={signInMethodVariant({
+                  method: SIGN_IN_METHOD.password,
+                  lastUsed,
+                  fallback: "default",
+                })}
+              >
+                {t("auth.signInWithPassword")}
+              </Button>
+            )}
+          </LastUsedSignInFrame>
         )}
       </form.Subscribe>
     </Form>
@@ -644,41 +682,36 @@ const signUpWithSelfhostBootstrap = async (
 const SocialButton = ({
   icon,
   label,
-  lastUsedLabel,
   lastUsed,
+  method,
   loading,
   disabled,
   onClick,
 }: {
   icon: ReactNode;
   label: string;
-  lastUsedLabel: string;
-  lastUsed: boolean;
+  lastUsed: SignInMethod | null;
+  method: SignInMethod;
   loading: boolean;
   disabled: boolean;
   onClick: () => void;
 }) => (
-  <div className="relative">
-    <Button
-      className={cn(
-        "w-full min-w-0 shrink max-sm:h-auto max-sm:min-h-10 max-sm:px-2 max-sm:py-2 max-sm:text-[0.95rem] max-sm:leading-tight max-sm:whitespace-normal sm:whitespace-nowrap",
-        lastUsed && "border-primary/40 shadow-primary/8 shadow-sm",
-      )}
-      disabled={disabled}
-      loading={loading}
-      onClick={onClick}
-      size="lg"
-      variant="outline"
-    >
-      {icon}
-      <span className="min-w-0 text-center">{label}</span>
-    </Button>
-    {lastUsed && (
-      <span className="bg-primary text-primary-foreground text-3xs absolute end-3 -top-2 rounded-full px-2 py-0.5 font-medium">
-        {lastUsedLabel}
-      </span>
+  <LastUsedSignInFrame lastUsed={lastUsed === method}>
+    {(describedBy) => (
+      <Button
+        aria-describedby={describedBy}
+        className="w-full min-w-0 shrink max-sm:h-auto max-sm:min-h-10 max-sm:px-2 max-sm:py-2 max-sm:text-[0.95rem] max-sm:leading-tight max-sm:whitespace-normal sm:whitespace-nowrap"
+        disabled={disabled}
+        loading={loading}
+        onClick={onClick}
+        size="lg"
+        variant={signInMethodVariant({ method, lastUsed, fallback: "outline" })}
+      >
+        {icon}
+        <span className="min-w-0 text-center">{label}</span>
+      </Button>
     )}
-  </div>
+  </LastUsedSignInFrame>
 );
 
 const GoogleIcon = () => (

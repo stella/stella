@@ -51,6 +51,7 @@ import {
 } from "../helpers/smoke-route-defs";
 import { createBrowserErrorCollector } from "../helpers/test";
 import { listTimeBillingRoutes } from "../helpers/time-billing-routes";
+import { declareVisualSandboxSmoke } from "../helpers/visual-sandbox-smoke";
 import {
   type TestWorkspace,
   createTestWorkspace,
@@ -400,6 +401,7 @@ const declareRouteSmokeGroup = ({
 };
 
 const baselineMode = process.env["E2E_NETWORK_BASELINE"];
+declareVisualSandboxSmoke();
 declarePublicKnowledgeSmoke({ mode: "disabled" });
 
 test("route coverage matches the authenticated route tree", async () => {

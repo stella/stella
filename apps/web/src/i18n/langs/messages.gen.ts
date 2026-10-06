@@ -963,6 +963,9 @@ type Messages = {
     };
     "viewer": {
       "abstract": "Abstract";
+      "appliedVersionNotStated": "Applied version not stated";
+      "appliedVersionStatedAmendment": "Wording as amended by <reference>{amendment}</reference>";
+      "appliedVersionStatedDate": "{relation, select, on {Wording effective on {date}} until {Wording effective through {date}} from {Wording effective from {date}} other {Wording effective on {date}}}";
       "caseFileMayHoldOthers": "This case file may contain other decisions as well.";
       "citedBy": "Cited by";
       "cites": "Cites";

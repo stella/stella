@@ -123,6 +123,7 @@ import { vatRateRoute } from "@/api/handlers/vat-rates/routes";
 import { verifyAuthRoute } from "@/api/handlers/verify/routes";
 import { viewTemplatesRoute } from "@/api/handlers/view-templates/routes";
 import { viewsRoute } from "@/api/handlers/views/routes";
+import { handleVisualSandboxRequest } from "@/api/handlers/visual-sandbox/routes";
 import { wellKnownRoute } from "@/api/handlers/well-known/routes";
 import { myWorkRoute } from "@/api/handlers/work-obligations/my-work-route";
 import { workObligationsRoute } from "@/api/handlers/work-obligations/routes";
@@ -372,7 +373,10 @@ const api = new Elysia()
       return mcpPreflightResponse;
     }
 
-    return handleMcpAppSandboxRequest(request, set);
+    return (
+      handleMcpAppSandboxRequest(request, set) ??
+      handleVisualSandboxRequest(request, set)
+    );
   })
   .use(
     cors({
