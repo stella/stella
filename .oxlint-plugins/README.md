@@ -335,3 +335,5 @@ implies a hazard that is gone.
 - [`no-raw-child-exit-status`](./no-raw-child-exit-status.ts) (`no-raw-child-exit-status`): requires the shared `childExitStatus` helper when forwarding child-process statuses to process exit sinks, including aliases and local return values.
 
 - [`no-discarded-toast-error`](./no-discarded-toast-error.ts) (`no-discarded-toast-error`): preserves original caught errors through shared notification.
+
+- [`require-json-import-attribute`](./require-json-import-attribute.ts) (`require-json-import-attribute`): requires the JSON type attribute on static runtime JSON imports in web browser-test files and repository scripts; erased type imports are allowed.

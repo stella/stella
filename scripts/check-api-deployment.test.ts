@@ -474,16 +474,32 @@ describe("API deployment health receipt", () => {
       "/etc/apt/sources.list.d/google-chrome.list",
     );
     expect(promoteJob).not.toContain("playwright install");
-    // The gate only reads: it decides whether to promote, never promotes.
+    // The gate records an off status but cannot write source or deployments.
     // Both delimiters are asserted so a missing block cannot slice to "" and
-    // satisfy the write check by being empty.
+    // satisfy the permission check by being empty.
     const permissionsStart = healthJob.indexOf("permissions:");
     const outputsStart = healthJob.indexOf("outputs:");
     expect(permissionsStart).toBeGreaterThanOrEqual(0);
     expect(outputsStart).toBeGreaterThan(permissionsStart);
     const healthPermissions = healthJob.slice(permissionsStart, outputsStart);
-    expect(healthPermissions).toContain("contents: read");
-    expect(healthPermissions).not.toContain("write");
+    const assertHealthPermissions = (permissions: unknown) =>
+      expect(
+        permissions,
+        "Staging gate permissions are confined to status writes",
+      ).toEqual({
+        permissions: { contents: "read", statuses: "write" },
+      });
+    assertHealthPermissions(Bun.YAML.parse(healthPermissions));
+    for (const mutated of [
+      healthPermissions.replace("contents: read", "contents: write"),
+      `${healthPermissions.trimEnd()}\n      deployments: write\n`,
+      healthPermissions.replace("      statuses: write\n", ""),
+    ]) {
+      expect(mutated).not.toBe(healthPermissions);
+      expect(() => assertHealthPermissions(Bun.YAML.parse(mutated))).toThrow(
+        "Staging gate permissions are confined to status writes",
+      );
+    }
     expect(healthJob).toContain(
       "STAGING_HEALTH_URL: https://api-staging.stll.app/ready",
     );
@@ -492,7 +508,7 @@ describe("API deployment health receipt", () => {
     expect(healthJob).toContain('status="$NOT_READY_STATUS"');
     expect(healthJob).toContain('status="$READY_STATUS"');
     expect(healthJob).toContain(`echo "status=\${status}" >> "$GITHUB_OUTPUT"`);
-    // An unreachable environment is normally off: skip, unless asked to
+    // An unreachable environment is normally off: fail, unless asked to
     // deploy into it anyway.
     expect(healthJob).toContain("DEPLOY_WHEN_UNREACHABLE");
     expect(healthJob).toContain(

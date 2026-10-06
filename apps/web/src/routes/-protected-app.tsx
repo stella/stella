@@ -216,7 +216,10 @@ export const ProtectedAppFrame = ({
     workspaceId: workspaceMatch?.params.workspaceId,
   });
   const { data: workspaceNavigation } = useChromeQuery(
-    workspacesNavigationOptions(inspectorBroadcastOrganizationId),
+    workspacesNavigationOptions({
+      organizationId: inspectorBroadcastOrganizationId,
+      userId: inspectorBroadcastUserId,
+    }),
   );
   const activeWorkspace = workspaceNavigation?.workspaces.find(
     ({ id }) => id === activeWorkspaceId,

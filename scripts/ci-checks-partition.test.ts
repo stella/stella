@@ -390,6 +390,24 @@ const withoutPreparedGeneration = (step: Step): Step => {
   }
   const { run } = v.parse(v.looseObject({ run: v.optional(v.string()) }), step);
   const prepared = "bun scripts/ci-generated-sources.ts prepare\n";
+  const regeneration = [
+    "set -euo pipefail",
+    "bun scripts/ci-generated-sources.ts prepare",
+    "# Regeneration guards intentionally modify inputs and report their diff.",
+    "# Validate the artifact first, then use ordinary generation in this leg.",
+    "unset CI_GENERATED_SOURCES_MANIFEST",
+    `echo 'CI_GENERATED_SOURCES_MANIFEST=' >> "$GITHUB_ENV"`,
+    "",
+  ].join("\n");
+  if (
+    step.name === "CLI sharded registry and derived runtime guard" &&
+    run?.startsWith(regeneration)
+  ) {
+    return {
+      ...step,
+      run: `bun apps/api/scripts/generate-capability-runtime.ts\n${run.slice(regeneration.length)}`,
+    };
+  }
   return run?.startsWith(prepared)
     ? {
         ...step,
@@ -426,7 +444,8 @@ const conditionTokens = (condition: string) =>
     .replaceAll(/'(?:[^']|'')*'|\s+/gu, (token) =>
       token.startsWith("'") ? token : " ",
     )
-    .trim();
+    .trim()
+    .replace(/^\$\{\{\s*([\s\S]*?)\s*\}\}$/u, "$1");
 type ScopeOptions = {
   current: Record<string, unknown>;
   base: Record<string, unknown>;
@@ -460,17 +479,21 @@ const expectScope = ({ current, base }: ScopeOptions) => {
     }
   }
   expect(migrated).toEqual(originalScope);
-  if (condition === originalCondition) {
+  const tokens = conditionTokens(v.parse(v.string(), condition));
+  // Ordinary scope comparisons supply fresh-run evidence. Completion reuse
+  // is exercised separately by the depth contract's true/false census.
+  const fresh =
+    /^needs\.ci-plan\.outputs\.run_required != 'false' && \(\s*(.*?)\s*\)$/u
+      .exec(tokens)
+      ?.at(1) ?? tokens;
+  const original = conditionTokens(v.parse(v.string(), originalCondition));
+  if (fresh === original) {
     return;
   }
-  // Heavy-only main runs skip the thin ci-checks legs. Only this wrapper
-  // may change their scope; every token of the base condition stays intact.
   const wrapped = /^inputs\.heavy_only != true && \(\s*(.*?)\s*\)$/u.exec(
-    conditionTokens(v.parse(v.string(), condition)),
+    fresh,
   );
-  expect(wrapped?.at(1)).toBe(
-    conditionTokens(v.parse(v.string(), originalCondition)),
-  );
+  expect(wrapped?.at(1)).toBe(original);
 };
 
 type CoverageOptions = {

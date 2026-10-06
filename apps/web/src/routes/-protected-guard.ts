@@ -3,10 +3,7 @@ import { redirect } from "@tanstack/react-router";
 import { panic } from "better-result";
 
 import { isInboxPreviewEnabled } from "@/hooks/use-inbox-preview";
-import {
-  isTimeBillingRouteEnabled,
-  prefetchTimeBillingServerState,
-} from "@/hooks/use-time-billing-preview";
+import { isTimeBillingRouteEnabled } from "@/hooks/use-time-billing-preview";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { roleOptions } from "@/lib/auth-queries";
 import { detached } from "@/lib/detached";
@@ -64,15 +61,6 @@ export const loadProtectedContext = async ({
   const onPrefetchError = (error: unknown) => {
     getAnalytics().captureError(error);
   };
-  detached(
-    prefetchTimeBillingServerState({
-      queryClient: context.queryClient,
-      caller: { userId, organizationId: activeOrganizationId },
-      onError: onPrefetchError,
-    }),
-    "protected-layout.deployment-features-prefetch",
-  );
-
   if (location.pathname === "/settings/organization/time-policy") {
     detached(
       (async () => {

@@ -51,8 +51,13 @@ export type InspectorGroupPresentation = {
 
 export const useInspectorGroups = () => {
   const t = useTranslations();
-  const { activeOrganizationId } = useAuthenticatedUser();
-  const { data } = useQuery(workspacesNavigationOptions(activeOrganizationId));
+  const { activeOrganizationId, id: userId } = useAuthenticatedUser();
+  const { data } = useQuery(
+    workspacesNavigationOptions({
+      organizationId: activeOrganizationId,
+      userId,
+    }),
+  );
   const state = useInspectorTabsStore(
     useShallow((s) => ({
       tabs: s.tabs,

@@ -6151,6 +6151,10 @@
     "seconds": 0.104776,
     "source": "estimated"
   },
+  "src/lib/legal-search/corpus-index-unreachable.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
   "src/lib/legal-search/corpus-location.test.ts": {
     "seconds": 0.107206,
     "source": "estimated"
@@ -6525,6 +6529,10 @@
   },
   "src/lib/lists/verification/claim-context.test.ts": {
     "seconds": 0.092071,
+    "source": "estimated"
+  },
+  "src/lib/lists/verification/document-deletion.db.test.ts": {
+    "seconds": 1,
     "source": "estimated"
   },
   "src/lib/lists/verification/engine.test.ts": {
@@ -7859,6 +7867,14 @@
     "seconds": 0.442742,
     "source": "estimated"
   },
+  "src/lib/visual-preview-stream.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
+  "src/lib/visual-preview.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
   "src/lib/web-search/select-provider.test.ts": {
     "seconds": 0.065347,
     "source": "estimated"
@@ -8317,6 +8333,10 @@
   },
   "src/mcp/resources.test.ts": {
     "seconds": 0.467175,
+    "source": "estimated"
+  },
+  "src/mcp/search-index-unavailable.test.ts": {
+    "seconds": 1,
     "source": "estimated"
   },
   "src/mcp/server-admission.valkey.test.ts": {
