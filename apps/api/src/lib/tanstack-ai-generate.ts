@@ -413,9 +413,56 @@ export type TanStackTextRun = {
  * caller owns the model resolution and must dispatch through
  * {@link textAdapterWithNormalizedStops}.
  */
+/**
+ * The proof a direct chat run was admitted under. The run's abort follows the
+ * admitted action, so model work never outlives the lease that admitted it.
+ */
+type AdmittedChatRunOptions = StreamChatChunksOptions & {
+  model: ResolvedTanStackTextModel;
+  admission: ModelDispatchScope["admission"];
+};
+
+const admittedChatRunOptions = ({
+  admission,
+  abortController,
+  ...options
+}: AdmittedChatRunOptions): StreamChatChunksOptions & {
+  model: ResolvedTanStackTextModel;
+} => {
+  const controller = admittedAbortController(admission, abortController);
+  return controller === undefined
+    ? options
+    : { ...options, abortController: controller };
+};
+
+const admittedAbortController = (
+  admission: ModelDispatchScope["admission"],
+  abortController: AbortController | undefined,
+): AbortController | undefined => {
+  switch (admission.type) {
+    case "organization": {
+      // Checks the proof still admits work, then joins its signal.
+      const signal = admittedDispatchSignal({
+        organizationId: admission.organizationId,
+        admission,
+        abortSignal: abortController?.signal,
+      });
+      return signal === undefined
+        ? abortController
+        : abortControllerFromSignal(signal);
+    }
+    case "no-organization":
+      return abortController;
+    default:
+      admission satisfies never;
+      return panic("Unhandled model dispatch admission");
+  }
+};
+
 export const collectTanStackTextRun = async (
-  options: StreamChatChunksOptions & { model: ResolvedTanStackTextModel },
+  admitted: AdmittedChatRunOptions,
 ): Promise<TanStackTextRun> => {
+  const options = admittedChatRunOptions(admitted);
   // Assigned from the loop below; a property keeps the declared union instead
   // of narrowing to the initial branch.
   const run: { finish: TextRunFinish } = { finish: { kind: "unfinished" } };
@@ -1711,12 +1758,10 @@ const tanStackRunErrorChunk = (
  *
  * @yields The run's chunks, with each `RUN_ERROR` projected.
  */
-export const streamTanStackChatRun = async function* ({
-  model,
-  ...options
-}: StreamChatChunksOptions & {
-  model: ResolvedTanStackTextModel;
-}): AsyncIterable<TanStackChatRunChunk> {
+export const streamTanStackChatRun = async function* (
+  admitted: AdmittedChatRunOptions,
+): AsyncIterable<TanStackChatRunChunk> {
+  const { model, ...options } = admittedChatRunOptions(admitted);
   try {
     for await (const chunk of streamChatChunks(options)) {
       yield chunk.type === EventType.RUN_ERROR
@@ -1733,8 +1778,7 @@ export const streamTanStackChatRun = async function* ({
 };
 
 type GenerateTanStackChatObjectOptions<TSchema extends v.GenericSchema> =
-  StreamChatChunksOptions & {
-    model: ResolvedTanStackTextModel;
+  AdmittedChatRunOptions & {
     outputSchema: TSchema;
   };
 
@@ -1746,12 +1790,12 @@ type GenerateTanStackChatObjectOptions<TSchema extends v.GenericSchema> =
 export const generateTanStackChatObject = async <
   TSchema extends v.GenericSchema,
 >({
-  model,
   outputSchema,
-  ...options
+  ...admitted
 }: GenerateTanStackChatObjectOptions<TSchema>): Promise<
   v.InferOutput<TSchema>
 > => {
+  const { model, ...options } = admittedChatRunOptions(admitted);
   const result = await Result.tryPromise({
     try: async () =>
       await generateChatObject({

@@ -26,9 +26,12 @@ const apiRoot = new URL("../../../", import.meta.url);
 
 /** The entry points that send a request to a model. */
 const DISPATCH_ENTRY_POINTS = new Set([
+  "collectTanStackTextRun",
+  "generateTanStackChatObject",
   "generateTanStackObjectForRole",
   "generateTanStackTextForRole",
   "resolveTanStackTextModel",
+  "streamTanStackChatRun",
   "streamTanStackObjectForRole",
   "streamTanStackTextForRole",
 ]);
@@ -242,6 +245,47 @@ const productionSources = async () => {
   return sources;
 };
 
+const RAW_CHAT_RUNTIME = "@/api/lib/chat/tanstack-chat-runtime";
+const RAW_CHAT_ENTRY_POINTS = new Set([
+  "generateChatObject",
+  "streamChatChunks",
+  "streamChatObject",
+]);
+/**
+ * The chat runtime's raw entry points read no proof, so a run through them
+ * aborts with its admitted action only where the caller joins the proof's
+ * signal itself. Everything else dispatches through the admitted helpers.
+ */
+const RAW_CHAT_RUNTIME_OWNERS = {
+  "handlers/chat/stream-chat.ts":
+    "the turn's provider abort controller joins its execution admission",
+  "lib/tanstack-ai-generate.ts":
+    "the admitted helpers join the proof's signal to every run",
+};
+
+const importsRawChatRuntime = (file: string, source: string): boolean =>
+  ts
+    .createSourceFile(file, source, ts.ScriptTarget.Latest, true)
+    .statements.some((statement) => {
+      if (
+        !ts.isImportDeclaration(statement) ||
+        !ts.isStringLiteral(statement.moduleSpecifier) ||
+        statement.moduleSpecifier.text !== RAW_CHAT_RUNTIME
+      ) {
+        return false;
+      }
+      const bindings = statement.importClause?.namedBindings;
+      return (
+        bindings !== undefined &&
+        ts.isNamedImports(bindings) &&
+        bindings.elements.some((binding) =>
+          RAW_CHAT_ENTRY_POINTS.has(
+            (binding.propertyName ?? binding.name).text,
+          ),
+        )
+      );
+    });
+
 describe("model dispatch admission guard", () => {
   test("flags a dispatch without an admission however it names the entry point", () => {
     const offending = [
@@ -307,6 +351,19 @@ describe("model dispatch admission guard", () => {
     expect(scan(source, "handlers/chat/tools/example.ts").violations).toEqual(
       [],
     );
+  });
+
+  test("only the owners that join the proof's signal run the chat runtime directly", async () => {
+    const importers = (await productionSources())
+      .filter(
+        ({ file, source }) =>
+          !file.startsWith("evals/") &&
+          !file.startsWith("scripts/") &&
+          importsRawChatRuntime(file, source),
+      )
+      .map(({ file }) => file)
+      .toSorted();
+    expect(importers).toEqual(Object.keys(RAW_CHAT_RUNTIME_OWNERS).toSorted());
   });
 
   test("every model dispatch in the API, its evaluations and scripts carries an admission", async () => {

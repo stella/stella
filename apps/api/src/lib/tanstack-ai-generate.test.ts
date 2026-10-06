@@ -2391,6 +2391,7 @@ describe("a chat run a caller consumes itself", () => {
     const chunks: unknown[] = [];
     const caught = await (async () => {
       for await (const chunk of streamTanStackChatRun({
+        admission: NO_ORGANIZATION_MODEL_DISPATCH,
         model: testModel,
         adapter: testModel.adapter,
         messages: [{ role: "user", content: "Hello" }],
