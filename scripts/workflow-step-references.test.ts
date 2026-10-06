@@ -7,7 +7,8 @@ import path from "node:path";
 // reference must name a step declared in the same job or composite action.
 
 const ROOT = path.resolve(import.meta.dir, "..");
-const STEP_REFERENCE = /\bsteps\.([A-Za-z_][\w-]*)\./gu;
+// The step context only: `needs.steps.outputs` names a job called "steps".
+const STEP_REFERENCE = /(?<![\w.-])steps\.([A-Za-z_][\w-]*)\./gu;
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
@@ -45,11 +46,7 @@ export const danglingStepReferences = (
   const runs = document["runs"];
   if (isRecord(runs)) {
     // Composite action: outputs and steps share one step scope.
-    return missing(
-      `${file}`,
-      { outputs: document["outputs"], runs },
-      runs["steps"],
-    );
+    return missing(file, { outputs: document["outputs"], runs }, runs["steps"]);
   }
   const jobs = document["jobs"];
   if (!isRecord(jobs)) {
@@ -130,6 +127,18 @@ describe("workflow step references", () => {
     expect(danglingStepReferences("deploy.yml", workflow)).toEqual([
       "deploy.yml: job deploy: steps.pick names no step in this scope",
     ]);
+  });
+
+  test("ignores a job named steps in the needs context", () => {
+    const workflow = {
+      jobs: {
+        deploy: {
+          if: `\${{ needs.steps.outputs.ready == 'true' }}`,
+          steps: [{ id: "push", run: "true" }],
+        },
+      },
+    };
+    expect(danglingStepReferences("deploy.yml", workflow)).toEqual([]);
   });
 
   test("checks composite action outputs against the action's steps", () => {
