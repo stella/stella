@@ -1,5 +1,5 @@
 import { Result, TaggedError } from "better-result";
-import type { Browser } from "playwright-core";
+import type { Browser, LaunchOptions } from "playwright-core";
 import * as v from "valibot";
 
 import {
@@ -10,6 +10,12 @@ import {
 } from "@stll/api-contract/visual-preview";
 
 const PREVIEW_VIEWPORT_HEIGHT = 800;
+const PREVIEW_BROWSER_ARGS = [
+  "--host-resolver-rules=MAP * ~NOTFOUND",
+  "--disable-background-networking",
+  "--force-webrtc-ip-handling-policy=disable_non_proxied_udp",
+  "--webrtc-ip-handling-policy=disable_non_proxied_udp",
+] as const;
 
 export class VisualRenderError extends TaggedError("VisualRenderError")<{
   message: string;
@@ -23,9 +29,11 @@ export class VisualRenderTimeoutError extends TaggedError(
   readyFired: false;
 }> {}
 
+export type VisualPreviewLaunchOptions = Required<Pick<LaunchOptions, "args">>;
+
 type RenderVisualOptions = {
   input: VisualPreviewInput;
-  launch: () => Promise<Browser>;
+  launch: (options: VisualPreviewLaunchOptions) => Promise<Browser>;
 };
 
 export const renderVisual = async ({ input, launch }: RenderVisualOptions) => {
@@ -36,7 +44,7 @@ export const renderVisual = async ({ input, launch }: RenderVisualOptions) => {
     );
   }
   const launched = await Result.tryPromise({
-    try: launch,
+    try: () => launch({ args: [...PREVIEW_BROWSER_ARGS] }),
     catch: () =>
       new VisualRenderError({ message: "Preview browser unavailable" }),
   });

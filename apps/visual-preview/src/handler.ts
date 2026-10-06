@@ -5,6 +5,7 @@ import * as v from "valibot";
 
 import { visualPreviewInputSchema } from "@stll/api-contract/visual-preview";
 
+import { getBrowserEnvironment } from "./env";
 import { renderVisual, VisualRenderError } from "./render";
 
 export const handler = async (event: unknown) => {
@@ -14,7 +15,7 @@ export const handler = async (event: unknown) => {
   }
   const rendered = await renderVisual({
     input: parsed.output,
-    launch: async () =>
+    launch: async ({ args }) =>
       playwright.launch({
         executablePath: await chromium.executablePath("/opt/chromium"),
         args: [
@@ -24,11 +25,13 @@ export const handler = async (event: unknown) => {
                 "--disable-web-security",
                 "--allow-running-insecure-content",
                 "--disable-site-isolation-trials",
-              ].includes(arg),
+              ].includes(arg) &&
+              !arg.startsWith("--force-webrtc-ip-handling-policy=") &&
+              !arg.startsWith("--webrtc-ip-handling-policy="),
           ),
-          "--host-resolver-rules=MAP * ~NOTFOUND",
-          "--disable-background-networking",
+          ...args,
         ],
+        env: getBrowserEnvironment(),
         headless: true,
         timeout: 5000,
         chromiumSandbox: false,
