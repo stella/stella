@@ -656,14 +656,20 @@
     },
     "@stll/api#test:property": {
       "dependsOn": ["@stll/cli#codegen:runtime", "generate:capability-runtime"],
+      "passThroughEnv": ["API_TEST_TIMINGS_DIR", "API_TEST_MEASUREMENTS"],
       "cache": false
     },
     "@stll/api#test": {
       "dependsOn": ["@stll/cli#codegen:runtime", "generate:capability-runtime"],
       "env": ["API_TEST_SHARD", "API_TEST_FILES"],
-      // Lane count and diagnostics destination never change test results;
+      // Lane count and diagnostics destinations never change test results;
       // pass them through without entering the cache key.
-      "passThroughEnv": ["API_TEST_ARTIFACT_DIR", "API_TEST_LANES"],
+      "passThroughEnv": [
+        "API_TEST_ARTIFACT_DIR",
+        "API_TEST_LANES",
+        "API_TEST_TIMINGS_DIR",
+        "API_TEST_MEASUREMENTS"
+      ],
       "inputs": [
         "$TURBO_DEFAULT$",
         "$TURBO_ROOT$/.github/workflows/ai-provider-canary.yml",
