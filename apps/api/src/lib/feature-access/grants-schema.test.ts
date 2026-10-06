@@ -2,6 +2,7 @@ import { expect, test } from "bun:test";
 import * as v from "valibot";
 
 import { createFeatureAccessGrantsEnvSchema } from "@/api/lib/feature-access/grants-schema";
+import type { FeatureGrant } from "@/api/lib/feature-access/grants-schema";
 import { FEATURE_REGISTRY } from "@/api/lib/feature-access/registry";
 import type { FeatureRegistry } from "@/api/lib/feature-access/registry";
 
@@ -78,7 +79,12 @@ for (const unknownFeature of ["unknown-feature", "__proto__", "constructor"]) {
     const knownGrants = Object.fromEntries(
       Object.keys(registry).map((featureId) => [
         featureId,
-        [{ type: "organization", organizationId: "org-a" }],
+        [
+          {
+            type: "organization",
+            organizationId: "org-a",
+          } satisfies FeatureGrant,
+        ],
       ]),
     );
     expect(
@@ -103,7 +109,12 @@ test("feature grants boot logs only the discarded count and exposes known grants
   const knownGrants = Object.fromEntries(
     Object.keys(FEATURE_REGISTRY).map((featureId) => [
       featureId,
-      [{ type: "organization", organizationId: "org-a" }],
+      [
+        {
+          type: "organization",
+          organizationId: "org-a",
+        } satisfies FeatureGrant,
+      ],
     ]),
   );
   const envPath = new URL("../../env.ts", import.meta.url).pathname;
