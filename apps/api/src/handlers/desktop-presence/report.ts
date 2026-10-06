@@ -38,7 +38,7 @@ export const createDesktopPresenceReportEndpoint = (
       const { scopedDb, userId, organizationId } = yield* Result.await(
         authorizeAccount(request),
       );
-      yield* Result.await(
+      const reported = yield* Result.await(
         Result.tryPromise(
           async () =>
             await reportDesktopPresence({
@@ -49,7 +49,7 @@ export const createDesktopPresenceReportEndpoint = (
             }),
         ),
       );
-      return Result.ok({ reported: true });
+      return Result.ok({ reported });
     },
   );
 };

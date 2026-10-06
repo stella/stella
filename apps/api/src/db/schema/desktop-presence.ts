@@ -8,7 +8,7 @@ import {
   userOrganizationPolicies,
 } from "./common";
 
-// One current observation per installation; account deletion removes it.
+// One current observation per installation; membership or account removal erases it.
 export const desktopPresence = p.pgTable(
   "desktop_presence",
   {

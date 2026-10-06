@@ -205,8 +205,6 @@ const RETAINED_MEMBER_COLUMNS = {
   "usage_allocations.seat_scope_user_id":
     "Accounting scope; active seat assignment is membership-bound.",
 
-  "desktop_presence.user_id":
-    "Technical liveness observation; account deletion cascades, and current organization membership gates reporting and reads.",
   "account_deletion_requests.user_id":
     "Account-scoped record; organization removal does not erase the user account.",
   "action_cost_records.user_id":
@@ -447,6 +445,8 @@ const RETAINED_MEMBER_COLUMNS = {
  * the person stays a member of the organization.
  */
 const MATTER_REMOVAL_RETAINED_COLUMNS = {
+  "desktop_presence.user_id":
+    "Organization-scoped presence; the person stays an organization member.",
   "member.user_id": "Organization membership outlives a matter removal.",
   "contacts.originating_attorney_id":
     "Organization-level attorney; the person stays an organization member.",

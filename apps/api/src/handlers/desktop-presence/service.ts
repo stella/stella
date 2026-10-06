@@ -1,4 +1,4 @@
-import { and, desc, eq, sql } from "drizzle-orm";
+import { and, desc, eq, notInArray, sql } from "drizzle-orm";
 
 import { DESKTOP_HANDOFF_MIN_SUPPORTED_PROTOCOL } from "@stll/api-contract/desktop-handoff";
 import { DESKTOP_PRESENCE_POLICY } from "@stll/api-contract/desktop-presence";
@@ -7,6 +7,7 @@ import type {
   DesktopPresenceReport,
 } from "@stll/api-contract/desktop-presence";
 
+import { member } from "@/api/db/auth-schema";
 import type { ScopedDb } from "@/api/db/safe-db";
 import { desktopPresence } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -14,6 +15,8 @@ import type {
   UnbackedProjectionKeys,
   UnprojectedColumns,
 } from "@/api/lib/projection-totality";
+
+export const DESKTOP_PRESENCE_INSTALLATION_LIMIT = 10;
 
 // Heartbeats overwrite this technical observation; they create no history or audit rows.
 type ReportDesktopPresenceOptions = {
@@ -30,6 +33,22 @@ export const reportDesktopPresence = async ({
   report,
 }: ReportDesktopPresenceOptions) =>
   await scopedDb(async (tx) => {
+    // Membership precedes presence locks, matching member and account removal.
+    // It also serializes all installation writes for this owner.
+    const memberships = await tx
+      .select({ id: member.id })
+      .from(member)
+      .where(
+        and(
+          eq(member.userId, userId),
+          eq(member.organizationId, organizationId),
+        ),
+      )
+      .limit(1)
+      .for("update");
+    if (memberships.length === 0) {
+      return false;
+    }
     // audit: skip - reportDesktopPresence overwrites owner-scoped technical presence; heartbeat history is not retained
     await tx
       .insert(desktopPresence)
@@ -53,6 +72,30 @@ export const reportDesktopPresence = async ({
           lastSeenAt: sql`clock_timestamp()`,
         },
       });
+    // Keep a disconnected observation until membership removal; expiry alone
+    // must not turn a previously reported desktop into never-reported.
+    const retained = tx
+      .select({ desktopId: desktopPresence.desktopId })
+      .from(desktopPresence)
+      .where(
+        and(
+          eq(desktopPresence.userId, userId),
+          eq(desktopPresence.organizationId, organizationId),
+        ),
+      )
+      .orderBy(desc(desktopPresence.lastSeenAt), desktopPresence.desktopId)
+      .limit(DESKTOP_PRESENCE_INSTALLATION_LIMIT);
+    // audit: skip - discard superseded owner-scoped technical observations
+    await tx
+      .delete(desktopPresence)
+      .where(
+        and(
+          eq(desktopPresence.userId, userId),
+          eq(desktopPresence.organizationId, organizationId),
+          notInArray(desktopPresence.desktopId, retained),
+        ),
+      );
+    return true;
   });
 
 type DesktopPresenceRow = typeof desktopPresence.$inferSelect;

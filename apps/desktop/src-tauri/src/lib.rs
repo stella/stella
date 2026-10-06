@@ -361,6 +361,8 @@ pub fn run() {
         }
       }
 
+      presence::start(handle.clone());
+
       // Check for updates in the background after launch settles.
       updater::schedule_startup_check(handle.clone(), Arc::clone(&manager));
 

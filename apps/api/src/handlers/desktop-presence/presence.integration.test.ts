@@ -2,6 +2,7 @@ import { Result } from "better-result";
 import { afterAll, beforeAll, expect, test } from "bun:test";
 import { and, eq, sql } from "drizzle-orm";
 import Elysia from "elysia";
+import fc from "fast-check";
 import * as v from "valibot";
 
 import { DESKTOP_HANDOFF_MIN_SUPPORTED_PROTOCOL } from "@stll/api-contract/desktop-handoff";
@@ -9,6 +10,7 @@ import {
   DESKTOP_PRESENCE_POLICY,
   desktopPresenceSchema,
 } from "@stll/api-contract/desktop-presence";
+import { assertProperty } from "@stll/property-testing";
 
 import type { ScopedDb } from "@/api/db/safe-db";
 import { desktopPresence } from "@/api/db/schema";
@@ -181,9 +183,7 @@ test("app-role presence access is confined to the owner for reads, inserts, and 
         report,
       }),
   );
-  expect(deniedOrganization).toMatchObject({
-    error: { cause: { cause: { code: "42501" } } },
-  });
+  expect(deniedOrganization).toEqual(Result.ok(false));
   await testDb
     .insert(desktopPresence)
     .values({ userId: ids.userA1, organizationId: ids.orgB, ...report });
@@ -311,4 +311,67 @@ test("the committed presence table forces row security with owner-only policies"
   expect(rows.rows).toEqual([
     { relrowsecurity: true, relforcerowsecurity: true },
   ]);
+});
+
+test("installation rotation retains the newest ten observations", async () => {
+  const { testDb, ids } = fixture;
+  await assertProperty(
+    "installation rotation retains the newest ten observations",
+    fc.asyncProperty(
+      fc.uniqueArray(fc.uuid(), { minLength: 11, maxLength: 25 }),
+      async (installationIds) => {
+        await testDb
+          .delete(desktopPresence)
+          .where(eq(desktopPresence.userId, ids.userA1));
+        for (const [index, installationId] of installationIds.entries()) {
+          expect(
+            await reportDesktopPresence({
+              scopedDb,
+              userId: ids.userA1,
+              organizationId: ids.orgA,
+              report: {
+                ...report,
+                desktopId: installationId,
+                version: `0.9.${index}`,
+              },
+            }),
+          ).toBe(true);
+        }
+        const rows = await testDb
+          .select()
+          .from(desktopPresence)
+          .where(
+            and(
+              eq(desktopPresence.userId, ids.userA1),
+              eq(desktopPresence.organizationId, ids.orgA),
+            ),
+          );
+        expect(rows.map((row) => row.desktopId).toSorted()).toEqual(
+          installationIds.slice(-10).toSorted(),
+        );
+        expect(
+          await readDesktopPresence({
+            scopedDb,
+            userId: ids.userA1,
+            organizationId: ids.orgA,
+          }),
+        ).toMatchObject({
+          type: "current",
+          desktop: { version: `0.9.${installationIds.length - 1}` },
+        });
+        expect(
+          await readDesktopPresence({
+            scopedDb,
+            userId: ids.userA1,
+            organizationId: ids.orgA,
+            now: new Date(
+              Date.now() +
+                (DESKTOP_PRESENCE_POLICY.freshnessSeconds + 1) * 1000,
+            ),
+          }),
+        ).toMatchObject({ type: "not_connected" });
+      },
+    ),
+    { numRuns: 3 },
+  );
 });

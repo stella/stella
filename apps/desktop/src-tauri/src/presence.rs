@@ -1,14 +1,57 @@
-//! Connected desktop presence, paced by the updater's wall-clock tick.
+//! Connected desktop presence with an independent, paced wall-clock task.
 
+use std::future::Future;
 use std::io::Write;
 use std::path::Path;
-use std::time::Duration;
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Manager};
 use uuid::Uuid;
 
 use crate::http_client::{DesktopHttpClient, HttpClientOptions};
+
+const WAKE_CHECK_TICK: Duration = Duration::from_secs(30);
+
+pub(crate) fn start(handle: AppHandle) {
+  tauri::async_runtime::spawn(run_loop(
+    unix_seconds(),
+    move || {
+      let handle = handle.clone();
+      async move { report(&handle).await }
+    },
+    || async {
+      tokio::time::sleep(WAKE_CHECK_TICK).await;
+      unix_seconds()
+    },
+  ));
+}
+
+fn unix_seconds() -> u64 {
+  SystemTime::now()
+    .duration_since(UNIX_EPOCH)
+    .unwrap_or_default()
+    .as_secs()
+}
+
+pub(super) async fn run_loop<Report, ReportFuture, Tick, TickFuture>(
+  mut now: u64,
+  mut report: Report,
+  mut tick: Tick,
+) where
+  Report: FnMut() -> ReportFuture,
+  ReportFuture: Future<Output = ()>,
+  Tick: FnMut() -> TickFuture,
+  TickFuture: Future<Output = u64>,
+{
+  let mut schedule = Schedule::default();
+  loop {
+    if schedule.take_due(now, WAKE_CHECK_TICK) {
+      report().await;
+    }
+    now = tick().await;
+  }
+}
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -25,13 +68,13 @@ fn interval_seconds() -> u64 {
 }
 
 #[derive(Default)]
-pub(crate) struct Schedule {
+struct Schedule {
   last_attempt: Option<u64>,
   last_tick: Option<u64>,
 }
 
 impl Schedule {
-  pub(crate) fn take_due(&mut self, now: u64, tick: Duration) -> bool {
+  fn take_due(&mut self, now: u64, tick: Duration) -> bool {
     let woke = self
       .last_tick
       .is_some_and(|last| now >= last && now - last > tick.as_secs() * 2);
@@ -134,7 +177,7 @@ fn request(
     .json(report)
 }
 
-pub(crate) async fn report(handle: &AppHandle) {
+async fn report(handle: &AppHandle) {
   let state = handle.state::<crate::account::AccountState>();
   let account = match crate::account::current(&state).await {
     Ok(Some(account)) => account,

@@ -55,17 +55,10 @@ pub fn schedule_startup_check(handle: AppHandle, manager: Arc<Mutex<SessionManag
     }
   }
   async_runtime::spawn(async move {
-    let mut presence_schedule = crate::presence::Schedule::default();
-    if presence_schedule.take_due(unix_seconds(SystemTime::now()), WAKE_CHECK_TICK) {
-      crate::presence::report(&handle).await;
-    }
     tokio::time::sleep(STARTUP_CHECK_DELAY).await;
 
     loop {
       let now = unix_seconds(SystemTime::now());
-      if presence_schedule.take_due(now, WAKE_CHECK_TICK) {
-        crate::presence::report(&handle).await;
-      }
       let last_check = LAST_CHECK.load(Ordering::Relaxed);
       if cfg!(debug_assertions) || !check_due(last_check, now) {
         tokio::time::sleep(WAKE_CHECK_TICK).await;
@@ -224,6 +217,89 @@ fn notify(handle: &AppHandle, title: &str, body: &str) {
 #[cfg(test)]
 mod tests {
   use super::*;
+
+  #[test]
+  fn presence_task_is_started_independently_of_updater_work() {
+    let setup = include_str!("lib.rs");
+    let updater = include_str!("updater.rs")
+      .split("#[cfg(test)]")
+      .next()
+      .unwrap();
+    let independently_started = |setup: &str, updater: &str| {
+      setup.matches("presence::start(handle.clone());").count() == 1
+        && setup
+          .matches("updater::schedule_startup_check(handle.clone(), Arc::clone(&manager));")
+          .count()
+          == 1
+        && !updater.contains("presence::")
+    };
+    assert!(independently_started(setup, updater));
+    assert!(!independently_started(
+      &setup.replace("presence::start(handle.clone());", ""),
+      updater
+    ));
+    assert!(!independently_started(
+      setup,
+      "crate::presence::report(&handle).await;"
+    ));
+  }
+
+  #[tokio::test]
+  async fn held_updater_work_does_not_delay_startup_heartbeat_or_wake() {
+    let (updater_started, started) = tokio::sync::oneshot::channel();
+    let (release_updater, released) = tokio::sync::oneshot::channel();
+    let updater = tokio::spawn(async move {
+      let _operation = CHECK_LOCK.lock().await;
+      updater_started.send(()).unwrap();
+      released.await.unwrap();
+    });
+    started.await.unwrap();
+
+    let (reports, mut reported) = tokio::sync::mpsc::unbounded_channel();
+    let (ticks, ticked) = tokio::sync::mpsc::unbounded_channel();
+    let ticked = std::sync::Arc::new(tokio::sync::Mutex::new(ticked));
+    let presence = tokio::spawn(crate::presence::run_loop(
+      1_000,
+      move || {
+        reports.send(()).unwrap();
+        std::future::ready(())
+      },
+      move || {
+        let ticked = std::sync::Arc::clone(&ticked);
+        async move { ticked.lock().await.recv().await.unwrap() }
+      },
+    ));
+
+    // The updater remains suspended throughout every observed report.
+    tokio::time::timeout(Duration::from_secs(5), reported.recv())
+      .await
+      .expect("startup report must not wait for updater work")
+      .unwrap();
+    let interval = 3 * 60;
+    for elapsed in (30..=interval).step_by(30) {
+      ticks.send(1_000 + elapsed).unwrap();
+    }
+    tokio::time::timeout(Duration::from_secs(5), reported.recv())
+      .await
+      .expect("heartbeat must not wait for updater work")
+      .unwrap();
+    assert!(matches!(
+      reported.try_recv(),
+      Err(tokio::sync::mpsc::error::TryRecvError::Empty)
+    ));
+
+    ticks.send(1_000 + interval + 121).unwrap();
+    tokio::time::timeout(Duration::from_secs(5), reported.recv())
+      .await
+      .expect("wake report must not wait for updater work")
+      .unwrap();
+    assert!(!updater.is_finished());
+    release_updater.send(()).unwrap();
+    updater.await.unwrap();
+    presence.abort();
+    assert!(presence.await.unwrap_err().is_cancelled());
+  }
+
   #[test]
   fn wall_clock_sleep_gap_is_due_without_advancing_a_monotonic_timer() {
     let last = 1_000_000;
