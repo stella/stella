@@ -10,15 +10,39 @@ type VisualShellSessionOptions = { url: string; newNonce: () => string };
 type VisualShellSessionState =
   | { type: "uninitialized" }
   | { type: "awaiting-ready"; nonce: string }
-  | { type: "ready" };
+  | { type: "ready"; nonce: string };
 
+type ShellFrameWindow =
+  | { postMessage: (message: unknown, targetOrigin: string) => void }
+  | null
+  | undefined;
+
+type ShellEvent = { source: unknown; origin: string; data: unknown };
+
+const shellReadyNonce = (event: ShellEvent, frameWindow: ShellFrameWindow) => {
+  if (
+    frameWindow === null ||
+    frameWindow === undefined ||
+    event.source !== frameWindow ||
+    event.origin !== "null"
+  ) {
+    return null;
+  }
+  const parsed = v.safeParse(visualShellReadySchema, event.data);
+  return parsed.success ? parsed.output.nonce : null;
+};
+
+// Each nonce releases the payload once. A shell document announces itself
+// with the nonce in its URL, so a reloaded shell repeats the spent nonce:
+// that, not the frame's load event, starts the next handshake. Changing the
+// frame's URL fires a load event for a cross-origin frame even when only the
+// fragment changes, so a handshake started on load would never settle.
 export const createVisualShellSession = ({
   url,
   newNonce,
 }: VisualShellSessionOptions) => {
   let state: VisualShellSessionState = { type: "uninitialized" };
   return {
-    // A completed document load replaces the previous document's handshake.
     beginLoad: () => {
       const nonce = newNonce();
       const target = new URL(url);
@@ -33,30 +57,30 @@ export const createVisualShellSession = ({
       frameWindow,
       message,
     }: {
-      event: { source: unknown; origin: string; data: unknown };
-      frameWindow:
-        | { postMessage: (message: unknown, targetOrigin: string) => void }
-        | null
-        | undefined;
+      event: ShellEvent;
+      frameWindow: ShellFrameWindow;
       message: v.InferOutput<typeof visualRenderMessageSchema>;
     }) => {
-      if (
-        state.type !== "awaiting-ready" ||
-        frameWindow === null ||
-        frameWindow === undefined ||
-        event.source !== frameWindow ||
-        event.origin !== "null"
-      ) {
+      if (state.type !== "awaiting-ready" || !frameWindow) {
         return false;
       }
-      const parsed = v.safeParse(visualShellReadySchema, event.data);
-      if (!parsed.success || parsed.output.nonce !== state.nonce) {
+      if (shellReadyNonce(event, frameWindow) !== state.nonce) {
         return false;
       }
-      state = { type: "ready" };
+      state = { type: "ready", nonce: state.nonce };
       frameWindow.postMessage(message, "*");
       return true;
     },
+    /** A shell document that loaded after the payload was released. */
+    isReloadedShell: ({
+      event,
+      frameWindow,
+    }: {
+      event: ShellEvent;
+      frameWindow: ShellFrameWindow;
+    }) =>
+      state.type === "ready" &&
+      shellReadyNonce(event, frameWindow) === state.nonce,
     isReady: () => state.type === "ready",
   };
 };

@@ -62,7 +62,7 @@ describe("visual shell document handshake", () => {
     );
     expect(deliveries).toHaveLength(1);
   });
-  test("requires a fresh nonce after any document load", () => {
+  test("starts a fresh handshake only when a reloaded shell repeats the spent nonce", () => {
     const nonces = [nonceOne, nonceTwo];
     const deliveries: unknown[] = [];
     const frameWindow = {
@@ -74,29 +74,42 @@ describe("visual shell document handshake", () => {
       url,
       newNonce: () => nonces.shift() ?? nonceTwo,
     });
-    session.beginLoad();
     const first = {
       source: frameWindow,
       origin: "null",
       data: { kind: "shell-ready", nonce: nonceOne },
     };
+    expect(session.isReloadedShell({ event: first, frameWindow })).toBe(false);
+    session.beginLoad();
+    expect(session.isReloadedShell({ event: first, frameWindow })).toBe(false);
     expect(
       session.deliverRender({ event: first, frameWindow, message: render }),
     ).toBe(true);
+    for (const other of [
+      { ...first, source: {} },
+      { ...first, origin: "https://api.example.test" },
+      { ...first, data: { kind: "shell-ready", nonce: nonceTwo } },
+    ]) {
+      expect(session.isReloadedShell({ event: other, frameWindow })).toBe(
+        false,
+      );
+    }
+    expect(session.isReloadedShell({ event: first, frameWindow: null })).toBe(
+      false,
+    );
+    expect(session.isReloadedShell({ event: first, frameWindow })).toBe(true);
     expect(session.beginLoad()).toBe(`${url}#n=${nonceTwo}`);
     expect(session.isReady()).toBe(false);
+    expect(session.isReloadedShell({ event: first, frameWindow })).toBe(false);
     expect(
       session.deliverRender({ event: first, frameWindow, message: render }),
     ).toBe(false);
-    expect(session.isReady()).toBe(false);
     expect(deliveries).toHaveLength(1);
+    const second = { ...first, data: { kind: "shell-ready", nonce: nonceTwo } };
     expect(
-      session.deliverRender({
-        event: { ...first, data: { kind: "shell-ready", nonce: nonceTwo } },
-        frameWindow,
-        message: render,
-      }),
+      session.deliverRender({ event: second, frameWindow, message: render }),
     ).toBe(true);
     expect(deliveries).toHaveLength(2);
+    expect(session.isReloadedShell({ event: first, frameWindow })).toBe(false);
   });
 });

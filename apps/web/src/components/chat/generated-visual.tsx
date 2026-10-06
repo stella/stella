@@ -129,6 +129,13 @@ const GeneratedVisualFrame = ({
     ) {
       return;
     }
+    if (shell.isReloadedShell({ event, frameWindow })) {
+      const element = frame.current;
+      if (element !== null) {
+        element.src = shell.beginLoad();
+      }
+      return;
+    }
     if (!shell.isReady()) {
       return;
     }
@@ -209,12 +216,9 @@ const GeneratedVisualFrame = ({
     setInteraction(next);
     requestAnimationFrame(() => frame.current?.focus());
   };
+  // Every document load, a reload included, returns the view to preview.
   const loadShell = () => {
     setInteraction({ status: "preview" });
-    const element = frame.current;
-    if (element !== null) {
-      element.src = shell.beginLoad();
-    }
   };
   if (page.isError) {
     return <p role="status">{t("chat.richContentUnavailable")}</p>;

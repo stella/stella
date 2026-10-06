@@ -113,10 +113,12 @@ test("generated view activates, reloads and offers user-controlled chat actions"
       }
     });
   await expect(outer).toHaveAttribute("inert", "");
+  // The frame keeps its document and its URL until something reloads it.
+  const initialSrc = await outer.getAttribute("src");
   await card.getByRole("button").first().click();
   await expect(outer).not.toHaveAttribute("inert", "");
   await expect(outer).toBeFocused();
-  const initialSrc = await outer.getAttribute("src");
+  await expect(outer).toHaveAttribute("src", initialSrc ?? "");
   await outer.evaluate((element) => {
     if (element instanceof HTMLIFrameElement) {
       element.setAttribute("src", element.src);
