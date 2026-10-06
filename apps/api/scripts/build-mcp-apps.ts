@@ -1,7 +1,35 @@
+import "../src/tests/setup-env";
 import { panic } from "better-result";
 import path from "node:path";
 
-const MCP_APP_DIRECTORIES = ["document-upload", "file-comparison"] as const;
+import { MCP_APP_OUTPUT_SCHEMAS } from "../src/mcp/app-contracts";
+import { MCP_APPS } from "../src/mcp/apps/manifest";
+import { defineChatProjectionMcpToolOutput } from "../src/mcp/valibot-tool-definition";
+import { buildMcpAppMessages } from "./lib/mcp-app-catalog";
+
+const generatedRoot = path.resolve(
+  import.meta.dirname,
+  "../src/mcp/apps/shared/generated",
+);
+await Bun.write(
+  path.join(generatedRoot, "messages.json"),
+  `${JSON.stringify(await buildMcpAppMessages(), null, 2)}\n`,
+);
+await Bun.write(
+  path.join(generatedRoot, "schemas.json"),
+  `${JSON.stringify(
+    Object.fromEntries(
+      Object.entries(MCP_APP_OUTPUT_SCHEMAS).map(([name, schema]) => [
+        name,
+        defineChatProjectionMcpToolOutput(schema).outputSchema,
+      ]),
+    ),
+    null,
+    2,
+  )}\n`,
+);
+
+const MCP_APP_DIRECTORIES = MCP_APPS.map(({ directory }) => directory);
 const MCP_APP_INPUTS = ["app.html"] as const;
 const EXTERNAL_SCRIPT_PATTERN = /<script\b[^>]*\bsrc\s*=/iu;
 const EXTERNAL_STYLESHEET_PATTERN =

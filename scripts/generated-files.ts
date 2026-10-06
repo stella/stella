@@ -140,7 +140,7 @@ export const GENERATORS = [
     check: null,
     checkedBy: "CLI sharded registry and derived runtime guard",
     autofix: true,
-    after: ["capability-runtime"],
+    after: ["capability-runtime", "mcp-app-bundles"],
   },
   {
     id: "cli-runtime",
@@ -175,10 +175,18 @@ export const GENERATORS = [
   {
     id: "mcp-app-bundles",
     outputKind: "committed",
-    outputs: ["apps/api/src/mcp/apps/*/generated/app.html.txt"],
+    outputs: [
+      "apps/api/src/mcp/apps/*/generated/app.html.txt",
+      "apps/api/src/mcp/apps/shared/generated/*.json",
+    ],
     inputs: [
       "apps/api/src/mcp/apps/**",
       "apps/api/scripts/build-mcp-apps.ts",
+      "apps/api/scripts/lib/mcp-app-catalog.ts",
+      "apps/api/src/mcp/app-contracts.ts",
+      "apps/api/src/lib/chat/projections.ts",
+      "apps/web/src/i18n/langs/*.json",
+      "packages/locales/**",
       "packages/api-contract/**",
       "packages/fetch/**",
       "bun.lock",

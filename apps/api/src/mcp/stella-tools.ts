@@ -219,6 +219,8 @@ import {
 } from "@/api/mcp/valibot-tool-definition";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
 
+import { CASE_LAW_RESULTS_APP } from "./apps/manifest";
+
 const defaultReadWorkspaceHandler: typeof readWorkspaceHandler = async (
   input,
 ) =>
@@ -1091,6 +1093,12 @@ export const STELLA_TOOL_DEFINITIONS = [
     // Backed by the public case-law corpus (caseLawPublicReadDb), the same
     // surface the public routes gate behind the same feature flag.
     feature: "FEATURE_PUBLIC_LAW",
+    _meta: {
+      ui: {
+        resourceUri: CASE_LAW_RESULTS_APP.uri,
+        visibility: ["model", "app"],
+      },
+    },
     name: SEARCH_CASE_LAW_TOOL,
     scope: "stella:search",
   }),
@@ -1154,6 +1162,12 @@ export const STELLA_TOOL_DEFINITIONS = [
     // Backed by the public case-law corpus (caseLawPublicReadDb), the same
     // surface the public routes gate behind the same feature flag.
     feature: "FEATURE_PUBLIC_LAW",
+    _meta: {
+      ui: {
+        resourceUri: CASE_LAW_RESULTS_APP.uri,
+        visibility: ["model", "app"],
+      },
+    },
     name: LOOKUP_CASE_LAW_TOOL,
     scope: "stella:read",
   }),
