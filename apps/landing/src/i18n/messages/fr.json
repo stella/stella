@@ -234,13 +234,13 @@
       "team": {
         "features": {
           "0": "Assistant IA et services complets, dans la limite d’un usage raisonnable",
-          "1": "Évaluation de 14 jours, sans carte bancaire"
+          "1": "Évaluation de 7 jours, sans carte bancaire"
         },
         "summary": "Pour les équipes juridiques qui travaillent ensemble sur leurs dossiers."
       }
     },
     "signUpNote": "Inscrivez-vous d’abord ; vous choisirez un forfait payant dans l’application.",
-    "startEvaluation": "Commencer une évaluation de 14 jours",
+    "startEvaluation": "Commencer une évaluation de 7 jours",
     "storage": "{storage} de stockage",
     "storagePerSeat": "{storage} de stockage par siège",
     "subtitle": "Commencez gratuitement et passez à un forfait supérieur quand l’activité grandit. Tous les forfaits incluent la recherche de jurisprudence et de législation et fonctionnent avec la clé de votre propre fournisseur d’IA.",

@@ -234,13 +234,13 @@
       "team": {
         "features": {
           "0": "Asistente de IA y servicios completos, con uso razonable",
-          "1": "Evaluación de 14 días, sin tarjeta"
+          "1": "Evaluación de 7 días, sin tarjeta"
         },
         "summary": "Para equipos jurídicos que trabajan juntos en sus asuntos."
       }
     },
     "signUpNote": "Primero regístrate; el plan de pago lo eliges en la aplicación.",
-    "startEvaluation": "Empezar una evaluación de 14 días",
+    "startEvaluation": "Empezar una evaluación de 7 días",
     "storage": "{storage} de almacenamiento",
     "storagePerSeat": "{storage} de almacenamiento por puesto",
     "subtitle": "Empieza gratis y cambia de plan cuando crezca el trabajo. Todos los planes incluyen búsqueda de jurisprudencia y legislación y funcionan con la clave de tu propio proveedor de IA.",

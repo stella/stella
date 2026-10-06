@@ -234,13 +234,13 @@
       "team": {
         "features": {
           "0": "Pełny asystent AI i usługi w ramach zasad uczciwego korzystania",
-          "1": "14-dniowy okres próbny bez karty"
+          "1": "7-dniowy okres próbny bez karty"
         },
         "summary": "Dla zespołów prawniczych, które wspólnie prowadzą sprawy."
       }
     },
     "signUpNote": "Najpierw się zarejestruj; płatny plan wybierzesz w aplikacji.",
-    "startEvaluation": "Rozpocznij 14-dniowy okres próbny",
+    "startEvaluation": "Rozpocznij 7-dniowy okres próbny",
     "storage": "{storage} przestrzeni dyskowej",
     "storagePerSeat": "{storage} przestrzeni dyskowej na miejsce",
     "subtitle": "Zacznij za darmo i przejdź na wyższy plan, gdy pracy przybędzie. Każdy plan obejmuje wyszukiwanie orzecznictwa i przepisów prawa oraz działa z Twoim własnym kluczem dostawcy modeli.",

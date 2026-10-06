@@ -234,13 +234,13 @@
       "team": {
         "features": {
           "0": "Pilnas AI asistenta un pakalpojumu iespējas godīgas lietošanas ietvaros",
-          "1": "14 dienu izmēģinājuma periods, karte nav nepieciešama"
+          "1": "7 dienu izmēģinājuma periods, karte nav nepieciešama"
         },
         "summary": "Juristu komandām, kas pie lietām strādā kopā."
       }
     },
     "signUpNote": "Vispirms reģistrējieties; maksas plānu izvēlēsieties lietotnē.",
-    "startEvaluation": "Sākt 14 dienu izmēģinājumu",
+    "startEvaluation": "Sākt 7 dienu izmēģinājumu",
     "storage": "{storage} krātuve",
     "storagePerSeat": "{storage} krātuve katrai vietai",
     "subtitle": "Sāciet bez maksas un pārejiet uz augstāku plānu, kad darba kļūst vairāk. Katrā plānā ir tiesu prakses un tiesību aktu meklēšana, un katrs darbojas ar jūsu modeļu pakalpojumu sniedzēja atslēgu.",

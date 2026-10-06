@@ -234,13 +234,13 @@
       "team": {
         "features": {
           "0": "Voller KI-Assistent und alle KI-Dienste nach Fair-Use-Richtlinie",
-          "1": "14-tägige Testphase, ohne Kreditkarte"
+          "1": "7-tägige Testphase, ohne Kreditkarte"
         },
         "summary": "Für juristische Teams, die gemeinsam an Akten arbeiten."
       }
     },
     "signUpNote": "Registrieren Sie sich zuerst; den bezahlten Tarif wählen Sie dann in der App.",
-    "startEvaluation": "14-tägige Testphase starten",
+    "startEvaluation": "7-tägige Testphase starten",
     "storage": "{storage} Speicher",
     "storagePerSeat": "{storage} Speicher pro Platz",
     "subtitle": "Starten Sie kostenlos und wechseln Sie den Tarif, wenn die Arbeit wächst. Jeder Tarif enthält die Suche in Rechtsprechung und Gesetzen und funktioniert mit dem Schlüssel Ihres eigenen KI-Anbieters.",

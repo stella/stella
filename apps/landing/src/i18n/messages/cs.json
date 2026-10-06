@@ -234,13 +234,13 @@
       "team": {
         "features": {
           "0": "Plný AI asistent a služby podle zásad férového využívání",
-          "1": "14denní zkušební období bez platební karty"
+          "1": "7denní zkušební období bez platební karty"
         },
         "summary": "Pro právní týmy, které na spisech pracují společně."
       }
     },
     "signUpNote": "Nejprve se zaregistrujte, placený tarif zvolíte v aplikaci.",
-    "startEvaluation": "Zahájit 14denní zkušební období",
+    "startEvaluation": "Zahájit 7denní zkušební období",
     "storage": "{storage} úložiště",
     "storagePerSeat": "{storage} úložiště na místo",
     "subtitle": "Začněte zdarma a přejděte na vyšší tarif, až práce poroste. Každý tarif zahrnuje vyhledávání v judikatuře a právních předpisech a funguje s vaším vlastním klíčem od poskytovatele modelů.",

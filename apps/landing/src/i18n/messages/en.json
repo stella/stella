@@ -234,13 +234,13 @@
       "team": {
         "features": {
           "0": "Full AI assistant and services under fair use",
-          "1": "14-day evaluation, no card required"
+          "1": "7-day evaluation, no card required"
         },
         "summary": "For legal teams that work on matters together."
       }
     },
     "signUpNote": "Sign up first; you choose a paid plan in the app.",
-    "startEvaluation": "Start a 14-day evaluation",
+    "startEvaluation": "Start a 7-day evaluation",
     "storage": "{storage} storage",
     "storagePerSeat": "{storage} storage per seat",
     "subtitle": "Start free and upgrade when the work grows. Every plan includes case-law and legislation search and works with your own model provider key.",

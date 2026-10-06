@@ -234,13 +234,13 @@
       "team": {
         "features": {
           "0": "Visas DI asistentas ir paslaugos pagal sąžiningo naudojimo taisykles",
-          "1": "14 dienų bandomasis laikotarpis, kortelės nereikia"
+          "1": "7 dienų bandomasis laikotarpis, kortelės nereikia"
         },
         "summary": "Teisininkų komandoms, kurios bylas veda kartu."
       }
     },
     "signUpNote": "Pirmiausia užsiregistruokite; mokamą planą pasirinksite programoje.",
-    "startEvaluation": "Pradėkite 14 dienų bandomąjį laikotarpį",
+    "startEvaluation": "Pradėkite 7 dienų bandomąjį laikotarpį",
     "storage": "{storage} saugyklos",
     "storagePerSeat": "{storage} saugyklos vietai",
     "subtitle": "Pradėkite nemokamai ir pereikite prie aukštesnio plano, kai darbų padaugės. Kiekvienas planas apima teismų praktikos ir teisės aktų paiešką bei veikia su Jūsų modelių teikėjo raktu.",

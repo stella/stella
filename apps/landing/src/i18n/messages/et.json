@@ -234,13 +234,13 @@
       "team": {
         "features": {
           "0": "Täisvõimekusega tehisintellekti assistent ja teenused mõistliku kasutuse piires",
-          "1": "14-päevane prooviperiood, kaarti pole vaja"
+          "1": "7-päevane prooviperiood, kaarti pole vaja"
         },
         "summary": "Õigusmeeskondadele, kes töötavad toimikutega koos."
       }
     },
     "signUpNote": "Registreeru esmalt; tasulise plaani valid rakenduses.",
-    "startEvaluation": "Alusta 14-päevast prooviperioodi",
+    "startEvaluation": "Alusta 7-päevast prooviperioodi",
     "storage": "{storage} salvestusruumi",
     "storagePerSeat": "{storage} salvestusruumi koha kohta",
     "subtitle": "Alusta tasuta ja vaheta plaani, kui tööd tuleb juurde. Igas plaanis on kohtupraktika ja õigusaktide otsing ning saad kasutada oma mudelipakkuja võtit.",

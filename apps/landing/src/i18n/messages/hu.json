@@ -234,13 +234,13 @@
       "team": {
         "features": {
           "0": "Teljes AI-asszisztens és szolgáltatások méltányos használat mellett",
-          "1": "14 napos próbaidőszak bankkártya nélkül"
+          "1": "7 napos próbaidőszak bankkártya nélkül"
         },
         "summary": "Ügyeken közösen dolgozó jogi csapatoknak."
       }
     },
     "signUpNote": "Először regisztráljon; a fizetős díjcsomagot az alkalmazásban választja ki.",
-    "startEvaluation": "14 napos próbaidőszak indítása",
+    "startEvaluation": "7 napos próbaidőszak indítása",
     "storage": "{storage} tárhely",
     "storagePerSeat": "{storage} tárhely helyenként",
     "subtitle": "Kezdje ingyen, és váltson nagyobb díjcsomagra, ahogy a munka nő. Minden díjcsomag tartalmazza az ítélkezési gyakorlat és a jogszabályok keresését, és működik saját modellszolgáltatói kulccsal.",
