@@ -737,8 +737,7 @@ export const ClauseHeader = ({
     <div className="flex items-center gap-2">
       {editingTitle && canEdit ? (
         <InlineEdit
-          className="flex-1"
-          inputClassName="flex-1 text-base"
+          className="min-w-0 flex-1 text-lg font-semibold"
           onCancel={() => {
             setTitleDraft(detail.title);
             setEditingTitle(false);
@@ -751,7 +750,7 @@ export const ClauseHeader = ({
         />
       ) : (
         <button
-          className="flex-1 truncate text-start text-lg font-semibold disabled:cursor-default"
+          className="flex-1 overflow-hidden text-start text-lg font-semibold text-ellipsis whitespace-pre disabled:cursor-default"
           dir="auto"
           disabled={!canEdit}
           onClick={() => {
