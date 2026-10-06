@@ -5,11 +5,18 @@ import { panic, Result } from "better-result";
 import { useTranslations } from "use-intl";
 
 import { copyToClipboard } from "@stll/clipboard";
+import type {
+  CaptionLineKind,
+  DecisionCaption,
+} from "@stll/legal-ast/decision-caption";
+import { displayElisions } from "@stll/legal-ast/display-elision";
+import type { DisplayElision } from "@stll/legal-ast/display-elision";
 import { plainTextOf, tableCellPieceId } from "@stll/legal-ast/document-ast";
 import type {
   Block,
   HeadingLevel,
   Inline,
+  ParagraphBlock,
   ParagraphListDepth,
 } from "@stll/legal-ast/document-ast";
 import {
@@ -87,6 +94,7 @@ type HighlightContext = {
   activeMatchIndex: number;
   anchorPresentation: AnchorPresentation;
   anchors: TextAnchor[];
+  elisions: readonly DisplayElision[];
   pieceId: string;
   ranges: ReaderMarkRange[];
   /**
@@ -151,7 +159,7 @@ type RenderMarkOptions = {
   isRangeStart: boolean;
   key: string;
   range: ReaderMarkRange;
-  text: string;
+  text: SynchronousNode;
 };
 
 /**
@@ -200,14 +208,63 @@ const renderMark = ({
   }
 };
 
+/**
+ * A slice of a piece's text with its elided characters kept in the document
+ * but not drawn. They stay text nodes, not reader chrome, so a selection's
+ * offsets and the quote it takes index the stored text exactly as before,
+ * and a copy, which takes rendered text, leaves them out.
+ */
+const renderElided = ({
+  elisions,
+  segmentStart,
+  text,
+}: {
+  elisions: readonly DisplayElision[];
+  segmentStart: number;
+  text: string;
+}): SynchronousNode => {
+  const segmentEnd = segmentStart + text.length;
+  const relevant = elisions.filter(
+    (elision) => elision.end > segmentStart && elision.start < segmentEnd,
+  );
+  if (relevant.length === 0) {
+    return text;
+  }
+  const children: ReactNode[] = [];
+  let cursor = segmentStart;
+  for (const elision of relevant) {
+    const start = Math.max(elision.start, segmentStart);
+    const end = Math.min(elision.end, segmentEnd);
+    if (start > cursor) {
+      children.push(text.slice(cursor - segmentStart, start - segmentStart));
+    }
+    children.push(
+      <span
+        className="hidden"
+        data-reader-elided={elision.kind}
+        key={`elided-${String(start)}`}
+      >
+        {text.slice(start - segmentStart, end - segmentStart)}
+      </span>,
+    );
+    cursor = end;
+  }
+  if (cursor < segmentEnd) {
+    children.push(text.slice(cursor - segmentStart));
+  }
+  return children;
+};
+
 const renderHighlightedSlice = ({
   activeMatchIndex,
+  elisions,
   pieceId,
   ranges,
   segmentStart,
   text,
 }: {
   activeMatchIndex: number;
+  elisions: readonly DisplayElision[];
   pieceId: string;
   ranges: ReaderMarkRange[];
   segmentStart: number;
@@ -217,9 +274,15 @@ const renderHighlightedSlice = ({
   const relevantRanges = ranges.filter(
     (range) => range.end > segmentStart && range.start < segmentEnd,
   );
+  const elided = (localStart: number, localEnd: number) =>
+    renderElided({
+      elisions,
+      segmentStart: segmentStart + localStart,
+      text: text.slice(localStart, localEnd),
+    });
 
   if (relevantRanges.length === 0) {
-    return text;
+    return elided(0, text.length);
   }
 
   const children: ReactNode[] = [];
@@ -230,7 +293,7 @@ const renderHighlightedSlice = ({
     const localEnd = Math.min(range.end - segmentStart, text.length);
 
     if (localStart > cursor - segmentStart) {
-      children.push(text.slice(cursor - segmentStart, localStart));
+      children.push(elided(cursor - segmentStart, localStart));
     }
 
     children.push(
@@ -241,14 +304,14 @@ const renderHighlightedSlice = ({
         isRangeStart: range.start >= segmentStart,
         key: `${pieceId}-${range.type}-${localStart}`,
         range,
-        text: text.slice(localStart, localEnd),
+        text: elided(localStart, localEnd),
       }),
     );
     cursor = segmentStart + localEnd;
   }
 
   if (cursor < segmentEnd) {
-    children.push(text.slice(cursor - segmentStart));
+    children.push(elided(cursor - segmentStart, text.length));
   }
 
   return children;
@@ -264,6 +327,7 @@ const renderTextSegment = ({
   activeMatchIndex,
   anchors,
   anonymized,
+  elisions,
   pieceId,
   ranges,
   segmentStart,
@@ -272,6 +336,7 @@ const renderTextSegment = ({
   activeMatchIndex: number;
   anchors: TextAnchor[];
   anonymized?: boolean | undefined;
+  elisions: readonly DisplayElision[];
   pieceId: string;
   ranges: ReaderMarkRange[];
   segmentStart: number;
@@ -285,6 +350,7 @@ const renderTextSegment = ({
   const highlight = (sliceStart: number, sliceEnd: number) =>
     renderHighlightedSlice({
       activeMatchIndex,
+      elisions,
       pieceId,
       ranges,
       segmentStart: sliceStart,
@@ -356,6 +422,7 @@ const renderInline = ({
           activeMatchIndex: context.activeMatchIndex,
           anchors: context.anchors,
           anonymized: node.anonymized,
+          elisions: context.elisions,
           pieceId: context.pieceId,
           ranges: context.ranges,
           segmentStart,
@@ -685,6 +752,14 @@ const bareUrlAnchors = (
   return anchors;
 };
 
+/** The text's display elisions, stated on its piece's offset axis. */
+const shiftedElisions = (text: string, pieceOffset: number): DisplayElision[] =>
+  displayElisions(text).map((elision) => ({
+    kind: elision.kind,
+    start: elision.start + pieceOffset,
+    end: elision.end + pieceOffset,
+  }));
+
 export const InlineContent = ({
   activeMatchIndex,
   anchorPresentation = "document",
@@ -705,8 +780,9 @@ export const InlineContent = ({
 }) => {
   const sourceLinks = useSourceLinkPolicy();
   const offset: OffsetRef = { value: initialOffset };
+  const text = inlinesToPlainText(inlines);
   const automaticLinks = bareUrlAnchors(
-    inlinesToPlainText(inlines),
+    text,
     anchors,
     initialOffset,
     sourceLinks,
@@ -716,6 +792,7 @@ export const InlineContent = ({
     anchors: [...anchors, ...automaticLinks].toSorted(
       (left, right) => left.start - right.start,
     ),
+    elisions: shiftedElisions(text, initialOffset),
     pieceId,
     ranges,
     activeMatchIndex,
@@ -744,6 +821,7 @@ export const HighlightedText = ({
   <span className={className}>
     {renderHighlightedSlice({
       activeMatchIndex,
+      elisions: shiftedElisions(text, segmentStart),
       pieceId,
       ranges,
       segmentStart,
@@ -1228,21 +1306,15 @@ type RenderTextBlockOptions = {
 };
 
 type RenderParagraphOptions = RenderTextBlockOptions & {
-  block: Extract<Block, { type: "paragraph" }>;
+  block: ParagraphBlock;
 };
 
-const renderParagraphBlock = ({
-  activeMatchIndex,
-  anchorPresentation,
-  anchorsByPieceId,
-  block,
-  documentAnchorProps,
-  isAddressable,
-  noteBackJumpTo,
-  noteHead,
-  permalink,
-  rangesByPieceId,
-}: RenderParagraphOptions) => {
+/** The case number a decision prints at its head, set to the end edge. */
+const CASE_NUMBER_CLASS =
+  "reader-chrome text-muted-foreground mb-2 text-end text-[calc(0.95rem*var(--reader-text-scale))]";
+
+/** A paragraph's classes, for `cn`: shared by a block and a wrapped run. */
+const paragraphClassValues = (block: ParagraphBlock) => {
   // Short standalone roman numerals (I, II, III …) that the
   // parser emitted as paragraphs are section dividers; centre
   // them like level-3 headings instead of bleeding into the
@@ -1262,6 +1334,48 @@ const renderParagraphBlock = ({
   const shouldJustify =
     !isRomanNumeralDivider &&
     (block.role === undefined || !nonJustifiedRoles.has(block.role));
+  return [
+    "group relative mb-[var(--reader-paragraph-gap)] scroll-mt-[var(--reader-anchor-offset)] last:mb-0",
+    shouldJustify && "reader-justify",
+    block.role === "holding" && "font-[520]",
+    // Indented, slightly condensed; never italicized or reflowed —
+    // a reproduced passage must not be visually altered.
+    block.role === "quote" &&
+      "border-border my-4 border-s-2 ps-5 text-[0.95em]",
+    // Reporter front matter keeps its published, centered shape.
+    block.role === "parties" &&
+      "my-4 text-center text-[1.05em] leading-relaxed tracking-wide",
+    block.role === "front-matter" &&
+      "text-muted-foreground my-1 text-center text-[0.95em]",
+    block.note?.type === "footnote" &&
+      "text-muted-foreground mb-2 text-[0.86em] leading-relaxed",
+    isRomanNumeralDivider &&
+      "mt-[var(--reader-section-gap-top)] mb-[var(--reader-section-gap-bottom)] text-center text-sm font-semibold",
+    block.role === "case-number" && CASE_NUMBER_CLASS,
+    block.role === "closing" && "mt-8 text-center",
+    block.role === "signature" &&
+      "reader-signature text-muted-foreground mt-1 text-end",
+    block.listDepth !== undefined &&
+      PARAGRAPH_LIST_INDENT_CLASS[block.listDepth],
+    // Courts that number their paragraphs are cited by that
+    // number, so it hangs in the margin rather than running into
+    // the sentence, the way the published decision prints it.
+    block.number !== undefined && "ps-8",
+  ];
+};
+
+const renderParagraphBlock = ({
+  activeMatchIndex,
+  anchorPresentation,
+  anchorsByPieceId,
+  block,
+  documentAnchorProps,
+  isAddressable,
+  noteBackJumpTo,
+  noteHead,
+  permalink,
+  rangesByPieceId,
+}: RenderParagraphOptions) => {
   const noteLabel = block.note?.type === "footnote" ? block.note.label : null;
   const showNoteLabel =
     noteHead &&
@@ -1269,35 +1383,7 @@ const renderParagraphBlock = ({
     !footnoteTextCarriesLabel(noteLabel, block.plainText);
   return (
     <p
-      className={cn(
-        "group relative mb-[var(--reader-paragraph-gap)] scroll-mt-[var(--reader-anchor-offset)] last:mb-0",
-        shouldJustify && "reader-justify",
-        block.role === "holding" && "font-[520]",
-        // Indented, slightly condensed; never italicized or reflowed —
-        // a reproduced passage must not be visually altered.
-        block.role === "quote" &&
-          "border-border my-4 border-s-2 ps-5 text-[0.95em]",
-        // Reporter front matter keeps its published, centered shape.
-        block.role === "parties" &&
-          "my-4 text-center text-[1.05em] leading-relaxed tracking-wide",
-        block.role === "front-matter" &&
-          "text-muted-foreground my-1 text-center text-[0.95em]",
-        block.note?.type === "footnote" &&
-          "text-muted-foreground mb-2 text-[0.86em] leading-relaxed",
-        isRomanNumeralDivider &&
-          "mt-[var(--reader-section-gap-top)] mb-[var(--reader-section-gap-bottom)] text-center text-sm font-semibold",
-        block.role === "case-number" &&
-          "reader-chrome text-muted-foreground mb-2 text-end text-[calc(0.95rem*var(--reader-text-scale))]",
-        block.role === "closing" && "mt-8 text-center",
-        block.role === "signature" &&
-          "reader-signature text-muted-foreground mt-1 text-end",
-        block.listDepth !== undefined &&
-          PARAGRAPH_LIST_INDENT_CLASS[block.listDepth],
-        // Courts that number their paragraphs are cited by that
-        // number, so it hangs in the margin rather than running into
-        // the sentence, the way the published decision prints it.
-        block.number !== undefined && "ps-8",
-      )}
+      className={cn(paragraphClassValues(block))}
       {...documentAnchorProps}
       data-note={block.note?.type}
     >
@@ -1345,6 +1431,138 @@ const renderParagraphBlock = ({
     </p>
   );
 };
+
+/**
+ * Line blocks of a hard-wrapped source drawn as the one paragraph they were
+ * printed as. Each block stays its own anchored element with its own text, so
+ * search ranges, annotation offsets and deep links address it exactly as
+ * before; the separators sit between them, outside every anchor. The run
+ * takes the first block's paragraph style: the blocks of a run share a role.
+ */
+export const WrappedParagraphRun = ({
+  activeMatchIndex,
+  anchorsByPieceId,
+  blocks,
+  landingAnchorId,
+  rangesByPieceId,
+  separators,
+}: {
+  activeMatchIndex: number;
+  anchorsByPieceId?: Record<string, TextAnchor[]> | undefined;
+  blocks: readonly [ParagraphBlock, ...ParagraphBlock[]];
+  landingAnchorId: string | undefined;
+  rangesByPieceId: Record<string, ReaderMarkRange[]>;
+  separators: readonly string[];
+}) => {
+  const [head] = blocks;
+  const landing = blocks.some((block) => block.anchorId === landingAnchorId);
+  return (
+    <p
+      className={cn(paragraphClassValues(head))}
+      data-reader-landing={landing ? "" : undefined}
+    >
+      <BlockPermalink anchorId={head.anchorId} />
+      {blocks.map((block, index) => (
+        <Fragment key={block.id}>
+          {index === 0 ? null : separators[index - 1]}
+          <span
+            className="scroll-mt-[var(--reader-anchor-offset)]"
+            data-anchor={block.anchorId}
+            id={block.anchorId}
+          >
+            <InlineContent
+              activeMatchIndex={activeMatchIndex}
+              anchors={anchorsForPiece(anchorsByPieceId, block.id)}
+              inlines={block.inlines}
+              pieceId={block.id}
+              ranges={rangesForPiece(rangesByPieceId, block.id)}
+            />
+          </span>
+        </Fragment>
+      ))}
+    </p>
+  );
+};
+
+/**
+ * How a caption line is drawn: as the reader draws the same line where a
+ * parser stored it as a block of its own. The kind of decision is the
+ * decision title; the court, the state and the formula are the centred
+ * headings; the docket is the case-number line.
+ */
+const CAPTION_LINE_PRESENTATION = {
+  court: { className: HEADING_CLASS["case-law"][3], tag: "p" },
+  "case-number": { className: CASE_NUMBER_CLASS, tag: "p" },
+  state: { className: HEADING_CLASS["case-law"][3], tag: "p" },
+  "decision-type": { className: HEADING_CLASS["case-law"][1], tag: "h1" },
+  formula: { className: HEADING_CLASS["case-law"][3], tag: "p" },
+} as const satisfies Record<
+  CaptionLineKind,
+  { className: string; tag: "h1" | "p" }
+>;
+
+/**
+ * A decision's caption drawn line by line, from blocks that store it run
+ * together. Each block stays one anchored element holding all of its text:
+ * every line is drawn from its range of the block's plain text, and the
+ * whitespace between lines stays between them, so search ranges, annotation
+ * offsets and deep links index the block exactly as stored.
+ */
+export const DecisionCaptionHeader = ({
+  activeMatchIndex,
+  anchorsByPieceId,
+  caption,
+  landingAnchorId,
+  rangesByPieceId,
+}: {
+  activeMatchIndex: number;
+  anchorsByPieceId?: Record<string, TextAnchor[]> | undefined;
+  caption: DecisionCaption;
+  landingAnchorId: string | undefined;
+  rangesByPieceId: Record<string, ReaderMarkRange[]>;
+}) => (
+  <header>
+    {caption.blocks.map(({ block, lines }) => {
+      const text = inlinesToPlainText(block.inlines);
+      const drawn: ReactNode[] = [];
+      let cursor = 0;
+      for (const line of lines) {
+        const { className, tag: Tag } = CAPTION_LINE_PRESENTATION[line.kind];
+        drawn.push(
+          text.slice(cursor, line.start),
+          <Tag className={cn(className)} key={line.start}>
+            <InlineContent
+              activeMatchIndex={activeMatchIndex}
+              anchors={anchorsForPiece(anchorsByPieceId, block.id)}
+              initialOffset={line.start}
+              inlines={[
+                { text: text.slice(line.start, line.end), type: "text" },
+              ]}
+              pieceId={block.id}
+              ranges={rangesForPiece(rangesByPieceId, block.id)}
+            />
+          </Tag>,
+        );
+        cursor = line.end;
+      }
+      drawn.push(text.slice(cursor));
+      return (
+        <div
+          className="group relative scroll-mt-[var(--reader-anchor-offset)]"
+          data-anchor={block.anchorId}
+          data-reader-landing={
+            block.anchorId === landingAnchorId ? "" : undefined
+          }
+          id={block.anchorId}
+          key={block.id}
+        >
+          <BlockPermalink anchorId={block.anchorId} />
+          {drawn}
+        </div>
+      );
+    })}
+  </header>
+);
 
 type RenderTableOptions = RenderTextBlockOptions & {
   block: Extract<Block, { type: "table" }>;

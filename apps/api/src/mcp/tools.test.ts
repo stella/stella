@@ -19,6 +19,7 @@ import {
   COUNTRY_INPUT_MAX_CHARS,
 } from "@stll/agent-input";
 import { DECISION_READ_RESOLUTION } from "@stll/api-contract/case-law-decision-resolution";
+import { CASE_LAW_JURISDICTIONS } from "@stll/api-contract/case-law-jurisdictions";
 import { PUBLIC_CASE_LAW_COUNTRIES } from "@stll/api-contract/case-law-launch-readiness";
 import { PUBLIC_LEGISLATION_COUNTRIES } from "@stll/api-contract/legislation-publication";
 import {
@@ -94,6 +95,7 @@ import { COMPAT_SEARCH_CURSOR_MAX_LENGTH } from "@/api/mcp/compat-shared";
 import type { McpRequestContext } from "@/api/mcp/context";
 import { resolveMcpToolOutputContract } from "@/api/mcp/gateway/list-tools";
 import { deriveContactDisplayName } from "@/api/mcp/matter-tools";
+import { DEFAULT_MCP_CLI_ANNOTATIONS } from "@/api/mcp/static-cli-metadata";
 import {
   CASE_LAW_SEARCH_CURSOR_MAX_LENGTH,
   READ_DECISION_BATCH_MAX_TEXT_CHARS,
@@ -114,6 +116,10 @@ import {
   XLSX_MIME_TYPE,
 } from "@/api/mime-types";
 import { setRuntimeModeForTesting } from "@/api/runtime-mode";
+import {
+  CASE_LAW_COVERAGE_FIXTURE,
+  CASE_LAW_COVERAGE_EXPECTED,
+} from "@/api/tests/helpers/case-law-coverage-fixture";
 import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
 import type { FakeS3 } from "@/api/tests/helpers/fake-s3";
 import {
@@ -131,6 +137,13 @@ import {
   createSelectQueryMock,
   toSafeDbMock,
 } from "@/api/tests/scoped-db-mock";
+
+import {
+  buildRenderPlan as buildCliRenderPlan,
+  renderPlanExitCode as cliRenderPlanExitCode,
+  renderResult as renderCliResult,
+} from "../../../../packages/cli/src/output.ts";
+import { parsePayload as parseCliPayload } from "../../../../packages/cli/src/run-leaf-command.ts";
 
 const wireSchemaValidator = createWireSchemaValidator();
 
@@ -1439,6 +1452,7 @@ describe("OpenAI-compatible MCP tools", () => {
       "list_matters",
       "search_across_matters",
       "search_case_law",
+      "case_law_coverage",
       "lookup_case_law",
       "read_content_across_matters",
       "read_case_law_decision",
@@ -1477,6 +1491,7 @@ describe("OpenAI-compatible MCP tools", () => {
       "search",
       "fetch",
       "search_case_law",
+      "case_law_coverage",
       "lookup_case_law",
       "read_case_law_decision",
       "read_case_law_citations",
@@ -5104,6 +5119,103 @@ describe("OpenAI-compatible MCP tools", () => {
     });
   });
 
+  describe("case_law_coverage", () => {
+    const readCoverage = mock(async () => CASE_LAW_COVERAGE_FIXTURE);
+    const call = async (
+      args: Record<string, unknown>,
+      readCaseLawCoverageHandler: NonNullable<
+        McpRequestContext["testDependencies"]
+      >["readCaseLawCoverageHandler"] = readCoverage,
+    ) =>
+      await handleMcpToolCall({
+        args,
+        context: createContext({
+          testDependencies: { readCaseLawCoverageHandler },
+        }),
+        toolName: "case_law_coverage",
+      });
+
+    test("reports every jurisdiction with only public coverage facts and the data timestamp", async () => {
+      const result = await call({});
+      expect(result.isError).not.toBe(true);
+      expect(result.structuredContent).toEqual(CASE_LAW_COVERAGE_EXPECTED);
+      expect(result.structuredContent).toHaveProperty(
+        "asOf",
+        CASE_LAW_COVERAGE_FIXTURE.generatedAt,
+      );
+      const uuid =
+        /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/iu;
+      expect(JSON.stringify(CASE_LAW_COVERAGE_FIXTURE)).toMatch(uuid);
+      const walk = (value: unknown): void => {
+        if (typeof value === "string") {
+          expect(value).not.toMatch(uuid);
+          return;
+        }
+        if (value === null || typeof value !== "object") {
+          return;
+        }
+        for (const [key, entry] of Object.entries(value)) {
+          expect(key).not.toMatch(uuid);
+          walk(entry);
+        }
+      };
+      walk(result.structuredContent);
+    });
+
+    test("reads a localized country through the shared convention and filters to it", async () => {
+      const result = await call({ country: "Česká republika" });
+      expect(result.structuredContent).toMatchObject({
+        asOf: CASE_LAW_COVERAGE_EXPECTED.asOf,
+        countries: [CASE_LAW_COVERAGE_EXPECTED.countries.at(0)],
+      });
+    });
+
+    test("reports held counts for a jurisdiction in preparation without invented dates or courts", async () => {
+      const result = await call({ country: "SK" });
+      expect(result.structuredContent).toMatchObject({
+        countries: [CASE_LAW_COVERAGE_EXPECTED.countries.at(1)],
+      });
+    });
+
+    test("preserves unknown ranges and court breakdowns for an empty searchable jurisdiction", async () => {
+      const result = await call({ country: "EU" });
+      expect(result.structuredContent).toMatchObject({
+        countries: [CASE_LAW_COVERAGE_EXPECTED.countries.at(2)],
+      });
+    });
+
+    test("returns a typed admission miss for a recognized country without coverage", async () => {
+      expectErrorEnvelope(await call({ country: "Germany" }), {
+        code: "not_found",
+        message: "Case-law country not found",
+        hint: "Pass one of the coverage country codes: CZE, SVK, EU, or omit country for all jurisdictions.",
+      });
+    });
+
+    test("asks for clarification when no country matches the spelling", async () => {
+      const result = await call({ country: "XAA" });
+      expect(validationEnvelope(result)["code"]).toBe("validation_error");
+      expect(validationEnvelope(result)["issues"]).toEqual([
+        {
+          path: "country",
+          message: `"XAA" is not a country code, one of ${CASE_LAW_JURISDICTIONS.join(", ")}.`,
+        },
+      ]);
+    });
+
+    test("surfaces unavailable coverage as a retryable typed failure", async () => {
+      expectErrorEnvelope(
+        await call({}, async () => ({ message: "Coverage is unavailable" })),
+        {
+          code: "upstream_unavailable",
+          message: "Coverage is unavailable",
+          hint: "Retry case_law_coverage later.",
+          retryable: true,
+        },
+      );
+    });
+  });
+
   // Recognising a country and admitting it are two answers. A country the
   // reader resolves but the corpus does not hold is an admission miss, which
   // the model fixes by choosing another jurisdiction.
@@ -5301,6 +5413,121 @@ describe("OpenAI-compatible MCP tools", () => {
           },
         },
       ],
+    });
+  });
+
+  describe("the CLI prints what read_case_law_decision returns", () => {
+    // `stella case-law read` calls this same tool, so the two surfaces share
+    // one read. What can still differ is the CLI's rendering of the payload:
+    // these run the tool's real output through the CLI's own parse and render
+    // steps under the annotation the CLI is generated from.
+    const annotation = DEFAULT_MCP_CLI_ANNOTATIONS.read_case_law_decision;
+
+    const renderThroughCli = (
+      result: Awaited<ReturnType<typeof handleMcpToolCall>>,
+      textPath: string | undefined,
+    ) => {
+      const content = result.content.at(0);
+      if (content?.type !== "text") {
+        return panic("Expected a text MCP response");
+      }
+      const out: string[] = [];
+      const err: string[] = [];
+      const plan = buildCliRenderPlan({
+        payload: parseCliPayload({ content: [content] }),
+        itemsKey: "itemsKey" in annotation ? annotation.itemsKey : undefined,
+        textPath,
+        singleReadActive: false,
+        columns: undefined,
+      });
+      renderCliResult({
+        plan,
+        format: "json",
+        writers: {
+          stdout: (text) => {
+            out.push(text);
+          },
+          stderr: (text) => {
+            err.push(text);
+          },
+        },
+        allActive: false,
+      });
+      return {
+        printed: JSON.parse(out.join("")) as unknown,
+        stderr: err.join(""),
+        exitCode: cliRenderPlanExitCode(plan) ?? 0,
+      };
+    };
+
+    const callRead = async () =>
+      await handleMcpToolCall({
+        args: { decision_ids: [DECISION_ID] },
+        context: createContext(),
+        toolName: "read_case_law_decision",
+      });
+
+    test("a decision whose text is not in the row's text column prints the same text on both surfaces", async () => {
+      // No AST and no column text: what the read returns once the text came
+      // from the corpus store rather than from `fulltext`.
+      const storedText = "I. Facts.\n\nII. The court dismissed the appeal.";
+      readDecisionHandlerMock.mockResolvedValue({
+        ...createReadDecisionResult(),
+        documentAst: null,
+        fulltext: storedText,
+      });
+      const result = await callRead();
+      const mcp = parseToolPayload(result);
+      const cli = renderThroughCli(result, undefined);
+
+      expect(mcp).toMatchObject({
+        items: [{ decision: { text: storedText } }],
+      });
+      expect(cli.printed).toEqual(mcp);
+      expect(cli.exitCode).toBe(0);
+    });
+
+    test("a decision without readable text is typed on both surfaces, never an empty string", async () => {
+      readDecisionHandlerMock.mockResolvedValue({
+        ...createReadDecisionResult(),
+        source: {
+          ...createReadDecisionResult().source,
+          allowsDerivedAi: false,
+        },
+      });
+      const result = await callRead();
+      const mcp = parseToolPayload(result);
+      const cli = renderThroughCli(result, undefined);
+
+      expect(mcp).toMatchObject({
+        items: [
+          {
+            decision: {
+              text: null,
+              textWithheldReason: expect.any(String),
+            },
+          },
+        ],
+      });
+      expect(cli.printed).toEqual(mcp);
+    });
+
+    test("a CLI built for a single-text response does not print this batch as empty text", async () => {
+      // An older CLI rendered this tool as one text at `decision.text`; the
+      // batch payload has none there. It must say so, not print "".
+      readDecisionHandlerMock.mockResolvedValue(createReadDecisionResult());
+      const result = await callRead();
+      const cli = renderThroughCli(result, "decision.text");
+
+      expect(cli.printed).toMatchObject({
+        text: null,
+        textUnavailable: {
+          reason: "not_in_response",
+          textPath: "decision.text",
+        },
+        response: parseToolPayload(result),
+      });
+      expect(cli.exitCode).not.toBe(0);
     });
   });
 

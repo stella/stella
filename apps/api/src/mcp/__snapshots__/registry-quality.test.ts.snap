@@ -317,6 +317,48 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
     }
   },
   {
+    "name": "case_law_coverage",
+    "scope": "stella:read",
+    "access": "read",
+    "feature": "FEATURE_PUBLIC_LAW",
+    "description": "Report case-law availability, decision counts, year ranges and court breakdowns per jurisdiction. Use before concluding that a decision is missing from the corpus; in-preparation counts describe held decisions that public search cannot yet find.",
+    "annotations": {
+      "title": "Read case-law coverage",
+      "destructiveHint": false,
+      "readOnlyHint": true,
+      "openWorldHint": false
+    },
+    "inputSchema": {
+      "type": "object",
+      "required": [],
+      "additionalProperties": false,
+      "properties": {
+        "country": {
+          "type": "string",
+          "maxLength": 64,
+          "description": "Corpus country; omit for all jurisdictions, including those in preparation. An ISO 3166-1 alpha-3 or alpha-2 code, or the country's name, is read.",
+          "minLength": 1,
+          "x-stella-agent-input": {
+            "kind": "country",
+            "country": {
+              "spelling": "alpha-3",
+              "admitted": [
+                "AUT",
+                "CZE",
+                "EU",
+                "HUN",
+                "POL",
+                "SVK",
+                "USA"
+              ],
+              "tool": "case_law_coverage"
+            }
+          }
+        }
+      }
+    }
+  },
+  {
     "name": "lookup_case_law",
     "scope": "stella:read",
     "access": "read",
@@ -7003,6 +7045,48 @@ exports[`MCP registry quality (anonymized surface) tool surface snapshot (name, 
     }
   },
   {
+    "name": "case_law_coverage",
+    "scope": "stella:read_anonymized",
+    "access": "read",
+    "feature": "FEATURE_PUBLIC_LAW",
+    "description": "Report case-law availability, decision counts, year ranges and court breakdowns per jurisdiction. Use before concluding that a decision is missing from the corpus; in-preparation counts describe held decisions that public search cannot yet find.",
+    "annotations": {
+      "title": "Read case-law coverage",
+      "destructiveHint": false,
+      "readOnlyHint": true,
+      "openWorldHint": false
+    },
+    "inputSchema": {
+      "type": "object",
+      "required": [],
+      "additionalProperties": false,
+      "properties": {
+        "country": {
+          "type": "string",
+          "maxLength": 64,
+          "description": "Corpus country; omit for all jurisdictions, including those in preparation. An ISO 3166-1 alpha-3 or alpha-2 code, or the country's name, is read.",
+          "minLength": 1,
+          "x-stella-agent-input": {
+            "kind": "country",
+            "country": {
+              "spelling": "alpha-3",
+              "admitted": [
+                "AUT",
+                "CZE",
+                "EU",
+                "HUN",
+                "POL",
+                "SVK",
+                "USA"
+              ],
+              "tool": "case_law_coverage"
+            }
+          }
+        }
+      }
+    }
+  },
+  {
     "name": "lookup_case_law",
     "scope": "stella:read_anonymized",
     "access": "read",
@@ -8517,6 +8601,48 @@ exports[`MCP registry quality (law surface) tool surface snapshot (name, scope, 
         "strict": {
           "type": "boolean",
           "description": "Require every word of each query, function words included. Off by default: a query phrased as a question carries words no judgment is written with, and \`searches[].queryUsed\` reports what was required. Pass true when every word matters."
+        }
+      }
+    }
+  },
+  {
+    "name": "case_law_coverage",
+    "scope": "stella:read",
+    "access": "read",
+    "feature": "FEATURE_PUBLIC_LAW",
+    "description": "Report case-law availability, decision counts, year ranges and court breakdowns per jurisdiction. Use before concluding that a decision is missing from the corpus; in-preparation counts describe held decisions that public search cannot yet find.",
+    "annotations": {
+      "title": "Read case-law coverage",
+      "destructiveHint": false,
+      "readOnlyHint": true,
+      "openWorldHint": false
+    },
+    "inputSchema": {
+      "type": "object",
+      "required": [],
+      "additionalProperties": false,
+      "properties": {
+        "country": {
+          "type": "string",
+          "maxLength": 64,
+          "description": "Corpus country; omit for all jurisdictions, including those in preparation. An ISO 3166-1 alpha-3 or alpha-2 code, or the country's name, is read.",
+          "minLength": 1,
+          "x-stella-agent-input": {
+            "kind": "country",
+            "country": {
+              "spelling": "alpha-3",
+              "admitted": [
+                "AUT",
+                "CZE",
+                "EU",
+                "HUN",
+                "POL",
+                "SVK",
+                "USA"
+              ],
+              "tool": "case_law_coverage"
+            }
+          }
         }
       }
     }

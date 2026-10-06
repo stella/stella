@@ -46,6 +46,7 @@ import type { SearchResult } from "@/api/lib/search/types";
 import type { DescribeTemplateResult } from "@/api/lib/templates/template-fill-service";
 import type { McpRequestContext } from "@/api/mcp/context";
 import type { READ_CONTACT_COLUMNS } from "@/api/mcp/read-contact-columns";
+import { CASE_LAW_COVERAGE_FIXTURE } from "@/api/tests/helpers/case-law-coverage-fixture";
 import { installRecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
 import type { RecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
@@ -95,6 +96,7 @@ const describeStoredTemplateMock = mock();
 const searchProviderSearchMock = mock();
 const lookupDecisionsByIdentityMock = mock();
 const searchDecisionsHandlerMock = mock();
+const readCaseLawCoverageHandlerMock = mock();
 const readGatedDecisionWithDocumentMock = mock();
 const readGatedDecisionCitationsMock = mock();
 const withRedistributableSubjectMock = mock();
@@ -217,6 +219,7 @@ const buildContext = (tx: unknown): McpRequestContext => {
       getSearchReader: () => asTestRaw({ search: searchProviderSearchMock }),
       lookupDecisionsByIdentity: lookupDecisionsByIdentityMock,
       searchDecisionsHandler: searchDecisionsHandlerMock,
+      readCaseLawCoverageHandler: readCaseLawCoverageHandlerMock,
       readGatedDecisionWithDocument: readGatedDecisionWithDocumentMock,
       readGatedDecisionCitations: readGatedDecisionCitationsMock,
       searchLegislationHandler: searchLegislationHandlerMock,
@@ -1413,6 +1416,18 @@ const CONTRACT_CORPUS = {
       expectRefPaths: [],
     },
   ],
+  case_law_coverage: [
+    {
+      mode: "search",
+      buildArgs: () => ({}),
+      setup: () => {
+        readCaseLawCoverageHandlerMock.mockResolvedValue(
+          CASE_LAW_COVERAGE_FIXTURE,
+        );
+      },
+      expectRefPaths: [],
+    },
+  ],
   search_case_law: [
     {
       mode: "search",
@@ -2012,6 +2027,7 @@ const ALL_MOCKS = [
   searchProviderSearchMock,
   lookupDecisionsByIdentityMock,
   searchDecisionsHandlerMock,
+  readCaseLawCoverageHandlerMock,
   readGatedDecisionWithDocumentMock,
   readGatedDecisionCitationsMock,
   searchLegislationHandlerMock,
