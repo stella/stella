@@ -49,10 +49,7 @@ import type {
 } from "@/api/lib/docx/resolve-ai-fields";
 import { failureSink } from "@/api/lib/observability/failure";
 import { observeFailure } from "@/api/lib/observability/observe-failure";
-import {
-  admittedDispatchSignal,
-  type ModelDispatchAdmission,
-} from "@/api/lib/rate-limit/model-dispatch-admission";
+import type { ModelDispatchAdmission } from "@/api/lib/rate-limit/model-dispatch-admission";
 import {
   abortControllerFromSignal,
   collectTanStackTextRun,
@@ -233,12 +230,7 @@ const resolveFieldChat = async ({
   system,
   tenantWorkspaceIds,
 }: FieldChatInput): Promise<ResolvedFieldChat> => ({
-  // The direct chat runtime does not read the proof, so the admitted action's
-  // signal is attached here, as the generate helpers attach it.
-  abortController: abortControllerFromSignal(
-    admittedDispatchSignal({ organizationId, admission, abortSignal }) ??
-      abortSignal,
-  ),
+  abortController: abortControllerFromSignal(abortSignal),
   caching: resolveCaching({
     promptCachingEnabled: false,
     role: "fast",
@@ -268,6 +260,7 @@ const generateFieldText = async (
   const { abortController, caching, messages, model, system } =
     await resolveFieldChat(input);
   return await collectTanStackTextRun({
+    admission: input.admission,
     model,
     adapter: textAdapterWithNormalizedStops(model),
     messages,
@@ -301,6 +294,7 @@ const generateFieldObject = async <TSchema extends v.GenericSchema>(
   const { abortController, caching, messages, model, system } =
     await resolveFieldChat(input);
   return await generateTanStackChatObject({
+    admission: input.admission,
     model,
     adapter: model.adapter,
     messages,

@@ -217,7 +217,9 @@ export const runSubagent = async (
     role: options.role,
   });
 
-  const abortController = abortControllerFromSignal(options.abortSignal);
+  const abortController = abortControllerFromSignal(
+    AbortSignal.any([options.abortSignal, options.admission.signal]),
+  );
 
   const analytics = createTanStackAIAnalyticsCallbacks({
     dataClass: "customer",
@@ -306,6 +308,7 @@ export const runSubagent = async (
   });
 
   const stream = streamTanStackChatRun({
+    admission: options.admission,
     model,
     adapter: model.adapter,
     messages: guardedMessages,
