@@ -203,7 +203,10 @@ const resolve = (requested: string) => {
   };
 };
 
-const runRecord = async (deploySha: string) => {
+const runRecord = async (
+  deploySha: string,
+  overrides: Record<string, string> = {},
+) => {
   const callsPath = path.join(workspace, `gh-calls-${Bun.randomUUIDv7()}`);
   await Bun.write(callsPath, "");
   const result = Bun.spawnSync(["bash", recordScriptPath], {
@@ -221,6 +224,7 @@ const runRecord = async (deploySha: string) => {
       PATH: `${workspace}:${process.env["PATH"] ?? ""}`,
       STUB_CALLS_PATH: callsPath,
       WEB_SMOKE: "success",
+      ...overrides,
     },
   });
   return {
@@ -455,6 +459,23 @@ describe("staging deploy commit", () => {
     }
     expect(statusWrites[0]).toContain('"context":"staging/verified"');
     expect(statusWrites[1]).toContain('"context":"staging/mcp-journeys"');
+  });
+
+  test("reports failed MCP journeys separately while their exemption lasts", async () => {
+    const result = await runRecord(baseSha, {
+      MCP_JOURNEYS_NON_BLOCKING_UNTIL: "9999-12-31",
+      MCP_SMOKE: "failure",
+    });
+
+    expect(result.exitCode).toBe(0);
+    const statusWrites = result.calls
+      .split("\n")
+      .filter((line) => line.includes("repos/stella/stella/statuses/"));
+    expect(statusWrites).toHaveLength(2);
+    expect(statusWrites[0]).toContain('"context":"staging/verified"');
+    expect(statusWrites[0]).toContain('"state":"success"');
+    expect(statusWrites[1]).toContain('"context":"staging/mcp-journeys"');
+    expect(statusWrites[1]).toContain('"state":"failure"');
   });
 
   test("builds, promotes and verifies only the resolved commit", async () => {
