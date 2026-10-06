@@ -107,8 +107,12 @@ export const SMOKE_ROUTE_DEFS: readonly SmokeRouteDef[] = [
     path: (world) => `/workspaces/${world.workspace.id}/invoices`,
   },
   {
+    // Lists is shown only to callers with list access; the smoke caller has
+    // none, so the route leaves before its loader. Granted rendering is covered
+    // by the route gate tests.
     template: "/workspaces/$workspaceId/lists",
     path: (world) => `/workspaces/${world.workspace.id}/lists`,
+    expectation: { kind: "redirectsTo", to: "/workspaces" },
   },
   {
     template: "/workspaces/$workspaceId/timesheets",
