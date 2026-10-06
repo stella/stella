@@ -22,7 +22,14 @@
  */
 
 import { Result } from "better-result";
-import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+import {
+  afterEach,
+  beforeEach,
+  describe,
+  expect,
+  setSystemTime,
+  test,
+} from "bun:test";
 
 import { ADAPTER_KEYS } from "@/api/handlers/case-law/consts";
 import type { AdapterKey } from "@/api/handlers/case-law/consts";
@@ -55,6 +62,8 @@ const MAX_WALK_STEPS = 192;
  */
 /** Walks are stubbed and sleepless, but CZ ÚS still drives ~2000 requests. */
 const WALK_TIMEOUT_MS = 120_000;
+
+const FIXTURE_CLOCK_MS = new Date("2026-10-06T12:00:00.000Z").getTime();
 
 /**
  * What the pl-courts stub gives the dump: a full page and a short one. The
@@ -637,11 +646,19 @@ const describeFootprint = (positions: readonly string[]): string =>
 describe("an exhausted source leaves every adapter parked", () => {
   const originalFetch = globalThis.fetch;
   const originalSleep = Bun.sleep;
+  let fixtureClock = FIXTURE_CLOCK_MS;
 
   beforeEach(() => {
-    // Adapters pace themselves against live courts. Nothing here is live.
-    Bun.sleep = async () => {
-      // no-op
+    fixtureClock = FIXTURE_CLOCK_MS;
+    setSystemTime(fixtureClock);
+    // Keep calendar windows deterministic and spend pacing delays on the
+    // fixture clock, so the walk never waits for a live publisher interval.
+    Bun.sleep = async (duration) => {
+      fixtureClock =
+        typeof duration === "number"
+          ? fixtureClock + Math.max(0, duration)
+          : Math.max(fixtureClock, duration.getTime());
+      setSystemTime(fixtureClock);
     };
   });
 
@@ -650,6 +667,7 @@ describe("an exhausted source leaves every adapter parked", () => {
     // never returned, so one adapter's stub can never answer the next one's.
     globalThis.fetch = originalFetch;
     Bun.sleep = originalSleep;
+    setSystemTime();
   });
 
   for (const key of DECLARED_ADAPTER_KEYS) {
@@ -665,6 +683,7 @@ describe("an exhausted source leaves every adapter parked", () => {
     test(
       `${key}: parks within a bounded window`,
       async () => {
+        expect(Date.now()).toBe(FIXTURE_CLOCK_MS);
         const adapter = getAdapter(key);
         expect(adapter, `${key} is declared but not registered`).toBeDefined();
         if (adapter === undefined) {

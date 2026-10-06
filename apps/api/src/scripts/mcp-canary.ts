@@ -908,8 +908,22 @@ export const evaluateCredentialExpiry = ({
   const schema = v.object({
     expiresAt: v.nullable(v.pipe(v.string(), v.isoTimestamp())),
   });
+  // The status decides the fix: 404 means the target predates the endpoint,
+  // 401 means the key itself was refused, anything else is the deployment.
+  if (status === 404) {
+    return failed(
+      name,
+      "HTTP 404: the target does not serve the key expiry endpoint yet",
+    );
+  }
+  if (status === 401) {
+    return failed(name, "HTTP 401: the target refused MCP_CANARY_TOKEN");
+  }
   if (status !== 200 || !v.is(schema, body)) {
-    return failed(name, "could not inspect the current machine key expiry");
+    return failed(
+      name,
+      `HTTP ${status}: could not inspect the current machine key expiry`,
+    );
   }
   if (body.expiresAt === null) {
     return passed(name, "credential has no expiry");
@@ -1116,7 +1130,8 @@ export const runStagingCredentialJourneys = async (
     results.push(
       await runNamedProbe(bootstrapName, async () => {
         const smoke = await readProbeResponse(
-          await fetcher(new URL("/v1/smoke/session", baseUrl), {
+          // Mounted at the root, outside the versioned API prefix.
+          await fetcher(new URL("/smoke/session", baseUrl), {
             method: "POST",
             headers: { "x-smoke-secret": smokeSecret },
             timeout: { type: "idle", ms: PROBE_TIMEOUT_MS },

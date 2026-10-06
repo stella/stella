@@ -24,8 +24,17 @@ const admittedByServer = (
   switch (feature.undeclared.type) {
     case "hidden":
       return false;
-    case "deployment":
-      return availability.deploymentFeatures[feature.undeclared.key];
+    // Delete this undeclared policy when the server declares legal-lists.
+    case "deployment-and-enabled-for":
+      return (
+        availability.deploymentFeatures[feature.undeclared.key] &&
+        // Read the server decision directly: dependent features require Lists.
+        feature.undeclared.featureIds.some(
+          (id) =>
+            availability.declaredFeatureIds.includes(id) &&
+            availability.capabilities[id]?.status === "enabled",
+        )
+      );
     default:
       feature.undeclared satisfies never;
       return panic("Unknown undeclared feature policy");

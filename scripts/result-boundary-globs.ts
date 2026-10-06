@@ -223,6 +223,7 @@ export const RESULT_BOUNDARY_GLOBS = [
   "apps/api/src/lib/rate-limit/queued-action-admission.ts",
   "apps/api/src/scripts/**",
   "apps/api/src/handlers/mcp-app-sandbox/**",
+  "apps/api/src/handlers/visual-sandbox/**",
   // Web worker entry modules. The browser, not our code, invokes the message
   // handler, and a failure has to travel back over `postMessage` instead of
   // returning to a caller that could read a `Result`.

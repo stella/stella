@@ -1671,20 +1671,6 @@ const AssistantMessageParts = ({
     }
 
     if (part.type === "tool-call" && part.name === "spawn_subagents") {
-      if (
-        isApprovalPart(part) &&
-        (part.state === "approval-requested" ||
-          part.state === "approval-responded")
-      ) {
-        return (
-          <ToolApprovalCard
-            isAwaitingUser={isAwaitingUser}
-            isTurnActive={isTurnActive}
-            key={part.id}
-            part={part}
-          />
-        );
-      }
       return <SpawnSubagentsCard key={part.id} part={part} />;
     }
 

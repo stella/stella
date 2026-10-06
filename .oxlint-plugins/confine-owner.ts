@@ -30,7 +30,11 @@
 // to `navigator.clipboard.writeText`) is untouched. A `member-call` row matches
 // a call of the named method on any receiver, including the optional-chained
 // form, in files under one of its `within` prefixes; the method name alone is
-// too common to confine repository-wide. A `literal-pattern` row matches its
+// too common to confine repository-wide. A `function-call` row matches a direct
+// call of the named identifier in its scoped paths, including optional calls
+// and value-preserving TypeScript wrappers. This kind compares identifier names,
+// not bindings: renaming the function or its callback binding is unrecognized.
+// A `literal-pattern` row matches its
 // regular expression against cooked string and template text; constructing
 // the value across separate expressions is outside this syntax boundary.
 // A value reached through an alias, a
@@ -51,6 +55,7 @@ import {
   memberPropertyName,
   repoRelativeFilename,
   TRANSPARENT_WRAPPERS,
+  unwrapExpression,
 } from "./utils.ts";
 
 const GLOBAL_ROOTS = ["window", "globalThis", "self"] as const;
@@ -79,6 +84,14 @@ type MemberCallEntry = {
   owner: string;
   paths: readonly string[];
   method: string;
+  within: readonly string[];
+};
+
+type FunctionCallEntry = {
+  id: string;
+  owner: string;
+  paths: readonly string[];
+  name: string;
   within: readonly string[];
 };
 
@@ -113,6 +126,7 @@ type ConfiguredEntries = {
   importEntries: ImportEntry[];
   globalMemberEntries: GlobalMemberEntry[];
   memberCallEntries: MemberCallEntry[];
+  functionCallEntries: FunctionCallEntry[];
   literalPatternEntries: LiteralPatternEntry[];
 };
 
@@ -122,11 +136,13 @@ const configuredEntries = (context: {
   const importEntries: ImportEntry[] = [];
   const globalMemberEntries: GlobalMemberEntry[] = [];
   const memberCallEntries: MemberCallEntry[] = [];
+  const functionCallEntries: FunctionCallEntry[] = [];
   const literalPatternEntries: LiteralPatternEntry[] = [];
   const configured = {
     importEntries,
     globalMemberEntries,
     memberCallEntries,
+    functionCallEntries,
     literalPatternEntries,
   };
   const options = context.options?.[0];
@@ -207,6 +223,15 @@ const configuredEntries = (context: {
         continue;
       }
       memberCallEntries.push({ id, owner, paths, method, within });
+      continue;
+    }
+    if (kind === "function-call") {
+      const name = Reflect.get(enforcement, "name");
+      const within = stringsFrom(Reflect.get(enforcement, "within"));
+      if (typeof name !== "string" || within.length === 0) {
+        continue;
+      }
+      functionCallEntries.push({ id, owner, paths, name, within });
     }
   }
 
@@ -385,6 +410,7 @@ export default eslintCompatPlugin({
         let activeGlobalMembers: readonly GlobalMemberEntry[] = [];
         let importerPath = "";
         let activeMemberCalls: readonly MemberCallEntry[] = [];
+        let activeFunctionCalls: readonly FunctionCallEntry[] = [];
         let activeLiteralPatterns: readonly LiteralPatternEntry[] = [];
 
         // `takesOwnedName` is `null` when the declaration reaches every
@@ -445,6 +471,7 @@ export default eslintCompatPlugin({
               importEntries,
               globalMemberEntries,
               memberCallEntries,
+              functionCallEntries,
               literalPatternEntries,
             } = configured;
             const applies = (entry: { paths: readonly string[] }) =>
@@ -460,10 +487,16 @@ export default eslintCompatPlugin({
                 applies(entry) &&
                 entry.within.some((prefix) => coversFile(prefix, filename)),
             );
+            activeFunctionCalls = functionCallEntries.filter(
+              (entry) =>
+                applies(entry) &&
+                entry.within.some((prefix) => coversFile(prefix, filename)),
+            );
             return (
               activeImports.length > 0 ||
               activeGlobalMembers.length > 0 ||
               activeMemberCalls.length > 0 ||
+              activeFunctionCalls.length > 0 ||
               activeLiteralPatterns.length > 0
             );
           },
@@ -511,6 +544,16 @@ export default eslintCompatPlugin({
           CallExpression(node) {
             for (const entry of activeMemberCalls) {
               if (isMemberStep(node.callee, entry.method)) {
+                context.report({
+                  node,
+                  messageId: "unownedUse",
+                  data: { id: entry.id, owner: entry.owner },
+                });
+              }
+            }
+            const callee = unwrapExpression(node.callee);
+            for (const entry of activeFunctionCalls) {
+              if (isIdentifier(callee, entry.name)) {
                 context.report({
                   node,
                   messageId: "unownedUse",

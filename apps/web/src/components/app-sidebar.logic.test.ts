@@ -1,13 +1,17 @@
 import { describe, expect, test } from "bun:test";
 
+import type { WorkspaceActivity } from "@/components/app-sidebar.logic";
 import {
   matterActivityIsKnownEmpty,
+  matterActivityItemVisible,
+  matterActivityNeedsLegalListsDecision,
   resolveEntityActivityDestination,
   resolveAutomaticExpandedMatterId,
   resolveMatterNavigationTarget,
   resolveSidebarWorkspaceId,
   selectRecentWorkspaces,
 } from "@/components/app-sidebar.logic";
+import { LIST_ITEM_TYPES } from "@/components/workspaces/tasks/task-detail-constants";
 
 describe("sidebar matter context", () => {
   test("opens a matter at its default view without an intermediate redirect", () => {
@@ -247,5 +251,87 @@ describe("sidebar entity activity navigation", () => {
     expect(resolveEntityActivityDestination("link")).toEqual({
       type: "all-view",
     });
+  });
+});
+
+describe("sidebar list item admission", () => {
+  const entity = {
+    activityAt: "2026-07-01T12:00:00.000Z",
+    entityKind: "task",
+    fieldId: null,
+    fileName: null,
+    hasThumbnail: false,
+    id: "entity-a",
+    listItemType: null,
+    mimeType: null,
+    status: "open",
+    title: "Review contract",
+    type: "entity",
+  } as const satisfies WorkspaceActivity;
+  for (const listItemType of [null, ...LIST_ITEM_TYPES]) {
+    for (const legalListsEnabled of [false, true]) {
+      test(`task ${listItemType ?? "none"} with Lists ${String(legalListsEnabled)}`, () => {
+        const item = {
+          ...entity,
+          listItemType,
+        } as const satisfies WorkspaceActivity;
+        const visible = matterActivityItemVisible(item, legalListsEnabled);
+        expect(visible).toBe(
+          legalListsEnabled || listItemType === null || listItemType === "task",
+        );
+        expect(
+          matterActivityIsKnownEmpty({
+            isInvalidated: false,
+            status: "success",
+            pages: [
+              {
+                items: [item].filter((entry) =>
+                  matterActivityItemVisible(entry, legalListsEnabled),
+                ),
+                nextCursor: null,
+              },
+            ],
+          }),
+        ).toBe(!visible);
+      });
+    }
+  }
+  test("only list items other than tasks need the Lists decision", () => {
+    expect(matterActivityNeedsLegalListsDecision([])).toBe(false);
+    expect(matterActivityNeedsLegalListsDecision([entity])).toBe(false);
+    expect(
+      matterActivityNeedsLegalListsDecision([
+        { ...entity, listItemType: "task" },
+      ]),
+    ).toBe(false);
+    for (const listItemType of LIST_ITEM_TYPES.filter(
+      (type) => type !== "task",
+    )) {
+      expect(
+        matterActivityNeedsLegalListsDecision([
+          entity,
+          { ...entity, id: "entity-b", listItemType },
+        ]),
+      ).toBe(true);
+    }
+  });
+  test("documents and threads remain visible without Lists", () => {
+    expect(
+      matterActivityItemVisible(
+        {
+          type: "thread",
+          id: "thread-a",
+          title: "Review notes",
+          activityAt: entity.activityAt,
+        } satisfies WorkspaceActivity,
+        false,
+      ),
+    ).toBe(true);
+    expect(
+      matterActivityItemVisible(
+        { ...entity, entityKind: "document" } satisfies WorkspaceActivity,
+        false,
+      ),
+    ).toBe(true);
   });
 });

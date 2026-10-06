@@ -1417,14 +1417,20 @@ jobs:
             packages/api-contract/src/mcp-chat-tool-policy.gen.ts
           bun scripts/check-cli-runtime-generation.ts
 
-      - name: MCP App bundle guard
+      - name: MCP App bundle and shared assets guard
         if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
         # The API serves the committed single-file bundle, not the TypeScript
         # source. Regenerate it and fail on any diff so source tests and the
         # production resource cannot silently exercise different app code.
         run: |
           (cd apps/api && bun run build:mcp-apps)
-          git diff --exit-code -- "apps/api/src/mcp/apps/*/generated/app.html.txt"
+          git diff --exit-code -- "apps/api/src/mcp/apps/*/generated/app.html.txt" "apps/api/src/mcp/apps/shared/generated/*"
+
+      - name: Visual sandbox document tests
+        if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
+        run: |
+          (cd apps/api && bun run build:visual-sandbox)
+          git diff --exit-code -- apps/api/src/handlers/visual-sandbox/generated/runtime.js.txt
 
       - name: Capability catalog drift guard
         if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
