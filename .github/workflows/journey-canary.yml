@@ -27,6 +27,7 @@ jobs:
           sparse-checkout: |
             /scripts/check-journeys.sh
             /scripts/check-published-versions.ts
+            /scripts/check-npm-publish-lag.ts
             /scripts/publish-packages.ts
             /package.json
           sparse-checkout-cone-mode: false
