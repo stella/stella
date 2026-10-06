@@ -409,7 +409,7 @@ describe("changed-file autofix boundary", () => {
     expect(plan).toBeGreaterThan(availability);
     expect(job).toContain(`ready: \${{ steps.planner.outputs.ready }}`);
     expect(scope).toContain(
-      "scripts/autofix-plan.ts scripts/generated-files.ts",
+      "scripts/autofix-plan.ts scripts/generated-files.ts packages/scripts/src/generated-files.ts",
     );
     expect(scope).toContain('git cat-file -e "HEAD:$path"');
     expect(scope).toContain('echo "ready=false" >> "$GITHUB_OUTPUT"');
