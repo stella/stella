@@ -137,6 +137,19 @@ describe("htmlToMarkdown", () => {
     expect(htmlToMarkdown(html)).toBe("| p |\n| --- |\n| C:\\\\tmp\\|x |\n");
   });
 
+  test("table cell pipes inside code spans and link destinations are escaped", () => {
+    const html =
+      "<table><tr><th>c</th></tr>" +
+      '<tr><td><code>a|b</code> <a href="https://x.test/?q=a|b">q</a></td></tr></table>';
+    expect(htmlToMarkdown(html)).toBe(
+      "| c |\n| --- |\n| `a\\|b` [q](https://x.test/?q=a\\|b) |\n",
+    );
+  });
+
+  test("code spans outside tables keep raw pipes", () => {
+    expect(htmlToMarkdown("<p><code>a|b</code></p>")).toBe("`a|b`\n");
+  });
+
   test("markdown special characters in text are backslash-escaped", () => {
     expect(htmlToMarkdown("<p>5 * 3</p>")).toBe("5 \\* 3\n");
     expect(htmlToMarkdown("<p>foo_bar</p>")).toBe("foo\\_bar\n");
