@@ -184,7 +184,7 @@ export const treemapCategoryValue = (
     case "type":
     case "tier": {
       const value = node[field];
-      return value === undefined ? null : String(value);
+      return value ?? null;
     }
     case "count":
     case "citationSum":

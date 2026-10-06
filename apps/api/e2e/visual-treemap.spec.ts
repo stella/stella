@@ -113,7 +113,7 @@ for (const direction of ["ltr", "rtl"] as const) {
       await expect(guest.locator('[data-color-mode="category"]')).toContainText(
         "Ústavní soudy",
       );
-      const cellFills = () =>
+      const cellFills = async () =>
         svg
           .locator('rect[fill]:not([data-ts-key="background"])')
           .evaluateAll((cells) =>
