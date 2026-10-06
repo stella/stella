@@ -34,7 +34,10 @@ export const createVisualShellSession = ({
       message,
     }: {
       event: { source: unknown; origin: string; data: unknown };
-      frameWindow: Pick<Window, "postMessage"> | null | undefined;
+      frameWindow:
+        | { postMessage: (message: unknown, targetOrigin: string) => void }
+        | null
+        | undefined;
       message: v.InferOutput<typeof visualRenderMessageSchema>;
     }) => {
       if (

@@ -5533,11 +5533,13 @@ describe("native visual stream persistence", () => {
         .find(({ role }) => role === "assistant") ??
       panic("Visual stream produced no assistant");
     const streamedVisuals = streamed.parts.filter(
-      ({ type }) => type === "ui-resource",
+      (messagePart) => messagePart.type === "ui-resource",
     );
     expect(streamedVisuals).toEqual([part]);
     expect(
-      persisted.parts.filter(({ type }) => type === "ui-resource"),
+      persisted.parts.filter(
+        (messagePart) => messagePart.type === "ui-resource",
+      ),
     ).toEqual(streamedVisuals);
     const stored = chatMessageContentFromMessage(
       toPersistableChatMessage({
@@ -5551,12 +5553,14 @@ describe("native visual stream persistence", () => {
       role: persisted.role,
       content: stored,
     });
-    expect(reloaded.parts.filter(({ type }) => type === "ui-resource")).toEqual(
-      streamedVisuals,
-    );
+    expect(
+      reloaded.parts.filter(
+        (messagePart) => messagePart.type === "ui-resource",
+      ),
+    ).toEqual(streamedVisuals);
     expect(
       toChatMessage(streamed)?.parts.some(
-        ({ type }) => type === "ui-resource",
+        (messagePart) => messagePart.type === "ui-resource",
       ) ?? false,
     ).toBe(false);
   });

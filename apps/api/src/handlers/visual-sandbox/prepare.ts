@@ -62,8 +62,9 @@ export const prepareGeneratedVisual = (input: GeneratedVisualInput) => {
       }),
     );
   }
+  const { links = [] } = input;
   const ids = new Set<string>();
-  for (const link of input.links ?? []) {
+  for (const link of links) {
     if (ids.has(link.id)) {
       return Result.err(
         new VisualDefinitionError({
@@ -78,7 +79,7 @@ export const prepareGeneratedVisual = (input: GeneratedVisualInput) => {
     title,
     html: normalized.value,
     data: input.data,
-    links: input.links ?? [],
+    links,
     literalLinks: collectLiteralVisualLinks(normalized.value),
   });
 };

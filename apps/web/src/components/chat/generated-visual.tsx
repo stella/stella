@@ -152,7 +152,7 @@ const GeneratedVisualFrame = ({
       case "drill": {
         const text = t("chat.generatedViewDrill", {
           court: message.court,
-          year: message.year,
+          year: String(message.year),
         });
         insertPastedTextIntoThread(threadRef, {
           source: "prompt",
@@ -168,7 +168,7 @@ const GeneratedVisualFrame = ({
         }
         detachedUserAction(
           (async () => {
-            const decision = await queries.fetchQuery(
+            const decision = await queries.query(
               decisionOptions(link.decisionId),
             );
             openDecision({
@@ -190,7 +190,7 @@ const GeneratedVisualFrame = ({
       }
       default: {
         message satisfies never;
-        return panic("Unhandled visual message kind");
+        panic("Unhandled visual message kind");
       }
     }
   });
@@ -263,8 +263,12 @@ const GeneratedVisualFrame = ({
             type="button"
             className="absolute inset-0 cursor-pointer"
             aria-label={t("chat.activateGeneratedView")}
-            onClick={() => {
-              setInteraction("interactive");
+            onClick={(event) => {
+              const activatedFrame = frame.current?.contentWindow;
+              if (!event.nativeEvent.isTrusted || !activatedFrame) {
+                return;
+              }
+              setInteraction({ status: "interactive", activatedFrame });
               requestAnimationFrame(() => frame.current?.focus());
             }}
           />
