@@ -261,6 +261,20 @@ describe("API deployment health receipt", () => {
     expect(targetIndex).toBeGreaterThanOrEqual(0);
     expect(targetIndex).toBeLessThan(deployedIndex);
     expect(deployedIndex).toBeLessThan(checkoutIndex);
+    // Setup reads package.json from the checkout, and a release checkout must
+    // never seed main's dependency cache.
+    const setupIndex = indexOf(
+      (step) =>
+        typeof step["uses"] === "string" &&
+        step["uses"].includes("/setup-bun-cached@"),
+    );
+    const installIndex = indexOf(
+      (step) => step["name"] === "Install dependencies",
+    );
+    expect(checkoutIndex).toBeLessThan(setupIndex);
+    expect(setupIndex).toBeLessThan(installIndex);
+    const setupWith = steps[setupIndex]?.["with"];
+    expect(isRecord(setupWith) && setupWith["save"]).toBe(false);
 
     const deployed = steps[deployedIndex];
     const deployedEnv = deployed?.["env"];
@@ -269,7 +283,10 @@ describe("API deployment health receipt", () => {
     );
     const script = typeof deployed?.["run"] === "string" ? deployed["run"] : "";
     const commit = "0123456789abcdef0123456789abcdef01234567";
-    const resolve = (healthBody: string) => {
+    const resolve = (
+      healthBody: string,
+      { baseUrl = "https://api.example.test/", curlExit = 0 } = {},
+    ) => {
       const directory = mkdtempSync(path.join(tmpdir(), "mcp-canary-"));
       try {
         const output = path.join(directory, "output");
@@ -277,12 +294,13 @@ describe("API deployment health receipt", () => {
           [
             "bash",
             "-c",
-            `curl() { printf '%s\\n' "$*" >> "$CURL_LOG"; printf '%s' "$HEALTH_BODY"; }\nset -e\n${script}`,
+            `curl() { printf '%s\\n' "$*" >> "$CURL_LOG"; printf '%s' "$HEALTH_BODY"; return "$CURL_EXIT"; }\nset -e\n${script}`,
           ],
           {
             env: {
               ...process.env,
-              BASE_URL: "https://api.example.test/",
+              BASE_URL: baseUrl,
+              CURL_EXIT: String(curlExit),
               CURL_LOG: path.join(directory, "curl"),
               GITHUB_OUTPUT: output,
               HEALTH_BODY: healthBody,
@@ -304,6 +322,15 @@ describe("API deployment health receipt", () => {
     expect(reported.exitCode).toBe(0);
     expect(reported.written).toBe(`commit=${commit}\n`);
     expect(reported.requested).toContain("https://api.example.test/health");
+    expect(
+      resolve(JSON.stringify({ commit }), {
+        baseUrl: "https://api.example.test",
+      }).requested,
+    ).toContain("https://api.example.test/health");
+
+    const unreachable = resolve(JSON.stringify({ commit }), { curlExit: 22 });
+    expect(unreachable.exitCode).not.toBe(0);
+    expect(unreachable.written).toBe("");
 
     for (const body of [
       "{}",
