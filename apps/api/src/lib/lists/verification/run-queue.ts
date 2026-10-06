@@ -915,7 +915,11 @@ export const initListVerificationRunWorker = () => {
         job,
         signal: new AbortController().signal,
         run: async (_signal, admission) =>
-          await processListVerificationRun({ data: job.data, actor, admission }),
+          await processListVerificationRun({
+            data: job.data,
+            actor,
+            admission,
+          }),
       });
     },
     {
