@@ -130,7 +130,7 @@ describe("visual treemap hierarchy", () => {
   test("uses sequential citations and symmetric signed treatment domains", () => {
     const model = createTreemapModel(treemapFixture);
     expect(treemapColorDomain(model.visible(), "citations")).toEqual([0, 76]);
-    expect(treemapColorDomain(model.visible(), "treatment")).toEqual([-0, 0]);
+    expect(treemapColorDomain(model.visible(), "treatment")).toEqual([0, 0]);
     const signed = createTreemapModel({
       type: "group",
       id: "root",
