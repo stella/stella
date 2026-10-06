@@ -8,6 +8,9 @@ import {
   parseApiTestShard,
   partitionTestFiles,
 } from "../apps/api/scripts/test-file-shards";
+import { durationSeconds } from "../apps/api/scripts/test-timings";
+import { allApiTests } from "./api-test-impact";
+import { planCiApiTests } from "./ci-api-test-plan";
 import {
   apiShardValue,
   assertApiShardExecuted,
@@ -87,14 +90,16 @@ test("a shard's filters exclude every package it does not own", () => {
 // The workflow matrix is the other half of the shard map: a shard the matrix
 // omits runs nowhere, and its packages would leave CI silently.
 test("the ci-tests matrix runs exactly the declared jobs", () => {
-  const declared = /\n {8}shard: \[(?<ids>[^\]]+)\]\n/u.exec(ciTestsJob())
-    ?.groups?.["ids"];
-  if (declared === undefined) {
-    throw new Error("ci-tests declares no shard matrix");
-  }
-  expect(declared.split(",").map((id) => id.trim())).toEqual([
-    ...Object.keys(TEST_JOB_SHARDS),
-  ]);
+  expect(ciTestsJob()).toContain(
+    `matrix: \${{ fromJSON(needs.ci-plan.outputs.ci_tests_matrix) }}`,
+  );
+  const declared = planCiApiTests({
+    event: "merge_group",
+    scopeUnknown: false,
+    apiInScope: true,
+    select: allApiTests,
+  }).matrix.shard;
+  expect(declared).toEqual(Object.keys(TEST_JOB_SHARDS));
 });
 
 test("merged jobs run every suite exactly once and preserve the package partition", () => {
@@ -154,9 +159,11 @@ test("API sub-shards cover every discovered file exactly once, including new fil
     const shard = parseApiTestShard(apiShardValue(id));
     return shard === null
       ? []
-      : (partitionTestFiles({ files: input, durations, count: shard.count }).at(
-          shard.index - 1,
-        ) ?? []);
+      : (partitionTestFiles({
+          files: input,
+          durations: durationSeconds(durations),
+          count: shard.count,
+        }).at(shard.index - 1) ?? []);
   });
   expect(selected.toSorted()).toEqual(input.toSorted());
   expect(new Set(selected).size).toBe(input.length);
@@ -181,4 +188,43 @@ test("an in-scope API leg rejects help, empty or another shard's output", () => 
   });
   assertApiShardExecuted({ shard: "api-1", taskIds: [], output: "" });
   assertApiShardExecuted({ shard: "rest", taskIds, output: "" });
+});
+
+test("dynamic API shard counts certify the selected partition and allow zero API work in rest", () => {
+  expect(apiShardValue("rest", 0)).toBe("");
+  expect(apiShardValue("web", 0)).toBe("");
+  assertApiShardExecuted({
+    shard: "rest",
+    count: 0,
+    taskIds: ["@stll/scripts#test"],
+    output: "",
+  });
+  for (const count of [1, 2, 3, 4]) {
+    for (const [index, shard] of (
+      ["api-1", "api-2", "api-3", "api-4"] as const
+    ).entries()) {
+      if (index >= count) {
+        expect(() => apiShardValue(shard, count)).toThrow(
+          "outside the planned shard count",
+        );
+        continue;
+      }
+      const value = `${index + 1}/${count}`;
+      expect(apiShardValue(shard, count)).toBe(value);
+      assertApiShardExecuted({
+        shard,
+        count,
+        taskIds: ["@stll/api#test"],
+        output: `API test shard ${value}: 1/2 files`,
+      });
+      expect(() =>
+        assertApiShardExecuted({
+          shard,
+          count,
+          taskIds: ["@stll/api#test"],
+          output: "API test shard 1/9: 1/2 files",
+        }),
+      ).toThrow("ran no API test files");
+    }
+  }
 });

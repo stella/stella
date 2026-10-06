@@ -25,7 +25,6 @@ import {
   type DocumentStageObservation,
 } from "@stll/legal-atlas/document-fetch-diagnostics";
 import { observeDocumentStageSafely } from "@stll/legal-atlas/document-stage-observer";
-import type { IngestionStopKind } from "@stll/legal-atlas/ingestion-cycle";
 import { Temporal } from "@stll/time";
 
 import { SOURCE_TOTAL_ORIGIN, caseLawIngestionEvents } from "@/api/db/schema";
@@ -114,16 +113,14 @@ import {
   type CycleCadence,
   type CycleResult,
   INITIAL_CADENCE_STREAKS,
-  INITIAL_STALL_ALERT,
-  type StallAlertState,
   cycleMadeProgress,
   stepCadence,
-  stepAdapterCycleHealth,
 } from "./cycle-progress";
 import {
-  createIngestionHealthRefresh,
-  ingestionHealthRecord,
-} from "./ingestion-health";
+  createIngestionAlertHealth,
+  SOURCE_UNAVAILABLE_AFTER_MS,
+} from "./ingestion-alert-health";
+import { createIngestionHealthRefresh } from "./ingestion-health";
 import { formatLogDetail } from "./log-detail";
 import {
   RECOMPUTE_OUTCOME,
@@ -449,8 +446,11 @@ const inFlightCycles = new Set<string>();
  */
 const cyclesSinceWatchdogTick = new Set<string>();
 
-/** Sources whose current no-progress episode reached the alert threshold. */
-const stalledAdapters = new Map<AdapterKey, IngestionStopKind>();
+const alertHealth = createIngestionAlertHealth({
+  now: () => performance.now(),
+  stallThreshold: SUSTAINED_FAILURE_THRESHOLD,
+  sourceUnavailableAfterMs: SOURCE_UNAVAILABLE_AFTER_MS,
+});
 
 const writeHeartbeat = () => {
   void Bun.write(
@@ -507,11 +507,10 @@ let pagesSinceStart = 0;
 const logHeartbeat = (): void => {
   logInfo(
     JSON.stringify(
-      ingestionHealthRecord({
+      alertHealth.record({
         uptimeSec: Math.round(process.uptime()),
         pagesSinceStart,
         activeCycles: inFlightCycles.size,
-        stalledAdapters,
       }),
     ),
   );
@@ -792,8 +791,6 @@ const runOneCycle = async (
  */
 
 const runAdapterLoop = async ({ adapterKey, name }: SourceDef) => {
-  /** Stall streak plus the once-per-episode capture latch; see cycle-progress. */
-  let stallAlert: StallAlertState = INITIAL_STALL_ALERT;
   /** Separate counter for backoff; not reset by the alert threshold. */
   let backoffFailures = 0;
   /** Quiet and unproductive streaks; drive the inter-cycle delay. */
@@ -897,26 +894,27 @@ const runAdapterLoop = async ({ adapterKey, name }: SourceDef) => {
       }
     }
 
-    // A run of cycles that advanced no page means the source is stalled.
-    // The log signal re-fires every threshold-worth of stalled cycles; the
-    // exception capture fires once per episode, when it begins, so a source
-    // outage reaches error tracking as one alert instead of one event per
-    // failed fetch.
     if (finishedCycle !== null) {
-      const { stall, stopKind } = stepAdapterCycleHealth({
+      const { stall, stopKind, disposition } = alertHealth.step(
         adapterKey,
-        cycle: finishedCycle,
-        stallAlert,
-        stalledAdapters,
-        threshold: SUSTAINED_FAILURE_THRESHOLD,
-      });
-      stallAlert = stall.state;
+        finishedCycle,
+      );
       if (stall.sustained !== null) {
-        logger.error("case_law.ingestion.sustained_failure", {
+        const fields = {
           adapterKey,
           noProgressStreak: stall.sustained,
           stopKind,
-        });
+        };
+        if (disposition === "source_unavailable") {
+          logInfo(
+            JSON.stringify({
+              message: "case_law.ingestion.source_unavailable",
+              ...fields,
+            }),
+          );
+        } else {
+          logger.error("case_law.ingestion.sustained_failure", fields);
+        }
         if (stall.capture) {
           captureError(
             new IngestionStallError({

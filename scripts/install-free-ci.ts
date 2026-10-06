@@ -633,6 +633,8 @@ const changeDirectory = ({ from, to }: ChangeDirectoryOptions): string => {
   return joined === "." ? "" : joined;
 };
 
+const TIMEOUT_DURATION = /^(?:\d+(?:\.\d*)?|\.\d+)[smhd]?$/u;
+
 /** The program and its arguments, past keywords, assignments and wrappers. */
 const programWords = (words: readonly string[]): readonly string[] => {
   let rest = words;
@@ -648,6 +650,46 @@ const programWords = (words: readonly string[]): readonly string[] => {
       while (rest.at(0)?.startsWith("-") === true) {
         rest = rest.slice(1);
       }
+    } else if (first === "timeout") {
+      rest = rest.slice(1);
+      while (rest.at(0)?.startsWith("-") === true) {
+        const option = rest.at(0);
+        if (option === "--") {
+          rest = rest.slice(1);
+          break;
+        }
+        if (["-k", "--kill-after", "-s", "--signal"].includes(option ?? "")) {
+          if (
+            ["-k", "--kill-after"].includes(option ?? "") &&
+            !TIMEOUT_DURATION.test(rest.at(1) ?? "")
+          ) {
+            return words;
+          }
+          rest = rest.slice(2);
+        } else if (
+          ["--preserve-status", "--foreground", "--verbose", "-v"].includes(
+            option ?? "",
+          ) ||
+          /^(?:--(?:kill-after|signal)=|-[ks].+)/u.test(option ?? "")
+        ) {
+          if (
+            /^(?:--kill-after=|-k.)/u.test(option ?? "") &&
+            !TIMEOUT_DURATION.test(
+              (option ?? "").replace(/^(?:--kill-after=|-k)/u, ""),
+            )
+          ) {
+            return words;
+          }
+          rest = rest.slice(1);
+        } else {
+          // --help/--version can exit successfully without running the child.
+          return words;
+        }
+      }
+      if (!TIMEOUT_DURATION.test(rest.at(0) ?? "")) {
+        return words;
+      }
+      rest = rest.slice(1); // Duration precedes the wrapped command.
     } else if (first === "bash" && rest.at(1) === "scripts/retry.sh") {
       rest = rest.slice(2);
     } else {
@@ -1085,6 +1127,16 @@ const classifyBun = ({
       root: context.root,
       target: subcommand,
     });
+    if (file.type !== "invalid" && file.path === "scripts/ci-install.ts") {
+      return [
+        ...single({
+          cwd: dir,
+          entries: [...preloads, file.path],
+          type: "files",
+        }),
+        ...single(classifyInstall({ args: rest.slice(1), dir })),
+      ];
+    }
     return single(
       file.type === "invalid"
         ? unclassified(file.reason)

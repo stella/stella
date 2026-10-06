@@ -24,6 +24,10 @@ import { panic } from "better-result";
 import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
 import path from "node:path";
 
+import { readStringLiterals, readTestInputs } from "./test-input-readers";
+
+export { readStringLiterals, readTestInputs } from "./test-input-readers";
+
 const REPO_ROOT = path.resolve(import.meta.dirname, "..");
 const WORKSPACE_PARENTS = ["apps", "packages"] as const;
 const TURBO_CONFIG = "turbo.json";
@@ -80,188 +84,8 @@ const NON_READ_CALLS = new Set([
   "toStrictEqual",
 ]);
 
-const IDENTIFIER_CHARACTER = /[A-Za-z0-9_$]/u;
-const WHITESPACE = /\s/u;
 const GLOB_CHARACTER = /[*?]/u;
-/** A `/` here opens a regular expression rather than continuing an expression. */
-const REGEX_PRECEDING = new Set([
-  "!",
-  "&",
-  "(",
-  ",",
-  ":",
-  ";",
-  "=",
-  "?",
-  "[",
-  "{",
-  "|",
-  "}",
-  "+",
-  "-",
-  "*",
-  "%",
-  "<",
-  ">",
-  "~",
-  "^",
-  "\n",
-]);
-/** Bounds brace expansion so a pathological pattern cannot fan out. */
 const MAX_BRACE_EXPANSIONS = 64;
-
-type SourceLiteral = {
-  readonly callee: string | undefined;
-  readonly line: number;
-  readonly value: string;
-};
-
-const calleeBefore = (source: string, open: number): string | undefined => {
-  let end = open - 1;
-  while (end >= 0 && WHITESPACE.test(source.charAt(end))) {
-    end -= 1;
-  }
-  let start = end;
-  while (start >= 0 && IDENTIFIER_CHARACTER.test(source.charAt(start))) {
-    start -= 1;
-  }
-  return start === end ? undefined : source.slice(start + 1, end + 1);
-};
-
-type ScanState = {
-  index: number;
-  line: number;
-};
-
-/**
- * Consumes a quoted or template literal, returning its static text. A quote
- * that never closes on its line is JSX prose (`don't`), not a literal: the scan
- * rewinds past it rather than swallowing the rest of the file.
- */
-const readQuoted = (
-  source: string,
-  state: ScanState,
-  quote: string,
-): string | undefined => {
-  const start = state.index;
-  const startLine = state.line;
-  let value = "";
-  let dynamic = false;
-  state.index += 1;
-  while (state.index < source.length) {
-    const char = source.charAt(state.index);
-    if (char === "\\") {
-      value += source.charAt(state.index + 1);
-      state.index += 2;
-      continue;
-    }
-    if (char === quote) {
-      state.index += 1;
-      return dynamic ? undefined : value;
-    }
-    if (char === "\n") {
-      if (quote !== "`") {
-        break;
-      }
-      state.line += 1;
-    }
-    if (
-      quote === "`" &&
-      char === "$" &&
-      source.charAt(state.index + 1) === "{"
-    ) {
-      dynamic = true;
-    }
-    value += char;
-    state.index += 1;
-  }
-  state.index = start + 1;
-  state.line = startLine;
-  return undefined;
-};
-
-/**
- * Every static string literal in a TypeScript source, tagged with the callee of
- * the innermost call that encloses it. Comments and regular expressions are
- * skipped so a commented-out path or a character class cannot be read as one.
- */
-export const readStringLiterals = (
-  source: string,
-): readonly SourceLiteral[] => {
-  const literals: SourceLiteral[] = [];
-  const calls: (string | undefined)[] = [];
-  const state: ScanState = { index: 0, line: 1 };
-  let previousSignificant = "\n";
-
-  while (state.index < source.length) {
-    const char = source.charAt(state.index);
-    const next = source.charAt(state.index + 1);
-
-    if (char === "\n") {
-      state.line += 1;
-      state.index += 1;
-      continue;
-    }
-    if (WHITESPACE.test(char)) {
-      state.index += 1;
-      continue;
-    }
-    if (char === "/" && next === "/") {
-      const end = source.indexOf("\n", state.index);
-      state.index = end === -1 ? source.length : end;
-      continue;
-    }
-    if (char === "/" && next === "*") {
-      const end = source.indexOf("*/", state.index + 2);
-      const stop = end === -1 ? source.length : end + 2;
-      state.line += source.slice(state.index, stop).split("\n").length - 1;
-      state.index = stop;
-      continue;
-    }
-    if (char === "/" && REGEX_PRECEDING.has(previousSignificant)) {
-      state.index += 1;
-      let inClass = false;
-      while (state.index < source.length) {
-        const regexChar = source.charAt(state.index);
-        if (regexChar === "\\") {
-          state.index += 2;
-          continue;
-        }
-        if (regexChar === "[") {
-          inClass = true;
-        } else if (regexChar === "]") {
-          inClass = false;
-        } else if (regexChar === "/" && !inClass) {
-          state.index += 1;
-          break;
-        } else if (regexChar === "\n") {
-          break;
-        }
-        state.index += 1;
-      }
-      previousSignificant = "/";
-      continue;
-    }
-    if (char === '"' || char === "'" || char === "`") {
-      const line = state.line;
-      const value = readQuoted(source, state, char);
-      if (value !== undefined) {
-        literals.push({ callee: calls.at(-1), line, value });
-      }
-      previousSignificant = char;
-      continue;
-    }
-    if (char === "(") {
-      calls.push(calleeBefore(source, state.index));
-    } else if (char === ")") {
-      calls.pop();
-    }
-    previousSignificant = char;
-    state.index += 1;
-  }
-
-  return literals;
-};
 
 /** `{apps,packages}/**` expands to `apps/**` and `packages/**`. */
 export const expandBraces = (pattern: string): readonly string[] => {
@@ -555,39 +379,6 @@ const dependencyClosure = (
     queue.push(...dependency.dependencies);
   }
   return closure;
-};
-
-export const readTestInputs = (
-  root: string,
-): ReadonlyMap<string, readonly string[]> => {
-  const parsed: unknown = Bun.JSONC.parse(
-    readFileSync(path.join(root, TURBO_CONFIG), "utf-8"),
-  );
-  const tasks = isRecord(parsed) ? parsed["tasks"] : undefined;
-  if (!isRecord(tasks)) {
-    panic(`${TURBO_CONFIG} must declare tasks`);
-  }
-  const inputs = new Map<string, readonly string[]>();
-  for (const [task, definition] of Object.entries(tasks)) {
-    if (!task.endsWith(TEST_TASK_SUFFIX) || !isRecord(definition)) {
-      continue;
-    }
-    const declared = definition["inputs"];
-    if (!Array.isArray(declared)) {
-      continue;
-    }
-    inputs.set(
-      task.slice(0, -TEST_TASK_SUFFIX.length),
-      declared
-        .filter(
-          (entry): entry is string =>
-            typeof entry === "string" &&
-            entry.startsWith(TURBO_ROOT_INPUT_PREFIX),
-        )
-        .map((entry) => entry.slice(TURBO_ROOT_INPUT_PREFIX.length)),
-    );
-  }
-  return inputs;
 };
 
 const testFiles = (root: string, workspaceDir: string): readonly string[] =>

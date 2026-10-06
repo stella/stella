@@ -25,6 +25,7 @@ import {
   SKILL_TOOL_OUTPUT,
   SKILL_TOOL_OUTPUT_TYPE,
 } from "@/api/mcp/gateway/dynamic-tool-policy";
+import type { SkillToolOutput } from "@/api/mcp/gateway/dynamic-tool-policy";
 import {
   callGatewayExternalMcpTool,
   gatewayLoadErrorResult,
@@ -39,7 +40,10 @@ import type {
   SkillToolRead,
 } from "@/api/mcp/gateway/skills";
 import { getStaticMcpToolDefinition } from "@/api/mcp/static-tool-definitions";
-import type { InternalToolResult } from "@/api/mcp/tool-types";
+import type {
+  InternalToolErrorResult,
+  InternalToolResult,
+} from "@/api/mcp/tool-types";
 import {
   oauthScopeRecoveryHint,
   structuredErrorResult,
@@ -84,7 +88,7 @@ const unavailableSkillResult = ({
   grantedScopes: readonly string[];
   missingTools: readonly string[];
   skillName: string;
-}): InternalToolResult => {
+}): InternalToolErrorResult => {
   const message = `The skill "${skillName}" cannot run in this session. ${describeMissingSkillTools(missingTools)}`;
   const missingScopes = [
     ...new Set(
@@ -121,7 +125,7 @@ const unavailableSkillResult = ({
 
 export type GatewayDispatchResult =
   | { type: "external_mcp"; result: CallToolResult }
-  | { type: "internal"; result: InternalToolResult };
+  | { type: "internal"; result: InternalToolResult<SkillToolOutput> };
 
 export const dispatchGatewayToolCall = async ({
   args,
