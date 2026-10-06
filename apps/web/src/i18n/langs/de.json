@@ -1487,7 +1487,8 @@
       "toggleLabel": "Websuche",
       "toggleOff": "Websuche ausschalten",
       "toggleOn": "Websuche einschalten"
-    }
+    },
+    "workedFor": "Bearbeitungszeit: {duration}"
   },
   "clauses": {
     "addVariant": "Variante hinzufügen",

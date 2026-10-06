@@ -12,8 +12,10 @@ import {
   normalizePersistedChatMessageContent,
 } from "@/api/handlers/chat/chat-message-parts";
 import { ACTIVE_CHAT_TURN_STATUSES } from "@/api/handlers/chat/chat-turn-state";
+import { messageTurnTiming } from "@/api/handlers/chat/chat-turn-timing";
 import type {
   ChatMessageMetadata,
+  ChatTurnTiming,
   ChatMessageRole,
   ChatPart,
   PersistedChatMessageContent,
@@ -124,6 +126,10 @@ const loadChatMessagePageOnTx = async ({
       role: chatMessages.role,
       content: chatMessages.content,
       createdAt: chatMessages.createdAt,
+      turnTiming: messageTurnTiming({
+        messageId: chatMessages.id,
+        threadId: chatMessages.threadId,
+      }),
     })
     .from(chatMessages)
     .where(
@@ -231,6 +237,10 @@ export const loadClientMessages = async ({
         role: chatMessages.role,
         content: chatMessages.content,
         createdAt: chatMessages.createdAt,
+        turnTiming: messageTurnTiming({
+          messageId: chatMessages.id,
+          threadId: chatMessages.threadId,
+        }),
       })
       .from(chatMessages)
       .where(
@@ -250,6 +260,7 @@ type ChatMessagePageRow = {
   createdAt: Date;
   id: SafeId<"chatMessage">;
   role: ChatMessageRole;
+  turnTiming?: ChatTurnTiming | null;
 };
 
 export const clientMessageFromPageRow = (
@@ -257,10 +268,17 @@ export const clientMessageFromPageRow = (
   placeholderById: Map<string, string>,
 ): ClientMessage => {
   const message = chatMessageFromPersisted(row);
+  let metadata = message.metadata;
+  if (
+    row.turnTiming !== undefined &&
+    (row.turnTiming !== null || metadata !== undefined)
+  ) {
+    metadata = { ...metadata, turnTiming: row.turnTiming ?? undefined };
+  }
   return {
     createdAt: row.createdAt.toISOString(),
     id: message.id,
-    ...(message.metadata === undefined ? {} : { metadata: message.metadata }),
+    ...(metadata === undefined ? {} : { metadata }),
     role: message.role,
     parts: attachPlaceholders(message.parts, placeholderById),
   };

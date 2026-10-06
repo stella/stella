@@ -137,7 +137,13 @@ export type ChatTurnOutcome =
       reason: ChatTurnInterruptionReason;
     };
 
+export type ChatTurnTiming =
+  | { status: "running"; durationMs: number; startedAt: string }
+  | { status: "finished"; durationMs: number };
+
 export type ChatMessageMetadata = {
+  /** Server-owned active execution time; human interaction waits are excluded. */
+  turnTiming?: ChatTurnTiming | null | undefined;
   /** Server-owned generated-document draft binding. Incoming client metadata
    * deliberately does not accept this field. */
   activeDraftContext?: GeneratedDocumentActiveDraftContext | undefined;

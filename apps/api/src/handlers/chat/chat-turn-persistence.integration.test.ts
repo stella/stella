@@ -1,6 +1,6 @@
 import { Result } from "better-result";
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
-import { eq, inArray } from "drizzle-orm";
+import { eq, inArray, sql } from "drizzle-orm";
 
 import {
   ACTION_ADMISSION_CODES,
@@ -27,11 +27,16 @@ import {
   createChatTurnAcceptance,
   insertChatTurnAcceptanceOnTx,
   renewChatTurnExecutionLease,
+  readChatTurnTiming,
   settleChatTurnOnTx,
+  stopChatTurnOnTx,
   withClaimedChatTurnExecution,
 } from "@/api/handlers/chat/chat-turn-persistence";
 import type { ChatTurnExecutionClaim } from "@/api/handlers/chat/chat-turn-persistence";
-import { clientMessageFromPageRow } from "@/api/handlers/chat/message-page";
+import {
+  clientMessageFromPageRow,
+  loadChatMessagePage,
+} from "@/api/handlers/chat/message-page";
 import type { ChatPart, ChatTurnOutcome } from "@/api/handlers/chat/types";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -2102,4 +2107,289 @@ describe("settling a continuation reports a stored message that breaks the rules
       expect(await settleContinuation({ continued, run })).toEqual(reports);
     },
   );
+});
+
+describe("durable active turn timing", () => {
+  const resume = async (
+    fixture: Awaited<ReturnType<typeof seedAwaitingTurn>>,
+  ) => {
+    const execution = unwrap(
+      await claimChatTurnForExecution({
+        acceptedTurnId: null,
+        continuationInteraction: { toolCallId: "ask-1", type: "ask-user" },
+        incomingMessageId: fixture.assistantMessageId,
+        incomingMessageRole: "assistant",
+        organizationId: ids.orgA,
+        safeDb,
+        threadId: fixture.threadId,
+        userId: ids.userA1,
+        workspaceId: ids.wsA1,
+      }),
+    );
+    if (execution === null) {
+      throw new Error("Expected a timing continuation claim");
+    }
+    return execution;
+  };
+
+  test("continuations accumulate active spans and exclude the user pause", async () => {
+    const fixture = await seedAwaitingTurn();
+    await testDb
+      .update(chatTurns)
+      .set({ activeDurationMs: 2000 })
+      .where(eq(chatTurns.id, fixture.acceptance.id));
+    const execution = await resume(fixture);
+    const running = await testDb.query.chatTurns.findFirst({
+      where: { id: { eq: fixture.acceptance.id } },
+    });
+    expect(running?.activeDurationMs).toBe(2000);
+    expect(running?.activeStartedAt).toBeInstanceOf(Date);
+    expect(running?.timingMessageId).toBe(fixture.assistantMessageId);
+    expect(unwrap(await readChatTurnTiming({ execution, safeDb }))).toEqual({
+      status: "running",
+      durationMs: 2000,
+      startedAt: running?.activeStartedAt?.toISOString(),
+    });
+    unwrap(
+      await safeDb(async (tx) => {
+        await tx
+          .update(chatTurns)
+          .set({ activeStartedAt: sql`now() - interval '3 seconds'` })
+          .where(eq(chatTurns.id, fixture.acceptance.id));
+        expect(
+          await settleChatTurnOnTx({
+            assistantMessageId: fixture.assistantMessageId,
+            execution,
+            outcome: { type: "completed" },
+            tx,
+          }),
+        ).toBe("settled");
+        // Replaying a settlement is a fixed point, including its duration.
+        expect(
+          await settleChatTurnOnTx({
+            assistantMessageId: fixture.assistantMessageId,
+            execution,
+            outcome: { type: "completed" },
+            tx,
+          }),
+        ).toBe("not-owned");
+      }),
+    );
+    const settled = await testDb.query.chatTurns.findFirst({
+      where: { id: { eq: fixture.acceptance.id } },
+    });
+    expect(settled?.activeDurationMs).toBe(5000);
+    expect(unwrap(await readChatTurnTiming({ execution, safeDb }))).toEqual({
+      durationMs: 5000,
+      status: "finished",
+    });
+  });
+
+  test("all terminal outcomes close their active span and retain message timing ownership", async () => {
+    const outcomes = [
+      { type: "completed" },
+      { error: "unknown", type: "failed" },
+      { reason: "user-stop", type: "cancelled" },
+      { reason: "owner-lost", type: "interrupted" },
+    ] as const satisfies readonly ChatTurnOutcome[];
+    for (const outcome of outcomes) {
+      const fixture = await seedAwaitingTurn();
+      const execution = await resume(fixture);
+      unwrap(
+        await safeDb(async (tx) => {
+          await tx
+            .update(chatTurns)
+            .set({
+              activeDurationMs: 0,
+              activeStartedAt: sql`now() - interval '4 seconds'`,
+            })
+            .where(eq(chatTurns.id, fixture.acceptance.id));
+          expect(
+            await settleChatTurnOnTx({
+              assistantMessageId: fixture.assistantMessageId,
+              execution,
+              outcome,
+              tx,
+            }),
+          ).toBe("settled");
+        }),
+      );
+      const settled = await testDb.query.chatTurns.findFirst({
+        where: { id: { eq: fixture.acceptance.id } },
+      });
+      expect(settled?.timingMessageId).toBe(fixture.assistantMessageId);
+      expect(unwrap(await readChatTurnTiming({ execution, safeDb }))).toEqual({
+        durationMs: 4000,
+        status: "finished",
+      });
+    }
+  });
+
+  test("streaming and reload aggregate every turn producing the same message", async () => {
+    const fixture = await seedAwaitingTurn();
+    await testDb
+      .update(chatTurns)
+      .set({ activeDurationMs: 7000 })
+      .where(eq(chatTurns.id, fixture.acceptance.id));
+    const earlierTurnId = toSafeId<"chatTurn">(Bun.randomUUIDv7());
+    await testDb.insert(chatTurns).values({
+      id: earlierTurnId,
+      organizationId: ids.orgA,
+      userId: ids.userA1,
+      workspaceId: ids.wsA1,
+      userMessageId: fixture.userMessageId,
+      assistantMessageId: fixture.assistantMessageId,
+      timingMessageId: fixture.assistantMessageId,
+      threadId: fixture.threadId,
+      status: "completed",
+      settledAt: sql`now()`,
+      activeDurationMs: 4000,
+    });
+    const execution = await resume(fixture);
+    // Keep the presentation clock outside the precision boundary at now().
+    await testDb
+      .update(chatTurns)
+      .set({ activeStartedAt: sql`now() - interval '1 second'` })
+      .where(eq(chatTurns.id, fixture.acceptance.id));
+    const live = unwrap(await readChatTurnTiming({ execution, safeDb }));
+    expect(live?.durationMs).toBe(11_000);
+    expect(live?.status).toBe("running");
+    const page = unwrap(
+      await loadChatMessagePage({
+        threadId: fixture.threadId,
+        userId: ids.userA1,
+        safeDb,
+      }),
+    );
+    expect(
+      page.messages.find((message) => message.id === fixture.assistantMessageId)
+        ?.metadata?.turnTiming,
+    ).toEqual(live);
+    unwrap(
+      await safeDb(async (tx) => {
+        await tx
+          .update(chatTurns)
+          .set({ activeStartedAt: sql`now()` })
+          .where(eq(chatTurns.id, fixture.acceptance.id));
+        expect(
+          await settleChatTurnOnTx({
+            assistantMessageId: fixture.assistantMessageId,
+            execution,
+            outcome: { type: "completed" },
+            tx,
+          }),
+        ).toBe("settled");
+      }),
+    );
+    expect(unwrap(await readChatTurnTiming({ execution, safeDb }))).toEqual({
+      status: "finished",
+      durationMs: 11_000,
+    });
+    const settledPage = unwrap(
+      await loadChatMessagePage({
+        threadId: fixture.threadId,
+        userId: ids.userA1,
+        safeDb,
+      }),
+    );
+    expect(
+      settledPage.messages.find(
+        (message) => message.id === fixture.assistantMessageId,
+      )?.metadata?.turnTiming,
+    ).toEqual({ status: "finished", durationMs: 11_000 });
+    await testDb
+      .update(chatTurns)
+      .set({ activeDurationMs: null })
+      .where(eq(chatTurns.id, earlierTurnId));
+    expect(unwrap(await readChatTurnTiming({ execution, safeDb }))).toBeNull();
+    const unknownPage = unwrap(
+      await loadChatMessagePage({
+        threadId: fixture.threadId,
+        userId: ids.userA1,
+        safeDb,
+      }),
+    );
+    expect(
+      unknownPage.messages.find(
+        (message) => message.id === fixture.assistantMessageId,
+      )?.metadata?.turnTiming,
+    ).toBeUndefined();
+  });
+
+  test("stopping while awaiting the user preserves the closed active duration", async () => {
+    const fixture = await seedAwaitingTurn();
+    await testDb
+      .update(chatTurns)
+      .set({ activeDurationMs: 5000 })
+      .where(eq(chatTurns.id, fixture.acceptance.id));
+    unwrap(
+      await safeDb(async (tx) => {
+        expect(
+          await stopChatTurnOnTx({
+            threadId: fixture.threadId,
+            turnId: fixture.acceptance.id,
+            tx,
+          }),
+        ).toMatchObject({ type: "settled" });
+      }),
+    );
+    const page = unwrap(
+      await loadChatMessagePage({
+        threadId: fixture.threadId,
+        userId: ids.userA1,
+        safeDb,
+      }),
+    );
+    expect(
+      page.messages.find((message) => message.id === fixture.assistantMessageId)
+        ?.metadata?.turnTiming,
+    ).toEqual({ status: "finished", durationMs: 5000 });
+  });
+
+  test("unknown history and reversed clocks never invent a duration", async () => {
+    for (const timing of [
+      { activeDurationMs: null, activeStartedAt: null },
+      {
+        activeDurationMs: 2000,
+        activeStartedAt: sql`now() + interval '1 second'`,
+      },
+    ]) {
+      const fixture = await seedAwaitingTurn();
+      if (timing.activeDurationMs === null) {
+        await testDb
+          .update(chatTurns)
+          .set(timing)
+          .where(eq(chatTurns.id, fixture.acceptance.id));
+      }
+      const execution = await resume(fixture);
+      if (timing.activeDurationMs === null) {
+        expect(
+          unwrap(await readChatTurnTiming({ execution, safeDb })),
+        ).toBeNull();
+      }
+      unwrap(
+        await safeDb(async (tx) => {
+          await tx
+            .update(chatTurns)
+            .set(timing)
+            .where(eq(chatTurns.id, fixture.acceptance.id));
+          expect(
+            await settleChatTurnOnTx({
+              assistantMessageId: fixture.assistantMessageId,
+              execution,
+              outcome: { type: "completed" },
+              tx,
+            }),
+          ).toBe("settled");
+        }),
+      );
+      const settled = await testDb.query.chatTurns.findFirst({
+        where: { id: { eq: fixture.acceptance.id } },
+      });
+      expect(settled?.activeDurationMs).toBeNull();
+      expect(
+        unwrap(await readChatTurnTiming({ execution, safeDb })),
+      ).toBeNull();
+    }
+  });
 });

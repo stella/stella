@@ -1487,7 +1487,8 @@
       "toggleLabel": "Wyszukiwanie w sieci",
       "toggleOff": "Wyłącz wyszukiwanie w sieci",
       "toggleOn": "Włącz wyszukiwanie w sieci"
-    }
+    },
+    "workedFor": "Czas pracy: {duration}"
   },
   "clauses": {
     "addVariant": "Dodaj wariant",

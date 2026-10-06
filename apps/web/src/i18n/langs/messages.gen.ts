@@ -1491,6 +1491,7 @@ type Messages = {
       "toggleOff": "Turn off web search";
       "toggleOn": "Turn on web search";
     };
+    "workedFor": "Worked for {duration}";
   };
   "clauses": {
     "addVariant": "Add variant";

@@ -8,6 +8,7 @@ import {
   CHAT_TURN_INTERACTION_TYPES,
   CHAT_TURN_INTERRUPTION_REASONS,
   CHAT_TURN_STATUSES,
+  CHAT_TURN_TIMING_DISPOSITION,
 } from "@/api/handlers/chat/chat-turn-state";
 import {
   CHAT_THREAD_NAME_KIND,
@@ -67,6 +68,10 @@ const CHAT_COMPACTION_MEMORY_ELIGIBILITY_SQL_VALUES =
 const CHAT_TURN_STATUS_SQL_VALUES = CHAT_TURN_STATUSES.map((status) =>
   sql.raw(`'${status}'`),
 );
+
+const CHAT_TURN_TIMING_ACTIVE_SQL_VALUES = CHAT_TURN_STATUSES.filter(
+  (status) => CHAT_TURN_TIMING_DISPOSITION[status] !== "finished",
+).map((status) => sql`${status}`);
 
 const CHAT_THREAD_NAME_KIND_SQL_VALUES = CHAT_THREAD_NAME_KINDS.map((kind) =>
   sql.raw(`'${kind}'`),
@@ -370,6 +375,9 @@ export const chatTurns = p.pgTable(
       .references(() => chatThreads.id, { onDelete: "cascade" }),
     userMessageId: safeUuid<"chatMessage">("user_message_id").notNull(),
     assistantMessageId: safeUuid<"chatMessage">("assistant_message_id"),
+    timingMessageId: safeUuid<"chatMessage">("timing_message_id"),
+    activeDurationMs: p.bigint("active_duration_ms", { mode: "number" }),
+    activeStartedAt: timestamptz("active_started_at"),
     status: p.text({ enum: CHAT_TURN_STATUSES }).notNull().default("accepted"),
     executionId: p.uuid("execution_id"),
     leaseExpiresAt: timestamptz("lease_expires_at"),
@@ -414,6 +422,22 @@ export const chatTurns = p.pgTable(
         foreignColumns: [chatMessages.id, chatMessages.threadId],
       })
       .onDelete("cascade"),
+    p
+      .foreignKey({
+        name: "chat_turns_timing_message_thread_fk",
+        columns: [table.timingMessageId, table.threadId],
+        foreignColumns: [chatMessages.id, chatMessages.threadId],
+      })
+      .onDelete("cascade"),
+    p.check(
+      "chat_turns_active_timing_check",
+      sql`(${table.activeDurationMs} IS NULL AND ${table.activeStartedAt} IS NULL) OR
+        (${table.activeDurationMs} IS NOT NULL AND ${table.activeDurationMs} >= 0 AND
+          ((${table.status} IN (${sql.join(CHAT_TURN_TIMING_ACTIVE_SQL_VALUES, sql`, `)})) = (${table.activeStartedAt} IS NOT NULL)))`,
+    ),
+    p
+      .index("chat_turns_org_timing_message_idx")
+      .on(table.organizationId, table.timingMessageId),
     // RESTRICT mirrors the single-column workspace reference; a global turn
     // (workspace_id NULL) is exempt under MATCH SIMPLE.
     p
@@ -558,7 +582,9 @@ export const chatTurns = p.pgTable(
     p
       .index("chat_turns_org_active_lease_idx")
       .on(table.organizationId, table.status, table.leaseExpiresAt, table.id)
-      .where(sql`${table.status} IN ('accepted', 'running')`),
+      .where(
+        sql`${table.status} IN (${sql.join(CHAT_TURN_TIMING_ACTIVE_SQL_VALUES, sql`, `)})`,
+      ),
     ...chatTurnPolicies(),
   ],
 );

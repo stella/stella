@@ -1656,6 +1656,7 @@ const isChatMessageMetadataEmpty = (metadata: ChatMessageMetadata): boolean =>
   metadata.serverProvenance === undefined &&
   metadata.sourceDocuments === undefined &&
   metadata.turnOutcome === undefined &&
+  metadata.turnTiming === undefined &&
   metadata.usage === undefined;
 
 const safeStringifyToolArguments = (value: unknown): string => {

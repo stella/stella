@@ -1487,7 +1487,8 @@
       "toggleLabel": "Paieška internete",
       "toggleOff": "Išjungti paiešką internete",
       "toggleOn": "Įjungti paiešką internete"
-    }
+    },
+    "workedFor": "Darbo trukmė: {duration}"
   },
   "clauses": {
     "addVariant": "Pridėti variantą",

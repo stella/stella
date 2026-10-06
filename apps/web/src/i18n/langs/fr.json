@@ -1487,7 +1487,8 @@
       "toggleLabel": "Recherche web",
       "toggleOff": "Désactiver la recherche web",
       "toggleOn": "Activer la recherche web"
-    }
+    },
+    "workedFor": "Temps de travail : {duration}"
   },
   "clauses": {
     "addVariant": "Ajouter une variante",
