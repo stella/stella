@@ -107,7 +107,7 @@ describe("transient preview wire projection", () => {
     expect(await project(chunks)).toEqual(chunks);
   });
 
-  test("rejects unsupported preview parts before forwarding", async () => {
+  test("replaces unsupported preview parts with incomplete diagnostics", async () => {
     const chunks = normalizeStreamChunk({
       type: EventType.TOOL_CALL_END,
       toolCallId: "preview-call",
@@ -119,8 +119,81 @@ describe("transient preview wire projection", () => {
         },
       ],
     });
-    expect(await rejectionOf(project(chunks))).toMatchObject({
-      message: "Visual preview tool returned unsupported content parts",
-    });
+    const projected = await project(chunks);
+    expect(JSON.stringify(projected)).not.toContain(
+      "https://preview.invalid/example.png",
+    );
+    expect(JSON.stringify(projected)).toContain(
+      "Visual preview diagnostics incomplete",
+    );
   });
+
+  test.each(["error-event", "source-error", "abort"] as const)(
+    "keeps partial preview bytes private when the source ends with %s",
+    async (fault) => {
+      const terminalError = {
+        type: EventType.RUN_ERROR,
+        message: "Preview source failed",
+        code: "fixture_failure",
+      } as const;
+      const failure =
+        fault === "abort"
+          ? new DOMException("Preview source aborted", "AbortError")
+          : new Error("Preview source failed");
+      const emitted: PublicStreamChunk[] = [];
+      const lifecycle = { closed: false };
+      const source = async function* (): AsyncIterable<PublicStreamChunk> {
+        try {
+          yield* normalizeStreamChunk({
+            type: EventType.TOOL_CALL_END,
+            toolCallId: "preview-call",
+            toolName: VISUAL_PREVIEW_TOOL_NAME,
+            output: [
+              {
+                type: "image",
+                source: { type: "data", value: "iVBORw0KGgo=" },
+              },
+            ],
+          });
+          yield {
+            type: EventType.TOOL_CALL_RESULT,
+            toolCallId: "preview-call",
+            messageId: "assistant",
+            content: JSON.stringify(output).slice(0, -1),
+          };
+          if (fault === "error-event") {
+            yield terminalError;
+            return;
+          }
+          throw failure;
+        } finally {
+          lifecycle.closed = true;
+        }
+      };
+      const consume = async () => {
+        for await (const chunk of projectVisualPreviewStream(source())) {
+          emitted.push(chunk);
+        }
+      };
+      if (fault === "error-event") {
+        await consume();
+        expect(emitted.at(-1)).toBe(terminalError);
+      } else {
+        expect(await rejectionOf(consume())).toBe(failure);
+      }
+      expect(lifecycle.closed).toBe(true);
+      expect(JSON.stringify(emitted)).not.toContain("iVBORw0KGgo=");
+      expect(JSON.stringify(emitted)).toContain(
+        "screenshot omitted from history",
+      );
+      const cleanTurn = normalizeStreamChunk({
+        type: EventType.TOOL_CALL_END,
+        toolCallId: "preview-call",
+        toolName: "example_image",
+        output,
+        result: output,
+      });
+      expect(await project(cleanTurn)).toEqual(cleanTurn);
+    },
+  );
 });
