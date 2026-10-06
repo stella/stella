@@ -208,7 +208,7 @@ const expectedPrSelection = ({
   if (job === "ci-browser") {
     return (
       value.needs["ci-plan"]?.outputs["trusted"] === "true" &&
-      value.needs["ci-plan"]?.outputs["desktop_browser_required"] === "true"
+      value.needs["ci-plan"].outputs["desktop_browser_required"] === "true"
     );
   }
   switch (disposition) {
