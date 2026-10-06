@@ -119,6 +119,7 @@ const collectEvidenceReads = (source: string) => {
       ["findMany", "findFirst"].includes(node.expression.name.text) &&
       isEvidenceReader(node.expression.expression)
     ) {
+      contentProjection = true;
       sites.push(node.getText(file));
     }
     if (ts.isCallExpression(node) && isEvidenceReader(node.expression)) {
@@ -132,6 +133,7 @@ const collectEvidenceReads = (source: string) => {
         node.text,
       )
     ) {
+      contentProjection = true;
       sites.push(node.text);
     }
     ts.forEachChild(node, visit);
@@ -329,6 +331,8 @@ test("projection classification rejects aliased content and whole-table selectio
     'import { legalListClaims as claims } from "@/api/db/schema"; const all = getTableColumns(claims); tx.select(all).from(claims);',
     'import { legalListClaims as claims } from "@/api/db/schema"; tx.select({ ...getTableColumns(claims) }).from(claims);',
     "const claims = legalListClaims; tx.select({ ...claims }).from(claims);",
+    "tx.query.legalListClaims.findMany();",
+    "tx.execute(sql`SELECT * FROM legal_list_claims`);",
   ]) {
     expect(
       evidenceReadIssues({
