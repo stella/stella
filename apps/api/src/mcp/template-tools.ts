@@ -20,10 +20,9 @@ import { assertUsageAvailableForHandler } from "@/api/lib/api-handlers";
 import { arrayOrEmpty } from "@/api/lib/array";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
-  type AssertNoExtraFields,
   CONFIGURE_TEMPLATE_FIELDS_PROJECTION,
   CREATE_TEMPLATE_PROJECTION,
-  type LIST_TEMPLATES_LIST_PROJECTION,
+  LIST_TEMPLATES_LIST_PROJECTION,
   LIST_TEMPLATES_PROJECTION,
   type TEMPLATE_DESCRIBE_PROJECTION,
 } from "@/api/lib/chat/projections";
@@ -54,6 +53,10 @@ import {
   encodePaginationCursor,
   isUuidPaginationCursorPart,
 } from "@/api/lib/pagination";
+import {
+  type AssertNoExtraFields,
+  projectionPayload,
+} from "@/api/lib/projection-totality";
 import {
   brandPersistedEntityId,
   brandPersistedTemplateId,
@@ -1021,10 +1024,10 @@ const handleListTemplatesTool: TypedMcpToolHandler<
   // Templates are organization-scoped, so the org id is the anonymization
   // scope. Only the org-authored free text (name, usage guidance, tags) is
   // redacted; ids and field counts pass through.
-  const payload = {
+  const payload = projectionPayload(LIST_TEMPLATES_LIST_PROJECTION, {
     templates: page.items,
     nextCursor: page.nextCursor,
-  } satisfies v.InferInput<typeof LIST_TEMPLATES_LIST_PROJECTION>;
+  });
   const textFields = runTextFieldSpecs(
     buildTemplateListTextFieldSpecs(context.organizationId),
     payload,
@@ -1491,26 +1494,28 @@ const handleFillTemplateTool: McpToolHandler<
 
   if (parsed.output.output_mode === "docx") {
     const truncated = filled.text.length > TEMPLATE_FILL_TEXT_MAX_CHARS;
-    return toolDataResult({
-      completionStatus: completion.completionStatus,
-      templateName: filled.templateName,
-      fileName: filled.fileName,
-      text: truncated
-        ? filled.text.slice(0, TEMPLATE_FILL_TEXT_MAX_CHARS)
-        : filled.text,
-      truncated,
-      docxBase64: Buffer.from(filled.file.bytes).toString("base64"),
-      unmatchedPlaceholders: filled.unmatchedPlaceholders,
-      unusedValues: filled.unusedValues,
-      clauseWarnings: filled.clauseWarnings,
-      structureErrors: filled.structureErrors,
-      aiFieldErrors: filled.aiFieldErrors.map((error) => ({
-        field: error.valuePath,
-        reason: error.reason,
-        message: error.message,
-      })),
-      decisions: filled.conditionDecisions.map(toFillConditionDecision),
-    });
+    return toolDataResult(
+      projectionPayload(FILL_TEMPLATE_OUTPUT_SCHEMA, {
+        completionStatus: completion.completionStatus,
+        templateName: filled.templateName,
+        fileName: filled.fileName,
+        text: truncated
+          ? filled.text.slice(0, TEMPLATE_FILL_TEXT_MAX_CHARS)
+          : filled.text,
+        truncated,
+        docxBase64: Buffer.from(filled.file.bytes).toString("base64"),
+        unmatchedPlaceholders: filled.unmatchedPlaceholders,
+        unusedValues: filled.unusedValues,
+        clauseWarnings: filled.clauseWarnings,
+        structureErrors: filled.structureErrors,
+        aiFieldErrors: filled.aiFieldErrors.map((error) => ({
+          field: error.valuePath,
+          reason: error.reason,
+          message: error.message,
+        })),
+        decisions: filled.conditionDecisions.map(toFillConditionDecision),
+      }),
+    );
   }
 
   // The shared preview reader the template preview routes use: it flattens
@@ -1536,29 +1541,31 @@ const handleFillTemplateTool: McpToolHandler<
     renderedChars += paragraph.text.length;
   }
 
-  return toolDataResult({
-    completionStatus: completion.completionStatus,
-    templateName: filled.templateName,
-    fileName: filled.fileName,
-    paragraphs: rendered,
-    charCount,
-    truncated,
-    unmatchedPlaceholders: filled.unmatchedPlaceholders,
-    unusedValues: filled.unusedValues,
-    clauseWarnings: filled.clauseWarnings,
-    structureErrors: filled.structureErrors,
-    // Fields whose AI draft failed: they are unfilled in the document above,
-    // so an agent must supply them itself rather than treat the fill as done.
-    aiFieldErrors: filled.aiFieldErrors.map((error) => ({
-      field: error.valuePath,
-      reason: error.reason,
-      message: error.message,
-    })),
-    // What each AI-decided condition was settled on: an agent reading the
-    // paragraphs cannot tell an excluded block from one the template never
-    // carried, nor a decided `false` from a condition nothing could settle.
-    decisions: filled.conditionDecisions.map(toFillConditionDecision),
-  });
+  return toolDataResult(
+    projectionPayload(FILL_TEMPLATE_OUTPUT_SCHEMA, {
+      completionStatus: completion.completionStatus,
+      templateName: filled.templateName,
+      fileName: filled.fileName,
+      paragraphs: rendered,
+      charCount,
+      truncated,
+      unmatchedPlaceholders: filled.unmatchedPlaceholders,
+      unusedValues: filled.unusedValues,
+      clauseWarnings: filled.clauseWarnings,
+      structureErrors: filled.structureErrors,
+      // Fields whose AI draft failed: they are unfilled in the document above,
+      // so an agent must supply them itself rather than treat the fill as done.
+      aiFieldErrors: filled.aiFieldErrors.map((error) => ({
+        field: error.valuePath,
+        reason: error.reason,
+        message: error.message,
+      })),
+      // What each AI-decided condition was settled on: an agent reading the
+      // paragraphs cannot tell an excluded block from one the template never
+      // carried, nor a decided `false` from a condition nothing could settle.
+      decisions: filled.conditionDecisions.map(toFillConditionDecision),
+    }),
+  );
 };
 
 const resolveFilledDocxName = ({
@@ -1754,7 +1761,12 @@ const handleSaveFilledTemplateTool: McpToolHandler<
       case "claimed":
         return claim.value.claimToken;
       case "completed":
-        return toolDataResult(claim.value.result);
+        return toolDataResult(
+          projectionPayload(
+            SAVE_FILLED_TEMPLATE_OUTPUT_SCHEMA,
+            claim.value.result,
+          ),
+        );
       case "conflict":
         return structuredErrorResult({
           code: "validation_error",
@@ -2073,7 +2085,12 @@ const handleSaveFilledTemplateTool: McpToolHandler<
     await releaseClaim();
     return errorResult(persistence.value.message);
   }
-  return toolDataResult(persistence.value.value);
+  return toolDataResult(
+    projectionPayload(
+      SAVE_FILLED_TEMPLATE_OUTPUT_SCHEMA,
+      persistence.value.value,
+    ),
+  );
 };
 
 /**
@@ -2455,12 +2472,14 @@ const handleCreateTemplateTool: TypedMcpToolHandler<
     if (isToolErrorResult(described)) {
       return described;
     }
-    return toolDataResult({
-      templateId,
-      fieldCount: upserted.fieldCount,
-      ...described,
-      warnings: [...sourceWarnings, ...described.warnings],
-    });
+    return toolDataResult(
+      projectionPayload(CREATE_TEMPLATE_PROJECTION, {
+        templateId,
+        fieldCount: upserted.fieldCount,
+        ...described,
+        warnings: [...sourceWarnings, ...described.warnings],
+      }),
+    );
   }
 
   // The schema guarantees both on this branch: a create carries a name and a
@@ -2498,12 +2517,14 @@ const handleCreateTemplateTool: TypedMcpToolHandler<
     });
   }
 
-  return toolDataResult({
-    templateId: created.value.id,
-    fieldCount: created.value.fieldCount,
-    ...described,
-    warnings: [...sourceWarnings, ...described.warnings],
-  });
+  return toolDataResult(
+    projectionPayload(CREATE_TEMPLATE_PROJECTION, {
+      templateId: created.value.id,
+      fieldCount: created.value.fieldCount,
+      ...described,
+      warnings: [...sourceWarnings, ...described.warnings],
+    }),
+  );
 };
 
 /** The describe payload both `create_template` and `configure_template_fields`
@@ -2882,12 +2903,14 @@ const handleConfigureTemplateFieldsTool: TypedMcpToolHandler<
   if (isToolErrorResult(described)) {
     return described;
   }
-  return toolDataResult({
-    ...described,
-    issues: [...parsed.issues, ...serviceIssues].toSorted(
-      (left, right) => left.index - right.index,
-    ),
-  });
+  return toolDataResult(
+    projectionPayload(CONFIGURE_TEMPLATE_FIELDS_PROJECTION, {
+      ...described,
+      issues: [...parsed.issues, ...serviceIssues].toSorted(
+        (left, right) => left.index - right.index,
+      ),
+    }),
+  );
 };
 
 /** A stored template that could not be read: gone, its file refused by the
@@ -2994,7 +3017,13 @@ const handlePreviewTemplateConditionsTool: TypedMcpToolHandler<
     payload,
   );
 
-  return structuredEgressPlan({ payload, textFields });
+  return structuredEgressPlan({
+    payload: projectionPayload(
+      PREVIEW_TEMPLATE_CONDITIONS_OUTPUT_SCHEMA,
+      payload,
+    ),
+    textFields,
+  });
 };
 
 export const TEMPLATE_TOOL_HANDLERS = {

@@ -91,9 +91,13 @@ describe("output excess paths", () => {
     const untyped = () =>
       // @ts-expect-error -- no declared output type to check against
       toolDataResult({ facets: null });
+    const declaredOnly = () =>
+      // @ts-expect-error -- naming only the declared type would skip the check
+      toolDataResult<Declared>({ facets, total: { type: "not_counted" } });
 
     expect(handler().status).toBe("success");
     expect(plan().egress).toBe("structured");
     expect(untyped().status).toBe("success");
+    expect(declaredOnly().status).toBe("success");
   });
 });

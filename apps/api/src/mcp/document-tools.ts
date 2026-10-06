@@ -29,13 +29,13 @@ import {
   DELETED_TRUE_PROJECTION,
   LIST_DOCUMENTS_PROJECTION,
   LIST_PROPERTIES_PROJECTION,
-  type READ_DOCUMENT_DEFAULT_PROJECTION,
-  type READ_DOCUMENT_DIFF_PROJECTION,
+  READ_DOCUMENT_DEFAULT_PROJECTION,
+  READ_DOCUMENT_DIFF_PROJECTION,
   READ_DOCUMENT_PROJECTION,
-  type READ_DOCUMENT_VERSION_PROJECTION,
-  type SAVE_DOCUMENT_CREATE_PROJECTION,
+  READ_DOCUMENT_VERSION_PROJECTION,
+  SAVE_DOCUMENT_CREATE_PROJECTION,
   SAVE_DOCUMENT_PROJECTION,
-  type SAVE_DOCUMENT_UPDATE_PROJECTION,
+  SAVE_DOCUMENT_UPDATE_PROJECTION,
   SET_FIELD_VALUE_PROJECTION,
 } from "@/api/lib/chat/projections";
 import { createTimestampIdCursorCodec } from "@/api/lib/db-pagination";
@@ -62,6 +62,7 @@ import {
   decodePaginationCursor,
   encodePaginationCursor,
 } from "@/api/lib/pagination";
+import { projectionPayload } from "@/api/lib/projection-totality";
 import { normalizeTenantPageLimit } from "@/api/lib/rate-limit/action-size-limits";
 import {
   brandPersistedEntityId,
@@ -741,10 +742,10 @@ const handleListDocumentsTool: TypedMcpToolHandler<
 
   const documents = page.items.map(({ createdAt: _createdAt, ...doc }) => doc);
 
-  const payload = {
+  const payload = projectionPayload(LIST_DOCUMENTS_PROJECTION, {
     documents,
     nextCursor: page.nextCursor,
-  } satisfies v.InferInput<typeof LIST_DOCUMENTS_PROJECTION>;
+  });
   const textFields = runTextFieldSpecs(
     documentListTextFieldSpecs(workspaceId),
     payload,
@@ -1422,11 +1423,11 @@ const handleReadDocumentTool: TypedMcpToolHandler<
       baseResult.value,
       targetResult.value,
     );
-    const payload = {
+    const payload = projectionPayload(READ_DOCUMENT_DIFF_PROJECTION, {
       entityId,
       name: owner.name,
       diff: { baseVersionId, targetVersionId, segments },
-    } satisfies v.InferInput<typeof READ_DOCUMENT_DIFF_PROJECTION>;
+    });
 
     const textFields = runTextFieldSpecs(
       readDocumentDiffTextFieldSpecs(workspaceId),
@@ -1472,7 +1473,7 @@ const handleReadDocumentTool: TypedMcpToolHandler<
     }
     const { fields: versionFields, ...versionMeta } = versionRow;
 
-    const payload = {
+    const payload = projectionPayload(READ_DOCUMENT_VERSION_PROJECTION, {
       entityId,
       name: owner.name,
       version: {
@@ -1480,7 +1481,7 @@ const handleReadDocumentTool: TypedMcpToolHandler<
         createdAt: versionRow.createdAt.toISOString(),
         fields: versionFields,
       },
-    } satisfies v.InferInput<typeof READ_DOCUMENT_VERSION_PROJECTION>;
+    });
     const textFields = runTextFieldSpecs(
       readDocumentVersionDetailTextFieldSpecs(workspaceId),
       payload,
@@ -1517,7 +1518,7 @@ const handleReadDocumentTool: TypedMcpToolHandler<
     versionHistory = history;
   }
 
-  const payload = {
+  const payload = projectionPayload(READ_DOCUMENT_DEFAULT_PROJECTION, {
     entityId: current.entityId,
     kind: current.kind,
     name: current.name,
@@ -1530,7 +1531,7 @@ const handleReadDocumentTool: TypedMcpToolHandler<
           versionsNextCursor: versionHistory.nextCursor,
         }
       : {}),
-  } satisfies v.InferInput<typeof READ_DOCUMENT_DEFAULT_PROJECTION>;
+  });
 
   // Version history carries tenant-authored label/description; payload.versions
   // holds the same entry references runTextFieldSpecs reads from, so the
@@ -1759,9 +1760,11 @@ const createDocumentEntity = async ({
     return internalFailureResult(created.error);
   }
 
-  return toolDataResult({
-    entityId: created.value.entityId,
-  } satisfies v.InferInput<typeof SAVE_DOCUMENT_CREATE_PROJECTION>);
+  return toolDataResult(
+    projectionPayload(SAVE_DOCUMENT_CREATE_PROJECTION, {
+      entityId: created.value.entityId,
+    }),
+  );
 };
 
 /**
@@ -1972,9 +1975,11 @@ const updateDocumentEntity = async ({
     }
   }
 
-  return toolDataResult({
-    updated: true,
-  } satisfies v.InferInput<typeof SAVE_DOCUMENT_UPDATE_PROJECTION>);
+  return toolDataResult(
+    projectionPayload(SAVE_DOCUMENT_UPDATE_PROJECTION, {
+      updated: true,
+    }),
+  );
 };
 
 const handleSaveDocumentTool: TypedMcpToolHandler<
@@ -2108,9 +2113,11 @@ const handleDeleteDocumentTool: TypedMcpToolHandler<
     if (Result.isError(deleted)) {
       return internalFailureResult(deleted.error);
     }
-    return toolDataResult({
-      deleted: true,
-    } satisfies v.InferInput<typeof DELETED_TRUE_PROJECTION>);
+    return toolDataResult(
+      projectionPayload(DELETED_TRUE_PROJECTION, {
+        deleted: true,
+      }),
+    );
   }
 
   if (!hasEffectiveAuthority(context, { entity: ["delete"] })) {
@@ -2128,9 +2135,11 @@ const handleDeleteDocumentTool: TypedMcpToolHandler<
   if (Result.isError(deleted)) {
     return internalFailureResult(deleted.error);
   }
-  return toolDataResult({
-    deleted: true,
-  } satisfies v.InferInput<typeof DELETED_TRUE_PROJECTION>);
+  return toolDataResult(
+    projectionPayload(DELETED_TRUE_PROJECTION, {
+      deleted: true,
+    }),
+  );
 };
 
 const listPropertiesArgsSchema = nullAsAbsent(
@@ -2229,10 +2238,10 @@ const handleListPropertiesTool: TypedMcpToolHandler<
     writeMethod: PROPERTY_WRITE_METHODS[property.content.type],
   }));
 
-  const payload = {
+  const payload = projectionPayload(LIST_PROPERTIES_PROJECTION, {
     properties: propertyList,
     nextCursor: page.nextCursor,
-  } satisfies v.InferInput<typeof LIST_PROPERTIES_PROJECTION>;
+  });
   const textFields = runTextFieldSpecs(
     propertyListTextFieldSpecs(workspaceId),
     payload,
@@ -2406,9 +2415,7 @@ const handleSetFieldValueTool: TypedMcpToolHandler<
     return internalFailureResult(result.error);
   }
 
-  return toolDataResult(
-    {} satisfies v.InferInput<typeof SET_FIELD_VALUE_PROJECTION>,
-  );
+  return toolDataResult(projectionPayload(SET_FIELD_VALUE_PROJECTION, {}));
 };
 
 export const DOCUMENT_TOOL_DEFINITIONS = [

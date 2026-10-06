@@ -430,7 +430,13 @@ export type McpCompatSearchResult =
       url: string;
       workspaceId: string;
     }
-  | { kind: "corpus"; id: string; title: string; url: string };
+  | {
+      kind: "corpus";
+      id: string;
+      title: string;
+      url: string;
+      source_url?: string;
+    };
 
 /**
  * What one compat fetch is reading, and therefore whether its text is
@@ -546,6 +552,7 @@ export type McpEgressPlan<TPayload = unknown> =
     }
   | {
       egress: "compatFetch";
+      source_url?: string;
       cursor: string | undefined;
       id: string;
       maxChars: number;

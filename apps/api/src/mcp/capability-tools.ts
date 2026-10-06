@@ -29,6 +29,7 @@ import {
   decodePaginationCursor,
   encodePaginationCursor,
 } from "@/api/lib/pagination";
+import { projectionPayload } from "@/api/lib/projection-totality";
 import {
   VALIDATED_INPUT_SERVICE_CLASSIFICATION,
   isServiceClassification,
@@ -1000,7 +1001,7 @@ const listCapabilitiesHandler: McpToolHandler<
       : null;
 
   return structuredEgressPlan({
-    payload: {
+    payload: projectionPayload(LIST_CAPABILITIES_OUTPUT_SCHEMA, {
       items: page.map((entry) => ({
         id: entry.id,
         summary: scopeMcpDescriptorProse(summarizeEntry(entry), hiddenIds),
@@ -1017,7 +1018,7 @@ const listCapabilitiesHandler: McpToolHandler<
       })),
       nextCursor,
       limit,
-    },
+    }),
     textFields: [],
   });
 };
@@ -1191,7 +1192,7 @@ const describeCapabilityHandler: McpToolHandler<
       : schema;
 
   return structuredEgressPlan({
-    payload: {
+    payload: projectionPayload(DESCRIBE_CAPABILITY_OUTPUT_SCHEMA, {
       id: entry.id,
       description:
         entry.description === undefined
@@ -1216,7 +1217,7 @@ const describeCapabilityHandler: McpToolHandler<
         hiddenIds.size === 0
           ? inputSchema
           : scopeSchemaAnnotations(inputSchema, hiddenIds),
-    },
+    }),
     textFields: [],
   });
 };

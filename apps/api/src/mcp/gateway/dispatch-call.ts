@@ -17,13 +17,14 @@ import {
   isExternalMcpToolName,
   isSkillToolName,
 } from "@/api/lib/mcp-upstream/namespace";
+import { projectionPayload } from "@/api/lib/projection-totality";
 import type { McpMode } from "@/api/mcp/constants";
 import type { McpRequestContext } from "@/api/mcp/context";
 import {
   SKILL_TOOL_INPUT,
+  SKILL_TOOL_OUTPUT,
   SKILL_TOOL_OUTPUT_TYPE,
 } from "@/api/mcp/gateway/dynamic-tool-policy";
-import type { SkillToolOutput } from "@/api/mcp/gateway/dynamic-tool-policy";
 import {
   callGatewayExternalMcpTool,
   gatewayLoadErrorResult,
@@ -235,31 +236,35 @@ export const dispatchGatewayToolCall = async ({
       // validates the served value against the same Valibot source at runtime.
       return {
         type: "internal",
-        result: toolDataResult({
-          type: SKILL_TOOL_OUTPUT_TYPE.skill,
-          body: read.skill.body,
-          compatibility: read.skill.compatibility,
-          id: chatSkillId(read.skill),
-          license: read.skill.license,
-          metadata: read.skill.metadata,
-          name: read.skill.name,
-          origin: chatSkillOrigin(read.skill),
-          resources: read.skill.resources,
-          version: read.skill.version,
-        } satisfies SkillToolOutput),
+        result: toolDataResult(
+          projectionPayload(SKILL_TOOL_OUTPUT.outputSchemaSource, {
+            type: SKILL_TOOL_OUTPUT_TYPE.skill,
+            body: read.skill.body,
+            compatibility: read.skill.compatibility,
+            id: chatSkillId(read.skill),
+            license: read.skill.license,
+            metadata: read.skill.metadata,
+            name: read.skill.name,
+            origin: chatSkillOrigin(read.skill),
+            resources: read.skill.resources,
+            version: read.skill.version,
+          }),
+        ),
       };
     case SKILL_TOOL_READ_TYPE.resource:
       await auditRead(SKILL_READ_OUTCOME.success);
       return {
         type: "internal",
-        result: toolDataResult({
-          type: SKILL_TOOL_OUTPUT_TYPE.resource,
-          content: read.content,
-          id: chatSkillId(read.skill),
-          kind: read.kind,
-          name: read.skill.name,
-          path: read.path,
-        } satisfies SkillToolOutput),
+        result: toolDataResult(
+          projectionPayload(SKILL_TOOL_OUTPUT.outputSchemaSource, {
+            type: SKILL_TOOL_OUTPUT_TYPE.resource,
+            content: read.content,
+            id: chatSkillId(read.skill),
+            kind: read.kind,
+            name: read.skill.name,
+            path: read.path,
+          }),
+        ),
       };
     default: {
       read satisfies never;
