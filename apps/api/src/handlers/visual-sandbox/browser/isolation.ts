@@ -59,11 +59,6 @@ const createIsolationPrimitives = () => {
   const prototypeOf = Object.getPrototypeOf;
   const get = Reflect.get;
   const stringify = String;
-  const instanceOf = Function.prototype[Symbol.hasInstance];
-  const NodeType = Node;
-  const ElementType = Element;
-  const FragmentType = DocumentFragment;
-  const DocumentTypeConstructor = Document;
   const TemplateType = HTMLTemplateElement;
   const ExceptionType = DOMException;
   const ObserverType = MutationObserver;
@@ -71,6 +66,8 @@ const createIsolationPrimitives = () => {
   const remove = Element.prototype.remove;
   const nodeItem = NodeList.prototype.item;
   const tagName = descriptorOf(Element.prototype, "tagName")?.get;
+  const nodeType = descriptorOf(Node.prototype, "nodeType")?.get;
+  const namespace = descriptorOf(Element.prototype, "namespaceURI")?.get;
   const templateContent = descriptorOf(TemplateType.prototype, "content")?.get;
   const innerHtml = descriptorOf(Element.prototype, "innerHTML");
   const selectors = DocumentFragment.prototype.querySelectorAll;
@@ -83,10 +80,19 @@ const createIsolationPrimitives = () => {
       "SecurityError",
     );
   };
-  if (!tagName || !templateContent || !innerHtml?.get || !innerHtml.set) {
+  if (
+    !tagName ||
+    !nodeType ||
+    !namespace ||
+    !templateContent ||
+    !innerHtml?.get ||
+    !innerHtml.set
+  ) {
     return reject();
   }
   const readTagName = tagName;
+  const readNodeType = nodeType;
+  const readNamespace = namespace;
   const readTemplateContent = templateContent;
   const readHtml = innerHtml.get;
   const setHtml = innerHtml.set;
@@ -97,10 +103,21 @@ const createIsolationPrimitives = () => {
   const normalize = (value: string) => apply(lower, apply(trim, value, []), []);
   const attr = (element: Element, name: string): string =>
     apply(attribute, element, [name]) ?? "";
+  // Native brand checks also work after a page changes a node's prototype.
+  // Object arguments that are not DOM nodes are refused by these wrappers.
+  const isNode = (value: unknown): value is Node => {
+    if (typeof value !== "object" || value === null) {
+      return false;
+    }
+    apply(readNodeType, value, []);
+    return true;
+  };
   const isElement = (node: unknown): node is Element =>
-    apply(instanceOf, ElementType, [node]);
-  const isNode = (node: unknown): node is Node =>
-    apply(instanceOf, NodeType, [node]);
+    isNode(node) && apply(readNodeType, node, []) === 1;
+  const isTemplate = (node: Node) =>
+    isElement(node) &&
+    normalize(apply(readTagName, node, [])) === "template" &&
+    apply(readNamespace, node, []) === "http://www.w3.org/1999/xhtml";
   const isProhibited = (element: Element) => {
     const tag = normalize(apply(readTagName, element, []));
     switch (tag) {
@@ -131,18 +148,15 @@ const createIsolationPrimitives = () => {
   };
   const inspect = (node: Node) => {
     const elementNode = isElement(node);
-    const documentNode = apply(instanceOf, DocumentTypeConstructor, [node]);
-    if (
-      !elementNode &&
-      !documentNode &&
-      !apply(instanceOf, FragmentType, [node])
-    ) {
+    const kind: number = apply(readNodeType, node, []);
+    const documentNode = kind === 9;
+    if (!elementNode && !documentNode && kind !== 11) {
       return;
     }
     if (isElement(node) && isProhibited(node)) {
       reject();
     }
-    if (apply(instanceOf, TemplateType, [node])) {
+    if (isTemplate(node)) {
       inspect(apply(readTemplateContent, node, []));
     }
     // Native selector results are private snapshots; page-owned NodeList
@@ -162,7 +176,7 @@ const createIsolationPrimitives = () => {
       if (isProhibited(element)) {
         reject();
       }
-      if (apply(instanceOf, TemplateType, [element])) {
+      if (isTemplate(element)) {
         inspect(apply(readTemplateContent, element, []));
       }
     }
