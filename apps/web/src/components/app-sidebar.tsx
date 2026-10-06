@@ -62,6 +62,7 @@ import { cn } from "@stll/ui/utils";
 import {
   matterActivityIsKnownEmpty,
   matterActivityItemVisible,
+  matterActivityNeedsLegalListsDecision,
   resolveEntityActivityDestination,
   resolveAutomaticExpandedMatterId,
   resolveMatterNavigationTarget,
@@ -1156,7 +1157,11 @@ const MatterItem = ({
     () => queryClient.getQueryState(activityQueryKey)?.isInvalidated ?? false,
     () => false,
   );
-  const legalListsEnabled = useCallerFeatureEnabled(CALLER_FEATURE.legalLists);
+  const legalListsEnabled = useCallerFeatureEnabled(CALLER_FEATURE.legalLists, {
+    enabled: matterActivityNeedsLegalListsDecision(
+      cachedActivity?.pages.flatMap((page) => page.items) ?? [],
+    ),
+  });
   const activityIsKnownEmpty = matterActivityIsKnownEmpty({
     isInvalidated: activityIsInvalidated,
     pages: cachedActivity?.pages.map((page) => ({
@@ -1590,12 +1595,13 @@ const MatterActivityList = ({
     }),
     enabled: mounted,
   });
-  const legalListsEnabled = useCallerFeatureEnabled(CALLER_FEATURE.legalLists);
-  const items = data
-    ? data.pages
-        .flatMap((page) => page.items)
-        .filter((item) => matterActivityItemVisible(item, legalListsEnabled))
-    : [];
+  const activityItems = data?.pages.flatMap((page) => page.items) ?? [];
+  const legalListsEnabled = useCallerFeatureEnabled(CALLER_FEATURE.legalLists, {
+    enabled: matterActivityNeedsLegalListsDecision(activityItems),
+  });
+  const items = activityItems.filter((item) =>
+    matterActivityItemVisible(item, legalListsEnabled),
+  );
 
   const openEntity = async ({
     entityKind,
