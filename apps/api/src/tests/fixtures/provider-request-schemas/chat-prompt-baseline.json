@@ -24,6 +24,10 @@
       {
         "reason": "Citation tools state the Stella reader link (url) and the publisher source (source_url) once, merged with main's prompt changes",
         "tokens": 34134
+      },
+      {
+        "reason": "legal-list feature access narrows discovery schema",
+        "tokens": 33884
       }
     ],
     "anthropic/extended": [
@@ -50,6 +54,10 @@
       {
         "reason": "Citation tools state the Stella reader link (url) and the publisher source (source_url) once, merged with main's prompt changes",
         "tokens": 34624
+      },
+      {
+        "reason": "legal-list feature access narrows discovery schema",
+        "tokens": 34373
       }
     ],
     "bedrock/default": [
@@ -76,6 +84,10 @@
       {
         "reason": "Citation tools state the Stella reader link (url) and the publisher source (source_url) once, merged with main's prompt changes",
         "tokens": 34367
+      },
+      {
+        "reason": "legal-list feature access narrows discovery schema",
+        "tokens": 34117
       }
     ],
     "bedrock/extended": [
@@ -102,6 +114,10 @@
       {
         "reason": "Citation tools state the Stella reader link (url) and the publisher source (source_url) once, merged with main's prompt changes",
         "tokens": 34855
+      },
+      {
+        "reason": "legal-list feature access narrows discovery schema",
+        "tokens": 34605
       }
     ],
     "google/default": [
@@ -128,6 +144,10 @@
       {
         "reason": "Citation tools state the Stella reader link (url) and the publisher source (source_url) once, merged with main's prompt changes",
         "tokens": 33264
+      },
+      {
+        "reason": "legal-list feature access narrows discovery schema",
+        "tokens": 33038
       }
     ],
     "google/extended": [
@@ -176,6 +196,10 @@
       {
         "reason": "Citation tools state the Stella reader link (url) and the publisher source (source_url) once, merged with main's prompt changes",
         "tokens": 35754
+      },
+      {
+        "reason": "legal-list feature access narrows discovery schema",
+        "tokens": 35477
       }
     ],
     "mistral/extended": [
@@ -202,6 +226,10 @@
       {
         "reason": "Citation tools state the Stella reader link (url) and the publisher source (source_url) once, merged with main's prompt changes",
         "tokens": 36280
+      },
+      {
+        "reason": "legal-list feature access narrows discovery schema",
+        "tokens": 36002
       }
     ],
     "openai/default": [
@@ -228,6 +256,10 @@
       {
         "reason": "Citation tools state the Stella reader link (url) and the publisher source (source_url) once, merged with main's prompt changes",
         "tokens": 35357
+      },
+      {
+        "reason": "legal-list feature access narrows discovery schema",
+        "tokens": 35079
       }
     ],
     "openai/extended": [
@@ -254,6 +286,10 @@
       {
         "reason": "Citation tools state the Stella reader link (url) and the publisher source (source_url) once, merged with main's prompt changes",
         "tokens": 35871
+      },
+      {
+        "reason": "legal-list feature access narrows discovery schema",
+        "tokens": 35594
       }
     ],
     "openrouter-anthropic/default": [
@@ -280,6 +316,10 @@
       {
         "reason": "Citation tools state the Stella reader link (url) and the publisher source (source_url) once, merged with main's prompt changes",
         "tokens": 35220
+      },
+      {
+        "reason": "legal-list feature access narrows discovery schema",
+        "tokens": 34962
       }
     ],
     "openrouter-anthropic/extended": [
@@ -306,6 +346,10 @@
       {
         "reason": "Citation tools state the Stella reader link (url) and the publisher source (source_url) once, merged with main's prompt changes",
         "tokens": 35719
+      },
+      {
+        "reason": "legal-list feature access narrows discovery schema",
+        "tokens": 35461
       }
     ],
     "openrouter/default": [
@@ -332,6 +376,10 @@
       {
         "reason": "Citation tools state the Stella reader link (url) and the publisher source (source_url) once, merged with main's prompt changes",
         "tokens": 35220
+      },
+      {
+        "reason": "legal-list feature access narrows discovery schema",
+        "tokens": 34962
       }
     ],
     "openrouter/extended": [
@@ -358,6 +406,10 @@
       {
         "reason": "Citation tools state the Stella reader link (url) and the publisher source (source_url) once, merged with main's prompt changes",
         "tokens": 35719
+      },
+      {
+        "reason": "legal-list feature access narrows discovery schema",
+        "tokens": 35461
       }
     ]
   },
