@@ -297,24 +297,30 @@ type ScopeOptions = {
 const expectScope = ({ current, base }: ScopeOptions) => {
   const { if: condition, ...scope } = current;
   const { if: originalCondition, ...originalScope } = base;
+  const originalEnvironment =
+    originalScope["env"] === undefined
+      ? undefined
+      : v.parse(v.record(v.string(), v.unknown()), originalScope["env"]);
   const hydrationDependency =
     originalScope["needs"] === "ci-plan" &&
-    Array.isArray(scope["needs"]) &&
-    scope["needs"].length === 2 &&
-    scope["needs"].at(0) === "ci-plan" &&
-    scope["needs"].at(1) === "ci-generated-sources";
+    isDeepStrictEqual(scope["needs"], ["ci-plan", "ci-generated-sources"]) &&
+    !Object.hasOwn(
+      originalEnvironment ?? {},
+      "CI_GENERATED_SOURCES_MANIFEST",
+    ) &&
+    isDeepStrictEqual(scope["env"], {
+      ...originalEnvironment,
+      CI_GENERATED_SOURCES_MANIFEST: `\${{ github.workspace }}/.cache/ci-generated-sources/manifest.json`,
+    });
   const migrated = { ...scope };
+  // Normalize only an added handoff. A baseline that owns it must retain it.
   if (hydrationDependency) {
     migrated["needs"] = "ci-plan";
-  }
-  if (
-    originalScope["env"] === undefined &&
-    JSON.stringify(migrated["env"]) ===
-      JSON.stringify({
-        CI_GENERATED_SOURCES_MANIFEST: `\${{ github.workspace }}/.cache/ci-generated-sources/manifest.json`,
-      })
-  ) {
-    delete migrated["env"];
+    if (originalEnvironment === undefined) {
+      delete migrated["env"];
+    } else {
+      migrated["env"] = originalEnvironment;
+    }
   }
   expect(migrated).toEqual(originalScope);
   if (condition === originalCondition) {
@@ -554,7 +560,13 @@ test("CI check scope permits only the heavy-only wrapper around the unchanged co
   expectScope({ current: base, base });
   expectScope({ current: wrapped, base });
   expectScope({
-    current: { ...wrapped, needs: ["ci-plan", "ci-generated-sources"] },
+    current: {
+      ...wrapped,
+      needs: ["ci-plan", "ci-generated-sources"],
+      env: {
+        CI_GENERATED_SOURCES_MANIFEST: `\${{ github.workspace }}/.cache/ci-generated-sources/manifest.json`,
+      },
+    },
     base,
   });
   for (const condition of [
@@ -589,6 +601,83 @@ test("CI check scope permits only the heavy-only wrapper around the unchanged co
   expect(() => expectScope({ current: missingCondition, base })).toThrow(
     "Invalid type",
   );
+});
+
+test("CI check scope migrates only the complete producer handoff and preserves an existing handoff", () => {
+  for (const environment of [
+    undefined,
+    {},
+    { REQUIRED_SETTING: "unchanged" },
+  ]) {
+    const base = {
+      if: "needs.ci-plan.outputs.trusted == 'true'",
+      needs: "ci-plan",
+      ...(environment === undefined ? {} : { env: environment }),
+      permissions: { contents: "read" },
+      "runs-on": "ubuntu-latest",
+    };
+    const handoff = {
+      ...base,
+      needs: ["ci-plan", "ci-generated-sources"],
+      env: {
+        ...environment,
+        CI_GENERATED_SOURCES_MANIFEST: `\${{ github.workspace }}/.cache/ci-generated-sources/manifest.json`,
+      },
+    };
+    expectScope({ current: handoff, base });
+    expectScope({ current: handoff, base: handoff });
+    expectScope({
+      current: {
+        ...handoff,
+        if: `inputs.heavy_only != true && (${handoff.if})`,
+      },
+      base: handoff,
+    });
+    const incomplete = [
+      { ...handoff, env: environment },
+      { ...handoff, needs: "ci-plan" },
+      { ...handoff, needs: ["ci-generated-sources", "ci-plan"] },
+      { ...handoff, needs: ["ci-plan", "ci-generated-sources", "unrelated"] },
+      {
+        ...handoff,
+        env: { ...handoff.env, CI_GENERATED_SOURCES_MANIFEST: "different" },
+      },
+      { ...handoff, env: { ...handoff.env, UNRELATED_SETTING: "added" } },
+    ];
+    for (const current of incomplete) {
+      expect(() => expectScope({ current, base })).toThrow("toEqual");
+      expect(() => expectScope({ current, base: handoff })).toThrow("toEqual");
+    }
+    expect(() => expectScope({ current: base, base: handoff })).toThrow(
+      "toEqual",
+    );
+  }
+});
+
+test("producer scope regression rejects a mutation that normalizes an already-owned handoff", () => {
+  const source = expectScope.toString();
+  const mutant = source.replace(/if\s*\(hydrationDependency\)/u, "if (true)");
+  expect(mutant).not.toBe(source);
+  const handoff = {
+    if: "needs.ci-plan.outputs.trusted == 'true'",
+    needs: ["ci-plan", "ci-generated-sources"],
+    env: {
+      CI_GENERATED_SOURCES_MANIFEST: `\${{ github.workspace }}/.cache/ci-generated-sources/manifest.json`,
+    },
+  };
+  expectScope({ current: handoff, base: handoff });
+  expect(() =>
+    runInContext(
+      `(${mutant})(options)`,
+      createContext({
+        expect,
+        v,
+        isDeepStrictEqual,
+        conditionTokens,
+        options: { current: handoff, base: handoff },
+      }),
+    ),
+  ).toThrow("toEqual");
 });
 
 test("CI check scope preserves whitespace inside quoted condition values", () => {
