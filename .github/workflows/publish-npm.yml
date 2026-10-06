@@ -116,7 +116,23 @@ jobs:
       eligible: ${{ steps.source.outputs.eligible }}
       release_ref: ${{ steps.source.outputs.release_ref }}
       release_sha: ${{ steps.source.outputs.release_sha }}
+    env:
+      GH_RETRY_SCRIPT: ${{ runner.temp }}/gh-retry.sh
+
     steps:
+      - name: Checkout GitHub API tooling
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: ${{ github.repository }}
+          ref: ${{ github.workflow_sha }}
+          path: .gh-retry
+          persist-credentials: false
+          sparse-checkout: scripts/gh-retry.sh
+          sparse-checkout-cone-mode: false
+
+      - name: Preserve GitHub API tooling across source checkouts
+        run: cp "$GITHUB_WORKSPACE/.gh-retry/scripts/gh-retry.sh" "$GH_RETRY_SCRIPT"
+
       - name: Resolve upstream release receipt
         id: source
         env:
@@ -139,7 +155,7 @@ jobs:
           fi
 
           receipt_dir="${RUNNER_TEMP}/release-source-receipt"
-          gh run download "$UPSTREAM_RUN_ID" \
+          bash "$GH_RETRY_SCRIPT" run download "$UPSTREAM_RUN_ID" \
             --repo "$GITHUB_REPOSITORY" \
             --name release-source-receipt \
             --dir "$receipt_dir"
@@ -167,9 +183,9 @@ jobs:
               echo "::error::Upstream tag push does not match the release receipt." >&2
               exit 1
             fi
-            tag_object="$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/tags/${release_ref}" --jq '.object.type + " " + .object.sha')"
+            tag_object="$(bash "$GH_RETRY_SCRIPT" api "repos/${GITHUB_REPOSITORY}/git/ref/tags/${release_ref}" --jq '.object.type + " " + .object.sha')"
             if [[ "$tag_object" == tag\ * ]]; then
-              tag_sha="$(gh api "repos/${GITHUB_REPOSITORY}/git/tags/${tag_object#tag }" --jq 'select(.object.type == "commit") | .object.sha')"
+              tag_sha="$(bash "$GH_RETRY_SCRIPT" api "repos/${GITHUB_REPOSITORY}/git/tags/${tag_object#tag }" --jq 'select(.object.type == "commit") | .object.sha')"
             else
               tag_sha="${tag_object#commit }"
             fi
@@ -177,7 +193,7 @@ jobs:
               echo "::error::${release_ref} does not resolve to the receipt's release_sha in ${GITHUB_REPOSITORY}." >&2
               exit 1
             fi
-            on_default="$(gh api "repos/${GITHUB_REPOSITORY}/compare/${release_sha}...${DEFAULT_BRANCH}" --jq '.status')"
+            on_default="$(bash "$GH_RETRY_SCRIPT" api "repos/${GITHUB_REPOSITORY}/compare/${release_sha}...${DEFAULT_BRANCH}" --jq '.status')"
             if [[ "$on_default" != "ahead" && "$on_default" != "identical" ]]; then
               echo "::error::release_sha is not on ${DEFAULT_BRANCH}." >&2
               exit 1

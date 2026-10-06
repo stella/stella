@@ -1025,6 +1025,7 @@ const resultGateCase = ({
     script: outcomeScript,
     args: [],
     env: {
+      GH_RETRY_SCRIPT: nodePath.resolve(import.meta.dir, "gh-retry.sh"),
       EVENT: event,
       QUEUE_DEPTH: "full",
       THIN_JOBS: "[]",

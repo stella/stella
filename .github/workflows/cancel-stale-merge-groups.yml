@@ -34,7 +34,23 @@ jobs:
     permissions:
       actions: write
       contents: read
+    env:
+      GH_RETRY_SCRIPT: ${{ runner.temp }}/gh-retry.sh
+
     steps:
+      - name: Checkout GitHub API tooling
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: ${{ github.repository }}
+          ref: ${{ github.workflow_sha }}
+          path: .gh-retry
+          persist-credentials: false
+          sparse-checkout: scripts/gh-retry.sh
+          sparse-checkout-cone-mode: false
+
+      - name: Preserve GitHub API tooling across source checkouts
+        run: cp "$GITHUB_WORKSPACE/.gh-retry/scripts/gh-retry.sh" "$GH_RETRY_SCRIPT"
+
       - name: Cancel merge_group runs whose branch no longer exists
         env:
           DRY_RUN: ${{ inputs.dry-run == true }}
@@ -43,7 +59,7 @@ jobs:
         run: |
           set -euo pipefail
           for status in queued in_progress; do
-            gh api --paginate \
+            bash "$GH_RETRY_SCRIPT" api --paginate \
               "repos/$REPO/actions/runs?event=merge_group&status=$status&per_page=100" \
               --jq '.workflow_runs[] | "\(.id) \(.head_branch)"'
           done | sort -u | while read -r run_id branch; do
@@ -63,6 +79,6 @@ jobs:
             echo "Cancelling run $run_id: $branch no longer exists."
             # Force-cancel also stops `if: always()` jobs, which have nothing
             # to report for a group the queue has already discarded.
-            gh api --method POST "repos/$REPO/actions/runs/$run_id/force-cancel" > /dev/null \
+            bash "$GH_RETRY_SCRIPT" api --method POST "repos/$REPO/actions/runs/$run_id/force-cancel" > /dev/null \
               || echo "::warning::Could not cancel run $run_id ($branch)."
           done

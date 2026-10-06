@@ -1994,11 +1994,14 @@ const runGhProcess = (
   args: readonly string[],
   access: "read" | "write" = "read",
 ) =>
-  Bun.spawnSync(["gh", ...args], {
-    env: githubEnvironment(access),
-    stdout: "pipe",
-    stderr: "pipe",
-  });
+  Bun.spawnSync(
+    ["bash", fileURLToPath(new URL("gh-retry.sh", import.meta.url)), ...args],
+    {
+      env: githubEnvironment(access),
+      stdout: "pipe",
+      stderr: "pipe",
+    },
+  );
 
 const runGh = (
   args: readonly string[],
@@ -2461,7 +2464,7 @@ const createGhGateway = ({
       if (result.exitCode === 0) {
         return result.stdout.toString();
       }
-      if (result.stderr.toString().includes("(HTTP 404)")) {
+      if (result.stderr.toString().includes("HTTP 404")) {
         return null;
       }
       return panic(

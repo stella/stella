@@ -22,7 +22,7 @@ set -uo pipefail
 
 script_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 repo_root="$(cd "$script_dir/.." && pwd)"
-cd "$repo_root"
+cd "$repo_root" || exit 1
 
 affected_flag="--affected"
 base_ref=""
@@ -439,6 +439,7 @@ run_failure_as_empty_guard() {
 run_step "Failure-as-empty baseline" run_failure_as_empty_guard
 run_step "Oxlint override union guard" bun test \
   scripts/oxlint-override-union.test.ts scripts/oxlint-config-liveness.test.ts
+run_step "GitHub API command ownership" bun scripts/check-gh-retry.ts
 run_step "Oxlint rule decisions" bun scripts/check-oxlint-rule-decisions.ts
 run_oxlint_effective_config_guard() {
   bun test scripts/oxlint-effective-config.test.ts || return 1

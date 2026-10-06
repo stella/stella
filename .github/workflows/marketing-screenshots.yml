@@ -105,7 +105,23 @@ jobs:
     # Release App key lives in this environment (main and v* tags only).
     environment: release-app
 
+    env:
+      GH_RETRY_SCRIPT: ${{ runner.temp }}/gh-retry.sh
+
     steps:
+      - name: Checkout GitHub API tooling
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: ${{ github.repository }}
+          ref: ${{ github.workflow_sha }}
+          path: .gh-retry
+          persist-credentials: false
+          sparse-checkout: scripts/gh-retry.sh
+          sparse-checkout-cone-mode: false
+
+      - name: Preserve GitHub API tooling across source checkouts
+        run: cp "$GITHUB_WORKSPACE/.gh-retry/scripts/gh-retry.sh" "$GH_RETRY_SCRIPT"
+
       - name: Validate inputs
         env:
           BRANCH: ${{ inputs.ref }}
@@ -147,7 +163,7 @@ jobs:
           BRANCH: ${{ inputs.ref }}
           GH_TOKEN: ${{ github.token }}
         run: |
-          if ! gh api "repos/${GITHUB_REPOSITORY}/branches/${BRANCH}" --silent 2> /dev/null; then
+          if ! bash "$GH_RETRY_SCRIPT" api "repos/${GITHUB_REPOSITORY}/branches/${BRANCH}" --silent; then
             echo "::error::Branch ${BRANCH} does not exist in ${GITHUB_REPOSITORY}"
             exit 1
           fi

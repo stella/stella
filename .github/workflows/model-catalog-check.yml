@@ -31,7 +31,23 @@ jobs:
       contents: read
       actions: read
 
+    env:
+      GH_RETRY_SCRIPT: ${{ runner.temp }}/gh-retry.sh
+
     steps:
+      - name: Checkout GitHub API tooling
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: ${{ github.repository }}
+          ref: ${{ github.workflow_sha }}
+          path: .gh-retry
+          persist-credentials: false
+          sparse-checkout: scripts/gh-retry.sh
+          sparse-checkout-cone-mode: false
+
+      - name: Preserve GitHub API tooling across source checkouts
+        run: cp "$GITHUB_WORKSPACE/.gh-retry/scripts/gh-retry.sh" "$GH_RETRY_SCRIPT"
+
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -58,7 +74,7 @@ jobs:
           GH_REPO: ${{ github.repository }}
         run: |
           mkdir -p .benchmark-state
-          gh api "repos/$GH_REPO/actions/artifacts?name=model-catalog-benchmark-state-v1&per_page=1" > .benchmark-state/artifacts.json
+          bash "$GH_RETRY_SCRIPT" api "repos/$GH_REPO/actions/artifacts?name=model-catalog-benchmark-state-v1&per_page=1" > .benchmark-state/artifacts.json
           jq -e '(.artifacts | type) == "array"' .benchmark-state/artifacts.json > /dev/null
           if [ "$(jq '.artifacts | length' .benchmark-state/artifacts.json)" = 0 ]; then
             echo 'Starting scheduled benchmark state.'
@@ -69,7 +85,7 @@ jobs:
             echo 'Scheduled benchmark state expired; restore it before continuing.' >&2
             exit 1
           fi
-          gh api "repos/$GH_REPO/actions/artifacts/$artifact_id/zip" > .benchmark-state/state.zip
+          bash "$GH_RETRY_SCRIPT" api "repos/$GH_REPO/actions/artifacts/$artifact_id/zip" > .benchmark-state/state.zip
           unzip -p .benchmark-state/state.zip state.json > .benchmark-state/state.json
           test -s .benchmark-state/state.json
 

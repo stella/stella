@@ -1,17 +1,19 @@
 #!/usr/bin/env bash
 set -euo pipefail
+
+gh_retry_script="${GH_RETRY_SCRIPT:-$(dirname "${BASH_SOURCE[0]}")/gh-retry.sh}"
 base_sha=$(git merge-base origin/main HEAD)
 name="typecheck-base-v1-$base_sha"
 base_dir="$RUNNER_TEMP/typecheck-base"
-artifacts=$(gh api --method GET "repos/$REPOSITORY/actions/artifacts" -f name="$name" -f per_page=100)
+artifacts=$(bash "$gh_retry_script" api --method GET "repos/$REPOSITORY/actions/artifacts" -f name="$name" -f per_page=100)
 while IFS=$'\t' read -r id run_id; do
   [[ -n "$id" ]] || continue
-  run=$(gh api "repos/$REPOSITORY/actions/runs/$run_id")
+  run=$(bash "$gh_retry_script" api "repos/$REPOSITORY/actions/runs/$run_id")
   if ! jq -e --arg sha "$base_sha" '.path == ".github/workflows/typecheck-base.yml" and .event == "push" and .conclusion == "success" and .head_branch == "main" and .head_sha == $sha' <<< "$run" >/dev/null; then
     continue
   fi
   bundle=$(mktemp -d "$RUNNER_TEMP/typecheck-recording.XXXXXX")
-  gh api "repos/$REPOSITORY/actions/artifacts/$id/zip" > "$bundle/recording.zip"
+  bash "$gh_retry_script" api "repos/$REPOSITORY/actions/artifacts/$id/zip" > "$bundle/recording.zip"
   unzip -q "$bundle/recording.zip" -d "$bundle/data"
   test "$(cat "$bundle/data/sha")" = "$base_sha"
   test -s "$bundle/data/typecheck-base.json"

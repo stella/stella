@@ -48,7 +48,23 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions: {}
+    env:
+      GH_RETRY_SCRIPT: ${{ runner.temp }}/gh-retry.sh
+
     steps:
+      - name: Checkout GitHub API tooling
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: ${{ github.repository }}
+          ref: ${{ github.workflow_sha }}
+          path: .gh-retry
+          persist-credentials: false
+          sparse-checkout: scripts/gh-retry.sh
+          sparse-checkout-cone-mode: false
+
+      - name: Preserve GitHub API tooling across source checkouts
+        run: cp "$GITHUB_WORKSPACE/.gh-retry/scripts/gh-retry.sh" "$GH_RETRY_SCRIPT"
+
       - name: Create GitHub App token
         id: app-token
         uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
@@ -64,7 +80,7 @@ jobs:
         shell: bash --noprofile --norc -eo pipefail {0}
         run: |
           LIVE_POLICY=$(
-            gh api "repos/${REPO}/actions/permissions/fork-pr-contributor-approval" \
+            bash "$GH_RETRY_SCRIPT" api "repos/${REPO}/actions/permissions/fork-pr-contributor-approval" \
               --jq '.approval_policy'
           )
           echo "Fork approval policy: ${LIVE_POLICY}"

@@ -23,6 +23,8 @@
 # fallback if the `.app.tar.gz` updater payload is absent.
 set -euo pipefail
 
+gh_retry_script="${GH_RETRY_SCRIPT:-$(dirname "${BASH_SOURCE[0]}")/gh-retry.sh}"
+
 if [[ $# -ne 1 ]]; then
   echo "usage: $0 <tag>" >&2
   exit 2
@@ -125,7 +127,7 @@ check_inner_binary() {
 #     so we can extract anywhere). Fall back to mounting the .dmg
 #     with hdiutil if the tar.gz is absent (older releases).
 mac_payload="Stella-macos-universal.app.tar.gz"
-if gh release download "$tag" --pattern "$mac_payload" --dir "$work" 2>/dev/null; then
+if bash "$gh_retry_script" release download "$tag" --pattern "$mac_payload" --dir "$work"; then
   tar -xzf "$work/$mac_payload" -C "$work" 2>/dev/null
   # Tauri tars `<productName>.app` at the top level. The Mach-O
   # binary lives in Contents/MacOS — name varies (productName) so
@@ -137,7 +139,7 @@ if gh release download "$tag" --pattern "$mac_payload" --dir "$work" 2>/dev/null
   else
     note_fail "macOS: no .app directory found inside $mac_payload"
   fi
-elif gh release download "$tag" --pattern "Stella-macos-universal.dmg" --dir "$work" 2>/dev/null; then
+elif bash "$gh_retry_script" release download "$tag" --pattern "Stella-macos-universal.dmg" --dir "$work"; then
   printf '  \xe2\x84\xb9\xef\xb8\x8f  macOS: .app.tar.gz absent; mounting .dmg as fallback\n'
   # `hdiutil attach` final tab-separated column is the mount path.
   # Use grep -oE to capture it intact even when the path contains
@@ -165,7 +167,7 @@ if ! command -v 7z >/dev/null 2>&1; then
   note_fail "Windows: 7z not installed (install with 'brew install p7zip' or 'apt install p7zip-full')"
 else
   win_exe="Stella-windows-x64-setup.exe"
-  if gh release download "$tag" --pattern "$win_exe" --dir "$work" 2>/dev/null; then
+  if bash "$gh_retry_script" release download "$tag" --pattern "$win_exe" --dir "$work"; then
     win_extract="$work/win-extract"
     mkdir -p "$win_extract"
     if 7z x -y -o"$win_extract" "$work/$win_exe" >/dev/null 2>&1; then

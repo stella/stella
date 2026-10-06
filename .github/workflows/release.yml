@@ -35,7 +35,23 @@ jobs:
       release_ref: ${{ steps.release.outputs.ref }}
       release_sha: ${{ steps.release.outputs.sha }}
       version: ${{ steps.release.outputs.version }}
+    env:
+      GH_RETRY_SCRIPT: ${{ runner.temp }}/gh-retry.sh
+
     steps:
+      - name: Checkout GitHub API tooling
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: ${{ github.repository }}
+          ref: ${{ github.workflow_sha }}
+          path: .gh-retry
+          persist-credentials: false
+          sparse-checkout: scripts/gh-retry.sh
+          sparse-checkout-cone-mode: false
+
+      - name: Preserve GitHub API tooling across source checkouts
+        run: cp "$GITHUB_WORKSPACE/.gh-retry/scripts/gh-retry.sh" "$GH_RETRY_SCRIPT"
+
       - name: Resolve release tag
         id: release
         env:
@@ -55,14 +71,14 @@ jobs:
             exit 1
           fi
 
-          tag_ref_json=$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/tags/${release_ref}" 2>/dev/null) || {
+          tag_ref_json=$(bash "$GH_RETRY_SCRIPT" api "repos/${GITHUB_REPOSITORY}/git/ref/tags/${release_ref}") || {
             echo "::error::Tag ${release_ref} does not exist"
             exit 1
           }
           tag_object_type=$(echo "$tag_ref_json" | jq -r '.object.type')
           tag_object_sha=$(echo "$tag_ref_json" | jq -r '.object.sha')
           if [[ "$tag_object_type" == "tag" ]]; then
-            release_sha=$(gh api "repos/${GITHUB_REPOSITORY}/git/tags/${tag_object_sha}" --jq '.object.sha')
+            release_sha=$(bash "$GH_RETRY_SCRIPT" api "repos/${GITHUB_REPOSITORY}/git/tags/${tag_object_sha}" --jq '.object.sha')
           else
             release_sha="$tag_object_sha"
           fi
@@ -288,7 +304,23 @@ jobs:
       digest: ${{ steps.result.outputs.digest }}
       target-environment: ${{ steps.target.outputs.environment }}
 
+    env:
+      GH_RETRY_SCRIPT: ${{ runner.temp }}/gh-retry.sh
+
     steps:
+      - name: Checkout GitHub API tooling
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: ${{ github.repository }}
+          ref: ${{ github.workflow_sha }}
+          path: .gh-retry
+          persist-credentials: false
+          sparse-checkout: scripts/gh-retry.sh
+          sparse-checkout-cone-mode: false
+
+      - name: Preserve GitHub API tooling across source checkouts
+        run: cp "$GITHUB_WORKSPACE/.gh-retry/scripts/gh-retry.sh" "$GH_RETRY_SCRIPT"
+
       - name: Resolve web build target
         id: target
         env:
@@ -323,9 +355,9 @@ jobs:
           set -euo pipefail
           mkdir -p existing-release
           receipt_digest=""
-          if gh release download "$RELEASE_REF" \
+          if bash "$GH_RETRY_SCRIPT" release download "$RELEASE_REF" \
             --pattern release-manifest.json \
-            --dir existing-release 2>/dev/null; then
+            --dir existing-release; then
             receipt_digest="$(jq -r '.webImage.digest // empty' existing-release/release-manifest.json)"
             target_environment="$(jq -r '.webImage.targetEnvironment // empty' existing-release/release-manifest.json)"
             if [[ -n "$receipt_digest" && "$target_environment" != "$TARGET_ENV" ]]; then
@@ -500,7 +532,23 @@ jobs:
       attestations: write
       artifact-metadata: write
 
+    env:
+      GH_RETRY_SCRIPT: ${{ runner.temp }}/gh-retry.sh
+
     steps:
+      - name: Checkout GitHub API tooling
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: ${{ github.repository }}
+          ref: ${{ github.workflow_sha }}
+          path: .gh-retry
+          persist-credentials: false
+          sparse-checkout: scripts/gh-retry.sh
+          sparse-checkout-cone-mode: false
+
+      - name: Preserve GitHub API tooling across source checkouts
+        run: cp "$GITHUB_WORKSPACE/.gh-retry/scripts/gh-retry.sh" "$GH_RETRY_SCRIPT"
+
       - name: Checkout release source
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -537,9 +585,9 @@ jobs:
           set -euo pipefail
           mkdir -p existing-api-release
           receipt_digest=""
-          if gh release download "$RELEASE_REF" \
+          if bash "$GH_RETRY_SCRIPT" release download "$RELEASE_REF" \
             --pattern release-manifest.json \
-            --dir existing-api-release 2>/dev/null; then
+            --dir existing-api-release; then
             receipt_digest="$(jq -r '.image.digest // empty' existing-api-release/release-manifest.json)"
           fi
 
@@ -735,20 +783,20 @@ jobs:
           # reuses the object; a release already published by an earlier
           # run is left as it is. Beta and alpha tags promote nowhere, so
           # nothing would publish their draft: they are published here.
-          if ! gh release view "$RELEASE_REF" >/dev/null 2>&1; then
+          if ! bash "$GH_RETRY_SCRIPT" release view "$RELEASE_REF" >/dev/null; then
             extra_args=()
             case "$RELEASE_REF" in
               *-rc.*) extra_args+=(--draft --prerelease) ;;
               *-*) extra_args+=(--prerelease) ;;
               *) extra_args+=(--draft) ;;
             esac
-            gh release create "$RELEASE_REF" \
+            bash "$GH_RETRY_SCRIPT" release create "$RELEASE_REF" \
               --title "$RELEASE_REF" \
               --notes-file NOTES.md \
               --verify-tag \
               "${extra_args[@]}"
           fi
-          bash .workflow-source/scripts/retry.sh gh release upload "$RELEASE_REF" release-manifest.json --clobber
+          bash "$GH_RETRY_SCRIPT" release upload "$RELEASE_REF" release-manifest.json --clobber
 
   promote:
     # Auto-promote stable releases (vX.Y.Z) to production. Any tag
@@ -766,7 +814,23 @@ jobs:
       packages: write # advance the mutable image aliases
     # Release App key lives in this environment (main and v* tags only).
     environment: release-app
+    env:
+      GH_RETRY_SCRIPT: ${{ runner.temp }}/gh-retry.sh
+
     steps:
+      - name: Checkout GitHub API tooling
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: ${{ github.repository }}
+          ref: ${{ github.workflow_sha }}
+          path: .gh-retry
+          persist-credentials: false
+          sparse-checkout: scripts/gh-retry.sh
+          sparse-checkout-cone-mode: false
+
+      - name: Preserve GitHub API tooling across source checkouts
+        run: cp "$GITHUB_WORKSPACE/.gh-retry/scripts/gh-retry.sh" "$GH_RETRY_SCRIPT"
+
       # The dispatch runs from a local composite action, so the workspace has
       # to hold the workflow's own revision rather than the release's. This
       # job can be dispatched manually against any existing tag, including one
@@ -834,12 +898,12 @@ jobs:
           # its final step, after the signed installers are attached, so
           # /releases/latest/download/Stella-* never 404s in between, and
           # publishing a draft would otherwise make it Latest by default.
-          is_draft="$(gh release view "$RELEASE_REF" --json isDraft --jq '.isDraft')"
+          is_draft="$(bash "$GH_RETRY_SCRIPT" release view "$RELEASE_REF" --json isDraft --jq '.isDraft')"
           if [[ "$is_draft" != "true" ]]; then
             echo "Release $RELEASE_REF is already published; leaving it unchanged."
             exit 0
           fi
-          gh release edit "$RELEASE_REF" --draft=false --latest=false
+          bash "$GH_RETRY_SCRIPT" release edit "$RELEASE_REF" --draft=false --latest=false
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
@@ -884,7 +948,23 @@ jobs:
     permissions:
       contents: write # publish the draft prerelease
     environment: release-app
+    env:
+      GH_RETRY_SCRIPT: ${{ runner.temp }}/gh-retry.sh
+
     steps:
+      - name: Checkout GitHub API tooling
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: ${{ github.repository }}
+          ref: ${{ github.workflow_sha }}
+          path: .gh-retry
+          persist-credentials: false
+          sparse-checkout: scripts/gh-retry.sh
+          sparse-checkout-cone-mode: false
+
+      - name: Preserve GitHub API tooling across source checkouts
+        run: cp "$GITHUB_WORKSPACE/.gh-retry/scripts/gh-retry.sh" "$GH_RETRY_SCRIPT"
+
       # The workflow's own revision, not the release's: this job can be
       # dispatched manually against a tag cut before the composite action
       # existed, and only the workflow revision is guaranteed to contain it.
@@ -910,9 +990,9 @@ jobs:
           RELEASE_REF: ${{ needs.resolve.outputs.release_ref }}
         run: |
           # Same rerun rule as the production publish: only a draft changes.
-          is_draft="$(gh release view "$RELEASE_REF" --json isDraft --jq '.isDraft')"
+          is_draft="$(bash "$GH_RETRY_SCRIPT" release view "$RELEASE_REF" --json isDraft --jq '.isDraft')"
           if [[ "$is_draft" != "true" ]]; then
             echo "Release $RELEASE_REF is already published; leaving it unchanged."
             exit 0
           fi
-          gh release edit "$RELEASE_REF" --draft=false --prerelease
+          bash "$GH_RETRY_SCRIPT" release edit "$RELEASE_REF" --draft=false --prerelease

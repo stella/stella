@@ -140,7 +140,23 @@ jobs:
     timeout-minutes: 5
     permissions:
       statuses: write
+    env:
+      GH_RETRY_SCRIPT: ${{ runner.temp }}/gh-retry.sh
+
     steps:
+      - name: Checkout GitHub API tooling
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: ${{ github.repository }}
+          ref: ${{ github.workflow_sha }}
+          path: .gh-retry
+          persist-credentials: false
+          sparse-checkout: scripts/gh-retry.sh
+          sparse-checkout-cone-mode: false
+
+      - name: Preserve GitHub API tooling across source checkouts
+        run: cp "$GITHUB_WORKSPACE/.gh-retry/scripts/gh-retry.sh" "$GH_RETRY_SCRIPT"
+
       - name: Publish heavy conclusion
         env:
           GH_TOKEN: ${{ github.token }}
@@ -154,7 +170,7 @@ jobs:
             state=success
           fi
           if [[ -n "$SHA" ]]; then
-            gh api --method POST "repos/$REPOSITORY/statuses/$SHA" \
+            bash "$GH_RETRY_SCRIPT" api --method POST "repos/$REPOSITORY/statuses/$SHA" \
               -f context=main/heavy -f state="$state" \
               -f description="Main heavy suites: $state" -f target_url="$RUN_URL"
           fi

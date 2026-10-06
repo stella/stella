@@ -72,7 +72,23 @@ jobs:
     outputs:
       deploy: ${{ steps.decide.outputs.deploy }}
 
+    env:
+      GH_RETRY_SCRIPT: ${{ runner.temp }}/gh-retry.sh
+
     steps:
+      - name: Checkout GitHub API tooling
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: ${{ github.repository }}
+          ref: ${{ github.workflow_sha }}
+          path: .gh-retry
+          persist-credentials: false
+          sparse-checkout: scripts/gh-retry.sh
+          sparse-checkout-cone-mode: false
+
+      - name: Preserve GitHub API tooling across source checkouts
+        run: cp "$GITHUB_WORKSPACE/.gh-retry/scripts/gh-retry.sh" "$GH_RETRY_SCRIPT"
+
       - name: Probe staging health
         id: probe
         env:
@@ -179,7 +195,7 @@ jobs:
           run_url="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
           jq -n --arg url "$run_url" \
             '{state: "error", context: "staging/verified", description: "staging off", target_url: $url}' |
-            gh api "repos/${GITHUB_REPOSITORY}/statuses/${DEPLOY_SHA}" \
+            bash "$GH_RETRY_SCRIPT" api "repos/${GITHUB_REPOSITORY}/statuses/${DEPLOY_SHA}" \
               --method POST --input - >/dev/null
           exit 1
 
@@ -373,7 +389,23 @@ jobs:
       statuses: write
     # Release App key lives in this environment (main and v* tags only).
     environment: release-app
+    env:
+      GH_RETRY_SCRIPT: ${{ runner.temp }}/gh-retry.sh
+
     steps:
+      - name: Checkout GitHub API tooling
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: ${{ github.repository }}
+          ref: ${{ github.workflow_sha }}
+          path: .gh-retry
+          persist-credentials: false
+          sparse-checkout: scripts/gh-retry.sh
+          sparse-checkout-cone-mode: false
+
+      - name: Preserve GitHub API tooling across source checkouts
+        run: cp "$GITHUB_WORKSPACE/.gh-retry/scripts/gh-retry.sh" "$GH_RETRY_SCRIPT"
+
       - name: Checkout workflow actions
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -429,19 +461,19 @@ jobs:
                 production_environment: false,
                 description: "Deploy of main to staging"
               }' |
-              gh api "repos/${GITHUB_REPOSITORY}/deployments" \
+              bash "$GH_RETRY_SCRIPT" api "repos/${GITHUB_REPOSITORY}/deployments" \
                 --method POST --input - --jq '.id'
           )"
 
           echo "id=${deployment_id}" >>"$GITHUB_OUTPUT"
 
           jq -n '{state: "in_progress", environment_url: "https://staging.stll.app"}' |
-            gh api "repos/${GITHUB_REPOSITORY}/deployments/${deployment_id}/statuses" \
+            bash "$GH_RETRY_SCRIPT" api "repos/${GITHUB_REPOSITORY}/deployments/${deployment_id}/statuses" \
               --method POST --input - >/dev/null
 
           jq -n --arg run "$GITHUB_RUN_ID" \
             '{state: "pending", context: "staging/verified", description: ("Staging smoke pending: run " + $run)}' |
-            gh api "repos/${GITHUB_REPOSITORY}/statuses/${DEPLOY_SHA}" \
+            bash "$GH_RETRY_SCRIPT" api "repos/${GITHUB_REPOSITORY}/statuses/${DEPLOY_SHA}" \
               --method POST --input - >/dev/null
 
       # Post-deploy verification stays in the serialized promotion job. If it
@@ -584,9 +616,9 @@ jobs:
           run_url="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
           jq -n --arg state "$state" --arg run "$GITHUB_RUN_ID" --arg url "$run_url" \
             '{state: $state, context: "staging/verified", description: ("Staging smoke " + $state + ": run " + $run), target_url: $url}' |
-            gh api "repos/${GITHUB_REPOSITORY}/statuses/${DEPLOY_SHA}" \
+            bash "$GH_RETRY_SCRIPT" api "repos/${GITHUB_REPOSITORY}/statuses/${DEPLOY_SHA}" \
               --method POST --input - >/dev/null
           jq -n --arg state "$state" --arg url "$run_url" \
             '{state: $state, environment_url: "https://staging.stll.app", log_url: $url}' |
-            gh api "repos/${GITHUB_REPOSITORY}/deployments/${DEPLOYMENT_ID}/statuses" \
+            bash "$GH_RETRY_SCRIPT" api "repos/${GITHUB_REPOSITORY}/deployments/${DEPLOYMENT_ID}/statuses" \
               --method POST --input - >/dev/null
