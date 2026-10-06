@@ -1,13 +1,23 @@
+import type { ComponentProps } from "react";
+
 import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
 import {
+  Accordion,
+  AccordionItem,
+  AccordionPanel,
+  AccordionTrigger,
+} from "@stll/ui/accordion";
+import {
   CheckIcon,
   CircleDashedIcon,
   LoaderIcon,
-  NetworkIcon,
+  SplitIcon,
 } from "@stll/ui/icons";
 
+import { MessageResponse } from "@/components/ai-elements/message";
+import { assistantMessageFallbackText } from "@/components/chat/chat-thread-messages.logic";
 import type {
   ChatUITools,
   RegisteredChatUIToolCallPart,
@@ -15,7 +25,9 @@ import type {
 import {
   getSpawnSubagentsCallStatus,
   keySpawnSubagents,
+  maskSubagentIdentifiers,
   SPAWN_SUBAGENTS_CALL_STATUS,
+  subagentTitleRuns,
 } from "@/components/chat/spawn-subagents-card.logic";
 import type { SpawnSubagentsCallStatus } from "@/components/chat/spawn-subagents-card.logic";
 import { useFormatter } from "@/i18n/formatting-context";
@@ -30,9 +42,13 @@ type SpawnSubagentsOutput = ChatUITools["spawn_subagents"]["output"];
 
 type SpawnSubagentsCardProps = {
   part: SpawnSubagentsPart;
+  streamdownComponents: ComponentProps<typeof MessageResponse>["components"];
 };
 
-export const SpawnSubagentsCard = ({ part }: SpawnSubagentsCardProps) => {
+export const SpawnSubagentsCard = ({
+  part,
+  streamdownComponents,
+}: SpawnSubagentsCardProps) => {
   const t = useTranslations();
   const format = useFormatter();
 
@@ -46,7 +62,10 @@ export const SpawnSubagentsCard = ({ part }: SpawnSubagentsCardProps) => {
     return (
       <div className="border-border bg-muted/30 my-1 rounded-lg border text-sm">
         <div className="flex items-center gap-2 px-3 py-2">
-          <NetworkIcon className="text-muted-foreground size-4 shrink-0" />
+          <SplitIcon
+            aria-hidden="true"
+            className="text-muted-foreground size-4 shrink-0"
+          />
           <span className="font-medium">{t("chat.tool.spawn_subagents")}</span>
           <CallStatusIndicator status={callStatus} />
         </div>
@@ -56,9 +75,11 @@ export const SpawnSubagentsCard = ({ part }: SpawnSubagentsCardProps) => {
 
   return (
     <div className="border-border bg-muted/30 my-1 rounded-lg border text-sm">
-      {/* Header */}
       <div className="flex items-center gap-2 px-3 py-2">
-        <NetworkIcon className="text-muted-foreground size-4 shrink-0" />
+        <SplitIcon
+          aria-hidden="true"
+          className="text-muted-foreground size-4 shrink-0"
+        />
         <span className="font-medium">{t("chat.tool.spawn_subagents")}</span>
         <span className="text-muted-foreground text-xs tabular-nums">
           {format.number(input.subagents.length)}
@@ -66,11 +87,11 @@ export const SpawnSubagentsCard = ({ part }: SpawnSubagentsCardProps) => {
         <CallStatusIndicator status={callStatus} />
       </div>
 
-      {/* Subtasks */}
       <SpawnSubagentsSubtaskList
         callStatus={callStatus}
         results={output?.results ?? undefined}
         subagents={input.subagents}
+        streamdownComponents={streamdownComponents}
       />
     </div>
   );
@@ -85,45 +106,108 @@ type SpawnSubagentsSubtaskListProps = {
    * since that subagent is no longer working.
    */
   callStatus: SpawnSubagentsCallStatus;
+  streamdownComponents: SpawnSubagentsCardProps["streamdownComponents"];
 };
 
 const SpawnSubagentsSubtaskList = ({
   callStatus,
   subagents,
   results,
+  streamdownComponents,
 }: SpawnSubagentsSubtaskListProps) => {
+  const t = useTranslations();
   const keyedSubagents = keySpawnSubagents(subagents);
 
   return (
-    <ul className="border-border/50 space-y-2 border-t px-3 py-3">
+    <ul className="border-border/50 border-t px-3">
       {keyedSubagents.map(({ index, key, subagent }) => {
         const result = results?.find((entry) => entry.index === index);
         return (
-          <li className="space-y-1.5" key={key}>
-            <div className="flex items-start justify-between gap-2">
-              <p className="line-clamp-2 text-sm">{subagent.task}</p>
-              <SubtaskStatus callStatus={callStatus} status={result?.status} />
-            </div>
-
-            {subagent.model ? (
-              <div className="flex items-center gap-1.5">
-                <span className="bg-muted/40 text-muted-foreground text-2xs rounded px-1.5 py-0.5 font-medium">
-                  {subagent.model}
-                </span>
-              </div>
-            ) : null}
-
-            {result?.status === "completed" && result.result && (
-              <p className="text-muted-foreground max-h-40 overflow-auto text-xs whitespace-pre-wrap">
-                {result.result}
-              </p>
-            )}
-
-            {result?.status === "failed" && result.error && (
-              <p className="text-destructive text-2xs max-h-40 overflow-auto whitespace-pre-wrap">
-                {result.error}
-              </p>
-            )}
+          <li key={key}>
+            <Accordion>
+              <AccordionItem value="result">
+                <AccordionTrigger>
+                  <span className="flex min-w-0 flex-1 items-center justify-between gap-2">
+                    <bdi className="line-clamp-2 min-w-0 text-sm">
+                      {subagentTitleRuns(
+                        maskSubagentIdentifiers(subagent.title),
+                      ).map((run) => {
+                        switch (run.type) {
+                          case "citation":
+                            return (
+                              <bdi dir="ltr" key={run.start}>
+                                {run.text}
+                              </bdi>
+                            );
+                          case "text":
+                            return run.text;
+                          default:
+                            run.type satisfies never;
+                            return panic(
+                              `Unhandled title run: ${String(run.type)}`,
+                            );
+                        }
+                      })}
+                    </bdi>
+                    <SubtaskStatus
+                      callStatus={callStatus}
+                      status={result?.status}
+                    />
+                  </span>
+                </AccordionTrigger>
+                <AccordionPanel>
+                  <div className="space-y-2">
+                    {result?.status === "completed" && result.result && (
+                      <MessageResponse
+                        components={streamdownComponents}
+                        fallbackChildren={assistantMessageFallbackText(
+                          result.result,
+                        )}
+                        className="text-sm"
+                      >
+                        {result.result}
+                      </MessageResponse>
+                    )}
+                    {result?.status === "failed" && result.error && (
+                      <p
+                        className="text-destructive text-xs whitespace-pre-wrap"
+                        dir="auto"
+                      >
+                        {maskSubagentIdentifiers(result.error)}
+                      </p>
+                    )}
+                    <Accordion>
+                      <AccordionItem value="prompt">
+                        <AccordionTrigger>
+                          {t("chat.toolCall.input")}
+                        </AccordionTrigger>
+                        <AccordionPanel>
+                          {subagent.model && (
+                            <bdi className="text-muted-foreground text-2xs">
+                              {subagent.model}
+                            </bdi>
+                          )}
+                          <pre
+                            className="text-xs wrap-break-word whitespace-pre-wrap"
+                            dir="auto"
+                          >
+                            {maskSubagentIdentifiers(
+                              [
+                                subagent.task,
+                                subagent.context,
+                                subagent.expectedOutput,
+                              ]
+                                .filter((text) => text !== undefined)
+                                .join("\n\n"),
+                            )}
+                          </pre>
+                        </AccordionPanel>
+                      </AccordionItem>
+                    </Accordion>
+                  </div>
+                </AccordionPanel>
+              </AccordionItem>
+            </Accordion>
           </li>
         );
       })}
@@ -133,27 +217,31 @@ const SpawnSubagentsSubtaskList = ({
 
 type SubtaskStatusProps = {
   callStatus: SpawnSubagentsCallStatus;
-  status: "completed" | "failed" | undefined;
+  status: SpawnSubagentsOutput["results"][number]["status"] | undefined;
 };
 
 const SubtaskStatus = ({ callStatus, status }: SubtaskStatusProps) => {
   const t = useTranslations();
 
-  if (status === "completed") {
-    return (
-      <span className="bg-muted/40 text-muted-foreground text-2xs flex shrink-0 items-center gap-1 rounded px-1.5 py-0.5 font-medium">
-        <CheckIcon className="size-3" />
-        {t("common.done")}
-      </span>
-    );
-  }
-
-  if (status === "failed") {
-    return (
-      <span className="bg-destructive/10 text-destructive border-destructive/60 text-2xs flex shrink-0 items-center gap-1 rounded border px-1.5 py-0.5 font-medium">
-        {t("common.failed")}
-      </span>
-    );
+  switch (status) {
+    case "completed":
+      return (
+        <span className="bg-muted/40 text-muted-foreground text-2xs flex shrink-0 items-center gap-1 rounded px-1.5 py-0.5 font-medium">
+          <CheckIcon aria-hidden="true" className="size-3" />
+          {t("common.done")}
+        </span>
+      );
+    case "failed":
+      return (
+        <span className="bg-destructive/10 text-destructive border-destructive/60 text-2xs flex shrink-0 items-center gap-1 rounded border px-1.5 py-0.5 font-medium">
+          {t("common.failed")}
+        </span>
+      );
+    case undefined:
+      break;
+    default:
+      status satisfies never;
+      return panic(`Unhandled subagent result status: ${String(status)}`);
   }
 
   if (callStatus !== SPAWN_SUBAGENTS_CALL_STATUS.running) {
