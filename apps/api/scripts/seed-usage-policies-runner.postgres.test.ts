@@ -138,6 +138,65 @@ describe.skipIf(!runPostgres)("usage policy seed outcomes (postgres)", () => {
     });
   });
 
+  test("replacing the seeded free key commits under the one-active-free index", async () => {
+    if (!databaseUrl) {
+      panic("DATABASE_URL required");
+    }
+    await withGatedTestClients(databaseUrl, async ({ openClient }) => {
+      const { db } = openClient({ max: 1 });
+      const dir = mkdtempSync(
+        nodePath.join(tmpdir(), "policy-postgres-free-swap-"),
+      );
+      await db.execute(
+        sql`CREATE TEMP TABLE usage_policies (LIKE public.usage_policies INCLUDING ALL)`,
+      );
+      const freeSeed = (key: string) =>
+        JSON.stringify([
+          {
+            key,
+            displayName: "Free",
+            kind: "free",
+            monthlyUsageUnits: 0,
+            maxMembers: 1,
+            storageBytesPerAssignment: 1024,
+            serviceActionsPerPeriod: 3,
+          },
+        ]);
+      try {
+        await runSeedReport({
+          mode: "apply",
+          freeTier: "on",
+          input: freeSeed("free-a"),
+          resultsPath: nodePath.join(dir, "first.jsonl"),
+          openDb: () => db,
+        });
+        const replaced = await runSeedReport({
+          mode: "apply",
+          freeTier: "on",
+          input: freeSeed("free-b"),
+          resultsPath: nodePath.join(dir, "second.jsonl"),
+          openDb: () => db,
+        });
+        expect(replaced.status).toBe("complete");
+        expect(
+          await db
+            .select({
+              policyKey: usagePolicies.policyKey,
+              active: usagePolicies.active,
+            })
+            .from(usagePolicies)
+            .orderBy(usagePolicies.policyKey),
+        ).toEqual([
+          { policyKey: "free-a", active: false },
+          { policyKey: "free-b", active: true },
+        ]);
+      } finally {
+        await db.execute(sql`DROP TABLE pg_temp.usage_policies`);
+        rmSync(dir, { recursive: true });
+      }
+    });
+  });
+
   test("an empty configuration with the free tier off deactivates the seeded free policy", async () => {
     if (!databaseUrl) {
       panic("DATABASE_URL required");

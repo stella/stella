@@ -13,6 +13,7 @@ import {
   eq,
   getColumns,
   inArray,
+  ne,
   notInArray,
   sql,
   TransactionRollbackError,
@@ -192,6 +193,33 @@ const seedPolicies = async ({ db, seeds, mode }: SeedPoliciesOptions) => {
   let pendingKey = seeds.at(0)?.key;
   let pendingHiddenKeys: string[] = [];
   const writeSeeds = async (tx: SeedTransaction) => {
+    const seededKeys = seeds.map((seedPolicy) => seedPolicy.key);
+    const seededFreeKey = seeds.find(
+      (seedPolicy) => seedPolicy.kind === FREE_POLICY_KIND,
+    )?.key;
+    // Retire every other active free policy before the upserts: the database
+    // admits one active free policy at a time, so replacing the seeded free key
+    // must retire the previous one first. Empty seeds retire it too, so turning
+    // the free tier off with no remaining config cannot leave its limits live.
+    const retiredFree = await tx
+      .update(usagePolicies)
+      .set({ active: false })
+      .where(
+        and(
+          eq(usagePolicies.kind, FREE_POLICY_KIND),
+          eq(usagePolicies.active, true),
+          seededFreeKey === undefined
+            ? undefined
+            : ne(usagePolicies.policyKey, seededFreeKey),
+        ),
+      )
+      .returning({ policyKey: usagePolicies.policyKey });
+    // A retired row seeded under another kind stays active after its upsert.
+    for (const { policyKey } of retiredFree) {
+      if (!seededKeys.includes(policyKey)) {
+        rows.push({ policyKey, mode, outcome: "deactivated" });
+      }
+    }
     for (const seedPolicy of seeds) {
       pendingKey = seedPolicy.key;
       const values = {
@@ -213,6 +241,8 @@ const seedPolicies = async ({ db, seeds, mode }: SeedPoliciesOptions) => {
         serviceActionsPerPeriod: seedPolicy.serviceActionsPerPeriod,
         visibility: seedPolicy.visibility,
         sortOrder: seedPolicy.sortOrder,
+        // Re-seeding a policy restores one a previous run retired.
+        active: true,
       };
       const { policyKey: _policyKey, ...set } = values;
       // Derive comparison columns from the update projection: newly seeded
@@ -243,24 +273,6 @@ const seedPolicies = async ({ db, seeds, mode }: SeedPoliciesOptions) => {
         mode,
         outcome: row.inserted ? "inserted" : "updated",
       });
-    }
-    const seededKeys = seeds.map((seedPolicy) => seedPolicy.key);
-    // A free policy absent from the seeds stops applying: the database
-    // reads only an active one. Empty seeds retire it too, so turning the
-    // free tier off with no remaining config cannot leave its limits live.
-    const retiredFree = await tx
-      .update(usagePolicies)
-      .set({ active: false })
-      .where(
-        and(
-          notInArray(usagePolicies.policyKey, seededKeys),
-          eq(usagePolicies.kind, FREE_POLICY_KIND),
-          eq(usagePolicies.active, true),
-        ),
-      )
-      .returning({ policyKey: usagePolicies.policyKey });
-    for (const row of retiredFree) {
-      rows.push({ policyKey: row.policyKey, mode, outcome: "deactivated" });
     }
     if (seeds.length === 0) {
       return;

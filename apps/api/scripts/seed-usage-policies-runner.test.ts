@@ -1,7 +1,8 @@
 import { PGlite } from "@electric-sql/pglite";
+import { panic } from "better-result";
 import { expect, test } from "bun:test";
-import { eq, sql } from "drizzle-orm";
-import { getTableConfig, PgDialect } from "drizzle-orm/pg-core";
+import { eq, is, sql } from "drizzle-orm";
+import { getTableConfig, IndexedColumn, PgDialect } from "drizzle-orm/pg-core";
 import { drizzle } from "drizzle-orm/pglite";
 import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -30,11 +31,25 @@ const withDatabase = async (
     (column) =>
       sql`${sql.identifier(column.name)} ${sql.raw(column.getSQLType())} ${column.notNull ? sql`NOT NULL` : sql``} ${column.default === undefined ? sql`` : sql`DEFAULT ${column.default}`}`,
   );
-  const query = new PgDialect().sqlToQuery(
-    sql`CREATE TABLE usage_policies (${sql.join(columns, sql`, `)}, UNIQUE (policy_key), UNIQUE (hosted_policy_ref))`.inlineParams(),
-  );
+  // Unique indexes come from the schema too, so the fixture enforces the same
+  // one-active-free-policy rule the database does.
+  const uniqueIndexes = getTableConfig(usagePolicies)
+    .indexes.filter(({ config }) => config.unique)
+    .map(({ config: { name, columns: indexColumns, where } }) => {
+      const names = indexColumns.map((column) =>
+        is(column, IndexedColumn) && column.name !== undefined
+          ? sql.identifier(column.name)
+          : panic("usage policy fixture supports column indexes only"),
+      );
+      return sql`CREATE UNIQUE INDEX ${sql.identifier(name ?? panic("unnamed usage policy index"))} ON usage_policies (${sql.join(names, sql`, `)}) ${where === undefined ? sql`` : sql`WHERE ${where}`}`;
+    });
+  const dialect = new PgDialect();
+  const statements = [
+    sql`CREATE TABLE usage_policies (${sql.join(columns, sql`, `)})`,
+    ...uniqueIndexes,
+  ].map((statement) => dialect.sqlToQuery(statement.inlineParams()).sql);
   try {
-    await client.exec(query.sql);
+    await client.exec(statements.join(";\n"));
     await check(drizzle({ client }), dir);
   } finally {
     await client.close();
@@ -347,9 +362,7 @@ test.each(["apply", "dry_run"] as const)(
         resultsPath: nodePath.join(dir, "before.jsonl"),
         openDb: () => db,
       });
-      await db.execute(
-        sql`ALTER TABLE usage_policies DROP CONSTRAINT usage_policies_hosted_policy_ref_key`,
-      );
+      await db.execute(sql`DROP INDEX usage_policies_hosted_policy_ref_uidx`);
       await db.execute(
         sql`ALTER TABLE usage_policies ADD UNIQUE (hosted_policy_ref) DEFERRABLE INITIALLY DEFERRED`,
       );
@@ -537,6 +550,67 @@ test("a free policy absent from the seeds stops applying", async () => {
     });
     expect(await readPolicyRows(db)).toEqual([
       { policyKey: "free", kind: "free", active: false },
+      { policyKey: "team", kind: "subscription", active: true },
+    ]);
+  });
+});
+
+test("replacing the seeded free key retires the previous free policy first", async () => {
+  await withDatabase(async (db, dir) => {
+    await runSeedReport({
+      mode: "apply",
+      freeTier: "on",
+      input: JSON.stringify([freePolicy("free-a")]),
+      resultsPath: nodePath.join(dir, "first.jsonl"),
+      openDb: () => db,
+    });
+    const report = await runSeedReport({
+      mode: "apply",
+      freeTier: "on",
+      input: JSON.stringify([freePolicy("free-b")]),
+      resultsPath: nodePath.join(dir, "second.jsonl"),
+      openDb: () => db,
+    });
+    expect(report.rows).toEqual([
+      { policyKey: "free-a", mode: "apply", outcome: "deactivated" },
+      { policyKey: "free-b", mode: "apply", outcome: "inserted" },
+      { policyKey: "free-a", mode: "apply", outcome: "hidden" },
+    ]);
+    expect(report.status).toBe("complete");
+    expect(await readPolicyRows(db)).toEqual([
+      { policyKey: "free-a", kind: "free", active: false },
+      { policyKey: "free-b", kind: "free", active: true },
+    ]);
+  });
+});
+
+test("re-seeding a retired free policy makes it apply again", async () => {
+  await withDatabase(async (db, dir) => {
+    const apply = async (name: string, input: unknown[]) =>
+      await runSeedReport({
+        mode: "apply",
+        freeTier: "on",
+        input: JSON.stringify(input),
+        resultsPath: nodePath.join(dir, `${name}.jsonl`),
+        openDb: () => db,
+      });
+    await apply("seeded", [freePolicy("free"), policy("team")]);
+    await apply("retired", [policy("team")]);
+    expect(await readPolicyRows(db)).toContainEqual({
+      policyKey: "free",
+      kind: "free",
+      active: false,
+    });
+    const restored = await apply("restored", [
+      freePolicy("free"),
+      policy("team"),
+    ]);
+    expect(restored.rows).toEqual([
+      { policyKey: "free", mode: "apply", outcome: "updated" },
+      { policyKey: "team", mode: "apply", outcome: "unchanged" },
+    ]);
+    expect(await readPolicyRows(db)).toEqual([
+      { policyKey: "free", kind: "free", active: true },
       { policyKey: "team", kind: "subscription", active: true },
     ]);
   });
