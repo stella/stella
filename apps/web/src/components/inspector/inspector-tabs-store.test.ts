@@ -1,3 +1,5 @@
+import { QueryClient } from "@tanstack/react-query";
+import { panic } from "better-result";
 import { afterEach, beforeEach, describe, expect, spyOn, test } from "bun:test";
 
 import { Temporal } from "@stll/time";
@@ -22,8 +24,17 @@ import {
   lookupLegalDocumentChatThread,
   useLegalDocumentChatThreads,
 } from "@/features/chat/legal-document-chat-threads";
+import { browserStorage } from "@/lib/account/browser-storage";
+import { installUserScopedStorage } from "@/lib/account/install-user-scoped-storage";
+import {
+  releaseUserStorage,
+  userStorageKey,
+} from "@/lib/account/user-scoped-storage";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { toChatThreadId } from "@/lib/chat-thread-ref";
+
+const localArea = () =>
+  browserStorage("local") ?? panic("Test requires local browser storage");
 
 let cleanupInspectorBroadcast: (() => void) | null = null;
 let restoreTemporalNow: (() => void) | undefined;
@@ -1905,13 +1916,11 @@ describe("Inspector tab broadcast", () => {
     const captureSpy = spyOn(getAnalytics(), "captureError").mockImplementation(
       () => undefined,
     );
-    const workingSetItem = window.localStorage.setItem.bind(
-      window.localStorage,
-    );
+    const workingSetItem = localArea().setItem.bind(localArea());
     const failingSetItem = () => {
       throw new DOMException("Storage unavailable", "QuotaExceededError");
     };
-    window.localStorage.setItem = failingSetItem;
+    localArea().setItem = failingSetItem;
 
     useInspectorTabsStore
       .getState()
@@ -1923,11 +1932,11 @@ describe("Inspector tab broadcast", () => {
     expect(toastSpy).toHaveBeenCalledTimes(1);
     expect(captureSpy).toHaveBeenCalledTimes(1);
 
-    window.localStorage.setItem = workingSetItem;
+    localArea().setItem = workingSetItem;
     useInspectorTabsStore
       .getState()
       .openChat({ id: toChatThreadId("thread-3") });
-    window.localStorage.setItem = failingSetItem;
+    localArea().setItem = failingSetItem;
     useInspectorTabsStore
       .getState()
       .openChat({ id: toChatThreadId("thread-4") });
@@ -1956,8 +1965,11 @@ describe("Inspector tab broadcast", () => {
 
     expect(useInspectorTabsStore.getState().tabs).toEqual([]);
     expect(
-      window.localStorage.getItem(
-        "stella:inspector-state:v1:org-new:user-scope-switch",
+      localArea().getItem(
+        userStorageKey("stella:inspector-state:v1:org-new:", {
+          kind: "user",
+          userId: "user-scope-switch",
+        }),
       ),
     ).toBeNull();
   });
@@ -1983,8 +1995,11 @@ describe("Inspector tab broadcast", () => {
     expect(useInspectorTabsStore.getState().tabs).toEqual([]);
     expect(useInspectorTabsStore.getState().minimized).toBe(false);
     expect(
-      window.localStorage.getItem(
-        "stella:inspector-minimized:v1:org-storage-old:user-storage",
+      localArea().getItem(
+        userStorageKey("stella:inspector-minimized:v1:org-storage-old:", {
+          kind: "user",
+          userId: "user-storage",
+        }),
       ),
     ).toBe("1");
   });
@@ -2094,8 +2109,11 @@ describe("a legal document's chat tab and the reader's composer", () => {
       userId: "user-restore",
     };
     const restored = toChatThreadId("thread-restored");
-    window.localStorage.setItem(
-      `stella:inspector-state:v1:${scope.organizationId}:${scope.userId}`,
+    localArea().setItem(
+      userStorageKey(`stella:inspector-state:v1:${scope.organizationId}:`, {
+        kind: "user",
+        userId: scope.userId,
+      }),
       JSON.stringify({
         activeId: restored,
         collapsedGroupIds: [],
@@ -2135,8 +2153,11 @@ describe("a legal document's chat tab and the reader's composer", () => {
       userId: "user-legacy",
     };
     const restored = toChatThreadId("thread-legacy");
-    window.localStorage.setItem(
-      `stella:inspector-state:v1:${scope.organizationId}:${scope.userId}`,
+    localArea().setItem(
+      userStorageKey(`stella:inspector-state:v1:${scope.organizationId}:`, {
+        kind: "user",
+        userId: scope.userId,
+      }),
       JSON.stringify({
         activeId: restored,
         collapsedGroupIds: [],
@@ -2177,4 +2198,48 @@ describe("a legal document's chat tab and the reader's composer", () => {
       useLegalDocumentChatThreads.getState().threadIdByDocumentKey,
     ).toEqual({});
   });
+});
+
+test("inspector subscriptions restore only their active account scope", () => {
+  installFakeBroadcastChannel();
+  const client = new QueryClient();
+  const areas = () => ({ local: null, session: null });
+  const unsubscribe = installUserScopedStorage(client, areas);
+  client.setQueryData(["session"], { user: { id: "a" } });
+  cleanupInspectorBroadcast = initializeInspectorTabBroadcast({
+    organizationId: "org",
+    userId: "a",
+  });
+  useInspectorTabsStore.getState().setMinimized(true);
+  const keyA = userStorageKey("stella:inspector-minimized:v1:org:", {
+    kind: "user",
+    userId: "a",
+  });
+  expect(localArea().getItem(keyA)).toBe("1");
+  client.setQueryData(["session"], { user: { id: "b" } });
+  expect(useInspectorTabsStore.getState().minimized).toBe(false);
+  expect(useInspectorTabsStore.getState().tabs).toEqual([]);
+  localArea().removeItem(keyA);
+  useInspectorTabsStore.getState().setMinimized(true);
+  expect(localArea().getItem(keyA)).toBeNull();
+  cleanupInspectorBroadcast();
+  cleanupInspectorBroadcast = null;
+  const keyB = userStorageKey("stella:inspector-minimized:v1:org:", {
+    kind: "user",
+    userId: "b",
+  });
+  localArea().setItem(keyB, "1");
+  cleanupInspectorBroadcast = initializeInspectorTabBroadcast({
+    organizationId: "org",
+    userId: "b",
+  });
+  expect(useInspectorTabsStore.getState().minimized).toBe(true);
+  useInspectorTabsStore.getState().setMinimized(false);
+  expect(localArea().getItem(keyB)).toBe("0");
+  expect(localArea().getItem(keyA)).toBeNull();
+  cleanupInspectorBroadcast();
+  cleanupInspectorBroadcast = null;
+  unsubscribe();
+  releaseUserStorage(areas());
+  client.clear();
 });

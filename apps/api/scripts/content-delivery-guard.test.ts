@@ -21,6 +21,15 @@ const analyze = (sources: Record<string, string>) =>
   });
 
 describe("content delivery declarations follow reachable runtime definitions", () => {
+  test("treats explicitly imported text assets as inert values", () => {
+    const result = analyze({
+      "/routes.ts":
+        'import asset from "./runtime.js.txt" with { type: "text" }; export default createSafeHandler({}, () => new Response(asset));',
+    });
+    expect(result.errors).toEqual([]);
+    expect(result.candidates).toEqual([]);
+  });
+
   test.each([
     'import { readS3ArrayBuffer } from "@/api/lib/s3"; export default createSafeHandler({}, () => readS3ArrayBuffer("key"));',
     'import { readS3ArrayBuffer as read } from "@/api/lib/s3"; export const endpoint = createSafeHandler({}, () => read("key"));',

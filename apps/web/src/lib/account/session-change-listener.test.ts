@@ -32,7 +32,7 @@ const { installSessionChangeListener } =
   await import("@/lib/account/session-change-listener");
 const { installSessionCacheGuard } = await import("@/lib/session-cache-guard");
 const { installUserScopedStorage } =
-  await import("@/lib/account/user-scoped-storage");
+  await import("@/lib/account/install-user-scoped-storage");
 
 afterAll(() => {
   globalThis.fetch = originalFetch;

@@ -14,6 +14,8 @@ type InlineRenameInputProps = Omit<
   onValueChange: (value: string) => void;
   onCommit: () => void;
   onCancel: () => void;
+  /** Fill the parent's row instead of sizing to the text. */
+  fill?: boolean;
 };
 
 /** Content-sized rename field; the title's parent owns its typography. */
@@ -38,6 +40,7 @@ export const InlineRenameInput = ({
   className,
   ref,
   dir,
+  fill = false,
   ...props
 }: InlineRenameInputProps) => {
   // The value the editor last finished at (Enter, Escape or a committed
@@ -63,7 +66,11 @@ export const InlineRenameInput = ({
   const mirrorText = mirrorTextFor(value, props.placeholder);
 
   return (
-    <span className={cn(className)} data-slot="inline-rename">
+    <span
+      className={cn(className)}
+      data-fill={fill ? "" : undefined}
+      data-slot="inline-rename"
+    >
       {/* The mirror sizes older webviews without measuring or changing fonts. */}
       <span aria-hidden="true" data-slot="inline-rename-mirror">
         {mirrorText}

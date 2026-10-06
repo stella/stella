@@ -10,6 +10,7 @@ import { queryCountLogger } from "@/api/lib/db-query-counter";
 import { runTransactionsInCallerContext } from "@/api/lib/db/caller-async-context";
 import type { RegistrationQuery } from "@/api/lib/db/operator-registrations/input";
 import { readAuditedRegistrationPage } from "@/api/lib/db/operator-registrations/read";
+import type { createReviewAccountOrganizationStore } from "@/api/lib/db/review-account-organization-store";
 import { createSanctionsPublicReadDb } from "@/api/lib/lists/sanctions/read-db";
 import { isLocalDevOpen } from "@/api/runtime-mode";
 
@@ -87,6 +88,16 @@ export const createPublicSanctionsReader = () =>
 /** The operator handler receives a bounded audited page, never the owner handle. */
 export const readOperatorRegistrationPage = async (query: RegistrationQuery) =>
   await readAuditedRegistrationPage(rootDb, query);
+
+/**
+ * Binds the review-account organization store to the owner connection; the
+ * operator command receives the operations, never the owner handle. The
+ * store is passed in rather than imported, so nothing it depends on (the API
+ * environment, audit, seeds) joins this module's import graph.
+ */
+export const bindOwnerReviewAccountOrganizationStore = (
+  createStore: typeof createReviewAccountOrganizationStore,
+) => createStore(rootDb);
 
 type Database = typeof rootDb;
 export type Transaction = TransactionOf<Database>;

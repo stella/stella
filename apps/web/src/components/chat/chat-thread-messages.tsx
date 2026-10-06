@@ -296,6 +296,7 @@ export const ChatThreadMessages = ({
               shouldShowToolCalls={shouldShowToolCalls}
               streamdownComponents={streamdownComponents}
               workspaceId={workspaceId}
+              threadRef={threadRef}
             />
             <div
               className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1"
@@ -1359,6 +1360,7 @@ type AssistantMessagePartsProps = Pick<
   | "onOpenCreateDocumentDraft"
   | "onOpenCreatedDocument"
   | "streamdownComponents"
+  | "threadRef"
   | "workspaceId"
 > & {
   activeOrganizationId: string;
@@ -1535,6 +1537,7 @@ const toAssistantPartRenderGroups = (
  * remount on every streaming text delta.
  */
 const AssistantMessageParts = ({
+  threadRef,
   activeFileName,
   activeOrganizationId,
   assistantTextDensity,
@@ -1565,6 +1568,8 @@ const AssistantMessageParts = ({
         <ChatRichMessagePart
           key={`${message.id}-${entry.key}`}
           part={entry.part}
+          organizationId={activeOrganizationId}
+          threadRef={threadRef}
         />
       );
     }

@@ -145,6 +145,7 @@
       "useBackupCode": "استخدام رمز احتياطي بدلاً من ذلك"
     },
     "useDifferentEmail": "استخدام بريد إلكتروني مختلف",
+    "usePassword": "استخدام كلمة المرور بدلًا من ذلك",
     "weSentCodeTo": "أرسلنا رمزًا إلى <email>{emailAddress}</email>"
   },
   "avt": {
@@ -1049,6 +1050,7 @@
       "toastDescription": "ستتوفّر الدردشة بملء الصفحة مع إطلاق السلاسل المحفوظة.",
       "toastTitle": "العرض الكامل غير متاح بعد"
     },
+    "activateGeneratedView": "التفاعل مع هذا العرض",
     "aiPrompt": "أداة تحرير رسائل الذكاء الاصطناعي",
     "aiThread": "محادثة مع الذكاء الاصطناعي",
     "analyzingSources": "جارٍ تحليل المصادر",
@@ -1194,6 +1196,8 @@
     "forkedFromUnavailable": "تم إنشاؤها من دردشة لم تعد متاحة",
     "forkedThread": "من دردشة أخرى",
     "forkingThread": "جارٍ إنشاء دردشة جديدة…",
+    "generatedView": "عرض مُنشأ",
+    "generatedViewDrill": "ابحث عن القرارات باستخدام مرشح المحكمة {court} والسنة {year}.",
     "greeting": "ما الذي تودّ العمل عليه؟",
     "greetingSubtitle": "ابدأ بملف قانوني أو مستند أو سؤال مباشر.",
     "hideThread": "إخفاء المحادثة",

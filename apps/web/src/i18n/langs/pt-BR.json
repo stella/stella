@@ -145,6 +145,7 @@
       "useBackupCode": "Usar um código de backup em vez disso"
     },
     "useDifferentEmail": "Use um e-mail diferente",
+    "usePassword": "Usar uma senha",
     "weSentCodeTo": "Enviamos um código para <email>{emailAddress}</email>"
   },
   "avt": {
@@ -1049,6 +1050,7 @@
       "toastDescription": "O chat em página inteira virá com conversas persistidas.",
       "toastTitle": "Visualização completa ainda não disponível"
     },
+    "activateGeneratedView": "Interagir com esta visualização",
     "aiPrompt": "Campo de mensagem de IA",
     "aiThread": "Conversa de IA",
     "analyzingSources": "Analisando fontes",
@@ -1194,6 +1196,8 @@
     "forkedFromUnavailable": "Criado a partir de um chat que não está mais disponível",
     "forkedThread": "De outro chat",
     "forkingThread": "Criando um novo chat…",
+    "generatedView": "Visualização gerada",
+    "generatedViewDrill": "Busque decisões com o filtro de tribunal {court} e o ano {year}.",
     "greeting": "No que você gostaria de trabalhar?",
     "greetingSubtitle": "Comece com um caso, documento ou pergunta simples.",
     "hideThread": "Ocultar conversa",
