@@ -117,60 +117,6 @@ import {
  * `RefMediationEntry.projection` boundary, so the map's surface is unchanged.
  */
 
-// --- Compile-time payload ties -------------------------------------------------
-
-/**
- * The field paths in `Payload` that `SchemaInput` does not declare, at any
- * depth (arrays compared element-wise; a `Payload` union branch is compared
- * only against the `SchemaInput` branches it is assignable to; an `unknown`
- * schema field — stripped/unenumerated positions — admits any payload type
- * without descending).
- */
-type ProjectionScalar =
-  | string
-  | number
-  | boolean
-  | bigint
-  | symbol
-  | null
-  | undefined;
-
-type ExtraProjectionFields<Payload, SchemaInput> = unknown extends SchemaInput
-  ? never
-  : SchemaInput extends ProjectionScalar
-    ? never
-    : Payload extends readonly (infer Item)[]
-      ? SchemaInput extends readonly (infer ShapeItem)[]
-        ? ExtraProjectionFields<Item, ShapeItem>
-        : never
-      : Payload extends object
-        ? SchemaInput extends object
-          ? Payload extends SchemaInput
-            ? {
-                [K in keyof Payload]-?: K extends keyof SchemaInput
-                  ? ExtraProjectionFields<Payload[K], SchemaInput[K]>
-                  : K;
-              }[keyof Payload]
-            : never
-          : never
-        : never;
-
-/**
- * Compile-time exactness tie for a chat payload that is NOT built as an
- * object literal (a shared helper's return value forwarded verbatim), where
- * `satisfies v.InferInput<typeof X_PROJECTION>` gets no excess-property
- * check. `AssertNoExtraFields<Payload, SchemaInput>` fails typecheck when
- * `Payload` carries a field the projection schema does not classify, naming
- * the offending keys. Literal construction sites should prefer a direct
- * `satisfies` tie instead.
- */
-export type AssertNoExtraFields<
-  Payload extends ([ExtraProjectionFields<Payload, SchemaInput>] extends [never]
-    ? SchemaInput
-    : { unclassifiedFields: ExtraProjectionFields<Payload, SchemaInput> }),
-  SchemaInput,
-> = Payload;
-
 // --- Chat projection schemas -------------------------------------------------
 // One artifact per projected tool: the exact shape the chat surface forwards,
 // with per-field chat semantics attached (`chatRef`/`chatEntityRef`/

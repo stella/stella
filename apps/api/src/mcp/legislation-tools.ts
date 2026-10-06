@@ -32,6 +32,7 @@ import { PROVISION_STATUS } from "@/api/lib/legal-search/legislation-provision-v
 import { readVersionBlocks } from "@/api/lib/legal-search/legislation-version-blocks";
 import { legislationPublicReadDb } from "@/api/lib/legislation-public-read-db";
 import { LIMITS } from "@/api/lib/limits";
+import { projectionPayload } from "@/api/lib/projection-totality";
 import { normalizeTenantPageLimit } from "@/api/lib/rate-limit/action-size-limits";
 import { brandPersistedLegislationDocumentId } from "@/api/lib/safe-id-boundaries";
 import {
@@ -589,35 +590,37 @@ const handleSearchLegislationTool: TypedMcpToolHandler<
       : errorResult(failure?.message ?? "Legislation search failed");
   }
 
-  return toolDataResult({
-    nextCursor: result.nextCursor,
-    paginationOutcome: result.paginationOutcome,
-    results: result.items.map((hit) => ({
-      ...legalCitationLinkFields({
-        appUrl: buildLegislationDocumentAppUrl({
-          country: hit.country,
-          documentId: hit.documentId,
-          eli: hit.eli,
-          slug: hit.slug,
+  return toolDataResult(
+    projectionPayload(SEARCH_LEGISLATION_PROJECTION, {
+      nextCursor: result.nextCursor,
+      paginationOutcome: result.paginationOutcome,
+      results: result.items.map((hit) => ({
+        ...legalCitationLinkFields({
+          appUrl: buildLegislationDocumentAppUrl({
+            country: hit.country,
+            documentId: hit.documentId,
+            eli: hit.eli,
+            slug: hit.slug,
+          }),
+          sourceUrl: hit.sourceUrl,
         }),
+        country: hit.country,
+        documentId: hit.documentId,
+        documentType: hit.documentType,
+        effectiveDate: hit.effectiveDate,
+        eli: hit.eli,
+        language: hit.language,
+        match: hit.match,
+        resourceName: legislationResourceName(hit.documentId),
+        score: hit.score,
+        snippet: toPlainTextSnippet(hit.headline),
         sourceUrl: hit.sourceUrl,
-      }),
-      country: hit.country,
-      documentId: hit.documentId,
-      documentType: hit.documentType,
-      effectiveDate: hit.effectiveDate,
-      eli: hit.eli,
-      language: hit.language,
-      match: hit.match,
-      resourceName: legislationResourceName(hit.documentId),
-      score: hit.score,
-      snippet: toPlainTextSnippet(hit.headline),
-      sourceUrl: hit.sourceUrl,
-      status: hit.status,
-      title: hit.title,
-    })),
-    total: result.total,
-  } satisfies v.InferInput<typeof SEARCH_LEGISLATION_PROJECTION>);
+        status: hit.status,
+        title: hit.title,
+      })),
+      total: result.total,
+    }),
+  );
 };
 
 // --- read_statute ---------------------------------------------------------
@@ -736,56 +739,58 @@ const handleReadStatuteTool: TypedMcpToolHandler<
     return window;
   }
 
-  return toolDataResult({
-    nextCursor: window?.nextCursor ?? null,
-    statute: {
-      ...legalCitationLinkFields({
-        appUrl: buildLegislationDocumentAppUrl({
-          country: document.country,
-          documentId: document.id,
-          eli: document.eli,
-          slug: document.slug,
-          version: asOf === undefined ? null : document.versionValidFrom,
-        }),
-        sourceUrl: document.sourceUrl,
-      }),
-      charCount: window?.charCount ?? null,
-      country: document.country,
-      documentId: document.id,
-      documentType: document.documentType,
-      effectiveDate: document.effectiveDate,
-      eli: document.eli,
-      language: document.language,
-      outline,
-      outlineTruncated,
-      resourceName: legislationResourceName(document.id),
-      sourceUrl: document.sourceUrl,
-      status: document.status,
-      text: window?.text ?? null,
-      title: document.title,
-      truncated: window?.truncated ?? false,
-      versionValidFrom: document.versionValidFrom,
-      versionValidTo: document.versionValidTo,
-      expressionKind: document.expressionKind,
-      windowDisposition: document.windowDisposition,
-      windowDispositionBasis: document.windowDispositionBasis,
-      versions: versionsPage.items.map((version) => ({
-        documentId: version.id,
-        resourceName: legislationResourceName(version.id),
-        versionValidFrom: version.versionValidFrom,
-        versionValidTo: version.versionValidTo,
-        expressionKind: version.expressionKind,
-        windowDisposition: version.windowDisposition,
-        windowDispositionBasis: version.windowDispositionBasis,
-      })),
-      ...(document.allowsDerivedAi
-        ? {}
-        : {
-            textWithheldReason:
-              "The source licence does not permit AI use of the full text.",
+  return toolDataResult(
+    projectionPayload(READ_STATUTE_PROJECTION, {
+      nextCursor: window?.nextCursor ?? null,
+      statute: {
+        ...legalCitationLinkFields({
+          appUrl: buildLegislationDocumentAppUrl({
+            country: document.country,
+            documentId: document.id,
+            eli: document.eli,
+            slug: document.slug,
+            version: asOf === undefined ? null : document.versionValidFrom,
           }),
-    },
-  } satisfies v.InferInput<typeof READ_STATUTE_PROJECTION>);
+          sourceUrl: document.sourceUrl,
+        }),
+        charCount: window?.charCount ?? null,
+        country: document.country,
+        documentId: document.id,
+        documentType: document.documentType,
+        effectiveDate: document.effectiveDate,
+        eli: document.eli,
+        language: document.language,
+        outline,
+        outlineTruncated,
+        resourceName: legislationResourceName(document.id),
+        sourceUrl: document.sourceUrl,
+        status: document.status,
+        text: window?.text ?? null,
+        title: document.title,
+        truncated: window?.truncated ?? false,
+        versionValidFrom: document.versionValidFrom,
+        versionValidTo: document.versionValidTo,
+        expressionKind: document.expressionKind,
+        windowDisposition: document.windowDisposition,
+        windowDispositionBasis: document.windowDispositionBasis,
+        versions: versionsPage.items.map((version) => ({
+          documentId: version.id,
+          resourceName: legislationResourceName(version.id),
+          versionValidFrom: version.versionValidFrom,
+          versionValidTo: version.versionValidTo,
+          expressionKind: version.expressionKind,
+          windowDisposition: version.windowDisposition,
+          windowDispositionBasis: version.windowDispositionBasis,
+        })),
+        ...(document.allowsDerivedAi
+          ? {}
+          : {
+              textWithheldReason:
+                "The source licence does not permit AI use of the full text.",
+            }),
+      },
+    }),
+  );
 };
 
 // --- read_statute_provisions ----------------------------------------------
@@ -1018,20 +1023,22 @@ const handleReadStatuteProvisionsTool: TypedMcpToolHandler<
     }),
   );
 
-  return toolDataResult({
-    items: entries.map((entry) =>
-      entry.type === "invalid"
-        ? entry.result
-        : provisionItemResult({
-            blocksByDocumentId,
-            item: entry.request,
-            resolution:
-              resolutionsByKey.get(provisionRequestKey(entry.request)) ??
-              panic("Lost a provision resolution"),
-            versionsByDocumentId,
-          }),
-    ),
-  } satisfies v.InferInput<typeof READ_STATUTE_PROVISIONS_PROJECTION>);
+  return toolDataResult(
+    projectionPayload(READ_STATUTE_PROVISIONS_PROJECTION, {
+      items: entries.map((entry) =>
+        entry.type === "invalid"
+          ? entry.result
+          : provisionItemResult({
+              blocksByDocumentId,
+              item: entry.request,
+              resolution:
+                resolutionsByKey.get(provisionRequestKey(entry.request)) ??
+                panic("Lost a provision resolution"),
+              versionsByDocumentId,
+            }),
+      ),
+    }),
+  );
 };
 
 // --- read_provision_history -----------------------------------------------
@@ -1096,48 +1103,50 @@ const handleReadProvisionHistoryTool: TypedMcpToolHandler<
       : notFoundResult("Legislation not found", FIND_THE_ELI_HINT);
   }
 
-  return toolDataResult({
-    anchor,
-    eli,
-    items: page.items.map((item) => {
-      const version = {
-        ...legalCitationLinkFields({
-          appUrl: buildLegislationDocumentAppUrl({
-            country: item.country,
-            documentId: item.documentId,
-            eli,
-            slug: item.slug,
-            version: item.versionValidFrom,
-            anchor,
+  return toolDataResult(
+    projectionPayload(READ_PROVISION_HISTORY_PROJECTION, {
+      anchor,
+      eli,
+      items: page.items.map((item) => {
+        const version = {
+          ...legalCitationLinkFields({
+            appUrl: buildLegislationDocumentAppUrl({
+              country: item.country,
+              documentId: item.documentId,
+              eli,
+              slug: item.slug,
+              version: item.versionValidFrom,
+              anchor,
+            }),
+            sourceUrl: item.sourceUrl,
           }),
-          sourceUrl: item.sourceUrl,
-        }),
-        documentId: item.documentId,
-        resourceName: legislationResourceName(item.documentId),
-        versionValidFrom: item.versionValidFrom,
-        versionValidTo: item.versionValidTo,
-        expressionKind: item.expressionKind,
-        windowDisposition: item.windowDisposition,
-        windowDispositionBasis: item.windowDispositionBasis,
-      };
-      // The same publisher permission read_statute and
-      // read_statute_provisions apply, per consolidation: a Work may be
-      // re-licensed between versions, so the gate is per item and not per
-      // call.
-      return item.allowsDerivedAi
-        ? {
-            ...version,
-            ...boundProvisionText(item.text),
-            status: PROVISION_STATUS.found,
-          }
-        : {
-            ...version,
-            message: WITHHELD_WORDING_MESSAGE,
-            status: PROVISION_STATUS.textWithheld,
-          };
+          documentId: item.documentId,
+          resourceName: legislationResourceName(item.documentId),
+          versionValidFrom: item.versionValidFrom,
+          versionValidTo: item.versionValidTo,
+          expressionKind: item.expressionKind,
+          windowDisposition: item.windowDisposition,
+          windowDispositionBasis: item.windowDispositionBasis,
+        };
+        // The same publisher permission read_statute and
+        // read_statute_provisions apply, per consolidation: a Work may be
+        // re-licensed between versions, so the gate is per item and not per
+        // call.
+        return item.allowsDerivedAi
+          ? {
+              ...version,
+              ...boundProvisionText(item.text),
+              status: PROVISION_STATUS.found,
+            }
+          : {
+              ...version,
+              message: WITHHELD_WORDING_MESSAGE,
+              status: PROVISION_STATUS.textWithheld,
+            };
+      }),
+      nextCursor: page.nextCursor,
     }),
-    nextCursor: page.nextCursor,
-  } satisfies v.InferInput<typeof READ_PROVISION_HISTORY_PROJECTION>);
+  );
 };
 
 export const LEGISLATION_TOOL_HANDLERS = {
