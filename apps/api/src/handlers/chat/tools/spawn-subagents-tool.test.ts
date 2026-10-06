@@ -7,6 +7,7 @@ import {
   BUILT_IN_CHAT_TOOL_POLICY_KINDS,
   CHAT_TOOL_POLICY_REQUIRES_APPROVAL,
 } from "@stll/api-contract";
+import { SUBAGENT_TITLE_MAX_CHARS } from "@stll/api-contract/spawn-subagents";
 
 import type { Transaction } from "@/api/db/root";
 import type { SafeDb } from "@/api/db/safe-db";
@@ -26,10 +27,7 @@ import {
   SPAWN_SUBAGENTS_TOOL_DEFINITION,
   SUBAGENT_FAILED_MESSAGE,
 } from "@/api/handlers/chat/tools/spawn-subagents-tool";
-import {
-  SPAWN_SUBAGENTS_TOOL_NAME,
-  SUBAGENT_TITLE_MAX_CHARS,
-} from "@/api/handlers/chat/tools/subagent-tool-shared";
+import { SPAWN_SUBAGENTS_TOOL_NAME } from "@/api/handlers/chat/tools/subagent-tool-shared";
 import type { SubagentProposalSink } from "@/api/handlers/chat/tools/subagent-tool-shared";
 import { projectToolMapForSubagent } from "@/api/handlers/chat/tools/subagent-tools";
 import { toTanStackToolSchema } from "@/api/handlers/chat/tools/tanstack-tool-schema";

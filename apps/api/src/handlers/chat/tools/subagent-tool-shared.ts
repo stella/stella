@@ -10,7 +10,6 @@
  */
 
 export const SPAWN_SUBAGENTS_TOOL_NAME = "spawn_subagents";
-export const SUBAGENT_TITLE_MAX_CHARS = 80;
 
 export type SubagentWriteProposal = {
   toolName: string;

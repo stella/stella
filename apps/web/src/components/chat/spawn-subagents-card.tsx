@@ -2,7 +2,12 @@ import type { ComponentProps } from "react";
 
 import { panic } from "better-result";
 import { useTranslations } from "use-intl";
+import * as v from "valibot";
 
+import {
+  spawnSubagentsInputSchema,
+  spawnSubagentsOutputSchema,
+} from "@stll/api-contract/spawn-subagents";
 import {
   Accordion,
   AccordionItem,
@@ -32,10 +37,10 @@ import {
 import type { SpawnSubagentsCallStatus } from "@/components/chat/spawn-subagents-card.logic";
 import { useFormatter } from "@/i18n/formatting-context";
 
-type SpawnSubagentsPart = Extract<
-  RegisteredChatUIToolCallPart,
-  { name: "spawn_subagents" }
->;
+type SpawnSubagentsPart = Omit<
+  Extract<RegisteredChatUIToolCallPart, { name: "spawn_subagents" }>,
+  "input" | "output"
+> & { input?: unknown; output?: unknown };
 
 type SpawnSubagentsInput = ChatUITools["spawn_subagents"]["input"];
 type SpawnSubagentsOutput = ChatUITools["spawn_subagents"]["output"];
@@ -52,10 +57,17 @@ export const SpawnSubagentsCard = ({
   const t = useTranslations();
   const format = useFormatter();
 
-  // Input is a DeepPartial while streaming; treat as absent until it
-  // settles. `part.input` is already parsed/typed upstream.
-  const input = part.state !== "input-streaming" ? part.input : undefined;
-  const output = part.state === "complete" ? part.output : null;
+  // Persisted calls can predate the current schema; types are no parse proof.
+  const parsedInput = v.safeParse(
+    spawnSubagentsInputSchema,
+    part.state === "input-streaming" ? undefined : part.input,
+  );
+  const parsedOutput = v.safeParse(
+    spawnSubagentsOutputSchema,
+    part.state === "complete" ? part.output : undefined,
+  );
+  const input = parsedInput.success ? parsedInput.output : null;
+  const output = parsedOutput.success ? parsedOutput.output : null;
   const callStatus = getSpawnSubagentsCallStatus(part);
 
   if (!input) {
@@ -67,6 +79,11 @@ export const SpawnSubagentsCard = ({
             className="text-muted-foreground size-4 shrink-0"
           />
           <span className="font-medium">{t("chat.tool.spawn_subagents")}</span>
+          {output !== null && (
+            <span className="text-muted-foreground text-xs tabular-nums">
+              {format.number(output.results.length)}
+            </span>
+          )}
           <CallStatusIndicator status={callStatus} />
         </div>
       </div>

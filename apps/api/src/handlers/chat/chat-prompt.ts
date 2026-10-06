@@ -39,6 +39,7 @@ import type {
   LegislationWindowDisposition,
 } from "@stll/api-contract/legislation-expression";
 import { PUBLIC_LEGISLATION_COUNTRIES } from "@stll/api-contract/legislation-publication";
+import { SUBAGENT_TITLE_MAX_CHARS } from "@stll/api-contract/spawn-subagents";
 import { describeSuggestChangesCapabilities } from "@stll/folio-agents";
 import { isFolioAIContentBlock } from "@stll/folio-core/server";
 import type { SkillMetadata } from "@stll/skills";
@@ -76,7 +77,6 @@ import {
   chatCodeModeSystemPrompt,
 } from "@/api/handlers/chat/tools/execute/chat-code-mode";
 import type { RegistryReadToolName } from "@/api/handlers/chat/tools/registry-adapter/ref-field-map";
-import { SUBAGENT_TITLE_MAX_CHARS } from "@/api/handlers/chat/tools/subagent-tool-shared";
 import { CHAT_REFERENCE_HREF_PREFIXES } from "@/api/handlers/chat/types";
 import type { ChatMessage } from "@/api/handlers/chat/types";
 import type { RequestedSkills } from "@/api/lib/agent-skills/requested-skills";
