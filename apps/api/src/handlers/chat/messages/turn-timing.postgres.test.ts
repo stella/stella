@@ -206,10 +206,9 @@ const seedTurn = async ({
         settledAt,
       });
       return;
-    default: {
-      const exhaustive: never = state;
-      panic(`Unhandled timing fixture state: ${exhaustive}`);
-    }
+    default:
+      state satisfies never;
+      panic("Unhandled timing fixture state");
   }
 };
 

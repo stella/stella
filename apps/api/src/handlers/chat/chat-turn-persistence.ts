@@ -1442,10 +1442,7 @@ export const settleChatTurnOnTx = async ({
   const settledAt = databaseNow();
   const base = {
     ...closeActiveTiming(),
-    timingMessageId:
-      assistantMessageId === null
-        ? chatTurns.timingMessageId
-        : assistantMessageId,
+    timingMessageId: assistantMessageId ?? chatTurns.timingMessageId,
     cancellationReason: null,
     executionId: null,
     leaseExpiresAt: null,

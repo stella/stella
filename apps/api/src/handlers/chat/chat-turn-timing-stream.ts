@@ -41,7 +41,7 @@ export const withChatTurnTiming = async function* ({
   const messageIds = new Set<string>();
   let settledTiming: Promise<ReadOutcome<ChatTurnTiming | null>> | undefined;
   for await (const chunk of source) {
-    if ("subagentRunId" in chunk && chunk.subagentRunId !== undefined) {
+    if ("subagentRunId" in chunk) {
       yield chunk;
       continue;
     }
