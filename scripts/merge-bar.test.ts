@@ -50,7 +50,7 @@ import {
   type MergeQueueRemoval,
   type RunJob,
 } from "./merge-bar";
-import ratchetDefinitionPaths from "./ratchet-definition-paths.json";
+import ratchetDefinitionPaths from "./ratchet-definition-paths.json" with { type: "json" };
 
 // The CLI runs below spawn the real script offline against a fake gh, as a
 // local test run; its source freshness check is covered in
