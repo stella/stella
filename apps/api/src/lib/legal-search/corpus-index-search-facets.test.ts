@@ -168,7 +168,7 @@ test("facets sharing a query share one engine round trip", async () => {
 
   expect(engine.requests).toHaveLength(1);
   expect(Object.keys(engine.requests.at(0)?.aggs ?? {}).toSorted()).toEqual(
-    [...CORPUS_SEARCH_FACET_NAMES, "total"].toSorted(),
+    [...CORPUS_SEARCH_FACET_NAMES, "courtYear", "total"].toSorted(),
   );
 });
 

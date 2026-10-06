@@ -271,6 +271,18 @@ describe("case-law search response schema", () => {
       { buckets: [{ ...matrixBucket, tier: "invented" }], truncated: false },
       { buckets: [{ ...matrixBucket, extra: true }], truncated: false },
       {
+        buckets: [{ ...matrixBucket, court: "x".repeat(513) }],
+        truncated: false,
+      },
+      {
+        buckets: [{ ...matrixBucket, courtName: "x".repeat(513) }],
+        truncated: false,
+      },
+      {
+        buckets: [{ ...matrixBucket, courtAbbreviation: "x".repeat(257) }],
+        truncated: false,
+      },
+      {
         buckets: Array.from({ length: 401 }, () => matrixBucket),
         truncated: true,
       },

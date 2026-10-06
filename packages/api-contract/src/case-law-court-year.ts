@@ -10,6 +10,8 @@ const count = v.pipe(
   v.minValue(0),
   v.maxValue(Number.MAX_SAFE_INTEGER),
 );
+const courtText = v.pipe(v.string(), v.maxLength(512));
+const courtAbbreviation = v.nullable(v.pipe(v.string(), v.maxLength(256)));
 
 /** Whole-query decision counts; unavailable index signals remain explicit. */
 export const caseLawCourtYearSchema = v.nullable(
@@ -17,9 +19,9 @@ export const caseLawCourtYearSchema = v.nullable(
     buckets: v.pipe(
       v.array(
         v.strictObject({
-          court: v.string(),
-          courtName: v.string(),
-          courtAbbreviation: v.nullable(v.string()),
+          court: courtText,
+          courtName: courtText,
+          courtAbbreviation,
           tier: v.picklist(COURT_TIER_LABELS),
           year: v.pipe(v.number(), v.integer()),
           count,

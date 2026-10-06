@@ -1,12 +1,12 @@
 export const APP_SEARCH_FIXTURE = {
   facets: {
-    courtYear: null,
     court: [
       {
         tierLabel: "constitutional" as const,
         courts: [{ value: "Ústavní soud", label: null, count: 1 }],
       },
     ],
+    courtYear: null,
     year: [],
     decisionType: [],
     source: [],
