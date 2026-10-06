@@ -135,6 +135,25 @@ const FLUSHES_ITS_OWN_SEARCH_MARKS =
 // the baseline; it moves one out of it, and review of the row is the gate.
 export const ROOT_CONNECTION_DOORS = [
   {
+    id: "operator-registration-directory",
+    capability: "Serving audited operator registration pages",
+    owner: ["apps/api/src/db/root.ts"],
+    summary:
+      "Reads bounded registration pages through the owner connection and records each read transactionally; callers receive only the declared directory fields, never a database handle.",
+    enforcement: {
+      kind: "import",
+      specifiers: ["@/api/db/root"],
+      names: ["readOperatorRegistrationPage"],
+      allowed: [
+        {
+          path: "apps/api/src/handlers/operator/registrations.ts",
+          reason:
+            "Authorizes the deployment credential before reading the directory.",
+        },
+      ],
+    },
+  },
+  {
     id: "public-sanctions-reader-binding",
     capability:
       "Binding the public sanctions reader to the scoped connection pool",
