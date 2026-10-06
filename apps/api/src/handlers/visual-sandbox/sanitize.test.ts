@@ -13,7 +13,7 @@ describe("visual presentation markup", () => {
     );
     expect(result.isOk()).toBe(true);
     if (result.isOk()) {
-      expect(result.value).toBe(
+      expect(String(result.value)).toBe(
         '<script>const count = 2;</script><p>Timeline</p><script>const label = "dates";</script>',
       );
     }
@@ -40,7 +40,7 @@ describe("visual presentation markup", () => {
     if (!result.isOk()) {
       return;
     }
-    expect(result.value).toBe(
+    expect(String(result.value)).toBe(
       '<a data-stella-link="https://example.test/decision?q=a&amp;b=c">Decision</a>',
     );
   });
@@ -51,7 +51,7 @@ describe("visual presentation markup", () => {
     );
     expect(result.isOk()).toBe(true);
     if (result.isOk()) {
-      expect(result.value).toBe(
+      expect(String(result.value)).toBe(
         '<label for="filter">Filter</label><input id="filter" type="search"><button type="button">Sort</button>',
       );
     }
