@@ -1351,7 +1351,13 @@ const createSafeScopedHandler = <
               { schema: config.params, value: ctx.params },
               { schema: config.query, value: ctx.query },
             ],
-            scopedDb: async (read) => (await ctx.safeDb(read)).unwrap(),
+            scopedDb: async (read) => {
+              const result = await ctx.safeDb(read);
+              if (result.isErr()) {
+                throw result.error;
+              }
+              return result.value;
+            },
           }),
       );
       if (visible.isErr()) {
