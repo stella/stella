@@ -884,6 +884,7 @@ test("worker budget refusal stops model dispatch and releases its active slot", 
       await seedRun();
       await processListVerificationRun({
         data: { runId, organizationId, workspaceId, userId },
+        admission: testModelAdmission(organizationId),
         actor: actorFor(runId),
         grants,
         execution: {

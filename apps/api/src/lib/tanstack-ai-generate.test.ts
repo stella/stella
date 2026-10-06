@@ -12,6 +12,7 @@ import {
   REASONING_EFFORTS,
 } from "@stll/ai-catalog";
 import { assertProperty } from "@stll/property-testing";
+import { rejectionOf } from "@stll/property-testing/rejection";
 
 import type { CachingDecision } from "@/api/lib/ai-config";
 import { classifyAIError, isAnticipatedAIFailure } from "@/api/lib/ai-error";
@@ -1491,16 +1492,18 @@ describe("model dispatch within its admitted action", () => {
     queueRun(textRun(["never sent"]));
 
     const outlived = "Model dispatch outlived the action that admitted it";
-    await expect(
-      generateTextForTestModel({ ...dispatchOptions, admission: escaped }),
-    ).rejects.toThrow(outlived);
+    expect(
+      await rejectionOf(
+        generateTextForTestModel({ ...dispatchOptions, admission: escaped }),
+      ),
+    ).toHaveProperty("message", expect.stringContaining(outlived));
     const stream = streamTextForTestModel({
       ...dispatchOptions,
       admission: escaped,
     });
-    await expect(stream[Symbol.asyncIterator]().next()).rejects.toThrow(
-      outlived,
-    );
+    expect(
+      await rejectionOf(stream[Symbol.asyncIterator]().next()),
+    ).toHaveProperty("message", expect.stringContaining(outlived));
     expect(providerRequests).toHaveLength(0);
   });
 });
@@ -2336,6 +2339,7 @@ test("recovers an unclassified provider failure wrapped without a status", () =>
 describe("model output that fails its schema", () => {
   const SENTINEL = "SENTINEL_MODEL_OUTPUT";
   const objectOptions = {
+    admission: NO_ORGANIZATION_MODEL_DISPATCH,
     caching: noCaching,
     organizationId: null,
     dataClass: "customer" as const,

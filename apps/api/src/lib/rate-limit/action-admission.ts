@@ -411,7 +411,7 @@ const createAdmissionExecutor = ({
           ...actionPeriodArguments(window),
         ]);
         return retried
-          .map((reply) => ({ reply, window }))
+          .map((retriedReply) => ({ reply: retriedReply, window }))
           .mapError((cause) =>
             ActionAdmissionError.is(cause)
               ? cause

@@ -1865,12 +1865,7 @@ const handleSavePlaybookTool: TypedMcpToolHandler<
     if (merged.issues.length > 0 && merged.written.length === 0) {
       return savePlaybookRefusedResult(merged.issues);
     }
-    const {
-      orgAIConfig,
-      orgAIConfigStatus,
-      promptCachingEnabled,
-      managedAIResidency,
-    } = await loadOrgSettings();
+    const orgSettings = await loadOrgSettings();
     const scope = toPlaybookScope({ stored: null, input: input.scope });
     const created = await Result.gen(() =>
       createPlaybookDefinitionHandler({
@@ -1878,10 +1873,7 @@ const handleSavePlaybookTool: TypedMcpToolHandler<
         safeDb: context.safeDb,
         organizationId,
         accessibleWorkspaceIds: context.accessibleWorkspaceIds,
-        orgAIConfig,
-        orgAIConfigStatus,
-        promptCachingEnabled,
-        managedAIResidency,
+        ...orgSettings,
         recordAuditEvent: context.recordAuditEvent,
         body: {
           name,
@@ -1987,12 +1979,7 @@ const handleSavePlaybookTool: TypedMcpToolHandler<
     return toolDataResult(payload);
   }
 
-  const {
-    orgAIConfig,
-    orgAIConfigStatus,
-    promptCachingEnabled,
-    managedAIResidency,
-  } = await loadOrgSettings();
+  const orgSettings = await loadOrgSettings();
   const updated = await Result.gen(() =>
     updatePlaybookDefinitionHandler({
       admitModelAction: playbookDerivationAdmitter(context),
@@ -2000,10 +1987,7 @@ const handleSavePlaybookTool: TypedMcpToolHandler<
       organizationId,
       accessibleWorkspaceIds: context.accessibleWorkspaceIds,
       playbookId,
-      orgAIConfig,
-      orgAIConfigStatus,
-      promptCachingEnabled,
-      managedAIResidency,
+      ...orgSettings,
       recordAuditEvent: context.recordAuditEvent,
       body: {
         name,
