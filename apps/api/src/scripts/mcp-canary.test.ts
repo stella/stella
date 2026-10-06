@@ -125,6 +125,19 @@ const REVIEW_FAILURE_CASES: readonly (readonly [
   ["cleanup", "malformed"],
 ];
 
+const readFakeRequestBody = async (
+  body: unknown,
+  request: Request | undefined,
+): Promise<string> => {
+  if (typeof body === "string") {
+    return body;
+  }
+  if (body instanceof URLSearchParams) {
+    return body.toString();
+  }
+  return request ? await request.clone().text() : "";
+};
+
 const reviewFetcher = (
   options: {
     failure?: ReviewFailure;
@@ -143,14 +156,7 @@ const reviewFetcher = (
     const request = input instanceof Request ? input : undefined;
     const url = new URL(input instanceof Request ? input.url : input);
     const headers = new Headers(init.headers ?? request?.headers);
-    let body = "";
-    if (typeof init.body === "string") {
-      body = init.body;
-    } else if (init.body instanceof URLSearchParams) {
-      body = init.body.toString();
-    } else if (request) {
-      body = await request.clone().text();
-    }
+    const body = await readFakeRequestBody(init.body, request);
     observed.push({ url: url.toString(), headers, body });
     let expectedOrigin = REVIEW_BASE_URL;
     if (url.pathname.startsWith("/api/auth/")) {
@@ -318,7 +324,7 @@ const reviewFetcher = (
                 {
                   id: REVIEW_EXISTING_TASK_ID,
                   name: SAMPLE_MATTERS.flatMap(({ tasks }) =>
-                    tasks.map(({ name }) => name),
+                    tasks.map((task) => task.name),
                   ).at(0),
                   matterId: REVIEW_MATTER_ID,
                 },
@@ -492,8 +498,8 @@ describe("restricted review-account journey", () => {
     const fetcher: CanaryFetcher = async () => {
       throw new Error("must not fetch");
     };
-    await expect(
-      runReviewAccountJourney(
+    expect(
+      await runReviewAccountJourney(
         {
           baseUrl: REVIEW_BASE_URL,
           configuredBaseUrl: REVIEW_BASE_URL,
@@ -501,11 +507,11 @@ describe("restricted review-account journey", () => {
         },
         fetcher,
       ),
-    ).resolves.toMatchObject([
+    ).toMatchObject([
       { status: "skipped", name: "restricted account: sign-in" },
     ]);
-    await expect(
-      runReviewAccountJourney(
+    expect(
+      await runReviewAccountJourney(
         {
           baseUrl: "https://other.example",
           configuredBaseUrl: REVIEW_BASE_URL,
@@ -515,11 +521,11 @@ describe("restricted review-account journey", () => {
         },
         fetcher,
       ),
-    ).resolves.toMatchObject([
+    ).toMatchObject([
       { status: "skipped", name: "restricted account: sign-in" },
     ]);
-    await expect(
-      runReviewAccountJourney(
+    expect(
+      await runReviewAccountJourney(
         {
           baseUrl: REVIEW_BASE_URL,
           configuredBaseUrl: REVIEW_BASE_URL,
@@ -528,7 +534,7 @@ describe("restricted review-account journey", () => {
         },
         fetcher,
       ),
-    ).resolves.toEqual([]);
+    ).toEqual([]);
   });
 
   test.each(REVIEW_FAILURE_CASES)(
