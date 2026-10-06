@@ -59,7 +59,7 @@ const loaderPatterns = (source: string, file: string, target: string) => {
 // Declarations bind the selector to generator and test input owners. Literal
 // filesystem reads additionally cover guards that are not workspace test tasks.
 const markdownInputs = (root: string) => {
-  const patterns = new Set(
+  const patterns = new Set<string>(
     GENERATORS.flatMap(({ inputs, outputs }) => [...inputs, ...outputs]),
   );
   for (const inputs of readTestInputs(root).values()) {
