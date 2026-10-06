@@ -1,6 +1,5 @@
-import { Kind, Type, TypeRegistry } from "@sinclair/typebox";
+import { Type } from "@sinclair/typebox";
 import { t } from "elysia";
-import { is } from "valibot";
 
 import { COURT_TIER_LABELS } from "@stll/api-contract/case-law-court-tiers";
 import {
@@ -29,6 +28,7 @@ import {
   tPaginationLimit,
   tSafeId,
 } from "@/api/lib/custom-schema";
+import { jsonSchemaToTypeBox } from "@/api/lib/json-schema/json-schema-to-typebox";
 import { toJsonSchema } from "@/api/lib/json-schema/valibot-to-json-schema";
 import { CORPUS_SEARCH_CURSOR_WITH_GROUPS_MAX_LENGTH } from "@/api/lib/legal-search/corpus-search-cursor";
 import { tLegalAlternatives } from "@/api/lib/legal-search/legal-alternatives";
@@ -47,20 +47,9 @@ import { searchTotalSchema } from "@/api/lib/search/total-schema";
 
 import { CASE_SEARCH_TEXT_BYTES as bytes } from "./search-response-limits";
 
-const COURT_YEAR_SCHEMA_KIND = "CaseLawCourtYear";
-// TypeBox needs a registered validator for Unsafe JSON Schema nodes. Keep
-// runtime checks tied to the same Valibot contract as the published schema.
-TypeRegistry.Set(COURT_YEAR_SCHEMA_KIND, (_schema, value) =>
-  is(caseLawCourtYearSchema, value),
+const courtYearSchema = Type.Unsafe<CaseLawCourtYear>(
+  jsonSchemaToTypeBox(toJsonSchema(caseLawCourtYearSchema)),
 );
-const courtYearSchema = Type.Unsafe<CaseLawCourtYear>({
-  ...Object.fromEntries(
-    Object.entries(toJsonSchema(caseLawCourtYearSchema)).filter(
-      ([, value]) => value !== undefined,
-    ),
-  ),
-  [Kind]: COURT_YEAR_SCHEMA_KIND,
-});
 
 export const searchDecisionsBodySchema = t.Object({
   query: t.String({
