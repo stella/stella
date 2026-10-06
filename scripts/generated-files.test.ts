@@ -228,7 +228,7 @@ test("capability runtime cache manifests cover every file the producer writes", 
     for (const output of outputs) {
       const mutated = structuredClone(config.tasks);
       const web = mutated["@stll/web#generate:api-types"];
-      if (web === undefined || web.inputs === undefined) {
+      if (web?.inputs === undefined) {
         panic("Missing web API generation inputs");
       }
       const originalLength = web.inputs.length;

@@ -12,7 +12,6 @@ import {
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { Script } from "node:vm";
-import * as v from "valibot";
 
 import { parseBunLockText } from "./bun-lock-text";
 
@@ -519,20 +518,27 @@ describe("detect-e2e-changes", () => {
       'echo "status=rate-limited" >> "$GITHUB_OUTPUT"',
     );
     expect(e2eStackSetup).toContain('echo "status=ready" >> "$GITHUB_OUTPUT"');
-    const stackSteps = v.parse(
-      v.object({
-        runs: v.object({
-          steps: v.array(
-            v.looseObject({
-              name: v.optional(v.string()),
-              id: v.optional(v.string()),
-              if: v.optional(v.string()),
-            }),
-          ),
-        }),
-      }),
-      Bun.YAML.parse(e2eStackSetup),
-    ).runs.steps;
+    const action: unknown = Bun.YAML.parse(e2eStackSetup);
+    if (
+      !isRecord(action) ||
+      !isRecord(action["runs"]) ||
+      !Array.isArray(action["runs"]["steps"])
+    ) {
+      throw new TypeError("Shared E2E action must declare composite steps");
+    }
+    const stackSteps = action["runs"]["steps"].map((value: unknown) => {
+      if (!isRecord(value)) {
+        throw new TypeError("Shared E2E action step must be an object");
+      }
+      const text = (key: string) => {
+        const field = value[key];
+        if (field === undefined || typeof field === "string") {
+          return field;
+        }
+        throw new TypeError(`Shared E2E action step ${key} must be text`);
+      };
+      return { name: text("name"), id: text("id"), if: text("if") };
+    });
     const stackIndex = stackSteps.findIndex((step) => step.id === "stack");
     expect(stackIndex).toBeGreaterThanOrEqual(0);
     const afterStack = stackSteps
