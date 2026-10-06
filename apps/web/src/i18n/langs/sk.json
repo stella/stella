@@ -3783,11 +3783,15 @@
     }
   },
   "lawHome": {
+    "clearRecent": "Vymazať nedávne",
     "enteringIntoForce": "Čoskoro nadobudne účinnosť",
     "inForceFrom": "Účinné od {date}",
-    "noRecentSearches": "Zatiaľ žiadne vyhľadávania",
+    "noRecent": "Zatiaľ žiadna nedávna aktivita",
     "noSignals": "Zatiaľ žiadne signály",
     "prompt": "Čo hľadáte?",
+    "recent": "Nedávne",
+    "recentCasesFilter": "Rozhodnutia",
+    "recentSearchFilter": "Vyhľadávania",
     "recentlyInForce": "Nedávno nadobudlo účinnosť",
     "searchLabel": "Hľadať v právnej databáze",
     "searchPlaceholder": "Spisová značka, číslo predpisu, ECLI alebo kľúčové slová",
