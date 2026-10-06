@@ -335,6 +335,27 @@ test("only successful real validation publishes a completion marker", () => {
   }
 });
 
+test("completion publication replaces an existing marker on a second attempt", () => {
+  const publisher = result.steps.find(
+    (step) => step.name === "Publish completed suite depth",
+  );
+  const inputs = v.parse(
+    v.object({ name: v.string(), overwrite: v.literal(true) }),
+    publisher?.with,
+  );
+  expect(inputs.overwrite).toBe(true);
+  for (const attempt of [1, 2]) {
+    expect(
+      evaluate(inputs.name, {
+        values: {
+          "needs.ci-plan.outputs.completion_marker": marker("full"),
+          "github.run_attempt": attempt,
+        },
+      }),
+    ).toBe(marker("full"));
+  }
+});
+
 test("completion lookup conditions belong only to the planner job", () => {
   for (const [name, job] of Object.entries(jobs)) {
     for (const step of job.steps) {
@@ -410,11 +431,16 @@ test("surviving artifacts require the latest source attempt to succeed", async (
   expect((await decide({ runFailure: true })).outputs.get("run_required")).toBe(
     "true",
   );
-  expect(
-    (
-      await decide({ sourceRun: { ...successfulRun, run_attempt: 2 } })
-    ).outputs.get("run_required"),
-  ).toBe("false");
+  for (const conclusion of ["success", "failure"]) {
+    expect(
+      (
+        await decide({
+          artifacts: [artifact("full")],
+          sourceRun: { ...successfulRun, run_attempt: 2, conclusion },
+        })
+      ).outputs.get("run_required"),
+    ).toBe(conclusion === "success" ? "false" : "true");
+  }
 });
 
 test("exact-name lookup finds evidence behind more than a page of unrelated artifacts", async () => {
