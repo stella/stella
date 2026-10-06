@@ -671,77 +671,105 @@ describe("a running turn's owner, once the user asked to stop", () => {
     },
   );
 
-  /**
-   * Five stops and the owner's finish, the finish starting after `stopsFirst`
-   * of the stops. Returns how the turn ended once they all have.
-   */
-  const raceStopsWithFinish = async (stopsFirst: number) => {
+  const seedStopAndFinish = async () => {
     const { execution, threadId, turnId } = await seedRunningTurn();
     const messageId = toSafeId<"chatMessage">(Bun.randomUUIDv7());
     const finish = async () =>
-      await finalizeAssistantTurn({
-        acceptedSendMode: null,
-        threadNames: NO_THREAD_NAMES,
-        existingIds: new Set(),
-        execution,
-        outcome: { type: "completed" },
-        recordAuditEvent: createBackgroundAuditRecorder({
-          execution: {
-            performer: { id: ids.userA1, type: "user" },
-            trigger: { type: "direct" },
-          },
-          organizationId: ids.orgA,
+      unwrap(
+        await finalizeAssistantTurn({
+          acceptedSendMode: null,
+          threadNames: NO_THREAD_NAMES,
+          existingIds: new Set(),
+          execution,
+          outcome: { type: "completed" },
+          recordAuditEvent: createBackgroundAuditRecorder({
+            execution: {
+              performer: { id: ids.userA1, type: "user" },
+              trigger: { type: "direct" },
+            },
+            organizationId: ids.orgA,
+            userId: ids.userA1,
+            workspaceId: ids.wsA1,
+          }),
+          responseMessage: toPersistableChatMessage({
+            id: messageId,
+            parts: [TEXT_PART],
+            role: "assistant",
+          }),
+          safeDb,
+          threadId,
           userId: ids.userA1,
           workspaceId: ids.wsA1,
+          indexThread: async () => {},
         }),
-        responseMessage: toPersistableChatMessage({
-          id: messageId,
-          parts: [TEXT_PART],
-          role: "assistant",
-        }),
-        safeDb,
-        threadId,
-        userId: ids.userA1,
-        workspaceId: ids.wsA1,
-        indexThread: async () => {},
-      });
-    const racers = Array.from({ length: 6 }, (_, index) =>
-      index === stopsFirst
-        ? async () => await finish()
-        : async () => await stop({ threadId, turnId }),
-    );
-    await Promise.all(racers.map(async (run) => await run()));
+      );
+    const requestStop = async () => {
+      const response = await stop({ threadId, turnId });
+      expect(response.status).toBeOneOf([200, 202]);
+      return response;
+    };
 
-    const row = await readTurn(turnId);
-    // Exactly one outcome: the finish, or the stop that overtook it.
-    expect(["cancelled", "completed"]).toContain(row.status);
-    expect(await findTurnOutcomeMismatches({ db: testDb, threadId })).toEqual(
-      [],
-    );
-    // One stored message, audited once; a stop audits nothing.
-    expect(
-      await testDb
-        .select({ id: auditLogs.id })
-        .from(auditLogs)
-        .where(eq(auditLogs.resourceId, messageId)),
-    ).toHaveLength(1);
-    // A later stop reports the outcome and never moves the first time.
-    expect((await stop({ threadId, turnId })).status).toBe(200);
-    const after = await readTurn(turnId);
-    expect({
-      requested: after.cancelRequestedAt,
-      status: after.status,
-    }).toEqual({ requested: row.cancelRequestedAt, status: row.status });
-    return row.status;
+    const expectSettled = async () => {
+      const row = await readTurn(turnId);
+      // Exactly one outcome: the finish, or the stop that overtook it.
+      expect(["cancelled", "completed"]).toContain(row.status);
+      expect(await findTurnOutcomeMismatches({ db: testDb, threadId })).toEqual(
+        [],
+      );
+      // One stored message, audited once; a stop audits nothing.
+      expect(
+        await testDb.query.chatMessages.findMany({
+          where: { threadId: { eq: threadId }, role: { eq: "assistant" } },
+          columns: { id: true },
+        }),
+      ).toEqual([{ id: messageId }]);
+      expect(
+        await testDb
+          .select({ id: auditLogs.id })
+          .from(auditLogs)
+          .where(eq(auditLogs.resourceId, messageId)),
+      ).toHaveLength(1);
+      // A later stop reports the outcome and never moves the first time.
+      expect(await requestStop()).toEqual({
+        status: 200,
+        body: {
+          turn: {
+            id: turnId,
+            status: row.status,
+            ...(row.status === "cancelled" ? { reason: "user-stop" } : {}),
+          },
+        },
+      });
+      const after = await readTurn(turnId);
+      expect(after).toEqual(row);
+      return row.status;
+    };
+    return { expectSettled, finish, requestStop };
   };
 
   test("settles once when stops race its finish", async () => {
-    const outcomes = new Set<string>();
     for (const stopsFirst of [0, 1, 3, 5]) {
-      outcomes.add(await raceStopsWithFinish(stopsFirst));
+      const { expectSettled, finish, requestStop } = await seedStopAndFinish();
+      const racers = Array.from({ length: 6 }, (_, index) =>
+        index === stopsFirst ? finish : requestStop,
+      );
+      await Promise.all(racers.map(async (run) => await run()));
+      await expectSettled();
     }
-    // The fixture must reach both orders.
-    expect([...outcomes].toSorted()).toEqual(["cancelled", "completed"]);
+  });
+
+  test("settles as cancelled when the stop finishes before the owner", async () => {
+    const { expectSettled, finish, requestStop } = await seedStopAndFinish();
+    await requestStop();
+    expect((await finish()).outcome).toEqual(USER_STOP);
+    expect(await expectSettled()).toBe("cancelled");
+  });
+
+  test("stays completed when the owner finishes before the stop", async () => {
+    const { expectSettled, finish, requestStop } = await seedStopAndFinish();
+    expect((await finish()).outcome).toEqual({ type: "completed" });
+    await requestStop();
+    expect(await expectSettled()).toBe("completed");
   });
 });
 
