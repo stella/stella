@@ -240,7 +240,7 @@ export const ProtectedAppFrame = ({
       inspectorOwner.kind !== "user" ||
       inspectorOwner.userId !== inspectorBroadcastUserId
     ) {
-      return;
+      return undefined;
     }
     return initializeInspectorTabBroadcast({
       organizationId: inspectorBroadcastOrganizationId,

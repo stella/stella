@@ -104,8 +104,7 @@ export const useTableState = ({
   const [pendingColumnSizing, setPendingColumnSizing] =
     useState<PendingColumnSizing | null>(null);
   const columnSizing: ColumnSizingState =
-    pendingColumnSizing !== null &&
-    pendingColumnSizing.owner === owner &&
+    pendingColumnSizing?.owner === owner &&
     pendingColumnSizing.over === storedColumnSizing.sizing
       ? pendingColumnSizing.sizing
       : storedColumnSizing.sizing;
