@@ -18,6 +18,11 @@ export const SYSTEM_RUN_ACTOR_COUNTS = {
     "fannedOrganizations",
     "transitions",
   ],
+  "system:operator-registrations": [
+    "sinceEpochMilliseconds",
+    "pageSize",
+    "returned",
+  ],
   "system:sanctions-refresh": [
     "activated",
     "activatedEntries",

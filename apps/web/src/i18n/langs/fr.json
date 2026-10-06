@@ -54,6 +54,17 @@
       "polish": "Améliorer la formulation"
     }
   },
+  "aiColumns": {
+    "countSummary": "{columns} colonnes × {rows} lignes = {answers, plural, one {# réponse} other {# réponses}}. Les réponses consomment le budget.",
+    "refusedBudget": "Non exécuté : budget de réponses indisponible",
+    "rerunAllPage": "Tout relancer (cette page)",
+    "rerunColumnPage": "Relancer la colonne (cette page)",
+    "runColumnPage": "Exécuter la colonne (cette page)",
+    "runPageRows": "Exécuter pour {count, plural, one {# ligne de cette page} other {# lignes de cette page}}",
+    "runRemainingPage": "Exécuter le reste (cette page)",
+    "runSelectedRows": "Exécuter pour {count, plural, one {# ligne sélectionnée} other {# lignes sélectionnées}}",
+    "selectedRun": "Exécuter les colonnes IA pour {count, plural, one {# ligne} other {# lignes}}"
+  },
   "appearance": {
     "calendar": "Calendrier",
     "calendarGregorian": "Grégorien",
@@ -841,6 +852,7 @@
       "subsection": "al. {value}"
     },
     "reader": {
+      "expandProvisions": "Développer les dispositions",
       "headMatter": "En-tête",
       "sourceAttribution": "Les données sources sont librement accessibles sur <link>{source}</link>."
     },
@@ -2310,6 +2322,8 @@
       "encryptedContent": "Le contenu d’un document chiffré ne peut pas être extrait. Retirez le mot de passe du fichier et réessayez.",
       "filePropertyTypeImmutable": "Le type d’une propriété de fichier ne peut pas être modifié. Conservez le type actuel ; créez une propriété personnalisée pour les autres valeurs.",
       "forbidden": "Vous n’avez pas l’autorisation d’effectuer cette action.",
+      "hostedCheckoutOpen": "Un paiement est déjà en cours pour cette organisation. Finalisez-le ou lancez-en un nouveau après son expiration.",
+      "hostedSubscriptionLive": "Cette organisation a déjà un abonnement. Modifiez-le dans « Gérer l’utilisation hébergée ».",
       "internalServerError": "Une erreur s’est produite. Veuillez réessayer.",
       "legalSourceEntityLimitReached": "Ce dossier a atteint la limite d’éléments, le document n’a donc pas pu être créé.",
       "legalSourceFilePropertyMissing": "Il manque une propriété de fichier dans ce dossier, le document n’a donc pas pu être créé.",
@@ -4637,6 +4651,7 @@
     "compareVersionMissing": "La version à comparer ne figure pas dans l'historique de ce texte.",
     "compareWholeAct": "Comparer le texte entier",
     "compareWithVersion": "Comparer avec {version}",
+    "currentWording": "Rédaction actuelle",
     "description": "Base de données publique de textes législatifs consolidés, indexables par texte et par version.",
     "diffInserted": "Ajouté :",
     "diffRemoved": "Supprimé :",
@@ -4686,7 +4701,9 @@
       "unknown": "Statut incertain"
     },
     "title": "Législation",
-    "validity": "En vigueur du {from} au {to}"
+    "validity": "En vigueur du {from} au {to}",
+    "wordingValidFrom": "Rédaction en vigueur depuis le {date}",
+    "wordingVersionUnknown": "Date de la version de la rédaction indisponible"
   },
   "styleSets": {
     "create": "Créer",
@@ -5455,8 +5472,7 @@
         "signCurrent": "Signer avec stella desktop",
         "signNone": "Téléchargez stella desktop pour signer ce PDF",
         "signOutdated": "Mettez à jour stella desktop pour signer",
-        "signReason": "La signature utilise le certificat de votre ordinateur ; elle s’effectue donc dans stella desktop.",
-        "signShort": "Signer"
+        "signReason": "La signature utilise le certificat de votre ordinateur ; elle s’effectue donc dans stella desktop."
       },
       "downloadAs": "Télécharger sous…",
       "downloadAsZip": "Télécharger en .zip",
@@ -5998,7 +6014,6 @@
       "previewUnsupported": "Aperçu non disponible pour ce type de document.",
       "readingFrom": "L’IA lit à partir de",
       "referencesItself": "La propriété se référence elle-même via d'autres propriétés",
-      "rerunColumn": "Relancer la colonne",
       "resultType": "Type de résultat",
       "returnsLabel": "Format",
       "scopeFile": "Fichier actuel",

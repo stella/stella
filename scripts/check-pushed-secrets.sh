@@ -72,6 +72,17 @@ if ! git log --remerge-diff -n 0 HEAD >/dev/null 2>&1; then
   exit 1
 fi
 
+# A resolvable range can still fail to print its patches (a blob a partial
+# clone must fetch lazily, and the fetch fails); the scanner then reads no
+# commits and exits 0, so every patch must be readable before the scan.
+for range in "${ranges[@]}"; do
+  read -r -a revisions <<<"${range}"
+  if ! git log -p --remerge-diff "${revisions[@]}" >/dev/null 2>&1; then
+    echo "error: cannot read the patches of pushed commit range ${range}; secret scanning refused." >&2
+    exit 1
+  fi
+done
+
 for range in "${ranges[@]}"; do
   gitleaks git --redact --no-banner --no-color --log-opts="--remerge-diff ${range}" .
 done
