@@ -19,7 +19,10 @@ const CaseDecisionView = (
   props: InspectorViewRenderProps<CaseDecisionViewPayload>,
 ) => (
   <Suspense fallback={<div className="bg-background flex-1" />}>
-    <LazyCaseDecisionInspectorView {...props} />
+    <LazyCaseDecisionInspectorView
+      key={`${props.tab.id}:${props.tab.payload.findSessionId ?? props.tab.payload.searchQuery ?? ""}`}
+      {...props}
+    />
   </Suspense>
 );
 

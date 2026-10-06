@@ -30,7 +30,6 @@ import { cn } from "@stll/ui/utils";
 import type {
   ReaderMark,
   ReaderMarkRange,
-  SearchMatchRange,
   SearchPiece,
 } from "@/components/legal-reader/reader-search";
 import {
@@ -1761,80 +1760,3 @@ export const buildDocumentAstSearchPieces = (
 
   return pieces;
 };
-
-/**
- * Every search piece one block renders, in the order
- * `buildDocumentAstSearchPieces` writes them. Derived from that builder's own
- * shapes rather than restated, so a new kind of piece cannot go missing here.
- */
-const blockSearchPieceIds = (block: Block): string[] =>
-  buildDocumentAstSearchPieces([block]).map((piece) => piece.id);
-
-/** The lowest match index among one block's search pieces, or null for none. */
-const firstMatchIndexInBlock = (
-  block: Block,
-  rangesByPieceId: Record<string, SearchMatchRange[]>,
-): number | null => {
-  let first: number | null = null;
-  for (const pieceId of blockSearchPieceIds(block)) {
-    for (const { matchIndex } of rangesForPiece(rangesByPieceId, pieceId)) {
-      first = first === null ? matchIndex : Math.min(first, matchIndex);
-    }
-  }
-  return first;
-};
-
-/**
- * The find's first match inside the passage an anchor names, as an index into
- * the document's matches, or null when the query does not reach it.
- *
- * A passage is a run of blocks, not one block: the corpus indexes a
- * contiguous run of them as a single searchable unit and deep-links it by its
- * *first* member's anchor, so the words that won the hit may sit in a block
- * after the one named. The scan therefore walks forward from the anchor, and
- * stops at the next heading, which is where a passage ends — a heading closes
- * the run it follows rather than joining it. A section long enough to be
- * indexed as several passages has no heading between them, so the scan can
- * reach a match one passage further down the same section; that is a near
- * miss inside the section the reader asked for, where scanning the anchor
- * block alone lands them on an unrelated match at the top of the decision.
- * Naming the matching block exactly is the search result's job, not the
- * client's: nothing here can see the index's passage boundaries.
- *
- * Matches are numbered in document order, so the first block with any match
- * carries the one nearest the reader.
- */
-export const firstMatchIndexInPassage = ({
-  anchorId,
-  blocks,
-  rangesByPieceId,
-}: {
-  anchorId: string;
-  blocks: readonly Block[];
-  rangesByPieceId: Record<string, SearchMatchRange[]>;
-}): number | null => {
-  const start = blocks.findIndex((block) => block.anchorId === anchorId);
-  if (start === -1) {
-    return null;
-  }
-
-  for (const [offset, block] of blocks.slice(start).entries()) {
-    // The anchor's own block counts even when it is a heading; a later one
-    // ends the passage before it is read.
-    if (offset > 0 && block.type === "heading") {
-      return null;
-    }
-    const first = firstMatchIndexInBlock(block, rangesByPieceId);
-    if (first !== null) {
-      return first;
-    }
-  }
-  return null;
-};
-
-/** Search pieces for the paragraph split `FulltextFallback` renders. */
-export const buildFulltextSearchPieces = (text: string): SearchPiece[] =>
-  text.split(/\n{2,}/u).map((paragraph, index) => ({
-    id: `fulltext:${index}`,
-    text: paragraph,
-  }));
