@@ -35,9 +35,6 @@ jobs:
       release_ref: ${{ steps.release.outputs.ref }}
       release_sha: ${{ steps.release.outputs.sha }}
       version: ${{ steps.release.outputs.version }}
-    env:
-      GH_RETRY_SCRIPT: ${{ runner.temp }}/gh-retry.sh
-
     steps:
       - name: Checkout GitHub API tooling
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -50,7 +47,9 @@ jobs:
           sparse-checkout-cone-mode: false
 
       - name: Preserve GitHub API tooling across source checkouts
-        run: cp "$GITHUB_WORKSPACE/.gh-retry/scripts/gh-retry.sh" "$GH_RETRY_SCRIPT"
+        run: |
+          cp "$GITHUB_WORKSPACE/.gh-retry/scripts/gh-retry.sh" "$RUNNER_TEMP/gh-retry.sh"
+          echo "GH_RETRY_SCRIPT=$RUNNER_TEMP/gh-retry.sh" >> "$GITHUB_ENV"
 
       - name: Resolve release tag
         id: release
@@ -304,9 +303,6 @@ jobs:
       digest: ${{ steps.result.outputs.digest }}
       target-environment: ${{ steps.target.outputs.environment }}
 
-    env:
-      GH_RETRY_SCRIPT: ${{ runner.temp }}/gh-retry.sh
-
     steps:
       - name: Checkout GitHub API tooling
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -319,7 +315,9 @@ jobs:
           sparse-checkout-cone-mode: false
 
       - name: Preserve GitHub API tooling across source checkouts
-        run: cp "$GITHUB_WORKSPACE/.gh-retry/scripts/gh-retry.sh" "$GH_RETRY_SCRIPT"
+        run: |
+          cp "$GITHUB_WORKSPACE/.gh-retry/scripts/gh-retry.sh" "$RUNNER_TEMP/gh-retry.sh"
+          echo "GH_RETRY_SCRIPT=$RUNNER_TEMP/gh-retry.sh" >> "$GITHUB_ENV"
 
       - name: Resolve web build target
         id: target
@@ -532,9 +530,6 @@ jobs:
       attestations: write
       artifact-metadata: write
 
-    env:
-      GH_RETRY_SCRIPT: ${{ runner.temp }}/gh-retry.sh
-
     steps:
       - name: Checkout GitHub API tooling
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -547,7 +542,9 @@ jobs:
           sparse-checkout-cone-mode: false
 
       - name: Preserve GitHub API tooling across source checkouts
-        run: cp "$GITHUB_WORKSPACE/.gh-retry/scripts/gh-retry.sh" "$GH_RETRY_SCRIPT"
+        run: |
+          cp "$GITHUB_WORKSPACE/.gh-retry/scripts/gh-retry.sh" "$RUNNER_TEMP/gh-retry.sh"
+          echo "GH_RETRY_SCRIPT=$RUNNER_TEMP/gh-retry.sh" >> "$GITHUB_ENV"
 
       - name: Checkout release source
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -814,9 +811,6 @@ jobs:
       packages: write # advance the mutable image aliases
     # Release App key lives in this environment (main and v* tags only).
     environment: release-app
-    env:
-      GH_RETRY_SCRIPT: ${{ runner.temp }}/gh-retry.sh
-
     steps:
       - name: Checkout GitHub API tooling
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -829,7 +823,9 @@ jobs:
           sparse-checkout-cone-mode: false
 
       - name: Preserve GitHub API tooling across source checkouts
-        run: cp "$GITHUB_WORKSPACE/.gh-retry/scripts/gh-retry.sh" "$GH_RETRY_SCRIPT"
+        run: |
+          cp "$GITHUB_WORKSPACE/.gh-retry/scripts/gh-retry.sh" "$RUNNER_TEMP/gh-retry.sh"
+          echo "GH_RETRY_SCRIPT=$RUNNER_TEMP/gh-retry.sh" >> "$GITHUB_ENV"
 
       # The dispatch runs from a local composite action, so the workspace has
       # to hold the workflow's own revision rather than the release's. This
@@ -948,9 +944,6 @@ jobs:
     permissions:
       contents: write # publish the draft prerelease
     environment: release-app
-    env:
-      GH_RETRY_SCRIPT: ${{ runner.temp }}/gh-retry.sh
-
     steps:
       - name: Checkout GitHub API tooling
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -963,7 +956,9 @@ jobs:
           sparse-checkout-cone-mode: false
 
       - name: Preserve GitHub API tooling across source checkouts
-        run: cp "$GITHUB_WORKSPACE/.gh-retry/scripts/gh-retry.sh" "$GH_RETRY_SCRIPT"
+        run: |
+          cp "$GITHUB_WORKSPACE/.gh-retry/scripts/gh-retry.sh" "$RUNNER_TEMP/gh-retry.sh"
+          echo "GH_RETRY_SCRIPT=$RUNNER_TEMP/gh-retry.sh" >> "$GITHUB_ENV"
 
       # The workflow's own revision, not the release's: this job can be
       # dispatched manually against a tag cut before the composite action

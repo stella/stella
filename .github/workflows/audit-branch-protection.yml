@@ -48,9 +48,6 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions: {}
-    env:
-      GH_RETRY_SCRIPT: ${{ runner.temp }}/gh-retry.sh
-
     steps:
       - name: Checkout GitHub API tooling
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -63,7 +60,9 @@ jobs:
           sparse-checkout-cone-mode: false
 
       - name: Preserve GitHub API tooling across source checkouts
-        run: cp "$GITHUB_WORKSPACE/.gh-retry/scripts/gh-retry.sh" "$GH_RETRY_SCRIPT"
+        run: |
+          cp "$GITHUB_WORKSPACE/.gh-retry/scripts/gh-retry.sh" "$RUNNER_TEMP/gh-retry.sh"
+          echo "GH_RETRY_SCRIPT=$RUNNER_TEMP/gh-retry.sh" >> "$GITHUB_ENV"
 
       - name: Create GitHub App token
         id: app-token

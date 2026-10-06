@@ -81,9 +81,6 @@ jobs:
       # S3 path and to pin the in-binary updater endpoint, so an rc
       # build never polls or overwrites the production manifest.
       channel: ${{ steps.ref.outputs.channel }}
-    env:
-      GH_RETRY_SCRIPT: ${{ runner.temp }}/gh-retry.sh
-
     steps:
       - name: Checkout GitHub API tooling
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -96,7 +93,9 @@ jobs:
           sparse-checkout-cone-mode: false
 
       - name: Preserve GitHub API tooling across source checkouts
-        run: cp "$GITHUB_WORKSPACE/.gh-retry/scripts/gh-retry.sh" "$GH_RETRY_SCRIPT"
+        run: |
+          cp "$GITHUB_WORKSPACE/.gh-retry/scripts/gh-retry.sh" "$RUNNER_TEMP/gh-retry.sh"
+          echo "GH_RETRY_SCRIPT=$RUNNER_TEMP/gh-retry.sh" >> "$GITHUB_ENV"
 
       # Lightweight first-pass checkout of the workflow's own ref
       # (not the release tag yet — that resolves below) so the
@@ -265,9 +264,6 @@ jobs:
             target: universal-apple-darwin
             rust_targets: aarch64-apple-darwin,x86_64-apple-darwin
 
-    env:
-      GH_RETRY_SCRIPT: ${{ runner.temp }}/gh-retry.sh
-
     steps:
       - name: Checkout GitHub API tooling
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -280,7 +276,9 @@ jobs:
           sparse-checkout-cone-mode: false
 
       - name: Preserve GitHub API tooling across source checkouts
-        run: cp "$GITHUB_WORKSPACE/.gh-retry/scripts/gh-retry.sh" "$GH_RETRY_SCRIPT"
+        run: |
+          cp "$GITHUB_WORKSPACE/.gh-retry/scripts/gh-retry.sh" "$RUNNER_TEMP/gh-retry.sh"
+          echo "GH_RETRY_SCRIPT=$RUNNER_TEMP/gh-retry.sh" >> "$GITHUB_ENV"
 
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -731,9 +729,6 @@ jobs:
     permissions:
       contents: write # upload latest.json to GitHub Release
       id-token: write # OIDC for AWS S3 + CloudFront
-    env:
-      GH_RETRY_SCRIPT: ${{ runner.temp }}/gh-retry.sh
-
     steps:
       - name: Checkout GitHub API tooling
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -746,7 +741,9 @@ jobs:
           sparse-checkout-cone-mode: false
 
       - name: Preserve GitHub API tooling across source checkouts
-        run: cp "$GITHUB_WORKSPACE/.gh-retry/scripts/gh-retry.sh" "$GH_RETRY_SCRIPT"
+        run: |
+          cp "$GITHUB_WORKSPACE/.gh-retry/scripts/gh-retry.sh" "$RUNNER_TEMP/gh-retry.sh"
+          echo "GH_RETRY_SCRIPT=$RUNNER_TEMP/gh-retry.sh" >> "$GITHUB_ENV"
 
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -862,7 +859,6 @@ jobs:
     permissions:
       contents: write # download from / upload to / edit GitHub Releases
     env:
-      GH_RETRY_SCRIPT: ${{ runner.temp }}/gh-retry.sh
       # `gh` resolves the repo from GH_REPO, so the checkout below serves the
       # workflow's own scripts only, not the release source.
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -881,7 +877,9 @@ jobs:
           sparse-checkout-cone-mode: false
 
       - name: Preserve GitHub API tooling across source checkouts
-        run: cp "$GITHUB_WORKSPACE/.gh-retry/scripts/gh-retry.sh" "$GH_RETRY_SCRIPT"
+        run: |
+          cp "$GITHUB_WORKSPACE/.gh-retry/scripts/gh-retry.sh" "$RUNNER_TEMP/gh-retry.sh"
+          echo "GH_RETRY_SCRIPT=$RUNNER_TEMP/gh-retry.sh" >> "$GITHUB_ENV"
 
       - name: Checkout workflow policy scripts
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1

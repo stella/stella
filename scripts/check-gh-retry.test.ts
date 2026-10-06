@@ -106,9 +106,10 @@ test("workflow API tooling is pinned and survives source checkouts", async () =>
       consumers += 1;
       const label = `${file}:${name}`;
       const env = definition["env"];
-      expect(record(env) ? env["GH_RETRY_SCRIPT"] : undefined, label).toBe(
-        `\${{ runner.temp }}/gh-retry.sh`,
-      );
+      expect(
+        record(env) ? env["GH_RETRY_SCRIPT"] : undefined,
+        label,
+      ).toBeUndefined();
       const checkoutIndex = steps.findIndex(
         (step) => record(step["with"]) && step["with"]["path"] === ".gh-retry",
       );
@@ -131,8 +132,12 @@ test("workflow API tooling is pinned and survives source checkouts", async () =>
       ).toBe("scripts/gh-retry.sh");
       const preserveIndex = steps.findIndex(
         (step) =>
-          step["run"] ===
-          'cp "$GITHUB_WORKSPACE/.gh-retry/scripts/gh-retry.sh" "$GH_RETRY_SCRIPT"',
+          typeof step["run"] === "string" &&
+          step["run"].trim() ===
+            [
+              'cp "$GITHUB_WORKSPACE/.gh-retry/scripts/gh-retry.sh" "$RUNNER_TEMP/gh-retry.sh"',
+              'echo "GH_RETRY_SCRIPT=$RUNNER_TEMP/gh-retry.sh" >> "$GITHUB_ENV"',
+            ].join("\n"),
       );
       expect(preserveIndex, label).toBeGreaterThan(checkoutIndex);
       for (const index of calls) {

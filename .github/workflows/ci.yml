@@ -125,9 +125,6 @@ jobs:
       web_build_required: ${{ steps.changed-files.outputs.web_build_required }}
       web_image_smoke_required: ${{ steps.changed-files.outputs.web_image_smoke_required }}
       windows_scripts_required: ${{ steps.changed-files.outputs.windows_scripts_required }}
-    env:
-      GH_RETRY_SCRIPT: ${{ runner.temp }}/gh-retry.sh
-
     steps:
       - name: Checkout GitHub API tooling
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -140,7 +137,9 @@ jobs:
           sparse-checkout-cone-mode: false
 
       - name: Preserve GitHub API tooling across source checkouts
-        run: cp "$GITHUB_WORKSPACE/.gh-retry/scripts/gh-retry.sh" "$GH_RETRY_SCRIPT"
+        run: |
+          cp "$GITHUB_WORKSPACE/.gh-retry/scripts/gh-retry.sh" "$RUNNER_TEMP/gh-retry.sh"
+          echo "GH_RETRY_SCRIPT=$RUNNER_TEMP/gh-retry.sh" >> "$GITHUB_ENV"
 
       - name: Resolve suite depth
         id: depth
@@ -4248,9 +4247,6 @@ jobs:
       # edited body applies on a re-run.
       pull-requests: read
 
-    env:
-      GH_RETRY_SCRIPT: ${{ runner.temp }}/gh-retry.sh
-
     steps:
       - name: Checkout GitHub API tooling
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -4263,7 +4259,9 @@ jobs:
           sparse-checkout-cone-mode: false
 
       - name: Preserve GitHub API tooling across source checkouts
-        run: cp "$GITHUB_WORKSPACE/.gh-retry/scripts/gh-retry.sh" "$GH_RETRY_SCRIPT"
+        run: |
+          cp "$GITHUB_WORKSPACE/.gh-retry/scripts/gh-retry.sh" "$RUNNER_TEMP/gh-retry.sh"
+          echo "GH_RETRY_SCRIPT=$RUNNER_TEMP/gh-retry.sh" >> "$GITHUB_ENV"
 
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -6675,9 +6673,6 @@ jobs:
       checks: read
       # A skipped plan passes only while the pull request is still a draft.
       pull-requests: read
-    env:
-      GH_RETRY_SCRIPT: ${{ runner.temp }}/gh-retry.sh
-
     steps:
       - name: Checkout GitHub API tooling
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -6690,7 +6685,9 @@ jobs:
           sparse-checkout-cone-mode: false
 
       - name: Preserve GitHub API tooling across source checkouts
-        run: cp "$GITHUB_WORKSPACE/.gh-retry/scripts/gh-retry.sh" "$GH_RETRY_SCRIPT"
+        run: |
+          cp "$GITHUB_WORKSPACE/.gh-retry/scripts/gh-retry.sh" "$RUNNER_TEMP/gh-retry.sh"
+          echo "GH_RETRY_SCRIPT=$RUNNER_TEMP/gh-retry.sh" >> "$GITHUB_ENV"
 
       - name: Evaluate CI outcome
         env:
