@@ -103,7 +103,7 @@ const scenario = async ({
       cwd: directory,
       env: {
         ...Bun.env,
-        PATH: `${directory}:${Bun.env.PATH ?? ""}`,
+        PATH: `${directory}:${Bun.env["PATH"] ?? ""}`,
         FAKE_ROOT: directory,
         FAKE_EXPIRE_WATCHDOG: expireWatchdog ? "1" : "0",
         FAKE_RESPONSES: JSON.stringify(responses),

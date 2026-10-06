@@ -110,9 +110,16 @@ test("workflow API tooling is pinned and survives source checkouts", async () =>
         record(env) ? env["GH_RETRY_SCRIPT"] : undefined,
         label,
       ).toBeUndefined();
-      const checkoutIndex = steps.findIndex(
-        (step) => record(step["with"]) && step["with"]["path"] === ".gh-retry",
-      );
+      const checkoutIndex = steps.findIndex((step) => {
+        const settings = step["with"];
+        return (
+          record(settings) &&
+          typeof settings["sparse-checkout"] === "string" &&
+          settings["sparse-checkout"]
+            .split("\n")
+            .includes("scripts/gh-retry.sh")
+        );
+      });
       const checkout = steps.at(checkoutIndex);
       const settings = checkout?.["with"];
       expect(checkoutIndex, label).toBeGreaterThanOrEqual(0);
@@ -129,13 +136,17 @@ test("workflow API tooling is pinned and survives source checkouts", async () =>
       expect(
         record(settings) ? settings["sparse-checkout"] : undefined,
         label,
-      ).toBe("scripts/gh-retry.sh");
+      ).toContain("scripts/gh-retry.sh");
+      const toolingPath = record(settings) ? settings["path"] : undefined;
+      if (typeof toolingPath !== "string") {
+        throw new TypeError(`${label}: Missing tooling checkout path`);
+      }
       const preserveIndex = steps.findIndex(
         (step) =>
           typeof step["run"] === "string" &&
           step["run"].trim() ===
             [
-              'cp "$GITHUB_WORKSPACE/.gh-retry/scripts/gh-retry.sh" "$RUNNER_TEMP/gh-retry.sh"',
+              `cp "$GITHUB_WORKSPACE/${toolingPath}/scripts/gh-retry.sh" "$RUNNER_TEMP/gh-retry.sh"`,
               'echo "GH_RETRY_SCRIPT=$RUNNER_TEMP/gh-retry.sh" >> "$GITHUB_ENV"',
             ].join("\n"),
       );
