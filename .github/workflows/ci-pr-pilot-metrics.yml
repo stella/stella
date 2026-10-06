@@ -51,9 +51,13 @@ jobs:
             const { data: run } = await github.rest.actions.getWorkflowRun({
               ...context.repo, run_id: artifact.workflow_run.id, request: { timeout: 10000 },
             });
+            await new Promise(resolve => setTimeout(resolve, 1100));
+            const { data: repository } = await github.rest.repos.get({
+              ...context.repo, request: { timeout: 10000 },
+            });
             if (run.path !== ".github/workflows/ci-pr-pilot-metrics.yml"
                 || !["schedule", "workflow_dispatch"].includes(run.event)
-                || run.head_branch !== context.payload.repository.default_branch
+                || run.head_branch !== repository.default_branch
                 || run.head_sha !== artifact.workflow_run.head_sha
                 || run.status !== "completed" || run.conclusion !== "success") return;
             core.setOutput("run_id", String(run.id));

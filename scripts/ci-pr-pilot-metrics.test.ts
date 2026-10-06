@@ -1,4 +1,5 @@
 import { expect, test } from "bun:test";
+import { Script } from "node:vm";
 import * as v from "valibot";
 
 const execute = (body: string) => {
@@ -265,4 +266,141 @@ index = calls[0].index("number=1")
 print(json.dumps(calls[0][index - 1]))
 `);
   expect(values).toBe("-F");
+});
+
+test("a stopped generation CLI publishes both evidence artifacts and retains its cache", () => {
+  const values = execute(`
+import gzip, os, subprocess, sys, tempfile
+from pathlib import Path
+results = []
+for has_cache in [True, False]:
+    with tempfile.TemporaryDirectory() as directory:
+        root = Path(directory)
+        previous = dict(m.build_report([], None, now, True, set(), seed), stopped=True)
+        previous_path = root / "previous.json"
+        previous_path.write_text(json.dumps(previous))
+        cached = [{"number": 73, "commits": {"nodes": []}}] if has_cache else []
+        cache_path = root / "previous.json.gz"
+        if has_cache:
+            cache_path.write_bytes(gzip.compress(json.dumps(cached).encode()))
+        output = root / "public" / "report.json"
+        private = root / "private" / "report.json"
+        cache_output = root / "cache" / "report.json.gz"
+        result = subprocess.run([sys.executable, "scripts/ci-pr-pilot-metrics.py",
+            "--repository", "stella/stella", "--previous", str(previous_path),
+            "--cache", str(cache_path), "--output", str(output),
+            "--private-output", str(private), "--cache-output", str(cache_output)],
+            check=True, capture_output=True, text=True, env={"PATH": ""})
+        report = json.loads(output.read_text())
+        preserved = json.loads(gzip.decompress(cache_output.read_bytes())) if cache_output.exists() else None
+        results.append([report["stopped"], report["startedAt"] == previous["startedAt"],
+            report["generatedAt"] != previous["generatedAt"], json.loads(private.read_text()) == report,
+            preserved == cached, [os.stat(p).st_mode & 0o777 for p in [output, private, cache_output]]
+                if cache_output.exists() else [], "remains stopped" in result.stdout])
+print(json.dumps(results))
+`);
+  expect(values).toEqual([
+    [true, true, true, true, true, [0o600, 0o600, 0o600], true],
+    [true, true, true, true, true, [0o600, 0o600, 0o600], true],
+  ]);
+});
+
+test("metrics workflow gets the default branch without schedule or dispatch repository payloads", async () => {
+  const workflow = v.parse(
+    v.object({
+      jobs: v.object({
+        metrics: v.object({
+          steps: v.array(
+            v.looseObject({
+              name: v.string(),
+              with: v.optional(
+                v.looseObject({ script: v.optional(v.string()) }),
+              ),
+            }),
+          ),
+        }),
+      }),
+    }),
+    Bun.YAML.parse(
+      await Bun.file(
+        new URL(
+          "../.github/workflows/ci-pr-pilot-metrics.yml",
+          import.meta.url,
+        ),
+      ).text(),
+    ),
+  );
+  const scripts = workflow.jobs.metrics.steps.filter(
+    (step) => step.with?.script !== undefined,
+  );
+  expect(scripts).toHaveLength(1);
+  for (const step of scripts) {
+    const script = step.with?.script;
+    if (script === undefined) {
+      throw new Error("Missing metrics workflow script");
+    }
+    for (const eventName of ["schedule", "workflow_dispatch"]) {
+      for (const head_branch of ["trunk", "untrusted"]) {
+        const outputs = new Map<string, string>();
+        const calls: string[] = [];
+        const repo = { owner: "stella", repo: "stella" };
+        await new Script(`(async () => {${script}\n})()`).runInNewContext({
+          context: {
+            repo,
+            runId: 100,
+            eventName,
+            payload:
+              eventName === "schedule"
+                ? { schedule: "37 3 * * *" }
+                : { inputs: {} },
+          },
+          setTimeout: (callback: () => void) => callback(),
+          core: {
+            setOutput: (key: string, value: string) => outputs.set(key, value),
+          },
+          github: {
+            rest: {
+              repos: {
+                get: async (request: { owner: string; repo: string }) => {
+                  expect(request.owner).toBe(repo.owner);
+                  expect(request.repo).toBe(repo.repo);
+                  calls.push("repository");
+                  return { data: { default_branch: "trunk" } };
+                },
+              },
+              actions: {
+                listArtifactsForRepo: async () => ({
+                  data: {
+                    artifacts: [
+                      {
+                        id: 10,
+                        name: "ci-pr-depth-pilot-v1",
+                        expired: false,
+                        workflow_run: { id: 99, head_sha: "abc" },
+                      },
+                    ],
+                  },
+                }),
+                getWorkflowRun: async () => ({
+                  data: {
+                    id: 99,
+                    path: ".github/workflows/ci-pr-pilot-metrics.yml",
+                    event: eventName,
+                    head_branch,
+                    head_sha: "abc",
+                    status: "completed",
+                    conclusion: "success",
+                  },
+                }),
+              },
+            },
+          },
+        });
+        expect(calls).toEqual(["repository"]);
+        expect(outputs.get("run_id")).toBe(
+          head_branch === "trunk" ? "99" : undefined,
+        );
+      }
+    }
+  }
 });

@@ -326,6 +326,16 @@ def write_report(filename, report):
     os.chmod(target, 0o600)
 
 
+def write_evidence(args, report, pulls):
+    cache_output = Path(args.cache_output)
+    cache_output.parent.mkdir(parents=True, exist_ok=True)
+    cache_output.write_bytes(gzip.compress(json.dumps(pulls).encode()))
+    os.chmod(cache_output, 0o600)
+    write_report(args.output, report)
+    if args.private_output:
+        write_report(args.private_output, report)
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--repository", required=True)
@@ -341,15 +351,13 @@ def main():
     if previous and previous["profile"] != PROFILE:
         raise ValueError("Unrecognized previous pilot generation")
     bootstrap = json.loads(Path(args.bootstrap).read_text()) if args.bootstrap and Path(args.bootstrap).exists() else None
+    cached = json.loads(gzip.decompress(Path(args.cache).read_bytes())) if args.cache and Path(args.cache).exists() else []
     if previous and previous["stopped"] and bootstrap is None:
         previous["generatedAt"] = now.astimezone(ZoneInfo("Europe/Prague")).isoformat()
-        write_report(args.output, previous)
-        if args.private_output:
-            write_report(args.private_output, previous)
+        write_evidence(args, previous, cached)
         print("Pilot generation remains stopped; final metrics retained")
         return
     start = timestamp(previous["startedAt"]) if previous else now
-    cached = json.loads(gzip.decompress(Path(args.cache).read_bytes())) if args.cache and Path(args.cache).exists() else []
     since = max(start, timestamp(previous["generatedAt"]) - dt.timedelta(hours=1)) if previous and cached else start
     collector = Collector(args.repository)
     pulls, complete = collector.collect(since, cached)
@@ -377,12 +385,7 @@ def main():
     report["measured"].update(queue)
     report["complete"] = report["complete"] and queue["queueFailureEvidenceComplete"]
     report["postArmCycleDefinition"] = "distinct observed heads failing normal-PR checks deferred by pilot-fast; unmapped runs are reported separately"
-    cache_output = Path(args.cache_output)
-    cache_output.write_bytes(gzip.compress(json.dumps(pulls).encode()))
-    os.chmod(cache_output, 0o600)
-    write_report(args.output, report)
-    if args.private_output:
-        write_report(args.private_output, report)
+    write_evidence(args, report, pulls)
     print(f"Pilot metrics complete={report['complete']} stopped={report['stopped']}")
 
 
