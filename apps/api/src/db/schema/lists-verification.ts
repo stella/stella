@@ -181,6 +181,7 @@ export const legalListVerificationReadReceipts = p.pgTable(
   },
   (table) => [
     p.primaryKey({
+      name: "verification_read_receipts_pk",
       columns: [
         table.organizationId,
         table.workspaceId,

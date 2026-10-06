@@ -3,12 +3,12 @@
 SET lock_timeout = '1s';--> statement-breakpoint
 SET statement_timeout = '10s';--> statement-breakpoint
 CREATE TABLE "legal_list_verification_read_receipts" (
-  organization_id text NOT NULL,
+  organization_id varchar(128) NOT NULL,
   workspace_id uuid NOT NULL,
   run_id uuid NOT NULL,
   user_id text NOT NULL REFERENCES "user"(id) ON DELETE CASCADE,
   audited_day date NOT NULL,
-  PRIMARY KEY (organization_id, workspace_id, run_id, user_id),
+  CONSTRAINT verification_read_receipts_pk PRIMARY KEY (organization_id, workspace_id, run_id, user_id),
   CONSTRAINT verification_read_receipts_run_fk FOREIGN KEY (run_id, workspace_id)
     REFERENCES legal_list_verification_runs(id, workspace_id) ON DELETE CASCADE,
   CONSTRAINT verification_read_receipts_workspace_org_fk FOREIGN KEY (workspace_id, organization_id)
