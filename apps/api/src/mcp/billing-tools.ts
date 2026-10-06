@@ -67,7 +67,6 @@ import type {
 } from "@/api/mcp/tool-types";
 import { defineMcpToolSet } from "@/api/mcp/tool-types";
 import {
-  invalidCursorResult,
   bindWorkspaceRecorder,
   cursorInput,
   DEFAULT_LIST_LIMIT,
@@ -75,10 +74,12 @@ import {
   ensureWorkspaceAccess,
   errorResult,
   internalFailureResult,
+  invalidCursorResult,
   ISO_DATE_SCHEMA,
   MAX_LIST_LIMIT,
   notFoundResult,
   nullAsAbsent,
+  structuredEgressPlan,
   toolDataResult,
   uuidInputSchema,
   validationErrorResult,
@@ -622,8 +623,7 @@ const handleListTimeEntriesTool: TypedMcpToolHandler<
       }),
       { entry },
     );
-    return {
-      egress: "structured",
+    return structuredEgressPlan({
       payload: projectionPayload(LIST_TIME_ENTRIES_DETAIL_PROJECTION, {
         visibility: canReview
           ? TIME_ENTRY_VISIBILITY.ALL_ENTRIES
@@ -631,7 +631,7 @@ const handleListTimeEntriesTool: TypedMcpToolHandler<
         entry,
       }),
       textFields,
-    };
+    });
   }
 
   // List mode. matter_id is guaranteed present by the schema.
@@ -738,8 +738,7 @@ const handleListTimeEntriesTool: TypedMcpToolHandler<
     { entries },
   );
 
-  return {
-    egress: "structured",
+  return structuredEgressPlan({
     payload: projectionPayload(LIST_TIME_ENTRIES_LIST_PROJECTION, {
       visibility: canReview
         ? TIME_ENTRY_VISIBILITY.ALL_ENTRIES
@@ -748,7 +747,7 @@ const handleListTimeEntriesTool: TypedMcpToolHandler<
       nextCursor: page.nextCursor,
     }),
     textFields,
-  };
+  });
 };
 
 // --- save_time_entry ----------------------------------------------------
@@ -1388,11 +1387,10 @@ const handleListInvoicesTool: TypedMcpToolHandler<
       { invoice },
     );
 
-    return {
-      egress: "structured",
+    return structuredEgressPlan({
       payload: projectionPayload(LIST_INVOICES_DETAIL_PROJECTION, { invoice }),
       textFields,
-    };
+    });
   }
 
   // List mode. matter_id is guaranteed present by the schema.
@@ -1459,14 +1457,13 @@ const handleListInvoicesTool: TypedMcpToolHandler<
     invoices: invoiceList,
   });
 
-  return {
-    egress: "structured",
+  return structuredEgressPlan({
     payload: projectionPayload(LIST_INVOICES_LIST_PROJECTION, {
       invoices: invoiceList,
       nextCursor: page.nextCursor,
     }),
     textFields,
-  };
+  });
 };
 
 // --- get_usage ----------------------------------------------------------

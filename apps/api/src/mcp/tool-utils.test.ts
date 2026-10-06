@@ -28,6 +28,7 @@ import {
   serializeToolResult,
   structuredErrorResult,
   toolDataResult,
+  untypedToolDataResult,
   toPlainTextSnippet,
   validationErrorResult,
   windowTextByCursor,
@@ -323,7 +324,7 @@ describe("serializeToolResult", () => {
       v.object({ entityId: v.string(), nextStep: v.string() }),
     );
     const result = serializeToolResult(
-      toolDataResult({
+      untypedToolDataResult({
         nextStep: "Choose a file.",
         undeclared: true,
         entityId: "doc_1",
@@ -428,7 +429,7 @@ describe("serializeToolResult", () => {
 
     test("are stripped at every depth, the result returned and the defect logged", () => {
       const result = serializeToolResult(
-        toolDataResult({
+        untypedToolDataResult({
           entityId: "doc_1",
           hits: [
             {
@@ -496,7 +497,11 @@ describe("serializeToolResult", () => {
         { extra: true, hits: [] },
       ]) {
         expect(() =>
-          serializeToolResult(toolDataResult(data), contract, "search_test"),
+          serializeToolResult(
+            untypedToolDataResult(data),
+            contract,
+            "search_test",
+          ),
         ).toThrow("MCP tool output violated its advertised contract");
       }
       expect(degradeLogs()).toEqual([]);
@@ -505,7 +510,7 @@ describe("serializeToolResult", () => {
     test("a contract-clean output reports nothing", () => {
       const data = { entityId: "doc_1", hits: [] };
       const result = serializeToolResult(
-        toolDataResult(data),
+        untypedToolDataResult(data),
         contract,
         "search_test",
       );
