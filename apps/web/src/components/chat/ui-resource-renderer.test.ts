@@ -14,6 +14,9 @@ describe("chat UI resource rendering", () => {
     expect(Object.keys(UI_RESOURCE_RENDERER).toSorted()).toEqual(
       [...CHAT_UI_RESOURCE_MIME_TYPES].toSorted(),
     );
+    for (const mimeType of CHAT_UI_RESOURCE_MIME_TYPES) {
+      expect(uiResourceRenderer(mimeType)).toBe(UI_RESOURCE_RENDERER[mimeType]);
+    }
     expect(uiResourceRenderer(MCP_APP_RESOURCE_MIME_TYPE)).toBe("mcp-app");
     expect(uiResourceRenderer(GENERATED_VISUAL_MIME_TYPE)).toBe(
       "generated-visual",

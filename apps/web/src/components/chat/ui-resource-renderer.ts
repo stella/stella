@@ -10,12 +10,10 @@ export const UI_RESOURCE_RENDERER = {
   "mcp-app" | "generated-visual"
 >;
 
-export const uiResourceRenderer = (mimeType: string) => {
-  if (mimeType === MCP_APP_RESOURCE_MIME_TYPE) {
-    return UI_RESOURCE_RENDERER[mimeType];
-  }
-  if (mimeType === GENERATED_VISUAL_MIME_TYPE) {
-    return UI_RESOURCE_RENDERER[mimeType];
-  }
-  return null;
-};
+const isSupportedResourceMime = (
+  mimeType: string,
+): mimeType is ChatUiResourceMimeType =>
+  Object.hasOwn(UI_RESOURCE_RENDERER, mimeType);
+
+export const uiResourceRenderer = (mimeType: string) =>
+  isSupportedResourceMime(mimeType) ? UI_RESOURCE_RENDERER[mimeType] : null;
