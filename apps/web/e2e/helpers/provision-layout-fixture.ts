@@ -7,8 +7,6 @@ import {
 import type { DecisionAnalysis } from "@stll/legal-ast/analysis";
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
 
-import type { api } from "../../src/lib/api";
-import type { PublicLawData } from "../../src/lib/public-law-api";
 import { E2E_API_ORIGIN } from "./api";
 import { dockedChatLegalPayloads } from "./docked-chat-legal-payloads";
 
@@ -131,9 +129,7 @@ const provisionRow = {
   targetDocumentId: historical.id,
   targetStatus: null,
   previewKey: null,
-} satisfies PublicLawData<
-  ReturnType<typeof api.case.decisions>["provisions"]["get"]
->["items"][number];
+} as const;
 export const PROVISION_LAYOUT_DECISION_PATH = createCaseLawDecisionPath(
   createCaseLawDecisionRouteParams({
     caseNumber: decision.caseNumber,
@@ -216,7 +212,7 @@ export const installProvisionLayoutFixture = async (
             unresolvedReason: null,
           },
         ],
-      } satisfies PublicLawData<typeof api.law.statutes.resolve.post>);
+      });
       return;
     }
     if (path.endsWith("/versions") && path.startsWith("/v1/law/statutes/")) {
