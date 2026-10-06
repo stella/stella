@@ -294,14 +294,14 @@ describe("Docker source closure", () => {
         new Map(),
       ),
     ).toEqual(["Entry is unavailable: /app/copied.ts"]);
-    expect(
+    expect(() =>
       checkDockerSource(
         root,
         `${prefix}cp absent.ts helper.ts && bun entry.ts`,
         context,
         new Map(),
-      ).join("\n"),
-    ).toContain("./helper");
+      ),
+    ).toThrow("cp source is unavailable: /app/absent.ts");
     expect(() =>
       checkDockerSource(
         root,
@@ -328,6 +328,87 @@ describe("Docker source closure", () => {
         new Map(),
       ),
     ).toEqual([]);
+  });
+
+  test("literal cp supports source reads, overwrites, directories and preservation flags", () => {
+    const entry = put("literal-cp/entry.ts", 'import "./helper";');
+    const helper = put("literal-cp/helper.ts", "export const value = 1;");
+    const replacement = put("literal-cp/replacement.ts", 'import "./absent";');
+    const context: SourceTree = new Map([
+      ["/entry.ts", entry],
+      ["/helper.ts", helper],
+      ["/replacement.ts", replacement],
+      ["/src/marker.ts", helper],
+      ["/folder/helper.ts", helper],
+      ["/apps/api/src/lib/ocr-local/latin-v5-dict.txt", helper],
+    ]);
+    const prefix = "FROM bun\nWORKDIR /app\nCOPY . .\nRUN ";
+    expect(
+      checkDockerSource(
+        root,
+        `${prefix}cp apps/api/src/lib/ocr-local/latin-v5-dict.txt /app/runtime-workers/latin-v5-dict.txt && bun entry.ts`,
+        context,
+        new Map(),
+      ),
+    ).toEqual([]);
+    for (const flag of ["-r", "-R", "-a", "-p"]) {
+      expect(
+        checkDockerSource(
+          root,
+          `${prefix}cp ${flag} helper.ts copied.ts && bun copied.ts`,
+          context,
+          new Map(),
+        ),
+      ).toEqual([]);
+    }
+    for (const flag of ["-r", "-R", "-a"]) {
+      expect(
+        checkDockerSource(
+          root,
+          `${prefix}cp ${flag} folder src && bun src/folder/helper.ts`,
+          context,
+          new Map(),
+        ),
+      ).toEqual([]);
+    }
+    expect(
+      checkDockerSource(
+        root,
+        `${prefix}cp helper.ts replacement.ts src && bun src/helper.ts`,
+        context,
+        new Map(),
+      ),
+    ).toEqual([]);
+    expect(
+      checkDockerSource(
+        root,
+        `${prefix}bun entry.ts && cp replacement.ts helper.ts && bun entry.ts`,
+        context,
+        new Map(),
+      ).join("\n"),
+    ).toContain("literal-cp/replacement.ts imports ./absent");
+    expect(() =>
+      checkDockerSource(
+        root,
+        `${prefix}cp missing.ts helper.ts && bun entry.ts`,
+        context,
+        new Map(),
+      ),
+    ).toThrow("cp source is unavailable: /app/missing.ts");
+    for (const command of [
+      "cp helper*.ts copied.ts",
+      "cp -t src helper.ts",
+      "cp --parents helper.ts src",
+    ]) {
+      expect(() =>
+        checkDockerSource(
+          root,
+          `${prefix}${command} && bun entry.ts`,
+          context,
+          new Map(),
+        ),
+      ).toThrow("Unsupported source mutation: cp touches");
+    }
   });
 
   test("checks builds following installs in the same instruction", () => {
@@ -470,9 +551,154 @@ describe("Docker source closure", () => {
     }
   });
 
-  test.each(["guaranteed", "conditional"] as const)(
-    "filtered build scripts require a guaranteed producer chain: %s",
-    (scenario) => {
+  test.each([
+    {
+      kind: "direct",
+      declaration: "",
+      form: '[ -n "$TURBO_HASH" ]',
+      operator: "||",
+      generated: true,
+    },
+    {
+      kind: "static",
+      declaration: "ENV TURBO_HASH=x",
+      form: '[ -n "$TURBO_HASH" ]',
+      operator: "&&",
+      generated: true,
+    },
+    {
+      kind: "static",
+      declaration: "",
+      form: '[ -n "$TURBO_HASH" ]',
+      operator: "&&",
+      generated: false,
+    },
+    {
+      kind: "static",
+      declaration: "ENV TURBO_HASH=x",
+      form: '[ -z "$TURBO_HASH" ]',
+      operator: "||",
+      generated: true,
+    },
+    {
+      kind: "static",
+      declaration: "",
+      form: '[ -z "$TURBO_HASH" ]',
+      operator: "||",
+      generated: false,
+    },
+    {
+      kind: "static",
+      declaration: "ENV OTHER_FLAG=x",
+      form: 'test -n "$OTHER_FLAG"',
+      operator: "&&",
+      generated: true,
+    },
+    {
+      kind: "static",
+      declaration: "ARG TURBO_HASH\nFROM builder AS inherited",
+      form: '[ -n "$TURBO_HASH" ]',
+      operator: "||",
+      generated: false,
+    },
+    {
+      kind: "static",
+      declaration: 'ENV TURBO_HASH=""\nFROM builder AS inherited',
+      form: '[ -n "$TURBO_HASH" ]',
+      operator: "||",
+      generated: true,
+    },
+    {
+      kind: "static",
+      declaration: "",
+      form: '[ -f "$TURBO_HASH" ]',
+      operator: "||",
+      generated: false,
+    },
+    {
+      kind: "ungrouped",
+      declaration: "",
+      form: 'test -n "$TURBO_HASH"',
+      operator: "||",
+      generated: true,
+    },
+    {
+      kind: "inline",
+      declaration: "",
+      form: '[ -n "$TURBO_HASH" ]',
+      operator: "||",
+      generated: false,
+    },
+    ...['[ -n "$TURBO_HASH" ]', 'test -n "$TURBO_HASH"'].flatMap((form) => [
+      {
+        kind: "static",
+        declaration: "",
+        form,
+        operator: "||",
+        generated: true,
+      },
+      {
+        kind: "static",
+        declaration: "ARG TURBO_HASH",
+        form,
+        operator: "||",
+        generated: false,
+      },
+      {
+        kind: "static",
+        declaration: "ENV TURBO_HASH=x",
+        form,
+        operator: "||",
+        generated: false,
+      },
+      {
+        kind: "static",
+        declaration: 'ENV TURBO_HASH=""',
+        form,
+        operator: "||",
+        generated: true,
+      },
+      {
+        kind: "static",
+        declaration: 'ENV TURBO_HASH="$VALUE"',
+        form,
+        operator: "||",
+        generated: false,
+      },
+    ]),
+    ...['[ -z "$TURBO_HASH" ]', 'test -z "$TURBO_HASH"'].flatMap((form) => [
+      {
+        kind: "static",
+        declaration: "",
+        form,
+        operator: "&&",
+        generated: true,
+      },
+      {
+        kind: "static",
+        declaration: "ARG TURBO_HASH",
+        form,
+        operator: "&&",
+        generated: false,
+      },
+      {
+        kind: "static",
+        declaration: "ENV TURBO_HASH=x",
+        form,
+        operator: "&&",
+        generated: false,
+      },
+      {
+        kind: "static",
+        declaration: 'ENV TURBO_HASH=""',
+        form,
+        operator: "&&",
+        generated: true,
+      },
+    ]),
+  ])(
+    "filtered build scripts require a decidable producer chain: %j",
+    ({ kind, declaration, form, operator, generated }) => {
       const fixtureRoot = mkdtempSync(path.join(root, "generated-filter-"));
       const write = (file: string, source: string) => {
         const target = path.join(fixtureRoot, file);
@@ -490,16 +716,19 @@ describe("Docker source closure", () => {
       const manifest = "apps/web/package.json";
       const entry = "apps/web/src/entry.ts";
       write(producer, "export const generated = true;");
+      let build = `(${form} ${operator} bun run generate:route-tree) && bun src/entry.ts`;
+      if (kind === "direct") {
+        build = "bun run generate:route-tree && bun src/entry.ts";
+      } else if (kind === "ungrouped") {
+        build = `${form} ${operator} bun run generate:route-tree && bun src/entry.ts`;
+      }
       write(
         manifest,
         JSON.stringify({
           name: "@stll/web",
           scripts: {
             "generate:route-tree": "bun scripts/generate-route-tree.ts",
-            build:
-              scenario === "guaranteed"
-                ? "bun run generate:route-tree && bun src/entry.ts"
-                : '([ -n "$TURBO_HASH" ] || bun run generate:route-tree) && bun src/entry.ts',
+            build,
           },
         }),
       );
@@ -507,15 +736,14 @@ describe("Docker source closure", () => {
       const context: SourceTree = new Map(
         [producer, manifest, entry].map((file) => [`/${file}`, file]),
       );
-      const source =
-        "FROM bun AS builder\nWORKDIR /app\nCOPY . .\nRUN bun --filter @stll/web build";
+      const source = `FROM bun AS builder\nWORKDIR /app\nCOPY . .\n${declaration}\nRUN ${kind === "inline" ? "TURBO_HASH=x " : ""}bun --filter @stll/web build`;
       const problems = checkDockerSource(
         fixtureRoot,
         source,
         context,
         new Map(),
       );
-      if (scenario === "guaranteed") {
+      if (generated) {
         expect(problems).toEqual([]);
       } else {
         expect(problems.join("\n")).toContain("routeTree.gen");

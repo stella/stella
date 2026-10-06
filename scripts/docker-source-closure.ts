@@ -502,12 +502,15 @@ export const sourceClosureProblems = (
   seen = new Set<string>(),
 ): string[] => sourceClosureChecker(root, tree)(entries, seen);
 
+type EnvironmentValue = { type: "known"; value: string } | { type: "unknown" };
+
 type Stage = {
   files: SourceTree;
   cwd: string;
   seen: Set<string>;
   checker?: ReturnType<typeof sourceClosureChecker>;
   hazards: Set<string>;
+  environment: Map<string, EnvironmentValue>;
 };
 
 type StageClosureOptions = {
@@ -570,6 +573,7 @@ type CommandContext = {
   tree: SourceTree;
   active: Set<string>;
   production?: "guaranteed" | "conditional";
+  environment?: Map<string, EnvironmentValue>;
   consume?: (
     entry: SourceCommandEntry,
     production: "guaranteed" | "conditional",
@@ -977,7 +981,84 @@ const isSourceFreeNpmCommand = (words: readonly string[]) =>
 
 // Only a straight success chain establishes produced files. Every branch is
 // still visited for reads, but separators and compound scopes certify no writes.
-const guaranteedProduction = (command: string) => {
+const staticTestCondition = String.raw`(?:\[\s*-[nz]\s+"\$[A-Za-z_]\w*"\s*\]|test\s+-[nz]\s+"\$[A-Za-z_]\w*")`;
+const groupedStaticTest = new RegExp(
+  String.raw`^\s*\(\s*(${staticTestCondition})\s*(\|\||&&)\s*([^()\n;|&]+)\)`,
+  "u",
+);
+const directStaticTest = new RegExp(
+  String.raw`^\s*(${staticTestCondition})\s*(\|\||&&)\s*`,
+  "u",
+);
+
+const resolveStaticProduction = (
+  command: string,
+  environment?: Map<string, EnvironmentValue>,
+) => {
+  if (environment === undefined) {
+    return command;
+  }
+  const match =
+    groupedStaticTest.exec(command) ?? directStaticTest.exec(command);
+  if (match === null) {
+    return command;
+  }
+  const condition = match[1] ?? "";
+  const variable = /"\$([A-Za-z_]\w*)"/u.exec(condition)?.[1];
+  if (variable === undefined) {
+    return command;
+  }
+  const known = environment.get(variable) ?? { type: "known", value: "" };
+  if (known.type === "unknown") {
+    return command;
+  }
+  const testPassed = condition.includes("-n")
+    ? known.value.length > 0
+    : known.value.length === 0;
+  const producerRuns = match[2] === "&&" ? testPassed : !testPassed;
+  if (!producerRuns) {
+    return command;
+  }
+  return (match[3] ?? "") + command.slice(match[0].length);
+};
+
+const declareEnvironment = (
+  stage: Stage,
+  operation: "ENV" | "ARG",
+  body: string,
+) => {
+  const event = lexShell(`declaration ${body}`).find(
+    (item) => item.type === "command",
+  );
+  if (event?.type !== "command") {
+    panic(`Unresolved Docker environment declaration: ${body}`);
+  }
+  const words = event.words.slice(1);
+  const assignments =
+    words.at(0)?.includes("=") || operation === "ARG"
+      ? words
+      : [`${words.at(0) ?? ""}=${words.slice(1).join(" ")}`];
+  for (const assignment of assignments) {
+    const split = assignment.indexOf("=");
+    const key = split === -1 ? assignment : assignment.slice(0, split);
+    if (!/^[A-Za-z_]\w*$/u.test(key)) {
+      panic(`Unresolved Docker environment declaration: ${body}`);
+    }
+    const value = split === -1 ? "" : assignment.slice(split + 1);
+    stage.environment.set(
+      key,
+      operation === "ARG" || /[$`]/u.test(value)
+        ? { type: "unknown" }
+        : { type: "known", value },
+    );
+  }
+};
+
+const guaranteedProduction = (
+  source: string,
+  environment?: Map<string, EnvironmentValue>,
+) => {
+  const command = resolveStaticProduction(source, environment);
   const operators = command
     .replace(/'[^']*'|"(?:\\.|[^"\\])*"/gu, "")
     .replaceAll("&&", "");
@@ -992,19 +1073,45 @@ const guaranteedProduction = (command: string) => {
   );
 };
 
+const commandScope = (context: CommandContext, command: string) =>
+  ({
+    ...context,
+    environment:
+      context.environment === undefined
+        ? undefined
+        : new Map(context.environment),
+    production:
+      context.production !== "conditional" &&
+      guaranteedProduction(command, context.environment)
+        ? "guaranteed"
+        : "conditional",
+  }) satisfies CommandContext;
+
+const shellProgramWords = (
+  source: readonly string[],
+  environment?: Map<string, EnvironmentValue>,
+) => {
+  const words = [...source];
+  while (
+    /^\w+=/u.test(words[0] ?? "") ||
+    (words[0] ?? "").startsWith("--mount=")
+  ) {
+    const assignment = words.shift() ?? "";
+    const variable = /^(\w+)=/u.exec(assignment)?.[1];
+    if (variable !== undefined) {
+      environment?.set(variable, { type: "unknown" });
+    }
+  }
+  return words;
+};
+
 const walkCommand = (
   context: CommandContext,
   command: string,
   initialCwd: string,
 ): SourceCommandEntry[] => {
   const { tree } = context;
-  const runContext = {
-    ...context,
-    production:
-      context.production !== "conditional" && guaranteedProduction(command)
-        ? "guaranteed"
-        : "conditional",
-  } satisfies CommandContext;
+  const runContext = commandScope(context, command);
   let cwd = initialCwd;
   const entries: SourceCommandEntry[] = [];
   const directories: string[] = [];
@@ -1023,13 +1130,7 @@ const walkCommand = (
     if (event.type !== "command") {
       continue;
     }
-    const words = [...event.words];
-    while (
-      /^\w+=/u.test(words[0] ?? "") ||
-      (words[0] ?? "").startsWith("--mount=")
-    ) {
-      words.shift();
-    }
+    const words = shellProgramWords(event.words, runContext.environment);
     const program = words.shift();
     runContext.command?.({
       program,
@@ -1214,29 +1315,57 @@ const copyMutation = ({
   cwd,
   production,
 }: SourceMutationOptions) => {
-  if (words.length !== 2 || words.some((word) => /^-|[$\\*?[\]]/u.test(word))) {
-    return false;
-  }
-  const [input, target] = words;
-  if (input === undefined || target === undefined) {
-    return false;
-  }
-  const source = absolute(cwd, input);
-  const origin = stage.files.get(source);
-  if (origin === undefined && hasDirectory(stage.files, source)) {
-    return false;
-  }
-  let destination = absolute(cwd, target);
   if (
-    target.endsWith("/") ||
-    destination === cwd ||
-    hasDirectory(stage.files, destination)
+    words.some(
+      (word) =>
+        /[$\\*?[\]]/u.test(word) ||
+        (word.startsWith("-") && !/^(?:--|-[rRap]+)$/u.test(word)),
+    )
   ) {
-    destination = path.posix.join(destination, path.posix.basename(source));
+    return false;
   }
-  stage.files.delete(destination);
-  if (origin !== undefined && production === "guaranteed") {
-    stage.files.set(destination, origin);
+  const paths = words.filter((word) => !word.startsWith("-"));
+  const target = paths.pop();
+  if (target === undefined || paths.length === 0) {
+    return false;
+  }
+  const targetPath = absolute(cwd, target);
+  const directory =
+    target.endsWith("/") ||
+    targetPath === cwd ||
+    hasDirectory(stage.files, targetPath);
+  if (paths.length > 1 && !directory) {
+    panic("Multiple cp sources require a directory destination");
+  }
+  const snapshot = new Map(stage.files);
+  for (const input of paths) {
+    const source = absolute(cwd, input);
+    const origin = snapshot.get(source);
+    const sourceDirectory = hasDirectory(snapshot, source);
+    if (origin === undefined && !sourceDirectory) {
+      if (modulePattern.test(source) || !source.includes("/node_modules/")) {
+        panic(`cp source is unavailable: ${source}`);
+      }
+      const destination = directory
+        ? path.posix.join(targetPath, path.posix.basename(source))
+        : targetPath;
+      stage.files.delete(destination);
+      continue;
+    }
+    if (sourceDirectory && !words.some((word) => /^-[rRa]/u.test(word))) {
+      panic(`cp directory requires a recursive flag: ${source}`);
+    }
+    const destination = directory
+      ? path.posix.join(targetPath, path.posix.basename(source))
+      : targetPath;
+    const writes: SourceTree = new Map();
+    copySource(snapshot, writes, source, destination);
+    for (const [file, copied] of writes) {
+      stage.files.delete(file);
+      if (production === "guaranteed") {
+        stage.files.set(file, copied);
+      }
+    }
   }
   stage.seen.clear();
   delete stage.checker;
@@ -1331,6 +1460,15 @@ const sourceMutation = ({
   }
 };
 
+const createStage = (parent?: Stage) =>
+  ({
+    cwd: parent?.cwd ?? "/",
+    files: new Map(parent?.files),
+    seen: new Set<string>(),
+    hazards: new Set(parent?.hazards),
+    environment: new Map(parent?.environment),
+  }) satisfies Stage;
+
 export const checkDockerSource = (
   root: string,
   source: string,
@@ -1344,12 +1482,7 @@ export const checkDockerSource = (
     entries: generatorEntries(root, context, generator),
   }));
   const stages = new Map<string, Stage>();
-  let stage: Stage = {
-    cwd: "/",
-    files: new Map(),
-    seen: new Set(),
-    hazards: new Set(),
-  };
+  let stage: Stage = createStage();
   const problems: string[] = [];
   let index = 0;
   for (const instruction of dockerInstructions(source)) {
@@ -1359,13 +1492,10 @@ export const checkDockerSource = (
     if (operation === "FROM") {
       const words = body.split(/\s+/u).filter((word) => !word.startsWith("--"));
       const parent = stages.get(words[0] ?? "");
-      stage = {
-        cwd: parent?.cwd ?? "/",
-        files: new Map(parent?.files),
-        seen: new Set(),
-        hazards: new Set(parent?.hazards),
-      };
+      stage = createStage(parent);
       stages.set(words[2] ?? `stage-${index++}`, stage);
+    } else if (operation === "ENV" || operation === "ARG") {
+      declareEnvironment(stage, operation, body);
     } else if (operation === "WORKDIR") {
       stage.cwd = absolute(stage.cwd, body);
     } else if (operation === "ADD") {
@@ -1414,6 +1544,7 @@ export const checkDockerSource = (
           root,
           tree: runStage.files,
           active: new Set(),
+          environment: runStage.environment,
           command: ({ program, words, cwd, production }) => {
             if (program === "turbo" && words.at(0) === "prune") {
               if (production !== "guaranteed") {
