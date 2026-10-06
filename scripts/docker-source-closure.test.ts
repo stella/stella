@@ -240,6 +240,96 @@ describe("Docker source closure", () => {
     }
   });
 
+  test("source mutations remove inventory and unknown writers fail closed before runners", () => {
+    const entry = put("mutation/entry.ts", 'import "./helper";');
+    const helper = put("mutation/helper.ts", "export const value = 1;");
+    const context: SourceTree = new Map([
+      ["/entry.ts", entry],
+      ["/helper.ts", helper],
+    ]);
+    const prefix = "FROM bun\nWORKDIR /app\nCOPY . .\nRUN ";
+    for (const command of [
+      "rm helper.ts && bun entry.ts",
+      "rm -rf /app/helper.ts && bun entry.ts",
+      "mv helper.ts moved.ts && bun entry.ts",
+      "mv helper.ts moved.ts\nRUN bun entry.ts",
+      "rm -rf /app && bun entry.ts",
+      "rmdir /app && bun entry.ts",
+    ]) {
+      expect(
+        checkDockerSource(root, prefix + command, context, new Map()).join(
+          "\n",
+        ),
+      ).toMatch(/unavailable in Docker stage|Entry is unavailable/u);
+    }
+    expect(
+      checkDockerSource(
+        root,
+        `${prefix}mv helper.ts moved.ts && bun moved.ts`,
+        context,
+        new Map(),
+      ),
+    ).toEqual([]);
+    expect(
+      checkDockerSource(
+        root,
+        `${prefix}false && mv helper.ts moved.ts; bun moved.ts`,
+        context,
+        new Map(),
+      ),
+    ).toEqual(["Entry is unavailable: /app/moved.ts"]);
+    expect(
+      checkDockerSource(
+        root,
+        `${prefix}cp helper.ts copied.ts && bun copied.ts`,
+        context,
+        new Map(),
+      ),
+    ).toEqual([]);
+    expect(
+      checkDockerSource(
+        root,
+        `${prefix}false && cp helper.ts copied.ts; bun copied.ts`,
+        context,
+        new Map(),
+      ),
+    ).toEqual(["Entry is unavailable: /app/copied.ts"]);
+    expect(
+      checkDockerSource(
+        root,
+        `${prefix}cp absent.ts helper.ts && bun entry.ts`,
+        context,
+        new Map(),
+      ).join("\n"),
+    ).toContain("./helper");
+    expect(() =>
+      checkDockerSource(
+        root,
+        `${prefix}cp --unknown helper.ts copied.ts && bun entry.ts`,
+        context,
+        new Map(),
+      ),
+    ).toThrow("Unsupported source mutation: cp touches /app/helper.ts");
+    for (const command of [
+      "sed -i helper.ts && bun entry.ts",
+      "sed -i helper.ts\nRUN bun entry.ts",
+    ]) {
+      expect(() =>
+        checkDockerSource(root, prefix + command, context, new Map()),
+      ).toThrow("Unsupported source mutation: sed touches /app/helper.ts");
+    }
+    expect(
+      checkDockerSource(
+        root,
+        `${
+          prefix
+        }rm -rf /var/lib/apt/lists/* /root/.bun/install/cache && bun entry.ts`,
+        context,
+        new Map(),
+      ),
+    ).toEqual([]);
+  });
+
   test("checks builds following installs in the same instruction", () => {
     const entry = put("after-install/entry.ts", 'import "./missing";');
     const context: SourceTree = new Map([["/entry.ts", entry]]);
@@ -262,6 +352,13 @@ describe("Docker source closure", () => {
     }
     for (const scenario of [
       "valid",
+      "valid-chain",
+      "conditional-semicolon",
+      "conditional-or",
+      "conditional-subshell",
+      "conditional-pipe",
+      "conditional-background",
+      "conditional-earlier-run",
       "missing-command",
       "preload-only",
       "before-producer",
@@ -307,7 +404,33 @@ describe("Docker source closure", () => {
           ? `RUN bun --preload ${producer} entry.ts`
           : `RUN ${generator.write.join(" ")}`;
       const build = "RUN bun entry.ts";
-      const commands = [run, build];
+      let commands = [run, build];
+      if (scenario === "valid-chain") {
+        commands = [
+          `RUN VALUE="\${PUBLIC_API_URL}" ${generator.write.join(" ")} && bun entry.ts`,
+        ];
+      } else if (
+        scenario === "conditional-semicolon" ||
+        scenario === "conditional-or" ||
+        scenario === "conditional-subshell" ||
+        scenario === "conditional-pipe" ||
+        scenario === "conditional-background" ||
+        scenario === "conditional-earlier-run"
+      ) {
+        const command = generator.write.join(" ");
+        const conditional = {
+          "conditional-semicolon": `RUN false && ${command}; bun entry.ts`,
+          "conditional-or": `RUN ${command} || bun entry.ts`,
+          "conditional-subshell": `RUN (${command}) && bun entry.ts`,
+          "conditional-pipe": `RUN ${command} | bun entry.ts`,
+          "conditional-background": `RUN ${command} & bun entry.ts`,
+          "conditional-earlier-run": `RUN false && ${command}; true`,
+        };
+        commands = [
+          conditional[scenario],
+          ...(scenario === "conditional-earlier-run" ? [build] : []),
+        ];
+      }
       if (scenario === "before-producer") {
         commands.reverse();
       } else if (scenario === "missing-command") {
@@ -325,10 +448,16 @@ describe("Docker source closure", () => {
         context,
         new Map(),
       );
-      if (scenario === "valid") {
+      if (scenario === "valid" || scenario === "valid-chain") {
         expect(problems).toEqual([]);
       } else {
         const expected = {
+          "conditional-semicolon": output.slice(0, -3),
+          "conditional-or": output.slice(0, -3),
+          "conditional-subshell": output.slice(0, -3),
+          "conditional-pipe": output.slice(0, -3),
+          "conditional-background": output.slice(0, -3),
+          "conditional-earlier-run": output.slice(0, -3),
           "missing-command": output.slice(0, -3),
           "preload-only": output.slice(0, -3),
           "before-producer": output.slice(0, -3),
@@ -341,66 +470,83 @@ describe("Docker source closure", () => {
     }
   });
 
-  test("filtered build scripts generate their declared sources before later commands", () => {
-    const fixtureRoot = mkdtempSync(path.join(root, "generated-filter-"));
-    const write = (file: string, source: string) => {
-      const target = path.join(fixtureRoot, file);
-      mkdirSync(path.dirname(target), { recursive: true });
-      writeFileSync(target, source);
-    };
-    const output = GENERATORS.find(({ id }) => id === "route-tree")?.outputs.at(
-      0,
-    );
-    if (output === undefined) {
-      throw new Error("Route tree output is missing");
-    }
-    write(output, "export const routeTree = {};");
-    const producer = "apps/web/scripts/generate-route-tree.ts";
-    const manifest = "apps/web/package.json";
-    const entry = "apps/web/src/entry.ts";
-    write(producer, "export const generated = true;");
-    write(
-      manifest,
-      JSON.stringify({
-        name: "@stll/web",
-        scripts: {
-          "generate:route-tree": "bun scripts/generate-route-tree.ts",
-          build: "bun run generate:route-tree && bun src/entry.ts",
-        },
-      }),
-    );
-    write(entry, 'import "./routeTree.gen";');
-    const context: SourceTree = new Map(
-      [producer, manifest, entry].map((file) => [`/${file}`, file]),
-    );
-    const source =
-      "FROM bun AS builder\nWORKDIR /app\nCOPY . .\nRUN bun --filter @stll/web build";
-    expect(checkDockerSource(fixtureRoot, source, context, new Map())).toEqual(
-      [],
-    );
-    expect(
-      checkDockerSource(
+  test.each(["guaranteed", "conditional"] as const)(
+    "filtered build scripts require a guaranteed producer chain: %s",
+    (scenario) => {
+      const fixtureRoot = mkdtempSync(path.join(root, "generated-filter-"));
+      const write = (file: string, source: string) => {
+        const target = path.join(fixtureRoot, file);
+        mkdirSync(path.dirname(target), { recursive: true });
+        writeFileSync(target, source);
+      };
+      const output = GENERATORS.find(
+        ({ id }) => id === "route-tree",
+      )?.outputs.at(0);
+      if (output === undefined) {
+        throw new Error("Route tree output is missing");
+      }
+      write(output, "export const routeTree = {};");
+      const producer = "apps/web/scripts/generate-route-tree.ts";
+      const manifest = "apps/web/package.json";
+      const entry = "apps/web/src/entry.ts";
+      write(producer, "export const generated = true;");
+      write(
+        manifest,
+        JSON.stringify({
+          name: "@stll/web",
+          scripts: {
+            "generate:route-tree": "bun scripts/generate-route-tree.ts",
+            build:
+              scenario === "guaranteed"
+                ? "bun run generate:route-tree && bun src/entry.ts"
+                : '([ -n "$TURBO_HASH" ] || bun run generate:route-tree) && bun src/entry.ts',
+          },
+        }),
+      );
+      write(entry, 'import "./routeTree.gen";');
+      const context: SourceTree = new Map(
+        [producer, manifest, entry].map((file) => [`/${file}`, file]),
+      );
+      const source =
+        "FROM bun AS builder\nWORKDIR /app\nCOPY . .\nRUN bun --filter @stll/web build";
+      const problems = checkDockerSource(
         fixtureRoot,
-        source.replace(
-          "bun --filter @stll/web build",
-          "bun apps/web/src/entry.ts",
-        ),
+        source,
         context,
         new Map(),
-      ).join("\n"),
-    ).toContain("routeTree.gen");
-    for (const command of [
-      "bun apps/web/scripts/generate-route-tree.ts --check",
-      "bun build apps/web/scripts/generate-route-tree.ts",
-    ]) {
-      const validationOnly = `FROM bun AS builder\nWORKDIR /app\nCOPY . .\nRUN ${command}\nRUN bun apps/web/src/entry.ts`;
+      );
+      if (scenario === "guaranteed") {
+        expect(problems).toEqual([]);
+      } else {
+        expect(problems.join("\n")).toContain("routeTree.gen");
+      }
       expect(
-        checkDockerSource(fixtureRoot, validationOnly, context, new Map()).join(
-          "\n",
-        ),
+        checkDockerSource(
+          fixtureRoot,
+          source.replace(
+            "bun --filter @stll/web build",
+            "bun apps/web/src/entry.ts",
+          ),
+          context,
+          new Map(),
+        ).join("\n"),
       ).toContain("routeTree.gen");
-    }
-  });
+      for (const command of [
+        "bun apps/web/scripts/generate-route-tree.ts --check",
+        "bun build apps/web/scripts/generate-route-tree.ts",
+      ]) {
+        const validationOnly = `FROM bun AS builder\nWORKDIR /app\nCOPY . .\nRUN ${command}\nRUN bun apps/web/src/entry.ts`;
+        expect(
+          checkDockerSource(
+            fixtureRoot,
+            validationOnly,
+            context,
+            new Map(),
+          ).join("\n"),
+        ).toContain("routeTree.gen");
+      }
+    },
+  );
 
   test("later COPY instructions refresh checked entries and alias resolution", () => {
     for (const laterEntry of ["entry.ts", "other.ts"]) {
@@ -638,14 +784,14 @@ describe("Docker source closure", () => {
     const checksum = "a".repeat(64);
     const prefix = `FROM bun\nWORKDIR /app\nCOPY entry.ts .\nADD --checksum=sha256:${checksum} https://example.invalid/native.tar /native.tar`;
     expect(checkDockerSource(root, prefix, context, new Map())).toEqual([]);
-    expect(
+    expect(() =>
       checkDockerSource(
         root,
         `${prefix}\nRUN tar -xf /native.tar -C /app && bun entry.ts`,
         context,
         new Map(),
-      ).join("\n"),
-    ).toContain("missing");
+      ),
+    ).toThrow("Unsupported source mutation: tar touches /app");
     for (const target of ["/app", "/app/"]) {
       expect(
         checkDockerSource(
@@ -1155,7 +1301,11 @@ describe("Docker source closure", () => {
           context,
           pruned,
         ),
-      ).toEqual([]);
+      ).toEqual(
+        separator === "&&"
+          ? []
+          : [`${entry} imports ./out/full/value, unavailable in Docker stage`],
+      );
       expect(
         checkDockerSource(
           root,
