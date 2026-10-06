@@ -3,6 +3,8 @@ import * as v from "valibot";
 
 import { DAY_IN_MS } from "@stll/time";
 
+import { envBaseServerSchema } from "@/api/env-base-schema";
+
 import { envApiInvariantViolation, envApiServerSchema } from "./env-schema";
 
 test("agent client storage format requires explicit enablement", () => {
@@ -14,14 +16,14 @@ test("agent client storage format requires explicit enablement", () => {
 
 test("feature access grants default to empty and unknown production feature ids reject startup", () => {
   expect(
-    v.parse(envApiServerSchema.API_FEATURE_ACCESS_GRANTS, undefined),
+    v.parse(envBaseServerSchema.API_FEATURE_ACCESS_GRANTS, undefined),
   ).toEqual({});
-  expect(v.parse(envApiServerSchema.API_FEATURE_ACCESS_GRANTS, "{}")).toEqual(
+  expect(v.parse(envBaseServerSchema.API_FEATURE_ACCESS_GRANTS, "{}")).toEqual(
     {},
   );
   expect(
     v.safeParse(
-      envApiServerSchema.API_FEATURE_ACCESS_GRANTS,
+      envBaseServerSchema.API_FEATURE_ACCESS_GRANTS,
       '{"unknown-feature":[{"type":"member","organizationId":"org-a","email":"member@example.test"}]}',
     ).success,
   ).toBe(false);
@@ -317,7 +319,7 @@ test("inbound mail receiving is configured all-or-none and requires its domain",
 test("list verification grants use the shared registered-feature configuration", () => {
   expect(
     v.parse(
-      envApiServerSchema.API_FEATURE_ACCESS_GRANTS,
+      envBaseServerSchema.API_FEATURE_ACCESS_GRANTS,
       JSON.stringify({
         "list-verification": [
           {
@@ -335,7 +337,7 @@ test("list verification grants use the shared registered-feature configuration",
   });
   expect(
     v.safeParse(
-      envApiServerSchema.API_FEATURE_ACCESS_GRANTS,
+      envBaseServerSchema.API_FEATURE_ACCESS_GRANTS,
       '{"list-verification":[{"type":"member","organizationId":"org-a","email":"*@example.test"}]}',
     ).success,
   ).toBe(false);

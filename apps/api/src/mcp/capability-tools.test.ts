@@ -10,12 +10,12 @@ import type { workspaceViews } from "@/api/db/schema";
 import { env } from "@/api/env";
 import exportTimeEntriesCsv from "@/api/handlers/time-entries/csv/export";
 import type { AuditRecorder } from "@/api/lib/audit-log";
+import { toSafeId } from "@/api/lib/branded-types";
+import { PLAYBOOK_RUN_FAILURE_CODE } from "@/api/lib/document-review/playbook-run-refusal";
 import {
   createFeatureAccessSnapshot,
   decideFeatureAccess,
-} from "@/api/lib/auth/feature-access/policy";
-import { toSafeId } from "@/api/lib/branded-types";
-import { PLAYBOOK_RUN_FAILURE_CODE } from "@/api/lib/document-review/playbook-run-refusal";
+} from "@/api/lib/feature-access/policy";
 import { featurePrerequisiteClosure } from "@/api/lib/feature-access/prerequisites";
 import {
   FEATURE_REGISTRY,
@@ -142,14 +142,27 @@ const visibleReferenceDatabase = (ids: readonly string[]) =>
       const query = {
         from: () => query,
         where: (condition: SQL) =>
-          Promise.resolve(
-            new PgDialect()
-              .sqlToQuery(condition)
-              .params.filter(
-                (id): id is string =>
-                  typeof id === "string" && ids.includes(id),
-              )
-              .map((id) => ({ id })),
+          Object.assign(
+            Promise.resolve(
+              new PgDialect()
+                .sqlToQuery(condition)
+                .params.filter(
+                  (id): id is string =>
+                    typeof id === "string" && ids.includes(id),
+                )
+                .map((id) => ({ id })),
+            ),
+            {
+              limit: async (count: number) =>
+                new PgDialect()
+                  .sqlToQuery(condition)
+                  .params.filter(
+                    (id): id is string =>
+                      typeof id === "string" && ids.includes(id),
+                  )
+                  .slice(0, count)
+                  .map((id) => ({ id })),
+            },
           ),
       };
       return query;
@@ -3413,6 +3426,7 @@ test.each(["default-deny", "granted", "colleague"] as const)(
       configurable: true,
       value: {
         type: "conditional",
+        decision: "when-used",
         featureId,
         usesFeature: async ({ query }: { query: unknown }) => {
           checkedQueries.push(query);

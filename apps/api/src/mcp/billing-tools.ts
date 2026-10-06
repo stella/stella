@@ -206,7 +206,7 @@ type InvoiceTimeEntryTextItem = {
 type InvoiceExpenseTextItem = {
   description: string;
   invoiceDescription: string | null;
-  entity: { name: string };
+  entity: { name: string } | null;
 };
 
 type InvoiceLineTextItem = {
@@ -330,7 +330,11 @@ const invoiceDetailTextFieldSpecs = (
   }),
   defineTextFieldSpec({
     path: "invoice.expenses[].entity.name",
-    items: (payload) => payload.invoice.expenses,
+    items: (payload) =>
+      payload.invoice.expenses.filter(
+        (item): item is InvoiceExpenseTextItem & { entity: { name: string } } =>
+          item.entity !== null,
+      ),
     scope: () => workspaceId,
     read: (item) => item.entity.name,
     apply: (item, value) => {

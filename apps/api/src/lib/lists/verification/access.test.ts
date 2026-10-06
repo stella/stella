@@ -1,13 +1,13 @@
 import { expect, test } from "bun:test";
 import * as v from "valibot";
 
-import { envApiServerSchema } from "@/api/env-schema";
+import { envBaseServerSchema } from "@/api/env-base-schema";
 import { resolveFeatureAccessSnapshot } from "@/api/lib/auth/feature-access/context";
+import { toSafeId } from "@/api/lib/branded-types";
 import {
   decideFeatureAccess,
   isFeatureEnabled,
-} from "@/api/lib/auth/feature-access/policy";
-import { toSafeId } from "@/api/lib/branded-types";
+} from "@/api/lib/feature-access/policy";
 import {
   FEATURE_REGISTRY,
   LEGAL_LISTS_FEATURE_ID,
@@ -71,7 +71,7 @@ test("the verification declaration uses invitation enrollment and the shared ide
 test("parsed verification grants resolve against current identity and deny absent membership", async () => {
   const organizationId = toSafeId<"organization">("org-a");
   const grants = v.parse(
-    envApiServerSchema.API_FEATURE_ACCESS_GRANTS,
+    envBaseServerSchema.API_FEATURE_ACCESS_GRANTS,
     JSON.stringify({
       [LEGAL_LISTS_FEATURE_ID]: [memberGrant],
       [LIST_VERIFICATION_FEATURE_ID]: [

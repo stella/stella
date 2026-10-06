@@ -1,7 +1,7 @@
 import { describe, expect, mock, test } from "bun:test";
 
-import { createFeatureAccessSnapshot } from "@/api/lib/auth/feature-access/policy";
 import { toSafeId } from "@/api/lib/branded-types";
+import { createFeatureAccessSnapshot } from "@/api/lib/feature-access/policy";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";

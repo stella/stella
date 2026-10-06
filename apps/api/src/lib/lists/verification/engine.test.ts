@@ -13,8 +13,8 @@ import { RUNTIME_MODE } from "@stll/runtime-mode";
 import type { SafeDb } from "@/api/db/safe-db";
 import { env } from "@/api/env";
 import type { AIUsageMetering } from "@/api/lib/analytics/tanstack-ai";
-import { decideFeatureAccess } from "@/api/lib/auth/feature-access/policy";
 import { toSafeId } from "@/api/lib/branded-types";
+import { decideFeatureAccess } from "@/api/lib/feature-access/policy";
 import {
   FEATURE_REGISTRY,
   LEGAL_LISTS_FEATURE_ID,

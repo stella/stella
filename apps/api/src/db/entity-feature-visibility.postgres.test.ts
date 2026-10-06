@@ -2,6 +2,7 @@ import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 import { asc, count, eq, sql } from "drizzle-orm";
 
+import { cents } from "@stll/money";
 import { rejectionOf } from "@stll/property-testing/rejection";
 
 import {
@@ -145,7 +146,7 @@ describe.skipIf(!runPostgresTests)(
                 {
                   id: entryId,
                   minutes: 60,
-                  rate: 12_000,
+                  rate: cents(12_000),
                   workItemId: enabled ? factId : null,
                   reference: enabled
                     ? { type: "available", id: factId }

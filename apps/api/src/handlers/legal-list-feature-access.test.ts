@@ -4,7 +4,7 @@ import { expect, test } from "bun:test";
 import {
   createFeatureAccessSnapshot,
   decideFeatureAccess,
-} from "@/api/lib/auth/feature-access/policy";
+} from "@/api/lib/feature-access/policy";
 import {
   FEATURE_REGISTRY,
   LEGAL_LISTS_FEATURE_ID,
@@ -49,7 +49,7 @@ for (const grants of [
     );
     expect(entries.length).toBeGreaterThan(0);
     for (const [id, entry] of entries) {
-      const module = await entry.load();
+      const module: Record<string, unknown> = await entry.load();
       const endpoint =
         module[
           "exportName" in entry && typeof entry.exportName === "string"

@@ -7,9 +7,10 @@ import createWorkspace from "@/api/handlers/workspaces/create";
 import addWorkspaceMember from "@/api/handlers/workspaces/members/add";
 import removeWorkspaceMember from "@/api/handlers/workspaces/members/remove";
 import updateWorkspace from "@/api/handlers/workspaces/update";
-import { createFeatureAccessSnapshot } from "@/api/lib/auth/feature-access/policy";
 import { toSafeId } from "@/api/lib/branded-types";
+import { createFeatureAccessSnapshot } from "@/api/lib/feature-access/policy";
 import { createTestHandlerContext } from "@/api/tests/helpers/handler-context";
+import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
 
 describe("account lifecycle handlers", () => {
   test.each([undefined, "org_account"])(
@@ -25,6 +26,10 @@ describe("account lifecycle handlers", () => {
         id: toSafeId<"user">("user_account"),
         email: "account@example.test",
       };
+      const { safeDb, scopedDb } = createScopedDbMock(
+        {},
+        { visibleResources: { field: ["field_account"] } },
+      );
       try {
         const downloaded = await readFileEndpoint.handler(
           createTestHandlerContext<
@@ -36,6 +41,8 @@ describe("account lifecycle handlers", () => {
               fieldId: "field_account",
             },
             query: { purpose: "download" },
+            safeDb,
+            scopedDb,
           }),
         );
         const added = await addWorkspaceMember.handler(

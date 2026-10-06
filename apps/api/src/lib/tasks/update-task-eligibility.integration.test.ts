@@ -7,8 +7,9 @@ import {
   setDefaultTimeout,
   test,
 } from "bun:test";
-import { inArray } from "drizzle-orm";
+import { eq, inArray } from "drizzle-orm";
 
+import { user } from "@/api/db/auth-schema";
 import {
   entities,
   taskAssignees,
@@ -18,9 +19,11 @@ import {
   workObligations,
 } from "@/api/db/schema";
 import { createSafeDb } from "@/api/db/scoped";
+import { env } from "@/api/env";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { TASK_ASSIGNEE_ROLE } from "@/api/lib/entity-constants";
+import { LEGAL_LISTS_FEATURE_ID } from "@/api/lib/feature-access/registry";
 import { updateTaskHandler } from "@/api/lib/tasks/update-task";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
@@ -39,12 +42,22 @@ const FEATURES_ENABLED = {
 
 let testDb: TestDatabase;
 let ids: TestIds;
+const previousGrants = env.API_FEATURE_ACCESS_GRANTS;
 const seededEntityIds: SafeId<"entity">[] = [];
 
 beforeAll(async () => {
   const fixture = await getRlsFixture();
   testDb = fixture.testDb;
   ids = fixture.ids;
+  env.API_FEATURE_ACCESS_GRANTS = {
+    [LEGAL_LISTS_FEATURE_ID]: [
+      { type: "organization", organizationId: ids.orgA },
+    ],
+  };
+  await testDb
+    .update(user)
+    .set({ emailVerified: true })
+    .where(eq(user.id, ids.userA1));
 });
 
 afterAll(async () => {
@@ -55,6 +68,7 @@ afterAll(async () => {
         .where(inArray(entities.id, seededEntityIds));
     }
   } finally {
+    env.API_FEATURE_ACCESS_GRANTS = previousGrants;
     await releaseRlsFixture();
   }
 });

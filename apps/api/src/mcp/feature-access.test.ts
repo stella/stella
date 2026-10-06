@@ -15,12 +15,13 @@ import { CHAT_READ_SCRIPT_POLICY } from "@/api/handlers/chat/tools/execute/chat-
 import { runRegistryReadTool } from "@/api/handlers/chat/tools/registry-adapter/run-registry-tool";
 import { runRegistryWriteTool } from "@/api/handlers/chat/tools/registry-adapter/run-registry-write-tool";
 import { buildChatWriteTools } from "@/api/handlers/chat/tools/registry-write-tools";
+import { toSafeId } from "@/api/lib/branded-types";
+import { createChatRefRegistry } from "@/api/lib/chat/ref-registry";
+import { createChatToolDefectMemo } from "@/api/lib/chat/tool-defect-memo";
 import {
   createFeatureAccessSnapshot,
   decideFeatureAccess,
-} from "@/api/lib/auth/feature-access/policy";
-import { createChatRefRegistry } from "@/api/lib/chat/ref-registry";
-import { createChatToolDefectMemo } from "@/api/lib/chat/tool-defect-memo";
+} from "@/api/lib/feature-access/policy";
 import {
   FEATURE_REGISTRY,
   LEGAL_LISTS_FEATURE_ID,
@@ -51,8 +52,8 @@ import {
 } from "@/api/tests/scoped-db-mock";
 
 const featureId = "fixture-feature";
-const organizationId = "org_fixture";
-const userId = "user_fixture";
+const organizationId = toSafeId<"organization">("org_fixture");
+const userId = toSafeId<"user">("user_fixture");
 const decision = decideFeatureAccess({
   registry: { [featureId]: { enrolment: "invitation" } },
   grants: {

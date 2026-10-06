@@ -5,16 +5,16 @@ import type { UnavailableWorkspaceView } from "@stll/api-contract";
 
 import type { Transaction } from "@/api/db/root";
 import { workspaceViews, workspaceViewTemplates } from "@/api/db/schema";
-import {
-  isFeatureEnabled,
-  type FeatureAccessSnapshot,
-} from "@/api/lib/auth/feature-access/policy";
 import type {
   FeatureAccessRequirement,
   FeatureResourceContext,
 } from "@/api/lib/auth/feature-access/requirements";
 import type { SafeId } from "@/api/lib/branded-types";
 import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
+import {
+  isFeatureEnabled,
+  type FeatureAccessSnapshot,
+} from "@/api/lib/feature-access/policy";
 import { LIST_VERIFICATION_FEATURE_ID } from "@/api/lib/feature-access/registry";
 import { isRecord } from "@/api/lib/type-guards";
 import type { AdvertisedSchemas } from "@/api/mcp/advertised-schema";
@@ -252,12 +252,14 @@ const usesAvtFeature = async ({
 export const AVT_LAYOUT_FEATURE_ACCESS = {
   featureId: LIST_VERIFICATION_FEATURE_ID,
   type: "conditional",
+  decision: "when-used",
   usesFeature: usesAvtFeature,
   projectInputSchema: projectAvtViewInputSchemas,
 } as const satisfies FeatureAccessRequirement;
 export const AVT_LAYOUT_DISCOVERY_FEATURE_ACCESS = {
   featureId: LIST_VERIFICATION_FEATURE_ID,
   type: "conditional",
+  decision: "always",
   usesFeature: () => false,
   projectInputSchema: projectAvtViewInputSchemas,
 } as const satisfies FeatureAccessRequirement;

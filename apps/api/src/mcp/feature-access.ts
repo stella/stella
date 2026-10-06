@@ -1,4 +1,4 @@
-import { isFeatureEnabled } from "@/api/lib/auth/feature-access/policy";
+import { isFeatureEnabled } from "@/api/lib/feature-access/policy";
 import type { McpRequestContext } from "@/api/mcp/context";
 import type { McpToolDefinition } from "@/api/mcp/tool-types";
 

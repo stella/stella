@@ -4,8 +4,8 @@ import type { SQLWrapper } from "drizzle-orm";
 
 import type { Transaction } from "@/api/db/root";
 import { envFeatureAccess } from "@/api/env-feature-access";
-import { decideFeatureAccess } from "@/api/lib/auth/feature-access/policy";
 import { executedRows } from "@/api/lib/db/executed-rows";
+import { decideFeatureAccess } from "@/api/lib/feature-access/policy";
 import { featurePrerequisiteClosure } from "@/api/lib/feature-access/prerequisites";
 import { FEATURE_REGISTRY } from "@/api/lib/feature-access/registry";
 import { isRecord } from "@/api/lib/type-guards";

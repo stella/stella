@@ -1,15 +1,15 @@
 import { expect, test } from "bun:test";
 
-import {
-  createFeatureAccessSnapshot,
-  decideFeatureAccess,
-  isFeatureEnabled,
-} from "@/api/lib/auth/feature-access/policy";
-import type { FeatureAccessDecision } from "@/api/lib/auth/feature-access/policy";
 import type {
   FeatureAccessGrants,
   FeatureGrant,
 } from "@/api/lib/feature-access/grants-schema";
+import {
+  createFeatureAccessSnapshot,
+  decideFeatureAccess,
+  isFeatureEnabled,
+} from "@/api/lib/feature-access/policy";
+import type { FeatureAccessDecision } from "@/api/lib/feature-access/policy";
 import type { FeatureRegistry } from "@/api/lib/feature-access/registry";
 
 const registry = {

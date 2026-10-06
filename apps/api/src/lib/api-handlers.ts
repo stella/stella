@@ -21,14 +21,6 @@ import type { AuditExecutionContext, AuditRecorder } from "@/api/lib/audit-log";
 import type { AccessibleWorkspace } from "@/api/lib/auth";
 import { checkDemoAccountOperation } from "@/api/lib/auth/demo-account";
 import { resolveFeatureAccessSnapshot } from "@/api/lib/auth/feature-access/context";
-import {
-  isFeatureEnabled,
-  isFeatureAccessSnapshotForPrincipal,
-} from "@/api/lib/auth/feature-access/policy";
-import type {
-  FeatureAccessSnapshot,
-  FeatureAccessProof,
-} from "@/api/lib/auth/feature-access/policy";
 import type { FeatureAccessRequirement } from "@/api/lib/auth/feature-access/requirements";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { CapabilityTransport } from "@/api/lib/capability-transport";
@@ -51,6 +43,14 @@ import type {
   HandlerErrorValidationIssue,
 } from "@/api/lib/errors/tagged-errors";
 import { errorTag, unredactedErrorFields } from "@/api/lib/errors/utils";
+import {
+  isFeatureEnabled,
+  isFeatureAccessSnapshotForPrincipal,
+} from "@/api/lib/feature-access/policy";
+import type {
+  FeatureAccessSnapshot,
+  FeatureAccessProof,
+} from "@/api/lib/feature-access/policy";
 import {
   getContentDeliveryReceiptError,
   markContentDeliveryIntent,
@@ -1191,6 +1191,7 @@ const admitHandlerFeatureAccess = async <TConfig extends HandlerConfig>({
   }
   if (
     featureAccess?.type === "conditional" &&
+    featureAccess.decision === "when-used" &&
     (ctx.featureAccessSnapshot === undefined ||
       !isFeatureAccessSnapshotForPrincipal(ctx.featureAccessSnapshot, {
         organizationId: ctx.session.activeOrganizationId,
@@ -1215,7 +1216,7 @@ const admitHandlerFeatureAccess = async <TConfig extends HandlerConfig>({
       return await runSafeHandler({
         ctx,
         contentDelivery: config.contentDelivery,
-        async *handler() {
+        async *handler(): SafeHandlerGenerator<never> {
           return yield* Result.await(Promise.resolve(Result.err(usage.error)));
         },
       });
@@ -1245,7 +1246,7 @@ const admitHandlerFeatureAccess = async <TConfig extends HandlerConfig>({
       return await runSafeHandler({
         ctx,
         contentDelivery: config.contentDelivery,
-        async *handler() {
+        async *handler(): SafeHandlerGenerator<never> {
           return yield* Result.await(
             Promise.resolve(Result.err(snapshot.error)),
           );
@@ -1286,7 +1287,7 @@ const admitHandlerFeatureAccess = async <TConfig extends HandlerConfig>({
         return await runSafeHandler({
           ctx,
           contentDelivery: config.contentDelivery,
-          async *handler() {
+          async *handler(): SafeHandlerGenerator<never> {
             return yield* Result.await(
               Promise.resolve(Result.err(usage.error)),
             );
@@ -1333,6 +1334,15 @@ const createSafeScopedHandler = <
         return featureAccessResponse;
       }
 
+      if (requiresStandardAccount(config.accountAccess)) {
+        const accountAccess = checkAccountOperation(ctx.user.email);
+        if (Result.isError(accountAccess)) {
+          return toSafeStatusResponse(403, {
+            code: "account_access_unavailable",
+            message: "This operation is unavailable for this account.",
+          });
+        }
+      }
       const visible = await Result.tryPromise(
         async () =>
           await resourcesAreVisible({
@@ -1359,15 +1369,6 @@ const createSafeScopedHandler = <
         return toSafeStatusResponse(404, { message: "Not found" });
       }
 
-      if (requiresStandardAccount(config.accountAccess)) {
-        const accountAccess = checkAccountOperation(ctx.user.email);
-        if (Result.isError(accountAccess)) {
-          return toSafeStatusResponse(403, {
-            code: "account_access_unavailable",
-            message: "This operation is unavailable for this account.",
-          });
-        }
-      }
       // A handler that declares AI usage must not run when this request could
       // not read the org's stored config, or the org is barred from the
       // instance provider: `ctx.orgAIConfig` is null there, and resolving a

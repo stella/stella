@@ -1757,7 +1757,6 @@
     "apps/api/src/tests/module-mock-factories.ts": 1,
     "apps/api/src/tests/pglite-schema.ts": 5,
     "apps/api/src/tests/query-plans/scale-profile.ts": 1,
-    "apps/api/src/tests/scoped-db-mock.ts": 1,
     "apps/api/src/tests/security/auth-user-grants.test.ts": 4,
     "apps/api/src/tests/security/cross-tenant-handlers.test.ts": 189,
     "apps/api/src/tests/security/file-upload-limits.test.ts": 3,

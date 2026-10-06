@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
 
-import { decideFeatureAccess } from "@/api/lib/auth/feature-access/policy";
+import { decideFeatureAccess } from "@/api/lib/feature-access/policy";
 import {
   assertFeaturePrerequisites,
   defineFeatureRegistry,

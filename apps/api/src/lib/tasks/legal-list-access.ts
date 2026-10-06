@@ -45,6 +45,7 @@ export const projectTaskListInputSchemas = (
 export const LEGAL_LIST_TASK_FEATURE_ACCESS = {
   featureId: LEGAL_LISTS_FEATURE_ID,
   type: "conditional",
+  decision: "when-used",
   usesFeature: ({ body }) => taskInputUsesLegalLists(body),
   projectInputSchema: projectTaskListInputSchemas,
 } as const satisfies FeatureAccessRequirement;

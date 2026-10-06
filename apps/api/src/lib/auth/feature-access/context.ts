@@ -5,16 +5,16 @@ import { member, user } from "@/api/db/auth-schema";
 import type { Transaction } from "@/api/db/root";
 import type { SafeDb } from "@/api/db/safe-db";
 import { env } from "@/api/env";
+import type { SafeId } from "@/api/lib/branded-types";
+import type { FeatureAccessGrants } from "@/api/lib/feature-access/grants-schema";
 import {
   createFeatureAccessSnapshot,
   decideFeatureAccess,
-} from "@/api/lib/auth/feature-access/policy";
+} from "@/api/lib/feature-access/policy";
 import type {
   FeatureAccessDecision,
   FeatureAccessSnapshot,
-} from "@/api/lib/auth/feature-access/policy";
-import type { SafeId } from "@/api/lib/branded-types";
-import type { FeatureAccessGrants } from "@/api/lib/feature-access/grants-schema";
+} from "@/api/lib/feature-access/policy";
 import { FEATURE_REGISTRY } from "@/api/lib/feature-access/registry";
 import type { FeatureRegistry } from "@/api/lib/feature-access/registry";
 
