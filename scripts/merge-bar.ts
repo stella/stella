@@ -678,8 +678,10 @@ export const evaluateMergeBar = (
   };
 };
 
-// Limit unrelated drift too: beyond twenty commits, path overlap alone is
-// too weak a signal for whether an old green run still represents integration.
+// How far main may have moved for the changed-file comparison to stay
+// readable. Beyond it the comparison is skipped, not refused: the merge group
+// re-runs the ratchet and full CI on the real merge commit, so main moving is
+// never by itself a reason to make a green PR run CI again.
 const MAX_GREEN_BASE_DRIFT = 20;
 const COMPARE_FILE_LIMIT = 300;
 
@@ -909,10 +911,10 @@ const ratchetFreshnessFailure = ({
   if (ratchetChanges.length === 0) {
     return null;
   }
-  // The recheck runs the base's checker; a PR that edits the checker itself
-  // needs CI, which runs the merged one.
+  // The recheck runs the base's checker, which cannot judge a PR that edits
+  // the checker itself; the merge group runs the merged checker instead.
   if (pullFiles.some((filename) => definitions.includes(filename))) {
-    return `main changed the ratchet since the green run (${ratchetChanges.join(", ")}) and this PR changes it too`;
+    return null;
   }
   const recheck = ratchet.recheck({ headSha, baseRefName });
   if (recheck.isOk()) {
@@ -924,6 +926,19 @@ const ratchetFreshnessFailure = ({
       recheck.error.message
     }`
   );
+};
+
+/** Every path main's comparison names, renamed files under both names. */
+const changedPathsOf = (files: readonly unknown[]) => {
+  const changedPaths = new Set<string>();
+  for (const rawFile of files) {
+    const file = readRecord(rawFile, "base changed file");
+    changedPaths.add(readString(file, "filename"));
+    if (typeof file["previous_filename"] === "string") {
+      changedPaths.add(file["previous_filename"]);
+    }
+  }
+  return changedPaths;
 };
 
 type CheckGreenResultFreshnessOptions = {
@@ -1023,39 +1038,24 @@ export const checkGreenResultFreshness = ({
   ) {
     panic("Expected a non-negative commit count in base comparison");
   }
-  if (commits > MAX_GREEN_BASE_DRIFT) {
-    return refuse(
-      `main advanced ${commits} commits since the green run (limit ${MAX_GREEN_BASE_DRIFT})`,
-    );
-  }
   const files = comparison["files"];
-  if (!Array.isArray(files) || files.length >= COMPARE_FILE_LIMIT) {
-    return refuse("cannot establish complete changed-file coverage for main");
-  }
-  const changedPaths = new Set<string>();
-  for (const rawFile of files) {
-    const file = readRecord(rawFile, "base changed file");
-    changedPaths.add(readString(file, "filename"));
-    if (typeof file["previous_filename"] === "string") {
-      changedPaths.add(file["previous_filename"]);
+  const pullFiles = readPullFiles();
+  if (
+    commits <= MAX_GREEN_BASE_DRIFT &&
+    Array.isArray(files) &&
+    files.length < COMPARE_FILE_LIMIT
+  ) {
+    const ratchetFailure = ratchetFreshnessFailure({
+      ratchet,
+      changedPaths: changedPathsOf(files),
+      pullFiles,
+      pullRequest,
+    });
+    if (ratchetFailure !== null) {
+      return refuse(ratchetFailure);
     }
   }
-  const pullFiles = readPullFiles();
-  const ratchetFailure = ratchetFreshnessFailure({
-    ratchet,
-    changedPaths,
-    pullFiles,
-    pullRequest,
-  });
-  if (ratchetFailure !== null) {
-    return refuse(ratchetFailure);
-  }
-  const overlap = pullFiles.filter((filename) => changedPaths.has(filename));
-  if (overlap.length > 0) {
-    return refuse(
-      `main changed files also touched by this PR: ${overlap.join(", ")}`,
-    );
-  }
+
   // The green run planned its jobs with the planner of its own base. Re-plan
   // this PR's files with main's planner now: a rule main gained since can
   // require a job that run never had. A planner change that selects nothing
