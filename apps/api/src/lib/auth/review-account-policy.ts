@@ -147,7 +147,10 @@ const SESSION_AUTH_PATH_OPERATIONS: Readonly<
   "/email-otp/change-email": REVIEW_ACCOUNT_OPERATION.changeEmail,
   "/change-password": REVIEW_ACCOUNT_OPERATION.changePassword,
   "/link-social": REVIEW_ACCOUNT_OPERATION.linkIdentity,
+  // Unlinking the credential identity would end password sign-in.
+  "/unlink-account": REVIEW_ACCOUNT_OPERATION.linkIdentity,
   "/delete-user": REVIEW_ACCOUNT_OPERATION.deleteAccount,
+  "/delete-user/callback": REVIEW_ACCOUNT_OPERATION.deleteAccount,
 };
 
 const SESSION_AUTH_PATH_PREFIX_OPERATIONS: readonly (readonly [

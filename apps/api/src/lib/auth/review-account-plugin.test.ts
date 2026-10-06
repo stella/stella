@@ -8,6 +8,10 @@ import {
   createReviewAccountPlugin,
   REVIEW_ACCOUNT_SIGN_IN_BUDGET,
 } from "@/api/lib/auth/review-account-plugin";
+import {
+  isReviewAccountBodyEmailPath,
+  resolveReviewAccountSessionOperation,
+} from "@/api/lib/auth/review-account-policy";
 import { createAccountAttemptBudget } from "@/api/lib/rate-limit/otp-account-budget";
 import { RedisRateLimitContext } from "@/api/lib/rate-limit/redis-context";
 
@@ -130,6 +134,56 @@ const answer = async (response: Response) => ({
   status: response.status,
   body: await response.json(),
 });
+
+/**
+ * Endpoints the restricted review account may call: reads, its own session
+ * and credential lifecycle, and sign-in. Reviewed; anything that changes
+ * identity, credentials, membership or second factors is mapped to a refused
+ * operation instead.
+ */
+const REVIEWED_OPEN_AUTH_PATHS: ReadonlySet<string> = new Set([
+  // Reads.
+  "/account-info",
+  "/get-session",
+  "/list-accounts",
+  "/list-sessions",
+  "/ok",
+  "/error",
+  "/organization/get-active-member",
+  "/organization/get-active-member-role",
+  "/organization/get-full-organization",
+  "/organization/get-invitation",
+  "/organization/get-organization",
+  "/organization/list",
+  "/organization/list-invitations",
+  "/organization/list-members",
+  "/organization/list-user-invitations",
+  // The session rule refuses any organization but its own.
+  "/organization/set-active",
+  // Sign-in and the account's own sessions.
+  "/sign-in/email",
+  "/sign-in/social",
+  "/callback/:id",
+  "/sign-out",
+  "/revoke-session",
+  "/revoke-sessions",
+  "/revoke-other-sessions",
+  "/update-session",
+  // Provider tokens of identities already linked; linking itself is refused.
+  "/get-access-token",
+  "/refresh-token",
+  // Profile fields only; email changes go through the refused endpoints.
+  "/update-user",
+  "/verify-password",
+  // Email verification; the change-email tokens it could complete are only
+  // issued by the refused change-email endpoints.
+  "/send-verification-email",
+  "/verify-email",
+  // The reset form's redirect; completing a reset is refused for this
+  // account's tokens by the plugin's reset-token check.
+  "/reset-password/:token",
+  "/reset-password",
+]);
 
 describe("restricted review account password sign-in", () => {
   test("signs the review account in with its password", async () => {
@@ -312,5 +366,76 @@ describe("restricted review account password sign-in", () => {
       (await postAuth(auth, "/sign-in/email", { email: reviewEmail, password }))
         .status,
     ).toBe(200);
+  });
+
+  test("refuses unlinking an identity, so password sign-in cannot be removed", async () => {
+    const auth = await createReviewAuth();
+    const context = await auth.$context;
+    const userId =
+      (await context.internalAdapter.findUserByEmail(reviewEmail))?.user.id ??
+      "";
+    // The provisioned credential plus a social identity.
+    await context.internalAdapter.linkAccount({
+      userId,
+      providerId: "google",
+      accountId: "google-fixture-subject",
+    });
+    const cookie = sessionCookie(
+      await postAuth(auth, "/sign-in/email", { email: reviewEmail, password }),
+    );
+    for (const providerId of ["credential", "google"]) {
+      const response = await postAuth(
+        auth,
+        "/unlink-account",
+        { providerId },
+        cookie,
+      );
+      expect({ providerId, status: response.status }).toEqual({
+        providerId,
+        status: 403,
+      });
+    }
+    expect(
+      (await context.internalAdapter.findAccounts(userId))
+        .map((account) => account.providerId)
+        .toSorted(),
+    ).toEqual(["credential", "google"]);
+  });
+
+  test("classifies every auth endpoint the router exposes", async () => {
+    const auth = await createReviewAuth();
+    const isPostLike = (method: unknown) =>
+      (Array.isArray(method) ? method : [method]).some(
+        (entry) => entry !== "GET",
+      );
+    const unclassified = Object.values(auth.api)
+      .flatMap((endpoint: unknown) => {
+        const path: unknown =
+          typeof endpoint === "function" ? Reflect.get(endpoint, "path") : null;
+        const options: unknown =
+          typeof endpoint === "function"
+            ? Reflect.get(endpoint, "options")
+            : null;
+        const method =
+          typeof options === "object" && options !== null
+            ? Reflect.get(options, "method")
+            : undefined;
+        if (typeof path !== "string") {
+          return [];
+        }
+        const operation = resolveReviewAccountSessionOperation({
+          path,
+          method: isPostLike(method) ? "POST" : "GET",
+        });
+        return operation === null &&
+          !isReviewAccountBodyEmailPath(path) &&
+          !REVIEWED_OPEN_AUTH_PATHS.has(path)
+          ? [path]
+          : [];
+      })
+      .toSorted();
+    // A new endpoint lands here until it is mapped to an operation or
+    // reviewed as open for the restricted review account.
+    expect(unclassified).toEqual([]);
   });
 });
