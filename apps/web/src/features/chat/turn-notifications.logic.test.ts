@@ -69,14 +69,17 @@ describe("getChatTurnNotification", () => {
   };
 
   test("the end of a watched turn notifies a hidden page", () => {
-    for (const [current, kind] of Object.entries(ENDS)) {
+    for (const current of PHASES) {
+      if (current === "running") {
+        continue;
+      }
       expect(
         getChatTurnNotification({
-          current: current as keyof typeof ENDS,
+          current,
           pageVisible: false,
           previous: "running",
         }),
-      ).toBe(kind);
+      ).toBe(ENDS[current]);
     }
   });
 
