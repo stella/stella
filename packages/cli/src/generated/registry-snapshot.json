@@ -499,7 +499,7 @@
             ],
             "type": "string"
           },
-          "description": "Optional fields: details (court, date, ECLI, appUrl, sourceUrl), metadata (publisher fields not stated elsewhere), textFields (published abstract, headnote, legalSentence, summary), source (publisher name), citations (summary), outline (single decision only). Omit for all on page 1 and none on later pages or with query. [] returns text and identity only. Use a JSON array of strings; a single string is read as a one-item list.",
+          "description": "Optional fields: details (court, date, ECLI, url, source_url), metadata (publisher fields not stated elsewhere), textFields (published abstract, headnote, legalSentence, summary), source (publisher name), citations (summary), outline (single decision only). Omit for all on page 1 and none on later pages or with query. [] returns text and identity only. Use a JSON array of strings; a single string is read as a one-item list.",
           "x-stella-agent-input": {
             "kind": "string-list"
           }
