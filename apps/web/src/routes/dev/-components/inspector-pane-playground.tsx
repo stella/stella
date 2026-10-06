@@ -232,10 +232,8 @@ const BenchPane = ({ width }: { width: number }) => (
             />
           </div>
           <DecisionText
-            activeMatchIndex={-1}
             decision={BENCH_DECISION}
             decisionId={BENCH_DECISION.id}
-            searchQuery=""
           />
         </main>
       </ScrollArea>

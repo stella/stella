@@ -1169,7 +1169,6 @@
     "apps/web/src/components/workspaces/row-actions.tsx": 1,
     "apps/web/src/components/workspaces/table/workspace-table/workspace-table.tsx": 1,
     "apps/web/src/components/workspaces/tasks/task-detail-panel.tsx": 1,
-    "apps/web/src/features/case-law/components/case-viewer/decision-text.tsx": 1,
     "apps/web/src/features/case-law/components/case-viewer/decision-workspace.tsx": 1,
     "apps/web/src/features/case-law/components/case-viewer/use-decision-provision-anchors.ts": 1,
     "apps/web/src/features/chat/chat-runtime.ts": 1,
