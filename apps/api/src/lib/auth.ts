@@ -207,6 +207,10 @@ import {
   MEMBER_CAPACITY_REACHED_ERROR_CODE,
 } from "@/api/lib/usage/member-capacity";
 import { recordNewOrganizationAccessState } from "@/api/lib/usage/organization-access-state";
+import {
+  hasRenewingHostedSubscription,
+  ORGANIZATION_DELETION_REFUSAL_CODE,
+} from "@/api/lib/usage/renewing-hosted-subscription";
 import { normalizeUserShortcutsField } from "@/api/lib/user-shortcuts";
 import {
   MCP_ALL_RESOURCE_SCOPES,
@@ -1185,25 +1189,40 @@ export const createAuth = (roleAssignmentPolicy = assignableRoles) => {
         const organizationId = brandPersistedOrganizationId(org.id);
         const teardown = await Result.tryPromise({
           try: async () =>
-            await rootDb.transaction(
-              async (tx) =>
-                await completeOrganizationDeletion({
+            await rootDb.transaction(async (tx) => {
+              // The provider bills a renewing subscription after the
+              // organization is gone, so its owner cancels it first. The
+              // check holds the entitlement row until the deletion commits.
+              if (await hasRenewingHostedSubscription(tx, organizationId)) {
+                return { type: "subscription_renews" } as const;
+              }
+              return {
+                type: "deleted",
+                teardown: await completeOrganizationDeletion({
                   organizationId,
                   tx,
                 }),
-            ),
+              } as const;
+            }),
           catch: (cause) => cause,
         });
         if (Result.isError(teardown)) {
           captureError(teardown.error, { organizationId });
-          if (teardown.error instanceof OrganizationStorageTeardownBoundError) {
-            throw new APIError("BAD_REQUEST", {
-              error: "organization_storage_too_large",
-              message: teardown.error.message,
-            });
-          }
-          throw new APIError("INTERNAL_SERVER_ERROR", {
-            message: "Failed to delete the organization's stored files",
+          throw teardown.error instanceof OrganizationStorageTeardownBoundError
+            ? new APIError("BAD_REQUEST", {
+                error: "organization_storage_too_large",
+                message: teardown.error.message,
+              })
+            : new APIError("INTERNAL_SERVER_ERROR", {
+                message: "Failed to delete the organization's stored files",
+              });
+        }
+
+        if (teardown.value.type === "subscription_renews") {
+          throw new APIError("CONFLICT", {
+            error: ORGANIZATION_DELETION_REFUSAL_CODE.subscriptionRenews,
+            message:
+              "Cancel the organization's subscription before deleting the organization.",
           });
         }
 
@@ -1215,7 +1234,7 @@ export const createAuth = (roleAssignmentPolicy = assignableRoles) => {
         await handoffCommittedEntityDeletionCleanupBatch({
           captureDeliveryError: captureError,
           enqueueCleanup: enqueueEntityDeletionCleanup,
-          requestIds: teardown.value.requestIds,
+          requestIds: teardown.value.teardown.requestIds,
         });
       },
       // A readable refusal before the plugin writes anything; the
@@ -2049,19 +2068,29 @@ export const getAuth = () => {
 
 export type { MemberRole } from "@/api/lib/member-roles";
 
+type AuthSessionReadOptions = {
+  headers: Headers | Record<string, string>;
+  returnHeaders: true;
+};
+const readAuthSession = async (options: AuthSessionReadOptions) =>
+  await getAuth().api.getSession(options);
+type AuthSessionReader = typeof readAuthSession;
+
 type GetSessionAndMemberAuthorizationOptions = {
+  getSession?: AuthSessionReader | undefined;
   headers: Headers | Record<string, string>;
   responseHeaders: Context["set"]["headers"];
   workspaceId?: SafeId<"workspace"> | undefined;
 };
 
 const getSessionAndMemberAuthorization = async ({
+  getSession = readAuthSession,
   headers,
   responseHeaders,
   workspaceId,
 }: GetSessionAndMemberAuthorizationOptions) => {
   const sessionResult = await Result.tryPromise(async () => {
-    const resolved = await getAuth().api.getSession({
+    const resolved = await getSession({
       headers,
       returnHeaders: true,
     });
@@ -2448,6 +2477,7 @@ export const realtimeAuthorizers = {
  * what every handler's `ctx.scopedDb`/`ctx.safeDb` callback expects.
  */
 type ResolveValidateAuthOptions = {
+  getSession?: AuthSessionReader | undefined;
   request: Request;
   server: Parameters<typeof createAuditRecorder>[0]["server"];
   initialWorkspaceId: SafeId<"workspace"> | null;
@@ -2455,6 +2485,7 @@ type ResolveValidateAuthOptions = {
 };
 
 const resolveValidateAuth = async ({
+  getSession,
   request,
   server,
   initialWorkspaceId,
@@ -2462,6 +2493,7 @@ const resolveValidateAuth = async ({
 }: ResolveValidateAuthOptions) => {
   const { sessionResult, memberAuthorizationResult } =
     await getSessionAndMemberAuthorization({
+      getSession,
       headers: request.headers,
       responseHeaders,
       workspaceId: initialWorkspaceId ?? undefined,
@@ -2685,58 +2717,73 @@ export type ValidateAuthValue = Extract<
 
 type ValidateAuthResolution = Awaited<ReturnType<typeof resolveValidateAuth>>;
 
-const validateAuthResolutionCache = new WeakMap<
-  Request,
-  Promise<ValidateAuthResolution>
->();
+const createRequestAuthResolver = (getSession?: AuthSessionReader) => {
+  const validateAuthResolutionCache = new WeakMap<
+    Request,
+    Promise<ValidateAuthResolution>
+  >();
+
+  return async ({
+    params,
+    query,
+    request,
+    server,
+    set,
+  }: Pick<Context, "request" | "server" | "set"> & {
+    // Read only as workspace-id sources, so a pre-validation transform context fits too.
+    params: unknown;
+    query: unknown;
+  }) =>
+    await memoizePerRequest(
+      validateAuthResolutionCache,
+      request,
+      async () =>
+        await resolveValidateAuth({
+          getSession,
+          request,
+          server,
+          initialWorkspaceId: readInitialWorkspaceId(params, query),
+          responseHeaders: set.headers,
+        }),
+    );
+};
 
 /** Share the request's authorization with gates that must run before validation. */
-export const resolveRequestAuth = async ({
-  params,
-  query,
-  request,
-  server,
-  set,
-}: Pick<Context, "request" | "server" | "set"> & {
-  // Read only as workspace-id sources, so a pre-validation transform context fits too.
-  params: unknown;
-  query: unknown;
-}) =>
-  await memoizePerRequest(
-    validateAuthResolutionCache,
-    request,
-    async () =>
-      await resolveValidateAuth({
-        request,
-        server,
-        initialWorkspaceId: readInitialWorkspaceId(params, query),
-        responseHeaders: set.headers,
-      }),
-  );
+export const resolveRequestAuth = createRequestAuthResolver();
 
-export const authMacro = new Elysia({ name: "authMacro" }).macro({
-  validateAuth: {
-    detail: { [TENANT_ACTION_DETAIL]: true },
-    async resolve({ params, query, status, request, server, set }) {
-      const result = await resolveRequestAuth({
-        params,
-        query,
-        request,
-        server,
-        set,
-      });
+export const createAuthMacro = ({
+  getSession,
+}: { getSession?: AuthSessionReader } = {}) => {
+  const resolveAuth = getSession
+    ? createRequestAuthResolver(getSession)
+    : resolveRequestAuth;
 
-      if (!result.ok) {
-        return status(
-          result.statusCode,
-          AUTH_REJECTION_BODY[result.statusCode],
-        );
-      }
+  return new Elysia({ name: "authMacro" }).macro({
+    validateAuth: {
+      detail: { [TENANT_ACTION_DETAIL]: true },
+      async resolve({ params, query, status, request, server, set }) {
+        const result = await resolveAuth({
+          params,
+          query,
+          request,
+          server,
+          set,
+        });
 
-      return result.value;
+        if (!result.ok) {
+          return status(
+            result.statusCode,
+            AUTH_REJECTION_BODY[result.statusCode],
+          );
+        }
+
+        return result.value;
+      },
     },
-  },
-});
+  });
+};
+
+export const authMacro = createAuthMacro();
 
 export const permissionMacro = new Elysia({ name: "permissionMacro" })
   .use(authMacro)

@@ -156,7 +156,12 @@ test("provision history pages keep each preview wording inside its byte budget",
         text,
       } as const;
       const count = LIMITS.legislationProvisionHistoryPageSizeMax;
-      const item = projectProvisionHistoryItem(row);
+      const item = projectProvisionHistoryItem({
+        ...row,
+        country: "CZE",
+        slug: "89-2012-sb",
+        sourceUrl: "https://www.e-sbirka.cz/sb/2012/89",
+      });
       const result = {
         items: Array.from({ length: count }, () => item),
         limit: count,
@@ -225,6 +230,9 @@ test("reader plain text keeps literal markup and entities as text", () => {
           blocks: [{ id: "1", anchorId: "par_1", text }],
         }).blocks.at(0)?.text;
         const history = projectProvisionHistoryItem({
+          country: "CZE",
+          slug: "89-2012-sb",
+          sourceUrl: "https://www.e-sbirka.cz/sb/2012/89",
           documentId: id,
           allowsDerivedAi: true,
           versionValidFrom: null,

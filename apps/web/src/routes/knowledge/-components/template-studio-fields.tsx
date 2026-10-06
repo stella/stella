@@ -10,6 +10,7 @@ import { Button } from "@stll/ui/button";
 import { Checkbox } from "@stll/ui/checkbox";
 import {
   Dialog,
+  DialogFormState,
   DialogClose,
   DialogFooter,
   DialogHeader,
@@ -1621,6 +1622,12 @@ const SaveRecipeDialog = ({
   return (
     <Dialog onOpenChange={onOpenChange} open={open}>
       <DialogPopup className="sm:max-w-sm">
+        <DialogFormState
+          dirty={name !== ""}
+          onDiscard={() => {
+            setName("");
+          }}
+        />
         <DialogHeader>
           <DialogTitle>{t("templates.studio.saveAsRecipe")}</DialogTitle>
         </DialogHeader>

@@ -50,6 +50,9 @@
 //   // SAFETY: writes are capped at LIMITS.fooPerOrg, so this cannot grow unbounded.
 
 import { eslintCompatPlugin } from "@oxlint/plugins";
+import { panic } from "better-result";
+import { readFileSync } from "node:fs";
+import ts from "typescript";
 
 import {
   getPropertyName,
@@ -61,6 +64,75 @@ import {
   unwrapExpression,
 } from "./utils.ts";
 import type { AstNode, ScopeContext } from "./utils.ts";
+
+let boundedReadExports: ReadonlySet<string> | undefined;
+
+const getBoundedReadExports = () => {
+  if (boundedReadExports !== undefined) {
+    return boundedReadExports;
+  }
+  // Read the declaration without initializing the owner's runtime dependencies.
+  const source = ts.createSourceFile(
+    "read-bounded.ts",
+    readFileSync(
+      new URL("../apps/api/src/lib/db/read-bounded.ts", import.meta.url),
+      "utf-8",
+    ),
+    ts.ScriptTarget.Latest,
+    true,
+    ts.ScriptKind.TS,
+  );
+  for (const statement of source.statements) {
+    if (
+      !ts.isVariableStatement(statement) ||
+      !statement.modifiers?.some(
+        (modifier) => modifier.kind === ts.SyntaxKind.ExportKeyword,
+      )
+    ) {
+      continue;
+    }
+    for (const declaration of statement.declarationList.declarations) {
+      if (
+        !ts.isIdentifier(declaration.name) ||
+        declaration.name.text !== "BOUNDED_READ_EXPORTS"
+      ) {
+        continue;
+      }
+      let initializer = declaration.initializer;
+      while (
+        initializer !== undefined &&
+        (ts.isAsExpression(initializer) ||
+          ts.isSatisfiesExpression(initializer) ||
+          ts.isParenthesizedExpression(initializer))
+      ) {
+        initializer = initializer.expression;
+      }
+      if (
+        initializer === undefined ||
+        !ts.isObjectLiteralExpression(initializer)
+      ) {
+        panic(
+          "Bounded-read exports must be an object of owner function references",
+        );
+      }
+      const names = new Set<string>();
+      for (const property of initializer.properties) {
+        if (!ts.isShorthandPropertyAssignment(property)) {
+          panic(
+            "Bounded-read exports must use shorthand owner function references",
+          );
+        }
+        names.add(property.name.text);
+      }
+      if (names.size === 0) {
+        panic("Bounded-read exports must declare at least one entry point");
+      }
+      boundedReadExports = names;
+      return boundedReadExports;
+    }
+  }
+  return panic("Bounded-read owner must declare its exported entry points");
+};
 
 const getType = (node: unknown): string | null => {
   if (typeof node !== "object" || node === null || !("type" in node)) {
@@ -177,7 +249,7 @@ const isBoundedConsumer = (context: ScopeContext, node: AstNode): boolean => {
   const imported = resolveImport(context, call.callee);
   return (
     imported?.moduleId === "apps/api/src/lib/db/read-bounded" &&
-    imported.imported === "readBounded"
+    getBoundedReadExports().has(imported.imported)
   );
 };
 

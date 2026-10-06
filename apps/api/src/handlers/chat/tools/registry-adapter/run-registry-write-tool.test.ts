@@ -10,7 +10,6 @@ import { toSafeId } from "@/api/lib/branded-types";
 import {
   containsRawUuid,
   projectForChat,
-  REF_PROJECTION_FAILURE_MESSAGE,
 } from "@/api/lib/chat/projection-schema";
 import { createChatRefRegistry } from "@/api/lib/chat/ref-registry";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
@@ -422,11 +421,11 @@ describe("write ref mediation (via the WRITE_TOOL_REF_FIELD_MAP)", () => {
     );
   });
 
-  test("the UUID invariant fails closed on a raw uuid in a declared plain field", () => {
+  test("the UUID invariant drops a raw uuid in a declared plain field", () => {
     // manage_organization's settings echo declares `matterNumberPattern` as an
-    // ordinary string, which no annotation licenses to carry a UUID: a raw
-    // uuid there is refused rather than leaked, with only the path (never the
-    // value) reaching telemetry.
+    // ordinary string, which no annotation licenses to carry a UUID: the leaf
+    // is dropped rather than leaked, with only the path (never the value)
+    // reaching telemetry.
     const result = projectForChat({
       dehydration: {
         args: {},
@@ -441,17 +440,14 @@ describe("write ref mediation (via the WRITE_TOOL_REF_FIELD_MAP)", () => {
       toolName: "manage_organization",
     });
 
-    expect(Result.isError(result)).toBe(true);
-    if (Result.isError(result)) {
-      expect(result.error.kind).toBe("server-defect");
-      expect(result.error.message).toBe(REF_PROJECTION_FAILURE_MESSAGE);
-    }
+    expect(result.unwrap()).toEqual({});
     expect(
       analytics.exceptions().map((event) => event.properties),
     ).toMatchObject([
       {
-        "error.class": "ChatToolError",
-        path: "matterNumberPattern",
+        defect: "unmapped_id",
+        "error.class": "ToolOutputContractDegradedError",
+        paths: "matterNumberPattern",
         source: "run-registry-write-tool",
         toolName: "manage_organization",
       },

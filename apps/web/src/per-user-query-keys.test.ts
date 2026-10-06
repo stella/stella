@@ -99,6 +99,10 @@ const KEY_TYPE_HAS_USER = "the key argument's type requires userId";
 
 // Keyed by handler path under apps/api/src/handlers.
 const PER_USER_READS: Record<string, PerUserRead> = {
+  "api-keys/personal/list.ts": {
+    kind: "no-web-caller",
+    calls: ['api["api-keys"].personal.get'],
+  },
   "organization-settings/get.ts": {
     kind: "keyed",
     calls: ['api["organization-settings"].get'],

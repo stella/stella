@@ -7,6 +7,7 @@ import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
 import {
+  DialogFormState,
   DialogClose,
   DialogDescription,
   DialogFooter,
@@ -120,6 +121,13 @@ export const PdfSignPlacement = ({
 
   return (
     <>
+      <DialogFormState
+        dirty={mode !== "invisible" || placement !== null}
+        onDiscard={() => {
+          setMode("invisible");
+          setPlacement(null);
+        }}
+      />
       <DialogHeader>
         <DialogTitle>
           {t("workspaces.files.pdfSigning.placementTitle")}

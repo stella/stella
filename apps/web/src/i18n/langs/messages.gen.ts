@@ -57,6 +57,17 @@ type Messages = {
       "polish": "Polish the writing";
     };
   };
+  "aiColumns": {
+    "countSummary": "{columns} columns × {rows} rows = {answers, plural, one {# answer} other {# answers}}. Answers spend budget.";
+    "refusedBudget": "Not run: answer budget unavailable";
+    "rerunAllPage": "Rerun all (this page)";
+    "rerunColumnPage": "Rerun column (this page)";
+    "runColumnPage": "Run column (this page)";
+    "runPageRows": "Run for {count, plural, one {# row on this page} other {# rows on this page}}";
+    "runRemainingPage": "Run remaining (this page)";
+    "runSelectedRows": "Run for {count, plural, one {# selected row} other {# selected rows}}";
+    "selectedRun": "Run AI columns for {count, plural, one {# row} other {# rows}}";
+  };
   "appearance": {
     "calendar": "Calendar";
     "calendarGregorian": "Gregorian";
@@ -799,6 +810,34 @@ type Messages = {
       "unavailable": "Coverage figures are unavailable right now.";
     };
     "decisionNotFound": "Decision not found";
+    "decisionTypes": {
+      "administrative_decision": "Administrative decision";
+      "binding_excise_information": "Binding excise information";
+      "binding_rate_information": "Binding VAT rate information";
+      "court_direction": "Procedural direction";
+      "decision": "Decision";
+      "finding": "Finding";
+      "general_tax_ruling": "General tax ruling";
+      "individual_tax_ruling": "Individual tax ruling";
+      "judgment": "Judgment";
+      "leave_refused": "Rejected for lack of a significant point of law";
+      "merits_decision": "Decision on the merits";
+      "ministry_of_justice_decision": "Decision of the Ministry of Justice";
+      "minutes_extract": "Extract from the minutes";
+      "opinion": "Opinion";
+      "order": "Order";
+      "other": "Other";
+      "payment_order": "Payment order";
+      "penal_order": "Penal order";
+      "principle_decision": "Decision of principle";
+      "protective_opinion": "Protective opinion";
+      "resolution": "Resolution";
+      "signalling_decision": "Signalling decision";
+      "statement_of_reasons": "Statement of reasons";
+      "tax_explanations": "Tax explanations";
+      "top_up_tax_opinion": "Top-up tax opinion";
+      "uniformity_decision": "Uniformity decision";
+    };
     "emptyState": "No decisions found. Configure a source and run a sync to import case law.";
     "filters": {
       "remove": "Remove filter {filter}";
@@ -844,6 +883,7 @@ type Messages = {
       "subsection": "para. {value}";
     };
     "reader": {
+      "expandProvisions": "Expand provisions";
       "headMatter": "Head matter";
       "sourceAttribution": "The source data is freely available at <link>{source}</link>.";
     };
@@ -1860,6 +1900,7 @@ type Messages = {
     "unexpectedError": "An unexpected error occurred. Please contact support.";
     "unknownUser": "Unknown user";
     "unpin": "Unpin";
+    "unsavedChangesEscape": "Unsaved changes. Press Esc again to discard";
     "unsavedLeaveConfirm": "You have unsaved changes. Leave without saving?";
     "unverified": "Unverified";
     "unverifiedCitationHint": "This quote could not be matched to the source document.";
@@ -2312,6 +2353,8 @@ type Messages = {
       "encryptedContent": "Encrypted document content cannot be extracted. Remove the password from the file and try again.";
       "filePropertyTypeImmutable": "File property types cannot be changed. Keep the existing type; create a custom property for other values.";
       "forbidden": "You do not have permission to do this.";
+      "hostedCheckoutOpen": "A checkout for this organization is already open. Complete it, or start a new one after it expires.";
+      "hostedSubscriptionLive": "This organization already has a subscription. Change it under Manage hosted usage.";
       "internalServerError": "The server could not complete the action. Please try again.";
       "legalSourceEntityLimitReached": "This matter has reached its item limit, so the document could not be created.";
       "legalSourceFilePropertyMissing": "This matter is missing a file property, so the document could not be created.";
@@ -3743,11 +3786,15 @@ type Messages = {
     };
   };
   "lawHome": {
+    "clearRecent": "Clear recent";
     "enteringIntoForce": "Entering into force";
     "inForceFrom": "In force from {date}";
-    "noRecentSearches": "No searches yet";
+    "noRecent": "No recent activity";
     "noSignals": "No signals yet";
     "prompt": "What are you looking for?";
+    "recent": "Recent";
+    "recentCasesFilter": "Cases";
+    "recentSearchFilter": "Searches";
     "recentlyInForce": "Recently in force";
     "searchLabel": "Search the legal database";
     "searchPlaceholder": "Case number, act number, ECLI or keywords";
@@ -4639,6 +4686,7 @@ type Messages = {
     "compareVersionMissing": "The version to compare with is not in this act's history.";
     "compareWholeAct": "Compare the whole act";
     "compareWithVersion": "Compare with {version}";
+    "currentWording": "Current wording";
     "description": "Public database of consolidated statutes, indexable by act and version.";
     "diffInserted": "Inserted:";
     "diffRemoved": "Deleted:";
@@ -4689,6 +4737,8 @@ type Messages = {
     };
     "title": "Statutes";
     "validity": "Valid from {from} to {to}";
+    "wordingValidFrom": "Wording in force since {date}";
+    "wordingVersionUnknown": "Wording version date unavailable";
   };
   "styleSets": {
     "create": "Create";
@@ -5425,6 +5475,7 @@ type Messages = {
         "unknownLocation": "Template location: an address stella cannot verify";
       };
       "desktopEdit": {
+        "accountRequiredTitle": "Connect stella desktop to your account";
         "action": "Edit in desktop";
         "authRequiredDescription": "Refresh stella and sign in again before using desktop editing.";
         "authRequiredTitle": "Your session expired";
@@ -5457,7 +5508,6 @@ type Messages = {
         "signNone": "Download stella desktop to sign this PDF";
         "signOutdated": "Update stella desktop to sign";
         "signReason": "Signing uses the certificate on your computer, so it runs in stella desktop.";
-        "signShort": "Sign";
       };
       "downloadAs": "Download as…";
       "downloadAsZip": "Download as ZIP";
@@ -5999,7 +6049,6 @@ type Messages = {
       "previewUnsupported": "Preview unsupported for this document type.";
       "readingFrom": "AI reads from";
       "referencesItself": "Property references itself through other properties";
-      "rerunColumn": "Rerun column";
       "resultType": "Result type";
       "returnsLabel": "Format";
       "scopeFile": "Current file";

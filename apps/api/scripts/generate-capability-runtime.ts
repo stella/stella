@@ -83,7 +83,7 @@ export const generateCapabilityRuntime = async (
     .join("\n");
   await writeFile(
     new URL("capability-dispatch.ts", directory),
-    `${header}${dispatchImports}\n\nexport type CapabilityDispatchEntry = { load: () => Promise<Record<string, unknown>>; exportName?: string };\nexport const CAPABILITY_DISPATCH = {${ids.map((_id, index) => `...dispatch${index}`).join(",")}} as const satisfies Record<string, CapabilityDispatchEntry>;\n`,
+    `${header}${dispatchImports}\n\nexport type CapabilityDispatchEntry = { load: () => Promise<Record<string, unknown>>; exportName?: string; featureId?: string; featureAccess?: "required" | "conditional" };\nexport const CAPABILITY_DISPATCH = {${ids.map((_id, index) => `...dispatch${index}`).join(",")}} as const satisfies Record<string, CapabilityDispatchEntry>;\n`,
   );
 };
 

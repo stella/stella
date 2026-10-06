@@ -11,6 +11,9 @@ export type StatuteViewPayload = {
   anchorId?: string | undefined;
   /** Jurisdiction, as the act's public address spells it. */
   country: string;
+  searchQuery?: string | undefined;
+  /** A search opening resets find even when this tab already holds the same query. */
+  findSessionId?: string | undefined;
   /** The consolidation on screen: every read in the pane is addressed by it. */
   documentId: string;
   /** The work's own identifier, for the readable half of the id-form address. */
@@ -53,6 +56,10 @@ export const isStatuteViewPayload = (
     isNonEmptyString(value.statuteTitle) &&
     "versionValidFrom" in value &&
     isNullableString(value.versionValidFrom) &&
+    (!("findSessionId" in value) ||
+      isOptionalNonEmptyString(value.findSessionId)) &&
+    (!("searchQuery" in value) ||
+      isOptionalNonEmptyString(value.searchQuery)) &&
     (!("anchorId" in value) || isOptionalNonEmptyString(value.anchorId))
   );
 };
@@ -80,6 +87,7 @@ export type StatuteViewTab = {
 type CreateStatuteViewTabOptions = {
   anchorId?: string | undefined;
   country: string;
+  searchQuery?: string | undefined;
   documentId: string;
   eli?: string | null | undefined;
   slug?: string | null | undefined;
@@ -94,6 +102,7 @@ export const createStatuteViewTab = ({
   documentId,
   eli,
   slug,
+  searchQuery,
   statuteTitle,
   versionValidFrom,
 }: CreateStatuteViewTabOptions): StatuteViewTab => ({
@@ -107,6 +116,9 @@ export const createStatuteViewTab = ({
     slug: slug ?? null,
     statuteTitle,
     versionValidFrom: versionValidFrom ?? null,
+    ...(searchQuery === undefined || searchQuery.trim() === ""
+      ? {}
+      : { searchQuery, findSessionId: crypto.randomUUID() }),
     ...(anchorId === undefined ? {} : { anchorId }),
   },
 });

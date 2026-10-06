@@ -2,10 +2,10 @@ import { lazy, Suspense, useState } from "react";
 
 import { useTranslations } from "use-intl";
 
-import { Button } from "@stll/ui/button";
 import { Dialog, DialogPopup } from "@stll/ui/dialog";
 import { SignatureIcon } from "@stll/ui/icons";
 import { Loader } from "@stll/ui/loader";
+import { ToolbarIconAction } from "@stll/ui/toolbar-icon-action";
 
 import type { PdfSignableFile } from "@/components/inspector/pdf-signing";
 import { useDesktopPdfSign } from "@/components/inspector/use-desktop-pdf-sign";
@@ -94,38 +94,19 @@ export const PdfSignDialogs = ({ flow, target }: PdfSignDialogsProps) => {
 
 type PdfSignButtonProps = {
   target: PdfSignTarget;
-  /** `icon` for dense headers; `labelled` where people look for the action. */
-  presentation: "icon" | "labelled";
 };
 
-export const PdfSignButton = ({ presentation, target }: PdfSignButtonProps) => {
-  const t = useTranslations();
+export const PdfSignButton = ({ target }: PdfSignButtonProps) => {
   const flow = usePdfSignFlow();
   return (
     <>
-      {presentation === "icon" ? (
-        <Button
-          aria-label={flow.label}
-          disabled={flow.isConnecting}
-          onClick={flow.start}
-          size="icon-xs"
-          tooltip={flow.label}
-          variant="ghost"
-        >
-          <SignatureIcon className="size-3.5" />
-        </Button>
-      ) : (
-        <Button
-          disabled={flow.isConnecting}
-          onClick={flow.start}
-          size="sm"
-          tooltip={flow.label}
-          variant="ghost"
-        >
-          <SignatureIcon />
-          {t("workspaces.files.desktopGate.signShort")}
-        </Button>
-      )}
+      <ToolbarIconAction
+        density="toolbar"
+        disabled={flow.isConnecting}
+        icon={<SignatureIcon className="size-3.5" />}
+        label={flow.label}
+        onClick={flow.start}
+      />
       <PdfSignDialogs flow={flow} target={target} />
     </>
   );
