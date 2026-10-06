@@ -4955,9 +4955,11 @@ jobs:
 
   route-smoke:
     needs: [ci-plan, web-build, heavy-web-build]
+    # A thin merge group still runs the browser suites when the change needs
+    # them; QUEUE_BROWSER_SUITES=off turns that off without a commit.
     if: >-
       github.event_name != 'pull_request' && (
-      needs.ci-plan.outputs.queue_depth != 'thin'
+      (needs.ci-plan.outputs.queue_depth != 'thin' || vars.QUEUE_BROWSER_SUITES != 'off')
       && (always()
       && (github.event_name != 'merge_group' || !cancelled())
       && needs.ci-plan.outputs.trusted == 'true'
@@ -5101,9 +5103,10 @@ jobs:
 
   e2e-production-shard:
     needs: [ci-plan, web-build, heavy-web-build]
+    # Admitted to thin merge groups like route-smoke (see there).
     if: >-
       github.event_name != 'pull_request' && (
-      needs.ci-plan.outputs.queue_depth != 'thin'
+      (needs.ci-plan.outputs.queue_depth != 'thin' || vars.QUEUE_BROWSER_SUITES != 'off')
       && (always()
       && (github.event_name != 'merge_group' || !cancelled())
       && (needs.ci-plan.outputs.trusted == 'true'

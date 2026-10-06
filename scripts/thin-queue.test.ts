@@ -17,7 +17,7 @@ import {
   evaluate as evaluateExpression,
   UNKNOWN,
 } from "./github-expression";
-import { mainHeavyJobs, thinJobs } from "./main-heavy-plan";
+import { mainHeavyJobs, queueAdmittedJobs, thinJobs } from "./main-heavy-plan";
 
 const root = new URL("../", import.meta.url).pathname;
 const stepSchema = v.looseObject({
@@ -55,6 +55,7 @@ const ci = readWorkflow("ci.yml");
 const THIN_JOBS = thinJobs(ci);
 const main = readWorkflow("main-heavy.yml");
 const heavy = mainHeavyJobs(ci);
+const admitted = queueAdmittedJobs(ci);
 const eventPolicy = v.parse(
   v.object({ jobs: v.record(v.string(), v.string()) }),
   JSON.parse(
@@ -133,12 +134,15 @@ type ContextOptions = {
   variable: string;
   queueDepth: string;
   proveFix?: boolean;
+  /** The QUEUE_BROWSER_SUITES repository variable; GitHub reads unset as ''. */
+  queueBrowserSuites?: string;
 };
 const context = ({
   event: { event, message },
   variable,
   queueDepth,
   proveFix = false,
+  queueBrowserSuites = "",
 }: ContextOptions) => ({
   github: {
     event_name: event,
@@ -150,7 +154,10 @@ const context = ({
       },
     },
   },
-  vars: { MERGE_QUEUE_DEPTH: variable },
+  vars: {
+    MERGE_QUEUE_DEPTH: variable,
+    QUEUE_BROWSER_SUITES: queueBrowserSuites,
+  },
   inputs: { heavy_only: false },
   needs: Object.fromEntries(
     needs.map((job) => {
@@ -183,7 +190,8 @@ const expectedRouteSelection = (value: ReturnType<typeof context>) => {
   return (
     value.github.event_name !== "pull_request" &&
     (value.github.event_name !== "merge_group" || !value.cancelled()) &&
-    planner.outputs["queue_depth"] !== "thin" &&
+    (planner.outputs["queue_depth"] !== "thin" ||
+      value.vars.QUEUE_BROWSER_SUITES !== "off") &&
     planner.outputs["trusted"] === "true" &&
     planner.outputs["route_smoke_required"] === "true" &&
     (value.needs["web-build"]?.result === "success" ||
@@ -597,7 +605,10 @@ test("one variable moves only derived heavy jobs from merge groups to ordinary m
           );
           continue;
         }
-        if (resolved.exitCode !== 0 || (thinQueue && heavy.includes(job))) {
+        if (
+          resolved.exitCode !== 0 ||
+          (thinQueue && heavy.includes(job) && !admitted.includes(job))
+        ) {
           expect(runs, `${event.event}/${variable}/${job}`).toBe(false);
           continue;
         }
@@ -921,3 +932,57 @@ test("main release and scheduled runs execute the planned version compiler in ei
     }
   }
 }, 30_000);
+
+test("thin merge groups admit exactly the planned browser suites until the switch turns them off", () => {
+  expect([...admitted].toSorted()).toEqual(
+    ["e2e-production-shard", "route-smoke"].toSorted(),
+  );
+  for (const job of admitted) {
+    // Main-heavy keeps certifying them after merge as well.
+    expect(heavy, job).toContain(job);
+    const scope = scopes[job];
+    if (!scope) {
+      panic(`Missing planner scope for ${job}`);
+    }
+    for (const planned of [false, true]) {
+      for (const queueBrowserSuites of ["", "on", "off"]) {
+        const value = context({
+          event: { event: "merge_group", message: "ordinary" },
+          variable: "thin",
+          queueDepth: "thin",
+          queueBrowserSuites,
+        });
+        const planner = value.needs["ci-plan"];
+        const heavyWeb = value.needs["heavy-web-build"];
+        if (!planner || !heavyWeb) {
+          panic(`Missing ${job} build context`);
+        }
+        planner.outputs[scope] = String(planned);
+        heavyWeb.result = "skipped";
+        expect(
+          selected(ci.jobs[job]?.if, value),
+          `${job}/${planned}/${queueBrowserSuites}`,
+        ).toBe(planned && queueBrowserSuites !== "off");
+      }
+    }
+  }
+});
+
+test("a browser suite without the queue switch drops out of thin merge groups", () => {
+  const mutated = structuredClone(ci);
+  const smoke = mutated.jobs["route-smoke"];
+  if (!smoke?.if) {
+    panic("Missing route smoke condition");
+  }
+  smoke.if = smoke.if.replace(
+    "(needs.ci-plan.outputs.queue_depth != 'thin' || vars.QUEUE_BROWSER_SUITES != 'off')",
+    "needs.ci-plan.outputs.queue_depth != 'thin'",
+  );
+  expect(queueAdmittedJobs(mutated)).not.toContain("route-smoke");
+  const value = context({
+    event: { event: "merge_group", message: "ordinary" },
+    variable: "thin",
+    queueDepth: "thin",
+  });
+  expect(selected(smoke.if, value)).toBe(false);
+});

@@ -3211,6 +3211,30 @@ test("route-relevant changes plan the required merge-group smoke", () => {
   ).toBe(0);
 }, 30_000);
 
+test("a merge group plans both browser suites for app changes and neither for docs", () => {
+  const scopes = ["route_smoke_required", "e2e_production_required"];
+  const appChange = [
+    "apps/api/src/handlers/workspaces/read-activity.ts",
+    "apps/web/src/components/app-sidebar.logic.ts",
+    "apps/web/src/components/app-sidebar.tsx",
+    "apps/web/src/lib/organization/feature-access/access.logic.ts",
+    "apps/web/src/lib/organization/feature-access/surfaces.ts",
+    "apps/web/src/routes/-legal-lists-route-gates.dom.test.tsx",
+  ];
+  expect(
+    runSelector(appChange, scopes, "full", "false", EVENT.mergeGroup),
+  ).toEqual(["true", "true"]);
+  expect(
+    runSelector(
+      ["README.md", "apps/desktop/README.md"],
+      scopes,
+      "full",
+      "false",
+      EVENT.mergeGroup,
+    ),
+  ).toEqual(["false", "false"]);
+}, 30_000);
+
 test("route smoke consumes the production build and fails when its stack cannot run", () => {
   const plan = jobSteps(ciJobs["ci-plan"]).find(
     ({ name }) => name === "Check changed file scope",
