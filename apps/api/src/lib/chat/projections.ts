@@ -1153,7 +1153,7 @@ const timeEntryFieldEntries = (workspace: { from: "inputParam" | "sibling" }) =>
     entityReference: contextEntityReference(
       workspace.from === "inputParam"
         ? { from: "inputParam", param: "matter_id" }
-        : { from: "sibling", key: "workspaceId" },
+        : { from: "outputPath", path: "entry.workspaceId" },
     ),
     userId: v.nullable(passthroughId()),
     dateWorked: v.string(),

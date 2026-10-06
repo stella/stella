@@ -2,6 +2,8 @@ import { describe, expect, test } from "bun:test";
 
 import { cents } from "@stll/money";
 
+import { toSafeId } from "@/lib/safe-id";
+
 import {
   summarizeBillableAmountByMatterAndCurrency,
   summarizeBillableAmountByCurrency,
@@ -12,7 +14,7 @@ const entry = (
   overrides: Partial<TimesheetTotalEntry> = {},
 ): TimesheetTotalEntry => ({
   workItemId: "m1",
-  workItemReference: { type: "available", id: "m1" },
+  workItemReference: { type: "available", id: toSafeId<"entity">("m1") },
   currency: "USD",
   billable: true,
   noCharge: false,

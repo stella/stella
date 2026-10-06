@@ -146,7 +146,10 @@ describe("bulk rejecting pending docx suggestions", () => {
         body: { suggestionIds: [suggestionId] },
       },
     );
-    expect(result).toEqual({ rejectedIds: [] });
+    expect(result).toMatchObject({
+      code: 404,
+      response: { message: "Not found" },
+    });
 
     const row = await readSuggestion(suggestionId);
     expect(row?.status).toBe("pending");

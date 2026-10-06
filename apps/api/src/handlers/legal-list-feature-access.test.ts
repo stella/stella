@@ -51,11 +51,15 @@ for (const grants of [
     for (const [id, entry] of entries) {
       const module = await entry.load();
       const endpoint =
-        module["exportName" in entry ? entry.exportName : "default"];
+        module[
+          "exportName" in entry && typeof entry.exportName === "string"
+            ? entry.exportName
+            : "default"
+        ];
       if (
         !isRecord(endpoint) ||
-        !isRecord(endpoint.config) ||
-        typeof endpoint.handler !== "function"
+        !isRecord(endpoint["config"]) ||
+        typeof endpoint["handler"] !== "function"
       ) {
         panic("List endpoint definition required");
       }
@@ -63,7 +67,7 @@ for (const grants of [
         "featureId" in entry
           ? entry.featureId
           : panic("List feature declaration required");
-      expect(endpoint.config.featureAccess).toEqual({
+      expect(endpoint["config"]["featureAccess"]).toEqual({
         type: "required",
         featureId,
       });
@@ -71,7 +75,7 @@ for (const grants of [
         continue;
       }
       // The default database panics if any handler reaches a resource lookup.
-      const result = await endpoint.handler(
+      const result = await endpoint["handler"](
         createTestHandlerContext({ featureAccessSnapshot: snapshot }),
       );
       expect(result, id).toMatchObject({

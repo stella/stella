@@ -96,12 +96,8 @@ export const resourcesAreVisible = async ({
       const rows = await tx
         .select({ id: table.id })
         .from(table)
-        .where(
-          inArray(
-            table.id,
-            [...ids].map((id) => sql`${id}`),
-          ),
-        );
+        .where(inArray(sql`${table.id}`, [...ids]))
+        .limit(ids.size);
       if (rows.length !== ids.size) {
         return false;
       }

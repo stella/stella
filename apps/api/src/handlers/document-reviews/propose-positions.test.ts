@@ -8,6 +8,7 @@
 import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 
+import { entities, fields } from "@/api/db/schema";
 import type { prepareReferenceProposal } from "@/api/handlers/document-reviews/prepare-proposal";
 import type { proposeReferencePositions } from "@/api/handlers/document-reviews/reference-positions";
 import { toSafeId } from "@/api/lib/branded-types";
@@ -17,6 +18,7 @@ import {
   PROVIDER_FAILURE_CASES,
 } from "@/api/tests/helpers/provider-failure-cases";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
+import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
 
 import type proposePositions from "./propose-positions";
 import { createProposePositions } from "./propose-positions";
@@ -74,6 +76,23 @@ describe("proposePositions", () => {
       const result = await handler.handler(
         createTestHandlerContext<ProposePositionsCtx>({
           body,
+          ...createScopedDbMock({
+            select: () => ({
+              from: (table: unknown) => ({
+                where: () => ({
+                  limit: async () => {
+                    if (table === entities) {
+                      return [{ id: ENTITY_ID }, { id: REFERENCE_ENTITY_ID }];
+                    }
+                    if (table === fields) {
+                      return [{ id: FIELD_ID }];
+                    }
+                    return [];
+                  },
+                }),
+              }),
+            }),
+          }),
           workspaceId: WORKSPACE_ID,
         }),
       );

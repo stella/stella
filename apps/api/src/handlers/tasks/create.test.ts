@@ -387,6 +387,7 @@ describe("createTaskHandler validation", () => {
   test("a non-task List row is created without governed work", async () => {
     const obligationRows: Record<string, unknown>[] = [];
     const { safeDb } = createScopedDbMock({
+      execute: async () => [{ enabled: true }],
       $count: async () => 0,
       select: () => ({
         from: (table: unknown) =>

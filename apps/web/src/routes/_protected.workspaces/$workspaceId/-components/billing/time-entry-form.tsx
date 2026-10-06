@@ -252,9 +252,6 @@ export const TimeEntryForm = ({
                 id="billing-time-entry-duration"
                 labelledBy="billing-time-entry-duration-label"
                 onChange={field.handleChange}
-                {...(contextState === "unavailable" && field.state.value === ""
-                  ? { placeholder: t("common.unavailable") }
-                  : {})}
                 value={field.state.value}
               />
             )}

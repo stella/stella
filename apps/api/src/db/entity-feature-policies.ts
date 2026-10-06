@@ -1,5 +1,5 @@
 import { panic } from "better-result";
-import { sql } from "drizzle-orm";
+import { getColumnTable, sql } from "drizzle-orm";
 import type { SQL, GetColumnData, SQLWrapper } from "drizzle-orm";
 import { getTableConfig, pgPolicy, PgDialect } from "drizzle-orm/pg-core";
 import type { AnyPgColumn, PgTable } from "drizzle-orm/pg-core";
@@ -23,7 +23,7 @@ const entityReferences = new WeakMap<
 >();
 
 export const entityReferenceClassification = (column: AnyPgColumn) =>
-  entityReferences.get(column.table)?.get(column.name);
+  entityReferences.get(getColumnTable<PgTable>(column))?.get(column.name);
 
 export type { EntityContextReference };
 
@@ -31,7 +31,8 @@ export type { EntityContextReference };
 export const entityContextProjection = <TColumn extends AnyPgColumn>(
   source: TColumn,
 ) => {
-  getTableConfig(source.table);
+  // Drizzle evaluates the schema callback lazily, including its reference classifications.
+  getTableConfig(getColumnTable<PgTable>(source));
   const classification = entityReferenceClassification(source);
   if (classification?.kind !== "context") {
     return panic("Context projection requires a classified context reference");
@@ -61,10 +62,10 @@ export const entityFeaturePolicies = (
   > = new Map(),
 ) => {
   for (const [column, classification] of references) {
-    let tableReferences = entityReferences.get(column.table);
+    let tableReferences = entityReferences.get(getColumnTable<PgTable>(column));
     if (tableReferences === undefined) {
       tableReferences = new Map();
-      entityReferences.set(column.table, tableReferences);
+      entityReferences.set(getColumnTable<PgTable>(column), tableReferences);
     }
     tableReferences.set(column.name, classification);
   }

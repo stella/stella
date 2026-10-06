@@ -53,6 +53,30 @@ const snapshot = (userId: string, organizationId: string, invited: boolean) =>
   });
 
 describe("feature access safe-handler admission", () => {
+  test("ordinary conditional requests need no feature identity read", async () => {
+    const endpoint = createSafeRootHandler(
+      {
+        accountAccess: ACCOUNT_ACCESS.sandbox,
+        permissions: { workspace: ["read"] },
+        mcp: { type: "internal", reason: "health_infra" },
+        featureAccess: {
+          type: "conditional",
+          featureId: requiredFeatureId,
+          usesFeature: async () => false,
+          projectInputSchema: (schemas) => schemas,
+        },
+      } as const satisfies Parameters<typeof createSafeRootHandler>[0],
+      async function* ({ featureAccessProof }) {
+        expect(featureAccessProof).toBeUndefined();
+        return Result.ok({ ok: true });
+      },
+    );
+    const result = await endpoint.handler(
+      createTestHandlerContext<Parameters<typeof endpoint.handler>[0]>(),
+    );
+    expect(result).toEqual({ ok: true });
+  });
+
   test("required features are hidden without a supplied snapshot before handler reads or execution", async () => {
     let executions = 0;
     let identityQueries = 0;

@@ -3,6 +3,8 @@ import { expect, test } from "bun:test";
 import { parseTimeEntryListPage } from "@stll/api-contract/time-entries";
 import type { TimeEntry } from "@stll/api-contract/time-entry-types";
 
+import { toSafeId } from "@/lib/safe-id";
+
 import {
   timeEntryContextKey,
   timeEntryContextUpdate,
@@ -77,7 +79,7 @@ test("preceding additive time-entry responses normalize during an API rollout", 
   );
   expect(parsed?.items.at(0)?.workItemReference).toEqual({
     type: "available",
-    id: "context",
+    id: toSafeId<"entity">("context"),
   });
   expect(
     timeEntryContextUpdate(

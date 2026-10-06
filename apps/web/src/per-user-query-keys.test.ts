@@ -37,6 +37,7 @@ import { reportExportsKeys } from "@/lib/workspaces/queries/report-exports";
 import { timeEntriesKeys } from "@/lib/workspaces/queries/time-entries";
 import { viewTemplateKeys } from "@/lib/workspaces/queries/view-templates";
 import { workspaceMemberPreviewsOptions } from "@/lib/workspaces/queries/workspace-member-previews";
+import { featureAccessOptions } from "@/queries/feature-access";
 import {
   organizationSettingsOptions,
   optionalOrganizationSettingsOptions,
@@ -97,6 +98,14 @@ const KEY_TYPE_HAS_USER = "the key argument's type requires userId";
 
 // Keyed by handler path under apps/api/src/handlers.
 const PER_USER_READS: Record<string, PerUserRead> = {
+  "organization-settings/feature-access/get.ts": {
+    kind: "keyed",
+    calls: ['api["organization-settings"]["feature-access"].get'],
+    files: ["queries/feature-access.ts"],
+    keys: () => [
+      featureAccessOptions({ organizationId: ORG, userId: USER }).queryKey,
+    ],
+  },
   "views/list.ts": {
     kind: "caller-marker",
     reason:

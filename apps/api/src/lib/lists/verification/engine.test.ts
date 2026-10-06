@@ -17,6 +17,7 @@ import { decideFeatureAccess } from "@/api/lib/auth/feature-access/policy";
 import { toSafeId } from "@/api/lib/branded-types";
 import {
   FEATURE_REGISTRY,
+  LEGAL_LISTS_FEATURE_ID,
   LIST_VERIFICATION_FEATURE_ID,
 } from "@/api/lib/feature-access/registry";
 import { extractClaims } from "@/api/lib/lists/verification/claim-extract";
@@ -56,6 +57,7 @@ const access = decideFeatureAccess({
   featureId: LIST_VERIFICATION_FEATURE_ID,
   userId: "user-fixture",
   grants: {
+    [LEGAL_LISTS_FEATURE_ID]: [{ type: "organization", organizationId }],
     [LIST_VERIFICATION_FEATURE_ID]: [{ type: "organization", organizationId }],
   },
   organizationId,
@@ -664,6 +666,7 @@ test("model dispatch requires proofs bound to the requester and organization", a
   const other = decideFeatureAccess({
     registry: FEATURE_REGISTRY,
     grants: {
+      [LEGAL_LISTS_FEATURE_ID]: [{ type: "organization", organizationId }],
       [LIST_VERIFICATION_FEATURE_ID]: [
         { type: "organization", organizationId },
       ],

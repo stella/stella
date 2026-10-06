@@ -1,8 +1,15 @@
-import { getTableName } from "drizzle-orm";
-import { getTableConfig, PgDialect } from "drizzle-orm/pg-core";
-import type { AnyPgColumn, PgTable } from "drizzle-orm/pg-core";
+import { getColumnTable, getTableName, is } from "drizzle-orm";
+import { getTableConfig, PgDialect, PgRole } from "drizzle-orm/pg-core";
+import type { AnyPgColumn, PgTable, PgPolicyConfig } from "drizzle-orm/pg-core";
 
 import { entityReferenceClassification } from "./entity-feature-policies";
+
+const targetsApplicationRole = (to: PgPolicyConfig["to"]): boolean => {
+  if (Array.isArray(to)) {
+    return to.some(targetsApplicationRole);
+  }
+  return to === "stella" || (is(to, PgRole) && to.name === "stella");
+};
 
 const ENTITY_RELATION_ALIASES = {
   entities: "e",
@@ -21,7 +28,7 @@ const entityRelationsOf = (
     return relations;
   }
   visited.add(column);
-  const tableName = getTableName(column.table);
+  const tableName = getTableName(getColumnTable<PgTable>(column));
   if (
     column.name === "id" &&
     (tableName === "entities" ||
@@ -31,7 +38,8 @@ const entityRelationsOf = (
     relations.add(tableName);
     return relations;
   }
-  for (const foreignKey of getTableConfig(column.table).foreignKeys) {
+  for (const foreignKey of getTableConfig(getColumnTable<PgTable>(column))
+    .foreignKeys) {
     const reference = foreignKey.reference();
     const index = reference.columns.findIndex(
       (source) => source.name === column.name,
@@ -58,14 +66,9 @@ export const entityFeatureCoverageViolations = (
   const dialect = new PgDialect();
   for (const table of tables) {
     const config = getTableConfig(table);
-    const appReadable = config.policies.some((policy) => {
-      const roles = Array.isArray(policy.to) ? policy.to : [policy.to];
-      return roles.some(
-        (role) =>
-          role === "stella" ||
-          (typeof role === "object" && role !== null && role.name === "stella"),
-      );
-    });
+    const appReadable = config.policies.some((policy) =>
+      targetsApplicationRole(policy.to),
+    );
     const root = config.columns.find(
       (column) => column.name === "list_item_type",
     );

@@ -3,7 +3,7 @@ import { sql } from "drizzle-orm";
 import type { SQLWrapper } from "drizzle-orm";
 
 import type { Transaction } from "@/api/db/root";
-import { env } from "@/api/env";
+import { envFeatureAccess } from "@/api/env-feature-access";
 import { decideFeatureAccess } from "@/api/lib/auth/feature-access/policy";
 import { executedRows } from "@/api/lib/db/executed-rows";
 import { featurePrerequisiteClosure } from "@/api/lib/feature-access/prerequisites";
@@ -27,7 +27,7 @@ export const resolveScopedFeatureIds = async ({
   const candidates = Object.keys(FEATURE_REGISTRY).filter((id) =>
     [...featurePrerequisiteClosure(FEATURE_REGISTRY, id)].every(
       (required) =>
-        env.API_FEATURE_ACCESS_GRANTS[required]?.some(
+        envFeatureAccess.API_FEATURE_ACCESS_GRANTS[required]?.some(
           (grant) => grant.organizationId === organizationId,
         ) === true,
     ),
@@ -62,7 +62,7 @@ export const resolveScopedFeatureIds = async ({
     (featureId) =>
       decideFeatureAccess({
         registry: FEATURE_REGISTRY,
-        grants: env.API_FEATURE_ACCESS_GRANTS,
+        grants: envFeatureAccess.API_FEATURE_ACCESS_GRANTS,
         featureId,
         organizationId,
         userId,

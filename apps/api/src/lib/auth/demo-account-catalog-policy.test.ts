@@ -7,6 +7,7 @@ import { env } from "@/api/env";
 import { ACCOUNT_ACCESS } from "@/api/lib/api-handlers";
 import type { AccountAccess } from "@/api/lib/api-handlers";
 import { createTestHandlerContext } from "@/api/tests/helpers/handler-context";
+import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
 
 import { discoverSafeHandlers } from "../../../scripts/lib/enumerate-safe-handlers";
 
@@ -217,7 +218,19 @@ describe("handler account policy census", () => {
           module[endpoint.exportName ?? "default"],
         );
         const response = await handler(
-          createTestHandlerContext({ user: { email: "account@example.test" } }),
+          createTestHandlerContext({
+            user: { email: "account@example.test" },
+            ...createScopedDbMock({
+              select: () => ({
+                from: () => ({
+                  where: () => ({ limit: async () => [] }),
+                  innerJoin: () => ({
+                    where: () => ({ limit: async () => [] }),
+                  }),
+                }),
+              }),
+            }),
+          }),
         );
         expect(response, endpoint.id).toMatchObject({
           code: 403,

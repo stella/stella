@@ -95,6 +95,7 @@ describe("verification handler access admission", () => {
     const previousDeployment = env.FEATURE_LEGAL_LISTS;
     env.FEATURE_LEGAL_LISTS = true;
     env.API_FEATURE_ACCESS_GRANTS = {
+      "legal-lists": [{ type: "organization", organizationId: "org_a" }],
       "list-verification": [
         {
           type: "member",

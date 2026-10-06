@@ -13,7 +13,7 @@ import { inArray, sql } from "drizzle-orm";
 
 import { LIST_ITEM_TYPE } from "@stll/api-contract/entity-options";
 
-import { organization, user } from "@/api/db/auth-schema";
+import { member, organization, user } from "@/api/db/auth-schema";
 import type { Transaction } from "@/api/db/root";
 import type { SafeDb } from "@/api/db/safe-db";
 import {
@@ -25,6 +25,7 @@ import {
   legalLists,
   workspaces,
 } from "@/api/db/schema";
+import { env } from "@/api/env";
 import readListItems from "@/api/handlers/lists/items/list";
 import { createSafeId, toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -40,6 +41,8 @@ import type {
 type ReadListItemsCtx = Parameters<typeof readListItems.handler>[0];
 
 let testDb: TestDatabase;
+const previousGrants = env.API_FEATURE_ACCESS_GRANTS;
+const previousDeployment = env.FEATURE_LEGAL_LISTS;
 const organizationId = toSafeId<"organization">(`org_${Bun.randomUUIDv7()}`);
 const userId = toSafeId<"user">(`user_${Bun.randomUUIDv7()}`);
 const workspaceId = createSafeId<"workspace">();
@@ -54,6 +57,10 @@ const minutesVersionId = createSafeId<"entityVersion">();
 
 beforeAll(
   async () => {
+    env.FEATURE_LEGAL_LISTS = true;
+    env.API_FEATURE_ACCESS_GRANTS = {
+      "legal-lists": [{ type: "organization", organizationId }],
+    };
     testDb = await getTestDb();
     await testDb.transaction(async (tx: TestDatabaseTransaction) => {
       await tx.execute(sql.raw("RESET ROLE"));
@@ -67,6 +74,14 @@ beforeAll(
         id: userId,
         name: "List Items User",
         email: `${userId}@example.test`,
+        emailVerified: true,
+      });
+      await tx.insert(member).values({
+        id: Bun.randomUUIDv7(),
+        organizationId,
+        userId,
+        role: "owner",
+        createdAt: new Date(),
       });
       await tx.insert(workspaces).values({
         id: workspaceId,
@@ -208,6 +223,8 @@ beforeAll(
 );
 
 afterAll(async () => {
+  env.API_FEATURE_ACCESS_GRANTS = previousGrants;
+  env.FEATURE_LEGAL_LISTS = previousDeployment;
   await testDb
     .delete(organization)
     .where(inArray(organization.id, [organizationId]));

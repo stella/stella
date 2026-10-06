@@ -18,7 +18,7 @@ const LIST_PLACEMENT_FIELDS = [
 
 export const taskInputUsesLegalLists = (body: unknown): boolean =>
   isRecord(body) &&
-  ((body.listItemType !== undefined && body.listItemType !== "task") ||
+  ((body["listItemType"] !== undefined && body["listItemType"] !== "task") ||
     LIST_PLACEMENT_FIELDS.some((field) => body[field] !== undefined));
 
 export const projectTaskListInputSchemas = (
@@ -32,8 +32,10 @@ export const projectTaskListInputSchemas = (
   const properties = Object.fromEntries(
     Object.entries(body.properties).filter(([name]) => !excluded.has(name)),
   );
-  if (properties.listItemType !== undefined) {
-    properties.listItemType = KindGuard.IsOptional(properties.listItemType)
+  if (properties["listItemType"] !== undefined) {
+    properties["listItemType"] = KindGuard.IsOptional(
+      properties["listItemType"],
+    )
       ? Type.Optional(Type.Literal("task"))
       : Type.Literal("task");
   }
@@ -43,7 +45,7 @@ export const projectTaskListInputSchemas = (
 export const LEGAL_LIST_TASK_FEATURE_ACCESS = {
   featureId: LEGAL_LISTS_FEATURE_ID,
   type: "conditional",
-  usesFeature: async ({ body }) => taskInputUsesLegalLists(body),
+  usesFeature: ({ body }) => taskInputUsesLegalLists(body),
   projectInputSchema: projectTaskListInputSchemas,
 } as const satisfies FeatureAccessRequirement;
 
@@ -65,11 +67,11 @@ export const projectNativeTaskListInput = (
   schema: McpToolInputSchema,
 ): McpToolInputSchema => {
   const properties = { ...schema.properties };
-  delete properties.list_id;
-  delete properties.list_section_id;
-  delete properties.list_description;
-  if (properties.item_type !== undefined) {
-    properties.item_type = { type: "string", const: "task" };
+  delete properties["list_id"];
+  delete properties["list_section_id"];
+  delete properties["list_description"];
+  if (properties["item_type"] !== undefined) {
+    properties["item_type"] = { type: "string", enum: ["task"] };
   }
   return { ...schema, properties };
 };

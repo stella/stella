@@ -3,6 +3,7 @@ import { panic } from "better-result";
 import { existsSync, statSync } from "node:fs";
 
 import { envDocumentProcessingWorker } from "@/api/env-document-processing-worker";
+import { envFeatureAccess } from "@/api/env-feature-access";
 import {
   envApiInvariantViolation,
   envApiServerSchema,
@@ -60,6 +61,12 @@ const validatedEnv = {
   ...envDocumentProcessingWorker,
   ...envApi,
   EMAIL_PROVIDER: emailProvider,
+  get API_FEATURE_ACCESS_GRANTS() {
+    return envFeatureAccess.API_FEATURE_ACCESS_GRANTS;
+  },
+  set API_FEATURE_ACCESS_GRANTS(grants) {
+    envFeatureAccess.API_FEATURE_ACCESS_GRANTS = grants;
+  },
 };
 
 // Bun owns process.env and may expose it through a runtime proxy. Freeze the

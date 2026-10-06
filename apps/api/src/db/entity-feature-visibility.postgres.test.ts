@@ -22,6 +22,7 @@ import {
   timeEntries,
   workObligations,
 } from "@/api/db/schema";
+import { createSafeId } from "@/api/lib/branded-types";
 import {
   LEGAL_LISTS_FEATURE_ID,
   LIST_VERIFICATION_FEATURE_ID,
@@ -31,7 +32,10 @@ import {
   WORK_OBLIGATION_EVENT_CONTEXT_EXTRAS,
 } from "@/api/lib/work-obligations/read-context";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
-import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
+import {
+  mintAuthProviderId,
+  mintAuthProviderIdValue,
+} from "@/api/tests/helpers/auth-provider-id";
 
 const databaseUrl = process.env["DATABASE_URL"];
 const runPostgresTests = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
@@ -52,12 +56,12 @@ describe.skipIf(!runPostgresTests)(
           const { sql: client, db } = openClient();
           const organizationId = mintAuthProviderId<"organization">();
           const userId = mintAuthProviderId<"user">();
-          const workspaceId = Bun.randomUUIDv7();
-          const factId = Bun.randomUUIDv7();
-          const taskId = Bun.randomUUIDv7();
-          const versionId = Bun.randomUUIDv7();
-          const entryId = Bun.randomUUIDv7();
-          const eventId = Bun.randomUUIDv7();
+          const workspaceId = createSafeId<"workspace">();
+          const factId = createSafeId<"entity">();
+          const taskId = createSafeId<"entity">();
+          const versionId = createSafeId<"entityVersion">();
+          const entryId = createSafeId<"timeEntry">();
+          const eventId = createSafeId<"workObligationEvent">();
           const enabled = featureIds.includes(LEGAL_LISTS_FEATURE_ID);
           try {
             await client`INSERT INTO organization (id, name, slug, created_at)
@@ -65,7 +69,7 @@ describe.skipIf(!runPostgresTests)(
             await client`INSERT INTO "user" (id, name, email)
             VALUES (${userId}, 'Feature user', ${`${userId}@example.test`})`;
             await client`INSERT INTO member (id, organization_id, user_id, role, created_at)
-            VALUES (${mintAuthProviderId<"member">()}, ${organizationId}, ${userId}, 'owner', now())`;
+            VALUES (${mintAuthProviderIdValue()}, ${organizationId}, ${userId}, 'owner', now())`;
             await client`INSERT INTO workspaces (id, organization_id, name, reference)
             VALUES (${workspaceId}, ${organizationId}, 'Feature matter', ${workspaceId})`;
             await client`INSERT INTO entities (id, workspace_id, kind, list_item_type, name)

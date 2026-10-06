@@ -5,7 +5,7 @@ import { and, eq, inArray, sql } from "drizzle-orm";
 import { LIST_ITEM_TYPE } from "@stll/api-contract/entity-options";
 import type { ListItemType } from "@stll/api-contract/entity-options";
 
-import { organization, user } from "@/api/db/auth-schema";
+import { member, organization, user } from "@/api/db/auth-schema";
 import type { Transaction } from "@/api/db/root";
 import type { SafeDb } from "@/api/db/safe-db";
 import {
@@ -19,6 +19,7 @@ import {
   workObligations,
   workspaces,
 } from "@/api/db/schema";
+import { env } from "@/api/env";
 import type acceptGenerationCandidateDefinition from "@/api/handlers/lists/generation-candidates/acceptance/create";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { createSafeId, toSafeId } from "@/api/lib/branded-types";
@@ -50,12 +51,15 @@ type AcceptGenerationCandidateCtx = Parameters<
 >[0];
 
 let testDb: TestDatabase;
+const previousGrants = env.API_FEATURE_ACCESS_GRANTS;
+const previousDeployment = env.FEATURE_LEGAL_LISTS;
 let acceptGenerationCandidate: AcceptGenerationCandidate;
 let acceptGovernedCandidate: AcceptGenerationCandidate;
 const seededOrganizationIds: SafeId<"organization">[] = [];
 
 beforeAll(
   async () => {
+    env.FEATURE_LEGAL_LISTS = true;
     testDb = await getTestDb();
     // The handler materializes its entity through the shared task-creation
     // path, which is gated on the deployed feature flags. Legal Lists must be
@@ -84,6 +88,8 @@ beforeAll(
 );
 
 afterAll(async () => {
+  env.API_FEATURE_ACCESS_GRANTS = previousGrants;
+  env.FEATURE_LEGAL_LISTS = previousDeployment;
   if (seededOrganizationIds.length > 0) {
     await testDb
       .delete(organization)
@@ -104,6 +110,9 @@ const testSafeDb: SafeDb = async (fn) =>
     try: async () =>
       await testDb.transaction(async (tx: TestDatabaseTransaction) => {
         await tx.execute(sql.raw("RESET ROLE"));
+        await tx.execute(
+          sql`SELECT set_config('app.enabled_features', '["legal-lists"]', true)`,
+        );
         return await fn(asTestRaw<Transaction>(tx));
       }),
     catch: (cause) =>
@@ -204,6 +213,14 @@ const seedAcceptance = async ({
       id: userId,
       name: "Candidate Acceptance User",
       email: `${userId}@example.test`,
+      emailVerified: true,
+    });
+    await tx.insert(member).values({
+      id: Bun.randomUUIDv7(),
+      organizationId,
+      userId,
+      role: "owner",
+      createdAt: new Date(),
     });
     await tx.insert(workspaces).values({
       id: workspaceId,
@@ -303,6 +320,13 @@ const seedAcceptance = async ({
     });
   });
 
+  env.API_FEATURE_ACCESS_GRANTS = {
+    ...env.API_FEATURE_ACCESS_GRANTS,
+    "legal-lists": [
+      ...(env.API_FEATURE_ACCESS_GRANTS["legal-lists"] ?? []),
+      { type: "organization", organizationId },
+    ],
+  };
   seededOrganizationIds.push(organizationId);
   return {
     candidateId,
