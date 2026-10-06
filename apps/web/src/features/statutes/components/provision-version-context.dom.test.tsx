@@ -57,6 +57,41 @@ test("an applied version names its decision and switches to current wording thro
   expect(selected).toEqual([currentDocumentId]);
 });
 
+test("the applied current version keeps its decision attribution without a current wording action", () => {
+  const screen = render(
+    <IntlProvider locale="en" messages={messages} timeZone="UTC">
+      <FormattingProvider locale="en" timeZone="UTC">
+        <ProvisionVersionContext
+          {...validity}
+          status="current"
+          validFrom="2024-01-01"
+          validTo={null}
+          decisionContext={{
+            ...decisionContext,
+            appliedDocumentId: currentDocumentId,
+          }}
+          documentId={currentDocumentId}
+          currentVersionId={currentDocumentId}
+          onVersionChange={() => undefined}
+        />
+      </FormattingProvider>
+    </IntlProvider>,
+  );
+
+  expect(screen.container.textContent).toContain(
+    "Version applied in Nejvyšší soud 25 Cdo 627/2022",
+  );
+  expect(screen.container.textContent).toContain(
+    messages.statutes.status.current,
+  );
+  expect(
+    screen.queryByRole("button", { name: messages.statutes.currentWording }),
+  ).toBeNull();
+  expect(screen.container.textContent).not.toContain(
+    messages.statutes.currentWording,
+  );
+});
+
 test("plain views and a different selected version keep the ordinary status label", () => {
   for (const context of [undefined, decisionContext]) {
     const screen = render(
