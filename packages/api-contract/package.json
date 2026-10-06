@@ -77,7 +77,10 @@
     "./statute-aliases": "./src/statute-aliases.ts",
     "./statute-query-capability": "./src/statute-query-capability.ts",
     "./statute-query-intent": "./src/statute-query-intent.ts",
-    "./desktop-presence": "./src/desktop-presence.ts"
+    "./desktop-presence": "./src/desktop-presence.ts",
+    "./mcp-app-messages": "./src/mcp-app-messages.json",
+    "./mcp-app.fixtures": "./src/mcp-app.fixtures.ts",
+    "./mcp-app-sandbox-policy": "./src/mcp-app-sandbox-policy.ts"
   },
   "scripts": {
     "clean": "git clean -xdf .cache .turbo node_modules",

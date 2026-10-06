@@ -61,6 +61,7 @@ import { cn } from "@stll/ui/utils";
 
 import {
   matterActivityIsKnownEmpty,
+  matterActivityItemVisible,
   resolveEntityActivityDestination,
   resolveAutomaticExpandedMatterId,
   resolveMatterNavigationTarget,
@@ -140,6 +141,8 @@ import { knowledgeSections } from "@/lib/knowledge/navigation";
 import { isPublicKnowledgeEnabled } from "@/lib/knowledge/public-knowledge-launch";
 import { publicToolsBasePath } from "@/lib/knowledge/public-tools-path";
 import { localISODate } from "@/lib/local-iso-date";
+import { useCallerFeatureEnabled } from "@/lib/organization/feature-access/access";
+import { CALLER_FEATURE } from "@/lib/organization/feature-access/surfaces";
 import { usePinnedStore } from "@/lib/pinned-store";
 import { formatFullTimestamp, formatRelativeTime } from "@/lib/relative-time";
 import type { EntityKind } from "@/lib/types";
@@ -1153,9 +1156,15 @@ const MatterItem = ({
     () => queryClient.getQueryState(activityQueryKey)?.isInvalidated ?? false,
     () => false,
   );
+  const legalListsEnabled = useCallerFeatureEnabled(CALLER_FEATURE.legalLists);
   const activityIsKnownEmpty = matterActivityIsKnownEmpty({
     isInvalidated: activityIsInvalidated,
-    pages: cachedActivity?.pages,
+    pages: cachedActivity?.pages.map((page) => ({
+      ...page,
+      items: page.items.filter((item) =>
+        matterActivityItemVisible(item, legalListsEnabled),
+      ),
+    })),
     status: activityStatus,
   });
   const hasExpandableContent = !activityIsKnownEmpty || showTimesheetLink;
@@ -1575,7 +1584,12 @@ const MatterActivityList = ({
     }),
     enabled: mounted,
   });
-  const items = data ? data.pages.flatMap((page) => page.items) : [];
+  const legalListsEnabled = useCallerFeatureEnabled(CALLER_FEATURE.legalLists);
+  const items = data
+    ? data.pages
+        .flatMap((page) => page.items)
+        .filter((item) => matterActivityItemVisible(item, legalListsEnabled))
+    : [];
 
   const openEntity = async ({
     entityKind,
