@@ -1,0 +1,581 @@
+import { panic, Result } from "better-result";
+import {
+  afterAll,
+  beforeAll,
+  beforeEach,
+  describe,
+  expect,
+  setDefaultTimeout,
+  test,
+} from "bun:test";
+import { and, eq, inArray } from "drizzle-orm";
+
+import { member, organization, user } from "@/api/db/auth-schema";
+import type { Transaction } from "@/api/db/root";
+import {
+  clauses,
+  contacts,
+  entities,
+  playbookDefinitions,
+  systemAuditRuns,
+  templates,
+  timeEntries,
+  workspaces,
+} from "@/api/db/schema";
+import type { RlsDatabase } from "@/api/db/scoped";
+import { createContactHandler } from "@/api/handlers/contacts/create";
+import { createWorkspaceHandler } from "@/api/handlers/workspaces/create";
+import { createBackgroundAuditRecorder } from "@/api/lib/audit-log";
+import { createSafeId } from "@/api/lib/branded-types";
+import type { SafeId } from "@/api/lib/branded-types";
+import type { CreateEntityFromBufferDependencies } from "@/api/lib/entities/create-from-buffer";
+import { sessionMemberRole } from "@/api/lib/permission-authorization";
+import type { ReviewOrganizationConfig } from "@/api/lib/review-organization/config";
+import { reviewOrganizationConfigFrom } from "@/api/lib/review-organization/config";
+import {
+  REVIEW_RESET_REFUSAL,
+  resetReviewOrganization,
+} from "@/api/lib/review-organization/reset";
+import type {
+  ReviewResetDependencies,
+  ReviewResetRefusalReason,
+} from "@/api/lib/review-organization/reset";
+import { SAMPLE_COUNTS } from "@/api/lib/review-organization/sample-data";
+import { seedReviewOrganization } from "@/api/lib/review-organization/seed";
+import type {
+  ReviewSeedActor,
+  ReviewSeedKind,
+} from "@/api/lib/review-organization/seed";
+import {
+  createRootMembershipSafeDb,
+  createRootMembershipScopedDb,
+} from "@/api/lib/root-scoped-db";
+import { createResetReviewOrganizationTask } from "@/api/lib/scheduler/tasks/review-organization-reset";
+import type {
+  SchedulerDb,
+  SchedulerTaskContext,
+} from "@/api/lib/scheduler/types";
+import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
+import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
+import type { FakeS3 } from "@/api/tests/helpers/fake-s3";
+import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
+import { getTestDb, releaseTestDb } from "@/api/tests/security/test-utils";
+import type { TestDatabase } from "@/api/tests/security/test-utils";
+
+setDefaultTimeout(120_000);
+
+// Stored documents skip extraction and derivative queues: the test proves
+// what lands in the database and the object store, not the workers after it.
+const documentDependencies: CreateEntityFromBufferDependencies = {
+  broadcastWorkspaceResourceUpdated: () => {},
+  enqueueImageThumbnailOrMarkFailed: async () => {},
+  enqueuePdfDerivativeOrMarkFailed: async () => {},
+  processExtraction: async () => {},
+  requestNativeExtractionRun: async () => null,
+};
+
+const resetDependencies: ReviewResetDependencies = {
+  seed: { documents: documentDependencies },
+  workspaceDeletion: { enqueueCleanup: async () => {} },
+};
+
+let testDb: TestDatabase;
+let fakeS3: FakeS3;
+
+const REVIEW_EMAIL = `review-${Bun.randomUUIDv7()}@example.test`;
+const OTHER_EMAIL = `colleague-${Bun.randomUUIDv7()}@example.test`;
+const DEMO_EMAIL = `demo-${Bun.randomUUIDv7()}@example.test`;
+
+type Fixture = {
+  reviewUserId: SafeId<"user">;
+  otherUserId: SafeId<"user">;
+  reviewOrgId: SafeId<"organization">;
+  sharedOrgId: SafeId<"organization">;
+  foreignOrgId: SafeId<"organization">;
+  demoOrgId: SafeId<"organization">;
+  foreignWorkspaceId: SafeId<"workspace">;
+  foreignContactId: SafeId<"contact">;
+};
+let fixture: Fixture;
+
+const insertUser = async (email: string) => {
+  const id = mintAuthProviderId<"user">();
+  await testDb.insert(user).values({
+    id,
+    name: email,
+    email,
+    emailVerified: true,
+    createdAt: new Date(),
+    updatedAt: new Date(),
+  });
+  return id;
+};
+
+const insertOrganization = async (
+  name: string,
+  members: readonly SafeId<"user">[],
+) => {
+  const id = mintAuthProviderId<"organization">();
+  await testDb.insert(organization).values({
+    id,
+    name,
+    slug: `review-test-${id}`,
+    createdAt: new Date(),
+  });
+  if (members.length > 0) {
+    await testDb.insert(member).values(
+      members.map((userId) => ({
+        id: Bun.randomUUIDv7(),
+        organizationId: id,
+        userId,
+        role: "owner",
+        createdAt: new Date(),
+      })),
+    );
+  }
+  return id;
+};
+
+const config = (
+  organizationId: string,
+  overrides: Record<string, string> = {},
+): ReviewOrganizationConfig =>
+  reviewOrganizationConfigFrom({
+    APP_REVIEW_ACCOUNT_EMAIL: REVIEW_EMAIL,
+    APP_REVIEW_ORGANIZATION_ID: organizationId,
+    DEMO_ACCOUNT_EMAIL: DEMO_EMAIL,
+    DEMO_ACCOUNT_ORGANIZATION_ID: fixture.demoOrgId,
+    ...overrides,
+  }) ?? panic("Expected a complete review configuration");
+
+const rlsDatabase = () => asTestRaw<RlsDatabase<Transaction>>(testDb);
+const ownerDb = () => asTestRaw<SchedulerDb>(testDb);
+
+const actorFor = (
+  organizationId: SafeId<"organization">,
+  userId: SafeId<"user">,
+): ReviewSeedActor => ({
+  organizationId,
+  userId,
+  userEmail: REVIEW_EMAIL,
+  memberAuthority: sessionMemberRole("owner"),
+  safeDb: createRootMembershipSafeDb({ organizationId, userId }, rlsDatabase()),
+  scopedDb: createRootMembershipScopedDb(
+    { organizationId, userId },
+    rlsDatabase(),
+  ),
+  recorderFor: (workspaceId) =>
+    createBackgroundAuditRecorder({
+      organizationId,
+      workspaceId,
+      userId,
+      execution: {
+        performer: { type: "service", id: "review-test", name: null },
+        trigger: { type: "direct" },
+      },
+    }),
+});
+
+/** Rows of each seeded kind the organization holds now. */
+const countRows = async (
+  organizationId: SafeId<"organization">,
+): Promise<Record<ReviewSeedKind, number>> => {
+  const matterIds = testDb
+    .select({ id: workspaces.id })
+    .from(workspaces)
+    .where(eq(workspaces.organizationId, organizationId));
+  const [
+    contactCount,
+    matterCount,
+    documentCount,
+    taskCount,
+    timeEntryCount,
+    clauseCount,
+    templateCount,
+    playbookCount,
+  ] = await Promise.all([
+    testDb.$count(contacts, eq(contacts.organizationId, organizationId)),
+    testDb.$count(workspaces, eq(workspaces.organizationId, organizationId)),
+    testDb.$count(
+      entities,
+      and(
+        eq(entities.kind, "document"),
+        // The seeded matters are the organization's only matters.
+        inArray(entities.workspaceId, matterIds),
+      ),
+    ),
+    testDb.$count(
+      entities,
+      and(eq(entities.kind, "task"), inArray(entities.workspaceId, matterIds)),
+    ),
+    testDb.$count(timeEntries, eq(timeEntries.organizationId, organizationId)),
+    testDb.$count(clauses, eq(clauses.organizationId, organizationId)),
+    testDb.$count(templates, eq(templates.organizationId, organizationId)),
+    testDb.$count(
+      playbookDefinitions,
+      eq(playbookDefinitions.organizationId, organizationId),
+    ),
+  ]);
+  return {
+    contacts: contactCount,
+    matters: matterCount,
+    documents: documentCount,
+    tasks: taskCount,
+    timeEntries: timeEntryCount,
+    clauses: clauseCount,
+    templates: templateCount,
+    playbooks: playbookCount,
+  };
+};
+
+beforeAll(async () => {
+  testDb = await getTestDb();
+  fakeS3 = startFakeS3();
+  const reviewUserId = await insertUser(REVIEW_EMAIL);
+  const otherUserId = await insertUser(OTHER_EMAIL);
+  const demoUserId = await insertUser(DEMO_EMAIL);
+  const reviewOrgId = await insertOrganization("Review", [reviewUserId]);
+  const sharedOrgId = await insertOrganization("Shared", [
+    reviewUserId,
+    otherUserId,
+  ]);
+  const foreignOrgId = await insertOrganization("Foreign", [otherUserId]);
+  const demoOrgId = await insertOrganization("Demo", [
+    reviewUserId,
+    demoUserId,
+  ]);
+  fixture = {
+    reviewUserId,
+    otherUserId,
+    reviewOrgId,
+    sharedOrgId,
+    foreignOrgId,
+    demoOrgId,
+    foreignWorkspaceId: createSafeId<"workspace">(),
+    foreignContactId: createSafeId<"contact">(),
+  };
+
+  // A real member's data in another organization, which no reset may touch.
+  const foreign = actorFor(foreignOrgId, otherUserId);
+  const contact = await Result.gen(() =>
+    createContactHandler({
+      safeDb: foreign.safeDb,
+      organizationId: foreignOrgId,
+      userId: otherUserId,
+      recordAuditEvent: foreign.recorderFor(null),
+      body: {
+        id: fixture.foreignContactId,
+        type: "organization",
+        displayName: "Foreign client",
+        organizationName: "Foreign client",
+      },
+    }),
+  );
+  expect(Result.isOk(contact)).toBe(true);
+  const matter = await Result.gen(() =>
+    createWorkspaceHandler({
+      userEmail: OTHER_EMAIL,
+      safeDb: foreign.safeDb,
+      organizationId: foreignOrgId,
+      userId: otherUserId,
+      recordAuditEvent: foreign.recorderFor(null),
+      body: {
+        id: fixture.foreignWorkspaceId,
+        name: "Foreign matter",
+        filePropertyName: "File",
+        clientId: fixture.foreignContactId,
+      },
+    }),
+  );
+  expect(Result.isOk(matter)).toBe(true);
+});
+
+afterAll(async () => {
+  fakeS3.stop();
+  await releaseTestDb();
+});
+
+describe("review organization configuration", () => {
+  test("is absent unless both the account and the organization are set", () => {
+    expect(reviewOrganizationConfigFrom({})).toBeNull();
+    expect(
+      reviewOrganizationConfigFrom({ APP_REVIEW_ACCOUNT_EMAIL: REVIEW_EMAIL }),
+    ).toBeNull();
+    expect(
+      reviewOrganizationConfigFrom({ APP_REVIEW_ORGANIZATION_ID: "org_1" }),
+    ).toBeNull();
+    expect(
+      reviewOrganizationConfigFrom({
+        APP_REVIEW_ACCOUNT_EMAIL: "not an email",
+        APP_REVIEW_ORGANIZATION_ID: "org_1",
+      }),
+    ).toBeNull();
+  });
+});
+
+describe("review organization reset refusals", () => {
+  const expectRefusal = async (
+    target: ReviewOrganizationConfig | null,
+    reason: ReviewResetRefusalReason,
+  ) => {
+    const outcome = await resetReviewOrganization({
+      config: target,
+      db: ownerDb(),
+      rlsDatabase: rlsDatabase(),
+      runId: Bun.randomUUIDv7(),
+      signal: new AbortController().signal,
+      dependencies: resetDependencies,
+    });
+    expect(
+      outcome.match({ ok: () => null, err: (error) => error.reason }),
+    ).toBe(reason);
+  };
+
+  test("refuses when no review organization is configured", async () => {
+    await expectRefusal(null, REVIEW_RESET_REFUSAL.unconfigured);
+  });
+
+  test("refuses the demo organization even when the account is its member", async () => {
+    await expectRefusal(
+      config(fixture.demoOrgId),
+      REVIEW_RESET_REFUSAL.demoOrganization,
+    );
+  });
+
+  test("refuses when the review account is the demo account", async () => {
+    await expectRefusal(
+      config(fixture.reviewOrgId, { DEMO_ACCOUNT_EMAIL: REVIEW_EMAIL }),
+      REVIEW_RESET_REFUSAL.demoAccount,
+    );
+  });
+
+  test("refuses an organization with any other member", async () => {
+    await expectRefusal(
+      config(fixture.sharedOrgId),
+      REVIEW_RESET_REFUSAL.otherMembers,
+    );
+  });
+
+  test("refuses an organization the review account does not belong to", async () => {
+    await expectRefusal(
+      config(fixture.foreignOrgId),
+      REVIEW_RESET_REFUSAL.accountNotMember,
+    );
+    const foreignMatter = await testDb.$count(
+      workspaces,
+      eq(workspaces.id, fixture.foreignWorkspaceId),
+    );
+    expect(foreignMatter).toBe(1);
+  });
+
+  test("refuses an organization that does not exist", async () => {
+    await expectRefusal(
+      config(mintAuthProviderId<"organization">()),
+      REVIEW_RESET_REFUSAL.organizationMissing,
+    );
+  });
+
+  test("refuses when the review account does not exist", async () => {
+    await expectRefusal(
+      config(fixture.reviewOrgId, {
+        APP_REVIEW_ACCOUNT_EMAIL: `missing-${Bun.randomUUIDv7()}@example.test`,
+      }),
+      REVIEW_RESET_REFUSAL.accountMissing,
+    );
+  });
+});
+
+describe("review organization seed and reset", () => {
+  beforeEach(async () => {
+    // Start each case from an empty review organization.
+    const outcome = await resetReviewOrganization({
+      config: config(fixture.reviewOrgId),
+      db: ownerDb(),
+      rlsDatabase: rlsDatabase(),
+      runId: Bun.randomUUIDv7(),
+      signal: new AbortController().signal,
+      dependencies: resetDependencies,
+    });
+    expect(Result.isOk(outcome)).toBe(true);
+  });
+
+  test("a second seed writes nothing and the organization holds every sample kind once", async () => {
+    const actor = actorFor(fixture.reviewOrgId, fixture.reviewUserId);
+    const again = (
+      await seedReviewOrganization(actor, { documents: documentDependencies })
+    ).unwrap("Expected the second seed to succeed");
+    const kinds: readonly ReviewSeedKind[] = [
+      "contacts",
+      "matters",
+      "documents",
+      "tasks",
+      "timeEntries",
+      "clauses",
+      "templates",
+      "playbooks",
+    ];
+    for (const kind of kinds) {
+      expect({ kind, ...again[kind] }).toEqual({
+        kind,
+        created: 0,
+        existing: SAMPLE_COUNTS[kind],
+      });
+    }
+    expect(await countRows(fixture.reviewOrgId)).toEqual({ ...SAMPLE_COUNTS });
+  });
+
+  test("reset removes what the reviewer added, reseeds, and leaves other organizations alone", async () => {
+    const actor = actorFor(fixture.reviewOrgId, fixture.reviewUserId);
+    const extraContactId = createSafeId<"contact">();
+    const extraMatterId = createSafeId<"workspace">();
+    const contact = await Result.gen(() =>
+      createContactHandler({
+        safeDb: actor.safeDb,
+        organizationId: fixture.reviewOrgId,
+        userId: fixture.reviewUserId,
+        recordAuditEvent: actor.recorderFor(null),
+        body: {
+          id: extraContactId,
+          type: "person",
+          displayName: "Added by reviewer",
+          firstName: "Added",
+          lastName: "Reviewer",
+        },
+      }),
+    );
+    expect(Result.isOk(contact)).toBe(true);
+    const matter = await Result.gen(() =>
+      createWorkspaceHandler({
+        userEmail: REVIEW_EMAIL,
+        safeDb: actor.safeDb,
+        organizationId: fixture.reviewOrgId,
+        userId: fixture.reviewUserId,
+        recordAuditEvent: actor.recorderFor(null),
+        body: {
+          id: extraMatterId,
+          name: "Reviewer matter",
+          filePropertyName: "File",
+        },
+      }),
+    );
+    expect(Result.isOk(matter)).toBe(true);
+    await testDb
+      .update(workspaces)
+      .set({ status: "archived" })
+      .where(eq(workspaces.id, extraMatterId));
+
+    const outcome = await resetReviewOrganization({
+      config: config(fixture.reviewOrgId),
+      db: ownerDb(),
+      rlsDatabase: rlsDatabase(),
+      runId: Bun.randomUUIDv7(),
+      signal: new AbortController().signal,
+      dependencies: resetDependencies,
+    });
+    const report = outcome.unwrap("Expected the reset to run");
+    expect(report.failures).toEqual([]);
+    expect(report.deleted).toEqual({
+      matters: SAMPLE_COUNTS.matters + 1,
+      contacts: SAMPLE_COUNTS.contacts + 1,
+      clauses: SAMPLE_COUNTS.clauses,
+      templates: SAMPLE_COUNTS.templates,
+      playbooks: SAMPLE_COUNTS.playbooks,
+    });
+    report.seed.unwrap("Expected the reseed to succeed");
+    expect(await countRows(fixture.reviewOrgId)).toEqual({ ...SAMPLE_COUNTS });
+    expect(
+      await testDb.$count(workspaces, eq(workspaces.id, extraMatterId)),
+    ).toBe(0);
+    expect(await testDb.$count(contacts, eq(contacts.id, extraContactId))).toBe(
+      0,
+    );
+
+    // The other organizations keep their rows and members.
+    expect(
+      await testDb.$count(
+        workspaces,
+        eq(workspaces.id, fixture.foreignWorkspaceId),
+      ),
+    ).toBe(1);
+    expect(
+      await testDb.$count(contacts, eq(contacts.id, fixture.foreignContactId)),
+    ).toBe(1);
+    expect(
+      await testDb.$count(
+        member,
+        eq(member.organizationId, fixture.sharedOrgId),
+      ),
+    ).toBe(2);
+    expect(
+      await testDb.$count(
+        workspaces,
+        eq(workspaces.organizationId, fixture.sharedOrgId),
+      ),
+    ).toBe(0);
+    // The review account keeps its membership; only data is reset.
+    expect(
+      await testDb.$count(
+        member,
+        and(
+          eq(member.organizationId, fixture.reviewOrgId),
+          eq(member.userId, fixture.reviewUserId),
+        ),
+      ),
+    ).toBe(1);
+  });
+});
+
+describe("review organization reset task", () => {
+  const silentLogger = asTestRaw<SchedulerTaskContext["logger"]>({
+    debug: () => {},
+    info: () => {},
+    warn: () => {},
+    error: () => {},
+  });
+  const contextFor = (runId: string) =>
+    asTestRaw<SchedulerTaskContext>({
+      db: ownerDb(),
+      runId,
+      signal: new AbortController().signal,
+      logger: silentLogger,
+    });
+
+  test("does nothing when no review organization is configured", async () => {
+    const task = createResetReviewOrganizationTask({ readConfig: () => null });
+    const before = await countRows(fixture.reviewOrgId);
+    expect(Result.isOk(await task(contextFor(Bun.randomUUIDv7())))).toBe(true);
+    expect(await countRows(fixture.reviewOrgId)).toEqual(before);
+  });
+
+  test("fails the run when the configured organization is refused", async () => {
+    const task = createResetReviewOrganizationTask({
+      readConfig: () => config(fixture.sharedOrgId),
+      dependencies: resetDependencies,
+      rlsDatabase: rlsDatabase(),
+    });
+    const outcome = await task(contextFor(Bun.randomUUIDv7()));
+    expect(Result.isError(outcome)).toBe(true);
+  });
+
+  test("records the run's totals in the system audit", async () => {
+    const runId = Bun.randomUUIDv7();
+    const task = createResetReviewOrganizationTask({
+      readConfig: () => config(fixture.reviewOrgId),
+      dependencies: resetDependencies,
+      rlsDatabase: rlsDatabase(),
+    });
+    (await task(contextFor(runId))).unwrap("Expected the reset run to succeed");
+    const rows = await testDb
+      .select({ counts: systemAuditRuns.counts })
+      .from(systemAuditRuns)
+      .where(eq(systemAuditRuns.subject, runId));
+    expect(rows).toHaveLength(1);
+    expect(rows[0]?.counts).toMatchObject({
+      failedDeletes: 0,
+      seedFailed: 0,
+      seededMatters: SAMPLE_COUNTS.matters,
+      seededDocuments: SAMPLE_COUNTS.documents,
+    });
+    expect(await countRows(fixture.reviewOrgId)).toEqual({ ...SAMPLE_COUNTS });
+  });
+});

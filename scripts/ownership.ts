@@ -1828,6 +1828,11 @@ const OWNERSHIP_DECLARATIONS = [
           reason:
             "Builds an owner session to assemble the full chat tool set for provider schema checks; serves no request.",
         },
+        {
+          path: "apps/api/src/lib/review-organization/reset.ts",
+          reason:
+            "Builds the restricted review account's authority from the sole membership the reset just proved, for the sample-data seed.",
+        },
       ],
     },
   },
