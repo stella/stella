@@ -2529,6 +2529,43 @@ type ResolveValidateAuthOptions = {
   responseHeaders: Context["set"]["headers"];
 };
 
+type FeatureAccessFacts = Pick<
+  MemberAuthorization,
+  "email" | "emailVerified" | "userDeleted" | "enrolledFeatureIds"
+>;
+
+/**
+ * The caller's feature-access snapshot from the facts the member lookup read.
+ * A deleted account keeps neither identity nor enrolments, exactly as the
+ * standalone resolver treats a membership whose user is deleted.
+ */
+export const featureAccessSnapshotFromAuthorization = ({
+  organizationId,
+  userId,
+  authorization,
+}: {
+  organizationId: SafeId<"organization">;
+  userId: SafeId<"user">;
+  authorization: FeatureAccessFacts;
+}) =>
+  buildFeatureAccessSnapshot({
+    organizationId,
+    userId,
+    identity: authorization.userDeleted
+      ? null
+      : {
+          email: authorization.email,
+          emailVerified: authorization.emailVerified,
+        },
+    enrolments: authorization.userDeleted
+      ? []
+      : authorization.enrolledFeatureIds.map((featureId) => ({
+          featureId,
+          organizationId,
+          userId,
+        })),
+  });
+
 const resolveValidateAuth = async ({
   getSession,
   request,
@@ -2569,20 +2606,10 @@ const resolveValidateAuth = async ({
   const userId = toSafeId<"user">(user.id);
   // Feature access comes from the member lookup above, so gated routes and
   // handlers reuse it instead of resolving it with queries of their own.
-  const featureAccessSnapshot = buildFeatureAccessSnapshot({
+  const featureAccessSnapshot = featureAccessSnapshotFromAuthorization({
     organizationId: activeOrganizationId,
     userId,
-    identity: authorization.userDeleted
-      ? null
-      : {
-          email: authorization.email,
-          emailVerified: authorization.emailVerified,
-        },
-    enrolments: authorization.enrolledFeatureIds.map((featureId) => ({
-      featureId,
-      organizationId: activeOrganizationId,
-      userId,
-    })),
+    authorization,
   });
 
   enrichRequestContext(request, {

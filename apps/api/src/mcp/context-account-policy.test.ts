@@ -78,7 +78,6 @@ describe("MCP account authorization", () => {
                   role: "owner",
                   workspace: null,
                   ...NO_FEATURE_ACCESS_FACTS,
-                  ...NO_FEATURE_ACCESS_FACTS,
                 };
               },
               checkAccountOperation: (email) => {

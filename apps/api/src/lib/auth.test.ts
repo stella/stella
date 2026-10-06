@@ -9,7 +9,7 @@ import {
   spyOn,
   test,
 } from "bun:test";
-import { eq } from "drizzle-orm";
+import { inArray } from "drizzle-orm";
 
 import { RUNTIME_MODE } from "@stll/runtime-mode";
 
@@ -213,11 +213,19 @@ describe("resolveMemberAuthorization", () => {
   });
 
   test("reads the caller's own feature enrolments in the same lookup, never another member's", async () => {
-    await testDb.insert(featureEnrolments).values({
-      organizationId: orgFull,
-      userId: memberInFull,
-      featureId: "time-billing",
-    });
+    await testDb.insert(featureEnrolments).values([
+      {
+        organizationId: orgFull,
+        userId: memberInFull,
+        featureId: "time-billing",
+      },
+      // Same user, another organization: must never surface in orgFull.
+      {
+        organizationId: orgEmpty,
+        userId: loneMemberInFull,
+        featureId: "time-billing",
+      },
+    ]);
     try {
       const enrolled = await resolveMemberAuthorization(
         { organizationId: orgFull, userId: memberInFull },
@@ -240,10 +248,17 @@ describe("resolveMemberAuthorization", () => {
         "time-billing",
       ]);
       expect(other?.enrolledFeatureIds).toEqual([]);
+      const otherOrganization = await resolveMemberAuthorization(
+        { organizationId: orgFull, userId: loneMemberInFull },
+        testDb,
+      );
+      expect(otherOrganization?.enrolledFeatureIds).toEqual([]);
     } finally {
       await testDb
         .delete(featureEnrolments)
-        .where(eq(featureEnrolments.userId, memberInFull));
+        .where(
+          inArray(featureEnrolments.userId, [memberInFull, loneMemberInFull]),
+        );
     }
   });
 

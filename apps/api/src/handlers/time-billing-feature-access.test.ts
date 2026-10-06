@@ -25,12 +25,14 @@ import { memberTimeTargetsRoute } from "@/api/handlers/time-entries/members/rout
 import { timeEntriesRoute } from "@/api/handlers/time-entries/routes";
 import { timeTimersRoute } from "@/api/handlers/time-timers/routes";
 import { vatRateRoute } from "@/api/handlers/vat-rates/routes";
+import { featureAccessSnapshotFromAuthorization } from "@/api/lib/auth";
 import type { ValidateAuthValue } from "@/api/lib/auth";
 import {
   createFeatureAccessSnapshot,
   decideFeatureAccess,
 } from "@/api/lib/auth/feature-access/policy";
 import { featureAccessGate } from "@/api/lib/auth/feature-access/route";
+import { toSafeId } from "@/api/lib/branded-types";
 import { FEATURE_REGISTRY } from "@/api/lib/feature-access/registry";
 import { isRecord } from "@/api/lib/type-guards";
 import { featureOmittedCapabilityIds } from "@/api/mcp/capability-tools";
@@ -509,5 +511,91 @@ describe("time billing for the web client", () => {
       // An unauthenticated probe stops at authentication, never at a flag.
       expect(response.status).toBe(401);
     }
+  });
+});
+
+describe("feature access from the request's member lookup", () => {
+  const organizationId = toSafeId<"organization">(ORGANIZATION_ID);
+  const userId = toSafeId<"user">(USER_ID);
+  // What the standalone resolver decides from the same facts: a deleted
+  // account has no identity and no enrolments.
+  const resolverDecision = ({
+    deleted,
+    verified,
+    enrolled,
+  }: {
+    deleted: boolean;
+    verified: boolean;
+    enrolled: boolean;
+  }) =>
+    decideFeatureAccess({
+      registry: FEATURE_REGISTRY,
+      featureId: FEATURE_ID,
+      userId: USER_ID,
+      organizationId: ORGANIZATION_ID,
+      membership: !deleted,
+      user: deleted
+        ? null
+        : { email: "member@example.test", emailVerified: verified },
+      grants: {},
+      enrolments:
+        deleted || !enrolled
+          ? []
+          : [
+              {
+                userId: USER_ID,
+                organizationId: ORGANIZATION_ID,
+                featureId: FEATURE_ID,
+              },
+            ],
+      deploymentEnabled: true,
+    });
+
+  test("matches the standalone resolver for enrolled, unverified, unenrolled and deleted callers", async () => {
+    for (const deleted of [false, true]) {
+      for (const verified of [false, true]) {
+        for (const enrolled of [false, true]) {
+          const snapshot = await withTimeBilling(true, async () =>
+            featureAccessSnapshotFromAuthorization({
+              organizationId,
+              userId,
+              authorization: {
+                email: "member@example.test",
+                emailVerified: verified,
+                userDeleted: deleted,
+                enrolledFeatureIds: enrolled ? [FEATURE_ID] : [],
+              },
+            }),
+          );
+          expect({
+            deleted,
+            verified,
+            enrolled,
+            decision: snapshot.decisions.get(FEATURE_ID),
+          }).toEqual({
+            deleted,
+            verified,
+            enrolled,
+            decision: resolverDecision({ deleted, verified, enrolled }),
+          });
+        }
+      }
+    }
+  });
+
+  test("a deleted account keeps no enrolment, so it is never enabled", async () => {
+    const snapshot = await withTimeBilling(true, async () =>
+      featureAccessSnapshotFromAuthorization({
+        organizationId,
+        userId,
+        authorization: {
+          email: "member@example.test",
+          emailVerified: true,
+          userDeleted: true,
+          enrolledFeatureIds: [FEATURE_ID],
+        },
+      }),
+    );
+    expect(snapshot.decisions.get(FEATURE_ID)?.status).not.toBe("enabled");
   });
 });
