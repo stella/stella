@@ -376,9 +376,7 @@ export const GENERATORS = [
     outputKind: "committed",
     outputs: CI_GENERATED_OUTPUTS.webMessages,
     inputs: [
-      "apps/web/src/fonts.css",
-      "apps/web/public/fonts/**",
-      "packages/ui/**",
+      "apps/web/src/i18n/langs/*.json",
       "packages/scripts/src/i18n-typegen.ts",
     ],
     write: [
