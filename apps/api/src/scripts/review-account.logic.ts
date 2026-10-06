@@ -1,7 +1,7 @@
 import type { AuthContext } from "better-auth";
 import { Result, TaggedError } from "better-result";
 
-import type { createReviewAccountOrganizationStore } from "@/api/lib/auth/review-account-organization-store";
+import type { createReviewAccountOrganizationStore } from "@/api/lib/review-account/organization-store";
 import {
   brandPersistedOrganizationId,
   brandPersistedUserId,

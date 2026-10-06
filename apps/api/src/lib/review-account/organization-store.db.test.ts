@@ -10,7 +10,7 @@ import {
   organizationAccessStates,
 } from "@/api/db/schema";
 import { AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
-import { createReviewAccountOrganizationStore } from "@/api/lib/auth/review-account-organization-store";
+import { createReviewAccountOrganizationStore } from "@/api/lib/review-account/organization-store";
 import { brandPersistedOrganizationId } from "@/api/lib/safe-id-boundaries";
 import {
   bindReviewAccountOrganizationStore,

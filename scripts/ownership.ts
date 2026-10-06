@@ -238,7 +238,7 @@ export const ROOT_CONNECTION_DOORS = [
       "Provisioning the restricted review account's organization and owner membership",
     owner: [
       "apps/api/src/db/root.ts",
-      "apps/api/src/lib/auth/review-account-organization-store.ts",
+      "apps/api/src/lib/review-account/organization-store.ts",
     ],
     summary:
       "The organization plugin refuses the review account by policy, so its single organization, the creation seeds and the owner membership are written on the owner connection in one transaction. The connection owner binds the store; the operator command receives the operations, never a database handle.",
