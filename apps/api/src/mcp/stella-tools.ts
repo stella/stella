@@ -189,25 +189,26 @@ import type {
 } from "@/api/mcp/tool-types";
 import { defineMcpToolSet } from "@/api/mcp/tool-types";
 import {
-  invalidCursorResult,
   buildCaseLawDecisionAppUrl,
   legalCitationLinkFields,
   countryInputSchema,
   countryNormalization,
-  FILTER_NORMALIZATION,
   cursorInput,
   DEFAULT_LIST_LIMIT,
   DEFAULT_SEARCH_LIMIT,
   ensureWorkspaceAccess,
   errorResult,
+  FILTER_NORMALIZATION,
   handlerResultMessage,
   internalFailureResult,
+  invalidCursorResult,
   ISO_DATE_SCHEMA,
-  MCP_CONTENT_MAX_CHARS,
   MAX_LIST_LIMIT,
   MAX_SEARCH_LIMIT,
+  MCP_CONTENT_MAX_CHARS,
   notFoundResult,
   nullAsAbsent,
+  structuredEgressPlan,
   structuredErrorResult,
   toolDataResult,
   toPlainCorpusText,
@@ -1480,7 +1481,7 @@ const handleListMattersTool: TypedMcpToolHandler<
     payload,
   );
 
-  return { egress: "structured", payload, textFields };
+  return structuredEgressPlan({ payload, textFields });
 };
 
 // Detail branch of list_matters: one matter's overview (counts, recent
@@ -1611,7 +1612,7 @@ const readMatterOverview = async ({
     payload,
   );
 
-  return { egress: "structured", payload, textFields };
+  return structuredEgressPlan({ payload, textFields });
 };
 
 const handleSearchAcrossMattersTool: TypedMcpToolHandler<
@@ -1665,7 +1666,7 @@ const handleSearchAcrossMattersTool: TypedMcpToolHandler<
     payload,
   );
 
-  return { egress: "structured", payload, textFields };
+  return structuredEgressPlan({ payload, textFields });
 };
 
 const toIsoDateString = (value: unknown): string | null => {
@@ -1969,8 +1970,7 @@ const handleReadContentAcrossMattersTool: TypedMcpToolHandler<
     v.InferInput<typeof READ_CONTENT_ACROSS_MATTERS_PROJECTION>
   >;
 
-  return {
-    egress: "structured",
+  return structuredEgressPlan({
     payload: payload satisfies ReadContentPayload,
     textFields: runTextFieldSpecs(
       READ_CONTENT_ACROSS_MATTERS_TEXT_FIELD_SPECS,
@@ -1987,7 +1987,7 @@ const handleReadContentAcrossMattersTool: TypedMcpToolHandler<
         payload.nextCursor = textWindow.nextCursor;
       },
     },
-  };
+  });
 };
 
 type CaseLawSearchHit = SearchCaseLawSuccess["hits"][number];
@@ -3629,15 +3629,14 @@ const handleReadContactTool: TypedMcpToolHandler<
     payload,
   );
 
-  return {
-    egress: "structured",
+  return structuredEgressPlan({
     payload,
     textFields,
     redactInAnonymized: () => {
       payload.dateOfBirth = null;
       payload.nationalityCodes = [];
     },
-  };
+  });
 };
 
 const handleSetPracticeJurisdictionsTool: TypedMcpToolHandler<

@@ -1,6 +1,6 @@
 import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
-import { getColumns } from "drizzle-orm";
+import { getColumns, sql } from "drizzle-orm";
 import {
   integer,
   pgTable,
@@ -26,6 +26,7 @@ import {
   transition,
   defineScopedTransitions,
   transitionScopedBatch,
+  transitionScopedCount,
   transitionUpsertBatch,
 } from "@/api/lib/db/transitions";
 import type { ScopedTransitionDeclaration } from "@/api/lib/db/transitions";
@@ -122,6 +123,48 @@ const assertTransitionRejected = async (
 };
 
 describe("conditional status transitions", () => {
+  test.each(["array", "rows"] as const)(
+    "%s driver results preserve single, batch and stale transitions",
+    async (shape) => {
+      for (const rows of [[], [{ id: "job", status: "failed" as const }]]) {
+        const tx = {
+          execute: async () => (shape === "array" ? rows : { rows }),
+          rollback,
+        };
+        const audits: unknown[] = [];
+        const single = await transition({
+          tx,
+          spec,
+          id: "job",
+          options: { from: ["running"], to: "failed" },
+          recordTransitionAuditEvent: async (auditTx, row) => {
+            expect(auditTx === tx).toBe(true);
+            audits.push(row);
+          },
+        });
+        if (rows.length === 0) {
+          expect(single).toEqual({ type: "stale" });
+        } else {
+          expect(single).toEqual({
+            type: "transitioned",
+            row: { id: "job", status: "failed" },
+          });
+        }
+        const batch = await transitionBatch({
+          tx,
+          spec,
+          ids: ["job"],
+          options: { from: ["running"], to: "failed" },
+          recordTransitionAuditEvent: async (auditTx, changed) => {
+            expect(auditTx === tx).toBe(true);
+            audits.push(changed);
+          },
+        });
+        expect(batch).toEqual(rows);
+        expect(audits).toEqual(rows.length === 0 ? [] : [rows.at(0), rows]);
+      }
+    },
+  );
   test("status transition graph pairs", () => {
     assertProperty(
       "status transition graph pairs",
@@ -439,7 +482,7 @@ test("a keyed batch binds every identifier and audits only changed rows once", a
       set: { description: "Closed" },
     },
     recordTransitionAuditEvent: async (auditTx, rows) => {
-      expect(auditTx).toBe(tx);
+      expect(auditTx === tx).toBe(true);
       expect(rows).toEqual([{ id: "first", status: "failed" }]);
       audits += 1;
     },
@@ -488,215 +531,275 @@ test("empty and stale batches perform no audit", async () => {
   expect(audits).toBe(0);
 });
 
-test("scoped state batches bind composite identities and audit only changed rows once", async () => {
-  const scopedRows = pgTable(
-    "scoped_transition_rows",
-    {
-      organizationId: text("organization_id").notNull(),
-      sourceId: text("source_id").notNull(),
-      state: text({ enum: ["active", "lapsed"] as const }).notNull(),
-      note: text(),
-    },
-    (table) => [
-      primaryKey({ columns: [table.organizationId, table.sourceId] }),
-    ],
-  );
-  const scoped = defineScopedTransitions({
-    table: scopedRows,
-    key: "sourceId",
-    scope: ["organizationId"],
-    stateColumn: "state",
-    edges: { active: ["lapsed"], lapsed: [] },
-    initial: ["active"],
-    sameStateUpsert: "ignore",
-  });
-  const captured: ReturnType<PgDialect["sqlToQuery"]>[] = [];
-  const tx = {
-    execute: async (query: Parameters<PgDialect["sqlToQuery"]>[0]) => {
-      captured.push(dialect.sqlToQuery(query));
-      return [
+test.each(["array", "rows"] as const)(
+  "%s driver: scoped counts validate aggregates and audit only changes",
+  async (shape) => {
+    const scoped = defineScopedTransitions({
+      table: jobs,
+      key: "id",
+      scope: [],
+      stateColumn: "status",
+      edges: graph,
+      initial: ["queued"],
+    });
+    for (const count of [0, 2, -1, 0.5, "2", undefined]) {
+      const rows = [{ count }];
+      const tx = {
+        execute: async () => (shape === "array" ? rows : { rows }),
+        rollback,
+      };
+      const audits: number[] = [];
+      const operation = transitionScopedCount({
+        tx,
+        spec: scoped,
+        where: sql`true`,
+        options: { from: ["running"], to: "failed" },
+        recordTransitionAuditEvent: async (auditTx, changed) => {
+          expect(auditTx).toBe(tx);
+          audits.push(changed);
+        },
+      });
+      if (count === 0 || count === 2) {
+        expect(await operation).toBe(count);
+        expect(audits).toEqual(count === 0 ? [] : [count]);
+      } else {
+        await assertTransitionRejected(
+          operation,
+          "Transition count returned an invalid aggregate",
+        );
+        expect(audits).toEqual([]);
+      }
+    }
+  },
+);
+
+test.each(["array", "rows"] as const)(
+  "%s driver: scoped state batches bind composite identities and audit only changed rows once",
+  async (shape) => {
+    const scopedRows = pgTable(
+      "scoped_transition_rows",
+      {
+        organizationId: text("organization_id").notNull(),
+        sourceId: text("source_id").notNull(),
+        state: text({ enum: ["active", "lapsed"] as const }).notNull(),
+        note: text(),
+      },
+      (table) => [
+        primaryKey({ columns: [table.organizationId, table.sourceId] }),
+      ],
+    );
+    const scoped = defineScopedTransitions({
+      table: scopedRows,
+      key: "sourceId",
+      scope: ["organizationId"],
+      stateColumn: "state",
+      edges: { active: ["lapsed"], lapsed: [] },
+      initial: ["active"],
+      sameStateUpsert: "ignore",
+    });
+    const captured: ReturnType<PgDialect["sqlToQuery"]>[] = [];
+    const tx = {
+      execute: async (query: Parameters<PgDialect["sqlToQuery"]>[0]) => {
+        captured.push(dialect.sqlToQuery(query));
+        const rows = [
+          {
+            sourceId: "entry-1",
+            organizationId: "org-1",
+            status: "lapsed",
+          },
+        ];
+        return shape === "array" ? rows : { rows };
+      },
+      rollback,
+    };
+    let auditCalls = 0;
+    const changed = await transitionScopedBatch({
+      tx,
+      spec: scoped,
+      identities: [
+        { organizationId: "org-1", sourceId: "entry-1" },
+        { organizationId: "org-2", sourceId: "entry-1" },
+      ],
+      options: { from: ["active"], to: "lapsed" },
+      recordTransitionAuditEvent: async (_auditTx, rows) => {
+        auditCalls += 1;
+        expect(rows).toEqual([
+          {
+            identity: { sourceId: "entry-1", organizationId: "org-1" },
+            status: "lapsed",
+          },
+        ]);
+      },
+    });
+    expect(changed).toHaveLength(1);
+    expect(auditCalls).toBe(1);
+    expect(captured.at(0)?.sql).toContain('"state" IN');
+    expect(captured.at(0)?.sql).toContain('"organization_id" =');
+    expect(captured.at(0)?.params).toEqual([
+      "lapsed",
+      "entry-1",
+      "org-1",
+      "entry-1",
+      "org-2",
+      "active",
+    ]);
+  },
+);
+
+test.each(["array", "rows"] as const)(
+  "%s driver: scoped upserts declare initial states and audit only inserted or transitioned rows",
+  async (shape) => {
+    const scopedRows = pgTable(
+      "scoped_upsert_rows",
+      {
+        organizationId: text("organization_id").notNull(),
+        sourceId: text("source_id").notNull(),
+        state: text({ enum: ["active", "lapsed"] as const }).notNull(),
+        note: text(),
+      },
+      (table) => [
+        primaryKey({ columns: [table.organizationId, table.sourceId] }),
+      ],
+    );
+    const scoped = defineScopedTransitions({
+      table: scopedRows,
+      key: "sourceId",
+      scope: ["organizationId"],
+      stateColumn: "state",
+      edges: { active: ["lapsed"], lapsed: ["active"] },
+      initial: ["active"],
+      sameStateUpsert: "update",
+    });
+    const queries: ReturnType<PgDialect["sqlToQuery"]>[] = [];
+    const tx = {
+      execute: async (query: Parameters<PgDialect["sqlToQuery"]>[0]) => {
+        const compiled = dialect.sqlToQuery(query);
+        queries.push(compiled);
+        if (compiled.sql.includes("INSERT INTO")) {
+          const rows = [
+            { organizationId: "org-1", sourceId: "new", status: "active" },
+          ];
+          return shape === "array" ? rows : { rows };
+        }
+        if (compiled.sql.includes("SELECT 1")) {
+          const rows = [{ value: 1 }, { value: 1 }];
+          return shape === "array" ? rows : { rows };
+        }
+        if (compiled.sql.includes("RETURNING")) {
+          const rows = [
+            { organizationId: "org-1", sourceId: "old", status: "active" },
+          ];
+          return shape === "array" ? rows : { rows };
+        }
+        return shape === "array" ? [] : { rows: [] };
+      },
+      rollback,
+    };
+    let auditCalls = 0;
+    const changed = await transitionUpsertBatch({
+      tx,
+      spec: scoped,
+      values: [
         {
-          sourceId: "entry-1",
           organizationId: "org-1",
-          status: "lapsed",
+          sourceId: "new",
+          state: "active",
+          note: "new",
         },
-      ];
-    },
-    rollback,
-  };
-  let auditCalls = 0;
-  const changed = await transitionScopedBatch({
-    tx,
-    spec: scoped,
-    identities: [
-      { organizationId: "org-1", sourceId: "entry-1" },
-      { organizationId: "org-2", sourceId: "entry-1" },
-    ],
-    options: { from: ["active"], to: "lapsed" },
-    recordTransitionAuditEvent: async (_auditTx, rows) => {
-      auditCalls += 1;
-      expect(rows).toEqual([
         {
-          identity: { sourceId: "entry-1", organizationId: "org-1" },
-          status: "lapsed",
+          organizationId: "org-1",
+          sourceId: "old",
+          state: "active",
+          note: "changed",
         },
-      ]);
-    },
-  });
-  expect(changed).toHaveLength(1);
-  expect(auditCalls).toBe(1);
-  expect(captured.at(0)?.sql).toContain('"state" IN');
-  expect(captured.at(0)?.sql).toContain('"organization_id" =');
-  expect(captured.at(0)?.params).toEqual([
-    "lapsed",
-    "entry-1",
-    "org-1",
-    "entry-1",
-    "org-2",
-    "active",
-  ]);
-});
-
-test("scoped upserts declare initial states and audit only inserted or transitioned rows", async () => {
-  const scopedRows = pgTable(
-    "scoped_upsert_rows",
-    {
-      organizationId: text("organization_id").notNull(),
-      sourceId: text("source_id").notNull(),
-      state: text({ enum: ["active", "lapsed"] as const }).notNull(),
-      note: text(),
-    },
-    (table) => [
-      primaryKey({ columns: [table.organizationId, table.sourceId] }),
-    ],
-  );
-  const scoped = defineScopedTransitions({
-    table: scopedRows,
-    key: "sourceId",
-    scope: ["organizationId"],
-    stateColumn: "state",
-    edges: { active: ["lapsed"], lapsed: ["active"] },
-    initial: ["active"],
-    sameStateUpsert: "update",
-  });
-  const queries: ReturnType<PgDialect["sqlToQuery"]>[] = [];
-  const tx = {
-    execute: async (query: Parameters<PgDialect["sqlToQuery"]>[0]) => {
-      const compiled = dialect.sqlToQuery(query);
-      queries.push(compiled);
-      if (compiled.sql.includes("INSERT INTO")) {
-        return [{ organizationId: "org-1", sourceId: "new", status: "active" }];
-      }
-      if (compiled.sql.includes("SELECT 1")) {
-        return [{ value: 1 }, { value: 1 }];
-      }
-      if (compiled.sql.includes("RETURNING")) {
-        return [{ organizationId: "org-1", sourceId: "old", status: "active" }];
-      }
-      return [];
-    },
-    rollback,
-  };
-  let auditCalls = 0;
-  const changed = await transitionUpsertBatch({
-    tx,
-    spec: scoped,
-    values: [
-      {
-        organizationId: "org-1",
-        sourceId: "new",
-        state: "active",
-        note: "new",
+      ],
+      recordTransitionAuditEvent: async (_auditTx, rows) => {
+        auditCalls += 1;
+        expect(rows).toEqual([
+          {
+            identity: { sourceId: "new", organizationId: "org-1" },
+            status: "active",
+          },
+          {
+            identity: { sourceId: "old", organizationId: "org-1" },
+            status: "active",
+          },
+        ]);
       },
+    });
+    expect(changed).toHaveLength(2);
+    expect(auditCalls).toBe(1);
+    expect(queries).toHaveLength(4);
+    expect(queries.at(0)?.sql).toContain('incoming."state" IN');
+    expect(queries.at(1)?.sql).toContain('current."state" <> incoming."state"');
+    expect(queries.at(2)?.sql).toContain('current."state" = incoming."state"');
+  },
+);
+
+test.each(["array", "rows"] as const)(
+  "%s driver: same-state upserts need a declared policy and ignored rows do not audit",
+  async (shape) => {
+    const scopedRows = pgTable(
+      "same_state_upsert_rows",
       {
-        organizationId: "org-1",
-        sourceId: "old",
-        state: "active",
-        note: "changed",
+        organizationId: text("organization_id").notNull(),
+        sourceId: text("source_id").notNull(),
+        state: text({ enum: ["active", "lapsed"] as const }).notNull(),
       },
-    ],
-    recordTransitionAuditEvent: async (_auditTx, rows) => {
+      (table) => [
+        primaryKey({ columns: [table.organizationId, table.sourceId] }),
+      ],
+    );
+    const base = {
+      table: scopedRows,
+      key: "sourceId",
+      scope: ["organizationId"],
+      stateColumn: "state",
+      edges: { active: ["lapsed"], lapsed: ["active"] },
+      initial: ["active"],
+    } as const;
+    const value = {
+      organizationId: "org-1",
+      sourceId: "existing",
+      state: "active",
+    } as const;
+    const existingStateTx = {
+      execute: async (query: Parameters<PgDialect["sqlToQuery"]>[0]) => {
+        const compiled = dialect.sqlToQuery(query);
+        if (compiled.sql.includes("SELECT 1")) {
+          const rows = [{ value: 1 }];
+          return shape === "array" ? rows : { rows };
+        }
+        return shape === "array" ? [] : { rows: [] };
+      },
+      rollback,
+    };
+    let auditCalls = 0;
+    const recordTransitionAuditEvent = async () => {
       auditCalls += 1;
-      expect(rows).toEqual([
-        {
-          identity: { sourceId: "new", organizationId: "org-1" },
-          status: "active",
-        },
-        {
-          identity: { sourceId: "old", organizationId: "org-1" },
-          status: "active",
-        },
-      ]);
-    },
-  });
-  expect(changed).toHaveLength(2);
-  expect(auditCalls).toBe(1);
-  expect(queries).toHaveLength(4);
-  expect(queries.at(0)?.sql).toContain('incoming."state" IN');
-  expect(queries.at(1)?.sql).toContain('current."state" <> incoming."state"');
-  expect(queries.at(2)?.sql).toContain('current."state" = incoming."state"');
-});
+    };
 
-test("same-state upserts need a declared policy and ignored rows do not audit", async () => {
-  const scopedRows = pgTable(
-    "same_state_upsert_rows",
-    {
-      organizationId: text("organization_id").notNull(),
-      sourceId: text("source_id").notNull(),
-      state: text({ enum: ["active", "lapsed"] as const }).notNull(),
-    },
-    (table) => [
-      primaryKey({ columns: [table.organizationId, table.sourceId] }),
-    ],
-  );
-  const base = {
-    table: scopedRows,
-    key: "sourceId",
-    scope: ["organizationId"],
-    stateColumn: "state",
-    edges: { active: ["lapsed"], lapsed: ["active"] },
-    initial: ["active"],
-  } as const;
-  const value = {
-    organizationId: "org-1",
-    sourceId: "existing",
-    state: "active",
-  } as const;
-  const existingStateTx = {
-    execute: async (query: Parameters<PgDialect["sqlToQuery"]>[0]) => {
-      const compiled = dialect.sqlToQuery(query);
-      if (compiled.sql.includes("SELECT 1")) {
-        return [{ value: 1 }];
-      }
-      return [];
-    },
-    rollback,
-  };
-  let auditCalls = 0;
-  const recordTransitionAuditEvent = async () => {
-    auditCalls += 1;
-  };
+    await assertTransitionRejected(
+      transitionUpsertBatch({
+        tx: existingStateTx,
+        spec: defineScopedTransitions(base),
+        values: [value],
+        recordTransitionAuditEvent,
+      }),
+      "same-state upsert requires an explicit policy",
+    );
+    expect(auditCalls).toBe(0);
 
-  await assertTransitionRejected(
-    transitionUpsertBatch({
+    const changed = await transitionUpsertBatch({
       tx: existingStateTx,
-      spec: defineScopedTransitions(base),
+      spec: defineScopedTransitions({ ...base, sameStateUpsert: "ignore" }),
       values: [value],
       recordTransitionAuditEvent,
-    }),
-    "same-state upsert requires an explicit policy",
-  );
-  expect(auditCalls).toBe(0);
-
-  const changed = await transitionUpsertBatch({
-    tx: existingStateTx,
-    spec: defineScopedTransitions({ ...base, sameStateUpsert: "ignore" }),
-    values: [value],
-    recordTransitionAuditEvent,
-  });
-  expect(changed).toEqual([]);
-  expect(auditCalls).toBe(0);
-});
+    });
+    expect(changed).toEqual([]);
+    expect(auditCalls).toBe(0);
+  },
+);
 
 test("scoped identities accept only schema-declared non-null primary or unique columns", () => {
   const rows = pgTable("declared_transition_identity", {
@@ -767,7 +870,7 @@ describe("multi-column lifecycles", () => {
         moves,
         set: { description: "Claimed" },
         recordTransitionAuditEvent: async (auditTx, row) => {
-          expect(auditTx).toBe(tx);
+          expect(auditTx === tx).toBe(true);
           audited.push(row);
         },
       }),

@@ -156,16 +156,17 @@ import type {
 } from "@/api/mcp/tool-types";
 import { defineMcpToolSet } from "@/api/mcp/tool-types";
 import {
-  invalidCursorResult,
   bindWorkspaceRecorder,
   cursorInput,
   ensureActiveWorkspace,
   ensureWorkspaceAccess,
   errorResult,
   internalFailureResult,
+  invalidCursorResult,
   isToolErrorResult,
   notFoundResult,
   nullAsAbsent,
+  structuredEgressPlan,
   structuredErrorResult,
   toolDataResult,
   uuidInputSchema,
@@ -1032,7 +1033,7 @@ const handleListTemplatesTool: TypedMcpToolHandler<
     payload,
   );
 
-  return { egress: "structured", payload, textFields };
+  return structuredEgressPlan({ payload, textFields });
 };
 
 // Detail branch of list_templates: one template's field configuration. Reused
@@ -1063,7 +1064,7 @@ const describeTemplateDetail = async ({
     payload,
   );
 
-  return { egress: "structured", payload, textFields };
+  return structuredEgressPlan({ payload, textFields });
 };
 
 /** One line describing a missing required field for the issues list: its
@@ -1751,7 +1752,11 @@ const handleSaveFilledTemplateTool: McpToolHandler<
   if (Result.isError(claim)) {
     return internalFailureResult(claim.error);
   }
-  const claimToken = (() => {
+  const claimToken = (():
+    | string
+    | TypedMcpToolResponse<
+        v.InferInput<typeof SAVE_FILLED_TEMPLATE_OUTPUT_SCHEMA>
+      > => {
     switch (claim.value.status) {
       case "claimed":
         return claim.value.claimToken;
@@ -3012,14 +3017,13 @@ const handlePreviewTemplateConditionsTool: TypedMcpToolHandler<
     payload,
   );
 
-  return {
-    egress: "structured",
+  return structuredEgressPlan({
     payload: projectionPayload(
       PREVIEW_TEMPLATE_CONDITIONS_OUTPUT_SCHEMA,
       payload,
     ),
     textFields,
-  };
+  });
 };
 
 export const TEMPLATE_TOOL_HANDLERS = {

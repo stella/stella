@@ -33,6 +33,7 @@ import {
 import { legalListsOptions } from "@/lib/workspaces/queries/legal-lists";
 import { propertiesOptions } from "@/lib/workspaces/queries/properties";
 import { viewsOptions } from "@/lib/workspaces/queries/views";
+import { selectAvailableWorkspaceView } from "@/lib/workspaces/queries/views.logic";
 import { isAvtView, isTableView } from "@/lib/workspaces/view-layout";
 import { CalendarView } from "@/routes/_protected.workspaces/$workspaceId/-components/calendar/calendar-view";
 import { CorrespondenceView } from "@/routes/_protected.workspaces/$workspaceId/-components/correspondence-view";
@@ -187,7 +188,7 @@ function RouteComponent() {
   const navigate = Route.useNavigate();
   const { data: activeView } = useSuspenseQuery({
     ...viewsOptions(workspaceId),
-    select: (data) => data.find((view) => view.id === viewId) ?? data.at(0),
+    select: (data) => selectAvailableWorkspaceView(data, viewId),
   });
 
   if (!activeView) {

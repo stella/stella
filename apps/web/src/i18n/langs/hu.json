@@ -275,6 +275,7 @@
     "runs": {
       "back": "Összes irat",
       "errors": {
+        "accessRevoked": "Az ellenőrzés leállt, mert a hozzáférés nem érhető el.",
         "aiUnavailable": "Nem érhető el AI-modell az iratok ellenőrzéséhez. Ellenőrizze a szervezet AI-beállításait.",
         "enqueueFailed": "Az ellenőrzést nem sikerült elindítani. Próbálja újra.",
         "extractionFailed": "Ennek az iratnak az állításait nem sikerült kinyerni.",

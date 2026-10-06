@@ -16,6 +16,7 @@ import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { FieldDiffs } from "@/api/lib/audit-log";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { LIST_VERIFICATION_FEATURE_ID } from "@/api/lib/feature-access/registry";
 import {
   FACT_CONFIDENCES,
   FACT_DATE_PRECISIONS,
@@ -57,6 +58,7 @@ const bodySchema = t.Object({
 });
 
 const config = {
+  featureAccess: { featureId: LIST_VERIFICATION_FEATURE_ID, type: "required" },
   description:
     "Set the evidential detail of one fact item, replacing what it had: when " +
     "it happened (a date with day, month or year precision; a partial date " +

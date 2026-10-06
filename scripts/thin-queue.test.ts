@@ -164,6 +164,7 @@ const context = ({
   ),
   always: () => true,
   cancelled: () => false,
+  failure: () => false,
   startsWith: (value: string, prefix: string) => value.startsWith(prefix),
 });
 const selected = (condition: string | undefined, value: object) => {
@@ -213,7 +214,12 @@ const expectedPrSelection = (
 };
 const templateValue = (template: string, value: object) =>
   template.replaceAll(/\$\{\{([\s\S]*?)\}\}/gu, (_, expression: string) =>
-    v.parse(v.string(), new Script(`(${expression})`).runInNewContext(value)),
+    String(
+      v.parse(
+        v.union([v.string(), v.number()]),
+        new Script(`(${expression})`).runInNewContext(value),
+      ),
+    ),
   );
 
 type ConcurrencyContextOptions = {
@@ -236,6 +242,7 @@ const concurrencyContext = ({
       sha: eventSha,
       workflow: main.name,
       ref: "refs/heads/main",
+      run_id: eventSha === "a".repeat(40) ? 1 : 2,
     },
     inputs: {
       ...value.inputs,
@@ -276,7 +283,10 @@ const assertMainConcurrency = (workflow: typeof main) => {
         });
         const group = templateValue(concurrency.group, value);
         expect(group, `${event.event}/${event.message}/${variable}/group`).toBe(
-          `${main.name}-refs/heads/main`,
+          event.event === "push" &&
+            !event.message.startsWith("chore: release v")
+            ? `${main.name}-${value.github.run_id}`
+            : `${main.name}-refs/heads/main`,
         );
         expect(
           templateValue(runName, value),
@@ -288,7 +298,17 @@ const assertMainConcurrency = (workflow: typeof main) => {
       expect(
         first,
         `${event.event}/${event.message}/${variable}/same branch`,
-      ).toBe(second);
+      ).toBe(
+        event.event === "push" && !event.message.startsWith("chore: release v")
+          ? `${main.name}-1`
+          : second,
+      );
+      if (
+        event.event === "push" &&
+        !event.message.startsWith("chore: release v")
+      ) {
+        expect(first).not.toBe(second);
+      }
     }
   }
 };
@@ -373,7 +393,7 @@ const mainSelection = ({ workflow, event, variable }: MainSelectionOptions) => {
   }
   const dependentContext = {
     ...value,
-    needs: { validate: { result: validationResult } },
+    needs: { validate: { result: validationResult, outputs: { run: "true" } } },
   };
   const suites =
     mainTriggered(event.event) &&
@@ -391,7 +411,10 @@ const mainSelection = ({ workflow, event, variable }: MainSelectionOptions) => {
 const assertMainSelection = (workflow: typeof main) => {
   for (const event of events) {
     for (const variable of ["", "full", "thin", "typo"]) {
-      const validationSelected = mainTriggered(event.event);
+      const validationSelected =
+        mainTriggered(event.event) &&
+        (event.event !== "push" ||
+          event.message.startsWith("chore: release v"));
       const valid = variable !== "typo";
       expect(
         mainSelection({ workflow, event, variable }),
@@ -405,6 +428,32 @@ const assertMainSelection = (workflow: typeof main) => {
     }
   }
 };
+
+test("failure-only cancellation jobs resolve both successful and failed dependencies", () => {
+  const cancellations = Object.entries(ci.jobs).filter(([, job]) =>
+    job.if?.includes("failure()"),
+  );
+  expect(cancellations.length).toBeGreaterThan(0);
+  for (const [id, job] of cancellations) {
+    for (const event of events) {
+      for (const failed of [false, true]) {
+        const value = context({ event, variable: "full", queueDepth: "full" });
+        value.failure = () => failed;
+        expect(selected(job.if, value), `${id}/${event.event}/${failed}`).toBe(
+          failed && event.event === "merge_group",
+        );
+        if (event.event === "merge_group") {
+          const unresolved = Object.fromEntries(
+            Object.entries(value).filter(([key]) => key !== "failure"),
+          );
+          expect(() => selected(job.if, unresolved)).toThrow(
+            "Unresolved queue workflow expression",
+          );
+        }
+      }
+    }
+  }
+});
 
 test("route smoke certifies planned queue and heavy builds while skipping PRs", () => {
   expect(eventPolicy["ci.yml/route-smoke"]).toBe("queue");
@@ -733,7 +782,7 @@ test("per-SHA groups or preserving superseded heavy work violate the concurrency
   );
 }, 30_000);
 
-test("skipping ordinary main pushes by queue depth violates the scheduling contract", () => {
+test("ordinary pushes cannot bypass the hourly heavy scheduling contract", () => {
   assertMainSelection(main);
   const mutated = structuredClone(main);
   const validate = mutated.jobs["validate"];

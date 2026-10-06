@@ -275,6 +275,7 @@
     "runs": {
       "back": "Todos los documentos",
       "errors": {
+        "accessRevoked": "La verificación se detuvo porque el acceso no está disponible.",
         "aiUnavailable": "No hay ningún modelo de IA disponible para verificar documentos. Revise la configuración de IA de la organización.",
         "enqueueFailed": "No se pudo iniciar la verificación. Inténtelo de nuevo.",
         "extractionFailed": "No se pudieron extraer las afirmaciones de este documento.",
