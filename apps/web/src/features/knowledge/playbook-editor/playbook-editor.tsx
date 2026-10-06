@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useId, useRef, useState } from "react";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
@@ -778,6 +778,12 @@ const PlaybookEditorForm = ({
   const scrollRef = useRef<HTMLDivElement>(null);
   const scrollTopRef = useRef(0);
   const nameInputRef = useRef<HTMLInputElement>(null);
+  // The page and a pane can show the same playbook at once, so field ids are
+  // scoped to this form.
+  const fieldIdPrefix = useId();
+  const nameId = `${fieldIdPrefix}-name`;
+  const descriptionId = `${fieldIdPrefix}-description`;
+  const documentTypeId = `${fieldIdPrefix}-document-type`;
   const navigationLeaveRequestedRef = useRef(false);
   const tourAnchors = host.type === "page" ? host.tourAnchors : NO_TOUR_ANCHORS;
 
@@ -1092,7 +1098,7 @@ const PlaybookEditorForm = ({
     setOpen(sourceId, true);
     const container = scrollRef.current;
     const target = container?.querySelector<HTMLElement>(
-      `#position-${sourceId}`,
+      `[data-position-id="${CSS.escape(sourceId)}"]`,
     );
     if (!container || !target) {
       return;
@@ -1626,10 +1632,10 @@ const PlaybookEditorForm = ({
 
           <div className="space-y-6" {...tourAnchors.basics}>
             <div className="grid gap-1.5">
-              <Label htmlFor="playbook-name">{t("common.name")}</Label>
+              <Label htmlFor={nameId}>{t("common.name")}</Label>
               <Input
                 aria-invalid={attemptedSave && name.trim() === ""}
-                id="playbook-name"
+                id={nameId}
                 onChange={(e) => setName(e.target.value)}
                 ref={nameInputRef}
                 placeholder={t("knowledge.playbooks.namePlaceholder")}
@@ -1638,12 +1644,10 @@ const PlaybookEditorForm = ({
             </div>
 
             <div className="grid gap-1.5">
-              <Label htmlFor="playbook-description">
-                {t("common.description")}
-              </Label>
+              <Label htmlFor={descriptionId}>{t("common.description")}</Label>
               <Textarea
                 className="min-h-[60px]"
-                id="playbook-description"
+                id={descriptionId}
                 onChange={(e) => setDescription(e.target.value)}
                 placeholder={t("knowledge.playbooks.descriptionPlaceholder")}
                 value={description}
@@ -1652,9 +1656,7 @@ const PlaybookEditorForm = ({
 
             {documentTypes.length > 0 && (
               <div className="grid gap-1.5">
-                <Label htmlFor="playbook-document-type">
-                  {t("common.type")}
-                </Label>
+                <Label htmlFor={documentTypeId}>{t("common.type")}</Label>
                 <Select
                   onValueChange={(next) =>
                     setDocumentTypeKey(
@@ -1663,7 +1665,7 @@ const PlaybookEditorForm = ({
                   }
                   value={documentTypeKey ?? SCOPE_ALL_VALUE}
                 >
-                  <SelectTrigger id="playbook-document-type">
+                  <SelectTrigger id={documentTypeId}>
                     <SelectValue />
                   </SelectTrigger>
                   <SelectPopup>

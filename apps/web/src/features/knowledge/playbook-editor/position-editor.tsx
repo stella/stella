@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useId, useState } from "react";
 
 import {
   draggable,
@@ -256,7 +256,7 @@ export const PositionEditor = ({
   const { sourceId } = position;
   const announcementName =
     position.issue.trim() || t("knowledge.playbooks.untitledPosition");
-  const bodyId = `position-body-${sourceId}`;
+  const bodyId = useId();
   const handleReorder = useLatestCallback(onReorder);
   const handleFocusLeave = useLatestCallback(onFocusLeave);
 
@@ -356,7 +356,7 @@ export const PositionEditor = ({
         !position.enabled && "opacity-60",
         isDropTarget && "ring-primary ring-2",
       )}
-      id={`position-${sourceId}`}
+      data-position-id={sourceId}
       ref={setCardRef}
     >
       <PositionHeader
@@ -1337,6 +1337,8 @@ const NegotiationSection = ({
 }) => {
   const t = useTranslations();
   const [open, setOpen] = useState(false);
+  const rationaleId = useId();
+  const escalationId = useId();
   const { negotiation } = position;
   const talkingPoints = optionalArray(negotiation?.talkingPoints);
 
@@ -1362,15 +1364,12 @@ const NegotiationSection = ({
       {open && (
         <div className="bg-muted/50 mt-3 space-y-4 rounded-md p-3">
           <div className="grid gap-1.5">
-            <Label
-              className="text-xs"
-              htmlFor={`position-negotiation-rationale-${position.sourceId}`}
-            >
+            <Label className="text-xs" htmlFor={rationaleId}>
               {t("knowledge.playbooks.negotiation.rationaleLabel")}
             </Label>
             <Textarea
               className="min-h-[52px] text-sm"
-              id={`position-negotiation-rationale-${position.sourceId}`}
+              id={rationaleId}
               onChange={(e) =>
                 onChange(
                   updateNegotiation(position, { rationale: e.target.value }),
@@ -1435,14 +1434,11 @@ const NegotiationSection = ({
           </div>
 
           <div className="grid gap-1.5">
-            <Label
-              className="text-xs"
-              htmlFor={`position-negotiation-escalation-${position.sourceId}`}
-            >
+            <Label className="text-xs" htmlFor={escalationId}>
               {t("knowledge.playbooks.negotiation.escalationLabel")}
             </Label>
             <Input
-              id={`position-negotiation-escalation-${position.sourceId}`}
+              id={escalationId}
               maxLength={NEGOTIATION_FIELD_LIMITS.escalation}
               onChange={(e) =>
                 onChange(
@@ -1663,7 +1659,6 @@ const ExtractionAdvanced = ({
           onChange({ ...position, ask: { ...ask, question } })
         }
         question={ask.question}
-        sourceId={position.sourceId}
       />
       <Button
         onClick={() => onChange({ ...position, ask: { mode: "auto" } })}
@@ -1962,7 +1957,6 @@ const ExtractBody = ({
                 onChange({ ...position, ask: { ...position.ask, question } })
               }
               question={position.ask.question}
-              sourceId={position.sourceId}
             />
           )}
           {settingsView === POSITION_SETTINGS_VIEW.guidance && (
@@ -1977,28 +1971,27 @@ const ExtractBody = ({
 // ── Shared: ask content editor (question + type + options) ──
 
 const AskContentEditor = ({
-  sourceId,
   question,
   content,
   onChangeQuestion,
   onChangeContent,
 }: {
-  sourceId: string;
   question: string;
   content: PositionAskContent;
   onChangeQuestion: (question: string) => void;
   onChangeContent: (content: PositionAskContent) => void;
 }) => {
   const t = useTranslations();
+  const questionId = useId();
   return (
     <div className="space-y-3">
       <div className="grid gap-1.5">
-        <Label className="text-xs" htmlFor={`position-question-${sourceId}`}>
+        <Label className="text-xs" htmlFor={questionId}>
           {t("knowledge.playbooks.askQuestionLabel")}
         </Label>
         <Textarea
           className="min-h-[52px] text-sm"
-          id={`position-question-${sourceId}`}
+          id={questionId}
           onChange={(e) => onChangeQuestion(e.target.value)}
           placeholder={t("knowledge.playbooks.askQuestionPlaceholder")}
           value={question}
@@ -2125,18 +2118,16 @@ const GuidanceField = ({
   onChange: (position: Position) => void;
 }) => {
   const t = useTranslations();
+  const guidanceId = useId();
 
   return (
     <div className="grid gap-1.5">
-      <Label
-        className="text-xs"
-        htmlFor={`position-guidance-${position.sourceId}`}
-      >
+      <Label className="text-xs" htmlFor={guidanceId}>
         {t("knowledge.playbooks.guidanceLabel")}
       </Label>
       <Textarea
         className="min-h-[44px] text-sm"
-        id={`position-guidance-${position.sourceId}`}
+        id={guidanceId}
         onChange={(e) => onChange({ ...position, guidance: e.target.value })}
         placeholder={t("knowledge.playbooks.guidancePlaceholder")}
         value={position.guidance ?? ""}
