@@ -713,7 +713,7 @@ const ConfirmAction = ({
 
   return (
     <AlertDialog>
-      <AlertDialogTrigger render={children} />
+      <AlertDialogTrigger nativeButton render={children} />
       <AlertDialogPopup>
         <AlertDialogHeader>
           <AlertDialogTitle>{t("confirmAction")}</AlertDialogTitle>
@@ -807,10 +807,15 @@ const EditInvoiceForm = ({
     }),
   );
 
-  const formErrors = useSelector(form.store, (s) => toFormErrors(s.fieldMeta));
+  const { formErrors, dirty } = useSelector(form.store, (s) => ({
+    formErrors: toFormErrors(s.fieldMeta),
+    dirty: !s.isDefaultValue,
+  }));
 
   return (
     <Form
+      dirty={dirty}
+      onDiscard={() => form.reset()}
       className="flex flex-col gap-4 p-4"
       errors={formErrors}
       onSubmit={(e) => {

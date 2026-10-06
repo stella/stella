@@ -2170,7 +2170,9 @@ test.each([
       now: drainNow,
       signal: new AbortController().signal,
     });
-    expect(drained).toEqual(Result.ok({ claimed: 1, terminal: 1 }));
+    expect(drained).toEqual(
+      Result.ok({ claimed: 1, terminal: 1, hasMore: false }),
+    );
     expect(
       await db
         .select()

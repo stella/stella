@@ -1371,6 +1371,7 @@ export const LIST_INVOICES_DETAIL_PROJECTION = v.strictObject({
         vatAmount: v.number(),
         grossAmount: v.number(),
         source: v.string(),
+        billingPurpose: v.string(),
         timeEntryId: v.nullable(passthroughId()),
         expenseId: v.nullable(passthroughId()),
       }),
@@ -1502,6 +1503,49 @@ const decisionIdentifiersProjection = v.optional(
       value: v.string(),
     }),
   ),
+);
+
+/** Coverage keeps grouped court rows explicit when the public data has no names. */
+export const CASE_LAW_COVERAGE_PROJECTION = projectionBranch(
+  v.strictObject({
+    asOf: v.string(),
+    countries: v.array(
+      v.strictObject({
+        country: v.string(),
+        availability: v.picklist(["searchable", "in-preparation"]),
+        decisions: v.number(),
+        decisionYearFrom: v.nullable(v.number()),
+        decisionYearTo: v.nullable(v.number()),
+        courts: v.nullable(
+          v.array(
+            v.variant("type", [
+              projectionBranch(
+                v.strictObject({
+                  type: v.literal("court"),
+                  court: v.string(),
+                  decisions: v.number(),
+                }),
+              ),
+              projectionBranch(
+                v.strictObject({
+                  type: v.literal("tier"),
+                  tier: v.picklist(COURT_TIER_LABELS),
+                  courts: v.number(),
+                  decisions: v.number(),
+                }),
+              ),
+              projectionBranch(
+                v.strictObject({
+                  type: v.literal("unlisted"),
+                  decisions: v.number(),
+                }),
+              ),
+            ]),
+          ),
+        ),
+      }),
+    ),
+  }),
 );
 
 /**

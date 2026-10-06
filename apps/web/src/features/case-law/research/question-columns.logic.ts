@@ -135,6 +135,56 @@ export type QuestionRunSet = {
   cells: number;
 };
 
+export type QuestionColumnRunOptions = {
+  type: "remaining" | "rerun";
+  scope: "page" | "selection";
+};
+
+type QueuedAnswerKeysOptions = {
+  answersByKey: ReadonlyMap<string, QuestionAnswer>;
+  force: boolean;
+  runSet: QuestionRunSet;
+};
+
+export const questionQueuedAnswerKeys = ({
+  answersByKey,
+  force,
+  runSet,
+}: QueuedAnswerKeysOptions): ReadonlySet<string> => {
+  const keys = new Set<string>();
+  for (const decisionId of runSet.decisionIds) {
+    for (const columnId of runSet.columnIds) {
+      const key = answerKey(columnId, decisionId);
+      if (needsRun(answersByKey.get(key), force)) {
+        keys.add(key);
+      }
+    }
+  }
+  return keys;
+};
+
+type RefusedAnswerKeysOptions = {
+  answersByKey: ReadonlyMap<string, QuestionAnswer>;
+  runSet: QuestionRunSet;
+};
+
+/** A refused request leaves existing answers intact, including forced reruns. */
+export const questionRefusedAnswerKeys = ({
+  answersByKey,
+  runSet,
+}: RefusedAnswerKeysOptions): ReadonlySet<string> => {
+  const keys = new Set<string>();
+  for (const decisionId of runSet.decisionIds) {
+    for (const columnId of runSet.columnIds) {
+      const key = answerKey(columnId, decisionId);
+      if (!answersByKey.has(key)) {
+        keys.add(key);
+      }
+    }
+  }
+  return keys;
+};
+
 /**
  * The decisions and columns a run covers, and how many cells that is.
  *
@@ -408,7 +458,22 @@ export type AvailableQuestionColumns = {
   addable: readonly QuestionColumn[];
   /** Shows questions on this search, after the ones it already shows. */
   onAddToSearch: (columnIds: readonly string[]) => void;
+  /**
+   * Questions the reader added to this search during this visit. Their
+   * headers scroll into view and say they are new, so an add that lands past
+   * the visible columns, with no answers yet, is never mistaken for nothing.
+   */
+  addedIds: ReadonlySet<string>;
   answersByKey: ReadonlyMap<string, QuestionAnswer>;
+  pageDecisionIds: readonly string[];
+  selectedDecisionIds: readonly string[];
+  queuedAnswerKeys: ReadonlySet<string>;
+  refusedAnswerKeys: ReadonlySet<string>;
+  onRunColumn: (
+    column: QuestionColumn,
+    options: QuestionColumnRunOptions,
+  ) => void;
+  onRunSelectedRows: () => void;
   onColumnAction: (
     column: QuestionColumn,
     action: QuestionColumnAction,

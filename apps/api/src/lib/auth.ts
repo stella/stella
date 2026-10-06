@@ -34,7 +34,12 @@ import type { Context } from "elysia";
 import Elysia, { t } from "elysia";
 
 import { BETTER_AUTH_ORGANIZATION_OPTIONS } from "@stll/auth-model";
-import { ac, assignableRoles, roles } from "@stll/permissions";
+import {
+  ac,
+  assignableRoles,
+  CLIENT_MATTER_ADMIN_ROLES,
+  roles,
+} from "@stll/permissions";
 import type { PermissionInput } from "@stll/permissions";
 import { RUNTIME_MODE, type RuntimeMode } from "@stll/runtime-mode";
 import { parseUserAgent, type ParsedUserAgent } from "@stll/user-agent";
@@ -148,10 +153,7 @@ import {
 } from "@/api/lib/limits";
 import { extractLangFromRequest } from "@/api/lib/locale";
 import { removeOrganizationMemberInTransaction } from "@/api/lib/member-assignment-offboarding";
-import {
-  CLIENT_MATTER_ADMIN_ROLES,
-  isMemberRole,
-} from "@/api/lib/member-roles";
+import { isMemberRole } from "@/api/lib/member-roles";
 import {
   mapMembershipInvariantError,
   ownerRequiredError,
@@ -205,6 +207,10 @@ import {
   MEMBER_CAPACITY_REACHED_ERROR_CODE,
 } from "@/api/lib/usage/member-capacity";
 import { recordNewOrganizationAccessState } from "@/api/lib/usage/organization-access-state";
+import {
+  hasRenewingHostedSubscription,
+  ORGANIZATION_DELETION_REFUSAL_CODE,
+} from "@/api/lib/usage/renewing-hosted-subscription";
 import { normalizeUserShortcutsField } from "@/api/lib/user-shortcuts";
 import {
   MCP_ALL_RESOURCE_SCOPES,
@@ -1183,25 +1189,40 @@ export const createAuth = (roleAssignmentPolicy = assignableRoles) => {
         const organizationId = brandPersistedOrganizationId(org.id);
         const teardown = await Result.tryPromise({
           try: async () =>
-            await rootDb.transaction(
-              async (tx) =>
-                await completeOrganizationDeletion({
+            await rootDb.transaction(async (tx) => {
+              // The provider bills a renewing subscription after the
+              // organization is gone, so its owner cancels it first. The
+              // check holds the entitlement row until the deletion commits.
+              if (await hasRenewingHostedSubscription(tx, organizationId)) {
+                return { type: "subscription_renews" } as const;
+              }
+              return {
+                type: "deleted",
+                teardown: await completeOrganizationDeletion({
                   organizationId,
                   tx,
                 }),
-            ),
+              } as const;
+            }),
           catch: (cause) => cause,
         });
         if (Result.isError(teardown)) {
           captureError(teardown.error, { organizationId });
-          if (teardown.error instanceof OrganizationStorageTeardownBoundError) {
-            throw new APIError("BAD_REQUEST", {
-              error: "organization_storage_too_large",
-              message: teardown.error.message,
-            });
-          }
-          throw new APIError("INTERNAL_SERVER_ERROR", {
-            message: "Failed to delete the organization's stored files",
+          throw teardown.error instanceof OrganizationStorageTeardownBoundError
+            ? new APIError("BAD_REQUEST", {
+                error: "organization_storage_too_large",
+                message: teardown.error.message,
+              })
+            : new APIError("INTERNAL_SERVER_ERROR", {
+                message: "Failed to delete the organization's stored files",
+              });
+        }
+
+        if (teardown.value.type === "subscription_renews") {
+          throw new APIError("CONFLICT", {
+            error: ORGANIZATION_DELETION_REFUSAL_CODE.subscriptionRenews,
+            message:
+              "Cancel the organization's subscription before deleting the organization.",
           });
         }
 
@@ -1213,7 +1234,7 @@ export const createAuth = (roleAssignmentPolicy = assignableRoles) => {
         await handoffCommittedEntityDeletionCleanupBatch({
           captureDeliveryError: captureError,
           enqueueCleanup: enqueueEntityDeletionCleanup,
-          requestIds: teardown.value.requestIds,
+          requestIds: teardown.value.teardown.requestIds,
         });
       },
       // A readable refusal before the plugin writes anything; the
@@ -2102,6 +2123,23 @@ const getSessionAndMemberAuthorization = async ({
   };
 };
 
+type AuthRejectionStatus = 401 | 403 | 404 | 500;
+
+// Every auth-macro rejection carries the shared JSON error body: a bare
+// `status(n)` reaches clients as an empty `application/octet-stream` response.
+export const AUTH_REJECTION_BODY = {
+  401: { code: "permission_denied", message: "Sign in to continue." },
+  403: {
+    code: "permission_denied",
+    message: "Your role does not allow this action.",
+  },
+  404: { code: "not_found", message: "Matter not found." },
+  500: { code: "internal_error", message: "Could not verify your session." },
+} as const satisfies Record<
+  AuthRejectionStatus,
+  { code: string; message: string }
+>;
+
 export const sessionAuthMacro = new Elysia({ name: "sessionAuthMacro" }).macro({
   validateSession: {
     async resolve({ status, request, set }) {
@@ -2115,13 +2153,13 @@ export const sessionAuthMacro = new Elysia({ name: "sessionAuthMacro" }).macro({
       });
 
       if (Result.isError(sessionResult)) {
-        return status(500);
+        return status(500, AUTH_REJECTION_BODY[500]);
       }
 
       const session = sessionResult.value?.session;
       const user = sessionResult.value?.user;
       if (!session || !user) {
-        return status(401);
+        return status(401, AUTH_REJECTION_BODY[401]);
       }
 
       const userId = toSafeId<"user">(user.id);
@@ -2689,7 +2727,10 @@ export const authMacro = new Elysia({ name: "authMacro" }).macro({
       );
 
       if (!result.ok) {
-        return status(result.statusCode);
+        return status(
+          result.statusCode,
+          AUTH_REJECTION_BODY[result.statusCode],
+        );
       }
 
       return result.value;
@@ -2709,7 +2750,7 @@ export const permissionMacro = new Elysia({ name: "permissionMacro" })
     beforeHandle(ctx) {
       const memberRole = readAuthorizedMemberRole(ctx);
       if (!memberRole || !hasMemberPermission(memberRole, permissions)) {
-        return ctx.status(403);
+        return ctx.status(403, AUTH_REJECTION_BODY[403]);
       }
 
       return undefined;
@@ -2765,7 +2806,7 @@ export const workspaceAccessMacro = new Elysia({
       const ws = await ctx.getWorkspaceAccess(workspaceId);
 
       if (ws?.status !== "active") {
-        return ctx.status(404);
+        return ctx.status(404, AUTH_REJECTION_BODY[404]);
       }
 
       return {
@@ -2783,7 +2824,7 @@ export const workspaceAccessMacro = new Elysia({
       const ws = await ctx.getWorkspaceAccess(workspaceId);
 
       if (!ws || (ws.status !== "active" && ws.status !== "archived")) {
-        return ctx.status(404);
+        return ctx.status(404, AUTH_REJECTION_BODY[404]);
       }
 
       return {

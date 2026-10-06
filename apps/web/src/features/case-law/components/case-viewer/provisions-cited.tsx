@@ -9,6 +9,7 @@ import { Button } from "@stll/ui/button";
 import { ChevronRightIcon } from "@stll/ui/icons";
 import { cn } from "@stll/ui/utils";
 
+import { ProvisionVersionBasisLabel } from "@/components/provision-version-basis";
 import {
   groupProvisionsByWork,
   type ProvisionGroup,
@@ -52,13 +53,17 @@ export const ProvisionsCited = ({
   decisionDate,
   decisionId,
   isHydrated,
+  expanded,
 }: {
   decisionDate: string | null;
   decisionId: SafeId<"caseLawDecision">;
   isHydrated?: boolean;
+  /** The compact inspector owns the one disclosure around all citation lists. */
+  expanded?: boolean;
 }) => {
   const t = useTranslations();
-  const [open, setOpen] = useState(false);
+  const [localOpen, setLocalOpen] = useState(false);
+  const open = expanded ?? localOpen;
   const renderPart = useProvisionPartRenderer();
 
   const {
@@ -74,8 +79,8 @@ export const ProvisionsCited = ({
     optionalArray(data?.pages).flatMap((page) => page.items),
   );
 
-  // Each work is read at the version its references state, and at the
-  // decision's date otherwise; every work on the panel resolves in one read.
+  // Existing links select an inferred version at the decision date;
+  // every work on the panel resolves in one read.
   const decisionAsOf = decisionDateToIso(decisionDate);
   const citedWorkByGroup = new Map<string, CitedWorkAtDate>();
   for (const group of groups) {
@@ -108,12 +113,84 @@ export const ProvisionsCited = ({
     return null;
   }
 
+  const content = open ? (
+    <div
+      className={cn(
+        "flex flex-col gap-3",
+        expanded === undefined && "px-3 pb-3",
+      )}
+    >
+      {isError && (
+        <div className="flex items-center gap-2">
+          <p className="text-muted-foreground text-xs">
+            {t("errors.actionFailed")}
+          </p>
+          <Button
+            onClick={() => {
+              detached(refetch(), "case-law.provisions-retry");
+            }}
+            size="sm"
+            variant="ghost"
+          >
+            {t("common.retry")}
+          </Button>
+        </div>
+      )}
+      {groups.map((group) => {
+        const citedWork = citedWorkByGroup.get(group.key);
+        return (
+          <WorkReferences
+            group={group}
+            key={group.key}
+            publisherInconsistent={
+              citedWork !== undefined &&
+              inconsistentWorks.has(citedWorkAtDateKey(citedWork))
+            }
+            renderPart={renderPart}
+            statute={
+              citedWork === undefined
+                ? undefined
+                : statuteByWork.get(citedWorkAtDateKey(citedWork))
+            }
+          />
+        );
+      })}
+      {hasNextPage && (
+        <Button
+          className="w-fit"
+          disabled={isFetchingNextPage}
+          onClick={() => {
+            detached(fetchNextPage(), "case-law.provisions-more");
+          }}
+          size="sm"
+          variant="ghost"
+        >
+          {t("common.loadMore")}
+        </Button>
+      )}
+    </div>
+  ) : null;
+
+  if (expanded !== undefined) {
+    if (!open) {
+      return null;
+    }
+    return (
+      <section className="flex flex-col gap-2">
+        <h3 className="text-foreground-strong-muted text-xs font-medium">
+          {t("caseLaw.viewer.provisionsCited")}
+        </h3>
+        {content}
+      </section>
+    );
+  }
+
   return (
     <section className="reader-chrome border-border/60 mb-6 rounded-lg border print:hidden">
       <button
         aria-expanded={open}
         className="text-foreground-strong-muted hover:text-foreground flex w-full items-center gap-1.5 px-3 py-2 text-start text-xs font-medium"
-        onClick={() => setOpen(!open)}
+        onClick={() => setLocalOpen(!open)}
         type="button"
       >
         <ChevronRightIcon
@@ -121,59 +198,7 @@ export const ProvisionsCited = ({
         />
         {t("caseLaw.viewer.provisionsCited")}
       </button>
-      {open && (
-        <div className="flex flex-col gap-3 px-3 pb-3">
-          {isError && (
-            <div className="flex items-center gap-2">
-              <p className="text-muted-foreground text-xs">
-                {t("errors.actionFailed")}
-              </p>
-              <Button
-                onClick={() => {
-                  detached(refetch(), "case-law.provisions-retry");
-                }}
-                size="sm"
-                variant="ghost"
-              >
-                {t("common.retry")}
-              </Button>
-            </div>
-          )}
-          {groups.map((group) => {
-            const citedWork = citedWorkByGroup.get(group.key);
-
-            return (
-              <WorkReferences
-                group={group}
-                key={group.key}
-                publisherInconsistent={
-                  citedWork !== undefined &&
-                  inconsistentWorks.has(citedWorkAtDateKey(citedWork))
-                }
-                renderPart={renderPart}
-                statute={
-                  citedWork === undefined
-                    ? undefined
-                    : statuteByWork.get(citedWorkAtDateKey(citedWork))
-                }
-              />
-            );
-          })}
-          {hasNextPage && (
-            <Button
-              className="w-fit"
-              disabled={isFetchingNextPage}
-              onClick={() => {
-                detached(fetchNextPage(), "case-law.provisions-more");
-              }}
-              size="sm"
-              variant="ghost"
-            >
-              {t("common.loadMore")}
-            </Button>
-          )}
-        </div>
-      )}
+      {content}
     </section>
   );
 };
@@ -206,7 +231,7 @@ const WorkReferences = ({
    * The consolidation a reference was made against, or null while it is not
    * known to be held.
    *
-   * A reference that states a version has to reach that version: the current
+   * A reference that selects a version has to reach that version: the current
    * wording is a different text, and may not even carry the anchor. Until the
    * matching consolidation resolves — the read is in flight, it failed, or
    * the corpus does not hold that version — the reference reads as text
@@ -221,7 +246,7 @@ const WorkReferences = ({
       return statute;
     }
 
-    // The wording in force is itself the cited version for most references,
+    // The wording in force is the inferred version for most references,
     // which is why the versions read is not started for them.
     if (versionCoversDate(statute, provision.versionValidFrom)) {
       return statute;
@@ -314,6 +339,7 @@ const ProvisionRowItem = ({
             {label}
           </Link>
         )}
+        <ProvisionVersionBasisLabel basis={provision.versionBasis} />
         {count > 1 && (
           <button
             aria-expanded={showPassages}

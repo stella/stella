@@ -1,5 +1,5 @@
 import type { CallToolResult } from "@modelcontextprotocol/server";
-import { panic, TaggedError } from "better-result";
+import { panic, Result, TaggedError } from "better-result";
 import * as v from "valibot";
 
 import type {
@@ -28,6 +28,10 @@ import { captureError } from "@/api/lib/analytics/capture";
 import type { AuditEvent, AuditRecorder } from "@/api/lib/audit-log";
 import type { AccessibleWorkspace } from "@/api/lib/auth";
 import type { SafeId } from "@/api/lib/branded-types";
+import {
+  parseStrippingUndeclaredKeys,
+  reportToolOutputDegrade,
+} from "@/api/lib/chat/tool-output-degrade";
 import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
@@ -47,6 +51,7 @@ import {
   projectMcpRefusal,
   statusCodeToErrorCode,
 } from "@/api/mcp/error-codes";
+import { MCP_INTERNAL_TOOL_FAILURE } from "@/api/mcp/tool-call-outcome";
 import { TOOL_CONFIRMATION } from "@/api/mcp/tool-confirmation";
 import type { ToolConfirmation } from "@/api/mcp/tool-confirmation";
 import type {
@@ -419,10 +424,11 @@ export const toolDataResult = <TData>(
 const stringifyJson = (value: unknown): unknown => JSON.stringify(value);
 
 /**
- * A tool succeeded but its output failed the output schema it advertises.
- * The cause of the panic `serializeToolResult` raises; observed as a defect:
- * the handler and its contract disagree, so every call on that path fails
- * until the code changes.
+ * A tool succeeded but its output failed the output schema it advertises on a
+ * declared field (missing or invalid; undeclared extra keys alone are
+ * stripped and reported instead). The cause of the panic
+ * `serializeToolResult` raises; observed as a defect: the handler and its
+ * contract disagree, so every call on that path fails until the code changes.
  */
 export class McpOutputContractError extends TaggedError(
   "McpOutputContractError",
@@ -447,20 +453,30 @@ const isJsonObject = (value: unknown): value is Record<string, unknown> =>
  * and the `{ error: … }` envelope is the absence of one. A client validating
  * it against an output schema must not be handed a failure envelope in that
  * slot.
+ *
+ * Output whose only violation is undeclared extra keys is stripped of them
+ * (the degrade shared with the chat projection) and reported as a defect; the
+ * caller still gets exactly the advertised shape.
  */
 const successStructuredContent = (
   result: InternalToolSuccess,
   outputContract: RuntimeMcpToolOutputContract | undefined,
+  toolName: string | undefined,
 ): Record<string, unknown> | undefined => {
   if (outputContract === undefined) {
     return isJsonObject(result.data) ? result.data : undefined;
   }
   const projected = outputContract.project(result.data);
-  const parsed = v.safeParse(outputContract.outputSchemaSource, projected);
-  if (!parsed.success) {
+  const parsed = parseStrippingUndeclaredKeys(
+    outputContract.outputSchemaSource,
+    projected,
+  );
+  if (Result.isError(parsed)) {
     // Paths only: an issue's `input` is the tool's output, which carries
     // matter content.
-    const paths = parsed.issues.map((issue) => v.getDotPath(issue) ?? "(root)");
+    const paths = parsed.error.issues.map(
+      (issue) => v.getDotPath(issue) ?? "(root)",
+    );
     return panic(
       "MCP tool output violated its advertised contract",
       new McpOutputContractError({
@@ -468,16 +484,27 @@ const successStructuredContent = (
       }),
     );
   }
-  if (!isJsonObject(parsed.output)) {
+  const { output, undeclaredPaths } = parsed.value;
+  if (undeclaredPaths.length > 0) {
+    reportToolOutputDegrade({
+      defect: "undeclared_fields",
+      paths: undeclaredPaths,
+      source: "mcp",
+      toolName: toolName ?? "(unknown)",
+    });
+  }
+  if (!isJsonObject(output)) {
     return panic("MCP tool output contract produced a non-object root");
   }
-  return parsed.output;
+  return output;
 };
 
 /** Serialize a canonical Stella tool result at the external MCP boundary. */
 export const serializeToolResult = (
   result: InternalToolResult,
   outputContract?: RuntimeMcpToolOutputContract,
+  /** Telemetry only: names the tool in a degraded-output defect report. */
+  toolName?: string,
 ): CallToolResult => {
   if (result.status === "success") {
     const serializedData = stringifyJson(result.data);
@@ -486,7 +513,11 @@ export const serializeToolResult = (
     }
     // A host shows the model either the text or `structuredContent`, so the
     // one text block is the JSON of the same validated object.
-    const structuredContent = successStructuredContent(result, outputContract);
+    const structuredContent = successStructuredContent(
+      result,
+      outputContract,
+      toolName,
+    );
     return {
       content: [
         {
@@ -512,6 +543,9 @@ export const serializeToolResult = (
   return {
     content: [{ type: "text", text: JSON.stringify({ error }) }],
     isError: true,
+    ...(result.error.code === "internal_error"
+      ? { [MCP_INTERNAL_TOOL_FAILURE]: result.error[MCP_INTERNAL_TOOL_FAILURE] }
+      : {}),
   };
 };
 
@@ -611,34 +645,23 @@ export const structuredErrorResult = ({
   retryable?: boolean | undefined;
   contactUrl?: string | undefined;
 }): InternalToolErrorResult => {
-  const error: {
-    type: "structured";
-    code: McpErrorCode;
-    message: string;
-    hint?: string;
-    issues?: readonly McpValidationIssue[];
-    retryable?: boolean;
-    contactUrl?: string;
-    requestId?: string;
-  } = { type: "structured", code, message };
-  if (hint !== undefined) {
-    error.hint = hint;
-  }
-  if (issues !== undefined && issues.length > 0) {
-    error.issues = issues;
-  }
-  if (retryable !== undefined) {
-    error.retryable = retryable;
-  }
-  if (contactUrl !== undefined) {
-    error.contactUrl = contactUrl;
-  }
   const requestId = getCurrentRequestId();
-  if (requestId !== undefined) {
-    error.requestId = requestId;
-  }
-
-  return { status: "error", error };
+  const fields = {
+    type: "structured",
+    message,
+    ...(hint === undefined ? {} : { hint }),
+    ...(issues === undefined || issues.length === 0 ? {} : { issues }),
+    ...(retryable === undefined ? {} : { retryable }),
+    ...(contactUrl === undefined ? {} : { contactUrl }),
+    ...(requestId === undefined ? {} : { requestId }),
+  } as const;
+  return {
+    status: "error",
+    error:
+      code === "internal_error"
+        ? { code, ...fields, [MCP_INTERNAL_TOOL_FAILURE]: true }
+        : { code, ...fields },
+  };
 };
 
 /**

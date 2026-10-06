@@ -23,7 +23,8 @@ import {
   MatterOriginLink,
 } from "@/components/inspector/inspector-tab-header";
 import type { FileTab } from "@/components/inspector/inspector-tabs-store";
-import { PdfSignButton } from "@/components/inspector/pdf-sign-button";
+import { PdfSignButton } from "@/components/inspector/pdf-sign-action";
+import type { PdfSignTarget } from "@/components/inspector/pdf-sign-action";
 import type { DesktopOpenTarget } from "@/components/inspector/use-desktop-file-open";
 import Tooltip from "@/components/tooltip";
 import { detached } from "@/lib/detached";
@@ -102,7 +103,7 @@ type FileTabHeaderActionsProps = {
   desktopEditTarget: Pick<DesktopOpenTarget, "fileType" | "propertyId"> | null;
   downloadRenditions: readonly DownloadRendition[];
   /** The current PDF file the signer may sign, or `null` to offer no signing. */
-  pdfSignTarget: { propertyId: string } | null;
+  pdfSignTarget: PdfSignTarget | null;
   tab: FileTab;
 };
 
@@ -146,14 +147,7 @@ export const FileTabHeaderActions = ({
           workspaceId={tab.workspaceId}
         />
       ) : null}
-      {pdfSignTarget !== null ? (
-        <PdfSignButton
-          entityId={tab.entityId}
-          fieldId={tab.id}
-          propertyId={pdfSignTarget.propertyId}
-          workspaceId={tab.workspaceId}
-        />
-      ) : null}
+      {pdfSignTarget !== null ? <PdfSignButton target={pdfSignTarget} /> : null}
       {children}
     </>
   );

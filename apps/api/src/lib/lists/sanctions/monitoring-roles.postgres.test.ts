@@ -498,9 +498,6 @@ if (!databaseUrl || !runPostgresTests) {
         );
 
         const firstRun = await drainSanctionsMonitoringTask(taskContext(base));
-        if (firstRun === undefined) {
-          panic("Sanctions monitoring task returned no outcome");
-        }
         expect(firstRun.isOk()).toBe(true);
         expect(
           await db
@@ -547,9 +544,6 @@ if (!databaseUrl || !runPostgresTests) {
             rollbackRunId,
           ),
         );
-        if (rollbackRun === undefined) {
-          panic("Sanctions monitoring retry returned no outcome");
-        }
         expect(rollbackRun.isErr()).toBe(true);
         const unadvancedMark =
           (
@@ -595,9 +589,6 @@ if (!databaseUrl || !runPostgresTests) {
         const generationRun = await drainSanctionsMonitoringTask(
           taskContext(new Date(base.getTime() + 10_000), generationRunId),
         );
-        if (generationRun === undefined) {
-          panic("Sanctions monitoring generation retry returned no outcome");
-        }
         expect(generationRun.isOk()).toBe(true);
         const newBackoffMark =
           (
@@ -621,9 +612,6 @@ if (!databaseUrl || !runPostgresTests) {
         const retryRun = await drainSanctionsMonitoringTask(
           taskContext(retryAt, retryRunId),
         );
-        if (retryRun === undefined) {
-          panic("Sanctions monitoring final retry returned no outcome");
-        }
         expect(retryRun.isOk()).toBe(true);
         expect(
           await db

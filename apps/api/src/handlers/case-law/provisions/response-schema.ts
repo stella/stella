@@ -3,6 +3,7 @@ import { Type } from "@sinclair/typebox";
 import { t } from "elysia";
 
 import { PROVISION_LINK_STATUS_TYPES } from "@stll/api-contract/provision-link-status";
+import { PROVISION_VERSION_BASIS_TYPES } from "@stll/api-contract/provision-version-basis";
 
 import { caseLawProvisionCitations } from "@/api/db/schema";
 import { languageAlternatesSchema } from "@/api/handlers/case-law/decisions/search-schema";
@@ -15,6 +16,11 @@ import {
   boundedString,
   nullableBoundedString,
 } from "@/api/lib/search/response-text-bounds";
+
+const versionBasisSchema = t.Object({
+  type: t.UnionEnum(PROVISION_VERSION_BASIS_TYPES),
+  kind: t.Literal("decision_date"),
+});
 
 const nullableNumber = t.Union([t.Number(), t.Null()]);
 const date = nullableBoundedString(128);
@@ -50,6 +56,7 @@ const citationFields = {
   openEnded: t.Boolean(),
   anchor: boundedString(1024),
   versionValidFrom: date,
+  versionBasis: versionBasisSchema,
   sentenceText: boundedString(16_384),
   spanStart: t.Number(),
   spanEnd: t.Number(),
@@ -140,6 +147,7 @@ export const citingDecisionsSuccessResponseSchema = t.Object({
       country: boundedString(12),
       language: boundedString(32),
       decisionDate: date,
+      versionBasis: versionBasisSchema,
       citationAuthority: t.Number(),
       sentenceText: nullableBoundedString(16_384),
       spanStart: t.Number(),

@@ -27,8 +27,7 @@ export type TransitionSpec = {
 };
 
 type ScopedStateTable = PgTable;
-type ColumnKey<TTable extends ScopedStateTable> = keyof TTable["_"]["columns"] &
-  string;
+type ColumnKey<TTable extends PgTable> = keyof TTable["_"]["columns"] & string;
 type StateValue<
   TTable extends ScopedStateTable,
   TState extends ColumnKey<TTable>,
@@ -62,7 +61,7 @@ export type ScopedTransitionDeclaration = {
   readonly sameStateUpsert: "ignore" | "update" | undefined;
 };
 
-/** Declares a lifecycle over a real (possibly composite) primary key. */
+/** Declares a lifecycle over a non-null primary or unique identity. */
 export const defineScopedTransitions = <
   TTable extends ScopedStateTable,
   const TKey extends ColumnKey<TTable>,
@@ -772,21 +771,61 @@ export const permitsTransition = (
   return targets !== undefined && (from === to || targets.includes(to));
 };
 
-/** The returned table handle carries the literal graph into every writer. */
-export const defineTransitions = <
-  TTable extends LifecycleTable,
-  const TEdges extends Readonly<
-    Record<Status<TTable>, readonly Status<TTable>[]>
-  >,
-  const TOptions extends {
-    terminal: readonly Status<TTable>[];
-    fence?: FenceKey<TTable>;
-  },
->(
-  table: TTable,
-  edges: TEdges,
-  options: TOptions,
-) => defineKeyedTransitions({ table, key: "id", edges, options });
+type LifecycleGraphCheck = {
+  column: AnyPgColumn;
+  edges: Readonly<Record<string, readonly string[]>>;
+  terminal: readonly string[];
+};
+
+const assertLifecycleGraph = ({
+  column,
+  edges,
+  terminal,
+}: LifecycleGraphCheck) => {
+  const statuses = column.enumValues;
+  if (
+    statuses === undefined ||
+    statuses.some((status) => !Object.hasOwn(edges, status)) ||
+    Object.keys(edges).some((status) => !statuses.includes(status))
+  ) {
+    panic("A transition graph must cover the column's closed status domain");
+  }
+  for (const [from, targets] of Object.entries<readonly string[]>(edges)) {
+    if (targets.some((to) => !statuses.includes(to))) {
+      panic(`Unknown transition target from ${from}`);
+    }
+    if (
+      terminal.some((status) => status === from) &&
+      targets.some((to) => to !== from)
+    ) {
+      panic(`Terminal status ${from} cannot have outgoing transitions`);
+    }
+  }
+  if (terminal.some((status) => !Object.hasOwn(edges, status))) {
+    panic("Unknown terminal status");
+  }
+};
+
+const assertTransitionFence = (table: PgTable, fence: string | undefined) => {
+  if (fence !== undefined && !Object.hasOwn(getColumns(table), fence)) {
+    panic("The declared transition fence is not a table column");
+  }
+};
+
+const assertTransitionIdentity = (table: PgTable, key: string) => {
+  // Runtime callers can supply keys outside the generic column domain.
+  const runtimeColumns: Readonly<Record<string, AnyPgColumn>> =
+    getColumns(table);
+  const identity = runtimeColumns[key];
+  // Named primary-key constraints leave the column's own flag unset.
+  const constrained = getTableConfig(table).primaryKeys.some(
+    ({ columns }) =>
+      columns.length === 1 && columns.at(0)?.name === identity?.name,
+  );
+  if (identity === undefined || !(identity.primary || constrained)) {
+    panic("A transition identity must be a primary-key column");
+  }
+};
 
 type DefineKeyedTransitionsArgs<
   TTable extends StatusTable,
@@ -827,45 +866,20 @@ export const defineKeyedTransitions = <
   scope,
 }: DefineKeyedTransitionsArgs<TTable, TKey, TEdges, TOptions, TScope>) => {
   const idColumn = getColumns(table)[key];
-  // Runtime callers can supply keys outside the generic column domain.
   const runtimeColumns: Readonly<Record<string, AnyPgColumn>> =
     getColumns(table);
   const runtimeIdColumn = runtimeColumns[key];
-  const statuses = table.status.enumValues;
-  if (
-    statuses === undefined ||
-    statuses.some((status) => !Object.hasOwn(edges, status)) ||
-    Object.keys(edges).some((status) => !statuses.includes(status))
-  ) {
-    panic("A transition graph must cover the column's closed status domain");
-  }
-  for (const [from, targets] of Object.entries<readonly string[]>(edges)) {
-    if (targets.some((to) => !statuses.includes(to))) {
-      panic(`Unknown transition target from ${from}`);
-    }
-    if (
-      options.terminal.some((status) => status === from) &&
-      targets.some((to) => to !== from)
-    ) {
-      panic(`Terminal status ${from} cannot have outgoing transitions`);
-    }
-  }
-  if (options.terminal.some((status) => !Object.hasOwn(edges, status))) {
-    panic("Unknown terminal status");
-  }
-  if (
-    options.fence !== undefined &&
-    !Object.hasOwn(getColumns(table), options.fence)
-  ) {
-    panic("The declared transition fence is not a table column");
-  }
+  assertLifecycleGraph({
+    column: table.status,
+    edges,
+    terminal: options.terminal,
+  });
+  assertTransitionFence(table, options.fence);
   if (runtimeIdColumn === undefined) {
     panic("A transition identity must be a table column");
   }
   if (scope === undefined) {
-    if (!runtimeIdColumn.primary) {
-      panic("A transition identity must be a primary-key column");
-    }
+    assertTransitionIdentity(table, key);
   } else {
     const keys = [key, ...scope];
     const columns = keys.map((name) => runtimeColumns[name]);
@@ -899,6 +913,22 @@ export const defineKeyedTransitions = <
     fence: options.fence,
   });
 };
+
+/** The returned table handle carries the literal graph into every writer. */
+export const defineTransitions = <
+  TTable extends LifecycleTable,
+  const TEdges extends Readonly<
+    Record<Status<TTable>, readonly Status<TTable>[]>
+  >,
+  const TOptions extends {
+    terminal: readonly Status<TTable>[];
+    fence?: FenceKey<TTable>;
+  },
+>(
+  table: TTable,
+  edges: TEdges,
+  options: TOptions,
+) => defineKeyedTransitions({ table, key: "id", edges, options });
 
 type DefinedTransitions<
   TTable extends LifecycleTable,
@@ -982,144 +1012,6 @@ type TransitionArgs<
   ) => Promise<void>;
 };
 
-type TransitionAssignmentsArgs<TTable extends StatusTable> = {
-  spec: TransitionSpec & { table: TTable };
-  key: string;
-  options: {
-    from: readonly string[];
-    to: string;
-    set?: Readonly<Record<string, unknown>>;
-    fence?: unknown;
-    nextFence?: unknown;
-  };
-};
-
-const transitionAssignments = <TTable extends StatusTable>({
-  spec,
-  key: identityKey,
-  options,
-}: TransitionAssignmentsArgs<TTable>) => {
-  if (
-    options.from.length === 0 ||
-    options.from.some((from) => !permitsTransition(spec, from, options.to))
-  ) {
-    panic("Illegal status transition");
-  }
-  const columns = getColumns(spec.table);
-  const assignments = [
-    sql`${sql.identifier(spec.table.status.name)} = ${options.to}`,
-  ];
-  const metadata: Readonly<Record<string, unknown>> = options.set ?? {};
-  for (const [key, value] of Object.entries(metadata)) {
-    const column = columns[key];
-    if (
-      column === undefined ||
-      key === identityKey ||
-      spec.scope?.includes(key) === true ||
-      key === "status" ||
-      key === spec.fence
-    ) {
-      panic(`Transition metadata cannot set ${key}`);
-    }
-    if (value !== undefined) {
-      assignments.push(
-        sql`${sql.identifier(column.name)} = ${isSQLWrapper(value) ? value : sql.param(value, column)}`,
-      );
-    }
-  }
-  for (const [key, column] of Object.entries(columns)) {
-    if (
-      key === identityKey ||
-      spec.scope?.includes(key) === true ||
-      key === "status" ||
-      key === spec.fence ||
-      Reflect.get(options.set ?? {}, key) !== undefined ||
-      column.onUpdateFn === undefined
-    ) {
-      continue;
-    }
-    const value = column.onUpdateFn();
-    assignments.push(
-      sql`${sql.identifier(column.name)} = ${isSQLWrapper(value) ? value : sql.param(value, column)}`,
-    );
-  }
-  const fence = spec.fence === undefined ? undefined : columns[spec.fence];
-  // Untyped callers still need fence validation when the generic excludes a fence.
-  const runtimeOptions: {
-    readonly fence?: unknown;
-    readonly nextFence?: unknown;
-  } = options;
-  const expectedFence = runtimeOptions.fence;
-  if (spec.fence !== undefined && expectedFence === undefined) {
-    panic("The transition requires its declared fence");
-  }
-  if (spec.fence === undefined && expectedFence !== undefined) {
-    panic("This transition table has no fence");
-  }
-  if (runtimeOptions.nextFence !== undefined) {
-    if (fence === undefined) {
-      panic("A fence advance requires the table's declared fence");
-    }
-    assignments.push(
-      sql`${sql.identifier(fence.name)} = ${sql.param(runtimeOptions.nextFence, fence)}`,
-    );
-  }
-  return { assignments, fence };
-};
-
-/** The update and required audit share the caller's transaction. */
-export const transition = async <
-  TTx extends TransitionTransaction,
-  TTable extends LifecycleTable,
-  const TEdges extends Readonly<Record<string, readonly string[]>>,
-  TOptions extends { terminal: readonly string[]; fence?: string },
->({
-  tx,
-  spec,
-  id,
-  options,
-  recordTransitionAuditEvent,
-}: TransitionArgs<TTx, TTable, TEdges, TOptions>): Promise<
-  TransitionResult<GetColumnData<TTable["id"]>, Status<TTable>>
-> => {
-  const { assignments, fence } = transitionAssignments({
-    spec,
-    key: "id",
-    options,
-  });
-  const rows = await tx.execute(sql`
-    UPDATE ${spec.table}
-    SET ${sql.join(assignments, sql`, `)}
-    WHERE ${spec.table.id} = ${sql.param(id, spec.table.id)}
-      AND ${spec.table.status} IN (${sql.join(
-        options.from.map((from) => sql`${from}`),
-        sql`, `,
-      )})
-      ${fence === undefined ? sql`` : sql`AND ${fence} IS NOT DISTINCT FROM ${sql.param(options.fence, fence)}`}
-    RETURNING ${spec.table.id} AS "id", ${spec.table.status} AS "status"
-  `);
-  const row = rows.at(0);
-  if (row === undefined) {
-    return { type: "stale" };
-  }
-  // Column's runtime decoder erases its data type; restore its declared codec contract.
-  const idDecoder: DriverValueDecoder<
-    GetColumnData<TTable["id"]>,
-    unknown
-  > = spec.table.id;
-  const statusDecoder: DriverValueDecoder<Status<TTable>, unknown> = spec.table
-    .status;
-  const transitioned = {
-    type: "transitioned",
-    row: {
-      id: idDecoder.mapFromDriverValue(row["id"]),
-      status: statusDecoder.mapFromDriverValue(row["status"]),
-    },
-  } as const;
-  await recordTransitionAuditEvent(tx, transitioned.row);
-  return transitioned;
-};
-
 type TransitionScopeOptions = {
   table: StatusTable;
   keys: readonly string[];
@@ -1145,6 +1037,236 @@ const transitionScopePredicate = ({
   return predicates.length === 0
     ? sql``
     : sql`AND ${sql.join(predicates, sql` AND `)}`;
+};
+
+type LifecycleMove = {
+  key: string;
+  column: AnyPgColumn;
+  edges: Readonly<Record<string, readonly string[]>>;
+  from: readonly string[];
+  to: string;
+};
+
+type LifecycleUpdateArgs = {
+  tx: TransitionTransaction;
+  table: PgTable;
+  identity: { key: string; column: AnyPgColumn };
+  ids: readonly unknown[];
+  match: "one" | "many";
+  moves: readonly LifecycleMove[];
+  set: Readonly<Record<string, unknown>> | undefined;
+  scope?: TransitionScopeOptions;
+  fence: { key: string | undefined; value: unknown; nextValue?: unknown };
+  recordTransitionAuditEvent: (
+    rows: readonly Record<string, unknown>[],
+  ) => Promise<void>;
+};
+
+/** One conditional update; every moved column's expected sources join its predicate. */
+const lifecycleUpdate = async ({
+  tx,
+  table,
+  identity,
+  ids,
+  match,
+  moves,
+  set = {},
+  scope,
+  fence: { key: fenceKey, value: expectedFence, nextValue: nextFence },
+  recordTransitionAuditEvent,
+}: LifecycleUpdateArgs) => {
+  if (
+    moves.length === 0 ||
+    moves.some(
+      (move) =>
+        move.from.length === 0 ||
+        move.from.some((from) => !permitsTransition(move, from, move.to)),
+    )
+  ) {
+    panic("Illegal status transition");
+  }
+  const columns = getColumns(table);
+  const owned = new Set([
+    identity.key,
+    ...(scope?.keys ?? []),
+    ...moves.map(({ key }) => key),
+    ...(fenceKey === undefined ? [] : [fenceKey]),
+  ]);
+  const assignments = moves.map(
+    ({ column, to }) => sql`${sql.identifier(column.name)} = ${to}`,
+  );
+  for (const [key, value] of Object.entries(set)) {
+    const column = columns[key];
+    if (column === undefined || owned.has(key)) {
+      panic(`Transition metadata cannot set ${key}`);
+    }
+    if (value !== undefined) {
+      assignments.push(
+        sql`${sql.identifier(column.name)} = ${isSQLWrapper(value) ? value : sql.param(value, column)}`,
+      );
+    }
+  }
+  for (const [key, column] of Object.entries(columns)) {
+    if (
+      owned.has(key) ||
+      Reflect.get(set, key) !== undefined ||
+      column.onUpdateFn === undefined
+    ) {
+      continue;
+    }
+    const value = column.onUpdateFn();
+    assignments.push(
+      sql`${sql.identifier(column.name)} = ${isSQLWrapper(value) ? value : sql.param(value, column)}`,
+    );
+  }
+  const fence = fenceKey === undefined ? undefined : columns[fenceKey];
+  if (fenceKey !== undefined && expectedFence === undefined) {
+    panic("The transition requires its declared fence");
+  }
+  if (fenceKey === undefined && expectedFence !== undefined) {
+    panic("This transition table has no fence");
+  }
+  if (nextFence !== undefined) {
+    if (fence === undefined) {
+      panic("A fence advance requires the table's declared fence");
+    }
+    assignments.push(
+      sql`${sql.identifier(fence.name)} = ${sql.param(nextFence, fence)}`,
+    );
+  }
+  if (ids.length === 0) {
+    return [];
+  }
+  const scoped = scope === undefined ? sql`` : transitionScopePredicate(scope);
+  const identityMatch =
+    match === "one"
+      ? sql`${identity.column} = ${sql.param(ids[0], identity.column)}`
+      : sql`${identity.column} IN (${sql.join(
+          ids.map((id) => sql`${sql.param(id, identity.column)}`),
+          sql`, `,
+        )})`;
+  const sources = moves.map(
+    ({ column, from }) =>
+      sql`AND ${column} IN (${sql.join(
+        from.map((value) => sql`${value}`),
+        sql`, `,
+      )})`,
+  );
+  const returned = moves.map(
+    ({ key, column }) => sql`, ${column} AS ${sql.identifier(key)}`,
+  );
+  const rows = await tx.execute(sql`
+    UPDATE ${table}
+    SET ${sql.join(assignments, sql`, `)}
+    WHERE ${identityMatch}
+      ${scoped}
+      ${sql.join(sources, sql` `)}
+      ${fence === undefined ? sql`` : sql`AND ${fence} IS NOT DISTINCT FROM ${sql.param(expectedFence, fence)}`}
+    RETURNING ${identity.column} AS "id"${sql.join(returned, sql``)}
+  `);
+  // Stale updates change nothing and record nothing.
+  if (rows.length > 0) {
+    await recordTransitionAuditEvent(rows);
+  }
+  return rows;
+};
+
+type StatusUpdateArgs = Pick<
+  LifecycleUpdateArgs,
+  "tx" | "identity" | "ids" | "match" | "recordTransitionAuditEvent"
+> & {
+  spec: TransitionSpec & { table: StatusTable };
+  scope?: TransitionScopeOptions;
+  // Untyped callers still need fence validation when the generic excludes a fence.
+  options: {
+    from: readonly string[];
+    to: string;
+    set?: Readonly<Record<string, unknown>>;
+    fence?: unknown;
+    nextFence?: unknown;
+  };
+};
+
+const statusUpdate = async ({
+  tx,
+  spec,
+  identity,
+  ids,
+  match,
+  options,
+  scope,
+  recordTransitionAuditEvent,
+}: StatusUpdateArgs) =>
+  await lifecycleUpdate({
+    tx,
+    table: spec.table,
+    identity,
+    ids,
+    match,
+    moves: [
+      {
+        key: "status",
+        column: spec.table.status,
+        edges: spec.edges,
+        from: options.from,
+        to: options.to,
+      },
+    ],
+    set: options.set,
+    ...(scope === undefined ? {} : { scope }),
+    fence: {
+      key: spec.fence,
+      value: options.fence,
+      nextValue: options.nextFence,
+    },
+    recordTransitionAuditEvent,
+  });
+
+/** The update and required audit share the caller's transaction. */
+export const transition = async <
+  TTx extends TransitionTransaction,
+  TTable extends LifecycleTable,
+  const TEdges extends Readonly<Record<string, readonly string[]>>,
+  TOptions extends { terminal: readonly string[]; fence?: string },
+>({
+  tx,
+  spec,
+  id,
+  options,
+  recordTransitionAuditEvent,
+}: TransitionArgs<TTx, TTable, TEdges, TOptions>): Promise<
+  TransitionResult<GetColumnData<TTable["id"]>, Status<TTable>>
+> => {
+  // Column's runtime decoder erases its data type; restore its declared codec contract.
+  const idDecoder: DriverValueDecoder<
+    GetColumnData<TTable["id"]>,
+    unknown
+  > = spec.table.id;
+  const statusDecoder: DriverValueDecoder<Status<TTable>, unknown> = spec.table
+    .status;
+  const decode = (row: Record<string, unknown>) => ({
+    id: idDecoder.mapFromDriverValue(row["id"]),
+    status: statusDecoder.mapFromDriverValue(row["status"]),
+  });
+  const rows = await statusUpdate({
+    tx,
+    spec,
+    identity: { key: "id", column: spec.table.id },
+    ids: [id],
+    match: "one",
+    options,
+    recordTransitionAuditEvent: async ([changed]) => {
+      await recordTransitionAuditEvent(
+        tx,
+        decode(changed ?? panic("A recorded transition has its row")),
+      );
+    },
+  });
+  const row = rows.at(0);
+  if (row === undefined) {
+    return { type: "stale" };
+  }
+  return { type: "transitioned", row: decode(row) } as const;
 };
 
 type TransitionBatchArgs<
@@ -1215,49 +1337,328 @@ export const transitionBatch = async <
   recordTransitionAuditEvent,
   scope,
 }: TransitionBatchArgs<TTx, TTable, TKey, TEdges, TOptions, TScope>) => {
-  const { assignments, fence } = transitionAssignments({
-    spec,
-    key: spec.key,
-    options,
-  });
-  if (ids.length === 0) {
-    return [];
-  }
-  const scoped =
-    spec.scope === undefined
-      ? sql``
-      : transitionScopePredicate({
-          table: spec.table,
-          keys: spec.scope,
-          values: scope ?? {},
-        });
-  const rows = await tx.execute(sql`
-    UPDATE ${spec.table}
-    SET ${sql.join(assignments, sql`, `)}
-    WHERE ${spec.idColumn} IN (${sql.join(
-      ids.map((id) => sql`${sql.param(id, spec.idColumn)}`),
-      sql`, `,
-    )})
-      ${scoped}
-      AND ${spec.table.status} IN (${sql.join(
-        options.from.map((from) => sql`${from}`),
-        sql`, `,
-      )})
-      ${fence === undefined ? sql`` : sql`AND ${fence} IS NOT DISTINCT FROM ${sql.param(options.fence, fence)}`}
-    RETURNING ${spec.idColumn} AS "id", ${spec.table.status} AS "status"
-  `);
   const idDecoder: DriverValueDecoder<
     GetColumnData<TTable["_"]["columns"][TKey]>,
     unknown
   > = spec.idColumn;
   const statusDecoder: DriverValueDecoder<Status<TTable>, unknown> = spec.table
     .status;
-  const changed = rows.map((row) => ({
-    id: idDecoder.mapFromDriverValue(row["id"]),
-    status: statusDecoder.mapFromDriverValue(row["status"]),
-  }));
-  if (changed.length > 0) {
-    await recordTransitionAuditEvent(tx, changed);
+  const decode = (rows: readonly Record<string, unknown>[]) =>
+    rows.map((row) => ({
+      id: idDecoder.mapFromDriverValue(row["id"]),
+      status: statusDecoder.mapFromDriverValue(row["status"]),
+    }));
+  const rows = await statusUpdate({
+    tx,
+    spec,
+    identity: { key: spec.key, column: spec.idColumn },
+    ...(spec.scope === undefined
+      ? {}
+      : {
+          scope: {
+            table: spec.table,
+            keys: spec.scope,
+            values: scope ?? {},
+          },
+        }),
+    ids,
+    match: "many",
+    options,
+    recordTransitionAuditEvent: async (changed) => {
+      await recordTransitionAuditEvent(tx, decode(changed));
+    },
+  });
+  return decode(rows);
+};
+
+type ColumnState<
+  TTable extends PgTable,
+  TColumn extends ColumnKey<TTable>,
+> = GetColumnData<TTable["_"]["columns"][TColumn]> & string;
+type LifecycleGraphs<TTable extends PgTable> = {
+  readonly [TColumn in ColumnKey<TTable>]?: {
+    readonly edges: Readonly<
+      Record<
+        ColumnState<TTable, TColumn>,
+        readonly ColumnState<TTable, TColumn>[]
+      >
+    >;
+    readonly terminal: readonly ColumnState<TTable, TColumn>[];
+  };
+};
+
+type LifecycleGraph = {
+  readonly edges: Readonly<Record<string, readonly string[]>>;
+  readonly terminal: readonly string[];
+};
+
+/** A declared multi-column lifecycle; the transition map binds its columns to the inventory. */
+export type LifecycleSpec<TColumn extends string = string> = {
+  readonly kind: "lifecycle";
+  readonly table: PgTable;
+  readonly graphs: Readonly<Record<TColumn, LifecycleGraph>>;
+};
+
+type DefineLifecycleArgs<
+  TTable extends PgTable,
+  TKey extends ColumnKey<TTable>,
+  TGraphs extends LifecycleGraphs<TTable>,
+> = { table: TTable; key: TKey; graphs: TGraphs };
+
+/**
+ * Rows whose lifecycle spans several columns that move together. Each column
+ * keeps its own graph, and every transition names a move for each of them.
+ */
+export const defineLifecycle = <
+  TTable extends PgTable,
+  const TKey extends ColumnKey<TTable>,
+  const TGraphs extends LifecycleGraphs<TTable>,
+>({
+  table,
+  key,
+  graphs,
+}: DefineLifecycleArgs<TTable, TKey, TGraphs>) => {
+  const columns = getColumns(table);
+  const runtimeColumns: Readonly<Record<string, AnyPgColumn>> = columns;
+  const declared = Object.entries<LifecycleGraph | undefined>(graphs);
+  if (declared.length === 0) {
+    panic("A lifecycle must declare at least one column");
   }
-  return changed;
+  const lifecycleColumns = declared.map(([column, graph]) => {
+    const lifecycleColumn =
+      runtimeColumns[column] ?? panic(`Unknown lifecycle column ${column}`);
+    if (graph === undefined) {
+      panic(`Lifecycle column ${column} has no graph`);
+    }
+    assertLifecycleGraph({
+      column: lifecycleColumn,
+      edges: graph.edges,
+      terminal: graph.terminal,
+    });
+    for (const targets of Object.values(graph.edges)) {
+      Object.freeze(targets);
+    }
+    Object.freeze(graph.edges);
+    Object.freeze(graph.terminal);
+    Object.freeze(graph);
+    return Object.freeze({
+      key: column,
+      column: lifecycleColumn,
+      edges: graph.edges,
+    });
+  });
+  assertTransitionIdentity(table, key);
+  return Object.freeze({
+    kind: "lifecycle",
+    table,
+    key,
+    idColumn: columns[key],
+    graphs: Object.freeze(graphs),
+    lifecycleColumns: Object.freeze(lifecycleColumns),
+  } as const);
+};
+
+type LifecycleColumn = {
+  readonly key: string;
+  readonly column: AnyPgColumn;
+  readonly edges: Readonly<Record<string, readonly string[]>>;
+};
+
+type DefinedLifecycle<
+  TTable extends PgTable,
+  TKey extends ColumnKey<TTable>,
+  TGraphs extends LifecycleGraphs<TTable>,
+> = {
+  readonly kind: "lifecycle";
+  readonly table: TTable;
+  readonly key: TKey;
+  readonly idColumn: TTable["_"]["columns"][TKey];
+  readonly graphs: TGraphs;
+  readonly lifecycleColumns: readonly LifecycleColumn[];
+};
+
+type GraphEdges<TGraph> = TGraph extends {
+  edges: infer TEdges extends Readonly<Record<string, readonly string[]>>;
+}
+  ? TEdges
+  : never;
+
+type LifecycleMoves<TGraphs> = {
+  [TColumn in keyof TGraphs & string]: Move<GraphEdges<TGraphs[TColumn]>>;
+};
+
+/** Narrows a move computed at run time to one its column's graph permits. */
+export const permitsLifecycleMove = <TGraph extends LifecycleGraph>(
+  graph: TGraph,
+  move: { readonly from: readonly string[]; readonly to: string },
+): move is Move<GraphEdges<TGraph>> =>
+  move.from.length > 0 &&
+  move.from.every((from) => permitsTransition(graph, from, move.to));
+
+type TransitionLifecycleArgs<
+  TTx extends TransitionTransaction,
+  TTable extends PgTable,
+  TKey extends ColumnKey<TTable>,
+  TGraphs extends LifecycleGraphs<TTable>,
+> = {
+  tx: TTx;
+  spec: DefinedLifecycle<TTable, TKey, TGraphs>;
+  moves: LifecycleMoves<NoInfer<TGraphs>>;
+  set?: Omit<
+    PgUpdateSetSource<NoInfer<TTable>>,
+    NoInfer<TKey> | (keyof NoInfer<TGraphs> & string)
+  > &
+    Partial<Record<NoInfer<TKey> | (keyof NoInfer<TGraphs> & string), never>>;
+};
+
+type LifecycleMoveSet = Readonly<
+  Record<string, { readonly from: readonly string[]; readonly to: string }>
+>;
+
+const lifecycleMoves = (
+  lifecycleColumns: readonly LifecycleColumn[],
+  moves: LifecycleMoveSet,
+) => {
+  if (
+    Object.keys(moves).some(
+      (key) => !lifecycleColumns.some((column) => column.key === key),
+    )
+  ) {
+    panic("A lifecycle move names an undeclared column");
+  }
+  return lifecycleColumns.map(({ key, column, edges }) => {
+    const move = moves[key] ?? panic(`The transition must move ${key}`);
+    return { key, column, edges, from: move.from, to: move.to };
+  });
+};
+
+/** Moves every declared lifecycle column of one row; the audit shares the transaction. */
+export const transitionLifecycle = async <
+  TTx extends TransitionTransaction,
+  TTable extends PgTable,
+  TKey extends ColumnKey<TTable>,
+  const TGraphs extends LifecycleGraphs<TTable>,
+>({
+  tx,
+  spec,
+  id,
+  moves,
+  set,
+  recordTransitionAuditEvent,
+}: TransitionLifecycleArgs<TTx, TTable, TKey, TGraphs> & {
+  id: GetColumnData<TTable["_"]["columns"][TKey]>;
+  recordTransitionAuditEvent: (
+    tx: TTx,
+    row: {
+      id: GetColumnData<TTable["_"]["columns"][TKey]>;
+      moves: LifecycleMoves<TGraphs>;
+    },
+  ) => Promise<void>;
+}): Promise<
+  | { type: "transitioned"; id: GetColumnData<TTable["_"]["columns"][TKey]> }
+  | { type: "stale" }
+> => {
+  const idDecoder: DriverValueDecoder<
+    GetColumnData<TTable["_"]["columns"][TKey]>,
+    unknown
+  > = spec.idColumn;
+  const rows = await lifecycleUpdate({
+    tx,
+    table: spec.table,
+    identity: { key: spec.key, column: spec.idColumn },
+    ids: [id],
+    match: "one",
+    moves: lifecycleMoves(spec.lifecycleColumns, moves),
+    set,
+    fence: { key: undefined, value: undefined },
+    recordTransitionAuditEvent: async ([changed]) => {
+      await recordTransitionAuditEvent(tx, {
+        id: idDecoder.mapFromDriverValue(
+          (changed ?? panic("A recorded transition has its row"))["id"],
+        ),
+        moves,
+      });
+    },
+  });
+  const row = rows.at(0);
+  if (row === undefined) {
+    return { type: "stale" };
+  }
+  return { type: "transitioned", id: idDecoder.mapFromDriverValue(row["id"]) };
+};
+
+/** One conditional update moving every declared column; only changed rows reach the audit. */
+export const transitionLifecycleBatch = async <
+  TTx extends TransitionTransaction,
+  TTable extends PgTable,
+  TKey extends ColumnKey<TTable>,
+  const TGraphs extends LifecycleGraphs<TTable>,
+>({
+  tx,
+  spec,
+  ids,
+  moves,
+  set,
+  recordTransitionAuditEvent,
+}: TransitionLifecycleArgs<TTx, TTable, TKey, TGraphs> & {
+  ids: readonly GetColumnData<NoInfer<TTable>["_"]["columns"][NoInfer<TKey>]>[];
+  recordTransitionAuditEvent: (
+    tx: TTx,
+    changed: {
+      ids: readonly GetColumnData<TTable["_"]["columns"][TKey]>[];
+      moves: LifecycleMoves<TGraphs>;
+    },
+  ) => Promise<void>;
+}) => {
+  const idDecoder: DriverValueDecoder<
+    GetColumnData<TTable["_"]["columns"][TKey]>,
+    unknown
+  > = spec.idColumn;
+  const decode = (rows: readonly Record<string, unknown>[]) =>
+    rows.map((row) => idDecoder.mapFromDriverValue(row["id"]));
+  const rows = await lifecycleUpdate({
+    tx,
+    table: spec.table,
+    identity: { key: spec.key, column: spec.idColumn },
+    ids,
+    match: "many",
+    moves: lifecycleMoves(spec.lifecycleColumns, moves),
+    set,
+    fence: { key: undefined, value: undefined },
+    recordTransitionAuditEvent: async (changed) => {
+      await recordTransitionAuditEvent(tx, { ids: decode(changed), moves });
+    },
+  });
+  return decode(rows);
+};
+
+/** A lifecycle column written once at insert; the map binds it to the inventory. */
+export type FixedLifecycleSpec<TColumn extends string = string> = {
+  readonly kind: "fixed";
+  readonly table: PgTable;
+  readonly column: TColumn;
+  readonly value: string;
+};
+
+/**
+ * A lifecycle column set once at insert and never updated. It has no
+ * transitions to run, so any update of the column remains a direct write.
+ */
+export const defineFixedLifecycle = <
+  TTable extends PgTable,
+  const TColumn extends ColumnKey<TTable>,
+  const TValue extends ColumnState<TTable, TColumn>,
+>({
+  table,
+  column,
+  value,
+}: {
+  table: TTable;
+  column: TColumn;
+  value: TValue;
+}) => {
+  if (!Object.hasOwn(getColumns(table), column)) {
+    panic(`Unknown lifecycle column ${column}`);
+  }
+  return Object.freeze({ kind: "fixed", table, column, value } as const);
 };

@@ -1451,13 +1451,11 @@ describe("folded acts stay folded across capped windows", () => {
             )
             .map((candidate) => ({
               id: candidate.id,
+              work: actOf(candidate.id),
               score: candidate.score,
               lexicalScore: candidate.score,
               citationAuthority: 0,
             })),
-          workOf: new Map(
-            candidates.map((candidate) => [candidate.id, actOf(candidate.id)]),
-          ),
           representatives: new Map(),
           namedWorks: [],
           namedScoreFloor: 10,

@@ -182,6 +182,16 @@ export const isOrganizationManagementRole = (
   );
 
 /**
+ * The roles that reach every client matter without a matter assignment. The
+ * stella_authorized_workspaces view repeats this list in SQL; the API's RLS
+ * coverage test binds the two.
+ */
+export const CLIENT_MATTER_ADMIN_ROLES = [
+  "owner",
+  "admin",
+] as const satisfies readonly OrganizationRoleName[];
+
+/**
  * Closing a task can decide the workflow review gate that raised it, so a
  * role that edits tasks must also hold the review permission. The task paths
  * rely on this binding rather than checking twice.

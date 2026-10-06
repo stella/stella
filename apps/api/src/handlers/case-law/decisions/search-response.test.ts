@@ -4,6 +4,7 @@ import type { Static } from "elysia";
 import fc from "fast-check";
 
 import { COURT_TIER_LABELS } from "@stll/api-contract/case-law-court-tiers";
+import { DECISION_TYPE_KIND_OTHER } from "@stll/api-contract/case-law-decision-types";
 import {
   SEARCH_PAGINATION_COMPLETE,
   SEARCH_TOTAL_NOT_COUNTED,
@@ -76,7 +77,7 @@ const responseWithText = (text: string): SearchResponse => {
         { length: LIMITS.caseLawYearFacetLimit + 1 },
         () => bucket,
       ),
-      decisionType: [bucket],
+      decisionType: [{ ...bucket, value: DECISION_TYPE_KIND_OTHER }],
       source: [{ ...bucket, countType: "exact" }],
       language: [bucket],
     },

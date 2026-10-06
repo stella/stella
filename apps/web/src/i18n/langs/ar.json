@@ -54,6 +54,17 @@
       "polish": "تحسين الصياغة"
     }
   },
+  "aiColumns": {
+    "countSummary": "{columns} أعمدة × {rows} صفوف = {answers, plural, zero {# إجابة} one {# إجابة} two {# إجابتين} few {# إجابات} many {# إجابة} other {# إجابة}}. الإجابات تستهلك الميزانية.",
+    "refusedBudget": "لم يُشغّل: ميزانية الإجابات غير متاحة",
+    "rerunAllPage": "إعادة تشغيل الكل (هذه الصفحة)",
+    "rerunColumnPage": "إعادة تشغيل العمود (هذه الصفحة)",
+    "runColumnPage": "تشغيل العمود (هذه الصفحة)",
+    "runPageRows": "تشغيل لـ {count, plural, zero {# صف في هذه الصفحة} one {# صف في هذه الصفحة} two {# صفين في هذه الصفحة} few {# صفوف في هذه الصفحة} many {# صفًا في هذه الصفحة} other {# صف في هذه الصفحة}}",
+    "runRemainingPage": "تشغيل المتبقي (هذه الصفحة)",
+    "runSelectedRows": "تشغيل لـ {count, plural, zero {# صف محدد} one {# صف محدد} two {# صفين محددين} few {# صفوف محددة} many {# صفًا محددًا} other {# صف محدد}}",
+    "selectedRun": "تشغيل أعمدة الذكاء الاصطناعي لـ {count, plural, zero {# صف} one {# صف} two {# صفين} few {# صفوف} many {# صفًا} other {# صف}}"
+  },
   "appearance": {
     "calendar": "تقويم",
     "calendarGregorian": "الميلادي",
@@ -796,6 +807,34 @@
       "unavailable": "أرقام التغطية غير متاحة حاليًا."
     },
     "decisionNotFound": "لم يُعثر على القرار",
+    "decisionTypes": {
+      "administrative_decision": "قرار إداري",
+      "binding_excise_information": "معلومة ملزمة بشأن الضريبة الانتقائية",
+      "binding_rate_information": "معلومة ملزمة بشأن سعر ضريبة القيمة المضافة",
+      "court_direction": "توجيه إجرائي",
+      "decision": "قرار",
+      "finding": "حكم في الموضوع",
+      "general_tax_ruling": "تفسير ضريبي عام",
+      "individual_tax_ruling": "تفسير ضريبي فردي",
+      "judgment": "حكم",
+      "leave_refused": "رفض لعدم وجود مسألة قانونية جوهرية",
+      "merits_decision": "قرار في أصل النزاع",
+      "ministry_of_justice_decision": "قرار وزارة العدل",
+      "minutes_extract": "مستخرج من المحضر",
+      "opinion": "رأي",
+      "order": "أمر",
+      "other": "أخرى",
+      "payment_order": "أمر بالأداء",
+      "penal_order": "أمر جزائي",
+      "principle_decision": "قرار مبدئي",
+      "protective_opinion": "رأي وقائي",
+      "resolution": "قرار تفسيري",
+      "signalling_decision": "قرار تنبيه",
+      "statement_of_reasons": "تسبيب",
+      "tax_explanations": "إيضاحات ضريبية",
+      "top_up_tax_opinion": "رأي بشأن الضريبة التكميلية",
+      "uniformity_decision": "قرار توحيد الاجتهاد القضائي"
+    },
     "emptyState": "لم يُعثر على أي قرارات. اضبط مصدرًا وشغّل مزامنة لاستيراد الاجتهاد القضائي.",
     "filters": {
       "remove": "إزالة عامل التصفية {filter}"
@@ -841,6 +880,7 @@
       "subsection": "الفقرة {value}"
     },
     "reader": {
+      "expandProvisions": "توسيع الأحكام",
       "headMatter": "الديباجة",
       "sourceAttribution": "بيانات المصدر متاحة بحرية على <link>{source}</link>."
     },
@@ -865,7 +905,9 @@
       },
       "deleteColumnConfirm": "يحذف هذا السؤال وكل إجاباته لمؤسستك بأكملها، من كل بحث ولدى كل عضو. لإخفائه من هذا البحث فقط، استخدم «إزالة من هذا البحث».",
       "editQuestionHint": "يؤدي تغيير الصياغة أو نوع الإجابة أو خياراته إلى حذف الإجابات الحالية؛ شغّل العمود مجددًا بعد ذلك.",
+      "newQuestionColumn": "جديد",
       "nothingToRun": "كل خلية لديها إجابة بالفعل",
+      "questionAdded": "أُضيف «{question}» إلى الجدول",
       "questionPlaceholder": "مثلًا: هل اعتبرت المحكمة الفصل صحيحًا؟",
       "removeFromSearch": "إزالة من هذا البحث",
       "runAll": "الإجابة عن الكل",
@@ -944,7 +986,8 @@
       "textNotYetAvailable": "لم تنشر المحكمة نص القرار، أو أنه غير متاح هنا بعد.",
       "textPending": "لا يزال جارٍ جلب نص الحكم",
       "textReadFailed": "تعذّر تحميل نص الحكم",
-      "textUnavailable": "لا يتوفر نص لهذا الحكم"
+      "textUnavailable": "لا يتوفر نص لهذا الحكم",
+      "versionAtDecisionDateInferred": "الصيغة في تاريخ القرار (مستنتجة)"
     }
   },
   "catalogue": {
@@ -1854,6 +1897,7 @@
     "unexpectedError": "حدث خطأ غير متوقع. يُرجى التواصل مع الدعم.",
     "unknownUser": "مستخدم غير معروف",
     "unpin": "إلغاء التثبيت",
+    "unsavedChangesEscape": "تغييرات غير محفوظة. اضغط على Esc مرة أخرى لتجاهلها",
     "unsavedLeaveConfirm": "لديك تغييرات غير محفوظة. هل تغادر دون حفظ؟",
     "unverified": "غير مُتحقَّق منه",
     "unverifiedCitationHint": "تعذّر مطابقة هذا الاقتباس مع المستند المصدر.",
@@ -1874,15 +1918,23 @@
     "zoomOut": "تصغير"
   },
   "consent": {
+    "actingAs": "سيعمل {clientName} بصفتك في {organizationName}",
     "allow": "السماح",
-    "appIdentity": "هوية التطبيق",
+    "canChange": "يمكنه التغيير",
+    "canRead": "يمكنه القراءة",
     "completeSetup": "إكمال الإعداد",
+    "connectTitle": "ربط {clientName} بـ stella",
+    "connectedTitle": "متصل بـ {clientName}",
+    "connectionDuration": "يظل متصلاً حتى تفصله من الإعدادات › الاتصالات",
     "defaultClientName": "تطبيق ما",
-    "description": "يريد {clientName} الوصول إلى مساحة عمل stella الخاصة بك",
+    "destinationDetails": "تفاصيل إعادة التوجيه",
     "error": "حدث خطأ ما. يُرجى المحاولة مرة أخرى.",
     "missingJurisdictions": "لم تُعدّ مؤسستك في stella ولاياتها القضائية للممارسة بعد. ستكون بعض الأدوات المراعية للولاية القضائية غير متاحة حتى تُكمل الإعداد.",
-    "permissions": "سيسمح هذا للتطبيق بـ:",
-    "redirectDestination": "وجهة إعادة التوجيه",
+    "otherPermissions": "أذونات أخرى",
+    "publishedBy": "نشره <host>{publisherHost}</host>",
+    "returnToAgent": "ارجع إلى وكيلك للمتابعة.",
+    "returnsLocally": "ستعود إلى {clientName} على هذا الكمبيوتر",
+    "returnsTo": "ستعود إلى {clientName}",
     "scopeAdminRead": "قراءة سجل تدقيق مؤسستك",
     "scopeAdminWrite": "إدارة أعضاء المؤسسة وإعداداتها",
     "scopeBillingWrite": "إنشاء إدخالات الوقت الخاصة بك وتعديلها وحذفها",
@@ -1903,8 +1955,11 @@
     "scopeSkills": "استخدام مهارات stella المحفوظة لديك",
     "scopeTemplates": "سرد قوالب مستنداتك وتعبئتها وإنشاؤها",
     "scopeTemplatesAnonymized": "سرد النسخ المُخفاة الهوية من قوالب مستنداتك وتعبئتها وإنشاؤها",
+    "signedInAs": "تم تسجيل الدخول باسم <email>{accountEmail}</email>",
     "title": "التفويض بالوصول",
-    "unverifiedApp": "تطبيق غير موثّق"
+    "unverifiedApp": "تطبيق غير موثّق",
+    "unverifiedExplanation": "لم تتحقق stella من الجهة التي تنشر هذا التطبيق.",
+    "useAnotherAccount": "استخدم حسابًا آخر"
   },
   "contacts": {
     "alsoPartyIn": "يظهر أيضاً كطرف في {count, plural, zero {# ملف قانوني آخر} one {ملف قانوني آخر واحد} two {ملفين قانونيين آخرين} few {# ملفات قانونية أخرى} many {# ملفًا قانونيًا آخر} other {# ملف قانوني آخر}}",
@@ -2295,6 +2350,8 @@
       "encryptedContent": "لا يمكن استخراج محتوى المستند المشفّر. أزِل كلمة المرور من الملف ثم أعِد المحاولة.",
       "filePropertyTypeImmutable": "لا يمكن تغيير نوع خاصية الملف. احتفظ بالنوع الحالي؛ وأنشئ خاصية مخصصة للقيم الأخرى.",
       "forbidden": "ليست لديك صلاحية لتنفيذ ذلك.",
+      "hostedCheckoutOpen": "توجد عملية دفع مفتوحة بالفعل لهذه المؤسسة. أكملها، أو ابدأ عملية جديدة بعد انتهاء صلاحيتها.",
+      "hostedSubscriptionLive": "لدى هذه المؤسسة اشتراك بالفعل. غيّره من «إدارة الاستخدام المُستضاف».",
       "internalServerError": "حدث خطأ ما. يرجى المحاولة مرة أخرى.",
       "legalSourceEntityLimitReached": "بلغ هذا الملف القانوني الحد الأقصى للعناصر، لذا تعذّر إنشاء المستند.",
       "legalSourceFilePropertyMissing": "يفتقر هذا الملف القانوني إلى خاصية ملف، لذا تعذر إنشاء المستند.",
@@ -4622,6 +4679,7 @@
     "compareVersionMissing": "الصيغة المطلوب المقارنة بها غير موجودة في سجل هذا التشريع.",
     "compareWholeAct": "مقارنة التشريع كاملًا",
     "compareWithVersion": "المقارنة مع {version}",
+    "currentWording": "الصياغة الحالية",
     "description": "قاعدة بيانات عامة للتشريعات الموحّدة، قابلة للفهرسة بحسب التشريع والإصدار.",
     "diffInserted": "مُضاف:",
     "diffRemoved": "محذوف:",
@@ -4671,7 +4729,9 @@
       "unknown": "الحالة غير واضحة"
     },
     "title": "التشريعات",
-    "validity": "نافذ من {from} إلى {to}"
+    "validity": "نافذ من {from} إلى {to}",
+    "wordingValidFrom": "الصياغة النافذة منذ {date}",
+    "wordingVersionUnknown": "تاريخ نسخة الصياغة غير متاح"
   },
   "styleSets": {
     "create": "إنشاء",
@@ -5408,6 +5468,7 @@
         "unknownLocation": "موقع القالب: عنوان لا تستطيع stella التحقق منه"
       },
       "desktopEdit": {
+        "accountRequiredTitle": "اربط stella desktop بحسابك",
         "action": "التحرير في تطبيق سطح المكتب",
         "authRequiredDescription": "حدّث stella وسجّل الدخول مرة أخرى قبل استخدام التحرير على سطح المكتب.",
         "authRequiredTitle": "انتهت صلاحية جلستك",
@@ -5430,6 +5491,17 @@
         "updateRequiredDescription": "يحتاج تطبيق stella لسطح المكتب إلى تحديث. سيتم تحديثه تلقائيًا عند انتهاء عمليات التحرير النشطة على سطح المكتب؛ حاول مرة أخرى بعد إعادة تشغيله.",
         "updateRequiredTitle": "تحديث تطبيق stella لسطح المكتب"
       },
+      "desktopGate": {
+        "alreadyInstalled": "هل هو مثبّت بالفعل؟ اربطه",
+        "connect": "ربط stella desktop",
+        "editNone": "نزّل stella desktop لتعديل هذا الملف",
+        "editOutdated": "حدّث stella desktop للتعديل",
+        "editReason": "يفتح التعديل على الحاسوب الملف في تطبيق على حاسوبك عبر stella desktop.",
+        "signCurrent": "التوقيع باستخدام stella desktop",
+        "signNone": "نزّل stella desktop لتوقيع ملف PDF هذا",
+        "signOutdated": "حدّث stella desktop للتوقيع",
+        "signReason": "يستخدم التوقيع الشهادة الموجودة على حاسوبك، لذا يتم داخل stella desktop."
+      },
       "downloadAs": "تنزيل بصيغة…",
       "downloadAsZip": "تنزيل بصيغة ZIP",
       "downloadExtractedText": "النص المستخرج (.txt)",
@@ -5443,7 +5515,6 @@
       "ocrQueueFailed": "تعذّرت جدولة التعرّف على النص",
       "ocrQueued": "تمت إضافة التعرّف على النص إلى دفعة OCR التالية",
       "pdfSigning": {
-        "action": "التوقيع في تطبيق سطح المكتب",
         "cancelledBaseVersionDescription": "تغيّر المستند أثناء التوقيع. افتح أحدث إصدار ووقّعه من جديد.",
         "cancelledCertificateDescription": "لا يمكن استخدام الشهادة المختارة للتوقيع. اختر شهادة تسمح بالتوقيع الرقمي.",
         "cancelledCertifiedDescription": "ملف PDF هذا مُصدَّق، ولا يسمح تصديقه بإضافة توقيعات أخرى.",
@@ -5971,7 +6042,6 @@
       "previewUnsupported": "المعاينة غير مدعومة لهذا النوع من المستندات.",
       "readingFrom": "يقرأ الذكاء الاصطناعي من",
       "referencesItself": "الخاصية تشير إلى نفسها عبر خصائص أخرى",
-      "rerunColumn": "إعادة تشغيل العمود",
       "resultType": "نوع النتيجة",
       "returnsLabel": "التنسيق",
       "scopeFile": "الملف الحالي",

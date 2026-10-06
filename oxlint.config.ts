@@ -902,6 +902,10 @@ export default defineConfig({
       { allowConstantLoopConditions: "only-allowed-literals" },
     ],
     "typescript/consistent-type-definitions": ["error", "type"],
+    // NonNullable<unknown> deliberately admits every defined handler payload;
+    // Record<never, never> models empty adapter options and negative type tests.
+    // This rule rejects both contracts, including unresolved Drizzle generics.
+    "typescript/no-generated-empty-object-type": "off",
     "typescript/no-misused-promises": [
       "error",
       { checksVoidReturn: { attributes: false } },
@@ -1087,6 +1091,7 @@ export default defineConfig({
     // stays flagged.
     "no-bare-jsonb-cast/no-bare-jsonb-cast": "error",
     "no-hand-rolled-sql-case/no-hand-rolled-sql-case": "error",
+    "no-hand-rolled-role-set/no-hand-rolled-role-set": "error",
     "require-timestamptz-column/require-timestamptz-column": "error",
     "no-naive-timestamp-cast/no-naive-timestamp-cast": "error",
     "no-inline-timestamp-cursor-sql/no-inline-timestamp-cursor-sql": "error",
@@ -1509,6 +1514,7 @@ export default defineConfig({
     "./.oxlint-plugins/provider-call-error-message.ts",
     "./.oxlint-plugins/require-custom-jsonb-column.ts",
     "./.oxlint-plugins/no-bare-jsonb-cast.ts",
+    "./.oxlint-plugins/no-hand-rolled-role-set.ts",
     "./.oxlint-plugins/no-hand-rolled-sql-case.ts",
     "./.oxlint-plugins/no-hand-rolled-execute-rows.ts",
     "./.oxlint-plugins/require-derived-check-enum.ts",
@@ -3965,6 +3971,7 @@ export default defineConfig({
               "apps/api/src/env-online-index.ts",
               "apps/api/src/env-db-timeouts.ts",
               "apps/api/src/env-replay.ts",
+              "apps/api/src/env-eu-completion.ts",
               "apps/api/src/env-schema.ts",
               "apps/api/src/env-document-processing-worker.ts",
               "apps/api/src/db-url.ts",
@@ -4337,6 +4344,11 @@ export default defineConfig({
           "error",
           {
             allowedFiles: [
+              {
+                file: "apps/api/src/lib/db/operator-registrations/read.ts",
+                reason:
+                  "deployment-credential authorized operator directory, bounded by registration time and page size, with transactional access auditing",
+              },
               {
                 file: "apps/api/src/lib/db/account-row.ts",
                 reason:

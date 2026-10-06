@@ -6,6 +6,7 @@ import {
   envBaseServerSchema,
 } from "../apps/api/src/env-base-schema";
 import { envDocumentProcessingWorkerServerSchema } from "../apps/api/src/env-document-processing-worker-schema";
+import { euCompletionTickServerSchema } from "../apps/api/src/env-eu-completion";
 import { envOnlineIndexServerSchema } from "../apps/api/src/env-online-index";
 import { replayTickServerSchema } from "../apps/api/src/env-replay";
 import { envApiServerSchema } from "../apps/api/src/env-schema";
@@ -101,6 +102,10 @@ const INTERNAL_SERVER_KEYS = new Set([
   "BETTER_AUTH_COOKIE_PREFIX",
   "BETTER_AUTH_URL",
   "CASE_LAW_DATABASE_POOL_MAX",
+  "CASE_LAW_EU_COMPLETION_ENABLED",
+  "CASE_LAW_EU_COMPLETION_KILL_SWITCH",
+  "CASE_LAW_EU_COMPLETION_MODE",
+  "CASE_LAW_EU_COMPLETION_MAX_ROWS",
   "CASE_LAW_REPLAY_ENABLED",
   "CASE_LAW_REPLAY_KILL_SWITCH",
   "CASE_LAW_REPLAY_DISABLED_SOURCES",
@@ -278,6 +283,14 @@ const EXAMPLE_VALUES: Record<string, string> = {
 };
 
 const DESCRIPTION_OVERRIDES: Record<string, string> = {
+  CASE_LAW_EU_COMPLETION_ENABLED:
+    "Enable bounded EU case-law completion. Defaults to false.",
+  CASE_LAW_EU_COMPLETION_KILL_SWITCH:
+    "Stop EU case-law completion before the next publisher or database effect.",
+  CASE_LAW_EU_COMPLETION_MODE:
+    "Completion mode: dry-run by default; apply requires durable supervised approval.",
+  CASE_LAW_EU_COMPLETION_MAX_ROWS:
+    "Maximum completion documents per invocation, from 1 to 100. Defaults to 25.",
   CASE_LAW_REPLAY_ENABLED:
     "Enable bounded background case-law replay. Defaults to false.",
   CASE_LAW_REPLAY_KILL_SWITCH:
@@ -531,6 +544,8 @@ const DESCRIPTION_OVERRIDES: Record<string, string> = {
     "Redis URL used for cross-replica Yjs and awareness broadcast. Treated as secret because it may contain credentials.",
   STELLA_COLLAB_SERVICE_TOKEN:
     "Bearer credential used by the collaboration service for snapshot load and store requests.",
+  OPERATOR_API_TOKEN:
+    "Deployment-owned bearer credential for operator HTTP access. Unset disables access; use at least 32 characters.",
   STELLA_SIGNUP_RATE_LIMIT_IP_SOURCE:
     'Client-IP source for signup limits. Use "direct" without a proxy and "trusted_proxy" behind configured proxies.',
   STELLA_CLIENT_ADDRESS_HEADER:
@@ -629,6 +644,7 @@ type EnvCatalogName =
   | keyof typeof envApiServerSchema
   | keyof typeof envCollabServerSchema
   | keyof typeof replayTickServerSchema
+  | keyof typeof euCompletionTickServerSchema
   | keyof typeof envWebClientSchema;
 
 export const ENV_CREDENTIAL_CLASSIFICATION = {
@@ -677,6 +693,10 @@ export const ENV_CREDENTIAL_CLASSIFICATION = {
   CASE_LAW_REPLAY_ENABLED: ENV_CREDENTIAL_KIND.notCredential,
   CASE_LAW_REPLAY_KILL_SWITCH: ENV_CREDENTIAL_KIND.notCredential,
   CASE_LAW_REPLAY_DISABLED_SOURCES: ENV_CREDENTIAL_KIND.notCredential,
+  CASE_LAW_EU_COMPLETION_ENABLED: ENV_CREDENTIAL_KIND.notCredential,
+  CASE_LAW_EU_COMPLETION_KILL_SWITCH: ENV_CREDENTIAL_KIND.notCredential,
+  CASE_LAW_EU_COMPLETION_MAX_ROWS: ENV_CREDENTIAL_KIND.notCredential,
+  CASE_LAW_EU_COMPLETION_MODE: ENV_CREDENTIAL_KIND.notCredential,
   CASE_LAW_DATABASE_URL: ENV_CREDENTIAL_KIND.notCredential,
   CHAT_RUN_LOG_SHADOW: ENV_CREDENTIAL_KIND.notCredential,
   COMPANIES_HOUSE_API_KEY: ENV_CREDENTIAL_KIND.credential,
@@ -872,6 +892,7 @@ export const ENV_CREDENTIAL_CLASSIFICATION = {
   STELLA_COLLAB_PORT: ENV_CREDENTIAL_KIND.notCredential,
   STELLA_COLLAB_REDIS_URL: ENV_CREDENTIAL_KIND.notCredential,
   STELLA_COLLAB_SERVICE_TOKEN: ENV_CREDENTIAL_KIND.credential,
+  OPERATOR_API_TOKEN: ENV_CREDENTIAL_KIND.credential,
   STELLA_COMMIT_SHA: ENV_CREDENTIAL_KIND.notCredential,
   STELLA_OCR_PDF_FONT_PATH: ENV_CREDENTIAL_KIND.notCredential,
   STELLA_ORIGIN_VERIFY_SECRET: ENV_CREDENTIAL_KIND.credential,
@@ -959,6 +980,7 @@ const ACTIVE_EXAMPLE_KEYS = new Set([
   "SMTP_PORT",
   "SMTP_USERNAME",
   "STELLA_COLLAB_SERVICE_TOKEN",
+  "OPERATOR_API_TOKEN",
   "STELLA_SIGNUP_RATE_LIMIT_IP_SOURCE",
   "TRANSACTIONAL_EMAIL_FROM",
   "USE_MOCK_AI",
@@ -1119,6 +1141,10 @@ const createCatalogEntries = ({ owner, schema }: CreateCatalogEntriesOptions) =>
 export const ENV_CATALOG = [
   ...createCatalogEntries({
     owner: ENV_OWNER.apiBase,
+    schema: euCompletionTickServerSchema,
+  }),
+  ...createCatalogEntries({
+    owner: ENV_OWNER.apiBase,
     schema: replayTickServerSchema,
   }),
   ...createCatalogEntries({
@@ -1149,6 +1175,7 @@ export const ENV_CATALOG = [
 ];
 
 export const API_ENV_SCHEMA = {
+  ...euCompletionTickServerSchema,
   ...replayTickServerSchema,
   ...envBaseServerSchema,
   ...envOnlineIndexServerSchema,
@@ -1289,6 +1316,7 @@ export const TOOLING_ENV_KEYS = new Set([
   "BUN_INSTALL_CACHE_DIR",
   // Browser commands use only executables baked into the pinned image.
   "PLAYWRIGHT_BROWSERS_PATH",
+  "PLAYWRIGHT_JSON_OUTPUT_FILE",
   "PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD",
   "AGENT_ENGINE_DOCKER_CANARY_URL",
   "AGENT_ENGINE_DOCKER_IMAGE",
@@ -1309,6 +1337,7 @@ export const TOOLING_ENV_KEYS = new Set([
   "API_DEPLOYMENT_PROBE_PATH",
   "API_DEPLOYMENT_STABLE_PROBES",
   "API_DEPLOYMENT_URL",
+  "API_TEST_ARTIFACT_DIR",
   "APP_VERSION",
   "AWS_ENDPOINT_URL_BEDROCK_RUNTIME",
   "BASE_REF",
@@ -1377,6 +1406,7 @@ export const TOOLING_ENV_KEYS = new Set([
   "PROPERTY_TEST_TIMEOUT_BASE_MS",
   "PROVIDER_REQUEST_COMBINATIONS",
   "PROVIDER_REQUEST_SHARD",
+  "PUSH_BEFORE",
   "RAILWAY_API_TOKEN",
   "RAILWAY_PROJECT_TOKEN",
   "RAILWAY_SMOKE_API_URL",
@@ -1441,6 +1471,7 @@ export const TOOLING_ENV_KEYS = new Set([
   "STORED_AGENT_TEST_VALUE",
   "TANSTACK_DRIFT_INSTALL_OUTCOME",
   "TEST_API_ERROR",
+  "TEST_LATER",
   "TURBO_HASH",
   "TURBO_SCM_BASE",
   "TURN_OUTCOME_COMBINATIONS",

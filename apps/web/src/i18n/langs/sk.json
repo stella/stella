@@ -54,6 +54,17 @@
       "polish": "Vylepšiť znenie"
     }
   },
+  "aiColumns": {
+    "countSummary": "{columns} stĺpcov × {rows} riadkov = {answers, plural, one {# odpoveď} few {# odpovede} many {# odpovede} other {# odpovedí}}. Odpovede čerpajú rozpočet.",
+    "refusedBudget": "Nespustené: rozpočet na odpovede nie je k dispozícii",
+    "rerunAllPage": "Spustiť všetko znova (táto stránka)",
+    "rerunColumnPage": "Spustiť stĺpec znova (táto stránka)",
+    "runColumnPage": "Spustiť stĺpec (táto stránka)",
+    "runPageRows": "Spustiť pre {count, plural, one {# riadok na tejto stránke} few {# riadky na tejto stránke} many {# riadka na tejto stránke} other {# riadkov na tejto stránke}}",
+    "runRemainingPage": "Spustiť zostávajúce (táto stránka)",
+    "runSelectedRows": "Spustiť pre {count, plural, one {# vybraný riadok} few {# vybrané riadky} many {# vybraného riadka} other {# vybraných riadkov}}",
+    "selectedRun": "Spustiť AI stĺpce pre {count, plural, one {# riadok} few {# riadky} many {# riadka} other {# riadkov}}"
+  },
   "appearance": {
     "calendar": "Kalendár",
     "calendarGregorian": "Gregoriánsky",
@@ -796,6 +807,34 @@
       "unavailable": "Údaje o pokrytí momentálne nie sú k dispozícii."
     },
     "decisionNotFound": "Rozhodnutie sa nenašlo",
+    "decisionTypes": {
+      "administrative_decision": "Správne rozhodnutie",
+      "binding_excise_information": "Záväzná informácia o spotrebnej dani",
+      "binding_rate_information": "Záväzná informácia o sadzbe DPH",
+      "court_direction": "Opatrenie",
+      "decision": "Rozhodnutie",
+      "finding": "Nález",
+      "general_tax_ruling": "Všeobecná daňová interpretácia",
+      "individual_tax_ruling": "Individuálna daňová interpretácia",
+      "judgment": "Rozsudok",
+      "leave_refused": "Odmietnuté pre nedostatok zásadnej právnej otázky",
+      "merits_decision": "Rozhodnutie vo veci samej",
+      "ministry_of_justice_decision": "Rozhodnutie ministerstva spravodlivosti",
+      "minutes_extract": "Výpis zo zápisnice",
+      "opinion": "Stanovisko",
+      "order": "Uznesenie",
+      "other": "Ostatné",
+      "payment_order": "Platobný rozkaz",
+      "penal_order": "Trestný rozkaz",
+      "principle_decision": "Zásadné rozhodnutie",
+      "protective_opinion": "Zabezpečovacie stanovisko",
+      "resolution": "Uznesenie (uchwała)",
+      "signalling_decision": "Signalizačné uznesenie",
+      "statement_of_reasons": "Odôvodnenie",
+      "tax_explanations": "Daňové vysvetlenia",
+      "top_up_tax_opinion": "Stanovisko k dorovnávacej dani",
+      "uniformity_decision": "Rozhodnutie o zjednotení judikatúry"
+    },
     "emptyState": "Žiadne rozhodnutia. Nakonfigurujte zdroj a spustite synchronizáciu na import judikatúry.",
     "filters": {
       "remove": "Odstrániť filter {filter}"
@@ -841,6 +880,7 @@
       "subsection": "ods. {value}"
     },
     "reader": {
+      "expandProvisions": "Rozbaliť ustanovenia",
       "headMatter": "Úvodná časť",
       "sourceAttribution": "Zdroj údajov je voľne dostupný na <link>{source}</link>."
     },
@@ -865,7 +905,9 @@
       },
       "deleteColumnConfirm": "Otázka aj všetky jej odpovede sa odstránia pre celú organizáciu, zo všetkých vyhľadávaní a všetkým členom. Ak ju chcete skryť len v tomto vyhľadávaní, zvoľte „Odstrániť z tohto vyhľadávania“.",
       "editQuestionHint": "Zmena znenia, typu odpovede alebo jeho možností zahodí existujúce odpovede; stĺpec potom spustite znova.",
+      "newQuestionColumn": "Nové",
       "nothingToRun": "Každá bunka už má odpoveď",
+      "questionAdded": "„{question}“ pridané do tabuľky",
       "questionPlaceholder": "napr. Považoval súd výpoveď za platnú?",
       "removeFromSearch": "Odstrániť z tohto vyhľadávania",
       "runAll": "Odpovedať na všetko",
@@ -944,7 +986,8 @@
       "textNotYetAvailable": "Súd text rozhodnutia nezverejnil alebo tu zatiaľ nie je dostupný.",
       "textPending": "Text rozhodnutia sa stále načítava",
       "textReadFailed": "Text rozhodnutia sa nepodarilo načítať",
-      "textUnavailable": "K tomuto rozhodnutiu nie je k dispozícii text"
+      "textUnavailable": "K tomuto rozhodnutiu nie je k dispozícii text",
+      "versionAtDecisionDateInferred": "Znenie k dátumu rozhodnutia (odvodené)"
     }
   },
   "catalogue": {
@@ -1854,6 +1897,7 @@
     "unexpectedError": "Vyskytla sa neočakávaná chyba. Kontaktujte podporu.",
     "unknownUser": "Neznámy používateľ",
     "unpin": "Odopnúť",
+    "unsavedChangesEscape": "Neuložené zmeny. Ďalším stlačením Esc ich zahodíte",
     "unsavedLeaveConfirm": "Máte neuložené zmeny. Odísť bez uloženia?",
     "unverified": "Neoverené",
     "unverifiedCitationHint": "Túto citáciu sa nepodarilo priradiť k zdrojovému dokumentu.",
@@ -1874,15 +1918,23 @@
     "zoomOut": "Oddialiť"
   },
   "consent": {
+    "actingAs": "{clientName} bude konať vo vašom mene v organizácii {organizationName}",
     "allow": "Povoliť",
-    "appIdentity": "Identita aplikácie",
+    "canChange": "Môže meniť",
+    "canRead": "Môže čítať",
     "completeSetup": "Dokončiť nastavenie",
+    "connectTitle": "Pripojiť {clientName} k stella",
+    "connectedTitle": "Pripojené k aplikácii {clientName}",
+    "connectionDuration": "Zostane pripojená, kým ju neodpojíte v Nastaveniach › Pripojenia",
     "defaultClientName": "Aplikácia",
-    "description": "{clientName} chce získať prístup k vášmu pracovnému priestoru stella",
+    "destinationDetails": "Podrobnosti o presmerovaní",
     "error": "Niečo sa pokazilo. Skúste to znova.",
     "missingJurisdictions": "Vaša organizácia v stelle si zatiaľ nenastavila jurisdikcie svojej praxe. Niektoré nástroje závislé od jurisdikcie nebudú dostupné, kým nastavenie nedokončíte.",
-    "permissions": "Toto umožní aplikácii:",
-    "redirectDestination": "Cieľ presmerovania",
+    "otherPermissions": "Ďalšie povolenia",
+    "publishedBy": "Vydavateľ: <host>{publisherHost}</host>",
+    "returnToAgent": "Pokračujte návratom k svojmu agentovi.",
+    "returnsLocally": "Na tomto počítači sa vrátite do aplikácie {clientName}",
+    "returnsTo": "Vrátite sa do aplikácie {clientName}",
     "scopeAdminRead": "Čítať protokol auditu vašej organizácie",
     "scopeAdminWrite": "Spravovať členov a nastavenia organizácie",
     "scopeBillingWrite": "Vytvoriť, upraviť a vymazať vaše časové záznamy",
@@ -1903,8 +1955,11 @@
     "scopeSkills": "Použitie vašich uložených zručností stella",
     "scopeTemplates": "Zobrazenie, vypĺňanie a vytváranie vašich vzorov dokumentov",
     "scopeTemplatesAnonymized": "Zobraziť, vyplniť a vytvoriť anonymizované verzie vašich vzorov dokumentov",
+    "signedInAs": "Prihlásený ako <email>{accountEmail}</email>",
     "title": "Autorizácia prístupu",
-    "unverifiedApp": "Neoverená aplikácia"
+    "unverifiedApp": "Neoverená aplikácia",
+    "unverifiedExplanation": "Stella neoverila, kto túto aplikáciu vydáva.",
+    "useAnotherAccount": "Použiť iný účet"
   },
   "contacts": {
     "alsoPartyIn": "Vystupuje tiež ako strana v {count, plural, one {# ďalšom spise} few {# ďalších spisoch} other {# ďalších spisoch}}",
@@ -2295,6 +2350,8 @@
       "encryptedContent": "Obsah šifrovaného dokumentu nie je možné extrahovať. Odstráňte zo súboru heslo a skúste to znova.",
       "filePropertyTypeImmutable": "Typ súborovej vlastnosti nie je možné zmeniť. Ponechajte existujúci typ; pre iné hodnoty vytvorte vlastnú vlastnosť.",
       "forbidden": "Na túto akciu nemáte oprávnenie.",
+      "hostedCheckoutOpen": "Pre túto organizáciu je už otvorená objednávka. Dokončite ju alebo začnite novú, keď vyprší.",
+      "hostedSubscriptionLive": "Táto organizácia už má predplatné. Zmeňte ho v časti Spravovať hostované využitie.",
       "internalServerError": "Niečo sa pokazilo. Skúste to prosím znova.",
       "legalSourceEntityLimitReached": "Tento spis dosiahol limit položiek, preto dokument nebolo možné vytvoriť.",
       "legalSourceFilePropertyMissing": "V tomto spise chýba vlastnosť súboru, preto dokument nebolo možné vytvoriť.",
@@ -4622,6 +4679,7 @@
     "compareVersionMissing": "Verzia na porovnanie v histórii tohto predpisu nie je.",
     "compareWholeAct": "Porovnať celý predpis",
     "compareWithVersion": "Porovnať so znením {version}",
+    "currentWording": "Aktuálne znenie",
     "description": "Verejná databáza konsolidovaných právnych predpisov, indexovateľných podľa predpisu a jeho znenia.",
     "diffInserted": "Vložené:",
     "diffRemoved": "Vypustené:",
@@ -4671,7 +4729,9 @@
       "unknown": "Stav nejasný"
     },
     "title": "Právne predpisy",
-    "validity": "Platné od {from} do {to}"
+    "validity": "Platné od {from} do {to}",
+    "wordingValidFrom": "Znenie účinné od {date}",
+    "wordingVersionUnknown": "Dátum verzie znenia nie je k dispozícii"
   },
   "styleSets": {
     "create": "Vytvoriť",
@@ -5408,6 +5468,7 @@
         "unknownLocation": "Umiestnenie vzoru: adresa, ktorú stella nedokáže overiť"
       },
       "desktopEdit": {
+        "accountRequiredTitle": "Pripojte stella desktop k svojmu účtu",
         "action": "Upraviť v desktopovej aplikácii",
         "authRequiredDescription": "Pred použitím úprav v desktopovej aplikácii obnovte stella a znovu sa prihláste.",
         "authRequiredTitle": "Relácia vypršala",
@@ -5430,6 +5491,17 @@
         "updateRequiredDescription": "stella desktop vyžaduje aktualizáciu. Prebehne automaticky po dokončení aktívnych desktopových úprav; skúste to znova po reštarte.",
         "updateRequiredTitle": "Aktualizujte stella desktop"
       },
+      "desktopGate": {
+        "alreadyInstalled": "Už je nainštalovaný? Pripojiť",
+        "connect": "Pripojiť stella desktop",
+        "editNone": "Stiahnite si stella desktop a upravte tento súbor",
+        "editOutdated": "Aktualizujte stella desktop a upravujte",
+        "editReason": "Úpravy v počítači otvárajú súbor v aplikácii vo vašom počítači cez stella desktop.",
+        "signCurrent": "Podpísať v stella desktop",
+        "signNone": "Stiahnite si stella desktop a podpíšte toto PDF",
+        "signOutdated": "Aktualizujte stella desktop a podpisujte",
+        "signReason": "Podpis používa certifikát vo vašom počítači, preto prebieha v stella desktop."
+      },
       "downloadAs": "Stiahnuť ako…",
       "downloadAsZip": "Stiahnuť .zip súbor",
       "downloadExtractedText": "Extrahovaný text (.txt)",
@@ -5443,7 +5515,6 @@
       "ocrQueueFailed": "Rozpoznávanie textu sa nepodarilo zaradiť do fronty",
       "ocrQueued": "Rozpoznávanie textu bolo zaradené do nasledujúcej dávky OCR",
       "pdfSigning": {
-        "action": "Podpísať v desktopovej aplikácii",
         "cancelledBaseVersionDescription": "Dokument sa počas podpisovania zmenil. Otvorte najnovšiu verziu a podpíšte ho znova.",
         "cancelledCertificateDescription": "Vybraný certifikát sa nedá použiť na podpis. Zvoľte certifikát, ktorý umožňuje digitálny podpis.",
         "cancelledCertifiedDescription": "Toto PDF je certifikované a jeho certifikácia nepovoľuje ďalšie podpisy.",
@@ -5971,7 +6042,6 @@
       "previewUnsupported": "Náhľad nie je pre tento typ dokumentu podporovaný.",
       "readingFrom": "AI číta z",
       "referencesItself": "Vlastnosť odkazuje sama na seba cez iné vlastnosti",
-      "rerunColumn": "Spustiť stĺpec znovu",
       "resultType": "Typ výsledku",
       "returnsLabel": "Formát",
       "scopeFile": "Aktuálny súbor",

@@ -18,6 +18,11 @@ export const SYSTEM_RUN_ACTOR_COUNTS = {
     "fannedOrganizations",
     "transitions",
   ],
+  "system:operator-registrations": [
+    "sinceEpochMilliseconds",
+    "pageSize",
+    "returned",
+  ],
   "system:sanctions-refresh": [
     "activated",
     "activatedEntries",
@@ -51,6 +56,13 @@ export const SYSTEM_RUN_ACTOR_COUNTS = {
     "attempted",
     "applied",
     "blocked",
+    "failed",
+  ],
+  "system:eu-corpus-completion": [
+    "attempted",
+    "applied",
+    "unchanged",
+    "reviewRequired",
     "failed",
   ],
 } as const satisfies Record<`system:${string}`, readonly string[]>;
