@@ -432,14 +432,15 @@ pub(crate) async fn show_connection_confirmation(
   let (details, title_key) = match confirmation {
     ConnectionConfirmation::HandoffError(failure) => {
       let detail = match failure {
-        crate::handoff::Failure::Other(message) => message.as_str(),
+        crate::handoff::Failure::Retryable(message)
+        | crate::handoff::Failure::Terminal(message) => message.as_str(),
         _ => "",
       };
       (
         format!(
           "mode=handoff&message={}&action={}&detail={}",
           percent_encode(crate::i18n::t(failure.message_key())),
-          percent_encode(crate::i18n::t(failure.action_key())),
+          percent_encode(failure.action_key().map(crate::i18n::t).unwrap_or("")),
           percent_encode(detail)
         ),
         "dialog.handoffWindowTitle",
