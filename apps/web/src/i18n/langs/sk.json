@@ -1049,6 +1049,7 @@
       "toastDescription": "Zobrazenie chatu na celú stránku s uloženými vláknami už čoskoro.",
       "toastTitle": "Plné zobrazenie zatiaľ nie je dostupné"
     },
+    "activateGeneratedView": "Pracovať s prehľadom",
     "aiPrompt": "Pole správy pre AI",
     "aiThread": "Konverzácia s AI",
     "analyzingSources": "Analyzujem zdroje",
@@ -1194,6 +1195,8 @@
     "forkedFromUnavailable": "Vytvorené z chatu, ktorý už nie je dostupný",
     "forkedThread": "Z iného chatu",
     "forkingThread": "Vytvára sa nový chat…",
+    "generatedView": "Vygenerovaný prehľad",
+    "generatedViewDrill": "Vyhľadaj rozhodnutia s filtrom súdu {court} a rokom {year}.",
     "greeting": "Na čom chcete pracovať?",
     "greetingSubtitle": "Začnite spisom, dokumentom alebo obyčajnou otázkou.",
     "hideThread": "Skryť konverzáciu",

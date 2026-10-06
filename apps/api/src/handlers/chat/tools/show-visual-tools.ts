@@ -41,6 +41,8 @@ export const createShowVisualTools = ({
       "in the supplied links list, and stella.ready() once rendered. External links need user confirmation " +
       "and their complete URL must occur literally in the page. Scripts run locally in an isolated frame; " +
       "network requests, imports, frames, forms, SVG authoring and stylesheets are unavailable. " +
+      "Style with stella-stack, stella-row, stella-card, stella-muted, stella-chart and stella-table classes; " +
+      "stella-light and stella-dark select a color scheme. " +
       "On refusal, correct the indicated input and call again.",
     inputSchema: toTanStackToolSchema(generatedVisualInputSchema, {
       omitValidationActions: ["check"],

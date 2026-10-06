@@ -1049,6 +1049,7 @@
       "toastDescription": "Pilnas lapas tērzēšana ar saglabātām sarunām drīz būs pieejama.",
       "toastTitle": "Pilnais skats vēl nav pieejams"
     },
+    "activateGeneratedView": "Izmantot šo skatu",
     "aiPrompt": "AI ziņojuma lauks",
     "aiThread": "AI saruna",
     "analyzingSources": "Avotu analīze",
@@ -1194,6 +1195,8 @@
     "forkedFromUnavailable": "Izveidota no tērzēšanas, kas vairs nav pieejama",
     "forkedThread": "No citas tērzēšanas",
     "forkingThread": "Tiek veidota jauna tērzēšana…",
+    "generatedView": "Ģenerēts skats",
+    "generatedViewDrill": "Meklē nolēmumus ar tiesas filtru {court} un gadu {year}.",
     "greeting": "Pie kā vēlaties strādāt?",
     "greetingSubtitle": "Sāciet ar lietu, dokumentu vai vienkāršu jautājumu.",
     "hideThread": "Paslēpt sarunu",

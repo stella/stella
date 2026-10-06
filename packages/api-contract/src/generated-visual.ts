@@ -1,7 +1,7 @@
 import * as v from "valibot";
 
 import { safeIdSchema } from "./safe-id";
-import { VISUAL_SANDBOX_LIMITS } from "./visual-sandbox";
+import { visualLinkSchema, VISUAL_SANDBOX_LIMITS } from "./visual-sandbox";
 
 export const GENERATED_VISUAL_LIMITS = {
   dataBytes: 1024 * 1024,
@@ -110,6 +110,15 @@ export const generatedVisualInputSchema = v.strictObject({
     ),
   ),
 });
+export const generatedVisualPageSchema = v.strictObject({
+  ...generatedVisualInputSchema.entries,
+  links: v.nonOptional(generatedVisualInputSchema.entries.links),
+  literalLinks: v.array(visualLinkSchema),
+});
+export type GeneratedVisualPage = v.InferOutput<
+  typeof generatedVisualPageSchema
+>;
+
 export type GeneratedVisualInput = v.InferOutput<
   typeof generatedVisualInputSchema
 >;

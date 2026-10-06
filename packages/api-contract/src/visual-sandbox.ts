@@ -2,6 +2,12 @@ import * as v from "valibot";
 
 export const VISUAL_GUEST_MARKER_ATTRIBUTE = "data-stella-visual-guest";
 
+export const VISUAL_SHELL_NONCE_PARAMETER = "n";
+export const visualShellReadySchema = v.strictObject({
+  kind: v.literal("shell-ready"),
+  nonce: v.pipe(v.string(), v.uuid()),
+});
+
 export const VISUAL_SANDBOX_PATH = "/visual-sandbox";
 
 export const VISUAL_SANDBOX_LIMITS = {

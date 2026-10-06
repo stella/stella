@@ -212,6 +212,7 @@ export const isSuggestChangesApplyOutput = (
   typeof output.success === "boolean";
 
 const CHAT_TOOL_TITLE_KEYS = {
+  show_visual: "chat.generatedView",
   add_comment: "chat.tool.add_comment",
   "ask-user": "chat.tool.ask-user",
   boe_find_related_laws: "chat.tool.boe_find_related_laws",

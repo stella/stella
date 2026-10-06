@@ -83,7 +83,8 @@
     "./desktop-presence": "./src/desktop-presence.ts",
     "./mcp-app-messages": "./src/mcp-app-messages.json",
     "./mcp-app.fixtures": "./src/mcp-app.fixtures.ts",
-    "./mcp-app-sandbox-policy": "./src/mcp-app-sandbox-policy.ts"
+    "./mcp-app-sandbox-policy": "./src/mcp-app-sandbox-policy.ts",
+    "./chat-ui-resources": "./src/chat-ui-resources.ts"
   },
   "scripts": {
     "clean": "git clean -xdf .cache .turbo node_modules",

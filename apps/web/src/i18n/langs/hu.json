@@ -1049,6 +1049,7 @@
       "toastDescription": "A teljes oldalas csevegés a csevegések mentésével együtt érkezik.",
       "toastTitle": "A teljes nézet még nem érhető el"
     },
+    "activateGeneratedView": "A nézet használata",
     "aiPrompt": "AI-üzenetmező",
     "aiThread": "AI-beszélgetés",
     "analyzingSources": "Források elemzése",
@@ -1194,6 +1195,8 @@
     "forkedFromUnavailable": "Egy már nem elérhető csevegésből létrehozva",
     "forkedThread": "Másik csevegésből",
     "forkingThread": "Új csevegés létrehozása…",
+    "generatedView": "Létrehozott nézet",
+    "generatedViewDrill": "Keress határozatokat a(z) {court} bíróságszűrővel és a(z) {year} évre.",
     "greeting": "Min szeretne dolgozni?",
     "greetingSubtitle": "Kezdje egy üggyel, dokumentummal vagy egyszerű kérdéssel.",
     "hideThread": "Beszélgetés elrejtése",

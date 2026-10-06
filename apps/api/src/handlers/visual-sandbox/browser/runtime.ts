@@ -8,6 +8,7 @@ import {
 import {
   VISUAL_GUEST_MARKER_ATTRIBUTE,
   VISUAL_SANDBOX_LIMITS,
+  visualLinkSchema,
 } from "@stll/api-contract/visual-sandbox";
 
 import { createVisualMessageHandler } from "../bridge";
@@ -15,10 +16,13 @@ import { composeVisualDocument } from "../srcdoc";
 import { parseVisualOuterConfig, whenVisualDocumentReady } from "./boot";
 import { createVisualGuestApi } from "./guest-api";
 import { isolateVisualGuest } from "./isolation";
+import { installVisualPresentation } from "./presentation";
+import { visualShellReadyMessage } from "./shell-ready";
 
 const bootGuest = () => {
   try {
     isolateVisualGuest();
+    installVisualPresentation(document);
     const dataElement = document.querySelector(`#${VISUAL_DATA_SCRIPT_ID}`);
     if (!dataElement) {
       return panic("The visual document has no data payload");
@@ -53,6 +57,32 @@ const bootGuest = () => {
     document.documentElement.replaceChildren();
     throw error;
   }
+  const NativeElement = Element;
+  const closest = Element.prototype.closest;
+  const getAttribute = Element.prototype.getAttribute;
+  const requestLink = (event: Event) => {
+    if (!(event.target instanceof NativeElement)) {
+      return;
+    }
+    const anchor = closest.call(event.target, "a[data-stella-link]");
+    if (!anchor) {
+      return;
+    }
+    event.preventDefault();
+    const parsed = v.safeParse(
+      visualLinkSchema,
+      getAttribute.call(anchor, "data-stella-link"),
+    );
+    if (parsed.success) {
+      window.parent.postMessage({ kind: "open-link", url: parsed.output }, "*");
+    }
+  };
+  document.addEventListener("click", requestLink);
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Enter") {
+      requestLink(event);
+    }
+  });
   const reportSize = () =>
     window.parent.postMessage(
       {
@@ -68,6 +98,10 @@ const bootGuest = () => {
       "*",
     );
   whenVisualDocumentReady(document, () => {
+    for (const anchor of document.querySelectorAll("a[data-stella-link]")) {
+      anchor.setAttribute("role", "link");
+      anchor.setAttribute("tabindex", "0");
+    }
     new ResizeObserver(reportSize).observe(document.body);
     reportSize();
   });
@@ -103,6 +137,14 @@ const bootOuter = (runtime: string) => {
         window.parent.postMessage(message, hostOrigin),
     }),
   );
+  const reportReady = () => {
+    const message = visualShellReadyMessage(window.location.hash);
+    if (message !== null) {
+      window.parent.postMessage(message, "*");
+    }
+  };
+  window.addEventListener("hashchange", reportReady);
+  reportReady();
 };
 
 const runtime = document.currentScript?.textContent;
