@@ -6,6 +6,7 @@ import { VISUAL_PREVIEW_TOOL_NAME } from "@stll/api-contract/visual-preview";
 import type { VisualPreviewOutput } from "@stll/api-contract/visual-preview";
 import { rejectionOf } from "@stll/property-testing/rejection";
 
+import { VISUAL_SHOWCASE_GUIDANCE } from "@/api/handlers/visual-sandbox/guidance/showcase";
 import { createVisualResourceOrigin } from "@/api/handlers/visual-sandbox/resource-origin";
 import { createSafeId } from "@/api/lib/branded-types";
 import { ChatToolError } from "@/api/lib/errors/tagged-errors";
@@ -22,6 +23,16 @@ const unavailablePreview = async () =>
   );
 
 describe("show visual", () => {
+  test("carries the court and year guidance in its description", () => {
+    const tool = createShowVisualTools({
+      origin: createVisualResourceOrigin(),
+      preview: unavailablePreview,
+      store: async () => panic("The description test stores nothing"),
+    })[VISUAL_PREVIEW_TOOL_NAME];
+    expect(tool.description).toEndWith(VISUAL_SHOWCASE_GUIDANCE);
+    expect(tool.description).toContain("facets.courtYear");
+  });
+
   test("has a serializable input contract and emits its native resource", async () => {
     const origin = createVisualResourceOrigin();
     const fileId = createSafeId<"userFile">();
