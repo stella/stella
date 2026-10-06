@@ -831,10 +831,11 @@ type SuiteDepth = (typeof SUITE_DEPTH)[keyof typeof SUITE_DEPTH];
 const FULL_DEPTH_EVENTS = [EVENT.mergeGroup, EVENT.workflowDispatch] as const;
 
 type EvaluateResultOptions = {
-  event: Event;
+  event: Event | "push";
   results: Record<string, string>;
   suiteDepth?: SuiteDepth | "";
   unplannedScopes?: readonly string[];
+  plannedOutputs?: Record<string, string>;
   /** The pull request's draft state as the API reports it now; unset fails the lookup. */
   liveDraft?: boolean;
   suiteResults?: Record<string, string>;
@@ -909,6 +910,7 @@ const resultGateCase = ({
     ? SUITE_DEPTH.fast
     : SUITE_DEPTH.full,
   unplannedScopes = [],
+  plannedOutputs = {},
   liveDraft,
   suiteResults = {},
   cancellationEvidence = "timeout",
@@ -1058,6 +1060,7 @@ const resultGateCase = ({
       REPO: PULL_REQUEST.repo,
       PLAN: JSON.stringify({
         ...plan,
+        ...plannedOutputs,
         suite_depth: suiteDepth,
         trusted: "true",
       }),
@@ -3163,7 +3166,7 @@ test("every browser suite belongs to exactly one required matrix leg", () => {
     expect(suite.if, suite.name).toContain("outputs.required == 'true'");
   }
   expect(resultJob.needs).toContain("ci-browser");
-  expect(jobScopes["ci-browser"]).toBeNull();
+  expect(jobScopes["ci-browser"]).toBe("ci_browser_required");
   for (const event of FULL_DEPTH_EVENTS) {
     for (const result of ["failure", "cancelled", "skipped"]) {
       expect(evaluateResult({ event, results: { "ci-browser": result } })).toBe(
@@ -3819,6 +3822,13 @@ const runsAtDepth = (
           actual = depth;
         } else if (context === "needs.ci-plan.outputs.queue_depth") {
           actual = event === EVENT.mergeGroup ? queueDepth : "full";
+        } else if (context === "needs.ci-plan.outputs.ci_browser_required") {
+          actual = browserPlanOutput({
+            event,
+            depth,
+            desktopRequired: "true",
+            queueDepth: event === EVENT.mergeGroup ? queueDepth : "full",
+          });
         } else if (
           context === "needs.ci-plan.outputs.heavy_web_build_required"
         ) {
@@ -3960,10 +3970,13 @@ test("every gated merge-group job has a required PR path or an explicit queue-on
       expect(condition, name).toContain(
         `needs.ci-plan.outputs.${scope} == 'true'`,
       );
-      // The release screenshot planner has its own ready-release behavioral
-      // matrix above; every changed-files scope must actually select a PR.
-      if (scope !== "marketing_screenshots_required") {
-        pathScopes.add(scope);
+      // Computed outputs can depend on file scopes as well as event/depth.
+      for (const match of (plan.outputs[scope] ?? "").matchAll(
+        /steps\.changed-files\.outputs\.(\w+)/gu,
+      )) {
+        if (match[1] !== undefined) {
+          pathScopes.add(match[1]);
+        }
       }
     }
   }
@@ -4451,6 +4464,117 @@ test("API planning only loads dependencies after installation and emits install-
   }
 });
 
+type BrowserPlanOptions = {
+  event: Event | "push";
+  depth: SuiteDepth;
+  desktopRequired: string;
+  runRequired?: string;
+  trusted?: string;
+  queueDepth?: string;
+};
+const browserPlanOutput = ({
+  event,
+  depth,
+  desktopRequired,
+  runRequired = "true",
+  trusted = "true",
+  queueDepth = "full",
+}: BrowserPlanOptions) => {
+  const { outputs } = v.parse(
+    v.object({ outputs: v.record(v.string(), v.string()) }),
+    ciJobs["ci-plan"],
+  );
+  return v.parse(
+    v.picklist(["true", "false"]),
+    evaluate(outputs["ci_browser_required"] ?? "", {
+      values: {
+        "github.event_name": event,
+        "steps.completed-depth.outputs.run_required": runRequired,
+        "steps.check.outputs.trusted": trusted,
+        "steps.changed-files.outputs.desktop_browser_required": desktopRequired,
+        "steps.depth.outputs.suite_depth": depth,
+        "steps.depth.outputs.queue_depth": queueDepth,
+      },
+    }),
+  );
+};
+
+test("browser planning, scheduling and result gates agree across events and depths", () => {
+  const cases = (
+    [
+      EVENT.workflowDispatch,
+      "push",
+      EVENT.mergeGroup,
+      EVENT.pullRequest,
+    ] as const
+  ).flatMap((event) =>
+    [SUITE_DEPTH.fast, SUITE_DEPTH.full].flatMap((depth) =>
+      ["true", "false"].flatMap((desktopRequired) =>
+        ["true", "false"].flatMap((trusted) =>
+          ["true", "false"].flatMap((runRequired) =>
+            ["full", "thin"].map((queueDepth) => ({
+              event,
+              depth,
+              desktopRequired,
+              trusted,
+              runRequired,
+              queueDepth,
+            })),
+          ),
+        ),
+      ),
+    ),
+  );
+  for (const options of cases) {
+    const planned = browserPlanOutput(options);
+    const expected =
+      options.runRequired === "true" &&
+      (options.trusted === "true" ||
+        options.event === EVENT.workflowDispatch) &&
+      (options.event === EVENT.pullRequest
+        ? options.desktopRequired === "true"
+        : options.depth === SUITE_DEPTH.full && options.queueDepth !== "thin");
+    expect(planned, JSON.stringify(options)).toBe(String(expected));
+    expect(
+      evaluate(jobIf(ciJobs["ci-browser"]), {
+        values: { "needs.ci-plan.outputs.ci_browser_required": planned },
+      }),
+      JSON.stringify(options),
+    ).toBe(expected);
+  }
+  expectResultGates(
+    (
+      [
+        EVENT.workflowDispatch,
+        "push",
+        EVENT.mergeGroup,
+        EVENT.pullRequest,
+      ] as const
+    ).flatMap((event) =>
+      [SUITE_DEPTH.fast, SUITE_DEPTH.full].flatMap((depth) =>
+        ["true", "false"].flatMap((desktopRequired) => {
+          const planned = browserPlanOutput({ event, depth, desktopRequired });
+          return ["success", "skipped", "failure"].map((result) => ({
+            label: `${event} ${depth} desktop=${desktopRequired} browser=${result}`,
+            options: {
+              event,
+              suiteDepth: depth,
+              results: { "ci-browser": result },
+              plannedOutputs: { ci_browser_required: planned },
+            },
+            exitCode:
+              (event === EVENT.mergeGroup && depth === SUITE_DEPTH.fast) ||
+              result === "failure" ||
+              (planned === "true" && result === "skipped")
+                ? 1
+                : 0,
+          }));
+        }),
+      ),
+    ),
+  );
+}, 30_000);
+
 test("a planted desktop path plans the PR desktop browser leg while unrelated paths skip it", () => {
   const root = nodePath.resolve(import.meta.dirname, "..");
   const directory = mkdtempSync(
@@ -4471,26 +4595,27 @@ test("a planted desktop path plans the PR desktop browser leg while unrelated pa
         panic("Desktop scope selector returned no value");
       }
       expect(required).toBe(expected);
-      const job = v.parse(v.object({ if: v.string() }), ciJobs["ci-browser"]);
       for (const runRequired of ["true", "false"]) {
+        const planned = browserPlanOutput({
+          event: EVENT.pullRequest,
+          depth: SUITE_DEPTH.fast,
+          desktopRequired: required,
+          runRequired,
+        });
+        expect(planned).toBe(
+          String(expected === "true" && runRequired === "true"),
+        );
         expect(
-          evaluate(job.if, {
-            values: {
-              "github.event_name": "pull_request",
-              "needs.ci-plan.outputs.trusted": "true",
-              "needs.ci-plan.outputs.run_required": runRequired,
-              "needs.ci-plan.outputs.desktop_browser_required": required,
-              "needs.ci-plan.outputs.suite_depth": "fast",
-              "needs.ci-plan.outputs.queue_depth": "full",
-            },
+          evaluate(jobIf(ciJobs["ci-browser"]), {
+            values: { "needs.ci-plan.outputs.ci_browser_required": planned },
           }),
-        ).toBe(expected === "true" && runRequired === "true");
+        ).toBe(planned === "true");
       }
     }
   } finally {
     rmSync(directory, { recursive: true, force: true });
   }
-  expect(fastJobScopes["ci-browser"]).toBe("desktop_browser_required");
+  expect(fastJobScopes).not.toHaveProperty("ci-browser");
   expect(
     evaluateResult({
       event: EVENT.pullRequest,
@@ -4501,7 +4626,7 @@ test("a planted desktop path plans the PR desktop browser leg while unrelated pa
     evaluateResult({
       event: EVENT.pullRequest,
       results: { "ci-browser": "skipped" },
-      unplannedScopes: ["desktop_browser_required"],
+      unplannedScopes: ["ci_browser_required"],
     }),
   ).toBe(0);
 });
