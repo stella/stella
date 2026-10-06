@@ -350,6 +350,26 @@ describe("MCP app registry and contracts", () => {
     ).toEqual(["c", "a", "b"]);
     expect(rows.map(({ decisionId }) => decisionId)).toEqual(["b", "a", "c"]);
   });
+  test("lookup text and structured content include the canonical court field", () => {
+    const found = APP_LOOKUP_FIXTURE.items.find(
+      (item) => item.status === "found",
+    );
+    if (found === undefined) {
+      throw new Error("Missing found lookup fixture");
+    }
+    const result = serializeToolResult(
+      toolDataResult({ items: [found] }),
+      getStaticMcpToolOutputContract("lookup_case_law"),
+      "lookup_case_law",
+    );
+    expect(result.structuredContent).toEqual({ items: [found] });
+    expect(result.content).toEqual([
+      {
+        type: "text",
+        text: '{"items":[{"identifier":"I. ÚS 123/24","appUrl":"https://stll.app/case-law/fixture-decision","url":"https://stll.app/case-law/fixture-decision","caseNumber":"I. ÚS 123/24","court":"Ústavní soud","courtAbbreviation":"ÚS","decisionDate":"2024-04-15","decisionId":"fixture-decision","ecli":"ECLI:CZ:US:2024:1.US.123.24.1","resourceName":"case-law/fixture-decision","status":"found"}]}',
+      },
+    ]);
+  });
   test("linking an app leaves text and structured content byte-identical", () => {
     for (const [name, fixtures] of [
       ["search_case_law", [APP_SEARCH_FIXTURE, APP_UNAVAILABLE_FIXTURE]],

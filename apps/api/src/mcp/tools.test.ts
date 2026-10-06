@@ -72,6 +72,7 @@ import type {
 } from "@/api/lib/business-registries/sanctions-check";
 import { caseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
 import { CITATION_READ_DIRECTIONS } from "@/api/lib/case-law/citation-vocabulary";
+import { courtAbbreviation } from "@/api/lib/case-law/court-abbreviations";
 import { readDecisionTextMetadata } from "@/api/lib/case-law/decision-text";
 import type { CaseLawSearchGuidanceMode } from "@/api/lib/case-law/search-guidance-mode";
 import { encryptContent } from "@/api/lib/content-encryption";
@@ -2788,6 +2789,7 @@ describe("OpenAI-compatible MCP tools", () => {
       candidates?: { court: string }[];
       caseNumber?: string;
       court?: string;
+      courtAbbreviation?: string | null;
       decisionDate?: string | null;
       decisionId?: string;
       ecli?: string | null;
@@ -2804,6 +2806,7 @@ describe("OpenAI-compatible MCP tools", () => {
     caseNumberType: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
     country: "CZE",
     court,
+    courtAbbreviation: courtAbbreviation({ country: "CZE", court }),
     decisionDate: "2020-05-01",
     ecli: null,
     id: toSafeId<"caseLawDecision">(decisionId),
@@ -2846,6 +2849,7 @@ describe("OpenAI-compatible MCP tools", () => {
       url: `${APP_BASE_URL}/law/cze/cases/nejvyssi-soud/slug-${DECISION_ID}`,
       caseNumber: CZ_DOCKET,
       court: "Nejvyšší soud",
+      courtAbbreviation: "NS",
       decisionDate: "2020-05-01",
       decisionId: DECISION_ID,
       ecli: CZ_ECLI,
@@ -3190,6 +3194,52 @@ describe("OpenAI-compatible MCP tools", () => {
     }[];
     total: { type: string };
   };
+
+  test("search and lookup project the same canonical court abbreviation for one decision", async () => {
+    const row = {
+      ...createLookupRow(DECISION_ID, "Nejvyšší soud"),
+      ecli: CZ_ECLI,
+    };
+    lookupDecisionsByIdentityMock.mockResolvedValue([row]);
+    searchDecisionsHandlerMock.mockResolvedValue({
+      paginationOutcome: SEARCH_PAGINATION_COMPLETE,
+      facets: null,
+      hits: [
+        {
+          ...createCaseLawHit(DECISION_ID, "Public decision"),
+          caseNumber: CZ_DOCKET,
+          ecli: CZ_ECLI,
+          decisionDate: row.decisionDate,
+          courtAbbreviation: row.courtAbbreviation,
+        },
+      ],
+      nextCursor: null,
+      total: countedSearchTotal(SEARCH_TOTAL_TYPE.EXACT, 1),
+      queryUsed: "Public decision",
+      warnings: [],
+    });
+    const identity = (await lookup([CZ_ECLI])).items.at(0);
+    expect(identity).toMatchObject({
+      status: "found",
+      decisionId: DECISION_ID,
+      courtAbbreviation: "NS",
+    });
+    const search = parseToolPayload(
+      await handleMcpToolCall({
+        args: { country: "CZE", queries: ["Public decision"] },
+        context: createContext(),
+        toolName: "search_case_law",
+      }),
+    );
+    expect(search).toMatchObject({
+      results: [
+        {
+          decisionId: DECISION_ID,
+          courtAbbreviation: identity?.courtAbbreviation,
+        },
+      ],
+    });
+  });
 
   test("search_case_law merges several phrasings by best rank", async () => {
     searchDecisionsHandlerMock.mockImplementation(

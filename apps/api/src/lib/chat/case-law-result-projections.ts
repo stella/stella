@@ -13,6 +13,7 @@ import { DECISION_PRIMARY_REFERENCE_TYPES } from "@stll/legal-ast/decision-ident
 import { DECISION_LOOKUP_STATUS } from "../case-law/decision-lookup-vocabulary";
 import { AGENT_CASE_LAW_SEARCH_WARNING_CODES } from "../case-law/search-warnings";
 import { SEARCH_PAGINATION_OUTCOME_SCHEMA } from "../search/pagination-outcome-projection";
+import { CASE_LAW_COURT_PROJECTION } from "./case-law-court-projection";
 import {
   passthroughId,
   publicUrl,
@@ -156,12 +157,7 @@ export const SEARCH_CASE_LAW_PROJECTION = v.union([
           // `ln(1 + weighted citations)`, the score the ranking blends in.
           citationAuthority: v.number(),
           country: v.string(),
-          court: v.string(),
-          // The court's short form as a lawyer writes it (ÚS, NS, NSS, SN, CJEU),
-          // derived from the decision's ECLI or the jurisdiction's apex-court
-          // names. Null where nothing states one: it is never guessed, so a
-          // caller quoting it is quoting the court's own abbreviation.
-          courtAbbreviation: v.nullable(v.string()),
+          ...CASE_LAW_COURT_PROJECTION.entries,
           decisionDate: v.nullable(v.string()),
           decisionId: passthroughId(),
           resourceName: passthroughId(),
@@ -200,7 +196,7 @@ const caseLawDecisionIdentityProjection = v.strictObject({
   source_url: v.optional(publicUrl()),
   caseNumber: v.string(),
   caseNumberType: caseNumberTypeProjection,
-  court: v.string(),
+  ...CASE_LAW_COURT_PROJECTION.entries,
   decisionDate: v.nullable(v.string()),
   decisionId: passthroughId(),
   ecli: v.nullable(v.string()),

@@ -56,6 +56,7 @@ const identity = {
   url: "https://stll.app/case-law/fixture-decision",
   caseNumber: "I. ÚS 123/24",
   court: "Ústavní soud",
+  courtAbbreviation: "ÚS",
   decisionDate: "2024-04-15",
   decisionId: "fixture-decision",
   ecli: "ECLI:CZ:US:2024:1.US.123.24.1",

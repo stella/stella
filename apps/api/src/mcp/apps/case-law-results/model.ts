@@ -15,17 +15,17 @@ export type ResultRow = Pick<
   SearchPage["results"][number],
   | "decisionId"
   | "court"
+  | "courtAbbreviation"
   | "decisionDate"
   | "caseNumber"
   | "ecli"
   | "appUrl"
   | "url"
-> & { snippet: string | null; courtAbbreviation: string | null };
+> & { snippet: string | null };
 
 const resultRow = (
-  row: Omit<ResultRow, "snippet" | "courtAbbreviation">,
+  row: Omit<ResultRow, "snippet">,
   snippet: string | null,
-  courtAbbreviation: string | null,
 ): ResultRow => ({
   decisionId: row.decisionId,
   court: row.court,
@@ -35,7 +35,7 @@ const resultRow = (
   appUrl: row.appUrl,
   url: row.url,
   snippet,
-  courtAbbreviation,
+  courtAbbreviation: row.courtAbbreviation,
 });
 
 export const lookupRows = (items: LookupPage["items"]) => {
@@ -44,10 +44,10 @@ export const lookupRows = (items: LookupPage["items"]) => {
   for (const item of items) {
     switch (item.status) {
       case "found":
-        rows.push(resultRow(item, null, null));
+        rows.push(resultRow(item, null));
         break;
       case "ambiguous":
-        rows.push(...item.candidates.map((row) => resultRow(row, null, null)));
+        rows.push(...item.candidates.map((row) => resultRow(row, null)));
         notices.push(item.message);
         break;
       case "not_found":
@@ -74,9 +74,7 @@ export const searchView = (data: SearchResults) => {
   }
   return {
     type: "search",
-    results: data.results.map((row) =>
-      resultRow(row, row.snippet, row.courtAbbreviation),
-    ),
+    results: data.results.map((row) => resultRow(row, row.snippet)),
     facets:
       data.facets === null
         ? null

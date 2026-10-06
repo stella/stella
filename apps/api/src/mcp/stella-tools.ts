@@ -81,6 +81,7 @@ import {
   manyRequiredTermsWarning,
   withFacetValues,
 } from "@/api/lib/case-law/search-warnings";
+import { projectCaseLawCourt } from "@/api/lib/chat/case-law-court-projection";
 import {
   LIST_MATTERS_DETAIL_PROJECTION,
   LIST_MATTERS_LIST_PROJECTION,
@@ -2305,8 +2306,7 @@ const caseLawSearchResult = ({
     citationAuthority: hit.citationAuthority,
     citationCount: hit.citationCount,
     country: hit.country,
-    court: hit.court,
-    courtAbbreviation: hit.courtAbbreviation,
+    ...projectCaseLawCourt(hit),
     decisionDate: hit.decisionDate,
     decisionId: hit.decisionId,
     resourceName: serializeAuthorizedCorpusMcpResourceName(resource),
@@ -3286,7 +3286,7 @@ const decisionIdentityOf = (row: DecisionIdentityRow) => ({
   ...(row.caseNumberType === DECISION_IDENTIFIER_TYPES.CASE_NUMBER
     ? {}
     : { caseNumberType: row.caseNumberType }),
-  court: row.court,
+  ...projectCaseLawCourt(row),
   decisionDate: row.decisionDate,
   decisionId: row.id,
   ecli: row.ecli,

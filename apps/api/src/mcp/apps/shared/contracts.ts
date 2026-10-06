@@ -14,6 +14,7 @@ const unavailable = v.object(
 const identityFields = [
   "decisionId",
   "court",
+  "courtAbbreviation",
   "decisionDate",
   "caseNumber",
   "ecli",
@@ -32,11 +33,8 @@ export const APP_SEARCH_SCHEMA = v.union([
     ...v.pick(search, ["nextCursor", "nextStep"]).entries,
     results: v.array(
       v.object(
-        v.pick(search.entries.results.item, [
-          ...identityFields,
-          "snippet",
-          "courtAbbreviation",
-        ]).entries,
+        v.pick(search.entries.results.item, [...identityFields, "snippet"])
+          .entries,
       ),
     ),
     facets: v.nullable(
