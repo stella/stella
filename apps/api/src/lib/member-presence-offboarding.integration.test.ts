@@ -1,3 +1,4 @@
+import { panic } from "better-result";
 import { afterAll, beforeAll, expect, test } from "bun:test";
 import { and, eq } from "drizzle-orm";
 import { ElysiaCustomStatusResponse } from "elysia/error";
@@ -50,7 +51,7 @@ test("organization removal clears only the departing member's presence and rejoi
     );
     expect(result).not.toBeInstanceOf(ElysiaCustomStatusResponse);
     if (result instanceof ElysiaCustomStatusResponse) {
-      throw result;
+      return panic(`Expected presence success, received status ${result.code}`);
     }
     return result;
   };

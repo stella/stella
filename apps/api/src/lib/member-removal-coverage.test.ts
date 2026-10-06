@@ -319,6 +319,8 @@ const RETAINED_MEMBER_COLUMNS = {
     "Retained attribution or request history; this column grants no matter membership.",
   "legal_list_verification_runs.requested_by":
     "Retained attribution or request history; this column grants no matter membership.",
+  "legal_list_verification_read_receipts.user_id":
+    "Read-audit dedupe receipt; retained with the run, cascades on user deletion, and grants no membership.",
   "legal_lists.created_by":
     "Retained attribution or request history; this column grants no matter membership.",
   "legal_reader_annotations.user_id":

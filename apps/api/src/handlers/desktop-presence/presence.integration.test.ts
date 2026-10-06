@@ -24,7 +24,11 @@ import {
 
 import readEndpoint from "./read";
 import { createDesktopPresenceReportEndpoint } from "./report";
-import { readDesktopPresence, reportDesktopPresence } from "./service";
+import {
+  DESKTOP_PRESENCE_INSTALLATION_LIMIT,
+  readDesktopPresence,
+  reportDesktopPresence,
+} from "./service";
 
 let fixture: Awaited<ReturnType<typeof getRlsFixture>>;
 let scopedDb: ScopedDb;
@@ -91,6 +95,59 @@ test("authenticated reports converge on one row and use the server clock", async
   expect(rows.at(0)?.lastSeenAt.getTime()).toBeGreaterThanOrEqual(before);
   expect(rows.at(0)?.lastSeenAt.getTime()).toBeLessThanOrEqual(Date.now());
 });
+
+test.each([
+  DESKTOP_PRESENCE_INSTALLATION_LIMIT - 1,
+  DESKTOP_PRESENCE_INSTALLATION_LIMIT,
+  DESKTOP_PRESENCE_INSTALLATION_LIMIT + 1,
+  DESKTOP_PRESENCE_INSTALLATION_LIMIT * 2,
+])(
+  "retention keeps the newest installation and the oldest tied ids at size %i",
+  async (count) => {
+    const { testDb, ids } = fixture;
+    const owner = and(
+      eq(desktopPresence.userId, ids.userA2),
+      eq(desktopPresence.organizationId, ids.orgA),
+    );
+    const ownerScoped = asTestRaw<ScopedDb>(
+      createScopedDb(testDb, [], ids.orgA, ids.userA2),
+    );
+    const installations = Array.from(
+      { length: count },
+      (_, index) =>
+        `00000000-0000-4000-8000-${index.toString().padStart(12, "0")}`,
+    );
+    await testDb.delete(desktopPresence).where(owner);
+    try {
+      await testDb.insert(desktopPresence).values(
+        installations.map((id) => ({
+          ...report,
+          desktopId: id,
+          userId: ids.userA2,
+          organizationId: ids.orgA,
+          lastSeenAt: new Date("2000-01-01T00:00:00Z"),
+        })),
+      );
+      await reportDesktopPresence({
+        scopedDb: ownerScoped,
+        userId: ids.userA2,
+        organizationId: ids.orgA,
+        report,
+      });
+      const rows = await testDb
+        .select({ desktopId: desktopPresence.desktopId })
+        .from(desktopPresence)
+        .where(owner)
+        .orderBy(desktopPresence.desktopId);
+      expect(rows.map(({ desktopId: id }) => id)).toEqual([
+        ...installations.slice(0, DESKTOP_PRESENCE_INSTALLATION_LIMIT - 1),
+        desktopId,
+      ]);
+    } finally {
+      await testDb.delete(desktopPresence).where(owner);
+    }
+  },
+);
 
 test("the signed-in read returns only the fixed presence projection", async () => {
   const { ids } = fixture;

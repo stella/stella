@@ -137,13 +137,15 @@ if (!databaseUrl || !runPostgres) {
           const reportedIds = Array.from({ length: batchSize }, (_, index) =>
             installationId(200 + index),
           );
-          const reports = Array.from({ length: batchSize }, (_, index) =>
-            reportDesktopPresence({
-              scopedDb: index % 2 === 0 ? firstScoped : secondScoped,
-              organizationId,
-              userId,
-              report: { ...report, desktopId: installationId(200 + index) },
-            }),
+          const reports = Array.from(
+            { length: batchSize },
+            async (_, index) =>
+              await reportDesktopPresence({
+                scopedDb: index % 2 === 0 ? firstScoped : secondScoped,
+                organizationId,
+                userId,
+                report: { ...report, desktopId: installationId(200 + index) },
+              }),
           );
           tasks.push(...reports);
           await Promise.all(reports);

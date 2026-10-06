@@ -10,6 +10,48 @@ import {
 
 const file = "apps/api/src/handlers/export.ts";
 
+test("SQL predicate subqueries stay server-side while ordinary capped reads are checked", () => {
+  for (const predicate of ["inArray", "notInArray", "exists", "notExists"]) {
+    const argumentsSource =
+      predicate === "inArray" || predicate === "notInArray"
+        ? "table.id, db.select().from(table).orderBy(table.id).limit(CAP)"
+        : "db.select().from(table).orderBy(table.id).limit(CAP)";
+    for (const localName of [predicate, "predicate"]) {
+      const body = `${localName}(${argumentsSource})`;
+      const source = `import { ${predicate} as ${localName} } from "drizzle-orm";
+        const remove = () => db.delete(table).where(${body});`;
+      expect(findTransferReads(file, source)).toEqual([]);
+      for (const declaration of [localName, `{ ${localName} }`]) {
+        expect(
+          findTransferReads(
+            file,
+            source.replace(
+              "const remove = ()",
+              () => `const remove = (${declaration})`,
+            ),
+          ).map(({ kind }) => kind),
+        ).toEqual(["constant-limit"]);
+      }
+      expect(
+        findTransferReads(
+          file,
+          source.replace('"drizzle-orm"', '"./local"'),
+        ).map(({ kind }) => kind),
+      ).toEqual(["constant-limit"]);
+      expect(
+        findTransferReads(
+          file,
+          `import { ${predicate} as ${localName} } from "drizzle-orm";
+            const rows = async () => {
+              const items = await db.select().from(table).orderBy(table.id).limit(CAP);
+              return ${localName}(items);
+            };`,
+        ).map(({ kind }) => kind),
+      ).toEqual(["constant-limit"]);
+    }
+  }
+});
+
 test("numeric timeout streaming and unchecked export fixtures are rejected", () => {
   const streaming = findTransferReads(
     file,

@@ -74,27 +74,30 @@ export const reportDesktopPresence = async ({
       });
     // Keep a disconnected observation until membership removal; expiry alone
     // must not turn a previously reported desktop into never-reported.
-    const retained = tx
-      .select({ desktopId: desktopPresence.desktopId })
-      .from(desktopPresence)
-      .where(
-        and(
-          eq(desktopPresence.userId, userId),
-          eq(desktopPresence.organizationId, organizationId),
-        ),
-      )
-      .orderBy(desc(desktopPresence.lastSeenAt), desktopPresence.desktopId)
-      .limit(DESKTOP_PRESENCE_INSTALLATION_LIMIT);
     // audit: skip - discard superseded owner-scoped technical observations
-    await tx
-      .delete(desktopPresence)
-      .where(
-        and(
-          eq(desktopPresence.userId, userId),
-          eq(desktopPresence.organizationId, organizationId),
-          notInArray(desktopPresence.desktopId, retained),
+    await tx.delete(desktopPresence).where(
+      and(
+        eq(desktopPresence.userId, userId),
+        eq(desktopPresence.organizationId, organizationId),
+        notInArray(
+          desktopPresence.desktopId,
+          tx
+            .select({ desktopId: desktopPresence.desktopId })
+            .from(desktopPresence)
+            .where(
+              and(
+                eq(desktopPresence.userId, userId),
+                eq(desktopPresence.organizationId, organizationId),
+              ),
+            )
+            .orderBy(
+              desc(desktopPresence.lastSeenAt),
+              desktopPresence.desktopId,
+            )
+            .limit(DESKTOP_PRESENCE_INSTALLATION_LIMIT),
         ),
-      );
+      ),
+    );
     return true;
   });
 
