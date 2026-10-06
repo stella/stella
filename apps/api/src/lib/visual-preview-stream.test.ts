@@ -31,14 +31,38 @@ const project = async (chunks: PublicStreamChunk[]) => {
   return await Array.fromAsync(projectVisualPreviewStream(source()));
 };
 
+const stringFields = function* (value: unknown): Generator<string> {
+  if (typeof value === "string") {
+    yield value;
+    return;
+  }
+  if (Array.isArray(value)) {
+    for (const item of value) {
+      yield* stringFields(item);
+    }
+    return;
+  }
+  if (typeof value === "object" && value !== null) {
+    for (const item of Object.values(value)) {
+      yield* stringFields(item);
+    }
+  }
+};
+
 describe("transient preview wire projection", () => {
-  test("replaces both top-level and metadata output without mutating the model copy", async () => {
+  test("rebuilds preview events carrying output and result without mutating the model copy", async () => {
     const chunk = {
       type: EventType.TOOL_CALL_END,
       toolCallId: "preview-call",
       toolName: VISUAL_PREVIEW_TOOL_NAME,
       output,
-      metadata: { tanstack: { output, state: "output-available" } },
+      result: output,
+      timestamp: 1,
+      subagentRunId: "preview-run",
+      input: { title: "Example" },
+      metadata: {
+        tanstack: { output, result: output, state: "output-available" },
+      },
     } satisfies AdapterYieldChunk;
     const projected = await project([chunk]);
     expect(JSON.stringify(projected)).not.toContain("iVBORw0KGgo=");
@@ -47,6 +71,21 @@ describe("transient preview wire projection", () => {
     );
     expect(JSON.stringify(chunk)).toContain("iVBORw0KGgo=");
     expect(await project(projected)).toEqual(projected);
+    expect(projected.at(0)).toMatchObject({
+      type: EventType.TOOL_CALL_END,
+      toolCallId: "preview-call",
+      timestamp: 1,
+      subagentRunId: "preview-run",
+      metadata: {
+        tanstack: {
+          toolName: VISUAL_PREVIEW_TOOL_NAME,
+          input: { title: "Example" },
+        },
+      },
+    });
+    for (const value of stringFields(projected)) {
+      expect(value).not.toContain("iVBOR");
+    }
   });
 
   test("projects SDK snapshot content and its metadata copy without prior tool events", async () => {

@@ -9,6 +9,7 @@ import {
 } from "@stll/api-contract/visual-preview";
 
 import {
+  toolCallEndInputOf,
   toolCallEndOutputOf,
   toolCallNameOf,
 } from "@/api/lib/chat/tanstack-chat-runtime";
@@ -108,12 +109,22 @@ export const projectVisualPreviewStream = async function* (
       previewCallIds.has(chunk.toolCallId)
     ) {
       const output = toolCallEndOutputOf(chunk);
-      const projected = { ...chunk };
-      if (output !== undefined) {
-        Object.assign(projected, { output: historyContent(output) });
+      const projected = {
+        type: chunk.type,
+        toolCallId: chunk.toolCallId,
+        metadata: {
+          tanstack: {
+            toolName: VISUAL_PREVIEW_TOOL_NAME,
+            input: toolCallEndInputOf(chunk),
+            output: output === undefined ? undefined : historyContent(output),
+          },
+        },
+      } satisfies PublicStreamChunk;
+      if (chunk.timestamp !== undefined) {
+        Object.assign(projected, { timestamp: chunk.timestamp });
       }
-      if (chunk.metadata !== undefined) {
-        Object.assign(projected, { metadata: historyMetadata(chunk.metadata) });
+      if (chunk.subagentRunId !== undefined) {
+        Object.assign(projected, { subagentRunId: chunk.subagentRunId });
       }
       yield projected;
       continue;
