@@ -31,7 +31,7 @@ import {
   LIST_CLAUSES_LIST_PROJECTION,
   LIST_CLAUSES_PROJECTION,
   LIST_CLAUSES_VERSION_PROJECTION,
-  type LIST_PLAYBOOKS_DETAIL_PROJECTION,
+  LIST_PLAYBOOKS_DETAIL_PROJECTION,
   LIST_PLAYBOOKS_LIST_PROJECTION,
   LIST_PLAYBOOKS_PROJECTION,
   RUN_PLAYBOOK_PROJECTION,
@@ -56,10 +56,7 @@ import {
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { requestExtractionRunStore } from "@/api/lib/extraction-runs/request-run-store";
 import { LIMITS } from "@/api/lib/limits";
-import {
-  type AssertNoExtraFields,
-  projectionPayload,
-} from "@/api/lib/projection-totality";
+import { projectionPayload } from "@/api/lib/projection-totality";
 import { createModelActionAdmitter } from "@/api/lib/rate-limit/model-action-admission";
 import {
   brandPersistedClauseCategoryId,
@@ -1470,12 +1467,8 @@ const readPlaybookDetail = async ({
   // `playbook` is forwarded verbatim, so a bare `satisfies` gets no
   // excess-property check below the top level: a field added to
   // `positionSchema` would typecheck here and fail the strict parse in chat.
-  type ListPlaybooksDetailPayload = AssertNoExtraFields<
-    { playbook: typeof playbook },
-    v.InferInput<typeof LIST_PLAYBOOKS_DETAIL_PROJECTION>
-  >;
   return structuredEgressPlan({
-    payload: { playbook } satisfies ListPlaybooksDetailPayload,
+    payload: projectionPayload(LIST_PLAYBOOKS_DETAIL_PROJECTION, { playbook }),
     textFields,
   });
 };

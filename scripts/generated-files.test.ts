@@ -31,6 +31,22 @@ const generator = (id: string) => {
   return found ?? panic(`Missing generator ${id}`);
 };
 
+test("visual source changes select the frame bundle before API catalog generation", () => {
+  const selected = orderGenerators(
+    generatorsForFiles([
+      "apps/api/src/handlers/visual-sandbox/browser/runtime.ts",
+    ]),
+  );
+  const ids = selected.map(({ id }) => id);
+  expect(ids).toContain("visual-sandbox-bundle");
+  expect(ids.indexOf("visual-sandbox-bundle")).toBeLessThan(
+    ids.indexOf("capability-catalog"),
+  );
+  expect(generator("visual-sandbox-bundle").outputs).toEqual([
+    "apps/api/src/handlers/visual-sandbox/generated/runtime.js.txt",
+  ]);
+});
+
 test("generation metadata loads without dependencies in a reduced checkout", async () => {
   const directory = await mkdtemp(
     nodePath.join(tmpdir(), "generation-metadata-"),
@@ -668,7 +684,7 @@ test("CI determinism selectors cover the cached generators' input contracts", ()
 test("CI diff path guards stay pinned to manifest outputs", () => {
   const cli = ci.slice(
     ci.indexOf("- name: CLI sharded registry and derived runtime guard"),
-    ci.indexOf("- name: MCP App bundle guard"),
+    ci.indexOf("- name: MCP App bundle and shared assets guard"),
   );
   const diff = cli.split("git diff --exit-code -- \\\n")[1];
   expect(diff).toBeDefined();
@@ -685,10 +701,13 @@ test("CI diff path guards stay pinned to manifest outputs", () => {
       .outputs.map((glob) => glob.replace(/\/\*\*$/u, ""))
       .toSorted(),
   );
-  const bundle = ci.slice(ci.indexOf("- name: MCP App bundle guard"));
-  expect(bundle).toContain(
-    `git diff --exit-code -- "${generator("mcp-app-bundles").outputs[0]}"`,
+  const bundle = ci.slice(
+    ci.indexOf("- name: MCP App bundle and shared assets guard"),
   );
+  const bundleOutputs = generator("mcp-app-bundles")
+    .outputs.map((glob) => `"${glob}"`)
+    .join(" ");
+  expect(bundle).toContain(`git diff --exit-code -- ${bundleOutputs}`);
 });
 
 test("route tree has one derived owner and a cache producer for every consumer", () => {

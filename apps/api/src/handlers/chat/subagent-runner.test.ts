@@ -5,6 +5,7 @@ import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import * as v from "valibot";
 
 import { createPipelineContext } from "@stll/anonymize";
+import { AI_ERROR_KINDS } from "@stll/api-contract";
 
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import { createScopedDb } from "@/api/db/scoped";
@@ -36,7 +37,7 @@ import {
 } from "@/api/tests/security/rls-fixture";
 import type { TestIds } from "@/api/tests/security/rls-helpers";
 
-import { runSubagent } from "./subagent-runner";
+import { runSubagent, subagentRunErrorMessage } from "./subagent-runner";
 import type { RunSubagentOptions } from "./subagent-runner";
 
 // Drives `runSubagent` through the real `chat()` loop with a scripted provider,
@@ -377,6 +378,24 @@ describe("a subagent run that ends without a complete answer", () => {
       reason: "run-error",
       usage: LOOKUP_STEP_USAGE,
     });
+  });
+
+  test("names a provider error by its kind, never by the provider's text", async () => {
+    const sentinel = "SENTINEL_SUBAGENT_PROVIDER_TEXT";
+    const { result } = await runScriptedSubagent([
+      lookupStep,
+      {
+        code: `${sentinel}_code`,
+        message: JSON.stringify({ error: { message: sentinel, code: 503 } }),
+        type: "error",
+      },
+    ]);
+
+    expect(result).toMatchObject({ outcome: "failed", reason: "run-error" });
+    expect(JSON.stringify(result)).not.toContain(sentinel);
+    expect(
+      AI_ERROR_KINDS.map((kind) => subagentRunErrorMessage(kind)),
+    ).toContain(result.outcome === "failed" ? result.message : "");
   });
 
   test("adds the usage a failed step reported to the steps before it", async () => {

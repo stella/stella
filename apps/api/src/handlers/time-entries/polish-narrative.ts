@@ -54,6 +54,7 @@ const config = {
   },
   permissions: { timeEntry: ["create"] },
   accountAccess: ACCOUNT_ACCESS.sandbox,
+  featureAccess: { featureId: "time-billing", type: "required" },
   mcp: { type: "internal", reason: "billing_ui" },
   body: polishNarrativeBodySchema,
   requiresUsage: { actionType: "chat", modelRole: "fast" },

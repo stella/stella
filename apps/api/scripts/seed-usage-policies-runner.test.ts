@@ -37,7 +37,7 @@ const withDatabase = async (
     .indexes.filter(({ config }) => config.unique)
     .map(({ config: { name, columns: indexColumns, where } }) => {
       const names = indexColumns.map((column) =>
-        is(column, IndexedColumn) && column.name !== undefined
+        is(column, IndexedColumn)
           ? sql.identifier(column.name)
           : panic("usage policy fixture supports column indexes only"),
       );

@@ -25,6 +25,7 @@ import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 const config = {
   description: "List synthetic billing-code merge probes.",
   permissions: { workspace: ["read"] },
+  featureAccess: { type: "required", featureId: "time-billing" },
   mcp: {
     type: "capability",
     readClass: "tenant",
@@ -138,6 +139,18 @@ test.skipIf(!process.env["CI"])(
         const dispatch = `${DISPATCH_DIRECTORY}/${capabilityId(probe)}.ts`;
         expect(existsSync(path.join(checkout, catalog))).toBe(true);
         expect(existsSync(path.join(checkout, dispatch))).toBe(true);
+        expect(
+          JSON.parse(readFileSync(path.join(checkout, catalog), "utf-8")),
+        ).toMatchObject({
+          featureId: "time-billing",
+          featureAccess: "required",
+        });
+        const generatedDispatch = readFileSync(
+          path.join(checkout, dispatch),
+          "utf-8",
+        );
+        expect(generatedDispatch).toContain('featureId: "time-billing"');
+        expect(generatedDispatch).toContain('featureAccess: "required"');
         await succeed([
           "git",
           "add",

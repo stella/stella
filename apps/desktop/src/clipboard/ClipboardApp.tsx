@@ -98,6 +98,7 @@ import { typedCharacter } from "@stll/ui/typed-character";
 import { cn } from "@stll/ui/utils";
 
 import { RegistrySearch } from "../registry/RegistrySearch";
+import type { DesktopConnectionStatus } from "../registry/RegistrySearch";
 import { subscribeDesktopEvent } from "../shared/desktop-events";
 import {
   DESKTOP_TELEMETRY_ERROR_CODES,
@@ -1232,6 +1233,10 @@ const ClipboardContextMenu = ({
 
 type ClipboardWelcomeDialogProps = {
   onClose: () => void;
+  connectionStatus: DesktopConnectionStatus;
+  connectionError: string | null;
+  connectControl: ReactNode;
+  onRetryConnection: () => void;
 };
 
 const AUTOSTART_ERROR = {
@@ -1255,7 +1260,13 @@ type AutostartChoiceState =
       status: "saving";
     };
 
-const ClipboardWelcomeDialog = ({ onClose }: ClipboardWelcomeDialogProps) => {
+const ClipboardWelcomeDialog = ({
+  onClose,
+  connectionStatus,
+  connectionError,
+  connectControl,
+  onRetryConnection,
+}: ClipboardWelcomeDialogProps) => {
   const t = useTranslations("clipboard");
   const settingsT = useTranslations("settings");
   const [autostartChoice, setAutostartChoice] = useState<AutostartChoiceState>({
@@ -1426,6 +1437,16 @@ const ClipboardWelcomeDialog = ({ onClose }: ClipboardWelcomeDialogProps) => {
           </span>
         </DialogHeader>
         <DialogPanel className="px-5 pt-2 pb-1" scrollFade={false}>
+          {connectionStatus === "disconnected" ? (
+            <p className="text-muted-foreground mb-3 text-sm leading-relaxed">
+              {settingsT("connectToStellaDescription")}
+            </p>
+          ) : null}
+          {connectionError ? (
+            <p className="text-destructive mb-3 text-sm" role="alert">
+              {connectionError}
+            </p>
+          ) : null}
           <div className="bg-muted/48 divide-border/70 divide-y rounded-2xl px-4 shadow-sm">
             {features.map(({ description, icon: Icon, title }) => (
               <div
@@ -1483,11 +1504,24 @@ const ClipboardWelcomeDialog = ({ onClose }: ClipboardWelcomeDialogProps) => {
           </Label>
         </DialogPanel>
         <DialogFooter className="px-5 pb-5" variant="bare">
+          {connectionStatus === "disconnected" ? connectControl : null}
+          {connectionStatus === "unavailable" ? (
+            <Button
+              className="min-h-11 rounded-xl"
+              onClick={onRetryConnection}
+              type="button"
+            >
+              {settingsT("tryAgain")}
+            </Button>
+          ) : null}
           <Button
             className="min-h-11 rounded-xl"
             disabled={autostartChoice.status !== "ready"}
             onClick={completeWelcome}
             type="button"
+            variant={
+              connectionStatus === "disconnected" ? "outline" : "default"
+            }
           >
             {t("welcomeStart")}
           </Button>
@@ -2432,7 +2466,6 @@ const ClipboardApp = () => {
           );
         }}
       />
-      {welcomeOpen ? <ClipboardWelcomeDialog onClose={closeWelcome} /> : null}
       {contextMenu.type === "closed" ? null : (
         <ClipboardContextMenu
           groupLimit={snapshot.groupLimit}
@@ -2476,8 +2509,25 @@ const ClipboardApp = () => {
         }}
         searchInput={searchInputRef}
       >
-        {({ controls, results, feedback: registryFeedback }) => (
+        {({
+          controls,
+          results,
+          feedback: registryFeedback,
+          connectionStatus,
+          connectionError,
+          connectControl,
+          retryConnection,
+        }) => (
           <>
+            {welcomeOpen ? (
+              <ClipboardWelcomeDialog
+                onClose={closeWelcome}
+                connectionStatus={connectionStatus}
+                connectionError={connectionError}
+                connectControl={connectControl}
+                onRetryConnection={retryConnection}
+              />
+            ) : null}
             {searchSource === "clips" ? (
               <main className="relative min-h-0 flex-1">
                 {filteredItems.length === 0 ? (

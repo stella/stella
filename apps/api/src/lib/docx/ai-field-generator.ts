@@ -30,7 +30,6 @@ import type {
   GuardedModelMessages,
   GuardedSystemPrompt,
 } from "@/api/lib/chat/model-ingress-guard";
-import { generateChatObject } from "@/api/lib/chat/tanstack-chat-runtime";
 import type { AiOccurrenceAdapter } from "@/api/lib/docx/adapt-ai-fields";
 import {
   CONDITION_DECISION_ID,
@@ -54,6 +53,7 @@ import type { ModelDispatchAdmission } from "@/api/lib/rate-limit/model-dispatch
 import {
   abortControllerFromSignal,
   collectTanStackTextRun,
+  generateTanStackChatObject,
   mergeGenerationOptions,
   resolveTanStackTextModel,
   systemPromptsPatch,
@@ -61,7 +61,6 @@ import {
 } from "@/api/lib/tanstack-ai-generate";
 import type { TanStackTextRun } from "@/api/lib/tanstack-ai-generate";
 import { hasTanStackInstanceProvider } from "@/api/lib/tanstack-ai-models";
-import { toTanStackValibotSchema } from "@/api/lib/tanstack-ai-schema";
 import { decide } from "@/api/lib/workflow/decisions/decide";
 import { hasInstanceDecisionModel } from "@/api/lib/workflow/decisions/decision-model";
 import type { DecisionModel } from "@/api/lib/workflow/decisions/decision-model";
@@ -293,10 +292,11 @@ const generateFieldObject = async <TSchema extends v.GenericSchema>(
 ): Promise<v.InferOutput<TSchema>> => {
   const { abortController, caching, messages, model, system } =
     await resolveFieldChat(input);
-  const output = await generateChatObject({
+  return await generateTanStackChatObject({
+    model,
     adapter: model.adapter,
     messages,
-    outputSchema: toTanStackValibotSchema(input.outputSchema),
+    outputSchema: input.outputSchema,
     abortController,
     ...systemPromptsPatch({ caching, model, system }),
     modelOptions: mergeGenerationOptions({
@@ -316,7 +316,6 @@ const generateFieldObject = async <TSchema extends v.GenericSchema>(
         }
       : {}),
   });
-  return v.parse(input.outputSchema, output);
 };
 
 // Loading the caller's skill catalog failed before any model call, so it is a

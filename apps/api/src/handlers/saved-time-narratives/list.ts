@@ -49,6 +49,7 @@ const config = {
     "List the signed-in user's saved time narratives in the active organization, ordered by name with cursor pagination.",
   permissions: { timeEntry: ["read"] },
   accountAccess: ACCOUNT_ACCESS.sandbox,
+  featureAccess: { featureId: "time-billing", type: "required" },
   mcp: {
     type: "capability",
     readClass: "tenant",

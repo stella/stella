@@ -1,9 +1,11 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
-import { sql } from "drizzle-orm";
+import { sql, TransactionRollbackError } from "drizzle-orm";
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import nodePath from "node:path";
 
 import { stellaCaseLawAnalysisReader } from "@/api/db/rls";
+import { caseLawDecisions, caseLawSources } from "@/api/db/schema";
+import { createSafeId } from "@/api/lib/branded-types";
 import { CASE_LAW_ANALYSIS_READER_SELECT_COLUMNS } from "@/api/tests/pglite-test-db";
 import { getTestDb, releaseTestDb } from "@/api/tests/security/test-utils";
 import type { TestDatabase } from "@/api/tests/security/test-utils";
@@ -283,9 +285,64 @@ describe("case-law analysis reader role", () => {
       expectedRelations.map((tablename) => ({
         tablename,
         cmd: "SELECT",
-        qual: "true",
+        qual:
+          tablename === "case_law_decisions" ? "(redacted_at IS NULL)" : "true",
       })),
     );
+  });
+
+  test("SET ROLE sees unredacted decisions and never redacted ones", async () => {
+    const sourceId = createSafeId<"caseLawSource">();
+    const visibleId = createSafeId<"caseLawDecision">();
+    const redactedId = createSafeId<"caseLawDecision">();
+    let seen: { id: string; sections: unknown }[] = [];
+
+    await testDb
+      .transaction(async (tx) => {
+        await tx.insert(caseLawSources).values({
+          id: sourceId,
+          adapterKey: `case-law-analysis-reader-${sourceId}`,
+          name: "Case-law analysis reader role",
+        });
+        await tx.insert(caseLawDecisions).values([
+          {
+            id: visibleId,
+            sourceId,
+            caseNumber: `CASE-${visibleId}`,
+            court: "Test Court",
+            country: "CZE",
+            language: "cs",
+            sections: [],
+          },
+          {
+            id: redactedId,
+            sourceId,
+            caseNumber: `CASE-${redactedId}`,
+            court: "Test Court",
+            country: "CZE",
+            language: "cs",
+            redactedAt: new Date("2026-09-01T00:00:00.000Z"),
+            textS3Key: `text/${redactedId}`,
+            normalizedS3Key: `normalized/${redactedId}`,
+          },
+        ]);
+
+        await tx.execute(sql.raw(`SET LOCAL ROLE ${quoted(READER_ROLE)}`));
+        // Only granted columns: the policy reads redacted_at itself.
+        const result = await tx.execute<{ id: string; sections: unknown }>(sql`
+          SELECT id, sections FROM case_law_decisions
+          WHERE id IN (${visibleId}, ${redactedId})
+        `);
+        seen = result.rows;
+        tx.rollback();
+      })
+      .catch((error: unknown) => {
+        if (!(error instanceof TransactionRollbackError)) {
+          throw error;
+        }
+      });
+
+    expect(seen).toEqual([{ id: visibleId, sections: [] }]);
   });
 });
 

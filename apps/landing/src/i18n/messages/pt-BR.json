@@ -831,8 +831,8 @@
           "title": "Chat e ferramentas de conhecimento"
         },
         "4": {
-          "body": "Um aplicativo para desktop funciona como ponte local para editar documentos do Office a partir da stella.",
-          "title": "Ponte para o desktop"
+          "body": "Abre documentos do Office da stella nos aplicativos instalados no seu computador e salva as alterações de volta na stella. Também mantém um histórico da área de transferência que fica no seu dispositivo.",
+          "title": "Aplicativo para computador"
         },
         "5": {
           "body": "Edições salvas e arquivos enviados viram revisões do documento, então o arquivo atual e seu histórico ficam juntos.",

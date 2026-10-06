@@ -78,6 +78,7 @@ const listRunningMemberTimers = createSafeRootHandler(
       "List running timers in the active organization as an organization owner or admin. Use the timer ID with time-timers.admin.stop to end it into its owner's draft entry. Follow nextCursor to read the next page.",
     permissions: { timeEntry: ["approve"] },
     accountAccess: ACCOUNT_ACCESS.sandbox,
+    featureAccess: { featureId: "time-billing", type: "required" },
     access: "read",
     mcp: {
       type: "capability",

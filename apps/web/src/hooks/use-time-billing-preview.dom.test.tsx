@@ -2,12 +2,9 @@ import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { afterAll, afterEach, describe, expect, test } from "bun:test";
 
 GlobalRegistrator.register({ url: "http://localhost:3000/workspaces" });
-// A production-shaped web build: beta previews available, time billing not
-// shipped by the build, so only the per-browser preview can ask for it.
 Object.assign(import.meta.env, {
   VITE_API_URL: "http://localhost:3001",
   VITE_BETA_FEATURES_ENABLED: "true",
-  VITE_FEATURE_TIME_BILLING: "false",
 });
 
 const originalFetch = globalThis.fetch;
@@ -18,7 +15,7 @@ globalThis.fetch = Object.assign(async () => Response.json(null), {
 const React = await import("react");
 const { QueryClient, QueryClientProvider } =
   await import("@tanstack/react-query");
-const { act, cleanup, render, waitFor } =
+const { act, cleanup, fireEvent, render, waitFor } =
   await import("@testing-library/react");
 const { IntlProvider } = await import("use-intl");
 const { FormattingProvider } = await import("@/i18n/formatting-context");
@@ -26,7 +23,6 @@ const messages = (await import("@/i18n/langs/en.json")).default;
 const { roleOptions } = await import("@/lib/auth-queries");
 const { AuthenticatedUserProvider } =
   await import("@/lib/authenticated-user-context");
-const { useDevStore } = await import("@/lib/dev-store");
 const { GlobalTimer } = await import("@/features/time-timers/global-timer");
 const {
   isTimeBillingPreviewEnabled,
@@ -37,14 +33,17 @@ const {
 const { Route: BetaRoute } =
   await import("@/routes/_protected.settings/account.beta");
 
+// The caller the shell renders as (see renderShell).
+const CALLER = { userId: "member", organizationId: "org-a" };
+
 const DEPLOYMENT_FEATURES_PATH =
   "/v1/organization-settings/deployment-features";
+const FEATURE_ENROLMENTS_PATH = "/v1/organization-settings/feature-enrolments";
 const TIME_TIMERS_PATH = "/v1/time-timers";
 
 afterEach(() => {
   cleanup();
   globalThis.fetch = originalFetch;
-  useDevStore.getState().setTimeBillingPreview(false);
 });
 
 afterAll(async () => {
@@ -56,15 +55,55 @@ afterAll(async () => {
   await GlobalRegistrator.unregister();
 });
 
-/** Serves the deployment-features answer and records every request path. */
-const serve = (deploymentFeatures: () => Response) => {
+/** Serves the caller's decision and offered enrolments, recording requests. */
+const serve = ({
+  enrolled = false,
+  offered = true,
+  failRead = false,
+  failWrite = false,
+  beforeWrite,
+}: {
+  enrolled?: boolean;
+  offered?: boolean;
+  failRead?: boolean;
+  failWrite?: boolean;
+  beforeWrite?: () => Promise<unknown>;
+} = {}) => {
   const paths: string[] = [];
+  let currentEnrolment = enrolled;
   globalThis.fetch = Object.assign(
-    async (input: RequestInfo | URL) => {
+    async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = new URL(input instanceof Request ? input.url : String(input));
+      const method =
+        init?.method ?? (input instanceof Request ? input.method : "GET");
       paths.push(url.pathname);
+      if (
+        failRead &&
+        (url.pathname === DEPLOYMENT_FEATURES_PATH ||
+          url.pathname === FEATURE_ENROLMENTS_PATH)
+      ) {
+        return Response.json({ message: "unavailable" }, { status: 503 });
+      }
       if (url.pathname === DEPLOYMENT_FEATURES_PATH) {
-        return deploymentFeatures();
+        return Response.json({ timeBilling: offered && currentEnrolment });
+      }
+      if (url.pathname === FEATURE_ENROLMENTS_PATH) {
+        return Response.json({
+          features: offered
+            ? [{ featureId: "time-billing", enrolled: currentEnrolment }]
+            : [],
+        });
+      }
+      if (url.pathname === `${FEATURE_ENROLMENTS_PATH}/time-billing`) {
+        await beforeWrite?.();
+        if (failWrite) {
+          return Response.json({ message: "unavailable" }, { status: 503 });
+        }
+        currentEnrolment = method === "PUT";
+        return Response.json({
+          featureId: "time-billing",
+          enrolled: currentEnrolment,
+        });
       }
       if (url.pathname === TIME_TIMERS_PATH) {
         return Response.json({ items: [], nextCursor: null });
@@ -75,9 +114,6 @@ const serve = (deploymentFeatures: () => Response) => {
   );
   return paths;
 };
-
-const serveServer = (timeBilling: boolean) =>
-  serve(() => Response.json({ timeBilling }));
 
 const newQueryClient = () => {
   const queryClient = new QueryClient({
@@ -142,75 +178,32 @@ const settle = async () => {
   });
 };
 
-describe("time billing with the server flag off", () => {
-  test("a ticked preview offers nothing, never polls timers, and hides the toggle", async () => {
-    useDevStore.getState().setTimeBillingPreview(true);
-    const paths = serveServer(false);
+describe("time billing access follows the caller's server decision", () => {
+  test("the kill switch hides surfaces, avoids timer requests, and hides enrolment", async () => {
+    const paths = serve({ offered: false, enrolled: true });
     const view = renderShell(newQueryClient());
 
-    await waitFor(() => expect(paths).toContain(DEPLOYMENT_FEATURES_PATH));
+    await waitFor(() => expect(paths).toContain(FEATURE_ENROLMENTS_PATH));
     await settle();
 
     expect(view.getByTestId("offer").textContent).toBe("false");
     expect(paths).not.toContain(TIME_TIMERS_PATH);
     expect(view.queryAllByText(messages.common.timeBilling)).toHaveLength(0);
-    // The fixture reaches the gate: the other previews still render.
-    expect(view.getAllByText(messages.common.workflows).length).toBeGreaterThan(
-      0,
-    );
   });
 
-  test("route gates refuse without fetching any time-billing data", async () => {
-    useDevStore.getState().setTimeBillingPreview(true);
-    const paths = serveServer(false);
+  test("unenrolled callers may opt in but cannot load billing routes", async () => {
+    const paths = serve();
     const queryClient = newQueryClient();
-
-    expect(await isTimeBillingRouteEnabled(queryClient)).toBe(false);
-    expect(await isTimeBillingPreviewEnabled(queryClient)).toBe(false);
-    expect(paths).toEqual([DEPLOYMENT_FEATURES_PATH]);
-  });
-
-  test("an unticked preview never asks the server", async () => {
-    const paths = serveServer(true);
-    const queryClient = newQueryClient();
-
-    await prefetchTimeBillingServerState(queryClient, (error) => {
-      throw error;
+    await prefetchTimeBillingServerState({
+      queryClient,
+      caller: CALLER,
+      onError: (error) => {
+        throw error;
+      },
     });
-    expect(await isTimeBillingRouteEnabled(queryClient)).toBe(false);
-    expect(await isTimeBillingPreviewEnabled(queryClient)).toBe(false);
-    expect(paths).toEqual([]);
-  });
-});
-
-describe("time billing with the server flag on", () => {
-  test("a ticked preview offers time billing, polls timers, and shows the toggle", async () => {
-    useDevStore.getState().setTimeBillingPreview(true);
-    const paths = serveServer(true);
-    const view = renderShell(newQueryClient());
-
-    await waitFor(() =>
-      expect(view.getByTestId("offer").textContent).toBe("true"),
-    );
-    await waitFor(() => expect(paths).toContain(TIME_TIMERS_PATH));
-    expect(
-      view.getAllByText(messages.common.timeBilling).length,
-    ).toBeGreaterThan(0);
-  });
-
-  test("route gates open through the preview", async () => {
-    useDevStore.getState().setTimeBillingPreview(true);
-    serveServer(true);
-    const queryClient = newQueryClient();
-
-    expect(await isTimeBillingRouteEnabled(queryClient)).toBe(true);
-    expect(await isTimeBillingPreviewEnabled(queryClient)).toBe(true);
-  });
-
-  test("the beta page offers the toggle before anyone ticks it", async () => {
-    const paths = serveServer(true);
-    const view = renderShell(newQueryClient());
-
+    expect(await isTimeBillingRouteEnabled(queryClient, CALLER)).toBe(false);
+    expect(await isTimeBillingPreviewEnabled(queryClient, CALLER)).toBe(false);
+    const view = renderShell(queryClient);
     await waitFor(() =>
       expect(
         view.getAllByText(messages.common.timeBilling).length,
@@ -219,21 +212,90 @@ describe("time billing with the server flag on", () => {
     expect(view.getByTestId("offer").textContent).toBe("false");
     expect(paths).not.toContain(TIME_TIMERS_PATH);
   });
-});
 
-describe("time billing when the server answer fails", () => {
-  test("a ticked preview offers nothing, never polls timers, and hides the toggle", async () => {
-    useDevStore.getState().setTimeBillingPreview(true);
-    const paths = serve(() =>
-      Response.json({ message: "unavailable" }, { status: 503 }),
+  test("enrolled callers load billing routes and poll timers without a browser preference", async () => {
+    const paths = serve({ enrolled: true });
+    const queryClient = newQueryClient();
+    expect(await isTimeBillingRouteEnabled(queryClient, CALLER)).toBe(true);
+    expect(await isTimeBillingPreviewEnabled(queryClient, CALLER)).toBe(true);
+    const view = renderShell(queryClient);
+    await waitFor(() =>
+      expect(view.getByTestId("offer").textContent).toBe("true"),
     );
-    const view = renderShell(newQueryClient());
+    await waitFor(() => expect(paths).toContain(TIME_TIMERS_PATH));
+  });
 
+  test("opting in and out reconciles navigation with the server", async () => {
+    const paths = serve();
+    const view = renderShell(newQueryClient());
+    await waitFor(() =>
+      expect(
+        view.getAllByText(messages.common.timeBilling).length,
+      ).toBeGreaterThan(0),
+    );
+    const billingCheckbox = view.getByRole("checkbox", {
+      name: messages.common.timeBilling,
+    });
+    fireEvent.click(billingCheckbox);
+    await waitFor(() =>
+      expect(view.getByTestId("offer").textContent).toBe("true"),
+    );
+    expect(paths).toContain(`${FEATURE_ENROLMENTS_PATH}/time-billing`);
+    await waitFor(() =>
+      expect(billingCheckbox.hasAttribute("disabled")).toBe(false),
+    );
+    fireEvent.click(billingCheckbox);
+    await waitFor(() =>
+      expect(view.getByTestId("offer").textContent).toBe("false"),
+    );
+  });
+
+  test("a failed enrolment rolls the optimistic checkbox back", async () => {
+    const writeResponse = Promise.withResolvers();
+    const paths = serve({
+      failWrite: true,
+      beforeWrite: async () => await writeResponse.promise,
+    });
+    const view = renderShell(newQueryClient());
+    await waitFor(() =>
+      expect(
+        view.getAllByText(messages.common.timeBilling).length,
+      ).toBeGreaterThan(0),
+    );
+    const billingCheckbox = view.getByRole("checkbox", {
+      name: messages.common.timeBilling,
+    });
+    fireEvent.click(billingCheckbox);
+    await waitFor(() =>
+      expect(paths).toContain(`${FEATURE_ENROLMENTS_PATH}/time-billing`),
+    );
+    await waitFor(() =>
+      expect(billingCheckbox.getAttribute("aria-checked")).toBe("true"),
+    );
+    expect(view.getByTestId("offer").textContent).toBe("false");
+    writeResponse.resolve(undefined);
+    await waitFor(() =>
+      expect(billingCheckbox.getAttribute("aria-checked")).toBe("false"),
+    );
+    expect(view.getByTestId("offer").textContent).toBe("false");
+    expect(paths).not.toContain(TIME_TIMERS_PATH);
+  });
+
+  test("failed server answers offer nothing and never poll timers", async () => {
+    const paths = serve({ failRead: true });
+    const view = renderShell(newQueryClient());
     await waitFor(() => expect(paths).toContain(DEPLOYMENT_FEATURES_PATH));
     await settle();
-
     expect(view.getByTestId("offer").textContent).toBe("false");
     expect(paths).not.toContain(TIME_TIMERS_PATH);
     expect(view.queryAllByText(messages.common.timeBilling)).toHaveLength(0);
+    await waitFor(() =>
+      expect(view.getByRole("alert").textContent).toBe(
+        messages.errors.actionFailed,
+      ),
+    );
+    expect(
+      view.getByRole("button", { name: messages.common.retry }),
+    ).toBeDefined();
   });
 });

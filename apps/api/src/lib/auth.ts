@@ -2717,31 +2717,58 @@ export type ValidateAuthValue = Extract<
 
 type ValidateAuthResolution = Awaited<ReturnType<typeof resolveValidateAuth>>;
 
-export const createAuthMacro = ({
-  getSession,
-}: { getSession?: AuthSessionReader } = {}) => {
+const createRequestAuthResolver = (getSession?: AuthSessionReader) => {
   const validateAuthResolutionCache = new WeakMap<
     Request,
     Promise<ValidateAuthResolution>
   >();
 
+  return async ({
+    params,
+    query,
+    request,
+    server,
+    set,
+  }: Pick<Context, "request" | "server" | "set"> & {
+    // Read only as workspace-id sources, so a pre-validation transform context fits too.
+    params: unknown;
+    query: unknown;
+  }) =>
+    await memoizePerRequest(
+      validateAuthResolutionCache,
+      request,
+      async () =>
+        await resolveValidateAuth({
+          getSession,
+          request,
+          server,
+          initialWorkspaceId: readInitialWorkspaceId(params, query),
+          responseHeaders: set.headers,
+        }),
+    );
+};
+
+/** Share the request's authorization with gates that must run before validation. */
+export const resolveRequestAuth = createRequestAuthResolver();
+
+export const createAuthMacro = ({
+  getSession,
+}: { getSession?: AuthSessionReader } = {}) => {
+  const resolveAuth = getSession
+    ? createRequestAuthResolver(getSession)
+    : resolveRequestAuth;
+
   return new Elysia({ name: "authMacro" }).macro({
     validateAuth: {
       detail: { [TENANT_ACTION_DETAIL]: true },
       async resolve({ params, query, status, request, server, set }) {
-        const initialWorkspaceId = readInitialWorkspaceId(params, query);
-        const result = await memoizePerRequest(
-          validateAuthResolutionCache,
+        const result = await resolveAuth({
+          params,
+          query,
           request,
-          async () =>
-            await resolveValidateAuth({
-              getSession,
-              request,
-              server,
-              initialWorkspaceId,
-              responseHeaders: set.headers,
-            }),
-        );
+          server,
+          set,
+        });
 
         if (!result.ok) {
           return status(

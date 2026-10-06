@@ -1,4 +1,5 @@
 import type { PGlite } from "@electric-sql/pglite";
+import { panic } from "better-result";
 import { afterAll, beforeAll, beforeEach, expect, test } from "bun:test";
 import { sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
@@ -13,8 +14,9 @@ import {
 import { courtWeightMapFromSeed } from "@/api/handlers/case-law/court-weight-seed";
 import {
   candidateDecisionRowsQuery,
-  caseLawSearchRowFilters,
+  candidateDecisionRowsStatement,
   pageDecisionRowsQuery,
+  pageDecisionRowsStatement,
   readCaseLawPageDecisionRows,
   rehydrateCaseLawCandidates,
 } from "@/api/handlers/case-law/decisions/search";
@@ -23,16 +25,27 @@ import type {
   CaseLawPublicReadDb,
   CaseLawPublicReadTransaction,
 } from "@/api/lib/case-law-public-read-db";
+import { createCorpusHitDispositionCounter } from "@/api/lib/legal-search/corpus-hit-telemetry";
 import {
   CORPUS_INDEX_MANIFESTS,
   corpusIndexManifestDigest,
 } from "@/api/lib/legal-search/corpus-index-manifest";
+import { readCorpusIndexSearchPage } from "@/api/lib/legal-search/corpus-index-pagination";
+import {
+  rankCorpusIndexProviderCandidates,
+  rehydrateCorpusIndexProviderCandidatesQuery,
+  rehydrateCorpusIndexProviderCandidatesStatement,
+} from "@/api/lib/legal-search/corpus-index-provider";
+import { RELEVANCE_ORDER } from "@/api/lib/legal-search/corpus-search-order";
 import { corpusIndexId } from "@/api/lib/legal-search/index-naming";
+import { isRecord, isUnknownArray } from "@/api/lib/type-guards";
 import { caseLawSourceRow } from "@/api/tests/helpers/case-law-source-row";
+import { installCorpusDispositionScan } from "@/api/tests/helpers/corpus-disposition-scan";
 import {
   createTestPglite,
   withPublicLawReaderRole,
 } from "@/api/tests/pglite-test-db";
+import { explainRoot } from "@/api/tests/query-plans/plan-walker";
 
 /**
  * Search reads Postgres twice per request. The blend read answers for every
@@ -521,20 +534,13 @@ test.each([true, false])(
     await caseLawDb(async (tx) => {
       await tx.execute(sql`SET LOCAL enable_seqscan = off`);
       const options = {
-        filters: caseLawSearchRowFilters(
-          {
-            ...SEARCH_BODY,
-            category: "A",
-            hasLegalSentence,
-          },
-          GENERATION,
-        ),
+        body: { ...SEARCH_BODY, category: "A", hasLegalSentence },
         generation: GENERATION,
         ids: [czechId, slovakId],
       };
       for (const query of [
-        candidateDecisionRowsQuery(tx, options),
-        pageDecisionRowsQuery(tx, options),
+        candidateDecisionRowsStatement(tx, options),
+        pageDecisionRowsStatement(tx, options),
       ]) {
         const plan = JSON.stringify(
           await tx.execute(sql`EXPLAIN (COSTS OFF) ${query.getSQL()}`),
@@ -582,5 +588,201 @@ test("corpus hydration and page reads apply the same case-insensitive type filte
       });
       expect([...rows.keys()].toSorted()).toEqual(expected.toSorted());
     }
+  }
+});
+
+test("rehydration accounts for exclusions and absent canonical rows in one read", async () => {
+  const hitDispositions = createCorpusHitDispositionCounter();
+  const missingId = createSafeId<"caseLawDecision">();
+  const hydrated: HydratedRows = new Map();
+  const options = {
+    body: SEARCH_BODY,
+    caseLawDb,
+    courtWeights,
+    generation: GENERATION,
+    hydrated,
+    hitDispositions,
+    candidates: candidatesOf(czechId, foreignId, closedId, queuedId, missingId),
+  };
+  const result = await rehydrateCaseLawCandidates(options);
+  expect(result.ranked.map((hit) => hit.id)).toEqual([czechId]);
+  expect(hitDispositions.snapshot()).toEqual({
+    malformed: 0,
+    excluded: 3,
+    drift: 1,
+  });
+  await rehydrateCaseLawCandidates(options);
+  expect(hitDispositions.snapshot()).toEqual({
+    malformed: 0,
+    excluded: 3,
+    drift: 1,
+  });
+  expect(reads).toBe(1);
+});
+
+test("the shared provider accounts for canonical eligibility with its existing batch", async () => {
+  const hitDispositions = createCorpusHitDispositionCounter();
+  const missingId = createSafeId<"caseLawDecision">();
+  const result = await rankCorpusIndexProviderCandidates({
+    generation: GENERATION,
+    caseLawDb,
+    hitDispositions,
+    candidates: candidatesOf(czechId, closedId, queuedId, missingId),
+    excludedGroups: undefined,
+  });
+  expect(result.ranked.map((row) => row.id)).toEqual([czechId]);
+  expect([...result.context.displayById.keys()]).toEqual([czechId]);
+  expect(hitDispositions.snapshot()).toEqual({
+    malformed: 0,
+    excluded: 2,
+    drift: 1,
+  });
+  expect(reads).toBe(1);
+});
+
+test("the final page read accounts for canonical exclusions before presentation", async () => {
+  const hitDispositions = createCorpusHitDispositionCounter();
+  const missingId = createSafeId<"caseLawDecision">();
+  const rows = await readCaseLawPageDecisionRows({
+    body: SEARCH_BODY,
+    generation: GENERATION,
+    caseLawDb,
+    hitDispositions,
+    ids: [czechId, foreignId, closedId, missingId],
+  });
+  expect([...rows.keys()]).toEqual([czechId]);
+  expect(hitDispositions.snapshot()).toEqual({
+    malformed: 0,
+    excluded: 2,
+    drift: 1,
+  });
+  expect(reads).toBe(1);
+});
+
+test("canonical reads return content only for eligible rows and separate id-only dispositions", async () => {
+  const missingId = createSafeId<"caseLawDecision">();
+  const ids = [czechId, closedId, queuedId, missingId];
+  await caseLawDb(async (tx) => {
+    const options = { generation: GENERATION, ids, body: SEARCH_BODY };
+    const partitions = [
+      await candidateDecisionRowsQuery(tx, options),
+      await pageDecisionRowsQuery(tx, options),
+      await rehydrateCorpusIndexProviderCandidatesQuery(tx, options),
+    ];
+    for (const read of partitions) {
+      expect(read.rows.map((row) => row.id)).toEqual([czechId]);
+      expect(read.dispositions).toEqual(
+        expect.arrayContaining([
+          { id: closedId, type: "excluded" },
+          { id: queuedId, type: "excluded" },
+          { id: missingId, type: "drift" },
+        ]),
+      );
+      expect(read.dispositions).toHaveLength(3);
+      expect(JSON.stringify(read)).not.toContain("1 Afs 2/2026");
+    }
+  });
+});
+
+test("the database returns no content columns for excluded canonical ids", async () => {
+  await caseLawDb(async (tx) => {
+    const options = {
+      body: SEARCH_BODY,
+      generation: GENERATION,
+      ids: [closedId, queuedId],
+    };
+    const statements = [
+      candidateDecisionRowsStatement(tx, options),
+      pageDecisionRowsStatement(tx, options),
+      rehydrateCorpusIndexProviderCandidatesStatement(tx, options),
+    ];
+    for (const statement of statements) {
+      const records = await statement;
+      expect(records).toEqual(
+        expect.arrayContaining([
+          { id: closedId, row: null },
+          { id: queuedId, row: null },
+        ]),
+      );
+      expect(records).toHaveLength(2);
+      const result = await tx.execute(
+        sql`EXPLAIN (ANALYZE, COSTS OFF, FORMAT JSON) ${statement.getSQL()}`,
+      );
+      const nodes = [explainRoot(result)];
+      let identifiers = 0;
+      for (let index = 0; index < nodes.length; index += 1) {
+        const node = nodes.at(index) ?? panic("Missing EXPLAIN node");
+        if (node["Relation Name"] === "case_law_decision_identifiers") {
+          identifiers += 1;
+          expect(node["Actual Loops"]).toBe(0);
+        }
+        const children = node["Plans"];
+        if (children !== undefined) {
+          if (!isUnknownArray(children) || !children.every(isRecord)) {
+            panic("Malformed EXPLAIN children");
+          }
+          nodes.push(...children);
+        }
+      }
+      if (statement === statements.at(0)) {
+        expect(identifiers).toBe(0);
+      } else {
+        expect(identifiers).toBeGreaterThan(0);
+      }
+    }
+  });
+});
+
+test("provider scan counts retained omissions once as eligible candidates grow", async () => {
+  const hitDispositions = createCorpusHitDispositionCounter();
+  const missingId = createSafeId<"caseLawDecision">();
+  const eligibleIds = [czechId, slovakId];
+  const restoreFetch = installCorpusDispositionScan([
+    closedId,
+    missingId,
+    ...eligibleIds,
+  ]);
+  const candidateCounts: number[] = [];
+  const eligibleCounts: number[] = [];
+  try {
+    const page = await readCorpusIndexSearchPage({
+      observer: "unobserved",
+      cluster: "q09",
+      indexId: INDEX_ID,
+      query: "text:fixture",
+      limit: 40,
+      order: RELEVANCE_ORDER,
+      parsedCursor: null,
+      hitDispositions,
+      rankingMode: "off",
+      snippetFields: ["text"],
+      extractId: (hit) =>
+        typeof hit["document_id"] === "string" ? hit["document_id"] : null,
+      extractSnippet: () => null,
+      unseenScoreUpperBound: () => 0,
+      rankCandidates: async (candidates) => {
+        candidateCounts.push(candidates.length);
+        const result = await rankCorpusIndexProviderCandidates({
+          generation: GENERATION,
+          caseLawDb,
+          hitDispositions,
+          candidates,
+          excludedGroups: undefined,
+        });
+        eligibleCounts.push(result.ranked.length);
+        return result;
+      },
+    });
+    expect(page.scan.rounds).toBe(3);
+    expect(candidateCounts).toEqual([2, 3, 4]);
+    expect(eligibleCounts).toEqual([0, 1, 2]);
+    expect(hitDispositions.snapshot()).toEqual({
+      malformed: 0,
+      excluded: 1,
+      drift: 1,
+    });
+    expect(reads).toBe(3);
+  } finally {
+    restoreFetch();
   }
 });

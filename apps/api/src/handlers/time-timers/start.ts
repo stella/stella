@@ -18,6 +18,7 @@ const startTimer = createSafeRootHandler(
       "Start your timer in the active organization, optionally assigning a matter and description. Automatically pauses your running timer. Returns its ID for pause, resume, update, confirm or discard.",
     permissions: { timeEntry: ["create"] },
     accountAccess: ACCOUNT_ACCESS.sandbox,
+    featureAccess: { featureId: "time-billing", type: "required" },
     mcp: {
       type: "capability",
       reason: "billing_admin",

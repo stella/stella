@@ -55,6 +55,10 @@ import {
 } from "@/api/lib/lists/verification/model-call";
 import type { VerificationModelDeps } from "@/api/lib/lists/verification/model-call";
 import {
+  checkVerificationDispatchBudget,
+  ListVerificationRunCapError,
+} from "@/api/lib/lists/verification/run-caps";
+import {
   completeVerificationRun,
   failVerificationRun,
 } from "@/api/lib/lists/verification/run-persistence";
@@ -703,6 +707,14 @@ const executeRun = async ({
   const deps: VerificationModelDeps = {
     admission,
     accessProof,
+    checkRunBudget: async () =>
+      await actor.writeDb(
+        async (tx) =>
+          await checkVerificationDispatchBudget({
+            tx,
+            organizationId: actor.organizationId,
+          }),
+      ),
     ...(execution.generateObjectForRole === undefined
       ? {}
       : { generateObjectForRole: execution.generateObjectForRole }),
@@ -733,6 +745,9 @@ const executeRun = async ({
 
   const extracted = await extractClaims({ blocks: document.blocks, deps });
   if (Result.isError(extracted)) {
+    if (extracted.error.cause instanceof ListVerificationRunCapError) {
+      return "run_limit_reached";
+    }
     return extracted.error.cause instanceof ListVerificationAccessRevokedError
       ? "access_revoked"
       : "extraction_failed";
@@ -761,6 +776,9 @@ const executeRun = async ({
     deps,
   });
   if (Result.isError(graded)) {
+    if (graded.error.cause instanceof ListVerificationRunCapError) {
+      return "run_limit_reached";
+    }
     return graded.error.cause instanceof ListVerificationAccessRevokedError
       ? "access_revoked"
       : "grading_failed";

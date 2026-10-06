@@ -16,6 +16,41 @@ const MAX_LOG_BYTES = 4 * 1024 * 1024;
 const TAIL_BYTES = 16 * 1024;
 const TIMEOUT_EXIT_CODE = 124;
 
+export const API_TEST_CHILD_TIMEOUT_MS_ENV = "API_TEST_CHILD_TIMEOUT_MS";
+export const API_TEST_RUNNER_DEADLINE_MS_ENV = "API_TEST_RUNNER_DEADLINE_MS";
+
+export const testProcessBudgets = (
+  environment: NodeJS.ProcessEnv,
+  defaultDeadlineMs = RUNNER_DEADLINE_MS,
+) => {
+  const readLimit = (name: string, fallback: number) => {
+    const value = environment[name];
+    if (value === undefined) {
+      return fallback;
+    }
+    if (!/^\d+$/u.test(value)) {
+      panic(`${name} must be an integer of at least two`);
+    }
+    const limit = Number(value);
+    if (!Number.isSafeInteger(limit) || limit < 2) {
+      panic(`${name} must be an integer of at least two`);
+    }
+    return limit;
+  };
+  const childTimeoutMs = readLimit(
+    API_TEST_CHILD_TIMEOUT_MS_ENV,
+    CHILD_TIMEOUT_MS,
+  );
+  const deadlineMs = readLimit(
+    API_TEST_RUNNER_DEADLINE_MS_ENV,
+    defaultDeadlineMs,
+  );
+  if (childTimeoutMs >= deadlineMs) {
+    panic("API test child budget must be below the runner deadline");
+  }
+  return { childTimeoutMs, deadlineMs };
+};
+
 class TestProcessOperationError extends TaggedError(
   "TestProcessOperationError",
 )<{

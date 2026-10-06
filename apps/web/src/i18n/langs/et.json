@@ -960,6 +960,9 @@
     },
     "viewer": {
       "abstract": "Kokkuvõte",
+      "appliedVersionNotStated": "Kohaldatud redaktsiooni pole märgitud",
+      "appliedVersionStatedAmendment": "Redaktsioon muudatuse <reference>{amendment}</reference> järgi",
+      "appliedVersionStatedDate": "{relation, select, on {Kuupäeval {date} kehtinud redaktsioon} until {Kuni {date} kehtinud redaktsioon} from {Alates {date} kehtinud redaktsioon} other {Kuupäeval {date} kehtinud redaktsioon}}",
       "caseFileMayHoldOthers": "Selles toimikus võib olla ka teisi lahendeid.",
       "citedBy": "Viidatud",
       "cites": "Viitab",
@@ -1819,6 +1822,8 @@
     "notes": "Märkused",
     "open": "Ava",
     "openInNewTab": "Ava uuel vahekaardil",
+    "openInStella": "Ava stellas",
+    "openOriginalSource": "Ava algallikas",
     "options": "Valikud",
     "or": "Või",
     "organization": "Organisatsioon",
@@ -4735,6 +4740,7 @@
     },
     "title": "Õigusaktid",
     "validity": "Kehtib {from} kuni {to}",
+    "versionAppliedInDecision": "Kohtulahendis <bdi>{court}</bdi> <bdi>{caseNumber}</bdi> kohaldatud redaktsioon (<bdi>{range}</bdi>) · {status}",
     "wordingValidFrom": "Sõnastus kehtib alates {date}",
     "wordingVersionUnknown": "Sõnastuse versiooni kuupäev pole teada"
   },

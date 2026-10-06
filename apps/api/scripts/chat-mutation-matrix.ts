@@ -324,6 +324,16 @@ const namesOracle = (output: string, oracle: string): boolean =>
   output.includes(`"oracle":"${oracle}"`) ||
   output.includes(`"oracle": "${oracle}"`);
 
+/** The oracle ids a failed scenario's output names, for a non-kill's detail. */
+export const namedOracles = (output: string): string[] => [
+  ...new Set(
+    Array.from(
+      output.matchAll(/"oracle": ?"([^"]+)"/gu),
+      ([, oracle]) => oracle ?? "",
+    ),
+  ),
+];
+
 type Verdict = { detail: string; entry: Entry; killed: boolean };
 
 const runEntry = async (
@@ -361,7 +371,7 @@ const runEntry = async (
     return namesOracle(mutated.output, entry.oracle)
       ? { detail: `failed at ${entry.oracle}`, entry, killed: true }
       : {
-          detail: `failed without naming ${entry.oracle} (not a kill)`,
+          detail: `failed without naming ${entry.oracle} (not a kill; named: ${namedOracles(mutated.output).join(", ") || "no oracle"})`,
           entry,
           killed: false,
         };

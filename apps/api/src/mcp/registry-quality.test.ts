@@ -86,6 +86,7 @@ const TOOL_NAME_PATTERN = /^[a-z]+(?:_[a-z]+)*$/u;
 // (MAX_TOOL_TITLE_CHARS in packages/cli/src/registry-trust.ts), so every
 // title the registry can emit is also one a fetched listing would accept.
 const TOOL_TITLE_MAX_CHARS = 40;
+const WIRE_TOOL_TITLE_MAX_CHARS = 64;
 const TOOL_TITLE_PATTERN = /^[A-Z].*[^.\s]$/u;
 
 describe("MCP tool-surface baseline", () => {
@@ -112,6 +113,33 @@ describe.each(SURFACES)(
       // snapshot diff. Registry order is the advertised wire order, so
       // reorders are surface changes too.
       expect(serializeToolSurface(definitions)).toMatchSnapshot();
+    });
+
+    test("every wire tool carries a display title and explicit safety hints", () => {
+      for (const tool of toMcpTools(definitions, { mode })) {
+        expect(
+          tool.title,
+          `Tool ${tool.name} must advertise a title`,
+        ).toBeDefined();
+        expect(
+          tool.title?.trim().length,
+          `Tool ${tool.name} title is empty`,
+        ).toBeGreaterThan(0);
+        expect(
+          tool.title?.length,
+          `Tool ${tool.name} title exceeds the wire limit`,
+        ).toBeLessThanOrEqual(WIRE_TOOL_TITLE_MAX_CHARS);
+        for (const hint of [
+          "readOnlyHint",
+          "destructiveHint",
+          "openWorldHint",
+        ] as const) {
+          expect(
+            typeof tool.annotations?.[hint],
+            `Tool ${tool.name} must advertise annotations.${hint}`,
+          ).toBe("boolean");
+        }
+      }
     });
 
     test("every output schema fits the per-tool budget", () => {

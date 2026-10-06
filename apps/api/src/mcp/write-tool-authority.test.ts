@@ -26,6 +26,7 @@ import {
 } from "@/api/mcp/write-tool-authority";
 import { callMcpToolOverHttp } from "@/api/tests/helpers/mcp-http-tool-call";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
+import { enrolledTimeBillingSnapshot } from "@/api/tests/helpers/time-billing-enrolment";
 import { toSafeDbMock } from "@/api/tests/scoped-db-mock";
 
 import ledger from "./write-tool-authority-ledger.json" with { type: "json" };
@@ -50,6 +51,13 @@ const writeDefinitions = (): McpToolDefinition[] => {
 
 const mcpContextFor = (role: MemberRole): McpRequestContext =>
   asTestRaw<McpRequestContext>({
+    featureAccessSnapshot: enrolledTimeBillingSnapshot({
+      organizationId: "org_1",
+      userId: "user_1",
+    }),
+    organizationId: toSafeId<"organization">("org_1"),
+    userId: toSafeId<"user">("user_1"),
+    userEmail: "member@example.test",
     accessibleWorkspaceIds: [],
     enabledRegistrySlugs: undefined,
     grantedScopes: [],
@@ -95,6 +103,10 @@ const chatWriteTools = (
   currentRole: MemberRole | null = role,
 ) =>
   buildChatWriteTools({
+    featureAccessSnapshot: enrolledTimeBillingSnapshot({
+      organizationId: "org_1",
+      userId: "user_1",
+    }),
     memberRole: sessionMemberRole(role),
     organizationId: toSafeId<"organization">("org_1"),
     pinServerValidatedWorkspaceId: () => true,
@@ -149,6 +161,24 @@ const ledgerId = (definition: McpToolDefinition): string | null => {
 };
 
 describe("write tool permissions", () => {
+  test("enrolled principals exercise every feature-bound write tool's authority", () => {
+    const featureBoundWrites = writeDefinitions().filter(
+      (definition) => definition.featureId !== undefined,
+    );
+    expect(featureBoundWrites.length).toBeGreaterThan(0);
+    for (const role of MEMBER_ROLES) {
+      const offered = mcpOffered(role);
+      for (const definition of featureBoundWrites) {
+        expect(
+          offered.has(definition.name),
+          `${role}: ${definition.name}`,
+        ).toBe(
+          isMemberAuthorizedForMcpTool(sessionMemberRole(role), definition),
+        );
+      }
+    }
+  });
+
   test("every write tool declares an authority some role can hold", () => {
     const definitions = writeDefinitions();
     expect(definitions.length).toBeGreaterThan(0);

@@ -198,14 +198,22 @@ const revokeExecutionPrerequisite = async (kind: ExecutionRevocation) => {
 const withProductionPrerequisites = async (run: () => Promise<void>) => {
   const previousGrants = env.API_FEATURE_ACCESS_GRANTS;
   const previousDeployment = env.FEATURE_LEGAL_LISTS;
+  const previousActive = env.LIST_VERIFICATION_ACTIVE_RUNS_MAX;
+  const previousDaily = env.LIST_VERIFICATION_DAILY_STARTS_MAX;
   const restoreMode = setRuntimeModeForTesting({ mode: RUNTIME_MODE.strict });
   env.FEATURE_LEGAL_LISTS = true;
   env.API_FEATURE_ACCESS_GRANTS = grants;
+  // Shared queue fixtures intentionally retain runs; ordinary execution tests
+  // use the supported upper limits, and budget tests lower them explicitly.
+  env.LIST_VERIFICATION_ACTIVE_RUNS_MAX = 100;
+  env.LIST_VERIFICATION_DAILY_STARTS_MAX = 1000;
   try {
     await run();
   } finally {
     env.API_FEATURE_ACCESS_GRANTS = previousGrants;
     env.FEATURE_LEGAL_LISTS = previousDeployment;
+    env.LIST_VERIFICATION_ACTIVE_RUNS_MAX = previousActive;
+    env.LIST_VERIFICATION_DAILY_STARTS_MAX = previousDaily;
     restoreMode();
   }
 };
@@ -705,6 +713,7 @@ test.each([
             deps: {
               admission,
               accessProof,
+              checkRunBudget: async () => Result.ok(),
               refreshAccessProof: async () => {
                 const decision = await actor.writeDb(
                   async (tx) =>
@@ -861,4 +870,49 @@ test("queue handoff failures surface while the persisted run remains recoverable
     });
     expect(recovered.isOk()).toBe(true);
     expect(healthy.added).toHaveLength(1);
+  }));
+
+test("worker budget refusal stops model dispatch and releases its active slot", async () =>
+  await withProductionPrerequisites(async () => {
+    const runId = await seedPinnedRun();
+    const previousActive = env.LIST_VERIFICATION_ACTIVE_RUNS_MAX;
+    const previousDaily = env.LIST_VERIFICATION_DAILY_STARTS_MAX;
+    const modelDispatches: unknown[] = [];
+    try {
+      env.LIST_VERIFICATION_ACTIVE_RUNS_MAX = 1;
+      env.LIST_VERIFICATION_DAILY_STARTS_MAX = 1;
+      await seedRun();
+      await processListVerificationRun({
+        data: { runId, organizationId, workspaceId, userId },
+        actor: actorFor(runId),
+        grants,
+        execution: {
+          readDocument: async () => ({
+            type: "read",
+            blocks: [
+              {
+                id: "p1",
+                text: "A meeting happened.",
+                source: { type: "docx-block", blockId: "p1" },
+              },
+            ],
+          }),
+          generateObjectForRole: asTestRaw<
+            typeof generateTanStackObjectForRole
+          >(async (request: unknown) => {
+            modelDispatches.push(request);
+            return { claims: [] };
+          }),
+        },
+      });
+      expect(modelDispatches).toHaveLength(0);
+      expect(await readRun(runId)).toEqual({
+        status: "failed",
+        errorCode: "run_limit_reached",
+      });
+      expect(await readAudits(runId)).toHaveLength(1);
+    } finally {
+      env.LIST_VERIFICATION_ACTIVE_RUNS_MAX = previousActive;
+      env.LIST_VERIFICATION_DAILY_STARTS_MAX = previousDaily;
+    }
   }));

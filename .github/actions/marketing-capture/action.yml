@@ -77,7 +77,6 @@ runs:
       if: inputs.web-build-artifact == ''
       shell: bash
       env:
-        VITE_FEATURE_TIME_BILLING: "true"
         VITE_PUBLIC_LAW_ENABLED: "true"
         VITE_PUBLIC_TOOLS_ENABLED: "true"
         VITE_WORKFLOWS_ENABLED: "true"

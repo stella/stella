@@ -5,6 +5,7 @@ import { resolveCaching } from "@/api/lib/ai-config";
 import { memberAIAccessError } from "@/api/lib/ai-config-response";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
+import { applicationErrorMessage } from "@/api/lib/errors/application-error-message";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { startExecutionAdmission } from "@/api/lib/rate-limit/execution-admission";
 import { sseResponse } from "@/api/lib/sse";
@@ -15,6 +16,7 @@ const MAX_SUFFIX_CHARS = 4000;
 const MAX_OUTPUT_TOKENS = 96;
 const AUTOCOMPLETE_TIMEOUT_MS = 10_000;
 const AUTOCOMPLETE_ACTION_KIND = "editor.autocomplete";
+const AUTOCOMPLETE_STREAM_INTERRUPTED_MESSAGE = "stream interrupted";
 
 const requestBody = t.Object({
   prefix: t.String({ maxLength: MAX_PREFIX_CHARS }),
@@ -63,6 +65,45 @@ const buildUserPrompt = (input: {
   );
   return sections.join("\n");
 };
+
+export const createAutocompleteEventStream = (
+  stream: AsyncIterable<string>,
+  signal: AbortSignal,
+): ReadableStream<Uint8Array> =>
+  new ReadableStream<Uint8Array>({
+    async start(controller) {
+      const encoder = new TextEncoder();
+      const writeEvent = (event: string, data: unknown) => {
+        if (signal.aborted) {
+          return;
+        }
+        controller.enqueue(
+          encoder.encode(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`),
+        );
+      };
+      try {
+        for await (const delta of stream) {
+          if (delta.length > 0) {
+            writeEvent("token", { text: delta });
+          }
+        }
+        writeEvent("done", {});
+      } catch (error) {
+        if (!signal.aborted) {
+          writeEvent("error", {
+            message: applicationErrorMessage(
+              error,
+              AUTOCOMPLETE_STREAM_INTERRUPTED_MESSAGE,
+            ),
+          });
+        }
+      } finally {
+        if (!signal.aborted) {
+          controller.close();
+        }
+      }
+    },
+  });
 
 const autocompleteStream = createSafeRootHandler(
   config,
@@ -146,41 +187,14 @@ const autocompleteStream = createSafeRootHandler(
       },
     });
 
-    const sse = new ReadableStream<Uint8Array>({
-      async start(controller) {
-        const encoder = new TextEncoder();
-        const writeEvent = (event: string, data: unknown) => {
-          if (request.signal.aborted) {
-            return;
-          }
-          controller.enqueue(
-            encoder.encode(
-              `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`,
-            ),
-          );
-        };
-        try {
-          for await (const delta of stream) {
-            if (delta.length > 0) {
-              writeEvent("token", { text: delta });
-            }
-          }
-          writeEvent("done", {});
-        } catch (error) {
-          if (!request.signal.aborted) {
-            writeEvent("error", {
-              message:
-                error instanceof Error ? error.message : "stream interrupted",
-            });
-          }
-        } finally {
-          await admission.release();
-          if (!request.signal.aborted) {
-            controller.close();
-          }
-        }
-      },
-    });
+    const admittedStream = async function* () {
+      try {
+        yield* stream;
+      } finally {
+        await admission.release();
+      }
+    };
+    const sse = createAutocompleteEventStream(admittedStream(), request.signal);
 
     return Result.ok(sseResponse(sse));
   },
