@@ -1822,6 +1822,8 @@
     "notes": "Pastabos",
     "open": "Atidaryti",
     "openInNewTab": "Atidaryti naujame skirtuke",
+    "openInStella": "Atverti programoje stella",
+    "openOriginalSource": "Atverti pirminį šaltinį",
     "options": "Parinktys",
     "or": "Arba",
     "organization": "Organizacija",
@@ -4738,6 +4740,7 @@
     },
     "title": "Teisės aktai",
     "validity": "Galioja nuo {from} iki {to}",
+    "versionAppliedInDecision": "Sprendime <bdi>{court}</bdi> <bdi>{caseNumber}</bdi> taikyta redakcija (<bdi>{range}</bdi>) · {status}",
     "wordingValidFrom": "Redakcija galioja nuo {date}",
     "wordingVersionUnknown": "Redakcijos versijos data nežinoma"
   },

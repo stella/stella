@@ -33,10 +33,29 @@ export type ProvisionViewPayload = {
    * never read the list. The view reads it and counts from there.
    */
   versionCount: number;
+  decisionContext?:
+    | {
+        court: string;
+        caseNumber: string;
+        appliedDocumentId: string;
+      }
+    | undefined;
 };
 
 const isNonEmptyString = (value: unknown): value is string =>
   typeof value === "string" && value.length > 0;
+
+const isProvisionDecisionContext = (
+  value: unknown,
+): value is NonNullable<ProvisionViewPayload["decisionContext"]> =>
+  typeof value === "object" &&
+  value !== null &&
+  "court" in value &&
+  isNonEmptyString(value.court) &&
+  "caseNumber" in value &&
+  isNonEmptyString(value.caseNumber) &&
+  "appliedDocumentId" in value &&
+  isNonEmptyString(value.appliedDocumentId);
 
 export const isProvisionViewPayload = (
   value: unknown,
@@ -46,6 +65,9 @@ export const isProvisionViewPayload = (
   }
 
   return (
+    (!("decisionContext" in value) ||
+      value.decisionContext === undefined ||
+      isProvisionDecisionContext(value.decisionContext)) &&
     "documentId" in value &&
     isNonEmptyString(value.documentId) &&
     "eli" in value &&
