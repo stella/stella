@@ -213,6 +213,7 @@ export const GENERATORS = [
     inputs: [
       "apps/api/src/handlers/visual-sandbox/**",
       "apps/api/scripts/build-visual-sandbox.ts",
+      "apps/api/scripts/visual-sandbox-build-options.ts",
       "packages/api-contract/**",
       "bun.lock",
     ],

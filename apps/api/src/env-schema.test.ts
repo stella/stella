@@ -5,6 +5,18 @@ import { DAY_IN_MS } from "@stll/time";
 
 import { envApiInvariantViolation, envApiServerSchema } from "./env-schema";
 
+test("generated views require explicit deployment enablement", () => {
+  expect(v.parse(envApiServerSchema.FEATURE_GENERATED_VIEWS, undefined)).toBe(
+    false,
+  );
+  expect(v.parse(envApiServerSchema.FEATURE_GENERATED_VIEWS, "false")).toBe(
+    false,
+  );
+  expect(v.parse(envApiServerSchema.FEATURE_GENERATED_VIEWS, "true")).toBe(
+    true,
+  );
+});
+
 test("agent client storage format requires explicit enablement", () => {
   const schema = envApiServerSchema.AGENT_CLIENT_STORAGE_V1_ENABLED;
   expect(v.parse(schema, undefined)).toBe(false);
@@ -364,4 +376,19 @@ test("list verification grants use the shared registered-feature configuration",
       '{"list-verification":[{"type":"member","organizationId":"org-a","email":"*@example.test"}]}',
     ).success,
   ).toBe(false);
+});
+
+test("visual preview configuration accepts an optional Lambda function identifier", () => {
+  const schema = envApiServerSchema.VISUAL_PREVIEW_FUNCTION_NAME;
+  expect(v.parse(schema, undefined)).toBeUndefined();
+  for (const arn of ["visual-preview-test", "visual-preview-test:live"]) {
+    expect(v.parse(schema, arn)).toBe(arn);
+  }
+  for (const value of [
+    "https://example.test/preview",
+    "arn:aws:s3:::preview",
+    "arn:aws:lambda:eu-central-1:123:function:preview",
+  ]) {
+    expect(v.safeParse(schema, value).success).toBe(false);
+  }
 });

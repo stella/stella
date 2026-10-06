@@ -1,7 +1,7 @@
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { EventType } from "@tanstack/ai";
 import type { StreamChunk } from "@tanstack/ai";
-import { Result } from "better-result";
+import { Result, panic } from "better-result";
 import {
   afterAll,
   afterEach,
@@ -17,6 +17,12 @@ import {
   streamChunkKindOf,
 } from "@/features/chat/stream-chunk-commit-budget";
 import type { StreamChunkKind } from "@/features/chat/stream-chunk-commit-budget";
+import { browserStorage } from "@/lib/account/browser-storage";
+
+const localArea = () =>
+  browserStorage("local") ?? panic("Test requires local browser storage");
+const sessionArea = () =>
+  browserStorage("session") ?? panic("Test requires session browser storage");
 
 // Oracle `chat.render.stream-commits-bounded`: while a response streams, the
 // thread page commits at most its budget a second, whatever kind of chunk
@@ -75,8 +81,8 @@ afterEach(() => {
   testing.cleanup();
   routeRequest = undefined;
   __resetChatRequestStateForTests();
-  sessionStorage.clear();
-  localStorage.clear();
+  sessionArea().clear();
+  localArea().clear();
 });
 
 const ORGANIZATION_ID = "00000000-0000-7000-8000-00000000ffff";

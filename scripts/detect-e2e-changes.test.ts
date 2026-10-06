@@ -1146,22 +1146,30 @@ describe("detect-e2e-changes", () => {
 
   test("scopes browser work before every dependency setup step", () => {
     const job = workflowJob("ci-browser");
-    const scope = "Check UI browser test scope";
+    const scopes = [
+      "Check desktop browser test scope",
+      "Check UI browser test scope",
+      "Check extension browser test scope",
+    ];
+    const required =
+      "if: steps.desktop-browser-tests.outputs.required == 'true' || steps.ui-browser-tests.outputs.required == 'true' || steps.extension-browser-tests.outputs.required == 'true'";
     const setupSteps = [
       "Setup Bun",
+      "Restore Bun install cache",
       "Turbo remote cache",
       "Install dependencies",
       "Prepare environment",
       "Install UI browser test runtime",
     ];
-    expect(job.indexOf(scope)).toBeGreaterThan(-1);
-    for (const name of setupSteps) {
-      expect(job.indexOf(scope)).toBeLessThan(job.indexOf(name));
-      expect(workflowStep(job, name)).toContain(
-        "if: steps.ui-browser-tests.outputs.required == 'true'",
-      );
+    for (const scope of scopes) {
+      expect(job.indexOf(scope)).toBeGreaterThan(-1);
+      expect(workflowStep(job, scope)).not.toContain("bun ");
+      for (const name of setupSteps) {
+        expect(job.indexOf(name)).toBeGreaterThan(-1);
+        expect(job.indexOf(scope)).toBeLessThan(job.indexOf(name));
+        expect(workflowStep(job, name)).toContain(required);
+      }
     }
-    expect(workflowStep(job, scope)).not.toContain("bun ");
   });
 
   test("browser setup verifies image executables without a host cache or installs", () => {

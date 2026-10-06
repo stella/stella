@@ -1,4 +1,5 @@
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
+import { panic } from "better-result";
 import { afterAll, afterEach, describe, expect, spyOn, test } from "bun:test";
 import * as v from "valibot";
 import { createStore } from "zustand";
@@ -14,8 +15,13 @@ import { stellaToast } from "@stll/ui/toast";
 import type { DownloadVariant } from "@/components/inspector/file-download-service.logic";
 import type { FileTab } from "@/components/inspector/inspector-store-types";
 import englishMessages from "@/i18n/langs/en.json";
+import { browserStorage } from "@/lib/account/browser-storage";
+import { userStorageKey } from "@/lib/account/user-scoped-storage";
 
 import type { InspectorTabsStore } from "./inspector-store-types";
+
+const localArea = () =>
+  browserStorage("local") ?? panic("Test requires local browser storage");
 
 const NativeBroadcastChannel = globalThis.BroadcastChannel;
 GlobalRegistrator.register({ url: "http://localhost:3000" });
@@ -182,7 +188,7 @@ afterEach(async () => {
     activeId: null,
     ...originalActions,
   });
-  window.localStorage.clear();
+  localArea().clear();
 });
 afterAll(async () => {
   globalThis.fetch = originalFetch;
@@ -721,8 +727,11 @@ describe("confirmed file rename state", () => {
     });
     expect(
       readStoredJson(
-        window.localStorage.getItem(
-          "stella:inspector-state:v1:org-rename:user-rename",
+        localArea().getItem(
+          userStorageKey("stella:inspector-state:v1:org-rename:", {
+            kind: "user",
+            userId: "user-rename",
+          }),
         ),
         v.object({
           tabs: v.array(v.object({ label: v.string(), fileName: v.string() })),

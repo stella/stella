@@ -8,6 +8,7 @@ import { parseCaseLawDecisionPath } from "@stll/api-contract/case-law-decision-r
 import { parseStatutePath } from "@stll/api-contract/statute-route";
 import { Temporal } from "@stll/time";
 
+import { browserStateStorage } from "@/lib/account/browser-storage";
 import {
   onStorageOwnerChange,
   userStorageKey,
@@ -120,16 +121,15 @@ const hydrate = (): void => {
   if (recentStore.getState().hydrated) {
     return;
   }
-  const raw = Result.try(() =>
-    localStorage.getItem(userStorageKey(STORAGE_KEY)),
-  ).unwrapOr(null);
+  const raw = browserStateStorage("local").getItem(userStorageKey(STORAGE_KEY));
   recentStore.setState({ entries: readLawRecent(raw), hydrated: true });
 };
 const save = (entries: readonly LawRecentEntry[]): void => {
-  const storage = Result.try(() => localStorage).unwrapOr(null);
-  if (storage !== null) {
-    writeStoredJson(storage, userStorageKey(STORAGE_KEY), entries);
-  }
+  writeStoredJson(
+    browserStateStorage("local"),
+    userStorageKey(STORAGE_KEY),
+    entries,
+  );
   recentStore.setState({ entries });
 };
 const record = (entry: LawRecentEntry): void => {

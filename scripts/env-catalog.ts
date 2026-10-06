@@ -151,6 +151,7 @@ const INTERNAL_SERVER_KEYS = new Set([
   "FEATURE_AI_MEMORY",
   "FEATURE_FILE_USAGE_LIMITS",
   "FEATURE_GOVERNED_WORKFLOW",
+  "FEATURE_GENERATED_VIEWS",
   "FEATURE_INBOX_DOCUMENT_SCOUTS",
   "FEATURE_LEGAL_LISTS",
   "FEATURE_MANAGED_PROVIDER_CHECKS",
@@ -218,6 +219,7 @@ const INTERNAL_SERVER_KEYS = new Set([
   "TEMPLATE_PACKS_CONTENT_DIR",
   "USAGE_ENFORCEMENT_ENABLED",
   "USE_MOCK_AI",
+  "VISUAL_PREVIEW_FUNCTION_NAME",
 ]);
 
 const EXAMPLE_VALUES: Record<string, string> = {
@@ -289,6 +291,10 @@ const DESCRIPTION_OVERRIDES: Record<string, string> = {
     "Restricted review account allowed password sign-in. Set together with APP_REVIEW_ORGANIZATION_ID.",
   APP_REVIEW_ORGANIZATION_ID:
     "Organization the restricted review account is confined to. Set together with APP_REVIEW_ACCOUNT_EMAIL.",
+  FEATURE_GENERATED_VIEWS:
+    "Enable generated views for callers granted access to the feature. Disabled by default.",
+  VISUAL_PREVIEW_FUNCTION_NAME:
+    "Optional Lambda function name for generated-view previews. Publishing remains available when previews are not configured.",
   LIST_VERIFICATION_ACTIVE_RUNS_MAX:
     "Maximum queued and running document verifications per organization (1–100; default 2).",
   LIST_VERIFICATION_DAILY_STARTS_MAX:
@@ -763,6 +769,7 @@ export const ENV_CREDENTIAL_CLASSIFICATION = {
   FEATURE_CONFIGURED_ACCESS: ENV_CREDENTIAL_KIND.notCredential,
   FEATURE_FILE_USAGE_LIMITS: ENV_CREDENTIAL_KIND.notCredential,
   FEATURE_GOVERNED_WORKFLOW: ENV_CREDENTIAL_KIND.notCredential,
+  FEATURE_GENERATED_VIEWS: ENV_CREDENTIAL_KIND.notCredential,
   FEATURE_INBOX_DOCUMENT_SCOUTS: ENV_CREDENTIAL_KIND.notCredential,
   FEATURE_LEGAL_LISTS: ENV_CREDENTIAL_KIND.notCredential,
   FEATURE_MANAGED_PROVIDER_CHECKS: ENV_CREDENTIAL_KIND.notCredential,
@@ -922,6 +929,7 @@ export const ENV_CREDENTIAL_CLASSIFICATION = {
   UNUSED_CLIENT_RETENTION_DAYS: ENV_CREDENTIAL_KIND.notCredential,
   USAGE_ENFORCEMENT_ENABLED: ENV_CREDENTIAL_KIND.notCredential,
   USE_MOCK_AI: ENV_CREDENTIAL_KIND.notCredential,
+  VISUAL_PREVIEW_FUNCTION_NAME: ENV_CREDENTIAL_KIND.notCredential,
   VITE_API_URL: ENV_CREDENTIAL_KIND.notCredential,
   VITE_AUTH_GOOGLE: ENV_CREDENTIAL_KIND.notCredential,
   VITE_AUTH_MICROSOFT: ENV_CREDENTIAL_KIND.notCredential,

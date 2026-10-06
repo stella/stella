@@ -30,8 +30,9 @@ globalThis.fetch = Object.assign(
 );
 
 const { signOutAndRelease } = await import("@/hooks/use-sign-out");
-const { installUserScopedStorage, storageOwner } =
-  await import("@/lib/account/user-scoped-storage");
+const { installUserScopedStorage } =
+  await import("@/lib/account/install-user-scoped-storage");
+const { storageOwner } = await import("@/lib/account/user-scoped-storage");
 
 afterAll(() => {
   globalThis.fetch = originalFetch;
