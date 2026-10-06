@@ -98,6 +98,31 @@ test("ordinary markdown and changesets skip package checks while source content 
   });
 });
 
+test("source and unknown paths retain package checks alone or with documentation", () => {
+  repository((root) => {
+    for (const file of [
+      "apps/api/src/index.ts",
+      "packages/x/src/a.ts",
+      "scripts/a.ts",
+      "railway/template.json",
+      ".oxlint-plugins/rule.ts",
+      "docs/unrecognized.weird",
+      ".provenance.yml.ts",
+    ]) {
+      for (const changed of [
+        [file],
+        ["README.md", file],
+        [file, "apps/desktop/README.md"],
+      ]) {
+        expect(
+          requiresPackageChecks({ root, changed }),
+          changed.join(", "),
+        ).toBe(true);
+      }
+    }
+  });
+});
+
 test("a planted markdown reader joins isolated checks, including deleted input files", () => {
   repository((root, write) => {
     expect(requiresPackageChecks({ root, changed: ["docs/planted.md"] })).toBe(
@@ -158,6 +183,28 @@ test("an aliased filesystem reader with a typed path constant joins automaticall
       ["bun", "test", "scripts/aliased-reader.test.ts"],
     ]);
   });
+});
+
+test("static template paths join the same Markdown checks as quoted paths", () => {
+  for (const expression of [
+    "readFileSync(`README.md`, 'utf8');",
+    "const INPUT = `README.md`; readFileSync(INPUT, 'utf8');",
+    "const root = process.cwd(); readFileSync(path.join(root, `README.md`), 'utf8');",
+    "const INPUT = `README.md`; Bun.file(INPUT);",
+  ]) {
+    repository((root, write) => {
+      write(
+        "scripts/template-reader.test.ts",
+        `import { readFileSync } from "node:fs"; ${expression}`,
+      );
+      expect(markdownChecks({ root, changed: ["README.md"] })).toEqual([
+        ["bun", "test", "scripts/template-reader.test.ts"],
+      ]);
+      expect(requiresPackageChecks({ root, changed: ["README.md"] })).toBe(
+        false,
+      );
+    });
+  }
 });
 
 test("quoted fixture declarations cannot shadow a real Markdown read", () => {

@@ -4341,6 +4341,65 @@ test("the exact docs-only README change plans only Markdown checks in PRs and me
   }
 });
 
+test("mixed documentation and code changes retain the complete code plan", () => {
+  const outputs = [
+    ...new Set([
+      ...Object.values(jobScopes).filter((scope) => scope !== null),
+      "docs_changed_files",
+    ]),
+  ];
+  for (const event of [EVENT.pullRequest, EVENT.mergeGroup]) {
+    const depth =
+      event === EVENT.pullRequest ? SUITE_DEPTH.fast : SUITE_DEPTH.full;
+    const code = ["apps/api/src/index.ts"];
+    const selected = runSelector(
+      [...code, "README.md", "apps/desktop/README.md"],
+      outputs,
+      depth,
+      "false",
+      event,
+    );
+    expect(selected).toEqual(runSelector(code, outputs, depth, "false", event));
+    const plan = Object.fromEntries(
+      outputs.map((name, index) => [name, selected.at(index) ?? ""]),
+    );
+    expect(plan["package_checks_required"]).toBe("true");
+    expect(plan["docs_checks_required"]).toBe("false");
+    if (event !== EVENT.mergeGroup) {
+      continue;
+    }
+    const values = {
+      "github.event_name": event,
+      "inputs.heavy_only": false,
+      "needs.ci-plan.outputs.trusted": "true",
+      "needs.ci-plan.outputs.suite_depth": depth,
+      "needs.ci-plan.outputs.queue_depth": "full",
+      ...Object.fromEntries(
+        Object.entries(plan).map(([name, value]) => [
+          `needs.ci-plan.outputs.${name}`,
+          value,
+        ]),
+      ),
+    };
+    for (const [job, scope] of Object.entries(jobScopes)) {
+      if (scope === "package_checks_required") {
+        expect(
+          evaluate(jobIf(ciJobs[job]), {
+            values,
+            status: {
+              failure: false,
+              cancelled: false,
+              always: true,
+              success: true,
+            },
+          }),
+          job,
+        ).toBe(true);
+      }
+    }
+  }
+});
+
 test("documentation guards run independently of package checks", () => {
   const steps = jobSteps(ciJobs["ci-checks-policy"]);
   for (const name of [

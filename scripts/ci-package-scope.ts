@@ -156,7 +156,7 @@ const pathExpression = ({
   const literal = readStringLiterals(text);
   const value = literal.at(0)?.value;
   if (
-    (text.startsWith('"') || text.startsWith("'")) &&
+    (text.startsWith('"') || text.startsWith("'") || text.startsWith("`")) &&
     literal.length === 1 &&
     text.at(-1) === text.at(0) &&
     value !== undefined
