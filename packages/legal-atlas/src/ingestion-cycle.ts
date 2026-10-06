@@ -1,4 +1,4 @@
-// parser-output-unchanged: operational stop kinds do not affect stored parser output.
+// parser-output-unchanged: Stop dispositions classify cycle failures; parsed decision output is unchanged.
 export const INGESTION_STOP_KIND = {
   SOURCE_UNREACHABLE: "source_unreachable",
   PUBLISHER_REFUSAL: "publisher_refusal",
@@ -9,6 +9,15 @@ export const INGESTION_STOP_KIND = {
 
 export type IngestionStopKind =
   (typeof INGESTION_STOP_KIND)[keyof typeof INGESTION_STOP_KIND];
+
+/** Source availability is measured separately from defects. */
+export const INGESTION_STOP_DISPOSITION = {
+  [INGESTION_STOP_KIND.SOURCE_UNREACHABLE]: "source_unavailable",
+  [INGESTION_STOP_KIND.PUBLISHER_REFUSAL]: "source_unavailable",
+  [INGESTION_STOP_KIND.ADAPTER_ERROR]: "defect",
+  [INGESTION_STOP_KIND.DEADLINE]: "defect",
+  [INGESTION_STOP_KIND.INTERNAL_ERROR]: "defect",
+} as const satisfies Record<IngestionStopKind, "source_unavailable" | "defect">;
 
 export type IngestionPipelineResult = {
   inserted: number;
