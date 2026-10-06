@@ -1050,8 +1050,15 @@ describe("runIngestionPipeline — failure records", () => {
     async (field) => {
       const source = caseLawSourceRow({ name: "Citation failure source" });
       const prefix = "ECLI:CZ:NS:2026:";
+      const prefixLength =
+        field === "text"
+          ? prefix.length
+          : normalizeDecisionIdentifierValue(
+              DECISION_IDENTIFIER_TYPES.ECLI,
+              prefix,
+            ).length;
       const citationText =
-        prefix + "1".repeat(CITATION_STORAGE_WIDTHS[field] + 1 - prefix.length);
+        prefix + "1".repeat(CITATION_STORAGE_WIDTHS[field] + 1 - prefixLength);
       const citations = extractCitations([{ index: 0, text: citationText }]);
       expect(citations).toHaveLength(1);
       const citation = citations.at(0);
