@@ -27,9 +27,10 @@ import { decisionHasNoDocument } from "@/features/case-law/components/case-viewe
 import { buildDecisionFacts } from "@/features/case-law/components/case-viewer/decision-facts.logic";
 import { DecisionWorkspace } from "@/features/case-law/components/case-viewer/decision-workspace";
 import { useClientAuthStatus } from "@/hooks/use-client-auth-status";
-import { useMountEffect } from "@/hooks/use-effect";
+import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
 import { ChromeHeaderActions } from "@/lib/chrome-header-actions";
 import { detached } from "@/lib/detached";
+import { recordLawOpen } from "@/lib/law-search-history";
 import {
   extractId,
   fileMayHoldOthersOf,
@@ -58,6 +59,17 @@ export function PublicDecisionViewer({
   routeId,
 }: PublicDecisionViewerProps) {
   const decisionId = extractId(decision.id);
+  const openedPath = useRouterState({
+    select: ({ location }) => location.pathname,
+  });
+  useExternalSyncEffect(() => {
+    recordLawOpen({
+      kind: "decision",
+      id: decision.id,
+      title: `${decision.caseNumber} · ${decision.court}`,
+      path: openedPath,
+    });
+  }, [decision.id, decision.caseNumber, decision.court, openedPath]);
   // The block the URL names. A results row that could not open beside the
   // list lands here instead, at the passage and on the words it matched.
   const initialAnchorId = useRouterState({

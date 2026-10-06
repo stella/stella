@@ -3783,11 +3783,15 @@
     }
   },
   "lawHome": {
+    "clearRecent": "Előzmények törlése",
     "enteringIntoForce": "Hamarosan hatályba lép",
     "inForceFrom": "Hatálybalépés: {date}",
-    "noRecentSearches": "Még nincsenek keresések",
+    "noRecent": "Még nincs legutóbbi tevékenység",
     "noSignals": "Még nincsenek jelzések",
     "prompt": "Mit keres?",
+    "recent": "Legutóbbiak",
+    "recentCasesFilter": "Határozatok",
+    "recentSearchFilter": "Keresések",
     "recentlyInForce": "Nemrég hatályba lépett",
     "searchLabel": "Keresés a jogi adatbázisban",
     "searchPlaceholder": "Ügyszám, jogszabályszám, ECLI vagy kulcsszavak",
