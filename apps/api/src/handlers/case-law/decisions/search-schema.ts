@@ -2,6 +2,10 @@ import { Type } from "@sinclair/typebox";
 import { t } from "elysia";
 
 import { COURT_TIER_LABELS } from "@stll/api-contract/case-law-court-tiers";
+import {
+  caseLawCourtYearSchema,
+  type CaseLawCourtYear,
+} from "@stll/api-contract/case-law-court-year";
 import { DECISION_TYPE_KINDS } from "@stll/api-contract/case-law-decision-types";
 import {
   CASE_LAW_SEARCH_WARNING_CODES,
@@ -24,6 +28,8 @@ import {
   tPaginationLimit,
   tSafeId,
 } from "@/api/lib/custom-schema";
+import { jsonSchemaToTypeBox } from "@/api/lib/json-schema/json-schema-to-typebox";
+import { toJsonSchema } from "@/api/lib/json-schema/valibot-to-json-schema";
 import { CORPUS_SEARCH_CURSOR_WITH_GROUPS_MAX_LENGTH } from "@/api/lib/legal-search/corpus-search-cursor";
 import { tLegalAlternatives } from "@/api/lib/legal-search/legal-alternatives";
 import {
@@ -40,6 +46,10 @@ import {
 import { searchTotalSchema } from "@/api/lib/search/total-schema";
 
 import { CASE_SEARCH_TEXT_BYTES as bytes } from "./search-response-limits";
+
+const courtYearSchema = Type.Unsafe<CaseLawCourtYear>(
+  jsonSchemaToTypeBox(toJsonSchema(caseLawCourtYearSchema)),
+);
 
 export const searchDecisionsBodySchema = t.Object({
   query: t.String({
@@ -264,6 +274,7 @@ export const searchDecisionsSuccessResponseSchema = t.Object(
       t.Object(
         {
           court: searchCourtTiersSchema,
+          courtYear: courtYearSchema,
           year: searchFacetBucketsSchema,
           decisionType: decisionTypeFacetBucketsSchema,
           source: sourceFacetBucketsSchema,

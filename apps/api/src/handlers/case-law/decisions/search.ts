@@ -94,6 +94,7 @@ import {
   decisionTypeKindBuckets,
   foldStatedDecisionTypeBuckets,
   groupCourtsByTier,
+  presentCourtYear,
   labelSourceBuckets,
   readCaseLawSourceNames,
 } from "@/api/lib/case-law/decision-search-facets";
@@ -934,6 +935,7 @@ const searchPostgresDecisions = async (
   const facets: DecisionSearchFacets | null = parsedCursor
     ? null
     : {
+        courtYear: null,
         court: groupCourtsByTier({
           buckets: facetBuckets(courtResultRaw),
           country: body.country,
@@ -1976,14 +1978,27 @@ const readCaseLawSearchFacets = async ({
   }
 
   const { court, decisionType, language, source, year } = read.value.facets;
+  const courtFacets = groupCourtsByTier({
+    buckets: court,
+    country: body.country,
+    courtWeights,
+    perTierLimit: LIMITS.caseLawFacetLimit,
+  });
+  if (read.value.courtYear === null) {
+    logger.warn("case_law.search_court_year.unavailable", {
+      reason: "unreadable_aggregation",
+    });
+  }
+  const courtYear = presentCourtYear({
+    matrix: read.value.courtYear,
+    courts: courtFacets,
+    country: body.country,
+    courtWeights,
+  });
   return {
     facets: {
-      court: groupCourtsByTier({
-        buckets: court,
-        country: body.country,
-        courtWeights,
-        perTierLimit: LIMITS.caseLawFacetLimit,
-      }),
+      court: courtFacets,
+      courtYear,
       year,
       decisionType: foldStatedDecisionTypeBuckets(decisionType),
       source: labelSourceBuckets(

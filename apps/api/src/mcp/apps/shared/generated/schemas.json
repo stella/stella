@@ -52,6 +52,13 @@
               "additionalProperties": true
             }
           },
+          "courtYear": {
+            "type": [
+              "object",
+              "null"
+            ],
+            "additionalProperties": true
+          },
           "year": {
             "type": "array",
             "items": {
@@ -83,6 +90,7 @@
         },
         "required": [
           "court",
+          "courtYear",
           "year",
           "decisionType",
           "source",
