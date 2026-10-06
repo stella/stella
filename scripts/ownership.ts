@@ -245,7 +245,7 @@ export const ROOT_CONNECTION_DOORS = [
     enforcement: {
       kind: "import",
       specifiers: ["@/api/db/root"],
-      names: ["createOwnerReviewAccountOrganizationStore"],
+      names: ["bindOwnerReviewAccountOrganizationStore"],
       allowed: [
         {
           path: "apps/api/src/scripts/review-account.ts",

@@ -10,9 +10,10 @@
  * Better Auth's password hashing, and ends the account's browser sessions;
  * OAuth grants stay. Only fixed outcome words and counts are printed.
  */
-import { createOwnerReviewAccountOrganizationStore } from "@/api/db/root";
+import { bindOwnerReviewAccountOrganizationStore } from "@/api/db/root";
 import { env } from "@/api/env";
 import { getAuth } from "@/api/lib/auth";
+import { createReviewAccountOrganizationStore } from "@/api/lib/db/review-account-organization-store";
 import {
   bindReviewAccountOrganizationStore,
   createReviewAccountAuthStore,
@@ -23,7 +24,9 @@ import type { ReviewAccountStore } from "@/api/scripts/review-account.logic";
 const createStore = async (): Promise<ReviewAccountStore> => ({
   ...createReviewAccountAuthStore(await getAuth().$context),
   ...bindReviewAccountOrganizationStore(
-    await createOwnerReviewAccountOrganizationStore(),
+    bindOwnerReviewAccountOrganizationStore(
+      createReviewAccountOrganizationStore,
+    ),
   ),
 });
 
