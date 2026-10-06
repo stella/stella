@@ -792,6 +792,71 @@ describe("the free floor's service budget", () => {
     );
   });
 
+  test("a queued workflow on the organization's own key takes the per-kind backlog cap, not the free budget", async () => {
+    const backlogCap = 2;
+    for (const periodReservation of [undefined, "on-acceptance"] as const) {
+      const store = periodStore();
+      const kickoff = async () => {
+        const identity = {
+          actionKind: "workflow.start",
+          logicalPhaseId: Bun.randomUUIDv7(),
+        } as const satisfies AdmittedActionIdentity;
+        return await withActionAdmission({
+          organizationId,
+          userId,
+          enabled: true,
+          policy,
+          execution: "queued-kickoff",
+          periodReservation,
+          periodIdentity: identity,
+          periodPolicy: {
+            periodMs: serviceBudgetConfig.periodMs,
+            limit: backlogCap,
+          },
+          serviceBudgetsEnabled: true,
+          serviceBudgetConfig,
+          budgetNow: () => nowMs,
+          readOrganizationState: async () =>
+            freeActionState(ORGANIZATION_MODEL_CREDENTIALS.organization),
+          redis: store.client,
+          run: async (_signal, control) => {
+            if (periodReservation === "on-acceptance") {
+              const reserved = await control.reservePeriod(identity);
+              if (Result.isError(reserved)) {
+                throw reserved.error;
+              }
+            }
+            return "queued";
+          },
+        });
+      };
+      for (let start = 0; start < backlogCap; start += 1) {
+        expect(await kickoff()).toEqual(Result.ok("queued"));
+      }
+      expectRefusal(await kickoff(), ACTION_ADMISSION_CODES.periodExhausted);
+      expect(store.counts()).toEqual([backlogCap]);
+      const managed = await withActionAdmission({
+        organizationId,
+        userId,
+        enabled: true,
+        policy,
+        serviceBudgetsEnabled: true,
+        serviceBudgetConfig,
+        periodIdentity: {
+          actionKind: "chat.send",
+          logicalPhaseId: Bun.randomUUIDv7(),
+        },
+        budgetNow: () => nowMs,
+        readOrganizationState: async () =>
+          freeActionState(ORGANIZATION_MODEL_CREDENTIALS.managed),
+        redis: store.client,
+        run: async () => "completed",
+      });
+      expect(managed).toEqual(Result.ok("completed"));
+      expect(store.counts()).toEqual([backlogCap, 1]);
+    }
+  });
+
   test("a missing free policy refuses as unavailable, never as unlimited", async () => {
     const redis = countingRedis();
     const result = await withActionAdmission({
