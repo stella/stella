@@ -7,6 +7,7 @@ import {
   parseCanonicalChatSourceCitationHref,
   type ChatSourceCitationTarget,
 } from "@stll/api-contract";
+import { isCaseLawDecisionId } from "@stll/api-contract/case-law-decision-route";
 import { isFolioBlockId } from "@stll/folio-react";
 import {
   FileTextIcon,
@@ -18,6 +19,10 @@ import {
 import { stellaToast } from "@stll/ui/toast";
 import { cn } from "@stll/ui/utils";
 
+import {
+  ChatDecisionCitation,
+  ChatRouteDecisionCitation,
+} from "@/components/chat/chat-decision-citation";
 import {
   openEmailCitationSource,
   openOfficeCitationSource,
@@ -144,6 +149,29 @@ const ReferenceCitationLink = ({
       {children}
     </MarkdownReferenceChip>
   );
+  if (
+    decision?.locator.type === "ref" &&
+    isCaseLawDecisionId(decision.locator.ref)
+  ) {
+    return (
+      <ChatDecisionCitation
+        decisionId={decision.locator.ref}
+        passage={children}
+        anchorId={decision.anchorId ?? undefined}
+        interactive={interactive}
+      />
+    );
+  }
+  if (decision?.locator.type === "route") {
+    return (
+      <ChatRouteDecisionCitation
+        params={decision.locator.params}
+        passage={children}
+        anchorId={decision.anchorId ?? undefined}
+        interactive={interactive}
+      />
+    );
+  }
   if (source === undefined) {
     return fallback;
   }

@@ -1,6 +1,7 @@
 import { useState } from "react";
 
 import { useInfiniteQuery } from "@tanstack/react-query";
+import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
 import { BidiText } from "@stll/ui/bidi-text";
@@ -10,6 +11,9 @@ import { Skeleton } from "@stll/ui/skeleton";
 
 import { CitedDecisionLink } from "@/components/legal-reader/cited-decision-link";
 import { ProvisionVersionBasisLabel } from "@/components/provision-version-basis";
+import { decisionCitationCourtLabel } from "@/features/case-law/components/decision-citation-chip.logic";
+import { decisionCitationPresentationsById } from "@/features/case-law/decision-citation-presentation.logic";
+import type { DecisionCitationPresentation } from "@/features/case-law/decision-citation-presentation.logic";
 import { filterCitingDecisions } from "@/features/statutes/provision-inspector.logic";
 import { citingDecisionsInfiniteOptions } from "@/features/statutes/queries/citing-decisions";
 import { formatValidityDate } from "@/features/statutes/statute-format";
@@ -27,8 +31,10 @@ export type CitingDecisionRow = PublicLawData<
 /** One citing decision with the passage that applies the provision. */
 export const CitingDecisionItem = ({
   decision,
+  presentation,
 }: {
   decision: CitingDecisionRow;
+  presentation?: DecisionCitationPresentation | undefined;
 }) => {
   const format = useFormatter();
   const decided = formatValidityDate(decision.decisionDate, format);
@@ -36,10 +42,18 @@ export const CitingDecisionItem = ({
   return (
     <CitedDecisionLink
       className="hover:bg-accent -mx-2 flex flex-col gap-0.5 rounded-md px-2 py-1.5 no-underline"
+      passage={
+        decision.sentenceText === null
+          ? undefined
+          : { type: "text", text: decision.sentenceText }
+      }
+      presentation={presentation}
       decision={{
         caseNumber: decision.caseNumber,
         country: decision.country,
         court: decision.court,
+        courtAbbreviation: decision.courtAbbreviation,
+        sourceUrl: decision.sourceUrl,
         decisionDate: decision.decisionDate,
         id: decision.decisionId,
         language: decision.language,
@@ -55,7 +69,7 @@ export const CitingDecisionItem = ({
       </span>
       <ProvisionVersionBasisLabel basis={decision.versionBasis} />
       {decision.sentenceText === null ? null : (
-        <span className="text-foreground-strong-muted text-2xs line-clamp-3 leading-snug">
+        <span className="text-foreground-strong-muted text-2xs leading-snug">
           {decision.sentenceText}
         </span>
       )}
@@ -102,6 +116,12 @@ export const ProvisionCitingDecisions = ({
   );
 
   const decisions = optionalArray(data?.pages).flatMap((page) => page.items);
+  const presentations = decisionCitationPresentationsById(
+    decisions.map((decision) => ({
+      decisionId: decision.decisionId,
+      courtShortCode: decisionCitationCourtLabel(decision),
+    })),
+  );
   const visible = filterCitingDecisions(decisions, filter);
 
   if (isPending) {
@@ -151,7 +171,13 @@ export const ProvisionCitingDecisions = ({
       <ul className="m-0 flex list-none flex-col p-0">
         {visible.map((decision) => (
           <li key={`${decision.decisionId}-${decision.spanStart}`}>
-            <CitingDecisionItem decision={decision} />
+            <CitingDecisionItem
+              decision={decision}
+              presentation={
+                presentations.get(decision.decisionId) ??
+                panic("Citing decision missing collected identity")
+              }
+            />
           </li>
         ))}
       </ul>

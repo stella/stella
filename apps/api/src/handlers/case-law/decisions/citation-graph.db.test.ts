@@ -158,6 +158,7 @@ beforeAll(
         caseNumber: "open-related",
         country: "CZE",
         court: "Related court",
+        sourceUrl: "https://example.test/decision/open-related",
         decisionDate: "2020-02-03",
         decisionType: "nález",
         ecli: "ECLI:CZ:US:2020:1.US.1.20.2",
@@ -410,6 +411,8 @@ test("incoming pages carry treatment and the citing decision, and the rollup mat
       citationAuthority: 0,
       country: "CZE",
       court: "Related court",
+      courtAbbreviation: "ÚS",
+      sourceUrl: "https://example.test/decision/open-related",
       decisionDate: "2020-02-03",
       decisionType: "nález",
       ecli: "ECLI:CZ:US:2020:1.US.1.20.2",
@@ -586,6 +589,8 @@ test("top citing decisions are one row per visible precedent citer", async () =>
   expect(top.at(0)).toMatchObject({
     caseNumber: "open-related",
     court: "Related court",
+    courtAbbreviation: "ÚS",
+    sourceUrl: "https://example.test/decision/open-related",
     decisionDate: "2020-02-03",
   });
 });

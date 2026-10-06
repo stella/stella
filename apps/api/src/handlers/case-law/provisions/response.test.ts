@@ -80,6 +80,8 @@ const citingItem = (text: string) =>
     caseNumber: text,
     slug: text,
     court: text,
+    courtAbbreviation: text,
+    sourceUrl: text,
     country: text,
     language: text,
     decisionDate: text,

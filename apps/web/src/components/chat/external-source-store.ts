@@ -2,6 +2,8 @@ import { create } from "zustand";
 
 import type { BusinessRegistrySlug } from "@stll/api-contract";
 
+import type { DecisionCitationMetadata } from "@/features/case-law/components/decision-citation-chip";
+
 export type BusinessRegistrySourceReference = {
   registry: BusinessRegistrySlug;
   companyId: string;
@@ -11,6 +13,12 @@ export type BusinessRegistrySourceReference = {
 export type CaseLawDecisionSourceReference = {
   caseNumber: string;
   decisionId: string;
+  citation?:
+    | Pick<
+        DecisionCitationMetadata,
+        "court" | "courtShortCode" | "decisionDate"
+      >
+    | undefined;
 };
 
 export type ExternalSourceReference = {

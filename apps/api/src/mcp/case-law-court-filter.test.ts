@@ -1,9 +1,9 @@
 import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
 
+import { courtAbbreviation } from "@stll/api-contract/case-law-court-abbreviations";
 import { assertProperty } from "@stll/property-testing";
 
-import { courtAbbreviation } from "@/api/lib/case-law/court-abbreviations";
 import {
   combineCourtFilters,
   readCourtFilter,

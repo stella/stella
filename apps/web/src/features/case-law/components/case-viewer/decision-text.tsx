@@ -1,6 +1,7 @@
 import { Fragment, useRef } from "react";
 import type { ReactElement, ReactNode } from "react";
 
+import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
 import { locateCitationSpans } from "@stll/legal-ast/citation-passage";
@@ -74,6 +75,8 @@ import { HeadnoteBlock } from "@/features/case-law/components/case-viewer/headno
 import type { HeadnoteOrigin } from "@/features/case-law/components/case-viewer/headnote-block";
 import type { DecisionProvisionAnchor } from "@/features/case-law/components/case-viewer/use-decision-provision-anchors";
 import type { DecisionStatuteCitationAnchor } from "@/features/case-law/components/case-viewer/use-decision-statute-citation-anchors";
+import { decisionCitationCourtLabel } from "@/features/case-law/components/decision-citation-chip.logic";
+import { decisionCitationPresentationsById } from "@/features/case-law/decision-citation-presentation.logic";
 import { dissentingJudges } from "@/features/case-law/decision-judges";
 import { locateExternalCjeuCitations } from "@/features/case-law/fallback-legal-anchors";
 import { locateProvisionAnchors } from "@/features/case-law/provision-anchors";
@@ -522,16 +525,26 @@ const buildAnchorsByPieceId = ({
   annotations,
   blocks,
   citations,
+  textDecisionId,
   provisions,
   statutes,
 }: {
   annotations: readonly AnnotationAnchorSource[];
   blocks: readonly Block[];
   citations: readonly CitationAnchorSource[];
+  textDecisionId: string;
   provisions: readonly DecisionProvisionAnchor[];
   statutes: readonly DecisionStatuteCitationAnchor[];
 }) => {
   const citationSpans = locateCitationSpans({ blocks, citations });
+  const presentations = decisionCitationPresentationsById(
+    Object.values(citationSpans).flatMap((spans) =>
+      spans.map(({ source: { decision } }) => ({
+        decisionId: decision.id,
+        courtShortCode: decisionCitationCourtLabel(decision),
+      })),
+    ),
+  );
   const provisionSpans = locateProvisionAnchors({ blocks, provisions });
   const statuteSpans = new Map<string, DecisionStatuteCitationAnchor[]>();
   for (const statute of statutes) {
@@ -605,7 +618,16 @@ const buildAnchorsByPieceId = ({
               className={cn(
                 decisionReferenceTintClassName(span.source.treatment),
               )}
+              passage={{
+                type: "citation",
+                citation: span.source,
+                textDecisionId,
+              }}
               decision={span.source.decision}
+              presentation={
+                presentations.get(span.source.decision.id) ??
+                panic("Reader citation missing collected identity")
+              }
               treatment={span.source.treatment}
             >
               {marked}
@@ -1033,6 +1055,7 @@ export const DecisionText = ({
   const { anchorsByPieceId, provisionsByAnchorId } = buildAnchorsByPieceId({
     annotations: hydrated ? annotationAnchors : NO_ANNOTATION_ANCHORS,
     blocks: visibleBlocks,
+    textDecisionId: decisionId,
     citations: hydrated ? citationAnchors : NO_CITATION_ANCHORS,
     provisions: hydrated ? provisionAnchors : NO_PROVISION_ANCHORS,
     statutes: hydrated ? statuteCitationAnchors : NO_STATUTE_CITATION_ANCHORS,

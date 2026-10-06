@@ -1,14 +1,13 @@
-import { useState } from "react";
-import type { MouseEvent, ReactNode } from "react";
+import type { ReactNode } from "react";
 
-import { Link, useNavigate } from "@tanstack/react-router";
+import { useNavigate } from "@tanstack/react-router";
+import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
-import { createCaseLawDecisionRouteParams } from "@stll/api-contract/case-law-decision-route";
-import type { CaseLawDecisionLanguageAlternate } from "@stll/api-contract/case-law-decision-route";
-import { BidiText } from "@stll/ui/bidi-text";
-import { Button } from "@stll/ui/button";
-import { Popover, PopoverPanel, PopoverTrigger } from "@stll/ui/popover";
+import {
+  createCaseLawDecisionPath,
+  createCaseLawDecisionRouteParams,
+} from "@stll/api-contract/case-law-decision-route";
 import { useIsMobile } from "@stll/ui/use-mobile";
 import { cn } from "@stll/ui/utils";
 
@@ -17,93 +16,89 @@ import {
   navigateToCaseDecisionMain,
 } from "@/components/inspector/case-decision-view";
 import { useInspectorView } from "@/components/inspector/use-inspector-view";
-import { LEGAL_CITATION_LINK_CLASS_NAME } from "@/components/legal-reader/citation-link";
-import {
-  citedDecisionClick,
-  CITED_DECISION_CLICK,
-} from "@/components/legal-reader/cited-decision-link.logic";
 import type { CitationAnchorSource } from "@/features/case-law/citation-anchors";
 import {
   CITATION_TREATMENT_DOT,
   CITATION_TREATMENT_LABEL,
 } from "@/features/case-law/citation-treatment";
-import type { CitationTreatment } from "@/features/case-law/citation-treatment";
+import type {
+  CitedDecisionAddress,
+  CitationTreatment,
+} from "@/features/case-law/citation-treatment";
 import {
   CitationPassageQuote,
   useCitationPassage,
 } from "@/features/case-law/components/case-viewer/citation-passage-preview";
-import { useFormatter } from "@/i18n/formatting-context";
-import { citedDecisionLabel } from "@/lib/cited-decision-label";
-import { formatDecisionDate } from "@/lib/decision-date";
+import { DecisionCitationChip } from "@/features/case-law/components/decision-citation-chip";
+import { decisionCitationCourtLabel } from "@/features/case-law/components/decision-citation-chip.logic";
+import type { DecisionCitationPresentation } from "@/features/case-law/decision-citation-presentation.logic";
 import { detached } from "@/lib/detached";
 
-type CitedDecisionTarget = {
-  caseNumber: string;
-  country: string;
-  court: string;
-  decisionDate: string | null;
-  decisionType?: string | null | undefined;
-  id: string;
-  language: string | null;
-  languageAlternates: readonly CaseLawDecisionLanguageAlternate[] | null;
-  slug: string | null;
-};
+type CitedDecisionTarget = Pick<
+  CitedDecisionAddress,
+  | "caseNumber"
+  | "country"
+  | "court"
+  | "courtAbbreviation"
+  | "sourceUrl"
+  | "decisionDate"
+  | "id"
+  | "language"
+  | "languageAlternates"
+  | "slug"
+>;
 
 /** Where the citing text names the decision, when a passage can be quoted. */
-type CitedDecisionPassage = {
-  citation: CitationAnchorSource;
-  /** The decision whose text holds the citation. */
-  textDecisionId: string;
-};
+type CitedDecisionPassage =
+  | {
+      type: "citation";
+      citation: CitationAnchorSource;
+      /** The decision whose text holds the citation. */
+      textDecisionId: string;
+    }
+  | { type: "text"; text: string };
 
 type CitedDecisionPreviewProps = {
-  decision: CitedDecisionTarget;
-  onOpen: () => void;
   passage?: CitedDecisionPassage | undefined;
   /** How the citing text treats the cited decision. */
   treatment?: CitationTreatment | undefined;
 };
 
-type CitedDecisionLinkProps = Omit<CitedDecisionPreviewProps, "onOpen"> & {
+type CitedDecisionLinkProps = CitedDecisionPreviewProps & {
+  decision: CitedDecisionTarget;
+  presentation?: DecisionCitationPresentation | undefined;
   children: ReactNode;
   className?: string | undefined;
 };
 
 /**
- * Base UI adds `preventBaseUIHandler` to the rightmost handler of a merged
- * chain; calling it drops the handlers merged to its left, which is how the
- * popover trigger's own click is suppressed for a navigation gesture.
- */
-type TriggerClick = MouseEvent<HTMLAnchorElement> & {
-  preventBaseUIHandler?: (() => void) | undefined;
-};
-
-/**
  * What the citing text says about a cited decision: the passage, how it
- * treats the decision, its court and its date, and the one action that opens
- * it. Reading a citation and following it are separate gestures, so weighing
- * one never costs the reader the text they are in.
+ * treats the decision. Metadata and navigation belong to the shared chip.
+ * Reading a citation and following it are separate gestures, so weighing one
+ * never costs the reader the text they are in.
  */
 export const CitedDecisionPreview = ({
-  decision,
-  onOpen,
   passage,
   treatment,
 }: CitedDecisionPreviewProps) => {
   const t = useTranslations();
-  const format = useFormatter();
-  const decided = formatDecisionDate(decision.decisionDate, format);
+  let quoted: ReactNode;
+  if (passage !== undefined) {
+    switch (passage.type) {
+      case "citation":
+        quoted = <CitingPassage passage={passage} />;
+        break;
+      case "text":
+        quoted = <span dir="auto">{passage.text}</span>;
+        break;
+      default:
+        passage satisfies never;
+        return panic("Unhandled cited decision passage");
+    }
+  }
 
   return (
     <>
-      <span className="flex flex-col gap-0.5">
-        <BidiText as="span" className="text-foreground text-sm font-medium">
-          {citedDecisionLabel(decision)}
-        </BidiText>
-        <span className="text-muted-foreground text-xs">
-          {decided === null ? decision.court : `${decision.court} · ${decided}`}
-        </span>
-      </span>
       {treatment !== undefined && (
         <span className="text-muted-foreground flex items-center gap-1.5 text-[calc(0.7rem*var(--reader-text-scale))]">
           <span
@@ -116,15 +111,7 @@ export const CitedDecisionPreview = ({
           {t(CITATION_TREATMENT_LABEL[treatment])}
         </span>
       )}
-      {passage !== undefined && <CitingPassage passage={passage} />}
-      <Button
-        className="h-6 w-fit px-2"
-        onClick={onOpen}
-        size="sm"
-        variant="outline"
-      >
-        {t("caseLaw.citation.openDecision")}
-      </Button>
+      {quoted}
     </>
   );
 };
@@ -134,17 +121,19 @@ export const CitedDecisionPreview = ({
  * preview opens, not when the citation is rendered: a decision's text names
  * dozens of others, and none of those reads is worth paying up front.
  */
-const CitingPassage = ({ passage }: { passage: CitedDecisionPassage }) => {
+const CitingPassage = ({
+  passage,
+}: {
+  passage: Extract<CitedDecisionPassage, { type: "citation" }>;
+}) => {
   const read = useCitationPassage(passage);
 
   return <CitationPassageQuote read={read} />;
 };
 
 /**
- * A link to another decision that shows the preview above before it takes the
- * reader anywhere. Keyboard reaches both steps: Enter on the citation opens
- * the preview, whose only tabbable element is the action Base UI focuses, so
- * Enter again opens the decision.
+ * The source wording stays in the document; its court chip opens the shared
+ * preview and keeps the inspector navigation action beside the source text.
  */
 export const CitedDecisionLink = ({
   children,
@@ -152,11 +141,11 @@ export const CitedDecisionLink = ({
   decision,
   passage,
   treatment,
+  presentation,
 }: CitedDecisionLinkProps) => {
   const isMobile = useIsMobile();
   const inspector = useInspectorView();
   const navigate = useNavigate();
-  const [open, setOpen] = useState(false);
   const params = createCaseLawDecisionRouteParams({
     caseNumber: decision.caseNumber,
     country: decision.country,
@@ -167,19 +156,7 @@ export const CitedDecisionLink = ({
     slug: decision.slug,
   });
 
-  const onTriggerClick = (event: TriggerClick) => {
-    if (citedDecisionClick(event) === CITED_DECISION_CLICK.navigate) {
-      event.preventBaseUIHandler?.();
-      return;
-    }
-
-    // The trigger's own handler opens the preview; this only stops the
-    // navigation the anchor would otherwise do underneath it.
-    event.preventDefault();
-  };
-
   const openDecision = () => {
-    setOpen(false);
     const tab = createCaseDecisionViewTab({
       caseNumber: decision.caseNumber,
       country: decision.country,
@@ -200,53 +177,27 @@ export const CitedDecisionLink = ({
     inspector.open(tab);
   };
 
-  const linkClassName = cn(LEGAL_CITATION_LINK_CLASS_NAME, className);
-  const link =
-    params.language === undefined ? (
-      <Link
-        className={linkClassName}
-        onClick={onTriggerClick}
-        params={{
-          country: params.country,
-          court: params.court,
-          slug: params.slug,
-        }}
-        to="/law/$country/cases/$court/$slug"
-      />
-    ) : (
-      <Link
-        className={linkClassName}
-        onClick={onTriggerClick}
-        params={{
-          country: params.country,
-          court: params.court,
-          language: params.language,
-          slug: params.slug,
-        }}
-        to="/law/$country/cases/$court/$language/$slug"
-      />
-    );
-
   return (
-    <Popover onOpenChange={setOpen} open={open}>
-      <PopoverTrigger nativeButton={false} role="link" render={link}>
-        {children}
-      </PopoverTrigger>
-      {/* Panel, not Popup: Base UI renders popup children inside its own
-          viewport, so a content stack has to be laid out below that. */}
-      <PopoverPanel
-        align="start"
-        className="reader-chrome w-[min(28rem,calc(100vw-2rem))] max-w-none"
-        contentClassName="gap-2"
-        side="bottom"
-      >
-        <CitedDecisionPreview
-          decision={decision}
-          onOpen={openDecision}
-          passage={passage}
-          treatment={treatment}
-        />
-      </PopoverPanel>
-    </Popover>
+    <>
+      <span className={className}>{children}</span>{" "}
+      <DecisionCitationChip
+        decision={{
+          decisionId: decision.id,
+          court: decision.court,
+          courtShortCode: decisionCitationCourtLabel(decision),
+          caseNumber: decision.caseNumber,
+          decisionDate: decision.decisionDate,
+          readerUrl: createCaseLawDecisionPath(params),
+          originalUrl: decision.sourceUrl,
+        }}
+        onOpen={openDecision}
+        passage={
+          passage !== undefined || treatment !== undefined ? (
+            <CitedDecisionPreview passage={passage} treatment={treatment} />
+          ) : undefined
+        }
+        presentation={presentation}
+      />
+    </>
   );
 };

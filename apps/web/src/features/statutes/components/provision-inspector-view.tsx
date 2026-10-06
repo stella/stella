@@ -3,6 +3,7 @@ import type { ReactNode } from "react";
 
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
+import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
 import { ScrollArea } from "@stll/ui/scroll-area";
@@ -22,6 +23,8 @@ import { ZoomControls } from "@/components/inspector/zoom-controls";
 import { LegalReaderAIChat } from "@/components/legal-reader/legal-reader-ai-chat";
 import { OpenOriginalButton } from "@/components/legal-reader/open-original-button";
 import { useReaderTextScale } from "@/components/legal-reader/use-reader-text-scale";
+import { decisionCitationCourtLabel } from "@/features/case-law/components/decision-citation-chip.logic";
+import { decisionCitationPresentationsById } from "@/features/case-law/decision-citation-presentation.logic";
 import {
   CitingDecisionItem,
   ProvisionCitingDecisions,
@@ -103,6 +106,12 @@ export const ProvisionInspectorView = ({
   );
   const leadingDecisions =
     leadingView.type === "items" ? uniqueByDecision(leadingView.items) : [];
+  const leadingPresentations = decisionCitationPresentationsById(
+    leadingDecisions.map((decision) => ({
+      decisionId: decision.decisionId,
+      courtShortCode: decisionCitationCourtLabel(decision),
+    })),
+  );
   const panelRef = useRef<HTMLDivElement | null>(null);
   const contentRef = useRef<HTMLDivElement | null>(null);
   // The wording's own query, read here only for whether there is text to
@@ -199,7 +208,13 @@ export const ProvisionInspectorView = ({
                   <ul className="m-0 flex list-none flex-col p-0">
                     {leadingDecisions.map((decision) => (
                       <li key={decision.decisionId}>
-                        <CitingDecisionItem decision={decision} />
+                        <CitingDecisionItem
+                          decision={decision}
+                          presentation={
+                            leadingPresentations.get(decision.decisionId) ??
+                            panic("Leading decision missing collected identity")
+                          }
+                        />
                       </li>
                     ))}
                   </ul>

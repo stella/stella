@@ -20,6 +20,8 @@
     "./inspector-file-facet": "./src/inspector-file-facet.ts",
     "./sk-court-succession": "./src/sk-court-succession.ts",
     "./sk-court-tiers": "./src/sk-court-tiers.ts",
+    "./case-law-courts": "./src/case-law-courts.ts",
+    "./case-law-court-abbreviations": "./src/case-law-court-abbreviations.ts",
     "./case-law-court-tiers": "./src/case-law-court-tiers.ts",
     "./case-law-decision-types": "./src/case-law-decision-types.ts",
     "./case-law-decision-resolution": "./src/case-law-decision-resolution.ts",

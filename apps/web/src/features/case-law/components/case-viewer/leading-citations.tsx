@@ -1,6 +1,7 @@
 import { useRef, useState } from "react";
 
 import { useQuery } from "@tanstack/react-query";
+import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
 import type { CitationPassageMatch } from "@stll/legal-ast/citation-passage";
@@ -12,6 +13,7 @@ import { cn } from "@stll/ui/utils";
 
 import { createCaseDecisionViewTab } from "@/components/inspector/case-decision-view";
 import { useInspectorView } from "@/components/inspector/use-inspector-view";
+import { CitedDecisionLink } from "@/components/legal-reader/cited-decision-link";
 import type { CitationAnchorSource } from "@/features/case-law/citation-anchors";
 import {
   CITATION_TREATMENT_DOT,
@@ -32,6 +34,9 @@ import {
   DIRECTION_TITLE,
 } from "@/features/case-law/components/case-viewer/decision-citations";
 import { CitationTreatmentBar } from "@/features/case-law/components/citation-treatment-bar";
+import { decisionCitationCourtLabel } from "@/features/case-law/components/decision-citation-chip.logic";
+import { decisionCitationPresentationsById } from "@/features/case-law/decision-citation-presentation.logic";
+import type { DecisionCitationPresentation } from "@/features/case-law/decision-citation-presentation.logic";
 import {
   decisionCitationSummaryOptions,
   decisionLeadingCitationsOptions,
@@ -146,6 +151,14 @@ const DirectionSection = ({
   );
   const [showingAll, setShowingAll] = useState(false);
   const total = totalCitations(counts);
+  const presentations = decisionCitationPresentationsById(
+    optionalArray(leading)
+      .filter((row) => counts[row.treatment] > 0)
+      .map(({ decision: cited }) => ({
+        decisionId: cited.id,
+        courtShortCode: decisionCitationCourtLabel(cited),
+      })),
+  );
 
   return (
     <section className="flex flex-col gap-3">
@@ -191,6 +204,10 @@ const DirectionSection = ({
                     direction={direction}
                     key={row.id}
                     row={row}
+                    presentation={
+                      presentations.get(row.decision.id) ??
+                      panic("Leading citation missing collected identity")
+                    }
                   />
                 ))}
               </ul>
@@ -237,9 +254,11 @@ const LeadingRow = ({
   decisionId,
   direction,
   row,
+  presentation,
 }: LeadingCitationsProps & {
   direction: CitationDirection;
   row: LeadingCitation;
+  presentation: DecisionCitationPresentation;
 }) => {
   const format = useFormatter();
   const inspector = useInspectorView();
@@ -281,6 +300,26 @@ const LeadingRow = ({
           </span>
         </span>
       </button>
+      <div className="ps-4">
+        <CitedDecisionLink
+          decision={row.decision}
+          presentation={presentation}
+          treatment={row.treatment}
+          passage={{
+            type: "citation",
+            textDecisionId,
+            citation: {
+              citationText: row.citationText,
+              decision: cited,
+              id: row.id,
+              sectionIndex: row.sectionIndex,
+              treatment: row.treatment,
+            },
+          }}
+        >
+          {null}
+        </CitedDecisionLink>
+      </div>
       {open && (
         <div className="ps-4">
           <LeadingPassage

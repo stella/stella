@@ -46,6 +46,8 @@ const decision = {
   caseNumber: "1 C 1/2020",
   country: "CZE",
   court: "Supreme Court",
+  courtAbbreviation: null,
+  sourceUrl: null,
   language: "cs",
   languageAlternates: [],
   slug: "decision",

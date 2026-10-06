@@ -152,6 +152,30 @@ const build = (
 };
 
 describe("directory generation rules", () => {
+  test("a registered court without a publisher short name fails generation", () => {
+    expect(() =>
+      build(
+        [{ ...source("cal", "S", "California Supreme Court"), short_name: "" }],
+        {},
+        { cal: "CA" },
+      ),
+    ).toThrow("cal: source short_name is empty");
+  });
+
+  test("the publisher short name becomes the court citation code", () => {
+    const entries = build(
+      [
+        {
+          ...source("cal", "S", "California Supreme Court"),
+          short_name: "Cal.",
+        },
+      ],
+      {},
+      { cal: "CA" },
+    );
+    expect(entries.at(0)).toMatchObject({ shortCode: "Cal." });
+  });
+
   test("a region comes from courts-db, then from a same-system parent", () => {
     const entries = build(
       [

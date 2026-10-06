@@ -1,4 +1,7 @@
-// parser-output-unchanged: The apex abbreviation list feeds search tool text only, not parsed records.
+import { ECLI_COURT_REGISTRY } from "./case-law-courts";
+import type { CaseLawJurisdiction } from "./case-law-jurisdictions";
+import { SK_COURT_TIERS } from "./sk-court-tiers";
+
 /**
  * The short form a lawyer writes a court as: ÚS, NS, NSS, KS, SN, NSA, CJEU.
  *
@@ -8,14 +11,15 @@
  * `CJEU` next to "Court of Justice". A chip in the reader's UI language beside
  * a name in the court's own would read as two different courts.
  *
- * Two sources, in order, and no third:
+ * The ECLI, registered court name, then jurisdiction name patterns:
  *
  * 1. The decision's own ECLI. Its third segment is the court's national code
  *    (`ECLI:CZ:KSOS:…` is Krajský soud v Ostravě whichever portal serves it),
  *    which is machine-readable and spelled the same way by every publisher.
  *    Seat-bearing codes resolve to their family, because the chip's job is to
  *    say what kind of court this is, not which building.
- * 2. A curated apex-court name pattern per jurisdiction, for the constitutional,
+ * 2. A registered court name, including courts without an ECLI.
+ * 3. A curated apex-court name pattern per jurisdiction, for the constitutional,
  *    supreme, supreme administrative and justice courts — the courts whose
  *    abbreviation a reader actually reads as a name.
  *
@@ -97,40 +101,53 @@ const ECLI_COURT_CODES = {
  * named after their seat and are not abbreviated in prose, so there is nothing
  * to derive from a name that an ECLI did not already answer.
  */
-const APEX_COURT_PATTERNS = {
+export const COURT_NAME_REGISTRY = {
+  AUT: [
+    { pattern: /verfassungsgerichtshof|^vfgh$/iu, shortCode: "VfGH" },
+    { pattern: /verwaltungsgerichtshof|^vwgh$/iu, shortCode: "VwGH" },
+    { pattern: /oberster\s+gerichtshof|^ogh$/iu, shortCode: "OGH" },
+  ],
   CZE: [
-    [/ústavní\s+soud/iu, "ÚS"],
-    [/nejvyšší\s+správní\s+soud/iu, "NSS"],
-    [/nejvyšší\s+soud/iu, "NS"],
+    { pattern: /ústavní\s+soud/iu, shortCode: "ÚS" },
+    { pattern: /nejvyšší\s+správní\s+soud/iu, shortCode: "NSS" },
+    { pattern: /nejvyšší\s+soud/iu, shortCode: "NS" },
   ],
   EU: [
-    [/court\s+of\s+justice/iu, "CJEU"],
-    [/general\s+court/iu, "GC"],
+    { pattern: /court\s+of\s+justice/iu, shortCode: "CJEU" },
+    { pattern: /general\s+court/iu, shortCode: "GC" },
   ],
   // Hungary issues no ECLI, so the name is the only source there is. The
   // Kúria is written out rather than abbreviated in Hungarian prose, which is
   // why its chip is the name; `LB` is the pre-2012 Legfelsőbb Bíróság, the
   // same court under the name its older decisions carry.
   HUN: [
-    [/alkotmánybíróság/iu, "AB"],
-    [/kúria/iu, "Kúria"],
-    [/legfelsőbb\s+bíróság/iu, "LB"],
+    { pattern: /alkotmánybíróság/iu, shortCode: "AB" },
+    { pattern: /kúria/iu, shortCode: "Kúria" },
+    { pattern: /legfelsőbb\s+bíróság/iu, shortCode: "LB" },
   ],
   POL: [
-    [/trybunał\s+konstytucyjny/iu, "TK"],
-    [/naczelny\s+sąd\s+administracyjny/iu, "NSA"],
-    [/sąd\s+najwyższy/iu, "SN"],
+    { pattern: /trybunał\s+konstytucyjny/iu, shortCode: "TK" },
+    { pattern: /naczelny\s+sąd\s+administracyjny/iu, shortCode: "NSA" },
+    { pattern: /sąd\s+najwyższy/iu, shortCode: "SN" },
   ],
   SVK: [
-    [/ústavný\s+súd/iu, "ÚS"],
-    [/najvyšš(?:í|ieho)\s+správn(?:y|eho)\s+súd(?:u)?/iu, "NSS"],
-    [/najvyšš(?:í|ieho)\s+súd(?:u)?/iu, "NS"],
+    { pattern: /ústavný\s+súd/iu, shortCode: "ÚS" },
+    {
+      pattern: /najvyšš(?:í|ieho)\s+správn(?:y|eho)\s+súd(?:u)?/iu,
+      shortCode: "NSS",
+    },
+    { pattern: /najvyšš(?:í|ieho)\s+súd(?:u)?/iu, shortCode: "NS" },
   ],
   // Anchored to the court directory's canonical name, the one spelling a
   // decision of that court is stored under.
-  USA: [[/^supreme\s+court\s+of\s+the\s+united\s+states$/iu, "SCOTUS"]],
+  USA: [
+    {
+      pattern: /^supreme\s+court\s+of\s+the\s+united\s+states$/iu,
+      shortCode: "SCOTUS",
+    },
+  ],
 } as const satisfies Readonly<
-  Record<string, readonly (readonly [RegExp, string])[]>
+  Record<CaseLawJurisdiction, readonly { pattern: RegExp; shortCode: string }[]>
 >;
 
 /**
@@ -139,6 +156,13 @@ const APEX_COURT_PATTERNS = {
  * than an appellate one. Built once: the object literal above is what is
  * reviewed, and this is what is read.
  */
+const registeredEcliCourts = new Map(
+  Object.entries(ECLI_COURT_REGISTRY).map(([country, courts]) => [
+    country,
+    new Map(Object.entries(courts).map(([code, court]) => [code, court])),
+  ]),
+);
+
 const ecliCourtCodes = new Map<string, EcliCourtCodes>(
   Object.entries(ECLI_COURT_CODES).map(([jurisdiction, codes]) => [
     jurisdiction,
@@ -155,6 +179,10 @@ const abbreviationFromEcliCode = (
   jurisdiction: string,
   code: string,
 ): string | undefined => {
+  const registered = registeredEcliCourts.get(jurisdiction)?.get(code);
+  if (registered !== undefined) {
+    return registered.shortCode;
+  }
   const codes = ecliCourtCodes.get(jurisdiction);
   if (codes === undefined) {
     return undefined;
@@ -187,8 +215,8 @@ const courtAbbreviationFromEcli = (
 
 const apexCourtPatterns = new Map<
   string,
-  readonly (readonly [RegExp, string])[]
->(Object.entries(APEX_COURT_PATTERNS));
+  readonly { pattern: RegExp; shortCode: string }[]
+>(Object.entries(COURT_NAME_REGISTRY));
 
 /**
  * The apex-court abbreviations a stored country's court names carry, in the
@@ -198,7 +226,7 @@ export const apexCourtAbbreviations = (country: string): readonly string[] => {
   const patterns = apexCourtPatterns.get(country.toUpperCase());
   return patterns === undefined
     ? []
-    : patterns.map(([, abbreviation]) => abbreviation);
+    : patterns.map(({ shortCode }) => shortCode);
 };
 
 /** The abbreviation a jurisdiction's apex-court names carry, or none. */
@@ -208,7 +236,7 @@ const courtAbbreviationFromName = (
 ): string | undefined =>
   apexCourtPatterns
     .get(country.toUpperCase())
-    ?.find(([pattern]) => pattern.test(court))?.[1];
+    ?.find(({ pattern }) => pattern.test(court))?.shortCode;
 
 export type CourtAbbreviationInput = {
   /** The decision's stored country, ISO 3166-1 alpha-3 or `EU`. */
@@ -217,6 +245,50 @@ export type CourtAbbreviationInput = {
   court: string;
   /** The decision's own identifier, where it carries one. */
   ecli?: string | null | undefined;
+};
+
+const registeredCourtNames = new Map(
+  Object.entries(ECLI_COURT_REGISTRY).map(([jurisdiction, courts]) => [
+    jurisdiction,
+    new Map(
+      Object.values(courts).map((court) => [
+        court.name.toLowerCase(),
+        court.shortCode,
+      ]),
+    ),
+  ]),
+);
+
+const ECLI_JURISDICTION_BY_COUNTRY = {
+  CZE: "CZ",
+  SVK: "SK",
+  EU: "EU",
+} as const;
+
+const registeredSlovakCourtTypes = Object.entries(SK_COURT_TIERS).toSorted(
+  ([left], [right]) => right.length - left.length,
+);
+
+const registeredCourtFromName = ({
+  country,
+  court,
+}: CourtAbbreviationInput) => {
+  const jurisdiction = Object.entries(ECLI_JURISDICTION_BY_COUNTRY)
+    .find(([candidate]) => candidate === country.toUpperCase())
+    ?.at(1);
+  const registered =
+    jurisdiction === undefined
+      ? undefined
+      : registeredCourtNames.get(jurisdiction)?.get(court.toLowerCase().trim());
+  if (registered !== undefined || country.toUpperCase() !== "SVK") {
+    return registered;
+  }
+  const normalized = court.toLowerCase().trim();
+  return registeredSlovakCourtTypes.find(
+    ([name]) =>
+      normalized === name.toLowerCase() ||
+      normalized.startsWith(`${name.toLowerCase()} `),
+  )?.[1].shortCode;
 };
 
 /**
@@ -231,4 +303,6 @@ export const courtAbbreviation = ({
   court,
   ecli,
 }: CourtAbbreviationInput): string | undefined =>
-  courtAbbreviationFromEcli(ecli) ?? courtAbbreviationFromName(country, court);
+  courtAbbreviationFromEcli(ecli) ??
+  registeredCourtFromName({ country, court }) ??
+  courtAbbreviationFromName(country, court);
