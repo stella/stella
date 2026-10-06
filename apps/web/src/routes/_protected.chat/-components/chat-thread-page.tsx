@@ -611,7 +611,7 @@ export const ChatThreadPage = ({
                 className="@container isolate min-h-0"
                 key={threadRef.threadId}
               >
-                <ConversationContent className="mx-auto w-full max-w-5xl gap-3 px-4 pb-[calc(var(--composer-block-h,7rem)+1.5rem)]">
+                <ConversationContent className="mx-auto w-full max-w-5xl gap-3 px-4 pb-[max(var(--chat-bottom-fade-h),calc(var(--composer-block-h,7rem)+1.5rem))]">
                   {messages.length === 0 && !isGenerating && !error ? (
                     <div className="m-auto flex w-full max-w-md flex-col gap-6 px-4">
                       <PromptSuggestions
@@ -676,13 +676,14 @@ export const ChatThreadPage = ({
                 workspaceId={workspaceId ?? threadRef.threadId}
               />
               {/* Soft fade so messages dissolve into the floating composer
-              instead of being clipped at a hard edge. Only when a
-              conversation exists — the centered empty-state suggestions
-              must stay crisp, not dimmed by the bottom fade. */}
+              instead of being clipped at a hard edge. ScrollArea owns the
+              overflow signal; only its transcript root controls this fade,
+              so scrollable tool results cannot keep it visible at bottom. */}
               {messages.length > 0 && (
                 <div
                   aria-hidden="true"
-                  className="from-background pointer-events-none absolute inset-x-0 bottom-0 mx-auto h-48 w-full max-w-5xl bg-linear-to-t to-transparent"
+                  className="from-background pointer-events-none absolute inset-x-0 bottom-0 mx-auto hidden h-(--chat-bottom-fade-h) w-full max-w-5xl bg-linear-to-t to-transparent group-has-[[role=log]>[data-overflow-y-end]]/chat-scroll-surface:block"
+                  data-chat-bottom-fade=""
                 />
               )}
               {/* Top of the page stacking order: must stack above the sticky
@@ -813,7 +814,7 @@ export const ChatThreadPage = ({
 const ChatThreadScrollSurface = ({ children }: { children: ReactNode }) => (
   <ConversationScrollProvider>
     <div
-      className="relative flex min-h-0 flex-1 flex-col"
+      className="group/chat-scroll-surface relative flex min-h-0 flex-1 flex-col [--chat-bottom-fade-h:12rem]"
       data-composer-host=""
     >
       {children}
