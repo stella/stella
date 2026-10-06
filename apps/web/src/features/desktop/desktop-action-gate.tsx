@@ -15,43 +15,17 @@ import {
 } from "@stll/ui/dialog";
 
 import { DesktopDownloadButtons } from "@/components/desktop-download-buttons";
+import {
+  DESKTOP_ACTION_LABELS,
+  DESKTOP_ACTION_REASONS,
+} from "@/features/desktop/desktop-action-gate.logic";
+import type { DesktopAction } from "@/features/desktop/desktop-action-gate.logic";
 import type { DesktopPresenceType } from "@/features/desktop/desktop-presence";
 import { useDesktopPresence } from "@/features/desktop/desktop-presence";
 import { useDesktopAccountConnection } from "@/features/desktop/use-desktop-account-connection";
-import type { TranslationKey } from "@/i18n/types";
+import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { detectDesktopPlatform } from "@/lib/desktop-downloads";
 import { detached } from "@/lib/detached";
-
-/** Work that only stella desktop can do for a file. */
-export type DesktopAction = "edit-file" | "sign-pdf";
-
-/**
- * Each action stays visible in every presence and names what it will do:
- * run, update the app, connect it, or install it.
- */
-const DESKTOP_ACTION_LABELS = {
-  "edit-file": {
-    current: "workspaces.files.desktopEdit.openAction",
-    none: "workspaces.files.desktopGate.editNone",
-    not_connected: "workspaces.files.desktopGate.connect",
-    outdated: "workspaces.files.desktopGate.editOutdated",
-  },
-  "sign-pdf": {
-    current: "workspaces.files.desktopGate.signCurrent",
-    none: "workspaces.files.desktopGate.signNone",
-    not_connected: "workspaces.files.desktopGate.connect",
-    outdated: "workspaces.files.desktopGate.signOutdated",
-  },
-} as const satisfies Record<
-  DesktopAction,
-  Record<DesktopPresenceType, TranslationKey>
->;
-
-/** Why the action needs the desktop app, shown before installing it. */
-const DESKTOP_ACTION_REASONS = {
-  "edit-file": "workspaces.files.desktopGate.editReason",
-  "sign-pdf": "workspaces.files.desktopGate.signReason",
-} as const satisfies Record<DesktopAction, TranslationKey>;
 
 /** Presences that need the app installed or updated before the action. */
 type DesktopRequiredPresence = Extract<
@@ -90,7 +64,8 @@ export const useDesktopActionGate = (
     );
   };
 
-  const run = (perform: () => void) => {
+  // Toasts retain this callback while presence continues to refresh.
+  const run = useLatestCallback((perform: () => void) => {
     switch (presence.type) {
       case "current": {
         perform();
@@ -106,11 +81,11 @@ export const useDesktopActionGate = (
         return;
       }
       default: {
-        presence satisfies never;
-        panic(`Unhandled desktop presence: ${String(presence)}`);
+        presence.type satisfies never;
+        panic(`Unhandled desktop presence: ${String(presence.type)}`);
       }
     }
-  };
+  });
 
   return {
     label: t(DESKTOP_ACTION_LABELS[action][presence.type]),

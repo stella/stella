@@ -8,6 +8,7 @@ import { companyFormatKeys } from "@/components/company-format-library";
 import { readerAnnotationKeys } from "@/components/legal-reader/annotations/reader-annotations-query";
 import { savedSearchKeys } from "@/components/saved-searches.logic";
 import { chatKeys } from "@/features/chat/chat-query-contract";
+import { desktopPresenceOptions } from "@/features/desktop/desktop-presence";
 import { timeTimersOptions } from "@/features/time-timers/queries";
 import {
   linkedAccountsOptions,
@@ -98,8 +99,13 @@ const KEY_TYPE_HAS_USER = "the key argument's type requires userId";
 // Keyed by handler path under apps/api/src/handlers.
 const PER_USER_READS: Record<string, PerUserRead> = {
   "desktop-presence/read.ts": {
-    kind: "no-web-caller",
+    kind: "keyed",
     calls: ["api.desktop.presence.get"],
+    files: ["features/desktop/desktop-presence.ts"],
+    keys: () => [
+      desktopPresenceOptions({ userId: USER, organizationId: ORG }).queryKey,
+    ],
+    opaqueKeys: { "desktopPresenceKeys.all(key)": KEY_TYPE_HAS_USER },
   },
   "views/list.ts": {
     kind: "caller-marker",
