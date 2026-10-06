@@ -156,49 +156,32 @@ test("verification needs both capabilities for UI and prefetch admission", async
   }
 });
 
-test("undeclared Legal Lists follows deployment while verification remains hidden", async () => {
+test("undeclared Legal Lists needs deployment and an enabled verification caller", async () => {
   for (const deploymentEnabled of [false, true]) {
-    const state = {
-      declaredFeatureIds: [],
-      capabilities: { unknown: { status: "enabled" as const } },
-      deploymentFeatures: { legalLists: deploymentEnabled },
-    };
-    expect(callerFeatureEnabled(state, CALLER_FEATURE.legalLists)).toBe(
-      deploymentEnabled,
-    );
-    expect(callerFeatureEnabled(state, CALLER_FEATURE.verification)).toBe(
-      false,
-    );
-    let calls = 0;
-    const admission = await runForCallerFeature({
-      availability: state,
-      feature: CALLER_FEATURE.legalLists,
-      load: async () => {
-        calls += 1;
-      },
-    });
-    expect(admission.isOk()).toBe(deploymentEnabled);
-    expect(calls).toBe(deploymentEnabled ? 1 : 0);
-    const withVerification = {
-      ...state,
-      declaredFeatureIds: [CALLER_FEATURE.verification.id],
-      capabilities: {
-        [CALLER_FEATURE.verification.id]: { status: "enabled" as const },
-      },
-    };
-    expect(
-      callerFeatureEnabled(withVerification, CALLER_FEATURE.verification),
-    ).toBe(deploymentEnabled);
-    calls = 0;
-    const verificationAdmission = await runForCallerFeature({
-      availability: withVerification,
-      feature: CALLER_FEATURE.verification,
-      load: async () => {
-        calls += 1;
-      },
-    });
-    expect(verificationAdmission.isOk()).toBe(deploymentEnabled);
-    expect(calls).toBe(deploymentEnabled ? 1 : 0);
+    for (const status of [undefined, "hidden", "enabled"] as const) {
+      const state = {
+        declaredFeatureIds: [CALLER_FEATURE.verification.id],
+        capabilities:
+          status === undefined
+            ? { unrelated: { status: "enabled" as const } }
+            : { [CALLER_FEATURE.verification.id]: { status } },
+        deploymentFeatures: { legalLists: deploymentEnabled },
+      };
+      const enabled = deploymentEnabled && status === "enabled";
+      for (const feature of Object.values(CALLER_FEATURE)) {
+        expect(callerFeatureEnabled(state, feature)).toBe(enabled);
+        let calls = 0;
+        const admission = await runForCallerFeature({
+          availability: state,
+          feature,
+          load: async () => {
+            calls += 1;
+          },
+        });
+        expect(admission.isOk()).toBe(enabled);
+        expect(calls).toBe(enabled ? 1 : 0);
+      }
+    }
   }
 });
 
