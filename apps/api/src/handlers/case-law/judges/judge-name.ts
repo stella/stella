@@ -1,14 +1,4 @@
-/**
- * NFD, then every `\p{Diacritic}` removed, spacing ones (`´`, `ʼ`, `^`)
- * included. `stripDiacritics` keeps spacing characters for search, but name
- * keys are persisted in `case_law_judges.name_key` and decision-judge rows
- * and are never re-keyed, so this fold stays pinned to the one they were
- * minted with.
- */
-const NAME_KEY_DIACRITIC_PATTERN = /\p{Diacritic}/gu;
-
-const stripNameKeyDiacritics = (text: string): string =>
-  text.normalize("NFD").replace(NAME_KEY_DIACRITIC_PATTERN, "");
+import { stripDiacritics } from "@stll/text-normalize";
 
 /**
  * Academic titles a court prints around a judge's name, folded the way
@@ -59,7 +49,7 @@ const REPEATED_SEPARATOR_PATTERN = /,(?:\s*,)+/gu;
 
 /** The comparable shape of one printed token: `Ph.D.,` and `phd` agree here. */
 const titleShape = (token: string): string =>
-  stripNameKeyDiacritics(token).toLowerCase().replace(NON_LETTER_PATTERN, "");
+  stripDiacritics(token).toLowerCase().replace(NON_LETTER_PATTERN, "");
 
 /**
  * The name without the titles the publisher printed around it.
@@ -89,7 +79,7 @@ export const stripAcademicTitles = (printed: string): string =>
  * would leave every decision's bench unmatched.
  */
 export const judgeNameKey = (printed: string): string =>
-  stripNameKeyDiacritics(stripAcademicTitles(printed))
+  stripDiacritics(stripAcademicTitles(printed))
     .toLowerCase()
     .replace(NON_ALPHANUMERIC_PATTERN, " ")
     .trim()

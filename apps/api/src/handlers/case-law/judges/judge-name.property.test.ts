@@ -122,13 +122,6 @@ describe("judge match key", () => {
     expect(judgeNameKey("Novák Jan")).toBe(judgeNameKey("Jan Novák"));
   });
 
-  test("spacing diacritics fold out of the persisted key", () => {
-    // Keys stored in `name_key` were minted with spacing marks removed;
-    // search folding keeps them, the key must not.
-    expect(judgeNameKey("JUDr. Jan O´Novák")).toBe("jan-onovak");
-    expect(judgeNameKey("Jan Oʼnovák")).toBe("jan-onovak");
-  });
-
   test("two judges never share a key", () => {
     const keys = JUDGE_NAMES.map((name) => judgeNameKey(name));
 

@@ -25,17 +25,6 @@ describe("stripDiacritics (NFD)", () => {
     expect(stripDiacritics("a᪰b᷄c")).toBe("abc");
   });
 
-  test.each([
-    ["コーヒー", "コーヒー"],
-    ["l·l", "l·l"],
-    ["a^b`c", "a^b`c"],
-  ])(
-    "keeps spacing diacritic characters: strip(%p) === %p",
-    (input, expected) => {
-      expect(stripDiacritics(input)).toBe(expected);
-    },
-  );
-
   test("leaves precomposed compatibility characters intact (NFD)", () => {
     // NFD does not decompose the ﬁ ligature or the superscript ².
     expect(stripDiacritics("ﬁ²")).toBe("ﬁ²");

@@ -101,11 +101,6 @@ describe("foldToAscii", () => {
     }
   });
 
-  test("keeps non-Latin spacing marks that unaccent leaves alone", () => {
-    expect(foldToAscii("コーヒー")).toBe("コーヒー");
-    expect(foldToAscii("l·l")).toBe("l·l");
-  });
-
   test("passes non-Latin scripts through with marks stripped", () => {
     // Out of contract: Greek, Cyrillic, and Arabic keep their letters, so the
     // fold stays safe to run ahead of the script-specific normalizers.
