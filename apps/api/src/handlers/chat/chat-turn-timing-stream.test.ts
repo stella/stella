@@ -42,7 +42,7 @@ const starts = [
   {
     type: EventType.REASONING_MESSAGE_START,
     messageId: "answer",
-    role: "assistant",
+    role: "reasoning",
     timestamp: 0,
   },
   {

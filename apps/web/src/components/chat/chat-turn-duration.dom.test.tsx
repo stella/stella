@@ -23,7 +23,9 @@ afterEach(() => {
   jest.useRealTimers();
   setSystemTime();
 });
-afterAll(() => GlobalRegistrator.unregister());
+afterAll(async () => {
+  await GlobalRegistrator.unregister();
+});
 
 test("ticks only the active server span and freezes while awaiting a user", async () => {
   jest.useFakeTimers();
