@@ -66,7 +66,7 @@ const createIsolationPrimitives = () => {
   const ObserverType = MutationObserver;
   const attribute = Element.prototype.getAttribute;
   const remove = Element.prototype.remove;
-  const nodeItem = NodeList.prototype.item;
+  const nodeItem: unknown = descriptorOf(NodeList.prototype, "item")?.value;
   const tagName = descriptorOf(Element.prototype, "tagName")?.get;
   const nodeType = descriptorOf(Node.prototype, "nodeType")?.get;
   const namespace = descriptorOf(Element.prototype, "namespaceURI")?.get;
@@ -83,6 +83,7 @@ const createIsolationPrimitives = () => {
     );
   };
   if (
+    typeof nodeItem !== "function" ||
     !tagName ||
     !nodeType ||
     !namespace ||
@@ -171,7 +172,7 @@ const createIsolationPrimitives = () => {
     }
     const matches: NodeListOf<Element> = apply(query, node, ["*"]);
     for (let index = 0; ; index += 1) {
-      const element = apply(nodeItem, matches, [index]);
+      const element: unknown = apply(nodeItem, matches, [index]);
       if (!element) {
         break;
       }
@@ -339,7 +340,7 @@ export const isolateVisualGuest = () => {
     }
     const matches: NodeListOf<Element> = apply(elementSelectors, node, ["*"]);
     for (let index = 0; ; index += 1) {
-      const element = apply(nodeItem, matches, [index]);
+      const element: unknown = apply(nodeItem, matches, [index]);
       if (!element) {
         break;
       }

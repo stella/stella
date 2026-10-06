@@ -39,7 +39,9 @@ describe("visual page runtime API", () => {
     const messages: VisualGuestMessage[] = [];
     const api = createVisualGuestApi({
       data: null,
-      postMessage: (message) => messages.push(message),
+      postMessage: (message) => {
+        messages.push(message);
+      },
       measureSize: () => ({ width: 1200, height: 400 }),
     });
     api.drill({ court: "court-one", year: 2026 });

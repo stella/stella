@@ -386,11 +386,9 @@ describe("AI provider production chat tool matrix", () => {
       ),
     );
     expect(registered.has(VISUAL_PREVIEW_TOOL_NAME)).toBe(false);
-    expect(
-      DEFAULT_MCP_TOOL_DEFINITIONS.some(
-        ({ name }) => String(name) === VISUAL_PREVIEW_TOOL_NAME,
-      ),
-    ).toBe(false);
+    expect(DEFAULT_MCP_TOOL_DEFINITIONS).not.toContainEqual(
+      expect.objectContaining({ name: VISUAL_PREVIEW_TOOL_NAME }),
+    );
     expect([...registered].toSorted()).toEqual(
       catalogNames.filter((name) => !gated.has(name)).toSorted(),
     );
