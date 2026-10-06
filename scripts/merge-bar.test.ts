@@ -1663,6 +1663,61 @@ describe("green result freshness", () => {
       throw new Error("unexpected run jobs read");
     },
     ratchet: baseDefinitions({}),
+    mergeGroupRetests: true,
+  });
+
+  test("a direct merge still refuses a green result once main has moved", () => {
+    const direct = (comparison: unknown, pullFiles = ["scripts/shared.ts"]) =>
+      checkGreenResultFreshness({
+        ...readers(comparison),
+        readPullFiles: () => pullFiles,
+        mergeGroupRetests: false,
+      });
+    for (const [comparison, pullFiles, message] of [
+      [
+        { status: "ahead", ahead_by: 21, files: [] },
+        undefined,
+        "main advanced 21 commits since the green run (limit 20)",
+      ],
+      [
+        {
+          status: "ahead",
+          ahead_by: 1,
+          files: Array.from({ length: 300 }, () => ({
+            filename: "unrelated.ts",
+          })),
+        },
+        undefined,
+        "cannot establish complete changed-file coverage for main",
+      ],
+      [
+        {
+          status: "ahead",
+          ahead_by: 1,
+          files: [{ filename: "scripts/shared.ts" }],
+        },
+        undefined,
+        "main changed files also touched by this PR: scripts/shared.ts",
+      ],
+      [
+        {
+          status: "ahead",
+          ahead_by: 1,
+          files: [{ filename: "scripts/ownership.ts" }],
+        },
+        ["scripts/ratchet.ts"],
+        "main changed the ratchet since the green run (scripts/ownership.ts) and this PR changes it too",
+      ],
+    ] as const) {
+      const result = direct(
+        comparison,
+        pullFiles === undefined ? undefined : [...pullFiles],
+      );
+      expect(result.isErr(), message).toBe(true);
+      if (result.isErr()) {
+        expect(result.error.message).toContain(message);
+      }
+    }
   });
 
   test("unchanged base and up to twenty unrelated commits retain green results", () => {
