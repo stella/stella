@@ -12,20 +12,18 @@ import { useQueryView } from "@/lib/use-query-view";
 const isTabOpen = (tabId: string) =>
   useInspectorTabsStore.getState().tabs.some((tab) => tab.id === tabId);
 
-type PlaybookPaneProps = {
-  tabId: string;
-  tabLabel: string;
-  playbookId: string;
-  onClose: () => void;
-};
-
-const PlaybookPane = ({
-  tabId,
-  tabLabel,
-  playbookId,
+/**
+ * The playbook a chat is building, open for editing beside the chat. The
+ * playbook id resolves inside the active organization, through the same
+ * endpoints and permission checks as the Knowledge page.
+ */
+export const PlaybookDraftView = ({
+  tab,
   onClose,
-}: PlaybookPaneProps) => {
+}: InspectorViewRenderProps<PlaybookDraftViewPayload>) => {
   const { activeOrganizationId } = useAuthenticatedUser();
+  const { id: tabId, label: tabLabel } = tab;
+  const { playbookId } = tab.payload;
   // The editor reads the same cached query and shows its loading and error
   // states; this read only names the tab.
   const detailView = useQueryView(
@@ -60,20 +58,3 @@ const PlaybookPane = ({
     </div>
   );
 };
-
-/**
- * The playbook a chat is building, open for editing beside the chat. The
- * playbook id resolves inside the active organization, through the same
- * endpoints and permission checks as the Knowledge page.
- */
-export const PlaybookDraftView = ({
-  tab,
-  onClose,
-}: InspectorViewRenderProps<PlaybookDraftViewPayload>) => (
-  <PlaybookPane
-    onClose={onClose}
-    playbookId={tab.payload.playbookId}
-    tabId={tab.id}
-    tabLabel={tab.label}
-  />
-);

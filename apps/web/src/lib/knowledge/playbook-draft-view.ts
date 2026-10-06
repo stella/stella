@@ -3,9 +3,8 @@ export const PLAYBOOK_DRAFT_VIEW = "playbook-draft";
 
 /**
  * Plain values only: the payload crosses the inspector's structured-clone
- * boundary and is persisted. The `type` discriminator stays although there
- * is one branch, so a stored tab keeps validating when another branch (a
- * pane opened before the playbook exists) is added.
+ * boundary and is persisted. `type` names the kind of pane, so a stored tab
+ * keeps validating when a second kind is added.
  */
 export type PlaybookDraftViewPayload = { type: "playbook"; playbookId: string };
 

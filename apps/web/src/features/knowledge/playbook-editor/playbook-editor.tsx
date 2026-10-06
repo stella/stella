@@ -21,15 +21,7 @@ import {
   AlertDialogTitle,
 } from "@stll/ui/alert-dialog";
 import { Button } from "@stll/ui/button";
-import {
-  ArrowLeftIcon,
-  ChevronDownIcon,
-  HistoryIcon,
-  PlusIcon,
-  ShieldCheckIcon,
-  Trash2Icon,
-  TriangleAlertIcon,
-} from "@stll/ui/icons";
+import { ChevronDownIcon, PlusIcon } from "@stll/ui/icons";
 import { Input } from "@stll/ui/input";
 import { Label } from "@stll/ui/label";
 import { Menu, MenuItem, MenuPopup, MenuTrigger } from "@stll/ui/menu";
@@ -46,31 +38,34 @@ import { stellaToast } from "@stll/ui/toast";
 import { cn } from "@stll/ui/utils";
 
 import { useReferencePassageTexts } from "@/components/ai-suggestions/document-review-passage-texts";
-import Tooltip from "@/components/tooltip";
 import { LeaveConfirmDialog } from "@/features/knowledge/leave-confirm-dialog";
+import type { PlaybookSnapshot } from "@/features/knowledge/playbook-editor/playbook-editor-sync.logic";
+import {
+  canAutosave,
+  draftToAdopt,
+  isNewerToken,
+  resolvePaneSaveStatus,
+  resolveServerFollow,
+} from "@/features/knowledge/playbook-editor/playbook-editor-sync.logic";
+import { PlaybookEditorToolbar } from "@/features/knowledge/playbook-editor/playbook-editor-toolbar";
+import type { TourAttributes } from "@/features/knowledge/playbook-editor/playbook-editor-toolbar";
 import type {
   FresherDetail,
   PlaybookDraft,
-  PaneSaveStatus,
-  PlaybookSnapshot,
   PositionSourceLookup,
 } from "@/features/knowledge/playbook-editor/playbook-editor.logic";
 import {
-  canAutosave,
   buildPlaybookSavePayload,
   createPlaybookBaseline,
   hasPlaybookDraftChanges,
   hasResolvedPositionSources,
   detailSeedGate,
   invalidPositionIds,
-  draftToAdopt,
   latchedSeedGate,
   refetchSupersededDetail,
   resolveDetailSeed,
-  resolvePaneSaveStatus,
   resolvePlaybookScrollTop,
   resolvePositionSources,
-  resolveServerFollow,
   toPositionSourceLookup,
 } from "@/features/knowledge/playbook-editor/playbook-editor.logic";
 import {
@@ -85,7 +80,6 @@ import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { usePermissions } from "@/hooks/use-permissions";
 import { useUnsavedWork } from "@/hooks/use-unsaved-work";
-import { useFormatter } from "@/i18n/formatting-context";
 import { api } from "@/lib/api";
 import { detached } from "@/lib/detached";
 import { toAPIError, APIError, unwrapEden } from "@/lib/errors/api";
@@ -98,7 +92,6 @@ import {
   moveAdjacent,
   newExtractPosition,
   newGradedPosition,
-  type PlaybookApprovalStatus,
   type Position,
   type PositionErrors,
   type PositionSeverity,
@@ -144,9 +137,6 @@ const isNotFound = (error: unknown): boolean =>
 type ToastFailure = { title: string; description: string };
 
 // ── Root component ────────────────────────────────────
-
-/** `data-*` attributes a product tour marks its targets with. */
-type TourAttributes = Readonly<Partial<Record<`data-${string}`, string>>>;
 
 /**
  * The page's product-tour targets, supplied by the route that runs the tour.
@@ -323,6 +313,12 @@ const PlaybookEditorLoader = ({
     </div>
   );
 
+  const leaveButton = (
+    <Button onClick={() => leaveEditor(host)} variant="ghost">
+      {host.type === "page" ? t("common.goBack") : t("common.close")}
+    </Button>
+  );
+
   // Deleted elsewhere (another editor, a chat, the CLI): the form has
   // nothing left to save to.
   if (isNotFound(detailQuery.error)) {
@@ -334,9 +330,7 @@ const PlaybookEditorLoader = ({
         <p className="text-muted-foreground text-sm">
           {t("knowledge.playbooks.deletedElsewhere")}
         </p>
-        <Button onClick={() => leaveEditor(host)} variant="ghost">
-          {host.type === "page" ? t("common.goBack") : t("common.close")}
-        </Button>
+        {leaveButton}
       </div>
     );
   }
@@ -358,9 +352,7 @@ const PlaybookEditorLoader = ({
     case "empty":
       return (
         <div className="flex flex-1 items-center justify-center p-8">
-          <Button onClick={() => leaveEditor(host)} variant="ghost">
-            {host.type === "page" ? t("common.goBack") : t("common.close")}
-          </Button>
+          {leaveButton}
         </div>
       );
     case "items":
@@ -502,229 +494,6 @@ const StaleDetailNotice = ({
   }
 };
 
-// ── Toolbar ───────────────────────────────────────────
-
-type PaneSaveStatusProps = {
-  status: PaneSaveStatus;
-  onRetry: () => void;
-  onShowProblems: () => void;
-};
-
-/**
- * Stands in for the Save button while the pane autosaves. "Saving" stays
- * quiet however long it takes: a save can wait on a model deriving asks.
- */
-const PaneSaveStatusContent = ({
-  status,
-  onRetry,
-  onShowProblems,
-}: PaneSaveStatusProps) => {
-  const t = useTranslations();
-  switch (status.type) {
-    case "saved":
-      return <span className="text-muted-foreground">{t("common.saved")}</span>;
-    case "saving":
-      return (
-        <span className="text-muted-foreground">{t("common.saving")}</span>
-      );
-    case "failed":
-      return (
-        <>
-          <span className="text-destructive">
-            {t("knowledge.playbooks.autosave.failed")}
-          </span>
-          <Button onClick={onRetry} size="xs" type="button" variant="ghost">
-            {t("common.retry")}
-          </Button>
-        </>
-      );
-    case "needs-attention":
-      return (
-        <Button
-          onClick={onShowProblems}
-          size="xs"
-          type="button"
-          variant="outline"
-        >
-          <TriangleAlertIcon className="text-warning-foreground" />
-          {status.invalidPositions > 0
-            ? t("knowledge.playbooks.autosave.positionsNeedAttention", {
-                count: status.invalidPositions,
-              })
-            : t("knowledge.playbooks.autosave.nameMissing")}
-        </Button>
-      );
-    default:
-      status satisfies never;
-      return panic(`Unhandled pane save status: ${String(status)}`);
-  }
-};
-
-/** The save control: a Save button, or the pane's autosave status. */
-type ToolbarSave =
-  | { type: "button"; disabled: boolean; loading: boolean; onSave: () => void }
-  | ({ type: "autosave" } & PaneSaveStatusProps);
-
-type PlaybookEditorToolbarProps = {
-  /** Null in the pane, whose tab header closes it. */
-  onBack: (() => void) | null;
-  className?: string | undefined;
-  backTourAttributes: TourAttributes;
-  isEdit: boolean;
-  isDirty: boolean;
-  status: PlaybookApprovalStatus;
-  approvedAt: string | null;
-  canApprove: boolean;
-  canDelete: boolean;
-  approving: boolean;
-  onApprove: () => void;
-  onOpenVersionHistory: () => void;
-  deleteOpen: boolean;
-  onDeleteOpenChange: (open: boolean) => void;
-  /** A save or delete request is running. */
-  busy: boolean;
-  onDelete: () => void;
-  save: ToolbarSave;
-};
-
-const PlaybookEditorToolbar = ({
-  onBack,
-  className,
-  backTourAttributes,
-  isEdit,
-  isDirty,
-  status,
-  approvedAt,
-  canApprove,
-  canDelete,
-  approving,
-  onApprove,
-  onOpenVersionHistory,
-  deleteOpen,
-  onDeleteOpenChange,
-  busy,
-  onDelete,
-  save,
-}: PlaybookEditorToolbarProps) => {
-  const t = useTranslations();
-  return (
-    <div
-      className={cn(
-        "flex flex-wrap items-center justify-between gap-2",
-        className,
-      )}
-    >
-      {onBack !== null && (
-        <Button
-          onClick={onBack}
-          size="sm"
-          type="button"
-          variant="ghost"
-          {...backTourAttributes}
-        >
-          <ArrowLeftIcon />
-          {t("common.back")}
-        </Button>
-      )}
-      <div className="ms-auto flex flex-wrap items-center justify-end gap-2">
-        {isEdit && (
-          <PlaybookStatusBadge approvedAt={approvedAt} status={status} />
-        )}
-        {isDirty && save.type === "button" && (
-          <span className="text-muted-foreground text-xs">
-            {t("knowledge.playbooks.unsavedChanges")}
-          </span>
-        )}
-        {isEdit && (
-          <Button
-            aria-label={t("knowledge.playbooks.versions.versionHistory")}
-            onClick={onOpenVersionHistory}
-            size="sm"
-            type="button"
-            variant="outline"
-          >
-            <HistoryIcon />
-            <span className="hidden @lg:inline">
-              {t("knowledge.playbooks.versions.versionHistory")}
-            </span>
-          </Button>
-        )}
-        {isEdit && canApprove && (
-          <Button
-            disabled={isDirty || approving}
-            loading={approving}
-            onClick={onApprove}
-            size="sm"
-            tooltip={
-              isDirty
-                ? t("knowledge.playbooks.approval.saveBeforeApprove")
-                : undefined
-            }
-            type="button"
-            variant="outline"
-          >
-            <ShieldCheckIcon />
-            {t("knowledge.playbooks.approval.approve")}
-          </Button>
-        )}
-        {isEdit && canDelete && (
-          <AlertDialog onOpenChange={onDeleteOpenChange} open={deleteOpen}>
-            <Button
-              aria-label={t("knowledge.playbooks.deletePlaybook")}
-              onClick={() => onDeleteOpenChange(true)}
-              size="icon-sm"
-              type="button"
-              variant="ghost"
-            >
-              <Trash2Icon />
-            </Button>
-            <AlertDialogPopup>
-              <AlertDialogHeader>
-                <AlertDialogTitle>
-                  {t("knowledge.playbooks.deletePlaybook")}
-                </AlertDialogTitle>
-                <AlertDialogDescription>
-                  {t("knowledge.playbooks.confirmDelete")}
-                </AlertDialogDescription>
-              </AlertDialogHeader>
-              <AlertDialogFooter>
-                <AlertDialogClose render={<Button variant="ghost" />}>
-                  {t("common.cancel")}
-                </AlertDialogClose>
-                <Button
-                  disabled={busy}
-                  onClick={onDelete}
-                  variant="destructive"
-                >
-                  {t("common.delete")}
-                </Button>
-              </AlertDialogFooter>
-            </AlertDialogPopup>
-          </AlertDialog>
-        )}
-        {save.type === "autosave" ? (
-          <div aria-live="polite" className="flex items-center gap-1 text-xs">
-            <PaneSaveStatusContent
-              onRetry={save.onRetry}
-              onShowProblems={save.onShowProblems}
-              status={save.status}
-            />
-          </div>
-        ) : (
-          <Button
-            disabled={save.disabled}
-            loading={save.loading}
-            onClick={save.onSave}
-            type="button"
-          >
-            {t("common.save")}
-          </Button>
-        )}
-      </div>
-    </div>
-  );
-};
-
 // ── Editor form ───────────────────────────────────────
 
 // Long enough that typing a sentence does not save once per word; short
@@ -738,8 +507,8 @@ type SaveOutcome =
   | { type: "conflict"; error: ApiErrorInput }
   | { type: "failed"; error: ApiErrorInput };
 
-/** A save placed behind any save in flight; `outcome` is the queue's tail. */
-type QueuedSave = { outcome: Promise<SaveOutcome> };
+/** `isLatest` is false when another save was queued behind this one. */
+type QueuedSave = { outcome: SaveOutcome; isLatest: boolean };
 
 type SendSaveArgs = {
   savedDraft: PlaybookDraft;
@@ -757,7 +526,7 @@ const seedFromServer = ({ server, isNew }: SeedFromServerArgs): FormSeed => {
   const positions =
     isNew && server.draft.positions.length === 0
       ? [newGradedPosition()]
-      : [...server.draft.positions];
+      : server.draft.positions;
   const draft = { ...server.draft, positions };
   return {
     draft,
@@ -834,15 +603,11 @@ const PlaybookEditorForm = ({
         seedFromServer({ server, isNew: false }))
       : seedFromServer({ server, isNew: playbookId === null }),
   );
-  // The token stays with the draft it was read with, so it shares one state
-  // with the baseline: both move on this form's own writes, or together with
-  // the content when the form follows or rebases onto a newer server version
-  // (see `resolveServerFollow`). Were the token to move alone, a refetch
-  // under the form (a chat save, another editor, a window refocus) would pair
-  // a fresh token with a stale draft, and the next save, a full replace,
-  // would silently drop the change that moved it instead of meeting the
-  // version conflict. The baseline is the clean state every later draft is
-  // measured against; its fingerprint is computed once per baseline.
+  // The token and the baseline share one state because they move together:
+  // on this form's own saves, or with the content when the form takes a newer
+  // server version. A token that moved alone would pair with a stale draft,
+  // and the next save, a full replace, would silently drop the other writer's
+  // change instead of meeting the version conflict.
   const [persisted, setPersisted] = useState(() => ({
     updatedAt: initial.updatedAt,
     baseline: initial.baseline,
@@ -856,12 +621,10 @@ const PlaybookEditorForm = ({
   const [status, setStatus] = useState(initial.status);
   const [approvedAt, setApprovedAt] = useState(initial.approvedAt);
   const [versionHistoryOpen, setVersionHistoryOpen] = useState(false);
-  const [positions, setPositions] = useState(() => [
-    ...initial.draft.positions,
-  ]);
+  const [positions, setPositions] = useState(initial.draft.positions);
   const [openIds, setOpenIds] = useState(initial.openIds);
-  // Cards whose errors show although no save was attempted: the user edited
-  // them and moved on. The pane has no Save press to reveal errors.
+  // Cards that show their errors before any save attempt (see
+  // `revealErrorsOnLeave`).
   const [revealedIds, setRevealedIds] = useState(initial.revealedIds);
   const editedIdsRef = useRef(new Set<string>());
   const undoToastIdsRef = useRef<string[]>([]);
@@ -904,32 +667,25 @@ const PlaybookEditorForm = ({
 
   /** Takes a server version's token and baseline, with `next` as the draft. */
   const adoptServerVersion = (next: PlaybookDraft) => {
-    const nextPositions = [...next.positions];
     setName(next.name);
     setDescription(next.description);
     setDocumentTypeKey(next.documentTypeKey);
     setPerspective(next.perspective);
     setTrigger(next.trigger);
-    setPositions(nextPositions);
+    setPositions(next.positions);
     setPersisted({
       updatedAt: server.updatedAt,
-      baseline: createPlaybookBaseline(
-        next === server.draft
-          ? { ...server.draft, positions: nextPositions }
-          : server.draft,
-      ),
+      baseline: createPlaybookBaseline(server.draft),
     });
     setStatus(server.status);
     setApprovedAt(server.approvedAt);
   };
 
   // Another writer (a chat, an agent, a second editor) saved a newer version.
-  // A form without edits takes it in place: cards are keyed by `sourceId`,
-  // which saves keep stable, so expanded cards and scroll position hold. In
-  // the pane, edits are rebased onto it, so both the user's edits and the
-  // other writer's save survive. On the page, edits stay and the next save
-  // meets the version conflict. Adjusting state during render settles in the
-  // same pass, before paint.
+  // A form without edits takes it in place: cards are keyed by `sourceId`, so
+  // expanded cards and scroll position hold. A form with edits rebases them
+  // onto it in the pane; on the page it keeps them and its next save meets
+  // the version conflict. Setting state during render settles before paint.
   const serverFollow = resolveServerFollow({
     formUpdatedAt: updatedAt,
     serverUpdatedAt: server.updatedAt,
@@ -1039,8 +795,7 @@ const PlaybookEditorForm = ({
     const index = positions.findIndex((p) => p.sourceId === sourceId);
     const removed = positions[index];
     setPositions((prev) => prev.filter((p) => p.sourceId !== sourceId));
-    // The pane saves the removal a moment later and a draft save keeps no
-    // version, so it offers the undo the page's explicit Save stands in for.
+    // The pane autosaves the removal, so it offers an undo.
     if (host.type !== "pane" || removed === undefined) {
       return;
     }
@@ -1171,13 +926,15 @@ const PlaybookEditorForm = ({
   };
 
   /**
-   * A 409 means someone else moved the definition. On the page, refetch and
-   * take the fresh token alone (the one place it moves without the content):
-   * the user has now been told, so their next save is a deliberate overwrite
-   * rather than the same rejection again. Also offer a reload that swaps in
-   * the server's copy instead of leaving a toast the user can only
-   * re-trigger. In the pane, the refetch alone is enough for a save: the
-   * newer version arrives through the loader, the form rebases onto it, and
+   * A 409 means someone else moved the definition.
+   *
+   * On the page, refetch and take the fresh token (the one place it moves
+   * without the content): the user has now been told, so their next save is a
+   * deliberate overwrite rather than the same rejection again. Also offer a
+   * reload that swaps in the server's copy instead of leaving a toast the
+   * user can only re-trigger.
+   *
+   * In the pane, refetch only: the form rebases onto the newer version and
    * the rebased draft saves by itself. An approval is not repeated, so the
    * pane says that it did not happen.
    */
@@ -1185,17 +942,16 @@ const PlaybookEditorForm = ({
     failure: ToastFailure,
     refused: "save" | "approval",
   ) => {
-    if (playbookId === null) {
-      return;
-    }
     if (host.type === "pane") {
-      detached(
-        refetchSupersededDetail(
-          queryClient,
-          playbookDetailOptions(organizationId, playbookId).queryKey,
-        ),
-        "playbook-editor.refetch-for-rebase",
-      );
+      if (playbookId !== null) {
+        detached(
+          refetchSupersededDetail(
+            queryClient,
+            playbookDetailOptions(organizationId, playbookId).queryKey,
+          ),
+          "playbook-editor.refetch-for-rebase",
+        );
+      }
       if (refused === "approval") {
         notifyUserError(undefined, failure.title, {
           description: failure.description,
@@ -1203,10 +959,12 @@ const PlaybookEditorForm = ({
       }
       return;
     }
-    detached(
-      takeFreshToken(playbookId),
-      "playbook-editor.refetch-after-conflict",
-    );
+    if (playbookId !== null) {
+      detached(
+        takeFreshToken(playbookId),
+        "playbook-editor.refetch-after-conflict",
+      );
+    }
     notifyUserError(undefined, failure.title, {
       description: failure.description,
       ...(onReload
@@ -1227,8 +985,7 @@ const PlaybookEditorForm = ({
 
   /**
    * Sends one save and records its outcome. Shared by the Save button and
-   * autosave; only the toasts around it differ. A success never moves the
-   * form to an older token: a rebase may already have taken a newer one.
+   * autosave; only the toasts around it differ.
    */
   const sendSave = async ({
     savedDraft,
@@ -1262,18 +1019,10 @@ const PlaybookEditorForm = ({
       "updatedAt" in response.data ? response.data.updatedAt : null;
     // What was just persisted is the new clean state; the draft may have moved
     // on during the request, and comparing against this snapshot keeps those
-    // later keystrokes dirty.
+    // later keystrokes dirty. A newer token a rebase already took stays.
     setPersisted((current) =>
-      savedAt === null ||
-      resolveServerFollow({
-        formUpdatedAt: current.updatedAt,
-        serverUpdatedAt: savedAt,
-        isDirty: false,
-      }).type === "reseed"
-        ? {
-            updatedAt: savedAt,
-            baseline: createPlaybookBaseline(savedDraft),
-          }
+      savedAt === null || isNewerToken(savedAt, current.updatedAt)
+        ? { updatedAt: savedAt, baseline: createPlaybookBaseline(savedDraft) }
         : current,
     );
     // Every update returns the playbook to draft.
@@ -1292,6 +1041,13 @@ const PlaybookEditorForm = ({
     title: t("knowledge.playbooks.saveFailed"),
     description: userErrorMessage(error, t("common.unexpectedError")),
   });
+
+  const notifySaveFailed = (error: ApiErrorInput) => {
+    const failure = saveFailure(error);
+    notifyUserError(toAPIError(error), failure.title, {
+      description: failure.description,
+    });
+  };
 
   const revealInvalidPositions = () => {
     setAttemptedSave(true);
@@ -1352,13 +1108,9 @@ const PlaybookEditorForm = ({
       case "conflict":
         reportVersionConflict(saveFailure(outcome.error), "save");
         return false;
-      case "failed": {
-        const failure = saveFailure(outcome.error);
-        notifyUserError(toAPIError(outcome.error), failure.title, {
-          description: failure.description,
-        });
+      case "failed":
+        notifySaveFailed(outcome.error);
         return false;
-      }
       default:
         outcome satisfies never;
         return panic(`Unhandled save outcome: ${String(outcome)}`);
@@ -1369,7 +1121,7 @@ const PlaybookEditorForm = ({
    * Queues a save behind any save still in flight, so two never run at once.
    * A queued save expects the token the one before it returned.
    */
-  const queueSave = (savedDraft: PlaybookDraft): QueuedSave => {
+  const queueSave = async (savedDraft: PlaybookDraft): Promise<QueuedSave> => {
     const previous = inFlightSaveRef.current;
     const tokenAtCall = updatedAt;
     const request = (async () => {
@@ -1381,42 +1133,38 @@ const PlaybookEditorForm = ({
       return sendSave({ savedDraft, expectedUpdatedAt });
     })();
     inFlightSaveRef.current = request;
-    return { outcome: request };
-  };
-
-  /** Saves the pane's draft without toasts. */
-  const runAutosave = async () => {
-    if (
-      deletingRef.current ||
-      !autosaves ||
-      !isDirty ||
-      nameMissing ||
-      invalidIds.length > 0
-    ) {
-      return;
-    }
-    setSaveRequest("in-flight");
-    const { outcome: request } = queueSave(draft);
     const outcome = await request;
     const isLatest = inFlightSaveRef.current === request;
     if (isLatest) {
       inFlightSaveRef.current = null;
     }
+    return { outcome, isLatest };
+  };
+
+  const isAutosaveDue = () =>
+    !deletingRef.current &&
+    autosaves &&
+    isDirty &&
+    !nameMissing &&
+    invalidIds.length === 0;
+
+  /** Saves the pane's draft. The status line reports it; only a failure
+   *  also raises a toast. */
+  const runAutosave = async () => {
+    if (!isAutosaveDue()) {
+      return;
+    }
+    setSaveRequest("in-flight");
+    const { outcome, isLatest } = await queueSave(draft);
     switch (outcome.type) {
       case "saved":
         break;
       case "conflict":
-        // The refetch brings the newer version, the form rebases onto it,
-        // and the rebased draft saves after the next pause.
         reportVersionConflict(saveFailure(outcome.error), "save");
         break;
-      case "failed": {
-        const failure = saveFailure(outcome.error);
-        notifyUserError(toAPIError(outcome.error), failure.title, {
-          description: failure.description,
-        });
+      case "failed":
+        notifySaveFailed(outcome.error);
         break;
-      }
       default:
         outcome satisfies never;
         panic(`Unhandled save outcome: ${String(outcome)}`);
@@ -1450,14 +1198,10 @@ const PlaybookEditorForm = ({
    * The status line is gone by then, so a failure is a toast.
    */
   const flushOnLeave = async () => {
-    const outcome = await queueSave(draft).outcome;
-    if (outcome.type === "saved") {
-      return;
+    const { outcome } = await queueSave(draft);
+    if (outcome.type !== "saved") {
+      notifySaveFailed(outcome.error);
     }
-    const failure = saveFailure(outcome.error);
-    notifyUserError(toAPIError(outcome.error), failure.title, {
-      description: failure.description,
-    });
   };
 
   // The pane unmounts whenever another inspector tab is opened or the pane
@@ -1472,13 +1216,7 @@ const PlaybookEditorForm = ({
     for (const toastId of undoToastIdsRef.current) {
       stellaToast.close(toastId);
     }
-    if (
-      !deletingRef.current &&
-      autosaves &&
-      isDirty &&
-      !nameMissing &&
-      invalidIds.length === 0
-    ) {
+    if (isAutosaveDue()) {
       detached(flushOnLeave(), "playbook-editor.flush-on-leave");
     }
     if (!host.isTabOpen(host.tabId)) {
@@ -1517,6 +1255,12 @@ const PlaybookEditorForm = ({
    */
   const saveThen = async (after: (saved: boolean) => void) => {
     after(await handleSave());
+  };
+
+  const leaveIfSaved = (saved: boolean) => {
+    if (saved && host.type === "page") {
+      host.onSaved();
+    }
   };
 
   const handleDelete = async () => {
@@ -1672,14 +1416,7 @@ const PlaybookEditorForm = ({
                     disabled: !canSave || !isDirty || saving,
                     loading: saving,
                     onSave: () => {
-                      detached(
-                        saveThen((saved) => {
-                          if (saved && host.type === "page") {
-                            host.onSaved();
-                          }
-                        }),
-                        "playbook-editor.save",
-                      );
+                      detached(saveThen(leaveIfSaved), "playbook-editor.save");
                     },
                   }
             }
@@ -1689,8 +1426,7 @@ const PlaybookEditorForm = ({
           {/* Once the fresher copy has loaded, a form without edits has already
               followed it; the notice stays only over unsaved edits. */}
           {staleDetail !== undefined &&
-            (staleDetail.fresher !== "loaded" ||
-              serverFollow.type === "behind") && (
+            (staleDetail.fresher !== "loaded" || serverFollow === "behind") && (
               <StaleDetailNotice
                 isDirty={isDirty}
                 onReload={onReload}
@@ -1872,126 +1608,75 @@ const PlaybookEditorForm = ({
         />
       )}
 
-      {onBack !== null && (
-        <>
-          <LeaveConfirmDialog
-            cancelLabel={t("common.goBackToEditing")}
-            description={t("common.unsavedLeaveConfirm")}
-            onOpenChange={setLeaveConfirmOpen}
-            open={leaveConfirmOpen}
-            primary={{
-              label: t("common.saveAndLeave"),
-              onClick: () => {
-                detached(
-                  saveThen((saved) => {
-                    if (saved && host.type === "page") {
-                      host.onSaved();
-                    }
-                  }),
-                  "playbook-editor.save-and-leave",
-                );
-              },
-            }}
-            secondary={{
-              label: t("knowledge.playbooks.discardChanges"),
-              onClick: onBack,
-              variant: "destructive",
-            }}
-          />
+      <LeaveConfirmDialog
+        cancelLabel={t("common.goBackToEditing")}
+        description={t("common.unsavedLeaveConfirm")}
+        onOpenChange={setLeaveConfirmOpen}
+        open={leaveConfirmOpen}
+        primary={{
+          label: t("common.saveAndLeave"),
+          onClick: () => {
+            detached(saveThen(leaveIfSaved), "playbook-editor.save-and-leave");
+          },
+        }}
+        secondary={{
+          label: t("knowledge.playbooks.discardChanges"),
+          onClick: () => leaveEditor(host),
+          variant: "destructive",
+        }}
+      />
 
-          <LeaveConfirmDialog
-            cancelLabel={t("common.goBackToEditing")}
-            description={t("common.unsavedLeaveConfirm")}
-            onOpenChange={(open) => {
-              if (open || navigationBlocker.status !== "blocked") {
-                return;
-              }
-              // "Save and leave" closes the dialog before the save resolves; hold
-              // the block until it does, instead of cancelling the navigation the
-              // user asked to complete.
-              if (navigationLeaveRequestedRef.current) {
-                navigationLeaveRequestedRef.current = false;
-                return;
-              }
-              navigationBlocker.reset();
-            }}
-            open={navigationBlocker.status === "blocked"}
-            primary={{
-              label: t("common.saveAndLeave"),
-              onClick: () => {
-                navigationLeaveRequestedRef.current = true;
-                detached(
-                  saveThen((saved) => {
-                    if (navigationBlocker.status !== "blocked") {
-                      return;
-                    }
-                    // A rejected save must not leave the dialog open over a latch
-                    // nothing will release. Cancel the navigation and close: the
-                    // draft is intact and `handleSave` has already said why.
-                    if (saved) {
-                      navigationBlocker.proceed();
-                    } else {
-                      navigationLeaveRequestedRef.current = false;
-                      navigationBlocker.reset();
-                    }
-                  }),
-                  "playbook-editor.save-and-navigate",
-                );
-              },
-            }}
-            secondary={{
-              label: t("knowledge.playbooks.discardChanges"),
-              onClick: () => {
-                if (navigationBlocker.status === "blocked") {
-                  navigationBlocker.proceed();
+      <LeaveConfirmDialog
+        cancelLabel={t("common.goBackToEditing")}
+        description={t("common.unsavedLeaveConfirm")}
+        onOpenChange={(open) => {
+          if (open || navigationBlocker.status !== "blocked") {
+            return;
+          }
+          // "Save and leave" closes the dialog before the save resolves; hold
+          // the block until it does, instead of cancelling the navigation the
+          // user asked to complete.
+          if (navigationLeaveRequestedRef.current) {
+            navigationLeaveRequestedRef.current = false;
+            return;
+          }
+          navigationBlocker.reset();
+        }}
+        open={navigationBlocker.status === "blocked"}
+        primary={{
+          label: t("common.saveAndLeave"),
+          onClick: () => {
+            navigationLeaveRequestedRef.current = true;
+            detached(
+              saveThen((saved) => {
+                if (navigationBlocker.status !== "blocked") {
+                  return;
                 }
-              },
-              variant: "destructive",
-            }}
-          />
-        </>
-      )}
+                // A rejected save must not leave the dialog open over a latch
+                // nothing will release. Cancel the navigation and close: the
+                // draft is intact and `handleSave` has already said why.
+                if (saved) {
+                  navigationBlocker.proceed();
+                } else {
+                  navigationLeaveRequestedRef.current = false;
+                  navigationBlocker.reset();
+                }
+              }),
+              "playbook-editor.save-and-navigate",
+            );
+          },
+        }}
+        secondary={{
+          label: t("knowledge.playbooks.discardChanges"),
+          onClick: () => {
+            if (navigationBlocker.status === "blocked") {
+              navigationBlocker.proceed();
+            }
+          },
+          variant: "destructive",
+        }}
+      />
     </div>
-  );
-};
-
-// ── Status badge ──────────────────────────────────────
-
-const PlaybookStatusBadge = ({
-  status,
-  approvedAt,
-}: {
-  status: PlaybookApprovalStatus;
-  approvedAt: string | null;
-}) => {
-  const t = useTranslations();
-  const format = useFormatter();
-
-  if (status === "approved") {
-    return (
-      <Tooltip
-        content={
-          approvedAt
-            ? t("knowledge.playbooks.approval.approvedOn", {
-                date: format.dateTime(new Date(approvedAt), {
-                  dateStyle: "medium",
-                }),
-              })
-            : undefined
-        }
-        render={
-          <span className="bg-success/15 text-success text-3xs inline-flex items-center gap-0.5 rounded-full px-1.5 py-0.5 font-medium tracking-wider uppercase" />
-        }
-      >
-        {t("knowledge.playbooks.approval.statusApproved")}
-      </Tooltip>
-    );
-  }
-
-  return (
-    <span className="bg-muted text-muted-foreground text-3xs inline-flex items-center gap-0.5 rounded-full px-1.5 py-0.5 font-medium tracking-wider uppercase">
-      {t("knowledge.playbooks.approval.statusDraft")}
-    </span>
   );
 };
 
@@ -2060,7 +1745,7 @@ const OutlineRail = ({
   positions,
   onJump,
 }: {
-  positions: Position[];
+  positions: readonly Position[];
   onJump: (sourceId: string) => void;
 }) => {
   const t = useTranslations();

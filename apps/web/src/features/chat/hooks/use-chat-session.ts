@@ -1106,12 +1106,7 @@ export const useChatSession = ({
     [playbookPaneLabel, playbookPaneTabId],
   );
 
-  /**
-   * The thread's pane follows the playbook its latest save wrote. An open
-   * pane on another playbook moves to it without taking focus, so a thread
-   * that starts a second playbook takes the pane along; a closed one may
-   * open (see `playbookPaneReaction`).
-   */
+  /** Moves or opens this thread's pane as `playbookPaneReaction` decides. */
   const followPlaybookSave = useLatestCallback((playbookId: string) => {
     const inspector = useInspectorTabsStore.getState();
     const tab = inspector.tabs.find(({ id }) => id === playbookPaneTabId);

@@ -7,11 +7,10 @@ import type {
 import type { PlaybookApprovalStatus } from "@/lib/knowledge/playbook-types";
 
 /**
- * An inspector view renders only while its tab is active and the pane is
- * expanded, so the pane editor unmounts whenever the user opens another tab
- * or minimizes the pane. Its state is parked here on unmount and restored on
- * the next mount, so leaving the tab loses nothing that a save could not
- * keep: an invalid draft, or unsaved edits to an approved playbook.
+ * The pane editor unmounts whenever the user opens another inspector tab or
+ * minimizes the pane. Its state is parked here on unmount and restored on the
+ * next mount, so leaving the tab keeps what a save could not: an invalid
+ * draft, or unsaved edits to an approved playbook.
  *
  * The draft, its baseline and its token are parked together, so a restored
  * token is never paired with a different draft. In memory only: a reload
