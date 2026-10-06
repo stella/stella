@@ -28,6 +28,7 @@
         "route-tree.config.ts",
         "scripts/generate-route-tree.ts",
         "$TURBO_ROOT$/packages/scripts/src/prepared-generated-sources.ts",
+        "$TURBO_ROOT$/packages/scripts/src/generated-files.ts",
         "$TURBO_ROOT$/scripts/generated-files.ts",
         "package.json",
         "$TURBO_ROOT$/bun.lock"
@@ -43,9 +44,13 @@
       "cache": false
     },
     "@stll/web#generate:api-types": {
-      "dependsOn": ["generate:route-tree"],
+      "dependsOn": [
+        "generate:route-tree",
+        "@stll/api#generate:capability-runtime"
+      ],
       "inputs": [
         "$TURBO_ROOT$/apps/api/**",
+        "$TURBO_ROOT$/packages/scripts/src/generated-files.ts",
         "$TURBO_ROOT$/scripts/generated-files.ts",
         "$TURBO_ROOT$/apps/web/src/**",
         "$TURBO_ROOT$/apps/web/package.json",
@@ -69,6 +74,9 @@
         "!$TURBO_ROOT$/packages/**/.env*",
         "!$TURBO_ROOT$/packages/**/.turbo/**",
         "!$TURBO_ROOT$/packages/**/*.tsbuildinfo",
+        "!$TURBO_ROOT$/apps/api/src/mcp/generated/capability-dispatch.ts",
+        "!$TURBO_ROOT$/apps/api/src/mcp/generated/capability-catalog.ts",
+        "!$TURBO_ROOT$/apps/api/src/mcp/generated/capability-feature-bindings.ts",
         "!src/generated/api-routes.gen.ts",
         "!src/routeTree.gen.ts"
       ],
@@ -465,6 +473,7 @@
         "$TURBO_ROOT$/packages/scripts/src/prepare-cli-runtime.ts",
         "$TURBO_ROOT$/packages/scripts/src/child-exit-status.ts",
         "$TURBO_ROOT$/packages/scripts/src/prepared-generated-sources.ts",
+        "$TURBO_ROOT$/packages/scripts/src/generated-files.ts",
         "$TURBO_ROOT$/scripts/generated-files.ts",
         "src/capability-catalog-load.ts",
         "src/generate-capability-tree.ts",
@@ -574,6 +583,7 @@
         "$TURBO_ROOT$/packages/cli/capabilities/**",
         "$TURBO_ROOT$/packages/cli/src/capability-catalog-data.ts",
         "$TURBO_ROOT$/packages/scripts/src/prepared-generated-sources.ts",
+        "$TURBO_ROOT$/packages/scripts/src/generated-files.ts",
         "$TURBO_ROOT$/scripts/generated-files.ts"
       ],
       "outputs": [
