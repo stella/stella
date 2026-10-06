@@ -14,10 +14,7 @@ describe("bounded stored file reads", () => {
     const store = startFakeS3();
     const key = testFileKey("user-files/visual-definition");
     const bytes = new TextEncoder().encode("view");
-    store.objects.set(`${envBase.S3_BUCKET}/${key}`, {
-      bytes,
-      contentType: "text/plain",
-    });
+    store.put(envBase.S3_BUCKET, key, bytes, "text/plain");
     try {
       const file = await readStoredFile({
         key,
