@@ -84,81 +84,121 @@ type MarkdownReader = {
   | { kind: "unresolved" }
 );
 
+const READER_PACKAGE_CHECKS = {
+  module: true,
+  check: false,
+  unresolved: true,
+} as const satisfies Record<MarkdownReader["kind"], boolean>;
+
 const READ_CALLS = new Set(["readFileSync", "readFile"]);
 const DIRECTORY_CALLS = new Set(["readdirSync", "readdir", "Glob"]);
 const IDENTIFIER = /^[A-Za-z_$][\w$]*$/u;
 
-// Resolve the path expression that a read actually receives. Fixture strings,
-// output names, and external specification names never enter this walk.
-const pathExpression = (
-  expression: string,
-  source: string,
-  file: string,
+type PathExpressionOptions = {
+  expression: string;
+  source: string;
+  file: string;
+  seen?: Set<string>;
+};
+type PathExpressionResult =
+  | { kind: "repository"; value: string }
+  | { kind: "external" }
+  | { kind: "unresolved" };
+
+// Resolve the expression a read actually receives. Temporary fixture roots
+// stay outside the repository; their Markdown files are not CI source inputs.
+const pathExpression = ({
+  expression,
+  source,
+  file,
   seen = new Set<string>(),
-): string | undefined => {
+}: PathExpressionOptions): PathExpressionResult => {
   const text = expression.trim();
   if (text === "import.meta.dir" || text === "import.meta.dirname") {
-    return path.posix.dirname(file);
+    return { kind: "repository", value: path.posix.dirname(file) };
   }
-  if (text === "process.cwd()" || text === "root") {
-    return ".";
+  if (text === "process.cwd()") {
+    return { kind: "repository", value: "." };
   }
   if (IDENTIFIER.test(text)) {
     if (seen.has(text)) {
-      return undefined;
+      return { kind: "unresolved" };
     }
     seen.add(text);
-    const declaration = new RegExp(`\\bconst\\s+${text}\\b`, "u").exec(source);
-    if (!declaration) {
-      return undefined;
+    for (const declaration of source.matchAll(
+      new RegExp(`\\bconst\\s+${text}\\b`, "gu"),
+    )) {
+      const tail = source
+        .slice(declaration.index + declaration[0].length)
+        .trimStart();
+      if (!tail.startsWith("=") && !tail.startsWith(":")) {
+        continue;
+      }
+      const start =
+        source.indexOf("=", declaration.index + declaration[0].length) + 1;
+      const end = source.indexOf(";", start);
+      if (start === 0 || end === -1) {
+        return { kind: "unresolved" };
+      }
+      return pathExpression({
+        expression: source.slice(start, end),
+        source,
+        file,
+        seen,
+      });
     }
-    const start =
-      source.indexOf("=", declaration.index + declaration[0].length) + 1;
-    if (start === 0) {
-      return undefined;
-    }
-    const end = source.indexOf(";", start);
-    if (end === -1) {
-      return undefined;
-    }
-    return pathExpression(source.slice(start, end), source, file, seen);
+    return { kind: "unresolved" };
   }
   const literal = readStringLiterals(text);
+  const value = literal.at(0)?.value;
   if (
     (text.startsWith('"') || text.startsWith("'")) &&
     literal.length === 1 &&
-    text.at(-1) === text.at(0)
+    text.at(-1) === text.at(0) &&
+    value !== undefined
   ) {
-    return literal.at(0)?.value;
+    return { kind: "repository", value };
   }
   const open = text.indexOf("(");
   if (open === -1 || !text.endsWith(")")) {
-    return undefined;
+    return { kind: "unresolved" };
   }
   const callee = text.slice(0, open).trim();
   const args = readCallArguments(text.slice(open));
+  if (["mkdtempSync", "mkdtemp", "tmpdir"].includes(callee)) {
+    return { kind: "external" };
+  }
   if (callee === "new URL" && args.at(1) === "import.meta.url") {
     const target = args.at(0);
-    const value =
-      target === undefined
-        ? undefined
-        : pathExpression(target, source, file, seen);
-    return value === undefined
-      ? undefined
-      : path.posix.join(path.posix.dirname(file), value);
+    if (target === undefined) {
+      return { kind: "unresolved" };
+    }
+    const resolved = pathExpression({ expression: target, source, file, seen });
+    if (resolved.kind !== "repository") {
+      return resolved;
+    }
+    return {
+      kind: "repository",
+      value: path.posix.join(path.posix.dirname(file), resolved.value),
+    };
   }
   if (!["join", "resolve"].includes(callee.split(".").at(-1) ?? "")) {
-    return undefined;
+    return { kind: "unresolved" };
   }
   const parts: string[] = [];
   for (const arg of args) {
-    const value = pathExpression(arg, source, file, new Set(seen));
-    if (value === undefined) {
-      return undefined;
+    const resolved = pathExpression({
+      expression: arg,
+      source,
+      file,
+      seen: new Set(seen),
+    });
+    if (resolved.kind !== "repository") {
+      return resolved;
     }
-    parts.push(value);
+    parts.push(resolved.value);
   }
-  return path.posix.join(...parts);
+  return { kind: "repository", value: path.posix.join(...parts) };
 };
 
 const readerCommand = (
@@ -182,8 +222,8 @@ const readerCommand = (
   }
   // Only direct commands qualify: a chained package script may run unrelated
   // generators or write files. A computed command needs an owner declaration.
-  for (const command of Object.values(scripts)) {
-    if (typeof command !== "string") {
+  for (const [name, command] of Object.entries(scripts)) {
+    if (!name.startsWith("check:") || typeof command !== "string") {
       continue;
     }
     const words = command.trim().split(/\s+/u);
@@ -344,7 +384,12 @@ export const markdownReaders = (root = ROOT): readonly MarkdownReader[] => {
     const inputs = new Set<string>();
     let moduleInput = false;
     for (const { path: imported } of imports) {
-      if (MARKDOWN.test(imported) && imported.startsWith(".")) {
+      if (MARKDOWN.test(imported)) {
+        if (!imported.startsWith(".")) {
+          throw new MarkdownReaderDeclarationError(
+            `${file}: Markdown import needs a resolvable repository path: ${imported}`,
+          );
+        }
         inputs.add(path.posix.join(path.posix.dirname(file), imported));
         moduleInput = true;
       }
@@ -375,7 +420,9 @@ export const markdownReaders = (root = ROOT): readonly MarkdownReader[] => {
         if (argument === undefined) {
           return;
         }
-        const target = pathExpression(argument, source, file);
+        const resolved = pathExpression({ expression: argument, source, file });
+        const target =
+          resolved.kind === "repository" ? resolved.value : undefined;
         if (
           target !== undefined &&
           !target.includes("\n") &&
@@ -387,7 +434,7 @@ export const markdownReaders = (root = ROOT): readonly MarkdownReader[] => {
               : target.replace(/^(?:\.\.\/)+/u, ""),
           );
         } else if (
-          target === undefined &&
+          resolved.kind === "unresolved" &&
           readStringLiterals(argument).some(({ value }) => MARKDOWN.test(value))
         ) {
           throw new MarkdownReaderDeclarationError(
@@ -505,7 +552,7 @@ export const requiresPackageChecks = ({
           `${reader.file}: Markdown consumer has no isolated check command`,
         );
       }
-      if (reader.kind === "module") {
+      if (READER_PACKAGE_CHECKS[reader.kind]) {
         return true;
       }
     }

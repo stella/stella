@@ -191,6 +191,16 @@ test("fixture literals and external Markdown names do not declare readers", () =
   });
 });
 
+test("Markdown reads under a temporary fixture root are not repository readers", () => {
+  repository((root, write) => {
+    write(
+      "scripts/temporary.test.ts",
+      'import { readFileSync, mkdtempSync } from "node:fs"; import { tmpdir } from "node:os"; const root = mkdtempSync(path.join(tmpdir(), "fixture-")); readFileSync(path.join(root, "README.md"));',
+    );
+    expect(markdownChecks({ root, changed: ["README.md"] })).toEqual([]);
+  });
+});
+
 test("an unresolved Markdown path names its owner and retains package checks", () => {
   repository((root, write) => {
     write(
@@ -296,7 +306,7 @@ test("split path joins and indirect directory readers retain their markdown subt
     ).toBe(false);
     write(
       "scripts/join.test.ts",
-      'import { readFileSync } from "node:fs"; const source = readFileSync(path.join(root, "docs/contracts", "planted.md"));',
+      'import { readFileSync } from "node:fs"; const root = process.cwd(); const source = readFileSync(path.join(root, "docs/contracts", "planted.md"));',
     );
     expect(
       markdownChecks({ root, changed: ["docs/contracts/planted.md"] }),
