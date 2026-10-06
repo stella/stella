@@ -107,7 +107,7 @@ const noDefineProof = {
         }
       },
       CallExpression(node) {
-        if (isDefineProofCall(node, new Set(), imports.namespaces)) {
+        if (isDefineProofCall(node, imports.defineProof, imports.namespaces)) {
           context.report({
             node,
             message: "Only modules in proofs/ may call defineProof.",

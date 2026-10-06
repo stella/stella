@@ -63,7 +63,13 @@ const assignSignal = createSafeRootHandler(
             memberRole,
             signalId: params.signalId,
           },
-          async ({ tx, signal, actor, proof, existing }) => {
+          async ({
+            tx,
+            signal,
+            actor,
+            proof,
+            existing,
+          }): Promise<Result<undefined, HandlerError<400 | 409>>> => {
             if (assigneeUserId) {
               const orgMember = await lockOrgUserIdsForAssignment({
                 tx: tx.value,

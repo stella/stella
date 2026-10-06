@@ -12,6 +12,7 @@ import {
 import type { PermissionInput } from "@stll/permissions";
 
 import { resultTx } from "@/api/db/safe-db";
+import type { SafeDb } from "@/api/db/safe-db";
 import { SIGNAL_EVENT_TYPE, signals } from "@/api/db/schema";
 import { createSafeDb } from "@/api/db/scoped";
 import { emitSignalRequest } from "@/api/handlers/signals/requests/write";
@@ -24,6 +25,7 @@ import {
 } from "@/api/lib/permission-authorization";
 import { withSignalRequestAuthorization } from "@/api/lib/signals/proofs/may-create-signal-request";
 import { withVisibleSignal } from "@/api/lib/signals/proofs/signal-visible-to";
+import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
   getRlsFixture,
   releaseRlsFixture,
@@ -34,6 +36,8 @@ import type { TestDatabase } from "@/api/tests/security/test-utils";
 let testDb: TestDatabase;
 let ids: TestIds;
 const seeded: SafeId<"signal">[] = [];
+const safeDbA1 = () =>
+  asTestRaw<SafeDb>(createSafeDb(testDb, [ids.wsA1], ids.orgA, ids.userA1));
 beforeAll(async () => {
   const fixture = await getRlsFixture();
   testDb = fixture.testDb;
@@ -104,22 +108,20 @@ describe("signal authorization evidence", () => {
     "transition evidence follows scope and credential $scope $expected",
     async ({ scope, permissions, expected }) => {
       const signalId = await seed(scope === "matter" ? ids.wsA1 : null);
-      const outcome = await resultTx(
-        createSafeDb(testDb, [ids.wsA1], ids.orgA, ids.userA1),
-        (transaction) =>
-          withVisibleSignal(
-            {
-              tx: transaction,
-              organizationId: ids.orgA,
-              actorUserId: ids.userA1,
-              memberRole: authorizedMemberRole({
-                role: "owner",
-                credential: { type: "attenuated", permissions },
-              }),
-              signalId,
-            },
-            async ({ proof }) => Result.ok(proof.kind),
-          ),
+      const outcome = await resultTx(safeDbA1(), (transaction) =>
+        withVisibleSignal(
+          {
+            tx: transaction,
+            organizationId: ids.orgA,
+            actorUserId: ids.userA1,
+            memberRole: authorizedMemberRole({
+              role: "owner",
+              credential: { type: "attenuated", permissions },
+            }),
+            signalId,
+          },
+          async ({ proof }) => Result.ok(proof.kind),
+        ),
       );
       if (expected === 200) {
         expect(outcome).toMatchObject({ value: "SignalVisibleTo" });
@@ -148,22 +150,20 @@ describe("signal authorization evidence", () => {
   }[])(
     "request evidence follows scope and credential $scope $expected",
     async ({ scope, permissions, expected }) => {
-      const outcome = await resultTx(
-        createSafeDb(testDb, [ids.wsA1], ids.orgA, ids.userA1),
-        (transaction) =>
-          withSignalRequestAuthorization(
-            {
-              tx: transaction,
-              organizationId: ids.orgA,
-              actorUserId: ids.userA1,
-              memberRole: authorizedMemberRole({
-                role: "owner",
-                credential: { type: "attenuated", permissions },
-              }),
-              workspaceId: scope === "matter" ? ids.wsA1 : null,
-            },
-            async ({ proof }) => Result.ok(proof.kind),
-          ),
+      const outcome = await resultTx(safeDbA1(), (transaction) =>
+        withSignalRequestAuthorization(
+          {
+            tx: transaction,
+            organizationId: ids.orgA,
+            actorUserId: ids.userA1,
+            memberRole: authorizedMemberRole({
+              role: "owner",
+              credential: { type: "attenuated", permissions },
+            }),
+            workspaceId: scope === "matter" ? ids.wsA1 : null,
+          },
+          async ({ proof }) => Result.ok(proof.kind),
+        ),
       );
       if (expected === 200) {
         expect(outcome).toMatchObject({ value: "MayCreateSignalRequest" });
@@ -178,36 +178,34 @@ describe("signal authorization evidence", () => {
 
   test("a checked transition records its actor and uses the current row", async () => {
     const signalId = await seed(ids.wsA1);
-    const outcome = await resultTx(
-      createSafeDb(testDb, [ids.wsA1], ids.orgA, ids.userA1),
-      (transaction) =>
-        withVisibleSignal(
-          {
-            tx: transaction,
-            organizationId: ids.orgA,
-            actorUserId: ids.userA1,
-            memberRole: owner(),
-            signalId,
-          },
-          async ({ tx, signal, actor, proof, existing }) => {
-            expect(proof.kind).toBe("SignalVisibleTo");
-            return await transitionSignal({
-              tx,
-              signalId: signal,
-              actorUserId: actor,
-              visibility: proof,
-              from: [SIGNAL_STATUS.NEW],
-              set: { status: SIGNAL_STATUS.DISMISSED, resolvedAt: new Date() },
-              event: { type: SIGNAL_EVENT_TYPE.DISMISSED },
-              audit: {
-                recordAuditEvent: async () => undefined,
-                workspaceId: existing.workspaceId,
-                previousStatus: existing.status,
-                metadata: {},
-              },
-            });
-          },
-        ),
+    const outcome = await resultTx(safeDbA1(), (transaction) =>
+      withVisibleSignal(
+        {
+          tx: transaction,
+          organizationId: ids.orgA,
+          actorUserId: ids.userA1,
+          memberRole: owner(),
+          signalId,
+        },
+        async ({ tx, signal, actor, proof, existing }) => {
+          expect(proof.kind).toBe("SignalVisibleTo");
+          return await transitionSignal({
+            tx,
+            signalId: signal,
+            actorUserId: actor,
+            visibility: proof,
+            from: [SIGNAL_STATUS.NEW],
+            set: { status: SIGNAL_STATUS.DISMISSED, resolvedAt: new Date() },
+            event: { type: SIGNAL_EVENT_TYPE.DISMISSED },
+            audit: {
+              recordAuditEvent: async () => undefined,
+              workspaceId: existing.workspaceId,
+              previousStatus: existing.status,
+              metadata: {},
+            },
+          });
+        },
+      ),
     );
     expect(outcome.isOk()).toBe(true);
     const row = await testDb.query.signals.findFirst({
@@ -235,20 +233,18 @@ describe("signal authorization evidence", () => {
       .update(signals)
       .set({ updatedAt: new Date(prepared.updatedAt.getTime() + 1000) })
       .where(eq(signals.id, signalId));
-    const outcome = await resultTx(
-      createSafeDb(testDb, [ids.wsA1], ids.orgA, ids.userA1),
-      (transaction) =>
-        withVisibleSignal(
-          {
-            tx: transaction,
-            organizationId: ids.orgA,
-            actorUserId: ids.userA1,
-            memberRole: owner(),
-            signalId,
-            expectedUpdatedAt: prepared.updatedAt,
-          },
-          async () => Result.ok("prepared"),
-        ),
+    const outcome = await resultTx(safeDbA1(), (transaction) =>
+      withVisibleSignal(
+        {
+          tx: transaction,
+          organizationId: ids.orgA,
+          actorUserId: ids.userA1,
+          memberRole: owner(),
+          signalId,
+          expectedUpdatedAt: prepared.updatedAt,
+        },
+        async () => Result.ok("prepared"),
+      ),
     );
     expect(outcome.isErr()).toBe(true);
     if (outcome.isErr()) {
@@ -257,34 +253,32 @@ describe("signal authorization evidence", () => {
   });
 
   test("request creation obtains scope evidence in its write transaction", async () => {
-    const outcome = await resultTx(
-      createSafeDb(testDb, [ids.wsA1], ids.orgA, ids.userA1),
-      (transaction) =>
-        withSignalRequestAuthorization(
-          {
-            tx: transaction,
-            organizationId: ids.orgA,
-            actorUserId: ids.userA1,
-            memberRole: owner(),
-            workspaceId: ids.wsA1,
-          },
-          async ({ tx, workspace, actor, proof }) => {
-            const draft = requestDraft();
-            return Result.ok(
-              await emitSignalRequest({
-                tx,
-                workspace,
-                actor,
-                proof,
-                signal: {
-                  ...draft,
-                  suggestions: [],
-                  evidence: { ...draft.evidence, attachments: [] },
-                },
-              }),
-            );
-          },
-        ),
+    const outcome = await resultTx(safeDbA1(), (transaction) =>
+      withSignalRequestAuthorization(
+        {
+          tx: transaction,
+          organizationId: ids.orgA,
+          actorUserId: ids.userA1,
+          memberRole: owner(),
+          workspaceId: ids.wsA1,
+        },
+        async ({ tx, workspace, actor, proof }) => {
+          const draft = requestDraft();
+          return Result.ok(
+            await emitSignalRequest({
+              tx,
+              workspace,
+              actor,
+              proof,
+              signal: {
+                ...draft,
+                suggestions: [],
+                evidence: { ...draft.evidence, attachments: [] },
+              },
+            }),
+          );
+        },
+      ),
     );
     expect(outcome.isOk()).toBe(true);
     if (outcome.isErr()) {
