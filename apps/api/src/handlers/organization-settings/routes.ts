@@ -17,7 +17,6 @@ import readDeepLAvailability from "@/api/handlers/organization-settings/deepl-av
 import deleteAIConfig from "@/api/handlers/organization-settings/delete-ai-config";
 import deleteDeepLKey from "@/api/handlers/organization-settings/delete-deepl-key";
 import deleteWebSearchKey from "@/api/handlers/organization-settings/delete-web-search-key";
-import getDeploymentFeatures from "@/api/handlers/organization-settings/deployment-features/get";
 import getDocumentOcrAvailability from "@/api/handlers/organization-settings/document-ocr-availability/get";
 import enrolFeature from "@/api/handlers/organization-settings/feature-enrolments/enrol";
 import getFeatureEnrolments from "@/api/handlers/organization-settings/feature-enrolments/get";
@@ -136,9 +135,6 @@ export const organizationSettingsRoute = new Elysia({
   })
   .get("/ai-availability", readAIAvailability.handler, {
     permissions: readAIAvailability.config.permissions,
-  })
-  .get("/deployment-features", getDeploymentFeatures.handler, {
-    permissions: getDeploymentFeatures.config.permissions,
   })
   .get("/feature-enrolments", getFeatureEnrolments.handler, {
     permissions: getFeatureEnrolments.config.permissions,

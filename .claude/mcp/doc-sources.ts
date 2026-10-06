@@ -174,6 +174,7 @@ export const DOC_SOURCES = {
     dependencies: [
       "@aws-sdk/client-bedrock-runtime",
       "@aws-sdk/client-cloudwatch",
+      "@aws-sdk/client-lambda",
       "@aws-sdk/client-s3",
       "@aws-sdk/client-sesv2",
       "@aws-sdk/client-sqs",
@@ -396,6 +397,22 @@ export const DOC_SOURCE_EXCLUSIONS = [
     },
     {
       checkedAt: "2026-10-06T00:00:00.000Z",
+      dependency: "@types/d3-scale",
+      explanation:
+        "Type declarations for d3-scale have no separate documentation site. https://d3js.org/llms.txt returns 404; use https://d3js.org/d3-scale and the declarations in @types/d3-scale directly.",
+      expiresAt: "2026-11-05T00:00:00.000Z",
+      reason: "no-llms-txt",
+    },
+    {
+      checkedAt: "2026-10-06T00:00:00.000Z",
+      dependency: "playwright-core",
+      explanation:
+        "https://playwright.dev/llms.txt returns 404. Use the canonical documentation at https://playwright.dev/docs/api/class-browser directly.",
+      expiresAt: "2026-11-05T00:00:00.000Z",
+      reason: "no-llms-txt",
+    },
+    {
+      checkedAt: "2026-10-06T00:00:00.000Z",
       dependency: "postcss",
       explanation:
         "https://postcss.org/llms.txt returns 404. Use the API reference at https://postcss.org/api/ directly.",
@@ -404,9 +421,9 @@ export const DOC_SOURCE_EXCLUSIONS = [
     },
     {
       checkedAt: "2026-10-06T00:00:00.000Z",
-      dependency: "@types/d3-scale",
+      dependency: "@sparticuz/chromium-min",
       explanation:
-        "Type declarations for d3-scale have no separate documentation site. https://d3js.org/llms.txt returns 404; use https://d3js.org/d3-scale and the declarations in @types/d3-scale directly.",
+        "https://raw.githubusercontent.com/Sparticuz/chromium/main/llms.txt returns 404. Use the canonical documentation at https://github.com/Sparticuz/chromium directly.",
       expiresAt: "2026-11-05T00:00:00.000Z",
       reason: "no-llms-txt",
     },

@@ -34,6 +34,7 @@ type MatterComboboxProps = {
    * this control once a reader is signed in.
    */
   activeOrganizationId: string;
+  userId: string;
   /** The control's id, so a label outside it can point at the field. */
   id: string;
   onChange: (matter: MatterOption | null) => void;
@@ -51,6 +52,7 @@ type MatterComboboxProps = {
  */
 export const MatterCombobox = ({
   activeOrganizationId,
+  userId,
   id,
   onChange,
   value,
@@ -65,7 +67,10 @@ export const MatterCombobox = ({
     isPending,
     refetch,
   } = useQuery({
-    ...workspacesNavigationOptions(activeOrganizationId),
+    ...workspacesNavigationOptions({
+      organizationId: activeOrganizationId,
+      userId,
+    }),
     select: (data) => {
       const ordered =
         order === "recent"

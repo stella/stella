@@ -13,6 +13,7 @@ export const RESULT_CONVENTION_SOURCE_GLOBS = [
   "apps/api/src/handlers/**/*.{ts,tsx}",
   "apps/api/src/mcp/**/*.{ts,tsx}",
   "apps/web/src/**/*.{ts,tsx}",
+  "apps/visual-preview/src/**/*.{ts,tsx}",
   "packages/*/src/**/*.{ts,tsx}",
 ] as const;
 
@@ -26,6 +27,7 @@ export const RESULT_CONVENTION_SOURCE_GLOBS = [
 // oxlint.config.ts spreads this list rather than restating it, so the lint
 // scope and the enrolment guard cannot drift apart.
 export const RESULT_CONVENTION_ENABLED_GLOBS = [
+  "apps/visual-preview/src/**/*.ts",
   "apps/api/src/handlers/realtime-resource-sets.ts",
   "apps/api/src/lib/auth/**/*.ts",
   "apps/api/src/handlers/agent-auth/**/*.ts",
@@ -224,6 +226,8 @@ export const RESULT_BOUNDARY_GLOBS = [
   "apps/api/src/scripts/**",
   "apps/api/src/handlers/mcp-app-sandbox/**",
   "apps/api/src/handlers/visual-sandbox/**",
+  // Lambda invokes this entry point and reports a failure through rejection.
+  "apps/visual-preview/src/handler.ts",
   // Web worker entry modules. The browser, not our code, invokes the message
   // handler, and a failure has to travel back over `postMessage` instead of
   // returning to a caller that could read a `Result`.

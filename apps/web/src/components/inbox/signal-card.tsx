@@ -425,7 +425,10 @@ const WorkspaceName = ({
   workspaceId: string;
   organizationId: string;
 }) => {
-  const { data } = useQuery(workspacesNavigationOptions(organizationId));
+  const { id: userId } = useAuthenticatedUser();
+  const { data } = useQuery(
+    workspacesNavigationOptions({ organizationId, userId }),
+  );
   const name = data?.workspaces.find((w) => w.id === workspaceId)?.name;
   return (
     <MatterRefLink

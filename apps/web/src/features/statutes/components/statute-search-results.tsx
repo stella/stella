@@ -3,9 +3,9 @@ import type { ReactNode } from "react";
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
-import { Loader } from "@stll/ui/loader";
 import { SEARCH_HIT_MARK, TextMark } from "@stll/ui/text-mark";
 
+import { DefaultPendingComponent } from "@/components/route-components";
 import type { StatuteSearchHit } from "@/features/statutes/queries/statutes";
 
 const decodeSearchText = (text: string): string =>
@@ -89,7 +89,8 @@ export const StatuteSearchResults = ({
   if (isLoading) {
     return (
       <div role="status">
-        <Loader label={t("common.loading")} />
+        <span className="sr-only">{t("common.loading")}</span>
+        <DefaultPendingComponent announce={false} />
       </div>
     );
   }
