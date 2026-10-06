@@ -334,8 +334,9 @@ export type QueryParagraph = DecisionParagraph & {
 /**
  * The paragraphs holding every word of `query`, each with the paragraph
  * before and after it, in document order and without repeats. At most
- * `QUERY_HIT_LIMIT` matches, and no more text than `budget` characters once
- * the first match is in.
+ * `QUERY_HIT_LIMIT` matches, and no more text than `budget` characters: the
+ * first match is cut to it, and a neighbour or later match that does not fit
+ * what is left is dropped and marks the answer truncated.
  */
 export const paragraphsMatching = ({
   budget,
@@ -358,45 +359,53 @@ export const paragraphsMatching = ({
     return wanted.every((term) => terms.has(term)) ? [index] : [];
   });
 
-  const chosen = new Set<number>();
-  let used = 0;
+  // Each chosen paragraph and how much of it travels. Only the first match
+  // may be cut, to the budget, on a whole code point; everything after it
+  // travels whole or not at all, so the matches never outgrow the window
+  // they replace.
+  const chosen = new Map<number, number>();
+  let remaining = budget;
   let truncated = hits.length > QUERY_HIT_LIMIT;
-  for (const hit of hits.slice(0, QUERY_HIT_LIMIT)) {
-    const run = [hit - 1, hit, hit + 1].filter(
-      (index) => index >= 0 && index < paragraphs.length && !chosen.has(index),
-    );
-    const cost = run.reduce(
-      (sum, index) =>
-        sum + Math.min(paragraphs[index]?.text.length ?? 0, budget),
-      0,
-    );
-    if (chosen.size > 0 && used + cost > budget) {
+  const take = (index: number): boolean => {
+    if (chosen.has(index)) {
+      return true;
+    }
+    const text = paragraphs[index]?.text ?? panic("A paragraph must exist");
+    const length =
+      chosen.size === 0
+        ? resolveTextWindowBounds({ text, offset: 0, size: budget }).end
+        : text.length;
+    // The first match always travels: a one-character budget still takes a
+    // whole supplementary character, as a page does.
+    if (chosen.size > 0 && length > remaining) {
       truncated = true;
+      return false;
+    }
+    chosen.set(index, length);
+    remaining = Math.max(0, remaining - length);
+    return true;
+  };
+  for (const hit of hits.slice(0, QUERY_HIT_LIMIT)) {
+    if (!take(hit)) {
       break;
     }
-    for (const index of run) {
-      chosen.add(index);
+    for (const neighbour of [hit - 1, hit + 1]) {
+      if (neighbour >= 0 && neighbour < paragraphs.length) {
+        take(neighbour);
+      }
     }
-    used += cost;
   }
   const hitSet = new Set(hits);
   return {
     hitCount: hits.length,
     paragraphs: [...chosen]
-      .toSorted((left, right) => left - right)
-      .map((index) => {
+      .toSorted(([left], [right]) => left - right)
+      .map(([index, length]) => {
         const paragraph =
           paragraphs[index] ?? panic("A chosen paragraph must exist");
-        // A paragraph longer than the whole budget is cut to it, on a whole
-        // code point, so one match cannot outgrow the window it replaces.
-        const end = resolveTextWindowBounds({
-          text: paragraph.text,
-          offset: 0,
-          size: budget,
-        }).end;
         return {
           anchorId: paragraph.anchorId,
-          text: paragraph.text.slice(0, end),
+          text: paragraph.text.slice(0, length),
           paragraph: index + 1,
           hit: hitSet.has(index),
         };

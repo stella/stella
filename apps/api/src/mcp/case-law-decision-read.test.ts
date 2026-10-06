@@ -383,6 +383,42 @@ describe("paragraphs matching a query", () => {
     ).toBeLessThanOrEqual(10);
   });
 
+  test("a match between two long neighbours stays within the budget", () => {
+    // Each paragraph alone is longer than the budget: the match is cut to
+    // it and neither neighbour fits what is left.
+    const long = (word: string) => `${word} ${"x".repeat(9000)}`;
+    const found = paragraphsMatching({
+      budget: 8000,
+      language: "xx",
+      paragraphs: [
+        { anchorId: null, text: long("before") },
+        { anchorId: null, text: long("match") },
+        { anchorId: null, text: long("after") },
+      ],
+      query: "match",
+    });
+    expect(
+      found.paragraphs.reduce((sum, { text }) => sum + text.length, 0),
+    ).toBeLessThanOrEqual(8000);
+    expect(found.paragraphs.map(({ paragraph }) => paragraph)).toEqual([2]);
+    expect(found.truncated).toBe(true);
+  });
+
+  test("a neighbour that fits what is left still travels", () => {
+    const found = paragraphsMatching({
+      budget: 20,
+      language: "xx",
+      paragraphs: [
+        { anchorId: null, text: "short" },
+        { anchorId: null, text: "match here" },
+        { anchorId: null, text: "much too long to fit" },
+      ],
+      query: "match",
+    });
+    expect(found.paragraphs.map(({ paragraph }) => paragraph)).toEqual([1, 2]);
+    expect(found.truncated).toBe(true);
+  });
+
   test("a paragraph longer than the budget is cut to it", () => {
     const found = paragraphsMatching({
       budget: 5,

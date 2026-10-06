@@ -934,7 +934,7 @@ const readCaseLawDecisionArgsSchema = nullAsAbsent(
       v.pipe(
         v.array(v.picklist(DECISION_READ_INCLUDE)),
         v.description(
-          "Optional fields: details (court, date, ECLI, appUrl, sourceUrl), metadata (publisher fields not stated elsewhere), textFields (published abstract, headnote, legalSentence, summary), source (publisher name), citations (summary), outline (single decision only). Omit for all on page 1 and none on later pages or with query. [] returns text and identity only.",
+          "Optional fields: details (court, date, ECLI, url, source_url), metadata (publisher fields not stated elsewhere), textFields (published abstract, headnote, legalSentence, summary), source (publisher name), citations (summary), outline (single decision only). Omit for all on page 1 and none on later pages or with query. [] returns text and identity only.",
         ),
       ),
     ),

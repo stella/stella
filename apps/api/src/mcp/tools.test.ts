@@ -5984,6 +5984,43 @@ describe("OpenAI-compatible MCP tools", () => {
     expect(entry.decision).not.toHaveProperty("court");
   });
 
+  test("read_case_law_decision keeps a query batch within the call ceiling", async () => {
+    const ids = Array.from(
+      { length: LIMITS.caseLawDecisionBatchMax },
+      (_, index) =>
+        `00000000-0000-4000-8000-0000000d02${String(index).padStart(2, "0")}`,
+    );
+    const long = (word: string) => `${word} ${"x".repeat(9000)}`;
+    const base = createReadDecisionResult();
+    readGatedDecisionMock.mockImplementation(
+      async ({ locator }: { locator: { kind: "id"; id: string } }) => ({
+        ...base,
+        documentAst: null,
+        fulltext: [long("before"), long("match"), long("after")].join("\n"),
+        id: locator.id,
+      }),
+    );
+
+    const payload = await readDecisions({
+      decision_ids: ids,
+      max_chars: MCP_CONTENT_MAX_CHARS,
+      query: "match",
+    });
+
+    const share = READ_DECISION_BATCH_MAX_TEXT_CHARS / ids.length;
+    const lengths = payload.items.map(
+      ({ decision }) =>
+        decision?.matches?.paragraphs.reduce(
+          (sum, { text }) => sum + text.length,
+          0,
+        ) ?? panic("Missing matches"),
+    );
+    expect(lengths.every((length) => length <= share)).toBe(true);
+    expect(
+      lengths.reduce((sum, length) => sum + length, 0),
+    ).toBeLessThanOrEqual(READ_DECISION_BATCH_MAX_TEXT_CHARS);
+  });
+
   test("read_case_law_decision gives outline entries pages and deep links", async () => {
     const fulltext = `I. Průběh řízení\n${"Facts. ".repeat(
       40,
