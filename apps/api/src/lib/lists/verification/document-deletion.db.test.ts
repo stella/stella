@@ -184,11 +184,17 @@ describe.skipIf(!enabled)("document-owned verification history", () => {
           "20261005120700_validate_verification_document_cascade",
         );
         expect(Object.values(await counts())).toEqual(dependents.map(() => 0));
-        expect(
-          await client`
-            SELECT resource_id, organization_id, action, trigger_source_id
-            FROM audit_logs`,
-        ).toEqual([
+        const removalAudits = await client<
+          {
+            resource_id: string;
+            organization_id: string;
+            action: string;
+            trigger_source_id: string;
+          }[]
+        >`
+          SELECT resource_id, organization_id, action, trigger_source_id
+          FROM audit_logs`;
+        expect([...removalAudits]).toEqual([
           {
             resource_id: orphanRunId,
             organization_id: organizationId,
