@@ -47,6 +47,11 @@ const REVIEW_PASSWORD = "review-password-secret";
 const REVIEW_TASK_ID = "11111111-1111-4111-8111-111111111111";
 const REVIEW_MATTER_ID = "22222222-2222-4222-8222-222222222222";
 const REVIEW_EXISTING_TASK_ID = "33333333-3333-4333-8333-333333333333";
+const REVIEW_REQUIRED_TOOLS = [
+  "list_tasks",
+  "save_task",
+  "delete_task",
+] as const;
 
 type ReviewFailure = {
   step: string;
@@ -246,7 +251,7 @@ const reviewFetcher = (
           jsonrpc: "2.0",
           id: 2,
           result: {
-            tools: ["list_tasks", "save_task", "delete_task"].map((name) => ({
+            tools: REVIEW_REQUIRED_TOOLS.map((name) => ({
               name,
             })),
           },
@@ -507,6 +512,122 @@ describe("restricted review-account journey", () => {
     },
   );
 
+  test.each(REVIEW_REQUIRED_TOOLS)(
+    "fails tool discovery when required tool %s is absent",
+    async (missingTool) => {
+      const observed: { url: string; headers: Headers; body: string }[] = [];
+      const tools = REVIEW_REQUIRED_TOOLS.filter(
+        (name) => name !== missingTool,
+      ).map((name) => ({ name }));
+      expect(tools.some(({ name }) => name === missingTool)).toBe(false);
+      const results = await runReviewAccountJourney(
+        {
+          baseUrl: REVIEW_BASE_URL,
+          configuredBaseUrl: REVIEW_BASE_URL,
+          frontendUrl: REVIEW_FRONTEND_URL,
+          password: REVIEW_PASSWORD,
+          mode: "full",
+        },
+        reviewFetcher({
+          observed,
+          responseBody: {
+            step: "tools/list",
+            body: { jsonrpc: "2.0", result: { tools } },
+          },
+        }),
+      );
+      expect(results.filter(({ status }) => status === "failed")).toMatchObject(
+        [
+          {
+            name: "restricted account: tools/list",
+            status: "failed",
+            detail: expect.stringContaining("expected read/write tools"),
+          },
+        ],
+      );
+      expect(
+        observed.some(({ body }) => body.includes('"method":"tools/call"')),
+      ).toBe(false);
+    },
+  );
+
+  test.each(["passed", "transport", "http", "malformed"] as const)(
+    "cleans up the created task after a read-back failure with %s cleanup",
+    async (cleanupKind) => {
+      const observed: { url: string; headers: Headers; body: string }[] = [];
+      const results = await runReviewAccountJourney(
+        {
+          baseUrl: REVIEW_BASE_URL,
+          configuredBaseUrl: REVIEW_BASE_URL,
+          frontendUrl: REVIEW_FRONTEND_URL,
+          password: REVIEW_PASSWORD,
+          mode: "full",
+        },
+        reviewFetcher({
+          observed,
+          responseBody: {
+            step: "assert",
+            body: {
+              jsonrpc: "2.0",
+              result: {
+                structuredContent: {
+                  task: {
+                    taskId: REVIEW_TASK_ID,
+                    name: "Unexpected task name",
+                  },
+                },
+              },
+            },
+          },
+          ...(cleanupKind === "passed"
+            ? {}
+            : { failure: { step: "cleanup", kind: cleanupKind } }),
+        }),
+      );
+      expect(
+        results.find(({ name }) => name === "restricted account: write"),
+      ).toMatchObject({ status: "passed" });
+      const cleanupRequests = observed.filter(({ body }) =>
+        body.includes('"name":"delete_task"'),
+      );
+      expect(cleanupRequests).toHaveLength(1);
+      expect(JSON.parse(cleanupRequests.at(0)?.body ?? "{}")).toMatchObject({
+        method: "tools/call",
+        params: {
+          name: "delete_task",
+          arguments: { task_id: REVIEW_TASK_ID, confirm: true },
+        },
+      });
+      expect(
+        results.find(({ name }) => name === "restricted account: assert"),
+      ).toMatchObject({
+        status: "failed",
+        detail: expect.stringContaining("created task did not round-trip"),
+      });
+      expect(results.at(-1)).toMatchObject({
+        name: "restricted account: cleanup",
+        status: cleanupKind === "passed" ? "passed" : "failed",
+      });
+      expect(
+        results
+          .filter(({ status }) => status === "failed")
+          .map(({ name }) => name),
+      ).toEqual(
+        cleanupKind === "passed"
+          ? ["restricted account: assert"]
+          : ["restricted account: assert", "restricted account: cleanup"],
+      );
+      for (const credential of [
+        REVIEW_PASSWORD,
+        "secret-code",
+        "review-access-token",
+        "review-cookie",
+      ]) {
+        expect(JSON.stringify(results)).not.toContain(credential);
+      }
+    },
+  );
+
   test.each(["list_audit_log", "save_time_entry", "delete_time_entry"])(
     "fails when excluded tool %s is exposed despite requested scopes",
     async (name) => {
@@ -524,9 +645,9 @@ describe("restricted review-account journey", () => {
             body: {
               jsonrpc: "2.0",
               result: {
-                tools: ["list_tasks", "save_task", "delete_task", name].map(
-                  (tool) => ({ name: tool }),
-                ),
+                tools: [...REVIEW_REQUIRED_TOOLS, name].map((tool) => ({
+                  name: tool,
+                })),
               },
             },
           },

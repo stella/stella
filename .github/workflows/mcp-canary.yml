@@ -3,8 +3,7 @@ name: MCP canary
 on:
   schedule:
     - cron: "*/10 * * * *"
-    # 03:17 UTC is 04:17 Prague (CET) / 05:17 (CEST), after the
-    # review organization reset at 03:30 local time in either season.
+    # Daily, after the review organization's nightly reset in either daylight-saving season.
     - cron: "17 3 * * *"
   workflow_dispatch:
     inputs:
