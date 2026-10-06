@@ -1,4 +1,8 @@
+import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
+import fc from "fast-check";
+
+import { assertProperty } from "@stll/property-testing";
 
 import {
   groupProvisionsByWork,
@@ -182,4 +186,64 @@ describe("groupProvisionsByWork", () => {
       groupProvisionsByWork([row({}), row({ jurisdiction: "SVK" })]),
     ).toHaveLength(2);
   });
+});
+
+test("provision grouping preserves temporal identities and per-mention evidence under permutation", () => {
+  const positions = [0, 1, 2, 3];
+  assertProperty(
+    "provision grouping preserves temporal identities and per-mention evidence under permutation",
+    fc.property(
+      fc.shuffledSubarray(positions, {
+        minLength: positions.length,
+        maxLength: positions.length,
+      }),
+      (order) => {
+        const rows = [
+          row({ spanStart: 1, versionBasis: { type: "not_stated" } }),
+          row({
+            spanStart: 2,
+            versionBasis: {
+              type: "stated_version",
+              amendmentWorkIdentifier: "303/2013 Sb.",
+              expression: null,
+              evidence: { kind: "stated_version", start: 2, end: 30 },
+            },
+          }),
+          row({
+            spanStart: 3,
+            versionBasis: {
+              type: "stated_version",
+              amendmentWorkIdentifier: "1/2014 Sb.",
+              expression: null,
+              evidence: { kind: "stated_version", start: 3, end: 30 },
+            },
+          }),
+          row({
+            spanStart: 4,
+            versionBasis: {
+              type: "stated_version",
+              amendmentWorkIdentifier: "303/2013 Sb.",
+              expression: null,
+              evidence: { kind: "stated_version", start: 40, end: 70 },
+            },
+          }),
+        ] as const;
+        const permuted = order.map(
+          (index) => rows.at(index) ?? panic("Permutation index is absent"),
+        );
+        const provisions = groupProvisionsByWork(permuted).at(0)?.provisions;
+        expect(provisions).toHaveLength(3);
+        const amendment = provisions?.find(
+          ({ versionBasis }) =>
+            versionBasis.type === "stated_version" &&
+            versionBasis.amendmentWorkIdentifier === "303/2013 Sb.",
+        );
+        expect(
+          amendment?.occurrences
+            .toSorted((left, right) => left.spanStart - right.spanStart)
+            .map(({ versionBasis }) => versionBasis),
+        ).toEqual([rows[1].versionBasis, rows[3].versionBasis]);
+      },
+    ),
+  );
 });

@@ -960,6 +960,9 @@
     },
     "viewer": {
       "abstract": "Abstrakt",
+      "appliedVersionNotStated": "Použité znění neuvedeno",
+      "appliedVersionStatedAmendment": "Znění podle novely <reference>{amendment}</reference>",
+      "appliedVersionStatedDate": "{relation, select, on {Znění účinné k {date}} until {Znění účinné do {date}} from {Znění účinné od {date}} other {Znění účinné k {date}}}",
       "caseFileMayHoldOthers": "Tento spis může obsahovat i další rozhodnutí.",
       "citedBy": "Citováno v",
       "cites": "Cituje",

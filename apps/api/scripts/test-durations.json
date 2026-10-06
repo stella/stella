@@ -423,6 +423,10 @@
     "seconds": 0.06332,
     "source": "estimated"
   },
+  "src/db/provision-applied-version.postgres.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
   "src/db/public-sanctions-reader.postgres.test.ts": {
     "seconds": 0.78131,
     "source": "estimated"
@@ -1745,6 +1749,10 @@
   },
   "src/handlers/case-law/provisions/response.test.ts": {
     "seconds": 0.975067,
+    "source": "estimated"
+  },
+  "src/handlers/case-law/provisions/version-response.test.ts": {
+    "seconds": 1,
     "source": "estimated"
   },
   "src/handlers/case-law/public-response-schemas.test.ts": {
