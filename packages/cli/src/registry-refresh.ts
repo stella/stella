@@ -10,7 +10,10 @@ import type { CliActionAdmissionRefusal } from "./action-admission-refusal.js";
 import { loadBakedCapabilityCatalog } from "./capability-catalog-load.js";
 import { fetchLatestCliVersion } from "./cli-release-channel.js";
 import { buildVersionNudge } from "./cli-version-nudge.js";
-import { hasFeatureCommands } from "./feature-command-projection.js";
+import {
+  hasFeatureCommands,
+  projectFeatureCommands,
+} from "./feature-command-projection.js";
 import type { CallerFeatureAccess } from "./feature-command-projection.js";
 import type { CapabilityCatalogEntry } from "./generate-capability-tree.js";
 import { buildCliRouteTree } from "./generate-capability-tree.js";
@@ -163,8 +166,6 @@ export type CurrentRegistry = {
 
 export type ResolvedCommandTree = {
   tree: RouteNode;
-  /** Current same-origin admission, applied when building this caller's app. */
-  featureAccess: CallerFeatureAccess | undefined;
   /**
    * What diverged from the baked-in tree, when anything did. Reporting is
    * `registry-drift.ts`'s job: this path takes no network and writes no disk,
@@ -178,8 +179,8 @@ export type ResolvedCommandTree = {
 /**
  * Resolve this invocation without network. A current same-origin response can
  * rebuild and prune the tree by caller scope; disk supplies deployment metadata
- * only. Feature admission stays separate from registry structure: the caller
- * projects this tree before dispatch or help, using only the current response.
+ * only. Caller feature admission projects the resolved tree using only the
+ * current response; missing or invalid live data hides feature commands.
  */
 export const resolveCommandTree = async ({
   serverOrigin,
@@ -206,10 +207,11 @@ export const resolveCommandTree = async ({
       ? registry
       : undefined;
   const currentAccess = file === undefined ? undefined : featureAccess;
+  const project = (tree: RouteNode) =>
+    projectFeatureCommands({ tree, featureAccess: currentAccess });
   if (serverOrigin === undefined) {
     return {
-      tree: bakedTree,
-      featureAccess: currentAccess,
+      tree: project(bakedTree),
       disabled: NO_DISABLED_COMMANDS,
     };
   }
@@ -217,8 +219,7 @@ export const resolveCommandTree = async ({
   const deployment = cached?.serverOrigin === serverOrigin ? cached : undefined;
   if (file === undefined) {
     return {
-      tree: bakedTree,
-      featureAccess: currentAccess,
+      tree: project(bakedTree),
       disabled: {
         tools: deployment?.featureOmittedTools ?? [],
         capabilities: deployment?.featureOmittedCapabilities ?? [],
@@ -234,6 +235,9 @@ export const resolveCommandTree = async ({
   };
   const prunedByScope = (file.scopeOmittedTools ?? []).some(
     (name) => !isCompoundTool(name),
+  );
+  const featureListings = file.listings.some(
+    (listing) => listing.featureId !== undefined,
   );
   const enabledTools = new Set(currentAccess?.tools);
   const hiddenTools = new Set(
@@ -253,8 +257,8 @@ export const resolveCommandTree = async ({
     removed: file.delta.removed.filter((name) => !hiddenTools.has(name)),
     changed: file.delta.changed.filter((name) => !hiddenTools.has(name)),
   };
-  if (isDeltaEmpty(delta) && !prunedByScope) {
-    return { tree: bakedTree, featureAccess: currentAccess, disabled };
+  if (isDeltaEmpty(file.delta) && !prunedByScope && !featureListings) {
+    return { tree: project(bakedTree), disabled };
   }
   // Rebuild through the SAME shared builder codegen uses (curated tools from
   // the current listings + the baked capability merge), so a diverged registry
@@ -262,7 +266,7 @@ export const resolveCommandTree = async ({
   // a tree that fails to build falls back to the baked-in tree (rule 6).
   const entries = await loadCatalog();
   if (entries === null) {
-    return { tree: bakedTree, featureAccess: currentAccess, disabled };
+    return { tree: project(bakedTree), disabled };
   }
   const listings = retainAttestedOmittedListings({
     fetched: file.listings,
@@ -279,13 +283,12 @@ export const resolveCommandTree = async ({
       }).tree,
   );
   if (Result.isError(built)) {
-    return { tree: bakedTree, featureAccess: currentAccess, disabled };
+    return { tree: project(bakedTree), disabled };
   }
   return isDeltaEmpty(delta)
-    ? { tree: built.value, featureAccess: currentAccess, disabled }
+    ? { tree: project(built.value), disabled }
     : {
-        tree: built.value,
-        featureAccess: currentAccess,
+        tree: project(built.value),
         drift: delta,
         disabled,
       };

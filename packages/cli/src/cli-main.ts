@@ -22,7 +22,6 @@ import { normalizeProcessExitCode } from "./cli-exit-code.js";
 import { commandNeedsRegistry } from "./command-locality.js";
 import { HOME, XDG_CACHE_HOME } from "./env.js";
 import type { CallerFeatureAccess } from "./feature-command-projection.js";
-import { projectFeatureCommands } from "./feature-command-projection.js";
 import { generatedRouteMap } from "./generated/route-map.js";
 import { reportFatalError } from "./main-error-boundary.js";
 import { EXIT_CODES, resolveMcpErrorCodeExit } from "./mcp-constants.js";
@@ -164,12 +163,7 @@ const main = async (): Promise<void> => {
 
   // Only this invocation's validated response can project caller commands.
   // Disk supplies deployment metadata; resolution itself performs no network.
-  const {
-    tree,
-    drift,
-    disabled,
-    featureAccess: currentAccess,
-  } = await resolveCommandTree({
+  const { tree, drift, disabled } = await resolveCommandTree({
     serverOrigin: serverUrl,
     env: cacheEnv,
     ...(currentRegistry === undefined ? {} : { registry: currentRegistry }),
@@ -203,11 +197,7 @@ const main = async (): Promise<void> => {
     }
   }
 
-  const callerTree = projectFeatureCommands({
-    tree,
-    featureAccess: currentAccess,
-  });
-  await run(buildApp(callerTree, disabled), argv, {
+  await run(buildApp(tree, disabled), argv, {
     forCommand: () => ({ configDir, process, serverUrl, token }),
     process: stricliProcess,
   });
