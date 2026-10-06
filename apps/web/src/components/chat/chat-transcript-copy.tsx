@@ -11,14 +11,15 @@ export const ChatTranscriptCopy = ({ rootRef }: ChatTranscriptCopyProps) => {
   // The scroll element belongs to the surrounding chat surface.
   useMountEffect(() => {
     const root = rootRef.current;
-    if (root === null) {
-      return;
+    if (root !== null) {
+      const onCopy = (event: ClipboardEvent) => copyChatSelection(event, root);
+      // Native copy targets the focused element, which may be outside the
+      // selected message. The serializer scopes ownership to both endpoints.
+      root.ownerDocument.addEventListener("copy", onCopy);
+      return () => {
+        root.ownerDocument.removeEventListener("copy", onCopy);
+      };
     }
-    const onCopy = (event: ClipboardEvent) => copyChatSelection(event, root);
-    // Native copy targets the focused element, which may be outside the
-    // selected message. The serializer scopes ownership to both endpoints.
-    root.ownerDocument.addEventListener("copy", onCopy);
-    return () => root.ownerDocument.removeEventListener("copy", onCopy);
   });
   return null;
 };

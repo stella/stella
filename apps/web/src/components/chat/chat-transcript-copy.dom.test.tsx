@@ -8,7 +8,9 @@ afterEach(() => {
   document.getSelection()?.removeAllRanges();
   document.body.replaceChildren();
 });
-afterAll(() => GlobalRegistrator.unregister());
+afterAll(async () => {
+  await GlobalRegistrator.unregister();
+});
 
 const fixture = (html: string) => {
   const root = document.createElement("div");
@@ -74,13 +76,14 @@ describe("transcript copy contains only selected visible text", () => {
     '<span style="display:none">Private hidden payload</span>',
     '<span style="visibility:hidden">Private hidden payload</span>',
     '<span style="position:absolute;clip:rect(0px,0px,0px,0px)">Private hidden payload</span>',
+    '<span class="sr-only">Private hidden payload</span>',
     "<span data-chat-copy-exclude>Private hidden payload</span>",
     "<details><summary></summary><div>Private hidden payload</div></details>",
   ])("excludes hidden content by its DOM contract: %s", (hidden) => {
     const root = fixture(
-      `<p data-chat-message-id="one">Start ${hidden}end</p>`,
+      `<div data-chat-message-id="one">Start ${hidden}end</div>`,
     );
-    const message = root.querySelector("p");
+    const message = root.querySelector("[data-chat-message-id]");
     if (
       message?.firstChild === null ||
       message?.firstChild === undefined ||
