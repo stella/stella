@@ -185,3 +185,6 @@ export const phraseToPattern = (phrase: string): string => {
   const escaped = phrase.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&");
   return escaped.replace(/\s+/gu, "\\s+");
 };
+
+/** Named capture whose span declares a reported party submission. */
+export const REPORTED_PARTY_SUBMISSION_GROUP = "reportedPartySubmission";

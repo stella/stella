@@ -721,19 +721,18 @@ describe("detect-e2e-changes", () => {
                     cancelled: () => cancelled,
                   };
                   expect(Boolean(evaluateExpression(predicate, context))).toBe(
-                    planned &&
+                    event !== "pull_request" &&
+                      planned &&
                       (trusted || event === "workflow_dispatch") &&
                       (!buildRequired ||
                         webResult === "success" ||
                         heavyResult === "success") &&
                       (event !== "merge_group" || !cancelled),
                   );
-                  if (predicate.includes("queue_depth")) {
-                    context.needs["ci-plan"].outputs.queue_depth = "thin";
-                    expect(
-                      Boolean(evaluateExpression(predicate, context)),
-                    ).toBe(false);
-                  }
+                  context.needs["ci-plan"].outputs.queue_depth = "thin";
+                  expect(Boolean(evaluateExpression(predicate, context))).toBe(
+                    false,
+                  );
                 }
               }
             }
@@ -1054,18 +1053,17 @@ describe("detect-e2e-changes", () => {
                       Boolean(evaluateExpression(predicate, context)),
                       `${event}/${depth}/${planned}/${trusted}/${webResult}/${heavyResult}/${heavyOnly}/${cancelled}`,
                     ).toBe(
-                      planned &&
+                      event !== "pull_request" &&
+                        planned &&
                         (trusted || event === "workflow_dispatch") &&
                         (webResult === "success" ||
                           heavyResult === "success") &&
                         (event !== "merge_group" || !cancelled),
                     );
-                    if (predicate.includes("queue_depth")) {
-                      context.needs["ci-plan"].outputs.queue_depth = "thin";
-                      expect(
-                        Boolean(evaluateExpression(predicate, context)),
-                      ).toBe(false);
-                    }
+                    context.needs["ci-plan"].outputs.queue_depth = "thin";
+                    expect(
+                      Boolean(evaluateExpression(predicate, context)),
+                    ).toBe(false);
                   }
                 }
               }

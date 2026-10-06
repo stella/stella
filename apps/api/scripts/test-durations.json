@@ -165,7 +165,6 @@
   "src/handlers/case-law/ingestion/adapters/courtlistener/conformance-fixture.test.ts": 0.02176,
   "src/handlers/case-law/ingestion/adapters/courtlistener/inventory.test.ts": 0.00488,
   "src/handlers/case-law/ingestion/adapters/courtlistener/map.test.ts": 0.14255,
-  "src/handlers/case-law/ingestion/adapters/courtlistener/order-classification.test.ts": 0.00194,
   "src/handlers/case-law/ingestion/adapters/courtlistener/plan.test.ts": 0.03815,
   "src/handlers/case-law/ingestion/adapters/courtlistener/raw.test.ts": 0.00506,
   "src/handlers/case-law/ingestion/adapters/courtlistener/record.test.ts": 0.02104,

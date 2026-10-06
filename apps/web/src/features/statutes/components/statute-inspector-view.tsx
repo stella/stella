@@ -71,6 +71,7 @@ export const StatuteInspectorView = ({
     contentRef,
     enabled: statute !== undefined,
     highlightKey: tab.id,
+    initialQuery: payload.searchQuery,
     panelRef,
   });
   const ast = parseDocumentAst(statute?.documentAst);
@@ -109,7 +110,11 @@ export const StatuteInspectorView = ({
               />
             )}
             {/* The wording moves to the page, so the tab that held it goes. */}
-            <StatuteMainViewAction onMoveToMain={onClose} payload={payload} />
+            <StatuteMainViewAction
+              onMoveToMain={onClose}
+              payload={payload}
+              searchQuery={find.findQuery}
+            />
           </>
         }
         label={tab.label}
@@ -181,7 +186,9 @@ export const StatuteInspectorView = ({
 const StatuteMainViewAction = ({
   onMoveToMain,
   payload,
+  searchQuery,
 }: {
+  searchQuery: string;
   onMoveToMain: () => void;
   payload: StatuteViewPayload;
 }) => {
@@ -203,6 +210,7 @@ const StatuteMainViewAction = ({
           render={
             <Link
               onClick={onNavigate}
+              search={{ q: searchQuery || undefined }}
               {...(payload.anchorId === undefined
                 ? {}
                 : { hash: payload.anchorId })}

@@ -665,6 +665,145 @@ describe("windowed text (S4)", () => {
     });
   });
 
+  for (const format of ["json", "jsonl"] as const) {
+    for (const held of [true, false]) {
+      test(`--all ${format} preserves ${held ? "held" : "external"} legal citation links from the first window`, async () => {
+        const source = "https://publisher.example/act/89-2012";
+        const links = held
+          ? {
+              url: "https://app.example/law/cze/statutes/89-2012-sb/v/2014-01-01#par_1729",
+              source_url: source,
+            }
+          : { url: source };
+        const server = startMockServer((_body, index) => ({
+          toolPayload:
+            index === 0
+              ? {
+                  nextCursor: "w2",
+                  statute: { text: "FIRST ", truncated: true, ...links },
+                }
+              : {
+                  nextCursor: null,
+                  statute: { text: "SECOND", truncated: false },
+                },
+        }));
+        try {
+          const result = await runCli({
+            args: [
+              "legislation",
+              "read",
+              "--eli",
+              "/eli/cz/sb/2012/89",
+              "--all",
+              "--output",
+              format,
+            ],
+            url: server.url,
+            token: READ,
+          });
+          expect(result.exitCode).toBe(0);
+          expect(JSON.parse(result.stdout)).toEqual({
+            text: "FIRST SECOND",
+            ...links,
+          });
+          expect(server.requests).toHaveLength(2);
+          expect(server.requests.at(1)?.params.arguments).toMatchObject({
+            cursor: "w2",
+          });
+        } finally {
+          server.stop();
+        }
+      });
+    }
+  }
+  test("a read the server states has no text exits 0 with a typed field, not empty text", async () => {
+    const server = startMockServer(() => ({
+      toolPayload: {
+        nextCursor: null,
+        statute: {
+          eli: "/eli/cz/sb/2012/89",
+          text: null,
+          textWithheldReason: "The source licence does not permit it.",
+        },
+      },
+    }));
+    const result = await runCli({
+      args: ["legislation", "read", "--eli", "/eli/cz/sb/2012/89", "--json"],
+      url: server.url,
+      token: READ,
+    });
+    server.stop();
+    expect(result.exitCode).toBe(EXIT_CODES.ok);
+    expect(JSON.parse(result.stdout)).toEqual({
+      text: null,
+      textUnavailable: { reason: "no_text", textPath: "statute.text" },
+      response: {
+        nextCursor: null,
+        statute: {
+          eli: "/eli/cz/sb/2012/89",
+          text: null,
+          textWithheldReason: "The source licence does not permit it.",
+        },
+      },
+    });
+    expect(result.stderr).toContain("No text");
+  });
+
+  test("a response without the text the command reads fails loudly instead of printing empty text", async () => {
+    // A command built for one response shape reading another: here a batch
+    // envelope answering a single-text leaf, the shape that printed
+    // `{"text":""}` with exit 0 before. The response is kept, not dropped.
+    const items = [
+      {
+        decisionId: "00000000-0000-4000-8000-000000000001",
+        status: "found",
+        decision: { text: "THE DECISION BODY" },
+      },
+    ];
+    const server = startMockServer(() => ({ toolPayload: { items } }));
+    const result = await runCli({
+      args: ["document", "content", "--entity-id", "e1", "--json"],
+      url: server.url,
+      token: READ,
+    });
+    server.stop();
+    expect(result.exitCode).toBe(EXIT_CODES.unexpected);
+    expect(JSON.parse(result.stdout)).toEqual({
+      text: null,
+      textUnavailable: { reason: "not_in_response", textPath: "text" },
+      response: { items },
+    });
+    expect(result.stderr).toContain("npm i -g @stll/cli");
+  });
+
+  test("--all stops at a first window without text and types it", async () => {
+    const server = startMockServer(() => ({
+      toolPayload: {
+        nextCursor: "w2",
+        statute: { text: null, textWithheldReason: "withheld" },
+      },
+    }));
+    const result = await runCli({
+      args: [
+        "legislation",
+        "read",
+        "--eli",
+        "/eli/cz/sb/2012/89",
+        "--all",
+        "--json",
+      ],
+      url: server.url,
+      token: READ,
+    });
+    server.stop();
+    expect(result.exitCode).toBe(EXIT_CODES.ok);
+    expect(server.requests).toHaveLength(1);
+    expect(JSON.parse(result.stdout)).toMatchObject({
+      text: null,
+      textUnavailable: { reason: "no_text", textPath: "statute.text" },
+    });
+  });
+
   test("a case-law decision read renders one entry per requested id", async () => {
     // Not a windowed-text leaf: the read answers per entry, so both the text
     // and its continuation cursor are per entry and there is no one window to
@@ -697,17 +836,19 @@ describe("windowed text (S4)", () => {
         "00000000-0000-4000-8000-000000000001",
         "--decision-ids",
         "00000000-0000-4000-8000-000000000002",
+        "--json",
       ],
       url: server.url,
       token: READ,
     });
     server.stop();
     expect(result.exitCode).toBe(0);
+    const printed = JSON.parse(result.stdout);
     expect(
-      JSON.parse(result.stdout).items.map(
-        (item: { status: string }) => item.status,
-      ),
+      printed.items.map((item: { status: string }) => item.status),
     ).toEqual(["found", "not_found"]);
+    expect(printed.items.at(0).decision.text).toBe("THE DECISION BODY");
+    expect(printed).not.toHaveProperty("text");
     expect(server.requests.at(0)?.params.arguments).toMatchObject({
       decision_ids: [
         "00000000-0000-4000-8000-000000000001",

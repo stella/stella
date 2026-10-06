@@ -54,6 +54,17 @@
       "polish": "Patobulinti formuluotę"
     }
   },
+  "aiColumns": {
+    "countSummary": "{columns} stulpeliai × {rows} eilutės = {answers, plural, one {# atsakymas} few {# atsakymai} many {# atsakymo} other {# atsakymų}}. Atsakymai naudoja biudžetą.",
+    "refusedBudget": "Nevykdyta: atsakymų biudžetas nepasiekiamas",
+    "rerunAllPage": "Vykdyti viską iš naujo (šiame puslapyje)",
+    "rerunColumnPage": "Vykdyti stulpelį iš naujo (šiame puslapyje)",
+    "runColumnPage": "Vykdyti stulpelį (šiame puslapyje)",
+    "runPageRows": "Vykdyti {count, plural, one {# šio puslapio eilutei} few {# šio puslapio eilutėms} many {# šio puslapio eilutės} other {# šio puslapio eilučių}}",
+    "runRemainingPage": "Vykdyti likusius (šiame puslapyje)",
+    "runSelectedRows": "Vykdyti {count, plural, one {# pasirinktai eilutei} few {# pasirinktoms eilutėms} many {# pasirinktos eilutės} other {# pasirinktų eilučių}}",
+    "selectedRun": "Vykdyti DI stulpelius {count, plural, one {# eilutei} few {# eilutėms} many {# eilutės} other {# eilučių}}"
+  },
   "appearance": {
     "calendar": "Kalendorius",
     "calendarGregorian": "Grigaliaus",
@@ -796,6 +807,34 @@
       "unavailable": "Aprėpties duomenys šiuo metu nepasiekiami."
     },
     "decisionNotFound": "Sprendimas nerastas",
+    "decisionTypes": {
+      "administrative_decision": "Administracinis sprendimas",
+      "binding_excise_information": "Privaloma informacija apie akcizus",
+      "binding_rate_information": "Privaloma informacija apie PVM tarifą",
+      "court_direction": "Potvarkis",
+      "decision": "Sprendimas",
+      "finding": "Sprendimas iš esmės",
+      "general_tax_ruling": "Bendroji mokesčių interpretacija",
+      "individual_tax_ruling": "Individuali mokesčių interpretacija",
+      "judgment": "Teismo sprendimas",
+      "leave_refused": "Atsisakyta nesant reikšmingo teisės klausimo",
+      "merits_decision": "Sprendimas byloje",
+      "ministry_of_justice_decision": "Teisingumo ministerijos sprendimas",
+      "minutes_extract": "Protokolo išrašas",
+      "opinion": "Nuomonė",
+      "order": "Nutartis",
+      "other": "Kita",
+      "payment_order": "Teismo įsakymas",
+      "penal_order": "Baudžiamasis įsakymas",
+      "principle_decision": "Principinis sprendimas",
+      "protective_opinion": "Apsauginė nuomonė",
+      "resolution": "Nutarimas",
+      "signalling_decision": "Signalinė nutartis",
+      "statement_of_reasons": "Motyvai",
+      "tax_explanations": "Mokesčių paaiškinimai",
+      "top_up_tax_opinion": "Nuomonė dėl papildomo mokesčio",
+      "uniformity_decision": "Teismų praktikos vienodinimo sprendimas"
+    },
     "emptyState": "Sprendimų nerasta. Sukonfigūruokite šaltinį ir paleiskite sinchronizavimą, kad importuotumėte teismų praktiką.",
     "filters": {
       "remove": "Pašalinti filtrą {filter}"
@@ -841,6 +880,7 @@
       "subsection": "{value} d."
     },
     "reader": {
+      "expandProvisions": "Išskleisti nuostatas",
       "headMatter": "Antraštinė dalis",
       "sourceAttribution": "Šaltinio duomenys laisvai prieinami adresu <link>{source}</link>."
     },
@@ -2310,6 +2350,8 @@
       "encryptedContent": "Užšifruoto dokumento turinio išgauti negalima. Pašalinkite failo slaptažodį ir bandykite dar kartą.",
       "filePropertyTypeImmutable": "Failo savybės tipo keisti negalima. Palikite esamą tipą; kitoms reikšmėms sukurkite pasirinktinę savybę.",
       "forbidden": "Neturite teisės atlikti šio veiksmo.",
+      "hostedCheckoutOpen": "Šiai organizacijai jau atidarytas apmokėjimas. Užbaikite jį arba pradėkite naują, kai jis baigs galioti.",
+      "hostedSubscriptionLive": "Ši organizacija jau turi prenumeratą. Pakeiskite ją skiltyje „Tvarkyti prieglobos naudojimą“.",
       "internalServerError": "Kažkas nepavyko. Bandykite dar kartą.",
       "legalSourceEntityLimitReached": "Šioje byloje pasiektas elementų limitas, todėl dokumento sukurti nepavyko.",
       "legalSourceFilePropertyMissing": "Šioje byloje trūksta failo ypatybės, todėl dokumento sukurti nepavyko.",
@@ -4637,6 +4679,7 @@
     "compareVersionMissing": "Lyginamos redakcijos šio akto istorijoje nėra.",
     "compareWholeAct": "Palyginti visą aktą",
     "compareWithVersion": "Palyginti su redakcija {version}",
+    "currentWording": "Galiojanti redakcija",
     "description": "Vieša konsoliduotų teisės aktų duomenų bazė, indeksuojama pagal aktą ir jo redakciją.",
     "diffInserted": "Įterpta:",
     "diffRemoved": "Išbraukta:",
@@ -4686,7 +4729,9 @@
       "unknown": "Būsena neaiški"
     },
     "title": "Teisės aktai",
-    "validity": "Galioja nuo {from} iki {to}"
+    "validity": "Galioja nuo {from} iki {to}",
+    "wordingValidFrom": "Redakcija galioja nuo {date}",
+    "wordingVersionUnknown": "Redakcijos versijos data nežinoma"
   },
   "styleSets": {
     "create": "Kurti",
@@ -5455,8 +5500,7 @@
         "signCurrent": "Pasirašyti su stella desktop",
         "signNone": "Atsisiųskite stella desktop, kad galėtumėte pasirašyti šį PDF",
         "signOutdated": "Atnaujinkite stella desktop, kad galėtumėte pasirašyti",
-        "signReason": "Pasirašymas naudoja jūsų kompiuteryje esantį sertifikatą, todėl vyksta stella desktop.",
-        "signShort": "Pasirašyti"
+        "signReason": "Pasirašymas naudoja jūsų kompiuteryje esantį sertifikatą, todėl vyksta stella desktop."
       },
       "downloadAs": "Atsisiųsti kaip…",
       "downloadAsZip": "Atsisiųsti .zip failą",
@@ -5998,7 +6042,6 @@
       "previewUnsupported": "Peržiūra šio tipo dokumentui nepalaikoma.",
       "readingFrom": "DI skaito iš",
       "referencesItself": "Savybė nurodo pati save per kitas savybes",
-      "rerunColumn": "Paleisti stulpelį iš naujo",
       "resultType": "Rezultato tipas",
       "returnsLabel": "Formatas",
       "scopeFile": "Dabartinis failas",

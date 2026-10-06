@@ -30,6 +30,7 @@
   ],
   "exports": {
     ".": "./src/index.ts",
+    "./toolbar-icon-action": "./src/components/toolbar-icon-action.tsx",
     "./view-toolbar": "./src/components/view-toolbar.tsx",
     "./accordion": "./src/components/accordion.tsx",
     "./application-rail": "./src/components/application-rail.tsx",
@@ -52,6 +53,7 @@
     "./calendar": "./src/calendar/index.ts",
     "./data-table": "./src/data-table/index.ts",
     "./date-picker-popover": "./src/components/date-picker-popover.tsx",
+    "./details-grid": "./src/components/details-grid.tsx",
     "./destructive-action-confirmation": "./src/components/destructive-action-confirmation.tsx",
     "./destructive-confirm-dialog": "./src/components/destructive-confirm-dialog.tsx",
     "./dialog": "./src/components/dialog.tsx",
