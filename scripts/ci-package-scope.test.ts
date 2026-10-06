@@ -1,4 +1,4 @@
-import { expect, test } from "bun:test";
+import { expect, spyOn, test } from "bun:test";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -294,6 +294,31 @@ test("loader wildcard bases stay tied to their calls", () => {
   });
 });
 
+test("an unknown Astro glob identifies the reader whose declaration needs repair", () => {
+  repository((root, write) => {
+    const reader = "scripts/unknown-content-reader.ts";
+    write(
+      reader,
+      'import { glob } from "astro/loaders"; glob({ pattern: getPattern(), base: "notes/consumed" });',
+    );
+    const diagnostic = spyOn(console, "error").mockImplementation(() => {});
+    try {
+      expect(
+        requiresPackageChecks({ root, changed: ["notes/unread.md"] }),
+      ).toBe(true);
+      expect(diagnostic).toHaveBeenCalledWith(
+        "Package scope unavailable; running package checks",
+        expect.objectContaining({
+          name: "MarkdownReaderDeclarationError",
+          message: `${reader}: Astro glob must declare a literal Markdown pattern and base`,
+        }),
+      );
+    } finally {
+      diagnostic.mockRestore();
+    }
+  });
+});
+
 test("scope selectors run before dependency installation", () => {
   expect(
     importProblems({
@@ -360,19 +385,25 @@ test("fixture source containing content loader text does not declare a loader im
 
 test("loader patterns with directory prefixes resolve under their declared base", () => {
   repository((root, write) => {
-    write(
-      "scripts/content.ts",
-      'import {glob} from "astro/loaders"; glob({pattern:"articles/**/*.md",base:"notes/consumed"});',
-    );
-    expect(
-      requiresPackageChecks({
-        root,
-        changed: ["notes/consumed/articles/new.md"],
-      }),
-    ).toBe(true);
-    expect(requiresPackageChecks({ root, changed: ["articles/new.md"] })).toBe(
-      false,
-    );
+    for (const pattern of [
+      "articles/**/*.md",
+      "articles/**/*.{md,mdx}",
+      "articles/**",
+    ]) {
+      write(
+        "scripts/content.ts",
+        `import {glob} from "astro/loaders"; glob({pattern:"${pattern}",base:"notes/consumed"});`,
+      );
+      expect(
+        requiresPackageChecks({
+          root,
+          changed: ["notes/consumed/articles/new.md"],
+        }),
+      ).toBe(true);
+      expect(
+        requiresPackageChecks({ root, changed: ["articles/new.md"] }),
+      ).toBe(false);
+    }
   });
 });
 

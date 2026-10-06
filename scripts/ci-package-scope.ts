@@ -24,8 +24,10 @@ const PROVENANCE = /^(?:\.provenance\.yml$|provenance\/)/u;
 const matches = (file: string, pattern: string) =>
   file === pattern || new Bun.Glob(pattern).match(file);
 
-const allMarkdownPatterns = () =>
-  ["md", "mdx"].map((extension) => `**/*.${extension}`);
+class MarkdownReaderDeclarationError extends Error {
+  override name = "MarkdownReaderDeclarationError";
+  readonly _tag = "MarkdownReaderDeclarationError";
+}
 
 // Bind loader patterns to actual imports; quoted fixture source declares none.
 const astroMarkdownInputs = (
@@ -55,23 +57,18 @@ const astroMarkdownInputs = (
     const options = readLiteralCallOptions(call);
     const pattern = options?.get("pattern");
     const base = options?.get("base");
-    if (
-      options?.size === 2 &&
-      pattern !== undefined &&
-      MARKDOWN.test(pattern) &&
-      base !== undefined
-    ) {
+    if (options?.size === 2 && pattern !== undefined && base !== undefined) {
       patterns.push(path.posix.join(workspace, base, pattern));
     } else {
-      for (const fallback of allMarkdownPatterns()) {
-        patterns.push(fallback);
-      }
+      throw new MarkdownReaderDeclarationError(
+        `${file}: Astro glob must declare a literal Markdown pattern and base`,
+      );
     }
   });
   if (calls === 0) {
-    for (const fallback of allMarkdownPatterns()) {
-      patterns.push(fallback);
-    }
+    throw new MarkdownReaderDeclarationError(
+      `${file}: Astro Markdown reader has no resolvable glob call`,
+    );
   }
   return patterns;
 };
