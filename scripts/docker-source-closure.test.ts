@@ -191,13 +191,14 @@ describe("Docker source closure", () => {
       if (scenario === "valid") {
         expect(problems).toEqual([]);
       } else {
-        let expected = output;
-        if (scenario === "missing-producer-input") {
-          expected = "absent-helper";
-        } else if (scenario === "missing-output-import") {
-          expected = "absent-output-input";
-        }
-        expect(problems.join("\n")).toContain(expected);
+        const expected = {
+          "missing-command": output.slice(0, -3),
+          "before-producer": output.slice(0, -3),
+          "missing-producer-input": "absent-helper",
+          "missing-output": output,
+          "missing-output-import": "absent-output-input",
+        } satisfies Record<typeof scenario, string>;
+        expect(problems.join("\n")).toContain(expected[scenario]);
       }
     }
   });
@@ -261,6 +262,28 @@ describe("Docker source closure", () => {
         ),
       ).toContain("routeTree.gen");
     }
+  });
+
+  test("source-run arguments are distinct from Bun options and build entrypoints", () => {
+    const context: SourceTree = new Map([
+      ["/app/entry.ts", "entry.ts"],
+      ["/app/argument.ts", "argument.ts"],
+    ]);
+    for (const command of [
+      "bun entry.ts --check",
+      "bun entry.ts argument.ts --check",
+      "bun entry.ts --unknown-script-argument",
+    ]) {
+      expect(commandEntries(root, context, command, "/app")).toEqual([
+        "/app/entry.ts",
+      ]);
+    }
+    expect(
+      commandEntries(root, context, "bun build entry.ts argument.ts", "/app"),
+    ).toEqual(["/app/entry.ts", "/app/argument.ts"]);
+    expect(() =>
+      commandEntries(root, context, "bun --unknown entry.ts", "/app"),
+    ).toThrow("Unsupported Bun flag: --unknown");
   });
 
   test("runs after source hydration in the installed light job with a fixed total budget", () => {

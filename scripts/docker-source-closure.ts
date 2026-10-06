@@ -589,6 +589,9 @@ const sourceCommandEntries = (
       mode,
     });
     found = true;
+    if (mode === "run") {
+      break;
+    }
   }
   if (!found) {
     panic(`No source entry in Bun command: ${command}`);
