@@ -10,99 +10,46 @@
  * Better Auth's password hashing, and ends the account's browser sessions;
  * OAuth grants stay. Only fixed outcome words and counts are printed.
  */
-import { generateId } from "@better-auth/core/utils/id";
-import { eq } from "drizzle-orm";
-
-import { member, organization } from "@/api/db/auth-schema";
-import { rootDb } from "@/api/db/root";
+import { createOwnerReviewAccountOrganizationStore } from "@/api/db/root";
 import { env } from "@/api/env";
-import { seedDefaultSkills } from "@/api/lib/agent-skills/default-skills";
 import { getAuth } from "@/api/lib/auth";
-import { ensureDefaultDocumentTypes } from "@/api/lib/document-types/defaults";
 import {
   brandPersistedOrganizationId,
   brandPersistedUserId,
 } from "@/api/lib/safe-id-boundaries";
-import { recordNewOrganizationAccessState } from "@/api/lib/usage/organization-access-state";
 import {
   createReviewAccountAuthStore,
   runReviewAccountCommand,
 } from "@/api/scripts/review-account.logic";
 import type { ReviewAccountStore } from "@/api/scripts/review-account.logic";
 
-// Better Auth's default id length, the shape every auth row holds.
-const AUTH_ID_LENGTH = 32;
-const ORGANIZATION_NAME = "Sample law firm";
-
-const insertOwner = async (
-  tx: Parameters<Parameters<typeof rootDb.transaction>[0]>[0],
-  { organizationId, userId }: { organizationId: string; userId: string },
-) => {
-  // A direct insert skips the organization plugin's membership hooks, so the
-  // member defaults a real new owner gets are installed here.
-  await tx.insert(member).values({
-    id: generateId(AUTH_ID_LENGTH),
-    organizationId,
-    userId,
-    role: "owner",
-    createdAt: new Date(),
-  });
-  await seedDefaultSkills({
-    organizationId: brandPersistedOrganizationId(organizationId),
-    tx,
-    userId: brandPersistedUserId(userId),
-  });
-};
-
 const createStore = async (): Promise<ReviewAccountStore> => {
-  const context = await getAuth().$context;
+  const organizations = await createOwnerReviewAccountOrganizationStore();
   return {
-    ...createReviewAccountAuthStore(context),
+    ...createReviewAccountAuthStore(await getAuth().$context),
+    // Ids arrive from the validated environment and stored auth rows.
     organizationExists: async (organizationId) =>
-      (await rootDb.query.organization.findFirst({
-        where: { id: { eq: organizationId } },
-        columns: { id: true },
-      })) !== undefined,
-    listOrganizationIdsForUser: async (userId) =>
-      (
-        await rootDb
-          .select({ organizationId: member.organizationId })
-          .from(member)
-          .where(eq(member.userId, userId))
-      ).map((row) => row.organizationId),
+      await organizations.organizationExists(
+        brandPersistedOrganizationId(organizationId),
+      ),
     listMemberUserIds: async (organizationId) =>
-      (
-        await rootDb
-          .select({ userId: member.userId })
-          .from(member)
-          .where(eq(member.organizationId, organizationId))
-      ).map((row) => row.userId),
+      await organizations.listMemberUserIds(
+        brandPersistedOrganizationId(organizationId),
+      ),
+    listOrganizationIdsForUser: async (userId) =>
+      await organizations.listOrganizationIdsForUser(
+        brandPersistedUserId(userId),
+      ),
     createOrganization: async ({ organizationId, ownerUserId }) => {
-      // A direct insert skips the organization plugin's creation hook, so the
-      // state and starter taxonomy a real new organization gets are written
-      // here, with the owner, in one transaction.
-      await rootDb.transaction(async (tx) => {
-        const now = new Date();
-        await tx.insert(organization).values({
-          id: organizationId,
-          name: ORGANIZATION_NAME,
-          slug: `review-${organizationId.toLowerCase()}`,
-          createdAt: now,
-        });
-        await recordNewOrganizationAccessState(tx, {
-          organizationId: brandPersistedOrganizationId(organizationId),
-          now,
-        });
-        await ensureDefaultDocumentTypes(
-          brandPersistedOrganizationId(organizationId),
-          tx,
-        );
-        await insertOwner(tx, { organizationId, userId: ownerUserId });
+      await organizations.createOrganization({
+        organizationId: brandPersistedOrganizationId(organizationId),
+        ownerUserId: brandPersistedUserId(ownerUserId),
       });
     },
-    addOwner: async (options) => {
-      await rootDb.transaction(async (tx) => {
-        await insertOwner(tx, options);
+    addOwner: async ({ organizationId, userId }) => {
+      await organizations.addOwner({
+        organizationId: brandPersistedOrganizationId(organizationId),
+        userId: brandPersistedUserId(userId),
       });
     },
   };

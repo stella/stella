@@ -1,6 +1,0 @@
-{
-  "metric": "direct-root-connection-imports",
-  "file": "apps/api/src/scripts/review-account.ts",
-  "delta": 1,
-  "reason": "Operator command run inside the API task that provisions the restricted review account's organization and owner membership. The organization plugin refuses that account by policy, so, like the smoke-session principal, the rows and the creation seeds are written on the owner connection in one transaction; no request path reaches it."
-}

@@ -88,5 +88,15 @@ export const createPublicSanctionsReader = () =>
 export const readOperatorRegistrationPage = async (query: RegistrationQuery) =>
   await readAuditedRegistrationPage(rootDb, query);
 
+/**
+ * The review-account operator command receives its organization writes bound
+ * to the owner connection, never the owner handle. Loaded on demand so the
+ * connection module keeps its light dependency set.
+ */
+export const createOwnerReviewAccountOrganizationStore = async () =>
+  (
+    await import("@/api/lib/auth/review-account-organization-store")
+  ).createReviewAccountOrganizationStore(rootDb);
+
 type Database = typeof rootDb;
 export type Transaction = TransactionOf<Database>;
