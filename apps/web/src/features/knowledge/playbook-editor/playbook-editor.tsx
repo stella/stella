@@ -28,6 +28,7 @@ import {
   PlusIcon,
   ShieldCheckIcon,
   Trash2Icon,
+  TriangleAlertIcon,
 } from "@stll/ui/icons";
 import { Input } from "@stll/ui/input";
 import { Label } from "@stll/ui/label";
@@ -512,8 +513,9 @@ const PaneSaveStatusContent = ({
           onClick={onShowProblems}
           size="xs"
           type="button"
-          variant="ghost"
+          variant="outline"
         >
+          <TriangleAlertIcon className="text-warning-foreground" />
           {status.invalidPositions > 0
             ? t("knowledge.playbooks.autosave.positionsNeedAttention", {
                 count: status.invalidPositions,
@@ -535,6 +537,7 @@ type ToolbarSave =
 type PlaybookEditorToolbarProps = {
   /** Null in the pane, whose tab header closes it. */
   onBack: (() => void) | null;
+  className?: string | undefined;
   backTourAttributes: TourAttributes;
   isEdit: boolean;
   isDirty: boolean;
@@ -555,6 +558,7 @@ type PlaybookEditorToolbarProps = {
 
 const PlaybookEditorToolbar = ({
   onBack,
+  className,
   backTourAttributes,
   isEdit,
   isDirty,
@@ -573,7 +577,12 @@ const PlaybookEditorToolbar = ({
 }: PlaybookEditorToolbarProps) => {
   const t = useTranslations();
   return (
-    <div className="flex flex-wrap items-center justify-between gap-2">
+    <div
+      className={cn(
+        "flex flex-wrap items-center justify-between gap-2",
+        className,
+      )}
+    >
       {onBack !== null && (
         <Button
           onClick={onBack}
@@ -1558,6 +1567,11 @@ const PlaybookEditorForm = ({
       <div className="mx-auto flex w-full max-w-5xl gap-8 p-4 @lg:p-6">
         <div className="min-w-0 flex-1 space-y-6">
           <PlaybookEditorToolbar
+            // The pane's save status stands in for the Save button and warns
+            // before a close loses edits, so it stays in view while scrolling.
+            className={cn(
+              host.type === "pane" && "bg-background sticky top-0 z-10 py-2",
+            )}
             approvedAt={approvedAt}
             approving={approveMutation.isPending}
             busy={saving}
