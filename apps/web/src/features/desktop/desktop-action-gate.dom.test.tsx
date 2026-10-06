@@ -282,10 +282,13 @@ describe("desktop action gate uses observed presence", () => {
       if (action !== "edit-file" && action !== "sign-pdf") {
         panic(`Unexpected test action: ${action}`);
       }
+      const started = Result.ok<{ readonly status: "started" }, never>({
+        status: "started",
+      });
       const connect = spyOn(
         desktopBridge,
         "linkDesktopAccount",
-      ).mockResolvedValue(Result.ok({ status: "started" }));
+      ).mockResolvedValue(started);
       const { performed, view } = mountGate({
         action,
         presence: PRESENCE_FIXTURES.not_connected,
