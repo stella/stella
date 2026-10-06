@@ -633,6 +633,8 @@ const changeDirectory = ({ from, to }: ChangeDirectoryOptions): string => {
   return joined === "." ? "" : joined;
 };
 
+const TIMEOUT_DURATION = /^(?:\d+(?:\.\d*)?|\.\d+)[smhd]?$/u;
+
 /** The program and its arguments, past keywords, assignments and wrappers. */
 const programWords = (words: readonly string[]): readonly string[] => {
   let rest = words;
@@ -657,6 +659,12 @@ const programWords = (words: readonly string[]): readonly string[] => {
           break;
         }
         if (["-k", "--kill-after", "-s", "--signal"].includes(option ?? "")) {
+          if (
+            ["-k", "--kill-after"].includes(option ?? "") &&
+            !TIMEOUT_DURATION.test(rest.at(1) ?? "")
+          ) {
+            return words;
+          }
           rest = rest.slice(2);
         } else if (
           ["--preserve-status", "--foreground", "--verbose", "-v"].includes(
@@ -664,11 +672,22 @@ const programWords = (words: readonly string[]): readonly string[] => {
           ) ||
           /^(?:--(?:kill-after|signal)=|-[ks].+)/u.test(option ?? "")
         ) {
+          if (
+            /^(?:--kill-after=|-k.)/u.test(option ?? "") &&
+            !TIMEOUT_DURATION.test(
+              (option ?? "").replace(/^(?:--kill-after=|-k)/u, ""),
+            )
+          ) {
+            return words;
+          }
           rest = rest.slice(1);
         } else {
           // --help/--version can exit successfully without running the child.
           return words;
         }
+      }
+      if (!TIMEOUT_DURATION.test(rest.at(0) ?? "")) {
+        return words;
       }
       rest = rest.slice(1); // Duration precedes the wrapped command.
     } else if (first === "bash" && rest.at(1) === "scripts/retry.sh") {
