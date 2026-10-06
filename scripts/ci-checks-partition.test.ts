@@ -480,13 +480,16 @@ const expectScope = ({ current, base }: ScopeOptions) => {
   }
   expect(migrated).toEqual(originalScope);
   const tokens = conditionTokens(v.parse(v.string(), condition));
+  const original = conditionTokens(v.parse(v.string(), originalCondition));
+  if (tokens === original) {
+    return;
+  }
   // Ordinary scope comparisons supply fresh-run evidence. Completion reuse
   // is exercised separately by the depth contract's true/false census.
   const fresh =
     /^needs\.ci-plan\.outputs\.run_required != 'false' && \(\s*(.*?)\s*\)$/u
       .exec(tokens)
       ?.at(1) ?? tokens;
-  const original = conditionTokens(v.parse(v.string(), originalCondition));
   if (fresh === original) {
     return;
   }
@@ -723,6 +726,25 @@ test("CI check scope permits only the heavy-only wrapper around the unchanged co
   };
   expectScope({ current: base, base });
   expectScope({ current: wrapped, base });
+  const reused = {
+    ...wrapped,
+    if: `needs.ci-plan.outputs.run_required != 'false' && (${wrapped.if})`,
+  };
+  expectScope({ current: reused, base });
+  expectScope({ current: reused, base: reused });
+  expectScope({
+    current: { ...reused, if: `inputs.heavy_only != true && (${reused.if})` },
+    base: reused,
+  });
+  for (const condition of [
+    wrapped.if,
+    reused.if.replace("!= 'false'", "== 'false'"),
+    reused.if.replace("run_required", "other"),
+  ]) {
+    expect(() =>
+      expectScope({ current: { ...reused, if: condition }, base: reused }),
+    ).toThrow("Expected:");
+  }
   expectScope({
     current: {
       ...wrapped,
