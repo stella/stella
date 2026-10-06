@@ -1401,7 +1401,12 @@ jobs:
         # change cannot silently ship stale CLI, web approval, or skill behavior.
         # Regenerate: `bun run codegen` in packages/cli.
         run: |
+          set -euo pipefail
           bun scripts/ci-generated-sources.ts prepare
+          # Regeneration guards intentionally modify inputs and report their diff.
+          # Validate the artifact first, then use ordinary generation in this leg.
+          unset CI_GENERATED_SOURCES_MANIFEST
+          echo 'CI_GENERATED_SOURCES_MANIFEST=' >> "$GITHUB_ENV"
           (cd packages/cli && bun run codegen)
           (cd packages/cli && bun run codegen:runtime)
           git diff --exit-code -- \
