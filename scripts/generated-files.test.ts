@@ -182,8 +182,8 @@ test("capability runtime cache manifests cover every file the producer writes", 
       .map((file) => `src/mcp/generated/${file}`)
       .toSorted();
     expect(outputs.length).toBeGreaterThan(0);
-    expect(generator("capability-runtime").outputs.toSorted()).toEqual(
-      outputs.map((file) => `apps/api/${file}`),
+    expect(outputs.map((file) => `apps/api/${file}`)).toEqual(
+      generator("capability-runtime").outputs.toSorted(),
     );
     const config = v.parse(
       v.object({

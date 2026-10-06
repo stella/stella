@@ -4,6 +4,7 @@ import {
   mkdirSync,
   mkdtempSync,
   readFileSync,
+  realpathSync,
   rmSync,
   symlinkSync,
   writeFileSync,
@@ -23,7 +24,9 @@ import {
 } from "./prepared-generated-sources";
 
 const fixture = () => {
-  const root = mkdtempSync(path.join(tmpdir(), "prepared-sources-"));
+  const root = realpathSync(
+    mkdtempSync(path.join(tmpdir(), "prepared-sources-")),
+  );
   const write = (file: string, bytes: string) => {
     const destination = path.join(root, file);
     mkdirSync(path.dirname(destination), { recursive: true });
@@ -246,7 +249,9 @@ test("configured preparation fails closed and an ordinary checkout generates loc
       JSON.stringify(manifest),
     );
     expect(hasPreparedGeneratedSources(root)).toBe(true);
-    write(CI_GENERATED_FILES[0], "changed output");
+    const output =
+      CI_GENERATED_FILES.at(0) ?? panic("Generated output inventory is empty");
+    write(output, "changed output");
     expect(() => hasPreparedGeneratedSources(root)).toThrow(
       "Prepared generated source differs",
     );

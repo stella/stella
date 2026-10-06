@@ -15,7 +15,7 @@ const root = new URL("../", import.meta.url).pathname;
 
 const generate = () => {
   for (const command of CI_GENERATION_COMMANDS) {
-    const result = Bun.spawnSync(command, {
+    const result = Bun.spawnSync([...command], {
       cwd: root,
       stdout: "inherit",
       stderr: "inherit",

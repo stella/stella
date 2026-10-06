@@ -269,9 +269,10 @@ const expectScope = ({ current, base }: ScopeOptions) => {
     scope["needs"].length === 2 &&
     scope["needs"].at(0) === "ci-plan" &&
     scope["needs"].at(1) === "ci-generated-sources";
-  const migrated = hydrationDependency
-    ? { ...scope, needs: "ci-plan" }
-    : { ...scope };
+  const migrated = { ...scope };
+  if (hydrationDependency) {
+    migrated["needs"] = "ci-plan";
+  }
   if (
     JSON.stringify(migrated["env"]) ===
     JSON.stringify({

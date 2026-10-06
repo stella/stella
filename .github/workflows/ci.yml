@@ -575,7 +575,7 @@ jobs:
             # The route-tree generator reads the web package script and config
             # as well as the route sources; all must trigger its drift guard.
             case "$file" in
-              apps/web/src/routes/*|apps/web/vite.config.ts|apps/web/route-tree.config.ts|apps/web/scripts/generate-route-tree.ts|apps/web/package.json|apps/web/src/routeTree.gen.ts|bun.lock)
+              apps/web/src/routes/*|apps/web/vite.config.ts|apps/web/route-tree.config.ts|apps/web/scripts/generate-route-tree.ts|apps/web/package.json|apps/web/src/routeTree.gen.ts|packages/scripts/src/prepared-generated-sources.ts|scripts/generated-files.ts|bun.lock)
                 route_tree_required=true
                 ;;
             esac
@@ -649,7 +649,7 @@ jobs:
             # The web API types determinism guard compiles the API and wire
             # programs; mirror the complete cached generator input contract.
             case "$file" in
-              apps/api/*|apps/web/src/*|apps/web/package.json|apps/web/tsconfig*.json|packages/*|patches/*|types/*|tsconfig*.json|bun.lock|bunfig.toml|package.json|.npmrc|turbo.json|.github/workflows/ci.yml)
+              apps/api/*|apps/web/src/*|apps/web/package.json|apps/web/tsconfig*.json|packages/*|scripts/generated-files.ts|patches/*|types/*|tsconfig*.json|bun.lock|bunfig.toml|package.json|.npmrc|turbo.json|.github/workflows/ci.yml)
                 web_api_types_required=true
                 ;;
             esac
