@@ -30,6 +30,7 @@ import type {
 import { UserIdentityAvatar } from "@/components/user-avatar";
 import { EntityIcon } from "@/components/workspaces/entity-kind-icon";
 import { useOpenDecisionTab } from "@/features/case-law/open-decision-tab";
+import { SIGNED_OUT_QUERY_OWNER } from "@/lib/account/queries";
 import { useMaybeAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { detached } from "@/lib/detached";
 import { resolveMatterColor } from "@/lib/matter-colors";
@@ -85,7 +86,8 @@ const toLiveFact = <TData, TValue>(
  * a reload.
  */
 const useReferenceFacts = (reference: ChatReference): ReferenceLiveFacts => {
-  const organizationId = useMaybeAuthenticatedUser()?.activeOrganizationId;
+  const user = useMaybeAuthenticatedUser();
+  const organizationId = user?.activeOrganizationId;
   const entity =
     reference.type === "entity" && reference.matterId !== null
       ? { entityId: reference.entityId, matterId: reference.matterId }
@@ -113,7 +115,10 @@ const useReferenceFacts = (reference: ChatReference): ReferenceLiveFacts => {
   // The navigation list is already in flight on every chat surface, so the
   // matter colour is a cache read rather than a fetch.
   const mattersQuery = useQuery({
-    ...workspacesNavigationOptions(organizationId ?? ""),
+    ...workspacesNavigationOptions({
+      organizationId: organizationId ?? "",
+      userId: user?.id ?? SIGNED_OUT_QUERY_OWNER,
+    }),
     enabled: matterId !== null && organizationId !== undefined,
   });
   const organizationQuery = useQuery({

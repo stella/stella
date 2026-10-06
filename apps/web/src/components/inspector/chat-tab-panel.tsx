@@ -721,7 +721,13 @@ const useBoundLegalDocumentLabel = (tab: ChatTab): string | undefined => {
 
 const useChatContextLabel = (tab: ChatTab, activeOrganizationId: string) => {
   const t = useTranslations();
-  const { data } = useQuery(workspacesNavigationOptions(activeOrganizationId));
+  const { id: userId } = useAuthenticatedUser();
+  const { data } = useQuery(
+    workspacesNavigationOptions({
+      organizationId: activeOrganizationId,
+      userId,
+    }),
+  );
   const boundDocumentLabel = useBoundLegalDocumentLabel(tab);
   const workspaces = data?.workspaces ?? [];
   const matterNames = tab.contextMatterIds

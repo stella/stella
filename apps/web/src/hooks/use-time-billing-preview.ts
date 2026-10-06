@@ -3,49 +3,30 @@ import type { QueryClient } from "@tanstack/react-query";
 import { panic } from "better-result";
 
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
-import { ensureRouteQueryData, prefetchRouteQuery } from "@/lib/react-query";
+import { ensureRouteQueryData } from "@/lib/react-query";
 import { useQueryView } from "@/lib/use-query-view";
-import { deploymentFeaturesOptions } from "@/queries/deployment-features";
-import type { DeploymentFeaturesCaller } from "@/queries/deployment-features";
+import { workspacesNavigationOptions } from "@/lib/workspaces/queries";
+import type { WorkspaceNavigationCaller } from "@/lib/workspaces/queries.logic";
 
 /** Admission and navigation use the caller's server-owned enrolment decision. */
 export const isTimeBillingPreviewEnabled = async (
   queryClient: QueryClient,
-  caller: DeploymentFeaturesCaller,
+  caller: WorkspaceNavigationCaller,
 ): Promise<boolean> => {
   const features = await ensureRouteQueryData(
     queryClient,
-    deploymentFeaturesOptions(caller),
+    workspacesNavigationOptions(caller),
   );
-  return features.timeBilling;
+  return features.features.timeBilling;
 };
 
 export const isTimeBillingRouteEnabled = isTimeBillingPreviewEnabled;
-
-type PrefetchTimeBillingServerStateOptions = {
-  queryClient: QueryClient;
-  caller: DeploymentFeaturesCaller;
-  onError: (error: unknown) => void;
-};
-
-/** Prime the caller's decision before navigation surfaces render. */
-export const prefetchTimeBillingServerState = async ({
-  queryClient,
-  caller,
-  onError,
-}: PrefetchTimeBillingServerStateOptions): Promise<void> => {
-  await prefetchRouteQuery(
-    queryClient,
-    deploymentFeaturesOptions(caller),
-    onError,
-  );
-};
 
 export const useTimeBillingPreviewEnabled = (): boolean => {
   const user = useAuthenticatedUser();
   const view = useQueryView(
     useQuery(
-      deploymentFeaturesOptions({
+      workspacesNavigationOptions({
         userId: user.id,
         organizationId: user.activeOrganizationId,
       }),
@@ -57,7 +38,7 @@ export const useTimeBillingPreviewEnabled = (): boolean => {
     case "empty":
       return false;
     case "items":
-      return view.items.timeBilling;
+      return view.items.features.timeBilling;
     default:
       view satisfies never;
       return panic(`Unknown query view: ${String(view)}`);

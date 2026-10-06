@@ -277,7 +277,8 @@ export const useChatSession = ({
 }: UseChatSessionOptions) => {
   useMountEffect(mountBrowserExtensionBridge);
   const t = useTranslations();
-  const organizationId = useAuthenticatedUser().activeOrganizationId;
+  const { activeOrganizationId: organizationId, id: userId } =
+    useAuthenticatedUser();
   const { data: mcpCatalog } = useQuery(mcpConnectorsOptions(organizationId));
   const mcpConnectorIdentities =
     mcpCatalog?.connectors ?? EMPTY_MCP_CONNECTOR_IDENTITIES;
@@ -935,7 +936,7 @@ export const useChatSession = ({
 
   const createDocumentMattersView = useQueryView(
     useQuery({
-      ...workspacesNavigationOptions(organizationId),
+      ...workspacesNavigationOptions({ organizationId, userId }),
       select: (navigation) =>
         navigation.workspaces.map((matter) => ({
           id: matter.id,
