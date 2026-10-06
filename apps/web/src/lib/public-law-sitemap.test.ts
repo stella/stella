@@ -657,7 +657,9 @@ describe("public law sitemap", () => {
     const source = await readSource("apps/web/src/routes/_protected.tsx");
 
     expect(source).toContain("ssr: false");
-    expect(source).toContain("pendingComponent: ProtectedPendingSkeleton");
+    // A nested pending state renders content only; the shell owns its chrome.
+    expect(source).toContain("pendingComponent: DefaultPendingComponent");
+    expect(source).not.toContain("ProtectedPendingSkeleton");
   });
 
   test("document routes do not prefetch parent overview billing data", async () => {

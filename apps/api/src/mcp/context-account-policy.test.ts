@@ -8,6 +8,7 @@ import { authenticateMcpRequest } from "@/api/mcp/auth";
 import { MCP_MODES } from "@/api/mcp/constants";
 import { resolveMcpSessionContext } from "@/api/mcp/context";
 import { McpOrganizationAccessError } from "@/api/mcp/errors";
+import { NO_FEATURE_ACCESS_FACTS } from "@/api/tests/helpers/member-authorization";
 
 const credentialCases = [
   { type: "oauth_client", claims: { client_id: "client_one" } },
@@ -76,6 +77,7 @@ describe("MCP account authorization", () => {
                   email: "limited@example.test",
                   role: "owner",
                   workspace: null,
+                  ...NO_FEATURE_ACCESS_FACTS,
                 };
               },
               checkAccountOperation: (email) => {
@@ -123,6 +125,7 @@ describe("MCP account authorization", () => {
           email: "standard@example.test",
           role: "owner",
           workspace: null,
+          ...NO_FEATURE_ACCESS_FACTS,
         }),
         checkAccountOperation: (email) => {
           accountChecks += 1;

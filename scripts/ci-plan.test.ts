@@ -4393,7 +4393,9 @@ test("API planning only loads dependencies after installation and emits install-
   const select = steps.find(
     (step) => step.name === "Select affected API test files",
   );
-  expect(select?.if).toBe("steps.api-test-deps.outcome == 'success'");
+  expect(select?.if).toBe(
+    "steps.completed-depth.outputs.run_required != 'false' && (steps.api-test-deps.outcome == 'success')",
+  );
   const plan = steps.find(
     (step) => step.name === "Plan API test files and shards",
   );
@@ -4470,17 +4472,20 @@ test("a planted desktop path plans the PR desktop browser leg while unrelated pa
       }
       expect(required).toBe(expected);
       const job = v.parse(v.object({ if: v.string() }), ciJobs["ci-browser"]);
-      expect(
-        evaluate(job.if, {
-          values: {
-            "github.event_name": "pull_request",
-            "needs.ci-plan.outputs.trusted": "true",
-            "needs.ci-plan.outputs.desktop_browser_required": required,
-            "needs.ci-plan.outputs.suite_depth": "fast",
-            "needs.ci-plan.outputs.queue_depth": "full",
-          },
-        }),
-      ).toBe(expected === "true");
+      for (const runRequired of ["true", "false"]) {
+        expect(
+          evaluate(job.if, {
+            values: {
+              "github.event_name": "pull_request",
+              "needs.ci-plan.outputs.trusted": "true",
+              "needs.ci-plan.outputs.run_required": runRequired,
+              "needs.ci-plan.outputs.desktop_browser_required": required,
+              "needs.ci-plan.outputs.suite_depth": "fast",
+              "needs.ci-plan.outputs.queue_depth": "full",
+            },
+          }),
+        ).toBe(expected === "true" && runRequired === "true");
+      }
     }
   } finally {
     rmSync(directory, { recursive: true, force: true });

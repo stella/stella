@@ -116,6 +116,7 @@ const plan = {
   ),
   agent_sandbox_docker_required: "true",
   api_image_deps_required: "true",
+  run_required: "true",
   trusted: "true",
   suite_depth: "full",
   fix_tests_on_base_required: "false",
@@ -886,7 +887,10 @@ test("the planner emits the canonical thin set only when derived planning is sel
           selected(derive.if, {
             github: { event_name: event },
             inputs: { heavy_only: heavyOnly },
-            steps: { depth: { outputs: { queue_depth: queueDepth } } },
+            steps: {
+              depth: { outputs: { queue_depth: queueDepth } },
+              "completed-depth": { outputs: { run_required: "true" } },
+            },
           }),
         ).toBe(heavyOnly || (event === "merge_group" && queueDepth === "thin"));
       }
