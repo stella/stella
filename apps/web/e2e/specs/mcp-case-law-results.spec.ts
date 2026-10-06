@@ -421,6 +421,15 @@ test("filter labels align and date fields remain fixed when opened", async ({
     expect(controlBox).not.toBeNull();
     if (labelBox !== null && controlBox !== null) {
       expect(Math.abs(labelBox.x - controlBox.x)).toBeLessThanOrEqual(0.5);
+      const textLeft = await labels.nth(index).evaluate((element) => {
+        const range = document.createRange();
+        range.selectNodeContents(element);
+        return range.getBoundingClientRect().left;
+      });
+      const controlLeft = await controls
+        .nth(index)
+        .evaluate((element) => element.getBoundingClientRect().left);
+      expect(Math.abs(textLeft - controlLeft)).toBeLessThanOrEqual(0.5);
     }
   }
   const trigger = app.getByRole("button", { name: /^To /u });

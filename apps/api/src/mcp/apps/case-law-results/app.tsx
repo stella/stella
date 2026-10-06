@@ -373,7 +373,7 @@ const SearchControls = ({
       </div>
       <div className="grid grid-cols-2 items-end gap-3 sm:grid-cols-[minmax(0,1fr)_minmax(0,1.6fr)_minmax(0,1.2fr)_minmax(0,1.2fr)_auto]">
         <Field className="gap-1.5">
-          <FieldLabel className="text-muted-foreground ps-3 text-xs">
+          <FieldLabel className="text-muted-foreground text-xs">
             {t("country")}
           </FieldLabel>
           <Select
@@ -397,7 +397,7 @@ const SearchControls = ({
           </Select>
         </Field>
         <Field className="gap-1.5">
-          <FieldLabel className="text-muted-foreground ps-3 text-xs">
+          <FieldLabel className="text-muted-foreground text-xs">
             {t("court")}
           </FieldLabel>
           <Select
@@ -446,10 +446,7 @@ const SearchControls = ({
           </Select>
         </Field>
         <Field className="gap-1.5">
-          <FieldLabel
-            id={fromId}
-            className="text-muted-foreground ps-3 text-xs"
-          >
+          <FieldLabel id={fromId} className="text-muted-foreground text-xs">
             {t("from")}
           </FieldLabel>
           <DatePickerPopover
@@ -462,7 +459,7 @@ const SearchControls = ({
           />
         </Field>
         <Field className="gap-1.5">
-          <FieldLabel id={toId} className="text-muted-foreground ps-3 text-xs">
+          <FieldLabel id={toId} className="text-muted-foreground text-xs">
             {t("to")}
           </FieldLabel>
           <DatePickerPopover
