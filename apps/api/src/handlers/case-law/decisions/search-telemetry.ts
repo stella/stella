@@ -2,6 +2,7 @@ import { panic } from "better-result";
 
 import type { DecisionQueryIntent } from "@stll/api-contract/decision-query-intent";
 
+import type { CorpusHitDispositionCounts } from "@/api/lib/legal-search/corpus-hit-telemetry";
 import { tokenizeCorpusFreeText } from "@/api/lib/legal-search/corpus-query";
 import type { LoggerAttributes } from "@/api/lib/observability/logger";
 import { logger } from "@/api/lib/observability/logger";
@@ -184,6 +185,7 @@ export const createCaseLawSearchDbTimer = (): CaseLawSearchDbTimer => {
 };
 
 type CaseLawSearchCompletedEvent = {
+  hitDispositions: CorpusHitDispositionCounts;
   /** Candidate rows read for blending, including ones the filters dropped. */
   candidatesHydrated: number;
   country: string | undefined;
@@ -234,6 +236,7 @@ type CaseLawSearchCompletedEvent = {
  * country) searched nothing and reports nothing.
  */
 export const reportCaseLawSearchCompleted = ({
+  hitDispositions,
   candidatesHydrated,
   country,
   db,
@@ -262,6 +265,7 @@ export const reportCaseLawSearchCompleted = ({
   }
 
   logger.info("case_law.search.completed", {
+    ...hitDispositions,
     queryClass,
     ...(country === undefined ? {} : { country }),
     rounds,

@@ -3,7 +3,7 @@ import { describe, expect, test } from "bun:test";
 process.env["VITE_API_URL"] ??= "https://api.example.test";
 const { describeSuggestChangesApplyOutcome, hasAutomaticApproval } =
   await import("@/components/chat/tool-approval-card.logic");
-const { isSuggestChangesApplyOutput } =
+const { isSuggestChangesApplyOutput, SUGGEST_CHANGES_TOOL_NAME } =
   await import("@/components/chat/chat-ui-tools");
 
 const noGrants = new Set<never>();
@@ -24,7 +24,7 @@ describe("automatic tool approval", () => {
   test.each([
     "delete_matter",
     "manage_organization",
-    "spawn_subagents",
+    SUGGEST_CHANGES_TOOL_NAME,
   ] as const)(
     "never reuses a stored grant for approve-once tool %s",
     (name) => {
