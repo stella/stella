@@ -159,6 +159,8 @@ type ClaimedPendingDocument = PendingDocument & {
   readonly [claimedPendingDocument]: true;
   readonly sourceHash: string | null;
   readonly attempts: number;
+  /** Settlement refuses once a decision merge ran after this claim. */
+  readonly mergeEpoch: bigint;
 };
 
 /**
@@ -1415,6 +1417,7 @@ const claimDocumentFetchOwned = async ({
       decision: {
         ...snapshot,
         attempts: nextAttempts,
+        mergeEpoch: fence.mergeEpoch,
         [claimedPendingDocument]: true,
       },
       attempts: nextAttempts,
@@ -1930,6 +1933,8 @@ const processClaimedDocument = async ({
 type OwnedDocumentOperationOptions<T> = {
   missingValue: NoInfer<T>;
   decisionId: SafeId<"caseLawDecision">;
+  /** The earlier claim this operation settles; null starts a fresh one. */
+  claimed: ClaimedPendingDocument | null;
   scopedDb: ScopedDb;
   signal?: AbortSignal;
   operation: (fence: DeferredDocumentSourceFence) => Promise<T>;
@@ -1939,8 +1944,14 @@ const ownedDocumentOperation = async <T>(
   options: OwnedDocumentOperationOptions<T>,
 ): Promise<T | DeferredDocumentOwnershipRefusal> => {
   const result = await withDeferredDocumentSourceOwnership({
-    ...options,
+    decisionId: options.decisionId,
+    scopedDb: options.scopedDb,
+    signal: options.signal,
+    operation: options.operation,
     timeoutMs: DOCUMENT_FETCH_BUDGET_MS,
+    ...(options.claimed === null
+      ? {}
+      : { expectedMergeEpoch: options.claimed.mergeEpoch }),
   });
   if (result.status === "missing") {
     return options.missingValue;
@@ -1972,6 +1983,7 @@ export const fetchDecisionDocument = async (
       await ownedDocumentOperation({
         missingValue: { status: "superseded" } as const,
         decisionId: options.decisionId,
+        claimed: null,
         scopedDb: options.scopedDb,
         signal: options.signal,
         operation: async (fence) =>
@@ -2021,6 +2033,7 @@ export const claimDocumentFetch = async (
   await ownedDocumentOperation({
     missingValue: { status: "held" } as const,
     decisionId,
+    claimed: null,
     scopedDb,
     operation: async (fence) =>
       await claimDocumentFetchOwned({
@@ -2036,6 +2049,7 @@ export const storeBackfilledDocument = async (
   await ownedDocumentOperation({
     missingValue: "superseded" as const,
     decisionId: options.decision.id,
+    claimed: options.decision,
     scopedDb: options.scopedDb,
     operation: async (fence) =>
       await storeBackfilledDocumentOwned({
@@ -2050,6 +2064,7 @@ export const markDocumentUnavailable = async (
   await ownedDocumentOperation({
     missingValue: undefined,
     decisionId: options.decision.id,
+    claimed: options.decision,
     scopedDb: options.scopedDb,
     operation: async (fence) =>
       await markDocumentUnavailableOwned({
@@ -2062,6 +2077,7 @@ export const parkDocumentFetch = async (options: ClaimedFetchWriteOptions) =>
   await ownedDocumentOperation({
     missingValue: "superseded" as const,
     decisionId: options.decision.id,
+    claimed: options.decision,
     scopedDb: options.scopedDb,
     operation: async (fence) =>
       await parkDocumentFetchOwned({

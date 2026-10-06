@@ -32,6 +32,8 @@ export type DeferredDocumentSourceFence = {
   readonly sourceId: SafeId<"caseLawSource">;
   readonly scopedDb: ScopedDb;
   readonly signal: AbortSignal;
+  /** The decision-merge generation this ownership started under. */
+  readonly mergeEpoch: bigint;
   /** Refuses once a decision merge holds or has held the source. */
   assertOwned: () => Promise<void>;
   beforeRemoteEffect: <T>(effect: () => Promise<T>) => Promise<T>;
@@ -46,6 +48,11 @@ type WithDeferredDocumentSourceOwnershipOptions<T> = {
   scopedDb: ScopedDb;
   signal?: AbortSignal;
   timeoutMs: number;
+  /**
+   * The generation an earlier ownership claimed the decision under; a merge
+   * completed since then makes that claim's snapshot stale.
+   */
+  expectedMergeEpoch?: bigint;
   operation: (fence: DeferredDocumentSourceFence) => Promise<T>;
 };
 
@@ -65,6 +72,7 @@ export const withDeferredDocumentSourceOwnership = async <T>({
   scopedDb,
   signal,
   timeoutMs,
+  expectedMergeEpoch,
   operation,
 }: WithDeferredDocumentSourceOwnershipOptions<T>): Promise<
   | { status: "completed"; value: T }
@@ -107,6 +115,12 @@ export const withDeferredDocumentSourceOwnership = async <T>({
   });
   if (initial.status !== "ready") {
     return initial;
+  }
+  if (
+    expectedMergeEpoch !== undefined &&
+    initial.mergeEpoch !== expectedMergeEpoch
+  ) {
+    return { status: "lost" };
   }
   let state: "active" | "closed" = "active";
   try {
@@ -172,6 +186,7 @@ export const withDeferredDocumentSourceOwnership = async <T>({
             const fence: DeferredDocumentSourceFence = {
               [ownership]: true,
               sourceId: initial.sourceId,
+              mergeEpoch: initial.mergeEpoch,
               scopedDb: fencedDb,
               signal: operationSignal,
               assertOwned,

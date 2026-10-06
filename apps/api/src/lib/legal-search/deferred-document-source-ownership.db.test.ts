@@ -355,6 +355,60 @@ if (!databaseUrl || !enabled) {
       );
     });
 
+    test("a decision merge completed after a claim refuses every settlement of that claim", async () => {
+      const { sourceId, decisionId } = await fixture();
+      const claim = await claimDocumentFetch(decisionId, scopedDb);
+      if (claim.status !== "claimed") {
+        panic("document claim fixture missing");
+      }
+      const merge = await acquireCaseLawSourceIngestionLease({
+        sourceId,
+        scopedDb,
+        purpose: "decision-merge",
+      });
+      if (merge === null) {
+        panic("decision merge fixture missing");
+      }
+      await merge.release();
+      const document = {
+        fulltext: "document",
+        sections: [],
+        documentAst: {
+          version: 1,
+          source: {
+            system: "fixture",
+            documentId: "document",
+            webUrl: "",
+            printUrl: "",
+          },
+          metadata: {
+            caseNumber: "1/2026",
+            ecli: null,
+            court: "Court",
+            decisionDate: null,
+            decisionType: null,
+            keywords: [],
+            statutes: [],
+          },
+          blocks: [],
+        },
+      } satisfies BackfilledDocument;
+      for (const result of [
+        await markDocumentUnavailable({ decision: claim.decision, scopedDb }),
+        await parkDocumentFetch({ decision: claim.decision, scopedDb }),
+        await storeBackfilledDocument({
+          decision: claim.decision,
+          document,
+          scopedDb,
+          transfer: null,
+        }),
+      ]) {
+        expect(result).toEqual({ status: "lost" });
+      }
+      expect((await readDecision(decisionId))?.fulltext).toBeNull();
+      expect((await readDecision(decisionId))?.documentFetchAttempts).toBe(1);
+    });
+
     test("every exported document mutation observes a decision merge owner", async () => {
       const { sourceId, decisionId } = await fixture();
       const claim = await claimDocumentFetch(decisionId, scopedDb);
