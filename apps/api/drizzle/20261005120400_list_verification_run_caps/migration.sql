@@ -3,10 +3,15 @@
 SET lock_timeout = '1s';--> statement-breakpoint
 SET statement_timeout = '10s';--> statement-breakpoint
 
+CREATE FUNCTION stella_list_verification_day(instant timestamptz)
+RETURNS date LANGUAGE sql IMMUTABLE STRICT PARALLEL SAFE
+SET search_path = pg_catalog
+AS $$ SELECT (instant AT TIME ZONE 'Europe/Prague')::date $$;--> statement-breakpoint
+
 CREATE TABLE "legal_list_verification_budgets" (
   "organization_id" varchar(128) PRIMARY KEY REFERENCES "organization"("id") ON DELETE CASCADE,
   "active_runs" integer NOT NULL DEFAULT 0,
-  "starts_day" date NOT NULL DEFAULT (CURRENT_TIMESTAMP AT TIME ZONE 'Europe/Prague')::date,
+  "starts_day" date NOT NULL DEFAULT stella_list_verification_day(CURRENT_TIMESTAMP),
   "starts_today" integer NOT NULL DEFAULT 0,
   "active_limit" integer NOT NULL DEFAULT 2,
   "daily_limit" integer NOT NULL DEFAULT 20,
@@ -33,11 +38,6 @@ CREATE POLICY "legal_list_verification_budgets_owner_access" ON "legal_list_veri
     FROM pg_catalog.pg_class WHERE oid = 'public.legal_list_verification_budgets'::regclass))
   WITH CHECK (current_user = (SELECT pg_catalog.pg_get_userbyid(relowner)
     FROM pg_catalog.pg_class WHERE oid = 'public.legal_list_verification_budgets'::regclass));--> statement-breakpoint
-
-CREATE FUNCTION stella_list_verification_day(instant timestamptz)
-RETURNS date LANGUAGE sql IMMUTABLE STRICT PARALLEL SAFE
-SET search_path = pg_catalog
-AS $$ SELECT (instant AT TIME ZONE 'Europe/Prague')::date $$;--> statement-breakpoint
 
 CREATE FUNCTION maintain_list_verification_budget()
 RETURNS trigger LANGUAGE plpgsql
@@ -119,12 +119,18 @@ FOR EACH ROW EXECUTE FUNCTION maintain_list_verification_budget();--> statement-
 
 -- Trigger installation holds the run table's write lock through this seed.
 -- stella-migration-safety: reviewed insert-select - initialize the new organization counters from existing verification rows while trigger installation serializes run writes
+WITH existing_runs AS (
+  SELECT organization_id, status,
+    stella_list_verification_day(created_at) AS starts_day,
+    max(stella_list_verification_day(created_at)) OVER (PARTITION BY organization_id) AS latest_day
+  FROM legal_list_verification_runs
+)
 INSERT INTO legal_list_verification_budgets (organization_id, active_runs, starts_day, starts_today)
 SELECT organization_id,
   count(*) FILTER (WHERE status IN ('queued', 'running'))::integer,
-  stella_list_verification_day(CURRENT_TIMESTAMP),
-  count(*) FILTER (WHERE stella_list_verification_day(created_at) = stella_list_verification_day(CURRENT_TIMESTAMP))::integer
-FROM legal_list_verification_runs GROUP BY organization_id;
+  max(latest_day),
+  count(*) FILTER (WHERE starts_day = latest_day)::integer
+FROM existing_runs GROUP BY organization_id;
 --> statement-breakpoint
 
 -- stella-migration-safety: reviewed drop-constraint - extend the closed verification error-code domain for budget refusals; all existing values remain accepted

@@ -217,17 +217,15 @@ const createVerification = createSafeHandler(
           },
         }),
     });
-    const created = yield* Result.await(
-      inserted.mapError((error) =>
-        ListVerificationRunCapError.is(error)
-          ? new HandlerError({
-              status: 429,
-              message: error.message,
-              hint: error.hint,
-              retryable: true,
-            })
-          : error,
-      ),
+    const created = yield* inserted.mapError((error) =>
+      ListVerificationRunCapError.is(error)
+        ? new HandlerError({
+            status: 429,
+            message: error.message,
+            hint: error.hint,
+            retryable: true,
+          })
+        : error,
     );
     if (!created) {
       return Result.err(

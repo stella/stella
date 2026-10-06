@@ -1,4 +1,3 @@
-import { Result } from "better-result";
 import { sql } from "drizzle-orm";
 
 import type { Transaction } from "@/api/db/root";
@@ -71,11 +70,7 @@ export const startVerificationRun = async ({
     await recordAuditEvent(tx);
     return true;
   });
-  if (Result.isError(inserted)) {
-    const refusal = verificationCapErrorFromDatabase(inserted.error);
-    if (refusal !== null) {
-      return Result.err(refusal);
-    }
-  }
-  return inserted;
+  return inserted.mapError(
+    (error) => verificationCapErrorFromDatabase(error) ?? error,
+  );
 };

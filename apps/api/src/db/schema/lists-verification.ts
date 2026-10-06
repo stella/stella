@@ -71,7 +71,7 @@ export const legalListVerificationBudgets = p
       startsDay: p
         .date("starts_day", { mode: "string" })
         .notNull()
-        .default(sql`(CURRENT_TIMESTAMP AT TIME ZONE 'Europe/Prague')::date`),
+        .default(sql`stella_list_verification_day(CURRENT_TIMESTAMP)`),
       startsToday: p.integer("starts_today").notNull().default(0),
       activeLimit: p
         .integer("active_limit")

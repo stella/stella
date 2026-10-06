@@ -109,8 +109,13 @@ const createFixture = async ({ db, connect, schema }: CreateFixtureArgs) => {
   };
 };
 
+type WithFixtureOptions = {
+  beforeCapsMigration?: (db: GatedTestDb) => Promise<void>;
+};
+
 const withFixture = async (
   fn: (fixture: Awaited<ReturnType<typeof createFixture>>) => Promise<void>,
+  { beforeCapsMigration }: WithFixtureOptions = {},
 ) => {
   if (databaseUrl === undefined) {
     panic("DATABASE_URL required");
@@ -135,6 +140,9 @@ const withFixture = async (
         "20261005120300_list_verification_access_revoked",
         "20261005120400_list_verification_run_caps",
       ]) {
+        if (migration === "20261005120400_list_verification_run_caps") {
+          await beforeCapsMigration?.(db);
+        }
         const source = await Bun.file(
           new URL(
             `../../../../drizzle/${migration}/migration.sql`,
@@ -163,6 +171,70 @@ const withFixture = async (
 describe.skipIf(!enabled)(
   "organization verification run caps (postgres)",
   () => {
+    test("migration counters derive from persisted run dates across Prague midnight", async () =>
+      await withFixture(
+        async (fixture) => {
+          const seeded = (
+            await fixture.db
+              .select()
+              .from(legalListVerificationBudgets)
+              .where(
+                eq(
+                  legalListVerificationBudgets.organizationId,
+                  toSafeId<"organization">("seeded_org"),
+                ),
+              )
+          ).at(0);
+          expect(seeded).toMatchObject({
+            activeRuns: 1,
+            startsDay: "2026-01-02",
+            startsToday: 2,
+          });
+          const nextStart = await fixture.start(
+            fixture.run(
+              toSafeId<"workspace">("00000000-0000-0000-0000-000000000001"),
+              toSafeId<"organization">("seeded_org"),
+            ),
+            { active: 2, startsPerDay: 1 },
+          );
+          expect(Result.isOk(nextStart)).toBe(true);
+          expect(
+            (
+              await fixture.db
+                .select()
+                .from(legalListVerificationBudgets)
+                .where(
+                  eq(
+                    legalListVerificationBudgets.organizationId,
+                    toSafeId<"organization">("seeded_org"),
+                  ),
+                )
+            ).at(0),
+          ).toMatchObject({ activeRuns: 2, startsToday: 1 });
+        },
+        {
+          beforeCapsMigration: async (db) => {
+            await db.execute(
+              sql`INSERT INTO organization VALUES ('seeded_org')`,
+            );
+            await db.execute(
+              sql`INSERT INTO workspaces VALUES ('00000000-0000-0000-0000-000000000001', 'seeded_org')`,
+            );
+            await db.execute(sql`INSERT INTO legal_list_verification_runs
+              (id, organization_id, workspace_id, entity_id, file_field_id,
+               entity_version_id, content_sha256, evidence, status, created_at)
+              SELECT gen_random_uuid(), 'seeded_org', '00000000-0000-0000-0000-000000000001',
+                gen_random_uuid(), gen_random_uuid(), gen_random_uuid(), repeat('a', 64),
+                '{"facts": [], "listId": "seeded_list"}'::jsonb, status, created_at
+              FROM (VALUES
+                ('completed', '2026-01-01T22:59:59Z'::timestamptz),
+                ('completed', '2026-01-01T23:00:00Z'::timestamptz),
+                ('queued', '2026-01-02T10:00:00Z'::timestamptz)
+              ) AS persisted_runs(status, created_at)`);
+          },
+        },
+      ));
+
     test("concurrent starts across matters admit exactly the active cap per organization", async () =>
       await withFixture(async (fixture) => {
         const caps = { active: 2, startsPerDay: 20 };
