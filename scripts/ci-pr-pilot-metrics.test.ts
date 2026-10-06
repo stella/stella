@@ -120,3 +120,71 @@ print(json.dumps([exact["stopped"], over["stopped"]]))
 `);
   expect(values).toEqual([false, true]);
 });
+
+test("daily collection retains replaced heads and batches resolved commits five at a time", () => {
+  const values = execute(`
+def connection(nodes):
+    return {"nodes": nodes, "pageInfo": {"hasNextPage": False}}
+old = "a" * 40
+new = "b" * 40
+cached = [{"number": 1, "updatedAt": now.isoformat(), "mergedAt": None,
+    "timelineItems": connection([]), "commits": connection([
+        {"commit": {"oid": old, "checkSuites": connection([])}}])}]
+class Fixture(m.Collector):
+    def __init__(self):
+        super().__init__("stella/stella")
+        self.batches = []
+    def query(self, query, variables):
+        if "pullRequests(" in query:
+            return {"repository": {"pullRequests": dict(connection([
+                {"number": 1, "updatedAt": now.isoformat(), "mergedAt": None,
+                 "timelineItems": connection([{"__typename": "HeadRefForcePushedEvent",
+                    "createdAt": now.isoformat(), "beforeCommit": {"oid": old}, "afterCommit": {"oid": new}}]),
+                 "commits": connection([{"commit": {"oid": new}}])}
+            ]), pageInfo={"hasNextPage": False, "endCursor": None})}}
+        shas = [value for key, value in variables.items() if key.startswith("sha")]
+        self.batches.append(shas)
+        return {"repository": {"head" + str(index): {"oid": sha, "checkSuites": connection([])}
+            for index, sha in enumerate(shas)}}
+fixture = Fixture()
+pulls, complete = fixture.collect(now - dt.timedelta(hours=1), cached)
+print(json.dumps([complete, sorted(node["commit"]["oid"] for node in pulls[0]["commits"]["nodes"]),
+                  fixture.batches, m.complete_pull(pulls[0])]))
+`);
+  expect(values).toEqual([
+    true,
+    ["a".repeat(40), "b".repeat(40)],
+    [["a".repeat(40), "b".repeat(40)]],
+    true,
+  ]);
+});
+
+test("commit lookup is bounded and missing objects make daily evidence incomplete", () => {
+  const values = execute(`
+def connection(nodes):
+    return {"nodes": nodes, "pageInfo": {"hasNextPage": False}}
+class Fixture(m.Collector):
+    def __init__(self, count, missing=False):
+        super().__init__("stella/stella")
+        self.count, self.missing, self.batch_sizes = count, missing, []
+    def query(self, query, variables):
+        if "pullRequests(" in query:
+            nodes = [{"number": 1, "updatedAt": now.isoformat(), "mergedAt": None,
+                "timelineItems": connection([]), "commits": connection([
+                    {"commit": {"oid": format(index, "040x")}} for index in range(self.count)])}]
+            return {"repository": {"pullRequests": dict(connection(nodes), pageInfo={"hasNextPage": False, "endCursor": None})}}
+        shas = [value for key, value in variables.items() if key.startswith("sha")]
+        self.batch_sizes.append(len(shas))
+        return {"repository": {"head" + str(index): None if self.missing else {"checkSuites": connection([])}
+            for index, sha in enumerate(shas)}}
+normal = Fixture(11)
+_, complete = normal.collect(now, [])
+missing = Fixture(1, True)
+missing_pulls, missing_complete = missing.collect(now, [])
+over = Fixture(601)
+over_pulls, over_complete = over.collect(now, [])
+print(json.dumps([complete, normal.batch_sizes, missing_complete, m.complete_pull(missing_pulls[0]),
+                  over_complete, sum(over.batch_sizes), max(over.batch_sizes), m.complete_pull(over_pulls[0])]))
+`);
+  expect(values).toEqual([true, [5, 5, 1], false, false, false, 600, 5, false]);
+});

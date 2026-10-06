@@ -1,6 +1,8 @@
 """Collect a bounded daily snapshot; uncertain evidence cannot enable the pilot."""
 
 import argparse
+import gzip
+import re
 import datetime as dt
 import json
 import os
@@ -207,35 +209,89 @@ class Collector:
         return {"postArmDeferredQueueFailureHeads": len(heads),
                 "unmappedDeferredQueueFailureRuns": unmapped, "queueFailureEvidenceComplete": complete and unmapped == 0}
 
-    def collect(self, since):
-        pulls = []
+    def collect(self, since, cached):
+        pulls = {pull["number"]: pull for pull in cached}
+        refreshed = set()
         cursor = None
-        query = '''query($owner:String!, $repo:String!, $cursor:String) {
+        complete = True
+        query = """query($owner:String!, $repo:String!, $cursor:String) {
           repository(owner:$owner,name:$repo) {
-            pullRequests(first:10,after:$cursor,orderBy:{field:UPDATED_AT,direction:DESC}) {
+            pullRequests(first:100,after:$cursor,orderBy:{field:UPDATED_AT,direction:DESC}) {
               pageInfo {hasNextPage endCursor}
               nodes {number updatedAt mergedAt
-                timelineItems(first:100,itemTypes:[AUTO_MERGE_ENABLED_EVENT,ADDED_TO_MERGE_QUEUE_EVENT]) {
+                timelineItems(first:100,itemTypes:[AUTO_MERGE_ENABLED_EVENT,ADDED_TO_MERGE_QUEUE_EVENT,HEAD_REF_FORCE_PUSHED_EVENT]) {
                   pageInfo {hasNextPage} nodes {__typename ... on AutoMergeEnabledEvent {createdAt}
-                    ... on AddedToMergeQueueEvent {createdAt}} }
-                commits(last:100) {pageInfo {hasPreviousPage} nodes {commit {oid
-                  checkSuites(first:100) {pageInfo {hasNextPage} nodes {createdAt
-                    workflowRun {databaseId event workflow {name}}
-                    checkRuns(first:100) {pageInfo {hasNextPage} nodes {
-                      databaseId name startedAt completedAt conclusion}}}}}}}
+                    ... on AddedToMergeQueueEvent {createdAt}
+                    ... on HeadRefForcePushedEvent {createdAt beforeCommit {oid} afterCommit {oid}}} }
+                commits(last:100) {pageInfo {hasPreviousPage} nodes {commit {oid}}}
               }
             }
           }
-        }'''
-        # Bound the daily job. Reaching any pagination boundary disables optimization.
-        for _ in range(300):
+        }"""
+        for _ in range(30):
             result = self.query(query, {"owner": self.owner, "repo": self.repo, "cursor": cursor})
             page = result["repository"]["pullRequests"]
-            pulls.extend(page["nodes"])
+            for pull in page["nodes"]:
+                if timestamp(pull["updatedAt"]) < since:
+                    continue
+                old = pulls.get(pull["number"])
+                heads = {node["commit"]["oid"]: node for node in (old["commits"]["nodes"] if old else [])}
+                for node in pull["commits"]["nodes"]:
+                    heads.setdefault(node["commit"]["oid"], node)
+                for event in pull["timelineItems"]["nodes"]:
+                    for key in ["beforeCommit", "afterCommit"]:
+                        if event.get(key):
+                            sha = event[key]["oid"]
+                            heads.setdefault(sha, {"commit": {"oid": sha}})
+                pull["commits"]["nodes"] = list(heads.values())
+                pulls[pull["number"]] = pull
+                refreshed.add(pull["number"])
             if not page["pageInfo"]["hasNextPage"] or any(timestamp(pull["updatedAt"]) < since for pull in page["nodes"]):
-                return pulls, True
+                break
             cursor = page["pageInfo"]["endCursor"]
-        return pulls, False
+        else:
+            complete = False
+        pending = set()
+        for pull in pulls.values():
+            for node in pull["commits"]["nodes"]:
+                commit = node["commit"]
+                suites = commit.get("checkSuites")
+                active = suites and any(job["completedAt"] is None
+                    for suite in suites["nodes"] for job in suite["checkRuns"]["nodes"])
+                if pull["number"] in refreshed or suites is None or active:
+                    pending.add(commit["oid"])
+        shas = sorted(pending)
+        # Each five-head batch costs roughly five GraphQL points, within the token budget.
+        if len(shas) > 600:
+            complete = False
+        responses = {}
+        for index in range(0, min(len(shas), 600), 5):
+            batch = shas[index:index + 5]
+            if any(re.fullmatch(r"[a-f0-9]{40}", sha) is None for sha in batch):
+                raise ValueError("Invalid commit identity")
+            variables = {"owner": self.owner, "repo": self.repo}
+            declarations = ["$owner:String!", "$repo:String!"]
+            fields = []
+            for offset, sha in enumerate(batch):
+                variables[f"sha{offset}"] = sha
+                declarations.append(f"$sha{offset}:String!")
+                fields.append(f"head{offset}:object(expression:$sha{offset}) {{... on Commit {{oid checkSuites(first:100) {{pageInfo {{hasNextPage}} nodes {{createdAt workflowRun {{databaseId event workflow {{name}}}} checkRuns(first:100) {{pageInfo {{hasNextPage}} nodes {{databaseId name startedAt completedAt conclusion}}}}}}}}}}}}")
+            result = self.query("query(" + ",".join(declarations) + "){repository(owner:$owner,name:$repo){" + " ".join(fields) + "}}", variables)
+            for offset, sha in enumerate(batch):
+                value = result["repository"][f"head{offset}"]
+                if not value:
+                    complete = False
+                    continue
+                responses[sha] = value["checkSuites"]
+        for pull in pulls.values():
+            for node in pull["commits"]["nodes"]:
+                commit = node["commit"]
+                if commit["oid"] in responses:
+                    commit["checkSuites"] = responses[commit["oid"]]
+                if "checkSuites" not in commit:
+                    complete = False
+                    commit["checkSuites"] = {"pageInfo": {"hasNextPage": True}, "nodes": []}
+        return list(pulls.values()), complete
 
 
 def write_report(filename, report):
@@ -252,6 +308,8 @@ def main():
     parser.add_argument("--private-output")
     parser.add_argument("--previous")
     parser.add_argument("--bootstrap")
+    parser.add_argument("--cache")
+    parser.add_argument("--cache-output", required=True)
     args = parser.parse_args()
     now = dt.datetime.now(dt.UTC)
     previous = json.loads(Path(args.previous).read_text()) if args.previous and Path(args.previous).exists() else None
@@ -266,8 +324,10 @@ def main():
         print("Pilot generation remains stopped; final metrics retained")
         return
     start = timestamp(previous["startedAt"]) if previous else now
+    cached = json.loads(gzip.decompress(Path(args.cache).read_bytes())) if args.cache and Path(args.cache).exists() else []
+    since = max(start, timestamp(previous["generatedAt"]) - dt.timedelta(hours=1)) if previous and cached else start
     collector = Collector(args.repository)
-    pulls, complete = collector.collect(start)
+    pulls, complete = collector.collect(since, cached)
     plan = subprocess.run(["bun", "scripts/ci-pr-pilot-plan.ts", ".github/workflows/ci.yml"],
                           check=True, capture_output=True, text=True)
     fast_jobs = set(json.loads(plan.stdout.removeprefix("fast_jobs=")))
@@ -283,6 +343,9 @@ def main():
     report["measured"].update(queue)
     report["complete"] = report["complete"] and queue["queueFailureEvidenceComplete"]
     report["postArmCycleDefinition"] = "distinct observed heads failing normal-PR checks deferred by pilot-fast; unmapped runs are reported separately"
+    cache_output = Path(args.cache_output)
+    cache_output.write_bytes(gzip.compress(json.dumps(pulls).encode()))
+    os.chmod(cache_output, 0o600)
     write_report(args.output, report)
     if args.private_output:
         write_report(args.private_output, report)

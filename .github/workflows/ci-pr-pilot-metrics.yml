@@ -74,11 +74,13 @@ jobs:
         run: |
           printf '%s' "$BOOTSTRAP" > "$RUNNER_TEMP/bootstrap.json"
           args=(--repository "$REPOSITORY" --output "$RUNNER_TEMP/ci-pr-pilot.json"
-            --private-output "$RUNNER_TEMP/private/ci-pr-pilot.json")
+            --private-output "$RUNNER_TEMP/private/ci-pr-pilot.json"
+            --cache-output "$RUNNER_TEMP/ci-pr-pilot-cache.json.gz")
           if [[ -s "$RUNNER_TEMP/bootstrap.json" ]]; then
             args+=(--bootstrap "$RUNNER_TEMP/bootstrap.json")
           else
-            args+=(--previous "$RUNNER_TEMP/previous/ci-pr-pilot.json")
+            args+=(--previous "$RUNNER_TEMP/previous/ci-pr-pilot.json"
+              --cache "$RUNNER_TEMP/previous/ci-pr-pilot-cache.json.gz")
           fi
           python3 scripts/ci-pr-pilot-metrics.py "${args[@]}"
 
@@ -86,7 +88,9 @@ jobs:
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: ci-pr-depth-pilot-v1
-          path: ${{ runner.temp }}/ci-pr-pilot.json
+          path: |
+            ${{ runner.temp }}/ci-pr-pilot.json
+            ${{ runner.temp }}/ci-pr-pilot-cache.json.gz
           overwrite: true
           if-no-files-found: error
           retention-days: 14
