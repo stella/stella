@@ -729,7 +729,7 @@ export const checkDockerSource = (
           if (
             file === "/app/package.json" ||
             file === "/app/bun.lock" ||
-            /\/package\.json$/u.test(file) ||
+            file.endsWith("/package.json") ||
             /^\/app\/(?:bunfig\.toml|\.npmrc|patches\/)/u.test(file)
           ) {
             stage.files.set(`/json/${file.slice(5)}`, origin);
