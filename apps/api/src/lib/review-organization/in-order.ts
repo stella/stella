@@ -5,13 +5,19 @@ import { Result } from "better-result";
  * The review organization's seed and reset write a handful of rows, each
  * through a shared handler that takes its own locks and caps; running them in
  * order keeps those locks uncontended and makes a failure stop the run where
- * it happened.
+ * it happened. `stop`, checked before each item, ends the run early with the
+ * error it returns (a cancellation, for instance).
  */
 export const inOrder = async <T, E>(
   items: Iterable<T>,
   step: (item: T) => Promise<Result<void, E>>,
+  stop?: () => E | undefined,
 ): Promise<Result<void, E>> => {
   for (const item of items) {
+    const stopped = stop?.();
+    if (stopped !== undefined) {
+      return Result.err(stopped);
+    }
     const outcome = await step(item);
     if (Result.isError(outcome)) {
       return outcome;

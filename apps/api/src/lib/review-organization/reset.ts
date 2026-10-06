@@ -40,7 +40,10 @@ import type { ReviewOrganizationConfig } from "@/api/lib/review-organization/con
 import { inOrder } from "@/api/lib/review-organization/in-order";
 import { sweepReviewOrganization } from "@/api/lib/review-organization/reset-scope";
 import { seedReviewOrganization } from "@/api/lib/review-organization/seed";
-import { ReviewSeedError } from "@/api/lib/review-organization/seed-common";
+import {
+  ReviewSeedError,
+  seedCancellation,
+} from "@/api/lib/review-organization/seed-common";
 import type {
   ReviewSeedCounts,
   ReviewSeedDependencies,
@@ -742,6 +745,7 @@ export const resetReviewOrganization = async ({
         fencedDatabase,
       ),
       recorderFor,
+      cancelled: seedCancellation(signal),
     },
     dependencies.seed,
   );

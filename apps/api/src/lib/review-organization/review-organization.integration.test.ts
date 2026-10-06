@@ -177,6 +177,7 @@ const actorFor = (
     { organizationId, userId },
     rlsDatabase(),
   ),
+  cancelled: () => undefined,
   recorderFor: (workspaceId) =>
     createBackgroundAuditRecorder({
       organizationId,
@@ -648,6 +649,51 @@ describe("review organization seed and reset", () => {
       },
     );
   }
+
+  test("a cancellation during the seed stops before the next sample item, and the next run completes it", async () => {
+    const controller = new AbortController();
+    const abortOnFirstDocument: CreateEntityFromBufferDependencies = {
+      ...documentDependencies,
+      processExtraction: async () => {
+        controller.abort();
+      },
+    };
+    const outcome = await resetReviewOrganization({
+      config: config(fixture.reviewOrgId),
+      db: ownerDb(),
+      rlsDatabase: rlsDatabase(),
+      runId: Bun.randomUUIDv7(),
+      signal: controller.signal,
+      dependencies: {
+        ...resetDependencies,
+        seed: { documents: abortOnFirstDocument },
+      },
+    });
+    const report = outcome.unwrap("Expected the reset to report");
+    expect(Result.isError(report.seed)).toBe(true);
+    expect(await countRows(fixture.reviewOrgId)).toEqual({
+      contacts: SAMPLE_COUNTS.contacts,
+      matters: 1,
+      documents: 1,
+      tasks: 0,
+      timeEntries: 0,
+      clauses: 0,
+      templates: 0,
+      playbooks: 0,
+      rateTables: 0,
+      rateEntries: 0,
+    });
+
+    // The next run picks up where the cancelled seed stopped.
+    const resumed = (
+      await seedReviewOrganization(
+        actorFor(fixture.reviewOrgId, fixture.reviewUserId),
+        { documents: documentDependencies },
+      )
+    ).unwrap("Expected the resumed seed to succeed");
+    expect(resumed.documents.existing).toBe(1);
+    expect(await countRows(fixture.reviewOrgId)).toEqual({ ...SAMPLE_COUNTS });
+  });
 
   test("a member who joins after the target is proved stops the reset before any delete", async () => {
     const before = await countRows(fixture.reviewOrgId);

@@ -116,28 +116,32 @@ const seedContacts = async (
     return Result.err(seedError("contacts", existing.error));
   }
   const existingIds = new Set(existing.value.map(({ id }) => id));
-  return await inOrder(bodies, async (body) => {
-    if (existingIds.has(body.id)) {
-      counts.contacts.existing += 1;
-      return Result.ok(undefined);
-    }
-    const created = await Result.gen(() =>
-      createContactHandler({
-        safeDb: actor.safeDb,
-        organizationId: actor.organizationId,
-        userId: actor.userId,
-        recordAuditEvent: actor.recorderFor(null),
-        body,
-      }),
-    );
-    if (Result.isError(created)) {
-      return Result.err(
-        seedError(`contact ${body.displayName}`, created.error),
+  return await inOrder(
+    bodies,
+    async (body) => {
+      if (existingIds.has(body.id)) {
+        counts.contacts.existing += 1;
+        return Result.ok(undefined);
+      }
+      const created = await Result.gen(() =>
+        createContactHandler({
+          safeDb: actor.safeDb,
+          organizationId: actor.organizationId,
+          userId: actor.userId,
+          recordAuditEvent: actor.recorderFor(null),
+          body,
+        }),
       );
-    }
-    counts.contacts.created += 1;
-    return Result.ok(undefined);
-  });
+      if (Result.isError(created)) {
+        return Result.err(
+          seedError(`contact ${body.displayName}`, created.error),
+        );
+      }
+      counts.contacts.created += 1;
+      return Result.ok(undefined);
+    },
+    actor.cancelled,
+  );
 };
 
 const documentBytes = async (
@@ -180,37 +184,41 @@ const seedDocuments = async ({
     return Result.err(seedError("documents", existing.error));
   }
   const existingNames = new Set(existing.value.map(({ name }) => name));
-  return await inOrder(matter.documents, async (document) => {
-    if (existingNames.has(document.fileName)) {
-      counts.documents.existing += 1;
+  return await inOrder(
+    matter.documents,
+    async (document) => {
+      if (existingNames.has(document.fileName)) {
+        counts.documents.existing += 1;
+        return Result.ok(undefined);
+      }
+      const bytes = await documentBytes(document);
+      if (Result.isError(bytes)) {
+        return bytes;
+      }
+      const created = await createEntityFromBuffer({
+        scopedDb: actor.scopedDb,
+        organizationId: actor.organizationId,
+        workspaceId,
+        userId: actor.userId,
+        recordAuditEvent: actor.recorderFor(workspaceId),
+        buffer: bytes.value,
+        fileName: document.fileName,
+        mimeType: document.format === "pdf" ? PDF_MIME_TYPE : DOCX_MIME_TYPE,
+        encryption: serverBuiltFileEncryption(),
+        ...(dependencies.documents === undefined
+          ? {}
+          : { dependencies: dependencies.documents }),
+      });
+      if (Result.isError(created)) {
+        return Result.err(
+          seedError(`document ${document.fileName}`, created.error),
+        );
+      }
+      counts.documents.created += 1;
       return Result.ok(undefined);
-    }
-    const bytes = await documentBytes(document);
-    if (Result.isError(bytes)) {
-      return bytes;
-    }
-    const created = await createEntityFromBuffer({
-      scopedDb: actor.scopedDb,
-      organizationId: actor.organizationId,
-      workspaceId,
-      userId: actor.userId,
-      recordAuditEvent: actor.recorderFor(workspaceId),
-      buffer: bytes.value,
-      fileName: document.fileName,
-      mimeType: document.format === "pdf" ? PDF_MIME_TYPE : DOCX_MIME_TYPE,
-      encryption: serverBuiltFileEncryption(),
-      ...(dependencies.documents === undefined
-        ? {}
-        : { dependencies: dependencies.documents }),
-    });
-    if (Result.isError(created)) {
-      return Result.err(
-        seedError(`document ${document.fileName}`, created.error),
-      );
-    }
-    counts.documents.created += 1;
-    return Result.ok(undefined);
-  });
+    },
+    actor.cancelled,
+  );
 };
 
 const seedTasks = async ({
@@ -241,33 +249,37 @@ const seedTasks = async ({
     return Result.err(seedError("tasks", existing.error));
   }
   const existingIds = new Set(existing.value.map(({ id }) => id));
-  return await inOrder(matter.tasks.entries(), async ([index, task]) => {
-    const entityId = taskIds[index];
-    if (entityId === undefined || existingIds.has(entityId)) {
-      counts.tasks.existing += 1;
+  return await inOrder(
+    matter.tasks.entries(),
+    async ([index, task]) => {
+      const entityId = taskIds[index];
+      if (entityId === undefined || existingIds.has(entityId)) {
+        counts.tasks.existing += 1;
+        return Result.ok(undefined);
+      }
+      const created = await Result.gen(() =>
+        createTaskEntityHandler({
+          safeDb: actor.safeDb,
+          workspaceId,
+          userId: actor.userId,
+          recordAuditEvent: actor.recorderFor(workspaceId),
+          entityId,
+          body: {
+            name: task.name,
+            status: task.status,
+            priority: task.priority,
+            dueDate: task.dueDate,
+          },
+        }),
+      );
+      if (Result.isError(created)) {
+        return Result.err(seedError(`task ${task.name}`, created.error));
+      }
+      counts.tasks.created += 1;
       return Result.ok(undefined);
-    }
-    const created = await Result.gen(() =>
-      createTaskEntityHandler({
-        safeDb: actor.safeDb,
-        workspaceId,
-        userId: actor.userId,
-        recordAuditEvent: actor.recorderFor(workspaceId),
-        entityId,
-        body: {
-          name: task.name,
-          status: task.status,
-          priority: task.priority,
-          dueDate: task.dueDate,
-        },
-      }),
-    );
-    if (Result.isError(created)) {
-      return Result.err(seedError(`task ${task.name}`, created.error));
-    }
-    counts.tasks.created += 1;
-    return Result.ok(undefined);
-  });
+    },
+    actor.cancelled,
+  );
 };
 
 const seedMatters = async (
@@ -294,44 +306,49 @@ const seedMatters = async (
     return Result.err(seedError("matters", existing.error));
   }
   const existingIds = new Set(existing.value.map(({ id }) => id));
-  return await inOrder(SAMPLE_MATTERS.entries(), async ([index, matter]) => {
-    const workspaceId = matterIds[index];
-    if (workspaceId === undefined) {
-      return Result.ok(undefined);
-    }
-    if (existingIds.has(workspaceId)) {
-      counts.matters.existing += 1;
-    } else {
-      const created = await Result.gen(() =>
-        createWorkspaceHandler({
-          userEmail: actor.userEmail,
-          safeDb: actor.safeDb,
-          organizationId: actor.organizationId,
-          userId: actor.userId,
-          recordAuditEvent: actor.recorderFor(null),
-          body: {
-            id: workspaceId,
-            name: matter.name,
-            filePropertyName: "File",
-            clientId: reviewSampleId<"contact">(
-              actor.organizationId,
-              `contact:${matter.clientKey}`,
-            ),
-          },
-        }),
-      );
-      if (Result.isError(created)) {
-        return Result.err(seedError(`matter ${matter.name}`, created.error));
+  return await inOrder(
+    SAMPLE_MATTERS.entries(),
+    async ([index, matter]) => {
+      const workspaceId = matterIds[index];
+      if (workspaceId === undefined) {
+        return Result.ok(undefined);
       }
-      counts.matters.created += 1;
-    }
-    const matterStep = { actor, workspaceId, matter, dependencies, counts };
-    // The rate table comes before the time entries it prices.
-    return await inOrder(
-      [seedDocuments, seedTasks, seedMatterTimeBilling],
-      async (step) => await step(matterStep),
-    );
-  });
+      if (existingIds.has(workspaceId)) {
+        counts.matters.existing += 1;
+      } else {
+        const created = await Result.gen(() =>
+          createWorkspaceHandler({
+            userEmail: actor.userEmail,
+            safeDb: actor.safeDb,
+            organizationId: actor.organizationId,
+            userId: actor.userId,
+            recordAuditEvent: actor.recorderFor(null),
+            body: {
+              id: workspaceId,
+              name: matter.name,
+              filePropertyName: "File",
+              clientId: reviewSampleId<"contact">(
+                actor.organizationId,
+                `contact:${matter.clientKey}`,
+              ),
+            },
+          }),
+        );
+        if (Result.isError(created)) {
+          return Result.err(seedError(`matter ${matter.name}`, created.error));
+        }
+        counts.matters.created += 1;
+      }
+      const matterStep = { actor, workspaceId, matter, dependencies, counts };
+      // The rate table comes before the time entries it prices.
+      return await inOrder(
+        [seedDocuments, seedTasks, seedMatterTimeBilling],
+        async (step) => await step(matterStep),
+        actor.cancelled,
+      );
+    },
+    actor.cancelled,
+  );
 };
 
 const seedClauses = async (
@@ -355,31 +372,35 @@ const seedClauses = async (
     return Result.err(seedError("clauses", existing.error));
   }
   const existingTitles = new Set(existing.value.map(({ title }) => title));
-  return await inOrder(SAMPLE_CLAUSES, async (clause) => {
-    if (existingTitles.has(clause.title)) {
-      counts.clauses.existing += 1;
+  return await inOrder(
+    SAMPLE_CLAUSES,
+    async (clause) => {
+      if (existingTitles.has(clause.title)) {
+        counts.clauses.existing += 1;
+        return Result.ok(undefined);
+      }
+      const created = await Result.gen(() =>
+        createClauseHandler({
+          safeDb: actor.safeDb,
+          organizationId: actor.organizationId,
+          userId: actor.userId,
+          recordAuditEvent: actor.recorderFor(null),
+          body: {
+            title: clause.title,
+            language: clause.language,
+            description: clause.description,
+            body: clause.paragraphs.map((text) => ({ text })),
+          },
+        }),
+      );
+      if (Result.isError(created)) {
+        return Result.err(seedError(`clause ${clause.title}`, created.error));
+      }
+      counts.clauses.created += 1;
       return Result.ok(undefined);
-    }
-    const created = await Result.gen(() =>
-      createClauseHandler({
-        safeDb: actor.safeDb,
-        organizationId: actor.organizationId,
-        userId: actor.userId,
-        recordAuditEvent: actor.recorderFor(null),
-        body: {
-          title: clause.title,
-          language: clause.language,
-          description: clause.description,
-          body: clause.paragraphs.map((text) => ({ text })),
-        },
-      }),
-    );
-    if (Result.isError(created)) {
-      return Result.err(seedError(`clause ${clause.title}`, created.error));
-    }
-    counts.clauses.created += 1;
-    return Result.ok(undefined);
-  });
+    },
+    actor.cancelled,
+  );
 };
 
 const seedTemplate = async (
@@ -569,6 +590,10 @@ export const seedReviewOrganization = async (
     async () => await seedPlaybook(actor, counts),
   ];
   // The steps depend on each other's rows and stop at the first failure.
-  const outcome = await inOrder(steps, async (step) => await step());
+  const outcome = await inOrder(
+    steps,
+    async (step) => await step(),
+    actor.cancelled,
+  );
   return Result.isError(outcome) ? outcome : Result.ok(counts);
 };

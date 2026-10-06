@@ -212,33 +212,37 @@ const seedTimeEntries = async ({
   const existingNarratives = new Set(
     existing.value.map(({ narrative }) => narrative),
   );
-  return await inOrder(matter.timeEntries, async (entry) => {
-    if (existingNarratives.has(entry.narrative)) {
-      counts.timeEntries.existing += 1;
+  return await inOrder(
+    matter.timeEntries,
+    async (entry) => {
+      if (existingNarratives.has(entry.narrative)) {
+        counts.timeEntries.existing += 1;
+        return Result.ok(undefined);
+      }
+      const created = await Result.gen(() =>
+        createTimeEntryHandler({
+          safeDb: actor.safeDb,
+          organizationId: actor.organizationId,
+          workspaceId,
+          userId: actor.userId,
+          memberRole: actor.memberAuthority,
+          recordAuditEvent: actor.recorderFor(workspaceId),
+          body: {
+            dateWorked: entry.dateWorked,
+            timezoneId: SAMPLE_TIME_ZONE,
+            durationMinutes: entry.durationMinutes,
+            narrative: entry.narrative,
+          },
+        }),
+      );
+      if (Result.isError(created)) {
+        return Result.err(seedError("time entry", created.error));
+      }
+      counts.timeEntries.created += 1;
       return Result.ok(undefined);
-    }
-    const created = await Result.gen(() =>
-      createTimeEntryHandler({
-        safeDb: actor.safeDb,
-        organizationId: actor.organizationId,
-        workspaceId,
-        userId: actor.userId,
-        memberRole: actor.memberAuthority,
-        recordAuditEvent: actor.recorderFor(workspaceId),
-        body: {
-          dateWorked: entry.dateWorked,
-          timezoneId: SAMPLE_TIME_ZONE,
-          durationMinutes: entry.durationMinutes,
-          narrative: entry.narrative,
-        },
-      }),
-    );
-    if (Result.isError(created)) {
-      return Result.err(seedError("time entry", created.error));
-    }
-    counts.timeEntries.created += 1;
-    return Result.ok(undefined);
-  });
+    },
+    actor.cancelled,
+  );
 };
 
 const admitted = (dependencies: ReviewSeedDependencies) =>
@@ -266,5 +270,6 @@ export const seedMatterTimeBilling = async (
     ? await inOrder(
         [seedRateTable, seedTimeEntries],
         async (seedStep) => await seedStep(step),
+        step.actor.cancelled,
       )
     : Result.ok(undefined);

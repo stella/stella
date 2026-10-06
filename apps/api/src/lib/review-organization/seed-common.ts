@@ -31,7 +31,24 @@ export type ReviewSeedActor = {
   scopedDb: ScopedDb;
   /** The recorder for one matter, or for organization-level rows (null). */
   recorderFor: (workspaceId: SafeId<"workspace"> | null) => AuditRecorder;
+  /**
+   * The cancellation, once the run is cancelled; checked before every item
+   * the seed writes. A cancelled seed stops where it is, and the next run
+   * completes it.
+   */
+  cancelled: () => ReviewSeedError | undefined;
 };
+
+/** The `cancelled` check for a seed driven by `signal`. */
+export const seedCancellation =
+  (signal: AbortSignal) => (): ReviewSeedError | undefined =>
+    signal.aborted
+      ? new ReviewSeedError({
+          message: "The seed was cancelled",
+          item: "remaining items",
+          cause: signal.reason,
+        })
+      : undefined;
 
 export type ReviewSeedDependencies = {
   /** Side effects after a document is stored (extraction, derivatives). */
