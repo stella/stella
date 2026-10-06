@@ -303,7 +303,7 @@ const main = async (): Promise<void> => {
     const baseline = validateBaselineFile(file);
     if (args.includes("--route-tree")) {
       const directory = "apps/web/e2e/network-budgets";
-      const declarations = readdirSync(directory)
+      const declarations = (existsSync(directory) ? readdirSync(directory) : [])
         .filter((name) => name.endsWith(".json"))
         .map((name): unknown => {
           const declarationFile = path.join(directory, name);

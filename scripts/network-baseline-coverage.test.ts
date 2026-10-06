@@ -19,7 +19,10 @@ import {
 } from "../apps/web/e2e/helpers/smoke-route-coverage";
 import { SMOKE_ROUTE_DEFS } from "../apps/web/e2e/helpers/smoke-route-defs";
 import { ROUTE_TREE_OPTIONS } from "../apps/web/route-tree.config";
-import { networkBudgetDeclarationProblem } from "./network-baseline-scope";
+import {
+  networkBudgetDeclarationProblem,
+  prepareComparisonBaseline,
+} from "./network-baseline-scope";
 
 const directory = mkdtempSync(path.join(os.tmpdir(), "network-coverage-"));
 let routeTree: string;
@@ -44,7 +47,13 @@ beforeAll(async () => {
     webRoot,
   );
   await new Generator({ config, root: webRoot }).run();
-  routeTree = readFileSync(output, "utf-8");
+  // Revision preparation generates beside route sources before copying the
+  // tree. Give this relocated test output the same source-relative imports.
+  routeTree = readFileSync(output, "utf-8").replaceAll(
+    /from '[^']*\/routes\//gu,
+    "from './routes/",
+  );
+  writeFileSync(output, routeTree);
 });
 afterAll(() => rmSync(directory, { recursive: true, force: true }));
 
@@ -241,17 +250,22 @@ test("unknown expectations require an explicit baseline mapping", () => {
   ).toThrow("Unknown smoke route expectation: unknown");
 });
 
-test("prepared scope permits changed-route inventory without excusing unchanged stale keys", () => {
-  const stale = baseline();
-  delete stale["/workspaces/$workspaceId/lists"];
-  stale["/workspaces/$workspaceId/lists target"] = entry;
-  validate(
-    stale,
-    [],
-    ["/workspaces/$workspaceId/lists", "/workspaces/$workspaceId/lists target"],
-  );
-  expect(() => validate(stale, [], ["/contacts", "/contacts target"])).toThrow(
-    "Network baseline route keys differ",
+test("real prepared context exempts changed redirects and leaves unrelated stale keys strict", () => {
+  const { changedRoutes } = prepareComparisonBaseline({
+    base: baseline(),
+    changedPaths: ["apps/web/src/routes/_protected.settings/index.tsx"],
+    baseRouteTree: routeTree,
+    routeTree,
+    declarations: [],
+  });
+  expect(changedRoutes).toEqual(["/settings", "/settings target"]);
+  const changedRedirect = baseline();
+  delete changedRedirect["/settings target"];
+  validate(changedRedirect, [], changedRoutes);
+  delete changedRedirect["/workspaces/$workspaceId/lists"];
+  changedRedirect["/workspaces/$workspaceId/lists target"] = entry;
+  expect(() => validate(changedRedirect, [], changedRoutes)).toThrow(
+    'missing=["/workspaces/$workspaceId/lists"] stale=["/workspaces/$workspaceId/lists target"]',
   );
 });
 
@@ -389,4 +403,29 @@ test("cleanup restores the tracked baseline and removes preparation files after 
   expect(metadata.every((file) => !existsSync(file))).toBe(true);
   expect(readFileSync(unrelated, "utf-8")).toBe("retain");
   expect(run(["git", "diff", "--exit-code"]).exitCode).toBe(0);
+});
+
+test("validation accepts a checkout without a network budget declaration directory", () => {
+  const repository = path.join(directory, "no-budgets");
+  mkdirSync(repository);
+  expect(
+    existsSync(path.join(repository, "apps/web/e2e/network-budgets")),
+  ).toBe(false);
+  const file = path.join(repository, "baseline.json");
+  writeFileSync(file, JSON.stringify(baseline()));
+  writeFileSync(path.join(repository, "context.json"), "[]");
+  const result = Bun.spawnSync(
+    [
+      "bun",
+      path.resolve(import.meta.dirname, "network-baseline-scope.ts"),
+      "validate",
+      file,
+      "--route-tree",
+      path.join(directory, "tree.ts"),
+      "--context",
+      path.join(repository, "context.json"),
+    ],
+    { cwd: repository, stdout: "pipe", stderr: "pipe" },
+  );
+  expect(result.exitCode, result.stderr.toString()).toBe(0);
 });
