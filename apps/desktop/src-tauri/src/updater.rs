@@ -228,7 +228,9 @@ mod tests {
     let independently_started = |setup: &str, updater: &str| {
       setup.matches("presence::start(handle.clone());").count() == 1
         && setup
-          .matches("updater::schedule_startup_check(handle.clone(), Arc::clone(&manager));")
+          .matches(
+            "updater::schedule_startup_check(handle.clone(), Arc::clone(&manager));",
+          )
           .count()
           == 1
         && !updater.contains("presence::")

@@ -1,5 +1,6 @@
 import { afterAll, beforeAll, expect, test } from "bun:test";
 import { and, eq } from "drizzle-orm";
+import { ElysiaCustomStatusResponse } from "elysia/error";
 
 import { DESKTOP_HANDOFF_MIN_SUPPORTED_PROTOCOL } from "@stll/api-contract/desktop-handoff";
 
@@ -39,14 +40,20 @@ test("organization removal clears only the departing member's presence and rejoi
   const desktopId = Bun.randomUUIDv7();
   const scopedDb = async <T>(run: (tx: Transaction) => Promise<T>) =>
     await db.transaction(async (tx) => await run(asTestRaw<Transaction>(tx)));
-  const readPresence = async () =>
-    await readEndpoint.handler(
+  const readPresence = async () => {
+    const result = await readEndpoint.handler(
       createTestHandlerContext<Parameters<typeof readEndpoint.handler>[0]>({
         scopedDb,
         user: { id: userId },
         session: { activeOrganizationId: organizationId },
       }),
     );
+    expect(result).not.toBeInstanceOf(ElysiaCustomStatusResponse);
+    if (result instanceof ElysiaCustomStatusResponse) {
+      throw result;
+    }
+    return result;
+  };
   await db.insert(user).values(
     [actorUserId, userId].map((id) => ({
       id,
