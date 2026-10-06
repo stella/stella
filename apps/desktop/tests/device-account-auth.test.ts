@@ -15,14 +15,14 @@ const assertAccountRequestOwners = (sources: readonly NativeSource[]) => {
       const call = source.slice(reference.index);
       if (
         filename === "http_client.rs" &&
-        /^\.bearer_auth\(bearer\)/u.test(call)
+        call.startsWith(".bearer_auth(bearer)")
       ) {
         ownerBearers += 1;
         continue;
       }
       if (
         filename === "sse.rs" &&
-        /^\.bearer_auth\(&session_token\)/u.test(call)
+        call.startsWith(".bearer_auth(&session_token)")
       ) {
         continue;
       }
