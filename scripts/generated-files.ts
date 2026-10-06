@@ -223,22 +223,6 @@ export const GENERATORS = [
     after: [],
   },
   {
-    id: "visual-sandbox-bundle",
-    outputKind: "committed",
-    outputs: ["apps/api/src/handlers/visual-sandbox/generated/runtime.js.txt"],
-    inputs: [
-      "apps/api/src/handlers/visual-sandbox/**",
-      "apps/api/scripts/build-visual-sandbox.ts",
-      "packages/api-contract/**",
-      "bun.lock",
-    ],
-    write: ["bun", "--cwd=apps/api", "run", "build:visual-sandbox"],
-    check: null,
-    checkedBy: "Visual sandbox document tests",
-    autofix: true,
-    after: [],
-  },
-  {
     id: "mcp-surface",
     outputKind: "committed",
     outputs: ["apps/api/mcp-surface-baseline.json"],
