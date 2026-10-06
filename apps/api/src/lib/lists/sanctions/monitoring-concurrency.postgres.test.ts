@@ -107,12 +107,23 @@ type ScopedForOptions = {
   db: GatedTestDb;
   organizationId: typeof contacts.$inferSelect.organizationId;
   gate?: bigint;
+  onTransactionPid?: (pid: number) => void;
 };
 
 const scopedFor =
-  ({ db, organizationId, gate }: ScopedForOptions): ScopedDb =>
+  ({
+    db,
+    organizationId,
+    gate,
+    onTransactionPid,
+  }: ScopedForOptions): ScopedDb =>
   async (run) =>
     await db.transaction(async (tx) => {
+      const pid =
+        (
+          await tx.execute<{ pid: number }>(sql`SELECT pg_backend_pid() AS pid`)
+        ).at(0)?.pid ?? panic("Missing scoped transaction backend");
+      onTransactionPid?.(pid);
       await tx.execute(sql`SET LOCAL ROLE stella`);
       await tx.execute(
         sql`SELECT set_config('app.organization_id', ${organizationId}, true)`,
@@ -153,48 +164,65 @@ const failureMessages = (error: unknown): string => {
 // Organization-consumption tests own only their request. Keep unrelated edition
 // pages quiescent, and put their exact state back before closing the fixture.
 const pauseEditionFanouts = async (db: GatedTestDb) => {
-  const saved = await db.transaction(async (tx) => {
+  const snapshot = await db.transaction(async (tx) => {
     await tx.execute(sql`SET LOCAL ROLE stella_ingestion`);
     const fanouts = await tx.select().from(sanctionsEditionFanouts);
-    if (fanouts.length > 0) {
-      await tx
-        .update(sanctionsEditionFanouts)
-        .set({ status: "complete" })
-        .where(
-          inArray(
-            sanctionsEditionFanouts.sourceId,
-            fanouts.map(({ sourceId }) => sourceId),
-          ),
-        );
-    }
     const freshness = await readSanctionsFreshness({
       db: async (read) => await read(asTestRaw<Transaction>(tx)),
       now,
     });
-    await tx.execute(sql`
-      UPDATE sanctions_edition_fanouts AS fanout
-      SET state = 'complete', freshness_status = observed.status
-      FROM jsonb_to_recordset(${JSON.stringify(freshness.map(({ source, status }) => ({ source, status })))}::text::jsonb)
-        AS observed(source text, status text)
-      WHERE fanout.source_id = observed.source
-    `);
-    return fanouts;
+    const fixtureRows = freshness.map(({ source, status, edition }) => ({
+      sourceId: source,
+      editionId: edition?.id ?? null,
+      cursorOrganizationId: null,
+      freshnessStatus: status,
+      status: "complete" as const,
+    }));
+    await tx
+      .insert(sanctionsEditionFanouts)
+      .values(fixtureRows)
+      .onConflictDoUpdate({
+        target: sanctionsEditionFanouts.sourceId,
+        set: {
+          editionId: sql`excluded.edition_id`,
+          cursorOrganizationId: sql`excluded.cursor_organization_id`,
+          freshnessStatus: sql`excluded.freshness_status`,
+          status: "complete",
+        },
+      });
+    const savedSources = new Set(fanouts.map(({ sourceId }) => sourceId));
+    const createdSourceIds = fixtureRows
+      .filter(({ sourceId }) => !savedSources.has(sourceId))
+      .map(({ sourceId }) => sourceId);
+    return { fanouts, createdSourceIds };
   });
   return async () =>
     await db.transaction(async (tx) => {
       await tx.execute(sql`SET LOCAL ROLE stella_ingestion`);
-      await tx
-        .insert(sanctionsEditionFanouts)
-        .values(saved)
-        .onConflictDoUpdate({
-          target: sanctionsEditionFanouts.sourceId,
-          set: {
-            editionId: sql`excluded.edition_id`,
-            cursorOrganizationId: sql`excluded.cursor_organization_id`,
-            freshnessStatus: sql`excluded.freshness_status`,
-            status: sql`excluded.state`,
-          },
-        });
+      if (snapshot.createdSourceIds.length > 0) {
+        await tx
+          .delete(sanctionsEditionFanouts)
+          .where(
+            inArray(
+              sanctionsEditionFanouts.sourceId,
+              snapshot.createdSourceIds,
+            ),
+          );
+      }
+      if (snapshot.fanouts.length > 0) {
+        await tx
+          .insert(sanctionsEditionFanouts)
+          .values(snapshot.fanouts)
+          .onConflictDoUpdate({
+            target: sanctionsEditionFanouts.sourceId,
+            set: {
+              editionId: sql`excluded.edition_id`,
+              cursorOrganizationId: sql`excluded.cursor_organization_id`,
+              freshnessStatus: sql`excluded.freshness_status`,
+              status: sql`excluded.state`,
+            },
+          });
+      }
     });
 };
 
@@ -227,13 +255,11 @@ if (!databaseUrl || !runPostgresTests) {
       const sourceFanout = await controlDb.transaction(async (tx) => {
         await tx.execute(sql`SET LOCAL ROLE stella_ingestion`);
         return (
-          (
-            await tx
-              .select()
-              .from(sanctionsEditionFanouts)
-              .where(eq(sanctionsEditionFanouts.sourceId, "eu"))
-          ).at(0) ?? panic("Missing committed EU fanout")
-        );
+          await tx
+            .select()
+            .from(sanctionsEditionFanouts)
+            .where(eq(sanctionsEditionFanouts.sourceId, "eu"))
+        ).at(0);
       });
       const running: Promise<unknown>[] = [];
       const removeGate = await installGate({
@@ -419,7 +445,13 @@ if (!databaseUrl || !runPostgresTests) {
           result.contactFingerprint,
         );
         const excludedState = await contactState(controlDb, contact.id);
-        expect(excludedState.matches).toEqual(state.matches);
+        expect(excludedState.matches).toEqual(
+          state.matches.map((match) => ({
+            ...match,
+            state: "lapsed",
+            updatedAt: now,
+          })),
+        );
         expect(excludedState.events).toEqual(state.events);
         expect(excludedState.screenings).toHaveLength(1);
         expect(excludedState.screenings.at(0)).toMatchObject({
@@ -448,10 +480,24 @@ if (!databaseUrl || !runPostgresTests) {
           .where(eq(sanctionsSources.id, "eu"));
         await controlDb.transaction(async (tx) => {
           await tx.execute(sql`SET LOCAL ROLE stella_ingestion`);
-          await tx
-            .update(sanctionsEditionFanouts)
-            .set(sourceFanout)
-            .where(eq(sanctionsEditionFanouts.sourceId, "eu"));
+          if (sourceFanout === undefined) {
+            await tx
+              .delete(sanctionsEditionFanouts)
+              .where(eq(sanctionsEditionFanouts.sourceId, "eu"));
+          } else {
+            await tx
+              .insert(sanctionsEditionFanouts)
+              .values(sourceFanout)
+              .onConflictDoUpdate({
+                target: sanctionsEditionFanouts.sourceId,
+                set: {
+                  editionId: sql`excluded.edition_id`,
+                  cursorOrganizationId: sql`excluded.cursor_organization_id`,
+                  freshnessStatus: sql`excluded.freshness_status`,
+                  status: sql`excluded.state`,
+                },
+              });
+          }
         });
         await controlDb
           .delete(sanctionsEditionEntries)
@@ -486,6 +532,7 @@ if (!databaseUrl || !runPostgresTests) {
       const controllers = new AbortController();
       const running: Promise<unknown>[] = [];
       let gateHeld = false;
+      let controlGatePid: number | undefined;
       let editedContactId: typeof contacts.$inferSelect.id | undefined;
       let drainFirstEditedContactId:
         | typeof contacts.$inferSelect.id
@@ -541,7 +588,12 @@ if (!databaseUrl || !runPostgresTests) {
             ]),
           );
 
-        const scopedDrainDb = scopedFor({ db: drainDb, organizationId });
+        let captureDrainPid: ((pid: number) => void) | undefined;
+        const scopedDrainDb = scopedFor({
+          db: drainDb,
+          organizationId,
+          onTransactionPid: (pid) => captureDrainPid?.(pid),
+        });
         const drain = async () =>
           (
             await drainSanctionsContactMarks({
@@ -551,12 +603,25 @@ if (!databaseUrl || !runPostgresTests) {
               signal: controllers.signal,
             })
           ).unwrap();
+        const startDrain = () => {
+          const started = Promise.withResolvers<number>();
+          captureDrainPid = started.resolve;
+          const operation = drain();
+          void operation.catch(started.reject);
+          return { operation, pid: started.promise };
+        };
 
         const editStarted = Promise.withResolvers<undefined>();
         const releaseEdit = Promise.withResolvers<undefined>();
-        const editPid = await backendPid(editDb);
-        const drainPid = await backendPid(drainDb);
+        const editPidReady = Promise.withResolvers<number>();
         const editFirst = editDb.transaction(async (tx) => {
+          const pid =
+            (
+              await tx.execute<{ pid: number }>(
+                sql`SELECT pg_backend_pid() AS pid`,
+              )
+            ).at(0)?.pid ?? panic("Missing edit transaction backend");
+          editPidReady.resolve(pid);
           await tx
             .update(contacts)
             .set({ displayName: "Edit wins before drain" })
@@ -566,8 +631,11 @@ if (!databaseUrl || !runPostgresTests) {
         });
         running.push(editFirst);
         void editFirst.catch(editStarted.reject);
+        const editPid = await editPidReady.promise;
         await editStarted.promise;
-        const drainAfterEdit = drain();
+        const drainAfterEditRun = startDrain();
+        const drainPid = await drainAfterEditRun.pid;
+        const drainAfterEdit = drainAfterEditRun.operation;
         running.push(drainAfterEdit);
         expect(await blockersFor(controlDb, drainPid)).toContain(editPid);
         releaseEdit.resolve(undefined);
@@ -606,19 +674,31 @@ if (!databaseUrl || !runPostgresTests) {
         await drainDb.execute(
           sql`SELECT set_config(${GATE_SETTING}, ${String(gate)}, false)`,
         );
-        await controlDb.execute(
-          sql`SELECT pg_advisory_lock(${String(gate)}::bigint)`,
-        );
+        controlGatePid =
+          (
+            await controlDb.execute<{ pid: number }>(sql`
+              SELECT pg_advisory_lock(${String(gate)}::bigint), pg_backend_pid() AS pid
+            `)
+          ).at(0)?.pid ?? panic("Missing advisory lock holder backend");
         gateHeld = true;
-        const blockedDrain = drain();
+        const blockedDrainRun = startDrain();
+        const blockedDrainPid = await blockedDrainRun.pid;
+        const blockedDrain = blockedDrainRun.operation;
         running.push(blockedDrain);
-        expect(await blockersFor(controlDb, drainPid)).toContain(
-          await backendPid(controlDb),
+        expect(await blockersFor(controlDb, blockedDrainPid)).toContain(
+          controlGatePid,
         );
         const reverseEditStarted = Promise.withResolvers<undefined>();
         const releaseReverseEdit = Promise.withResolvers<undefined>();
-        const reverseEditPid = await backendPid(editDb);
+        const reverseEditPidReady = Promise.withResolvers<number>();
         const reverseEdit = editDb.transaction(async (tx) => {
+          const pid =
+            (
+              await tx.execute<{ pid: number }>(
+                sql`SELECT pg_backend_pid() AS pid`,
+              )
+            ).at(0)?.pid ?? panic("Missing reverse edit transaction backend");
+          reverseEditPidReady.resolve(pid);
           await tx
             .update(contacts)
             .set({ displayName: "Drain wins before edit" })
@@ -628,8 +708,9 @@ if (!databaseUrl || !runPostgresTests) {
         });
         running.push(reverseEdit);
         void reverseEdit.catch(reverseEditStarted.reject);
+        const reverseEditPid = await reverseEditPidReady.promise;
         expect(await blockersFor(controlDb, reverseEditPid)).toContain(
-          drainPid,
+          blockedDrainPid,
         );
         await controlDb.execute(
           sql`SELECT pg_advisory_unlock(${String(gate)}::bigint)`,
@@ -686,17 +767,29 @@ if (!databaseUrl || !runPostgresTests) {
         await drainDb.execute(
           sql`SELECT set_config(${GATE_SETTING}, ${String(gate)}, false)`,
         );
-        await controlDb.execute(
-          sql`SELECT pg_advisory_lock(${String(gate)}::bigint)`,
-        );
+        controlGatePid =
+          (
+            await controlDb.execute<{ pid: number }>(sql`
+              SELECT pg_advisory_lock(${String(gate)}::bigint), pg_backend_pid() AS pid
+            `)
+          ).at(0)?.pid ?? panic("Missing opt-out advisory lock holder backend");
         gateHeld = true;
-        const blockedOptOutDrain = drain();
+        const blockedOptOutDrainRun = startDrain();
+        const blockedOptOutDrainPid = await blockedOptOutDrainRun.pid;
+        const blockedOptOutDrain = blockedOptOutDrainRun.operation;
         running.push(blockedOptOutDrain);
-        expect(await blockersFor(controlDb, drainPid)).toContain(
-          await backendPid(controlDb),
+        expect(await blockersFor(controlDb, blockedOptOutDrainPid)).toContain(
+          controlGatePid,
         );
-        const optOutPid = await backendPid(editDb);
+        const optOutPidReady = Promise.withResolvers<number>();
         const optOut = editDb.transaction(async (tx) => {
+          const pid =
+            (
+              await tx.execute<{ pid: number }>(
+                sql`SELECT pg_backend_pid() AS pid`,
+              )
+            ).at(0)?.pid ?? panic("Missing opt-out transaction backend");
+          optOutPidReady.resolve(pid);
           await lockSanctionsMonitoring(
             asTestRaw<Transaction>(tx),
             organizationId,
@@ -710,7 +803,10 @@ if (!databaseUrl || !runPostgresTests) {
             .where(eq(contacts.id, optedOutId));
         });
         running.push(optOut);
-        expect(await blockersFor(controlDb, optOutPid)).toContain(drainPid);
+        const optOutPid = await optOutPidReady.promise;
+        expect(await blockersFor(controlDb, optOutPid)).toContain(
+          blockedOptOutDrainPid,
+        );
         await controlDb.execute(
           sql`SELECT pg_advisory_unlock(${String(gate)}::bigint)`,
         );
