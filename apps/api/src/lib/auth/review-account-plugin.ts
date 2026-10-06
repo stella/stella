@@ -20,6 +20,10 @@ import type {
   ReviewAccountConfig,
   ReviewAccountOperation,
 } from "@/api/lib/auth/review-account-policy";
+import {
+  isReviewAccountTokenRedemptionPath,
+  REVIEW_ACCOUNT_TOKEN_REDEMPTIONS,
+} from "@/api/lib/auth/review-account-token-subjects";
 import type { createAccountAttemptBudget } from "@/api/lib/rate-limit/otp-account-budget";
 import { isRecord } from "@/api/lib/type-guards";
 
@@ -27,20 +31,6 @@ const SIGN_IN_EMAIL_PATH = "/sign-in/email";
 const GET_SESSION_PATH = "/get-session";
 const API_KEY_CREATE_PATH = "/api-key/create";
 const BUDGET_CONTEXT_KEY = "reviewAccountSignInBudgetKey";
-const RESET_PASSWORD_PATH = "/reset-password";
-
-/** Better Auth reads the body token first, then the query token. */
-const readResetToken = (body: unknown, query: unknown): string | undefined => {
-  const fromBody = isRecord(body) ? body["token"] : undefined;
-  if (typeof fromBody === "string" && fromBody.length > 0) {
-    return fromBody;
-  }
-  const fromQuery = isRecord(query) ? query["token"] : undefined;
-  return typeof fromQuery === "string" && fromQuery.length > 0
-    ? fromQuery
-    : undefined;
-};
-
 /** Failed password sign-ins one account may make in one window. */
 export const REVIEW_ACCOUNT_SIGN_IN_BUDGET = {
   max: 10,
@@ -145,31 +135,31 @@ export const createReviewAccountPlugin = ({
           }),
         },
         {
-          // A reset token names its account only through the stored token, so
-          // one issued before the account was restricted is refused here.
-          matcher: ({ path }) => configured && path === RESET_PASSWORD_PATH,
+          // Endpoints redeeming a token or stored state that names an account
+          // check that account before taking effect, whenever the token was
+          // issued.
+          matcher: ({ path }) =>
+            configured &&
+            path !== undefined &&
+            isReviewAccountTokenRedemptionPath(path),
           handler: createAuthMiddleware(async (ctx) => {
-            const token = readResetToken(ctx.body, ctx.query);
-            if (token === undefined) {
-              return undefined;
-            }
-            const verification =
-              await ctx.context.internalAdapter.findVerificationValue(
-                `reset-password:${token}`,
-              );
-            if (!verification) {
-              return undefined;
-            }
-            const owner = await ctx.context.internalAdapter.findUserById(
-              verification.value,
-            );
-            if (owner) {
+            const resolve = Object.hasOwn(
+              REVIEW_ACCOUNT_TOKEN_REDEMPTIONS,
+              ctx.path,
+            )
+              ? REVIEW_ACCOUNT_TOKEN_REDEMPTIONS[ctx.path]
+              : undefined;
+            const subjects =
+              resolve === undefined
+                ? []
+                : await resolve({
+                    body: ctx.body,
+                    query: ctx.query,
+                    internalAdapter: ctx.context.internalAdapter,
+                  });
+            for (const { email, operation } of subjects) {
               requireReviewAccountAccess(
-                checkReviewAccountAccess({
-                  email: owner.email,
-                  config,
-                  operation: REVIEW_ACCOUNT_OPERATION.changePassword,
-                }),
+                checkReviewAccountAccess({ email, config, operation }),
               );
             }
             return undefined;

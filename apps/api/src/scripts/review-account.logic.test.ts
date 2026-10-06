@@ -104,6 +104,7 @@ describe("review account provisioning", () => {
         user: "created",
         organization: "created",
         membership: "created",
+        verificationsRevoked: 0,
       }),
     );
     const second = await provisionReviewAccount({
@@ -117,6 +118,7 @@ describe("review account provisioning", () => {
         user: "existing",
         organization: "existing",
         membership: "existing",
+        verificationsRevoked: 0,
       }),
     );
     expect(writes).toEqual(["user", "organization"]);

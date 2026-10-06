@@ -1,7 +1,8 @@
 import { betterAuth } from "better-auth";
 import { memoryAdapter } from "better-auth/adapters/memory";
-import { organization, twoFactor } from "better-auth/plugins";
+import { emailOTP, organization, twoFactor } from "better-auth/plugins";
 import { describe, expect, test } from "bun:test";
+import { SignJWT } from "jose";
 
 import { resolveEmailAndPasswordOptions } from "@/api/lib/auth/password-sign-in-options";
 import {
@@ -12,6 +13,10 @@ import {
   isReviewAccountBodyEmailPath,
   resolveReviewAccountSessionOperation,
 } from "@/api/lib/auth/review-account-policy";
+import {
+  isReviewAccountTokenRedemptionPath,
+  REVIEW_ACCOUNT_TOKEN_REDEMPTIONS,
+} from "@/api/lib/auth/review-account-token-subjects";
 import { createAccountAttemptBudget } from "@/api/lib/rate-limit/otp-account-budget";
 import { RedisRateLimitContext } from "@/api/lib/rate-limit/redis-context";
 
@@ -87,6 +92,7 @@ const createReviewAuth = async ({
       }),
       twoFactor({ allowPasswordless: true }),
       organization({ allowUserToCreateOrganization: true }),
+      emailOTP({ sendVerificationOTP: async () => undefined }),
     ],
   });
   // Accounts are provisioned out of band; sign-up is off.
@@ -163,7 +169,6 @@ const REVIEWED_OPEN_AUTH_PATHS: ReadonlySet<string> = new Set([
   // Sign-in and the account's own sessions.
   "/sign-in/email",
   "/sign-in/social",
-  "/callback/:id",
   "/sign-out",
   "/revoke-session",
   "/revoke-sessions",
@@ -175,14 +180,11 @@ const REVIEWED_OPEN_AUTH_PATHS: ReadonlySet<string> = new Set([
   // Profile fields only; email changes go through the refused endpoints.
   "/update-user",
   "/verify-password",
-  // Email verification; the change-email tokens it could complete are only
-  // issued by the refused change-email endpoints.
+  // Sends a verification link; redeeming it is a checked token redemption.
   "/send-verification-email",
-  "/verify-email",
-  // The reset form's redirect; completing a reset is refused for this
-  // account's tokens by the plugin's reset-token check.
+  // The reset form's redirect only; completing a reset is a token
+  // redemption, checked by its subject.
   "/reset-password/:token",
-  "/reset-password",
 ]);
 
 describe("restricted review account password sign-in", () => {
@@ -429,6 +431,7 @@ describe("restricted review account password sign-in", () => {
         });
         return operation === null &&
           !isReviewAccountBodyEmailPath(path) &&
+          !isReviewAccountTokenRedemptionPath(path) &&
           !REVIEWED_OPEN_AUTH_PATHS.has(path)
           ? [path]
           : [];
@@ -437,5 +440,96 @@ describe("restricted review account password sign-in", () => {
     // A new endpoint lands here until it is mapped to an operation or
     // reviewed as open for the restricted review account.
     expect(unclassified).toEqual([]);
+  });
+
+  test("marks every token-redeeming endpoint and checks its subject", async () => {
+    const auth = await createReviewAuth();
+    const routerPaths = new Set(
+      Object.values(auth.api).flatMap((endpoint: unknown) => {
+        const path: unknown =
+          typeof endpoint === "function" ? Reflect.get(endpoint, "path") : null;
+        return typeof path === "string" ? [path] : [];
+      }),
+    );
+    const redemptions = Object.keys(
+      REVIEW_ACCOUNT_TOKEN_REDEMPTIONS,
+    ).toSorted();
+    expect(redemptions).toEqual([
+      "/callback/:id",
+      "/delete-user/callback",
+      "/reset-password",
+      "/verify-email",
+    ]);
+    for (const path of redemptions) {
+      expect({ path, routed: routerPaths.has(path) }).toEqual({
+        path,
+        routed: true,
+      });
+      expect(REVIEWED_OPEN_AUTH_PATHS.has(path)).toBe(false);
+    }
+  });
+
+  test("refuses an email-change link issued before the account was restricted", async () => {
+    const auth = await createReviewAuth();
+    const context = await auth.$context;
+    // A change-email confirmation link, signed as Better Auth signs it.
+    const token = await new SignJWT({
+      email: reviewEmail,
+      updateTo: "moved@example.test",
+      requestType: "change-email-verification",
+    })
+      .setProtectedHeader({ alg: "HS256" })
+      .setIssuedAt()
+      .setExpirationTime("1h")
+      .sign(new TextEncoder().encode(context.secret));
+    const response = await auth.handler(
+      new Request(
+        `http://localhost:3001/api/auth/verify-email?token=${token}`,
+        { headers: { origin: "http://localhost:3001" } },
+      ),
+    );
+    expect(response.status).toBe(403);
+    expect(
+      await context.internalAdapter.findUserByEmail(reviewEmail),
+    ).not.toBeNull();
+    expect(
+      await context.internalAdapter.findUserByEmail("moved@example.test"),
+    ).toBeNull();
+  });
+
+  test("refuses stored deletion and identity-link tokens for the account", async () => {
+    const auth = await createReviewAuth();
+    const context = await auth.$context;
+    const userId =
+      (await context.internalAdapter.findUserByEmail(reviewEmail))?.user.id ??
+      "";
+    const expiresAt = new Date(Date.now() + 60 * 60 * 1000);
+    await context.internalAdapter.createVerificationValue({
+      identifier: "delete-account-fixture-token",
+      value: userId,
+      expiresAt,
+    });
+    await context.internalAdapter.createVerificationValue({
+      identifier: "fixture-state",
+      value: JSON.stringify({
+        callbackURL: "/",
+        codeVerifier: "fixture-verifier",
+        expiresAt: expiresAt.getTime(),
+        link: { email: reviewEmail, userId },
+      }),
+      expiresAt,
+    });
+    for (const path of [
+      "/delete-user/callback?token=fixture-token",
+      "/callback/google?state=fixture-state&code=fixture-code",
+    ]) {
+      const response = await auth.handler(
+        new Request(`http://localhost:3001/api/auth${path}`, {
+          headers: { origin: "http://localhost:3001" },
+        }),
+      );
+      expect({ path, status: response.status }).toEqual({ path, status: 403 });
+    }
+    expect(await context.internalAdapter.findUserById(userId)).not.toBeNull();
   });
 });

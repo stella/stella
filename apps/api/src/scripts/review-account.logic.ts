@@ -132,7 +132,9 @@ export const createReviewAccountAuthStore = (context: {
     await context.internalAdapter.deleteUserSessions(userId);
     return sessions.length;
   },
-  // Reset tokens carry the user id as their value. Emailed codes are keyed
+  // Reset and account-deletion tokens carry the user id as their value.
+  // Email-verification and email-change links are signed tokens, not stored,
+  // and are checked when redeemed. Emailed codes are keyed
   // exactly `<type>-otp-<email>` (better-auth email-otp `toOTPIdentifier`).
   // Change-email codes also name the new address, so they cannot be named
   // exactly; the account policy refuses every email change for this account.
@@ -258,6 +260,7 @@ type ProvisionOutcome = {
   user: "created" | "existing";
   organization: "created" | "existing";
   membership: "created" | "existing";
+  verificationsRevoked: number;
 };
 
 export const provisionReviewAccount = async ({
@@ -306,6 +309,12 @@ export const provisionReviewAccount = async ({
     );
   }
   const userId = existingUserId ?? (await store.createUser(email));
+  // Tokens and codes issued before the account was restricted must not be
+  // redeemable afterwards.
+  const verificationsRevoked =
+    existingUserId === null
+      ? 0
+      : await store.revokeVerifications({ userId, email });
   if (memberUserIds === null) {
     await store.createOrganization({ organizationId, ownerUserId: userId });
     return Result.ok({
@@ -313,6 +322,7 @@ export const provisionReviewAccount = async ({
       user: existingUserId === null ? "created" : "existing",
       organization: "created",
       membership: "created",
+      verificationsRevoked,
     });
   }
   const isMember = memberUserIds.includes(userId);
@@ -324,6 +334,7 @@ export const provisionReviewAccount = async ({
     user: existingUserId === null ? "created" : "existing",
     organization: "existing",
     membership: isMember ? "existing" : "created",
+    verificationsRevoked,
   });
 };
 

@@ -91,6 +91,7 @@ describe("review account provisioning store", () => {
         user: "created",
         organization: "created",
         membership: "created",
+        verificationsRevoked: 0,
       }),
     );
 
@@ -174,6 +175,7 @@ describe("review account provisioning store", () => {
         user: "existing",
         organization: "existing",
         membership: "existing",
+        verificationsRevoked: 0,
       }),
     );
     expect(await snapshot()).toEqual(created);

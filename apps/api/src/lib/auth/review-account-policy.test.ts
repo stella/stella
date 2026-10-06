@@ -36,11 +36,13 @@ describe("restricted review account policy", () => {
     );
   });
 
-  test("allows only sign-in, MCP and its own organization's session", () => {
+  test("allows only sign-in, email verification, MCP and its own organization's session", () => {
     expect(
       allowedOperations({ email: reviewEmail, config, organizationId }),
     ).toEqual([
       REVIEW_ACCOUNT_OPERATION.passwordSignIn,
+      REVIEW_ACCOUNT_OPERATION.emailCodeSignIn,
+      REVIEW_ACCOUNT_OPERATION.verifyEmail,
       REVIEW_ACCOUNT_OPERATION.session,
       REVIEW_ACCOUNT_OPERATION.mcp,
     ]);
@@ -52,6 +54,8 @@ describe("restricted review account policy", () => {
       }),
     ).toEqual([
       REVIEW_ACCOUNT_OPERATION.passwordSignIn,
+      REVIEW_ACCOUNT_OPERATION.emailCodeSignIn,
+      REVIEW_ACCOUNT_OPERATION.verifyEmail,
       REVIEW_ACCOUNT_OPERATION.mcp,
     ]);
   });

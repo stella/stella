@@ -17,6 +17,8 @@ export type ReviewAccountConfig = {
 
 export const REVIEW_ACCOUNT_OPERATION = {
   passwordSignIn: "password-sign-in",
+  emailCodeSignIn: "email-code-sign-in",
+  verifyEmail: "verify-email",
   session: "session",
   mcp: "mcp",
   createOrganization: "create-organization",
@@ -54,6 +56,8 @@ type ReviewAccountDisposition =
 /** What the review account may do; every new operation must pick one. */
 export const REVIEW_ACCOUNT_POLICY = {
   "password-sign-in": REVIEW_ACCOUNT_DISPOSITION.allowed,
+  "email-code-sign-in": REVIEW_ACCOUNT_DISPOSITION.allowed,
+  "verify-email": REVIEW_ACCOUNT_DISPOSITION.allowed,
   session: REVIEW_ACCOUNT_DISPOSITION.ownOrganization,
   mcp: REVIEW_ACCOUNT_DISPOSITION.allowed,
   "create-organization": REVIEW_ACCOUNT_DISPOSITION.refused,
@@ -199,6 +203,10 @@ const BODY_EMAIL_AUTH_PATH_OPERATIONS: Readonly<
   Record<string, ReviewAccountOperation>
 > = {
   "/sign-up/email": REVIEW_ACCOUNT_OPERATION.changePassword,
+  // Email codes redeemed by address: checked, and allowed.
+  "/sign-in/email-otp": REVIEW_ACCOUNT_OPERATION.emailCodeSignIn,
+  "/email-otp/verify-email": REVIEW_ACCOUNT_OPERATION.verifyEmail,
+  "/email-otp/check-verification-otp": REVIEW_ACCOUNT_OPERATION.verifyEmail,
   "/request-password-reset": REVIEW_ACCOUNT_OPERATION.changePassword,
   "/email-otp/request-password-reset": REVIEW_ACCOUNT_OPERATION.changePassword,
   "/forget-password/email-otp": REVIEW_ACCOUNT_OPERATION.changePassword,
