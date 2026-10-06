@@ -31,14 +31,38 @@ const project = async (chunks: PublicStreamChunk[]) => {
   return await Array.fromAsync(projectVisualPreviewStream(source()));
 };
 
+const stringFields = function* (value: unknown): Generator<string> {
+  if (typeof value === "string") {
+    yield value;
+    return;
+  }
+  if (Array.isArray(value)) {
+    for (const item of value) {
+      yield* stringFields(item);
+    }
+    return;
+  }
+  if (typeof value === "object" && value !== null) {
+    for (const item of Object.values(value)) {
+      yield* stringFields(item);
+    }
+  }
+};
+
 describe("transient preview wire projection", () => {
-  test("replaces both top-level and metadata output without mutating the model copy", async () => {
+  test("rebuilds preview events carrying output and result without mutating the model copy", async () => {
     const chunk = {
       type: EventType.TOOL_CALL_END,
       toolCallId: "preview-call",
       toolName: VISUAL_PREVIEW_TOOL_NAME,
       output,
-      metadata: { tanstack: { output, state: "output-available" } },
+      result: output,
+      timestamp: 1,
+      subagentRunId: "preview-run",
+      input: { title: "Example" },
+      metadata: {
+        tanstack: { output, result: output, state: "output-available" },
+      },
     } satisfies AdapterYieldChunk;
     const projected = await project([chunk]);
     expect(JSON.stringify(projected)).not.toContain("iVBORw0KGgo=");
@@ -47,33 +71,158 @@ describe("transient preview wire projection", () => {
     );
     expect(JSON.stringify(chunk)).toContain("iVBORw0KGgo=");
     expect(await project(projected)).toEqual(projected);
+    expect(projected.at(0)).toMatchObject({
+      type: EventType.TOOL_CALL_END,
+      toolCallId: "preview-call",
+      timestamp: 1,
+      subagentRunId: "preview-run",
+      metadata: {
+        tanstack: {
+          toolName: VISUAL_PREVIEW_TOOL_NAME,
+          input: { title: "Example" },
+        },
+      },
+    });
+    for (const value of stringFields(projected)) {
+      expect(value).not.toContain("iVBOR");
+    }
   });
 
-  test("projects SDK snapshot content and its metadata copy without prior tool events", async () => {
-    const messages = uiMessagesToWire([
-      {
-        role: "assistant",
-        content: "",
-        toolCalls: [
-          {
-            id: "preview-call",
-            type: "function",
-            function: { name: VISUAL_PREVIEW_TOOL_NAME, arguments: "{}" },
+  test("rebuilds result envelopes and metadata while preserving diagnostics and identity", async () => {
+    const start = {
+      type: EventType.TOOL_CALL_START,
+      toolCallId: "preview-call",
+      toolCallName: VISUAL_PREVIEW_TOOL_NAME,
+    } as const;
+    const chunk = {
+      type: EventType.TOOL_CALL_RESULT,
+      toolCallId: "preview-call",
+      messageId: "assistant",
+      content: JSON.stringify(output),
+      timestamp: 2,
+      subagentRunId: "preview-run",
+      output,
+      result: output,
+      metadata: {
+        additional: output,
+        tanstack: {
+          state: "output-available",
+          output,
+          result: output,
+          additional: output,
+          toolResult: {
+            id: "result-message",
+            createdAt: "2026-01-01T00:00:00.000Z",
+            content: output,
+            result: output,
+            additional: output,
           },
-        ],
+        },
       },
-      { role: "tool", toolCallId: "preview-call", content: output },
-    ]);
-    expect(JSON.stringify(messages)).toContain("iVBORw0KGgo=");
-    const projected = await project([
-      { type: EventType.MESSAGES_SNAPSHOT, messages },
-    ]);
-    expect(JSON.stringify(projected)).not.toContain("iVBORw0KGgo=");
+    } satisfies PublicStreamChunk;
+    const projected = await project([start, chunk]);
+    expect(projected.at(1)).toMatchObject({
+      type: EventType.TOOL_CALL_RESULT,
+      toolCallId: "preview-call",
+      messageId: "assistant",
+      timestamp: 2,
+      subagentRunId: "preview-run",
+      metadata: {
+        tanstack: {
+          state: "output-available",
+          toolResult: {
+            id: "result-message",
+            createdAt: "2026-01-01T00:00:00.000Z",
+          },
+        },
+      },
+    });
     expect(JSON.stringify(projected)).toContain(
       "screenshot omitted from history",
     );
-    expect(JSON.stringify(messages)).toContain("iVBORw0KGgo=");
+    expect(JSON.stringify(chunk)).toContain("iVBORw0KGgo=");
+    for (const value of stringFields(projected)) {
+      expect(value).not.toContain("iVBOR");
+    }
+    expect(await project(projected)).toEqual(projected);
   });
+
+  test.each(["serialized", "parts", "named-result"] as const)(
+    "projects SDK snapshot %s and metadata without prior tool events",
+    async (shape) => {
+      const messages = uiMessagesToWire([
+        {
+          role: "assistant",
+          content: "",
+          toolCalls: [
+            {
+              id: "preview-call",
+              type: "function",
+              function: { name: VISUAL_PREVIEW_TOOL_NAME, arguments: "{}" },
+            },
+          ],
+        },
+        {
+          role: "tool",
+          toolCallId: "preview-call",
+          name: VISUAL_PREVIEW_TOOL_NAME,
+          content: output,
+          metadata: {
+            additional: output,
+            tanstack: { result: output, output },
+          },
+        },
+      ])
+        .filter(
+          (message) => shape !== "named-result" || message.role === "tool",
+        )
+        .map((message) => {
+          if (message.role !== "assistant") {
+            if (message.role !== "tool" || shape !== "parts") {
+              return message;
+            }
+            return {
+              ...message,
+              result: output,
+              content: output.map((part) =>
+                part.type === "text"
+                  ? { type: part.type, text: part.content }
+                  : part,
+              ),
+            };
+          }
+          return {
+            ...message,
+            result: output,
+            metadata: { tanstack: { result: output, output } },
+            toolCalls: message.toolCalls?.map((call) => ({
+              ...call,
+              result: output,
+              metadata: { result: output },
+              function: { ...call.function, result: output },
+            })),
+          };
+        });
+      expect(JSON.stringify(messages)).toContain("iVBORw0KGgo=");
+      const projected = await project([
+        {
+          type: EventType.MESSAGES_SNAPSHOT,
+          messages,
+          result: output,
+          metadata: { tanstack: { result: output } },
+        },
+      ]);
+      expect(JSON.stringify(projected)).not.toContain("iVBORw0KGgo=");
+      expect(JSON.stringify(projected)).toContain(
+        "screenshot omitted from history",
+      );
+      expect(JSON.stringify(messages)).toContain("iVBORw0KGgo=");
+      for (const value of stringFields(projected)) {
+        expect(value).not.toContain("iVBOR");
+      }
+      expect(await project(projected)).toEqual(projected);
+    },
+  );
 
   test("preserves text-only previews and SDK error envelopes", async () => {
     const start = {

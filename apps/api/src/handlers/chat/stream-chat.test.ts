@@ -545,15 +545,71 @@ test("transient visual preview reaches the in-turn model but not wire, persisten
     description: "Pause after checking the visual",
     inputSchema: toTanStackToolSchema(v.strictObject({})),
   }).client();
+  const withDuplicateResult = async function* (
+    chunks: AsyncIterable<PublicStreamChunk>,
+  ): AsyncIterable<PublicStreamChunk> {
+    for await (const chunk of chunks) {
+      if (
+        chunk.type === EventType.TOOL_CALL_END &&
+        chunk.toolCallId === "call-1"
+      ) {
+        yield {
+          ...chunk,
+          output,
+          result: output,
+          metadata: { tanstack: { output, result: output } },
+        };
+        continue;
+      }
+      if (
+        chunk.type === EventType.TOOL_CALL_RESULT &&
+        chunk.toolCallId === "call-1"
+      ) {
+        yield {
+          ...chunk,
+          result: output,
+          metadata: {
+            tanstack: {
+              result: output,
+              toolResult: { content: output, result: output },
+            },
+          },
+        };
+        continue;
+      }
+      if (chunk.type === EventType.MESSAGES_SNAPSHOT) {
+        yield {
+          ...chunk,
+          messages: chunk.messages.map((message) =>
+            message.role === "tool" && message.toolCallId === "call-1"
+              ? {
+                  ...message,
+                  metadata: {
+                    tanstack: {
+                      result: output,
+                      toolResult: { content: output, result: output },
+                    },
+                  },
+                }
+              : message,
+          ),
+        };
+        continue;
+      }
+      yield chunk;
+    }
+  };
   const { emitted, finish, source } = await persistNativeInterruptTurn(
     projectVisualPreviewStream(
-      chat({
-        adapter,
-        tools: [visualTool, finishTool],
-        messages: [{ role: "user", content: "Show the example" }],
-        agentLoopStrategy: maxIterations(3),
-        threadId: "preview-thread",
-      }),
+      withDuplicateResult(
+        chat({
+          adapter,
+          tools: [visualTool, finishTool],
+          messages: [{ role: "user", content: "Show the example" }],
+          agentLoopStrategy: maxIterations(3),
+          threadId: "preview-thread",
+        }),
+      ),
     ),
   );
   expect(observed.calls).toBe(1);
@@ -579,6 +635,24 @@ test("transient visual preview reaches the in-turn model but not wire, persisten
   expect(JSON.stringify(reloaded)).not.toContain('"type":"image"');
   expect(JSON.stringify(reloaded)).toContain("screenshot omitted from history");
   expect(JSON.stringify(reloaded)).toContain("Example diagnostic");
+  const fields: unknown[] = [source, emitted, persisted, reloaded];
+  let enumeratedStrings = 0;
+  while (fields.length > 0) {
+    const field = fields.pop();
+    if (typeof field === "string") {
+      enumeratedStrings += 1;
+      expect(field).not.toContain("iVBOR");
+      continue;
+    }
+    if (Array.isArray(field)) {
+      fields.push(...field);
+      continue;
+    }
+    if (typeof field === "object" && field !== null) {
+      fields.push(...Object.values(field));
+    }
+  }
+  expect(enumeratedStrings).toBeGreaterThan(0);
   const settled = settleHistoryForRun({
     messages: [
       {
