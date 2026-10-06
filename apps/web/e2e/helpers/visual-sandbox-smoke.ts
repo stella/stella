@@ -34,17 +34,41 @@ export const declareVisualSandboxSmoke = () => {
         frameRequests.push(request.method());
       }
     });
-    const hostDocument = `<script>addEventListener("message",({source,data})=>{const frame=document.querySelector("iframe");if(source===frame.contentWindow&&data.type==="resize"&&Number.isInteger(data.height)&&data.height>0)document.documentElement.dataset.visualResize="received"})</script><iframe title="Timeline" src="${sandboxUrl}" onload='this.contentWindow.postMessage({type:"render",title:"Timeline",html:"<p id=visual-smoke>Timeline</p>"},${JSON.stringify(new URL(sandboxUrl).origin)})'></iframe>`;
     try {
       const hostResponse = await page.goto(hostUrl);
       expect(hostResponse?.ok()).toBe(true);
       const frameResponse = page.waitForResponse(sandboxUrl);
-      await page.evaluate((markup) => {
-        document.open();
-        // safe-html: hostDocument is a constant test fixture defined above.
-        document.write(markup);
-        document.close();
-      }, hostDocument);
+      await page.evaluate(
+        ({ frameUrl, frameOrigin }) => {
+          const frame = document.createElement("iframe");
+          frame.title = "Timeline";
+          frame.src = frameUrl;
+          addEventListener("message", ({ source, data }: MessageEvent) => {
+            if (
+              source === frame.contentWindow &&
+              typeof data === "object" &&
+              data !== null &&
+              data.type === "resize" &&
+              Number.isInteger(data.height) &&
+              data.height > 0
+            ) {
+              document.documentElement.dataset["visualResize"] = "received";
+            }
+          });
+          frame.addEventListener("load", () => {
+            frame.contentWindow?.postMessage(
+              {
+                type: "render",
+                title: "Timeline",
+                html: "<p id=visual-smoke>Timeline</p>",
+              },
+              frameOrigin,
+            );
+          });
+          document.body.replaceChildren(frame);
+        },
+        { frameUrl: sandboxUrl, frameOrigin: new URL(sandboxUrl).origin },
+      );
       const response = await frameResponse;
       expect(response.status()).toBe(200);
       expect(response.headers()["cache-control"]).toBe("private, no-store");

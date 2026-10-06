@@ -187,3 +187,8 @@ export const matterActivityItemVisible = (
   item.listItemType === null ||
   item.listItemType === "task" ||
   legalListsEnabled;
+
+/** Only list items other than tasks need the caller's Lists decision. */
+export const matterActivityNeedsLegalListsDecision = (
+  items: readonly WorkspaceActivity[],
+): boolean => items.some((item) => !matterActivityItemVisible(item, false));
