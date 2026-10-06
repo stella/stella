@@ -20,6 +20,7 @@ const readInvoiceById = createSafeHandler(
       "invoices.list for a paginated summary without lines.",
     permissions: { workspace: ["read"] },
     accountAccess: ACCOUNT_ACCESS.sandbox,
+    featureAccess: { featureId: "time-billing", type: "required" },
     mcp: { type: "covered", by: "list_invoices" },
     access: "read",
     params: invoiceParamsSchema,

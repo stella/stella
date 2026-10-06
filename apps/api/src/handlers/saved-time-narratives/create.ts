@@ -17,6 +17,7 @@ const config = {
     "Save a personal named time narrative for reuse across matters in the active organization.",
   permissions: { timeEntry: ["create"] },
   accountAccess: ACCOUNT_ACCESS.sandbox,
+  featureAccess: { featureId: "time-billing", type: "required" },
   mcp: { type: "capability", reason: "billing_admin", consumesServices: false },
   body: t.Object({
     name: t.String({ minLength: 1, maxLength: 128 }),

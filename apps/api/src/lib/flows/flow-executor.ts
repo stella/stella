@@ -43,7 +43,8 @@ import { markdownToStellaDocx } from "@/api/lib/docx-authoring/from-markdown";
 import { createEntityFromBuffer } from "@/api/lib/entities/create-from-buffer";
 import { lockWorkspacesForEntityCap } from "@/api/lib/entity-cap-lock";
 import { TASK_STATUS } from "@/api/lib/entity-constants";
-import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { applicationErrorMessage } from "@/api/lib/errors/application-error-message";
+import { FlowStepError, HandlerError } from "@/api/lib/errors/tagged-errors";
 import { serverBuiltFileEncryption } from "@/api/lib/files/detect-file-encryption";
 import {
   flowRunCompletedNotification,
@@ -120,11 +121,7 @@ const unwrapOrFlowStepError = <T>(
   return result.value;
 };
 
-/** Expected step-execution failure (bad AI output, doc-compile error, etc). */
-export class FlowStepError extends TaggedError("FlowStepError")<{
-  message: string;
-  cause?: unknown;
-}> {}
+export { FlowStepError } from "@/api/lib/errors/tagged-errors";
 
 /**
  * The completion notice for a run a reviewer finished could not be filed.
@@ -1209,8 +1206,7 @@ const readRunProgress = async (
 
 // ── Worker failure finalization ─────────────────────────
 
-const errorMessage = (error: unknown): string =>
-  error instanceof Error ? error.message : "Flow step failed";
+const FLOW_STEP_FAILED_MESSAGE = "Flow step failed";
 
 /**
  * Flip a run (and its current step) to `failed` after the worker exhausts its
@@ -1238,7 +1234,7 @@ export const failFlowRunFromWorker = async (
     return;
   }
   const scope = await resolveRunScope(run, database);
-  const message = errorMessage(error);
+  const message = applicationErrorMessage(error, FLOW_STEP_FAILED_MESSAGE);
   const now = new Date();
 
   const writeFailure = async (

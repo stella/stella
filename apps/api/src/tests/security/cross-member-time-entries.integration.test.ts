@@ -27,6 +27,7 @@ import {
   timeTimerConfirmations,
   workspaceMembers,
   workspaces,
+  featureEnrolments,
 } from "@/api/db/schema";
 import { createSafeDb, createScopedDb } from "@/api/db/scoped";
 import batchDelete from "@/api/handlers/time-entries/batch/delete";
@@ -49,6 +50,7 @@ import {
   createBackgroundAuditRecorder,
 } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
+import { loadFeatureAccessSnapshot } from "@/api/lib/auth/feature-access/context";
 import { createSafeId, toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { cents } from "@/api/lib/money";
@@ -92,9 +94,12 @@ const noopAuditRecorder: AuditRecorder = async () => undefined;
 
 const createUser = async (name: string): Promise<SafeId<"user">> => {
   const userId = mintAuthProviderId<"user">();
-  await testDb
-    .insert(user)
-    .values({ id: userId, name, email: `${userId}@test.local` });
+  await testDb.insert(user).values({
+    id: userId,
+    name,
+    email: `${userId}@example.com`,
+    emailVerified: true,
+  });
   return userId;
 };
 
@@ -134,6 +139,14 @@ beforeAll(async () => {
       userId: actor.userId,
       role: actor.role,
       createdAt: new Date(),
+    })),
+  );
+
+  await testDb.insert(featureEnrolments).values(
+    Object.values(actors).map(({ userId }) => ({
+      organizationId,
+      userId,
+      featureId: "time-billing" as const,
     })),
   );
 
@@ -1349,14 +1362,26 @@ describe("confirming a timer in a matter shared by several members", () => {
 
 // ── MCP tools ──────────────────────────────────────────
 
-const mcpContextFor = (name: ActorName): McpRequestContext => {
+const mcpContextFor = async (name: ActorName): Promise<McpRequestContext> => {
   const actor = actors[name];
   const workspaceIds = [workspaceId];
   const accessibleWorkspaces = workspaceIds.map((id) => ({
     id,
     status: "active" as const,
   }));
+  const safeDb = asTestRaw<SafeDb>(
+    createSafeDb(testDb, workspaceIds, organizationId, actor.userId),
+  );
+  const snapshot = await loadFeatureAccessSnapshot({
+    safeDb,
+    organizationId,
+    userId: actor.userId,
+  });
+  if (Result.isError(snapshot)) {
+    throw snapshot.error;
+  }
   return asTestRaw<McpRequestContext>({
+    featureAccessSnapshot: snapshot.value,
     accessibleWorkspaceIds: workspaceIds,
     accessibleWorkspaceIdSet: new Set(workspaceIds),
     accessibleWorkspaceStatusById: new Map(
@@ -1415,7 +1440,7 @@ describe("time entry MCP tools between members of one organization", () => {
 
         const result = await handleMcpToolCall({
           args: operation.args(id),
-          context: mcpContextFor("colleague"),
+          context: await mcpContextFor("colleague"),
           toolName: operation.toolName,
         });
 
@@ -1430,7 +1455,7 @@ describe("time entry MCP tools between members of one organization", () => {
 
           const result = await handleMcpToolCall({
             args: operation.args(id),
-            context: mcpContextFor(actor),
+            context: await mcpContextFor(actor),
             toolName: operation.toolName,
           });
 

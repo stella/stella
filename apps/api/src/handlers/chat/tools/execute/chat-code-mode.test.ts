@@ -7,6 +7,7 @@ import { toSafeId } from "@/api/lib/branded-types";
 import { createChatRefRegistry } from "@/api/lib/chat/ref-registry";
 import { createChatToolDefectMemo } from "@/api/lib/chat/tool-defect-memo";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
+import { getStaticMcpToolDefinition } from "@/api/mcp/static-tool-definitions";
 import {
   installRecordingAnalytics,
   installRecordingLogger,
@@ -491,8 +492,13 @@ describe("the chat read script policy", () => {
   );
 
   test("the script catalog follows each read's declared policy", () => {
+    // Without a caller, enrolment-gated reads stay hidden.
     const scriptReads = Object.entries(CHAT_READ_SCRIPT_POLICY).flatMap(
-      ([name, policy]) => (policy === "script" ? [name] : []),
+      ([name, policy]) =>
+        policy === "script" &&
+        getStaticMcpToolDefinition(name)?.featureId === undefined
+          ? [name]
+          : [],
     );
     expect(directOnly).toEqual([
       "search_boe_legislation",

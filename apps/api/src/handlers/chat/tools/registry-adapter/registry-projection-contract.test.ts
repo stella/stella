@@ -59,6 +59,7 @@ import { CASE_LAW_COVERAGE_FIXTURE } from "@/api/tests/helpers/case-law-coverage
 import { installRecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
 import type { RecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
+import { enrolledTimeBillingSnapshot } from "@/api/tests/helpers/time-billing-enrolment";
 import { toSafeDbMock } from "@/api/tests/scoped-db-mock";
 
 import type { RegistryReadToolName } from "./ref-field-map";
@@ -218,6 +219,12 @@ const buildContext = (tx: unknown): McpRequestContext => {
     userId: toSafeId<"user">("user_1"),
     userEmail: "standard@example.test",
     testDependencies: {
+      // Billing reads are enrolment-gated; this caller is enrolled so every
+      // projectable read runs.
+      featureAccessSnapshot: enrolledTimeBillingSnapshot({
+        organizationId: ORGANIZATION_ID,
+        userId: "user_1",
+      }),
       readWorkspaceHandler: readWorkspaceHandlerMock,
       readOverviewHandler: readOverviewHandlerMock,
       readWorkspaceContactsHandler: readWorkspaceContactsHandlerMock,
@@ -1577,6 +1584,7 @@ const CONTRACT_CORPUS = {
             caseNumberType: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
             country: "CZ",
             court: "Nejvyšší soud",
+            courtAbbreviation: "NS",
             decisionDate: "2020-05-01",
             ecli: "ECLI:CZ:NS:2020:22.CDO.1000.2020.1",
             id: toSafeId<"caseLawDecision">(uid(53)),

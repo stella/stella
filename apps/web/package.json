@@ -22,6 +22,7 @@
     "test:timings": "([ -n \"$TURBO_HASH\" ] || bun run generate:route-tree) && mkdir -p .cache && bun test --parallel=2 --timings=.cache/e2e-unit-timings.json --update-timings e2e/unit",
     "test:property": "([ -n \"$TURBO_HASH\" ] || bun run generate:route-tree) && bun test --preload @stll/property-testing/preload $(grep -rlE 'fc\\.assert|assertProperty' src --include='*.test.ts' --include='*.test.tsx')",
     "test:e2e": "([ -n \"$TURBO_HASH\" ] || bun run generate:route-tree) && playwright test --config e2e/playwright.config.ts",
+    "test:e2e:mcp-apps": "playwright test --config e2e/playwright.mcp-apps.config.ts",
     "test:e2e:soak": "([ -n \"$TURBO_HASH\" ] || bun run generate:route-tree) && playwright test --config e2e/playwright.soak.config.ts",
     "test:e2e:anonymized-export": "([ -n \"$TURBO_HASH\" ] || bun run generate:route-tree) && playwright test --config e2e/playwright.anonymized-export.config.ts",
     "test:e2e:stack-redaction": "([ -n \"$TURBO_HASH\" ] || bun run generate:route-tree) && playwright test --config e2e/playwright.stack-redaction.config.ts",

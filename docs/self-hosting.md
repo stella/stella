@@ -44,6 +44,14 @@ cp apps/web/.env.example apps/web/.env
 bun install
 ```
 
+## Feature grants
+
+Promote the image that registers a feature before setting its
+`API_FEATURE_ACCESS_GRANTS`; before rolling back, set grants to `{}`.
+Unknown feature IDs are dropped at startup and emit the count-only ERROR event
+`feature_access.unknown_grant`. Invalid JSON or malformed grant shapes remain
+fatal configuration errors.
+
 ## Frontend (web app)
 
 The web app under `apps/web` is a TanStack Start SSR app built by Vite. For a
@@ -170,9 +178,9 @@ before contacting any service:
 bun run selfhost:doctor
 ```
 
-The doctor also reads the web build variables in `apps/web/.env` and fails
-when a web feature flag is on without its API flag, such as
-`VITE_FEATURE_TIME_BILLING="true"` without `FEATURE_TIME_BILLING="true"`.
+Time billing requires the API deployment flag `FEATURE_TIME_BILLING="true"`
+and each user's enrolment in Settings > Account > Beta. The web follows that server
+response; a web build variable cannot enable it.
 
 The stock profile enables local email/password authentication and requires the
 setup token when the first account is created. The web sign-up form prompts for

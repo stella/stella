@@ -324,7 +324,7 @@ test("API runtime generation works with only packaged sources and rejects a root
         ),
         "utf-8",
       ),
-    ).toContain('["widgets.list","fixture-feature"]');
+    ).toContain('["widgets.list", "fixture-feature"]');
     const owner = "packages/scripts/src/prepared-generated-sources.ts";
     const source = readFileSync(path.join(root, owner), "utf-8");
     const mutated = source.replace(

@@ -1,12 +1,64 @@
+import "../src/tests/setup-env";
+import tailwindcss from "@tailwindcss/postcss";
 import { panic } from "better-result";
 import path from "node:path";
+import postcss from "postcss";
 
-const MCP_APP_DIRECTORIES = ["document-upload", "file-comparison"] as const;
+import MCP_APP_MESSAGES from "@stll/api-contract/mcp-app-messages";
+
+import { MCP_APP_OUTPUT_SCHEMAS } from "../src/mcp/app-contracts";
+import { MCP_APPS } from "../src/mcp/apps/manifest";
+import { defineChatProjectionMcpToolOutput } from "../src/mcp/valibot-tool-definition";
+import { inspectMcpAppHtml } from "./lib/mcp-app-html-guard";
+
+const generatedRoot = path.resolve(
+  import.meta.dirname,
+  "../src/mcp/apps/shared/generated",
+);
+await Bun.write(
+  path.join(generatedRoot, "messages.json"),
+  `${JSON.stringify(MCP_APP_MESSAGES, null, 2)}\n`,
+);
+const schemas = Object.fromEntries(
+  Object.entries(MCP_APP_OUTPUT_SCHEMAS).map(([name, schema]) => [
+    name,
+    defineChatProjectionMcpToolOutput(schema).outputSchema,
+  ]),
+);
+await Bun.write(
+  path.join(generatedRoot, "schemas.json"),
+  `${JSON.stringify(schemas, null, 2)}\n`,
+);
+const styleInput = path.resolve(generatedRoot, "../style.css");
+const styles = await postcss([tailwindcss()]).process(
+  await Bun.file(styleInput).text(),
+  { from: styleInput },
+);
+const webRoot = path.resolve(import.meta.dirname, "../../web");
+let fonts = await Bun.file(path.join(webRoot, "src/fonts.css")).text();
+const paths = [...fonts.matchAll(/url\("(\/fonts\/[^" ]+)"\)/gu)].map((match) =>
+  match.at(1),
+);
+for (const fontPath of paths) {
+  if (fontPath === undefined) {
+    panic("Font URL has no path");
+  }
+  const bytes = await Bun.file(
+    path.join(webRoot, "public", fontPath),
+  ).arrayBuffer();
+  fonts = fonts.replaceAll(
+    `url("${fontPath}")`,
+    () =>
+      `url("data:font/woff2;base64,${Buffer.from(bytes).toString("base64")}")`,
+  );
+}
+await Bun.write(
+  path.join(generatedRoot, "style.css"),
+  `${fonts}\n${styles.css}`,
+);
+
+const MCP_APP_DIRECTORIES = MCP_APPS.map(({ directory }) => directory);
 const MCP_APP_INPUTS = ["app.html"] as const;
-const EXTERNAL_SCRIPT_PATTERN = /<script\b[^>]*\bsrc\s*=/iu;
-const EXTERNAL_STYLESHEET_PATTERN =
-  /<link\b(?=[^>]*\brel\s*=\s*["']?stylesheet\b)[^>]*>/iu;
-
 const buildMcpApp = async ({
   directory,
   input,
@@ -42,11 +94,11 @@ const buildMcpApp = async ({
     .split("\n")
     .map((line) => line.trimEnd())
     .join("\n");
-  if (
-    EXTERNAL_SCRIPT_PATTERN.test(canonicalHtml) ||
-    EXTERNAL_STYLESHEET_PATTERN.test(canonicalHtml)
-  ) {
-    panic(`MCP app build for ${app} contains an external script or stylesheet`);
+  const issues = inspectMcpAppHtml(canonicalHtml);
+  if (issues.length > 0) {
+    panic(
+      `MCP app build for ${app} is not self-contained: ${issues.join(", ")}`,
+    );
   }
 
   await Bun.write(

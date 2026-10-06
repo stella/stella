@@ -1,7 +1,7 @@
 // Keep provider response text out of provider-call error messages. The provider
 // error message is consumed by persistence and retry paths, so it must remain a
-// stable application-owned constant. ProviderCallError owns its fixed message;
-// callers must not supply one at all.
+// stable application-owned constant. ProviderCallError and ModelRunError own
+// their fixed messages; callers must not supply one at all.
 
 import { eslintCompatPlugin } from "@oxlint/plugins";
 
@@ -22,6 +22,8 @@ import {
 const SOURCE_FILE = "apps/api/src/lib/tanstack-ai-generate.ts";
 const PROVIDER_CALL_ERROR_MODULE =
   "apps/api/src/lib/errors/provider-call-error";
+// The errors whose constructor sets the message itself.
+const FIXED_MESSAGE_ERRORS = new Set(["ProviderCallError", "ModelRunError"]);
 const FIXTURE_FILE =
   ".oxlint-plugins/__fixtures__/provider-call-error-message.fixture.ts";
 
@@ -118,7 +120,7 @@ export default eslintCompatPlugin({
           dynamicHandlerMessage:
             "HandlerError in tanstack-ai-generate must use an application-owned constant message.",
           providerMessage:
-            "ProviderCallError owns its fixed message; omit the `message` option.",
+            "ProviderCallError and ModelRunError own their fixed message; omit the `message` option.",
         },
       },
       createOnce(context) {
@@ -129,12 +131,12 @@ export default eslintCompatPlugin({
               return;
             }
             const isProviderCallError =
-              callee.name === "ProviderCallError" ||
+              FIXED_MESSAGE_ERRORS.has(callee.name) ||
               isImportedFrom({
                 context,
                 node: callee,
                 modules: [PROVIDER_CALL_ERROR_MODULE],
-                names: new Set(["ProviderCallError"]),
+                names: FIXED_MESSAGE_ERRORS,
               });
             const isHandlerError =
               callee.name === "HandlerError" && isTargetHandlerFile(context);
