@@ -1,0 +1,318 @@
+import { Generator, getConfig } from "@tanstack/router-generator";
+import { expect, test, beforeAll, afterAll } from "bun:test";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import os from "node:os";
+import path from "node:path";
+
+import {
+  assertSmokeRouteCoverage,
+  authenticatedRouteTemplates,
+  networkBaselineKey,
+  networkBaselineCoverageProblem,
+} from "../apps/web/e2e/helpers/smoke-route-coverage";
+import { SMOKE_ROUTE_DEFS } from "../apps/web/e2e/helpers/smoke-route-defs";
+import { ROUTE_TREE_OPTIONS } from "../apps/web/route-tree.config";
+import { networkBudgetDeclarationProblem } from "./network-baseline-scope";
+
+const directory = mkdtempSync(path.join(os.tmpdir(), "network-coverage-"));
+let routeTree: string;
+const entry = { depth: 0, requests: [] };
+const baseline = () =>
+  Object.fromEntries(
+    SMOKE_ROUTE_DEFS.map((def) => [networkBaselineKey(def), entry]),
+  );
+
+beforeAll(async () => {
+  const webRoot = path.resolve(import.meta.dirname, "../apps/web");
+  const output = path.join(directory, "tree.ts");
+  const config = getConfig(
+    {
+      routesDirectory: path.join(
+        webRoot,
+        ROUTE_TREE_OPTIONS.srcDirectory,
+        ROUTE_TREE_OPTIONS.routesDirectory,
+      ),
+      generatedRouteTree: output,
+    },
+    webRoot,
+  );
+  await new Generator({ config, root: webRoot }).run();
+  routeTree = readFileSync(output, "utf-8");
+});
+afterAll(() => rmSync(directory, { recursive: true, force: true }));
+
+const validate = (
+  value = baseline(),
+  declarations: unknown[] = [],
+  changedRoutes: string[] = [],
+) => {
+  assertSmokeRouteCoverage(routeTree);
+  const expectedKeys = SMOKE_ROUTE_DEFS.map(networkBaselineKey);
+  const problem =
+    networkBudgetDeclarationProblem({ expectedKeys, declarations }) ??
+    networkBaselineCoverageProblem({
+      actualKeys: Object.keys(value),
+      expectedKeys,
+      changedRoutes,
+    });
+  if (problem !== null) {
+    throw new Error(problem);
+  }
+};
+
+test("canonical smoke keys and declarations cover the generated authenticated tree", () => {
+  validate();
+  validate(baseline(), [
+    { route: "/contacts", reason: "Reviewed budget", budget: entry },
+  ]);
+  expect(authenticatedRouteTemplates(routeTree)).toContain(
+    "/workspaces/$workspaceId/lists",
+  );
+});
+
+test("a render-in-place expectation rejects the former lists redirect key", () => {
+  const route = SMOKE_ROUTE_DEFS.find(
+    (def) => def.template === "/workspaces/$workspaceId/lists",
+  );
+  expect(route).toBeDefined();
+  expect(route?.expectation?.kind).not.toBe("redirectsTo");
+  const stale = baseline();
+  delete stale["/workspaces/$workspaceId/lists"];
+  stale["/workspaces/$workspaceId/lists target"] = entry;
+  expect(() => validate(stale)).toThrow(
+    'Network baseline route keys differ: missing=["/workspaces/$workspaceId/lists"] stale=["/workspaces/$workspaceId/lists target"]',
+  );
+});
+
+test("every smoke route rejects a missing key and its opposite redirect mapping", () => {
+  for (const def of SMOKE_ROUTE_DEFS) {
+    const key = networkBaselineKey(def);
+    const missing = Object.fromEntries(
+      Object.entries(baseline()).filter(([route]) => route !== key),
+    );
+    expect(() => validate(missing)).toThrow(
+      "Network baseline route keys differ",
+    );
+    missing[
+      def.expectation?.kind === "redirectsTo"
+        ? def.template
+        : `${def.template} target`
+    ] = entry;
+    expect(() => validate(missing)).toThrow(
+      "Network baseline route keys differ",
+    );
+  }
+});
+
+test("new authenticated routes, stale exclusions and duplicate smoke declarations fail coverage", () => {
+  const changed = routeTree.replace(
+    "export interface FileRoutesByTo {",
+    "export interface FileRoutesByTo {\n  '/new-section': typeof ProtectedNewSectionRoute",
+  );
+  expect(() => assertSmokeRouteCoverage(changed)).toThrow(
+    'missing=["/new-section"]',
+  );
+  expect(() =>
+    assertSmokeRouteCoverage(routeTree, [
+      ...SMOKE_ROUTE_DEFS,
+      { template: "/stale" },
+    ]),
+  ).toThrow('stale=["/stale"]');
+  expect(() =>
+    assertSmokeRouteCoverage(routeTree, [
+      ...SMOKE_ROUTE_DEFS,
+      ...SMOKE_ROUTE_DEFS,
+    ]),
+  ).toThrow("declarations must cover each route exactly once");
+});
+
+test("unknown generated route forms and missing structural markers fail closed", () => {
+  expect(() => authenticatedRouteTemplates("")).toThrow(
+    "Could not find FileRoutesByTo",
+  );
+  expect(() =>
+    authenticatedRouteTemplates(
+      "export interface FileRoutesByTo {\n  '/x': UnknownType\n}",
+    ),
+  ).toThrow("Unknown FileRoutesByTo entry");
+  expect(() =>
+    authenticatedRouteTemplates(
+      "export interface FileRoutesByTo {\n  '/x': typeof PublicRoute\n}",
+    ),
+  ).toThrow("no authenticated routes");
+});
+
+test("reviewed declarations cannot retain inactive redirect keys", () => {
+  expect(() =>
+    validate(baseline(), [
+      {
+        route: "/workspaces/$workspaceId/lists target",
+        reason: "Reviewed budget",
+        budget: entry,
+      },
+    ]),
+  ).toThrow("Network budget declaration names an inactive route");
+});
+
+test("CLI checks the real route inventory and baseline schema", () => {
+  const file = path.join(directory, "baseline.json");
+  const run = () =>
+    Bun.spawnSync(
+      [
+        "bun",
+        "scripts/network-baseline-scope.ts",
+        "validate",
+        file,
+        "--route-tree",
+        path.join(directory, "tree.ts"),
+        "--context",
+        path.join(directory, "context.json"),
+      ],
+      {
+        cwd: path.resolve(import.meta.dirname, ".."),
+        stdout: "pipe",
+        stderr: "pipe",
+      },
+    );
+  writeFileSync(path.join(directory, "context.json"), "[]");
+  writeFileSync(file, JSON.stringify(baseline()));
+  expect(run().exitCode).toBe(0);
+  const malformed = baseline();
+  malformed["/contacts"] = { depth: -1, requests: [] };
+  writeFileSync(file, JSON.stringify(malformed));
+  const result = run();
+  expect(result.exitCode).not.toBe(0);
+  expect(result.stderr.toString()).toContain(
+    "does not match the network baseline schema",
+  );
+});
+
+test("declarations reject duplicate routes, unknown fields and unrecorded request allowances", () => {
+  const declaration = {
+    route: "/contacts",
+    reason: "Reviewed budget",
+    budget: entry,
+  };
+  for (const declarations of [
+    [declaration, declaration],
+    [{ ...declaration, reason: " " }],
+    [{ ...declaration, extra: true }],
+    [{ ...declaration, budget: { ...entry, depth: -1 } }],
+    [
+      {
+        ...declaration,
+        budget: { ...entry, requestCounts: { "GET /unrecorded": 1 } },
+      },
+    ],
+    [null],
+  ]) {
+    const result = Bun.spawnSync(
+      [
+        "bun",
+        "--eval",
+        `import { networkBudgetDeclarationProblem } from "./scripts/network-baseline-scope.ts"; networkBudgetDeclarationProblem(${JSON.stringify({ baseline: baseline(), expectedKeys: SMOKE_ROUTE_DEFS.map(networkBaselineKey), declarations })});`,
+      ],
+      {
+        cwd: path.resolve(import.meta.dirname, ".."),
+        stderr: "pipe",
+        stdout: "pipe",
+      },
+    );
+    expect(result.exitCode).toBe(1);
+    expect(result.stderr.toString()).toMatch(
+      /Invalid network budget declaration|Duplicate network budget declaration/u,
+    );
+  }
+});
+
+test("unknown expectations require an explicit baseline mapping", () => {
+  expect(() =>
+    networkBaselineKey({
+      template: "/contacts",
+      expectation: { kind: "unknown" },
+    }),
+  ).toThrow("Unknown smoke route expectation: unknown");
+});
+
+test("prepared scope permits changed-route inventory without excusing unchanged stale keys", () => {
+  const stale = baseline();
+  delete stale["/workspaces/$workspaceId/lists"];
+  stale["/workspaces/$workspaceId/lists target"] = entry;
+  validate(
+    stale,
+    [],
+    ["/workspaces/$workspaceId/lists", "/workspaces/$workspaceId/lists target"],
+  );
+  expect(() => validate(stale, [], ["/contacts", "/contacts target"])).toThrow(
+    "Network baseline route keys differ",
+  );
+});
+
+test("inherited declarations cannot manufacture a missing prepared baseline key", () => {
+  const missing = baseline();
+  delete missing["/contacts"];
+  expect(() =>
+    validate(missing, [
+      { route: "/contacts", reason: "Inherited budget", budget: entry },
+    ]),
+  ).toThrow('missing=["/contacts"]');
+});
+
+test("an expectation change needs a matching prepared recording", () => {
+  const changedDefs = SMOKE_ROUTE_DEFS.map((def) =>
+    def.template === "/workspaces/$workspaceId/lists"
+      ? {
+          ...def,
+          expectation: {
+            kind: "redirectsTo",
+            to: "/workspaces/$workspaceId/$viewId",
+          },
+        }
+      : def,
+  );
+  assertSmokeRouteCoverage(routeTree, changedDefs);
+  const expectedKeys = changedDefs.map(networkBaselineKey);
+  expect(
+    networkBaselineCoverageProblem({
+      actualKeys: Object.keys(baseline()),
+      expectedKeys,
+    }),
+  ).toBe(
+    'Network baseline route keys differ: missing=["/workspaces/$workspaceId/lists target"] stale=["/workspaces/$workspaceId/lists"]',
+  );
+  const recorded = baseline();
+  delete recorded["/workspaces/$workspaceId/lists"];
+  recorded["/workspaces/$workspaceId/lists target"] = entry;
+  expect(
+    networkBaselineCoverageProblem({
+      actualKeys: Object.keys(recorded),
+      expectedKeys,
+    }),
+  ).toBeNull();
+});
+
+test("light coverage prepares through the shared action before checking under the time cap", () => {
+  const source = readFileSync(
+    path.resolve(import.meta.dirname, "../.github/workflows/ci.yml"),
+    "utf-8",
+  );
+  const job = source.split("  ci-checks-rest:")[1]?.split("  ci-tests:")[0];
+  expect(job).toBeDefined();
+  const prepare = job?.indexOf("name: Prepare route network manifest") ?? -1;
+  const coverage = job?.indexOf("name: Route network manifest coverage") ?? -1;
+  expect(prepare).toBeGreaterThan(0);
+  expect(coverage).toBeGreaterThan(prepare);
+  const steps = job?.slice(
+    prepare,
+    job.indexOf("name: Workspace hygiene", coverage),
+  );
+  expect(steps).toContain("uses: ./.github/actions/prepare-network-baseline");
+  expect(steps).toContain("timeout-minutes: 1");
+  expect(steps).toContain(
+    "steps.network_manifest_prepare.outcome == 'success'",
+  );
+  expect(steps).toContain("timeout 30s bash -c");
+  expect(steps).toContain(
+    "--context apps/web/e2e/.network-baseline-context.json",
+  );
+});

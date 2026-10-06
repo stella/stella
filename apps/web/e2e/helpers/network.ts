@@ -8,6 +8,8 @@ import {
 } from "node:fs";
 import path from "node:path";
 
+import { networkBaselineCoverageProblem } from "./smoke-route-coverage";
+
 // Matches apps/web/e2e/playwright.config.ts and helpers/api.ts: the API origin
 // the frontend talks to. Only requests to this origin are guarded; everything
 // else (the web host, presigned S3 uploads) is noise for a route-shape budget.
@@ -1138,14 +1140,13 @@ export const assertNetworkBaseline = (
 };
 
 export const assertNetworkBaselineCoverage = (expectedRoutes: string[]) => {
-  const baseline = readNetworkBaseline();
-  const changed = new Set(readChangedRoutes());
+  const problem = networkBaselineCoverageProblem({
+    actualKeys: Object.keys(readNetworkBaseline() ?? {}),
+    expectedKeys: expectedRoutes,
+    changedRoutes: readChangedRoutes(),
+  });
   expect(
-    baseline === null
-      ? []
-      : Object.keys(baseline)
-          .filter((route) => !changed.has(route))
-          .toSorted(),
+    problem,
     `network baseline route keys in ${BASELINE_RELATIVE}`,
-  ).toEqual(expectedRoutes.filter((route) => !changed.has(route)).toSorted());
+  ).toBeNull();
 };
