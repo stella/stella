@@ -750,7 +750,6 @@ const FolderCell = ({
       />
       {isEditing ? (
         <InlineEdit
-          inputClassName="w-48"
           onCancel={() => {
             onStopEditing();
             setEditValue(name);
@@ -761,7 +760,7 @@ const FolderCell = ({
         />
       ) : (
         <button
-          className="truncate text-start text-sm"
+          className="overflow-hidden text-start text-sm text-ellipsis whitespace-pre"
           dir="auto"
           onDoubleClick={(e) => {
             e.stopPropagation();

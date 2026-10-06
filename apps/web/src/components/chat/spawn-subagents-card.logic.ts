@@ -1,4 +1,7 @@
-import type { RegisteredChatUIToolCallPart } from "@/components/chat/chat-ui-tools";
+import type {
+  ChatUITools,
+  RegisteredChatUIToolCallPart,
+} from "@/components/chat/chat-ui-tools";
 
 export type SpawnSubagentsToolCallState = Extract<
   RegisteredChatUIToolCallPart,
@@ -52,13 +55,8 @@ export const getSpawnSubagentsCallStatus = ({
     ? SPAWN_SUBAGENTS_CALL_STATUS.declined
     : SPAWN_SUBAGENTS_CALL_STATUS_BY_STATE[state];
 
-// Historical persisted tool-call arguments can contain provider-emitted nulls.
-type SpawnSubagent = {
-  task: string;
-  context?: string | null | undefined;
-  expectedOutput?: string | null | undefined;
-  model?: string | null | undefined;
-};
+type SpawnSubagent =
+  ChatUITools["spawn_subagents"]["input"]["subagents"][number];
 
 export type KeyedSpawnSubagent<T extends SpawnSubagent> = {
   index: number;
@@ -73,6 +71,7 @@ export const keySpawnSubagents = <T extends SpawnSubagent>(
 
   return subagents.map((subagent, index) => {
     const identity = JSON.stringify([
+      subagent.title,
       subagent.task,
       subagent.context ?? null,
       subagent.expectedOutput ?? null,
@@ -87,4 +86,50 @@ export const keySpawnSubagents = <T extends SpawnSubagent>(
       subagent,
     };
   });
+};
+
+const MASKED_IDENTIFIER = "[…]";
+const UUID_IN_PROMPT =
+  /\b[\da-f]{8}-[\da-f]{4}-[\da-f]{4}-[\da-f]{4}-[\da-f]{12}\b/giu;
+// Mask values labeled by the identifier naming conventions, including JSON
+// and prose assignments, without removing ordinary legal references.
+const LABELED_IDENTIFIER_IN_PROMPT =
+  /\b((?:id|ID|[a-zA-Z][\w]*(?:Id|ID)|[a-zA-Z][\w]*_(?:id|ID))["']?\s*[:=]\s*)(?:\[…\]|"[^"\n]*"|'[^'\n]*'|[^\s,;.)}\]]+)/gu;
+
+export const maskSubagentIdentifiers = (text: string) =>
+  text
+    .replace(UUID_IN_PROMPT, () => MASKED_IDENTIFIER)
+    .replace(
+      LABELED_IDENTIFIER_IN_PROMPT,
+      (_match, prefix: string) => `${prefix}${MASKED_IDENTIFIER}`,
+    );
+
+// Start a numerical range only at the beginning of a number run: failed
+// matches must not retry the remaining suffix at every digit.
+const TITLE_CITATION_RUN =
+  /§{1,2}\s*\p{N}+(?:[./:–—-]\p{N}+)*|(?<!\p{N})\p{N}+(?:[./:–—-]\p{N}+)+/gu;
+
+type SubagentTitleRun = {
+  type: "text" | "citation";
+  text: string;
+  start: number;
+};
+
+/** Keep numerical legal references in their source order within RTL titles. */
+export const subagentTitleRuns = (title: string) => {
+  const runs: SubagentTitleRun[] = [];
+  let start = 0;
+  for (const match of title.matchAll(TITLE_CITATION_RUN)) {
+    // SAFETY: A regex match always contains its full matched text at index zero.
+    const citation = match[0];
+    if (match.index > start) {
+      runs.push({ type: "text", text: title.slice(start, match.index), start });
+    }
+    runs.push({ type: "citation", text: citation, start: match.index });
+    start = match.index + citation.length;
+  }
+  if (start < title.length) {
+    runs.push({ type: "text", text: title.slice(start), start });
+  }
+  return runs;
 };
