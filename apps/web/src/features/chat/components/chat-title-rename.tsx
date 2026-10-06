@@ -123,6 +123,7 @@ type ChatTitleRenameProps = {
   inputClassName?: string | undefined;
   /** Class for the `InlineEdit` wrapper (e.g. to fill a list row). */
   editClassName?: string | undefined;
+  editDescription?: React.ReactNode;
 };
 
 /**
@@ -153,6 +154,7 @@ const ChatTitleRenameSession = ({
   renderView,
   inputClassName,
   editClassName,
+  editDescription,
 }: ChatTitleRenameProps) => {
   const t = useTranslations();
   const rename = useRenameChatThread(threadRef);
@@ -239,38 +241,48 @@ const ChatTitleRenameSession = ({
 
   if (inlineRename.state.mode === "edit") {
     return (
-      <InlineEdit
-        action={
-          <ChatTitleSuggestButton
-            hasMessages={hasMessages}
-            isPending={isSuggesting}
-            onTrigger={() => {
-              detached(
-                suggestIntoDraft(),
-                "chat-title-rename.suggest-into-draft",
-              );
-            }}
-            usedAnonymization={usedAnonymization}
-          />
-        }
-        className={editClassName}
-        inputClassName={inputClassName}
-        onCancel={() => {
-          sessionRef.current += 1;
-          draftRef.current = null;
-          inlineRename.cancel();
-        }}
-        onChange={(value) => {
-          draftRef.current = value;
-          inlineRename.setDraft(value);
-        }}
-        onCommit={() => {
-          sessionRef.current += 1;
-          draftRef.current = null;
-          detached(inlineRename.commit(), "chat-title-rename.commit");
-        }}
-        value={inlineRename.state.draft}
-      />
+      <span
+        className={cn(
+          "flex max-w-full min-w-0 flex-col",
+          editDescription !== undefined ? editClassName : "py-0.5",
+        )}
+      >
+        <InlineEdit
+          action={
+            <ChatTitleSuggestButton
+              hasMessages={hasMessages}
+              isPending={isSuggesting}
+              onTrigger={() => {
+                detached(
+                  suggestIntoDraft(),
+                  "chat-title-rename.suggest-into-draft",
+                );
+              }}
+              usedAnonymization={usedAnonymization}
+            />
+          }
+          className={cn(
+            editDescription !== undefined ? undefined : editClassName,
+          )}
+          inputClassName={inputClassName}
+          onCancel={() => {
+            sessionRef.current += 1;
+            draftRef.current = null;
+            inlineRename.cancel();
+          }}
+          onChange={(value) => {
+            draftRef.current = value;
+            inlineRename.setDraft(value);
+          }}
+          onCommit={() => {
+            sessionRef.current += 1;
+            draftRef.current = null;
+            detached(inlineRename.commit(), "chat-title-rename.commit");
+          }}
+          value={inlineRename.state.draft}
+        />
+        {editDescription}
+      </span>
     );
   }
 
@@ -295,7 +307,10 @@ const ChatTitleRenameSession = ({
           onClick={startEditing}
           type="button"
         >
-          <BidiText as="span" className="max-w-64 truncate">
+          <BidiText
+            as="span"
+            className="max-w-full overflow-hidden text-ellipsis whitespace-pre"
+          >
             {displayTitle}
           </BidiText>
         </button>
