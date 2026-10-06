@@ -186,7 +186,6 @@ describe("unavailable view mutation targets", () => {
     const queryClient = await seededClient();
     const unavailable = {
       id: "verification",
-      layout: { type: "avt" },
       eligibility: "unavailable",
     } satisfies UnavailableWorkspaceView;
     const rows = [...CACHED_VIEWS, unavailable];

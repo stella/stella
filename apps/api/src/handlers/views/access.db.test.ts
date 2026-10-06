@@ -263,7 +263,6 @@ describe("AVT views follow the current access grant", () => {
     if (Array.isArray(denied)) {
       expect(denied.find((view) => view.id === avtId)).toEqual({
         id: avtId,
-        layout: { type: "avt" },
         eligibility: "unavailable",
       });
       expect(denied.some((view) => view.id === ordinaryId)).toBe(true);
@@ -535,7 +534,6 @@ test.each(["unavailable", "colleague"] as const)(
         Array.isArray(views) && views.find((view) => view.id === viewId),
       ).toEqual({
         id: viewId,
-        layout: { type: "avt" },
         eligibility: "unavailable",
       });
       expect(
@@ -706,7 +704,6 @@ test("deployment availability remains a ceiling for granted AVT controls", async
       Array.isArray(views) && views.find((view) => view.id === viewId),
     ).toEqual({
       id: viewId,
-      layout: { type: "avt" },
       eligibility: "unavailable",
     });
     expect(

@@ -343,7 +343,6 @@ describe("reconciling the store against a matter's views", () => {
     seedEveryRecord([v1, v2, otherMatter]);
     const unavailable = {
       id: "v1",
-      layout: { type: "avt" },
       eligibility: "unavailable",
     } satisfies UnavailableWorkspaceView;
     const ordinary = {

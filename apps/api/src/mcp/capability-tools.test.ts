@@ -622,7 +622,6 @@ describe("list verification access grants across MCP tools", () => {
           : [
               {
                 id: view.id,
-                layout: { type: "avt" },
                 eligibility: "unavailable",
               },
             ],
@@ -636,7 +635,7 @@ describe("list verification access grants across MCP tools", () => {
     });
     expect(denied.isError).not.toBe(true);
     expect(parseToolPayload<unknown[]>(denied)).toEqual([
-      { id: view.id, layout: { type: "avt" }, eligibility: "unavailable" },
+      { id: view.id, eligibility: "unavailable" },
     ]);
   });
 
