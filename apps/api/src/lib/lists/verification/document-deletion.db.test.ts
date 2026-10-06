@@ -1,8 +1,9 @@
 import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
-import { sql } from "drizzle-orm";
+import { getColumns, sql } from "drizzle-orm";
 
 import {
+  auditLogs,
   legalListClaimReviewEvents,
   legalListClaims,
   legalListVerificationBlocks,
@@ -48,6 +49,15 @@ describe.skipIf(!enabled)("document-owned verification history", () => {
           GRANT SELECT ON stella_authorized_workspaces TO stella;
           GRANT SELECT, DELETE ON entities TO stella;
         `);
+        // The cleanup records each removed run; keep that record in this schema.
+        await client.unsafe(
+          `CREATE TABLE audit_logs (${Object.values(getColumns(auditLogs))
+            .map(
+              (column) =>
+                `"${column.name}" ${column.getSQLType()}${column.name === "created_at" ? " DEFAULT now()" : ""}`,
+            )
+            .join(", ")})`,
+        );
         const applyMigration = async (name: string) => {
           const source = await Bun.file(
             new URL(
@@ -164,13 +174,28 @@ describe.skipIf(!enabled)("document-owned verification history", () => {
           }
           return result;
         };
-        await seedRun(createSafeId<"entity">(), "completed");
+        const orphanRunId = await seedRun(
+          createSafeId<"entity">(),
+          "completed",
+        );
         expect(Object.values(await counts())).toEqual(dependents.map(() => 1));
         await applyMigration(migrationName);
         await applyMigration(
           "20261005120700_validate_verification_document_cascade",
         );
         expect(Object.values(await counts())).toEqual(dependents.map(() => 0));
+        expect(
+          await client`
+            SELECT resource_id, organization_id, action, trigger_source_id
+            FROM audit_logs`,
+        ).toEqual([
+          {
+            resource_id: orphanRunId,
+            organization_id: organizationId,
+            action: "delete",
+            trigger_source_id: migrationName,
+          },
+        ]);
         for (const status of VERIFICATION_RUN_STATUSES) {
           await seedRun(documentId, status);
         }
