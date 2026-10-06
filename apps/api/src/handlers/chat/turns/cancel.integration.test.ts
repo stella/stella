@@ -705,7 +705,7 @@ describe("a running turn's owner, once the user asked to stop", () => {
       );
     const requestStop = async () => {
       const response = await stop({ threadId, turnId });
-      expect([200, 202]).toContain(response.status);
+      expect(response.status).toBeOneOf([200, 202]);
       return response;
     };
 
