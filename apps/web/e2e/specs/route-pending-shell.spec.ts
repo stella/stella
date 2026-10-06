@@ -9,13 +9,18 @@ const cases = [
   { path: "/contacts", listPath: "/v1/contacts" },
 ] as const;
 
-const holdProtectedLoader = async (page: Page) => {
-  await page.evaluate(() => {
+const holdProtectedLoader = async (page: Page, path: string) => {
+  await page.evaluate((targetPath) => {
     const router = window.__TSR_ROUTER__;
     const route = router?.routesById["/_protected"];
     const original = route?.options.loader;
     if (route === undefined || typeof original !== "function") {
       throw new Error("The production protected route loader must exist");
+    }
+    const child = router?.routesById[`/_protected${targetPath}/`];
+    const originalChild = child?.options.loader;
+    if (child === undefined || typeof originalChild !== "function") {
+      throw new Error("The production page route loader must exist");
     }
     const gate = Promise.withResolvers<undefined>();
     window.addEventListener(
@@ -30,7 +35,10 @@ const holdProtectedLoader = async (page: Page) => {
       () => {
         gate.resolve(undefined);
         route.update({ loader: original });
+        child.update({ loader: originalChild });
         delete document.documentElement.dataset["parentLoaderHeld"];
+        delete document.documentElement.dataset["parentLoaderSettled"];
+        delete document.documentElement.dataset["pageLoaderState"];
       },
       { once: true },
     );
@@ -39,10 +47,19 @@ const holdProtectedLoader = async (page: Page) => {
         const result = await original(context);
         document.documentElement.dataset["parentLoaderHeld"] = "true";
         await gate.promise;
+        document.documentElement.dataset["parentLoaderSettled"] = "true";
         return result;
       },
     });
-  });
+    child.update({
+      loader: async (context: Parameters<typeof originalChild>[0]) => {
+        document.documentElement.dataset["pageLoaderState"] = "running";
+        const result = await originalChild(context);
+        document.documentElement.dataset["pageLoaderState"] = "settled";
+        return result;
+      },
+    });
+  }, path);
 };
 
 const holdRequest = async (page: Page, path: string) => {
@@ -87,7 +104,7 @@ for (const { path, listPath } of cases) {
     await expectSingleShell(page);
     const list = await holdRequest(page, listPath);
     const content = page.locator('[data-slot="workspace-shell-content"]');
-    await holdProtectedLoader(page);
+    await holdProtectedLoader(page, path);
 
     try {
       // Navigate through the mounted app, using its real route tree and frame.
@@ -106,10 +123,22 @@ for (const { path, listPath } of cases) {
       await page.evaluate(() =>
         window.dispatchEvent(new Event("release-protected-loader")),
       );
-      // The page's own disabled toolbar now proves its fallback is mounted.
+      await expect(page.locator("html")).toHaveAttribute(
+        "data-parent-loader-settled",
+        "true",
+        { timeout: 2000 },
+      );
+      // The router can retain the parent fallback until its child settles.
+      // Prove the actual page loader remains in flight instead of requiring
+      // a particular route-specific toolbar to have replaced that fallback.
+      await expect(page.locator("html")).toHaveAttribute(
+        "data-page-loader-state",
+        "running",
+        { timeout: 2000 },
+      );
       await expect(
-        content.locator("input[placeholder]:disabled").first(),
-      ).toBeVisible();
+        content.locator('[data-slot="skeleton"]').first(),
+      ).toBeVisible({ timeout: 2000 });
       await expectSingleShell(page);
 
       const listResponse = page.waitForResponse(
@@ -117,6 +146,10 @@ for (const { path, listPath } of cases) {
       );
       list.release();
       expect((await listResponse).ok()).toBe(true);
+      await expect(page.locator("html")).toHaveAttribute(
+        "data-page-loader-state",
+        "settled",
+      );
       await expect(
         content.locator("input[placeholder]:enabled").first(),
       ).toBeVisible();

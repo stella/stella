@@ -235,6 +235,26 @@ test.each([
   ],
   ["default alias", "import Pending from '@stll/ui/loader';"],
   [
+    "large region",
+    "import {Loader} from '@stll/ui/loader'; const Pending=()=> <Loader size='lg'/>;",
+  ],
+  [
+    "medium row",
+    "import {Loader} from '@stll/ui/loader'; const Pending=()=> <Loader size='md'/>;",
+  ],
+  [
+    "region state",
+    "import {LoaderState} from '@stll/ui/loader'; const Pending=()=> <LoaderState size='sm'/>;",
+  ],
+  [
+    "dynamic size",
+    "import {Loader} from '@stll/ui/loader'; const Pending=()=> <Loader size={loadingSize}/>;",
+  ],
+  [
+    "spread override",
+    "import {Loader} from '@stll/ui/loader'; const Pending=()=> <Loader size='sm' {...props}/>;",
+  ],
+  [
     "lazy named",
     "import {lazy} from 'react'; const Pending=lazy(()=> import('@stll/ui/loader').then(module=> ({default:module.Loader})));",
   ],
@@ -260,6 +280,21 @@ test.each([
     );
   },
 );
+
+test("allows canonical small inline progress in content controls, including aliased and paired tags", async () => {
+  await withSources(
+    {
+      "routes/index.tsx":
+        "import {Loader as Busy} from '@stll/ui/loader'; import * as Loading from '@stll/ui/loader'; import {Inline} from '@/alias'; const Pending=()=> <main><button><Busy size='sm'/></button><Loading.Loader size={'sm'}></Loading.Loader><Inline size='sm'/></main>; export const Route=createFileRoute('/')({pendingComponent:Pending});",
+      "alias.ts": "export {Loader as Inline} from '@stll/ui/loader';",
+    },
+    (directory) => {
+      const result = checkRouteFallbacks(directory);
+      expect(result.census).toHaveLength(2);
+      expect(result.violations).toEqual([]);
+    },
+  );
+});
 
 test.each([
   [

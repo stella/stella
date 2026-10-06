@@ -235,6 +235,15 @@ class FallbackSymbols {
     if (ts.isTypeNode(node)) {
       return [];
     }
+    if (ts.isJsxClosingElement(node)) {
+      return [];
+    }
+    if (
+      (ts.isJsxOpeningElement(node) || ts.isJsxSelfClosingElement(node)) &&
+      this.isInlineLoader(file, node)
+    ) {
+      return [];
+    }
     if (ts.isJsxAttribute(node)) {
       return this.inspectAttribute(file, node, visited, locals);
     }
@@ -242,21 +251,7 @@ class FallbackSymbols {
       ts.isPropertyAccessExpression(node) &&
       ts.isIdentifier(node.expression)
     ) {
-      const imported = this.load(file).imports.get(node.expression.text);
-      if (imported?.module === LOGO_LOADER_MODULE) {
-        return [`${imported.module}#${node.name.text}`];
-      }
-      if (imported?.name === "*") {
-        if (SHELL_SYMBOLS.has(node.name.text)) {
-          return [`${imported.module}#${node.name.text}`];
-        }
-        const target = this.resolveModule(file, imported.module);
-        return target
-          ? this.inspectSymbol(target, node.name.text, visited)
-          : [];
-      }
-      // Data/query members in JSX props are not rendered component symbols.
-      return [];
+      return this.inspectPropertyAccess(file, node, visited);
     }
     if (
       ts.isCallExpression(node) &&
@@ -297,62 +292,93 @@ class FallbackSymbols {
       }
       return this.inspectSymbol(file, node.text, visited);
     }
-    const findings: string[] = [];
     if (
       ts.isFunctionDeclaration(node) ||
       ts.isArrowFunction(node) ||
       ts.isFunctionExpression(node)
     ) {
-      const body = node.body;
-      if (!body) {
-        return findings;
-      }
-      if (!ts.isBlock(body)) {
-        return this.inspectNode(file, body, visited, locals);
-      }
-      const scopedLocals = new Map(locals);
-      const declarations = (child: ts.Node) => {
-        if (
-          ts.isVariableDeclaration(child) &&
-          ts.isIdentifier(child.name) &&
-          child.initializer
-        ) {
-          scopedLocals.set(child.name.text, child.initializer);
-        }
-        if (ts.isFunctionDeclaration(child)) {
-          if (child.name) {
-            scopedLocals.set(child.name.text, child);
-          }
-          return;
-        }
-        if (ts.isArrowFunction(child) || ts.isFunctionExpression(child)) {
-          return;
-        }
-        ts.forEachChild(child, declarations);
-      };
-      ts.forEachChild(body, declarations);
-      const returns = (child: ts.Node) => {
-        if (ts.isReturnStatement(child) && child.expression) {
-          findings.push(
-            ...this.inspectNode(file, child.expression, visited, scopedLocals),
-          );
-          return;
-        }
-        if (
-          ts.isFunctionDeclaration(child) ||
-          ts.isArrowFunction(child) ||
-          ts.isFunctionExpression(child)
-        ) {
-          return;
-        }
-        ts.forEachChild(child, returns);
-      };
-      ts.forEachChild(body, returns);
-      return findings;
+      return this.inspectFunction(file, node, visited, locals);
     }
+    const findings: string[] = [];
     ts.forEachChild(node, (child) => {
       findings.push(...this.inspectNode(file, child, visited, locals));
     });
+    return findings;
+  }
+  inspectPropertyAccess(
+    file: string,
+    node: ts.PropertyAccessExpression,
+    visited: Set<string>,
+  ): string[] {
+    if (!ts.isIdentifier(node.expression)) {
+      return [];
+    }
+    const imported = this.load(file).imports.get(node.expression.text);
+    if (imported?.module === LOGO_LOADER_MODULE) {
+      return [`${imported.module}#${node.name.text}`];
+    }
+    if (imported?.name === "*") {
+      if (SHELL_SYMBOLS.has(node.name.text)) {
+        return [`${imported.module}#${node.name.text}`];
+      }
+      const target = this.resolveModule(file, imported.module);
+      return target ? this.inspectSymbol(target, node.name.text, visited) : [];
+    }
+    // Data/query members in JSX props are not rendered component symbols.
+    return [];
+  }
+  inspectFunction(
+    file: string,
+    node: ts.FunctionDeclaration | ts.ArrowFunction | ts.FunctionExpression,
+    visited: Set<string>,
+    locals: Map<string, ts.Node>,
+  ): string[] {
+    const findings: string[] = [];
+    const body = node.body;
+    if (!body) {
+      return findings;
+    }
+    if (!ts.isBlock(body)) {
+      return this.inspectNode(file, body, visited, locals);
+    }
+    const scopedLocals = new Map(locals);
+    const declarations = (child: ts.Node) => {
+      if (
+        ts.isVariableDeclaration(child) &&
+        ts.isIdentifier(child.name) &&
+        child.initializer
+      ) {
+        scopedLocals.set(child.name.text, child.initializer);
+      }
+      if (ts.isFunctionDeclaration(child)) {
+        if (child.name) {
+          scopedLocals.set(child.name.text, child);
+        }
+        return;
+      }
+      if (ts.isArrowFunction(child) || ts.isFunctionExpression(child)) {
+        return;
+      }
+      ts.forEachChild(child, declarations);
+    };
+    ts.forEachChild(body, declarations);
+    const returns = (child: ts.Node) => {
+      if (ts.isReturnStatement(child) && child.expression) {
+        findings.push(
+          ...this.inspectNode(file, child.expression, visited, scopedLocals),
+        );
+        return;
+      }
+      if (
+        ts.isFunctionDeclaration(child) ||
+        ts.isArrowFunction(child) ||
+        ts.isFunctionExpression(child)
+      ) {
+        return;
+      }
+      ts.forEachChild(child, returns);
+    };
+    ts.forEachChild(body, returns);
     return findings;
   }
   inspectAttribute(
@@ -379,6 +405,86 @@ class FallbackSymbols {
     return node.initializer
       ? this.inspectNode(file, node.initializer, visited, locals)
       : [];
+  }
+  isCanonicalLoader(file: string, name: string, visited: Set<string>): boolean {
+    const key = `${file}#${name}`;
+    if (visited.has(key)) {
+      return false;
+    }
+    visited.add(key);
+    const module = this.load(file);
+    const imported = module.imports.get(name) ?? module.exports.get(name);
+    if (imported) {
+      if (imported.module === LOGO_LOADER_MODULE) {
+        return imported.name === "Loader";
+      }
+      const target = imported.module
+        ? this.resolveModule(file, imported.module)
+        : file;
+      return (
+        target !== undefined &&
+        this.isCanonicalLoader(target, imported.name, visited)
+      );
+    }
+    const definition = module.definitions.get(name);
+    if (definition && ts.isIdentifier(definition)) {
+      return this.isCanonicalLoader(file, definition.text, visited);
+    }
+    for (const specifier of module.exportStars) {
+      const target = this.resolveModule(file, specifier);
+      if (target && this.isCanonicalLoader(target, name, visited)) {
+        return true;
+      }
+    }
+    return false;
+  }
+  isInlineLoader(
+    file: string,
+    node: ts.JsxOpeningElement | ts.JsxSelfClosingElement,
+  ): boolean {
+    if (node.attributes.properties.some(ts.isJsxSpreadAttribute)) {
+      return false;
+    }
+    const sizes = node.attributes.properties.filter(
+      (attribute) =>
+        ts.isJsxAttribute(attribute) && attribute.name.getText() === "size",
+    );
+    const size = sizes.at(0);
+    if (sizes.length !== 1 || !size || !ts.isJsxAttribute(size)) {
+      return false;
+    }
+    const value = size.initializer;
+    const expression =
+      value && ts.isJsxExpression(value) ? value.expression : value;
+    if (
+      !expression ||
+      !ts.isStringLiteral(expression) ||
+      expression.text !== "sm"
+    ) {
+      return false;
+    }
+    // The owner defines sm as progress next to a control; md/lg occupy a region.
+    if (ts.isIdentifier(node.tagName)) {
+      return this.isCanonicalLoader(file, node.tagName.text, new Set());
+    }
+    if (
+      !ts.isPropertyAccessExpression(node.tagName) ||
+      !ts.isIdentifier(node.tagName.expression)
+    ) {
+      return false;
+    }
+    const imported = this.load(file).imports.get(node.tagName.expression.text);
+    if (!imported) {
+      return false;
+    }
+    if (imported.module === LOGO_LOADER_MODULE) {
+      return node.tagName.name.text === "Loader";
+    }
+    const target = this.resolveModule(file, imported.module);
+    return (
+      target !== undefined &&
+      this.isCanonicalLoader(target, node.tagName.name.text, new Set())
+    );
   }
   inspectRenderCall(
     file: string,
