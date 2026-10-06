@@ -1815,7 +1815,7 @@
     "apps/web/e2e/specs/evidence-references.spec.ts": 1,
     "apps/web/e2e/specs/heap-growth-canary.spec.ts": 9,
     "apps/web/e2e/specs/navigation-policy.unit.spec.ts": 4,
-    "apps/web/e2e/specs/route-smoke.spec.ts": 28,
+    "apps/web/e2e/specs/route-smoke.spec.ts": 32,
     "apps/web/e2e/specs/vite-dependency-canary.spec.ts": 4,
     "apps/web/src/components/ai-config-role-model-picker.tsx": 1,
     "apps/web/src/components/ai-config-role-models.logic.ts": 12,
