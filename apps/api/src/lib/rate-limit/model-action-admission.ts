@@ -4,6 +4,8 @@ import type { ScopedDb } from "@/api/db/safe-db";
 import { detached } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { failureSink } from "@/api/lib/observability/failure";
+import { observeFailure } from "@/api/lib/observability/observe-failure";
 import {
   ActionAdmissionError,
   actionAdmissionRefusal,
@@ -14,6 +16,12 @@ import {
   admitModelDispatch,
   type ModelDispatchAdmission,
 } from "@/api/lib/rate-limit/model-dispatch-admission";
+
+// Background model work that failed after its caller already answered.
+const BACKGROUND_FAILURE = failureSink({
+  event: "model_action.background_failed",
+  expected: [],
+});
 
 export type AdmittedModelAction = {
   signal: AbortSignal;
@@ -105,30 +113,33 @@ export const createDetachedModelActionStarter = (
   }: DetachedModelActionOptions<TStarted>) => {
     const answered = Promise.withResolvers<Result<TStarted, unknown>>();
     const phase: { status: "starting" | "continuing" } = { status: "starting" };
-    detached(
-      admitModelAction(async (admitted) => {
+    const run = async () => {
+      const outcome = await admitModelAction(async (admitted) => {
         const started = await start(admitted);
         phase.status = "continuing";
         answered.resolve(Result.ok(started));
         await background(admitted, started);
-      }).then((outcome) => {
-        if (Result.isOk(outcome)) {
+      });
+      if (Result.isOk(outcome)) {
+        return;
+      }
+      switch (phase.status) {
+        case "starting":
+          answered.resolve(Result.err(outcome.error));
           return;
-        }
-        switch (phase.status) {
-          case "starting":
-            answered.resolve(Result.err(outcome.error));
-            return;
-          case "continuing":
-            // The caller already answered; the failure goes to capture.
-            throw outcome.error;
-          default:
-            phase.status satisfies never;
-            panic("Unhandled detached model action phase");
-        }
-      }),
-      label,
-    );
+        case "continuing":
+          // The caller already answered; the failure goes to capture.
+          observeFailure(outcome.error, {
+            sink: BACKGROUND_FAILURE,
+            ctx: { operation: label },
+          });
+          return;
+        default:
+          phase.status satisfies never;
+          panic("Unhandled detached model action phase");
+      }
+    };
+    detached(run(), "model-action.background");
     return await answered.promise;
   };
 };

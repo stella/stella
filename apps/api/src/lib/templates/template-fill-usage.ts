@@ -105,16 +105,18 @@ export const runAdmittedAiFill = async <TRejection, T>({
   if (rejection !== null) {
     return { type: "refused", rejection };
   }
-  const phase: { status: "admitting" | "filling" } = { status: "admitting" };
+  const filling: { promise: Promise<T> | null } = { promise: null };
   const admitted = await admitModelAction(async (action) => {
-    phase.status = "filling";
-    return await fill(await collaborators(action));
+    filling.promise = (async () => await fill(await collaborators(action)))();
+    return await filling.promise;
   });
   if (Result.isOk(admitted)) {
     return { type: "admitted", value: admitted.value };
   }
-  if (phase.status === "filling") {
-    throw admitted.error;
+  if (filling.promise !== null) {
+    // Awaiting the fill again rejects with its own failure; a fill that
+    // settled keeps its value, as a settled admitted action does.
+    return { type: "admitted", value: await filling.promise };
   }
   return { type: "refused", rejection: modelActionRefusal(admitted.error) };
 };
