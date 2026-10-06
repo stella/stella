@@ -1121,7 +1121,11 @@ const retainedMarkdownReader = ({
   file,
   temporaryFactories,
 }: MarkdownReaderOptions): MarkdownReader | undefined => {
-  if (importsFs || source.includes("Bun.file")) {
+  if (
+    importsFs ||
+    source.includes("Bun.file") ||
+    /\bconst\s+CI_MARKDOWN_READER_INPUTS(?:_[A-Za-z_$][\w$]*)?\b/u.test(code)
+  ) {
     const declared = declaredMarkdownInputs({
       expression: "CI_MARKDOWN_READER_INPUTS",
       code,
@@ -1179,6 +1183,9 @@ export const markdownReaders = (root = ROOT): readonly MarkdownReader[] => {
         source,
       ) &&
       !source.includes("astro/loaders") &&
+      !/\bconst\s+CI_MARKDOWN_READER_INPUTS(?:_[A-Za-z_$][\w$]*)?\b/u.test(
+        maskSourceNonCode(source),
+      ) &&
       !/\b(?:from|import)\s*["'][^"'\n]+\.mdx?["']/u.test(source)
     ) {
       continue;

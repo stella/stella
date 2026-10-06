@@ -488,24 +488,23 @@ const expectScope = ({ current, base }: ScopeOptions) => {
     /^needs\.ci-plan\.outputs\.run_required != 'false' && \(\s*(.*?)\s*\)$/u;
   const currentCompletion = completionWrapper.exec(tokens)?.at(1);
   const baseCompletion = completionWrapper.exec(original)?.at(1);
-  // An existing completion gate must survive approved package-scope additions.
-  if (baseCompletion !== undefined && currentCompletion === undefined) {
+  const addedPackageGate = ` && ${PACKAGE_SCOPE}`;
+  // Extend the exact baseline comparison only for the owned package gate.
+  if (baseCompletion !== undefined) {
+    if (currentCompletion === `${baseCompletion}${addedPackageGate}`) {
+      return;
+    }
     expect(tokens).toBe(original);
     return;
   }
   const fresh = currentCompletion ?? tokens;
-  const baselineScope = baseCompletion ?? original;
-  if (fresh === baselineScope) {
-    return;
-  }
-  const addedPackageGate = ` && ${PACKAGE_SCOPE}`;
-  if (fresh === `${baselineScope}${addedPackageGate}`) {
+  if (fresh === original || fresh === `${original}${addedPackageGate}`) {
     return;
   }
   const wrapped = /^inputs\.heavy_only != true && \(\s*(.*?)\s*\)$/u.exec(
     fresh,
   );
-  expect(wrapped?.at(1)).toBe(baselineScope);
+  expect(wrapped?.at(1)).toBe(original);
 };
 
 type CoverageOptions = {
@@ -797,6 +796,7 @@ test("package scope narrows check legs while retaining baseline trust and comple
     for (const suffix of [
       " || true",
       " && needs.ci-plan.outputs.other == 'true'",
+      ` && ${PACKAGE_SCOPE} && needs.ci-plan.outputs.unapproved == 'true'`,
       " && needs.ci-plan.outputs.package_checks_required != 'true'",
     ]) {
       expect(() =>
@@ -809,6 +809,7 @@ test("package scope narrows check legs while retaining baseline trust and comple
     if (completion) {
       for (const invalid of [
         `${trust} && ${PACKAGE_SCOPE}`,
+        wrap(`inputs.heavy_only != true && (${trust})`),
         wrap(
           `${trust.replace("inputs.heavy_only != true && ", "")} && ${PACKAGE_SCOPE}`,
         ),
