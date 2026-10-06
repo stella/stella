@@ -30,12 +30,19 @@ import {
   ACTION_ADMISSION_CODES,
   ACTION_ADMISSION_REFUSALS,
 } from "@stll/api-contract/action-admission";
+import {
+  VISUAL_PREVIEW_TOOL_NAME,
+  visualPreviewToolOutputSchema,
+  type VisualPreviewOutput,
+} from "@stll/api-contract/visual-preview";
 
 import {
   createChatAttachmentPart,
   chatMessageContentFromMessage,
   chatMessageFromPersisted,
   toPersistableChatMessage,
+  normalizePersistedChatMessageContent,
+  toPersistedChatMessageContentV3,
 } from "@/api/handlers/chat/chat-message-parts";
 import {
   CHAT_RUN_MODE,
@@ -84,6 +91,8 @@ import { logger } from "@/api/lib/observability/logger";
 import { ActionAdmissionError } from "@/api/lib/rate-limit/action-admission";
 import { abortControllerFromSignal } from "@/api/lib/tanstack-ai-generate";
 import { toUserFileUrl } from "@/api/lib/user-files/types";
+import { visualPreviewModelContent } from "@/api/lib/visual-preview";
+import { projectVisualPreviewStream } from "@/api/lib/visual-preview-stream";
 import { PDF_MIME_TYPE } from "@/api/mime-types";
 import {
   buildEngineSnapshot,
@@ -490,6 +499,83 @@ const persistNativeInterruptTurn = async (
   }
   return { emitted, finish: terminal.finish, source };
 };
+
+test("transient visual preview reaches the in-turn model but not wire, persistence or reload", async () => {
+  const preview = {
+    png: "iVBORw0KGgo=",
+    consoleErrors: ["Example diagnostic"],
+    blockedRequests: 1,
+    size: { width: 1200, height: 200 },
+    readyFired: true,
+  } satisfies VisualPreviewOutput;
+  const output = visualPreviewModelContent({ title: "Example", preview });
+  const scripted = createToolCallSequenceAdapter([
+    { toolName: VISUAL_PREVIEW_TOOL_NAME, arguments: "{}" },
+    { toolName: "finish_preview", arguments: "{}" },
+  ]);
+  const observed: { modelMessages: ModelMessage[] | null; calls: number } = {
+    modelMessages: null,
+    calls: 0,
+  };
+  const adapter = {
+    ...scripted,
+    async *chatStream(options) {
+      if (options.messages.some((message) => message.role === "tool")) {
+        observed.modelMessages = structuredClone(options.messages);
+      }
+      yield* scripted.chatStream(options);
+    },
+  } satisfies AnyTextAdapter;
+  const visualTool = toolDefinition({
+    name: VISUAL_PREVIEW_TOOL_NAME,
+    description: "Return the visual preview fixture",
+    inputSchema: toTanStackToolSchema(v.strictObject({})),
+    outputSchema: toTanStackToolSchema(visualPreviewToolOutputSchema),
+  }).server(() => {
+    observed.calls += 1;
+    return output;
+  });
+  const finishTool = toolDefinition({
+    name: "finish_preview",
+    description: "Pause after checking the visual",
+    inputSchema: toTanStackToolSchema(v.strictObject({})),
+  }).client();
+  const { emitted, finish, source } = await persistNativeInterruptTurn(
+    projectVisualPreviewStream(
+      chat({
+        adapter,
+        tools: [visualTool, finishTool],
+        messages: [{ role: "user", content: "Show the example" }],
+        agentLoopStrategy: maxIterations(3),
+        threadId: "preview-thread",
+      }),
+    ),
+  );
+  expect(observed.calls).toBe(1);
+  expect(
+    observed.modelMessages?.find((message) => message.role === "tool")?.content,
+  ).toEqual(output);
+  expect(
+    source.some((chunk) => chunk.type === EventType.MESSAGES_SNAPSHOT),
+  ).toBe(true);
+  expect(JSON.stringify(emitted)).not.toContain(preview.png);
+  expect(JSON.stringify(emitted)).not.toContain('"type":"image"');
+  expect(JSON.stringify(emitted)).toContain("screenshot omitted from history");
+  if (finish === null) {
+    throw new Error("Expected preview turn persistence");
+  }
+  const persisted = toPersistedChatMessageContentV3({
+    data: finish.responseMessage.parts,
+  });
+  const reloaded = normalizePersistedChatMessageContent(persisted);
+  expect(JSON.stringify(persisted)).not.toContain(preview.png);
+  expect(JSON.stringify(persisted)).not.toContain('"type":"image"');
+  expect(JSON.stringify(reloaded)).not.toContain(preview.png);
+  expect(JSON.stringify(reloaded)).not.toContain('"type":"image"');
+  expect(JSON.stringify(reloaded)).toContain("screenshot omitted from history");
+  expect(JSON.stringify(reloaded)).toContain("Example diagnostic");
+  expect(output).toHaveLength(2);
+});
 
 test("whitespace rejected as an empty completion remains in the raw live processor", async () => {
   const whitespace = " \n\t\u00a0";
