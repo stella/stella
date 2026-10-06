@@ -10,6 +10,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 
 import { respondToMcpLifecycle } from "../tests/mcp-test-lifecycle.js";
+import registrySnapshot from "./generated/registry-snapshot.json";
 import { EXIT_CODES } from "./mcp-constants.js";
 
 const CLI_ENTRYPOINT = path.join(import.meta.dirname, "cli.ts");
@@ -64,6 +65,13 @@ const startMockServer = (handler: MockHandler, putHandler?: PutHandler) => {
       const lifecycle = respondToMcpLifecycle(body);
       if (lifecycle !== null) {
         return lifecycle;
+      }
+      if (body.method === "tools/list") {
+        return Response.json({
+          jsonrpc: "2.0",
+          id: 1,
+          result: { tools: registrySnapshot },
+        });
       }
       const index = requests.length;
       requests.push(body);

@@ -12,6 +12,7 @@ import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { LIST_VERIFICATION_FEATURE_ID } from "@/api/lib/feature-access/registry";
 import { includes } from "@/api/lib/type-guards";
 
 const bodySchema = t.Object({
@@ -21,6 +22,7 @@ const bodySchema = t.Object({
   status: t.String({ minLength: 1, maxLength: 32 }),
 });
 const config = {
+  featureAccess: { featureId: LIST_VERIFICATION_FEATURE_ID, type: "required" },
   description:
     "Set the verification status of one source attached to a list item. Any " +
     "status other than unverified records who set it and when; setting it " +

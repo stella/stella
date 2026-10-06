@@ -15,6 +15,7 @@ import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import type { AuthorizedMemberRole } from "@/api/lib/permission-authorization";
 import { auditRecorderDouble } from "@/api/tests/helpers/audit-recorder-double";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
+import type { TestDatabaseTransaction } from "@/api/tests/security/test-utils";
 
 /**
  * Shared safe-handler context factory for API handler tests.
@@ -69,11 +70,12 @@ export type BaseTestHandlerContext = {
  * `query`, `params`, ...) pass straight through onto the returned context.
  */
 export type TestHandlerContextOverrides = Partial<
-  Omit<BaseTestHandlerContext, "user">
-> & { user?: Partial<BaseTestHandlerContext["user"]> } & Record<
-    string,
-    unknown
-  >;
+  Omit<BaseTestHandlerContext, "user" | "safeDb" | "scopedDb">
+> & {
+  user?: Partial<BaseTestHandlerContext["user"]>;
+  safeDb?: SafeDb | SafeDb<TestDatabaseTransaction>;
+  scopedDb?: ScopedDb | ScopedDb<TestDatabaseTransaction>;
+} & Record<string, unknown>;
 
 const DEFAULT_WORKSPACE_ID = toSafeId<"workspace">("workspace_test");
 const DEFAULT_ORGANIZATION_ID = toSafeId<"organization">("org_test");
