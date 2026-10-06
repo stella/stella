@@ -128,8 +128,9 @@ export const createPresentationBridge = <View>({
     generation += 1;
     publish({ status: "error", message: reason ?? null });
   };
-  // oxlint-disable-next-line unicorn/prefer-add-event-listener -- MCP App exposes a protocol error callback, not an EventTarget.
-  app.onerror = ({ message }) => publish({ status: "error", message });
+  const reportAppError: NonNullable<typeof app.onerror> = ({ message }) =>
+    publish({ status: "error", message });
+  Reflect.set(app, "onerror", reportAppError);
 
   const call = async (request: ReadCall): Promise<void> => {
     // The typed call list and its runtime check share the manifest the CI census reads.

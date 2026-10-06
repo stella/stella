@@ -25,9 +25,16 @@ type HostOptions = {
   locale: string;
   tool: "search_case_law" | "lookup_case_law";
   payload: typeof APP_SEARCH_FIXTURE | typeof APP_LOOKUP_FIXTURE;
+  queries?: string[];
 };
 
-const mountApp = async ({ page, locale, tool, payload }: HostOptions) => {
+const mountApp = async ({
+  page,
+  locale,
+  tool,
+  payload,
+  queries = ["náhrada škody"],
+}: HostOptions) => {
   const bundle = await readFile(
     new URL(
       "../../../api/src/mcp/apps/case-law-results/generated/app.html.txt",
@@ -49,6 +56,7 @@ const mountApp = async ({ page, locale, tool, payload }: HostOptions) => {
       locale: hostLocale,
       tool: hostTool,
       payload: hostPayload,
+      queries: hostQueries,
     }) => {
       const iframe = document.querySelector<HTMLIFrameElement>("iframe");
       if (iframe === null) {
@@ -62,7 +70,7 @@ const mountApp = async ({ page, locale, tool, payload }: HostOptions) => {
         content: [{ type: "text", text: JSON.stringify(data) }],
         structuredContent: data,
       });
-      const queries = { queries: ["náhrada škody"], country: "CZE", limit: 10 };
+      const searchInput = { queries: hostQueries, country: "CZE", limit: 10 };
       window.addEventListener("message", ({ source, data }) => {
         if (
           source !== iframe.contentWindow ||
@@ -103,7 +111,7 @@ const mountApp = async ({ page, locale, tool, payload }: HostOptions) => {
               params: {
                 arguments:
                   hostTool === "search_case_law"
-                    ? queries
+                    ? searchInput
                     : { identifiers: ["I. ÚS 123/24"], country: "CZE" },
               },
             });
@@ -158,7 +166,7 @@ const mountApp = async ({ page, locale, tool, payload }: HostOptions) => {
       // safe-html: repository build-mcp-apps.ts emits this self-contained fixture bundle.
       iframe.srcdoc = appHtml;
     },
-    { html, locale, tool, payload },
+    { html, locale, tool, payload, queries },
   );
   return page.frameLocator("#app");
 };
@@ -272,6 +280,97 @@ test("case-law app filters, pages and opens links through the MCP host", async (
       .filter({ hasText: /[٠-٩]/u })
       .first(),
   ).toContainText(/[٠-٩]/u);
+  expect(errors).toEqual([]);
+});
+
+test("court filters preserve multiple query phrasings until the search text is edited", async ({
+  page,
+}) => {
+  const queries = ["náhrada škody", "odpovědnost za škodu"];
+  const app = await mountApp({
+    page,
+    locale: "en-GB",
+    tool: "search_case_law",
+    payload: APP_SEARCH_FIXTURE,
+    queries,
+  });
+  await expect(app.locator("tbody tr")).toHaveCount(1);
+  await app.getByRole("combobox", { name: "Court", exact: true }).click();
+  await app
+    .getByRole("option", { name: "Constitutional courts", exact: true })
+    .click();
+  await app.getByRole("button", { name: "Filter", exact: true }).click();
+  await expect
+    .poll(() => hostHistory(page, "appCalls"))
+    .toEqual([
+      {
+        name: "search_case_law",
+        arguments: {
+          queries,
+          country: "CZE",
+          limit: 10,
+          courts: ["Ústavní soud"],
+        },
+      },
+    ]);
+  await expect(app.locator("tbody tr")).toHaveCount(1);
+  await app
+    .getByRole("searchbox", { name: "Search", exact: true })
+    .fill("edited phrasing");
+  await app.getByRole("button", { name: "Filter", exact: true }).click();
+  await expect
+    .poll(async () => (await hostHistory(page, "appCalls")).at(-1))
+    .toEqual({
+      name: "search_case_law",
+      arguments: {
+        queries: ["edited phrasing"],
+        country: "CZE",
+        limit: 10,
+        courts: ["Ústavní soud"],
+      },
+    });
+});
+
+test("a selected court tier survives a later response without facets", async ({
+  page,
+}) => {
+  const errors: string[] = [];
+  page.on("pageerror", ({ message }) => errors.push(message));
+  const app = await mountApp({
+    page,
+    locale: "en-GB",
+    tool: "search_case_law",
+    payload: APP_SEARCH_FIXTURE,
+  });
+  await expect(app.locator("tbody tr")).toHaveCount(1);
+  await app.getByRole("combobox", { name: "Court", exact: true }).click();
+  await app
+    .getByRole("option", { name: "Constitutional courts", exact: true })
+    .click();
+  await page.evaluate(
+    (payload) =>
+      globalThis.appFixtureHost.sendAppResult({
+        ...payload,
+        facets: null,
+        results: [],
+      }),
+    APP_SEARCH_FIXTURE,
+  );
+  await expect(app.locator("tbody tr")).toHaveCount(0);
+  await app.getByRole("button", { name: "Filter", exact: true }).click();
+  await expect
+    .poll(() => hostHistory(page, "appCalls"))
+    .toEqual([
+      {
+        name: "search_case_law",
+        arguments: {
+          queries: ["náhrada škody"],
+          country: "CZE",
+          limit: 10,
+          courts: ["Ústavní soud"],
+        },
+      },
+    ]);
   expect(errors).toEqual([]);
 });
 

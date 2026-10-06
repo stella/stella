@@ -279,6 +279,8 @@ type SearchControlsProps = {
   input: Record<string, unknown>;
   defaults: Extract<ReturnType<typeof filterDefaults>, { status: "ready" }>;
 };
+type CourtFilterState = { value: string; selection: CourtSelection };
+
 const SearchControls = ({
   bridge,
   page,
@@ -292,35 +294,27 @@ const SearchControls = ({
   const initialQueries = normalizeStringList(input["queries"], {
     split: "never",
   });
-  const [query, setQuery] = useState(
-    initialQueries.ok ? initialQueries.value.join(" ") : "",
-  );
+  const originalQuery = initialQueries.ok ? initialQueries.value.join(" ") : "";
+  const [query, setQuery] = useState(originalQuery);
   const [country, setCountry] = useState(defaults.country);
   const [from, setFrom] = useState(defaults.from);
   const [to, setTo] = useState(defaults.to);
-  const [court, setCourt] = useState(() => {
+  const [court, setCourt] = useState((): CourtFilterState => {
     if (defaults.courts.length > 0) {
-      return "current";
+      return {
+        value: "current",
+        selection: { type: "courts", names: defaults.courts },
+      };
     }
-    return defaults.court === "" ? "all" : `court:${defaults.court}`;
+    if (defaults.court === "") {
+      return { value: "all", selection: { type: "all" } };
+    }
+    return {
+      value: `court:${defaults.court}`,
+      selection: { type: "court", name: defaults.court },
+    };
   });
-  const facets = page.facets?.court ?? [];
-  const courtSelection = (): CourtSelection => {
-    if (court === "all") {
-      return { type: "all" };
-    }
-    if (court === "current") {
-      return { type: "courts", names: defaults.courts };
-    }
-    if (court.startsWith("court:")) {
-      return { type: "court", name: court.slice("court:".length) };
-    }
-    const tier = facets.find((entry) => court === `tier:${entry.tierLabel}`);
-    if (tier === undefined) {
-      return panic("Selected court tier is missing");
-    }
-    return { type: "courts", names: tier.courts.map(({ value }) => value) };
-  };
+  const facets = page.facets;
   const dateLabels = {
     locale,
     placeholderLabel: t("selectDate"),
@@ -346,11 +340,11 @@ const SearchControls = ({
               ...searchFilterInput({
                 input,
                 country,
-                court: courtSelection(),
+                court: court.selection,
                 from,
                 to,
               }),
-              queries: [query],
+              queries: query === originalQuery ? input["queries"] : [query],
             },
           }),
           "filter case-law results",
@@ -401,11 +395,34 @@ const SearchControls = ({
             {t("court")}
           </FieldLabel>
           <Select
-            value={court}
+            value={court.value}
             onValueChange={(value) => {
-              if (value !== null) {
-                setCourt(value);
+              if (value === null) {
+                return;
               }
+              let selection: CourtSelection;
+              if (value === "all") {
+                selection = { type: "all" };
+              } else if (value === "current") {
+                selection = { type: "courts", names: defaults.courts };
+              } else if (value.startsWith("court:")) {
+                selection = {
+                  type: "court",
+                  name: value.slice("court:".length),
+                };
+              } else {
+                const tier = facets?.court.find(
+                  (entry) => value === `tier:${entry.tierLabel}`,
+                );
+                if (tier === undefined) {
+                  return;
+                }
+                selection = {
+                  type: "courts",
+                  names: tier.courts.map(({ value: name }) => name),
+                };
+              }
+              setCourt({ value, selection });
             }}
           >
             <SelectTrigger aria-label={t("court")} className="w-full">
@@ -419,14 +436,15 @@ const SearchControls = ({
                 </SelectItem>
               )}
               {defaults.court !== "" &&
-                !facets.some((tier) =>
-                  tier.courts.some(({ value }) => value === defaults.court),
-                ) && (
+                (facets === null ||
+                  !facets.court.some((tier) =>
+                    tier.courts.some(({ value }) => value === defaults.court),
+                  )) && (
                   <SelectItem value={`court:${defaults.court}`}>
                     {defaults.court}
                   </SelectItem>
                 )}
-              {facets.map(({ tierLabel, courts }) => (
+              {facets?.court.map(({ tierLabel, courts }) => (
                 <SelectGroup key={tierLabel}>
                   <SelectGroupLabel>{t(tierLabel)}</SelectGroupLabel>
                   <SelectItem

@@ -1,0 +1,5 @@
+{
+  "metric": "direct-third-party-declarations",
+  "delta": 9,
+  "reason": "The API owns the self-contained React MCP App build: @base-ui/react, react, react-dom and use-intl render its shared UI; @types/react and @types/react-dom type-check it; @tailwindcss/postcss, postcss and tailwindcss compile the existing UI design tokens. All nine reuse existing catalog versions."
+}
