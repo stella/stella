@@ -563,7 +563,10 @@
     // these lists and the tests in sync in both directions.
     "@stll/cli#test": {
       "dependsOn": ["codegen:runtime"],
-      "inputs": ["$TURBO_DEFAULT$"]
+      "inputs": [
+        "$TURBO_DEFAULT$",
+        "$TURBO_ROOT$/packages/api-contract/src/mcp-tool-name.ts"
+      ]
     },
     "@stll/agent-engine#test": {
       "dependsOn": [],
