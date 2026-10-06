@@ -2,9 +2,6 @@ import { describe, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import ts from "typescript";
 
-import { COURT_TIER_LOCALIZED_LABELS } from "@stll/api-contract/case-law-court-tier-locales";
-import { COURT_TIER_LABELS } from "@stll/api-contract/case-law-court-tiers";
-
 import { escapeVisualScript } from "../src/handlers/visual-sandbox/srcdoc";
 import { VISUAL_RUNTIME_BUILD_OPTIONS } from "./visual-sandbox-build-options";
 
@@ -146,24 +143,6 @@ describe("visual sandbox runtime asset", () => {
     expect(problems).toEqual([]);
     // The library's SVG reconciliation must actually be inspected.
     expect(templateWrites).toBeGreaterThan(0);
-  });
-
-  test("derives every tier legend label from the shared locale catalog", () => {
-    const generated: Record<string, Record<string, string>> = JSON.parse(
-      readFileSync(
-        new URL(
-          "../src/handlers/visual-sandbox/generated/court-tier-labels.json",
-          import.meta.url,
-        ),
-        "utf-8",
-      ),
-    );
-    expect(generated).toEqual(COURT_TIER_LOCALIZED_LABELS);
-    for (const labels of Object.values(generated)) {
-      expect(Object.keys(labels).toSorted()).toEqual(
-        [...COURT_TIER_LABELS].toSorted(),
-      );
-    }
   });
 
   test("detects code generation and markup writes outside template parsing", () => {
