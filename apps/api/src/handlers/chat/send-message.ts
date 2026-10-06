@@ -20,6 +20,7 @@ import type { SkillMetadata } from "@stll/skills";
 
 import type { SafeDb, SafeDbError, ScopedDb } from "@/api/db/safe-db";
 import { chatMessages, chatThreads } from "@/api/db/schema";
+import { env } from "@/api/env";
 import {
   getActiveFileModelBinding,
   type ActiveFileModelBinding,
@@ -283,6 +284,7 @@ import {
   validateTanStackDevModelOverride,
 } from "@/api/lib/tanstack-ai-models";
 import type { UsageLaneDecision } from "@/api/lib/usage/lane-routing";
+import { previewVisual } from "@/api/lib/visual-preview";
 import { loadWebSearchProvidersForOrg } from "@/api/lib/web-search/load-org-keys";
 import { PDF_MIME_TYPE } from "@/api/mime-types";
 import { isLocalDevOpen } from "@/api/runtime-mode";
@@ -2662,6 +2664,11 @@ export const createSendMessage = (
         const visualOrigin = createVisualResourceOrigin();
         const visualTools = {
           origin: visualOrigin,
+          preview: (document: string) =>
+            previewVisual({
+              document,
+              functionArn: env.VISUAL_PREVIEW_FUNCTION_NAME,
+            }),
           store: createVisualStore({
             recordAuditEvent,
             safeDb,

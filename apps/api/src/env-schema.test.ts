@@ -347,3 +347,18 @@ test("list verification grants use the shared registered-feature configuration",
     ).success,
   ).toBe(false);
 });
+
+test("visual preview configuration accepts an optional Lambda function identifier", () => {
+  const schema = envApiServerSchema.VISUAL_PREVIEW_FUNCTION_NAME;
+  expect(v.parse(schema, undefined)).toBeUndefined();
+  for (const arn of ["visual-preview-test", "visual-preview-test:live"]) {
+    expect(v.parse(schema, arn)).toBe(arn);
+  }
+  for (const value of [
+    "https://example.test/preview",
+    "arn:aws:s3:::preview",
+    "arn:aws:lambda:eu-central-1:123:function:preview",
+  ]) {
+    expect(v.safeParse(schema, value).success).toBe(false);
+  }
+});

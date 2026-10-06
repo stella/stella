@@ -2,14 +2,24 @@ import { convertSchemaToJsonSchema } from "@tanstack/ai";
 import { panic, Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 
-import { SHOW_VISUAL_TOOL_NAME } from "@stll/api-contract/generated-visual";
+import { VISUAL_PREVIEW_TOOL_NAME } from "@stll/api-contract/visual-preview";
+import type { VisualPreviewOutput } from "@stll/api-contract/visual-preview";
 import { rejectionOf } from "@stll/property-testing/rejection";
 
 import { createVisualResourceOrigin } from "@/api/handlers/visual-sandbox/resource-origin";
 import { createSafeId } from "@/api/lib/branded-types";
 import { ChatToolError } from "@/api/lib/errors/tagged-errors";
+import { VisualPreviewError } from "@/api/lib/visual-preview";
 
 import { createShowVisualTools } from "./show-visual-tools";
+
+const unavailablePreview = async () =>
+  Result.err(
+    new VisualPreviewError({
+      code: "unavailable",
+      message: "Preview is not configured",
+    }),
+  );
 
 describe("show visual", () => {
   test("has a serializable input contract and emits its native resource", async () => {
@@ -18,14 +28,15 @@ describe("show visual", () => {
     let saved = 0;
     const tool = createShowVisualTools({
       origin,
+      preview: unavailablePreview,
       store: async (visual) => {
         saved += 1;
         expect(visual.title).toBe("Revenue");
         expect(String(visual.html)).toBe("<p>revenue</p>");
         expect(visual.data).toEqual({ revenue: 42 });
-        return Result.ok(fileId);
+        return Result.ok({ fileId, document: "<!doctype html><p>Revenue</p>" });
       },
-    })[SHOW_VISUAL_TOOL_NAME];
+    })[VISUAL_PREVIEW_TOOL_NAME];
     expect(convertSchemaToJsonSchema(tool.inputSchema)).toMatchObject({
       type: "object",
     });
@@ -45,10 +56,76 @@ describe("show visual", () => {
         },
       },
     );
-    expect(output).toEqual({ success: true, title: "Revenue" });
+    expect(output).toEqual([
+      {
+        type: "text",
+        content: JSON.stringify({
+          success: true,
+          title: "Revenue",
+          preview: {
+            status: "unavailable",
+            reason: "unavailable",
+            message: "Preview is not configured",
+          },
+        }),
+      },
+    ]);
     expect(saved).toBe(1);
     expect(emissions).toHaveLength(1);
     expect(origin.accepts(emissions.at(0))).toBe(true);
+  });
+
+  test("publishes one native resource before requesting the composed page preview once", async () => {
+    const document = "<!doctype html><p>Revenue</p>";
+    const preview = {
+      png: "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/l9sAAAAASUVORK5CYII=",
+      consoleErrors: [],
+      blockedRequests: 0,
+      size: { width: 1200, height: 320 },
+      readyFired: true,
+    } satisfies VisualPreviewOutput;
+    const emissions: unknown[] = [];
+    let invocations = 0;
+    const tool = createShowVisualTools({
+      origin: createVisualResourceOrigin(),
+      store: async () =>
+        Result.ok({ fileId: createSafeId<"userFile">(), document }),
+      preview: async (received) => {
+        expect(emissions).toHaveLength(1);
+        expect(received).toBe(document);
+        invocations += 1;
+        return Result.ok(preview);
+      },
+    })[VISUAL_PREVIEW_TOOL_NAME];
+    const execute = tool.execute ?? panic("Visual tool has no executor");
+    const output = await execute(
+      { title: "Revenue", html: "<p>Revenue</p>", data: {} },
+      {
+        toolCallId: "visual-call-preview",
+        emitCustomEvent: (_name, value) => emissions.push(value),
+      },
+    );
+    expect(invocations).toBe(1);
+    expect(emissions).toHaveLength(1);
+    expect(output).toEqual([
+      {
+        type: "text",
+        content: JSON.stringify({
+          success: true,
+          title: "Revenue",
+          preview: {
+            consoleErrors: [],
+            blockedRequests: 0,
+            size: preview.size,
+            readyFired: true,
+          },
+        }),
+      },
+      {
+        type: "image",
+        source: { type: "data", value: preview.png, mimeType: "image/png" },
+      },
+    ]);
   });
 
   test("keeps data checks at execution after their provider projection", async () => {
@@ -56,11 +133,15 @@ describe("show visual", () => {
     const emissions: unknown[] = [];
     const tool = createShowVisualTools({
       origin: createVisualResourceOrigin(),
+      preview: unavailablePreview,
       store: async () => {
         saved += 1;
-        return Result.ok(createSafeId<"userFile">());
+        return Result.ok({
+          fileId: createSafeId<"userFile">(),
+          document: "<!doctype html><p>Revenue</p>",
+        });
       },
-    })[SHOW_VISUAL_TOOL_NAME];
+    })[VISUAL_PREVIEW_TOOL_NAME];
     const schema = convertSchemaToJsonSchema(tool.inputSchema);
     expect(schema?.properties?.["data"]).toEqual({});
     const execute = tool.execute ?? panic("Visual tool has no executor");
@@ -105,6 +186,7 @@ describe("show visual", () => {
     };
     const tool = createShowVisualTools({
       origin: createVisualResourceOrigin(),
+      preview: unavailablePreview,
       store: async () => {
         saved += 1;
         return Result.err(
@@ -114,7 +196,7 @@ describe("show visual", () => {
           }),
         );
       },
-    })[SHOW_VISUAL_TOOL_NAME];
+    })[VISUAL_PREVIEW_TOOL_NAME];
     const execute = tool.execute ?? panic("Visual tool has no executor");
     expect(
       await rejectionOf(

@@ -61,5 +61,5 @@ export const createVisualStore =
         }),
       );
     }
-    return Result.ok(stored.value.id);
+    return Result.ok({ fileId: stored.value.id, document });
   };

@@ -6,8 +6,8 @@ import {
   GENERATED_VISUAL_MIME_TYPE,
   GENERATED_VISUAL_URI_PREFIX,
   generatedVisualPartSchema,
-  SHOW_VISUAL_TOOL_NAME,
 } from "@stll/api-contract/generated-visual";
+import { VISUAL_PREVIEW_TOOL_NAME } from "@stll/api-contract/visual-preview";
 
 import type { SafeId } from "@/api/lib/branded-types";
 
@@ -31,7 +31,7 @@ export const createVisualResourceOrigin = () => {
           text: title,
         },
         toolCallId,
-        toolName: SHOW_VISUAL_TOOL_NAME,
+        toolName: VISUAL_PREVIEW_TOOL_NAME,
       } as const satisfies UIResourcePart;
       const result = v.safeParse(generatedVisualPartSchema, candidate);
       if (!result.success) {

@@ -3,10 +3,11 @@ import { panic } from "better-result";
 import type { Result } from "better-result";
 import * as v from "valibot";
 
+import { generatedVisualInputSchema } from "@stll/api-contract/generated-visual";
 import {
-  generatedVisualInputSchema,
-  SHOW_VISUAL_TOOL_NAME,
-} from "@stll/api-contract/generated-visual";
+  VISUAL_PREVIEW_TOOL_NAME,
+  visualPreviewToolOutputSchema,
+} from "@stll/api-contract/visual-preview";
 
 import { toTanStackToolSchema } from "@/api/handlers/chat/tools/tanstack-tool-schema";
 import { raiseChatToolError } from "@/api/handlers/chat/tools/tool-failure";
@@ -15,25 +16,29 @@ import type { PreparedGeneratedVisual } from "@/api/handlers/visual-sandbox/prep
 import type { VisualResourceOrigin } from "@/api/handlers/visual-sandbox/resource-origin";
 import type { SafeId } from "@/api/lib/branded-types";
 import { ChatToolError } from "@/api/lib/errors/tagged-errors";
+import {
+  visualPreviewFailureModelContent,
+  visualPreviewModelContent,
+} from "@/api/lib/visual-preview";
+import type { previewVisual } from "@/api/lib/visual-preview";
 
 type CreateShowVisualToolsOptions = {
   origin: VisualResourceOrigin;
   store: (
     visual: PreparedGeneratedVisual,
-  ) => Promise<Result<SafeId<"userFile">, ChatToolError>>;
+  ) => Promise<
+    Result<{ fileId: SafeId<"userFile">; document: string }, ChatToolError>
+  >;
+  preview: (document: string) => ReturnType<typeof previewVisual>;
 };
-
-const showVisualOutputSchema = v.strictObject({
-  success: v.literal(true),
-  title: generatedVisualInputSchema.entries.title,
-});
 
 export const createShowVisualTools = ({
   origin,
   store,
+  preview,
 }: CreateShowVisualToolsOptions) => ({
-  [SHOW_VISUAL_TOOL_NAME]: toolDefinition({
-    name: SHOW_VISUAL_TOOL_NAME,
+  [VISUAL_PREVIEW_TOOL_NAME]: toolDefinition({
+    name: VISUAL_PREVIEW_TOOL_NAME,
     description:
       "Display an interactive Generated view in this chat. Supply a short title, HTML and finite JSON data. " +
       "Keep only data fields referenced literally by the page. Read them with stella.data. " +
@@ -47,7 +52,7 @@ export const createShowVisualTools = ({
     inputSchema: toTanStackToolSchema(generatedVisualInputSchema, {
       omitValidationActions: ["check"],
     }),
-    outputSchema: toTanStackToolSchema(showVisualOutputSchema),
+    outputSchema: toTanStackToolSchema(visualPreviewToolOutputSchema),
   }).server(async (input, context) => {
     if (!context?.toolCallId) {
       return panic("A visual tool requires its server execution context");
@@ -76,11 +81,21 @@ export const createShowVisualTools = ({
       return raiseChatToolError(stored.error);
     }
     const part = origin.issue({
-      fileId: stored.value,
+      fileId: stored.value.fileId,
       title: prepared.value.title,
       toolCallId: context.toolCallId,
     });
     context.emitCustomEvent("ui-resource", part);
-    return { success: true, title: prepared.value.title };
+    const rendered = await preview(stored.value.document);
+    if (rendered.isErr()) {
+      return visualPreviewFailureModelContent({
+        title: prepared.value.title,
+        error: rendered.error,
+      });
+    }
+    return visualPreviewModelContent({
+      title: prepared.value.title,
+      preview: rendered.value,
+    });
   }),
 });

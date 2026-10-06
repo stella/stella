@@ -6,8 +6,8 @@ import {
   generatedVisualPartSchema,
   GENERATED_VISUAL_MIME_TYPE,
   GENERATED_VISUAL_URI_PREFIX,
-  SHOW_VISUAL_TOOL_NAME,
 } from "./generated-visual";
+import { VISUAL_PREVIEW_TOOL_NAME } from "./visual-preview";
 
 describe("generated visual contract", () => {
   test("preserves bounded JSON, presentation text and optional decision links", () => {
@@ -86,7 +86,7 @@ describe("generated visual resource", () => {
         text: "Court overview",
       },
       toolCallId: "visual-call-one",
-      toolName: SHOW_VISUAL_TOOL_NAME,
+      toolName: VISUAL_PREVIEW_TOOL_NAME,
     };
     expect(v.safeParse(generatedVisualPartSchema, part).success).toBe(true);
     for (const candidate of [
