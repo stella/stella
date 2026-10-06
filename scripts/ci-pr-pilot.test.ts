@@ -260,7 +260,7 @@ test("main and queue ignore the pilot switch", async () => {
   }
 });
 
-test("untrusted, incomplete, stale, expired or slowed pilot evidence retains full checks", async () => {
+test("untrusted, incomplete, stale, expired or slowed pilot evidence retains normal checks", async () => {
   for (const data of [
     null,
     {},

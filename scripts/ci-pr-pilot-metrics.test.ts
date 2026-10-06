@@ -169,8 +169,8 @@ class Fixture(m.Collector):
         self.count, self.missing, self.batch_sizes = count, missing, []
     def query(self, query, variables):
         if "pullRequests(" in query:
-            nodes = [{"number": 1, "updatedAt": now.isoformat(), "mergedAt": None,
-                "timelineItems": connection([]), "commits": connection([
+            nodes = [{"number": 1, "updatedAt": now.isoformat(), "mergedAt": now.isoformat(),
+                "timelineItems": connection([{ "__typename": "AutoMergeEnabledEvent", "createdAt": (now - dt.timedelta(minutes=30)).isoformat()}]), "commits": connection([
                     {"commit": {"oid": format(index, "040x")}} for index in range(self.count)])}]
             return {"repository": {"pullRequests": dict(connection(nodes), pageInfo={"hasNextPage": False, "endCursor": None})}}
         shas = [value for key, value in variables.items() if key.startswith("sha")]
@@ -184,9 +184,21 @@ missing_pulls, missing_complete = missing.collect(now, [])
 over = Fixture(601)
 over_pulls, over_complete = over.collect(now, [])
 print(json.dumps([complete, normal.batch_sizes, missing_complete, m.complete_pull(missing_pulls[0]),
-                  over_complete, sum(over.batch_sizes), max(over.batch_sizes), m.complete_pull(over_pulls[0])]))
+                  over_complete, sum(over.batch_sizes), max(over.batch_sizes), m.complete_pull(over_pulls[0]), over.sampling["populationCommits"],
+                  m.summarize(over_pulls, now - dt.timedelta(days=1), now + dt.timedelta(seconds=1), set())["armToMergeP50Minutes"]]))
 `);
-  expect(values).toEqual([true, [5, 5, 1], false, false, false, 600, 5, false]);
+  expect(values).toEqual([
+    true,
+    [5, 5, 1],
+    false,
+    false,
+    true,
+    120,
+    5,
+    true,
+    601,
+    30,
+  ]);
 });
 
 test("closed unmerged PRs cannot inflate pending arm latency", () => {
@@ -198,4 +210,59 @@ summary = m.summarize([pull], now - dt.timedelta(days=1), now, set())
 print(json.dumps([summary["pendingArmedSampleCount"], summary["armToMergeP50LowerBoundMinutes"]]))
 `);
   expect(result).toEqual([0, null]);
+});
+
+test("queue-wait sampling bounds reads and reports the full run population", () => {
+  const values = execute(`
+class Fixture(m.Collector):
+    def __init__(self):
+        super().__init__("stella/stella")
+        self.ids = []
+    def rest(self, endpoint, parameters):
+        self.ids.append(int(endpoint.split("/")[2]))
+        return {"total_count": 1, "jobs": [{"conclusion": "success",
+            "created_at": "2026-10-10T10:00:00Z", "started_at": "2026-10-10T10:02:00Z"}]}
+fixture = Fixture()
+result = fixture.queue_wait(list(range(1000)))
+print(json.dumps([len(fixture.ids), fixture.ids[0], fixture.ids[-1], result["queueWaitPopulationRuns"],
+    result["queueWaitP50Minutes"], result["queueWaitEvidenceComplete"]]))
+`);
+  expect(values).toEqual([25, 0, 999, 1000, 2, true]);
+});
+
+test("large PR commit connections are paginated before workload sampling", () => {
+  const values = execute(`
+def connection(nodes):
+    return {"nodes": nodes, "pageInfo": {"hasPreviousPage": False}}
+class Fixture(m.Collector):
+    def query(self, query, variables):
+        if "pullRequests(" in query:
+            pull = {"number": 1, "updatedAt": now.isoformat(), "mergedAt": None,
+                "timelineItems": connection([]), "commits": connection([{"commit": {"oid": "b" * 40}}])}
+            pull["commits"]["pageInfo"] = {"hasPreviousPage": True, "startCursor": "before"}
+            return {"repository": {"pullRequests": {"nodes": [pull], "pageInfo": {"hasNextPage": False}}}}
+        if "pullRequest(number:" in query:
+            assert variables["before"] == "before"
+            return {"repository": {"pullRequest": {"commits": connection([{"commit": {"oid": "a" * 40}}])}}}
+        return {"repository": {"head" + str(index): {"checkSuites": connection([])}
+            for index in range(len([key for key in variables if key.startswith("sha")]))}}
+pulls, complete = Fixture("stella/stella").collect(now, [])
+print(json.dumps([complete, len(pulls[0]["commits"]["nodes"]), m.complete_pull(pulls[0])]))
+`);
+  expect(values).toEqual([true, 2, true]);
+});
+
+test("integer GraphQL variables keep their numeric type at the gh boundary", () => {
+  const values = execute(`
+from types import SimpleNamespace
+calls = []
+def run(command, **kwargs):
+    calls.append(command)
+    return SimpleNamespace(stdout=b'{"data": {}}')
+m.subprocess.run = run
+m.Collector("stella/stella").query("query($number:Int!){viewer{login}}", {"number": 1})
+index = calls[0].index("number=1")
+print(json.dumps(calls[0][index - 1]))
+`);
+  expect(values).toBe("-F");
 });

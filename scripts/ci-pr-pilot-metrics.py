@@ -14,6 +14,11 @@ from zoneinfo import ZoneInfo
 
 PROFILE = "pilot-v1"
 WINDOW = dt.timedelta(days=7)
+COMMIT_SAMPLE_LIMIT = 120
+QUEUE_SAMPLE_LIMIT = 25
+
+def sample(values, limit):
+    return values if len(values) <= limit else [values[int(index * (len(values) - 1) / (limit - 1))] for index in range(limit)]
 
 
 
@@ -54,7 +59,7 @@ def summarize(pulls, start, end, fast_jobs):
             elif merge is None and pull.get("closedAt") is None:
                 pending_arms.append((end - first_arm).total_seconds() / 60)
         for commit in pull["commits"]["nodes"]:
-            for suite in commit["commit"]["checkSuites"]["nodes"]:
+            for suite in commit["commit"].get("checkSuites", {"nodes": []})["nodes"]:
                 run = suite["workflowRun"]
                 if not run or run["event"] != "pull_request" or run["workflow"]["name"] != "CI Checks":
                     continue
@@ -95,6 +100,8 @@ def summarize(pulls, start, end, fast_jobs):
 def complete_pull(pull):
     connections = [pull["timelineItems"], pull["commits"]]
     for commit in pull["commits"]["nodes"]:
+        if commit["commit"].get("sampled") is False:
+            continue
         suites = commit["commit"]["checkSuites"]
         connections.append(suites)
         connections.extend(suite["checkRuns"] for suite in suites["nodes"] if suite["workflowRun"])
@@ -133,6 +140,7 @@ class Collector:
     def __init__(self, repository):
         self.owner, self.repo = repository.split("/")
         self.last_request = 0.0
+        self.sampling = {}
 
     def query(self, query, variables):
         time.sleep(max(0, 1.1 - (time.monotonic() - self.last_request)))
@@ -140,7 +148,7 @@ class Collector:
         command = ["gh", "api", "graphql", "-f", f"query={query}"]
         for name, value in variables.items():
             if value is not None:
-                command.extend(["-f", f"{name}={value}"])
+                command.extend(["-F" if isinstance(value, int) else "-f", f"{name}={value}"])
         response = subprocess.run(command, check=True, capture_output=True, timeout=30)
         data = json.loads(response.stdout)
         if data.get("errors"):
@@ -158,7 +166,7 @@ class Collector:
 
     def queue_wait(self, run_ids):
         # Systematic samples span the whole generation and bound daily REST reads.
-        selected = run_ids if len(run_ids) <= 100 else [run_ids[int(index * (len(run_ids) - 1) / 99)] for index in range(100)]
+        selected = sample(run_ids, QUEUE_SAMPLE_LIMIT)
         waits = []
         pending = 0
         complete = True
@@ -184,28 +192,24 @@ class Collector:
         heads = set()
         unmapped = 0
         complete = True
-        for page in range(1, 11):
-            result = self.rest("actions/workflows/ci.yml/runs", {
-                "event": "merge_group", "status": "failure", "created": f">={since.isoformat()}",
-                "per_page": 100, "page": page,
-            })
-            if result["total_count"] > 1000:
+        result = self.rest("actions/workflows/ci.yml/runs", {
+            "event": "merge_group", "status": "failure", "created": f">={since.isoformat()}",
+            "per_page": 40, "page": 1,
+        })
+        complete = result["total_count"] <= len(result["workflow_runs"])
+        for run in result["workflow_runs"]:
+            jobs = self.rest(f"actions/runs/{run['id']}/jobs", {"per_page": 100, "filter": "latest"})
+            if jobs["total_count"] > len(jobs["jobs"]):
                 complete = False
-            for run in result["workflow_runs"]:
-                jobs = self.rest(f"actions/runs/{run['id']}/jobs", {"per_page": 100, "filter": "latest"})
-                if jobs["total_count"] > len(jobs["jobs"]):
-                    complete = False
-                failed = any(job["name"].split(" (")[0] in normal_pr_deferred
-                             and job["conclusion"] == "failure" for job in jobs["jobs"])
-                if not failed:
-                    continue
-                pulls = run["pull_requests"]
-                if not pulls:
-                    unmapped += 1
-                for pull in pulls:
-                    heads.add((pull["number"], pull["head"]["sha"]))
-            if result["total_count"] <= page * 100:
-                break
+            failed = any(job["name"].split(" (")[0] in normal_pr_deferred
+                         and job["conclusion"] == "failure" for job in jobs["jobs"])
+            if not failed:
+                continue
+            pulls = run["pull_requests"]
+            if not pulls:
+                unmapped += 1
+            for pull in pulls:
+                heads.add((pull["number"], pull["head"]["sha"]))
         return {"postArmDeferredQueueFailureHeads": len(heads),
                 "unmappedDeferredQueueFailureRuns": unmapped, "queueFailureEvidenceComplete": complete and unmapped == 0}
 
@@ -223,7 +227,7 @@ class Collector:
                   pageInfo {hasNextPage} nodes {__typename ... on AutoMergeEnabledEvent {createdAt}
                     ... on AddedToMergeQueueEvent {createdAt}
                     ... on HeadRefForcePushedEvent {createdAt beforeCommit {oid} afterCommit {oid}}} }
-                commits(last:100) {pageInfo {hasPreviousPage} nodes {commit {oid}}}
+                commits(last:100) {pageInfo {hasPreviousPage startCursor} nodes {commit {oid}}}
               }
             }
           }
@@ -238,6 +242,22 @@ class Collector:
                 heads = {node["commit"]["oid"]: node for node in (old["commits"]["nodes"] if old else [])}
                 for node in pull["commits"]["nodes"]:
                     heads.setdefault(node["commit"]["oid"], node)
+                connection = pull["commits"]
+                for _ in range(10):
+                    if not connection["pageInfo"].get("hasPreviousPage", False):
+                        break
+                    result = self.query("""query($owner:String!, $repo:String!, $number:Int!, $before:String!) {
+                      repository(owner:$owner,name:$repo) {pullRequest(number:$number) {
+                        commits(last:100,before:$before) {pageInfo {hasPreviousPage startCursor} nodes {commit {oid}}}
+                      }}
+                    }""", {"owner": self.owner, "repo": self.repo, "number": pull["number"],
+                           "before": connection["pageInfo"]["startCursor"]})
+                    connection = result["repository"]["pullRequest"]["commits"]
+                    for node in connection["nodes"]:
+                        heads.setdefault(node["commit"]["oid"], node)
+                if connection["pageInfo"].get("hasPreviousPage", False):
+                    complete = False
+                pull["commits"]["pageInfo"] = connection["pageInfo"]
                 for event in pull["timelineItems"]["nodes"]:
                     for key in ["beforeCommit", "afterCommit"]:
                         if event.get(key):
@@ -251,21 +271,26 @@ class Collector:
             cursor = page["pageInfo"]["endCursor"]
         else:
             complete = False
+        population = sorted({node["commit"]["oid"] for pull in pulls.values() for node in pull["commits"]["nodes"]})
+        selected = set(sample(population, COMMIT_SAMPLE_LIMIT))
+        self.sampling = {"sampledCommits": len(selected), "populationCommits": len(population)}
         pending = set()
         for pull in pulls.values():
             for node in pull["commits"]["nodes"]:
                 commit = node["commit"]
+                commit["sampled"] = commit["oid"] in selected
+                if not commit["sampled"]:
+                    commit.pop("checkSuites", None)
+                    continue
                 suites = commit.get("checkSuites")
                 active = suites and any(job["completedAt"] is None
                     for suite in suites["nodes"] for job in suite["checkRuns"]["nodes"])
                 if pull["number"] in refreshed or suites is None or active:
                     pending.add(commit["oid"])
         shas = sorted(pending)
-        # Each five-head batch costs roughly five GraphQL points, within the token budget.
-        if len(shas) > 600:
-            complete = False
+        # Sample workload reads; every PR timeline still participates in the stop metric.
         responses = {}
-        for index in range(0, min(len(shas), 600), 5):
+        for index in range(0, len(shas), 5):
             batch = shas[index:index + 5]
             if any(re.fullmatch(r"[a-f0-9]{40}", sha) is None for sha in batch):
                 raise ValueError("Invalid commit identity")
@@ -288,7 +313,7 @@ class Collector:
                 commit = node["commit"]
                 if commit["oid"] in responses:
                     commit["checkSuites"] = responses[commit["oid"]]
-                if "checkSuites" not in commit:
+                if commit["sampled"] and "checkSuites" not in commit:
                     complete = False
                     commit["checkSuites"] = {"pageInfo": {"hasNextPage": True}, "nodes": []}
         return list(pulls.values()), complete
@@ -332,6 +357,15 @@ def main():
                           check=True, capture_output=True, text=True)
     fast_jobs = set(json.loads(plan.stdout.removeprefix("fast_jobs=")))
     report = build_report(pulls, previous, now, complete, fast_jobs, bootstrap)
+    report["measured"].update(collector.sampling)
+    report["measured"]["jobMinutesBasis"] = "observed systematic commit sample; savings estimate projects to observed commit population"
+    sampled = collector.sampling["sampledCommits"]
+    population = collector.sampling["populationCommits"]
+    if sampled and sampled < population:
+        measured = report["measured"]["jobMinutes"]
+        elapsed_days = min(max((now - timestamp(report["startedAt"])).total_seconds() / 86400, 0), 7)
+        report["estimatedJobMinutesSaved"] = report["baselineJobMinutesPerDay"] * elapsed_days - measured * population / sampled
+        report["estimateBasis"] += "; systematic commit sample projected to observed commit population"
     waiting = collector.queue_wait(report["measured"].pop("runIds"))
     report["measured"].update(waiting)
     report["complete"] = report["complete"] and waiting["queueWaitEvidenceComplete"]
