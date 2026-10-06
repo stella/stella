@@ -4,9 +4,10 @@ import type { OrganizationSettings } from "@/queries/organization-settings";
 
 import type { CallerFeature } from "./surfaces";
 
-export class CallerFeatureHiddenError extends TaggedError(
-  "CallerFeatureHiddenError",
-)<{ message: string; featureId: string }> {}
+class CallerFeatureHiddenError extends TaggedError("CallerFeatureHiddenError")<{
+  message: string;
+  featureId: string;
+}> {}
 
 type CallerAvailability = Pick<
   OrganizationSettings,

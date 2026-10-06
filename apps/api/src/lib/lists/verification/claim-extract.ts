@@ -176,64 +176,86 @@ export const extractClaims = async ({
     windows.push({ from, to: Math.min(blocks.length, from + WINDOW_BLOCKS) });
   }
 
-  return await Result.tryPromise({
-    try: async () => {
-      const perWindow = await mapWithConcurrency({
-        items: windows,
-        limit: CONCURRENCY,
-        operation: async (window) => {
-          const request = call.request(windowTask(blocks, window));
-          const output = await call.generate([request]);
-          const cursor = new Map<string, number>();
-          const grounded: ExtractedClaim[] = [];
-          const misquoted: { raw: RawClaim; reason: string }[] = [];
-          for (const raw of output.claims) {
-            const result = ground(raw, blockIndexById, blocks, cursor);
-            if (result.type === "grounded") {
-              grounded.push(result.claim);
-            } else {
-              misquoted.push(result);
+  return Result.flatten(
+    await Result.tryPromise({
+      try: async () => {
+        const perWindow = await mapWithConcurrency({
+          items: windows,
+          limit: CONCURRENCY,
+          operation: async (window) => {
+            const request = call.request(windowTask(blocks, window));
+            const output = await call.generate([request]);
+            if (Result.isError(output)) {
+              return output;
             }
-          }
-          if (misquoted.length === 0) {
-            return grounded;
-          }
-          const repaired = await call.generate([
-            request,
-            { role: "assistant", content: JSON.stringify(output) },
-            { role: "user", content: repairMessage(misquoted) },
-          ]);
-          for (const raw of repaired.claims) {
-            const result = ground(raw, blockIndexById, blocks, cursor);
-            if (result.type === "grounded") {
-              grounded.push(result.claim);
+            const cursor = new Map<string, number>();
+            const grounded: ExtractedClaim[] = [];
+            const misquoted: { raw: RawClaim; reason: string }[] = [];
+            for (const raw of output.value.claims) {
+              const result = ground(raw, blockIndexById, blocks, cursor);
+              if (result.type === "grounded") {
+                grounded.push(result.claim);
+              } else {
+                misquoted.push(result);
+              }
             }
+            if (misquoted.length === 0) {
+              return Result.ok(grounded);
+            }
+            const repaired = await call.generate([
+              request,
+              { role: "assistant", content: JSON.stringify(output.value) },
+              { role: "user", content: repairMessage(misquoted) },
+            ]);
+            if (Result.isError(repaired)) {
+              return repaired;
+            }
+            for (const raw of repaired.value.claims) {
+              const result = ground(raw, blockIndexById, blocks, cursor);
+              if (result.type === "grounded") {
+                grounded.push(result.claim);
+              }
+            }
+            return Result.ok(grounded);
+          },
+        });
+        // A claim listed twice (in two windows, or again in a repair) is one
+        // claim: its anchor is its identity.
+        const unique = new Map<string, ExtractedClaim>();
+        const resolved: ExtractedClaim[] = [];
+        for (const window of perWindow) {
+          if (window.isErr()) {
+            return Result.err(
+              new WorkflowIntegrationError({
+                message: "Claim extraction failed",
+                cause: window.error,
+              }),
+            );
           }
-          return grounded;
-        },
-      });
-      // A claim listed twice (in two windows, or again in a repair) is one
-      // claim: its anchor is its identity.
-      const unique = new Map<string, ExtractedClaim>();
-      for (const claim of perWindow.flat()) {
-        const key = `${String(claim.blockIndex)}:${String(claim.anchor.start)}:${String(claim.anchor.end)}`;
-        if (!unique.has(key)) {
-          unique.set(key, claim);
+          resolved.push(...window.value);
         }
-      }
-      return [...unique.values()]
-        .toSorted(
-          (a, b) =>
-            a.blockIndex - b.blockIndex || a.anchor.start - b.anchor.start,
-        )
-        .slice(0, VERIFICATION_LIMITS.CLAIMS_PER_RUN_MAX);
-    },
-    catch: (cause) => {
-      call.captureError(cause);
-      return new WorkflowIntegrationError({
-        message: "Claim extraction failed",
-        cause,
-      });
-    },
-  });
+        for (const claim of resolved) {
+          const key = `${String(claim.blockIndex)}:${String(claim.anchor.start)}:${String(claim.anchor.end)}`;
+          if (!unique.has(key)) {
+            unique.set(key, claim);
+          }
+        }
+        return Result.ok(
+          [...unique.values()]
+            .toSorted(
+              (a, b) =>
+                a.blockIndex - b.blockIndex || a.anchor.start - b.anchor.start,
+            )
+            .slice(0, VERIFICATION_LIMITS.CLAIMS_PER_RUN_MAX),
+        );
+      },
+      catch: (cause) => {
+        call.captureError(cause);
+        return new WorkflowIntegrationError({
+          message: "Claim extraction failed",
+          cause,
+        });
+      },
+    }),
+  );
 };

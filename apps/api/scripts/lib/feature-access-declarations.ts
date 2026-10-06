@@ -204,8 +204,10 @@ class DeclarationSourceGraph {
     { targets: string[]; missing: string[] }
   >();
   readonly sources: ReadonlyMap<string, string>;
-  constructor(sources: ReadonlyMap<string, string>) {
+  private readonly registry: FeatureRegistry;
+  constructor(sources: ReadonlyMap<string, string>, registry: FeatureRegistry) {
     this.sources = sources;
+    this.registry = registry;
   }
   sourceFile(file: string) {
     const cached = this.parsed.get(file);
@@ -317,7 +319,16 @@ class DeclarationSourceGraph {
             return [];
           }
         }
-        return [file];
+        const selections = Object.values(this.registry).flatMap(
+          ({ ownership }) => {
+            const symbols = ownership?.conditionalTableSchemas?.[file];
+            return symbols === undefined ? [] : [symbols];
+          },
+        );
+        return selections.length === 0 ||
+          selections.some((symbols) => symbols.includes(name))
+          ? [file]
+          : [];
       }
       if (!ts.isExportDeclaration(statement) || statement.isTypeOnly) {
         continue;
@@ -361,16 +372,44 @@ class DeclarationSourceGraph {
           target,
           binding.propertyName?.text ?? binding.name.text,
         );
-        targets.push(...(resolved.length === 0 ? [target] : resolved));
+        targets.push(...resolved);
       }
       return targets;
     }
-    if (
-      bindings !== undefined &&
-      ts.isNamespaceImport(bindings) &&
-      registrationOnly(ast, bindings.name.text)
-    ) {
-      return [];
+    if (bindings !== undefined && ts.isNamespaceImport(bindings)) {
+      if (registrationOnly(ast, bindings.name.text)) {
+        return [];
+      }
+      const members = new Set<string>();
+      const dynamicReferences = new Set<ts.Identifier>();
+      const visit = (node: ts.Node) => {
+        if (
+          ts.isIdentifier(node) &&
+          node.text === bindings.name.text &&
+          node !== bindings.name
+        ) {
+          const parent = node.parent;
+          if (
+            ts.isPropertyAccessExpression(parent) &&
+            parent.expression === node
+          ) {
+            members.add(parent.name.text);
+          } else if (
+            ts.isElementAccessExpression(parent) &&
+            parent.expression === node &&
+            ts.isStringLiteral(parent.argumentExpression)
+          ) {
+            members.add(parent.argumentExpression.text);
+          } else {
+            dynamicReferences.add(node);
+          }
+        }
+        ts.forEachChild(node, visit);
+      };
+      visit(ast);
+      return dynamicReferences.size !== 0
+        ? [target]
+        : [...members].flatMap((name) => this.symbolModules(target, name));
     }
     return [target];
   }
@@ -458,13 +497,14 @@ const validateOwnership = (
   graph: DeclarationSourceGraph,
 ) => {
   const violations: FeatureAccessDeclarationViolation[] = [];
-  const tableOwners = new Map<string, Set<string>>();
+  const tableOwners = new Map<string, Map<string, Requirement>>();
   for (const [featureId, { ownership }] of Object.entries(registry)) {
     if (
       ownership === undefined ||
       [
         ...ownership.handlerDirectories,
         ...ownership.tableSchemaFiles,
+        ...Object.keys(ownership.conditionalTableSchemas ?? {}),
         ...ownership.coreModules,
         ...(ownership.conditionalModules ?? []),
       ].length === 0
@@ -489,6 +529,7 @@ const validateOwnership = (
     }
     for (const file of [
       ...ownership.tableSchemaFiles,
+      ...Object.keys(ownership.conditionalTableSchemas ?? {}),
       ...ownership.coreModules,
       ...(ownership.conditionalModules ?? []),
     ]) {
@@ -499,14 +540,44 @@ const validateOwnership = (
         });
       }
     }
-    for (const file of ownership.tableSchemaFiles) {
+    for (const file of [
+      ...ownership.tableSchemaFiles,
+      ...Object.keys(ownership.conditionalTableSchemas ?? {}),
+    ]) {
       const ast = graph.sourceFile(file);
       if (ast === undefined) {
         continue;
       }
-      for (const name of exportedTableNames(ast)) {
-        const owners = tableOwners.get(name) ?? new Set<string>();
-        owners.add(featureId);
+      const selectedSymbols = ownership.conditionalTableSchemas?.[file];
+      const selectedAst =
+        selectedSymbols === undefined
+          ? ast
+          : ts.factory.updateSourceFile(
+              ast,
+              ast.statements.filter((statement) =>
+                selectedSymbols.some((symbol) =>
+                  declaresSymbol(statement, symbol),
+                ),
+              ),
+            );
+      for (const symbol of selectedSymbols ?? []) {
+        if (
+          !ast.statements.some((statement) => declaresSymbol(statement, symbol))
+        ) {
+          violations.push({
+            file,
+            message: `feature ${featureId} owns a missing table symbol ${symbol}`,
+          });
+        }
+      }
+      for (const name of exportedTableNames(selectedAst)) {
+        const owners = tableOwners.get(name) ?? new Map<string, Requirement>();
+        owners.set(
+          featureId,
+          ownership.conditionalTableSchemas?.[file] !== undefined
+            ? "conditional"
+            : "required",
+        );
         tableOwners.set(name, owners);
       }
     }
@@ -566,7 +637,10 @@ const parseDeclaration = (
 const moduleRequirements = (registry: FeatureRegistry, module: string) => {
   const required = new Map<string, Requirement>();
   for (const [id, { ownership }] of Object.entries(registry)) {
-    if (ownership?.conditionalModules?.includes(module)) {
+    if (
+      ownership?.conditionalModules?.includes(module) ||
+      ownership?.conditionalTableSchemas?.[module] !== undefined
+    ) {
       required.set(id, "conditional");
     } else if (
       ownership?.handlerDirectories.some((directory) =>
@@ -643,6 +717,30 @@ const inspectEndpoint = ({
         return;
       }
       if (
+        (ts.isPropertyAccessExpression(node) ||
+          (ts.isElementAccessExpression(node) &&
+            ts.isStringLiteral(node.argumentExpression))) &&
+        ts.isPropertyAccessExpression(node.expression) &&
+        node.expression.name.text === "query"
+      ) {
+        let symbol: string | undefined;
+        if (ts.isPropertyAccessExpression(node)) {
+          symbol = node.name.text;
+        } else if (ts.isStringLiteral(node.argumentExpression)) {
+          symbol = node.argumentExpression.text;
+        }
+        for (const [id, { ownership }] of Object.entries(registry)) {
+          if (
+            symbol !== undefined &&
+            Object.values(ownership?.conditionalTableSchemas ?? {}).some(
+              (symbols) => symbols.includes(symbol),
+            )
+          ) {
+            add(id, "conditional");
+          }
+        }
+      }
+      if (
         ts.isStringLiteralLike(node) ||
         ts.isTemplateHead(node) ||
         ts.isTemplateMiddle(node) ||
@@ -650,8 +748,8 @@ const inspectEndpoint = ({
       ) {
         for (const { matcher, owners } of tables) {
           if (matcher.test(node.text)) {
-            for (const id of owners) {
-              add(id, "required");
+            for (const [id, type] of owners) {
+              add(id, type);
             }
           }
         }
@@ -662,6 +760,17 @@ const inspectEndpoint = ({
   };
   walk(file);
   for (const [id, types] of required) {
+    const conditionalModules = registry[id]?.ownership?.conditionalModules;
+    if (
+      types.has("conditional") &&
+      conditionalModules !== undefined &&
+      !conditionalModules.some((module) => visited.has(module))
+    ) {
+      violations.push({
+        file,
+        message: `featureAccess ${id} conditional tables require the shared policy module`,
+      });
+    }
     if (declaration.id !== id) {
       violations.push({
         file,
@@ -786,7 +895,7 @@ export const validateFeatureAccessDeclarations = ({
   sources,
 }: DeclarationOptions): FeatureAccessDeclarationViolation[] => {
   const dispatch = dispatchEntryEndpoints(sources);
-  const graph = new DeclarationSourceGraph(dispatch.sources);
+  const graph = new DeclarationSourceGraph(dispatch.sources, registry);
   const tasks = new Map<string, DeclarationOptions["endpoints"][number]>();
   for (const entry of dispatch.entries) {
     const ast = graph.sourceFile(entry.file);

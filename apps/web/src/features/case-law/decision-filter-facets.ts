@@ -1,13 +1,63 @@
+import { keepPreviousData, useQuery } from "@tanstack/react-query";
+import type { FetchStatus, QueryClient } from "@tanstack/react-query";
+
 import {
   decisionFilterFacetsFromBrowse,
   orderCourtTiers,
   yearsNewestFirst,
 } from "@/features/case-law/decision-filter-facets.logic";
 import type { DecisionFilterFacets } from "@/features/case-law/decision-filter-facets.logic";
+import { decisionFacetsOptions } from "@/features/case-law/queries/decisions";
 import type {
   CaseLawBrowseFacets,
   SearchFacets,
 } from "@/features/case-law/queries/decisions";
+import { getAnalytics } from "@/lib/analytics/provider";
+import { detached } from "@/lib/detached";
+import { prefetchRouteQuery } from "@/lib/react-query";
+
+type PrefetchDecisionFacetsAfterSearchOptions<T> = {
+  country: string;
+  queryClient: QueryClient;
+  search: Promise<T>;
+};
+
+/** Facets use the same admission slot as search, but never hold up the route. */
+export const prefetchDecisionFacetsAfterSearch = async <T>({
+  country,
+  queryClient,
+  search,
+}: PrefetchDecisionFacetsAfterSearchOptions<T>): Promise<T> =>
+  await search.finally(() => {
+    detached(
+      prefetchRouteQuery(
+        queryClient,
+        decisionFacetsOptions(country),
+        (error) => {
+          getAnalytics().captureError(error);
+        },
+      ),
+      "cases.facets-prefetch",
+    );
+  });
+
+type UseDecisionBrowseFacetsOptions = {
+  country: string;
+  searchFetched: boolean;
+  searchFetchStatus: FetchStatus;
+};
+
+/** Background navigations also wait for their own result query to settle. */
+export const useDecisionBrowseFacets = ({
+  country,
+  searchFetched,
+  searchFetchStatus,
+}: UseDecisionBrowseFacetsOptions) =>
+  useQuery({
+    ...decisionFacetsOptions(country),
+    enabled: searchFetched && searchFetchStatus === "idle",
+    placeholderData: keepPreviousData,
+  });
 
 /**
  * The one place the served facet shapes are read. Two endpoints answer with

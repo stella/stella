@@ -275,6 +275,7 @@
     "runs": {
       "back": "Tous les documents",
       "errors": {
+        "accessRevoked": "La vérification a été arrêtée car l’accès est indisponible.",
         "aiUnavailable": "Aucun modèle d’IA n’est disponible pour vérifier les documents. Vérifiez les paramètres d’IA de l’organisation.",
         "enqueueFailed": "La vérification n’a pas pu être lancée. Réessayez.",
         "extractionFailed": "Les affirmations de ce document n’ont pas pu être extraites.",
