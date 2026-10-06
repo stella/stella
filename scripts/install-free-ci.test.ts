@@ -803,6 +803,69 @@ describe("install-free invocation classification", () => {
       importProblems({ entries: ["scripts/check.test.ts"], root }),
     ).toEqual([]);
   });
+  test("bounded installs and planner calls retain dependency coverage", () => {
+    for (const prefix of [
+      "timeout 120s",
+      "timeout --kill-after=10s 120s",
+      "timeout -k 10s 120s",
+      "timeout --signal TERM -- 120s",
+    ]) {
+      const root = repository(
+        [
+          "jobs:",
+          "  job:",
+          "    steps:",
+          `      - run: bash scripts/retry.sh ${prefix} bun ci --ignore-scripts`,
+          "        id: installed",
+          "        if: inputs.run == true",
+          `      - run: ${prefix} bun scripts/check.ts`,
+          "        if: steps.installed.outcome == 'success'",
+        ].join("\n"),
+      );
+      expect(
+        installFreeInvocations({ root, workflow: CI_WORKFLOW }).map(
+          ({ classification }) => classification.type,
+        ),
+      ).toEqual(["install"]);
+      expect(
+        classify(`${prefix} bun scripts/check.ts`).map(
+          ({ classification }) => classification.type,
+        ),
+      ).toEqual(["files"]);
+    }
+  });
+
+  test("timeout help and unknown options cannot certify dependency installation", () => {
+    for (const option of ["--help", "--version", "--unknown"]) {
+      const root = repository(
+        [
+          "jobs:",
+          "  job:",
+          "    steps:",
+          `      - run: timeout ${option} 120s bun ci`,
+          "        id: installed",
+          "      - run: bun scripts/check.ts",
+          "        if: steps.installed.outcome == 'success'",
+        ].join("\n"),
+      );
+      const invocations = installFreeInvocations({
+        root,
+        workflow: CI_WORKFLOW,
+      });
+      expect(
+        invocations.some(
+          ({ classification }) => classification.type === "install",
+        ),
+      ).toBe(false);
+      expect(
+        invocations.some(
+          ({ classification }) =>
+            classification.type === "files" &&
+            classification.entries.includes("scripts/check.ts"),
+        ),
+      ).toBe(true);
+    }
+  });
 });
 
 test("everything CI runs without the dependency install imports only built-ins", () => {

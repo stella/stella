@@ -648,6 +648,29 @@ const programWords = (words: readonly string[]): readonly string[] => {
       while (rest.at(0)?.startsWith("-") === true) {
         rest = rest.slice(1);
       }
+    } else if (first === "timeout") {
+      rest = rest.slice(1);
+      while (rest.at(0)?.startsWith("-") === true) {
+        const option = rest.at(0);
+        if (option === "--") {
+          rest = rest.slice(1);
+          break;
+        }
+        if (["-k", "--kill-after", "-s", "--signal"].includes(option ?? "")) {
+          rest = rest.slice(2);
+        } else if (
+          ["--preserve-status", "--foreground", "--verbose", "-v"].includes(
+            option ?? "",
+          ) ||
+          /^(?:--(?:kill-after|signal)=|-[ks].+)/u.test(option ?? "")
+        ) {
+          rest = rest.slice(1);
+        } else {
+          // --help/--version can exit successfully without running the child.
+          return words;
+        }
+      }
+      rest = rest.slice(1); // Duration precedes the wrapped command.
     } else if (first === "bash" && rest.at(1) === "scripts/retry.sh") {
       rest = rest.slice(2);
     } else {

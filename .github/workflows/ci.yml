@@ -776,28 +776,54 @@ jobs:
           fi
 
       - name: Install API test planner dependencies
+        id: api-test-deps
         if: >-
           steps.check.outputs.trusted == 'true'
           && github.event_name == 'pull_request'
           && steps.changed-files.outputs.package_checks_required == 'true'
+          && steps.changed-files.outputs.api_scope_unknown != 'true'
         run: bash scripts/retry.sh timeout --kill-after=10s 120s bun ci --ignore-scripts
         env:
           NPM_TOKEN: ""
+
+      - name: Select affected API test files
+        id: api-test-selection
+        if: steps.api-test-deps.outcome == 'success'
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          BASE_REF: ${{ github.base_ref || 'main' }}
+          API_SCOPE_UNKNOWN: ${{ steps.changed-files.outputs.api_scope_unknown }}
+        run: |
+          if ! timeout --kill-after=10s 120s bun scripts/ci-api-test-plan.ts; then
+            echo 'ci_tests_matrix={"shard":["api-1","api-2","api-3","api-4","rest-web"]}' >> "$GITHUB_OUTPUT"
+            echo 'api_test_shards=4' >> "$GITHUB_OUTPUT"
+            echo 'api_test_files=' >> "$GITHUB_OUTPUT"
+          fi
 
       - name: Plan API test files and shards
         if: steps.check.outputs.trusted == 'true' || github.event_name == 'workflow_dispatch'
         id: api-tests
         env:
           EVENT_NAME: ${{ github.event_name }}
-          BASE_REF: ${{ github.base_ref || 'main' }}
           API_SCOPE_UNKNOWN: ${{ steps.changed-files.outputs.api_scope_unknown }}
           PACKAGE_CHECKS_REQUIRED: ${{ steps.changed-files.outputs.package_checks_required }}
+          SELECTED_MATRIX: ${{ steps.api-test-selection.outputs.ci_tests_matrix }}
+          SELECTED_FILES: ${{ steps.api-test-selection.outputs.api_test_files }}
+          SELECTED_SHARDS: ${{ steps.api-test-selection.outputs.api_test_shards }}
         run: |
-          if [[ "$EVENT_NAME" == pull_request && "$PACKAGE_CHECKS_REQUIRED" != true && "$API_SCOPE_UNKNOWN" != true ]]; then
+          if [[ -n "$SELECTED_MATRIX" && -n "$SELECTED_SHARDS" ]]; then
+            echo "ci_tests_matrix=$SELECTED_MATRIX" >> "$GITHUB_OUTPUT"
+            echo "api_test_shards=$SELECTED_SHARDS" >> "$GITHUB_OUTPUT"
+            {
+              echo 'api_test_files<<API_TEST_FILES_END'
+              printf '%s\n' "$SELECTED_FILES"
+              echo 'API_TEST_FILES_END'
+            } >> "$GITHUB_OUTPUT"
+          elif [[ "$EVENT_NAME" == pull_request && "$PACKAGE_CHECKS_REQUIRED" != true && "$API_SCOPE_UNKNOWN" != true ]]; then
             echo 'ci_tests_matrix={"shard":["rest-web"]}' >> "$GITHUB_OUTPUT"
             echo 'api_test_shards=0' >> "$GITHUB_OUTPUT"
             echo 'api_test_files=' >> "$GITHUB_OUTPUT"
-          elif [[ "$EVENT_NAME" != pull_request || "$API_SCOPE_UNKNOWN" == true ]] || ! timeout --kill-after=10s 120s bun scripts/ci-api-test-plan.ts; then
+          else
             echo 'ci_tests_matrix={"shard":["api-1","api-2","api-3","api-4","rest-web"]}' >> "$GITHUB_OUTPUT"
             echo 'api_test_shards=4' >> "$GITHUB_OUTPUT"
             echo 'api_test_files=' >> "$GITHUB_OUTPUT"

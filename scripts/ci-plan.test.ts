@@ -4170,7 +4170,7 @@ test("API test matrix drops API shards for web-only scope and keeps four in merg
     `matrix: \${{ fromJSON(needs.ci-plan.outputs.ci_tests_matrix) }}`,
   );
   const planner = jobSteps(ciJobs["ci-plan"]).find(
-    (step) => step.name === "Plan API test files and shards",
+    (step) => step.name === "Select affected API test files",
   );
   expect(planner?.run).toContain(
     "! timeout --kill-after=10s 120s bun scripts/ci-api-test-plan.ts; then",
@@ -4186,7 +4186,7 @@ test("API test matrix drops API shards for web-only scope and keeps four in merg
 
 test("a crashed API planner widens the real workflow outputs", () => {
   const planner = jobSteps(ciJobs["ci-plan"]).find(
-    (step) => step.name === "Plan API test files and shards",
+    (step) => step.name === "Select affected API test files",
   );
   const directory = mkdtempSync(nodePath.join(tmpdir(), "api-plan-fallback-"));
   const output = nodePath.join(directory, "output");
@@ -4241,4 +4241,65 @@ test("nightly full tests retain the unrestricted API suite and selection enters 
     "utf-8",
   );
   expect(turbo).toContain('"env": ["API_TEST_SHARD", "API_TEST_FILES"]');
+});
+
+test("API planning only loads dependencies after installation and emits install-free fallbacks", () => {
+  const steps = jobSteps(ciJobs["ci-plan"]);
+  const select = steps.find(
+    (step) => step.name === "Select affected API test files",
+  );
+  expect(select?.if).toBe("steps.api-test-deps.outcome == 'success'");
+  const plan = steps.find(
+    (step) => step.name === "Plan API test files and shards",
+  );
+  expect(plan?.run).not.toContain("bun ");
+  const directory = mkdtempSync(nodePath.join(tmpdir(), "api-plan-output-"));
+  const output = nodePath.join(directory, "output");
+  try {
+    for (const [event, packages, unknown, selected, shards, expected] of [
+      ["pull_request", "false", "false", "", "", "0"],
+      ["pull_request", "true", "false", "", "", "4"],
+      ["pull_request", "false", "true", "", "", "4"],
+      ["merge_group", "true", "false", "", "", "4"],
+      ["workflow_dispatch", "true", "false", "", "", "4"],
+      [
+        "pull_request",
+        "true",
+        "false",
+        '{"shard":["api-1","rest-web"]}',
+        "1",
+        "1",
+      ],
+    ]) {
+      writeFileSync(output, "");
+      const result = Bun.spawnSync(
+        ["bash", "-e", "-c", plan?.run ?? panic("Missing output planner")],
+        {
+          env: {
+            PATH: Bun.env["PATH"] ?? "",
+            GITHUB_OUTPUT: output,
+            EVENT_NAME: event,
+            PACKAGE_CHECKS_REQUIRED: packages,
+            API_SCOPE_UNKNOWN: unknown,
+            SELECTED_MATRIX: selected,
+            SELECTED_SHARDS: shards,
+            SELECTED_FILES: selected ? "src/a.test.ts\nsrc/b.test.ts" : "",
+          },
+          stdout: "pipe",
+          stderr: "pipe",
+        },
+      );
+      expect(result.exitCode, result.stderr.toString()).toBe(0);
+      const values = readFileSync(output, "utf-8");
+      expect(values).toContain(`api_test_shards=${expected}\n`);
+      if (selected) {
+        expect(values).toContain(`ci_tests_matrix=${selected}\n`);
+        expect(values).toContain(
+          "api_test_files<<API_TEST_FILES_END\nsrc/a.test.ts\nsrc/b.test.ts\nAPI_TEST_FILES_END\n",
+        );
+      }
+    }
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
 });

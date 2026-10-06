@@ -120,7 +120,11 @@ test("an API sub-shard must select files before the runner can start", () => {
 });
 
 test("explicit test selection validates inline lists and files before duration sharding", () => {
-  const files = ["src/a.test.ts", "src/b.test.ts", "src/c.test.ts"];
+  const files: [string, string, string] = [
+    "src/a.test.ts",
+    "src/b.test.ts",
+    "src/c.test.ts",
+  ];
   expect(restrictApiTestFiles(files, undefined)).toEqual(files);
   expect(restrictApiTestFiles(files, "")).toEqual(files);
   expect(
@@ -147,7 +151,7 @@ test("explicit test selection validates inline lists and files before duration s
           shardValue: `${index}/2`,
         }).testPaths,
     );
-    expect(bins.flat().toSorted()).toEqual(selected);
+    expect(bins.flat().toSorted()).toEqual([...selected]);
     writeFileSync(filename, "");
     expect(() => restrictApiTestFiles(files, filename)).toThrow(
       "selected zero test files",
