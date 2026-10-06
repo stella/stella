@@ -77,6 +77,14 @@ const isVerifiableFile = (content: {
   content.mimeType === PDF_MIME_TYPE ||
   content.pdfFileId !== null;
 
+const runCapRefusal = (error: ListVerificationRunCapError) =>
+  new HandlerError({
+    status: 429,
+    message: error.message,
+    hint: error.hint,
+    retryable: true,
+  });
+
 const createVerification = createSafeHandler(
   config,
   async function* ({
@@ -226,14 +234,7 @@ const createVerification = createSafeHandler(
         }),
     });
     const created = yield* inserted.mapError((error) =>
-      ListVerificationRunCapError.is(error)
-        ? new HandlerError({
-            status: 429,
-            message: error.message,
-            hint: error.hint,
-            retryable: true,
-          })
-        : error,
+      ListVerificationRunCapError.is(error) ? runCapRefusal(error) : error,
     );
     if (!created) {
       return Result.err(
