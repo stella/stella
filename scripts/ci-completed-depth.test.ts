@@ -299,3 +299,33 @@ test("only successful real validation publishes a completion marker", () => {
     }
   }
 });
+
+test("completion lookup conditions belong only to the planner job", () => {
+  for (const [name, job] of Object.entries(jobs)) {
+    for (const step of job.steps) {
+      if (step.if?.includes("steps.completed-depth")) {
+        expect(name, step.name).toBe("ci-plan");
+      }
+      if (step.if?.includes("${{")) {
+        expect(step.if, step.name).toMatch(/^\$\{\{[\s\S]*\}\}$/u);
+      }
+    }
+  }
+  const condition = jobs["docker-checks"]?.steps.find(
+    (step) => step.id === "api-deps",
+  )?.if;
+  if (!condition) {
+    throw new Error("Missing image dependency scope condition");
+  }
+  const expression = condition.replace(/^\$\{\{\s*|\s*\}\}$/gu, "");
+  for (const cancelled of [true, false]) {
+    for (const required of ["true", "false"]) {
+      expect(
+        evaluate(expression, {
+          status: { cancelled },
+          values: { "needs.ci-plan.outputs.api_image_deps_required": required },
+        }),
+      ).toBe(!cancelled && required === "true");
+    }
+  }
+});

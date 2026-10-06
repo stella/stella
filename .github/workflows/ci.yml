@@ -983,14 +983,12 @@ jobs:
       api-image-deps: ${{ steps.api-deps.outcome }}
     steps:
       - name: Checkout
-        if: steps.completed-depth.outputs.run_required != 'false'
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
           ref: ${{ inputs.heavy_only == true && inputs.sha || '' }}
 
       - name: Setup Bun
-        if: steps.completed-depth.outputs.run_required != 'false'
         uses: stella/.github/actions/setup-bun-cached@167fb396c6c0f4e07296ad2cd72e6ef15367c776
         with:
           save: ${{ github.ref == 'refs/heads/main' }}
@@ -998,19 +996,19 @@ jobs:
 
       - name: Install dependencies
         id: install
-        if: steps.completed-depth.outputs.run_required != 'false' && (needs.ci-plan.outputs.agent_sandbox_docker_required == 'true')
+        if: needs.ci-plan.outputs.agent_sandbox_docker_required == 'true'
         run: bash scripts/retry.sh bun ci --ignore-scripts
         env:
           NPM_TOKEN: ""
 
       - name: Run protocol and malformed-stream tests
-        if: steps.completed-depth.outputs.run_required != 'false' && (needs.ci-plan.outputs.agent_sandbox_docker_required == 'true')
+        if: needs.ci-plan.outputs.agent_sandbox_docker_required == 'true'
         id: protocol
         run: bun --filter @stll/agent-engine test
 
       # Pull helpers follow the workflow revision; Dockerfiles follow the tested source.
       - name: Checkout workflow tooling
-        if: steps.completed-depth.outputs.run_required != 'false' && (needs.ci-plan.outputs.agent_sandbox_docker_required == 'true')
+        if: needs.ci-plan.outputs.agent_sandbox_docker_required == 'true'
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ github.workflow_sha }}
@@ -1022,14 +1020,14 @@ jobs:
           sparse-checkout-cone-mode: false
 
       - name: Pull sandbox base images
-        if: steps.completed-depth.outputs.run_required != 'false' && (needs.ci-plan.outputs.agent_sandbox_docker_required == 'true')
+        if: needs.ci-plan.outputs.agent_sandbox_docker_required == 'true'
         id: pull
         run: |
           bash .workflow-tooling/scripts/pull-base-images.sh packages/agent-engine/docker/sandbox.Dockerfile
           rm -rf .workflow-tooling
 
       - name: Build pinned sandbox image
-        if: steps.completed-depth.outputs.run_required != 'false' && (needs.ci-plan.outputs.agent_sandbox_docker_required == 'true')
+        if: needs.ci-plan.outputs.agent_sandbox_docker_required == 'true'
         id: image
         run: >-
           docker build
@@ -1038,12 +1036,12 @@ jobs:
           packages/agent-engine/docker
 
       - name: Create internal sandbox network
-        if: steps.completed-depth.outputs.run_required != 'false' && (needs.ci-plan.outputs.agent_sandbox_docker_required == 'true')
+        if: needs.ci-plan.outputs.agent_sandbox_docker_required == 'true'
         id: network
         run: docker network create --internal "$AGENT_ENGINE_DOCKER_NETWORK"
 
       - name: Start the only reachable network canary
-        if: steps.completed-depth.outputs.run_required != 'false' && (needs.ci-plan.outputs.agent_sandbox_docker_required == 'true')
+        if: needs.ci-plan.outputs.agent_sandbox_docker_required == 'true'
         id: canary
         run: |
           bun build packages/agent-engine/scripts/mcp-canary-server.ts \
@@ -1071,14 +1069,14 @@ jobs:
           exit 1
 
       - name: Exercise Docker provider isolation and cleanup
-        if: steps.completed-depth.outputs.run_required != 'false' && (needs.ci-plan.outputs.agent_sandbox_docker_required == 'true')
+        if: needs.ci-plan.outputs.agent_sandbox_docker_required == 'true'
         id: isolation
         env:
           AGENT_ENGINE_DOCKER_TEST: "1"
         run: bun test packages/agent-engine/src/bun-docker/provider.integration.test.ts
 
       - name: Assert provider left no sandbox containers
-        if: steps.completed-depth.outputs.run_required != 'false' && (needs.ci-plan.outputs.agent_sandbox_docker_required == 'true')
+        if: needs.ci-plan.outputs.agent_sandbox_docker_required == 'true'
         id: assert-cleanup
         run: |
           mapfile -t container_ids < <(
@@ -1092,7 +1090,7 @@ jobs:
 
       - name: Cleanup Docker resources
         id: cleanup
-        if: steps.completed-depth.outputs.run_required != 'false' && (always() && needs.ci-plan.outputs.agent_sandbox_docker_required == 'true')
+        if: always() && needs.ci-plan.outputs.agent_sandbox_docker_required == 'true'
         run: |
           docker ps --all --quiet --filter "ancestor=$AGENT_ENGINE_DOCKER_IMAGE" | xargs --no-run-if-empty docker rm --force
           docker network rm "$AGENT_ENGINE_DOCKER_NETWORK" 2>/dev/null || true
@@ -1100,7 +1098,7 @@ jobs:
       - name: Check image dependency trees and production runner
         id: api-deps
         timeout-minutes: 10
-        if: steps.completed-depth.outputs.run_required != 'false' && (${{ !cancelled() && needs.ci-plan.outputs.api_image_deps_required == 'true' }})
+        if: ${{ !cancelled() && needs.ci-plan.outputs.api_image_deps_required == 'true' }}
         env:
           NPM_TOKEN: ""
         run: |
@@ -1162,7 +1160,7 @@ jobs:
           echo ::endgroup::
 
       - name: Upload failed Bun install logs
-        if: steps.completed-depth.outputs.run_required != 'false' && (failure())
+        if: failure()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: bun-install-${{ github.job }}
@@ -1235,7 +1233,6 @@ jobs:
       actions: write
     steps:
       - name: Checkout
-        if: steps.completed-depth.outputs.run_required != 'false'
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
@@ -1243,14 +1240,12 @@ jobs:
           persist-credentials: false
 
       - name: Setup Bun
-        if: steps.completed-depth.outputs.run_required != 'false'
         uses: stella/.github/actions/setup-bun-cached@167fb396c6c0f4e07296ad2cd72e6ef15367c776
         with:
           save: ${{ github.ref == 'refs/heads/main' }}
           bun-version-file: package.json
 
       - name: Check parser version guard
-        if: steps.completed-depth.outputs.run_required != 'false'
         env:
           EVENT_NAME: ${{ github.event_name }}
           BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha || '' }}
