@@ -145,6 +145,7 @@
       "useBackupCode": "Usar un código de copia de seguridad en su lugar"
     },
     "useDifferentEmail": "Usar otro correo",
+    "usePassword": "Usar una contraseña",
     "weSentCodeTo": "Hemos enviado un código a <email>{emailAddress}</email>"
   },
   "avt": {

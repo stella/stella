@@ -185,6 +185,7 @@ export const RESULT_BOUNDARY_GLOBS = [
   "apps/web/src/lib/errors/query-result.ts",
   // Better Auth invokes these hooks and consumes rejected APIError values.
   "apps/api/src/lib/auth/demo-account-hooks.ts",
+  "apps/api/src/lib/auth/review-account-plugin.ts",
   // Better Auth consumes adapter failures through Promise rejection.
   "apps/api/src/lib/auth/registration-adapter.ts",
 

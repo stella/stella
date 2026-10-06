@@ -145,6 +145,7 @@
       "useBackupCode": "Vietoj to naudoti atsarginį kodą"
     },
     "useDifferentEmail": "Naudoti kitą el. pašto adresą",
+    "usePassword": "Naudoti slaptažodį",
     "weSentCodeTo": "Išsiuntėme kodą adresu <email>{emailAddress}</email>"
   },
   "avt": {

@@ -148,6 +148,7 @@ type Messages = {
       "useBackupCode": "Use a backup code instead";
     };
     "useDifferentEmail": "Use a different email";
+    "usePassword": "Use a password instead";
     "weSentCodeTo": "We sent a code to <email>{emailAddress}</email>";
   };
   "avt": {

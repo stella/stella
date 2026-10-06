@@ -145,6 +145,7 @@
       "useBackupCode": "Kasuta selle asemel varukoodi"
     },
     "useDifferentEmail": "Kasuta teist e-posti aadressi",
+    "usePassword": "Kasuta hoopis parooli",
     "weSentCodeTo": "Saatsime koodi aadressile <email>{emailAddress}</email>"
   },
   "avt": {

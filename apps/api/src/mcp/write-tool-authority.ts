@@ -3,7 +3,7 @@ import { panic, Result } from "better-result";
 import type { PermissionInput } from "@stll/permissions";
 
 import type { AccountAccess } from "@/api/lib/api-handlers";
-import { checkDemoAccountOperation } from "@/api/lib/auth/demo-account";
+import { checkStandardAccountOperation } from "@/api/lib/auth/review-account";
 import { hasMemberPermission } from "@/api/lib/permission-authorization";
 import type { AuthorizedMemberRole } from "@/api/lib/permission-authorization";
 import {
@@ -226,20 +226,21 @@ export const hasMcpToolInputAuthority = (
     input,
   );
 
-export type AccountOperationCheck = typeof checkDemoAccountOperation;
+export type AccountOperationCheck = typeof checkStandardAccountOperation;
 
-/** The refusal REST answers a `standard` handler with for the demo account. */
+/** The refusal REST answers a `standard` handler with for a restricted account. */
 export const ACCOUNT_ACCESS_UNAVAILABLE_MESSAGE =
   "This operation is unavailable for this account.";
 
 /**
  * Whether this account may be offered and call the tool: a `standard` write
- * tool refuses the configured demo account, as its REST counterpart does.
+ * tool refuses the demo and restricted review accounts, as its REST
+ * counterpart does.
  */
 export const isAccountAuthorizedForMcpTool = (
   userEmail: string,
   definition: McpToolAuthorityDeclaration,
-  checkAccountOperation: AccountOperationCheck = checkDemoAccountOperation,
+  checkAccountOperation: AccountOperationCheck = checkStandardAccountOperation,
 ): boolean =>
   definition.access === "read" ||
   definition.accountAccess === "sandbox" ||

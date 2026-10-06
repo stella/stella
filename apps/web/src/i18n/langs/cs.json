@@ -145,6 +145,7 @@
       "useBackupCode": "Použít místo toho záložní kód"
     },
     "useDifferentEmail": "Použít jiný e-mail",
+    "usePassword": "Přihlásit se raději heslem",
     "weSentCodeTo": "Kód jsme odeslali na <email>{emailAddress}</email>"
   },
   "avt": {
