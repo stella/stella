@@ -366,7 +366,7 @@ const DecisionInfoPopover = (input: DecisionFactsInput) => {
       <PopoverPopup align="end" className="w-72" side="bottom">
         <DecisionFacts
           {...input}
-          className="mb-0 grid-cols-[auto_minmax(0,1fr)] gap-x-3"
+          className="mb-0"
           facts={HEADER_DECISION_FACTS}
         />
       </PopoverPopup>

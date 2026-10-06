@@ -1,3 +1,4 @@
+import { panic } from "better-result";
 /**
  * Populate `citation_key` on decisions and citations.
  *
@@ -20,17 +21,13 @@
  *
  *   bun apps/api/src/scripts/backfill-citation-keys.ts [--recanonicalize]
  */
-
-import { panic } from "better-result";
 import { sql } from "drizzle-orm";
 
 import { runBackfillPass } from "@stll/db-load-gate/backfill-pass";
 
 import { createScriptBackfillRuntime } from "@/api/db/backfill-runtime";
-import {
-  lockCitationGraph,
-  reopenCitationsForKeys,
-} from "@/api/handlers/case-law/citation-resolution";
+import { runCitationGraphTransaction } from "@/api/handlers/case-law/citation-graph-transaction";
+import { reopenCitationsForKeys } from "@/api/handlers/case-law/citation-resolution";
 import { CITATION_RESOLUTION_STATUS } from "@/api/handlers/case-law/citation-resolution-status";
 import {
   citationKeyOf,
@@ -80,10 +77,13 @@ const backfillTable = async (
   try {
     const pass = await runBackfillPass({
       step: async () =>
-        await runtime.step(async ({ tx, size, cursor }) => {
-          await lockCitationGraph(tx);
-          const result: unknown = await tx.execute(
-            sql`SELECT id, ${sql.raw(sourceColumn)} AS text, citation_key AS stored,
+        await runtime.step(
+          async ({ tx: batchTx, size, cursor }) =>
+            await runCitationGraphTransaction(
+              async (run) => await run(batchTx),
+              async (tx) => {
+                const result: unknown = await tx.execute(
+                  sql`SELECT id, ${sql.raw(sourceColumn)} AS text, citation_key AS stored,
                    ${sql.raw(table === "case_law_decisions" ? "case_number_type" : "NULL")} AS type
               FROM ${sql.raw(table)}
              WHERE ${missingOnly ? sql`citation_key IS NULL` : sql`TRUE`}
@@ -91,67 +91,70 @@ const backfillTable = async (
              ORDER BY id
              LIMIT ${size}
              FOR UPDATE`,
-          );
-          const rows = executedRows(result).map((row) => {
-            if (
-              !isRecord(row) ||
-              typeof row["id"] !== "string" ||
-              typeof row["text"] !== "string"
-            ) {
-              return panic("Citation key batch returned an invalid row");
-            }
-            return {
-              id: row["id"],
-              // A non-docket primary reference keeps no citation key.
-              key:
-                table === "case_law_decisions"
-                  ? decisionCitationKeyOf({
-                      caseNumber: row["text"],
-                      caseNumberType: primaryReferenceTypeFromStored(
-                        row["type"],
-                      ),
-                    })
-                  : citationKeyOf(row["text"]),
-              stored: typeof row["stored"] === "string" ? row["stored"] : null,
-            };
-          });
+                );
+                const rows = executedRows(result).map((row) => {
+                  if (
+                    !isRecord(row) ||
+                    typeof row["id"] !== "string" ||
+                    typeof row["text"] !== "string"
+                  ) {
+                    return panic("Citation key batch returned an invalid row");
+                  }
+                  return {
+                    id: row["id"],
+                    // A non-docket primary reference keeps no citation key.
+                    key:
+                      table === "case_law_decisions"
+                        ? decisionCitationKeyOf({
+                            caseNumber: row["text"],
+                            caseNumberType: primaryReferenceTypeFromStored(
+                              row["type"],
+                            ),
+                          })
+                        : citationKeyOf(row["text"]),
+                    stored:
+                      typeof row["stored"] === "string" ? row["stored"] : null,
+                  };
+                });
 
-          if (rows.length === 0) {
-            return { cursor, done: true, value: { seen: 0, keyed: 0 } };
-          }
+                if (rows.length === 0) {
+                  return { cursor, done: true, value: { seen: 0, keyed: 0 } };
+                }
 
-          const keyed = rows.filter(({ key, stored }) =>
-            missingOnly ? key !== null : key !== stored,
-          );
-          if (keyed.length > 0) {
-            const values = sql.join(
-              keyed.map(({ id, key }) => sql`(${id}::uuid, ${key}::varchar)`),
-              sql`, `,
-            );
-            // Rekeying and reopening affected citations share the checkpoint transaction.
-            if (table === "case_law_decisions") {
-              await tx.execute(
-                sql`WITH v(id, key) AS (VALUES ${values})
+                const keyed = rows.filter(({ key, stored }) =>
+                  missingOnly ? key !== null : key !== stored,
+                );
+                if (keyed.length > 0) {
+                  const values = sql.join(
+                    keyed.map(
+                      ({ id, key }) => sql`(${id}::uuid, ${key}::varchar)`,
+                    ),
+                    sql`, `,
+                  );
+                  // Rekeying and reopening affected citations share the checkpoint transaction.
+                  if (table === "case_law_decisions") {
+                    await tx.execute(
+                      sql`WITH v(id, key) AS (VALUES ${values})
                   UPDATE case_law_decisions AS t
                      SET citation_key = v.key
                     FROM v
                    WHERE t.id = v.id`,
-              );
-              await reopenCitationsForKeys(
-                tx,
-                keyed.flatMap(({ key, stored }) =>
-                  [key, stored].filter((value) => value !== null),
-                ),
-              );
-            } else {
-              await tx.execute(
-                missingOnly
-                  ? sql`WITH v(id, key) AS (VALUES ${values})
+                    );
+                    await reopenCitationsForKeys(
+                      tx,
+                      keyed.flatMap(({ key, stored }) =>
+                        [key, stored].filter((value) => value !== null),
+                      ),
+                    );
+                  } else {
+                    await tx.execute(
+                      missingOnly
+                        ? sql`WITH v(id, key) AS (VALUES ${values})
                     UPDATE case_law_citations AS t
                        SET citation_key = v.key
                       FROM v
                      WHERE t.id = v.id`
-                  : sql`WITH v(id, key) AS (VALUES ${values})
+                        : sql`WITH v(id, key) AS (VALUES ${values})
                     UPDATE case_law_citations AS t
                        SET citation_key = v.key,
                            resolution_status = ${CITATION_RESOLUTION_STATUS.PENDING},
@@ -160,15 +163,17 @@ const backfillTable = async (
                            resolution_attempted_at = NULL
                       FROM v
                      WHERE t.id = v.id`,
-              );
-            }
-          }
-          return {
-            cursor: rows.at(-1)?.id ?? cursor,
-            done: rows.length < size,
-            value: { seen: rows.length, keyed: keyed.length },
-          };
-        }),
+                    );
+                  }
+                }
+                return {
+                  cursor: rows.at(-1)?.id ?? cursor,
+                  done: rows.length < size,
+                  value: { seen: rows.length, keyed: keyed.length },
+                };
+              },
+            ),
+        ),
       onBatch: ({ value: batch }) => {
         totals.seen += batch.seen;
         totals.keyed += batch.keyed;
