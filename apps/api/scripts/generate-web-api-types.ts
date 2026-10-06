@@ -35,6 +35,7 @@ import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import ts from "typescript";
 
+import { hasPreparedGeneratedSources } from "../../../packages/scripts/src/prepared-generated-sources";
 import { withoutTsgoOnlyOptionDiagnostics } from "../../../packages/scripts/src/tsgo-compiler-options";
 import {
   hasFlag,
@@ -1289,6 +1290,9 @@ const main = () => {
   const check = args.includes("--check");
   if (args.some((arg) => arg !== "--check")) {
     panic(`generate-web-api-types: unknown arguments ${args.join(" ")}`);
+  }
+  if (!check && hasPreparedGeneratedSources(REPO_ROOT)) {
+    return;
   }
   const started = performance.now();
   const output = generate({ validation: check ? "identity" : "print" });
