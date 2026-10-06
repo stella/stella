@@ -2,12 +2,14 @@ import { describe, expect, test } from "bun:test";
 
 import {
   matterActivityIsKnownEmpty,
+  matterActivityItemVisible,
   resolveEntityActivityDestination,
   resolveAutomaticExpandedMatterId,
   resolveMatterNavigationTarget,
   resolveSidebarWorkspaceId,
   selectRecentWorkspaces,
 } from "@/components/app-sidebar.logic";
+import { LIST_ITEM_TYPES } from "@/components/workspaces/tasks/task-detail-constants";
 
 describe("sidebar matter context", () => {
   test("opens a matter at its default view without an intermediate redirect", () => {
@@ -247,5 +249,46 @@ describe("sidebar entity activity navigation", () => {
     expect(resolveEntityActivityDestination("link")).toEqual({
       type: "all-view",
     });
+  });
+});
+
+describe("sidebar list item admission", () => {
+  for (const listItemType of [null, ...LIST_ITEM_TYPES]) {
+    for (const legalListsEnabled of [false, true]) {
+      test(`task ${listItemType} with Lists ${legalListsEnabled}`, () => {
+        const item = {
+          type: "entity",
+          entityKind: "task",
+          listItemType,
+        } as const;
+        const visible = matterActivityItemVisible(item, legalListsEnabled);
+        expect(visible).toBe(
+          legalListsEnabled || listItemType === null || listItemType === "task",
+        );
+        expect(
+          matterActivityIsKnownEmpty({
+            isInvalidated: false,
+            status: "success",
+            pages: [
+              {
+                items: [item].filter((entry) =>
+                  matterActivityItemVisible(entry, legalListsEnabled),
+                ),
+                nextCursor: null,
+              },
+            ],
+          }),
+        ).toBe(!visible);
+      });
+    }
+  }
+  test("documents and threads remain visible without Lists", () => {
+    expect(matterActivityItemVisible({ type: "thread" }, false)).toBe(true);
+    expect(
+      matterActivityItemVisible(
+        { type: "entity", entityKind: "document", listItemType: null },
+        false,
+      ),
+    ).toBe(true);
   });
 });

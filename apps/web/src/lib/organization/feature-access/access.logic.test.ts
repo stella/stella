@@ -222,3 +222,21 @@ test("declared features require an explicit decision even when deployment is ena
     ),
   ).toBe(false);
 });
+
+test("declared Legal Lists decisions do not require verification", () => {
+  for (const deploymentEnabled of [false, true]) {
+    for (const enabled of [false, true]) {
+      const status = enabled ? "enabled" : "hidden";
+      expect(
+        callerFeatureEnabled(
+          {
+            declaredFeatureIds: [CALLER_FEATURE.legalLists.id],
+            deploymentFeatures: { legalLists: deploymentEnabled },
+            capabilities: { [CALLER_FEATURE.legalLists.id]: { status } },
+          },
+          CALLER_FEATURE.legalLists,
+        ),
+      ).toBe(enabled);
+    }
+  }
+});

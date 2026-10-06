@@ -1,6 +1,6 @@
 import { panic } from "better-result";
 
-import type { EntityKind } from "@/lib/types";
+import type { EntityKind, WorkspaceEntity } from "@/lib/types";
 
 export const resolveSidebarWorkspaceId = ({
   chatWorkspaceId,
@@ -173,3 +173,21 @@ export const resolveEntityActivityDestination = (
       return panic("Unsupported entity kind");
   }
 };
+
+type MatterActivityItem =
+  | { type: "thread" }
+  | {
+      type: "entity";
+      entityKind: EntityKind;
+      listItemType: WorkspaceEntity["listItemType"];
+    };
+
+export const matterActivityItemVisible = (
+  item: MatterActivityItem,
+  legalListsEnabled: boolean,
+): boolean =>
+  item.type === "thread" ||
+  item.entityKind !== "task" ||
+  item.listItemType === null ||
+  item.listItemType === "task" ||
+  legalListsEnabled;
