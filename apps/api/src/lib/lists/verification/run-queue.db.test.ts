@@ -95,12 +95,16 @@ afterAll(async () => await releaseTestDb());
 
 const seedRun = async (status: "queued" | "running" = "queued") => {
   const id = createSafeId<"legalListVerificationRun">();
+  const entityId = createSafeId<"entity">();
+  await db
+    .insert(entities)
+    .values({ id: entityId, workspaceId, name: "Verification document" });
   await db.insert(legalListVerificationRuns).values({
     id,
     organizationId,
     workspaceId,
     requestedBy: userId,
-    entityId: createSafeId<"entity">(),
+    entityId,
     fileFieldId: createSafeId<"field">(),
     entityVersionId: createSafeId<"entityVersion">(),
     contentSha256: "a".repeat(64),
@@ -124,9 +128,6 @@ const seedPinnedRun = async () => {
   if (run === undefined) {
     throw new Error("Expected pinned run fixture");
   }
-  await db
-    .insert(entities)
-    .values({ id: run.entityId, workspaceId, name: "Verification document" });
   await db
     .insert(entityVersions)
     .values({ id: run.entityVersionId, entityId: run.entityId, workspaceId });
