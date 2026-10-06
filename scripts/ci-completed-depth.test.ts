@@ -13,21 +13,24 @@ const stepSchema = v.looseObject({
   run: v.optional(v.string()),
   with: v.optional(v.looseObject({ script: v.optional(v.string()) })),
 });
-const jobs = v.parse(
-  v.record(
-    v.string(),
-    v.looseObject({
-      if: v.optional(v.string()),
-      steps: v.optional(v.array(stepSchema), []),
-    }),
-  ),
+const workflow = v.parse(
+  v.object({
+    jobs: v.record(
+      v.string(),
+      v.looseObject({
+        if: v.optional(v.string()),
+        steps: v.optional(v.array(stepSchema), []),
+      }),
+    ),
+  }),
   Bun.YAML.parse(
     readFileSync(
       new URL("../.github/workflows/ci.yml", import.meta.url),
       "utf-8",
     ),
-  ).jobs,
+  ),
 );
+const jobs = workflow.jobs;
 const planner = jobs["ci-plan"];
 const result = jobs["ci-result"];
 if (!planner || !result) {
@@ -54,9 +57,9 @@ const scope = createHash("sha256")
   .update(JSON.stringify([pr.title, pr.body, false]))
   .digest("hex");
 const marker = (depth: string) =>
-  `ci-completed-v2-123-456-${pr.head.sha}-${pr.base.sha}-${depth}-${scope}`;
+  `ci-completed-v3-123-456-${pr.head.sha}-${pr.base.sha}-${depth}-${scope}`;
 const artifact = (depth: string) => ({
-  name: `${marker(depth)}-run-99-attempt-1`,
+  name: marker(depth),
   expired: false,
   expires_at: "2099-01-01T00:00:00Z",
   workflow_run: { id: 99, head_sha: pr.head.sha, head_repository_id: 456 },
@@ -113,19 +116,30 @@ const decide = async ({
     github: {
       rest: {
         actions: {
-          getWorkflowRun: (request: unknown) => {
+          getWorkflowRun: async (request: unknown) => {
             requests.push(request);
             if (runFailure) {
-              return Promise.reject(new Error("Source run unavailable"));
+              throw new Error("Source run unavailable");
             }
-            return Promise.resolve({ data: sourceRun });
+            return { data: sourceRun };
           },
-          listArtifactsForRepo: (request: unknown) => {
+          listArtifactsForRepo: async (request: {
+            name: string;
+            per_page: number;
+          }) => {
             requests.push(request);
             if (failure) {
-              return Promise.reject(new Error("Evidence unavailable"));
+              throw new Error("Evidence unavailable");
             }
-            return Promise.resolve({ data: { artifacts } });
+            return {
+              data: {
+                artifacts: Array.isArray(artifacts)
+                  ? artifacts
+                      .filter((item) => item?.name === request.name)
+                      .slice(0, request.per_page)
+                  : artifacts,
+              },
+            };
           },
         },
       },
@@ -379,12 +393,12 @@ test("every CI condition is one expression without partial interpolation", () =>
   expect(conditions.size).toBeGreaterThan(0);
 });
 
-test("surviving artifacts cannot reuse failed, newer or unconfirmed run attempts", async () => {
+test("surviving artifacts require the latest source attempt to succeed", async () => {
   for (const sourceRun of [
     { ...successfulRun, conclusion: "failure" },
     { ...successfulRun, conclusion: "cancelled" },
     { ...successfulRun, status: "in_progress", conclusion: null },
-    { ...successfulRun, run_attempt: 2 },
+    { ...successfulRun, run_attempt: 2, conclusion: "failure" },
     { ...successfulRun, path: ".github/workflows/other.yml" },
     null,
   ]) {
@@ -395,16 +409,23 @@ test("surviving artifacts cannot reuse failed, newer or unconfirmed run attempts
   expect((await decide({ runFailure: true })).outputs.get("run_required")).toBe(
     "true",
   );
-  const secondAttempt = {
-    ...artifact("full"),
-    name: `${marker("full")}-run-99-attempt-2`,
-  };
   expect(
     (
-      await decide({
-        artifacts: [secondAttempt],
-        sourceRun: { ...successfulRun, run_attempt: 2 },
-      })
+      await decide({ sourceRun: { ...successfulRun, run_attempt: 2 } })
     ).outputs.get("run_required"),
   ).toBe("false");
+});
+
+test("exact-name lookup finds evidence behind more than a page of unrelated artifacts", async () => {
+  const artifacts = [
+    ...Array.from({ length: 150 }, (_, index) => ({
+      ...artifact("full"),
+      name: `unrelated-${index}`,
+    })),
+    artifact("full"),
+  ];
+  const { outputs, requests } = await decide({ artifacts });
+  expect(outputs.get("run_required")).toBe("false");
+  expect(requests).toHaveLength(2);
+  expect(requests.at(0)).toMatchObject({ name: marker("full"), per_page: 100 });
 });

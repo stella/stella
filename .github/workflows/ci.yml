@@ -211,20 +211,18 @@ jobs:
               && pr.labels.some((label) => label.name === "prove-fix");
             const scope = require("node:crypto").createHash("sha256")
               .update(JSON.stringify([pr.title, pr.body || "", proof])).digest("hex");
-            const prefix = `ci-completed-v2-${pr.number}-${pr.head.repo.id}-${pr.head.sha}-${pr.base.sha}-${depth}-${scope}`;
-            const attempt = Number(process.env.GITHUB_RUN_ATTEMPT);
-            if (!Number.isSafeInteger(attempt) || attempt < 1) return;
-            core.setOutput("marker", `${prefix}-run-${context.runId}-attempt-${attempt}`);
+            const marker = `ci-completed-v3-${pr.number}-${pr.head.repo.id}-${pr.head.sha}-${pr.base.sha}-${depth}-${scope}`;
+            core.setOutput("marker", marker);
             if (!["labeled", "unlabeled", "ready_for_review", "reopened", "auto_merge_enabled"].includes(context.payload.action)) return;
             try {
               const { data } = await github.rest.actions.listArtifactsForRepo({
-                ...context.repo, per_page: 100,
+                ...context.repo, name: marker, per_page: 100,
                 request: { timeout: 10000 },
               });
               if (!Array.isArray(data.artifacts)) return;
               const completed = data.artifacts.find((artifact) =>
                 typeof artifact?.name === "string"
-                && artifact.name.startsWith(`${prefix}-run-`)
+                && artifact.name === marker
                 && artifact.expired === false
                 && Date.parse(artifact.expires_at) > Date.now()
                 && artifact.workflow_run?.head_sha === pr.head.sha
@@ -233,13 +231,7 @@ jobs:
                 && artifact.workflow_run.id > 0
                 && artifact.workflow_run.id !== context.runId);
               if (!completed) return;
-              const record = completed.name.slice(prefix.length)
-                .match(/^-run-([1-9][0-9]*)-attempt-([1-9][0-9]*)$/);
-              if (!record) return;
-              const sourceId = Number(record[1]);
-              const sourceAttempt = Number(record[2]);
-              if (sourceId !== completed.workflow_run.id
-                  || !Number.isSafeInteger(sourceAttempt)) return;
+              const sourceId = completed.workflow_run.id;
               const { data: sourceRun } = await github.rest.actions.getWorkflowRun({
                 ...context.repo, run_id: sourceId,
                 request: { timeout: 10000 },
@@ -247,7 +239,6 @@ jobs:
               if (sourceRun.id !== sourceId || sourceRun.head_sha !== pr.head.sha
                   || sourceRun.event !== "pull_request"
                   || sourceRun.path !== ".github/workflows/ci.yml"
-                  || sourceRun.run_attempt !== sourceAttempt
                   || sourceRun.status !== "completed"
                   || sourceRun.conclusion !== "success") return;
               core.setOutput("completed_run_id", String(sourceId));
@@ -350,7 +341,7 @@ jobs:
           NPM_TOKEN: ""
 
       - name: Upload failed Bun install logs
-        if: steps.completed-depth.outputs.run_required != 'false' && (failure())
+        if: failure()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: bun-install-${{ github.job }}
@@ -4697,6 +4688,7 @@ jobs:
           path: ${{ runner.temp }}/bun-install/*.log
           retention-days: 7
           if-no-files-found: ignore
+
       - name: Cancel failed merge-group run
         if: failure() && github.event_name == 'merge_group'
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
