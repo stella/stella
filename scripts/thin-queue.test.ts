@@ -164,6 +164,7 @@ const context = ({
   ),
   always: () => true,
   cancelled: () => false,
+  failure: () => false,
   startsWith: (value: string, prefix: string) => value.startsWith(prefix),
 });
 const selected = (condition: string | undefined, value: object) => {
@@ -405,6 +406,29 @@ const assertMainSelection = (workflow: typeof main) => {
     }
   }
 };
+
+test("failure-only cancellation jobs resolve both successful and failed dependencies", () => {
+  const cancellations = Object.entries(ci.jobs).filter(([, job]) =>
+    job.if?.includes("failure()"),
+  );
+  expect(cancellations.length).toBeGreaterThan(0);
+  for (const [id, job] of cancellations) {
+    for (const event of events) {
+      for (const failed of [false, true]) {
+        const value = context({ event, variable: "full", queueDepth: "full" });
+        value.failure = () => failed;
+        expect(selected(job.if, value), `${id}/${event.event}/${failed}`).toBe(
+          failed && event.event === "merge_group",
+        );
+        if (event.event === "merge_group") {
+          expect(() =>
+            selected(job.if, { ...value, failure: undefined }),
+          ).toThrow("Unresolved queue workflow expression");
+        }
+      }
+    }
+  }
+});
 
 test("route smoke certifies planned queue and heavy builds while skipping PRs", () => {
   expect(eventPolicy["ci.yml/route-smoke"]).toBe("queue");
