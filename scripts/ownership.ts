@@ -1307,6 +1307,8 @@ const OWNERSHIP_DECLARATIONS = [
     summary:
       "`readBounded` applies a cap-plus-one SQL limit and returns either the " +
       "complete rows or an explicit overflow result without a partial set. " +
+      "`readCursorPage` uses the same sentinel and the existing `Page` owner " +
+      "to preserve worker continuation without claiming a partial set is complete. " +
       "This owner handles expected export ceilings; `boundedAll` instead " +
       "panics when a write-path cardinality invariant is violated. " +
       "`scripts/transfer-read-guard.ts` enumerates fixed-limit reads and " +

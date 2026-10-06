@@ -14,6 +14,21 @@ import {
 import type { ExternalSourceEntry } from "@/components/chat/source-chips.logic";
 
 describe("external source extraction from tool output", () => {
+  test("keeps a root-relative URL only when it opens a legal reader page", () => {
+    const sources: ExternalSourceEntry[] = [];
+    collectExternalSources(
+      [
+        { title: "Civil Code", url: "/law/cz/statutes/civil-code" },
+        { title: "Billing", url: "/settings/billing" },
+        { title: "Matter", url: "/workspaces/workspace-1" },
+      ],
+      sources,
+    );
+    expect(sources.map(({ url }) => url)).toEqual([
+      "/law/cz/statutes/civil-code",
+    ]);
+  });
+
   test.each(BUSINESS_REGISTRY_SLUGS)(
     "preserves the company identity through nested source deduplication for %s",
     (registry) => {

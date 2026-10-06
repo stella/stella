@@ -217,6 +217,7 @@ const runRecord = async (deploySha: string) => {
       GITHUB_RUN_ID: "9",
       GITHUB_SERVER_URL: "https://github.com",
       JOB_STATUS: "success",
+      MCP_SMOKE: "success",
       PATH: `${workspace}:${process.env["PATH"] ?? ""}`,
       STUB_CALLS_PATH: callsPath,
       WEB_SMOKE: "success",

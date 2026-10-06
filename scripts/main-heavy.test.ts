@@ -13,7 +13,8 @@ import path from "node:path";
 import { Script } from "node:vm";
 import * as v from "valibot";
 
-import { mainHeavyJobs, THIN_JOBS } from "./main-heavy-plan";
+import { contextFromNested, evaluate, UNKNOWN } from "./github-expression";
+import { mainHeavyJobs, thinJobs } from "./main-heavy-plan";
 
 const stepSchema = v.looseObject({
   name: v.optional(v.string()),
@@ -86,6 +87,7 @@ const mainWorkflow = {
   ),
 };
 const ciWorkflow = readWorkflow(".github/workflows/ci.yml");
+const THIN_JOBS = thinJobs(ciWorkflow);
 const mainTriggers = v.parse(mainTriggersSchema, mainWorkflow.on);
 const ciCall = v.parse(ciCallSchema, ciWorkflow.on).workflow_call;
 
@@ -215,15 +217,12 @@ test("main heavy workflow dispatches exactly the validated commit through ci.yml
 });
 
 const expressionValue = (value: unknown, context: object) => {
-  const expression = v
-    .parse(v.string(), value)
-    .replace(/^\s*\$\{\{([\s\S]*)\}\}\s*$/u, "$1");
-  return new Script(
-    expression.replaceAll(
-      /needs\.([\w-]+)/gu,
-      (_, job: string) => `needs[${JSON.stringify(job)}]`,
-    ),
-  ).runInNewContext(context);
+  const expression = v.parse(v.string(), value);
+  const result = evaluate(expression, contextFromNested(context));
+  if (result === UNKNOWN) {
+    panic(`Unresolved heavy workflow expression: ${expression}`);
+  }
+  return result;
 };
 
 type CheckoutWorkflow = v.InferOutput<typeof workflowSchema>;
@@ -252,7 +251,7 @@ const heavyCheckoutCensus = (workflow: CheckoutWorkflow) => {
       sha: "b".repeat(40),
       workflow_sha: "c".repeat(40),
       event_name: "workflow_dispatch",
-      event: { pull_request: { draft: false } },
+      event: { pull_request: { draft: false, labels: [] } },
     },
     needs: Object.fromEntries(
       Object.keys(workflow.jobs).map((job) => [
