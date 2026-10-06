@@ -38,7 +38,9 @@ test("an applied version names its decision and switches to current wording thro
           decisionContext={decisionContext}
           documentId={appliedDocumentId}
           currentVersionId={currentDocumentId}
-          onVersionChange={(id) => selected.push(id)}
+          onVersionChange={(id) => {
+            selected.push(id);
+          }}
         />
       </FormattingProvider>
     </IntlProvider>,

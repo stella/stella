@@ -151,7 +151,8 @@ export const installProvisionLayoutFixture = async (
       url.origin === new URL(page.url()).origin &&
       url.pathname.startsWith("/api/v1/");
     if (url.origin !== new URL(apiOrigin).origin && !sameOriginMount) {
-      return await route.continue();
+      await route.continue();
+      return;
     }
     const path = (
       sameOriginMount ? url.pathname.slice(4) : url.pathname
@@ -162,11 +163,12 @@ export const installProvisionLayoutFixture = async (
       path === `/v1/case/decisions/by-slug/${decision.slug}` ||
       path === `/v1/case/decisions/${decision.id}`
     ) {
-      return await respond(decision);
+      await respond(decision);
+      return;
     }
     if (path.startsWith(`/v1/case/decisions/${decision.id}/`)) {
       if (path.endsWith("/analysis")) {
-        return await respond({
+        await respond({
           status: "done",
           analysis: {
             version: 2,
@@ -176,25 +178,30 @@ export const installProvisionLayoutFixture = async (
             tree: [],
           } satisfies DecisionAnalysis,
         });
+        return;
       }
       if (path.endsWith("/provisions")) {
-        return await respond({
+        await respond({
           ...dockedChatLegalPayloads.noProvisions,
           items: [provisionRow],
         });
+        return;
       }
       if (path.endsWith("/citations/summary")) {
-        return await respond(dockedChatLegalPayloads.citationSummary);
+        await respond(dockedChatLegalPayloads.citationSummary);
+        return;
       }
       if (path.endsWith("/citations/leading")) {
-        return await respond(dockedChatLegalPayloads.noLeadingCitations);
+        await respond(dockedChatLegalPayloads.noLeadingCitations);
+        return;
       }
       if (path.endsWith("/citations")) {
-        return await respond(dockedChatLegalPayloads.noCitations);
+        await respond(dockedChatLegalPayloads.noCitations);
+        return;
       }
     }
     if (path === "/v1/law/statutes/resolve") {
-      return await respond({
+      await respond({
         items: [
           {
             asOf: historical.versionValidFrom,
@@ -205,9 +212,10 @@ export const installProvisionLayoutFixture = async (
           },
         ],
       } satisfies PublicLawData<typeof api.law.statutes.resolve.post>);
+      return;
     }
     if (path.endsWith("/versions") && path.startsWith("/v1/law/statutes/")) {
-      return await respond({
+      await respond({
         ...dockedChatLegalPayloads.versions,
         items: dockedChatLegalPayloads.versions.items.map((version) => ({
           ...version,
@@ -222,18 +230,20 @@ export const installProvisionLayoutFixture = async (
             : {}),
         })),
       });
+      return;
     }
     for (const statute of [historical, current]) {
       if (
         path === `/v1/law/statutes/${statute.id}` ||
         path === `/v1/law/statutes/by-slug/${statute.slug}`
       ) {
-        return await respond(statute);
+        await respond(statute);
+        return;
       }
       if (
         path === `/v1/law/statutes/${statute.id}/provisions/par_2895/preview`
       ) {
-        return await respond({
+        await respond({
           documentId: statute.id,
           language: "cs",
           anchorId: "par_2895",
@@ -256,16 +266,19 @@ export const installProvisionLayoutFixture = async (
             },
           ],
         });
+        return;
       }
       if (
         path.includes(`/v1/law/statutes/${statute.id}/provisions/`) &&
         path.endsWith("/history")
       ) {
-        return await respond({ items: [], nextCursor: null, limit: 50 });
+        await respond({ items: [], nextCursor: null, limit: 50 });
+        return;
       }
     }
     if (path === "/v1/case/provisions/citing-decisions") {
-      return await respond({ items: [], nextCursor: null, limit: 50 });
+      await respond({ items: [], nextCursor: null, limit: 50 });
+      return;
     }
     await route.continue();
   });
