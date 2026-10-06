@@ -1131,7 +1131,7 @@ test("setup migration preserves runtime inputs and protected install policy", ()
 test("baseline cancellation normalization uses its own owner and rejects changed tails", () => {
   for (const id of partitionIds) {
     const raw = v.parse(
-      v.looseObject({ steps: v.array(v.record(v.string(), v.unknown())) }),
+      v.looseObject({ steps: v.array(v.looseObject({ name: v.string() })) }),
       baseJobs[id],
     );
     const normalized = v.parse(baseJobSchema, baseJobs[id]);
