@@ -415,4 +415,5 @@ export const SAMPLE_COUNTS = {
   templates: 1,
   playbooks: 1,
   rateTables: SAMPLE_MATTERS.length,
+  rateEntries: SAMPLE_MATTERS.length,
 } as const;

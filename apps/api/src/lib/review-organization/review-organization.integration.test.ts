@@ -8,7 +8,7 @@ import {
   setDefaultTimeout,
   test,
 } from "bun:test";
-import { and, eq, inArray } from "drizzle-orm";
+import { and, eq, inArray, isNull } from "drizzle-orm";
 
 import { member, organization, user } from "@/api/db/auth-schema";
 import type { Transaction } from "@/api/db/root";
@@ -20,6 +20,7 @@ import {
   featureEnrolments,
   organizationSettings,
   playbookDefinitions,
+  rateEntries,
   rateTables,
   savedSearches,
   systemAuditRuns,
@@ -199,6 +200,7 @@ const countRows = async (
     templateCount,
     playbookCount,
     rateTableCount,
+    rateEntryCount,
   ] = await Promise.all([
     testDb.$count(contacts, eq(contacts.organizationId, organizationId)),
     testDb.$count(workspaces, eq(workspaces.organizationId, organizationId)),
@@ -228,9 +230,18 @@ const countRows = async (
         eq(rateTables.isDefault, true),
       ),
     ),
+    testDb.$count(
+      rateEntries,
+      and(
+        inArray(rateEntries.workspaceId, matterIds),
+        isNull(rateEntries.userId),
+        isNull(rateEntries.role),
+      ),
+    ),
   ]);
   return {
     rateTables: rateTableCount,
+    rateEntries: rateEntryCount,
     contacts: contactCount,
     matters: matterCount,
     documents: documentCount,
@@ -428,6 +439,7 @@ describe("review organization seed and reset", () => {
       "templates",
       "playbooks",
       "rateTables",
+      "rateEntries",
     ];
     for (const kind of kinds) {
       expect({ kind, ...again[kind] }).toEqual({
@@ -459,6 +471,63 @@ describe("review organization seed and reset", () => {
         ),
       ),
     ).toBe(SAMPLE_COUNTS.timeEntries);
+  });
+
+  test("a seed resumes a default rate table that has no fallback rate", async () => {
+    const matterIds = testDb
+      .select({ id: workspaces.id })
+      .from(workspaces)
+      .where(eq(workspaces.organizationId, fixture.reviewOrgId));
+    await testDb
+      .delete(rateEntries)
+      .where(inArray(rateEntries.workspaceId, matterIds));
+    const resumed = (
+      await seedReviewOrganization(
+        actorFor(fixture.reviewOrgId, fixture.reviewUserId),
+        { documents: documentDependencies },
+      )
+    ).unwrap("Expected the resumed seed to succeed");
+    expect(resumed.rateTables).toEqual({
+      created: 0,
+      existing: SAMPLE_COUNTS.rateTables,
+    });
+    expect(resumed.rateEntries).toEqual({
+      created: SAMPLE_COUNTS.rateEntries,
+      existing: 0,
+    });
+    expect(await countRows(fixture.reviewOrgId)).toEqual({ ...SAMPLE_COUNTS });
+  });
+
+  test("a member who joins after the target is proved stops the reset before any delete", async () => {
+    const before = await countRows(fixture.reviewOrgId);
+    const joinedId = Bun.randomUUIDv7();
+    try {
+      const outcome = await resetReviewOrganization({
+        config: config(fixture.reviewOrgId),
+        db: ownerDb(),
+        rlsDatabase: rlsDatabase(),
+        runId: Bun.randomUUIDv7(),
+        signal: new AbortController().signal,
+        dependencies: {
+          ...resetDependencies,
+          afterTargetResolved: async () => {
+            await testDb.insert(member).values({
+              id: joinedId,
+              organizationId: fixture.reviewOrgId,
+              userId: fixture.otherUserId,
+              role: "member",
+              createdAt: new Date(),
+            });
+          },
+        },
+      });
+      expect(
+        outcome.match({ ok: () => null, err: (error) => error.reason }),
+      ).toBe(REVIEW_RESET_REFUSAL.otherMembers);
+      expect(await countRows(fixture.reviewOrgId)).toEqual(before);
+    } finally {
+      await testDb.delete(member).where(eq(member.id, joinedId));
+    }
   });
 
   test("reset removes what the reviewer added, reseeds, and leaves other organizations alone", async () => {

@@ -1,5 +1,5 @@
 import { Result, TaggedError } from "better-result";
-import { and, eq, inArray } from "drizzle-orm";
+import { and, eq, inArray, isNull } from "drizzle-orm";
 
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import {
@@ -8,6 +8,7 @@ import {
   entities,
   featureEnrolments,
   playbookDefinitions,
+  rateEntries,
   rateTables,
   templates,
   timeEntries,
@@ -97,6 +98,7 @@ export type ReviewSeedKind =
   | "templates"
   | "playbooks"
   | "rateTables"
+  | "rateEntries"
   | "enrolments";
 
 /** Per kind: items this run wrote, and items an earlier run had written. */
@@ -115,6 +117,7 @@ const emptyCounts = (): ReviewSeedCounts => ({
   templates: { created: 0, existing: 0 },
   playbooks: { created: 0, existing: 0 },
   rateTables: { created: 0, existing: 0 },
+  rateEntries: { created: 0, existing: 0 },
   enrolments: { created: 0, existing: 0 },
 });
 
@@ -357,18 +360,14 @@ const seedTasks = async ({
   });
 };
 
-/**
- * A default rate table with one fallback rate per matter, through the same
- * writers the rate settings use, so sample time entries are billable as the
- * product's default entry is.
- */
 const TIME_BILLING_FEATURE_ID = "time-billing";
 
-const seedRateTable = async ({
+/** The matter's default rate table, created when it has none. */
+const ensureDefaultRateTable = async ({
   actor,
   workspaceId,
   counts,
-}: MatterStep): Promise<Result<void, ReviewSeedError>> => {
+}: MatterStep): Promise<Result<SafeId<"rateTable">, ReviewSeedError>> => {
   const existing = await actor.safeDb((tx) =>
     tx
       .select({ id: rateTables.id })
@@ -384,12 +383,12 @@ const seedRateTable = async ({
   if (Result.isError(existing)) {
     return Result.err(seedError("rate table", existing.error));
   }
-  if (existing.value.length > 0) {
+  const table = existing.value.at(0);
+  if (table !== undefined) {
     counts.rateTables.existing += 1;
-    return Result.ok(undefined);
+    return Result.ok(table.id);
   }
-  const recordAuditEvent = actor.recorderFor(workspaceId);
-  const table = await Result.gen(() =>
+  const created = await Result.gen(() =>
     createRateTableHandler({
       safeDb: actor.safeDb,
       organizationId: actor.organizationId,
@@ -399,29 +398,68 @@ const seedRateTable = async ({
         currency: SAMPLE_RATE_TABLE.currency,
         isDefault: true,
       },
-      recordAuditEvent,
+      recordAuditEvent: actor.recorderFor(workspaceId),
     }),
   );
+  if (Result.isError(created)) {
+    return Result.err(seedError("rate table", created.error));
+  }
+  counts.rateTables.created += 1;
+  return Result.ok(created.value.id);
+};
+
+/**
+ * A default rate table with a fallback rate per matter, through the same
+ * writers the rate settings use, so sample time entries are billable as the
+ * product's default entry is. The table and its fallback rate are ensured
+ * separately, so a run that stopped between the two completes on the next.
+ */
+const seedRateTable = async (
+  step: MatterStep,
+): Promise<Result<void, ReviewSeedError>> => {
+  const { actor, workspaceId, counts } = step;
+  const table = await ensureDefaultRateTable(step);
   if (Result.isError(table)) {
-    return Result.err(seedError("rate table", table.error));
+    return table;
+  }
+  const rateTableId = table.value;
+  const fallback = await actor.safeDb((tx) =>
+    tx
+      .select({ id: rateEntries.id })
+      .from(rateEntries)
+      .where(
+        and(
+          eq(rateEntries.rateTableId, rateTableId),
+          isNull(rateEntries.userId),
+          isNull(rateEntries.role),
+        ),
+      )
+      .limit(1),
+  );
+  if (Result.isError(fallback)) {
+    return Result.err(seedError("rate entry", fallback.error));
+  }
+  if (fallback.value.length > 0) {
+    counts.rateEntries.existing += 1;
+    return Result.ok(undefined);
   }
   const entry = await Result.gen(() =>
     createRateEntryHandler({
       safeDb: actor.safeDb,
       workspaceId,
       session: { activeOrganizationId: actor.organizationId },
-      params: { rateTableId: table.value.id },
+      params: { rateTableId },
       body: {
         hourlyRate: SAMPLE_RATE_TABLE.hourlyRateMinor,
         effectiveFrom: SAMPLE_RATE_TABLE.effectiveFrom,
       },
-      recordAuditEvent,
+      recordAuditEvent: actor.recorderFor(workspaceId),
     }),
   );
   if (Result.isError(entry)) {
     return Result.err(seedError("rate entry", entry.error));
   }
-  counts.rateTables.created += 1;
+  counts.rateEntries.created += 1;
   return Result.ok(undefined);
 };
 

@@ -3,6 +3,7 @@ import { and, asc, eq, sql } from "drizzle-orm";
 
 import { member, organization, user } from "@/api/db/auth-schema";
 import type { Transaction } from "@/api/db/root";
+import { abortTransaction } from "@/api/db/safe-db";
 import type { SafeDb } from "@/api/db/safe-db";
 import {
   clauses,
@@ -205,7 +206,63 @@ export type ReviewResetReport = {
 export type ReviewResetDependencies = {
   seed?: ReviewSeedDependencies | undefined;
   workspaceDeletion?: Omit<WorkspaceDeletionDependencies, "database">;
+  /** Test seam: runs after the target is proved, before the first delete. */
+  afterTargetResolved?: (() => Promise<void>) | undefined;
 };
+
+/** The review organization gained a member while the reset ran. */
+class ReviewMembershipChangedError extends TaggedError(
+  "ReviewMembershipChangedError",
+)<{ message: string }> {}
+
+/**
+ * Re-proves, inside every transaction the reset writes in, that the review
+ * account is still the organization's only member, and rolls that
+ * transaction back otherwise. Once tripped it stays tripped: every later
+ * transaction refuses too, and the reset stops without seeding.
+ *
+ * Membership writes take no lock this check could share, so the guarantee is
+ * per transaction: a member who joins after a check sees no further delete.
+ */
+type MembershipFence = {
+  tripped: boolean;
+  assert: (tx: Pick<Transaction, "select">) => Promise<void>;
+};
+
+const createMembershipFence = (target: ReviewTarget): MembershipFence => {
+  const fence: MembershipFence = {
+    tripped: false,
+    assert: async (tx) => {
+      const rows = fence.tripped
+        ? []
+        : await tx
+            .select({ userId: member.userId })
+            .from(member)
+            .where(eq(member.organizationId, target.organizationId))
+            .orderBy(asc(member.userId))
+            .limit(2);
+      if (rows.length !== 1 || rows[0]?.userId !== target.userId) {
+        fence.tripped = true;
+        abortTransaction(
+          new ReviewMembershipChangedError({
+            message:
+              "The review organization has members other than the review account",
+          }),
+        );
+      }
+    },
+  };
+  return fence;
+};
+
+/** `safeDb` with the fence checked first in each of its transactions. */
+const fencedSafeDb =
+  (safeDb: SafeDb, fence: MembershipFence): SafeDb =>
+  async (fn, retry) =>
+    await safeDb(async (tx) => {
+      await fence.assert(tx);
+      return await fn(tx);
+    }, retry);
 
 export type ReviewResetOptions = {
   config: ReviewOrganizationConfig | null;
@@ -227,6 +284,7 @@ type ResetScope = {
   target: ReviewTarget;
   db: SchedulerDb;
   safeDb: SafeDb;
+  fence: MembershipFence;
   signal: AbortSignal;
   recorderFor: (workspaceId: SafeId<"workspace"> | null) => AuditRecorder;
   /** The recorder for organization-level rows. */
@@ -246,7 +304,7 @@ const deleteEach = async <TRow extends { id: string }>(
   // Every row goes through its kind's shared delete path, one short
   // transaction each; a failed row is reported and the next one still runs.
   await inOrder(rows, async (row) => {
-    if (scope.signal.aborted) {
+    if (scope.signal.aborted || scope.fence.tripped) {
       return Result.ok(undefined);
     }
     const outcome = await remove(row);
@@ -293,7 +351,11 @@ const deleteMatters = async (scope: ResetScope) => {
       {
         ...scope.dependencies.workspaceDeletion,
         database: {
-          transaction: async (callback) => await scope.db.transaction(callback),
+          transaction: async (callback) =>
+            await scope.db.transaction(async (tx) => {
+              await scope.fence.assert(tx);
+              return await callback(tx);
+            }),
         },
       },
     );
@@ -423,6 +485,9 @@ const sweepRemainingRows = async (
   failures: ReviewResetFailure[];
 }> => {
   const { organizationId } = scope.target;
+  if (scope.fence.tripped) {
+    return { swept: new Map(), failures: [] };
+  }
   // The storage census seals and records every matter still standing; a
   // matter whose own deletion failed must keep its objects, so the sweep waits.
   const remainingMatters = await scope.db.$count(
@@ -444,6 +509,7 @@ const sweepRemainingRows = async (
   const outcome = await Result.tryPromise({
     try: async () =>
       await scope.db.transaction(async (tx) => {
+        await scope.fence.assert(tx);
         const teardown = await recordOrganizationStorageTeardown({
           organizationId,
           tx,
@@ -519,16 +585,22 @@ export const resetReviewOrganization = async ({
         },
       },
     });
+  const fence = createMembershipFence(target.value);
   const scope: ResetScope = {
     target: target.value,
     db,
-    safeDb: createRootMembershipSafeDb({ organizationId, userId }, rlsDatabase),
+    safeDb: fencedSafeDb(
+      createRootMembershipSafeDb({ organizationId, userId }, rlsDatabase),
+      fence,
+    ),
+    fence,
     signal,
     recorderFor,
     recordOrganizationAuditEvent: recorderFor(null),
     dependencies,
   };
 
+  await dependencies.afterTargetResolved?.();
   // Matters first: their documents, tasks and time entries go with them, and
   // a contact that is a matter's client cannot be deleted before it.
   const matters = await deleteMatters(scope);
@@ -554,6 +626,12 @@ export const resetReviewOrganization = async ({
   ];
   const { swept } = sweep;
 
+  if (fence.tripped) {
+    return refuse(
+      REVIEW_RESET_REFUSAL.otherMembers,
+      "The review organization gained a member during the reset; it stopped",
+    );
+  }
   if (signal.aborted) {
     return Result.ok({
       deleted,
