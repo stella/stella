@@ -354,6 +354,7 @@ export const sourceClosureProblems = (
   const sourceAvailable = (file: string) =>
     !/\.d\.[cm]?ts$/u.test(file) && tree.has(physical(file));
   const host: ts.ModuleResolutionHost = {
+    getCurrentDirectory: () => "/app",
     fileExists: sourceAvailable,
     readFile: (file) => {
       const origin = tree.get(physical(file));
