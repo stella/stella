@@ -64,12 +64,6 @@ export default defineConfig({
 
   projects: [
     {
-      name: "visual-charts",
-      testDir: "../../api/e2e",
-      testMatch: /visual-treemap\.spec\.ts$/u,
-      use: { ...devices["Desktop Chrome"] },
-    },
-    {
       name: "chromium",
       testIgnore: [ROUTE_SMOKE_SPEC, HEAP_GROWTH_CANARY_SPEC],
       use: { ...devices["Desktop Chrome"] },
