@@ -20,6 +20,9 @@
   // package, not one task's declared inputs.
   "globalDependencies": ["patches/**"],
   "tasks": {
+    "@stll/desktop#test:browser": {
+      "inputs": ["$TURBO_DEFAULT$"]
+    },
     "@stll/visual-preview#typecheck": {
       "inputs": ["$TURBO_DEFAULT$", "$TURBO_ROOT$/scripts/browser/**"]
     },

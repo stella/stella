@@ -5833,6 +5833,53 @@
     margin-top: calc(var(--spacing) * 1.5);
   }
 }
+[data-slot="inline-rename"] {
+  position: relative;
+  display: inline-grid;
+  grid-template-columns: minmax(0, max-content);
+  min-inline-size: 0;
+  max-inline-size: 100%;
+  vertical-align: baseline;
+}
+[data-slot="inline-rename-mirror"], [data-slot="inline-rename-input"] {
+  grid-area: 1 / 1;
+  min-inline-size: 1px;
+  max-inline-size: 100%;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  font: inherit;
+  letter-spacing: inherit;
+  line-height: inherit;
+}
+[data-slot="inline-rename-mirror"] {
+  visibility: hidden;
+  white-space: pre;
+  overflow: hidden;
+}
+[data-slot="inline-rename-input"] {
+  position: absolute;
+  inset-block-start: 0;
+  inset-inline-start: 0;
+  inline-size: 100%;
+  block-size: 1lh;
+  border-radius: var(--radius-sm, 2px);
+  color: inherit;
+  background: transparent;
+  outline: none;
+  text-align: start;
+}
+[data-slot="inline-rename-input"]:focus {
+  outline: 2px solid var(--ring, currentColor);
+  outline-offset: 3px;
+}
+@supports (field-sizing: content) {
+  [data-slot="inline-rename-input"] {
+    position: static;
+    field-sizing: content;
+    inline-size: auto;
+  }
+}
 @keyframes skeleton-rtl {
   to {
     background-position: 200% 0;

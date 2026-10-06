@@ -39,7 +39,9 @@ const {
   recordLawSearch,
   removeLawRecent,
 } = await import("@/lib/law-search-history");
-const { installUserScopedStorage, releaseUserStorage, userStorageKey } =
+const { installUserScopedStorage } =
+  await import("@/lib/account/install-user-scoped-storage");
+const { releaseUserStorage, userStorageKey } =
   await import("@/lib/account/user-scoped-storage");
 
 const queryClient = new QueryClient();
