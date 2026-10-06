@@ -335,4 +335,6 @@ implies a hazard that is gone.
 
 - [`no-discarded-toast-error`](./no-discarded-toast-error.ts) (`no-discarded-toast-error`): preserves original caught errors through shared notification.
 
+- [`no-ad-hoc-inline-rename`](./no-ad-hoc-inline-rename.ts) (`no-ad-hoc-inline-rename`): enumerates native and UI input aliases in view/edit owners with blur/keyboard commit handlers and rename bindings or autofocus; requires `@stll/ui/inline-rename`. Permanent, creation, numeric and multiline fields stay outside this detection boundary.
+
 - [`require-json-import-attribute`](./require-json-import-attribute.ts) (`require-json-import-attribute`): requires the JSON type attribute on static runtime JSON imports in web browser-test files and repository scripts; erased type imports are allowed.
