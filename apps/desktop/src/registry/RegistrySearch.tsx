@@ -46,6 +46,10 @@ import {
 import { registryFormatHtml } from "./registry-format";
 
 const SEARCH_DEBOUNCE_MS = 300;
+const CONNECTION_FAILURE_MESSAGES = {
+  lookup: "registryErrorState",
+  connect: "registryErrorConnect",
+} as const;
 // Emitted by the native bridge once a browser handoff stored a credential;
 // the non-activating panel gets no focus event to notice it otherwise.
 const CONNECTION_CHANGED_EVENT = "desktop-account-changed";
@@ -118,6 +122,9 @@ export const RegistrySearch = ({
     scope: string;
     message: string;
   } | null>(null);
+  const [connectionFailure, setConnectionFailure] = useState<
+    keyof typeof CONNECTION_FAILURE_MESSAGES | null
+  >(null);
   const [attempt, setAttempt] = useState(0);
   const connectionRefresh = useRef<() => void>(() => undefined);
   const [activeResultId, setActiveResultId] = useState<string | null>(null);
@@ -127,8 +134,10 @@ export const RegistrySearch = ({
   const formatRequests = useRef(new Map<string, number>());
   const defaultFormatRequests = useRef(0);
   const [savingDefaultFormat, setSavingDefaultFormat] = useState(false);
-  const connectionFailure =
-    connection?.status === "unavailable" ? t("registryErrorState") : null;
+  const connectionError =
+    connectionFailure === null
+      ? null
+      : t(CONNECTION_FAILURE_MESSAGES[connectionFailure]);
   const searchError = t("registryErrorSearch");
   const connected = connection?.status === "connected";
   const formatType =
@@ -144,7 +153,7 @@ export const RegistrySearch = ({
     attempt,
   ]);
   const errorMessage =
-    failure?.scope === scope ? failure.message : connectionFailure;
+    failure?.scope === scope ? failure.message : connectionError;
   const setError = (message: string | null) =>
     setFailure(message === null ? null : { scope, message });
 
@@ -173,6 +182,7 @@ export const RegistrySearch = ({
                 : "")
             );
           });
+          setConnectionFailure(null);
           setAttempt((current) => current + 1);
           return;
         })
@@ -181,6 +191,7 @@ export const RegistrySearch = ({
             return;
           }
           setConnection({ status: "unavailable" });
+          setConnectionFailure("lookup");
         });
     };
     refresh();
@@ -307,7 +318,7 @@ export const RegistrySearch = ({
     onConnectionFlowChange("signIn");
     void onConnectAccount().catch(() => {
       onConnectionFlowChange("idle");
-      setConnectionFailure(t("registryErrorConnect"));
+      setConnectionFailure("connect");
     });
   };
   const disconnect = () => {
@@ -776,7 +787,7 @@ export const RegistrySearch = ({
     results,
     feedback,
     connectionStatus: connection?.status ?? "loading",
-    connectionError: connectionFailure,
+    connectionError,
     connectControl: (
       <Button className="min-h-11 rounded-xl" onClick={connect} type="button">
         {settingsT("connectToStella")}
