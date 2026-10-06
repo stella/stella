@@ -1,5 +1,11 @@
 import { describe, expect, test } from "bun:test";
-import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import {
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  symlinkSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
@@ -192,6 +198,31 @@ describe("staging source selection", () => {
         sha: updated,
         tip: "true",
         "main-sha": updated,
+      });
+    });
+  });
+
+  test("source selection uses only Git and Bash on a minimal runner path", async () => {
+    await withRepository(({ checkout, old, tip }) => {
+      const tools = path.join(checkout, "fixture-tools");
+      mkdirSync(tools);
+      for (const tool of ["git", "bash"]) {
+        const executable = Bun.which(tool);
+        if (!executable) {
+          throw new TypeError(`Fixture requires ${tool}`);
+        }
+        symlinkSync(executable, path.join(tools, tool));
+      }
+      const resolved = run({
+        cwd: checkout,
+        command: ["bash", RESOLVER, "--sha", old],
+        env: { PATH: tools },
+      });
+      expect(resolved.exitCode, resolved.stderr).toBe(0);
+      expect(outputs(resolved.stdout)).toEqual({
+        sha: old,
+        tip: "false",
+        "main-sha": tip,
       });
     });
   });

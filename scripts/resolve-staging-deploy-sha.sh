@@ -34,7 +34,7 @@ fi
 resolved=$(git rev-parse --verify --quiet "$sha^{commit}") \
   || { echo "::error::STAGING_SHA_REFUSED: $sha is not a commit in this repository" >&2; exit 1; }
 history=$(git rev-list --first-parent "$main")
-if ! rg -Fxq "$resolved" <<< "$history"; then
+if [[ $'\n'"$history"$'\n' != *$'\n'"$resolved"$'\n'* ]]; then
   echo "::error::STAGING_SHA_REFUSED: $resolved is not on the first-parent history of origin/main ($main)" >&2
   exit 1
 fi
