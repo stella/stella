@@ -98,7 +98,7 @@ export const SplitButton = (props: SplitButtonProps) => {
         >
           <ChevronDownIcon
             aria-hidden="true"
-            className="size-2.25"
+            className="size-[0.65625rem]"
             strokeWidth={1.5}
           />
         </PopoverTrigger>
@@ -111,7 +111,7 @@ export const SplitButton = (props: SplitButtonProps) => {
         >
           <ChevronDownIcon
             aria-hidden="true"
-            className="size-2.25"
+            className="size-[0.65625rem]"
             strokeWidth={1.5}
           />
         </MenuTrigger>

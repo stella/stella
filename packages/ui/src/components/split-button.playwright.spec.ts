@@ -205,8 +205,8 @@ for (const size of ["sm", "md"] as const) {
         throw new Error("Both split button glyphs must have visible bounds");
       }
       const ratio = chevronBox.width / primaryIconBox.width;
-      expect(ratio).toBeGreaterThanOrEqual(0.6);
-      expect(ratio).toBeLessThanOrEqual(0.65);
+      expect(ratio).toBeGreaterThanOrEqual(0.72);
+      expect(ratio).toBeLessThanOrEqual(0.75);
       await expect(chevron).toHaveAttribute("stroke-width", "1.5");
       await trigger.click();
       await expect(page.getByRole("menu")).toBeVisible();
