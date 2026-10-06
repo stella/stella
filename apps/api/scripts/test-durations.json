@@ -2479,6 +2479,22 @@
     "seconds": 2.8,
     "source": "measured"
   },
+  "src/handlers/desktop-presence/presence.integration.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
+  "src/handlers/desktop-presence/presence.postgres.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
+  "src/handlers/desktop-presence/routes.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
+  "src/handlers/desktop-presence/service.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
   "src/handlers/desktop-registry/auth.test.ts": {
     "seconds": 0.953933,
     "source": "estimated"
@@ -6554,6 +6570,10 @@
   "src/lib/member-credential-lifecycle.db.test.ts": {
     "seconds": 8.5,
     "source": "measured"
+  },
+  "src/lib/member-presence-offboarding.integration.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
   },
   "src/lib/member-removal-coverage.test.ts": {
     "seconds": 0.8,
