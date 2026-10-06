@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
+import { userStorageKey } from "@/lib/account/user-scoped-storage";
 import {
   readRecentFiles,
   readRecentSearches,
@@ -123,7 +124,10 @@ describe("search recents", () => {
   test("keeps older recent file records without MIME metadata", () => {
     const storage = new MemoryStorage();
     storage.setItem(
-      "stella-search-recent-files:org-1:user-1",
+      userStorageKey("stella-search-recent-files:org-1:", {
+        kind: "user",
+        userId: "user-1",
+      }),
       JSON.stringify([
         {
           entityId: "entity-1",
@@ -143,7 +147,10 @@ describe("search recents", () => {
   test("drops recent file records with empty identity fields", () => {
     const storage = new MemoryStorage();
     storage.setItem(
-      "stella-search-recent-files:org-1:user-1",
+      userStorageKey("stella-search-recent-files:org-1:", {
+        kind: "user",
+        userId: "user-1",
+      }),
       JSON.stringify([
         {
           entityId: "",
@@ -189,7 +196,10 @@ describe("search recents", () => {
     const storage = new MemoryStorage();
     const illFormedId = "\uD800";
     storage.setItem(
-      "stella-search-recent-files:org-1:user-1",
+      userStorageKey("stella-search-recent-files:org-1:", {
+        kind: "user",
+        userId: "user-1",
+      }),
       JSON.stringify([
         {
           entityId: illFormedId,
@@ -246,9 +256,18 @@ describe("search recents", () => {
 
   test("ignores corrupted storage payloads", () => {
     const storage = new MemoryStorage();
-    storage.setItem("stella-search-recent-searches:org-1:user-1", "{bad");
     storage.setItem(
-      "stella-search-recent-files:org-1:user-1",
+      userStorageKey("stella-search-recent-searches:org-1:", {
+        kind: "user",
+        userId: "user-1",
+      }),
+      "{bad",
+    );
+    storage.setItem(
+      userStorageKey("stella-search-recent-files:org-1:", {
+        kind: "user",
+        userId: "user-1",
+      }),
       JSON.stringify([{ bad: true }]),
     );
 

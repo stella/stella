@@ -69,8 +69,8 @@ import {
   setCreateDocumentDraftPayloadStatus,
   terminalizeUnsettledCreateDocumentDraft,
 } from "@/components/chat/create-document-draft.logic";
-import "@/components/chat/create-document-draft-inspector";
 import { openEntityInInspector } from "@/components/chat/entity-open";
+import "@/components/chat/create-document-draft-inspector";
 import type { CreateDocumentDestination } from "@/components/chat/needs-matter-card";
 import { StreamdownMentionLink } from "@/components/chat/streamdown-mention-link";
 import { useInspectorCommandStore } from "@/components/inspector/inspector-command-store";
@@ -106,6 +106,7 @@ import {
 import { fetchOlderMessages } from "@/features/chat/queries";
 import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
+import { browserStateStorage } from "@/lib/account/browser-storage";
 import { userStorageKey } from "@/lib/account/user-scoped-storage";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
@@ -1494,7 +1495,9 @@ type ApprovedToolsChangedDetail =
     };
 
 const getConversationApprovedToolsStorageKey = (conversationId: string) =>
-  `${CHAT_CONVERSATION_APPROVED_TOOLS_STORAGE_KEY_PREFIX}${conversationId}`;
+  userStorageKey(
+    `${CHAT_CONVERSATION_APPROVED_TOOLS_STORAGE_KEY_PREFIX}${conversationId}`,
+  );
 
 const readConversationApprovedTools = (conversationId: string) =>
   readStoredApprovedTools(
@@ -1537,7 +1540,9 @@ const getStorage = (scope: "local" | "session") => {
     return null;
   }
 
-  return scope === "local" ? window.localStorage : window.sessionStorage;
+  return scope === "local"
+    ? browserStateStorage("local")
+    : browserStateStorage("session");
 };
 
 const readStoredApprovedTools = (

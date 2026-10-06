@@ -47,6 +47,7 @@ import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { useFormatter } from "@/i18n/formatting-context";
 import { useI18nStore } from "@/i18n/i18n-store";
+import { browserStateStorage } from "@/lib/account/browser-storage";
 import { userStorageKey } from "@/lib/account/user-scoped-storage";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
@@ -138,7 +139,7 @@ export const ExistingFileOrganizerDialog = ({
     if (typeof window === "undefined") {
       return "";
     }
-    return window.localStorage.getItem(userInstructionsKey) ?? "";
+    return browserStateStorage("local").getItem(userInstructionsKey) ?? "";
   });
   const [showInstructions, setShowInstructions] = useState(false);
   const getSuggestionRequestContext = useLatestCallback(() => ({
@@ -657,7 +658,10 @@ export const ExistingFileOrganizerDialog = ({
             onChange={(value) => {
               setUserInstructions(value);
               if (typeof window !== "undefined") {
-                window.localStorage.setItem(userInstructionsKey, value);
+                browserStateStorage("local").setItem(
+                  userInstructionsKey,
+                  value,
+                );
               }
             }}
             onRegenerate={() => {

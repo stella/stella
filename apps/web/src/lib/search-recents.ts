@@ -4,6 +4,8 @@ import { isSafeIdValue } from "@stll/api-contract";
 import { Temporal } from "@stll/time";
 
 import { getStorageKey } from "@/consts";
+import { browserStateStorage } from "@/lib/account/browser-storage";
+import { userStorageKey } from "@/lib/account/user-scoped-storage";
 import { readStoredJson, writeStoredJson } from "@/lib/stored-json";
 
 const RECENT_SEARCHES_KEY = getStorageKey("search-recent-searches");
@@ -35,11 +37,13 @@ export type RecentFile = {
 
 type RecentFileInput = Omit<RecentFile, "openedAt">;
 
-const getStorage = (): Storage | null =>
-  typeof window === "undefined" ? null : window.localStorage;
+const getStorage = (): Storage | null => browserStateStorage("local");
 
 const scopedKey = (key: string, scope: SearchRecentsScope): string =>
-  `${key}:${scope.organizationId}:${scope.userId}`;
+  userStorageKey(`${key}:${scope.organizationId}:`, {
+    kind: "user",
+    userId: scope.userId,
+  });
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null;

@@ -1,4 +1,8 @@
+import { Result } from "better-result";
+
 import { Temporal } from "@stll/time";
+
+import { requireBrowserStorage } from "@/lib/account/browser-storage";
 // Recover from code that a deploy removed. Vite dispatches
 // `vite:preloadError` on the window when a lazily imported module fails to
 // load — typically a stale chunk after a deploy, or a dev HMR / dep-reoptimize
@@ -47,22 +51,16 @@ export const isStaleDeploymentLoadError = (error: unknown): boolean => {
 // disabled), so both access points are guarded: if we cannot read or record
 // the timestamp we skip the reload entirely and fall through to the error
 // boundary, rather than risk a reload loop with no working guard.
-const readReloadAt = (): number | null => {
-  try {
-    return Number(window.sessionStorage.getItem(STORAGE_KEY) ?? "0");
-  } catch {
-    return null;
-  }
-};
+const readReloadAt = (): number | null =>
+  Result.try(() =>
+    Number(requireBrowserStorage("session").getItem(STORAGE_KEY) ?? "0"),
+  ).unwrapOr(null);
 
-const recordReloadAt = (timestamp: number): boolean => {
-  try {
-    window.sessionStorage.setItem(STORAGE_KEY, String(timestamp));
+const recordReloadAt = (timestamp: number): boolean =>
+  Result.try(() => {
+    requireBrowserStorage("session").setItem(STORAGE_KEY, String(timestamp));
     return true;
-  } catch {
-    return false;
-  }
-};
+  }).unwrapOr(false);
 
 /**
  * Reload the page for a fresh build unless one was attempted within the

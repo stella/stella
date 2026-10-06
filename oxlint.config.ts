@@ -1566,6 +1566,7 @@ export default defineConfig({
     "./.oxlint-plugins/require-stable-editor-options.ts",
     "./.oxlint-plugins/require-use-shallow.ts",
     "./.oxlint-plugins/no-raw-stored-json.ts",
+    "./.oxlint-plugins/no-raw-browser-storage.ts",
     "./.oxlint-plugins/no-detached-void.ts",
     "./.oxlint-plugins/no-broad-translation-callable.ts",
     "./.oxlint-plugins/no-partial-record-satisfies.ts",
@@ -2774,6 +2775,17 @@ export default defineConfig({
       ],
       rules: {
         "no-broad-translation-callable/no-broad-translation-callable": "error",
+      },
+    },
+    {
+      // All browser storage consumers use the account storage owners;
+      // the rule owns its documented, shrink-only owner allowlist.
+      files: [
+        "apps/web/src/**/*.{ts,tsx}",
+        ".oxlint-plugins/__fixtures__/no-raw-browser-storage.fixture.ts",
+      ],
+      rules: {
+        "no-raw-browser-storage/no-raw-browser-storage": "error",
       },
     },
     {

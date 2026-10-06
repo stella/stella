@@ -8,7 +8,6 @@ import { Temporal } from "@stll/time";
 
 import { useInspectorCommandStore } from "@/components/inspector/inspector-command-store";
 import { normalizeInspectorGroupAssignments } from "@/components/inspector/inspector-groups.logic";
-import "@/components/inspector/inspector-persistence-references";
 import {
   FILE_FACETS,
   parseSkillResourceSource,
@@ -23,6 +22,7 @@ import {
   isGenericInspectorTab,
   reconcileSharedInspectorTabs,
 } from "@/components/inspector/inspector-tabs-slice";
+import "@/components/inspector/inspector-persistence-references";
 import {
   getInspectorPersistenceReference,
   getInspectorView,
@@ -34,6 +34,8 @@ import {
 import { adoptRestoredLegalDocumentChatThreads } from "@/features/chat/legal-document-chat-threads";
 import type { RestoredLegalDocumentChatThread } from "@/features/chat/legal-document-chat-threads";
 import { getTranslator } from "@/i18n/i18n-store";
+import { requireBrowserStorage } from "@/lib/account/browser-storage";
+import { userStorageKey } from "@/lib/account/user-scoped-storage";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { readStoredJson } from "@/lib/stored-json";
@@ -101,13 +103,19 @@ const getInspectorMinimizedStorageKey = ({
   userId,
   organizationId,
 }: InspectorBroadcastScope) =>
-  `${INSPECTOR_MINIMIZED_STORAGE_PREFIX}:${organizationId}:${userId}`;
+  userStorageKey(`${INSPECTOR_MINIMIZED_STORAGE_PREFIX}:${organizationId}:`, {
+    kind: "user",
+    userId,
+  });
 
 const getInspectorStateStorageKey = ({
   userId,
   organizationId,
 }: InspectorBroadcastScope) =>
-  `${INSPECTOR_STATE_STORAGE_PREFIX}:${organizationId}:${userId}`;
+  userStorageKey(`${INSPECTOR_STATE_STORAGE_PREFIX}:${organizationId}:`, {
+    kind: "user",
+    userId,
+  });
 
 const readPersistedMinimized = (scope: InspectorBroadcastScope): boolean => {
   if (typeof window === "undefined") {
@@ -115,8 +123,9 @@ const readPersistedMinimized = (scope: InspectorBroadcastScope): boolean => {
   }
   try {
     return (
-      window.localStorage.getItem(getInspectorMinimizedStorageKey(scope)) ===
-      "1"
+      requireBrowserStorage("local").getItem(
+        getInspectorMinimizedStorageKey(scope),
+      ) === "1"
     );
   } catch {
     return false;
@@ -131,7 +140,7 @@ const writePersistedMinimized = (
     return;
   }
   try {
-    window.localStorage.setItem(
+    requireBrowserStorage("local").setItem(
       getInspectorMinimizedStorageKey(scope),
       minimized ? "1" : "0",
     );
@@ -524,7 +533,9 @@ const readPersistedInspectorState = (
   }
   const readResult = Result.try(() =>
     readStoredJson(
-      window.localStorage.getItem(getInspectorStateStorageKey(scope)),
+      requireBrowserStorage("local").getItem(
+        getInspectorStateStorageKey(scope),
+      ),
       v.unknown(),
     ),
   );
@@ -590,7 +601,7 @@ const writePersistedInspectorState = (
   );
   const storageKey = getInspectorStateStorageKey(scope);
   const writeResult = Result.try(() =>
-    window.localStorage.setItem(
+    requireBrowserStorage("local").setItem(
       storageKey,
       JSON.stringify({
         tabs,

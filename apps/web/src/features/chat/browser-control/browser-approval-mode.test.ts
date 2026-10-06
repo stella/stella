@@ -2,6 +2,8 @@ import { describe, expect, test } from "bun:test";
 
 import type { BrowserControlCommand } from "@stll/api-contract/browser-control";
 
+import { userStorageKey } from "@/lib/account/user-scoped-storage";
+
 import {
   BROWSER_APPROVAL_MODE,
   createBrowserApprovalStore,
@@ -15,7 +17,7 @@ const act = {
   target: { name: "Submit", ref: "e:0:0.1", role: "button" },
 } satisfies BrowserControlCommand;
 
-const STORAGE_KEY = "stella.chat.browserApprovalMode";
+const STORAGE_KEY = userStorageKey("stella.chat.browserApprovalMode");
 
 const memoryStorage = (values: Record<string, string> = {}): Storage => {
   const entries = new Map(Object.entries(values));

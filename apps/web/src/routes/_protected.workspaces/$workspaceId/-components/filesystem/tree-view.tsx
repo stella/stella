@@ -73,6 +73,8 @@ import type { TableTreeNode } from "@/components/workspaces/table/types";
 import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { useFormatter, useLocale } from "@/i18n/formatting-context";
+import { browserStateStorage } from "@/lib/account/browser-storage";
+import { userStorageKey } from "@/lib/account/user-scoped-storage";
 import { detached } from "@/lib/detached";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { getFileSizeDisplay } from "@/lib/file-size";
@@ -257,7 +259,7 @@ const useColumnWidths = (storageKey: string): ColumnWidthsApi => {
     if (typeof window === "undefined") {
       return {};
     }
-    const raw = window.localStorage.getItem(storageKey);
+    const raw = browserStateStorage("local").getItem(storageKey);
     const parsed = readStoredJson(raw, ColumnWidthsRecordSchema);
     if (!parsed) {
       return {};
@@ -282,7 +284,7 @@ const useColumnWidths = (storageKey: string): ColumnWidthsApi => {
           return prev;
         }
         const next = { ...prev, [id]: clamped };
-        writeStoredJson(window.localStorage, storageKey, next);
+        writeStoredJson(browserStateStorage("local"), storageKey, next);
         return next;
       });
     },
@@ -593,7 +595,7 @@ export const FilesystemView = ({ workspaceId, view }: FilesystemViewProps) => {
   );
 
   const { widths: columnWidths, setWidth: setColumnWidth } = useColumnWidths(
-    `stella.tree-view.column-widths.${view.id}`,
+    userStorageKey(`stella.tree-view.column-widths.${view.id}`),
   );
 
   const gridTemplate = useMemo(

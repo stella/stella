@@ -1,5 +1,7 @@
 import { Result, TaggedError } from "better-result";
 
+import { requireBrowserStorage } from "@/lib/account/browser-storage";
+import { userStorageKey } from "@/lib/account/user-scoped-storage";
 import { toSafeId } from "@/lib/safe-id";
 import type { SafeId } from "@/lib/safe-id";
 import type { ImportCommitPayload } from "@/routes/_protected.contacts/-import-candidate";
@@ -31,9 +33,7 @@ class ContactImportRequestPersistenceError extends TaggedError(
 }> {}
 
 const sessionStorageOrUndefined = (): ContactImportRequestStorage | undefined =>
-  Result.try(() =>
-    typeof window === "undefined" ? undefined : window.sessionStorage,
-  ).unwrapOr(undefined);
+  Result.try(() => requireBrowserStorage("session")).unwrapOr(undefined);
 
 const sha256Hex = async (input: BufferSource): Promise<string> => {
   const digest = await crypto.subtle.digest("SHA-256", input);
@@ -51,7 +51,10 @@ const operationStorageKey = async (
     sha256Hex(encoder.encode(JSON.stringify(payload))),
     sha256Hex(encoder.encode(JSON.stringify(scope))),
   ]);
-  return `${CONTACT_IMPORT_REQUEST_STORAGE_PREFIX}${scopeHash}:${payloadHash}`;
+  return userStorageKey(
+    `${CONTACT_IMPORT_REQUEST_STORAGE_PREFIX}${scopeHash}:${payloadHash}`,
+    { kind: "user", userId: scope.userId },
+  );
 };
 
 /**

@@ -8,6 +8,11 @@ import {
   isReadOnlyBrowserCommand,
 } from "@stll/api-contract/browser-control";
 
+import { browserStateStorage } from "@/lib/account/browser-storage";
+import {
+  onStorageOwnerChange,
+  userStorageKey,
+} from "@/lib/account/user-scoped-storage";
 import { readStoredJson, writeStoredJson } from "@/lib/stored-json";
 
 /**
@@ -55,7 +60,9 @@ export const createBrowserApprovalStore = (getStorage: () => Storage) => {
   // A throwing storage (blocked site data, sandboxed frame) reads as unset.
   let mode: BrowserApprovalMode =
     readStoredJson(
-      Result.try(() => getStorage().getItem(STORAGE_KEY)).unwrapOr(null),
+      Result.try(() =>
+        getStorage().getItem(userStorageKey(STORAGE_KEY)),
+      ).unwrapOr(null),
       modeSchema,
     ) ?? BROWSER_APPROVAL_MODE.askEveryTime;
   let commandsInFlight = 0;
@@ -77,7 +84,7 @@ export const createBrowserApprovalStore = (getStorage: () => Storage) => {
     // then lasts until reload.
     const storage = Result.try(() => getStorage()).unwrapOr(null);
     if (storage !== null) {
-      writeStoredJson(storage, STORAGE_KEY, next);
+      writeStoredJson(storage, userStorageKey(STORAGE_KEY), next);
     }
     notify();
   };
@@ -132,8 +139,12 @@ type BrowserApprovalStore = ReturnType<typeof createBrowserApprovalStore>;
 
 let store: BrowserApprovalStore | null = null;
 
+onStorageOwnerChange(() => {
+  store = null;
+});
+
 const getStore = (): BrowserApprovalStore => {
-  store ??= createBrowserApprovalStore(() => window.sessionStorage);
+  store ??= createBrowserApprovalStore(() => browserStateStorage("session"));
   return store;
 };
 

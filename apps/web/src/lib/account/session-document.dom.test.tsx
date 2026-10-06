@@ -1,4 +1,5 @@
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
+import { panic } from "better-result";
 import {
   afterAll,
   afterEach,
@@ -8,6 +9,11 @@ import {
   spyOn,
   test,
 } from "bun:test";
+
+import { browserStorage } from "@/lib/account/browser-storage";
+
+const sessionArea = () =>
+  browserStorage("session") ?? panic("Test requires session browser storage");
 
 GlobalRegistrator.register({ url: "http://localhost:3000/frame" });
 
@@ -32,7 +38,7 @@ globalThis.fetch = Object.assign(
 
 beforeEach(() => {
   document.documentElement.hidden = false;
-  window.sessionStorage.clear();
+  sessionArea().clear();
   releaseUserStorage();
   sessionReads = 0;
 });
@@ -78,9 +84,9 @@ describe("session document restoration", () => {
     ({ current, stored, restored }) => {
       installOwner(current);
       if (stored === null) {
-        window.sessionStorage.removeItem("stella.storage-owner");
+        sessionArea().removeItem("stella.storage-owner");
       } else {
-        window.sessionStorage.setItem("stella.storage-owner", stored);
+        sessionArea().setItem("stella.storage-owner", stored);
       }
       let resumed = 0;
       const reload = spyOn(window.location, "reload").mockImplementation(() => {
