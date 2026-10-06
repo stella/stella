@@ -4415,7 +4415,9 @@ test("API planning only loads dependencies after installation and emits install-
   const select = steps.find(
     (step) => step.name === "Select affected API test files",
   );
-  expect(select?.if).toBe("steps.api-test-deps.outcome == 'success'");
+  expect(select?.if).toBe(
+    "steps.completed-depth.outputs.run_required != 'false' && (steps.api-test-deps.outcome == 'success')",
+  );
   const plan = steps.find(
     (step) => step.name === "Plan API test files and shards",
   );

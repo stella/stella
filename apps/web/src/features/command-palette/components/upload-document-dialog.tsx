@@ -39,7 +39,7 @@ export const UploadDocumentDialog = ({
   workspaceId,
 }: UploadDocumentDialogProps) => {
   const t = useTranslations();
-  const { activeOrganizationId } = useAuthenticatedUser();
+  const { activeOrganizationId, id: userId } = useAuthenticatedUser();
   // The picked matter, or the one the caller opened the dialog for, resolved
   // from the same list the picker offers so both paths show the same name.
   const [picked, setPicked] = useState<MatterOption | null>(null);
@@ -48,7 +48,10 @@ export const UploadDocumentDialog = ({
     isPending,
     refetch,
   } = useQuery({
-    ...workspacesNavigationOptions(activeOrganizationId),
+    ...workspacesNavigationOptions({
+      organizationId: activeOrganizationId,
+      userId,
+    }),
     select: (data) =>
       data.workspaces.map((matter) => ({
         clientName: matter.client?.displayName ?? null,
@@ -89,6 +92,7 @@ export const UploadDocumentDialog = ({
               </label>
               <MatterCombobox
                 activeOrganizationId={activeOrganizationId}
+                userId={userId}
                 id="upload-matter"
                 onChange={setPicked}
                 value={picked}

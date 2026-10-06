@@ -222,7 +222,12 @@ export const AppSidebar = (props: AppSidebarProps) => {
     isError: workspacesFailed,
     isFetching: workspacesFetching,
     refetch: refetchWorkspaces,
-  } = useChromeQuery(workspacesNavigationOptions(user.activeOrganizationId));
+  } = useChromeQuery(
+    workspacesNavigationOptions({
+      organizationId: user.activeOrganizationId,
+      userId: user.id,
+    }),
+  );
   const inboxQuery = useChromeQuery({
     ...inboxCountOptions(user.activeOrganizationId, user.id),
     enabled: inboxPreviewEnabled,
