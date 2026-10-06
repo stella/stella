@@ -54,6 +54,7 @@ import { GUIDE_ANCHORS } from "@/features/guides/guide-anchors";
 import { usePermissions } from "@/hooks/use-permissions";
 import { getFormattingLocale } from "@/i18n/i18n-store";
 import { api } from "@/lib/api";
+import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { detached } from "@/lib/detached";
 import { toAPIError } from "@/lib/errors/api";
 import { userErrorMessage } from "@/lib/errors/user-safe";
@@ -333,7 +334,10 @@ const FlowEditorForm = ({
   const [saving, setSaving] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
 
-  const workspacesQuery = useQuery(workspacesNavigationOptions(organizationId));
+  const { id: userId } = useAuthenticatedUser();
+  const workspacesQuery = useQuery(
+    workspacesNavigationOptions({ organizationId, userId }),
+  );
   const workspaces = toWorkspaceOptions(workspacesQuery);
 
   const updateStep = (index: number, next: FlowStep) => {

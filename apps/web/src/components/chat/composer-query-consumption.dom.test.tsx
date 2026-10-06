@@ -107,7 +107,10 @@ const mount = (client: InstanceType<typeof QueryClient>, children: ReactNode) =>
 
 test("the context menu reports its navigation read failure instead of no matters", async () => {
   const client = createClient();
-  const options = workspacesNavigationOptions(organizationId);
+  const options = workspacesNavigationOptions({
+    organizationId,
+    userId: user.id,
+  });
   client.getQueryCache().build(client, { queryKey: options.queryKey });
   markFailed(client, options.queryKey);
   const ui = mount(
@@ -261,8 +264,14 @@ test("the MCP menu retains catalog rows during an initial connections failure", 
 
 test("the context search retains a failed empty refresh notice instead of no results", async () => {
   const client = createClient();
-  const options = workspacesNavigationOptions(organizationId);
-  client.setQueryData(options.queryKey, { workspaces: [] });
+  const options = workspacesNavigationOptions({
+    organizationId,
+    userId: user.id,
+  });
+  client.setQueryData(options.queryKey, {
+    workspaces: [],
+    features: { timeBilling: false },
+  });
   const ui = mount(
     client,
     <ComposerContextMenu
@@ -342,9 +351,13 @@ for (const { failingRead, failure, withHealthy = true } of [
 ]) {
   test(`a registered source ${failingRead} failure with healthy=${withHealthy} offers retry and recovery merges both successful sources`, async () => {
     const client = createClient();
-    client.setQueryData(workspacesNavigationOptions(organizationId).queryKey, {
-      workspaces: [],
-    });
+    client.setQueryData(
+      workspacesNavigationOptions({ organizationId, userId: user.id }).queryKey,
+      {
+        workspaces: [],
+        features: { timeBilling: false },
+      },
+    );
     let unavailable = true;
     const local = {
       category: "decision",
