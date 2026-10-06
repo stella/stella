@@ -313,6 +313,10 @@ const getCatalog = async () => {
   catalog = parseCatalog(generated.default);
   return catalog;
 };
+/** The parsed capability catalog, for checks over every capability. */
+export const loadCapabilityCatalog = async (): Promise<
+  readonly CatalogEntry[]
+> => await getCatalog();
 const getCatalogById = async () =>
   (catalogById ??= new Map(
     (await getCatalog()).map((entry) => [entry.id, entry]),

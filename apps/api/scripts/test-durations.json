@@ -4171,6 +4171,18 @@
     "seconds": 3.1,
     "source": "measured"
   },
+  "src/lib/auth/review-account-organization-store.db.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
+  "src/lib/auth/review-account-plugin.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
+  "src/lib/auth/review-account-policy.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
   "src/lib/auth/session-bearer.test.ts": {
     "seconds": 0.219057,
     "source": "estimated"
@@ -8299,6 +8311,10 @@
     "seconds": 0.467175,
     "source": "estimated"
   },
+  "src/mcp/review-account-exposure.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
   "src/mcp/server-admission.valkey.test.ts": {
     "seconds": 1.009738,
     "source": "estimated"
@@ -8562,6 +8578,10 @@
   "src/scripts/replay-tick.test.ts": {
     "seconds": 0.4,
     "source": "measured"
+  },
+  "src/scripts/review-account.logic.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
   },
   "src/scripts/seed-migration-rehearsal-plan.db.test.ts": {
     "seconds": 2.451865,

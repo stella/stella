@@ -4,8 +4,8 @@ import { env } from "@/api/env";
 import { ACCOUNT_ACCESS } from "@/api/lib/api-handlers";
 import { REVIEW_ACCOUNT_EXCLUDED_SCOPES } from "@/api/lib/auth/review-account-policy";
 import {
+  loadCapabilityCatalog,
   loadCapabilityEndpoint,
-  parseCatalog,
 } from "@/api/mcp/capability-tools";
 import { MCP_MODES, MCP_OAUTH_SCOPES } from "@/api/mcp/constants";
 import { listStaticMcpToolDefinitions } from "@/api/mcp/static-tool-definitions";
@@ -69,8 +69,7 @@ describe("restricted review account MCP exposure", () => {
   });
 
   test("backs no exposed capability with an account-control operation", async () => {
-    const generated = await import("@/api/mcp/generated/capability-catalog");
-    const catalog = parseCatalog(generated.default);
+    const catalog = await loadCapabilityCatalog();
     expect(catalog.length).toBeGreaterThan(0);
     const refused: string[] = [];
     let checked = 0;

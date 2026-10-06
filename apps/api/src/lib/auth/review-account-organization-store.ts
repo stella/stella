@@ -1,5 +1,5 @@
 import { generateId } from "@better-auth/core/utils/id";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 
 import { member, organization } from "@/api/db/auth-schema";
 import type { Transaction } from "@/api/db/root";
@@ -26,7 +26,8 @@ type OwnerMembership = {
 
 type ProvisioningCause =
   | "review_account_organization_created"
-  | "review_account_owner_added";
+  | "review_account_owner_added"
+  | "review_account_owner_promoted";
 
 const provisioningAuditBindings = ({
   organizationId,
@@ -99,13 +100,11 @@ export const createReviewAccountOrganizationStore = (db: OwnerDatabase) => ({
         .where(eq(organization.id, organizationId))
         .limit(1)
     ).length > 0,
-  listMemberUserIds: async (organizationId: SafeId<"organization">) =>
-    (
-      await db
-        .select({ userId: member.userId })
-        .from(member)
-        .where(eq(member.organizationId, organizationId))
-    ).map((row) => row.userId),
+  listMembers: async (organizationId: SafeId<"organization">) =>
+    await db
+      .select({ userId: member.userId, role: member.role })
+      .from(member)
+      .where(eq(member.organizationId, organizationId)),
   listOrganizationIdsForUser: async (userId: SafeId<"user">) =>
     (
       await db
@@ -144,6 +143,30 @@ export const createReviewAccountOrganizationStore = (db: OwnerDatabase) => ({
         ),
       );
       await insertOwner(tx, membership);
+    });
+  },
+  /** Makes an existing sole membership the organization's owner. */
+  promoteToOwner: async (membership: OwnerMembership) => {
+    await db.transaction(async (tx) => {
+      const recordAuditEvent = createBackgroundAuditRecorder(
+        provisioningAuditBindings(membership),
+      );
+      await tx
+        .update(member)
+        .set({ role: "owner" })
+        .where(
+          and(
+            eq(member.organizationId, membership.organizationId),
+            eq(member.userId, membership.userId),
+          ),
+        );
+      await recordAuditEvent(
+        tx,
+        provisioningAuditEvent(
+          membership.organizationId,
+          "review_account_owner_promoted",
+        ),
+      );
     });
   },
   addOwner: async (membership: OwnerMembership) => {

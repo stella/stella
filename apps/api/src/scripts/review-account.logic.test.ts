@@ -15,6 +15,7 @@ import {
   readSecretLine,
   REVIEW_PASSWORD_MIN_LENGTH,
   runReviewAccountCommand,
+  setReviewAccountPassword,
 } from "@/api/scripts/review-account.logic";
 import type { ReviewAccountStore } from "@/api/scripts/review-account.logic";
 
@@ -45,6 +46,8 @@ const createFakeStore = (
   >,
 ) => {
   const organizations = new Map<string, string[]>();
+  // Membership roles by `<organization>:<user>`; owner unless set.
+  const roles = new Map<string, string>();
   const writes: string[] = [];
   const store: ReviewAccountStore = {
     ...accounts,
@@ -53,7 +56,11 @@ const createFakeStore = (
       return await accounts.createUser(email);
     },
     organizationExists: async (id) => organizations.has(id),
-    listMemberUserIds: async (id) => [...(organizations.get(id) ?? [])],
+    listMembers: async (id) =>
+      (organizations.get(id) ?? []).map((userId) => ({
+        userId,
+        role: roles.get(`${id}:${userId}`) ?? "owner",
+      })),
     listOrganizationIdsForUser: async (userId) =>
       [...organizations].flatMap(([id, members]) =>
         members.includes(userId) ? [id] : [],
@@ -66,8 +73,12 @@ const createFakeStore = (
       writes.push("membership");
       organizations.set(id, [...(organizations.get(id) ?? []), userId]);
     },
+    promoteToOwner: async ({ organizationId: id, userId }) => {
+      writes.push("promotion");
+      roles.set(`${id}:${userId}`, "owner");
+    },
   };
-  return { organizations, store, writes };
+  return { organizations, roles, store, writes };
 };
 
 const createMemoryAccounts = () => {
@@ -138,6 +149,39 @@ describe("review account provisioning", () => {
       value: { organization: "existing", membership: "created" },
     });
     expect(writes).toEqual(["user", "membership"]);
+  });
+
+  test("promotes an existing sole member to owner", async () => {
+    const { accounts } = createMemoryAccounts();
+    const { organizations, roles, store, writes } = createFakeStore(accounts);
+    const userId = await accounts.createUser(reviewEmail);
+    organizations.set(organizationId, [userId]);
+    roles.set(`${organizationId}:${userId}`, "member");
+    // Until promoted, the account is not provisioned for a password.
+    const early = await setReviewAccountPassword({
+      config,
+      demoEmail: undefined,
+      password,
+      store,
+    });
+    expect(Result.isError(early) && early.error.code).toBe("account-missing");
+    const result = await provisionReviewAccount({
+      config,
+      demoEmail: undefined,
+      store,
+    });
+    expect(result).toMatchObject({
+      value: { organization: "existing", membership: "promoted" },
+    });
+    expect(writes).toEqual(["promotion"]);
+    expect(roles.get(`${organizationId}:${userId}`)).toBe("owner");
+    const later = await setReviewAccountPassword({
+      config,
+      demoEmail: undefined,
+      password,
+      store,
+    });
+    expect(Result.isOk(later)).toBe(true);
   });
 
   test("refuses an organization with other members and writes nothing", async () => {

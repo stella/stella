@@ -181,6 +181,45 @@ describe("review account provisioning store", () => {
     expect(await snapshot()).toEqual(created);
   });
 
+  test("promotes an existing sole member to owner, with an audit event", async () => {
+    const store = createStore();
+    const organizationId = mintAuthProviderIdValue();
+    const email = `review-${organizationId.toLowerCase()}@example.test`;
+    const userId = await store.createUser(email);
+    // An organization whose sole membership is not the owner role, as a
+    // manual setup could leave it.
+    await testDb.insert(organization).values({
+      id: organizationId,
+      name: "Existing",
+      slug: `existing-${organizationId.toLowerCase()}`,
+      createdAt: new Date(),
+    });
+    await testDb.insert(member).values({
+      id: mintAuthProviderIdValue(),
+      organizationId,
+      userId,
+      role: "member",
+      createdAt: new Date(),
+    });
+    const result = await provisionReviewAccount({
+      config: { email, organizationId },
+      demoEmail: undefined,
+      store,
+    });
+    expect(result).toMatchObject({ value: { membership: "promoted" } });
+    expect(await store.listMembers(organizationId)).toEqual([
+      { userId, role: "owner" },
+    ]);
+    const branded = brandPersistedOrganizationId(organizationId);
+    const causes = (
+      await testDb
+        .select({ metadata: auditLogs.metadata })
+        .from(auditLogs)
+        .where(eq(auditLogs.organizationId, branded))
+    ).map((row) => String(row.metadata?.["cause"]));
+    expect(causes).toContain("review_account_owner_promoted");
+  });
+
   test("refuses an enrolled account and one that belongs elsewhere, writing nothing", async () => {
     const store = createStore();
     for (const shape of ["two-factor", "other-organization"] as const) {

@@ -46,7 +46,9 @@ export type ReviewAccountStore = {
   hasTwoFactorEnabled: (userId: string) => Promise<boolean>;
   createUser: (email: string) => Promise<string>;
   organizationExists: (organizationId: string) => Promise<boolean>;
-  listMemberUserIds: (organizationId: string) => Promise<string[]>;
+  listMembers: (
+    organizationId: string,
+  ) => Promise<{ userId: string; role: string }[]>;
   listOrganizationIdsForUser: (userId: string) => Promise<string[]>;
   /** Creates the organization with this user as its only owner. */
   createOrganization: (options: {
@@ -54,6 +56,11 @@ export type ReviewAccountStore = {
     ownerUserId: string;
   }) => Promise<void>;
   addOwner: (options: {
+    organizationId: string;
+    userId: string;
+  }) => Promise<void>;
+  /** Makes the account's existing membership the organization's owner. */
+  promoteToOwner: (options: {
     organizationId: string;
     userId: string;
   }) => Promise<void>;
@@ -158,10 +165,11 @@ export const createReviewAccountAuthStore = (context: {
 type OrganizationStoreHalf = Pick<
   ReviewAccountStore,
   | "organizationExists"
-  | "listMemberUserIds"
+  | "listMembers"
   | "listOrganizationIdsForUser"
   | "createOrganization"
   | "addOwner"
+  | "promoteToOwner"
 >;
 
 /**
@@ -176,8 +184,8 @@ export const bindReviewAccountOrganizationStore = (
     await organizations.organizationExists(
       brandPersistedOrganizationId(organizationId),
     ),
-  listMemberUserIds: async (organizationId) =>
-    await organizations.listMemberUserIds(
+  listMembers: async (organizationId) =>
+    await organizations.listMembers(
       brandPersistedOrganizationId(organizationId),
     ),
   listOrganizationIdsForUser: async (userId) =>
@@ -188,6 +196,12 @@ export const bindReviewAccountOrganizationStore = (
     await organizations.createOrganization({
       organizationId: brandPersistedOrganizationId(organizationId),
       ownerUserId: brandPersistedUserId(ownerUserId),
+    });
+  },
+  promoteToOwner: async ({ organizationId, userId }) => {
+    await organizations.promoteToOwner({
+      organizationId: brandPersistedOrganizationId(organizationId),
+      userId: brandPersistedUserId(userId),
     });
   },
   addOwner: async ({ organizationId, userId }) => {
@@ -209,7 +223,7 @@ type ReviewAccountState = {
   /** The account, when it exists. */
   userId: string | null;
   /** The organization's members, when the organization exists. */
-  memberUserIds: string[] | null;
+  members: { userId: string; role: string }[] | null;
 };
 
 /**
@@ -245,8 +259,8 @@ export const checkReviewAccountPreconditions = async ({
     );
   }
   const userId = await store.findUserIdByEmail(email);
-  const memberUserIds = (await store.organizationExists(organizationId))
-    ? await store.listMemberUserIds(organizationId)
+  const members = (await store.organizationExists(organizationId))
+    ? await store.listMembers(organizationId)
     : null;
   if (userId !== null && (await store.hasTwoFactorEnabled(userId))) {
     return refuse(
@@ -266,31 +280,39 @@ export const checkReviewAccountPreconditions = async ({
       "The account belongs to another organization; the review account may belong to its own organization only.",
     );
   }
-  if (memberUserIds?.some((memberId) => memberId !== userId) === true) {
+  if (members?.some((entry) => entry.userId !== userId) === true) {
     return refuse(
       "organization-has-other-members",
       "The configured organization has other members; it must hold only the review account.",
     );
   }
-  if (
-    provisioned &&
-    (userId === null ||
-      memberUserIds === null ||
-      !memberUserIds.includes(userId))
-  ) {
+  const isOwner =
+    members?.some(
+      (entry) => entry.userId === userId && entry.role === "owner",
+    ) === true;
+  if (provisioned && (userId === null || !isOwner)) {
     return refuse(
       "account-missing",
-      "The review account is not provisioned; run provision first.",
+      "The review account is not provisioned as its organization's owner; run provision first.",
     );
   }
-  return Result.ok({ email, organizationId, userId, memberUserIds });
+  return Result.ok({ email, organizationId, userId, members });
+};
+
+const membershipOutcome = (
+  membership: { role: string } | undefined,
+): "created" | "existing" | "promoted" => {
+  if (membership === undefined) {
+    return "created";
+  }
+  return membership.role === "owner" ? "existing" : "promoted";
 };
 
 type ProvisionOutcome = {
   outcome: "provisioned";
   user: "created" | "existing";
   organization: "created" | "existing";
-  membership: "created" | "existing";
+  membership: "created" | "existing" | "promoted";
   verificationsRevoked: number;
 };
 
@@ -312,7 +334,7 @@ export const provisionReviewAccount = async ({
   if (Result.isError(checked)) {
     return checked;
   }
-  const { email, organizationId, memberUserIds } = checked.value;
+  const { email, organizationId, members } = checked.value;
   const existingUserId = checked.value.userId;
   const userId = existingUserId ?? (await store.createUser(email));
   // Tokens and codes issued before the account was restricted must not be
@@ -321,7 +343,7 @@ export const provisionReviewAccount = async ({
     existingUserId === null
       ? 0
       : await store.revokeVerifications({ userId, email });
-  if (memberUserIds === null) {
+  if (members === null) {
     await store.createOrganization({ organizationId, ownerUserId: userId });
     return Result.ok({
       outcome: "provisioned",
@@ -331,15 +353,19 @@ export const provisionReviewAccount = async ({
       verificationsRevoked,
     });
   }
-  const isMember = memberUserIds.includes(userId);
-  if (!isMember) {
+  // The organization holds no one else (checked above), so the account is
+  // either missing, its owner, or a member promoted to owner here.
+  const membership = members.find((entry) => entry.userId === userId);
+  if (membership === undefined) {
     await store.addOwner({ organizationId, userId });
+  } else if (membership.role !== "owner") {
+    await store.promoteToOwner({ organizationId, userId });
   }
   return Result.ok({
     outcome: "provisioned",
     user: existingUserId === null ? "created" : "existing",
     organization: "existing",
-    membership: isMember ? "existing" : "created",
+    membership: membershipOutcome(membership),
     verificationsRevoked,
   });
 };
