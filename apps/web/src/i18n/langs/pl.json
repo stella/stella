@@ -54,6 +54,17 @@
       "polish": "Popraw sformułowanie"
     }
   },
+  "aiColumns": {
+    "countSummary": "{columns} kolumn × {rows} wierszy = {answers, plural, one {# odpowiedź} few {# odpowiedzi} many {# odpowiedzi} other {# odpowiedzi}}. Odpowiedzi zużywają budżet.",
+    "refusedBudget": "Nie uruchomiono: budżet odpowiedzi niedostępny",
+    "rerunAllPage": "Uruchom wszystko ponownie (ta strona)",
+    "rerunColumnPage": "Uruchom kolumnę ponownie (ta strona)",
+    "runColumnPage": "Uruchom kolumnę (ta strona)",
+    "runPageRows": "Uruchom dla {count, plural, one {# wiersza na tej stronie} few {# wierszy na tej stronie} many {# wierszy na tej stronie} other {# wiersza na tej stronie}}",
+    "runRemainingPage": "Uruchom pozostałe (ta strona)",
+    "runSelectedRows": "Uruchom dla {count, plural, one {# wybranego wiersza} few {# wybranych wierszy} many {# wybranych wierszy} other {# wybranego wiersza}}",
+    "selectedRun": "Uruchom kolumny AI dla {count, plural, one {# wiersza} few {# wierszy} many {# wierszy} other {# wiersza}}"
+  },
   "appearance": {
     "calendar": "Kalendarz",
     "calendarGregorian": "Gregoriański",
@@ -2311,6 +2322,8 @@
       "encryptedContent": "Nie można wyodrębnić zawartości zaszyfrowanego dokumentu. Usuń hasło z pliku i spróbuj ponownie.",
       "filePropertyTypeImmutable": "Nie można zmienić typu właściwości pliku. Zachowaj obecny typ; dla innych wartości utwórz własną właściwość.",
       "forbidden": "Nie masz uprawnień do wykonania tej czynności.",
+      "hostedCheckoutOpen": "Dla tej organizacji jest już otwarta płatność. Dokończ ją albo rozpocznij nową po jej wygaśnięciu.",
+      "hostedSubscriptionLive": "Ta organizacja ma już subskrypcję. Zmień ją w sekcji „Zarządzaj użyciem hostowanym”.",
       "internalServerError": "Coś poszło nie tak. Spróbuj ponownie.",
       "legalSourceEntityLimitReached": "Ta sprawa osiągnęła limit elementów, dlatego nie można było utworzyć dokumentu.",
       "legalSourceFilePropertyMissing": "W tej sprawie brakuje właściwości pliku, dlatego nie można było utworzyć dokumentu.",
@@ -5459,8 +5472,7 @@
         "signCurrent": "Podpisz w stella desktop",
         "signNone": "Pobierz stella desktop, aby podpisać ten PDF",
         "signOutdated": "Zaktualizuj stella desktop, aby podpisywać",
-        "signReason": "Podpis korzysta z certyfikatu na Twoim komputerze, dlatego odbywa się w stella desktop.",
-        "signShort": "Podpisz"
+        "signReason": "Podpis korzysta z certyfikatu na Twoim komputerze, dlatego odbywa się w stella desktop."
       },
       "downloadAs": "Pobierz jako…",
       "downloadAsZip": "Pobierz plik .zip",
@@ -6002,7 +6014,6 @@
       "previewUnsupported": "Podgląd niedostępny dla tego typu dokumentu.",
       "readingFrom": "AI czyta z",
       "referencesItself": "Właściwość odwołuje się do siebie przez inne właściwości",
-      "rerunColumn": "Uruchom kolumnę ponownie",
       "resultType": "Typ wyniku",
       "returnsLabel": "Format",
       "scopeFile": "Bieżący plik",

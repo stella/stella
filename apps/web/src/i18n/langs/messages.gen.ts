@@ -57,6 +57,17 @@ type Messages = {
       "polish": "Polish the writing";
     };
   };
+  "aiColumns": {
+    "countSummary": "{columns} columns × {rows} rows = {answers, plural, one {# answer} other {# answers}}. Answers spend budget.";
+    "refusedBudget": "Not run: answer budget unavailable";
+    "rerunAllPage": "Rerun all (this page)";
+    "rerunColumnPage": "Rerun column (this page)";
+    "runColumnPage": "Run column (this page)";
+    "runPageRows": "Run for {count, plural, one {# row on this page} other {# rows on this page}}";
+    "runRemainingPage": "Run remaining (this page)";
+    "runSelectedRows": "Run for {count, plural, one {# selected row} other {# selected rows}}";
+    "selectedRun": "Run AI columns for {count, plural, one {# row} other {# rows}}";
+  };
   "appearance": {
     "calendar": "Calendar";
     "calendarGregorian": "Gregorian";
@@ -2314,6 +2325,8 @@ type Messages = {
       "encryptedContent": "Encrypted document content cannot be extracted. Remove the password from the file and try again.";
       "filePropertyTypeImmutable": "File property types cannot be changed. Keep the existing type; create a custom property for other values.";
       "forbidden": "You do not have permission to do this.";
+      "hostedCheckoutOpen": "A checkout for this organization is already open. Complete it, or start a new one after it expires.";
+      "hostedSubscriptionLive": "This organization already has a subscription. Change it under Manage hosted usage.";
       "internalServerError": "The server could not complete the action. Please try again.";
       "legalSourceEntityLimitReached": "This matter has reached its item limit, so the document could not be created.";
       "legalSourceFilePropertyMissing": "This matter is missing a file property, so the document could not be created.";
@@ -5463,7 +5476,6 @@ type Messages = {
         "signNone": "Download stella desktop to sign this PDF";
         "signOutdated": "Update stella desktop to sign";
         "signReason": "Signing uses the certificate on your computer, so it runs in stella desktop.";
-        "signShort": "Sign";
       };
       "downloadAs": "Download as…";
       "downloadAsZip": "Download as ZIP";
@@ -6005,7 +6017,6 @@ type Messages = {
       "previewUnsupported": "Preview unsupported for this document type.";
       "readingFrom": "AI reads from";
       "referencesItself": "Property references itself through other properties";
-      "rerunColumn": "Rerun column";
       "resultType": "Result type";
       "returnsLabel": "Format";
       "scopeFile": "Current file";

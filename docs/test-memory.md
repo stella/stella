@@ -17,3 +17,15 @@ The command recursively reads JSON receipts and writes a sorted, formatted table
 Batch composition uses the largest shard baseline plus each file's positive increase above its own shard baseline: `max(baselines) + sum(max(0, peak - fileBaseline))`. Peaks below their baseline are valid process noise. A shared batch's estimate stays within 70% of its class cap; an unmeasured file reserves 40% of that share. Measurements guide composition; runtime memory limits remain authoritative.
 
 The runner warns when a shared batch's measured peak passes 80% of its cap: its plan came from a stale or missing measurement, so refresh the table before the batch nears the cap (warned at 90%, failed above 100%).
+
+## Hung-process diagnostics
+
+The API runner prints each child's timestamp, lane, PID and file list as soon as it starts, even when completed batch output is grouped. CI streams Turbo output and uploads an `api-test-diagnostics-<shard>` artifact on success, failure or cancellation. It includes the dry execution plan, task output, per-child JUnit XML, rolling raw logs, `active.json`, and `failure.json` when a watchdog or signal stops the run. Artifacts expire after seven days.
+
+`API_TEST_ARTIFACT_DIR` selects the diagnostics directory (CI uses the runner temporary directory); local runs use a fresh temporary directory. Each child's two raw log segments total at most 4 MiB, preserving recent stdout/stderr. Timeout diagnostics print the last 16 KiB for every active child. `failure.json` preserves the active identities at the first stop; `active.json` reflects current processes. JUnit is written at child completion, so raw logs and the failure registry are the evidence for a child terminated before XML is produced.
+
+Buffered console output retains at most four million characters per child and marks truncation. This bounds the runner's memory when a stuck child emits output continuously; ordinary batch output stays unchanged.
+
+Each test child, snapshot builder and archive validator has a ten-minute wall-clock budget. A measured CI solo chat batch ran 254 tests in 250.9 seconds; ten minutes provides more than twice that observed duration, including import and cleanup headroom. This process budget supplements the existing 30-second Bun test timeout. The supervisor stops all work once, without retries, sends SIGTERM, then SIGKILL after ten seconds if necessary. A twenty-minute runner deadline reserves time before the CI job's twenty-five-minute limit for termination and artifact upload. Review the process budget against measured batch durations when suite size changes; do not raise it merely to hide a hang.
+
+The dedicated memory workflow runs a serial per-file sweep with a two-hour job limit, so its runner deadline is 110 minutes. Child budgets and diagnostic behavior remain the same. On POSIX, each supervised child owns a separate process group; termination also reaches descendants that hold its output pipes.

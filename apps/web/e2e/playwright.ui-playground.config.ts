@@ -15,6 +15,19 @@ const sharedUse = {
 } as const;
 
 export default defineConfig({
+  reporter: process.env["CI"]
+    ? [
+        ["dot"],
+        [
+          "json",
+          {
+            outputFile:
+              process.env["PLAYWRIGHT_JSON_OUTPUT_FILE"] ??
+              ".cache/playwright-timings.json",
+          },
+        ],
+      ]
+    : [["list"]],
   testDir: "./ui-playground",
   // `*.visual.spec.ts` compares screenshots; `*.geometry.spec.ts` compares
   // measured boxes, which a screenshot cannot assert on and a unit test cannot

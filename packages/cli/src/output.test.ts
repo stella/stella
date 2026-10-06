@@ -2,11 +2,14 @@ import { describe, expect, test } from "bun:test";
 
 import { generatedToolAnnotations as TOOL_ANNOTATIONS } from "./generated/tool-annotations.js";
 import type { CallToolResult } from "./mcp-client.js";
+import { EXIT_CODES } from "./mcp-constants.js";
 import {
   buildRenderPlan,
   displayWidth,
+  renderPlanExitCode,
   renderResult,
   selectFormat,
+  TEXT_UNAVAILABLE_REASONS,
   type Writers,
 } from "./output.js";
 import { parsePayload } from "./run-leaf-command.js";
@@ -149,19 +152,65 @@ describe("buildRenderPlan (S4)", () => {
     });
   });
 
-  test("windowed-text reads an absent nested path as empty, never as a throw", () => {
+  test("a null text is a typed no_text outcome, never an empty document", () => {
+    const payload = {
+      nextCursor: null,
+      statute: { text: null, textWithheldReason: "licence" },
+    };
     const plan = buildRenderPlan({
-      payload: { nextCursor: null },
+      payload,
       itemsKey: undefined,
       textPath: "statute.text",
       singleReadActive: false,
       columns: undefined,
     });
     expect(plan).toEqual({
-      kind: "windowed-text",
-      text: "",
-      nextCursor: null,
+      kind: "text-unavailable",
+      reason: TEXT_UNAVAILABLE_REASONS.noText,
+      textPath: "statute.text",
+      payload,
     });
+    expect(renderPlanExitCode(plan)).toBe(EXIT_CODES.ok);
+  });
+
+  // Every non-string the path can hold. A batch response read through a
+  // single-text leaf (`{ items: [...] }` at `decision.text`) is the shape that
+  // printed `{"text":""}` before; the others are the rest of the JSON kinds.
+  test.each([
+    ["an absent path", { nextCursor: null }],
+    ["a batch envelope", { items: [{ decision: { text: "BODY" } }] }],
+    ["a number", { statute: { text: 3 } }],
+    ["an object", { statute: { text: { value: "BODY" } } }],
+    ["an array", { statute: { text: ["BODY"] } }],
+    ["a boolean", { statute: { text: false } }],
+    ["a non-object parent", { statute: "BODY" }],
+  ])("%s is a typed not_in_response outcome", (_label, payload) => {
+    const plan = buildRenderPlan({
+      payload,
+      itemsKey: undefined,
+      textPath: "statute.text",
+      singleReadActive: false,
+      columns: undefined,
+    });
+    expect(plan).toEqual({
+      kind: "text-unavailable",
+      reason: TEXT_UNAVAILABLE_REASONS.notInResponse,
+      textPath: "statute.text",
+      payload,
+    });
+    expect(renderPlanExitCode(plan)).toBe(EXIT_CODES.unexpected);
+  });
+
+  test("an empty string is still text: the server said the window is empty", () => {
+    const plan = buildRenderPlan({
+      payload: { text: "", nextCursor: null },
+      itemsKey: undefined,
+      textPath: "text",
+      singleReadActive: false,
+      columns: undefined,
+    });
+    expect(plan).toEqual({ kind: "windowed-text", text: "", nextCursor: null });
+    expect(renderPlanExitCode(plan)).toBeUndefined();
   });
 });
 
@@ -217,6 +266,56 @@ describe("renderResult (S4)", () => {
       allActive: false,
     });
     expect(out.join("")).toBe("raw body\n");
+  });
+
+  const unavailable = {
+    kind: "text-unavailable",
+    reason: TEXT_UNAVAILABLE_REASONS.noText,
+    textPath: "statute.text",
+    payload: { statute: { text: null, textWithheldReason: "licence" } },
+  } as const;
+
+  test("a read without text emits a typed JSON field and keeps the response", () => {
+    const { out, err, writers } = capture();
+    renderResult({
+      plan: unavailable,
+      format: "json",
+      writers,
+      allActive: false,
+    });
+    expect(JSON.parse(out.join(""))).toEqual({
+      text: null,
+      textUnavailable: { reason: "no_text", textPath: "statute.text" },
+      response: unavailable.payload,
+    });
+    expect(err.join("")).toContain("No text");
+  });
+
+  test("a read without text is one JSONL line with the same shape", () => {
+    const { out, writers } = capture();
+    renderResult({
+      plan: unavailable,
+      format: "jsonl",
+      writers,
+      allActive: false,
+    });
+    expect(out).toHaveLength(1);
+    expect(JSON.parse(out.join(""))).toMatchObject({
+      text: null,
+      textUnavailable: { reason: "no_text" },
+    });
+  });
+
+  test("a read without text prints the response fields, not an empty line", () => {
+    const { out, err, writers } = capture();
+    renderResult({
+      plan: unavailable,
+      format: "table",
+      writers,
+      allActive: false,
+    });
+    expect(out.join("")).toContain("licence");
+    expect(err.join("")).toContain("`statute.text` is null");
   });
 });
 
