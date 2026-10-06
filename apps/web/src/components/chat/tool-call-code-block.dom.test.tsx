@@ -29,7 +29,7 @@ afterAll(async () => {
   await GlobalRegistrator.unregister();
 });
 
-const mount = (tone: ToolCallCodeTone, lineNumbers?: boolean) =>
+const mount = (tone: ToolCallCodeTone, lineNumbers = false) =>
   render(
     <IntlProvider locale="en" messages={messages}>
       <ToolCallCodeBlock
