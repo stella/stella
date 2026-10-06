@@ -4735,6 +4735,7 @@
     },
     "title": "Právne predpisy",
     "validity": "Platné od {from} do {to}",
+    "versionAppliedInDecision": "Znenie použité v rozhodnutí <bdi>{court}</bdi> <bdi>{caseNumber}</bdi> (<bdi>{range}</bdi>) · {status}",
     "wordingValidFrom": "Znenie účinné od {date}",
     "wordingVersionUnknown": "Dátum verzie znenia nie je k dispozícii"
   },
