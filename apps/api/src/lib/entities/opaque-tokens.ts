@@ -1,3 +1,4 @@
+import { sha256Hex as hashSha256Hex } from "@stll/sha256/bun";
 /**
  * Opaque bearer tokens for browser-to-desktop handoffs and the desktop
  * sessions they open.
@@ -18,8 +19,7 @@ export const createOpaqueToken = () =>
   Bun.randomUUIDv7().replaceAll("-", "").slice(0, TOKEN_PART_LENGTH) +
   Bun.randomUUIDv7().replaceAll("-", "").slice(0, TOKEN_PART_LENGTH);
 
-export const hashOpaqueToken = (token: string) =>
-  new Bun.CryptoHasher("sha256").update(token).digest("hex");
+export const hashOpaqueToken = (token: string) => hashSha256Hex(token);
 
 /**
  * Exact length first, then shape: a length check on the raw input keeps a

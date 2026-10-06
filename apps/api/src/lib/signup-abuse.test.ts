@@ -1,5 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
+import { sha256Hex as hashSha256Hex } from "@stll/sha256/bun";
+
 import { env } from "@/api/env";
 import { normalizeRateLimitClientAddress } from "@/api/lib/client-ip";
 import {
@@ -174,9 +176,7 @@ describe("new-account OTP abuse policy", () => {
     const keyedIpDigest = new Bun.CryptoHasher("sha256", env.BETTER_AUTH_SECRET)
       .update(clientIp)
       .digest("hex");
-    const unkeyedEmailDigest = new Bun.CryptoHasher("sha256")
-      .update(normalizedEmail)
-      .digest("hex");
+    const unkeyedEmailDigest = hashSha256Hex(normalizedEmail);
 
     expect(observedKeys).toEqual([
       `auth:new-account-otp:email:${keyedEmailDigest}`,

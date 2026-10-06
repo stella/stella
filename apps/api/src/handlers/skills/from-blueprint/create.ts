@@ -1,11 +1,11 @@
 import { panic, Result } from "better-result";
 import { t } from "elysia";
 
+import { sha256Hex } from "@stll/sha256/bun";
 import { BLUEPRINT_IDS, getBlueprint, parseSkillFile } from "@stll/skills";
 
 import { AGENT_SKILL_SCOPES } from "@/api/db/schema";
 import { skillRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
-import { skillTextSha256 } from "@/api/lib/agent-skills/content-hash";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -63,7 +63,7 @@ const buildParsedBlueprint = (
     body,
     compatibility: metadata.compatibility ?? null,
     description: metadata.description,
-    entrypointHash: skillTextSha256(blueprint.source),
+    entrypointHash: sha256Hex(blueprint.source),
     license: metadata.license ?? null,
     metadata: { blueprintId: blueprint.id },
     name: metadata.name,

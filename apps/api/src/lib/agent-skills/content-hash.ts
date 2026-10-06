@@ -1,6 +1,8 @@
 import { panic } from "better-result";
 import { eq, sql } from "drizzle-orm";
 
+import { sha256Hex as hashSha256Hex, createSha256 } from "@stll/sha256/bun";
+
 import type { Transaction } from "@/api/db/root";
 import { agentSkillResources, agentSkills } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -39,11 +41,8 @@ const compareCodeUnits = (a: string, b: string): number => {
   return a > b ? 1 : 0;
 };
 
-export const skillTextSha256 = (text: string): string =>
-  new Bun.CryptoHasher("sha256").update(text).digest("hex");
-
 export const hashSkillContent = (content: SkillContent): string => {
-  const hasher = new Bun.CryptoHasher("sha256");
+  const hasher = createSha256();
   // Length-prefixed fields: no two distinct contents share a byte stream.
   const field = (value: string) => {
     const bytes = UTF8_ENCODER.encode(value);
@@ -91,7 +90,7 @@ export const hashSkillPackageContent = ({
   hashSkillContent({
     ...fields,
     resources: resources.map(({ content, path }) => ({
-      contentSha256: skillTextSha256(content),
+      contentSha256: hashSha256Hex(content),
       path,
     })),
   });

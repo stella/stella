@@ -1,6 +1,7 @@
 import { panic, Result } from "better-result";
 import type JSZip from "jszip";
 
+import { createSha256 } from "@stll/sha256/bun";
 import {
   getSkillResourceKind,
   isAllowedResourcePath,
@@ -1406,7 +1407,7 @@ const normalizePackageFilePath = (path: string): string | null =>
 
 // Identifies the SKILL.md a GitHub preview showed, independent of resources.
 const hashSkillEntrypoint = (source: string) => {
-  const hasher = new Bun.CryptoHasher("sha256");
+  const hasher = createSha256();
   const updateField = (value: string) => {
     const bytes = UTF8_ENCODER.encode(value);
     hasher.update(`${bytes.byteLength}:`);

@@ -14,6 +14,7 @@ import { setTimeout as sleep } from "node:timers/promises";
 
 import { classifyFailure } from "@stll/errors";
 import { fetchWithTimeout } from "@stll/fetch";
+import { createSha256 } from "@stll/sha256/bun";
 import { Temporal } from "@stll/time";
 
 import { envBase } from "@/api/env-base";
@@ -995,7 +996,7 @@ export const hashS3ObjectSha256WithSignal = async (
             );
           }
           const reader = response.Body.transformToWebStream().getReader();
-          const hasher = new Bun.CryptoHasher("sha256");
+          const hasher = createSha256();
           try {
             while (true) {
               const chunk = await reader.read();

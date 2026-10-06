@@ -1,11 +1,10 @@
+import type { AnalysisInputFingerprint } from "@stll/legal-ast/analysis";
 /**
  * Shared base for all language-specific analysis prompts.
  *
  * The output JSON schema is enforced by TanStack AI structured
  * output with a Valibot schema; no textual schema description needed.
  */
-
-import type { AnalysisInputFingerprint } from "@stll/legal-ast/analysis";
 import {
   ANALYSIS_ABSTRACT_MAX_LENGTH,
   ANALYSIS_HOLDING_MAX_ANCHORS,
@@ -13,6 +12,7 @@ import {
   ANALYSIS_MAX_TOPICS,
   ANALYSIS_TOPIC_MAX_LENGTH,
 } from "@stll/legal-ast/analysis";
+import { createSha256 } from "@stll/sha256/bun";
 
 /**
  * Behavioral guidelines shared across all language prompts.
@@ -144,7 +144,7 @@ Country: ${decision.country}
 Type: ${decision.decisionType ?? "unknown"}
 
 ${formatDecisionForPrompt(blocks)}`;
-  const fingerprint = new Bun.CryptoHasher("sha256")
+  const fingerprint = createSha256()
     .update(systemPrompt)
     .update(INPUT_SEPARATOR)
     .update(userMessage)

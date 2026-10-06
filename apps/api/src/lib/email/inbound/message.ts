@@ -11,6 +11,7 @@ import type {
   CorrespondenceProvenance,
   ParsedCorrespondence,
 } from "@stll/api-contract/correspondence";
+import { sha256Hex as hashSha256Hex, createSha256 } from "@stll/sha256/bun";
 import { Temporal } from "@stll/time";
 
 import {
@@ -459,7 +460,7 @@ const checkedAttachments = (
         attachment,
         key: JSON.stringify([
           attachment.mimeType,
-          new Bun.CryptoHasher("sha256").update(attachment.bytes).digest("hex"),
+          hashSha256Hex(attachment.bytes),
         ]),
       }))
       .toSorted((a, b) => (a.key < b.key ? -1 : Number(a.key > b.key)))
@@ -470,7 +471,7 @@ const checkedAttachments = (
 const contentHash = (
   message: Omit<NormalizedInboundMessage, "contentHash">,
 ): string => {
-  const hash = new Bun.CryptoHasher("sha256");
+  const hash = createSha256();
   hash.update(
     JSON.stringify({
       from: message.from,
@@ -483,10 +484,7 @@ const contentHash = (
     }),
   );
   const attachmentFingerprints = message.attachments.map(
-    ({ mimeType, bytes }) => [
-      mimeType,
-      new Bun.CryptoHasher("sha256").update(bytes).digest("hex"),
-    ],
+    ({ mimeType, bytes }) => [mimeType, hashSha256Hex(bytes)],
   );
   for (const fingerprint of attachmentFingerprints
     .map((parts) => JSON.stringify(parts))

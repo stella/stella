@@ -1,6 +1,7 @@
 import { Result, TaggedError } from "better-result";
-import { createHash } from "node:crypto";
 import * as v from "valibot";
+
+import { sha256Hex as hashSha256Hex } from "@stll/sha256/bun";
 
 import { env } from "@/api/env";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -31,9 +32,6 @@ export class ActionPeriodBudgetError extends TaggedError(
   message: string;
 }> {}
 
-const digest = (identity: string) =>
-  createHash("sha256").update(identity).digest("hex");
-
 // Flag-on requires a non-evicting admission store; these TTL keys are an operational throttle.
 const periodKey = ({
   organizationId,
@@ -49,7 +47,7 @@ const periodKey = ({
   coordinationKey({
     scope: "action-admission",
     slot: organizationId,
-    suffix: `period:${digest(actionKind)}:${startMs}:${endMs}`,
+    suffix: `period:${hashSha256Hex(actionKind)}:${startMs}:${endMs}`,
   });
 
 type ResolveActionPeriodBudgetOptions = {
@@ -110,7 +108,7 @@ export const resolveActionPeriodBudget = ({
     startMs,
     endMs,
     limit,
-    phaseField: `phase:${digest(identity.logicalPhaseId)}`,
+    phaseField: `phase:${hashSha256Hex(identity.logicalPhaseId)}`,
   });
 };
 

@@ -21,8 +21,10 @@ import { panic } from "better-result";
  * `STELLA_CLIENT_ADDRESS_HEADER`. That header is read only from a trusted
  * peer and takes precedence over the `x-forwarded-for` chain.
  */
-import { createHash, timingSafeEqual } from "node:crypto";
+import { timingSafeEqual } from "node:crypto";
 import { BlockList, isIP, isIPv4, isIPv6 } from "node:net";
+
+import { sha256Bytes as hashSha256Bytes } from "@stll/sha256/bun";
 
 import { env } from "@/api/env";
 import {
@@ -222,8 +224,6 @@ type ClientAddressOptions = {
   edgeAddressFormat?: EdgeAddressFormat;
 };
 
-const digest = (value: string) => createHash("sha256").update(value).digest();
-
 const carriesOriginSecret = (
   request: Request,
   secrets: readonly string[],
@@ -235,10 +235,10 @@ const carriesOriginSecret = (
   if (presented === null) {
     return false;
   }
-  const presentedDigest = digest(presented);
+  const presentedDigest = hashSha256Bytes(presented);
   // Every value is compared so the time taken does not reveal which matched.
   return secrets
-    .map((secret) => timingSafeEqual(presentedDigest, digest(secret)))
+    .map((secret) => timingSafeEqual(presentedDigest, hashSha256Bytes(secret)))
     .includes(true);
 };
 

@@ -123,6 +123,8 @@ describe("resolveS3Credentials", () => {
         cwd: new URL("../..", import.meta.url).pathname,
         env: {
           PATH: process.env["PATH"],
+          HOME: new URL("../../.cache/s3-credentials-fixture/", import.meta.url)
+            .pathname,
           NODE_ENV: "test",
           STELLA_LOCAL_DEV: "1",
           DATABASE_URL: "postgres://fixture:fixture@localhost:5432/fixture",

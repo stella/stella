@@ -1,3 +1,4 @@
+import { sha256Hex as hashSha256Hex } from "@stll/sha256/bun";
 /**
  * What an audit row keeps of a skill or proposal body. The revision history
  * holds the text; the audit trail records that it changed, how large it is,
@@ -12,5 +13,5 @@ const UTF8_ENCODER = new TextEncoder();
 
 export const auditedSkillBody = (body: string): AuditedSkillBody => ({
   sizeBytes: UTF8_ENCODER.encode(body).byteLength,
-  sha256: new Bun.CryptoHasher("sha256").update(body).digest("hex"),
+  sha256: hashSha256Hex(body),
 });

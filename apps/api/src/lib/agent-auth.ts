@@ -1,6 +1,10 @@
 import { panic, Result } from "better-result";
 import { and, eq } from "drizzle-orm";
 
+import {
+  sha256Hex as hashSha256Hex,
+  sha256Base64Url as hashSha256Base64Url,
+} from "@stll/sha256/bun";
 import { Temporal } from "@stll/time";
 
 import {
@@ -53,25 +57,11 @@ const AGENT_REDIRECT_URI =
 /** How long an unconsumed claim token / registration row stays valid. */
 const REGISTRATION_TTL_MS = AGENT_AUTH_CEREMONY_TTL_SECONDS * 1000;
 
-const sha256Hex = (value: string): string =>
-  new Bun.CryptoHasher("sha256").update(value).digest("hex");
-
-/**
- * better-auth's default `storeClientSecret: "hashed"` form: SHA-256 of
- * the secret, base64url without padding. Reproduced here so we can mint
- * a confidential agent client by inserting the row directly (the admin
- * create-client endpoint requires an interactive session we do not have
- * at registration time). Kept in lockstep with `defaultHasher` in
- * `@better-auth/oauth-provider`.
- */
-const hashClientSecret = (secret: string): string =>
-  new Bun.CryptoHasher("sha256").update(secret).digest("base64url");
-
 export const generateOpaqueToken = (): string =>
   Bun.randomUUIDv7().replaceAll("-", "") +
   Bun.randomUUIDv7().replaceAll("-", "");
 
-export const hashClaimToken = (token: string): string => sha256Hex(token);
+export const hashClaimToken = (token: string): string => hashSha256Hex(token);
 
 const getResourceModeForType = (
   registrationType: AgentRegistrationType,
@@ -157,7 +147,8 @@ export const createAgentOAuthClient = async ({
       id: createSafeId<"mcpOAuthClient">(),
       applicationType: "web",
       clientId,
-      clientSecret: hashClientSecret(clientSecret),
+      // Matches better-auth's hashed client-secret representation (SHA-256 base64url).
+      clientSecret: hashSha256Base64Url(clientSecret),
       clientCredentialsScopes: grantTypes.includes("client_credentials")
         ? [...scopes]
         : [],

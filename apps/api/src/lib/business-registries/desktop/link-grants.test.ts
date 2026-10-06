@@ -1,7 +1,8 @@
 import type { Result } from "better-result";
 import { afterAll, beforeAll, expect, test } from "bun:test";
 import { eq } from "drizzle-orm";
-import { createHash } from "node:crypto";
+
+import { sha256Hex as hashSha256Hex } from "@stll/sha256/bun";
 
 import { verification } from "@/api/db/auth-schema";
 import {
@@ -36,7 +37,7 @@ const issue = async () => {
     correlationId,
     userId,
     organizationId,
-    verifierHash: createHash("sha256").update(verifier).digest("hex"),
+    verifierHash: hashSha256Hex(verifier),
     db,
     now,
   });
@@ -114,7 +115,7 @@ test("issuing an account link does not replace an existing link", async () => {
   const input = await issue();
   const replacement = await createDesktopLinkGrant({
     correlationId: input.correlationId,
-    verifierHash: createHash("sha256").update("b".repeat(64)).digest("hex"),
+    verifierHash: hashSha256Hex("b".repeat(64)),
     userId,
     organizationId,
     db,

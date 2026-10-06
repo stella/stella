@@ -6,8 +6,8 @@ import {
   isAPIError,
 } from "better-auth/api";
 import { panic, Result } from "better-result";
-import { createHash } from "node:crypto";
 
+import { sha256Hex as hashSha256Hex } from "@stll/sha256/bun";
 import { Temporal } from "@stll/time";
 
 import type { RateLimitContext } from "@/api/lib/rate-limit/rate-limit";
@@ -47,7 +47,7 @@ export const createOtpAccountBudget = (
     const accountBudget = isDemoAccount
       ? DEMO_OTP_ACCOUNT_BUDGET
       : OTP_ACCOUNT_BUDGET;
-    const account = createHash("sha256").update(normalizedEmail).digest("hex");
+    const account = hashSha256Hex(normalizedEmail);
     const key = createRedisRateLimitRequestKey({
       counterKey: `otp-account:${account}`,
       requestId: Bun.randomUUIDv7(),

@@ -15,6 +15,8 @@ import {
 import { exportJWK, generateKeyPair, SignJWT } from "jose";
 import * as v from "valibot";
 
+import { sha256Bytes as hashSha256Bytes } from "@stll/sha256/browser";
+
 // Mirrors https://chatgpt.com/oauth/client.json, fetched 2026-10-05. The
 // documents and signing keys are test-owned; no request reaches ChatGPT.
 const CLIENT_ID = "https://chatgpt.com/oauth/client.json";
@@ -112,7 +114,7 @@ const authorizeAndConsent = async () => {
   });
   const verifier = `${Bun.randomUUIDv7()}${Bun.randomUUIDv7()}`;
   const challenge = Buffer.from(
-    await crypto.subtle.digest("SHA-256", new TextEncoder().encode(verifier)),
+    await hashSha256Bytes(new TextEncoder().encode(verifier)),
   ).toString("base64url");
   const state = Bun.randomUUIDv7();
   const url = new URL(getAuthEndpointUrl("oauth2/authorize"));
