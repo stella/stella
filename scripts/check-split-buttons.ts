@@ -155,7 +155,7 @@ export const findAdHocSplitButtons = (
     if (CHEVRON.test(name) || chevrons.has(name)) {
       return false;
     }
-    if (/Icon$/u.test(name)) {
+    if (name.endsWith("Icon")) {
       return true;
     }
     if (ts.isJsxElement(node) && node.children.some(hasVisibleLabel)) {
