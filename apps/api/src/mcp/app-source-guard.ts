@@ -71,13 +71,13 @@ export const inspectAppSources = (
         ts.isImportDeclaration(node) &&
         ts.isStringLiteral(node.moduleSpecifier) &&
         node.moduleSpecifier.text.startsWith("@modelcontextprotocol/") &&
-        node.importClause?.isTypeOnly !== true
+        node.importClause?.phaseModifier !== ts.SyntaxKind.TypeKeyword
       ) {
         issues.push(`App SDK import requires the shared bridge: ${file}`);
       }
       if (
         ts.isExportDeclaration(node) &&
-        node.isTypeOnly !== true &&
+        !node.isTypeOnly &&
         node.moduleSpecifier !== undefined &&
         ts.isStringLiteral(node.moduleSpecifier) &&
         node.moduleSpecifier.text.startsWith("@modelcontextprotocol/")

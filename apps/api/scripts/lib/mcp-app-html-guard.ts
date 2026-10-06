@@ -1,4 +1,5 @@
 import { load } from "cheerio";
+import { isTag } from "domhandler";
 
 const URL_ATTRIBUTES = new Set([
   "src",
@@ -18,11 +19,7 @@ export const inspectMcpAppHtml = (html: string): string[] => {
   const document = load(html);
   const issues: string[] = [];
   for (const element of document("*").toArray()) {
-    if (
-      element.type !== "tag" &&
-      element.type !== "script" &&
-      element.type !== "style"
-    ) {
+    if (!isTag(element)) {
       continue;
     }
     const tag = element.tagName;

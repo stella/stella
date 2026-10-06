@@ -3,7 +3,10 @@ import {
   applyDocumentTheme,
   applyHostStyleVariables,
 } from "@modelcontextprotocol/ext-apps";
-import type { McpUiHostContext } from "@modelcontextprotocol/ext-apps";
+import type {
+  AppEventMap,
+  McpUiHostContext,
+} from "@modelcontextprotocol/ext-apps";
 import { Result } from "better-result";
 
 import { parseLegalCitationHttpUrl } from "@stll/api-contract/legal-citation-links";
@@ -106,8 +109,7 @@ export const createPresentationBridge = <View>({
       listener();
     }
   };
-  app.onhostcontextchanged = hostContext;
-  app.ontoolinput = ({ arguments: input }) => {
+  const toolInput = ({ arguments: input }: AppEventMap["toolinput"]) => {
     generation += 1;
     lastCall = undefined;
     snapshot = {
@@ -120,13 +122,26 @@ export const createPresentationBridge = <View>({
       listener();
     }
   };
-  app.ontoolresult = (result) => {
+  const toolResult = (result: AppEventMap["toolresult"]) => {
     generation += 1;
     receive(result);
   };
-  app.ontoolcancelled = ({ reason }) => {
+  const toolCancelled = ({ reason }: AppEventMap["toolcancelled"]) => {
     generation += 1;
     publish({ status: "error", message: reason ?? null });
+  };
+  app.addEventListener("hostcontextchanged", hostContext);
+  app.addEventListener("toolinput", toolInput);
+  app.addEventListener("toolresult", toolResult);
+  app.addEventListener("toolcancelled", toolCancelled);
+  app.onteardown = () => {
+    generation += 1;
+    app.removeEventListener("hostcontextchanged", hostContext);
+    app.removeEventListener("toolinput", toolInput);
+    app.removeEventListener("toolresult", toolResult);
+    app.removeEventListener("toolcancelled", toolCancelled);
+    listeners.clear();
+    return {};
   };
   const reportAppError: NonNullable<typeof app.onerror> = ({ message }) =>
     publish({ status: "error", message });
@@ -141,7 +156,9 @@ export const createPresentationBridge = <View>({
     lastCall = request;
     const currentGeneration = ++generation;
     publish({ status: "loading" });
-    const called = await Result.tryPromise(() => app.callServerTool(request));
+    const called = await Result.tryPromise(async () =>
+      app.callServerTool(request),
+    );
     if (currentGeneration !== generation) {
       return;
     }
@@ -163,7 +180,7 @@ export const createPresentationBridge = <View>({
       publish({ status: "error", message: null });
       return;
     }
-    const opened = await Result.tryPromise(() =>
+    const opened = await Result.tryPromise(async () =>
       app.openLink({ url: parsed.href }),
     );
     if (Result.isError(opened)) {
@@ -173,7 +190,7 @@ export const createPresentationBridge = <View>({
     }
   };
   const connect = async (): Promise<void> => {
-    const connected = await Result.tryPromise(() => app.connect());
+    const connected = await Result.tryPromise(async () => app.connect());
     if (Result.isError(connected)) {
       publish({ status: "error", message: connected.error.message });
       return;

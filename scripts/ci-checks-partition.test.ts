@@ -962,7 +962,7 @@ test("the baseline accepts the monolithic job and derives later split baselines"
   const split = readBaseline(jobs);
   expect(split).toEqual(partitions);
   expectCoverage({
-    current: split.flatMap(({ steps }) => steps),
+    current: legSteps(split, partitionIds),
     base: actualSteps,
     removed: [],
   });

@@ -78,7 +78,7 @@ export const inspectAppManifest = ({
         issues.push(`Unknown app tool: ${name}`);
       } else if (
         app.type === "presentation" &&
-        tool.annotations.readOnlyHint !== true
+        !tool.annotations.readOnlyHint
       ) {
         issues.push(`Presentation apps require read-only tools: ${name}`);
       }
