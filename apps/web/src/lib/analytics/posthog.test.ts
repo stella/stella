@@ -356,6 +356,7 @@ describe("PostHog browser analytics adapter", () => {
   test.each([
     "ai_config_provider_validation_failed",
     "chat_continuation_rejected",
+    "file_security_rejected",
   ])("drops the expected API outcome %s", (code) => {
     expect(
       isNoiseException(

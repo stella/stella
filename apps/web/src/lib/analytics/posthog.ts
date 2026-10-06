@@ -153,6 +153,7 @@ const EXPECTED_API_STATUSES: ReadonlySet<number> = new Set([401, 403, 404]);
 const EXPECTED_API_CODES: ReadonlySet<string> = new Set([
   "ai_config_provider_validation_failed",
   "chat_continuation_rejected",
+  "file_security_rejected",
 ]);
 
 const hasExtensionFrame = (entry: unknown): boolean => {

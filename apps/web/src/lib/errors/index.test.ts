@@ -279,6 +279,17 @@ describe("toAPIError", () => {
     expect(error.message).toBe(expected);
   });
 
+  test("shows a file security rejection instead of the fallback", () => {
+    const error = toAPIError({
+      status: 422,
+      value: { code: "file_security_rejected", message: "Raw rejection" },
+    });
+
+    expect(userErrorFromThrown(error, "Upload failed")).toBe(
+      messages.errors.apiCodes.fileSecurityRejected,
+    );
+  });
+
   test("localizes malformed empty payloads by status", () => {
     const error = toAPIError({
       status: 502,
