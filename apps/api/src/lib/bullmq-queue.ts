@@ -42,8 +42,8 @@ class QueueFailureJob<
   NameType extends string = string,
   ProgressType extends JobProgress = JobProgress,
 > extends Job<DataType, ResultType, NameType, ProgressType> {
-  override async moveToFailed<E extends Error>(
-    error: E,
+  override async moveToFailed(
+    error: Error,
     token: string,
     fetchNext?: boolean,
   ) {

@@ -72,8 +72,12 @@ describe.skipIf(!enabled)("queue failure records over Valkey", () => {
             { connection: workerConnection, prefix },
           );
           const workerErrors: Error[] = [];
-          worker.on("error", (error) => workerErrors.push(error));
-          queue.on("error", (error) => workerErrors.push(error));
+          worker.on("error", (error) => {
+            workerErrors.push(error);
+          });
+          queue.on("error", (error) => {
+            workerErrors.push(error);
+          });
           try {
             await Promise.all([
               queue.waitUntilReady(),
@@ -180,9 +184,13 @@ describe.skipIf(!enabled)("queue failure records over Valkey", () => {
       { connection: workerConnection, prefix },
     );
     const errors: Error[] = [];
-    worker.on("error", (error) => errors.push(error));
+    worker.on("error", (error) => {
+      errors.push(error);
+    });
     const failed: Error[] = [];
-    worker.on("failed", (_job, error) => failed.push(error));
+    worker.on("failed", (_job, error) => {
+      failed.push(error);
+    });
     try {
       const job = await queue.add("delayed", {});
       await withTimeout(async () => await delayed.promise, {
