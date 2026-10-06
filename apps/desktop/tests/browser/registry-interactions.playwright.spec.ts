@@ -1235,7 +1235,9 @@ for (const language of ["en", "ar"] as const) {
         .toBeGreaterThan(0);
       await page.evaluate(async () => {
         await new Promise<void>((resolve) => {
-          requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
+          requestAnimationFrame(() => {
+            requestAnimationFrame(() => resolve());
+          });
         });
       });
       await expect(
