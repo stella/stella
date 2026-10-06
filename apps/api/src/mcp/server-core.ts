@@ -1135,6 +1135,7 @@ export const createMcpHttpRequestHandler = ({
         try: () =>
           recordMcpSessionInitialized({
             clientInfo: message.params.clientInfo,
+            capabilities: message.params.capabilities,
             mode,
             session,
           }),

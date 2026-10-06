@@ -1825,6 +1825,8 @@ type Messages = {
     "notes": "Notes";
     "open": "Open";
     "openInNewTab": "Open in new tab";
+    "openInStella": "Open in stella";
+    "openOriginalSource": "Open original source";
     "options": "Options";
     "or": "Or";
     "organization": "Organization";
