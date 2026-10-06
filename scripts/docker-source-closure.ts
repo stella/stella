@@ -1,5 +1,6 @@
 import { panic } from "better-result";
 import {
+  existsSync,
   readdirSync,
   readFileSync,
   mkdirSync,
@@ -10,6 +11,7 @@ import path from "node:path";
 import ts from "typescript";
 import * as v from "valibot";
 
+import { GENERATORS, type Generator } from "./generated-files";
 import { specifierCandidates } from "./generated-imports";
 import { lexShell } from "./install-free-ci";
 
@@ -675,6 +677,38 @@ export const commandEntries = (
   cwd: string,
 ): string[] => walkCommand({ root, tree, active: new Set() }, command, cwd);
 
+const generatorEntries = (
+  root: string,
+  context: SourceTree,
+  generator: Generator,
+): readonly string[] => {
+  const inventory: SourceTree = new Map(
+    [...context].map(([file, origin]) => [`/app${file}`, origin]),
+  );
+  const words = [...generator.write];
+  let cwd = "/app";
+  const directory = words.find((word) => word.startsWith("--cwd="));
+  if (directory !== undefined) {
+    cwd = absolute(cwd, directory.slice("--cwd=".length));
+    words.splice(words.indexOf(directory), 1);
+    if (!inventory.has(`${cwd}/package.json`)) {
+      return [];
+    }
+  }
+  const filter = words.indexOf("--filter");
+  if (
+    filter !== -1 &&
+    ![...inventory].some(
+      ([file, origin]) =>
+        file.endsWith("/package.json") &&
+        JSON.parse(text(root, origin)).name === words.at(filter + 1),
+    )
+  ) {
+    return [];
+  }
+  return commandEntries(root, inventory, words.join(" "), cwd);
+};
+
 const copyInstruction = (
   stages: Map<string, Stage>,
   stage: Stage,
@@ -723,6 +757,12 @@ export const checkDockerSource = (
   context: SourceTree,
   pruned: SourceTree,
 ): string[] => {
+  const producers = GENERATORS.filter(
+    ({ outputKind }) => outputKind === "derived",
+  ).map((generator) => ({
+    generator,
+    entries: generatorEntries(root, context, generator),
+  }));
   const stages = new Map<string, Stage>();
   let stage: Stage = { cwd: "/", files: new Map(), seen: new Set() };
   const problems: string[] = [];
@@ -773,14 +813,36 @@ export const checkDockerSource = (
         continue;
       }
       const entries = commandEntries(root, stage.files, body, stage.cwd);
-      problems.push(
-        ...sourceClosureProblems(
+      for (const entry of entries.filter((file) => !file.includes("/dist/"))) {
+        const closure = sourceClosureProblems(
           root,
           stage.files,
-          entries.filter((file) => !file.includes("/dist/")),
+          [entry],
           stage.seen,
-        ),
-      );
+        );
+        problems.push(...closure);
+        if (closure.length > 0) {
+          continue;
+        }
+        // A Docker RUN can create declared sources after validating its own
+        // source closure. Only hydrated outputs of that exact producer enter
+        // the stage; later imports still resolve against this inventory.
+        for (const { generator, entries: producerEntries } of producers) {
+          if (!producerEntries.includes(entry)) {
+            continue;
+          }
+          for (const output of generator.outputs) {
+            if (!existsSync(path.join(root, output))) {
+              problems.push(
+                `Generated output is unavailable: ${generator.id}/${output}`,
+              );
+              continue;
+            }
+            stage.files.set(absolute("/app", output), output);
+          }
+          stage.seen.clear();
+        }
+      }
     }
   }
   return [...new Set(problems)];

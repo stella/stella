@@ -20,6 +20,7 @@ import {
   sourceClosureProblems,
   type SourceTree,
 } from "./docker-source-closure";
+import { GENERATORS } from "./generated-files";
 
 const root = mkdtempSync(path.join(tmpdir(), "docker-source-fixtures-"));
 afterAll(() => rmSync(root, { recursive: true, force: true }));
@@ -118,6 +119,86 @@ describe("Docker source closure", () => {
       expect(checkDockerSource(root, source, context, new Map())).toEqual([
         `${entry} imports ./missing, unavailable in Docker stage`,
       ]);
+    }
+  });
+
+  test("declared generated sources enter a stage only after their available producer runs", () => {
+    const generator = GENERATORS.find(({ id }) => id === "capability-runtime");
+    if (generator === undefined) {
+      throw new Error("Capability runtime generator is missing");
+    }
+    for (const scenario of [
+      "valid",
+      "missing-command",
+      "before-producer",
+      "missing-producer-input",
+      "missing-output",
+      "missing-output-import",
+    ] as const) {
+      const fixtureRoot = mkdtempSync(path.join(root, "generated-stage-"));
+      const write = (file: string, source: string) => {
+        const target = path.join(fixtureRoot, file);
+        mkdirSync(path.dirname(target), { recursive: true });
+        writeFileSync(target, source);
+      };
+      const producer = generator.write.at(1);
+      const output = generator.outputs.at(0);
+      if (producer === undefined || output === undefined) {
+        throw new Error("Capability generator needs a source entry and output");
+      }
+      write(
+        producer,
+        scenario === "missing-producer-input"
+          ? 'import "./absent-helper";'
+          : "export const generated = true;",
+      );
+      for (const file of generator.outputs) {
+        if (scenario === "missing-output" && file === output) {
+          continue;
+        }
+        write(
+          file,
+          scenario === "missing-output-import" && file === output
+            ? 'import "./absent-output-input";'
+            : "export const value = 1;",
+        );
+      }
+      write("entry.ts", `import "./${output.slice(0, -3)}";`);
+      const context: SourceTree = new Map([
+        [`/${producer}`, producer],
+        ["/entry.ts", "entry.ts"],
+      ]);
+      const run = `RUN ${generator.write.join(" ")}`;
+      const build = "RUN bun entry.ts";
+      const commands = [run, build];
+      if (scenario === "before-producer") {
+        commands.reverse();
+      } else if (scenario === "missing-command") {
+        commands.shift();
+      }
+      const source = [
+        "FROM bun AS builder",
+        "WORKDIR /app",
+        "COPY . .",
+        ...commands,
+      ].join("\n");
+      const problems = checkDockerSource(
+        fixtureRoot,
+        source,
+        context,
+        new Map(),
+      );
+      if (scenario === "valid") {
+        expect(problems).toEqual([]);
+      } else {
+        let expected = output;
+        if (scenario === "missing-producer-input") {
+          expected = "absent-helper";
+        } else if (scenario === "missing-output-import") {
+          expected = "absent-output-input";
+        }
+        expect(problems.join("\n")).toContain(expected);
+      }
     }
   });
 
