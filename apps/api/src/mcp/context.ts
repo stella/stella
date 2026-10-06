@@ -15,6 +15,7 @@ import {
   createScopedDb,
 } from "@/api/db/scoped";
 import type { readGatedDecisionCitations } from "@/api/handlers/case-law/decisions/citation-passages";
+import type { readCaseLawCoverageHandler } from "@/api/handlers/case-law/decisions/coverage";
 import type {
   readGatedDecisionWithDocument,
   readsSharedPublicLawCorpus,
@@ -152,6 +153,7 @@ export type McpRequestContext = {
     loadLatestApprovedVersion?: typeof loadLatestApprovedVersion;
     createPlaybookTableRuns?: typeof createPlaybookTableRuns;
     createTimeEntryHandler?: typeof createTimeEntryHandler;
+    readCaseLawCoverageHandler?: typeof readCaseLawCoverageHandler;
     searchDecisionsHandler?: typeof searchDecisionsHandler;
     corpusIndexQueryVariant?: CorpusIndexQueryVariant;
     caseLawSearchGuidance?: CaseLawSearchGuidanceMode;

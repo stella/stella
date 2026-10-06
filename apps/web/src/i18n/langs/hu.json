@@ -54,6 +54,17 @@
       "polish": "Megfogalmazás javítása"
     }
   },
+  "aiColumns": {
+    "countSummary": "{columns} oszlop × {rows} sor = {answers, plural, one {# válasz} other {# válasz}}. A válaszok felhasználják a keretet.",
+    "refusedBudget": "Nem futott le: a válaszkeret nem érhető el",
+    "rerunAllPage": "Összes újrafuttatása (ezen az oldalon)",
+    "rerunColumnPage": "Oszlop újrafuttatása (ezen az oldalon)",
+    "runColumnPage": "Oszlop futtatása (ezen az oldalon)",
+    "runPageRows": "Futtatás {count, plural, one {# sorra ezen az oldalon} other {# sorra ezen az oldalon}}",
+    "runRemainingPage": "Hátralévők futtatása (ezen az oldalon)",
+    "runSelectedRows": "Futtatás {count, plural, one {# kijelölt sorra} other {# kijelölt sorra}}",
+    "selectedRun": "AI-oszlopok futtatása {count, plural, one {# sorra} other {# sorra}}"
+  },
   "appearance": {
     "calendar": "Naptár",
     "calendarGregorian": "Gergely",
@@ -6003,7 +6014,6 @@
       "previewUnsupported": "Az előnézet ehhez a dokumentumtípushoz nem támogatott.",
       "readingFrom": "Az AI innen olvas:",
       "referencesItself": "A tulajdonság más tulajdonságokon keresztül hivatkozik önmagára",
-      "rerunColumn": "Oszlop újrafuttatása",
       "resultType": "Eredmény típusa",
       "returnsLabel": "Formátum",
       "scopeFile": "Aktuális fájl",
