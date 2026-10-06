@@ -1444,12 +1444,13 @@ export const readCaseLawPageDecisionRows = async ({
   }
   const read = await timeDbRead(
     async () =>
-      await caseLawDb(async (tx) =>
-        await pageDecisionRowsQuery(tx, {
-          body,
-          generation,
-          ids: ids.map((id) => toSafeId<"caseLawDecision">(id)),
-        }),
+      await caseLawDb(
+        async (tx) =>
+          await pageDecisionRowsQuery(tx, {
+            body,
+            generation,
+            ids: ids.map((id) => toSafeId<"caseLawDecision">(id)),
+          }),
       ),
   );
   recordCorpusRehydrationDispositions(read.dispositions, hitDispositions);
@@ -1582,12 +1583,13 @@ export const rehydrateCaseLawCandidates = async ({
       ? { rows: [], dispositions: [] }
       : await timeDbRead(
           async () =>
-            await caseLawDb(async (tx) =>
-              await candidateDecisionRowsQuery(tx, {
-                body,
-                generation,
-                ids,
-              }),
+            await caseLawDb(
+              async (tx) =>
+                await candidateDecisionRowsQuery(tx, {
+                  body,
+                  generation,
+                  ids,
+                }),
             ),
         );
   recordCorpusRehydrationDispositions(read.dispositions, hitDispositions);
