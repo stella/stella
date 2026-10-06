@@ -228,6 +228,7 @@ describe.skipIf(!runPostgresTests)("migrated public sanctions reader", () => {
         await admin`DELETE FROM sanctions_edition_entries WHERE edition_id = ${edition}`;
         await admin`DELETE FROM sanctions_entry_payloads WHERE content_hash = ${contentHash}`;
         await admin`DELETE FROM sanctions_editions WHERE id = ${edition}`;
+        await admin`DELETE FROM sanctions_edition_fanouts WHERE source_id = ${source}`;
         await admin`DELETE FROM sanctions_sources WHERE id = ${source}`;
         await admin.unsafe(`DROP ROLE IF EXISTS "${application}"`);
       }

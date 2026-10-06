@@ -5,7 +5,8 @@ use std::{
 #[cfg(target_os = "macos")]
 use tauri::window::{Effect, EffectState, EffectsBuilder};
 use tauri::{
-  AppHandle, LogicalPosition, LogicalSize, Manager, WebviewWindow,
+  AppHandle, LogicalPosition, LogicalSize, Manager, Runtime, WebviewWindow,
+  ipc::{CommandArg, CommandItem, InvokeError},
   webview::PageLoadEvent,
 };
 
@@ -26,6 +27,41 @@ const CLIPBOARD_WINDOW_INSET: f64 = 18.0;
 const CLIPBOARD_WINDOW_RADIUS: f64 = 28.0;
 const CLIPBOARD_EDITOR_WIDTH: f64 = 700.0;
 const CLIPBOARD_EDITOR_HEIGHT: f64 = 520.0;
+
+/// Proof that an IPC call came from a clipboard window showing a bundled
+/// page. History reaches a webview only through accessors that take it, so
+/// another window or origin cannot read history even if a capability grants
+/// it a clipboard command.
+pub struct ClipboardCaller(());
+
+impl ClipboardCaller {
+  fn verify(
+    label: &str,
+    url: Option<&tauri::Url>,
+    dev_origin: Option<&tauri::Url>,
+  ) -> Option<Self> {
+    let clipboard_window =
+      label == CLIPBOARD_WINDOW_LABEL || label == CLIPBOARD_EDITOR_WINDOW_LABEL;
+    let app_origin =
+      url.is_some_and(|url| crate::app_window::is_app_origin(url, dev_origin));
+    (clipboard_window && app_origin).then_some(Self(()))
+  }
+
+  #[cfg(test)]
+  pub(crate) fn for_test() -> Self {
+    Self(())
+  }
+}
+
+impl<'de, R: Runtime> CommandArg<'de, R> for ClipboardCaller {
+  fn from_command(command: CommandItem<'de, R>) -> Result<Self, InvokeError> {
+    let webview = command.message.webview();
+    let url = webview.url().ok();
+    let dev_origin = crate::app_window::dev_origin(&webview);
+    Self::verify(webview.label(), url.as_ref(), dev_origin.as_ref())
+      .ok_or_else(|| InvokeError::from("clipboard history is not available here"))
+  }
+}
 
 /// Timing anchor for the clipboard window's creation. Page load and frontend
 /// spans are measured against it, and the first snapshot read after creation
@@ -253,16 +289,12 @@ fn show_as(app: &AppHandle, created_kind: ClipboardOpenKind) {
   // hidden leaves WebKit's scrolling layers at the old size until a later
   // layout, which clips the rail on the first open.
   let initial_frame = window_placement::target_work_area(app).map(docked_frame);
-  let builder = tauri::WebviewWindowBuilder::new(
-    app,
-    CLIPBOARD_WINDOW_LABEL,
-    tauri::WebviewUrl::App("index.html".into()),
-  )
-  .title("stella clipboard")
-  .inner_size(
-    initial_frame.map_or(1440.0, |frame| frame.width),
-    initial_frame.map_or(CLIPBOARD_WINDOW_HEIGHT, |frame| frame.height),
-  );
+  let builder = crate::app_window::builder(app, CLIPBOARD_WINDOW_LABEL, "index.html")
+    .title("stella clipboard")
+    .inner_size(
+      initial_frame.map_or(1440.0, |frame| frame.width),
+      initial_frame.map_or(CLIPBOARD_WINDOW_HEIGHT, |frame| frame.height),
+    );
   let builder = match initial_frame {
     Some(frame) => builder.position(frame.x, frame.y),
     None => builder,
@@ -423,18 +455,15 @@ pub fn show_editor(app: &AppHandle) -> Result<(), String> {
       });
   }
 
-  let builder = tauri::WebviewWindowBuilder::new(
-    app,
-    CLIPBOARD_EDITOR_WINDOW_LABEL,
-    tauri::WebviewUrl::App("index.html".into()),
-  )
-  .title("Stella")
-  .inner_size(CLIPBOARD_EDITOR_WIDTH, CLIPBOARD_EDITOR_HEIGHT)
-  .min_inner_size(560.0, 420.0)
-  .always_on_top(true)
-  .content_protected(content_protected(app))
-  .resizable(true)
-  .visible(false);
+  let builder =
+    crate::app_window::builder(app, CLIPBOARD_EDITOR_WINDOW_LABEL, "index.html")
+      .title("Stella")
+      .inner_size(CLIPBOARD_EDITOR_WIDTH, CLIPBOARD_EDITOR_HEIGHT)
+      .min_inner_size(560.0, 420.0)
+      .always_on_top(true)
+      .content_protected(content_protected(app))
+      .resizable(true)
+      .visible(false);
   let builder = window_placement::centered_on_target_screen(
     app,
     builder,
@@ -471,6 +500,38 @@ pub fn show_editor(app: &AppHandle) -> Result<(), String> {
 #[cfg(test)]
 mod tests {
   use super::*;
+
+  #[test]
+  fn history_callers_are_clipboard_windows_on_the_app_origin() {
+    let page = tauri::Url::parse("tauri://localhost/index.html").unwrap();
+    let dev = tauri::Url::parse("http://127.0.0.1:5177").unwrap();
+    let dev_page = tauri::Url::parse("http://127.0.0.1:5177/index.html").unwrap();
+    for label in [CLIPBOARD_WINDOW_LABEL, CLIPBOARD_EDITOR_WINDOW_LABEL] {
+      assert!(ClipboardCaller::verify(label, Some(&page), None).is_some());
+      assert!(ClipboardCaller::verify(label, Some(&dev_page), Some(&dev)).is_some());
+      assert!(ClipboardCaller::verify(label, Some(&dev_page), None).is_none());
+      assert!(ClipboardCaller::verify(label, None, None).is_none());
+      for remote in [
+        "https://my.stll.app/",
+        "https://example.org/index.html",
+        "http://localhost:3000/",
+      ] {
+        let remote = tauri::Url::parse(remote).unwrap();
+        assert!(ClipboardCaller::verify(label, Some(&remote), Some(&dev)).is_none());
+      }
+    }
+    for label in [
+      "main",
+      "pdf-sign-dialog",
+      "selfhost-connect-dialog",
+      "takeover-dialog",
+      "clipboard ",
+      "Clipboard",
+      "",
+    ] {
+      assert!(ClipboardCaller::verify(label, Some(&page), None).is_none());
+    }
+  }
 
   #[test]
   fn docks_to_the_bottom_of_a_secondary_screen_above_the_primary() {

@@ -1,7 +1,6 @@
 import { useCallback, useRef, useState } from "react";
 
 import { useTranslations } from "use-intl";
-import { useShallow } from "zustand/react/shallow";
 
 import { parseDocumentAst } from "@stll/legal-ast/document-ast";
 import { BidiText } from "@stll/ui/bidi-text";
@@ -37,8 +36,9 @@ import {
   buildSectionMap,
   flattenAnalysisHeadings,
   getCategoryVar,
+  getHeadingDisplayAnchorId,
 } from "@/features/case-law/components/case-viewer/analysis/types";
-import { useDecisionAnalysis } from "@/features/case-law/components/case-viewer/analysis/use-decision-analysis";
+import { useLazyDecisionAnalysis } from "@/features/case-law/components/case-viewer/analysis/use-lazy-decision-analysis";
 import type { ReaderMarksFilter } from "@/features/case-law/components/case-viewer/decision-annotation-surface.logic";
 import type { DecisionDocumentState } from "@/features/case-law/components/case-viewer/decision-body-state.logic";
 import { DecisionText } from "@/features/case-law/components/case-viewer/decision-text";
@@ -58,9 +58,7 @@ import { useDecisionCitationAnchors } from "@/features/case-law/components/case-
 import { useDecisionProvisionAnchors } from "@/features/case-law/components/case-viewer/use-decision-provision-anchors";
 import { useDecisionStatuteCitationAnchors } from "@/features/case-law/components/case-viewer/use-decision-statute-citation-anchors";
 import type { PublicCaseLawDecision } from "@/features/case-law/public-decision";
-import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useReaderProvisionMode } from "@/hooks/use-reader-provision-mode";
-import { useCaseSearchStore } from "@/lib/case-search-store";
 import { ChromeHeaderActions } from "@/lib/chrome-header-actions";
 import { detached } from "@/lib/detached";
 import type { SafeId } from "@/lib/safe-id";
@@ -84,6 +82,7 @@ type DecisionWorkspaceDecision = Pick<
   | "judges"
   | "language"
   | "metadata"
+  | "source"
   | "sourceAttributionUrl"
   | "textFields"
   | "updatedAt"
@@ -94,7 +93,6 @@ type DecisionWorkspaceBaseProps = {
   decisionId: SafeId<"caseLawDecision">;
   /** The block the URL names, which the reader arrived at from a result row. */
   initialAnchorId?: string | undefined;
-  initialSearchQuery?: string | undefined;
 };
 
 /**
@@ -129,14 +127,6 @@ export type DecisionWorkspaceProps =
   | EnabledDecisionWorkspaceProps
   | GatedDecisionWorkspaceProps;
 
-const getHeadingDisplayAnchorId = ({
-  annotations,
-  startAnchorId,
-}: {
-  annotations: { startAnchorId: string }[];
-  startAnchorId: string;
-}) => annotations.at(0)?.startAnchorId ?? startAnchorId;
-
 /** What the margin's source filter means for the reader's own marks. */
 const MARKS_FOR_NOTES_FILTER = {
   ai: "none",
@@ -149,7 +139,7 @@ const NotesFilterAllIcon = ({ className }: { className?: string }) => (
 );
 
 export const DecisionWorkspace = (props: DecisionWorkspaceProps) => {
-  const { decision, decisionId, initialAnchorId, initialSearchQuery } = props;
+  const { decision, decisionId, initialAnchorId } = props;
   const t = useTranslations();
   const provisions = useReaderProvisionMode();
   const ast = parseDocumentAst(decision.documentAst);
@@ -182,30 +172,11 @@ export const DecisionWorkspace = (props: DecisionWorkspaceProps) => {
   // below reads `analysisState` alone: a gated reader never starts a run, so
   // its state stays `idle` (the offer rather than an empty analysis column)
   // unless this session already fetched the finished analysis.
-  const analysisRunnable = props.aiMode === "enabled";
   const ensureAIAvailable =
     props.aiMode === "enabled" ? props.ensureAIAvailable : null;
 
   const [panelWidth, setPanelWidth] = useState(220);
   const isDragging = useRef(false);
-  const {
-    searchOpen,
-    searchQuery,
-    activeMatchIndex,
-    openSearch,
-    setMatchCount,
-    setSearchQuery,
-  } = useCaseSearchStore(
-    useShallow((s) => ({
-      searchOpen: s.isOpen,
-      searchQuery: s.query,
-      activeMatchIndex: s.activeMatchIndex,
-      openSearch: s.open,
-      setMatchCount: s.setMatchCount,
-      setSearchQuery: s.setQuery,
-    })),
-  );
-
   // The text links every cited decision the first outgoing page resolves;
   // the panel below pages further, the links stop at what is already read.
   const citationAnchors = useDecisionCitationAnchors(decisionId);
@@ -221,9 +192,12 @@ export const DecisionWorkspace = (props: DecisionWorkspaceProps) => {
   );
 
   const { state: analysisState, generate: generateDecisionAnalysis } =
-    useDecisionAnalysis({
+    useLazyDecisionAnalysis({
       decisionId,
       decisionUpdatedAt: decision.updatedAt,
+      documentReady: ast !== null,
+      sourceAllowsDerivedAi: decision.source.allowsDerivedAi,
+      mode: props.aiMode,
     });
   const generate = useCallback(async () => {
     if (!ensureAIAvailable) {
@@ -395,21 +369,6 @@ export const DecisionWorkspace = (props: DecisionWorkspaceProps) => {
     ...exampleMarginItems,
     ...annotations.notes,
   ];
-
-  useExternalSyncEffect(() => {
-    if (analysisRunnable && ast && analysisState.status === "idle") {
-      detached(generate(), "decision-workspace.generate");
-    }
-  }, [analysisRunnable, analysisState.status, ast, generate]);
-
-  const reset = useCaseSearchStore((s) => s.reset);
-  useExternalSyncEffect(() => {
-    reset();
-    if (initialSearchQuery) {
-      setSearchQuery(initialSearchQuery);
-      openSearch();
-    }
-  }, [decisionId, initialSearchQuery, openSearch, reset, setSearchQuery]);
 
   const notesFilterOptions = [
     { icon: NotesFilterAllIcon, label: t("common.all"), value: "all" },
@@ -663,7 +622,6 @@ export const DecisionWorkspace = (props: DecisionWorkspaceProps) => {
                   data-slot="reader-document-column"
                 >
                   <DecisionText
-                    activeMatchIndex={activeMatchIndex}
                     aiHeadnotes={aiHeadnotes}
                     annotationAnchors={annotations.anchors}
                     citationAnchors={citationAnchors}
@@ -672,9 +630,7 @@ export const DecisionWorkspace = (props: DecisionWorkspaceProps) => {
                     expandProvisions={provisions.expandProvisions}
                     landingAnchorId={landingAnchorId}
                     onAnnotationActivate={annotations.setActiveAnnotationId}
-                    onMatchCountChange={setMatchCount}
                     provisionAnchors={provisionAnchors}
-                    searchQuery={searchOpen ? searchQuery : ""}
                     sectionMap={showAiNotes ? sectionMap : undefined}
                     statuteCitationAnchors={statuteCitationAnchors}
                   />

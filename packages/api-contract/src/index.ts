@@ -473,6 +473,7 @@ export type {
   DirectlyCreatableViewLayoutType,
   RequiredViewLayoutType,
   SingleViewLayoutType,
+  UnavailableWorkspaceView,
   ViewLayoutType,
 } from "./view-layout";
 export type {

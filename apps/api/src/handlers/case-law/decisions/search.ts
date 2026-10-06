@@ -91,6 +91,8 @@ import type {
 } from "@/api/lib/case-law/decision-search-facets";
 import {
   cappedSourceFacetBuckets,
+  decisionTypeKindBuckets,
+  foldStatedDecisionTypeBuckets,
   groupCourtsByTier,
   labelSourceBuckets,
   readCaseLawSourceNames,
@@ -104,7 +106,10 @@ import {
   decisionSortKeySql,
 } from "@/api/lib/case-law/decision-search-order-sql";
 import { readDecisionHeadnote } from "@/api/lib/case-law/decision-text";
-import { decisionTypeFilterSql } from "@/api/lib/case-law/decision-type-filter-sql";
+import {
+  decisionTypeFilterSql,
+  decisionTypeKindSql,
+} from "@/api/lib/case-law/decision-type-filter-sql";
 import { readPublicDecisionLanguageAlternatesByGroup } from "@/api/lib/case-law/language-alternates";
 import { readCaseLawSourceRegistry } from "@/api/lib/case-law/non-redistributable-sources";
 import {
@@ -627,8 +632,13 @@ export const caseLawSearchPlan = ({
     LIMIT ${LIMITS.caseLawYearFacetLimit}
   `;
 
+  // Grouped by canonical kind rather than by spelling: one kind is stated in
+  // several spellings (an abbreviation, a casing), and counting judgments per
+  // kind here, not summing per spelling, keeps a judgment whose language
+  // versions state the kind differently from being counted twice.
   const decisionTypeFacetQuery = sql`
-    SELECT d.decision_type AS value, ${judgmentCountSql} AS count
+    SELECT ${decisionTypeKindSql(sql`d.decision_type`)} AS value,
+           ${judgmentCountSql} AS count
     ${facetFrom}
     WHERE ${ftsSearch.predicate}
       ${datedFilter}
@@ -640,8 +650,8 @@ export const caseLawSearchPlan = ({
       ${sourceFilter}
       ${languageFilter}
       AND d.decision_type IS NOT NULL
-    GROUP BY d.decision_type
-    ORDER BY count DESC
+    GROUP BY 1
+    ORDER BY count DESC, value
     LIMIT ${LIMITS.caseLawFacetLimit}
   `;
 
@@ -925,7 +935,9 @@ const searchPostgresDecisions = async (
         // Already newest-first from the statement; the year is the key it
         // grouped and ordered by.
         year: facetBuckets(yearResultRaw),
-        decisionType: facetBuckets(decisionTypeResultRaw),
+        decisionType: decisionTypeKindBuckets(
+          facetBuckets(decisionTypeResultRaw),
+        ),
         source: labelSourceBuckets(
           sourceBuckets,
           await readCaseLawSourceNames(
@@ -1905,7 +1917,7 @@ const readCaseLawSearchFacets = async ({
         perTierLimit: LIMITS.caseLawFacetLimit,
       }),
       year,
-      decisionType,
+      decisionType: foldStatedDecisionTypeBuckets(decisionType),
       source: labelSourceBuckets(
         source.map(({ value, label, count }) => ({
           value,

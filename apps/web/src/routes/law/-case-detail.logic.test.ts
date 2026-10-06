@@ -165,7 +165,7 @@ test("a readable decision omits textless language variants from alternate links"
     },
   });
   expect(
-    head.links.flatMap((link) => ("hreflang" in link ? [link.hreflang] : [])),
+    head.links.flatMap((link) => ("hrefLang" in link ? [link.hrefLang] : [])),
   ).toEqual(["cs", "en", "x-default"]);
 });
 

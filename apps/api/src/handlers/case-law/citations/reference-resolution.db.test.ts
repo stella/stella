@@ -1,3 +1,4 @@
+import { panic } from "better-result";
 /**
  * The resolver's doctrine stated twice, once as SQL over batches and once as
  * a function of one reference's holders, must give one answer.
@@ -13,8 +14,6 @@
  * time, self, language grouping, the cap and every rule are left to the
  * function.
  */
-
-import { panic } from "better-result";
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { eq, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
@@ -34,6 +33,7 @@ import {
   CITATION_DECISION_TYPE_HINT_FAMILIES,
   CITATION_DECISION_TYPE_HINTS,
 } from "@/api/handlers/case-law/citation-decision-type-hint";
+import { runCitationGraphTransaction } from "@/api/handlers/case-law/citation-graph-transaction";
 import {
   classifyCitationsBeforeWrite,
   resolveCitationsForDecision,
@@ -773,10 +773,12 @@ const expectOneOutcome = async (
   };
 
   const classified = (
-    await classifyCitationsBeforeWrite(db, {
-      citingDecisionId: citingId,
-      citations: [unwritten],
-    })
+    await runCitationGraphTransaction(db.transaction.bind(db), async (tx) =>
+      classifyCitationsBeforeWrite(tx, {
+        citingDecisionId: citingId,
+        citations: [unwritten],
+      }),
+    )
   ).get(unwritten.id);
 
   await db.insert(caseLawCitations).values({
@@ -784,7 +786,10 @@ const expectOneOutcome = async (
     citingDecisionId: citingId,
     citationText: reference.citationKey ?? "unkeyed",
   });
-  const counts = await resolveCitationsForDecision(db, citingId);
+  const counts = await runCitationGraphTransaction(
+    db.transaction.bind(db),
+    async (tx) => resolveCitationsForDecision(tx, citingId),
+  );
   const [walked] = await db
     .select({
       status: caseLawCitations.resolutionStatus,
