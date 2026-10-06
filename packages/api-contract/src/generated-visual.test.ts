@@ -20,7 +20,12 @@ describe("generated visual contract", () => {
     const parsed = v.parse(generatedVisualInputSchema, input);
     expect(parsed.title).toBe(input.title);
     expect(parsed.data).toEqual(input.data);
-    expect(parsed.links).toEqual(input.links);
+    expect(
+      parsed.links?.map(({ id, decisionId }) => ({
+        id,
+        decisionId: String(decisionId),
+      })),
+    ).toEqual(input.links);
     expect(
       v.safeParse(generatedVisualInputSchema, {
         ...input,

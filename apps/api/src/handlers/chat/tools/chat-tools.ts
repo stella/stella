@@ -357,6 +357,7 @@ type FolderConsistencyReviewTools = ReturnType<
 type RegistryWriteTools = ChatRegistryWriteToolMap;
 type SubagentTools = ReturnType<typeof createSpawnSubagentsTool>;
 type RememberTools = ReturnType<typeof createRememberTools>;
+type ShowVisualTools = ReturnType<typeof createShowVisualTools>;
 
 type BuiltInChatTools = OrgTools &
   ChatExecutionTools &
@@ -380,7 +381,8 @@ type BuiltInChatTools = OrgTools &
   FolderConsistencyReviewTools &
   RegistryWriteTools &
   SubagentTools &
-  RememberTools;
+  RememberTools &
+  ShowVisualTools;
 
 export type ChatTools = BuiltInChatTools;
 

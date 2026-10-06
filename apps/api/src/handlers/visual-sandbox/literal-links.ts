@@ -1,4 +1,5 @@
 import { load } from "cheerio";
+import { isTag } from "domhandler";
 import * as v from "valibot";
 
 import { visualLinkSchema } from "@stll/api-contract/visual-sandbox";
@@ -21,6 +22,9 @@ export const collectLiteralVisualLinks = (html: SanitizedVisualHtml) => {
   const $ = load(html);
   collect($("body").text());
   $("*").each((_, element) => {
+    if (!isTag(element)) {
+      return;
+    }
     for (const value of Object.values(element.attribs)) {
       collect(value);
     }

@@ -5466,7 +5466,11 @@ describe("native visual stream persistence", () => {
       persisted.parts.filter(({ type }) => type === "ui-resource"),
     ).toEqual(streamedVisuals);
     const stored = chatMessageContentFromMessage(
-      toPersistableChatMessage(persisted),
+      toPersistableChatMessage({
+        id: toSafeId<"chatMessage">(persisted.id),
+        role: persisted.role,
+        parts: persisted.parts,
+      }),
     );
     const reloaded = chatMessageFromPersisted({
       id: toSafeId<"chatMessage">(persisted.id),

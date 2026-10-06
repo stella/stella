@@ -19,6 +19,7 @@ import type { ActiveChatSkillContext } from "@/api/handlers/chat/active-skill-co
 import { resolveToolWorkspaceIds } from "@/api/handlers/chat/tools/authorized-workspace-ids";
 import { getChatTools } from "@/api/handlers/chat/tools/chat-tools";
 import { PAST_CHAT_SCOPE_TYPE } from "@/api/handlers/chat/tools/past-chat-tools";
+import { createVisualResourceOrigin } from "@/api/handlers/visual-sandbox/resource-origin";
 import type { OrgAIConfig } from "@/api/lib/ai-config";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { toSafeId } from "@/api/lib/branded-types";
@@ -162,6 +163,12 @@ const buildChatToolsForScenario = ({
   return getChatTools({
     activeFile,
     activeSkillContext,
+    visualTools: {
+      origin: createVisualResourceOrigin(),
+      store: async () => panic("The provider canary must not publish views."),
+      preview: async () =>
+        panic("The provider canary must not render previews."),
+    },
     // A live extension registers the client-executed browser tool, so its
     // schema also runs through the provider matrix.
     browserClient: { protocolVersion: BROWSER_CONTROL_PROTOCOL_VERSION },

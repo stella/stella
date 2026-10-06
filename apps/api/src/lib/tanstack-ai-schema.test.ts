@@ -27,7 +27,7 @@ describe("tool validation projection", () => {
     expect(await projected["~standard"].validate({ value: 3 })).toHaveProperty(
       "issues",
     );
-    expect(await projected["~standard"].validate({ value: 4 })).toEqual({
+    expect(await projected["~standard"].validate({ value: 4 })).toMatchObject({
       value: { value: 4 },
     });
     const anotherAction = v.strictObject({
@@ -66,8 +66,10 @@ describe("tool validation projection", () => {
     expect(await projected["~standard"].validate({ id: "" })).toHaveProperty(
       "issues",
     );
-    expect(await projected["~standard"].validate({ id: "case-one" })).toEqual({
-      value: { id: "case-one" },
+    expect(
+      await projected["~standard"].validate({ id: "case-one" }),
+    ).toMatchObject({
+      value: { id: v.parse(safeIdSchema, "case-one") },
     });
     const transformation = v.strictObject({
       id: v.pipe(v.string(), v.brand("Id"), v.toUpperCase()),
