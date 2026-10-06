@@ -604,10 +604,9 @@ export const refreshCachedMcpToolsForConnection = async ({
       safeDb,
       userId,
     });
-    // oxlint-disable-next-line arrow-body-style -- block body holds the audit-skip directive
-    const updated = await safeDb((tx) => {
+    const updated = await safeDb((tx) =>
       // audit: skip — derived MCP tool-cache metadata, not a user-facing state change
-      return tx
+      tx
         .update(mcpUserConnections)
         .set({
           cachedTools,
@@ -618,8 +617,8 @@ export const refreshCachedMcpToolsForConnection = async ({
           instructions: server?.instructions ?? null,
           updatedAt: new Date(),
         })
-        .where(eq(mcpUserConnections.id, connectionId));
-    });
+        .where(eq(mcpUserConnections.id, connectionId)),
+    );
     if (Result.isError(updated)) {
       observeFailure(updated.error, { sink: TOOL_CACHE_REFRESH_FAILED });
     }
@@ -911,10 +910,9 @@ const writeUnderRefreshLease = async ({
   fence,
   values,
 }: WriteUnderRefreshLeaseOptions) =>
-  // oxlint-disable-next-line arrow-body-style -- block body holds the audit-skip directive
-  await safeDb((tx) => {
+  await safeDb((tx) =>
     // audit: skip — refresh coordination and token rotation for the caller's existing MCP connection
-    return tx
+    tx
       .update(mcpUserConnections)
       .set(values)
       .where(
@@ -927,8 +925,8 @@ const writeUnderRefreshLease = async ({
       .returning({
         id: mcpUserConnections.id,
         expiresAt: mcpUserConnections.refreshLeaseExpiresAt,
-      });
-  });
+      }),
+  );
 
 type ClaimMcpRefreshLeaseOptions = {
   safeDb: SafeDb;
@@ -1626,10 +1624,9 @@ const markConnectionsStatus = async ({
   if (connectionIds.length === 0) {
     return;
   }
-  // oxlint-disable-next-line arrow-body-style -- block body holds the audit-skip directive
-  const result = await safeDb((tx) => {
+  const result = await safeDb((tx) =>
     // audit: skip — derived status for the caller's existing MCP connections once stored credentials or authorization no longer apply
-    return tx
+    tx
       .update(mcpUserConnections)
       .set({ status, refreshLeaseExpiresAt: null, updatedAt: new Date() })
       .where(
@@ -1639,8 +1636,8 @@ const markConnectionsStatus = async ({
           eq(mcpUserConnections.userId, userId),
           eq(mcpUserConnections.status, "connected"),
         ),
-      );
-  });
+      ),
+  );
   if (Result.isError(result)) {
     observeFailure(result.error, { sink: CONNECTION_STATUS_WRITE_FAILED });
   }

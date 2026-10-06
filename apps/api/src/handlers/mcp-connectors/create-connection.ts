@@ -75,51 +75,51 @@ const createMcpConnection = createSafeRootHandler(
     });
 
     const saved = yield* Result.await(
-      // oxlint-disable-next-line arrow-body-style -- block body holds the audit-skip directive
-      safeDb(async (tx) => {
-        // audit: skip — per-user MCP connection bearer-token registration; the connector itself is SOC 2-audited at create-connector / delete-connector.
-        return await tx
-          .insert(mcpUserConnections)
-          .values({
-            organizationId: session.activeOrganizationId,
-            connectorId: connector.id,
-            userId: user.id,
-            staticTokenEncrypted: encrypted.ciphertext,
-            staticTokenIv: encrypted.iv,
-            status: "connected",
-            enabled: true,
-            tokenType: "Bearer",
-          })
-          .onConflictDoUpdate({
-            target: [
-              mcpUserConnections.organizationId,
-              mcpUserConnections.connectorId,
-              mcpUserConnections.userId,
-            ],
-            set: {
-              accessTokenEncrypted: null,
-              accessTokenIv: null,
-              expiresAt: null,
-              refreshTokenEncrypted: null,
-              refreshTokenIv: null,
-              resourceUrl: null,
-              authorizationServerUrl: null,
-              scope: null,
+      safeDb(
+        async (tx) =>
+          // audit: skip — per-user MCP connection bearer-token registration; the connector itself is SOC 2-audited at create-connector / delete-connector.
+          await tx
+            .insert(mcpUserConnections)
+            .values({
+              organizationId: session.activeOrganizationId,
+              connectorId: connector.id,
+              userId: user.id,
               staticTokenEncrypted: encrypted.ciphertext,
               staticTokenIv: encrypted.iv,
-              cachedTools: null,
-              cachedToolsRefreshedAt: null,
               status: "connected",
               enabled: true,
               tokenType: "Bearer",
-              updatedAt: new Date(),
-            },
-          })
-          .returning({
-            id: mcpUserConnections.id,
-            status: mcpUserConnections.status,
-          });
-      }),
+            })
+            .onConflictDoUpdate({
+              target: [
+                mcpUserConnections.organizationId,
+                mcpUserConnections.connectorId,
+                mcpUserConnections.userId,
+              ],
+              set: {
+                accessTokenEncrypted: null,
+                accessTokenIv: null,
+                expiresAt: null,
+                refreshTokenEncrypted: null,
+                refreshTokenIv: null,
+                resourceUrl: null,
+                authorizationServerUrl: null,
+                scope: null,
+                staticTokenEncrypted: encrypted.ciphertext,
+                staticTokenIv: encrypted.iv,
+                cachedTools: null,
+                cachedToolsRefreshedAt: null,
+                status: "connected",
+                enabled: true,
+                tokenType: "Bearer",
+                updatedAt: new Date(),
+              },
+            })
+            .returning({
+              id: mcpUserConnections.id,
+              status: mcpUserConnections.status,
+            }),
+      ),
     );
 
     const connection = saved.at(0);
