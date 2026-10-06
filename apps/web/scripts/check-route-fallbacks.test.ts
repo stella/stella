@@ -343,3 +343,20 @@ test("rejects raw sidebar markers while allowing page headers and complementary 
     },
   );
 });
+
+test("follows a fallback exported through a local export list", async () => {
+  await withSources(
+    {
+      "routes/index.tsx": "export const Route=createFileRoute('/')({});",
+      "mixed.tsx":
+        "import {Sidebar} from '@/components/sidebar'; const Frame=()=> <Sidebar/>; export { Frame };",
+      "router.tsx":
+        "import {Frame} from '@/mixed'; const router=createRouter({defaultPendingComponent:Frame});",
+    },
+    (directory) => {
+      expect(
+        checkRouteFallbacks(directory).violations.map(({ kind }) => kind),
+      ).toEqual(["defaultPendingComponent"]);
+    },
+  );
+});

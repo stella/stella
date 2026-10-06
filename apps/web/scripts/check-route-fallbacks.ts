@@ -201,7 +201,11 @@ class FallbackSymbols {
     visited.add(key);
     const module = this.load(file);
     const imported = module.imports.get(name) ?? module.exports.get(name);
-    if (imported) {
+    // `export { Name }` names a local binding: inspect its definition below
+    // instead of following the export back to the key already visited.
+    const localSelfExport =
+      imported !== undefined && !imported.module && imported.name === name;
+    if (imported && !localSelfExport) {
       if (imported.module === LOGO_LOADER_MODULE) {
         return [`${imported.module}#${imported.name}`];
       }
@@ -414,7 +418,11 @@ class FallbackSymbols {
     visited.add(key);
     const module = this.load(file);
     const imported = module.imports.get(name) ?? module.exports.get(name);
-    if (imported) {
+    // `export { Name }` names a local binding: inspect its definition below
+    // instead of following the export back to the key already visited.
+    const localSelfExport =
+      imported !== undefined && !imported.module && imported.name === name;
+    if (imported && !localSelfExport) {
       if (imported.module === LOGO_LOADER_MODULE) {
         return imported.name === "Loader";
       }

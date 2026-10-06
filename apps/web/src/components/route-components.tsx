@@ -487,18 +487,24 @@ type DefaultPendingComponentProps = {
 export const DefaultPendingComponent = ({
   className,
 }: DefaultPendingComponentProps) => (
+  // Announced as busy content; the skeleton bars themselves are decoration.
   <div
-    aria-hidden="true"
+    aria-busy="true"
+    aria-label="Loading"
     className={cn(
       "flex h-full min-h-0 w-full flex-1 flex-col gap-4 p-6",
       className,
     )}
+    role="status"
   >
-    <Skeleton className="h-7 w-1/3" />
-    <Skeleton className="h-4 w-2/3" />
-    <Skeleton className="min-h-40 w-full flex-1 rounded-xl" />
-    <Skeleton className="h-4 w-1/2" />
-    <Skeleton className="h-24 w-full rounded-xl" />
+    <Skeleton aria-hidden="true" className="h-7 w-1/3" />
+    <Skeleton aria-hidden="true" className="h-4 w-2/3" />
+    <Skeleton
+      aria-hidden="true"
+      className="min-h-40 w-full flex-1 rounded-xl"
+    />
+    <Skeleton aria-hidden="true" className="h-4 w-1/2" />
+    <Skeleton aria-hidden="true" className="h-24 w-full rounded-xl" />
   </div>
 );
 
