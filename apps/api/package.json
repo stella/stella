@@ -215,8 +215,7 @@
     "openai": "6.49.0",
     "pdfjs-dist": "^6.3.289",
     "postcss": "catalog:",
-    "tailwindcss": "catalog:",
-    "typescript": "catalog:"
+    "tailwindcss": "catalog:"
   },
   "ciGateTestRunners": {
     "test:corpus": {
