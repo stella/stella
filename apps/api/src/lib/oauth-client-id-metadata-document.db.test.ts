@@ -207,6 +207,73 @@ describe("OAuth client ID metadata documents", () => {
     expect(requestedUrls).toEqual([DOCUMENT_URL]);
   });
 
+  // Native clients list a portless loopback callback on one or two loopback
+  // hosts, then bind whichever host and port is free (RFC 8252 7.3, 8.3).
+  const nativeDocument = (
+    documentUrl: string,
+    overrides: Record<string, unknown> = {},
+  ) => {
+    documentsByUrl.set(
+      documentUrl,
+      metadataDocument({
+        client_id: documentUrl,
+        redirect_uris: [
+          "http://localhost/callback",
+          "http://127.0.0.1/callback",
+        ],
+        ...overrides,
+      }),
+    );
+  };
+  const NATIVE_DOCUMENT_URL =
+    "https://native.example.com/oauth/client-metadata.json";
+
+  test.each([
+    "http://localhost:49152/callback",
+    "http://127.0.0.1:49152/callback",
+    "http://[::1]:49152/callback",
+    "http://[::1]/callback",
+  ])("accepts every loopback host form and port: %s", async (redirectUri) => {
+    nativeDocument(NATIVE_DOCUMENT_URL);
+
+    const response = await authorize(NATIVE_DOCUMENT_URL, redirectUri);
+
+    expect(response.status).toBe(302);
+    expect(response.headers.get("location")).toContain("oauth_query=");
+  });
+
+  test("accepts an IPv6 loopback callback for a declared native application", async () => {
+    const documentUrl = "https://native-app.example.com/oauth/client.json";
+    nativeDocument(documentUrl, {
+      application_type: "native",
+      redirect_uris: ["http://127.0.0.1/callback", "http://localhost/callback"],
+    });
+
+    const response = await authorize(
+      documentUrl,
+      "http://[::1]:49152/callback",
+    );
+
+    expect(response.status).toBe(302);
+    expect(response.headers.get("location")).toContain("oauth_query=");
+  });
+
+  test.each([
+    "http://[::1]:49152/other",
+    "http://127.0.0.2:49152/callback",
+    "https://[::1]:49152/callback",
+    "http://[::1]:49152/callback?extra=1",
+  ])(
+    "refuses a loopback callback that differs beyond host and port: %s",
+    async (redirectUri) => {
+      nativeDocument(NATIVE_DOCUMENT_URL);
+
+      const response = await authorize(NATIVE_DOCUMENT_URL, redirectUri);
+
+      expect(await refusalFrom(response)).toMatch(/invalid_re/u);
+    },
+  );
+
   test("refuses a request whose redirect_uri the document does not list", async () => {
     documentsByUrl.set(DOCUMENT_URL, metadataDocument());
 
