@@ -1111,6 +1111,10 @@
     "seconds": 12.157384,
     "source": "estimated"
   },
+  "src/handlers/case-law/ingestion/adapters/publication-absence.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
   "src/handlers/case-law/ingestion/adapters/publisher-backoff.test.ts": {
     "seconds": 0.124248,
     "source": "estimated"
