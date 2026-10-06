@@ -31,12 +31,25 @@ const generator = (id: string) => {
   return found ?? panic(`Missing generator ${id}`);
 };
 
-test("generation metadata loads in a scripts-only checkout without dependencies", async () => {
+test("generation metadata loads without dependencies in a reduced checkout", async () => {
   const directory = await mkdtemp(
     nodePath.join(tmpdir(), "generation-metadata-"),
   );
   try {
-    const registry = nodePath.join(directory, "generated-files.ts");
+    const registry = nodePath.join(directory, "scripts/generated-files.ts");
+    await mkdir(nodePath.dirname(registry), { recursive: true });
+    const inventory = nodePath.join(
+      directory,
+      "packages/scripts/src/generated-files.ts",
+    );
+    await mkdir(nodePath.dirname(inventory), { recursive: true });
+    await writeFile(
+      inventory,
+      readFileSync(
+        new URL("../packages/scripts/src/generated-files.ts", import.meta.url),
+        "utf-8",
+      ),
+    );
     const source = readFileSync(
       new URL("generated-files.ts", import.meta.url),
       "utf-8",
