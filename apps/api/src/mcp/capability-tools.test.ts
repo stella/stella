@@ -362,28 +362,9 @@ describe("list verification access grants across MCP tools", () => {
     let resourceLookups = 0;
     let mutations = 0;
     const tx = {
-      select: (projection?: Record<string, unknown>) => {
-        const identity =
-          projection !== undefined && "emailVerified" in projection;
-        if (!identity) {
-          resourceLookups += 1;
-        }
-        const identityRows =
-          membership === "current"
-            ? [
-                {
-                  email,
-                  emailVerified,
-                  role: "owner",
-                  workspaceId: matterId,
-                  workspaceStatus: "active",
-                  clientId: null,
-                  workspaceMemberId: resourceId,
-                },
-              ]
-            : [];
-        const rows = identity ? identityRows : viewRows;
-        const query = [...rows];
+      select: () => {
+        resourceLookups += 1;
+        const query = [...viewRows];
         const builder = Object.assign(query, {
           from: () => query,
           innerJoin: () => query,
@@ -431,7 +412,11 @@ describe("list verification access grants across MCP tools", () => {
         };
       },
     };
-    const database = createScopedDbMock(tx);
+    const database = createScopedDbMock(tx, {
+      featureAccess: {
+        identity: membership === "current" ? { email, emailVerified } : null,
+      },
+    });
     const context = createContext({
       scopedDb: database.scopedDb,
       safeDb: database.safeDb,

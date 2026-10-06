@@ -19,7 +19,11 @@ import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
 
 const context = (tx: unknown) => ({
-  ...createScopedDbMock(tx),
+  ...createScopedDbMock(tx, {
+    featureAccess: {
+      identity: { email: "member@example.test", emailVerified: true },
+    },
+  }),
   user: { id: toSafeId<"user">("user_a"), email: "member@example.test" },
   session: { activeOrganizationId: toSafeId<"organization">("org_a") },
   workspaceId: toSafeId<"workspace">("workspace_a"),
@@ -53,22 +57,7 @@ describe("verification handler access admission", () => {
         });
         for (const runId of ["lvr_existing", "lvr_missing"]) {
           let operations = 0;
-          let identityQueries = 0;
           const tx = {
-            select: () => {
-              identityQueries += 1;
-              return {
-                from: () => ({
-                  innerJoin: () => ({
-                    where: () => ({
-                      limit: async () => [
-                        { email: "member@example.test", emailVerified: true },
-                      ],
-                    }),
-                  }),
-                }),
-              };
-            },
             insert: () => {
               operations += 1;
               throw new Error("Resource operation must not run");
@@ -82,7 +71,6 @@ describe("verification handler access admission", () => {
             response: { message: "Not found" },
           });
           expect(operations).toBe(0);
-          expect(identityQueries).toBe(1);
         }
       }
     } finally {
@@ -119,17 +107,7 @@ describe("verification handler access admission", () => {
           return Result.ok({ proof: featureAccessProof });
         },
       );
-      const query = {
-        leftJoin: () => query,
-        where: () => query,
-        limit: async () => [
-          { email: "member@example.test", emailVerified: true },
-        ],
-      };
-      const tx = {
-        select: () => ({ from: () => ({ innerJoin: () => query }) }),
-      };
-      const result = await endpoint.handler(asTestRaw(context(tx)));
+      const result = await endpoint.handler(asTestRaw(context({})));
       expect(result).toMatchObject({
         proof: {
           featureId: "list-verification",

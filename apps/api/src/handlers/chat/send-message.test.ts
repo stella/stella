@@ -226,23 +226,6 @@ const withRegistryCredentialQuery = (transaction: unknown): unknown => {
     },
     ...transaction,
     select: (selection: unknown) => {
-      if (
-        typeof selection === "object" &&
-        selection !== null &&
-        "emailVerified" in selection
-      ) {
-        return {
-          from: () => ({
-            innerJoin: () => ({
-              where: () => ({
-                limit: async () => [
-                  { email: "member@example.test", emailVerified: true },
-                ],
-              }),
-            }),
-          }),
-        };
-      }
       if ("select" in transaction && typeof transaction.select === "function") {
         const result: unknown = Reflect.apply(transaction.select, transaction, [
           selection,
@@ -289,6 +272,11 @@ const createContext = ({
 }): SendMessageCtx => {
   const { safeDb, scopedDb } = createScopedDbMock(
     withRegistryCredentialQuery(transaction),
+    {
+      featureAccess: {
+        identity: { email: "member@example.test", emailVerified: true },
+      },
+    },
   );
   const observedSafeDb: SafeDb = async (operation, retry) => {
     onSafeDbTransaction?.();

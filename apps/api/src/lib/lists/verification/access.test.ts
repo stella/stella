@@ -12,10 +12,7 @@ import {
   FEATURE_REGISTRY,
   LIST_VERIFICATION_FEATURE_ID,
 } from "@/api/lib/feature-access/registry";
-import {
-  createFeatureAccessSelectMock,
-  createScopedDbMock,
-} from "@/api/tests/scoped-db-mock";
+import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
 
 const memberGrant = {
   type: "member",
@@ -83,9 +80,7 @@ test("parsed verification grants resolve against current identity and deny absen
     { email: memberGrant.email, emailVerified: false },
     null,
   ]) {
-    const database = createScopedDbMock({
-      select: createFeatureAccessSelectMock({ identity }),
-    });
+    const database = createScopedDbMock({}, { featureAccess: { identity } });
     const snapshot = await database.scopedDb(
       async (tx) =>
         await resolveFeatureAccessSnapshot({

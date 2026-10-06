@@ -17,10 +17,7 @@ import type { FeatureRegistry } from "@/api/lib/feature-access/registry";
 import { isMcpDescriptorFeatureEnabled } from "@/api/mcp/feature-access";
 import { setRuntimeModeForTesting } from "@/api/runtime-mode";
 import { createTestHandlerContext } from "@/api/tests/helpers/handler-context";
-import {
-  createFeatureAccessSelectMock,
-  createScopedDbMock,
-} from "@/api/tests/scoped-db-mock";
+import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
 
 const emptySnapshot = createFeatureAccessSnapshot({
   organizationId: "org_test",
@@ -30,12 +27,10 @@ const emptySnapshot = createFeatureAccessSnapshot({
 
 // Identity resolves through the member join; the enrolment read finds no rows.
 const unenrolledSettingsDatabase = (email: string) =>
-  createScopedDbMock({
-    query: { organizationSettings: { findFirst: async () => undefined } },
-    select: createFeatureAccessSelectMock({
-      identity: { email, emailVerified: true },
-    }),
-  });
+  createScopedDbMock(
+    { query: { organizationSettings: { findFirst: async () => undefined } } },
+    { featureAccess: { identity: { email, emailVerified: true } } },
+  );
 
 describe("projectOrganizationSettingsRow", () => {
   test("returns the active org's practiceJurisdictions verbatim", () => {
@@ -241,21 +236,14 @@ test("organization settings recompute a supplied snapshot when the user or activ
 test("organization settings project the production verification declaration for granted and ungranted current members", async () => {
   const organizationId = toSafeId<"organization">("org_test");
   for (const granted of [false, true]) {
-    const database = createScopedDbMock({
-      query: { organizationSettings: { findFirst: async () => undefined } },
-      select: () => ({
-        from: () => ({
-          innerJoin: () => ({
-            where: () => ({
-              limit: async () => [
-                { email: "member@example.test", emailVerified: true },
-              ],
-            }),
-          }),
-          where: () => ({ limit: async () => [] }),
-        }),
-      }),
-    });
+    const database = createScopedDbMock(
+      { query: { organizationSettings: { findFirst: async () => undefined } } },
+      {
+        featureAccess: {
+          identity: { email: "member@example.test", emailVerified: true },
+        },
+      },
+    );
     const snapshot = await database.scopedDb(
       async (tx) =>
         await resolveFeatureAccessSnapshot({
