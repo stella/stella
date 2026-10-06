@@ -100,7 +100,7 @@ export const ToolCallCodeBlock = ({
   };
 
   return (
-    <section aria-label={label} className="group/code relative">
+    <section aria-label={label} className="group/code relative" dir="ltr">
       <div
         className="absolute end-1 top-1 opacity-0 transition-opacity duration-150 group-hover/code:opacity-100 focus-within:opacity-100 motion-reduce:transition-none pointer-coarse:opacity-100"
         data-chat-copy-exclude

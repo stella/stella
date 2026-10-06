@@ -48,6 +48,7 @@ describe("ToolCallCodeBlock", () => {
 
     const region = screen.getByRole("region", { name: "Input" });
     expect(region.textContent).toContain('"query": "nájemní smlouva"');
+    expect(region.getAttribute("dir")).toBe("ltr");
     expect(region.className).not.toContain("border");
     expect(region.className).not.toContain("bg-");
     expect(container.textContent).not.toContain("json");
