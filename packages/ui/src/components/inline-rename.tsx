@@ -5,7 +5,6 @@ import { panic } from "better-result";
 
 import { contentDir, isStructuredInputType } from "../hooks/use-content-dir";
 import { cn } from "../lib/utils";
-import "../styles/inline-rename.css";
 
 type InlineRenameInputProps = Omit<
   ComponentProps<"input">,

@@ -72,7 +72,8 @@ export default eslintCompatPlugin({
             ) {
               return;
             }
-            let owner = node.parent;
+            // The opening element's immediate parent is its JSXElement.
+            let owner = node.parent.parent;
             while (
               owner &&
               owner.type !== "ArrowFunctionExpression" &&

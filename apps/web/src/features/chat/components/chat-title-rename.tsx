@@ -244,7 +244,7 @@ const ChatTitleRenameSession = ({
       <span
         className={cn(
           "flex max-w-full min-w-0 flex-col",
-          editDescription ? editClassName : "py-0.5",
+          editDescription !== undefined ? editClassName : "py-0.5",
         )}
       >
         <InlineEdit
@@ -261,7 +261,9 @@ const ChatTitleRenameSession = ({
               usedAnonymization={usedAnonymization}
             />
           }
-          className={cn(editDescription ? undefined : editClassName)}
+          className={cn(
+            editDescription !== undefined ? undefined : editClassName,
+          )}
           inputClassName={inputClassName}
           onCancel={() => {
             sessionRef.current += 1;
