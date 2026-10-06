@@ -19,10 +19,12 @@ import { isLocalDevOpen } from "@/api/runtime-mode";
  * The `class` dimension is the whole point: it lets the p95 latency
  * alarm watch `class=crud` in isolation, so an inherently multi-second
  * synchronous AI endpoint (template field suggestions, chat, summaries)
- * cannot trip an SLO meant for CRUD. A separate, looser alarm watches
- * `class=ai`. Keeping `class` the only dimension caps this at two
- * extracted metrics regardless of route cardinality; `http.route` and
- * `http.status_code` ride along as queryable properties, not dimensions.
+ * or search read cannot trip an SLO meant for CRUD. Looser alarms watch
+ * `class=ai` and `class=search`; `class=batch` (crawler reads) stays out of
+ * every latency SLO. Keeping `class` the only dimension caps this at one
+ * extracted metric per {@link REQUEST_CLASSES} member regardless of route
+ * cardinality; `http.route` and `http.status_code` ride along as queryable
+ * properties, not dimensions.
  */
 
 const METRIC_NAMESPACE = "Stella/Api";
@@ -76,7 +78,8 @@ const writeMetricLine = (record: object): void => {
   process.stdout.write(`${line}\n`);
 };
 
-export type RequestClass = "ai" | "crud";
+export const REQUEST_CLASSES = ["ai", "crud", "search", "batch"] as const;
+export type RequestClass = (typeof REQUEST_CLASSES)[number];
 
 type EmitRequestDurationMetricInput = {
   durationMs: number;

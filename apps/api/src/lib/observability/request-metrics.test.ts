@@ -13,6 +13,7 @@ import {
   emitActionCostDropMetric,
   emitChatRunLogMetric,
   emitPromptCacheMetric,
+  REQUEST_CLASSES,
   resetMetricLineSinkForTesting,
   setMetricLineSinkForTesting,
 } from "@/api/lib/observability/request-metrics";
@@ -53,11 +54,12 @@ describe("buildRequestDurationRecord", () => {
     expect(buildRequestDurationRecord(base).RequestDuration).toBe(1235);
   });
 
-  test("class dimension distinguishes ai from crud", () => {
-    expect(buildRequestDurationRecord(base).class).toBe("ai");
-    expect(
-      buildRequestDurationRecord({ ...base, requestClass: "crud" }).class,
-    ).toBe("crud");
+  test("class dimension carries every request class", () => {
+    for (const requestClass of REQUEST_CLASSES) {
+      expect(buildRequestDurationRecord({ ...base, requestClass }).class).toBe(
+        requestClass,
+      );
+    }
   });
 });
 
