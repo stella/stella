@@ -169,10 +169,9 @@ const mountTreemap = ({ win, el, opts }: MountTreemapOptions) => {
       ),
     ];
   }
-  const categoryScale = scaleOrdinal<string, string>()
-    .domain(categories)
-    .range(categoricalPalette)
-    .unknown(colors.muted);
+  const categoryScale = scaleOrdinal(categories, categoricalPalette).unknown(
+    colors.muted,
+  );
   let destroyed = false;
   const owner = win.document;
   const surface = owner.createElement("div");
