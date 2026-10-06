@@ -14,6 +14,13 @@ import type { DesktopAction } from "./desktop-action-gate.logic";
 
 GlobalRegistrator.register({ url: "http://localhost:3000/" });
 
+const originalFetch = globalThis.fetch;
+// Auth initializes during imports; DOM tests own the network boundary too.
+const idleFetch = Object.assign(async () => Response.json(null), {
+  preconnect: originalFetch.preconnect,
+});
+globalThis.fetch = idleFetch;
+
 const { act } = await import("react");
 const { cleanup, fireEvent, render, screen, waitFor } =
   await import("@testing-library/react");
@@ -26,7 +33,6 @@ const { desktopPresenceOptions } = await import("./desktop-presence");
 const { AuthenticatedUserProvider } =
   await import("@/lib/authenticated-user-context");
 
-const originalFetch = globalThis.fetch;
 const clients: InstanceType<typeof QueryClient>[] = [];
 
 afterEach(async () => {
@@ -36,11 +42,12 @@ afterEach(async () => {
       client.clear();
     }
     clients.length = 0;
-    globalThis.fetch = originalFetch;
+    globalThis.fetch = idleFetch;
     focusManager.setFocused(undefined);
   });
 });
 afterAll(async () => {
+  globalThis.fetch = originalFetch;
   await GlobalRegistrator.unregister();
 });
 
