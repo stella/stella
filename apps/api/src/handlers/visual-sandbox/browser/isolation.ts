@@ -52,6 +52,17 @@ export const VISUAL_BLOCKED_GLOBALS = [
   "open",
 ] as const;
 
+const createNativeCapture = (reject: () => never) => {
+  const descriptorOf = Object.getOwnPropertyDescriptor;
+  return (target: object, name: string) => {
+    const native: unknown = descriptorOf(target, name)?.value;
+    if (typeof native !== "function") {
+      return reject();
+    }
+    return native;
+  };
+};
+
 const createIsolationPrimitives = () => {
   // Keep native operations private before page scripts can replace globals,
   // prototype methods, or instance accessors used by these checks.
@@ -64,31 +75,32 @@ const createIsolationPrimitives = () => {
   const TemplateType = HTMLTemplateElement;
   const ExceptionType = DOMException;
   const ObserverType = MutationObserver;
-  const attribute: unknown = descriptorOf(
-    Element.prototype,
-    "getAttribute",
-  )?.value;
-  const remove: unknown = descriptorOf(Element.prototype, "remove")?.value;
-  const nodeItem: unknown = descriptorOf(NodeList.prototype, "item")?.value;
-  const tagName = descriptorOf(Element.prototype, "tagName")?.get;
-  const nodeType = descriptorOf(Node.prototype, "nodeType")?.get;
-  const namespace = descriptorOf(Element.prototype, "namespaceURI")?.get;
-  const templateContent = descriptorOf(TemplateType.prototype, "content")?.get;
-  const innerHtml = descriptorOf(Element.prototype, "innerHTML");
-  const selectors = DocumentFragment.prototype.querySelectorAll;
-  const documentSelectors = Document.prototype.querySelectorAll;
-  const elementSelectors = Element.prototype.querySelectorAll;
-  const createElement = document.createElement.bind(document);
   const reject = () => {
     throw new ExceptionType(
       "This operation is unavailable in this view",
       "SecurityError",
     );
   };
+  const captureNative = createNativeCapture(reject);
+  const attribute = captureNative(Element.prototype, "getAttribute");
+  const remove = captureNative(Element.prototype, "remove");
+  const nodeItem = captureNative(NodeList.prototype, "item");
+  const tagName = descriptorOf(Element.prototype, "tagName")?.get;
+  const nodeType = descriptorOf(Node.prototype, "nodeType")?.get;
+  const namespace = descriptorOf(Element.prototype, "namespaceURI")?.get;
+  const templateContent = descriptorOf(TemplateType.prototype, "content")?.get;
+  const innerHtml = descriptorOf(Element.prototype, "innerHTML");
+  const selectors = captureNative(
+    DocumentFragment.prototype,
+    "querySelectorAll",
+  );
+  const documentSelectors = captureNative(
+    Document.prototype,
+    "querySelectorAll",
+  );
+  const elementSelectors = captureNative(Element.prototype, "querySelectorAll");
+  const createElement = document.createElement.bind(document);
   if (
-    typeof attribute !== "function" ||
-    typeof remove !== "function" ||
-    typeof nodeItem !== "function" ||
     !tagName ||
     !nodeType ||
     !namespace ||
