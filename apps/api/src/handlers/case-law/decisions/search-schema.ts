@@ -1,5 +1,6 @@
-import { Type } from "@sinclair/typebox";
+import { Kind, Type, TypeRegistry } from "@sinclair/typebox";
 import { t } from "elysia";
+import { is } from "valibot";
 
 import { COURT_TIER_LABELS } from "@stll/api-contract/case-law-court-tiers";
 import {
@@ -46,14 +47,20 @@ import { searchTotalSchema } from "@/api/lib/search/total-schema";
 
 import { CASE_SEARCH_TEXT_BYTES as bytes } from "./search-response-limits";
 
-// Runtime JSON Schema and static type both derive from the shared Valibot schema.
-const courtYearSchema = Type.Unsafe<CaseLawCourtYear>(
-  Object.fromEntries(
+const COURT_YEAR_SCHEMA_KIND = "CaseLawCourtYear";
+// TypeBox needs a registered validator for Unsafe JSON Schema nodes. Keep
+// runtime checks tied to the same Valibot contract as the published schema.
+TypeRegistry.Set(COURT_YEAR_SCHEMA_KIND, (_schema, value) =>
+  is(caseLawCourtYearSchema, value),
+);
+const courtYearSchema = Type.Unsafe<CaseLawCourtYear>({
+  ...Object.fromEntries(
     Object.entries(toJsonSchema(caseLawCourtYearSchema)).filter(
       ([, value]) => value !== undefined,
     ),
   ),
-);
+  [Kind]: COURT_YEAR_SCHEMA_KIND,
+});
 
 export const searchDecisionsBodySchema = t.Object({
   query: t.String({

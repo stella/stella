@@ -1,3 +1,4 @@
+import { TypeCompiler } from "@sinclair/typebox/compiler";
 import { Value } from "@sinclair/typebox/value";
 import { describe, expect, expectTypeOf, test } from "bun:test";
 import type { Static, UnwrapSchema } from "elysia";
@@ -250,6 +251,7 @@ describe("case-law search response schema", () => {
   );
 
   test("HTTP court/year validation matches the canonical aggregate schema", () => {
+    const compiled = TypeCompiler.Compile(searchDecisionsSuccessResponseSchema);
     const matrixBucket = {
       court: "Nejvyšší soud",
       courtName: "Nejvyšší soud",
@@ -273,12 +275,15 @@ describe("case-law search response schema", () => {
         truncated: true,
       },
     ]) {
-      expect(
-        Value.Check(searchDecisionsSuccessResponseSchema, {
-          ...validResponse,
-          facets: { ...firstPageFacets, courtYear },
-        }),
-      ).toBe(v.safeParse(caseLawCourtYearSchema, courtYear).success);
+      const response = {
+        ...validResponse,
+        facets: { ...firstPageFacets, courtYear },
+      };
+      const valid = v.safeParse(caseLawCourtYearSchema, courtYear).success;
+      expect(Value.Check(searchDecisionsSuccessResponseSchema, response)).toBe(
+        valid,
+      );
+      expect(compiled.Check(response)).toBe(valid);
     }
   });
 
