@@ -12,6 +12,14 @@ import type {
 import { executedRows } from "@/api/lib/db/executed-rows";
 import { isRecord } from "@/api/lib/type-guards";
 
+const returnedTransitionRows = (result: unknown) =>
+  executedRows(result).map((row) => {
+    if (!isRecord(row)) {
+      return panic("Transition requires a returned row object");
+    }
+    return row;
+  });
+
 type StatusTable = PgTable & { status: AnyPgColumn };
 type LifecycleTable = StatusTable & { id: AnyPgColumn };
 type Status<TTable extends StatusTable> = GetColumnData<TTable["status"]> &
@@ -394,12 +402,9 @@ const executeScopedUpsertWrites = async <
     );
   }
   const changedRows = [
-    ...executedRows(insertRows),
-    ...executedRows(transitionRows),
+    ...returnedTransitionRows(insertRows),
+    ...returnedTransitionRows(transitionRows),
   ].map((row) => {
-    if (!isRecord(row)) {
-      return panic("Transition requires a returned row object");
-    }
     const status = row["status"];
     if (!isScopedStateValue(spec.table, spec.stateColumn, status)) {
       panic("Upsert result returned an unknown state");
@@ -615,10 +620,7 @@ export const transitionScopedBatch = async <
       sql`, `,
     )}
   `);
-  const changed = executedRows(rows).map((row) => {
-    if (!isRecord(row)) {
-      return panic("Transition requires a returned row object");
-    }
+  const changed = returnedTransitionRows(rows).map((row) => {
     const status = row["status"];
     if (!isScopedStateValue(table, spec.stateColumn, status)) {
       panic("Transition result returned an unknown state");
@@ -1180,12 +1182,7 @@ const lifecycleUpdate = async ({
       ${fence === undefined ? sql`` : sql`AND ${fence} IS NOT DISTINCT FROM ${sql.param(expectedFence, fence)}`}
     RETURNING ${identity.column} AS "id"${sql.join(returned, sql``)}
   `);
-  const rows = executedRows(executed).map((row) => {
-    if (!isRecord(row)) {
-      return panic("Transition requires a returned row object");
-    }
-    return row;
-  });
+  const rows = returnedTransitionRows(executed);
   // Stale updates change nothing and record nothing.
   if (rows.length > 0) {
     await recordTransitionAuditEvent(rows);
