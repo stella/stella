@@ -1474,6 +1474,14 @@
       "toggleDetails": "Perjungti detales",
       "unrestoredFields": "Anonimizuotu režimu nepavyko tikromis reikšmėmis užpildyti {count, plural, one {# lauko} few {# laukų} many {# lauko} other {# laukų}}. Patikrinkite: {fields}"
     },
+    "turnNotification": {
+      "failedBody": "stellos pokalbio atsakymas nebuvo baigtas.",
+      "failedTitle": "Atsakymas nepavyko",
+      "needsInputBody": "Pokalbis laukia jūsų patvirtinimo ar atsakymo.",
+      "needsInputTitle": "stellai reikia jūsų",
+      "replyReadyBody": "stella baigė atsakyti jūsų pokalbyje.",
+      "replyReadyTitle": "Atsakymas paruoštas"
+    },
     "unsupportedFileType": "Nepalaikomas failo tipas",
     "uploadFailed": "Nepavyko apdoroti failo",
     "usageFallbackNotice": "Dienos DI kvota išnaudota — atsakymai toliau teikiami standartiniu modeliu.",
@@ -4372,6 +4380,11 @@
       "betaInbox": "Gautieji ir pranešimai",
       "betaInboxDescription": "Rodyti gautuosius ir pranešimų varpelį",
       "betaTimeBillingDescription": "Rodyti laiko stebėjimą, sąskaitas ir išlaidas",
+      "chatNotifications": "Pokalbių pranešimai",
+      "chatNotificationsBlocked": "stellos pranešimai šioje naršyklėje užblokuoti. Leiskite juos naršyklės svetainės nustatymuose.",
+      "chatNotificationsDescription": "Gaukite pranešimą iš šios naršyklės, kai pokalbio atsakymas baigiamas, kol stella veikia fone.",
+      "chatNotificationsToggle": "Pranešti, kai atsakymas paruoštas arba laukia mano veiksmo",
+      "chatNotificationsUnsupported": "Ši naršyklė nepalaiko pranešimų.",
       "confirmDelete": "Patvirtinti paskyros ištrynimą",
       "dangerZone": "Pavojinga zona",
       "dangerZoneDescription": "Visam laikui ištrinti paskyros prieigą ir privačius paskyros duomenis.",

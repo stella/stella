@@ -28,6 +28,7 @@ import type {
 } from "@/components/chat/chat-ui-tools";
 import {
   getExternalMcpConnectorApprovalGrant,
+  getAwaitedAssistantMessageId,
   getChatAssistantTurnError,
   getCurrentApprovalPendingMessageId,
   getExternalMcpConnectorSlugFromToolName,
@@ -69,9 +70,9 @@ import {
   setCreateDocumentDraftPayloadStatus,
   terminalizeUnsettledCreateDocumentDraft,
 } from "@/components/chat/create-document-draft.logic";
-import "@/components/chat/create-document-draft-inspector";
 import { openEntityInInspector } from "@/components/chat/entity-open";
 import type { CreateDocumentDestination } from "@/components/chat/needs-matter-card";
+import "@/components/chat/create-document-draft-inspector";
 import { StreamdownMentionLink } from "@/components/chat/streamdown-mention-link";
 import { useInspectorCommandStore } from "@/components/inspector/inspector-command-store";
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
@@ -104,6 +105,8 @@ import {
   type SendQueueState,
 } from "@/features/chat/hooks/use-chat-session-send-queue.logic";
 import { fetchOlderMessages } from "@/features/chat/queries";
+import { getChatTurnPhase } from "@/features/chat/turn-notifications.logic";
+import { useChatTurnNotifications } from "@/features/chat/use-chat-turn-notifications";
 import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { userStorageKey } from "@/lib/account/user-scoped-storage";
@@ -1330,6 +1333,14 @@ export const useChatSession = ({
   useExternalSyncEffect(() => {
     applySendQueueEvent({ type: "generation-status-synced", isGenerating });
   }, [applySendQueueEvent, isGenerating]);
+  useChatTurnNotifications({
+    conversationId,
+    phase: getChatTurnPhase({
+      awaitingUser: getAwaitedAssistantMessageId(messages) !== null,
+      hasError: error !== undefined,
+      isGenerating,
+    }),
+  });
 
   // Notify `onError` exactly once per new error instance. TanStack keeps
   // the same Error reference alive across renders until the turn is
