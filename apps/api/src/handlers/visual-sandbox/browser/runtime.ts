@@ -14,6 +14,7 @@ import {
 import { createVisualMessageHandler } from "../bridge";
 import { composeVisualDocument } from "../srcdoc";
 import { parseVisualOuterConfig, whenVisualDocumentReady } from "./boot";
+import { createVisualCharts } from "./charts";
 import { createVisualGuestApi } from "./guest-api";
 import { isolateVisualGuest } from "./isolation";
 import { installVisualPresentation } from "./presentation";
@@ -32,22 +33,25 @@ const bootGuest = () => {
       JSON.parse(dataElement.textContent),
     );
     Object.defineProperty(window, "stella", {
-      value: createVisualGuestApi({
-        data,
-        postMessage: (message) => window.parent.postMessage(message, "*"),
-        measureSize: () => ({
-          width: Math.max(
-            1,
-            Math.min(10_000, Math.ceil(document.documentElement.scrollWidth)),
-          ),
-          height: Math.max(
-            1,
-            Math.min(
-              VISUAL_SANDBOX_LIMITS.height,
-              Math.ceil(document.documentElement.scrollHeight),
+      value: Object.freeze({
+        ...createVisualGuestApi({
+          data,
+          postMessage: (message) => window.parent.postMessage(message, "*"),
+          measureSize: () => ({
+            width: Math.max(
+              1,
+              Math.min(10_000, Math.ceil(document.documentElement.scrollWidth)),
             ),
-          ),
+            height: Math.max(
+              1,
+              Math.min(
+                VISUAL_SANDBOX_LIMITS.height,
+                Math.ceil(document.documentElement.scrollHeight),
+              ),
+            ),
+          }),
         }),
+        charts: createVisualCharts(window),
       }),
       writable: false,
       configurable: false,
