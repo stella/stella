@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import * as v from "valibot";
 
-import eventPolicies from "../.github/ci-event-policy.json";
+import eventPolicies from "../.github/ci-event-policy.json" with { type: "json" };
 import {
   contextFromNested,
   evaluate as evaluateExpression,
