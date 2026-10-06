@@ -24,9 +24,9 @@ for (const [locale, { dialog: strings }] of Object.entries({ en, ar })) {
             Reflect.get(window, "recordResponse")(args),
         });
       });
-      await page.route("**/handoff-dialog-test", (route) =>
-        route.fulfill({ contentType: "text/html", body: html }),
-      );
+      await page.route("**/handoff-dialog-test", async (route) => {
+        await route.fulfill({ contentType: "text/html", body: html });
+      });
       const params = new URLSearchParams({
         mode: "handoff",
         message:
