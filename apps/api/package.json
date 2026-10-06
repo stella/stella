@@ -203,8 +203,6 @@
     "@stll/property-testing": "workspace:*",
     "@stll/typescript-config": "workspace:*",
     "@tailwindcss/postcss": "catalog:",
-    "@types/react": "catalog:react19",
-    "@types/react-dom": "catalog:react19",
     "ajv": "catalog:",
     "ajv-formats": "catalog:",
     "bun-types": "catalog:",
