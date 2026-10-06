@@ -218,6 +218,7 @@ const INTERNAL_SERVER_KEYS = new Set([
   "TEMPLATE_PACKS_CONTENT_DIR",
   "USAGE_ENFORCEMENT_ENABLED",
   "USE_MOCK_AI",
+  "VISUAL_PREVIEW_FUNCTION_NAME",
 ]);
 
 const EXAMPLE_VALUES: Record<string, string> = {
@@ -285,6 +286,8 @@ const EXAMPLE_VALUES: Record<string, string> = {
 };
 
 const DESCRIPTION_OVERRIDES: Record<string, string> = {
+  VISUAL_PREVIEW_FUNCTION_NAME:
+    "Optional Lambda function name for generated-view previews. Publishing remains available when previews are not configured.",
   LIST_VERIFICATION_ACTIVE_RUNS_MAX:
     "Maximum queued and running document verifications per organization (1–100; default 2).",
   LIST_VERIFICATION_DAILY_STARTS_MAX:
@@ -916,6 +919,7 @@ export const ENV_CREDENTIAL_CLASSIFICATION = {
   UNUSED_CLIENT_RETENTION_DAYS: ENV_CREDENTIAL_KIND.notCredential,
   USAGE_ENFORCEMENT_ENABLED: ENV_CREDENTIAL_KIND.notCredential,
   USE_MOCK_AI: ENV_CREDENTIAL_KIND.notCredential,
+  VISUAL_PREVIEW_FUNCTION_NAME: ENV_CREDENTIAL_KIND.notCredential,
   VITE_API_URL: ENV_CREDENTIAL_KIND.notCredential,
   VITE_AUTH_GOOGLE: ENV_CREDENTIAL_KIND.notCredential,
   VITE_AUTH_MICROSOFT: ENV_CREDENTIAL_KIND.notCredential,
