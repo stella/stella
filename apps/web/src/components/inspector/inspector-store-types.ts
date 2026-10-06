@@ -207,6 +207,8 @@ export type InspectorTabsState = {
 };
 
 export type InspectorCommandState = {
+  /** The mounted chat owns fresh-thread metadata and persistent composer state. */
+  newChatCommand: { tabId: string; run: () => void } | null;
   desktopOpenAttention: {
     fieldId: string;
     sequence: number;
@@ -397,6 +399,9 @@ export type InspectorTabsActions = {
 };
 
 export type InspectorCommandActions = {
+  registerNewChatCommand: (
+    command: NonNullable<InspectorCommandState["newChatCommand"]>,
+  ) => () => void;
   requestDesktopOpenAttention: (fieldId: string) => void;
   clearDesktopOpenAttention: (sequence: number) => void;
   requestRename: (id: string) => void;

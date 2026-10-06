@@ -12,6 +12,7 @@ import {
   ClockIcon,
   FileTextIcon,
   Loader2Icon,
+  NewChatIcon,
   PaperclipIcon,
   RotateCcwIcon,
   XIcon,
@@ -124,6 +125,7 @@ export const ChatThreadMessages = ({
   onLoadOlder,
   scrollContainerRef,
   onResend,
+  onNewThread,
   onSendWithoutAnonymization,
   onAskUserSubmit,
   onAskUserEditAndRerun,
@@ -318,6 +320,7 @@ export const ChatThreadMessages = ({
                 })}
                 contextMatterIds={branchSource?.contextMatterIds}
                 message={message}
+                onNewThread={onNewThread}
                 onResend={onResend}
                 threadRef={threadRef}
               />
@@ -1093,6 +1096,7 @@ const AssistantMessageActions = ({
   exportArtifact,
   message,
   onResend,
+  onNewThread,
   threadRef,
 }: {
   /** `canForkAssistantMessage`: also whether the answer may be exported. */
@@ -1103,6 +1107,8 @@ const AssistantMessageActions = ({
   contextMatterIds?: readonly string[] | undefined;
   exportArtifact: CreateDocumentDraft | null;
   message: PersistedChatMessage;
+  /** Supplied only by constrained chat hosts; shares their dock action. */
+  onNewThread?: (() => void) | null | undefined;
   onResend?:
     | ((options?: ChatResendOptions) => void | PromiseLike<void>)
     | undefined;
@@ -1115,7 +1121,7 @@ const AssistantMessageActions = ({
   const canRetry = Boolean(onResend) && retryOffered;
   const canFork = Boolean(threadRef) && forkOffered;
 
-  if (!text && !canRetry && !canFork) {
+  if (!text && !canRetry && !canFork && !onNewThread) {
     return null;
   }
 
@@ -1144,6 +1150,17 @@ const AssistantMessageActions = ({
         >
           <RotateCcwIcon className="size-3.5" />
           {t("common.retry")}
+        </Button>
+      )}
+      {onNewThread && (
+        <Button
+          className="text-muted-foreground h-6 px-1.5"
+          onClick={onNewThread}
+          size="xs"
+          variant="ghost"
+        >
+          <NewChatIcon className="size-3.5" />
+          {t("chat.newChat")}
         </Button>
       )}
       {threadRef && forkOffered && (
@@ -1206,6 +1223,8 @@ type ChatThreadMessagesProps = {
   scrollContainerRef?: RefObject<HTMLDivElement | null> | undefined;
   /** Fetch + prepend the page immediately older than the current top. */
   onLoadOlder?: (() => void | PromiseLike<void>) | undefined;
+  /** Supplied only by constrained chat hosts; shares their dock action. */
+  onNewThread?: (() => void) | null | undefined;
   onResend?:
     | ((options?: ChatResendOptions) => void | PromiseLike<void>)
     | undefined;

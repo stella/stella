@@ -8,7 +8,7 @@ import { useTranslations } from "use-intl";
 
 import { ENTITIES_PER_WORKSPACE_MAX } from "@stll/api-contract";
 
-import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
+import { startNewInspectorChat } from "@/components/inspector/inspector-new-chat";
 import { usePermissions } from "@/hooks/use-permissions";
 import { useTimeBillingPreviewEnabled } from "@/hooks/use-time-billing-preview";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
@@ -74,7 +74,6 @@ export function useCommandActions(open: boolean): UseCommandActionsResult {
     !isCreatingTask;
   const canCreateMatter = usePermissions({ workspace: ["create"] });
   const openCreateMatterDialog = useCreateMatterStore((s) => s.openDialog);
-  const openChat = useInspectorTabsStore((s) => s.openChat);
   const shortcutGroups = useEffectiveShortcutGroups();
 
   const context: CommandActionContext = useMemo(
@@ -99,7 +98,7 @@ export function useCommandActions(open: boolean): UseCommandActionsResult {
         openCreateMatterDialog();
       },
       openNewChat: () => {
-        openChat(
+        startNewInspectorChat(
           workspaceId === undefined
             ? {}
             : { workspaceId, contextMatterIds: [workspaceId] },
@@ -115,7 +114,6 @@ export function useCommandActions(open: boolean): UseCommandActionsResult {
       user.id,
       user.activeOrganizationId,
       createTask,
-      openChat,
       openCreateMatterDialog,
       workspaceId,
     ],

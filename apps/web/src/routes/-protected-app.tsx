@@ -38,18 +38,19 @@ import { WorkspaceEndRail } from "@stll/ui/workspace-shell";
 import { WorkspaceFrame } from "@stll/workspace-ui/workspace-frame";
 
 import { ApiVersionMismatchReporter } from "@/components/api-version-mismatch-refresh";
+import { AppSidebar } from "@/components/app-sidebar";
 import "@/features/case-law/case-decision-details-inspector-registration";
 import "@/features/case-law/case-decision-inspector-registration";
 import "@/features/inbox/signal-inspector-registration";
 import "@/features/statutes/provision-inspector-registration";
 import "@/features/statutes/statute-inspector-registration";
-import { AppSidebar } from "@/components/app-sidebar";
 import { resolveSidebarWorkspaceId } from "@/components/app-sidebar.logic";
 import { AppBreadcrumbs } from "@/components/breadcrumbs/app-breadcrumbs";
 import { ChatEditorProvider } from "@/components/chat-editor-provider";
 import { ChatMentionProviders } from "@/components/chat-mention-providers";
 import { DocxEditorHost } from "@/components/docx/docx-editor-host";
 import { DragAndDropLiveRegion } from "@/components/drag-and-drop-live-region";
+import { startNewInspectorChat } from "@/components/inspector/inspector-new-chat";
 import {
   initializeInspectorTabBroadcast,
   useInspectorTabsStore,
@@ -263,7 +264,7 @@ export const ProtectedAppFrame = ({
   }, [activeWorkspaceId]);
   useHotkey(useEffectiveHotkey("toggleChat"), handleToggleInspectorHotkey);
   useHotkey(useEffectiveHotkey("newChat"), () => {
-    useInspectorTabsStore.getState().openChat(
+    startNewInspectorChat(
       activeWorkspaceId === undefined
         ? {}
         : {

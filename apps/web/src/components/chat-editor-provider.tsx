@@ -1378,8 +1378,12 @@ export const useChatEditor = ({
             doc,
           }),
         );
-        // The editor may have been destroyed during `await send(...)`;
-        if (!editor.isDestroyed) {
+        // A persistent editor may now belong to another thread; preserve
+        // the failed draft in its store without overwriting the new composer.
+        if (
+          !editor.isDestroyed &&
+          committedThreadKeyRef.current === restoreThreadKey
+        ) {
           applyDraftDocToEditor(editor, doc);
           applyIsEmpty(editor.isEmpty);
           if (!editor.isEmpty || files.length > 0) {

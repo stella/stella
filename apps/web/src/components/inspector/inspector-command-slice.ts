@@ -3,10 +3,25 @@ import type {
   InspectorCommandStore,
 } from "@/components/inspector/inspector-store-types";
 
-/** Commands that must survive until a lazily mounted consumer acknowledges them. */
+/** Pending commands and live actions owned by mounted inspector surfaces. */
 export const createInspectorCommandSlice = (
   set: InspectorCommandSet,
 ): InspectorCommandStore => ({
+  newChatCommand: null,
+  registerNewChatCommand: ({ tabId, run }) => {
+    // Each registration has its own identity so an obsolete cleanup cannot
+    // remove the next mounted surface's action, even if it reused the callback.
+    const registeredRun = () => run();
+    set((state) => {
+      state.newChatCommand = { tabId, run: registeredRun };
+    });
+    return () =>
+      set((state) => {
+        if (state.newChatCommand?.run === registeredRun) {
+          state.newChatCommand = null;
+        }
+      });
+  },
   desktopOpenAttention: null,
   pendingRenameTabId: null,
   pendingBlockScroll: null,
@@ -96,6 +111,12 @@ export const createInspectorCommandSlice = (
 
   clearCommandsForMissingTabs: (tabIds) =>
     set((state) => {
+      if (
+        state.newChatCommand !== null &&
+        !tabIds.has(state.newChatCommand.tabId)
+      ) {
+        state.newChatCommand = null;
+      }
       if (
         state.pendingDocxEditTabId !== null &&
         !tabIds.has(state.pendingDocxEditTabId)

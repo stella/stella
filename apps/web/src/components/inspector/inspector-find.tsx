@@ -1,15 +1,11 @@
-import { useCallback, useLayoutEffect, useRef, useState } from "react";
+import { useCallback, useLayoutEffect, useState } from "react";
 import type { RefObject } from "react";
 
 import { panic } from "better-result";
-import { useTranslations } from "use-intl";
 
-import { Button } from "@stll/ui/button";
-import { DirectionalIcon } from "@stll/ui/directional-icon";
-import { ChevronLeftIcon, ChevronRightIcon, XIcon } from "@stll/ui/icons";
-import { Input } from "@stll/ui/input";
 import { SEARCH_HIT_MARK, textMarkHighlightRule } from "@stll/ui/text-mark";
 
+import { ReaderFindBar } from "@/components/legal-reader/reader-find-bar";
 import { buildSearchResults } from "@/components/legal-reader/reader-search";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
@@ -305,131 +301,35 @@ type InspectorFind = ReturnType<typeof useInspectorFind>;
  * exists.
  */
 export const InspectorFindBar = ({ find }: { find: InspectorFind }) => {
-  const t = useTranslations();
-  const inputRef = useRef<HTMLInputElement | null>(null);
-  const {
-    activeMatchNumber,
-    clearFind,
-    closeFind,
-    findOpen,
-    findQuery,
-    focusRequest,
-    highlightKey,
-    matchCount,
-    nextMatch,
-    previousMatch,
-    setFindQuery,
-  } = find;
-
-  // On open, and again on every find command while open: the shortcut
-  // pressed from the reader brings the caret back to the query.
-  useExternalSyncEffect(() => {
-    if (!findOpen) {
-      return;
-    }
-    inputRef.current?.focus();
-    inputRef.current?.select();
-  }, [findOpen, focusRequest]);
-
-  if (!findOpen) {
+  if (!find.findOpen) {
     return null;
   }
-
-  const counter = (() => {
-    if (!findQuery) {
-      return "";
-    }
-    if (matchCount === 0) {
-      return t("common.noResults");
-    }
-    return t("folio.findReplace.matchCounter", {
-      current: String(activeMatchNumber),
-      total: String(matchCount),
-    });
-  })();
-
-  const dismiss = () => {
-    clearFind();
-    closeFind();
-  };
-
   return (
-    <div className="flex h-10 shrink-0 items-center gap-1 border-b px-2">
+    <ReaderFindBar
+      activeIndex={find.activeMatchNumber - 1}
+      focusRequest={find.focusRequest}
+      matchCount={find.matchCount}
+      onClose={find.closeFind}
+      onNext={find.nextMatch}
+      onPrevious={find.previousMatch}
+      onQueryChange={find.setFindQuery}
+      query={find.findQuery}
+    >
       <style>
         {[
           textMarkHighlightRule({
-            name: `stella-inspector-find-${highlightKey}`,
+            name: `stella-inspector-find-${find.highlightKey}`,
             tone: SEARCH_HIT_MARK.tone,
             state: "rest",
           }),
           textMarkHighlightRule({
-            name: `stella-inspector-find-active-${highlightKey}`,
+            name: `stella-inspector-find-active-${find.highlightKey}`,
             tone: SEARCH_HIT_MARK.tone,
             state: "active",
           }),
         ].join("\n")}
       </style>
-      <Input
-        aria-label={t("folio.findReplace.findText")}
-        className="h-7 flex-1 rounded-md"
-        nativeInput
-        onChange={(event) => {
-          setFindQuery(event.currentTarget.value);
-        }}
-        onKeyDown={(event) => {
-          if (event.key === "Escape") {
-            event.preventDefault();
-            dismiss();
-            return;
-          }
-          if (event.key !== "Enter") {
-            return;
-          }
-          event.preventDefault();
-          if (event.shiftKey) {
-            previousMatch();
-            return;
-          }
-          nextMatch();
-        }}
-        placeholder={t("folio.findReplace.findPlaceholder")}
-        ref={inputRef}
-        size="sm"
-        type="search"
-        value={findQuery}
-      />
-      <span className="text-muted-foreground min-w-14 text-end text-xs tabular-nums">
-        {counter}
-      </span>
-      <Button
-        aria-label={t("common.previousMatch")}
-        disabled={matchCount === 0}
-        onClick={previousMatch}
-        size="icon-xs"
-        title={t("folio.findReplace.previousShortcut")}
-        variant="ghost"
-      >
-        <DirectionalIcon className="size-3.5" icon={ChevronLeftIcon} />
-      </Button>
-      <Button
-        aria-label={t("common.nextMatch")}
-        disabled={matchCount === 0}
-        onClick={nextMatch}
-        size="icon-xs"
-        title={t("folio.findReplace.nextShortcut")}
-        variant="ghost"
-      >
-        <DirectionalIcon className="size-3.5" icon={ChevronRightIcon} />
-      </Button>
-      <Button
-        aria-label={t("folio.findReplace.close")}
-        onClick={dismiss}
-        size="icon-xs"
-        variant="ghost"
-      >
-        <XIcon className="size-3.5" />
-      </Button>
-    </div>
+    </ReaderFindBar>
   );
 };
 

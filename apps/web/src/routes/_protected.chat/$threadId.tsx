@@ -1,7 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
 
-import { Skeleton } from "@stll/ui/skeleton";
-
 import { chatThreadOptions } from "@/features/chat/queries";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { roleOptions } from "@/lib/auth-queries";
@@ -15,14 +13,10 @@ import {
   prefetchRouteQuery,
 } from "@/lib/react-query";
 import { usageEntitlementOptions } from "@/lib/usage-queries";
-import { ChatThreadPage } from "@/routes/_protected.chat/-components/chat-thread-page";
 
 export const Route = createFileRoute("/_protected/chat/$threadId")({
   component: ThreadRoute,
   pendingComponent: ChatThreadPending,
-  // Most threads load instantly from cache, so hold the skeleton back for
-  // 1s — it only appears when the load actually stalls, avoiding a flash
-  // between two consecutive chats.
   pendingMs: 1000,
   loader: async ({ context, params }) => {
     const { queryClient } = context;
@@ -63,9 +57,8 @@ export const Route = createFileRoute("/_protected/chat/$threadId")({
       ]),
       "chat-thread.prefetch",
     );
-    // Prime the pure thread-data query the page suspends on so the fetch
-    // starts during navigation instead of after the component mounts and
-    // suspends. `context` here is a key-shape stub only (no live getters):
+    // Preload the persistent page's data before committing a cold navigation.
+    // `context` here is a key-shape stub only (no live getters):
     // `chatThreadOptions` never builds a `ChatRuntime` from it — the
     // component builds that separately, from its own live getters, via
     // `useChatThreadRuntime`. See that factory's docs.
@@ -98,56 +91,9 @@ export const Route = createFileRoute("/_protected/chat/$threadId")({
 });
 
 function ThreadRoute() {
-  const threadId = Route.useParams({
-    select: (params) => toChatThreadId(params.threadId),
-  });
-
-  return <ChatThreadPage threadRef={{ scope: "global", threadId }} />;
+  return null;
 }
 
-const CHAT_SKELETON_BUBBLES = [
-  { key: "a", side: "user" },
-  { key: "b", side: "assistant" },
-  { key: "c", side: "user" },
-  { key: "d", side: "assistant" },
-] as const;
-
-// Mirrors the ChatThreadPage shell: top bar, conversation area, and the input
-// surface — so the chat structure is visible immediately instead of a logo.
 function ChatThreadPending() {
-  return (
-    <div className="flex w-full flex-1 flex-col overflow-hidden">
-      <div className="mx-auto flex w-full max-w-5xl items-center justify-between gap-2 px-4 py-2">
-        <div className="flex items-center gap-2">
-          <Skeleton className="h-8 w-24 rounded-md" />
-          <Skeleton className="h-8 w-32 rounded-md" />
-        </div>
-        <div className="flex items-center gap-1">
-          <Skeleton className="size-8 rounded-md" />
-          <Skeleton className="size-8 rounded-md" />
-          <Skeleton className="size-8 rounded-md" />
-        </div>
-      </div>
-
-      <div className="mx-auto flex w-full max-w-5xl flex-1 flex-col gap-4 overflow-hidden px-4 py-4">
-        {CHAT_SKELETON_BUBBLES.map((bubble) =>
-          bubble.side === "user" ? (
-            <div className="flex justify-end" key={bubble.key}>
-              <Skeleton className="h-12 w-2/5 rounded-2xl" />
-            </div>
-          ) : (
-            <div className="flex flex-col gap-2" key={bubble.key}>
-              <Skeleton className="h-4 w-4/5" />
-              <Skeleton className="h-4 w-3/5" />
-              <Skeleton className="h-4 w-2/3" />
-            </div>
-          ),
-        )}
-      </div>
-
-      <div className="mx-auto w-full max-w-5xl p-4">
-        <Skeleton className="h-24 w-full rounded-xl" />
-      </div>
-    </div>
-  );
+  return null;
 }

@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useLayoutEffect, useRef, useState } from "react";
 /**
  * Inspector chat tab — full-fat chat surface backed by the same
  * `/chat` endpoint, persistence layer, and `useChat` runtime as the
@@ -23,6 +23,7 @@ import {
   useSuspenseQuery,
 } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
+import { Result } from "better-result";
 import { useTranslations } from "use-intl";
 import { useShallow } from "zustand/react/shallow";
 
@@ -62,6 +63,7 @@ import {
   PromptBarPlaceholderContent,
 } from "@/components/chat/docked-composer";
 import { PromptSuggestions } from "@/components/chat/prompt-suggestions";
+import { useChatModelSelection } from "@/components/chat/use-chat-model-selection";
 import {
   boundLegalDocumentLabel,
   chatContextLabel,
@@ -91,7 +93,11 @@ import { useSuggestedFollowupPrompts } from "@/features/chat/hooks/use-suggested
 import { legalDocumentChatContext } from "@/features/chat/legal-document-chat-context";
 import { buildChatRequestMessage } from "@/features/chat/lib/build-chat-request-message";
 import { startNewThreadCommandHandoff } from "@/features/chat/lib/start-new-thread-command-handoff";
-import { chatThreadOptions } from "@/features/chat/queries";
+import {
+  applyChatModelChange,
+  chatThreadOptions,
+  seedNewChatThread,
+} from "@/features/chat/queries";
 import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
 import { useInlineRename } from "@/hooks/use-inline-rename";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
@@ -189,6 +195,8 @@ export const ChatTabPanel = ({
   const anonymized = useChatAnonymized(threadRef);
   const [composerFocused, setComposerFocused] = useState(false);
   const getSendMode = useLatestCallback(() => getChatSendMode(threadRef));
+  const threadKey = getChatThreadKey(threadRef);
+  const getCurrentThreadKey = useLatestCallback(() => threadKey);
   const activeOrganizationId = useAuthenticatedUser().activeOrganizationId;
   const contextLabel = useChatContextLabel(tab, activeOrganizationId);
 
@@ -229,6 +237,23 @@ export const ChatTabPanel = ({
       context: chatThreadContext,
     }),
   );
+  const threadQueryOptions = chatThreadOptions({
+    activeOrganizationId,
+    key: threadRef,
+    context: chatThreadContext,
+  });
+  const modelSelection = useChatModelSelection({
+    threadRef,
+    draftSelection: data,
+    onPersisted: ({ model, reasoningEffort }) =>
+      applyChatModelChange({
+        model,
+        reasoningEffort,
+        queryClient,
+        queryKey: threadQueryOptions.queryKey,
+        threadId: threadRef.threadId,
+      }),
+  });
   const chat = useChatThreadRuntime({
     activeOrganizationId,
     context: chatThreadContext,
@@ -287,11 +312,18 @@ export const ChatTabPanel = ({
           return;
         }
 
+        if (Result.isError(await modelSelection.awaitPendingSelection())) {
+          throw new ChatSubmitPreservedError({
+            message: "Model selection failed",
+          });
+        }
         // PromptBar emits the raw editor HTML; the backend parses
         // `<entity-mention>` tags out of TanStack text content.
-        await sendMessage(
-          await buildChatRequestMessage({ files, html: prompt }),
-        );
+        const message = await buildChatRequestMessage({ files, html: prompt });
+        if (getCurrentThreadKey() !== threadKey) {
+          return;
+        }
+        await sendMessage(message);
       } catch (submitError) {
         capturePromptSubmitError(submitError);
       }
@@ -322,6 +354,9 @@ export const ChatTabPanel = ({
   });
   const hasSuggestedFollowups = suggestedPrompts.length > 0;
   const focusComposer = editorController.focus;
+  useExternalSyncEffect(() => {
+    focusComposer();
+  }, [threadRef.threadId, focusComposer]);
   const sendWithoutAnonymization = useLatestCallback(async () => {
     await resendLatestMessage({ sendMode: CHAT_SEND_MODE.rawOverride });
   });
@@ -427,20 +462,41 @@ export const ChatTabPanel = ({
 
   // New-chat lives in the composer's status row (the dock), not the
   // pane header: opens a fresh tab with the same scope + context.
-  const startNewThread = () => {
+  const startNewThread = useLatestCallback(() => {
+    const nextId = createChatThreadId();
+    const nextThreadRef: ChatThreadRef =
+      tabWorkspaceId === undefined
+        ? { scope: "global", threadId: nextId }
+        : { scope: "workspace", threadId: nextId, workspaceId: tabWorkspaceId };
+    leave();
+    seedNewChatThread({
+      queryClient,
+      activeOrganizationId,
+      key: nextThreadRef,
+      previousKey: threadRef,
+      context: chatThreadContext,
+      contextMatterIds: tab.contextMatterIds,
+    });
     openChat({
       // Named explicitly: a chat about a legal document otherwise continues
       // that document's one conversation, and this button asks for a fresh
       // one. Naming it also makes it the document's conversation, so the
       // reader's floating composer follows rather than staying on the thread
       // left here.
-      id: createChatThreadId(),
+      id: nextId,
       workspaceId: tabWorkspaceId,
       contextMatterIds: tab.contextMatterIds,
       ...(tab.activeLegalKey ? { activeLegalKey: tab.activeLegalKey } : {}),
       ...(tab.activeSkill ? { activeSkill: tab.activeSkill } : {}),
     });
-  };
+  });
+  useLayoutEffect(
+    () =>
+      useInspectorCommandStore
+        .getState()
+        .registerNewChatCommand({ tabId: tab.id, run: startNewThread }),
+    [tab.id, startNewThread],
+  );
 
   // The shared tab context menu (right-click on rail icon or
   // ribbon label) dispatches `requestRename(tabId)` to the store.
@@ -473,8 +529,7 @@ export const ChatTabPanel = ({
             newThreadMessages.push(args);
             return;
           }
-          leave();
-          resetChatTabId(tab.id, createChatThreadId());
+          startNewThread();
           editorController.setContent(composerText(""));
         },
         "rename-chat": (args) => {
@@ -514,6 +569,22 @@ export const ChatTabPanel = ({
               threadId: newThreadId,
               workspaceId: tabWorkspaceId,
             };
+      if (Result.isError(await modelSelection.awaitPendingSelection())) {
+        throw new ChatSubmitPreservedError({
+          message: "Model selection failed",
+        });
+      }
+      if (getCurrentThreadKey() !== threadKey) {
+        return;
+      }
+      seedNewChatThread({
+        queryClient,
+        activeOrganizationId,
+        key: newThreadRef,
+        previousKey: threadRef,
+        context: chatThreadContext,
+        contextMatterIds: getContextMatterIds(),
+      });
       await startNewThreadCommandHandoff({
         activeOrganizationId,
         context: {
@@ -522,9 +593,13 @@ export const ChatTabPanel = ({
         },
         files,
         html: newThreadMessage,
+        isCurrent: () => getCurrentThreadKey() === threadKey,
         queryClient,
         threadRef: newThreadRef,
       });
+      if (getCurrentThreadKey() !== threadKey) {
+        return;
+      }
       leave();
       resetChatTabId(tab.id, newThreadId);
     },
@@ -598,6 +673,7 @@ export const ChatTabPanel = ({
                 />
               ) : (
                 <ChatThreadMessages
+                  onNewThread={messages.length > 0 ? startNewThread : null}
                   approvalPendingMessageId={approvalPendingMessageId}
                   branchSource={{
                     contextMatterIds: tab.contextMatterIds,
@@ -655,12 +731,13 @@ export const ChatTabPanel = ({
                 onSelect={(prompt) => {
                   editorController.setContent(composerStoredMarkdown(prompt));
                   detached(
-                    editorController.submit(async (draft) => {
-                      if (!(await ensureAIAvailable())) {
-                        return;
-                      }
-                      await sendMessage(await buildChatRequestMessage(draft));
-                    }),
+                    editorController.submit(
+                      async (draft) =>
+                        await handlePromptSubmit({
+                          prompt: draft.html,
+                          files: draft.files,
+                        }),
+                    ),
                     "chat-tab-panel.submit",
                   );
                 }}
@@ -699,6 +776,13 @@ export const ChatTabPanel = ({
                   />
                 }
                 onNewThread={messages.length > 0 ? startNewThread : null}
+                models={{
+                  activeOrganizationId,
+                  threadRef,
+                  selectedModel: data.model,
+                  selectedReasoningEffort: data.reasoningEffort,
+                  selectModel: modelSelection.selectModel,
+                }}
                 status="ready"
                 threadRef={threadRef}
               />

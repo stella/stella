@@ -237,10 +237,6 @@ export const chatKeys = {
     key.contextKind ?? "plain",
     CHAT_TRANSPORT_VERSION,
   ],
-  draftMeta: (activeOrganizationId: string, threadRef: ChatThreadRef) => [
-    ...chatKeys.threadPrefix(activeOrganizationId, threadRef),
-    "draftMeta",
-  ],
   recap: (
     activeOrganizationId: string,
     threadRef: ChatThreadRef,

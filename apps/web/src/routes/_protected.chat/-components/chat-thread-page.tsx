@@ -1,21 +1,15 @@
 import { useCallback, useRef, useState } from "react";
 import type { ReactNode } from "react";
 
-import {
-  useMutation,
-  useQuery,
-  useQueryClient,
-  useSuspenseQuery,
-} from "@tanstack/react-query";
-import { getRouteApi, Link, useNavigate } from "@tanstack/react-router";
-import { Result } from "better-result";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { getRouteApi, useNavigate } from "@tanstack/react-router";
+import { panic, Result } from "better-result";
 import { useTranslations } from "use-intl";
 
 import { CHAT_SEND_MODE } from "@stll/anonymize-chat";
-import { Button, buttonVariants } from "@stll/ui/button";
+import { Button } from "@stll/ui/button";
 import { Minimize2Icon, NewChatIcon } from "@stll/ui/icons";
 import { stellaToast } from "@stll/ui/toast";
-import { cn } from "@stll/ui/utils";
 
 import {
   Conversation,
@@ -42,6 +36,7 @@ import { ComposerVeil } from "@/components/chat/composer-veil";
 import { PromptSuggestions } from "@/components/chat/prompt-suggestions";
 import { useChatModelSelection } from "@/components/chat/use-chat-model-selection";
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
+import { QueryViewFeedback } from "@/components/query-view-feedback";
 import { RenderStormRegion } from "@/components/render-storm-canary";
 import { useAIKeyGate } from "@/components/require-ai-key";
 import Tooltip from "@/components/tooltip";
@@ -61,6 +56,8 @@ import {
   applyChatModelChange,
   chatThreadOptions,
   invalidateChatThreadAcrossScopes,
+  invalidateGroupedChatThreads,
+  seedNewChatThread,
 } from "@/features/chat/queries";
 import { GuideNudge } from "@/features/guides/guide-nudge";
 import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
@@ -90,8 +87,10 @@ import { useSuggestedSkills } from "@/lib/prompts/use-suggested-skills";
 import { runReservedChatCommand } from "@/lib/reserved-chat-commands";
 import { toSafeId } from "@/lib/safe-id";
 import { usageEntitlementOptions } from "@/lib/usage-queries";
+import { useQueryView } from "@/lib/use-query-view";
 import { ChatThreadFilesButton } from "@/routes/_protected.chat/-components/chat-file-stack";
 import { ChatForkedFromBanner } from "@/routes/_protected.chat/-components/chat-forked-from-banner";
+import { ChatFullSurfaceContext } from "@/routes/_protected.chat/-components/chat-full-surface-context";
 import { ChatThreadRecap } from "@/routes/_protected.chat/-components/chat-thread-recap";
 import { ChatTurnNavigator } from "@/routes/_protected.chat/-components/chat-turn-navigator";
 import { ThreadsSheet } from "@/routes/_protected.chat/-components/threads-sheet";
@@ -103,6 +102,12 @@ const COMPOSER_HOST_ATTRIBUTE = "data-composer-host";
 type ChatThreadPageProps = {
   threadRef: ChatThreadRef;
   workspaceId?: string | undefined;
+  landing?:
+    | {
+        content: ReactNode;
+        onNewDraft: (threadRef: ChatThreadRef) => void;
+      }
+    | undefined;
 };
 
 const protectedRouteApi = getRouteApi("/_protected");
@@ -117,6 +122,7 @@ const WebSearchSeedLifecycle = ({ seed }: { seed: () => void }) => {
 export const ChatThreadPage = ({
   threadRef,
   workspaceId,
+  landing,
 }: ChatThreadPageProps) => {
   const t = useTranslations();
   const { ensureAIAvailable } = useAIKeyGate();
@@ -152,6 +158,7 @@ export const ChatThreadPage = ({
     null,
   );
   const threadKey = getChatThreadKey(threadRef);
+  const getCurrentThreadKey = useLatestCallback(() => threadKey);
   const anonymized = useChatAnonymized(threadRef);
   const [composerFocused, setComposerFocused] = useState(false);
   const getContextMatterIds = useLatestCallback(() =>
@@ -177,7 +184,11 @@ export const ChatThreadPage = ({
     key: threadRef,
     context: chatThreadContext,
   });
-  const { data } = useSuspenseQuery(threadQueryOptions);
+  const threadView = useQueryView(useQuery(threadQueryOptions));
+  const data =
+    threadView.type === "items"
+      ? threadView.items
+      : panic("Chat routes must preload their thread data");
   const chat = useChatThreadRuntime({
     activeOrganizationId,
     context: chatThreadContext,
@@ -329,6 +340,7 @@ export const ChatThreadPage = ({
   // submit on the outcome (see `onSubmit` below) so a send can never race
   // a just-changed model onto the old, stale one.
   const modelSelection = useChatModelSelection({
+    draftSelection: data,
     onPersisted: ({ model, reasoningEffort }) => {
       applyChatModelChange({
         model,
@@ -386,25 +398,56 @@ export const ChatThreadPage = ({
     await resendLatestMessage({ sendMode: CHAT_SEND_MODE.rawOverride });
   });
 
-  // Dock new-chat: same destination as the header's labeled "New chat"
-  // button (which stays as the primary affordance); the dock icon keeps
-  // the status row uniform across chat surfaces. Abort any live stream
-  // first — `chatThreadOptions` keeps the in-flight Chat alive in the
-  // query cache, so navigating away would leave it streaming.
-  const startNewThread = () => {
+  const startNewThread = useLatestCallback(() => {
     leave();
-    if (threadRef.scope === "workspace") {
+    const next: ChatThreadRef =
+      landing === undefined && threadRef.scope === "workspace"
+        ? {
+            scope: "workspace",
+            threadId: createChatThreadId(),
+            workspaceId: threadRef.workspaceId,
+          }
+        : { scope: "global", threadId: createChatThreadId() };
+    seedNewChatThread({
+      activeOrganizationId,
+      context: chatThreadContext,
+      contextMatterIds: selectedContextMatterIds,
+      key: next,
+      previousKey: threadRef,
+      queryClient,
+    });
+    if (landing !== undefined) {
+      landing.onNewDraft(next);
+      return;
+    }
+    if (next.scope === "workspace") {
       detached(
         navigate({
-          to: "/chat/workspaces/$workspaceId/new",
-          params: { workspaceId: threadRef.workspaceId },
+          to: "/chat/workspaces/$workspaceId/$threadId",
+          params: { workspaceId: next.workspaceId, threadId: next.threadId },
         }),
         "chat-thread-page.navigate",
       );
       return;
     }
-    detached(navigate({ to: "/chat/new" }), "chat-thread-page.navigate");
-  };
+    detached(
+      navigate({ to: "/chat/$threadId", params: { threadId: next.threadId } }),
+      "chat-thread-page.navigate",
+    );
+  });
+  const surface = landing === undefined ? "thread" : "landing";
+  const previousSurface = useRef(surface);
+  useExternalSyncEffect(() => {
+    const previous = previousSurface.current;
+    previousSurface.current = surface;
+    if (previous === "thread" && surface === "landing") {
+      startNewThread();
+    }
+  }, [startNewThread, surface]);
+  const focusComposer = controller.focus;
+  useExternalSyncEffect(() => {
+    focusComposer();
+  }, [focusComposer, threadKey]);
 
   // The floating composer block grows with the draft (multi-line text,
   // attachment chips, followup chips), so a static bottom offset cannot
@@ -443,29 +486,8 @@ export const ChatThreadPage = ({
           newThreadMessages.push(args);
           return;
         }
-        // Abort any live stream first: `chatThreadOptions` keeps the
-        // in-flight Chat alive in the query cache, so navigating away
-        // would leave it streaming against the abandoned thread.
-        leave();
         controller.setContent(composerText(""));
-        if (threadRef.scope === "workspace") {
-          detached(
-            navigate({
-              to: "/chat/workspaces/$workspaceId/new",
-              params: { workspaceId: threadRef.workspaceId },
-              replace: true,
-            }),
-            "chat-thread-page.navigate",
-          );
-        } else {
-          detached(
-            navigate({
-              to: "/chat/new",
-              replace: true,
-            }),
-            "chat-thread-page.navigate",
-          );
-        }
+        startNewThread();
       },
       "rename-chat": (args) => {
         controller.setContent(composerText(""));
@@ -498,6 +520,9 @@ export const ChatThreadPage = ({
           message: "Model selection failed",
         });
       }
+      if (getCurrentThreadKey() !== threadKey) {
+        return;
+      }
       const newThreadRef: ChatThreadRef =
         threadRef.scope === "workspace"
           ? {
@@ -506,18 +531,31 @@ export const ChatThreadPage = ({
               workspaceId: threadRef.workspaceId,
             }
           : { scope: "global", threadId: createChatThreadId() };
+      const newContextMatterIds = getContextMatterIds();
+      seedNewChatThread({
+        activeOrganizationId,
+        context: chatThreadContext,
+        contextMatterIds: newContextMatterIds,
+        key: newThreadRef,
+        previousKey: threadRef,
+        queryClient,
+      });
       await startNewThreadCommandHandoff({
         activeOrganizationId,
         context: {
           ...chatThreadContext,
-          getContextMatterIds: () => selectedContextMatterIds,
+          getContextMatterIds: () => newContextMatterIds,
           getSendMode: () => getChatSendMode(newThreadRef),
         },
         files: draft.files,
         html: newThreadMessage,
         queryClient,
         threadRef: newThreadRef,
+        isCurrent: () => getCurrentThreadKey() === threadKey,
       });
+      if (getCurrentThreadKey() !== threadKey) {
+        return;
+      }
       leave();
       if (newThreadRef.scope === "workspace") {
         await navigate({
@@ -549,48 +587,70 @@ export const ChatThreadPage = ({
     if (Result.isError(await modelSelection.awaitPendingSelection())) {
       return;
     }
-    await sendMessage(await buildChatRequestMessage(draft));
+    const message = await buildChatRequestMessage(draft);
+    if (getCurrentThreadKey() !== threadKey) {
+      return;
+    }
+    if (landing !== undefined) {
+      chat.startRouteHandoffMessage(message);
+      await navigate({
+        to: "/chat/$threadId",
+        params: { threadId: threadRef.threadId },
+      });
+      detached(
+        invalidateGroupedChatThreads(queryClient),
+        "chat-thread-page.invalidate-grouped-chat-threads",
+      );
+      return;
+    }
+    await sendMessage(message);
   });
 
   return (
-    <RenderStormRegion name="chat-thread-page">
-      <ChatMattersContext value={{ createDocumentMattersView }}>
-        {shouldSeedWebSearch && (
-          <WebSearchSeedLifecycle
-            key={`${threadRef.threadId}:${messages.length}:${data.webSearchAvailable}:${data.webSearchEnabled}:${enabledPreference}`}
-            seed={triggerWebSearchSeed}
-          />
-        )}
-        <ChatApprovalContext
-          value={{
-            activeOrganizationId,
-            alwaysApprovedTools,
-            conversationApprovedTools,
-            handleAllowInConversation,
-            handleAlwaysAllow,
-            handleApprove,
-            handleDeny,
-          }}
-        >
-          <div className="relative flex w-full flex-1 flex-col overflow-hidden">
-            <ChromeHeaderActions>
-              <ChatThreadFilesButton attachedFiles={data.attachedFiles} />
-              <Tooltip
-                content={t("inspector.moveToSide")}
-                render={
-                  <Button onClick={moveToSide} size="icon-sm" variant="ghost">
-                    <Minimize2Icon className="size-4" />
-                  </Button>
-                }
-              />
-              <ThreadsSheet />
-              <NewChatButton
-                hasMessages={messages.length > 0}
-                threadRef={threadRef}
-              />
-            </ChromeHeaderActions>
+    <ChatFullSurfaceContext value={{ selectPrompt, focusComposer }}>
+      <RenderStormRegion name="chat-thread-page">
+        <ChatMattersContext value={{ createDocumentMattersView }}>
+          {shouldSeedWebSearch && (
+            <WebSearchSeedLifecycle
+              key={`${threadRef.threadId}:${messages.length}:${data.webSearchAvailable}:${data.webSearchEnabled}:${enabledPreference}`}
+              seed={triggerWebSearchSeed}
+            />
+          )}
+          <ChatApprovalContext
+            value={{
+              activeOrganizationId,
+              alwaysApprovedTools,
+              conversationApprovedTools,
+              handleAllowInConversation,
+              handleAlwaysAllow,
+              handleApprove,
+              handleDeny,
+            }}
+          >
+            <div className="relative flex w-full flex-1 flex-col overflow-hidden">
+              <ChromeHeaderActions>
+                <ChatThreadFilesButton attachedFiles={data.attachedFiles} />
+                <Tooltip
+                  content={t("inspector.moveToSide")}
+                  render={
+                    <Button onClick={moveToSide} size="icon-sm" variant="ghost">
+                      <Minimize2Icon className="size-4" />
+                    </Button>
+                  }
+                />
+                <ThreadsSheet />
+                <Button
+                  disabled={messages.length === 0}
+                  onClick={startNewThread}
+                  size="sm"
+                  variant="ghost"
+                >
+                  <NewChatIcon />
+                  {t("chat.newChat")}
+                </Button>
+              </ChromeHeaderActions>
 
-            {/*
+              {/*
             Page-level stacking order (bottom → top):
               1. transcript content   — in-flow, z-auto
               2. sticky user headers  — z-10 (capped inside <Conversation>)
@@ -601,91 +661,97 @@ export const ChatThreadPage = ({
             value (sticky headers, scroll button) inside its own context so
             none of them can leak up and overlay the fade or the composer.
           */}
-            <ChatForkedFromBanner forkProvenance={data.forkProvenance} />
-            <ChatThreadScrollSurface>
-              {/* Keyed per thread so the viewport remounts and lands pinned
+              <ChatForkedFromBanner forkProvenance={data.forkProvenance} />
+              <ChatThreadScrollSurface>
+                {/* Keyed per thread so the viewport remounts and lands pinned
                 to the bottom on every thread switch (a fork lands here from
                 a scrolled-up source thread). The scroll provider above stays
                 mounted: the composer block reads its context. */}
-              <Conversation
-                className="@container isolate min-h-0"
-                key={threadRef.threadId}
-              >
-                <ConversationContent className="mx-auto w-full max-w-5xl gap-3 px-4 pb-[calc(var(--composer-block-h,7rem)+1.5rem)]">
-                  {messages.length === 0 && !isGenerating && !error ? (
-                    <div className="m-auto flex w-full max-w-md flex-col gap-6 px-4">
-                      <PromptSuggestions
-                        onSelect={selectPrompt}
-                        prompts={suggestedSkills}
-                      />
-                      <GuideNudge />
-                    </div>
-                  ) : (
-                    <>
-                      <ChatThreadMessages
-                        approvalPendingMessageId={approvalPendingMessageId}
-                        branchSource={{
-                          contextMatterIds: selectedContextMatterIds,
-                          threadRef,
-                        }}
-                        error={error}
-                        hasOlderMessages={olderCursor !== null}
-                        isGenerating={isGenerating}
-                        isLoadingOlder={isLoadingOlder}
-                        loadOlderError={loadOlderError}
-                        messages={messages}
-                        onLoadOlder={loadOlder}
-                        onAskUserEditAndRerun={handleAskUserEditAndRerun}
-                        onAskUserEditingChange={handleAskUserEditingChange}
-                        onAskUserSubmit={handleAskUserSubmit}
-                        onCreateDocumentResolve={handleCreateDocumentResolve}
-                        onOpenCreateDocumentDraft={
-                          handleOpenCreateDocumentDraft
-                        }
-                        onOpenCreatedDocument={handleOpenCreatedDocument}
-                        onRemoveQueuedMessage={removeQueuedMessage}
-                        onResend={resendLatestMessage}
-                        onSendWithoutAnonymization={sendWithoutAnonymization}
-                        queuedMessages={queuedMessages}
-                        showThinkingIndicator
-                        stickyUserMessages
-                        streamdownComponents={streamdownComponents}
-                        threadRef={threadRef}
-                        workspaceId={workspaceId}
-                      />
-                      <ChatThreadRecap
-                        activeOrganizationId={activeOrganizationId}
-                        isGenerating={isGenerating}
-                        lastActivityAt={data.lastActivityAt}
-                        lastMessageId={messages.at(-1)?.id ?? null}
-                        lastMessageRole={messages.at(-1)?.role ?? null}
-                        messageCount={messages.length}
-                        threadRef={threadRef}
-                      />
-                    </>
-                  )}
-                </ConversationContent>
-                <ChatTurnNavigator messages={messages} />
-              </Conversation>
+                <Conversation
+                  className="@container isolate min-h-0"
+                  key={threadRef.threadId}
+                >
+                  <ConversationContent className="mx-auto w-full max-w-5xl gap-3 px-4 pb-[calc(var(--composer-block-h,7rem)+1.5rem)]">
+                    <QueryViewFeedback view={threadView} />
+                    {landing?.content ??
+                      (messages.length === 0 && !isGenerating && !error ? (
+                        <div className="m-auto flex w-full max-w-md flex-col gap-6 px-4">
+                          <PromptSuggestions
+                            onSelect={selectPrompt}
+                            prompts={suggestedSkills}
+                          />
+                          <GuideNudge />
+                        </div>
+                      ) : (
+                        <>
+                          <ChatThreadMessages
+                            approvalPendingMessageId={approvalPendingMessageId}
+                            branchSource={{
+                              contextMatterIds: selectedContextMatterIds,
+                              threadRef,
+                            }}
+                            error={error}
+                            hasOlderMessages={olderCursor !== null}
+                            isGenerating={isGenerating}
+                            isLoadingOlder={isLoadingOlder}
+                            loadOlderError={loadOlderError}
+                            messages={messages}
+                            onLoadOlder={loadOlder}
+                            onAskUserEditAndRerun={handleAskUserEditAndRerun}
+                            onAskUserEditingChange={handleAskUserEditingChange}
+                            onAskUserSubmit={handleAskUserSubmit}
+                            onCreateDocumentResolve={
+                              handleCreateDocumentResolve
+                            }
+                            onOpenCreateDocumentDraft={
+                              handleOpenCreateDocumentDraft
+                            }
+                            onOpenCreatedDocument={handleOpenCreatedDocument}
+                            onRemoveQueuedMessage={removeQueuedMessage}
+                            onResend={resendLatestMessage}
+                            onSendWithoutAnonymization={
+                              sendWithoutAnonymization
+                            }
+                            queuedMessages={queuedMessages}
+                            showThinkingIndicator
+                            stickyUserMessages
+                            streamdownComponents={streamdownComponents}
+                            threadRef={threadRef}
+                            workspaceId={workspaceId}
+                          />
+                          <ChatThreadRecap
+                            activeOrganizationId={activeOrganizationId}
+                            isGenerating={isGenerating}
+                            lastActivityAt={data.lastActivityAt}
+                            lastMessageId={messages.at(-1)?.id ?? null}
+                            lastMessageRole={messages.at(-1)?.role ?? null}
+                            messageCount={messages.length}
+                            threadRef={threadRef}
+                          />
+                        </>
+                      ))}
+                  </ConversationContent>
+                  <ChatTurnNavigator messages={messages} />
+                </Conversation>
 
-              <ChatAnonymizationLayer
-                editor={controller.editor}
-                enabled={anonymized}
-                focused={composerFocused}
-                ownerKey={threadKey}
-                workspaceId={workspaceId ?? threadRef.threadId}
-              />
-              {/* Soft fade so messages dissolve into the floating composer
+                <ChatAnonymizationLayer
+                  editor={controller.editor}
+                  enabled={anonymized}
+                  focused={composerFocused}
+                  ownerKey={threadKey}
+                  workspaceId={workspaceId ?? threadRef.threadId}
+                />
+                {/* Soft fade so messages dissolve into the floating composer
               instead of being clipped at a hard edge. Only when a
               conversation exists — the centered empty-state suggestions
               must stay crisp, not dimmed by the bottom fade. */}
-              {messages.length > 0 && (
-                <div
-                  aria-hidden="true"
-                  className="from-background pointer-events-none absolute inset-x-0 bottom-0 mx-auto h-48 w-full max-w-5xl bg-linear-to-t to-transparent"
-                />
-              )}
-              {/* Top of the page stacking order: must stack above the sticky
+                {messages.length > 0 && (
+                  <div
+                    aria-hidden="true"
+                    className="from-background pointer-events-none absolute inset-x-0 bottom-0 mx-auto h-48 w-full max-w-5xl bg-linear-to-t to-transparent"
+                  />
+                )}
+                {/* Top of the page stacking order: must stack above the sticky
                 transcript headers and the fade gradient. `z-20` beats the
                 isolated <Conversation> context (which caps its sticky
                 headers at z-10) and the z-auto fade sibling.
@@ -698,115 +764,111 @@ export const ChatThreadPage = ({
                 `--composer-block-h` is measured from this block's live
                 height, so transcript clearance and the scroll button's
                 offset track the change automatically. */}
-              <div
-                className="absolute inset-x-0 bottom-0 z-20 mx-auto w-full max-w-5xl px-4"
-                ref={observeComposerBlock}
-              >
-                {/* `px-2` mirrors the tray's `p-2` so the first chip starts on
+                <div
+                  className="absolute inset-x-0 bottom-0 z-20 mx-auto w-full max-w-5xl px-4"
+                  ref={observeComposerBlock}
+                >
+                  {/* `px-2` mirrors the tray's `p-2` so the first chip starts on
                   the composer box's leading edge; `pb-0` because the tray
                   padding alone separates the chips from the box here. */}
-                <SuggestedFollowupChips
-                  className="px-2 pb-0"
-                  onSelect={(prompt) => {
-                    controller.setContent(composerStoredMarkdown(prompt));
-                    detached(
-                      controller.submit(async (draft) => {
-                        if (!(await ensureAIAvailable())) {
-                          return;
-                        }
-                        await sendMessage(await buildChatRequestMessage(draft));
-                      }),
-                      "chat-thread-page.submit",
-                    );
-                  }}
-                  prompts={suggestedFollowupPrompts}
-                  surface="floating"
-                />
-                {env.VITE_FEATURE_USAGE && <UsageFallbackNotice />}
-                {/* Glass tray behind the composer + status row: the shared
+                  <SuggestedFollowupChips
+                    className="px-2 pb-0"
+                    onSelect={(prompt) => {
+                      controller.setContent(composerStoredMarkdown(prompt));
+                      detached(
+                        controller.submit(handleSubmit),
+                        "chat-thread-page.submit",
+                      );
+                    }}
+                    prompts={suggestedFollowupPrompts}
+                    surface="floating"
+                  />
+                  {env.VITE_FEATURE_USAGE && <UsageFallbackNotice />}
+                  {/* Glass tray behind the composer + status row: the shared
                   `ComposerVeil` (one owner of the blur/tint values across
                   every chat surface) fills this `relative isolate` wrapper
                   so the floating status-row text stays readable over the
                   scrolled transcript. */}
-                <div className="relative isolate p-2">
-                  <ComposerVeil />
-                  <ChatInputSurface
-                    anonymized={anonymized}
-                    autoFocus
-                    context={{ activeOrganizationId, threadRef }}
-                    controller={controller}
-                    guideAnchorsEnabled
-                    isGenerating={isGenerating}
-                    mcpOrganizationId={activeOrganizationId}
-                    models={{
-                      activeOrganizationId,
-                      threadRef,
-                      selectedModel: data.model,
-                      selectedReasoningEffort: data.reasoningEffort,
-                      selectModel: modelSelection.selectModel,
-                    }}
-                    reservedCommands={{
-                      hasPersistedThread: messages.length > 0,
-                    }}
-                    skillChat={{
-                      contextMatterIds: selectedContextMatterIds,
-                      document: null,
-                      threadRef,
-                      webSearch: {
-                        available: data.webSearchAvailable,
-                        enabled: data.webSearchEnabled,
-                      },
-                    }}
-                    skillsOrganizationId={activeOrganizationId}
-                    onNewThread={messages.length > 0 ? startNewThread : null}
-                    dock={
-                      <ChatComposerDock
-                        data={data}
-                        guideAnchorsEnabled
-                        models={{
-                          activeOrganizationId,
-                          threadRef,
-                          selectedModel: data.model,
-                          selectedReasoningEffort: data.reasoningEffort,
-                          selectModel: modelSelection.selectModel,
-                        }}
-                        leadingContext={
-                          <ChatMatterPicker
-                            matterIds={selectedContextMatterIds}
-                            onChange={(matterIds) =>
-                              setContextMatterIds(
-                                resolveChatContextMatterIds(
-                                  threadRef,
-                                  matterIds,
-                                ),
-                              )
-                            }
-                          />
-                        }
-                        onNewThread={
-                          messages.length > 0 ? startNewThread : null
-                        }
-                        status="ready"
-                        threadRef={threadRef}
-                      />
-                    }
-                    onStop={() => {
-                      stop();
-                    }}
-                    onFocusChange={setComposerFocused}
-                    onSubmit={handleSubmit}
-                  />
+                  <div className="relative isolate p-2">
+                    <ComposerVeil />
+                    <ChatInputSurface
+                      anonymized={anonymized}
+                      autoFocus
+                      context={{ activeOrganizationId, threadRef }}
+                      controller={controller}
+                      guideAnchorsEnabled
+                      isGenerating={isGenerating}
+                      mcpOrganizationId={activeOrganizationId}
+                      models={{
+                        activeOrganizationId,
+                        threadRef,
+                        selectedModel: data.model,
+                        selectedReasoningEffort: data.reasoningEffort,
+                        selectModel: modelSelection.selectModel,
+                      }}
+                      reservedCommands={{
+                        hasPersistedThread: messages.length > 0,
+                      }}
+                      skillChat={{
+                        contextMatterIds: selectedContextMatterIds,
+                        document: null,
+                        threadRef,
+                        webSearch: {
+                          available: data.webSearchAvailable,
+                          enabled: data.webSearchEnabled,
+                        },
+                      }}
+                      skillsOrganizationId={activeOrganizationId}
+                      onNewThread={messages.length > 0 ? startNewThread : null}
+                      dock={
+                        <ChatComposerDock
+                          data={data}
+                          guideAnchorsEnabled
+                          models={{
+                            activeOrganizationId,
+                            threadRef,
+                            selectedModel: data.model,
+                            selectedReasoningEffort: data.reasoningEffort,
+                            selectModel: modelSelection.selectModel,
+                          }}
+                          leadingContext={
+                            <ChatMatterPicker
+                              matterIds={selectedContextMatterIds}
+                              onChange={(matterIds) =>
+                                setContextMatterIds(
+                                  resolveChatContextMatterIds(
+                                    threadRef,
+                                    matterIds,
+                                  ),
+                                )
+                              }
+                            />
+                          }
+                          onNewThread={
+                            messages.length > 0 ? startNewThread : null
+                          }
+                          status="ready"
+                          threadRef={threadRef}
+                        />
+                      }
+                      onStop={() => {
+                        stop();
+                      }}
+                      onFocusChange={setComposerFocused}
+                      onSubmit={handleSubmit}
+                    />
+                  </div>
                 </div>
-              </div>
-            </ChatThreadScrollSurface>
-          </div>
-        </ChatApprovalContext>
-        <UsageLimitModal
-          {...usageLimit.modalProps}
-          hasHostedEntitlement={usageLimit.hasHostedEntitlement}
-        />
-      </ChatMattersContext>
-    </RenderStormRegion>
+              </ChatThreadScrollSurface>
+            </div>
+          </ChatApprovalContext>
+          <UsageLimitModal
+            {...usageLimit.modalProps}
+            hasHostedEntitlement={usageLimit.hasHostedEntitlement}
+          />
+        </ChatMattersContext>
+      </RenderStormRegion>
+    </ChatFullSurfaceContext>
   );
 };
 
@@ -873,45 +935,4 @@ const useChatWebSearchSeed = ({
     },
   });
   return mutate;
-};
-
-const NewChatButton = ({
-  hasMessages,
-  threadRef,
-}: {
-  hasMessages: boolean;
-  threadRef: ChatThreadRef;
-}) => {
-  const t = useTranslations();
-  // Empty draft? Stay put. Otherwise spawn a fresh thread via the
-  // /chat/new (or workspace-scoped) redirect helper.
-  if (!hasMessages) {
-    return (
-      <Button disabled size="sm" variant="ghost">
-        <NewChatIcon />
-        {t("chat.newChat")}
-      </Button>
-    );
-  }
-  if (threadRef.scope === "workspace") {
-    return (
-      <Link
-        className={cn(buttonVariants({ variant: "ghost", size: "sm" }))}
-        params={{ workspaceId: threadRef.workspaceId }}
-        to="/chat/workspaces/$workspaceId/new"
-      >
-        <NewChatIcon />
-        {t("chat.newChat")}
-      </Link>
-    );
-  }
-  return (
-    <Link
-      className={cn(buttonVariants({ variant: "ghost", size: "sm" }))}
-      to="/chat/new"
-    >
-      <NewChatIcon />
-      {t("chat.newChat")}
-    </Link>
-  );
 };

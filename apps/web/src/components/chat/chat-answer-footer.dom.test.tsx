@@ -11,7 +11,7 @@ GlobalRegistrator.register({ url: "https://app.example.test" });
 const previousApiUrl = process.env["VITE_API_URL"];
 process.env["VITE_API_URL"] ??= "https://api.example.test";
 const { act } = await import("react");
-const { cleanup, render } = await import("@testing-library/react");
+const { cleanup, fireEvent, render } = await import("@testing-library/react");
 const { QueryClient, QueryClientProvider } =
   await import("@tanstack/react-query");
 const { IntlProvider } = await import("use-intl");
@@ -74,7 +74,10 @@ const renderWithProviders = (children: ReactNode) => {
   );
 };
 
-const renderAssistant = (sourceDocuments?: readonly ChatSourceDocument[]) => {
+const renderAssistant = (
+  sourceDocuments?: readonly ChatSourceDocument[],
+  onNewThread?: (() => void) | null,
+) => {
   const message = {
     id: "assistant-answer",
     role: "assistant",
@@ -88,6 +91,7 @@ const renderAssistant = (sourceDocuments?: readonly ChatSourceDocument[]) => {
     <ChatThreadMessages
       approvalPendingMessageId={null}
       messages={[message]}
+      onNewThread={onNewThread}
       onResend={() => {}}
       onAskUserSubmit={() => {}}
       onCreateDocumentResolve={() => {}}
@@ -149,5 +153,32 @@ test("assistant footer omits the divider when there are no citations", async () 
   ).toBeNull();
   expect(
     view.container.querySelector("[data-chat-answer-citations]"),
+  ).toBeNull();
+});
+
+test("constrained answer row invokes its existing New chat action and full chat omits it", async () => {
+  let newChats = 0;
+  const full = renderAssistant();
+  await act(async () => {});
+  expect(
+    full.queryByRole("button", { name: messages.chat.newChat }),
+  ).toBeNull();
+  full.unmount();
+  const compact = renderAssistant(undefined, () => {
+    newChats += 1;
+  });
+  await act(async () => {});
+  const actions = compact.container.querySelector("[data-chat-answer-actions]");
+  const action = compact.getByRole("button", { name: messages.chat.newChat });
+  expect(actions?.contains(action)).toBe(true);
+  await act(async () => {
+    fireEvent.click(action);
+  });
+  expect(newChats).toBe(1);
+  compact.unmount();
+  const unavailable = renderAssistant(undefined, null);
+  await act(async () => {});
+  expect(
+    unavailable.queryByRole("button", { name: messages.chat.newChat }),
   ).toBeNull();
 });

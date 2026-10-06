@@ -10,6 +10,7 @@ import type { WorkspaceEndRailChatAction } from "@stll/ui/workspace-shell";
 
 import { useMainLegalDocument } from "@/components/ai-suggestions/use-main-legal-document";
 import { useRequireAccount } from "@/components/auth/use-require-account";
+import { startNewInspectorChat } from "@/components/inspector/inspector-new-chat";
 import { railChatOpenArgs } from "@/components/inspector/inspector-rail-chat.logic";
 import {
   isGenericInspectorTab,
@@ -124,7 +125,6 @@ const SessionRailPlaceholder = () => {
   const t = useTranslations();
   const minimized = useInspectorTabsStore((state) => state.minimized);
   const setMinimized = useInspectorTabsStore((state) => state.setMinimized);
-  const openChat = useInspectorTabsStore((state) => state.openChat);
   const legalDocument = useMainLegalDocument();
 
   return (
@@ -133,7 +133,7 @@ const SessionRailPlaceholder = () => {
         chatAction={{
           label: t("chat.newChat"),
           onActivate: () => {
-            openChat(railChatOpenArgs({ legalDocument }));
+            startNewInspectorChat(railChatOpenArgs({ legalDocument }));
           },
           status: "enabled",
         }}

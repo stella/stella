@@ -4,18 +4,15 @@ import { useWorkspaceChatMentionRegistration } from "@/features/chat/hooks/use-w
 import { chatThreadOptions } from "@/features/chat/queries";
 import { toChatThreadId } from "@/lib/chat-thread-ref";
 import { ensureRouteQueryData } from "@/lib/react-query";
-import { ChatThreadPage } from "@/routes/_protected.chat/-components/chat-thread-page";
 
 export const Route = createFileRoute(
   "/_protected/chat/workspaces/$workspaceId/$threadId",
 )({
   component: WorkspaceThreadRoute,
-  // See sibling route at `/_protected/chat/$threadId` — delay the
-  // pending splash so consecutive thread navigations don't flash
-  // a logo loader between two cached chats.
   pendingMs: 1000,
+  pendingComponent: () => null,
   loader: async ({ context, params }) => {
-    // Prime the pure thread-data query the page suspends on; see the
+    // Preload the persistent page's data; see the
     // sibling `/_protected/chat/$threadId` loader for why `context` here
     // is a key-shape stub and never seeds a `ChatRuntime`, and why the
     // loader only fills a COLD cache (cached data renders immediately and
@@ -41,18 +38,9 @@ export const Route = createFileRoute(
 });
 
 function WorkspaceThreadRoute() {
-  const { threadId, workspaceId } = Route.useParams({
-    select: (params) => ({
-      threadId: toChatThreadId(params.threadId),
-      workspaceId: params.workspaceId,
-    }),
+  const workspaceId = Route.useParams({
+    select: (params) => params.workspaceId,
   });
   useWorkspaceChatMentionRegistration(workspaceId);
-
-  return (
-    <ChatThreadPage
-      threadRef={{ scope: "workspace", threadId, workspaceId }}
-      workspaceId={workspaceId}
-    />
-  );
+  return null;
 }

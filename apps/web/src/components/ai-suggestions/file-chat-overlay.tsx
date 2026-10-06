@@ -164,6 +164,7 @@ import {
   chatThreadOptions,
   fileChatThreadOptions,
   materializeFileChatThread,
+  seedNewChatThread,
 } from "@/features/chat/queries";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
@@ -837,7 +838,8 @@ export const FileChatOverlay = ({
   requestDocxEditMode,
   threadPresentation,
 }: FileChatOverlayProps) => {
-  if (chatThreadId === undefined) {
+  const [usesMappedFileThread] = useState(() => chatThreadId === undefined);
+  if (usesMappedFileThread) {
     const fileFieldId = activeFile?.fileFieldId;
     if (
       workspaceId === undefined ||
@@ -850,6 +852,7 @@ export const FileChatOverlay = ({
     return (
       <Suspense fallback={fallback}>
         <ResolvedFileChatOverlay
+          chatThreadId={chatThreadId}
           activeFile={{ ...activeFile, fileFieldId }}
           draftPersistence={draftPersistence}
           docxComments={docxComments}
@@ -865,6 +868,9 @@ export const FileChatOverlay = ({
     );
   }
 
+  if (chatThreadId === undefined) {
+    return panic("An explicit chat surface must have a thread identity");
+  }
   return (
     <Suspense fallback={fallback}>
       <FileChatOverlayInner
@@ -891,17 +897,14 @@ export const FileChatOverlay = ({
 
 type ResolvedFileChatOverlayProps = Omit<
   FileChatOverlayProps,
-  | "activeExternal"
-  | "activeFile"
-  | "activeLegal"
-  | "chatThreadId"
-  | "workspaceId"
+  "activeExternal" | "activeFile" | "activeLegal" | "workspaceId"
 > & {
   activeFile: ActiveFile & { fileFieldId: string };
   workspaceId: string;
 };
 
 const ResolvedFileChatOverlay = ({
+  chatThreadId,
   activeFile,
   docxComments,
   docxEditable,
@@ -958,13 +961,15 @@ const ResolvedFileChatOverlay = ({
   return (
     <FileChatOverlayInner
       activeFile={activeFile}
-      chatThreadId={fileThreadBinding.threadId}
+      chatThreadId={chatThreadId ?? fileThreadBinding.threadId}
       draftPersistence={draftPersistence}
       docxComments={docxComments}
       docxEditable={docxEditable}
       docxEditSafety={docxEditSafety}
       docxEditorRef={docxEditorRef}
-      ensureFileThreadPersisted={ensureFileThreadPersisted}
+      ensureFileThreadPersisted={
+        chatThreadId === undefined ? ensureFileThreadPersisted : undefined
+      }
       onDocxCommentsChange={onDocxCommentsChange}
       onNewThread={onNewThread}
       requestDocxEditMode={requestDocxEditMode}
@@ -1186,13 +1191,16 @@ const FileChatOverlayInner = ({
     },
     [t],
   );
-  const activeOrganizationId = useAuthenticatedUser().activeOrganizationId;
+  const user = useAuthenticatedUser();
+  const activeOrganizationId = user.activeOrganizationId;
   const userContext = useChatUserContext();
   const getUserContext = useLatestCallback(() => userContext);
   const threadRef = useMemo(
     () => getFileChatThreadRef(chatThreadId, workspaceId),
     [chatThreadId, workspaceId],
   );
+  const threadKey = getChatThreadKey(threadRef);
+  const getCurrentThreadKey = useLatestCallback(() => threadKey);
   // Per-send anonymization now reads the shared per-thread store keyed by
   // `threadRef`, same as every other chat surface: the dock's shield
   // shows `useChatAnonymized(threadRef)`, the transport reads
@@ -1491,6 +1499,7 @@ const FileChatOverlayInner = ({
   // thread's cache, mirroring `ChatThreadPage`'s wiring so the file-chat (+)
   // menu keeps the same functionality as the main chat's.
   const modelSelection = useChatModelSelection({
+    draftSelection: data,
     onPersisted: ({ model, reasoningEffort }) => {
       applyChatModelChange({
         model,
@@ -1598,6 +1607,9 @@ const FileChatOverlayInner = ({
         return;
       }
 
+      if (getCurrentThreadKey() !== threadKey) {
+        return;
+      }
       // A workspace-file overlay mounts on a lookup that deliberately
       // creates nothing; the thread (row + file mapping) is persisted here,
       // on the first real message. The persisted id normally IS the
@@ -1628,11 +1640,15 @@ const FileChatOverlayInner = ({
         }
       }
 
+      const message = await buildChatRequestMessage({ files, html: prompt });
+      if (getCurrentThreadKey() !== threadKey) {
+        return;
+      }
       // Always pop the thread open on send, even if the user
       // minimised it earlier — they're sending a new prompt
       // and want to see the response stream in.
       setPanelOpen(true);
-      await sendMessage(await buildChatRequestMessage({ files, html: prompt }));
+      await sendMessage(message);
     },
   );
 
@@ -2127,9 +2143,48 @@ const FileChatOverlayInner = ({
     if (pendingReview !== PENDING_REVIEW_CHOICE.keep) {
       await settleReviewWrites();
     }
+    if (getCurrentThreadKey() !== threadKey) {
+      endNewThreadCommit({ status: NEW_THREAD_CHOICE_STATUS.idle });
+      return;
+    }
+    const nextThreadRef = getFileChatThreadRef(threadId, workspaceId);
+    const nextOptions = chatThreadOptions({
+      activeOrganizationId,
+      key: nextThreadRef,
+      context: chatThreadContext,
+    });
+    if (queryClient.getQueryData(nextOptions.queryKey) === undefined) {
+      seedNewChatThread({
+        queryClient,
+        activeOrganizationId,
+        key: nextThreadRef,
+        previousKey: threadRef,
+        context: chatThreadContext,
+        contextMatterIds: getContextMatterIds(),
+      });
+    }
+    if (activeFile?.fileFieldId !== undefined && workspaceId !== undefined) {
+      const mappedOptions = fileChatThreadOptions({
+        activeOrganizationId,
+        hasDocxEditSurface,
+        key: {
+          entityId: activeFile.entityId,
+          fieldId: activeFile.fileFieldId,
+          userId: user.id,
+          workspaceId,
+        },
+      });
+      queryClient.setQueryData(mappedOptions.queryKey, {
+        threadId,
+        threadExists: false,
+      });
+    }
+    setSeededContextForThreadId(threadId);
+    setContextMatterIds(getContextMatterIds());
+    endNewThreadCommit({ status: NEW_THREAD_CHOICE_STATUS.idle });
     onNewThread(threadId, pendingReview);
   };
-  // The rotation remount only swaps the surface; `beginNewThreadCommit`
+  // Rotation changes the thread binding; `beginNewThreadCommit`
   // already stopped the old Chat instance, which would otherwise keep
   // streaming inside the query cache.
   const rotateThread = async (pendingReview: PendingReviewChoice) => {
@@ -2160,6 +2215,10 @@ const FileChatOverlayInner = ({
         message: "Model selection failed",
       });
     }
+    if (getCurrentThreadKey() !== threadKey) {
+      endNewThreadCommit({ status: NEW_THREAD_CHOICE_STATUS.idle });
+      return;
+    }
     const newThreadRef: ChatThreadRef =
       workspaceId === undefined
         ? { scope: "global", threadId: createChatThreadId() }
@@ -2168,6 +2227,14 @@ const FileChatOverlayInner = ({
             threadId: createChatThreadId(),
             workspaceId,
           };
+    seedNewChatThread({
+      queryClient,
+      activeOrganizationId,
+      key: newThreadRef,
+      previousKey: threadRef,
+      context: chatThreadContext,
+      contextMatterIds: getContextMatterIds(),
+    });
     await startNewThreadCommandHandoff({
       activeOrganizationId,
       context: {
@@ -2176,9 +2243,14 @@ const FileChatOverlayInner = ({
       },
       files,
       html: message,
+      isCurrent: () => getCurrentThreadKey() === threadKey,
       queryClient,
       threadRef: newThreadRef,
     });
+    if (getCurrentThreadKey() !== threadKey) {
+      endNewThreadCommit({ status: NEW_THREAD_CHOICE_STATUS.idle });
+      return;
+    }
     await commitNewThread(newThreadRef.threadId, pendingReview);
   };
   const readComposerHtml = (): string => {
@@ -2538,6 +2610,7 @@ const FileChatOverlayInner = ({
               onOpenCreateDocumentDraft={handleOpenCreateDocumentDraft}
               onOpenCreatedDocument={handleOpenCreatedDocument}
               onRemoveQueuedMessage={removeQueuedMessage}
+              onNewThread={newThreadAction}
               onResend={resendLatestMessage}
               queuedMessages={queuedMessages}
               scrollContainerRef={threadScrollRef}
@@ -2562,20 +2635,13 @@ const FileChatOverlayInner = ({
                 }
                 editorController.setContent(composerStoredMarkdown(prompt));
                 detached(
-                  editorController.submit(async (draft) => {
-                    if (!(await ensureAIAvailable())) {
-                      return;
-                    }
-                    // Same model-race guard as the composer send path.
-                    if (
-                      Result.isError(
-                        await modelSelection.awaitPendingSelection(),
-                      )
-                    ) {
-                      return;
-                    }
-                    await sendMessage(await buildChatRequestMessage(draft));
-                  }),
+                  editorController.submit(
+                    async (draft) =>
+                      await handlePromptSubmit({
+                        prompt: draft.html,
+                        files: draft.files,
+                      }),
+                  ),
                   "file-chat-overlay.submit",
                 );
               }}

@@ -73,7 +73,6 @@ export const FileViewerWithAI = ({
   const overlayIsActive =
     overlayActivation === FILE_CHAT_OVERLAY_ACTIVATION.active;
   const overlayKey = [
-    chatThreadId ?? "mapped-file-chat",
     workspaceId ?? "",
     activeFile?.entityId ?? "",
     activeFile?.fileFieldId ?? "",
@@ -90,9 +89,15 @@ export const FileViewerWithAI = ({
   const [overlayThread, setOverlayThread] = useState<{
     overlayKey: string;
     threadId: ChatThreadId | undefined;
-  }>(() => ({ overlayKey, threadId: chatThreadId }));
+    suppliedThreadId: ChatThreadId | undefined;
+  }>(() => ({
+    overlayKey,
+    threadId: chatThreadId,
+    suppliedThreadId: chatThreadId,
+  }));
   const activeChatThreadId =
-    overlayThread.overlayKey === overlayKey
+    overlayThread.overlayKey === overlayKey &&
+    overlayThread.suppliedThreadId === chatThreadId
       ? overlayThread.threadId
       : chatThreadId;
 
@@ -170,7 +175,11 @@ export const FileViewerWithAI = ({
               docxEditorRef={docxEditorRef}
               key={overlayKey}
               onChatThreadIdChange={(threadId) => {
-                setOverlayThread({ overlayKey, threadId });
+                setOverlayThread({
+                  overlayKey,
+                  threadId,
+                  suppliedThreadId: chatThreadId,
+                });
                 onChatThreadIdChange?.(threadId);
               }}
               onActiveDraftChatBound={onActiveDraftChatBound}

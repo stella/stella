@@ -2,10 +2,13 @@ import { beforeEach, describe, expect, test } from "bun:test";
 
 import { requestInspectorRename } from "@/components/inspector/inspector-actions";
 import { useInspectorCommandStore } from "@/components/inspector/inspector-command-store";
+import { startNewInspectorChat } from "@/components/inspector/inspector-new-chat";
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
+import { createChatThreadId } from "@/lib/chat-thread-ref";
 
 beforeEach(() => {
   useInspectorCommandStore.setState({
+    newChatCommand: null,
     desktopOpenAttention: null,
     pendingRenameTabId: null,
     pendingBlockScroll: null,
@@ -117,5 +120,106 @@ describe("inspector commands", () => {
 
     commands.clearDesktopOpenAttention(firstSequence + 1);
     expect(useInspectorCommandStore.getState().desktopOpenAttention).toBeNull();
+  });
+});
+
+describe("mounted inspector New chat ownership", () => {
+  test("global entry points reuse the active chat owner instead of opening a cold thread", () => {
+    const id = createChatThreadId();
+    const contextMatterIds = ["matter-source"];
+    useInspectorTabsStore.getState().openChat({ id, contextMatterIds });
+    let runs = 0;
+    const unregister = useInspectorCommandStore
+      .getState()
+      .registerNewChatCommand({
+        tabId: id,
+        run: () => {
+          runs += 1;
+        },
+      });
+    const before = useInspectorTabsStore.getState().tabs;
+
+    startNewInspectorChat({ workspaceId: "different-route-matter" });
+
+    expect(runs).toBe(1);
+    expect(useInspectorTabsStore.getState().tabs).toBe(before);
+    expect(useInspectorTabsStore.getState().activeId).toBe(id);
+    unregister();
+  });
+
+  test("an obsolete registration cleanup cannot remove a replacement using the same callback", () => {
+    const id = createChatThreadId();
+    const run = () => undefined;
+    const commands = useInspectorCommandStore.getState();
+    const firstCleanup = commands.registerNewChatCommand({ tabId: id, run });
+    const secondCleanup = commands.registerNewChatCommand({ tabId: id, run });
+    const secondRegistration =
+      useInspectorCommandStore.getState().newChatCommand;
+
+    firstCleanup();
+
+    expect(useInspectorCommandStore.getState().newChatCommand).toBe(
+      secondRegistration,
+    );
+    secondCleanup();
+    expect(useInspectorCommandStore.getState().newChatCommand).toBeNull();
+  });
+
+  test("reconciliation retires only the missing chat owner's callback", () => {
+    const id = createChatThreadId();
+    const commands = useInspectorCommandStore.getState();
+    commands.registerNewChatCommand({ tabId: id, run: () => undefined });
+    const registration = useInspectorCommandStore.getState().newChatCommand;
+
+    commands.clearCommandsForMissingTabs(new Set([id]));
+    expect(useInspectorCommandStore.getState().newChatCommand).toBe(
+      registration,
+    );
+    commands.clearCommandsForMissingTabs(new Set());
+    expect(useInspectorCommandStore.getState().newChatCommand).toBeNull();
+  });
+
+  test("a hidden chat owner cannot consume a cold-pane entry point", () => {
+    const id = createChatThreadId();
+    useInspectorTabsStore.getState().openChat({ id });
+    let runs = 0;
+    useInspectorCommandStore.getState().registerNewChatCommand({
+      tabId: id,
+      run: () => {
+        runs += 1;
+      },
+    });
+    useInspectorTabsStore.setState({ minimized: true });
+    const destination = createChatThreadId();
+
+    startNewInspectorChat({
+      id: destination,
+      contextMatterIds: ["matter-destination"],
+    });
+
+    expect(runs).toBe(0);
+    expect(useInspectorTabsStore.getState().activeId).toBe(destination);
+    expect(useInspectorTabsStore.getState().minimized).toBe(false);
+  });
+
+  test("a callback for another tab cannot consume the active tab's New chat command", () => {
+    const oldId = createChatThreadId();
+    const activeId = createChatThreadId();
+    const tabs = useInspectorTabsStore.getState();
+    tabs.openChat({ id: oldId });
+    tabs.openChat({ id: activeId });
+    let runs = 0;
+    useInspectorCommandStore.getState().registerNewChatCommand({
+      tabId: oldId,
+      run: () => {
+        runs += 1;
+      },
+    });
+    const destination = createChatThreadId();
+
+    startNewInspectorChat({ id: destination });
+
+    expect(runs).toBe(0);
+    expect(useInspectorTabsStore.getState().activeId).toBe(destination);
   });
 });

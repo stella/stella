@@ -5,8 +5,11 @@ import { useTranslations } from "use-intl";
 
 import type { ReasoningEffort } from "@stll/ai-catalog";
 
+import { useExternalSyncEffect } from "@/hooks/use-effect";
+import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { api } from "@/lib/api";
 import type { ChatThreadRef } from "@/lib/chat-thread-ref";
+import { getChatThreadKey } from "@/lib/chat-thread-ref";
 import { detached } from "@/lib/detached";
 import { type APIError, toAPIError } from "@/lib/errors/api";
 import { ClientOperationError } from "@/lib/errors/client";
@@ -27,11 +30,54 @@ export type UseChatModelSelectionOptions = {
    *  still the latest one issued -- a slower, stale response can never
    *  revert a newer selection (the `requestIdRef` guard below). */
   onPersisted: (selection: PersistedChatModelSelection) => void;
+  /** A carried draft selection must reach the server before its first send. */
+  draftSelection?:
+    | (PersistedChatModelSelection & {
+        threadExists: boolean;
+        modelSelectionSource?: "carried" | undefined;
+      })
+    | undefined;
 };
 
 export type PersistedChatModelSelection = {
   model: string | null;
   reasoningEffort: ReasoningEffort | null;
+};
+
+type PersistChatModelSelectionArgs = {
+  threadRef: ChatThreadRef;
+  selection: PersistedChatModelSelection;
+};
+
+export const persistChatModelSelection = async ({
+  threadRef,
+  selection,
+}: PersistChatModelSelectionArgs): Promise<Result<void, ModelPersistError>> => {
+  const result = await Result.tryPromise(async () => {
+    const response = await api.chat
+      .threads({ threadId: toSafeId<"chatThread">(threadRef.threadId) })
+      .model.patch(selection, {
+        query:
+          threadRef.scope === "workspace"
+            ? { workspaceId: toSafeId<"workspace">(threadRef.workspaceId) }
+            : {},
+        fetch: { signal: AbortSignal.timeout(MODEL_SELECT_TIMEOUT_MS) },
+      });
+    if (response.error) {
+      return Result.err(toAPIError(response.error));
+    }
+    return Result.ok(undefined);
+  });
+  if (Result.isError(result)) {
+    return Result.err(
+      new ClientOperationError({
+        action: "chat.selectModel",
+        cause: result.error,
+        message: "Failed to persist the selected model",
+      }),
+    );
+  }
+  return result.value;
 };
 
 export type ChatModelSelection = {
@@ -61,6 +107,7 @@ export type ChatModelSelection = {
 export const useChatModelSelection = ({
   threadRef,
   onPersisted,
+  draftSelection,
 }: UseChatModelSelectionOptions): ChatModelSelection => {
   const t = useTranslations();
   // Bumped on every `selectModel` call; a settling request only applies
@@ -72,54 +119,33 @@ export const useChatModelSelection = ({
   // `awaitPendingSelection` so message submit blocks on exactly the
   // selection the user actually made last, not the whole submenu's
   // history.
-  const pendingRef = useRef<Promise<Result<void, ModelPersistError>> | null>(
-    null,
-  );
+  const pendingRef = useRef<{
+    threadKey: string;
+    promise: Promise<Result<void, ModelPersistError>>;
+  } | null>(null);
+  const carriedDraftRef = useRef<{
+    threadKey: string;
+    promise: Promise<Result<void, ModelPersistError>>;
+  } | null>(null);
+  const threadKey = getChatThreadKey(threadRef);
+  const getCurrentThreadKey = useLatestCallback(() => threadKey);
 
   const persist = async (
     selection: PersistedChatModelSelection,
   ): Promise<Result<void, ModelPersistError>> => {
     const requestId = ++requestIdRef.current;
-    const result = await Result.tryPromise(async () => {
-      const { data, error } = await api.chat
-        .threads({ threadId: toSafeId<"chatThread">(threadRef.threadId) })
-        .model.patch(selection, {
-          query:
-            threadRef.scope === "workspace"
-              ? {
-                  workspaceId: toSafeId<"workspace">(threadRef.workspaceId),
-                }
-              : {},
-          fetch: { signal: AbortSignal.timeout(MODEL_SELECT_TIMEOUT_MS) },
-        });
-      return { data, error };
-    });
+    const result = await persistChatModelSelection({ threadRef, selection });
     // A stale response (a newer selection has already been issued): never
     // toast for it and never touch the cache -- the newer request owns
     // both once it settles.
-    const isLatest = requestId === requestIdRef.current;
+    const isLatest =
+      requestId === requestIdRef.current && getCurrentThreadKey() === threadKey;
 
     if (Result.isError(result)) {
       if (isLatest) {
         notifyUserError(result.error, t("common.somethingWentWrong"));
       }
-      return Result.err(
-        new ClientOperationError({
-          action: "chat.selectModel",
-          cause: result.error,
-          message: "Failed to persist the selected model",
-        }),
-      );
-    }
-    if (result.value.error) {
-      const error = toAPIError(result.value.error);
-      if (isLatest) {
-        notifyUserError(
-          toAPIError(result.value.error),
-          t("common.somethingWentWrong"),
-        );
-      }
-      return Result.err(error);
+      return result;
     }
     if (isLatest) {
       onPersisted(selection);
@@ -129,10 +155,13 @@ export const useChatModelSelection = ({
 
   const selectModel = (selection: PersistedChatModelSelection) => {
     const promise = persist(selection);
-    pendingRef.current = promise;
+    pendingRef.current = { threadKey, promise };
+    if (carriedDraftRef.current?.threadKey === threadKey) {
+      carriedDraftRef.current = { threadKey, promise };
+    }
     detached(
       promise.finally(() => {
-        if (pendingRef.current === promise) {
+        if (pendingRef.current?.promise === promise) {
           pendingRef.current = null;
         }
       }),
@@ -140,10 +169,50 @@ export const useChatModelSelection = ({
     );
   };
 
+  type CarriedSelection = Promise<Result<void, ModelPersistError>> | null;
+  const ensureCarriedSelection = useLatestCallback((): CarriedSelection => {
+    if (
+      draftSelection === undefined ||
+      (draftSelection.threadExists &&
+        draftSelection.modelSelectionSource !== "carried") ||
+      (draftSelection.model === null && draftSelection.reasoningEffort === null)
+    ) {
+      return null;
+    }
+    if (carriedDraftRef.current?.threadKey === threadKey) {
+      return carriedDraftRef.current.promise;
+    }
+    const promise = persist({
+      model: draftSelection.model,
+      reasoningEffort: draftSelection.reasoningEffort,
+    });
+    carriedDraftRef.current = { threadKey, promise };
+    pendingRef.current = { threadKey, promise };
+    return promise;
+  });
+
+  useExternalSyncEffect(() => {
+    const pending = ensureCarriedSelection();
+    if (pending !== null) {
+      detached(pending, "use-chat-model-selection.persist-carried-draft");
+    }
+  }, [
+    draftSelection?.model,
+    draftSelection?.modelSelectionSource,
+    draftSelection?.reasoningEffort,
+    draftSelection?.threadExists,
+    ensureCarriedSelection,
+    threadKey,
+  ]);
+
   const awaitPendingSelection = async (): Promise<
     Result<void, ModelPersistError>
   > => {
-    const pending = pendingRef.current;
+    const carried = ensureCarriedSelection();
+    const pending =
+      pendingRef.current?.threadKey === threadKey
+        ? pendingRef.current.promise
+        : carried;
     if (!pending) {
       return Result.ok(undefined);
     }

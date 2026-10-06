@@ -3,6 +3,7 @@ import type { DataTag, QueryClient, QueryKey } from "@tanstack/react-query";
 import { panic } from "better-result";
 
 import type { ReasoningEffort } from "@stll/ai-catalog";
+import { CHAT_SEND_MODE } from "@stll/anonymize-chat";
 import {
   DOCX_SUGGESTION_SURFACE,
   type DocxSuggestionSurface,
@@ -16,6 +17,10 @@ import {
 } from "@/components/chat/chat-ui-tools";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
+import {
+  getChatSendMode,
+  setChatAnonymized,
+} from "@/lib/chat-anonymized-store";
 import type { ChatThreadId, ChatThreadRef } from "@/lib/chat-thread-ref";
 import { createChatThreadId, toChatThreadId } from "@/lib/chat-thread-ref";
 import { STALE_TIME } from "@/lib/consts";
@@ -447,6 +452,8 @@ export const __resetChatRequestStateForTests = (): void => {
 };
 
 export type ChatThreadFetched = {
+  /** Client carry pending its model PATCH; server reads omit this marker. */
+  modelSelectionSource?: "carried" | undefined;
   /**
    * The thread's turn not yet settled when this page was read, which the
    * composer's Stop cancels. Null when every turn has settled.
@@ -900,6 +907,61 @@ export const chatThreadOptions = ({
       };
     },
   });
+
+type SeedNewChatThreadArgs = ChatThreadOptionsArgs & {
+  queryClient: QueryClient;
+  previousKey: ChatThreadRef;
+  contextMatterIds: string[];
+  threadExists?: boolean;
+};
+
+/** New drafts retain surface settings, never the preceding conversation. */
+export const seedNewChatThread = ({
+  activeOrganizationId,
+  context,
+  key,
+  queryClient,
+  previousKey,
+  contextMatterIds,
+  threadExists = false,
+}: SeedNewChatThreadArgs): ChatThreadFetched => {
+  if (key.threadId === previousKey.threadId) {
+    return panic("A fresh chat requires a distinct thread identity");
+  }
+  const previousOptions = chatThreadOptions({
+    activeOrganizationId,
+    context,
+    key: previousKey,
+  });
+  const previous =
+    queryClient.getQueryData(previousOptions.queryKey) ??
+    panic("Fresh chat must carry settings from its cached source thread");
+  const data = {
+    activeTurnId: null,
+    attachedFiles: EMPTY_ATTACHED_FILES,
+    forkProvenance: { type: "none" },
+    messages: [],
+    olderCursor: null,
+    contextMatterIds,
+    lastActivityAt: null,
+    threadRevision: null,
+    threadExists,
+    usedAnonymization: false,
+    webSearchAvailable: previous.webSearchAvailable,
+    webSearchEnabled: false,
+    model: previous.model,
+    reasoningEffort: previous.reasoningEffort,
+    modelSelectionSource: "carried",
+    context: null,
+  } satisfies ChatThreadFetched;
+  const options = chatThreadOptions({ activeOrganizationId, context, key });
+  queryClient.setQueryData(options.queryKey, data);
+  setChatAnonymized(
+    key,
+    getChatSendMode(previousKey) === CHAT_SEND_MODE.anonymized,
+  );
+  return data;
+};
 
 /**
  * Server-authoritative freshness signal a runtime was seeded with,
@@ -1632,43 +1694,6 @@ const fetchChatThreadTitle = async ({
   return unwrapEden(response).title;
 };
 
-type ChatDraftMetaOptionsArgs = {
-  activeOrganizationId: string;
-  threadRef: ChatThreadRef;
-};
-
-// Standalone, non-suspense fetch of a draft thread's metadata for the chat
-// home. `chatThreadOptions` is deliberately not reused: it instantiates a
-// stateful `Chat<>` inside its queryFn on every miss, and doing that on the
-// chat-home render path froze the tab. Web search availability, the model,
-// and the context floor come from a plain GET instead.
-export const chatDraftMetaOptions = ({
-  activeOrganizationId,
-  threadRef,
-}: ChatDraftMetaOptionsArgs) =>
-  queryOptions({
-    queryKey: chatKeys.draftMeta(activeOrganizationId, threadRef),
-    staleTime: Number.POSITIVE_INFINITY,
-    queryFn: async ({ signal }) => {
-      const response = await api.chat
-        .threads({ threadId: threadRef.threadId })
-        .messages.get({
-          query: { allowMissingThread: true },
-          fetch: { signal },
-        });
-      const data = unwrapEden(response);
-      return {
-        webSearchAvailable: data.webSearchAvailable,
-        webSearchEnabled: data.webSearchEnabled,
-        model: data.model,
-        reasoningEffort: data.reasoningEffort,
-        // The draft's cache-stable context floor (system prompt + tools), so
-        // the hero meter shows the honest baseline instead of 0% before send.
-        context: data.context,
-      };
-    },
-  });
-
 type ChatThreadTitleOptionsArgs = {
   activeOrganizationId: string;
   enabled: boolean;
@@ -1727,7 +1752,7 @@ export const invalidateChatThreadLists = async ({
 /**
  * Whether a query key targets the given chat thread in its own scope:
  * every entry composed from `chatKeys.threadPrefix` (thread page, recap,
- * suggested prompts, the chat-home draft metadata) matches, whatever it
+ * suggested prompts) matches, whatever it
  * appends. Callers that need to touch the same thread's cache — cache
  * writers as well as invalidators — use this instead of restating the
  * positions, so a prefix change cannot desynchronize them.
@@ -1817,8 +1842,8 @@ export const invalidateChatThreadAcrossScopes = async ({
  * tab, other scope) picks it up too. `queryKey` must come from a
  * `queryOptions()` call (its data type is inferred from the key's tag), so
  * this only accepts a cache entry shaped like `{ model, reasoningEffort }`;
- * exactly what `chatThreadOptions` and the draft `/chat` composer's meta
- * query return. Shared by every composer surface with a Models submenu so
+ * exactly what `chatThreadOptions` returns. Shared by every composer
+ * surface with a Models submenu so
  * the cache update and invalidation pairing can't drift again.
  */
 export const applyChatModelChange = ({

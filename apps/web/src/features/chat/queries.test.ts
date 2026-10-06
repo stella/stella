@@ -252,7 +252,11 @@ describe("thread-scoped chat keys", () => {
     for (const threadRef of threadRefs) {
       const keys = [
         chatKeys.thread("org_test", threadRef),
-        chatKeys.draftMeta("org_test", threadRef),
+        chatThreadOptions({
+          activeOrganizationId: "org_test",
+          key: threadRef,
+          context: { allowMissingThread: true },
+        }).queryKey,
         chatKeys.recap("org_test", threadRef, "message-1"),
         chatKeys.suggestedPrompts("org_test", threadRef, "message-1"),
       ];
@@ -267,16 +271,10 @@ describe("thread-scoped chat keys", () => {
   test("keeps the two scopes' caches apart", () => {
     const [globalRef, workspaceRef] = threadRefs;
     expect(
-      matchesChatThread(
-        chatKeys.draftMeta("org_test", globalRef),
-        workspaceRef,
-      ),
+      matchesChatThread(chatKeys.thread("org_test", globalRef), workspaceRef),
     ).toBe(false);
     expect(
-      matchesChatThread(
-        chatKeys.draftMeta("org_test", workspaceRef),
-        globalRef,
-      ),
+      matchesChatThread(chatKeys.thread("org_test", workspaceRef), globalRef),
     ).toBe(false);
   });
 });

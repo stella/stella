@@ -60,9 +60,8 @@ export const useSetChatWebSearch = (
       return unwrapEden(response);
     },
     onMutate: async (nextEnabled) => {
-      // Every cached query for this thread (the thread page's
-      // `chatThreadOptions` and the new-chat hero's draft-meta both hang off
-      // `chatKeys.threadPrefix`) that carries a `webSearchEnabled` field.
+      // Every surface's canonical thread query hangs off
+      // `chatKeys.threadPrefix` and carries `webSearchEnabled`.
       // Flipping them here turns the icon on/off instantly and smoothly
       // instead of snapping only once the PATCH round-trips.
       const filters = {

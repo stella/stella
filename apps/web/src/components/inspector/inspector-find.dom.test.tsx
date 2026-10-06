@@ -46,6 +46,7 @@ const { TEXT_ABSENCE_REASON, TEXT_FIELD_TYPE } =
 const { DECISION_IDENTIFIER_TYPES } =
   await import("@stll/legal-ast/decision-identifier");
 const messages = (await import("@/i18n/langs/en.json")).default;
+const arabicMessages = (await import("@/i18n/langs/ar.json")).default;
 
 afterEach(() => {
   cleanup();
@@ -106,13 +107,17 @@ const Reader = ({
   );
 };
 
-const renderReaders = (readers: ReaderOptions[]) => {
+const defaultLocale = { locale: "en", catalog: messages };
+const renderReaders = (
+  readers: ReaderOptions[],
+  { locale, catalog } = defaultLocale,
+) => {
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false } },
   });
   const view = (options: ReaderOptions[]) => (
     <QueryClientProvider client={client}>
-      <IntlProvider locale="en" messages={messages} timeZone="UTC">
+      <IntlProvider locale={locale} messages={catalog} timeZone="UTC">
         {options.map((reader) => (
           <Reader key={reader.name} {...reader} />
         ))}
@@ -194,7 +199,7 @@ test("a rendered decision paints only CSS find ranges and Escape leaves no searc
   expect(screen.getByText(decision.fulltext)).toBeTruthy();
 });
 
-test("search terms open the bar and navigate morphology matches across inline markup", async () => {
+test("Enter and Shift+Enter navigate morphology matches across inline markup", async () => {
   const screen = renderReaders([
     { initialQuery: "odpovědnost", name: "decision" },
   ]);
@@ -212,9 +217,7 @@ test("search terms open the bar and navigate morphology matches across inline ma
   const first = activeRange("decision");
   expect(first?.startContainer.textContent).toBe("Odpověd");
   expect(first?.endContainer.textContent).toBe("nosti");
-  fireEvent.click(
-    screen.getByRole("button", { name: messages.common.nextMatch }),
-  );
+  fireEvent.keyDown(input, { key: "Enter" });
   await waitFor(() =>
     expect(screen.getByText(matchCounter(2, 2))).toBeTruthy(),
   );
@@ -222,9 +225,7 @@ test("search terms open the bar and navigate morphology matches across inline ma
     first?.startContainer,
   );
   expect(activeRange("decision")?.toString()).toBe("odpovědnosti");
-  fireEvent.click(
-    screen.getByRole("button", { name: messages.common.previousMatch }),
-  );
+  fireEvent.keyDown(input, { key: "Enter", shiftKey: true });
   await waitFor(() =>
     expect(screen.getByText(matchCounter(1, 2))).toBeTruthy(),
   );
@@ -497,3 +498,49 @@ test("a hard-wrapped decision finds words inside both drawn paragraphs", async (
     "Krajský",
   ]);
 });
+
+for (const [locale, catalog] of Object.entries({
+  en: messages,
+  ar: arabicMessages,
+})) {
+  test(`${locale}: find formats its active and total matches and Escape closes the overlay`, async () => {
+    const term = "synthetic";
+    const total = 12;
+    const screen = renderReaders(
+      [
+        {
+          name: "localized",
+          initialQuery: term,
+          content: <p>{Array.from({ length: total }, () => term).join(" ")}</p>,
+        },
+      ],
+      { locale, catalog },
+    );
+    const input = screen.getByRole("searchbox", {
+      name: catalog.folio.findReplace.findText,
+    });
+    const format = new Intl.NumberFormat(locale);
+    const expectedCounter = (current: number) =>
+      catalog.folio.findReplace.matchCounter
+        .replace("{current}", () => format.format(current))
+        .replace("{total}", () => format.format(total));
+    await waitFor(() =>
+      expect(screen.getByText(expectedCounter(1))).toBeTruthy(),
+    );
+    fireEvent.keyDown(input, { key: "Enter" });
+    fireEvent.keyDown(input, { key: "Enter" });
+    await waitFor(() =>
+      expect(screen.getByText(expectedCounter(3))).toBeTruthy(),
+    );
+    expect(activeRange("localized")?.startOffset).toBe((term.length + 1) * 2);
+    fireEvent.keyDown(input, { key: "Enter", shiftKey: true });
+    await waitFor(() =>
+      expect(screen.getByText(expectedCounter(2))).toBeTruthy(),
+    );
+    expect(activeRange("localized")?.startOffset).toBe(term.length + 1);
+    fireEvent.keyDown(input, { key: "Escape" });
+    expect(screen.queryByRole("searchbox")).toBeNull();
+    expect(highlightText("stella-inspector-find-localized")).toEqual([]);
+    expect(activeRange("localized")).toBeUndefined();
+  });
+}

@@ -83,6 +83,7 @@ import type {
   UnresolvedFolioAgentDocToolCallPart,
 } from "@/components/chat/chat-ui-tools";
 import { DockedChatStackProvider } from "@/components/chat/docked-chat-stack";
+import { useChatModelSelection } from "@/components/chat/use-chat-model-selection";
 import { useAIKeyGate } from "@/components/require-ai-key";
 import { isInputType } from "@/components/templates/template-field-manifest";
 import { SUGGEST_TEMPLATE_FIELDS_TOOL_SCOPE } from "@/features/chat/chat-query-contract";
@@ -92,7 +93,9 @@ import { useChatThreadRuntime } from "@/features/chat/hooks/use-chat-thread-runt
 import { useChatUserContext } from "@/features/chat/hooks/use-chat-user-context";
 import { buildChatRequestMessage } from "@/features/chat/lib/build-chat-request-message";
 import {
+  applyChatModelChange,
   chatThreadOptions,
+  seedNewChatThread,
   templateChatThreadOptions,
 } from "@/features/chat/queries";
 import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
@@ -207,21 +210,31 @@ const ResolvedTemplateStudioChat = (props: TemplateStudioChatProps) => {
   const [pendingPresetSend, setPendingPresetSend] =
     useState<ScopedPresetSend | null>(null);
 
+  const rotationPendingRef = useRef(false);
+
   // "New chat" rotates the server-side mapping to a fresh thread and
-  // swaps the cached id; the key change remounts the inner surface
-  // (which also drops the previous thread's in-document suggestions).
-  const rotateThread = async (): Promise<boolean> => {
+  // seeds the new thread before swapping the mapping. The inner surface
+  // keeps its composer and explicitly clears thread-owned suggestions.
+  const rotateThread = async (
+    prepareNewThread: (id: ChatThreadId) => void,
+  ): Promise<boolean> => {
+    if (rotationPendingRef.current) {
+      return false;
+    }
+    rotationPendingRef.current = true;
     const rotated = await Result.tryPromise(async () => {
       const response = await api.chat["template-thread"].rotate.post({
         templateId: toSafeId<"template">(props.templateId),
       });
       return unwrapEden(response);
     });
+    rotationPendingRef.current = false;
     if (Result.isError(rotated)) {
       getAnalytics().captureError(rotated.error);
       notifyUserError(rotated.error, t("common.somethingWentWrong"));
       return false;
     }
+    prepareNewThread(toChatThreadId(rotated.value.threadId));
     queryClient.setQueryData(
       templateChatThreadOptions({
         activeOrganizationId,
@@ -233,11 +246,14 @@ const ResolvedTemplateStudioChat = (props: TemplateStudioChatProps) => {
   };
 
   // Scoped preset: rotate first so the turn ALWAYS starts a fresh
-  // thread, then hand the send to the remounted inner instance. The
+  // thread, then hand the send to the same surface bound to the new id. The
   // cache swap and the pending-send state land in the same commit,
-  // so only the new instance ever sees the request.
-  const handleScopedPresetSend = async (request: ScopedPresetSend) => {
-    const rotated = await rotateThread();
+  // so the retained surface sends only after it is bound to the new thread.
+  const handleScopedPresetSend = async (
+    request: ScopedPresetSend,
+    prepareNewThread: (id: ChatThreadId) => void,
+  ) => {
+    const rotated = await rotateThread(prepareNewThread);
     if (rotated) {
       setPendingPresetSend(request);
     }
@@ -245,14 +261,16 @@ const ResolvedTemplateStudioChat = (props: TemplateStudioChatProps) => {
 
   return (
     <TemplateStudioChatInner
-      key={chatThreadId}
       chatThreadId={chatThreadId}
-      onNewThread={() => {
-        detached(rotateThread(), "template-studio-chat.rotate-thread");
-      }}
-      onScopedPresetSend={(request) => {
+      onNewThread={(prepareNewThread) => {
         detached(
-          handleScopedPresetSend(request),
+          rotateThread(prepareNewThread),
+          "template-studio-chat.rotate-thread",
+        );
+      }}
+      onScopedPresetSend={(request, prepareNewThread) => {
+        detached(
+          handleScopedPresetSend(request, prepareNewThread),
           "template-studio-chat.scoped-preset-send",
         );
       }}
@@ -267,8 +285,11 @@ const ResolvedTemplateStudioChat = (props: TemplateStudioChatProps) => {
 
 type TemplateStudioChatInnerProps = TemplateStudioChatProps & {
   chatThreadId: ChatThreadId;
-  onNewThread: () => void;
-  onScopedPresetSend: (request: ScopedPresetSend) => void;
+  onNewThread: (prepareNewThread: (id: ChatThreadId) => void) => void;
+  onScopedPresetSend: (
+    request: ScopedPresetSend,
+    prepareNewThread: (id: ChatThreadId) => void,
+  ) => void;
   pendingPresetSend: ScopedPresetSend | null;
   onPendingPresetSendHandled: () => void;
 };
@@ -434,7 +455,7 @@ const TemplateStudioChatInner = ({
   }, [editorView, focusedId]);
 
   // Clear this thread's decorations when the surface unmounts (leaving
-  // the Studio or swapping to a new thread).
+  // the Studio). Thread rotation clears suggestions in its handler.
   const getViewForCleanup = useLatestCallback(() => getView());
   useMountEffect(() => () => {
     const view = getViewForCleanup();
@@ -634,13 +655,24 @@ const TemplateStudioChatInner = ({
     getActiveTemplate: () => getActiveTemplate(),
     getEditApplyMode: () => CHAT_EDIT_APPLY_MODE.manual,
   };
-  const { data } = useSuspenseQuery(
-    chatThreadOptions({
-      activeOrganizationId,
-      key: threadRef,
-      context: chatThreadContext,
-    }),
-  );
+  const threadQueryOptions = chatThreadOptions({
+    activeOrganizationId,
+    key: threadRef,
+    context: chatThreadContext,
+  });
+  const { data } = useSuspenseQuery(threadQueryOptions);
+  const modelSelection = useChatModelSelection({
+    threadRef,
+    draftSelection: data,
+    onPersisted: ({ model, reasoningEffort }) =>
+      applyChatModelChange({
+        model,
+        reasoningEffort,
+        queryClient,
+        queryKey: threadQueryOptions.queryKey,
+        threadId: threadRef.threadId,
+      }),
+  });
   const chat = useChatThreadRuntime({
     activeOrganizationId,
     context: chatThreadContext,
@@ -687,28 +719,38 @@ const TemplateStudioChatInner = ({
   }, [openIfAIUnavailable]);
 
   // Dispatch a scoped preset send queued by the rotate flow: this
-  // instance mounts already bound to the fresh thread, so the send
+  // surface rebinds to the fresh thread before the queued request, so the send
   // lands there. The named tool scope rides the request body and the
   // backend narrows the turn's tools to the suggest-template-fields
   // allowlist. The local ref de-duplicates StrictMode's double
   // effect invocation, which runs before the parent can commit the
   // cleared pending-send state.
-  const presetSendDispatchedRef = useRef(false);
+  const presetSendDispatchedRef = useRef<ScopedPresetSend | null>(null);
   const dispatchPendingPresetSend = useLatestCallback(async () => {
     const request = pendingPresetSend;
-    if (request === null || presetSendDispatchedRef.current) {
+    if (request === null || presetSendDispatchedRef.current === request) {
       return;
     }
-    presetSendDispatchedRef.current = true;
+    presetSendDispatchedRef.current = request;
     onPendingPresetSendHandled();
     const available = await ensureAIAvailable();
     if (!available) {
       return;
     }
+    if (Result.isError(await modelSelection.awaitPendingSelection())) {
+      return;
+    }
+    const currentThreadId = queryClient.getQueryData(
+      templateChatThreadOptions({
+        activeOrganizationId,
+        key: { templateId, userId: user.id },
+      }).queryKey,
+    );
+    if (currentThreadId !== chatThreadId) {
+      return;
+    }
     // This send bypasses the prompt bar's `canSubmitNow` (which
-    // normally records the sent snapshot), and after the rotate
-    // remount the transport's `getActiveTemplate` can be bound to a
-    // previous instance whose ref this one cannot see. Record the
+    // normally records the sent snapshot). Record the
     // snapshot here so the apply path resolves the ops against the
     // same blocks the model receives.
     lastSentSnapshotRef.current =
@@ -720,9 +762,11 @@ const TemplateStudioChatInner = ({
       body: { toolScope: SUGGEST_TEMPLATE_FIELDS_TOOL_SCOPE },
     });
   });
-  useMountEffect(() => {
-    dispatchPendingPresetSend().catch(capturePromptSubmitError);
-  });
+  useExternalSyncEffect(() => {
+    if (pendingPresetSend !== null) {
+      dispatchPendingPresetSend().catch(capturePromptSubmitError);
+    }
+  }, [pendingPresetSend, dispatchPendingPresetSend]);
 
   /**
    * Scoped "Suggest fields" preset submit. For the selection scope
@@ -730,35 +774,14 @@ const TemplateStudioChatInner = ({
    * confines its proposals to that part; the document snapshot still
    * rides along as context for anchoring the edits.
    */
-  const submitScopedPreset = (
-    preset: AISuggestionPreset,
-    scope: PromptBarPresetScope,
-  ) => {
-    let text = preset.prompt;
-    if (scope === "selection") {
-      const view = getView();
-      const selectionText =
-        view !== null && !view.state.selection.empty
-          ? view.state.doc
-              .textBetween(
-                view.state.selection.from,
-                view.state.selection.to,
-                "\n",
-                "\n",
-              )
-              .trim()
-          : "";
-      if (selectionText.length > 0) {
-        text = `${preset.prompt}\n\n${t("templates.studio.aiScopeSelectionPrompt")}\n${selectionText}`;
-      }
-    }
-    onScopedPresetSend({ text });
-  };
-
   const editorController = useChatEditor({
     placeholder: t("chat.editableFilePlaceholder", { title: fileName }),
     threadRef,
   });
+  const focusComposer = editorController.focus;
+  useExternalSyncEffect(() => {
+    focusComposer();
+  }, [chatThreadId, focusComposer]);
 
   // ---- tool execution ----------------------------------------------------------
 
@@ -1291,14 +1314,58 @@ const TemplateStudioChatInner = ({
       window.removeEventListener("keydown", handler);
     };
   }, [panelOpen]);
-  // Dock new-chat handler: abort any live stream first — the rotation
-  // remount only swaps the surface, while the old Chat instance would
-  // keep streaming inside the query cache.
-  const startNewThread = () => {
+  // The composer remains mounted; release the previous thread runtime
+  // before resetting its suggestions and rebinding the surface.
+  const prepareNewThread = (nextId: ChatThreadId) => {
     leave();
+    seedNewChatThread({
+      queryClient,
+      activeOrganizationId,
+      key: { scope: "global", threadId: nextId },
+      previousKey: threadRef,
+      context: chatThreadContext,
+      threadExists: true,
+      contextMatterIds: data.contextMatterIds,
+    });
     setPanelOpen(false);
-    onNewThread();
+    setSuggestions([]);
+    setFocusedId(null);
+    fieldMetaMap.clear();
+    mirrorAcceptHandlers.clear();
+    streamingPlacements.clear();
+    executedActiveDocxEditToolCallIdsRef.current?.clear();
+    suggestChangesOutputCacheRef.current?.clear();
+    lastSentSnapshotRef.current = null;
+    activeScopedPresetTurnMessageIdRef.current = null;
   };
+  const startNewThread = () => {
+    onNewThread(prepareNewThread);
+  };
+  const submitScopedPreset = (
+    preset: AISuggestionPreset,
+    scope: PromptBarPresetScope,
+  ) => {
+    let text = preset.prompt;
+    if (scope === "selection") {
+      const view = getView();
+      const selectionText =
+        view !== null && !view.state.selection.empty
+          ? view.state.doc
+              .textBetween(
+                view.state.selection.from,
+                view.state.selection.to,
+                "\n",
+                "\n",
+              )
+              .trim()
+          : "";
+      if (selectionText.length > 0) {
+        text = `${preset.prompt}\n\n${t("templates.studio.aiScopeSelectionPrompt")}\n${selectionText}`;
+      }
+    }
+    onScopedPresetSend({ text }, prepareNewThread);
+  };
+
   useLayoutEffect(() => {
     const scrollElement = threadScrollRef.current;
     if (!scrollElement) {
@@ -1332,6 +1399,7 @@ const TemplateStudioChatInner = ({
             scrollRef={threadScrollRef}
           >
             <ChatThreadMessages
+              onNewThread={hasMessages ? startNewThread : null}
               approvalPendingMessageId={approvalPendingMessageId}
               error={error}
               isGenerating={isGenerating}
@@ -1439,7 +1507,7 @@ const TemplateStudioChatInner = ({
           onSubmit={({ prompt, files }) => {
             // ensureAIAvailable is a real round-trip; a concurrent "new chat"
             // rotation can swap the active thread while it is in flight. This
-            // instance (keyed by chatThreadId) still targets its own thread,
+            // send callback still targets its initiating thread,
             // so bail if the active thread moved rather than deliver the send
             // to a thread the user has already left.
             const submittingThreadId = chatThreadId;
@@ -1457,18 +1525,32 @@ const TemplateStudioChatInner = ({
                 if (currentThreadId !== submittingThreadId) {
                   return;
                 }
+                if (
+                  Result.isError(await modelSelection.awaitPendingSelection())
+                ) {
+                  return;
+                }
+                const message = await buildChatRequestMessage({
+                  files,
+                  html: prompt,
+                });
+                if (
+                  queryClient.getQueryData(
+                    templateChatThreadOptions({
+                      activeOrganizationId,
+                      key: { templateId, userId: user.id },
+                    }).queryKey,
+                  ) !== submittingThreadId
+                ) {
+                  return;
+                }
                 // Always pop the thread open on send, even if the user
                 // minimised it earlier.
                 setPanelOpen(true);
                 // The typed composer submit carries any (+) attachments
                 // (reference docs to lift clauses from); the scoped-preset
                 // path below stays text-only.
-                await sendMessage(
-                  await buildChatRequestMessage({
-                    files,
-                    html: prompt,
-                  }),
-                );
+                await sendMessage(message);
                 return;
               })
               .catch(capturePromptSubmitError);
@@ -1511,6 +1593,13 @@ const TemplateStudioChatInner = ({
             <ChatComposerDock
               data={data}
               onNewThread={hasMessages ? startNewThread : null}
+              models={{
+                activeOrganizationId,
+                threadRef,
+                selectedModel: data.model,
+                selectedReasoningEffort: data.reasoningEffort,
+                selectModel: modelSelection.selectModel,
+              }}
               status="ready"
               threadRef={threadRef}
             />

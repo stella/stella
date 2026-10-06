@@ -1,6 +1,7 @@
 import type { QueryClient } from "@tanstack/react-query";
 
 import type { ChatDraftAttachment } from "@/components/chat-editor-provider";
+import { persistChatModelSelection } from "@/components/chat/use-chat-model-selection";
 import type { ChatThreadOptionsContext } from "@/features/chat/chat-query-contract";
 import { buildChatRequestMessage } from "@/features/chat/lib/build-chat-request-message";
 import { acquireChatRuntime, chatThreadOptions } from "@/features/chat/queries";
@@ -13,6 +14,7 @@ type StartNewThreadCommandHandoffArgs = {
   html: string;
   queryClient: QueryClient;
   threadRef: ChatThreadRef;
+  isCurrent: () => boolean;
 };
 
 /**
@@ -28,6 +30,7 @@ export const startNewThreadCommandHandoff = async ({
   html,
   queryClient,
   threadRef,
+  isCurrent,
 }: StartNewThreadCommandHandoffArgs): Promise<void> => {
   const [message, data] = await Promise.all([
     buildChatRequestMessage({ files, html }),
@@ -40,6 +43,22 @@ export const startNewThreadCommandHandoff = async ({
       staleTime: "static",
     }),
   ]);
+  if (!isCurrent()) {
+    return;
+  }
+  if (
+    (!data.threadExists || data.modelSelectionSource === "carried") &&
+    (data.model !== null || data.reasoningEffort !== null)
+  ) {
+    const selection = await persistChatModelSelection({
+      threadRef,
+      selection: { model: data.model, reasoningEffort: data.reasoningEffort },
+    });
+    selection.unwrap();
+  }
+  if (!isCurrent()) {
+    return;
+  }
   const chat = acquireChatRuntime({
     activeOrganizationId,
     context,
