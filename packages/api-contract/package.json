@@ -12,6 +12,7 @@
     "./action-admission": "./src/action-admission.ts",
     "./browser-control": "./src/browser-control.ts",
     "./visual-sandbox": "./src/visual-sandbox.ts",
+    "./visual-bridge-policy": "./src/visual-bridge-policy.ts",
     "./generated-visual": "./src/generated-visual.ts",
     "./browser-control-json-schema": "./src/browser-control-json-schema.ts",
     "./chat": "./src/chat.ts",

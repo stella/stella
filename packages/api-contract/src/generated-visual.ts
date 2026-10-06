@@ -8,7 +8,6 @@ export const GENERATED_VISUAL_LIMITS = {
   dataNodes: 50_000,
   titleChars: 120,
   links: 400,
-  linkIdChars: 128,
 } as const;
 
 type VisualDataVisit = { value: unknown; depth: number };
@@ -101,7 +100,7 @@ export const generatedVisualInputSchema = v.strictObject({
           id: v.pipe(
             v.string(),
             v.minLength(1),
-            v.maxLength(GENERATED_VISUAL_LIMITS.linkIdChars),
+            v.maxLength(VISUAL_SANDBOX_LIMITS.linkIdChars),
           ),
           decisionId: v.pipe(v.string(), v.minLength(1), v.maxLength(256)),
         }),
@@ -113,3 +112,9 @@ export const generatedVisualInputSchema = v.strictObject({
 export type GeneratedVisualInput = v.InferOutput<
   typeof generatedVisualInputSchema
 >;
+
+export const VISUAL_DATA_SCRIPT_ID = "stella-visual-data";
+export const visualRenderMessageSchema = v.strictObject({
+  type: v.literal("render"),
+  ...generatedVisualInputSchema.entries,
+});

@@ -3791,7 +3791,19 @@
     "seconds": 1,
     "source": "estimated"
   },
+  "src/handlers/visual-sandbox/browser/guest-api.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
   "src/handlers/visual-sandbox/treemap-model.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
+  "src/handlers/visual-sandbox/literal-links.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
+  "src/handlers/visual-sandbox/prepare.test.ts": {
     "seconds": 1,
     "source": "estimated"
   },
