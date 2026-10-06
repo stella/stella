@@ -2194,6 +2194,10 @@ jobs:
         if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
         run: bun test scripts/ci-plan.test.ts
 
+      - name: Test documentation and landing CI scope
+        if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
+        run: bun test scripts/ci-package-scope.test.ts
+
       - name: Test main heavy workflow contracts
         if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
         run: bun test scripts/main-heavy-plan.test.ts scripts/main-heavy.test.ts scripts/validate-main-heavy-sha.test.ts

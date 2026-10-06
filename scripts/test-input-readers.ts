@@ -200,6 +200,71 @@ export const readStringLiterals = (
   return literals;
 };
 
+/** A flat call options object containing only static string values. */
+export const readLiteralCallOptions = (
+  source: string,
+): ReadonlyMap<string, string> | undefined => {
+  const state: ScanState = { index: 0, line: 1 };
+  const skipSpace = () => {
+    while (
+      WHITESPACE.test(source.charAt(state.index)) &&
+      state.index < source.length
+    ) {
+      state.index += 1;
+    }
+  };
+  const take = (token: string) => {
+    skipSpace();
+    if (source.charAt(state.index) !== token) {
+      return false;
+    }
+    state.index += 1;
+    return true;
+  };
+  if (!take("(") || !take("{")) {
+    return undefined;
+  }
+  const options = new Map<string, string>();
+  skipSpace();
+  while (source.charAt(state.index) !== "}") {
+    const start = state.index;
+    while (IDENTIFIER_CHARACTER.test(source.charAt(state.index))) {
+      state.index += 1;
+    }
+    const key = source.slice(start, state.index);
+    if (!key || options.has(key) || !take(":")) {
+      return undefined;
+    }
+    skipSpace();
+    const quote = source.charAt(state.index);
+    if (quote !== '"' && quote !== "'") {
+      return undefined;
+    }
+    const quotedStart = state.index;
+    const value = readQuoted(source, state, quote);
+    if (
+      value === undefined ||
+      source.slice(quotedStart, state.index).includes("\\")
+    ) {
+      return undefined;
+    }
+    options.set(key, value);
+    skipSpace();
+    if (source.charAt(state.index) === "}") {
+      break;
+    }
+    if (!take(",")) {
+      return undefined;
+    }
+    skipSpace();
+  }
+  if (!take("}") || !take(")")) {
+    return undefined;
+  }
+  skipSpace();
+  return state.index === source.length ? options : undefined;
+};
+
 export const readTestInputs = (
   root: string,
 ): ReadonlyMap<string, readonly string[]> => {

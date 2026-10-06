@@ -214,9 +214,23 @@ const withInstallCache = (step: Step, job: Record<string, unknown>): Step => {
     with: { ...inputs, save: `\${{ github.ref == 'refs/heads/main' }}` },
   };
 };
+const PACKAGE_SCOPE = "needs.ci-plan.outputs.package_checks_required == 'true'";
+const DOCUMENTATION_CHECKS = new Set([
+  "Documentation source policy rule",
+  "Instruction references",
+]);
+// Documentation checks retain all prerequisites while widening beyond package scope.
+const documentationScope = (step: Step): Step => {
+  if (!DOCUMENTATION_CHECKS.has(step.name) || typeof step["if"] !== "string") {
+    return step;
+  }
+  return { ...step, if: step["if"].replace(` && (${PACKAGE_SCOPE})`, "") };
+};
+
 const ownedSteps = (steps: readonly Step[]) =>
   steps
     .filter(({ name }) => !prerequisites.has(name))
+    .map(documentationScope)
     .map(withoutContinuation)
     .map(withoutStepId)
     .map(withoutActionRef)
@@ -415,7 +429,19 @@ test("each CI check leg preserves merge-base setup, supply-chain protection and 
     const { steps, "timeout-minutes": timeout, ...scope } = partition;
     const originalSetup = setupSteps(originalSteps)
       .map(withIsolatedCachePort)
-      .map((step) => withInstallCache(step, base));
+      .map((step) => withInstallCache(step, base))
+      .map((step) => {
+        if (
+          partitionIds.at(index) !== "ci-checks-policy" ||
+          step.name !== "Install dependencies" ||
+          step["if"] !== PACKAGE_SCOPE
+        ) {
+          return step;
+        }
+        const widened = { ...step };
+        delete widened["if"];
+        return widened;
+      });
     if (!baseJobs["ci-checks"]) {
       const baseNames = new Set(originalSteps.map(({ name }) => name));
       expect(
@@ -674,16 +700,17 @@ const expectContinuation = (steps: readonly Step[], leg: string) => {
       );
     let prefix: string = CONTINUATION_PREFIXES.checkout;
     if (index > installIndex) {
-      prefix = packageDependent
-        ? CONTINUATION_PREFIXES.installPackages
-        : CONTINUATION_PREFIXES.install;
+      prefix =
+        packageDependent || DOCUMENTATION_CHECKS.has(step.name)
+          ? CONTINUATION_PREFIXES.installPackages
+          : CONTINUATION_PREFIXES.install;
     }
     expect(condition.startsWith(prefix), step.name).toBe(true);
     expect(withoutContinuation(step), step.name).not.toEqual(step);
     if (step.name === "Install dependencies") {
       const safety = leg === "ci-checks-rest" ? SAFETY_SUFFIX : "";
       expect(condition).toBe(
-        `${CONTINUATION_PREFIXES.checkout} && (needs.ci-plan.outputs.package_checks_required == 'true')${safety} }}`,
+        `${CONTINUATION_PREFIXES.checkout}${leg === "ci-checks-policy" ? "" : ` && (${PACKAGE_SCOPE})`}${safety} }}`,
       );
     }
     expect(continueOnError, step.name).toBeUndefined();
@@ -1106,4 +1133,27 @@ test("setup migration preserves runtime inputs and protected install policy", ()
   }
   const mutable = { ...setup, uses: "oven-sh/setup-bun@main" };
   expect(withInstallCache(mutable, { steps: [mutable] })).toEqual(mutable);
+});
+
+test("documentation policy widens only its package gate and retains successful installation", () => {
+  const policy = partitions[partitionIds.indexOf("ci-checks-policy")];
+  if (!policy) {
+    panic("Missing policy leg");
+  }
+  for (const name of DOCUMENTATION_CHECKS) {
+    const step = policy.steps.find((entry) => entry.name === name);
+    expect(step?.["if"]).toBe(`${CONTINUATION_PREFIXES.installPackages} }}`);
+    expect(step?.["run"]).toBeTruthy();
+    const base = {
+      name,
+      run: "bun guard.ts",
+      if: `${CONTINUATION_PREFIXES.installPackages} && (${PACKAGE_SCOPE}) }}`,
+    };
+    expect(documentationScope(base)).toEqual({
+      ...base,
+      if: `${CONTINUATION_PREFIXES.installPackages} }}`,
+    });
+    const unrelated = { ...base, name: "Unrelated guard" };
+    expect(documentationScope(unrelated)).toEqual(unrelated);
+  }
 });

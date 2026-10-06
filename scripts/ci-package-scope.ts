@@ -7,7 +7,11 @@ import {
   landingClosure,
   parseLockfile,
 } from "./landing-deploy-scope";
-import { readStringLiterals, readTestInputs } from "./test-input-readers";
+import {
+  readLiteralCallOptions,
+  readStringLiterals,
+  readTestInputs,
+} from "./test-input-readers";
 
 const ROOT = path.resolve(import.meta.dir, "..");
 const GLOBAL =
@@ -20,40 +24,56 @@ const PROVENANCE = /^(?:\.provenance\.yml$|provenance\/)/u;
 const matches = (file: string, pattern: string) =>
   file === pattern || new Bun.Glob(pattern).match(file);
 
-// Astro globs are relative to the loader's base, not the repository root.
-// Unknown call shapes retain the broad pattern rather than guessing a base.
-const loaderPatterns = (source: string, file: string, target: string) => {
+const allMarkdownPatterns = () =>
+  ["md", "mdx"].map((extension) => `**/*.${extension}`);
+
+// Bind loader patterns to actual imports; quoted fixture source declares none.
+const astroMarkdownInputs = (
+  source: string,
+  file: string,
+): string[] | undefined => {
+  const importsAstro =
+    source.includes("astro/loaders") &&
+    new Bun.Transpiler({
+      loader: file.endsWith("tsx") || file.endsWith("jsx") ? "tsx" : "ts",
+    })
+      .scan(source)
+      .imports.some(({ path: imported }) => imported === "astro/loaders");
+  if (!importsAstro) {
+    return undefined;
+  }
   const patterns: string[] = [];
-  let unknown = false;
   const workspace = /^(?:apps|packages)\//u.test(file)
     ? file.split("/").slice(0, 2).join("/")
     : ".";
+  let calls = 0;
   readStringLiterals(source, (callee, call) => {
-    if (
-      callee !== "glob" ||
-      !readStringLiterals(call).some(({ value }) => value === target)
-    ) {
+    if (callee !== "glob") {
       return;
     }
-    // Only a flat options object with two static properties proves a base.
-    // Spreads, expressions, nested options and extra arguments remain broad.
-    const forward =
-      /^\(\s*\{\s*pattern\s*:\s*(["'])([^"'\\]*?)\1\s*,\s*base\s*:\s*(["'])([^"'\\]*?)\3\s*,?\s*\}\s*\)$/u.exec(
-        call,
-      );
-    const reverse =
-      /^\(\s*\{\s*base\s*:\s*(["'])([^"'\\]*?)\1\s*,\s*pattern\s*:\s*(["'])([^"'\\]*?)\3\s*,?\s*\}\s*\)$/u.exec(
-        call,
-      );
-    const pattern = forward?.[2] ?? reverse?.[4];
-    const base = forward?.[4] ?? reverse?.[2];
-    if (pattern === target && base !== undefined) {
-      patterns.push(path.posix.join(workspace, base, target));
+    calls += 1;
+    const options = readLiteralCallOptions(call);
+    const pattern = options?.get("pattern");
+    const base = options?.get("base");
+    if (
+      options?.size === 2 &&
+      pattern !== undefined &&
+      MARKDOWN.test(pattern) &&
+      base !== undefined
+    ) {
+      patterns.push(path.posix.join(workspace, base, pattern));
     } else {
-      unknown = true;
+      for (const fallback of allMarkdownPatterns()) {
+        patterns.push(fallback);
+      }
     }
   });
-  return !unknown && patterns.length > 0 ? patterns : [target];
+  if (calls === 0) {
+    for (const fallback of allMarkdownPatterns()) {
+      patterns.push(fallback);
+    }
+  }
+  return patterns;
 };
 
 // Declarations bind the selector to generator and test input owners. Literal
@@ -88,23 +108,10 @@ const markdownInputs = (root: string) => {
     ) {
       continue;
     }
-    if (/from\s*["']astro\/loaders["']/u.test(source)) {
-      let calls = 0;
-      readStringLiterals(source, (callee, call) => {
-        if (callee !== "glob") {
-          return;
-        }
-        calls += 1;
-        if (
-          !readStringLiterals(call).some(({ value }) => MARKDOWN.test(value))
-        ) {
-          patterns.add("**/*.md");
-          patterns.add("**/*.mdx");
-        }
-      });
-      if (calls === 0) {
-        patterns.add("**/*.md");
-        patterns.add("**/*.mdx");
+    const loaderInputs = astroMarkdownInputs(source, file);
+    if (loaderInputs !== undefined) {
+      for (const input of loaderInputs) {
+        patterns.add(input);
       }
     }
     for (const { value, callee } of readStringLiterals(source)) {
@@ -128,17 +135,10 @@ const markdownInputs = (root: string) => {
       if (
         MARKDOWN.test(target) &&
         !target.includes("\n") &&
-        !target.includes(" ")
+        !target.includes(" ") &&
+        (callee !== "glob" || loaderInputs === undefined)
       ) {
-        const inputs =
-          target.startsWith("*") &&
-          callee === "glob" &&
-          /from\s*["']astro\/loaders["']/u.test(source)
-            ? loaderPatterns(source, file, target)
-            : [target];
-        for (const input of inputs) {
-          patterns.add(input);
-        }
+        patterns.add(target);
       }
       if (
         ["readdir", "readdirSync", "Glob"].includes(callee ?? "") &&

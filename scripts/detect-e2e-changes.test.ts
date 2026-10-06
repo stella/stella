@@ -574,7 +574,9 @@ describe("detect-e2e-changes", () => {
     for (const leg of ["api", "web", "rest"]) {
       const codeQuality = workflowJob(`code-quality-${leg}`);
       expect(plan).not.toContain(".github/*|.provenance.yml|provenance/*)");
-      expect(plan).toContain(".provenance.yml|provenance/*)");
+      expect(plan).toContain(
+        "bun scripts/ci-package-scope.ts --package-checks",
+      );
       expect(codeQuality).toContain(
         `EVENT_NAME: ${githubExpression("github.event_name")}`,
       );

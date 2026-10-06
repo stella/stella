@@ -328,7 +328,7 @@ test("loader option expressions retain the broad pattern", () => {
 test("dynamic and aliased content loaders retain Markdown checks", () => {
   repository((root, write) => {
     for (const source of [
-      `import { glob } from "astro/loaders"; glob({ pattern: \`${"$"}{prefix}/*.md\`, base: "notes/consumed" });`,
+      `import { glob } from "astro/loaders"; glob({ pattern: \`\${prefix}/*.md\`, base: "notes/consumed" });`,
       'import { glob as load } from "astro/loaders"; load({ pattern: "**/*.md", base: "notes/consumed" });',
     ]) {
       write("scripts/content.ts", source);
@@ -343,5 +343,47 @@ test("dynamic and aliased content loaders retain Markdown checks", () => {
     expect(requiresPackageChecks({ root, changed: ["notes/new.md"] })).toBe(
       true,
     );
+  });
+});
+
+test("fixture source containing content loader text does not declare a loader import", () => {
+  repository((root, write) => {
+    write(
+      "scripts/fixture.test.ts",
+      `import { readFileSync } from "node:fs"; const source = 'import { glob } from "astro/loaders"; glob({ pattern: "**/*.md" });';`,
+    );
+    expect(requiresPackageChecks({ root, changed: ["notes/new.md"] })).toBe(
+      false,
+    );
+  });
+});
+
+test("loader patterns with directory prefixes resolve under their declared base", () => {
+  repository((root, write) => {
+    write(
+      "scripts/content.ts",
+      'import {glob} from "astro/loaders"; glob({pattern:"articles/**/*.md",base:"notes/consumed"});',
+    );
+    expect(
+      requiresPackageChecks({
+        root,
+        changed: ["notes/consumed/articles/new.md"],
+      }),
+    ).toBe(true);
+    expect(requiresPackageChecks({ root, changed: ["articles/new.md"] })).toBe(
+      false,
+    );
+  });
+});
+
+test("unrelated Markdown options cannot certify a computed loader pattern", () => {
+  repository((root, write) => {
+    write(
+      "scripts/content.ts",
+      `import {glob} from "astro/loaders"; glob({pattern:\`\${prefix}/*.md\`,base:"notes/consumed",ignore:"README.md"});`,
+    );
+    expect(
+      requiresPackageChecks({ root, changed: ["notes/consumed/new.md"] }),
+    ).toBe(true);
   });
 });
