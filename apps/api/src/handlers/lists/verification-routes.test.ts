@@ -84,9 +84,12 @@ describe("list verification route admission", () => {
       if (!isRecord(config)) {
         continue;
       }
-      const featureAccess = config.featureAccess;
+      const featureAccess = config["featureAccess"];
       expect(isRecord(featureAccess)).toBe(true);
-      if (!isRecord(featureAccess) || featureAccess.featureId !== FEATURE_ID) {
+      if (
+        !isRecord(featureAccess) ||
+        featureAccess["featureId"] !== FEATURE_ID
+      ) {
         continue;
       }
       const handler = module.default.handler;
