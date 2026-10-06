@@ -1291,13 +1291,35 @@ describe("dev env factories", () => {
       skipInstall: true,
     });
 
-    expect(steps).toHaveLength(1);
-    expect(steps.at(0)?.cmd.slice(1)).toEqual(["run", "db:migrate"]);
+    expect(steps).toHaveLength(2);
+    expect(steps.at(0)?.cmd.slice(1)).toEqual([
+      "run",
+      "generate:capability-runtime",
+    ]);
+    expect(steps.at(1)?.cmd.slice(1)).toEqual(["run", "db:migrate"]);
     expect(steps.at(0)?.cwd).toBe(path.resolve(rootDir, "apps/api"));
-    expect(steps.at(0)?.env).toMatchObject({
+    expect(steps.at(1)?.env).toMatchObject({
       DATABASE_URL: "postgres://postgres:postgres@localhost:5442/stella",
     });
-    expect(steps.at(0)?.label).toBe("Applying database migrations");
+    expect(steps.at(1)?.label).toBe("Applying database migrations");
+  });
+
+  test("every API dev mode prepares runtime sources even when installation and migrations are skipped", () => {
+    const rootDir = createTempDir();
+    for (const mode of ["dev", "dev:api", "dev:desktop", "dev:web"] as const) {
+      const steps = buildPreparationSteps({
+        infraOffset: 0,
+        infraPorts: infraPortsForOffset(0),
+        mode,
+        ports: portsForOffset(0),
+        rootDir,
+        skipDbPush: true,
+        skipInstall: true,
+      });
+      expect(steps.map(({ cmd }) => cmd.slice(1))).toEqual(
+        mode === "dev:web" ? [] : [["run", "generate:capability-runtime"]],
+      );
+    }
   });
 
   test("threads computed ports into the API env without infra overrides at offset 0", () => {
