@@ -77,6 +77,8 @@
     "publish-npm.yml/release-trigger": "main",
     "publish-npm.yml/pack": "main",
     "publish-npm.yml/release": "main",
+    "publish-npm.yml/verify-npm": "main",
+    "mirror-ci-service-images.yml/mirror": "main",
     "ai-provider-canary.yml/provider-canary": "main",
     "ai-provider-canary.yml/require-provider-coverage": "main",
     "cancel-stale-merge-groups.yml/cancel": "main",
