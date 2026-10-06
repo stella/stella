@@ -58,7 +58,7 @@ export const signalSessionChange = (): void => {
   // event; the nonce makes every note a change.
   const storage = deviceStorage("local");
   Result.try(() => {
-    storage?.setItem(SESSION_SIGNAL_KEY, JSON.stringify(signal));
+    storage.setItem(SESSION_SIGNAL_KEY, JSON.stringify(signal));
   }).unwrapOr(undefined);
 };
 

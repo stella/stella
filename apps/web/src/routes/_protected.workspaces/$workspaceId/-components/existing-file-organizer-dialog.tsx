@@ -47,8 +47,7 @@ import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { useFormatter } from "@/i18n/formatting-context";
 import { useI18nStore } from "@/i18n/i18n-store";
-import { browserStateStorage } from "@/lib/account/browser-storage";
-import { userStorageKey } from "@/lib/account/user-scoped-storage";
+import { useUserStorageState } from "@/lib/account/use-user-storage-state";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { detached } from "@/lib/detached";
@@ -77,6 +76,9 @@ export type ExistingOrganizerFile = {
   parentId: string | null;
   mimeType: string | null;
 };
+
+const decodeInstructions = (raw: string | null) => raw ?? "";
+const encodeInstructions = (value: string) => value;
 
 type ExistingFileOrganizerDialogProps = {
   workspaceId: string;
@@ -132,15 +134,13 @@ export const ExistingFileOrganizerDialog = ({
   const locale = useI18nStore((s) => s.loadedLang);
   const queryClient = useQueryClient();
   const analytics = useAnalytics();
-  const userInstructionsKey = userStorageKey(
-    `stella.organize-suggestions.user-instructions.${workspaceId}`,
-  );
-  const [userInstructions, setUserInstructions] = useState(() => {
-    if (typeof window === "undefined") {
-      return "";
-    }
-    return browserStateStorage("local").getItem(userInstructionsKey) ?? "";
-  });
+  const { value: userInstructions, setValue: setUserInstructions } =
+    useUserStorageState({
+      baseKey: `stella.organize-suggestions.user-instructions.${workspaceId}`,
+      area: "local",
+      decode: decodeInstructions,
+      encode: encodeInstructions,
+    });
   const [showInstructions, setShowInstructions] = useState(false);
   const getSuggestionRequestContext = useLatestCallback(() => ({
     locale,
@@ -655,15 +655,7 @@ export const ExistingFileOrganizerDialog = ({
           <UserInstructionsSection
             disabled={false}
             expanded={showInstructions}
-            onChange={(value) => {
-              setUserInstructions(value);
-              if (typeof window !== "undefined") {
-                browserStateStorage("local").setItem(
-                  userInstructionsKey,
-                  value,
-                );
-              }
-            }}
+            onChange={setUserInstructions}
             onRegenerate={() => {
               detached(
                 requestAiSuggestions(),

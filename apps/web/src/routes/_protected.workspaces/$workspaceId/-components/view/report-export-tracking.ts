@@ -7,6 +7,7 @@ import { stellaToast } from "@stll/ui/toast";
 import { browserStateStorage } from "@/lib/account/browser-storage";
 import {
   followStorageOwner,
+  storageOwner,
   userScopedStateStorage,
 } from "@/lib/account/user-scoped-storage";
 
@@ -58,6 +59,13 @@ export const useReportExportTrackingStore = create<ReportExportTrackingStore>()(
         return toastId;
       },
       track: (reportExport) => {
+        const owner = storageOwner();
+        if (
+          owner.kind !== "user" ||
+          owner.userId !== reportExport.requestedBy
+        ) {
+          return;
+        }
         set((state) => {
           const trackedAt = nextTrackedAt(
             state.exports,

@@ -35,7 +35,12 @@ import { adoptRestoredLegalDocumentChatThreads } from "@/features/chat/legal-doc
 import type { RestoredLegalDocumentChatThread } from "@/features/chat/legal-document-chat-threads";
 import { getTranslator } from "@/i18n/i18n-store";
 import { requireBrowserStorage } from "@/lib/account/browser-storage";
-import { userStorageKey } from "@/lib/account/user-scoped-storage";
+import {
+  isCurrentStorageOwner,
+  onStorageOwnerChange,
+  storageOwner,
+  userStorageKey,
+} from "@/lib/account/user-scoped-storage";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { readStoredJson } from "@/lib/stored-json";
@@ -121,15 +126,12 @@ const readPersistedMinimized = (scope: InspectorBroadcastScope): boolean => {
   if (typeof window === "undefined") {
     return false;
   }
-  try {
-    return (
-      requireBrowserStorage("local").getItem(
-        getInspectorMinimizedStorageKey(scope),
-      ) === "1"
-    );
-  } catch {
-    return false;
-  }
+  return requireBrowserStorage("local")
+    .andThen((storage) =>
+      Result.try(() => storage.getItem(getInspectorMinimizedStorageKey(scope))),
+    )
+    .map((value) => value === "1")
+    .unwrapOr(false);
 };
 
 const writePersistedMinimized = (
@@ -139,14 +141,16 @@ const writePersistedMinimized = (
   if (typeof window === "undefined") {
     return;
   }
-  try {
-    requireBrowserStorage("local").setItem(
-      getInspectorMinimizedStorageKey(scope),
-      minimized ? "1" : "0",
-    );
-  } catch {
-    // The in-memory store remains usable when storage is unavailable.
-  }
+  requireBrowserStorage("local")
+    .andThen((storage) =>
+      Result.try(() =>
+        storage.setItem(
+          getInspectorMinimizedStorageKey(scope),
+          minimized ? "1" : "0",
+        ),
+      ),
+    )
+    .unwrapOr(undefined);
 };
 
 let inspectorBroadcastSession: InspectorBroadcastSession | null = null;
@@ -531,12 +535,12 @@ const readPersistedInspectorState = (
   if (typeof window === "undefined") {
     return null;
   }
-  const readResult = Result.try(() =>
-    readStoredJson(
-      requireBrowserStorage("local").getItem(
-        getInspectorStateStorageKey(scope),
+  const readResult = requireBrowserStorage("local").andThen((storage) =>
+    Result.try(() =>
+      readStoredJson(
+        storage.getItem(getInspectorStateStorageKey(scope)),
+        v.unknown(),
       ),
-      v.unknown(),
     ),
   );
   if (Result.isError(readResult)) {
@@ -600,16 +604,18 @@ const writePersistedInspectorState = (
     ),
   );
   const storageKey = getInspectorStateStorageKey(scope);
-  const writeResult = Result.try(() =>
-    requireBrowserStorage("local").setItem(
-      storageKey,
-      JSON.stringify({
-        tabs,
-        groups: state.groups,
-        groupAssignments,
-        activeId: tabIds.has(state.activeId ?? "") ? state.activeId : null,
-        collapsedGroupIds: state.collapsedGroupIds,
-      }),
+  const writeResult = requireBrowserStorage("local").andThen((storage) =>
+    Result.try(() =>
+      storage.setItem(
+        storageKey,
+        JSON.stringify({
+          tabs,
+          groups: state.groups,
+          groupAssignments,
+          activeId: tabIds.has(state.activeId ?? "") ? state.activeId : null,
+          collapsedGroupIds: state.collapsedGroupIds,
+        }),
+      ),
     ),
   );
   if (Result.isOk(writeResult)) {
@@ -633,7 +639,11 @@ const subscribeInspectorPersistence = (
   store: StoreApi<InspectorTabsStore>,
   scope: InspectorBroadcastScope,
 ) => {
+  const owner = storageOwner();
   const unsubscribeState = store.subscribe((state, previousState) => {
+    if (!isCurrentStorageOwner(owner)) {
+      return;
+    }
     if (
       state.tabs !== previousState.tabs ||
       state.groups !== previousState.groups ||
@@ -645,6 +655,9 @@ const subscribeInspectorPersistence = (
     }
   });
   const unsubscribeMinimized = store.subscribe((state, previousState) => {
+    if (!isCurrentStorageOwner(owner)) {
+      return;
+    }
     if (state.minimized !== previousState.minimized) {
       writePersistedMinimized(scope, state.minimized);
     }
@@ -659,6 +672,7 @@ export const createInspectorBroadcastSession = (
   store: StoreApi<InspectorTabsStore>,
   scope: InspectorBroadcastScope,
 ): InspectorBroadcastSession => {
+  const owner = storageOwner();
   const channel = new window.BroadcastChannel(
     getInspectorTabsBroadcastChannelName(scope),
   );
@@ -668,6 +682,9 @@ export const createInspectorBroadcastSession = (
   let lastTabsClock: InspectorBroadcastClock | null = null;
 
   const postTabs = (recipientId?: string) => {
+    if (!isCurrentStorageOwner(owner)) {
+      return;
+    }
     const state = store.getState();
     const tabs = state.tabs.filter((tab) => !isGenericInspectorTab(tab));
     if (
@@ -711,6 +728,9 @@ export const createInspectorBroadcastSession = (
   const unsubscribePersistence = subscribeInspectorPersistence(store, scope);
 
   const handleMessage = (event: MessageEvent<unknown>) => {
+    if (!isCurrentStorageOwner(owner)) {
+      return;
+    }
     const message = event.data;
     if (
       !isInspectorBroadcastMessage(message) ||
@@ -781,7 +801,7 @@ export const createInspectorBroadcastSession = (
   };
 };
 
-export const initializeInspectorTabBroadcast = (
+const initializeInspectorScope = (
   store: StoreApi<InspectorTabsStore>,
   scope: InspectorBroadcastScope,
 ) => {
@@ -843,4 +863,34 @@ export const initializeInspectorTabBroadcast = (
   }
   inspectorBroadcastSession = createInspectorBroadcastSession(store, scope);
   return inspectorBroadcastSession.release;
+};
+
+export const initializeInspectorTabBroadcast = (
+  store: StoreApi<InspectorTabsStore>,
+  scope: InspectorBroadcastScope,
+) => {
+  let disconnect = initializeInspectorScope(store, scope);
+  const unsubscribeOwner = onStorageOwnerChange(() => {
+    disconnect();
+    disconnect = noopInspectorBroadcastCleanup;
+    inspectorScopeOwnership.delete(store);
+    store.setState({
+      tabs: [],
+      groups: [],
+      groupAssignments: {},
+      collapsedGroupIds: [],
+      activeId: null,
+      reviveSuggestion: null,
+      minimized: false,
+    });
+    const owner = storageOwner();
+    if (owner.kind === "user" && owner.userId === scope.userId) {
+      disconnect = initializeInspectorScope(store, scope);
+    }
+  });
+  return () => {
+    unsubscribeOwner();
+    disconnect();
+    disconnect = noopInspectorBroadcastCleanup;
+  };
 };

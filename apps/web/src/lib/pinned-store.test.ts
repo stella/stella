@@ -1,8 +1,8 @@
 import { QueryClient } from "@tanstack/react-query";
 import { beforeEach, describe, expect, test } from "bun:test";
 
+import { installUserScopedStorage } from "@/lib/account/install-user-scoped-storage";
 import {
-  installUserScopedStorage,
   releaseUserStorage,
   userStorageKey,
 } from "@/lib/account/user-scoped-storage";
@@ -13,15 +13,15 @@ Object.defineProperty(globalThis, "localStorage", {
   writable: true,
   value: {
     clear: () => stored.clear(),
-    getItem: (key) => stored.get(key) ?? null,
-    key: (index) => [...stored.keys()][index] ?? null,
+    getItem: (key: string) => stored.get(key) ?? null,
+    key: (index: number) => [...stored.keys()].at(index) ?? null,
     get length() {
       return stored.size;
     },
-    removeItem: (key) => {
+    removeItem: (key: string) => {
       stored.delete(key);
     },
-    setItem: (key, value) => {
+    setItem: (key: string, value: string) => {
       stored.set(key, value);
     },
   },

@@ -107,7 +107,12 @@ import { fetchOlderMessages } from "@/features/chat/queries";
 import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { browserStateStorage } from "@/lib/account/browser-storage";
-import { userStorageKey } from "@/lib/account/user-scoped-storage";
+import { useOwnerScopedState } from "@/lib/account/use-owner-scoped-state";
+import {
+  isCurrentStorageOwner,
+  userStorageKey,
+} from "@/lib/account/user-scoped-storage";
+import type { StorageOwner } from "@/lib/account/user-scoped-storage";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
@@ -282,12 +287,43 @@ export const useChatSession = ({
   const { data: mcpCatalog } = useQuery(mcpConnectorsOptions(organizationId));
   const mcpConnectorIdentities =
     mcpCatalog?.connectors ?? EMPTY_MCP_CONNECTOR_IDENTITIES;
-  const [conversationApprovedTools, setConversationApprovedTools] = useState(
-    () => readConversationApprovedTools(conversationId),
+  const readConversationGrants = useCallback(
+    (owner: StorageOwner) =>
+      readConversationApprovedTools(conversationId, owner),
+    [conversationId],
   );
-  const [alwaysApprovedTools, setAlwaysApprovedTools] = useState(() =>
-    readAlwaysApprovedTools({ organizationId, mcpConnectorIdentities: [] }),
+  const writeConversationGrants = useCallback(
+    (tools: Set<ToolApprovalGrant>, owner: StorageOwner) =>
+      writeStoredApprovedTools(
+        getConversationApprovedToolsStorageKey(conversationId, owner),
+        tools,
+        "session",
+      ),
+    [conversationId],
   );
+  const {
+    owner: conversationGrantsOwner,
+    value: conversationApprovedTools,
+    updateValue: updateConversationApprovedTools,
+    refresh: refreshConversationApprovedTools,
+  } = useOwnerScopedState({
+    read: readConversationGrants,
+    write: writeConversationGrants,
+  });
+  const readAlwaysGrants = useCallback(
+    (owner: StorageOwner) =>
+      readAlwaysApprovedTools({
+        organizationId,
+        mcpConnectorIdentities,
+        owner,
+      }),
+    [organizationId, mcpConnectorIdentities],
+  );
+  const {
+    owner: alwaysGrantsOwner,
+    value: alwaysApprovedTools,
+    refresh: refreshAlwaysApprovedTools,
+  } = useOwnerScopedState({ read: readAlwaysGrants });
 
   const snapshot = useSyncExternalStore(
     chat.subscribe,
@@ -770,14 +806,11 @@ export const useChatSession = ({
   );
   const handleAllowInConversation = useCallback(
     async (id: string, toolName: ApprovalToolName) => {
-      const next = new Set(conversationApprovedTools).add(
-        getToolApprovalGrant(toolName),
-      );
-      setConversationApprovedTools(next);
-      writeStoredApprovedTools(
-        getConversationApprovedToolsStorageKey(conversationId),
-        next,
-        "session",
+      if (!isCurrentStorageOwner(conversationGrantsOwner)) {
+        return;
+      }
+      updateConversationApprovedTools((previous) =>
+        new Set(previous).add(getToolApprovalGrant(toolName)),
       );
       dispatchApprovedToolsChanged({
         conversationId,
@@ -785,10 +818,18 @@ export const useChatSession = ({
       });
       await resolveToolApproval({ id, approved: true });
     },
-    [resolveToolApproval, conversationApprovedTools, conversationId],
+    [
+      resolveToolApproval,
+      conversationGrantsOwner,
+      updateConversationApprovedTools,
+      conversationId,
+    ],
   );
   const handleAlwaysAllow = useCallback(
     async (id: string, toolName: ApprovalToolName) => {
+      if (!isCurrentStorageOwner(alwaysGrantsOwner)) {
+        return;
+      }
       const approvalKey = getAlwaysApprovalKey({
         mcpConnectorIdentities,
         organizationId,
@@ -801,22 +842,27 @@ export const useChatSession = ({
 
       const nextStored = new Set(
         readStoredStrings(
-          userStorageKey(CHAT_ALWAYS_APPROVED_TOOLS_STORAGE_KEY),
+          userStorageKey(
+            CHAT_ALWAYS_APPROVED_TOOLS_STORAGE_KEY,
+            alwaysGrantsOwner,
+          ),
         ),
       ).add(approvalKey);
-      setAlwaysApprovedTools(
-        new Set(alwaysApprovedTools).add(getToolApprovalGrant(toolName)),
-      );
       writeStoredApprovedStrings(
-        userStorageKey(CHAT_ALWAYS_APPROVED_TOOLS_STORAGE_KEY),
+        userStorageKey(
+          CHAT_ALWAYS_APPROVED_TOOLS_STORAGE_KEY,
+          alwaysGrantsOwner,
+        ),
         nextStored,
       );
+      refreshAlwaysApprovedTools();
       dispatchApprovedToolsChanged({ scope: "local" });
       await resolveToolApproval({ id, approved: true });
     },
     [
       resolveToolApproval,
-      alwaysApprovedTools,
+      alwaysGrantsOwner,
+      refreshAlwaysApprovedTools,
       mcpConnectorIdentities,
       organizationId,
     ],
@@ -1390,12 +1436,6 @@ export const useChatSession = ({
   ]);
 
   useExternalSyncEffect(() => {
-    setConversationApprovedTools(readConversationApprovedTools(conversationId));
-    setAlwaysApprovedTools(
-      readAlwaysApprovedTools({ organizationId, mcpConnectorIdentities }),
-    );
-  }, [conversationId, mcpConnectorIdentities, organizationId]);
-  useExternalSyncEffect(() => {
     const handleApprovedToolsChanged = (event: Event) => {
       const detail = getApprovedToolsChangedDetail(event);
       if (!detail) {
@@ -1403,9 +1443,7 @@ export const useChatSession = ({
       }
 
       if (detail.scope === "local") {
-        setAlwaysApprovedTools(
-          readAlwaysApprovedTools({ organizationId, mcpConnectorIdentities }),
-        );
+        refreshAlwaysApprovedTools();
         return;
       }
 
@@ -1413,20 +1451,20 @@ export const useChatSession = ({
         return;
       }
 
-      setConversationApprovedTools(
-        readConversationApprovedTools(conversationId),
-      );
+      refreshConversationApprovedTools();
     };
     const handleStorage = (event: StorageEvent) => {
       if (
-        event.key !== userStorageKey(CHAT_ALWAYS_APPROVED_TOOLS_STORAGE_KEY)
+        event.key !==
+        userStorageKey(
+          CHAT_ALWAYS_APPROVED_TOOLS_STORAGE_KEY,
+          alwaysGrantsOwner,
+        )
       ) {
         return;
       }
 
-      setAlwaysApprovedTools(
-        readAlwaysApprovedTools({ organizationId, mcpConnectorIdentities }),
-      );
+      refreshAlwaysApprovedTools();
     };
 
     window.addEventListener(
@@ -1442,7 +1480,12 @@ export const useChatSession = ({
       );
       window.removeEventListener("storage", handleStorage);
     };
-  }, [conversationId, mcpConnectorIdentities, organizationId]);
+  }, [
+    conversationId,
+    alwaysGrantsOwner,
+    refreshAlwaysApprovedTools,
+    refreshConversationApprovedTools,
+  ]);
 
   return {
     clientStatus: status,
@@ -1494,25 +1537,34 @@ type ApprovedToolsChangedDetail =
       conversationId: string;
     };
 
-const getConversationApprovedToolsStorageKey = (conversationId: string) =>
+const getConversationApprovedToolsStorageKey = (
+  conversationId: string,
+  owner: StorageOwner,
+) =>
   userStorageKey(
     `${CHAT_CONVERSATION_APPROVED_TOOLS_STORAGE_KEY_PREFIX}${conversationId}`,
+    owner,
   );
 
-const readConversationApprovedTools = (conversationId: string) =>
+const readConversationApprovedTools = (
+  conversationId: string,
+  owner: StorageOwner,
+) =>
   readStoredApprovedTools(
-    getConversationApprovedToolsStorageKey(conversationId),
+    getConversationApprovedToolsStorageKey(conversationId, owner),
   );
 
 const readAlwaysApprovedTools = ({
   mcpConnectorIdentities,
   organizationId,
+  owner,
 }: {
   mcpConnectorIdentities: readonly McpConnectorApprovalIdentity[];
   organizationId: string;
+  owner: StorageOwner;
 }) => {
   const stored = readStoredStrings(
-    userStorageKey(CHAT_ALWAYS_APPROVED_TOOLS_STORAGE_KEY),
+    userStorageKey(CHAT_ALWAYS_APPROVED_TOOLS_STORAGE_KEY, owner),
   );
   const approvedTools: ToolApprovalGrant[] = [];
 

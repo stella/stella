@@ -1,3 +1,4 @@
+import { QueryClient } from "@tanstack/react-query";
 import { panic } from "better-result";
 import { afterEach, beforeEach, describe, expect, spyOn, test } from "bun:test";
 
@@ -24,7 +25,11 @@ import {
   useLegalDocumentChatThreads,
 } from "@/features/chat/legal-document-chat-threads";
 import { browserStorage } from "@/lib/account/browser-storage";
-import { userStorageKey } from "@/lib/account/user-scoped-storage";
+import { installUserScopedStorage } from "@/lib/account/install-user-scoped-storage";
+import {
+  releaseUserStorage,
+  userStorageKey,
+} from "@/lib/account/user-scoped-storage";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { toChatThreadId } from "@/lib/chat-thread-ref";
 
@@ -2193,4 +2198,48 @@ describe("a legal document's chat tab and the reader's composer", () => {
       useLegalDocumentChatThreads.getState().threadIdByDocumentKey,
     ).toEqual({});
   });
+});
+
+test("inspector subscriptions restore only their active account scope", () => {
+  installFakeBroadcastChannel();
+  const client = new QueryClient();
+  const areas = () => ({ local: null, session: null });
+  const unsubscribe = installUserScopedStorage(client, areas);
+  client.setQueryData(["session"], { user: { id: "a" } });
+  cleanupInspectorBroadcast = initializeInspectorTabBroadcast({
+    organizationId: "org",
+    userId: "a",
+  });
+  useInspectorTabsStore.getState().setMinimized(true);
+  const keyA = userStorageKey("stella:inspector-minimized:v1:org:", {
+    kind: "user",
+    userId: "a",
+  });
+  expect(localArea().getItem(keyA)).toBe("1");
+  client.setQueryData(["session"], { user: { id: "b" } });
+  expect(useInspectorTabsStore.getState().minimized).toBe(false);
+  expect(useInspectorTabsStore.getState().tabs).toEqual([]);
+  localArea().removeItem(keyA);
+  useInspectorTabsStore.getState().setMinimized(true);
+  expect(localArea().getItem(keyA)).toBeNull();
+  cleanupInspectorBroadcast();
+  cleanupInspectorBroadcast = null;
+  const keyB = userStorageKey("stella:inspector-minimized:v1:org:", {
+    kind: "user",
+    userId: "b",
+  });
+  localArea().setItem(keyB, "1");
+  cleanupInspectorBroadcast = initializeInspectorTabBroadcast({
+    organizationId: "org",
+    userId: "b",
+  });
+  expect(useInspectorTabsStore.getState().minimized).toBe(true);
+  useInspectorTabsStore.getState().setMinimized(false);
+  expect(localArea().getItem(keyB)).toBe("0");
+  expect(localArea().getItem(keyA)).toBeNull();
+  cleanupInspectorBroadcast();
+  cleanupInspectorBroadcast = null;
+  unsubscribe();
+  releaseUserStorage(areas());
+  client.clear();
 });

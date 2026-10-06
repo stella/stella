@@ -78,6 +78,7 @@ import { useChromeQuery } from "@/hooks/use-chrome-query";
 import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
 import { useInboxPreviewEnabled } from "@/hooks/use-inbox-preview";
 import { useI18nStore } from "@/i18n/i18n-store";
+import { useStorageOwner } from "@/lib/account/use-owner-scoped-state";
 import { AuthenticatedUserProvider } from "@/lib/authenticated-user-context";
 import type { AuthenticatedUser } from "@/lib/authenticated-user-context";
 import { ChromeHeaderActionsSlot } from "@/lib/chrome-header-actions";
@@ -199,6 +200,7 @@ export const ProtectedAppFrame = ({
     };
   });
   const analyticsUser = user;
+  const inspectorOwner = useStorageOwner();
   const inspectorBroadcastUserId = user.id;
   const inspectorBroadcastOrganizationId = user.activeOrganizationId;
   const workspaceMatch = useMatch({
@@ -233,14 +235,22 @@ export const ProtectedAppFrame = ({
   });
 
   // Restore the authenticated tab scope before any previous scope can paint.
-  useLayoutEffect(
-    () =>
-      initializeInspectorTabBroadcast({
-        organizationId: inspectorBroadcastOrganizationId,
-        userId: inspectorBroadcastUserId,
-      }),
-    [inspectorBroadcastOrganizationId, inspectorBroadcastUserId],
-  );
+  useLayoutEffect(() => {
+    if (
+      inspectorOwner.kind !== "user" ||
+      inspectorOwner.userId !== inspectorBroadcastUserId
+    ) {
+      return;
+    }
+    return initializeInspectorTabBroadcast({
+      organizationId: inspectorBroadcastOrganizationId,
+      userId: inspectorBroadcastUserId,
+    });
+  }, [
+    inspectorBroadcastOrganizationId,
+    inspectorBroadcastUserId,
+    inspectorOwner,
+  ]);
 
   // Mod+J — toggles the inspector pane. With tabs already open it
   // restores or hides the pane regardless of route, so users can

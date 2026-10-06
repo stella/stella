@@ -3,8 +3,8 @@ import { beforeEach, describe, expect, test } from "bun:test";
 
 import type { UnavailableWorkspaceView } from "@stll/api-contract";
 
+import { installUserScopedStorage } from "@/lib/account/install-user-scoped-storage";
 import {
-  installUserScopedStorage,
   releaseUserStorage,
   userStorageKey,
 } from "@/lib/account/user-scoped-storage";

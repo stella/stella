@@ -52,15 +52,21 @@ export const isStaleDeploymentLoadError = (error: unknown): boolean => {
 // the timestamp we skip the reload entirely and fall through to the error
 // boundary, rather than risk a reload loop with no working guard.
 const readReloadAt = (): number | null =>
-  Result.try(() =>
-    Number(requireBrowserStorage("session").getItem(STORAGE_KEY) ?? "0"),
-  ).unwrapOr(null);
+  requireBrowserStorage("session")
+    .andThen((storage) =>
+      Result.try(() => Number(storage.getItem(STORAGE_KEY) ?? "0")),
+    )
+    .unwrapOr(null);
 
 const recordReloadAt = (timestamp: number): boolean =>
-  Result.try(() => {
-    requireBrowserStorage("session").setItem(STORAGE_KEY, String(timestamp));
-    return true;
-  }).unwrapOr(false);
+  requireBrowserStorage("session")
+    .andThen((storage) =>
+      Result.try(() => {
+        storage.setItem(STORAGE_KEY, String(timestamp));
+        return true;
+      }),
+    )
+    .unwrapOr(false);
 
 /**
  * Reload the page for a fresh build unless one was attempted within the

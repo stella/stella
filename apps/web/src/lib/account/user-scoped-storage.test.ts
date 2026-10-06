@@ -3,9 +3,9 @@ import { beforeEach, describe, expect, test } from "bun:test";
 import { create } from "zustand";
 import { createJSONStorage, persist } from "zustand/middleware";
 
+import { installUserScopedStorage } from "@/lib/account/install-user-scoped-storage";
 import {
   followStorageOwner,
-  installUserScopedStorage,
   pruneUserStorage,
   releaseUserStorage,
   storageOwner,

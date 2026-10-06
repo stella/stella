@@ -1,14 +1,10 @@
-import type { QueryClient } from "@tanstack/react-query";
-import { hashKey } from "@tanstack/react-query";
 import { panic, Result } from "better-result";
 import type { StateStorage } from "zustand/middleware";
 
 import { browserStorage } from "@/lib/account/browser-storage";
 import { USER_STORAGE_FAMILIES } from "@/lib/account/storage-families";
 import type { StorageArea } from "@/lib/account/storage-families";
-import { rootKeys } from "@/lib/auth-queries";
 import { detached } from "@/lib/detached";
-import { signedInUserId } from "@/lib/session-cache-guard";
 
 /**
  * What the browser keeps for one signed-in user (recent searches, drafts,
@@ -38,6 +34,10 @@ let writesSuspended = false;
 
 /** Whose entries the browser holds now; a visitor until a session is read. */
 export const storageOwner = (): StorageOwner => currentOwner;
+
+/** Pending work belongs to the exact account transition that started it. */
+export const isCurrentStorageOwner = (owner: StorageOwner): boolean =>
+  owner === currentOwner;
 
 /** The key an entry of `base` has for `owner`. */
 export const userStorageKey = (
@@ -231,7 +231,10 @@ const setOwner = (areas: Areas, next: StorageOwner) => {
   if (sameOwner(currentOwner, next)) {
     return;
   }
-  currentOwner = next;
+  currentOwner =
+    next.kind === "user"
+      ? { kind: "user", userId: next.userId }
+      : { kind: "visitor" };
   for (const listener of ownerListeners) {
     listener();
   }
@@ -279,28 +282,8 @@ export const releaseUserStorage = (areas: Areas = browserStorageAreas()) => {
   handOver(areas, VISITOR);
 };
 
-const SESSION_QUERY_HASH = hashKey(rootKeys.session);
-
-/**
- * Prunes the browser's per-user entries to the owner every session read
- * names. Pruning on each read, not only on a change seen in this page, covers
- * a different user signing in after a reload.
- */
-export const installUserScopedStorage = (
-  queryClient: QueryClient,
-  areas: () => Areas = browserStorageAreas,
-) =>
-  queryClient.getQueryCache().subscribe((event) => {
-    if (event.type !== "updated" || event.action.type !== "success") {
-      return;
-    }
-    if (event.query.queryHash !== SESSION_QUERY_HASH) {
-      return;
-    }
-    const session: unknown = event.query.state.data;
-    const userId = signedInUserId(session);
-    handOver(
-      areas(),
-      userId === undefined ? VISITOR : { kind: "user", userId },
-    );
-  });
+/** The authentication boundary supplies the account identified by its session. */
+export const assignUserStorage = (
+  userId: string | undefined,
+  areas: Areas = browserStorageAreas(),
+) => handOver(areas, userId === undefined ? VISITOR : { kind: "user", userId });

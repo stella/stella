@@ -19,7 +19,9 @@ const { useReaderProvisionMode } =
   await import("@/hooks/use-reader-provision-mode");
 const { READER_PROVISION_MODE_STORAGE_KEY } =
   await import("@/components/legal-reader/reader-provision-mode.logic");
-const { installUserScopedStorage, releaseUserStorage, userStorageKey } =
+const { installUserScopedStorage } =
+  await import("@/lib/account/install-user-scoped-storage");
+const { releaseUserStorage, userStorageKey } =
   await import("@/lib/account/user-scoped-storage");
 const { rootKeys } = await import("@/lib/auth-queries");
 

@@ -1,5 +1,0 @@
-{
-  "metric": "throw-outside-boundary",
-  "delta": 1,
-  "reason": "The registered browser-storage accessor is a persistence boundary. Strict callers receive a tagged unavailable-storage error so they can surface failure or skip recovery that requires durable storage."
-}

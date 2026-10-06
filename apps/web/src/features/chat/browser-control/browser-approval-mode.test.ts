@@ -3,8 +3,8 @@ import { describe, expect, test } from "bun:test";
 
 import type { BrowserControlCommand } from "@stll/api-contract/browser-control";
 
+import { installUserScopedStorage } from "@/lib/account/install-user-scoped-storage";
 import {
-  installUserScopedStorage,
   releaseUserStorage,
   userStorageKey,
 } from "@/lib/account/user-scoped-storage";

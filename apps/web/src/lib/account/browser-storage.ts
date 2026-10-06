@@ -85,15 +85,17 @@ class BrowserStorageUnavailableError extends TaggedError(
 )<{ message: string; area: StorageArea }> {}
 
 /** Registered persistence that propagates blocked-storage and quota failures. */
-export const requireBrowserStorage = (area: StorageArea): Storage => {
+export const requireBrowserStorage = (area: StorageArea) => {
   const storage = browserStorage(area);
   if (storage === null) {
-    throw new BrowserStorageUnavailableError({
-      message: "Browser storage is unavailable",
-      area,
-    });
+    return Result.err(
+      new BrowserStorageUnavailableError({
+        message: "Browser storage is unavailable",
+        area,
+      }),
+    );
   }
-  return {
+  return Result.ok({
     get length() {
       return storage.length;
     },
@@ -113,5 +115,5 @@ export const requireBrowserStorage = (area: StorageArea): Storage => {
       assertRegistered({ area, key, ownership: "any" });
       storage.removeItem(key);
     },
-  };
+  } satisfies Storage);
 };

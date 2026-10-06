@@ -143,6 +143,10 @@ import {
 } from "@/hooks/use-public-law-preview";
 import { useLocale } from "@/i18n/formatting-context";
 import { useI18nStore } from "@/i18n/i18n-store";
+import {
+  useOwnerScopedState,
+  useStorageOwner,
+} from "@/lib/account/use-owner-scoped-state";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import type { GlobalSearchHit } from "@/lib/api-contract";
@@ -163,6 +167,7 @@ import {
 } from "@/lib/search";
 import type { SearchAISummaryParams } from "@/lib/search";
 import {
+  isSearchRecentsScopeCurrent,
   readRecentFiles,
   readRecentSearches,
   recordRecentFile,
@@ -515,6 +520,11 @@ type SearchDialogProps = {
   mode?: SearchDialogMode;
 };
 
+const getRecentsSnapshotKey = (open: boolean, scope: SearchRecentsScope) =>
+  open && isSearchRecentsScopeCurrent(scope)
+    ? `${scope.organizationId}:${scope.userId}`
+    : null;
+
 export const SearchDialog = ({
   open,
   onOpenChange,
@@ -533,12 +543,14 @@ export const SearchDialog = ({
   const isMobile = useIsMobile();
   const publicLawPreviewEnabled = usePublicLawPreviewEnabled();
   const [closeActionQueue] = useState(createDialogCloseActionQueue);
+  const owner = useStorageOwner();
   const searchRecentsScope = useMemo(
     (): SearchRecentsScope => ({
+      owner,
       organizationId: user.activeOrganizationId,
       userId: user.id,
     }),
-    [user.activeOrganizationId, user.id],
+    [owner, user.activeOrganizationId, user.id],
   );
   const [resultsElement, setResultsElement] = useState<HTMLDivElement | null>(
     null,
@@ -586,8 +598,19 @@ export const SearchDialog = ({
   const [debouncedQuery, setDebouncedQuery] = useState("");
   const [highlightedHitId, setHighlightedHitId] = useState<string | null>(null);
   const [previewEnabled, setPreviewEnabled] = useState(true);
-  const [recentSearches, setRecentSearches] = useState<RecentSearch[]>([]);
-  const [recentFiles, setRecentFiles] = useState<RecentFile[]>([]);
+  const readSearches = useCallback(
+    () => (open ? readRecentSearches(searchRecentsScope) : []),
+    [open, searchRecentsScope],
+  );
+  const readFiles = useCallback(
+    () => (open ? readRecentFiles(searchRecentsScope) : []),
+    [open, searchRecentsScope],
+  );
+  const { value: recentSearches, setValue: setRecentSearches } =
+    useOwnerScopedState({ read: readSearches });
+  const { value: recentFiles, setValue: setRecentFiles } = useOwnerScopedState({
+    read: readFiles,
+  });
   const [recentPreviewFile, setRecentPreviewFile] = useState<RecentFile | null>(
     null,
   );
@@ -803,29 +826,27 @@ export const SearchDialog = ({
   });
   const virtualHits = hitVirtualizer.getVirtualItems();
 
-  // Refresh the recents snapshot from localStorage on the open transition (and
-  // if the scope changes while open). The recents are also locally mutated by
+  // Refresh recents on an open, auth scope, or storage owner transition. The recents are also locally mutated by
   // the result/search handlers below, so this is guarded against the last-seen
   // key rather than read unconditionally: an unguarded render-time read would
   // re-run on every render and clobber those in-session mutations. SearchDialog
   // itself never unmounts (both call sites render it unconditionally and
   // control visibility via `open`), so there is no mount to hang this off of.
-  const recentsSnapshotKey = open
-    ? `${searchRecentsScope.organizationId}:${searchRecentsScope.userId}`
-    : null;
+  const recentsSnapshotKey = getRecentsSnapshotKey(open, searchRecentsScope);
   const [lastRecentsSnapshotKey, setLastRecentsSnapshotKey] = useState<
     string | null
   >(null);
-  if (recentsSnapshotKey !== lastRecentsSnapshotKey) {
+  const [lastRecentsOwner, setLastRecentsOwner] = useState(owner);
+  if (
+    recentsSnapshotKey !== lastRecentsSnapshotKey ||
+    owner !== lastRecentsOwner
+  ) {
+    setLastRecentsOwner(owner);
     setLastRecentsSnapshotKey(recentsSnapshotKey);
     setRegistryExpanded(false);
     setCaseLawExpanded(false);
     setSupplementalPreview({ type: "internal" });
     setRecentPreviewFile(null);
-    if (recentsSnapshotKey) {
-      setRecentSearches(readRecentSearches(searchRecentsScope));
-      setRecentFiles(readRecentFiles(searchRecentsScope));
-    }
   }
 
   const searchFilterParams = {
@@ -1035,7 +1056,13 @@ export const SearchDialog = ({
   };
 
   const navigateAfterClose = (navigateToTarget: () => Promise<unknown>) => {
+    if (!isSearchRecentsScopeCurrent(searchRecentsScope)) {
+      return;
+    }
     closeActionQueue.schedule(() => {
+      if (!isSearchRecentsScopeCurrent(searchRecentsScope)) {
+        return;
+      }
       detached(
         navigateToTarget().catch((error: unknown) => {
           analytics.captureError(error);
@@ -1087,7 +1114,11 @@ export const SearchDialog = ({
 
   const handleRefineQuery = () => {
     const trimmedQuery = query.trim();
-    if (!trimmedQuery || refineSearchMutation.isPending) {
+    if (
+      !isSearchRecentsScopeCurrent(searchRecentsScope) ||
+      !trimmedQuery ||
+      refineSearchMutation.isPending
+    ) {
       return;
     }
 
@@ -1095,6 +1126,9 @@ export const SearchDialog = ({
       { query: trimmedQuery, locale: apiLocale },
       {
         onSuccess: (refined, variables) => {
+          if (!isSearchRecentsScopeCurrent(searchRecentsScope)) {
+            return;
+          }
           debouncedSetQuery.cancel();
           setQuery(refined.query);
           setDebouncedQuery(refined.query);
@@ -1112,12 +1146,20 @@ export const SearchDialog = ({
 
   const handleAskAI = () => {
     const trimmedQuery = query.trim();
-    if (!canAskAI || !trimmedQuery || askAIMutation.isPending) {
+    if (
+      !isSearchRecentsScopeCurrent(searchRecentsScope) ||
+      !canAskAI ||
+      !trimmedQuery ||
+      askAIMutation.isPending
+    ) {
       return;
     }
     setRecentSearches(recordRecentSearch(trimmedQuery, searchRecentsScope));
     askAIMutation.mutate(trimmedQuery, {
       onSuccess: (threadId) => {
+        if (!isSearchRecentsScopeCurrent(searchRecentsScope)) {
+          return;
+        }
         detached(
           invalidateGroupedChatThreads(queryClient),
           "search-dialog.invalidate-grouped-chat-threads",
@@ -1130,6 +1172,9 @@ export const SearchDialog = ({
   };
 
   const applyRecentSearch = (recent: RecentSearch) => {
+    if (!isSearchRecentsScopeCurrent(searchRecentsScope)) {
+      return;
+    }
     setRecentPreviewFile(null);
     setQuery(recent.query);
     setDebouncedQuery(recent.query);
@@ -1140,6 +1185,9 @@ export const SearchDialog = ({
   // Opens the matter's file tree with the entity's row revealed, or the
   // matter itself for entities the tree does not list.
   const openEntityLocation = async (location: EntityLocation) => {
+    if (!isSearchRecentsScopeCurrent(searchRecentsScope)) {
+      return;
+    }
     if (location.type === "matter") {
       await navigate({
         to: "/workspaces/$workspaceId",
@@ -1150,7 +1198,12 @@ export const SearchDialog = ({
     await navigateToWorkspaceReveal({
       entityId: location.entityId,
       fallbackFolderId: location.fallbackFolderId,
-      navigate,
+      navigate: async (options) => {
+        if (!isSearchRecentsScopeCurrent(searchRecentsScope)) {
+          return;
+        }
+        await navigate(options);
+      },
       pathname: router.state.location.pathname,
       queryClient,
       targetWorkspaceId: location.workspaceId,
@@ -1174,6 +1227,9 @@ export const SearchDialog = ({
     workspaceId: string;
   }) => {
     await openEntityLocation(location);
+    if (!isSearchRecentsScopeCurrent(searchRecentsScope)) {
+      return;
+    }
     await openEntityInInspector(entityId, label, workspaceId);
   };
 
@@ -1210,6 +1266,9 @@ export const SearchDialog = ({
           workspaceId: file.workspaceId,
         }),
       );
+      if (!isSearchRecentsScopeCurrent(searchRecentsScope)) {
+        return;
+      }
       setRecentFiles(
         recordRecentFile({ ...file, fileFieldId }, searchRecentsScope),
       );
@@ -1225,6 +1284,9 @@ export const SearchDialog = ({
     hit: GlobalSearchHit,
     options?: { locationModifier?: boolean },
   ) => {
+    if (!isSearchRecentsScopeCurrent(searchRecentsScope)) {
+      return;
+    }
     if (query.trim()) {
       setRecentSearches(recordRecentSearch(query, searchRecentsScope));
     }
@@ -1256,7 +1318,10 @@ export const SearchDialog = ({
             ),
         });
         // A hit whose current file cannot be resolved has nothing to pin.
-        if (fileFieldId === null) {
+        if (
+          fileFieldId === null ||
+          !isSearchRecentsScopeCurrent(searchRecentsScope)
+        ) {
           return;
         }
         mode.onPick({
@@ -1370,6 +1435,9 @@ export const SearchDialog = ({
               }),
             ),
         });
+        if (!isSearchRecentsScopeCurrent(searchRecentsScope)) {
+          return;
+        }
         setRecentFiles(
           recordRecentFile(
             {

@@ -1,7 +1,11 @@
 import { Result, TaggedError } from "better-result";
 
 import { requireBrowserStorage } from "@/lib/account/browser-storage";
-import { userStorageKey } from "@/lib/account/user-scoped-storage";
+import {
+  isCurrentStorageOwner,
+  storageOwner,
+  userStorageKey,
+} from "@/lib/account/user-scoped-storage";
 import { toSafeId } from "@/lib/safe-id";
 import type { SafeId } from "@/lib/safe-id";
 import type { ImportCommitPayload } from "@/routes/_protected.contacts/-import-candidate";
@@ -33,7 +37,7 @@ class ContactImportRequestPersistenceError extends TaggedError(
 }> {}
 
 const sessionStorageOrUndefined = (): ContactImportRequestStorage | undefined =>
-  Result.try(() => requireBrowserStorage("session")).unwrapOr(undefined);
+  requireBrowserStorage("session").unwrapOr(undefined);
 
 const sha256Hex = async (input: BufferSource): Promise<string> => {
   const digest = await crypto.subtle.digest("SHA-256", input);
@@ -71,10 +75,17 @@ export const resolveContactImportRequest = async ({
   scope: ContactImportRequestScope;
   storage?: ContactImportRequestStorage | undefined;
 }): Promise<PendingContactImportRequest> => {
+  const owner = storageOwner();
   const storageKey = await operationStorageKey(payload, scope);
-  if (!storage) {
+  const scopeIsCurrent =
+    owner.kind === "user" &&
+    owner.userId === scope.userId &&
+    isCurrentStorageOwner(owner);
+  if (!scopeIsCurrent || !storage) {
     throw new ContactImportRequestPersistenceError({
-      message: "Contact import retry identity storage is unavailable",
+      message: !scopeIsCurrent
+        ? "Contact import retry identity account changed"
+        : "Contact import retry identity storage is unavailable",
     });
   }
 

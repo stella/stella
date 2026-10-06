@@ -99,6 +99,7 @@ export default eslintCompatPlugin({
           MemberExpression(node) {
             if (
               isFileIn(context, STORAGE_OWNERS) ||
+              !isAstNode(node) ||
               !STORAGE_NAMES.has(memberPropertyName(node) ?? "") ||
               !isBrowserObject(context, node.object)
             ) {

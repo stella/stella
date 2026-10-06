@@ -23,7 +23,9 @@ const { installSessionChangeListener } =
   await import("@/lib/account/session-change-listener");
 const { listenForSessionDocumentRestore } =
   await import("@/lib/account/session-document");
-const { installUserScopedStorage, releaseUserStorage } =
+const { installUserScopedStorage } =
+  await import("@/lib/account/install-user-scoped-storage");
+const { releaseUserStorage } =
   await import("@/lib/account/user-scoped-storage");
 
 const originalFetch = globalThis.fetch;

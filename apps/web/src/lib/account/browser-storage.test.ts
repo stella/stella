@@ -1,3 +1,4 @@
+import { Result } from "better-result";
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 
 import {
@@ -192,7 +193,7 @@ describe("required registered persistence", () => {
         "InvalidStateError",
       );
     }
-    const strict = requireBrowserStorage("local");
+    const strict = requireBrowserStorage("local").unwrap();
     strict.setItem("sidebar_state", "expanded");
     expect(strict.getItem("sidebar_state")).toBe("expanded");
     expect(() => strict.setItem("unregistered.fixture", "value")).toThrow(
@@ -209,8 +210,13 @@ describe("required registered persistence", () => {
       configurable: true,
       value: {},
     });
-    expect(() => requireBrowserStorage("local")).toThrow(
-      "Browser storage is unavailable",
-    );
+    const unavailable = requireBrowserStorage("local");
+    expect(Result.isError(unavailable)).toBe(true);
+    if (Result.isError(unavailable)) {
+      expect(unavailable.error).toMatchObject({
+        _tag: "BrowserStorageUnavailableError",
+        area: "local",
+      });
+    }
   });
 });
