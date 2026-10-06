@@ -2,6 +2,7 @@ import { panic } from "better-result";
 import { expect, test } from "bun:test";
 import fc from "fast-check";
 import { readFileSync } from "node:fs";
+import { isDeepStrictEqual } from "node:util";
 import { createContext, runInContext } from "node:vm";
 import * as v from "valibot";
 
@@ -9,27 +10,31 @@ import { compareCodeUnit } from "@stll/collation";
 import { assertProperty } from "@stll/property-testing";
 
 import { CUSTOM_LINT_TEST_ARGS } from "./check-oxlint-rule-coverage.ts";
-import {
-  CANONICAL_CANCEL_STEP,
-  isCanonicalFailureCancellation,
-} from "./ci-cancellation-contract";
+import { CANONICAL_CANCEL_STEP } from "./ci-cancellation-contract";
 import { jobCachePolicy } from "./workflow-cache-policy.ts";
 
-const jobSchema = v.pipe(
-  v.looseObject({
-    permissions: v.optional(v.record(v.string(), v.string())),
-    steps: v.array(v.looseObject({ name: v.string() })),
-  }),
-  v.transform((job) => {
-    if (!isCanonicalFailureCancellation(job.steps.at(-1))) {
-      return job;
-    }
-    expect(job.permissions?.["actions"]).toBe("write");
-    const permissions = { ...job.permissions };
-    delete permissions["actions"];
-    return { ...job, permissions, steps: job.steps.slice(0, -1) };
-  }),
-);
+const cancellationJobSchema = (canonical: object) =>
+  v.pipe(
+    v.looseObject({
+      permissions: v.optional(v.record(v.string(), v.string())),
+      steps: v.array(v.looseObject({ name: v.string() })),
+    }),
+    v.transform((job) => {
+      if (
+        !isDeepStrictEqual(job.steps.at(-1), {
+          ...canonical,
+          if: "failure() && github.event_name == 'merge_group'",
+        })
+      ) {
+        return job;
+      }
+      expect(job.permissions?.["actions"]).toBe("write");
+      const permissions = { ...job.permissions };
+      delete permissions["actions"];
+      return { ...job, permissions, steps: job.steps.slice(0, -1) };
+    }),
+  );
+const jobSchema = cancellationJobSchema(CANONICAL_CANCEL_STEP);
 const workflowSchema = v.object({ jobs: v.record(v.string(), v.unknown()) });
 const removalSchema = v.array(
   v.object({ name: v.string(), reason: v.pipe(v.string(), v.minLength(1)) }),
@@ -45,6 +50,18 @@ const git = (args: string[]) => {
   return result.stdout.toString().trim();
 };
 const mergeBase = git(["merge-base", "origin/main", "HEAD"]);
+const baseCancellationSource = new Bun.Transpiler({
+  loader: "ts",
+}).transformSync(
+  git(["show", `${mergeBase}:scripts/ci-cancellation-contract.ts`]),
+);
+const baseCancellation = v.parse(
+  v.object({ CANONICAL_CANCEL_STEP: v.record(v.string(), v.unknown()) }),
+  await import(
+    `data:text/javascript;base64,${Buffer.from(baseCancellationSource).toString("base64")}`
+  ),
+).CANONICAL_CANCEL_STEP;
+const baseJobSchema = cancellationJobSchema(baseCancellation);
 const parseJobs = (source: string) =>
   v.parse(workflowSchema, Bun.YAML.parse(source)).jobs;
 const jobs = parseJobs(
@@ -86,16 +103,19 @@ const prerequisites = new Set([
   "Prepare environment",
 ]);
 const partitions = partitionIds.map((id) => v.parse(jobSchema, jobs[id]));
-const readBaseline = (source: v.InferOutput<typeof workflowSchema>["jobs"]) => {
+const readBaseline = (
+  source: v.InferOutput<typeof workflowSchema>["jobs"],
+  schema = jobSchema,
+) => {
   if (source["ci-checks"] !== undefined) {
     for (const id of partitionIds) {
       expect(source).not.toHaveProperty(id);
     }
-    return [v.parse(jobSchema, source["ci-checks"])];
+    return [v.parse(schema, source["ci-checks"])];
   }
-  return partitionIds.map((id) => v.parse(jobSchema, source[id]));
+  return partitionIds.map((id) => v.parse(schema, source[id]));
 };
-const baseline = readBaseline(baseJobs);
+const baseline = readBaseline(baseJobs, baseJobSchema);
 
 type Step = v.InferOutput<typeof jobSchema>["steps"][number];
 // A full commit SHA pin is version metadata that dependency updates bump; the
@@ -1106,4 +1126,28 @@ test("setup migration preserves runtime inputs and protected install policy", ()
   }
   const mutable = { ...setup, uses: "oven-sh/setup-bun@main" };
   expect(withInstallCache(mutable, { steps: [mutable] })).toEqual(mutable);
+});
+
+test("baseline cancellation normalization uses its own owner and rejects changed tails", () => {
+  for (const id of partitionIds) {
+    const raw = v.parse(
+      v.looseObject({ steps: v.array(v.record(v.string(), v.unknown())) }),
+      baseJobs[id],
+    );
+    const normalized = v.parse(baseJobSchema, baseJobs[id]);
+    expect(normalized.steps).toEqual(raw.steps.slice(0, -1));
+    const tail = raw.steps.at(-1);
+    if (!tail) {
+      panic("Baseline cancellation tail unavailable");
+    }
+    const original = v.parse(v.record(v.string(), v.unknown()), baseJobs[id]);
+    const mutated = {
+      ...original,
+      steps: [
+        ...raw.steps.slice(0, -1),
+        { ...tail, "continue-on-error": true },
+      ],
+    };
+    expect(v.parse(baseJobSchema, mutated).steps).toEqual(mutated.steps);
+  }
 });
