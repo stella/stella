@@ -8,6 +8,10 @@
     "types": ["bun-types"],
     "tsBuildInfoFile": "${configDir}/.cache/tsbuildinfo.visual-sandbox.json"
   },
-  "include": ["src/handlers/visual-sandbox/browser/**/*.ts", "e2e/**/*.ts"],
+  "include": [
+    "src/handlers/visual-sandbox/browser/**/*.ts",
+    "e2e/**/*.ts",
+    "e2e/**/*.mts"
+  ],
   "exclude": []
 }
