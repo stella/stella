@@ -80,14 +80,15 @@ describe("review organization reset scope", () => {
   });
 
   test("every organization-scoped table is cleared or kept with a reason", () => {
+    // Cleared means swept by name, or removed by a cascade from the matters
+    // the authorized matter deletion takes first.
+    const goneWithMatters = matterClosure();
     const undecided = [...tables.entries()]
       .filter(([, table]) => columnNames(table).has("organization_id"))
       .map(([name]) => name)
       .filter(
         (name) =>
-          !cleared.has(name) &&
-          !kept.has(name) &&
-          name !== REVIEW_RESET_MATTER_TABLE,
+          !cleared.has(name) && !kept.has(name) && !goneWithMatters.has(name),
       );
     expect(undecided).toEqual([]);
   });

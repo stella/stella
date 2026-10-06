@@ -242,7 +242,11 @@ const SCHEDULER_TASKS = {
     recordMissingOrganizationAccessStatesTask,
   [RECONCILE_ORGANIZATION_FILE_RESERVATIONS_TASK]:
     reconcileOrganizationFileReservations,
-  [RESET_REVIEW_ORGANIZATION_TASK]: resetReviewOrganizationTask,
+  // The seed writes time-billing data (rate tables, time entries).
+  [RESET_REVIEW_ORGANIZATION_TASK]: {
+    featureId: "time-billing",
+    task: resetReviewOrganizationTask,
+  },
   [CLEAN_TEMPLATE_DELETION_OBJECTS_TASK]: cleanTemplateDeletionObjects,
   [REPAIR_FILE_DERIVATIVES_TASK]: repairFileDerivatives,
   [RECONCILE_FLOW_RUN_ORPHANS_TASK]: reconcileFlowRunOrphans,

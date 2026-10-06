@@ -117,8 +117,6 @@ export const REVIEW_RESET_CLEARED_TABLES = [
   "flow_definitions",
   "invoice_lines",
   "invoices",
-  "legal_list_verification_read_receipts",
-  "legal_list_verification_runs",
   "legal_reader_annotations",
   "matter_counters",
   "matter_inbound_addresses",

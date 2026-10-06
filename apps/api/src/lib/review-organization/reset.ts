@@ -2,6 +2,7 @@ import { Result, TaggedError } from "better-result";
 import { and, asc, eq, sql } from "drizzle-orm";
 
 import { member, organization, user } from "@/api/db/auth-schema";
+import { rlsDb } from "@/api/db/root";
 import type { Transaction } from "@/api/db/root";
 import { abortTransaction } from "@/api/db/safe-db";
 import type { SafeDb } from "@/api/db/safe-db";
@@ -12,6 +13,7 @@ import {
   templates,
   workspaces,
 } from "@/api/db/schema";
+import { markRlsDatabase } from "@/api/db/scoped";
 import type { RlsDatabase } from "@/api/db/scoped";
 import { deleteClauseHandler } from "@/api/handlers/clauses/delete";
 import { deleteContactHandler } from "@/api/handlers/contacts/delete";
@@ -208,6 +210,8 @@ export type ReviewResetDependencies = {
   workspaceDeletion?: Omit<WorkspaceDeletionDependencies, "database">;
   /** Test seam: runs after the target is proved, before the first delete. */
   afterTargetResolved?: (() => Promise<void>) | undefined;
+  /** Test seam: runs inside each fenced transaction once the fence holds. */
+  afterFenceCheck?: (() => Promise<void>) | undefined;
 };
 
 /** The review organization gained a member while the reset ran. */
@@ -216,23 +220,34 @@ class ReviewMembershipChangedError extends TaggedError(
 )<{ message: string }> {}
 
 /**
- * Re-proves, inside every transaction the reset writes in, that the review
- * account is still the organization's only member, and rolls that
- * transaction back otherwise. Once tripped it stays tripped: every later
- * transaction refuses too, and the reset stops without seeding.
- *
- * Membership writes take no lock this check could share, so the guarantee is
- * per transaction: a member who joins after a check sees no further delete.
+ * Holds sole membership for the length of each transaction the reset writes
+ * in. It first locks the organization row `FOR UPDATE` as the owner, before
+ * any role switch: a membership insert checks its foreign key to that row
+ * with `FOR KEY SHARE`, which conflicts, so a concurrent join waits until the
+ * transaction ends. With the lock held it re-proves that the review account is
+ * the only member and rolls the transaction back otherwise. Once tripped it
+ * stays tripped: every later transaction refuses, and the reset stops without
+ * seeding.
  */
-type MembershipFence = {
+export type MembershipFence = {
   tripped: boolean;
   assert: (tx: Pick<Transaction, "select">) => Promise<void>;
 };
 
-const createMembershipFence = (target: ReviewTarget): MembershipFence => {
+export const createMembershipFence = (
+  target: ReviewTarget,
+  afterCheck: (() => Promise<void>) | undefined,
+): MembershipFence => {
   const fence: MembershipFence = {
     tripped: false,
     assert: async (tx) => {
+      if (!fence.tripped) {
+        await tx
+          .select({ id: organization.id })
+          .from(organization)
+          .where(eq(organization.id, target.organizationId))
+          .for("update");
+      }
       const rows = fence.tripped
         ? []
         : await tx
@@ -250,19 +265,28 @@ const createMembershipFence = (target: ReviewTarget): MembershipFence => {
           }),
         );
       }
+      await afterCheck?.();
     },
   };
   return fence;
 };
 
-/** `safeDb` with the fence checked first in each of its transactions. */
-const fencedSafeDb =
-  (safeDb: SafeDb, fence: MembershipFence): SafeDb =>
-  async (fn, retry) =>
-    await safeDb(async (tx) => {
-      await fence.assert(tx);
-      return await fn(tx);
-    }, retry);
+/**
+ * The application-role connection with the fence taken first in each
+ * transaction, while it still runs as the owner; the scoped handle switches
+ * to the application role after it.
+ */
+const fencedRlsDatabase = (
+  database: RlsDatabase<Transaction>,
+  fence: MembershipFence,
+): RlsDatabase<Transaction> =>
+  markRlsDatabase({
+    transaction: async <T>(fn: (tx: Transaction) => Promise<T>) =>
+      await database.transaction(async (tx) => {
+        await fence.assert(tx);
+        return await fn(tx);
+      }),
+  });
 
 export type ReviewResetOptions = {
   config: ReviewOrganizationConfig | null;
@@ -585,13 +609,17 @@ export const resetReviewOrganization = async ({
         },
       },
     });
-  const fence = createMembershipFence(target.value);
+  const fence = createMembershipFence(
+    target.value,
+    dependencies.afterFenceCheck,
+  );
+  const fencedDatabase = fencedRlsDatabase(rlsDatabase ?? rlsDb, fence);
   const scope: ResetScope = {
     target: target.value,
     db,
-    safeDb: fencedSafeDb(
-      createRootMembershipSafeDb({ organizationId, userId }, rlsDatabase),
-      fence,
+    safeDb: createRootMembershipSafeDb(
+      { organizationId, userId },
+      fencedDatabase,
     ),
     fence,
     signal,
@@ -656,7 +684,7 @@ export const resetReviewOrganization = async ({
       safeDb: scope.safeDb,
       scopedDb: createRootMembershipScopedDb(
         { organizationId, userId },
-        rlsDatabase,
+        fencedDatabase,
       ),
       recorderFor,
     },
