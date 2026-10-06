@@ -1,3 +1,7 @@
+// The e2e tsconfig is node-only; page.evaluate / addInitScript callbacks run
+// in the browser.
+/// <reference lib="dom" />
+import { chromium } from "@playwright/test";
 // Drive the running web app as the seeded owner and write evidence: a
 // screenshot, the browser errors, the failed API calls and, for `measure`,
 // timing and network numbers. Run only through `bun run agent:drive`, which
@@ -7,18 +11,14 @@
 //
 // Exit code 1 means the page itself showed a problem (browser error, 5xx,
 // sign-in redirect, route error boundary); the report says which.
-
-// The e2e tsconfig is node-only; page.evaluate / addInitScript callbacks run
-// in the browser.
-/// <reference lib="dom" />
-import { chromium } from "@playwright/test";
 import type { Browser, BrowserContext, Page, Response } from "@playwright/test";
 import { panic } from "better-result";
-import { createHash } from "node:crypto";
 import { existsSync, realpathSync } from "node:fs";
 import { appendFile, mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
+
+import { sha256Hex as hashSha256Hex } from "@stll/sha256/node";
 
 import { ROUTE_ERROR_HEADING } from "../helpers/app-shell";
 import { createNetworkCollector, summarizeCapture } from "../helpers/network";
@@ -163,7 +163,7 @@ const capture = async ({
       // Real path, matching the one agent:attach resolves, so a symlinked
       // checkout path cannot make a genuine capture look unrecorded.
       path: realpathSync(screenshotPath),
-      sha256: createHash("sha256").update(image).digest("hex"),
+      sha256: hashSha256Hex(image),
       textEntered,
       url: page.url(),
     })}\n`,

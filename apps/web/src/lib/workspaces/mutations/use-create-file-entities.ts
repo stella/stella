@@ -7,6 +7,7 @@ import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
 import { fetchWithTimeout } from "@stll/fetch";
+import { sha256Hex as hashSha256Hex } from "@stll/sha256/browser";
 import { stellaToast } from "@stll/ui/toast";
 
 import { useStartWorkflow } from "@/components/workspaces/hooks/use-start-workflow";
@@ -69,26 +70,6 @@ type PreparedFileEntityUpload = {
   headers: Record<string, string>;
 };
 
-/**
- * Hex-encode a SHA-256 hash already computed via Web Crypto. The
- * API stores hex on `fields.content.sha256Hex` and converts to
- * base64 for the S3 `x-amz-checksum-sha256` header.
- */
-const bufferToHex = (buffer: ArrayBuffer): string => {
-  const view = new Uint8Array(buffer);
-  let out = "";
-  for (const byte of view) {
-    out += byte.toString(16).padStart(2, "0");
-  }
-  return out;
-};
-
-const hashFileSha256Hex = async (file: File): Promise<string> => {
-  const fileBuffer = await file.arrayBuffer();
-  const sha256Buffer = await crypto.subtle.digest("SHA-256", fileBuffer);
-  return bufferToHex(sha256Buffer);
-};
-
 type PrepareFolderTreeUploadOptions = {
   workspaceId: string;
   parentId: string | null;
@@ -116,7 +97,7 @@ const prepareFolderTreeUpload = async ({
       name: placement.file.name,
       mimeType: placement.file.type || "application/octet-stream",
       size: placement.file.size,
-      sha256Hex: await hashFileSha256Hex(placement.file),
+      sha256Hex: await hashSha256Hex(await placement.file.arrayBuffer()),
     });
   }
 
@@ -268,7 +249,7 @@ const prepareSingleFileEntityUpload = async ({
   signal.throwIfAborted();
 
   // 1. SHA-256 of file bytes.
-  const sha256Hex = await hashFileSha256Hex(file);
+  const sha256Hex = await hashSha256Hex(await file.arrayBuffer());
 
   signal.throwIfAborted();
 

@@ -1,6 +1,7 @@
 import { panic } from "better-result";
 
 import { fetchWithTimeout } from "@stll/fetch";
+import { sha256Hex as hashSha256Hex } from "@stll/sha256/browser";
 
 import { api } from "@/lib/api";
 import { toAPIError, unwrapEden } from "@/lib/errors/api";
@@ -31,14 +32,6 @@ export const ENTITY_VERSION_UPLOAD_RESULT = {
 export type EntityVersionUploadResult =
   | { type: typeof ENTITY_VERSION_UPLOAD_RESULT.cancelled }
   | { type: typeof ENTITY_VERSION_UPLOAD_RESULT.uploaded };
-
-const hashFileSha256Hex = async (file: File): Promise<string> => {
-  const buffer = await file.arrayBuffer();
-  const digest = await crypto.subtle.digest("SHA-256", buffer);
-  return Array.from(new Uint8Array(digest))
-    .map((byte) => byte.toString(16).padStart(2, "0"))
-    .join("");
-};
 
 const abortUpload = async (
   workspaceId: string,
@@ -82,7 +75,7 @@ export const uploadEntityVersion = async ({
   }
 
   signal?.throwIfAborted();
-  const sha256Hex = await hashFileSha256Hex(fileToUpload);
+  const sha256Hex = await hashSha256Hex(await fileToUpload.arrayBuffer());
   signal?.throwIfAborted();
 
   const wsClient = api.uploads({
