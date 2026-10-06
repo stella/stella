@@ -402,6 +402,27 @@ const PDF_SIGNING_TOKEN_SCOPE_STATEMENT_PREFIXES = [
   "GRANT EXECUTE ON FUNCTION",
 ] as const;
 
+/** Apply the presence migration's forced owner boundary, which schema push omits. */
+export const installPgliteDesktopPresenceRls = async (
+  db: PgliteSchemaDb,
+): Promise<void> => {
+  const statement = readMigrationStatements(
+    nodePath.join(
+      DRIZZLE_DIR,
+      "20261004120300_desktop_presence",
+      "migration.sql",
+    ),
+  ).find((candidate) =>
+    executableSql(candidate).startsWith(
+      'ALTER TABLE "desktop_presence" FORCE ROW LEVEL SECURITY',
+    ),
+  );
+  if (!statement) {
+    panic("Desktop presence FORCE RLS migration statement is missing");
+  }
+  await db.execute(sql.raw(statement));
+};
+
 /**
  * Install what schema push cannot say about PDF signing sessions: forced row
  * security and the token-scope lookups the desktop's calls go through.

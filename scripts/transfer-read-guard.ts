@@ -661,6 +661,43 @@ const limitDisposition = ({
   return "constant-limit";
 };
 
+const isPredicateSubquery = (
+  node: ts.CallExpression,
+  predicates: ReadonlyMap<string, number>,
+) => {
+  const parent = node.parent;
+  if (!ts.isCallExpression(parent) || !ts.isIdentifier(parent.expression)) {
+    return false;
+  }
+  const name = parent.expression.text;
+  const argument = predicates.get(name);
+  if (argument === undefined || parent.arguments.at(argument) !== node) {
+    return false;
+  }
+  let scope = parent.parent;
+  while (!ts.isSourceFile(scope)) {
+    if (
+      declarationIn(scope, name) !== undefined ||
+      (isFunction(scope) &&
+        (scope.name?.getText() === name ||
+          scope.parameters.some((parameter) =>
+            bindingNames(parameter.name).includes(name),
+          ))) ||
+      (ts.isBlock(scope) &&
+        scope.statements.some(
+          (statement) =>
+            (ts.isFunctionDeclaration(statement) ||
+              ts.isClassDeclaration(statement)) &&
+            statement.name?.text === name,
+        ))
+    ) {
+      return false;
+    }
+    scope = scope.parent;
+  }
+  return true;
+};
+
 /** Conservative syntax census: JSON/text may also carry user-sized content.
  * Existing bounded metadata and paginated reads retain explicit baseline reasons. */
 export const findTransferReads = (
@@ -682,6 +719,7 @@ export const findTransferReads = (
     file.endsWith("x") ? ts.ScriptKind.TSX : ts.ScriptKind.TS,
   );
   const imported = new Map<string, string>();
+  const subqueryPredicates = new Map<string, number>();
   for (const statement of parsed.statements) {
     if (!ts.isImportDeclaration(statement)) {
       continue;
@@ -693,6 +731,24 @@ export const findTransferReads = (
           element.name.text,
           element.propertyName?.text ?? element.name.text,
         );
+        if (
+          ts.isStringLiteral(statement.moduleSpecifier) &&
+          statement.moduleSpecifier.text === "drizzle-orm"
+        ) {
+          const name = element.propertyName?.text ?? element.name.text;
+          switch (name) {
+            case "inArray":
+            case "notInArray":
+              subqueryPredicates.set(element.name.text, 1);
+              break;
+            case "exists":
+            case "notExists":
+              subqueryPredicates.set(element.name.text, 0);
+              break;
+            default:
+              break;
+          }
+        }
       }
     }
   }
@@ -771,7 +827,11 @@ export const findTransferReads = (
           cap !== undefined &&
           isConstant(cap)
         ) {
-          const disposition = limitDisposition({ node, cap, root });
+          // Predicate subqueries stay in Postgres; their limit does not
+          // truncate a collection transferred to the application.
+          const disposition = isPredicateSubquery(node, subqueryPredicates)
+            ? "exempt"
+            : limitDisposition({ node, cap, root });
           if (disposition !== "exempt") {
             record(disposition, node);
           }

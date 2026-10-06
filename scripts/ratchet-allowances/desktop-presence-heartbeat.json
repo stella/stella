@@ -1,0 +1,5 @@
+{
+  "metric": "audit-skip-directives",
+  "delta": 2,
+  "reason": "reportDesktopPresence uses two audit skips for technical owner-scoped presence writes: upserting the authenticated user's installation observation and deleting superseded installations for that user and organization. Technical liveness is not a user action; no heartbeat history is retained."
+}
