@@ -4740,6 +4740,7 @@
     },
     "title": "Rechtsvorschriften",
     "validity": "Gültig von {from} bis {to}",
+    "versionAppliedInDecision": "In der Entscheidung <bdi>{court}</bdi> <bdi>{caseNumber}</bdi> angewandte Fassung (<bdi>{range}</bdi>) · {status}",
     "wordingValidFrom": "Wortlaut in Kraft seit {date}",
     "wordingVersionUnknown": "Datum der Wortlautversion nicht verfügbar"
   },

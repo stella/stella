@@ -4740,6 +4740,7 @@
     },
     "title": "Akty prawne",
     "validity": "Obowiązuje od {from} do {to}",
+    "versionAppliedInDecision": "Wersja zastosowana w orzeczeniu <bdi>{court}</bdi> <bdi>{caseNumber}</bdi> (<bdi>{range}</bdi>) · {status}",
     "wordingValidFrom": "Brzmienie obowiązuje od {date}",
     "wordingVersionUnknown": "Data wersji brzmienia jest niedostępna"
   },

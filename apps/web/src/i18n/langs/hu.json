@@ -4740,6 +4740,7 @@
     },
     "title": "Jogszabályok",
     "validity": "Hatályos {from} és {to} között",
+    "versionAppliedInDecision": "A(z) <bdi>{court}</bdi> <bdi>{caseNumber}</bdi> határozatban alkalmazott változat (<bdi>{range}</bdi>) · {status}",
     "wordingValidFrom": "A szöveg {date} óta hatályos",
     "wordingVersionUnknown": "A szövegváltozat dátuma nem érhető el"
   },

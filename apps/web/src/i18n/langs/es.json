@@ -4740,6 +4740,7 @@
     },
     "title": "Legislación",
     "validity": "Vigente del {from} al {to}",
+    "versionAppliedInDecision": "Versión aplicada en la resolución <bdi>{court}</bdi> <bdi>{caseNumber}</bdi> (<bdi>{range}</bdi>) · {status}",
     "wordingValidFrom": "Redacción vigente desde {date}",
     "wordingVersionUnknown": "No se conoce la fecha de la versión de la redacción"
   },
