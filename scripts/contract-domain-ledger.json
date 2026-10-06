@@ -904,10 +904,6 @@
     "reason": "Existing SECTION_ORDER domain; contract ownership pending migration."
   },
   {
-    "id": "apps/web/src/components/chat/tool-approval-card.test.ts::<module>::domain:[\"delete_matter\",\"manage_organization\",\"suggest_changes\"]::1",
-    "reason": "Local test input domain or bound; retained for fixture coverage."
-  },
-  {
     "id": "apps/web/src/components/chat/tool-approval-summary.ts::READER_ANNOTATION_EDIT_TOOL_NAMES::domain:[\"delete_reader_annotation\",\"update_reader_annotation\"]::1",
     "reason": "Existing READER_ANNOTATION_EDIT_TOOL_NAMES domain; contract ownership pending migration."
   },
