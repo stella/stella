@@ -41,6 +41,7 @@ describe.skipIf(!enabled)("document-owned verification history", () => {
           CREATE TABLE organization (id varchar(128) PRIMARY KEY);
           CREATE TABLE "user" (id text PRIMARY KEY);
           CREATE TABLE workspaces (id uuid PRIMARY KEY, organization_id varchar(128), UNIQUE (id, organization_id));
+          CREATE TABLE audit_logs (LIKE public.audit_logs INCLUDING DEFAULTS, FOREIGN KEY (organization_id) REFERENCES organization (id) ON DELETE CASCADE);
           CREATE TABLE entities (id uuid PRIMARY KEY, workspace_id uuid, UNIQUE (id, workspace_id));
           CREATE TABLE legal_list_items (entity_id uuid, list_id uuid, workspace_id uuid, UNIQUE (entity_id, list_id, workspace_id));
           CREATE VIEW stella_authorized_workspaces AS SELECT NULL::uuid AS authorized_workspace_id WHERE false;
@@ -164,13 +165,23 @@ describe.skipIf(!enabled)("document-owned verification history", () => {
           }
           return result;
         };
-        await seedRun(createSafeId<"entity">(), "completed");
+        const unownedRunId = await seedRun(
+          createSafeId<"entity">(),
+          "completed",
+        );
         expect(Object.values(await counts())).toEqual(dependents.map(() => 1));
         await applyMigration(migrationName);
         await applyMigration(
           "20261005120700_validate_verification_document_cascade",
         );
         expect(Object.values(await counts())).toEqual(dependents.map(() => 0));
+        expect(
+          await client<
+            { resource_id: string; trigger_source_id: string }[]
+          >`SELECT resource_id, trigger_source_id FROM audit_logs`,
+        ).toEqual([
+          { resource_id: unownedRunId, trigger_source_id: migrationName },
+        ]);
         for (const status of VERIFICATION_RUN_STATUSES) {
           await seedRun(documentId, status);
         }
