@@ -555,7 +555,7 @@ const isValidDispatchBoundary = (
     }
     default: {
       boundary satisfies never;
-      panic("Unknown dispatch ownership boundary");
+      return panic("Unknown dispatch ownership boundary");
     }
   }
 };

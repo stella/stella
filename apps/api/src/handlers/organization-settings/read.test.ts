@@ -12,7 +12,10 @@ import {
 } from "@/api/lib/feature-access/registry";
 import type { FeatureRegistry } from "@/api/lib/feature-access/registry";
 import { createTestHandlerContext } from "@/api/tests/helpers/handler-context";
-import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
+import {
+  createFeatureAccessSelectMock,
+  createScopedDbMock,
+} from "@/api/tests/scoped-db-mock";
 
 const emptySnapshot = createFeatureAccessSnapshot({
   organizationId: "org_test",
@@ -24,15 +27,8 @@ const emptySnapshot = createFeatureAccessSnapshot({
 const unenrolledSettingsDatabase = (email: string) =>
   createScopedDbMock({
     query: { organizationSettings: { findFirst: async () => undefined } },
-    select: () => ({
-      from: () => ({
-        innerJoin: () => ({
-          where: () => ({
-            limit: async () => [{ email, emailVerified: true }],
-          }),
-        }),
-        where: () => ({ limit: async () => [] }),
-      }),
+    select: createFeatureAccessSelectMock({
+      identity: { email, emailVerified: true },
     }),
   });
 

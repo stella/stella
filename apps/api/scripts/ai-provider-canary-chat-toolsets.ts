@@ -29,6 +29,8 @@ import { createChatRefRegistry } from "@/api/lib/chat/ref-registry";
 import { createChatToolDefectMemo } from "@/api/lib/chat/tool-defect-memo";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import type { UrlFetcher, WebSearchProvider } from "@/api/lib/web-search/types";
+import { hiddenMcpDescriptorIds } from "@/api/mcp/feature-access-prose";
+import { DEFAULT_MCP_TOOL_DEFINITIONS } from "@/api/mcp/static-tool-definitions";
 
 import type { CanaryProvider } from "./ai-provider-canary-config";
 
@@ -230,13 +232,28 @@ export const buildCanaryChatToolsets = (
     toolsets.flatMap(({ tools }) => tools.map(({ name }) => name)),
   );
   const catalogNames = Object.keys(BUILT_IN_CHAT_TOOL_POLICY_KINDS);
-  const missing = catalogNames.filter((name) => !registeredNames.has(name));
+  // The canary has no feature admission. Account for those tools through the
+  // same registry-derived visibility rule chat uses, without granting access.
+  const gatedNames = hiddenMcpDescriptorIds(
+    undefined,
+    DEFAULT_MCP_TOOL_DEFINITIONS,
+  );
+  const missing = catalogNames.filter(
+    (name) => !registeredNames.has(name) && !gatedNames.has(name),
+  );
   const uncatalogued = [...registeredNames].filter(
     (name) => !Object.hasOwn(BUILT_IN_CHAT_TOOL_POLICY_KINDS, name),
   );
-  if (missing.length > 0 || uncatalogued.length > 0) {
+  const unexpectedlyGated = [...registeredNames].filter((name) =>
+    gatedNames.has(name),
+  );
+  if (
+    missing.length > 0 ||
+    uncatalogued.length > 0 ||
+    unexpectedlyGated.length > 0
+  ) {
     return panic(
-      `Canary chat toolset census drifted (missing: ${missing.join(", ") || "none"}; uncatalogued: ${uncatalogued.join(", ") || "none"}).`,
+      `Canary chat toolset census drifted (missing: ${missing.join(", ") || "none"}; uncatalogued: ${uncatalogued.join(", ") || "none"}; gated: ${unexpectedlyGated.join(", ") || "none"}).`,
     );
   }
   return toolsets;

@@ -166,7 +166,7 @@ describe("resolveCommandTree (S5.3)", () => {
     const env = await makeCacheEnv();
     const toolName = "save_time_entry";
     const spec = curatedLeavesForTool(generatedRouteMap, toolName).at(0);
-    if (spec === undefined || spec.featureId === undefined) {
+    if (spec?.featureId === undefined) {
       panic("Missing real feature-gated command fixture");
     }
     const bakedTree = { kind: "leaf", spec } as const satisfies RouteNode;
@@ -190,7 +190,7 @@ describe("resolveCommandTree (S5.3)", () => {
         env,
         registry,
         bakedTree,
-        featureAccess,
+        ...(featureAccess === undefined ? {} : { featureAccess }),
       });
       const visible = curatedLeavesForTool(resolved.tree, toolName);
       expect(visible.length).toBe(featureAccess === admittedFeatures ? 1 : 0);
@@ -242,7 +242,9 @@ describe("resolveCommandTree (S5.3)", () => {
       serverOrigin: ORIGIN,
       env,
       registry: outcome.registry,
-      featureAccess: outcome.featureAccess,
+      ...(outcome.featureAccess === undefined
+        ? {}
+        : { featureAccess: outcome.featureAccess }),
     });
     expect(capabilityLeafIds(resolved.tree).toSorted()).toEqual(
       capabilityLeafIds(generatedRouteMap).toSorted(),

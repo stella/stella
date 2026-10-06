@@ -14,7 +14,10 @@ import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { isRecord } from "@/api/lib/type-guards";
 import { createTestHandlerContext } from "@/api/tests/helpers/handler-context";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
-import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
+import {
+  createFeatureAccessSelectMock,
+  createScopedDbMock,
+} from "@/api/tests/scoped-db-mock";
 
 const featureId = "fixture-access";
 // The fixture features are not registered, so handler configs name them
@@ -25,17 +28,8 @@ const registry = { [featureId]: { enrolment: "invitation" } } as const;
 // and enrolments; neither grants a fixture feature.
 const unenrolledDatabase = () =>
   createScopedDbMock({
-    select: () => ({
-      from: () => ({
-        innerJoin: () => ({
-          where: () => ({
-            limit: async () => [
-              { email: "colleague@example.test", emailVerified: true },
-            ],
-          }),
-        }),
-        where: () => ({ limit: async () => [] }),
-      }),
+    select: createFeatureAccessSelectMock({
+      identity: { email: "colleague@example.test", emailVerified: true },
     }),
   });
 const snapshot = (userId: string, organizationId: string, invited: boolean) =>

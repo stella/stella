@@ -1,8 +1,9 @@
 import { panic, Result } from "better-result";
 
+import { member, type user } from "@/api/db/auth-schema";
 import type { Transaction } from "@/api/db/root";
 import type { SafeDb, SafeDbRetryConfig, ScopedDb } from "@/api/db/safe-db";
-import { entities } from "@/api/db/schema";
+import { entities, featureEnrolments } from "@/api/db/schema";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 export const toSafeDbMock =
@@ -110,3 +111,28 @@ export const createSelectQueryMock = <TRow>(rows: TRow[]) => {
     }),
   };
 };
+
+type FeatureAccessSelectMockOptions = {
+  identity: Pick<typeof user.$inferSelect, "email" | "emailVerified"> | null;
+  enrolments?: Pick<
+    typeof featureEnrolments.$inferSelect,
+    "featureId" | "organizationId" | "userId"
+  >[];
+};
+
+// Resolve identity and enrolments by table so every feature uses the same fixture.
+export const createFeatureAccessSelectMock =
+  ({ identity, enrolments = [] }: FeatureAccessSelectMockOptions) =>
+  () => ({
+    from: (table: unknown) => {
+      if (table === member) {
+        return createSelectQueryMock(
+          identity === null ? [] : [identity],
+        ).from();
+      }
+      if (table === featureEnrolments) {
+        return createSelectQueryMock(enrolments).from();
+      }
+      return panic("Feature access fixture must read membership or enrolments");
+    },
+  });
