@@ -98,6 +98,6 @@ test("renders the Arabic sentence with localized narrow duration units", () => {
       <ChatTurnDuration timing={{ status: "finished", durationMs: 4000 }} />
     </IntlProvider>,
   );
-  expect(html).toContain("مدة العمل: 4ث");
+  expect(html).toMatch(/مدة العمل: 4\s*ث/u);
   expect(html).not.toContain("Worked for");
 });

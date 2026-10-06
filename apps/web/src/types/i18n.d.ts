@@ -8,6 +8,7 @@ type LocalizedIntlProviderProps = {
   locale: string;
   messages: LocaleMessages;
   timeZone?: string;
+  now?: Date;
 };
 
 declare module "use-intl" {

@@ -13,9 +13,9 @@ type ChatTurnDurationProps = {
 export const ChatTurnDuration = ({ timing }: ChatTurnDurationProps) => {
   const t = useTranslations();
   const format = useFormatter();
-  const now = useNow({
-    updateInterval: timing.status === "running" ? 1000 : undefined,
-  });
+  const now = useNow(
+    timing.status === "running" ? { updateInterval: 1000 } : {},
+  );
   const durationMs = getChatTurnDurationMs(timing, now.getTime());
   if (durationMs === undefined) {
     return null;

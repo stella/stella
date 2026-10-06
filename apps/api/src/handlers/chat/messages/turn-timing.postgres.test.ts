@@ -116,8 +116,12 @@ const seedMessages = async (
   });
   await fixture.db.insert(chatMessages).values(
     [
-      { id: userMessageId, role: "user", createdAt },
-      { id: assistantMessageId, role: "assistant", createdAt: settledAt },
+      { id: userMessageId, role: "user" as const, createdAt },
+      {
+        id: assistantMessageId,
+        role: "assistant" as const,
+        createdAt: settledAt,
+      },
     ].map((message) => ({
       ...message,
       threadId,

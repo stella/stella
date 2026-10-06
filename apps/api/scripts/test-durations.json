@@ -1907,6 +1907,10 @@
     "seconds": 0.465734,
     "source": "estimated"
   },
+  "src/handlers/chat/chat-turn-timing-stream.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
   "src/handlers/chat/code-mode-misplaced-call.integration.test.ts": {
     "seconds": 11.7,
     "source": "measured"
@@ -1989,6 +1993,10 @@
   },
   "src/handlers/chat/message-page.test.ts": {
     "seconds": 0.442428,
+    "source": "estimated"
+  },
+  "src/handlers/chat/messages/turn-timing.postgres.test.ts": {
+    "seconds": 1,
     "source": "estimated"
   },
   "src/handlers/chat/persist-message.test.ts": {

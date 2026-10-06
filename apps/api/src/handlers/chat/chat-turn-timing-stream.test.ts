@@ -6,6 +6,7 @@ import { withChatTurnTiming } from "@/api/handlers/chat/chat-turn-timing-stream"
 import type { ChatTurnTiming } from "@/api/handlers/chat/types";
 import { createStreamMessageCapture } from "@/api/lib/chat/stream-message-capture";
 import { readPresent, readUnavailable } from "@/api/lib/errors/read-outcome";
+import { buildWireSnapshot } from "@/api/tests/helpers/chat-fixtures";
 
 const running = {
   status: "running",
@@ -41,6 +42,7 @@ const starts = [
   {
     type: EventType.REASONING_MESSAGE_START,
     messageId: "answer",
+    role: "assistant",
     timestamp: 0,
   },
   {
@@ -213,22 +215,22 @@ describe("active timing at iteration and snapshot boundaries", () => {
         },
         { type: EventType.TOOL_CALL_END, toolCallId: "call", timestamp: 2000 },
         {
-          type: EventType.MESSAGES_SNAPSHOT,
-          timestamp: 3000,
-          messages: [
+          ...buildWireSnapshot([
             {
               id: "answer",
               role: "assistant",
-              content: "",
-              toolCalls: [
+              parts: [
                 {
+                  type: "tool-call",
                   id: "call",
-                  type: "function",
-                  function: { name: "synthetic", arguments: "{}" },
+                  name: "synthetic",
+                  arguments: "{}",
+                  state: "input-complete",
                 },
               ],
             },
-          ],
+          ]),
+          timestamp: 3000,
         },
         runEnd,
       ]),

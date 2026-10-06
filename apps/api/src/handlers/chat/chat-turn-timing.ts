@@ -1,4 +1,4 @@
-import { Column, getTableName, is, sql } from "drizzle-orm";
+import { Column, getColumnTable, getTableName, is, sql } from "drizzle-orm";
 import type { AnyColumn, SQL } from "drizzle-orm";
 
 import {
@@ -38,7 +38,7 @@ export const messageTurnTiming = ({
   // identifiers keep the inner aggregate correlated to the outer row.
   const outerReference = (value: AnyColumn | SQL) =>
     is(value, Column)
-      ? sql`${sql.identifier(getTableName(value.table))}.${sql.identifier(value.name)}`
+      ? sql`${sql.identifier(getTableName(getColumnTable(value)))}.${sql.identifier(value.name)}`
       : value;
   const message = outerReference(messageId);
   const thread = outerReference(threadId);

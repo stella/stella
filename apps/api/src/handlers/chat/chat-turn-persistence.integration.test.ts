@@ -1,4 +1,4 @@
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { eq, inArray, sql } from "drizzle-orm";
 
@@ -2145,10 +2145,16 @@ describe("durable active turn timing", () => {
     expect(running?.activeDurationMs).toBe(2000);
     expect(running?.activeStartedAt).toBeInstanceOf(Date);
     expect(running?.timingMessageId).toBe(fixture.assistantMessageId);
+    if (
+      running?.activeStartedAt === null ||
+      running?.activeStartedAt === undefined
+    ) {
+      panic("Expected an active timing anchor");
+    }
     expect(unwrap(await readChatTurnTiming({ execution, safeDb }))).toEqual({
       status: "running",
       durationMs: 2000,
-      startedAt: running?.activeStartedAt?.toISOString(),
+      startedAt: running.activeStartedAt.toISOString(),
     });
     unwrap(
       await safeDb(async (tx) => {

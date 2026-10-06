@@ -41,7 +41,7 @@ export const withChatTurnTiming = async function* ({
   const messageIds = new Set<string>();
   let settledTiming: Promise<ReadOutcome<ChatTurnTiming | null>> | undefined;
   for await (const chunk of source) {
-    if (chunk.subagentRunId !== undefined) {
+    if ("subagentRunId" in chunk && chunk.subagentRunId !== undefined) {
       yield chunk;
       continue;
     }
@@ -65,7 +65,9 @@ export const withChatTurnTiming = async function* ({
           type: EventType.TEXT_MESSAGE_START,
           messageId,
           role: "assistant",
-          timestamp: chunk.timestamp,
+          ...(chunk.timestamp === undefined
+            ? {}
+            : { timestamp: chunk.timestamp }),
           metadata: running,
         };
       }
@@ -81,7 +83,9 @@ export const withChatTurnTiming = async function* ({
         yield {
           type: EventType.TEXT_MESSAGE_END,
           messageId: id,
-          timestamp: chunk.timestamp,
+          ...(chunk.timestamp === undefined
+            ? {}
+            : { timestamp: chunk.timestamp }),
           metadata: finished,
         };
       }

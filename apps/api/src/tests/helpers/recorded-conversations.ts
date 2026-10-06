@@ -138,8 +138,8 @@ export const registerRecordedConversationSuite = (
   /** Epoch milliseconds from 2023 to 2033, the stream's `timestamp` values. */
   const EPOCH_MS_PATTERN = /(?<![\d.])1[7-9]\d{11}(?![\d.])/gu;
   const RECORDING_EPOCH_MS = Date.UTC(2026, 0, 1);
-  /** Elapsed milliseconds a code-mode run reports, raw or inside an SSE body. */
-  const DURATION_PATTERN = /(\\?"(?:duration|durationMs)\\?":)\d+/gu;
+  /** Elapsed milliseconds, raw or inside an SSE body. */
+  const DURATION_PATTERN = /(\\?"(?:duration|durationMs)\\?":\s*)\d+/gu;
 
   /** Each distinct match of `pattern`, in order of first appearance, named by
    *  `name(n, match)`: identity is kept, the generated value is not. */
