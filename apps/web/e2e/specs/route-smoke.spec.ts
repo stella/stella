@@ -277,6 +277,53 @@ const INTENTIONALLY_NOT_SMOKED = new Set([
   "/workspaces/$workspaceId/reports/$exportId",
 ]);
 
+type TimeBillingRedirectDestinationOptions = {
+  template: string;
+  workspaceId: string;
+};
+
+const timeBillingRedirectDestination = ({
+  template,
+  workspaceId,
+}: TimeBillingRedirectDestinationOptions): string => {
+  if (template.startsWith("/workspaces/")) {
+    return `/workspaces/${workspaceId}`;
+  }
+  if (template.startsWith("/settings/organization/")) {
+    return "/settings/organization/members";
+  }
+  if (template === "/time") {
+    return "/workspaces";
+  }
+  throw new Error(`No unenrolled redirect expectation for ${template}`);
+};
+
+// A route counts as smoked only if it settled on its own component or its
+// declared redirect target; bouncing to an unrelated route means the component
+// under test never rendered. `settles` routes opt out because their final URL
+// depends on env or runtime data.
+const assertFinalDestination = (page: Page, route: SmokeRoute) => {
+  const expectation = route.expectation ?? { kind: "rendersInPlace" };
+  if (expectation.kind === "settles") {
+    return;
+  }
+
+  const expected = expectedDestination(route, page.url());
+  const actual = new URL(page.url());
+
+  expect(
+    comparableHref(actual, expected.assertSearch),
+    `${route.template} settled on an unexpected route`,
+  ).toBe(expected.href);
+};
+
+const assertNoRouteBoundary = async (page: Page, routeTemplate: string) => {
+  await expect(
+    page.getByRole("heading", { name: ROUTE_ERROR_HEADING }),
+    `route error boundary rendered on ${routeTemplate}`,
+  ).toHaveCount(0);
+};
+
 const declareRouteSmokeGroup = ({
   defs,
   name,
@@ -831,25 +878,6 @@ const gotoSmokeRoute = async (page: Page, route: SmokeRoute) => {
   }
 };
 
-// A route counts as smoked only if it settled on its own component or its
-// declared redirect target; bouncing to an unrelated route means the component
-// under test never rendered. `settles` routes opt out because their final URL
-// depends on env or runtime data.
-const assertFinalDestination = (page: Page, route: SmokeRoute) => {
-  const expectation = route.expectation ?? { kind: "rendersInPlace" };
-  if (expectation.kind === "settles") {
-    return;
-  }
-
-  const expected = expectedDestination(route, page.url());
-  const actual = new URL(page.url());
-
-  expect(
-    comparableHref(actual, expected.assertSearch),
-    `${route.template} settled on an unexpected route`,
-  ).toBe(expected.href);
-};
-
 const waitForRedirectDestination = async (page: Page, route: SmokeRoute) => {
   if (route.expectation?.kind !== "redirectsTo") {
     return;
@@ -893,13 +921,6 @@ const expectedDestination = (
 
 const comparableHref = (url: URL, assertSearch: boolean) =>
   assertSearch ? url.pathname + url.search : url.pathname;
-
-const assertNoRouteBoundary = async (page: Page, routeTemplate: string) => {
-  await expect(
-    page.getByRole("heading", { name: ROUTE_ERROR_HEADING }),
-    `route error boundary rendered on ${routeTemplate}`,
-  ).toHaveCount(0);
-};
 
 const assertRouteContentVisible = async (page: Page, routeTemplate: string) => {
   if (
@@ -971,24 +992,3 @@ const PROTECTED_ROUTE_LINE =
 
 const parseAuthenticatedRouteTemplate = (line: string): string | null =>
   PROTECTED_ROUTE_LINE.exec(line.trimStart())?.groups?.["path"] ?? null;
-
-type TimeBillingRedirectDestinationOptions = {
-  template: string;
-  workspaceId: string;
-};
-
-const timeBillingRedirectDestination = ({
-  template,
-  workspaceId,
-}: TimeBillingRedirectDestinationOptions): string => {
-  if (template.startsWith("/workspaces/")) {
-    return `/workspaces/${workspaceId}`;
-  }
-  if (template.startsWith("/settings/organization/")) {
-    return "/settings/organization/members";
-  }
-  if (template === "/time") {
-    return "/workspaces";
-  }
-  throw new Error(`No unenrolled redirect expectation for ${template}`);
-};

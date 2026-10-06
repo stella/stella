@@ -32,6 +32,31 @@ type ScopedDbMockOptions = {
   featureAccess?: FeatureAccessMockOptions;
 };
 
+// Query fixtures provide the rows matching their select boundary. Keep the
+// awaitable builder shape intact for locking and bounded reads.
+export const createSelectQueryMock = <TRow>(rows: TRow[]) => {
+  // oxlint-disable-next-line typescript-eslint/promise-function-async -- async would wrap the query promise and discard its for method
+  const limit = (count: number) => {
+    const selected = rows.slice(0, count);
+    return Object.assign(Promise.resolve(selected), {
+      for: async () => await Promise.resolve(selected),
+    });
+  };
+  // oxlint-disable-next-line typescript-eslint/promise-function-async -- async would wrap the query promise and discard its query methods
+  const where = () =>
+    Object.assign(Promise.resolve(rows), {
+      limit,
+      for: async () => await Promise.resolve(rows),
+      orderBy: () => ({ limit }),
+    });
+  return {
+    from: () => ({
+      where,
+      innerJoin: () => ({ where }),
+    }),
+  };
+};
+
 const fixtureSelect =
   (tx: unknown, options?: ScopedDbMockOptions) => (selection: unknown) => {
     const columns =
@@ -132,30 +157,5 @@ export const createScopedDbMock = (
     getCallCount: () => callCount,
     safeDb: toSafeDbMock(scopedDb),
     scopedDb,
-  };
-};
-
-// Query fixtures provide the rows matching their select boundary. Keep the
-// awaitable builder shape intact for locking and bounded reads.
-export const createSelectQueryMock = <TRow>(rows: TRow[]) => {
-  // oxlint-disable-next-line typescript-eslint/promise-function-async -- async would wrap the query promise and discard its for method
-  const limit = (count: number) => {
-    const selected = rows.slice(0, count);
-    return Object.assign(Promise.resolve(selected), {
-      for: async () => await Promise.resolve(selected),
-    });
-  };
-  // oxlint-disable-next-line typescript-eslint/promise-function-async -- async would wrap the query promise and discard its query methods
-  const where = () =>
-    Object.assign(Promise.resolve(rows), {
-      limit,
-      for: async () => await Promise.resolve(rows),
-      orderBy: () => ({ limit }),
-    });
-  return {
-    from: () => ({
-      where,
-      innerJoin: () => ({ where }),
-    }),
   };
 };

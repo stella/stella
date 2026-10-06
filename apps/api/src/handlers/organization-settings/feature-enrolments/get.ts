@@ -1,9 +1,10 @@
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import { and, eq } from "drizzle-orm";
 
 import { featureEnrolments } from "@/api/db/schema";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
+import { readBounded } from "@/api/lib/db/read-bounded";
 import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import {
   FEATURE_REGISTRY,
@@ -53,9 +54,9 @@ export default createSafeRootHandler(
   async function* ({ safeDb, session, user }) {
     // The registry bounds this preference list; pagination would split one settings snapshot.
     const rows = yield* Result.await(
-      safeDb(
-        async (tx) =>
-          await tx
+      safeDb(async (tx) => {
+        const read = await readBounded(
+          tx
             .select({ featureId: featureEnrolments.featureId })
             .from(featureEnrolments)
             .where(
@@ -66,9 +67,15 @@ export default createSafeRootHandler(
                   session.activeOrganizationId,
                 ),
               ),
-            )
-            .limit(SELF_SERVE_FEATURE_IDS.length),
-      ),
+            ),
+          SELF_SERVE_FEATURE_IDS.length,
+        );
+        // The primary key and feature-id check bound each caller to the registry.
+        if (read.type === "overflow") {
+          return panic("Feature enrolments exceed the self-serve registry");
+        }
+        return read.rows;
+      }),
     );
     const enrolled = new Set(rows.map(({ featureId }) => featureId));
     return Result.ok({
