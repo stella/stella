@@ -370,7 +370,7 @@ describe("list verification access grants across MCP tools", () => {
               ]
             : [];
         const rows = identity ? identityRows : viewRows;
-        const query = Promise.resolve(rows);
+        const query = [...rows];
         const builder = Object.assign(query, {
           from: () => query,
           innerJoin: () => query,
@@ -400,7 +400,7 @@ describe("list verification access grants across MCP tools", () => {
       },
       selectDistinctOn: () => {
         resourceLookups += 1;
-        const query = Promise.resolve([]);
+        const query: unknown[] = [];
         return Object.assign(query, {
           from: () => query,
           where: () => query,
@@ -770,7 +770,9 @@ describe("list verification access grants across MCP tools", () => {
       expect(fixture.mutations()).toBe(0);
       if (capability === "lists.verifications.list") {
         expect(result.isError).not.toBe(true);
-        expect(parseToolPayload(result)).toMatchObject({ items: [] });
+        expect(parseToolPayload<{ items: unknown[] }>(result)).toMatchObject({
+          items: [],
+        });
       } else if (capability === "lists.verifications.latest.list") {
         expect(result.isError).not.toBe(true);
         expect(parseToolPayload<{ runs: unknown[] }>(result)).toEqual({
