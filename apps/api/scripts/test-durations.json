@@ -311,6 +311,14 @@
     "seconds": 4.398227,
     "source": "estimated"
   },
+  "src/db/entity-feature-coverage.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
+  "src/db/entity-feature-visibility.postgres.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
   "src/db/entity-views-migration.test.ts": {
     "seconds": 3.9,
     "source": "measured"
@@ -513,6 +521,10 @@
   },
   "src/db/schema/soft-law-constraints.db.test.ts": {
     "seconds": 1.672165,
+    "source": "estimated"
+  },
+  "src/db/scoped-feature-access.test.ts": {
+    "seconds": 1,
     "source": "estimated"
   },
   "src/db/scoped.test.ts": {
@@ -2919,6 +2931,10 @@
     "seconds": 0.213871,
     "source": "estimated"
   },
+  "src/handlers/legal-list-feature-access.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
   "src/handlers/legal-reader/annotations/create.logic.test.ts": {
     "seconds": 0.212431,
     "source": "estimated"
@@ -4093,10 +4109,6 @@
   },
   "src/lib/auth/feature-access/context.test.ts": {
     "seconds": 0.25307,
-    "source": "estimated"
-  },
-  "src/lib/auth/feature-access/policy.test.ts": {
-    "seconds": 0.179483,
     "source": "estimated"
   },
   "src/lib/auth/oauth-consent-info.test.ts": {
@@ -5375,6 +5387,10 @@
     "seconds": 3.6052,
     "source": "estimated"
   },
+  "src/lib/entities/resource-access.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
   "src/lib/entities/sibling-name.test.ts": {
     "seconds": 0.121786,
     "source": "estimated"
@@ -5481,6 +5497,14 @@
   },
   "src/lib/feature-access/grants-schema.test.ts": {
     "seconds": 0.0517,
+    "source": "estimated"
+  },
+  "src/lib/feature-access/policy.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
+  "src/lib/feature-access/prerequisites.test.ts": {
+    "seconds": 1,
     "source": "estimated"
   },
   "src/lib/fields/write-field.integration.test.ts": {
