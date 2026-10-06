@@ -1,7 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
 
-import { validateFetchedToolsList } from "@stll/cli/registry-trust";
 import { propertyConfig } from "@stll/property-testing";
 import { listSkillMetadata } from "@stll/skills";
 
@@ -13,6 +12,8 @@ import {
   TOOL_NAME_MAX_LENGTH,
   TOOL_NAME_PATTERN,
 } from "@/api/lib/mcp-upstream/namespace";
+
+import { validateFetchedToolsList } from "../../../../../packages/cli/src/registry-trust";
 
 /**
  * Every dynamic tool name is derived here, and a client that meets one name

@@ -10,7 +10,6 @@ import {
 } from "bun:test";
 import * as v from "valibot";
 
-import { validateFetchedToolsList } from "@stll/cli/registry-trust";
 import { listSkillMetadata, loadSkill } from "@stll/skills";
 
 import type { Transaction } from "@/api/db/root";
@@ -37,6 +36,8 @@ import {
 } from "@/api/tests/security/rls-fixture";
 import type { TestIds } from "@/api/tests/security/rls-helpers";
 import type { TestDatabase } from "@/api/tests/security/test-utils";
+
+import { validateFetchedToolsList } from "../../../../../packages/cli/src/registry-trust";
 
 /**
  * End-to-end contract of the `skill__*` family through the served surface:
