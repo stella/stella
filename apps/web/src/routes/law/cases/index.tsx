@@ -518,7 +518,11 @@ export const Route = createFileRoute("/law/cases/")({
             }),
         }),
       ),
-      ensureRouteQueryData(queryClient, decisionFacetsOptions(scope)),
+      // The page reads facets without suspending, so a busy or unreachable
+      // corpus leaves them unprimed here instead of failing the route.
+      resultsOrOutage(
+        ensureRouteQueryData(queryClient, decisionFacetsOptions(scope)),
+      ),
     ]);
 
     // The rows are one region of this page, so a search backend that cannot be

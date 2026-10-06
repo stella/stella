@@ -11,9 +11,9 @@
 import { Result } from "better-result";
 
 import { isApparatusRole } from "@stll/legal-ast/document-ast";
+import { stripDangerousChars } from "@stll/legal-ast/text-sanitize";
 
 import type { Block } from "@/api/handlers/case-law/document-ast";
-import type { PrincipalTextEvidence } from "@/api/handlers/case-law/ingestion/adapters/courtlistener/order-classification";
 import {
   COURTLISTENER_REJECTION_REASON,
   type CourtListenerRejectionReason,
@@ -24,6 +24,10 @@ import {
   type OpinionType,
 } from "@/api/handlers/case-law/ingestion/adapters/courtlistener/vocabulary";
 import { indexCitationScopes } from "@/api/handlers/case-law/ingestion/citation-scopes";
+import {
+  scanRun,
+  US_CITATION_WORK_LIMIT,
+} from "@/api/handlers/case-law/ingestion/us-citation-scanner";
 import type {
   DecisionSection,
   DecisionSectionType,
@@ -83,7 +87,19 @@ export type CourtListenerTextOutcome =
         summary: string;
       };
       readonly citationScopes: readonly CitationOpinionScope[];
-      readonly principal: Extract<PrincipalTextEvidence, { status: "parsed" }>;
+      readonly principal: {
+        readonly body: string;
+        /** Whitespace-collapsed principal length in Unicode code points. */
+        readonly length: number;
+        readonly bodyParagraphCount: number;
+        /** Supported full and short citations, excluding note and apparatus text. */
+        readonly inBodyCitationCount:
+          | { readonly status: "counted"; readonly count: number }
+          | {
+              readonly status: "unavailable";
+              readonly reason: "scan-work-limit";
+            };
+      };
       readonly opinions: readonly OpinionTextReport[];
     }
   | {
@@ -128,19 +144,11 @@ const blockGroups = (blocks: readonly Block[]): Block[][] => {
   return groups;
 };
 
-/** A unit that may be read as the principal text, with what proves it. */
-type PrincipalUnit = {
-  readonly unit: TextUnit;
-  /** The class the row and markup prove; `unknown` proves no opinion. */
-  readonly body: ReturnType<typeof unitClass>["body"];
-  readonly structural: boolean;
-};
-
 type ScopedRow = {
   readonly scopes: CitationOpinionScope[];
   readonly coverage: "opinion" | "block-only";
   readonly classConflicts: number;
-  readonly principal: PrincipalUnit[];
+  readonly principal: TextUnit[];
 };
 
 /**
@@ -158,7 +166,7 @@ const scopeRow = (
 ): ScopedRow => {
   const base = `cl-opinion:${row.id}`;
   const scopes: CitationOpinionScope[] = [];
-  const principal: PrincipalUnit[] = [];
+  const principal: TextUnit[] = [];
   let proven = 0;
   let unproven = 0;
   let classConflicts = 0;
@@ -188,11 +196,7 @@ const scopeRow = (
     const unitType = unitClass(type, unit.domType, unit.position);
     classConflicts += unitType.conflict ? 1 : 0;
     if (unitType.principal) {
-      principal.push({
-        unit,
-        body: unitType.body,
-        structural: unitType.structural,
-      });
+      principal.push(unit);
     }
     if (
       unit.boundaries === "layout" ||
@@ -371,7 +375,7 @@ export const composeCourtListenerText = (
   blocks.push(...front.blocks);
   appendSections(sections, front.blocks, "header");
   const citationScopes: CitationOpinionScope[] = [];
-  const principal: PrincipalUnit[] = [];
+  const principal: TextUnit[] = [];
   const reports = selected.map(({ opinion, selection }) => {
     if (selection.status !== "parsed") {
       return report(opinion, selection, null);
@@ -427,12 +431,29 @@ export const composeCourtListenerText = (
     };
   }
 
-  const [first] = principal;
-  const titles = new Set(
-    principal.flatMap(({ unit }) =>
-      unit.orderTitleBlockId === null ? [] : [unit.orderTitleBlockId],
-    ),
-  );
+  const bodyBlocks = principal
+    .flatMap((unit) => unit.blocks)
+    .filter(isPrincipalBody);
+  const body = bodyBlocks.map(({ plainText }) => plainText).join("\n");
+  const citationBudget = { limit: US_CITATION_WORK_LIMIT, spent: 0 };
+  const citationCount = Result.gen(function* () {
+    let count = 0;
+    for (const block of bodyBlocks) {
+      if (block.type !== "paragraph") {
+        continue;
+      }
+      const scanned = yield* scanRun(block.inlines, {
+        budget: citationBudget,
+        identityKey: ({ value }) => value,
+      });
+      for (const event of scanned.events) {
+        if (event.kind === "token" && event.token.kind !== "barrier") {
+          count += 1;
+        }
+      }
+    }
+    return Result.ok(count);
+  });
   return {
     status: "parsed",
     blocks,
@@ -440,24 +461,14 @@ export const composeCourtListenerText = (
     textFields: front.textFields,
     citationScopes,
     principal: {
-      status: "parsed",
-      // The principal text opens with a root `ORDER` title of its own.
-      orderHeading:
-        first !== undefined && first.unit.orderTitleBlockId !== null,
-      body: principal
-        .flatMap(({ unit }) => unit.blocks)
-        .filter((block) => isPrincipalBody(block) && !titles.has(block.id))
-        .map(({ plainText }) => plainText)
-        .join("\n"),
-      structuralOpinion: principal.some(
-        ({ body, structural }) => structural && body === "argumentation",
-      ),
-      // One scope of source text is not one proven opinion: the unit must
-      // also be of a class the row or markup states.
-      singleOpinionBody:
-        principal.length === 1 &&
-        first !== undefined &&
-        first.body !== "unknown",
+      body,
+      length: Array.from(
+        stripDangerousChars(body).normalize("NFC").replace(/\s+/gu, " ").trim(),
+      ).length,
+      bodyParagraphCount: bodyBlocks.length,
+      inBodyCitationCount: Result.isError(citationCount)
+        ? { status: "unavailable", reason: "scan-work-limit" }
+        : { status: "counted", count: citationCount.value },
     },
     opinions: reports,
   };

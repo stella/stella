@@ -54,6 +54,17 @@
       "polish": "Viimistle sõnastust"
     }
   },
+  "aiColumns": {
+    "countSummary": "{columns} veergu × {rows} rida = {answers, plural, one {# vastus} other {# vastust}}. Vastused kasutavad eelarvet.",
+    "refusedBudget": "Käivitamata: vastuste eelarve pole saadaval",
+    "rerunAllPage": "Käivita kõik uuesti (sellel lehel)",
+    "rerunColumnPage": "Käivita veerg uuesti (sellel lehel)",
+    "runColumnPage": "Käivita veerg (sellel lehel)",
+    "runPageRows": "Käivita {count, plural, one {# selle lehe real} other {# selle lehe real}}",
+    "runRemainingPage": "Käivita ülejäänud (sellel lehel)",
+    "runSelectedRows": "Käivita {count, plural, one {# valitud real} other {# valitud real}}",
+    "selectedRun": "Käivita tehisintellekti veerud {count, plural, one {# real} other {# real}}"
+  },
   "appearance": {
     "calendar": "Kalender",
     "calendarGregorian": "Gregoriuse",
@@ -6003,7 +6014,6 @@
       "previewUnsupported": "Eelvaade pole selle dokumenditüübi jaoks toetatud.",
       "readingFrom": "AI loeb:",
       "referencesItself": "Omadus viitab iseendale teiste omaduste kaudu",
-      "rerunColumn": "Käivita veerg uuesti",
       "resultType": "Tulemuse tüüp",
       "returnsLabel": "Vorming",
       "scopeFile": "Praegune fail",

@@ -1876,6 +1876,13 @@ jobs:
           bun test scripts/check-test-input-coverage.test.ts
           bun run check:test-input-coverage
 
+      - name: Chat mutation targets
+        if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
+        # Every API/web change validates all active targets; scenarios stay nightly.
+        run: |
+          bun test apps/api/scripts/chat-mutation-matrix.test.ts
+          bun apps/api/scripts/chat-mutation-matrix.ts --check
+
       - name: Desktop Rust inputs
         if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
         # The desktop native test task's turbo.json inputs, the files Rust
@@ -2714,10 +2721,14 @@ jobs:
 
       - name: Test UI browser interactions
         if: matrix.suite == 'ui' && steps.ui-browser-tests.outputs.required == 'true'
+        env:
+          PLAYWRIGHT_JSON_OUTPUT_FILE: ${{ github.workspace }}/.cache/playwright-timings/test-ui-browser-interactions.json
         run: bun --filter @stll/ui test:browser
 
       - name: Test desktop browser interactions
         if: matrix.suite == 'desktop' && steps.ui-browser-tests.outputs.required == 'true'
+        env:
+          PLAYWRIGHT_JSON_OUTPUT_FILE: ${{ github.workspace }}/.cache/playwright-timings/test-desktop-browser-interactions.json
         run: |
           cd apps/desktop
           bun run test:browser
@@ -2733,11 +2744,24 @@ jobs:
 
       - name: Test UI playground visuals
         if: matrix.suite == 'ui' && steps.ui-browser-tests.outputs.required == 'true'
+        env:
+          PLAYWRIGHT_JSON_OUTPUT_FILE: ${{ github.workspace }}/.cache/playwright-timings/test-ui-playground-visuals.json
         run: bun --filter @stll/web test:e2e:ui-playground
 
       - name: Test extension browser boundary
         if: matrix.suite == 'ui' && steps.extension-browser-tests.outputs.required == 'true'
+        env:
+          PLAYWRIGHT_JSON_OUTPUT_FILE: ${{ github.workspace }}/.cache/playwright-timings/test-extension-browser-boundary.json
         run: bun --filter @stll/extension test:e2e
+
+      - name: Upload browser test timings
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: ci-browser-timings-${{ matrix.suite }}
+          path: .cache/playwright-timings/*.json
+          retention-days: 7
+          if-no-files-found: ignore
 
       - name: Cancel failed merge-group run
         if: failure() && github.event_name == 'merge_group'
@@ -3997,6 +4021,7 @@ jobs:
       - name: Check route network baseline
         id: network-baseline
         env:
+          PLAYWRIGHT_JSON_OUTPUT_FILE: ${{ github.workspace }}/.cache/playwright-timings/check-route-network-baseline.json
           E2E_EXECUTION_PROFILE: network-baseline
           E2E_EXPECT_DEV_ROUTES: "false"
           PLAYWRIGHT_BLOB_OUTPUT_NAME: report-route-smoke-pr.zip
@@ -4024,6 +4049,15 @@ jobs:
             /tmp/api.log
             /tmp/web-production.log
           retention-days: 7
+
+      - name: Upload browser test timings
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: route-smoke-timings
+          path: .cache/playwright-timings/*.json
+          retention-days: 7
+          if-no-files-found: ignore
 
   e2e-production-shard:
     needs: [ci-plan, web-build, heavy-web-build]
@@ -4088,6 +4122,7 @@ jobs:
           steps.e2e-stack.outputs.status == 'ready'
           && matrix.shard == 'network-baseline'
         env:
+          PLAYWRIGHT_JSON_OUTPUT_FILE: ${{ github.workspace }}/.cache/playwright-timings/check-route-network-baseline.json
           E2E_EXECUTION_PROFILE: network-baseline
           E2E_EXPECT_DEV_ROUTES: "false"
           PLAYWRIGHT_BLOB_OUTPUT_NAME: report-network-baseline.zip
@@ -4110,6 +4145,7 @@ jobs:
           steps.e2e-stack.outputs.status == 'ready'
           && matrix.shard != 'network-baseline'
         env:
+          PLAYWRIGHT_JSON_OUTPUT_FILE: ${{ github.workspace }}/.cache/playwright-timings/run-playwright-shard.json
           E2E_EXECUTION_PROFILE: ci-production-parallel
           E2E_EXPECT_DEV_ROUTES: "false"
         run: >-
@@ -4124,6 +4160,7 @@ jobs:
           && steps.e2e-stack.outputs.status == 'ready'
           && matrix.shard != 'network-baseline'
         env:
+          PLAYWRIGHT_JSON_OUTPUT_FILE: ${{ github.workspace }}/.cache/playwright-timings/run-route-smoke-playwright-shard.json
           E2E_EXECUTION_PROFILE: standard
           E2E_EXPECT_DEV_ROUTES: "false"
           E2E_OUTPUT_DIR: test-results/route-smoke-${{ matrix.shard }}
@@ -4164,6 +4201,15 @@ jobs:
             /tmp/api.log
             /tmp/web-production.log
           retention-days: 7
+
+      - name: Upload browser test timings
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: e2e-production-shard-timings-${{ matrix.shard }}
+          path: .cache/playwright-timings/*.json
+          retention-days: 7
+          if-no-files-found: ignore
 
       - name: Cancel failed merge-group run
         if: failure() && github.event_name == 'merge_group'
@@ -4213,7 +4259,18 @@ jobs:
           browsers: firefox webkit
 
       - name: Test browser stack redaction
+        env:
+          PLAYWRIGHT_JSON_OUTPUT_FILE: ${{ github.workspace }}/.cache/playwright-timings/test-browser-stack-redaction.json
         run: bash "$GITHUB_WORKSPACE/.github/actions/setup-playwright/run-in-image.sh" bun --filter @stll/web test:e2e:stack-redaction
+
+      - name: Upload browser test timings
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: stack-redaction-browsers-timings
+          path: .cache/playwright-timings/*.json
+          retention-days: 7
+          if-no-files-found: ignore
 
       - name: Cancel failed merge-group run
         if: failure() && github.event_name == 'merge_group'
@@ -4328,6 +4385,7 @@ jobs:
       - name: Run Vite dependency canary
         if: steps.e2e-stack.outputs.status == 'ready'
         env:
+          PLAYWRIGHT_JSON_OUTPUT_FILE: ${{ github.workspace }}/.cache/playwright-timings/run-vite-dependency-canary.json
           E2E_EXPECT_DEV_ROUTES: "true"
           PLAYWRIGHT_BLOB_OUTPUT_NAME: report-vite-canary.zip
         run: >-
@@ -4337,6 +4395,8 @@ jobs:
 
       - name: Test anonymized PDF export
         if: steps.e2e-stack.outputs.status == 'ready'
+        env:
+          PLAYWRIGHT_JSON_OUTPUT_FILE: ${{ github.workspace }}/.cache/playwright-timings/test-anonymized-pdf-export.json
         run: bash "$GITHUB_WORKSPACE/.github/actions/setup-playwright/run-in-image.sh" bun --filter @stll/web test:e2e:anonymized-export
 
       # Own output dir: the blob reporter clears its directory
@@ -4346,6 +4406,7 @@ jobs:
       - name: Run lockless collaboration browser suite
         if: steps.e2e-stack.outputs.status == 'ready'
         env:
+          PLAYWRIGHT_JSON_OUTPUT_FILE: ${{ github.workspace }}/.cache/playwright-timings/run-lockless-collaboration-browser-suite.json
           E2E_EXPECT_DEV_ROUTES: "true"
           E2E_OUTPUT_DIR: test-results-collab
         run: bash "$GITHUB_WORKSPACE/.github/actions/setup-playwright/run-in-image.sh" bun --filter @stll/web test:e2e:collab -- --project chromium
@@ -4404,6 +4465,15 @@ jobs:
             /tmp/collab.log
             /tmp/web.log
           retention-days: 7
+
+      - name: Upload browser test timings
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: e2e-vite-canary-timings
+          path: .cache/playwright-timings/*.json
+          retention-days: 7
+          if-no-files-found: ignore
 
       - name: Cancel failed merge-group run
         if: failure() && github.event_name == 'merge_group'
@@ -4475,6 +4545,8 @@ jobs:
         uses: ./.github/actions/setup-playwright
 
       - name: Check landing islands
+        env:
+          PLAYWRIGHT_JSON_OUTPUT_FILE: ${{ github.workspace }}/.cache/playwright-timings/check-landing-islands.json
         run: E2E_LANDING_URL=http://localhost:4321 bash "$GITHUB_WORKSPACE/.github/actions/setup-playwright/run-in-image.sh" bun --filter @stll/web test:e2e:landing
 
       - name: Stop landing preview server
@@ -4496,6 +4568,15 @@ jobs:
           if-no-files-found: ignore
           retention-days: 7
 
+      - name: Upload browser test timings
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: e2e-landing-timings
+          path: .cache/playwright-timings/*.json
+          retention-days: 7
+          if-no-files-found: ignore
+
       - name: Cancel failed merge-group run
         if: failure() && github.event_name == 'merge_group'
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
@@ -4515,6 +4596,7 @@ jobs:
   # main with `-f branch=<this branch>`), which is also why the comparison
   # tolerance can stay tight:
   # baselines and comparison render on the same image.
+
   marketing-screenshots:
     # A bounded poll can expire while web-build is still waiting for a runner;
     # declare the producer so artifact consumers start only after it succeeds.

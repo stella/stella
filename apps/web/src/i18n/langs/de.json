@@ -54,6 +54,17 @@
       "polish": "Formulierung verbessern"
     }
   },
+  "aiColumns": {
+    "countSummary": "{columns} Spalten × {rows} Zeilen = {answers, plural, one {# Antwort} other {# Antworten}}. Antworten verbrauchen Budget.",
+    "refusedBudget": "Nicht ausgeführt: Antwortbudget nicht verfügbar",
+    "rerunAllPage": "Alle erneut ausführen (diese Seite)",
+    "rerunColumnPage": "Spalte erneut ausführen (diese Seite)",
+    "runColumnPage": "Spalte ausführen (diese Seite)",
+    "runPageRows": "Ausführen für {count, plural, one {# Zeile auf dieser Seite} other {# Zeilen auf dieser Seite}}",
+    "runRemainingPage": "Verbleibende ausführen (diese Seite)",
+    "runSelectedRows": "Ausführen für {count, plural, one {# ausgewählte Zeile} other {# ausgewählte Zeilen}}",
+    "selectedRun": "KI-Spalten ausführen für {count, plural, one {# Zeile} other {# Zeilen}}"
+  },
   "appearance": {
     "calendar": "Kalender",
     "calendarGregorian": "Gregorianisch",
@@ -6003,7 +6014,6 @@
       "previewUnsupported": "Vorschau für diesen Dokumenttyp nicht unterstützt.",
       "readingFrom": "KI liest aus",
       "referencesItself": "Eigenschaft referenziert sich selbst über andere Eigenschaften",
-      "rerunColumn": "Spalte neu ausführen",
       "resultType": "Ergebnistyp",
       "returnsLabel": "Format",
       "scopeFile": "Aktuelle Datei",
