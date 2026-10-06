@@ -5,6 +5,7 @@ import * as v from "valibot";
 import {
   VISUAL_PREVIEW_TOOL_NAME,
   visualPreviewToolOutputSchema,
+  type VisualPreviewToolOutput,
 } from "@stll/api-contract/visual-preview";
 
 import {
@@ -14,10 +15,19 @@ import {
 import type { PublicStreamChunk } from "@/api/lib/chat/tanstack-chat-runtime";
 import { isRecord } from "@/api/lib/type-guards";
 
+const incompleteHistoryContent = () =>
+  [
+    {
+      type: "text",
+      content:
+        "Visual preview diagnostics incomplete.\nscreenshot omitted from history",
+    },
+  ] satisfies VisualPreviewToolOutput;
+
 const historyContent = (value: unknown) => {
   const parsed = v.safeParse(visualPreviewToolOutputSchema, value);
   if (!parsed.success) {
-    return panic("Visual preview tool returned unsupported content parts");
+    return incompleteHistoryContent();
   }
   const parts = parsed.output;
   if (parts.length === 1) {
@@ -30,18 +40,32 @@ const historyContent = (value: unknown) => {
     },
   ]);
   if (!projected.success) {
-    return panic("Visual preview history diagnostics exceed their bounds");
+    return incompleteHistoryContent();
   }
   return projected.output;
 };
 
 const historyWireContent = (content: string) => {
   const parsed = Result.try((): unknown => JSON.parse(content));
-  // SDK tool failures are ordinary text or JSON error objects, not parts.
-  if (Result.isError(parsed) || !Array.isArray(parsed.value)) {
+  if (Result.isError(parsed)) {
+    // A truncated JSON result must not forward a partially encoded image.
+    return /^[[{]/u.test(content.trimStart())
+      ? JSON.stringify(incompleteHistoryContent())
+      : content;
+  }
+  if (Array.isArray(parsed.value)) {
+    return JSON.stringify(historyContent(parsed.value));
+  }
+  // SDK failures may be ordinary text or a single error field. Other JSON
+  // values are incomplete preview payloads, never safe history diagnostics.
+  if (
+    isRecord(parsed.value) &&
+    Object.keys(parsed.value).length === 1 &&
+    typeof parsed.value["error"] === "string"
+  ) {
     return content;
   }
-  return JSON.stringify(historyContent(parsed.value));
+  return JSON.stringify(incompleteHistoryContent());
 };
 
 const historyMetadata = (metadata: unknown) => {
@@ -49,14 +73,17 @@ const historyMetadata = (metadata: unknown) => {
     return metadata;
   }
   const tanstack = { ...metadata["tanstack"] };
-  if (Array.isArray(tanstack["output"])) {
+  if (tanstack["output"] !== undefined) {
     tanstack["output"] = historyContent(tanstack["output"]);
   }
   const toolResult = tanstack["toolResult"];
-  if (isRecord(toolResult) && Array.isArray(toolResult["content"])) {
+  if (isRecord(toolResult) && toolResult["content"] !== undefined) {
     tanstack["toolResult"] = {
       ...toolResult,
-      content: historyContent(toolResult["content"]),
+      content:
+        typeof toolResult["content"] === "string"
+          ? historyWireContent(toolResult["content"])
+          : historyContent(toolResult["content"]),
     };
   }
   return { ...metadata, tanstack };
@@ -82,7 +109,7 @@ export const projectVisualPreviewStream = async function* (
     ) {
       const output = toolCallEndOutputOf(chunk);
       const projected = { ...chunk };
-      if (Array.isArray(output)) {
+      if (output !== undefined) {
         Object.assign(projected, { output: historyContent(output) });
       }
       if (chunk.metadata !== undefined) {
