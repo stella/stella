@@ -518,10 +518,22 @@ const sweepRemainingRows = async (
     return { swept: new Map(), failures: [] };
   }
   await scope.dependencies.beforeSweep?.();
+  // A cancelled run deletes nothing more: checked before the sweep starts and
+  // again under its lock, before the storage census or any delete.
+  if (scope.signal.aborted) {
+    return { swept: new Map(), failures: [] };
+  }
   const outcome = await Result.tryPromise({
     try: async () =>
       await scope.db.transaction(async (tx) => {
         await scope.fence.assert(tx);
+        if (scope.signal.aborted) {
+          abortTransaction(
+            new ReviewSweepBlockedError({
+              message: "The reset was cancelled; the sweep did not run",
+            }),
+          );
+        }
         // The storage census seals and records every matter still standing,
         // and a matter that survives must keep its objects. Counted under the
         // organization-row lock: a matter insert checks its foreign key to
