@@ -105,6 +105,24 @@ type InlineContext = "flow" | "table-cell";
 const escapeTableCellPipes = (text: string, context: InlineContext): string =>
   context === "table-cell" ? text.replace(/\|/g, "\\|") : text;
 
+const CODE_HTML_ESCAPES: Record<string, string> = {
+  "&": "&amp;",
+  "<": "&lt;",
+  ">": "&gt;",
+  "|": "&#124;",
+};
+
+/**
+ * Inline code for a table cell. The row splitter drops one backslash before
+ * each `\|`, so code text with its own backslash before a pipe cannot be
+ * written as a code span that keeps both the cell and the text: it is written
+ * as an HTML `<code>` element, which carries the pipe as an entity.
+ */
+const renderTableCellCode = (text: string): string =>
+  /\\\|/.test(text)
+    ? `<code>${text.replace(/[&<>|]/g, (char) => CODE_HTML_ESCAPES[char] ?? char)}</code>`
+    : escapeTableCellPipes(wrapInlineCode(text), "table-cell");
+
 const renderInlineElement = (el: Element, context: InlineContext): string => {
   const tag = tagNameOf(el);
   switch (tag) {
@@ -118,7 +136,9 @@ const renderInlineElement = (el: Element, context: InlineContext): string => {
     case "s":
       return `~~${renderInline(el.children, context)}~~`;
     case "code":
-      return escapeTableCellPipes(wrapInlineCode(rawText(el)), context);
+      return context === "table-cell"
+        ? renderTableCellCode(rawText(el))
+        : wrapInlineCode(rawText(el));
     case "br":
       return "  \n";
     case "a": {

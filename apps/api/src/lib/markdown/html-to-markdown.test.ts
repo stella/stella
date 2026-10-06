@@ -146,6 +146,18 @@ describe("htmlToMarkdown", () => {
     );
   });
 
+  test("table cell code with a backslash before a pipe keeps one cell and its text", () => {
+    const html =
+      "<table><tr><th>c</th></tr><tr><td><code>a\\|b &lt;x&gt;</code></td></tr></table>";
+    const markdown = htmlToMarkdown(html);
+    expect(markdown).toBe(
+      "| c |\n| --- |\n| <code>a\\&#124;b &lt;x&gt;</code> |\n",
+    );
+    // No raw pipe is left inside the cell for the row splitter to cut at.
+    const cell = markdown.split("\n")[2] ?? "";
+    expect(cell.slice(1, -1).includes("|")).toBe(false);
+  });
+
   test("code spans outside tables keep raw pipes", () => {
     expect(htmlToMarkdown("<p><code>a|b</code></p>")).toBe("`a|b`\n");
   });
