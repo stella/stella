@@ -294,7 +294,7 @@ const mountTreemap = ({ win, el, opts }: MountTreemapOptions) => {
     NonNullable<Parameters<typeof host.update>[0]["onSelect"]>
   >[0];
   const onSelect = (point: SelectionPoint) => {
-    if (!point?.datum.data || destroyed) {
+    if (!point?.datum.data || point.datum.data.parentId === null || destroyed) {
       return;
     }
     const selected = model.select(point.datum.data.node.id);

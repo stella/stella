@@ -3,7 +3,7 @@ import { treemapFixture } from "./treemap-fixture";
 
 const el = document.querySelector<HTMLElement>("#chart");
 if (el) {
-  const chart = createVisualCharts(window).treemap(el, {
+  let chart = createVisualCharts(window).treemap(el, {
     data: treemapFixture,
     value: "count",
     color: { mode: "category", field: "tier", legend: true },
@@ -20,6 +20,23 @@ if (el) {
   document
     .querySelector("#category")
     ?.addEventListener("click", () => chart.setColorMode("category"));
+  document.querySelector("#empty")?.addEventListener("click", () => {
+    chart.destroy();
+    delete el.dataset.selected;
+    chart = createVisualCharts(window).treemap(el, {
+      data: {
+        type: "group",
+        id: "empty-root",
+        label: "empty-root",
+        children: [],
+      },
+      value: "count",
+      color: { mode: "category", field: "tier", legend: true },
+      onSelect: (node) => {
+        el.dataset.selected = node.id;
+      },
+    });
+  });
   document.querySelector("#destroy")?.addEventListener("click", () => {
     chart.destroy();
     chart.destroy();
