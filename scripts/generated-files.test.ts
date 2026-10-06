@@ -10,6 +10,7 @@ import * as v from "valibot";
 import { generateCapabilityRuntime } from "../apps/api/scripts/generate-capability-runtime";
 import {
   GENERATORS,
+  CI_GENERATED_FILES,
   allowedOutputs,
   GUARD_A_EXCLUSIONS,
   generatorsForFiles,
@@ -29,6 +30,44 @@ const generator = (id: string) => {
   const found = GENERATORS.find((entry) => entry.id === id);
   return found ?? panic(`Missing generator ${id}`);
 };
+
+test("generation metadata loads in a scripts-only checkout without dependencies", async () => {
+  const directory = await mkdtemp(
+    nodePath.join(tmpdir(), "generation-metadata-"),
+  );
+  try {
+    const registry = nodePath.join(directory, "generated-files.ts");
+    const source = readFileSync(
+      new URL("generated-files.ts", import.meta.url),
+      "utf-8",
+    );
+    await writeFile(registry, source);
+    const load = () =>
+      Bun.spawnSync(
+        [
+          process.execPath,
+          "-e",
+          "const metadata = await import(process.argv[1]); console.log(metadata.CI_GENERATED_FILES.length);",
+          registry,
+        ],
+        { cwd: directory },
+      );
+    const ordinary = load();
+    expect(ordinary.exitCode, ordinary.stderr.toString()).toBe(0);
+    expect(ordinary.stdout.toString().trim()).toBe(
+      String(CI_GENERATED_FILES.length),
+    );
+    await writeFile(
+      registry,
+      `import "../packages/scripts/src/prepared-generated-sources";\n${source}`,
+    );
+    const misplaced = load();
+    expect(misplaced.exitCode).not.toBe(0);
+    expect(misplaced.stderr.toString()).toContain("prepared-generated-sources");
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});
 
 test("Guard A rejects an unregistered generated source and ignores ordinary comments", () => {
   const unknown = "packages/example/src/unlisted.ts";

@@ -10,22 +10,8 @@ import {
 import path from "node:path";
 import * as v from "valibot";
 
-export const CI_GENERATED_OUTPUTS = {
-  capabilityRuntime: [
-    "apps/api/src/mcp/generated/capability-dispatch.ts",
-    "apps/api/src/mcp/generated/capability-catalog.ts",
-    "apps/api/src/mcp/generated/capability-feature-bindings.ts",
-  ],
-  cliRuntime: [
-    "packages/cli/src/generated/route-map.ts",
-    "packages/cli/src/generated/tool-annotations.ts",
-  ],
-  webMessages: ["apps/web/src/i18n/langs/messages.gen.ts"],
-  prepaintLocale: ["apps/web/public/prepaint-init.js"],
-  routeTree: ["apps/web/src/routeTree.gen.ts"],
-  apiTypes: ["apps/web/src/generated/api-routes.gen.ts"],
-} as const;
-export const CI_GENERATED_FILES = Object.values(CI_GENERATED_OUTPUTS).flat();
+import { CI_GENERATED_FILES } from "../../../scripts/generated-files";
+
 const generated = new Set<string>(CI_GENERATED_FILES);
 const hashSchema = v.pipe(v.string(), v.regex(/^[a-f0-9]{64}$/u));
 export const preparedManifestSchema = v.strictObject({

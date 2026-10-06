@@ -11,8 +11,8 @@ import {
 import { tmpdir } from "node:os";
 import path from "node:path";
 
+import { CI_GENERATED_FILES } from "../../../scripts/generated-files";
 import {
-  CI_GENERATED_FILES,
   generatedFileHash,
   generatedInputIdentity,
   validatePreparedManifest,
@@ -102,6 +102,13 @@ test("every prepared output has required identity and byte coverage", () => {
 test("CLI runtime preparation consumes a verified artifact without invoking generation", () => {
   const { root, manifest, write } = fixture();
   try {
+    write(
+      "scripts/generated-files.ts",
+      readFileSync(
+        new URL("../../../scripts/generated-files.ts", import.meta.url),
+        "utf-8",
+      ),
+    );
     for (const file of [
       "prepare-cli-runtime.ts",
       "prepared-generated-sources.ts",

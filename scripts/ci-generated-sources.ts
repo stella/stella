@@ -4,12 +4,12 @@ import path from "node:path";
 
 import { childExitStatus } from "../packages/scripts/src/child-exit-status";
 import {
-  CI_GENERATED_FILES,
   generatedFileHash,
   generatedInputIdentity,
   restorePreparedGeneratedSources,
   hasPreparedGeneratedSources,
 } from "../packages/scripts/src/prepared-generated-sources";
+import { CI_GENERATED_FILES } from "./generated-files";
 
 const root = new URL("../", import.meta.url).pathname;
 const commands = [

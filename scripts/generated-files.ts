@@ -1,4 +1,19 @@
-import { CI_GENERATED_OUTPUTS } from "../packages/scripts/src/prepared-generated-sources";
+export const CI_GENERATED_OUTPUTS = {
+  capabilityRuntime: [
+    "apps/api/src/mcp/generated/capability-dispatch.ts",
+    "apps/api/src/mcp/generated/capability-catalog.ts",
+    "apps/api/src/mcp/generated/capability-feature-bindings.ts",
+  ],
+  cliRuntime: [
+    "packages/cli/src/generated/route-map.ts",
+    "packages/cli/src/generated/tool-annotations.ts",
+  ],
+  webMessages: ["apps/web/src/i18n/langs/messages.gen.ts"],
+  prepaintLocale: ["apps/web/public/prepaint-init.js"],
+  routeTree: ["apps/web/src/routeTree.gen.ts"],
+  apiTypes: ["apps/web/src/generated/api-routes.gen.ts"],
+} as const;
+export const CI_GENERATED_FILES = Object.values(CI_GENERATED_OUTPUTS).flat();
 
 type GeneratorCheck =
   | { check: readonly string[]; checkedBy?: never; unchecked?: never }
@@ -280,6 +295,8 @@ export const GENERATORS = [
       "apps/web/vite.config.ts",
       "apps/web/route-tree.config.ts",
       "apps/web/scripts/generate-route-tree.ts",
+      "packages/scripts/src/prepared-generated-sources.ts",
+      "scripts/generated-files.ts",
       "apps/web/package.json",
       "bun.lock",
     ],
