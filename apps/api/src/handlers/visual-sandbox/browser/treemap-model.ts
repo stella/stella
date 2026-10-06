@@ -1,6 +1,13 @@
 import { panic } from "better-result";
 
+import { courtTierLabelsForLanguage } from "@stll/api-contract/case-law-court-tier-locales";
 import type { CourtTierLabel } from "@stll/api-contract/case-law-court-tiers";
+
+export const localizedTierLabel = (language: string, category: string) => {
+  const locale = courtTierLabelsForLanguage(language);
+  const entry = Object.entries(locale).find(([key]) => key === category);
+  return entry?.[1] ?? category;
+};
 
 export type VisualTreemapTree =
   | {

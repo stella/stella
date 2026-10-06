@@ -10,6 +10,7 @@ import { assertProperty } from "@stll/property-testing";
 import { courtYearFixture, treemapFixture } from "./browser/treemap-fixture";
 import {
   createTreemapModel,
+  localizedTierLabel,
   treemapColorDomain,
   treemapCategoryValue,
   type VisualTreemapTree,
@@ -262,4 +263,11 @@ describe("visual treemap hierarchy", () => {
       }),
     ).toThrow("aggregate values must be finite");
   });
+});
+
+test("court tier legends preserve an authored category outside the tier catalog", () => {
+  expect(localizedTierLabel("cs", "authored-tier")).toBe("authored-tier");
+  expect(localizedTierLabel("cs", "supreme")).toBe(
+    COURT_TIER_LOCALIZED_LABELS.cs.supreme,
+  );
 });

@@ -1,6 +1,5 @@
 import { toolDefinition } from "@tanstack/ai";
-import { panic } from "better-result";
-import type { Result } from "better-result";
+import { panic, Result } from "better-result";
 import * as v from "valibot";
 
 import { generatedVisualInputSchema } from "@stll/api-contract/generated-visual";
@@ -17,6 +16,7 @@ import type { VisualResourceOrigin } from "@/api/handlers/visual-sandbox/resourc
 import type { SafeId } from "@/api/lib/branded-types";
 import { ChatToolError } from "@/api/lib/errors/tagged-errors";
 import {
+  VisualPreviewError,
   visualPreviewFailureModelContent,
   visualPreviewModelContent,
 } from "@/api/lib/visual-preview";
@@ -86,7 +86,17 @@ export const createShowVisualTools = ({
       toolCallId: context.toolCallId,
     });
     context.emitCustomEvent("ui-resource", part);
-    const rendered = await preview(stored.value.document);
+    const rendered = (
+      await Result.tryPromise({
+        try: () => preview(stored.value.document),
+        catch: () =>
+          new VisualPreviewError({
+            code: "unavailable",
+            message:
+              "The generated view was published; its preview is unavailable.",
+          }),
+      })
+    ).andThen((result) => result);
     if (rendered.isErr()) {
       return visualPreviewFailureModelContent({
         title: prepared.value.title,

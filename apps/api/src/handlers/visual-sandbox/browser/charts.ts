@@ -4,11 +4,11 @@ import { treemap } from "@tanstack/charts/hierarchy/treemap";
 import { panic } from "better-result";
 import { scaleLinear, scaleOrdinal } from "d3-scale";
 
-import { courtTierLabelsForLanguage } from "@stll/api-contract/case-law-court-tier-locales";
 import { COURT_TIER_LABELS } from "@stll/api-contract/case-law-court-tiers";
 
 import {
   createTreemapModel,
+  localizedTierLabel,
   treemapCategoryValue,
   treemapColorDomain,
   type VisualColorMode,
@@ -39,15 +39,6 @@ const categoricalPalette = [8, 17, 26, 35].map(
   (weight) =>
     `color-mix(in srgb, ${colors.background}, ${colors.primary} ${weight}%)`,
 );
-
-const localizedTierLabel = (language: string, category: string) => {
-  const locale = courtTierLabelsForLanguage(language);
-  const entry = Object.entries(locale).find(([key]) => key === category);
-  if (!entry) {
-    panic("Treemap selected an unknown court tier");
-  }
-  return entry[1];
-};
 
 const createNumericColors = (
   mode: VisualColorMode,

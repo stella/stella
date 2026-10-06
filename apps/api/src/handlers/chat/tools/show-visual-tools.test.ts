@@ -128,6 +128,58 @@ describe("show visual", () => {
     ]);
   });
 
+  test("keeps publication successful when the optional preview rejects", async () => {
+    const origin = createVisualResourceOrigin();
+    const emissions: unknown[] = [];
+    let publications = 0;
+    let previews = 0;
+    const tool = createShowVisualTools({
+      origin,
+      store: async () => {
+        publications += 1;
+        return Result.ok({
+          fileId: createSafeId<"userFile">(),
+          document: "<!doctype html><p>Revenue</p>",
+        });
+      },
+      preview: async () => {
+        previews += 1;
+        expect(emissions).toHaveLength(1);
+        throw new VisualPreviewError({
+          code: "unavailable",
+          message: "Preview invocation rejected",
+        });
+      },
+    })[VISUAL_PREVIEW_TOOL_NAME];
+    const execute = tool.execute ?? panic("Visual tool has no executor");
+    const output = await execute(
+      { title: "Revenue", html: "<p>Revenue</p>", data: {} },
+      {
+        toolCallId: "visual-call-rejected-preview",
+        emitCustomEvent: (_name, value) => emissions.push(value),
+      },
+    );
+    expect(publications).toBe(1);
+    expect(previews).toBe(1);
+    expect(emissions).toHaveLength(1);
+    expect(origin.accepts(emissions.at(0))).toBe(true);
+    expect(output).toEqual([
+      {
+        type: "text",
+        content: JSON.stringify({
+          success: true,
+          title: "Revenue",
+          preview: {
+            status: "unavailable",
+            reason: "unavailable",
+            message:
+              "The generated view was published; its preview is unavailable.",
+          },
+        }),
+      },
+    ]);
+  });
+
   test("keeps data checks at execution after their provider projection", async () => {
     let saved = 0;
     const emissions: unknown[] = [];
