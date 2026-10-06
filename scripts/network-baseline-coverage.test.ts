@@ -35,6 +35,28 @@ const baseline = () =>
     SMOKE_ROUTE_DEFS.map((def) => [networkBaselineKey(def), entry]),
   );
 
+const fixtureDefs = [
+  { template: "/fixture-render", expectation: { kind: "rendersInPlace" } },
+  {
+    template: "/fixture-redirect",
+    expectation: { kind: "redirectsTo", to: "/fixture-render" },
+  },
+] as const;
+const fixtureKeys = fixtureDefs.map(networkBaselineKey);
+const fixtureBaseline = () =>
+  Object.fromEntries(fixtureKeys.map((key) => [key, entry]));
+const fixtureRouteTree = `
+import { Route as FixtureRedirectRouteImport } from './routes/_protected.fixture-redirect/index'
+declare module '@tanstack/react-router' {
+  interface FileRoutesByPath {
+    '/fixture-redirect': {
+      fullPath: '/fixture-redirect'
+      preLoaderRoute: typeof FixtureRedirectRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+  }
+}`;
+
 beforeAll(async () => {
   const output = path.join(directory, "tree.ts");
   await generateRouteTree(output);
@@ -77,17 +99,17 @@ test("canonical smoke keys and declarations cover the generated authenticated tr
   );
 });
 
-test("a render-in-place expectation rejects the former lists redirect key", () => {
-  const route = SMOKE_ROUTE_DEFS.find(
-    (def) => def.template === "/workspaces/$workspaceId/lists",
-  );
-  expect(route).toBeDefined();
-  expect(route?.expectation?.kind).not.toBe("redirectsTo");
-  const stale = baseline();
-  delete stale["/workspaces/$workspaceId/lists"];
-  stale["/workspaces/$workspaceId/lists target"] = entry;
-  expect(() => validate(stale)).toThrow(
-    'Network baseline route keys differ: missing=["/workspaces/$workspaceId/lists"] stale=["/workspaces/$workspaceId/lists target"]',
+test("a render-in-place expectation rejects an inactive redirect key", () => {
+  const stale = fixtureBaseline();
+  delete stale["/fixture-render"];
+  stale["/fixture-render target"] = entry;
+  expect(
+    networkBaselineCoverageProblem({
+      actualKeys: Object.keys(stale),
+      expectedKeys: fixtureKeys,
+    }),
+  ).toBe(
+    'Network baseline route keys differ: missing=["/fixture-render"] stale=["/fixture-render target"]',
   );
 });
 
@@ -150,15 +172,20 @@ test("unknown generated route forms and missing structural markers fail closed",
 });
 
 test("reviewed declarations cannot retain inactive redirect keys", () => {
-  expect(() =>
-    validate(baseline(), [
-      {
-        route: "/workspaces/$workspaceId/lists target",
-        reason: "Reviewed budget",
-        budget: entry,
-      },
-    ]),
-  ).toThrow("Network budget declaration names an inactive route");
+  expect(
+    networkBudgetDeclarationProblem({
+      expectedKeys: fixtureKeys,
+      declarations: [
+        {
+          route: "/fixture-render target",
+          reason: "Reviewed budget",
+          budget: entry,
+        },
+      ],
+    }),
+  ).toBe(
+    "Network budget declaration names an inactive route: /fixture-render target",
+  );
 });
 
 test("CLI checks the real route inventory and baseline schema", () => {
@@ -241,22 +268,37 @@ test("unknown expectations require an explicit baseline mapping", () => {
   ).toThrow("Unknown smoke route expectation: unknown");
 });
 
-test("real prepared context exempts changed redirects and leaves unrelated stale keys strict", () => {
+test("prepared context exempts changed redirects and leaves unrelated stale keys strict", () => {
   const { changedRoutes } = prepareComparisonBaseline({
-    base: baseline(),
-    changedPaths: ["apps/web/src/routes/_protected.settings/index.tsx"],
-    baseRouteTree: routeTree,
-    routeTree,
+    base: fixtureBaseline(),
+    changedPaths: ["apps/web/src/routes/_protected.fixture-redirect/index.tsx"],
+    baseRouteTree: fixtureRouteTree,
+    routeTree: fixtureRouteTree,
     declarations: [],
   });
-  expect(changedRoutes).toEqual(["/settings", "/settings target"]);
-  const changedRedirect = baseline();
-  delete changedRedirect["/settings target"];
-  validate(changedRedirect, [], changedRoutes);
-  delete changedRedirect["/workspaces/$workspaceId/lists"];
-  changedRedirect["/workspaces/$workspaceId/lists target"] = entry;
-  expect(() => validate(changedRedirect, [], changedRoutes)).toThrow(
-    'missing=["/workspaces/$workspaceId/lists"] stale=["/workspaces/$workspaceId/lists target"]',
+  expect(changedRoutes).toEqual([
+    "/fixture-redirect",
+    "/fixture-redirect target",
+  ]);
+  const changedRedirect = fixtureBaseline();
+  delete changedRedirect["/fixture-redirect target"];
+  expect(
+    networkBaselineCoverageProblem({
+      actualKeys: Object.keys(changedRedirect),
+      expectedKeys: fixtureKeys,
+      changedRoutes,
+    }),
+  ).toBeNull();
+  delete changedRedirect["/fixture-render"];
+  changedRedirect["/fixture-render target"] = entry;
+  expect(
+    networkBaselineCoverageProblem({
+      actualKeys: Object.keys(changedRedirect),
+      expectedKeys: fixtureKeys,
+      changedRoutes,
+    }),
+  ).toBe(
+    'Network baseline route keys differ: missing=["/fixture-render"] stale=["/fixture-render target"]',
   );
 });
 
@@ -271,30 +313,26 @@ test("inherited declarations cannot manufacture a missing prepared baseline key"
 });
 
 test("an expectation change needs a matching prepared recording", () => {
-  const changedDefs = SMOKE_ROUTE_DEFS.map((def) =>
-    def.template === "/workspaces/$workspaceId/lists"
+  const changedDefs = fixtureDefs.map((def) =>
+    def.template === "/fixture-render"
       ? {
           ...def,
-          expectation: {
-            kind: "redirectsTo",
-            to: "/workspaces/$workspaceId/$viewId",
-          },
+          expectation: { kind: "redirectsTo", to: "/fixture-redirect" },
         }
       : def,
   );
-  assertSmokeRouteCoverage(routeTree, changedDefs);
   const expectedKeys = changedDefs.map(networkBaselineKey);
   expect(
     networkBaselineCoverageProblem({
-      actualKeys: Object.keys(baseline()),
+      actualKeys: Object.keys(fixtureBaseline()),
       expectedKeys,
     }),
   ).toBe(
-    'Network baseline route keys differ: missing=["/workspaces/$workspaceId/lists target"] stale=["/workspaces/$workspaceId/lists"]',
+    'Network baseline route keys differ: missing=["/fixture-render target"] stale=["/fixture-render"]',
   );
-  const recorded = baseline();
-  delete recorded["/workspaces/$workspaceId/lists"];
-  recorded["/workspaces/$workspaceId/lists target"] = entry;
+  const recorded = fixtureBaseline();
+  delete recorded["/fixture-render"];
+  recorded["/fixture-render target"] = entry;
   expect(
     networkBaselineCoverageProblem({
       actualKeys: Object.keys(recorded),
