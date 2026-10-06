@@ -36,13 +36,14 @@ import {
   CZ_NSS_CONTINUATION_PAGE_ROWS,
   CZ_NSS_FIRST_SLICE,
   CZ_NSS_FIRST_PAGE_ROWS,
+  parseCzNssDetailMetadata,
   parseResultRows,
 } from "@/api/handlers/case-law/ingestion/adapters/cz-nss";
 import type { ParsedRow } from "@/api/handlers/case-law/ingestion/adapters/cz-nss";
 import { requireReconciliation } from "@/api/handlers/case-law/ingestion/adapters/test-utils";
-import { hashContent } from "@/api/handlers/case-law/ingestion/adapters/utils";
 import { tipWindowSlices } from "@/api/handlers/case-law/ingestion/reconciliation-plan";
 import { shouldSkipRefresh } from "@/api/handlers/case-law/ingestion/refresh-policy";
+import { sourceFingerprint } from "@/api/handlers/case-law/ingestion/source-fingerprint";
 import {
   TEXT_ABSENCE_REASON,
   TEXT_FIELD_TYPE,
@@ -62,6 +63,7 @@ import {
   listingIdentityKey,
   SOURCE_DOCUMENT_ID_MAX_LENGTH,
 } from "@/api/lib/legal-search/ingestion-types";
+import { isRecord } from "@/api/lib/type-guards";
 import { installRecordingLogger } from "@/api/tests/helpers/recording-telemetry";
 import type { RecordingLogger } from "@/api/tests/helpers/recording-telemetry";
 import { asFetchMock } from "@/api/tests/helpers/test-tool-set";
@@ -614,6 +616,26 @@ describe("cz-nss listing rows", () => {
       "1 Az 4/2026",
       "52 Af 4/2026",
     ]);
+  });
+
+  // Production stored references such as `63 az 17/2026 - 28` as decision
+  // types: a docket in the type field is a column out of place, not a type.
+  test("a docket number where the type belongs is not stored as the type", () => {
+    const docketTypedRow = rowBlock(MUNICIPAL_ROW).replace(
+      "<td> Rozsudek </td>",
+      "<td> 63&#xA0;Az&#xA0;17/2026&#xA0;-&#xA0;28 </td>",
+    );
+    expect(docketTypedRow).not.toContain("Rozsudek");
+    const [row] = parseResultRows(docketTypedRow);
+    expect(row?.caseNumber).toBe("1 Az 4/2026");
+    expect(row?.decisionType).toBeUndefined();
+
+    const detail = (value: string) =>
+      parseCzNssDetailMetadata(
+        `<div id="druhdokumentuavyrokrozhodnuti"><span class="det-textitle">Druh:</span><span class="det-textval" title="${value}">${value}</span></div>`,
+      ).decisionType;
+    expect(detail("Rozsudek")).toBe("Rozsudek");
+    expect(detail("8 Afs 24/2025 - 50")).toBeUndefined();
   });
 
   test("finds nothing in a page that lists nothing", () => {
@@ -1533,31 +1555,36 @@ describe("cz-nss buildDecision", () => {
     expect(withSheet.rawHash).not.toBe(withoutSheet.rawHash);
   });
 
-  /**
-   * The other half of that bargain: a row the court states no sheet for gains
-   * nothing from this change and must not be rewritten for it. The literal is
-   * the hash's pre-existing input, so re-hashing the sheetless corpus cannot
-   * happen without editing this line.
-   */
-  test("a visible reference with no sheet number hashes as before", async () => {
-    const decision = await crawledWithReference("1 Az 4/2026");
-
-    expect(decision.rawHash).toBe(
-      hashContent("1 Az 4/2026|2026-06-10|rozsudek"),
-    );
-  });
-
-  test("the court's spacing does not move the source hash", async () => {
+  test("the court's spacing moves the source hash with the stored reference", async () => {
     const tight = await crawledWithReference("1 Az 4/2026-79");
     const spaced = await crawledWithReference("1 Az 4/2026 - 79");
 
-    // Spacing is typography, not the document moving. Were it hashed, a court
-    // re-spacing its citations would rewrite its whole corpus, and a legacy
-    // row would never agree with the crawl that re-reads it.
-    expect(spaced.rawHash).toBe(tight.rawHash);
+    // The row stores the reference as the court prints it, so a re-spaced
+    // reference is a stored value changing, and the row has to be rewritten.
+    expect(spaced.rawHash).not.toBe(tight.rawHash);
     expect(spaced.metadata["publishedCaseNumber"] === "1 Az 4/2026 - 79").toBe(
       true,
     );
+  });
+
+  test("a listing row stores the same bytes after a round trip through JSONB", async () => {
+    const payload = await listedRow();
+    if (!isRecord(payload)) {
+      throw new TypeError("Expected the listing to park a row object");
+    }
+    installStub({ search: [] });
+    const direct = await reconciliation.buildDecision(payload);
+    installStub({ search: [] });
+    const reordered = await reconciliation.buildDecision(
+      Object.fromEntries(Object.entries(payload).toReversed()),
+    );
+
+    expect(direct.type).toBe("built");
+    expect(reordered.type).toBe("built");
+    if (direct.type !== "built" || reordered.type !== "built") {
+      return;
+    }
+    expect(reordered.decision.rawHash).toBe(direct.decision.rawHash);
   });
 
   test("replays stored HTML to the same result without contacting the court", async () => {
@@ -2072,12 +2099,12 @@ describe("cz-nss buildDecision", () => {
     expect(legacy.result.metadata).not.toHaveProperty("legalSentence");
     expect(storedText.result.metadata).not.toHaveProperty("legalSentence");
     // Crawl and replay have to agree on the hash, or every replayed row would
-    // read as changed to the crawl that next re-reads it, and back again. For
-    // a row whose metadata never read the sentence, the stored detail page is
-    // what brings the two back into agreement.
+    // read as changed to the crawl that next re-reads it, and back again. Both
+    // fingerprint the payload stored, so a row holding what the crawl fetched
+    // agrees; a legacy row holding less is refreshed once by the next crawl.
     expect(recovered.result.rawHash).toBe(decision.rawHash);
     expect(legacy.result.rawHash).not.toBe(decision.rawHash);
-    expect(storedText.result.rawHash).toBe(decision.rawHash);
+    expect(storedText.result.rawHash).toBe(legacy.result.rawHash);
   });
 
   test("a headnote the court adds or edits moves the source hash", async () => {
@@ -2093,13 +2120,17 @@ describe("cz-nss buildDecision", () => {
     expect(edited.rawHash).not.toBe(headnoted.rawHash);
   });
 
-  test("a decision the court states no headnote for hashes as it did before", async () => {
-    const none = await crawledWithHeadnote();
+  test("the source hash is the fingerprint of every page stored", async () => {
+    const decision = await crawledWithHeadnote();
+    const parts = decodeSourceRawEnvelope(decision.sourceRaw ?? "");
 
-    // The literal is the hash's pre-existing input, so re-hashing the rows the
-    // court wrote no headnote for cannot happen without editing this line.
-    expect(none.rawHash).toBe(
-      hashContent("1 Az 4/2026-79|2026-06-10|rozsudek"),
+    expect(Object.keys(parts ?? {}).toSorted()).toEqual([
+      "detail",
+      "document",
+      "listing",
+    ]);
+    expect(decision.rawHash).toBe(
+      sourceFingerprint({ sourceRaw: decision.sourceRaw ?? "" }),
     );
   });
 
@@ -2115,7 +2146,11 @@ describe("cz-nss buildDecision", () => {
 
     const parts = decodeSourceRawEnvelope(built.decision.sourceRaw ?? "");
     expect(built.decision.fulltext).toContain("Kasační stížnost");
-    expect(Object.keys(parts ?? {}).toSorted()).toEqual(["detail", "text"]);
+    expect(Object.keys(parts ?? {}).toSorted()).toEqual([
+      "detail",
+      "listing",
+      "text",
+    ]);
   });
 
   test("a replay rebuilds the text-served row the crawl built", async () => {

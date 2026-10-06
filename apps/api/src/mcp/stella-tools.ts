@@ -5,6 +5,7 @@ import * as v from "valibot";
 import { AGENT_INPUT_NORMALIZATION_KIND } from "@stll/agent-input";
 import { resourceRef, RESOURCE_TYPE } from "@stll/api-contract";
 import { DECISION_READ_RESOLUTION } from "@stll/api-contract/case-law-decision-resolution";
+import { CASE_LAW_JURISDICTIONS } from "@stll/api-contract/case-law-jurisdictions";
 import {
   PUBLIC_CASE_LAW_COUNTRIES,
   publicCaseLawCountry,
@@ -26,6 +27,7 @@ import { decisionReporterGrammarForJurisdiction } from "@stll/api-contract/us-re
 import { mapWithConcurrency } from "@stll/concurrency";
 import { COUNTRY_CODES } from "@stll/country-codes";
 import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
+import { parseUsableDocumentAst } from "@stll/legal-ast/document-ast";
 
 import { workspaces } from "@/api/db/schema";
 import type {
@@ -35,10 +37,11 @@ import type {
 } from "@/api/db/schema-validators";
 import { envBase } from "@/api/env-base";
 import {
-  DECISION_DOCUMENT_HYDRATION,
   DECISION_DOCUMENT_STATE,
   decisionDocumentState,
+  documentHydrationFor,
   readsSharedPublicLawCorpus,
+  STORED_ONLY_DOCUMENT_HYDRATION,
   type DecisionDocumentHydration,
   type readGatedDecisionWithDocument,
 } from "@/api/handlers/case-law/decisions/get-deferred-document";
@@ -47,7 +50,6 @@ import {
   type DecisionIdentityRow,
 } from "@/api/handlers/case-law/decisions/lookup-by-identity";
 import { interpretDecisionQuery } from "@/api/handlers/case-law/decisions/search-interpretation";
-import { parseUsableDocumentAst } from "@/api/handlers/case-law/document-ast";
 import { dateOfBirthFromColumns } from "@/api/handlers/contacts/person-details";
 import {
   identifyOrganizationJurisdictions,
@@ -75,11 +77,11 @@ import {
   withFacetValues,
 } from "@/api/lib/case-law/search-warnings";
 import {
-  type AssertNoExtraFields,
-  type LIST_MATTERS_DETAIL_PROJECTION,
-  type LIST_MATTERS_LIST_PROJECTION,
+  LIST_MATTERS_DETAIL_PROJECTION,
+  LIST_MATTERS_LIST_PROJECTION,
   LIST_MATTERS_PROJECTION,
   LOOKUP_CASE_LAW_PROJECTION,
+  CASE_LAW_COVERAGE_PROJECTION,
   READ_CASE_LAW_CITATIONS_PROJECTION,
   READ_CASE_LAW_DECISION_PROJECTION,
   READ_CONTACT_PROJECTION,
@@ -110,6 +112,10 @@ import {
   isUuidPaginationCursorPart,
 } from "@/api/lib/pagination";
 import {
+  type AssertNoExtraFields,
+  projectionPayload,
+} from "@/api/lib/projection-totality";
+import {
   getTenantActionSizePolicy,
   normalizeTenantPageLimit as normalizePage,
 } from "@/api/lib/rate-limit/action-size-limits";
@@ -138,6 +144,7 @@ import type { McpRequestContext } from "@/api/mcp/context";
 import { hasEffectiveAuthority } from "@/api/mcp/effective-authority";
 import {
   defaultLookupDecisionsByIdentity,
+  defaultReadCaseLawCoverageHandler,
   defaultReadGatedDecisionCitations,
   defaultReadGatedDecisionWithDocument,
   defaultSearchDecisionsHandler,
@@ -161,25 +168,27 @@ import type {
 } from "@/api/mcp/tool-types";
 import { defineMcpToolSet } from "@/api/mcp/tool-types";
 import {
-  invalidCursorResult,
   buildCaseLawDecisionAppUrl,
+  legalCitationLinkFields,
   countryInputSchema,
   countryNormalization,
-  FILTER_NORMALIZATION,
   cursorInput,
   DEFAULT_LIST_LIMIT,
   DEFAULT_SEARCH_LIMIT,
   ensureWorkspaceAccess,
   errorResult,
+  FILTER_NORMALIZATION,
   handlerResultMessage,
   internalFailureResult,
+  invalidCursorResult,
   ISO_DATE_SCHEMA,
-  MCP_CONTENT_MAX_CHARS,
   MAX_LIST_LIMIT,
   MAX_SEARCH_LIMIT,
+  MCP_CONTENT_MAX_CHARS,
   notFoundResult,
   nullAsAbsent,
   resolveTextWindowBounds,
+  structuredEgressPlan,
   structuredErrorResult,
   toolDataResult,
   toPlainCorpusText,
@@ -215,6 +224,7 @@ const defaultReadWorkspaceMembersHandler: typeof readWorkspaceMembersHandler =
     ).readWorkspaceMembersHandler(input);
 
 type StellaToolName =
+  | "case_law_coverage"
   | "list_matters"
   | "lookup_case_law"
   | "read_case_law_citations"
@@ -634,6 +644,20 @@ const searchAcrossMattersArgsSchema = nullAsAbsent(
  */
 const ADMITTED_CASE_LAW_COUNTRIES = PUBLIC_CASE_LAW_COUNTRIES.join(", ");
 
+const CASE_LAW_COVERAGE_TOOL = "case_law_coverage";
+const caseLawCoverageArgsSchema = nullAsAbsent(
+  v.strictObject({
+    country: v.optional(
+      v.pipe(
+        countryInputSchema(
+          "Corpus country; omit for all jurisdictions, including those in preparation.",
+        ),
+        v.minLength(LIMITS.caseLawCoverageCountryMinLength),
+      ),
+    ),
+  }),
+);
+
 /** Named because the country ask names the call to change; a census test binds
  *  this to the tool's own `name` so a rename cannot leave a stale hint. */
 const SEARCH_CASE_LAW_TOOL = "search_case_law";
@@ -838,7 +862,7 @@ const readCaseLawDecisionArgsSchema = nullAsAbsent(
         v.minValue(1),
         v.maxValue(MCP_CONTENT_MAX_CHARS),
         v.description(
-          `Text window size, 1–${MCP_CONTENT_MAX_CHARS} characters. Accepted only alongside a single decision id.`,
+          `Text window size per decision, 1–${MCP_CONTENT_MAX_CHARS} characters. In a batch each decision gets its own window of this size, trimmed evenly so the call returns at most 40000 characters; omitted, the batch shares ${MCP_CONTENT_MAX_CHARS} characters.`,
         ),
       ),
     ),
@@ -989,7 +1013,7 @@ export const STELLA_TOOL_DEFINITIONS = [
       readOnlyHint: true,
       openWorldHint: false,
     },
-    description: SEARCH_CASE_LAW_TEXTS.description,
+    description: `${SEARCH_CASE_LAW_TEXTS.description} Use \`url\` for the reader and \`source_url\` for the publisher.`,
     inputSchema: searchCaseLawArgsSchema,
     inputNormalization: {
       country: countryNormalization({
@@ -1013,6 +1037,31 @@ export const STELLA_TOOL_DEFINITIONS = [
     scope: "stella:search",
   }),
   defineValibotMcpTool({
+    consumesServices: false,
+    annotations: {
+      title: "Read case-law coverage",
+      destructiveHint: false,
+      readOnlyHint: true,
+      openWorldHint: false,
+    },
+    description:
+      "Report case-law availability, decision counts, year ranges and court breakdowns per jurisdiction. Use before concluding that a decision is missing from the corpus; in-preparation counts describe held decisions that public search cannot yet find.",
+    inputSchema: caseLawCoverageArgsSchema,
+    inputNormalization: {
+      country: countryNormalization({
+        spelling: "alpha-3",
+        admitted: CASE_LAW_JURISDICTIONS,
+        tool: CASE_LAW_COVERAGE_TOOL,
+      }),
+    },
+    access: "read",
+    readClass: "public",
+    anonymized: { exposure: "passthrough" },
+    feature: "FEATURE_PUBLIC_LAW",
+    name: CASE_LAW_COVERAGE_TOOL,
+    scope: "stella:read",
+  }),
+  defineValibotMcpTool({
     consumesServices: true,
     annotations: {
       title: "Look up case law by identifier",
@@ -1022,8 +1071,7 @@ export const STELLA_TOOL_DEFINITIONS = [
     },
     description:
       "Resolve case references to decisions: docket numbers as the courts " +
-      "write them and ECLIs. Answered from identity columns, not ranked " +
-      "text: a hit is the decision named, not one citing it. Each " +
+      "write them and ECLIs. Matches identity columns, not ranked text or citations. Each " +
       "`identifiers[]` entry is answered on its own, in input order, under " +
       "`status`: `found` carries that decision's id, resourceName, appUrl, " +
       "caseNumber (citable reference, not always a docket), court, date and " +
@@ -1032,7 +1080,8 @@ export const STELLA_TOOL_DEFINITIONS = [
       "call instead; `lookup_failed`: the read did not complete; retry that " +
       "entry. Use this when the user names a case; use search_case_law when " +
       "they describe one. Pass a `found` decisionId to " +
-      "read_case_law_decision for the text and typed identifiers.",
+      "read_case_law_decision for the text and typed identifiers. " +
+      "Use `url` for the reader and `source_url` for the publisher.",
     inputSchema: lookupCaseLawArgsSchema,
     inputNormalization: {
       country: countryNormalization({
@@ -1086,14 +1135,15 @@ export const STELLA_TOOL_DEFINITIONS = [
     },
     description:
       "Read decisions by `decision_ids[]`, answered in input order. Batch ids " +
-      "share the text budget; `max_chars` sizes one id’s text window. Static " +
+      "share the text budget unless `max_chars` sizes each id’s window. Static " +
       "details appear only on the cursor-less window. A single id also gets " +
       "up to 100 outline headings or numbered paragraphs: pass an outline " +
       "cursor with that id to jump there. `include` selects optional fields " +
       "on any window; [] returns text and identity only. Text and unfinished " +
       "citation lists are paged: pass nextCursor with that one id. Citation " +
       "ids carry neither treatment nor surrounding text; for those call " +
-      "read_case_law_citations ({ decision_id: '<uuid>', direction: 'cited_by' }).",
+      "read_case_law_citations ({ decision_id: '<uuid>', direction: 'cited_by' }). " +
+      "Use `url` for the reader and `source_url` for the publisher.",
     inputSchema: readCaseLawDecisionArgsSchema,
     inputNormalization: {
       max_chars: {
@@ -1124,7 +1174,7 @@ export const STELLA_TOOL_DEFINITIONS = [
     // polarity vocabulary and the two readings a model would otherwise guess
     // at, the passage's bounds, and the next call spelled out.
     description:
-      "How the decisions citing one stood to it, or what it cited. One page, " +
+      "Read how citing decisions stood to one, or what it cited. One page, " +
       "each citation with a polarity and an excerpt of its paragraph. " +
       "`cited_by` returns the decisions that cite this one, `cites` the ones " +
       "it cites; neither means agreement. " +
@@ -1135,9 +1185,8 @@ export const STELLA_TOOL_DEFINITIONS = [
       `${LIMITS.caseLawCitationPassageChars} characters centred on the citation, cut when ` +
       "`passage.truncated`; `passage.mention` is 'sole', " +
       "'classified_section' (the mention the polarity came from), or " +
-      "'latest_of_several' (it may not be). Example: { decision_id: " +
-      "'<uuid>', direction: " +
-      "'cited_by', limit: 20 }. Pass nextCursor back as cursor.",
+      "'latest_of_several' (it may not be). Pass nextCursor back as cursor. " +
+      "Use `url` for the reader and `source_url` for the publisher.",
     inputSchema: readCaseLawCitationsArgsSchema,
     access: "read",
     readClass: "public",
@@ -1349,23 +1398,25 @@ const handleListMattersTool: TypedMcpToolHandler<
   // its own workspace scope in anonymized mode. The matter id is its workspace
   // id.
   if (matters.length === 0) {
-    return toolDataResult({
-      matters,
-      nextCursor: page.nextCursor,
-      ...(await onboardingNextStep(context)),
-    } satisfies v.InferInput<typeof LIST_MATTERS_LIST_PROJECTION>);
+    return toolDataResult(
+      projectionPayload(LIST_MATTERS_LIST_PROJECTION, {
+        matters,
+        nextCursor: page.nextCursor,
+        ...(await onboardingNextStep(context)),
+      }),
+    );
   }
 
-  const payload = {
+  const payload = projectionPayload(LIST_MATTERS_LIST_PROJECTION, {
     matters,
     nextCursor: page.nextCursor,
-  } satisfies v.InferInput<typeof LIST_MATTERS_LIST_PROJECTION>;
+  });
   const textFields = runTextFieldSpecs(
     LIST_MATTERS_LIST_TEXT_FIELD_SPECS,
     payload,
   );
 
-  return { egress: "structured", payload, textFields };
+  return structuredEgressPlan({ payload, textFields });
 };
 
 // Detail branch of list_matters: one matter's overview (counts, recent
@@ -1474,13 +1525,13 @@ const readMatterOverview = async ({
       }) => entity,
     ),
   };
-  const payload = {
+  const payload = projectionPayload(LIST_MATTERS_DETAIL_PROJECTION, {
     matter,
     overview: overviewWithoutAvatarUrls,
     contacts: contactCards,
     contactsOverflow: contacts.value.overflow,
     members: memberCards,
-  } satisfies v.InferInput<typeof LIST_MATTERS_DETAIL_PROJECTION>;
+  });
 
   // Everything below belongs to one matter, so it all anonymizes under this
   // single workspace scope. Ids/status/dates pass through; user-authored
@@ -1496,7 +1547,7 @@ const readMatterOverview = async ({
     payload,
   );
 
-  return { egress: "structured", payload, textFields };
+  return structuredEgressPlan({ payload, textFields });
 };
 
 const handleSearchAcrossMattersTool: TypedMcpToolHandler<
@@ -1540,17 +1591,17 @@ const handleSearchAcrossMattersTool: TypedMcpToolHandler<
   // Hits span multiple matters; each anonymizes under its own workspace scope.
   // `workspaceName` embeds the matter name (party names), so it is redacted
   // alongside the hit name and headline to stay consistent with list_matters.
-  const payload = {
+  const payload = projectionPayload(SEARCH_ACROSS_MATTERS_PROJECTION, {
     totalCount: result.totalCount,
     nextCursor: result.nextCursor,
     hits,
-  } satisfies v.InferInput<typeof SEARCH_ACROSS_MATTERS_PROJECTION>;
+  });
   const textFields = runTextFieldSpecs(
     SEARCH_ACROSS_MATTERS_TEXT_FIELD_SPECS,
     payload,
   );
 
-  return { egress: "structured", payload, textFields };
+  return structuredEgressPlan({ payload, textFields });
 };
 
 const toIsoDateString = (value: unknown): string | null => {
@@ -1854,8 +1905,7 @@ const handleReadContentAcrossMattersTool: TypedMcpToolHandler<
     v.InferInput<typeof READ_CONTENT_ACROSS_MATTERS_PROJECTION>
   >;
 
-  return {
-    egress: "structured",
+  return structuredEgressPlan({
     payload: payload satisfies ReadContentPayload,
     textFields: runTextFieldSpecs(
       READ_CONTENT_ACROSS_MATTERS_TEXT_FIELD_SPECS,
@@ -1872,7 +1922,7 @@ const handleReadContentAcrossMattersTool: TypedMcpToolHandler<
         payload.nextCursor = textWindow.nextCursor;
       },
     },
-  };
+  });
 };
 
 type CaseLawSearchHit = SearchCaseLawSuccess["hits"][number];
@@ -2168,14 +2218,17 @@ const caseLawSearchResult = ({
   });
   return {
     matchedQueries,
-    appUrl: buildCaseLawDecisionAppUrl({
-      caseNumber: hit.caseNumber,
-      country: hit.country,
-      court: hit.court,
-      decisionId: hit.decisionId,
-      language: hit.language,
-      languageAlternates: hit.languageAlternates,
-      slug: hit.slug,
+    ...legalCitationLinkFields({
+      appUrl: buildCaseLawDecisionAppUrl({
+        caseNumber: hit.caseNumber,
+        country: hit.country,
+        court: hit.court,
+        decisionId: hit.decisionId,
+        language: hit.language,
+        languageAlternates: hit.languageAlternates,
+        slug: hit.slug,
+      }),
+      sourceUrl: hit.sourceUrl,
     }),
     caseNumber: hit.caseNumber,
     citationAuthority: hit.citationAuthority,
@@ -2412,24 +2465,26 @@ const handleSearchCaseLawTool: TypedMcpToolHandler<
     },
   );
 
-  return toolDataResult({
-    facets: first.exhausted ? null : first.page.facets,
-    searches,
-    nextCursor: single === undefined ? mergedCursor : single.nextCursor,
-    paginationOutcome: pages.some(
-      (outcome) =>
-        !outcome.exhausted &&
-        outcome.page.paginationOutcome.type === "truncated",
-    )
-      ? SEARCH_PAGINATION_TRUNCATED_EXCLUSION_BUDGET
-      : SEARCH_PAGINATION_COMPLETE,
-    results: merged.map(caseLawSearchResult),
-    total:
-      single === undefined
-        ? { type: SEARCH_TOTAL_TYPE.NOT_COUNTED }
-        : single.total,
-    ...(merged.length === 0 ? await onboardingNextStep(context) : {}),
-  } satisfies v.InferInput<typeof SEARCH_CASE_LAW_PROJECTION>);
+  return toolDataResult(
+    projectionPayload(SEARCH_CASE_LAW_PROJECTION, {
+      facets: first.exhausted ? null : first.page.facets,
+      searches,
+      nextCursor: single === undefined ? mergedCursor : single.nextCursor,
+      paginationOutcome: pages.some(
+        (outcome) =>
+          !outcome.exhausted &&
+          outcome.page.paginationOutcome.type === "truncated",
+      )
+        ? SEARCH_PAGINATION_TRUNCATED_EXCLUSION_BUDGET
+        : SEARCH_PAGINATION_COMPLETE,
+      results: merged.map(caseLawSearchResult),
+      total:
+        single === undefined
+          ? { type: SEARCH_TOTAL_TYPE.NOT_COUNTED }
+          : single.total,
+      ...(merged.length === 0 ? await onboardingNextStep(context) : {}),
+    }),
+  );
 };
 
 type DecisionCursorState = {
@@ -2518,7 +2573,9 @@ type DecisionItemOptions = {
   decisionId: string;
   /** See `decisionDocumentState`: the deployment's half of the answer. */
   readsSharedCorpus: boolean;
-  /** The window this entry's share of the call's text budget allows. */
+  /** Whether this call could fetch a pending document at all. */
+  documentHydration: DecisionDocumentHydration["type"];
+  /** This entry's text window: max_chars, or its share of the default budget. */
   maxTextChars: number;
   outline: "include" | "omit";
   read: GatedDecisionRead;
@@ -2526,6 +2583,24 @@ type DecisionItemOptions = {
   firstWindow: boolean;
   include: v.InferOutput<typeof readCaseLawDecisionArgsSchema>["include"];
   citationsCursor: DecisionCursorState["citations"];
+};
+
+/** What a caller does about a document this call left pending. */
+const pendingDocumentMessage = (
+  documentHydration: DecisionDocumentHydration["type"],
+): string => {
+  switch (documentHydration) {
+    case "on-demand": {
+      return `The publisher document for this decision is not stored yet. Read this decision id on its own to fetch it; this call's fetch budget is ${String(LIMITS.caseLawDecisionBatchHydrationsMax)} documents.`;
+    }
+    case "stored-only": {
+      return "The publisher document for this decision is not stored yet. The ingestion queue fetches it; read this decision again later.";
+    }
+    default: {
+      documentHydration satisfies never;
+      return panic("Unhandled document hydration");
+    }
+  }
 };
 
 const decisionIncludedFields = ({
@@ -2552,6 +2627,7 @@ const decisionItemResult = ({
   outline,
   read,
   readsSharedCorpus,
+  documentHydration,
   textOffset,
   firstWindow,
   include,
@@ -2569,7 +2645,7 @@ const decisionItemResult = ({
   if (isDecisionDocumentPending(read, readsSharedCorpus)) {
     return {
       decisionId,
-      message: `The publisher document for this decision is not stored yet. Read this decision id on its own to fetch it; this call's fetch budget is ${String(LIMITS.caseLawDecisionBatchHydrationsMax)} documents.`,
+      message: pendingDocumentMessage(documentHydration),
       status: DECISION_READ_STATUS.pending,
     };
   }
@@ -2627,17 +2703,21 @@ const decisionItemResult = ({
       : null,
     status: DECISION_READ_STATUS.found,
     decision: {
+      ...legalCitationLinkFields({
+        appUrl: buildCaseLawDecisionAppUrl({
+          caseNumber: read.caseNumber,
+          country: read.country,
+          court: read.court,
+          decisionId: read.id,
+          language: read.language,
+          languageAlternates: read.languageAlternates,
+          slug: read.slug,
+        }),
+        sourceUrl: read.sourceUrl,
+      }),
+
       ...(includedFields.has("details")
         ? {
-            appUrl: buildCaseLawDecisionAppUrl({
-              caseNumber: read.caseNumber,
-              country: read.country,
-              court: read.court,
-              decisionId: read.id,
-              language: read.language,
-              languageAlternates: read.languageAlternates,
-              slug: read.slug,
-            }),
             ...nonDocketReference(read),
             country: read.country,
             court: read.court,
@@ -2693,6 +2773,9 @@ const decisionItemResult = ({
   };
 };
 
+/** The most decision text one read_case_law_decision call answers with. */
+export const READ_DECISION_BATCH_MAX_TEXT_CHARS = 40_000;
+
 const handleReadCaseLawDecisionTool: TypedMcpToolHandler<
   v.InferInput<typeof READ_CASE_LAW_DECISION_PROJECTION>
 > = async ({ args, context }) => {
@@ -2720,17 +2803,6 @@ const handleReadCaseLawDecisionTool: TypedMcpToolHandler<
         },
       ],
       hint: "Pass one decision id with a cursor to continue its text.",
-    });
-  }
-
-  if (maxChars !== undefined && decisionIds.length > 1) {
-    return structuredErrorResult({
-      code: "validation_error",
-      message: "max_chars sizes one decision's text window",
-      hint: "Pass one decision id with max_chars, or omit max_chars for a batch read.",
-      issues: [
-        { path: "max_chars", message: "Accepted only with one decision id." },
-      ],
     });
   }
 
@@ -2781,10 +2853,7 @@ const handleReadCaseLawDecisionTool: TypedMcpToolHandler<
       operation: async (decisionId) =>
         [
           decisionId,
-          await readDecision(
-            decisionId,
-            DECISION_DOCUMENT_HYDRATION.storedOnly,
-          ),
+          await readDecision(decisionId, STORED_ONLY_DOCUMENT_HYDRATION),
         ] as const,
     }),
   );
@@ -2814,12 +2883,17 @@ const handleReadCaseLawDecisionTool: TypedMcpToolHandler<
 
   // The pending entries this call fetches, in input order. Anything past the
   // budget, and anything whose fetch does not finish, stays pending and is
-  // reported as such.
-  const fetchedIds = uniqueIds
-    .filter((decisionId) =>
-      isDecisionDocumentPending(readOf(decisionId), readsSharedCorpus),
-    )
-    .slice(0, LIMITS.caseLawDecisionBatchHydrationsMax);
+  // reported as such. A caller without a third-party outbound permit (a chat
+  // script) fetches none.
+  const onDemand = documentHydrationFor(context.thirdPartyOutboundPermit);
+  const fetchedIds =
+    onDemand.type === "stored-only"
+      ? []
+      : uniqueIds
+          .filter((decisionId) =>
+            isDecisionDocumentPending(readOf(decisionId), readsSharedCorpus),
+          )
+          .slice(0, LIMITS.caseLawDecisionBatchHydrationsMax);
   // The re-read runs the gate again rather than hydrating the row it already
   // holds: a publisher fetch must not run inside the read transaction, and
   // the content that answers has to come from a state the gate approved.
@@ -2827,8 +2901,7 @@ const handleReadCaseLawDecisionTool: TypedMcpToolHandler<
     await mapWithConcurrency({
       items: fetchedIds,
       limit: LIMITS.caseLawDecisionBatchHydrationsMax,
-      operation: async (decisionId) =>
-        await readDecision(decisionId, DECISION_DOCUMENT_HYDRATION.onDemand),
+      operation: async (decisionId) => await readDecision(decisionId, onDemand),
     })
   ).entries()) {
     const decisionId =
@@ -2836,29 +2909,37 @@ const handleReadCaseLawDecisionTool: TypedMcpToolHandler<
     reads.set(decisionId, hydrated);
   }
 
-  // The call's text budget is shared across the entries, so a batch cannot
-  // answer with twenty full windows of decision text. A single id keeps the
-  // whole window, which is what a caller reading one decision asked for.
+  // An explicit max_chars sizes every entry's window on its own: each
+  // decision is truncated and continued by its own cursor. Without one the
+  // default text budget is shared across the entries, so a batch nobody sized
+  // cannot answer with twenty full windows of decision text. Either way the
+  // whole call stays within the batch ceiling, trimmed evenly per entry.
   const maxTextChars = Math.max(
     1,
-    Math.floor((maxChars ?? MCP_CONTENT_MAX_CHARS) / decisionIds.length),
+    Math.min(
+      maxChars ?? Math.floor(MCP_CONTENT_MAX_CHARS / decisionIds.length),
+      Math.floor(READ_DECISION_BATCH_MAX_TEXT_CHARS / decisionIds.length),
+    ),
   );
 
-  return toolDataResult({
-    items: decisionIds.map((decisionId) =>
-      decisionItemResult({
-        decisionId,
-        maxTextChars,
-        outline: decisionIds.length === 1 ? "include" : "omit",
-        read: readOf(decisionId),
-        readsSharedCorpus,
-        textOffset: offsets.text,
-        firstWindow: cursor === undefined,
-        include,
-        citationsCursor: offsets.citations,
-      }),
-    ),
-  } satisfies v.InferInput<typeof READ_CASE_LAW_DECISION_PROJECTION>);
+  return toolDataResult(
+    projectionPayload(READ_CASE_LAW_DECISION_PROJECTION, {
+      items: decisionIds.map((decisionId) =>
+        decisionItemResult({
+          decisionId,
+          maxTextChars,
+          outline: decisionIds.length === 1 ? "include" : "omit",
+          read: readOf(decisionId),
+          readsSharedCorpus,
+          documentHydration: onDemand.type,
+          textOffset: offsets.text,
+          firstWindow: cursor === undefined,
+          include,
+          citationsCursor: offsets.citations,
+        }),
+      ),
+    }),
+  );
 };
 
 // --- lookup_case_law -------------------------------------------------------
@@ -2872,14 +2953,17 @@ const SEARCH_INSTEAD_HINT =
   "Search the decision's text with search_case_law instead, or pass the docket exactly as the court wrote it.";
 
 const decisionIdentityOf = (row: DecisionIdentityRow) => ({
-  appUrl: buildCaseLawDecisionAppUrl({
-    caseNumber: row.caseNumber,
-    country: row.country,
-    court: row.court,
-    decisionId: row.id,
-    language: row.language,
-    languageAlternates: row.languageAlternates,
-    slug: row.slug,
+  ...legalCitationLinkFields({
+    appUrl: buildCaseLawDecisionAppUrl({
+      caseNumber: row.caseNumber,
+      country: row.country,
+      court: row.court,
+      decisionId: row.id,
+      language: row.language,
+      languageAlternates: row.languageAlternates,
+      slug: row.slug,
+    }),
+    sourceUrl: null,
   }),
   caseNumber: row.caseNumber,
   // As in search: the kind is named only where the reference is not a docket.
@@ -3090,14 +3174,16 @@ const handleLookupCaseLawTool: TypedMcpToolHandler<
     outcomes.get(identifier) ??
     panic(`No lookup ran for identifier ${identifier}`);
 
-  return toolDataResult({
-    items: identifiers.map((identifier) =>
-      lookupItemResult({
-        identifier,
-        outcome: outcomeOf(identifier),
-      }),
-    ),
-  } satisfies v.InferInput<typeof LOOKUP_CASE_LAW_PROJECTION>);
+  return toolDataResult(
+    projectionPayload(LOOKUP_CASE_LAW_PROJECTION, {
+      items: identifiers.map((identifier) =>
+        lookupItemResult({
+          identifier,
+          outcome: outcomeOf(identifier),
+        }),
+      ),
+    }),
+  );
 };
 
 const handleReadCaseLawCitationsTool: TypedMcpToolHandler<
@@ -3138,47 +3224,52 @@ const handleReadCaseLawCitationsTool: TypedMcpToolHandler<
     });
   }
 
-  return toolDataResult({
-    decisionId,
-    direction,
-    nextCursor: read.page.nextCursor,
-    citations: read.page.items.map((item) => ({
-      citationId: item.id,
-      citationText: item.citationText,
-      polarity: item.treatment,
-      decision:
-        item.decision === null
-          ? null
-          : {
-              appUrl: buildCaseLawDecisionAppUrl({
-                caseNumber: item.decision.caseNumber,
-                country: item.decision.country,
-                court: item.decision.court,
-                decisionId: item.decision.id,
-                language: item.decision.language,
-                languageAlternates: item.decision.languageAlternates,
-                slug: item.decision.slug,
-              }),
-              caseNumber: item.decision.caseNumber,
-              ...(item.decision.caseNumberType ===
-              DECISION_IDENTIFIER_TYPES.CASE_NUMBER
-                ? {}
-                : { caseNumberType: item.decision.caseNumberType }),
-              citationAuthority: item.decision.citationAuthority,
-              court: item.decision.court,
-              decisionDate: item.decision.decisionDate,
-              decisionId: item.decision.id,
-              decisionType: item.decision.decisionType,
-              resourceName: serializeAuthorizedCorpusMcpResourceName(
-                resourceRef({
-                  type: RESOURCE_TYPE.CASE_LAW_DECISION,
-                  id: brandPersistedCaseLawDecisionId(item.decision.id),
+  return toolDataResult(
+    projectionPayload(READ_CASE_LAW_CITATIONS_PROJECTION, {
+      decisionId,
+      direction,
+      nextCursor: read.page.nextCursor,
+      citations: read.page.items.map((item) => ({
+        citationId: item.id,
+        citationText: item.citationText,
+        polarity: item.treatment,
+        decision:
+          item.decision === null
+            ? null
+            : {
+                ...legalCitationLinkFields({
+                  appUrl: buildCaseLawDecisionAppUrl({
+                    caseNumber: item.decision.caseNumber,
+                    country: item.decision.country,
+                    court: item.decision.court,
+                    decisionId: item.decision.id,
+                    language: item.decision.language,
+                    languageAlternates: item.decision.languageAlternates,
+                    slug: item.decision.slug,
+                  }),
+                  sourceUrl: null,
                 }),
-              ),
-            },
-      passage: item.passage,
-    })),
-  } satisfies v.InferInput<typeof READ_CASE_LAW_CITATIONS_PROJECTION>);
+                caseNumber: item.decision.caseNumber,
+                ...(item.decision.caseNumberType ===
+                DECISION_IDENTIFIER_TYPES.CASE_NUMBER
+                  ? {}
+                  : { caseNumberType: item.decision.caseNumberType }),
+                citationAuthority: item.decision.citationAuthority,
+                court: item.decision.court,
+                decisionDate: item.decision.decisionDate,
+                decisionId: item.decision.id,
+                decisionType: item.decision.decisionType,
+                resourceName: serializeAuthorizedCorpusMcpResourceName(
+                  resourceRef({
+                    type: RESOURCE_TYPE.CASE_LAW_DECISION,
+                    id: brandPersistedCaseLawDecisionId(item.decision.id),
+                  }),
+                ),
+              },
+        passage: item.passage,
+      })),
+    }),
+  );
 };
 
 const handleReadContactTool: TypedMcpToolHandler<
@@ -3208,7 +3299,7 @@ const handleReadContactTool: TypedMcpToolHandler<
   // Contacts are organization-scoped (no owning workspace), so the org id is
   // the anonymization scope. The placeholder card is intentional and consistent
   // with how chat anonymizes contact fields.
-  const payload = {
+  const payload = projectionPayload(READ_CONTACT_PROJECTION, {
     contactId: contact.id,
     type: contact.type,
     displayName: contact.displayName,
@@ -3221,22 +3312,21 @@ const handleReadContactTool: TypedMcpToolHandler<
     phones: arrayOrEmpty(contact.phones),
     dateOfBirth: dateOfBirthFromColumns(contact),
     nationalityCodes: contact.nationalityCodes,
-  } satisfies v.InferInput<typeof READ_CONTACT_PROJECTION>;
+  });
 
   const textFields = runTextFieldSpecs(
     buildContactTextFieldSpecs(context.organizationId),
     payload,
   );
 
-  return {
-    egress: "structured",
+  return structuredEgressPlan({
     payload,
     textFields,
     redactInAnonymized: () => {
       payload.dateOfBirth = null;
       payload.nationalityCodes = [];
     },
-  };
+  });
 };
 
 const handleSetPracticeJurisdictionsTool: TypedMcpToolHandler<
@@ -3279,12 +3369,101 @@ const handleSetPracticeJurisdictionsTool: TypedMcpToolHandler<
     practiceJurisdictions,
   );
 
-  return toolDataResult({ practiceJurisdictions } satisfies v.InferInput<
-    typeof SET_PRACTICE_JURISDICTIONS_PROJECTION
-  >);
+  return toolDataResult(
+    projectionPayload(SET_PRACTICE_JURISDICTIONS_PROJECTION, {
+      practiceJurisdictions,
+    }),
+  );
+};
+
+const handleCaseLawCoverageTool: TypedMcpToolHandler<
+  v.InferInput<typeof CASE_LAW_COVERAGE_PROJECTION>
+> = async ({ args, context }) => {
+  const parsed = v.safeParse(caseLawCoverageArgsSchema, args);
+  if (!parsed.success) {
+    return validationErrorResult(parsed.issues);
+  }
+  const { country } = parsed.output;
+  const readCoverage =
+    context.testDependencies?.readCaseLawCoverageHandler ??
+    defaultReadCaseLawCoverageHandler;
+  const coverage = await readCoverage(caseLawPublicReadDb);
+  if ("message" in coverage) {
+    return structuredErrorResult({
+      code: "upstream_unavailable",
+      message: coverage.message,
+      hint: "Retry case_law_coverage later.",
+      retryable: true,
+    });
+  }
+  const countries =
+    country === undefined
+      ? coverage.countries
+      : coverage.countries.filter((entry) => entry.country === country);
+  if (country !== undefined && countries.length === 0) {
+    return notFoundResult(
+      "Case-law country not found",
+      `Pass one of the coverage country codes: ${coverage.countries.map((entry) => entry.country).join(", ")}, or omit country for all jurisdictions.`,
+    );
+  }
+  return toolDataResult({
+    asOf: coverage.generatedAt,
+    countries: countries.map((entry) => {
+      switch (entry.availability) {
+        case "in-preparation":
+          return {
+            country: entry.country,
+            availability: entry.availability,
+            decisions: entry.stored.decisions,
+            decisionYearFrom: null,
+            decisionYearTo: null,
+            courts: null,
+          };
+        case "searchable":
+          return {
+            country: entry.country,
+            availability: entry.availability,
+            decisions: entry.searchable,
+            decisionYearFrom: entry.decisionYearFrom,
+            decisionYearTo: entry.decisionYearTo,
+            courts:
+              entry.courts === null
+                ? null
+                : entry.courts.map((row) => {
+                    switch (row.type) {
+                      case "court":
+                        return {
+                          type: row.type,
+                          court: row.court,
+                          decisions: row.decisions,
+                        };
+                      case "tier":
+                        return {
+                          type: row.type,
+                          tier: row.tier,
+                          courts: row.courts,
+                          decisions: row.decisions,
+                        };
+                      case "unlisted":
+                        return { type: row.type, decisions: row.decisions };
+                      default: {
+                        row satisfies never;
+                        return panic("Unknown case-law coverage court row");
+                      }
+                    }
+                  }),
+          };
+        default: {
+          entry satisfies never;
+          return panic("Unknown case-law coverage availability");
+        }
+      }
+    }),
+  } satisfies v.InferInput<typeof CASE_LAW_COVERAGE_PROJECTION>);
 };
 
 export const STELLA_TOOL_HANDLERS = {
+  case_law_coverage: handleCaseLawCoverageTool,
   list_matters: handleListMattersTool,
   lookup_case_law: handleLookupCaseLawTool,
   read_case_law_citations: handleReadCaseLawCitationsTool,
@@ -3300,6 +3479,9 @@ export const STELLA_TOOL_SET = defineMcpToolSet(
   STELLA_TOOL_DEFINITIONS,
   STELLA_TOOL_HANDLERS,
   {
+    case_law_coverage: defineChatProjectionMcpToolOutput(
+      CASE_LAW_COVERAGE_PROJECTION,
+    ),
     list_matters: defineChatProjectionMcpToolOutput(LIST_MATTERS_PROJECTION),
     lookup_case_law: defineChatProjectionMcpToolOutput(
       LOOKUP_CASE_LAW_PROJECTION,

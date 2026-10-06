@@ -1,3 +1,4 @@
+import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 import nodePath from "node:path";
 
@@ -7,13 +8,24 @@ const MIGRATIONS_DIR = nodePath.resolve(import.meta.dir, "../../drizzle");
 const ZERO_DURATION = /^'?0\s*(?:us|ms|s|min|h|d)?'?$/iu;
 const CONCURRENT_INDEX_OPERATION =
   /^(?:(?:CREATE\s+(?:UNIQUE\s+)?|DROP\s+)INDEX\s+CONCURRENTLY|REINDEX\s+INDEX\s+CONCURRENTLY)\b/iu;
-const CONCURRENT_IF_NOT_EXISTS =
-  /\bCREATE\s+(?:UNIQUE\s+)?INDEX\s+CONCURRENTLY\s+IF\s+NOT\s+EXISTS\s+"([^"]+)"/giu;
-const CONCURRENT_UNIQUE_CREATE =
-  /\bCREATE\s+UNIQUE\s+INDEX\s+CONCURRENTLY(?<idempotent>\s+IF\s+NOT\s+EXISTS)?\s+"(?<name>[^"]+)"/giu;
-const CONCURRENT_DROP =
-  /\bDROP\s+INDEX\s+CONCURRENTLY\s+IF\s+EXISTS\s+"([^"]+)"/giu;
-const CONCURRENT_REINDEX = /\bREINDEX\s+INDEX\s+CONCURRENTLY\s+"([^"]+)"/giu;
+const IDENTIFIER = String.raw`(?:"(?:""|[^"])+"|[A-Za-z_][\w$]*)`;
+const RELATION = String.raw`(?:${IDENTIFIER}\s*\.\s*)?${IDENTIFIER}`;
+const CONCURRENT_IF_NOT_EXISTS = new RegExp(
+  String.raw`\bCREATE\s+(?:UNIQUE\s+)?INDEX\s+CONCURRENTLY\s+IF\s+NOT\s+EXISTS\s+(?<name>${RELATION})`,
+  "giu",
+);
+const CONCURRENT_UNIQUE_CREATE = new RegExp(
+  String.raw`\bCREATE\s+UNIQUE\s+INDEX\s+CONCURRENTLY(?<idempotent>\s+IF\s+NOT\s+EXISTS)?\s+(?<name>${RELATION})`,
+  "giu",
+);
+const CONCURRENT_DROP = new RegExp(
+  String.raw`\bDROP\s+INDEX\s+CONCURRENTLY\s+IF\s+EXISTS\s+(?<name>${RELATION})`,
+  "giu",
+);
+const CONCURRENT_REINDEX = new RegExp(
+  String.raw`\bREINDEX\s+INDEX\s+CONCURRENTLY\s+(?<name>${RELATION})`,
+  "giu",
+);
 const TYPE_CHANGE =
   /^ALTER\s+TABLE\b[^;]*?\bALTER\s+(?:COLUMN\s+)?(?:(?:U&)?"(?:""|[^"])+"(?:\s+UESCAPE\s+'(?:''|[^'])*')?|[A-Z_\u0080-\u{10FFFF}][A-Z0-9_$\u0080-\u{10FFFF}]*)\s+(?:SET\s+DATA\s+)?TYPE\b/iu;
 const TYPE_CHANGE_ANYWHERE =
@@ -730,95 +742,129 @@ const collectUnsafeConcurrentTimeouts = (
   return violations;
 };
 
+const canonicalIdentifier = (identifier: string): string =>
+  identifier.startsWith('"')
+    ? identifier.slice(1, -1).replaceAll('""', '"')
+    : identifier.toLowerCase();
+
+/** A relation without its schema: migrations here address `public` alone. */
+const canonicalRelation = (relation: string): string => {
+  const parts = relation.match(new RegExp(IDENTIFIER, "gu")) ?? [];
+  return canonicalIdentifier(parts.at(-1) ?? relation);
+};
+
+const matchedIndexName = (match: RegExpMatchArray): string | undefined => {
+  const name = match.groups?.["name"];
+  return name === undefined ? undefined : canonicalRelation(name);
+};
+type ConcurrentIndexMigrationOptions = {
+  relativePath: string;
+  source: string;
+  validatedIndexNames: ReadonlySet<string>;
+};
+
+const collectUnsafeConcurrentIndexesInMigration = ({
+  relativePath,
+  source,
+  validatedIndexNames,
+}: ConcurrentIndexMigrationOptions): string[] => {
+  const violations: string[] = [];
+  const sqlWithoutLineComments = stripSqlComments(source);
+  for (const match of sqlWithoutLineComments.matchAll(
+    CONCURRENT_IF_NOT_EXISTS,
+  )) {
+    const name = matchedIndexName(match);
+    if (!name || !validatedIndexNames.has(name)) {
+      violations.push(
+        `${relativePath}: ${name ?? "unknown index"} uses IF NOT EXISTS without an online validity postcondition`,
+      );
+    }
+  }
+
+  const droppedIndexes = new Set(
+    [...sqlWithoutLineComments.matchAll(CONCURRENT_DROP)].flatMap((match) => {
+      const name = matchedIndexName(match);
+      return name ? [name] : [];
+    }),
+  );
+  const concurrentUniqueCreates = [
+    ...sqlWithoutLineComments.matchAll(CONCURRENT_UNIQUE_CREATE),
+  ];
+  const concurrentReindexPositions = new Map<string, number[]>();
+  for (const match of sqlWithoutLineComments.matchAll(CONCURRENT_REINDEX)) {
+    const name = matchedIndexName(match);
+    if (name === undefined) {
+      continue;
+    }
+    const positions = concurrentReindexPositions.get(name) ?? [];
+    positions.push(match.index);
+    concurrentReindexPositions.set(name, positions);
+  }
+  const firstForeignKeyIndex =
+    sqlWithoutLineComments.search(/\bFOREIGN\s+KEY\b/iu);
+  const createdUniqueIndexes = new Set(
+    concurrentUniqueCreates.flatMap((match) => {
+      const name = matchedIndexName(match);
+      return name ? [name] : [];
+    }),
+  );
+  if (
+    concurrentUniqueCreates.some(({ groups }) => groups?.["idempotent"]) &&
+    [...droppedIndexes].some((name) => !createdUniqueIndexes.has(name))
+  ) {
+    violations.push(
+      `${relativePath}: unique replacement drop must follow online validity postconditions`,
+    );
+  }
+  for (const match of concurrentUniqueCreates) {
+    const { groups } = match;
+    const name = matchedIndexName(match);
+    if (!name) {
+      continue;
+    }
+    if (!groups?.["idempotent"]) {
+      violations.push(
+        `${relativePath}: unique index ${name} is not retry-idempotent`,
+      );
+    }
+    if (
+      groups?.["idempotent"] &&
+      firstForeignKeyIndex !== -1 &&
+      !(concurrentReindexPositions.get(name) ?? []).some(
+        (position) => position > match.index && position < firstForeignKeyIndex,
+      )
+    ) {
+      violations.push(
+        `${relativePath}: unique index ${name} is used before retry validity repair`,
+      );
+    }
+    if (droppedIndexes.has(name)) {
+      violations.push(
+        `${relativePath}: retry can remove valid unique index ${name}`,
+      );
+    }
+  }
+  violations.push(...collectUnsafeConcurrentTimeouts(relativePath, source));
+  return violations.toSorted();
+};
+
 const collectUnsafeConcurrentIndexes = async (): Promise<string[]> => {
   const violations: string[] = [];
   const migrationFiles = new Bun.Glob("20*/migration.sql");
-
   for await (const relativePath of migrationFiles.scan({
     cwd: MIGRATIONS_DIR,
   })) {
     const source = await Bun.file(
       nodePath.join(MIGRATIONS_DIR, relativePath),
     ).text();
-    const sqlWithoutLineComments = stripSqlComments(source);
-    for (const match of sqlWithoutLineComments.matchAll(
-      CONCURRENT_IF_NOT_EXISTS,
-    )) {
-      const name = match.at(1);
-      if (!name || !ONLINE_VALIDATED_INDEX_NAMES.has(name)) {
-        violations.push(
-          `${relativePath}: ${name ?? "unknown index"} uses IF NOT EXISTS without an online validity postcondition`,
-        );
-      }
-    }
-
-    const droppedIndexes = new Set(
-      [...sqlWithoutLineComments.matchAll(CONCURRENT_DROP)].flatMap((match) => {
-        const name = match.at(1);
-        return name ? [name] : [];
+    violations.push(
+      ...collectUnsafeConcurrentIndexesInMigration({
+        relativePath,
+        source,
+        validatedIndexNames: ONLINE_VALIDATED_INDEX_NAMES,
       }),
     );
-    const concurrentUniqueCreates = [
-      ...sqlWithoutLineComments.matchAll(CONCURRENT_UNIQUE_CREATE),
-    ];
-    const concurrentReindexPositions = new Map<string, number[]>();
-    for (const match of sqlWithoutLineComments.matchAll(CONCURRENT_REINDEX)) {
-      const name = match.at(1);
-      if (name === undefined) {
-        continue;
-      }
-      const positions = concurrentReindexPositions.get(name) ?? [];
-      positions.push(match.index);
-      concurrentReindexPositions.set(name, positions);
-    }
-    const firstForeignKeyIndex =
-      sqlWithoutLineComments.search(/\bFOREIGN\s+KEY\b/iu);
-    const createdUniqueIndexes = new Set(
-      concurrentUniqueCreates.flatMap(({ groups }) => {
-        const name = groups?.["name"];
-        return name ? [name] : [];
-      }),
-    );
-    if (
-      concurrentUniqueCreates.some(({ groups }) => groups?.["idempotent"]) &&
-      [...droppedIndexes].some((name) => !createdUniqueIndexes.has(name))
-    ) {
-      violations.push(
-        `${relativePath}: unique replacement drop must follow online validity postconditions`,
-      );
-    }
-    for (const match of concurrentUniqueCreates) {
-      const { groups } = match;
-      const name = groups?.["name"];
-      if (!name) {
-        continue;
-      }
-      if (!groups["idempotent"]) {
-        violations.push(
-          `${relativePath}: unique index ${name} is not retry-idempotent`,
-        );
-      }
-      if (
-        groups["idempotent"] &&
-        firstForeignKeyIndex !== -1 &&
-        !(concurrentReindexPositions.get(name) ?? []).some(
-          (position) =>
-            position > match.index && position < firstForeignKeyIndex,
-        )
-      ) {
-        violations.push(
-          `${relativePath}: unique index ${name} is used before retry validity repair`,
-        );
-      }
-      if (droppedIndexes.has(name)) {
-        violations.push(
-          `${relativePath}: retry can remove valid unique index ${name}`,
-        );
-      }
-    }
-    violations.push(...collectUnsafeConcurrentTimeouts(relativePath, source));
   }
-
   return violations.toSorted();
 };
 
@@ -1151,6 +1197,76 @@ const collectUnsafeTypeChanges = async () => {
 };
 
 describe("concurrent index migration safety", () => {
+  test.each([
+    { spelling: "index_name", name: "index_name" },
+    { spelling: "INDEX_NAME", name: "index_name" },
+    { spelling: '"MixedName"', name: "MixedName" },
+    { spelling: 'public."MixedName"', name: "MixedName" },
+    { spelling: '"escaped""name"', name: 'escaped"name' },
+  ])(
+    "recognizes concurrent index identifier $spelling",
+    ({ spelling, name }) => {
+      const operations = [
+        {
+          sql: `CREATE INDEX CONCURRENTLY IF NOT EXISTS ${spelling} ON contacts (id);`,
+          pattern: CONCURRENT_IF_NOT_EXISTS,
+        },
+        {
+          sql: `CREATE UNIQUE INDEX CONCURRENTLY IF NOT EXISTS ${spelling} ON contacts (id);`,
+          pattern: CONCURRENT_UNIQUE_CREATE,
+        },
+        {
+          sql: `DROP INDEX CONCURRENTLY IF EXISTS ${spelling};`,
+          pattern: CONCURRENT_DROP,
+        },
+        {
+          sql: `REINDEX INDEX CONCURRENTLY ${spelling};`,
+          pattern: CONCURRENT_REINDEX,
+        },
+      ];
+      for (const { sql, pattern } of operations) {
+        expect([...sql.matchAll(pattern)].map(matchedIndexName)).toEqual([
+          name,
+        ]);
+      }
+    },
+  );
+
+  test("removing either sanctions cursor index registration fails the migration guard", async () => {
+    const relativePath =
+      "20261003123000_sanctions_monitoring_review_index/migration.sql";
+    const source = await Bun.file(
+      nodePath.join(MIGRATIONS_DIR, relativePath),
+    ).text();
+    const names = [
+      ...stripSqlComments(source).matchAll(CONCURRENT_IF_NOT_EXISTS),
+    ].map(matchedIndexName);
+    expect(names).toHaveLength(2);
+    expect(
+      collectUnsafeConcurrentIndexesInMigration({
+        relativePath,
+        source,
+        validatedIndexNames: ONLINE_VALIDATED_INDEX_NAMES,
+      }),
+    ).toEqual([]);
+    for (const name of names) {
+      if (name === undefined) {
+        panic("Concurrent index identifier was not captured");
+      }
+      const validatedIndexNames = new Set(ONLINE_VALIDATED_INDEX_NAMES);
+      expect(validatedIndexNames.delete(name)).toBe(true);
+      expect(
+        collectUnsafeConcurrentIndexesInMigration({
+          relativePath,
+          source,
+          validatedIndexNames,
+        }),
+      ).toEqual([
+        `${relativePath}: ${name} uses IF NOT EXISTS without an online validity postcondition`,
+      ]);
+    }
+  });
+
   test("enforces bounded-lock, unbounded-build, and validity-aware retries", async () => {
     expect(await collectUnsafeConcurrentIndexes()).toEqual([]);
   });
@@ -1714,8 +1830,6 @@ const REPLAY_SAFE_TABLE_ACTIONS: readonly RegExp[] = [
   /^(?:ENABLE|FORCE)\s+ROW\s+LEVEL\s+SECURITY$/iu,
 ];
 
-const IDENTIFIER = String.raw`(?:"(?:""|[^"])+"|[A-Za-z_][\w$]*)`;
-const RELATION = String.raw`(?:${IDENTIFIER}\s*\.\s*)?${IDENTIFIER}`;
 const ALTER_TABLE = new RegExp(
   String.raw`^ALTER\s+TABLE\s+(?:IF\s+EXISTS\s+)?(?:ONLY\s+)?(?<table>${RELATION})\s+(?<actions>[\s\S]+)$`,
   "iu",
@@ -1738,16 +1852,6 @@ const DROP_NAMED_ON_TABLE = new RegExp(
 );
 
 /** An identifier as PostgreSQL resolves it: unquoted folds to lower case. */
-const canonicalIdentifier = (identifier: string): string =>
-  identifier.startsWith('"')
-    ? identifier.slice(1, -1).replaceAll('""', '"')
-    : identifier.toLowerCase();
-
-/** A relation without its schema: migrations here address `public` alone. */
-const canonicalRelation = (relation: string): string => {
-  const parts = relation.match(new RegExp(IDENTIFIER, "gu")) ?? [];
-  return canonicalIdentifier(parts.at(-1) ?? relation);
-};
 
 /** Split on the commas that separate actions, not the ones inside parentheses. */
 const splitTableActions = (actions: string): string[] => {

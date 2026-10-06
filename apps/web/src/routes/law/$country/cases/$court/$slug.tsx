@@ -21,6 +21,7 @@ function PublicDecisionRoute() {
 
   return (
     <PublicDecisionViewer
+      key={`${decision.id}:${initialSearchQuery ?? ""}`}
       decision={decision}
       initialSearchQuery={initialSearchQuery}
       routeId={Route.id}

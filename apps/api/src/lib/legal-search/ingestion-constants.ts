@@ -49,9 +49,9 @@ export type ImportSourceKey =
  * of every court corpus.
  */
 export const PARSER_VERSIONS = {
-  [ADAPTER_KEYS.CZ_REGIONAL]: 9,
-  [ADAPTER_KEYS.CZ_NS]: 13,
-  [ADAPTER_KEYS.CZ_NSS]: 14,
+  [ADAPTER_KEYS.CZ_REGIONAL]: 10,
+  [ADAPTER_KEYS.CZ_NS]: 15,
+  [ADAPTER_KEYS.CZ_NSS]: 16,
   [ADAPTER_KEYS.CZ_US]: 13,
   [ADAPTER_KEYS.SK_COURTS]: 14,
   [ADAPTER_KEYS.SK_US]: 8,

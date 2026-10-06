@@ -1,5 +1,7 @@
 import { Result } from "better-result";
 
+import type { TimeZoneId } from "@stll/time";
+
 import type {
   DocumentProcessingMode,
   PracticeJurisdiction,
@@ -21,16 +23,26 @@ import {
 import type { FeatureAccessSnapshot } from "@/api/lib/auth/feature-access/policy";
 import { DEFAULT_MANAGED_AI_RESIDENCY } from "@/api/lib/chat/ai-data-policy";
 import type { ManagedAIResidency } from "@/api/lib/chat/ai-data-policy";
+import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import {
   DEFAULT_MATTER_NUMBER_PADDING,
   DEFAULT_MATTER_NUMBER_PATTERN,
 } from "@/api/lib/matter-reference";
+import {
+  effectiveOrganizationTimeZone,
+  ORGANIZATION_TIME_ZONE_SOURCE,
+} from "@/api/lib/organization-time-zone";
 
 const config = {
   description:
     "Read the organization's general settings: document processing mode, " +
     "matter-number pattern and padding, practice jurisdictions, prompt " +
-    "caching, memory extraction, and time policy. An organization that has never saved " +
+    "caching, memory extraction, time policy, and the time zone whose calendar " +
+    "decides the organization's day. declaredFeatureIds identifies policies in force; " +
+    "capabilities contains caller decisions; deploymentFeatures supplies deployment availability. " +
+    "timeZoneSource says whether the zone was " +
+    "chosen or derived from the primary practice jurisdiction (Europe/Prague " +
+    "for CZ and SK, UTC otherwise). An organization that has never saved " +
     "settings gets the defaults rather than an error.",
   permissions: { workspace: ["read"] },
   accountAccess: ACCOUNT_ACCESS.sandbox,
@@ -55,12 +67,17 @@ type OrganizationSettingsRow = {
   timeEditWindowDays: number;
   timeLockedThroughMonth: string | null;
   timeNarrativeRequired: boolean;
+  timeZone: TimeZoneId | null;
 };
 
 export const projectOrganizationSettingsRow = (
   row: OrganizationSettingsRow | null | undefined,
   snapshot: FeatureAccessSnapshot,
 ) => ({
+  declaredFeatureIds: Array.from(snapshot.decisions.keys()),
+  deploymentFeatures: {
+    legalLists: isDeploymentFeatureEnabled("FEATURE_LEGAL_LISTS"),
+  },
   capabilities: Object.fromEntries(
     Array.from(
       snapshot.decisions,
@@ -91,6 +108,14 @@ export const projectOrganizationSettingsRow = (
   timeLockedThroughMonth: row?.timeLockedThroughMonth ?? null,
   timeNarrativeRequired:
     row?.timeNarrativeRequired ?? DEFAULT_TIME_NARRATIVE_REQUIRED,
+  timeZone: effectiveOrganizationTimeZone({
+    timeZone: row?.timeZone ?? null,
+    practiceJurisdictions: arrayOrEmpty(row?.practiceJurisdictions),
+  }),
+  timeZoneSource:
+    (row?.timeZone ?? null) === null
+      ? ORGANIZATION_TIME_ZONE_SOURCE.PRACTICE_JURISDICTION
+      : ORGANIZATION_TIME_ZONE_SOURCE.ORGANIZATION,
 });
 
 const readOrganizationSettings = createSafeRootHandler(
@@ -112,6 +137,7 @@ const readOrganizationSettings = createSafeRootHandler(
             timeEditWindowDays: true,
             timeLockedThroughMonth: true,
             timeNarrativeRequired: true,
+            timeZone: true,
           },
         }),
       ),

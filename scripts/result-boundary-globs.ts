@@ -53,6 +53,7 @@ export const RESULT_CONVENTION_ENABLED_GLOBS = [
   "apps/api/src/handlers/me/**/*.ts",
   "apps/api/src/handlers/memories/**/*.ts",
   "apps/api/src/handlers/notifications/**/*.ts",
+  "apps/api/src/handlers/operator/**/*.ts",
   "apps/api/src/handlers/number-series/**/*.ts",
   "apps/api/src/handlers/vat-rates/**/*.ts",
   "apps/api/src/handlers/organization-settings/**/*.ts",
@@ -91,6 +92,7 @@ export const RESULT_CONVENTION_ENABLED_GLOBS = [
   "apps/api/src/lib/infosoud/**/*.ts",
   "apps/api/src/lib/json-schema/**/*.ts",
   "apps/api/src/lib/lists/**/*.ts",
+  "apps/api/src/lib/machine-api-keys/**/*.ts",
   "apps/api/src/lib/markdown/**/*.ts",
   "apps/api/src/lib/mcp-connectors/**/*.ts",
   "apps/api/src/lib/memory/**/*.ts",
@@ -123,6 +125,7 @@ export const RESULT_CONVENTION_ENABLED_GLOBS = [
   "apps/web/src/components/billing/**/*.{ts,tsx}",
   "apps/web/src/components/public-law-table/**/*.{ts,tsx}",
   "apps/web/src/components/references/**/*.{ts,tsx}",
+  "apps/web/src/components/viewer/**/*.{ts,tsx}",
   "apps/web/src/features/avt/**/*.{ts,tsx}",
   "apps/web/src/features/command-palette/**/*.{ts,tsx}",
   "apps/web/src/features/desktop/**/*.{ts,tsx}",
@@ -137,6 +140,7 @@ export const RESULT_CONVENTION_ENABLED_GLOBS = [
   "apps/web/src/lib/web-search/**/*.{ts,tsx}",
   "apps/web/src/queries/**/*.{ts,tsx}",
   "apps/web/src/routes/-protected-app/**/*.{ts,tsx}",
+  "apps/web/src/routes/consent/**/*.{ts,tsx}",
   "apps/web/src/routes/dev/**/*.{ts,tsx}",
   "apps/web/src/routes/sitemaps/**/*.{ts,tsx}",
   "apps/web/src/stores/**/*.{ts,tsx}",
@@ -173,6 +177,9 @@ export const RESULT_CONVENTION_ENABLED_GLOBS = [
 ] as const;
 
 export const RESULT_BOUNDARY_GLOBS = [
+  // TanStack Query consumes read failures through queryFn Promise rejection;
+  // this adapter translates typed Result errors at that framework boundary.
+  "apps/web/src/lib/errors/query-result.ts",
   // Better Auth invokes these hooks and consumes rejected APIError values.
   "apps/api/src/lib/auth/demo-account-hooks.ts",
   // Better Auth consumes adapter failures through Promise rejection.
@@ -239,6 +246,10 @@ export const RESULT_BOUNDARY_GLOBS = [
   // The publisher HTTP boundary keeps the fetch-compatible rejection contract;
   // adapters convert its typed failures to Result at their ingestion boundary.
   "apps/api/src/handlers/case-law/ingestion/adapters/retry.ts",
+  // The CLI entry point catches the dynamic load of the application shell so
+  // a checkout without installed packages gets one actionable line; it cannot
+  // import the Result library, which is one of the packages that may be missing.
+  "packages/cli/src/cli.ts",
   "packages/start-runtime/src/runtime.ts",
   "packages/ssr-testkit/src/assert-document.ts",
   "packages/property-testing/src/index.ts",

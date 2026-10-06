@@ -574,7 +574,9 @@ describe("detect-e2e-changes", () => {
     for (const leg of ["api", "web", "rest"]) {
       const codeQuality = workflowJob(`code-quality-${leg}`);
       expect(plan).not.toContain(".github/*|.provenance.yml|provenance/*)");
-      expect(plan).toContain(".provenance.yml|provenance/*)");
+      expect(plan).toContain(
+        "bun scripts/ci-package-scope.ts --package-checks",
+      );
       expect(codeQuality).toContain(
         `EVENT_NAME: ${githubExpression("github.event_name")}`,
       );
@@ -721,19 +723,18 @@ describe("detect-e2e-changes", () => {
                     cancelled: () => cancelled,
                   };
                   expect(Boolean(evaluateExpression(predicate, context))).toBe(
-                    planned &&
+                    event !== "pull_request" &&
+                      planned &&
                       (trusted || event === "workflow_dispatch") &&
                       (!buildRequired ||
                         webResult === "success" ||
                         heavyResult === "success") &&
                       (event !== "merge_group" || !cancelled),
                   );
-                  if (predicate.includes("queue_depth")) {
-                    context.needs["ci-plan"].outputs.queue_depth = "thin";
-                    expect(
-                      Boolean(evaluateExpression(predicate, context)),
-                    ).toBe(false);
-                  }
+                  context.needs["ci-plan"].outputs.queue_depth = "thin";
+                  expect(Boolean(evaluateExpression(predicate, context))).toBe(
+                    false,
+                  );
                 }
               }
             }
@@ -846,7 +847,15 @@ describe("detect-e2e-changes", () => {
     });
     const suites = mainHeavyContract.jobs["suites"];
     expect(suites?.with?.["heavy_only"]).toBe(true);
-    expect(suites?.if).toBe("needs.validate.result == 'success'");
+    for (const result of ["success", "failure", "cancelled", "skipped"]) {
+      for (const run of ["true", "false"]) {
+        expect(
+          evaluateExpression(requiredExpression(suites?.if), {
+            needs: { validate: { result, outputs: { run } } },
+          }),
+        ).toBe(result === "success" && run === "true");
+      }
+    }
     const callerSha = evaluateExpression(
       requiredExpression(suites?.with?.["sha"]),
       { needs: { validate: { outputs: { sha: forwardedSha } } } },
@@ -1046,18 +1055,17 @@ describe("detect-e2e-changes", () => {
                       Boolean(evaluateExpression(predicate, context)),
                       `${event}/${depth}/${planned}/${trusted}/${webResult}/${heavyResult}/${heavyOnly}/${cancelled}`,
                     ).toBe(
-                      planned &&
+                      event !== "pull_request" &&
+                        planned &&
                         (trusted || event === "workflow_dispatch") &&
                         (webResult === "success" ||
                           heavyResult === "success") &&
                         (event !== "merge_group" || !cancelled),
                     );
-                    if (predicate.includes("queue_depth")) {
-                      context.needs["ci-plan"].outputs.queue_depth = "thin";
-                      expect(
-                        Boolean(evaluateExpression(predicate, context)),
-                      ).toBe(false);
-                    }
+                    context.needs["ci-plan"].outputs.queue_depth = "thin";
+                    expect(
+                      Boolean(evaluateExpression(predicate, context)),
+                    ).toBe(false);
                   }
                 }
               }
@@ -1180,6 +1188,14 @@ describe("detect-e2e-changes", () => {
     const bunSetup = workflowStep(workflowJob("ci-browser"), "Setup Bun");
     expect(bunSetup).toContain("@oven/bun-linux-x64@$version");
     expect(bunSetup).toContain("--ignore-scripts");
+    // The cached owner's pinned setup-bun reuses this standard install path.
+    expect(bunSetup).toContain('bin="$HOME/.bun/bin"');
+    const cachedSetup = workflowStep(
+      workflowJob("ci-browser"),
+      "Restore Bun install cache",
+    );
+    expect(cachedSetup).toContain("stella/.github/actions/setup-bun-cached@");
+    expect(cachedSetup).toContain("bun-version-file: package.json");
   });
 
   test("isolates cross-engine stack redaction from Chromium E2E", () => {

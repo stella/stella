@@ -30,9 +30,9 @@ instructions, because an orchestrator picks tools from the names it was handed:
 - `/mcp-documents`: the least-privilege document surface. Document tools plus
   the version-upload lifecycle through `invoke_capability`, whose capability IDs
   are allowlisted for that surface.
-- `/mcp-law`: the public legal corpus. Exactly ten read tools (`search`,
+- `/mcp-law`: the public legal corpus. Exactly eleven read tools (`search`,
   `fetch`, `search_case_law`, `lookup_case_law`, `read_case_law_decision`,
-  `read_case_law_citations`, `search_legislation`, `read_statute`,
+  `read_case_law_citations`, `case_law_coverage`, `search_legislation`, `read_statute`,
   `read_statute_provisions`, `read_provision_history`) under `stella:search`
   and `stella:read`. No matter, document, contact or billing data is reachable
   through it. `search`/`fetch` are the OpenAI-compatible pair, defined and
@@ -342,3 +342,20 @@ behind the estimates with the Anthropic count_tokens endpoint; it needs
 - `server.ts` and `server-core.ts`: MCP HTTP transport wiring.
 - `../handlers/mcp/routes-core.ts`: Elysia routes that expose the MCP resources.
 - `../handlers/mcp-connectors/`: connector management APIs used by the web app.
+
+## Output projection contracts
+
+Bind successful payloads with `projectionPayload(schema, payload)` from
+`lib/projection-totality.ts` before a handler return annotation widens their
+source types. It checks undeclared fields recursively, including forwarded
+objects, arrays, unions and spreads. A domain field must be declared in the
+strict schema or explicitly removed when constructing the payload. Open JSON
+fields remain explicit schema decisions. Dispatch still strict-parses the
+served result; the compile-time gate does not replace runtime validation.
+
+The `weak-mcp-projection-ties` ratchet prevents new satisfies-only projection
+ties. `contracts/mcp-output-projection.ts` exercises producer-field drift and
+binds the case-law facet tree to its source type. The case-law source-facet
+database tests feed real SQL output through the production count builder and
+the MCP projection, covering exact counts, lower bounds and unknown-field
+rejection.

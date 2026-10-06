@@ -24,6 +24,7 @@ import { ChatComposerActionButton } from "@/components/chat/chat-composer-action
 import { ComposerControlSlot } from "@/components/chat/composer-control-slot";
 import { ComposerPlusMenu } from "@/components/chat/composer-plus-menu";
 import { ComposerVeil } from "@/components/chat/composer-veil";
+import { useDockedChatSlotRef } from "@/components/chat/docked-chat-stack";
 
 /**
  * Styled placeholder label rendered in the prompt bar when the editor
@@ -189,38 +190,65 @@ type DockedComposerProps = {
  * z-40) so the two never fight where they meet, and the chips sit below
  * it (z-30) so an open thread wins the overlap.
  */
-export const DockedComposer = ({ chips, bar, dock }: DockedComposerProps) => (
-  <div
-    className={cn(
-      "pointer-events-none absolute inset-x-0 bottom-3.5 flex flex-col items-center",
-      DOCKED_COMPOSER_INSET_START_CLASS,
-      OVERLAY_LAYER_CLASS_NAMES.chrome,
-    )}
-  >
-    <ComposerVeil
-      className={cn("mx-auto", DOCKED_COMPOSER_VEIL_WIDTH_CLASS)}
-      variant="pane"
-    />
-    {chips !== undefined && (
-      <div
-        className={cn(
-          "pointer-events-auto relative z-30 px-1",
-          DOCKED_COMPOSER_WIDTH_CLASS,
-        )}
-      >
-        {chips}
-      </div>
-    )}
+export const DockedComposer = ({ chips, bar, dock }: DockedComposerProps) => {
+  const threadSlotRef = useDockedChatSlotRef("thread");
+  const reviewSlotRef = useDockedChatSlotRef("review");
+  return (
     <div
       className={cn(
-        "pointer-events-auto relative z-50 flex flex-col",
-        DOCKED_COMPOSER_WIDTH_CLASS,
+        "pointer-events-none absolute inset-x-0 bottom-3.5 flex flex-col items-center",
+        DOCKED_COMPOSER_INSET_START_CLASS,
+        OVERLAY_LAYER_CLASS_NAMES.chrome,
       )}
     >
-      {bar}
-      {/* No extra top margin: `ComposerStatusRow` owns the single
-            bar-to-row gap (mt-1.5), matching the main chat tray's rhythm. */}
-      {dock !== undefined && <div className="px-1">{dock}</div>}
+      {/* The docked surfaces of this host (thread card, review pill) render
+          into these slots: same column, same width, stacked on the bar with
+          one gap, so they cannot drift from the composer on any route. They
+          sit outside the veil's box, which belongs to the composer alone. */}
+      <div
+        className={cn(
+          "pointer-events-auto relative z-40 mb-2 empty:hidden",
+          DOCKED_COMPOSER_WIDTH_CLASS,
+        )}
+        data-slot="docked-chat-thread"
+        ref={threadSlotRef}
+      />
+      <div
+        className={cn(
+          "pointer-events-auto relative mb-2 empty:hidden",
+          DOCKED_COMPOSER_WIDTH_CLASS,
+        )}
+        data-slot="docked-chat-review"
+        ref={reviewSlotRef}
+      />
+      <div className="relative flex w-full flex-col items-center">
+        <ComposerVeil
+          className={cn("mx-auto", DOCKED_COMPOSER_VEIL_WIDTH_CLASS)}
+          variant="pane"
+        />
+        {chips !== undefined && (
+          <div
+            className={cn(
+              "pointer-events-auto relative z-30 px-1",
+              DOCKED_COMPOSER_WIDTH_CLASS,
+            )}
+          >
+            {chips}
+          </div>
+        )}
+        <div
+          className={cn(
+            "pointer-events-auto relative z-50 flex flex-col",
+            DOCKED_COMPOSER_WIDTH_CLASS,
+          )}
+          data-slot="docked-chat-composer"
+        >
+          {bar}
+          {/* No extra top margin: `ComposerStatusRow` owns the single
+                bar-to-row gap (mt-1.5), matching the main chat tray's rhythm. */}
+          {dock !== undefined && <div className="px-1">{dock}</div>}
+        </div>
+      </div>
     </div>
-  </div>
-);
+  );
+};

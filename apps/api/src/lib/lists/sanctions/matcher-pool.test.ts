@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { Worker } from "node:worker_threads";
+import { MessageChannel, Worker } from "node:worker_threads";
 
 import {
   buildScreeningIndex,
@@ -11,8 +11,16 @@ import type { ParsedList } from "@stll/sanctions";
 
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
-import { createSanctionsMatcherPool } from "./matcher-pool";
+import {
+  createSanctionsMatcherPool,
+  SANCTIONS_MATCHER_CONFIG,
+} from "./matcher-pool";
 import type { SanctionsMatcherRequest } from "./matcher-protocol";
+import { createMatcherTestClock } from "./test-fixtures/matcher-test-clock";
+import { recordingMatcherWorker } from "./test-fixtures/recording-matcher-worker";
+
+const MATCHER_WORK_BUDGET = 2_000_000;
+const MAXIMUM_TRANSFER_ENTRIES = 1000;
 
 const list = (name: string): ParsedList => ({
   version: { source: "eu", publishedAt: "2026-09-20", fileId: null },
@@ -52,39 +60,66 @@ const actualWorker = () =>
 for (const fault of ["hang", "crash"] as const) {
   test(`${fault} returns unavailable, recycles the worker, and the next request answers`, async () => {
     let spawned = 0;
+    const clock = createMatcherTestClock();
+    const entered = Promise.withResolvers<undefined>();
+    const { port1, port2 } = new MessageChannel();
+    port1.once("message", () => entered.resolve(undefined));
+    const crashed = Promise.withResolvers<undefined>();
     const pool = createSanctionsMatcherPool({
       deadlineMs: 150,
+      clock,
       createWorker: () => {
         spawned += 1;
-        return spawned === 1
-          ? new Worker(
-              new URL("test-fixtures/matcher-fault-worker.ts", import.meta.url),
-              { workerData: fault },
-            )
-          : actualWorker();
+        const worker =
+          spawned === 1
+            ? new Worker(
+                new URL(
+                  "test-fixtures/matcher-fault-worker.ts",
+                  import.meta.url,
+                ),
+                {
+                  workerData: { fault, acknowledgement: port2 },
+                  transferList: [port2],
+                },
+              )
+            : actualWorker();
+        if (spawned === 1) {
+          worker.once("exit", () => crashed.resolve(undefined));
+        }
+        return worker;
       },
     });
     try {
-      const start = performance.now();
-      expect(
-        await pool.run(
-          async (session) => await session.match(request("Acme Trading")),
-        ),
-      ).toBeNull();
-      expect(performance.now() - start).toBeLessThan(500);
+      const failed = pool.run(
+        async (session) => await session.match(request("Acme Trading")),
+      );
+      await entered.promise;
+      // Reverting to wall-clock scheduling fails here before any worker timing matters.
+      expect(clock.pending()).toEqual([150]);
+      if (fault === "hang") {
+        clock.advance(150);
+      } else {
+        await crashed.promise;
+      }
+      expect(await failed).toBeNull();
+      expect(clock.pending()).toEqual([]);
       const next = await pool.run(
         async (session) => await session.match(request("Acme Trading")),
+        // Recycling starts a cold worker; retain the short fault deadline above.
+        { deadlineMs: SANCTIONS_MATCHER_CONFIG.warmupDeadlineMs },
       );
       expect(next?.status).toBe("screened");
       expect(spawned).toBe(2);
     } finally {
       await pool.close();
+      port1.close();
+      port2.close();
     }
   });
 }
 
 test("cached worker results match direct screening and replace changed editions", async () => {
-  const pool = createSanctionsMatcherPool({ deadlineMs: 2000 });
+  const pool = createSanctionsMatcherPool({ clock: createMatcherTestClock() });
   try {
     const first = request("Acme Trading");
     const expected = screen(
@@ -135,7 +170,8 @@ test("bundled runtime loads the deployed matcher worker", async () => {
     writeFileSync(
       entrypoint,
       `import { createSanctionsMatcherPool } from ${JSON.stringify(path.join(import.meta.dir, "matcher-pool.ts"))};
-const pool = createSanctionsMatcherPool({ deadlineMs: 2000 });
+import { createMatcherTestClock } from ${JSON.stringify(path.join(import.meta.dir, "test-fixtures/matcher-test-clock.ts"))};
+const pool = createSanctionsMatcherPool({ clock: createMatcherTestClock() });
 const response = await pool.run(async (session) => await session.match(${JSON.stringify(request("Acme Trading"))}));
 await pool.close();
 if (response?.status !== "screened" || response.result.possibleMatches.length !== 1) { process.exit(1); }
@@ -166,7 +202,7 @@ if (response?.status !== "screened" || response.result.possibleMatches.length !=
   }
 });
 
-test("cold construction and adversarial warm matching leave timers responsive", async () => {
+test("cold construction and adversarial warm matching stay within work budgets", async () => {
   const template = list("Acme").entries.at(0);
   if (template === undefined) {
     throw new Error("Missing matcher fixture entry");
@@ -184,8 +220,20 @@ test("cold construction and adversarial warm matching leave timers responsive", 
       ],
     })),
   };
-  const pool = createSanctionsMatcherPool({ deadlineMs: 5000 });
+  const recorded = recordingMatcherWorker();
+  const pool = createSanctionsMatcherPool({
+    clock: createMatcherTestClock(),
+    createWorker: recorded.createWorker,
+  });
+  const index = buildScreeningIndex([corpus]);
   const timed = async (name: string, cold: boolean) => {
+    // Bound vocabulary lookups, postings and scoring independently of elapsed time.
+    const expected = screen(
+      index,
+      { name, entityType: "organisation" },
+      { cutoff: DEFAULT_CUTOFF, limit: 10, maxWork: MATCHER_WORK_BUDGET },
+    ).unwrap();
+    const before = { ...recorded.work };
     let previous = performance.now();
     const start = previous;
     let maxGapMs = 0;
@@ -203,15 +251,26 @@ test("cold construction and adversarial warm matching leave timers responsive", 
       );
       const totalMs = performance.now() - start;
       maxGapMs = Math.max(maxGapMs, performance.now() - previous);
-      expect(response).not.toBeNull();
-      expect(ticks).toBeGreaterThan(0);
-      expect(maxGapMs).toBeLessThan(50);
+      expect(response).toEqual({ status: "screened", result: expected });
+      // Each query screens once; only the cold query transfers the corpus,
+      // in bounded chunks rather than one event-loop-blocking message.
+      expect(recorded.work.screenings - before.screenings).toBe(1);
+      expect(recorded.work.entries - before.entries).toBe(
+        cold ? corpus.entries.length : 0,
+      );
+      expect(recorded.work.entryBatches - before.entryBatches).toBe(
+        cold ? Math.ceil(corpus.entries.length / MAXIMUM_TRANSFER_ENTRIES) : 0,
+      );
+      expect(recorded.work.maximumBatchEntries).toBeLessThanOrEqual(
+        MAXIMUM_TRANSFER_ENTRIES,
+      );
       console.info(
         JSON.stringify({
           workerMatcher: name,
           cold,
           totalMs: Number(totalMs.toFixed(2)),
           maxGapMs: Number(maxGapMs.toFixed(2)),
+          ticks,
         }),
       );
       return response;
@@ -235,7 +294,8 @@ test("cold construction and adversarial warm matching leave timers responsive", 
 }, 20_000);
 
 test("deadline replies retain admission until unfinished operations settle", async () => {
-  const pool = createSanctionsMatcherPool({ size: 2, deadlineMs: 20 });
+  const clock = createMatcherTestClock();
+  const pool = createSanctionsMatcherPool({ size: 2, deadlineMs: 20, clock });
   const held = Promise.withResolvers<undefined>();
   let started = 0;
   let unfinished = 0;
@@ -250,7 +310,13 @@ test("deadline replies retain admission until unfinished operations settle", asy
   };
   try {
     for (const _attempt of Array.from({ length: 8 })) {
-      expect(await pool.run(operation)).toBeNull();
+      const pending = pool.run(operation);
+      await new Promise<void>((resolve) => {
+        setImmediate(resolve);
+      });
+      expect(clock.pending()).toEqual([20]);
+      clock.advance(20);
+      expect(await pending).toBeNull();
     }
     expect(started).toBe(2);
     expect(unfinished).toBe(2);
@@ -270,6 +336,7 @@ test("deadline replies retain admission until unfinished operations settle", asy
 });
 
 test("late retired-worker errors cannot release a held acquisition or a replacement worker", async () => {
+  const clock = createMatcherTestClock();
   const termination = Promise.withResolvers<number>();
   const acquisition = Promise.withResolvers<undefined>();
   const workers: {
@@ -282,6 +349,7 @@ test("late retired-worker errors cannot release a held acquisition or a replacem
   const pool = createSanctionsMatcherPool({
     size: 1,
     deadlineMs: 20,
+    clock,
     createWorker: () => {
       const listeners = new Map<string, () => void>();
       const state = {
@@ -320,7 +388,13 @@ test("late retired-worker errors cannot release a held acquisition or a replacem
     return "settled";
   };
   try {
-    expect(await pool.run(operation)).toBeNull();
+    const first = pool.run(operation);
+    await new Promise<void>((resolve) => {
+      setImmediate(resolve);
+    });
+    expect(clock.pending()).toEqual([20]);
+    clock.advance(20);
+    expect(await first).toBeNull();
     const retired = workers.at(0);
     expect(retired).toBeDefined();
     retired?.events.emit("error");
@@ -328,7 +402,10 @@ test("late retired-worker errors cannot release a held acquisition or a replacem
     await new Promise<void>((resolve) => {
       setImmediate(resolve);
     });
-    expect(await pool.run(operation)).toBeNull();
+    const queued = pool.run(operation);
+    expect(clock.pending()).toEqual([20]);
+    clock.advance(20);
+    expect(await queued).toBeNull();
     expect(started).toBe(1);
     expect(unfinished).toBe(1);
     expect(workers).toHaveLength(1);
@@ -353,6 +430,71 @@ test("late retired-worker errors cannot release a held acquisition or a replacem
   } finally {
     acquisition.resolve(undefined);
     termination.resolve(0);
+    await pool.close();
+  }
+});
+
+const inertWorker = () =>
+  asTestRaw<Worker>({
+    on: () => undefined,
+    unref: () => undefined,
+    terminate: async () => 0,
+  });
+
+const deadlineCases = [20, 150, 1000].flatMap((deadlineMs) =>
+  [-1, 0, 1].map((offset) => ({ deadlineMs, elapsedMs: deadlineMs + offset })),
+);
+
+test.each(deadlineCases)(
+  "a reply after $elapsedMs ms observes the $deadlineMs ms deadline even before the timer runs",
+  async ({ deadlineMs, elapsedMs }) => {
+    const clock = createMatcherTestClock();
+    const entered = Promise.withResolvers<undefined>();
+    const response = Promise.withResolvers<string>();
+    const pool = createSanctionsMatcherPool({
+      deadlineMs,
+      clock,
+      createWorker: inertWorker,
+    });
+    try {
+      const pending = pool.run(async () => {
+        entered.resolve(undefined);
+        return await response.promise;
+      });
+      await entered.promise;
+      expect(clock.pending()).toEqual([deadlineMs]);
+      clock.elapse(elapsedMs);
+      response.resolve("reply");
+      expect(await pending).toBe(elapsedMs < deadlineMs ? "reply" : null);
+      expect(clock.pending()).toEqual([]);
+    } finally {
+      response.resolve("reply");
+      await pool.close();
+    }
+  },
+);
+
+test("the deadline harness rejects the wall-clock mutation before worker timing matters", async () => {
+  const clock = createMatcherTestClock();
+  const entered = Promise.withResolvers<undefined>();
+  const release = Promise.withResolvers<undefined>();
+  // Omitting the injected clock restores the original scheduling behavior.
+  const pool = createSanctionsMatcherPool({
+    deadlineMs: 150,
+    createWorker: inertWorker,
+  });
+  try {
+    const pending = pool.run(async () => {
+      entered.resolve(undefined);
+      await release.promise;
+      return "reply";
+    });
+    await entered.promise;
+    expect(clock.pending()).not.toEqual([150]);
+    release.resolve(undefined);
+    await pending;
+  } finally {
+    release.resolve(undefined);
     await pool.close();
   }
 });

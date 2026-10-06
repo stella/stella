@@ -8,12 +8,13 @@
 
 import { describe, expect, test } from "bun:test";
 
+import type { DocumentAst } from "@stll/legal-ast/document-ast";
+
 import {
   isDeferredDocumentFetchable,
   readThroughDeferredDocument,
 } from "@/api/handlers/case-law/decisions/document-on-demand";
 import type { OnDemandDocumentDeps } from "@/api/handlers/case-law/decisions/document-on-demand";
-import type { DocumentAst } from "@/api/handlers/case-law/document-ast";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import type {

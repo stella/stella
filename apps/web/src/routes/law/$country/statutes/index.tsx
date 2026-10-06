@@ -57,6 +57,7 @@ import {
   useStatuteColumnGroups,
 } from "@/features/statutes/components/statute-table";
 import { createStatuteFilters } from "@/features/statutes/open-statute-match";
+import { useOpenStatuteTab } from "@/features/statutes/open-statute-tab";
 import {
   statuteFacetsOptions,
   statuteSearchInfiniteOptions,
@@ -88,6 +89,7 @@ import {
   createPublicLawHead,
 } from "@/lib/public-law-seo";
 import { ensureRouteInfiniteQueryData } from "@/lib/react-query";
+import { toSafeId } from "@/lib/safe-id";
 import { isPublicStatuteCountry } from "@/lib/statute-route";
 import {
   createStatuteListFilters,
@@ -254,6 +256,7 @@ function PublicStatutesIndex({
 }
 
 function PublicStatuteFullText({ query }: { query: string }) {
+  const openStatute = useOpenStatuteTab(query);
   const hydrated = useHydrated();
   const t = useTranslations();
   const country = Route.useParams({
@@ -370,6 +373,12 @@ function PublicStatuteFullText({ query }: { query: string }) {
               <Link
                 to="/law/$country/statutes/$slug"
                 params={{ country: params.country, slug: params.slug }}
+                search={{ q: query }}
+                onClick={openStatute.onLinkClick({
+                  ...hit,
+                  id: toSafeId<"legislationDocument">(hit.documentId),
+                  versionValidFrom: null,
+                })}
               >
                 {hit.title}
               </Link>

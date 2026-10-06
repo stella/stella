@@ -11,10 +11,7 @@ import {
   readDecisionHandler,
   readDecisionQuerySchema,
 } from "@/api/handlers/case-law/decisions/get";
-import {
-  DECISION_DOCUMENT_HYDRATION,
-  hydrateDeferredDocument,
-} from "@/api/handlers/case-law/decisions/get-deferred-document";
+import { hydrateDeferredDocument } from "@/api/handlers/case-law/decisions/get-deferred-document";
 import {
   listLatestDecisionsHandler,
   listLatestDecisionsQuerySchema,
@@ -82,6 +79,7 @@ import {
   createSafeBoundedPublicHandler,
   safePublicHandlerResponseSchemasWithStatusText,
 } from "@/api/lib/api-handlers";
+import { grantThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import { caseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
@@ -244,11 +242,10 @@ const readDecision = createSafePublicSubjectFollowUpHandler({
   // Unauthenticated: hydrates when a slot is free, but never persists
   // demand — see `recordDemand`. Runs after the gated transaction closes.
   followUp: async (read) => {
-    const hydrated = await hydrateDeferredDocument(
-      read,
-      false,
-      DECISION_DOCUMENT_HYDRATION.onDemand,
-    );
+    const hydrated = await hydrateDeferredDocument(read, false, {
+      type: "on-demand",
+      permit: grantThirdPartyOutboundPermit(),
+    });
     return "documentPending" in hydrated
       ? projectDecisionReader(hydrated)
       : hydrated;
@@ -282,11 +279,10 @@ const readDecisionBySlug = createSafePublicSubjectFollowUpHandler({
   read: async (subject, { query: { citationsCursor } }) =>
     await readDecisionHandler({ subject, citationsCursor }),
   followUp: async (read) => {
-    const hydrated = await hydrateDeferredDocument(
-      read,
-      false,
-      DECISION_DOCUMENT_HYDRATION.onDemand,
-    );
+    const hydrated = await hydrateDeferredDocument(read, false, {
+      type: "on-demand",
+      permit: grantThirdPartyOutboundPermit(),
+    });
     return "documentPending" in hydrated
       ? projectDecisionReader(hydrated)
       : hydrated;

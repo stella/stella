@@ -15,6 +15,7 @@ import type {
 } from "@/api/mcp/constants";
 import type { McpRequestContext } from "@/api/mcp/context";
 import type { McpErrorCode, McpValidationIssue } from "@/api/mcp/error-codes";
+import type { MCP_INTERNAL_TOOL_FAILURE } from "@/api/mcp/tool-call-outcome";
 import type { TextWindowResult } from "@/api/mcp/tool-utils";
 import type { McpWriteToolPermissions } from "@/api/mcp/write-tool-authority";
 
@@ -429,7 +430,13 @@ export type McpCompatSearchResult =
       url: string;
       workspaceId: string;
     }
-  | { kind: "corpus"; id: string; title: string; url: string };
+  | {
+      kind: "corpus";
+      id: string;
+      title: string;
+      url: string;
+      source_url?: string;
+    };
 
 /**
  * What one compat fetch is reading, and therefore whether its text is
@@ -487,14 +494,16 @@ export type InternalToolSuccess<TData = unknown> = {
 
 export type InternalToolStructuredError = {
   type: "structured";
-  code: McpErrorCode;
   message: string;
   hint?: string;
   issues?: readonly McpValidationIssue[];
   retryable?: boolean;
   contactUrl?: string;
   requestId?: string;
-};
+} & (
+  | { code: "internal_error"; readonly [MCP_INTERNAL_TOOL_FAILURE]: true }
+  | { code: Exclude<McpErrorCode, "internal_error"> }
+);
 
 export type InternalToolTextError = {
   type: "text";
@@ -543,6 +552,7 @@ export type McpEgressPlan<TPayload = unknown> =
     }
   | {
       egress: "compatFetch";
+      source_url?: string;
       cursor: string | undefined;
       id: string;
       maxChars: number;

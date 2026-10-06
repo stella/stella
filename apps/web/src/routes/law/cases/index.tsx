@@ -3,7 +3,6 @@ import { useRef, useState } from "react";
 import {
   keepPreviousData,
   useInfiniteQuery,
-  useQuery,
   useQueryClient,
 } from "@tanstack/react-query";
 import {
@@ -105,7 +104,11 @@ import {
 } from "@/features/case-law/components/decision-toolbar-controls";
 import { useDecisionColumnPreferences } from "@/features/case-law/decision-column-preferences";
 import { decisionReferenceColumnKind } from "@/features/case-law/decision-columns.logic";
-import { decisionFilterFacets } from "@/features/case-law/decision-filter-facets";
+import {
+  decisionFilterFacets,
+  prefetchDecisionFacetsAfterSearch,
+  useDecisionBrowseFacets,
+} from "@/features/case-law/decision-filter-facets";
 import type { DecisionFilterFacets } from "@/features/case-law/decision-filter-facets.logic";
 import { useOpenDecisionInspector } from "@/features/case-law/decision-row-host";
 import {
@@ -113,10 +116,7 @@ import {
   openDecisionMatch,
   readDecisionIntent,
 } from "@/features/case-law/open-decision-match";
-import {
-  decisionFacetsOptions,
-  decisionsInfiniteOptions,
-} from "@/features/case-law/queries/decisions";
+import { decisionsInfiniteOptions } from "@/features/case-law/queries/decisions";
 import type { CaseLawBrowseFacets } from "@/features/case-law/queries/decisions";
 import {
   QuestionColumnControls,
@@ -137,6 +137,8 @@ import { getMessageLocale, getTranslator } from "@/i18n/i18n-store";
 import type { TranslationKey } from "@/i18n/types";
 import { resolveCaseLawRouteCountry } from "@/lib/case-law-route";
 import { detached } from "@/lib/detached";
+import { readQueryResult } from "@/lib/errors/query-result";
+import { detachedUserAction } from "@/lib/errors/user-toast";
 import { pageTitle } from "@/lib/page-title";
 import {
   isSearchUnavailableError,
@@ -147,10 +149,7 @@ import {
   createPublicLawCanonicalUrl,
   createPublicLawHead,
 } from "@/lib/public-law-seo";
-import {
-  ensureRouteInfiniteQueryData,
-  ensureRouteQueryData,
-} from "@/lib/react-query";
+import { ensureRouteInfiniteQueryData } from "@/lib/react-query";
 import { optionalUuidSearchSchema } from "@/lib/schema";
 import { optionalLawSearchQuerySchema } from "@/routes/law/-search-query.logic";
 import { ssrStatusHeaders } from "@/ssr-response-status";
@@ -346,12 +345,9 @@ const resultsOrOutage = async <TRead,>(
     catch: (cause): Error =>
       cause instanceof Error ? cause : new UnhandledException({ cause }),
   });
-  if (Result.isError(result)) {
-    return isSearchUnavailableError(result.error)
-      ? null
-      : await Promise.reject(result.error);
-  }
-  return result.value;
+  return Result.isError(result) && isSearchUnavailableError(result.error)
+    ? null
+    : readQueryResult(result);
 };
 
 /**
@@ -509,8 +505,10 @@ export const Route = createFileRoute("/law/cases/")({
     const walked =
       queryClient.getQueryData(decisionsOptions.queryKey)?.pages.length ?? 0;
     const wanted = publicLawPageNumber(deps.page);
-    const [decisionPages] = await Promise.all([
-      resultsOrOutage(
+    const decisionPages = await prefetchDecisionFacetsAfterSearch({
+      country: scope,
+      queryClient,
+      search: resultsOrOutage(
         ensureRouteInfiniteQueryData(queryClient, {
           ...decisionsOptions,
           ...(wanted > 1 &&
@@ -519,8 +517,7 @@ export const Route = createFileRoute("/law/cases/")({
             }),
         }),
       ),
-      ensureRouteQueryData(queryClient, decisionFacetsOptions(scope)),
-    ]);
+    });
 
     // The rows are one region of this page, so a search backend that cannot be
     // reached is that region's failure and not the route's: the box and the
@@ -688,13 +685,6 @@ function PublicCaseLawIndex({ routeState }: PublicCaseLawIndexProps) {
   const paneRef = useRef<HTMLDivElement>(null);
 
   const pageSize = publicLawPageSize(search.pageSize);
-  // Read, not suspended on: the loader primes this only on a cold arrival, and
-  // a jurisdiction switch must not take the whole page down for a list of
-  // court names. The previous facets stay until the new ones land.
-  const { data: browseFacets } = useQuery({
-    ...decisionFacetsOptions(scope),
-    placeholderData: keepPreviousData,
-  });
   const decisionsOptions = decisionsInfiniteOptions(filters, pageSize);
   const {
     data,
@@ -703,6 +693,8 @@ function PublicCaseLawIndex({ routeState }: PublicCaseLawIndexProps) {
     hasNextPage,
     isFetchingNextPage,
     isLoading,
+    isFetched: searchFetched,
+    fetchStatus: searchFetchStatus,
     isPlaceholderData,
     refetch,
   } = useInfiniteQuery({
@@ -710,6 +702,13 @@ function PublicCaseLawIndex({ routeState }: PublicCaseLawIndexProps) {
     // The chain the reader has walked stays loaded while the filters change,
     // so stepping between pages never blanks the table.
     placeholderData: keepPreviousData,
+  });
+  // The loader warms these after search; background navigations keep the
+  // same order without suspending the page on optional filter choices.
+  const { data: browseFacets } = useDecisionBrowseFacets({
+    country: scope,
+    searchFetched,
+    searchFetchStatus,
   });
   // A backend that cannot be reached is this region's failure, not the page's.
   // The loader lets it through for the same reason, so both the first render
@@ -822,7 +821,7 @@ function PublicCaseLawIndex({ routeState }: PublicCaseLawIndexProps) {
    * named, so it is fetched first and only then does the URL move on to it.
    */
   const walkForward = () => {
-    detached(
+    detachedUserAction(
       (async () => {
         const result = await fetchNextPage();
         const walked = result.data?.pages.length ?? walkedPageCount;
@@ -836,7 +835,10 @@ function PublicCaseLawIndex({ routeState }: PublicCaseLawIndexProps) {
           }),
         });
       })(),
-      "cases.walk-next-page",
+      {
+        context: "cases.walk-next-page",
+        failureMessage: t("errors.actionFailed"),
+      },
     );
   };
 
@@ -876,7 +878,9 @@ function PublicCaseLawIndex({ routeState }: PublicCaseLawIndexProps) {
     // touches it.
     shownQuestionIds,
     onShownQuestionIdsChange: (update) => {
-      detached(
+      // Adding or removing a question column is the reader's own press; a
+      // navigation that fails says so instead of leaving the table unchanged.
+      detachedUserAction(
         navigate({
           replace: true,
           search: (previous) => ({
@@ -884,7 +888,10 @@ function PublicCaseLawIndex({ routeState }: PublicCaseLawIndexProps) {
             questions: update(previous.questions ?? NO_SHOWN_QUESTIONS),
           }),
         }),
-        "cases.questions-navigate",
+        {
+          context: "cases.questions-navigate",
+          failureMessage: t("errors.actionFailed"),
+        },
       );
     },
   });
@@ -908,12 +915,15 @@ function PublicCaseLawIndex({ routeState }: PublicCaseLawIndexProps) {
   });
 
   const setPageSize = (next: PublicLawPageSize) => {
-    detached(
+    detachedUserAction(
       searchNavigation((previous) => ({
         ...previous,
         pageSize: publicLawPageSizeSearchValue(next),
       })),
-      "cases.page-size-navigate",
+      {
+        context: "cases.page-size-navigate",
+        failureMessage: t("errors.actionFailed"),
+      },
     );
   };
 
@@ -921,12 +931,15 @@ function PublicCaseLawIndex({ routeState }: PublicCaseLawIndexProps) {
   // other change here — the pending field text folded in, the page dropped —
   // because the words it requires are a different result set.
   const searchEveryWord = () => {
-    detached(
+    detachedUserAction(
       searchNavigation((previous) => ({
         ...previous,
         strict: STRICT_SEARCH_VALUE,
       })),
-      "cases.strict-navigate",
+      {
+        context: "cases.strict-navigate",
+        failureMessage: t("errors.actionFailed"),
+      },
     );
   };
 

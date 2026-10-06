@@ -12,6 +12,7 @@ import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
 import {
   Dialog,
+  DialogFormState,
   DialogFooter,
   DialogHeader,
   DialogPanel,
@@ -272,6 +273,10 @@ export const EmailAttachmentsFacet = ({
         open={saveTargetAttachment !== undefined}
       >
         <DialogPopup className="max-w-lg">
+          <DialogFormState
+            dirty={matterTarget !== null}
+            onDiscard={() => setMatterTarget(null)}
+          />
           <DialogHeader>
             <DialogTitle>{t("common.selectAMatter")}</DialogTitle>
           </DialogHeader>
@@ -562,6 +567,7 @@ const AttachmentPreviewContent = ({
   return (
     <MeasuredPdfProvider
       active
+      surface="email-attachment-pdf"
       fallback={{
         error: (
           <FacetMessage

@@ -15,6 +15,7 @@ import { Input } from "@stll/ui/input";
 import { TextSeparator } from "@stll/ui/separator";
 import { cn } from "@stll/ui/utils";
 
+import { QueryViewFeedback } from "@/components/query-view-feedback";
 import { SecretInput } from "@/components/secret-input";
 import { env } from "@/env";
 import { useInvalidateSession } from "@/hooks/use-invalidate-session";
@@ -32,9 +33,10 @@ import { notifyUserError } from "@/lib/errors/user-toast";
 import { isAcceptInvitationRedirect } from "@/lib/redirect";
 import { sanitizeHref } from "@/lib/sanitize-href";
 import { schemaFormOptions, emailSchema, toFormErrors } from "@/lib/schema";
+import { useQueryView } from "@/lib/use-query-view";
 
-import type { AuthCapabilities } from "./sign-in-panel.logic";
 import { resolveSignInOptions } from "./sign-in-panel.logic";
+import type { AuthCapabilities } from "./sign-in-panel.logic";
 
 type SignInPanelProps = {
   className?: string;
@@ -64,16 +66,6 @@ const authErrorResponseSchema = v.object({
 
 const BETTER_AUTH_SIGN_UP_EMAIL_PATH = "/api/auth/sign-up/email";
 const termsUrl = sanitizeHref(env.VITE_TERMS_URL) ?? "/terms";
-const authCapabilitiesFallback = {
-  emailOtp: !env.VITE_SELFHOST,
-  localPassword: false,
-  bootstrap: false,
-  social: {
-    google: false,
-    microsoft: false,
-  },
-} as const satisfies AuthCapabilities;
-
 const renderTermsLink = (chunks: ReactNode) => (
   <a
     className="hover:text-foreground underline"
@@ -85,18 +77,16 @@ const renderTermsLink = (chunks: ReactNode) => (
   </a>
 );
 
-export const SignInPanel = ({
+const SignInOptionsPanel = ({
   className,
   redirectTo,
   showHeading = true,
   onOtpSent,
-}: SignInPanelProps) => {
+  authCapabilities,
+}: SignInPanelProps & { authCapabilities: AuthCapabilities }) => {
   const t = useTranslations();
   const analytics = useAnalytics();
   const navigate = useNavigate();
-  const { data: authCapabilities = authCapabilitiesFallback } = useQuery(
-    authCapabilitiesOptions,
-  );
   const [socialLoading, setSocialLoading] = useState<
     "google" | "microsoft" | null
   >(null);
@@ -178,7 +168,10 @@ export const SignInPanel = ({
     }),
   );
 
-  const formErrors = useSelector(form.store, (s) => toFormErrors(s.fieldMeta));
+  const { formErrors, dirty } = useSelector(form.store, (s) => ({
+    formErrors: toFormErrors(s.fieldMeta),
+    dirty: !s.isDefaultValue,
+  }));
 
   return (
     <div className={cn("flex w-full max-w-md flex-col gap-8", className)}>
@@ -256,6 +249,8 @@ export const SignInPanel = ({
 
       {showEmailOtp && (
         <Form
+          dirty={dirty}
+          onDiscard={() => form.reset()}
           errors={formErrors}
           onSubmit={(e) => {
             e.preventDefault();
@@ -412,10 +407,15 @@ const PasswordSignInForm = ({
       },
     }),
   );
-  const formErrors = useSelector(form.store, (s) => toFormErrors(s.fieldMeta));
+  const { formErrors, dirty } = useSelector(form.store, (s) => ({
+    formErrors: toFormErrors(s.fieldMeta),
+    dirty: !s.isDefaultValue,
+  }));
 
   return (
     <Form
+      dirty={dirty}
+      onDiscard={() => form.reset()}
       errors={formErrors}
       onSubmit={(e) => {
         e.preventDefault();
@@ -505,12 +505,17 @@ const BootstrapSignUpForm = ({
       },
     }),
   );
-  const formErrors = useSelector(form.store, (s) => toFormErrors(s.fieldMeta));
+  const { formErrors, dirty } = useSelector(form.store, (s) => ({
+    formErrors: toFormErrors(s.fieldMeta),
+    dirty: !s.isDefaultValue,
+  }));
 
   return (
     <div className="flex flex-col gap-3">
       <TextSeparator>{t("auth.createFirstAccount")}</TextSeparator>
       <Form
+        dirty={dirty}
+        onDiscard={() => form.reset()}
         errors={formErrors}
         onSubmit={(e) => {
           e.preventDefault();
@@ -715,3 +720,20 @@ const MicrosoftIcon = () => (
     <rect fill="#FFB900" height="9" width="9" x="11" y="11" />
   </svg>
 );
+
+export const SignInPanel = (props: SignInPanelProps) => {
+  const capabilitiesQuery = useQuery(authCapabilitiesOptions);
+  const capabilitiesView = useQueryView(capabilitiesQuery);
+  if (capabilitiesView.type !== "items") {
+    return <QueryViewFeedback view={capabilitiesView} />;
+  }
+  return (
+    <>
+      <QueryViewFeedback view={capabilitiesView} />
+      <SignInOptionsPanel
+        {...props}
+        authCapabilities={capabilitiesView.items}
+      />
+    </>
+  );
+};

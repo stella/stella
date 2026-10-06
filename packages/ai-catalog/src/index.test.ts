@@ -89,7 +89,7 @@ describe("direct OpenAI GPT-5.6 family", () => {
 
     for (const modelId of DIRECT_GPT_56_MODEL_IDS) {
       const displayName = DIRECT_GPT_56_DISPLAY_NAMES[modelId];
-      expect(getModelDisplayMetadata(modelId)).toEqual({
+      expect(getModelDisplayMetadata(modelId)).toMatchObject({
         displayName,
         iconProvider: "openai",
       });
@@ -113,6 +113,7 @@ describe("direct OpenAI GPT-5.6 family", () => {
     expect(getModelDisplayMetadata("gpt-5.6-sol")).toEqual({
       displayName: "GPT-5.6 Sol",
       iconProvider: "openai",
+      supersededBy: "gpt-6.1-sol",
     });
     expect(getModelRate("gpt-5.6-sol")).toBe(getModelRate("gpt-5.6"));
     expect(getContextWindowTokens("gpt-5.6-sol")).toBe(
@@ -132,9 +133,11 @@ describe("direct OpenAI GPT-5.6 family", () => {
       if (directModelId === undefined) {
         throw new Error("GPT-5.6 provider family is not aligned");
       }
-      expect(getModelDisplayMetadata(modelId)).toEqual(
-        getModelDisplayMetadata(directModelId),
-      );
+      // Successors differ by route; the product the picker shows does not.
+      expect(getModelDisplayMetadata(modelId)).toMatchObject({
+        displayName: getModelDisplayMetadata(directModelId)?.displayName,
+        iconProvider: getModelDisplayMetadata(directModelId)?.iconProvider,
+      });
       expect(getModelRate(modelId)).toBe(getModelRate(directModelId));
       expect(getContextWindowTokens(modelId)).toBe(
         getContextWindowTokens(directModelId),

@@ -35,6 +35,7 @@ import { captureError } from "@/api/lib/analytics/capture";
 import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
 import { assertUsageAvailableForHandler } from "@/api/lib/api-handlers";
 import { createBackgroundAuditRecorder } from "@/api/lib/audit-log";
+import { grantThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { BullMqWorkerContext } from "@/api/lib/bullmq-queue";
 import type { ManagedAIResidency } from "@/api/lib/chat/ai-data-policy";
@@ -755,6 +756,7 @@ const fillReportDocx = async ({
         values,
         scopedDb: actor.writeDb,
         organizationId: actor.organizationId,
+        thirdPartyOutboundPermit: grantThirdPartyOutboundPermit(),
         requiredFields: "enforce",
         // The export records use when it completes, not when the fill does.
         useRecording: "caller",
@@ -789,6 +791,7 @@ const fillReportDocx = async ({
       values,
       scopedDb: actor.writeDb,
       organizationId: actor.organizationId,
+      thirdPartyOutboundPermit: grantThirdPartyOutboundPermit(),
       requiredFields: "enforce",
       ...generators,
     }),

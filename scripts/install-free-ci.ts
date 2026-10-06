@@ -64,8 +64,16 @@ const isRecord = (value: unknown): value is Record<string, unknown> =>
 // ---------------------------------------------------------------------------
 // Shell lexing
 
+/** A heredoc's body, filled in once the lexer reads past the command's line. */
+type Heredoc = { delimiter: string; stripTabs: boolean; body: string };
+
 export type ShellEvent =
-  | { readonly type: "command"; readonly words: readonly string[] }
+  | {
+      readonly type: "command";
+      readonly words: readonly string[];
+      /** The heredoc on the command's standard input, if any. */
+      readonly stdin?: { readonly body: string };
+    }
   | { readonly type: "subshell-start" }
   | { readonly type: "subshell-end" }
   | { readonly type: "control-flow" }
@@ -98,6 +106,7 @@ type AppendShellCommandOptions = {
   words: string[];
   commandStart: number;
   controlFlow: boolean;
+  stdin: Heredoc | undefined;
 };
 
 const appendShellCommand = ({
@@ -105,13 +114,18 @@ const appendShellCommand = ({
   words,
   commandStart,
   controlFlow,
+  stdin,
 }: AppendShellCommandOptions) => {
   if (controlFlow || SHELL_CONTROL_FLOW.has(words[0] ?? "")) {
     // Precede substitutions too: they belong to this command's branch.
     events.splice(commandStart, 0, { type: "control-flow" });
   }
   if (words.length > 0) {
-    events.push({ type: "command", words });
+    events.push(
+      stdin === undefined
+        ? { type: "command", words }
+        : { type: "command", words, stdin },
+    );
   }
 };
 
@@ -140,7 +154,30 @@ const parameterEnd = (source: string, index: number): number | undefined => {
 type SkipHeredocBodiesOptions = {
   source: string;
   index: number;
-  pendingHeredocs: { delimiter: string; stripTabs: boolean }[];
+  pendingHeredocs: Heredoc[];
+};
+
+/** A heredoc on stdin, `null` for another stdin source, `undefined` for neither. */
+type Redirected = Heredoc | null | undefined;
+
+const nextStdin = (
+  current: Heredoc | undefined,
+  redirected: Redirected,
+): Heredoc | undefined =>
+  redirected === undefined ? current : (redirected ?? undefined);
+
+/** Queues the body a `<<` or `<<-` operator introduces; `null` otherwise. */
+const queueHeredoc = (
+  operator: string,
+  delimiter: string,
+  pending: Heredoc[],
+): Heredoc | null => {
+  if (operator !== "<<" && operator !== "<<-") {
+    return null;
+  }
+  const heredoc = { body: "", delimiter, stripTabs: operator === "<<-" };
+  pending.push(heredoc);
+  return heredoc;
 };
 
 const skipHeredocBodies = ({
@@ -149,15 +186,19 @@ const skipHeredocBodies = ({
   pendingHeredocs,
 }: SkipHeredocBodiesOptions): number => {
   let index = start;
-  for (const { delimiter, stripTabs } of pendingHeredocs.splice(0)) {
+  for (const heredoc of pendingHeredocs.splice(0)) {
+    const lines: string[] = [];
     while (index < source.length) {
       const end = source.indexOf("\n", index);
-      const line = source.slice(index, end === -1 ? source.length : end);
+      const raw = source.slice(index, end === -1 ? source.length : end);
+      const line = heredoc.stripTabs ? raw.replace(/^\t+/u, "") : raw;
       index = end === -1 ? source.length : end + 1;
-      if ((stripTabs ? line.replace(/^\t+/u, "") : line) === delimiter) {
+      if (line === heredoc.delimiter) {
         break;
       }
+      lines.push(line);
     }
+    heredoc.body = lines.join("\n");
   }
   return index;
 };
@@ -166,12 +207,13 @@ const skipHeredocBodies = ({
  * Splits shell source into simple commands, in execution order. Quotes are
  * removed; a command substitution (`$(…)`, backticks) or subshell becomes
  * its own subshell-delimited commands, ahead of the command that uses it.
- * Comments and heredoc bodies are skipped. It is not a full shell parser: an
+ * Comments are skipped; a heredoc on a command's standard input becomes its
+ * `stdin`, and other heredoc bodies are skipped. It is not a full shell parser: an
  * unterminated quote or substitution yields an `unparsed` event.
  */
 export const lexShell = (source: string): ShellEvent[] => {
   const events: ShellEvent[] = [];
-  const pendingHeredocs: { delimiter: string; stripTabs: boolean }[] = [];
+  const pendingHeredocs: Heredoc[] = [];
   let index = 0;
   let failure: string | undefined;
 
@@ -272,33 +314,30 @@ export const lexShell = (source: string): ShellEvent[] => {
     return consumed ? text : undefined;
   };
 
-  const readRedirection = (words: string[], adjacent: boolean): void => {
+  /** Reads one redirection; returns stdin's new source (see `nextStdin`). */
+  const readRedirection = (words: string[], adjacent: boolean): Redirected => {
     // A file-descriptor prefix (`2>&1`) belongs to the redirection.
-    if (adjacent && /^\d+$/u.test(words.at(-1) ?? "")) {
-      words.pop();
-    }
+    const descriptor =
+      adjacent && /^\d+$/u.test(words.at(-1) ?? "") ? words.pop() : undefined;
     const operator =
       /^(?:<<<|<<-|<<|>>|>&|<&|>\||[<>])/u.exec(source.slice(index))?.[0] ?? "";
     index += operator.length;
+    const readsStdin = operator.startsWith("<") && (descriptor ?? "0") === "0";
     while (isBlank(source[index] ?? "")) {
       index += 1;
     }
     if (source[index] === "(") {
       // Process substitution, `<(…)`: the caller reads it as a subshell.
-      return;
+      return readsStdin ? null : undefined;
     }
-    const target = readWord() ?? "";
-    if (operator === "<<" || operator === "<<-") {
-      pendingHeredocs.push({
-        delimiter: target,
-        stripTabs: operator === "<<-",
-      });
-    }
+    const heredoc = queueHeredoc(operator, readWord() ?? "", pendingHeredocs);
+    return readsStdin ? heredoc : undefined;
   };
 
   const readList = (closing: ")" | "`" | "}" | undefined): void => {
     let commandStart = events.length;
     let words: string[] = [];
+    let stdin: Heredoc | undefined;
     let wordEnd = -1;
     let compoundStart: number | undefined;
     const flush = (controlFlow = false) => {
@@ -307,9 +346,11 @@ export const lexShell = (source: string): ShellEvent[] => {
         words,
         commandStart: compoundStart ?? commandStart,
         controlFlow,
+        stdin,
       });
       compoundStart = undefined;
       words = [];
+      stdin = undefined;
       commandStart = events.length;
     };
     while (index < source.length) {
@@ -361,7 +402,7 @@ export const lexShell = (source: string): ShellEvent[] => {
         flush();
         index += 1;
       } else if (character === "<" || character === ">") {
-        readRedirection(words, wordEnd === index);
+        stdin = nextStdin(stdin, readRedirection(words, wordEnd === index));
       } else {
         const word = readWord();
         if (word !== undefined) {
@@ -592,6 +633,8 @@ const changeDirectory = ({ from, to }: ChangeDirectoryOptions): string => {
   return joined === "." ? "" : joined;
 };
 
+const TIMEOUT_DURATION = /^(?:\d+(?:\.\d*)?|\.\d+)[smhd]?$/u;
+
 /** The program and its arguments, past keywords, assignments and wrappers. */
 const programWords = (words: readonly string[]): readonly string[] => {
   let rest = words;
@@ -607,6 +650,46 @@ const programWords = (words: readonly string[]): readonly string[] => {
       while (rest.at(0)?.startsWith("-") === true) {
         rest = rest.slice(1);
       }
+    } else if (first === "timeout") {
+      rest = rest.slice(1);
+      while (rest.at(0)?.startsWith("-") === true) {
+        const option = rest.at(0);
+        if (option === "--") {
+          rest = rest.slice(1);
+          break;
+        }
+        if (["-k", "--kill-after", "-s", "--signal"].includes(option ?? "")) {
+          if (
+            ["-k", "--kill-after"].includes(option ?? "") &&
+            !TIMEOUT_DURATION.test(rest.at(1) ?? "")
+          ) {
+            return words;
+          }
+          rest = rest.slice(2);
+        } else if (
+          ["--preserve-status", "--foreground", "--verbose", "-v"].includes(
+            option ?? "",
+          ) ||
+          /^(?:--(?:kill-after|signal)=|-[ks].+)/u.test(option ?? "")
+        ) {
+          if (
+            /^(?:--kill-after=|-k.)/u.test(option ?? "") &&
+            !TIMEOUT_DURATION.test(
+              (option ?? "").replace(/^(?:--kill-after=|-k)/u, ""),
+            )
+          ) {
+            return words;
+          }
+          rest = rest.slice(1);
+        } else {
+          // --help/--version can exit successfully without running the child.
+          return words;
+        }
+      }
+      if (!TIMEOUT_DURATION.test(rest.at(0) ?? "")) {
+        return words;
+      }
+      rest = rest.slice(1); // Duration precedes the wrapped command.
     } else if (first === "bash" && rest.at(1) === "scripts/retry.sh") {
       rest = rest.slice(2);
     } else {
@@ -839,6 +922,8 @@ type BunFlagsOptions = {
   readonly args: readonly string[];
   readonly context: ClassifyContext;
   readonly cwd: string;
+  /** The heredoc body on the command's standard input, if any. */
+  readonly stdin: string | undefined;
 };
 
 type BunFlags =
@@ -855,7 +940,12 @@ type BunFlags =
   | { readonly type: "classified"; readonly classification: Classification };
 
 /** Reads the flags before Bun's subcommand, script or file. */
-const parseBunFlags = ({ args, context, cwd }: BunFlagsOptions): BunFlags => {
+const parseBunFlags = ({
+  args,
+  context,
+  cwd,
+  stdin,
+}: BunFlagsOptions): BunFlags => {
   const classified = (classification: Classification): BunFlags => ({
     classification,
     type: "classified",
@@ -873,6 +963,17 @@ const parseBunFlags = ({ args, context, cwd }: BunFlagsOptions): BunFlags => {
     }
     if (!arg.startsWith("-")) {
       break;
+    }
+    if (arg === "-") {
+      // `bun -` runs code from standard input: check it like `bun -e`.
+      if (stdin === undefined) {
+        return classified(unclassified("reads code from a non-heredoc stdin"));
+      }
+      return classified(
+        preloads.length > 0
+          ? unclassified("evaluates code with a preload")
+          : { code: stdin, cwd: dir, type: "eval" },
+      );
     }
     const [flag = "", inline] = arg.split(/[=](.*)/su);
     if (BUN_SWITCHES.has(flag)) {
@@ -963,6 +1064,8 @@ type ClassifyBunOptions = {
   readonly context: ClassifyContext;
   readonly cwd: string;
   readonly words: readonly string[];
+  /** The heredoc body on the command's standard input, if any. */
+  readonly stdin: string | undefined;
 };
 
 /** Classifies one `bun`, `bunx` or `npx` command run in `cwd`. */
@@ -970,6 +1073,7 @@ const classifyBun = ({
   context,
   cwd,
   words,
+  stdin,
 }: ClassifyBunOptions): Expansion[] => {
   const command = words.join(" ");
   const single = (classification: Classification): Expansion[] => [
@@ -985,7 +1089,7 @@ const classifyBun = ({
   if (program !== "bun") {
     return single({ type: "fetch" });
   }
-  const flags = parseBunFlags({ args, context, cwd });
+  const flags = parseBunFlags({ args, context, cwd, stdin });
   if (flags.type === "classified") {
     return single(flags.classification);
   }
@@ -1167,6 +1271,7 @@ const walkCommands = ({
           for (const expansion of classifyBun({
             context,
             cwd: current,
+            stdin: event.stdin?.body,
             words,
           })) {
             const { classification } = expansion;

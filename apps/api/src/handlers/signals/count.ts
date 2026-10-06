@@ -25,7 +25,7 @@ const config = {
       t.String({
         format: "date",
         description:
-          "The caller's calendar day (YYYY-MM-DD); defaults to the server's UTC day",
+          "The caller's calendar day (YYYY-MM-DD); defaults to the organization's day in its time zone",
       }),
     ),
   }),
@@ -35,6 +35,9 @@ const countInbox = createSafeRootHandler(
   config,
   async function* ({ safeDb, session, user, memberRole, query }) {
     const organizationId = session.activeOrganizationId;
+    const asOf = yield* Result.await(
+      resolveWorkAsOf({ asOf: query.asOf, safeDb, organizationId }),
+    );
     // One statement for both halves: the badge polls on every page.
     const rows = yield* Result.await(
       safeDb((tx) =>
@@ -54,7 +57,7 @@ const countInbox = createSafeRootHandler(
               dueAssignedTaskCondition({
                 organizationId,
                 userId: user.id,
-                asOf: resolveWorkAsOf(query.asOf),
+                asOf,
               }),
             ),
           })

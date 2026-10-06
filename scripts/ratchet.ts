@@ -60,6 +60,7 @@ import {
   countRootConnectionShapes,
   countRootConnectionTypeImports,
 } from "./root-connection-shapes";
+import { schemaIntrospectionPaths } from "./schema-introspection";
 import {
   ALL_SOURCE_GLOBS,
   isExcludedSource,
@@ -1178,6 +1179,34 @@ const countDirectRedistributableCalls: FileCounter = (content, { file }) => {
     node.forEachChild(visit);
   };
   visit(sourceFile);
+  return total;
+};
+
+// A satisfies tie only checks fresh literal keys. Forwarded domain objects
+// need projectionPayload's recursive exactness gate before return annotations.
+const countWeakMcpProjectionTies: FileCounter = (content, { file }) => {
+  const source = parseSource({ fileName: file, text: content });
+  let total = 0;
+  const visit = (node: ts.Node) => {
+    if (ts.isSatisfiesExpression(node)) {
+      const type = node.type;
+      if (
+        ts.isTypeReferenceNode(type) &&
+        ts.isQualifiedName(type.typeName) &&
+        type.typeName.right.text === "InferInput" &&
+        type.typeArguments?.some(
+          (argument) =>
+            ts.isTypeQueryNode(argument) &&
+            ts.isIdentifier(argument.exprName) &&
+            argument.exprName.text.endsWith("_PROJECTION"),
+        )
+      ) {
+        total += 1;
+      }
+    }
+    node.forEachChild(visit);
+  };
+  visit(source);
   return total;
 };
 
@@ -2929,6 +2958,22 @@ const RESULT_BOUNDARY_METRICS = [
 
 export const RATCHET_METRICS: readonly RatchetMetric[] = [
   {
+    scope: "repo",
+    id: "schema-introspection-files",
+    description:
+      "Shared schema introspection paths, gated independently; additions require a justified allowance and pass the schema-only dependency guard",
+    perFile: true,
+    count: (context) => {
+      const paths = schemaIntrospectionPaths(
+        readSource(context, "scripts/ownership.ts"),
+      );
+      return {
+        count: paths.length,
+        files: Object.fromEntries(paths.map((file) => [file, 1])),
+      };
+    },
+  },
+  {
     scope: "file",
     id: "direct-status-writes",
     description:
@@ -3268,6 +3313,15 @@ export const RATCHET_METRICS: readonly RatchetMetric[] = [
     ],
     exclude: isExcludedSource,
     count: countDirectRedistributableCalls,
+  },
+  {
+    scope: "file",
+    id: "weak-mcp-projection-ties",
+    description:
+      "satisfies-only MCP projection ties miss nested producer fields; use projectionPayload to bind forwarded domain results recursively. Stays at 0",
+    include: ["apps/api/src/mcp/**/*.ts"],
+    exclude: isExcludedSource,
+    count: countWeakMcpProjectionTies,
   },
   {
     scope: "file",
@@ -6073,6 +6127,68 @@ const dependencyMetricSelfTestFailures = (root: string): string[] => {
   return failures;
 };
 
+const schemaIntrospectionSelfTestFailures = (snapshot: Baseline): string[] => {
+  const failures: string[] = [];
+  const schemaIntrospectionMetric = requireSnapshot(
+    snapshot,
+    "schema-introspection-files",
+  );
+  if (
+    schemaIntrospectionMetric.count !== 2 ||
+    Object.keys(schemaIntrospectionMetric.files).length !== 2 ||
+    schemaIntrospectionMetric.files["scripts/inventory-a.test.ts"] !== 1 ||
+    schemaIntrospectionMetric.files["scripts/inventory-b.test.ts"] !== 1
+  ) {
+    failures.push(
+      "schema-introspection-files did not measure exact path membership",
+    );
+  }
+
+  return failures;
+};
+
+const projectionTieSelfTestFailures = (): string[] => {
+  const failures: string[] = [];
+  const projectionTieCases = [
+    {
+      code: "payload satisfies v.InferInput<typeof SEARCH_CASE_LAW_PROJECTION>;",
+      expected: 1,
+    },
+    {
+      code: "payload satisfies v.InferInput<\n typeof READ_STATUTE_PROJECTION\n>;",
+      expected: 1,
+    },
+    {
+      code: "payload satisfies v.InferInput<typeof INPUT_SCHEMA>;",
+      expected: 0,
+    },
+    {
+      code: "payload satisfies AssertNoExtraFields<typeof payload, v.InferInput<typeof READ_STATUTE_PROJECTION>>;",
+      expected: 0,
+    },
+    {
+      code: "projectionPayload(READ_STATUTE_PROJECTION, payload);",
+      expected: 0,
+    },
+    {
+      code: "// payload satisfies v.InferInput<typeof READ_STATUTE_PROJECTION>;",
+      expected: 0,
+    },
+  ];
+  for (const { code, expected } of projectionTieCases) {
+    const counted = countWeakMcpProjectionTies(code, {
+      file: "apps/api/src/mcp/tool.ts",
+    });
+    if (counted !== expected) {
+      failures.push(
+        `weak-mcp-projection-ties counted ${counted}, expected ${expected}, for: ${code}`,
+      );
+    }
+  }
+
+  return failures;
+};
+
 const runSelfTest = (): number => {
   const failures: string[] = [];
   const root = mkdtempSync(path.join(tmpdir(), "ratchet-selftest-"));
@@ -6155,6 +6271,11 @@ const runSelfTest = (): number => {
   }
 
   try {
+    writeFixture(
+      root,
+      "scripts/ownership.ts",
+      'export const SCHEMA_INTROSPECTION = [{ path: "scripts/inventory-a.test.ts", reason: "Table metadata." }, { path: "scripts/inventory-b.test.ts", reason: "Column metadata." }];',
+    );
     writeFixture(root, "apps/api/src/casts.ts", SELF_TEST_AS_CASTS);
     writeFixture(
       root,
@@ -6551,6 +6672,8 @@ const runSelfTest = (): number => {
     writeFileSync(path.join(root, "bun.lock"), "{ packages: {} }");
     const snapshot = scanAll(root);
 
+    failures.push(...schemaIntrospectionSelfTestFailures(snapshot));
+
     failures.push(...asCastSelfTestFailures(snapshot));
     failures.push(...failureSinkSelfTestFailures(snapshot));
     failures.push(...ownerHandleAllowlistSelfTestFailures(snapshot));
@@ -6907,6 +7030,8 @@ const runSelfTest = (): number => {
         );
       }
     }
+
+    failures.push(...projectionTieSelfTestFailures());
 
     // Diff behavior: equal passes, a rise regresses, a fall is a drop.
     const equal = diffMetric(

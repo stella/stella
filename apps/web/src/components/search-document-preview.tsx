@@ -94,6 +94,7 @@ export const SearchDocumentPreview = ({
     ) : (
       <MeasuredPdfProvider
         active
+        surface="search-preview-pdf"
         fallback={{ suspense: fallback }}
         fieldId={target.fieldId}
         initialScaleOffset={scaleOffset}

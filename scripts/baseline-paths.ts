@@ -37,6 +37,8 @@ export const BASELINE_PATHS = {
   failureAsEmpty: ".oxlint-plugins/no-failure-as-empty-baseline.json",
   /** scripts/typecheck-baseline.ts */
   typecheck: "scripts/typecheck-baseline.json",
+  /** scripts/transfer-read-guard.ts */
+  transferRead: "scripts/transfer-read-guard-baseline.json",
   /** scripts/source-fingerprint-baseline.ts */
   sourceFingerprint: "scripts/source-fingerprint-baseline.json",
   /** scripts/sql-perf-baseline.ts */

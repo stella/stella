@@ -1,152 +1,21 @@
-import { useMemo, useState } from "react";
-
 import { useShallow } from "zustand/react/shallow";
 
-import { useExternalSyncEffect } from "@/hooks/use-effect";
-import {
-  mapEntityToSpanSlices,
-  mergeAdjacentRects,
-} from "@/lib/anonymize/overlay-rects";
+import { projectOverlayRects } from "@/lib/anonymize/overlay-rects";
 import type { OverlayRect } from "@/lib/anonymize/overlay-rects";
-import { EOC_CLASS_NAME, TEXT_LAYER_ATTRIBUTE } from "@/lib/pdf/consts";
 import { usePDFStore } from "@/lib/pdf/pdf-context";
 
-/**
- * Compute overlay rects from the pdfjs text layer DOM
- * using the Range API. Rects are measured once and stored
- * as normalized (PDF-space) coordinates, then scaled to
- * the current viewport on each render.
- */
+/** The anonymization overlay rectangles of one page at its current zoom. */
 export const useOverlayRects = (
   pageId: string,
   pageIndex: number,
 ): Map<number, OverlayRect[]> | null => {
-  const overlays = usePDFStore(
+  const entities = usePDFStore(
     useShallow((s) => s.fileAnonymization?.perPage.get(pageIndex)),
   );
+  const viewport = usePDFStore((s) => s.pages.get(pageId)?.viewport);
 
-  const charSpans = usePDFStore((s) => s.fileAnonymization?.charSpans);
-
-  const scale = usePDFStore((s) => s.pages.get(pageId)?.viewport.scale);
-
-  // oxlint-disable-next-line typescript-eslint/promise-function-async -- store selector returns promise as value, not as async result
-  const renderPromise = usePDFStore((s) => s.renderPromises.get(pageId));
-
-  type NormalizedRectsCache = {
-    source: typeof overlays;
-    rects: Map<number, OverlayRect[]>;
-  };
-  const [normalizedRectsCache, setNormalizedRectsCache] =
-    useState<NormalizedRectsCache | null>(null);
-  const normalizedRects =
-    normalizedRectsCache !== null && normalizedRectsCache.source === overlays
-      ? normalizedRectsCache.rects
-      : null;
-
-  // Measure pdf.js text-layer rects via the Range API into state.
-  // This reads the live pdf.js-rendered DOM (getClientRects), which
-  // can't run during render, so it's a genuine external (DOM)
-  // measurement sync rather than derived state.
-  useExternalSyncEffect(() => {
-    if (normalizedRects) {
-      return;
-    }
-    if (
-      !overlays ||
-      overlays.length === 0 ||
-      !charSpans ||
-      scale === undefined
-    ) {
-      return;
-    }
-
-    const textLayerEl = document.querySelector(
-      `[${TEXT_LAYER_ATTRIBUTE}="${pageId}"]`,
-    );
-    if (!textLayerEl) {
-      return;
-    }
-
-    const domSpans = [...textLayerEl.children].filter(
-      (el): el is HTMLSpanElement =>
-        el.tagName === "SPAN" && !el.classList.contains(EOC_CLASS_NAME),
-    );
-
-    const pageSpans = charSpans.filter((s) => s.bbox.pageIndex === pageIndex);
-
-    const containerRect = textLayerEl.getBoundingClientRect();
-    const invScale = 1 / scale;
-    const result = new Map<number, OverlayRect[]>();
-
-    for (const entity of overlays) {
-      const rects: OverlayRect[] = [];
-
-      for (const entitySpan of entity.spans) {
-        if (entitySpan.pageIndex !== pageIndex) {
-          continue;
-        }
-
-        const slices = mapEntityToSpanSlices({
-          pageSpans,
-          entityStart: entitySpan.start,
-          entityEnd: entitySpan.end,
-        });
-
-        for (const slice of slices) {
-          const domSpan = domSpans[slice.spanIndex];
-          const textNode = domSpan?.firstChild;
-          if (!textNode || textNode.nodeType !== Node.TEXT_NODE) {
-            continue;
-          }
-
-          const range = document.createRange();
-          range.setStart(textNode, slice.localStart);
-          range.setEnd(textNode, slice.localEnd);
-
-          for (const r of range.getClientRects()) {
-            rects.push({
-              left: (r.left - containerRect.left) * invScale,
-              top: (r.top - containerRect.top) * invScale,
-              width: r.width * invScale,
-              height: r.height * invScale,
-            });
-          }
-        }
-      }
-
-      if (rects.length > 0) {
-        result.set(entity.id, mergeAdjacentRects(rects));
-      }
-    }
-
-    setNormalizedRectsCache({ source: overlays, rects: result });
-  }, [
-    normalizedRects,
-    overlays,
-    charSpans,
-    pageId,
-    pageIndex,
-    renderPromise,
-    scale,
-  ]);
-
-  return useMemo(() => {
-    if (!normalizedRects || scale === undefined) {
-      return null;
-    }
-
-    const scaled = new Map<number, OverlayRect[]>();
-    for (const [id, rects] of normalizedRects) {
-      scaled.set(
-        id,
-        rects.map((r) => ({
-          left: r.left * scale,
-          top: r.top * scale,
-          width: r.width * scale,
-          height: r.height * scale,
-        })),
-      );
-    }
-    return scaled;
-  }, [normalizedRects, scale]);
+  if (entities === undefined || viewport === undefined) {
+    return null;
+  }
+  return projectOverlayRects({ entities, pageIndex, viewport });
 };

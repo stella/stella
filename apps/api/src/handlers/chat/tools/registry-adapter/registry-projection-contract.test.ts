@@ -1,9 +1,18 @@
 import { type InferOk, panic, Result } from "better-result";
-import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
+import {
+  afterEach,
+  beforeEach,
+  describe,
+  expect,
+  mock,
+  spyOn,
+  test,
+} from "bun:test";
 
 import { TIME_ENTRY_ACTIVITY_GROUP } from "@stll/api-contract";
 import { DECISION_READ_RESOLUTION } from "@stll/api-contract/case-law-decision-resolution";
 import {
+  FACET_COUNT_TYPE,
   SEARCH_PAGINATION_COMPLETE,
   countedSearchTotal,
   LEGISLATION_SEARCH_MATCH_TYPES,
@@ -11,29 +20,41 @@ import {
 } from "@stll/api-contract/search";
 import type { BoeSearchResponse, getLawTextBlock } from "@stll/boe";
 import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
+import { RUNTIME_MODE } from "@stll/runtime-mode";
 
 import type { ScopedDb } from "@/api/db/safe-db";
-import type { contacts } from "@/api/db/schema";
+import { type contacts, INVOICE_BILLING_PURPOSE } from "@/api/db/schema";
+import { env } from "@/api/env";
 import type { readGatedDecisionCitations } from "@/api/handlers/case-law/decisions/citation-passages";
 import type { readGatedDecisionWithDocument } from "@/api/handlers/case-law/decisions/get-deferred-document";
 import type { lookupDecisionsByIdentity } from "@/api/handlers/case-law/decisions/lookup-by-identity";
 import type { searchDecisionsHandler } from "@/api/handlers/case-law/decisions/search";
 import { resolveToolWorkspaceIds } from "@/api/handlers/chat/tools/authorized-workspace-ids";
+import { CHAT_READ_SCRIPT_POLICY } from "@/api/handlers/chat/tools/execute/chat-read-script-policy";
 import type { readWorkspaceHandler } from "@/api/handlers/workspaces/get";
 import type { readOverviewHandler } from "@/api/handlers/workspaces/read-overview";
 import type { readWorkspaceContactsHandler } from "@/api/handlers/workspaces/workspace-contacts-read";
 import type { readWorkspaceMembersHandler } from "@/api/handlers/workspaces/workspace-members-read";
+import { grantThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { RegistryLookupResponse } from "@/api/lib/business-registries/dispatch";
-import { deriveRefMediationEntry } from "@/api/lib/chat/projection-schema";
+import {
+  deriveRefMediationEntry,
+  projectForChat,
+} from "@/api/lib/chat/projection-schema";
 import type { ChatRefRegistry } from "@/api/lib/chat/ref-registry";
 import { createChatRefRegistry } from "@/api/lib/chat/ref-registry";
 import { encryptContent } from "@/api/lib/content-encryption";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import type { SearchResult } from "@/api/lib/search/types";
 import type { DescribeTemplateResult } from "@/api/lib/templates/template-fill-service";
+import { isRecord } from "@/api/lib/type-guards";
 import type { McpRequestContext } from "@/api/mcp/context";
+import { LEGISLATION_TOOL_HANDLERS } from "@/api/mcp/legislation-tools";
 import type { READ_CONTACT_COLUMNS } from "@/api/mcp/read-contact-columns";
+import { STELLA_TOOL_HANDLERS } from "@/api/mcp/stella-tools";
+import { setRuntimeModeForTesting } from "@/api/runtime-mode";
+import { CASE_LAW_COVERAGE_FIXTURE } from "@/api/tests/helpers/case-law-coverage-fixture";
 import { installRecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
 import type { RecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
@@ -61,9 +82,11 @@ import { READ_TOOL_REF_FIELD_MAP } from "./ref-field-map";
  * 1. The corpus is keyed by `ProjectableReadToolName` via `satisfies`, so a
  *    read tool marked `chatProjectable: true` without a fixture here fails
  *    typecheck (plus a runtime both-ways check for `bun test` alone).
- * 2. Every call must produce a payload free of undeclared UUIDs — this is
- *    `runRegistryReadTool`'s own fail-closed backstop; the corpus asserts it
- *    returns ok instead of the anonymization failure.
+ * 2. Every call must produce a payload free of undeclared UUIDs and
+ *    undeclared fields. At runtime the projection degrades instead of
+ *    failing (drops the offending leaf, strips the undeclared key) and
+ *    reports a defect; the corpus asserts it returns ok with NO defect
+ *    reported, so a fixture that only projects degraded still fails here.
  * 3. Anti-vacuity: per tool, the union of the calls' `expectRefPaths` must
  *    equal the map's declared `outputRefs` paths, and each such path must
  *    resolve to at least one minted chat ref in the actual payload. A fixture
@@ -81,6 +104,7 @@ const describeStoredTemplateMock = mock();
 const searchProviderSearchMock = mock();
 const lookupDecisionsByIdentityMock = mock();
 const searchDecisionsHandlerMock = mock();
+const readCaseLawCoverageHandlerMock = mock();
 const readGatedDecisionWithDocumentMock = mock();
 const readGatedDecisionCitationsMock = mock();
 const withRedistributableSubjectMock = mock();
@@ -120,9 +144,6 @@ const EXTRACTED_TEXT = "decrypted text";
 const extractedEnvelope = await encryptContent(ORGANIZATION_ID, EXTRACTED_TEXT);
 
 // --- DB doubles ---------------------------------------------------------------
-
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-  typeof value === "object" && value !== null && !Array.isArray(value);
 
 type ThenableBuilder = {
   from: () => ThenableBuilder;
@@ -203,6 +224,7 @@ const buildContext = (tx: unknown): McpRequestContext => {
       getSearchReader: () => asTestRaw({ search: searchProviderSearchMock }),
       lookupDecisionsByIdentity: lookupDecisionsByIdentityMock,
       searchDecisionsHandler: searchDecisionsHandlerMock,
+      readCaseLawCoverageHandler: readCaseLawCoverageHandlerMock,
       readGatedDecisionWithDocument: readGatedDecisionWithDocumentMock,
       readGatedDecisionCitations: readGatedDecisionCitationsMock,
       searchLegislationHandler: searchLegislationHandlerMock,
@@ -224,6 +246,49 @@ const buildContext = (tx: unknown): McpRequestContext => {
       executeRegistryLookup: executeRegistryLookupMock,
     },
   });
+};
+
+/**
+ * The context a call runs with. A `script` read runs as the chat script runner
+ * runs it: `buildMcpContextFromChat`, which holds no third-party outbound
+ * permit. A `direct-only` read is offered as its direct tool, whose boundary
+ * holds one.
+ */
+const contextFor = (
+  toolName: ProjectableReadToolName,
+  tx: unknown,
+): McpRequestContext =>
+  CHAT_READ_SCRIPT_POLICY[toolName] === "script"
+    ? buildContext(tx)
+    : {
+        ...buildContext(tx),
+        thirdPartyOutboundPermit: grantThirdPartyOutboundPermit(),
+      };
+
+/**
+ * Every fetch the process attempts while `run` is in flight. The fixtures
+ * answer every source a read uses, so a read that sends anything reaches past
+ * its seams to the network.
+ */
+const recordOutboundFetches = async <TResult>(
+  run: () => Promise<TResult>,
+): Promise<{ result: TResult; fetched: readonly string[] }> => {
+  const fetched: string[] = [];
+  const refuse = Object.assign(
+    async (input: Parameters<typeof fetch>[0]): Promise<Response> => {
+      fetched.push(input instanceof Request ? input.url : String(input));
+      return await Promise.reject(
+        new Error("A contract fixture read must not reach the network"),
+      );
+    },
+    { preconnect: globalThis.fetch.preconnect },
+  );
+  const spy = spyOn(globalThis, "fetch").mockImplementation(refuse);
+  try {
+    return { result: await run(), fetched };
+  } finally {
+    spy.mockRestore();
+  }
 };
 
 /**
@@ -1309,6 +1374,7 @@ const CONTRACT_CORPUS = {
                   vatAmount: 21,
                   grossAmount: 121,
                   source: "time_entry",
+                  billingPurpose: INVOICE_BILLING_PURPOSE.ORDINARY,
                   timeEntryId: uid(47),
                   expenseId: null,
                   releasedAt: null,
@@ -1355,6 +1421,18 @@ const CONTRACT_CORPUS = {
       expectRefPaths: [],
     },
   ],
+  case_law_coverage: [
+    {
+      mode: "search",
+      buildArgs: () => ({}),
+      setup: () => {
+        readCaseLawCoverageHandlerMock.mockResolvedValue(
+          CASE_LAW_COVERAGE_FIXTURE,
+        );
+      },
+      expectRefPaths: [],
+    },
+  ],
   search_case_law: [
     {
       mode: "search",
@@ -1363,6 +1441,78 @@ const CONTRACT_CORPUS = {
         searchDecisionsHandlerMock.mockResolvedValue({
           paginationOutcome: SEARCH_PAGINATION_COMPLETE,
           facets: null,
+          hits: [
+            {
+              anchorId: null,
+              caseNumber: "22 Cdo 1000/2020",
+              caseNumberType: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
+              citationAuthority: 1.4,
+              citationCount: 3,
+              country: "CZ",
+              court: "Nejvyšší soud",
+              courtAbbreviation: "NS",
+              courtTier: "supreme",
+              createdAt: "2020-05-01T00:00:00.000Z",
+              decisionDate: "2020-05-01",
+              decisionId: uid(53),
+              decisionType: "judgment",
+              ecli: "ECLI:CZ:NS:2020:22.CDO.1000.2020.1",
+              identifiers: [
+                {
+                  type: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
+                  value: "22 Cdo 1000/2020",
+                },
+                {
+                  type: DECISION_IDENTIFIER_TYPES.ECLI,
+                  value: "ECLI:CZ:NS:2020:22.CDO.1000.2020.1",
+                },
+              ],
+              headline: "…dobré <em>mravy</em>…",
+              language: "cs",
+              matchingPassages: 3,
+              headnote: { type: "absent", reason: "not_published" },
+              languageAlternates: [],
+              slug: "ns-22-cdo-1000-2020",
+              // GUID-bearing publisher URL; see the statute fixture above.
+              sourceUrl: `https://example.test/decision/${uid(91)}`,
+            },
+          ],
+          nextCursor: null,
+          total: countedSearchTotal(SEARCH_TOTAL_TYPE.EXACT, 1),
+          queryUsed: "dobré mravy",
+          warnings: [],
+        } satisfies Awaited<ReturnType<typeof searchDecisionsHandler>>);
+      },
+      expectRefPaths: [],
+    },
+    {
+      // Page one of a single query carries the filter rail. A source facet's
+      // value is the source's own id, which an agent passes back as
+      // `source_id`; a null-facets fixture alone never exercised it.
+      mode: "search",
+      buildArgs: () => ({ country: "CZE", queries: ["dobré mravy"] }),
+      setup: () => {
+        searchDecisionsHandlerMock.mockResolvedValue({
+          paginationOutcome: SEARCH_PAGINATION_COMPLETE,
+          facets: {
+            court: [
+              {
+                tierLabel: "supreme",
+                courts: [{ value: "Nejvyšší soud", label: null, count: 1 }],
+              },
+            ],
+            year: [{ value: "2020", label: null, count: 1 }],
+            decisionType: [{ value: "judgment", label: null, count: 1 }],
+            source: [
+              {
+                value: uid(108),
+                label: "Nejvyšší soud",
+                count: 1,
+                countType: FACET_COUNT_TYPE.EXACT,
+              },
+            ],
+            language: [{ value: "cs", label: null, count: 1 }],
+          },
           hits: [
             {
               anchorId: null,
@@ -1653,6 +1803,9 @@ const CONTRACT_CORPUS = {
             expressionKind: "consolidation" as const,
             windowDisposition: "effective" as const,
             windowDispositionBasis: null,
+            country: "CZE",
+            slug: "89-2012-sb-obcansky-zakonik",
+            sourceUrl: "https://www.e-sbirka.cz/sb/2012/89",
             allowsDerivedAi: true,
           },
         ]);
@@ -1673,6 +1826,9 @@ const CONTRACT_CORPUS = {
         readProvisionHistoryHandlerMock.mockResolvedValue({
           items: [
             {
+              country: "CZE",
+              slug: "89-2012-sb-obcansky-zakonik",
+              sourceUrl: "https://www.e-sbirka.cz/sb/2012/89",
               allowsDerivedAi: true,
               documentId: uid(73),
               versionValidFrom: "2014-01-01",
@@ -1691,6 +1847,12 @@ const CONTRACT_CORPUS = {
   ],
   search_boe_legislation: [
     {
+      expectPayloadContains: [
+        JSON.stringify({ url: `https://boe.es/consolidado/${uid(98)}` }).slice(
+          1,
+          -1,
+        ),
+      ],
       mode: "search",
       buildArgs: () => ({ query: "impuesto" }),
       setup: () => {
@@ -1882,6 +2044,7 @@ const ALL_MOCKS = [
   searchProviderSearchMock,
   lookupDecisionsByIdentityMock,
   searchDecisionsHandlerMock,
+  readCaseLawCoverageHandlerMock,
   readGatedDecisionWithDocumentMock,
   readGatedDecisionCitationsMock,
   searchLegislationHandlerMock,
@@ -1906,13 +2069,20 @@ let analytics: RecordingAnalytics | null = null;
 const recordedExceptions = () =>
   (analytics ?? panic("recording analytics is not installed")).exceptions();
 
+// Production serves the public-law pages, so every corpus result carries an
+// `appUrl`; a decision or statute without a slug is addressed by its id there.
+let previousFeaturePublicLaw = env.FEATURE_PUBLIC_LAW;
+
 afterEach(() => {
   analytics?.restore();
   analytics = null;
+  env.FEATURE_PUBLIC_LAW = previousFeaturePublicLaw;
 });
 
 beforeEach(() => {
   analytics = installRecordingAnalytics();
+  previousFeaturePublicLaw = env.FEATURE_PUBLIC_LAW;
+  env.FEATURE_PUBLIC_LAW = true;
   for (const handlerMock of ALL_MOCKS) {
     handlerMock.mockReset();
   }
@@ -1930,6 +2100,69 @@ beforeEach(() => {
 });
 
 describe("registry projection contract", () => {
+  for (const toolName of ["search_case_law", "search_legislation"] as const) {
+    test(`${toolName} projects the publisher as primary when the deployment cannot serve the item`, async () => {
+      const restore = setRuntimeModeForTesting({ mode: RUNTIME_MODE.strict });
+      const previous = env.FEATURE_PUBLIC_LAW;
+      env.FEATURE_PUBLIC_LAW = false;
+      try {
+        const call =
+          corpusEntries()
+            .find(([name]) => name === toolName)?.[1]
+            .at(0) ?? panic("Missing citation fixture");
+        call.setup?.();
+        const refRegistry = createChatRefRegistry();
+        const args = call.buildArgs(refRegistry);
+        const handler =
+          toolName === "search_case_law"
+            ? STELLA_TOOL_HANDLERS.search_case_law
+            : LEGISLATION_TOOL_HANDLERS.search_legislation;
+        // The advertised registry hides disabled tools. Exercise the handler's
+        // shared output projection directly to reach its deployment fallback.
+        const response = await handler({
+          args,
+          context: contextFor(toolName, {}),
+        });
+        if (!("status" in response) || response.status !== "success") {
+          panic("Citation handler failed");
+        }
+        const result = projectForChat({
+          payload: response.data,
+          schema: READ_TOOL_REF_FIELD_MAP[toolName].projection,
+          refRegistry,
+          dehydration: {
+            args,
+            resolvedMatterParams: {},
+            resolvedEntityParams: {},
+            dehydratedEntityRefs: new Map(),
+          },
+          source: "run-registry-tool",
+          toolName,
+        });
+        if (Result.isError(result)) {
+          panic("Citation projection failed", result.error);
+        }
+        const payload = result.value;
+        if (!isRecord(payload) || !Array.isArray(payload["results"])) {
+          panic("No citation search results");
+        }
+        expect(payload["results"].length).toBeGreaterThan(0);
+        for (const item of payload["results"]) {
+          if (!isRecord(item)) {
+            panic("Invalid citation result");
+          }
+          expect(item["appUrl"]).toBeNull();
+          expect(item["url"]).toBe(item["sourceUrl"]);
+          expect(item["url"]).toMatch(/^https:/u);
+          expect(item["source_url"]).toBeUndefined();
+        }
+      } finally {
+        env.FEATURE_PUBLIC_LAW = previous;
+        restore();
+      }
+    });
+  }
+
   test("every declared outputRef path is exercised by some fixture call", () => {
     for (const [toolName, calls] of corpusEntries()) {
       // Derived from the entry's projection schema, the only artifact.
@@ -1954,14 +2187,21 @@ describe("registry projection contract", () => {
       test(`${toolName} (${call.mode}) projects with no undeclared UUID`, async () => {
         call.setup?.();
         const refRegistry = createChatRefRegistry();
-        const context = buildContext(call.tx?.() ?? {});
+        const context = contextFor(toolName, call.tx?.() ?? {});
 
-        const result = await runRegistryReadTool({
-          args: call.buildArgs(refRegistry),
-          context,
-          refRegistry,
-          toolName,
-        });
+        const { result, fetched } = await recordOutboundFetches(
+          async () =>
+            await runRegistryReadTool({
+              args: call.buildArgs(refRegistry),
+              context,
+              refRegistry,
+              toolName,
+            }),
+        );
+        expect(
+          fetched,
+          `${toolName} (${call.mode}): the read sent a request past its seams`,
+        ).toEqual([]);
 
         if (Result.isError(result)) {
           const leakPaths = recordedExceptions()
@@ -1977,6 +2217,35 @@ describe("registry projection contract", () => {
         }
 
         const payload = result.value;
+        const assertCitationLinks = (value: unknown) => {
+          if (Array.isArray(value)) {
+            for (const item of value) {
+              assertCitationLinks(item);
+            }
+            return;
+          }
+          if (typeof value !== "object" || value === null) {
+            return;
+          }
+          if ("appUrl" in value) {
+            expect(
+              "url" in value,
+              `${toolName}: every reader link has a primary url`,
+            ).toBe(true);
+            if ("url" in value && typeof value.appUrl === "string") {
+              expect(value.url).toBe(value.appUrl);
+              if ("sourceUrl" in value && typeof value.sourceUrl === "string") {
+                expect("source_url" in value && value.source_url).toBe(
+                  new URL(value.sourceUrl).href,
+                );
+              }
+            }
+          }
+          for (const child of Object.values(value)) {
+            assertCitationLinks(child);
+          }
+        };
+        assertCitationLinks(payload);
         if (call.expectPayloadContains) {
           const serialized = JSON.stringify(payload);
           for (const literal of call.expectPayloadContains) {
@@ -2017,11 +2286,48 @@ describe("registry projection contract", () => {
         }
 
         // A clean projection reports nothing: no refusal or defect hides
-        // behind a payload that merely looks well formed.
+        // behind a payload that merely looks well formed. This is the guard
+        // on the runtime degrade: a stripped undeclared field or a dropped
+        // unmappable id succeeds at runtime but reports a defect, which
+        // fails the corpus here (its `defect` and `paths` name the leak).
         expect(
-          recordedExceptions(),
+          recordedExceptions().map((event) => ({
+            class: event.properties["error.class"],
+            defect: event.properties["defect"],
+            paths: event.properties["paths"],
+          })),
           `${toolName} (${call.mode}): the call reported an exception`,
         ).toEqual([]);
+      });
+    }
+  }
+});
+
+describe("third-party outbound permit", () => {
+  for (const [toolName, calls] of corpusEntries()) {
+    if (CHAT_READ_SCRIPT_POLICY[toolName] === "script") {
+      continue;
+    }
+    for (const call of calls) {
+      test(`${toolName} (${call.mode}) refuses the chat context and sends nothing`, async () => {
+        call.setup?.();
+        const refRegistry = createChatRefRegistry();
+
+        const { result, fetched } = await recordOutboundFetches(
+          async () =>
+            await runRegistryReadTool({
+              args: call.buildArgs(refRegistry),
+              context: buildContext(call.tx?.() ?? {}),
+              refRegistry,
+              toolName,
+            }),
+        );
+
+        expect(Result.isError(result)).toBe(true);
+        expect(fetched).toEqual([]);
+        for (const handlerMock of ALL_MOCKS) {
+          expect(handlerMock).not.toHaveBeenCalled();
+        }
       });
     }
   }

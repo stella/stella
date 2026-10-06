@@ -18,9 +18,32 @@ import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
+import { canonicalModuleId } from "../.oxlint-plugins/module-id.ts";
 import { STATUS_COLUMNS } from "../apps/api/src/lib/db/status-tables.gen.ts";
+import { SANCTIONS_MONITORING_TRANSITION_IDENTITIES } from "../apps/api/src/lib/lists/sanctions/monitoring-transition-identities.ts";
 // With its extension: oxlint.config.ts loads this file under Node's resolver.
 import { formattedLikeRepository } from "./generated-artifacts.ts";
+
+const statusTransitionColumns = () => {
+  const columns = new Map(
+    Object.entries(STATUS_COLUMNS).map(([table, names]) => [
+      table,
+      new Set<string>(names),
+    ]),
+  );
+  for (const { tableName, stateColumn } of Object.values(
+    SANCTIONS_MONITORING_TRANSITION_IDENTITIES,
+  )) {
+    const names = columns.get(tableName) ?? new Set<string>();
+    names.add(stateColumn);
+    columns.set(tableName, names);
+  }
+  return Object.fromEntries(
+    [...columns].map(([table, names]) => [table, [...names].toSorted()]),
+  );
+};
+
+const STATUS_TRANSITION_COLUMNS = statusTransitionColumns();
 
 // A file the rule accepts besides the owner itself. `path` is a
 // repo-relative file path, or a directory prefix ending in "/".
@@ -31,6 +54,11 @@ export type AllowedFile = {
 
 export type OwnershipEnforcement =
   | { readonly kind: "none" }
+  | {
+      readonly kind: "literal-pattern";
+      readonly pattern: string;
+      readonly allowed: readonly AllowedFile[];
+    }
   | {
       readonly kind: "status-set";
       readonly columns: Readonly<Record<string, readonly string[]>>;
@@ -72,6 +100,51 @@ export type OwnershipEntry = {
   readonly enforcement: OwnershipEnforcement;
 };
 
+export const SCHEMA_INTROSPECTION = [
+  {
+    path: "apps/api/scripts/generate-status-tables.ts",
+    reason: "Enumerates full-schema metadata without database operations.",
+  },
+  {
+    path: "apps/api/src/db/schema.ts",
+    reason: "Re-exports the schema declarations.",
+  },
+  {
+    path: "apps/api/src/db/code-owned-tables.test.ts",
+    reason: "Enumerates full-schema metadata without database operations.",
+  },
+  {
+    path: "apps/api/src/db/high-volume-tables.test.ts",
+    reason: "Enumerates full-schema metadata without database operations.",
+  },
+  {
+    path: "apps/api/src/db/plan-guard-tables.test.ts",
+    reason: "Enumerates full-schema metadata without database operations.",
+  },
+  {
+    path: "apps/api/src/tests/security/schema-invariants.test.ts",
+    reason: "Enumerates full-schema metadata without database operations.",
+  },
+  {
+    path: "apps/api/src/tests/security/chat-derived-scope.test.ts",
+    reason: "Enumerates full-schema metadata without database operations.",
+  },
+] as const satisfies readonly AllowedFile[];
+
+const isSchemaEnforcement = (
+  enforcement: OwnershipEnforcement,
+  ownerPath: string,
+): boolean =>
+  enforcement.kind === "import" &&
+  enforcement.specifiers.length > 0 &&
+  enforcement.specifiers.every((specifier) => {
+    const module = canonicalModuleId(specifier, ownerPath);
+    return (
+      module === "apps/api/src/db/schema" ||
+      module.startsWith("apps/api/src/db/schema/")
+    );
+  });
+
 const FLUSHES_ITS_OWN_SEARCH_MARKS =
   "Flushes the search marks its own transaction committed.";
 
@@ -88,6 +161,90 @@ const FLUSHES_ITS_OWN_SEARCH_MARKS =
 // exemptions cannot drift apart. Adding a door here does not add a shape to
 // the baseline; it moves one out of it, and review of the row is the gate.
 export const ROOT_CONNECTION_DOORS = [
+  {
+    id: "personal-api-key-lifecycle",
+    capability: "Managing member-owned credentials in the denied auth table",
+    owner: ["apps/api/src/lib/machine-api-keys/personal-lifecycle.ts"],
+    summary:
+      "Bounded lifecycle operations retain organization and owner SQL predicates, lock live membership, enforce policy and active-key limits, and audit within the mutation transaction. No raw database handle is exported.",
+    enforcement: {
+      kind: "import",
+      specifiers: ["@/api/lib/machine-api-keys/personal-lifecycle"],
+      allowed: [
+        {
+          path: "apps/api/src/handlers/api-keys/personal/create.ts",
+          reason: "Owns the session-authorized personal key operation.",
+        },
+        {
+          path: "apps/api/src/handlers/api-keys/personal/list.ts",
+          reason: "Owns the session-authorized personal key operation.",
+        },
+        {
+          path: "apps/api/src/handlers/api-keys/personal/revoke.ts",
+          reason: "Owns the session-authorized personal key operation.",
+        },
+        {
+          path: "apps/api/src/handlers/api-keys/personal/rotate.ts",
+          reason: "Owns the session-authorized personal key operation.",
+        },
+        {
+          path: "apps/api/src/handlers/api-keys/personal/list-organization.ts",
+          reason: "Owns the session-authorized personal key operation.",
+        },
+        {
+          path: "apps/api/src/handlers/api-keys/personal/revoke-organization.ts",
+          reason: "Owns the session-authorized personal key operation.",
+        },
+        {
+          path: "apps/api/src/handlers/api-keys/personal/policy.ts",
+          reason: "Owns the session-authorized personal key operation.",
+        },
+        {
+          path: "apps/api/src/lib/machine-api-keys/personal-policy-reader.ts",
+          reason: "Exposes only the read-only organization policy operation.",
+        },
+      ],
+    },
+  },
+  {
+    id: "operator-registration-directory",
+    capability: "Serving audited operator registration pages",
+    owner: ["apps/api/src/db/root.ts"],
+    summary:
+      "Reads bounded registration pages through the owner connection and records each read transactionally; callers receive only the declared directory fields, never a database handle.",
+    enforcement: {
+      kind: "import",
+      specifiers: ["@/api/db/root"],
+      names: ["readOperatorRegistrationPage"],
+      allowed: [
+        {
+          path: "apps/api/src/handlers/operator/registrations.ts",
+          reason:
+            "Authorizes the deployment credential before reading the directory.",
+        },
+      ],
+    },
+  },
+
+  {
+    id: "personal-api-key-policy-reader",
+    capability:
+      "Reading personal API key policy during credential verification",
+    owner: ["apps/api/src/lib/machine-api-keys/personal-policy-reader.ts"],
+    summary:
+      "The MCP authentication boundary can read policy without importing lifecycle mutations.",
+    enforcement: {
+      kind: "import",
+      specifiers: ["@/api/lib/machine-api-keys/personal-policy-reader"],
+      allowed: [
+        {
+          path: "apps/api/src/mcp/api-key-auth.ts",
+          reason: "Checks policy before accepting a personal credential.",
+        },
+      ],
+    },
+  },
+
   {
     id: "public-sanctions-reader-binding",
     capability:
@@ -154,6 +311,11 @@ export const ROOT_CONNECTION_DOORS = [
         {
           path: "apps/api/src/handlers/desktop-registry/redeem-link.ts",
           reason: "Claims the native connection request.",
+        },
+        {
+          path: "apps/api/src/lib/business-registries/desktop/handoff-auth.ts",
+          reason:
+            "Records a terminal handoff acknowledgement before returning a protocol or account refusal.",
         },
         {
           path: "apps/api/src/handlers/entities/desktop-edit-handoffs.ts",
@@ -388,7 +550,11 @@ export const STATUS_TRANSITION_OWNERSHIP = {
   owner: ["apps/api/src/lib/db/transitions.ts"],
   summary:
     "The transition owner checks the expected state and optional fence in the update predicate, and returns Transitioned or Stale. A required recorder audits successful updates in the caller's transaction; stale updates record nothing and recorder failure rolls the update back. Direct lifecycle writes, conflict updates and visible SQL lifecycle assignments are lint errors outside the measured backlog; per-file shrink-only guards forbid adding them. Opaque table handles and payloads count conservatively. Unmanaged declarations shrink independently per table. SQL built entirely by external functions, external payload mutation and custom SQL column names not ending in status/state/phase remain outside static inspection.",
-  enforcement: { kind: "status-set", columns: STATUS_COLUMNS, allowed: [] },
+  enforcement: {
+    kind: "status-set",
+    columns: STATUS_TRANSITION_COLUMNS,
+    allowed: [],
+  },
 } as const satisfies OwnershipEntry;
 // Case-law modules that still call the raw publisher fetch. Each migrates to
 // `readPublisher` and leaves this list; nothing is added to it.
@@ -410,8 +576,38 @@ const UNMIGRATED_PUBLISHER_READERS = [
   "handlers/case-law/ingestion/adapters/sk-collections.ts",
 ] as const;
 
-export const OWNERSHIP = [
+const OWNERSHIP_DECLARATIONS = [
   STATUS_TRANSITION_OWNERSHIP,
+  {
+    id: "citation-graph-transaction",
+    capability: "Acquiring the citation graph transaction lock",
+    owner: ["apps/api/src/handlers/case-law/citation-graph-transaction.ts"],
+    summary:
+      "The graph owner acquires its advisory lock before domain row locks and passes a branded transaction to graph writers. The conditional owner declines busy walks before reading their cursor.",
+    enforcement: {
+      kind: "literal-pattern",
+      pattern: "citation_resolution_walk",
+      allowed: [
+        {
+          path: "scripts/ownership.ts",
+          reason: "Declares the confined lock key.",
+        },
+        {
+          path: "apps/api/src/handlers/case-law/citation-graph-transaction.test.ts",
+          reason: "Checks graph admission and failed acquisition.",
+        },
+        {
+          path: "apps/api/src/handlers/case-law/ingestion/citation-graph-lock-order.postgres.test.ts",
+          reason: "Exercises graph lock ordering and the rejecting mutation.",
+        },
+        {
+          path: ".oxlint-plugins/__tests__/confine-owner.test.ts",
+          reason:
+            "Exercises rejected literal and SQL fixtures through the lint rule.",
+        },
+      ],
+    },
+  },
   {
     id: "task-assignment-membership",
     capability: "Writing task assignments for current matter members",
@@ -431,11 +627,6 @@ export const OWNERSHIP = [
       ],
       names: ["taskAssignees"],
       allowed: [
-        {
-          path: "apps/api/scripts/generate-status-tables.ts",
-          reason:
-            "Inspects Drizzle column metadata to generate the lifecycle inventory; never writes task assignments.",
-        },
         {
           path: "apps/api/src/db/",
           reason: "Schema and relation declarations.",
@@ -545,47 +736,12 @@ export const OWNERSHIP = [
       names: ["hostedUsageWebhookEvents"],
       allowed: [
         {
-          path: "apps/api/scripts/generate-status-tables.ts",
-          reason:
-            "Inspects Drizzle column metadata to generate the lifecycle inventory; never writes provider receipts.",
-        },
-        {
-          path: "apps/api/src/db/schema.ts",
-          reason:
-            "Schema export or full-schema test introspection; no production receipt writer.",
-        },
-        {
-          path: "apps/api/src/db/code-owned-tables.test.ts",
-          reason:
-            "Schema export or full-schema test introspection; no production receipt writer.",
-        },
-        {
-          path: "apps/api/src/db/high-volume-tables.test.ts",
-          reason:
-            "Schema export or full-schema test introspection; no production receipt writer.",
-        },
-        {
-          path: "apps/api/src/db/plan-guard-tables.test.ts",
-          reason:
-            "Schema export or full-schema test introspection; no production receipt writer.",
-        },
-        {
           path: "apps/api/src/tests/pglite-test-db.ts",
           reason:
             "Schema export or full-schema test introspection; no production receipt writer.",
         },
         {
-          path: "apps/api/src/tests/security/schema-invariants.test.ts",
-          reason:
-            "Schema export or full-schema test introspection; no production receipt writer.",
-        },
-        {
           path: "apps/api/src/tests/security/test-utils.ts",
-          reason:
-            "Schema export or full-schema test introspection; no production receipt writer.",
-        },
-        {
-          path: "apps/api/src/tests/security/chat-derived-scope.test.ts",
           reason:
             "Schema export or full-schema test introspection; no production receipt writer.",
         },
@@ -1171,6 +1327,33 @@ export const OWNERSHIP = [
     enforcement: { kind: "none" },
   },
   {
+    id: "bounded-export-read",
+    capability: "Reading a complete set within an export row cap",
+    owner: ["apps/api/src/lib/db/read-bounded.ts"],
+    summary:
+      "`readBounded` applies a cap-plus-one SQL limit and returns either the " +
+      "complete rows or an explicit overflow result without a partial set. " +
+      "`readCursorPage` uses the same sentinel and the existing `Page` owner " +
+      "to preserve worker continuation without claiming a partial set is complete. " +
+      "This owner handles expected export ceilings; `boundedAll` instead " +
+      "panics when a write-path cardinality invariant is violated. " +
+      "`scripts/transfer-read-guard.ts` enumerates fixed-limit reads and " +
+      "enforces their shrink-only migration baseline.",
+    enforcement: { kind: "none" },
+  },
+  {
+    id: "fetch-transfer-timeout",
+    capability: "Applying response header and body idle deadlines",
+    owner: ["packages/fetch/src/index.ts"],
+    summary:
+      "`@stll/fetch` requires a header or idle timeout policy for new callers " +
+      "and composes caller cancellation. Idle deadlines cover pending body reads; " +
+      "header deadlines stop at the response. Deprecated numeric callers and " +
+      "raw total deadlines on body reads are enumerated by " +
+      "`scripts/transfer-read-guard.ts` with a shrink-only baseline.",
+    enforcement: { kind: "none" },
+  },
+  {
     id: "case-law-source-fingerprint",
     capability:
       "The change-detection hash of a case-law decision's stored source",
@@ -1238,6 +1421,11 @@ export const OWNERSHIP = [
         {
           path: "apps/api/src/handlers/case-law/ingestion/pipeline/stored-raw.ts",
           reason: "Loads persisted source bytes for ingestion.",
+        },
+        {
+          path: "apps/api/src/handlers/case-law/ingestion/eu-completion-runner.ts",
+          reason:
+            "Loads persisted source bytes under the completion job's byte cap and tick deadline.",
         },
         {
           path: "apps/api/src/handlers/case-law/ingestion/background-replay-runner.ts",
@@ -1552,6 +1740,11 @@ export const OWNERSHIP = [
       specifiers: ["@/api/lib/permission-authorization"],
       names: ["sessionMemberRole", "authorizedMemberRole"],
       allowed: [
+        {
+          path: "apps/api/src/lib/machine-api-keys/personal-lifecycle.ts",
+          reason:
+            "Builds the key owner authority from a locked live membership before minting.",
+        },
         {
           path: "apps/api/src/lib/auth.ts",
           reason: "Builds the authenticated session context.",
@@ -2489,6 +2682,31 @@ export const OWNERSHIP = [
   ...ROOT_CONNECTION_DOORS,
 ] as const satisfies readonly OwnershipEntry[];
 
+// Materialize shared exceptions once, before either the lint rule or the
+// documentation consumes the registry; new schema owners inherit them.
+export const withSchemaIntrospection = (
+  entry: OwnershipEntry,
+): OwnershipEntry => {
+  if (
+    entry.enforcement.kind !== "import" ||
+    !isSchemaEnforcement(
+      entry.enforcement,
+      entry.owner.at(0) ?? panic("Schema export ownership requires an owner"),
+    )
+  ) {
+    return entry;
+  }
+  return {
+    ...entry,
+    enforcement: {
+      ...entry.enforcement,
+      allowed: [...entry.enforcement.allowed, ...SCHEMA_INTROSPECTION],
+    },
+  };
+};
+
+export const OWNERSHIP = OWNERSHIP_DECLARATIONS.map(withSchemaIntrospection);
+
 const REPO_ROOT = fileURLToPath(new URL("..", import.meta.url));
 const DOC_PATH = "docs/module-ownership.md";
 
@@ -2506,6 +2724,11 @@ Rows whose enforcement is not \`none\` are also read by the
 \`confine-owner/confine-owner\` lint rule, which reports any linted file outside
 the owner and its \`allowed\` list. Add a bypass by adding an \`allowed\` entry with a
 reason, in the same table.
+
+Schema export owners inherit the exact files in \`SCHEMA_INTROSPECTION\`.
+The ownership check follows their runtime dependencies and checks that they
+only enumerate schema metadata. The ratchet measures each shared path;
+additions require a justified allowance and removals are free.
 `;
 
 const ownerPathExists = (repoRoot: string, entryPath: string): boolean =>
@@ -2530,6 +2753,9 @@ const enforcementCell = (enforcement: OwnershipEnforcement): string => {
     }
     case "status-set": {
       return "lifecycle updates, conflict sets and visible SQL assignments; lint errors plus measured per-file backlog and shrink-only ratchet";
+    }
+    case "literal-pattern": {
+      return `literal pattern \`${enforcement.pattern}\``;
     }
     default: {
       enforcement satisfies never;
@@ -2578,6 +2804,25 @@ export const validateOwnership = (
     }
     seen.add(entry.id);
 
+    if (entry.enforcement.kind === "import") {
+      const ownerPath = entry.owner.at(0);
+      if (
+        ownerPath !== undefined &&
+        entry.enforcement.specifiers.some((specifier) => {
+          const module = canonicalModuleId(specifier, ownerPath);
+          return (
+            module === "apps/api/src/db/schema" ||
+            module.startsWith("apps/api/src/db/schema/")
+          );
+        }) &&
+        !isSchemaEnforcement(entry.enforcement, ownerPath)
+      ) {
+        problems.push(
+          `${entry.id}: schema imports require a separate ownership entry from other modules`,
+        );
+      }
+    }
+
     for (const entryPath of entry.owner) {
       if (!ownerPathExists(repoRoot, entryPath)) {
         problems.push(`${entry.id}: owner path does not exist: ${entryPath}`);
@@ -2613,7 +2858,15 @@ const main = async (argv: readonly string[]): Promise<number> => {
     return 1;
   }
 
-  const problems = [...validateOwnership(OWNERSHIP, REPO_ROOT)];
+  const { validateSchemaIntrospection } =
+    await import("./schema-introspection.ts");
+  const problems = [
+    ...validateOwnership(OWNERSHIP, REPO_ROOT),
+    ...validateSchemaIntrospection({
+      entries: SCHEMA_INTROSPECTION,
+      repoRoot: REPO_ROOT,
+    }),
+  ];
   const committed = existsSync(docFile) ? readFileSync(docFile, "utf-8") : "";
   if (committed !== rendered) {
     problems.push(

@@ -4,6 +4,8 @@ import { ACTION_ADMISSION_REFUSALS } from "@stll/api-contract/action-admission";
 import { FILE_PROPERTY_TYPE_IMMUTABLE_CODE } from "@stll/api-contract/property-policy";
 
 import type { Transaction } from "@/api/db/root";
+import type { workspaceViews } from "@/api/db/schema";
+import { env } from "@/api/env";
 import exportTimeEntriesCsv from "@/api/handlers/time-entries/csv/export";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import {
@@ -12,6 +14,10 @@ import {
 } from "@/api/lib/auth/feature-access/policy";
 import { toSafeId } from "@/api/lib/branded-types";
 import { PLAYBOOK_RUN_FAILURE_CODE } from "@/api/lib/document-review/playbook-run-refusal";
+import {
+  FEATURE_REGISTRY,
+  LIST_VERIFICATION_FEATURE_ID,
+} from "@/api/lib/feature-access/registry";
 import { runWithRequestId } from "@/api/lib/observability/request-context";
 import { encodePaginationCursor } from "@/api/lib/pagination";
 import { isRecord } from "@/api/lib/type-guards";
@@ -50,18 +56,28 @@ const consumeRateLimitMock = mock(async () => ({
 // env, so the deployment-gate tests toggle flags through this set instead
 // (cleared in beforeEach). Default (empty set) behaves like everything-enabled.
 const disabledFeatures = new Set<string>();
-const { handleMcpToolCall } = await import("@/api/mcp/tools");
+const { handleMcpToolCall, listMcpTools } = await import("@/api/mcp/tools");
 const { featureOmittedCapabilityIds, mapHandlerResult } =
   await import("@/api/mcp/capability-tools");
 const { UPLOAD_PURPOSE_GATE_BY_CAPABILITY } =
   await import("@/api/mcp/upload-purpose-gate");
 const { synthesizeCapabilityContext } =
   await import("@/api/mcp/capability-context");
+const { listStaticMcpToolDefinitions } =
+  await import("@/api/mcp/static-tool-definitions");
+const { listMcpResources, readMcpResource } =
+  await import("@/api/mcp/resources");
 const { ElysiaCustomStatusResponse } = await import("elysia");
 const { readCapabilityCatalog } =
   await import("@stll/cli/capability-catalog-data");
 const { parseCatalog } = await import("@/api/mcp/capability-tools");
 const capabilityCatalog = parseCatalog(readCapabilityCatalog());
+
+const requiresVerificationGrant = (entry: (typeof capabilityCatalog)[number]) =>
+  "featureId" in entry &&
+  entry.featureId === LIST_VERIFICATION_FEATURE_ID &&
+  "featureAccess" in entry &&
+  entry.featureAccess === "required";
 
 // --- Helpers -----------------------------------------------------------------
 
@@ -166,6 +182,16 @@ const createContext = ({
         feature === undefined || !disabledFeatures.has(feature),
       contextFidelityWaivers,
     },
+    featureAccessSnapshot: createFeatureAccessSnapshot({
+      organizationId: "org_1",
+      userId: "user_1",
+      decisions: new Map(
+        Object.keys(FEATURE_REGISTRY).map((featureId) => [
+          featureId,
+          { status: "hidden" as const },
+        ]),
+      ),
+    }),
     accessibleWorkspaceIds: workspaceIds.map((id) => toSafeId<"workspace">(id)),
     accessibleWorkspaceIdSet,
     accessibleWorkspaceStatusById: new Map(
@@ -216,6 +242,549 @@ beforeEach(() => {
 
 afterEach(() => {
   analytics.restore();
+});
+
+describe("list verification access grants across MCP tools", () => {
+  const matterId = "a1111111-1111-4111-8111-111111111111";
+  const resourceId = "a2222222-2222-4222-8222-222222222222";
+  const params = { matterId };
+  const inputs = {
+    "lists.verifications.create": {
+      params,
+      body: {
+        listId: resourceId,
+        entityId: resourceId,
+        fileFieldId: resourceId,
+      },
+    },
+    "lists.verifications.list": {
+      params,
+      query: { entityId: resourceId, fileFieldId: resourceId },
+    },
+    "lists.verifications.get": { params: { ...params, runId: resourceId } },
+    "lists.verifications.latest.list": {
+      params,
+      body: { documents: [{ entityId: resourceId, fileFieldId: resourceId }] },
+    },
+    "lists.verifications.claim-reviews.create": {
+      params,
+      body: {
+        runId: resourceId,
+        claimId: resourceId,
+        event: { kind: "note", note: "Synthetic review" },
+      },
+    },
+    "lists.verifications.claim-reviews.bulk.create": {
+      params,
+      body: { runId: resourceId, claimIds: [resourceId] },
+    },
+    "lists.items.fact-details.update": {
+      params,
+      body: {
+        listId: resourceId,
+        itemEntityId: resourceId,
+        occurredOn: null,
+        evidenceKind: null,
+        medium: null,
+        confidence: "high",
+        interpretationNote: null,
+        scoring: "included",
+      },
+    },
+    "lists.items.sources.verification.update": {
+      params,
+      body: {
+        id: resourceId,
+        listId: resourceId,
+        itemEntityId: resourceId,
+        status: "verified",
+      },
+    },
+  } as const;
+
+  let previousGrants = env.API_FEATURE_ACCESS_GRANTS;
+  let previousDeploymentFlag = env.FEATURE_LEGAL_LISTS;
+
+  beforeEach(() => {
+    previousGrants = env.API_FEATURE_ACCESS_GRANTS;
+    previousDeploymentFlag = env.FEATURE_LEGAL_LISTS;
+    env.API_FEATURE_ACCESS_GRANTS = {};
+    env.FEATURE_LEGAL_LISTS = true;
+  });
+
+  afterEach(() => {
+    env.API_FEATURE_ACCESS_GRANTS = previousGrants;
+    env.FEATURE_LEGAL_LISTS = previousDeploymentFlag;
+  });
+
+  const grantCurrentMember = () => {
+    env.API_FEATURE_ACCESS_GRANTS = {
+      [LIST_VERIFICATION_FEATURE_ID]: [
+        {
+          type: "member",
+          organizationId: "org_1",
+          email: "standard@example.test",
+        },
+      ],
+    };
+  };
+
+  type VerificationContextOptions = {
+    email?: string;
+    emailVerified?: boolean;
+    membership?: "current" | "departed";
+    organizationId?: string;
+    userId?: string;
+    viewRows?: (typeof workspaceViews.$inferSelect)[];
+  };
+
+  const verificationContext = ({
+    email = "standard@example.test",
+    emailVerified = true,
+    membership = "current",
+    organizationId = "org_1",
+    userId = "user_1",
+    viewRows = [],
+  }: VerificationContextOptions = {}) => {
+    let resourceLookups = 0;
+    let mutations = 0;
+    const tx = {
+      select: (projection?: Record<string, unknown>) => {
+        const identity =
+          projection !== undefined && "emailVerified" in projection;
+        if (!identity) {
+          resourceLookups += 1;
+        }
+        const identityRows =
+          membership === "current"
+            ? [
+                {
+                  email,
+                  emailVerified,
+                  role: "owner",
+                  workspaceId: matterId,
+                  workspaceStatus: "active",
+                  clientId: null,
+                  workspaceMemberId: resourceId,
+                },
+              ]
+            : [];
+        const rows = identity ? identityRows : viewRows;
+        const query = [...rows];
+        const builder = Object.assign(query, {
+          from: () => query,
+          innerJoin: () => query,
+          leftJoin: () => query,
+          where: () => query,
+          groupBy: () => query,
+          orderBy: () => query,
+          limit: () => query,
+          for: () => query,
+        });
+        return builder;
+      },
+      query: {
+        properties: { findMany: async () => [] },
+        entities: {
+          findFirst: async () => {
+            resourceLookups += 1;
+            return undefined;
+          },
+        },
+        legalLists: {
+          findFirst: async () => {
+            resourceLookups += 1;
+            return undefined;
+          },
+        },
+      },
+      selectDistinctOn: () => {
+        resourceLookups += 1;
+        const query: unknown[] = [];
+        return Object.assign(query, {
+          from: () => query,
+          where: () => query,
+          orderBy: () => query,
+          limit: () => query,
+        });
+      },
+      insert: () => ({ values: async () => [] }),
+      update: () => {
+        mutations += 1;
+        return {
+          set: () => ({
+            where: () => ({ returning: async () => [{ id: resourceId }] }),
+          }),
+        };
+      },
+    };
+    const database = createScopedDbMock(tx);
+    const context = createContext({
+      scopedDb: database.scopedDb,
+      safeDb: database.safeDb,
+      workspaceIds: [matterId],
+    });
+    context.organizationId = toSafeId<"organization">(organizationId);
+    context.userId = toSafeId<"user">(userId);
+    context.userEmail = email;
+    context.featureAccessSnapshot = createFeatureAccessSnapshot({
+      organizationId,
+      userId: context.userId,
+      decisions: new Map(
+        Object.keys(FEATURE_REGISTRY).map((featureId) => [
+          featureId,
+          decideFeatureAccess({
+            registry: FEATURE_REGISTRY,
+            grants: env.API_FEATURE_ACCESS_GRANTS,
+            featureId,
+            organizationId,
+            userId: context.userId,
+            user: { email, emailVerified },
+            membership: membership === "current",
+          }),
+        ]),
+      ),
+    });
+    return {
+      context,
+      resourceLookups: () => resourceLookups,
+      mutations: () => mutations,
+    };
+  };
+
+  test("the transport matrix covers every dedicated verification capability", () => {
+    const declared = capabilityCatalog
+      .filter(requiresVerificationGrant)
+      .map(({ id }) => id);
+    expect(Object.keys(inputs).toSorted()).toEqual(declared.toSorted());
+  });
+
+  test("empty grants omit dedicated verification capabilities from discovery", async () => {
+    const { context } = verificationContext();
+    const listed: string[] = [];
+    for (const domain of ["lists"]) {
+      const result = await handleMcpToolCall({
+        toolName: "list_capabilities",
+        context,
+        args: { domain, limit: MAX_LIST_LIMIT },
+      });
+      listed.push(
+        ...parseToolPayload<{ items: { id: string }[] }>(result).items.map(
+          ({ id }) => id,
+        ),
+      );
+    }
+    for (const capability of Object.keys(inputs)) {
+      expect(listed).not.toContain(capability);
+      const described = await handleMcpToolCall({
+        toolName: "describe_capability",
+        context,
+        args: { capability },
+      });
+      expect(errorEnvelope(described)).toMatchObject({
+        code: "not_found",
+        message: "Not found",
+      });
+    }
+    expect(loadOrgSettingsMock).not.toHaveBeenCalled();
+  });
+
+  test("real native and resource discovery preserves shared surfaces for another member", async () => {
+    grantCurrentMember();
+    const granted = verificationContext().context;
+    const denied = verificationContext({
+      userId: "user_2",
+      email: "another-member@example.test",
+    }).context;
+    const featureCapabilities = capabilityCatalog
+      .filter(requiresVerificationGrant)
+      .map(({ id }) => id);
+    expect(featureCapabilities).toHaveLength(Object.keys(inputs).length);
+    const enabledTools = await listMcpTools(
+      granted,
+      "default",
+      granted.grantedScopes,
+    );
+    const hiddenTools = await listMcpTools(
+      denied,
+      "default",
+      denied.grantedScopes,
+    );
+    expect(enabledTools.length).toBeGreaterThan(0);
+    const featureTools = listStaticMcpToolDefinitions().filter(
+      (tool) => tool.featureId === LIST_VERIFICATION_FEATURE_ID,
+    );
+    for (const { name } of featureTools) {
+      expect(enabledTools.map((tool) => tool.name)).toContain(name);
+    }
+    const featureToolNames = new Set(featureTools.map(({ name }) => name));
+    expect(hiddenTools.map(({ name }) => name).toSorted()).toEqual(
+      enabledTools
+        .filter(({ name }) => !featureToolNames.has(name))
+        .map(({ name }) => name)
+        .toSorted(),
+    );
+    const hiddenNativeSurface = JSON.stringify(hiddenTools);
+    for (const id of featureCapabilities) {
+      expect(hiddenNativeSurface).not.toContain(id);
+    }
+    let projectedLayouts = 0;
+    for (const { id } of capabilityCatalog.filter(
+      (entry) =>
+        "featureId" in entry &&
+        entry.featureId === LIST_VERIFICATION_FEATURE_ID &&
+        "featureAccess" in entry &&
+        entry.featureAccess === "conditional",
+    )) {
+      const enabled = await handleMcpToolCall({
+        toolName: "describe_capability",
+        context: granted,
+        args: { capability: id },
+      });
+      const hidden = await handleMcpToolCall({
+        toolName: "describe_capability",
+        context: denied,
+        args: { capability: id },
+      });
+      const fullSchema = JSON.stringify(parseToolPayload(enabled));
+      const hiddenSchema = JSON.stringify(parseToolPayload(hidden));
+      if (fullSchema.includes('"avt"')) {
+        projectedLayouts += 1;
+      }
+      expect(hiddenSchema).not.toContain('"avt"');
+      expect(hidden.isError).not.toBe(true);
+    }
+    expect(projectedLayouts).toBeGreaterThan(0);
+    const enabledResources = listMcpResources("default", granted);
+    const hiddenResources = listMcpResources("default", denied);
+    expect(enabledResources.length).toBeGreaterThan(0);
+    // The production feature declares capability endpoints; its shared static
+    // references remain available and contain no dedicated capability names.
+    expect(hiddenResources.map(({ uri }) => uri).toSorted()).toEqual(
+      enabledResources.map(({ uri }) => uri).toSorted(),
+    );
+    for (const { uri } of hiddenResources) {
+      const resource = await readMcpResource(uri, "default", denied);
+      const text = JSON.stringify(resource);
+      for (const id of featureCapabilities) {
+        expect(text).not.toContain(id);
+      }
+    }
+  });
+
+  test("the real views list transport retains unavailable identities without layout details", async () => {
+    grantCurrentMember();
+    const view = {
+      id: toSafeId<"workspaceView">(resourceId),
+      workspaceId: toSafeId<"workspace">(matterId),
+      name: "Verification view",
+      position: 0,
+      createdAt: new Date("2026-10-02T10:00:00Z"),
+      layout: {
+        type: "avt",
+        version: 1,
+        listId: null,
+        filters: [],
+        sorts: [],
+        hiddenProperties: [],
+        calculations: [],
+      },
+    } satisfies typeof workspaceViews.$inferSelect;
+    const listedCapability = capabilityCatalog.find(
+      ({ id }) => id === "views.list",
+    );
+    expect(listedCapability).toMatchObject({
+      featureId: LIST_VERIFICATION_FEATURE_ID,
+      featureAccess: "conditional",
+    });
+    for (const caller of [
+      {},
+      { userId: "user_2", email: "another-member@example.test" },
+    ]) {
+      const fixture = verificationContext({ ...caller, viewRows: [view] });
+      const result = await handleMcpToolCall({
+        toolName: "invoke_capability",
+        context: fixture.context,
+        args: { capability: "views.list", input: { params: { matterId } } },
+      });
+      expect(result.isError).not.toBe(true);
+      const payload = parseToolPayload<unknown[]>(result);
+      expect(payload).toEqual(
+        caller.userId === undefined
+          ? [
+              {
+                version: 1,
+                id: view.id,
+                name: view.name,
+                position: view.position,
+                createdAt: view.createdAt.toISOString(),
+                layout: view.layout,
+              },
+            ]
+          : [
+              {
+                id: view.id,
+                layout: { type: "avt" },
+                eligibility: "unavailable",
+              },
+            ],
+      );
+    }
+    env.API_FEATURE_ACCESS_GRANTS = {};
+    const denied = await handleMcpToolCall({
+      toolName: "invoke_capability",
+      context: verificationContext({ viewRows: [view] }).context,
+      args: { capability: "views.list", input: { params: { matterId } } },
+    });
+    expect(denied.isError).not.toBe(true);
+    expect(parseToolPayload<unknown[]>(denied)).toEqual([
+      { id: view.id, layout: { type: "avt" }, eligibility: "unavailable" },
+    ]);
+  });
+
+  test("empty grants deny invoke and validate-only before resource lookup or mutation", async () => {
+    const fixture = verificationContext();
+    for (const [capability, input] of Object.entries(inputs)) {
+      for (const validate_only of [false, true]) {
+        const result = await handleMcpToolCall({
+          toolName: "invoke_capability",
+          context: fixture.context,
+          args: { capability, input, validate_only },
+        });
+        expect(errorEnvelope(result)).toMatchObject({
+          code: "not_found",
+          message: "Not found",
+        });
+      }
+    }
+    expect(fixture.resourceLookups()).toBe(0);
+    expect(fixture.mutations()).toBe(0);
+    expect(loadOrgSettingsMock).not.toHaveBeenCalled();
+    expect(consumeRateLimitMock).not.toHaveBeenCalled();
+  });
+
+  test("member grants advertise and validate every dedicated verification capability", async () => {
+    grantCurrentMember();
+    const fixture = verificationContext();
+    const listed: string[] = [];
+    for (const domain of ["lists"]) {
+      const result = await handleMcpToolCall({
+        toolName: "list_capabilities",
+        context: fixture.context,
+        args: { domain, limit: MAX_LIST_LIMIT },
+      });
+      listed.push(
+        ...parseToolPayload<{ items: { id: string }[] }>(result).items.map(
+          ({ id }) => id,
+        ),
+      );
+    }
+    for (const [capability, input] of Object.entries(inputs)) {
+      expect(listed).toContain(capability);
+      const described = await handleMcpToolCall({
+        toolName: "describe_capability",
+        context: fixture.context,
+        args: { capability },
+      });
+      expect(described.isError).not.toBe(true);
+      const result = await handleMcpToolCall({
+        toolName: "invoke_capability",
+        context: fixture.context,
+        args: { capability, input, validate_only: true },
+      });
+      expect(
+        parseToolPayload<{ valid: boolean; capability: string }>(result),
+      ).toEqual({ valid: true, capability });
+    }
+    expect(fixture.resourceLookups()).toBe(0);
+    expect(fixture.mutations()).toBe(0);
+    expect(loadOrgSettingsMock).not.toHaveBeenCalled();
+  });
+
+  test("MCP resolves current verified identity, membership, and organization for each grant", async () => {
+    grantCurrentMember();
+    for (const options of [
+      { email: "changed@example.test" },
+      { userId: "user_2", email: "another-member@example.test" },
+      { emailVerified: false },
+      { membership: "departed" },
+      { organizationId: "org_2" },
+    ] as const satisfies readonly VerificationContextOptions[]) {
+      const fixture = verificationContext(options);
+      const listed = await handleMcpToolCall({
+        toolName: "list_capabilities",
+        context: fixture.context,
+        args: { domain: "lists", limit: MAX_LIST_LIMIT },
+      });
+      const ids = parseToolPayload<{ items: { id: string }[] }>(
+        listed,
+      ).items.map(({ id }) => id);
+      for (const [capability, input] of Object.entries(inputs)) {
+        expect(ids).not.toContain(capability);
+        const described = await handleMcpToolCall({
+          toolName: "describe_capability",
+          context: fixture.context,
+          args: { capability },
+        });
+        expect(errorEnvelope(described)).toMatchObject({
+          code: "not_found",
+          message: "Not found",
+        });
+        for (const validate_only of [false, true]) {
+          const invoked = await handleMcpToolCall({
+            toolName: "invoke_capability",
+            context: fixture.context,
+            args: { capability, input, validate_only },
+          });
+          expect(errorEnvelope(invoked)).toMatchObject({
+            code: "not_found",
+            message: "Not found",
+          });
+        }
+      }
+      expect(fixture.resourceLookups()).toBe(0);
+      expect(fixture.mutations()).toBe(0);
+    }
+    expect(loadOrgSettingsMock).not.toHaveBeenCalled();
+    expect(consumeRateLimitMock).not.toHaveBeenCalled();
+  });
+
+  test("granted invocations reach their resource operations without model dispatch", async () => {
+    grantCurrentMember();
+    for (const [capability, input] of Object.entries(inputs)) {
+      const fixture = verificationContext();
+      const result = await handleMcpToolCall({
+        toolName: "invoke_capability",
+        context: fixture.context,
+        args: { capability, input },
+      });
+      if (capability === "lists.items.sources.verification.update") {
+        expect(result.isError).not.toBe(true);
+        expect(parseToolPayload<{ id: string }>(result)).toEqual({
+          id: resourceId,
+        });
+        expect(fixture.mutations()).toBe(1);
+        continue;
+      }
+      expect(fixture.resourceLookups()).toBeGreaterThan(0);
+      expect(fixture.mutations()).toBe(0);
+      if (capability === "lists.verifications.list") {
+        expect(result.isError).not.toBe(true);
+        expect(parseToolPayload<{ items: unknown[] }>(result)).toMatchObject({
+          items: [],
+        });
+      } else if (capability === "lists.verifications.latest.list") {
+        expect(result.isError).not.toBe(true);
+        expect(parseToolPayload<{ runs: unknown[] }>(result)).toEqual({
+          runs: [],
+        });
+      } else {
+        expect(errorEnvelope(result).code).toBe("not_found");
+        expect(errorEnvelope(result).message).toContain("not found");
+        expect(errorEnvelope(result).message).not.toBe("Not found");
+      }
+    }
+  });
 });
 
 describe("generated capability catalog", () => {
@@ -858,7 +1427,9 @@ describe("invoke_capability gates", () => {
       // Derived from the catalog, not a list: a capability that later becomes
       // destructive is covered without touching this test.
       const destructiveIds = capabilityCatalog
-        .filter((entry) => entry.destructive)
+        .filter(
+          (entry) => entry.destructive && !requiresVerificationGrant(entry),
+        )
         .map((entry) => entry.id);
       expect(destructiveIds.length).toBeGreaterThan(0);
 
@@ -2511,7 +3082,7 @@ describe("invoke_capability deployment feature gate", () => {
     expect(parseToolPayload<string>(result)).toContain("Date,");
   });
 
-  test("the attested omission is exactly the set list_capabilities hides", async () => {
+  test("discovery omits deployment-disabled and ungranted verification capabilities", async () => {
     disabledFeatures.add("FEATURE_TIME_BILLING");
     disabledFeatures.add("FEATURE_USAGE");
     const listed = new Set<string>();
@@ -2538,11 +3109,15 @@ describe("invoke_capability deployment feature gate", () => {
       .filter((id) => !listed.has(id))
       .toSorted();
     expect(hidden).toContain("usage.entitlement.get");
-    expect(
-      await featureOmittedCapabilityIds(
-        (feature) => feature === undefined || !disabledFeatures.has(feature),
-      ),
-    ).toEqual(hidden);
+    const disabledIds = await featureOmittedCapabilityIds(
+      (feature) => feature === undefined || !disabledFeatures.has(feature),
+    );
+    const ungrantedIds = capabilityCatalog
+      .filter(requiresVerificationGrant)
+      .map(({ id }) => id);
+    expect([...new Set([...disabledIds, ...ungrantedIds])].toSorted()).toEqual(
+      hidden,
+    );
   });
 
   test("describe exposes the feature flag on an enabled entry", async () => {
@@ -2669,9 +3244,14 @@ describe("feature access discovery guard: real capability catalog", () => {
         context,
       });
       expect(parseToolPayload<{ items: unknown[] }>(list).items).toHaveLength(
-        0,
+        capabilityCatalog.filter(
+          (entry) => entry.featureAccess === "conditional",
+        ).length,
       );
-      for (const { id } of capabilityCatalog) {
+      for (const { id, featureAccess } of capabilityCatalog) {
+        if (featureAccess === "conditional") {
+          continue;
+        }
         const described = await handleMcpToolCall({
           toolName: "describe_capability",
           args: { capability: id },
