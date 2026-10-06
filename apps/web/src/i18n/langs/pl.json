@@ -4671,6 +4671,7 @@
     "citingDecisionShowSnippet": "Pokaż cały fragment",
     "citingDecisionsCourtPlaceholder": "Wszystkie sądy",
     "citingDecisionsFilterPlaceholder": "Filtruj wczytane orzeczenia",
+    "citingDecisionsSnapshotCapped": "Wyświetlono {count} orzeczeń (do {limit} najczęściej wspominających o tym przepisie).",
     "citingDecisionsSortCitations": "Wzmianki o tym przepisie",
     "citingDecisionsSortDate": "Data orzeczenia",
     "citingDecisionsYear": "Rok orzeczenia",

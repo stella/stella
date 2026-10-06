@@ -44,7 +44,10 @@ import {
   statuteOptions,
   statuteVersionsOptions,
 } from "@/features/statutes/queries/statutes";
-import { readProvisionCitingSearch } from "@/features/statutes/statute-page-search";
+import {
+  readProvisionCitingSearch,
+  updateProvisionCitingSearch,
+} from "@/features/statutes/statute-page-search";
 import { useFormatter } from "@/i18n/formatting-context";
 import { optionalArray } from "@/lib/arrays";
 import { detached } from "@/lib/detached";
@@ -283,7 +286,8 @@ export const ProvisionInspectorView = ({
                     detached(
                       navigate({
                         to: ".",
-                        search: (previous) => ({ ...previous, ...filters }),
+                        search: (previous) =>
+                          updateProvisionCitingSearch(previous, filters),
                         replace: true,
                       }),
                       "statutes.citing-decisions-filters",

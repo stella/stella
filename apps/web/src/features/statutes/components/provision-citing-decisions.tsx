@@ -17,6 +17,7 @@ import { CitingDecisionItem } from "@/features/statutes/components/citing-decisi
 import { citingDecisionsInfiniteOptions } from "@/features/statutes/queries/citing-decisions";
 import { readProvisionCitingSearch } from "@/features/statutes/statute-page-search";
 import type { ProvisionCitingSearch } from "@/features/statutes/statute-page-search";
+import { useFormatter } from "@/i18n/formatting-context";
 import type { api } from "@/lib/api";
 import { optionalArray } from "@/lib/arrays";
 import { detached } from "@/lib/detached";
@@ -45,6 +46,7 @@ export const ProvisionCitingDecisions = ({
   onFiltersChange,
 }: ProvisionCitingDecisionsProps) => {
   const t = useTranslations();
+  const format = useFormatter();
   const {
     data,
     fetchNextPage,
@@ -66,6 +68,7 @@ export const ProvisionCitingDecisions = ({
     }
   }
   const decisions = [...byDecision.values()];
+  const snapshot = data?.pages.at(0)?.snapshot;
   return (
     <div className="flex flex-col gap-2">
       <form
@@ -135,6 +138,14 @@ export const ProvisionCitingDecisions = ({
           </SelectContent>
         </Select>
       </form>
+      {snapshot?.type === "capped" && (
+        <p className="text-muted-foreground text-xs">
+          {t("statutes.citingDecisionsSnapshotCapped", {
+            count: format.number(decisions.length),
+            limit: format.number(snapshot.limit),
+          })}
+        </p>
+      )}
       {isPending && <CitingDecisionsLoader />}
       {isError && (
         <div className="flex flex-col items-start gap-1" role="alert">

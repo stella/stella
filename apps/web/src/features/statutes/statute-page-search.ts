@@ -60,6 +60,26 @@ export type ProvisionCitingSearch = v.InferOutput<
   typeof provisionCitingSearchSchema
 >;
 
+export const updateProvisionCitingSearch = <T extends Record<string, unknown>>(
+  previous: T,
+  filters: ProvisionCitingSearch,
+) => {
+  const {
+    citingCourt: _court,
+    citingYear: _year,
+    citingSort: _sort,
+    ...rest
+  } = previous;
+  return {
+    ...rest,
+    citingSort: filters.citingSort,
+    ...(filters.citingCourt ? { citingCourt: filters.citingCourt } : {}),
+    ...(filters.citingYear === undefined
+      ? {}
+      : { citingYear: filters.citingYear }),
+  };
+};
+
 export const publicStatuteSearchSchema = v.object({
   ...provisionCitingSearchSchema.entries,
   citingSort: v.optional(v.picklist(PROVISION_CITING_DECISION_SORTS)),

@@ -4671,6 +4671,7 @@
     "citingDecisionShowSnippet": "Zobraziť celý úryvok",
     "citingDecisionsCourtPlaceholder": "Všetky súdy",
     "citingDecisionsFilterPlaceholder": "Filtrovať načítané rozhodnutia",
+    "citingDecisionsSnapshotCapped": "Zobrazených {count} rozhodnutí (najviac {limit} s najväčším počtom zmienok o tomto ustanovení).",
     "citingDecisionsSortCitations": "Zmienky o tomto ustanovení",
     "citingDecisionsSortDate": "Dátum rozhodnutia",
     "citingDecisionsYear": "Rok rozhodnutia",

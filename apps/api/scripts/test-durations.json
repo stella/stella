@@ -259,10 +259,6 @@
     "seconds": 4.6,
     "source": "measured"
   },
-  "src/db/case-law-provision-extraction-scope-read-digest.db.test.ts": {
-    "seconds": 1,
-    "source": "estimated"
-  },
   "src/db/case-law-provision-extraction-state.db.test.ts": {
     "seconds": 3.443943,
     "source": "estimated"

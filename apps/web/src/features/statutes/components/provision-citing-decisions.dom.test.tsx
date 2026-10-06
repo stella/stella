@@ -1,6 +1,7 @@
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { afterAll, afterEach, expect, test } from "bun:test";
 
+import { PROVISION_CITING_SNAPSHOT_LIMIT } from "@stll/api-contract/provision-citing-decisions";
 import { DECISION_DATE_VERSION_BASIS } from "@stll/api-contract/provision-version-basis";
 
 import { readProvisionCitingSearch } from "@/features/statutes/statute-page-search";
@@ -89,15 +90,15 @@ const firstDecision = makeDecision(
   "00000000-0000-4000-8000-000000000011",
   "1 C 11/2020",
 );
-const replacementDecision = makeDecision(
-  "00000000-0000-4000-8000-000000000012",
-  "1 C 12/2020",
-);
 type CitingPage = PublicLawData<
   (typeof api.case.provisions)["citing-decisions"]["get"]
 >;
-const page = (items: CitingDecisionRow[], nextCursor: string | null = null) =>
-  ({ items, limit: 10, nextCursor }) satisfies CitingPage;
+const page = (
+  items: CitingDecisionRow[],
+  nextCursor: string | null = null,
+  snapshot: CitingPage["snapshot"] = null,
+  limit = 10,
+) => ({ items, limit, nextCursor, snapshot }) satisfies CitingPage;
 
 const createClient = () => {
   const client = new QueryClient({
@@ -161,9 +162,10 @@ const seedPages = (
   client: InstanceType<typeof QueryClient>,
   pages: CitingPage[],
   pageParams: (string | null)[],
+  filters: ProvisionCitingSearch = initialFilters,
 ) => {
   client.setQueryData(
-    citingDecisionsInfiniteOptions(citingDecisionKey, initialFilters).queryKey,
+    citingDecisionsInfiniteOptions(citingDecisionKey, filters).queryKey,
     {
       pageParams,
       pages,
@@ -175,7 +177,16 @@ const seed = (
   client: InstanceType<typeof QueryClient>,
   items: CitingDecisionRow[],
   nextCursor: string | null = null,
-) => seedPages(client, [page(items, nextCursor)], [null]);
+  filters: ProvisionCitingSearch = initialFilters,
+  snapshot: CitingPage["snapshot"] = null,
+  limit = 10,
+) =>
+  seedPages(
+    client,
+    [page(items, nextCursor, snapshot, limit)],
+    [null],
+    filters,
+  );
 
 for (const [locale, messages] of [
   ["en", en],
@@ -261,33 +272,54 @@ for (const [locale, messages] of [
     expect(ui.getByText(messages.common.noResults)).toBeTruthy();
     expect(ui.queryByRole("status")).toBeNull();
   });
+
+  test(`${locale}: capped citation snapshot shows its count and has no load more`, async () => {
+    const client = createClient();
+    const filters = readProvisionCitingSearch({ citingSort: "citations" });
+    seed(
+      client,
+      [firstDecision],
+      null,
+      filters,
+      { type: "capped", limit: PROVISION_CITING_SNAPSHOT_LIMIT },
+      PROVISION_CITING_SNAPSHOT_LIMIT,
+    );
+    const ui = await mount({ client, locale, messages, filters });
+    const localizedCount = locale === "ar" ? "١" : "1";
+    const localizedLimit = locale === "ar" ? "٢٠٠" : "200";
+    const capNotice = ui.getByText(
+      (_, element) =>
+        element?.tagName === "P" &&
+        element.textContent?.includes(localizedCount) === true &&
+        element.textContent.includes(localizedLimit),
+    );
+
+    expect(capNotice.textContent).toBe(
+      messages.statutes.citingDecisionsSnapshotCapped
+        .replace("{count}", () => localizedCount)
+        .replace("{limit}", () => localizedLimit),
+    );
+    expect(
+      ui.queryByRole("button", { name: messages.common.loadMore }),
+    ).toBeNull();
+  });
+
+  test(`${locale}: complete citation snapshot has no cap notice or load more`, async () => {
+    const client = createClient();
+    const filters = readProvisionCitingSearch({ citingSort: "citations" });
+    seed(
+      client,
+      [firstDecision],
+      null,
+      filters,
+      { type: "complete", limit: PROVISION_CITING_SNAPSHOT_LIMIT },
+      PROVISION_CITING_SNAPSHOT_LIMIT,
+    );
+    const ui = await mount({ client, locale, messages, filters });
+
+    expect(ui.queryByText((_, element) => element?.tagName === "P")).toBeNull();
+    expect(
+      ui.queryByRole("button", { name: messages.common.loadMore }),
+    ).toBeNull();
+  });
 }
-
-test("a stale next-page cursor resets the active query from page one", async () => {
-  const requests: URL[] = [];
-  globalThis.fetch = Object.assign(
-    async (input: RequestInfo | URL) => {
-      const requestUrl = new URL(
-        input instanceof Request ? input.url : String(input),
-      );
-      requests.push(requestUrl);
-      return requestUrl.searchParams.has("cursor")
-        ? Response.json({ message: "Generation changed" }, { status: 409 })
-        : Response.json(page([replacementDecision]));
-    },
-    { preconnect: originalFetch.preconnect },
-  );
-  const client = createClient();
-  seed(client, [firstDecision], "stale-cursor");
-  const ui = await mount({ client });
-  expect(ui.getByRole("link", { name: /1 C 11\/2020/u })).toBeTruthy();
-
-  fireEvent.click(ui.getByRole("button", { name: en.common.loadMore }));
-  await waitFor(() =>
-    expect(ui.getByRole("link", { name: /1 C 12\/2020/u })).toBeTruthy(),
-  );
-  expect(requests).toHaveLength(2);
-  expect(requests.at(0)?.searchParams.has("cursor")).toBe(true);
-  expect(requests.at(1)?.searchParams.has("cursor")).toBe(false);
-  expect(ui.queryByRole("link", { name: /1 C 11\/2020/u })).toBeNull();
-});

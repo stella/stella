@@ -1,5 +1,7 @@
 import { infiniteQueryOptions, queryOptions } from "@tanstack/react-query";
 
+import { PROVISION_CITING_SNAPSHOT_LIMIT } from "@stll/api-contract/provision-citing-decisions";
+
 import type { ProvisionCitingSearch } from "@/features/statutes/statute-page-search";
 import { api } from "@/lib/api";
 import { nullableStringCursorSeed } from "@/lib/infinite-query";
@@ -97,37 +99,34 @@ export const citingDecisionsInfiniteOptions = (
   const queryKey = [...citingDecisionKeys.forProvision(key), filters];
   return infiniteQueryOptions({
     queryKey,
-    queryFn: async ({
-      client,
-      pageParam,
-      signal,
-      queryKey: activeQueryKey,
-    }) => {
+    queryFn: async ({ pageParam, signal }) => {
+      const isCitationsSnapshot = filters.citingSort === "citations";
       const response = await api.case.provisions["citing-decisions"].get({
         query: {
           anchor: key.anchor,
           eli: key.eli,
           jurisdiction: key.jurisdiction,
-          limit: PAGE_SIZE,
+          limit: isCitationsSnapshot
+            ? PROVISION_CITING_SNAPSHOT_LIMIT
+            : PAGE_SIZE,
           sort: filters.citingSort,
           ...(filters.citingCourt ? { court: filters.citingCourt } : {}),
           ...(filters.citingYear === undefined
             ? {}
             : { year: filters.citingYear }),
-          ...(pageParam !== null && { cursor: pageParam }),
+          ...(!isCitationsSnapshot &&
+            pageParam !== null && { cursor: pageParam }),
         },
         fetch: { signal },
       });
 
-      if (pageParam !== null && response.error?.status === 409) {
-        await client.resetQueries({ queryKey: activeQueryKey, exact: true });
-      }
       const data = unwrapPublicLawEden(response, "listPublicCitingDecisions");
 
       return data;
     },
     initialPageParam: nullableStringCursorSeed(),
-    getNextPageParam: (lastPage) => lastPage.nextCursor,
+    getNextPageParam: (lastPage) =>
+      filters.citingSort === "citations" ? null : lastPage.nextCursor,
     staleTime: ROUTE_QUERY_STALE_TIME_MS,
   });
 };

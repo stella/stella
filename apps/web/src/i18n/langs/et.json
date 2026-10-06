@@ -4671,6 +4671,7 @@
     "citingDecisionShowSnippet": "Näita kogu lõiku",
     "citingDecisionsCourtPlaceholder": "Kõik kohtud",
     "citingDecisionsFilterPlaceholder": "Filtreeri laaditud lahendeid",
+    "citingDecisionsSnapshotCapped": "Kuvatakse {count} lahendit (kuni {limit} kõige rohkem seda sätet maininud lahendit).",
     "citingDecisionsSortCitations": "Viited sellele sättele",
     "citingDecisionsSortDate": "Lahendi kuupäev",
     "citingDecisionsYear": "Lahendi aasta",

@@ -1,4 +1,3 @@
-import { panic } from "better-result";
 import { and, desc, eq, gte, isNull, lt, sql } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
 import { status, t } from "elysia";
@@ -12,6 +11,7 @@ import {
 import {
   PROVISION_CITING_DECISION_SORTS,
   PROVISION_CITING_FILTER_LIMITS,
+  PROVISION_CITING_SNAPSHOT_LIMIT,
 } from "@stll/api-contract/provision-citing-decisions";
 
 import {
@@ -64,7 +64,14 @@ export const listCitingDecisionsQuerySchema = t.Object({
   work: t.Optional(t.String({ minLength: 1, maxLength: 256 })),
   eli: t.Optional(t.String({ minLength: 1, maxLength: 512 })),
   anchor: t.Optional(t.String({ minLength: 1, maxLength: 256 })),
-  limit: t.Optional(tPaginationLimit(LIMITS.caseLawSearchPageSizeMax)),
+  limit: t.Optional(
+    tPaginationLimit(
+      Math.max(
+        LIMITS.caseLawSearchPageSizeMax,
+        PROVISION_CITING_SNAPSHOT_LIMIT,
+      ),
+    ),
+  ),
   cursor: t.Optional(tPaginationCursor()),
   sort: t.Optional(
     t.Union([
@@ -120,8 +127,6 @@ const decisionDateCursorSql = sql<string>`to_char(${decisionDateKeySql}, 'YYYY-M
 
 type CitingDecisionsCursor = {
   context: string;
-  generation: string;
-  mentionCount: number;
   decisionDate: string;
   decisionId: string;
 };
@@ -130,24 +135,19 @@ const decodeCitingDecisionsCursor = (
   cursor: string,
 ): CitingDecisionsCursor | null => {
   const parts = decodePaginationCursor(cursor);
-  if (parts?.length !== 5) {
+  if (parts?.length !== 3) {
     return null;
   }
-  const [context, generation, mentionCount, decisionDate, decisionId] = parts;
+  const [context, decisionDate, decisionId] = parts;
   if (
     typeof context !== "string" ||
     !/^[a-f0-9]{64}$/u.test(context) ||
-    typeof generation !== "string" ||
-    !/^[a-f0-9]{64}$/u.test(generation) ||
-    typeof mentionCount !== "number" ||
-    !Number.isSafeInteger(mentionCount) ||
-    mentionCount < 1 ||
     !isDateOnlyPaginationCursorPart(decisionDate) ||
     !isUuidPaginationCursorPart(decisionId)
   ) {
     return null;
   }
-  return { context, generation, mentionCount, decisionDate, decisionId };
+  return { context, decisionDate, decisionId };
 };
 
 type CitingDecisionRowsOptions = {
@@ -216,10 +216,7 @@ const readCitingDecisionRows = async ({
 
   let continuation: SQL | undefined;
   if (cursor !== null) {
-    continuation =
-      sort === "citations"
-        ? sql`(${mentions.mentionCount}, ${mentions.decisionDateCursor}, ${mentions.decisionId}) < (${cursor.mentionCount}::integer, ${cursor.decisionDate}::text, ${cursor.decisionId}::uuid)`
-        : sql`(${mentions.decisionDateCursor}, ${mentions.decisionId}) < (${cursor.decisionDate}::text, ${cursor.decisionId}::uuid)`;
+    continuation = sql`(${mentions.decisionDateCursor}, ${mentions.decisionId}) < (${cursor.decisionDate}::text, ${cursor.decisionId}::uuid)`;
   }
   const citing = await tx
     .select({
@@ -316,12 +313,21 @@ export const listCitingDecisionsHandler = async (
     return status(400, { message: "Name exactly one of work or eli" });
   }
 
-  const limit = normalizeTenantPageLimit(
-    query.limit ?? LIMITS.caseLawSearchPageSizeDefault,
-  );
+  const byCitations = query.sort === "citations";
+  const limit = byCitations
+    ? PROVISION_CITING_SNAPSHOT_LIMIT
+    : normalizeTenantPageLimit(
+        Math.min(
+          query.limit ?? LIMITS.caseLawSearchPageSizeDefault,
+          LIMITS.caseLawSearchPageSizeMax,
+        ),
+      );
   const byAuthority = query.sort === "authority";
   if (byAuthority && query.cursor !== undefined) {
     return status(400, { message: "Authority order has no cursor" });
+  }
+  if (byCitations && query.cursor !== undefined) {
+    return status(400, { message: "Citations order has no cursor" });
   }
   const context = createHash("sha256")
     .update(
@@ -370,58 +376,36 @@ export const listCitingDecisionsHandler = async (
     );
   }
 
-  const result = await caseLawDb(
-    async (tx) => {
-      // The clock and the page share one snapshot, including extraction replacement.
-      const [scope] = await tx.select({
-        generation:
-          sql<string>`public.case_law_provision_extraction_scope_generation_digest(${jurisdiction}::varchar)`.as(
-            "generation",
-          ),
-      });
-      const generation =
-        scope?.generation ??
-        panic("Provision extraction scope digest is absent");
-      if (cursor !== null && cursor.generation !== generation) {
-        return { type: "changed" } as const;
-      }
-
-      return {
-        type: "page",
-        generation,
-        rows: await readCitingDecisionRows({
-          tx,
-          conditions,
-          cursor,
-          sort: query.sort,
-          limit,
-          courtRegistry,
-        }),
-      } as const;
-    },
-    { isolation: "repeatable-read" },
+  const rows = await caseLawDb((tx) =>
+    readCitingDecisionRows({
+      tx,
+      conditions,
+      cursor,
+      sort: query.sort,
+      limit,
+      courtRegistry,
+    }),
   );
-  if (result.type === "changed") {
-    return status(409, {
-      type: "conflict",
-      message: "Provision citations changed; restart pagination",
-    });
-  }
   const page = createCursorPage({
-    rows: result.rows,
+    rows,
     limit,
     cursorForItem: (item) =>
       encodePaginationCursor([
         context,
-        result.generation,
-        item.mentionCount,
         item.decisionDateCursor,
         item.decisionId,
       ]),
   });
   return {
     ...page,
-    nextCursor: byAuthority ? null : page.nextCursor,
+    nextCursor: byAuthority || byCitations ? null : page.nextCursor,
+    snapshot: byCitations
+      ? {
+          type:
+            rows.length > limit ? ("capped" as const) : ("complete" as const),
+          limit: PROVISION_CITING_SNAPSHOT_LIMIT,
+        }
+      : null,
     items: page.items.map(
       ({ anchor: _anchor, decisionDateCursor: _decisionDateCursor, ...item }) =>
         projectProvisionVersion(item),

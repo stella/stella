@@ -4671,6 +4671,7 @@
     "citingDecisionShowSnippet": "Rādīt pilnu fragmentu",
     "citingDecisionsCourtPlaceholder": "Visas tiesas",
     "citingDecisionsFilterPlaceholder": "Filtrēt ielādētos nolēmumus",
+    "citingDecisionsSnapshotCapped": "Parādīti {count} nolēmumi (līdz {limit} nolēmumiem, kuros šī norma pieminēta visbiežāk).",
     "citingDecisionsSortCitations": "Šīs normas pieminējumi",
     "citingDecisionsSortDate": "Nolēmuma datums",
     "citingDecisionsYear": "Nolēmuma gads",

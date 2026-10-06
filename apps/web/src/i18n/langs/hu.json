@@ -4671,6 +4671,7 @@
     "citingDecisionShowSnippet": "Teljes szövegrész megjelenítése",
     "citingDecisionsCourtPlaceholder": "Minden bíróság",
     "citingDecisionsFilterPlaceholder": "Betöltött határozatok szűrése",
+    "citingDecisionsSnapshotCapped": "{count} határozat megjelenítve (legfeljebb a rendelkezést legtöbbször említő {limit} határozatból).",
     "citingDecisionsSortCitations": "A rendelkezés említései",
     "citingDecisionsSortDate": "A határozat dátuma",
     "citingDecisionsYear": "A határozat éve",

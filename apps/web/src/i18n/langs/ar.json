@@ -4671,6 +4671,7 @@
     "citingDecisionShowSnippet": "إظهار المقطع كاملًا",
     "citingDecisionsCourtPlaceholder": "كل المحاكم",
     "citingDecisionsFilterPlaceholder": "تصفية الأحكام المحمَّلة",
+    "citingDecisionsSnapshotCapped": "{count} من القرارات المعروضة (ضمن أفضل {limit} قرارًا حسب عدد مرات ذكر هذا النص).",
     "citingDecisionsSortCitations": "مرات ذكر هذا الحكم لهذا النص",
     "citingDecisionsSortDate": "تاريخ القرار",
     "citingDecisionsYear": "سنة القرار",

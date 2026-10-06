@@ -4674,6 +4674,7 @@ type Messages = {
     "citingDecisionShowSnippet": "Show full passage";
     "citingDecisionsCourtPlaceholder": "All courts";
     "citingDecisionsFilterPlaceholder": "Filter loaded decisions";
+    "citingDecisionsSnapshotCapped": "{count} decisions shown (the top {limit} by mentions of this provision).";
     "citingDecisionsSortCitations": "Mentions of this provision";
     "citingDecisionsSortDate": "Decision date";
     "citingDecisionsYear": "Decision year";

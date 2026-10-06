@@ -4671,6 +4671,7 @@
     "citingDecisionShowSnippet": "Afficher le passage complet",
     "citingDecisionsCourtPlaceholder": "Toutes les juridictions",
     "citingDecisionsFilterPlaceholder": "Filtrer les décisions chargées",
+    "citingDecisionsSnapshotCapped": "{count} décisions affichées (parmi les {limit} qui mentionnent le plus cette disposition).",
     "citingDecisionsSortCitations": "Mentions de cette disposition",
     "citingDecisionsSortDate": "Date de la décision",
     "citingDecisionsYear": "Année de la décision",

@@ -4671,6 +4671,7 @@
     "citingDecisionShowSnippet": "Mostrar trecho completo",
     "citingDecisionsCourtPlaceholder": "Todos os tribunais",
     "citingDecisionsFilterPlaceholder": "Filtrar as decisões carregadas",
+    "citingDecisionsSnapshotCapped": "{count} decisões exibidas (entre as {limit} com mais menções a este dispositivo).",
     "citingDecisionsSortCitations": "Menções a este dispositivo",
     "citingDecisionsSortDate": "Data da decisão",
     "citingDecisionsYear": "Ano da decisão",

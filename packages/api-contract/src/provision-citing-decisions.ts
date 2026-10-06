@@ -6,3 +6,5 @@ export const PROVISION_CITING_FILTER_LIMITS = {
   yearMin: 1,
   yearMax: 9998,
 } as const;
+
+export const PROVISION_CITING_SNAPSHOT_LIMIT = 200;

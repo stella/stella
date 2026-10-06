@@ -4671,6 +4671,7 @@
     "citingDecisionShowSnippet": "Vollständige Passage anzeigen",
     "citingDecisionsCourtPlaceholder": "Alle Gerichte",
     "citingDecisionsFilterPlaceholder": "Geladene Entscheidungen filtern",
+    "citingDecisionsSnapshotCapped": "{count} Entscheidungen angezeigt (höchstens die {limit} mit den meisten Erwähnungen dieser Vorschrift).",
     "citingDecisionsSortCitations": "Erwähnungen dieser Vorschrift",
     "citingDecisionsSortDate": "Entscheidungsdatum",
     "citingDecisionsYear": "Entscheidungsjahr",
