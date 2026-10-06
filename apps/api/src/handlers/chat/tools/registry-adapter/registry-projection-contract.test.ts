@@ -2423,7 +2423,16 @@ describe("decision text in chat projection", () => {
       projectionDigest: null,
       documentUrl: "https://example.test/decision/document",
       ecli: "ECLI:CZ:NS:2020:22.CDO.1000.2020.1",
-      identifiers: [],
+      identifiers: [
+        {
+          type: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
+          value: "22 Cdo 1000/2020",
+        },
+        {
+          type: DECISION_IDENTIFIER_TYPES.ECLI,
+          value: "ECLI:CZ:NS:2020:22.CDO.1000.2020.1",
+        },
+      ],
       fulltext: text,
       judges: [],
       headnote: { type: "absent", reason: "not_published" },
