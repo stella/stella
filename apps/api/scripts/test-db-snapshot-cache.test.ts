@@ -16,6 +16,7 @@ import path from "node:path";
 import {
   acquireCachedSnapshot,
   acquireCurrentSnapshot,
+  snapshotDigest,
   snapshotInputPaths,
   snapshotKey,
   SnapshotBuildError,
@@ -266,6 +267,78 @@ test("abort stops a cache-lock wait promptly", async () => {
     expect(builds).toBe(0);
   } finally {
     clearTimeout(abort);
+  }
+});
+
+test("abort during cached validation preserves the archive and digest", async () => {
+  const root = fixture();
+  const cacheDir = path.join(root, "cache");
+  mkdirSync(cacheDir);
+  for (const behavior of ["false", "throws"] as const) {
+    const key = behavior === "false" ? "a".repeat(64) : "c".repeat(64);
+    const finalPath = path.join(cacheDir, `${key}.tar`);
+    const digestPath = path.join(cacheDir, `${key}.sha256`);
+    writeFileSync(finalPath, `valid cached snapshot ${behavior}`);
+    const digest = await snapshotDigest(finalPath);
+    writeFileSync(digestPath, digest);
+    const controller = new AbortController();
+    const rejection = await acquireCachedSnapshot({
+      cacheDir,
+      key,
+      build: async () => {
+        throw new Error("A cached snapshot must not be rebuilt");
+      },
+      validate: async () => {
+        controller.abort();
+        if (behavior === "throws") {
+          throw new Error("snapshot validation interrupted");
+        }
+        return false;
+      },
+      signal: controller.signal,
+    }).then(
+      () => {
+        throw new Error("Expected snapshot acquisition to reject");
+      },
+      (error: unknown) => error,
+    );
+
+    expect(rejection).toBeInstanceOf(SnapshotBuildError);
+    expect(readFileSync(finalPath, "utf-8")).toBe(
+      `valid cached snapshot ${behavior}`,
+    );
+    expect(readFileSync(digestPath, "utf-8")).toBe(digest);
+  }
+});
+
+test("abort during built snapshot validation propagates for false and throws", async () => {
+  const root = fixture();
+  const cacheDir = path.join(root, "cache");
+  for (const behavior of ["false", "throws"] as const) {
+    const key = behavior === "false" ? "b".repeat(64) : "d".repeat(64);
+    const controller = new AbortController();
+    const rejection = await acquireCachedSnapshot({
+      cacheDir,
+      key,
+      build: async (filePath) => {
+        writeFileSync(filePath, `new snapshot ${behavior}`);
+      },
+      validate: async () => {
+        controller.abort();
+        if (behavior === "throws") {
+          throw new Error("snapshot validation interrupted");
+        }
+        return false;
+      },
+      signal: controller.signal,
+    }).then(
+      () => {
+        throw new Error("Expected snapshot acquisition to reject");
+      },
+      (error: unknown) => error,
+    );
+
+    expect(rejection).toBeInstanceOf(SnapshotBuildError);
   }
 });
 

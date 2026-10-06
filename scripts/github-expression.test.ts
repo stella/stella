@@ -1,10 +1,63 @@
 import { describe, expect, test } from "bun:test";
 
-import { UNKNOWN, definitelyFalse, evaluate } from "./github-expression";
+import {
+  UNKNOWN,
+  contextFromNested,
+  definitelyFalse,
+  evaluate,
+} from "./github-expression";
 
 const none = { values: {} };
 
 describe("GitHub expression evaluation", () => {
+  test("nested contexts preserve projections, status functions and unknown paths", () => {
+    const context = contextFromNested({
+      github: {
+        event: {
+          pull_request: { labels: [{ name: "prove-fix" }, { name: "other" }] },
+        },
+      },
+      needs: { "ci-plan": { outputs: { trusted: "true" } } },
+      always: () => true,
+      cancelled: () => false,
+    });
+    expect(
+      evaluate(
+        "contains(github.event.pull_request.labels.*.name, 'prove-fix')",
+        context,
+      ),
+    ).toBe(true);
+    expect(
+      evaluate(
+        "needs.ci-plan.outputs.trusted == 'true' && always() && !cancelled()",
+        context,
+      ),
+    ).toBe(true);
+    expect(evaluate("github.event.pull_request.missing", context)).toBe(
+      UNKNOWN,
+    );
+    expect(
+      evaluate("github.event.pull_request.labels.*.missing", context),
+    ).toEqual([]);
+    expect(
+      evaluate(
+        "contains(github.event.pull_request.labels.*.name, 'prove-fix')",
+        contextFromNested({
+          github: { event: { pull_request: { labels: [] } } },
+        }),
+      ),
+    ).toBe(false);
+    expect(evaluate("github.event.pull_request.labels.name", context)).toBe(
+      UNKNOWN,
+    );
+    expect(
+      evaluate("github.event.pull_request.labels.name.name", context),
+    ).toBe(UNKNOWN);
+    expect(() => contextFromNested({ always: () => "yes" })).toThrow(
+      "Invalid GitHub status function result",
+    );
+  });
+
   test("unpinned context is unknown and follows three-valued logic", () => {
     expect(evaluate("github.ref", none)).toBe(UNKNOWN);
     expect(evaluate("github.ref == 'x'", none)).toBe(UNKNOWN);

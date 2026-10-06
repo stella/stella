@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
 import { CLAUSE_DIRECTIVES_INVALID_CODE } from "@stll/api-contract";
+import { HOSTED_CHECKOUT_REFUSAL_CODE } from "@stll/api-contract/hosted-checkout";
 import { FILE_PROPERTY_TYPE_IMMUTABLE_CODE } from "@stll/api-contract/property-policy";
 
 import messages from "@/i18n/langs/en.json";
@@ -100,6 +101,19 @@ describe("toAPIError", () => {
     expect(error.rawMessage).toBe("Raw capacity refusal");
     expect(shouldRetryAPIRequest(0, error)).toBe(false);
   });
+  test.each(Object.values(HOSTED_CHECKOUT_REFUSAL_CODE))(
+    "shows the localized hosted checkout refusal %s",
+    (code) => {
+      const error = toAPIError({
+        status: 409,
+        value: { code, message: "Raw checkout refusal" },
+      });
+      const message = userErrorFromThrown(error, "fallback");
+      expect(message).not.toBe("fallback");
+      expect(message).not.toBe("Raw checkout refusal");
+      expect(Object.values(messages.errors.apiCodes)).toContain(message);
+    },
+  );
   test("localizes string payloads by status and preserves the raw message", () => {
     const error = toAPIError({
       status: 400,

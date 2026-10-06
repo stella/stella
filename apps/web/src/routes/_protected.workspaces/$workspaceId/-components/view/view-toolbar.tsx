@@ -3,7 +3,7 @@ import { Fragment, useState } from "react";
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { getRouteApi } from "@tanstack/react-router";
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import { useTranslations } from "use-intl";
 
 import type { PlaybookRunProjection } from "@stll/api-contract";
@@ -47,8 +47,10 @@ import { ViewToolbarChrome } from "@stll/ui/view-toolbar";
 
 import { CsvIcon, DocxIcon, XlsxIcon } from "@/components/document-icon";
 import { FolderExpandToggle } from "@/components/file-tree/folder-expand-toggle";
+import { AiColumnSelectionAction } from "@/components/workspaces/ai-column-run-controls";
 import { BulkAddColumns } from "@/components/workspaces/bulk-add-columns";
 import { getInternalPropertyId } from "@/components/workspaces/entity-utils";
+import { useStartWorkflow } from "@/components/workspaces/hooks/use-start-workflow";
 import { PropertyIcon } from "@/components/workspaces/property-helpers";
 import { RowActions } from "@/components/workspaces/row-actions";
 import { ColumnToggle } from "@/components/workspaces/table/column-toggle";
@@ -137,6 +139,14 @@ export const ViewToolbar = ({
     });
   };
   const columnToggleGroups = useMatterColumnToggleGroups(properties);
+  const aiProperties =
+    view.layout.type === "table"
+      ? properties.filter(
+          (property) =>
+            property.tool.type === "ai-model" &&
+            !hiddenProperties.includes(property.id),
+        )
+      : [];
 
   return (
     <ViewToolbarChrome
@@ -288,6 +298,7 @@ export const ViewToolbar = ({
 
       {view.layout.type === "table" && (
         <SelectionActions
+          aiProperties={aiProperties}
           selectedEntities={selectedEntities}
           workspaceId={workspaceId}
         />
@@ -297,6 +308,7 @@ export const ViewToolbar = ({
 };
 
 type SelectionActionsProps = {
+  aiProperties: readonly WorkspaceProperty[];
   selectedEntities: WorkspaceEntity[] | undefined;
   workspaceId: string;
 };
@@ -307,14 +319,62 @@ type SelectionActionsProps = {
  * toolbar and the row context menu cannot drift apart.
  */
 const SelectionActions = ({
+  aiProperties,
   selectedEntities,
   workspaceId,
 }: SelectionActionsProps) => {
   const t = useTranslations();
+  const startWorkflow = useStartWorkflow(workspaceId);
+  const [isRunningAIColumns, setIsRunningAIColumns] = useState(false);
   const firstSelected = selectedEntities?.at(0);
   if (!firstSelected || selectedEntities === undefined) {
     return null;
   }
+  const selectedRunRows = selectedEntities.filter(
+    (entity) => entity.kind !== "folder" && !entity.readOnly,
+  );
+  const aiPropertyIds = aiProperties.map((property) => property.id);
+  const runSelectedAIColumns = async () => {
+    if (aiPropertyIds.length === 0 || selectedRunRows.length === 0) {
+      return;
+    }
+    setIsRunningAIColumns(true);
+    try {
+      const result = await startWorkflow({
+        entityIds: selectedRunRows.map((entity) => entity.entityId),
+        propertyIds: aiPropertyIds,
+      });
+      if (!result) {
+        return;
+      }
+      switch (result.status) {
+        case "started":
+          stellaToast.add({
+            title: t("workspaces.workflow.startedSuccessfully"),
+            type: "success",
+          });
+          return;
+        case "already-running":
+          stellaToast.add({ title: t("common.running"), type: "info" });
+          return;
+        case "skipped":
+          stellaToast.add({
+            title: t("workspaces.workflow.noFieldsToProcess"),
+            type: "info",
+          });
+          return;
+        case "ai-unavailable":
+        case "failed":
+          return;
+        default: {
+          result satisfies never;
+          panic("Unhandled workflow start status");
+        }
+      }
+    } finally {
+      setIsRunningAIColumns(false);
+    }
+  };
 
   return (
     <div className="relative ms-auto flex items-center gap-1.5">
@@ -333,6 +393,21 @@ const SelectionActions = ({
           count: selectedEntities.length,
         })}
       </span>
+      {aiPropertyIds.length > 0 && (
+        <div className="flex flex-col items-start gap-0.5">
+          <AiColumnSelectionAction
+            columns={aiPropertyIds.length}
+            rows={selectedRunRows.length}
+            disabled={isRunningAIColumns || selectedRunRows.length === 0}
+            onRun={() =>
+              detached(
+                runSelectedAIColumns(),
+                "view-toolbar.run-selected-ai-columns",
+              )
+            }
+          />
+        </div>
+      )}
       <RowActions
         entity={firstSelected}
         selectedEntities={
