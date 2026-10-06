@@ -28,6 +28,7 @@ import { chatToolMapToArray } from "@/api/lib/chat/chat-tool-types";
 import { projectChatToolSchemasForProvider } from "@/api/lib/chat/provider-tool-projection";
 import { createChatRefRegistry } from "@/api/lib/chat/ref-registry";
 import { createChatToolDefectMemo } from "@/api/lib/chat/tool-defect-memo";
+import { CHAT_ONLY_FEATURE_TOOL_DEFINITIONS } from "@/api/lib/feature-access/registry";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import type { UrlFetcher, WebSearchProvider } from "@/api/lib/web-search/types";
 import { hiddenMcpDescriptorIds } from "@/api/mcp/feature-access-prose";
@@ -241,10 +242,10 @@ export const buildCanaryChatToolsets = (
   const catalogNames = Object.keys(BUILT_IN_CHAT_TOOL_POLICY_KINDS);
   // The canary has no feature admission. Account for those tools through the
   // same registry-derived visibility rule chat uses, without granting access.
-  const gatedNames = hiddenMcpDescriptorIds(
-    undefined,
-    DEFAULT_MCP_TOOL_DEFINITIONS,
-  );
+  const gatedNames = hiddenMcpDescriptorIds(undefined, [
+    ...DEFAULT_MCP_TOOL_DEFINITIONS,
+    ...CHAT_ONLY_FEATURE_TOOL_DEFINITIONS,
+  ]);
   const missing = catalogNames.filter(
     (name) => !registeredNames.has(name) && !gatedNames.has(name),
   );

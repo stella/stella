@@ -1,3 +1,5 @@
+import { VISUAL_PREVIEW_TOOL_NAME } from "@stll/api-contract/visual-preview";
+
 import type { DeploymentFeatureFlag } from "@/api/lib/deployment-feature";
 
 type FeatureDefinition = {
@@ -20,8 +22,13 @@ export type FeatureRegistry = Readonly<Record<string, FeatureDefinition>>;
 
 export const SELF_SERVE_FEATURE_IDS = ["time-billing"] as const;
 export const LIST_VERIFICATION_FEATURE_ID = "list-verification";
+export const GENERATED_VIEWS_FEATURE_ID = "generated-views";
 
 export const FEATURE_REGISTRY = {
+  [GENERATED_VIEWS_FEATURE_ID]: {
+    enrolment: "invitation",
+    deploymentFeature: "FEATURE_GENERATED_VIEWS",
+  },
   "time-billing": {
     enrolment: "self-serve",
     deploymentFeature: "FEATURE_TIME_BILLING",
@@ -96,6 +103,10 @@ export const FEATURE_REGISTRY = {
   >;
 
 export type FeatureId = keyof typeof FEATURE_REGISTRY;
+
+export const CHAT_ONLY_FEATURE_TOOL_DEFINITIONS = [
+  { name: VISUAL_PREVIEW_TOOL_NAME, featureId: GENERATED_VIEWS_FEATURE_ID },
+] as const satisfies readonly { name: string; featureId: FeatureId }[];
 
 type SelfServeFeatureId = {
   [

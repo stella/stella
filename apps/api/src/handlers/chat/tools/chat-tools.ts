@@ -110,6 +110,7 @@ import type {
   DocumentWriteAccess,
   NewDocumentVersionOperation,
 } from "@/api/lib/entities/authorize-document-write";
+import { CHAT_ONLY_FEATURE_TOOL_DEFINITIONS } from "@/api/lib/feature-access/registry";
 import { FIELD_VALUE_WRITE_PERMISSIONS } from "@/api/lib/fields/write-field";
 import { hasMemberPermission } from "@/api/lib/permission-authorization";
 import type { AuthorizedMemberRole } from "@/api/lib/permission-authorization";
@@ -1247,7 +1248,10 @@ export const getChatTools = (props: GetChatToolsProps): ChatToolMap => {
         },
         kind: "tools",
         id: name,
-        featureId: getStaticMcpToolDefinition(name)?.featureId,
+        featureId:
+          CHAT_ONLY_FEATURE_TOOL_DEFINITIONS.find(
+            (definition) => definition.name === name,
+          )?.featureId ?? getStaticMcpToolDefinition(name)?.featureId,
       }),
     ),
   );

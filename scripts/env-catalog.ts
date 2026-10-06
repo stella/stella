@@ -151,6 +151,7 @@ const INTERNAL_SERVER_KEYS = new Set([
   "FEATURE_AI_MEMORY",
   "FEATURE_FILE_USAGE_LIMITS",
   "FEATURE_GOVERNED_WORKFLOW",
+  "FEATURE_GENERATED_VIEWS",
   "FEATURE_INBOX_DOCUMENT_SCOUTS",
   "FEATURE_LEGAL_LISTS",
   "FEATURE_MANAGED_PROVIDER_CHECKS",
@@ -286,6 +287,8 @@ const EXAMPLE_VALUES: Record<string, string> = {
 };
 
 const DESCRIPTION_OVERRIDES: Record<string, string> = {
+  FEATURE_GENERATED_VIEWS:
+    "Enable generated views for callers granted access to the feature. Disabled by default.",
   VISUAL_PREVIEW_FUNCTION_NAME:
     "Optional Lambda function name for generated-view previews. Publishing remains available when previews are not configured.",
   LIST_VERIFICATION_ACTIVE_RUNS_MAX:
@@ -760,6 +763,7 @@ export const ENV_CREDENTIAL_CLASSIFICATION = {
   FEATURE_CONFIGURED_ACCESS: ENV_CREDENTIAL_KIND.notCredential,
   FEATURE_FILE_USAGE_LIMITS: ENV_CREDENTIAL_KIND.notCredential,
   FEATURE_GOVERNED_WORKFLOW: ENV_CREDENTIAL_KIND.notCredential,
+  FEATURE_GENERATED_VIEWS: ENV_CREDENTIAL_KIND.notCredential,
   FEATURE_INBOX_DOCUMENT_SCOUTS: ENV_CREDENTIAL_KIND.notCredential,
   FEATURE_LEGAL_LISTS: ENV_CREDENTIAL_KIND.notCredential,
   FEATURE_MANAGED_PROVIDER_CHECKS: ENV_CREDENTIAL_KIND.notCredential,

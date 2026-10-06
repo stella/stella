@@ -5,6 +5,18 @@ import { DAY_IN_MS } from "@stll/time";
 
 import { envApiInvariantViolation, envApiServerSchema } from "./env-schema";
 
+test("generated views require explicit deployment enablement", () => {
+  expect(v.parse(envApiServerSchema.FEATURE_GENERATED_VIEWS, undefined)).toBe(
+    false,
+  );
+  expect(v.parse(envApiServerSchema.FEATURE_GENERATED_VIEWS, "false")).toBe(
+    false,
+  );
+  expect(v.parse(envApiServerSchema.FEATURE_GENERATED_VIEWS, "true")).toBe(
+    true,
+  );
+});
+
 test("agent client storage format requires explicit enablement", () => {
   const schema = envApiServerSchema.AGENT_CLIENT_STORAGE_V1_ENABLED;
   expect(v.parse(schema, undefined)).toBe(false);

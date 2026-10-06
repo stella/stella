@@ -13,9 +13,13 @@ import {
   isBYOKModelRoleSupported,
 } from "@stll/ai-catalog";
 import { BUILT_IN_CHAT_TOOL_POLICY_KINDS } from "@stll/api-contract";
+import { VISUAL_PREVIEW_TOOL_NAME } from "@stll/api-contract/visual-preview";
 
 import type { OrgAIConfig } from "@/api/lib/ai-config";
-import { FEATURE_REGISTRY } from "@/api/lib/feature-access/registry";
+import {
+  FEATURE_REGISTRY,
+  CHAT_ONLY_FEATURE_TOOL_DEFINITIONS,
+} from "@/api/lib/feature-access/registry";
 import { createTanStackTextAdapterFactory } from "@/api/lib/tanstack-ai-models";
 import { DEFAULT_MCP_TOOL_DEFINITIONS } from "@/api/mcp/static-tool-definitions";
 
@@ -360,9 +364,10 @@ const emptyStringEnumPaths = (value: unknown, path = "request"): string[] => {
 
 describe("AI provider production chat tool matrix", () => {
   test("an unenrolled canary accounts for gated tools without requiring their admission", () => {
-    const featureDefinitions = DEFAULT_MCP_TOOL_DEFINITIONS.filter(
-      (definition) => "featureId" in definition,
-    );
+    const featureDefinitions = [
+      ...DEFAULT_MCP_TOOL_DEFINITIONS,
+      ...CHAT_ONLY_FEATURE_TOOL_DEFINITIONS,
+    ].filter((definition) => "featureId" in definition);
     for (const { featureId } of featureDefinitions) {
       expect(Object.hasOwn(FEATURE_REGISTRY, featureId)).toBe(true);
     }
@@ -380,6 +385,12 @@ describe("AI provider production chat tool matrix", () => {
         tools.map(({ name }) => name),
       ),
     );
+    expect(registered.has(VISUAL_PREVIEW_TOOL_NAME)).toBe(false);
+    expect(
+      DEFAULT_MCP_TOOL_DEFINITIONS.some(
+        ({ name }) => name === VISUAL_PREVIEW_TOOL_NAME,
+      ),
+    ).toBe(false);
     expect([...registered].toSorted()).toEqual(
       catalogNames.filter((name) => !gated.has(name)).toSorted(),
     );
