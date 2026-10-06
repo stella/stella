@@ -2,7 +2,7 @@ import { expect, test } from "bun:test";
 
 import { Temporal } from "@stll/time";
 
-import { defaultConfig } from "./health";
+import { defaultConfig, MAX_CLOCK_SKEW_MS } from "./health";
 import {
   autovacuumOnTarget,
   busyWindow,
@@ -34,7 +34,10 @@ for (const [name, read] of [
   ],
   [
     "future",
-    async () => ({ ...valid, observedAt: new Date(instant + 1).toISOString() }),
+    async () => ({
+      ...valid,
+      observedAt: new Date(instant + MAX_CLOCK_SKEW_MS + 1).toISOString(),
+    }),
   ],
   ["non-finite", async () => ({ ...valid, byteBalancePct: Number.NaN })],
 ] as const) {
@@ -194,6 +197,34 @@ for (const [name, reading] of [
         })
       ).kind,
     ).toBe("unknown");
+  });
+}
+
+// A local Postgres in a VM runs a few milliseconds ahead of the host clock.
+for (const skewMs of [26, MAX_CLOCK_SKEW_MS]) {
+  test(`readings stamped ${skewMs} ms ahead of the local clock are fresh`, async () => {
+    const ahead = new Date(instant + skewMs).toISOString();
+    expect(
+      (
+        await ebsBalance({
+          ...options,
+          read: async () => ({ ...valid, observedAt: ahead }),
+        })
+      ).kind,
+    ).toBe("normal");
+    const reading = { ageMs: 0, active: false, observedAt: ahead };
+    expect(
+      (await longTransaction({ ...options, read: async () => reading })).kind,
+    ).toBe("normal");
+    expect(
+      (
+        await autovacuumOnTarget({
+          ...options,
+          kind: "index_build",
+          read: async () => reading,
+        })
+      ).kind,
+    ).toBe("normal");
   });
 }
 
