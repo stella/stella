@@ -1,10 +1,21 @@
 import { normalizeToolResult } from "@tanstack/ai";
+import type { ContentPart } from "@tanstack/ai";
 import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
+import * as v from "valibot";
 
-import type { VisualPreviewOutput } from "@stll/api-contract/visual-preview";
+import {
+  VISUAL_PREVIEW_LIMITS,
+  visualPreviewToolOutputSchema,
+  type VisualPreviewOutput,
+} from "@stll/api-contract/visual-preview";
+import { VISUAL_SANDBOX_LIMITS } from "@stll/api-contract/visual-sandbox";
 
-import { previewVisual, visualPreviewModelContent } from "./visual-preview";
+import {
+  previewVisual,
+  visualPreviewFailureModelContent,
+  visualPreviewModelContent,
+} from "./visual-preview";
 
 const output = {
   png: "iVBORw0KGgo=",
@@ -21,7 +32,10 @@ test("projects preview as a model image with bounded text diagnostics", () => {
   const content = visualPreviewModelContent({
     title: "Example",
     preview: output,
-  });
+  }) satisfies ContentPart[];
+  expect(v.safeParse(visualPreviewToolOutputSchema, content).success).toBe(
+    true,
+  );
   expect(normalizeToolResult(content)).toBe(content);
   expect(content).toEqual([
     {
@@ -42,6 +56,48 @@ test("projects preview as a model image with bounded text diagnostics", () => {
       source: { type: "data", value: output.png, mimeType: "image/png" },
     },
   ]);
+});
+
+test("projects unavailable preview as text while preserving publishing success", async () => {
+  const result = await previewVisual({ document: "", functionArn: undefined });
+  expect(Result.isError(result)).toBe(true);
+  if (!Result.isError(result)) {
+    return;
+  }
+  const content = visualPreviewFailureModelContent({
+    title: "Example",
+    error: result.error,
+  }) satisfies ContentPart[];
+  expect(v.safeParse(visualPreviewToolOutputSchema, content).success).toBe(
+    true,
+  );
+  expect(normalizeToolResult(content)).toBe(content);
+  expect(content).toHaveLength(1);
+  expect(JSON.parse(content[0].content)).toEqual({
+    success: true,
+    title: "Example",
+    preview: {
+      status: "unavailable",
+      reason: "unavailable",
+      message: result.error.message,
+    },
+  });
+});
+
+test("accepts maximum escaped diagnostics in the model text budget", () => {
+  const content = visualPreviewModelContent({
+    title: "\u0000".repeat(VISUAL_SANDBOX_LIMITS.titleChars),
+    preview: {
+      ...output,
+      consoleErrors: Array.from(
+        { length: VISUAL_PREVIEW_LIMITS.consoleErrors },
+        () => "\u0000".repeat(VISUAL_PREVIEW_LIMITS.errorChars),
+      ),
+    },
+  });
+  expect(v.safeParse(visualPreviewToolOutputSchema, content).success).toBe(
+    true,
+  );
 });
 
 describe("visual preview invocation", () => {
