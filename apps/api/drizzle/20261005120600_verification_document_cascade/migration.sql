@@ -13,4 +13,4 @@ WHERE NOT EXISTS (
 ALTER TABLE "legal_list_verification_runs"
   ADD CONSTRAINT "legal_list_verification_runs_entity_fk"
   FOREIGN KEY ("entity_id", "workspace_id")
-  REFERENCES "entities" ("id", "workspace_id") ON DELETE CASCADE;
+  REFERENCES "entities" ("id", "workspace_id") ON DELETE CASCADE NOT VALID;

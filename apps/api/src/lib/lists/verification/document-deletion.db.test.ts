@@ -167,6 +167,9 @@ describe.skipIf(!enabled)("document-owned verification history", () => {
         await seedRun(createSafeId<"entity">(), "completed");
         expect(Object.values(await counts())).toEqual(dependents.map(() => 1));
         await applyMigration(migrationName);
+        await applyMigration(
+          "20261005120700_validate_verification_document_cascade",
+        );
         expect(Object.values(await counts())).toEqual(dependents.map(() => 0));
         for (const status of VERIFICATION_RUN_STATUSES) {
           await seedRun(documentId, status);
