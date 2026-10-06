@@ -1,4 +1,5 @@
 import type { CallToolResult } from "@modelcontextprotocol/server";
+import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 import * as v from "valibot";
 
@@ -13,7 +14,11 @@ import {
   uploadRoutePermission,
 } from "@/api/handlers/uploads/permissions";
 import type { AccountAccess } from "@/api/lib/api-handlers";
-import { createFeatureAccessSnapshot } from "@/api/lib/auth/feature-access/policy";
+import {
+  createFeatureAccessSnapshot,
+  decideFeatureAccess,
+} from "@/api/lib/auth/feature-access/policy";
+import { FEATURE_REGISTRY } from "@/api/lib/feature-access/registry";
 import { isMemberRole, type MemberRole } from "@/api/lib/member-roles";
 import {
   type AuthorizedMemberRole,
@@ -39,7 +44,6 @@ import {
 } from "@/api/mcp/write-tool-authority";
 import { callMcpToolOverHttp } from "@/api/tests/helpers/mcp-http-tool-call";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
-import { enrolledTimeBillingSnapshot } from "@/api/tests/helpers/time-billing-enrolment";
 
 import { parseCapabilityCatalog } from "../../../../packages/cli/src/capability-catalog-load";
 import {
@@ -611,22 +615,41 @@ const mcpContextFor = (role: MemberRole): McpRequestContext =>
     memberRole: role,
     userId: "user_1",
     organizationId: "org_1",
-    featureAccessSnapshot: enrolledTimeBillingSnapshot({
+    featureAccessSnapshot: createFeatureAccessSnapshot({
       userId: "user_1",
       organizationId: "org_1",
+      decisions: new Map(
+        Object.entries(FEATURE_REGISTRY).map(([featureId, definition]) => [
+          featureId,
+          decideFeatureAccess({
+            registry: FEATURE_REGISTRY,
+            featureId,
+            userId: "user_1",
+            organizationId: "org_1",
+            membership: true,
+            user: { email: "member@example.test", emailVerified: true },
+            grants: {
+              [featureId]: [{ type: "organization", organizationId: "org_1" }],
+            },
+            enrolments:
+              definition.enrolment === "self-serve"
+                ? [{ featureId, userId: "user_1", organizationId: "org_1" }]
+                : [],
+          }),
+        ]),
+      ),
     }),
   });
 
 const unenrolledMcpContextFor = (role: MemberRole): McpRequestContext => {
   const context = mcpContextFor(role);
-  const snapshot = enrolledTimeBillingSnapshot(context);
   return {
     ...context,
     featureAccessSnapshot: createFeatureAccessSnapshot({
       userId: context.userId,
       organizationId: context.organizationId,
       decisions: new Map(
-        [...snapshot.decisions.keys()].map(
+        Object.keys(FEATURE_REGISTRY).map(
           (featureId) => [featureId, { status: "hidden" }] as const,
         ),
       ),
@@ -1192,9 +1215,14 @@ describe("static feature tool enrolment boundary", () => {
     }
   });
 
-  test("every generated feature capability describes only for its enrolled principal", async () => {
+  test("every generated feature capability follows its declared admission requirement", async () => {
     expect(CAPABILITY_FEATURE_BINDINGS.size).toBeGreaterThan(0);
     for (const [capabilityId, featureId] of CAPABILITY_FEATURE_BINDINGS) {
+      const entry = catalogEntries.find(({ id }) => id === capabilityId);
+      if (entry === undefined) {
+        panic(`Feature-bound capability ${capabilityId} has no catalog entry`);
+      }
+      expect(entry.featureId).toBe(featureId);
       for (const enrolled of [true, false]) {
         const context = enrolled
           ? mcpContextFor("owner")
@@ -1208,7 +1236,10 @@ describe("static feature tool enrolment boundary", () => {
           mode: "default" as const,
           toolName: "describe_capability",
         };
-        const expected = enrolled ? null : "not_found";
+        const expected =
+          enrolled || entry.featureAccess === "conditional"
+            ? null
+            : "not_found";
         expect({
           capability: capabilityId,
           enrolled,

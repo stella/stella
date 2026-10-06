@@ -3,6 +3,7 @@ import type { SQL } from "drizzle-orm";
 import { PgDialect } from "drizzle-orm/pg-core";
 
 import {
+  loadFeatureAccessSnapshot,
   resolveFeatureAccess,
   resolveFeatureAccessSnapshot,
 } from "@/api/lib/auth/feature-access/context";
@@ -22,6 +23,42 @@ const grants = {
   ],
   "fixture-two": [{ type: "organization", organizationId: "org-a" }],
 } as const;
+
+test("the production feature snapshot resolves current identity once", async () => {
+  let identityQueries = 0;
+  const database = createScopedDbMock({
+    select: () => ({
+      from: () => ({
+        innerJoin: () => {
+          identityQueries += 1;
+          return {
+            where: () => ({
+              limit: async () => [
+                { email: "member@example.test", emailVerified: true },
+              ],
+            }),
+          };
+        },
+        where: () => ({ limit: async () => [] }),
+      }),
+    }),
+  });
+  const result = await loadFeatureAccessSnapshot({
+    safeDb: database.safeDb,
+    organizationId,
+    userId: "user-a",
+  });
+  expect(result.isOk()).toBe(true);
+  if (result.isOk()) {
+    expect(result.value.organizationId).toBe(organizationId);
+    expect(result.value.userId).toBe("user-a");
+    expect(result.value.decisions.get("list-verification")).toEqual({
+      status: "hidden",
+    });
+  }
+  expect(identityQueries).toBe(1);
+  expect(database.getCallCount()).toBe(1);
+});
 
 test("feature snapshots batch current identity across every registered feature", async () => {
   let queries = 0;

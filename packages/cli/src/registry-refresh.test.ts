@@ -4,6 +4,7 @@ import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
+import { projectFeatureCommands } from "./feature-command-projection.js";
 import { generatedRouteMap } from "./generated/route-map.js";
 import { McpClientError } from "./mcp-client.js";
 import {
@@ -162,7 +163,12 @@ describe("resolveCommandTree (S5.3)", () => {
       serverOrigin: ORIGIN,
       env,
     });
-    expect(tree).toBe(generatedRouteMap);
+    expect(tree).toEqual(
+      projectFeatureCommands({
+        tree: generatedRouteMap,
+        featureAccess: undefined,
+      }),
+    );
     expect(drift).toBeUndefined();
     expect(disabled).toEqual({ tools: [], capabilities: [] });
   });
@@ -178,7 +184,12 @@ describe("resolveCommandTree (S5.3)", () => {
       env,
       registry,
     });
-    expect(tree).toBe(generatedRouteMap);
+    expect(tree).toEqual(
+      projectFeatureCommands({
+        tree: generatedRouteMap,
+        featureAccess: undefined,
+      }),
+    );
     expect(disabled).toEqual({
       tools: ["search_case_law", "get_usage"],
       capabilities: ["usage.entitlement.get"],
@@ -195,7 +206,12 @@ describe("resolveCommandTree (S5.3)", () => {
       env,
       registry,
     });
-    expect(tree).toBe(generatedRouteMap);
+    expect(tree).toEqual(
+      projectFeatureCommands({
+        tree: generatedRouteMap,
+        featureAccess: undefined,
+      }),
+    );
     expect(drift).toBeUndefined();
   });
 
@@ -234,12 +250,17 @@ describe("resolveCommandTree (S5.3)", () => {
     expect(tree).not.toBe(generatedRouteMap);
     // The fetched curated tool is present...
     expect(countLeavesOfKind(tree, "leaf")).toBeGreaterThan(0);
-    // ...and the baked capability merge ran: the rebuilt tree carries the same
-    // capability leaves as the baked-in tree (they must never vanish on a
-    // registry divergence).
+    // Registry divergence preserves ordinary capability leaves; feature
+    // commands require this invocation's authenticated projection.
     const capabilityLeaves = countLeavesOfKind(tree, "capability-leaf");
     expect(capabilityLeaves).toBe(
-      countLeavesOfKind(generatedRouteMap, "capability-leaf"),
+      countLeavesOfKind(
+        projectFeatureCommands({
+          tree: generatedRouteMap,
+          featureAccess: undefined,
+        }),
+        "capability-leaf",
+      ),
     );
     expect(capabilityLeaves).toBeGreaterThan(200);
   });
@@ -313,7 +334,12 @@ describe("resolveCommandTree (S5.3)", () => {
       registry,
     });
 
-    expect(tree).toBe(generatedRouteMap);
+    expect(tree).toEqual(
+      projectFeatureCommands({
+        tree: generatedRouteMap,
+        featureAccess: undefined,
+      }),
+    );
     expect(drift).toBeUndefined();
   });
 
@@ -415,7 +441,12 @@ describe("resolveCommandTree (S5.3)", () => {
       env,
       registry,
     });
-    expect(tree).toBe(generatedRouteMap);
+    expect(tree).toEqual(
+      projectFeatureCommands({
+        tree: generatedRouteMap,
+        featureAccess: undefined,
+      }),
+    );
     expect(drift).toBeUndefined();
   });
 });
@@ -545,7 +576,12 @@ describe("refreshRegistryCache (S5.3/S5.5)", () => {
       env,
     });
     expect(drift).toBeUndefined();
-    expect(tree).toBe(generatedRouteMap);
+    expect(tree).toEqual(
+      projectFeatureCommands({
+        tree: generatedRouteMap,
+        featureAccess: undefined,
+      }),
+    );
   });
 
   test("an unattested absence is still a removal (older self-hosted server)", async () => {

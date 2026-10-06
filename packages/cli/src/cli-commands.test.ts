@@ -33,7 +33,7 @@ const catalog = loadBakedCapabilityCatalog();
 if (catalog === null) {
   panic("Invalid committed command-test capability catalog");
 }
-// Command-behaviour tests exercise an enrolled principal. Build its discovery
+// Command-behaviour tests exercise an admitted principal. Build its discovery
 // response from the shipped contract so new feature-owned commands cannot drift.
 const registryResult = {
   tools: registry.listings.map((listing) => {

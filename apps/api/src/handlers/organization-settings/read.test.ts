@@ -6,7 +6,10 @@ import readOrganizationSettings, {
 import { resolveFeatureAccessSnapshot } from "@/api/lib/auth/feature-access/context";
 import { createFeatureAccessSnapshot } from "@/api/lib/auth/feature-access/policy";
 import { toSafeId } from "@/api/lib/branded-types";
-import { FEATURE_REGISTRY } from "@/api/lib/feature-access/registry";
+import {
+  FEATURE_REGISTRY,
+  LIST_VERIFICATION_FEATURE_ID,
+} from "@/api/lib/feature-access/registry";
 import type { FeatureRegistry } from "@/api/lib/feature-access/registry";
 import { createTestHandlerContext } from "@/api/tests/helpers/handler-context";
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
@@ -214,5 +217,63 @@ test("organization settings recompute a supplied snapshot when the user or activ
       ),
     });
     expect(result).not.toHaveProperty("capabilities.fixture-invitation");
+  }
+});
+
+test("organization settings project the production verification declaration for granted and ungranted current members", async () => {
+  const organizationId = toSafeId<"organization">("org_test");
+  for (const granted of [false, true]) {
+    const database = createScopedDbMock({
+      query: { organizationSettings: { findFirst: async () => undefined } },
+      select: () => ({
+        from: () => ({
+          innerJoin: () => ({
+            where: () => ({
+              limit: async () => [
+                { email: "member@example.test", emailVerified: true },
+              ],
+            }),
+          }),
+          where: () => ({ limit: async () => [] }),
+        }),
+      }),
+    });
+    const snapshot = await database.scopedDb(
+      async (tx) =>
+        await resolveFeatureAccessSnapshot({
+          tx,
+          organizationId,
+          userId: "user_test",
+          grants: granted
+            ? {
+                [LIST_VERIFICATION_FEATURE_ID]: [
+                  { type: "organization", organizationId },
+                ],
+              }
+            : {},
+        }),
+    );
+    const result = await readOrganizationSettings.handler(
+      createTestHandlerContext<
+        Parameters<typeof readOrganizationSettings.handler>[0]
+      >({
+        safeDb: database.safeDb,
+        scopedDb: database.scopedDb,
+        featureAccessSnapshot: snapshot,
+      }),
+    );
+    expect(result).toMatchObject({
+      capabilities: {
+        [LIST_VERIFICATION_FEATURE_ID]: {
+          status: granted ? "enabled" : "hidden",
+        },
+      },
+    });
+    const capabilities = projectOrganizationSettingsRow(
+      null,
+      snapshot,
+    ).capabilities;
+    expect(Object.keys(capabilities)).toEqual(Object.keys(FEATURE_REGISTRY));
+    expect(JSON.stringify(capabilities)).not.toContain("proof");
   }
 });
