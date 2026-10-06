@@ -391,6 +391,32 @@ test("unresolved glob cwd remains named and fail-closed for Markdown and generic
   }
 });
 
+test("computed scan options and shorthand cwd cannot certify repository scope", () => {
+  for (const options of [
+    "{cwd}",
+    "options",
+    "{cwd: process.cwd(), ...options}",
+  ]) {
+    repository((root, write) => {
+      write(
+        "scripts/options-reader.test.ts",
+        `function scan(cwd: string, options: object) { return new Bun.Glob("**/*.{md,mdx}").scanSync(${options}); }`,
+      );
+      const errors = spyOn(console, "error").mockImplementation(() => {});
+      try {
+        expect(requiresPackageChecks({ root, changed: ["README.md"] })).toBe(
+          true,
+        );
+        expect(String(errors.mock.calls.at(0)?.at(1))).toContain(
+          "scripts/options-reader.test.ts",
+        );
+      } finally {
+        errors.mockRestore();
+      }
+    });
+  }
+});
+
 test("named unresolved scans derive their fail-closed subtree from their export inventory", () => {
   repository((root, write) => {
     const reader = "scripts/export-reader.test.ts";

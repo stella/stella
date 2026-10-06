@@ -384,15 +384,25 @@ const globPath = ({
   const options = readCallArguments(
     source.slice(start + call.length + scan[0].length - 1),
   ).at(0);
-  const fields = options?.trim().startsWith("{")
+  const objectOptions =
+    options?.trim().startsWith("{") && options.trim().endsWith("}");
+  const fields = objectOptions
     ? readCallArguments(`(${options.trim().slice(1, -1)})`)
     : [];
-  const cwd = fields.find((field) => /^\s*cwd\s*:/u.test(field));
-  if (cwd === undefined) {
+  const staticOptions =
+    objectOptions &&
+    fields.every((field) => /^[A-Za-z_$][\w$]*(?:\s*:|$)/u.test(field.trim()));
+  const cwd = fields.find((field) => /^\s*cwd(?:\s*:|\s*$)/u.test(field));
+  if (options === undefined || (staticOptions && cwd === undefined)) {
     return { kind: "repository", value: target };
   }
+  let directoryExpression = "<unresolved scan options>";
+  if (staticOptions && cwd !== undefined) {
+    const colon = cwd.indexOf(":");
+    directoryExpression = cwd.slice(colon === -1 ? 0 : colon + 1);
+  }
   const directory = pathExpression({
-    expression: cwd.slice(cwd.indexOf(":") + 1),
+    expression: directoryExpression,
     code,
     source,
     file,
