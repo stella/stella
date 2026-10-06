@@ -2,6 +2,7 @@ import { Result } from "better-result";
 
 import type { TextField } from "@stll/api-contract/case-law-text-field";
 import { DECISION_DOCUMENT_ROLE_METADATA_KEY } from "@stll/api-contract/decision-document-role";
+import { sha256Hex as hashSha256Hex } from "@stll/sha256/bun";
 
 import type { caseLawDecisions } from "@/api/db/schema";
 import { EU_ECJ_METADATA_URL_SCHEMA } from "@/api/handlers/case-law/ingestion/adapters/eu-ecj.metadata-urls";
@@ -440,7 +441,5 @@ export const ecjCompletionFingerprint = ({
     contentHash: existing.contentHash,
     redactedAt: existing.redactedAt?.toISOString() ?? null,
   };
-  return new Bun.CryptoHasher("sha256")
-    .update(JSON.stringify(sortDeep(state)))
-    .digest("hex");
+  return hashSha256Hex(JSON.stringify(sortDeep(state)));
 };

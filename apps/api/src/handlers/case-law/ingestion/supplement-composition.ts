@@ -17,6 +17,8 @@ import { panic } from "better-result";
  */
 import { and, eq, inArray, notInArray, sql } from "drizzle-orm";
 
+import { createSha256 } from "@stll/sha256/bun";
+
 import type { Transaction } from "@/api/db/root";
 import type { ScopedDb } from "@/api/db/safe-db";
 import { caseLawDecisionSupplements, caseLawDecisions } from "@/api/db/schema";
@@ -609,7 +611,7 @@ const compositeHash = (
   judgment: IngestionResult,
   supplements: readonly StoredSupplement[],
 ): string => {
-  const hasher = new Bun.CryptoHasher("sha256");
+  const hasher = createSha256();
   hasher.update(
     JSON.stringify({
       judgment: judgment.rawHash,

@@ -1,3 +1,4 @@
+// parser-output-unchanged: The SHA-256 owner receives identical UTF-8 inputs and emits the same lowercase hexadecimal digests; adapter fixture and fingerprint vectors retain the output.
 import { Result, panic } from "better-result";
 /**
  * Polish competition and consumer protection authority (Prezes UOKiK) adapter.
@@ -60,6 +61,10 @@ import { DECISION_DOCKET_GRAMMARS } from "@stll/api-contract/decision-docket-gra
 import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
 import type { DecisionIdentifiers } from "@stll/legal-ast/decision-identifier";
 import type { DocumentFetchStage } from "@stll/legal-atlas/document-fetch-diagnostics";
+import {
+  sha256Hex as hashContent,
+  sha256Hex as hashSha256Hex,
+} from "@stll/sha256/bun";
 import { readCappedBytes } from "@stll/skills/streaming";
 import { parsePlainDate, Temporal } from "@stll/time";
 
@@ -107,10 +112,7 @@ import { plCommonCourtRulingKeys } from "@/api/handlers/case-law/ingestion/adapt
 import { plSupremeCourtRulingKeys } from "@/api/handlers/case-law/ingestion/adapters/pl-sn-ruling-keys";
 import { publisherRequestIntervalMs } from "@/api/handlers/case-law/ingestion/adapters/publisher-policy";
 import { fetchWithRetry } from "@/api/handlers/case-law/ingestion/adapters/retry";
-import {
-  adapterCatch,
-  hashContent,
-} from "@/api/handlers/case-law/ingestion/adapters/utils";
+import { adapterCatch } from "@/api/handlers/case-law/ingestion/adapters/utils";
 import {
   parsePlUokikDocument,
   plUokikDocumentLines,
@@ -1150,9 +1152,6 @@ const keptFilesOf = (files: readonly PlUokikFetchedFile[]): KeptFile[] =>
       : [{ bytes, contentType: type }];
   });
 
-const sha256 = (bytes: Uint8Array): string =>
-  new Bun.CryptoHasher("sha256").update(bytes).digest("hex");
-
 type DocumentRead =
   | { type: "read"; output: ParsePlUokikDocumentOutput }
   /** The files hold no text layer: a scan. */
@@ -1341,7 +1340,9 @@ const pageMetadataOf = ({ detail, files, id, row }: PageMetadataOptions) => {
           documentUrl: metadataAddressOf(id, file),
           status: fetched?.status,
           sha256:
-            fetched?.bytes === undefined ? undefined : sha256(fetched.bytes),
+            fetched?.bytes === undefined
+              ? undefined
+              : hashSha256Hex(fetched.bytes),
         };
       },
     ),
@@ -1525,7 +1526,9 @@ export const assemblePlUokikDecision = async ({
       // The files are stored beside the envelope rather than in it, so a
       // corrected file under an unchanged page has to change the hash too.
       rawHash: hashContent(
-        [sourceRaw, ...kept.map(({ bytes }) => sha256(bytes))].join("\n"),
+        [sourceRaw, ...kept.map(({ bytes }) => hashSha256Hex(bytes))].join(
+          "\n",
+        ),
       ),
       parserVersion: PARSER_VERSIONS[ADAPTER_KEYS.PL_UOKIK],
       documentAst,
@@ -1557,7 +1560,7 @@ export const plUokikRulingId = (unid: string, name: string): string => {
   const readable = `${unid}/${name}`;
   return isPersistableSourceDocumentId(readable)
     ? readable
-    : `${unid}/sha256:${new Bun.CryptoHasher("sha256").update(name).digest("hex")}`;
+    : `${unid}/sha256:${hashSha256Hex(name)}`;
 };
 
 /** The envelope part naming which of the decision page's files a row is. */
@@ -1687,7 +1690,8 @@ export const assemblePlUokikRuling = async ({
         attachmentName: file.name,
         attachmentTitle: file.title,
         attachmentStatus: fetched.status,
-        attachmentSha256: kept === undefined ? undefined : sha256(kept.bytes),
+        attachmentSha256:
+          kept === undefined ? undefined : hashSha256Hex(kept.bytes),
         ...(read === undefined
           ? { rulingStatus: status }
           : {
@@ -1696,9 +1700,10 @@ export const assemblePlUokikRuling = async ({
             }),
       }),
       rawHash: hashContent(
-        [sourceRaw, ...(kept === undefined ? [] : [sha256(kept.bytes)])].join(
-          "\n",
-        ),
+        [
+          sourceRaw,
+          ...(kept === undefined ? [] : [hashSha256Hex(kept.bytes)]),
+        ].join("\n"),
       ),
       parserVersion: PARSER_VERSIONS[ADAPTER_KEYS.PL_UOKIK],
       documentAst: parsed?.documentAst ?? EMPTY_AST,

@@ -1,3 +1,4 @@
+// parser-output-unchanged: The SHA-256 owner receives identical UTF-8 inputs and emits the same lowercase hexadecimal digests; adapter fixture and fingerprint vectors retain the output.
 // parser-output-unchanged: Read scope passes through the gate; successful decision text and parsing are unchanged.
 import { Result, TaggedError, panic } from "better-result";
 import * as cheerio from "cheerio";
@@ -5,6 +6,7 @@ import * as cheerio from "cheerio";
 import { classifyFailure } from "@stll/errors";
 import { DECISION_IDENTIFIER_MAX_COUNT } from "@stll/legal-ast/decision-identifier";
 import type { DecisionIdentifiers } from "@stll/legal-ast/decision-identifier";
+import { sha256Hex as hashContent } from "@stll/sha256/bun";
 import { Temporal } from "@stll/time";
 
 import {
@@ -56,7 +58,6 @@ import {
 } from "@/api/handlers/case-law/ingestion/adapters/publisher-read";
 import {
   adapterCatch,
-  hashContent,
   parseCeDate,
   stripHtml,
 } from "@/api/handlers/case-law/ingestion/adapters/utils";

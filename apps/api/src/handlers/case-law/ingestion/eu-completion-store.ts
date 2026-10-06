@@ -17,6 +17,7 @@ import {
 import type { PgUpdateSetSource } from "drizzle-orm/pg-core";
 
 import { initialBatchState, type BatchState } from "@stll/db-load-gate/health";
+import { sha256Hex as hashSha256Hex } from "@stll/sha256/bun";
 import { DAY_IN_MS } from "@stll/time";
 
 import { decodeCheckpoint } from "@/api/db/backfill-runtime";
@@ -1303,8 +1304,7 @@ const createPayloadOperations = ({ transaction, now }: StoreContext) => {
       );
     }
     if (
-      new Bun.CryptoHasher("sha256").update(payload).digest("hex") !==
-        payloadHash ||
+      hashSha256Hex(payload) !== payloadHash ||
       !payloadHash ||
       !claimedFingerprint ||
       provenance.requestHashes.length > 100 ||

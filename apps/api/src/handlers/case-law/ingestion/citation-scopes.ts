@@ -1,4 +1,7 @@
+// parser-output-unchanged: Citation identities hash the same recursively sorted JSON through the SHA-256 owner; citation fixture and fingerprint vectors retain the hexadecimal output.
 import { Result, TaggedError } from "better-result";
+
+import { sha256Hex as hashSha256Hex } from "@stll/sha256/bun";
 
 import type { Block, DocumentAst } from "@/api/lib/case-law/document-ast";
 import { isDocumentAst } from "@/api/lib/case-law/document-ast";
@@ -56,9 +59,7 @@ export type CitationScopeEnvelope = {
 
 /** Hash the JSON shape that both jsonb and the corpus payload actually keep. */
 export const citationScopeAstHash = (ast: DocumentAst): string =>
-  new Bun.CryptoHasher("sha256")
-    .update(JSON.stringify(sortDeep(ast)))
-    .digest("hex");
+  hashSha256Hex(JSON.stringify(sortDeep(ast)));
 
 export const citationScopeEnvelope = (
   ast: DocumentAst,

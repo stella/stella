@@ -20,6 +20,8 @@ import {
 import { eq, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 
+import { sha256Hex as hashSha256Hex } from "@stll/sha256/bun";
+
 import { authRelationsPart } from "@/api/db/auth-schema";
 import type { ScopedDb } from "@/api/db/safe-db";
 import {
@@ -116,8 +118,6 @@ const holding = (text: string): string[] =>
     .filter(([, { bytes }]) => new TextDecoder().decode(bytes).includes(text))
     .map(([id]) => id);
 const bytesOf = (text: string) => new TextEncoder().encode(text);
-const sha256 = (data: Uint8Array | string): string =>
-  new Bun.CryptoHasher("sha256").update(data).digest("hex");
 
 const createSource = async (): Promise<SafeId<"caseLawSource">> => {
   const sourceId = createSafeId<"caseLawSource">();
@@ -174,7 +174,7 @@ const observe = async ({
       fulltext: "Rozhodnutie o veci samej.",
       metadata: {},
       textFields: absentDecisionTextFields(TEXT_ABSENCE_REASON.NOT_PUBLISHED),
-      rawHash: sha256(`${listing}|${file ?? ""}`),
+      rawHash: hashSha256Hex(`${listing}|${file ?? ""}`),
       documentAst: EMPTY_AST,
       sourceRaw: encodeSourceRawEnvelope({ listing }),
       ...(file === undefined
@@ -293,20 +293,20 @@ const legacyDecision = async ({
   file: string;
 }): Promise<LegacyDecision> => {
   const fileBytes = bytesOf(file);
-  const fileKey = `case-law/raw/${sourceId}/${sha256(fileBytes)}`;
+  const fileKey = `case-law/raw/${sourceId}/${hashSha256Hex(fileBytes)}`;
   fake.put(envBase.S3_BUCKET, fileKey, fileBytes, "application/pdf");
   const envelope = encodeSourceRawEnvelope(
     { listing },
     {
       "document-file": {
         location: fileKey,
-        sha256: sha256(fileBytes),
+        sha256: hashSha256Hex(fileBytes),
         contentType: "application/pdf",
         byteLength: fileBytes.byteLength,
       },
     },
   );
-  const payloadKey = `case-law/raw/${sourceId}/${sha256(envelope)}`;
+  const payloadKey = `case-law/raw/${sourceId}/${hashSha256Hex(envelope)}`;
   fake.put(
     envBase.S3_BUCKET,
     payloadKey,
@@ -322,7 +322,7 @@ const legacyDecision = async ({
     country: "SVK",
     language: "sk",
     fulltext: "Rozhodnutie.",
-    contentHash: sha256(caseNumber),
+    contentHash: hashSha256Hex(caseNumber),
     sourceRawS3Key: payloadKey,
     sourceRawContentType: SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
   });
@@ -446,7 +446,7 @@ describe("erasing one decision's raw objects", () => {
       const replaced = encodeSourceRawEnvelope({
         listing: '{"only":"replaced"}',
       });
-      const replacedKey = `case-law/raw/${sourceId}/${sha256(replaced)}`;
+      const replacedKey = `case-law/raw/${sourceId}/${hashSha256Hex(replaced)}`;
       fake.put(
         envBase.S3_BUCKET,
         replacedKey,
@@ -599,7 +599,7 @@ describe("a payload in its own prefix naming a file of the older layout", () => 
     });
     const a = await decisionIdOf(sourceId, "XII. ÚS 1/2026");
     const fileBytes = bytesOf("%PDF only named by an own envelope");
-    const legacyFile = `case-law/raw/${sourceId}/${sha256(fileBytes)}`;
+    const legacyFile = `case-law/raw/${sourceId}/${hashSha256Hex(fileBytes)}`;
     fake.put(envBase.S3_BUCKET, legacyFile, fileBytes, "application/pdf");
     const pointer = (await rowOf(a))?.sourceRawS3Key ?? "";
     fake.put(
@@ -610,7 +610,7 @@ describe("a payload in its own prefix naming a file of the older layout", () => 
         {
           "document-file": {
             location: legacyFile,
-            sha256: sha256(fileBytes),
+            sha256: hashSha256Hex(fileBytes),
             contentType: "application/pdf",
             byteLength: fileBytes.byteLength,
           },
@@ -982,7 +982,7 @@ describe("moving decisions out of the older layout", () => {
         fulltext: "Rozhodnutie o veci samej.",
         metadata: {},
         textFields: absentDecisionTextFields(TEXT_ABSENCE_REASON.NOT_PUBLISHED),
-        rawHash: sha256(envelope),
+        rawHash: hashSha256Hex(envelope),
         documentAst: EMPTY_AST,
         sourceRaw: envelope,
         sourceRawContentType: SOURCE_RAW_ENVELOPE_CONTENT_TYPE,

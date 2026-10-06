@@ -1,3 +1,4 @@
+import { panic, Result, TaggedError } from "better-result";
 /**
  * Import the Czech Constitutional Court's published roster of its justices
  * into `case_law_judges`, then re-link the decision rows whose printed name
@@ -14,13 +15,12 @@
  * implementations pull their connections in on first use: importing this
  * module opens nothing.
  */
-
-import { panic, Result, TaggedError } from "better-result";
 import * as cheerio from "cheerio";
 import type { AnyNode } from "domhandler";
 import { and, eq } from "drizzle-orm";
 
 import { fetchWithTimeout } from "@stll/fetch";
+import { sha256Hex as hashSha256Hex } from "@stll/sha256/bun";
 
 import { caseLawJudges } from "@/api/db/schema";
 import { createPublisherGateSlot } from "@/api/handlers/case-law/ingestion/adapters/publisher-policy";
@@ -436,9 +436,6 @@ type PortraitBytes = ServedPortraitType & {
   sha256: string;
 };
 
-const sha256Of = (bytes: Uint8Array): string =>
-  new Bun.CryptoHasher("sha256").update(bytes).digest("hex");
-
 const orNull = (value: string | undefined): string | null => value ?? null;
 
 /** One request to the court's site, checked against its origin and bounded. */
@@ -516,7 +513,7 @@ const readPortrait = async (
       }),
     );
   }
-  return Result.ok({ bytes, ...served, sha256: sha256Of(bytes) });
+  return Result.ok({ bytes, ...served, sha256: hashSha256Hex(bytes) });
 };
 
 /** What the court now states about a row that already exists. */

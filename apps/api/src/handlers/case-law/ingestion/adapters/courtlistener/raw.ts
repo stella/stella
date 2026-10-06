@@ -1,3 +1,5 @@
+// parser-output-unchanged: The SHA-256 owner receives identical UTF-8 inputs and emits the same lowercase hexadecimal digests; adapter fixture and fingerprint vectors retain the output.
+import { Result, TaggedError } from "better-result";
 /**
  * The stored raw of a CourtListener record and the hash that decides whether
  * a later edition of it changed anything.
@@ -8,11 +10,9 @@
  * publisher text survive storage and decode to the exact original strings.
  */
 
-import { Result, TaggedError } from "better-result";
-
+import { sha256Hex as hashContent } from "@stll/sha256/bun";
 import { stableStringify } from "@stll/stable-stringify";
 
-import { hashContent } from "@/api/handlers/case-law/ingestion/adapters/utils";
 import {
   decodeSourceRawEnvelope,
   encodeSourceRawEnvelope,

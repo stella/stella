@@ -1,3 +1,4 @@
+import { panic } from "better-result";
 /**
  * Every registered case-law source writes `rawHash` as `sourceFingerprint`
  * over what it stores, or is listed in the shrink-only `drivers` section of
@@ -8,14 +9,13 @@
  * regenerates it through this suite (the census is written to the path in
  * SOURCE_FINGERPRINT_CENSUS_OUT instead of being asserted).
  */
-
-import { panic } from "better-result";
 import { afterEach, expect, test } from "bun:test";
 import { writeFileSync } from "node:fs";
 
+import { sha256Hex as hashContent } from "@stll/sha256/bun";
+
 import { encodeSourceRawEnvelope } from "@/api/handlers/case-law/ingestion/adapter";
 import { listSourceRegistrations } from "@/api/handlers/case-law/ingestion/adapters/adapter-registry";
-import { hashContent } from "@/api/handlers/case-law/ingestion/adapters/utils";
 import { sourceFingerprint } from "@/api/handlers/case-law/ingestion/source-fingerprint";
 import { isRecord } from "@/api/lib/type-guards";
 import {

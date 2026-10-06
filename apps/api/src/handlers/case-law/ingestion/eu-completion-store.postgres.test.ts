@@ -3,6 +3,7 @@ import { describe, expect, test } from "bun:test";
 import { and, eq, sql } from "drizzle-orm";
 
 import { initialBatchState } from "@stll/db-load-gate/health";
+import { sha256Hex as hashSha256Hex } from "@stll/sha256/bun";
 import { DAY_IN_MS } from "@stll/time";
 
 import {
@@ -38,8 +39,6 @@ import {
 
 const databaseUrl = process.env["DATABASE_URL"];
 const enabled = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
-const hash = (payload: string) =>
-  new Bun.CryptoHasher("sha256").update(payload).digest("hex");
 
 if (!databaseUrl || !enabled) {
   describe.skip("durable EU completion receipts", () => {
@@ -139,7 +138,7 @@ if (!databaseUrl || !enabled) {
       const result = await store.markFetched({
         id: receipt.id,
         payload,
-        payloadHash: hash(payload),
+        payloadHash: hashSha256Hex(payload),
         claimedFingerprint: "claimed",
         target: "full",
         provenance: { requestHashes: [], requestedSurfaces: ["notice"] },
@@ -1025,7 +1024,7 @@ if (!databaseUrl || !enabled) {
       const saved = await state.store.markFetched({
         id: state.receipt.id,
         payload,
-        payloadHash: hash(payload),
+        payloadHash: hashSha256Hex(payload),
         claimedFingerprint: "claimed",
         target: "full",
         provenance: { requestHashes: [], requestedSurfaces: [] },

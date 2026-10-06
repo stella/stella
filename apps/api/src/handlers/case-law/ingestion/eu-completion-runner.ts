@@ -2,6 +2,7 @@ import { panic, Result, TaggedError, type InferOk } from "better-result";
 import { and, asc, eq } from "drizzle-orm";
 import { TransformStream } from "node:stream/web";
 
+import { sha256Hex as hashSha256Hex } from "@stll/sha256/bun";
 import { Temporal } from "@stll/time";
 
 import type { Transaction } from "@/api/db/root";
@@ -88,8 +89,6 @@ class CompletionStageFailure extends TaggedError("CompletionStageFailure")<{
 
 const MAX_COMPLETION_JUDGES = 1000;
 const COMPLETION_DEFER_MS = 60_000;
-const digest = (payload: string) =>
-  new Bun.CryptoHasher("sha256").update(payload).digest("hex");
 
 /** The canonical writer and storage APIs still reject promises; this is their typed boundary. */
 const legacyOperation = async <T>(operation: () => Promise<T>) =>
@@ -502,7 +501,7 @@ const recoverCompletionCandidate = async ({
 }: CandidateContext) => {
   const payload =
     receipt.payload ?? panic("Completion recovery has no payload");
-  if (digest(payload) !== receipt.payloadHash) {
+  if (hashSha256Hex(payload) !== receipt.payloadHash) {
     return Result.err(
       new CompletionReviewRequired({
         message: "Fetched recovery payload hash mismatch",
@@ -613,11 +612,11 @@ const prepareCompletionCandidate = async (
           await store.markFetched({
             id: receipt.id,
             payload,
-            payloadHash: digest(payload),
+            payloadHash: hashSha256Hex(payload),
             claimedFingerprint: fingerprint,
             target,
             provenance: {
-              requestHashes: [digest(payload)],
+              requestHashes: [hashSha256Hex(payload)],
               requestedSurfaces:
                 target === "formex"
                   ? ["formex"]

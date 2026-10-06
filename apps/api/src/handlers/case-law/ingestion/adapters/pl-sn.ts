@@ -1,3 +1,5 @@
+// parser-output-unchanged: The SHA-256 owner receives identical UTF-8 inputs and emits the same lowercase hexadecimal digests; adapter fixture and fingerprint vectors retain the output.
+import { Result, panic } from "better-result";
 // parser-output-unchanged: fetch-stage telemetry and document-stage metadata only; parser decision fields are unchanged.
 // parser-output-unchanged: Reconciliation revision projections classify listing inputs without changing parsed decision output.
 /**
@@ -46,9 +48,8 @@
  * what relates a row here to its SAOS copy.
  */
 
-import { Result, panic } from "better-result";
-
 import type { DocumentFetchStage } from "@stll/legal-atlas/document-fetch-diagnostics";
+import { sha256Hex as hashContent } from "@stll/sha256/bun";
 import { Temporal } from "@stll/time";
 
 import {
@@ -88,10 +89,7 @@ import { buildPlainTextItem } from "@/api/handlers/case-law/ingestion/adapters/i
 import { plSupremeCourtRulingKeys } from "@/api/handlers/case-law/ingestion/adapters/pl-sn-ruling-keys";
 import { publisherRequestIntervalMs } from "@/api/handlers/case-law/ingestion/adapters/publisher-policy";
 import { fetchWithRetry } from "@/api/handlers/case-law/ingestion/adapters/retry";
-import {
-  adapterCatch,
-  hashContent,
-} from "@/api/handlers/case-law/ingestion/adapters/utils";
+import { adapterCatch } from "@/api/handlers/case-law/ingestion/adapters/utils";
 import { parsePlSnDecisionPdf } from "@/api/handlers/case-law/ingestion/parsers/pl-sn";
 import {
   TEXT_ABSENCE_REASON,

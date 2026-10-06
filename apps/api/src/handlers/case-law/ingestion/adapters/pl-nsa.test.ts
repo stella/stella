@@ -14,6 +14,8 @@ import { mkdtemp, readdir, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import nodePath from "node:path";
 
+import { sha256Hex as hashSha256Hex } from "@stll/sha256/bun";
+
 import { decodeSourceRawEnvelope } from "@/api/handlers/case-law/ingestion/adapter";
 import type { IngestionResult } from "@/api/handlers/case-law/ingestion/adapter";
 import {
@@ -1251,8 +1253,7 @@ describe("shard download failures", () => {
     await rm(directory, { recursive: true, force: true });
   });
 
-  const sha256 = (): string =>
-    new Bun.CryptoHasher("sha256").update(bytes).digest("hex");
+  const sha256 = (): string => hashSha256Hex(bytes);
 
   test("a verified download reads, and a verified file is not fetched twice", async () => {
     const { requests } = serve(() => null);

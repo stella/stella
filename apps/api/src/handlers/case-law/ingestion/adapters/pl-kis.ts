@@ -1,3 +1,5 @@
+// parser-output-unchanged: The SHA-256 owner receives identical UTF-8 inputs and emits the same lowercase hexadecimal digests; adapter fixture and fingerprint vectors retain the output.
+import { Result, panic } from "better-result";
 // parser-output-unchanged: fetch-stage telemetry and document-stage metadata only; parser decision fields are unchanged.
 // parser-output-unchanged: Reconciliation revision projections classify listing inputs without changing parsed decision output.
 /**
@@ -47,9 +49,11 @@
  * of its own, ahead of the first month.
  */
 
-import { Result, panic } from "better-result";
-
 import type { DocumentFetchStage } from "@stll/legal-atlas/document-fetch-diagnostics";
+import {
+  sha256Hex as hashContent,
+  sha256Hex as hashSha256Hex,
+} from "@stll/sha256/bun";
 import { readCappedBytes } from "@stll/skills/streaming";
 import { parsePlainDate, Temporal } from "@stll/time";
 
@@ -89,10 +93,7 @@ import type {
 import { buildPlainTextItem } from "@/api/handlers/case-law/ingestion/adapters/item-build";
 import { publisherRequestIntervalMs } from "@/api/handlers/case-law/ingestion/adapters/publisher-policy";
 import { fetchWithRetry } from "@/api/handlers/case-law/ingestion/adapters/retry";
-import {
-  adapterCatch,
-  hashContent,
-} from "@/api/handlers/case-law/ingestion/adapters/utils";
+import { adapterCatch } from "@/api/handlers/case-law/ingestion/adapters/utils";
 import {
   parsePlKisDocumentHtml,
   parsePlKisDocumentPdf,
@@ -1348,9 +1349,7 @@ export const assemblePlKisDecision = async ({
       // rendition under an unchanged detail has to change the hash too.
       rawHash:
         parsed?.from === "pdf" && pdfBytes !== undefined
-          ? hashContent(
-              `${sourceRaw}\n${new Bun.CryptoHasher("sha256").update(pdfBytes).digest("hex")}`,
-            )
+          ? hashContent(`${sourceRaw}\n${hashSha256Hex(pdfBytes)}`)
           : hashContent(sourceRaw),
       parserVersion: PARSER_VERSIONS[ADAPTER_KEYS.PL_KIS],
       documentAst,

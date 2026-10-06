@@ -10,6 +10,8 @@ import {
 import { eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 
+import { sha256Hex as hashSha256Hex } from "@stll/sha256/bun";
+
 import { authRelationsPart } from "@/api/db/auth-schema";
 import type { Transaction } from "@/api/db/root";
 import type { ScopedDb } from "@/api/db/safe-db";
@@ -105,7 +107,7 @@ const observe = async ({ sourceId, listing, order }: ObserveOptions) =>
       fulltext: "Rozhodnutie o veci samej.",
       metadata: {},
       textFields: absentDecisionTextFields(TEXT_ABSENCE_REASON.NOT_PUBLISHED),
-      rawHash: new Bun.CryptoHasher("sha256").update(listing).digest("hex"),
+      rawHash: hashSha256Hex(listing),
       documentAst: EMPTY_AST,
       sourceRaw: encodeSourceRawEnvelope({ listing }),
       sourceRawObjects: {

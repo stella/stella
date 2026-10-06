@@ -1,4 +1,5 @@
 import { fitCaseLawDecisionSlug } from "@stll/api-contract/case-law-decision-route";
+import { sha256Hex as hashSha256Hex } from "@stll/sha256/bun";
 
 const CASE_LAW_DECISION_SLUG_HASH_LENGTH = 16;
 export const CASE_LAW_DECISION_SLUG_ALLOCATION_ATTEMPTS = [
@@ -28,9 +29,9 @@ export const createCaseLawDecisionSlugCandidate = ({
     return fitCaseLawDecisionSlug({ baseSlug });
   }
 
-  const digest = new Bun.CryptoHasher("sha256")
-    .update(`${identity}\u0000${attempt}`)
-    .digest("hex")
-    .slice(0, CASE_LAW_DECISION_SLUG_HASH_LENGTH);
+  const digest = hashSha256Hex(`${identity}\u0000${attempt}`).slice(
+    0,
+    CASE_LAW_DECISION_SLUG_HASH_LENGTH,
+  );
   return fitCaseLawDecisionSlug({ baseSlug, suffix: `-${digest}` });
 };

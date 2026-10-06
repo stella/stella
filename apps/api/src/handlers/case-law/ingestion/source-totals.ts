@@ -2,11 +2,11 @@ import { panic, Result, TaggedError } from "better-result";
 import type { ReservedSQL } from "bun";
 import { and, asc, eq, inArray, isNull, or, sql } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
-import { createHash } from "node:crypto";
 import * as v from "valibot";
 
 import { defaultConfig } from "@stll/db-load-gate/health";
 import type { HealthConfig, Signal } from "@stll/db-load-gate/health";
+import { sha256Bytes as hashSha256Bytes } from "@stll/sha256/bun";
 import { DAY_IN_MS, Temporal } from "@stll/time";
 
 import { createDatabaseLoadVerdictReader } from "@/api/db/backfill-runtime";
@@ -242,7 +242,7 @@ export const sourceStoredTotalNextRefreshAt = (
   earliest: Date,
 ): Date => {
   const phase =
-    createHash("sha256").update(sourceId).digest().readUInt32BE(0) %
+    hashSha256Bytes(sourceId).readUInt32BE(0) %
     SOURCE_STORED_TOTAL_REFRESH_INTERVAL_MS;
   const period = Math.ceil(
     (earliest.getTime() - phase) / SOURCE_STORED_TOTAL_REFRESH_INTERVAL_MS,

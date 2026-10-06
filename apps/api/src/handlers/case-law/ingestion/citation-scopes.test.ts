@@ -1,6 +1,7 @@
 import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 
+import { sha256Hex as hashSha256Hex } from "@stll/sha256/bun";
 import { stableStringify } from "@stll/stable-stringify";
 
 import type { IngestionResult } from "@/api/handlers/case-law/ingestion/adapter";
@@ -106,7 +107,7 @@ describe("persisted citation scopes", () => {
       const previousBytes = stableStringify(persisted);
       expect(JSON.stringify(sortDeep(documentAst))).toBe(previousBytes);
       expect(citationScopeAstHash(documentAst)).toBe(
-        new Bun.CryptoHasher("sha256").update(previousBytes).digest("hex"),
+        hashSha256Hex(previousBytes),
       );
       compared += 1;
     }

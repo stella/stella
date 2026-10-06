@@ -1,3 +1,4 @@
+// parser-output-unchanged: The SHA-256 owner receives identical UTF-8 inputs and emits the same lowercase hexadecimal digests; adapter fixture and fingerprint vectors retain the output.
 // parser-output-unchanged: fetch-stage telemetry and document-stage metadata only; parser decision fields are unchanged.
 // parser-output-unchanged: Reconciliation revision projections classify listing inputs without changing parsed decision output.
 // parser-output-unchanged: a download the publisher does not serve is reported as an unread item; built decisions are unchanged.
@@ -54,6 +55,7 @@ import type { Document as FolioDocument } from "@stll/docx-core/model";
  * (rule 16).
  */
 import type { DecisionIdentifiers } from "@stll/legal-ast/decision-identifier";
+import { sha256Hex as hashContent } from "@stll/sha256/bun";
 import { Temporal } from "@stll/time";
 
 import {
@@ -101,10 +103,7 @@ import {
   fetchWithRetry,
   rethrowCycleStop,
 } from "@/api/handlers/case-law/ingestion/adapters/retry";
-import {
-  adapterCatch,
-  hashContent,
-} from "@/api/handlers/case-law/ingestion/adapters/utils";
+import { adapterCatch } from "@/api/handlers/case-law/ingestion/adapters/utils";
 import {
   huBhgyHeaderLabelsOf,
   parseHuBhgyDecision,

@@ -10,6 +10,7 @@ import { and, eq, inArray, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 
 import { rejectionOf } from "@stll/property-testing/rejection";
+import { sha256Hex as hashSha256Hex } from "@stll/sha256/bun";
 import { DAY_IN_MS } from "@stll/time";
 
 import { authRelationsPart } from "@/api/db/auth-schema";
@@ -2236,7 +2237,7 @@ test("reconciliation persists registered root and nested URLs without caller sch
           PL_COURTS_METADATA_URL_SCHEMA,
         ),
         textFields: absentDecisionTextFields(TEXT_ABSENCE_REASON.NOT_PUBLISHED),
-        rawHash: new Bun.CryptoHasher("sha256").update(sourceRaw).digest("hex"),
+        rawHash: hashSha256Hex(sourceRaw),
         sourceRaw,
         sourceRawContentType: "application/json",
         documentAst: EMPTY_AST,

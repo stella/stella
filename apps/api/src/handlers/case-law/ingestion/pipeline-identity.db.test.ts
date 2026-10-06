@@ -3,6 +3,7 @@ import { beforeAll, describe, expect, spyOn, test } from "bun:test";
 import { and, eq, inArray, sql } from "drizzle-orm";
 
 import { rejectionOf } from "@stll/property-testing/rejection";
+import { sha256Hex as hashContent } from "@stll/sha256/bun";
 
 import type { ScopedDb } from "@/api/db/safe-db";
 import {
@@ -16,7 +17,6 @@ import { createCaseLawDecisionSlugCandidate } from "@/api/handlers/case-law/deci
 import { EMPTY_AST } from "@/api/handlers/case-law/ingestion/adapter";
 import type { IngestionResult } from "@/api/handlers/case-law/ingestion/adapter";
 import { czUsAdapter } from "@/api/handlers/case-law/ingestion/adapters/cz-us";
-import { hashContent } from "@/api/handlers/case-law/ingestion/adapters/utils";
 import { bareCitationKey } from "@/api/handlers/case-law/ingestion/citation-extractor";
 import { processDecision } from "@/api/handlers/case-law/ingestion/pipeline/decision";
 import type { SafeId } from "@/api/lib/branded-types";

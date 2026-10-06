@@ -19,6 +19,7 @@ import {
 } from "@stll/api-contract/case-law-text-field";
 import { DECISION_DOCUMENT_ROLE } from "@stll/api-contract/decision-document-role";
 import { assertProperty } from "@stll/property-testing";
+import { createSha256 } from "@stll/sha256/bun";
 
 import { authRelationsPart } from "@/api/db/auth-schema";
 import type { Transaction } from "@/api/db/root";
@@ -256,7 +257,7 @@ test("a writing replay goes through the pipeline, and replaying again converges"
   // decision's own prefix, byte for byte, and under the media type the row
   // recorded. A re-parse that returned no payload would otherwise clear the
   // row's pointer to it.
-  const hasher = new Bun.CryptoHasher("sha256");
+  const hasher = createSha256();
   hasher.update(STORED_PAYLOAD);
   const contentAddressedKey = `case-law/raw/${sourceId}/documents/${id}/payloads/${hasher.digest("hex")}`;
   const stored = fake.objects.get(

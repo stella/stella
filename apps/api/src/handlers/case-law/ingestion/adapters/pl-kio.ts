@@ -1,3 +1,4 @@
+// parser-output-unchanged: The SHA-256 owner receives identical UTF-8 inputs and emits the same lowercase hexadecimal digests; adapter fixture and fingerprint vectors retain the output.
 import { Result, panic } from "better-result";
 /**
  * Polish public-procurement rulings from the UZP decision database.
@@ -42,6 +43,7 @@ import {
   type DecisionIdentifier,
 } from "@stll/legal-ast/decision-identifier";
 import type { DocumentFetchStage } from "@stll/legal-atlas/document-fetch-diagnostics";
+import { sha256Hex as hashContent } from "@stll/sha256/bun";
 import { readCappedBytes } from "@stll/skills/streaming";
 import { Temporal } from "@stll/time";
 
@@ -85,10 +87,7 @@ import { createCalendarDaySliceWalk } from "@/api/handlers/case-law/ingestion/ad
 import { buildPlainTextItem } from "@/api/handlers/case-law/ingestion/adapters/item-build";
 import { publisherRequestIntervalMs } from "@/api/handlers/case-law/ingestion/adapters/publisher-policy";
 import { fetchWithRetry } from "@/api/handlers/case-law/ingestion/adapters/retry";
-import {
-  adapterCatch,
-  hashContent,
-} from "@/api/handlers/case-law/ingestion/adapters/utils";
+import { adapterCatch } from "@/api/handlers/case-law/ingestion/adapters/utils";
 import { parsePlDecisionContent } from "@/api/handlers/case-law/ingestion/parsers/pl-courts";
 import {
   legacyQuarantineHtmlText,

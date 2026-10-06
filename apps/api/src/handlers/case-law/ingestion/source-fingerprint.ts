@@ -1,3 +1,4 @@
+import { panic } from "better-result";
 /**
  * The fingerprint change detection compares for a case-law decision.
  *
@@ -14,7 +15,7 @@
  * hashed and what is stored cannot drift apart.
  */
 
-import { panic } from "better-result";
+import { sha256Hex as hashSha256Hex } from "@stll/sha256/bun";
 
 import type { IngestionResult } from "@/api/lib/legal-search/ingestion-types";
 
@@ -31,9 +32,6 @@ export type StoredSourceRaw = {
   readonly sourceRaw: string;
   readonly sourceRawObjects?: IngestionResult["sourceRawObjects"];
 };
-
-const sha256Hex = (input: string | Uint8Array): string =>
-  new Bun.CryptoHasher("sha256").update(input).digest("hex");
 
 const SHA256_HEX = /^[0-9a-f]{64}$/u;
 
@@ -53,9 +51,9 @@ export const sourceFingerprint = ({
   sourceRawObjects,
 }: StoredSourceRaw): SourceFingerprint => {
   const objects = Object.values(sourceRawObjects ?? {}).map(({ bytes }) =>
-    sha256Hex(bytes),
+    hashSha256Hex(bytes),
   );
-  const digest = sha256Hex([sourceRaw, ...objects].join("\n"));
+  const digest = hashSha256Hex([sourceRaw, ...objects].join("\n"));
   if (!isSourceFingerprint(digest)) {
     panic("SHA-256 produced a digest that is not 64 lowercase hex characters");
   }

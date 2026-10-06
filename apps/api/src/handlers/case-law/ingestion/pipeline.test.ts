@@ -23,6 +23,7 @@ import {
   CYCLE_HALT_REASON,
   INGESTION_STOP_KIND,
 } from "@stll/legal-atlas/ingestion-cycle";
+import { sha256Hex as hashSha256Hex } from "@stll/sha256/bun";
 
 import type { Transaction } from "@/api/db/root";
 import type { ScopedDb } from "@/api/db/safe-db";
@@ -1974,7 +1975,7 @@ describe("processDecision — source raw upload failure", () => {
   /** The payload's own digest, under the decision's own raw prefix. */
   const rawKey = (sourceId: string, payload: string): RegExp =>
     new RegExp(
-      `^case-law/raw/${sourceId}/documents/[0-9a-f-]{36}/payloads/${new Bun.CryptoHasher("sha256").update(payload).digest("hex")}$`,
+      `^case-law/raw/${sourceId}/documents/[0-9a-f-]{36}/payloads/${hashSha256Hex(payload)}$`,
       "u",
     );
 

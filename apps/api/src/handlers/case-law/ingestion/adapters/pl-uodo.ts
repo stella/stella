@@ -1,8 +1,13 @@
+// parser-output-unchanged: The SHA-256 owner receives identical UTF-8 inputs and emits the same lowercase hexadecimal digests; adapter fixture and fingerprint vectors retain the output.
 // parser-output-unchanged: fetch-stage telemetry and document-stage metadata only; parser decision fields are unchanged.
 // parser-output-unchanged: Reconciliation revision projections classify listing inputs without changing parsed decision output.
 import { Result, panic } from "better-result";
 
 import { polishAdministrativeDocketOf } from "@stll/api-contract/decision-docket-grammar";
+import {
+  sha256Hex as hashContent,
+  sha256Hex as hashSha256Hex,
+} from "@stll/sha256/bun";
 /**
  * Polish data-protection authority (Prezes UODO) adapter.
  *
@@ -88,10 +93,7 @@ import { plCommonCourtRulingKeys } from "@/api/handlers/case-law/ingestion/adapt
 import { plSupremeCourtRulingKeys } from "@/api/handlers/case-law/ingestion/adapters/pl-sn-ruling-keys";
 import { publisherRequestIntervalMs } from "@/api/handlers/case-law/ingestion/adapters/publisher-policy";
 import { fetchWithRetry } from "@/api/handlers/case-law/ingestion/adapters/retry";
-import {
-  adapterCatch,
-  hashContent,
-} from "@/api/handlers/case-law/ingestion/adapters/utils";
+import { adapterCatch } from "@/api/handlers/case-law/ingestion/adapters/utils";
 import { parsePlUodoDecisionXml } from "@/api/handlers/case-law/ingestion/parsers/pl-uodo";
 import { DECISION_JUDGE_ROLE } from "@/api/handlers/case-law/judges/consts";
 import {
@@ -1094,7 +1096,7 @@ const checksumMatches = (
   if (stated === undefined) {
     return undefined;
   }
-  return new Bun.CryptoHasher("sha256").update(bytes).digest("hex") === stated;
+  return hashSha256Hex(bytes) === stated;
 };
 
 export type PlUodoBody = {
