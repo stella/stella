@@ -8,6 +8,7 @@ import {
 } from "@stll/api-contract/generated-visual";
 import { Temporal } from "@stll/time";
 
+import { collectLiteralVisualLinks } from "./literal-links";
 import { sanitizeVisualHtml } from "./sanitize";
 
 export class VisualDefinitionError extends TaggedError(
@@ -166,5 +167,6 @@ export const prepareGeneratedVisual = (input: GeneratedVisualInput) => {
     html: normalized.value,
     data: input.data,
     charts: input.charts,
+    literalLinks: collectLiteralVisualLinks(normalized.value),
   });
 };
