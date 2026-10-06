@@ -1,7 +1,6 @@
 import { panic, Result } from "better-result";
 
-import { Temporal } from "@stll/time";
-
+import { isFreshReading } from "./health";
 import type { HealthConfig, Signal } from "./health";
 
 export type EbsBalanceReading = {
@@ -62,14 +61,10 @@ const fresh = (
   now: IndicatorClock,
   config: HealthConfig,
 ) => {
-  const result = Result.try(
-    () => now() - Temporal.Instant.from(observedAt).epochMilliseconds,
-  );
+  const clock = Result.try(now);
   return (
-    Result.isOk(result) &&
-    Number.isFinite(result.value) &&
-    result.value >= 0 &&
-    result.value <= config.maxStalenessMs
+    Result.isOk(clock) &&
+    isFreshReading(observedAt, clock.value, config.maxStalenessMs)
   );
 };
 

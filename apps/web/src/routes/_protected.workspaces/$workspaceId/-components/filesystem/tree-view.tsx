@@ -888,7 +888,6 @@ export const FilesystemView = ({ workspaceId, view }: FilesystemViewProps) => {
                           if (isEditingCrumb) {
                             return (
                               <InlineEdit
-                                inputClassName="h-5 w-40 text-xs"
                                 onCancel={() => setEditingEntityId(null)}
                                 onChange={setBreadcrumbEditValue}
                                 onCommit={() => {
@@ -909,7 +908,7 @@ export const FilesystemView = ({ workspaceId, view }: FilesystemViewProps) => {
                           if (isLast) {
                             return (
                               <button
-                                className="text-xs font-medium"
+                                className="text-xs font-medium whitespace-pre"
                                 onClick={() => {
                                   detached(
                                     navigateToFolder(),
@@ -1649,7 +1648,6 @@ export const FilesystemRow = ({
       {isEditing ? (
         <InlineEdit
           className="max-w-full min-w-0"
-          inputClassName="min-w-48 [field-sizing:content]"
           onCancel={cancelEditing}
           onChange={setEditValue}
           onCommit={commitRename}
@@ -1662,7 +1660,11 @@ export const FilesystemRow = ({
         />
       ) : (
         <span className="flex min-w-0 items-center gap-1.5">
-          <BidiText as="span" className="truncate" title={name}>
+          <BidiText
+            as="span"
+            className="overflow-hidden text-ellipsis whitespace-pre"
+            title={name}
+          >
             {name}
           </BidiText>
           {folderStatistics && formattedFolderSize && (
