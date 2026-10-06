@@ -56,10 +56,10 @@ const pr = {
 const scope = createHash("sha256")
   .update(JSON.stringify([pr.title, pr.body, false]))
   .digest("hex");
-const marker = (depth: string) =>
-  `ci-completed-v3-123-456-${pr.head.sha}-${pr.base.sha}-${depth}-${scope}`;
-const artifact = (depth: string) => ({
-  name: marker(depth),
+const marker = (depth: string, profile = "normal-v1") =>
+  `ci-completed-v4-${profile}-123-456-${pr.head.sha}-${pr.base.sha}-${depth}-${scope}`;
+const artifact = (depth: string, profile = "normal-v1") => ({
+  name: marker(depth, profile),
   expired: false,
   expires_at: "2099-01-01T00:00:00Z",
   workflow_run: { id: 99, head_sha: pr.head.sha, head_repository_id: 456 },
@@ -75,6 +75,7 @@ const successfulRun = {
 };
 type LookupOptions = {
   depth?: string;
+  profile?: string;
   action?: string;
   event?: string;
   artifacts?: unknown;
@@ -85,6 +86,7 @@ type LookupOptions = {
 };
 const decide = async ({
   depth = "full",
+  profile = "normal-v1",
   action = "labeled",
   event = "pull_request",
   artifacts = [artifact(depth)],
@@ -102,7 +104,13 @@ const decide = async ({
       }
       return { createHash };
     },
-    process: { env: { SUITE_DEPTH: depth, GITHUB_RUN_ATTEMPT: "1" } },
+    process: {
+      env: {
+        SUITE_DEPTH: depth,
+        COVERAGE_PROFILE: profile,
+        GITHUB_RUN_ATTEMPT: "1",
+      },
+    },
     context: {
       eventName: event,
       payload: { action, pull_request: pull },
@@ -455,4 +463,52 @@ test("exact-name lookup finds evidence behind more than a page of unrelated arti
   expect(outputs.get("run_required")).toBe("false");
   expect(requests).toHaveLength(2);
   expect(requests.at(0)).toMatchObject({ name: marker("full"), per_page: 100 });
+});
+
+test("switching the pilot on or off cannot reuse the other fast coverage profile", async () => {
+  for (const [profile, previous] of [
+    ["normal-v1", "pilot-fast-v1"],
+    ["pilot-fast-v1", "normal-v1"],
+  ]) {
+    expect(
+      (
+        await decide({
+          depth: "fast",
+          profile,
+          artifacts: [artifact("fast", previous)],
+        })
+      ).outputs.get("run_required"),
+    ).toBe("true");
+    expect(
+      (
+        await decide({
+          depth: "fast",
+          profile,
+          artifacts: [artifact("fast", profile)],
+        })
+      ).outputs.get("run_required"),
+    ).toBe("false");
+  }
+});
+
+test("enqueue events leave every PR suite to unchanged merge-group validation", async () => {
+  const { outputs, requests } = await decide({ action: "enqueued" });
+  expect(outputs.get("run_required")).toBe("false");
+  expect(outputs.get("queue_validation")).toBe("true");
+  expect(requests).toHaveLength(0);
+  for (const [name, job] of Object.entries(jobs)) {
+    if (["ci-plan", "ci-result"].includes(name)) {
+      continue;
+    }
+    expect(
+      evaluate(job.if ?? "true", {
+        values: {
+          "github.event_name": "pull_request",
+          "needs.ci-plan.outputs.run_required": "false",
+          "needs.ci-plan.outputs.coverage_profile": "normal-v1",
+        },
+      }),
+      name,
+    ).toBe(false);
+  }
 });

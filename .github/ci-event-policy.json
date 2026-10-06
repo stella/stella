@@ -67,6 +67,7 @@
     "marketing-screenshots.yml/check": "main",
     "marketing-screenshots.yml/update": "main",
     "model-catalog-check.yml/model-catalog-check": "main",
+    "ci-pr-pilot-metrics.yml/metrics": "main",
     "network-baseline-record.yml/build": "main",
     "network-baseline-record.yml/record": "main",
     "network-baseline-request.yml/request": "pr-fast",

@@ -2,7 +2,17 @@ name: CI Checks
 
 on:
   pull_request:
-    types: [opened, synchronize, reopened, ready_for_review, labeled, unlabeled]
+    types:
+      [
+        opened,
+        synchronize,
+        reopened,
+        ready_for_review,
+        labeled,
+        unlabeled,
+        auto_merge_enabled,
+        enqueued,
+      ]
   # The merge queue builds main plus queued pull requests and merges only if this
   # workflow reports `ci-result` success on that commit, so release-boundary
   # checks must include merge_group and validate the tree that will land.
@@ -85,6 +95,9 @@ jobs:
       run_required: ${{ steps.completed-depth.outputs.run_required }}
       completion_marker: ${{ steps.completed-depth.outputs.marker }}
       completed_run_id: ${{ steps.completed-depth.outputs.completed_run_id }}
+      queue_validation: ${{ steps.completed-depth.outputs.queue_validation }}
+      coverage_profile: ${{ steps.pilot.outputs.coverage_profile }}
+      pilot_fast_jobs: ${{ steps.pilot-plan.outputs.fast_jobs }}
       suite_depth: ${{ steps.depth.outputs.suite_depth }}
       queue_depth: ${{ steps.depth.outputs.queue_depth || 'full' }}
       thin_jobs: ${{ steps.heavy-plan.outputs.thin_jobs }}
@@ -129,6 +142,76 @@ jobs:
       web_image_smoke_required: ${{ steps.changed-files.outputs.web_image_smoke_required }}
       windows_scripts_required: ${{ steps.changed-files.outputs.windows_scripts_required }}
     steps:
+      - name: Resolve PR coverage pilot
+        id: pilot
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
+        env:
+          CI_PR_DEPTH_PILOT: ${{ vars.CI_PR_DEPTH_PILOT }}
+        with:
+          retries: 0
+          script: |
+            core.setOutput("coverage_profile", "normal-v1");
+            if (process.env.CI_PR_DEPTH_PILOT !== "on" || context.eventName !== "pull_request") return;
+            // Uncertified pilot evidence keeps complete PR coverage.
+            core.setOutput("coverage_profile", "normal-v1");
+            if (!["opened", "synchronize"].includes(context.payload.action)) return;
+            const name = "ci-pr-depth-pilot-v1";
+            try {
+              const { data } = await github.rest.actions.listArtifactsForRepo({
+                ...context.repo, name, per_page: 100, request: { timeout: 10000 },
+              });
+              if (!Array.isArray(data.artifacts)) return;
+              const artifact = data.artifacts.filter((item) => item?.name === name
+                && item.expired === false && Date.parse(item.expires_at) > Date.now()
+                && Number.isSafeInteger(item.workflow_run?.id))
+                .sort((a, b) => b.id - a.id)[0];
+              if (!artifact) return;
+              await new Promise(resolve => setTimeout(resolve, 1100));
+              const { data: run } = await github.rest.actions.getWorkflowRun({
+                ...context.repo, run_id: artifact.workflow_run.id, request: { timeout: 10000 },
+              });
+              if (run.path !== ".github/workflows/ci-pr-pilot-metrics.yml"
+                  || !["schedule", "workflow_dispatch"].includes(run.event)
+                  || run.head_branch !== context.payload.repository.default_branch
+                  || run.head_sha !== artifact.workflow_run.head_sha
+                  || run.status !== "completed" || run.conclusion !== "success") return;
+              await new Promise(resolve => setTimeout(resolve, 1100));
+              const { data: zip } = await github.rest.actions.downloadArtifact({
+                ...context.repo, artifact_id: artifact.id, archive_format: "zip",
+                request: { timeout: 10000 },
+              });
+              const fs = require("node:fs");
+              const path = require("node:path");
+              const directory = fs.mkdtempSync(path.join(process.env.RUNNER_TEMP, "ci-pilot-"));
+              let report;
+              try {
+                const filename = path.join(directory, "report.zip");
+                fs.writeFileSync(filename, Buffer.from(zip));
+                const text = require("node:child_process").execFileSync("unzip",
+                  ["-p", filename, "ci-pr-pilot.json"], { maxBuffer: 65536, timeout: 5000 });
+                report = JSON.parse(text.toString());
+              } finally {
+                fs.rmSync(directory, { recursive: true, force: true });
+              }
+              const start = Date.parse(report.startedAt);
+              const generated = Date.parse(report.generatedAt);
+              const now = Date.now();
+              if (report.profile !== "pilot-v1" || report.complete !== true
+                  || report.stopped !== false || !Number.isFinite(start)
+                  || !Number.isFinite(generated) || start > generated || generated > now
+                  || now - generated > 36 * 60 * 60 * 1000
+                  || now - start >= 7 * 24 * 60 * 60 * 1000
+                  || !Number.isFinite(report.baselineArmToMergeP50Minutes)
+                  || report.baselineArmToMergeP50Minutes < 0
+                  || (report.armToMergeP50Minutes !== null
+                    && (!Number.isFinite(report.armToMergeP50Minutes)
+                      || report.armToMergeP50Minutes < 0
+                      || report.armToMergeP50Minutes > report.baselineArmToMergeP50Minutes + 20))) return;
+              core.setOutput("coverage_profile", "pilot-fast-v1");
+            } catch {
+              core.info("Pilot metrics unavailable; retaining complete PR coverage.");
+            }
+
       - name: Resolve suite depth
         id: depth
         env:
@@ -192,10 +275,16 @@ jobs:
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
         env:
           SUITE_DEPTH: ${{ steps.depth.outputs.suite_depth }}
+          COVERAGE_PROFILE: ${{ steps.pilot.outputs.coverage_profile }}
         with:
           retries: 0
           script: |
             core.setOutput("run_required", "true");
+            if (context.eventName === "pull_request" && context.payload.action === "enqueued") {
+              core.setOutput("run_required", "false");
+              core.setOutput("queue_validation", "true");
+              return;
+            }
             const pr = context.payload.pull_request;
             const depth = process.env.SUITE_DEPTH;
             if (context.eventName !== "pull_request" || !pr
@@ -211,9 +300,10 @@ jobs:
               && pr.labels.some((label) => label.name === "prove-fix");
             const scope = require("node:crypto").createHash("sha256")
               .update(JSON.stringify([pr.title, pr.body || "", proof])).digest("hex");
-            const marker = `ci-completed-v3-${pr.number}-${pr.head.repo.id}-${pr.head.sha}-${pr.base.sha}-${depth}-${scope}`;
+            const profile = process.env.COVERAGE_PROFILE || "normal-v1";
+            const marker = `ci-completed-v4-${profile}-${pr.number}-${pr.head.repo.id}-${pr.head.sha}-${pr.base.sha}-${depth}-${scope}`;
             core.setOutput("marker", marker);
-            if (!["labeled", "unlabeled", "ready_for_review", "reopened", "auto_merge_enabled"].includes(context.payload.action)) return;
+            if (!["labeled", "unlabeled", "ready_for_review", "reopened", "auto_merge_enabled", "enqueued"].includes(context.payload.action)) return;
             try {
               const { data } = await github.rest.actions.listArtifactsForRepo({
                 ...context.repo, name: marker, per_page: 100,
@@ -884,6 +974,11 @@ jobs:
             echo 'api_test_files=' >> "$GITHUB_OUTPUT"
           fi
 
+      - name: Derive pilot fast prerequisites
+        id: pilot-plan
+        if: steps.completed-depth.outputs.run_required != 'false' && steps.pilot.outputs.coverage_profile == 'pilot-fast-v1'
+        run: bun scripts/ci-pr-pilot-plan.ts .github/workflows/ci.yml >> "$GITHUB_OUTPUT"
+
       - name: Plan API test files and shards
         if: steps.completed-depth.outputs.run_required != 'false' && (steps.check.outputs.trusted == 'true' || github.event_name == 'workflow_dispatch')
         id: api-tests
@@ -1230,12 +1325,14 @@ jobs:
   parser-version-guard:
     needs: ci-plan
     if: >-
+      (needs.ci-plan.outputs.coverage_profile != 'pilot-fast-v1' || contains(fromJSON(needs.ci-plan.outputs.pilot_fast_jobs || '[]'), 'parser-version-guard')) && (
       needs.ci-plan.outputs.run_required != 'false'
       && (
       inputs.heavy_only != true
       && (
-        needs.ci-plan.outputs.trusted == 'true'
-        || github.event_name == 'workflow_dispatch'
+      needs.ci-plan.outputs.trusted == 'true'
+      || github.event_name == 'workflow_dispatch'
+      )
       )
       )
     runs-on: ubuntu-latest
@@ -1319,10 +1416,12 @@ jobs:
   ci-generated-sources:
     needs: ci-plan
     if: >-
+      (needs.ci-plan.outputs.coverage_profile != 'pilot-fast-v1' || contains(fromJSON(needs.ci-plan.outputs.pilot_fast_jobs || '[]'), 'ci-generated-sources')) && (
       needs.ci-plan.outputs.run_required != 'false'
       && (
       inputs.heavy_only != true
       && (needs.ci-plan.outputs.trusted == 'true' || github.event_name == 'workflow_dispatch')
+      )
       )
     runs-on: ubuntu-latest
     timeout-minutes: 15
@@ -4333,12 +4432,14 @@ jobs:
   fix-tests-on-base:
     needs: ci-plan
     if: >-
+      (needs.ci-plan.outputs.coverage_profile != 'pilot-fast-v1' || contains(fromJSON(needs.ci-plan.outputs.pilot_fast_jobs || '[]'), 'fix-tests-on-base')) && (
       needs.ci-plan.outputs.run_required != 'false'
       && (
       github.event_name == 'pull_request'
       && contains(github.event.pull_request.labels.*.name, 'prove-fix')
       && needs.ci-plan.outputs.fix_tests_on_base_required == 'true'
       && needs.ci-plan.outputs.trusted == 'true'
+      )
       )
     runs-on: ubuntu-latest
     timeout-minutes: 20
@@ -6684,10 +6785,12 @@ jobs:
   dependency-malware:
     needs: ci-plan
     if: >-
+      (needs.ci-plan.outputs.coverage_profile != 'pilot-fast-v1' || contains(fromJSON(needs.ci-plan.outputs.pilot_fast_jobs || '[]'), 'dependency-malware')) && (
       needs.ci-plan.outputs.run_required != 'false'
       && (
       needs.ci-plan.outputs.queue_depth != 'thin'
       && (needs.ci-plan.outputs.trusted == 'true' && needs.ci-plan.outputs.dependency_malware_required == 'true')
+      )
       )
     runs-on: ubuntu-latest
     timeout-minutes: 20
@@ -6828,8 +6931,12 @@ jobs:
           PLAN: ${{ toJSON(needs.ci-plan.outputs) }}
           RUN_REQUIRED: ${{ needs.ci-plan.outputs.run_required }}
           COMPLETED_RUN_ID: ${{ needs.ci-plan.outputs.completed_run_id }}
+          QUEUE_VALIDATION: ${{ needs.ci-plan.outputs.queue_validation }}
+          PR_ACTION: ${{ github.event.action }}
           PLAN_RESULT: ${{ needs.ci-plan.result }}
           SUITE_DEPTH: ${{ needs.ci-plan.outputs.suite_depth }}
+          COVERAGE_PROFILE: ${{ needs.ci-plan.outputs.coverage_profile }}
+          PILOT_FAST_JOBS: ${{ needs.ci-plan.outputs.pilot_fast_jobs }}
           HEAVY_ONLY: ${{ inputs.heavy_only }}
           HEAVY_JOBS: ${{ needs.ci-plan.outputs.heavy_jobs || '[]' }}
           QUEUE_DEPTH: ${{ needs.ci-plan.outputs.queue_depth || 'full' }}
@@ -6882,6 +6989,14 @@ jobs:
           FAST_REQUIRED: >-
             ["ci-generated-sources", "ci-checks-generated", "ci-checks-policy", "ci-checks-rest", "code-quality-api", "code-quality-rest", "code-quality-web", "dependency-malware", "parser-version-guard", "typecheck-baseline", "ci-tests"]
         run: |
+          if [[ "$COVERAGE_PROFILE" == pilot-fast-v1 ]]; then
+            FAST_REQUIRED="$PILOT_FAST_JOBS"
+          fi
+          if [[ "$QUEUE_VALIDATION" == true && "$EVENT" == pull_request && "$PR_ACTION" == enqueued ]] &&
+            jq -e 'all(.[]; .result == "success" or .result == "skipped")' <<< "$NEEDS" >/dev/null; then
+            echo "Queued tree validation belongs to merge_group."
+            exit 0
+          fi
           # Read cancellation evidence before any early aggregation exit.
           cancelled_jobs=""
           if jq -e 'any(.[]; .result == "cancelled")' <<< "$NEEDS" > /dev/null; then
