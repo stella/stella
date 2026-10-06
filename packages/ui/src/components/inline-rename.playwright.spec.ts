@@ -250,6 +250,7 @@ for (const { fallback, rtl } of [
   { fallback: false, rtl: false },
   { fallback: true, rtl: false },
   { fallback: false, rtl: true },
+  { fallback: true, rtl: true },
 ]) {
   test(`a fill field spans its row whatever its text (fallback=${String(fallback)}, rtl=${String(rtl)})`, async ({
     page,
