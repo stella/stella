@@ -28,7 +28,7 @@
         "file": "src/handlers/chat/approval-settlement.integration.test.ts",
         "test": "is stored on its owning message when the model answers in text"
       },
-      "oracle": "chat.persisted.turn-settles"
+      "oracle": "chat.client.no-errors"
     },
     {
       "id": "failed-continuation-keeps-owning-parts",
@@ -666,8 +666,8 @@
       "behaviour": "A run binds the run id its request posted to its turn when it starts.",
       "status": "active",
       "file": "src/handlers/chat/chat-turn-persistence.ts",
-      "search": "...(runId === undefined ? {} : { runId }),",
-      "replace": "...(runId === undefined ? {} : {}),",
+      "search": "        mode === \"bind\"\n          ? { runId }\n          : {\n              leaseExpiresAt: nextChatTurnRunLeaseExpiry(),\n              ...(runId === undefined ? {} : { runId }),\n            },",
+      "replace": "        mode === \"bind\"\n          ? { runId: sql`${chatTurns.runId}` }\n          : {\n              leaseExpiresAt: nextChatTurnRunLeaseExpiry(),\n            },",
       "scenario": {
         "file": "src/handlers/chat/chat-turn-run.integration.test.ts",
         "test": "runs an approved call to completion after its request is torn down, with nobody reading"

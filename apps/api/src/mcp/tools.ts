@@ -373,6 +373,19 @@ const dispatchMcpToolCall = async ({
   dependencies,
 }: McpToolCallArgs): Promise<CallToolResult> => {
   const serializeForSurface = createSurfaceSerializer({ context, mode });
+  const staticTool = getStaticMcpToolDefinition(toolName, mode);
+  if (staticTool) {
+    // Role and credential refusals are independent of the caller's enrolment.
+    const toolRefusal = mcpToolAuthorityRefusal({
+      authority: context,
+      definition: staticTool,
+      toolName,
+      userEmail: context.userEmail,
+    });
+    if (toolRefusal !== null) {
+      return serializeForSurface(structuredErrorResult(toolRefusal));
+    }
+  }
   const unavailableResult = featureUnavailableToolResult({
     context,
     mode,
@@ -393,7 +406,6 @@ const dispatchMcpToolCall = async ({
     return gatewayResult;
   }
 
-  const staticTool = getStaticMcpToolDefinition(toolName, mode);
   if (!staticTool) {
     return serializeForSurface(unknownToolResult(toolName));
   }
@@ -428,18 +440,6 @@ const dispatchMcpToolCall = async ({
         hint: featureDisabledHint(staticTool.feature),
       }),
     );
-  }
-
-  // Discovery withholds the tool; a call by name resolves it and is refused
-  // here, naming the member role, the credential, or the account.
-  const toolRefusal = mcpToolAuthorityRefusal({
-    authority: context,
-    definition: staticTool,
-    toolName,
-    userEmail: context.userEmail,
-  });
-  if (toolRefusal !== null) {
-    return serializeForSurface(structuredErrorResult(toolRefusal));
   }
 
   const unknownArgs = findUndeclaredArguments({

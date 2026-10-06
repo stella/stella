@@ -960,6 +960,9 @@
     },
     "viewer": {
       "abstract": "الملخّص",
+      "appliedVersionNotStated": "الصيغة المطبقة غير مذكورة",
+      "appliedVersionStatedAmendment": "الصيغة المعدلة بموجب <reference>{amendment}</reference>",
+      "appliedVersionStatedDate": "{relation, select, on {الصيغة السارية في {date}} until {الصيغة السارية حتى {date}} from {الصيغة السارية اعتبارًا من {date}} other {الصيغة السارية في {date}}}",
       "caseFileMayHoldOthers": "قد يتضمّن ملف هذه الدعوى قرارات أخرى أيضًا.",
       "citedBy": "مستشهَد به في",
       "cites": "يستشهد بـ",
@@ -1819,6 +1822,8 @@
     "notes": "الملاحظات",
     "open": "فتح",
     "openInNewTab": "فتح في علامة تبويب جديدة",
+    "openInStella": "فتح في stella",
+    "openOriginalSource": "فتح المصدر الأصلي",
     "options": "الخيارات",
     "or": "أو",
     "organization": "المؤسسة",
@@ -4735,6 +4740,7 @@
     },
     "title": "التشريعات",
     "validity": "نافذ من {from} إلى {to}",
+    "versionAppliedInDecision": "الصيغة المطبقة في قرار <bdi>{court}</bdi> <bdi>{caseNumber}</bdi> (<bdi>{range}</bdi>) · {status}",
     "wordingValidFrom": "الصياغة النافذة منذ {date}",
     "wordingVersionUnknown": "تاريخ نسخة الصياغة غير متاح"
   },

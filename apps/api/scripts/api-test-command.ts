@@ -36,6 +36,8 @@ export const buildApiTestCommand = ({
     `--timeout=${API_TEST_TIMEOUT_MS}`,
     `--timings=${timingPath}`,
     "--update-timings",
+    "--preload",
+    path.join(import.meta.dirname, "../src/tests/publisher-gate-preload.ts"),
     ...testArguments,
     ...testFiles,
   ];

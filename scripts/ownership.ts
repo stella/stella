@@ -90,6 +90,12 @@ export type OwnershipEnforcement =
       readonly method: string;
       readonly within: readonly string[];
       readonly allowed: readonly AllowedFile[];
+    }
+  | {
+      readonly kind: "function-call";
+      readonly name: string;
+      readonly within: readonly string[];
+      readonly allowed: readonly AllowedFile[];
     };
 
 export type OwnershipEntry = {
@@ -536,12 +542,22 @@ const MODEL_REQUESTS_WITHOUT_CHAT_CONTENT = [
 const MODEL_REQUEST_NAMES = [
   "collectTanStackTextRun",
   "generateChatObject",
+  "generateTanStackChatObject",
   "generateTanStackObjectForRole",
   "generateTanStackTextForRole",
   "streamChatChunks",
   "streamChatObject",
+  "streamTanStackChatRun",
   "streamTanStackObjectForRole",
   "streamTanStackTextForRole",
+] as const;
+
+// The engine's raw run forms. Their failures carry provider and model text, so
+// only the modules that project them to fixed-message errors call them.
+const RAW_MODEL_RUN_NAMES = [
+  "generateChatObject",
+  "streamChatChunks",
+  "streamChatObject",
 ] as const;
 
 export const STATUS_TRANSITION_OWNERSHIP = {
@@ -1948,6 +1964,46 @@ const OWNERSHIP_DECLARATIONS = [
     },
   },
   {
+    id: "model-run-failure-projection",
+    capability: "Running a model through the engine's raw run forms",
+    owner: ["apps/api/src/lib/tanstack-ai-generate.ts"],
+    summary:
+      "A failed run's `RUN_ERROR` message and code, and the errors the engine " +
+      "throws, carry provider bodies and model output. The owner turns every " +
+      "failure into a `ProviderCallError` or `ModelRunError` with a fixed " +
+      "message (`withRecoveredProviderStatus`), and hands a caller that " +
+      "consumes chunks itself `streamTanStackChatRun`, whose `RUN_ERROR` " +
+      "carries only that message and the classified kind. A caller that " +
+      "assembles its own options uses `streamTanStackChatRun`, " +
+      "`collectTanStackTextRun` or `generateTanStackChatObject`.",
+    enforcement: {
+      kind: "import",
+      specifiers: ["@/api/lib/chat/tanstack-chat-runtime"],
+      names: RAW_MODEL_RUN_NAMES,
+      allowed: [
+        {
+          path: "apps/api/src/handlers/chat/stream-chat.ts",
+          reason:
+            "The chat turn projects each `RUN_ERROR` through `normalizeRunErrorChunk` before it is streamed or stored.",
+        },
+        {
+          path: "apps/api/evals/",
+          reason:
+            "Offline evaluations: a run failure is reported to the operator and never stored.",
+        },
+        {
+          path: "apps/api/scripts/ai-provider-canary.ts",
+          reason:
+            "Provider canary: reads the raw run error to report the provider's answer to the operator.",
+        },
+        {
+          path: "apps/api/scripts/benchmark-chat-read-surface.ts",
+          reason: "Benchmark with synthetic content; nothing is stored.",
+        },
+      ],
+    },
+  },
+  {
     id: "tanstack-chat-run",
     capability: "Starting a TanStack `chat()` run and reading its chunks",
     owner: ["apps/api/src/lib/chat/tanstack-chat-runtime.ts"],
@@ -2592,6 +2648,70 @@ const OWNERSHIP_DECLARATIONS = [
     },
   },
   {
+    id: "corpus-hit-classification",
+    capability: "Classifying corpus engine hit identities",
+    owner: ["apps/api/src/lib/legal-search/corpus-hit-disposition.ts"],
+    summary:
+      "The identity reader runs through one typed disposition owner in native, " +
+      "scored, BM25 and highlight modes. Malformed hits are counted separately " +
+      "from repeated passages and physical highlight copies.",
+    enforcement: {
+      kind: "function-call",
+      name: "extractId",
+      within: ["apps/api/src/lib/legal-search/", "apps/api/src/handlers/"],
+      allowed: [],
+    },
+  },
+  {
+    id: "corpus-candidate-rehydration",
+    capability: "Classifying eligible canonical search candidates",
+    owner: [
+      "apps/api/src/handlers/case-law/decisions/search.ts",
+      "apps/api/src/lib/legal-search/corpus-index-provider.ts",
+      "apps/api/src/lib/legal-search/corpus-rehydration-disposition.ts",
+      "apps/api/src/handlers/legislation/search.ts",
+    ],
+    summary:
+      "SQL gates content before it leaves the canonical read. " +
+      "`partitionCorpusRehydration` returns eligible rows separately from id-only " +
+      "dispositions, accumulated by the request through `recordCorpusRehydrationDispositions`.",
+    enforcement: {
+      kind: "import",
+      specifiers: [
+        "@/api/handlers/case-law/decisions/search",
+        "@/api/lib/legal-search/corpus-index-provider",
+        "@/api/handlers/legislation/search",
+      ],
+      names: [
+        "candidateDecisionRowsStatement",
+        "pageDecisionRowsStatement",
+        "rehydrateCorpusIndexProviderCandidatesStatement",
+        "legislationCandidateRowsStatement",
+      ],
+      allowed: [
+        {
+          path: "apps/api/src/mcp/generated/capability-dispatch/legislation.search.ts",
+          reason:
+            "Lazy-loads the handler endpoint; does not invoke its canonical-read statement exports.",
+        },
+        {
+          path: "apps/api/src/tests/query-plans/registry.ts",
+          reason:
+            "Measures production canonical-read statements under the public reader role.",
+        },
+        {
+          path: "apps/api/src/handlers/legislation/search-hydration.db.test.ts",
+          reason:
+            "Verifies the legislation read boundary and indexed statement plan.",
+        },
+        {
+          path: "apps/api/src/handlers/case-law/decisions/search-hydration.db.test.ts",
+          reason: "Verifies candidate eligibility with the public reader role.",
+        },
+      ],
+    },
+  },
+  {
     id: "compact-uuid",
     capability: "Compacting a uuid into a URL segment and reading it back",
     owner: ["packages/uuid-codec/"],
@@ -2794,6 +2914,9 @@ const enforcementCell = (enforcement: OwnershipEnforcement): string => {
     }
     case "member-call": {
       return `call \`.${enforcement.method}()\` in \`${enforcement.within.join("`, `")}\``;
+    }
+    case "function-call": {
+      return `call \`${enforcement.name}()\` in \`${enforcement.within.join("`, `")}\``;
     }
     case "status-set": {
       return "lifecycle updates, conflict sets and visible SQL assignments; lint errors plus measured per-file backlog and shrink-only ratchet";

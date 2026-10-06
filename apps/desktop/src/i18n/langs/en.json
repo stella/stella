@@ -146,6 +146,7 @@
     "accountLinked": "Account linked",
     "connectToStella": "Connect to stella web",
     "connectToStellaDescription": "Link this computer to your current stella account without opening a document.",
+    "desktopBenefit": "Office files and local clipboard history",
     "disconnectAccount": "Disconnect account",
     "errorDisconnectAccount": "stella desktop could not disconnect your account.",
     "errorReadAccount": "stella desktop could not check your account connection.",

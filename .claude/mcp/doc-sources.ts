@@ -378,6 +378,22 @@ export const DOC_SOURCE_EXCLUSIONS = [
   .map(noLlmsTxt)
   .concat(
     {
+      checkedAt: "2026-10-06T00:00:00.000Z",
+      dependency: "@tailwindcss/postcss",
+      explanation:
+        "https://tailwindcss.com/llms.txt returns 404. Use the PostCSS installation guide at https://tailwindcss.com/docs/installation/using-postcss directly.",
+      expiresAt: "2026-11-05T00:00:00.000Z",
+      reason: "no-llms-txt",
+    },
+    {
+      checkedAt: "2026-10-06T00:00:00.000Z",
+      dependency: "postcss",
+      explanation:
+        "https://postcss.org/llms.txt returns 404. Use the API reference at https://postcss.org/api/ directly.",
+      expiresAt: "2026-11-05T00:00:00.000Z",
+      reason: "no-llms-txt",
+    },
+    {
       checkedAt: "2026-09-30T00:00:00.000Z",
       dependency: "@standard-schema/spec",
       explanation:

@@ -123,6 +123,10 @@
     "seconds": 1.737437,
     "source": "estimated"
   },
+  "scripts/lib/mcp-app-html-guard.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
   "scripts/mcp-coverage-guard.test.ts": {
     "seconds": 0.262185,
     "source": "estimated"
@@ -165,6 +169,10 @@
   },
   "scripts/seed-firm-knowledge.logic.test.ts": {
     "seconds": 0.329369,
+    "source": "estimated"
+  },
+  "scripts/seed-test-user.postgres.test.ts": {
+    "seconds": 1,
     "source": "estimated"
   },
   "scripts/seed-usage-policies-runner.postgres.test.ts": {
@@ -319,6 +327,10 @@
     "seconds": 3.9,
     "source": "measured"
   },
+  "src/db/feature-enrolments.postgres.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
   "src/db/folio-block-ids-in-range.db.test.ts": {
     "seconds": 4.5,
     "source": "measured"
@@ -417,6 +429,10 @@
   },
   "src/db/pool-idle-timeout.postgres.test.ts": {
     "seconds": 0.06332,
+    "source": "estimated"
+  },
+  "src/db/provision-applied-version.postgres.test.ts": {
+    "seconds": 1,
     "source": "estimated"
   },
   "src/db/public-sanctions-reader.postgres.test.ts": {
@@ -585,6 +601,10 @@
   },
   "src/handlers/agent-auth/routes.test.ts": {
     "seconds": 0.629006,
+    "source": "estimated"
+  },
+  "src/handlers/ai-autocomplete/stream.test.ts": {
+    "seconds": 1,
     "source": "estimated"
   },
   "src/handlers/ai-config/validate-provider.test.ts": {
@@ -1117,6 +1137,10 @@
   },
   "src/handlers/case-law/ingestion/adapters/pl-uokik.test.ts": {
     "seconds": 12.157384,
+    "source": "estimated"
+  },
+  "src/handlers/case-law/ingestion/adapters/publication-absence.test.ts": {
+    "seconds": 1,
     "source": "estimated"
   },
   "src/handlers/case-law/ingestion/adapters/publisher-backoff.test.ts": {
@@ -1737,6 +1761,10 @@
   },
   "src/handlers/case-law/provisions/response.test.ts": {
     "seconds": 0.975067,
+    "source": "estimated"
+  },
+  "src/handlers/case-law/provisions/version-response.test.ts": {
+    "seconds": 1,
     "source": "estimated"
   },
   "src/handlers/case-law/public-response-schemas.test.ts": {
@@ -3759,6 +3787,22 @@
     "seconds": 3.147615,
     "source": "estimated"
   },
+  "src/handlers/visual-sandbox/bridge.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
+  "src/handlers/visual-sandbox/routes.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
+  "src/handlers/visual-sandbox/sanitize.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
+  "src/handlers/visual-sandbox/srcdoc.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
   "src/handlers/work-obligations/queues/list.integration.test.ts": {
     "seconds": 2.801835,
     "source": "estimated"
@@ -5471,6 +5515,10 @@
     "seconds": 5.33138,
     "source": "estimated"
   },
+  "src/lib/errors/application-error-message.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
   "src/lib/errors/elysia-error.test.ts": {
     "seconds": 0.07064,
     "source": "estimated"
@@ -5915,6 +5963,10 @@
     "seconds": 0.098636,
     "source": "estimated"
   },
+  "src/lib/legal-search/corpus-hit-disposition.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
   "src/lib/legal-search/corpus-index-client.test.ts": {
     "seconds": 0.619813,
     "source": "estimated"
@@ -5957,6 +6009,10 @@
   },
   "src/lib/legal-search/corpus-index-manifest.test.ts": {
     "seconds": 0.115643,
+    "source": "estimated"
+  },
+  "src/lib/legal-search/corpus-index-pagination-disposition.test.ts": {
+    "seconds": 1,
     "source": "estimated"
   },
   "src/lib/legal-search/corpus-index-pagination.test.ts": {
@@ -6141,6 +6197,10 @@
   },
   "src/lib/legal-search/corpus-ranking-policy.test.ts": {
     "seconds": 1.584192,
+    "source": "estimated"
+  },
+  "src/lib/legal-search/corpus-rehydration-disposition.test.ts": {
+    "seconds": 1,
     "source": "estimated"
   },
   "src/lib/legal-search/corpus-sanitize.test.ts": {
@@ -6487,11 +6547,23 @@
     "seconds": 0.250833,
     "source": "estimated"
   },
+  "src/lib/lists/verification/run-caps.db.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
+  "src/lib/lists/verification/run-caps.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
   "src/lib/lists/verification/run-persistence.db.test.ts": {
     "seconds": 1.671187,
     "source": "estimated"
   },
   "src/lib/lists/verification/run-queue.db.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
+  "src/lib/lists/verification/run-start-census.test.ts": {
     "seconds": 1,
     "source": "estimated"
   },
@@ -6557,6 +6629,10 @@
   },
   "src/lib/mcp-upstream/crypto.test.ts": {
     "seconds": 0.220722,
+    "source": "estimated"
+  },
+  "src/lib/mcp-upstream/namespace.property.test.ts": {
+    "seconds": 1,
     "source": "estimated"
   },
   "src/lib/mcp-upstream/oauth.test.ts": {
@@ -7403,6 +7479,10 @@
     "seconds": 3.996045,
     "source": "estimated"
   },
+  "src/lib/signals/scout.integration.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
   "src/lib/signup-abuse.test.ts": {
     "seconds": 0.208202,
     "source": "estimated"
@@ -7953,6 +8033,10 @@
   },
   "src/mcp/anonymization.test.ts": {
     "seconds": 0.145482,
+    "source": "estimated"
+  },
+  "src/mcp/app-contracts.test.ts": {
+    "seconds": 1,
     "source": "estimated"
   },
   "src/mcp/auth.test.ts": {
@@ -8621,6 +8705,10 @@
   },
   "src/tests/query-plans/sk-document-candidates-plan.db.test.ts": {
     "seconds": 5.484195,
+    "source": "estimated"
+  },
+  "src/tests/scoped-db-mock.test.ts": {
+    "seconds": 1,
     "source": "estimated"
   },
   "src/tests/security/account-wide-auth-revocation.test.ts": {

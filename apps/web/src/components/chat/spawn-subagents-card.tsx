@@ -81,13 +81,13 @@ type SpawnSubagentsSubtaskListProps = {
   results?: SpawnSubagentsOutput["results"] | undefined;
   /**
    * Status of the whole call. A subtask without a result shows a spinner only
-   * while the call runs; before approval or after the call settled it shows
-   * a neutral marker, since that subagent is not (or no longer) working.
+   * while the call runs; after the call settled it shows a neutral marker,
+   * since that subagent is no longer working.
    */
   callStatus: SpawnSubagentsCallStatus;
 };
 
-export const SpawnSubagentsSubtaskList = ({
+const SpawnSubagentsSubtaskList = ({
   callStatus,
   subagents,
   results,
@@ -194,8 +194,8 @@ const CallStatusIndicator = ({ status }: CallStatusIndicatorProps) => {
       return (
         <CircleDashedIcon className="text-muted-foreground ms-auto size-3.5 shrink-0" />
       );
-    // A declined call is rendered by the approval card, which names the
-    // decline itself.
+    // Delegation never asks for approval, so the approval states (awaiting,
+    // declined) only exist to keep the map total over the SDK's call states.
     case SPAWN_SUBAGENTS_CALL_STATUS.declined:
     case SPAWN_SUBAGENTS_CALL_STATUS.done:
       return null;

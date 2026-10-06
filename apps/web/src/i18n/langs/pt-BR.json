@@ -960,6 +960,9 @@
     },
     "viewer": {
       "abstract": "Resumo",
+      "appliedVersionNotStated": "Versão aplicada não informada",
+      "appliedVersionStatedAmendment": "Redação alterada por <reference>{amendment}</reference>",
+      "appliedVersionStatedDate": "{relation, select, on {Redação vigente em {date}} until {Redação vigente até {date}} from {Redação vigente desde {date}} other {Redação vigente em {date}}}",
       "caseFileMayHoldOthers": "Este processo também pode conter outras decisões.",
       "citedBy": "Citado por",
       "cites": "Cita",
@@ -1819,6 +1822,8 @@
     "notes": "Notas",
     "open": "Abrir",
     "openInNewTab": "Abrir em nova aba",
+    "openInStella": "Abrir no stella",
+    "openOriginalSource": "Abrir fonte original",
     "options": "Opções",
     "or": "Ou",
     "organization": "Organização",
@@ -4735,6 +4740,7 @@
     },
     "title": "Legislação",
     "validity": "Vigente de {from} a {to}",
+    "versionAppliedInDecision": "Versão aplicada na decisão <bdi>{court}</bdi> <bdi>{caseNumber}</bdi> (<bdi>{range}</bdi>) · {status}",
     "wordingValidFrom": "Redação em vigor desde {date}",
     "wordingVersionUnknown": "Data da versão da redação indisponível"
   },

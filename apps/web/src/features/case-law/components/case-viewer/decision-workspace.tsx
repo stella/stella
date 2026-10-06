@@ -181,6 +181,8 @@ export const DecisionWorkspace = (props: DecisionWorkspaceProps) => {
   // the panel below pages further, the links stop at what is already read.
   const citationAnchors = useDecisionCitationAnchors(decisionId);
   const provisionAnchors = useDecisionProvisionAnchors({
+    court: decision.court,
+    caseNumber: decision.caseNumber,
     blocks: visibleDecisionBlocks(ast, decision.caseNumberType),
     country: decision.country,
     decisionId,

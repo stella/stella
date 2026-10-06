@@ -1,7 +1,10 @@
 import { describe, expect, test } from "bun:test";
 
 import { LIMITS } from "@/api/lib/limits";
-import { normalizeDiscoveredMcpTools } from "@/api/lib/mcp-upstream/cached-tools";
+import {
+  normalizeDiscoveredMcpTools,
+  readCachedMcpTools,
+} from "@/api/lib/mcp-upstream/cached-tools";
 import { shortToolNameHash } from "@/api/lib/mcp-upstream/namespace";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
@@ -21,7 +24,7 @@ describe("MCP upstream tool cache", () => {
     expect(tools).toEqual([
       {
         description: "Search companies",
-        exposedName: "mcp__Legal_Data__search_company",
+        exposedName: "mcp__legal_data__search_company",
         inputSchema: { type: "object", properties: {} },
         rawName: "search.company",
       },
@@ -118,5 +121,15 @@ describe("MCP upstream tool cache", () => {
     });
 
     expect(tools).toEqual([]);
+  });
+
+  test("drops a cached tool whose exposed name is outside the name contract", () => {
+    const inputSchema = { type: "object", properties: {} };
+    expect(
+      readCachedMcpTools([
+        { exposedName: "mcp__Legal-Data__lookup", inputSchema, rawName: "a" },
+        { exposedName: "mcp__legal_data__lookup", inputSchema, rawName: "b" },
+      ]).map(({ rawName }) => rawName),
+    ).toEqual(["b"]);
   });
 });

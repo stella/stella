@@ -58,6 +58,7 @@ const createRateEntry = createSafeHandler(
       "or when the table is at its line limit.",
     permissions: { rate: ["create"] },
     accountAccess: ACCOUNT_ACCESS.sandbox,
+    featureAccess: { featureId: "time-billing", type: "required" },
     realtime: rateRealtimeUpdates,
     mcp: {
       type: "capability",

@@ -41,8 +41,6 @@ import type {
   SuggestChangesApplyOutput,
 } from "@/components/chat/chat-ui-tools";
 import { findMcpConnectorIconHref } from "@/components/chat/mcp-connector-icon";
-import { SpawnSubagentsSubtaskList } from "@/components/chat/spawn-subagents-card";
-import { getSpawnSubagentsCallStatus } from "@/components/chat/spawn-subagents-card.logic";
 import {
   describeSuggestChangesApplyOutcome,
   hasAutomaticApproval,
@@ -721,12 +719,6 @@ const ToolApprovalSummary = ({
         <SearchAllPastChatsSummary
           isAwaitingDecision={part.state === "approval-requested"}
           query={part.input.query}
-        />
-      )}
-      {part.name === "spawn_subagents" && part.input !== undefined && (
-        <SpawnSubagentsSubtaskList
-          callStatus={getSpawnSubagentsCallStatus(part)}
-          subagents={part.input.subagents}
         />
       )}
       {name === BROWSER_CONTROL_TOOL_NAME && input !== undefined && (

@@ -831,8 +831,8 @@
           "title": "Czat i narzędzia wiedzy"
         },
         "4": {
-          "body": "Aplikacja desktopowa działa jako lokalny mostek do edycji dokumentów Office z aplikacji stella.",
-          "title": "Mostek desktopowy"
+          "body": "Otwiera dokumenty Office z aplikacji stella w aplikacjach na Twoim komputerze i zapisuje zmiany z powrotem w aplikacji stella. Przechowuje też historię schowka, która pozostaje na Twoim urządzeniu.",
+          "title": "Aplikacja na komputer"
         },
         "5": {
           "body": "Zapisane zmiany i wgrane pliki stają się wersjami dokumentu, więc bieżący plik i jego historia zostają razem.",

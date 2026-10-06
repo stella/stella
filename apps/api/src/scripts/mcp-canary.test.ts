@@ -9,6 +9,7 @@ import { describe, expect, test } from "bun:test";
 import { rejectionOf } from "@stll/property-testing/rejection";
 
 import { bridgeOauthUiRedirect } from "@/api/lib/oauth-ui-fragment";
+import api from "@/api/server";
 
 import {
   AUTHENTICATED_PROBES,
@@ -822,7 +823,8 @@ describe("staging credential journeys", () => {
     expect(results.every(({ status }) => status === "skipped")).toBe(true);
   });
 
-  test("runs MCP and desktop probes with short-lived credentials, then revokes the MCP key", async () => {
+  // A staging deployment that answers every request of a passing journey.
+  const createStagingDeployment = () => {
     const requests: {
       path: string;
       method: string;
@@ -847,7 +849,7 @@ describe("staging credential journeys", () => {
         headers,
         body,
       });
-      if (url.pathname === "/v1/smoke/session") {
+      if (url.pathname === "/smoke/session") {
         return Response.json({
           cookieName: "session",
           cookieValue: "staging-session",
@@ -907,6 +909,11 @@ describe("staging credential journeys", () => {
       }
       return new Response(null, { status: 404 });
     };
+    return { requests, fetcher };
+  };
+
+  test("runs MCP and desktop probes with short-lived credentials, then revokes the MCP key", async () => {
+    const { requests, fetcher } = createStagingDeployment();
     const results = await runStagingCredentialJourneys(
       { baseUrl: "https://api.example", smokeSecret: "smoke-secret" },
       fetcher,
@@ -945,6 +952,43 @@ describe("staging credential journeys", () => {
     expect(JSON.parse(revoke?.body ?? "{}")).toEqual({ keyId: "mcp-key-id" });
   });
 
+  // The stand-in deployment answers whatever path it is asked, so only the
+  // real router can tell whether each journey request reaches a route.
+  test("requests only routes the API mounts", async () => {
+    const { requests, fetcher } = createStagingDeployment();
+    await runStagingCredentialJourneys(
+      { baseUrl: "https://api.example", smokeSecret: "smoke-secret" },
+      fetcher,
+    );
+    const mounted = api.routes
+      // The Better Auth catch-all matches any path; its own prefix is
+      // checked separately below.
+      .filter(({ path }) => path !== "/*")
+      .map(({ method, path }) => ({
+        method,
+        pattern: new RegExp(
+          `^${path
+            .replaceAll(/[.+?^${}()|[\]\\]/gu, "\\$&")
+            .replaceAll(/:[^/]+/gu, "[^/]+")
+            .replaceAll("*", ".*")}$`,
+          "u",
+        ),
+      }));
+    const unrouted = requests
+      .filter(({ path }) => !path.startsWith("/api/auth/"))
+      .filter(
+        ({ method, path }) =>
+          !mounted.some(
+            (route) =>
+              (route.method === method || route.method === "ALL") &&
+              route.pattern.test(path),
+          ),
+      )
+      .map(({ method, path }) => `${method} ${path}`);
+    expect(requests.map(({ path }) => path)).toContain("/smoke/session");
+    expect(unrouted).toEqual([]);
+  });
+
   test("revokes an MCP key id returned alongside a malformed bootstrap response", async () => {
     const requests: { path: string; body: string }[] = [];
     const fetcher: CanaryFetcher = async (input, init) => {
@@ -953,7 +997,7 @@ describe("staging credential journeys", () => {
         path: url.pathname,
         body: await new Response(init.body).text(),
       });
-      if (url.pathname === "/v1/smoke/session") {
+      if (url.pathname === "/smoke/session") {
         return Response.json({ cookieName: "session", cookieValue: "session" });
       }
       if (url.pathname === "/v1/api-keys/") {
@@ -984,7 +1028,7 @@ describe("staging credential journeys", () => {
     const fetcher: CanaryFetcher = async (input) => {
       const path = new URL(input instanceof Request ? input.url : input)
         .pathname;
-      if (path === "/v1/smoke/session") {
+      if (path === "/smoke/session") {
         return Response.json({ cookieName: "session", cookieValue: "session" });
       }
       if (path === "/v1/api-keys/") {
@@ -1054,6 +1098,26 @@ describe("canary credential expiry", () => {
         nowMs,
       }).status,
     ).toBe("failed");
+  });
+});
+
+describe("canary credential expiry failure detail", () => {
+  const nowMs = Date.parse("2026-01-01T00:00:00.000Z");
+
+  test.each([
+    [404, "HTTP 404: the target does not serve the key expiry endpoint yet"],
+    [401, "HTTP 401: the target refused MCP_CANARY_TOKEN"],
+    [403, "HTTP 403: could not inspect the current machine key expiry"],
+    [503, "HTTP 503: could not inspect the current machine key expiry"],
+    [200, "HTTP 200: could not inspect the current machine key expiry"],
+  ] as const)("names HTTP %s in the failure", (status, detail) => {
+    expect(
+      evaluateCredentialExpiry({
+        status,
+        body: status === 200 ? { expiresAt: "not-a-date" } : null,
+        nowMs,
+      }),
+    ).toEqual({ name: "canary bearer expiry", status: "failed", detail });
   });
 });
 

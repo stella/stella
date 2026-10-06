@@ -287,7 +287,8 @@
     "@tanstack/ai-openrouter@0.19.20": "patches/@tanstack%2Fai-openrouter@0.19.20.patch",
     "@tanstack/ai-anthropic@0.19.1": "patches/@tanstack%2Fai-anthropic@0.19.1.patch",
     "@better-auth/oauth-provider@1.7.6": "patches/@better-auth%2Foauth-provider@1.7.6.patch",
-    "@better-auth/cimd@1.7.6": "patches/@better-auth%2Fcimd@1.7.6.patch"
+    "@better-auth/cimd@1.7.6": "patches/@better-auth%2Fcimd@1.7.6.patch",
+    "happy-dom@20.14.5": "patches/happy-dom@20.14.5.patch"
   },
   "trustedDependencies": [
     "lefthook"

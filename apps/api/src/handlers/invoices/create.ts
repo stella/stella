@@ -389,6 +389,7 @@ const createInvoice = createSafeHandler(
       "afterwards with invoices.entries.add.",
     permissions: { invoice: ["create"] },
     accountAccess: ACCOUNT_ACCESS.sandbox,
+    featureAccess: { featureId: "time-billing", type: "required" },
     realtime: invoiceRealtimeUpdates,
     mcp: {
       type: "capability",

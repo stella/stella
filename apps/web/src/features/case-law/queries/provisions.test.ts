@@ -3,8 +3,11 @@ import { afterEach, describe, expect, test } from "bun:test";
 import * as v from "valibot";
 
 import { LEGISLATION_PUBLISHER_WINDOW_INCONSISTENT } from "@stll/api-contract/legislation-expression";
+import { PROVISION_LINK_STATUS_TYPES } from "@stll/api-contract/provision-link-status";
+import type { ProvisionVersionBasis } from "@stll/api-contract/provision-version-basis";
 
 import {
+  allowsLegacyProvisionFallback,
   citedWorkAtDateKey,
   decisionProvisionsForLinkingOptions,
   decisionProvisionsInfiniteOptions,
@@ -202,12 +205,16 @@ describe("provisions for inline linking", () => {
                   limit: 100,
                   nextCursor: "next",
                   previews: [],
+                  status: { type: "legacy" },
+                  generation: "7",
                 }
               : {
                   items: [{ anchor: "par_70-odst_2", spanStart: 28_592 }],
                   limit: 100,
                   nextCursor: null,
                   previews: [],
+                  status: { type: "legacy" },
+                  generation: "7",
                 },
           ),
           { headers: { "Content-Type": "application/json" } },
@@ -219,7 +226,7 @@ describe("provisions for inline linking", () => {
     const queryClient = new QueryClient({
       defaultOptions: { queries: { retry: false } },
     });
-    const { items } = await queryClient.query(
+    const { items, status, generation } = await queryClient.query(
       decisionProvisionsForLinkingOptions(
         "019ffba6-1445-7000-bd47-9268acb7ba92",
       ),
@@ -230,6 +237,82 @@ describe("provisions for inline linking", () => {
       "par_70-odst_2",
     ]);
     expect(cursors).toEqual([null, "next"]);
+    expect(status).toEqual({ type: "legacy" });
+    expect(generation).toBe("7");
+  });
+
+  test("only positively legacy results authorize inferred abbreviation links", () => {
+    const inferred = {
+      versionBasis: { type: "inferred", kind: "decision_date" },
+    } as const;
+    expect(allowsLegacyProvisionFallback(undefined)).toBe(false);
+    for (const type of PROVISION_LINK_STATUS_TYPES) {
+      for (const items of [[], [inferred]]) {
+        expect(allowsLegacyProvisionFallback({ status: { type }, items })).toBe(
+          type === "legacy",
+        );
+      }
+    }
+    const newBases = {
+      not_stated: { type: "not_stated" },
+      stated_date: {
+        type: "stated_date",
+        date: "2013-12-31",
+        relation: "until",
+        expression: null,
+        evidence: { kind: "stated_date", start: 0, end: 42 },
+      },
+      stated_version: {
+        type: "stated_version",
+        amendmentWorkIdentifier: "303/2013 Sb.",
+        expression: null,
+        evidence: { kind: "stated_version", start: 0, end: 42 },
+      },
+    } as const satisfies Record<
+      Exclude<ProvisionVersionBasis["type"], "inferred">,
+      ProvisionVersionBasis
+    >;
+    for (const versionBasis of Object.values(newBases)) {
+      for (const items of [
+        [{ versionBasis }],
+        [inferred, { versionBasis }],
+        [{ versionBasis }, inferred],
+      ]) {
+        expect(
+          allowsLegacyProvisionFallback({ status: { type: "legacy" }, items }),
+        ).toBe(false);
+      }
+    }
+  });
+
+  test("a new extraction with no rows retains its refusal of legacy fallback", async () => {
+    globalThis.fetch = Object.assign(
+      async () =>
+        new Response(
+          JSON.stringify({
+            items: [],
+            previews: [],
+            limit: 100,
+            nextCursor: null,
+            status: { type: "current" },
+            generation: "9",
+          }),
+          { headers: { "Content-Type": "application/json" } },
+        ),
+      { preconnect: previousFetch.preconnect },
+    );
+    const result = await newQueryClient().query(
+      decisionProvisionsForLinkingOptions(
+        "019ffba6-1445-7000-bd47-9268acb7ba92",
+      ),
+    );
+    expect(result).toEqual({
+      items: [],
+      previews: [],
+      status: { type: "current" },
+      generation: "9",
+    });
+    expect(allowsLegacyProvisionFallback(result)).toBe(false);
   });
 });
 

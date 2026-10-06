@@ -1,13 +1,15 @@
 import { createFileRoute, redirect } from "@tanstack/react-router";
 import { useTranslations } from "use-intl";
 
+import { Button } from "@stll/ui/button";
 import { Checkbox } from "@stll/ui/checkbox";
 import { Field, FieldLabel } from "@stll/ui/field";
 import { Frame, FramePanel } from "@stll/ui/frame";
 
-import { useTimeBillingPreviewOffered } from "@/hooks/use-time-billing-preview";
 import { betaFeaturesAvailable } from "@/lib/beta-features";
+import { detached } from "@/lib/detached";
 import { useDevStore } from "@/lib/dev-store";
+import { useTimeBillingEnrolment } from "@/queries/feature-enrolments";
 import { SettingsPageHeader } from "@/routes/_protected.settings/-components/settings-page-header";
 
 export const Route = createFileRoute("/_protected/settings/account/beta")({
@@ -25,9 +27,11 @@ function BetaFeaturesPage() {
   const setPublicLawPreview = useDevStore((s) => s.setPublicLawPreview);
   const workflowsPreview = useDevStore((s) => s.workflowsPreview);
   const setWorkflowsPreview = useDevStore((s) => s.setWorkflowsPreview);
-  const timeBillingPreview = useDevStore((s) => s.timeBillingPreview);
-  const setTimeBillingPreview = useDevStore((s) => s.setTimeBillingPreview);
-  const timeBillingPreviewOffered = useTimeBillingPreviewOffered();
+  const {
+    feature: timeBillingFeature,
+    mutation: timeBillingEnrolment,
+    view: timeBillingView,
+  } = useTimeBillingEnrolment();
   const inboxPreview = useDevStore((s) => s.inboxPreview);
   const setInboxPreview = useDevStore((s) => s.setInboxPreview);
 
@@ -80,7 +84,23 @@ function BetaFeaturesPage() {
             </Field>
           </div>
         </FramePanel>
-        {timeBillingPreviewOffered && (
+        {timeBillingView.type === "error" && (
+          <FramePanel>
+            <p role="alert" className="text-muted-foreground text-sm">
+              {t("errors.actionFailed")}
+            </p>
+            <Button
+              className="mt-3"
+              variant="ghost"
+              onClick={() => {
+                detached(timeBillingView.retry(), "feature-enrolments.refetch");
+              }}
+            >
+              {t("common.retry")}
+            </Button>
+          </FramePanel>
+        )}
+        {timeBillingFeature && (
           <FramePanel>
             <div className="flex flex-col gap-3 p-1">
               <h2 className="text-sm font-medium">{t("common.timeBilling")}</h2>
@@ -89,13 +109,15 @@ function BetaFeaturesPage() {
               </p>
               <Field className="flex-row items-center gap-2">
                 <Checkbox
-                  checked={timeBillingPreview}
+                  aria-label={t("common.timeBilling")}
+                  checked={timeBillingFeature.enrolled}
+                  disabled={timeBillingEnrolment.isPending}
                   onCheckedChange={(next) => {
-                    if (next === timeBillingPreview) {
+                    if (next === timeBillingFeature.enrolled) {
                       return;
                     }
 
-                    setTimeBillingPreview(next);
+                    timeBillingEnrolment.mutate(next);
                   }}
                 />
                 <FieldLabel>{t("common.timeBilling")}</FieldLabel>
