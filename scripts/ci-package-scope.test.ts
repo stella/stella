@@ -160,6 +160,25 @@ test("an aliased filesystem reader with a typed path constant joins automaticall
   });
 });
 
+test("quoted fixture declarations cannot shadow a real Markdown read", () => {
+  repository((root, write) => {
+    write(
+      "scripts/shadowed-reader.test.ts",
+      `import { readFileSync } from "node:fs";
+const fixture = 'const INPUT = "external.md";';
+// const INPUT = "comment.md";
+const INPUT = "README.md";
+readFileSync(INPUT, "utf8");`,
+    );
+    expect(markdownChecks({ root, changed: ["README.md"] })).toEqual([
+      ["bun", "test", "scripts/shadowed-reader.test.ts"],
+    ]);
+    expect(
+      markdownChecks({ root, changed: ["external.md", "comment.md"] }),
+    ).toEqual([]);
+  });
+});
+
 test("a reader without an isolated command fails closed and names its owner", () => {
   repository((root, write) => {
     write(

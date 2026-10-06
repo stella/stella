@@ -9,6 +9,7 @@ import {
   parseLockfile,
 } from "./landing-deploy-scope";
 import {
+  maskSourceNonCode,
   readCallArguments,
   readLiteralCallOptions,
   readStringLiterals,
@@ -96,6 +97,7 @@ const IDENTIFIER = /^[A-Za-z_$][\w$]*$/u;
 
 type PathExpressionOptions = {
   expression: string;
+  code: string;
   source: string;
   file: string;
   seen?: Set<string>;
@@ -109,6 +111,7 @@ type PathExpressionResult =
 // stay outside the repository; their Markdown files are not CI source inputs.
 const pathExpression = ({
   expression,
+  code,
   source,
   file,
   seen = new Set<string>(),
@@ -125,7 +128,7 @@ const pathExpression = ({
       return { kind: "unresolved" };
     }
     seen.add(text);
-    for (const declaration of source.matchAll(
+    for (const declaration of code.matchAll(
       new RegExp(`\\bconst\\s+${text}\\b`, "gu"),
     )) {
       const tail = source
@@ -142,6 +145,7 @@ const pathExpression = ({
       }
       return pathExpression({
         expression: source.slice(start, end),
+        code,
         source,
         file,
         seen,
@@ -173,7 +177,13 @@ const pathExpression = ({
     if (target === undefined) {
       return { kind: "unresolved" };
     }
-    const resolved = pathExpression({ expression: target, source, file, seen });
+    const resolved = pathExpression({
+      expression: target,
+      code,
+      source,
+      file,
+      seen,
+    });
     if (resolved.kind !== "repository") {
       return resolved;
     }
@@ -189,6 +199,7 @@ const pathExpression = ({
   for (const arg of args) {
     const resolved = pathExpression({
       expression: arg,
+      code,
       source,
       file,
       seen: new Set(seen),
@@ -264,11 +275,14 @@ const sourceFiles = (root: string): readonly string[] => {
   ];
 };
 
-const filesystemReadBindings = (source: string) => {
+const filesystemReadBindings = (source: string, code: string) => {
   const reads = new Set(READ_CALLS);
   for (const match of source.matchAll(
     /import\s*\{([^}]+)\}\s*from\s*["'](?:node:)?fs(?:\/promises)?["']/gu,
   )) {
+    if (!code.slice(match.index).startsWith("import")) {
+      continue;
+    }
     for (const binding of (match[1] ?? "").split(",")) {
       const [name, alias] = binding.trim().split(/\s+as\s+/u);
       if (READ_CALLS.has(name ?? "")) {
@@ -276,10 +290,10 @@ const filesystemReadBindings = (source: string) => {
       }
     }
   }
-  for (const match of source.matchAll(/\bconst\s+([A-Za-z_$][\w$]*)\s*=/gu)) {
+  for (const match of code.matchAll(/\bconst\s+([A-Za-z_$][\w$]*)\s*=/gu)) {
     const start = match.index + match[0].length;
     const end = source.indexOf(";", start);
-    const body = source.slice(start, end === -1 ? source.length : end);
+    const body = code.slice(start, end === -1 ? code.length : end);
     if (
       body.includes("=>") &&
       [...reads].some((name) => body.includes(`${name}(`))
@@ -404,7 +418,8 @@ export const markdownReaders = (root = ROOT): readonly MarkdownReader[] => {
     const importsFs = imports.some(({ path: imported }) =>
       ["node:fs", "node:fs/promises", "fs", "fs/promises"].includes(imported),
     );
-    const reads = importsFs ? filesystemReadBindings(source) : READ_CALLS;
+    const code = maskSourceNonCode(source);
+    const reads = importsFs ? filesystemReadBindings(source, code) : READ_CALLS;
     readStringLiterals(source, (callee, call, start) => {
       if (callee === undefined) {
         return;
@@ -420,7 +435,12 @@ export const markdownReaders = (root = ROOT): readonly MarkdownReader[] => {
         if (argument === undefined) {
           return;
         }
-        const resolved = pathExpression({ expression: argument, source, file });
+        const resolved = pathExpression({
+          expression: argument,
+          code,
+          source,
+          file,
+        });
         const target =
           resolved.kind === "repository" ? resolved.value : undefined;
         if (
