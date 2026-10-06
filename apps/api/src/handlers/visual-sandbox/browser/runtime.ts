@@ -7,8 +7,16 @@ import {
 
 import { createVisualMessageHandler } from "../bridge";
 import { composeVisualDocument } from "../srcdoc";
+import { isolateVisualGuest } from "./isolation";
 
 const bootGuest = () => {
+  try {
+    isolateVisualGuest();
+  } catch (error) {
+    window.stop();
+    document.documentElement.replaceChildren();
+    throw error;
+  }
   const reportSize = () =>
     window.parent.postMessage(
       {
