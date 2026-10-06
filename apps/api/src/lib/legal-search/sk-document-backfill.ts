@@ -1221,7 +1221,7 @@ const storeBackfilledDocumentOwned = async ({
     ) {
       throw flushed.error;
     }
-    await fence.scopedDb(() => Promise.resolve());
+    await fence.scopedDb(async () => undefined);
     stored = storedForCorpusOutcome(
       Result.isError(flushed)
         ? { type: "failed", error: flushed.error }
@@ -1927,6 +1927,27 @@ const processClaimedDocument = async ({
   return { status: "filled", document };
 };
 
+type OwnedDocumentOperationOptions<T> = {
+  missingValue: NoInfer<T>;
+  decisionId: SafeId<"caseLawDecision">;
+  scopedDb: ScopedDb;
+  signal?: AbortSignal;
+  operation: (fence: DeferredDocumentSourceFence) => Promise<T>;
+};
+
+const ownedDocumentOperation = async <T>(
+  options: OwnedDocumentOperationOptions<T>,
+): Promise<T | DeferredDocumentOwnershipRefusal> => {
+  const result = await withDeferredDocumentSourceOwnership({
+    ...options,
+    timeoutMs: DOCUMENT_FETCH_BUDGET_MS,
+  });
+  if (result.status === "missing") {
+    return options.missingValue;
+  }
+  return result.status === "completed" ? result.value : result;
+};
+
 /**
  * Fetch, parse and persist one decision's document.
  *
@@ -1992,27 +2013,6 @@ export const fetchDecisionDocument = async (
       }
     },
   });
-
-type OwnedDocumentOperationOptions<T> = {
-  missingValue: NoInfer<T>;
-  decisionId: SafeId<"caseLawDecision">;
-  scopedDb: ScopedDb;
-  signal?: AbortSignal;
-  operation: (fence: DeferredDocumentSourceFence) => Promise<T>;
-};
-
-const ownedDocumentOperation = async <T>(
-  options: OwnedDocumentOperationOptions<T>,
-): Promise<T | DeferredDocumentOwnershipRefusal> => {
-  const result = await withDeferredDocumentSourceOwnership({
-    ...options,
-    timeoutMs: DOCUMENT_FETCH_BUDGET_MS,
-  });
-  if (result.status === "missing") {
-    return options.missingValue;
-  }
-  return result.status === "completed" ? result.value : result;
-};
 
 export const claimDocumentFetch = async (
   decisionId: SafeId<"caseLawDecision">,
