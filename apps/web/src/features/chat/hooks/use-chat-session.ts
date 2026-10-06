@@ -141,6 +141,7 @@ import { ClientOperationError } from "@/lib/errors/client";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { fileOptions } from "@/lib/files/queries";
 import {
+  isPlaybookDraftViewPayload,
   PLAYBOOK_DRAFT_VIEW,
   playbookDraftTabId,
 } from "@/lib/knowledge/playbook-draft-view";
@@ -1107,9 +1108,9 @@ export const useChatSession = ({
 
   /**
    * The thread's pane follows the playbook its latest save wrote. An open
-   * pane moves to it without taking focus, so a thread that starts a second
-   * playbook takes the pane along; a closed one may open (see
-   * `playbookPaneReaction`).
+   * pane on another playbook moves to it without taking focus, so a thread
+   * that starts a second playbook takes the pane along; a closed one may
+   * open (see `playbookPaneReaction`).
    */
   const followPlaybookSave = useLatestCallback((playbookId: string) => {
     const inspector = useInspectorTabsStore.getState();
@@ -1118,7 +1119,13 @@ export const useChatSession = ({
       mode: playbookPane,
       isMobile,
       openedThisSession: openedPlaybookPaneRef.current,
-      paneOpen: tab?.type === "view" && tab.viewType === PLAYBOOK_DRAFT_VIEW,
+      shownPlaybookId:
+        tab?.type === "view" &&
+        tab.viewType === PLAYBOOK_DRAFT_VIEW &&
+        isPlaybookDraftViewPayload(tab.payload)
+          ? tab.payload.playbookId
+          : null,
+      savedPlaybookId: playbookId,
     });
     switch (reaction) {
       case "none":

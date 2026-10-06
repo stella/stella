@@ -182,14 +182,12 @@ describe("the playbook pane after a save", () => {
   const closed = {
     isMobile: false,
     openedThisSession: false,
-    paneOpen: false,
+    shownPlaybookId: null,
+    savedPlaybookId: "playbook-a",
   };
 
-  test("a main-area chat opens it once, then only updates it", () => {
+  test("a main-area chat opens it once", () => {
     expect(playbookPaneReaction({ mode: "auto-open", ...closed })).toBe("open");
-    expect(
-      playbookPaneReaction({ mode: "auto-open", ...closed, paneOpen: true }),
-    ).toBe("update");
     // Closed by the user after it opened: it stays closed.
     expect(
       playbookPaneReaction({
@@ -207,9 +205,16 @@ describe("the playbook pane after a save", () => {
     expect(
       playbookPaneReaction({ mode: "auto-open", ...closed, isMobile: true }),
     ).toBe("none");
-    // An open pane still follows the latest save everywhere.
+  });
+
+  test("an open pane moves only when the thread saves another playbook", () => {
+    const open = { mode: "on-request", ...closed } as const;
     expect(
-      playbookPaneReaction({ mode: "on-request", ...closed, paneOpen: true }),
+      playbookPaneReaction({ ...open, shownPlaybookId: "playbook-b" }),
     ).toBe("update");
+    // Already showing the saved playbook: its tab label and payload stay.
+    expect(
+      playbookPaneReaction({ ...open, shownPlaybookId: "playbook-a" }),
+    ).toBe("none");
   });
 });
