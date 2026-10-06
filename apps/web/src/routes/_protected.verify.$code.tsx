@@ -6,11 +6,12 @@ import { useTranslations } from "use-intl";
 import { isVerificationCode, refiledStamp } from "@stll/api-contract";
 import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
-import { Loader, LoaderState } from "@stll/ui/loader";
+import { LoaderState } from "@stll/ui/loader";
 import { stellaToast } from "@stll/ui/toast";
 
 import { toFileTab } from "@/components/inspector/open-entities.logic";
 import { MattersNavIcon } from "@/components/matter-icon";
+import { DefaultPendingComponent } from "@/components/route-components";
 import { getEntityDocumentRoute } from "@/components/search-dialog.logic";
 import { useMountEffect } from "@/hooks/use-effect";
 import { api } from "@/lib/api";
@@ -47,7 +48,7 @@ const NOT_FOUND = { status: "not-found" } as const satisfies ReferenceLookup;
 
 export const Route = createFileRoute("/_protected/verify/$code")({
   component: VerifyReferenceRoute,
-  pendingComponent: VerifyReferencePending,
+  pendingComponent: DefaultPendingComponent,
   loader: async ({
     abortController,
     context,
@@ -104,16 +105,6 @@ function VerifyReferenceRoute() {
   }
 
   return <ReferenceOpener match={lookup} />;
-}
-
-function VerifyReferencePending() {
-  const t = useTranslations();
-
-  return (
-    <div className="flex min-h-0 flex-1 items-center justify-center p-6">
-      <Loader label={t("common.loading")} size="lg" />
-    </div>
-  );
 }
 
 type ReferenceOpenerProps = {

@@ -1474,6 +1474,14 @@
       "toggleDetails": "Prepnúť podrobnosti",
       "unrestoredFields": "{count, plural, one {# pole sa nepodarilo} few {# polia sa nepodarilo} many {# poľa sa nepodarilo} other {# polí sa nepodarilo}} v anonymizovanom režime vyplniť skutočnými hodnotami. Skontrolujte: {fields}"
     },
+    "turnNotification": {
+      "failedBody": "Odpoveď v chate stelly sa nedokončila.",
+      "failedTitle": "Odpoveď zlyhala",
+      "needsInputBody": "Chat čaká na vaše schválenie alebo odpoveď.",
+      "needsInputTitle": "stella potrebuje váš vstup",
+      "replyReadyBody": "stella dokončila odpoveď vo vašom chate.",
+      "replyReadyTitle": "Odpoveď je hotová"
+    },
     "unsupportedFileType": "Nepodporovaný typ súboru",
     "uploadFailed": "Spracovanie súboru zlyhalo",
     "usageFallbackNotice": "Denný prídel AI je vyčerpaný — odpovede pokračujú na štandardnom modeli.",
@@ -4372,6 +4380,11 @@
       "betaInbox": "Doručené a oznámenia",
       "betaInboxDescription": "Zobraziť Doručené a zvonček oznámení",
       "betaTimeBillingDescription": "Zobraziť sledovanie času, faktúry a výdavky",
+      "chatNotifications": "Upozornenia z chatu",
+      "chatNotificationsBlocked": "Upozornenia sú pre stellu v tomto prehliadači zablokované. Povoľte ich v nastaveniach stránky v prehliadači.",
+      "chatNotificationsDescription": "Dostanete upozornenie z tohto prehliadača, keď sa odpoveď v chate dokončí, kým je stella na pozadí.",
+      "chatNotificationsToggle": "Upozorniť ma, keď je odpoveď hotová alebo potrebuje môj vstup",
+      "chatNotificationsUnsupported": "Tento prehliadač upozornenia nepodporuje.",
       "confirmDelete": "Potvrdiť vymazanie účtu",
       "dangerZone": "Nebezpečná zóna",
       "dangerZoneDescription": "Natrvalo vymazať prístup k účtu a súkromné údaje účtu.",

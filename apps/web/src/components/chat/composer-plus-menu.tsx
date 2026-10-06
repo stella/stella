@@ -1002,6 +1002,7 @@ export const ComposerContextMenu = ({
 }) => {
   const t = useTranslations();
   const { activeOrganizationId, editor, threadRef } = context;
+  const { id: userId } = useAuthenticatedUser();
   const [submenuOpen, setSubmenuOpen] = useState(false);
   const open = host.kind === "shortcut" ? host.open : submenuOpen;
   const [search, setSearch] = useState("");
@@ -1010,7 +1011,10 @@ export const ComposerContextMenu = ({
   // Same navigation list `ChatMatterPicker` and the mention sources' matter
   // options read from — no dedicated endpoint for this submenu.
   const mattersQuery = useQuery({
-    ...workspacesNavigationOptions(activeOrganizationId),
+    ...workspacesNavigationOptions({
+      organizationId: activeOrganizationId,
+      userId,
+    }),
     enabled,
   });
   const mattersView = useQueryView(mattersQuery, {

@@ -23,6 +23,7 @@ const MCP_CODE_TO_CHAT_KIND = {
   conflict: "invalid-input",
   rate_limited: "transient",
   upstream_unavailable: "transient",
+  search_index_unavailable: "transient",
   unknown_tool: "unavailable",
   internal_error: "server-defect",
 } as const satisfies Record<McpErrorCode, ChatToolErrorKind>;

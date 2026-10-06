@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import * as v from "valibot";
 
-import eventPolicies from "../.github/ci-event-policy.json";
+import eventPolicies from "../.github/ci-event-policy.json" with { type: "json" };
 import {
   contextFromNested,
   evaluate as evaluateExpression,
@@ -79,7 +79,7 @@ const context = (
           heavyOnly && THIN_JOBS.some((thin) => thin === job)
             ? "skipped"
             : "success",
-        outputs: job === "ci-plan" ? plan : {},
+        outputs: job === "ci-plan" ? { run_required: "true", ...plan } : {},
       },
     ]),
   ),
@@ -203,6 +203,23 @@ test("main heavy runs execute the release compiler exactly when VERSION is plann
         ),
         `${event}/${required}`,
       ).toBe(required === "true");
+    }
+  }
+});
+
+test("completed-depth reuse skips every nonstructural main heavy job", () => {
+  for (const event of heavyEvents) {
+    const reused = context(event, true, {
+      ...heavyPlan,
+      run_required: "false",
+    });
+    for (const [job, body] of Object.entries(workflow.jobs)) {
+      if (job === "ci-plan" || job === "ci-result") {
+        continue;
+      }
+      expect(selected(body.if ?? "true", reused), `${event}/${job}`).toBe(
+        false,
+      );
     }
   }
 });
@@ -423,6 +440,7 @@ test("heavy scope selection plans full suites even on an empty main diff", () =>
           HEAVY_ONLY: "true",
           SUITE_DEPTH: "full",
           GITHUB_OUTPUT: output,
+          RUNNER_TEMP: directory,
         },
       });
       expect(run.exitCode, run.stderr.toString()).toBe(0);

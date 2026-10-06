@@ -24,21 +24,47 @@ import { isRecord } from "@/api/lib/type-guards";
 
 type CorpusIndexErrorRejection = "definite" | "unknown" | "transient";
 
+/**
+ * Whether the engine was there to answer. `unreachable` is a request that
+ * never got an answer (refused or reset connection, failed DNS lookup, an
+ * expired budget) or one a gateway in front of the engine answered for it
+ * (502, 503, 504): the index is down or scaled away, and the same request can
+ * succeed once it is back. `answered` is everything else, including a
+ * response this client could not read, which no retry fixes.
+ */
+type CorpusIndexErrorReach = "answered" | "unreachable";
+
 export class CorpusIndexError extends TaggedError("CorpusIndexError")<{
   message: string;
   status?: number | undefined;
   cause?: unknown;
   rejection: CorpusIndexErrorRejection;
+  reach: CorpusIndexErrorReach;
 }> {
   constructor(input: {
     message: string;
     status?: number | undefined;
     cause?: unknown;
     rejection?: CorpusIndexErrorRejection | undefined;
+    reach?: CorpusIndexErrorReach | undefined;
   }) {
-    super({ ...input, rejection: input.rejection ?? "unknown" });
+    super({
+      ...input,
+      rejection: input.rejection ?? "unknown",
+      reach: input.reach ?? "answered",
+    });
   }
 }
+
+/** The statuses a gateway answers with while the engine behind it is gone. */
+const UNREACHABLE_HTTP_STATUSES: ReadonlySet<number> = new Set([502, 503, 504]);
+
+/**
+ * The one reading of "the search index is unavailable" every caller shares,
+ * so a search route, a tool and a test cannot each draw the line elsewhere.
+ */
+export const isCorpusIndexUnreachable = (error: CorpusIndexError): boolean =>
+  error.reach === "unreachable";
 
 /**
  * Mirrors Quickwit's default ingest `content_length_limit`; our node config
@@ -613,14 +639,26 @@ const requestFailure = ({
   request,
   error,
   unaborted,
-}: RequestFailureOptions): CorpusIndexError =>
+  reach,
+}: RequestFailureOptions & {
+  reach: CorpusIndexErrorReach;
+}): CorpusIndexError =>
   new CorpusIndexError({
     message: isAborted(error)
       ? `corpus index ${requestLabel(request)} failed within its ${request.timeoutMs}ms budget: ${String(error)}`
       : `corpus index ${requestLabel(request)} ${unaborted}: ${String(error)}`,
     cause: error,
     rejection: "unknown",
+    reach,
   });
+
+/**
+ * A body that stopped arriving (the budget expired or the connection dropped
+ * mid-stream) is the engine going away; a body that arrived and does not
+ * parse is a response, and a retry reads the same bytes.
+ */
+const bodyReadReach = (error: unknown): CorpusIndexErrorReach =>
+  error instanceof SyntaxError ? "answered" : "unreachable";
 
 const sendRequest = async (request: CorpusIndexRequest): Promise<Response> =>
   await fetchCorpusIndex(
@@ -632,7 +670,14 @@ const sendRequest = async (request: CorpusIndexRequest): Promise<Response> =>
     },
     request.observer,
   ).catch((error: unknown) => {
-    throw requestFailure({ request, error, unaborted: "could not be sent" });
+    // `fetch` rejects only when no response arrived: refused or reset
+    // connection, failed DNS lookup, expired budget.
+    throw requestFailure({
+      request,
+      error,
+      unaborted: "could not be sent",
+      reach: "unreachable",
+    });
   });
 
 const requestJson = async (request: CorpusIndexRequest): Promise<unknown> => {
@@ -643,6 +688,9 @@ const requestJson = async (request: CorpusIndexRequest): Promise<unknown> => {
       message: `corpus index ${requestLabel(request)} -> ${response.status}: ${body.slice(0, 500)}`,
       status: response.status,
       rejection: rejectionForHttpStatus(response.status),
+      reach: UNREACHABLE_HTTP_STATUSES.has(response.status)
+        ? "unreachable"
+        : "answered",
     });
   }
   return await response.json().catch((error: unknown) => {
@@ -650,6 +698,7 @@ const requestJson = async (request: CorpusIndexRequest): Promise<unknown> => {
       request,
       error,
       unaborted: "returned an unreadable body",
+      reach: bodyReadReach(error),
     });
   });
 };
@@ -1226,6 +1275,7 @@ const buildClient = (cluster: QuickwitCluster): CorpusIndexClient => ({
             request,
             error,
             unaborted: "returned an unreadable body",
+            reach: bodyReadReach(error),
           });
         });
         if (!isRecord(metadata) || !isRecord(metadata["index_config"])) {
