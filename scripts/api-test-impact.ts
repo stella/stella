@@ -2,6 +2,7 @@ import { Result, panic } from "better-result";
 import { existsSync, readFileSync, readdirSync, realpathSync } from "node:fs";
 import { isBuiltin } from "node:module";
 import path from "node:path";
+import * as v from "valibot";
 
 import { listApiTestPaths } from "../apps/api/scripts/api-test-plan";
 import { partitionTestFiles } from "../apps/api/scripts/test-file-shards";
@@ -30,6 +31,35 @@ export const API_ALL_RULES = {
   postgres: /^docker\/postgres\//u,
   data: /^(?:apps\/api|packages)\/(?!.*\.(?:[cm]?[jt]s|[jt]sx)$)/u,
 } as const;
+
+// Turbo owns cross-workspace test inputs. Matching one must widen before
+// the import graph, which cannot observe arbitrary root-level file readers.
+const apiExternalInputs = (root: string): string[] => {
+  const turbo = v.parse(
+    v.object({
+      tasks: v.object({
+        "@stll/api#test": v.object({ inputs: v.array(v.string()) }),
+      }),
+    }),
+    Bun.JSONC.parse(readFileSync(path.join(root, "turbo.json"), "utf-8")),
+  );
+  const external: string[] = [];
+  for (const input of turbo.tasks["@stll/api#test"].inputs) {
+    if (input === "$TURBO_DEFAULT$" || input.startsWith("!")) {
+      continue;
+    }
+    const pattern = input.startsWith("$TURBO_ROOT$/")
+      ? path.posix.normalize(input.slice("$TURBO_ROOT$/".length))
+      : path.posix.join("apps/api", input);
+    if (pattern.includes("$") || path.posix.isAbsolute(pattern)) {
+      panic(`Unknown API test input: ${input}`);
+    }
+    if (pattern !== "apps/api" && !pattern.startsWith("apps/api/")) {
+      external.push(pattern);
+    }
+  }
+  return external;
+};
 
 export type ApiTestImpact = {
   mode: "all" | "selected" | "none";
@@ -256,6 +286,14 @@ export const selectApiTestImpact = ({
     if (
       changed.some((file) =>
         Object.values(API_ALL_RULES).some((rule) => rule.test(file)),
+      )
+    ) {
+      return allApiTests();
+    }
+    const externalInputs = apiExternalInputs(root);
+    if (
+      changed.some((file) =>
+        externalInputs.some((input) => new Bun.Glob(input).match(file)),
       )
     ) {
       return allApiTests();

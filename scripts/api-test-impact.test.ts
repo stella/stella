@@ -1,5 +1,11 @@
 import { expect, test } from "bun:test";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import {
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
@@ -19,6 +25,12 @@ const withRepository = (
     writeFileSync(target, text);
   };
   try {
+    write(
+      "turbo.json",
+      JSON.stringify({
+        tasks: { "@stll/api#test": { inputs: ["$TURBO_DEFAULT$"] } },
+      }),
+    );
     write("apps/api/package.json", JSON.stringify({ name: "@stll/api" }));
     write("apps/api/src/tests/setup-env.ts", 'import "./preload-helper";');
     write("apps/api/src/tests/preload-helper.ts", "export const setup = true;");
@@ -339,5 +351,86 @@ test("workspace fallback honors conditional export declaration order", () => {
         changed: ["packages/example/src/alternate.ts"],
       }).mode,
     ).toBe("none");
+  });
+});
+
+test("every declared external API test input widens a readable graph", () => {
+  const repositoryRoot = path.resolve(import.meta.dir, "..");
+  const turbo = Bun.JSONC.parse(
+    readFileSync(path.join(repositoryRoot, "turbo.json"), "utf-8"),
+  );
+  const inputs: string[] = turbo.tasks["@stll/api#test"].inputs;
+  expect(inputs.length).toBeGreaterThan(1);
+  withRepository((root, write) => {
+    expect(selectApiTestImpact({ root, changed: [] }).mode).toBe("none");
+    write(
+      "turbo.json",
+      JSON.stringify({ tasks: { "@stll/api#test": { inputs } } }),
+    );
+    for (const input of inputs) {
+      if (input === "$TURBO_DEFAULT$" || input.startsWith("!")) {
+        continue;
+      }
+      const pattern = input.startsWith("$TURBO_ROOT$/")
+        ? path.posix.normalize(input.slice("$TURBO_ROOT$/".length))
+        : path.posix.join("apps/api", input);
+      if (pattern === "apps/api" || pattern.startsWith("apps/api/")) {
+        continue;
+      }
+      const files = [
+        ...new Bun.Glob(pattern).scanSync({
+          cwd: repositoryRoot,
+          onlyFiles: true,
+        }),
+      ];
+      expect(files.length, input).toBeGreaterThan(0);
+      for (const file of files) {
+        expect(
+          selectApiTestImpact({ root, changed: [file] }).mode,
+          `${input}: ${file}`,
+        ).toBe("all");
+      }
+    }
+  });
+});
+
+test("new external Turbo inputs widen without a selector rule and invalid metadata fails closed", () => {
+  withRepository((root, write) => {
+    const changed = [
+      "notes/new-root-input.ts",
+      "shared/new-root-input.ts",
+      "root-shared/new-root-input.ts",
+    ];
+    for (const file of changed) {
+      expect(selectApiTestImpact({ root, changed: [file] }).mode).toBe("none");
+    }
+    write(
+      "turbo.json",
+      JSON.stringify({
+        tasks: {
+          "@stll/api#test": {
+            inputs: [
+              "$TURBO_DEFAULT$",
+              "$TURBO_ROOT$/notes/**",
+              "../../shared/**",
+              "$TURBO_ROOT$/apps/api/../../root-shared/**",
+            ],
+          },
+        },
+      }),
+    );
+    for (const file of changed) {
+      expect(selectApiTestImpact({ root, changed: [file] }).mode).toBe("all");
+    }
+    for (const metadata of [
+      "invalid",
+      "{}",
+      '{"tasks":{"@stll/api#test":{"inputs":[42]}}}',
+    ]) {
+      write("turbo.json", metadata);
+      expect(
+        selectApiTestImpact({ root, changed: ["notes/unrelated.ts"] }).mode,
+      ).toBe("all");
+    }
   });
 });

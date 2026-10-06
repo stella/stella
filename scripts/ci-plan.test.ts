@@ -4172,7 +4172,9 @@ test("API test matrix drops API shards for web-only scope and keeps four in merg
   const planner = jobSteps(ciJobs["ci-plan"]).find(
     (step) => step.name === "Plan API test files and shards",
   );
-  expect(planner?.run).toContain("! bun scripts/ci-api-test-plan.ts; then");
+  expect(planner?.run).toContain(
+    "! timeout --kill-after=10s 120s bun scripts/ci-api-test-plan.ts; then",
+  );
   expect(planner?.run).toContain("api_test_shards=4");
   const runner = jobSteps(ciJobs["ci-tests"]).find(
     (step) => step.name === "Test API or rest",
@@ -4194,15 +4196,25 @@ test("a crashed API planner widens the real workflow outputs", () => {
         "bash",
         "-e",
         "-c",
-        `bun() { return 1; }\n${planner?.run ?? panic("Missing API test planner")}`,
+        `timeout() { shift 2; "$@"; }; bun() { echo invoked > "$PLANNER_CALLED"; return 1; }\n${planner?.run ?? panic("Missing API test planner")}`,
       ],
       {
-        env: { PATH: Bun.env["PATH"] ?? "", GITHUB_OUTPUT: output },
+        env: {
+          PATH: Bun.env["PATH"] ?? "",
+          GITHUB_OUTPUT: output,
+          EVENT_NAME: "pull_request",
+          PACKAGE_CHECKS_REQUIRED: "true",
+          API_SCOPE_UNKNOWN: "false",
+          PLANNER_CALLED: nodePath.join(directory, "called"),
+        },
         stdout: "pipe",
         stderr: "pipe",
       },
     );
     expect(result.exitCode, result.stderr.toString()).toBe(0);
+    expect(readFileSync(nodePath.join(directory, "called"), "utf-8")).toBe(
+      "invoked\n",
+    );
     const values = readFileSync(output, "utf-8");
     expect(values).toContain(
       'ci_tests_matrix={"shard":["api-1","api-2","api-3","api-4","rest-web"]}',

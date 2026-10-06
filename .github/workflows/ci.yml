@@ -65,7 +65,8 @@ jobs:
       github.event_name == 'workflow_dispatch'
       || github.event.pull_request.draft != true
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    # Bound install attempts and planner execution below this job budget.
+    timeout-minutes: 15
     permissions:
       contents: read
       # The merge-group trust check reads the queued pull request's head
@@ -779,7 +780,7 @@ jobs:
           steps.check.outputs.trusted == 'true'
           && github.event_name == 'pull_request'
           && steps.changed-files.outputs.package_checks_required == 'true'
-        run: bash scripts/retry.sh bun ci --ignore-scripts
+        run: bash scripts/retry.sh timeout --kill-after=10s 120s bun ci --ignore-scripts
         env:
           NPM_TOKEN: ""
 
@@ -796,7 +797,7 @@ jobs:
             echo 'ci_tests_matrix={"shard":["rest-web"]}' >> "$GITHUB_OUTPUT"
             echo 'api_test_shards=0' >> "$GITHUB_OUTPUT"
             echo 'api_test_files=' >> "$GITHUB_OUTPUT"
-          elif [[ "$EVENT_NAME" != pull_request || "$API_SCOPE_UNKNOWN" == true ]] || ! bun scripts/ci-api-test-plan.ts; then
+          elif [[ "$EVENT_NAME" != pull_request || "$API_SCOPE_UNKNOWN" == true ]] || ! timeout --kill-after=10s 120s bun scripts/ci-api-test-plan.ts; then
             echo 'ci_tests_matrix={"shard":["api-1","api-2","api-3","api-4","rest-web"]}' >> "$GITHUB_OUTPUT"
             echo 'api_test_shards=4' >> "$GITHUB_OUTPUT"
             echo 'api_test_files=' >> "$GITHUB_OUTPUT"
