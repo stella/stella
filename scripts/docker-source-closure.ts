@@ -640,7 +640,10 @@ const walkCommand = (
       if (
         program === "npm" &&
         (words[0] === "install" ||
-          (words[0] === "cache" && words[1] === "clean"))
+          (words.length === 3 &&
+            words[0] === "cache" &&
+            words[1] === "clean" &&
+            words[2] === "--force"))
       ) {
         continue;
       }

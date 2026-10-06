@@ -49,6 +49,17 @@ describe("Docker source closure", () => {
         new Map(),
       ),
     ).toEqual(["Entry is unavailable: /workspace/absent.ts"]);
+    for (const command of [
+      "npm cache clean",
+      "npm cache clean --force extra",
+      "npm cache clean --force --prefix scripts",
+      "npm cache verify",
+      'npm "cache clean --force"',
+    ]) {
+      expect(() => commandEntries(root, new Map(), command, "/app")).toThrow(
+        "Unsupported source runner: npm",
+      );
+    }
   });
   test("keeps commands after comment lines in a continued instruction", () => {
     for (const newline of ["\n", "\r\n"]) {
