@@ -11,6 +11,7 @@ import { envBase } from "@/api/env-base";
 import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import { resolveInboundMailReceiving } from "@/api/lib/email/inbound/receiving-config";
 import { logger } from "@/api/lib/observability/logger";
+import { readReviewOrganizationConfig } from "@/api/lib/review-organization/config";
 import { SCHEDULER_BACKFILL_IDS } from "@/api/lib/scheduler/backfill-config";
 import {
   REGISTERED_SCHEDULER_TASK_NAMES,
@@ -54,6 +55,7 @@ import { RECORD_MISSING_ORGANIZATION_ACCESS_STATES_TASK } from "@/api/lib/schedu
 import { RECONCILE_ORGANIZATION_FILE_RESERVATIONS_TASK } from "@/api/lib/scheduler/tasks/organization-file-reservation-reconcile";
 import { SWEEP_REGISTRATIONS_TASK } from "@/api/lib/scheduler/tasks/registration-retention";
 import { RECONCILE_REPORT_EXPORTS_TASK } from "@/api/lib/scheduler/tasks/report-export-reconcile";
+import { RESET_REVIEW_ORGANIZATION_TASK } from "@/api/lib/scheduler/tasks/review-organization-reset";
 import { DRAIN_SANCTIONS_MONITORING_TASK } from "@/api/lib/scheduler/tasks/sanctions-monitoring";
 import { BACKFILL_SANCTIONS_MONITORING_TASK } from "@/api/lib/scheduler/tasks/sanctions-monitoring-backfill";
 import { REFRESH_SANCTIONS_SOURCES_TASK } from "@/api/lib/scheduler/tasks/sanctions-refresh";
@@ -273,6 +275,20 @@ export const DECLARED_SCHEDULER_JOBS = [
     mode: "recurring",
     schedule: { type: "interval", everyMs: 60 * 60 * 1000 },
     task: RECORD_MISSING_ORGANIZATION_ACCESS_STATES_TASK,
+  },
+  {
+    description:
+      "Reset the restricted review organization and seed its sample data again",
+    enabled: readReviewOrganizationConfig() !== null,
+    id: "reviewOrganization.reset.nightly",
+    mode: "recurring",
+    schedule: {
+      type: "daily",
+      hour: 3,
+      minute: 30,
+      timeZone: "Europe/Prague",
+    },
+    task: RESET_REVIEW_ORGANIZATION_TASK,
   },
   {
     description: "Refresh the Postgres case-law browse facet counts",

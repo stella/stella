@@ -256,6 +256,27 @@ export const ROOT_CONNECTION_DOORS = [
   },
 
   {
+    id: "review-organization-reset-fence",
+    capability:
+      "Locking the restricted review organization before each reset transaction",
+    owner: ["apps/api/src/db/root.ts"],
+    summary:
+      "Runs the caller's organization-row lock and sole-membership check as the owner at the start of each scoped transaction, before the role switch; the caller receives a scoped database, never the pool.",
+    enforcement: {
+      kind: "import",
+      specifiers: ["@/api/db/root"],
+      names: ["createFencedRlsDatabase"],
+      allowed: [
+        {
+          path: "apps/api/src/lib/review-organization/reset.ts",
+          reason:
+            "Fences every reset transaction to the review account's sole membership.",
+        },
+      ],
+    },
+  },
+
+  {
     id: "personal-api-key-policy-reader",
     capability:
       "Reading personal API key policy during credential verification",
@@ -1827,6 +1848,11 @@ const OWNERSHIP_DECLARATIONS = [
           path: "apps/api/scripts/ai-provider-canary-chat-toolsets.ts",
           reason:
             "Builds an owner session to assemble the full chat tool set for provider schema checks; serves no request.",
+        },
+        {
+          path: "apps/api/src/lib/review-organization/reset.ts",
+          reason:
+            "Builds the restricted review account's authority from the sole membership the reset just proved, for the sample-data seed.",
         },
       ],
     },

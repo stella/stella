@@ -2,6 +2,7 @@
 // parser-output-unchanged: HTTP 426 extends handoff response typing only; adapter stop kinds and parsed records are unchanged.
 // parser-output-unchanged: optional clause provenance affects template refusals only; adapter stop kinds and parsed records are unchanged.
 // parser-output-unchanged: adapter stop kinds and TimeoutError reexport preserve successful parsed records.
+// parser-output-unchanged: AdapterFetchError is declared before its first use; the class and its stop kinds are identical.
 import { panic, TaggedError } from "better-result";
 
 import type { ActionAdmissionRefusal } from "@stll/api-contract/action-admission";
@@ -598,6 +599,18 @@ const ingestionFailureStopKind = (
   }
 };
 
+/** Case-law adapter page-fetch failure; wrappers retain its operational kind. */
+export class AdapterFetchError extends TaggedError(
+  "AdapterFetchError",
+)<AdapterFetchErrorOptions> {
+  override readonly stopKind: IngestionStopKind;
+
+  constructor(options: AdapterFetchErrorOptions) {
+    super(options);
+    this.stopKind = options.stopKind ?? adapterFetchStopKind(options);
+  }
+}
+
 const ingestionFailureOf = (
   cause: unknown,
   fallback: "adapter" | "internal",
@@ -650,18 +663,6 @@ const adapterFetchStopKind = ({
       ? ingestionFailureOf(cause, "adapter")
       : { type: "publisher-response", httpStatus },
   );
-
-/** Case-law adapter page-fetch failure; wrappers retain its operational kind. */
-export class AdapterFetchError extends TaggedError(
-  "AdapterFetchError",
-)<AdapterFetchErrorOptions> {
-  override readonly stopKind: IngestionStopKind;
-
-  constructor(options: AdapterFetchErrorOptions) {
-    super(options);
-    this.stopKind = options.stopKind ?? adapterFetchStopKind(options);
-  }
-}
 
 /**
  * One source made no progress for a sustained run of ingestion cycles.
