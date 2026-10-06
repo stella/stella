@@ -1940,21 +1940,20 @@ type OwnedDocumentOperationOptions<T> = {
   operation: (fence: DeferredDocumentSourceFence) => Promise<T>;
 };
 
-const ownedDocumentOperation = async <T>(
-  options: OwnedDocumentOperationOptions<T>,
-): Promise<T | DeferredDocumentOwnershipRefusal> => {
+const ownedDocumentOperation = async <T>({
+  claimed,
+  missingValue,
+  ...ownership
+}: OwnedDocumentOperationOptions<T>): Promise<
+  T | DeferredDocumentOwnershipRefusal
+> => {
   const result = await withDeferredDocumentSourceOwnership({
-    decisionId: options.decisionId,
-    scopedDb: options.scopedDb,
-    signal: options.signal,
-    operation: options.operation,
+    ...ownership,
     timeoutMs: DOCUMENT_FETCH_BUDGET_MS,
-    ...(options.claimed === null
-      ? {}
-      : { expectedMergeEpoch: options.claimed.mergeEpoch }),
+    ...(claimed === null ? {} : { expectedMergeEpoch: claimed.mergeEpoch }),
   });
   if (result.status === "missing") {
-    return options.missingValue;
+    return missingValue;
   }
   return result.status === "completed" ? result.value : result;
 };
