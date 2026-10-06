@@ -161,10 +161,12 @@
         "min-height:44px;min-width:0;flex:1;text-align:start;white-space:normal;overflow-wrap:anywhere;background-color:transparent;border-width:0;color:inherit;font-size:14px";
       button.addEventListener("click", () => stella.openDecision(hit.linkId));
       const barTrack = document.createElement("div");
-      barTrack.style.cssText = "width:24%;max-width:240px;height:6px;background-color:#e5e5e5;border-radius:3px";
+      barTrack.style.cssText =
+        "width:24%;max-width:240px;height:6px;background-color:#e5e5e5;border-radius:3px";
       const bar = document.createElement("div");
       const maximum = ranked.at(0)?.citationCount ?? 0;
-      const percentage = maximum === 0 ? 0 : 100 * hit.citationCount / maximum;
+      const percentage =
+        maximum === 0 ? 0 : (100 * hit.citationCount) / maximum;
       bar.style.cssText = `width:${percentage}%;height:6px;background-color:#525252;border-radius:3px`;
       barTrack.append(bar);
       const citations = document.createElement("span");
