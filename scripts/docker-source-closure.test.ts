@@ -277,7 +277,10 @@ describe("Docker source closure", () => {
       );
       for (const prefix of ["./", "@/"]) {
         const specifier = `${prefix}value.${suffix}`;
-        const entry = put("apps/dotted/src/entry.ts", `import "${specifier}";`);
+        const entry = put(
+          `apps/dotted/src/entry-${suffix}-${prefix === "./" ? "relative" : "alias"}.ts`,
+          `import "${specifier}";`,
+        );
         expect(
           sourceClosureProblems(root, tree([config, entry, dependency]), [
             `/app/${entry}`,
