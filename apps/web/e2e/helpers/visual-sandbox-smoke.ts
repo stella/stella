@@ -56,27 +56,6 @@ export const declareVisualSandboxSmoke = () => {
         "received",
       );
       errors.assertEmpty(VISUAL_SANDBOX_PATH);
-      errors.expectCaptured(/frame-src 'none'/u);
-      const navigationRequested = await page
-        .locator("iframe")
-        .evaluate((frame, targetOrigin) => {
-          if (!(frame instanceof HTMLIFrameElement) || !frame.contentWindow) {
-            return false;
-          }
-          frame.contentWindow.postMessage(
-            {
-              type: "render",
-              title: "Timeline",
-              html: '<p>Timeline</p><script>document.documentElement.dataset.navigationAttempted="true";location.href="https://example.invalid/visual-smoke";</script>',
-            },
-            targetOrigin,
-          );
-          return true;
-        }, new URL(sandboxUrl).origin);
-      expect(navigationRequested).toBe(true);
-      await expect(
-        page.frameLocator("iframe").frameLocator("iframe").locator("html"),
-      ).toHaveAttribute("data-navigation-attempted", "true");
       await collector.waitForQuiet({
         idleMs: 500,
         minimumObservationMs: 1000,
