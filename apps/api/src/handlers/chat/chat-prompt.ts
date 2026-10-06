@@ -76,6 +76,7 @@ import {
   chatCodeModeSystemPrompt,
 } from "@/api/handlers/chat/tools/execute/chat-code-mode";
 import type { RegistryReadToolName } from "@/api/handlers/chat/tools/registry-adapter/ref-field-map";
+import { SUBAGENT_TITLE_MAX_CHARS } from "@/api/handlers/chat/tools/subagent-tool-shared";
 import { CHAT_REFERENCE_HREF_PREFIXES } from "@/api/handlers/chat/types";
 import type { ChatMessage } from "@/api/handlers/chat/types";
 import type { RequestedSkills } from "@/api/lib/agent-skills/requested-skills";
@@ -293,8 +294,7 @@ const CORPUS_ONLY_CASE_LAW_SECTION = buildCorpusOnlyCaseLawSection({
  * Exported for the playbook-authoring eval, whose chat surface offers
  * `spawn_subagents` under the same instruction a chat turn carries.
  */
-export const SUBAGENT_DELEGATION_SECTION =
-  "DELEGATION: When a task splits into independent pieces (no piece depends on another's result), call `spawn_subagents` to run them in parallel instead of doing them one by one yourself. Subagents are cheaper and start without asking the user; their writes come back to you as proposals that the user approves one by one. Prefer this whenever breadth or parallelism would speed up the task.";
+export const SUBAGENT_DELEGATION_SECTION = `DELEGATION: When a task splits into independent pieces (no piece depends on another's result), call \`spawn_subagents\` to run them in parallel instead of doing them one by one yourself. Subagents are cheaper and start without asking the user; their writes come back to you as proposals that the user approves one by one. Give each subagent a short human-readable title (1–${SUBAGENT_TITLE_MAX_CHARS} characters) in the user's language that names the subject, without internal instructions or identifiers. Put the full instructions in task. Prefer this whenever breadth or parallelism would speed up the task.`;
 
 const ASK_USER_BOUNDARY =
   "ASK-USER BOUNDARY: Use `ask-user` only for missing task facts (preferences, jurisdiction, parties, scope). Never use it to request tool-call permission or consent — stella handles approvals outside the model. When you decide to call `ask-user`, do not emit any other tool calls (e.g. `execute_typescript`) in the same turn — wait for the user's answer first; otherwise the user sees retrieved data before they have answered the clarifying question and that data may be off-topic.";
