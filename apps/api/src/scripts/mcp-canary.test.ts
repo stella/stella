@@ -1101,6 +1101,26 @@ describe("canary credential expiry", () => {
   });
 });
 
+describe("canary credential expiry failure detail", () => {
+  const nowMs = Date.parse("2026-01-01T00:00:00.000Z");
+
+  test.each([
+    [404, "HTTP 404: the target does not serve the key expiry endpoint yet"],
+    [401, "HTTP 401: the target refused MCP_CANARY_TOKEN"],
+    [403, "HTTP 403: could not inspect the current machine key expiry"],
+    [503, "HTTP 503: could not inspect the current machine key expiry"],
+    [200, "HTTP 200: could not inspect the current machine key expiry"],
+  ] as const)("names HTTP %s in the failure", (status, detail) => {
+    expect(
+      evaluateCredentialExpiry({
+        status,
+        body: status === 200 ? { expiresAt: "not-a-date" } : null,
+        nowMs,
+      }),
+    ).toEqual({ name: "canary bearer expiry", status: "failed", detail });
+  });
+});
+
 describe("deployment fetch boundary", () => {
   test("injects the edge credential and always makes redirects manual", async () => {
     let captured: Parameters<CanaryFetcher>[1] | undefined;
