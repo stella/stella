@@ -1,6 +1,6 @@
 import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
-import { getColumns } from "drizzle-orm";
+import { getColumns, sql } from "drizzle-orm";
 import {
   integer,
   pgTable,
@@ -26,6 +26,7 @@ import {
   transition,
   defineScopedTransitions,
   transitionScopedBatch,
+  transitionScopedCount,
   transitionUpsertBatch,
 } from "@/api/lib/db/transitions";
 import type { ScopedTransitionDeclaration } from "@/api/lib/db/transitions";
@@ -529,6 +530,48 @@ test("empty and stale batches perform no audit", async () => {
   expect(queries).toBe(1);
   expect(audits).toBe(0);
 });
+
+test.each(["array", "rows"] as const)(
+  "%s driver: scoped counts validate aggregates and audit only changes",
+  async (shape) => {
+    const scoped = defineScopedTransitions({
+      table: jobs,
+      key: "id",
+      scope: [],
+      stateColumn: "status",
+      edges: graph,
+      initial: ["queued"],
+    });
+    for (const count of [0, 2, -1, 0.5, "2", undefined]) {
+      const rows = [{ count }];
+      const tx = {
+        execute: async () => (shape === "array" ? rows : { rows }),
+        rollback,
+      };
+      const audits: number[] = [];
+      const operation = transitionScopedCount({
+        tx,
+        spec: scoped,
+        where: sql`true`,
+        options: { from: ["running"], to: "failed" },
+        recordTransitionAuditEvent: async (auditTx, changed) => {
+          expect(auditTx).toBe(tx);
+          audits.push(changed);
+        },
+      });
+      if (count === 0 || count === 2) {
+        expect(await operation).toBe(count);
+        expect(audits).toEqual(count === 0 ? [] : [count]);
+      } else {
+        await assertTransitionRejected(
+          operation,
+          "Transition count returned an invalid aggregate",
+        );
+        expect(audits).toEqual([]);
+      }
+    }
+  },
+);
 
 test.each(["array", "rows"] as const)(
   "%s driver: scoped state batches bind composite identities and audit only changed rows once",

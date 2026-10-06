@@ -520,7 +520,7 @@ export const transitionScopedCount = async <
     )
     SELECT count(*)::double precision AS count FROM changed
   `);
-  const count = rows.at(0)?.["count"];
+  const count = returnedTransitionRows(rows).at(0)?.["count"];
   if (typeof count !== "number" || !Number.isSafeInteger(count) || count < 0) {
     panic("Transition count returned an invalid aggregate");
   }
