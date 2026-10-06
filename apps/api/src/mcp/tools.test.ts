@@ -2806,7 +2806,7 @@ describe("OpenAI-compatible MCP tools", () => {
     caseNumberType: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
     country: "CZE",
     court,
-    courtAbbreviation: courtAbbreviation({ country: "CZE", court }),
+    courtAbbreviation: courtAbbreviation({ country: "CZE", court }) ?? null,
     decisionDate: "2020-05-01",
     ecli: null,
     id: toSafeId<"caseLawDecision">(decisionId),
