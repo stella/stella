@@ -3,6 +3,7 @@ import {
   afterAll,
   beforeAll,
   describe,
+  spyOn,
   expect,
   setDefaultTimeout,
   test,
@@ -10,6 +11,10 @@ import {
 import { and, eq, inArray, sql } from "drizzle-orm";
 import fc from "fast-check";
 
+import {
+  PROFESSIONAL_USE_STATEMENT_VERSION,
+  PROFESSIONAL_USE_TERMS_VERSION,
+} from "@stll/api-contract/professional-use";
 import { assertProperty } from "@stll/property-testing";
 
 import {
@@ -19,10 +24,7 @@ import {
 } from "@/api/db/schema";
 import { createSafeDb } from "@/api/db/scoped";
 import { getAuth } from "@/api/lib/auth";
-import {
-  PROFESSIONAL_USE_STATEMENT_VERSION,
-  PROFESSIONAL_USE_TERMS_VERSION,
-} from "@/api/lib/professional-use";
+import { logger } from "@/api/lib/observability/logger";
 import {
   brandPersistedOrganizationId,
   brandPersistedUserId,
@@ -203,5 +205,68 @@ describe("professional-use acceptance", () => {
     if (Result.isOk(read)) {
       expect(read.value).toEqual({ users: [], organizations: [] });
     }
+  });
+
+  const createOrganizationFor = async (
+    person: Awaited<ReturnType<typeof signInHuman>>,
+  ) =>
+    await getAuth().api.createOrganization({
+      body: {
+        name: "Professional use creator",
+        slug: `professional-use-creator-${Bun.randomUUIDv7()}`,
+      },
+      headers: person.headers(),
+    });
+
+  test("an organization created by an account without an acceptance records none and reports it", async () => {
+    const person = await signInHuman(
+      `professional-use-missing-${Bun.randomUUIDv7()}@stella.dev`,
+    );
+    // An account created before acceptances were recorded.
+    await testDb
+      .delete(userProfessionalUseAcceptances)
+      .where(eq(userProfessionalUseAcceptances.userId, person.userId));
+    const error = spyOn(logger, "error");
+    const warn = spyOn(logger, "warn");
+    try {
+      const organization = await createOrganizationFor(person);
+
+      expect(await organizationAcceptances([organization.id])).toEqual([]);
+      expect(await acceptanceAuditEvents(organization.id)).toEqual([]);
+      const reported = [...error.mock.calls, ...warn.mock.calls].filter(
+        ([event]) =>
+          event === "auth.professional_use.creator_acceptance_missing",
+      );
+      expect(reported).toHaveLength(1);
+      expect(reported.at(0)?.[1]).toMatchObject({
+        organizationId: organization.id,
+      });
+    } finally {
+      error.mockRestore();
+      warn.mockRestore();
+    }
+  });
+
+  test("an organization carries the versions its creator accepted, not the current ones", async () => {
+    const person = await signInHuman(
+      `professional-use-older-${Bun.randomUUIDv7()}@stella.dev`,
+    );
+    const accepted = { statementVersion: "2000-01", termsVersion: "2000-02" };
+    await testDb
+      .update(userProfessionalUseAcceptances)
+      .set(accepted)
+      .where(eq(userProfessionalUseAcceptances.userId, person.userId));
+
+    const organization = await createOrganizationFor(person);
+
+    expect(await organizationAcceptances([organization.id])).toMatchObject([
+      { acceptedByUserId: person.userId, ...accepted },
+    ]);
+    expect(await acceptanceAuditEvents(organization.id)).toEqual([
+      {
+        userId: person.userId,
+        metadata: expect.objectContaining(accepted),
+      },
+    ]);
   });
 });

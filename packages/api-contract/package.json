@@ -47,6 +47,7 @@
     "./legal-citation-links": "./src/legal-citation-links.ts",
     "./legislation-expression": "./src/legislation-expression.ts",
     "./hosted-checkout": "./src/hosted-checkout.ts",
+    "./professional-use": "./src/professional-use.ts",
     "./legislation-status": "./src/legislation-status.ts",
     "./legislation-publication": "./src/legislation-publication.ts",
     "./matter-activity": "./src/matter-activity.ts",

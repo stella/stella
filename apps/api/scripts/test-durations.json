@@ -4139,6 +4139,10 @@
     "seconds": 0.240826,
     "source": "estimated"
   },
+  "src/lib/auth/professional-use.db.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
   "src/lib/auth/registration-adapter.test.ts": {
     "seconds": 0.49423,
     "source": "estimated"
@@ -6817,10 +6821,6 @@
   },
   "src/lib/pick-defined.test.ts": {
     "seconds": 0.338459,
-    "source": "estimated"
-  },
-  "src/lib/professional-use.db.test.ts": {
-    "seconds": 1,
     "source": "estimated"
   },
   "src/lib/prompt-safety.test.ts": {
