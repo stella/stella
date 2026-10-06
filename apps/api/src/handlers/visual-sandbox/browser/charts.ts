@@ -177,10 +177,15 @@ const mountTreemap = ({ win, el, opts }: MountTreemapOptions) => {
   const owner = win.document;
   const surface = owner.createElement("div");
   const legend = owner.createElement("div");
-  surface.style.colorScheme = "light dark";
+  const inheritedScheme = win.getComputedStyle(el).colorScheme;
+  const colorScheme =
+    inheritedScheme === "normal" ? "light dark" : inheritedScheme;
+  surface.style.colorScheme = colorScheme;
   surface.style.color = colors.foreground;
   legend.style.cssText =
     "display:flex;align-items:center;flex-wrap:wrap;gap:0.5rem;font-variant-numeric:tabular-nums;margin-block-start:0.5rem;color:inherit";
+  legend.style.colorScheme = colorScheme;
+  legend.style.color = colors.foreground;
   el.append(surface);
   if (opts.color.legend) {
     el.append(legend);
