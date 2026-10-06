@@ -12,7 +12,7 @@ const hasTemplateBinding = (access: ts.PropertyAccessExpression) => {
     return false;
   }
   let scope: ts.Node = access;
-  while (scope.parent && !isFunctionScope(scope) && !ts.isSourceFile(scope)) {
+  while (!isFunctionScope(scope) && !ts.isSourceFile(scope)) {
     scope = scope.parent;
   }
   let found = false;
@@ -64,7 +64,6 @@ export const inspectBrowserRuntimeSafety = (source: string) => {
     }
     if (
       ts.isElementAccessExpression(node) &&
-      node.argumentExpression &&
       ts.isStringLiteral(node.argumentExpression) &&
       ["eval", "Function", "innerHTML"].includes(node.argumentExpression.text)
     ) {
