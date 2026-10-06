@@ -195,8 +195,12 @@ const mountGate = ({
   const content = (
     <GateHarness
       action={action}
-      onPerform={() => performed.push(action)}
-      onCapture={(run) => retained.push(run)}
+      onPerform={() => {
+        performed.push(action);
+      }}
+      onCapture={(run) => {
+        retained.push(run);
+      }}
     />
   );
   const view = render(
@@ -388,7 +392,9 @@ describe("desktop action gate uses observed presence", () => {
     );
     const performed: string[] = [];
     await act(async () => {
-      run(() => performed.push("sign"));
+      run(() => {
+        performed.push("sign");
+      });
     });
     expect(await screen.findByRole("dialog")).toBeDefined();
     expect(screen.getByText(gate.signReason)).toBeDefined();
@@ -417,7 +423,9 @@ describe("desktop action gate uses observed presence", () => {
     );
     const performed: string[] = [];
     await act(async () => {
-      run(() => performed.push("open"));
+      run(() => {
+        performed.push("open");
+      });
     });
     expect(performed).toEqual(["open"]);
     expect(screen.queryByRole("dialog")).toBeNull();

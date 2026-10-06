@@ -18,7 +18,7 @@ type DesktopPresenceKey = {
   organizationId: string;
 };
 
-export const desktopPresenceKeys = {
+const desktopPresenceKeys = {
   all: ({ userId, organizationId }: DesktopPresenceKey) =>
     ["desktop-presence", organizationId, userId] as const,
 };
