@@ -213,6 +213,7 @@ import {
   safeTokenUsageFromTerminalChunk,
   tokenUsageFromTerminalChunk,
 } from "@/api/lib/tanstack-ai-usage";
+import { projectVisualPreviewStream } from "@/api/lib/visual-preview-stream";
 import { isLocalDevOpen } from "@/api/runtime-mode";
 
 const TIMING_READ_FAILURE = failureSink({
@@ -691,7 +692,7 @@ export const streamChat = async ({
         organizationId,
         runId,
       }),
-    source: stream,
+    source: projectVisualPreviewStream(stream),
   });
   const persistenceVisibleStream = transformPersistenceVisibleStream({
     boundary: thirdPartyBoundary,

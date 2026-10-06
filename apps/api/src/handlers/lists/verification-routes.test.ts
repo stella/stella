@@ -1,4 +1,3 @@
-import { Result } from "better-result";
 import { Glob } from "bun";
 import { describe, expect, test } from "bun:test";
 import Elysia from "elysia";
@@ -56,9 +55,10 @@ const routeFor = (enabled: boolean) => {
       createListVerificationRoutes({
         resolveAuth: async () => ({
           ok: true,
-          value: createTestHandlerContext<ValidateAuthValue>(),
+          value: createTestHandlerContext<ValidateAuthValue>({
+            featureAccessSnapshot: snapshot,
+          }),
         }),
-        loadSnapshot: async () => Result.ok(snapshot),
       }),
     );
 };

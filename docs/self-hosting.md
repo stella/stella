@@ -52,6 +52,10 @@ Unknown feature IDs are dropped at startup and emit the count-only ERROR event
 `feature_access.unknown_grant`. Invalid JSON or malformed grant shapes remain
 fatal configuration errors.
 
+The optional layout preview for generated views is available only in stella's
+cloud; on a self-hosted instance the assistant is told the preview is
+unavailable and the view is still published.
+
 ## Frontend (web app)
 
 The web app under `apps/web` is a TanStack Start SSR app built by Vite. For a

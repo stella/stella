@@ -152,6 +152,7 @@ export const openChatThreadDomPage = async ({
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false } },
   });
+  const userId = "00000000-0000-7000-8000-00000000fffe";
   // Lists the chat reads beside the thread, answered as empty.
   queryClient.setQueryData(mcpConnectorsOptions(organizationId).queryKey, {
     canManageCustomConnectors: false,
@@ -159,8 +160,8 @@ export const openChatThreadDomPage = async ({
     nativeTools: [],
   });
   queryClient.setQueryData(
-    workspacesNavigationOptions(organizationId).queryKey,
-    { workspaces: [] },
+    workspacesNavigationOptions({ organizationId, userId }).queryKey,
+    { workspaces: [], features: { timeBilling: false } },
   );
   // The thread route's loader fills a cold thread query before the page
   // mounts, so the page renders its messages on first paint instead of
@@ -183,7 +184,7 @@ export const openChatThreadDomPage = async ({
                 user={{
                   activeOrganizationId: organizationId,
                   email: "user@example.com",
-                  id: "00000000-0000-7000-8000-00000000fffe",
+                  id: userId,
                   image: null,
                   name: "User",
                   preferredName: null,
