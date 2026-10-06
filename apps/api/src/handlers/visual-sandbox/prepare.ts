@@ -9,7 +9,7 @@ export class VisualDefinitionError extends TaggedError(
   "VisualDefinitionError",
 )<{
   message: string;
-  reason: "data" | "links";
+  reason: "title" | "data" | "links";
 }> {}
 
 const isRow = (value: unknown): value is Record<string, unknown> =>
@@ -39,6 +39,15 @@ const unreferencedDataKey = (data: unknown, html: string) => {
 };
 
 export const prepareGeneratedVisual = (input: GeneratedVisualInput) => {
+  const title = input.title.trim();
+  if (title.length === 0) {
+    return Result.err(
+      new VisualDefinitionError({
+        reason: "title",
+        message: "Give the visual a nonempty title.",
+      }),
+    );
+  }
   const normalized = sanitizeVisualHtml(input.html);
   if (normalized.isErr()) {
     return normalized;
@@ -65,7 +74,7 @@ export const prepareGeneratedVisual = (input: GeneratedVisualInput) => {
     ids.add(link.id);
   }
   return Result.ok({
-    title: input.title,
+    title,
     html: normalized.value,
     data: input.data,
     links: input.links ?? [],

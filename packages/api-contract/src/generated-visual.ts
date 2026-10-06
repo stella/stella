@@ -81,7 +81,6 @@ const isBoundedVisualData = (data: unknown) => {
 export const generatedVisualInputSchema = v.strictObject({
   title: v.pipe(
     v.string(),
-    v.trim(),
     v.minLength(1),
     v.maxLength(GENERATED_VISUAL_LIMITS.titleChars),
   ),
@@ -117,4 +116,26 @@ export const VISUAL_DATA_SCRIPT_ID = "stella-visual-data";
 export const visualRenderMessageSchema = v.strictObject({
   type: v.literal("render"),
   ...generatedVisualInputSchema.entries,
+});
+
+export const SHOW_VISUAL_TOOL_NAME = "show_visual";
+export const GENERATED_VISUAL_MIME_TYPE = "application/vnd.stella.visual+json";
+export const GENERATED_VISUAL_URI_PREFIX = "ui://stella/visual/";
+
+export const generatedVisualResourceSchema = v.strictObject({
+  uri: v.pipe(
+    v.string(),
+    v.regex(
+      /^ui:\/\/stella\/visual\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/u,
+    ),
+  ),
+  mimeType: v.literal(GENERATED_VISUAL_MIME_TYPE),
+  text: generatedVisualInputSchema.entries.title,
+});
+
+export const generatedVisualPartSchema = v.strictObject({
+  type: v.literal("ui-resource"),
+  resource: generatedVisualResourceSchema,
+  toolCallId: v.pipe(v.string(), v.minLength(1), v.maxLength(256)),
+  toolName: v.literal(SHOW_VISUAL_TOOL_NAME),
 });
