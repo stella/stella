@@ -103,7 +103,7 @@ const mount = (items: ReturnType<typeof provision>[], resolveTitle = false) => {
     ] satisfies ResolvedWorks;
     client.setQueryData(statutesResolveOptions([work]).queryKey, resolved);
   }
-  return render(
+  const ui = render(
     <QueryClientProvider client={client}>
       <IntlProvider locale="en" messages={messages} timeZone="UTC">
         <FormattingProvider locale="en" timeZone="UTC">
@@ -119,6 +119,7 @@ const mount = (items: ReturnType<typeof provision>[], resolveTitle = false) => {
       </IntlProvider>
     </QueryClientProvider>,
   );
+  return { ...ui, client };
 };
 
 test("an inferred act shows its basis once and preserves repeated citation counts", () => {
@@ -222,6 +223,52 @@ test("an act exposes a native keyboard button that collapses and reopens its ref
     expect(trigger.getAttribute("aria-expanded")).toBe("true"),
   );
   expect(screen.getByRole("button", { name: /§ 1/u })).toBeTruthy();
+});
+
+test("a new work on the next page opens while a user-collapsed work stays closed", async () => {
+  const { client } = mount([civilProvision({})]);
+  const first = screen.getByRole("button", { name: "40/1964 Sb." });
+  expect(first.getAttribute("aria-expanded")).toBe("true");
+  fireEvent.click(first);
+  await waitFor(() =>
+    expect(first.getAttribute("aria-expanded")).toBe("false"),
+  );
+
+  await act(async () => {
+    client.setQueryData(
+      decisionProvisionsInfiniteOptions(decisionId).queryKey,
+      (data) => {
+        const page = data?.pages.at(0);
+        if (data === undefined || page === undefined) {
+          throw new Error("Expected the mounted provisions page");
+        }
+        return {
+          pageParams: [null, "page-2"],
+          pages: [
+            { ...page, nextCursor: "page-2" },
+            {
+              ...page,
+              items: [provision({ workEli: null })],
+              nextCursor: null,
+            },
+          ],
+        };
+      },
+    );
+  });
+
+  const second = await screen.findByRole("button", { name: "141/1961 Sb." });
+  await waitFor(() =>
+    expect(second.getAttribute("aria-expanded")).toBe("true"),
+  );
+  expect(first.getAttribute("aria-expanded")).toBe("false");
+  expect(screen.getByRole("button", { name: /§ 265b/u })).toBeTruthy();
+  expect(screen.queryByRole("button", { name: "§ 1" })).toBeNull();
+
+  fireEvent.click(first);
+  await waitFor(() => expect(first.getAttribute("aria-expanded")).toBe("true"));
+  expect(second.getAttribute("aria-expanded")).toBe("true");
+  expect(screen.getByRole("button", { name: "§ 1" })).toBeTruthy();
 });
 
 test("a focused provision reveals its full version basis and decision passage", async () => {

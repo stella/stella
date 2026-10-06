@@ -69,6 +69,9 @@ export const ProvisionsCited = ({
 }) => {
   const t = useTranslations();
   const [localOpen, setLocalOpen] = useState(false);
+  const [collapsedGroups, setCollapsedGroups] = useState(
+    () => new Set<string>(),
+  );
   const open = expanded ?? localOpen;
   const renderPart = useProvisionPartRenderer();
 
@@ -84,6 +87,9 @@ export const ProvisionsCited = ({
   const groups = groupProvisionsByWork(
     optionalArray(data?.pages).flatMap((page) => page.items),
   );
+  const expandedGroups = groups
+    .filter(({ key }) => !collapsedGroups.has(key))
+    .map(({ key }) => key);
 
   // Existing links select an inferred version at the decision date;
   // every work on the panel resolves in one read.
@@ -143,7 +149,19 @@ export const ProvisionsCited = ({
           </Button>
         </div>
       )}
-      <Accordion multiple defaultValue={groups.map(({ key }) => key)}>
+      <Accordion
+        multiple
+        value={expandedGroups}
+        onValueChange={(values) => {
+          setCollapsedGroups(
+            new Set(
+              groups
+                .filter(({ key }) => !values.includes(key))
+                .map(({ key }) => key),
+            ),
+          );
+        }}
+      >
         {groups.map((group) => {
           const citedWork = citedWorkByGroup.get(group.key);
           return (
