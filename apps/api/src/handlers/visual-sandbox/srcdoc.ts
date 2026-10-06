@@ -11,6 +11,11 @@ export const escapeVisualJson = (value: unknown) =>
     .replaceAll(">", "\\u003e")
     .replaceAll("&", "\\u0026");
 
+// The trusted bundle contains document-composer string literals. Preserve
+// their JavaScript values while avoiding HTML script-parser delimiters.
+export const escapeVisualScript = (source: string) =>
+  source.replace(/<\/script|<!--/giu, (match) => `\\u003c${match.slice(1)}`);
+
 type ComposeVisualDocumentOptions = {
   html: string;
   runtime: string;

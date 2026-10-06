@@ -1,9 +1,35 @@
 import { describe, expect, test } from "bun:test";
 import { load } from "cheerio";
 
-import { composeVisualDocument, escapeVisualJson } from "./srcdoc";
+import {
+  composeVisualDocument,
+  escapeVisualJson,
+  escapeVisualScript,
+} from "./srcdoc";
 
 describe("visual document composition", () => {
+  test("preserves composer string values when embedding bundled scripts", () => {
+    for (const value of [
+      "</script>",
+      "</SCRIPT>",
+      "</ScRiPt >",
+      "<!--",
+      "<p>Timeline</p>",
+    ]) {
+      const encoded = escapeVisualScript(JSON.stringify(value));
+      expect(JSON.parse(encoded)).toBe(value);
+      expect(encoded).not.toMatch(/<\/script|<!--/iu);
+      const document = load(
+        composeVisualDocument({
+          html: "<p>Timeline</p>",
+          runtime: `const title=${encoded};`,
+          policy: "default-src 'none'",
+        }),
+      );
+      expect(document("head script").text()).toBe(`const title=${encoded};`);
+      expect(document("body p").text()).toBe("Timeline");
+    }
+  });
   test("places the policy before all presentation markup", () => {
     const $ = load(
       composeVisualDocument({
