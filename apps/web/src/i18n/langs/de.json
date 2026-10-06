@@ -1326,6 +1326,7 @@
     "sendErrorQuotaExhausted": "Das Kontingent des KI-Anbieters ist ausgeschöpft. Versuchen Sie es in einer Minute erneut, oder wenden Sie sich an Ihren Arbeitsbereichs-Admin.",
     "sendErrorStreamIncomplete": "Die Antwort der KI wurde abgebrochen, bevor sie fertig war. Versuchen Sie es erneut.",
     "sendPrompt": "Nachricht senden",
+    "sendQueuedMessageNow": "Jetzt senden",
     "sendWithoutAnonymization": "Ohne Anonymisierung senden",
     "skills": {
       "scope": {
@@ -1473,6 +1474,14 @@
       "sourceCode": "Quellcode",
       "toggleDetails": "Details ein-/ausblenden",
       "unrestoredFields": "{count, plural, one {# Feld konnte} other {# Felder konnten}} im anonymisierten Modus nicht mit echten Werten gefüllt werden. Bitte prüfen: {fields}"
+    },
+    "turnNotification": {
+      "failedBody": "Eine Chat-Antwort in stella wurde nicht abgeschlossen.",
+      "failedTitle": "Antwort fehlgeschlagen",
+      "needsInputBody": "Ein Chat wartet auf Ihre Freigabe oder Antwort.",
+      "needsInputTitle": "stella braucht Ihre Eingabe",
+      "replyReadyBody": "stella hat in Ihrem Chat fertig geantwortet.",
+      "replyReadyTitle": "Antwort fertig"
     },
     "unsupportedFileType": "Nicht unterstützter Dateityp",
     "uploadFailed": "Datei konnte nicht verarbeitet werden",
@@ -4372,6 +4381,11 @@
       "betaInbox": "Posteingang und Benachrichtigungen",
       "betaInboxDescription": "Posteingang und Benachrichtigungsglocke anzeigen",
       "betaTimeBillingDescription": "Zeiterfassung, Rechnungen und Ausgaben anzeigen",
+      "chatNotifications": "Chat-Benachrichtigungen",
+      "chatNotificationsBlocked": "Benachrichtigungen für stella sind in diesem Browser blockiert. Erlauben Sie sie in den Website-Einstellungen des Browsers.",
+      "chatNotificationsDescription": "Erhalten Sie eine Benachrichtigung von diesem Browser, wenn eine Chat-Antwort fertig ist, während stella im Hintergrund läuft.",
+      "chatNotificationsToggle": "Benachrichtigen, wenn eine Antwort fertig ist oder meine Eingabe braucht",
+      "chatNotificationsUnsupported": "Dieser Browser unterstützt keine Benachrichtigungen.",
       "confirmDelete": "Konto löschen bestätigen",
       "dangerZone": "Gefahrenbereich",
       "dangerZoneDescription": "Löschen Sie Ihren Kontozugriff und private Kontodaten dauerhaft.",

@@ -13,6 +13,7 @@ import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-sto
 import { usePermissions } from "@/hooks/use-permissions";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
+import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { detached } from "@/lib/detached";
 import { unwrapEden } from "@/lib/errors/api";
 import { notifyUserError } from "@/lib/errors/user-toast";
@@ -41,7 +42,10 @@ export const NewEntityViewTask = ({
   const analytics = useAnalytics();
   const queryClient = useQueryClient();
   const canCreate = usePermissions({ entity: ["create"] });
-  const { data } = useQuery(workspacesNavigationOptions(organizationId));
+  const { id: userId } = useAuthenticatedUser();
+  const { data } = useQuery(
+    workspacesNavigationOptions({ organizationId, userId }),
+  );
   const pendingRef = useRef(false);
   const [pending, setPending] = useState(false);
   const create = async (selectedWorkspaceId: string) => {

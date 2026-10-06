@@ -28,6 +28,7 @@ import { notificationsOptions } from "@/lib/notification-queries";
 import { organizationListOptions } from "@/lib/organization/queries";
 import { searchPreviewOptions } from "@/lib/search";
 import { usageLaneOptions } from "@/lib/usage-queries";
+import { workspacesNavigationOptions } from "@/lib/workspaces/queries";
 import { workspacesKeys } from "@/lib/workspaces/queries.logic";
 import {
   entityViewKeys,
@@ -38,7 +39,6 @@ import { reportExportsKeys } from "@/lib/workspaces/queries/report-exports";
 import { timeEntriesKeys } from "@/lib/workspaces/queries/time-entries";
 import { viewTemplateKeys } from "@/lib/workspaces/queries/view-templates";
 import { workspaceMemberPreviewsOptions } from "@/lib/workspaces/queries/workspace-member-previews";
-import { deploymentFeaturesOptions } from "@/queries/deployment-features";
 import { featureEnrolmentsOptions } from "@/queries/feature-enrolments";
 import {
   organizationSettingsOptions,
@@ -46,6 +46,7 @@ import {
 } from "@/queries/organization-settings";
 import { connectedAppsOptions } from "@/routes/_protected.settings/-queries/connections";
 import { memoriesKeys } from "@/routes/_protected.settings/-queries/memories";
+import { memoryMattersOptions } from "@/routes/_protected.settings/-queries/memory-matters";
 
 // API reads that answer for the signed-in user are cached under a key that
 // names that user. The manifests below list every such read:
@@ -115,9 +116,22 @@ const PER_USER_READS: Record<string, PerUserRead> = {
       "Shared view identities carry caller eligibility; session-cache-guard clears them on member changes.",
   },
   "workspaces/read-navigation.ts": {
-    kind: "caller-marker",
-    reason:
-      "Shared matter navigation chooses caller-eligible layouts; session-cache-guard clears it on member changes.",
+    kind: "keyed",
+    calls: ["api.workspaces.navigation.get", "fetchWorkspaceNavigationPage"],
+    files: [
+      "lib/memory-api.ts",
+      "lib/workspaces/queries.ts",
+      "routes/_protected.settings/-queries/memory-matters.ts",
+    ],
+    keys: () => [
+      workspacesNavigationOptions({ organizationId: ORG, userId: USER })
+        .queryKey,
+      memoryMattersOptions({ organizationId: ORG, userId: USER }).queryKey,
+    ],
+    opaqueKeys: {
+      "workspacesKeys.navigation(caller)": KEY_TYPE_HAS_USER,
+      "memoryMatterKeys.all(caller)": KEY_TYPE_HAS_USER,
+    },
   },
   "api-keys/personal/list.ts": {
     kind: "no-web-caller",
@@ -136,14 +150,6 @@ const PER_USER_READS: Record<string, PerUserRead> = {
         organizationId: null,
         userId: USER,
       }).queryKey,
-    ],
-  },
-  "organization-settings/deployment-features/get.ts": {
-    kind: "keyed",
-    calls: ['api["organization-settings"]["deployment-features"].get'],
-    files: ["queries/deployment-features.ts"],
-    keys: () => [
-      deploymentFeaturesOptions({ organizationId: ORG, userId: USER }).queryKey,
     ],
   },
   "organization-settings/feature-enrolments/get.ts": {

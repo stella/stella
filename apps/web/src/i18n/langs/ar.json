@@ -1326,6 +1326,7 @@
     "sendErrorQuotaExhausted": "نفدت حصة مزوّد الذكاء الاصطناعي. حاول مجدداً بعد دقيقة، أو تواصل مع مسؤول مساحة العمل.",
     "sendErrorStreamIncomplete": "انقطع ردّ الذكاء الاصطناعي قبل أن يكتمل. حاول مجدداً.",
     "sendPrompt": "إرسال الرسالة",
+    "sendQueuedMessageNow": "إرسال الآن",
     "sendWithoutAnonymization": "إرسال دون تجهيل",
     "skills": {
       "scope": {
@@ -1473,6 +1474,14 @@
       "sourceCode": "الشيفرة المصدرية",
       "toggleDetails": "إظهار/إخفاء التفاصيل",
       "unrestoredFields": "تعذّر ملء {count, plural, zero {# حقل} one {حقل واحد} two {حقلين} few {# حقول} many {# حقلًا} other {# حقل}} بالقيم الحقيقية في وضع إخفاء الهوية. راجِع: {fields}"
+    },
+    "turnNotification": {
+      "failedBody": "لم يكتمل رد في دردشة stella.",
+      "failedTitle": "فشل الرد",
+      "needsInputBody": "تنتظر دردشة موافقتك أو إجابتك.",
+      "needsInputTitle": "تحتاج stella إلى مدخلاتك",
+      "replyReadyBody": "أنهت stella الرد في الدردشة.",
+      "replyReadyTitle": "الرد جاهز"
     },
     "unsupportedFileType": "نوع ملف غير مدعوم",
     "uploadFailed": "تعذّرت معالجة الملف",
@@ -4372,6 +4381,11 @@
       "betaInbox": "صندوق الوارد والإشعارات",
       "betaInboxDescription": "إظهار صندوق الوارد وجرس الإشعارات",
       "betaTimeBillingDescription": "إظهار تتبع الوقت والفواتير والمصروفات",
+      "chatNotifications": "إشعارات الدردشة",
+      "chatNotificationsBlocked": "الإشعارات محظورة لـ stella في هذا المتصفح. اسمح بها من إعدادات الموقع في المتصفح.",
+      "chatNotificationsDescription": "تلقَّ إشعارًا من هذا المتصفح عند اكتمال رد في الدردشة بينما تعمل stella في الخلفية.",
+      "chatNotificationsToggle": "أعلمني عندما يكون الرد جاهزًا أو يحتاج إلى مدخلاتي",
+      "chatNotificationsUnsupported": "لا يدعم هذا المتصفح الإشعارات.",
       "confirmDelete": "تأكيد حذف الحساب",
       "dangerZone": "منطقة الخطر",
       "dangerZoneDescription": "احذف الوصول إلى حسابك وبيانات الحساب الخاصة نهائيًا.",

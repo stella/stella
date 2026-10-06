@@ -1326,6 +1326,7 @@
     "sendErrorQuotaExhausted": "Le quota du fournisseur d’IA est épuisé. Réessayez dans une minute ou contactez l’administrateur de l’espace de travail.",
     "sendErrorStreamIncomplete": "La réponse de l’IA a été interrompue avant la fin. Réessayez.",
     "sendPrompt": "Envoyer le message",
+    "sendQueuedMessageNow": "Envoyer maintenant",
     "sendWithoutAnonymization": "Envoyer sans anonymisation",
     "skills": {
       "scope": {
@@ -1473,6 +1474,14 @@
       "sourceCode": "Code source",
       "toggleDetails": "Afficher les détails",
       "unrestoredFields": "En mode anonymisé, {count, plural, one {# champ n’a pas pu être rempli} other {# champs n’ont pas pu être remplis}} avec des valeurs réelles. À vérifier : {fields}"
+    },
+    "turnNotification": {
+      "failedBody": "Une réponse dans une conversation stella n’a pas abouti.",
+      "failedTitle": "Échec de la réponse",
+      "needsInputBody": "Une conversation attend votre approbation ou votre réponse.",
+      "needsInputTitle": "stella a besoin de vous",
+      "replyReadyBody": "stella a fini de répondre dans votre conversation.",
+      "replyReadyTitle": "Réponse prête"
     },
     "unsupportedFileType": "Type de fichier non pris en charge",
     "uploadFailed": "Échec du traitement du fichier",
@@ -4372,6 +4381,11 @@
       "betaInbox": "Boîte de réception et notifications",
       "betaInboxDescription": "Afficher la boîte de réception et la cloche de notifications",
       "betaTimeBillingDescription": "Afficher le suivi du temps, les factures et les dépenses",
+      "chatNotifications": "Notifications des conversations",
+      "chatNotificationsBlocked": "Les notifications de stella sont bloquées dans ce navigateur. Autorisez-les dans les paramètres du site du navigateur.",
+      "chatNotificationsDescription": "Recevez une notification de ce navigateur lorsqu’une réponse dans une conversation se termine pendant que stella est en arrière-plan.",
+      "chatNotificationsToggle": "M’avertir quand une réponse est prête ou attend mon intervention",
+      "chatNotificationsUnsupported": "Ce navigateur ne prend pas en charge les notifications.",
       "confirmDelete": "Confirmer la suppression du compte",
       "dangerZone": "Zone de danger",
       "dangerZoneDescription": "Supprimer définitivement votre accès au compte et les données privées du compte.",

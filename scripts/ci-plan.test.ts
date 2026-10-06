@@ -19,10 +19,10 @@ import * as v from "valibot";
 import { compareCodeUnit } from "@stll/collation";
 import { drawPropertySamples, propertyConfig } from "@stll/property-testing";
 
-import eventPolicies from "../.github/ci-event-policy.json";
-import queuedJob from "./__fixtures__/ci-cancellation/queued-job.json";
-import supersessionAnnotations from "./__fixtures__/ci-cancellation/supersession.json";
-import timeoutAnnotations from "./__fixtures__/ci-cancellation/timeout.json";
+import eventPolicies from "../.github/ci-event-policy.json" with { type: "json" };
+import queuedJob from "./__fixtures__/ci-cancellation/queued-job.json" with { type: "json" };
+import supersessionAnnotations from "./__fixtures__/ci-cancellation/supersession.json" with { type: "json" };
+import timeoutAnnotations from "./__fixtures__/ci-cancellation/timeout.json" with { type: "json" };
 import { selectApiTestImpact } from "./api-test-impact";
 import { requiresMalwareScan } from "./check-standalone-lockfiles";
 import { planCiApiTests } from "./ci-api-test-plan";
@@ -4375,7 +4375,9 @@ test("API planning only loads dependencies after installation and emits install-
   const select = steps.find(
     (step) => step.name === "Select affected API test files",
   );
-  expect(select?.if).toBe("steps.api-test-deps.outcome == 'success'");
+  expect(select?.if).toBe(
+    "steps.completed-depth.outputs.run_required != 'false' && (steps.api-test-deps.outcome == 'success')",
+  );
   const plan = steps.find(
     (step) => step.name === "Plan API test files and shards",
   );

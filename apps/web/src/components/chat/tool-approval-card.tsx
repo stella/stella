@@ -68,6 +68,8 @@ import {
   type BrowserApprovalDetail,
 } from "@/features/chat/browser-control/browser-approval-summary";
 import { useMountEffect } from "@/hooks/use-effect";
+import { SIGNED_OUT_QUERY_OWNER } from "@/lib/account/queries";
+import { useMaybeAuthenticatedUser } from "@/lib/authenticated-user-context";
 import type { DocxEditRepresentation } from "@/lib/chat-edit-mode";
 import { DOCX_EDIT_REPRESENTATION } from "@/lib/chat-edit-mode";
 import { detached } from "@/lib/detached";
@@ -752,7 +754,14 @@ type SummaryMatter = { color: string | null; id: string; name: string };
  */
 const useMattersById = (): ReadonlyMap<string, SummaryMatter> => {
   const { activeOrganizationId } = useChatApproval();
-  const { data } = useQuery(workspacesNavigationOptions(activeOrganizationId));
+  const user = useMaybeAuthenticatedUser();
+  const { data } = useQuery({
+    ...workspacesNavigationOptions({
+      organizationId: activeOrganizationId,
+      userId: user?.id ?? SIGNED_OUT_QUERY_OWNER,
+    }),
+    enabled: user !== null,
+  });
   const byId = new Map<string, SummaryMatter>();
   if (!data) {
     return byId;

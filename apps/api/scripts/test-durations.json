@@ -3119,6 +3119,10 @@
     "seconds": 3.469935,
     "source": "estimated"
   },
+  "src/handlers/lists/verification-routes.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
   "src/handlers/lists/verifications/create.db.test.ts": {
     "seconds": 1,
     "source": "estimated"
@@ -5431,6 +5435,10 @@
     "seconds": 0.26084,
     "source": "estimated"
   },
+  "src/lib/embeddable-frame-headers.test.ts": {
+    "seconds": 0.5,
+    "source": "estimated"
+  },
   "src/lib/entities/authorize-document-write.integration.test.ts": {
     "seconds": 1.574307,
     "source": "estimated"
@@ -6159,6 +6167,10 @@
     "seconds": 0.104776,
     "source": "estimated"
   },
+  "src/lib/legal-search/corpus-index-unreachable.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
   "src/lib/legal-search/corpus-location.test.ts": {
     "seconds": 0.107206,
     "source": "estimated"
@@ -6533,6 +6545,10 @@
   },
   "src/lib/lists/verification/claim-context.test.ts": {
     "seconds": 0.092071,
+    "source": "estimated"
+  },
+  "src/lib/lists/verification/document-deletion.db.test.ts": {
+    "seconds": 1,
     "source": "estimated"
   },
   "src/lib/lists/verification/engine.test.ts": {
@@ -7867,6 +7883,14 @@
     "seconds": 0.442742,
     "source": "estimated"
   },
+  "src/lib/visual-preview-stream.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
+  "src/lib/visual-preview.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
   "src/lib/web-search/select-provider.test.ts": {
     "seconds": 0.065347,
     "source": "estimated"
@@ -8328,6 +8352,10 @@
     "source": "estimated"
   },
   "src/mcp/review-account-exposure.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
+  "src/mcp/search-index-unavailable.test.ts": {
     "seconds": 1,
     "source": "estimated"
   },
