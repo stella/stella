@@ -112,3 +112,61 @@ test("base recordings require the exact main SHA and authoritative successful wo
     rmSync(root, { recursive: true, force: true });
   }
 });
+
+test("base fallback generates in its own checkout while head measurement retains its manifest", () => {
+  const root = mkdtempSync(path.join(tmpdir(), "typecheck-base-prepared-"));
+  try {
+    const bin = path.join(root, "bin");
+    const base = path.join(root, "typecheck-base");
+    mkdirSync(bin);
+    mkdirSync(path.join(base, "scripts"), { recursive: true });
+    mkdirSync(path.join(base, "apps/api/scripts"), { recursive: true });
+    writeFileSync(
+      path.join(base, "apps/api/scripts/generate-capability-runtime.ts"),
+      "",
+    );
+    writeFileSync(
+      path.join(base, "scripts/retry.sh"),
+      '#!/bin/bash\nexec "$@"\n',
+    );
+    for (const [name, source] of Object.entries({
+      git: '#!/bin/bash\nif [[ "$1" == merge-base ]]; then printf "%s" "$TEST_SHA"; fi\n',
+      gh: `#!/bin/bash\nprintf '%s' '{"artifacts":[]}'\n`,
+      bun: `#!/bin/bash\nif [[ "$PWD" == "$RUNNER_TEMP/typecheck-base" ]]; then [[ -z "\${CI_GENERATED_SOURCES_MANIFEST+x}" ]] || exit 61; else [[ "$CI_GENERATED_SOURCES_MANIFEST" == "$TEST_HEAD_MANIFEST" ]] || exit 62; fi\nprintf "%s:%s\\n" "$PWD" "$*" >> "$TEST_COMMANDS"\n`,
+    })) {
+      const file = path.join(bin, name);
+      writeFileSync(file, source);
+      chmodSync(file, 0o755);
+    }
+    const commands = path.join(root, "commands");
+    const headManifest = path.join(
+      root,
+      "head/.cache/ci-generated-sources/manifest.json",
+    );
+    const result = Bun.spawnSync(["bash", script], {
+      env: {
+        ...process.env,
+        PATH: `${bin}:${process.env["PATH"] ?? ""}`,
+        RUNNER_TEMP: root,
+        REPOSITORY: "example/repo",
+        TEST_SHA: sha,
+        TEST_HEAD_MANIFEST: headManifest,
+        CI_GENERATED_SOURCES_MANIFEST: headManifest,
+        TEST_COMMANDS: commands,
+        GITHUB_STEP_SUMMARY: path.join(root, "summary"),
+      },
+    });
+    expect(result.exitCode, result.stderr.toString()).toBe(0);
+    const actual = readFileSync(commands, "utf-8");
+    expect(actual).toContain(
+      `${base}:--filter @stll/api generate:capability-runtime`,
+    );
+    expect(actual).toContain(`${base}:run generate`);
+    expect(actual).toContain(`${base}:--filter @stll/web generate:route-tree`);
+    expect(actual).toContain(
+      `:scripts/typecheck-baseline.ts --measure ${base}`,
+    );
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});

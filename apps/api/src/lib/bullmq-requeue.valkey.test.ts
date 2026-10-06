@@ -1,7 +1,8 @@
-import { Queue, Worker } from "bullmq";
+import { Queue } from "bullmq";
 import type { Job, JobsOptions } from "bullmq";
 import { afterEach, describe, expect, test } from "bun:test";
 
+import { BullMqWorker } from "@/api/lib/bullmq-queue";
 import { createBullMqConnection } from "@/api/lib/redis-client";
 
 import {
@@ -50,7 +51,7 @@ const createHarness = (processor: ProbeProcessor, attempts = 1): Harness => {
       waiter.resolve();
     }
   };
-  let worker: Worker<ProbeData> | undefined;
+  let worker: BullMqWorker<ProbeData> | undefined;
 
   closers.push(async () => {
     await worker?.close(true);
@@ -73,7 +74,7 @@ const createHarness = (processor: ProbeProcessor, attempts = 1): Harness => {
       expect(settledCount).toBeGreaterThanOrEqual(count);
     },
     startWorker: () => {
-      worker = new Worker<ProbeData>(
+      worker = new BullMqWorker<ProbeData>(
         queueName,
         async (job) => {
           runs.push(job.data);
