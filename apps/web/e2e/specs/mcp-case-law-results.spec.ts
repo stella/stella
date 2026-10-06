@@ -501,6 +501,7 @@ test("missing and non-HTTP decision URLs do not expose link actions", async ({
     tool: "search_case_law",
     payload: APP_SEARCH_FIXTURE,
   });
+  await expect(app.locator("tbody tr")).toHaveCount(1);
   const rejectedUrls = [
     null,
     ...["javascript", "data", "file", "ftp"].map(
