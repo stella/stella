@@ -193,6 +193,8 @@ const RETAINED_MEMBER_COLUMNS = {
     "Assignment suggestions; accepting a suggestion validates current membership.",
   "sanctions_contact_matches.reviewed_by":
     "Screening review attribution; current membership gates review actions.",
+  "sanctions_screening_events.reviewer_id":
+    "Screening decision history; attribution grants no membership or review authority.",
   "audit_logs.user_id": "Audit performer history.",
   "audit_logs.trigger_user_id": "Audit trigger history.",
   "audit_logs.approved_by_user_id": "Audit approval history.",

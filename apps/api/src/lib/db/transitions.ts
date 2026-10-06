@@ -61,7 +61,7 @@ export type ScopedTransitionDeclaration = {
   readonly sameStateUpsert: "ignore" | "update" | undefined;
 };
 
-/** Declares a lifecycle over a real (possibly composite) primary key. */
+/** Declares a lifecycle over a non-null primary or unique identity. */
 export const defineScopedTransitions = <
   TTable extends ScopedStateTable,
   const TKey extends ColumnKey<TTable>,
@@ -96,7 +96,11 @@ export const defineScopedTransitions = <
     panic("A scoped transition requires an enum state and identity columns");
   }
   const stateValues = state.enumValues;
-  const primaryKeyCovered = getTableConfig(table).primaryKeys.some(
+  const tableConfig = getTableConfig(table);
+  const uniqueIdentityCovered = [
+    ...tableConfig.primaryKeys,
+    ...tableConfig.uniqueConstraints,
+  ].some(
     ({ columns: primary }) =>
       primary.length === keyColumns.length &&
       primary.every((column) =>
@@ -105,10 +109,12 @@ export const defineScopedTransitions = <
   );
   if (
     new Set(keyNames).size !== keyNames.length ||
-    (!(scope.length === 0 && keyColumn.primary) && !primaryKeyCovered)
+    keyColumns.some((column) => column === undefined || !column.notNull) ||
+    (!(scope.length === 0 && (keyColumn.primary || keyColumn.isUnique)) &&
+      !uniqueIdentityCovered)
   ) {
     panic(
-      "A scoped transition identity must cover exactly one composite primary key",
+      "A scoped transition identity must cover exactly one non-null primary or unique key",
     );
   }
   if (
@@ -284,8 +290,16 @@ const executeScopedUpsertWrites = async <
           RETURNING ${returning}
         `);
   const columns: Readonly<Record<string, AnyPgColumn>> = getColumns(spec.table);
+  const primaryColumns = new Set(
+    getTableConfig(spec.table).primaryKeys.flatMap(({ columns: primary }) =>
+      primary.map((column) => column.name),
+    ),
+  );
   const updateColumns = insertColumns.filter(
-    (column) => !identityKeys.some((key) => columns[key]?.name === column.name),
+    (column) =>
+      !column.primary &&
+      !primaryColumns.has(column.name) &&
+      !identityKeys.some((key) => columns[key]?.name === column.name),
   );
   const priorStates = Object.entries<readonly string[]>(spec.edges).flatMap(
     ([from, targets]) =>
@@ -416,6 +430,92 @@ type ScopedMove<TEdges extends Readonly<Record<string, readonly string[]>>> = {
   };
 }[keyof TEdges & string];
 
+type ScopedTransitionWriteOptions = {
+  from: readonly string[];
+  to: string;
+  set?: Readonly<Record<string, unknown>>;
+};
+
+const scopedTransitionAssignments = (
+  spec: ScopedTransitionDeclaration,
+  options: ScopedTransitionWriteOptions,
+) => {
+  const columns: Readonly<Record<string, AnyPgColumn>> = getColumns(spec.table);
+  const state = columns[spec.stateColumn];
+  if (state === undefined) {
+    panic("Declared transition state column is missing");
+  }
+  if (
+    options.from.length === 0 ||
+    options.from.some((from) => spec.edges[from]?.includes(options.to) !== true)
+  ) {
+    panic("Illegal scoped transition");
+  }
+  const assignments = [
+    sql`${sql.identifier(state.name)} = ${sql.param(options.to, state)}`,
+  ];
+  const reserved = new Set([spec.key, ...spec.scope, spec.stateColumn]);
+  for (const [name, value] of Object.entries(options.set ?? {})) {
+    const column = columns[name];
+    if (column === undefined || reserved.has(name)) {
+      panic(`Transition metadata cannot set ${name}`);
+    }
+    if (value !== undefined) {
+      assignments.push(
+        sql`${sql.identifier(column.name)} = ${isSQLWrapper(value) ? value : sql.param(value, column)}`,
+      );
+    }
+  }
+  return { state, assignments, columns };
+};
+
+/** Set-based transitions return only a count, keeping large scoped changes out of JS memory. */
+export const transitionScopedCount = async <
+  TTx extends TransitionTransaction,
+  TTable extends ScopedStateTable,
+  TKey extends ColumnKey<TTable>,
+  TScope extends readonly ColumnKey<TTable>[],
+  TState extends ColumnKey<TTable>,
+  const TEdges extends Readonly<
+    Record<StateValue<TTable, TState>, readonly StateValue<TTable, TState>[]>
+  >,
+>({
+  tx,
+  spec,
+  where,
+  options,
+  recordTransitionAuditEvent,
+}: {
+  tx: TTx;
+  spec: ScopedTransitionSpec<TTable, TKey, TScope, TState, TEdges>;
+  where: SQL;
+  options: ScopedMove<TEdges> & { set?: Readonly<Record<string, unknown>> };
+  recordTransitionAuditEvent: (tx: TTx, count: number) => void | Promise<void>;
+}) => {
+  const { state, assignments } = scopedTransitionAssignments(spec, options);
+  const rows = await tx.execute(sql`
+    WITH changed AS (
+      UPDATE ${spec.table}
+      SET ${sql.join(assignments, sql`, `)}
+      WHERE ${where}
+        AND ${state} IN (${sql.join(
+          options.from.map((from) => sql`${sql.param(from, state)}`),
+          sql`, `,
+        )})
+      RETURNING 1
+    )
+    SELECT count(*)::double precision AS count FROM changed
+  `);
+  const count = rows.at(0)?.["count"];
+  if (typeof count !== "number" || !Number.isSafeInteger(count) || count < 0) {
+    panic("Transition count returned an invalid aggregate");
+  }
+  if (count > 0) {
+    await recordTransitionAuditEvent(tx, count);
+  }
+  return count;
+};
+
 /** One UPDATE handles a bounded set of complete composite identities. */
 export const transitionScopedBatch = async <
   TTx extends TransitionTransaction,
@@ -446,11 +546,6 @@ export const transitionScopedBatch = async <
   ) => void | Promise<void>;
 }) => {
   const { table } = spec;
-  const columns: Readonly<Record<string, AnyPgColumn>> = getColumns(table);
-  const state = columns[spec.stateColumn];
-  if (state === undefined) {
-    panic("Declared transition state column is missing");
-  }
   if (
     identities.some((identity) =>
       [spec.key, ...spec.scope].some((key) => !Object.hasOwn(identity, key)),
@@ -458,29 +553,12 @@ export const transitionScopedBatch = async <
   ) {
     panic("A scoped transition identity is incomplete");
   }
-  if (
-    options.from.length === 0 ||
-    options.from.some((from) => !spec.edges[from].includes(options.to))
-  ) {
-    panic("Illegal scoped transition");
-  }
+  const { state, assignments, columns } = scopedTransitionAssignments(
+    spec,
+    options,
+  );
   if (identities.length === 0) {
     return [];
-  }
-  const assignments = [
-    sql`${sql.identifier(state.name)} = ${sql.param(options.to, state)}`,
-  ];
-  const reserved = new Set([spec.key, ...spec.scope, spec.stateColumn]);
-  for (const [name, value] of Object.entries(options.set ?? {})) {
-    const column = columns[name];
-    if (column === undefined || reserved.has(name)) {
-      panic(`Transition metadata cannot set ${name}`);
-    }
-    if (value !== undefined) {
-      assignments.push(
-        sql`${sql.identifier(column.name)} = ${isSQLWrapper(value) ? value : sql.param(value, column)}`,
-      );
-    }
   }
   const identityKeys: readonly (TKey | TScope[number])[] = [
     spec.key,

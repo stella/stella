@@ -20,8 +20,30 @@ import { fileURLToPath } from "node:url";
 
 import { canonicalModuleId } from "../.oxlint-plugins/module-id.ts";
 import { STATUS_COLUMNS } from "../apps/api/src/lib/db/status-tables.gen.ts";
+import { SANCTIONS_MONITORING_TRANSITION_IDENTITIES } from "../apps/api/src/lib/lists/sanctions/monitoring-transition-identities.ts";
 // With its extension: oxlint.config.ts loads this file under Node's resolver.
 import { formattedLikeRepository } from "./generated-artifacts.ts";
+
+const statusTransitionColumns = () => {
+  const columns = new Map(
+    Object.entries(STATUS_COLUMNS).map(([table, names]) => [
+      table,
+      new Set<string>(names),
+    ]),
+  );
+  for (const { tableName, stateColumn } of Object.values(
+    SANCTIONS_MONITORING_TRANSITION_IDENTITIES,
+  )) {
+    const names = columns.get(tableName) ?? new Set<string>();
+    names.add(stateColumn);
+    columns.set(tableName, names);
+  }
+  return Object.fromEntries(
+    [...columns].map(([table, names]) => [table, [...names].toSorted()]),
+  );
+};
+
+const STATUS_TRANSITION_COLUMNS = statusTransitionColumns();
 
 // A file the rule accepts besides the owner itself. `path` is a
 // repo-relative file path, or a directory prefix ending in "/".
@@ -463,7 +485,11 @@ export const STATUS_TRANSITION_OWNERSHIP = {
   owner: ["apps/api/src/lib/db/transitions.ts"],
   summary:
     "The transition owner checks the expected state and optional fence in the update predicate, and returns Transitioned or Stale. A required recorder audits successful updates in the caller's transaction; stale updates record nothing and recorder failure rolls the update back. Direct lifecycle writes, conflict updates and visible SQL lifecycle assignments are lint errors outside the measured backlog; per-file shrink-only guards forbid adding them. Opaque table handles and payloads count conservatively. Unmanaged declarations shrink independently per table. SQL built entirely by external functions, external payload mutation and custom SQL column names not ending in status/state/phase remain outside static inspection.",
-  enforcement: { kind: "status-set", columns: STATUS_COLUMNS, allowed: [] },
+  enforcement: {
+    kind: "status-set",
+    columns: STATUS_TRANSITION_COLUMNS,
+    allowed: [],
+  },
 } as const satisfies OwnershipEntry;
 // Case-law modules that still call the raw publisher fetch. Each migrates to
 // `readPublisher` and leaves this list; nothing is added to it.
