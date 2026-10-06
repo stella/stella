@@ -2248,6 +2248,13 @@ jobs:
           bun test apps/api/scripts/chat-mutation-matrix.test.ts
           bun apps/api/scripts/chat-mutation-matrix.ts --check
 
+      - name: API test duration weights
+        if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
+        # A test file without a duration weight fails here, on the pull request
+        # that adds it and on each merge-queue entry. The API shards run after
+        # merge and weight such a file by the median with a warning instead.
+        run: bun apps/api/scripts/refresh-test-durations.ts --check
+
       - name: Desktop Rust inputs
         if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
         # The desktop native test task's turbo.json inputs, the files Rust
@@ -2948,9 +2955,6 @@ jobs:
           API_TEST_SHARD=$(bun scripts/test-shards.ts --api-shard "$SHARD")
           export API_TEST_SHARD
           set -o pipefail
-          if [[ -n "$API_TEST_SHARD" ]]; then
-            bun apps/api/scripts/refresh-test-durations.ts --check
-          fi
           plan="$RUNNER_TEMP/test-plan-$SHARD.json"
           output="$RUNNER_TEMP/test-output-$SHARD.log"
           bun run test -- --concurrency=2 "${args[@]}" "${shard_args[@]}" --dry=json > "$plan"

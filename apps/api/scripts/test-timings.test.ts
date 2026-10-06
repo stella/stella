@@ -4,52 +4,77 @@ import fc from "fast-check";
 
 import { assertProperty } from "@stll/property-testing";
 
+import { missingTestDurationMode } from "./refresh-test-durations";
 import { selectApiTestFiles } from "./test-file-shards";
-import { assertTestDurations, readTimingArtifact } from "./test-timings";
+import {
+  assertTestDurations,
+  MISSING_TEST_DURATION,
+  readTimingArtifact,
+} from "./test-timings";
 
-test("every selected shard file needs a weight before execution", () => {
+test("the pull-request gate rejects a file without a weight", () => {
   expect(() =>
-    selectApiTestFiles({
+    assertTestDurations({
       files: ["new.test.ts"],
       durations: {},
-      shardValue: "1/1",
+      missing: MISSING_TEST_DURATION.fail,
     }),
   ).toThrow("Missing API test duration: new.test.ts");
+  expect(missingTestDurationMode([])).toBe(MISSING_TEST_DURATION.fail);
+  expect(missingTestDurationMode(["timings"])).toBe(MISSING_TEST_DURATION.warn);
   assertTestDurations({
     files: ["one.test.ts"],
     durations: { "one.test.ts": { seconds: 0, source: "measured" } },
+    missing: MISSING_TEST_DURATION.fail,
   });
 });
 
-test("removing any live weight prevents every shard from starting", () => {
-  assertProperty(
-    "removing any live weight prevents every shard from starting",
-    fc.property(
-      fc.uniqueArray(fc.stringMatching(/^[a-z]{1,8}$/u), {
-        minLength: 1,
-        maxLength: 20,
-      }),
-      fc.nat(),
-      (files, offset) => {
-        const missing =
-          files.at(offset % files.length) ??
-          panic("Nonempty file generator must select an existing file");
-        const durations = Object.fromEntries(
-          files
-            .filter((file) => file !== missing)
-            .map((file) => [
-              file,
-              { seconds: 1, source: "estimated" as const },
-            ]),
-        );
-        for (const index of [1, 2]) {
-          expect(() =>
-            selectApiTestFiles({ files, durations, shardValue: `${index}/2` }),
-          ).toThrow(`Missing API test duration: ${missing}`);
-        }
-      },
-    ),
-  );
+test("shards run a file without a weight exactly once and warn", () => {
+  const warning = spyOn(console, "warn").mockImplementation(() => undefined);
+  try {
+    assertProperty(
+      "shards run a file without a weight exactly once and warn",
+      fc.property(
+        fc.uniqueArray(fc.stringMatching(/^[a-z]{1,8}$/u), {
+          minLength: 2,
+          maxLength: 20,
+        }),
+        fc.nat(),
+        (files, offset) => {
+          const missing =
+            files.at(offset % files.length) ??
+            panic("Nonempty file generator must select an existing file");
+          const durations = Object.fromEntries(
+            files
+              .filter((file) => file !== missing)
+              .map((file) => [
+                file,
+                { seconds: 1, source: "estimated" as const },
+              ]),
+          );
+          warning.mockClear();
+          const bins = [1, 2].map(
+            (index) =>
+              selectApiTestFiles({
+                files,
+                durations,
+                shardValue: `${index}/2`,
+              }).testPaths,
+          );
+          expect(bins.flat().toSorted()).toEqual(files.toSorted());
+          const warnings = warning.mock.calls.map((call) => String(call.at(0)));
+          expect(warnings).toHaveLength(2);
+          for (const message of warnings) {
+            expect(message).toContain(
+              `::warning::Missing API test duration: ${missing}`,
+            );
+          }
+        },
+      ),
+    );
+  } finally {
+    warning.mockRestore();
+  }
 });
 
 test("measured drift warns only above both noise floors and never rejects execution", () => {
@@ -64,6 +89,7 @@ test("measured drift warns only above both noise floors and never rejects execut
       assertTestDurations({
         files: ["one"],
         durations: { one: { seconds: recorded, source: "measured" } },
+        missing: MISSING_TEST_DURATION.fail,
         measurements: { one: measured },
       });
       expect(warning).toHaveBeenCalledTimes(1);
@@ -84,6 +110,7 @@ test("measured drift warns only above both noise floors and never rejects execut
       assertTestDurations({
         files: ["one"],
         durations: { one: { seconds: recorded, source: "measured" } },
+        missing: MISSING_TEST_DURATION.fail,
         measurements: { one: measured },
       });
       expect(warning).not.toHaveBeenCalled();
@@ -92,6 +119,7 @@ test("measured drift warns only above both noise floors and never rejects execut
     assertTestDurations({
       files: ["one"],
       durations: { one: { seconds: 1, source: "estimated" } },
+      missing: MISSING_TEST_DURATION.fail,
       measurements: { one: 100, deleted: 999 },
     });
     expect(warning).not.toHaveBeenCalled();
@@ -114,7 +142,7 @@ test("a sixfold measured drift exits zero with a warning while a missing weight 
       [
         process.execPath,
         "-e",
-        `import { assertTestDurations } from "./test-timings.ts"; assertTestDurations(${JSON.stringify({ files: ["one"], durations, measurements: { one: 12 } })});`,
+        `import { assertTestDurations } from "./test-timings.ts"; assertTestDurations(${JSON.stringify({ files: ["one"], durations, missing: "fail", measurements: { one: 12 } })});`,
       ],
       { cwd: import.meta.dirname, stdout: "pipe", stderr: "pipe" },
     );
@@ -138,12 +166,14 @@ test("invalid recorded weights and measurements remain hard failures for both so
         assertTestDurations({
           files: ["one"],
           durations: { one: { seconds: invalid, source } },
+          missing: MISSING_TEST_DURATION.warn,
         }),
       ).toThrow("Invalid duration");
       expect(() =>
         assertTestDurations({
           files: ["one"],
           durations: { one: { seconds: 1, source } },
+          missing: MISSING_TEST_DURATION.warn,
           measurements: { one: invalid },
         }),
       ).toThrow("Invalid measurement");
