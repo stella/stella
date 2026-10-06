@@ -904,7 +904,7 @@
     "reason": "Existing SECTION_ORDER domain; contract ownership pending migration."
   },
   {
-    "id": "apps/web/src/components/chat/tool-approval-card.test.ts::<module>::domain:[\"delete_matter\",\"manage_organization\",\"spawn_subagents\"]::1",
+    "id": "apps/web/src/components/chat/tool-approval-card.test.ts::<module>::domain:[\"delete_matter\",\"manage_organization\",\"suggest_changes\"]::1",
     "reason": "Local test input domain or bound; retained for fixture coverage."
   },
   {

@@ -24,7 +24,7 @@ describe("automatic tool approval", () => {
   test.each([
     "delete_matter",
     "manage_organization",
-    "spawn_subagents",
+    "suggest_changes",
   ] as const)(
     "never reuses a stored grant for approve-once tool %s",
     (name) => {

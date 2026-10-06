@@ -4,10 +4,10 @@ import * as v from "valibot";
 
 import { createSafeId } from "@/api/lib/branded-types";
 import {
-  buildApprovalBody,
+  buildDeclineBody,
   buildSmokeAIConfigBody,
   describeChatSendFailure,
-  evaluateApprovedTurn,
+  evaluateDeclinedTurn,
   evaluateFollowUpTurn,
   evaluatePendingApproval,
   evaluateTurnStream,
@@ -33,15 +33,23 @@ const pendingCall = {
   type: "tool-call",
   id: "call-1",
   name: SMOKE_APPROVAL_TOOL_NAME,
-  arguments: '{"subagents":[{"task":"Reply with the word OK."}]}',
+  arguments: '{"name":"Deployment Check"}',
   state: "approval-requested",
   approval: { id: "approval-1", needsApproval: true },
 };
 
-const completedCall = {
+const declinedCall = {
   ...pendingCall,
+  state: "approval-responded",
+  approval: { id: "approval-1", needsApproval: true, approved: false },
+};
+
+const delegationCall = {
+  type: "tool-call",
+  id: "call-2",
+  name: "spawn_subagents",
+  arguments: '{"subagents":[{"task":"Reply with the word OK."}]}',
   state: "complete",
-  approval: { id: "approval-1", needsApproval: true, approved: true },
   output: { results: [{ index: 0, status: "completed", result: "OK" }] },
 };
 
@@ -233,28 +241,6 @@ describe("evaluatePendingApproval", () => {
     expect(pending).toBeNull();
   });
 
-  test("refuses to approve a call that asks for more than one subagent", () => {
-    const { check, pending } = evaluatePendingApproval(
-      storedThread([
-        {
-          id: "a1",
-          role: "assistant",
-          parts: [
-            {
-              ...pendingCall,
-              arguments: JSON.stringify({
-                subagents: [{ task: "Reply OK." }, { task: "Reply OK." }],
-              }),
-            },
-          ],
-          metadata: awaitingApproval,
-        },
-      ]),
-    );
-    expect(check.detail).toContain("asks for 2 subagents, expected 1");
-    expect(pending).toBeNull();
-  });
-
   test("fails when the turn did not stop for the approval", () => {
     const { check } = evaluatePendingApproval(
       storedThread([
@@ -270,10 +256,10 @@ describe("evaluatePendingApproval", () => {
   });
 });
 
-describe("buildApprovalBody", () => {
-  test("approves the stored call and resumes the interrupted run", () => {
+describe("buildDeclineBody", () => {
+  test("declines the stored call and resumes the interrupted run", () => {
     const pending = pendingOf(pendingThread());
-    const body = buildApprovalBody({
+    const body = buildDeclineBody({
       ...pending,
       interruptedRunId: "run-1",
       runId: "run-2",
@@ -286,7 +272,7 @@ describe("buildApprovalBody", () => {
       parts: [
         {
           ...pendingCall,
-          approval: { id: "approval-1", needsApproval: true, approved: true },
+          approval: { id: "approval-1", needsApproval: true, approved: false },
           state: "approval-responded",
         },
       ],
@@ -296,7 +282,7 @@ describe("buildApprovalBody", () => {
       resume: [
         {
           interruptId: "approval-1",
-          payload: { approved: true },
+          payload: { approved: false },
           status: "resolved",
         },
       ],
@@ -306,37 +292,44 @@ describe("buildApprovalBody", () => {
   });
 });
 
-describe("evaluateApprovedTurn", () => {
+describe("evaluateDeclinedTurn", () => {
   const settle = (assistant: object) =>
-    evaluateApprovedTurn({
+    evaluateDeclinedTurn({
       messages: storedThread([userMessage("u1", "go"), assistant]),
       pending: pendingOf(pendingThread()),
     });
 
-  test("passes a call stored complete with output and a text answer", () => {
+  test("passes a call stored declined and a text answer", () => {
     expect(
       settle({
         id: "a1",
         role: "assistant",
-        parts: [completedCall, { type: "text", content: "OK" }],
+        parts: [declinedCall, { type: "text", content: "OK" }],
         metadata: completed,
       }).ok,
     ).toBe(true);
   });
 
-  test("fails a call stored complete without its output", () => {
-    const { output: _output, ...withoutOutput } = completedCall;
+  test("fails a call that ran instead of staying declined", () => {
     expect(
       settle({
         id: "a1",
         role: "assistant",
-        parts: [withoutOutput, { type: "text", content: "OK" }],
+        parts: [
+          {
+            ...pendingCall,
+            state: "complete",
+            approval: { ...pendingCall.approval, approved: true },
+            output: {},
+          },
+          { type: "text", content: "OK" },
+        ],
         metadata: completed,
       }).detail,
-    ).toBe("approved call is complete without output");
+    ).toBe("declined call is complete (approved: true)");
   });
 
-  test("fails an approved call left open on a completed turn", () => {
+  test("fails a call stored approved rather than declined", () => {
     expect(
       settle({
         id: "a1",
@@ -350,6 +343,17 @@ describe("evaluateApprovedTurn", () => {
           { type: "text", content: "OK" },
         ],
         metadata: completed,
+      }).detail,
+    ).toBe("declined call is approval-responded (approved: true)");
+  });
+
+  test("fails a call still waiting on its answer", () => {
+    expect(
+      settle({
+        id: "a1",
+        role: "assistant",
+        parts: [pendingCall, { type: "text", content: "OK" }],
+        metadata: completed,
       }).ok,
     ).toBe(false);
   });
@@ -359,50 +363,10 @@ describe("evaluateApprovedTurn", () => {
       settle({
         id: "a1",
         role: "assistant",
-        parts: [completedCall],
+        parts: [declinedCall],
         metadata: completed,
       }).detail,
     ).toBe("the model did not answer in text after the tool");
-  });
-
-  test("fails when the subagent did not complete", () => {
-    expect(
-      settle({
-        id: "a1",
-        role: "assistant",
-        parts: [
-          {
-            ...completedCall,
-            output: { results: [{ index: 0, status: "failed", error: "x" }] },
-          },
-          { type: "text", content: "OK" },
-        ],
-        metadata: completed,
-      }).ok,
-    ).toBe(false);
-  });
-
-  test("fails when the call ran more than one subagent", () => {
-    const done = { status: "completed", result: "OK" };
-    expect(
-      settle({
-        id: "a1",
-        role: "assistant",
-        parts: [
-          {
-            ...completedCall,
-            output: {
-              results: [
-                { index: 0, ...done },
-                { index: 1, ...done },
-              ],
-            },
-          },
-          { type: "text", content: "OK" },
-        ],
-        metadata: completed,
-      }).detail,
-    ).toBe("approved call's output is not exactly one completed subagent");
   });
 
   test("fails when a new message replaced the continued one", () => {
@@ -410,7 +374,7 @@ describe("evaluateApprovedTurn", () => {
       settle({
         id: "a9",
         role: "assistant",
-        parts: [completedCall, { type: "text", content: "OK" }],
+        parts: [declinedCall, { type: "text", content: "OK" }],
         metadata: completed,
       }).detail,
     ).toBe("continued message a1 is no longer stored");
@@ -418,13 +382,13 @@ describe("evaluateApprovedTurn", () => {
 
   test("fails when the continuation answered in a new message", () => {
     expect(
-      evaluateApprovedTurn({
+      evaluateDeclinedTurn({
         messages: storedThread([
           userMessage("u1", "go"),
           {
             id: "a1",
             role: "assistant",
-            parts: [completedCall],
+            parts: [declinedCall],
             metadata: completed,
           },
           {
@@ -439,7 +403,7 @@ describe("evaluateApprovedTurn", () => {
     ).toBe("continuation answered in a new message a2 instead of a1");
   });
 
-  test("fails when the continuation lost the approved call", () => {
+  test("fails when the continuation lost the declined call", () => {
     expect(
       settle({
         id: "a1",
@@ -447,7 +411,7 @@ describe("evaluateApprovedTurn", () => {
         parts: [{ type: "text", content: "OK" }],
         metadata: completed,
       }).detail,
-    ).toBe("approved call call-1 is no longer stored");
+    ).toBe("declined call call-1 is no longer stored");
   });
 });
 
@@ -457,27 +421,105 @@ describe("evaluateFollowUpTurn", () => {
     {
       id: "a1",
       role: "assistant",
-      parts: [completedCall, { type: "text", content: "OK" }],
+      parts: [declinedCall, { type: "text", content: "OK" }],
       metadata: completed,
     },
   ];
+  const followUp = (assistant: object) =>
+    evaluateFollowUpTurn({
+      messages: storedThread([
+        ...settled,
+        userMessage("u2", "again"),
+        assistant,
+      ]),
+      previousAssistantId: "a1",
+    });
 
-  test("passes a new completed text answer", () => {
+  test("passes a delegation that ran without approval and a text answer", () => {
     expect(
-      evaluateFollowUpTurn({
-        messages: storedThread([
-          ...settled,
-          userMessage("u2", "again"),
-          {
-            id: "a2",
-            role: "assistant",
-            parts: [{ type: "text", content: "ok" }],
-            metadata: completed,
-          },
-        ]),
-        previousAssistantId: "a1",
+      followUp({
+        id: "a2",
+        role: "assistant",
+        parts: [delegationCall, { type: "text", content: "ok" }],
+        metadata: completed,
       }).ok,
     ).toBe(true);
+  });
+
+  test("fails when the delegation stopped for an approval", () => {
+    expect(
+      followUp({
+        id: "a2",
+        role: "assistant",
+        parts: [
+          {
+            ...delegationCall,
+            state: "approval-requested",
+            approval: { id: "approval-2", needsApproval: true },
+            output: undefined,
+          },
+        ],
+        metadata: {
+          turnOutcome: {
+            type: "awaiting-user",
+            interaction: { type: "approval", toolCallId: "call-2" },
+          },
+        },
+      }).detail,
+    ).toBe(
+      "spawn_subagents is approval-requested, expected complete without approval",
+    );
+  });
+
+  test("fails when the model answered without delegating", () => {
+    expect(
+      followUp({
+        id: "a2",
+        role: "assistant",
+        parts: [{ type: "text", content: "ok" }],
+        metadata: completed,
+      }).detail,
+    ).toBe("no spawn_subagents call (tool calls: none)");
+  });
+
+  test("fails when the subagent did not complete", () => {
+    expect(
+      followUp({
+        id: "a2",
+        role: "assistant",
+        parts: [
+          {
+            ...delegationCall,
+            output: { results: [{ index: 0, status: "failed", error: "x" }] },
+          },
+          { type: "text", content: "ok" },
+        ],
+        metadata: completed,
+      }).detail,
+    ).toBe("spawn_subagents output is not exactly one completed subagent");
+  });
+
+  test("fails when the call ran more than one subagent", () => {
+    const done = { status: "completed", result: "OK" };
+    expect(
+      followUp({
+        id: "a2",
+        role: "assistant",
+        parts: [
+          {
+            ...delegationCall,
+            output: {
+              results: [
+                { index: 0, ...done },
+                { index: 1, ...done },
+              ],
+            },
+          },
+          { type: "text", content: "ok" },
+        ],
+        metadata: completed,
+      }).detail,
+    ).toBe("spawn_subagents output is not exactly one completed subagent");
   });
 
   test("fails when no new assistant message was stored", () => {
@@ -499,8 +541,8 @@ const sendBodySchema = v.object({
 
 /**
  * A deployment that answers the journey the way a healthy API does: the first
- * send stops on the tool's approval, the approval completes the call and
- * answers in text, and the follow-up answers in text.
+ * send stops on the tool's approval, the decline settles the call and answers
+ * in text, and the follow-up delegates without approval and answers in text.
  */
 const createFakeDeployment = ({
   chatStatus = 200,
@@ -535,7 +577,7 @@ const createFakeDeployment = ({
       messages.splice(1, 1, {
         id: "a1",
         role: "assistant",
-        parts: [completedCall, { type: "text", content: "OK" }],
+        parts: [declinedCall, { type: "text", content: "OK" }],
         metadata: completed,
       });
     } else if (messages.length === 0) {
@@ -549,7 +591,7 @@ const createFakeDeployment = ({
       messages.push(userMessage("u2", "again"), {
         id: "a2",
         role: "assistant",
-        parts: [{ type: "text", content: "ok" }],
+        parts: [delegationCall, { type: "text", content: "ok" }],
         metadata: completed,
       });
     }
@@ -567,7 +609,7 @@ const createFakeDeployment = ({
 };
 
 describe("runAIChatJourney", () => {
-  test("passes send, approve, text, reload, and a follow-up turn", async () => {
+  test("passes send, decline, text, reload, and a delegating follow-up turn", async () => {
     const deployment = createFakeDeployment();
     const checks = await runAIChatJourney({
       apiKey: "key",
@@ -579,10 +621,10 @@ describe("runAIChatJourney", () => {
       "POST /v1/organization-settings/ai-config",
       "POST /v1/chat/ (turn 1)",
       "turn 1 awaits tool approval",
-      "POST /v1/chat/ (approval)",
-      "turn 1 settles after approval",
+      "POST /v1/chat/ (decline)",
+      "turn 1 settles after the decline",
       "POST /v1/chat/ (turn 2)",
-      "turn 2 completes",
+      "turn 2 delegates without approval and completes",
       "cleanup: DELETE /v1/chat/threads/:threadId",
       "cleanup: DELETE /v1/organization-settings/ai-config",
     ]);
