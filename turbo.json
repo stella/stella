@@ -20,15 +20,10 @@
   // package, not one task's declared inputs.
   "globalDependencies": ["patches/**"],
   "tasks": {
-    "@stll/visual-preview#test": {
-      "inputs": [
-        "$TURBO_DEFAULT$",
-        "$TURBO_ROOT$/apps/api/src/handlers/visual-sandbox/generated/runtime.js.txt"
-      ]
-    },
     "@stll/visual-preview#test:browser": {
       "inputs": [
         "$TURBO_DEFAULT$",
+        "$TURBO_ROOT$/scripts/visual-preview-composition.browser.test.ts",
         "$TURBO_ROOT$/apps/api/src/handlers/visual-sandbox/**",
         "$TURBO_ROOT$/packages/api-contract/src/visual-sandbox.ts"
       ]

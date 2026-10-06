@@ -12,6 +12,10 @@ import { rejectionOf } from "@stll/property-testing/rejection";
 import type { PublicStreamChunk } from "@/api/lib/chat/tanstack-chat-runtime";
 import { visualPreviewModelContent } from "@/api/lib/visual-preview";
 import { projectVisualPreviewStream } from "@/api/lib/visual-preview-stream";
+import {
+  buildWireSnapshot,
+  unsafeFixture,
+} from "@/api/tests/helpers/chat-fixtures";
 
 const output = visualPreviewModelContent({
   title: "Example",
@@ -53,7 +57,7 @@ describe("transient preview wire projection", () => {
   test.each([false, true])(
     "ordinary events remain identical after a preview=%s",
     async (afterPreview) => {
-      const messages = uiMessagesToWire([
+      const snapshot = buildWireSnapshot([
         { id: "user", role: "user", content: "Example request" },
         {
           id: "assistant",
@@ -106,7 +110,7 @@ describe("transient preview wire projection", () => {
           messageId: "message",
           content: JSON.stringify(output),
         },
-        { timestamp: 5, type: EventType.MESSAGES_SNAPSHOT, messages },
+        { timestamp: 5, ...snapshot },
         {
           timestamp: 6,
           type: EventType.RUN_FINISHED,
@@ -291,11 +295,11 @@ describe("transient preview wire projection", () => {
         metadata: { tanstack: { result: output } },
       };
       const projected = await project([
-        {
+        unsafeFixture("Snapshot aliases exercise unsupported metadata shapes", {
           type: EventType.MESSAGES_SNAPSHOT,
           messages,
           ...snapshotAliases,
-        },
+        }),
       ]);
       expect(JSON.stringify(projected)).not.toContain("iVBORw0KGgo=");
       expect(JSON.stringify(projected)).toContain(
