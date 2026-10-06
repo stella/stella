@@ -1,10 +1,12 @@
 import { expect, spyOn, test } from "bun:test";
+import fc from "fast-check";
 
 import {
   COURT_TIER_LABELS,
   type CourtTierLabel,
 } from "@stll/api-contract/case-law-court-tiers";
 import { FACET_COUNT_TYPE } from "@stll/api-contract/search";
+import { assertProperty } from "@stll/property-testing";
 
 import {
   COURT_WEIGHT_SEED,
@@ -16,6 +18,7 @@ import {
   decisionTypeKindBuckets,
   foldStatedDecisionTypeBuckets,
   groupCourtsByTier,
+  presentCourtYear,
   labelSourceBuckets,
   type SearchFacetBucket,
 } from "@/api/lib/case-law/decision-search-facets";
@@ -310,5 +313,104 @@ test("a Postgres type bucket that is not a kind is a broken statement", () => {
   ]);
   expect(() => decisionTypeKindBuckets([bucket("usn.", 3)])).toThrow(
     "non-kind",
+  );
+});
+
+test("court/year presentation shares hit abbreviations and keeps unavailable signals explicit", () => {
+  expect(
+    presentCourtYear({
+      matrix: null,
+      courts: [],
+      country: "CZE",
+      courtWeights,
+    }),
+  ).toBeNull();
+  expect(
+    presentCourtYear({
+      matrix: {
+        buckets: [
+          { court: "Ústavní soud", year: 2024, count: 2 },
+          { court: "omitted", year: 2024, count: 1 },
+        ],
+        truncated: false,
+      },
+      courts: [
+        { tierLabel: "constitutional", courts: [bucket("Ústavní soud", 2)] },
+      ],
+      country: "CZE",
+      courtWeights,
+    }),
+  ).toEqual({
+    buckets: [
+      {
+        court: "Ústavní soud",
+        courtName: "Ústavní soud",
+        courtAbbreviation: "ÚS",
+        tier: "constitutional",
+        year: 2024,
+        count: 2,
+        citationSum: null,
+        treatment: null,
+      },
+    ],
+    truncated: true,
+  });
+});
+
+test("every matrix court belongs to the filter rail and preserves its decision count", () => {
+  assertProperty(
+    "court/year presentation belongs to filter rail and preserves decision counts",
+    fc.property(
+      fc.uniqueArray(
+        fc.record({
+          court: fc.string({ minLength: 1, maxLength: 30 }),
+          count: fc.integer({ min: 0, max: 10_000 }),
+          visible: fc.boolean(),
+        }),
+        { selector: ({ court }) => court, maxLength: 30 },
+      ),
+      (rows) => {
+        const allowed = rows.filter(({ visible }) => visible);
+        const courts = [
+          {
+            tierLabel: "other",
+            courts: allowed.map(({ court, count }) => bucket(court, count)),
+          },
+        ];
+        const result = presentCourtYear({
+          matrix: {
+            buckets: rows.map(({ court, count }) => ({
+              court,
+              count,
+              year: 2024,
+            })),
+            truncated: false,
+          },
+          courts: [
+            {
+              tierLabel: "other",
+              courts: allowed.map(({ court, count }) => bucket(court, count)),
+            },
+          ],
+          country: "CZE",
+          courtWeights,
+        });
+        expect(
+          result?.buckets.map(({ court, count }) => ({ court, count })),
+        ).toEqual(allowed.map(({ court, count }) => ({ court, count })));
+        expect(result?.truncated).toBe(allowed.length !== rows.length);
+        for (const row of result?.buckets ?? []) {
+          expect(
+            courts.some(({ courts: tierCourts }) =>
+              tierCourts.some(({ value }) => value === row.court),
+            ),
+          ).toBe(true);
+          expect(row.count).toBeGreaterThanOrEqual(0);
+          expect(row.tier).toBe("other");
+          expect(row.citationSum).toBeNull();
+          expect(row.treatment).toBeNull();
+        }
+      },
+    ),
   );
 });

@@ -137,7 +137,9 @@ test("every facet aggregates its own index field, by its own kind", async () => 
     Object.fromEntries(
       engine.requests.flatMap((request) =>
         Object.entries(request.aggs).flatMap(([name, aggregation]) =>
-          name === "total" ? [] : [[name, describeAggregation(aggregation)]],
+          name === "total" || name === "courtYear"
+            ? []
+            : [[name, describeAggregation(aggregation)]],
         ),
       ),
     ),
@@ -283,7 +285,7 @@ test("every aggregation counts over the generation's document-id field", async (
   const cardinalityFields = JSON.stringify(engine.requests.at(0)?.aggs).match(
     /"cardinality":\{"field":"(?<field>[^"]+)"\}/gu,
   );
-  expect(cardinalityFields).toHaveLength(CORPUS_SEARCH_FACET_NAMES.length + 1);
+  expect(cardinalityFields).toHaveLength(CORPUS_SEARCH_FACET_NAMES.length + 2);
   expect(
     cardinalityFields?.every((entry) => entry.includes(`"${DOCUMENT_ID}"`)),
   ).toBe(true);
@@ -580,4 +582,20 @@ test("the read counts under exactly the query each facet was given", async () =>
     );
     expect(request?.query).toBe(`(${QUERY} AND facet:${name}) AND ${dated}`);
   }
+});
+
+test("the matrix uses the whole filtered result query in the existing total round trip", async () => {
+  const engine = fakeEngine();
+  const result = await read(engine, (name) => `cross-filter:${name}`);
+  const request = engine.requests.find(({ aggs }) =>
+    Object.hasOwn(aggs, "courtYear"),
+  );
+  expect(request?.query).toBe(QUERY);
+  expect(request?.aggs["total"]).toEqual({
+    cardinality: { field: DOCUMENT_ID },
+  });
+  expect(engine.requests).toHaveLength(CORPUS_SEARCH_FACET_NAMES.length + 1);
+  expect(
+    Result.isError(result) ? undefined : result.value.courtYear,
+  ).toBeNull();
 });

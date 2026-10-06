@@ -88,6 +88,7 @@ const validResponse = {
 const bucket = (value: string) => ({ value, label: null, count: 3 });
 
 const firstPageFacets = {
+  courtYear: null,
   court: [{ tierLabel: "supreme", courts: [bucket("Nejvyšší soud")] }],
   year: [bucket("2024")],
   decisionType: [bucket("judgment")],

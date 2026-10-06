@@ -2488,6 +2488,12 @@ export default defineConfig({
             approvedAdapters: [
               {
                 path: "apps/api/src/handlers/case-law/decisions/search-schema.ts",
+                binding: "courtYearSchema",
+                reason:
+                  "Runtime JSON Schema and static type are derived from the same shared Valibot schema.",
+              },
+              {
+                path: "apps/api/src/handlers/case-law/decisions/search-schema.ts",
                 binding: "decisionIdentifiersSchema",
                 reason:
                   "Runtime array bounds preserve the canonical non-empty readonly identifier contract.",

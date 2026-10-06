@@ -1,5 +1,6 @@
 export const APP_SEARCH_FIXTURE = {
   facets: {
+    courtYear: null,
     court: [
       {
         tierLabel: "constitutional" as const,

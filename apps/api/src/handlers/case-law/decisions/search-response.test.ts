@@ -66,6 +66,7 @@ const responseWithText = (text: string): SearchResponse => {
   return {
     hits: Array.from({ length: 2 }, () => hit),
     facets: {
+      courtYear: null,
       court: COURT_TIER_LABELS.map((tierLabel) => ({
         tierLabel,
         courts: Array.from(
