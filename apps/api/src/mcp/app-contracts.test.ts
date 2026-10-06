@@ -157,6 +157,40 @@ describe("MCP app registry and contracts", () => {
       ]);
     }
   });
+  test("browser apps reject server imports, including type-only edges", () => {
+    for (const module of [
+      "../static-tool-definitions",
+      "@/api/mcp/context",
+      "../../db/long-running-connection",
+      "@/api/handlers/case-law/decisions/get",
+    ]) {
+      for (const source of [
+        `import type { Tool } from "${module}";`,
+        `export type { Tool } from "${module}";`,
+        `type Tool = import("${module}").Tool;`,
+        `import("${module}");`,
+        `require("${module}");`,
+      ]) {
+        expect(inspectAppSources({ "manifest.ts": source })).toEqual([
+          "Server modules must stay outside browser apps: manifest.ts",
+        ]);
+      }
+    }
+  });
+  test("SDK owners also reject server imports", () => {
+    for (const file of [
+      "shared/bridge.ts",
+      "document-upload/app.ts",
+      "file-comparison/app.ts",
+    ]) {
+      expect(
+        inspectAppSources({
+          [file]:
+            'import type { Tool } from "@/api/mcp/static-tool-definitions";',
+        }),
+      ).toEqual([`Server modules must stay outside browser apps: ${file}`]);
+    }
+  });
   test.each(["default", "documents", "anonymized", "law"] as const)(
     "app resources follow linked tool feature admission in %s",
     (mode: McpMode) => {

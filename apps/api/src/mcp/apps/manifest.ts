@@ -3,23 +3,7 @@ import {
   FILE_COMPARISON_TRANSPORT,
 } from "@stll/api-contract";
 
-import type { DEFAULT_MCP_TOOL_DEFINITIONS } from "../static-tool-definitions";
 import { CASE_LAW_RESULTS_RESOURCE_URI } from "./resource-uri";
-
-type Tool = (typeof DEFAULT_MCP_TOOL_DEFINITIONS)[number];
-type ReadToolName = Extract<Tool, { access: "read" }>["name"];
-type AppManifest = {
-  directory: string;
-  uri: `ui://${string}`;
-  linkedTools: readonly Tool["name"][];
-} & (
-  | { type: "presentation"; callableTools: readonly ReadToolName[] }
-  | {
-      type: "host-approved-mutation";
-      reason: string;
-      callableTools: readonly Tool["name"][];
-    }
-);
 
 export const MCP_APPS = [
   {
@@ -47,7 +31,7 @@ export const MCP_APPS = [
     type: "presentation",
     callableTools: ["search_case_law", "lookup_case_law"],
   },
-] as const satisfies readonly AppManifest[];
+] as const;
 
 export const CASE_LAW_RESULTS_APP = MCP_APPS[2];
 export type PresentationApp = Extract<

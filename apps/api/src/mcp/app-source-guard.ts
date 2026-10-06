@@ -1,3 +1,4 @@
+import path from "node:path";
 import ts from "typescript";
 
 // Runtime SDK imports and the call primitive stay at these explicit boundaries.
@@ -7,14 +8,50 @@ const SDK_OWNERS: ReadonlySet<string> = new Set([
   "file-comparison/app.ts",
 ]);
 
+const importSpecifier = (node: ts.Node) => {
+  if (ts.isImportDeclaration(node) || ts.isExportDeclaration(node)) {
+    return node.moduleSpecifier;
+  }
+  if (ts.isImportTypeNode(node) && ts.isLiteralTypeNode(node.argument)) {
+    return node.argument.literal;
+  }
+  if (
+    ts.isCallExpression(node) &&
+    (node.expression.kind === ts.SyntaxKind.ImportKeyword ||
+      (ts.isIdentifier(node.expression) && node.expression.text === "require"))
+  ) {
+    return node.arguments.at(0);
+  }
+  return undefined;
+};
+
+const importsServerModule = (node: ts.Node, file: string) => {
+  const imported = importSpecifier(node);
+  if (imported === undefined || !ts.isStringLiteral(imported)) {
+    return false;
+  }
+  let target = imported.text;
+  if (target.startsWith("@/api/")) {
+    target = target.slice("@/api/".length);
+  } else if (target.startsWith(".")) {
+    target = path.posix.normalize(
+      path.posix.join("mcp/apps", path.posix.dirname(file), target),
+    );
+  } else {
+    return false;
+  }
+  return (
+    target.startsWith("db/") ||
+    target.startsWith("handlers/") ||
+    (target.startsWith("mcp/") && !target.startsWith("mcp/apps/"))
+  );
+};
+
 export const inspectAppSources = (
   sources: Readonly<Record<string, string>>,
 ): string[] => {
   const issues: string[] = [];
   for (const [file, text] of Object.entries(sources)) {
-    if (SDK_OWNERS.has(file)) {
-      continue;
-    }
     const source = ts.createSourceFile(
       file,
       text,
@@ -23,6 +60,13 @@ export const inspectAppSources = (
       file.endsWith(".tsx") ? ts.ScriptKind.TSX : ts.ScriptKind.TS,
     );
     const visit = (node: ts.Node): void => {
+      if (importsServerModule(node, file)) {
+        issues.push(`Server modules must stay outside browser apps: ${file}`);
+      }
+      if (SDK_OWNERS.has(file)) {
+        ts.forEachChild(node, visit);
+        return;
+      }
       if (
         ts.isImportDeclaration(node) &&
         ts.isStringLiteral(node.moduleSpecifier) &&
