@@ -82,6 +82,16 @@ export type PublisherRequestGateDependencies = {
 const fixtureDependencies =
   new AsyncLocalStorage<PublisherRequestGateDependencies>();
 
+let localFixtureGeneration = 0;
+
+/** Invalidate default local gate state without replacing captured singleton slots. */
+export const resetPublisherGateFixtures = () => {
+  if (!isLocalTestRun()) {
+    panic("Publisher gate fixtures require a local test run");
+  }
+  localFixtureGeneration += 1;
+};
+
 /** Exercise the actual shared and run-scoped gates without opening Redis. */
 export const withPublisherGateFixture = async <T>(
   dependencies: PublisherRequestGateDependencies,
@@ -161,10 +171,16 @@ const defaultDependencies = (
   intervalMs: number,
   cooldown: PublisherRequestGateConfig["cooldown"],
 ): PublisherRequestGateDependencies => {
+  let generation = localFixtureGeneration;
   let localNextRequestAt = 0;
   let localCooldownUntil = 0;
   const localRedis: PublisherGateClient = {
     send: (_command, args) => {
+      if (generation !== localFixtureGeneration) {
+        generation = localFixtureGeneration;
+        localNextRequestAt = 0;
+        localCooldownUntil = 0;
+      }
       const now = Temporal.Now.instant().epochMilliseconds;
       if (args[0] === READ_COOLDOWN_SCRIPT) {
         return localCooldownUntil > now ? localCooldownUntil : 0;

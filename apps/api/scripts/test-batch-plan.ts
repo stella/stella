@@ -35,9 +35,6 @@ export const SOLO_TEST_PATHS: ReadonlySet<string> = new Set([
   "src/handlers/legislation/work-names-plan.db.test.ts",
   // Sets the deployment's public address before the environment is read.
   "src/lib/oauth-cli-client-document.db.test.ts",
-  // Fault injection advances the clock across session cooldowns retained by
-  // publisher gate singletons; those clocks must not escape into other suites.
-  "src/handlers/case-law/ingestion/adapters/source-availability.test.ts",
   // Owns the CIMD transport module and the AS JWKS fetch for the whole process.
   "src/lib/oauth-cimd-private-key-jwt.db.test.ts",
 ]);

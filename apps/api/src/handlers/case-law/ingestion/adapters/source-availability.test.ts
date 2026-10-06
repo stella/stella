@@ -16,10 +16,9 @@ import { asFetchMock } from "@/api/tests/helpers/test-tool-set";
 
 import { ADAPTER_MODULES } from "./adapter-registry-lazy";
 
-let time = Date.now();
+const time = Date.now();
 const cacheDirectories: string[] = [];
 beforeEach(() => {
-  time += 48 * 60 * 60 * 1000;
   setSystemTime(new Date(time));
 });
 const createCacheDirectory = () => {

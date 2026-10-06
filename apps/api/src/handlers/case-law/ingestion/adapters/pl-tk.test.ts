@@ -202,11 +202,9 @@ const installPortal = (options: PortalOptions): SeenRequest[] => {
 
 const originalFetch = globalThis.fetch;
 const originalSleep = Bun.sleep;
-let fixtureClock = Temporal.Now.instant().epochMilliseconds;
+const fixtureClock = Temporal.Now.instant().epochMilliseconds;
 
 beforeEach(() => {
-  // Each fixture starts after the preceding session-refusal cooldown expired.
-  fixtureClock += DAY_IN_MS + 1;
   setSystemTime(fixtureClock);
   Bun.sleep = async () => {
     // Nothing here is live.
@@ -260,7 +258,6 @@ describe("portal session outcomes", () => {
       setSystemTime(startedAt + 3000);
       await plTkAdapter.fetchPage(cursor, {});
       expect(requests).toBe(2);
-      fixtureClock = Temporal.Now.instant().epochMilliseconds;
     },
   );
 
@@ -405,7 +402,6 @@ describe("portal session outcomes", () => {
     }
     expect(retried.error.httpStatus).toBe(403);
     expect(requests).toBe(2);
-    fixtureClock = Temporal.Now.instant().epochMilliseconds;
   });
 
   test("an entry refusal stops before search or listing", async () => {
