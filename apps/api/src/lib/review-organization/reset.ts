@@ -210,9 +210,16 @@ export type ReviewResetDependencies = {
   workspaceDeletion?: Omit<WorkspaceDeletionDependencies, "database">;
   /** Test seam: runs after the target is proved, before the first delete. */
   afterTargetResolved?: (() => Promise<void>) | undefined;
+  /** Test seam: runs after the per-row deletes, before the sweep transaction. */
+  beforeSweep?: (() => Promise<void>) | undefined;
   /** Test seam: runs inside each fenced transaction once the fence holds. */
   afterFenceCheck?: (() => Promise<void>) | undefined;
 };
+
+/** A matter stood in the review organization when the sweep took its lock. */
+class ReviewSweepBlockedError extends TaggedError("ReviewSweepBlockedError")<{
+  message: string;
+}> {}
 
 /** The review organization gained a member while the reset ran. */
 class ReviewMembershipChangedError extends TaggedError(
@@ -512,28 +519,26 @@ const sweepRemainingRows = async (
   if (scope.fence.tripped) {
     return { swept: new Map(), failures: [] };
   }
-  // The storage census seals and records every matter still standing; a
-  // matter whose own deletion failed must keep its objects, so the sweep waits.
-  const remainingMatters = await scope.db.$count(
-    workspaces,
-    eq(workspaces.organizationId, organizationId),
-  );
-  if (remainingMatters > 0) {
-    return {
-      swept: new Map(),
-      failures: [
-        {
-          kind: "sweep",
-          id: organizationId,
-          reason: `${remainingMatters} matter(s) remain; the sweep did not run`,
-        },
-      ],
-    };
-  }
+  await scope.dependencies.beforeSweep?.();
   const outcome = await Result.tryPromise({
     try: async () =>
       await scope.db.transaction(async (tx) => {
         await scope.fence.assert(tx);
+        // The storage census seals and records every matter still standing,
+        // and a matter that survives must keep its objects. Counted under the
+        // organization-row lock: a matter insert checks its foreign key to
+        // that row, so none can appear between this count and the commit.
+        const remainingMatters = await tx.$count(
+          workspaces,
+          eq(workspaces.organizationId, organizationId),
+        );
+        if (remainingMatters > 0) {
+          abortTransaction(
+            new ReviewSweepBlockedError({
+              message: `${remainingMatters} matter(s) remain; the sweep did not run`,
+            }),
+          );
+        }
         const teardown = await recordOrganizationStorageTeardown({
           organizationId,
           tx,

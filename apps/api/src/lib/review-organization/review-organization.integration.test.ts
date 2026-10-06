@@ -498,6 +498,58 @@ describe("review organization seed and reset", () => {
     expect(await countRows(fixture.reviewOrgId)).toEqual({ ...SAMPLE_COUNTS });
   });
 
+  test("a matter created before the sweep takes its lock stops the sweep and keeps its storage", async () => {
+    const lateMatterId = createSafeId<"workspace">();
+    try {
+      const outcome = await resetReviewOrganization({
+        config: config(fixture.reviewOrgId),
+        db: ownerDb(),
+        rlsDatabase: rlsDatabase(),
+        runId: Bun.randomUUIDv7(),
+        signal: new AbortController().signal,
+        dependencies: {
+          ...resetDependencies,
+          beforeSweep: async () => {
+            await testDb.insert(workspaces).values({
+              id: lateMatterId,
+              organizationId: fixture.reviewOrgId,
+              name: "Late matter",
+              reference: "LATE-1",
+            });
+            await testDb.insert(savedSearches).values({
+              organizationId: fixture.reviewOrgId,
+              userId: fixture.reviewUserId,
+              name: "Kept by the stopped sweep",
+              criteria: asTestRaw<typeof savedSearches.$inferInsert.criteria>({
+                version: 1,
+              }),
+            });
+          },
+        },
+      });
+      const report = outcome.unwrap("Expected the reset to report");
+      expect(report.failures.map(({ kind }) => kind)).toContain("sweep");
+      expect(report.swept.size).toBe(0);
+      // The storage census never ran for it: the matter is not sealed.
+      const late = await testDb
+        .select({ status: workspaces.status })
+        .from(workspaces)
+        .where(eq(workspaces.id, lateMatterId));
+      expect(late).toEqual([{ status: "active" }]);
+      expect(
+        await testDb.$count(
+          savedSearches,
+          eq(savedSearches.organizationId, fixture.reviewOrgId),
+        ),
+      ).toBe(1);
+    } finally {
+      await testDb.delete(workspaces).where(eq(workspaces.id, lateMatterId));
+      await testDb
+        .delete(savedSearches)
+        .where(eq(savedSearches.organizationId, fixture.reviewOrgId));
+    }
+  });
+
   test("a member who joins after the target is proved stops the reset before any delete", async () => {
     const before = await countRows(fixture.reviewOrgId);
     const joinedId = Bun.randomUUIDv7();
