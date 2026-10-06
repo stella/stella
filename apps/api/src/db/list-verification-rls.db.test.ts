@@ -1,15 +1,18 @@
-import { panic } from "better-result";
+import { Result, panic } from "better-result";
 import { describe, expect, test } from "bun:test";
-import { eq, sql } from "drizzle-orm";
+import { eq, sql, getColumns } from "drizzle-orm";
 
 import type { Transaction } from "@/api/db/root";
 import {
+  auditLogs,
   legalListClaims,
   legalListClaimReviewEvents,
   legalListVerificationRuns,
 } from "@/api/db/schema";
 import { markRlsDatabase } from "@/api/db/scoped";
+import { env } from "@/api/env";
 import { createSafeId, toSafeId } from "@/api/lib/branded-types";
+import type { FeatureAccessGrants } from "@/api/lib/feature-access/grants-schema";
 import { completeVerificationRun } from "@/api/lib/lists/verification/run-persistence";
 import {
   processListVerificationRun,
@@ -47,6 +50,12 @@ describe.skipIf(!enabled)("list verification row security", () => {
         scopedDatabase,
       );
 
+      const previousDeployment = env.FEATURE_LEGAL_LISTS;
+      env.FEATURE_LEGAL_LISTS = true;
+      const grants = {
+        "list-verification": [{ type: "organization", organizationId }],
+      } satisfies FeatureAccessGrants;
+      const jobData = { runId, organizationId, workspaceId, userId };
       await client.unsafe(`CREATE SCHEMA ${schema}`);
       try {
         await client.unsafe(`SET search_path TO ${schema}, public`);
@@ -60,18 +69,32 @@ describe.skipIf(!enabled)("list verification row security", () => {
         // policies come from the shipped migrations.
         await client.unsafe(`
           CREATE TABLE organization (id varchar(128) PRIMARY KEY);
-          CREATE TABLE "user" (id text PRIMARY KEY);
-          CREATE TABLE workspaces (id uuid PRIMARY KEY, organization_id varchar(128), UNIQUE (id, organization_id));
+          CREATE TABLE "user" (id text PRIMARY KEY, email text, email_verified boolean, deleted_at timestamptz);
+          CREATE TABLE member (id text PRIMARY KEY, user_id text, organization_id varchar(128), role text);
+          CREATE TABLE workspace_members (id uuid PRIMARY KEY, workspace_id uuid, user_id text);
+          CREATE TABLE workspaces (id uuid PRIMARY KEY, organization_id varchar(128), status text, client_id uuid, UNIQUE (id, organization_id));
           CREATE TABLE legal_list_items (entity_id uuid, list_id uuid, workspace_id uuid, UNIQUE (entity_id, list_id, workspace_id));
           CREATE TABLE fields (id uuid, workspace_id uuid, entity_version_id uuid, content jsonb);
           GRANT SELECT ON fields TO stella;
           CREATE VIEW stella_authorized_workspaces AS SELECT NULL::uuid AS authorized_workspace_id WHERE false;
           GRANT SELECT ON stella_authorized_workspaces TO stella;
         `);
+        await client.unsafe(
+          `CREATE TABLE audit_logs (${Object.values(getColumns(auditLogs))
+            .map(
+              (column) =>
+                `"${column.name}" ${column.getSQLType()}${column.name === "created_at" ? " DEFAULT now()" : ""}`,
+            )
+            .join(", ")})`,
+        );
+        await client.unsafe(
+          `GRANT SELECT ON "user", member, workspace_members, workspaces TO stella, ${ownerRole}; GRANT INSERT, SELECT ON audit_logs TO stella, ${ownerRole}`,
+        );
         for (const migration of [
           "20260925220000_legal_list_verifications",
           "20260928132500_legal_list_verification_blocks",
           "20261005120200_list_verification_force_rls",
+          "20261005120300_list_verification_access_revoked",
         ]) {
           const source = await Bun.file(
             new URL(
@@ -111,9 +134,11 @@ describe.skipIf(!enabled)("list verification row security", () => {
           { name: "legal_list_verification_runs", enabled: true, forced: true },
         ]);
         await client`INSERT INTO organization VALUES (${organizationId})`;
-        await client`INSERT INTO "user" VALUES (${userId})`;
-        await client`INSERT INTO workspaces VALUES (${workspaceId}, ${organizationId})`;
-        await db.insert(legalListVerificationRuns).values({
+        await client`INSERT INTO "user" VALUES (${userId}, 'member@example.test', true, null)`;
+        await client`INSERT INTO member VALUES ('verification_member', ${userId}, ${organizationId}, 'owner')`;
+        await client`INSERT INTO workspace_members VALUES (${Bun.randomUUIDv7()}, ${workspaceId}, ${userId})`;
+        await client`INSERT INTO workspaces VALUES (${workspaceId}, ${organizationId}, 'active', null)`;
+        const runFixture = {
           id: runId,
           organizationId,
           workspaceId,
@@ -123,7 +148,8 @@ describe.skipIf(!enabled)("list verification row security", () => {
           entityVersionId: createSafeId<"entityVersion">(),
           contentSha256: "a".repeat(64),
           evidence: { listId: createSafeId<"legalList">(), facts: [] },
-        });
+        } satisfies typeof legalListVerificationRuns.$inferInsert;
+        await db.insert(legalListVerificationRuns).values(runFixture);
         const claim = {
           id: claimId,
           runId,
@@ -181,8 +207,9 @@ describe.skipIf(!enabled)("list verification row security", () => {
         const recovered = await reconcileQueuedListVerificationRuns({
           db,
           queue,
+          grants,
         });
-        expect(recovered).toEqual({
+        expect(Result.unwrap(recovered)).toEqual({
           scanned: 1,
           handedOff: 1,
           unattributed: 0,
@@ -198,7 +225,9 @@ describe.skipIf(!enabled)("list verification row security", () => {
             await db.select().from(legalListVerificationRuns),
           ).toHaveLength(0);
           expect(
-            await reconcileQueuedListVerificationRuns({ db, queue }),
+            Result.unwrap(
+              await reconcileQueuedListVerificationRuns({ db, queue, grants }),
+            ),
           ).toEqual({ scanned: 0, handedOff: 0, unattributed: 0 });
         } finally {
           await client.unsafe("ROLLBACK");
@@ -207,7 +236,7 @@ describe.skipIf(!enabled)("list verification row security", () => {
           .update(legalListVerificationRuns)
           .set({ createdAt: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000) })
           .where(eq(legalListVerificationRuns.id, runId));
-        expect(await reconcileStuckListVerificationRuns(db)).toBe(1);
+        expect(await reconcileStuckListVerificationRuns(db, grants)).toBe(1);
         expect(
           (await db.select().from(legalListVerificationRuns)).at(0)?.status,
         ).toBe("failed");
@@ -254,7 +283,7 @@ describe.skipIf(!enabled)("list verification row security", () => {
 
         // An unresolved pin stops execution before any document or model I/O.
         // It still exercises the queue's conditional claim and terminal write.
-        await processListVerificationRun(actor);
+        await processListVerificationRun({ actor, data: jobData, grants });
         const failed = await db
           .select()
           .from(legalListVerificationRuns)
@@ -265,7 +294,7 @@ describe.skipIf(!enabled)("list verification row security", () => {
         });
         expect(failed.at(0)?.startedAt).toBeInstanceOf(Date);
         expect(failed.at(0)?.finishedAt).toBeInstanceOf(Date);
-        await processListVerificationRun(actor);
+        await processListVerificationRun({ actor, data: jobData, grants });
         expect(await db.select().from(legalListVerificationRuns)).toEqual(
           failed,
         );
@@ -305,7 +334,31 @@ describe.skipIf(!enabled)("list verification row security", () => {
               ),
           ),
         ).toEqual([{ text: "A dated meeting." }]);
+        const revokedRunId = createSafeId<"legalListVerificationRun">();
+        await db
+          .insert(legalListVerificationRuns)
+          .values({ ...runFixture, id: revokedRunId });
+        const revoked = Result.unwrap(
+          await reconcileQueuedListVerificationRuns({ db, queue, grants: {} }),
+        );
+        expect(revoked).toEqual({ scanned: 1, handedOff: 0, unattributed: 0 });
+        expect(
+          (
+            await db
+              .select()
+              .from(legalListVerificationRuns)
+              .where(eq(legalListVerificationRuns.id, revokedRunId))
+          ).at(0),
+        ).toMatchObject({ status: "failed", errorCode: "access_revoked" });
+        expect(
+          await db
+            .select()
+            .from(auditLogs)
+            .where(eq(auditLogs.resourceId, revokedRunId)),
+        ).toHaveLength(1);
+        expect(handedOff).toEqual([runId]);
       } finally {
+        env.FEATURE_LEGAL_LISTS = previousDeployment;
         await client.unsafe("RESET ROLE");
         await client.unsafe("RESET search_path");
         await client.unsafe(`DROP SCHEMA ${schema} CASCADE`);

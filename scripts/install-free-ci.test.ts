@@ -803,6 +803,84 @@ describe("install-free invocation classification", () => {
       importProblems({ entries: ["scripts/check.test.ts"], root }),
     ).toEqual([]);
   });
+  test("bounded installs and planner calls retain dependency coverage", () => {
+    for (const prefix of [
+      ...["0", "1.5", ".5", "1.", "2s", "3.5m", "4h", "5d"].map(
+        (duration) => `timeout ${duration}`,
+      ),
+      "timeout 120s",
+      "timeout --kill-after=10s 120s",
+      "timeout -k 10s 120s",
+      "timeout --signal TERM -- 120s",
+    ]) {
+      const root = repository(
+        [
+          "jobs:",
+          "  job:",
+          "    steps:",
+          `      - run: bash scripts/retry.sh ${prefix} bun ci --ignore-scripts`,
+          "        id: installed",
+          "        if: inputs.run == true",
+          `      - run: ${prefix} bun scripts/check.ts`,
+          "        if: steps.installed.outcome == 'success'",
+        ].join("\n"),
+      );
+      expect(
+        installFreeInvocations({ root, workflow: CI_WORKFLOW }).map(
+          ({ classification }) => classification.type,
+        ),
+      ).toEqual(["install"]);
+      expect(
+        classify(`${prefix} bun scripts/check.ts`).map(
+          ({ classification }) => classification.type,
+        ),
+      ).toEqual(["files"]);
+    }
+  });
+
+  test("timeout invalid durations and options cannot certify dependency installation", () => {
+    for (const option of [
+      "--help",
+      "--version",
+      "--unknown",
+      "invalid",
+      "1ss",
+      "1..5",
+      "1x",
+      "-1",
+      "--kill-after=invalid 120s",
+      "-k invalid 120s",
+      "-kinvalid 120s",
+    ]) {
+      const root = repository(
+        [
+          "jobs:",
+          "  job:",
+          "    steps:",
+          `      - run: timeout ${option} bun ci`,
+          "        id: installed",
+          "      - run: bun scripts/check.ts",
+          "        if: steps.installed.outcome == 'success'",
+        ].join("\n"),
+      );
+      const invocations = installFreeInvocations({
+        root,
+        workflow: CI_WORKFLOW,
+      });
+      expect(
+        invocations.some(
+          ({ classification }) => classification.type === "install",
+        ),
+      ).toBe(false);
+      expect(
+        invocations.some(
+          ({ classification }) =>
+            classification.type === "files" &&
+            classification.entries.includes("scripts/check.ts"),
+        ),
+      ).toBe(true);
+    }
+  });
 });
 
 test("everything CI runs without the dependency install imports only built-ins", () => {

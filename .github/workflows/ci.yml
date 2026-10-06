@@ -65,7 +65,8 @@ jobs:
       github.event_name == 'workflow_dispatch'
       || github.event.pull_request.draft != true
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    # Bound install attempts and planner execution below this job budget.
+    timeout-minutes: 15
     permissions:
       contents: read
       # The merge-group trust check reads the queued pull request's head
@@ -74,6 +75,9 @@ jobs:
       actions: write
     outputs:
       trusted: ${{ steps.check.outputs.trusted }}
+      ci_tests_matrix: ${{ steps.api-tests.outputs.ci_tests_matrix }}
+      api_test_files: ${{ steps.api-tests.outputs.api_test_files }}
+      api_test_shards: ${{ steps.api-tests.outputs.api_test_shards }}
       playwright_image: ${{ steps.browser-image.outputs.image }}
       # Pull requests run lightweight guards, lint and type checks.
       # Test shards retain PR coverage and follow heavy merge-queue depth.
@@ -354,6 +358,12 @@ jobs:
             fi
             rm -f "$changed_paths"
           fi
+
+          : > "$RUNNER_TEMP/api-test-changed-paths"
+          if (( ${#changed_files[@]} > 0 )); then
+            printf '%s\0' "${changed_files[@]}" > "$RUNNER_TEMP/api-test-changed-paths"
+          fi
+          echo "api_scope_unknown=$scope_unknown" >> "$GITHUB_OUTPUT"
 
           # An unreadable diff must widen every scope rather than skip checks.
           if [[ "$EVENT_NAME" == "workflow_dispatch" || "$scope_unknown" == "true" || "${HEAVY_ONLY:-false}" == true ]]; then
@@ -767,12 +777,100 @@ jobs:
             echo "::notice::Only documentation or provenance changed; skipping package CI checks."
           fi
 
+      - name: Install API test planner dependencies
+        id: api-test-deps
+        if: >-
+          steps.check.outputs.trusted == 'true'
+          && github.event_name == 'pull_request'
+          && steps.changed-files.outputs.package_checks_required == 'true'
+          && steps.changed-files.outputs.api_scope_unknown != 'true'
+        run: bash scripts/retry.sh timeout --kill-after=10s 120s bun ci --ignore-scripts
+        env:
+          NPM_TOKEN: ""
+
+      - name: Select affected API test files
+        id: api-test-selection
+        if: steps.api-test-deps.outcome == 'success'
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          BASE_REF: ${{ github.base_ref || 'main' }}
+          API_SCOPE_UNKNOWN: ${{ steps.changed-files.outputs.api_scope_unknown }}
+        run: |
+          if ! timeout --kill-after=10s 120s bun scripts/ci-api-test-plan.ts; then
+            echo 'ci_tests_matrix={"shard":["api-1","api-2","api-3","api-4","rest-web"]}' >> "$GITHUB_OUTPUT"
+            echo 'api_test_shards=4' >> "$GITHUB_OUTPUT"
+            echo 'api_test_files=' >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Plan API test files and shards
+        if: steps.check.outputs.trusted == 'true' || github.event_name == 'workflow_dispatch'
+        id: api-tests
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          API_SCOPE_UNKNOWN: ${{ steps.changed-files.outputs.api_scope_unknown }}
+          PACKAGE_CHECKS_REQUIRED: ${{ steps.changed-files.outputs.package_checks_required }}
+          SELECTED_MATRIX: ${{ steps.api-test-selection.outputs.ci_tests_matrix }}
+          SELECTED_FILES: ${{ steps.api-test-selection.outputs.api_test_files }}
+          SELECTED_SHARDS: ${{ steps.api-test-selection.outputs.api_test_shards }}
+        run: |
+          if [[ -n "$SELECTED_MATRIX" && -n "$SELECTED_SHARDS" ]]; then
+            echo "ci_tests_matrix=$SELECTED_MATRIX" >> "$GITHUB_OUTPUT"
+            echo "api_test_shards=$SELECTED_SHARDS" >> "$GITHUB_OUTPUT"
+            {
+              echo 'api_test_files<<API_TEST_FILES_END'
+              printf '%s\n' "$SELECTED_FILES"
+              echo 'API_TEST_FILES_END'
+            } >> "$GITHUB_OUTPUT"
+          elif [[ "$EVENT_NAME" == pull_request && "$PACKAGE_CHECKS_REQUIRED" != true && "$API_SCOPE_UNKNOWN" != true ]]; then
+            echo 'ci_tests_matrix={"shard":["rest-web"]}' >> "$GITHUB_OUTPUT"
+            echo 'api_test_shards=0' >> "$GITHUB_OUTPUT"
+            echo 'api_test_files=' >> "$GITHUB_OUTPUT"
+          else
+            echo 'ci_tests_matrix={"shard":["api-1","api-2","api-3","api-4","rest-web"]}' >> "$GITHUB_OUTPUT"
+            echo 'api_test_shards=4' >> "$GITHUB_OUTPUT"
+            echo 'api_test_files=' >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Cancel failed merge-group run
         if: failure() && github.event_name == 'merge_group'
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
         with:
           retries: 0
           script: |
+            let diagnostic;
+            let evidenceTimer;
+            try {
+              const jobs = await Promise.race([
+                github.paginate(
+                  "GET /repos/{owner}/{repo}/actions/runs/{run_id}/attempts/{attempt_number}/jobs",
+                  {
+                    ...context.repo,
+                    run_id: context.runId,
+                    attempt_number: Number(process.env.GITHUB_RUN_ATTEMPT),
+                    per_page: 100,
+                    request: { timeout: 10000 },
+                  },
+                ),
+                new Promise((_, reject) => {
+                  evidenceTimer = setTimeout(() => reject(new Error("Failed-step lookup timed out")), 10000);
+                }),
+              ]);
+              const failures = jobs.flatMap((job) => (job.steps || [])
+                .filter((step) => step.conclusion === "failure")
+                .map((step) => `${job.name} / ${step.number}: ${step.name} (${job.html_url})`));
+              diagnostic = `${context.job}: cancelling failed merge group; failed steps: ${failures.length ? failures.join("; ") : "not yet available from the jobs API"}`;
+            } catch {
+              diagnostic = `${context.job}: cancelling failed merge group; failed-step lookup unavailable`;
+            } finally {
+              clearTimeout(evidenceTimer);
+            }
+            core.error(diagnostic);
+            try {
+              core.summary.addRaw(`${diagnostic}\n`);
+              await core.summary.write();
+            } catch {
+              core.error(`${context.job}: cancellation step summary could not be written`);
+            }
             await github.rest.actions.cancelWorkflowRun({
               ...context.repo,
               run_id: context.runId,
@@ -994,6 +1092,40 @@ jobs:
         with:
           retries: 0
           script: |
+            let diagnostic;
+            let evidenceTimer;
+            try {
+              const jobs = await Promise.race([
+                github.paginate(
+                  "GET /repos/{owner}/{repo}/actions/runs/{run_id}/attempts/{attempt_number}/jobs",
+                  {
+                    ...context.repo,
+                    run_id: context.runId,
+                    attempt_number: Number(process.env.GITHUB_RUN_ATTEMPT),
+                    per_page: 100,
+                    request: { timeout: 10000 },
+                  },
+                ),
+                new Promise((_, reject) => {
+                  evidenceTimer = setTimeout(() => reject(new Error("Failed-step lookup timed out")), 10000);
+                }),
+              ]);
+              const failures = jobs.flatMap((job) => (job.steps || [])
+                .filter((step) => step.conclusion === "failure")
+                .map((step) => `${job.name} / ${step.number}: ${step.name} (${job.html_url})`));
+              diagnostic = `${context.job}: cancelling failed merge group; failed steps: ${failures.length ? failures.join("; ") : "not yet available from the jobs API"}`;
+            } catch {
+              diagnostic = `${context.job}: cancelling failed merge group; failed-step lookup unavailable`;
+            } finally {
+              clearTimeout(evidenceTimer);
+            }
+            core.error(diagnostic);
+            try {
+              core.summary.addRaw(`${diagnostic}\n`);
+              await core.summary.write();
+            } catch {
+              core.error(`${context.job}: cancellation step summary could not be written`);
+            }
             await github.rest.actions.cancelWorkflowRun({
               ...context.repo,
               run_id: context.runId,
@@ -1044,6 +1176,40 @@ jobs:
         with:
           retries: 0
           script: |
+            let diagnostic;
+            let evidenceTimer;
+            try {
+              const jobs = await Promise.race([
+                github.paginate(
+                  "GET /repos/{owner}/{repo}/actions/runs/{run_id}/attempts/{attempt_number}/jobs",
+                  {
+                    ...context.repo,
+                    run_id: context.runId,
+                    attempt_number: Number(process.env.GITHUB_RUN_ATTEMPT),
+                    per_page: 100,
+                    request: { timeout: 10000 },
+                  },
+                ),
+                new Promise((_, reject) => {
+                  evidenceTimer = setTimeout(() => reject(new Error("Failed-step lookup timed out")), 10000);
+                }),
+              ]);
+              const failures = jobs.flatMap((job) => (job.steps || [])
+                .filter((step) => step.conclusion === "failure")
+                .map((step) => `${job.name} / ${step.number}: ${step.name} (${job.html_url})`));
+              diagnostic = `${context.job}: cancelling failed merge group; failed steps: ${failures.length ? failures.join("; ") : "not yet available from the jobs API"}`;
+            } catch {
+              diagnostic = `${context.job}: cancelling failed merge group; failed-step lookup unavailable`;
+            } finally {
+              clearTimeout(evidenceTimer);
+            }
+            core.error(diagnostic);
+            try {
+              core.summary.addRaw(`${diagnostic}\n`);
+              await core.summary.write();
+            } catch {
+              core.error(`${context.job}: cancellation step summary could not be written`);
+            }
             await github.rest.actions.cancelWorkflowRun({
               ...context.repo,
               run_id: context.runId,
@@ -1209,6 +1375,40 @@ jobs:
         with:
           retries: 0
           script: |
+            let diagnostic;
+            let evidenceTimer;
+            try {
+              const jobs = await Promise.race([
+                github.paginate(
+                  "GET /repos/{owner}/{repo}/actions/runs/{run_id}/attempts/{attempt_number}/jobs",
+                  {
+                    ...context.repo,
+                    run_id: context.runId,
+                    attempt_number: Number(process.env.GITHUB_RUN_ATTEMPT),
+                    per_page: 100,
+                    request: { timeout: 10000 },
+                  },
+                ),
+                new Promise((_, reject) => {
+                  evidenceTimer = setTimeout(() => reject(new Error("Failed-step lookup timed out")), 10000);
+                }),
+              ]);
+              const failures = jobs.flatMap((job) => (job.steps || [])
+                .filter((step) => step.conclusion === "failure")
+                .map((step) => `${job.name} / ${step.number}: ${step.name} (${job.html_url})`));
+              diagnostic = `${context.job}: cancelling failed merge group; failed steps: ${failures.length ? failures.join("; ") : "not yet available from the jobs API"}`;
+            } catch {
+              diagnostic = `${context.job}: cancelling failed merge group; failed-step lookup unavailable`;
+            } finally {
+              clearTimeout(evidenceTimer);
+            }
+            core.error(diagnostic);
+            try {
+              core.summary.addRaw(`${diagnostic}\n`);
+              await core.summary.write();
+            } catch {
+              core.error(`${context.job}: cancellation step summary could not be written`);
+            }
             await github.rest.actions.cancelWorkflowRun({
               ...context.repo,
               run_id: context.runId,
@@ -1431,6 +1631,40 @@ jobs:
         with:
           retries: 0
           script: |
+            let diagnostic;
+            let evidenceTimer;
+            try {
+              const jobs = await Promise.race([
+                github.paginate(
+                  "GET /repos/{owner}/{repo}/actions/runs/{run_id}/attempts/{attempt_number}/jobs",
+                  {
+                    ...context.repo,
+                    run_id: context.runId,
+                    attempt_number: Number(process.env.GITHUB_RUN_ATTEMPT),
+                    per_page: 100,
+                    request: { timeout: 10000 },
+                  },
+                ),
+                new Promise((_, reject) => {
+                  evidenceTimer = setTimeout(() => reject(new Error("Failed-step lookup timed out")), 10000);
+                }),
+              ]);
+              const failures = jobs.flatMap((job) => (job.steps || [])
+                .filter((step) => step.conclusion === "failure")
+                .map((step) => `${job.name} / ${step.number}: ${step.name} (${job.html_url})`));
+              diagnostic = `${context.job}: cancelling failed merge group; failed steps: ${failures.length ? failures.join("; ") : "not yet available from the jobs API"}`;
+            } catch {
+              diagnostic = `${context.job}: cancelling failed merge group; failed-step lookup unavailable`;
+            } finally {
+              clearTimeout(evidenceTimer);
+            }
+            core.error(diagnostic);
+            try {
+              core.summary.addRaw(`${diagnostic}\n`);
+              await core.summary.write();
+            } catch {
+              core.error(`${context.job}: cancellation step summary could not be written`);
+            }
             await github.rest.actions.cancelWorkflowRun({
               ...context.repo,
               run_id: context.runId,
@@ -2202,6 +2436,10 @@ jobs:
         if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
         run: bun test scripts/main-heavy-plan.test.ts scripts/main-heavy.test.ts scripts/validate-main-heavy-sha.test.ts
 
+      - name: Test cancellation evidence
+        if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
+        run: bun test scripts/ci-cancellation-contract.test.ts
+
       - name: Test thin merge queue contracts
         if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
         run: bun test scripts/thin-queue.test.ts
@@ -2408,6 +2646,40 @@ jobs:
         with:
           retries: 0
           script: |
+            let diagnostic;
+            let evidenceTimer;
+            try {
+              const jobs = await Promise.race([
+                github.paginate(
+                  "GET /repos/{owner}/{repo}/actions/runs/{run_id}/attempts/{attempt_number}/jobs",
+                  {
+                    ...context.repo,
+                    run_id: context.runId,
+                    attempt_number: Number(process.env.GITHUB_RUN_ATTEMPT),
+                    per_page: 100,
+                    request: { timeout: 10000 },
+                  },
+                ),
+                new Promise((_, reject) => {
+                  evidenceTimer = setTimeout(() => reject(new Error("Failed-step lookup timed out")), 10000);
+                }),
+              ]);
+              const failures = jobs.flatMap((job) => (job.steps || [])
+                .filter((step) => step.conclusion === "failure")
+                .map((step) => `${job.name} / ${step.number}: ${step.name} (${job.html_url})`));
+              diagnostic = `${context.job}: cancelling failed merge group; failed steps: ${failures.length ? failures.join("; ") : "not yet available from the jobs API"}`;
+            } catch {
+              diagnostic = `${context.job}: cancelling failed merge group; failed-step lookup unavailable`;
+            } finally {
+              clearTimeout(evidenceTimer);
+            }
+            core.error(diagnostic);
+            try {
+              core.summary.addRaw(`${diagnostic}\n`);
+              await core.summary.write();
+            } catch {
+              core.error(`${context.job}: cancellation step summary could not be written`);
+            }
             await github.rest.actions.cancelWorkflowRun({
               ...context.repo,
               run_id: context.runId,
@@ -2441,8 +2713,7 @@ jobs:
       # reports no result of its own, and one failing suite should not hide
       # another.
       fail-fast: false
-      matrix:
-        shard: [api-1, api-2, api-3, api-4, rest-web]
+      matrix: ${{ fromJSON(needs.ci-plan.outputs.ci_tests_matrix) }}
 
     steps:
       - name: Checkout
@@ -2528,6 +2799,8 @@ jobs:
           BASE_REF: ${{ github.base_ref || 'main' }}
           SHARD: ${{ matrix.shard == 'rest-web' && 'rest' || matrix.shard }}
           API_TEST_ARTIFACT_DIR: ${{ runner.temp }}/api-test-${{ matrix.shard }}
+          API_TEST_FILES: ${{ needs.ci-plan.outputs.api_test_files }}
+          API_TEST_SHARD_COUNT: ${{ needs.ci-plan.outputs.api_test_shards }}
         # Not --affected: a suite that reads files outside its own package also
         # needs the packages its turbo.json test inputs name, and
         # `--affected --filter=X` intersects instead of widening.
@@ -2596,6 +2869,40 @@ jobs:
         with:
           retries: 0
           script: |
+            let diagnostic;
+            let evidenceTimer;
+            try {
+              const jobs = await Promise.race([
+                github.paginate(
+                  "GET /repos/{owner}/{repo}/actions/runs/{run_id}/attempts/{attempt_number}/jobs",
+                  {
+                    ...context.repo,
+                    run_id: context.runId,
+                    attempt_number: Number(process.env.GITHUB_RUN_ATTEMPT),
+                    per_page: 100,
+                    request: { timeout: 10000 },
+                  },
+                ),
+                new Promise((_, reject) => {
+                  evidenceTimer = setTimeout(() => reject(new Error("Failed-step lookup timed out")), 10000);
+                }),
+              ]);
+              const failures = jobs.flatMap((job) => (job.steps || [])
+                .filter((step) => step.conclusion === "failure")
+                .map((step) => `${job.name} / ${step.number}: ${step.name} (${job.html_url})`));
+              diagnostic = `${context.job}: cancelling failed merge group; failed steps: ${failures.length ? failures.join("; ") : "not yet available from the jobs API"}`;
+            } catch {
+              diagnostic = `${context.job}: cancelling failed merge group; failed-step lookup unavailable`;
+            } finally {
+              clearTimeout(evidenceTimer);
+            }
+            core.error(diagnostic);
+            try {
+              core.summary.addRaw(`${diagnostic}\n`);
+              await core.summary.write();
+            } catch {
+              core.error(`${context.job}: cancellation step summary could not be written`);
+            }
             await github.rest.actions.cancelWorkflowRun({
               ...context.repo,
               run_id: context.runId,
@@ -2806,6 +3113,40 @@ jobs:
         with:
           retries: 0
           script: |
+            let diagnostic;
+            let evidenceTimer;
+            try {
+              const jobs = await Promise.race([
+                github.paginate(
+                  "GET /repos/{owner}/{repo}/actions/runs/{run_id}/attempts/{attempt_number}/jobs",
+                  {
+                    ...context.repo,
+                    run_id: context.runId,
+                    attempt_number: Number(process.env.GITHUB_RUN_ATTEMPT),
+                    per_page: 100,
+                    request: { timeout: 10000 },
+                  },
+                ),
+                new Promise((_, reject) => {
+                  evidenceTimer = setTimeout(() => reject(new Error("Failed-step lookup timed out")), 10000);
+                }),
+              ]);
+              const failures = jobs.flatMap((job) => (job.steps || [])
+                .filter((step) => step.conclusion === "failure")
+                .map((step) => `${job.name} / ${step.number}: ${step.name} (${job.html_url})`));
+              diagnostic = `${context.job}: cancelling failed merge group; failed steps: ${failures.length ? failures.join("; ") : "not yet available from the jobs API"}`;
+            } catch {
+              diagnostic = `${context.job}: cancelling failed merge group; failed-step lookup unavailable`;
+            } finally {
+              clearTimeout(evidenceTimer);
+            }
+            core.error(diagnostic);
+            try {
+              core.summary.addRaw(`${diagnostic}\n`);
+              await core.summary.write();
+            } catch {
+              core.error(`${context.job}: cancellation step summary could not be written`);
+            }
             await github.rest.actions.cancelWorkflowRun({
               ...context.repo,
               run_id: context.runId,
@@ -2889,6 +3230,40 @@ jobs:
         with:
           retries: 0
           script: |
+            let diagnostic;
+            let evidenceTimer;
+            try {
+              const jobs = await Promise.race([
+                github.paginate(
+                  "GET /repos/{owner}/{repo}/actions/runs/{run_id}/attempts/{attempt_number}/jobs",
+                  {
+                    ...context.repo,
+                    run_id: context.runId,
+                    attempt_number: Number(process.env.GITHUB_RUN_ATTEMPT),
+                    per_page: 100,
+                    request: { timeout: 10000 },
+                  },
+                ),
+                new Promise((_, reject) => {
+                  evidenceTimer = setTimeout(() => reject(new Error("Failed-step lookup timed out")), 10000);
+                }),
+              ]);
+              const failures = jobs.flatMap((job) => (job.steps || [])
+                .filter((step) => step.conclusion === "failure")
+                .map((step) => `${job.name} / ${step.number}: ${step.name} (${job.html_url})`));
+              diagnostic = `${context.job}: cancelling failed merge group; failed steps: ${failures.length ? failures.join("; ") : "not yet available from the jobs API"}`;
+            } catch {
+              diagnostic = `${context.job}: cancelling failed merge group; failed-step lookup unavailable`;
+            } finally {
+              clearTimeout(evidenceTimer);
+            }
+            core.error(diagnostic);
+            try {
+              core.summary.addRaw(`${diagnostic}\n`);
+              await core.summary.write();
+            } catch {
+              core.error(`${context.job}: cancellation step summary could not be written`);
+            }
             await github.rest.actions.cancelWorkflowRun({
               ...context.repo,
               run_id: context.runId,
@@ -2975,6 +3350,40 @@ jobs:
         with:
           retries: 0
           script: |
+            let diagnostic;
+            let evidenceTimer;
+            try {
+              const jobs = await Promise.race([
+                github.paginate(
+                  "GET /repos/{owner}/{repo}/actions/runs/{run_id}/attempts/{attempt_number}/jobs",
+                  {
+                    ...context.repo,
+                    run_id: context.runId,
+                    attempt_number: Number(process.env.GITHUB_RUN_ATTEMPT),
+                    per_page: 100,
+                    request: { timeout: 10000 },
+                  },
+                ),
+                new Promise((_, reject) => {
+                  evidenceTimer = setTimeout(() => reject(new Error("Failed-step lookup timed out")), 10000);
+                }),
+              ]);
+              const failures = jobs.flatMap((job) => (job.steps || [])
+                .filter((step) => step.conclusion === "failure")
+                .map((step) => `${job.name} / ${step.number}: ${step.name} (${job.html_url})`));
+              diagnostic = `${context.job}: cancelling failed merge group; failed steps: ${failures.length ? failures.join("; ") : "not yet available from the jobs API"}`;
+            } catch {
+              diagnostic = `${context.job}: cancelling failed merge group; failed-step lookup unavailable`;
+            } finally {
+              clearTimeout(evidenceTimer);
+            }
+            core.error(diagnostic);
+            try {
+              core.summary.addRaw(`${diagnostic}\n`);
+              await core.summary.write();
+            } catch {
+              core.error(`${context.job}: cancellation step summary could not be written`);
+            }
             await github.rest.actions.cancelWorkflowRun({
               ...context.repo,
               run_id: context.runId,
@@ -3108,6 +3517,40 @@ jobs:
         with:
           retries: 0
           script: |
+            let diagnostic;
+            let evidenceTimer;
+            try {
+              const jobs = await Promise.race([
+                github.paginate(
+                  "GET /repos/{owner}/{repo}/actions/runs/{run_id}/attempts/{attempt_number}/jobs",
+                  {
+                    ...context.repo,
+                    run_id: context.runId,
+                    attempt_number: Number(process.env.GITHUB_RUN_ATTEMPT),
+                    per_page: 100,
+                    request: { timeout: 10000 },
+                  },
+                ),
+                new Promise((_, reject) => {
+                  evidenceTimer = setTimeout(() => reject(new Error("Failed-step lookup timed out")), 10000);
+                }),
+              ]);
+              const failures = jobs.flatMap((job) => (job.steps || [])
+                .filter((step) => step.conclusion === "failure")
+                .map((step) => `${job.name} / ${step.number}: ${step.name} (${job.html_url})`));
+              diagnostic = `${context.job}: cancelling failed merge group; failed steps: ${failures.length ? failures.join("; ") : "not yet available from the jobs API"}`;
+            } catch {
+              diagnostic = `${context.job}: cancelling failed merge group; failed-step lookup unavailable`;
+            } finally {
+              clearTimeout(evidenceTimer);
+            }
+            core.error(diagnostic);
+            try {
+              core.summary.addRaw(`${diagnostic}\n`);
+              await core.summary.write();
+            } catch {
+              core.error(`${context.job}: cancellation step summary could not be written`);
+            }
             await github.rest.actions.cancelWorkflowRun({
               ...context.repo,
               run_id: context.runId,
@@ -3277,6 +3720,40 @@ jobs:
         with:
           retries: 0
           script: |
+            let diagnostic;
+            let evidenceTimer;
+            try {
+              const jobs = await Promise.race([
+                github.paginate(
+                  "GET /repos/{owner}/{repo}/actions/runs/{run_id}/attempts/{attempt_number}/jobs",
+                  {
+                    ...context.repo,
+                    run_id: context.runId,
+                    attempt_number: Number(process.env.GITHUB_RUN_ATTEMPT),
+                    per_page: 100,
+                    request: { timeout: 10000 },
+                  },
+                ),
+                new Promise((_, reject) => {
+                  evidenceTimer = setTimeout(() => reject(new Error("Failed-step lookup timed out")), 10000);
+                }),
+              ]);
+              const failures = jobs.flatMap((job) => (job.steps || [])
+                .filter((step) => step.conclusion === "failure")
+                .map((step) => `${job.name} / ${step.number}: ${step.name} (${job.html_url})`));
+              diagnostic = `${context.job}: cancelling failed merge group; failed steps: ${failures.length ? failures.join("; ") : "not yet available from the jobs API"}`;
+            } catch {
+              diagnostic = `${context.job}: cancelling failed merge group; failed-step lookup unavailable`;
+            } finally {
+              clearTimeout(evidenceTimer);
+            }
+            core.error(diagnostic);
+            try {
+              core.summary.addRaw(`${diagnostic}\n`);
+              await core.summary.write();
+            } catch {
+              core.error(`${context.job}: cancellation step summary could not be written`);
+            }
             await github.rest.actions.cancelWorkflowRun({
               ...context.repo,
               run_id: context.runId,
@@ -3394,6 +3871,40 @@ jobs:
         with:
           retries: 0
           script: |
+            let diagnostic;
+            let evidenceTimer;
+            try {
+              const jobs = await Promise.race([
+                github.paginate(
+                  "GET /repos/{owner}/{repo}/actions/runs/{run_id}/attempts/{attempt_number}/jobs",
+                  {
+                    ...context.repo,
+                    run_id: context.runId,
+                    attempt_number: Number(process.env.GITHUB_RUN_ATTEMPT),
+                    per_page: 100,
+                    request: { timeout: 10000 },
+                  },
+                ),
+                new Promise((_, reject) => {
+                  evidenceTimer = setTimeout(() => reject(new Error("Failed-step lookup timed out")), 10000);
+                }),
+              ]);
+              const failures = jobs.flatMap((job) => (job.steps || [])
+                .filter((step) => step.conclusion === "failure")
+                .map((step) => `${job.name} / ${step.number}: ${step.name} (${job.html_url})`));
+              diagnostic = `${context.job}: cancelling failed merge group; failed steps: ${failures.length ? failures.join("; ") : "not yet available from the jobs API"}`;
+            } catch {
+              diagnostic = `${context.job}: cancelling failed merge group; failed-step lookup unavailable`;
+            } finally {
+              clearTimeout(evidenceTimer);
+            }
+            core.error(diagnostic);
+            try {
+              core.summary.addRaw(`${diagnostic}\n`);
+              await core.summary.write();
+            } catch {
+              core.error(`${context.job}: cancellation step summary could not be written`);
+            }
             await github.rest.actions.cancelWorkflowRun({
               ...context.repo,
               run_id: context.runId,
@@ -3444,6 +3955,40 @@ jobs:
         with:
           retries: 0
           script: |
+            let diagnostic;
+            let evidenceTimer;
+            try {
+              const jobs = await Promise.race([
+                github.paginate(
+                  "GET /repos/{owner}/{repo}/actions/runs/{run_id}/attempts/{attempt_number}/jobs",
+                  {
+                    ...context.repo,
+                    run_id: context.runId,
+                    attempt_number: Number(process.env.GITHUB_RUN_ATTEMPT),
+                    per_page: 100,
+                    request: { timeout: 10000 },
+                  },
+                ),
+                new Promise((_, reject) => {
+                  evidenceTimer = setTimeout(() => reject(new Error("Failed-step lookup timed out")), 10000);
+                }),
+              ]);
+              const failures = jobs.flatMap((job) => (job.steps || [])
+                .filter((step) => step.conclusion === "failure")
+                .map((step) => `${job.name} / ${step.number}: ${step.name} (${job.html_url})`));
+              diagnostic = `${context.job}: cancelling failed merge group; failed steps: ${failures.length ? failures.join("; ") : "not yet available from the jobs API"}`;
+            } catch {
+              diagnostic = `${context.job}: cancelling failed merge group; failed-step lookup unavailable`;
+            } finally {
+              clearTimeout(evidenceTimer);
+            }
+            core.error(diagnostic);
+            try {
+              core.summary.addRaw(`${diagnostic}\n`);
+              await core.summary.write();
+            } catch {
+              core.error(`${context.job}: cancellation step summary could not be written`);
+            }
             await github.rest.actions.cancelWorkflowRun({
               ...context.repo,
               run_id: context.runId,
@@ -3648,6 +4193,40 @@ jobs:
         with:
           retries: 0
           script: |
+            let diagnostic;
+            let evidenceTimer;
+            try {
+              const jobs = await Promise.race([
+                github.paginate(
+                  "GET /repos/{owner}/{repo}/actions/runs/{run_id}/attempts/{attempt_number}/jobs",
+                  {
+                    ...context.repo,
+                    run_id: context.runId,
+                    attempt_number: Number(process.env.GITHUB_RUN_ATTEMPT),
+                    per_page: 100,
+                    request: { timeout: 10000 },
+                  },
+                ),
+                new Promise((_, reject) => {
+                  evidenceTimer = setTimeout(() => reject(new Error("Failed-step lookup timed out")), 10000);
+                }),
+              ]);
+              const failures = jobs.flatMap((job) => (job.steps || [])
+                .filter((step) => step.conclusion === "failure")
+                .map((step) => `${job.name} / ${step.number}: ${step.name} (${job.html_url})`));
+              diagnostic = `${context.job}: cancelling failed merge group; failed steps: ${failures.length ? failures.join("; ") : "not yet available from the jobs API"}`;
+            } catch {
+              diagnostic = `${context.job}: cancelling failed merge group; failed-step lookup unavailable`;
+            } finally {
+              clearTimeout(evidenceTimer);
+            }
+            core.error(diagnostic);
+            try {
+              core.summary.addRaw(`${diagnostic}\n`);
+              await core.summary.write();
+            } catch {
+              core.error(`${context.job}: cancellation step summary could not be written`);
+            }
             await github.rest.actions.cancelWorkflowRun({
               ...context.repo,
               run_id: context.runId,
@@ -3766,6 +4345,40 @@ jobs:
         with:
           retries: 0
           script: |
+            let diagnostic;
+            let evidenceTimer;
+            try {
+              const jobs = await Promise.race([
+                github.paginate(
+                  "GET /repos/{owner}/{repo}/actions/runs/{run_id}/attempts/{attempt_number}/jobs",
+                  {
+                    ...context.repo,
+                    run_id: context.runId,
+                    attempt_number: Number(process.env.GITHUB_RUN_ATTEMPT),
+                    per_page: 100,
+                    request: { timeout: 10000 },
+                  },
+                ),
+                new Promise((_, reject) => {
+                  evidenceTimer = setTimeout(() => reject(new Error("Failed-step lookup timed out")), 10000);
+                }),
+              ]);
+              const failures = jobs.flatMap((job) => (job.steps || [])
+                .filter((step) => step.conclusion === "failure")
+                .map((step) => `${job.name} / ${step.number}: ${step.name} (${job.html_url})`));
+              diagnostic = `${context.job}: cancelling failed merge group; failed steps: ${failures.length ? failures.join("; ") : "not yet available from the jobs API"}`;
+            } catch {
+              diagnostic = `${context.job}: cancelling failed merge group; failed-step lookup unavailable`;
+            } finally {
+              clearTimeout(evidenceTimer);
+            }
+            core.error(diagnostic);
+            try {
+              core.summary.addRaw(`${diagnostic}\n`);
+              await core.summary.write();
+            } catch {
+              core.error(`${context.job}: cancellation step summary could not be written`);
+            }
             await github.rest.actions.cancelWorkflowRun({
               ...context.repo,
               run_id: context.runId,
@@ -3855,6 +4468,40 @@ jobs:
         with:
           retries: 0
           script: |
+            let diagnostic;
+            let evidenceTimer;
+            try {
+              const jobs = await Promise.race([
+                github.paginate(
+                  "GET /repos/{owner}/{repo}/actions/runs/{run_id}/attempts/{attempt_number}/jobs",
+                  {
+                    ...context.repo,
+                    run_id: context.runId,
+                    attempt_number: Number(process.env.GITHUB_RUN_ATTEMPT),
+                    per_page: 100,
+                    request: { timeout: 10000 },
+                  },
+                ),
+                new Promise((_, reject) => {
+                  evidenceTimer = setTimeout(() => reject(new Error("Failed-step lookup timed out")), 10000);
+                }),
+              ]);
+              const failures = jobs.flatMap((job) => (job.steps || [])
+                .filter((step) => step.conclusion === "failure")
+                .map((step) => `${job.name} / ${step.number}: ${step.name} (${job.html_url})`));
+              diagnostic = `${context.job}: cancelling failed merge group; failed steps: ${failures.length ? failures.join("; ") : "not yet available from the jobs API"}`;
+            } catch {
+              diagnostic = `${context.job}: cancelling failed merge group; failed-step lookup unavailable`;
+            } finally {
+              clearTimeout(evidenceTimer);
+            }
+            core.error(diagnostic);
+            try {
+              core.summary.addRaw(`${diagnostic}\n`);
+              await core.summary.write();
+            } catch {
+              core.error(`${context.job}: cancellation step summary could not be written`);
+            }
             await github.rest.actions.cancelWorkflowRun({
               ...context.repo,
               run_id: context.runId,
@@ -3908,6 +4555,40 @@ jobs:
         with:
           retries: 0
           script: |
+            let diagnostic;
+            let evidenceTimer;
+            try {
+              const jobs = await Promise.race([
+                github.paginate(
+                  "GET /repos/{owner}/{repo}/actions/runs/{run_id}/attempts/{attempt_number}/jobs",
+                  {
+                    ...context.repo,
+                    run_id: context.runId,
+                    attempt_number: Number(process.env.GITHUB_RUN_ATTEMPT),
+                    per_page: 100,
+                    request: { timeout: 10000 },
+                  },
+                ),
+                new Promise((_, reject) => {
+                  evidenceTimer = setTimeout(() => reject(new Error("Failed-step lookup timed out")), 10000);
+                }),
+              ]);
+              const failures = jobs.flatMap((job) => (job.steps || [])
+                .filter((step) => step.conclusion === "failure")
+                .map((step) => `${job.name} / ${step.number}: ${step.name} (${job.html_url})`));
+              diagnostic = `${context.job}: cancelling failed merge group; failed steps: ${failures.length ? failures.join("; ") : "not yet available from the jobs API"}`;
+            } catch {
+              diagnostic = `${context.job}: cancelling failed merge group; failed-step lookup unavailable`;
+            } finally {
+              clearTimeout(evidenceTimer);
+            }
+            core.error(diagnostic);
+            try {
+              core.summary.addRaw(`${diagnostic}\n`);
+              await core.summary.write();
+            } catch {
+              core.error(`${context.job}: cancellation step summary could not be written`);
+            }
             await github.rest.actions.cancelWorkflowRun({
               ...context.repo,
               run_id: context.runId,
@@ -3962,6 +4643,40 @@ jobs:
         with:
           retries: 0
           script: |
+            let diagnostic;
+            let evidenceTimer;
+            try {
+              const jobs = await Promise.race([
+                github.paginate(
+                  "GET /repos/{owner}/{repo}/actions/runs/{run_id}/attempts/{attempt_number}/jobs",
+                  {
+                    ...context.repo,
+                    run_id: context.runId,
+                    attempt_number: Number(process.env.GITHUB_RUN_ATTEMPT),
+                    per_page: 100,
+                    request: { timeout: 10000 },
+                  },
+                ),
+                new Promise((_, reject) => {
+                  evidenceTimer = setTimeout(() => reject(new Error("Failed-step lookup timed out")), 10000);
+                }),
+              ]);
+              const failures = jobs.flatMap((job) => (job.steps || [])
+                .filter((step) => step.conclusion === "failure")
+                .map((step) => `${job.name} / ${step.number}: ${step.name} (${job.html_url})`));
+              diagnostic = `${context.job}: cancelling failed merge group; failed steps: ${failures.length ? failures.join("; ") : "not yet available from the jobs API"}`;
+            } catch {
+              diagnostic = `${context.job}: cancelling failed merge group; failed-step lookup unavailable`;
+            } finally {
+              clearTimeout(evidenceTimer);
+            }
+            core.error(diagnostic);
+            try {
+              core.summary.addRaw(`${diagnostic}\n`);
+              await core.summary.write();
+            } catch {
+              core.error(`${context.job}: cancellation step summary could not be written`);
+            }
             await github.rest.actions.cancelWorkflowRun({
               ...context.repo,
               run_id: context.runId,
@@ -4119,6 +4834,40 @@ jobs:
         with:
           retries: 0
           script: |
+            let diagnostic;
+            let evidenceTimer;
+            try {
+              const jobs = await Promise.race([
+                github.paginate(
+                  "GET /repos/{owner}/{repo}/actions/runs/{run_id}/attempts/{attempt_number}/jobs",
+                  {
+                    ...context.repo,
+                    run_id: context.runId,
+                    attempt_number: Number(process.env.GITHUB_RUN_ATTEMPT),
+                    per_page: 100,
+                    request: { timeout: 10000 },
+                  },
+                ),
+                new Promise((_, reject) => {
+                  evidenceTimer = setTimeout(() => reject(new Error("Failed-step lookup timed out")), 10000);
+                }),
+              ]);
+              const failures = jobs.flatMap((job) => (job.steps || [])
+                .filter((step) => step.conclusion === "failure")
+                .map((step) => `${job.name} / ${step.number}: ${step.name} (${job.html_url})`));
+              diagnostic = `${context.job}: cancelling failed merge group; failed steps: ${failures.length ? failures.join("; ") : "not yet available from the jobs API"}`;
+            } catch {
+              diagnostic = `${context.job}: cancelling failed merge group; failed-step lookup unavailable`;
+            } finally {
+              clearTimeout(evidenceTimer);
+            }
+            core.error(diagnostic);
+            try {
+              core.summary.addRaw(`${diagnostic}\n`);
+              await core.summary.write();
+            } catch {
+              core.error(`${context.job}: cancellation step summary could not be written`);
+            }
             await github.rest.actions.cancelWorkflowRun({
               ...context.repo,
               run_id: context.runId,
@@ -4284,6 +5033,40 @@ jobs:
         with:
           retries: 0
           script: |
+            let diagnostic;
+            let evidenceTimer;
+            try {
+              const jobs = await Promise.race([
+                github.paginate(
+                  "GET /repos/{owner}/{repo}/actions/runs/{run_id}/attempts/{attempt_number}/jobs",
+                  {
+                    ...context.repo,
+                    run_id: context.runId,
+                    attempt_number: Number(process.env.GITHUB_RUN_ATTEMPT),
+                    per_page: 100,
+                    request: { timeout: 10000 },
+                  },
+                ),
+                new Promise((_, reject) => {
+                  evidenceTimer = setTimeout(() => reject(new Error("Failed-step lookup timed out")), 10000);
+                }),
+              ]);
+              const failures = jobs.flatMap((job) => (job.steps || [])
+                .filter((step) => step.conclusion === "failure")
+                .map((step) => `${job.name} / ${step.number}: ${step.name} (${job.html_url})`));
+              diagnostic = `${context.job}: cancelling failed merge group; failed steps: ${failures.length ? failures.join("; ") : "not yet available from the jobs API"}`;
+            } catch {
+              diagnostic = `${context.job}: cancelling failed merge group; failed-step lookup unavailable`;
+            } finally {
+              clearTimeout(evidenceTimer);
+            }
+            core.error(diagnostic);
+            try {
+              core.summary.addRaw(`${diagnostic}\n`);
+              await core.summary.write();
+            } catch {
+              core.error(`${context.job}: cancellation step summary could not be written`);
+            }
             await github.rest.actions.cancelWorkflowRun({
               ...context.repo,
               run_id: context.runId,
@@ -4347,6 +5130,40 @@ jobs:
         with:
           retries: 0
           script: |
+            let diagnostic;
+            let evidenceTimer;
+            try {
+              const jobs = await Promise.race([
+                github.paginate(
+                  "GET /repos/{owner}/{repo}/actions/runs/{run_id}/attempts/{attempt_number}/jobs",
+                  {
+                    ...context.repo,
+                    run_id: context.runId,
+                    attempt_number: Number(process.env.GITHUB_RUN_ATTEMPT),
+                    per_page: 100,
+                    request: { timeout: 10000 },
+                  },
+                ),
+                new Promise((_, reject) => {
+                  evidenceTimer = setTimeout(() => reject(new Error("Failed-step lookup timed out")), 10000);
+                }),
+              ]);
+              const failures = jobs.flatMap((job) => (job.steps || [])
+                .filter((step) => step.conclusion === "failure")
+                .map((step) => `${job.name} / ${step.number}: ${step.name} (${job.html_url})`));
+              diagnostic = `${context.job}: cancelling failed merge group; failed steps: ${failures.length ? failures.join("; ") : "not yet available from the jobs API"}`;
+            } catch {
+              diagnostic = `${context.job}: cancelling failed merge group; failed-step lookup unavailable`;
+            } finally {
+              clearTimeout(evidenceTimer);
+            }
+            core.error(diagnostic);
+            try {
+              core.summary.addRaw(`${diagnostic}\n`);
+              await core.summary.write();
+            } catch {
+              core.error(`${context.job}: cancellation step summary could not be written`);
+            }
             await github.rest.actions.cancelWorkflowRun({
               ...context.repo,
               run_id: context.runId,
@@ -4552,6 +5369,40 @@ jobs:
         with:
           retries: 0
           script: |
+            let diagnostic;
+            let evidenceTimer;
+            try {
+              const jobs = await Promise.race([
+                github.paginate(
+                  "GET /repos/{owner}/{repo}/actions/runs/{run_id}/attempts/{attempt_number}/jobs",
+                  {
+                    ...context.repo,
+                    run_id: context.runId,
+                    attempt_number: Number(process.env.GITHUB_RUN_ATTEMPT),
+                    per_page: 100,
+                    request: { timeout: 10000 },
+                  },
+                ),
+                new Promise((_, reject) => {
+                  evidenceTimer = setTimeout(() => reject(new Error("Failed-step lookup timed out")), 10000);
+                }),
+              ]);
+              const failures = jobs.flatMap((job) => (job.steps || [])
+                .filter((step) => step.conclusion === "failure")
+                .map((step) => `${job.name} / ${step.number}: ${step.name} (${job.html_url})`));
+              diagnostic = `${context.job}: cancelling failed merge group; failed steps: ${failures.length ? failures.join("; ") : "not yet available from the jobs API"}`;
+            } catch {
+              diagnostic = `${context.job}: cancelling failed merge group; failed-step lookup unavailable`;
+            } finally {
+              clearTimeout(evidenceTimer);
+            }
+            core.error(diagnostic);
+            try {
+              core.summary.addRaw(`${diagnostic}\n`);
+              await core.summary.write();
+            } catch {
+              core.error(`${context.job}: cancellation step summary could not be written`);
+            }
             await github.rest.actions.cancelWorkflowRun({
               ...context.repo,
               run_id: context.runId,
@@ -4656,6 +5507,40 @@ jobs:
         with:
           retries: 0
           script: |
+            let diagnostic;
+            let evidenceTimer;
+            try {
+              const jobs = await Promise.race([
+                github.paginate(
+                  "GET /repos/{owner}/{repo}/actions/runs/{run_id}/attempts/{attempt_number}/jobs",
+                  {
+                    ...context.repo,
+                    run_id: context.runId,
+                    attempt_number: Number(process.env.GITHUB_RUN_ATTEMPT),
+                    per_page: 100,
+                    request: { timeout: 10000 },
+                  },
+                ),
+                new Promise((_, reject) => {
+                  evidenceTimer = setTimeout(() => reject(new Error("Failed-step lookup timed out")), 10000);
+                }),
+              ]);
+              const failures = jobs.flatMap((job) => (job.steps || [])
+                .filter((step) => step.conclusion === "failure")
+                .map((step) => `${job.name} / ${step.number}: ${step.name} (${job.html_url})`));
+              diagnostic = `${context.job}: cancelling failed merge group; failed steps: ${failures.length ? failures.join("; ") : "not yet available from the jobs API"}`;
+            } catch {
+              diagnostic = `${context.job}: cancelling failed merge group; failed-step lookup unavailable`;
+            } finally {
+              clearTimeout(evidenceTimer);
+            }
+            core.error(diagnostic);
+            try {
+              core.summary.addRaw(`${diagnostic}\n`);
+              await core.summary.write();
+            } catch {
+              core.error(`${context.job}: cancellation step summary could not be written`);
+            }
             await github.rest.actions.cancelWorkflowRun({
               ...context.repo,
               run_id: context.runId,
@@ -4715,6 +5600,40 @@ jobs:
         with:
           retries: 0
           script: |
+            let diagnostic;
+            let evidenceTimer;
+            try {
+              const jobs = await Promise.race([
+                github.paginate(
+                  "GET /repos/{owner}/{repo}/actions/runs/{run_id}/attempts/{attempt_number}/jobs",
+                  {
+                    ...context.repo,
+                    run_id: context.runId,
+                    attempt_number: Number(process.env.GITHUB_RUN_ATTEMPT),
+                    per_page: 100,
+                    request: { timeout: 10000 },
+                  },
+                ),
+                new Promise((_, reject) => {
+                  evidenceTimer = setTimeout(() => reject(new Error("Failed-step lookup timed out")), 10000);
+                }),
+              ]);
+              const failures = jobs.flatMap((job) => (job.steps || [])
+                .filter((step) => step.conclusion === "failure")
+                .map((step) => `${job.name} / ${step.number}: ${step.name} (${job.html_url})`));
+              diagnostic = `${context.job}: cancelling failed merge group; failed steps: ${failures.length ? failures.join("; ") : "not yet available from the jobs API"}`;
+            } catch {
+              diagnostic = `${context.job}: cancelling failed merge group; failed-step lookup unavailable`;
+            } finally {
+              clearTimeout(evidenceTimer);
+            }
+            core.error(diagnostic);
+            try {
+              core.summary.addRaw(`${diagnostic}\n`);
+              await core.summary.write();
+            } catch {
+              core.error(`${context.job}: cancellation step summary could not be written`);
+            }
             await github.rest.actions.cancelWorkflowRun({
               ...context.repo,
               run_id: context.runId,
@@ -4778,6 +5697,40 @@ jobs:
         with:
           retries: 0
           script: |
+            let diagnostic;
+            let evidenceTimer;
+            try {
+              const jobs = await Promise.race([
+                github.paginate(
+                  "GET /repos/{owner}/{repo}/actions/runs/{run_id}/attempts/{attempt_number}/jobs",
+                  {
+                    ...context.repo,
+                    run_id: context.runId,
+                    attempt_number: Number(process.env.GITHUB_RUN_ATTEMPT),
+                    per_page: 100,
+                    request: { timeout: 10000 },
+                  },
+                ),
+                new Promise((_, reject) => {
+                  evidenceTimer = setTimeout(() => reject(new Error("Failed-step lookup timed out")), 10000);
+                }),
+              ]);
+              const failures = jobs.flatMap((job) => (job.steps || [])
+                .filter((step) => step.conclusion === "failure")
+                .map((step) => `${job.name} / ${step.number}: ${step.name} (${job.html_url})`));
+              diagnostic = `${context.job}: cancelling failed merge group; failed steps: ${failures.length ? failures.join("; ") : "not yet available from the jobs API"}`;
+            } catch {
+              diagnostic = `${context.job}: cancelling failed merge group; failed-step lookup unavailable`;
+            } finally {
+              clearTimeout(evidenceTimer);
+            }
+            core.error(diagnostic);
+            try {
+              core.summary.addRaw(`${diagnostic}\n`);
+              await core.summary.write();
+            } catch {
+              core.error(`${context.job}: cancellation step summary could not be written`);
+            }
             await github.rest.actions.cancelWorkflowRun({
               ...context.repo,
               run_id: context.runId,
@@ -4902,6 +5855,40 @@ jobs:
         with:
           retries: 0
           script: |
+            let diagnostic;
+            let evidenceTimer;
+            try {
+              const jobs = await Promise.race([
+                github.paginate(
+                  "GET /repos/{owner}/{repo}/actions/runs/{run_id}/attempts/{attempt_number}/jobs",
+                  {
+                    ...context.repo,
+                    run_id: context.runId,
+                    attempt_number: Number(process.env.GITHUB_RUN_ATTEMPT),
+                    per_page: 100,
+                    request: { timeout: 10000 },
+                  },
+                ),
+                new Promise((_, reject) => {
+                  evidenceTimer = setTimeout(() => reject(new Error("Failed-step lookup timed out")), 10000);
+                }),
+              ]);
+              const failures = jobs.flatMap((job) => (job.steps || [])
+                .filter((step) => step.conclusion === "failure")
+                .map((step) => `${job.name} / ${step.number}: ${step.name} (${job.html_url})`));
+              diagnostic = `${context.job}: cancelling failed merge group; failed steps: ${failures.length ? failures.join("; ") : "not yet available from the jobs API"}`;
+            } catch {
+              diagnostic = `${context.job}: cancelling failed merge group; failed-step lookup unavailable`;
+            } finally {
+              clearTimeout(evidenceTimer);
+            }
+            core.error(diagnostic);
+            try {
+              core.summary.addRaw(`${diagnostic}\n`);
+              await core.summary.write();
+            } catch {
+              core.error(`${context.job}: cancellation step summary could not be written`);
+            }
             await github.rest.actions.cancelWorkflowRun({
               ...context.repo,
               run_id: context.runId,
@@ -4967,6 +5954,40 @@ jobs:
         with:
           retries: 0
           script: |
+            let diagnostic;
+            let evidenceTimer;
+            try {
+              const jobs = await Promise.race([
+                github.paginate(
+                  "GET /repos/{owner}/{repo}/actions/runs/{run_id}/attempts/{attempt_number}/jobs",
+                  {
+                    ...context.repo,
+                    run_id: context.runId,
+                    attempt_number: Number(process.env.GITHUB_RUN_ATTEMPT),
+                    per_page: 100,
+                    request: { timeout: 10000 },
+                  },
+                ),
+                new Promise((_, reject) => {
+                  evidenceTimer = setTimeout(() => reject(new Error("Failed-step lookup timed out")), 10000);
+                }),
+              ]);
+              const failures = jobs.flatMap((job) => (job.steps || [])
+                .filter((step) => step.conclusion === "failure")
+                .map((step) => `${job.name} / ${step.number}: ${step.name} (${job.html_url})`));
+              diagnostic = `${context.job}: cancelling failed merge group; failed steps: ${failures.length ? failures.join("; ") : "not yet available from the jobs API"}`;
+            } catch {
+              diagnostic = `${context.job}: cancelling failed merge group; failed-step lookup unavailable`;
+            } finally {
+              clearTimeout(evidenceTimer);
+            }
+            core.error(diagnostic);
+            try {
+              core.summary.addRaw(`${diagnostic}\n`);
+              await core.summary.write();
+            } catch {
+              core.error(`${context.job}: cancellation step summary could not be written`);
+            }
             await github.rest.actions.cancelWorkflowRun({
               ...context.repo,
               run_id: context.runId,
@@ -5019,6 +6040,40 @@ jobs:
         with:
           retries: 0
           script: |
+            let diagnostic;
+            let evidenceTimer;
+            try {
+              const jobs = await Promise.race([
+                github.paginate(
+                  "GET /repos/{owner}/{repo}/actions/runs/{run_id}/attempts/{attempt_number}/jobs",
+                  {
+                    ...context.repo,
+                    run_id: context.runId,
+                    attempt_number: Number(process.env.GITHUB_RUN_ATTEMPT),
+                    per_page: 100,
+                    request: { timeout: 10000 },
+                  },
+                ),
+                new Promise((_, reject) => {
+                  evidenceTimer = setTimeout(() => reject(new Error("Failed-step lookup timed out")), 10000);
+                }),
+              ]);
+              const failures = jobs.flatMap((job) => (job.steps || [])
+                .filter((step) => step.conclusion === "failure")
+                .map((step) => `${job.name} / ${step.number}: ${step.name} (${job.html_url})`));
+              diagnostic = `${context.job}: cancelling failed merge group; failed steps: ${failures.length ? failures.join("; ") : "not yet available from the jobs API"}`;
+            } catch {
+              diagnostic = `${context.job}: cancelling failed merge group; failed-step lookup unavailable`;
+            } finally {
+              clearTimeout(evidenceTimer);
+            }
+            core.error(diagnostic);
+            try {
+              core.summary.addRaw(`${diagnostic}\n`);
+              await core.summary.write();
+            } catch {
+              core.error(`${context.job}: cancellation step summary could not be written`);
+            }
             await github.rest.actions.cancelWorkflowRun({
               ...context.repo,
               run_id: context.runId,
@@ -5176,6 +6231,40 @@ jobs:
         with:
           retries: 0
           script: |
+            let diagnostic;
+            let evidenceTimer;
+            try {
+              const jobs = await Promise.race([
+                github.paginate(
+                  "GET /repos/{owner}/{repo}/actions/runs/{run_id}/attempts/{attempt_number}/jobs",
+                  {
+                    ...context.repo,
+                    run_id: context.runId,
+                    attempt_number: Number(process.env.GITHUB_RUN_ATTEMPT),
+                    per_page: 100,
+                    request: { timeout: 10000 },
+                  },
+                ),
+                new Promise((_, reject) => {
+                  evidenceTimer = setTimeout(() => reject(new Error("Failed-step lookup timed out")), 10000);
+                }),
+              ]);
+              const failures = jobs.flatMap((job) => (job.steps || [])
+                .filter((step) => step.conclusion === "failure")
+                .map((step) => `${job.name} / ${step.number}: ${step.name} (${job.html_url})`));
+              diagnostic = `${context.job}: cancelling failed merge group; failed steps: ${failures.length ? failures.join("; ") : "not yet available from the jobs API"}`;
+            } catch {
+              diagnostic = `${context.job}: cancelling failed merge group; failed-step lookup unavailable`;
+            } finally {
+              clearTimeout(evidenceTimer);
+            }
+            core.error(diagnostic);
+            try {
+              core.summary.addRaw(`${diagnostic}\n`);
+              await core.summary.write();
+            } catch {
+              core.error(`${context.job}: cancellation step summary could not be written`);
+            }
             await github.rest.actions.cancelWorkflowRun({
               ...context.repo,
               run_id: context.runId,
@@ -5223,6 +6312,40 @@ jobs:
         with:
           retries: 0
           script: |
+            let diagnostic;
+            let evidenceTimer;
+            try {
+              const jobs = await Promise.race([
+                github.paginate(
+                  "GET /repos/{owner}/{repo}/actions/runs/{run_id}/attempts/{attempt_number}/jobs",
+                  {
+                    ...context.repo,
+                    run_id: context.runId,
+                    attempt_number: Number(process.env.GITHUB_RUN_ATTEMPT),
+                    per_page: 100,
+                    request: { timeout: 10000 },
+                  },
+                ),
+                new Promise((_, reject) => {
+                  evidenceTimer = setTimeout(() => reject(new Error("Failed-step lookup timed out")), 10000);
+                }),
+              ]);
+              const failures = jobs.flatMap((job) => (job.steps || [])
+                .filter((step) => step.conclusion === "failure")
+                .map((step) => `${job.name} / ${step.number}: ${step.name} (${job.html_url})`));
+              diagnostic = `${context.job}: cancelling failed merge group; failed steps: ${failures.length ? failures.join("; ") : "not yet available from the jobs API"}`;
+            } catch {
+              diagnostic = `${context.job}: cancelling failed merge group; failed-step lookup unavailable`;
+            } finally {
+              clearTimeout(evidenceTimer);
+            }
+            core.error(diagnostic);
+            try {
+              core.summary.addRaw(`${diagnostic}\n`);
+              await core.summary.write();
+            } catch {
+              core.error(`${context.job}: cancellation step summary could not be written`);
+            }
             await github.rest.actions.cancelWorkflowRun({
               ...context.repo,
               run_id: context.runId,
@@ -5341,6 +6464,26 @@ jobs:
           FAST_REQUIRED: >-
             ["ci-checks-generated", "ci-checks-policy", "ci-checks-rest", "code-quality-api", "code-quality-rest", "code-quality-web", "dependency-malware", "parser-version-guard", "typecheck-baseline", "ci-tests"]
         run: |
+          # Read cancellation evidence before any early aggregation exit.
+          cancelled_jobs=""
+          if jq -e 'any(.[]; .result == "cancelled")' <<< "$NEEDS" > /dev/null; then
+            cancelled_jobs=$(gh api --paginate --slurp "repos/$REPO/actions/runs/$GITHUB_RUN_ID/attempts/$GITHUB_RUN_ATTEMPT/jobs?per_page=100") || {
+              echo "::error::Cancelled CI job failed-step lookup was unavailable."
+              exit 1
+            }
+            failed_steps=$(jq -r '
+              .[].jobs[] | select(.conclusion == "cancelled") | . as $job
+              | (.steps // [])[] | select(.conclusion == "failure")
+              | "\($job.name) / \(.number): \(.name) (\($job.html_url))"
+              | gsub("%"; "%25") | gsub("\r"; "%0D") | gsub("\n"; "%0A")
+              ' <<< "$cancelled_jobs")
+            if [[ -n "$failed_steps" ]]; then
+              while IFS= read -r failed_step; do
+                echo "::error::Cancelled CI job contains a failed step: $failed_step"
+              done <<< "$failed_steps"
+              exit 1
+            fi
+          fi
           if [[ "${HEAVY_ONLY:-false}" == true ]]; then
             # No main run may turn a cancellation into successful supersession.
             # Keep only the derived heavy set; thin jobs intentionally skipped.
@@ -5356,7 +6499,7 @@ jobs:
           # the same workflow/group proves supersession, unless any cancelled
           # job timed out. Every API lookup fails closed.
           cancelled_dependencies_were_superseded() {
-            local current workflow created runs jobs urls url annotations
+            local current workflow created runs urls url annotations
             current=$(gh api "repos/$REPO/actions/runs/$GITHUB_RUN_ID") || return 1
             workflow=$(jq -er '.workflow_id | select(type == "number")' <<< "$current") || return 1
             created=$(jq -er '.created_at | select(type == "string" and length > 0) | @uri' <<< "$current") || return 1
@@ -5370,12 +6513,11 @@ jobs:
                   elif $event == "pull_request" then any(.pull_requests[]; (.number | tostring) == $pr)
                   else false end))
               ' <<< "$runs" > /dev/null || return 1
-            jobs=$(gh api --paginate --slurp "repos/$REPO/actions/runs/$GITHUB_RUN_ID/jobs?filter=latest&per_page=100") || return 1
             urls=$(jq -er '
               [.[].jobs[] | select(.conclusion == "cancelled")]
               | if length == 0 then error("Cancelled run has no cancelled jobs")
                 else [.[] | .check_run_url | select(. != null)] | join("\n") end
-              ' <<< "$jobs") || return 1
+              ' <<< "$cancelled_jobs") || return 1
             while IFS= read -r url; do
               [[ -n "$url" ]] || continue
               [[ "$url" == "https://api.github.com/repos/$REPO/check-runs/"* ]] || return 1
@@ -5530,6 +6672,40 @@ jobs:
         with:
           retries: 0
           script: |
+            let diagnostic;
+            let evidenceTimer;
+            try {
+              const jobs = await Promise.race([
+                github.paginate(
+                  "GET /repos/{owner}/{repo}/actions/runs/{run_id}/attempts/{attempt_number}/jobs",
+                  {
+                    ...context.repo,
+                    run_id: context.runId,
+                    attempt_number: Number(process.env.GITHUB_RUN_ATTEMPT),
+                    per_page: 100,
+                    request: { timeout: 10000 },
+                  },
+                ),
+                new Promise((_, reject) => {
+                  evidenceTimer = setTimeout(() => reject(new Error("Failed-step lookup timed out")), 10000);
+                }),
+              ]);
+              const failures = jobs.flatMap((job) => (job.steps || [])
+                .filter((step) => step.conclusion === "failure")
+                .map((step) => `${job.name} / ${step.number}: ${step.name} (${job.html_url})`));
+              diagnostic = `${context.job}: cancelling failed merge group; failed steps: ${failures.length ? failures.join("; ") : "not yet available from the jobs API"}`;
+            } catch {
+              diagnostic = `${context.job}: cancelling failed merge group; failed-step lookup unavailable`;
+            } finally {
+              clearTimeout(evidenceTimer);
+            }
+            core.error(diagnostic);
+            try {
+              core.summary.addRaw(`${diagnostic}\n`);
+              await core.summary.write();
+            } catch {
+              core.error(`${context.job}: cancellation step summary could not be written`);
+            }
             await github.rest.actions.cancelWorkflowRun({
               ...context.repo,
               run_id: context.runId,

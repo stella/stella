@@ -1,10 +1,3 @@
-/**
- * An AVT view verifies a matter's documents against one of its legal lists,
- * so storing one needs the lists feature, and a picked list must belong to
- * the matter the view is in. Checked inside the transaction that writes the
- * view; the list row is share-locked so it cannot be deleted before commit.
- */
-
 import { and, eq } from "drizzle-orm";
 
 import type { Transaction } from "@/api/db/root";
@@ -12,13 +5,14 @@ import { legalLists } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { ViewLayout } from "@/api/lib/views-schema";
 
-export type AvtLayoutRejection = "legal-lists-disabled" | "list-not-found";
+export type AvtLayoutRejection = "access-unavailable" | "list-not-found";
 
 type RejectAvtLayoutArgs = {
   tx: Transaction;
   workspaceId: SafeId<"workspace">;
   layout: ViewLayout;
   legalListsEnabled: boolean;
+  accessStatus: "available" | "unavailable";
 };
 
 /** Null when the layout may be stored; otherwise why not. */
@@ -27,12 +21,13 @@ export const rejectAvtLayout = async ({
   workspaceId,
   layout,
   legalListsEnabled,
+  accessStatus,
 }: RejectAvtLayoutArgs): Promise<AvtLayoutRejection | null> => {
   if (layout.type !== "avt") {
     return null;
   }
-  if (!legalListsEnabled) {
-    return "legal-lists-disabled";
+  if (!legalListsEnabled || accessStatus !== "available") {
+    return "access-unavailable";
   }
   if (layout.listId === null) {
     return null;
@@ -52,10 +47,9 @@ export const rejectAvtLayout = async ({
 };
 
 const REJECTION_ERRORS = {
-  "legal-lists-disabled": {
-    status: 422,
-    message:
-      "AVT views need legal lists, which this deployment does not serve.",
+  "access-unavailable": {
+    status: 404,
+    message: "Not found",
   },
   "list-not-found": {
     status: 404,
