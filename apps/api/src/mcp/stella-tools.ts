@@ -5,6 +5,7 @@ import * as v from "valibot";
 import { AGENT_INPUT_NORMALIZATION_KIND } from "@stll/agent-input";
 import { resourceRef, RESOURCE_TYPE } from "@stll/api-contract";
 import { DECISION_READ_RESOLUTION } from "@stll/api-contract/case-law-decision-resolution";
+import { CASE_LAW_JURISDICTIONS } from "@stll/api-contract/case-law-jurisdictions";
 import {
   PUBLIC_CASE_LAW_COUNTRIES,
   publicCaseLawCountry,
@@ -81,6 +82,7 @@ import {
   type LIST_MATTERS_LIST_PROJECTION,
   LIST_MATTERS_PROJECTION,
   LOOKUP_CASE_LAW_PROJECTION,
+  CASE_LAW_COVERAGE_PROJECTION,
   READ_CASE_LAW_CITATIONS_PROJECTION,
   READ_CASE_LAW_DECISION_PROJECTION,
   READ_CONTACT_PROJECTION,
@@ -139,6 +141,7 @@ import type { McpRequestContext } from "@/api/mcp/context";
 import { hasEffectiveAuthority } from "@/api/mcp/effective-authority";
 import {
   defaultLookupDecisionsByIdentity,
+  defaultReadCaseLawCoverageHandler,
   defaultReadGatedDecisionCitations,
   defaultReadGatedDecisionWithDocument,
   defaultSearchDecisionsHandler,
@@ -164,6 +167,7 @@ import { defineMcpToolSet } from "@/api/mcp/tool-types";
 import {
   invalidCursorResult,
   buildCaseLawDecisionAppUrl,
+  legalCitationLinkFields,
   countryInputSchema,
   countryNormalization,
   FILTER_NORMALIZATION,
@@ -216,6 +220,7 @@ const defaultReadWorkspaceMembersHandler: typeof readWorkspaceMembersHandler =
     ).readWorkspaceMembersHandler(input);
 
 type StellaToolName =
+  | "case_law_coverage"
   | "list_matters"
   | "lookup_case_law"
   | "read_case_law_citations"
@@ -635,6 +640,20 @@ const searchAcrossMattersArgsSchema = nullAsAbsent(
  */
 const ADMITTED_CASE_LAW_COUNTRIES = PUBLIC_CASE_LAW_COUNTRIES.join(", ");
 
+const CASE_LAW_COVERAGE_TOOL = "case_law_coverage";
+const caseLawCoverageArgsSchema = nullAsAbsent(
+  v.strictObject({
+    country: v.optional(
+      v.pipe(
+        countryInputSchema(
+          "Corpus country; omit for all jurisdictions, including those in preparation.",
+        ),
+        v.minLength(LIMITS.caseLawCoverageCountryMinLength),
+      ),
+    ),
+  }),
+);
+
 /** Named because the country ask names the call to change; a census test binds
  *  this to the tool's own `name` so a rename cannot leave a stale hint. */
 const SEARCH_CASE_LAW_TOOL = "search_case_law";
@@ -990,7 +1009,7 @@ export const STELLA_TOOL_DEFINITIONS = [
       readOnlyHint: true,
       openWorldHint: false,
     },
-    description: SEARCH_CASE_LAW_TEXTS.description,
+    description: `${SEARCH_CASE_LAW_TEXTS.description} Use \`url\` for the reader and \`source_url\` for the publisher.`,
     inputSchema: searchCaseLawArgsSchema,
     inputNormalization: {
       country: countryNormalization({
@@ -1014,6 +1033,31 @@ export const STELLA_TOOL_DEFINITIONS = [
     scope: "stella:search",
   }),
   defineValibotMcpTool({
+    consumesServices: false,
+    annotations: {
+      title: "Read case-law coverage",
+      destructiveHint: false,
+      readOnlyHint: true,
+      openWorldHint: false,
+    },
+    description:
+      "Report case-law availability, decision counts, year ranges and court breakdowns per jurisdiction. Use before concluding that a decision is missing from the corpus; in-preparation counts describe held decisions that public search cannot yet find.",
+    inputSchema: caseLawCoverageArgsSchema,
+    inputNormalization: {
+      country: countryNormalization({
+        spelling: "alpha-3",
+        admitted: CASE_LAW_JURISDICTIONS,
+        tool: CASE_LAW_COVERAGE_TOOL,
+      }),
+    },
+    access: "read",
+    readClass: "public",
+    anonymized: { exposure: "passthrough" },
+    feature: "FEATURE_PUBLIC_LAW",
+    name: CASE_LAW_COVERAGE_TOOL,
+    scope: "stella:read",
+  }),
+  defineValibotMcpTool({
     consumesServices: true,
     annotations: {
       title: "Look up case law by identifier",
@@ -1023,8 +1067,7 @@ export const STELLA_TOOL_DEFINITIONS = [
     },
     description:
       "Resolve case references to decisions: docket numbers as the courts " +
-      "write them and ECLIs. Answered from identity columns, not ranked " +
-      "text: a hit is the decision named, not one citing it. Each " +
+      "write them and ECLIs. Matches identity columns, not ranked text or citations. Each " +
       "`identifiers[]` entry is answered on its own, in input order, under " +
       "`status`: `found` carries that decision's id, resourceName, appUrl, " +
       "caseNumber (citable reference, not always a docket), court, date and " +
@@ -1033,7 +1076,8 @@ export const STELLA_TOOL_DEFINITIONS = [
       "call instead; `lookup_failed`: the read did not complete; retry that " +
       "entry. Use this when the user names a case; use search_case_law when " +
       "they describe one. Pass a `found` decisionId to " +
-      "read_case_law_decision for the text and typed identifiers.",
+      "read_case_law_decision for the text and typed identifiers. " +
+      "Use `url` for the reader and `source_url` for the publisher.",
     inputSchema: lookupCaseLawArgsSchema,
     inputNormalization: {
       country: countryNormalization({
@@ -1094,7 +1138,8 @@ export const STELLA_TOOL_DEFINITIONS = [
       "on any window; [] returns text and identity only. Text and unfinished " +
       "citation lists are paged: pass nextCursor with that one id. Citation " +
       "ids carry neither treatment nor surrounding text; for those call " +
-      "read_case_law_citations ({ decision_id: '<uuid>', direction: 'cited_by' }).",
+      "read_case_law_citations ({ decision_id: '<uuid>', direction: 'cited_by' }). " +
+      "Use `url` for the reader and `source_url` for the publisher.",
     inputSchema: readCaseLawDecisionArgsSchema,
     inputNormalization: {
       max_chars: {
@@ -1125,7 +1170,7 @@ export const STELLA_TOOL_DEFINITIONS = [
     // polarity vocabulary and the two readings a model would otherwise guess
     // at, the passage's bounds, and the next call spelled out.
     description:
-      "How the decisions citing one stood to it, or what it cited. One page, " +
+      "Read how citing decisions stood to one, or what it cited. One page, " +
       "each citation with a polarity and an excerpt of its paragraph. " +
       "`cited_by` returns the decisions that cite this one, `cites` the ones " +
       "it cites; neither means agreement. " +
@@ -1136,9 +1181,8 @@ export const STELLA_TOOL_DEFINITIONS = [
       `${LIMITS.caseLawCitationPassageChars} characters centred on the citation, cut when ` +
       "`passage.truncated`; `passage.mention` is 'sole', " +
       "'classified_section' (the mention the polarity came from), or " +
-      "'latest_of_several' (it may not be). Example: { decision_id: " +
-      "'<uuid>', direction: " +
-      "'cited_by', limit: 20 }. Pass nextCursor back as cursor.",
+      "'latest_of_several' (it may not be). Pass nextCursor back as cursor. " +
+      "Use `url` for the reader and `source_url` for the publisher.",
     inputSchema: readCaseLawCitationsArgsSchema,
     access: "read",
     readClass: "public",
@@ -2169,14 +2213,17 @@ const caseLawSearchResult = ({
   });
   return {
     matchedQueries,
-    appUrl: buildCaseLawDecisionAppUrl({
-      caseNumber: hit.caseNumber,
-      country: hit.country,
-      court: hit.court,
-      decisionId: hit.decisionId,
-      language: hit.language,
-      languageAlternates: hit.languageAlternates,
-      slug: hit.slug,
+    ...legalCitationLinkFields({
+      appUrl: buildCaseLawDecisionAppUrl({
+        caseNumber: hit.caseNumber,
+        country: hit.country,
+        court: hit.court,
+        decisionId: hit.decisionId,
+        language: hit.language,
+        languageAlternates: hit.languageAlternates,
+        slug: hit.slug,
+      }),
+      sourceUrl: hit.sourceUrl,
     }),
     caseNumber: hit.caseNumber,
     citationAuthority: hit.citationAuthority,
@@ -2649,17 +2696,21 @@ const decisionItemResult = ({
       : null,
     status: DECISION_READ_STATUS.found,
     decision: {
+      ...legalCitationLinkFields({
+        appUrl: buildCaseLawDecisionAppUrl({
+          caseNumber: read.caseNumber,
+          country: read.country,
+          court: read.court,
+          decisionId: read.id,
+          language: read.language,
+          languageAlternates: read.languageAlternates,
+          slug: read.slug,
+        }),
+        sourceUrl: read.sourceUrl,
+      }),
+
       ...(includedFields.has("details")
         ? {
-            appUrl: buildCaseLawDecisionAppUrl({
-              caseNumber: read.caseNumber,
-              country: read.country,
-              court: read.court,
-              decisionId: read.id,
-              language: read.language,
-              languageAlternates: read.languageAlternates,
-              slug: read.slug,
-            }),
             ...nonDocketReference(read),
             country: read.country,
             court: read.court,
@@ -2896,14 +2947,17 @@ const SEARCH_INSTEAD_HINT =
   "Search the decision's text with search_case_law instead, or pass the docket exactly as the court wrote it.";
 
 const decisionIdentityOf = (row: DecisionIdentityRow) => ({
-  appUrl: buildCaseLawDecisionAppUrl({
-    caseNumber: row.caseNumber,
-    country: row.country,
-    court: row.court,
-    decisionId: row.id,
-    language: row.language,
-    languageAlternates: row.languageAlternates,
-    slug: row.slug,
+  ...legalCitationLinkFields({
+    appUrl: buildCaseLawDecisionAppUrl({
+      caseNumber: row.caseNumber,
+      country: row.country,
+      court: row.court,
+      decisionId: row.id,
+      language: row.language,
+      languageAlternates: row.languageAlternates,
+      slug: row.slug,
+    }),
+    sourceUrl: null,
   }),
   caseNumber: row.caseNumber,
   // As in search: the kind is named only where the reference is not a docket.
@@ -3174,14 +3228,17 @@ const handleReadCaseLawCitationsTool: TypedMcpToolHandler<
         item.decision === null
           ? null
           : {
-              appUrl: buildCaseLawDecisionAppUrl({
-                caseNumber: item.decision.caseNumber,
-                country: item.decision.country,
-                court: item.decision.court,
-                decisionId: item.decision.id,
-                language: item.decision.language,
-                languageAlternates: item.decision.languageAlternates,
-                slug: item.decision.slug,
+              ...legalCitationLinkFields({
+                appUrl: buildCaseLawDecisionAppUrl({
+                  caseNumber: item.decision.caseNumber,
+                  country: item.decision.country,
+                  court: item.decision.court,
+                  decisionId: item.decision.id,
+                  language: item.decision.language,
+                  languageAlternates: item.decision.languageAlternates,
+                  slug: item.decision.slug,
+                }),
+                sourceUrl: null,
               }),
               caseNumber: item.decision.caseNumber,
               ...(item.decision.caseNumberType ===
@@ -3308,7 +3365,94 @@ const handleSetPracticeJurisdictionsTool: TypedMcpToolHandler<
   >);
 };
 
+const handleCaseLawCoverageTool: TypedMcpToolHandler<
+  v.InferInput<typeof CASE_LAW_COVERAGE_PROJECTION>
+> = async ({ args, context }) => {
+  const parsed = v.safeParse(caseLawCoverageArgsSchema, args);
+  if (!parsed.success) {
+    return validationErrorResult(parsed.issues);
+  }
+  const { country } = parsed.output;
+  const readCoverage =
+    context.testDependencies?.readCaseLawCoverageHandler ??
+    defaultReadCaseLawCoverageHandler;
+  const coverage = await readCoverage(caseLawPublicReadDb);
+  if ("message" in coverage) {
+    return structuredErrorResult({
+      code: "upstream_unavailable",
+      message: coverage.message,
+      hint: "Retry case_law_coverage later.",
+      retryable: true,
+    });
+  }
+  const countries =
+    country === undefined
+      ? coverage.countries
+      : coverage.countries.filter((entry) => entry.country === country);
+  if (country !== undefined && countries.length === 0) {
+    return notFoundResult(
+      "Case-law country not found",
+      `Pass one of the coverage country codes: ${coverage.countries.map((entry) => entry.country).join(", ")}, or omit country for all jurisdictions.`,
+    );
+  }
+  return toolDataResult({
+    asOf: coverage.generatedAt,
+    countries: countries.map((entry) => {
+      switch (entry.availability) {
+        case "in-preparation":
+          return {
+            country: entry.country,
+            availability: entry.availability,
+            decisions: entry.stored.decisions,
+            decisionYearFrom: null,
+            decisionYearTo: null,
+            courts: null,
+          };
+        case "searchable":
+          return {
+            country: entry.country,
+            availability: entry.availability,
+            decisions: entry.searchable,
+            decisionYearFrom: entry.decisionYearFrom,
+            decisionYearTo: entry.decisionYearTo,
+            courts:
+              entry.courts === null
+                ? null
+                : entry.courts.map((row) => {
+                    switch (row.type) {
+                      case "court":
+                        return {
+                          type: row.type,
+                          court: row.court,
+                          decisions: row.decisions,
+                        };
+                      case "tier":
+                        return {
+                          type: row.type,
+                          tier: row.tier,
+                          courts: row.courts,
+                          decisions: row.decisions,
+                        };
+                      case "unlisted":
+                        return { type: row.type, decisions: row.decisions };
+                      default: {
+                        row satisfies never;
+                        return panic("Unknown case-law coverage court row");
+                      }
+                    }
+                  }),
+          };
+        default: {
+          entry satisfies never;
+          return panic("Unknown case-law coverage availability");
+        }
+      }
+    }),
+  } satisfies v.InferInput<typeof CASE_LAW_COVERAGE_PROJECTION>);
+};
+
 export const STELLA_TOOL_HANDLERS = {
+  case_law_coverage: handleCaseLawCoverageTool,
   list_matters: handleListMattersTool,
   lookup_case_law: handleLookupCaseLawTool,
   read_case_law_citations: handleReadCaseLawCitationsTool,
@@ -3324,6 +3468,9 @@ export const STELLA_TOOL_SET = defineMcpToolSet(
   STELLA_TOOL_DEFINITIONS,
   STELLA_TOOL_HANDLERS,
   {
+    case_law_coverage: defineChatProjectionMcpToolOutput(
+      CASE_LAW_COVERAGE_PROJECTION,
+    ),
     list_matters: defineChatProjectionMcpToolOutput(LIST_MATTERS_PROJECTION),
     lookup_case_law: defineChatProjectionMcpToolOutput(
       LOOKUP_CASE_LAW_PROJECTION,

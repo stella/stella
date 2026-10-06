@@ -33,6 +33,11 @@ export type AllowedFile = {
 export type OwnershipEnforcement =
   | { readonly kind: "none" }
   | {
+      readonly kind: "literal-pattern";
+      readonly pattern: string;
+      readonly allowed: readonly AllowedFile[];
+    }
+  | {
       readonly kind: "status-set";
       readonly columns: Readonly<Record<string, readonly string[]>>;
       readonly allowed: readonly AllowedFile[];
@@ -134,6 +139,25 @@ const FLUSHES_ITS_OWN_SEARCH_MARKS =
 // exemptions cannot drift apart. Adding a door here does not add a shape to
 // the baseline; it moves one out of it, and review of the row is the gate.
 export const ROOT_CONNECTION_DOORS = [
+  {
+    id: "operator-registration-directory",
+    capability: "Serving audited operator registration pages",
+    owner: ["apps/api/src/db/root.ts"],
+    summary:
+      "Reads bounded registration pages through the owner connection and records each read transactionally; callers receive only the declared directory fields, never a database handle.",
+    enforcement: {
+      kind: "import",
+      specifiers: ["@/api/db/root"],
+      names: ["readOperatorRegistrationPage"],
+      allowed: [
+        {
+          path: "apps/api/src/handlers/operator/registrations.ts",
+          reason:
+            "Authorizes the deployment credential before reading the directory.",
+        },
+      ],
+    },
+  },
   {
     id: "public-sanctions-reader-binding",
     capability:
@@ -463,6 +487,36 @@ const UNMIGRATED_PUBLISHER_READERS = [
 
 const OWNERSHIP_DECLARATIONS = [
   STATUS_TRANSITION_OWNERSHIP,
+  {
+    id: "citation-graph-transaction",
+    capability: "Acquiring the citation graph transaction lock",
+    owner: ["apps/api/src/handlers/case-law/citation-graph-transaction.ts"],
+    summary:
+      "The graph owner acquires its advisory lock before domain row locks and passes a branded transaction to graph writers. The conditional owner declines busy walks before reading their cursor.",
+    enforcement: {
+      kind: "literal-pattern",
+      pattern: "citation_resolution_walk",
+      allowed: [
+        {
+          path: "scripts/ownership.ts",
+          reason: "Declares the confined lock key.",
+        },
+        {
+          path: "apps/api/src/handlers/case-law/citation-graph-transaction.test.ts",
+          reason: "Checks graph admission and failed acquisition.",
+        },
+        {
+          path: "apps/api/src/handlers/case-law/ingestion/citation-graph-lock-order.postgres.test.ts",
+          reason: "Exercises graph lock ordering and the rejecting mutation.",
+        },
+        {
+          path: ".oxlint-plugins/__tests__/confine-owner.test.ts",
+          reason:
+            "Exercises rejected literal and SQL fixtures through the lint rule.",
+        },
+      ],
+    },
+  },
   {
     id: "task-assignment-membership",
     capability: "Writing task assignments for current matter members",
@@ -1188,6 +1242,8 @@ const OWNERSHIP_DECLARATIONS = [
     summary:
       "`readBounded` applies a cap-plus-one SQL limit and returns either the " +
       "complete rows or an explicit overflow result without a partial set. " +
+      "`readCursorPage` uses the same sentinel and the existing `Page` owner " +
+      "to preserve worker continuation without claiming a partial set is complete. " +
       "This owner handles expected export ceilings; `boundedAll` instead " +
       "panics when a write-path cardinality invariant is violated. " +
       "`scripts/transfer-read-guard.ts` enumerates fixed-limit reads and " +
@@ -2601,6 +2657,9 @@ const enforcementCell = (enforcement: OwnershipEnforcement): string => {
     }
     case "status-set": {
       return "lifecycle updates, conflict sets and visible SQL assignments; lint errors plus measured per-file backlog and shrink-only ratchet";
+    }
+    case "literal-pattern": {
+      return `literal pattern \`${enforcement.pattern}\``;
     }
     default: {
       enforcement satisfies never;

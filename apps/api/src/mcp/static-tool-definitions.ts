@@ -319,6 +319,7 @@ export const LAW_MCP_TOOL_DISPOSITION = {
   fetch: "corpus",
   search_case_law: "corpus",
   lookup_case_law: "corpus",
+  case_law_coverage: "corpus",
   read_case_law_decision: "corpus",
   read_case_law_citations: "corpus",
   search_legislation: "corpus",

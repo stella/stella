@@ -1,6 +1,7 @@
 import Elysia from "elysia";
 
 import createMachineApiKey from "@/api/handlers/api-keys/create";
+import currentMachineApiKey from "@/api/handlers/api-keys/current";
 import listMachineApiKeys from "@/api/handlers/api-keys/list";
 import revokeMachineApiKey from "@/api/handlers/api-keys/revoke";
 import rotateMachineApiKey from "@/api/handlers/api-keys/rotate";
@@ -15,6 +16,7 @@ import { authMacro, permissionMacro } from "@/api/lib/auth";
  * This is the only route surface that mints or revokes a machine credential.
  */
 export const apiKeysRoute = new Elysia({ prefix: "/api-keys" })
+  .get("/current", currentMachineApiKey.handler)
   .use(authMacro)
   .use(permissionMacro)
   // See the identical guard in `organization-settings/routes.ts` for why this

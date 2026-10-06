@@ -1,4 +1,4 @@
-import { lazy, Suspense } from "react";
+import { lazy, Suspense, useRef } from "react";
 
 import { useNavigate, useRouterState } from "@tanstack/react-router";
 import { useTranslations } from "use-intl";
@@ -13,6 +13,10 @@ import {
   isCaseDecisionGenericTab,
   navigateToCaseDecisionMain,
 } from "@/components/inspector/case-decision-view";
+import {
+  InspectorFindBar,
+  useInspectorFind,
+} from "@/components/inspector/inspector-find";
 import { INSPECTOR_PANE_INTENT } from "@/components/inspector/inspector-store-types";
 import type { InspectorOwnerRouteId } from "@/components/inspector/inspector-store-types";
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
@@ -83,6 +87,15 @@ export function PublicDecisionViewer({
   });
 
   const noDocument = decisionHasNoDocument(decision);
+  const panelRef = useRef<HTMLElement>(null);
+  const contentRef = useRef<HTMLDivElement>(null);
+  const find = useInspectorFind({
+    contentRef,
+    enabled: !noDocument,
+    highlightKey: `decision-page-${decision.id}`,
+    initialQuery: initialSearchQuery,
+    panelRef,
+  });
   const originalUrl =
     buildDecisionFacts({
       decisionType: decision.decisionType,
@@ -116,9 +129,7 @@ export function PublicDecisionViewer({
         languageAlternates: decision.languageAlternates,
         slug: decision.slug,
         ...(initialAnchorId === undefined ? {} : { anchorId: initialAnchorId }),
-        ...(initialSearchQuery === undefined
-          ? {}
-          : { searchQuery: initialSearchQuery }),
+        ...(find.findQuery === "" ? {} : { searchQuery: find.findQuery }),
       }),
     );
     if (swapTarget !== undefined) {
@@ -138,7 +149,10 @@ export function PublicDecisionViewer({
   };
 
   return (
-    <main className="flex min-h-0 flex-1 flex-col overflow-hidden">
+    <main
+      className="flex min-h-0 flex-1 flex-col overflow-hidden"
+      ref={panelRef}
+    >
       <DecisionDetailsTab
         decision={decision}
         key={decision.id}
@@ -169,7 +183,8 @@ export function PublicDecisionViewer({
         />
       </ChromeHeaderActions>
       {fileMayHoldOthers && <PublicDecisionFileNote />}
-      <div className="flex min-h-0 flex-1 overflow-hidden">
+      {!noDocument && <InspectorFindBar find={find} />}
+      <div className="flex min-h-0 flex-1 overflow-hidden" ref={contentRef}>
         {noDocument && <PublicDecisionTextNotice sourceUrl={originalUrl} />}
         {!noDocument &&
           (authStatus.isAuthenticated ? (
@@ -181,7 +196,6 @@ export function PublicDecisionViewer({
                     decision={decision}
                     decisionId={decisionId}
                     initialAnchorId={initialAnchorId}
-                    initialSearchQuery={initialSearchQuery}
                   />
                 </div>
               }
@@ -190,7 +204,6 @@ export function PublicDecisionViewer({
                 decision={decision}
                 decisionId={decisionId}
                 initialAnchorId={initialAnchorId}
-                initialSearchQuery={initialSearchQuery}
                 user={authStatus.user}
               />
             </Suspense>
@@ -199,7 +212,6 @@ export function PublicDecisionViewer({
               decision={decision}
               decisionId={decisionId}
               initialAnchorId={initialAnchorId}
-              initialSearchQuery={initialSearchQuery}
             />
           ))}
       </div>
@@ -211,12 +223,10 @@ const GuestDecisionWorkspace = ({
   decision,
   decisionId,
   initialAnchorId,
-  initialSearchQuery,
 }: {
   decision: PublicCaseLawDecision;
   decisionId: ReturnType<typeof extractId>;
   initialAnchorId?: string | undefined;
-  initialSearchQuery?: string | undefined;
 }) => {
   const ensureAccount = useRequireAccount();
 
@@ -227,7 +237,6 @@ const GuestDecisionWorkspace = ({
         decision={decision}
         decisionId={decisionId}
         initialAnchorId={initialAnchorId}
-        initialSearchQuery={initialSearchQuery}
         onRequestAnalysis={() => {
           ensureAccount();
         }}

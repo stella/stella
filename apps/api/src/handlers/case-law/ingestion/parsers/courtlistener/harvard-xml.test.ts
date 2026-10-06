@@ -213,7 +213,6 @@ describe("text conservation", () => {
     domType: null,
     position: "row",
     boundaries: "markup",
-    orderTitleBlockId: null,
     blocks: texts.map((plainText, index) => ({
       id: `b${index}`,
       anchorId: `p${index}`,
@@ -661,7 +660,6 @@ describe("Harvard XML opinions composed into scopes", () => {
       },
     ]);
     expect(outcome.principal.body).toBe("We affirm.");
-    expect(outcome.principal.structuralOpinion).toBe(true);
   });
 
   test("keeps a nested opinion and the text after it in separate scopes", () => {

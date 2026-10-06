@@ -55,7 +55,9 @@ const rejectCredential = (): McpAuthenticationError =>
  * with no audience in its metadata predates the binding and stays usable
  * anywhere, which is what it could already do.
  */
-export const resolveMachineApiKeySession = async (
+type MachineApiKeyCredential = { session: McpSession; expiresAt: Date | null };
+
+export const resolveMachineApiKeyCredential = async (
   credential: string,
   {
     mode = "default",
@@ -68,7 +70,7 @@ export const resolveMachineApiKeySession = async (
     ) => ReturnType<ReturnType<typeof getAuth>["api"]["verifyApiKey"]>;
     resolveAuthorization?: typeof resolveCredentialMemberAuthorization;
   } = {},
-): Promise<McpSession> => {
+): Promise<MachineApiKeyCredential> => {
   const verification = await verifyApiKey({
     body: {
       // Scoping to this configuration means a key minted under any other
@@ -154,17 +156,25 @@ export const resolveMachineApiKeySession = async (
   }
 
   return {
-    credential: {
-      type: "machine_api_key",
-      id: key.id,
-      name: key.name ?? "Machine API key",
-      // The set the check above proved the owner's role can grant. It travels
-      // with the session so authorization can hold the key to it, rather than
-      // to the whole role the owner happens to have.
-      permissions: parsedPermissions.permissions,
+    expiresAt: key.expiresAt,
+    session: {
+      credential: {
+        type: "machine_api_key",
+        id: key.id,
+        name: key.name ?? "Machine API key",
+        // The set the check above proved the owner's role can grant. It travels
+        // with the session so authorization can hold the key to it, rather than
+        // to the whole role the owner happens to have.
+        permissions: parsedPermissions.permissions,
+      },
+      organizationId,
+      scopes: [...scopes],
+      userId,
     },
-    organizationId,
-    scopes: [...scopes],
-    userId,
   };
 };
+
+/** MCP consumers need only the session; lifecycle observers also need expiry. */
+export const resolveMachineApiKeySession = async (
+  ...args: Parameters<typeof resolveMachineApiKeyCredential>
+) => (await resolveMachineApiKeyCredential(...args)).session;
