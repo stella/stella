@@ -118,12 +118,12 @@ export const renderVisual = async ({ input, launch }: RenderVisualOptions) => {
     // This listener belongs to the trusted parent; the composed document is
     // loaded unchanged in the same opaque-origin sandbox as the web UI.
     const initialized = await page.evaluate((document) => {
-      const iframe = window.document.querySelector("iframe");
+      const iframe = globalThis.document.querySelector("iframe");
       if (!iframe) {
         return false;
       }
-      window.document.documentElement.dataset["ready"] = "false";
-      window.addEventListener("message", (event: MessageEvent<unknown>) => {
+      globalThis.document.documentElement.dataset["ready"] = "false";
+      globalThis.addEventListener("message", (event: MessageEvent<unknown>) => {
         if (event.source !== iframe.contentWindow) {
           return;
         }
@@ -135,7 +135,7 @@ export const renderVisual = async ({ input, launch }: RenderVisualOptions) => {
           return;
         }
         if (event.data.kind === "ready") {
-          window.document.documentElement.dataset["ready"] = "true";
+          globalThis.document.documentElement.dataset["ready"] = "true";
         }
       });
       // safe-html: composed visual HTML is confined to this opaque-origin allow-scripts frame with network interception.
