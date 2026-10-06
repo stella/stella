@@ -258,6 +258,40 @@ describe("Docker source closure", () => {
     }
   });
 
+  test("resolves dotted module basenames only from stage sources", () => {
+    const config = put(
+      "apps/dotted/tsconfig.json",
+      JSON.stringify({ compilerOptions: { paths: { "@/*": ["./src/*"] } } }),
+    );
+    for (const suffix of [
+      "logic",
+      "gen",
+      "generated",
+      "query",
+      "constants",
+      "custom.name",
+    ]) {
+      const dependency = put(
+        `apps/dotted/src/value.${suffix}.ts`,
+        "export const value = 1;",
+      );
+      for (const prefix of ["./", "@/"]) {
+        const specifier = `${prefix}value.${suffix}`;
+        const entry = put("apps/dotted/src/entry.ts", `import "${specifier}";`);
+        expect(
+          sourceClosureProblems(root, tree([config, entry, dependency]), [
+            `/app/${entry}`,
+          ]),
+        ).toEqual([]);
+        expect(
+          sourceClosureProblems(root, tree([config, entry]), [`/app/${entry}`]),
+        ).toEqual([
+          `${entry} imports ${specifier}, unavailable in Docker stage`,
+        ]);
+      }
+    }
+  });
+
   test("resolves aliases using only stage sources", () => {
     const files = [
       put(
