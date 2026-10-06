@@ -828,6 +828,21 @@ describe("deriveHandlerImportPath", () => {
 });
 
 describe("serializeDispatchModule", () => {
+  test("feature entry metadata is projected beside the loader", () => {
+    const output = serializeDispatchModule([
+      {
+        id: "widgets.list",
+        importPath: "@/api/handlers/widgets/list",
+        exportName: undefined,
+        featureAccess: { featureId: "fixture", type: "conditional" },
+      },
+    ]);
+    expect(output).toContain(
+      'featureId: "fixture", featureAccess: "conditional"',
+    );
+    expect(output).toContain('import("@/api/handlers/widgets/list")');
+  });
+
   test("emits an async lazy import thunk per record, named export threaded", () => {
     const out = serializeDispatchModule([
       {

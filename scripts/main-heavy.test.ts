@@ -13,7 +13,8 @@ import path from "node:path";
 import { Script } from "node:vm";
 import * as v from "valibot";
 
-import { mainHeavyJobs, THIN_JOBS } from "./main-heavy-plan";
+import { contextFromNested, evaluate, UNKNOWN } from "./github-expression";
+import { mainHeavyJobs, thinJobs } from "./main-heavy-plan";
 
 const stepSchema = v.looseObject({
   name: v.optional(v.string()),
@@ -86,6 +87,7 @@ const mainWorkflow = {
   ),
 };
 const ciWorkflow = readWorkflow(".github/workflows/ci.yml");
+const THIN_JOBS = thinJobs(ciWorkflow);
 const mainTriggers = v.parse(mainTriggersSchema, mainWorkflow.on);
 const ciCall = v.parse(ciCallSchema, ciWorkflow.on).workflow_call;
 
@@ -215,15 +217,12 @@ test("main heavy workflow dispatches exactly the validated commit through ci.yml
 });
 
 const expressionValue = (value: unknown, context: object) => {
-  const expression = v
-    .parse(v.string(), value)
-    .replace(/^\s*\$\{\{([\s\S]*)\}\}\s*$/u, "$1");
-  return new Script(
-    expression.replaceAll(
-      /needs\.([\w-]+)/gu,
-      (_, job: string) => `needs[${JSON.stringify(job)}]`,
-    ),
-  ).runInNewContext(context);
+  const expression = v.parse(v.string(), value);
+  const result = evaluate(expression, contextFromNested(context));
+  if (result === UNKNOWN) {
+    panic(`Unresolved heavy workflow expression: ${expression}`);
+  }
+  return result;
 };
 
 type CheckoutWorkflow = v.InferOutput<typeof workflowSchema>;
@@ -252,7 +251,7 @@ const heavyCheckoutCensus = (workflow: CheckoutWorkflow) => {
       sha: "b".repeat(40),
       workflow_sha: "c".repeat(40),
       event_name: "workflow_dispatch",
-      event: { pull_request: { draft: false } },
+      event: { pull_request: { draft: false, labels: [] } },
     },
     needs: Object.fromEntries(
       Object.keys(workflow.jobs).map((job) => [
@@ -290,7 +289,8 @@ const heavyCheckoutCensus = (workflow: CheckoutWorkflow) => {
   for (const job of mainHeavyJobs(workflow)) {
     visit(job);
   }
-  const checkouts = [...executed].flatMap((job) =>
+  const checkoutOwners = new Set([...mainHeavyJobs(workflow), ...executed]);
+  const checkouts = [...checkoutOwners].flatMap((job) =>
     (workflow.jobs[job]?.steps ?? [])
       .filter(({ uses }) => uses?.startsWith("actions/checkout@"))
       .map((step) => ({ job, step })),
@@ -320,6 +320,7 @@ test("every executed heavy checkout targets the validated source or workflow too
   const checkouts = heavyCheckoutCensus(ciWorkflow);
   expect(checkouts.some(({ job }) => job === "ci-plan")).toBe(true);
   expect(checkouts.some(({ job }) => job === "heavy-web-build")).toBe(true);
+  expect(checkouts.some(({ job }) => job === "ci-tests")).toBe(true);
   for (const { job, step } of checkouts) {
     const mutant = structuredClone(ciWorkflow);
     const checkout = mutant.jobs[job]?.steps?.find(
@@ -338,6 +339,53 @@ test("every executed heavy checkout targets the validated source or workflow too
       expect(() => heavyCheckoutCensus(mutant)).toThrow(
         /Expected: "c{40}"\nReceived: "a{40}"/u,
       );
+    }
+  }
+});
+
+test("heavy test shards execute full scope while ordinary runs retain affected scope", () => {
+  const affected = ciWorkflow.jobs["ci-tests"]?.steps?.find(
+    ({ name }) => name === "Compute affected flag",
+  );
+  const script = v.parse(v.string(), affected?.run);
+  expect(affected?.env?.["HEAVY_ONLY"]).toBe(`\${{ inputs.heavy_only }}`);
+  for (const event of [
+    "push",
+    "schedule",
+    "workflow_dispatch",
+    "merge_group",
+  ]) {
+    for (const heavyOnly of [false, true]) {
+      const fixture = mkdtempSync(path.join(tmpdir(), "heavy-test-scope-"));
+      try {
+        const output = path.join(fixture, "output");
+        const environment = path.join(fixture, "environment");
+        writeFileSync(output, "");
+        writeFileSync(environment, "");
+        const result = Bun.spawnSync(["bash", "-euc", script], {
+          cwd: fixture,
+          env: {
+            ...Bun.env,
+            EVENT_NAME: event,
+            HEAVY_ONLY: String(heavyOnly),
+            BASE_REF: "main",
+            GITHUB_OUTPUT: output,
+            GITHUB_ENV: environment,
+          },
+        });
+        expect(result.exitCode, `${event}/${String(heavyOnly)}`).toBe(0);
+        const full = heavyOnly || event === "workflow_dispatch";
+        expect(
+          readFileSync(output, "utf-8"),
+          `${event}/${String(heavyOnly)}`,
+        ).toBe(full ? "flag=\n" : "flag=--affected\n");
+        expect(
+          readFileSync(environment, "utf-8"),
+          `${event}/${String(heavyOnly)}`,
+        ).toBe(full ? "" : "TURBO_SCM_BASE=origin/main\n");
+      } finally {
+        rmSync(fixture, { recursive: true, force: true });
+      }
     }
   }
 });
