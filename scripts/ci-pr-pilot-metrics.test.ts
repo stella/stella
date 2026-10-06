@@ -94,7 +94,7 @@ class Fixture(m.Collector):
     def rest(self, endpoint, parameters):
         if endpoint.endswith("/runs"):
             return {"total_count": 2, "workflow_runs": [
-                {"id": 1, "pull_requests": [{"number": 1, "head": {"sha": "head"}}]},
+                {"id": 1, "head_sha": "a" * 40, "pull_requests": [{"number": 1, "head": {"sha": "head"}}]},
                 {"id": 2, "pull_requests": []},
             ]}
         return {"total_count": 1, "jobs": [{"name": "parser-version-guard", "conclusion": "failure"}]}
@@ -104,6 +104,68 @@ print(json.dumps([result["postArmDeferredQueueFailureHeads"], result["unmappedDe
                   result["queueFailureEvidenceComplete"], fast["postArmDeferredQueueFailureHeads"]]))
 `);
   expect(values).toEqual([1, 1, false, 0]);
+});
+
+test("queue failure evidence includes cancelled runs and maps the tested group commit", () => {
+  const values = execute(`
+class Fixture(m.Collector):
+    def __init__(self, truncated=False):
+        super().__init__("stella/stella")
+        self.truncated = truncated
+        self.reads = []
+    def rest(self, endpoint, parameters):
+        self.reads.append([endpoint, parameters])
+        if endpoint.endswith("/runs"):
+            runs = [] if parameters["status"] == "failure" else [
+                {"id": 1, "pull_requests": [], "head_sha": "a" * 40,
+                 "head_branch": "gh-readonly-queue/main/pr-42-" + "b" * 40},
+                {"id": 2, "pull_requests": [], "head_sha": "a" * 40,
+                 "head_branch": "refs/heads/gh-readonly-queue/main/pr-42-" + "b" * 40},
+                {"id": 3, "pull_requests": [], "head_sha": "c" * 40,
+                 "head_branch": "gh-readonly-queue/main/pr-42-" + "b" * 40},
+                {"id": 4, "pull_requests": [], "head_sha": "d" * 40,
+                 "head_branch": "gh-readonly-queue/main/pr-43-" + "b" * 40},
+            ]
+            return {"total_count": len(runs) + int(self.truncated), "workflow_runs": runs}
+        conclusion = "cancelled" if endpoint == "actions/runs/4/jobs" else "failure"
+        return {"total_count": 1, "jobs": [{"name": "parser-version-guard", "conclusion": conclusion}]}
+fixture = Fixture()
+result = fixture.queue_failures(now, {"parser-version-guard"})
+partial = Fixture(True).queue_failures(now, {"parser-version-guard"})
+print(json.dumps([result, partial["queueFailureEvidenceComplete"],
+                  [parameters["status"] for endpoint, parameters in fixture.reads if endpoint.endswith("/runs")]]))
+`);
+  expect(values).toEqual([
+    {
+      postArmDeferredQueueFailureHeads: 2,
+      unmappedDeferredQueueFailureRuns: 0,
+      queueFailureEvidenceComplete: true,
+    },
+    false,
+    ["failure", "cancelled"],
+  ]);
+});
+
+test("ambiguous queue associations cannot certify failure evidence", () => {
+  const values = execute(`
+class Fixture(m.Collector):
+    def rest(self, endpoint, parameters):
+        if endpoint.endswith("/runs"):
+            return {"total_count": 3, "workflow_runs": [
+                {"id": 1, "pull_requests": [{"number": 7, "head": {"sha": "later-head"}}], "head_sha": "a" * 40,
+                 "head_branch": "gh-readonly-queue/main/pr-42-" + "b" * 40},
+                {"id": 2, "pull_requests": [], "head_sha": "c" * 40, "head_branch": "unknown"},
+                {"id": 3, "pull_requests": [], "head_sha": "invalid",
+                 "head_branch": "gh-readonly-queue/main/pr-42-" + "b" * 40},
+            ]}
+        return {"total_count": 1, "jobs": [{"name": "parser-version-guard", "conclusion": "failure"}]}
+print(json.dumps(Fixture("stella/stella").queue_failures(now, {"parser-version-guard"})))
+`);
+  expect(values).toEqual({
+    postArmDeferredQueueFailureHeads: 0,
+    unmappedDeferredQueueFailureRuns: 3,
+    queueFailureEvidenceComplete: false,
+  });
 });
 
 test("only a p50 increase greater than twenty minutes stops a generation", () => {

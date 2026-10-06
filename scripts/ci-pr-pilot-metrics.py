@@ -192,12 +192,16 @@ class Collector:
         heads = set()
         unmapped = 0
         complete = True
-        result = self.rest("actions/workflows/ci.yml/runs", {
-            "event": "merge_group", "status": "failure", "created": f">={since.isoformat()}",
-            "per_page": 40, "page": 1,
-        })
-        complete = result["total_count"] <= len(result["workflow_runs"])
-        for run in result["workflow_runs"]:
+        runs = {}
+        for conclusion in ["failure", "cancelled"]:
+            result = self.rest("actions/workflows/ci.yml/runs", {
+                "event": "merge_group", "status": conclusion, "created": f">={since.isoformat()}",
+                "per_page": 40, "page": 1,
+            })
+            complete = complete and result["total_count"] <= len(result["workflow_runs"])
+            for run in result["workflow_runs"]:
+                runs[run["id"]] = run
+        for run in runs.values():
             jobs = self.rest(f"actions/runs/{run['id']}/jobs", {"per_page": 100, "filter": "latest"})
             if jobs["total_count"] > len(jobs["jobs"]):
                 complete = False
@@ -206,10 +210,23 @@ class Collector:
             if not failed:
                 continue
             pulls = run["pull_requests"]
-            if not pulls:
+            match = re.fullmatch(r"(?:refs/heads/)?gh-readonly-queue/[^/]+/pr-([0-9]+)-[0-9a-f]{40}",
+                                 run.get("head_branch") or "")
+            numbers = {pull["number"] for pull in pulls}
+            if match:
+                number = int(match.group(1))
+                if numbers and numbers != {number}:
+                    unmapped += 1
+                    continue
+                numbers.add(number)
+            group_sha = run.get("head_sha") or ""
+            if not numbers or not re.fullmatch(r"[0-9a-f]{40}", group_sha):
                 unmapped += 1
-            for pull in pulls:
-                heads.add((pull["number"], pull["head"]["sha"]))
+                continue
+            # Queue refs encode the base, not the PR head. Count the tested group
+            # commit; a current PR lookup could attribute an old failure to a push.
+            for number in numbers:
+                heads.add((number, group_sha))
         return {"postArmDeferredQueueFailureHeads": len(heads),
                 "unmappedDeferredQueueFailureRuns": unmapped, "queueFailureEvidenceComplete": complete and unmapped == 0}
 
@@ -384,7 +401,7 @@ def main():
     queue = collector.queue_failures(start, normal_pr_deferred)
     report["measured"].update(queue)
     report["complete"] = report["complete"] and queue["queueFailureEvidenceComplete"]
-    report["postArmCycleDefinition"] = "distinct observed heads failing normal-PR checks deferred by pilot-fast; unmapped runs are reported separately"
+    report["postArmCycleDefinition"] = "distinct observed PR heads and tested merge-group commits failing normal-PR checks deferred by pilot-fast; unmapped runs are reported separately"
     write_evidence(args, report, pulls)
     print(f"Pilot metrics complete={report['complete']} stopped={report['stopped']}")
 

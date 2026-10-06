@@ -89,7 +89,7 @@ const decide = async ({
   profile = "normal-v1",
   action = "labeled",
   event = "pull_request",
-  artifacts = [artifact(depth)],
+  artifacts = [artifact(depth, profile)],
   failure = false,
   runFailure = false,
   sourceRun = successfulRun,
@@ -176,6 +176,13 @@ test("unchanged-head events reuse only the exact completed depth", async () => {
         ).outputs.get("run_required"),
       ).toBe("true");
     }
+  }
+});
+
+test("default completion evidence follows the selected coverage profile", async () => {
+  for (const profile of ["normal-v1", "pilot-fast-v1"]) {
+    const { outputs } = await decide({ profile });
+    expect(outputs.get("run_required"), profile).toBe("false");
   }
 });
 
