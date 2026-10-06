@@ -43,6 +43,17 @@ export type PlaywrightListing = {
   errors: { message?: string }[];
 };
 
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === "object" && value !== null;
+
+const isListing = (value: unknown): value is PlaywrightListing =>
+  isRecord(value) &&
+  isRecord(value["config"]) &&
+  typeof value["config"]["rootDir"] === "string" &&
+  Array.isArray(value["config"]["projects"]) &&
+  Array.isArray(value["suites"]) &&
+  Array.isArray(value["errors"]);
+
 const isInside = (root: string, target: string) => {
   const relative = path.relative(root, target);
   return (
@@ -65,7 +76,7 @@ export const checkListing = (
 ): string[] => {
   const problems = listing.errors.map(
     (error) =>
-      `${config}: failed to load: ${(error.message ?? "unknown error").split("\n")[0]}`,
+      `${config}: failed to load: ${(error.message ?? "unknown error").split("\n", 1).join("")}`,
   );
   for (const project of listing.config.projects) {
     if (!isInside(packageRoot, project.testDir)) {
@@ -134,15 +145,18 @@ const listConfig = (config: string): string[] => {
   const jsonStart = result.stdout.indexOf("{");
   if (jsonStart === -1) {
     return [
-      `${config}: playwright --list printed no report (exit ${result.status}): ${result.stderr.trim().split("\n").slice(0, 5).join(" | ")}`,
+      `${config}: playwright --list printed no report (exit ${String(result.status)}): ${result.stderr.trim().split("\n").slice(0, 5).join(" | ")}`,
     ];
   }
-  const listing = JSON.parse(
-    result.stdout.slice(jsonStart),
-  ) as PlaywrightListing;
+  const listing: unknown = JSON.parse(result.stdout.slice(jsonStart));
+  if (!isListing(listing)) {
+    return [`${config}: playwright --list printed an unexpected report shape`];
+  }
   const problems = checkListing(config, packageRoot, listing);
   if (problems.length === 0 && result.status !== 0) {
-    problems.push(`${config}: playwright --list exited ${result.status}`);
+    problems.push(
+      `${config}: playwright --list exited ${String(result.status)}`,
+    );
   }
   return problems;
 };
