@@ -211,6 +211,8 @@ import type {
 import { createRawChatFilePart } from "@/api/handlers/chat/upload-files";
 import type { UploadedChatFile } from "@/api/handlers/chat/upload-files";
 import { attachVerifiedEntityMentionKinds } from "@/api/handlers/chat/verified-mention-kinds";
+import { createVisualResourceOrigin } from "@/api/handlers/visual-sandbox/resource-origin";
+import { createVisualStore } from "@/api/handlers/visual-sandbox/store";
 import type { OrgAIConfig } from "@/api/lib/ai-config";
 import { captureError, detached } from "@/api/lib/analytics/capture";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
@@ -2657,7 +2659,19 @@ export const createSendMessage = (
         // catalog and connector tools, which are known only later. Skill
         // availability is decided over the same inputs before the catalog
         // reaches the prompt, so an offered skill always has its tools.
+        const visualOrigin = createVisualResourceOrigin();
+        const visualTools = {
+          origin: visualOrigin,
+          store: createVisualStore({
+            recordAuditEvent,
+            safeDb,
+            threadId: body.threadId,
+            userId: user.id,
+            workspaceId,
+          }),
+        };
         const chatToolContext = {
+          visualTools,
           featureAccessSnapshot,
           createAIAbortSignal: createMeteredAIAbortSignal,
           organizationId: session.activeOrganizationId,
@@ -3114,6 +3128,7 @@ export const createSendMessage = (
                 };
 
                 const outcome = await dependencies.streamResponse({
+                  visualOrigin,
                   runId: body.runId,
                   ...(parentRunId === undefined ? {} : { parentRunId }),
                   ...(resume === undefined ? {} : { resume }),

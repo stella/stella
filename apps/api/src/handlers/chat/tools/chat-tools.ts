@@ -62,6 +62,7 @@ import {
   createRememberTool,
   REMEMBER_TOOL_NAME,
 } from "@/api/handlers/chat/tools/remember-tool";
+import { createShowVisualTools } from "@/api/handlers/chat/tools/show-visual-tools";
 import {
   createSpawnSubagentsTool,
   SPAWN_SUBAGENTS_TOOL_NAME,
@@ -393,6 +394,8 @@ type BuiltInChatToolPolicyName =
   | CurrentSkillEditToolName;
 
 export type GetChatToolsProps = {
+  /** Only the owning chat turn can issue and store displayed visual resources. */
+  visualTools?: Parameters<typeof createShowVisualTools>[0] | undefined;
   featureAccessSnapshot?: FeatureAccessSnapshot | undefined;
   testDependencies?: ChatRegistryContextDeps["testDependencies"] | undefined;
   /** Deployment gate; injectable so both disabled and enabled toolsets test. */
@@ -1181,6 +1184,7 @@ export const getChatTools = (props: GetChatToolsProps): ChatToolMap => {
           getChatTools({
             ...props,
             browserClient: undefined,
+            visualTools: undefined,
             hasActiveDocxEditClient: false,
             delegationDepth: delegationDepth + 1,
             projectToolSet: (tools) =>
@@ -1201,6 +1205,9 @@ export const getChatTools = (props: GetChatToolsProps): ChatToolMap => {
   const registered = applyChatToolPolicies({
     policyKinds,
     tools: {
+      ...(props.visualTools === undefined
+        ? {}
+        : createShowVisualTools(props.visualTools)),
       ...orgTools,
       ...executionTools,
       ...skillTools,

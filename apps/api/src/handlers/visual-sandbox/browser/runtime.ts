@@ -12,6 +12,7 @@ import {
 
 import { createVisualMessageHandler } from "../bridge";
 import { composeVisualDocument } from "../srcdoc";
+import { parseVisualOuterConfig, whenVisualDocumentReady } from "./boot";
 import { createVisualGuestApi } from "./guest-api";
 import { isolateVisualGuest } from "./isolation";
 
@@ -66,14 +67,10 @@ const bootGuest = () => {
       },
       "*",
     );
-  window.addEventListener(
-    "DOMContentLoaded",
-    () => {
-      new ResizeObserver(reportSize).observe(document.body);
-      reportSize();
-    },
-    { once: true },
-  );
+  whenVisualDocumentReady(document, () => {
+    new ResizeObserver(reportSize).observe(document.body);
+    reportSize();
+  });
 };
 
 const bootOuter = (runtime: string) => {
@@ -81,18 +78,11 @@ const bootOuter = (runtime: string) => {
   if (!config || window.self === window.top) {
     return;
   }
-  const configSchema = v.strictObject({
-    origins: v.array(v.string()),
-    policy: v.string(),
-  });
-  const parsedConfig = v.safeParse(
-    configSchema,
-    JSON.parse(config.textContent),
-  );
-  if (!parsedConfig.success) {
-    return;
+  const parsedConfig = parseVisualOuterConfig(config.textContent);
+  if (parsedConfig.isErr()) {
+    throw parsedConfig.error;
   }
-  const { origins, policy } = parsedConfig.output;
+  const { origins, policy } = parsedConfig.value;
   const inner = document.createElement("iframe");
   inner.setAttribute("sandbox", "allow-scripts");
   inner.setAttribute("referrerpolicy", "no-referrer");

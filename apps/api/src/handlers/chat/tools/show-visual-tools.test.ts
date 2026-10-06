@@ -70,18 +70,20 @@ describe("show visual", () => {
     }
     for (const data of [Number.POSITIVE_INFINITY, deep, "é".repeat(524_288)]) {
       const error = await rejectionOf(
-        execute(
-          {
-            title: "Revenue",
-            html: "<p>Revenue</p>",
-            data,
-          },
-          {
-            toolCallId: "visual-call-one",
-            emitCustomEvent: (_name, value) => {
-              emissions.push(value);
+        Promise.resolve(
+          execute(
+            {
+              title: "Revenue",
+              html: "<p>Revenue</p>",
+              data,
             },
-          },
+            {
+              toolCallId: "visual-call-one",
+              emitCustomEvent: (_name, value) => {
+                emissions.push(value);
+              },
+            },
+          ),
         ),
       );
       expect(error).toBeInstanceOf(ChatToolError);
@@ -116,9 +118,11 @@ describe("show visual", () => {
     const execute = tool.execute ?? panic("Visual tool has no executor");
     expect(
       await rejectionOf(
-        execute(
-          { title: "Revenue", html: "<p>Revenue</p>", data: { unused: 42 } },
-          context,
+        Promise.resolve(
+          execute(
+            { title: "Revenue", html: "<p>Revenue</p>", data: { unused: 42 } },
+            context,
+          ),
         ),
       ),
     ).toMatchObject({
@@ -128,9 +132,11 @@ describe("show visual", () => {
     expect(saved).toBe(0);
     expect(
       await rejectionOf(
-        execute(
-          { title: "Revenue", html: "<p>revenue</p>", data: { revenue: 42 } },
-          context,
+        Promise.resolve(
+          execute(
+            { title: "Revenue", html: "<p>revenue</p>", data: { revenue: 42 } },
+            context,
+          ),
         ),
       ),
     ).toMatchObject({ message: "Storage unavailable" });

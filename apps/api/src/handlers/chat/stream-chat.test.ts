@@ -64,7 +64,8 @@ import type {
   ChatAnonRestoration,
   ChatMessage,
 } from "@/api/handlers/chat/types";
-import { toSafeId } from "@/api/lib/branded-types";
+import { createVisualResourceOrigin } from "@/api/handlers/visual-sandbox/resource-origin";
+import { createSafeId, toSafeId } from "@/api/lib/branded-types";
 import type { ChatTool } from "@/api/lib/chat/chat-tool-types";
 import {
   guardModelMessages,
@@ -5158,5 +5159,75 @@ describe("a superseded client-tool call in the engine's history", () => {
     expect(finish?.responseMessage.parts).toMatchObject([
       { type: "text", content: "It will say one sentence." },
     ]);
+  });
+});
+
+describe("native visual stream persistence", () => {
+  test("preserves issued resources through SDK capture, storage and reload", () => {
+    const origin = createVisualResourceOrigin();
+    const messageId = createSafeId<"chatMessage">();
+    const part = origin.issue({
+      fileId: createSafeId<"userFile">(),
+      title: "Court overview",
+      toolCallId: "visual-call",
+    });
+    const capture = createStreamMessageCapture({
+      initialMessages: [],
+      capture: (message) => toChatMessage(message, origin),
+    });
+    const chunks = [
+      {
+        type: EventType.RUN_STARTED,
+        runId: "visual-run",
+        threadId: "visual-thread",
+      },
+      {
+        type: EventType.TOOL_CALL_START,
+        parentMessageId: messageId,
+        toolCallId: "visual-call",
+        toolCallName: "show_visual",
+      },
+      { type: EventType.CUSTOM, name: "ui-resource", value: part },
+      {
+        type: EventType.RUN_FINISHED,
+        runId: "visual-run",
+        threadId: "visual-thread",
+        finishReason: "stop",
+      },
+    ] as const satisfies readonly StreamChunk[];
+    for (const chunk of chunks) {
+      capture.processor.processChunk(chunk);
+    }
+    capture.processor.finalizeStream();
+    const persisted =
+      capture.message() ?? panic("Visual stream produced no message");
+    const streamed =
+      capture.processor
+        .getMessages()
+        .find(({ role }) => role === "assistant") ??
+      panic("Visual stream produced no assistant");
+    const streamedVisuals = streamed.parts.filter(
+      ({ type }) => type === "ui-resource",
+    );
+    expect(streamedVisuals).toEqual([part]);
+    expect(
+      persisted.parts.filter(({ type }) => type === "ui-resource"),
+    ).toEqual(streamedVisuals);
+    const stored = chatMessageContentFromMessage(
+      toPersistableChatMessage(persisted),
+    );
+    const reloaded = chatMessageFromPersisted({
+      id: toSafeId<"chatMessage">(persisted.id),
+      role: persisted.role,
+      content: stored,
+    });
+    expect(reloaded.parts.filter(({ type }) => type === "ui-resource")).toEqual(
+      streamedVisuals,
+    );
+    expect(
+      toChatMessage(streamed)?.parts.some(
+        ({ type }) => type === "ui-resource",
+      ) ?? false,
+    ).toBe(false);
   });
 });

@@ -3795,6 +3795,10 @@
     "seconds": 1,
     "source": "estimated"
   },
+  "src/handlers/visual-sandbox/browser/boot.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
   "src/handlers/visual-sandbox/browser/guest-api.test.ts": {
     "seconds": 1,
     "source": "estimated"
@@ -5629,6 +5633,10 @@
   },
   "src/lib/file-scan/scanner.test.ts": {
     "seconds": 0.05258,
+    "source": "estimated"
+  },
+  "src/lib/file-scan/stored-file.test.ts": {
+    "seconds": 1,
     "source": "estimated"
   },
   "src/lib/file-scan/verdict.test.ts": {

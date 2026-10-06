@@ -1,4 +1,4 @@
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import {
   afterAll,
   beforeAll,
@@ -119,6 +119,7 @@ import stopAdminTimer from "@/api/handlers/time-timers/admin/stop";
 import listMyTimeTimers from "@/api/handlers/time-timers/list";
 import readUserFileContent from "@/api/handlers/user-files/read-content";
 import readUserFileThumbnail from "@/api/handlers/user-files/read-thumbnail";
+import { createReadUserFileVisual } from "@/api/handlers/user-files/read-visual";
 import listVatRates from "@/api/handlers/vat-rates/list";
 import updateVatRate from "@/api/handlers/vat-rates/update";
 import listMyWork from "@/api/handlers/work-obligations/queues/list";
@@ -513,7 +514,53 @@ const savedSearchCriteria = (
   sort: "relevance",
 });
 
+const visualAttachmentReader = createReadUserFileVisual(async () =>
+  testScannedFile({
+    bytes: new TextEncoder().encode(
+      JSON.stringify({
+        title: "Court overview",
+        html: "<p>Overview</p>",
+        data: {},
+        links: [],
+      }),
+    ).buffer,
+    mimeType: "text/plain",
+  }),
+);
+
 const isolationCases: IsolationCase[] = [
+  {
+    name: "visual attachment across organizations",
+    runAAgainstB: async ({ ids: testIds, workspaceA }) =>
+      await runHandler(visualAttachmentReader, workspaceA, {
+        params: { fileId: testIds.userFileWorkspaceB1UserA1 },
+      }),
+    runBPositive: async ({ ids: testIds, sameUserWorkspaceB }) =>
+      await runHandler(visualAttachmentReader, sameUserWorkspaceB, {
+        params: { fileId: testIds.userFileWorkspaceB1UserA1 },
+      }),
+    expectDenied: expectStatus(404),
+    expectPositive: (result) => {
+      expectStatus(200)(result);
+      if (!(result instanceof Response)) {
+        return panic("Visual attachment did not return a response");
+      }
+      expect(result.headers.get("Cache-Control")).toBe("private, no-store");
+    },
+  },
+  {
+    name: "visual attachment with another owner",
+    runAAgainstB: async ({ ids: testIds, workspaceB }) =>
+      await runHandler(visualAttachmentReader, workspaceB, {
+        params: { fileId: testIds.userFileWorkspaceB1UserA1 },
+      }),
+    runBPositive: async ({ ids: testIds, sameUserWorkspaceB }) =>
+      await runHandler(visualAttachmentReader, sameUserWorkspaceB, {
+        params: { fileId: testIds.userFileWorkspaceB1UserA1 },
+      }),
+    expectDenied: expectStatus(404),
+    expectPositive: expectStatus(200),
+  },
   ...desktopPresenceIsolationCases(),
   {
     name: "user file content",
