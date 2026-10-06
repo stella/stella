@@ -146,6 +146,7 @@
     "accountLinked": "Cuenta vinculada",
     "connectToStella": "Conectar con stella web",
     "connectToStellaDescription": "Vincule este ordenador a su cuenta actual de stella sin abrir un documento.",
+    "desktopBenefit": "Archivos de Office e historial local del portapapeles",
     "disconnectAccount": "Desconectar cuenta",
     "errorDisconnectAccount": "stella desktop no pudo desconectar su cuenta.",
     "errorReadAccount": "stella desktop no pudo comprobar la conexión de su cuenta.",

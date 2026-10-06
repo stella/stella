@@ -271,9 +271,6 @@ const GeneralPane = ({
                 linkedAccount?.email ||
                 t("stellaDesktop")}
             </p>
-            <p className="text-muted-foreground truncate text-sm">
-              {linkedAccount?.email ?? t(presentation.webDescriptionKey)}
-            </p>
           </div>
           <span
             className={cn(
@@ -286,6 +283,9 @@ const GeneralPane = ({
             {t(presentation.statusKey)}
           </span>
         </div>
+        <p className="text-muted-foreground px-4 pb-4 text-sm leading-relaxed wrap-break-word">
+          {linkedAccount?.email ?? t("desktopBenefit")}
+        </p>
         {linkedAccount ? (
           <>
             <Separator />

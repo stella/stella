@@ -6611,6 +6611,10 @@
     "seconds": 0.220722,
     "source": "estimated"
   },
+  "src/lib/mcp-upstream/namespace.property.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
   "src/lib/mcp-upstream/oauth.test.ts": {
     "seconds": 0.264413,
     "source": "estimated"
