@@ -13,12 +13,14 @@ import {
   entityVersions,
   fields,
   legalListVerificationRuns,
+  organizationSettings,
   properties,
   workspaces,
   workspaceMembers,
 } from "@/api/db/schema";
 import type { RlsDatabase } from "@/api/db/scoped";
 import { env } from "@/api/env";
+import { encryptAIConfig } from "@/api/lib/ai-config-crypto";
 import type { SafeId } from "@/api/lib/branded-types";
 import { createSafeId, toSafeId } from "@/api/lib/branded-types";
 import type { FeatureAccessGrants } from "@/api/lib/feature-access/grants-schema";
@@ -95,12 +97,16 @@ afterAll(async () => await releaseTestDb());
 
 const seedRun = async (status: "queued" | "running" = "queued") => {
   const id = createSafeId<"legalListVerificationRun">();
+  const entityId = createSafeId<"entity">();
+  await db
+    .insert(entities)
+    .values({ id: entityId, workspaceId, name: "Verification document" });
   await db.insert(legalListVerificationRuns).values({
     id,
     organizationId,
     workspaceId,
     requestedBy: userId,
-    entityId: createSafeId<"entity">(),
+    entityId,
     fileFieldId: createSafeId<"field">(),
     entityVersionId: createSafeId<"entityVersion">(),
     contentSha256: "a".repeat(64),
@@ -124,9 +130,6 @@ const seedPinnedRun = async () => {
   if (run === undefined) {
     throw new Error("Expected pinned run fixture");
   }
-  await db
-    .insert(entities)
-    .values({ id: run.entityId, workspaceId, name: "Verification document" });
   await db
     .insert(entityVersions)
     .values({ id: run.entityVersionId, entityId: run.entityId, workspaceId });
@@ -862,6 +865,22 @@ test("queue handoff failures surface while the persisted run remains recoverable
 
 test("worker budget refusal stops model dispatch and releases its active slot", async () =>
   await withProductionPrerequisites(async () => {
+    const configured = await encryptAIConfig(organizationId, {
+      providers: [{ provider: "google", apiKey: "fixture-key" }],
+      overrideModels: {
+        chat: { provider: "google", modelId: "model-a" },
+        fast: { provider: "google", modelId: "model-a" },
+        pdf: { provider: "google", modelId: "model-a" },
+        reasoning: { provider: "google", modelId: "model-a" },
+      },
+      decision: null,
+    });
+    await db.insert(organizationSettings).values({
+      id: createSafeId<"organizationSettings">(),
+      organizationId,
+      aiConfigEncrypted: configured.ciphertext,
+      aiConfigIv: configured.iv,
+    });
     const runId = await seedPinnedRun();
     const previousActive = env.LIST_VERIFICATION_ACTIVE_RUNS_MAX;
     const previousDaily = env.LIST_VERIFICATION_DAILY_STARTS_MAX;
@@ -902,5 +921,8 @@ test("worker budget refusal stops model dispatch and releases its active slot", 
     } finally {
       env.LIST_VERIFICATION_ACTIVE_RUNS_MAX = previousActive;
       env.LIST_VERIFICATION_DAILY_STARTS_MAX = previousDaily;
+      await db
+        .delete(organizationSettings)
+        .where(eq(organizationSettings.organizationId, organizationId));
     }
   }));
