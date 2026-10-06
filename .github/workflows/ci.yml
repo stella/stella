@@ -3696,6 +3696,11 @@ jobs:
       - name: Projection totality
         run: bun run check:projection-totality
 
+      - name: Split-button census
+        run: |
+          bun run --cwd packages/scripts test ../../scripts/check-split-buttons.test.ts
+          bun run check:split-buttons
+
       - name: Database awaits in loops
         # Type-aware N+1 guard over the API source and scripts: an awaited
         # database call, a call handed a database handle, or a helper that
