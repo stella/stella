@@ -45,6 +45,7 @@ import {
   SelectValue,
 } from "@stll/ui/select";
 import { Skeleton } from "@stll/ui/skeleton";
+import { StellaMark } from "@stll/ui/stella-mark";
 import {
   Table,
   TableBody,
@@ -107,7 +108,7 @@ const ResultsTable = ({
           <TableHead className="w-72 ps-4">{t("reference")}</TableHead>
           <TableHead>{t("summary")}</TableHead>
           <TableHead className="w-28 whitespace-nowrap">{t("date")}</TableHead>
-          <TableHead className="w-12">
+          <TableHead className="w-20">
             <span className="sr-only">{t("open")}</span>
           </TableHead>
         </TableRow>
@@ -115,7 +116,8 @@ const ResultsTable = ({
       <TableBody>
         {[...new Map(rows.map((row) => [row.decisionId, row])).values()].map(
           (row) => {
-            const url = row.appUrl ?? row.url;
+            const url = row.appUrl;
+            const sourceUrl = row.source_url;
             const open = () => {
               if (url !== null) {
                 bridge.detached(bridge.openLink(url), "open case-law decision");
@@ -181,8 +183,8 @@ const ResultsTable = ({
                         )}
                         {url !== null && (
                           <Button variant="outline" size="sm" onClick={open}>
-                            {t("open")}
-                            <ExternalLinkIcon />
+                            <StellaMark />
+                            {t("openInStella")}
                           </Button>
                         )}
                       </PreviewCardPopup>
@@ -218,24 +220,49 @@ const ResultsTable = ({
                   )}
                 </TableCell>
                 <TableCell className="py-2 max-[480px]:ms-auto">
-                  {url !== null && (
-                    <Tooltip>
-                      <TooltipTrigger
-                        render={
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="icon-sm"
-                            aria-label={t("open")}
-                            onClick={open}
-                          />
-                        }
-                      >
-                        <ExternalLinkIcon />
-                      </TooltipTrigger>
-                      <TooltipPopup>{t("open")}</TooltipPopup>
-                    </Tooltip>
-                  )}
+                  <div className="flex justify-end gap-1">
+                    {url !== null && (
+                      <Tooltip>
+                        <TooltipTrigger
+                          render={
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="icon-sm"
+                              aria-label={t("openInStella")}
+                              onClick={open}
+                            />
+                          }
+                        >
+                          <StellaMark />
+                        </TooltipTrigger>
+                        <TooltipPopup>{t("openInStella")}</TooltipPopup>
+                      </Tooltip>
+                    )}
+                    {sourceUrl !== undefined && (
+                      <Tooltip>
+                        <TooltipTrigger
+                          render={
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="icon-sm"
+                              aria-label={t("openOriginalSource")}
+                              onClick={() => {
+                                bridge.detached(
+                                  bridge.openLink(sourceUrl),
+                                  "open original case-law source",
+                                );
+                              }}
+                            />
+                          }
+                        >
+                          <ExternalLinkIcon />
+                        </TooltipTrigger>
+                        <TooltipPopup>{t("openOriginalSource")}</TooltipPopup>
+                      </Tooltip>
+                    )}
+                  </div>
                 </TableCell>
               </TableRow>
             );

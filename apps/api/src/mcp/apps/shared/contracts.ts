@@ -19,7 +19,7 @@ const identityFields = [
   "caseNumber",
   "ecli",
   "appUrl",
-  "url",
+  "source_url",
 ] as const;
 const lookupOptions = lookup.entries.items.item.options;
 const found = lookupOptions[0].pipe[0];

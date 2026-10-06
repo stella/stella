@@ -6,6 +6,7 @@ import {
 import type { McpUiHostContext } from "@modelcontextprotocol/ext-apps";
 import { Result } from "better-result";
 
+import { parseLegalCitationHttpUrl } from "@stll/api-contract/legal-citation-links";
 import { createDetached } from "@stll/errors";
 
 import type { PresentationApp } from "../manifest";
@@ -156,7 +157,14 @@ export const createPresentationBridge = <View>({
     receive(called.value);
   };
   const openLink = async (url: string): Promise<void> => {
-    const opened = await Result.tryPromise(() => app.openLink({ url }));
+    const parsed = parseLegalCitationHttpUrl(url);
+    if (parsed === null) {
+      publish({ status: "error", message: null });
+      return;
+    }
+    const opened = await Result.tryPromise(() =>
+      app.openLink({ url: parsed.href }),
+    );
     if (Result.isError(opened)) {
       publish({ status: "error", message: opened.error.message });
     } else if (opened.value.isError === true) {

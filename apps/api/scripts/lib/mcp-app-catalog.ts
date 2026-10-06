@@ -59,6 +59,8 @@ export const MCP_APP_MESSAGE_KEYS = {
   retry: "common.retry",
   error: "common.error",
   open: "common.open",
+  openInStella: "common.openInStella",
+  openOriginalSource: "common.openOriginalSource",
   from: "search.dateFrom",
   to: "search.dateTo",
 } as const satisfies Record<string, CatalogKey>;

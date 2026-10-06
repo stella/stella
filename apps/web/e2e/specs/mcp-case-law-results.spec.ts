@@ -187,7 +187,9 @@ test("case-law app filters, pages and opens links through the MCP host", async (
   );
   await expect(app.locator(".snippet b")).toHaveCount(0);
   await expect(app.locator("html")).toHaveCSS("color-scheme", "dark");
-  await app.getByRole("button", { name: "Open", exact: true }).click();
+  await app
+    .getByRole("button", { name: "Open in stella", exact: true })
+    .click();
   await expect
     .poll(() => hostHistory(page, "appLinks"))
     .toEqual([APP_SEARCH_FIXTURE.results.at(0)?.appUrl]);
@@ -408,6 +410,19 @@ test("filter labels align and date fields remain fixed when opened", async ({
     }),
   );
   expect(new Set(labelBoxes.map(({ y, height }) => y + height)).size).toBe(1);
+  const controls = app.locator(
+    '[data-slot="field"] [data-slot="select-trigger"], [data-slot="field"] [data-slot="popover-trigger"]',
+  );
+  await expect(controls).toHaveCount(4);
+  for (let index = 0; index < 4; index++) {
+    const labelBox = await labels.nth(index).boundingBox();
+    const controlBox = await controls.nth(index).boundingBox();
+    expect(labelBox).not.toBeNull();
+    expect(controlBox).not.toBeNull();
+    if (labelBox !== null && controlBox !== null) {
+      expect(Math.abs(labelBox.x - controlBox.x)).toBeLessThanOrEqual(0.5);
+    }
+  }
   const trigger = app.getByRole("button", { name: /^To /u });
   const label = labels.last();
   const beforeTrigger = await trigger.boundingBox();
@@ -419,4 +434,99 @@ test("filter labels align and date fields remain fixed when opened", async ({
   await expect(
     app.locator('[data-slot="date-picker-popup"] [aria-current="date"]'),
   ).toBeFocused();
+});
+
+test("reader and publisher buttons open their own URLs only after a click", async ({
+  page,
+}) => {
+  const first = APP_SEARCH_FIXTURE.results.at(0);
+  if (first === undefined) {
+    throw new Error("Missing search fixture");
+  }
+  const sourceUrl = "https://example.org/fixture-publisher-decision";
+  const found = APP_LOOKUP_FIXTURE.items.filter(
+    (item) => item.status === "found",
+  );
+  const scenarios = [
+    {
+      tool: "search_case_law" as const,
+      payload: {
+        ...APP_SEARCH_FIXTURE,
+        results: [
+          { ...first, source_url: sourceUrl },
+          { ...first, decisionId: "no-source", url: sourceUrl },
+        ],
+      },
+      readers: 2,
+    },
+    {
+      tool: "lookup_case_law" as const,
+      payload: {
+        ...APP_LOOKUP_FIXTURE,
+        items: found.map((item) => ({ ...item, source_url: sourceUrl })),
+      },
+      readers: 1,
+    },
+  ];
+  for (const { tool, payload, readers } of scenarios) {
+    const app = await mountApp({ page, locale: "en-GB", tool, payload });
+    const reader = app.getByRole("button", {
+      name: "Open in stella",
+      exact: true,
+    });
+    const original = app.getByRole("button", {
+      name: "Open original source",
+      exact: true,
+    });
+    await expect(reader).toHaveCount(readers);
+    await expect(original).toHaveCount(1);
+    expect(await hostHistory(page, "appLinks")).toEqual([]);
+    await reader.first().click();
+    await expect
+      .poll(() => hostHistory(page, "appLinks"))
+      .toEqual([first.appUrl]);
+    await original.click();
+    await expect
+      .poll(() => hostHistory(page, "appLinks"))
+      .toEqual([first.appUrl, sourceUrl]);
+  }
+});
+
+test("missing and non-HTTP decision URLs do not expose link actions", async ({
+  page,
+}) => {
+  const app = await mountApp({
+    page,
+    locale: "en-GB",
+    tool: "search_case_law",
+    payload: APP_SEARCH_FIXTURE,
+  });
+  const rejectedUrls = [
+    null,
+    ...["javascript", "data", "file", "ftp"].map(
+      (protocol) => `${protocol}:fixture`,
+    ),
+  ];
+  for (const appUrl of rejectedUrls) {
+    await page.evaluate(
+      ({ payload, appUrl: decisionUrl }) =>
+        globalThis.appFixtureHost.sendAppResult({
+          ...payload,
+          results: payload.results.map((row) => ({
+            ...row,
+            appUrl: decisionUrl,
+            source_url: "file:///fixture",
+          })),
+        }),
+      { payload: APP_SEARCH_FIXTURE, appUrl },
+    );
+    await expect(app.locator("tbody tr")).toHaveCount(1);
+    await expect(
+      app.getByRole("button", { name: "Open in stella", exact: true }),
+    ).toHaveCount(0);
+    await expect(
+      app.getByRole("button", { name: "Open original source", exact: true }),
+    ).toHaveCount(0);
+    expect(await hostHistory(page, "appLinks")).toEqual([]);
+  }
 });

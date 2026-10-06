@@ -5,6 +5,7 @@ import {
   normalizeDateBound,
   normalizeStringList,
 } from "@stll/agent-input";
+import { parseLegalCitationHttpUrl } from "@stll/api-contract/legal-citation-links";
 import { compareCodeUnit, getCollator } from "@stll/collation";
 
 import type { LookupResults, SearchResults } from "../shared/contracts";
@@ -20,7 +21,7 @@ export type ResultRow = Pick<
   | "caseNumber"
   | "ecli"
   | "appUrl"
-  | "url"
+  | "source_url"
 > & { snippet: string | null };
 
 const resultRow = (
@@ -32,8 +33,9 @@ const resultRow = (
   decisionDate: row.decisionDate,
   caseNumber: row.caseNumber,
   ecli: row.ecli,
-  appUrl: row.appUrl,
-  url: row.url,
+  appUrl: parseLegalCitationHttpUrl(row.appUrl)?.href ?? null,
+  source_url:
+    parseLegalCitationHttpUrl(row.source_url ?? null)?.href ?? undefined,
   snippet,
   courtAbbreviation: row.courtAbbreviation,
 });

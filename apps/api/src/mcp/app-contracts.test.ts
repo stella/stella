@@ -239,7 +239,47 @@ describe("MCP app registry and contracts", () => {
       throw new Error("Expected search view");
     }
     expect(view.results.at(0)).not.toHaveProperty("citationAuthority");
+    expect(view.results.at(0)).not.toHaveProperty("url");
     expect(lookupView(APP_LOOKUP_FIXTURE)).not.toHaveProperty("resourceName");
+  });
+  test("decision actions use only HTTP links from their own contract fields", () => {
+    const first = APP_SEARCH_FIXTURE.results.at(0);
+    if (first === undefined) {
+      throw new Error("Missing search fixture");
+    }
+    for (const scheme of ["javascript", "data", "file", "ftp"]) {
+      const view = searchView({
+        ...APP_SEARCH_FIXTURE,
+        results: [
+          {
+            ...first,
+            appUrl: `${scheme}:invalid`,
+            source_url: `${scheme}:invalid`,
+          },
+        ],
+      });
+      if (view.type !== "search") {
+        throw new Error("Expected search view");
+      }
+      expect(view.results.at(0)?.appUrl).toBeNull();
+      expect(view.results.at(0)?.source_url).toBeUndefined();
+    }
+    const view = searchView({
+      ...APP_SEARCH_FIXTURE,
+      results: [
+        {
+          ...first,
+          appUrl: null,
+          url: "https://example.org/publisher",
+          source_url: "http://example.org/original",
+        },
+      ],
+    });
+    if (view.type !== "search") {
+      throw new Error("Expected search view");
+    }
+    expect(view.results.at(0)?.appUrl).toBeNull();
+    expect(view.results.at(0)?.source_url).toBe("http://example.org/original");
   });
   test("filter changes restart the search without discarding unrelated filters", () => {
     expect(

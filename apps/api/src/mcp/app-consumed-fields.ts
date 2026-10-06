@@ -7,7 +7,7 @@ const decisionFields = [
   "caseNumber",
   "ecli",
   "appUrl",
-  "url",
+  "source_url",
 ] as const;
 export const MCP_APP_CONSUMED_FIELDS = {
   search_case_law: [
