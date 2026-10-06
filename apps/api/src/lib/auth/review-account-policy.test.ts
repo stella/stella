@@ -2,7 +2,8 @@ import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 
 import { env } from "@/api/env";
-import { checkStandardAccountOperation } from "@/api/lib/auth/review-account";
+import { ACCOUNT_ACCESS } from "@/api/lib/api-handlers";
+import { checkRestrictedAccountOperation } from "@/api/lib/auth/review-account";
 import {
   checkReviewAccountAccess,
   narrowReviewOrganizationScopes,
@@ -200,8 +201,8 @@ describe("restricted review account scopes", () => {
   });
 });
 
-describe("standard account operations", () => {
-  test("refuse the demo and the review account and allow everyone else", () => {
+describe("restricted account operations", () => {
+  test("each declared account access refuses exactly its restricted accounts", () => {
     const previous = {
       demoEmail: env.DEMO_ACCOUNT_EMAIL,
       reviewEmail: env.APP_REVIEW_ACCOUNT_EMAIL,
@@ -211,19 +212,25 @@ describe("standard account operations", () => {
     env.APP_REVIEW_ACCOUNT_EMAIL = reviewEmail;
     env.APP_REVIEW_ORGANIZATION_ID = organizationId;
     try {
-      expect(
-        Object.fromEntries(
-          ["limited@example.test", reviewEmail, "member@example.test"].map(
-            (email) => [
-              email,
-              Result.isOk(checkStandardAccountOperation(email)),
-            ],
+      const allowed = Object.fromEntries(
+        Object.values(ACCOUNT_ACCESS).map((accountAccess) => [
+          accountAccess,
+          ["limited@example.test", reviewEmail, "member@example.test"].filter(
+            (email) =>
+              Result.isOk(
+                checkRestrictedAccountOperation(email, accountAccess),
+              ),
           ),
-        ),
-      ).toEqual({
-        "limited@example.test": false,
-        [reviewEmail]: false,
-        "member@example.test": true,
+        ]),
+      );
+      expect(allowed).toEqual({
+        [ACCOUNT_ACCESS.sandbox]: [
+          "limited@example.test",
+          reviewEmail,
+          "member@example.test",
+        ],
+        [ACCOUNT_ACCESS.standard]: [reviewEmail, "member@example.test"],
+        [ACCOUNT_ACCESS.accountControl]: ["member@example.test"],
       });
     } finally {
       env.DEMO_ACCOUNT_EMAIL = previous.demoEmail;

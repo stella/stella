@@ -32,10 +32,11 @@ export const REVIEW_ACCOUNT_OPERATION = {
   deleteAccount: "delete-account",
   /**
    * Every REST handler (and its MCP write tool) declared
-   * `ACCOUNT_ACCESS.standard`: billing writes, API keys, external MCP and
-   * integration connections, organization settings, exports.
+   * `ACCOUNT_ACCESS.accountControl`: billing writes, API keys, external MCP
+   * and integration connections, provider credentials, organization
+   * configuration, account deletion.
    */
-  standardAccountOperation: "standard-account-operation",
+  accountControlOperation: "account-control-operation",
 } as const;
 
 export type ReviewAccountOperation =
@@ -66,7 +67,7 @@ export const REVIEW_ACCOUNT_POLICY = {
   "create-api-key": REVIEW_ACCOUNT_DISPOSITION.refused,
   "link-identity": REVIEW_ACCOUNT_DISPOSITION.refused,
   "delete-account": REVIEW_ACCOUNT_DISPOSITION.refused,
-  "standard-account-operation": REVIEW_ACCOUNT_DISPOSITION.refused,
+  "account-control-operation": REVIEW_ACCOUNT_DISPOSITION.refused,
 } as const satisfies Record<ReviewAccountOperation, ReviewAccountDisposition>;
 
 export const REVIEW_ACCOUNT_REFUSAL_MESSAGE =

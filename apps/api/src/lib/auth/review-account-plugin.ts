@@ -137,7 +137,6 @@ export const createReviewAccountPlugin = ({
             configured &&
             path !== undefined &&
             isReviewAccountBodyEmailPath(path),
-          // oxlint-disable-next-line typescript/require-await -- createAuthMiddleware requires a Promise-returning handler; this check is synchronous.
           handler: createAuthMiddleware(async (ctx) => {
             const body: unknown = ctx.body;
             const email = isRecord(body) ? body["email"] : undefined;
@@ -145,12 +144,12 @@ export const createReviewAccountPlugin = ({
               path: ctx.path,
               otpType: isRecord(body) ? body["type"] : undefined,
             });
-            if (typeof email !== "string" || operation === null) {
-              return undefined;
+            if (typeof email === "string" && operation !== null) {
+              requireReviewAccountAccess(
+                checkReviewAccountAccess({ email, config, operation }),
+              );
             }
-            requireReviewAccountAccess(
-              checkReviewAccountAccess({ email, config, operation }),
-            );
+            await Promise.resolve();
             return undefined;
           }),
         },

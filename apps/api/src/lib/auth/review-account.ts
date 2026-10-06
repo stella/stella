@@ -1,6 +1,7 @@
 import { Result } from "better-result";
 
 import { env } from "@/api/env";
+import type { AccountAccess } from "@/api/lib/api-handlers";
 import { checkDemoAccountOperation } from "@/api/lib/auth/demo-account";
 import {
   checkReviewAccountAccess,
@@ -22,19 +23,26 @@ export const checkConfiguredReviewAccountAccess = (
 ) => checkReviewAccountAccess({ ...options, config: getReviewAccountConfig() });
 
 /**
- * Whether this account may run an operation declared
- * `ACCOUNT_ACCESS.standard`: refused for the demo account and for the
- * restricted review account.
+ * Whether this account may run an operation with the declared account
+ * access: `sandbox` admits everyone, `standard` refuses the demo account, and
+ * `account-control` also refuses the restricted review account.
  */
-export const checkStandardAccountOperation = (
+export const checkRestrictedAccountOperation = (
   email: string,
+  accountAccess: AccountAccess,
 ): Result<void, HandlerError> => {
+  if (accountAccess === "sandbox") {
+    return Result.ok();
+  }
   const demoAccess = checkDemoAccountOperation(email);
   if (Result.isError(demoAccess)) {
     return demoAccess;
   }
+  if (accountAccess === "standard") {
+    return Result.ok();
+  }
   return checkConfiguredReviewAccountAccess({
     email,
-    operation: REVIEW_ACCOUNT_OPERATION.standardAccountOperation,
+    operation: REVIEW_ACCOUNT_OPERATION.accountControlOperation,
   });
 };
