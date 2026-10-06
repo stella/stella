@@ -197,7 +197,11 @@ const SpawnSubagentsSubtaskList = ({
                                 subagent.context,
                                 subagent.expectedOutput,
                               ]
-                                .filter((text) => text !== undefined)
+                                .filter(
+                                  (text): text is string =>
+                                    typeof text === "string" &&
+                                    text.trim() !== "",
+                                )
                                 .join("\n\n"),
                             )}
                           </pre>
