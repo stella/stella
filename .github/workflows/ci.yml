@@ -1417,7 +1417,7 @@ jobs:
             packages/api-contract/src/mcp-chat-tool-policy.gen.ts
           bun scripts/check-cli-runtime-generation.ts
 
-      - name: MCP App bundle guard
+      - name: MCP App bundle and shared assets guard
         if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
         # The API serves the committed single-file bundle, not the TypeScript
         # source. Regenerate it and fail on any diff so source tests and the
