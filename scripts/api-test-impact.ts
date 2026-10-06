@@ -171,7 +171,7 @@ const buildGraph = (root: string, starts: readonly string[]) => {
         scanners.add(file);
       }
       let transpiler = transpilers.js;
-      if (/\.tsx$/u.test(file)) {
+      if (file.endsWith(".tsx")) {
         transpiler = transpilers.tsx;
       } else if (/\.[cm]?ts$/u.test(file)) {
         transpiler = transpilers.ts;
