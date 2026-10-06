@@ -1,6 +1,12 @@
 import type { AuthContext } from "better-auth";
 import { Result, TaggedError } from "better-result";
 
+import type { createReviewAccountOrganizationStore } from "@/api/lib/auth/review-account-organization-store";
+import {
+  brandPersistedOrganizationId,
+  brandPersistedUserId,
+} from "@/api/lib/safe-id-boundaries";
+
 /**
  * Operator commands for the restricted review account. The account and its
  * organization cannot be created through the product (the account policy
@@ -22,6 +28,7 @@ export class ReviewAccountCommandError extends TaggedError(
     | "demo-account"
     | "organization-has-other-members"
     | "account-in-other-organization"
+    | "two-factor-enabled"
     | "account-missing"
     | "password-too-short"
     | "password-too-long"
@@ -36,6 +43,7 @@ type ReviewAccountConfig = {
 
 export type ReviewAccountStore = {
   findUserIdByEmail: (email: string) => Promise<string | null>;
+  hasTwoFactorEnabled: (userId: string) => Promise<boolean>;
   createUser: (email: string) => Promise<string>;
   organizationExists: (organizationId: string) => Promise<boolean>;
   listMemberUserIds: (organizationId: string) => Promise<string[]>;
@@ -60,9 +68,17 @@ export type ReviewAccountStore = {
   }) => Promise<number>;
 };
 
+/** The email-otp code types that name the account by its address alone. */
+export const REVIEW_ACCOUNT_OTP_TYPES = [
+  "sign-in",
+  "email-verification",
+  "forget-password",
+] as const;
+
 type AuthAccountStore = Pick<
   ReviewAccountStore,
   | "findUserIdByEmail"
+  | "hasTwoFactorEnabled"
   | "createUser"
   | "setPassword"
   | "revokeSessions"
@@ -77,6 +93,14 @@ export const createReviewAccountAuthStore = (context: {
 }): AuthAccountStore => ({
   findUserIdByEmail: async (email) =>
     (await context.internalAdapter.findUserByEmail(email))?.user.id ?? null,
+  hasTwoFactorEnabled: async (userId) => {
+    const user: unknown = await context.internalAdapter.findUserById(userId);
+    return (
+      typeof user === "object" &&
+      user !== null &&
+      Reflect.get(user, "twoFactorEnabled") === true
+    );
+  },
   createUser: async (email) =>
     (
       await context.internalAdapter.createUser(
@@ -108,8 +132,10 @@ export const createReviewAccountAuthStore = (context: {
     await context.internalAdapter.deleteUserSessions(userId);
     return sessions.length;
   },
-  // Reset tokens carry the user id as their value; emailed codes are keyed
-  // `<type>-otp-<email>` (change-email codes append the new address).
+  // Reset tokens carry the user id as their value. Emailed codes are keyed
+  // exactly `<type>-otp-<email>` (better-auth email-otp `toOTPIdentifier`).
+  // Change-email codes also name the new address, so they cannot be named
+  // exactly; the account policy refuses every email change for this account.
   revokeVerifications: async ({ userId, email }) =>
     (await context.adapter.deleteMany({
       model: "verification",
@@ -118,12 +144,95 @@ export const createReviewAccountAuthStore = (context: {
     (await context.adapter.deleteMany({
       model: "verification",
       where: [
-        { field: "identifier", operator: "contains", value: `-otp-${email}` },
+        {
+          field: "identifier",
+          operator: "in",
+          value: REVIEW_ACCOUNT_OTP_TYPES.map((type) => `${type}-otp-${email}`),
+        },
       ],
     })),
 });
 
+type OrganizationStoreHalf = Pick<
+  ReviewAccountStore,
+  | "organizationExists"
+  | "listMemberUserIds"
+  | "listOrganizationIdsForUser"
+  | "createOrganization"
+  | "addOwner"
+>;
+
+/**
+ * Adapts the owner-bound organization store to the command's plain ids. Ids
+ * come from the validated environment and stored auth rows, so they are
+ * branded here, at the command boundary.
+ */
+export const bindReviewAccountOrganizationStore = (
+  organizations: ReturnType<typeof createReviewAccountOrganizationStore>,
+): OrganizationStoreHalf => ({
+  organizationExists: async (organizationId) =>
+    await organizations.organizationExists(
+      brandPersistedOrganizationId(organizationId),
+    ),
+  listMemberUserIds: async (organizationId) =>
+    await organizations.listMemberUserIds(
+      brandPersistedOrganizationId(organizationId),
+    ),
+  listOrganizationIdsForUser: async (userId) =>
+    await organizations.listOrganizationIdsForUser(
+      brandPersistedUserId(userId),
+    ),
+  createOrganization: async ({ organizationId, ownerUserId }) => {
+    await organizations.createOrganization({
+      organizationId: brandPersistedOrganizationId(organizationId),
+      ownerUserId: brandPersistedUserId(ownerUserId),
+    });
+  },
+  addOwner: async ({ organizationId, userId }) => {
+    await organizations.addOwner({
+      organizationId: brandPersistedOrganizationId(organizationId),
+      userId: brandPersistedUserId(userId),
+    });
+  },
+});
+
 const normalize = (email: string) => email.trim().toLowerCase();
+
+const twoFactorRefusal = () =>
+  Result.err(
+    new ReviewAccountCommandError({
+      code: "two-factor-enabled",
+      message:
+        "The account has two-factor authentication enabled; the review account must not. Disable it through the owner path first, or configure another address.",
+    }),
+  );
+
+/** Refuses an existing account that could not serve as the review account. */
+const checkExistingAccount = async ({
+  organizationId,
+  store,
+  userId,
+}: {
+  organizationId: string;
+  store: ReviewAccountStore;
+  userId: string;
+}): Promise<Result<void, ReviewAccountCommandError>> => {
+  if (await store.hasTwoFactorEnabled(userId)) {
+    return twoFactorRefusal();
+  }
+  const otherOrganizations = (
+    await store.listOrganizationIdsForUser(userId)
+  ).filter((id) => id !== organizationId);
+  return otherOrganizations.length > 0
+    ? Result.err(
+        new ReviewAccountCommandError({
+          code: "account-in-other-organization",
+          message:
+            "The account belongs to another organization; the review account may belong to its own organization only.",
+        }),
+      )
+    : Result.ok();
+};
 
 const requireConfig = (
   config: ReviewAccountConfig,
@@ -177,20 +286,15 @@ export const provisionReviewAccount = async ({
     ? await store.listMemberUserIds(organizationId)
     : null;
   const existingUserId = await store.findUserIdByEmail(email);
-  const otherOrganizations =
-    existingUserId === null
-      ? []
-      : (await store.listOrganizationIdsForUser(existingUserId)).filter(
-          (id) => id !== organizationId,
-        );
-  if (otherOrganizations.length > 0) {
-    return Result.err(
-      new ReviewAccountCommandError({
-        code: "account-in-other-organization",
-        message:
-          "The account belongs to another organization; the review account may belong to its own organization only.",
-      }),
-    );
+  if (existingUserId !== null) {
+    const existing = await checkExistingAccount({
+      organizationId,
+      store,
+      userId: existingUserId,
+    });
+    if (Result.isError(existing)) {
+      return existing;
+    }
   }
   if (memberUserIds?.some((userId) => userId !== existingUserId) === true) {
     return Result.err(
@@ -267,6 +371,9 @@ export const setReviewAccountPassword = async ({
         message: "Run provision before setting the password.",
       }),
     );
+  }
+  if (await store.hasTwoFactorEnabled(userId)) {
+    return twoFactorRefusal();
   }
   await store.setPassword({ userId, password });
   const sessionsRevoked = await store.revokeSessions(userId);

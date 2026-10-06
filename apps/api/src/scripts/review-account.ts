@@ -14,46 +14,18 @@ import { createOwnerReviewAccountOrganizationStore } from "@/api/db/root";
 import { env } from "@/api/env";
 import { getAuth } from "@/api/lib/auth";
 import {
-  brandPersistedOrganizationId,
-  brandPersistedUserId,
-} from "@/api/lib/safe-id-boundaries";
-import {
+  bindReviewAccountOrganizationStore,
   createReviewAccountAuthStore,
   runReviewAccountCommand,
 } from "@/api/scripts/review-account.logic";
 import type { ReviewAccountStore } from "@/api/scripts/review-account.logic";
 
-const createStore = async (): Promise<ReviewAccountStore> => {
-  const organizations = await createOwnerReviewAccountOrganizationStore();
-  return {
-    ...createReviewAccountAuthStore(await getAuth().$context),
-    // Ids arrive from the validated environment and stored auth rows.
-    organizationExists: async (organizationId) =>
-      await organizations.organizationExists(
-        brandPersistedOrganizationId(organizationId),
-      ),
-    listMemberUserIds: async (organizationId) =>
-      await organizations.listMemberUserIds(
-        brandPersistedOrganizationId(organizationId),
-      ),
-    listOrganizationIdsForUser: async (userId) =>
-      await organizations.listOrganizationIdsForUser(
-        brandPersistedUserId(userId),
-      ),
-    createOrganization: async ({ organizationId, ownerUserId }) => {
-      await organizations.createOrganization({
-        organizationId: brandPersistedOrganizationId(organizationId),
-        ownerUserId: brandPersistedUserId(ownerUserId),
-      });
-    },
-    addOwner: async ({ organizationId, userId }) => {
-      await organizations.addOwner({
-        organizationId: brandPersistedOrganizationId(organizationId),
-        userId: brandPersistedUserId(userId),
-      });
-    },
-  };
-};
+const createStore = async (): Promise<ReviewAccountStore> => ({
+  ...createReviewAccountAuthStore(await getAuth().$context),
+  ...bindReviewAccountOrganizationStore(
+    await createOwnerReviewAccountOrganizationStore(),
+  ),
+});
 
 const readStdin = (): AsyncIterable<Uint8Array> => {
   // On a terminal, raw mode keeps the typed password from being echoed.

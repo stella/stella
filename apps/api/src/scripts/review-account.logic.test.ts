@@ -1,5 +1,6 @@
 import { betterAuth } from "better-auth";
 import { memoryAdapter } from "better-auth/adapters/memory";
+import { twoFactor } from "better-auth/plugins";
 import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 
@@ -36,6 +37,7 @@ const createFakeStore = (
   accounts: Pick<
     ReviewAccountStore,
     | "findUserIdByEmail"
+    | "hasTwoFactorEnabled"
     | "createUser"
     | "setPassword"
     | "revokeSessions"
@@ -74,6 +76,7 @@ const createMemoryAccounts = () => {
     users,
     accounts: {
       findUserIdByEmail: async (email: string) => users.get(email) ?? null,
+      hasTwoFactorEnabled: async () => false,
       createUser: async (email: string) => {
         const id = `user_${users.size + 1}`;
         users.set(email, id);
@@ -226,8 +229,10 @@ const createPasswordAuth = async () => {
       session: [],
       account: [],
       verification: [],
+      twoFactor: [],
     }),
     emailAndPassword: { enabled: true, disableSignUp: true },
+    plugins: [twoFactor({ allowPasswordless: true })],
   });
   return { auth, context: await auth.$context };
 };
@@ -321,11 +326,20 @@ describe("review account password command", () => {
       value: "123456:0",
       expiresAt,
     });
-    await context.internalAdapter.createVerificationValue({
-      identifier: "sign-in-otp-member@example.test",
-      value: "654321:0",
-      expiresAt,
-    });
+    // Codes of other accounts, including one whose address extends the
+    // review address, and the review account's own sign-in code.
+    const kept = [
+      "sign-in-otp-member@example.test",
+      `sign-in-otp-${reviewEmail}.extended`,
+      `forget-password-otp-x${reviewEmail}`,
+    ];
+    for (const identifier of [`sign-in-otp-${reviewEmail}`, ...kept]) {
+      await context.internalAdapter.createVerificationValue({
+        identifier,
+        value: "654321:0",
+        expiresAt,
+      });
+    }
     const rotated = await runCommand({
       argv: ["set-password"],
       input: `${nextPassword}\n`,
@@ -335,7 +349,7 @@ describe("review account password command", () => {
       JSON.stringify({
         outcome: "password-set",
         sessionsRevoked: 1,
-        verificationsRevoked: 2,
+        verificationsRevoked: 3,
       }),
     ]);
     expect(rotated.transcript).not.toContain(nextPassword);
@@ -349,12 +363,17 @@ describe("review account password command", () => {
         `forget-password-otp-${reviewEmail}`,
       ),
     ).toBeNull();
-    // Another account's code is untouched.
     expect(
       await context.internalAdapter.findVerificationValue(
-        "sign-in-otp-member@example.test",
+        `sign-in-otp-${reviewEmail}`,
       ),
-    ).not.toBeNull();
+    ).toBeNull();
+    // Other accounts' codes are untouched, even where the address extends it.
+    for (const identifier of kept) {
+      expect(
+        await context.internalAdapter.findVerificationValue(identifier),
+      ).not.toBeNull();
+    }
     expect(
       await context.internalAdapter.listSessions(
         (await context.internalAdapter.findUserByEmail(reviewEmail))?.user.id ??
@@ -412,5 +431,41 @@ describe("review account password command", () => {
     expect(missing.err.join("")).toContain('"code":"account-missing"');
     expect(missing.transcript).not.toContain(password);
     expect(writes).toEqual([]);
+  });
+
+  test("refuses an account with two-factor authentication enabled", async () => {
+    const { context } = await createPasswordAuth();
+    const { store, writes } = createFakeStore(
+      createReviewAccountAuthStore(context),
+    );
+    // An account already enrolled before it was chosen as the review account.
+    await context.internalAdapter.createUser(
+      {
+        email: reviewEmail,
+        name: "Enrolled",
+        emailVerified: true,
+        twoFactorEnabled: true,
+      },
+      { method: "admin" },
+    );
+    for (const argv of [["provision"], ["set-password"]]) {
+      const result = await runCommand({
+        argv,
+        input: `${password}\n`,
+        store,
+      });
+      expect(result.code).toBe(1);
+      expect(result.err.join("")).toContain('"code":"two-factor-enabled"');
+      expect(result.transcript).not.toContain(password);
+    }
+    expect(writes).toEqual([]);
+    const userId =
+      (await context.internalAdapter.findUserByEmail(reviewEmail))?.user.id ??
+      "";
+    expect(
+      (await context.internalAdapter.findAccounts(userId)).some(
+        (account) => account.providerId === "credential",
+      ),
+    ).toBe(false);
   });
 });
