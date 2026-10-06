@@ -8,7 +8,7 @@
     "test": "bun test src",
     "test:browser": "bun test browser",
     "typecheck": "bun ../../packages/scripts/src/tsc-native.ts --noEmit",
-    "lint": "cd ../.. && bun --bun oxlint -c oxlint.config.ts apps/visual-preview",
+    "lint": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --report-unused-disable-directives-severity=error --type-aware --type-check apps/visual-preview",
     "format": "bun ../../scripts/run-oxfmt.ts ."
   },
   "dependencies": {

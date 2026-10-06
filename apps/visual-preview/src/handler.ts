@@ -14,7 +14,7 @@ export const handler = async (event: unknown) => {
   }
   const rendered = await renderVisual({
     input: parsed.output,
-    launch: async () =>
+    launch: async ({ args }) =>
       playwright.launch({
         executablePath: await chromium.executablePath("/opt/chromium"),
         args: [
@@ -24,10 +24,11 @@ export const handler = async (event: unknown) => {
                 "--disable-web-security",
                 "--allow-running-insecure-content",
                 "--disable-site-isolation-trials",
-              ].includes(arg),
+              ].includes(arg) &&
+              !arg.startsWith("--force-webrtc-ip-handling-policy=") &&
+              !arg.startsWith("--webrtc-ip-handling-policy="),
           ),
-          "--host-resolver-rules=MAP * ~NOTFOUND",
-          "--disable-background-networking",
+          ...args,
         ],
         headless: true,
         timeout: 5000,

@@ -1,12 +1,18 @@
 import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 import { chromium } from "playwright-core";
+import type { Browser } from "playwright-core";
 
 import { VISUAL_PREVIEW_LIMITS } from "@stll/api-contract/visual-preview";
 
-import { renderVisual, VisualRenderTimeoutError } from "../src/render";
+import {
+  renderVisual,
+  VisualRenderTimeoutError,
+  type VisualPreviewLaunchOptions,
+} from "../src/render";
 
-const launch = () => chromium.launch({ headless: true });
+const launch = async ({ args }: VisualPreviewLaunchOptions) =>
+  chromium.launch({ headless: true, args });
 
 describe("composed visual preview", () => {
   test("renders a PNG with bounded diagnostics and content size", async () => {
@@ -118,10 +124,15 @@ describe("composed visual preview", () => {
   test(
     "returns a typed timeout and closes an unresponsive guest browser",
     async () => {
-      const browser = await launch();
-      const started = performance.now();
+      const browsers: Browser[] = [];
+      const timing = { started: 0 };
       const result = await renderVisual({
-        launch: async () => browser,
+        launch: async (options) => {
+          const browser = await launch(options);
+          browsers.push(browser);
+          timing.started = performance.now();
+          return browser;
+        },
         input: {
           document: "<script>for(;;){}</script>",
           viewport: { width: 1200 },
@@ -134,9 +145,13 @@ describe("composed visual preview", () => {
           expect(result.error.readyFired).toBe(false);
         }
       }
-      expect(performance.now() - started).toBeLessThan(
+      expect(performance.now() - timing.started).toBeLessThan(
         VISUAL_PREVIEW_LIMITS.renderTimeoutMs + 2000,
       );
+      const browser = browsers.at(0);
+      if (browser === undefined) {
+        throw new TypeError("Preview timeout requires a launched browser");
+      }
       expect(browser.isConnected()).toBe(false);
       expect(browser.contexts()).toEqual([]);
     },

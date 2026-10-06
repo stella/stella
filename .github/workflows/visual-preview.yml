@@ -15,8 +15,8 @@ env:
 permissions:
   contents: read
 concurrency:
-  group: visual-preview-${{ github.ref }}
-  cancel-in-progress: true
+  group: ${{ github.workflow }}-${{ github.event_name == 'pull_request' && format('pr-{0}', github.event.pull_request.number || github.ref) || format('run-{0}', github.run_id) }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 jobs:
   preview:
     runs-on: ubuntu-24.04-arm
@@ -43,6 +43,7 @@ jobs:
         uses: stella/.github/actions/setup-bun-cached@167fb396c6c0f4e07296ad2cd72e6ef15367c776
         with:
           bun-version-file: package.json
+          save: ${{ github.ref == 'refs/heads/main' }}
       - name: Install renderer and browser harness dependencies
         if: steps.scope.outputs.required == 'true'
         run: bun install --frozen-lockfile --ignore-scripts --filter @stll/visual-preview --filter @stll/web --filter @stll/api
@@ -52,6 +53,9 @@ jobs:
       - name: Test preview in the pinned browser image
         if: steps.scope.outputs.required == 'true'
         run: bash .github/actions/setup-playwright/run-in-image.sh --offline bun --filter @stll/visual-preview test:browser
+      - name: Pull renderer base images
+        if: steps.scope.outputs.required == 'true'
+        run: bash scripts/pull-base-images.sh apps/visual-preview/Dockerfile
       - name: Build Lambda image
         if: steps.scope.outputs.required == 'true'
         run: docker build --platform linux/arm64 -f apps/visual-preview/Dockerfile -t visual-preview:test .
