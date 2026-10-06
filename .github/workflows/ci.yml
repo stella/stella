@@ -2566,6 +2566,12 @@ jobs:
         # install above; a workflow-only PR skips both.
         run: bun test scripts/publish-manifest.test.ts
 
+      - name: Test journey checks
+        if: ${{ !cancelled() && steps.checkout.outcome == 'success' && steps.install.outcome != 'failure' && steps.standalone_lockfiles.outcome != 'failure' && steps.lockfile_ages.outcome != 'failure' }}
+        run: |
+          bun test scripts/check-journeys.test.ts
+          bun test scripts/check-published-versions.test.ts
+
       # Release ordering is a safety property. This test has no workspace
       # dependencies, so it remains runnable when a PR changes only workflows
       # and the dependency install above is intentionally skipped.
