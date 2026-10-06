@@ -18,6 +18,10 @@ import "../src/tests/setup-env";
 import { panic } from "better-result";
 
 import { ACTION_ADMISSION_REFUSALS } from "@stll/api-contract/action-admission";
+import {
+  MCP_TOOL_NAME_MAX_LENGTH,
+  MCP_TOOL_NAME_PATTERN,
+} from "@stll/api-contract/mcp-tool-name";
 
 import { WRITE_TOOL_REF_FIELD_MAP } from "@/api/handlers/chat/tools/registry-adapter/ref-field-map";
 import {
@@ -413,6 +417,9 @@ await Bun.write(
 
 export const MCP_HTTP_PATH = ${JSON.stringify(MCP_HTTP_PATH)} as const;
 export const MCP_DISCOVERY_PATH = ${JSON.stringify(MCP_DISCOVERY_PATH)} as const;
+export const MCP_TOOL_NAME_MAX_LENGTH = ${MCP_TOOL_NAME_MAX_LENGTH};
+export const MCP_TOOL_NAME_PATTERN_SOURCE = ${JSON.stringify(MCP_TOOL_NAME_PATTERN.source)} as const;
+export const MCP_TOOL_NAME_PATTERN_FLAGS = ${JSON.stringify(MCP_TOOL_NAME_PATTERN.flags)} as const;
 export const CLI_KNOWN_SCOPES = ${JSON.stringify(cliKnownScopes, null, 2)} as const;
 export const CLI_REQUIRED_RESOURCE_SCOPES = ${JSON.stringify(MCP_DEFAULT_RESOURCE_SCOPES, null, 2)} as const;
 export const MCP_ERROR_CODES = ${JSON.stringify(MCP_ERROR_CODES, null, 2)} as const;

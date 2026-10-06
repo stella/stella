@@ -6527,6 +6527,10 @@
     "seconds": 0.092071,
     "source": "estimated"
   },
+  "src/lib/lists/verification/document-deletion.db.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
   "src/lib/lists/verification/engine.test.ts": {
     "seconds": 0.228532,
     "source": "estimated"
@@ -7857,6 +7861,14 @@
   },
   "src/lib/views/utils.test.ts": {
     "seconds": 0.442742,
+    "source": "estimated"
+  },
+  "src/lib/visual-preview-stream.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
+  "src/lib/visual-preview.test.ts": {
+    "seconds": 1,
     "source": "estimated"
   },
   "src/lib/web-search/select-provider.test.ts": {
