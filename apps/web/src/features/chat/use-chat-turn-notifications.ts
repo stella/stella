@@ -14,6 +14,7 @@ import type {
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useLocalStorageFlag } from "@/hooks/use-local-storage-flag";
 import type { TranslationKey } from "@/i18n/types";
+import { logDevError } from "@/lib/errors/telemetry";
 
 const NOTIFICATION_TEXT = {
   failed: {
@@ -126,7 +127,7 @@ export const useChatTurnNotifications = ({
     const text = NOTIFICATION_TEXT[kind];
     // Some mobile browsers expose `Notification` but refuse the constructor;
     // a missed notification is all that costs.
-    Result.try(() => {
+    const shown = Result.try(() => {
       const notification = new Notification(t(text.title), {
         body: t(text.body),
         tag: `stella-chat-${conversationId}`,
@@ -136,5 +137,8 @@ export const useChatTurnNotifications = ({
         notification.close();
       });
     });
+    if (Result.isError(shown)) {
+      logDevError(shown.error);
+    }
   }, [conversationId, enabled, phase, t]);
 };
