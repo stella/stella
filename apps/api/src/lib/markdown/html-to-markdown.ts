@@ -119,7 +119,7 @@ const CODE_HTML_ESCAPES: Record<string, string> = {
  * as an HTML `<code>` element, which carries the pipe as an entity.
  */
 const renderTableCellCode = (text: string): string =>
-  /\\\|/.test(text)
+  text.includes("\\|")
     ? `<code>${text.replace(/[&<>|]/g, (char) => CODE_HTML_ESCAPES[char] ?? char)}</code>`
     : escapeTableCellPipes(wrapInlineCode(text), "table-cell");
 
