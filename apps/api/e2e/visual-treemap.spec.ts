@@ -135,10 +135,10 @@ for (const direction of ["ltr", "rtl"] as const) {
           .locator("text")
           .filter({ hasText: court.label })
           .evaluate((label) => {
-            const cellKey = label.dataset.tsKey?.replace(/:label$/u, "");
+            const cellKey = label.dataset["tsKey"]?.replace(/:label$/u, "");
             const cell = Array.from(
               label.closest("svg")?.querySelectorAll("rect") ?? [],
-            ).find((candidate) => candidate.dataset.tsKey === cellKey);
+            ).find((candidate) => candidate.dataset["tsKey"] === cellKey);
             return cell ? getComputedStyle(cell).fill : undefined;
           });
         expect(fill).toBeTruthy();

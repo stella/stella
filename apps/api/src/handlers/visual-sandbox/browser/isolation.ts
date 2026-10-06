@@ -171,9 +171,12 @@ const createIsolationPrimitives = () => {
     }
     const matches: NodeListOf<Element> = apply(query, node, ["*"]);
     for (let index = 0; ; index += 1) {
-      const element: Element | null = apply(nodeItem, matches, [index]);
+      const element = apply(nodeItem, matches, [index]);
       if (!element) {
         break;
+      }
+      if (!isElement(element)) {
+        return reject();
       }
       if (isProhibited(element)) {
         reject();
@@ -336,9 +339,12 @@ export const isolateVisualGuest = () => {
     }
     const matches: NodeListOf<Element> = apply(elementSelectors, node, ["*"]);
     for (let index = 0; ; index += 1) {
-      const element: Element | null = apply(nodeItem, matches, [index]);
+      const element = apply(nodeItem, matches, [index]);
       if (!element) {
         break;
+      }
+      if (!isElement(element)) {
+        return reject();
       }
       if (isProhibited(element)) {
         apply(remove, element, []);

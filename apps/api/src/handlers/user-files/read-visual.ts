@@ -3,7 +3,10 @@ import { and, eq } from "drizzle-orm";
 import { t } from "elysia";
 import * as v from "valibot";
 
-import { generatedVisualInputSchema } from "@stll/api-contract/generated-visual";
+import {
+  generatedVisualInputSchema,
+  generatedVisualPageSchema,
+} from "@stll/api-contract/generated-visual";
 
 import { chatThreads, userFiles } from "@/api/db/schema";
 import { TEXT_PLAIN_MIME_TYPE } from "@/api/handlers/chat/attachment-validation";
@@ -14,6 +17,7 @@ import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { readStoredFile } from "@/api/lib/file-scan/stored-file";
+import { projectionPayload } from "@/api/lib/projection-totality";
 import {
   CACHE_CONTROL_HEADER,
   PRIVATE_CACHE_CONTROL,
@@ -133,7 +137,13 @@ export const createReadUserFileVisual = (readObject = readStoredFile) =>
       const { title, html, data, links, literalLinks } = prepared.value;
       return Result.ok(
         Response.json(
-          { title, html, data, links, literalLinks },
+          projectionPayload(generatedVisualPageSchema, {
+            title,
+            html,
+            data,
+            links,
+            literalLinks,
+          }),
           {
             headers: { [CACHE_CONTROL_HEADER]: PRIVATE_CACHE_CONTROL },
           },
