@@ -185,6 +185,9 @@ const run = async ({
       }
       if (pathname.startsWith("/cli/")) {
         expect(req.headers.get("Authorization")).toBe(`Bearer ${token}`);
+        if (scenario.rpc === "wrong-shape") {
+          return Response.json({ unrelated: SENTINEL });
+        }
         return Response.json(
           pathname.endsWith("read")
             ? readFixture(SENTINEL)
@@ -375,7 +378,7 @@ const run = async ({
       expect(stderr).toBe("");
       for (const line of stdout.trim().split("\n")) {
         expect(line).toMatch(
-          /^journey [a-z_]+ (passed|passed_after_retry|failed|skipped) (http_status|timeout|missing_marker|empty_result|contract_error|version_mismatch|no_credential|auth_rejected|ok)$/u,
+          /^journey [a-z_]+ (passed|passed_after_retry|failed|skipped) (http_status|timeout|missing_marker|empty_result|contract_error|version_mismatch|registry_rejected|no_credential|auth_rejected|ok)$/u,
         );
       }
     }
@@ -543,6 +546,56 @@ describe("scheduled read journeys", () => {
       expect(result.exit).toBe(1);
       expect(result.stdout).toContain("failed contract_error");
     }
+  });
+  test("fails a valid CLI answer served from rejected registry fallback", async () => {
+    const result = await run({
+      scenario: {
+        cliDiagnostic:
+          "registry refresh rejected (using built-in commands): tool name is invalid: skill__fixture-name",
+      },
+      mode: "cli",
+    });
+    expect(result.exit).toBe(1);
+    expect(result.stdout).toContain("cli_version passed ok");
+    expect(result.stdout).toContain("cli_search failed registry_rejected");
+    expect(result.stdout).toContain("cli_read failed registry_rejected");
+  });
+  test("names rejected registry fallback when the built-in command fails", async () => {
+    const result = await run({
+      scenario: {
+        cliExit: "1",
+        cliDiagnostic:
+          "registry refresh rejected (using built-in commands): tool name is invalid: skill__fixture-name",
+      },
+      mode: "cli",
+    });
+    expect(result.exit).toBe(1);
+    expect(result.stdout).toContain("cli_search failed registry_rejected");
+    expect(result.stdout).toContain("cli_read failed registry_rejected");
+  });
+  test("keeps CLI payload faults as contract errors", async () => {
+    const result = await run({
+      scenario: {
+        rpc: "wrong-shape",
+        cliDiagnostic:
+          "server registry differs from this CLI build: 5 removed, 1 changed",
+      },
+      mode: "cli",
+    });
+    expect(result.exit).toBe(1);
+    expect(result.stdout).toContain("cli_search failed contract_error");
+    expect(result.stdout).toContain("cli_read failed contract_error");
+  });
+  test("passes a CLI that only reports registry drift", async () => {
+    const result = await run({
+      scenario: {
+        cliDiagnostic:
+          "server registry differs from this CLI build: 5 removed, 1 changed",
+      },
+      mode: "cli",
+    });
+    expect(result.exit).toBe(0);
+    expect(result.stdout.match(/ passed ok/gu)).toHaveLength(3);
   });
   test("classifies CLI credential rejection", async () => {
     for (const cliDiagnostic of ["401", "403", "key rejected"]) {

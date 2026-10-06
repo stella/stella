@@ -140,14 +140,21 @@ cli_version() {
 
 cli_tool() {
   reason=contract_error
-  local shape="$1" nonempty="$2"
+  local shape="$1" nonempty="$2" rc=0
   shift 2
   STELLA_API_KEY="${credential}" STELLA_SERVER_URL="$cli_server" \
     XDG_CONFIG_HOME="$scratch/config" XDG_CACHE_HOME="$scratch/cache" \
-    "$cli" "$@" --json >"$scratch/payload" 2>"$scratch/error" || {
-      auth_rejection "$scratch/error" "$scratch/payload"
-      return 1
-    }
+    "$cli" "$@" --json >"$scratch/payload" 2>"$scratch/error" || rc=$?
+  # A rejected server registry leaves the CLI on its built-in commands: never a pass,
+  # and the root cause of any built-in failure that follows.
+  if grep -q 'registry refresh rejected' "$scratch/error"; then
+    reason=registry_rejected
+    return 1
+  fi
+  if [[ "$rc" != 0 ]]; then
+    auth_rejection "$scratch/error" "$scratch/payload"
+    return 1
+  fi
   validate_payload "$shape" "$nonempty"
 }
 
