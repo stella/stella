@@ -7,6 +7,9 @@ const ROOT = path.resolve(import.meta.dir, "..");
 const OWNER = "packages/ui/src/components/split-button.tsx";
 const TRIGGER = /(?:Menu|Popover)Trigger$/u;
 const CHEVRON = /^(?:ChevronDown(?:Icon)?|CaretDown(?:Icon)?)$/u;
+// Wrappers a chevron trigger may sit in while still belonging to the
+// surrounding control group; any other component owns a separate group.
+const TRIGGER_WRAPPER = /^(?:\w*(?:Menu|Popover)(?:Root)?|Tooltip)$/u;
 
 export type SplitButtonFinding = {
   file: string;
@@ -221,7 +224,7 @@ export const findAdHocSplitButtons = (
             break;
           }
           const parentTag = opening(parent)?.tagName.getText();
-          if (parentTag && /^[a-z]/u.test(parentTag)) {
+          if (parentTag && !TRIGGER_WRAPPER.test(parentTag)) {
             break;
           }
         }

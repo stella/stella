@@ -36,6 +36,8 @@ test("excludes plain dropdowns, independent controls and chevron navigation", ()
     `<div>${primary}<Menu><MenuTrigger><PlusIcon /><ChevronDownIcon /></MenuTrigger></Menu></div>`,
     `<div><InputGroup><Button onClick={clear} /></InputGroup>${chevronMenu}</div>`,
     `<div><div>${primary}</div>${chevronMenu}</div>`,
+    `<Toolbar>${primary}<ToolbarGroup>${chevronMenu}</ToolbarGroup></Toolbar>`,
+    `<div>${primary}<div>${chevronMenu}</div></div>`,
     `<div>${primary}<Button onClick={next}><ChevronDownIcon /></Button></div>`,
     `<div>${primary}<span>Unrelated section</span>${chevronMenu}</div>`,
     `<div>${primary}Unrelated section${chevronMenu}</div>`,
