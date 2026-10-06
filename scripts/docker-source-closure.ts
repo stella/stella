@@ -413,27 +413,35 @@ const sourceClosureChecker = (root: string, tree: SourceTree) => {
               : clean === pattern;
           },
         );
-        const aliasTargets = aliases.flatMap(([pattern, targets]) => {
-          const [prefix, suffix] = pattern.split("*");
-          const wildcard = pattern.includes("*");
-          const middle = wildcard
-            ? clean.slice(
-                (prefix ?? "").length,
-                suffix === "" || suffix === undefined
-                  ? undefined
-                  : -suffix.length,
-              )
-            : "";
-          return targets.flatMap((target) =>
-            specifierCandidates(
-              "/entry.ts",
-              absolute(
-                "/app",
-                target.replace("*", () => middle),
+        // TypeScript gives exact keys priority, then the longest wildcard prefix.
+        aliases.sort(
+          ([left], [right]) =>
+            Number(left.includes("*")) - Number(right.includes("*")) ||
+            right.indexOf("*") - left.indexOf("*"),
+        );
+        const aliasTargets = aliases
+          .slice(0, 1)
+          .flatMap(([pattern, targets]) => {
+            const [prefix, suffix] = pattern.split("*");
+            const wildcard = pattern.includes("*");
+            const middle = wildcard
+              ? clean.slice(
+                  (prefix ?? "").length,
+                  suffix === "" || suffix === undefined
+                    ? undefined
+                    : -suffix.length,
+                )
+              : "";
+            return targets.flatMap((target) =>
+              specifierCandidates(
+                "/entry.ts",
+                absolute(
+                  "/app",
+                  target.replace("*", () => middle),
+                ),
               ),
-            ),
-          );
-        });
+            );
+          });
         // Match every declared alias before excluding installed dependencies:
         // an omitted alias target must still fail the source closure.
         const name = specifier.startsWith("@")
@@ -527,7 +535,13 @@ type SourceCommandEntry = {
   mode: "run" | "build";
 };
 
-type CommandContext = { root: string; tree: SourceTree; active: Set<string> };
+type CommandContext = {
+  root: string;
+  tree: SourceTree;
+  active: Set<string>;
+  consume?: (entry: SourceCommandEntry) => void;
+  command?: (program: string | undefined, words: readonly string[]) => void;
+};
 type SourceCommandOptions = {
   command: string;
   words: string[];
@@ -620,11 +634,13 @@ const sourceCommandEntries = (
       }
       break;
     }
-    entries.push({
+    const entry = {
       file: absolute(commandCwd, word),
       args: words.slice(index + 1),
       mode,
-    });
+    } satisfies SourceCommandEntry;
+    entries.push(entry);
+    context.consume?.(entry);
     found = true;
     if (mode === "run") {
       break;
@@ -668,6 +684,7 @@ const walkCommand = (
       words.shift();
     }
     const program = words.shift();
+    context.command?.(program, words);
     if (program === "cd") {
       cwd = absolute(cwd, words[0] ?? ".");
       continue;
@@ -680,16 +697,20 @@ const walkCommand = (
       if (config === undefined) {
         panic(`Vite config is unavailable: ${cwd}`);
       }
-      entries.push({ file: config, args: [], mode: "build" });
-      // Vite discovers route modules rather than importing them from config.
-      entries.push(
+      const viteEntries: SourceCommandEntry[] = [
+        { file: config, args: [], mode: "build" },
+        // Vite discovers route modules rather than importing them from config.
         ...[...tree.keys()]
           .filter(
             (file) =>
               file.startsWith(`${directory}/src/`) && modulePattern.test(file),
           )
           .map((file) => ({ file, args: [], mode: "build" as const })),
-      );
+      ];
+      entries.push(...viteEntries);
+      for (const entry of viteEntries) {
+        context.consume?.(entry);
+      }
       continue;
     }
     if (["npm", "yarn", "pnpm", "npx", "bunx", "tsc"].includes(program ?? "")) {
@@ -848,79 +869,87 @@ export const checkDockerSource = (
     } else if (operation === "COPY") {
       copyInstruction(stages, stage, context, body);
     } else if (operation === "RUN") {
-      if (/\bturbo prune\b/u.test(body)) {
-        stage.seen.clear();
-        delete stage.checker;
-        for (const [file, origin] of pruned) {
-          stage.files.set(`/app/out/full${file.slice(4)}`, origin);
-          if (file.endsWith("/package.json")) {
-            stage.files.set(`/app/out/json${file.slice(4)}`, origin);
-          }
-        }
-        continue;
-      }
-      if (body.includes("find apps packages") && body.includes("/json/")) {
-        stage.seen.clear();
-        delete stage.checker;
-        for (const [file, origin] of [...stage.files]) {
-          if (
-            file === "/app/package.json" ||
-            file === "/app/bun.lock" ||
-            file.endsWith("/package.json") ||
-            /^\/app\/(?:bunfig\.toml|\.npmrc|patches\/)/u.test(file)
-          ) {
-            stage.files.set(`/json/${file.slice(5)}`, origin);
-          }
-        }
-        continue;
-      }
-      if (!/\b(?:bun|node|vite|npm|yarn|pnpm|npx|bunx|tsc)\b/u.test(body)) {
-        continue;
-      }
-      const entries = walkCommand(
-        { root, tree: stage.files, active: new Set() },
-        body,
-        stage.cwd,
-      );
-      for (const entry of entries.filter(
-        ({ file }) => !file.includes("/dist/"),
-      )) {
-        const closure = stageClosureProblems({
+      const runStage = stage;
+      walkCommand(
+        {
           root,
-          stage,
-          entries: [entry.file],
-        });
-        problems.push(...closure);
-        if (closure.length > 0) {
-          continue;
-        }
-        // A Docker RUN can create declared sources after validating its own
-        // source closure. Only hydrated outputs of that exact producer enter
-        // the stage; later imports still resolve against this inventory.
-        for (const { generator, entries: producerEntries } of producers) {
-          if (
-            entry.mode !== "run" ||
-            !producerEntries.some(
-              (producer) =>
-                producer.file === entry.file &&
-                JSON.stringify(producer.args) === JSON.stringify(entry.args),
-            )
-          ) {
-            continue;
-          }
-          for (const output of generator.outputs) {
-            if (!existsSync(path.join(root, output))) {
-              problems.push(
-                `Generated output is unavailable: ${generator.id}/${output}`,
-              );
-              continue;
+          tree: runStage.files,
+          active: new Set(),
+          command: (program, words) => {
+            if (program === "turbo" && words.at(0) === "prune") {
+              runStage.seen.clear();
+              delete runStage.checker;
+              for (const [file, origin] of pruned) {
+                runStage.files.set(`/app/out/full${file.slice(4)}`, origin);
+                if (file.endsWith("/package.json")) {
+                  runStage.files.set(`/app/out/json${file.slice(4)}`, origin);
+                }
+              }
+            } else if (
+              program === "find" &&
+              words.at(0) === "apps" &&
+              words.at(1) === "packages" &&
+              words.some((word) => word.includes("/json/"))
+            ) {
+              runStage.seen.clear();
+              delete runStage.checker;
+              for (const [file, origin] of [...runStage.files]) {
+                if (
+                  file === "/app/package.json" ||
+                  file === "/app/bun.lock" ||
+                  file.endsWith("/package.json") ||
+                  /^\/app\/(?:bunfig\.toml|\.npmrc|patches\/)/u.test(file)
+                ) {
+                  runStage.files.set(`/json/${file.slice(5)}`, origin);
+                }
+              }
             }
-            stage.files.set(absolute("/app", output), output);
-          }
-          stage.seen.clear();
-          delete stage.checker;
-        }
-      }
+          },
+          consume: (entry) => {
+            if (entry.file.includes("/dist/")) {
+              return;
+            }
+            const closure = stageClosureProblems({
+              root,
+              stage: runStage,
+              entries: [entry.file],
+            });
+            problems.push(...closure);
+            if (closure.length > 0) {
+              return;
+            }
+            // A Docker RUN can create declared sources after validating its own
+            // source closure. Only hydrated outputs of that exact producer enter
+            // the stage; later imports still resolve against this inventory.
+            for (const { generator, entries: producerEntries } of producers) {
+              if (
+                entry.mode !== "run" ||
+                !producerEntries.some(
+                  (producer) =>
+                    producer.file === entry.file &&
+                    JSON.stringify(producer.args) ===
+                      JSON.stringify(entry.args),
+                )
+              ) {
+                continue;
+              }
+              for (const output of generator.outputs) {
+                if (!existsSync(path.join(root, output))) {
+                  problems.push(
+                    `Generated output is unavailable: ${generator.id}/${output}`,
+                  );
+                  continue;
+                }
+                runStage.files.set(absolute("/app", output), output);
+              }
+              runStage.seen.clear();
+              delete runStage.checker;
+            }
+          },
+        },
+        body,
+        runStage.cwd,
+      );
     }
   }
   return [...new Set(problems)];

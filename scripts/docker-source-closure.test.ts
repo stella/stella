@@ -588,6 +588,63 @@ describe("Docker source closure", () => {
     ).toHaveLength(1);
   });
 
+  test("only the most specific alias supplies targets regardless of declaration order", () => {
+    for (const exact of [false, true]) {
+      for (const reversed of [false, true]) {
+        const directory = `apps/alias-priority-${exact}-${reversed}`;
+        const bindings = [
+          ["@/*", ["./broad/*"]],
+          [
+            exact ? "@/special/value" : "@/special/*",
+            [exact ? "./specific/value.ts" : "./specific/*"],
+          ],
+        ];
+        if (reversed) {
+          bindings.reverse();
+        }
+        const config = put(
+          `${directory}/tsconfig.json`,
+          JSON.stringify({
+            compilerOptions: { paths: Object.fromEntries(bindings) },
+          }),
+        );
+        const entry = put(`${directory}/entry.ts`, 'import "@/special/value";');
+        const broad = put(
+          `${directory}/broad/special/value.ts`,
+          "export const value = 1;",
+        );
+        const specific = put(
+          `${directory}/specific/value.ts`,
+          "export const value = 2;",
+        );
+        const sources = tree([config, entry, broad]);
+        expect(sourceClosureProblems(root, sources, [`/app/${entry}`])).toEqual(
+          [`${entry} imports @/special/value, unavailable in Docker stage`],
+        );
+        sources.set(`/app/${specific}`, specific);
+        expect(sourceClosureProblems(root, sources, [`/app/${entry}`])).toEqual(
+          [],
+        );
+      }
+    }
+    const config = put(
+      "apps/alias-fallback/tsconfig.json",
+      JSON.stringify({
+        compilerOptions: { paths: { "@/*": ["./absent/*", "./present/*"] } },
+      }),
+    );
+    const entry = put("apps/alias-fallback/entry.ts", 'import "@/value";');
+    const fallback = put(
+      "apps/alias-fallback/present/value.ts",
+      "export const value = 1;",
+    );
+    expect(
+      sourceClosureProblems(root, tree([config, entry, fallback]), [
+        `/app/${entry}`,
+      ]),
+    ).toEqual([]);
+  });
+
   test("retains the declaration directory of inherited aliases", () => {
     const files = [
       put(
@@ -692,6 +749,51 @@ describe("Docker source closure", () => {
     ]);
     pruned.set("/app/root-helper.ts", helper);
     expect(checkDockerSource(root, dockerfile, context, pruned)).toEqual([]);
+  });
+
+  test("checks every command following prune and preserves source production order", () => {
+    const entry = put("prune-order/entry.ts", 'import "./out/full/value";');
+    const value = put("prune-order/value.ts", "export const value = 1;");
+    const context: SourceTree = new Map([["/entry.ts", entry]]);
+    const pruned: SourceTree = new Map([["/app/value.ts", value]]);
+    const base = "FROM bun AS pruner\nWORKDIR /app\nCOPY . .\nRUN ";
+    for (const separator of ["&&", ";", "||"]) {
+      const prune = "turbo prune @stll/example --docker";
+      expect(
+        checkDockerSource(
+          root,
+          `${base}${prune} ${separator} bun absent.ts`,
+          context,
+          pruned,
+        ),
+      ).toEqual(["Entry is unavailable: /app/absent.ts"]);
+      expect(
+        checkDockerSource(
+          root,
+          `${base}${prune} ${separator} bun entry.ts`,
+          context,
+          pruned,
+        ),
+      ).toEqual([]);
+      expect(
+        checkDockerSource(
+          root,
+          `${base}bun entry.ts ${separator} ${prune}`,
+          context,
+          pruned,
+        ),
+      ).toEqual([
+        `${entry} imports ./out/full/value, unavailable in Docker stage`,
+      ]);
+      expect(() =>
+        checkDockerSource(
+          root,
+          `${base}${prune} ${separator} npm unknown`,
+          context,
+          pruned,
+        ),
+      ).toThrow("Unsupported source runner: npm");
+    }
   });
 
   test("derives actual prune scopes and rejects unrecognized forms", () => {
