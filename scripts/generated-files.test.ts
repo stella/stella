@@ -1,12 +1,13 @@
 import { panic } from "better-result";
 import { expect, test } from "bun:test";
 import { existsSync, readFileSync } from "node:fs";
-import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import nodePath from "node:path";
 import { pathToFileURL } from "node:url";
 import * as v from "valibot";
 
+import { generateCapabilityRuntime } from "../apps/api/scripts/generate-capability-runtime";
 import {
   GENERATORS,
   allowedOutputs,
@@ -116,6 +117,71 @@ test("derived runtime outputs have one owner and stay ignored when regenerated",
       new TextDecoder().decode(ignored.stdout).trim().split("\n").toSorted(),
       id,
     ).toEqual([...outputs].toSorted());
+  }
+});
+
+test("capability runtime cache manifests cover every file the producer writes", async () => {
+  const fixture = await mkdtemp(nodePath.join(tmpdir(), "capability-outputs-"));
+  try {
+    const generated = nodePath.join(fixture, "apps/api/src/mcp/generated");
+    const catalog = nodePath.join(fixture, "packages/cli/capabilities");
+    await mkdir(nodePath.join(generated, "capability-dispatch"), {
+      recursive: true,
+    });
+    await mkdir(catalog, { recursive: true });
+    await writeFile(
+      nodePath.join(catalog, "matters.list.json"),
+      JSON.stringify({ id: "matters.list", featureId: "matters" }),
+    );
+    await writeFile(
+      nodePath.join(generated, "capability-dispatch/matters.list.ts"),
+      "export const CAPABILITY_DISPATCH = {};\n",
+    );
+    await generateCapabilityRuntime(pathToFileURL(`${fixture}/`));
+    const outputs = (await readdir(generated))
+      .filter((file) => file.endsWith(".ts"))
+      .map((file) => `src/mcp/generated/${file}`)
+      .toSorted();
+    expect(outputs.length).toBeGreaterThan(0);
+    expect(generator("capability-runtime").outputs.toSorted()).toEqual(
+      outputs.map((file) => `apps/api/${file}`),
+    );
+    const config = v.parse(
+      v.object({
+        tasks: v.record(
+          v.string(),
+          v.looseObject({ outputs: v.optional(v.array(v.string())) }),
+        ),
+      }),
+      Bun.JSONC.parse(
+        readFileSync(new URL("../turbo.json", import.meta.url), "utf-8"),
+      ),
+    );
+    const assertOutputs = (tasks: typeof config.tasks) => {
+      expect(
+        tasks["@stll/api#generate:capability-runtime"]?.outputs?.toSorted(),
+      ).toEqual(outputs);
+      for (const output of outputs) {
+        expect(tasks["@stll/api#typecheck"]?.outputs).toContain(output);
+      }
+    };
+    assertOutputs(config.tasks);
+    for (const task of [
+      "@stll/api#generate:capability-runtime",
+      "@stll/api#typecheck",
+    ]) {
+      for (const output of outputs) {
+        const mutated = structuredClone(config.tasks);
+        const body = mutated[task];
+        if (!body?.outputs) {
+          panic(`Missing capability cache output fixture: ${task}`);
+        }
+        body.outputs = body.outputs.filter((file) => file !== output);
+        expect(() => assertOutputs(mutated)).toThrow("expect(received)");
+      }
+    }
+  } finally {
+    await rm(fixture, { recursive: true, force: true });
   }
 });
 

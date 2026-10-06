@@ -1051,8 +1051,56 @@ jobs:
   # are ci-tests and ci-browser, which run as separate jobs so they overlap
   # instead of queueing behind one another. The three share nothing but the
   # checkout and the install.
-  ci-checks-generated:
+  ci-generated-sources:
     needs: ci-plan
+    if: >-
+      inputs.heavy_only != true
+      && (needs.ci-plan.outputs.trusted == 'true' || github.event_name == 'workflow_dispatch')
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      actions: write
+    outputs:
+      input_hash: ${{ steps.generate.outputs.input_hash }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+          submodules: true
+      - name: Setup Bun
+        uses: stella/.github/actions/setup-bun-cached@167fb396c6c0f4e07296ad2cd72e6ef15367c776
+        with:
+          save: ${{ github.ref == 'refs/heads/main' }}
+      - name: Install dependencies
+        run: bash scripts/retry.sh bun ci --ignore-scripts
+        env:
+          NPM_TOKEN: ""
+      - name: Produce generated sources
+        id: generate
+        run: bun scripts/ci-generated-sources.ts produce "$RUNNER_TEMP/generated-sources"
+      - name: Upload generated sources
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: generated-sources-${{ steps.generate.outputs.input_hash }}
+          path: ${{ runner.temp }}/generated-sources/
+          retention-days: 1
+          if-no-files-found: error
+      - name: Cancel failed merge-group run
+        if: failure() && github.event_name == 'merge_group'
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
+        with:
+          retries: 0
+          script: |
+            await github.rest.actions.cancelWorkflowRun({
+              ...context.repo,
+              run_id: context.runId,
+            });
+
+  ci-checks-generated:
+    needs: [ci-plan, ci-generated-sources]
     if: >-
       inputs.heavy_only != true
       && (
@@ -1067,6 +1115,8 @@ jobs:
       # Release PR state for the release CLI changeset hold.
       pull-requests: read
       actions: write
+    env:
+      CI_GENERATED_SOURCES_MANIFEST: ${{ github.workspace }}/.cache/ci-generated-sources/manifest.json
     steps:
       - name: Checkout
         id: checkout
@@ -1099,9 +1149,15 @@ jobs:
           # the real npm token to dependency lifecycle scripts.
           NPM_TOKEN: ""
 
-      - name: Generate web sources
+      - name: Download generated sources
         if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
-        run: bun run generate
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: generated-sources-${{ needs.ci-generated-sources.outputs.input_hash }}
+          path: ${{ runner.temp }}/generated-sources
+      - name: Restore generated sources
+        if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
+        run: bun scripts/ci-generated-sources.ts restore "$RUNNER_TEMP/generated-sources"
 
       - name: Prepare environment
         if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
@@ -1124,7 +1180,7 @@ jobs:
         # change cannot silently ship stale CLI, web approval, or skill behavior.
         # Regenerate: `bun run codegen` in packages/cli.
         run: |
-          bun apps/api/scripts/generate-capability-runtime.ts
+          bun scripts/ci-generated-sources.ts prepare
           (cd packages/cli && bun run codegen)
           (cd packages/cli && bun run codegen:runtime)
           git diff --exit-code -- \
@@ -1213,7 +1269,7 @@ jobs:
             });
 
   ci-checks-policy:
-    needs: ci-plan
+    needs: [ci-plan, ci-generated-sources]
     if: >-
       inputs.heavy_only != true
       && (
@@ -1228,6 +1284,8 @@ jobs:
       # Release PR state for the release CLI changeset hold.
       pull-requests: read
       actions: write
+    env:
+      CI_GENERATED_SOURCES_MANIFEST: ${{ github.workspace }}/.cache/ci-generated-sources/manifest.json
     steps:
       - name: Checkout
         id: checkout
@@ -1274,11 +1332,15 @@ jobs:
           cd ../web
           cp .env.example .env
 
-      - name: Generate web route tree
+      - name: Download generated sources
         if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
-        # The scriptless install does not create the derived route tree, and
-        # both knip checks resolve the router through it.
-        run: bun --filter @stll/web generate:route-tree
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: generated-sources-${{ needs.ci-generated-sources.outputs.input_hash }}
+          path: ${{ runner.temp }}/generated-sources
+      - name: Restore generated sources
+        if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
+        run: bun scripts/ci-generated-sources.ts restore "$RUNNER_TEMP/generated-sources"
 
       - name: Compute affected flag
         if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
@@ -1435,7 +1497,7 @@ jobs:
             });
 
   ci-checks-rest:
-    needs: ci-plan
+    needs: [ci-plan, ci-generated-sources]
     if: >-
       inputs.heavy_only != true
       && (
@@ -1450,6 +1512,8 @@ jobs:
       # Release PR state for the release CLI changeset hold.
       pull-requests: read
       actions: write
+    env:
+      CI_GENERATED_SOURCES_MANIFEST: ${{ github.workspace }}/.cache/ci-generated-sources/manifest.json
     steps:
       - name: Checkout
         id: checkout
@@ -1600,9 +1664,15 @@ jobs:
           # the real npm token to dependency lifecycle scripts.
           NPM_TOKEN: ""
 
-      - name: Generate web compiler sources
+      - name: Download generated sources
         if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
-        run: bun run generate
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: generated-sources-${{ needs.ci-generated-sources.outputs.input_hash }}
+          path: ${{ runner.temp }}/generated-sources
+      - name: Restore generated sources
+        if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
+        run: bun scripts/ci-generated-sources.ts restore "$RUNNER_TEMP/generated-sources"
 
       - name: Workspace hygiene
         if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
@@ -1864,6 +1934,10 @@ jobs:
           bun test scripts/check-result-boundary-enrolment.test.ts
           bun run check:result-boundary-enrolment
 
+      - name: Generated source artifact contract
+        if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
+        run: bun test scripts/ci-generated-sources.test.ts packages/scripts/src/prepared-generated-sources.test.ts
+
       - name: Test input coverage
         if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
         # Turbo selects and caches a package's tests on that package's own
@@ -2080,7 +2154,7 @@ jobs:
         # The guard follows handler imports into the gitignored capability
         # runtime modules, so generate them first instead of skipping them.
         run: |
-          bun apps/api/scripts/generate-capability-runtime.ts
+          bun scripts/ci-generated-sources.ts prepare
           bun apps/api/scripts/content-delivery-guard.ts --self-test
           bun apps/api/scripts/content-delivery-guard.ts
 
@@ -2792,7 +2866,7 @@ jobs:
             });
 
   code-quality-api:
-    needs: ci-plan
+    needs: [ci-plan, ci-generated-sources]
     if: >-
       inputs.heavy_only != true
       && (
@@ -2805,6 +2879,8 @@ jobs:
     permissions:
       contents: read
       actions: write
+    env:
+      CI_GENERATED_SOURCES_MANIFEST: ${{ github.workspace }}/.cache/ci-generated-sources/manifest.json
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -2833,6 +2909,14 @@ jobs:
           # .npmrc references NPM_TOKEN, but PR installs must not expose
           # the real npm token to dependency lifecycle scripts.
           NPM_TOKEN: ""
+
+      - name: Download generated sources
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: generated-sources-${{ needs.ci-generated-sources.outputs.input_hash }}
+          path: ${{ runner.temp }}/generated-sources
+      - name: Restore generated sources
+        run: bun scripts/ci-generated-sources.ts restore "$RUNNER_TEMP/generated-sources"
 
       - name: Prepare environment
         run: |
@@ -2875,7 +2959,7 @@ jobs:
             });
 
   code-quality-web:
-    needs: ci-plan
+    needs: [ci-plan, ci-generated-sources]
     if: >-
       inputs.heavy_only != true
       && (
@@ -2888,6 +2972,8 @@ jobs:
     permissions:
       contents: read
       actions: write
+    env:
+      CI_GENERATED_SOURCES_MANIFEST: ${{ github.workspace }}/.cache/ci-generated-sources/manifest.json
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -2917,8 +3003,13 @@ jobs:
           # the real npm token to dependency lifecycle scripts.
           NPM_TOKEN: ""
 
-      - name: Generate web sources
-        run: bun run generate
+      - name: Download generated sources
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: generated-sources-${{ needs.ci-generated-sources.outputs.input_hash }}
+          path: ${{ runner.temp }}/generated-sources
+      - name: Restore generated sources
+        run: bun scripts/ci-generated-sources.ts restore "$RUNNER_TEMP/generated-sources"
 
       - name: Prepare environment
         run: |
@@ -2961,7 +3052,7 @@ jobs:
             });
 
   code-quality-rest:
-    needs: ci-plan
+    needs: [ci-plan, ci-generated-sources]
     if: >-
       inputs.heavy_only != true
       && (
@@ -2974,6 +3065,8 @@ jobs:
     permissions:
       contents: read
       actions: write
+    env:
+      CI_GENERATED_SOURCES_MANIFEST: ${{ github.workspace }}/.cache/ci-generated-sources/manifest.json
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -3003,8 +3096,13 @@ jobs:
           # the real npm token to dependency lifecycle scripts.
           NPM_TOKEN: ""
 
-      - name: Generate web sources
-        run: bun run generate
+      - name: Download generated sources
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: generated-sources-${{ needs.ci-generated-sources.outputs.input_hash }}
+          path: ${{ runner.temp }}/generated-sources
+      - name: Restore generated sources
+        run: bun scripts/ci-generated-sources.ts restore "$RUNNER_TEMP/generated-sources"
 
       - name: Install the docs MCP server
         # tsconfig.tooling.json typechecks .claude/mcp against the packages
@@ -3496,7 +3594,7 @@ jobs:
   # run would blow that job's timeout; here they run in parallel instead.
   # Regenerate the cumulative budget: `bun scripts/typecheck-baseline.ts --write-baseline`.
   typecheck-baseline:
-    needs: ci-plan
+    needs: [ci-plan, ci-generated-sources]
     if: >-
       inputs.heavy_only != true
       && (
@@ -3509,6 +3607,8 @@ jobs:
     permissions:
       contents: read
       actions: write
+    env:
+      CI_GENERATED_SOURCES_MANIFEST: ${{ github.workspace }}/.cache/ci-generated-sources/manifest.json
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -3535,13 +3635,13 @@ jobs:
           # the real npm token to dependency lifecycle scripts.
           NPM_TOKEN: ""
 
-      - name: Generate types
-        # The guard calls tsc directly (no turbo), so the generated inputs
-        # that turbo's typecheck pipeline would produce must exist first.
-        run: |
-          bun --filter @stll/api generate:capability-runtime
-          bun run generate
-          bun run typegen
+      - name: Download generated sources
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: generated-sources-${{ needs.ci-generated-sources.outputs.input_hash }}
+          path: ${{ runner.temp }}/generated-sources
+      - name: Restore generated sources
+        run: bun scripts/ci-generated-sources.ts restore "$RUNNER_TEMP/generated-sources"
 
       - name: Load merge base measurement
         run: bash scripts/prepare-typecheck-base.sh
@@ -5217,6 +5317,7 @@ jobs:
     needs:
       [
         ci-plan,
+        ci-generated-sources,
         dependency-malware,
         docker-checks,
         parser-version-guard,
@@ -5283,6 +5384,7 @@ jobs:
             "docker-checks": "docker_checks_required",
             "api-image-smoke": "api_image_smoke_required",
             "ci-browser": null,
+            "ci-generated-sources": null,
             "ci-checks-generated": null,
             "ci-checks-policy": null,
             "ci-checks-rest": null,
@@ -5319,7 +5421,7 @@ jobs:
           FAST_JOB_SCOPES: >-
             {"service-suites": "service_suites_pr_required", "docker-checks": "docker_checks_pr_required", "legal-atlas-image": "legal_atlas_image_pr_required"}
           FAST_REQUIRED: >-
-            ["ci-checks-generated", "ci-checks-policy", "ci-checks-rest", "code-quality-api", "code-quality-rest", "code-quality-web", "dependency-malware", "parser-version-guard", "typecheck-baseline", "ci-tests"]
+            ["ci-generated-sources", "ci-checks-generated", "ci-checks-policy", "ci-checks-rest", "code-quality-api", "code-quality-rest", "code-quality-web", "dependency-malware", "parser-version-guard", "typecheck-baseline", "ci-tests"]
         run: |
           if [[ "${HEAVY_ONLY:-false}" == true ]]; then
             # No main run may turn a cancellation into successful supersession.

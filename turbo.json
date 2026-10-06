@@ -8,6 +8,7 @@
   // would silently run the default seed.
   "globalPassThroughEnv": [
     "CI",
+    "CI_GENERATED_SOURCES_MANIFEST",
     "PROPERTY_TEST_NUM_RUNS_FACTOR",
     "PROPERTY_TEST_SEED"
   ],
@@ -26,6 +27,7 @@
         "vite.config.ts",
         "route-tree.config.ts",
         "scripts/generate-route-tree.ts",
+        "$TURBO_ROOT$/packages/scripts/src/prepared-generated-sources.ts",
         "package.json",
         "$TURBO_ROOT$/bun.lock"
       ],
@@ -458,6 +460,9 @@
         "src/codegen.ts",
         "src/capability-catalog-data.ts",
         "src/write-generated-file.ts",
+        "$TURBO_ROOT$/packages/scripts/src/prepare-cli-runtime.ts",
+        "$TURBO_ROOT$/packages/scripts/src/child-exit-status.ts",
+        "$TURBO_ROOT$/packages/scripts/src/prepared-generated-sources.ts",
         "src/capability-catalog-load.ts",
         "src/generate-capability-tree.ts",
         "src/generate-route-map.ts",
@@ -564,11 +569,13 @@
         "scripts/generate-capability-runtime.ts",
         "src/mcp/generated/capability-dispatch/**",
         "$TURBO_ROOT$/packages/cli/capabilities/**",
-        "$TURBO_ROOT$/packages/cli/src/capability-catalog-data.ts"
+        "$TURBO_ROOT$/packages/cli/src/capability-catalog-data.ts",
+        "$TURBO_ROOT$/packages/scripts/src/prepared-generated-sources.ts"
       ],
       "outputs": [
         "src/mcp/generated/capability-dispatch.ts",
-        "src/mcp/generated/capability-catalog.ts"
+        "src/mcp/generated/capability-catalog.ts",
+        "src/mcp/generated/capability-feature-bindings.ts"
       ]
     },
     "@stll/api#build": {
@@ -596,6 +603,7 @@
         "**/.cache/tsbuildinfo*.json",
         "src/mcp/generated/capability-dispatch.ts",
         "src/mcp/generated/capability-catalog.ts",
+        "src/mcp/generated/capability-feature-bindings.ts",
         "$TURBO_ROOT$/packages/cli/src/generated/route-map.ts",
         "$TURBO_ROOT$/packages/cli/src/generated/tool-annotations.ts"
       ]

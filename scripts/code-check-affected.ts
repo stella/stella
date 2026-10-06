@@ -881,9 +881,7 @@ export const scopedCommands = (
   }
   if (plan.rootLintPaths.length > 0) {
     if (!rootChecks.has(ROOT_CHECKS.rootScriptLint)) {
-      commands.push(["bun", "run", "generate"]);
-      commands.push(["bun", "--cwd=packages/cli", "run", "codegen:runtime"]);
-      commands.push(["bun", "apps/api/scripts/generate-capability-runtime.ts"]);
+      commands.push(["bun", "scripts/ci-generated-sources.ts", "prepare"]);
     }
     commands.push([
       "bun",
