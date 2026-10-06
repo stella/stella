@@ -202,7 +202,8 @@
     "drizzle-kit": "catalog:",
     "fast-check": "catalog:",
     "openai": "6.49.0",
-    "pdfjs-dist": "^6.3.289"
+    "pdfjs-dist": "^6.3.289",
+    "typescript": "catalog:"
   },
   "ciGateTestRunners": {
     "test:corpus": {

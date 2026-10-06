@@ -9,10 +9,12 @@ import {
   TEXT_ABSENCE_REASON,
   absentDecisionTextFields,
 } from "@/api/lib/case-law/decision-text";
+import { CASE_LAW_SEARCH_CANDIDATE_ROW_MAX_BYTES } from "@/api/lib/case-law/search-candidate-row-bound-sql";
 import {
   UNPERSISTABLE_DECISION_FIELDS,
   UnpersistableDecisionFieldError,
 } from "@/api/lib/errors/tagged-errors";
+import { decisionLanguageGroupKey } from "@/api/lib/legal-search/decision-language-identity";
 import { sanitizeResult } from "@/api/lib/legal-search/ingestion-normalization";
 import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
 
@@ -44,7 +46,18 @@ const normalizationProperty = (
         try: () => sanitizeResult({ ...decision, [field]: value }),
         catch: (error: unknown) => error,
       });
-      if (characters.length <= width) {
+      const input = {
+        ...decision,
+        [field]: value,
+      };
+      const languageGroupKey = decisionLanguageGroupKey({
+        ...input,
+        sourceId: "019a08bf-0600-7000-8000-000000000001",
+      });
+      const fitsBytes =
+        Buffer.byteLength(input.court) + Buffer.byteLength(languageGroupKey) <=
+        CASE_LAW_SEARCH_CANDIDATE_ROW_MAX_BYTES;
+      if (characters.length <= width && fitsBytes) {
         expect(value).toBe(result.unwrap()[field]);
       } else {
         expect(result.isErr()).toBe(true);
@@ -52,7 +65,12 @@ const normalizationProperty = (
           throw new Error("Expected storage refusal");
         }
         expect(result.error).toBeInstanceOf(UnpersistableDecisionFieldError);
-        expect(result.error).toMatchObject({ field: errorField });
+        expect(result.error).toMatchObject({
+          field:
+            characters.length > width
+              ? errorField
+              : UNPERSISTABLE_DECISION_FIELDS.SEARCH_CANDIDATE_BYTES,
+        });
       }
     },
   );
@@ -72,5 +90,59 @@ test("court storage is exact or a typed refusal for generated Unicode values", (
   assertProperty(
     "court storage is exact or a typed refusal for generated Unicode values",
     normalizationProperty("court", UNPERSISTABLE_DECISION_FIELDS.COURT_LENGTH),
+  );
+});
+
+test("generated decision candidates fit the aggregate UTF8 budget or receive a typed refusal", () => {
+  const unicode = (maximum: number) =>
+    fc
+      .array(fc.constantFrom("x", "é", "😀", "\u0301"), {
+        minLength: maximum - 4,
+        maxLength: maximum,
+      })
+      .map((characters) => characters.join(""));
+  assertProperty(
+    "generated decision candidates fit the aggregate UTF8 budget or receive a typed refusal",
+    fc.property(
+      unicode(CITATION_STORAGE_WIDTHS.court),
+      unicode(256),
+      unicode(128),
+      (court, ecli, decisionType) => {
+        const input = { ...decision, court, ecli, decisionType };
+        const languageGroupKey = decisionLanguageGroupKey({
+          ...input,
+          sourceId: "019a08bf-0600-7000-8000-000000000001",
+        });
+        const bytes =
+          Buffer.byteLength(court) +
+          Buffer.byteLength(languageGroupKey) +
+          Buffer.byteLength(decisionType);
+        const result = Result.try({
+          try: () => sanitizeResult(input),
+          catch: (error: unknown) => error,
+        });
+        if (bytes > CASE_LAW_SEARCH_CANDIDATE_ROW_MAX_BYTES) {
+          expect(result.isErr()).toBe(true);
+          if (result.isOk()) {
+            throw new Error("Expected aggregate byte refusal");
+          }
+          expect(result.error).toBeInstanceOf(UnpersistableDecisionFieldError);
+          expect(result.error).toMatchObject({
+            field: UNPERSISTABLE_DECISION_FIELDS.SEARCH_CANDIDATE_BYTES,
+          });
+          return;
+        }
+        const normalized = result.unwrap();
+        expect(normalized.court).toBe(court);
+        expect(
+          sanitizeResult({
+            ...decision,
+            court: normalized.court,
+            ecli: normalized.ecli,
+            decisionType: normalized.decisionType,
+          }),
+        ).toEqual(normalized);
+      },
+    ),
   );
 });

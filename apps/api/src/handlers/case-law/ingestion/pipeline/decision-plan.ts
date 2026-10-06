@@ -49,10 +49,15 @@ import { RECONCILE_CONTENTION } from "@/api/handlers/case-law/ingestion/pipeline
 import type { RuleCache } from "@/api/handlers/case-law/polarity/rule-engine";
 import type { SafeId } from "@/api/lib/branded-types";
 import { toPlainTextMetadataObject } from "@/api/lib/case-law/plain-text";
+import { fitsSearchCandidateRow } from "@/api/lib/case-law/search-candidate-row-bound-sql";
 import {
   corpusCarriesDocument,
   payloadCarriesDocument,
 } from "@/api/lib/case-law/stored-payload";
+import {
+  UNPERSISTABLE_DECISION_FIELDS,
+  UnpersistableDecisionFieldError,
+} from "@/api/lib/errors/tagged-errors";
 import {
   corpusMirrorColumns,
   corpusPayloadDisposition,
@@ -640,6 +645,18 @@ export const planDecisionWrite = async ({
     sourceDocumentId: result.sourceDocumentId,
     sourceId,
   });
+  if (
+    !fitsSearchCandidateRow({
+      court: result.court,
+      decisionType: result.decisionType,
+      languageGroupKey,
+    })
+  ) {
+    throw new UnpersistableDecisionFieldError({
+      message: "Decision search candidate exceeds storage byte limits",
+      field: UNPERSISTABLE_DECISION_FIELDS.SEARCH_CANDIDATE_BYTES,
+    });
+  }
 
   const {
     corpusPayload,

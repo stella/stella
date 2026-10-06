@@ -94,7 +94,6 @@ import {
  * separate id spaces; {@link plProcurementRulingKeys} is the relationship
  * between their rows, and nothing here merges or deletes either side.
  */
-import { fitsCitationStorageField } from "@/api/lib/case-law/citation-storage-bounds";
 import {
   TEXT_ABSENCE_REASON,
   absentDecisionTextFields,
@@ -103,6 +102,10 @@ import {
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import { errorTag } from "@/api/lib/errors/utils";
 import { ADAPTER_MANIFESTS } from "@/api/lib/legal-search/adapter-manifest";
+import {
+  decisionCourtExceedsStorage,
+  storedCaseNumberOf,
+} from "@/api/lib/legal-search/ingestion-normalization";
 import type { RawIngestionResult } from "@/api/lib/legal-search/ingestion-types";
 import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
 import { logger } from "@/api/lib/observability/logger";
@@ -834,13 +837,41 @@ const listOf = (
   return items.length === 0 ? undefined : items;
 };
 
-const plKioCourtStorage = (
-  statedCourt: string | undefined,
-  hasRecordId: boolean,
-) => {
+type PlKioCourtStorageOptions = {
+  statedCourt: string | undefined;
+  hasRecordId: boolean;
+  caseNumber: string;
+  decisionType: string | undefined;
+  sourceDocumentId: string;
+};
+
+const plKioCourtStorage = ({
+  statedCourt,
+  hasRecordId,
+  caseNumber,
+  decisionType,
+  sourceDocumentId,
+}: PlKioCourtStorageOptions) => {
+  if (statedCourt === undefined) {
+    logger.warn("case_law.ingestion.court_not_stated", {
+      adapterKey: ADAPTER_KEYS.PL_KIO,
+      sourceDocumentId,
+    });
+  }
+  const candidate = {
+    caseNumber: storedCaseNumberOf({
+      caseNumber,
+      country: ADAPTER_MANIFESTS[ADAPTER_KEYS.PL_KIO].country,
+      sourceDocumentId,
+    }),
+    country: ADAPTER_MANIFESTS[ADAPTER_KEYS.PL_KIO].country,
+    court: statedCourt ?? "",
+    decisionType,
+    ecli: undefined,
+    sourceDocumentId,
+  };
   const courtTooLong =
-    statedCourt !== undefined &&
-    !fitsCitationStorageField("court", statedCourt);
+    statedCourt !== undefined && decisionCourtExceedsStorage(candidate);
   const court = courtTooLong ? "" : (statedCourt ?? "");
   const unavailableCourt = statedCourt === undefined || courtTooLong;
   let quarantineReason:
@@ -914,18 +945,18 @@ export const assemblePlKioDecision = ({
   // and a later observation that states the body replaces it.
   const statedCourt =
     fieldOf(detail, "Organ wydający") ?? presentText(item.court);
-  if (statedCourt === undefined) {
-    logger.warn("case_law.ingestion.court_not_stated", {
-      adapterKey: ADAPTER_KEYS.PL_KIO,
-      sourceDocumentId,
-    });
-  }
-  const { court, courtTooLong, quarantineReason, unavailableCourt } =
-    plKioCourtStorage(statedCourt, id !== undefined);
-  const listingOnly = detail === null || unavailableCourt;
   const decisionForm =
     fieldOf(detail, "Rodzaj dokumentu") ?? presentText(item.documentType);
   const decisionType = plKioDecisionType(decisionForm);
+  const { court, courtTooLong, quarantineReason, unavailableCourt } =
+    plKioCourtStorage({
+      statedCourt,
+      hasRecordId: id !== undefined,
+      caseNumber,
+      decisionType,
+      sourceDocumentId,
+    });
+  const listingOnly = detail === null || unavailableCourt;
   const publishedDate =
     plKioIsoDate(fieldOf(detail, "Data wydania rozstrzygnięcia")) ??
     plKioIsoDate(item.issueDate);
