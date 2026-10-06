@@ -1325,6 +1325,7 @@
     "sendErrorQuotaExhausted": "Az AI-szolgáltató kvótája kimerült. Próbálja újra egy perc múlva, vagy forduljon a munkaterület adminisztrátorához.",
     "sendErrorStreamIncomplete": "Az AI válasza megszakadt, mielőtt elkészült volna. Próbálja újra.",
     "sendPrompt": "Üzenet küldése",
+    "sendQueuedMessageNow": "Küldés most",
     "sendWithoutAnonymization": "Küldés anonimizálás nélkül",
     "skills": {
       "scope": {

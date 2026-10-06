@@ -1029,6 +1029,9 @@ const RECORDED_ACTIONS: Record<string, RecordedCoverage> = {
     "The recorder scripts one model; a model switch needs a second one.",
   ),
   send: recordedAs(({ type }) => type === "send"),
+  "send-queued-message-now": notRecorded(
+    "The recorder has no send queue; it lives in the session hook this replay renders.",
+  ),
   stop: recordedAs(({ type }) => type === "stop"),
   "toggle-anonymization": OUTSIDE_THE_CONVERSATION,
   "toggle-web-search": OUTSIDE_THE_CONVERSATION,
