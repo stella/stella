@@ -6,6 +6,7 @@ import type { TimeEntry } from "@stll/api-contract/time-entry-types";
 import {
   timeEntryContextKey,
   timeEntryContextUpdate,
+  UNAVAILABLE_TIME_ENTRY_CONTEXT,
 } from "./time-entry-context.logic";
 
 const entry = {
@@ -42,7 +43,8 @@ test("unavailable context preserves the ledger and its stored link on edit", () 
   expect(timeEntryContextUpdate(entry, "replacement")).toEqual({
     workItemId: "replacement",
   });
-  expect(timeEntryContextKey(entry)).toBe("unavailable");
+  expect(UNAVAILABLE_TIME_ENTRY_CONTEXT).toBe("unavailable");
+  expect(timeEntryContextKey(entry)).toBe(UNAVAILABLE_TIME_ENTRY_CONTEXT);
 });
 
 test("context reference contracts refuse identifiers on unavailable references", () => {
