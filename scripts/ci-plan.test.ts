@@ -735,7 +735,15 @@ test("all failure tails and screenshot cancellation use the canonical same-run A
             repo: { owner: "fixture-owner", repo: "fixture-repository" },
             runId: 424_242,
           },
+          process: { env: { GITHUB_RUN_ATTEMPT: "1" } },
+          setTimeout,
+          clearTimeout,
+          core: {
+            error: () => {},
+            summary: { addRaw: () => {}, write: async () => {} },
+          },
           github: {
+            paginate: async () => [],
             rest: {
               actions: {
                 cancelWorkflowRun: async (arguments_: unknown) => {
@@ -824,6 +832,8 @@ type EvaluateResultOptions = {
   queuedCancellation?: "with-check" | "without-check";
   missingJob?: boolean;
   matrixTimeoutSibling?: boolean;
+  embeddedStepFailure?: boolean;
+  outcomeScript?: string;
 };
 
 const PULL_REQUEST = { repo: "stella/stella", number: "7" } as const;
@@ -851,7 +861,7 @@ case "$endpoint" in
     [[ "$FAKE_API_FAILURE" != "runs" ]] || exit 1
     echo "$FAKE_RUNS"
     ;;
-  "repos/${PULL_REQUEST.repo}/actions/runs/123/jobs?filter=latest&per_page=100")
+  "repos/${PULL_REQUEST.repo}/actions/runs/123/attempts/1/jobs?per_page=100")
     [[ "$FAKE_API_FAILURE" != "jobs" ]] || exit 1
     echo "$FAKE_JOBS"
     ;;
@@ -885,6 +895,8 @@ const resultGateCase = ({
   apiFailure,
   missingJob = false,
   matrixTimeoutSibling = false,
+  embeddedStepFailure = false,
+  outcomeScript = resultStep.run,
   newerRun = "same-group",
   queuedCancellation,
 }: EvaluateResultOptions): BashCase => {
@@ -938,6 +950,9 @@ const resultGateCase = ({
         name.replace(/\$\{\{[^}]+\}\}/gu, "fixture") +
         (job === "ci-tests" ? " (api-1)" : ""),
       conclusion: "cancelled",
+      steps: embeddedStepFailure
+        ? [{ name: "Validate contract", number: 3, conclusion: "failure" }]
+        : [],
       check_run_url: `https://api.github.com/repos/${PULL_REQUEST.repo}/check-runs/${checkId}`,
     });
     checkAnnotations[checkId] = [annotations];
@@ -997,13 +1012,14 @@ const resultGateCase = ({
   };
   return {
     flags: ["-eu"],
-    script: resultStep.run,
+    script: outcomeScript,
     args: [],
     env: {
       EVENT: event,
       QUEUE_DEPTH: "full",
       THIN_JOBS: "[]",
       GITHUB_RUN_ID: "123",
+      GITHUB_RUN_ATTEMPT: "1",
       FAKE_API_FAILURE: apiFailure ?? "",
       FAKE_CURRENT_RUN: JSON.stringify(currentRun),
       FAKE_RUNS: JSON.stringify([
@@ -1279,6 +1295,37 @@ test.each(resultJob.needs)(
     }
   },
 );
+
+test("cancelled jobs retain failed-step evidence and cannot pass verified supersession", () => {
+  const cases = [...FAST_DEPTH_EVENTS, EVENT.mergeGroup].flatMap((event) =>
+    resultJob.needs.map((job) => ({ event, job })),
+  );
+  for (const { item, exitCode, stdout } of evaluateResults(
+    cases,
+    ({ event, job }) => ({
+      event,
+      results: { [job]: "cancelled" },
+      cancellationEvidence: "superseded",
+      embeddedStepFailure: true,
+    }),
+  )) {
+    expect(exitCode, `${item.event}/${item.job}`).toBe(1);
+    expect(stdout).toContain("Cancelled CI job contains a failed step:");
+    expect(stdout).toContain("3: Validate contract");
+  }
+  const options = {
+    event: EVENT.pullRequest,
+    results: { "ci-tests": "cancelled" },
+    cancellationEvidence: "superseded",
+    embeddedStepFailure: true,
+  } as const;
+  const outcomeScript = resultStep.run.replace(
+    'if [[ -n "$failed_steps" ]]; then',
+    "if false; then",
+  );
+  expect(outcomeScript).not.toBe(resultStep.run);
+  expect(evaluateResult({ ...options, outcomeScript })).toBe(0);
+});
 
 test("cancelled dependencies fail closed on API errors, missing jobs and mixed matrix causes", () => {
   const cancelled = {
