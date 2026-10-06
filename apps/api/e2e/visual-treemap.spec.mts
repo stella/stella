@@ -1,16 +1,13 @@
 import { expect, test } from "@playwright/test";
 import { execFileSync } from "node:child_process";
-import { readFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import path from "node:path";
+import { pathToFileURL } from "node:url";
 
-import { courtTierLabelsForLanguage } from "@stll/api-contract/case-law-court-tier-locales";
 import { VISUAL_SANDBOX_PATH } from "@stll/api-contract/visual-sandbox";
 
-import { treemapFixture } from "../src/handlers/visual-sandbox/browser/treemap-fixture";
-import { sanitizeVisualHtml } from "../src/handlers/visual-sandbox/sanitize";
-import {
-  composeVisualDocument,
-  escapeVisualJson,
-} from "../src/handlers/visual-sandbox/srcdoc";
+import type * as TreemapHelpers from "./visual-treemap.helpers";
 
 const E2E_API_ORIGIN = process.env["E2E_API_URL"] ?? "http://localhost:3001";
 
@@ -23,7 +20,28 @@ const runtime = readFileSync(
 );
 
 const harness = { source: "" };
-test.beforeAll(() => {
+const loaded: { helpers?: typeof TreemapHelpers } = {};
+const helpers = (): typeof TreemapHelpers => {
+  if (!loaded.helpers) {
+    throw new TypeError("Treemap helpers load in beforeAll");
+  }
+  return loaded.helpers;
+};
+
+test.beforeAll(async () => {
+  const bundleDir = mkdtempSync(path.join(tmpdir(), "visual-treemap-"));
+  const helpersBundle = path.join(bundleDir, "helpers.mjs");
+  execFileSync("bun", [
+    "build",
+    new URL("./visual-treemap.helpers.ts", import.meta.url).pathname,
+    "--target=node",
+    "--format=esm",
+    `--outfile=${helpersBundle}`,
+  ]);
+  loaded.helpers = (await import(
+    pathToFileURL(helpersBundle).href
+  )) as typeof TreemapHelpers;
+  rmSync(bundleDir, { force: true, recursive: true });
   harness.source = execFileSync(
     "bun",
     [
@@ -46,6 +64,13 @@ for (const direction of ["ltr", "rtl"] as const) {
       page,
       request,
     }) => {
+      const {
+        composeVisualDocument,
+        courtTierLabelsForLanguage,
+        escapeVisualJson,
+        sanitizeVisualHtml,
+        treemapFixture,
+      } = helpers();
       const requests: string[] = [];
       const errors: string[] = [];
       page.on("request", (networkRequest) =>

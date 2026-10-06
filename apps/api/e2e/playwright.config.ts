@@ -4,10 +4,11 @@ const IS_CI = process.env["CI"] !== undefined;
 const E2E_OUTPUT_DIR = process.env["E2E_OUTPUT_DIR"] ?? "test-results";
 
 // Browser checks for API-owned browser code (the visual sandbox runtime).
-// They need a running API (E2E_API_URL) but no web app.
+// They need a running API (E2E_API_URL) but no web app. Specs are .mts so
+// they load as ES modules in this CommonJS package.
 export default defineConfig({
   testDir: ".",
-  testMatch: "**/*.spec.ts",
+  testMatch: "**/*.spec.mts",
   outputDir: E2E_OUTPUT_DIR,
   fullyParallel: true,
   retries: 0,
