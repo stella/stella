@@ -1,4 +1,5 @@
 import { Result, TaggedError } from "better-result";
+import type { InferOk } from "better-result";
 
 import type { GeneratedVisualInput } from "@stll/api-contract/generated-visual";
 
@@ -81,3 +82,7 @@ export const prepareGeneratedVisual = (input: GeneratedVisualInput) => {
     literalLinks: collectLiteralVisualLinks(normalized.value),
   });
 };
+
+export type PreparedGeneratedVisual = InferOk<
+  ReturnType<typeof prepareGeneratedVisual>
+>;

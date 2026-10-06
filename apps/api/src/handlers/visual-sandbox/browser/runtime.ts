@@ -18,7 +18,7 @@ const bootGuest = () => {
     }
     const data = v.parse(
       generatedVisualInputSchema.entries.data,
-      JSON.parse(dataElement.textContent ?? ""),
+      JSON.parse(dataElement.textContent),
     );
     Object.defineProperty(window, "stella", {
       value: createVisualGuestApi({

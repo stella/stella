@@ -2327,6 +2327,10 @@
     "seconds": 1.21339,
     "source": "estimated"
   },
+  "src/handlers/chat/tools/show-visual-tools.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
   "src/handlers/chat/tools/skill-documented-reads.test.ts": {
     "seconds": 3.344645,
     "source": "estimated"

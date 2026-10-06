@@ -1,5 +1,6 @@
 import * as v from "valibot";
 
+import { safeIdSchema } from "./safe-id";
 import { VISUAL_SANDBOX_LIMITS } from "./visual-sandbox";
 
 export const GENERATED_VISUAL_LIMITS = {
@@ -8,6 +9,7 @@ export const GENERATED_VISUAL_LIMITS = {
   dataNodes: 50_000,
   titleChars: 120,
   links: 400,
+  documentBytes: 2 * 1024 * 1024,
 } as const;
 
 type VisualDataVisit = { value: unknown; depth: number };
@@ -125,8 +127,9 @@ export const GENERATED_VISUAL_URI_PREFIX = "ui://stella/visual/";
 export const generatedVisualResourceSchema = v.strictObject({
   uri: v.pipe(
     v.string(),
-    v.regex(
-      /^ui:\/\/stella\/visual\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/u,
+    v.startsWith(GENERATED_VISUAL_URI_PREFIX),
+    v.check((uri) =>
+      v.is(safeIdSchema, uri.slice(GENERATED_VISUAL_URI_PREFIX.length)),
     ),
   ),
   mimeType: v.literal(GENERATED_VISUAL_MIME_TYPE),
