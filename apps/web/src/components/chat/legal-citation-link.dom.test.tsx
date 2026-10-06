@@ -27,7 +27,7 @@ process.env["VITE_PUBLIC_LAW_ENABLED"] = "true";
 const { QueryClient, QueryClientProvider } =
   await import("@tanstack/react-query");
 const router = await import("@tanstack/react-router");
-const { cleanup, fireEvent, render, screen, waitFor } =
+const { act, cleanup, fireEvent, render, screen, waitFor } =
   await import("@testing-library/react");
 const { IntlProvider } = await import("use-intl");
 const { FormattingProvider } = await import("@/i18n/formatting-context");
@@ -54,17 +54,21 @@ const { createCaseDecisionViewTab, isCaseDecisionViewPayload } =
   await import("@/components/inspector/case-decision-view");
 
 const clients: InstanceType<typeof QueryClient>[] = [];
-afterEach(() => {
-  cleanup();
-  for (const client of clients) {
-    client.clear();
-  }
-  clients.length = 0;
-  useExternalSourceStore.setState({ sourcesByUrl: {} });
-  useInspectorTabsStore.setState({ tabs: [], activeId: null });
-  globalThis.fetch = idleFetch;
+afterEach(async () => {
+  await act(async () => {
+    cleanup();
+    await Promise.all(clients.map((client) => client.cancelQueries()));
+    for (const client of clients) {
+      client.clear();
+    }
+    clients.length = 0;
+    useExternalSourceStore.setState({ sourcesByUrl: {} });
+    useInspectorTabsStore.setState({ tabs: [], activeId: null });
+    globalThis.fetch = idleFetch;
+  });
 });
 afterAll(async () => {
+  await act(async () => {});
   globalThis.fetch = originalFetch;
   if (originalPublicLawFlag === undefined) {
     delete process.env["VITE_PUBLIC_LAW_ENABLED"];
@@ -443,12 +447,15 @@ for (const anchorId of [null, "p-12"]) {
       name: decisionReference,
     });
     expect(primary.getAttribute("href")).toBe(
-      createCaseLawDecisionPath(
-        createCaseLawDecisionRouteParams({
-          ...fullDecision,
-          decisionId: fullDecision.id,
-        }),
-      ),
+      new URL(
+        createCaseLawDecisionPath(
+          createCaseLawDecisionRouteParams({
+            ...fullDecision,
+            decisionId: fullDecision.id,
+          }),
+        ),
+        env.VITE_PUBLIC_APP_URL,
+      ).href,
     );
     expect(primary.textContent).toBe("NS");
     expect(primary.textContent).not.toContain(target.caseNumber);
