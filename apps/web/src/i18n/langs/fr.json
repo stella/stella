@@ -963,7 +963,7 @@
       "appliedVersionNotStated": "Version appliquée non précisée",
       "appliedVersionNotStatedCompact": "Version non précisée",
       "appliedVersionStatedAmendment": "Rédaction modifiée par <reference>{amendment}</reference>",
-      "appliedVersionStatedAmendmentCompact": "Précisé : {amendment}",
+      "appliedVersionStatedAmendmentCompact": "Précisé : <reference>{amendment}</reference>",
       "appliedVersionStatedDate": "{relation, select, on {Rédaction en vigueur au {date}} until {Rédaction en vigueur jusqu’au {date}} from {Rédaction en vigueur à compter du {date}} other {Rédaction en vigueur au {date}}}",
       "appliedVersionStatedDateCompact": "{relation, select, on {Précisé : {date}} until {Précisé : jusqu’au {date}} from {Précisé : à partir du {date}} other {Précisé : {date}}}",
       "caseFileMayHoldOthers": "Ce dossier peut également contenir d’autres décisions.",

@@ -10,7 +10,7 @@ import type { ProvisionVersionBasis } from "@stll/api-contract/provision-version
 import { toSafeId } from "@/lib/safe-id";
 
 GlobalRegistrator.register({ url: "http://localhost:3000/" });
-const { cleanup, render, fireEvent, within, waitFor } =
+const { act, cleanup, render, fireEvent, within, waitFor } =
   await import("@testing-library/react");
 const { QueryClient, QueryClientProvider } =
   await import("@tanstack/react-query");
@@ -35,6 +35,13 @@ afterEach(() => {
   clients.length = 0;
 });
 afterAll(async () => {
+  cleanup();
+  // Let React's scheduled work drain before the DOM goes away.
+  await act(async () => {
+    await new Promise((resolve) => {
+      setTimeout(resolve, 50);
+    });
+  });
   await GlobalRegistrator.unregister();
 });
 
@@ -233,6 +240,12 @@ for (const [locale, messages, year] of [
       expect(
         panel.querySelector('[data-version-basis="group"]')?.textContent,
       ).toContain(compactLabel);
+      if (basis.type === "stated_version") {
+        // A mixed-direction act identifier keeps its own order inside RTL copy.
+        expect(
+          panel.querySelector('[data-version-basis="group"] bdi')?.textContent,
+        ).toBe(basis.amendmentWorkIdentifier);
+      }
       expect(
         panel.querySelectorAll('[data-version-basis="exception"]'),
       ).toHaveLength(0);

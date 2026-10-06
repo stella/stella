@@ -963,7 +963,7 @@
       "appliedVersionNotStated": "Použité znění neuvedeno",
       "appliedVersionNotStatedCompact": "Znění neuvedeno",
       "appliedVersionStatedAmendment": "Znění podle novely <reference>{amendment}</reference>",
-      "appliedVersionStatedAmendmentCompact": "Uvedeno: {amendment}",
+      "appliedVersionStatedAmendmentCompact": "Uvedeno: <reference>{amendment}</reference>",
       "appliedVersionStatedDate": "{relation, select, on {Znění účinné k {date}} until {Znění účinné do {date}} from {Znění účinné od {date}} other {Znění účinné k {date}}}",
       "appliedVersionStatedDateCompact": "{relation, select, on {Uvedeno: {date}} until {Uvedeno: do {date}} from {Uvedeno: od {date}} other {Uvedeno: {date}}}",
       "caseFileMayHoldOthers": "Tento spis může obsahovat i další rozhodnutí.",

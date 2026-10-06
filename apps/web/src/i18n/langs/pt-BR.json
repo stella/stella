@@ -963,7 +963,7 @@
       "appliedVersionNotStated": "Versão aplicada não informada",
       "appliedVersionNotStatedCompact": "Versão não informada",
       "appliedVersionStatedAmendment": "Redação alterada por <reference>{amendment}</reference>",
-      "appliedVersionStatedAmendmentCompact": "Informado: {amendment}",
+      "appliedVersionStatedAmendmentCompact": "Informado: <reference>{amendment}</reference>",
       "appliedVersionStatedDate": "{relation, select, on {Redação vigente em {date}} until {Redação vigente até {date}} from {Redação vigente desde {date}} other {Redação vigente em {date}}}",
       "appliedVersionStatedDateCompact": "{relation, select, on {Informado: {date}} until {Informado: até {date}} from {Informado: a partir de {date}} other {Informado: {date}}}",
       "caseFileMayHoldOthers": "Este processo também pode conter outras decisões.",

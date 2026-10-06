@@ -963,7 +963,7 @@
       "appliedVersionNotStated": "Versión aplicada no indicada",
       "appliedVersionNotStatedCompact": "Versión no indicada",
       "appliedVersionStatedAmendment": "Redacción modificada por <reference>{amendment}</reference>",
-      "appliedVersionStatedAmendmentCompact": "Indicado: {amendment}",
+      "appliedVersionStatedAmendmentCompact": "Indicado: <reference>{amendment}</reference>",
       "appliedVersionStatedDate": "{relation, select, on {Redacción vigente el {date}} until {Redacción vigente hasta el {date}} from {Redacción vigente desde el {date}} other {Redacción vigente el {date}}}",
       "appliedVersionStatedDateCompact": "{relation, select, on {Indicado: {date}} until {Indicado: hasta {date}} from {Indicado: desde {date}} other {Indicado: {date}}}",
       "caseFileMayHoldOthers": "Este expediente también puede contener otras resoluciones.",

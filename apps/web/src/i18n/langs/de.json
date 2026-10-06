@@ -963,7 +963,7 @@
       "appliedVersionNotStated": "Angewandte Fassung nicht angegeben",
       "appliedVersionNotStatedCompact": "Fassung nicht angegeben",
       "appliedVersionStatedAmendment": "Fassung gemäß Änderungsgesetz <reference>{amendment}</reference>",
-      "appliedVersionStatedAmendmentCompact": "Angegeben: {amendment}",
+      "appliedVersionStatedAmendmentCompact": "Angegeben: <reference>{amendment}</reference>",
       "appliedVersionStatedDate": "{relation, select, on {Am {date} geltende Fassung} until {Bis einschließlich {date} geltende Fassung} from {Ab {date} geltende Fassung} other {Am {date} geltende Fassung}}",
       "appliedVersionStatedDateCompact": "{relation, select, on {Angegeben: {date}} until {Angegeben: bis {date}} from {Angegeben: ab {date}} other {Angegeben: {date}}}",
       "caseFileMayHoldOthers": "Diese Verfahrensakte kann auch weitere Entscheidungen enthalten.",

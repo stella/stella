@@ -55,14 +55,15 @@ export const ProvisionVersionBasisLabel = ({
     case "stated_version":
       return (
         <span className="text-muted-foreground text-2xs">
-          {compact
-            ? t("caseLaw.viewer.appliedVersionStatedAmendmentCompact", {
-                amendment: basis.amendmentWorkIdentifier,
-              })
-            : t.rich("caseLaw.viewer.appliedVersionStatedAmendment", {
-                amendment: basis.amendmentWorkIdentifier,
-                reference: (chunks) => <BidiText>{chunks}</BidiText>,
-              })}
+          {t.rich(
+            compact
+              ? "caseLaw.viewer.appliedVersionStatedAmendmentCompact"
+              : "caseLaw.viewer.appliedVersionStatedAmendment",
+            {
+              amendment: basis.amendmentWorkIdentifier,
+              reference: (chunks) => <BidiText>{chunks}</BidiText>,
+            },
+          )}
         </span>
       );
     default: {

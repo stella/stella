@@ -963,7 +963,7 @@
       "appliedVersionNotStated": "الصيغة المطبقة غير مذكورة",
       "appliedVersionNotStatedCompact": "النسخة غير مذكورة",
       "appliedVersionStatedAmendment": "الصيغة المعدلة بموجب <reference>{amendment}</reference>",
-      "appliedVersionStatedAmendmentCompact": "المذكور: {amendment}",
+      "appliedVersionStatedAmendmentCompact": "المذكور: <reference>{amendment}</reference>",
       "appliedVersionStatedDate": "{relation, select, on {الصيغة السارية في {date}} until {الصيغة السارية حتى {date}} from {الصيغة السارية اعتبارًا من {date}} other {الصيغة السارية في {date}}}",
       "appliedVersionStatedDateCompact": "{relation, select, on {المذكور: {date}} until {المذكور: حتى {date}} from {المذكور: ابتداءً من {date}} other {المذكور: {date}}}",
       "caseFileMayHoldOthers": "قد يتضمّن ملف هذه الدعوى قرارات أخرى أيضًا.",

@@ -963,7 +963,7 @@
       "appliedVersionNotStated": "Taikyta redakcija nenurodyta",
       "appliedVersionNotStatedCompact": "Redakcija nenurodyta",
       "appliedVersionStatedAmendment": "Redakcija su <reference>{amendment}</reference> pakeitimais",
-      "appliedVersionStatedAmendmentCompact": "Nurodyta: {amendment}",
+      "appliedVersionStatedAmendmentCompact": "Nurodyta: <reference>{amendment}</reference>",
       "appliedVersionStatedDate": "{relation, select, on {{date} galiojusi redakcija} until {Iki {date} galiojusi redakcija} from {Nuo {date} galiojanti redakcija} other {{date} galiojusi redakcija}}",
       "appliedVersionStatedDateCompact": "{relation, select, on {Nurodyta: {date}} until {Nurodyta: iki {date}} from {Nurodyta: nuo {date}} other {Nurodyta: {date}}}",
       "caseFileMayHoldOthers": "Šioje byloje gali būti ir kitų sprendimų.",

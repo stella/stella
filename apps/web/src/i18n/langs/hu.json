@@ -963,7 +963,7 @@
       "appliedVersionNotStated": "Az alkalmazott változat nincs megadva",
       "appliedVersionNotStatedCompact": "A változat nincs megadva",
       "appliedVersionStatedAmendment": "A <reference>{amendment}</reference> szerinti módosított szöveg",
-      "appliedVersionStatedAmendmentCompact": "Megadva: {amendment}",
+      "appliedVersionStatedAmendmentCompact": "Megadva: <reference>{amendment}</reference>",
       "appliedVersionStatedDate": "{relation, select, on {A {date} napján hatályos szöveg} until {A {date} napjáig hatályos szöveg} from {A {date} napjától hatályos szöveg} other {A {date} napján hatályos szöveg}}",
       "appliedVersionStatedDateCompact": "{relation, select, on {Megadva: {date}} until {Megadva: {date} napjáig} from {Megadva: {date} napjától} other {Megadva: {date}}}",
       "caseFileMayHoldOthers": "Az ügy iratai további határozatokat is tartalmazhatnak.",
