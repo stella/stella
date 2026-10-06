@@ -2,11 +2,14 @@ import { lazy, Suspense, useRef } from "react";
 import type { ReactNode } from "react";
 
 import { useQuery } from "@tanstack/react-query";
-import { Link } from "@tanstack/react-router";
+import { Link, useNavigate, useRouterState } from "@tanstack/react-router";
 import { useTranslations } from "use-intl";
 
+import { Button } from "@stll/ui/button";
+import { InfoIcon } from "@stll/ui/icons";
 import { ScrollArea } from "@stll/ui/scroll-area";
 import { Skeleton } from "@stll/ui/skeleton";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@stll/ui/tooltip";
 
 import type { ActiveLegalDocument } from "@/components/ai-suggestions/active-legal-document";
 import { useRequireAccount } from "@/components/auth/use-require-account";
@@ -33,12 +36,18 @@ import { ProvisionWording } from "@/features/statutes/components/provision-wordi
 import { StatuteValidityIndicator } from "@/features/statutes/components/statute-validity-indicator";
 import { StatuteVersionSwitcher } from "@/features/statutes/components/statute-version-switcher";
 import type { ProvisionViewPayload } from "@/features/statutes/provision-inspector.logic";
-import { topCitingDecisionsOptions } from "@/features/statutes/queries/citing-decisions";
+import {
+  statuteCitationCountsOptions,
+  topCitingDecisionsOptions,
+} from "@/features/statutes/queries/citing-decisions";
 import {
   statuteOptions,
   statuteVersionsOptions,
 } from "@/features/statutes/queries/statutes";
+import { readProvisionCitingSearch } from "@/features/statutes/statute-page-search";
+import { useFormatter } from "@/i18n/formatting-context";
 import { optionalArray } from "@/lib/arrays";
+import { detached } from "@/lib/detached";
 import { createStatuteLinkTarget } from "@/lib/statute-route";
 import { useQueryView } from "@/lib/use-query-view";
 
@@ -62,6 +71,23 @@ export const ProvisionInspectorView = ({
 }: InspectorViewRenderProps<ProvisionViewPayload>) => {
   const t = useTranslations();
   const { payload } = tab;
+  const navigate = useNavigate();
+  const search = useRouterState({ select: (state) => state.location.search });
+  const citingFilters = readProvisionCitingSearch(search);
+  const countsView = useQueryView(
+    useQuery(
+      statuteCitationCountsOptions({
+        eli: payload.eli,
+        jurisdiction: payload.jurisdiction,
+      }),
+    ),
+  );
+  const citingCount =
+    countsView.type === "items" && countsView.items.status === "ready"
+      ? (countsView.items.provisions.find(
+          (row) => row.anchor === payload.anchorId,
+        )?.decisionCount ?? 0)
+      : null;
   const textScale = useReaderTextScale();
   const updateView = useInspectorTabsStore((state) => state.updateView);
   const { data: versions } = useQuery(
@@ -102,7 +128,11 @@ export const ProvisionInspectorView = ({
     ),
   );
   const leadingDecisions =
-    leadingView.type === "items" ? uniqueByDecision(leadingView.items) : [];
+    leadingView.type === "items" ? leadingView.items : [];
+  const leadingCount =
+    leadingView.type === "pending" || leadingView.type === "error"
+      ? null
+      : leadingDecisions.length;
   const panelRef = useRef<HTMLDivElement | null>(null);
   const contentRef = useRef<HTMLDivElement | null>(null);
   // The wording's own query, read here only for whether there is text to
@@ -194,21 +224,71 @@ export const ProvisionInspectorView = ({
                 highlightAnchorId={payload.highlightAnchorId}
               />
 
-              <ProvisionSection title={t("statutes.leadingDecisions")}>
+              <ProvisionSection
+                count={leadingCount}
+                explanation={t("statutes.leadingDecisionsExplanation")}
+                title={t("statutes.leadingDecisions")}
+              >
                 <ProvisionLeadingDecisions view={leadingView}>
                   <ul className="m-0 flex list-none flex-col p-0">
                     {leadingDecisions.map((decision) => (
                       <li key={decision.decisionId}>
-                        <CitingDecisionItem decision={decision} />
+                        <CitingDecisionItem
+                          currentVersionValidFrom={
+                            selectedVersion?.versionValidFrom ??
+                            payload.versionValidFrom
+                          }
+                          decision={decision}
+                        />
                       </li>
                     ))}
                   </ul>
                 </ProvisionLeadingDecisions>
               </ProvisionSection>
 
-              <ProvisionSection title={t("caseLaw.viewer.citedBy")}>
+              <ProvisionSection
+                count={citingCount}
+                title={t("caseLaw.viewer.citedBy")}
+              >
+                {(countsView.type === "error" ||
+                  (countsView.type === "items" &&
+                    countsView.refetchError !== undefined)) && (
+                  <div
+                    role="alert"
+                    className="text-muted-foreground flex items-center gap-2 text-xs"
+                  >
+                    {t("errors.actionFailed")}
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={() =>
+                        detached(
+                          countsView.retry(),
+                          "statutes.citation-counts-retry",
+                        )
+                      }
+                    >
+                      {t("common.retry")}
+                    </Button>
+                  </div>
+                )}
                 <ProvisionCitingDecisions
                   anchorId={payload.anchorId}
+                  currentVersionValidFrom={
+                    selectedVersion?.versionValidFrom ??
+                    payload.versionValidFrom
+                  }
+                  filters={citingFilters}
+                  onFiltersChange={(filters) => {
+                    detached(
+                      navigate({
+                        to: ".",
+                        search: (previous) => ({ ...previous, ...filters }),
+                        replace: true,
+                      }),
+                      "statutes.citing-decisions-filters",
+                    );
+                  }}
                   eli={payload.eli}
                   jurisdiction={payload.jurisdiction}
                 />
@@ -247,36 +327,41 @@ export const ProvisionInspectorView = ({
   );
 };
 
-/** One entry per decision: a decision applying the provision twice leads once. */
-const uniqueByDecision = (
-  rows: readonly CitingDecisionRow[],
-): CitingDecisionRow[] => {
-  const seen = new Set<string>();
-  const unique: CitingDecisionRow[] = [];
-  for (const row of rows) {
-    if (seen.has(row.decisionId)) {
-      continue;
-    }
-    seen.add(row.decisionId);
-    unique.push(row);
-  }
-  return unique;
-};
-
 const ProvisionSection = ({
   children,
   title,
+  count = null,
+  explanation,
 }: {
   children: ReactNode;
   title: string;
-}) => (
-  <section className="flex flex-col gap-2">
-    <h3 className="text-muted-foreground text-xs font-medium tracking-wide uppercase">
-      {title}
-    </h3>
-    {children}
-  </section>
-);
+  count?: number | null;
+  explanation?: string;
+}) => {
+  const format = useFormatter();
+  return (
+    <section className="flex flex-col gap-2">
+      <h3 className="text-muted-foreground text-xs font-medium tracking-wide uppercase">
+        {title}
+        {count === null ? null : (
+          <span className="ms-2 tabular-nums">{format.number(count)}</span>
+        )}
+        {explanation === undefined ? null : (
+          <Tooltip>
+            <TooltipTrigger
+              className="ms-1 inline-flex min-h-11 min-w-11 items-center justify-center"
+              aria-label={explanation}
+            >
+              <InfoIcon className="size-3" />
+            </TooltipTrigger>
+            <TooltipContent>{explanation}</TooltipContent>
+          </Tooltip>
+        )}
+      </h3>
+      {children}
+    </section>
+  );
+};
 
 /**
  * The two ways to ask about a provision, drawn for every reader. Writing the

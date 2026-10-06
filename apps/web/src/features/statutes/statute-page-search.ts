@@ -1,5 +1,9 @@
 import * as v from "valibot";
 
+import {
+  PROVISION_CITING_DECISION_SORTS,
+  PROVISION_CITING_FILTER_LIMITS,
+} from "@stll/api-contract/provision-citing-decisions";
 import { normalizeStatuteVersionSegment } from "@stll/api-contract/statute-route";
 import { parsePlainDate } from "@stll/time";
 
@@ -26,7 +30,39 @@ const MAX_PROVISION_ANCHOR_LENGTH = 256;
  * address. Anything unparseable is dropped rather than rejected — a mistyped
  * link should still open the act.
  */
+const provisionCitingSearchSchema = v.object({
+  citingCourt: v.optional(
+    v.pipe(
+      v.string(),
+      v.trim(),
+      v.maxLength(PROVISION_CITING_FILTER_LIMITS.courtChars),
+    ),
+  ),
+  citingYear: v.optional(
+    v.pipe(
+      v.number(),
+      v.integer(),
+      v.minValue(PROVISION_CITING_FILTER_LIMITS.yearMin),
+      v.maxValue(PROVISION_CITING_FILTER_LIMITS.yearMax),
+    ),
+  ),
+  citingSort: v.optional(v.picklist(PROVISION_CITING_DECISION_SORTS), "newest"),
+});
+
+export const readProvisionCitingSearch = (search: unknown) => {
+  const result = v.safeParse(provisionCitingSearchSchema, search);
+  return result.success
+    ? result.output
+    : v.parse(provisionCitingSearchSchema, {});
+};
+
+export type ProvisionCitingSearch = v.InferOutput<
+  typeof provisionCitingSearchSchema
+>;
+
 export const publicStatuteSearchSchema = v.object({
+  ...provisionCitingSearchSchema.entries,
+  citingSort: v.optional(v.picklist(PROVISION_CITING_DECISION_SORTS)),
   q: v.optional(v.pipe(v.string(), v.trim())),
   asOf: v.optional(
     v.pipe(

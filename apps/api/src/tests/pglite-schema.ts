@@ -93,6 +93,11 @@ const PROVISION_SCOPE_TRANSITION_KEYSET_MIGRATION_PATH = nodePath.join(
   "20260929180100_case_law_provision_scope_transition_keyset",
   "migration.sql",
 );
+const PROVISION_EXTRACTION_SCOPE_READ_DIGEST_MIGRATION_PATH = nodePath.join(
+  DRIZZLE_DIR,
+  "20261006124500_provision_extraction_scope_read_digest",
+  "migration.sql",
+);
 const CASE_LAW_OBSERVATION_FENCE_MIGRATION_PATH = nodePath.join(
   DRIZZLE_DIR,
   "20260731190000_case_law_observation_legacy_fence",
@@ -516,6 +521,7 @@ export const installPgliteProvisionExtractionState = async (
     PROVISION_READ_STATUS_MIGRATION_PATH,
     PROVISION_READER_GRANTS_MIGRATION_PATH,
     PROVISION_SCOPE_TRANSITION_KEYSET_MIGRATION_PATH,
+    PROVISION_EXTRACTION_SCOPE_READ_DIGEST_MIGRATION_PATH,
   ]) {
     const statements = readMigrationStatements(migrationPath).filter(
       (statement) =>

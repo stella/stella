@@ -1,5 +1,6 @@
 import { infiniteQueryOptions, queryOptions } from "@tanstack/react-query";
 
+import type { ProvisionCitingSearch } from "@/features/statutes/statute-page-search";
 import { api } from "@/lib/api";
 import { nullableStringCursorSeed } from "@/lib/infinite-query";
 import { unwrapPublicLawEden } from "@/lib/public-law-api";
@@ -89,21 +90,38 @@ export const topCitingDecisionsOptions = (key: CitingDecisionsKey) =>
     staleTime: ROUTE_QUERY_STALE_TIME_MS,
   });
 
-export const citingDecisionsInfiniteOptions = (key: CitingDecisionsKey) =>
-  infiniteQueryOptions({
-    queryKey: citingDecisionKeys.forProvision(key),
-    queryFn: async ({ pageParam, signal }) => {
+export const citingDecisionsInfiniteOptions = (
+  key: CitingDecisionsKey,
+  filters: ProvisionCitingSearch,
+) => {
+  const queryKey = [...citingDecisionKeys.forProvision(key), filters];
+  return infiniteQueryOptions({
+    queryKey,
+    queryFn: async ({
+      client,
+      pageParam,
+      signal,
+      queryKey: activeQueryKey,
+    }) => {
       const response = await api.case.provisions["citing-decisions"].get({
         query: {
           anchor: key.anchor,
           eli: key.eli,
           jurisdiction: key.jurisdiction,
           limit: PAGE_SIZE,
+          sort: filters.citingSort,
+          ...(filters.citingCourt ? { court: filters.citingCourt } : {}),
+          ...(filters.citingYear === undefined
+            ? {}
+            : { year: filters.citingYear }),
           ...(pageParam !== null && { cursor: pageParam }),
         },
         fetch: { signal },
       });
 
+      if (pageParam !== null && response.error?.status === 409) {
+        await client.resetQueries({ queryKey: activeQueryKey, exact: true });
+      }
       const data = unwrapPublicLawEden(response, "listPublicCitingDecisions");
 
       return data;
@@ -112,3 +130,4 @@ export const citingDecisionsInfiniteOptions = (key: CitingDecisionsKey) =>
     getNextPageParam: (lastPage) => lastPage.nextCursor,
     staleTime: ROUTE_QUERY_STALE_TIME_MS,
   });
+};

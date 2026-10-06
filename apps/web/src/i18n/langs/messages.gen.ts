@@ -4668,7 +4668,16 @@ type Messages = {
     "amendedTimes": "{count, plural, =0 {Not amended} one {Amended once} other {Amended # times}}";
     "asOf": "Text in force on";
     "backToList": "All statutes";
+    "citingDecisionHideSnippet": "Collapse passage";
+    "citingDecisionMentionCount": "cited {count}×";
+    "citingDecisionOlderVersion": "Older version";
+    "citingDecisionShowSnippet": "Show full passage";
+    "citingDecisionsCourtPlaceholder": "All courts";
     "citingDecisionsFilterPlaceholder": "Filter loaded decisions";
+    "citingDecisionsSortCitations": "Mentions of this provision";
+    "citingDecisionsSortDate": "Decision date";
+    "citingDecisionsYear": "Decision year";
+    "citingDecisionsYearPlaceholder": "All years";
     "columns": {
       "act": "Act";
       "amendments": "Amendments";
@@ -4710,6 +4719,7 @@ type Messages = {
     "inForceSince": "In force since {date}";
     "ineligibleVersion": "{range} ({label})";
     "leadingDecisions": "Leading decisions";
+    "leadingDecisionsExplanation": "The first mention in each decision, ranked by citation authority: weighted incoming citations, adjusted for court rank, citation polarity and age.";
     "noVersionInForce": "No version of this act was in force on the selected date.";
     "openEnded": "present";
     "openProvision": "Open provision";

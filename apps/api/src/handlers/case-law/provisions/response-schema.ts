@@ -2,6 +2,7 @@ import type { TSchema } from "@sinclair/typebox";
 import { Type } from "@sinclair/typebox";
 import { t } from "elysia";
 
+import { COURT_TIER_LABELS } from "@stll/api-contract/case-law-court-tiers";
 import { STATED_DATE_RELATIONS } from "@stll/api-contract/provision-applied-version";
 import { PROVISION_LINK_STATUS_TYPES } from "@stll/api-contract/provision-link-status";
 
@@ -171,6 +172,16 @@ export const citingDecisionsSuccessResponseSchema = t.Object({
       caseNumber: boundedString(1024),
       slug: nullableBoundedString(1024),
       court: boundedString(2048),
+      courtAbbreviation: nullableBoundedString(2048),
+      courtTier: t.UnionEnum(COURT_TIER_LABELS),
+      mentionCount: t.Integer({ minimum: 1 }),
+      snippetCitation: t.Union([
+        t.Object({
+          start: t.Integer({ minimum: 0 }),
+          end: t.Integer({ minimum: 1 }),
+        }),
+        t.Null(),
+      ]),
       country: boundedString(12),
       language: boundedString(32),
       decisionDate: date,

@@ -1,7 +1,5 @@
 import { Result } from "better-result";
 
-import { stripDiacritics } from "@stll/text-normalize";
-
 /** Inspector view kind for one provision of a consolidated statute. */
 export const PROVISION_VIEW = "statute-provision";
 
@@ -118,36 +116,6 @@ export const submitsOnEnter = ({
   key,
   shiftKey,
 }: EnterSubmitKey): boolean => key === "Enter" && !shiftKey && !isComposing;
-
-type CitingDecisionRow = {
-  caseNumber: string;
-  court: string;
-  sentenceText: string | null;
-};
-
-const foldForFilter = (value: string): string =>
-  stripDiacritics(value).toLowerCase();
-
-/**
- * Narrows the loaded pages to the rows whose case number, court, or cited
- * sentence contains the query. Diacritics are folded on both sides, so a
- * query typed without them still finds the decision.
- */
-export const filterCitingDecisions = <T extends CitingDecisionRow>(
-  decisions: readonly T[],
-  query: string,
-): T[] => {
-  const needle = foldForFilter(query.trim());
-  if (needle === "") {
-    return [...decisions];
-  }
-
-  return decisions.filter((decision) =>
-    foldForFilter(
-      `${decision.caseNumber} ${decision.court} ${decision.sentenceText ?? ""}`,
-    ).includes(needle),
-  );
-};
 
 /**
  * Where a half-written question about a provision is kept while the reader is

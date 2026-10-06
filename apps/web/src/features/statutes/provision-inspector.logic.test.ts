@@ -1,11 +1,8 @@
 import { describe, expect, test } from "bun:test";
 
-import { stripDiacritics } from "@stll/text-normalize";
-
 import {
   clearProvisionQuestionDraft,
   createProvisionViewTab,
-  filterCitingDecisions,
   isProvisionViewPayload,
   provisionQuestionDraftKey,
   provisionTabId,
@@ -144,66 +141,6 @@ describe("submitsOnEnter", () => {
         false,
       );
     }
-  });
-});
-
-const supremeCourtDecision = {
-  caseNumber: "22 Cdo 3819/2019",
-  court: "Nejvyšší soud",
-  sentenceText: "Zastoupení členem domácnosti podle § 47 se řídí…",
-};
-
-const constitutionalCourtDecision = {
-  caseNumber: "II. ÚS 1234/20",
-  court: "Ústavní soud",
-  sentenceText: "Svéprávnost lze omezit jen v zájmu člověka.",
-};
-
-const decisions = [supremeCourtDecision, constitutionalCourtDecision];
-
-describe("filterCitingDecisions", () => {
-  test("an unfiltered list is the loaded list", () => {
-    expect(filterCitingDecisions(decisions, "   ")).toEqual(decisions);
-  });
-
-  test("a query typed without diacritics still finds the decision", () => {
-    // Without this assertion the case would pass on plain substring matching
-    // and prove nothing about folding.
-    expect(stripDiacritics("Nejvyssi")).not.toBe("Nejvyšší");
-    expect(filterCitingDecisions(decisions, "nejvyssi")).toEqual([
-      supremeCourtDecision,
-    ]);
-  });
-
-  test("a query typed with diacritics finds a row stored without them", () => {
-    const rows = [
-      { caseNumber: "Pl. US 1/21", court: "Ustavni soud", sentenceText: "" },
-    ];
-
-    expect(filterCitingDecisions(rows, "Ústavní")).toEqual(rows);
-  });
-
-  test("the cited sentence and the case number are searched too", () => {
-    expect(filterCitingDecisions(decisions, "3819")).toEqual([
-      supremeCourtDecision,
-    ]);
-    expect(filterCitingDecisions(decisions, "svéprávnost")).toEqual([
-      constitutionalCourtDecision,
-    ]);
-    expect(filterCitingDecisions(decisions, "no such court")).toEqual([]);
-  });
-
-  test("a citation without an excerpt remains searchable by its metadata", () => {
-    const rows = [
-      {
-        caseNumber: "4 As 3/2008",
-        court: "Nejvyšší správní soud",
-        sentenceText: null,
-      },
-    ];
-
-    expect(filterCitingDecisions(rows, "správní")).toEqual(rows);
-    expect(filterCitingDecisions(rows, "null")).toEqual([]);
   });
 });
 

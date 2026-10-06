@@ -54,6 +54,7 @@
     "./provision-key": "./src/provision-key.ts",
     "./provision-applied-version": "./src/provision-applied-version.ts",
     "./provision-version-basis": "./src/provision-version-basis.ts",
+    "./provision-citing-decisions": "./src/provision-citing-decisions.ts",
     "./provision-link-status": "./src/provision-link-status.ts",
     "./property-policy": "./src/property-policy.ts",
     "./safe-id": "./src/safe-id.ts",

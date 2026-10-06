@@ -1,10 +1,19 @@
 import { panic } from "better-result";
 import { afterAll, beforeAll, expect, test } from "bun:test";
-import { eq } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
+import fc from "fast-check";
+
+import { compareCodeUnit } from "@stll/collation";
+import {
+  assertProperty,
+  propertyConfig,
+  propertyTestTimeout,
+} from "@stll/property-testing";
 
 import {
   caseLawDecisions,
+  caseLawProvisionExtractionScopes,
   caseLawProvisionCitations,
   caseLawStatuteCitationCounts,
   caseLawSources,
@@ -121,6 +130,13 @@ beforeAll(
     // SAFETY: brand-only wrapper; the reads never inspect the marker.
     // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- the branded handle carries no behaviour
     caseLawDb = readDb as unknown as CaseLawPublicReadDb;
+
+    await db.insert(caseLawProvisionExtractionScopes).values({
+      country: JURISDICTION,
+      generation: 1,
+      language: "cs",
+      status: "active",
+    });
 
     await db.insert(caseLawSources).values([
       caseLawSourceRow({ adapterKey: "open", id: openSourceId, name: "open" }),
@@ -262,21 +278,25 @@ const decisionProvisions = async (cursor?: string) => {
 
 type CitingDecisionsQuery = {
   anchor?: string;
+  court?: string;
   cursor?: string;
   eli?: string;
   excerpt?: "required";
   limit: number;
-  sort?: "authority" | "newest";
+  sort?: "authority" | "citations" | "newest";
+  year?: number;
   work?: string;
 };
 
 const readCitingDecisions = async ({
   anchor,
+  court,
   cursor,
   eli,
   excerpt,
   limit,
   sort,
+  year,
   work,
 }: CitingDecisionsQuery) =>
   await listCitingDecisionsHandler(
@@ -284,13 +304,15 @@ const readCitingDecisions = async ({
       jurisdiction: JURISDICTION,
       limit,
       ...(anchor === undefined ? {} : { anchor }),
+      ...(court === undefined ? {} : { court }),
       ...(cursor === undefined ? {} : { cursor }),
       ...(eli === undefined ? {} : { eli }),
       ...(excerpt === undefined ? {} : { excerpt }),
       ...(sort === undefined ? {} : { sort }),
+      ...(year === undefined ? {} : { year }),
       ...(work === undefined ? {} : { work }),
     },
-    caseLawDb,
+    { caseLawDb, courtRegistry: null },
   );
 
 /** Defaults to the display citation, the key a decision's own text states. */
@@ -334,17 +356,14 @@ test("decision provisions reject a malformed cursor", async () => {
   expect("items" in response).toBe(false);
 });
 
-test("citing decisions order by decision date, newest first", async () => {
+test("citing decisions group mentions and order by decision date, newest first", async () => {
   // Authority is refreshed in place and so cannot be a keyset column; it is
   // returned for display only.
   const page = await citingDecisions({ limit: 10 });
 
-  expect(page.items.map((item) => item.caseNumber)).toEqual([
-    "low",
-    "high",
-    "high",
-    "high",
-  ]);
+  expect(page.items.map((item) => item.caseNumber)).toEqual(["low", "high"]);
+  expect(page.items.map((item) => item.mentionCount)).toEqual([1, 3]);
+  expect(page.items.map((item) => item.spanStart)).toEqual([40, 10]);
   expect(page.items.at(0)?.decisionDate).toBe("2025-01-01");
   expect(page.items.at(0)?.citationAuthority).toBe(1);
   expect(page.items.map((item) => item.versionBasis)).toEqual(
@@ -382,7 +401,7 @@ test("excerpt-required authority reads fill their budget before limiting", async
 });
 
 test("citing decisions page through a stable cursor", async () => {
-  const seen: number[] = [];
+  const seen: { decisionId: string; mentionCount: number }[] = [];
   let cursor: string | undefined;
 
   for (let request = 0; request < 4; request += 1) {
@@ -390,16 +409,22 @@ test("citing decisions page through a stable cursor", async () => {
       limit: 1,
       ...(cursor === undefined ? {} : { cursor }),
     });
-    for (const item of page.items) {
-      seen.push(item.spanStart);
-    }
+    seen.push(
+      ...page.items.map(({ decisionId, mentionCount }) => ({
+        decisionId,
+        mentionCount,
+      })),
+    );
     cursor = page.nextCursor ?? undefined;
     if (cursor === undefined) {
       break;
     }
   }
 
-  expect(seen).toEqual([40, 30, 20, 10]);
+  expect(seen).toEqual([
+    { decisionId: lowAuthorityId, mentionCount: 1 },
+    { decisionId: highAuthorityId, mentionCount: 3 },
+  ]);
   expect(cursor).toBeUndefined();
 });
 
@@ -456,8 +481,16 @@ test("citing decisions answer the same work by its identifier", async () => {
     citingDecisions({ eli: WORK_ELI, limit: 10 }),
   ]);
 
-  expect(byEli.items.map((item) => item.spanStart)).toEqual(
-    byWork.items.map((item) => item.spanStart),
+  expect(
+    byEli.items.map(({ decisionId, mentionCount }) => ({
+      decisionId,
+      mentionCount,
+    })),
+  ).toEqual(
+    byWork.items.map(({ decisionId, mentionCount }) => ({
+      decisionId,
+      mentionCount,
+    })),
   );
   expect(byEli.items.length).toBeGreaterThan(0);
 });
@@ -481,7 +514,9 @@ test("citing decisions by identifier filter by anchor and page alike", async () 
     ...(first.nextCursor === null ? {} : { cursor: first.nextCursor }),
   });
 
-  expect(second.items.map((item) => item.spanStart)).toEqual([30]);
+  expect(second.items).toMatchObject([
+    { decisionId: highAuthorityId, mentionCount: 3, spanStart: 10 },
+  ]);
 });
 
 test("a reference to a work the corpus does not hold is reachable only by number", async () => {
@@ -598,9 +633,14 @@ test("both provision reads preserve applied statements independently of the deci
         evidence: { kind: "stated_version", start: 90, end: 130 },
       },
     ]);
-    expect(
-      incoming.items.map(({ versionBasis }) => versionBasis).toReversed(),
-    ).toEqual(outgoing.items.map(({ versionBasis }) => versionBasis));
+    expect(incoming.items).toMatchObject([
+      {
+        decisionId: id,
+        mentionCount: 3,
+        spanStart: 1,
+        versionBasis: { type: "not_stated" },
+      },
+    ]);
     expect(
       outgoing.items.map(({ versionValidFrom }) => versionValidFrom),
     ).toEqual([null, null, null]);
@@ -615,3 +655,261 @@ test("both provision reads preserve applied statements independently of the deci
     await db.delete(caseLawDecisions).where(eq(caseLawDecisions.id, id));
   }
 });
+
+test(
+  "grouped incoming decision pages match generated counts across sort, court, year, and page boundaries",
+  async () => {
+    await assertProperty(
+      "grouped incoming decision pages match generated counts across sort, court, year, and page boundaries",
+      fc.asyncProperty(
+        fc.record({
+          groupCount: fc.integer({ min: 2, max: 4 }),
+          mentionCounts: fc.array(fc.integer({ min: 1, max: 4 }), {
+            minLength: 4,
+            maxLength: 4,
+          }),
+          pageSize: fc.integer({ min: 1, max: 4 }),
+        }),
+        async ({ groupCount, mentionCounts, pageSize }) => {
+          const work = `property-${String(createSafeId<"caseLawDecision">())}`;
+          const decisions = Array.from(
+            { length: groupCount * 2 },
+            (_unused, index) => {
+              const group = Math.floor(index / 2);
+              const year = group < 2 ? 2021 : 2022;
+              const decisionId = createSafeId<"caseLawDecision">();
+              const mentionCount =
+                mentionCounts.at(group) ??
+                panic(
+                  "Generated mention count is missing for a decision group",
+                );
+              const court = group % 2 === 0 ? "Court A" : "Court B";
+              const decisionDate = `${String(year)}-06-01`;
+              return {
+                court,
+                decisionDate,
+                decisionId,
+                mentionCount,
+                year,
+              };
+            },
+          );
+
+          await db.insert(caseLawDecisions).values(
+            decisions.map(({ court, decisionDate, decisionId }, index) => ({
+              ...decisionRow({
+                caseNumber: `property-${String(index)}`,
+                citationAuthority: index + 1,
+                decisionDate,
+                id: decisionId,
+                sourceId: openSourceId,
+              }),
+              court,
+            })),
+          );
+
+          const citationRows = decisions.flatMap(
+            ({ decisionDate, decisionId, mentionCount }) =>
+              Array.from({ length: mentionCount }, (_unused, mentionIndex) =>
+                provisionRow({
+                  anchor: `p${String(mentionIndex + 1)}`,
+                  decisionDate,
+                  decisionId,
+                  spanStart: (mentionIndex + 1) * 10,
+                  workEli: null,
+                  workIdentifier: work,
+                }),
+              ),
+          );
+          await db.insert(caseLawProvisionCitations).values(citationRows);
+
+          const filters: readonly {
+            court: string | undefined;
+            year: number | undefined;
+          }[] = [
+            { court: undefined, year: undefined },
+            { court: "Court A", year: undefined },
+            { court: "Court B", year: undefined },
+            { court: undefined, year: 2021 },
+            { court: undefined, year: 2022 },
+            { court: "Court A", year: 2021 },
+            { court: "Court B", year: 2021 },
+            { court: "Court A", year: 2022 },
+            { court: "Court B", year: 2022 },
+          ];
+
+          for (const sort of ["newest", "citations"] as const) {
+            for (const filter of filters) {
+              const expected = decisions
+                .filter(
+                  (decision) =>
+                    (filter.court === undefined ||
+                      decision.court === filter.court) &&
+                    (filter.year === undefined ||
+                      decision.year === filter.year),
+                )
+                .toSorted((left, right) => {
+                  if (
+                    sort === "citations" &&
+                    left.mentionCount !== right.mentionCount
+                  ) {
+                    return right.mentionCount - left.mentionCount;
+                  }
+                  const dateOrder = compareCodeUnit(
+                    right.decisionDate,
+                    left.decisionDate,
+                  );
+                  if (dateOrder !== 0) {
+                    return dateOrder;
+                  }
+                  return compareCodeUnit(
+                    String(right.decisionId),
+                    String(left.decisionId),
+                  );
+                });
+              const actual: { decisionId: string; mentionCount: number }[] = [];
+              let cursor: string | undefined;
+
+              for (let request = 0; request < 9; request += 1) {
+                const page = await citingDecisions({
+                  limit: pageSize,
+                  sort,
+                  work,
+                  ...(filter.court === undefined
+                    ? {}
+                    : { court: filter.court }),
+                  ...(filter.year === undefined ? {} : { year: filter.year }),
+                  ...(cursor === undefined ? {} : { cursor }),
+                });
+                actual.push(
+                  ...page.items.map(({ decisionId, mentionCount }) => ({
+                    decisionId,
+                    mentionCount,
+                  })),
+                );
+                cursor = page.nextCursor ?? undefined;
+                if (cursor === undefined) {
+                  break;
+                }
+              }
+
+              expect(cursor).toBeUndefined();
+              expect(
+                new Set(actual.map(({ decisionId }) => decisionId)).size,
+              ).toBe(expected.length);
+              expect(actual).toEqual(
+                expected.map(({ decisionId, mentionCount }) => ({
+                  decisionId,
+                  mentionCount,
+                })),
+              );
+            }
+          }
+
+          const first = await citingDecisions({
+            limit: 1,
+            sort: "citations",
+            work,
+          });
+          const cursor = first.nextCursor;
+          if (cursor === null) {
+            panic("Expected a continuation cursor for a multi-decision work");
+          }
+          const firstDecision = decisions
+            .toSorted(
+              (left, right) =>
+                right.mentionCount - left.mentionCount ||
+                compareCodeUnit(right.decisionDate, left.decisionDate) ||
+                compareCodeUnit(
+                  String(right.decisionId),
+                  String(left.decisionId),
+                ),
+            )
+            .at(0);
+          if (firstDecision === undefined) {
+            panic("Generated decision batch was empty");
+          }
+          await db
+            .update(caseLawProvisionExtractionScopes)
+            .set({
+              generation: sql`${caseLawProvisionExtractionScopes.generation} + 1`,
+            })
+            .where(
+              and(
+                eq(caseLawProvisionExtractionScopes.country, JURISDICTION),
+                eq(caseLawProvisionExtractionScopes.language, "cs"),
+              ),
+            );
+
+          expect(
+            await readCitingDecisions({
+              cursor,
+              limit: 1,
+              sort: "citations",
+              work,
+            }),
+          ).toMatchObject({
+            code: 409,
+            response: {
+              type: "conflict",
+              message: "Provision citations changed; restart pagination",
+            },
+          });
+          expect(
+            (await citingDecisions({ limit: 1, sort: "citations", work }))
+              .items,
+          ).toMatchObject([
+            {
+              decisionId: firstDecision.decisionId,
+              mentionCount: firstDecision.mentionCount,
+            },
+          ]);
+
+          const beforeInsert = await citingDecisions({
+            limit: 1,
+            sort: "citations",
+            work,
+          });
+          const insertCursor = beforeInsert.nextCursor;
+          if (insertCursor === null) {
+            panic("Expected a continuation cursor for a multi-decision work");
+          }
+          await db.insert(caseLawProvisionCitations).values(
+            provisionRow({
+              anchor: "citation-insert",
+              decisionDate: firstDecision.decisionDate,
+              decisionId: firstDecision.decisionId,
+              spanStart: 1001,
+              workEli: null,
+              workIdentifier: work,
+            }),
+          );
+
+          const afterInsert = await readCitingDecisions({
+            cursor: insertCursor,
+            limit: 1,
+            sort: "citations",
+            work,
+          });
+          expect("items" in afterInsert).toBe(true);
+          if ("items" in afterInsert) {
+            expect(afterInsert.items).not.toContainEqual(
+              expect.objectContaining({ decisionId: firstDecision.decisionId }),
+            );
+          }
+          expect(
+            (await citingDecisions({ limit: 1, sort: "citations", work }))
+              .items,
+          ).toMatchObject([
+            {
+              decisionId: firstDecision.decisionId,
+              mentionCount: firstDecision.mentionCount + 1,
+            },
+          ]);
+        },
+      ),
+      propertyConfig({ numRuns: 12 }),
+    );
+  },
+  propertyTestTimeout(60_000),
+);
