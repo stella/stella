@@ -25,6 +25,7 @@
     style="
       display: flex;
       flex-wrap: wrap;
+      justify-content: space-between;
       gap: 32px;
       margin-block: 24px;
       padding-block: 16px;
@@ -60,7 +61,9 @@
       document.getElementById(id).textContent = value;
     };
     document.documentElement.lang = formattingLocale;
-    document.querySelector("main").lang = formattingLocale;
+    const page = document.querySelector("main");
+    page.lang = formattingLocale;
+    page.style.fontFamily = "system-ui, sans-serif";
     for (const id of [
       "eyebrow",
       "title",
@@ -112,6 +115,7 @@
     ];
     for (const [index, value] of statValues.entries()) {
       const group = document.createElement("div");
+      group.style.cssText = "flex:1;min-width:160px;max-width:240px";
       const name = document.createElement("dt");
       name.textContent = labels.stats[index];
       name.style.cssText = "font-size:12px;color:#737373";
@@ -154,13 +158,20 @@
       button.type = "button";
       button.textContent = `${hit.courtAbbreviation} · ${hit.caseNumber}`;
       button.style.cssText =
-        "min-height:44px;text-align:start;white-space:normal;overflow-wrap:anywhere;background-color:transparent;border-width:0;color:inherit;font-size:14px";
+        "min-height:44px;min-width:0;flex:1;text-align:start;white-space:normal;overflow-wrap:anywhere;background-color:transparent;border-width:0;color:inherit;font-size:14px";
       button.addEventListener("click", () => stella.openDecision(hit.linkId));
+      const barTrack = document.createElement("div");
+      barTrack.style.cssText = "width:24%;max-width:240px;height:6px;background-color:#e5e5e5;border-radius:3px";
+      const bar = document.createElement("div");
+      const maximum = ranked.at(0)?.citationCount ?? 0;
+      const percentage = maximum === 0 ? 0 : 100 * hit.citationCount / maximum;
+      bar.style.cssText = `width:${percentage}%;height:6px;background-color:#525252;border-radius:3px`;
+      barTrack.append(bar);
       const citations = document.createElement("span");
       citations.textContent = `${format.format(hit.citationCount)} ${labels.citations}`;
       citations.style.cssText =
         "font-size:13px;color:#737373;font-variant-numeric:tabular-nums";
-      row.append(button, citations);
+      row.append(button, barTrack, citations);
       document.getElementById("ranking").append(row);
     }
     if (ranked.length === 0) text("ranking", labels.emptyRanking);
