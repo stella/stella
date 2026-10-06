@@ -229,7 +229,9 @@ const configurationOptions = (
     active.add(key);
     const origin = tree.get(key);
     if (origin === undefined) {
-      panic(`Inherited tsconfig is unavailable: ${key}`);
+      // Bun runtime and bundling tolerate missing inherited configuration.
+      active.delete(key);
+      return {};
     }
     const parsed = ts.parseConfigFileTextToJson(origin, text(root, origin));
     if (parsed.error) {

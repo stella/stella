@@ -509,6 +509,38 @@ describe("Docker source closure", () => {
     }
   });
 
+  test("Bun runtime and bundling tolerate a missing inherited tsconfig", () => {
+    const directory = "missing-inherited-config";
+    const config = put(
+      `${directory}/tsconfig.json`,
+      JSON.stringify({
+        extends: "./absent-tooling.json",
+        compilerOptions: { paths: { "~/*": ["./src/*"] } },
+      }),
+    );
+    const target = put(`${directory}/src/value.ts`, "export const value = 42;");
+    const entry = put(
+      `${directory}/entry.ts`,
+      'import { value } from "~/value"; console.log(value);',
+    );
+    const cwd = path.join(root, directory);
+    for (const args of [
+      ["run", "entry.ts"],
+      ["build", "entry.ts", "--target=bun", "--outdir=dist"],
+    ]) {
+      const result = Bun.spawnSync([process.execPath, ...args], { cwd });
+      expect(result.exitCode, result.stderr.toString()).toBe(0);
+    }
+    expect(
+      sourceClosureProblems(root, tree([config, entry, target]), [
+        `/app/${entry}`,
+      ]),
+    ).toEqual([]);
+    expect(
+      sourceClosureProblems(root, tree([config, entry]), [`/app/${entry}`]),
+    ).toEqual([`${entry} imports ~/value, unavailable in Docker stage`]);
+  });
+
   test("every tracked tsconfig alias and custom alias requires its stage source", () => {
     const repositoryRoot = path.resolve(import.meta.dir, "..");
     const listed = Bun.spawnSync(
