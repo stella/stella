@@ -1376,7 +1376,7 @@ const reviewEnvelopeCode = (body: unknown): string => {
         : envelope.output.error.code
       : envelope.output.code;
   if (typeof code === "number") {
-    return [-32700, -32600, -32601, -32602, -32603].includes(code)
+    return [-32_700, -32_600, -32_601, -32_602, -32_603].includes(code)
       ? String(code)
       : "unrecognized";
   }

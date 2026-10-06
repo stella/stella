@@ -66,7 +66,7 @@ const REVIEW_CALLBACK_MUTATIONS: readonly ReviewCallbackMutation[] = [
 ];
 
 const observedRequest = (
-  observed: Array<{ url: string; headers: Headers; body: string }>,
+  observed: { url: string; headers: Headers; body: string }[],
   pathnameSuffix: string,
 ) => {
   const request = observed.find(({ url }) =>
@@ -78,9 +78,10 @@ const observedRequest = (
   return request;
 };
 
-const REVIEW_FAILURE_CASES: ReadonlyArray<
-  readonly [string, ReviewFailure["kind"]]
-> = [
+const REVIEW_FAILURE_CASES: readonly (readonly [
+  string,
+  ReviewFailure["kind"],
+])[] = [
   ["sign-in", "transport"],
   ["sign-in", "http"],
   ["sign-in", "malformed"],
@@ -126,7 +127,7 @@ const reviewFetcher = (
     maliciousDiscovery?: boolean;
     maliciousConsent?: boolean;
     callbackMutation?: ReviewCallbackMutation;
-    observed?: Array<{ url: string; headers: Headers; body: string }>;
+    observed?: { url: string; headers: Headers; body: string }[];
   } = {},
 ): CanaryFetcher => {
   let writtenTaskName = "";
@@ -318,7 +319,7 @@ const reviewFetcher = (
 
 describe("restricted review-account journey", () => {
   test("completes OAuth with PKCE, scoped MCP calls, and cleanup", async () => {
-    const observed: Array<{ url: string; headers: Headers; body: string }> = [];
+    const observed: { url: string; headers: Headers; body: string }[] = [];
     const results = await runReviewAccountJourney(
       {
         baseUrl: REVIEW_BASE_URL,
@@ -476,8 +477,7 @@ describe("restricted review-account journey", () => {
   test.each(REVIEW_ATTACKS)(
     "contains %s redirects to the configured API and owned callback",
     async (attack) => {
-      const observed: Array<{ url: string; headers: Headers; body: string }> =
-        [];
+      const observed: { url: string; headers: Headers; body: string }[] = [];
       const options =
         attack === "maliciousDiscovery"
           ? { maliciousDiscovery: true, observed }
@@ -549,7 +549,7 @@ describe("restricted review-account journey", () => {
       step: "initialize",
       body: {
         jsonrpc: "2.0",
-        error: { code: -32603, message: REVIEW_PASSWORD },
+        error: { code: -32_603, message: REVIEW_PASSWORD },
       },
       code: "-32603",
     },
