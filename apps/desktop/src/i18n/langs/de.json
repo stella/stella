@@ -146,6 +146,7 @@
     "accountLinked": "Konto verknüpft",
     "connectToStella": "Mit stella web verbinden",
     "connectToStellaDescription": "Verknüpfen Sie diesen Computer mit Ihrem aktuellen stella-Konto, ohne ein Dokument zu öffnen.",
+    "desktopBenefit": "Office-Dateien und lokaler Zwischenablageverlauf",
     "disconnectAccount": "Konto trennen",
     "errorDisconnectAccount": "stella desktop konnte Ihr Konto nicht trennen.",
     "errorReadAccount": "stella desktop konnte Ihre Kontoverbindung nicht prüfen.",
