@@ -652,10 +652,12 @@ export const planDecisionWrite = async ({
       languageGroupKey,
     })
   ) {
-    throw new UnpersistableDecisionFieldError({
-      message: "Decision search candidate exceeds storage byte limits",
-      field: UNPERSISTABLE_DECISION_FIELDS.SEARCH_CANDIDATE_BYTES,
-    });
+    return Result.err(
+      new UnpersistableDecisionFieldError({
+        message: "Decision search candidate exceeds storage byte limits",
+        field: UNPERSISTABLE_DECISION_FIELDS.SEARCH_CANDIDATE_BYTES,
+      }),
+    );
   }
 
   const {
