@@ -1446,10 +1446,13 @@ const caseLawFacetBucketProjection = v.strictObject({
 
 /**
  * A source bucket's count is capped, so it says whether it is the exact
- * number, a lower bound, or the index's estimate.
+ * number, a lower bound, or the index's estimate. Its value is the source's
+ * public corpus id, which an agent passes back as `source_id`, never a tenant
+ * id, so it is forwarded unchanged like `decisionId`.
  */
 const caseLawSourceFacetBucketProjection = v.strictObject({
   ...caseLawFacetBucketProjection.entries,
+  value: passthroughId(),
   countType: v.picklist(Object.values(FACET_COUNT_TYPE)),
 });
 

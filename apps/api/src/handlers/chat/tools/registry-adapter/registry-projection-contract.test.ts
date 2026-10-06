@@ -12,6 +12,7 @@ import {
 import { TIME_ENTRY_ACTIVITY_GROUP } from "@stll/api-contract";
 import { DECISION_READ_RESOLUTION } from "@stll/api-contract/case-law-decision-resolution";
 import {
+  FACET_COUNT_TYPE,
   SEARCH_PAGINATION_COMPLETE,
   countedSearchTotal,
   LEGISLATION_SEARCH_MATCH_TYPES,
@@ -1484,6 +1485,78 @@ const CONTRACT_CORPUS = {
       },
       expectRefPaths: [],
     },
+    {
+      // Page one of a single query carries the filter rail. A source facet's
+      // value is the source's own id, which an agent passes back as
+      // `source_id`; a null-facets fixture alone never exercised it.
+      mode: "search",
+      buildArgs: () => ({ country: "CZE", queries: ["dobré mravy"] }),
+      setup: () => {
+        searchDecisionsHandlerMock.mockResolvedValue({
+          paginationOutcome: SEARCH_PAGINATION_COMPLETE,
+          facets: {
+            court: [
+              {
+                tierLabel: "supreme",
+                courts: [{ value: "Nejvyšší soud", label: null, count: 1 }],
+              },
+            ],
+            year: [{ value: "2020", label: null, count: 1 }],
+            decisionType: [{ value: "judgment", label: null, count: 1 }],
+            source: [
+              {
+                value: uid(108),
+                label: "Nejvyšší soud",
+                count: 1,
+                countType: FACET_COUNT_TYPE.EXACT,
+              },
+            ],
+            language: [{ value: "cs", label: null, count: 1 }],
+          },
+          hits: [
+            {
+              anchorId: null,
+              caseNumber: "22 Cdo 1000/2020",
+              caseNumberType: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
+              citationAuthority: 1.4,
+              citationCount: 3,
+              country: "CZ",
+              court: "Nejvyšší soud",
+              courtAbbreviation: "NS",
+              courtTier: "supreme",
+              createdAt: "2020-05-01T00:00:00.000Z",
+              decisionDate: "2020-05-01",
+              decisionId: uid(53),
+              decisionType: "judgment",
+              ecli: "ECLI:CZ:NS:2020:22.CDO.1000.2020.1",
+              identifiers: [
+                {
+                  type: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
+                  value: "22 Cdo 1000/2020",
+                },
+                {
+                  type: DECISION_IDENTIFIER_TYPES.ECLI,
+                  value: "ECLI:CZ:NS:2020:22.CDO.1000.2020.1",
+                },
+              ],
+              headline: "…dobré <em>mravy</em>…",
+              language: "cs",
+              matchingPassages: 3,
+              headnote: { type: "absent", reason: "not_published" },
+              languageAlternates: [],
+              slug: "ns-22-cdo-1000-2020",
+              // GUID-bearing publisher URL; see the statute fixture above.
+              sourceUrl: `https://example.test/decision/${uid(91)}`,
+            },
+          ],
+          nextCursor: null,
+          total: countedSearchTotal(SEARCH_TOTAL_TYPE.EXACT, 1),
+          queryUsed: "dobré mravy",
+          warnings: [],
+        } satisfies Awaited<ReturnType<typeof searchDecisionsHandler>>);
+      },
+      expectRefPaths: [],
+    },
   ],
   lookup_case_law: [
     {
@@ -1996,13 +2069,20 @@ let analytics: RecordingAnalytics | null = null;
 const recordedExceptions = () =>
   (analytics ?? panic("recording analytics is not installed")).exceptions();
 
+// Production serves the public-law pages, so every corpus result carries an
+// `appUrl`; a decision or statute without a slug is addressed by its id there.
+let previousFeaturePublicLaw = env.FEATURE_PUBLIC_LAW;
+
 afterEach(() => {
   analytics?.restore();
   analytics = null;
+  env.FEATURE_PUBLIC_LAW = previousFeaturePublicLaw;
 });
 
 beforeEach(() => {
   analytics = installRecordingAnalytics();
+  previousFeaturePublicLaw = env.FEATURE_PUBLIC_LAW;
+  env.FEATURE_PUBLIC_LAW = true;
   for (const handlerMock of ALL_MOCKS) {
     handlerMock.mockReset();
   }
