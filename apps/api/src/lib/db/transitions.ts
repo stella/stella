@@ -374,12 +374,18 @@ const executeScopedUpsertWrites = async <
       )}
     WHERE current.${sql.identifier(state.name)} = incoming.${sql.identifier(state.name)}
   `);
-  if (verified.length !== values.length) {
+  if (executedRows(verified).length !== values.length) {
     panic(
       "An upsert target is neither initial nor reachable from its current state",
     );
   }
-  const changedRows = [...insertRows, ...transitionRows].map((row) => {
+  const changedRows = [
+    ...executedRows(insertRows),
+    ...executedRows(transitionRows),
+  ].map((row) => {
+    if (!isRecord(row)) {
+      return panic("Transition requires a returned row object");
+    }
     const status = row["status"];
     if (!isScopedStateValue(spec.table, spec.stateColumn, status)) {
       panic("Upsert result returned an unknown state");
@@ -531,7 +537,10 @@ export const transitionScopedBatch = async <
       sql`, `,
     )}
   `);
-  const changed = rows.map((row) => {
+  const changed = executedRows(rows).map((row) => {
+    if (!isRecord(row)) {
+      return panic("Transition requires a returned row object");
+    }
     const status = row["status"];
     if (!isScopedStateValue(table, spec.stateColumn, status)) {
       panic("Transition result returned an unknown state");
