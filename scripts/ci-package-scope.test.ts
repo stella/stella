@@ -289,6 +289,33 @@ readDoc("README.md");`,
   }
 });
 
+test("filesystem wrappers retain every consumed argument position through reordered calls", () => {
+  for (const declaration of [
+    'function readDoc(options: object, name: string) { return readFileSync(name); } readDoc({}, "README.md");',
+    'const readDoc = (options: object, name: string) => readFileSync(name); readDoc({}, "README.md");',
+    'function readDoc(options: object, name: string, other: string) { readFileSync(name); readFileSync(other); } readDoc({}, "README.md", "docs/guide.md");',
+    'function outer(name: string, options: object) { return inner(options, name); } function inner(options: object, name: string) { return readFileSync(name); } outer("README.md", {});',
+  ]) {
+    repository((root, write) => {
+      const reader = "scripts/multiple-arguments.test.ts";
+      write(reader, `import { readFileSync } from "node:fs"; ${declaration}`);
+      expect(requiresPackageChecks({ root, changed: ["README.md"] })).toBe(
+        false,
+      );
+      expect(markdownChecks({ root, changed: ["README.md"] })).toEqual([
+        ["bun", "test", reader],
+      ]);
+    });
+  }
+  repository((root, write) => {
+    write(
+      "scripts/unread-argument.test.ts",
+      'import { readFileSync } from "node:fs"; function readDoc(unread: string, name: string) { return readFileSync(name); } readDoc("README.md", "input.json");',
+    );
+    expect(markdownChecks({ root, changed: ["README.md"] })).toEqual([]);
+  });
+});
+
 test("arrow filesystem wrappers retain constant and literal call paths", () => {
   for (const declaration of [
     "const readDoc = name => readFileSync(name);",

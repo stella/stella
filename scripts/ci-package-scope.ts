@@ -687,7 +687,7 @@ const sourceFunctionBodies = (code: string) => {
   const functions: {
     name: string;
     body: string;
-    parameter: string | undefined;
+    parameters: (string | undefined)[];
   }[] = [];
   for (const match of code.matchAll(
     /\b(?:function|const)\s+([A-Za-z_$][\w$]*)/gu,
@@ -726,11 +726,17 @@ const sourceFunctionBodies = (code: string) => {
     }
     functions.push({
       name: match[1] ?? "",
-      parameter:
-        code.slice(start, bodyStart).match(/\(\s*([A-Za-z_$][\w$]*)\b/u)?.[1] ??
-        code
-          .slice(start, bodyStart)
-          .match(/[=]\s*(?:async\s+)?([A-Za-z_$][\w$]*)\s*=>/u)?.[1],
+      parameters: code.slice(start, bodyStart).includes("(")
+        ? readCallArguments(
+            code
+              .slice(start, bodyStart)
+              .slice(code.slice(start, bodyStart).indexOf("(")),
+          ).map((argument) => argument.match(/^\s*([A-Za-z_$][\w$]*)\b/u)?.[1])
+        : [
+            code
+              .slice(start, bodyStart)
+              .match(/[=]\s*(?:async\s+)?([A-Za-z_$][\w$]*)\s*=>/u)?.[1],
+          ],
       body: code.slice(bodyStart, end === -1 ? code.length : end),
     });
   }
@@ -804,7 +810,7 @@ const temporaryPathFactories = (code: string) => {
 };
 
 const filesystemReadBindings = (source: string, code: string) => {
-  const reads = new Set(READ_CALLS);
+  const reads = new Map([...READ_CALLS].map((name) => [name, new Set([0])]));
   for (const match of source.matchAll(
     /import\s*\{([^}]+)\}\s*from\s*["'](?:node:)?fs(?:\/promises)?["']/gu,
   )) {
@@ -814,38 +820,87 @@ const filesystemReadBindings = (source: string, code: string) => {
     for (const binding of (match[1] ?? "").split(",")) {
       const [name, separator, alias] = binding.trim().split(/\s+/u);
       if (READ_CALLS.has(name ?? "")) {
-        reads.add(separator === "as" ? (alias ?? "") : (name ?? ""));
+        reads.set(
+          separator === "as" ? (alias ?? "") : (name ?? ""),
+          new Set([0]),
+        );
       }
     }
   }
-  for (const { name, body, parameter } of sourceFunctionBodies(code)) {
-    if (parameter === undefined) {
-      continue;
-    }
-    const forwarded = [...reads].some((read) =>
-      [...body.matchAll(new RegExp(`\\b${read}\\s*\\(`, "gu"))].some((call) => {
-        const argument = readCallArguments(
-          body.slice(call.index + read.length),
-        ).at(0);
-        return (
-          argument !== undefined &&
-          expressionReferences({
-            expression: argument,
-            code,
-            source,
-            matchesExpression: (value) =>
-              new RegExp(`\\b${parameter}\\b`, "u").test(
-                maskSourceNonCode(value),
-              ),
-          })
-        );
-      }),
+  const functions = sourceFunctionBodies(code);
+  // Follow argument positions to a fixed point, so nested/reordered wrappers
+  // cannot hide a real filesystem path behind an options parameter.
+  while (true) {
+    const before = [...reads.values()].reduce(
+      (sum, positions) => sum + positions.size,
+      0,
     );
-    if (forwarded) {
-      reads.add(name);
+    for (const { name, body, parameters } of functions) {
+      for (const [index, parameter] of parameters.entries()) {
+        if (parameter === undefined || reads.get(name)?.has(index)) {
+          continue;
+        }
+        const forwarded = [...reads].some(([read, positions]) =>
+          [...body.matchAll(new RegExp(`\\b${read}\\s*\\(`, "gu"))].some(
+            (call) => {
+              const arguments_ = readCallArguments(
+                body.slice(call.index + read.length),
+              );
+              return [...positions].some((position) => {
+                const argument = arguments_.at(position);
+                return (
+                  argument !== undefined &&
+                  expressionReferences({
+                    expression: argument,
+                    code,
+                    source,
+                    matchesExpression: (value) =>
+                      new RegExp(`\\b${parameter}\\b`, "u").test(
+                        maskSourceNonCode(value),
+                      ),
+                  })
+                );
+              });
+            },
+          ),
+        );
+        if (forwarded) {
+          const positions = reads.get(name) ?? new Set<number>();
+          positions.add(index);
+          reads.set(name, positions);
+        }
+      }
+    }
+    const after = [...reads.values()].reduce(
+      (sum, positions) => sum + positions.size,
+      0,
+    );
+    if (before === after) {
+      break;
     }
   }
   return reads;
+};
+
+type FilesystemReadArgumentsOptions = {
+  call: string;
+  callee: string;
+  isBunFile: boolean;
+  isDirectory: boolean;
+  reads: ReadonlyMap<string, ReadonlySet<number>>;
+};
+const filesystemReadArguments = ({
+  call,
+  callee,
+  isBunFile,
+  isDirectory,
+  reads,
+}: FilesystemReadArgumentsOptions) => {
+  const positions =
+    isBunFile || isDirectory
+      ? new Set([0])
+      : (reads.get(callee) ?? new Set([0]));
+  return readCallArguments(call).filter((_, index) => positions.has(index));
 };
 
 const markdownPolicyReader = (step: unknown): MarkdownReader | undefined => {
@@ -1025,7 +1080,7 @@ export const markdownReaders = (root = ROOT): readonly MarkdownReader[] => {
     );
     const code = maskSourceNonCode(source);
     const temporaryFactories = temporaryPathFactories(code);
-    const reads = importsFs ? filesystemReadBindings(source, code) : READ_CALLS;
+    const reads = filesystemReadBindings(source, code);
     readStringLiterals(source, (callee, call, start) => {
       if (callee === undefined) {
         return;
@@ -1037,84 +1092,88 @@ export const markdownReaders = (root = ROOT): readonly MarkdownReader[] => {
         callee === "file" ? isBunFile : reads.has(callee) && importsFs;
       const isDirectory = DIRECTORY_CALLS.has(callee) && (importsFs || isGlob);
       if (isRead || isDirectory) {
-        const argument = readCallArguments(call).at(0);
-        if (argument === undefined) {
-          return;
-        }
-        let resolved: GlobPathResult = pathExpression({
-          expression: argument,
-          code,
-          source,
-          file,
-          temporaryFactories,
-        });
-        if (isGlob && resolved.kind === "repository") {
-          resolved = globPath({
-            expression: argument,
-            target: resolved.value,
-            call,
-            start,
-            source,
-            code,
-            file,
-            temporaryFactories,
-          });
-        }
-        if (resolved.kind === "declared") {
-          for (const input of resolved.inputs) {
-            inputs.add(input);
-          }
-          unresolvedInputs.add(argument);
-          return;
-        }
-        if (
-          isDirectory &&
-          resolved.kind === "unresolved" &&
-          resolved.prefix !== undefined
-        ) {
-          inputs.add(`${resolved.prefix}/**`);
-          unresolvedInputs.add(argument);
-          return;
-        }
-        const target =
-          resolved.kind === "repository" ? resolved.value : undefined;
-        if (
-          target !== undefined &&
-          !target.includes("\n") &&
-          (MARKDOWN.test(target) || isDirectory)
-        ) {
-          inputs.add(
-            isDirectory && !target.includes("*")
-              ? `${target}/**`
-              : target.replace(/^(?:\.\.\/)+/u, ""),
-          );
-        } else if (
-          resolved.kind === "unresolved" &&
-          expressionReferences({
-            expression: argument,
-            code,
-            source,
-            root,
-            file,
-            matchesExpression: (value) =>
-              readStringLiterals(value).some((literal) =>
-                MARKDOWN.test(literal.value),
-              ),
-          })
-        ) {
-          const declared = unresolvedReadInputs({
+        for (const argument of filesystemReadArguments({
+          call,
+          callee,
+          isBunFile,
+          isDirectory,
+          reads,
+        })) {
+          let resolved: GlobPathResult = pathExpression({
             expression: argument,
             code,
             source,
             file,
             temporaryFactories,
-            policyReaders,
           });
-          for (const input of declared) {
-            inputs.add(input);
+          if (isGlob && resolved.kind === "repository") {
+            resolved = globPath({
+              expression: argument,
+              target: resolved.value,
+              call,
+              start,
+              source,
+              code,
+              file,
+              temporaryFactories,
+            });
           }
-          if (declared.length > 0) {
+          if (resolved.kind === "declared") {
+            for (const input of resolved.inputs) {
+              inputs.add(input);
+            }
             unresolvedInputs.add(argument);
+            continue;
+          }
+          if (
+            isDirectory &&
+            resolved.kind === "unresolved" &&
+            resolved.prefix !== undefined
+          ) {
+            inputs.add(`${resolved.prefix}/**`);
+            unresolvedInputs.add(argument);
+            continue;
+          }
+          const target =
+            resolved.kind === "repository" ? resolved.value : undefined;
+          if (
+            target !== undefined &&
+            !target.includes("\n") &&
+            (MARKDOWN.test(target) || isDirectory)
+          ) {
+            inputs.add(
+              isDirectory && !target.includes("*")
+                ? `${target}/**`
+                : target.replace(/^(?:\.\.\/)+/u, ""),
+            );
+          } else if (
+            resolved.kind === "unresolved" &&
+            expressionReferences({
+              expression: argument,
+              code,
+              source,
+              root,
+              file,
+              matchesExpression: (value) =>
+                readStringLiterals(value).some((literal) =>
+                  MARKDOWN.test(literal.value),
+                ),
+            })
+          ) {
+            const declared = unresolvedReadInputs({
+              expression: argument,
+              code,
+              source,
+              file,
+              temporaryFactories,
+              policyReaders,
+            });
+            for (const input of declared) {
+              inputs.add(input);
+            }
+            if (declared.length > 0) {
+              unresolvedInputs.add(argument);
+            }
           }
         }
       }
