@@ -1027,7 +1027,7 @@ const resolveExecutionBudget = async ({
     execution === "queued-kickoff"
       ? await resolveQueuedBudget(organizationBudgetOptions)
       : await resolveAdmissionBudget(organizationBudgetOptions);
-  return Result.map(resolved, admittedPeriodBudget);
+  return resolved.map(admittedPeriodBudget);
 };
 
 const settledAdmissionOutcome = <T>(

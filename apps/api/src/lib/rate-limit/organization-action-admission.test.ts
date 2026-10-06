@@ -923,7 +923,9 @@ describe("the free floor's service budget", () => {
                 freeActionState(modelCredentials),
               redis: store.client,
               costRecorder: {
-                enqueue: (observation) => records.push(observation),
+                enqueue: (observation) => {
+                  records.push(observation);
+                },
                 estimate: () => null,
                 callRate: () => null,
               },
