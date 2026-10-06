@@ -40,7 +40,10 @@ export const InlineRenameInput = ({
   dir,
   ...props
 }: InlineRenameInputProps) => {
-  const finished = useRef(false);
+  // The value the editor last finished at (Enter, Escape or a committed
+  // blur). A later blur commits again only if the value moved since, whether
+  // the user typed or the parent supplied a corrected draft.
+  const finishedValue = useRef<string | null>(null);
   const inputRef = useRef<HTMLInputElement | null>(null);
   useImperativeHandle(ref, () => {
     if (!inputRef.current) {
@@ -73,7 +76,7 @@ export const InlineRenameInput = ({
         }
         size={undefined}
         onBlur={(event) => {
-          if (finished.current) {
+          if (finishedValue.current === value) {
             event.stopPropagation();
             return;
           }
@@ -81,11 +84,11 @@ export const InlineRenameInput = ({
             onBlur(event);
             return;
           }
-          finished.current = true;
+          finishedValue.current = value;
           onCommit();
         }}
         onChange={(event) => {
-          finished.current = false;
+          finishedValue.current = null;
           onValueChange(event.currentTarget.value);
         }}
         onClick={(event) => event.stopPropagation()}
@@ -98,7 +101,7 @@ export const InlineRenameInput = ({
             return;
           }
           event.preventDefault();
-          finished.current = true;
+          finishedValue.current = value;
           if (event.key === "Escape") {
             onCancel();
             return;

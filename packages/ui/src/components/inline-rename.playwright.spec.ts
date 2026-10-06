@@ -225,3 +225,23 @@ test("an empty field keeps its placeholder's width in the mirror fallback", asyn
   });
   expect(inputWidth).toBeGreaterThanOrEqual(placeholderWidth - TOLERANCE_PX);
 });
+
+test("a parent-supplied draft after a retained commit still commits on blur", async ({
+  page,
+}) => {
+  await page.goto(`${fixturePath}?retain=true`);
+  const input = await openEditor(page);
+  await input.fill("Rejected draft");
+  await input.press("Enter");
+  await expect(page.locator("output")).toHaveAttribute("data-commits", "1");
+  await page.evaluate(() => {
+    const setFixtureDraft: unknown = Reflect.get(window, "setFixtureDraft");
+    if (typeof setFixtureDraft !== "function") {
+      throw new TypeError("the fixture does not expose its draft setter");
+    }
+    Reflect.apply(setFixtureDraft, window, ["Corrected by parent"]);
+  });
+  await expect(input).toHaveValue("Corrected by parent");
+  await page.getByRole("button", { name: "Outside" }).click();
+  await expect(page.locator("output")).toHaveAttribute("data-commits", "2");
+});

@@ -24,6 +24,9 @@ const Fixture = () => {
   const [commits, setCommits] = useState(0);
   const [cancels, setCancels] = useState(0);
   const retain = params.get("retain") === "true";
+  // Lets a test supply a corrected draft the way a parent would, without a
+  // native input event.
+  Object.assign(window, { setFixtureDraft: setDraft });
   const commit = () => {
     setValue(draft);
     if (!retain) {
