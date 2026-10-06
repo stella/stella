@@ -480,22 +480,28 @@ export const StatusMessage = ({
 
 type DefaultPendingComponentProps = {
   className?: string | undefined;
+  /**
+   * Announce the loading state. Off when the caller already wraps the
+   * skeleton in its own (localized) status region.
+   */
+  announce?: boolean | undefined;
 };
 
 // Shared content fallback, including before the intl provider mounts. Shell
 // chrome belongs to the frame owner, never to a nested loading boundary.
 export const DefaultPendingComponent = ({
   className,
+  announce = true,
 }: DefaultPendingComponentProps) => (
   // Announced as busy content; the skeleton bars themselves are decoration.
   <div
-    aria-busy="true"
-    aria-label="Loading"
+    {...(announce
+      ? { "aria-busy": true, "aria-label": "Loading", role: "status" }
+      : { "aria-hidden": true })}
     className={cn(
       "flex h-full min-h-0 w-full flex-1 flex-col gap-4 p-6",
       className,
     )}
-    role="status"
   >
     <Skeleton aria-hidden="true" className="h-7 w-1/3" />
     <Skeleton aria-hidden="true" className="h-4 w-2/3" />

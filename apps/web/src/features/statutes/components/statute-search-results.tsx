@@ -90,7 +90,7 @@ export const StatuteSearchResults = ({
     return (
       <div role="status">
         <span className="sr-only">{t("common.loading")}</span>
-        <DefaultPendingComponent />
+        <DefaultPendingComponent announce={false} />
       </div>
     );
   }
