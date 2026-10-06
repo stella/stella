@@ -211,17 +211,21 @@ jobs:
               && pr.labels.some((label) => label.name === "prove-fix");
             const scope = require("node:crypto").createHash("sha256")
               .update(JSON.stringify([pr.title, pr.body || "", proof])).digest("hex");
-            const marker = `ci-completed-v1-${pr.number}-${pr.head.repo.id}-${pr.head.sha}-${pr.base.sha}-${depth}-${scope}`;
-            core.setOutput("marker", marker);
+            const prefix = `ci-completed-v2-${pr.number}-${pr.head.repo.id}-${pr.head.sha}-${pr.base.sha}-${depth}-${scope}`;
+            const attempt = Number(process.env.GITHUB_RUN_ATTEMPT);
+            if (!Number.isSafeInteger(attempt) || attempt < 1) return;
+            core.setOutput("marker", `${prefix}-run-${context.runId}-attempt-${attempt}`);
             if (!["labeled", "unlabeled", "ready_for_review", "reopened", "auto_merge_enabled"].includes(context.payload.action)) return;
             try {
               const { data } = await github.rest.actions.listArtifactsForRepo({
-                ...context.repo, name: marker, per_page: 100,
+                ...context.repo, per_page: 100,
                 request: { timeout: 10000 },
               });
               if (!Array.isArray(data.artifacts)) return;
               const completed = data.artifacts.find((artifact) =>
-                artifact.name === marker && artifact.expired === false
+                typeof artifact?.name === "string"
+                && artifact.name.startsWith(`${prefix}-run-`)
+                && artifact.expired === false
                 && Date.parse(artifact.expires_at) > Date.now()
                 && artifact.workflow_run?.head_sha === pr.head.sha
                 && artifact.workflow_run?.head_repository_id === pr.head.repo.id
@@ -229,7 +233,24 @@ jobs:
                 && artifact.workflow_run.id > 0
                 && artifact.workflow_run.id !== context.runId);
               if (!completed) return;
-              core.setOutput("completed_run_id", String(completed.workflow_run.id));
+              const record = completed.name.slice(prefix.length)
+                .match(/^-run-([1-9][0-9]*)-attempt-([1-9][0-9]*)$/);
+              if (!record) return;
+              const sourceId = Number(record[1]);
+              const sourceAttempt = Number(record[2]);
+              if (sourceId !== completed.workflow_run.id
+                  || !Number.isSafeInteger(sourceAttempt)) return;
+              const { data: sourceRun } = await github.rest.actions.getWorkflowRun({
+                ...context.repo, run_id: sourceId,
+                request: { timeout: 10000 },
+              });
+              if (sourceRun.id !== sourceId || sourceRun.head_sha !== pr.head.sha
+                  || sourceRun.event !== "pull_request"
+                  || sourceRun.path !== ".github/workflows/ci.yml"
+                  || sourceRun.run_attempt !== sourceAttempt
+                  || sourceRun.status !== "completed"
+                  || sourceRun.conclusion !== "success") return;
+              core.setOutput("completed_run_id", String(sourceId));
               core.setOutput("run_required", "false");
             } catch {
               core.info("Completed-depth evidence unavailable; running CI.");

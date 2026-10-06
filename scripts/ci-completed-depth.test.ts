@@ -54,19 +54,30 @@ const scope = createHash("sha256")
   .update(JSON.stringify([pr.title, pr.body, false]))
   .digest("hex");
 const marker = (depth: string) =>
-  `ci-completed-v1-123-456-${pr.head.sha}-${pr.base.sha}-${depth}-${scope}`;
+  `ci-completed-v2-123-456-${pr.head.sha}-${pr.base.sha}-${depth}-${scope}`;
 const artifact = (depth: string) => ({
-  name: marker(depth),
+  name: `${marker(depth)}-run-99-attempt-1`,
   expired: false,
   expires_at: "2099-01-01T00:00:00Z",
   workflow_run: { id: 99, head_sha: pr.head.sha, head_repository_id: 456 },
 });
+const successfulRun = {
+  id: 99,
+  head_sha: pr.head.sha,
+  event: "pull_request",
+  path: ".github/workflows/ci.yml",
+  run_attempt: 1,
+  status: "completed",
+  conclusion: "success",
+};
 type LookupOptions = {
   depth?: string;
   action?: string;
   event?: string;
   artifacts?: unknown;
   failure?: boolean;
+  runFailure?: boolean;
+  sourceRun?: unknown;
   pull?: typeof pr;
 };
 const decide = async ({
@@ -75,6 +86,8 @@ const decide = async ({
   event = "pull_request",
   artifacts = [artifact(depth)],
   failure = false,
+  runFailure = false,
+  sourceRun = successfulRun,
   pull = pr,
 }: LookupOptions = {}) => {
   const outputs = new Map<string, string>();
@@ -86,7 +99,7 @@ const decide = async ({
       }
       return { createHash };
     },
-    process: { env: { SUITE_DEPTH: depth } },
+    process: { env: { SUITE_DEPTH: depth, GITHUB_RUN_ATTEMPT: "1" } },
     context: {
       eventName: event,
       payload: { action, pull_request: pull },
@@ -100,6 +113,13 @@ const decide = async ({
     github: {
       rest: {
         actions: {
+          getWorkflowRun: (request: unknown) => {
+            requests.push(request);
+            if (runFailure) {
+              return Promise.reject(new Error("Source run unavailable"));
+            }
+            return Promise.resolve({ data: sourceRun });
+          },
           listArtifactsForRepo: (request: unknown) => {
             requests.push(request);
             if (failure) {
@@ -126,7 +146,7 @@ test("unchanged-head events reuse only the exact completed depth", async () => {
       const { outputs, requests } = await decide({ action, depth });
       expect(outputs.get("run_required")).toBe("false");
       expect(outputs.get("completed_run_id")).toBe("99");
-      expect(requests).toHaveLength(1);
+      expect(requests).toHaveLength(2);
       const opposite = depth === "fast" ? "full" : "fast";
       expect(
         (
@@ -357,4 +377,34 @@ test("every CI condition is one expression without partial interpolation", () =>
     "ci.yml",
   );
   expect(conditions.size).toBeGreaterThan(0);
+});
+
+test("surviving artifacts cannot reuse failed, newer or unconfirmed run attempts", async () => {
+  for (const sourceRun of [
+    { ...successfulRun, conclusion: "failure" },
+    { ...successfulRun, conclusion: "cancelled" },
+    { ...successfulRun, status: "in_progress", conclusion: null },
+    { ...successfulRun, run_attempt: 2 },
+    { ...successfulRun, path: ".github/workflows/other.yml" },
+    null,
+  ]) {
+    expect((await decide({ sourceRun })).outputs.get("run_required")).toBe(
+      "true",
+    );
+  }
+  expect((await decide({ runFailure: true })).outputs.get("run_required")).toBe(
+    "true",
+  );
+  const secondAttempt = {
+    ...artifact("full"),
+    name: `${marker("full")}-run-99-attempt-2`,
+  };
+  expect(
+    (
+      await decide({
+        artifacts: [secondAttempt],
+        sourceRun: { ...successfulRun, run_attempt: 2 },
+      })
+    ).outputs.get("run_required"),
+  ).toBe("false");
 });
