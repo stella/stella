@@ -13,6 +13,8 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { readCursorPage } from "@/api/lib/db/read-bounded";
 import {
   commitSanctionsMonitoringBatch,
+  createMonitoringBatchAuditCounts,
+  addMonitoringBatchAuditCounts,
   SANCTIONS_MONITORING_BATCH_SIZE,
 } from "@/api/lib/lists/sanctions/monitoring-diff";
 import { lockSanctionsMonitoring } from "@/api/lib/lists/sanctions/monitoring-lock";
@@ -134,6 +136,7 @@ const processSanctionsContactMarks = async (
     const terminal = new Set(prepared.map(({ contactId }) => contactId));
     const sources = sanctionsSourceIds();
     // Process one source at a time; marks and the run audit commit only after all sources finish.
+    const auditCounts = createMonitoringBatchAuditCounts();
     const commitSource = async (index: number): Promise<void> => {
       const source = sources.at(index);
       if (source === undefined) {
@@ -156,6 +159,9 @@ const processSanctionsContactMarks = async (
           source,
           results,
           claim: { leaseExpiresAt, marks: claimed.marks },
+          recordAuditEvent: (_auditTx, event) => {
+            addMonitoringBatchAuditCounts(auditCounts, event);
+          },
         }),
       );
       for (const id of terminal) {
@@ -204,6 +210,7 @@ const processSanctionsContactMarks = async (
         kind: "sanctions-monitoring-drain",
         claimed: claimed.marks.length,
         terminal: terminal.size,
+        ...auditCounts,
       },
     });
     return {

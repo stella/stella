@@ -3783,11 +3783,15 @@
     }
   },
   "lawHome": {
+    "clearRecent": "Išvalyti naujausius",
     "enteringIntoForce": "Netrukus įsigalios",
     "inForceFrom": "Įsigalioja {date}",
-    "noRecentSearches": "Paieškų dar nėra",
+    "noRecent": "Naujausios veiklos dar nėra",
     "noSignals": "Signalų dar nėra",
     "prompt": "Ko ieškote?",
+    "recent": "Naujausi",
+    "recentCasesFilter": "Sprendimai",
+    "recentSearchFilter": "Paieškos",
     "recentlyInForce": "Neseniai įsigaliojo",
     "searchLabel": "Ieškoti teisės duomenų bazėje",
     "searchPlaceholder": "Bylos numeris, akto numeris, ECLI arba raktažodžiai",

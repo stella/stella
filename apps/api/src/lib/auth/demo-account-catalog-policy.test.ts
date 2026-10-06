@@ -116,6 +116,7 @@ const REVIEWED_STANDARD_OPERATIONS = [
   "apps/api/src/handlers/organization-settings/read-ai-config.ts",
   "apps/api/src/handlers/organization-settings/read-deepl-config.ts",
   "apps/api/src/handlers/organization-settings/read-web-search-config.ts",
+  "apps/api/src/handlers/organization-settings/sanctions-monitoring/update.ts",
   "apps/api/src/handlers/organization-settings/update-ai-config.ts",
   "apps/api/src/handlers/organization-settings/update-deepl-key.ts",
   "apps/api/src/handlers/organization-settings/update-web-search-key.ts",
