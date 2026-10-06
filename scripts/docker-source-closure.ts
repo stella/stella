@@ -122,6 +122,16 @@ const filesBelow = (directory: string): string[] => {
   return files;
 };
 
+const hasDirectory = (files: SourceTree, directory: string) => {
+  const prefix = `${directory.replace(/\/$/u, "")}/`;
+  for (const file of files.keys()) {
+    if (file.startsWith(prefix)) {
+      return true;
+    }
+  }
+  return false;
+};
+
 export const copySource = (
   source: SourceTree,
   destination: SourceTree,
@@ -131,7 +141,9 @@ export const copySource = (
   const exact = source.get(from);
   if (exact !== undefined) {
     destination.set(
-      to.endsWith("/") ? `${to}${path.posix.basename(from)}` : to,
+      to.endsWith("/") || hasDirectory(destination, to)
+        ? path.posix.join(to, path.posix.basename(from))
+        : to,
       exact,
     );
     return;
@@ -607,7 +619,8 @@ const runtimeBunFlags = {
   "--prefer-offline": "switch",
   "--prefer-latest": "switch",
   "--port": "value",
-  "--conditions": "value",
+  "-C": "unsupported",
+  "--conditions": "unsupported",
   "--fetch-preconnect": "value",
   "--experimental-http2-fetch": "switch",
   "--experimental-http3-fetch": "switch",
@@ -726,7 +739,7 @@ export const BUN_FLAGS = {
     "--minify-identifiers": "switch",
     "--keep-names": "switch",
     "--css-chunking": "switch",
-    "--conditions": "value",
+    "--conditions": "unsupported",
     "--app": "switch",
     "--server-components": "switch",
     "--env": "value",
@@ -1071,26 +1084,44 @@ const generatorEntries = (
   );
 };
 
-const copyInstruction = (
-  stages: Map<string, Stage>,
-  stage: Stage,
-  context: SourceTree,
-  body: string,
-) => {
+type CopyInstructionOptions = {
+  stages: Map<string, Stage>;
+  stage: Stage;
+  context: SourceTree;
+  body: string;
+  operation: "COPY" | "ADD";
+};
+
+const copyInstruction = ({
+  stages,
+  stage,
+  context,
+  body,
+  operation,
+}: CopyInstructionOptions) => {
   const words = body.split(/\s+/u);
   for (const word of words.filter((candidate) => candidate.startsWith("--"))) {
-    if (!/^--(?:from|chown|chmod)=/u.test(word)) {
-      panic(`Unsupported COPY flag: ${word}`);
+    if (
+      !/^--(?:from|chown|chmod)=/u.test(word) ||
+      (operation === "ADD" && word.startsWith("--from="))
+    ) {
+      panic(`Unsupported ${operation} flag: ${word}`);
     }
   }
   const from = words.find((word) => word.startsWith("--from="))?.slice(7);
   const paths = words.filter((word) => !word.startsWith("--"));
   const destination = paths.pop();
   if (destination === undefined) {
-    panic(`Unsupported COPY: ${body}`);
+    panic(`Unsupported ${operation}: ${body}`);
   }
-  if (paths.length > 1 && !destination.endsWith("/")) {
-    panic("Multiple COPY sources require a directory destination");
+  const targetPath = absolute(stage.cwd, destination.replaceAll("\\$", "$"));
+  const directoryTarget =
+    destination.endsWith("/") ||
+    stage.cwd === targetPath ||
+    stage.cwd.startsWith(`${targetPath}/`) ||
+    hasDirectory(stage.files, targetPath);
+  if (paths.length > 1 && !directoryTarget) {
+    panic(`Multiple ${operation} sources require a directory destination`);
   }
   const sourceTree = from === undefined ? context : stages.get(from)?.files;
   if (sourceTree === undefined) {
@@ -1101,15 +1132,13 @@ const copyInstruction = (
     return;
   }
   if (body.startsWith("[") || /(?<!\\)\$/u.test(body)) {
-    panic(`Unsupported COPY: ${body}`);
+    panic(`Unsupported ${operation}: ${body}`);
   }
   stage.seen.clear();
   delete stage.checker;
   for (const file of paths) {
     const sourcePath = absolute(from === undefined ? "/" : "/app", file);
-    const target =
-      absolute(stage.cwd, destination.replaceAll("\\$", "$")) +
-      (destination.endsWith("/") || destination === "." ? "/" : "");
+    const target = targetPath + (directoryTarget ? "/" : "");
     copySource(sourceTree, stage.files, sourcePath, target);
   }
 };
@@ -1150,6 +1179,20 @@ export const checkDockerSource = (
       const inputs = words.filter((word) => !word.startsWith("--"));
       const archive = /\.(?:tar(?:\.(?:gz|xz|bz2))?|tgz|zip)$/iu;
       const [url, target] = inputs;
+      if (url !== undefined && !/^https?:\/\//u.test(url)) {
+        if (inputs.some((input) => archive.test(input))) {
+          panic(`Unsupported source instruction: ${instruction}`);
+        }
+        copyInstruction({ stages, stage, context, body, operation: "ADD" });
+        continue;
+      }
+      const targetPath =
+        target === undefined ? "" : absolute(stage.cwd, target);
+      const directoryTarget =
+        target?.endsWith("/") ||
+        stage.cwd === targetPath ||
+        stage.cwd.startsWith(`${targetPath}/`) ||
+        hasDirectory(stage.files, targetPath);
       if (
         words.some(
           (word) =>
@@ -1161,7 +1204,7 @@ export const checkDockerSource = (
         target === undefined ||
         !/^https?:\/\//u.test(url) ||
         !archive.test(url) ||
-        !archive.test(target) ||
+        (!archive.test(target) && !directoryTarget) ||
         /[$\\]/u.test(body)
       ) {
         panic(`Unsupported source instruction: ${instruction}`);
@@ -1169,7 +1212,7 @@ export const checkDockerSource = (
       // Remote archives stay opaque: neither ADD nor a later native unpack
       // declares repository modules available to a Bun source runner.
     } else if (operation === "COPY") {
-      copyInstruction(stages, stage, context, body);
+      copyInstruction({ stages, stage, context, body, operation: "COPY" });
     } else if (operation === "RUN") {
       const runStage = stage;
       walkCommand(

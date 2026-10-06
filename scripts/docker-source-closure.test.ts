@@ -110,6 +110,109 @@ describe("Docker source closure", () => {
     ).toEqual(["Entry is unavailable: /app/apps/entry.ts"]);
   });
 
+  test("COPY and ADD infer existing destination directories for single and multiple files", () => {
+    const entry = put(
+      "existing-directory/src/entry.ts",
+      'import "./helper"; import "./second";',
+    );
+    const helper = put(
+      "existing-directory/helper.ts",
+      "export const helper = 1;",
+    );
+    const second = put(
+      "existing-directory/second.ts",
+      "export const second = 2;",
+    );
+    const context: SourceTree = new Map([
+      ["/src/entry.ts", entry],
+      ["/helper.ts", helper],
+      ["/second.ts", second],
+    ]);
+    for (const operation of ["COPY", "ADD"]) {
+      for (const copies of [
+        `${operation} helper.ts /app/src\n${operation} second.ts /app/src`,
+        `${operation} helper.ts second.ts /app/src`,
+      ]) {
+        const dockerfile = `FROM bun\nWORKDIR /app\n${operation} src /app/src\n${copies}\nRUN bun src/entry.ts`;
+        expect(checkDockerSource(root, dockerfile, context, new Map())).toEqual(
+          [],
+        );
+      }
+      expect(() =>
+        checkDockerSource(
+          root,
+          `FROM bun\nWORKDIR /app\n${operation} helper.ts second.ts /app/not-a-directory`,
+          context,
+          new Map(),
+        ),
+      ).toThrow(
+        `Multiple ${operation} sources require a directory destination`,
+      );
+      expect(() =>
+        checkDockerSource(
+          root,
+          `FROM bun\nWORKDIR /app\n${operation} helper.ts /app/not-a-directory\n${operation} helper.ts second.ts /app/not-a-directory`,
+          context,
+          new Map(),
+        ),
+      ).toThrow(
+        `Multiple ${operation} sources require a directory destination`,
+      );
+      expect(
+        checkDockerSource(
+          root,
+          `FROM bun\nWORKDIR /app\n${operation} helper.ts second.ts /app\nRUN bun helper.ts`,
+          context,
+          new Map(),
+        ),
+      ).toEqual([]);
+    }
+    const destination: SourceTree = new Map([["/app/src/entry.ts", entry]]);
+    copySource(context, destination, "/helper.ts", "/app/src");
+    expect(destination.get("/app/src/helper.ts")).toBe(helper);
+    expect(destination.has("/app/src")).toBe(false);
+  });
+
+  test("conditional workspace exports reject unmodeled custom Bun conditions", () => {
+    const files = [
+      put(
+        "conditions/package.json",
+        JSON.stringify({
+          name: "@stll/conditional",
+          exports: {
+            ".": {
+              production: "./production.ts",
+              default: "./default.ts",
+            },
+          },
+        }),
+      ),
+      put("conditions/default.ts", "export const value = 1;"),
+      put("conditions-entry.ts", 'import "@stll/conditional";'),
+    ];
+    put("conditions/production.ts", 'import "./production-only-missing";');
+    const inventory = tree(files);
+    expect(
+      sourceClosureProblems(root, inventory, ["/app/conditions-entry.ts"]),
+    ).toEqual([]);
+    for (const mode of ["run", "build"]) {
+      for (const flag of [
+        "--conditions=production",
+        "--conditions production",
+        "-C production",
+      ]) {
+        expect(() =>
+          commandEntries(
+            root,
+            inventory,
+            `bun ${mode} ${flag} conditions-entry.ts`,
+            "/app",
+          ),
+        ).toThrow("Unsupported Bun flag semantics");
+      }
+    }
+  });
+
   test("checks builds following installs in the same instruction", () => {
     const entry = put("after-install/entry.ts", 'import "./missing";');
     const context: SourceTree = new Map([["/entry.ts", entry]]);
@@ -516,6 +619,16 @@ describe("Docker source closure", () => {
         new Map(),
       ).join("\n"),
     ).toContain("missing");
+    for (const target of ["/app", "/app/"]) {
+      expect(
+        checkDockerSource(
+          root,
+          `FROM bun\nWORKDIR /app\nCOPY entry.ts .\nADD https://example.invalid/native.tar ${target}`,
+          context,
+          new Map(),
+        ),
+      ).toEqual([]);
+    }
     for (const add of [
       "ADD local.tar /native.tar",
       "ADD https://example.invalid/entry.ts /app/entry.ts",
