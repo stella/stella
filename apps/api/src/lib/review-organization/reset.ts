@@ -2,7 +2,7 @@ import { Result, TaggedError } from "better-result";
 import { and, asc, eq, sql } from "drizzle-orm";
 
 import { member, organization, user } from "@/api/db/auth-schema";
-import { rlsDb } from "@/api/db/root";
+import { createFencedRlsDatabase } from "@/api/db/root";
 import type { Transaction } from "@/api/db/root";
 import { abortTransaction } from "@/api/db/safe-db";
 import type { SafeDb } from "@/api/db/safe-db";
@@ -613,7 +613,10 @@ export const resetReviewOrganization = async ({
     target.value,
     dependencies.afterFenceCheck,
   );
-  const fencedDatabase = fencedRlsDatabase(rlsDatabase ?? rlsDb, fence);
+  const fencedDatabase =
+    rlsDatabase === undefined
+      ? createFencedRlsDatabase(fence.assert)
+      : fencedRlsDatabase(rlsDatabase, fence);
   const scope: ResetScope = {
     target: target.value,
     db,
