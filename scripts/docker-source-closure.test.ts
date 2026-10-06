@@ -173,6 +173,33 @@ describe("Docker source closure", () => {
     expect(destination.has("/app/src")).toBe(false);
   });
 
+  test("cached import edges retain content and stage inventory boundaries", () => {
+    const first = put("import-cache/first.ts", 'import "./first-dependency";');
+    const second = put(
+      "import-cache/second.ts",
+      'import "./second-dependency";',
+    );
+    const dependency = put(
+      "import-cache/first-dependency.ts",
+      "export const value = 1;",
+    );
+    const complete: SourceTree = new Map([
+      ["/app/entry.ts", first],
+      ["/app/first-dependency.ts", dependency],
+    ]);
+    const omitted: SourceTree = new Map([["/app/entry.ts", first]]);
+    const replaced: SourceTree = new Map([["/app/entry.ts", second]]);
+    expect(sourceClosureProblems(root, complete, ["/app/entry.ts"])).toEqual(
+      [],
+    );
+    expect(sourceClosureProblems(root, omitted, ["/app/entry.ts"])).toEqual([
+      "import-cache/first.ts imports ./first-dependency, unavailable in Docker stage",
+    ]);
+    expect(sourceClosureProblems(root, replaced, ["/app/entry.ts"])).toEqual([
+      "import-cache/second.ts imports ./second-dependency, unavailable in Docker stage",
+    ]);
+  });
+
   test("conditional workspace exports reject unmodeled custom Bun conditions", () => {
     const files = [
       put(

@@ -158,7 +158,13 @@ export const copySource = (
   }
 };
 
+const importCache = new Map<string, { source: string; imports: string[] }>();
+
 const runtimeImports = (file: string, source: string): string[] => {
+  const cached = importCache.get(file);
+  if (cached?.source === source) {
+    return cached.imports;
+  }
   const parsed = ts.createSourceFile(
     file,
     source,
@@ -216,6 +222,8 @@ const runtimeImports = (file: string, source: string): string[] => {
     ts.forEachChild(node, visit);
   };
   visit(parsed);
+  // Literal edges depend on file content; their resolution still uses each stage.
+  importCache.set(file, { source, imports });
   return imports;
 };
 
