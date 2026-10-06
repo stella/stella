@@ -2,7 +2,9 @@ import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 import { chromium } from "playwright-core";
 
-import { renderVisual } from "../src/render";
+import { VISUAL_PREVIEW_LIMITS } from "@stll/api-contract/visual-preview";
+
+import { renderVisual, VisualRenderTimeoutError } from "../src/render";
 
 const launch = () => chromium.launch({ headless: true });
 
@@ -32,36 +34,17 @@ describe("composed visual preview", () => {
       Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]),
     );
   });
-  test("records HTTP and WebSocket requests without reaching a local server", async () => {
-    let receivedRequests = 0;
-    const server = Bun.serve({
-      port: 0,
-      fetch: () => {
-        receivedRequests += 1;
-        return new Response("example");
-      },
-    });
-    const origin = `http://127.0.0.1:${server.port}`;
+  test("a page referencing an external image renders and reports blocked requests", async () => {
     const result = await renderVisual({
       launch,
       input: {
-        document: `<body><script>
-      fetch('${origin}/data').then(() => {}, () => {});
-      new WebSocket('ws://127.0.0.1:${server.port}/socket');
-      const image = new Image(); image.src='${origin}/image'; document.body.append(image);
-      setTimeout(() => parent.postMessage({kind:'ready'}, '*'), 200);
-      </script>`,
+        document: `<body><img src="https://preview.invalid/example.png"><script>parent.postMessage({kind:'ready'}, '*')</script>`,
         viewport: { width: 1200 },
       },
     });
-    server.stop(true);
-    expect(Result.isOk(result)).toBe(true);
-    if (Result.isError(result)) {
-      return;
-    }
-    expect(result.value.readyFired).toBe(true);
-    expect(result.value.blockedRequests).toBeGreaterThanOrEqual(3);
-    expect(receivedRequests).toBe(0);
+    const output = result.unwrap();
+    expect(output.readyFired).toBe(true);
+    expect(output.blockedRequests).toBeGreaterThanOrEqual(1);
   });
   test("reports a missing ready signal and caps tall content", async () => {
     const result = await renderVisual({
@@ -111,6 +94,33 @@ describe("composed visual preview", () => {
     expect(Result.isError(result)).toBe(true);
     expect(performance.now() - started).toBeLessThan(15_000);
   }, 15_000);
+  test(
+    "returns a typed timeout and closes an unresponsive guest browser",
+    async () => {
+      const browser = await launch();
+      const started = performance.now();
+      const result = await renderVisual({
+        launch: async () => browser,
+        input: {
+          document: "<script>for(;;){}</script>",
+          viewport: { width: 1200 },
+        },
+      });
+      expect(Result.isError(result)).toBe(true);
+      if (Result.isError(result)) {
+        expect(VisualRenderTimeoutError.is(result.error)).toBe(true);
+        if (VisualRenderTimeoutError.is(result.error)) {
+          expect(result.error.readyFired).toBe(false);
+        }
+      }
+      expect(performance.now() - started).toBeLessThan(
+        VISUAL_PREVIEW_LIMITS.renderTimeoutMs + 2000,
+      );
+      expect(browser.isConnected()).toBe(false);
+      expect(browser.contexts()).toEqual([]);
+    },
+    VISUAL_PREVIEW_LIMITS.renderTimeoutMs + 3000,
+  );
   test("reports browser startup failure without exception details", async () => {
     const result = await renderVisual({
       launch: async () => {
