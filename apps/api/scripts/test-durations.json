@@ -1807,10 +1807,6 @@
     "seconds": 0.460327,
     "source": "estimated"
   },
-  "src/handlers/chat/chat-execution-admission.test.ts": {
-    "seconds": 0.463732,
-    "source": "estimated"
-  },
   "src/handlers/chat/chat-message-parts.test.ts": {
     "seconds": 0.521217,
     "source": "estimated"
@@ -6859,12 +6855,24 @@
     "seconds": 0.154125,
     "source": "estimated"
   },
+  "src/lib/rate-limit/execution-admission.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
   "src/lib/rate-limit/mcp-read-fence.test.ts": {
     "seconds": 0.730715,
     "source": "estimated"
   },
   "src/lib/rate-limit/mcp-read-fence.valkey.test.ts": {
     "seconds": 0.0948,
+    "source": "estimated"
+  },
+  "src/lib/rate-limit/model-action-admission.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
+  "src/lib/rate-limit/model-dispatch-admission.test.ts": {
+    "seconds": 1,
     "source": "estimated"
   },
   "src/lib/rate-limit/organization-action-admission.test.ts": {
