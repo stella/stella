@@ -43,6 +43,7 @@ jobs:
     outputs:
       sha: ${{ steps.resolve.outputs.sha }}
       tip: ${{ steps.resolve.outputs.tip }}
+      main-sha: ${{ steps.resolve.outputs.main-sha }}
 
     steps:
       - name: Checkout
@@ -259,11 +260,26 @@ jobs:
             STELLA_VERSION=${{ steps.ref.outputs.release_ref }}
             STELLA_COMMIT_SHA=${{ needs.resolve.outputs.sha }}
 
+      # Attestation tooling comes from the workflow revision, after building,
+      # so it cannot alter the pinned source or its Docker context.
+      - name: Checkout attestation tooling
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.workflow_sha }}
+          path: .workflow-actions
+          persist-credentials: false
+          sparse-checkout: |
+            .github/actions/provenance
+            scripts/staging-source-predicate.sh
+          sparse-checkout-cone-mode: false
+
       - name: Attest image provenance
-        uses: ./.github/actions/provenance
+        uses: ./.workflow-actions/.github/actions/provenance
         with:
           subject-name: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
           subject-digest: ${{ steps.build.outputs.digest }}
+          source-sha: ${{ needs.resolve.outputs.sha }}
+          main-sha: ${{ needs.resolve.outputs.main-sha }}
 
   build-web:
     name: Build staging web image
@@ -310,11 +326,26 @@ jobs:
           posthog-cli-api-key: ${{ secrets.POSTHOG_CLI_API_KEY }}
           posthog-project-id: ${{ vars.POSTHOG_PROJECT_ID }}
 
+      # Attestation tooling comes from the workflow revision, after building,
+      # so it cannot alter the pinned source or its Docker context.
+      - name: Checkout attestation tooling
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.workflow_sha }}
+          path: .workflow-actions
+          persist-credentials: false
+          sparse-checkout: |
+            .github/actions/provenance
+            scripts/staging-source-predicate.sh
+          sparse-checkout-cone-mode: false
+
       - name: Attest web image provenance
-        uses: ./.github/actions/provenance
+        uses: ./.workflow-actions/.github/actions/provenance
         with:
           subject-name: ${{ env.REGISTRY }}/${{ env.WEB_IMAGE_NAME }}
           subject-digest: ${{ steps.build.outputs.digest }}
+          source-sha: ${{ needs.resolve.outputs.sha }}
+          main-sha: ${{ needs.resolve.outputs.main-sha }}
 
   promote-staging:
     name: Promote staging images
