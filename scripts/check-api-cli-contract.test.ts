@@ -253,16 +253,6 @@ describe("API and CLI release contract", () => {
     expect(releaseSmoke).toContain('fetch("http://127.0.0.1:3001/live")');
     expect(releaseSmoke).toContain("process.exit(r.ok ? 0 : 1)");
     expect(releaseSmoke).toContain(`grep -F '"message":"scheduler.started"'`);
-    const cliGeneration = migrationSmoke.indexOf(
-      "bun --cwd=../../packages/cli run codegen:runtime",
-    );
-    const capabilityGeneration = migrationSmoke.indexOf(
-      "bun run generate:capability-runtime",
-    );
-    const serverLaunch = migrationSmoke.indexOf("bun src/server.ts");
-    expect(cliGeneration).toBeGreaterThanOrEqual(0);
-    expect(capabilityGeneration).toBeGreaterThan(cliGeneration);
-    expect(serverLaunch).toBeGreaterThan(capabilityGeneration);
     expect(migrationSmoke).toContain("curl -fsS http://127.0.0.1:3001/live");
     expect(migrationSmoke).toContain(`grep -q '"message":"scheduler.started"'`);
   });

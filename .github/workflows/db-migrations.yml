@@ -278,8 +278,6 @@ jobs:
           TRANSACTIONAL_EMAIL_FROM: "noreply@example.com"
         run: |
           set -euo pipefail
-          bun --cwd=../../packages/cli run codegen:runtime
-          bun run generate:capability-runtime
           log_file="$RUNNER_TEMP/stella-api-smoke.log"
           CONTENT_ENCRYPTION_KEY="$(openssl rand -hex 32)" \
             bun src/server.ts >"$log_file" 2>&1 &
