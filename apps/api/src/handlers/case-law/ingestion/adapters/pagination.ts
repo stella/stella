@@ -1,5 +1,4 @@
-// parser-output-unchanged: listing-stage labels preserve the fetched response and parsed page.
-// parser-output-unchanged: unread items pass through for adapters that report them; parsed pages and decisions are unchanged.
+// parser-output-unchanged: Retry exhaustion holds the cursor; successful pages produce unchanged parsed decisions.
 /**
  * Shared pagination helpers for case-law adapters.
  *
@@ -21,10 +20,7 @@ import type {
   UnreadListedItem,
 } from "@/api/handlers/case-law/ingestion/adapter";
 import { fetchWithRetry } from "@/api/handlers/case-law/ingestion/adapters/retry";
-import {
-  adapterCatch,
-  isTimeoutError,
-} from "@/api/handlers/case-law/ingestion/adapters/utils";
+import { adapterCatch } from "@/api/handlers/case-law/ingestion/adapters/utils";
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import type { AdapterKey } from "@/api/lib/legal-search/ingestion-constants";
 import { logger } from "@/api/lib/observability/logger";
@@ -825,25 +821,6 @@ export const createPagePaginatedFetch = <TResponse>(
           // Parent signal aborted: propagate for pipeline handling
           if (signal?.aborted) {
             throw error;
-          }
-          // Timeout after all retries: skip this page so the
-          // adapter doesn't stall on a single slow page.
-          // Network errors (DNS, connection refused) propagate
-          // so a transient outage doesn't permanently skip pages.
-          // A slow publisher is an expected operational failure, so no
-          // per-page exception capture (see the pipeline's halt path):
-          // the skip is logged, and the coverage ledger records the
-          // shortfall the skipped page leaves behind.
-          if (isTimeoutError(error)) {
-            logger.warn("case_law.ingestion.page_skipped_timeout", {
-              adapterKey: opts.adapterKey,
-              page: String(page),
-              retries: String(SERVER_ERROR_RETRIES),
-            });
-            return Result.ok({
-              decisions: [],
-              nextCursor: encode(pageStartOffset + opts.pageSize),
-            });
           }
           throw error;
         }

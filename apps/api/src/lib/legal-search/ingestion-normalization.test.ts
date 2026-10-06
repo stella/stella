@@ -68,7 +68,9 @@ describe("decision storage normalization", () => {
       });
       expect(value).toBe(normalized[field]);
       expect(normalized.sourceDocumentId).toBe(decision.sourceDocumentId);
-      expect(value).toBe(sanitizeResult(normalized)[field]);
+      expect(value).toBe(
+        sanitizeResult({ ...decision, [field]: normalized[field] })[field],
+      );
     });
   }
 });

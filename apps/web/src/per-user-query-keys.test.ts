@@ -127,6 +127,11 @@ const PER_USER_READS: Record<string, PerUserRead> = {
     ],
   },
   "audit-logs/export.ts": { kind: "not-per-user", reason: DOWNLOAD },
+  "lists/verifications/get.ts": {
+    kind: "not-per-user",
+    reason:
+      "The actor determines the read-audit receipt; returned run content is shared within the matter.",
+  },
   "catalogue/list.ts": {
     kind: "keyed",
     calls: ["api.catalogue.get"],

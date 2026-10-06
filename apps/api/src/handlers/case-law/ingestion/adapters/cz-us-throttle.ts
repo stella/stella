@@ -1,4 +1,4 @@
-// parser-output-unchanged: document-fetch observation preserves the response returned to the parser.
+// parser-output-unchanged: Refusal results carry typed read outcomes; successful responses are parsed unchanged.
 import { panic, Result, TaggedError } from "better-result";
 
 import { fetchWithTimeout } from "@stll/fetch";
@@ -17,9 +17,14 @@ import {
 } from "@/api/handlers/case-law/ingestion/adapters/publisher-policy";
 import type { PublisherRequestGateDependencies } from "@/api/handlers/case-law/ingestion/adapters/publisher-request-gate";
 import { INGESTION_USER_AGENT } from "@/api/handlers/case-law/ingestion/adapters/utils";
+import type { ReadRefusalScope } from "@/api/lib/errors/read-outcome";
+import { readOutcomeOfStatus } from "@/api/lib/errors/read-outcome";
+import type { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import { observePublisherDocumentFetch } from "@/api/lib/legal-search/document-stage-observation";
 import { ADAPTER_KEYS } from "@/api/lib/legal-search/ingestion-constants";
 import { restrictOutboundUrl } from "@/api/lib/restrict-outbound-url";
+
+import { unreadPublisherError } from "./publisher-read";
 
 /**
  * What one NALUS request costs the crawl in waiting, read off the policy map
@@ -80,6 +85,7 @@ const isRateLimitRefusal = (response: Response): boolean => {
 
 export type NalusRequestInit = {
   fetchStage: DocumentFetchStage;
+  refusalScope?: ReadRefusalScope | undefined;
   body?: string | undefined;
   headers?: Record<string, string> | undefined;
   method?: "POST" | undefined;
@@ -89,7 +95,7 @@ export type NalusRequestInit = {
 type NalusFetch = (
   url: string,
   init: NalusRequestInit,
-) => Promise<Result<Response, NalusRateLimitedError>>;
+) => Promise<Result<Response, NalusRateLimitedError | AdapterFetchError>>;
 
 /**
  * Every NALUS request the adapter makes, behind one publisher gate.
@@ -150,6 +156,21 @@ export const createNalusFetch = (
                   }
                 : documentFetchResponseOutcome(ADAPTER_KEYS.CZ_US, candidate),
           });
+    const outcome = readOutcomeOfStatus(
+      response.status,
+      init.refusalScope ?? "source",
+      response.headers.get("Retry-After"),
+    );
+    if (outcome.type === "refused") {
+      return Result.err(
+        unreadPublisherError({
+          outcome,
+          message: "Publisher request refused",
+          adapterKey: ADAPTER_KEYS.CZ_US,
+          cursor: null,
+        }),
+      );
+    }
     if (isRateLimitRefusal(response)) {
       return Result.err(
         new NalusRateLimitedError({

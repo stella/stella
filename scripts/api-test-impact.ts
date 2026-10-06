@@ -6,6 +6,7 @@ import * as v from "valibot";
 
 import { listApiTestPaths } from "../apps/api/scripts/api-test-plan";
 import { partitionTestFiles } from "../apps/api/scripts/test-file-shards";
+import { durationSeconds } from "../apps/api/scripts/test-timings";
 
 const REPOSITORY_ROOT = path.resolve(import.meta.dir, "..");
 const MAX_SHARDS = 4;
@@ -339,8 +340,13 @@ export const selectApiTestImpact = ({
     if (files.length === 0) {
       return { mode: "none", files: [], shards: 0 };
     }
-    const durations: Record<string, number> = JSON.parse(
-      readFileSync(path.join(apiRoot, "scripts/test-durations.json"), "utf-8"),
+    const durations = durationSeconds(
+      JSON.parse(
+        readFileSync(
+          path.join(apiRoot, "scripts/test-durations.json"),
+          "utf-8",
+        ),
+      ),
     );
     // The same median fallback as duration bins, including unmeasured new tests.
     const measured = files

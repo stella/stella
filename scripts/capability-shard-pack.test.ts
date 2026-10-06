@@ -28,8 +28,13 @@ const READER_PATHS = new Set([
 
 const run = (args: readonly [string, ...string[]], root: string): string => {
   const [command, ...parameters] = args;
+  const childEnv = { ...process.env };
+  if (root !== REPO_ROOT) {
+    delete childEnv["CI_GENERATED_SOURCES_MANIFEST"];
+  }
   const result = spawnSync(command, parameters, {
     cwd: root,
+    env: childEnv,
     encoding: "utf-8",
     timeout: COMMAND_TIMEOUT_MS,
     maxBuffer: 32 * 1024 * 1024,

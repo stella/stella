@@ -1,5 +1,5 @@
 import { Result } from "better-result";
-import { DelayedError, Worker } from "bullmq";
+import { DelayedError } from "bullmq";
 import { and, eq, sql } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
 
@@ -26,7 +26,7 @@ import {
   settleObjectCleanupIntentsAfterWriter,
 } from "@/api/lib/buffer-intent-reconciliation";
 import { createBullMqJobId } from "@/api/lib/bullmq-job-id";
-import { createLazyBullMqQueue } from "@/api/lib/bullmq-queue";
+import { BullMqWorker, createLazyBullMqQueue } from "@/api/lib/bullmq-queue";
 import {
   QUEUE_REQUEUE_OUTCOME,
   requeueDeterministicJob,
@@ -334,7 +334,7 @@ export const initFileDerivativeWorker = () => {
     storeClass: "durable-coordination",
   });
 
-  const worker = new Worker<FileDerivativeJobData>(
+  const worker = new BullMqWorker<FileDerivativeJobData>(
     QUEUE_NAME,
     async (job) => {
       try {
