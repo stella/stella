@@ -552,19 +552,20 @@ test("transient visual preview reaches the in-turn model but not wire, persisten
         chunk.type === EventType.TOOL_CALL_END &&
         chunk.toolCallId === "call-1"
       ) {
-        yield {
+        const duplicate = {
           ...chunk,
           output,
           result: output,
           metadata: { tanstack: { output, result: output } },
         };
+        yield duplicate;
         continue;
       }
       if (
         chunk.type === EventType.TOOL_CALL_RESULT &&
         chunk.toolCallId === "call-1"
       ) {
-        yield {
+        const duplicate = {
           ...chunk,
           result: output,
           metadata: {
@@ -574,6 +575,7 @@ test("transient visual preview reaches the in-turn model but not wire, persisten
             },
           },
         };
+        yield duplicate;
         continue;
       }
       if (chunk.type === EventType.MESSAGES_SNAPSHOT) {
@@ -658,8 +660,7 @@ test("transient visual preview reaches the in-turn model but not wire, persisten
         ...finish.responseMessage,
         parts: reloaded.parts.filter(
           (part) =>
-            (part.type === "tool-call" &&
-              part.name === VISUAL_PREVIEW_TOOL_NAME) ||
+            (part.type === "tool-call" && part.id === "call-1") ||
             (part.type === "tool-result" && part.toolCallId === "call-1"),
         ),
       },
@@ -671,8 +672,7 @@ test("transient visual preview reaches the in-turn model but not wire, persisten
     throw new Error("Expected settled preview message");
   }
   const previewCall = settledMessage.parts.find(
-    (part) =>
-      part.type === "tool-call" && part.name === VISUAL_PREVIEW_TOOL_NAME,
+    (part) => part.type === "tool-call" && part.id === "call-1",
   );
   if (previewCall?.type !== "tool-call") {
     throw new Error("Expected settled preview output");

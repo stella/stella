@@ -14,6 +14,6 @@ RUN mkdir -p /chromium && tar -xf /chromium.tar -C /chromium
 
 FROM public.ecr.aws/lambda/nodejs:22-arm64@sha256:3f965c1858f13651484a71587f2fa58717c1b906c33c26d79e1bd88783cc600b
 COPY --from=builder /chromium /opt/chromium
-COPY --from=builder /app/handler.mjs ${LAMBDA_TASK_ROOT}/handler.mjs
-COPY --from=builder /runtime/node_modules ${LAMBDA_TASK_ROOT}/node_modules
+COPY --from=builder /app/handler.mjs /var/task/handler.mjs
+COPY --from=builder /runtime/node_modules /var/task/node_modules
 CMD ["handler.handler"]

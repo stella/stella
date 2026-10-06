@@ -5,6 +5,7 @@ import * as v from "valibot";
 
 import { visualPreviewInputSchema } from "@stll/api-contract/visual-preview";
 
+import { getBrowserEnvironment } from "./env";
 import { renderVisual, VisualRenderError } from "./render";
 
 export const handler = async (event: unknown) => {
@@ -30,6 +31,7 @@ export const handler = async (event: unknown) => {
           ),
           ...args,
         ],
+        env: getBrowserEnvironment(),
         headless: true,
         timeout: 5000,
         chromiumSandbox: false,
