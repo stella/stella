@@ -13,10 +13,10 @@ import {
   CACHE_CONTROL_HEADER,
   PRIVATE_CACHE_CONTROL,
 } from "@/api/lib/security-headers";
-import { resolveMachineApiKeyCredential } from "@/api/mcp/api-key-auth";
+import { resolveOwnMachineApiKeyCredential } from "@/api/mcp/api-key-auth";
 import { McpAuthenticationError } from "@/api/mcp/errors";
 
-type ResolveCredential = typeof resolveMachineApiKeyCredential;
+type ResolveCredential = typeof resolveOwnMachineApiKeyCredential;
 type ResolveCredentialInput = Parameters<ResolveCredential>[0];
 
 const expiresAt = new Date("2026-10-08T12:00:00.000Z");
@@ -165,12 +165,8 @@ describe("GET /current audience reach", () => {
         role: "member",
         workspace: null,
       });
-      const resolveCredential: ResolveCredential = async (
-        credential,
-        options,
-      ) =>
-        await resolveMachineApiKeyCredential(credential, {
-          ...options,
+      const resolveCredential: ResolveCredential = async (credential) =>
+        await resolveOwnMachineApiKeyCredential(credential, {
           verifyApiKey,
           resolveAuthorization,
           resolvePersonalPolicy: async () => "enabled",

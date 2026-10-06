@@ -7,15 +7,12 @@ import {
   CACHE_CONTROL_HEADER,
   PRIVATE_CACHE_CONTROL,
 } from "@/api/lib/security-headers";
-import {
-  KEY_SELF_INSPECTION,
-  resolveMachineApiKeyCredential,
-} from "@/api/mcp/api-key-auth";
+import { resolveOwnMachineApiKeyCredential } from "@/api/mcp/api-key-auth";
 import { McpAuthenticationError } from "@/api/mcp/errors";
 
 /** Self-only expiry inspection; never opens a browser session or lists keys. */
 export const createCurrentMachineApiKeyHandler = (
-  resolveCredential: typeof resolveMachineApiKeyCredential = resolveMachineApiKeyCredential,
+  resolveCredential: typeof resolveOwnMachineApiKeyCredential = resolveOwnMachineApiKeyCredential,
 ) =>
   createSafeTokenHandler(
     {
@@ -38,10 +35,7 @@ export const createCurrentMachineApiKeyHandler = (
       }
       const credential = yield* Result.await(
         Result.tryPromise({
-          try: async () =>
-            await resolveCredential(authorization.slice(7), {
-              mode: KEY_SELF_INSPECTION,
-            }),
+          try: async () => await resolveCredential(authorization.slice(7)),
           catch: (cause) =>
             new HandlerError({
               status: cause instanceof McpAuthenticationError ? 401 : 503,
