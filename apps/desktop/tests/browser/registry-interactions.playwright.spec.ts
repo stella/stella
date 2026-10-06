@@ -1270,6 +1270,13 @@ for (const language of ["en", "ar"] as const) {
       await page.goto("/");
       const welcome = page.getByRole("dialog");
       await expect(welcome).toBeVisible();
+      // Wait for the requested messages before asserting the loading state.
+      await expect(
+        welcome.getByRole("button", {
+          name: messages.clipboard.welcomeStart,
+          exact: true,
+        }),
+      ).toBeEnabled();
       await expect(
         welcome.getByRole("button", {
           name: messages.settings.connectToStella,
@@ -1323,6 +1330,11 @@ for (const language of ["en", "ar"] as const) {
       await expect(welcome.getByRole("alert")).toHaveText(
         messages.clipboard.registryErrorState,
       );
+      expect(
+        (await readInvocations(page)).filter(
+          ({ command }) => command === "registry_get_state",
+        ),
+      ).toHaveLength(1);
       await expect(
         welcome.getByRole("button", {
           name: messages.settings.connectToStella,
@@ -1333,6 +1345,11 @@ for (const language of ["en", "ar"] as const) {
         .getByRole("button", { name: messages.settings.tryAgain, exact: true })
         .click();
       await expect(welcome.getByRole("alert")).toHaveCount(0);
+      expect(
+        (await readInvocations(page)).filter(
+          ({ command }) => command === "registry_get_state",
+        ),
+      ).toHaveLength(2);
       await expect(
         welcome.getByRole("button", {
           name: messages.settings.tryAgain,

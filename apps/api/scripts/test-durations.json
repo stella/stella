@@ -123,6 +123,10 @@
     "seconds": 1.737437,
     "source": "estimated"
   },
+  "scripts/lib/mcp-app-html-guard.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
   "scripts/mcp-coverage-guard.test.ts": {
     "seconds": 0.262185,
     "source": "estimated"
@@ -4639,6 +4643,10 @@
     "seconds": 0.192169,
     "source": "estimated"
   },
+  "src/lib/client-ip.guard.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
   "src/lib/client-ip.property.test.ts": {
     "seconds": 0.203069,
     "source": "estimated"
@@ -8013,6 +8021,10 @@
   },
   "src/mcp/anonymization.test.ts": {
     "seconds": 0.145482,
+    "source": "estimated"
+  },
+  "src/mcp/app-contracts.test.ts": {
+    "seconds": 1,
     "source": "estimated"
   },
   "src/mcp/auth.test.ts": {
