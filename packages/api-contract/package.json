@@ -11,6 +11,7 @@
     "./limits": "./src/limits.ts",
     "./action-admission": "./src/action-admission.ts",
     "./browser-control": "./src/browser-control.ts",
+    "./visual-sandbox": "./src/visual-sandbox.ts",
     "./browser-control-json-schema": "./src/browser-control-json-schema.ts",
     "./chat": "./src/chat.ts",
     "./correspondence": "./src/correspondence.ts",

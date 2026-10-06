@@ -1426,6 +1426,12 @@ jobs:
           (cd apps/api && bun run build:mcp-apps)
           git diff --exit-code -- "apps/api/src/mcp/apps/*/generated/app.html.txt"
 
+      - name: Visual sandbox document tests
+        if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
+        run: |
+          (cd apps/api && bun run build:visual-sandbox)
+          git diff --exit-code -- apps/api/src/handlers/visual-sandbox/generated/runtime.js.txt
+
       - name: Capability catalog drift guard
         if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
         # The committed capability catalog (every `tool`/`covered` safe handler,
