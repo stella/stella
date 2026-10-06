@@ -137,6 +137,9 @@ const isEdenVersionConflict = (error: ApiErrorInput): boolean =>
 const isThrownVersionConflict = (error: unknown): boolean =>
   APIError.is(error) && error.code === API_VERSION_CONFLICT_ERROR_CODE;
 
+const isNotFound = (error: unknown): boolean =>
+  APIError.is(error) && error.status === 404;
+
 /** Title plus localized detail, shared by the toast and conflict paths. */
 type ToastFailure = { title: string; description: string };
 
@@ -273,7 +276,8 @@ const PlaybookEditorLoader = ({
   }));
   const detailQuery = useQuery({
     ...detailOptions,
-    refetchInterval: OPEN_EDITOR_REFETCH_INTERVAL_MS,
+    refetchInterval: ({ state }) =>
+      isNotFound(state.error) ? false : OPEN_EDITOR_REFETCH_INTERVAL_MS,
   });
   const detailView = useQueryView(detailQuery, {
     isEmpty: (detail) => !("positions" in detail),
@@ -321,7 +325,7 @@ const PlaybookEditorLoader = ({
 
   // Deleted elsewhere (another editor, a chat, the CLI): the form has
   // nothing left to save to.
-  if (APIError.is(detailQuery.error) && detailQuery.error.status === 404) {
+  if (isNotFound(detailQuery.error)) {
     return (
       <div
         className="flex flex-1 flex-col items-center justify-center gap-2 p-8"
@@ -860,10 +864,13 @@ const PlaybookEditorForm = ({
   // them and moved on. The pane has no Save press to reveal errors.
   const [revealedIds, setRevealedIds] = useState(initial.revealedIds);
   const editedIdsRef = useRef(new Set<string>());
+  const undoToastIdsRef = useRef<string[]>([]);
   const [attemptedSave, setAttemptedSave] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saveRequest, setSaveRequest] = useState<SaveRequestState>("idle");
   const inFlightSaveRef = useRef<Promise<SaveOutcome> | null>(null);
+  // A playbook being deleted takes no more autosaves.
+  const deletingRef = useRef(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [leaveConfirmOpen, setLeaveConfirmOpen] = useState(false);
   // Non-null while confirming a graded → extract conversion that would drop
@@ -1037,19 +1044,21 @@ const PlaybookEditorForm = ({
     if (host.type !== "pane" || removed === undefined) {
       return;
     }
-    stellaToast.add({
-      title: t("knowledge.playbooks.positionRemoved"),
-      timeout: POSITION_REMOVED_TOAST_TIMEOUT_MS,
-      actionProps: {
-        children: t("common.undo"),
-        onClick: () =>
-          setPositions((prev) =>
-            prev.some((p) => p.sourceId === sourceId)
-              ? prev
-              : prev.toSpliced(Math.min(index, prev.length), 0, removed),
-          ),
-      },
-    });
+    undoToastIdsRef.current.push(
+      stellaToast.add({
+        title: t("knowledge.playbooks.positionRemoved"),
+        timeout: POSITION_REMOVED_TOAST_TIMEOUT_MS,
+        actionProps: {
+          children: t("common.undo"),
+          onClick: () =>
+            setPositions((prev) =>
+              prev.some((p) => p.sourceId === sourceId)
+                ? prev
+                : prev.toSpliced(Math.min(index, prev.length), 0, removed),
+            ),
+        },
+      }),
+    );
   };
 
   const addPosition = (mode: "graded" | "extract") => {
@@ -1167,10 +1176,15 @@ const PlaybookEditorForm = ({
    * the user has now been told, so their next save is a deliberate overwrite
    * rather than the same rejection again. Also offer a reload that swaps in
    * the server's copy instead of leaving a toast the user can only
-   * re-trigger. In the pane, the refetch alone is enough: the newer version
-   * arrives through the loader and the form rebases onto it.
+   * re-trigger. In the pane, the refetch alone is enough for a save: the
+   * newer version arrives through the loader, the form rebases onto it, and
+   * the rebased draft saves by itself. An approval is not repeated, so the
+   * pane says that it did not happen.
    */
-  const reportVersionConflict = (failure: ToastFailure) => {
+  const reportVersionConflict = (
+    failure: ToastFailure,
+    refused: "save" | "approval",
+  ) => {
     if (playbookId === null) {
       return;
     }
@@ -1182,6 +1196,11 @@ const PlaybookEditorForm = ({
         ),
         "playbook-editor.refetch-for-rebase",
       );
+      if (refused === "approval") {
+        notifyUserError(undefined, failure.title, {
+          description: failure.description,
+        });
+      }
       return;
     }
     detached(
@@ -1274,7 +1293,6 @@ const PlaybookEditorForm = ({
     description: userErrorMessage(error, t("common.unexpectedError")),
   });
 
-  /** Expands every invalid card and scrolls to the first, with errors shown. */
   const revealInvalidPositions = () => {
     setAttemptedSave(true);
     // Expand every position that still has an error so the inline messages
@@ -1332,7 +1350,7 @@ const PlaybookEditorForm = ({
         });
         return true;
       case "conflict":
-        reportVersionConflict(saveFailure(outcome.error));
+        reportVersionConflict(saveFailure(outcome.error), "save");
         return false;
       case "failed": {
         const failure = saveFailure(outcome.error);
@@ -1368,7 +1386,13 @@ const PlaybookEditorForm = ({
 
   /** Saves the pane's draft without toasts. */
   const runAutosave = async () => {
-    if (!autosaves || !isDirty || nameMissing || invalidIds.length > 0) {
+    if (
+      deletingRef.current ||
+      !autosaves ||
+      !isDirty ||
+      nameMissing ||
+      invalidIds.length > 0
+    ) {
       return;
     }
     setSaveRequest("in-flight");
@@ -1384,7 +1408,7 @@ const PlaybookEditorForm = ({
       case "conflict":
         // The refetch brings the newer version, the form rebases onto it,
         // and the rebased draft saves after the next pause.
-        reportVersionConflict(saveFailure(outcome.error));
+        reportVersionConflict(saveFailure(outcome.error), "save");
         break;
       case "failed": {
         const failure = saveFailure(outcome.error);
@@ -1444,7 +1468,17 @@ const PlaybookEditorForm = ({
       return;
     }
     scheduleAutosave.cancel();
-    if (autosaves && isDirty && !nameMissing && invalidIds.length === 0) {
+    // Undo restores a position into this form, so its toasts go with it.
+    for (const toastId of undoToastIdsRef.current) {
+      stellaToast.close(toastId);
+    }
+    if (
+      !deletingRef.current &&
+      autosaves &&
+      isDirty &&
+      !nameMissing &&
+      invalidIds.length === 0
+    ) {
       detached(flushOnLeave(), "playbook-editor.flush-on-leave");
     }
     if (!host.isTabOpen(host.tabId)) {
@@ -1490,12 +1524,14 @@ const PlaybookEditorForm = ({
       return;
     }
     setSaving(true);
+    deletingRef.current = true;
     const response = await api
       .playbooks({ playbookId: toSafeId<"playbookDefinition">(playbookId) })
       .delete();
     setSaving(false);
 
     if (response.error) {
+      deletingRef.current = false;
       notifyUserError(
         toAPIError(response.error),
         t("knowledge.playbooks.deleteFailed"),
@@ -1564,7 +1600,7 @@ const PlaybookEditorForm = ({
         description: userErrorFromThrown(error, t("common.unexpectedError")),
       };
       if (isThrownVersionConflict(error)) {
-        reportVersionConflict(failure);
+        reportVersionConflict(failure, "approval");
         return;
       }
       notifyUserError(error, failure.title, {
