@@ -63,9 +63,9 @@ const liveDecisionMergeLease = sql<boolean>`
 `;
 
 /**
- * All database effects validate ownership while holding the source row. The
- * epoch catches a merge that claimed and released the source between two
- * checks (during a remote effect), which a live-lease test alone cannot see.
+ * All database effects validate ownership while holding the source row, and
+ * every check validates the source's decision-merge generation across remote
+ * effects. Acquisition runs within the operation's deadline.
  */
 export const withDeferredDocumentSourceOwnership = async <T>({
   decisionId,
@@ -80,54 +80,56 @@ export const withDeferredDocumentSourceOwnership = async <T>({
   | DeferredDocumentOwnershipRefusal
 > => {
   signal?.throwIfAborted();
-  const initial = await scopedDb(async (tx) => {
-    const decision = (
-      await tx
-        .select({ sourceId: caseLawDecisions.sourceId })
-        .from(caseLawDecisions)
-        .where(eq(caseLawDecisions.id, decisionId))
-        .limit(1)
-    ).at(0);
-    if (decision === undefined) {
-      return { status: "missing" } as const;
-    }
-    const source = (
-      await tx
-        .select({
-          id: caseLawSources.id,
-          mergeLease: liveDecisionMergeLease,
-          mergeEpoch: caseLawSources.decisionMergeEpoch,
-        })
-        .from(caseLawSources)
-        .where(eq(caseLawSources.id, decision.sourceId))
-        .for("update")
-    ).at(0);
-    if (source === undefined) {
-      return { status: "missing" } as const;
-    }
-    return source.mergeLease
-      ? ({ status: "busy" } as const)
-      : ({
-          status: "ready",
-          sourceId: source.id,
-          mergeEpoch: source.mergeEpoch,
-        } as const);
-  });
-  if (initial.status !== "ready") {
-    return initial;
-  }
-  if (
-    expectedMergeEpoch !== undefined &&
-    initial.mergeEpoch !== expectedMergeEpoch
-  ) {
-    return { status: "lost" };
-  }
+  const readOwnership = async () =>
+    await scopedDb(async (tx) => {
+      const decision = (
+        await tx
+          .select({ sourceId: caseLawDecisions.sourceId })
+          .from(caseLawDecisions)
+          .where(eq(caseLawDecisions.id, decisionId))
+          .limit(1)
+      ).at(0);
+      if (decision === undefined) {
+        return { status: "missing" } as const;
+      }
+      const source = (
+        await tx
+          .select({
+            id: caseLawSources.id,
+            mergeLease: liveDecisionMergeLease,
+            mergeEpoch: caseLawSources.decisionMergeEpoch,
+          })
+          .from(caseLawSources)
+          .where(eq(caseLawSources.id, decision.sourceId))
+          .for("update")
+      ).at(0);
+      if (source === undefined) {
+        return { status: "missing" } as const;
+      }
+      return source.mergeLease
+        ? ({ status: "busy" } as const)
+        : ({
+            status: "ready",
+            sourceId: source.id,
+            mergeEpoch: source.mergeEpoch,
+          } as const);
+    });
   let state: "active" | "closed" = "active";
   try {
     const result = await Result.tryPromise({
       try: async () =>
         await withTimeout(
           async (operationSignal) => {
+            const initial = await readOwnership();
+            if (initial.status !== "ready") {
+              return initial;
+            }
+            if (
+              expectedMergeEpoch !== undefined &&
+              initial.mergeEpoch !== expectedMergeEpoch
+            ) {
+              return { status: "lost" } as const;
+            }
             const assertActive = () => {
               operationSignal.throwIfAborted();
               if (state === "closed") {
@@ -197,7 +199,10 @@ export const withDeferredDocumentSourceOwnership = async <T>({
                 return value;
               },
             };
-            return await operation(fence);
+            return {
+              status: "completed",
+              value: await operation(fence),
+            } as const;
           },
           { label: "caseLaw.deferredDocumentOwnership", timeoutMs, signal },
         ),
@@ -209,7 +214,7 @@ export const withDeferredDocumentSourceOwnership = async <T>({
       }
       abortTransaction(result.error);
     }
-    return { status: "completed", value: result.value };
+    return result.value;
   } finally {
     state = "closed";
   }

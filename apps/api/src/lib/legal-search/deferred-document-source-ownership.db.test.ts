@@ -409,6 +409,43 @@ if (!databaseUrl || !enabled) {
       expect((await readDecision(decisionId))?.documentFetchAttempts).toBe(1);
     });
 
+    test("acquisition blocked on the source row stops at the operation deadline", async () => {
+      const { sourceId, decisionId } = await fixture();
+      const locked = barrier();
+      const releaseLock = barrier();
+      const holder = db.transaction(async (tx) => {
+        await tx
+          .select({ id: caseLawSources.id })
+          .from(caseLawSources)
+          .where(eq(caseLawSources.id, sourceId))
+          .for("update");
+        locked.resolve();
+        await releaseLock.promise;
+      });
+      await locked.promise;
+      let started = false;
+      const stopped = await Result.tryPromise({
+        try: async () =>
+          await withDeferredDocumentSourceOwnership({
+            decisionId,
+            scopedDb,
+            timeoutMs: 50,
+            operation: async () => {
+              started = true;
+            },
+          }),
+        catch: (error) => error,
+      });
+      releaseLock.resolve();
+      await holder;
+      expect(Result.isError(stopped)).toBe(true);
+      if (Result.isOk(stopped)) {
+        panic("acquisition did not stop");
+      }
+      expect(String(stopped.error)).toContain("exceeded 50ms");
+      expect(started).toBe(false);
+    });
+
     test("every exported document mutation observes a decision merge owner", async () => {
       const { sourceId, decisionId } = await fixture();
       const claim = await claimDocumentFetch(decisionId, scopedDb);
