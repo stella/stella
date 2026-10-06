@@ -349,10 +349,12 @@ mod tests {
         assert!(crate::i18n::locales_missing(action).is_empty());
       }
     }
-    assert_eq!(
-      Failure::from_response(None, reqwest::StatusCode::BAD_GATEWAY),
-      Failure::Retryable("502 Bad Gateway".into())
-    );
+    let retryable = Failure::from_response(None, reqwest::StatusCode::BAD_GATEWAY);
+    assert_eq!(retryable, Failure::Retryable("502 Bad Gateway".into()));
+    assert_eq!(retryable.message_key(), "dialog.handoffFailed");
+    assert_eq!(retryable.action_key(), Some("dialog.handoffRetry"));
+    assert!(crate::i18n::locales_missing(retryable.message_key()).is_empty());
+    assert!(crate::i18n::locales_missing("dialog.handoffRetry").is_empty());
   }
   #[tokio::test]
   async fn both_redeems_parse_the_wire_error_and_preserve_success_payloads() {
