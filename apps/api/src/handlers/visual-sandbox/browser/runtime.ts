@@ -1,8 +1,14 @@
 import { panic } from "better-result";
 import * as v from "valibot";
 
-import { VISUAL_GUEST_MARKER_ATTRIBUTE, VISUAL_SANDBOX_LIMITS } from "@stll/api-contract/visual-sandbox";
-import { VISUAL_DATA_SCRIPT_ID, generatedVisualInputSchema } from "@stll/api-contract/generated-visual";
+import {
+  VISUAL_DATA_SCRIPT_ID,
+  generatedVisualInputSchema,
+} from "@stll/api-contract/generated-visual";
+import {
+  VISUAL_GUEST_MARKER_ATTRIBUTE,
+  VISUAL_SANDBOX_LIMITS,
+} from "@stll/api-contract/visual-sandbox";
 
 import { createVisualMessageHandler } from "../bridge";
 import { composeVisualDocument } from "../srcdoc";

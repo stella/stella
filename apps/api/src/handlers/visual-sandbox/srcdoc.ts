@@ -1,5 +1,5 @@
-import { VISUAL_GUEST_MARKER_ATTRIBUTE } from "@stll/api-contract/visual-sandbox";
 import { VISUAL_DATA_SCRIPT_ID } from "@stll/api-contract/generated-visual";
+import { VISUAL_GUEST_MARKER_ATTRIBUTE } from "@stll/api-contract/visual-sandbox";
 
 import type { SanitizedVisualHtml } from "./sanitize";
 

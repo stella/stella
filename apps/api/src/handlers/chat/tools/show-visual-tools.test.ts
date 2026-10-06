@@ -26,7 +26,7 @@ describe("show visual", () => {
         return Result.ok(fileId);
       },
     })[SHOW_VISUAL_TOOL_NAME];
-    expect(await convertSchemaToJsonSchema(tool.inputSchema)).toMatchObject({
+    expect(convertSchemaToJsonSchema(tool.inputSchema)).toMatchObject({
       type: "object",
     });
     const execute = tool.execute ?? panic("Visual tool has no executor");
@@ -49,6 +49,49 @@ describe("show visual", () => {
     expect(saved).toBe(1);
     expect(emissions).toHaveLength(1);
     expect(origin.accepts(emissions.at(0))).toBe(true);
+  });
+
+  test("keeps data checks at execution after their provider projection", async () => {
+    let saved = 0;
+    const emissions: unknown[] = [];
+    const tool = createShowVisualTools({
+      origin: createVisualResourceOrigin(),
+      store: async () => {
+        saved += 1;
+        return Result.ok(createSafeId<"userFile">());
+      },
+    })[SHOW_VISUAL_TOOL_NAME];
+    const schema = convertSchemaToJsonSchema(tool.inputSchema);
+    expect(schema?.properties?.["data"]).toEqual({});
+    const execute = tool.execute ?? panic("Visual tool has no executor");
+    let deep: unknown = 0;
+    for (let depth = 0; depth < 33; depth += 1) {
+      deep = [deep];
+    }
+    for (const data of [Number.POSITIVE_INFINITY, deep, "é".repeat(524_288)]) {
+      const error = await rejectionOf(
+        execute(
+          {
+            title: "Revenue",
+            html: "<p>Revenue</p>",
+            data,
+          },
+          {
+            toolCallId: "visual-call-one",
+            emitCustomEvent: (_name, value) => {
+              emissions.push(value);
+            },
+          },
+        ),
+      );
+      expect(error).toBeInstanceOf(ChatToolError);
+      expect(error).toMatchObject({
+        kind: "invalid-input",
+        message: expect.stringContaining("finite JSON data"),
+      });
+    }
+    expect(saved).toBe(0);
+    expect(emissions).toHaveLength(0);
   });
 
   test("refuses unused data before storage and propagates a storage failure", async () => {

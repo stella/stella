@@ -42,13 +42,25 @@ export const createShowVisualTools = ({
       "and their complete URL must occur literally in the page. Scripts run locally in an isolated frame; " +
       "network requests, imports, frames, forms, SVG authoring and stylesheets are unavailable. " +
       "On refusal, correct the indicated input and call again.",
-    inputSchema: toTanStackToolSchema(generatedVisualInputSchema),
+    inputSchema: toTanStackToolSchema(generatedVisualInputSchema, {
+      omitValidationActions: ["check"],
+    }),
     outputSchema: toTanStackToolSchema(showVisualOutputSchema),
   }).server(async (input, context) => {
     if (!context?.toolCallId) {
       return panic("A visual tool requires its server execution context");
     }
-    const prepared = prepareGeneratedVisual(input);
+    const parsed = v.safeParse(generatedVisualInputSchema, input);
+    if (!parsed.success) {
+      return raiseChatToolError(
+        new ChatToolError({
+          kind: "invalid-input",
+          message:
+            "Use a title within 120 characters, a page within 256 KB, and finite JSON data within 1 MB and 32 levels of nesting.",
+        }),
+      );
+    }
+    const prepared = prepareGeneratedVisual(parsed.output);
     if (prepared.isErr()) {
       return raiseChatToolError(
         new ChatToolError({
