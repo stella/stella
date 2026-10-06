@@ -33,7 +33,6 @@
         "$TURBO_ROOT$/apps/api/src/handlers/visual-sandbox/**",
         "$TURBO_ROOT$/packages/api-contract/src/visual-sandbox.ts"
       ]
-
     },
     // Outputs are ignored by Git, but restored by Turbo on a cache hit.
     "@stll/web#generate:route-tree": {
