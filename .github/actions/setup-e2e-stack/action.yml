@@ -109,6 +109,11 @@ runs:
       shell: bash
       run: docker logout
 
+    - name: Prepare API runtime sources
+      if: steps.stack.outputs.status == 'ready'
+      shell: bash
+      run: bun --filter @stll/api generate:capability-runtime
+
     - name: Run database migrations
       if: steps.stack.outputs.status == 'ready'
       # `db:migrate` (not `db:push`) so role bootstrap migrations such as
