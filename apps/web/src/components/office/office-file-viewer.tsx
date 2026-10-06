@@ -31,6 +31,10 @@ import type {
 } from "@/components/office/silurus-office-viewer";
 import { SilurusOfficeFileViewer } from "@/components/office/silurus-office-viewer";
 import { useTheme } from "@/components/theme-provider";
+import {
+  DesktopRequiredDialog,
+  useDesktopActionGate,
+} from "@/features/desktop/desktop-action-gate";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { TOOLBAR_ROW_HEIGHT_PX } from "@/lib/consts";
@@ -64,6 +68,7 @@ export const OfficeFileViewer = ({
   const t = useTranslations();
   const analytics = useAnalytics();
   const { resolvedTheme } = useTheme();
+  const desktopGate = useDesktopActionGate("edit-file");
   const editIntentStateRef = useRef(INITIAL_OFFICE_EDIT_INTENT_STATE);
   const navigationSequenceRef = useRef(0);
   const [attempt, setAttempt] = useState(0);
@@ -128,9 +133,11 @@ export const OfficeFileViewer = ({
       requestDesktopOpenAttention(fieldId);
       stellaToast.add({
         action: {
-          label: t("workspaces.files.desktopEdit.action"),
+          label: desktopGate.label,
           onClick: () => {
-            detached(openInDesktop(), "office-file-viewer.open-in-desktop");
+            desktopGate.run(() => {
+              detached(openInDesktop(), "office-file-viewer.open-in-desktop");
+            });
           },
         },
         description: t("workspaces.files.desktopEdit.editLocallyPrompt"),
@@ -141,6 +148,7 @@ export const OfficeFileViewer = ({
     },
     [
       desktopEditTarget,
+      desktopGate,
       fieldId,
       openInDesktop,
       requestDesktopOpenAttention,
@@ -190,6 +198,7 @@ export const OfficeFileViewer = ({
       activeFile={{ entityId, fileFieldId: fieldId, fileName }}
       workspaceId={workspaceId}
     >
+      <DesktopRequiredDialog {...desktopGate.requiredDialog} />
       <div
         aria-label={fileName}
         className="bg-muted flex h-full min-h-0 w-full flex-col overflow-hidden outline-none"
