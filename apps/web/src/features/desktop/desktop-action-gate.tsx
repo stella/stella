@@ -133,7 +133,7 @@ export const DesktopRequiredDialog = ({
     >
       <DialogPopup className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>
+          <DialogTitle className="me-6">
             {t(DESKTOP_ACTION_LABELS[action][required ?? "none"])}
           </DialogTitle>
           <DialogDescription>
