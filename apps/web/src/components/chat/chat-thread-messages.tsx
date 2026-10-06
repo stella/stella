@@ -52,6 +52,7 @@ import {
   getMentionTagAttr,
   userMessageFallbackText,
 } from "@/components/chat/chat-thread-messages.logic";
+import { ChatTranscriptCopy } from "@/components/chat/chat-transcript-copy";
 import type {
   AskUserOutput,
   ChatAnonRestoration,
@@ -298,6 +299,7 @@ export const ChatThreadMessages = ({
             <div
               className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1"
               data-chat-answer-footer
+              data-chat-copy-exclude
             >
               <AssistantMessageActions
                 exportArtifact={findCreateDocumentArtifactForMessage(
@@ -363,6 +365,7 @@ export const ChatThreadMessages = ({
     // Sent messages persist a same-matter mention without its matter; the
     // scope gives every reference chip below the thread's matter.
     <ReferenceRenderScope workspaceId={workspaceId}>
+      {scrollRef !== null && <ChatTranscriptCopy rootRef={scrollRef} />}
       {branchSource !== undefined && scrollRef !== null && (
         <ChatSelectionToolbar rootRef={scrollRef} source={branchSource} />
       )}
