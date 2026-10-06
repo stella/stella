@@ -153,7 +153,7 @@ export const previewVisual = async ({
     }, timeoutMs);
   });
   const reply = await Result.tryPromise({
-    try: () =>
+    try: async () =>
       Promise.race([
         invoke === undefined
           ? invokeLambda(functionArn, {

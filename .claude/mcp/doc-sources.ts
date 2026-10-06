@@ -173,6 +173,7 @@ export const DOC_SOURCES = {
     dependencies: [
       "@aws-sdk/client-bedrock-runtime",
       "@aws-sdk/client-cloudwatch",
+      "@aws-sdk/client-lambda",
       "@aws-sdk/client-s3",
       "@aws-sdk/client-sesv2",
       "@aws-sdk/client-sqs",
@@ -377,6 +378,22 @@ export const DOC_SOURCE_EXCLUSIONS = [
 ]
   .map(noLlmsTxt)
   .concat(
+    {
+      checkedAt: "2026-10-06T00:00:00.000Z",
+      dependency: "playwright-core",
+      explanation:
+        "https://playwright.dev/llms.txt returns 404. Use the canonical documentation at https://playwright.dev/docs/api/class-browser directly.",
+      expiresAt: "2026-11-05T00:00:00.000Z",
+      reason: "no-llms-txt",
+    },
+    {
+      checkedAt: "2026-10-06T00:00:00.000Z",
+      dependency: "@sparticuz/chromium-min",
+      explanation:
+        "https://raw.githubusercontent.com/Sparticuz/chromium/main/llms.txt returns 404. Use the canonical documentation at https://github.com/Sparticuz/chromium directly.",
+      expiresAt: "2026-11-05T00:00:00.000Z",
+      reason: "no-llms-txt",
+    },
     {
       checkedAt: "2026-09-30T00:00:00.000Z",
       dependency: "@standard-schema/spec",

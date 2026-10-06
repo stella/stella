@@ -80,6 +80,37 @@ describe("composed visual preview", () => {
     expect(result.value.size.height).toBe(2400);
     expect(result.value.consoleErrors).toContain("Example exception");
   });
+  test("settles fonts and two frames when ready is absent", async () => {
+    const result = await renderVisual({
+      launch,
+      input: {
+        document: `<style>html,body{margin:0}body{height:100px}</style><script>
+      Object.defineProperty(document.fonts, 'ready', {get: () => new Promise(resolve => setTimeout(() => {
+        document.body.style.height = '200px';
+        requestAnimationFrame(() => requestAnimationFrame(() => {document.body.style.height = '500px';}));
+        resolve(document.fonts);
+      }, 50))});
+    </script>`,
+        viewport: { width: 1200 },
+      },
+    });
+    expect(result.unwrap()).toMatchObject({
+      readyFired: false,
+      size: { width: 1200, height: 500 },
+    });
+  });
+  test("bounds settlement when the guest fonts never resolve", async () => {
+    const started = performance.now();
+    const result = await renderVisual({
+      launch,
+      input: {
+        document: `<script>Object.defineProperty(document.fonts, 'ready', {value: new Promise(() => {})});</script>`,
+        viewport: { width: 1200 },
+      },
+    });
+    expect(Result.isError(result)).toBe(true);
+    expect(performance.now() - started).toBeLessThan(15_000);
+  }, 15_000);
   test("reports browser startup failure without exception details", async () => {
     const result = await renderVisual({
       launch: async () => {

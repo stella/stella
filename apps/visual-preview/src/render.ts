@@ -32,9 +32,11 @@ export const renderVisual = async ({ input, launch }: RenderVisualOptions) => {
       new VisualRenderError({ message: "Preview browser unavailable" }),
   });
   if (Result.isError(launched)) {
-    return launched;
+    return Result.err(launched.error);
   }
   const browser = launched.value;
+  const renderDeadline =
+    performance.now() + VISUAL_PREVIEW_LIMITS.renderTimeoutMs;
   const rendered = await Result.tryPromise({
     try: async () => {
       // A fresh context and browser per invocation prevents state sharing.
@@ -120,6 +122,37 @@ export const renderVisual = async ({ input, launch }: RenderVisualOptions) => {
           { timeout: VISUAL_PREVIEW_LIMITS.readyTimeoutMs },
         ),
       );
+      if (Result.isError(ready)) {
+        await frame.evaluate(
+          async (timeoutMs) => {
+            let timeout: ReturnType<typeof setTimeout> | undefined;
+            const expired = new Promise<never>((_resolve, reject) => {
+              timeout = setTimeout(
+                () =>
+                  reject(
+                    new DOMException(
+                      "Preview settle deadline exceeded",
+                      "TimeoutError",
+                    ),
+                  ),
+                timeoutMs,
+              );
+            });
+            const settled = async () => {
+              await document.fonts.ready;
+              await new Promise<void>((resolve) => {
+                requestAnimationFrame(() => {
+                  requestAnimationFrame(() => resolve());
+                });
+              });
+            };
+            await Promise.race([settled(), expired]).finally(() =>
+              clearTimeout(timeout),
+            );
+          },
+          Math.max(1, renderDeadline - performance.now()),
+        );
+      }
       const contentHeight = await frame.evaluate(() =>
         Math.max(
           document.body?.scrollHeight ?? 1,
@@ -140,7 +173,7 @@ export const renderVisual = async ({ input, launch }: RenderVisualOptions) => {
       const png = await page.screenshot({
         type: "png",
         animations: "disabled",
-        timeout: VISUAL_PREVIEW_LIMITS.renderTimeoutMs,
+        timeout: Math.max(1, renderDeadline - performance.now()),
       });
       const output = v.safeParse(visualPreviewOutputSchema, {
         png: png.toString("base64"),
@@ -164,7 +197,7 @@ export const renderVisual = async ({ input, launch }: RenderVisualOptions) => {
       new VisualRenderError({ message: "Preview browser cleanup failed" }),
   });
   if (Result.isError(closed)) {
-    return closed;
+    return Result.err(closed.error);
   }
   return rendered;
 };

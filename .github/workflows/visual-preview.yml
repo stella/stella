@@ -45,7 +45,7 @@ jobs:
           bun-version-file: package.json
       - name: Install renderer and browser harness dependencies
         if: steps.scope.outputs.required == 'true'
-        run: bun install --frozen-lockfile --ignore-scripts --filter @stll/visual-preview --filter @stll/web
+        run: bun install --frozen-lockfile --ignore-scripts --filter @stll/visual-preview --filter @stll/web --filter @stll/api
       - name: Test renderer validation
         if: steps.scope.outputs.required == 'true'
         run: bun --filter @stll/visual-preview test
