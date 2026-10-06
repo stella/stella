@@ -1,6 +1,7 @@
 import { Panic, panic, Result } from "better-result";
 import { asc, eq, sql } from "drizzle-orm";
 
+import { sha256Hex as hashSha256Hex } from "@stll/sha256/bun";
 import { Temporal } from "@stll/time";
 
 import type { Transaction } from "@/api/db/root";
@@ -946,8 +947,7 @@ const recoverOrganizationFileReservations = async (
         return Result.err(read.error);
       }
       if (
-        new Bun.CryptoHasher("sha256").update(read.value).digest("hex") !==
-        object.expectedSha256Hex
+        hashSha256Hex(new Uint8Array(read.value)) !== object.expectedSha256Hex
       ) {
         if (ageMs >= FILE_RESERVATION_ABANDON_DELAY_MS) {
           toRelease.push(reservation);

@@ -1,3 +1,11 @@
+import {
+  PdfArray,
+  PdfDict,
+  PdfName,
+  PdfNumber,
+  PdfStream,
+  PdfString,
+} from "@libpdf/core";
 /**
  * Shaped stamp rows as PDF text: one Type0 font (CIDFontType2, Identity-H)
  * per face used, subset to the glyphs drawn, and the content operators
@@ -14,19 +22,11 @@
  * written in face order, subset tags are derived from their glyphs, and
  * nothing iterates in an order that depends on anything else.
  */
-
-import {
-  PdfArray,
-  PdfDict,
-  PdfName,
-  PdfNumber,
-  PdfStream,
-  PdfString,
-} from "@libpdf/core";
 import type { PDF, PdfRef } from "@libpdf/core";
 import { panic } from "better-result";
 
 import { subsetTrueType } from "@stll/folio-core/text-shaping";
+import { sha256Bytes as hashSha256Bytes } from "@stll/sha256/bun";
 
 import type { StampFace } from "@/api/lib/files/pdf-signing/stamp-font";
 import {
@@ -163,9 +163,7 @@ const needsActualText = (
 
 /** Six capital letters derived from the subset, so both phases agree. */
 const subsetTag = (face: StampFace, glyphIds: readonly number[]) => {
-  const hash = new Bun.CryptoHasher("sha256")
-    .update(`${face.key}\n${glyphIds.join(",")}`)
-    .digest();
+  const hash = hashSha256Bytes(`${face.key}\n${glyphIds.join(",")}`);
   return Array.from(hash.subarray(0, 6), (byte) =>
     String.fromCodePoint(65 + (byte % 26)),
   ).join("");

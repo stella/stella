@@ -8,6 +8,7 @@ import { loadavg } from "node:os";
 import { compareCodeUnit } from "@stll/collation";
 import { rejectionOf } from "@stll/property-testing/rejection";
 import type { SanctionsEntry } from "@stll/sanctions";
+import { sha256Hex as hashSha256Hex } from "@stll/sha256/bun";
 
 import { organization } from "@/api/db/auth-schema";
 import type { Transaction } from "@/api/db/root";
@@ -510,7 +511,7 @@ test(
 
 const emptyEdition = async () => {
   const editionId = toSafeId<"sanctionsEdition">(Bun.randomUUIDv7());
-  const hash = new Bun.CryptoHasher("sha256").update(editionId).digest("hex");
+  const hash = hashSha256Hex(editionId);
   await db.insert(sanctionsEditions).values({
     id: editionId,
     sourceId: "eu",
@@ -1064,7 +1065,7 @@ const seedIdentityEdition = async (now: Date) => {
     { sourceEntryId: "identity-a", name: "Alexandrov Zhuravlev" },
     { sourceEntryId: "identity-d", name: "Kwame Nkrumah" },
   ];
-  const hash = new Bun.CryptoHasher("sha256").update(editionId).digest("hex");
+  const hash = hashSha256Hex(editionId);
   await db.insert(sanctionsEditions).values({
     id: editionId,
     sourceId: "eu",
@@ -1091,9 +1092,7 @@ const seedIdentityEdition = async (now: Date) => {
       listedOn: null,
       sourceUrl: "https://example.test/identity",
     } satisfies SanctionsEntry;
-    const contentHash = new Bun.CryptoHasher("sha256")
-      .update(JSON.stringify(payload))
-      .digest("hex");
+    const contentHash = hashSha256Hex(JSON.stringify(payload));
     await db
       .insert(sanctionsEntryPayloads)
       .values({ contentHash, payload })
@@ -1370,7 +1369,7 @@ test(
     try {
       for (const sourceId of sources) {
         const id = toSafeId<"sanctionsEdition">(Bun.randomUUIDv7());
-        const hash = new Bun.CryptoHasher("sha256").update(id).digest("hex");
+        const hash = hashSha256Hex(id);
         await db.insert(sanctionsEditions).values({
           id,
           sourceId,

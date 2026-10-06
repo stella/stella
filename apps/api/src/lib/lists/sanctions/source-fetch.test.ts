@@ -4,6 +4,7 @@ import path from "node:path";
 
 import { SANCTIONS_SOURCES, readUnListVersion } from "@stll/sanctions";
 import type { SanctionsSource } from "@stll/sanctions";
+import { sha256Hex as hashSha256Hex } from "@stll/sha256/bun";
 
 import {
   fetchStreamWithResolvedAddress,
@@ -494,9 +495,9 @@ describe("OFAC list refresh", () => {
       ),
     ).toBe(true);
     expect(contentHash).toBe(
-      new Bun.CryptoHasher("sha256")
-        .update(await Bun.file(OFAC_NON_SDN_FIXTURE).arrayBuffer())
-        .digest("hex"),
+      hashSha256Hex(
+        new Uint8Array(await Bun.file(OFAC_NON_SDN_FIXTURE).arrayBuffer()),
+      ),
     );
   });
 
@@ -565,9 +566,7 @@ describe("UK list refresh", () => {
       ),
     ).toBe(true);
     expect(contentHash).toBe(
-      new Bun.CryptoHasher("sha256")
-        .update(await Bun.file(UK_FIXTURE).arrayBuffer())
-        .digest("hex"),
+      hashSha256Hex(new Uint8Array(await Bun.file(UK_FIXTURE).arrayBuffer())),
     );
   });
 
@@ -701,9 +700,7 @@ describe("SECO list refresh", () => {
       ),
     ).toBe(true);
     expect(contentHash).toBe(
-      new Bun.CryptoHasher("sha256")
-        .update(await Bun.file(SECO_FIXTURE).arrayBuffer())
-        .digest("hex"),
+      hashSha256Hex(new Uint8Array(await Bun.file(SECO_FIXTURE).arrayBuffer())),
     );
   });
 

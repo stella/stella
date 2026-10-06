@@ -284,10 +284,6 @@
     "reason": "migrates in a follow-up"
   },
   {
-    "id": "apps/api/src/handlers/uploads/update.ts",
-    "reason": "migrates in a follow-up"
-  },
-  {
     "id": "apps/api/src/handlers/workspaces/read-overview-activity-actors.logic.ts",
     "reason": "migrates in a follow-up"
   },
@@ -404,46 +400,6 @@
     "reason": "migrates in a follow-up"
   },
   {
-    "id": "apps/api/src/lib/files/office-evidence-worker.ts",
-    "reason": "migrates in a follow-up"
-  },
-  {
-    "id": "apps/api/src/lib/files/organization-file-usage-reconcile.db.test.ts",
-    "reason": "migrates in a follow-up"
-  },
-  {
-    "id": "apps/api/src/lib/files/organization-file-usage.ts",
-    "reason": "migrates in a follow-up"
-  },
-  {
-    "id": "apps/api/src/lib/files/pdf-signing/certificate.test.ts",
-    "reason": "migrates in a follow-up"
-  },
-  {
-    "id": "apps/api/src/lib/files/pdf-signing/certificate.ts",
-    "reason": "migrates in a follow-up"
-  },
-  {
-    "id": "apps/api/src/lib/files/pdf-signing/finalize.ts",
-    "reason": "migrates in a follow-up"
-  },
-  {
-    "id": "apps/api/src/lib/files/pdf-signing/revocation.ts",
-    "reason": "migrates in a follow-up"
-  },
-  {
-    "id": "apps/api/src/lib/files/pdf-signing/sign-pdf.test.ts",
-    "reason": "migrates in a follow-up"
-  },
-  {
-    "id": "apps/api/src/lib/files/pdf-signing/sign-pdf.ts",
-    "reason": "migrates in a follow-up"
-  },
-  {
-    "id": "apps/api/src/lib/files/pdf-signing/stamp-glyphs.ts",
-    "reason": "migrates in a follow-up"
-  },
-  {
     "id": "apps/api/src/lib/flows/flow-run-worker.integration.test.ts",
     "reason": "migrates in a follow-up"
   },
@@ -461,102 +417,6 @@
   },
   {
     "id": "apps/api/src/lib/infosoud/agenda-import.ts",
-    "reason": "migrates in a follow-up"
-  },
-  {
-    "id": "apps/api/src/lib/legal-search/corpus-content-hash.ts",
-    "reason": "migrates in a follow-up"
-  },
-  {
-    "id": "apps/api/src/lib/legal-search/corpus-index-manifest.ts",
-    "reason": "migrates in a follow-up"
-  },
-  {
-    "id": "apps/api/src/lib/legal-search/corpus-index-scored-scan.test.ts",
-    "reason": "migrates in a follow-up"
-  },
-  {
-    "id": "apps/api/src/lib/legal-search/corpus-pack.ts",
-    "reason": "migrates in a follow-up"
-  },
-  {
-    "id": "apps/api/src/lib/legal-search/corpus-query-variant-policy.ts",
-    "reason": "migrates in a follow-up"
-  },
-  {
-    "id": "apps/api/src/lib/legal-search/corpus-ranking-policy.ts",
-    "reason": "migrates in a follow-up"
-  },
-  {
-    "id": "apps/api/src/lib/legal-search/corpus-search-cursor.ts",
-    "reason": "migrates in a follow-up"
-  },
-  {
-    "id": "apps/api/src/lib/legal-search/expansion.ts",
-    "reason": "migrates in a follow-up"
-  },
-  {
-    "id": "apps/api/src/lib/legal-search/legal-alternatives.ts",
-    "reason": "migrates in a follow-up"
-  },
-  {
-    "id": "apps/api/src/lib/legal-search/plain-text-assembly.ts",
-    "reason": "migrates in a follow-up"
-  },
-  {
-    "id": "apps/api/src/lib/legal-search/raw-source-storage.ts",
-    "reason": "migrates in a follow-up"
-  },
-  {
-    "id": "apps/api/src/lib/legal-search/reconciliation-payload.ts",
-    "reason": "migrates in a follow-up"
-  },
-  {
-    "id": "apps/api/src/lib/legal-search/soft-law-fingerprint.ts",
-    "reason": "migrates in a follow-up"
-  },
-  {
-    "id": "apps/api/src/lib/lists/sanctions/monitoring-concurrency.postgres.test.ts",
-    "reason": "migrates in a follow-up"
-  },
-  {
-    "id": "apps/api/src/lib/lists/sanctions/monitoring-diff.db.test.ts",
-    "reason": "migrates in a follow-up"
-  },
-  {
-    "id": "apps/api/src/lib/lists/sanctions/monitoring-drain.db.test.ts",
-    "reason": "migrates in a follow-up"
-  },
-  {
-    "id": "apps/api/src/lib/lists/sanctions/monitoring-input.ts",
-    "reason": "migrates in a follow-up"
-  },
-  {
-    "id": "apps/api/src/lib/lists/sanctions/monitoring-opt-out.postgres.test.ts",
-    "reason": "migrates in a follow-up"
-  },
-  {
-    "id": "apps/api/src/lib/lists/sanctions/monitoring-throughput.postgres.test.ts",
-    "reason": "migrates in a follow-up"
-  },
-  {
-    "id": "apps/api/src/lib/lists/sanctions/refresh.db.test.ts",
-    "reason": "migrates in a follow-up"
-  },
-  {
-    "id": "apps/api/src/lib/lists/sanctions/refresh.ts",
-    "reason": "migrates in a follow-up"
-  },
-  {
-    "id": "apps/api/src/lib/lists/sanctions/screening-service.db.test.ts",
-    "reason": "migrates in a follow-up"
-  },
-  {
-    "id": "apps/api/src/lib/lists/sanctions/source-fetch.test.ts",
-    "reason": "migrates in a follow-up"
-  },
-  {
-    "id": "apps/api/src/lib/lists/sanctions/source-fetch.ts",
     "reason": "migrates in a follow-up"
   },
   {
@@ -636,10 +496,6 @@
     "reason": "migrates in a follow-up"
   },
   {
-    "id": "apps/api/src/lib/uploads/runtime.test.ts",
-    "reason": "migrates in a follow-up"
-  },
-  {
     "id": "apps/api/src/mcp/apps/document-upload/app.ts",
     "reason": "migrates in a follow-up"
   },
@@ -669,10 +525,6 @@
   },
   {
     "id": "apps/api/src/mcp/file-comparison-run.test.ts",
-    "reason": "migrates in a follow-up"
-  },
-  {
-    "id": "apps/api/src/mcp/file-comparison-run.ts",
     "reason": "migrates in a follow-up"
   },
   {

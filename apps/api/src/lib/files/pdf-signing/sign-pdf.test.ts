@@ -2,6 +2,8 @@ import { PDF } from "@libpdf/core";
 import { beforeEach, describe, expect, test } from "bun:test";
 import crypto from "node:crypto";
 
+import { sha256Hex as hashSha256Hex } from "@stll/sha256/bun";
+
 import { createTrackedRevocationProvider } from "@/api/lib/files/pdf-signing/revocation";
 import {
   applySignature,
@@ -191,9 +193,7 @@ describe("two-phase PDF signing", () => {
     const digestHex = await digestOf(invocation);
     const signature = await signDigestLikeAKeychain(privateKey, digestHex);
 
-    const otherDigestHex = new Bun.CryptoHasher("sha256")
-      .update("a digest for some other document")
-      .digest("hex");
+    const otherDigestHex = hashSha256Hex("a digest for some other document");
     expect(otherDigestHex).not.toBe(digestHex);
 
     const rejected = await settled(
