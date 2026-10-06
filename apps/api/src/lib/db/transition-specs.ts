@@ -6,6 +6,8 @@ import {
   euCompletionReceipts,
   pdfSigningSessions,
   workObligations,
+  sanctionsEditionFanouts,
+  sanctionsMonitoringBackfills,
 } from "@/api/db/schema";
 import {
   FLOW_RUN_TRANSITIONS_V1,
@@ -107,6 +109,34 @@ const WORK_OBLIGATION_TRANSITIONS = defineKeyedTransitions({
   options: { terminal: [] },
 });
 
+export const SANCTIONS_EDITION_FANOUT_TRANSITIONS = defineLifecycle({
+  table: sanctionsEditionFanouts,
+  key: "sourceId",
+  graphs: {
+    status: {
+      edges: { pending: ["complete"], complete: ["pending"] },
+      terminal: [],
+    },
+    freshnessStatus: {
+      edges: {
+        unknown: ["fresh", "unavailable"],
+        fresh: ["unavailable"],
+        unavailable: ["fresh"],
+      },
+      terminal: [],
+    },
+  },
+});
+
+export const SANCTIONS_MONITORING_BACKFILL_TRANSITIONS = defineKeyedTransitions(
+  {
+    table: sanctionsMonitoringBackfills,
+    key: "sourceId",
+    scope: ["organizationId"],
+    edges: { pending: ["complete"], complete: ["pending"] },
+    options: { terminal: [], fence: "generation" },
+  },
+);
 // Active receipts settle to any outcome; dry-run settles only fetched work.
 // Failed and mirror-repair receipts are readmitted; the rest are final.
 const EU_COMPLETION_SETTLEMENTS = EU_COMPLETION_STATUSES.filter(
@@ -263,6 +293,8 @@ export const TRANSITIONS = {
   reportExports: { unmanaged: UNMANAGED_REASONS.workerRun },
   sanctionsContactMatches: { unmanaged: UNMANAGED_REASONS.projection },
   sanctionsContactScreenings: { unmanaged: UNMANAGED_REASONS.projection },
+  sanctionsEditionFanouts: SANCTIONS_EDITION_FANOUT_TRANSITIONS,
+  sanctionsMonitoringBackfills: SANCTIONS_MONITORING_BACKFILL_TRANSITIONS,
   sanctionsEditions: { unmanaged: UNMANAGED_REASONS.corpusEdition },
   schedulerJobRuns: { unmanaged: UNMANAGED_REASONS.workerRun },
   scoutRuns: { unmanaged: UNMANAGED_REASONS.workerRun },
