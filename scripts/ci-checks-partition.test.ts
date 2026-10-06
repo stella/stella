@@ -444,7 +444,8 @@ const conditionTokens = (condition: string) =>
     .replaceAll(/'(?:[^']|'')*'|\s+/gu, (token) =>
       token.startsWith("'") ? token : " ",
     )
-    .trim();
+    .trim()
+    .replace(/^\$\{\{\s*([\s\S]*?)\s*\}\}$/u, "$1");
 type ScopeOptions = {
   current: Record<string, unknown>;
   base: Record<string, unknown>;
@@ -478,17 +479,26 @@ const expectScope = ({ current, base }: ScopeOptions) => {
     }
   }
   expect(migrated).toEqual(originalScope);
-  if (condition === originalCondition) {
+  // Ordinary scope comparisons supply fresh-run evidence. Completion reuse
+  // is exercised separately by the depth contract's true/false census. A
+  // merge base may already carry the completion guard, so strip it from both.
+  const freshScope = (value: unknown) => {
+    const tokens = conditionTokens(v.parse(v.string(), value));
+    return (
+      /^needs\.ci-plan\.outputs\.run_required != 'false' && \(\s*(.*?)\s*\)$/u
+        .exec(tokens)
+        ?.at(1) ?? tokens
+    );
+  };
+  const fresh = freshScope(condition);
+  const original = freshScope(originalCondition);
+  if (fresh === original) {
     return;
   }
-  // Heavy-only main runs skip the thin ci-checks legs. Only this wrapper
-  // may change their scope; every token of the base condition stays intact.
   const wrapped = /^inputs\.heavy_only != true && \(\s*(.*?)\s*\)$/u.exec(
-    conditionTokens(v.parse(v.string(), condition)),
+    fresh,
   );
-  expect(wrapped?.at(1)).toBe(
-    conditionTokens(v.parse(v.string(), originalCondition)),
-  );
+  expect(wrapped?.at(1)).toBe(original);
 };
 
 type CoverageOptions = {
