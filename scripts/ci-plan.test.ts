@@ -33,7 +33,7 @@ import { routeSmokeAffected } from "./detect-route-smoke-changes";
 import { serviceSuiteCliOutput } from "./detect-service-suite-changes";
 import { GENERATORS } from "./generated-files";
 import { evaluate } from "./github-expression";
-import { mainHeavyJobs } from "./main-heavy-plan";
+import { mainHeavyJobs, queueAdmittedJobs } from "./main-heavy-plan";
 
 const workflow = readFileSync(
   new URL("../.github/workflows/ci.yml", import.meta.url),
@@ -3790,6 +3790,8 @@ type DepthContext = {
   heavyOnly?: boolean;
   queueDepth?: "full" | "thin";
   proveFix?: boolean;
+  /** The QUEUE_BROWSER_SUITES repository variable; GitHub reads unset as ''. */
+  queueBrowserSuites?: string;
 };
 const runsAtDepth = (
   condition: string,
@@ -3799,6 +3801,7 @@ const runsAtDepth = (
     heavyOnly,
     queueDepth = "full",
     proveFix = false,
+    queueBrowserSuites = "",
   }: DepthContext,
 ) => {
   const expression = condition
@@ -3825,6 +3828,8 @@ const runsAtDepth = (
           actual = depth;
         } else if (context === "needs.ci-plan.outputs.queue_depth") {
           actual = event === EVENT.mergeGroup ? queueDepth : "full";
+        } else if (context === "vars.QUEUE_BROWSER_SUITES") {
+          actual = queueBrowserSuites;
         } else if (
           context === "needs.ci-plan.outputs.heavy_web_build_required"
         ) {
@@ -4046,6 +4051,7 @@ test("parity rejects new queue-only jobs, ungated PR paths and stale exemptions"
 
 test("thin merge groups intentionally skip heavy jobs while full parity stays enforced", () => {
   const heavy = new Set(mainHeavyJobs({ jobs: ciJobs }));
+  const admitted = new Set(queueAdmittedJobs({ jobs: ciJobs }));
   for (const { name, condition } of parityJobs) {
     const full = runsAtDepth(condition, {
       event: EVENT.mergeGroup,
@@ -4066,6 +4072,16 @@ test("thin merge groups intentionally skip heavy jobs while full parity stays en
         queueDepth: "thin",
       }),
       name,
+    ).toBe(heavy.has(name) && !admitted.has(name) ? false : full);
+    // The off switch restores the thin skip for the admitted browser suites.
+    expect(
+      runsAtDepth(condition, {
+        event: EVENT.mergeGroup,
+        depth: SUITE_DEPTH.full,
+        queueDepth: "thin",
+        queueBrowserSuites: "off",
+      }),
+      `${name}/off`,
     ).toBe(heavy.has(name) ? false : full);
     for (const event of [EVENT.pullRequest, EVENT.workflowDispatch]) {
       expect(
