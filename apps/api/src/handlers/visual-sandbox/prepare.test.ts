@@ -13,6 +13,19 @@ const input = () =>
   });
 
 describe("generated visual preparation", () => {
+  test("normalizes titles after accepting tool input", () => {
+    const source = input();
+    const result = prepareGeneratedVisual({ ...source, title: " Revenue " });
+    expect(result.isOk()).toBe(true);
+    if (result.isOk()) {
+      expect(result.value.title).toBe("Revenue");
+    }
+    const empty = prepareGeneratedVisual({ ...source, title: "   " });
+    expect(empty.isErr()).toBe(true);
+    if (empty.isErr()) {
+      expect(empty.error.reason).toBe("title");
+    }
+  });
   test("retains only page-referenced data fields and literal links", () => {
     const source = input();
     const prepared = prepareGeneratedVisual(source);

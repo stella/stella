@@ -1,7 +1,13 @@
 import { describe, expect, test } from "bun:test";
 import * as v from "valibot";
 
-import { generatedVisualInputSchema } from "./generated-visual";
+import {
+  generatedVisualInputSchema,
+  generatedVisualPartSchema,
+  GENERATED_VISUAL_MIME_TYPE,
+  GENERATED_VISUAL_URI_PREFIX,
+  SHOW_VISUAL_TOOL_NAME,
+} from "./generated-visual";
 
 describe("generated visual contract", () => {
   test("preserves bounded JSON, presentation text and optional decision links", () => {
@@ -12,7 +18,7 @@ describe("generated visual contract", () => {
       links: [{ id: "decision-one", decisionId: "case-one" }],
     };
     const parsed = v.parse(generatedVisualInputSchema, input);
-    expect(parsed.title).toBe("Revenue");
+    expect(parsed.title).toBe(input.title);
     expect(parsed.data).toEqual(input.data);
     expect(parsed.links).toEqual(input.links);
     expect(
@@ -67,5 +73,36 @@ describe("generated visual contract", () => {
       v.safeParse(generatedVisualInputSchema, { ...input, data: cycle })
         .success,
     ).toBe(false);
+  });
+});
+
+describe("generated visual resource", () => {
+  test("carries a private attachment reference and title", () => {
+    const part = {
+      type: "ui-resource",
+      resource: {
+        uri: `${GENERATED_VISUAL_URI_PREFIX}0199ba00-0000-7000-8000-000000000001`,
+        mimeType: GENERATED_VISUAL_MIME_TYPE,
+        text: "Court overview",
+      },
+      toolCallId: "visual-call-one",
+      toolName: SHOW_VISUAL_TOOL_NAME,
+    };
+    expect(v.safeParse(generatedVisualPartSchema, part).success).toBe(true);
+    for (const candidate of [
+      { ...part, serverId: "connector" },
+      { ...part, toolName: "other-tool" },
+      {
+        ...part,
+        resource: { ...part.resource, uri: "https://example.test/view" },
+      },
+      { ...part, resource: { ...part.resource, blob: "payload" } },
+      { ...part, resource: { ...part.resource, text: "x".repeat(121) } },
+      { ...part, resource: { ...part.resource, mimeType: "unknown" } },
+    ]) {
+      expect(v.safeParse(generatedVisualPartSchema, candidate).success).toBe(
+        false,
+      );
+    }
   });
 });
