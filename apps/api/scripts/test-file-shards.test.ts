@@ -108,11 +108,18 @@ test("an API sub-shard must select files before the runner can start", () => {
     selectApiTestFiles({ files: [], durations: {}, shardValue: "1/4" }),
   ).toThrow("selected zero test files");
   expect(() =>
-    selectApiTestFiles({ files: ["one"], durations: {}, shardValue: "4/4" }),
+    selectApiTestFiles({
+      files: ["one"],
+      durations: { one: { seconds: 1, source: "estimated" } },
+      shardValue: "4/4",
+    }),
   ).toThrow("selected zero test files");
   expect(
-    selectApiTestFiles({ files: ["one"], durations: {}, shardValue: "1/4" })
-      .testPaths,
+    selectApiTestFiles({
+      files: ["one"],
+      durations: { one: { seconds: 1, source: "estimated" } },
+      shardValue: "1/4",
+    }).testPaths,
   ).toEqual(["one"]);
   expect(
     selectApiTestFiles({ files: [], durations: {}, shardValue: undefined }),
@@ -147,7 +154,11 @@ test("explicit test selection validates inline lists and files before duration s
       (index) =>
         selectApiTestFiles({
           files: selected,
-          durations: { "src/b.test.ts": 1000 },
+          durations: {
+            "src/a.test.ts": { seconds: 1, source: "measured" },
+            "src/b.test.ts": { seconds: 1000, source: "measured" },
+            "src/c.test.ts": { seconds: 2, source: "estimated" },
+          },
           shardValue: `${index}/2`,
         }).testPaths,
     );

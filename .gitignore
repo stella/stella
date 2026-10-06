@@ -83,6 +83,7 @@ i18n.cache
 # API runtime aggregates embed the committed per-capability shards.
 apps/api/src/mcp/generated/capability-dispatch.ts
 apps/api/src/mcp/generated/capability-catalog.ts
+apps/api/src/mcp/generated/capability-feature-bindings.ts
 
 # CLI runtime projections are restored by codegen:runtime.
 packages/cli/src/generated/route-map.ts

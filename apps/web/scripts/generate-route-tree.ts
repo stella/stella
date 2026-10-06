@@ -4,6 +4,7 @@ import { mkdtemp, readFile, rm } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
+import { hasPreparedGeneratedSources } from "../../../packages/scripts/src/prepared-generated-sources";
 import { ROUTE_TREE_OPTIONS } from "../route-tree.config.ts";
 
 const webRoot = fileURLToPath(new URL("..", import.meta.url));
@@ -60,7 +61,9 @@ if (import.meta.main) {
   }
   if (args.includes("--check")) {
     await checkRouteTreeDeterminism(srcRoot, generate);
-  } else {
+  } else if (
+    !hasPreparedGeneratedSources(new URL("../../../", import.meta.url).pathname)
+  ) {
     await generate(output);
   }
 }
