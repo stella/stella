@@ -168,9 +168,9 @@ const toProviderSafeJsonSchema = (
 };
 
 type ToolSchemaProjectionOptions = ProviderSafeJsonSchemaProjectionOptions & {
-  // JSON Schema cannot express arbitrary predicates. Their canonical
+  // JSON Schema cannot express predicates or type-only brands. Their canonical
   // Standard Schema validator still runs at the tool execution boundary.
-  omitValidationActions?: readonly "check"[];
+  omitValidationActions?: readonly ("check" | "brand")[];
 };
 
 export const toTanStackValibotSchema = <TSchema extends GenericSchema>(

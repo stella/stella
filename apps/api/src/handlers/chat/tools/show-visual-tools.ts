@@ -50,7 +50,7 @@ export const createShowVisualTools = ({
       "stella-light and stella-dark select a color scheme. " +
       "On refusal, correct the indicated input and call again.",
     inputSchema: toTanStackToolSchema(generatedVisualInputSchema, {
-      omitValidationActions: ["check"],
+      omitValidationActions: ["check", "brand"],
     }),
     outputSchema: toTanStackToolSchema(visualPreviewToolOutputSchema),
   }).server(async (input, context) => {
