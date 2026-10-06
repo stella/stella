@@ -145,8 +145,8 @@ type ExpressionReferenceOptions = Pick<
   "expression" | "code" | "source" | "seen"
 > & {
   matchesExpression: (expression: string) => boolean;
-  root?: string;
-  file?: string;
+  root?: string | undefined;
+  file?: string | undefined;
 };
 
 type ImportedConstantOptions = {
@@ -684,7 +684,11 @@ const sourceFiles = (root: string): readonly string[] => {
 };
 
 const sourceFunctionBodies = (code: string) => {
-  const functions: { name: string; body: string; parameter?: string }[] = [];
+  const functions: {
+    name: string;
+    body: string;
+    parameter: string | undefined;
+  }[] = [];
   for (const match of code.matchAll(
     /\b(?:function|const)\s+([A-Za-z_$][\w$]*)/gu,
   )) {
