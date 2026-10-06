@@ -1541,6 +1541,7 @@ const FileChatOverlayInner = ({
     sendMessage,
     queuedMessages,
     removeQueuedMessage,
+    sendQueuedMessageNow,
     stop,
     leave,
     isGenerating,
@@ -2537,8 +2538,11 @@ const FileChatOverlayInner = ({
               onLoadOlder={loadOlder}
               onOpenCreateDocumentDraft={handleOpenCreateDocumentDraft}
               onOpenCreatedDocument={handleOpenCreatedDocument}
-              onRemoveQueuedMessage={removeQueuedMessage}
               onResend={resendLatestMessage}
+              queuedMessageActions={{
+                remove: removeQueuedMessage,
+                sendNow: sendQueuedMessageNow,
+              }}
               queuedMessages={queuedMessages}
               scrollContainerRef={threadScrollRef}
               showThinkingIndicator

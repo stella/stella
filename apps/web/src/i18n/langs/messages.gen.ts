@@ -1328,6 +1328,7 @@ type Messages = {
     "sendErrorQuotaExhausted": "The AI provider's quota is exhausted. Try again in a minute, or contact your workspace admin.";
     "sendErrorStreamIncomplete": "The AI reply was cut off before it finished. Try again.";
     "sendPrompt": "Send message";
+    "sendQueuedMessageNow": "Send now";
     "sendWithoutAnonymization": "Send without anonymization";
     "skills": {
       "scope": {

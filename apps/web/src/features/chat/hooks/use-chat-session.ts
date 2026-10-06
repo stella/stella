@@ -737,6 +737,30 @@ export const useChatSession = ({
     [applySendQueueEvent],
   );
 
+  // "Send now" on a queued message: it moves to the front of the queue.
+  // During a turn the turn is stopped, and the queue drain sends it once
+  // the stop settles; with the queue held after a failed turn it is sent
+  // at once, like a manual send.
+  const sendQueuedMessageNow = useCallback(
+    (id: string) => {
+      applySendQueueEvent({ type: "queued-message-promoted", id });
+      if (sendQueueRef.current.isGenerating) {
+        stop();
+        return;
+      }
+      const dispatched = applySendQueueEvent({
+        type: "oldest-dispatch-started",
+      });
+      if (dispatched) {
+        detached(
+          dispatchQueuedMessage(dispatched).catch(ignoreQueuedDispatchError),
+          "use-chat-session.send-queued-message-now",
+        );
+      }
+    },
+    [applySendQueueEvent, dispatchQueuedMessage, stop],
+  );
+
   const resendLatestMessage = useCallback(
     async ({ messageId, sendMode }: ResendLatestMessageOptions = {}) => {
       const latestAssistant = messages.findLast(
@@ -1455,6 +1479,7 @@ export const useChatSession = ({
     sendMessage,
     queuedMessages,
     removeQueuedMessage,
+    sendQueuedMessageNow,
     stop,
     leave,
     isGenerating,
