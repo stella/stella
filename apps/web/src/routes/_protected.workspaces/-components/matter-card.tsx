@@ -109,7 +109,7 @@ export const MatterCard = ({
             {/* Line 1: name + reference */}
             <div className="flex items-center gap-2">
               <h2
-                className="min-w-0 flex-1 truncate text-sm font-semibold"
+                className="min-w-0 flex-1 overflow-hidden text-sm font-semibold text-ellipsis whitespace-pre"
                 dir="auto"
               >
                 {rename.status === "editing" ? (
