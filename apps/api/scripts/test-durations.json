@@ -211,6 +211,10 @@
     "seconds": 1.21972,
     "source": "estimated"
   },
+  "scripts/visual-sandbox-runtime.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
   "src/agent-auth/metadata.test.ts": {
     "seconds": 0.06405,
     "source": "estimated"
@@ -2323,6 +2327,10 @@
     "seconds": 1.21339,
     "source": "estimated"
   },
+  "src/handlers/chat/tools/show-visual-tools.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
   "src/handlers/chat/tools/skill-documented-reads.test.ts": {
     "seconds": 3.344645,
     "source": "estimated"
@@ -3759,6 +3767,10 @@
     "seconds": 1.506288,
     "source": "estimated"
   },
+  "src/handlers/user-files/read-visual.test.ts": {
+    "seconds": 1.163,
+    "source": "measured"
+  },
   "src/handlers/view-templates/properties.test.ts": {
     "seconds": 0.166023,
     "source": "estimated"
@@ -3784,6 +3796,34 @@
     "source": "estimated"
   },
   "src/handlers/visual-sandbox/bridge.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
+  "src/handlers/visual-sandbox/browser/boot.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
+  "src/handlers/visual-sandbox/browser/guest-api.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
+  "src/handlers/visual-sandbox/browser/shell-ready.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
+  "src/handlers/visual-sandbox/treemap-model.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
+  "src/handlers/visual-sandbox/literal-links.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
+  "src/handlers/visual-sandbox/prepare.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
+  "src/handlers/visual-sandbox/resource-origin.test.ts": {
     "seconds": 1,
     "source": "estimated"
   },
@@ -5601,6 +5641,10 @@
   },
   "src/lib/file-scan/scanner.test.ts": {
     "seconds": 0.05258,
+    "source": "estimated"
+  },
+  "src/lib/file-scan/stored-file.test.ts": {
+    "seconds": 1,
     "source": "estimated"
   },
   "src/lib/file-scan/verdict.test.ts": {
@@ -7601,6 +7645,10 @@
   },
   "src/lib/tanstack-ai-provider-wire.test.ts": {
     "seconds": 20.14469,
+    "source": "estimated"
+  },
+  "src/lib/tanstack-ai-schema.test.ts": {
+    "seconds": 1,
     "source": "estimated"
   },
   "src/lib/tanstack-ai-usage.test.ts": {
