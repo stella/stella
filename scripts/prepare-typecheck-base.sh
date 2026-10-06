@@ -29,6 +29,7 @@ git worktree add --detach "$base_dir" "$base_sha"
 git -C "$base_dir" submodule update --init --recursive
 (
   cd "$base_dir"
+  unset CI_GENERATED_SOURCES_MANIFEST
   bash scripts/retry.sh bun ci --ignore-scripts
   # Older merge bases still commit the runtime aggregates.
   if [[ -f apps/api/scripts/generate-capability-runtime.ts ]]; then

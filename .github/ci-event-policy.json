@@ -103,6 +103,7 @@
     "cleanup-queued-pr-runs.yml/cleanup": "main",
     "safe-chain-cache.yml/warm": "main",
     "ci.yml/ci-plan": "pr-fast",
+    "ci.yml/ci-generated-sources": "pr-fast",
     "ci.yml/docker-checks": "queue",
     "ci.yml/parser-version-guard": "pr-fast",
     "ci.yml/ci-checks-generated": "pr-fast",

@@ -516,6 +516,7 @@ test("unset and full preserve historical predicates except declared PR and route
         (id) => id !== "merge-group-fail-fast",
       ),
       "marketing-screenshots-cancel",
+      "ci-generated-sources",
     ]),
   );
   for (const event of events) {
