@@ -1116,7 +1116,8 @@ export const runStagingCredentialJourneys = async (
     results.push(
       await runNamedProbe(bootstrapName, async () => {
         const smoke = await readProbeResponse(
-          await fetcher(new URL("/v1/smoke/session", baseUrl), {
+          // Mounted at the root, outside the versioned API prefix.
+          await fetcher(new URL("/smoke/session", baseUrl), {
             method: "POST",
             headers: { "x-smoke-secret": smokeSecret },
             timeout: { type: "idle", ms: PROBE_TIMEOUT_MS },

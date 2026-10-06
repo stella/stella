@@ -9,6 +9,7 @@ import { describe, expect, test } from "bun:test";
 import { rejectionOf } from "@stll/property-testing/rejection";
 
 import { bridgeOauthUiRedirect } from "@/api/lib/oauth-ui-fragment";
+import api from "@/api/server";
 
 import {
   AUTHENTICATED_PROBES,
@@ -822,7 +823,8 @@ describe("staging credential journeys", () => {
     expect(results.every(({ status }) => status === "skipped")).toBe(true);
   });
 
-  test("runs MCP and desktop probes with short-lived credentials, then revokes the MCP key", async () => {
+  // A staging deployment that answers every request of a passing journey.
+  const createStagingDeployment = () => {
     const requests: {
       path: string;
       method: string;
@@ -847,7 +849,7 @@ describe("staging credential journeys", () => {
         headers,
         body,
       });
-      if (url.pathname === "/v1/smoke/session") {
+      if (url.pathname === "/smoke/session") {
         return Response.json({
           cookieName: "session",
           cookieValue: "staging-session",
@@ -907,6 +909,11 @@ describe("staging credential journeys", () => {
       }
       return new Response(null, { status: 404 });
     };
+    return { requests, fetcher };
+  };
+
+  test("runs MCP and desktop probes with short-lived credentials, then revokes the MCP key", async () => {
+    const { requests, fetcher } = createStagingDeployment();
     const results = await runStagingCredentialJourneys(
       { baseUrl: "https://api.example", smokeSecret: "smoke-secret" },
       fetcher,
@@ -945,6 +952,43 @@ describe("staging credential journeys", () => {
     expect(JSON.parse(revoke?.body ?? "{}")).toEqual({ keyId: "mcp-key-id" });
   });
 
+  // The stand-in deployment answers whatever path it is asked, so only the
+  // real router can tell whether each journey request reaches a route.
+  test("requests only routes the API mounts", async () => {
+    const { requests, fetcher } = createStagingDeployment();
+    await runStagingCredentialJourneys(
+      { baseUrl: "https://api.example", smokeSecret: "smoke-secret" },
+      fetcher,
+    );
+    const mounted = api.routes
+      // The Better Auth catch-all matches any path; its own prefix is
+      // checked separately below.
+      .filter(({ path }) => path !== "/*")
+      .map(({ method, path }) => ({
+        method,
+        pattern: new RegExp(
+          `^${path
+            .replaceAll(/[.+?^${}()|[\]\\]/gu, "\\$&")
+            .replaceAll(/:[^/]+/gu, "[^/]+")
+            .replaceAll("*", ".*")}$`,
+          "u",
+        ),
+      }));
+    const unrouted = requests
+      .filter(({ path }) => !path.startsWith("/api/auth/"))
+      .filter(
+        ({ method, path }) =>
+          !mounted.some(
+            (route) =>
+              (route.method === method || route.method === "ALL") &&
+              route.pattern.test(path),
+          ),
+      )
+      .map(({ method, path }) => `${method} ${path}`);
+    expect(requests.map(({ path }) => path)).toContain("/smoke/session");
+    expect(unrouted).toEqual([]);
+  });
+
   test("revokes an MCP key id returned alongside a malformed bootstrap response", async () => {
     const requests: { path: string; body: string }[] = [];
     const fetcher: CanaryFetcher = async (input, init) => {
@@ -953,7 +997,7 @@ describe("staging credential journeys", () => {
         path: url.pathname,
         body: await new Response(init.body).text(),
       });
-      if (url.pathname === "/v1/smoke/session") {
+      if (url.pathname === "/smoke/session") {
         return Response.json({ cookieName: "session", cookieValue: "session" });
       }
       if (url.pathname === "/v1/api-keys/") {
@@ -984,7 +1028,7 @@ describe("staging credential journeys", () => {
     const fetcher: CanaryFetcher = async (input) => {
       const path = new URL(input instanceof Request ? input.url : input)
         .pathname;
-      if (path === "/v1/smoke/session") {
+      if (path === "/smoke/session") {
         return Response.json({ cookieName: "session", cookieValue: "session" });
       }
       if (path === "/v1/api-keys/") {
