@@ -5,7 +5,8 @@
 
 import { panic, Result, TaggedError } from "better-result";
 
-const SELECTOR_START = "          # Path scopes for the build/smoke jobs";
+const SELECTOR_START =
+  "          package_checks_required=true\n          if [[";
 const SELECTOR_END = "          printf 'Changed files:";
 const OUTPUT_NAME_PATTERN = /^[a-z_][a-z0-9_]*$/u;
 const VALUES_MARKER = "--- ci-plan-selector values ---";
@@ -39,7 +40,7 @@ type RunPlanSelectorOptions = {
 
 /**
  * The preamble stands in for the lines ci.yml runs before the selector:
- * the detectors it calls, and package checks planned as for any code change.
+ * the preliminary detectors it calls. Package selection runs from the workflow.
  */
 export const runPlanSelector = ({
   selector,
@@ -63,7 +64,6 @@ export const runPlanSelector = ({
       `changed_files=("$@"); e2e_core_required=$(bash scripts/detect-e2e-changes.sh core "$@")
 e2e_landing_required=\${E2E_LANDING_REQUIRED:-$(bash scripts/detect-e2e-changes.sh landing "$@")}
 desktop_rust_checks_required=$(bash scripts/detect-tauri-rust-changes.sh "$@")
-package_checks_required=true
 ${selector}
 printf "%s\\n" "${VALUES_MARKER}" ${outputs.map((output) => `"$${output}"`).join(" ")}`,
       "ci-plan-selector",

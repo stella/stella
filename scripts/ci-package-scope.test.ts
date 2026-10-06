@@ -4,6 +4,8 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 
 import {
+  markdownChecks,
+  markdownReaders,
   requiresLandingBuild,
   requiresPackageChecks,
 } from "./ci-package-scope";
@@ -69,6 +71,8 @@ test("ordinary markdown and changesets skip package checks while source content 
       ["provenance/attestation.json"],
       ["docs/guide.md", ".changeset/fresh.md"],
       ["notes/guide.mdx", ".provenance.yml"],
+      ["apps/example/README.md", "packages/example/README.md"],
+      ["apps/api/src/prompt.md"],
     ]) {
       expect(requiresPackageChecks({ root, changed })).toBe(false);
     }
@@ -82,12 +86,7 @@ test("ordinary markdown and changesets skip package checks while source content 
       "AGENTS.md",
       ".ai/local/guide.md",
       ".agents/skills/new/SKILL.md",
-      "packages/example/README.md",
-      "apps/api/src/prompt.md",
-      "apps/landing/src/content/guide.mdx",
-      "railway/template-readme.md",
       "docs/unrecognized.weird",
-      "scripts/fixtures/dependency-malware/README.md",
       ".provenance.yml.ts",
     ]) {
       expect(requiresPackageChecks({ root, changed: [file] }), file).toBe(true);
@@ -99,7 +98,7 @@ test("ordinary markdown and changesets skip package checks while source content 
   });
 });
 
-test("a planted markdown reader prevents skipping its checks, including deleted input files", () => {
+test("a planted markdown reader joins isolated checks, including deleted input files", () => {
   repository((root, write) => {
     expect(requiresPackageChecks({ root, changed: ["docs/planted.md"] })).toBe(
       false,
@@ -109,13 +108,106 @@ test("a planted markdown reader prevents skipping its checks, including deleted 
       'import { readFileSync } from "node:fs"; const source = readFileSync("../docs/planted.md", "utf8");',
     );
     expect(requiresPackageChecks({ root, changed: ["docs/planted.md"] })).toBe(
-      true,
+      false,
     );
+    expect(markdownChecks({ root, changed: ["docs/planted.md"] })).toEqual([
+      ["bun", "test", "scripts/reader.test.ts"],
+    ]);
     expect(requiresPackageChecks({ root, changed: ["docs/unread.md"] })).toBe(
       false,
     );
     write("scripts/readme.test.ts", 'const source = Bun.file("README.md");');
-    expect(requiresPackageChecks({ root, changed: ["README.md"] })).toBe(true);
+    expect(requiresPackageChecks({ root, changed: ["README.md"] })).toBe(false);
+    expect(markdownChecks({ root, changed: ["README.md"] })).toEqual([
+      ["bun", "test", "scripts/readme.test.ts"],
+    ]);
+  });
+});
+
+test("the exact README change derives both genuine readers without package jobs", () => {
+  const changed = ["README.md", "apps/desktop/README.md"];
+  expect(requiresPackageChecks({ changed })).toBe(false);
+  const checks = markdownChecks({ changed });
+  expect(checks).toHaveLength(4);
+  expect(checks).toContainEqual([
+    "bun",
+    "scripts/check-railway-template-shape.ts",
+  ]);
+  expect(checks).toContainEqual([
+    "bun",
+    "test",
+    "scripts/capability-catalog-readers.test.ts",
+  ]);
+  expect(
+    markdownReaders()
+      .filter((reader) => reader.file.startsWith(".github/workflows/ci.yml:"))
+      .map((reader) => reader.file),
+  ).toEqual([
+    ".github/workflows/ci.yml:ci-checks-policy:Documentation source policy rule",
+    ".github/workflows/ci.yml:ci-checks-policy:Instruction references",
+  ]);
+}, 30_000);
+
+test("an aliased filesystem reader with a typed path constant joins automatically", () => {
+  repository((root, write) => {
+    write(
+      "scripts/aliased-reader.test.ts",
+      'import { readFileSync as read } from "node:fs"; const INPUT: string = "README.md"; read(INPUT, "utf8");',
+    );
+    expect(markdownChecks({ root, changed: ["README.md"] })).toEqual([
+      ["bun", "test", "scripts/aliased-reader.test.ts"],
+    ]);
+  });
+});
+
+test("a reader without an isolated command fails closed and names its owner", () => {
+  repository((root, write) => {
+    write(
+      "scripts/undeclared-reader.ts",
+      'const text = Bun.file("README.md");',
+    );
+    const errors = spyOn(console, "error").mockImplementation(() => {});
+    try {
+      expect(requiresPackageChecks({ root, changed: ["README.md"] })).toBe(
+        true,
+      );
+      expect(String(errors.mock.calls.at(0)?.at(1))).toContain(
+        "scripts/undeclared-reader.ts",
+      );
+    } finally {
+      errors.mockRestore();
+    }
+  });
+});
+
+test("fixture literals and external Markdown names do not declare readers", () => {
+  repository((root, write) => {
+    write(
+      "scripts/fixture.test.ts",
+      'import { readFileSync } from "node:fs"; const fixture = "README.md"; const source = readFileSync("package.json", "utf8");',
+    );
+    expect(markdownChecks({ root, changed: ["README.md"] })).toEqual([]);
+    expect(requiresPackageChecks({ root, changed: ["README.md"] })).toBe(false);
+  });
+});
+
+test("an unresolved Markdown path names its owner and retains package checks", () => {
+  repository((root, write) => {
+    write(
+      "scripts/computed-reader.test.ts",
+      'import { readFileSync } from "node:fs"; readFileSync(path.join(root, name(), ".md"));',
+    );
+    const errors = spyOn(console, "error").mockImplementation(() => {});
+    try {
+      expect(requiresPackageChecks({ root, changed: ["README.md"] })).toBe(
+        true,
+      );
+      expect(String(errors.mock.calls.at(0)?.at(1))).toContain(
+        "scripts/computed-reader.test.ts",
+      );
+    } finally {
+      errors.mockRestore();
+    }
   });
 });
 
@@ -207,15 +299,15 @@ test("split path joins and indirect directory readers retain their markdown subt
       'import { readFileSync } from "node:fs"; const source = readFileSync(path.join(root, "docs/contracts", "planted.md"));',
     );
     expect(
-      requiresPackageChecks({ root, changed: ["docs/contracts/planted.md"] }),
-    ).toBe(true);
+      markdownChecks({ root, changed: ["docs/contracts/planted.md"] }),
+    ).toEqual([["bun", "test", "scripts/join.test.ts"]]);
     write(
       "scripts/dir.test.ts",
       'import { readdirSync } from "node:fs"; const directory = "docs/records"; readdirSync(directory);',
     );
-    expect(
-      requiresPackageChecks({ root, changed: ["docs/records/new.md"] }),
-    ).toBe(true);
+    expect(markdownChecks({ root, changed: ["docs/records/new.md"] })).toEqual([
+      ["bun", "test", "scripts/dir.test.ts"],
+    ]);
     expect(requiresPackageChecks({ root, changed: ["docs/unread.md"] })).toBe(
       false,
     );
@@ -234,6 +326,24 @@ test("direct markdown imports retain package checks", () => {
     expect(requiresPackageChecks({ root, changed: ["docs/imported.md"] })).toBe(
       true,
     );
+  });
+});
+
+test("a Markdown fixture imported as module content retains package jobs", () => {
+  repository((root, write) => {
+    write(
+      "apps/example/src/reader.ts",
+      'import text from "./fixtures/input.md" with { type: "text" };',
+    );
+    expect(
+      requiresPackageChecks({
+        root,
+        changed: ["apps/example/src/fixtures/input.md"],
+      }),
+    ).toBe(true);
+    expect(
+      requiresPackageChecks({ root, changed: ["apps/example/README.md"] }),
+    ).toBe(false);
   });
 });
 
@@ -264,12 +374,16 @@ test("repository readers preserve consumed documentation without swallowing unre
     `${["scope", "smoke"].join("-")}.md`,
   );
   expect(requiresPackageChecks({ changed: [unconsumed] })).toBe(false);
-  expect(
-    requiresPackageChecks({
-      changed: ["scripts/fixtures/dependency-malware/README.md"],
-    }),
-  ).toBe(true);
-  expect(requiresPackageChecks({ changed: ["docs/guide.md"] })).toBe(true);
+  expect(markdownChecks({ changed: [unconsumed] })).toContainEqual([
+    "bun",
+    "test",
+    "scripts/capability-catalog-readers.test.ts",
+  ]);
+  expect(markdownChecks({ changed: ["docs/guide.md"] })).toContainEqual([
+    "bun",
+    "test",
+    "scripts/capability-catalog-readers.test.ts",
+  ]);
 }, 30_000);
 
 test("loader wildcard bases stay tied to their calls", () => {

@@ -117,7 +117,7 @@ const readQuoted = (
  */
 export const readStringLiterals = (
   source: string,
-  onCall?: (callee: string | undefined, source: string) => void,
+  onCall?: (callee: string | undefined, source: string, start: number) => void,
 ): readonly SourceLiteral[] => {
   const literals: SourceLiteral[] = [];
   const calls: { callee: string | undefined; start: number }[] = [];
@@ -190,7 +190,11 @@ export const readStringLiterals = (
     } else if (char === ")") {
       const call = calls.pop();
       if (call) {
-        onCall?.(call.callee, source.slice(call.start, state.index + 1));
+        onCall?.(
+          call.callee,
+          source.slice(call.start, state.index + 1),
+          call.start,
+        );
       }
     }
     previousSignificant = char;
@@ -304,4 +308,36 @@ export const readTestInputs = (
     );
   }
   return inputs;
+};
+
+// Split call arguments without treating commas inside literals or nested calls
+// as separators. Unknown/computed expressions remain source for the caller.
+export const readCallArguments = (source: string): readonly string[] => {
+  const args: string[] = [];
+  const state = { index: 1, line: 1 };
+  let start = 1;
+  let depth = 0;
+  while (state.index < source.length - 1) {
+    const char = source.charAt(state.index);
+    if (char === '"' || char === "'" || char === "`") {
+      readQuoted(source, state, char);
+      continue;
+    }
+    if (["(", "[", "{"].includes(char)) {
+      depth += 1;
+    }
+    if ([")", "]", "}"].includes(char)) {
+      depth -= 1;
+    }
+    if (char === "," && depth === 0) {
+      args.push(source.slice(start, state.index).trim());
+      start = state.index + 1;
+    }
+    state.index += 1;
+  }
+  const last = source.slice(start, -1).trim();
+  if (last) {
+    args.push(last);
+  }
+  return args;
 };

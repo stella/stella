@@ -27,7 +27,10 @@ import { selectApiTestImpact } from "./api-test-impact";
 import { requiresMalwareScan } from "./check-standalone-lockfiles";
 import { planCiApiTests } from "./ci-api-test-plan";
 import { CANONICAL_CANCEL_STEP } from "./ci-cancellation-contract";
-import { requiresLandingBuild } from "./ci-package-scope";
+import {
+  requiresLandingBuild,
+  requiresPackageChecks,
+} from "./ci-package-scope";
 import { extractPlanSelector } from "./ci-plan-selector";
 import { routeSmokeAffected } from "./detect-route-smoke-changes";
 import { serviceSuiteCliOutput } from "./detect-service-suite-changes";
@@ -193,6 +196,11 @@ const SELECTOR_BUN_CLIS = {
 const SERVED_BUN_SHIM = `bun() {
   local script=$1 flag served
   shift
+  if [[ "$script" == scripts/ci-package-scope.ts && "\${1-}" == --package-checks ]]; then
+    shift
+    printf '%s\\n' "$SERVED_PACKAGE_CHECKS"
+    return
+  fi
   case "$script" in
 ${Object.entries(SELECTOR_BUN_CLIS)
   .map(
@@ -257,6 +265,7 @@ ${selector}
 printf "%s\\n" ${outputs.map((output) => `"$${output}"`).join(" ")}`,
     args: files,
     env: {
+      SERVED_PACKAGE_CHECKS: String(requiresPackageChecks({ changed: files })),
       E2E_LANDING_REQUIRED: e2eLandingRequired,
       EVENT_NAME: event,
       PATH: Bun.env["PATH"] ?? "",
@@ -1881,7 +1890,11 @@ test("API determinism runs only after installation for its selected scope", () =
 const packageScopeStart = workflow.indexOf(
   "          package_checks_required=true\n          if [[",
 );
-const packageScope = workflow.slice(packageScopeStart, selectorStart);
+const packageScopeEnd = workflow.indexOf(
+  "          # Path scopes for the build/smoke jobs",
+  packageScopeStart,
+);
+const packageScope = workflow.slice(packageScopeStart, packageScopeEnd);
 
 const packageChecksPlan = (files: readonly string[]) => {
   const process = Bun.spawnSync({
@@ -1943,13 +1956,13 @@ test("transfer read guard runs for API-only pull request changes", () => {
   expect(packageChecksPlan(["apps/api/src/handlers/files/get.ts"])).toBe(
     "true",
   );
-  expect(jobScopes["ci-checks-rest"]).toBeNull();
+  expect(jobScopes["ci-checks-rest"]).toBe("package_checks_required");
   expect(fastRequired).toContain("ci-checks-rest");
 });
 
 test("CLI packaging parity runs whenever CLI sources, codegen or generated outputs change", () => {
   expect(packageScopeStart).toBeGreaterThan(-1);
-  expect(packageScopeStart).toBeLessThan(selectorStart);
+  expect(packageScopeStart).toBe(selectorStart);
   const parity = Object.entries(ciJobs).flatMap(([job, body]) =>
     (v.is(v.object({ steps: v.array(v.unknown()) }), body)
       ? jobSteps(body)
@@ -1964,7 +1977,7 @@ test("CLI packaging parity runs whenever CLI sources, codegen or generated outpu
   expect(parity.at(0)?.condition).toBe(
     `\${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}`,
   );
-  expect(jobScopes["ci-checks-rest"]).toBeNull();
+  expect(jobScopes["ci-checks-rest"]).toBe("package_checks_required");
   expect(fastRequired).toContain("ci-checks-rest");
   expect(
     evaluateResult({
@@ -2698,9 +2711,7 @@ test("every parallel quality and guard leg fails closed at full depth", () => {
     "ci-checks-rest",
   ]) {
     expect(resultJob.needs).toContain(job);
-    expect(jobScopes[job]).toBe(
-      job.startsWith("code-quality-") ? "package_checks_required" : null,
-    );
+    expect(jobScopes[job]).toBe("package_checks_required");
     for (const event of FULL_DEPTH_EVENTS) {
       for (const result of ["failure", "cancelled", "skipped", ""]) {
         expect(
@@ -3172,7 +3183,7 @@ test("every browser suite belongs to exactly one required matrix leg", () => {
     expect(suite.if, suite.name).toContain("outputs.required == 'true'");
   }
   expect(resultJob.needs).toContain("ci-browser");
-  expect(jobScopes["ci-browser"]).toBeNull();
+  expect(jobScopes["ci-browser"]).toBe("package_checks_required");
   for (const event of FULL_DEPTH_EVENTS) {
     for (const result of ["failure", "cancelled", "skipped"]) {
       expect(evaluateResult({ event, results: { "ci-browser": result } })).toBe(
@@ -4250,6 +4261,83 @@ test("the advisory base proof runs only for pull requests opting in with prove-f
         runsAtDepth(condition, { event, depth: SUITE_DEPTH.fast, proveFix }),
       ).toBe(event === EVENT.pullRequest && proveFix);
     }
+  }
+});
+
+test("the exact docs-only README change plans only Markdown checks in PRs and merge groups", () => {
+  const outputs = [
+    ...new Set([
+      ...Object.values(jobScopes).filter((scope) => scope !== null),
+      "docs_changed_files",
+    ]),
+  ];
+  for (const event of [EVENT.pullRequest, EVENT.mergeGroup]) {
+    const depth =
+      event === EVENT.pullRequest ? SUITE_DEPTH.fast : SUITE_DEPTH.full;
+    const selected = runSelector(
+      ["README.md", "apps/desktop/README.md"],
+      outputs,
+      depth,
+      "false",
+      event,
+    );
+    const plan = Object.fromEntries(
+      outputs.map((name, index) => [name, selected.at(index) ?? ""]),
+    );
+    expect(plan["package_checks_required"]).toBe("false");
+    expect(plan["docs_checks_required"]).toBe("true");
+    expect(JSON.parse(plan["docs_changed_files"] ?? "null")).toEqual([
+      "README.md",
+      "apps/desktop/README.md",
+    ]);
+    const values = {
+      "github.event_name": event,
+      "inputs.heavy_only": false,
+      "github.event.pull_request.labels.*.name": [],
+      "needs.ci-plan.outputs.trusted": "true",
+      "needs.ci-plan.outputs.suite_depth": depth,
+      "needs.ci-plan.outputs.queue_depth": "full",
+      ...Object.fromEntries(
+        Object.entries(plan).map(([name, value]) => [
+          `needs.ci-plan.outputs.${name}`,
+          value,
+        ]),
+      ),
+    };
+    const scheduled = gatedJobs.filter(
+      (job) =>
+        evaluate(jobIf(ciJobs[job]), {
+          values,
+          status: {
+            failure: false,
+            cancelled: false,
+            always: true,
+            success: true,
+          },
+        }) !== false,
+    );
+    expect(scheduled).toEqual(["ci-checks-docs"]);
+    expect(resultJob.needs).toContain("ci-checks-docs");
+    expect(fastRequired).toContain("ci-checks-docs");
+    expect(
+      evaluateResult({
+        event,
+        suiteDepth: depth,
+        results: Object.fromEntries(
+          gatedJobs
+            .filter((job) => job !== "ci-checks-docs")
+            .map((job) => [job, "skipped"]),
+        ),
+        unplannedScopes: outputs.filter((scope) => plan[scope] !== "true"),
+      }),
+    ).toBe(0);
+    expect(
+      evaluateResult({
+        event,
+        suiteDepth: depth,
+        results: { "ci-checks-docs": "failure" },
+      }),
+    ).toBe(1);
   }
 });
 
