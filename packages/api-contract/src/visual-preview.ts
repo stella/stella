@@ -1,5 +1,7 @@
 import * as v from "valibot";
 
+export const VISUAL_PREVIEW_TOOL_NAME = "show_visual";
+
 export const VISUAL_PREVIEW_LIMITS = {
   documentBytes: 2 * 1024 * 1024,
   pngBase64Chars: 1.5 * 1024 * 1024,
@@ -31,7 +33,7 @@ export const visualPreviewOutputSchema = v.strictObject({
     v.string(),
     v.maxLength(VISUAL_PREVIEW_LIMITS.pngBase64Chars),
     v.regex(/^iVBORw0KGgo[A-Za-z0-9+/]*={0,2}$/u),
-    v.check((value) => value.length % 4 === 0),
+    v.base64(),
   ),
   consoleErrors: v.pipe(
     v.array(v.pipe(v.string(), v.maxLength(VISUAL_PREVIEW_LIMITS.errorChars))),
