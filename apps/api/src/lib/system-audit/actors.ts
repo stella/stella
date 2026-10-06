@@ -12,6 +12,11 @@
 
 /** Each run actor with the counts one of its runs reports. */
 export const SYSTEM_RUN_ACTOR_COUNTS = {
+  "system:operator-registrations": [
+    "sinceEpochMilliseconds",
+    "pageSize",
+    "returned",
+  ],
   "system:sanctions-refresh": [
     "activated",
     "activatedEntries",

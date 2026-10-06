@@ -5,6 +5,7 @@ import * as v from "valibot";
 import { AGENT_INPUT_NORMALIZATION_KIND } from "@stll/agent-input";
 import { resourceRef, RESOURCE_TYPE } from "@stll/api-contract";
 import { DECISION_READ_RESOLUTION } from "@stll/api-contract/case-law-decision-resolution";
+import { CASE_LAW_JURISDICTIONS } from "@stll/api-contract/case-law-jurisdictions";
 import {
   PUBLIC_CASE_LAW_COUNTRIES,
   publicCaseLawCountry,
@@ -80,6 +81,7 @@ import {
   LIST_MATTERS_LIST_PROJECTION,
   LIST_MATTERS_PROJECTION,
   LOOKUP_CASE_LAW_PROJECTION,
+  CASE_LAW_COVERAGE_PROJECTION,
   READ_CASE_LAW_CITATIONS_PROJECTION,
   READ_CASE_LAW_DECISION_PROJECTION,
   READ_CONTACT_PROJECTION,
@@ -142,6 +144,7 @@ import type { McpRequestContext } from "@/api/mcp/context";
 import { hasEffectiveAuthority } from "@/api/mcp/effective-authority";
 import {
   defaultLookupDecisionsByIdentity,
+  defaultReadCaseLawCoverageHandler,
   defaultReadGatedDecisionCitations,
   defaultReadGatedDecisionWithDocument,
   defaultSearchDecisionsHandler,
@@ -219,6 +222,7 @@ const defaultReadWorkspaceMembersHandler: typeof readWorkspaceMembersHandler =
     ).readWorkspaceMembersHandler(input);
 
 type StellaToolName =
+  | "case_law_coverage"
   | "list_matters"
   | "lookup_case_law"
   | "read_case_law_citations"
@@ -638,6 +642,20 @@ const searchAcrossMattersArgsSchema = nullAsAbsent(
  */
 const ADMITTED_CASE_LAW_COUNTRIES = PUBLIC_CASE_LAW_COUNTRIES.join(", ");
 
+const CASE_LAW_COVERAGE_TOOL = "case_law_coverage";
+const caseLawCoverageArgsSchema = nullAsAbsent(
+  v.strictObject({
+    country: v.optional(
+      v.pipe(
+        countryInputSchema(
+          "Corpus country; omit for all jurisdictions, including those in preparation.",
+        ),
+        v.minLength(LIMITS.caseLawCoverageCountryMinLength),
+      ),
+    ),
+  }),
+);
+
 /** Named because the country ask names the call to change; a census test binds
  *  this to the tool's own `name` so a rename cannot leave a stale hint. */
 const SEARCH_CASE_LAW_TOOL = "search_case_law";
@@ -1015,6 +1033,31 @@ export const STELLA_TOOL_DEFINITIONS = [
     feature: "FEATURE_PUBLIC_LAW",
     name: SEARCH_CASE_LAW_TOOL,
     scope: "stella:search",
+  }),
+  defineValibotMcpTool({
+    consumesServices: false,
+    annotations: {
+      title: "Read case-law coverage",
+      destructiveHint: false,
+      readOnlyHint: true,
+      openWorldHint: false,
+    },
+    description:
+      "Report case-law availability, decision counts, year ranges and court breakdowns per jurisdiction. Use before concluding that a decision is missing from the corpus; in-preparation counts describe held decisions that public search cannot yet find.",
+    inputSchema: caseLawCoverageArgsSchema,
+    inputNormalization: {
+      country: countryNormalization({
+        spelling: "alpha-3",
+        admitted: CASE_LAW_JURISDICTIONS,
+        tool: CASE_LAW_COVERAGE_TOOL,
+      }),
+    },
+    access: "read",
+    readClass: "public",
+    anonymized: { exposure: "passthrough" },
+    feature: "FEATURE_PUBLIC_LAW",
+    name: CASE_LAW_COVERAGE_TOOL,
+    scope: "stella:read",
   }),
   defineValibotMcpTool({
     consumesServices: true,
@@ -3323,7 +3366,94 @@ const handleSetPracticeJurisdictionsTool: TypedMcpToolHandler<
   );
 };
 
+const handleCaseLawCoverageTool: TypedMcpToolHandler<
+  v.InferInput<typeof CASE_LAW_COVERAGE_PROJECTION>
+> = async ({ args, context }) => {
+  const parsed = v.safeParse(caseLawCoverageArgsSchema, args);
+  if (!parsed.success) {
+    return validationErrorResult(parsed.issues);
+  }
+  const { country } = parsed.output;
+  const readCoverage =
+    context.testDependencies?.readCaseLawCoverageHandler ??
+    defaultReadCaseLawCoverageHandler;
+  const coverage = await readCoverage(caseLawPublicReadDb);
+  if ("message" in coverage) {
+    return structuredErrorResult({
+      code: "upstream_unavailable",
+      message: coverage.message,
+      hint: "Retry case_law_coverage later.",
+      retryable: true,
+    });
+  }
+  const countries =
+    country === undefined
+      ? coverage.countries
+      : coverage.countries.filter((entry) => entry.country === country);
+  if (country !== undefined && countries.length === 0) {
+    return notFoundResult(
+      "Case-law country not found",
+      `Pass one of the coverage country codes: ${coverage.countries.map((entry) => entry.country).join(", ")}, or omit country for all jurisdictions.`,
+    );
+  }
+  return toolDataResult({
+    asOf: coverage.generatedAt,
+    countries: countries.map((entry) => {
+      switch (entry.availability) {
+        case "in-preparation":
+          return {
+            country: entry.country,
+            availability: entry.availability,
+            decisions: entry.stored.decisions,
+            decisionYearFrom: null,
+            decisionYearTo: null,
+            courts: null,
+          };
+        case "searchable":
+          return {
+            country: entry.country,
+            availability: entry.availability,
+            decisions: entry.searchable,
+            decisionYearFrom: entry.decisionYearFrom,
+            decisionYearTo: entry.decisionYearTo,
+            courts:
+              entry.courts === null
+                ? null
+                : entry.courts.map((row) => {
+                    switch (row.type) {
+                      case "court":
+                        return {
+                          type: row.type,
+                          court: row.court,
+                          decisions: row.decisions,
+                        };
+                      case "tier":
+                        return {
+                          type: row.type,
+                          tier: row.tier,
+                          courts: row.courts,
+                          decisions: row.decisions,
+                        };
+                      case "unlisted":
+                        return { type: row.type, decisions: row.decisions };
+                      default: {
+                        row satisfies never;
+                        return panic("Unknown case-law coverage court row");
+                      }
+                    }
+                  }),
+          };
+        default: {
+          entry satisfies never;
+          return panic("Unknown case-law coverage availability");
+        }
+      }
+    }),
+  } satisfies v.InferInput<typeof CASE_LAW_COVERAGE_PROJECTION>);
+};
+
 export const STELLA_TOOL_HANDLERS = {
+  case_law_coverage: handleCaseLawCoverageTool,
   list_matters: handleListMattersTool,
   lookup_case_law: handleLookupCaseLawTool,
   read_case_law_citations: handleReadCaseLawCitationsTool,
@@ -3339,6 +3469,9 @@ export const STELLA_TOOL_SET = defineMcpToolSet(
   STELLA_TOOL_DEFINITIONS,
   STELLA_TOOL_HANDLERS,
   {
+    case_law_coverage: defineChatProjectionMcpToolOutput(
+      CASE_LAW_COVERAGE_PROJECTION,
+    ),
     list_matters: defineChatProjectionMcpToolOutput(LIST_MATTERS_PROJECTION),
     lookup_case_law: defineChatProjectionMcpToolOutput(
       LOOKUP_CASE_LAW_PROJECTION,

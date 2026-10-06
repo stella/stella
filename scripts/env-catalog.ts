@@ -544,6 +544,8 @@ const DESCRIPTION_OVERRIDES: Record<string, string> = {
     "Redis URL used for cross-replica Yjs and awareness broadcast. Treated as secret because it may contain credentials.",
   STELLA_COLLAB_SERVICE_TOKEN:
     "Bearer credential used by the collaboration service for snapshot load and store requests.",
+  OPERATOR_API_TOKEN:
+    "Deployment-owned bearer credential for operator HTTP access. Unset disables access; use at least 32 characters.",
   STELLA_SIGNUP_RATE_LIMIT_IP_SOURCE:
     'Client-IP source for signup limits. Use "direct" without a proxy and "trusted_proxy" behind configured proxies.',
   STELLA_CLIENT_ADDRESS_HEADER:
@@ -890,6 +892,7 @@ export const ENV_CREDENTIAL_CLASSIFICATION = {
   STELLA_COLLAB_PORT: ENV_CREDENTIAL_KIND.notCredential,
   STELLA_COLLAB_REDIS_URL: ENV_CREDENTIAL_KIND.notCredential,
   STELLA_COLLAB_SERVICE_TOKEN: ENV_CREDENTIAL_KIND.credential,
+  OPERATOR_API_TOKEN: ENV_CREDENTIAL_KIND.credential,
   STELLA_COMMIT_SHA: ENV_CREDENTIAL_KIND.notCredential,
   STELLA_OCR_PDF_FONT_PATH: ENV_CREDENTIAL_KIND.notCredential,
   STELLA_ORIGIN_VERIFY_SECRET: ENV_CREDENTIAL_KIND.credential,
@@ -977,6 +980,7 @@ const ACTIVE_EXAMPLE_KEYS = new Set([
   "SMTP_PORT",
   "SMTP_USERNAME",
   "STELLA_COLLAB_SERVICE_TOKEN",
+  "OPERATOR_API_TOKEN",
   "STELLA_SIGNUP_RATE_LIMIT_IP_SOURCE",
   "TRANSACTIONAL_EMAIL_FROM",
   "USE_MOCK_AI",

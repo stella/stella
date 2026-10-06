@@ -439,6 +439,8 @@ export const LIMITS = {
   clauseImportBatchLimit: 200,
   templateFillsRetentionDays: 365,
   caseLawMatterLinksPerWorkspace: 1000,
+  /** An empty coverage country reads as unset: all jurisdictions. */
+  caseLawCoverageCountryMinLength: 1,
   /**
    * Question columns one organization may ADD. Enforced on create alone: the
    * columns that predate the organization-owned model were capped per research

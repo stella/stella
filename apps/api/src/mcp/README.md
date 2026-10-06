@@ -30,9 +30,9 @@ instructions, because an orchestrator picks tools from the names it was handed:
 - `/mcp-documents`: the least-privilege document surface. Document tools plus
   the version-upload lifecycle through `invoke_capability`, whose capability IDs
   are allowlisted for that surface.
-- `/mcp-law`: the public legal corpus. Exactly ten read tools (`search`,
+- `/mcp-law`: the public legal corpus. Exactly eleven read tools (`search`,
   `fetch`, `search_case_law`, `lookup_case_law`, `read_case_law_decision`,
-  `read_case_law_citations`, `search_legislation`, `read_statute`,
+  `read_case_law_citations`, `case_law_coverage`, `search_legislation`, `read_statute`,
   `read_statute_provisions`, `read_provision_history`) under `stella:search`
   and `stella:read`. No matter, document, contact or billing data is reachable
   through it. `search`/`fetch` are the OpenAI-compatible pair, defined and
