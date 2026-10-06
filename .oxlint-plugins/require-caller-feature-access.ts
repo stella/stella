@@ -19,6 +19,13 @@ const GATED_ROUTE_IMPORTS = Object.values(CALLER_FEATURE).flatMap((feature) =>
     canonicalModuleId(source, IMPORTER_ROOT),
   ),
 );
+const isGatedModule = (moduleId: string): boolean =>
+  GATED_ROUTE_IMPORTS.some(
+    (prefix) =>
+      moduleId === prefix ||
+      moduleId.startsWith(`${prefix}/`) ||
+      (prefix.endsWith("/") && moduleId.startsWith(prefix)),
+  );
 const isWithin = (node: AstNode, ancestor: AstNode): boolean => {
   let current: unknown = node;
   while (isAstNode(current)) {
@@ -85,7 +92,7 @@ export default eslintCompatPlugin({
             "Caller-gated features use the server decision through the feature-access owner, without browser flags or preview state.",
         },
       },
-      create(context) {
+      createOnce(context) {
         let enabled = false;
         let filename = "";
         const routes: { node: AstNode; loader: AstNode | null }[] = [];
@@ -96,7 +103,14 @@ export default eslintCompatPlugin({
         const loaders = new Set<string>();
         const routeFactories = new Set<string>();
         return {
-          Program() {
+          before() {
+            routes.length = 0;
+            admissions.length = 0;
+            featureCalls.length = 0;
+            featureBindings.clear();
+            gatedImport = null;
+            loaders.clear();
+            routeFactories.clear();
             const reportedFilename = repoRelativeFilename(context);
             const webRoot = reportedFilename.indexOf("apps/web/src/");
             filename =
@@ -124,12 +138,7 @@ export default eslintCompatPlugin({
               context.report({ node, messageId: "local" });
             }
             const moduleId = canonicalModuleId(source, filename);
-            const gated = GATED_ROUTE_IMPORTS.some(
-              (prefix) =>
-                moduleId === prefix ||
-                moduleId.startsWith(`${prefix}/`) ||
-                (prefix.endsWith("/") && moduleId.startsWith(prefix)),
-            );
+            const gated = isGatedModule(moduleId);
             if (!Array.isArray(node.specifiers)) {
               return;
             }
@@ -176,14 +185,7 @@ export default eslintCompatPlugin({
             const source = node.source.value;
             if (
               typeof source === "string" &&
-              GATED_ROUTE_IMPORTS.some((prefix) => {
-                const moduleId = canonicalModuleId(source, filename);
-                return (
-                  moduleId === prefix ||
-                  moduleId.startsWith(`${prefix}/`) ||
-                  (prefix.endsWith("/") && moduleId.startsWith(prefix))
-                );
-              })
+              isGatedModule(canonicalModuleId(source, filename))
             ) {
               gatedImport = node;
             }
