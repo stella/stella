@@ -81,3 +81,14 @@ export const COURT_TIER_LOCALIZED_LABELS = {
     supreme: "Najvyššie súdy",
   },
 } as const satisfies Record<string, Record<CourtTierLabel, string>>;
+
+export const courtTierLabelsForLanguage = (language: string) => {
+  const normalized = language.toLowerCase();
+  const base = normalized.split("-").at(0);
+  const entries = Object.entries(COURT_TIER_LOCALIZED_LABELS);
+  return (
+    entries.find(([key]) => key.toLowerCase() === normalized)?.[1] ??
+    entries.find(([key]) => key.toLowerCase() === base)?.[1] ??
+    COURT_TIER_LOCALIZED_LABELS.en
+  );
+};

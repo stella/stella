@@ -8,7 +8,7 @@ if (el) {
     value: "count",
     color: { mode: "category", field: "tier", legend: true },
     onSelect: (node) => {
-      el.dataset.selected = node.id;
+      Object.assign(el.dataset, { selected: node.id });
     },
   });
   document
@@ -22,7 +22,7 @@ if (el) {
     ?.addEventListener("click", () => chart.setColorMode("category"));
   document.querySelector("#empty")?.addEventListener("click", () => {
     chart.destroy();
-    delete el.dataset.selected;
+    Reflect.deleteProperty(el.dataset, "selected");
     chart = createVisualCharts(window).treemap(el, {
       data: {
         type: "group",
@@ -33,7 +33,7 @@ if (el) {
       value: "count",
       color: { mode: "category", field: "tier", legend: true },
       onSelect: (node) => {
-        el.dataset.selected = node.id;
+        Object.assign(el.dataset, { selected: node.id });
       },
     });
   });

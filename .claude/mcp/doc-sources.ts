@@ -56,6 +56,7 @@ export const DOC_SOURCES = {
       "@tanstack/ai-persistence",
       "@tanstack/ai-react",
       "@tanstack/ai-sandbox",
+      "@tanstack/charts",
       "@tanstack/devtools-vite",
       "@tanstack/eslint-plugin-router",
       "@tanstack/react-devtools",
@@ -387,9 +388,25 @@ export const DOC_SOURCE_EXCLUSIONS = [
     },
     {
       checkedAt: "2026-10-06T00:00:00.000Z",
+      dependency: "d3-scale",
+      explanation:
+        "https://d3js.org/llms.txt returns 404. Use the official scale API reference at https://d3js.org/d3-scale directly.",
+      expiresAt: "2026-11-05T00:00:00.000Z",
+      reason: "no-llms-txt",
+    },
+    {
+      checkedAt: "2026-10-06T00:00:00.000Z",
       dependency: "postcss",
       explanation:
         "https://postcss.org/llms.txt returns 404. Use the API reference at https://postcss.org/api/ directly.",
+      expiresAt: "2026-11-05T00:00:00.000Z",
+      reason: "no-llms-txt",
+    },
+    {
+      checkedAt: "2026-10-06T00:00:00.000Z",
+      dependency: "@types/d3-scale",
+      explanation:
+        "Type declarations for d3-scale have no separate documentation site. https://d3js.org/llms.txt returns 404; use https://d3js.org/d3-scale and the declarations in @types/d3-scale directly.",
       expiresAt: "2026-11-05T00:00:00.000Z",
       reason: "no-llms-txt",
     },
