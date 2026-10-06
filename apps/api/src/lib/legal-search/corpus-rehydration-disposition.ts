@@ -1,11 +1,8 @@
-import { panic } from "better-result";
-
 import type { CorpusHitDispositionCounter } from "@/api/lib/legal-search/corpus-hit-telemetry";
 
-type CorpusRehydrationDisposition = {
-  id: string;
-  type: "excluded" | "drift";
-};
+type CorpusRehydrationDisposition = Parameters<
+  CorpusHitDispositionCounter["recordCanonical"]
+>[0];
 
 type PartitionCorpusRehydrationOptions<Row> = {
   ids: readonly string[];
@@ -40,20 +37,7 @@ export const recordCorpusRehydrationDispositions = (
   dispositions: readonly CorpusRehydrationDisposition[],
   counter: CorpusHitDispositionCounter,
 ): void => {
-  let excluded = 0;
-  let drift = 0;
   for (const disposition of dispositions) {
-    switch (disposition.type) {
-      case "excluded":
-        excluded += 1;
-        break;
-      case "drift":
-        drift += 1;
-        break;
-      default:
-        disposition.type satisfies never;
-        panic("Unhandled canonical rehydration disposition");
-    }
+    counter.recordCanonical(disposition);
   }
-  counter.record({ excluded, drift });
 };

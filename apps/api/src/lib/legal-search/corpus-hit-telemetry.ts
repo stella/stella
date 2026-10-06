@@ -1,3 +1,5 @@
+import { panic } from "better-result";
+
 import { logger } from "@/api/lib/observability/logger";
 
 export type CorpusHitDispositionCounts = {
@@ -9,15 +11,36 @@ export type CorpusHitDispositionCounts = {
 /** One accumulator shared by the scan, highlighting and canonical reads. */
 export const createCorpusHitDispositionCounter = () => {
   const counts = { malformed: 0, excluded: 0, drift: 0 };
+  const accountedCanonicalIds = new Set<string>();
   return {
     record: ({
       malformed = 0,
-      excluded = 0,
-      drift = 0,
-    }: Partial<CorpusHitDispositionCounts>): void => {
+    }: Partial<Pick<CorpusHitDispositionCounts, "malformed">>): void => {
       counts.malformed += malformed;
-      counts.excluded += excluded;
-      counts.drift += drift;
+    },
+    // The first omission owns the count even if a later read changes its kind.
+    recordCanonical: ({
+      id,
+      type: dispositionType,
+    }: {
+      id: string;
+      type: "excluded" | "drift";
+    }): void => {
+      if (accountedCanonicalIds.has(id)) {
+        return;
+      }
+      accountedCanonicalIds.add(id);
+      switch (dispositionType) {
+        case "excluded":
+          counts.excluded += 1;
+          break;
+        case "drift":
+          counts.drift += 1;
+          break;
+        default:
+          dispositionType satisfies never;
+          panic("Unhandled canonical rehydration disposition");
+      }
     },
     snapshot: () => ({ ...counts }),
   };

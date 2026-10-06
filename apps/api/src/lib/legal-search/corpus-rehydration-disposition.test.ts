@@ -105,6 +105,23 @@ test("canonical disposition accounting preserves eligible rows and counts unique
 
         const counter = createCorpusHitDispositionCounter();
         counter.record({ malformed: 2 });
+        // Each prefix models a scan retaining candidates from earlier rounds.
+        for (let length = 0; length <= fixtures.length; length += 1) {
+          const roundIds = ids.slice(0, length);
+          const round = partitionCorpusRehydration({
+            ids: roundIds,
+            records: records.filter(({ id }) => roundIds.includes(id)),
+          });
+          recordCorpusRehydrationDispositions(round.dispositions, counter);
+          expect(counter.snapshot()).toEqual({
+            malformed: 2,
+            excluded: states
+              .slice(0, length)
+              .filter((state) => state === "excluded").length,
+            drift: states.slice(0, length).filter((state) => state === "drift")
+              .length,
+          });
+        }
         recordCorpusRehydrationDispositions(output.dispositions, counter);
         expect(counter.snapshot()).toEqual({
           malformed: 2,

@@ -30,14 +30,17 @@ import {
   CORPUS_INDEX_MANIFESTS,
   corpusIndexManifestDigest,
 } from "@/api/lib/legal-search/corpus-index-manifest";
+import { readCorpusIndexSearchPage } from "@/api/lib/legal-search/corpus-index-pagination";
 import {
   rankCorpusIndexProviderCandidates,
   rehydrateCorpusIndexProviderCandidatesQuery,
   rehydrateCorpusIndexProviderCandidatesStatement,
 } from "@/api/lib/legal-search/corpus-index-provider";
+import { RELEVANCE_ORDER } from "@/api/lib/legal-search/corpus-search-order";
 import { corpusIndexId } from "@/api/lib/legal-search/index-naming";
 import { isRecord, isUnknownArray } from "@/api/lib/type-guards";
 import { caseLawSourceRow } from "@/api/tests/helpers/case-law-source-row";
+import { installCorpusDispositionScan } from "@/api/tests/helpers/corpus-disposition-scan";
 import {
   createTestPglite,
   withPublicLawReaderRole,
@@ -728,4 +731,58 @@ test("the database returns no content columns for excluded canonical ids", async
       }
     }
   });
+});
+
+test("provider scan counts retained omissions once as eligible candidates grow", async () => {
+  const hitDispositions = createCorpusHitDispositionCounter();
+  const missingId = createSafeId<"caseLawDecision">();
+  const eligibleIds = [czechId, slovakId];
+  const restoreFetch = installCorpusDispositionScan([
+    closedId,
+    missingId,
+    ...eligibleIds,
+  ]);
+  const candidateCounts: number[] = [];
+  const eligibleCounts: number[] = [];
+  try {
+    const page = await readCorpusIndexSearchPage({
+      observer: "unobserved",
+      cluster: "q09",
+      indexId: INDEX_ID,
+      query: "text:fixture",
+      limit: 40,
+      order: RELEVANCE_ORDER,
+      parsedCursor: null,
+      hitDispositions,
+      rankingMode: "off",
+      snippetFields: ["text"],
+      extractId: (hit) =>
+        typeof hit["document_id"] === "string" ? hit["document_id"] : null,
+      extractSnippet: () => null,
+      unseenScoreUpperBound: () => 0,
+      rankCandidates: async (candidates) => {
+        candidateCounts.push(candidates.length);
+        const result = await rankCorpusIndexProviderCandidates({
+          generation: GENERATION,
+          caseLawDb,
+          hitDispositions,
+          candidates,
+          excludedGroups: undefined,
+        });
+        eligibleCounts.push(result.ranked.length);
+        return result;
+      },
+    });
+    expect(page.scan.rounds).toBe(3);
+    expect(candidateCounts).toEqual([2, 3, 4]);
+    expect(eligibleCounts).toEqual([0, 1, 2]);
+    expect(hitDispositions.snapshot()).toEqual({
+      malformed: 0,
+      excluded: 1,
+      drift: 1,
+    });
+    expect(reads).toBe(3);
+  } finally {
+    restoreFetch();
+  }
 });

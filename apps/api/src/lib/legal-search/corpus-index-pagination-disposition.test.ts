@@ -202,13 +202,17 @@ test("a multi-round page emits one aggregate after highlighting", async () => {
 
 test("a caller-owned counter combines all pages and canonical read counts without intermediate logs", async () => {
   const hitDispositions = createCorpusHitDispositionCounter();
-  hitDispositions.record({ excluded: 2, drift: 1 });
+  hitDispositions.recordCanonical({ id: "excluded-a", type: "excluded" });
+  hitDispositions.recordCanonical({ id: "excluded-b", type: "excluded" });
+  hitDispositions.recordCanonical({ id: "missing", type: "drift" });
   stubHits(
     [{ document_id: 7 }, { document_id: "doc-a", text: "best a" }],
     [{ document_id: "doc-a", text: "best a" }],
   );
   await readDispositionPage("native", 40, hitDispositions);
-  hitDispositions.record({ excluded: 3 });
+  for (const id of ["excluded-c", "excluded-d", "excluded-e"]) {
+    hitDispositions.recordCanonical({ id, type: "excluded" });
+  }
   await readDispositionPage("scored", 40, hitDispositions);
   expect(logs.records).toEqual([]);
   expect(hitDispositions.snapshot()).toEqual({

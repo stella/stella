@@ -21,11 +21,14 @@ import {
   CORPUS_INDEX_MANIFESTS,
   corpusIndexManifestDigest,
 } from "@/api/lib/legal-search/corpus-index-manifest";
+import { readCorpusIndexSearchPage } from "@/api/lib/legal-search/corpus-index-pagination";
+import { RELEVANCE_ORDER } from "@/api/lib/legal-search/corpus-search-order";
 import { corpusIndexId } from "@/api/lib/legal-search/index-naming";
 import type {
   LegislationReadDb,
   LegislationReadTransaction,
 } from "@/api/lib/legislation-public-read-db";
+import { installCorpusDispositionScan } from "@/api/tests/helpers/corpus-disposition-scan";
 import {
   createTestPglite,
   withPublicLawReaderRole,
@@ -46,6 +49,8 @@ const DESIRED_FINGERPRINT = "b".repeat(64);
 
 const sourceId = createSafeId<"legislationSource">();
 const unheldId = createSafeId<"legislationDocument">();
+const secondProjectedId = createSafeId<"legislationDocument">();
+const secondProjectedIntentId = createSafeId<"corpusIndexProjectionIntent">();
 const projectedId = createSafeId<"legislationDocument">();
 const queuedId = createSafeId<"legislationDocument">();
 const movedId = createSafeId<"legislationDocument">();
@@ -92,15 +97,17 @@ beforeAll(
     // The document carries nothing that says what an index holds; that is
     // stated by its projection state alone.
     await db.insert(legislationDocuments).values(
-      [projectedId, queuedId, movedId, unheldId].map((id, index) => ({
-        id,
-        sourceId,
-        eli: `CZ/2020/${index + 1}`,
-        title: `Projected act ${index + 1}`,
-        country: "CZE",
-        language: "cs",
-        contentHash: `hash-${index}`,
-      })),
+      [projectedId, queuedId, movedId, unheldId, secondProjectedId].map(
+        (id, index) => ({
+          id,
+          sourceId,
+          eli: `CZ/2020/${id === secondProjectedId ? 6 : index + 1}`,
+          title: `Projected act ${index + 1}`,
+          country: "CZE",
+          language: "cs",
+          contentHash: `hash-${index}`,
+        }),
+      ),
     );
     // Withdrawn by its publisher; nothing has erased it from the index yet.
     await db.insert(legislationDocuments).values({
@@ -127,6 +134,11 @@ beforeAll(
 
     await db.insert(corpusIndexProjectionIntents).values(
       [
+        {
+          id: secondProjectedIntentId,
+          entityId: secondProjectedId,
+          indexId: PROJECTED_INDEX_ID,
+        },
         {
           id: projectedIntentId,
           entityId: projectedId,
@@ -167,6 +179,21 @@ beforeAll(
         appliedAction: "upsert",
         appliedEpoch: 1n,
         appliedRevision: projectedIntentId,
+        appliedFingerprint: APPLIED_FINGERPRINT,
+        appliedIndexId: PROJECTED_INDEX_ID,
+        appliedAt: new Date(),
+      },
+      {
+        family: "legislation",
+        generation: PROJECTED_GENERATION,
+        entityId: secondProjectedId,
+        desiredAction: "upsert",
+        desiredEpoch: 1n,
+        desiredFingerprint: APPLIED_FINGERPRINT,
+        desiredIndexId: PROJECTED_INDEX_ID,
+        appliedAction: "upsert",
+        appliedEpoch: 1n,
+        appliedRevision: secondProjectedIntentId,
         appliedFingerprint: APPLIED_FINGERPRINT,
         appliedIndexId: PROJECTED_INDEX_ID,
         appliedAt: new Date(),
@@ -339,4 +366,59 @@ test("the legislation read separates eligible content from id-only dispositions"
       /Index(?: Only)? Scan using legislation_documents_pkey|Bitmap Index Scan on legislation_documents_pkey/u,
     );
   });
+});
+
+test("legislation scan counts retained omissions once as eligible candidates grow", async () => {
+  const hitDispositions = createCorpusHitDispositionCounter();
+  const missingId = createSafeId<"legislationDocument">();
+  const eligibleIds = [projectedId, secondProjectedId];
+  const restoreFetch = installCorpusDispositionScan([
+    withdrawnId,
+    missingId,
+    ...eligibleIds,
+  ]);
+  const candidateCounts: number[] = [];
+  const eligibleCounts: number[] = [];
+  try {
+    const page = await readCorpusIndexSearchPage({
+      observer: "unobserved",
+      cluster: "q09",
+      indexId: PROJECTED_INDEX_ID,
+      query: "text:fixture",
+      limit: 40,
+      order: RELEVANCE_ORDER,
+      parsedCursor: null,
+      hitDispositions,
+      rankingMode: "off",
+      snippetFields: ["text"],
+      extractId: (hit) =>
+        typeof hit["document_id"] === "string" ? hit["document_id"] : null,
+      extractSnippet: () => null,
+      unseenScoreUpperBound: () => 0,
+      rankCandidates: async (candidates) => {
+        candidateCounts.push(candidates.length);
+        const result = await rehydrateLegislationCandidates({
+          body: { query: "smlouva" },
+          generation: PROJECTED_GENERATION,
+          legislationDb,
+          hitDispositions,
+          candidates,
+          namedWorks: [],
+        });
+        eligibleCounts.push(result.ranked.length);
+        return result;
+      },
+    });
+    expect(page.scan.rounds).toBe(3);
+    expect(candidateCounts).toEqual([2, 3, 4]);
+    expect(eligibleCounts).toEqual([0, 1, 2]);
+    expect(hitDispositions.snapshot()).toEqual({
+      malformed: 0,
+      excluded: 1,
+      drift: 1,
+    });
+    expect(reads).toBe(3);
+  } finally {
+    restoreFetch();
+  }
 });
