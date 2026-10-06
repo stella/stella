@@ -3,7 +3,7 @@ use std::time::Duration;
 use tauri::{State, WebviewWindow};
 use tauri_plugin_opener::OpenerExt;
 
-use crate::account::{self, AccountState, LinkedAccount};
+use crate::account::{self, AccountState};
 use crate::http_client::{DesktopHttpClient, HttpClientOptions};
 
 const MAX_RESPONSE_BYTES: usize = 512 * 1024;
@@ -285,6 +285,7 @@ pub async fn registry_set_default_format(
 #[cfg(test)]
 mod tests {
   use super::*;
+  use crate::account::LinkedAccount;
 
   #[tokio::test]
   #[ignore = "requires STELLA_DESKTOP_SMOKE_API_URL; runs in hosted desktop CI"]

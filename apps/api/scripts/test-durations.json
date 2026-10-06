@@ -319,6 +319,10 @@
     "seconds": 4.398227,
     "source": "estimated"
   },
+  "src/db/desktop-device-proof-replay-rls.db.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
   "src/db/entity-views-migration.test.ts": {
     "seconds": 3.9,
     "source": "measured"
@@ -4306,6 +4310,14 @@
   "src/lib/business-registries/desktop/link-grants.test.ts": {
     "seconds": 4.6,
     "source": "measured"
+  },
+  "src/lib/business-registries/desktop/proof.postgres.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
+  "src/lib/business-registries/desktop/proof.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
   },
   "src/lib/business-registries/desktop/renewal.postgres.test.ts": {
     "seconds": 1,

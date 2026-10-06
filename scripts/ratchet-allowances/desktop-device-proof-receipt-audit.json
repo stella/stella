@@ -1,5 +1,5 @@
 {
   "metric": "audit-skip-directives",
   "delta": 2,
-  "reason": "The confined owner writes only short-lived authentication proof receipts and prunes its own expired receipts in bounded batches. Receipt claims commit independently of later business operations; those operations retain their existing transactional audit recorders."
+  "reason": "ephemeral replay receipts; auth events audited at link lifecycle"
 }
