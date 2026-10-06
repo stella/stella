@@ -97,6 +97,10 @@ const KEY_TYPE_HAS_USER = "the key argument's type requires userId";
 
 // Keyed by handler path under apps/api/src/handlers.
 const PER_USER_READS: Record<string, PerUserRead> = {
+  "desktop-presence/read.ts": {
+    kind: "no-web-caller",
+    calls: ["api.desktop.presence.get"],
+  },
   "views/list.ts": {
     kind: "caller-marker",
     reason:
@@ -127,6 +131,11 @@ const PER_USER_READS: Record<string, PerUserRead> = {
     ],
   },
   "audit-logs/export.ts": { kind: "not-per-user", reason: DOWNLOAD },
+  "lists/verifications/get.ts": {
+    kind: "not-per-user",
+    reason:
+      "The actor determines the read-audit receipt; returned run content is shared within the matter.",
+  },
   "catalogue/list.ts": {
     kind: "keyed",
     calls: ["api.catalogue.get"],

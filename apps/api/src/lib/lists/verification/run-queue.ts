@@ -12,7 +12,6 @@
  */
 
 import { panic, Result, TaggedError } from "better-result";
-import { Worker } from "bullmq";
 import { and, asc, eq, inArray, isNull, or } from "drizzle-orm";
 
 import { DAY_IN_MS, Temporal } from "@stll/time";
@@ -24,7 +23,7 @@ import { loadOrgAISettings } from "@/api/lib/ai-config-loader";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { createBullMqJobId } from "@/api/lib/bullmq-job-id";
-import { createLazyBullMqQueue } from "@/api/lib/bullmq-queue";
+import { BullMqWorker, createLazyBullMqQueue } from "@/api/lib/bullmq-queue";
 import {
   requeueDeterministicJob,
   QUEUE_REQUEUE_OUTCOME,
@@ -895,7 +894,7 @@ export const processListVerificationRun = async ({
 };
 
 export const initListVerificationRunWorker = () => {
-  const worker = new Worker<ListVerificationJobData>(
+  const worker = new BullMqWorker<ListVerificationJobData>(
     QUEUE_NAME,
     async (job) => {
       await processListVerificationRun({ data: job.data });

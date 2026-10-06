@@ -14,6 +14,7 @@ import {
   createSafeDb,
   createScopedDb,
 } from "@/api/db/scoped";
+import type { readGatedDecisionCitationDigest } from "@/api/handlers/case-law/decisions/citation-digest";
 import type { readGatedDecisionCitations } from "@/api/handlers/case-law/decisions/citation-passages";
 import type { readCaseLawCoverageHandler } from "@/api/handlers/case-law/decisions/coverage";
 import type {
@@ -160,6 +161,7 @@ export type McpRequestContext = {
     /** Every court spelling one corpus country holds, for reading a court filter. */
     readCaseLawCourtNames?: (country: string) => Promise<readonly string[]>;
     readGatedDecisionCitations?: typeof readGatedDecisionCitations;
+    readGatedDecisionCitationDigest?: typeof readGatedDecisionCitationDigest;
     lookupDecisionsByIdentity?: typeof lookupDecisionsByIdentity;
     readGatedDecisionWithDocument?: typeof readGatedDecisionWithDocument;
     readsSharedPublicLawCorpus?: typeof readsSharedPublicLawCorpus;
