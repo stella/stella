@@ -261,6 +261,7 @@ test("reused depth prevents every nonstructural CI job and expensive planner ste
   for (const step of planner.steps.slice(checkout)) {
     expect(
       evaluate(step.if ?? "true", {
+        status: { failure: false },
         values: {
           "steps.completed-depth.outputs.run_required": "false",
           "github.event_name": "pull_request",
