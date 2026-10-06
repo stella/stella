@@ -50,14 +50,14 @@ describe("browser storage ownership", () => {
       expect(await lint(rawReferences, owner)).toEqual([]);
       expect(
         await lint(rawReferences, owner.replace("/account/", "/other/")),
-      ).toEqual([1, 2, 3, 4, 5, 6, 8, 9, 11, 12, 13, 14, 15]);
+      ).toEqual([1, 2, 3, 4, 5, 6, 8, 9, 11, 12, 13, 14, 15, 17, 19]);
     }
   });
 
   test("guards test consumers without reporting storage fixture declarations", async () => {
     expect(
       await lint(rawReferences, "apps/web/src/lib/storage-consumer.test.ts"),
-    ).toEqual([1, 2, 3, 4, 5, 6, 8, 9, 11, 12, 13, 14, 15]);
+    ).toEqual([1, 2, 3, 4, 5, 6, 8, 9, 11, 12, 13, 14, 15, 17, 19]);
     expect(
       await lint(
         [
