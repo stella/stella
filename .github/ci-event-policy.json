@@ -68,6 +68,7 @@
     "model-catalog-check.yml/model-catalog-check": "main",
     "network-baseline-record.yml/build": "main",
     "network-baseline-record.yml/record": "main",
+    "network-baseline-request.yml/request": "pr-fast",
     "typecheck-base.yml/record": "main",
     "deploy-staging.yml/resolve": "main",
     "deploy-staging.yml/staging-health": "main",
@@ -158,10 +159,6 @@
       "role": "analysis",
       "cancelInProgress": true
     },
-    "network-baseline-record.yml": {
-      "role": "analysis",
-      "cancelInProgress": false
-    },
     "publish-npm.yml": {
       "role": "publish",
       "cancelInProgress": false
@@ -171,10 +168,6 @@
       "cancelInProgress": false
     },
     "safe-chain-cache.yml": {
-      "role": "analysis",
-      "cancelInProgress": true
-    },
-    "scorecard.yml": {
       "role": "analysis",
       "cancelInProgress": true
     },
