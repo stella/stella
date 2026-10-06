@@ -171,6 +171,7 @@
         "@mistralai/mistralai": "2.7.0",
         "@modelcontextprotocol/client": "2.2.0",
         "@modelcontextprotocol/ext-apps": "^2.0.3",
+        "@playwright/test": "^1.63.0",
         "@standard-schema/spec": "^1.1.0",
         "@stll/property-testing": "workspace:*",
         "@stll/typescript-config": "workspace:*",
@@ -185,6 +186,7 @@
         "pdfjs-dist": "^6.3.289",
         "postcss": "catalog:",
         "tailwindcss": "catalog:",
+        "typescript": "catalog:",
       },
     },
     "apps/collab": {
