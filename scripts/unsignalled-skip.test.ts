@@ -168,6 +168,22 @@ describe("unsignalled skip shapes", () => {
       "const failure = cause => Result.err(cause); try { read(); } catch (cause) { failure(cause); }",
     ],
     [
+      "success result fallback",
+      "try { read(); } catch { return Result.ok([]); }",
+    ],
+    [
+      "success-shaped record fallback",
+      'try { read(); } catch { return { kind: "text", text: "" }; }',
+    ],
+    [
+      "collected success record",
+      'try { read(); } catch (cause) { imported.push({ type: "row", cause }); }',
+    ],
+    [
+      "switch break then swallow",
+      'try { read(); } catch (cause) { switch (kind) { case "a": cleanup(); break; } }',
+    ],
+    [
       "discarded hoisted typed result helper",
       "try { read(); } catch (cause) { toFailure(cause); } function toFailure(cause) { return Result.err(cause); }",
     ],
@@ -314,6 +330,22 @@ describe("unsignalled skip shapes", () => {
     [
       "result catch option",
       "Result.tryPromise({ try: () => read(), catch: cause => cause });",
+    ],
+    [
+      "typed record collected into an issue list",
+      'for (const row of rows) { const found = items.find(match); if (found === undefined) { issues.push({ code: "unknown_source_id", row }); continue; } }',
+    ],
+    [
+      "switch break then rethrow",
+      'try { read(); } catch (cause) { switch (kind) { case "a": cleanup(); break; } throw cause; }',
+    ],
+    [
+      "default break then rethrow",
+      "try { read(); } catch (cause) { switch (kind) { default: break; } throw cause; }",
+    ],
+    [
+      "conditional switch break then rethrow",
+      'try { read(); } catch (cause) { switch (kind) { case "a": if (done) { break; } cleanup(); break; } throw cause; }',
     ],
     [
       "returned result error",

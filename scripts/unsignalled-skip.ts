@@ -105,7 +105,18 @@ const METRIC_METHODS = new Set([
   "observe",
 ]);
 
-const isTypedRecord = (expression: ts.Expression): boolean => {
+// A discriminant counts only when it names a failure: success payloads use the
+// same keys (`kind: "windowed-text"`). A record collected into a failure list
+// (`issues.push({ code: "unknown_source_id" })`) is a failure by its container.
+const FAILURE_DISCRIMINANT =
+  /fail|err|invalid|reject|skip|unavailable|missing|denied/iu;
+const FAILURE_COLLECTION =
+  /(?:issue|error|failure|reject|skip|warning|problem|diagnostic)s?$/iu;
+
+const isTypedRecord = (
+  expression: ts.Expression,
+  { failureCollection = false } = {},
+): boolean => {
   const node = unwrap(expression);
   if (!ts.isObjectLiteralExpression(node)) {
     return false;
@@ -122,7 +133,8 @@ const isTypedRecord = (expression: ts.Expression): boolean => {
     return (
       (name === "ok" && value.kind === ts.SyntaxKind.FalseKeyword) ||
       (["type", "status", "kind", "code"].includes(name) &&
-        (ts.isStringLiteral(value) || ts.isPropertyAccessExpression(value))) ||
+        (ts.isStringLiteral(value) || ts.isPropertyAccessExpression(value)) &&
+        (failureCollection || FAILURE_DISCRIMINANT.test(value.getText()))) ||
       (name.endsWith("Failures") && ts.isObjectLiteralExpression(value))
     );
   });
@@ -257,13 +269,18 @@ function isSignalCall(node: ts.CallExpression, depth: number): boolean {
     (METRIC_METHODS.has(callee.name.text) &&
       /(?:metric|counter|skip|reject|fail)/iu.test(receiver)) ||
     (callee.name.text === "push" &&
-      node.arguments.some((argument) => isTypedReturn(argument, depth)))
+      node.arguments.some(
+        (argument) =>
+          isTypedRecord(argument, {
+            failureCollection: FAILURE_COLLECTION.test(receiver),
+          }) || isTypedReturn(argument, depth),
+      ))
   );
 }
 
 // Building a typed outcome observes nothing: it counts only where the outcome
 // is returned or collected.
-const TYPED_OUTCOME_METHODS = new Set(["err", "ok", "try", "tryPromise"]);
+const TYPED_OUTCOME_METHODS = new Set(["err", "try", "tryPromise"]);
 
 function isTypedOutcomeCall(node: ts.CallExpression, depth: number): boolean {
   const callee = unwrap(node.expression);
@@ -360,7 +377,13 @@ function isTypedReturn(expression: ts.Expression, depth = 0): boolean {
   return false;
 }
 
-type Flow = { live: boolean[]; unsignalledExit: boolean };
+// `switchExits` holds the states of paths that leave the innermost switch with
+// an unlabelled break: they continue after the switch, not out of the body.
+type Flow = {
+  live: boolean[];
+  unsignalledExit: boolean;
+  switchExits: boolean[];
+};
 
 // Track whether each reachable path has observed the failure. A signal in a
 // sibling branch or deferred callback does not cover an empty return.
@@ -373,63 +396,76 @@ type FlowOptions = {
   signalled?: boolean;
   depth?: number;
   mode?: FlowMode;
+  inSwitch?: boolean;
 };
+
+const unique = (states: boolean[]): boolean[] => [...new Set(states)];
+
+function flowSequence(
+  statements: readonly ts.Statement[],
+  options: Required<FlowOptions>,
+): Flow {
+  let live = [options.signalled];
+  let unsignalledExit = false;
+  const switchExits: boolean[] = [];
+  for (const child of statements) {
+    const next = live.map((state) =>
+      flow(child, { ...options, signalled: state }),
+    );
+    live = unique(next.flatMap((item) => item.live));
+    switchExits.push(...next.flatMap((item) => item.switchExits));
+    unsignalledExit ||= next.some((item) => item.unsignalledExit);
+  }
+  return { live, unsignalledExit, switchExits: unique(switchExits) };
+}
 
 function flow(
   statement: ts.Node,
-  { signalled = false, depth = 0, mode = "outcome" }: FlowOptions = {},
+  {
+    signalled = false,
+    depth = 0,
+    mode = "outcome",
+    inSwitch = false,
+  }: FlowOptions = {},
 ): Flow {
+  const options = { signalled, depth, mode, inSwitch };
   if (ts.isBlock(statement)) {
-    let live = [signalled];
-    let unsignalledExit = false;
-    for (const child of statement.statements) {
-      const next = live.map((state) =>
-        flow(child, { signalled: state, depth, mode }),
-      );
-      live = [...new Set(next.flatMap((item) => item.live))];
-      unsignalledExit ||= next.some((item) => item.unsignalledExit);
-    }
-    return { live, unsignalledExit };
+    return flowSequence(statement.statements, options);
   }
   if (ts.isIfStatement(statement)) {
     const state = signalled || hasSignal(statement.expression, depth);
-    const yes = flow(statement.thenStatement, {
-      signalled: state,
-      depth,
-      mode,
-    });
+    const yes = flow(statement.thenStatement, { ...options, signalled: state });
     const no =
       statement.elseStatement === undefined
-        ? { live: [state], unsignalledExit: false }
-        : flow(statement.elseStatement, { signalled: state, depth, mode });
+        ? { live: [state], unsignalledExit: false, switchExits: [] }
+        : flow(statement.elseStatement, { ...options, signalled: state });
     return {
-      live: [...yes.live, ...no.live],
+      live: unique([...yes.live, ...no.live]),
       unsignalledExit: yes.unsignalledExit || no.unsignalledExit,
+      switchExits: unique([...yes.switchExits, ...no.switchExits]),
     };
   }
   if (ts.isThrowStatement(statement)) {
-    return { live: [], unsignalledExit: false };
+    return { live: [], unsignalledExit: false, switchExits: [] };
   }
   if (ts.isSwitchStatement(statement)) {
-    const outcomes = statement.caseBlock.clauses.map((clause) => {
-      // Case fallthrough is conservative: a case must carry its own signal.
-      let live = [signalled];
-      let unsignalledExit = false;
-      for (const child of clause.statements) {
-        const next = live.map((state) =>
-          flow(child, { signalled: state, depth, mode }),
-        );
-        live = next.flatMap((item) => item.live);
-        unsignalledExit ||= next.some((item) => item.unsignalledExit);
-      }
-      return { live, unsignalledExit };
-    });
+    // Case fallthrough is conservative: a case must carry its own signal.
+    const outcomes = statement.caseBlock.clauses.map((clause) =>
+      flowSequence(clause.statements, { ...options, inSwitch: true }),
+    );
     if (!statement.caseBlock.clauses.some(ts.isDefaultClause)) {
-      outcomes.push({ live: [signalled], unsignalledExit: false });
+      outcomes.push({
+        live: [signalled],
+        unsignalledExit: false,
+        switchExits: [],
+      });
     }
     return {
-      live: outcomes.flatMap((item) => item.live),
+      live: unique(
+        outcomes.flatMap((item) => [...item.live, ...item.switchExits]),
+      ),
       unsignalledExit: outcomes.some((item) => item.unsignalledExit),
+      switchExits: [],
     };
   }
   if (ts.isReturnStatement(statement)) {
@@ -441,10 +477,18 @@ function flow(
           (mode === "observe"
             ? !hasSignal(statement.expression, depth)
             : !isTypedReturn(statement.expression, depth))),
+      switchExits: [],
     };
   }
+  if (
+    ts.isBreakStatement(statement) &&
+    statement.label === undefined &&
+    inSwitch
+  ) {
+    return { live: [], unsignalledExit: false, switchExits: [signalled] };
+  }
   if (ts.isContinueStatement(statement) || ts.isBreakStatement(statement)) {
-    return { live: [], unsignalledExit: !signalled };
+    return { live: [], unsignalledExit: !signalled, switchExits: [] };
   }
   // Signals within control structures are conditional. Only direct statements
   // establish observation for the following statement.
@@ -452,7 +496,11 @@ function flow(
     ts.isExpressionStatement(statement) || ts.isVariableStatement(statement)
       ? hasSignal(statement, depth)
       : false;
-  return { live: [signalled || observed], unsignalledExit: false };
+  return {
+    live: [signalled || observed],
+    unsignalledExit: false,
+    switchExits: [],
+  };
 }
 
 function dropsWithoutSignal(
