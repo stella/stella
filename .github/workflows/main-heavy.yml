@@ -5,7 +5,7 @@ on:
   push:
     branches: [main]
   schedule:
-    - cron: "17 2 * * *"
+    - cron: "17 * * * *"
   workflow_dispatch:
     inputs:
       sha:
@@ -14,20 +14,26 @@ on:
         type: string
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
+  # Skipped ordinary pushes must not cancel an hourly or release test.
+  group: >-
+    ${{ github.workflow }}-${{ github.event_name == 'push' && !startsWith(github.event.head_commit.message, 'chore: release v') && github.run_id || github.ref }}
   cancel-in-progress: true
 
 permissions: {}
 
 jobs:
   validate:
-    # Every main push validates its configuration and target before heavy checks.
+    # Ordinary changes coalesce into the hourly run; releases run immediately.
+    if: >-
+      github.event_name != 'push' || startsWith(github.event.head_commit.message, 'chore: release v')
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:
       contents: read
+      statuses: read
     outputs:
       sha: ${{ steps.ancestor.outputs.sha }}
+      run: ${{ steps.selection.outputs.run }}
     steps:
       - name: Validate merge queue depth
         env:
@@ -41,8 +47,36 @@ jobs:
               ;;
           esac
 
+      - name: Select untested heavy SHA
+        id: selection
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
+        with:
+          retries: 0
+          script: |
+            if (context.eventName !== "schedule") {
+              core.setOutput("run", "true");
+              return;
+            }
+            const { data } = await github.rest.repos.listCommitStatusesForRef({
+              ...context.repo,
+              ref: context.sha,
+              per_page: 100,
+            });
+            // Skipped push runs have no main/heavy status and cannot suppress
+            // a scheduled test. Only a completed bot-owned test is evidence.
+            const tested = data.some(status => status.context === "main/heavy"
+              && status.creator?.login === "github-actions[bot]"
+              && ["success", "failure"].includes(status.state));
+            const lastHeavySha = tested ? context.sha : undefined;
+            const required = lastHeavySha !== context.sha;
+            core.setOutput("run", String(required));
+            await core.summary.addRaw(required
+              ? "Main has an untested heavy SHA; running suites."
+              : "Main heavy SHA is unchanged; skipping suites.").write();
+
       # No repository code executes before the target has been validated.
       - name: Validate SHA format
+        if: steps.selection.outputs.run == 'true'
         env:
           SHA: ${{ inputs.sha || github.sha }}
         run: |
@@ -52,6 +86,7 @@ jobs:
           fi
 
       - name: Fetch main history
+        if: steps.selection.outputs.run == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
           REPOSITORY: ${{ github.repository }}
@@ -65,6 +100,7 @@ jobs:
           git -C "$RUNNER_TEMP/main-heavy-validation" -c "http.extraheader=AUTHORIZATION: basic $auth" fetch --no-tags origin main:refs/remotes/origin/main
 
       - name: Verify main ancestry
+        if: steps.selection.outputs.run == 'true'
         id: ancestor
         working-directory: ${{ runner.temp }}/main-heavy-validation
         env:
@@ -77,7 +113,7 @@ jobs:
           echo "sha=$SHA" >> "$GITHUB_OUTPUT"
 
   suites:
-    if: needs.validate.result == 'success'
+    if: needs.validate.result == 'success' && needs.validate.outputs.run == 'true'
     needs: validate
     uses: ./.github/workflows/ci.yml
     permissions:
@@ -98,7 +134,7 @@ jobs:
       DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
 
   status:
-    if: always() && needs.validate.result != 'skipped'
+    if: always() && needs.validate.result != 'skipped' && needs.validate.outputs.run != 'false'
     needs: [validate, suites]
     runs-on: ubuntu-latest
     timeout-minutes: 5

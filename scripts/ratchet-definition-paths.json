@@ -2,6 +2,7 @@
   ".oxlint-plugins/database-access.ts",
   ".oxlint-plugins/module-id.ts",
   "apps/api/src/lib/db/status-tables.gen.ts",
+  "apps/api/src/lib/lists/sanctions/monitoring-transition-identities.ts",
   "packages/api-contract/src/mcp.ts",
   "packages/scripts/src/tsgo-compiler-options.ts",
   "packages/scripts/src/typescript-program.ts",

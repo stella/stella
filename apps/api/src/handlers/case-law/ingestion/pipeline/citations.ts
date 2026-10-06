@@ -5,6 +5,7 @@ import type { PgInsertValue } from "drizzle-orm/pg-core";
 import type { Transaction } from "@/api/db/root";
 import type { ScopedDb } from "@/api/db/safe-db";
 import { caseLawCitations, caseLawPolarityRules } from "@/api/db/schema";
+import type { CitationGraphTransaction } from "@/api/handlers/case-law/citation-graph-transaction";
 import { CITATION_KIND } from "@/api/handlers/case-law/citation-kind";
 import type { ProceduralKeys } from "@/api/handlers/case-law/citation-kind";
 import {
@@ -295,7 +296,7 @@ const citationContent = (row: {
  * Runs under the citation-graph lock, which the caller takes first.
  */
 export const writeDecisionCitations = async (
-  tx: Transaction,
+  tx: CitationGraphTransaction<Transaction>,
   {
     decisionId,
     citations,

@@ -3,6 +3,7 @@ import type { ReactNode } from "react";
 import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
+import { DetailsGrid, DetailsItem } from "@stll/ui/details-grid";
 import { ScrollArea } from "@stll/ui/scroll-area";
 
 import { KnowledgeStatusMessage } from "@/features/knowledge/views/knowledge-status-message";
@@ -59,37 +60,39 @@ export const TemplateCatalogueDetailView = ({
           )}
         </header>
 
-        <dl className="grid grid-cols-1 gap-4 text-sm sm:grid-cols-2">
-          <DetailItem label={t("onboarding.catalogueDetailLicense")}>
-            {licenseUrl ? (
-              <a
-                className="underline underline-offset-2"
-                href={sanitizeHref(template.licenseUrl ?? undefined)}
-                rel="noreferrer"
-                target="_blank"
-              >
-                {template.license}
-              </a>
-            ) : (
-              template.license
-            )}
-          </DetailItem>
+        <DetailsGrid>
+          <DetailsItem label={t("onboarding.catalogueDetailLicense")}>
+            <bdi>
+              {licenseUrl ? (
+                <a
+                  className="underline underline-offset-2"
+                  href={sanitizeHref(template.licenseUrl ?? undefined)}
+                  rel="noreferrer"
+                  target="_blank"
+                >
+                  {template.license}
+                </a>
+              ) : (
+                template.license
+              )}
+            </bdi>
+          </DetailsItem>
           {template.legalArea !== null && (
-            <DetailItem label={t("caseLaw.viewer.legalArea")}>
-              {template.legalArea}
-            </DetailItem>
+            <DetailsItem label={t("caseLaw.viewer.legalArea")}>
+              <bdi>{template.legalArea}</bdi>
+            </DetailsItem>
           )}
           {template.jurisdictions.length > 0 && (
-            <DetailItem label={t("onboarding.catalogueDetailJurisdictions")}>
-              {template.jurisdictions.join(", ")}
-            </DetailItem>
+            <DetailsItem label={t("onboarding.catalogueDetailJurisdictions")}>
+              <bdi>{template.jurisdictions.join(", ")}</bdi>
+            </DetailsItem>
           )}
           {template.languages.length > 0 && (
-            <DetailItem label={t("templates.languages")}>
-              {template.languages.join(", ")}
-            </DetailItem>
+            <DetailsItem label={t("templates.languages")}>
+              <bdi>{template.languages.join(", ")}</bdi>
+            </DetailsItem>
           )}
-        </dl>
+        </DetailsGrid>
 
         {template.disclaimer !== null && (
           <p className="text-muted-foreground text-sm" dir="auto">
@@ -166,20 +169,3 @@ const CataloguePreview = ({
     }
   }
 };
-
-const DetailItem = ({
-  label,
-  children,
-}: {
-  label: string;
-  children: ReactNode;
-}) => (
-  <div className="flex flex-col gap-0.5">
-    <dt className="text-muted-foreground text-xs font-medium tracking-wider uppercase">
-      {label}
-    </dt>
-    <dd className="text-foreground" dir="auto">
-      {children}
-    </dd>
-  </div>
-);

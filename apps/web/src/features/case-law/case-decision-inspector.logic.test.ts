@@ -45,6 +45,32 @@ describe("case decision inspector", () => {
     });
   });
 
+  test("reopening the same search starts a fresh find session in the same tab", () => {
+    const target = {
+      caseNumber: "100 A 1/2026",
+      country: "CZ",
+      court: "Synthetic Court",
+      decisionId: "synthetic-decision",
+      language: null,
+      languageAlternates: null,
+      slug: "synthetic-decision",
+      searchQuery: "odpovědnost",
+    };
+    const first = createCaseDecisionViewTab(target);
+    const reopened = createCaseDecisionViewTab(target);
+
+    expect(reopened.id).toBe(first.id);
+    expect(reopened.payload.searchQuery).toBe(first.payload.searchQuery);
+    expect(first.payload.findSessionId).toBeDefined();
+    expect(reopened.payload.findSessionId).not.toBe(
+      first.payload.findSessionId,
+    );
+    expect(isCaseDecisionViewPayload(reopened.payload)).toBe(true);
+    expect(
+      isCaseDecisionViewPayload({ ...reopened.payload, findSessionId: "" }),
+    ).toBe(false);
+  });
+
   test("validates synchronized payloads", () => {
     const payload = createCaseDecisionViewTab({
       caseNumber: "4 As 3/2008",

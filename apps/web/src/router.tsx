@@ -1,4 +1,3 @@
-import { QueryClient } from "@tanstack/react-query";
 import { createRouter } from "@tanstack/react-router";
 import { setupRouterSsrQueryIntegration } from "@tanstack/react-router-ssr-query";
 import { enableMapSet } from "immer";
@@ -20,8 +19,8 @@ import {
   createRouteErrorLifecycleController,
   resolveCaughtRouteTemplate,
 } from "@/lib/analytics/route-error-lifecycle";
-import { STALE_TIME } from "@/lib/consts";
 import { installPDFDocumentCleanup } from "@/lib/pdf/hooks/use-pdf-document";
+import { createAppQueryClient } from "@/lib/react-query";
 import { isAuthFlowPathname } from "@/lib/redirect";
 import { installSessionCacheGuard } from "@/lib/session-cache-guard";
 import { installTableStoreReconcile } from "@/lib/workspaces/table-store";
@@ -34,13 +33,7 @@ export function getRouter() {
   const routeErrorLifecycle = createRouteErrorLifecycleController(
     analyticsValue.analytics,
   );
-  const queryClient = new QueryClient({
-    defaultOptions: {
-      queries: {
-        staleTime: STALE_TIME.FIVE.MINUTES,
-      },
-    },
-  });
+  const queryClient = createAppQueryClient();
   installPDFDocumentCleanup(queryClient);
   installDocxDocumentCacheInvalidation(queryClient);
   installChatRuntimeCleanup(queryClient);

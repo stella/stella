@@ -1,0 +1,5 @@
+{
+  "metric": "api-lib-top-level-entries",
+  "delta": 1,
+  "reason": "One feature folder owns the personal credential transaction lifecycle, policy and colocated tests, reused by session handlers and MCP authentication."
+}

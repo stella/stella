@@ -14,7 +14,7 @@ import {
   type PublicLawPageSize,
 } from "@/components/public-law-table/public-law-pagination.logic";
 import { api } from "@/lib/api";
-import { APIError, unwrapEden } from "@/lib/errors/api";
+import { APIError, shouldRetryAPIRequest, unwrapEden } from "@/lib/errors/api";
 import { nullableStringCursorSeed } from "@/lib/infinite-query";
 import { type PublicLawData, unwrapPublicLawEden } from "@/lib/public-law-api";
 import { ROUTE_QUERY_STALE_TIME_MS } from "@/lib/react-query";
@@ -155,6 +155,7 @@ export const decisionFacetsOptions = (country: string) =>
       return data;
     },
     staleTime: ROUTE_QUERY_STALE_TIME_MS,
+    retry: shouldRetryAPIRequest,
   });
 
 /** The newest decisions of a jurisdiction's largest courts: the browse page's shelf. */
@@ -346,6 +347,7 @@ export const decisionsInfiniteOptions = (
     initialPageParam: nullableStringCursorSeed(),
     getNextPageParam: (lastPage) => lastPage.nextCursor,
     staleTime: ROUTE_QUERY_STALE_TIME_MS,
+    retry: shouldRetryAPIRequest,
   });
 
 type RefineCaseLawQueryOptions = {

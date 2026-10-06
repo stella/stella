@@ -245,8 +245,10 @@ describe("public corpus fleet request budgets", () => {
         }
         return await completion.promise;
       };
+      // Refusals are what this measures; skip the brief wait for a slot.
       const composition = createPublicCorpusRateLimitComposition({
         createRedisBinding: bindings.binding,
+        concurrency: { waitMsOf: () => 0 },
       });
       const app = new Elysia().group(STELLA_API_VERSION_PREFIX, (group) =>
         group
