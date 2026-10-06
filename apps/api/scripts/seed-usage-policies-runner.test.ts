@@ -1,6 +1,6 @@
 import { PGlite } from "@electric-sql/pglite";
 import { expect, test } from "bun:test";
-import { sql } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { getTableConfig, PgDialect } from "drizzle-orm/pg-core";
 import { drizzle } from "drizzle-orm/pglite";
 import { mkdtempSync, readFileSync, rmSync } from "node:fs";
@@ -249,29 +249,27 @@ test("writes attempted rows and the failing row after rollback, without private 
   });
 });
 
-test("empty and invalid configurations produce empty files without opening the database", async () => {
+test("an invalid configuration produces an empty file without opening the database", async () => {
   const dir = mkdtempSync(nodePath.join(tmpdir(), "policy-empty-"));
   try {
-    for (const [index, input] of ["[]", "invalid JSON"].entries()) {
-      const path = nodePath.join(dir, `${index}.jsonl`);
-      const report = await runSeedReport({
-        freeTier: "off",
-        mode: "apply",
-        input,
-        resultsPath: path,
-        openDb: () => {
-          throw new TypeError("Unexpected database access");
-        },
-      });
-      expect(report.status).toBe(index === 0 ? "complete" : "failed");
-      expect(readFileSync(path, "utf-8")).toBe("");
-    }
+    const path = nodePath.join(dir, "invalid.jsonl");
+    const report = await runSeedReport({
+      freeTier: "off",
+      mode: "apply",
+      input: "invalid JSON",
+      resultsPath: path,
+      openDb: () => {
+        throw new TypeError("Unexpected database access");
+      },
+    });
+    expect(report.status).toBe("failed");
+    expect(readFileSync(path, "utf-8")).toBe("");
     let opened = false;
     const rejection = await runSeedReport({
       freeTier: "off",
       mode: "apply",
       input: "[]",
-      resultsPath: nodePath.join(dir, "0.jsonl"),
+      resultsPath: path,
       openDb: () => {
         opened = true;
         throw new TypeError("Unexpected database access");
@@ -541,6 +539,38 @@ test("a free policy absent from the seeds stops applying", async () => {
       { policyKey: "free", kind: "free", active: false },
       { policyKey: "team", kind: "subscription", active: true },
     ]);
+  });
+});
+
+test("an empty configuration retires the free policy and keeps the public catalog", async () => {
+  await withDatabase(async (db, dir) => {
+    await runSeedReport({
+      mode: "apply",
+      freeTier: "on",
+      input: JSON.stringify([freePolicy("free"), policy("team")]),
+      resultsPath: nodePath.join(dir, "first.jsonl"),
+      openDb: () => db,
+    });
+    const report = await runSeedReport({
+      mode: "apply",
+      freeTier: "off",
+      input: "[]",
+      resultsPath: nodePath.join(dir, "empty.jsonl"),
+      openDb: () => db,
+    });
+    expect(report.rows).toEqual([
+      { policyKey: "free", mode: "apply", outcome: "deactivated" },
+    ]);
+    expect(report.status).toBe("complete");
+    expect(await readPolicyRows(db)).toEqual([
+      { policyKey: "free", kind: "free", active: false },
+      { policyKey: "team", kind: "subscription", active: true },
+    ]);
+    const [team] = await db
+      .select({ visibility: usagePolicies.visibility })
+      .from(usagePolicies)
+      .where(eq(usagePolicies.policyKey, "team"));
+    expect(team?.visibility).toBe("public");
   });
 });
 

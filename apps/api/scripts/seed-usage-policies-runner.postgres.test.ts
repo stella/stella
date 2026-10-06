@@ -137,4 +137,53 @@ describe.skipIf(!runPostgres)("usage policy seed outcomes (postgres)", () => {
       }
     });
   });
+
+  test("an empty configuration with the free tier off deactivates the seeded free policy", async () => {
+    if (!databaseUrl) {
+      panic("DATABASE_URL required");
+    }
+    await withGatedTestClients(databaseUrl, async ({ openClient }) => {
+      const { db } = openClient({ max: 1 });
+      const dir = mkdtempSync(nodePath.join(tmpdir(), "policy-postgres-free-"));
+      await db.execute(
+        sql`CREATE TEMP TABLE usage_policies (LIKE public.usage_policies INCLUDING ALL)`,
+      );
+      try {
+        const seeded = await runSeedReport({
+          mode: "apply",
+          freeTier: "on",
+          input: JSON.stringify([
+            {
+              key: "free",
+              displayName: "Free",
+              kind: "free",
+              monthlyUsageUnits: 0,
+              maxMembers: 1,
+              storageBytesPerAssignment: 1024,
+              serviceActionsPerPeriod: 3,
+            },
+          ]),
+          resultsPath: nodePath.join(dir, "seeded.jsonl"),
+          openDb: () => db,
+        });
+        expect(seeded.status).toBe("complete");
+        const emptied = await runSeedReport({
+          mode: "apply",
+          freeTier: "off",
+          input: "[]",
+          resultsPath: nodePath.join(dir, "emptied.jsonl"),
+          openDb: () => db,
+        });
+        expect(emptied.rows).toEqual([
+          { policyKey: "free", mode: "apply", outcome: "deactivated" },
+        ]);
+        expect(
+          await db.select({ active: usagePolicies.active }).from(usagePolicies),
+        ).toEqual([{ active: false }]);
+      } finally {
+        await db.execute(sql`DROP TABLE pg_temp.usage_policies`);
+        rmSync(dir, { recursive: true });
+      }
+    });
+  });
 });

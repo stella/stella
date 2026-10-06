@@ -2,8 +2,9 @@
  * Seed usage policies from deployment-owned JSON config.
  *
  * Idempotent: runs upsert by `policyKey`; non-empty seeds hide public
- * rows whose keys are absent. Source defaults are intentionally empty
- * so the public repo does not encode an operator policy.
+ * rows whose keys are absent, and every run (empty seeds included)
+ * deactivates a free policy whose key is absent. Source defaults are
+ * intentionally empty so the public repo does not encode an operator policy.
  */
 
 import { Result, TaggedError } from "better-result";
@@ -243,12 +244,10 @@ const seedPolicies = async ({ db, seeds, mode }: SeedPoliciesOptions) => {
         outcome: row.inserted ? "inserted" : "updated",
       });
     }
-    if (seeds.length === 0) {
-      return;
-    }
     const seededKeys = seeds.map((seedPolicy) => seedPolicy.key);
     // A free policy absent from the seeds stops applying: the database
-    // reads only an active one.
+    // reads only an active one. Empty seeds retire it too, so turning the
+    // free tier off with no remaining config cannot leave its limits live.
     const retiredFree = await tx
       .update(usagePolicies)
       .set({ active: false })
@@ -262,6 +261,9 @@ const seedPolicies = async ({ db, seeds, mode }: SeedPoliciesOptions) => {
       .returning({ policyKey: usagePolicies.policyKey });
     for (const row of retiredFree) {
       rows.push({ policyKey: row.policyKey, mode, outcome: "deactivated" });
+    }
+    if (seeds.length === 0) {
+      return;
     }
     const retiring = and(
       notInArray(usagePolicies.policyKey, seededKeys),
@@ -355,9 +357,6 @@ export const runSeedReport = async ({
   let seeds: UsagePolicySeed[] = [];
   const result = await Result.tryPromise(async () => {
     seeds = parseSeeds(input, freeTier);
-    if (seeds.length === 0) {
-      return { status: "complete", rows: [] } as const;
-    }
     return await seedPolicies({ db: await openDb(), seeds, mode });
   });
   const report = result.isOk()
