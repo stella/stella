@@ -166,6 +166,9 @@ const derivedAttributeRuleOptions = {
 };
 
 const fixtureRuleOverrides = [
+  fixtureRuleOverride("require-json-import-attribute.fixture.ts", [
+    "require-json-import-attribute/require-json-import-attribute",
+  ]),
   fixtureRuleOverride("drizzle.fixture.ts", [
     "drizzle/enforce-delete-with-where",
     "drizzle/enforce-update-with-where",
@@ -1544,6 +1547,7 @@ export default defineConfig({
     "./.oxlint-plugins/no-imported-class-constant.ts",
     "./.oxlint-plugins/no-static-devtools-import.ts",
     "./.oxlint-plugins/no-static-catalogue-route-import.ts",
+    "./.oxlint-plugins/require-json-import-attribute.ts",
     "./.oxlint-plugins/no-workspace-field-value-drift.ts",
     "./.oxlint-plugins/icon-button-requires-tooltip.ts",
     "./.oxlint-plugins/no-disabled-tooltip-trigger.ts",
@@ -1590,6 +1594,12 @@ export default defineConfig({
   ],
 
   overrides: [
+    {
+      files: ["apps/web/e2e/**", "scripts/**"],
+      rules: {
+        "require-json-import-attribute/require-json-import-attribute": "error",
+      },
+    },
     {
       // Plugin fixtures include intentional lexical reads and class references
       // before declaration to exercise rule diagnostics.

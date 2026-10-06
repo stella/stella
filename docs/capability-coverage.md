@@ -687,6 +687,6 @@ mechanics, and similar), not gaps in coverage.
 | realtime_stream | 4 |
 | search_ui | 15 |
 | session_token_exchange | 20 |
-| ui_navigation_state | 14 |
+| ui_navigation_state | 13 |
 | upload_mechanics | 19 |
 | url_preview | 2 |

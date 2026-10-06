@@ -389,7 +389,11 @@ export const SELF_TEST_CASES: readonly SelfTestCase[] = [
       return (
         expected.length > 0 &&
         expected.every((id) =>
-          hasKey(result, `flagged-capability:${id}@${GATED_ROUTE_FILE}`),
+          result.findings.some(
+            (finding) =>
+              finding.kind === "flagged-capability" &&
+              finding.capability === id,
+          ),
         )
       );
     },

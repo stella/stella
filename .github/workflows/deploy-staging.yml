@@ -8,7 +8,7 @@ name: Deploy main to staging
 #
 # Staging is off unless someone starts it, so this runs only when
 # dispatched. A dispatch while staging is not answering deploys nothing and
-# stays green with a notice: start staging first, then dispatch again. To
+# fails with a staging/verified error: start staging first, then dispatch again. To
 # deploy a fix to a staging that is up but unhealthy, dispatch with
 # deploy_when_unreachable.
 
@@ -43,6 +43,7 @@ jobs:
     outputs:
       sha: ${{ steps.resolve.outputs.sha }}
       tip: ${{ steps.resolve.outputs.tip }}
+      main-sha: ${{ steps.resolve.outputs.main-sha }}
 
     steps:
       - name: Checkout
@@ -67,6 +68,7 @@ jobs:
     timeout-minutes: 5
     permissions:
       contents: read
+      statuses: write
     outputs:
       deploy: ${{ steps.decide.outputs.deploy }}
 
@@ -146,9 +148,10 @@ jobs:
 
       # Staging that does not answer is normally off. Deploying into it would
       # leave the smoke below measuring an environment that is not running.
-      - name: Decide deploy or skip
+      - name: Decide whether staging can deploy
         id: decide
         env:
+          GH_TOKEN: ${{ github.token }}
           DEPLOY_SHA: ${{ needs.resolve.outputs.sha }}
           DEPLOY_WHEN_UNREACHABLE: ${{ inputs.deploy_when_unreachable }}
           STATUS: ${{ steps.probe.outputs.status }}
@@ -172,7 +175,13 @@ jobs:
             echo "Staging is not answering its health probe, so \`${DEPLOY_SHA}\` was not deployed."
             echo "Start staging, then dispatch this workflow again."
           } >> "$GITHUB_STEP_SUMMARY"
-          echo "::notice::Staging is not answering; nothing was deployed. Start staging, then dispatch again."
+          echo "::error::staging off: nothing was deployed. Start staging, then dispatch again."
+          run_url="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+          jq -n --arg url "$run_url" \
+            '{state: "error", context: "staging/verified", description: "staging off", target_url: $url}' |
+            gh api "repos/${GITHUB_REPOSITORY}/statuses/${DEPLOY_SHA}" \
+              --method POST --input - >/dev/null
+          exit 1
 
   build-api:
     name: Build staging API image
@@ -259,11 +268,26 @@ jobs:
             STELLA_VERSION=${{ steps.ref.outputs.release_ref }}
             STELLA_COMMIT_SHA=${{ needs.resolve.outputs.sha }}
 
+      # Attestation tooling comes from the workflow revision, after building,
+      # so it cannot alter the pinned source or its Docker context.
+      - name: Checkout attestation tooling
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.workflow_sha }}
+          path: .workflow-actions
+          persist-credentials: false
+          sparse-checkout: |
+            .github/actions/provenance
+            scripts/staging-source-predicate.sh
+          sparse-checkout-cone-mode: false
+
       - name: Attest image provenance
-        uses: ./.github/actions/provenance
+        uses: ./.workflow-actions/.github/actions/provenance
         with:
           subject-name: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
           subject-digest: ${{ steps.build.outputs.digest }}
+          source-sha: ${{ needs.resolve.outputs.sha }}
+          main-sha: ${{ needs.resolve.outputs.main-sha }}
 
   build-web:
     name: Build staging web image
@@ -310,11 +334,26 @@ jobs:
           posthog-cli-api-key: ${{ secrets.POSTHOG_CLI_API_KEY }}
           posthog-project-id: ${{ vars.POSTHOG_PROJECT_ID }}
 
+      # Attestation tooling comes from the workflow revision, after building,
+      # so it cannot alter the pinned source or its Docker context.
+      - name: Checkout attestation tooling
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.workflow_sha }}
+          path: .workflow-actions
+          persist-credentials: false
+          sparse-checkout: |
+            .github/actions/provenance
+            scripts/staging-source-predicate.sh
+          sparse-checkout-cone-mode: false
+
       - name: Attest web image provenance
-        uses: ./.github/actions/provenance
+        uses: ./.workflow-actions/.github/actions/provenance
         with:
           subject-name: ${{ env.REGISTRY }}/${{ env.WEB_IMAGE_NAME }}
           subject-digest: ${{ steps.build.outputs.digest }}
+          source-sha: ${{ needs.resolve.outputs.sha }}
+          main-sha: ${{ needs.resolve.outputs.main-sha }}
 
   promote-staging:
     name: Promote staging images
@@ -502,9 +541,42 @@ jobs:
           SMOKE_AI_JOURNEY: only
           SMOKE_AI_OPENAI_API_KEY: ${{ secrets.STAGING_SMOKE_OPENAI_API_KEY }}
 
+      - name: Check staging corpus search backend
+        id: corpus-preflight
+        if: ${{ !cancelled() && steps.smoke-deps.conclusion == 'success' }}
+        timeout-minutes: 2
+        env:
+          E2E_API_URL: https://api-staging.stll.app
+          E2E_EDGE_HEADER_NAME: x-stella-edge-token
+          E2E_EDGE_HEADER_VALUE: ${{ secrets.STAGING_VIEWER_ACCESS_TOKEN }}
+        run: |
+          set -euo pipefail
+          curl_edge_args=()
+          if [[ -n "${E2E_EDGE_HEADER_NAME:-}" && -n "${E2E_EDGE_HEADER_VALUE:-}" ]]; then
+            curl_edge_args+=(--header "${E2E_EDGE_HEADER_NAME}: ${E2E_EDGE_HEADER_VALUE}")
+          fi
+          response_file="$RUNNER_TEMP/staging-corpus-search.json"
+          http_status="000"
+          if ! http_status="$(curl --connect-timeout 5 --max-time 30 \
+            --silent --show-error --output "$response_file" --write-out '%{http_code}' \
+            --header 'Content-Type: application/json' \
+            ${curl_edge_args[@]+"${curl_edge_args[@]}"} \
+            --data '{"query":"contract","country":"CZ","limit":1,"strict":true}' \
+            "${E2E_API_URL}/case/decisions/search")"; then
+            http_status="000"
+          fi
+          if [[ "$http_status" != "200" ]] || ! jq -e \
+            'type == "object" and (.hits | type == "array") and (.queryUsed | type == "string" and length > 0) and has("total") and (has("message") | not)' \
+            "$response_file" >/dev/null 2>&1; then
+            echo "::error title=corpus index down::Staging case-law search preflight failed (HTTP ${http_status}); MCP smoke cannot verify search without its backend."
+            echo "corpus index down: staging case-law search preflight failed (HTTP ${http_status})." >> "$GITHUB_STEP_SUMMARY"
+            exit 1
+          fi
+          echo "Staging corpus search backend answered the preflight." >> "$GITHUB_STEP_SUMMARY"
+
       - name: Run staging MCP user journeys
         id: mcp-smoke
-        if: ${{ !cancelled() && steps.smoke-deps.conclusion == 'success' }}
+        if: ${{ !cancelled() && steps.smoke-deps.conclusion == 'success' && steps.corpus-preflight.conclusion == 'success' }}
         run: bun run canary:mcp
         env:
           MCP_CANARY_ENVIRONMENT: staging

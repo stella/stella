@@ -6,7 +6,7 @@ import { appendFileSync } from "node:fs";
 import path from "node:path";
 import { isDeepStrictEqual } from "node:util";
 
-import aliasInventory from "../apps/api/src/lib/db/migration-alias-inventory.json";
+import aliasInventory from "../apps/api/src/lib/db/migration-alias-inventory.json" with { type: "json" };
 import {
   findMalformedRequiresLines,
   findSortUnstableNames,

@@ -12,7 +12,7 @@ import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { unwrapEden } from "@/lib/errors/api";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { useQueryView } from "@/lib/use-query-view";
-import { deploymentFeaturesOptions } from "@/queries/deployment-features";
+import { workspacesNavigationOptions } from "@/lib/workspaces/queries";
 
 const TIME_BILLING_FEATURE_ID = "time-billing";
 
@@ -87,7 +87,7 @@ export const useTimeBillingEnrolment = () => {
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: options.queryKey }),
         queryClient.invalidateQueries({
-          queryKey: deploymentFeaturesOptions({
+          queryKey: workspacesNavigationOptions({
             userId: user.id,
             organizationId: user.activeOrganizationId,
           }).queryKey,
