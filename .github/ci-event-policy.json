@@ -96,6 +96,7 @@
     "railway-template-source.yml/drift": "main",
     "disarm-auto-merge.yml/disarm": "pr-fast",
     "desktop-release-canary.yml/check-latest": "main",
+    "journey-canary.yml/journeys": "main",
     "provenance-nightly.yml/provenance-update": "main",
     "deploy-landing.yml/scope": "main",
     "deploy-landing.yml/build": "main",

@@ -22,11 +22,20 @@ type StatuteHit = Extract<
   v.InferInput<typeof SEARCH_LEGISLATION_PROJECTION>,
   { results: unknown[] }
 >["results"][number];
-const readFixture = (text: string | null) =>
-  ({ items: [{ status: "found", decision: { text } }] }) satisfies {
+// A read without text names why instead (a licence or an unserved document).
+const readFixture = (text: string | undefined) =>
+  ({
+    items: [
+      {
+        status: "found",
+        decision:
+          text === undefined ? { textWithheldReason: "fixture" } : { text },
+      },
+    ],
+  }) satisfies {
     items: {
       status: FoundDecision["status"];
-      decision: Pick<FoundDecision["decision"], "text">;
+      decision: Pick<FoundDecision["decision"], "text" | "textWithheldReason">;
     }[];
   };
 const caseHit = { decisionId: "fixture", caseNumber: "fixture" } satisfies Pick<
@@ -59,6 +68,7 @@ type Scenario = {
     | "wrong-shape"
     | "empty-text"
     | "whitespace-text"
+    | "withheld-text"
     | "sse"
     | "auth-error"
     | "invalid-hit"
@@ -94,6 +104,9 @@ const mcpPayload = ({ name, rpc }: McpPayloadOptions) => {
   }
   if (rpc === "whitespace-text") {
     return readFixture(" \n ");
+  }
+  if (rpc === "withheld-text") {
+    return readFixture(undefined);
   }
   return readFixture(SENTINEL);
 };
@@ -465,6 +478,7 @@ describe("scheduled read journeys", () => {
     ["empty collection", { rpc: "empty" }, "empty_result"],
     ["empty text", { rpc: "empty-text" }, "empty_result"],
     ["whitespace text", { rpc: "whitespace-text" }, "empty_result"],
+    ["withheld text", { rpc: "withheld-text" }, "empty_result"],
     ["RPC error", { rpc: "error" }, "contract_error"],
     ["malformed JSON", { rpc: "malformed" }, "contract_error"],
     ["RPC identity", { rpc: "wrong-id" }, "contract_error"],

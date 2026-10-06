@@ -109,7 +109,7 @@ validate_payload() {
 
 case_shape='.results | type == "array" and all(.[]; type == "object" and (.decisionId | type == "string" and length > 0) and (.caseNumber | type == "string" and length > 0))'
 case_nonempty='.results | length > 0'
-read_shape='.items | type == "array" and all(.[]; .status == "found" and (.decision | type == "object" and has("text")) and (.decision.text | type == "string" or . == null))'
+read_shape='.items | type == "array" and all(.[]; .status == "found" and (.decision | type == "object") and (.decision.text | type == "string" or . == null))'
 read_nonempty='.items | length > 0 and all(.[]; .decision.text | type == "string" and test("\\S"))'
 statute_shape='.results | type == "array" and all(.[]; type == "object" and (.documentId | type == "string" and length > 0) and (.eli | type == "string" and length > 0) and (.title | type == "string" and length > 0))'
 statute_nonempty='.results | length > 0'
