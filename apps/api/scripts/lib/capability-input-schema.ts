@@ -25,7 +25,7 @@ type ConditionalSchemaRequirement = {
 const hasSchemaProjection = (
   value: unknown,
 ): value is ConditionalSchemaRequirement =>
-  isRecord(value) && typeof value.projectInputSchema === "function";
+  isRecord(value) && typeof value["projectInputSchema"] === "function";
 
 const canonicalSchemaPart = (value: unknown) => {
   if (value === undefined) {
@@ -38,9 +38,13 @@ const canonicalSchemaPart = (value: unknown) => {
 };
 
 const staticInputSchemas = (config: Record<string, unknown>) => {
-  const requirement = config.featureAccess;
+  const requirement = config["featureAccess"];
   if (parseFeatureRequirement(requirement)?.type !== "conditional") {
-    return { body: config.body, params: config.params, query: config.query };
+    return {
+      body: config["body"],
+      params: config["params"],
+      query: config["query"],
+    };
   }
   if (!hasSchemaProjection(requirement)) {
     return panic(
@@ -48,9 +52,9 @@ const staticInputSchemas = (config: Record<string, unknown>) => {
     );
   }
   return requirement.projectInputSchema({
-    body: canonicalSchemaPart(config.body),
-    params: canonicalSchemaPart(config.params),
-    query: canonicalSchemaPart(config.query),
+    body: canonicalSchemaPart(config["body"]),
+    params: canonicalSchemaPart(config["params"]),
+    query: canonicalSchemaPart(config["query"]),
   });
 };
 

@@ -357,6 +357,8 @@ export const ${name} = { run: { featureId: "fixture", ${target} } };`;
     for (const read of [
       'import { layouts } from "../db/schema/layout";',
       'import * as tables from "../db/schema/layout"; const rows = tables.layouts;',
+      'import * as tables from "../db/schema/layout"; const rows = Object.values(tables);',
+      'import * as tables from "../db/schema/layout"; const key = "layouts"; const rows = tables[key];',
       "const rows = sql`select * from fixture_layouts`;",
     ]) {
       sources.set(file, read);

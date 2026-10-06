@@ -1,5 +1,6 @@
 import { panic, TaggedError } from "better-result";
 
+import type { ChatHarnessProfile } from "@/api/tests/helpers/chat-harness-profile";
 import {
   providerWireFormatOf,
   signedGeminiCallsOf,
@@ -354,11 +355,13 @@ const responseFor = (
  */
 export const installProviderWireReplay = ({
   passThroughOrigins = [],
+  profile,
   retryAfterMs,
 }: {
   /** In-process services (a fake object store) whose requests go through
    *  untouched; nothing else leaves the replay. */
   passThroughOrigins?: readonly string[];
+  profile?: ChatHarnessProfile | undefined;
   /** OpenAI/Anthropic retry hints; omitted to preserve recorded headers. */
   retryAfterMs?: number | undefined;
 } = {}) => {
@@ -385,128 +388,133 @@ export const installProviderWireReplay = ({
     ) {
       return await originalFetch(input, init);
     }
-    const { bodyText, headers, method, signal, url } = await readRequest(
-      input,
-      init,
-    );
-    const path = cassetteRequestPath(url);
-    const requestModel = requestModelOf(url, bodyText);
-    const format = providerWireFormatOf(url);
-    if (format !== null) {
-      let body: unknown = null;
-      try {
-        body = JSON.parse(bodyText);
-        // swallow-ok: unparseable request bodies remain null and are reported by transcript validation
-      } catch {
-        // Unreadable: the transcript check reports it.
-      }
-      transcripts.push(
-        format === "gemini"
-          ? { body, format, signedCalls: new Map(signedCalls) }
-          : { body, format },
+    const answerRequest = async () => {
+      const { bodyText, headers, method, signal, url } = await readRequest(
+        input,
+        init,
       );
-    }
-    const refuse = (reason: string): never => {
-      unexpected.push(`${method} ${url.host}${path}: ${reason}`);
+      const path = cassetteRequestPath(url);
+      const requestModel = requestModelOf(url, bodyText);
+      const format = providerWireFormatOf(url);
+      if (format !== null) {
+        let body: unknown = null;
+        try {
+          body = JSON.parse(bodyText);
+          // swallow-ok: unparseable request bodies remain null and are reported by transcript validation
+        } catch {
+          // Unreadable: the transcript check reports it.
+        }
+        transcripts.push(
+          format === "gemini"
+            ? { body, format, signedCalls: new Map(signedCalls) }
+            : { body, format },
+        );
+      }
+      const refuse = (reason: string): never => {
+        unexpected.push(`${method} ${url.host}${path}: ${reason}`);
+        requests.push({
+          body: bodyText,
+          exchange: null,
+          headers,
+          method,
+          model: requestModel,
+          path,
+          url: url.toString(),
+        });
+        // A rejected fetch, which every SDK reads as a connection failure.
+        throw new ProviderWireRefusal({
+          message: `Provider wire replay refused the request: ${reason}`,
+        });
+      };
+      if (!PROVIDER_HOST.test(url.hostname)) {
+        return refuse(
+          "not a provider host; the replay never reaches the network",
+        );
+      }
+      if (signal.aborted) {
+        throw abortError();
+      }
+      if (
+        sideAnswer !== undefined &&
+        model !== null &&
+        requestModel !== null &&
+        requestModel !== model
+      ) {
+        requests.push({
+          body: bodyText,
+          exchange: "side",
+          headers,
+          method,
+          model: requestModel,
+          path,
+          url: url.toString(),
+        });
+        return responseFor(sideAnswer, signal, undefined, options.chunking);
+      }
+      // A repeated exchange answers every retry until a request asks for
+      // something else.
+      const previous = queue[cursor - 1];
+      const current =
+        previous?.exchange.repeat === true &&
+        previous.exchange.request.path === path
+          ? { entry: previous, index: cursor - 1 }
+          : { entry: queue[cursor], index: cursor };
+      if (current.entry === undefined) {
+        return refuse("no exchange left to answer it");
+      }
+      if (current.entry.exchange.request.path !== path) {
+        return refuse(`expected ${current.entry.exchange.request.path}`);
+      }
+      if (method !== current.entry.exchange.request.method) {
+        return refuse(`expected ${current.entry.exchange.request.method}`);
+      }
+      if (model !== null && requestModel !== null && requestModel !== model) {
+        return refuse(`expected model ${model}, got ${requestModel}`);
+      }
+      if (current.index === cursor) {
+        cursor += 1;
+      }
+      current.entry.served += 1;
+      const { body: answer } = current.entry.exchange.response;
+      if (format === "gemini" && answer.encoding === "text") {
+        for (const [id, signature] of signedGeminiCallsOf(answer.text)) {
+          signedCalls.set(id, signature);
+        }
+      }
       requests.push({
         body: bodyText,
-        exchange: null,
+        exchange: current.index,
         headers,
         method,
         model: requestModel,
         path,
         url: url.toString(),
       });
-      // A rejected fetch, which every SDK reads as a connection failure.
-      throw new ProviderWireRefusal({
-        message: `Provider wire replay refused the request: ${reason}`,
-      });
+      const response = responseFor(
+        current.entry.exchange,
+        signal,
+        current.index === 0 && current.entry.served === 1
+          ? options.holdAfterBytes
+          : undefined,
+        options.chunking,
+      );
+      if (
+        retryAfterMs !== undefined &&
+        (url.hostname === "api.openai.com" ||
+          url.hostname === "api.anthropic.com") &&
+        (response.status === 408 ||
+          response.status === 409 ||
+          response.status === 429 ||
+          response.status >= 500) &&
+        current.entry.served > (options.recordedRetryResponses ?? 0)
+      ) {
+        response.headers.set("retry-after-ms", String(retryAfterMs));
+      }
+      return response;
     };
-    if (!PROVIDER_HOST.test(url.hostname)) {
-      return refuse(
-        "not a provider host; the replay never reaches the network",
-      );
-    }
-    if (signal.aborted) {
-      throw abortError();
-    }
-    if (
-      sideAnswer !== undefined &&
-      model !== null &&
-      requestModel !== null &&
-      requestModel !== model
-    ) {
-      requests.push({
-        body: bodyText,
-        exchange: "side",
-        headers,
-        method,
-        model: requestModel,
-        path,
-        url: url.toString(),
-      });
-      return responseFor(sideAnswer, signal, undefined, options.chunking);
-    }
-    // A repeated exchange answers every retry until a request asks for
-    // something else.
-    const previous = queue[cursor - 1];
-    const current =
-      previous?.exchange.repeat === true &&
-      previous.exchange.request.path === path
-        ? { entry: previous, index: cursor - 1 }
-        : { entry: queue[cursor], index: cursor };
-    if (current.entry === undefined) {
-      return refuse("no exchange left to answer it");
-    }
-    if (current.entry.exchange.request.path !== path) {
-      return refuse(`expected ${current.entry.exchange.request.path}`);
-    }
-    if (method !== current.entry.exchange.request.method) {
-      return refuse(`expected ${current.entry.exchange.request.method}`);
-    }
-    if (model !== null && requestModel !== null && requestModel !== model) {
-      return refuse(`expected model ${model}, got ${requestModel}`);
-    }
-    if (current.index === cursor) {
-      cursor += 1;
-    }
-    current.entry.served += 1;
-    const { body: answer } = current.entry.exchange.response;
-    if (format === "gemini" && answer.encoding === "text") {
-      for (const [id, signature] of signedGeminiCallsOf(answer.text)) {
-        signedCalls.set(id, signature);
-      }
-    }
-    requests.push({
-      body: bodyText,
-      exchange: current.index,
-      headers,
-      method,
-      model: requestModel,
-      path,
-      url: url.toString(),
-    });
-    const response = responseFor(
-      current.entry.exchange,
-      signal,
-      current.index === 0 && current.entry.served === 1
-        ? options.holdAfterBytes
-        : undefined,
-      options.chunking,
-    );
-    if (
-      retryAfterMs !== undefined &&
-      (url.hostname === "api.openai.com" ||
-        url.hostname === "api.anthropic.com") &&
-      (response.status === 408 ||
-        response.status === 409 ||
-        response.status === 429 ||
-        response.status >= 500) &&
-      current.entry.served > (options.recordedRetryResponses ?? 0)
-    ) {
-      response.headers.set("retry-after-ms", String(retryAfterMs));
-    }
-    return response;
+    return profile === undefined
+      ? await answerRequest()
+      : await profile.measure("replay", answerRequest);
   };
 
   globalThis.fetch = Object.assign(replayFetch, {

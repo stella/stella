@@ -21,7 +21,6 @@ import type { Transaction } from "@/api/db/root";
 import type { legalListClaims } from "@/api/db/schema";
 import { fields, legalListVerificationRuns } from "@/api/db/schema";
 import { loadOrgAISettings } from "@/api/lib/ai-config-loader";
-import type { FeatureAccessGrants } from "@/api/lib/auth/feature-access/grants";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { createBullMqJobId } from "@/api/lib/bullmq-job-id";
@@ -32,6 +31,7 @@ import {
 } from "@/api/lib/bullmq-requeue";
 import type { RequeueableQueue } from "@/api/lib/bullmq-requeue";
 import { createTimestampIdCursorCodec } from "@/api/lib/db-pagination";
+import type { FeatureAccessGrants } from "@/api/lib/feature-access/grants-schema";
 import type { ListVerificationAccessProof } from "@/api/lib/lists/verification/access";
 import { resolveListVerificationAccess } from "@/api/lib/lists/verification/access-context";
 import { extractClaims } from "@/api/lib/lists/verification/claim-extract";
@@ -213,7 +213,7 @@ type ResolvePersistedRunAccessArgs = {
     organizationId: SafeId<"organization">;
     workspaceId: SafeId<"workspace">;
   };
-  grants?: FeatureAccessGrants;
+  grants?: FeatureAccessGrants | undefined;
   requesterId?: string;
   expectedStatus?: "running";
 };
@@ -323,7 +323,7 @@ type ReconcileQueuedRunsResult = ReconcileScanResult & {
 type ReconcileQueuedOptions = {
   db: Pick<SchedulerDb, "select" | "transaction">;
   queue?: RequeueableQueue<ListVerificationJobData>;
-  grants?: FeatureAccessGrants;
+  grants?: FeatureAccessGrants | undefined;
 };
 
 /**
@@ -449,7 +449,7 @@ const claimRun = async ({
 type SetRunFailedArgs = {
   actor: RunActor;
   errorCode: VerificationRunErrorCode;
-  grants?: FeatureAccessGrants;
+  grants?: FeatureAccessGrants | undefined;
 };
 const setRunFailed = async ({
   actor,
@@ -613,7 +613,7 @@ type ExecuteRunArgs = {
   actor: RunActor;
   run: ClaimedRun;
   accessProof: ListVerificationAccessProof;
-  grants?: FeatureAccessGrants;
+  grants?: FeatureAccessGrants | undefined;
   execution?: VerificationExecutionBoundaries;
 };
 
@@ -805,7 +805,7 @@ const executeRun = async ({
 type ProcessListVerificationRunArgs = {
   data: ListVerificationJobData;
   actor?: RunActor;
-  grants?: FeatureAccessGrants;
+  grants?: FeatureAccessGrants | undefined;
   execute?: typeof executeRun;
   execution?: VerificationExecutionBoundaries;
 };
@@ -870,7 +870,7 @@ export const processListVerificationRun = async ({
         run: admission.run,
         accessProof: admission.proof,
         grants,
-        execution,
+        ...(execution === undefined ? {} : { execution }),
       }),
     catch: (cause) => cause,
   });

@@ -49,6 +49,7 @@ import {
 import type { SelectionAnchor } from "@/components/legal-reader/annotations/selection-anchor";
 import type { ReaderAnnotationController } from "@/components/legal-reader/annotations/use-reader-annotations";
 import { SelectionToolbar } from "@/components/selection-toolbar";
+import { selectionToolbarAnchor } from "@/components/selection-toolbar.logic";
 import Tooltip from "@/components/tooltip";
 import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
@@ -76,6 +77,7 @@ type AnnotationToolbarProps = {
 
 type Selected = {
   rect: DOMRect;
+  bounds: DOMRect;
   /** One per paragraph the selection touches; empty outside the words. */
   spans: SelectionAnchor[];
   text: string;
@@ -195,7 +197,8 @@ export const AnnotationToolbar = ({
     barRef.current = node;
   };
   const [selected, setSelected] = useState<Selected | null>(null);
-  const [activeRect, setActiveRect] = useState<DOMRect | null>(null);
+  const [activeGeometry, setActiveGeometry] =
+    useState<ReturnType<typeof selectionToolbarAnchor>>(null);
   // The reader's document, learned once mounted: the only browser handle the
   // bar holds, so nothing here reads a ref while rendering.
   const [doc, setDoc] = useState<Document | null>(null);
@@ -233,6 +236,7 @@ export const AnnotationToolbar = ({
     const ownerDoc = root.ownerDocument;
     setDoc(ownerDoc);
     let frame = 0;
+    let selectionPointer: { x: number; y: number } | undefined;
     let readerDragActive = false;
     let restoringReaderSelection = false;
     let readerSelectionSnapshot: ReaderSelectionSnapshot | null = null;
@@ -299,7 +303,7 @@ export const AnnotationToolbar = ({
         }
       }
     };
-    const readSelection = () => {
+    const readSelection = (pointer?: { x: number; y: number }) => {
       const currentSelection = ownerDoc.getSelection();
       if (currentSelection !== null) {
         containReaderSelection(currentSelection);
@@ -325,18 +329,29 @@ export const AnnotationToolbar = ({
         // A fresh selection must not inherit the previous one's open menu.
         setCopyOpen(false);
         const range = selection.getRangeAt(0);
+        const geometry = selectionToolbarAnchor({
+          range,
+          root,
+          ...(pointer === undefined ? {} : { pointer }),
+        });
+        if (geometry === null) {
+          setSelected(null);
+          return;
+        }
         const cleanText = cleanSelectionText(range);
         const spans = selectionAnchorsFrom(selection, root);
         setSelected({
           cleanText: cleanText === "" ? text : cleanText,
           locator: locatorOf(range, root, spans),
-          rect: range.getBoundingClientRect(),
+          rect: geometry.rect,
+          bounds: geometry.bounds,
           spans,
           text,
         });
       });
     };
     const onKeyDown = (event: KeyboardEvent) => {
+      selectionPointer = undefined;
       if (event.key === "Escape") {
         clearActive();
         ownerDoc.getSelection()?.removeAllRanges();
@@ -357,6 +372,7 @@ export const AnnotationToolbar = ({
       }
     };
     const onPointerDown = (event: PointerEvent) => {
+      selectionPointer = undefined;
       const pressed = event.target;
       readerDragActive =
         event.button === 0 && pressed instanceof Node && root.contains(pressed);
@@ -393,9 +409,26 @@ export const AnnotationToolbar = ({
         activateAnnotation(id);
       }
     };
-    const onPointerEnd = () => {
+    const onPointerCancel = () => {
+      selectionPointer = undefined;
       readerDragActive = false;
       readerSelectionSnapshot = null;
+    };
+    const onPointerEnd = (event: PointerEvent) => {
+      onPointerCancel();
+      if (
+        event.target instanceof Node &&
+        barRef.current?.contains(event.target)
+      ) {
+        return;
+      }
+      selectionPointer = { x: event.clientX, y: event.clientY };
+      readSelection(selectionPointer);
+    };
+    const onSelectionChange = () => readSelection(selectionPointer);
+    const onViewportChange = () => {
+      selectionPointer = undefined;
+      readSelection();
     };
     // Dragging selected words carries the passage with the document it came
     // from, so a drop on the chat composer lands as chips where the corpus
@@ -413,37 +446,63 @@ export const AnnotationToolbar = ({
       }
       writePassage(event.dataTransfer, quote);
     };
-    ownerDoc.addEventListener("selectionchange", readSelection);
+    ownerDoc.addEventListener("selectionchange", onSelectionChange);
     ownerDoc.addEventListener("keydown", onKeyDown);
     ownerDoc.addEventListener("pointerdown", onPointerDown);
-    ownerDoc.addEventListener("pointercancel", onPointerEnd);
+    ownerDoc.addEventListener("pointercancel", onPointerCancel);
     ownerDoc.addEventListener("pointerup", onPointerEnd);
+    ownerDoc.addEventListener("scroll", onViewportChange, true);
+    ownerDoc.defaultView?.addEventListener("resize", onViewportChange);
+    const observer = new ResizeObserver(onViewportChange);
+    observer.observe(root);
     root.addEventListener("click", onClick);
     root.addEventListener("dragstart", onDragStart);
     return () => {
+      observer.disconnect();
       cancelAnimationFrame(frame);
-      ownerDoc.removeEventListener("selectionchange", readSelection);
+      ownerDoc.removeEventListener("selectionchange", onSelectionChange);
       ownerDoc.removeEventListener("keydown", onKeyDown);
       ownerDoc.removeEventListener("pointerdown", onPointerDown);
-      ownerDoc.removeEventListener("pointercancel", onPointerEnd);
+      ownerDoc.removeEventListener("pointercancel", onPointerCancel);
       ownerDoc.removeEventListener("pointerup", onPointerEnd);
+      ownerDoc.removeEventListener("scroll", onViewportChange, true);
+      ownerDoc.defaultView?.removeEventListener("resize", onViewportChange);
       root.removeEventListener("click", onClick);
       root.removeEventListener("dragstart", onDragStart);
     };
   });
 
-  // The clicked mark's place on screen, read once per activation: a ref is
-  // not for rendering, and the mark does not move while the bar is open.
+  // A mark follows its visible words when this reader or an ancestor scrolls.
   const activeAnnotationId = activeAnnotation?.id ?? null;
   useExternalSyncEffect(() => {
-    if (activeAnnotationId === null) {
-      setActiveRect(null);
-      return;
+    const root = scrollContainerRef.current;
+    if (activeAnnotationId === null || root === null) {
+      setActiveGeometry(null);
+      return undefined;
     }
-    const element = scrollContainerRef.current?.querySelector(
-      `[data-annotation-id="${CSS.escape(activeAnnotationId)}"]`,
-    );
-    setActiveRect(element?.getBoundingClientRect() ?? null);
+    const updateGeometry = () => {
+      const element = root.querySelector(
+        `[data-annotation-id="${CSS.escape(activeAnnotationId)}"]`,
+      );
+      if (element === null) {
+        setActiveGeometry(null);
+        return;
+      }
+      const range = root.ownerDocument.createRange();
+      range.selectNodeContents(element);
+      setActiveGeometry(selectionToolbarAnchor({ range, root }));
+    };
+    const ownerDoc = root.ownerDocument;
+    updateGeometry();
+    ownerDoc.addEventListener("scroll", updateGeometry, true);
+    ownerDoc.defaultView?.addEventListener("resize", updateGeometry);
+    const observer = new ResizeObserver(updateGeometry);
+    observer.observe(root);
+    return () => {
+      observer.disconnect();
+      ownerDoc.removeEventListener("scroll", updateGeometry, true);
+      ownerDoc.defaultView?.removeEventListener("resize", updateGeometry);
+    };
   }, [activeAnnotationId, scrollContainerRef]);
 
   const clearSelection = () => {
@@ -484,8 +543,8 @@ export const AnnotationToolbar = ({
     clearSelection();
   };
 
-  const rect = activeRect ?? selected?.rect ?? null;
-  if (rect === null) {
+  const geometry = activeAnnotation !== null ? activeGeometry : selected;
+  if (geometry === null) {
     return null;
   }
 
@@ -536,7 +595,7 @@ export const AnnotationToolbar = ({
   if (activeAnnotation !== null) {
     if (!activeAnnotation.mine) {
       content = (
-        <div className="flex items-center gap-1">
+        <div className="flex flex-wrap items-center gap-1">
           <Button
             onClick={() => {
               askAboutPassage(
@@ -559,7 +618,7 @@ export const AnnotationToolbar = ({
           ? t("legalReader.annotations.removeHighlight")
           : t("common.delete");
       content = (
-        <div className="flex items-center gap-1">
+        <div className="flex flex-wrap items-center gap-1">
           {activeAnnotation.kind === "highlight" && (
             <>
               {styleButtons(activeAnnotation.style ?? "highlight", (next) => {
@@ -652,7 +711,7 @@ export const AnnotationToolbar = ({
   } else if (selected !== null) {
     const spans = selected.spans;
     content = (
-      <div className="flex items-center gap-1">
+      <div className="flex flex-wrap items-center gap-1">
         <div className="relative">
           <Button
             onClick={(event) => {
@@ -791,7 +850,8 @@ export const AnnotationToolbar = ({
 
   return (
     <SelectionToolbar
-      anchorRect={rect}
+      anchorRect={geometry.rect}
+      boundaryRect={geometry.bounds}
       className="reader-chrome"
       doc={doc}
       onAttach={attachBar}

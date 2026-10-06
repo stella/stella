@@ -54,6 +54,17 @@
       "polish": "Uzlabot formulējumu"
     }
   },
+  "aiColumns": {
+    "countSummary": "{columns} kolonnas × {rows} rindas = {answers, plural, zero {# atbildes} one {# atbilde} other {# atbildes}}. Atbildes patērē budžetu.",
+    "refusedBudget": "Nav palaists: atbilžu budžets nav pieejams",
+    "rerunAllPage": "Palaist visu vēlreiz (šajā lapā)",
+    "rerunColumnPage": "Palaist kolonnu vēlreiz (šajā lapā)",
+    "runColumnPage": "Palaist kolonnu (šajā lapā)",
+    "runPageRows": "Palaist {count, plural, zero {# rindai šajā lapā} one {# rindai šajā lapā} other {# rindām šajā lapā}}",
+    "runRemainingPage": "Palaist atlikušās (šajā lapā)",
+    "runSelectedRows": "Palaist {count, plural, zero {# atlasītai rindai} one {# atlasītai rindai} other {# atlasītām rindām}}",
+    "selectedRun": "Palaist AI kolonnas {count, plural, zero {# rindai} one {# rindai} other {# rindām}}"
+  },
   "appearance": {
     "calendar": "Kalendārs",
     "calendarGregorian": "Gregora",
@@ -264,6 +275,7 @@
     "runs": {
       "back": "Visi dokumenti",
       "errors": {
+        "accessRevoked": "Pārbaude tika apturēta, jo piekļuve nav pieejama.",
         "aiUnavailable": "Dokumentu pārbaudei nav pieejams neviens AI modelis. Pārbaudiet organizācijas AI iestatījumus.",
         "enqueueFailed": "Neizdevās sākt pārbaudi. Mēģiniet vēlreiz.",
         "extractionFailed": "Neizdevās iegūt šajā dokumentā ietvertos apgalvojumus.",
@@ -796,6 +808,34 @@
       "unavailable": "Aptvēruma dati pašlaik nav pieejami."
     },
     "decisionNotFound": "Lēmums nav atrasts",
+    "decisionTypes": {
+      "administrative_decision": "Administratīvais akts",
+      "binding_excise_information": "Saistoša informācija par akcīzes nodokli",
+      "binding_rate_information": "Saistoša informācija par PVN likmi",
+      "court_direction": "Rīkojums",
+      "decision": "Nolēmums",
+      "finding": "Spriedums pēc būtības",
+      "general_tax_ruling": "Vispārējs nodokļu skaidrojums",
+      "individual_tax_ruling": "Individuāls nodokļu skaidrojums",
+      "judgment": "Spriedums",
+      "leave_refused": "Noraidīts būtiska tiesību jautājuma trūkuma dēļ",
+      "merits_decision": "Nolēmums pēc būtības",
+      "ministry_of_justice_decision": "Tieslietu ministrijas lēmums",
+      "minutes_extract": "Protokola izraksts",
+      "opinion": "Atzinums",
+      "order": "Lēmums",
+      "other": "Citi",
+      "payment_order": "Maksājuma rīkojums",
+      "penal_order": "Sodu rīkojums",
+      "principle_decision": "Principiāls nolēmums",
+      "protective_opinion": "Aizsargājošs atzinums",
+      "resolution": "Rezolūcija",
+      "signalling_decision": "Signalizācijas lēmums",
+      "statement_of_reasons": "Motivācija",
+      "tax_explanations": "Nodokļu paskaidrojumi",
+      "top_up_tax_opinion": "Atzinums par papildu nodokli",
+      "uniformity_decision": "Judikatūras vienveidošanas lēmums"
+    },
     "emptyState": "Lēmumi nav atrasti. Konfigurējiet avotu un palaidiet sinhronizāciju, lai importētu tiesu praksi.",
     "filters": {
       "remove": "Noņemt filtru {filter}"
@@ -841,6 +881,7 @@
       "subsection": "{value}. daļa"
     },
     "reader": {
+      "expandProvisions": "Izvērst noteikumus",
       "headMatter": "Ievaddaļa",
       "sourceAttribution": "Avota dati ir brīvi pieejami vietnē <link>{source}</link>."
     },
@@ -1858,6 +1899,7 @@
     "unexpectedError": "Radās neparedzēta kļūda. Lūdzu, sazinieties ar atbalsta dienestu.",
     "unknownUser": "Nezināms lietotājs",
     "unpin": "Atspraust",
+    "unsavedChangesEscape": "Nesaglabātas izmaiņas. Vēlreiz nospiediet Esc, lai tās atmestu",
     "unsavedLeaveConfirm": "Jums ir nesaglabātas izmaiņas. Vai iziet bez saglabāšanas?",
     "unverified": "Nav pārbaudīts",
     "unverifiedCitationHint": "Šo citātu neizdevās sasaistīt ar avota dokumentu.",
@@ -2310,6 +2352,8 @@
       "encryptedContent": "Šifrēta dokumenta saturu nevar izgūt. Noņemiet failam paroli un mēģiniet vēlreiz.",
       "filePropertyTypeImmutable": "Faila īpašības tipu nevar mainīt. Saglabājiet pašreizējo tipu; citām vērtībām izveidojiet pielāgotu īpašību.",
       "forbidden": "Jums nav atļaujas veikt šo darbību.",
+      "hostedCheckoutOpen": "Šai organizācijai jau ir atvērta apmaksa. Pabeidziet to vai sāciet jaunu pēc tās derīguma beigām.",
+      "hostedSubscriptionLive": "Šai organizācijai jau ir abonements. Mainiet to sadaļā “Pārvaldīt mitināto lietojumu”.",
       "internalServerError": "Radās kļūda. Lūdzu, mēģiniet vēlreiz.",
       "legalSourceEntityLimitReached": "Šajā lietā ir sasniegts vienumu ierobežojums, tāpēc dokumentu nevarēja izveidot.",
       "legalSourceFilePropertyMissing": "Šajā lietā trūkst faila rekvizīta, tāpēc dokumentu nevarēja izveidot.",
@@ -3741,11 +3785,15 @@
     }
   },
   "lawHome": {
+    "clearRecent": "Notīrīt nesenos",
     "enteringIntoForce": "Drīzumā stāsies spēkā",
     "inForceFrom": "Stājas spēkā {date}",
-    "noRecentSearches": "Meklējumu vēl nav",
+    "noRecent": "Vēl nav nesenu darbību",
     "noSignals": "Signālu vēl nav",
     "prompt": "Ko jūs meklējat?",
+    "recent": "Nesenie",
+    "recentCasesFilter": "Nolēmumi",
+    "recentSearchFilter": "Meklējumi",
     "recentlyInForce": "Nesen stājās spēkā",
     "searchLabel": "Meklēt tiesību datubāzē",
     "searchPlaceholder": "Lietas numurs, akta numurs, ECLI vai atslēgvārdi",
@@ -4637,6 +4685,7 @@
     "compareVersionMissing": "Salīdzināmās redakcijas šī akta vēsturē nav.",
     "compareWholeAct": "Salīdzināt visu aktu",
     "compareWithVersion": "Salīdzināt ar redakciju {version}",
+    "currentWording": "Pašreizējā redakcija",
     "description": "Publiska konsolidētu tiesību aktu datubāze, indeksējama pēc akta un tā redakcijas.",
     "diffInserted": "Pievienots:",
     "diffRemoved": "Svītrots:",
@@ -4686,7 +4735,9 @@
       "unknown": "Statuss neskaidrs"
     },
     "title": "Tiesību akti",
-    "validity": "Spēkā no {from} līdz {to}"
+    "validity": "Spēkā no {from} līdz {to}",
+    "wordingValidFrom": "Redakcija ir spēkā kopš {date}",
+    "wordingVersionUnknown": "Redakcijas versijas datums nav pieejams"
   },
   "styleSets": {
     "create": "Izveidot",
@@ -5423,6 +5474,7 @@
         "unknownLocation": "Veidnes atrašanās vieta: adrese, kuru stella nevar pārbaudīt"
       },
       "desktopEdit": {
+        "accountRequiredTitle": "Savienojiet stella desktop ar savu kontu",
         "action": "Rediģēt datora lietotnē",
         "authRequiredDescription": "Pirms rediģēšanas datora lietotnē atsvaidziniet stella un piesakieties vēlreiz.",
         "authRequiredTitle": "Sesija ir beigusies",
@@ -5454,8 +5506,7 @@
         "signCurrent": "Parakstīt ar stella desktop",
         "signNone": "Lejupielādējiet stella desktop, lai parakstītu šo PDF",
         "signOutdated": "Atjauniniet stella desktop, lai parakstītu",
-        "signReason": "Parakstīšana izmanto sertifikātu jūsu datorā, tāpēc tā notiek stella desktop.",
-        "signShort": "Parakstīt"
+        "signReason": "Parakstīšana izmanto sertifikātu jūsu datorā, tāpēc tā notiek stella desktop."
       },
       "downloadAs": "Lejupielādēt kā…",
       "downloadAsZip": "Lejupielādēt .zip failu",
@@ -5997,7 +6048,6 @@
       "previewUnsupported": "Priekšskatījums šim dokumenta tipam nav atbalstīts.",
       "readingFrom": "AI lasa no",
       "referencesItself": "Rekvizīts atsaucas pats uz sevi caur citiem rekvizītiem",
-      "rerunColumn": "Palaist kolonnu vēlreiz",
       "resultType": "Rezultāta tips",
       "returnsLabel": "Formāts",
       "scopeFile": "Pašreizējais fails",

@@ -3,7 +3,7 @@ import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { eq, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 import { createHash } from "node:crypto";
-import { Worker } from "node:worker_threads";
+import { MessageChannel, Worker } from "node:worker_threads";
 
 import { buildScreeningIndex, SANCTIONS_SOURCES } from "@stll/sanctions";
 import type { SanctionsEntry, SanctionsSource } from "@stll/sanctions";
@@ -38,6 +38,7 @@ import { createTestPglite } from "@/api/tests/pglite-test-db";
 import { createSanctionsMatcherPool } from "./matcher-pool";
 import { createPublicSanctionsScreening } from "./public-screening";
 import { loadEditionEntries } from "./screening-index";
+import { createMatcherTestClock } from "./test-fixtures/matcher-test-clock";
 
 const DB_TEST_TIMEOUT_MS = 120_000;
 const HOUR_MS = 60 * 60 * 1000;
@@ -743,17 +744,36 @@ test.each(["hang", "crash"])(
   "public worker %s never answers clear and recovers",
   async (fault) => {
     const warmupFinished = Promise.withResolvers<undefined>();
+    const entered = Promise.withResolvers<undefined>();
+    const crashed = Promise.withResolvers<undefined>();
+    const { port1, port2 } = new MessageChannel();
+    port1.once("message", () => entered.resolve(undefined));
+    const clock = createMatcherTestClock();
     let spawned = 0;
     const pool = createSanctionsMatcherPool({
       deadlineMs: 200,
+      clock,
       createWorker: () => {
         spawned += 1;
-        return spawned === 1
-          ? new Worker(
-              new URL("test-fixtures/matcher-fault-worker.ts", import.meta.url),
-              { workerData: fault },
-            )
-          : new Worker(new URL("sanctions-matcher-worker.ts", import.meta.url));
+        const worker =
+          spawned === 1
+            ? new Worker(
+                new URL(
+                  "test-fixtures/matcher-fault-worker.ts",
+                  import.meta.url,
+                ),
+                {
+                  workerData: { fault, acknowledgement: port2 },
+                  transferList: [port2],
+                },
+              )
+            : new Worker(
+                new URL("sanctions-matcher-worker.ts", import.meta.url),
+              );
+        if (spawned === 1) {
+          worker.once("exit", () => crashed.resolve(undefined));
+        }
+        return worker;
       },
     });
     const publicScreen = createPublicSanctionsScreening({
@@ -779,7 +799,15 @@ test.each(["hang", "crash"])(
       now: FRESH_NOW,
     } as const;
     try {
-      const first = (await publicScreen(props)).unwrap();
+      const pending = publicScreen(props);
+      await entered.promise;
+      expect(clock.pending()).toEqual([200]);
+      if (fault === "hang") {
+        clock.advance(200);
+      } else {
+        await crashed.promise;
+      }
+      const first = (await pending).unwrap();
       expect(first.status).toBe("unavailable");
       expect(first.lists.every((list) => list.status === "unavailable")).toBe(
         true,
@@ -791,12 +819,15 @@ test.each(["hang", "crash"])(
       expect(spawned).toBe(2);
     } finally {
       await pool.close();
+      port1.close();
+      port2.close();
     }
   },
 );
 
 test("repeated public deadlines bound unfinished cold loads until held reads settle", async () => {
-  const pool = createSanctionsMatcherPool({ size: 2, deadlineMs: 30 });
+  const clock = createMatcherTestClock();
+  const pool = createSanctionsMatcherPool({ size: 2, deadlineMs: 30, clock });
   const held = Promise.withResolvers<undefined>();
   const started = Promise.withResolvers<undefined>();
   let startedLoads = 0;
@@ -837,9 +868,16 @@ test("repeated public deadlines bound unfinished cold loads until held reads set
   try {
     const first = publicScreen(props);
     await started.promise;
+    expect(clock.pending()).toEqual([30]);
+    clock.advance(30);
     expect((await first).unwrap().status).toBe("unavailable");
     for (const _attempt of Array.from({ length: 6 })) {
-      expect((await publicScreen(props)).unwrap().status).toBe("unavailable");
+      const pending = publicScreen(props);
+      await new Promise<void>((resolve) => {
+        setImmediate(resolve);
+      });
+      clock.advance(30);
+      expect((await pending).unwrap().status).toBe("unavailable");
     }
     // Both leases may share the same edition read; neither deadline releases it.
     expect(startedLoads).toBe(1);

@@ -71,9 +71,10 @@ const { rootDb } = apply
   ? await enterCaseLawMaintenanceLane()
   : await openCaseLawReadOnlySession();
 
-const outcome = await rootDb.transaction(
-  async (tx) =>
-    await runReviewedCitationLabels(tx, entries, apply ? "apply" : "plan"),
+const outcome = await runReviewedCitationLabels(
+  rootDb.transaction.bind(rootDb),
+  entries,
+  apply ? "apply" : "plan",
 );
 
 if (outcome.type === "rejected") {

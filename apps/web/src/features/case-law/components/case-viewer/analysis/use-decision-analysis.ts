@@ -2,10 +2,9 @@
  * Hook to manage decision analysis state.
  *
  * Draws a finished analysis from the analysis query's cache. Otherwise
- * triggers generation on request and polls until complete.
+ * enables the eligible observer and polls until complete. Explicit requests
+ * retry failures.
  */
-
-import { useState } from "react";
 
 import { useQuery } from "@tanstack/react-query";
 import { panic } from "better-result";
@@ -63,30 +62,17 @@ export const analysisStateFromQuery = ({
     : { status: "generating", tree: [] };
 };
 
-export const useDecisionAnalysis = (key: DecisionAnalysisKey) => {
-  const { decisionId } = key;
-  // Track which decision the user kicked generation off for. Comparing
-  // against the current `decisionId` in the same render keeps a stale
-  // value from enabling a fetch (and an unintended backend kick-off)
-  // for an unrelated decision during a route transition.
-  const [generatingFor, setGeneratingFor] = useState<string | null>(null);
-  // Clear the marker once the route moves on so returning to the
-  // original decision lands on its cached analysis, or in `idle`, instead
-  // of resuming a poll the user didn't request again.
-  // Adjusting state during render (rather than in an effect) drops the marker
-  // in the same render the decisionId changes and avoids a cascading render.
-  const [lastDecisionId, setLastDecisionId] = useState(decisionId);
-  if (decisionId !== lastDecisionId) {
-    setLastDecisionId(decisionId);
-    setGeneratingFor(null);
-  }
-  const isGenerating = generatingFor === decisionId;
+type UseDecisionAnalysisOptions = DecisionAnalysisKey & { enabled: boolean };
 
+export const useDecisionAnalysis = ({
+  enabled,
+  ...key
+}: UseDecisionAnalysisOptions) => {
   // Disabled, the observer still reads the cache, so an analysis finished
   // earlier is drawn without asking for a run.
   const query = useQuery({
     ...decisionAnalysisOptions(key),
-    enabled: isGenerating,
+    enabled,
   });
   const finishedAnalysis =
     query.data?.kind === "done" ? query.data.analysis : null;
@@ -95,27 +81,22 @@ export const useDecisionAnalysis = (key: DecisionAnalysisKey) => {
   const refetch = query.refetch;
 
   const generate = () => {
-    if (finishedAnalysis !== null) {
+    if (!enabled || finishedAnalysis !== null) {
       return;
     }
     // Allow retry when the previous attempt settled into an error
     // state: refetch the polling query so it picks up a fresh
     // result instead of staying on the cached failure.
-    if (isGenerating && hasErrorResult) {
+    if (hasErrorResult) {
       detached(refetch(), "use-decision-analysis.refetch");
-      return;
     }
-    if (isGenerating) {
-      return;
-    }
-    setGeneratingFor(decisionId);
   };
 
   const state: AnalysisState = (() => {
     if (finishedAnalysis !== null) {
       return { status: "done", analysis: finishedAnalysis };
     }
-    if (!isGenerating) {
+    if (!enabled) {
       return { status: "idle" };
     }
     return analysisStateFromQuery({

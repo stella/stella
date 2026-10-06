@@ -4,6 +4,7 @@ import { fileURLToPath } from "node:url";
 
 import { definitelyFalse } from "./github-expression";
 import {
+  MAIN_ONLY_BUN_CACHE_SAVE,
   usesDefaultCacheScope,
   workflowCacheProblems,
 } from "./workflow-cache-policy.ts";
@@ -389,6 +390,7 @@ test("publishing tokens and their artifact chain reject cached Bun setup", () =>
   const cachedSetup = {
     ...rawSetup,
     uses: "stella/.github/actions/setup-bun-cached@fixture",
+    with: { ...rawSetup.with, save: MAIN_ONLY_BUN_CACHE_SAVE },
   };
   for (const permission of ["contents", "packages", "id-token"]) {
     expect(

@@ -52,14 +52,13 @@ import { MAX_CONTACT_NATIONALITY_CODES } from "@/api/lib/business-registries/nat
 import { lookupBusinessRegistryShared } from "@/api/lib/business-registries/registry-lookup";
 import { SANCTIONS_COMPANY_ID_COUNTRIES } from "@/api/lib/business-registries/sanctions-check-vocabulary";
 import {
-  type AssertNoExtraFields,
   DELETED_TRUE_PROJECTION,
-  type LINK_MATTER_CONTACT_LINK_PROJECTION,
-  type LINK_MATTER_CONTACT_UNLINK_PROJECTION,
+  LINK_MATTER_CONTACT_LINK_PROJECTION,
+  LINK_MATTER_CONTACT_UNLINK_PROJECTION,
   LINK_MATTER_CONTACT_PROJECTION,
   LIST_CONTACTS_PROJECTION,
-  type LIST_TASKS_DETAIL_PROJECTION,
-  type LIST_TASKS_LIST_PROJECTION,
+  LIST_TASKS_DETAIL_PROJECTION,
+  LIST_TASKS_LIST_PROJECTION,
   LIST_TASKS_PROJECTION,
   CHECK_COUNTERPARTY_PROJECTION,
   LOOKUP_BUSINESS_REGISTRY_PROJECTION,
@@ -71,6 +70,10 @@ import { ENTITY_PRIORITIES, TASK_STATUSES } from "@/api/lib/entity-constants";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LEGAL_LISTS_FEATURE_ID } from "@/api/lib/feature-access/registry";
 import { LIMITS } from "@/api/lib/limits";
+import {
+  type AssertNoExtraFields,
+  projectionPayload,
+} from "@/api/lib/projection-totality";
 import {
   brandPersistedContactId,
   brandPersistedEntityId,
@@ -420,9 +423,11 @@ const handleSaveMatterTool: TypedMcpToolHandler<
     if (Result.isError(created)) {
       return internalFailureResult(created.error);
     }
-    return toolDataResult({
-      matterId: created.value.id,
-    } satisfies v.InferInput<typeof SAVE_MATTER_PROJECTION>);
+    return toolDataResult(
+      projectionPayload(SAVE_MATTER_PROJECTION, {
+        matterId: created.value.id,
+      }),
+    );
   }
 
   // Update branch.
@@ -510,10 +515,12 @@ const handleSaveMatterTool: TypedMcpToolHandler<
     }
   }
 
-  return toolDataResult({
-    matterId: workspaceId,
-    updated: true,
-  } satisfies v.InferInput<typeof SAVE_MATTER_PROJECTION>);
+  return toolDataResult(
+    projectionPayload(SAVE_MATTER_PROJECTION, {
+      matterId: workspaceId,
+      updated: true,
+    }),
+  );
 };
 
 // --- delete_matter ------------------------------------------------------
@@ -566,9 +573,11 @@ const handleDeleteMatterTool: TypedMcpToolHandler<
   if (Result.isError(deleted)) {
     return internalFailureResult(deleted.error);
   }
-  return toolDataResult({
-    deleted: true,
-  } satisfies v.InferInput<typeof DELETED_TRUE_PROJECTION>);
+  return toolDataResult(
+    projectionPayload(DELETED_TRUE_PROJECTION, {
+      deleted: true,
+    }),
+  );
 };
 
 // --- list_contacts ------------------------------------------------------
@@ -630,14 +639,14 @@ const handleListContactsTool: TypedMcpToolHandler<
   if (Result.isError(listed)) {
     return internalFailureResult(listed.error);
   }
-  const page = {
+  const page = projectionPayload(LIST_CONTACTS_PROJECTION, {
     ...listed.value,
     items: listed.value.items.map(({ createdAt, ...contact }) =>
       Object.assign(contact, {
         createdAt: createdAt.toISOString(),
       }),
     ),
-  } satisfies v.InferInput<typeof LIST_CONTACTS_PROJECTION>;
+  });
 
   return toolDataResult(page);
 };
@@ -887,9 +896,11 @@ const handleSaveContactTool: TypedMcpToolHandler<
     if (Result.isError(created)) {
       return internalFailureResult(created.error);
     }
-    return toolDataResult({
-      contactId: created.value.id,
-    } satisfies v.InferInput<typeof SAVE_CONTACT_PROJECTION>);
+    return toolDataResult(
+      projectionPayload(SAVE_CONTACT_PROJECTION, {
+        contactId: created.value.id,
+      }),
+    );
   }
 
   // Update branch.
@@ -928,9 +939,11 @@ const handleSaveContactTool: TypedMcpToolHandler<
   if (Result.isError(updated)) {
     return internalFailureResult(updated.error);
   }
-  return toolDataResult({
-    contactId: updated.value.id,
-  } satisfies v.InferInput<typeof SAVE_CONTACT_PROJECTION>);
+  return toolDataResult(
+    projectionPayload(SAVE_CONTACT_PROJECTION, {
+      contactId: updated.value.id,
+    }),
+  );
 };
 
 // --- delete_contact -----------------------------------------------------
@@ -973,9 +986,11 @@ const handleDeleteContactTool: TypedMcpToolHandler<
   if (Result.isError(deleted)) {
     return internalFailureResult(deleted.error);
   }
-  return toolDataResult({
-    deleted: true,
-  } satisfies v.InferInput<typeof DELETED_TRUE_PROJECTION>);
+  return toolDataResult(
+    projectionPayload(DELETED_TRUE_PROJECTION, {
+      deleted: true,
+    }),
+  );
 };
 
 // --- lookup_business_registry -------------------------------------------
@@ -1527,9 +1542,7 @@ const handleListTasksTool: TypedMcpToolHandler<
 
     return {
       egress: "structured",
-      payload: { task } satisfies v.InferInput<
-        typeof LIST_TASKS_DETAIL_PROJECTION
-      >,
+      payload: projectionPayload(LIST_TASKS_DETAIL_PROJECTION, { task }),
       textFields,
     };
   }
@@ -1578,10 +1591,10 @@ const handleListTasksTool: TypedMcpToolHandler<
 
   return {
     egress: "structured",
-    payload: {
+    payload: projectionPayload(LIST_TASKS_LIST_PROJECTION, {
       tasks,
       nextCursor: listed.value.nextCursor,
-    } satisfies v.InferInput<typeof LIST_TASKS_LIST_PROJECTION>,
+    }),
     textFields,
   };
 };
@@ -1997,9 +2010,11 @@ const handleSaveTaskTool: TypedMcpToolHandler<
     if (Result.isError(created)) {
       return internalFailureResult(created.error);
     }
-    return toolDataResult({
-      taskId: created.value.entityId,
-    } satisfies v.InferInput<typeof SAVE_TASK_PROJECTION>);
+    return toolDataResult(
+      projectionPayload(SAVE_TASK_PROJECTION, {
+        taskId: created.value.entityId,
+      }),
+    );
   }
 
   // Update branch.
@@ -2133,10 +2148,12 @@ const handleSaveTaskTool: TypedMcpToolHandler<
     }
   }
 
-  return toolDataResult({
-    taskId,
-    updated: true,
-  } satisfies v.InferInput<typeof SAVE_TASK_PROJECTION>);
+  return toolDataResult(
+    projectionPayload(SAVE_TASK_PROJECTION, {
+      taskId,
+      updated: true,
+    }),
+  );
 };
 
 // --- delete_task --------------------------------------------------------
@@ -2192,9 +2209,11 @@ const handleDeleteTaskTool: TypedMcpToolHandler<
   if (Result.isError(deleted)) {
     return internalFailureResult(deleted.error);
   }
-  return toolDataResult({
-    deleted: true,
-  } satisfies v.InferInput<typeof DELETED_TRUE_PROJECTION>);
+  return toolDataResult(
+    projectionPayload(DELETED_TRUE_PROJECTION, {
+      deleted: true,
+    }),
+  );
 };
 
 // --- link_matter_contact ------------------------------------------------
@@ -2333,9 +2352,11 @@ const handleLinkMatterContactTool: TypedMcpToolHandler<
     if (Result.isError(removed)) {
       return internalFailureResult(removed.error);
     }
-    return toolDataResult({
-      unlinked: true,
-    } satisfies v.InferInput<typeof LINK_MATTER_CONTACT_UNLINK_PROJECTION>);
+    return toolDataResult(
+      projectionPayload(LINK_MATTER_CONTACT_UNLINK_PROJECTION, {
+        unlinked: true,
+      }),
+    );
   }
 
   // Link branch. The schema guarantees contact_id is present alongside role.
@@ -2357,9 +2378,11 @@ const handleLinkMatterContactTool: TypedMcpToolHandler<
   if (Result.isError(created)) {
     return internalFailureResult(created.error);
   }
-  return toolDataResult({
-    workspaceContactId: created.value.id,
-  } satisfies v.InferInput<typeof LINK_MATTER_CONTACT_LINK_PROJECTION>);
+  return toolDataResult(
+    projectionPayload(LINK_MATTER_CONTACT_LINK_PROJECTION, {
+      workspaceContactId: created.value.id,
+    }),
+  );
 };
 
 // --- tool definitions -----------------------------------------------------

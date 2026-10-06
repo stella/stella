@@ -10,7 +10,6 @@ import { eq } from "drizzle-orm";
 import { ElysiaCustomStatusResponse } from "elysia/error";
 
 import { user } from "@/api/db/auth-schema";
-import type { SafeDb } from "@/api/db/safe-db";
 import { createSafeDb } from "@/api/db/scoped";
 import { env } from "@/api/env";
 import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
@@ -70,7 +69,7 @@ describe("verification creation requires complete AI admission", () => {
       };
       const scoped = createSafeDb(testDb, [ids.wsA1], ids.orgA, ids.userA1);
       let transactions = 0;
-      const safeDb: SafeDb = async (operation) => {
+      const safeDb: typeof scoped = async (operation) => {
         transactions++;
         return await scoped(operation);
       };

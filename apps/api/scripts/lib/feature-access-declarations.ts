@@ -382,7 +382,7 @@ class DeclarationSourceGraph {
         return [];
       }
       const members = new Set<string>();
-      let dynamic = false;
+      const dynamicReferences = new Set<ts.Identifier>();
       const visit = (node: ts.Node) => {
         if (
           ts.isIdentifier(node) &&
@@ -402,13 +402,13 @@ class DeclarationSourceGraph {
           ) {
             members.add(parent.argumentExpression.text);
           } else {
-            dynamic = true;
+            dynamicReferences.add(node);
           }
         }
         ts.forEachChild(node, visit);
       };
       visit(ast);
-      return dynamic
+      return dynamicReferences.size !== 0
         ? [target]
         : [...members].flatMap((name) => this.symbolModules(target, name));
     }

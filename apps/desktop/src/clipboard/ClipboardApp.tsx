@@ -36,6 +36,7 @@ import { Checkbox } from "@stll/ui/checkbox";
 import { ContextMenu } from "@stll/ui/context-menu";
 import {
   Dialog,
+  DialogFormState,
   DialogClose,
   DialogDescription,
   DialogFooter,
@@ -761,6 +762,7 @@ type ClipboardGroupDeletionMode = "deleteClips" | "keepClips";
 
 type DialogShellProps = {
   children: ReactNode;
+  dirty?: boolean;
   destructive?: boolean;
   onClose: () => void;
   onSubmit: () => void;
@@ -771,6 +773,7 @@ type DialogShellProps = {
 
 const DialogShell = ({
   children,
+  dirty = false,
   destructive = false,
   onClose,
   onSubmit,
@@ -781,6 +784,7 @@ const DialogShell = ({
   const t = useTranslations("clipboard");
   return (
     <Dialog
+      dirty={dirty}
       onOpenChange={(open) => {
         if (!open) {
           onClose();
@@ -900,6 +904,7 @@ const ClipboardDialog = ({
     case "deleteGroup":
       return (
         <DialogShell
+          dirty={dialog.mode !== "keepClips"}
           destructive
           onClose={close}
           onSubmit={() => {
@@ -1390,6 +1395,23 @@ const ClipboardWelcomeDialog = ({ onClose }: ClipboardWelcomeDialogProps) => {
         showCloseButton={false}
         viewportClassName="grid-rows-[1fr_auto_1fr] p-4"
       >
+        <DialogFormState
+          dirty={
+            autostartChoice.status === "ready" &&
+            autostartChoice.enabled !==
+              (autostartChoice.initialEnabled ?? false)
+          }
+          onDiscard={() => {
+            if (autostartChoice.status === "ready") {
+              setAutostartChoice({
+                enabled: autostartChoice.initialEnabled ?? false,
+                error: null,
+                initialEnabled: autostartChoice.initialEnabled,
+                status: "ready",
+              });
+            }
+          }}
+        />
         <DialogHeader className="flex-row items-start gap-4 px-5 pt-5 pb-2 text-start">
           <span className="grid size-11 shrink-0 place-items-center rounded-2xl bg-[var(--option-blue-bg)] text-[var(--option-blue-fg)] shadow-sm">
             <ClipboardIcon aria-hidden="true" className="size-5" />

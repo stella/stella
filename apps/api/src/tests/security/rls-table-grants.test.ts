@@ -138,6 +138,7 @@ const POST_BOOTSTRAP_SELECT_ONLY_TABLES = new Set([
   "corpus_index_projection_states",
   "corpus_index_projection_intents",
   // Global reference editions are read by request code and written by ingestion.
+  "sanctions_edition_fanouts",
   "sanctions_sources",
   "sanctions_editions",
   "sanctions_entry_payloads",

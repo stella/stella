@@ -279,10 +279,12 @@ const createSurfaceSerializer =
   (
     result: InternalToolResult,
     outputContract?: RuntimeMcpToolOutputContract,
+    toolName?: string,
   ): CallToolResult =>
     serializeToolResult(
       scopeToolResultToSurface(result, { mode, context }),
       outputContract,
+      toolName,
     );
 
 const featureUnavailableToolResult = ({
@@ -627,7 +629,7 @@ const dispatchMcpToolCall = async ({
         },
       );
       return withInputNotes(
-        serializeForSurface(finalized, outputContract),
+        serializeForSurface(finalized, outputContract, toolName),
         inputNotes,
       );
     },

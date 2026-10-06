@@ -117,60 +117,6 @@ import {
  * `RefMediationEntry.projection` boundary, so the map's surface is unchanged.
  */
 
-// --- Compile-time payload ties -------------------------------------------------
-
-/**
- * The field paths in `Payload` that `SchemaInput` does not declare, at any
- * depth (arrays compared element-wise; a `Payload` union branch is compared
- * only against the `SchemaInput` branches it is assignable to; an `unknown`
- * schema field — stripped/unenumerated positions — admits any payload type
- * without descending).
- */
-type ProjectionScalar =
-  | string
-  | number
-  | boolean
-  | bigint
-  | symbol
-  | null
-  | undefined;
-
-type ExtraProjectionFields<Payload, SchemaInput> = unknown extends SchemaInput
-  ? never
-  : SchemaInput extends ProjectionScalar
-    ? never
-    : Payload extends readonly (infer Item)[]
-      ? SchemaInput extends readonly (infer ShapeItem)[]
-        ? ExtraProjectionFields<Item, ShapeItem>
-        : never
-      : Payload extends object
-        ? SchemaInput extends object
-          ? Payload extends SchemaInput
-            ? {
-                [K in keyof Payload]-?: K extends keyof SchemaInput
-                  ? ExtraProjectionFields<Payload[K], SchemaInput[K]>
-                  : K;
-              }[keyof Payload]
-            : never
-          : never
-        : never;
-
-/**
- * Compile-time exactness tie for a chat payload that is NOT built as an
- * object literal (a shared helper's return value forwarded verbatim), where
- * `satisfies v.InferInput<typeof X_PROJECTION>` gets no excess-property
- * check. `AssertNoExtraFields<Payload, SchemaInput>` fails typecheck when
- * `Payload` carries a field the projection schema does not classify, naming
- * the offending keys. Literal construction sites should prefer a direct
- * `satisfies` tie instead.
- */
-export type AssertNoExtraFields<
-  Payload extends ([ExtraProjectionFields<Payload, SchemaInput>] extends [never]
-    ? SchemaInput
-    : { unclassifiedFields: ExtraProjectionFields<Payload, SchemaInput> }),
-  SchemaInput,
-> = Payload;
-
 // --- Chat projection schemas -------------------------------------------------
 // One artifact per projected tool: the exact shape the chat surface forwards,
 // with per-field chat semantics attached (`chatRef`/`chatEntityRef`/
@@ -1476,10 +1422,13 @@ const caseLawFacetBucketProjection = v.strictObject({
 
 /**
  * A source bucket's count is capped, so it says whether it is the exact
- * number, a lower bound, or the index's estimate.
+ * number, a lower bound, or the index's estimate. Its value is the source's
+ * public corpus id, which an agent passes back as `source_id`, never a tenant
+ * id, so it is forwarded unchanged like `decisionId`.
  */
 const caseLawSourceFacetBucketProjection = v.strictObject({
   ...caseLawFacetBucketProjection.entries,
+  value: passthroughId(),
   countType: v.picklist(Object.values(FACET_COUNT_TYPE)),
 });
 
@@ -1533,6 +1482,49 @@ const decisionIdentifiersProjection = v.optional(
       value: v.string(),
     }),
   ),
+);
+
+/** Coverage keeps grouped court rows explicit when the public data has no names. */
+export const CASE_LAW_COVERAGE_PROJECTION = projectionBranch(
+  v.strictObject({
+    asOf: v.string(),
+    countries: v.array(
+      v.strictObject({
+        country: v.string(),
+        availability: v.picklist(["searchable", "in-preparation"]),
+        decisions: v.number(),
+        decisionYearFrom: v.nullable(v.number()),
+        decisionYearTo: v.nullable(v.number()),
+        courts: v.nullable(
+          v.array(
+            v.variant("type", [
+              projectionBranch(
+                v.strictObject({
+                  type: v.literal("court"),
+                  court: v.string(),
+                  decisions: v.number(),
+                }),
+              ),
+              projectionBranch(
+                v.strictObject({
+                  type: v.literal("tier"),
+                  tier: v.picklist(COURT_TIER_LABELS),
+                  courts: v.number(),
+                  decisions: v.number(),
+                }),
+              ),
+              projectionBranch(
+                v.strictObject({
+                  type: v.literal("unlisted"),
+                  decisions: v.number(),
+                }),
+              ),
+            ]),
+          ),
+        ),
+      }),
+    ),
+  }),
 );
 
 /**
@@ -1600,6 +1592,8 @@ export const SEARCH_CASE_LAW_PROJECTION = v.union([
           // nullable; a non-nullable declaration would fail the strict parse and
           // take the tool off the chat surface on any deployment with the flag off.
           appUrl: v.nullable(v.string()),
+          url: v.nullable(publicUrl()),
+          source_url: v.optional(publicUrl()),
           caseNumber: v.string(),
           citationCount: v.number(),
           // `ln(1 + weighted citations)`, the score the ranking blends in.
@@ -1664,6 +1658,8 @@ const decisionTextFieldProjections = {
 const caseLawDecisionProjection = v.strictObject({
   // Nullable for the same reason as search_case_law's `results[].appUrl`.
   appUrl: v.optional(v.nullable(v.string())),
+  url: v.nullable(publicUrl()),
+  source_url: v.optional(publicUrl()),
   caseNumber: v.string(),
   caseNumberType: caseNumberTypeProjection,
   citationsFrom: v.optional(
@@ -1803,6 +1799,8 @@ export const READ_CASE_LAW_DECISION_PROJECTION = v.strictObject({
 const caseLawDecisionIdentityProjection = v.strictObject({
   // Nullable for the same reason as search_case_law's `results[].appUrl`.
   appUrl: v.nullable(v.string()),
+  url: v.nullable(publicUrl()),
+  source_url: v.optional(publicUrl()),
   caseNumber: v.string(),
   caseNumberType: caseNumberTypeProjection,
   court: v.string(),
@@ -1894,6 +1892,8 @@ export const READ_CASE_LAW_CITATIONS_PROJECTION = v.strictObject({
         v.strictObject({
           // Nullable for the same reason as search_case_law's `appUrl`.
           appUrl: v.nullable(v.string()),
+          url: v.nullable(publicUrl()),
+          source_url: v.optional(publicUrl()),
           caseNumber: v.string(),
           caseNumberType: caseNumberTypeProjection,
           citationAuthority: v.number(),
@@ -1960,10 +1960,11 @@ export const SEARCH_LEGISLATION_PROJECTION = v.union([
       paginationOutcome: v.optional(SEARCH_PAGINATION_OUTCOME_SCHEMA),
       results: v.array(
         v.strictObject({
-          // Null while the public-law surface is off (`FEATURE_PUBLIC_LAW`)
-          // and null for a statute whose ELI carries no citation tail to mint a
-          // slug from: both are addresses that do not exist, not missing data.
+          // Null while the public-law surface is off (`FEATURE_PUBLIC_LAW`);
+          // without a stored slug the canonical route uses the document id.
           appUrl: v.nullable(v.string()),
+          url: v.nullable(publicUrl()),
+          source_url: v.optional(publicUrl()),
           country: v.string(),
           documentId: passthroughId(),
           documentType: v.nullable(v.string()),
@@ -2002,6 +2003,8 @@ export const READ_STATUTE_PROJECTION = v.strictObject({
   statute: v.strictObject({
     // Nullable for the same reasons as search_legislation's `appUrl`.
     appUrl: v.nullable(v.string()),
+    url: v.nullable(publicUrl()),
+    source_url: v.optional(publicUrl()),
     charCount: v.nullable(v.number()),
     country: v.string(),
     documentId: passthroughId(),
@@ -2057,6 +2060,9 @@ export const READ_STATUTE_PROVISIONS_PROJECTION = v.strictObject({
       projectionBranch(
         v.strictObject({
           ...provisionEntrySubject,
+          appUrl: v.nullable(v.string()),
+          url: v.nullable(publicUrl()),
+          source_url: v.optional(publicUrl()),
           documentId: passthroughId(),
           resourceName: passthroughId(),
           status: v.literal(PROVISION_STATUS.found),
@@ -2070,6 +2076,9 @@ export const READ_STATUTE_PROVISIONS_PROJECTION = v.strictObject({
         projectionBranch(
           v.strictObject({
             ...provisionEntrySubject,
+            appUrl: v.optional(v.nullable(v.string())),
+            url: v.optional(v.nullable(publicUrl())),
+            source_url: v.optional(publicUrl()),
             message: v.string(),
             status: v.literal(status),
           }),
@@ -2093,6 +2102,9 @@ export const READ_STATUTE_PROVISIONS_PROJECTION = v.strictObject({
 });
 
 const statuteProvisionVersion = {
+  appUrl: v.nullable(v.string()),
+  url: v.nullable(publicUrl()),
+  source_url: v.optional(publicUrl()),
   documentId: passthroughId(),
   resourceName: passthroughId(),
   versionValidFrom: v.nullable(v.string()),
@@ -2210,6 +2222,7 @@ export const SEARCH_BOE_LEGISLATION_PROJECTION = v.union([
             // The gazette's own ELI and consolidated-text URLs, which may
             // embed the publisher's own UUID — never a Stella tenant id, so
             // they are forwarded unchanged.
+            url: v.nullable(publicUrl()),
             url_eli: v.optional(publicUrl()),
             url_html_consolidada: v.optional(publicUrl()),
           }),

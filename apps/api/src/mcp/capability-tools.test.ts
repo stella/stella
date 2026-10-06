@@ -415,7 +415,7 @@ describe("list verification access grants across MCP tools", () => {
           return viewRows;
         };
         const rows = selectedRows();
-        const query = Promise.resolve(rows);
+        const query = [...rows];
         const builder = Object.assign(query, {
           from: () => query,
           innerJoin: () => query,
@@ -445,7 +445,7 @@ describe("list verification access grants across MCP tools", () => {
       },
       selectDistinctOn: () => {
         resourceLookups += 1;
-        const query = Promise.resolve([]);
+        const query: unknown[] = [];
         return Object.assign(query, {
           from: () => query,
           where: () => query,
@@ -737,7 +737,9 @@ describe("list verification access grants across MCP tools", () => {
         context: fixture.context,
         args: { capability, input, validate_only: true },
       });
-      expect(parseToolPayload(result)).toEqual({ valid: true, capability });
+      expect(
+        parseToolPayload<{ valid: boolean; capability: string }>(result),
+      ).toEqual({ valid: true, capability });
     }
     expect(fixture.resourceLookups()).toBeGreaterThan(0);
     expect(fixture.mutations()).toBe(0);
@@ -803,7 +805,9 @@ describe("list verification access grants across MCP tools", () => {
       });
       if (capability === "lists.items.sources.verification.update") {
         expect(result.isError).not.toBe(true);
-        expect(parseToolPayload(result)).toEqual({ id: resourceId });
+        expect(parseToolPayload<{ id: string }>(result)).toEqual({
+          id: resourceId,
+        });
         expect(fixture.mutations()).toBe(1);
         continue;
       }
@@ -811,10 +815,14 @@ describe("list verification access grants across MCP tools", () => {
       expect(fixture.mutations()).toBe(0);
       if (capability === "lists.verifications.list") {
         expect(result.isError).not.toBe(true);
-        expect(parseToolPayload(result)).toMatchObject({ items: [] });
+        expect(parseToolPayload<{ items: unknown[] }>(result)).toMatchObject({
+          items: [],
+        });
       } else if (capability === "lists.verifications.latest.list") {
         expect(result.isError).not.toBe(true);
-        expect(parseToolPayload(result)).toEqual({ runs: [] });
+        expect(parseToolPayload<{ runs: unknown[] }>(result)).toEqual({
+          runs: [],
+        });
       } else {
         expect(errorEnvelope(result).code).toBe("not_found");
         expect(errorEnvelope(result).message).toContain("not found");

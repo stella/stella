@@ -2,6 +2,7 @@ import { Type } from "@sinclair/typebox";
 import { t } from "elysia";
 
 import { COURT_TIER_LABELS } from "@stll/api-contract/case-law-court-tiers";
+import { DECISION_TYPE_KINDS } from "@stll/api-contract/case-law-decision-types";
 import {
   CASE_LAW_SEARCH_WARNING_CODES,
   FACET_COUNT_TYPE,
@@ -163,6 +164,19 @@ const searchFacetBucketsSchema = t.Array(
   { maxItems: LIMITS.caseLawYearFacetLimit },
 );
 
+/** The type facet: canonical kinds, which the web labels per locale. */
+const decisionTypeFacetBucketsSchema = t.Array(
+  t.Object(
+    {
+      value: t.UnionEnum([...DECISION_TYPE_KINDS]),
+      label: nullableBoundedString(bytes.label),
+      count: Type.Integer({ minimum: 0 }),
+    },
+    { additionalProperties: false },
+  ),
+  { maxItems: DECISION_TYPE_KINDS.length },
+);
+
 const sourceFacetBucketsSchema = t.Array(
   t.Object(
     {
@@ -251,7 +265,7 @@ export const searchDecisionsSuccessResponseSchema = t.Object(
         {
           court: searchCourtTiersSchema,
           year: searchFacetBucketsSchema,
-          decisionType: searchFacetBucketsSchema,
+          decisionType: decisionTypeFacetBucketsSchema,
           source: sourceFacetBucketsSchema,
           language: searchFacetBucketsSchema,
         },

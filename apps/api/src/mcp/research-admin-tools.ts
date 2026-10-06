@@ -15,9 +15,8 @@ import { updateOrganizationSettingsHandler } from "@/api/handlers/organization-s
 import { addWorkspaceMemberHandler } from "@/api/handlers/workspaces/members/add";
 import { removeWorkspaceMemberHandler } from "@/api/handlers/workspaces/members/remove";
 import {
-  type AssertNoExtraFields,
-  type MANAGE_ORGANIZATION_ADD_MEMBER_PROJECTION,
-  type MANAGE_ORGANIZATION_REMOVE_MEMBER_PROJECTION,
+  MANAGE_ORGANIZATION_ADD_MEMBER_PROJECTION,
+  MANAGE_ORGANIZATION_REMOVE_MEMBER_PROJECTION,
   type MANAGE_ORGANIZATION_SETTINGS_PROJECTION,
   MANAGE_ORGANIZATION_PROJECTION,
   SEARCH_BOE_LEGISLATION_PROJECTION,
@@ -25,6 +24,10 @@ import {
 import { boeClient } from "@/api/lib/legal-search/boe-client";
 import { LIMITS } from "@/api/lib/limits";
 import { TIME_ZONE_ID_MAX_LENGTH } from "@/api/lib/organization-time-zone";
+import {
+  type AssertNoExtraFields,
+  projectionPayload,
+} from "@/api/lib/projection-totality";
 import { normalizeTenantPageLimit } from "@/api/lib/rate-limit/action-size-limits";
 import {
   brandPersistedUserId,
@@ -48,6 +51,7 @@ import {
   nullAsAbsent,
   structuredErrorResult,
   toolDataResult,
+  legalCitationLinkFields,
   uuidInputSchema,
   validationErrorResult,
 } from "@/api/mcp/tool-utils";
@@ -463,7 +467,7 @@ const SEARCH_BOE_LEGISLATION_TOOL_DEFINITION = defineValibotMcpTool({
     openWorldHint: true,
   },
   description:
-    "Search and read Spanish consolidated legislation from the BOE. In " +
+    "Search and read Spanish consolidated legislation from the BOE. Search hits return the publisher link as primary `url`. In " +
     "search mode, pass query (free text) and/or filters (title, " +
     "department_code, legal_range_code, matter_code, date_from/date_to as " +
     "YYYYMMDD); at least one filter is required. In read mode, pass law_id " +
@@ -586,14 +590,28 @@ const handleSearchBoeLegislationTool = withThirdPartyOutbound<
   if (Result.isError(result)) {
     return internalFailureResult(result.error);
   }
-  // Passthrough: the output is public BOE statutory data and the query is
-  // caller-supplied, so no tenant-authored text needs redaction. Forwarded
-  // verbatim, so the projection tie is on the BOE client's return type.
+  // Publisher search has no held corpus identity. Its existing source URL
+  // remains primary through the same citation resolver as corpus reads.
+  const { data, ...envelope } = result.value;
+  const payload = {
+    ...envelope,
+    ...(data === undefined
+      ? {}
+      : {
+          data: data.map((item) => {
+            const { url } = legalCitationLinkFields({
+              appUrl: null,
+              sourceUrl: item.url_html_consolidada ?? item.url_eli ?? null,
+            });
+            return { ...item, url };
+          }),
+        }),
+  };
   type SearchLegislationPayload = AssertNoExtraFields<
-    typeof result.value,
+    typeof payload,
     v.InferInput<typeof SEARCH_BOE_LEGISLATION_PROJECTION>
   >;
-  return toolDataResult(result.value satisfies SearchLegislationPayload);
+  return toolDataResult(payload satisfies SearchLegislationPayload);
 });
 
 // --- list_audit_log -----------------------------------------------------
@@ -659,19 +677,21 @@ const handleListAuditLogTool: McpToolHandler<
   if (Result.isError(page)) {
     return internalFailureResult(page.error);
   }
-  return toolDataResult({
-    ...page.value,
-    items: page.value.items.map((item) => ({
-      id: item.id,
-      createdAt: item.createdAt.toISOString(),
-      userId: item.userId,
-      actor: item.actor,
-      action: item.action,
-      resourceType: item.resourceType,
-      resourceId: item.resourceId,
-      changes: item.changes,
-    })),
-  });
+  return toolDataResult(
+    projectionPayload(LIST_AUDIT_LOG_OUTPUT_SCHEMA, {
+      ...page.value,
+      items: page.value.items.map((item) => ({
+        id: item.id,
+        createdAt: item.createdAt.toISOString(),
+        userId: item.userId,
+        actor: item.actor,
+        action: item.action,
+        resourceType: item.resourceType,
+        resourceId: item.resourceId,
+        changes: item.changes,
+      })),
+    }),
+  );
 };
 
 // --- manage_organization ------------------------------------------------
@@ -980,9 +1000,11 @@ const handleAddMember = async ({
   if (Result.isError(added)) {
     return internalFailureResult(added.error);
   }
-  return toolDataResult({
-    memberId: added.value.id,
-  } satisfies v.InferInput<typeof MANAGE_ORGANIZATION_ADD_MEMBER_PROJECTION>);
+  return toolDataResult(
+    projectionPayload(MANAGE_ORGANIZATION_ADD_MEMBER_PROJECTION, {
+      memberId: added.value.id,
+    }),
+  );
 };
 
 const handleRemoveMember = async ({
@@ -1020,12 +1042,12 @@ const handleRemoveMember = async ({
   if (Result.isError(removed)) {
     return internalFailureResult(removed.error);
   }
-  return toolDataResult({
-    removed: true,
-    id: removed.value.id,
-  } satisfies v.InferInput<
-    typeof MANAGE_ORGANIZATION_REMOVE_MEMBER_PROJECTION
-  >);
+  return toolDataResult(
+    projectionPayload(MANAGE_ORGANIZATION_REMOVE_MEMBER_PROJECTION, {
+      removed: true,
+      id: removed.value.id,
+    }),
+  );
 };
 
 const handleManageOrganizationTool: TypedMcpToolHandler<

@@ -377,7 +377,10 @@ describe("reconciling the store against a matter's views", () => {
       selectAvailableWorkspaceView([unavailable], unavailable.id),
     ).toBeUndefined();
     expect(selected.some((view) => view.id === unavailable.id)).toBe(false);
-    expect(queryClient.getQueryData(queryKey)).toEqual([unavailable, ordinary]);
+    expect(queryClient.getQueryCache().find({ queryKey })?.state.data).toEqual([
+      unavailable,
+      ordinary,
+    ]);
     for (const key of TABLE_VIEW_RECORD_KEYS) {
       expect(Object.keys(useTableStore.getState()[key]["ws-1"] ?? {})).toEqual([
         "v1",

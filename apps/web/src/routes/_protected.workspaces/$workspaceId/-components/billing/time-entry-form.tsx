@@ -87,6 +87,29 @@ const timeEntryFormSchema = (
     rateAtEntry: v.number(),
     currency: v.string(),
   });
+const initialRateInput = (entry: TimeEntryFormProps["defaultValues"]) =>
+  (entry?.rateAtEntry ?? 0) > 0
+    ? majorUnitInput(
+        entry?.rateAtEntry ?? 0,
+        entry?.currency ?? DEFAULT_CURRENCY,
+      )
+    : "";
+
+const initialTimeEntryValues = (
+  entry: TimeEntryFormProps["defaultValues"],
+) => ({
+  matterId: entry?.matterId ?? "",
+  dateWorked: entry?.dateWorked ?? localISODate(),
+  durationMinutes: entry?.durationMinutes ?? 6,
+  narrative: entry?.narrative ?? "",
+  narrativeLanguage: entry?.narrativeLanguage ?? null,
+  invoiceNarrative: entry?.invoiceNarrative ?? "",
+  billable: entry?.billable ?? true,
+  taskCode: entry?.taskCode ?? "",
+  activityCode: entry?.activityCode ?? "",
+  rateAtEntry: entry?.rateAtEntry ?? 0,
+  currency: entry?.currency ?? DEFAULT_CURRENCY,
+});
 
 export const TimeEntryForm = ({
   workspaceId,
@@ -102,12 +125,7 @@ export const TimeEntryForm = ({
     () => (defaultValues?.rateAtEntry ?? 0) > 0,
   );
   const [rateInputValue, setRateInputValue] = useState(() =>
-    (defaultValues?.rateAtEntry ?? 0) > 0
-      ? majorUnitInput(
-          defaultValues?.rateAtEntry ?? 0,
-          defaultValues?.currency ?? DEFAULT_CURRENCY,
-        )
-      : "",
+    initialRateInput(defaultValues),
   );
 
   const { data: taskCodes } = useQuery(
@@ -117,26 +135,13 @@ export const TimeEntryForm = ({
     billingCodesOptions(workspaceId, "activity"),
   );
 
-  const today = localISODate();
   const schema = timeEntryFormSchema(contextState, t("billing.matterRequired"));
 
   const form = useForm(
     schemaFormOptions({
       schema,
       submitValues: "raw",
-      defaultValues: {
-        matterId: defaultValues?.matterId ?? "",
-        dateWorked: defaultValues?.dateWorked ?? today,
-        durationMinutes: defaultValues?.durationMinutes ?? 6,
-        narrative: defaultValues?.narrative ?? "",
-        narrativeLanguage: defaultValues?.narrativeLanguage ?? null,
-        invoiceNarrative: defaultValues?.invoiceNarrative ?? "",
-        billable: defaultValues?.billable ?? true,
-        taskCode: defaultValues?.taskCode ?? "",
-        activityCode: defaultValues?.activityCode ?? "",
-        rateAtEntry: defaultValues?.rateAtEntry ?? 0,
-        currency: defaultValues?.currency ?? DEFAULT_CURRENCY,
-      },
+      defaultValues: initialTimeEntryValues(defaultValues),
       onSubmit: async ({ value }) => {
         // The rate input holds MAJOR units and the currency input sits beside
         // it, so an overridden rate is scaled here, against the currency the
@@ -161,10 +166,8 @@ export const TimeEntryForm = ({
     resolvedRateOptions(workspaceId, userId, dateWorked),
   );
 
-  // Push the resolved rate into the form store whenever it changes, unless
-  // the user has taken over with a manual override. This synchronizes a
-  // query result into TanStack Form's external store; it cannot run during
-  // render because `setFieldValue` mutates that store.
+  // Resolved rates are automatic defaults, not unsaved user changes.
+  // Sync the external form store until the user overrides the rate.
   useExternalSyncEffect(() => {
     if (rateOverride) {
       return;
@@ -181,12 +184,24 @@ export const TimeEntryForm = ({
     (s) => s.values.narrativeLanguage,
   );
   const currentCurrency = useSelector(form.store, (s) => s.values.currency);
-  const formErrors = useSelector(form.store, (state) =>
-    toFormErrors(state.fieldMeta),
-  );
+  const { formErrors, dirty } = useSelector(form.store, (state) => ({
+    formErrors: toFormErrors(state.fieldMeta),
+    dirty:
+      Object.entries(state.fieldMeta).some(
+        ([name, meta]) =>
+          !meta.isDefaultValue &&
+          (rateOverride || (name !== "rateAtEntry" && name !== "currency")),
+      ) || rateInputValue !== initialRateInput(defaultValues),
+  }));
 
   return (
     <Form
+      dirty={dirty}
+      onDiscard={() => {
+        form.reset();
+        setRateOverride((defaultValues?.rateAtEntry ?? 0) > 0);
+        setRateInputValue(initialRateInput(defaultValues));
+      }}
       className="flex flex-col gap-4"
       errors={formErrors}
       onSubmit={(e) => {

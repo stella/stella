@@ -6,6 +6,7 @@ import type { ChatSendMode } from "@stll/anonymize-chat";
 
 import { ASK_USER_TOOL_NAME } from "@/api/handlers/chat/tools/native-chat-tool-names";
 import type { SafeId } from "@/api/lib/branded-types";
+import type { ChatHarnessProfile } from "@/api/tests/helpers/chat-harness-profile";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 // The browser side of a chat thread is the web app's own code, loaded from
@@ -332,6 +333,7 @@ export const createWebChatClient = async ({
   context,
   inFlight,
   page,
+  profile,
   reload,
   threadId,
 }: {
@@ -339,6 +341,7 @@ export const createWebChatClient = async ({
   context?: WebChatContext | undefined;
   inFlight: () => number;
   page: WebChatPage;
+  profile?: ChatHarnessProfile | undefined;
   reload: () => Promise<WebChatPage>;
   threadId: string;
 }): Promise<WebChatClient> => {
@@ -368,7 +371,7 @@ export const createWebChatClient = async ({
   let runtime = createRuntime(page);
 
   /** Waits until no request is open and the runtime is idle. */
-  const settle = async () => {
+  const waitForIdle = async () => {
     let quiet = 0;
     for (let tick = 0; tick < MAX_SETTLE_TICKS; tick += 1) {
       await nextTick();
@@ -389,6 +392,10 @@ export const createWebChatClient = async ({
     }
     panic("The web chat runtime never settled");
   };
+  const settle = async () =>
+    profile === undefined
+      ? await waitForIdle()
+      : await profile.measure("webSettlement", waitForIdle);
 
   /**
    * Runs a user action the way a click does: without waiting on it. An
