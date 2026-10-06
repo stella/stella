@@ -10,7 +10,7 @@ import type { ProvisionVersionBasis } from "@stll/api-contract/provision-version
 import { toSafeId } from "@/lib/safe-id";
 
 GlobalRegistrator.register({ url: "http://localhost:3000/" });
-const { cleanup, render, fireEvent, within } =
+const { cleanup, render, fireEvent, within, waitFor } =
   await import("@testing-library/react");
 const { QueryClient, QueryClientProvider } =
   await import("@tanstack/react-query");
@@ -79,10 +79,12 @@ for (const [locale, messages, year] of [
     {
       basis: DECISION_DATE_VERSION_BASIS,
       label: messages.caseLaw.viewer.versionAtDecisionDateInferred,
+      compactLabel: messages.caseLaw.viewer.versionBasisInferredCompact,
     },
     {
       basis: { type: "not_stated" },
       label: messages.caseLaw.viewer.appliedVersionNotStated,
+      compactLabel: messages.caseLaw.viewer.appliedVersionNotStatedCompact,
     },
     {
       basis: {
@@ -92,6 +94,7 @@ for (const [locale, messages, year] of [
         evidence: { kind: "stated_version", start: 0, end: 10 },
       },
       label: "303/2013 Sb.",
+      compactLabel: "303/2013 Sb.",
     },
     ...STATED_DATE_RELATIONS.map(
       (relation) =>
@@ -104,13 +107,15 @@ for (const [locale, messages, year] of [
             evidence: { kind: "stated_date", start: 0, end: 10 },
           },
           label: year,
+          compactLabel: year,
         }) as const,
     ),
   ] as const satisfies readonly {
     basis: ProvisionVersionBasis;
     label: string;
+    compactLabel: string;
   }[];
-  for (const { basis, label } of cases) {
+  for (const { basis, label, compactLabel } of cases) {
     test(`${locale}: both provision citation views disclose ${basis.type}${basis.type === "stated_date" ? `:${basis.relation}` : ""}`, async () => {
       const client = new QueryClient({
         defaultOptions: { queries: { retry: false } },
@@ -219,25 +224,27 @@ for (const [locale, messages, year] of [
           name: messages.caseLaw.viewer.provisionsCited,
         }),
       );
+      const panel =
+        ui
+          .getByRole("button", {
+            name: messages.caseLaw.viewer.provisionsCited,
+          })
+          .closest("section") ?? ui.container;
       expect(
-        ui.getAllByText(
-          (_, element) =>
-            element !== null &&
-            element.classList.contains("text-2xs") &&
-            element.textContent.includes(label),
-        ),
-      ).toHaveLength(2);
+        panel.querySelector('[data-version-basis="group"]')?.textContent,
+      ).toContain(compactLabel);
       expect(
-        within(
-          ui
-            .getByRole("button", {
-              name: messages.caseLaw.viewer.provisionsCited,
-            })
-            .closest("section") ?? ui.container,
-        )
-          .getByText("§ 13")
-          .closest("li")?.textContent,
-      ).toContain(label);
+        panel.querySelectorAll('[data-version-basis="exception"]'),
+      ).toHaveLength(0);
+      const chip = within(panel).getByRole("button", { name: "§ 13" });
+      expect(chip.textContent).toBe("§ 13");
+      chip.focus();
+      await waitFor(() => {
+        expect(
+          ui.baseElement.querySelector('[data-slot="preview-card-content"]')
+            ?.textContent,
+        ).toContain(label);
+      });
     });
   }
 }

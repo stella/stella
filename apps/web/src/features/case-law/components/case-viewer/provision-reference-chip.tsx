@@ -115,7 +115,7 @@ export const ProvisionReferenceChip = ({
               })}
             </BidiText>
           )}
-          {document !== null && isPending && !isError && (
+          {document !== null && isPending && (
             <Skeleton className="h-12 w-full" />
           )}
           {isError && (

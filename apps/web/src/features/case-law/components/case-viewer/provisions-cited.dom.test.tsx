@@ -88,7 +88,9 @@ const mount = (items: ReturnType<typeof provision>[], resolveTitle = false) => {
         statute: {
           country: "CZE",
           eli: workEli,
-          id: "00000000-0000-4000-8000-000000000003",
+          id: toSafeId<"legislationDocument">(
+            "00000000-0000-4000-8000-000000000003",
+          ),
           language: "cs",
           slug: "40-1964-sb",
           title,
