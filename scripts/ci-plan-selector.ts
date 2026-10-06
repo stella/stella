@@ -5,8 +5,7 @@
 
 import { panic, Result, TaggedError } from "better-result";
 
-const SELECTOR_START =
-  "          package_checks_required=true\n          if [[";
+const SELECTOR_START = "          # Path scopes for the build/smoke jobs";
 const SELECTOR_END = "          printf 'Changed files:";
 const OUTPUT_NAME_PATTERN = /^[a-z_][a-z0-9_]*$/u;
 const VALUES_MARKER = "--- ci-plan-selector values ---";

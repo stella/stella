@@ -391,11 +391,23 @@ const sourceFiles = (root: string): readonly string[] => {
           ) && /\.[cm]?[jt]sx?$/u.test(file),
       );
   }
+  // Gitlinks belong to a separate source repository. An exported checkout
+  // must enumerate the same first-party files as git ls-files above.
+  const modules = path.join(root, ".gitmodules");
+  const gitlinks = existsSync(modules)
+    ? readFileSync(modules, "utf-8")
+        .split("\n")
+        .map((line) => line.trim())
+        .filter((line) => line.startsWith("path ="))
+        .map((line) => line.slice("path =".length).trim())
+    : [];
   return [
     ...new Bun.Glob(
       "{scripts,apps,packages,.oxlint-plugins,.claude}/**/*.{ts,tsx,js,mjs,cjs}",
     ).scanSync({ cwd: root, onlyFiles: true }),
-  ];
+  ].filter(
+    (file) => !gitlinks.some((gitlink) => file.startsWith(`${gitlink}/`)),
+  );
 };
 
 const sourceFunctionBodies = (code: string) => {
@@ -454,12 +466,19 @@ const temporaryPathFactories = (code: string) => {
       continue;
     }
     if (
-      returns.every((match) =>
-        new RegExp(
-          `\\bconst\\s+${match[1]}\\s*=\\s*mkdtemp(?:Sync)?\\s*\\(`,
-          "u",
-        ).test(body),
-      )
+      returns.every((match) => {
+        const declarations = [
+          ...body.matchAll(new RegExp(`\\bconst\\s+${match[1]}\\s*=`, "gu")),
+        ];
+        return (
+          declarations.length > 0 &&
+          declarations.every((declaration) =>
+            /^\s*mkdtemp(?:Sync)?\s*\(/u.test(
+              body.slice(declaration.index + declaration[0].length),
+            ),
+          )
+        );
+      })
     ) {
       factories.add(name);
     }
@@ -476,9 +495,9 @@ const filesystemReadBindings = (source: string, code: string) => {
       continue;
     }
     for (const binding of (match[1] ?? "").split(",")) {
-      const [name, alias] = binding.trim().split(/\s+as\s+/u);
+      const [name, separator, alias] = binding.trim().split(/\s+/u);
       if (READ_CALLS.has(name ?? "")) {
-        reads.add(alias ?? name ?? "");
+        reads.add(separator === "as" ? (alias ?? "") : (name ?? ""));
       }
     }
   }
@@ -490,6 +509,36 @@ const filesystemReadBindings = (source: string, code: string) => {
     }
   }
   return reads;
+};
+
+const markdownPolicyReader = (step: unknown): MarkdownReader | undefined => {
+  if (
+    typeof step !== "object" ||
+    step === null ||
+    !("if" in step) ||
+    !("run" in step) ||
+    typeof step.if !== "string" ||
+    typeof step.run !== "string"
+  ) {
+    return undefined;
+  }
+  if (
+    !step.if.includes("steps.install.outcome == 'success'") ||
+    step.if.includes("package_checks_required")
+  ) {
+    return undefined;
+  }
+  if (!("name" in step) || typeof step.name !== "string") {
+    throw new MarkdownReaderDeclarationError(
+      ".github/workflows/ci.yml: policy reader has no name",
+    );
+  }
+  return {
+    file: `.github/workflows/ci.yml:ci-checks-policy:${step.name}`,
+    kind: "check",
+    inputs: ["**/*.md", "**/*.mdx"],
+    command: ["bash", "-e", "-c", step.run],
+  };
 };
 
 // These existing policy guards run after install independently of package
@@ -533,33 +582,10 @@ const markdownPolicyReaders = (root: string): readonly MarkdownReader[] => {
   }
   const readers: MarkdownReader[] = [];
   for (const step of job.steps) {
-    if (
-      typeof step !== "object" ||
-      step === null ||
-      !("if" in step) ||
-      !("run" in step) ||
-      typeof step.if !== "string" ||
-      typeof step.run !== "string"
-    ) {
-      continue;
+    const reader = markdownPolicyReader(step);
+    if (reader !== undefined) {
+      readers.push(reader);
     }
-    if (
-      !step.if.includes("steps.install.outcome == 'success'") ||
-      step.if.includes("package_checks_required")
-    ) {
-      continue;
-    }
-    if (!("name" in step) || typeof step.name !== "string") {
-      throw new MarkdownReaderDeclarationError(
-        ".github/workflows/ci.yml: policy reader has no name",
-      );
-    }
-    readers.push({
-      file: `.github/workflows/ci.yml:ci-checks-policy:${step.name}`,
-      kind: "check",
-      inputs: ["**/*.md", "**/*.mdx"],
-      command: ["bash", "-e", "-c", step.run],
-    });
   }
   return readers;
 };
@@ -578,7 +604,13 @@ const gitMarkdownInputs = (callee: string, call: string): readonly string[] => {
     .map((value) => (value.startsWith("*.") ? `**/${value}` : value));
 };
 
+let rootReaders: readonly MarkdownReader[] | undefined;
 export const markdownReaders = (root = ROOT): readonly MarkdownReader[] => {
+  // The tracked checkout is fixed during a planning process; fixture roots
+  // remain uncached so tests and callers can change their declarations.
+  if (root === ROOT && rootReaders !== undefined) {
+    return rootReaders;
+  }
   const readers: MarkdownReader[] = [...markdownPolicyReaders(root)];
   for (const file of sourceFiles(root)) {
     const source = readFileSync(path.join(root, file), "utf-8").replace(
@@ -731,6 +763,9 @@ export const markdownReaders = (root = ROOT): readonly MarkdownReader[] => {
         kind: "module",
       });
     }
+  }
+  if (root === ROOT) {
+    rootReaders = readers;
   }
   return readers;
 };

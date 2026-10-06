@@ -282,6 +282,13 @@ test("heavy event policies exclude pull requests and preserve existing full cert
           if (event === "pull_request" && queueJob) {
             expected = false;
           }
+          if (
+            current.includes(
+              "needs.ci-plan.outputs.package_checks_required == 'true'",
+            )
+          ) {
+            expected = expected && required === "true";
+          }
           if (job === "route-smoke" && event === "merge_group") {
             expected = required === "true";
           }

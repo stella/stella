@@ -510,14 +510,17 @@ test("unset and full preserve historical predicates except declared PR and route
   const baseline = original("ci.yml");
   const baselineMain = original("main-heavy.yml");
   expect(Object.keys(main.jobs)).toEqual(Object.keys(baselineMain.jobs));
-  expect(new Set(Object.keys(ci.jobs))).toEqual(
-    new Set([
-      ...Object.keys(baseline.jobs).filter(
-        (id) => id !== "merge-group-fail-fast",
-      ),
-      "marketing-screenshots-cancel",
-      "ci-generated-sources",
-    ]),
+  expect(Object.keys(ci.jobs).toSorted()).toEqual(
+    [
+      ...new Set([
+        ...Object.keys(baseline.jobs).filter(
+          (id) => id !== "merge-group-fail-fast",
+        ),
+        "marketing-screenshots-cancel",
+        "ci-generated-sources",
+        "ci-checks-docs",
+      ]),
+    ].toSorted(),
   );
   for (const event of events) {
     for (const { variable, proveFix } of ["", "full"].flatMap((queueVariable) =>

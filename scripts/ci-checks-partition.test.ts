@@ -463,14 +463,18 @@ const expectScope = ({ current, base }: ScopeOptions) => {
   if (condition === originalCondition) {
     return;
   }
-  // Heavy-only main runs skip the thin ci-checks legs. Only this wrapper
-  // may change their scope; every token of the base condition stays intact.
+  // Package check legs retain the trusted/heavy-only gate and add the
+  // package decision shared with the generated-source producer.
+  const addedPackageGate = ` && ${PACKAGE_SCOPE}`;
+  const currentTokens = conditionTokens(v.parse(v.string(), condition));
+  const baseTokens = conditionTokens(v.parse(v.string(), originalCondition));
+  if (currentTokens === `${baseTokens}${addedPackageGate}`) {
+    return;
+  }
   const wrapped = /^inputs\.heavy_only != true && \(\s*(.*?)\s*\)$/u.exec(
-    conditionTokens(v.parse(v.string(), condition)),
+    currentTokens,
   );
-  expect(wrapped?.at(1)).toBe(
-    conditionTokens(v.parse(v.string(), originalCondition)),
-  );
+  expect(wrapped?.at(1)).toBe(baseTokens);
 };
 
 type CoverageOptions = {
@@ -738,6 +742,26 @@ test("CI check scope permits only the heavy-only wrapper around the unchanged co
   expect(() => expectScope({ current: missingCondition, base })).toThrow(
     "Invalid type",
   );
+});
+
+test("package scope narrows check legs without changing their existing trust condition", () => {
+  const base = {
+    if: "inputs.heavy_only != true && ( needs.ci-plan.outputs.trusted == 'true' || github.event_name == 'workflow_dispatch' )",
+    needs: ["ci-plan", "ci-generated-sources"],
+  };
+  expectScope({
+    base,
+    current: { ...base, if: `${base.if} && ${PACKAGE_SCOPE}` },
+  });
+  for (const suffix of [
+    " || true",
+    " && needs.ci-plan.outputs.other == 'true'",
+    " && needs.ci-plan.outputs.package_checks_required != 'true'",
+  ]) {
+    expect(() =>
+      expectScope({ base, current: { ...base, if: `${base.if}${suffix}` } }),
+    ).toThrow("Expected:");
+  }
 });
 
 test("CI check scope migrates only the complete producer handoff and preserves an existing handoff", () => {

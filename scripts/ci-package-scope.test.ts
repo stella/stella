@@ -322,6 +322,87 @@ test("directory readers retain Markdown inputs at the root and outside docs", ()
   });
 });
 
+test("temporary factory inference rejects conflicting root declarations", () => {
+  repository((root, write) => {
+    write(
+      "scripts/factory.test.ts",
+      `import { readFileSync, mkdtempSync } from "node:fs";
+function fixture() { const root = mkdtempSync("fixture-"); if (condition) { const root = process.cwd(); return root; } return root; }
+const root = fixture(); readFileSync(path.join(root, "README.md"));`,
+    );
+    const errors = spyOn(console, "error").mockImplementation(() => {});
+    try {
+      expect(requiresPackageChecks({ root, changed: ["README.md"] })).toBe(
+        true,
+      );
+      expect(String(errors.mock.calls.at(0)?.at(1))).toContain(
+        "scripts/factory.test.ts",
+      );
+    } finally {
+      errors.mockRestore();
+    }
+  });
+});
+
+test("unresolved directory suffixes retain their known subtree and name the reader", () => {
+  repository((root, write) => {
+    write(
+      "scripts/dynamic-directory.test.ts",
+      'import { readdirSync } from "node:fs"; readdirSync(path.join("docs", directory));',
+    );
+    const errors = spyOn(console, "error").mockImplementation(() => {});
+    try {
+      expect(requiresPackageChecks({ root, changed: ["docs/guide.md"] })).toBe(
+        true,
+      );
+      expect(String(errors.mock.calls.at(0)?.at(1))).toContain(
+        "scripts/dynamic-directory.test.ts",
+      );
+      expect(requiresPackageChecks({ root, changed: ["README.md"] })).toBe(
+        false,
+      );
+    } finally {
+      errors.mockRestore();
+    }
+  });
+});
+
+test("glob scans resolve cwd aliases through file URLs", () => {
+  repository((root, write) => {
+    write(
+      "apps/example/scripts/reader.ts",
+      `import { fileURLToPath } from "node:url";
+const ROOT_URL = new URL("../", import.meta.url);
+const ROOT_PATH = fileURLToPath(ROOT_URL);
+new Bun.Glob("**/*.md").scanSync({ cwd: ROOT_PATH });`,
+    );
+    expect(
+      requiresPackageChecks({ root, changed: ["apps/example/README.md"] }),
+    ).toBe(true);
+    expect(markdownChecks({ root, changed: ["README.md"] })).toEqual([]);
+  });
+});
+
+test("exported source censuses preserve gitlink ownership boundaries", () => {
+  repository((root, write) => {
+    write(
+      ".gitmodules",
+      '[submodule "packages/example/content"]\n path = packages/example/content\n url = https://example.invalid/content.git\n',
+    );
+    write(
+      "packages/example/content/convert.ts",
+      'import { readFileSync } from "node:fs"; readFileSync(join(EXTERNAL_ROOT, directory, "template.md"));',
+    );
+    write(
+      "scripts/real.test.ts",
+      'import { readFileSync } from "node:fs"; readFileSync("README.md");',
+    );
+    expect(markdownChecks({ root, changed: ["README.md"] })).toEqual([
+      ["bun", "test", "scripts/real.test.ts"],
+    ]);
+  });
+});
+
 test("a reader without an isolated command fails closed and names its owner", () => {
   repository((root, write) => {
     write(

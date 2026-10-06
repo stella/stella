@@ -486,6 +486,9 @@ jobs:
           desktop_rust_checks_required=$(bash scripts/detect-tauri-rust-changes.sh "${changed_files[@]}")
           e2e_core_required=$(bash scripts/detect-e2e-changes.sh core "${changed_files[@]}")
           e2e_landing_required=$(bash scripts/detect-e2e-changes.sh landing "${changed_files[@]}")
+          # Path scopes for the build/smoke jobs, computed here so a job whose
+          # scope did not change is skipped entirely instead of scheduling a
+          # runner just to decide it has nothing to do.
           package_checks_required=true
           if [[ "$EVENT_NAME" == pull_request || "$EVENT_NAME" == merge_group ]]; then
             package_scope=$(bun scripts/ci-package-scope.ts --package-checks "${changed_files[@]}") || package_scope=true
@@ -503,9 +506,6 @@ jobs:
             fi
           fi
 
-          # Path scopes for the build/smoke jobs, computed here so a job whose
-          # scope did not change is skipped entirely instead of scheduling a
-          # runner just to decide it has nothing to do.
           # A crashed detector cannot certify a plan. Reject its exit status
           # or malformed output before any empty scope can skip a suite.
           if ! service_suite_scopes=$(bun scripts/detect-service-suite-changes.ts --scopes "${changed_files[@]}"); then
@@ -1362,6 +1362,7 @@ jobs:
         uses: stella/.github/actions/setup-bun-cached@167fb396c6c0f4e07296ad2cd72e6ef15367c776
         with:
           bun-version-file: "package.json"
+          save: ${{ github.ref == 'refs/heads/main' }}
       - name: Install dependencies
         id: install
         run: bash scripts/retry.sh bun ci --ignore-scripts
