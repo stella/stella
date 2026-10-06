@@ -1,6 +1,7 @@
 import * as v from "valibot";
 
 import { COURT_TIER_LABELS } from "@stll/api-contract/case-law-court-tiers";
+import { caseLawCourtYearSchema } from "@stll/api-contract/case-law-court-year";
 import { publicCountryUnavailableSchema } from "@stll/api-contract/public-country-capability";
 import {
   CASE_LAW_SEARCH_WARNING_CODES,
@@ -94,13 +95,11 @@ export const SEARCH_CASE_LAW_PROJECTION = v.union([
   projectionBranch(publicCountryUnavailableSchema),
   projectionBranch(
     v.strictObject({
-      // Page one of a single query only: the counts describe one query's whole
-      // result set, so they do not change as an agent pages, are null on every
-      // page after the first, and are null throughout for a call carrying
-      // several queries, whose merged result set no count describes.
+      // Facets describe the first phrasing on page one; continuations are null.
       facets: v.nullable(
         v.strictObject({
           court: v.array(caseLawCourtTierProjection),
+          courtYear: caseLawCourtYearSchema,
           // Civil years the result set spans, newest first. Empty where the search
           // index cannot answer for them.
           year: v.array(caseLawFacetBucketProjection),

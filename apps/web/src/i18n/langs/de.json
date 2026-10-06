@@ -145,6 +145,7 @@
       "useBackupCode": "Stattdessen Wiederherstellungscode verwenden"
     },
     "useDifferentEmail": "Andere E-Mail verwenden",
+    "usePassword": "Stattdessen mit Passwort anmelden",
     "weSentCodeTo": "Wir haben einen Code an <email>{emailAddress}</email> gesendet"
   },
   "avt": {
@@ -1049,6 +1050,7 @@
       "toastDescription": "Der ganzseitige Chat mit dauerhaft gespeicherten Konversationen kommt bald.",
       "toastTitle": "Vollansicht noch nicht verfügbar"
     },
+    "activateGeneratedView": "Mit dieser Ansicht arbeiten",
     "aiPrompt": "KI-Nachrichtenfeld",
     "aiThread": "KI-Konversation",
     "analyzingSources": "Quellen werden analysiert",
@@ -1194,6 +1196,8 @@
     "forkedFromUnavailable": "Erstellt aus einem nicht mehr verfügbaren Chat",
     "forkedThread": "Aus einem anderen Chat",
     "forkingThread": "Neuer Chat wird erstellt…",
+    "generatedView": "Generierte Ansicht",
+    "generatedViewDrill": "Suche Entscheidungen mit dem Gerichtsfilter {court} und dem Jahr {year}.",
     "greeting": "Woran möchten Sie arbeiten?",
     "greetingSubtitle": "Beginnen Sie mit einer Akte, einem Dokument oder einer einfachen Frage.",
     "hideThread": "Konversation ausblenden",

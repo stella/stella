@@ -10,10 +10,10 @@ import {
   DefaultPendingComponent,
 } from "@/components/route-components";
 import { installChatRuntimeCleanup } from "@/features/chat/queries";
+import { installUserScopedStorage } from "@/lib/account/install-user-scoped-storage";
 import { installSessionChangeListener } from "@/lib/account/session-change-listener";
 import { listenForSessionDocumentRestore } from "@/lib/account/session-document";
 import { listenForSessionChange } from "@/lib/account/session-signal";
-import { installUserScopedStorage } from "@/lib/account/user-scoped-storage";
 import { createAnalyticsValue } from "@/lib/analytics/provider";
 import {
   createRouteErrorLifecycleController,

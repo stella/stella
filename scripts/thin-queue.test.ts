@@ -192,21 +192,36 @@ const expectedRouteSelection = (value: ReturnType<typeof context>) => {
     (value.github.event_name === "merge_group" || value.inputs.heavy_only)
   );
 };
-const expectedPrSelection = (
-  job: string,
-  baseline: boolean,
-  proveFix = false,
-) => {
+type ExpectedPrSelectionOptions = {
+  job: string;
+  baseline: boolean;
+  value: ReturnType<typeof context>;
+};
+const expectedPrSelection = ({
+  job,
+  baseline,
+  value,
+}: ExpectedPrSelectionOptions) => {
   const disposition = eventPolicy[`ci.yml/${job}`];
   if (disposition === undefined) {
     panic(`Missing CI event disposition: ${job}`);
+  }
+  if (job === "ci-browser") {
+    return (
+      value.needs["ci-plan"]?.outputs["trusted"] === "true" &&
+      value.needs["ci-plan"].outputs["desktop_browser_required"] === "true"
+    );
   }
   switch (disposition) {
     case "queue":
     case "main":
       return false;
     case "pr-opt-in":
-      return proveFix && baseline;
+      return (
+        value.github.event.pull_request.labels.some(
+          (label) => label.name === "prove-fix",
+        ) && baseline
+      );
     case "pr-fast":
       return baseline;
     default:
@@ -536,7 +551,7 @@ test("unset and full preserve historical predicates except declared PR and route
         if (job === "route-smoke") {
           expected = expectedRouteSelection(value);
         } else if (event.event === "pull_request") {
-          expected = expectedPrSelection(job, expected, proveFix);
+          expected = expectedPrSelection({ job, baseline: expected, value });
         }
         expect(
           selected(ci.jobs[job]?.if, value),
@@ -606,7 +621,7 @@ test("one variable moves only derived heavy jobs from merge groups to ordinary m
         if (job === "route-smoke") {
           expected = expectedRouteSelection(value);
         } else if (event.event === "pull_request") {
-          expected = expectedPrSelection(job, expected);
+          expected = expectedPrSelection({ job, baseline: expected, value });
         }
         expect(runs, `${event.event}/${variable}/${job}`).toBe(expected);
       }

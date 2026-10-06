@@ -51,6 +51,7 @@ import {
   EMPTY_RESTORATION_PAIRS,
   getFollowingAssistantRestorations,
   getMentionTagAttr,
+  sentinelIsAboveRoot,
   userMessageFallbackText,
 } from "@/components/chat/chat-thread-messages.logic";
 import { ChatTranscriptCopy } from "@/components/chat/chat-transcript-copy";
@@ -212,7 +213,7 @@ export const ChatThreadMessages = ({
 
     const observer = new IntersectionObserver(
       (entries) => {
-        const entry = entries.at(0);
+        const entry = entries.at(-1);
         if (!entry?.isIntersecting) {
           return;
         }
@@ -296,6 +297,7 @@ export const ChatThreadMessages = ({
               shouldShowToolCalls={shouldShowToolCalls}
               streamdownComponents={streamdownComponents}
               workspaceId={workspaceId}
+              threadRef={threadRef}
             />
             <div
               className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1"
@@ -524,14 +526,10 @@ const StickyUserTurn = ({
     }
     const observer = new IntersectionObserver(
       (entries) => {
-        const entry = entries.at(0);
-        if (!entry) {
-          return;
+        const stuck = sentinelIsAboveRoot(entries);
+        if (stuck !== undefined) {
+          setIsStuck(stuck);
         }
-        const rootTop = entry.rootBounds?.top ?? 0;
-        setIsStuck(
-          !entry.isIntersecting && entry.boundingClientRect.top <= rootTop,
-        );
       },
       { root, rootMargin: "0px", threshold: [0] },
     );
@@ -1359,6 +1357,7 @@ type AssistantMessagePartsProps = Pick<
   | "onOpenCreateDocumentDraft"
   | "onOpenCreatedDocument"
   | "streamdownComponents"
+  | "threadRef"
   | "workspaceId"
 > & {
   activeOrganizationId: string;
@@ -1535,6 +1534,7 @@ const toAssistantPartRenderGroups = (
  * remount on every streaming text delta.
  */
 const AssistantMessageParts = ({
+  threadRef,
   activeFileName,
   activeOrganizationId,
   assistantTextDensity,
@@ -1565,6 +1565,8 @@ const AssistantMessageParts = ({
         <ChatRichMessagePart
           key={`${message.id}-${entry.key}`}
           part={entry.part}
+          organizationId={activeOrganizationId}
+          threadRef={threadRef}
         />
       );
     }

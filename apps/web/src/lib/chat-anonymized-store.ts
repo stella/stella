@@ -10,6 +10,7 @@ import {
 } from "@stll/anonymize-chat";
 import type { ChatSendMode } from "@stll/anonymize-chat";
 
+import { browserStateStorage } from "@/lib/account/browser-storage";
 import {
   followStorageOwner,
   userScopedStateStorage,
@@ -154,7 +155,9 @@ export const useChatAnonymizedStore = create<ChatAnonymizedStore>()(
     }),
     {
       name: "stella.chat.anonymized",
-      storage: createJSONStorage(() => userScopedStateStorage(localStorage)),
+      storage: createJSONStorage(() =>
+        userScopedStateStorage(browserStateStorage("local")),
+      ),
       partialize: ({ defaultSendMode, sendModes }) => ({
         defaultSendMode,
         sendModes,

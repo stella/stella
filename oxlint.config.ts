@@ -932,15 +932,15 @@ export default defineConfig({
       { ignorePrimitives: { string: true, boolean: true } },
     ],
     "typescript/return-await": ["error", "error-handling-correctness-only"],
-    // A `let`, `const` or class read before its declaration runs throws in
-    // the temporal dead zone. A function declaration is hoisted, so calling
-    // one declared further down is not a defect.
+    // Same-scope lexical reads retain temporal-dead-zone checks. References
+    // inside functions may name variables declared later; their call order
+    // decides when those reads run. Class ordering stays checked.
     "eslint/no-use-before-define": [
       "error",
       {
         functions: false,
         classes: true,
-        variables: true,
+        variables: false,
         allowNamedExports: false,
       },
     ],
@@ -1574,6 +1574,7 @@ export default defineConfig({
     "./.oxlint-plugins/require-stable-editor-options.ts",
     "./.oxlint-plugins/require-use-shallow.ts",
     "./.oxlint-plugins/no-raw-stored-json.ts",
+    "./.oxlint-plugins/no-raw-browser-storage.ts",
     "./.oxlint-plugins/no-detached-void.ts",
     "./.oxlint-plugins/no-broad-translation-callable.ts",
     "./.oxlint-plugins/no-partial-record-satisfies.ts",
@@ -1605,8 +1606,8 @@ export default defineConfig({
       },
     },
     {
-      // Plugin fixtures are inputs for the local rules' tests; route fixtures
-      // name their component before declaring it, as route modules do.
+      // Plugin fixtures include intentional lexical reads and class references
+      // before declaration to exercise rule diagnostics.
       files: [".oxlint-plugins/__fixtures__/**"],
       rules: { "eslint/no-use-before-define": "off" },
     },
@@ -2503,6 +2504,12 @@ export default defineConfig({
             approvedAdapters: [
               {
                 path: "apps/api/src/handlers/case-law/decisions/search-schema.ts",
+                binding: "courtYearSchema",
+                reason:
+                  "Runtime JSON Schema and static type are derived from the same shared Valibot schema.",
+              },
+              {
+                path: "apps/api/src/handlers/case-law/decisions/search-schema.ts",
                 binding: "decisionIdentifiersSchema",
                 reason:
                   "Runtime array bounds preserve the canonical non-empty readonly identifier contract.",
@@ -2789,6 +2796,17 @@ export default defineConfig({
       ],
       rules: {
         "no-broad-translation-callable/no-broad-translation-callable": "error",
+      },
+    },
+    {
+      // All browser storage consumers use the account storage owners;
+      // the rule owns its documented, shrink-only owner allowlist.
+      files: [
+        "apps/web/src/**/*.{ts,tsx}",
+        ".oxlint-plugins/__fixtures__/no-raw-browser-storage.fixture.ts",
+      ],
+      rules: {
+        "no-raw-browser-storage/no-raw-browser-storage": "error",
       },
     },
     {

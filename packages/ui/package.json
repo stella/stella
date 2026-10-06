@@ -97,6 +97,7 @@
     "./file-input": "./src/components/file-input.tsx",
     "./segmented-icon-toggle": "./src/components/segmented-icon-toggle.tsx",
     "./select": "./src/components/select.tsx",
+    "./split-button": "./src/components/split-button.tsx",
     "./separator": "./src/components/separator.tsx",
     "./sheet": "./src/components/sheet.tsx",
     "./sidebar": "./src/components/sidebar.tsx",

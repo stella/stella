@@ -672,6 +672,7 @@ const ClipboardCard = ({
             aria-label={t("editItem")}
             className="h-8 min-w-0 flex-1 rounded-lg px-2 text-sm font-semibold"
             data-clipboard-name-input=""
+            fill
             maxLength={MAX_ITEM_NAME_CHARACTERS}
             onCancel={() => {
               setEditingName(false);

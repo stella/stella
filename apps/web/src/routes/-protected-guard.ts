@@ -9,7 +9,6 @@ import { roleOptions } from "@/lib/auth-queries";
 import { detached } from "@/lib/detached";
 import { notificationsOptions } from "@/lib/notification-queries";
 import { aiAvailabilityOptions } from "@/lib/organization/ai-config-queries";
-import { usePinnedStore } from "@/lib/pinned-store";
 import {
   prefetchNonCriticalInfiniteQuery,
   prefetchRouteQuery,
@@ -108,11 +107,6 @@ export const loadProtectedContext = async ({
       "protected-layout.notifications-prefetch",
     );
   }
-  // Seed the pinned-matters store from localStorage before the
-  // sidebar renders. The store's `init` is idempotent (skips when
-  // the same userId is already loaded), so re-runs on navigation
-  // cost nothing and a render-time effect is unnecessary.
-  usePinnedStore.getState().init(authContext.session.userId);
 
   return {
     user: {

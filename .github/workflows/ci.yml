@@ -104,6 +104,7 @@ jobs:
       e2e_landing_required: ${{ steps.changed-files.outputs.e2e_landing_required }}
       fix_tests_on_base_required: ${{ steps.changed-files.outputs.fix_tests_on_base_required }}
       landing_build_required: ${{ steps.changed-files.outputs.landing_build_required }}
+      desktop_browser_required: ${{ steps.changed-files.outputs.desktop_browser_required }}
       legal_atlas_image_required: ${{ steps.changed-files.outputs.legal_atlas_image_required }}
       legal_atlas_image_pr_required: ${{ steps.changed-files.outputs.legal_atlas_image_pr_required }}
       dependency_malware_required: ${{ steps.changed-files.outputs.dependency_malware_required }}
@@ -493,6 +494,7 @@ jobs:
               echo "service_suites_pr_required=true"
               echo "collab_redis_required=true"
               echo "desktop_rust_checks_required=true"
+              echo "desktop_browser_required=true"
               echo "e2e_core_required=true"
               echo "e2e_production_required=$e2e_production_required"
               echo "e2e_landing_required=true"
@@ -537,6 +539,7 @@ jobs:
               echo "service_suites_pr_required=false"
               echo "collab_redis_required=false"
               echo "desktop_rust_checks_required=false"
+              echo "desktop_browser_required=false"
               echo "e2e_core_required=false"
               echo "e2e_production_required=false"
               echo "e2e_landing_required=false"
@@ -592,6 +595,10 @@ jobs:
           service_suites_pr_required=false
           if [[ "$postgres_suites_required" == true || "$corpus_suites_required" == true || "$valkey_suites_required" == true || "$collaboration_suite_required" == true ]]; then
             service_suites_pr_required=true
+          fi
+          desktop_browser_required=$(bun scripts/ci-package-scope.ts --desktop-browser "${changed_files[@]}") || desktop_browser_required=true
+          if [[ "$desktop_browser_required" != false ]]; then
+            desktop_browser_required=true
           fi
           dependency_malware_required=$(bun scripts/check-standalone-lockfiles.ts --requires-malware-scan "${changed_files[@]}")
           agent_sandbox_docker_required=false
@@ -845,6 +852,7 @@ jobs:
             echo "service_suites_pr_required=$service_suites_pr_required"
             echo "collab_redis_required=$collab_redis_required"
             echo "desktop_rust_checks_required=$desktop_rust_checks_required"
+            echo "desktop_browser_required=$desktop_browser_required"
             echo "e2e_core_required=$e2e_core_required"
             echo "e2e_production_required=$e2e_production_required"
             echo "e2e_landing_required=$e2e_landing_required"
@@ -2201,6 +2209,16 @@ jobs:
         if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
         run: bun run i18n:check
 
+      - name: Playwright config scope
+        if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
+        # Lists every Playwright config from its package. A spec that does not
+        # load, or a project that collects another package's specs, fails here
+        # on the pull request instead of failing every e2e shard in the queue.
+        # The fixture tests run first so a broken guard cannot pass silently.
+        run: |
+          bun test scripts/check-playwright-config-scope.test.ts
+          bun run check:playwright-config-scope
+
       - name: Release changelog guard
         if: ${{ !cancelled() && steps.checkout.outcome == 'success' && steps.install.outcome != 'failure' && steps.standalone_lockfiles.outcome != 'failure' && steps.lockfile_ages.outcome != 'failure' && (github.event_name == 'pull_request' || github.event_name == 'merge_group') }}
         env:
@@ -2679,6 +2697,11 @@ jobs:
       - name: Test web runtime staging
         if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
         run: bun test scripts/stage-web-runtime.test.ts
+
+      - name: Check Docker source closure
+        if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
+        timeout-minutes: 1
+        run: timeout 30s bun test scripts/docker-source-closure.test.ts
 
       # The same transformation decides what every published tarball exports.
       # Its unit coverage is what keeps a malformed source map — a wildcard, a
@@ -3233,21 +3256,18 @@ jobs:
     needs: ci-plan
     if: >-
       needs.ci-plan.outputs.run_required != 'false'
+      && (needs.ci-plan.outputs.trusted == 'true' || github.event_name == 'workflow_dispatch')
       && (
-      github.event_name != 'pull_request' && (
-      needs.ci-plan.outputs.queue_depth != 'thin'
-      && ((needs.ci-plan.outputs.trusted == 'true'
-       || github.event_name == 'workflow_dispatch')
-      && needs.ci-plan.outputs.suite_depth == 'full'
-      )
-      )
+        (github.event_name == 'pull_request' && needs.ci-plan.outputs.desktop_browser_required == 'true')
+        || (github.event_name != 'pull_request' && needs.ci-plan.outputs.queue_depth != 'thin'
+        && needs.ci-plan.outputs.suite_depth == 'full')
       )
     runs-on: ubuntu-latest
     timeout-minutes: 35
     strategy:
       fail-fast: false
       matrix:
-        suite: [desktop, ui]
+        suite: ${{ github.event_name == 'pull_request' && fromJSON('["desktop"]') || fromJSON('["desktop","ui"]') }}
     container:
       image: ${{ needs.ci-plan.outputs.playwright_image }}
       options: --init --ipc=host
@@ -3267,8 +3287,14 @@ jobs:
           ref: ${{ inputs.heavy_only == true && inputs.sha || '' }}
           submodules: true
 
+      - name: Check desktop browser test scope
+        id: desktop-browser-tests
+        env:
+          REQUIRED: ${{ needs.ci-plan.outputs.desktop_browser_required }}
+        run: echo "required=$REQUIRED" >> "$GITHUB_OUTPUT"
+
       - name: Check UI browser test scope
-        if: needs.ci-plan.outputs.package_checks_required == 'true'
+        if: github.event_name != 'pull_request' && needs.ci-plan.outputs.package_checks_required == 'true'
         id: ui-browser-tests
         env:
           BASE_REF: ${{ github.base_ref || 'main' }}
@@ -3305,7 +3331,7 @@ jobs:
           echo "required=false" >> "$GITHUB_OUTPUT"
 
       - name: Check extension browser test scope
-        if: needs.ci-plan.outputs.package_checks_required == 'true'
+        if: github.event_name != 'pull_request' && needs.ci-plan.outputs.package_checks_required == 'true'
         id: extension-browser-tests
         env:
           BASE_REF: ${{ github.base_ref || 'main' }}
@@ -3328,7 +3354,7 @@ jobs:
           echo "required=false" >> "$GITHUB_OUTPUT"
 
       - name: Setup Bun
-        if: steps.ui-browser-tests.outputs.required == 'true' || steps.extension-browser-tests.outputs.required == 'true'
+        if: steps.desktop-browser-tests.outputs.required == 'true' || steps.ui-browser-tests.outputs.required == 'true' || steps.extension-browser-tests.outputs.required == 'true'
         env:
           NPM_TOKEN: ""
         # The Playwright image has npm but no unzip. Install Bun's native
@@ -3346,20 +3372,20 @@ jobs:
 
       # setup-bun reuses the matching ~/.bun/bin/bun above, avoiding unzip.
       - name: Restore Bun install cache
-        if: steps.ui-browser-tests.outputs.required == 'true' || steps.extension-browser-tests.outputs.required == 'true'
+        if: steps.desktop-browser-tests.outputs.required == 'true' || steps.ui-browser-tests.outputs.required == 'true' || steps.extension-browser-tests.outputs.required == 'true'
         uses: stella/.github/actions/setup-bun-cached@167fb396c6c0f4e07296ad2cd72e6ef15367c776
         with:
           bun-version-file: package.json
           save: ${{ github.ref == 'refs/heads/main' }}
 
       - name: Turbo remote cache
-        if: steps.ui-browser-tests.outputs.required == 'true' || steps.extension-browser-tests.outputs.required == 'true'
+        if: steps.desktop-browser-tests.outputs.required == 'true' || steps.ui-browser-tests.outputs.required == 'true' || steps.extension-browser-tests.outputs.required == 'true'
         uses: rharkor/caching-for-turbo@2238fae6eb9a9936f92356f54cb3660200d105e7 # v2.5.1
         with:
           server-port: "0"
 
       - name: Install dependencies
-        if: steps.ui-browser-tests.outputs.required == 'true' || steps.extension-browser-tests.outputs.required == 'true'
+        if: steps.desktop-browser-tests.outputs.required == 'true' || steps.ui-browser-tests.outputs.required == 'true' || steps.extension-browser-tests.outputs.required == 'true'
         run: bash scripts/retry.sh bun ci --ignore-scripts
         env:
           # .npmrc references NPM_TOKEN, but PR installs must not expose
@@ -3367,7 +3393,7 @@ jobs:
           NPM_TOKEN: ""
 
       - name: Prepare environment
-        if: steps.ui-browser-tests.outputs.required == 'true' || steps.extension-browser-tests.outputs.required == 'true'
+        if: steps.desktop-browser-tests.outputs.required == 'true' || steps.ui-browser-tests.outputs.required == 'true' || steps.extension-browser-tests.outputs.required == 'true'
         # `cp`, not `mv`: renaming the tracked .env.example would dirty the
         # working tree in apps/api and apps/web. .env is gitignored.
         run: |
@@ -3377,7 +3403,7 @@ jobs:
           cp .env.example .env
 
       - name: Install UI browser test runtime
-        if: steps.ui-browser-tests.outputs.required == 'true' || steps.extension-browser-tests.outputs.required == 'true'
+        if: steps.desktop-browser-tests.outputs.required == 'true' || steps.ui-browser-tests.outputs.required == 'true' || steps.extension-browser-tests.outputs.required == 'true'
         uses: ./.github/actions/setup-playwright
         with:
           # The pinned image includes both desktop engines and screenshot fonts.
@@ -3392,7 +3418,7 @@ jobs:
         run: bun --filter @stll/ui test:browser
 
       - name: Test desktop browser interactions
-        if: matrix.suite == 'desktop' && steps.ui-browser-tests.outputs.required == 'true'
+        if: matrix.suite == 'desktop' && steps.desktop-browser-tests.outputs.required == 'true'
         env:
           PLAYWRIGHT_JSON_OUTPUT_FILE: ${{ github.workspace }}/.cache/playwright-timings/test-desktop-browser-interactions.json
         run: |
@@ -3400,7 +3426,7 @@ jobs:
           bun run test:browser
 
       - name: Upload desktop browser failures
-        if: matrix.suite == 'desktop' && failure() && steps.ui-browser-tests.outputs.required == 'true'
+        if: matrix.suite == 'desktop' && failure() && steps.desktop-browser-tests.outputs.required == 'true'
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: desktop-browser-failures
@@ -3834,6 +3860,11 @@ jobs:
 
       - name: Projection totality
         run: bun run check:projection-totality
+
+      - name: Split-button census
+        run: |
+          bun run --cwd packages/scripts test ../../scripts/check-split-buttons.test.ts
+          bun run check:split-buttons
 
       - name: Database awaits in loops
         # Type-aware N+1 guard over the API source and scripts: an awaited
@@ -5381,6 +5412,17 @@ jobs:
           bash "$GITHUB_WORKSPACE/.github/actions/setup-playwright/run-in-image.sh" bun --filter @stll/web test:e2e --
           --grep-invert='route-smoke'
           --shard=${{ matrix.shard }}/2
+
+      # API-owned browser checks (visual sandbox) need the API from this stack
+      # but no web app; one shard runs them.
+      - name: Run API browser checks
+        if: >-
+          !cancelled()
+          && steps.e2e-stack.outputs.status == 'ready'
+          && matrix.shard == 1
+        env:
+          PLAYWRIGHT_JSON_OUTPUT_FILE: ${{ github.workspace }}/.cache/playwright-timings/run-api-browser-checks.json
+        run: bash "$GITHUB_WORKSPACE/.github/actions/setup-playwright/run-in-image.sh" bun --filter @stll/api test:e2e:browser
 
       - name: Run route-smoke Playwright shard
         if: >-
@@ -6935,9 +6977,9 @@ jobs:
           # Jobs a fast-depth run must also see succeed once their scope is
           # planned; any other job may skip there.
           FAST_JOB_SCOPES: >-
-            {"service-suites": "service_suites_pr_required", "docker-checks": "docker_checks_pr_required", "legal-atlas-image": "legal_atlas_image_pr_required"}
+            {"ci-browser": "desktop_browser_required", "service-suites": "service_suites_pr_required", "docker-checks": "docker_checks_pr_required", "legal-atlas-image": "legal_atlas_image_pr_required"}
           FAST_REQUIRED: >-
-            ["ci-generated-sources", "ci-checks-generated", "ci-checks-policy", "ci-checks-rest", "code-quality-api", "code-quality-rest", "code-quality-web", "dependency-malware", "parser-version-guard", "typecheck-baseline", "ci-tests"]
+            ["ci-browser", "ci-generated-sources", "ci-checks-generated", "ci-checks-policy", "ci-checks-rest", "code-quality-api", "code-quality-rest", "code-quality-web", "dependency-malware", "parser-version-guard", "typecheck-baseline", "ci-tests"]
         run: |
           # Read cancellation evidence before any early aggregation exit.
           cancelled_jobs=""
