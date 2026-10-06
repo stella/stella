@@ -5,12 +5,15 @@ import { afterAll, afterEach, expect, test } from "bun:test";
 
 GlobalRegistrator.register({ url: "http://localhost:3000/storage" });
 const { act, cleanup, renderHook } = await import("@testing-library/react");
-const { browserStorage } = await import("./browser-storage");
-const { USER_STORAGE_FAMILIES } = await import("./storage-families");
+const { browserStorage, browserStateStorage, deviceStorage } =
+  await import("./browser-storage");
+const { USER_STORAGE_FAMILIES, DEVICE_STORAGE_FAMILIES } =
+  await import("./storage-families");
 const { useUserStorageState } = await import("./use-user-storage-state");
+const { rootKeys } = await import("@/lib/auth-queries");
 const { installUserScopedStorage } =
   await import("./install-user-scoped-storage");
-const { releaseUserStorage, userStorageKey } =
+const { releaseUserStorage, userStorageKey, userScopedStateStorage } =
   await import("./user-scoped-storage");
 const { useColumnWidths } =
   await import("@/routes/_protected.workspaces/$workspaceId/-components/filesystem/use-column-widths");
@@ -109,4 +112,127 @@ test("mounted tree restores saved widths and resizes within the active owner", (
   mounted.unmount();
   unsubscribe();
   client.clear();
+});
+
+type StorageFamily = (typeof USER_STORAGE_FAMILIES)[number];
+const familyEntry = (family: StorageFamily) => {
+  const baseKey = `${family.prefix}document:anchor`;
+  const area = browserStateStorage(family.area);
+  switch (family.owner) {
+    case "scoped":
+      return {
+        family,
+        baseKey,
+        key: userStorageKey(baseKey),
+        storage: userScopedStateStorage(area),
+      };
+    case "carried":
+      return { family, baseKey, key: baseKey, storage: area };
+    default:
+      family.owner satisfies never;
+      return panic("Unhandled registered storage ownership");
+  }
+};
+
+const storageAreas = [
+  ...new Set(
+    [...USER_STORAGE_FAMILIES, ...DEVICE_STORAGE_FAMILIES].map(
+      ({ area }) => area,
+    ),
+  ),
+];
+
+const rawKeys = (area: StorageFamily["area"]) => {
+  const storage =
+    browserStorage(area) ?? panic("Test requires browser storage");
+  return Array.from({ length: storage.length }, (_, index) =>
+    storage.key(index),
+  ).filter((key): key is string => key !== null);
+};
+
+const assertOnlyDeviceEntries = () => {
+  for (const area of storageAreas) {
+    for (const key of rawKeys(area)) {
+      expect(
+        DEVICE_STORAGE_FAMILIES.some(
+          (family) => family.area === area && key.startsWith(family.prefix),
+        ),
+      ).toBe(true);
+    }
+  }
+};
+
+type SessionTransition = "account switch" | "sign-out";
+const assertRegisteredSessionTransition = (transition: SessionTransition) => {
+  const client = new QueryClient();
+  const unsubscribe = installUserScopedStorage(client);
+  client.setQueryData(rootKeys.session, { user: { id: "a" } });
+  const entries = USER_STORAGE_FAMILIES.map(familyEntry);
+  const devices = DEVICE_STORAGE_FAMILIES.map((family) => ({
+    ...family,
+    // Child keys let the canonical session-owner marker record transitions.
+    key: `${family.prefix}registry-fixture`,
+  }));
+  try {
+    for (const entry of entries) {
+      entry.storage.setItem(entry.baseKey, "A");
+      expect(entry.storage.getItem(entry.baseKey)).toBe("A");
+      expect(browserStorage(entry.family.area)?.getItem(entry.key)).toBe("A");
+    }
+    for (const device of devices) {
+      deviceStorage(device.area).setItem(device.key, "device");
+      expect(deviceStorage(device.area).getItem(device.key)).toBe("device");
+    }
+    const scoped =
+      entries.find(({ family }) => family.owner === "scoped") ??
+      panic("Test requires a scoped family");
+    const mounted = renderHook(() =>
+      useUserStorageState({
+        baseKey: scoped.baseKey,
+        area: scoped.family.area,
+        decode,
+        encode,
+      }),
+    );
+    expect(mounted.result.current.value).toBe("A");
+    if (transition === "sign-out") {
+      act(() => {
+        releaseUserStorage();
+      });
+      expect(mounted.result.current.value).toBe("empty");
+      assertOnlyDeviceEntries();
+      for (const entry of entries) {
+        expect(entry.storage.getItem(entry.baseKey)).toBeNull();
+      }
+    }
+    act(() => {
+      client.setQueryData(rootKeys.session, { user: { id: "b" } });
+    });
+    expect(mounted.result.current.value).toBe("empty");
+    for (const entry of entries) {
+      // Carried entries are dropped when their signed-in owner leaves.
+      expect(entry.storage.getItem(entry.baseKey)).toBeNull();
+      for (const area of storageAreas) {
+        expect(rawKeys(area)).not.toContain(entry.key);
+      }
+    }
+    assertOnlyDeviceEntries();
+    for (const device of devices) {
+      expect(deviceStorage(device.area).getItem(device.key)).toBe("device");
+    }
+    mounted.unmount();
+  } finally {
+    cleanup();
+    unsubscribe();
+    releaseUserStorage();
+    client.clear();
+  }
+};
+
+test("registered storage families follow an account switch", () => {
+  assertRegisteredSessionTransition("account switch");
+});
+
+test("registered storage families follow sign-out and account sign-in", () => {
+  assertRegisteredSessionTransition("sign-out");
 });
