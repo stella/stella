@@ -54,6 +54,17 @@
       "polish": "Viimistle sõnastust"
     }
   },
+  "aiColumns": {
+    "countSummary": "{columns} veergu × {rows} rida = {answers, plural, one {# vastus} other {# vastust}}. Vastused kasutavad eelarvet.",
+    "refusedBudget": "Käivitamata: vastuste eelarve pole saadaval",
+    "rerunAllPage": "Käivita kõik uuesti (sellel lehel)",
+    "rerunColumnPage": "Käivita veerg uuesti (sellel lehel)",
+    "runColumnPage": "Käivita veerg (sellel lehel)",
+    "runPageRows": "Käivita {count, plural, one {# selle lehe real} other {# selle lehe real}}",
+    "runRemainingPage": "Käivita ülejäänud (sellel lehel)",
+    "runSelectedRows": "Käivita {count, plural, one {# valitud real} other {# valitud real}}",
+    "selectedRun": "Käivita tehisintellekti veerud {count, plural, one {# real} other {# real}}"
+  },
   "appearance": {
     "calendar": "Kalender",
     "calendarGregorian": "Gregoriuse",
@@ -264,6 +275,7 @@
     "runs": {
       "back": "Kõik dokumendid",
       "errors": {
+        "accessRevoked": "Kontroll peatati, sest juurdepääs pole saadaval.",
         "aiUnavailable": "Dokumentide kontrollimiseks pole ühtegi AI-mudelit saadaval. Kontrollige organisatsiooni AI seadeid.",
         "enqueueFailed": "Kontrolli ei õnnestunud käivitada. Proovige uuesti.",
         "extractionFailed": "Selle dokumendi väiteid ei õnnestunud eraldada.",
@@ -796,6 +808,34 @@
       "unavailable": "Kaetuse andmed ei ole praegu saadaval."
     },
     "decisionNotFound": "Otsust ei leitud",
+    "decisionTypes": {
+      "administrative_decision": "Haldusakt",
+      "binding_excise_information": "Siduv aktsiisiteave",
+      "binding_rate_information": "Siduv käibemaksumäära teave",
+      "court_direction": "Korraldus",
+      "decision": "Otsus",
+      "finding": "Sisuline otsus",
+      "general_tax_ruling": "Üldine maksutõlgendus",
+      "individual_tax_ruling": "Individuaalne maksutõlgendus",
+      "judgment": "Kohtuotsus",
+      "leave_refused": "Tagasi lükatud olulise õigusküsimuse puudumise tõttu",
+      "merits_decision": "Sisulahend",
+      "ministry_of_justice_decision": "Justiitsministeeriumi otsus",
+      "minutes_extract": "Väljavõte protokollist",
+      "opinion": "Arvamus",
+      "order": "Määrus",
+      "other": "Muu",
+      "payment_order": "Maksekäsk",
+      "penal_order": "Karistuskäsk",
+      "principle_decision": "Põhimõtteline otsus",
+      "protective_opinion": "Kaitsev arvamus",
+      "resolution": "Resolutsioon",
+      "signalling_decision": "Märguandeotsus",
+      "statement_of_reasons": "Põhjendus",
+      "tax_explanations": "Maksualased selgitused",
+      "top_up_tax_opinion": "Arvamus täiendava maksu kohta",
+      "uniformity_decision": "Kohtupraktika ühtlustamise otsus"
+    },
     "emptyState": "Otsuseid ei leitud. Seadistage allikas ja käivitage sünkroonimine kohtupraktika importimiseks.",
     "filters": {
       "remove": "Eemalda filter {filter}"
@@ -841,6 +881,7 @@
       "subsection": "lg {value}"
     },
     "reader": {
+      "expandProvisions": "Laienda sätteid",
       "headMatter": "Päis",
       "sourceAttribution": "Lähteandmed on vabalt kättesaadavad aadressil <link>{source}</link>."
     },
@@ -1857,6 +1898,7 @@
     "unexpectedError": "Ilmnes ootamatu viga. Palun pöörduge klienditoe poole.",
     "unknownUser": "Tundmatu kasutaja",
     "unpin": "Eemalda kinnitamine",
+    "unsavedChangesEscape": "Salvestamata muudatused. Loobumiseks vajuta uuesti Esc",
     "unsavedLeaveConfirm": "Teil on salvestamata muudatusi. Kas lahkuda salvestamata?",
     "unverified": "Kontrollimata",
     "unverifiedCitationHint": "Seda tsitaati ei õnnestunud lähtedokumendiga sobitada.",
@@ -2309,6 +2351,8 @@
       "encryptedContent": "Krüpteeritud dokumendi sisu ei saa välja võtta. Eemalda faililt parool ja proovi uuesti.",
       "filePropertyTypeImmutable": "Faili omaduse tüüpi ei saa muuta. Säilitage praegune tüüp; muude väärtuste jaoks looge kohandatud omadus.",
       "forbidden": "Teil pole selleks toiminguks õigust.",
+      "hostedCheckoutOpen": "Selle organisatsiooni jaoks on makse juba avatud. Viige see lõpule või alustage uut pärast selle aegumist.",
+      "hostedSubscriptionLive": "Sellel organisatsioonil on juba tellimus. Muutke seda jaotises „Halda majutatud kasutust”.",
       "internalServerError": "Midagi läks valesti. Proovige uuesti.",
       "legalSourceEntityLimitReached": "See toimik on jõudnud üksuste piirini, mistõttu dokumenti ei saanud luua.",
       "legalSourceFilePropertyMissing": "Sellel toimikul puudub faili atribuut, mistõttu dokumenti ei saanud luua.",
@@ -3740,11 +3784,15 @@
     }
   },
   "lawHome": {
+    "clearRecent": "Kustuta hiljutised",
     "enteringIntoForce": "Peagi jõustuv",
     "inForceFrom": "Jõustub {date}",
-    "noRecentSearches": "Otsinguid veel pole",
+    "noRecent": "Hiljutisi tegevusi pole",
     "noSignals": "Signaale veel pole",
     "prompt": "Mida otsite?",
+    "recent": "Hiljutised",
+    "recentCasesFilter": "Kohtulahendid",
+    "recentSearchFilter": "Otsingud",
     "recentlyInForce": "Hiljuti jõustunud",
     "searchLabel": "Otsi õigusandmebaasist",
     "searchPlaceholder": "Kohtuasja number, akti number, ECLI või märksõnad",
@@ -4636,6 +4684,7 @@
     "compareVersionMissing": "Võrreldavat redaktsiooni selle akti ajaloos ei ole.",
     "compareWholeAct": "Võrdle kogu akti",
     "compareWithVersion": "Võrdle redaktsiooniga {version}",
+    "currentWording": "Kehtiv sõnastus",
     "description": "Avalik konsolideeritud õigusaktide andmebaas, mida saab indekseerida õigusakti ja redaktsiooni järgi.",
     "diffInserted": "Lisatud:",
     "diffRemoved": "Välja jäetud:",
@@ -4685,7 +4734,9 @@
       "unknown": "Olek ebaselge"
     },
     "title": "Õigusaktid",
-    "validity": "Kehtib {from} kuni {to}"
+    "validity": "Kehtib {from} kuni {to}",
+    "wordingValidFrom": "Sõnastus kehtib alates {date}",
+    "wordingVersionUnknown": "Sõnastuse versiooni kuupäev pole teada"
   },
   "styleSets": {
     "create": "Loo",
@@ -5422,6 +5473,7 @@
         "unknownLocation": "Malli asukoht: aadress, mida stella ei saa kontrollida"
       },
       "desktopEdit": {
+        "accountRequiredTitle": "Ühenda stella desktop oma kontoga",
         "action": "Muuda töölauarakenduses",
         "authRequiredDescription": "Värskenda stella ja logi enne töölaual redigeerimise kasutamist uuesti sisse.",
         "authRequiredTitle": "Seanss on aegunud",
@@ -5453,8 +5505,7 @@
         "signCurrent": "Allkirjasta stella desktopiga",
         "signNone": "Laadi alla stella desktop, et see PDF allkirjastada",
         "signOutdated": "Uuenda stella desktop, et allkirjastada",
-        "signReason": "Allkirjastamine kasutab sinu arvutis olevat sertifikaati, seega toimub see stella desktopis.",
-        "signShort": "Allkirjasta"
+        "signReason": "Allkirjastamine kasutab sinu arvutis olevat sertifikaati, seega toimub see stella desktopis."
       },
       "downloadAs": "Laadi alla kujul…",
       "downloadAsZip": "Laadi alla .zip-fail",
@@ -5996,7 +6047,6 @@
       "previewUnsupported": "Eelvaade pole selle dokumenditüübi jaoks toetatud.",
       "readingFrom": "AI loeb:",
       "referencesItself": "Omadus viitab iseendale teiste omaduste kaudu",
-      "rerunColumn": "Käivita veerg uuesti",
       "resultType": "Tulemuse tüüp",
       "returnsLabel": "Vorming",
       "scopeFile": "Praegune fail",

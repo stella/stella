@@ -46,6 +46,7 @@ import { PROCESS_DECISION_STATUS } from "@/api/handlers/case-law/ingestion/pipel
 import { DECISION_REFRESH } from "@/api/handlers/case-law/ingestion/pipeline/types";
 import { DECISION_JUDGE_ROLE } from "@/api/handlers/case-law/judges/consts";
 import { createSafeId } from "@/api/lib/branded-types";
+import { splitStoredDecisionTextMetadata } from "@/api/lib/case-law/decision-text";
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import { CORPUS_INDEX_MANIFESTS } from "@/api/lib/legal-search/corpus-index-manifest";
 import { deriveCorpusIndexProjectionDescriptor } from "@/api/lib/legal-search/corpus-index-projection-descriptor";
@@ -545,6 +546,7 @@ describe("notice publication outcomes", () => {
       for (const stored of [existing, partialExisting]) {
         const listingOnly = sanitizeResult({
           ...refused,
+          ...splitStoredDecisionTextMetadata(refused.metadata),
           observationDetail: "listing-only",
         });
         expect(

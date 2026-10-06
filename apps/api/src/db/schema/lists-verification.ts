@@ -155,6 +155,14 @@ export const legalListVerificationRuns = p.pgTable(
       })
       .onDelete("cascade"),
     ...wsOrganizationPolicies("legal_list_verification_runs"),
+    p.pgPolicy("legal_list_verification_runs_owner_access", {
+      for: "all",
+      to: "public",
+      using: sql`current_user = (SELECT pg_catalog.pg_get_userbyid(relowner)
+        FROM pg_catalog.pg_class WHERE oid = 'public.legal_list_verification_runs'::regclass)`,
+      withCheck: sql`current_user = (SELECT pg_catalog.pg_get_userbyid(relowner)
+        FROM pg_catalog.pg_class WHERE oid = 'public.legal_list_verification_runs'::regclass)`,
+    }),
   ],
 );
 

@@ -134,12 +134,15 @@ export const ExpenseForm = ({
   );
 
   const currentCurrency = useSelector(form.store, (s) => s.values.currency);
-  const formErrors = useSelector(form.store, (state) =>
-    toFormErrors(state.fieldMeta),
-  );
+  const { formErrors, dirty } = useSelector(form.store, (state) => ({
+    formErrors: toFormErrors(state.fieldMeta),
+    dirty: !state.isDefaultValue,
+  }));
 
   return (
     <Form
+      dirty={dirty}
+      onDiscard={() => form.reset()}
       className="flex flex-col gap-4"
       errors={formErrors}
       onSubmit={(e) => {

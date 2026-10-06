@@ -84,7 +84,9 @@ const dispatchRegistry = (node: ts.Node) =>
   node.initializer !== undefined &&
   ts.isObjectLiteralExpression(unwrapExpression(node.initializer));
 const insideDispatchRegistry = (node: ts.Node): boolean => {
-  for (let parent = node.parent; parent !== undefined; parent = parent.parent) {
+  let parent = node;
+  while (!ts.isSourceFile(parent)) {
+    parent = parent.parent;
     if (dispatchRegistry(parent)) {
       return true;
     }
@@ -379,7 +381,7 @@ class DeclarationSourceGraph {
         return [];
       }
       const members = new Set<string>();
-      let dynamic = false;
+      const dynamicReferences = new Set<ts.Identifier>();
       const visit = (node: ts.Node) => {
         if (
           ts.isIdentifier(node) &&
@@ -399,13 +401,13 @@ class DeclarationSourceGraph {
           ) {
             members.add(parent.argumentExpression.text);
           } else {
-            dynamic = true;
+            dynamicReferences.add(node);
           }
         }
         ts.forEachChild(node, visit);
       };
       visit(ast);
-      return dynamic
+      return dynamicReferences.size !== 0
         ? [target]
         : [...members].flatMap((name) => this.symbolModules(target, name));
     }

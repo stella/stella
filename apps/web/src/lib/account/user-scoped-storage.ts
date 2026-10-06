@@ -3,6 +3,7 @@ import { hashKey } from "@tanstack/react-query";
 import { panic, Result } from "better-result";
 import type { StateStorage } from "zustand/middleware";
 
+import { READER_PROVISION_MODE_STORAGE_KEY } from "@/components/legal-reader/reader-provision-mode.logic";
 import { rootKeys } from "@/lib/auth-queries";
 import { detached } from "@/lib/detached";
 import { signedInUserId } from "@/lib/session-cache-guard";
@@ -87,6 +88,7 @@ const keepPersistedFields =
 
 /** Every kind of entry that belongs to one user. */
 const USER_STORAGE_FAMILIES: readonly UserStorageFamily[] = [
+  { area: "local", prefix: READER_PROVISION_MODE_STORAGE_KEY, owner: "scoped" },
   { area: "local", prefix: "law_search_history", owner: "scoped" },
   {
     area: "local",

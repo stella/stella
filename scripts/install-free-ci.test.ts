@@ -131,6 +131,32 @@ describe("shell lexing", () => {
     ).toEqual(["cat", "true"]);
   });
 
+  test("keeps only a standard-input heredoc as the command's stdin", () => {
+    const stdins = (source: string) =>
+      lexShell(source).flatMap((event) =>
+        event.type === "command" ? [event.stdin?.body] : [],
+      );
+    expect(
+      stdins(
+        [
+          "bun - <<'JS'",
+          'import "a";',
+          "JS",
+          "cat <<-EOF",
+          "\tindented",
+          "\tEOF",
+          "bun - 3<<EOF",
+          "x",
+          "EOF",
+          "bun - <<EOF < file",
+          "x",
+          "EOF",
+          "true",
+        ].join("\n"),
+      ),
+    ).toEqual(['import "a";', "indented", undefined, undefined, undefined]);
+  });
+
   test("reports an unterminated quote instead of guessing", () => {
     expect(lexShell("echo 'open").at(-1)).toEqual({
       reason: "unterminated single quote",
@@ -334,6 +360,7 @@ describe("install-free invocation classification", () => {
           "bun run absent",
           "bun --filter @fixture/none gen",
           "bun build scripts/check.ts",
+          "bun - < scripts/check.ts",
           "bash run-in-image.sh bun scripts/check.ts",
           'cd "$TARGET" && bun scripts/check.ts',
         ].join("\n"),
@@ -355,6 +382,7 @@ describe("install-free invocation classification", () => {
       ".#absent is not a package.json script",
       "--filter @fixture/none names no single workspace package",
       "bun build is not classified",
+      "reads code from a non-heredoc stdin",
       "bash runs Bun with arguments this check cannot follow",
       "scripts/check.ts is computed at run time",
     ]);
@@ -734,6 +762,28 @@ describe("install-free invocation classification", () => {
         ({ classification }) => classification.type,
       ),
     ).toEqual(["install", "files", "files"]);
+  });
+
+  test("checks code a heredoc feeds to `bun -` like inline code", () => {
+    expect(
+      classify(
+        ["bun --no-env-file - <<'JS'", 'import { z } from "zod";', "JS"].join(
+          "\n",
+        ),
+      ),
+    ).toEqual([
+      {
+        classification: {
+          code: 'import { z } from "zod";',
+          cwd: "",
+          type: "eval",
+        },
+        command: "bun --no-env-file -",
+      },
+    ]);
+    expect(
+      kinds(["bun -r ./scripts/pre.ts - <<'JS'", "1", "JS"].join("\n")),
+    ).toEqual(["unclassified"]);
   });
 
   test("reports every installed package a file or inline code imports", () => {

@@ -44,4 +44,5 @@ export const reconcileListVerificationRuns: SchedulerTask = async ({
     "listVerificationRuns.scanned": scanned,
     "listVerificationRuns.unattributed": unattributed,
   });
+  return Result.ok();
 };

@@ -575,7 +575,10 @@ export const updateOrganizationSettingsHandler = async function* ({
                     : {}),
                 }
               : {}),
-            ...timePolicyUpdate,
+            timeMinimumUnitMinutes: timePolicyUpdate.timeMinimumUnitMinutes,
+            timeEditWindowDays: timePolicyUpdate.timeEditWindowDays,
+            timeLockedThroughMonth: timePolicyUpdate.timeLockedThroughMonth,
+            timeNarrativeRequired: timePolicyUpdate.timeNarrativeRequired,
             ...(wantsTimeZoneUpdate ? { timeZone: body.timeZone } : {}),
             updatedAt: new Date(),
           },

@@ -1,13 +1,13 @@
 name: OpenSSF Scorecard
 
 on:
-  # Run on pushes to main (scored and published)
-  push:
-    branches: [main]
   # Weekly scan to catch drift
   schedule:
     - cron: "20 7 * * 1"
-  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
 
 permissions: read-all
 

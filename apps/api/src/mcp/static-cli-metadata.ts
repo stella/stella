@@ -233,6 +233,12 @@ export const DEFAULT_MCP_CLI_ANNOTATIONS = defineMcpCliToolAnnotations(
       scope: "search",
       itemsKey: "results",
     },
+    case_law_coverage: {
+      command: ["case-law", "coverage"],
+      scope: "read",
+      itemsKey: "countries",
+      paginationless: true,
+    },
     lookup_case_law: {
       command: ["case-law", "lookup"],
       scope: "read",
