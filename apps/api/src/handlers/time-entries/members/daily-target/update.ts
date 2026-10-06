@@ -16,6 +16,7 @@ const updateMemberDailyTarget = createSafeRootHandler(
       "Set a current member's daily time target in the active organization. Only organization owners and admins may set another member's target. Pass minutes from 1 to 1440, or null to clear it.",
     permissions: { organizationSettings: ["update"] },
     accountAccess: ACCOUNT_ACCESS.standard,
+    featureAccess: { featureId: "time-billing", type: "required" },
     access: "write",
     mcp: {
       type: "capability",

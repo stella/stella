@@ -7,6 +7,7 @@ import type { AuditRecorder } from "@/api/lib/audit-log";
 import { toSafeId } from "@/api/lib/branded-types";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
+import { withTimeBillingEnrolment } from "@/api/tests/helpers/time-billing-enrolment";
 
 import createSellerProfile from "./create";
 
@@ -23,18 +24,20 @@ const createContext = ({
   safeDb: SafeDb;
   recordAuditEvent?: AuditRecorder;
 }): CreateContext =>
-  asTestRaw<CreateContext>({
-    body,
-    request: new Request("https://example.test/v1/seller-profiles", {
-      method: "POST",
+  withTimeBillingEnrolment(
+    asTestRaw<CreateContext>({
+      body,
+      request: new Request("https://example.test/v1/seller-profiles", {
+        method: "POST",
+      }),
+      route: "/v1/seller-profiles",
+      safeDb,
+      session: { activeOrganizationId: organizationId },
+      memberRole: sessionMemberRole("owner"),
+      user: { id: toSafeId<"user">("user_test") },
+      recordAuditEvent,
     }),
-    route: "/v1/seller-profiles",
-    safeDb,
-    session: { activeOrganizationId: organizationId },
-    memberRole: sessionMemberRole("owner"),
-    user: { id: toSafeId<"user">("user_test") },
-    recordAuditEvent,
-  });
+  );
 
 describe("seller profile creation", () => {
   test("rejects an invalid IBAN before opening a database transaction", async () => {

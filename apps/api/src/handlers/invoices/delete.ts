@@ -28,6 +28,7 @@ const deleteInvoice = createSafeHandler(
       "invoices can be deleted: a sent, paid, or void invoice is refused.",
     permissions: { invoice: ["delete"] },
     accountAccess: ACCOUNT_ACCESS.sandbox,
+    featureAccess: { featureId: "time-billing", type: "required" },
     realtime: invoiceRealtimeUpdates,
     mcp: {
       type: "capability",

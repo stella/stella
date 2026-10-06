@@ -542,12 +542,22 @@ const MODEL_REQUESTS_WITHOUT_CHAT_CONTENT = [
 const MODEL_REQUEST_NAMES = [
   "collectTanStackTextRun",
   "generateChatObject",
+  "generateTanStackChatObject",
   "generateTanStackObjectForRole",
   "generateTanStackTextForRole",
   "streamChatChunks",
   "streamChatObject",
+  "streamTanStackChatRun",
   "streamTanStackObjectForRole",
   "streamTanStackTextForRole",
+] as const;
+
+// The engine's raw run forms. Their failures carry provider and model text, so
+// only the modules that project them to fixed-message errors call them.
+const RAW_MODEL_RUN_NAMES = [
+  "generateChatObject",
+  "streamChatChunks",
+  "streamChatObject",
 ] as const;
 
 export const STATUS_TRANSITION_OWNERSHIP = {
@@ -584,6 +594,24 @@ const UNMIGRATED_PUBLISHER_READERS = [
 
 const OWNERSHIP_DECLARATIONS = [
   STATUS_TRANSITION_OWNERSHIP,
+  {
+    id: "desktop-presence-observations",
+    capability: "Reading and retaining desktop presence observations",
+    owner: ["apps/api/src/handlers/desktop-presence/service.ts"],
+    summary:
+      "The service serializes reports against live membership and retains ten newest installations per organization and user. Offboarding clears observations in its membership transaction.",
+    enforcement: {
+      kind: "import",
+      specifiers: ["@/api/db/schema", "@/api/db/schema/desktop-presence"],
+      names: ["desktopPresence"],
+      allowed: [
+        {
+          path: "apps/api/src/lib/member-assignment-offboarding.ts",
+          reason: "Clears observations during organization membership removal.",
+        },
+      ],
+    },
+  },
   {
     id: "citation-graph-transaction",
     capability: "Acquiring the citation graph transaction lock",
@@ -1919,6 +1947,46 @@ const OWNERSHIP_DECLARATIONS = [
           path: "apps/api/src/lib/file-scan/document-parsers.ts",
           reason:
             "Parse boundary: wraps applyFolioAIEditsToBuffer so its input must be a ScannedFile; applyAiEditsToDocx in the owner calls the wrapper, so edit attribution stays with the owner.",
+        },
+      ],
+    },
+  },
+  {
+    id: "model-run-failure-projection",
+    capability: "Running a model through the engine's raw run forms",
+    owner: ["apps/api/src/lib/tanstack-ai-generate.ts"],
+    summary:
+      "A failed run's `RUN_ERROR` message and code, and the errors the engine " +
+      "throws, carry provider bodies and model output. The owner turns every " +
+      "failure into a `ProviderCallError` or `ModelRunError` with a fixed " +
+      "message (`withRecoveredProviderStatus`), and hands a caller that " +
+      "consumes chunks itself `streamTanStackChatRun`, whose `RUN_ERROR` " +
+      "carries only that message and the classified kind. A caller that " +
+      "assembles its own options uses `streamTanStackChatRun`, " +
+      "`collectTanStackTextRun` or `generateTanStackChatObject`.",
+    enforcement: {
+      kind: "import",
+      specifiers: ["@/api/lib/chat/tanstack-chat-runtime"],
+      names: RAW_MODEL_RUN_NAMES,
+      allowed: [
+        {
+          path: "apps/api/src/handlers/chat/stream-chat.ts",
+          reason:
+            "The chat turn projects each `RUN_ERROR` through `normalizeRunErrorChunk` before it is streamed or stored.",
+        },
+        {
+          path: "apps/api/evals/",
+          reason:
+            "Offline evaluations: a run failure is reported to the operator and never stored.",
+        },
+        {
+          path: "apps/api/scripts/ai-provider-canary.ts",
+          reason:
+            "Provider canary: reads the raw run error to report the provider's answer to the operator.",
+        },
+        {
+          path: "apps/api/scripts/benchmark-chat-read-surface.ts",
+          reason: "Benchmark with synthetic content; nothing is stored.",
         },
       ],
     },

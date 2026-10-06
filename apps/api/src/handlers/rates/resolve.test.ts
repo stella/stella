@@ -33,6 +33,7 @@ import type { ValidatedOrgUserId } from "@/api/lib/validated-org-user-id";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
 import { createTestHandlerContext } from "@/api/tests/helpers/handler-context";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
+import { withTimeBillingEnrolment } from "@/api/tests/helpers/time-billing-enrolment";
 import { createPropertyRunReclaimer } from "@/api/tests/property-run-reclaim";
 import {
   createTestIds,
@@ -331,13 +332,15 @@ describe("resolveRate HTTP handler", () => {
   type ResolveCtx = Parameters<typeof resolveRateHandler.handler>[0];
 
   const contextFor = (query: { userId: string; date: string }): ResolveCtx =>
-    createTestHandlerContext<ResolveCtx>({
-      workspaceId: ids.wsA1,
-      session: { activeOrganizationId: ids.orgA },
-      user: { id: ids.userA1 },
-      safeDb: scopedSafeDb(),
-      query,
-    });
+    withTimeBillingEnrolment(
+      createTestHandlerContext<ResolveCtx>({
+        workspaceId: ids.wsA1,
+        session: { activeOrganizationId: ids.orgA },
+        user: { id: ids.userA1 },
+        safeDb: scopedSafeDb(),
+        query,
+      }),
+    );
 
   test("returns the user-specific rate when one is effective", async () => {
     const result = await resolveRateHandler.handler(

@@ -13,6 +13,11 @@ on:
 
 permissions: {}
 
+# Long-running property combinations retain cleanup time inside each job.
+env:
+  API_TEST_CHILD_TIMEOUT_MS: "1200000"
+  API_TEST_RUNNER_DEADLINE_MS: "2100000"
+
 jobs:
   # The chat-turn combinations' all-triples cover: every combination of the
   # values of any three dimensions, every night, split into SHARDS jobs.

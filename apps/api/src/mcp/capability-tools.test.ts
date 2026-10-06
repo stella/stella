@@ -11,6 +11,7 @@ import type { AuditRecorder } from "@/api/lib/audit-log";
 import {
   createFeatureAccessSnapshot,
   decideFeatureAccess,
+  isFeatureEnabled,
 } from "@/api/lib/auth/feature-access/policy";
 import { toSafeId } from "@/api/lib/branded-types";
 import { PLAYBOOK_RUN_FAILURE_CODE } from "@/api/lib/document-review/playbook-run-refusal";
@@ -186,9 +187,21 @@ const createContext = ({
       organizationId: "org_1",
       userId: "user_1",
       decisions: new Map(
-        Object.keys(FEATURE_REGISTRY).map((featureId) => [
+        Object.entries(FEATURE_REGISTRY).map(([featureId, definition]) => [
           featureId,
-          { status: "hidden" as const },
+          decideFeatureAccess({
+            registry: FEATURE_REGISTRY,
+            grants: {},
+            featureId,
+            organizationId: "org_1",
+            userId: "user_1",
+            membership: true,
+            user: { email: "standard@example.test", emailVerified: true },
+            enrolments:
+              definition.enrolment === "self-serve"
+                ? [{ featureId, organizationId: "org_1", userId: "user_1" }]
+                : [],
+          }),
         ]),
       ),
     }),
@@ -349,28 +362,9 @@ describe("list verification access grants across MCP tools", () => {
     let resourceLookups = 0;
     let mutations = 0;
     const tx = {
-      select: (projection?: Record<string, unknown>) => {
-        const identity =
-          projection !== undefined && "emailVerified" in projection;
-        if (!identity) {
-          resourceLookups += 1;
-        }
-        const identityRows =
-          membership === "current"
-            ? [
-                {
-                  email,
-                  emailVerified,
-                  role: "owner",
-                  workspaceId: matterId,
-                  workspaceStatus: "active",
-                  clientId: null,
-                  workspaceMemberId: resourceId,
-                },
-              ]
-            : [];
-        const rows = identity ? identityRows : viewRows;
-        const query = [...rows];
+      select: () => {
+        resourceLookups += 1;
+        const query = [...viewRows];
         const builder = Object.assign(query, {
           from: () => query,
           innerJoin: () => query,
@@ -418,7 +412,11 @@ describe("list verification access grants across MCP tools", () => {
         };
       },
     };
-    const database = createScopedDbMock(tx);
+    const database = createScopedDbMock(tx, {
+      featureAccess: {
+        identity: membership === "current" ? { email, emailVerified } : null,
+      },
+    });
     const context = createContext({
       scopedDb: database.scopedDb,
       safeDb: database.safeDb,
@@ -3109,11 +3107,21 @@ describe("invoke_capability deployment feature gate", () => {
       .filter((id) => !listed.has(id))
       .toSorted();
     expect(hidden).toContain("usage.entitlement.get");
+    const context = createContext();
     const disabledIds = await featureOmittedCapabilityIds(
       (feature) => feature === undefined || !disabledFeatures.has(feature),
+      context,
     );
+    const snapshot = context.featureAccessSnapshot;
+    if (snapshot === undefined) {
+      throw new Error("Expected caller feature admission fixture");
+    }
     const ungrantedIds = capabilityCatalog
-      .filter(requiresVerificationGrant)
+      .filter(
+        (entry) =>
+          entry.featureAccess === "required" &&
+          !isFeatureEnabled(snapshot, entry.featureId, context),
+      )
       .map(({ id }) => id);
     expect([...new Set([...disabledIds, ...ungrantedIds])].toSorted()).toEqual(
       hidden,
@@ -3320,6 +3328,19 @@ test.each(["default-deny", "granted", "colleague"] as const)(
       organizationId,
       userId,
       decisions: new Map([
+        [
+          "time-billing",
+          decideFeatureAccess({
+            registry: FEATURE_REGISTRY,
+            grants: {},
+            featureId: "time-billing",
+            organizationId,
+            userId,
+            membership: true,
+            user: { email: "standard@example.test", emailVerified: true },
+            enrolments: [{ featureId: "time-billing", organizationId, userId }],
+          }),
+        ],
         [
           featureId,
           decideFeatureAccess({
