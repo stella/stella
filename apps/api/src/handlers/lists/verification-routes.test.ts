@@ -3,6 +3,10 @@ import { Glob } from "bun";
 import { describe, expect, test } from "bun:test";
 import Elysia from "elysia";
 
+import { RUNTIME_MODE } from "@stll/runtime-mode";
+
+import { env } from "@/api/env";
+import { listsRoute } from "@/api/handlers/lists/routes";
 import { createListVerificationRoutes } from "@/api/handlers/lists/verification-routes";
 import type { ValidateAuthValue } from "@/api/lib/auth";
 import { permissionMacro, workspaceAccessMacro } from "@/api/lib/auth";
@@ -12,6 +16,7 @@ import {
 } from "@/api/lib/auth/feature-access/policy";
 import { FEATURE_REGISTRY } from "@/api/lib/feature-access/registry";
 import { isRecord } from "@/api/lib/type-guards";
+import { setRuntimeModeForTesting } from "@/api/runtime-mode";
 import { createTestHandlerContext } from "@/api/tests/helpers/handler-context";
 
 const FEATURE_ID = "list-verification";
@@ -114,6 +119,40 @@ describe("list verification route admission", () => {
       }
     },
   );
+
+  test("the production lists mount hides verification routes and validates shared source creation", async () => {
+    const previous = env.FEATURE_LEGAL_LISTS;
+    env.FEATURE_LEGAL_LISTS = true;
+    const restoreRuntimeMode = setRuntimeModeForTesting({
+      mode: RUNTIME_MODE.strict,
+    });
+    try {
+      const app = new Elysia().use(listsRoute);
+      for (const { method, path } of routeFor(false).routes) {
+        const url = `http://localhost${path.replaceAll(/:[A-Za-z]+/gu, () => "invalid-id")}`;
+        const request =
+          method === "GET"
+            ? new Request(url, { method })
+            : new Request(url, {
+                method,
+                headers: { "content-type": "application/json" },
+                body: "{}",
+              });
+        expect((await app.handle(request)).status).toBe(404);
+      }
+      const sibling = await app.handle(
+        new Request("http://localhost/lists/invalid-id/item-sources", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: "{}",
+        }),
+      );
+      expect(sibling.status).toBe(422);
+    } finally {
+      env.FEATURE_LEGAL_LISTS = previous;
+      restoreRuntimeMode();
+    }
+  });
 
   test("admission remains local to verification routes", async () => {
     const app = new Elysia()
