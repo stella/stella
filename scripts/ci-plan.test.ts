@@ -4291,7 +4291,7 @@ test("API planning only loads dependencies after installation and emits install-
       );
       expect(result.exitCode, result.stderr.toString()).toBe(0);
       const values = readFileSync(output, "utf-8");
-      expect(values).toContain(`api_test_shards=${expected}\n`);
+      expect(values).toContain(`api_test_shards=${String(expected)}\n`);
       if (selected) {
         expect(values).toContain(`ci_tests_matrix=${selected}\n`);
         expect(values).toContain(

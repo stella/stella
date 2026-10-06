@@ -8,6 +8,7 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import * as v from "valibot";
 
 import {
   API_ALL_RULES,
@@ -356,8 +357,15 @@ test("workspace fallback honors conditional export declaration order", () => {
 
 test("every declared external API test input widens a readable graph", () => {
   const repositoryRoot = path.resolve(import.meta.dir, "..");
-  const turbo = Bun.JSONC.parse(
-    readFileSync(path.join(repositoryRoot, "turbo.json"), "utf-8"),
+  const turbo = v.parse(
+    v.object({
+      tasks: v.object({
+        "@stll/api#test": v.object({ inputs: v.array(v.string()) }),
+      }),
+    }),
+    Bun.JSONC.parse(
+      readFileSync(path.join(repositoryRoot, "turbo.json"), "utf-8"),
+    ),
   );
   const inputs: string[] = turbo.tasks["@stll/api#test"].inputs;
   expect(inputs.length).toBeGreaterThan(1);
