@@ -15,6 +15,7 @@ import {
 } from "./docked-chat-history";
 import { createUploadedDocumentRoute } from "./document";
 import { expect } from "./test";
+import { e2eUserStorageKey } from "./user-storage-keys";
 import { createTestWorkspace, deleteTestWorkspace } from "./workspace";
 
 const sessionSchema = v.object({
@@ -133,10 +134,9 @@ export const restoreGeometryInspector = async (
   { world, presentation }: RestoreGeometryInspectorOptions,
 ) => {
   await page.addInitScript(
-    ({ userId, organizationId, fileTab, mode }) => {
-      const suffix = `${organizationId}:${userId}`;
+    ({ stateKey, minimizedKey, fileTab, mode }) => {
       localStorage.setItem(
-        `stella:inspector-state:v1:${suffix}`,
+        stateKey,
         JSON.stringify({
           tabs: mode === "inspector" ? [fileTab] : [],
           groups: [],
@@ -145,14 +145,17 @@ export const restoreGeometryInspector = async (
           collapsedGroupIds: [],
         }),
       );
-      localStorage.setItem(
-        `stella:inspector-minimized:v1:${suffix}`,
-        mode === "inspector" ? "0" : "1",
-      );
+      localStorage.setItem(minimizedKey, mode === "inspector" ? "0" : "1");
     },
     {
-      userId: world.session.user.id,
-      organizationId: world.session.session.activeOrganizationId,
+      stateKey: e2eUserStorageKey(
+        `stella:inspector-state:v1:${world.session.session.activeOrganizationId}:`,
+        world.session.user.id,
+      ),
+      minimizedKey: e2eUserStorageKey(
+        `stella:inspector-minimized:v1:${world.session.session.activeOrganizationId}:`,
+        world.session.user.id,
+      ),
       fileTab: world.fileTab,
       mode: presentation,
     },

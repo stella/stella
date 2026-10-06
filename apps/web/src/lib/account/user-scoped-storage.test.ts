@@ -13,6 +13,8 @@ import {
   userStorageKey,
 } from "@/lib/account/user-scoped-storage";
 
+import { e2eUserStorageKey } from "../../../e2e/helpers/user-storage-keys";
+
 /** A `Storage` held in memory, as a browser tab would hold it. */
 class MemoryStorage implements Storage {
   readonly #entries = new Map<string, string>();
@@ -295,5 +297,20 @@ describe("unavailable browser areas", () => {
     queryClient.setQueryData(["session"], { user: { id: "user-b" } });
     expect(storageOwner()).toEqual(USER_B);
     unsubscribe();
+  });
+});
+
+describe("e2e user storage keys", () => {
+  // Browser fixtures seed per-user storage without the app runtime; a key
+  // format change must fail here instead of silently skipping their state.
+  test("match the app's key for every scoped family the fixtures write", () => {
+    for (const base of [
+      "stella:inspector-state:v1:org-1:",
+      "stella:inspector-minimized:v1:org-1:",
+    ]) {
+      expect(e2eUserStorageKey(base, "user-1")).toBe(
+        userStorageKey(base, { kind: "user", userId: "user-1" }),
+      );
+    }
   });
 });
