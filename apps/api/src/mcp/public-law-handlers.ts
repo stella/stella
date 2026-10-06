@@ -1,3 +1,4 @@
+import type { readGatedDecisionCitationDigest } from "@/api/handlers/case-law/decisions/citation-digest";
 import type { readGatedDecisionCitations } from "@/api/handlers/case-law/decisions/citation-passages";
 import type { readCaseLawCoverageHandler } from "@/api/handlers/case-law/decisions/coverage";
 import type { readGatedDecisionWithDocument } from "@/api/handlers/case-law/decisions/get-deferred-document";
@@ -47,6 +48,12 @@ export const defaultReadGatedDecisionCitations: typeof readGatedDecisionCitation
     await (
       await import("@/api/handlers/case-law/decisions/citation-passages")
     ).readGatedDecisionCitations(input);
+
+export const defaultReadGatedDecisionCitationDigest: typeof readGatedDecisionCitationDigest =
+  async (input) =>
+    await (
+      await import("@/api/handlers/case-law/decisions/citation-digest")
+    ).readGatedDecisionCitationDigest(input);
 
 export const defaultLookupDecisionsByIdentity: typeof lookupDecisionsByIdentity =
   async (input) =>

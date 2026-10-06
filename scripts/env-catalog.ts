@@ -588,8 +588,6 @@ const DESCRIPTION_OVERRIDES: Record<string, string> = {
     "Show governed work-obligation fields on a task (owner, acknowledgement, hard deadline).",
   VITE_FEATURE_INBOX:
     "Show the Inbox and the notification bell for everyone, without the per-browser beta toggle.",
-  VITE_FEATURE_LEGAL_LISTS:
-    "Show first-class legal lists and list-item task controls.",
   VITE_POSTHOG_KEY:
     'Public PostHog project key. The placeholder "phc_" disables local capture.',
   VITE_POSTHOG_LOCAL_DEBUG:
@@ -922,7 +920,6 @@ export const ENV_CREDENTIAL_CLASSIFICATION = {
   VITE_FEATURE_FOLIO_COLLAB: ENV_CREDENTIAL_KIND.notCredential,
   VITE_FEATURE_GOVERNED_WORKFLOW: ENV_CREDENTIAL_KIND.notCredential,
   VITE_FEATURE_INBOX: ENV_CREDENTIAL_KIND.notCredential,
-  VITE_FEATURE_LEGAL_LISTS: ENV_CREDENTIAL_KIND.notCredential,
   VITE_FEATURE_TIME_BILLING: ENV_CREDENTIAL_KIND.notCredential,
   VITE_FEATURE_USAGE: ENV_CREDENTIAL_KIND.notCredential,
   VITE_POSTHOG_HOST: ENV_CREDENTIAL_KIND.notCredential,
@@ -1340,6 +1337,9 @@ export const TOOLING_ENV_KEYS = new Set([
   "API_SCOPE_UNKNOWN",
   "API_TEST_ARTIFACT_DIR",
   "API_TEST_FILES",
+  // Native Bun whole-file timing artifacts and optional drift measurements.
+  "API_TEST_MEASUREMENTS",
+  "API_TEST_TIMINGS_DIR",
   "API_TEST_SHARD_COUNT",
   "APP_VERSION",
   "AWS_ENDPOINT_URL_BEDROCK_RUNTIME",
@@ -1455,6 +1455,8 @@ export const TOOLING_ENV_KEYS = new Set([
   "STELLA_AGENT_CAPTURE_LOG",
   "STELLA_COLLAB_TEST_REDIS_CONTAINER_ID",
   "STELLA_COLLAB_TEST_REDIS_URL",
+  // Private loopback endpoint passed to the isolated corpus-suite preload.
+  "STELLA_CORPUS_ENGINE_TEST_ENDPOINT",
   "STELLA_DESKTOP_RELEASE_API_PATH",
   "STELLA_DESKTOP_RELEASE_EXPECTED_TAG",
   "STELLA_DESKTOP_SMOKE_API_URL",
@@ -1479,6 +1481,7 @@ export const TOOLING_ENV_KEYS = new Set([
   "TANSTACK_DRIFT_INSTALL_OUTCOME",
   "TEST_API_ERROR",
   "TEST_LATER",
+  "CI_GENERATED_SOURCES_MANIFEST",
   "TURBO_HASH",
   "TURBO_SCM_BASE",
   "TURN_OUTCOME_COMBINATIONS",

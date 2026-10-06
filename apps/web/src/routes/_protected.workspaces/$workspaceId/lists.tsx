@@ -6,7 +6,7 @@ import {
   useQueryClient,
   useSuspenseQuery,
 } from "@tanstack/react-query";
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, notFound } from "@tanstack/react-router";
 import { Result } from "better-result";
 import { useFormatter, useTranslations } from "use-intl";
 import * as v from "valibot";
@@ -46,12 +46,16 @@ import {
   LIST_ITEM_TYPES,
 } from "@/components/workspaces/tasks/task-detail-constants";
 import type { ListItemType } from "@/components/workspaces/tasks/task-detail-constants";
-import { env } from "@/env";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { detached } from "@/lib/detached";
 import { toAPIError } from "@/lib/errors/api";
 import { notifyUserError } from "@/lib/errors/user-toast";
+import {
+  loadCallerFeature,
+  useCallerFeatureEnabled,
+} from "@/lib/organization/feature-access/access";
+import { CALLER_FEATURE } from "@/lib/organization/feature-access/surfaces";
 import { ensureRouteQueryData } from "@/lib/react-query";
 import { toSafeId } from "@/lib/safe-id";
 import {
@@ -79,25 +83,31 @@ export const Route = createFileRoute(
 )({
   validateSearch: searchSchema,
   loader: async ({ context, params }) => {
-    if (!env.VITE_FEATURE_LEGAL_LISTS) {
-      return;
+    const admission = await loadCallerFeature({
+      queryClient: context.queryClient,
+      principal: {
+        organizationId: context.user.activeOrganizationId,
+        userId: context.user.id,
+      },
+      feature: CALLER_FEATURE.legalLists,
+      load: async () => {
+        await ensureRouteQueryData(
+          context.queryClient,
+          legalListsOptions(params.workspaceId),
+        );
+      },
+    });
+    if (admission.isErr()) {
+      notFound({ throw: true });
     }
-
-    await ensureRouteQueryData(
-      context.queryClient,
-      legalListsOptions(params.workspaceId),
-    );
   },
   remountDeps: ({ params }) => params.workspaceId,
   component: ListsRoutePage,
 });
 
 function ListsRoutePage() {
-  return env.VITE_FEATURE_LEGAL_LISTS ? (
-    <LegalListsPage />
-  ) : (
-    <DisabledListsRedirect />
-  );
+  const enabled = useCallerFeatureEnabled(CALLER_FEATURE.legalLists);
+  return enabled ? <LegalListsPage /> : <DisabledListsRedirect />;
 }
 
 function DisabledListsRedirect() {

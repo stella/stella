@@ -1,5 +1,4 @@
 import { Result, panic } from "better-result";
-import { Worker } from "bullmq";
 import { and, asc, eq, inArray, isNull, lt, sql } from "drizzle-orm";
 
 import { Temporal } from "@stll/time";
@@ -44,7 +43,7 @@ import {
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { createBullMqJobId } from "@/api/lib/bullmq-job-id";
-import { createLazyBullMqQueue } from "@/api/lib/bullmq-queue";
+import { BullMqWorker, createLazyBullMqQueue } from "@/api/lib/bullmq-queue";
 import type { BullMqWorkerContext } from "@/api/lib/bullmq-queue";
 import { requeueDeterministicJob } from "@/api/lib/bullmq-requeue";
 import type { RequeueableQueue } from "@/api/lib/bullmq-requeue";
@@ -1344,7 +1343,7 @@ export const reconcileDocumentTranslationRuns = async (
 export const initDocumentTranslationRunWorker = ({
   db,
 }: BullMqWorkerContext) => {
-  const worker = new Worker<DocumentTranslationRunJobData>(
+  const worker = new BullMqWorker<DocumentTranslationRunJobData>(
     QUEUE_NAME,
     async (job) => await processRunJob(job.data),
     {

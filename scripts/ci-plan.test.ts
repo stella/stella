@@ -6,6 +6,7 @@ import {
   mkdirSync,
   mkdtempSync,
   readFileSync,
+  realpathSync,
   rmSync,
   symlinkSync,
   writeFileSync,
@@ -26,6 +27,7 @@ import { selectApiTestImpact } from "./api-test-impact";
 import { requiresMalwareScan } from "./check-standalone-lockfiles";
 import { planCiApiTests } from "./ci-api-test-plan";
 import { CANONICAL_CANCEL_STEP } from "./ci-cancellation-contract";
+import { requiresLandingBuild } from "./ci-package-scope";
 import { extractPlanSelector } from "./ci-plan-selector";
 import { routeSmokeAffected } from "./detect-route-smoke-changes";
 import { serviceSuiteCliOutput } from "./detect-service-suite-changes";
@@ -164,6 +166,12 @@ const onlyOutcome = <T>(outcomes: readonly T[]): T => {
 // process, each answer comes from the same function the CLI prints; a bun
 // call the selector adds without an entry here fails the plan.
 const SELECTOR_BUN_CLIS = {
+  "scripts/ci-package-scope.ts": {
+    variable: "SERVED_LANDING_BUILD",
+    flag: "--landing-build",
+    output: (files: readonly string[]) =>
+      String(requiresLandingBuild({ changed: files })),
+  },
   "scripts/detect-service-suite-changes.ts": {
     variable: "SERVED_SERVICE_SUITE_SCOPES",
     flag: "--scopes",
@@ -1601,6 +1609,16 @@ test("path-scoped platform checks run in the merge group", () => {
   }
 });
 
+test("every bounded-install implementation and fixture selects Windows", () => {
+  const files = [...new Bun.Glob("scripts/ci-install*.ts").scanSync()];
+  expect(files.length).toBeGreaterThan(0);
+  for (const file of files) {
+    expect(runSelector([file], ["windows_scripts_required"]), file).toEqual([
+      "true",
+    ]);
+  }
+});
+
 test("a fast-depth run requires every selected fast-required job to run", () => {
   expect(fastRequired.length).toBeGreaterThan(0);
   const gates: ExpectedResultGate[] = [];
@@ -1861,7 +1879,7 @@ test("API determinism runs only after installation for its selected scope", () =
 });
 
 const packageScopeStart = workflow.indexOf(
-  "          package_checks_required=false\n",
+  "          package_checks_required=true\n          if [[",
 );
 const packageScope = workflow.slice(packageScopeStart, selectorStart);
 
@@ -1877,7 +1895,7 @@ printf "%s\\n" "$package_checks_required"`,
       "ci-plan-test",
       ...files,
     ],
-    env: { PATH: Bun.env["PATH"] ?? "" },
+    env: { PATH: Bun.env["PATH"] ?? "", EVENT_NAME: "pull_request" },
     stdout: "pipe",
     stderr: "pipe",
   });
@@ -2403,7 +2421,9 @@ test("direct web compiler checks materialize ignored API contracts before checki
           expect(
             beforeCheck,
             `${workflowName}/${job} generates before direct compiler checks`,
-          ).toContain("bun run generate");
+          ).toMatch(
+            /bun run generate|bun scripts\/ci-generated-sources\.ts restore/u,
+          );
           if (commands.includes("--measure")) {
             expect(
               commands.slice(0, consumer.index),
@@ -2449,7 +2469,9 @@ test("direct web compiler package scripts generate before inspecting types", () 
       expect(
         command.slice(0, consumer.index),
         `${manifest} ${name} materializes the API contract`,
-      ).toMatch(/bun run(?: --cwd \.\.\/\.\.)? generate/u);
+      ).toMatch(
+        /bun run(?: --cwd \.\.\/\.\.)? generate|bun scripts\/ci-generated-sources\.ts prepare/u,
+      );
       if (command.includes("$TURBO_HASH")) {
         const task = `${manifest === "../package.json" ? "//" : owner}#${name}`;
         expect(
@@ -2579,7 +2601,9 @@ test("the Docker fold is planned by either original scope without changing the s
 });
 
 test("folded image checks preserve separate working directories for frozen installs and production smoke", () => {
-  const directory = mkdtempSync(nodePath.join(tmpdir(), "folded-image-deps-"));
+  const directory = realpathSync(
+    mkdtempSync(nodePath.join(tmpdir(), "folded-image-deps-")),
+  );
   const bin = nodePath.join(directory, "bin");
   mkdirSync(bin);
   mkdirSync(nodePath.join(directory, "apps"));
@@ -2613,17 +2637,21 @@ mkdir -p out-runner/full
   try {
     const result = Bun.spawnSync(["bash", "-eu", "-c", api?.run ?? "exit 1"], {
       cwd: directory,
-      env: { PATH: `${bin}:${process.env["PATH"] ?? ""}` },
+      // GitHub sets RUNNER_TEMP; bounded installs write their logs below it.
+      env: {
+        PATH: `${bin}:${process.env["PATH"] ?? ""}`,
+        RUNNER_TEMP: directory,
+      },
       stdout: "pipe",
       stderr: "pipe",
     });
     expect(result.exitCode, new TextDecoder().decode(result.stderr)).toBe(0);
     const commands = readFileSync(nodePath.join(bin, "bun.log"), "utf-8");
     expect(commands).toContain(
-      `${directory}/api-install:install --filter @stll/api --filter @stll/collab --filter @stll/legal-atlas-runner --frozen-lockfile --ignore-scripts`,
+      `${directory}/api-install:../scripts/ci-install.ts ${directory}/bun-install/api-image.log --filter @stll/api --filter @stll/collab --filter @stll/legal-atlas-runner --frozen-lockfile --ignore-scripts`,
     );
     expect(commands).toContain(
-      `${directory}/runner-install:install --filter @stll/legal-atlas-runner --production --frozen-lockfile --ignore-scripts`,
+      `${directory}/runner-install:../scripts/ci-install.ts ${directory}/bun-install/legal-atlas.log --filter @stll/legal-atlas-runner --production --frozen-lockfile --ignore-scripts`,
     );
     expect(commands).toContain(
       `${directory}/runner-install:apps/legal-atlas-runner/dist/index.js smoke`,
@@ -2686,7 +2714,10 @@ test("folded service suites preserve both scopes and independent verdicts", () =
     ciJobs["service-suites"],
   );
   const suites = services.steps.filter(
-    ({ run }) => run?.includes("test:") || run?.includes(" test "),
+    ({ run }) =>
+      run?.includes("test:") ||
+      run?.includes(" test ") ||
+      run === "bun scripts/run-corpus-engine-suites.ts",
   );
   expect(suites.map(({ name }) => name)).toEqual([
     "Run Postgres-gated API suites",
@@ -2788,9 +2819,12 @@ test("property-testing guards run only when dependencies are installed", () => {
     const steps = jobSteps(ciJobs[job]);
     const installCondition =
       "needs.ci-plan.outputs.package_checks_required == 'true'";
-    expect(
-      steps.find(({ name }) => name === "Install dependencies")?.if,
-    ).toContain(`(${installCondition})`);
+    const install = steps.find(({ name }) => name === "Install dependencies");
+    if (job === "ci-checks-policy") {
+      expect(install?.if).toContain("steps.checkout.outcome == 'success'");
+    } else {
+      expect(install?.if).toContain(`(${installCondition})`);
+    }
     const guards = steps.filter(({ run }) =>
       run?.includes("bun test packages/property-testing/"),
     );
@@ -4189,6 +4223,52 @@ test("the advisory base proof runs only for pull requests opting in with prove-f
         runsAtDepth(condition, { event, depth: SUITE_DEPTH.fast, proveFix }),
       ).toBe(event === EVENT.pullRequest && proveFix);
     }
+  }
+});
+
+test("documentation guards run independently of package checks", () => {
+  const steps = jobSteps(ciJobs["ci-checks-policy"]);
+  for (const name of [
+    "Install dependencies",
+    "Documentation source policy rule",
+    "Instruction references",
+  ]) {
+    const step = steps.find((entry) => entry.name === name);
+    expect(step?.if).not.toContain("package_checks_required");
+    expect(step?.if).toContain(
+      name === "Install dependencies"
+        ? "steps.checkout.outcome == 'success'"
+        : "steps.install.outcome == 'success'",
+    );
+  }
+});
+
+test("unavailable or malformed documentation and landing detectors widen workflow scopes", () => {
+  const landingStart = selector.indexOf(
+    "          landing_build_required=false\n",
+  );
+  const landingEnd = selector.indexOf(
+    "          legal_atlas_image_required=false",
+    landingStart,
+  );
+  expect(landingStart).toBeGreaterThan(-1);
+  expect(landingEnd).toBeGreaterThan(landingStart);
+  for (const fake of ["return 1", "printf invalid"]) {
+    const result = Bun.spawnSync(
+      [
+        "bash",
+        "-e",
+        "-c",
+        `bun() { ${fake}; }; changed_files=(docs/guide.md);\n${packageScope}\n${selector.slice(landingStart, landingEnd)}\nprintf '%s %s' "$package_checks_required" "$landing_build_required"`,
+      ],
+      {
+        env: { PATH: Bun.env["PATH"] ?? "", EVENT_NAME: "pull_request" },
+        stdout: "pipe",
+        stderr: "pipe",
+      },
+    );
+    expect(result.exitCode, result.stderr.toString()).toBe(0);
+    expect(result.stdout.toString()).toBe("true true");
   }
 });
 

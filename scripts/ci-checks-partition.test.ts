@@ -95,13 +95,23 @@ const partitionIds = [
   "ci-checks-policy",
   "ci-checks-rest",
 ] as const;
-const prerequisites = new Set([
+const setupPrerequisites = new Set([
   "Checkout",
   "Setup Bun",
   "Turbo remote cache",
   "Install dependencies",
   "Prepare environment",
 ]);
+// Generation and hydration are preparation; their complete consumer and
+// provenance contract is owned by ci-generated-sources.test.ts.
+const preparationSteps = new Set([
+  "Generate web sources",
+  "Generate web route tree",
+  "Generate web compiler sources",
+  "Download generated sources",
+  "Restore generated sources",
+]);
+const prerequisites = new Set([...setupPrerequisites, ...preparationSteps]);
 const partitions = partitionIds.map((id) => v.parse(jobSchema, jobs[id]));
 const readBaseline = (
   source: v.InferOutput<typeof workflowSchema>["jobs"],
@@ -201,7 +211,7 @@ const withoutContinuation = (step: Step): Step => {
 };
 const setupSteps = (steps: readonly Step[]) =>
   steps
-    .filter(({ name }) => prerequisites.has(name))
+    .filter(({ name }) => setupPrerequisites.has(name))
     .map(withoutContinuation)
     .map(withoutStepId)
     .map(withoutActionRef);
@@ -234,10 +244,41 @@ const withInstallCache = (step: Step, job: Record<string, unknown>): Step => {
     with: { ...inputs, save: `\${{ github.ref == 'refs/heads/main' }}` },
   };
 };
+const withoutPreparedGeneration = (step: Step): Step => {
+  if (
+    step.name !== "CLI sharded registry and derived runtime guard" &&
+    step.name !== "Content delivery declarations"
+  ) {
+    return step;
+  }
+  const { run } = v.parse(v.looseObject({ run: v.optional(v.string()) }), step);
+  const prepared = "bun scripts/ci-generated-sources.ts prepare\n";
+  return run?.startsWith(prepared)
+    ? {
+        ...step,
+        run: `bun apps/api/scripts/generate-capability-runtime.ts\n${run.slice(prepared.length)}`,
+      }
+    : step;
+};
+const PACKAGE_SCOPE = "needs.ci-plan.outputs.package_checks_required == 'true'";
+const DOCUMENTATION_CHECKS = new Set([
+  "Documentation source policy rule",
+  "Instruction references",
+]);
+// Documentation checks retain all prerequisites while widening beyond package scope.
+const documentationScope = (step: Step): Step => {
+  if (!DOCUMENTATION_CHECKS.has(step.name) || typeof step["if"] !== "string") {
+    return step;
+  }
+  return { ...step, if: step["if"].replace(` && (${PACKAGE_SCOPE})`, "") };
+};
+
 const ownedSteps = (steps: readonly Step[]) =>
   steps
     .filter(({ name }) => !prerequisites.has(name))
+    .map(documentationScope)
     .map(withoutContinuation)
+    .map(withoutPreparedGeneration)
     .map(withoutStepId)
     .map(withoutActionRef)
     .toSorted((left, right) => compareCodeUnit(left.name, right.name));
@@ -256,7 +297,32 @@ type ScopeOptions = {
 const expectScope = ({ current, base }: ScopeOptions) => {
   const { if: condition, ...scope } = current;
   const { if: originalCondition, ...originalScope } = base;
-  expect(scope).toEqual(originalScope);
+  const originalEnvironment =
+    originalScope["env"] === undefined
+      ? undefined
+      : v.parse(v.record(v.string(), v.unknown()), originalScope["env"]);
+  const hydrationDependency =
+    originalScope["needs"] === "ci-plan" &&
+    isDeepStrictEqual(scope["needs"], ["ci-plan", "ci-generated-sources"]) &&
+    !Object.hasOwn(
+      originalEnvironment ?? {},
+      "CI_GENERATED_SOURCES_MANIFEST",
+    ) &&
+    isDeepStrictEqual(scope["env"], {
+      ...originalEnvironment,
+      CI_GENERATED_SOURCES_MANIFEST: `\${{ github.workspace }}/.cache/ci-generated-sources/manifest.json`,
+    });
+  const migrated = { ...scope };
+  // Normalize only an added handoff. A baseline that owns it must retain it.
+  if (hydrationDependency) {
+    migrated["needs"] = "ci-plan";
+    if (originalEnvironment === undefined) {
+      delete migrated["env"];
+    } else {
+      migrated["env"] = originalEnvironment;
+    }
+  }
+  expect(migrated).toEqual(originalScope);
   if (condition === originalCondition) {
     return;
   }
@@ -435,14 +501,34 @@ test("each CI check leg preserves merge-base setup, supply-chain protection and 
     const { steps, "timeout-minutes": timeout, ...scope } = partition;
     const originalSetup = setupSteps(originalSteps)
       .map(withIsolatedCachePort)
-      .map((step) => withInstallCache(step, base));
+      .map((step) => withInstallCache(step, base))
+      .map((step) => {
+        if (
+          partitionIds.at(index) !== "ci-checks-policy" ||
+          step.name !== "Install dependencies" ||
+          step["if"] !== PACKAGE_SCOPE
+        ) {
+          return step;
+        }
+        const widened = { ...step };
+        delete widened["if"];
+        return widened;
+      });
     if (!baseJobs["ci-checks"]) {
       const baseNames = new Set(originalSteps.map(({ name }) => name));
       expect(
-        steps.filter(({ name }) => baseNames.has(name)).map(({ name }) => name),
-      ).toEqual(originalSteps.map(({ name }) => name));
+        steps
+          .filter(
+            ({ name }) => baseNames.has(name) && !preparationSteps.has(name),
+          )
+          .map(({ name }) => name),
+      ).toEqual(
+        originalSteps
+          .filter(({ name }) => !preparationSteps.has(name))
+          .map(({ name }) => name),
+      );
     }
-    expect(originalSetup).toHaveLength(prerequisites.size);
+    expect(originalSetup).toHaveLength(setupPrerequisites.size);
     expectScope({ current: scope, base: originalScope });
     expect(timeout).toBe(
       partitionIds.at(index) === "ci-checks-generated" ? 60 : originalTimeout,
@@ -473,6 +559,16 @@ test("CI check scope permits only the heavy-only wrapper around the unchanged co
   };
   expectScope({ current: base, base });
   expectScope({ current: wrapped, base });
+  expectScope({
+    current: {
+      ...wrapped,
+      needs: ["ci-plan", "ci-generated-sources"],
+      env: {
+        CI_GENERATED_SOURCES_MANIFEST: `\${{ github.workspace }}/.cache/ci-generated-sources/manifest.json`,
+      },
+    },
+    base,
+  });
   for (const condition of [
     `inputs.heavy_only == true && (${base.if})`,
     `inputs.heavy_only != true || (${base.if})`,
@@ -490,6 +586,9 @@ test("CI check scope permits only the heavy-only wrapper around the unchanged co
   }
   const mutations = [
     { ...wrapped, needs: [] },
+    { ...wrapped, needs: ["ci-generated-sources"] },
+    { ...wrapped, needs: ["ci-plan", "unrelated"] },
+    { ...wrapped, needs: ["ci-plan", "ci-generated-sources", "unrelated"] },
     { ...wrapped, permissions: { contents: "write" } },
     { ...wrapped, "runs-on": "self-hosted" },
     { ...wrapped, "continue-on-error": true },
@@ -502,6 +601,83 @@ test("CI check scope permits only the heavy-only wrapper around the unchanged co
   expect(() => expectScope({ current: missingCondition, base })).toThrow(
     "Invalid type",
   );
+});
+
+test("CI check scope migrates only the complete producer handoff and preserves an existing handoff", () => {
+  for (const environment of [
+    undefined,
+    {},
+    { REQUIRED_SETTING: "unchanged" },
+  ]) {
+    const base = {
+      if: "needs.ci-plan.outputs.trusted == 'true'",
+      needs: "ci-plan",
+      ...(environment === undefined ? {} : { env: environment }),
+      permissions: { contents: "read" },
+      "runs-on": "ubuntu-latest",
+    };
+    const handoff = {
+      ...base,
+      needs: ["ci-plan", "ci-generated-sources"],
+      env: {
+        ...environment,
+        CI_GENERATED_SOURCES_MANIFEST: `\${{ github.workspace }}/.cache/ci-generated-sources/manifest.json`,
+      },
+    };
+    expectScope({ current: handoff, base });
+    expectScope({ current: handoff, base: handoff });
+    expectScope({
+      current: {
+        ...handoff,
+        if: `inputs.heavy_only != true && (${handoff.if})`,
+      },
+      base: handoff,
+    });
+    const incomplete = [
+      { ...handoff, env: environment },
+      { ...handoff, needs: "ci-plan" },
+      { ...handoff, needs: ["ci-generated-sources", "ci-plan"] },
+      { ...handoff, needs: ["ci-plan", "ci-generated-sources", "unrelated"] },
+      {
+        ...handoff,
+        env: { ...handoff.env, CI_GENERATED_SOURCES_MANIFEST: "different" },
+      },
+      { ...handoff, env: { ...handoff.env, UNRELATED_SETTING: "added" } },
+    ];
+    for (const current of incomplete) {
+      expect(() => expectScope({ current, base })).toThrow("toEqual");
+      expect(() => expectScope({ current, base: handoff })).toThrow("toEqual");
+    }
+    expect(() => expectScope({ current: base, base: handoff })).toThrow(
+      "toEqual",
+    );
+  }
+});
+
+test("producer scope regression rejects a mutation that normalizes an already-owned handoff", () => {
+  const source = expectScope.toString();
+  const mutant = source.replace(/if\s*\(hydrationDependency\)/u, "if (true)");
+  expect(mutant).not.toBe(source);
+  const handoff = {
+    if: "needs.ci-plan.outputs.trusted == 'true'",
+    needs: ["ci-plan", "ci-generated-sources"],
+    env: {
+      CI_GENERATED_SOURCES_MANIFEST: `\${{ github.workspace }}/.cache/ci-generated-sources/manifest.json`,
+    },
+  };
+  expectScope({ current: handoff, base: handoff });
+  expect(() =>
+    runInContext(
+      `(${mutant})(options)`,
+      createContext({
+        expect,
+        v,
+        isDeepStrictEqual,
+        conditionTokens,
+        options: { current: handoff, base: handoff },
+      }),
+    ),
+  ).toThrow("toEqual");
 });
 
 test("CI check scope preserves whitespace inside quoted condition values", () => {
@@ -608,7 +784,7 @@ test("each leg's setup accepts a pinned action bump but not a mutable ref", () =
     panic("CI checks have no legs");
   }
   const { action, withUses } = pinnedAction(leg.steps, (name) =>
-    prerequisites.has(name),
+    setupPrerequisites.has(name),
   );
   expect(setupSteps(withUses(`${action}@${otherSha}`))).toEqual(
     setupSteps(leg.steps),
@@ -694,16 +870,17 @@ const expectContinuation = (steps: readonly Step[], leg: string) => {
       );
     let prefix: string = CONTINUATION_PREFIXES.checkout;
     if (index > installIndex) {
-      prefix = packageDependent
-        ? CONTINUATION_PREFIXES.installPackages
-        : CONTINUATION_PREFIXES.install;
+      prefix =
+        packageDependent || DOCUMENTATION_CHECKS.has(step.name)
+          ? CONTINUATION_PREFIXES.installPackages
+          : CONTINUATION_PREFIXES.install;
     }
     expect(condition.startsWith(prefix), step.name).toBe(true);
     expect(withoutContinuation(step), step.name).not.toEqual(step);
     if (step.name === "Install dependencies") {
       const safety = leg === "ci-checks-rest" ? SAFETY_SUFFIX : "";
       expect(condition).toBe(
-        `${CONTINUATION_PREFIXES.checkout} && (needs.ci-plan.outputs.package_checks_required == 'true')${safety} }}`,
+        `${CONTINUATION_PREFIXES.checkout}${leg === "ci-checks-policy" ? "" : ` && (${PACKAGE_SCOPE})`}${safety} }}`,
       );
     }
     expect(continueOnError, step.name).toBeUndefined();
@@ -1126,6 +1303,29 @@ test("setup migration preserves runtime inputs and protected install policy", ()
   }
   const mutable = { ...setup, uses: "oven-sh/setup-bun@main" };
   expect(withInstallCache(mutable, { steps: [mutable] })).toEqual(mutable);
+});
+
+test("documentation policy widens only its package gate and retains successful installation", () => {
+  const policy = partitions[partitionIds.indexOf("ci-checks-policy")];
+  if (!policy) {
+    panic("Missing policy leg");
+  }
+  for (const name of DOCUMENTATION_CHECKS) {
+    const step = policy.steps.find((entry) => entry.name === name);
+    expect(step?.["if"]).toBe(`${CONTINUATION_PREFIXES.installPackages} }}`);
+    expect(step?.["run"]).toBeTruthy();
+    const base = {
+      name,
+      run: "bun guard.ts",
+      if: `${CONTINUATION_PREFIXES.installPackages} && (${PACKAGE_SCOPE}) }}`,
+    };
+    expect(documentationScope(base)).toEqual({
+      ...base,
+      if: `${CONTINUATION_PREFIXES.installPackages} }}`,
+    });
+    const unrelated = { ...base, name: "Unrelated guard" };
+    expect(documentationScope(unrelated)).toEqual(unrelated);
+  }
 });
 
 test("baseline cancellation normalization uses its own owner and rejects changed tails", () => {
