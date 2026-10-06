@@ -118,9 +118,6 @@ export const RegistrySearch = ({
     scope: string;
     message: string;
   } | null>(null);
-  const [connectionFailure, setConnectionFailure] = useState<string | null>(
-    null,
-  );
   const [attempt, setAttempt] = useState(0);
   const connectionRefresh = useRef<() => void>(() => undefined);
   const [activeResultId, setActiveResultId] = useState<string | null>(null);
@@ -130,7 +127,8 @@ export const RegistrySearch = ({
   const formatRequests = useRef(new Map<string, number>());
   const defaultFormatRequests = useRef(0);
   const [savingDefaultFormat, setSavingDefaultFormat] = useState(false);
-  const connectionError = t("registryErrorState");
+  const connectionFailure =
+    connection?.status === "unavailable" ? t("registryErrorState") : null;
   const searchError = t("registryErrorSearch");
   const connected = connection?.status === "connected";
   const formatType =
@@ -175,7 +173,6 @@ export const RegistrySearch = ({
                 : "")
             );
           });
-          setConnectionFailure(null);
           setAttempt((current) => current + 1);
           return;
         })
@@ -184,7 +181,6 @@ export const RegistrySearch = ({
             return;
           }
           setConnection({ status: "unavailable" });
-          setConnectionFailure(connectionError);
         });
     };
     refresh();
@@ -209,7 +205,7 @@ export const RegistrySearch = ({
       window.removeEventListener("focus", refresh);
       stopListening();
     };
-  }, [connectionError]);
+  }, []);
 
   useEffect(() => {
     if (connectionReadAttempt === 0) {
