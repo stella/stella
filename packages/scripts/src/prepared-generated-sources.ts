@@ -10,7 +10,7 @@ import {
 import path from "node:path";
 import * as v from "valibot";
 
-import { CI_GENERATED_FILES } from "../../../scripts/generated-files";
+import { CI_GENERATED_FILES } from "./generated-files";
 
 const generated = new Set<string>(CI_GENERATED_FILES);
 const hashSchema = v.pipe(v.string(), v.regex(/^[a-f0-9]{64}$/u));

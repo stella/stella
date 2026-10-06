@@ -1750,6 +1750,14 @@ export const buildPreparationSteps = ({
     });
   }
 
+  if (modeIncludesApi(mode)) {
+    steps.push({
+      cmd: [resolveCommandPath("bun"), "run", "generate:capability-runtime"],
+      cwd: path.resolve(rootDir, "apps/api"),
+      label: "Preparing API runtime sources",
+    });
+  }
+
   if (!skipDbPush && modeIncludesApi(mode)) {
     steps.push({
       cmd: [resolveCommandPath("bun"), "run", "db:migrate"],

@@ -127,7 +127,7 @@
     "hooks:uninstall": "lefthook uninstall",
     "postinstall": "bun run lint:ws && bun run generate",
     "dependencies:check": "DATABASE_URL=postgresql://invalid bun --no-env-file run knip --no-progress --include dependencies,unlisted",
-    "generate": "turbo run generate:route-tree generate:api-types --filter=@stll/web"
+    "generate": "turbo run generate:route-tree generate:api-types generate:capability-runtime --filter=@stll/web --filter=@stll/api"
   },
   "devDependencies": {
     "@changesets/changelog-github": "^1.0.1",
