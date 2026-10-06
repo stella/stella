@@ -14,7 +14,10 @@ import type {
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useLocalStorageFlag } from "@/hooks/use-local-storage-flag";
 import type { TranslationKey } from "@/i18n/types";
-import { browserStorage, deviceStorage } from "@/lib/account/browser-storage";
+import {
+  browserStorage,
+  requireBrowserStorage,
+} from "@/lib/account/browser-storage";
 import { logDevError } from "@/lib/errors/telemetry";
 
 const NOTIFICATION_TEXT = {
@@ -56,13 +59,15 @@ export const setChatTurnNotificationsEnabled = async (
       return "denied";
     }
   }
-  const written = Result.try(() => {
-    if (enabled) {
-      deviceStorage("local").setItem(CHAT_TURN_NOTIFICATIONS_STORAGE_KEY, "1");
-    } else {
-      deviceStorage("local").removeItem(CHAT_TURN_NOTIFICATIONS_STORAGE_KEY);
-    }
-  });
+  const written = requireBrowserStorage("local").andThen((storage) =>
+    Result.try(() => {
+      if (enabled) {
+        storage.setItem(CHAT_TURN_NOTIFICATIONS_STORAGE_KEY, "1");
+      } else {
+        storage.removeItem(CHAT_TURN_NOTIFICATIONS_STORAGE_KEY);
+      }
+    }),
+  );
   if (Result.isError(written)) {
     return "unsupported";
   }
