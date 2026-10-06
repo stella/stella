@@ -329,11 +329,14 @@ export const readCallArguments = (source: string): readonly string[] => {
   const state = { index: 1, line: 1 };
   let start = 1;
   let depth = 0;
-  while (state.index < source.length - 1) {
+  while (state.index < source.length) {
     const char = source.charAt(state.index);
     if (char === '"' || char === "'" || char === "`") {
       readQuoted(source, state, char);
       continue;
+    }
+    if (char === ")" && depth === 0) {
+      break;
     }
     if (["(", "[", "{"].includes(char)) {
       depth += 1;
@@ -347,7 +350,7 @@ export const readCallArguments = (source: string): readonly string[] => {
     }
     state.index += 1;
   }
-  const last = source.slice(start, -1).trim();
+  const last = source.slice(start, state.index).trim();
   if (last) {
     args.push(last);
   }

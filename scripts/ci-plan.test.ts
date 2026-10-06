@@ -1923,7 +1923,7 @@ test("pull requests and merge groups use the same fail-closed package detector",
       ["printf true", "true"],
       ["printf invalid", "true"],
       ["return 1", "true"],
-    ]) {
+    ] as const) {
       const result = Bun.spawnSync(
         [
           "bash",

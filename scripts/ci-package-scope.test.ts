@@ -226,6 +226,102 @@ readFileSync(INPUT, "utf8");`,
   });
 });
 
+test("conflicting repeated path declarations fail closed in either order", () => {
+  for (const definitions of [
+    ["const root = mkdtempSync('fixture-');", "const root = process.cwd();"],
+    ["const root = process.cwd();", "const root = mkdtempSync('fixture-');"],
+  ]) {
+    repository((root, write) => {
+      write(
+        "scripts/conflicting.test.ts",
+        `import { readFileSync, mkdtempSync } from "node:fs";
+function fixture() { ${definitions.at(0)} }
+function repository() { ${definitions.at(1)} readFileSync(path.join(root, "README.md")); }`,
+      );
+      const errors = spyOn(console, "error").mockImplementation(() => {});
+      try {
+        expect(requiresPackageChecks({ root, changed: ["README.md"] })).toBe(
+          true,
+        );
+        expect(String(errors.mock.calls.at(0)?.at(1))).toContain(
+          "scripts/conflicting.test.ts",
+        );
+      } finally {
+        errors.mockRestore();
+      }
+    });
+  }
+});
+
+test("agreeing repeated declarations resolve independently", () => {
+  repository((root, write) => {
+    write(
+      "scripts/agreeing.test.ts",
+      `import { readFileSync } from "node:fs";
+const INPUT = "README.md";
+function first() { const file = INPUT; }
+function second() { const file = INPUT; readFileSync(file); }`,
+    );
+    expect(markdownChecks({ root, changed: ["README.md"] })).toEqual([
+      ["bun", "test", "scripts/agreeing.test.ts"],
+    ]);
+  });
+});
+
+test("named filesystem wrappers declare their real Markdown call inputs", () => {
+  for (const body of [
+    'return readFileSync(name, "utf8");',
+    'if (name) { return readFileSync(name, "utf8"); } return "";',
+  ]) {
+    repository((root, write) => {
+      write(
+        "scripts/named-reader.test.ts",
+        `import { readFileSync } from "node:fs";
+function readDoc(name: string) { ${body} }
+readDoc("README.md");`,
+      );
+      expect(markdownChecks({ root, changed: ["README.md"] })).toEqual([
+        ["bun", "test", "scripts/named-reader.test.ts"],
+      ]);
+      expect(markdownChecks({ root, changed: ["external.md"] })).toEqual([]);
+    });
+  }
+});
+
+test("directory readers retain Markdown inputs at the root and outside docs", () => {
+  for (const [expression, input] of [
+    ['readdirSync("docs")', "docs/guide.md"],
+    [
+      'const root = process.cwd(); readdirSync(path.join(root, "docs"))',
+      "docs/guide.md",
+    ],
+    ['readdirSync("prompts")', "prompts/instruction.md"],
+    ['new Bun.Glob("prompts/**/*.md")', "prompts/nested/instruction.md"],
+  ] as const) {
+    repository((root, write) => {
+      write(
+        "scripts/directory-reader.test.ts",
+        `import { readdirSync } from "node:fs"; ${expression};`,
+      );
+      expect(markdownChecks({ root, changed: [input] })).toEqual([
+        ["bun", "test", "scripts/directory-reader.test.ts"],
+      ]);
+    });
+  }
+  repository((root, write) => {
+    write(
+      "apps/example/src/reader.ts",
+      'import { readdirSync, readFileSync } from "node:fs"; for (const file of readdirSync("apps/example/prompts")) { readFileSync(path.join("apps/example/prompts", file)); }',
+    );
+    expect(
+      requiresPackageChecks({
+        root,
+        changed: ["apps/example/prompts/instruction.md"],
+      }),
+    ).toBe(true);
+  });
+});
+
 test("a reader without an isolated command fails closed and names its owner", () => {
   repository((root, write) => {
     write(

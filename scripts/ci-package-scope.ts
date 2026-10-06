@@ -101,11 +101,66 @@ type PathExpressionOptions = {
   source: string;
   file: string;
   seen?: Set<string>;
+  temporaryFactories: ReadonlySet<string>;
 };
 type PathExpressionResult =
   | { kind: "repository"; value: string }
   | { kind: "external" }
-  | { kind: "unresolved" };
+  | { kind: "unresolved"; prefix?: string };
+
+type IdentifierPathOptions = PathExpressionOptions & {
+  resolve: (options: PathExpressionOptions) => PathExpressionResult;
+};
+
+const identifierPath = ({
+  expression: text,
+  resolve,
+  code,
+  source,
+  file,
+  temporaryFactories,
+  seen = new Set<string>(),
+}: IdentifierPathOptions): PathExpressionResult => {
+  if (seen.has(text)) {
+    return { kind: "unresolved" };
+  }
+  seen.add(text);
+  const results: PathExpressionResult[] = [];
+  for (const declaration of code.matchAll(
+    new RegExp(`\\bconst\\s+${text}\\b`, "gu"),
+  )) {
+    const tail = source
+      .slice(declaration.index + declaration[0].length)
+      .trimStart();
+    if (!tail.startsWith("=") && !tail.startsWith(":")) {
+      continue;
+    }
+    const start =
+      code.indexOf("=", declaration.index + declaration[0].length) + 1;
+    const end = code.indexOf(";", start);
+    if (start === 0 || end === -1) {
+      return { kind: "unresolved" };
+    }
+    results.push(
+      resolve({
+        expression: source.slice(start, end),
+        code,
+        source,
+        file,
+        seen: new Set(seen),
+        temporaryFactories,
+      }),
+    );
+  }
+  const [first, ...rest] = results;
+  if (
+    first === undefined ||
+    rest.some((result) => JSON.stringify(result) !== JSON.stringify(first))
+  ) {
+    return { kind: "unresolved" };
+  }
+  return first;
+};
 
 // Resolve the expression a read actually receives. Temporary fixture roots
 // stay outside the repository; their Markdown files are not CI source inputs.
@@ -115,6 +170,7 @@ const pathExpression = ({
   source,
   file,
   seen = new Set<string>(),
+  temporaryFactories,
 }: PathExpressionOptions): PathExpressionResult => {
   const text = expression.trim();
   if (text === "import.meta.dir" || text === "import.meta.dirname") {
@@ -124,34 +180,15 @@ const pathExpression = ({
     return { kind: "repository", value: "." };
   }
   if (IDENTIFIER.test(text)) {
-    if (seen.has(text)) {
-      return { kind: "unresolved" };
-    }
-    seen.add(text);
-    for (const declaration of code.matchAll(
-      new RegExp(`\\bconst\\s+${text}\\b`, "gu"),
-    )) {
-      const tail = source
-        .slice(declaration.index + declaration[0].length)
-        .trimStart();
-      if (!tail.startsWith("=") && !tail.startsWith(":")) {
-        continue;
-      }
-      const start =
-        source.indexOf("=", declaration.index + declaration[0].length) + 1;
-      const end = source.indexOf(";", start);
-      if (start === 0 || end === -1) {
-        return { kind: "unresolved" };
-      }
-      return pathExpression({
-        expression: source.slice(start, end),
-        code,
-        source,
-        file,
-        seen,
-      });
-    }
-    return { kind: "unresolved" };
+    return identifierPath({
+      resolve: pathExpression,
+      expression: text,
+      code,
+      source,
+      file,
+      temporaryFactories,
+      seen,
+    });
   }
   const literal = readStringLiterals(text);
   const value = literal.at(0)?.value;
@@ -169,8 +206,24 @@ const pathExpression = ({
   }
   const callee = text.slice(0, open).trim();
   const args = readCallArguments(text.slice(open));
-  if (["mkdtempSync", "mkdtemp", "tmpdir"].includes(callee)) {
+  if (
+    ["mkdtempSync", "mkdtemp", "tmpdir"].includes(callee) ||
+    temporaryFactories.has(callee)
+  ) {
     return { kind: "external" };
+  }
+  if (callee === "fileURLToPath") {
+    const target = args.at(0);
+    return target === undefined
+      ? { kind: "unresolved" }
+      : pathExpression({
+          expression: target,
+          code,
+          source,
+          file,
+          temporaryFactories,
+          seen,
+        });
   }
   if (callee === "new URL" && args.at(1) === "import.meta.url") {
     const target = args.at(0);
@@ -183,6 +236,7 @@ const pathExpression = ({
       source,
       file,
       seen,
+      temporaryFactories,
     });
     if (resolved.kind !== "repository") {
       return resolved;
@@ -203,13 +257,82 @@ const pathExpression = ({
       source,
       file,
       seen: new Set(seen),
+      temporaryFactories,
     });
     if (resolved.kind !== "repository") {
+      if (resolved.kind === "unresolved" && parts.length > 0) {
+        return { kind: "unresolved", prefix: path.posix.join(...parts) };
+      }
       return resolved;
     }
     parts.push(resolved.value);
   }
   return { kind: "repository", value: path.posix.join(...parts) };
+};
+
+type GlobPathOptions = PathExpressionOptions & {
+  target: string;
+  call: string;
+  start: number;
+};
+const globPath = ({
+  target,
+  call,
+  start,
+  source,
+  code,
+  file,
+  temporaryFactories,
+}: GlobPathOptions): PathExpressionResult => {
+  const extension = target.slice(target.lastIndexOf(".") + 1);
+  if (
+    /^(?:[A-Za-z0-9]+|\{[A-Za-z0-9,]+\})$/u.test(extension) &&
+    !extension
+      .replaceAll(/[{}]/gu, "")
+      .split(",")
+      .some((value) => value === "md" || value === "mdx")
+  ) {
+    return { kind: "external" };
+  }
+  const scan = source
+    .slice(start + call.length)
+    .match(/^\s*\.scan(?:Sync)?\s*\(/u);
+  if (scan === null) {
+    return { kind: "repository", value: target };
+  }
+  const options = readCallArguments(
+    source.slice(start + call.length + scan[0].length - 1),
+  ).at(0);
+  const fields = options?.trim().startsWith("{")
+    ? readCallArguments(`(${options.trim().slice(1, -1)})`)
+    : [];
+  const cwd = fields.find((field) => /^\s*cwd\s*:/u.test(field));
+  if (cwd === undefined) {
+    return { kind: "repository", value: target };
+  }
+  const directory = pathExpression({
+    expression: cwd.slice(cwd.indexOf(":") + 1),
+    code,
+    source,
+    file,
+    temporaryFactories,
+  });
+  if (directory.kind === "repository") {
+    return {
+      kind: "repository",
+      value: path.posix.join(directory.value, target),
+    };
+  }
+  if (directory.kind === "external" || directory.prefix !== undefined) {
+    return directory;
+  }
+  if (MARKDOWN.test(target) || target.startsWith("docs/")) {
+    throw new MarkdownReaderDeclarationError(
+      `${file}: Markdown glob scan has an unresolved cwd`,
+    );
+  }
+  // A generic scan of an unlocated scratch tree declares no repository input.
+  return { kind: "external" };
 };
 
 const readerCommand = (
@@ -275,6 +398,75 @@ const sourceFiles = (root: string): readonly string[] => {
   ];
 };
 
+const sourceFunctionBodies = (code: string) => {
+  const functions: { name: string; body: string }[] = [];
+  for (const match of code.matchAll(
+    /\b(?:function|const)\s+([A-Za-z_$][\w$]*)/gu,
+  )) {
+    const start = match.index + match[0].length;
+    const tail = code.slice(start);
+    let bodyStart: number;
+    if (match[0].startsWith("const")) {
+      const arrow = tail.indexOf("=>");
+      const end = tail.indexOf(";");
+      if (arrow === -1 || (end !== -1 && arrow > end)) {
+        continue;
+      }
+      bodyStart = start + arrow + 2;
+    } else {
+      bodyStart = code.indexOf("{", start);
+    }
+    while (/\s/u.test(code.charAt(bodyStart)) && bodyStart < code.length) {
+      bodyStart += 1;
+    }
+    if (bodyStart === -1) {
+      continue;
+    }
+    let end = code.indexOf(";", bodyStart);
+    if (code.charAt(bodyStart) === "{") {
+      let depth = 1;
+      end = bodyStart + 1;
+      while (end < code.length && depth > 0) {
+        if (code.charAt(end) === "{") {
+          depth += 1;
+        } else if (code.charAt(end) === "}") {
+          depth -= 1;
+        }
+        end += 1;
+      }
+    }
+    functions.push({
+      name: match[1] ?? "",
+      body: code.slice(bodyStart, end === -1 ? code.length : end),
+    });
+  }
+  return functions;
+};
+
+const temporaryPathFactories = (code: string) => {
+  const factories = new Set<string>();
+  for (const { name, body } of sourceFunctionBodies(code)) {
+    const returns = [...body.matchAll(/\breturn\s+([A-Za-z_$][\w$]*)\s*;/gu)];
+    if (
+      returns.length === 0 ||
+      returns.length !== [...body.matchAll(/\breturn\b/gu)].length
+    ) {
+      continue;
+    }
+    if (
+      returns.every((match) =>
+        new RegExp(
+          `\\bconst\\s+${match[1]}\\s*=\\s*mkdtemp(?:Sync)?\\s*\\(`,
+          "u",
+        ).test(body),
+      )
+    ) {
+      factories.add(name);
+    }
+  }
+  return factories;
+};
+
 const filesystemReadBindings = (source: string, code: string) => {
   const reads = new Set(READ_CALLS);
   for (const match of source.matchAll(
@@ -290,15 +482,11 @@ const filesystemReadBindings = (source: string, code: string) => {
       }
     }
   }
-  for (const match of code.matchAll(/\bconst\s+([A-Za-z_$][\w$]*)\s*=/gu)) {
-    const start = match.index + match[0].length;
-    const end = source.indexOf(";", start);
-    const body = code.slice(start, end === -1 ? code.length : end);
+  for (const { name, body } of sourceFunctionBodies(code)) {
     if (
-      body.includes("=>") &&
-      [...reads].some((name) => body.includes(`${name}(`))
+      [...reads].some((read) => new RegExp(`\\b${read}\\s*\\(`, "u").test(body))
     ) {
-      reads.add(match[1] ?? "");
+      reads.add(name);
     }
   }
   return reads;
@@ -376,6 +564,20 @@ const markdownPolicyReaders = (root: string): readonly MarkdownReader[] => {
   return readers;
 };
 
+// Git's unanchored pathspec *.md reaches every tracked directory.
+const gitMarkdownInputs = (callee: string, call: string): readonly string[] => {
+  if (callee !== "spawnSync") {
+    return [];
+  }
+  const values = readStringLiterals(call).map(({ value }) => value);
+  if (values.at(0) !== "git" || values.at(1) !== "grep") {
+    return [];
+  }
+  return values
+    .filter((value) => MARKDOWN.test(value))
+    .map((value) => (value.startsWith("*.") ? `**/${value}` : value));
+};
+
 export const markdownReaders = (root = ROOT): readonly MarkdownReader[] => {
   const readers: MarkdownReader[] = [...markdownPolicyReaders(root)];
   for (const file of sourceFiles(root)) {
@@ -397,6 +599,7 @@ export const markdownReaders = (root = ROOT): readonly MarkdownReader[] => {
     }).scanImports(source);
     const inputs = new Set<string>();
     let moduleInput = false;
+    let unresolvedInput = false;
     for (const { path: imported } of imports) {
       if (MARKDOWN.test(imported)) {
         if (!imported.startsWith(".")) {
@@ -419,6 +622,7 @@ export const markdownReaders = (root = ROOT): readonly MarkdownReader[] => {
       ["node:fs", "node:fs/promises", "fs", "fs/promises"].includes(imported),
     );
     const code = maskSourceNonCode(source);
+    const temporaryFactories = temporaryPathFactories(code);
     const reads = importsFs ? filesystemReadBindings(source, code) : READ_CALLS;
     readStringLiterals(source, (callee, call, start) => {
       if (callee === undefined) {
@@ -435,18 +639,40 @@ export const markdownReaders = (root = ROOT): readonly MarkdownReader[] => {
         if (argument === undefined) {
           return;
         }
-        const resolved = pathExpression({
+        let resolved = pathExpression({
           expression: argument,
           code,
           source,
           file,
+          temporaryFactories,
         });
+        if (isGlob && resolved.kind === "repository") {
+          resolved = globPath({
+            expression: argument,
+            target: resolved.value,
+            call,
+            start,
+            source,
+            code,
+            file,
+            temporaryFactories,
+          });
+        }
+        if (
+          isDirectory &&
+          resolved.kind === "unresolved" &&
+          resolved.prefix !== undefined
+        ) {
+          inputs.add(`${resolved.prefix}/**`);
+          unresolvedInput = true;
+          return;
+        }
         const target =
           resolved.kind === "repository" ? resolved.value : undefined;
         if (
           target !== undefined &&
           !target.includes("\n") &&
-          (MARKDOWN.test(target) || (isDirectory && target.startsWith("docs/")))
+          (MARKDOWN.test(target) || isDirectory)
         ) {
           inputs.add(
             isDirectory && !target.includes("*")
@@ -462,23 +688,16 @@ export const markdownReaders = (root = ROOT): readonly MarkdownReader[] => {
           );
         }
       }
-      // Git's unanchored pathspec *.md reaches every tracked directory, unlike
-      // Bun.Glob. Require the actual git grep argv, not a fixture's *.md string.
-      if (callee === "spawnSync") {
-        const values = readStringLiterals(call).map(({ value }) => value);
-        if (values.at(0) === "git" && values.at(1) === "grep") {
-          for (const value of values) {
-            if (MARKDOWN.test(value)) {
-              inputs.add(value.startsWith("*.") ? `**/${value}` : value);
-            }
-          }
-        }
+      for (const input of gitMarkdownInputs(callee, call)) {
+        inputs.add(input);
       }
     });
     if (inputs.size > 0) {
       const command = readerCommand(root, file);
       const reader = { file, inputs: [...inputs] };
-      if (moduleInput || /^(?:apps|packages)\//u.test(file)) {
+      if (unresolvedInput) {
+        readers.push({ ...reader, kind: "unresolved" });
+      } else if (moduleInput || /^(?:apps|packages)\//u.test(file)) {
         readers.push({ ...reader, kind: "module" });
       } else if (command !== undefined) {
         readers.push({ ...reader, kind: "check", command });
