@@ -11,6 +11,7 @@ import { env } from "@/api/env";
 import { frontendOrigins } from "@/api/lib/dev-origins";
 import {
   CACHE_CONTROL_HEADER,
+  EMBEDDABLE_FRAME_HEADERS,
   PRIVATE_CACHE_CONTROL,
 } from "@/api/lib/security-headers";
 import { runtimeMode } from "@/api/runtime-mode";
@@ -128,6 +129,7 @@ export const handleMcpAppSandboxRequest = (
   clearInheritedFrameDenial(set);
   return new Response(MCP_APP_SANDBOX_DOCUMENT, {
     headers: {
+      ...EMBEDDABLE_FRAME_HEADERS,
       [CACHE_CONTROL_HEADER]: PRIVATE_CACHE_CONTROL,
       "Content-Security-Policy": SANDBOX_CONTENT_SECURITY_POLICY,
       "Content-Type": "text/html; charset=utf-8",
