@@ -5419,6 +5419,10 @@
     "seconds": 0.26084,
     "source": "estimated"
   },
+  "src/lib/embeddable-frame-headers.test.ts": {
+    "seconds": 0.5,
+    "source": "estimated"
+  },
   "src/lib/entities/authorize-document-write.integration.test.ts": {
     "seconds": 1.574307,
     "source": "estimated"
