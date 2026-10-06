@@ -112,6 +112,34 @@ type IdentifierPathOptions = PathExpressionOptions & {
   resolve: (options: PathExpressionOptions) => PathExpressionResult;
 };
 
+const identifierExpressions = ({
+  expression: text,
+  code,
+  source,
+}: Pick<PathExpressionOptions, "expression" | "code" | "source">):
+  | readonly string[]
+  | undefined => {
+  const expressions: string[] = [];
+  for (const declaration of code.matchAll(
+    new RegExp(`\\bconst\\s+${text}\\b`, "gu"),
+  )) {
+    const tail = source
+      .slice(declaration.index + declaration[0].length)
+      .trimStart();
+    if (!tail.startsWith("=") && !tail.startsWith(":")) {
+      continue;
+    }
+    const start =
+      code.indexOf("=", declaration.index + declaration[0].length) + 1;
+    const end = code.indexOf(";", start);
+    if (start === 0 || end === -1) {
+      return undefined;
+    }
+    expressions.push(source.slice(start, end));
+  }
+  return expressions;
+};
+
 const identifierPath = ({
   expression: text,
   resolve,
@@ -126,24 +154,14 @@ const identifierPath = ({
   }
   seen.add(text);
   const results: PathExpressionResult[] = [];
-  for (const declaration of code.matchAll(
-    new RegExp(`\\bconst\\s+${text}\\b`, "gu"),
-  )) {
-    const tail = source
-      .slice(declaration.index + declaration[0].length)
-      .trimStart();
-    if (!tail.startsWith("=") && !tail.startsWith(":")) {
-      continue;
-    }
-    const start =
-      code.indexOf("=", declaration.index + declaration[0].length) + 1;
-    const end = code.indexOf(";", start);
-    if (start === 0 || end === -1) {
-      return { kind: "unresolved" };
-    }
+  const expressions = identifierExpressions({ expression: text, code, source });
+  if (expressions === undefined) {
+    return { kind: "unresolved" };
+  }
+  for (const expression of expressions) {
     results.push(
       resolve({
-        expression: source.slice(start, end),
+        expression,
         code,
         source,
         file,
@@ -270,6 +288,69 @@ const pathExpression = ({
   return { kind: "repository", value: path.posix.join(...parts) };
 };
 
+const declaredMarkdownInputs = (
+  options: PathExpressionOptions,
+): readonly string[] | undefined => {
+  const { expression, source, code, file } = options;
+  const text = expression.trim();
+  if (text.startsWith("[")) {
+    const end = text.lastIndexOf("]");
+    const tail = text.slice(end + 1).trim();
+    if (end === -1 || (tail !== "" && tail !== "as const")) {
+      throw new MarkdownReaderDeclarationError(
+        `${file}: Markdown reader inputs must be a static path list`,
+      );
+    }
+    return readCallArguments(`(${text.slice(1, end)})`).map((entry) => {
+      const codeExpression = maskSourceNonCode(entry).trim();
+      const literals = readStringLiterals(entry);
+      const resolved = pathExpression({
+        ...options,
+        expression:
+          codeExpression === "" && literals.length === 1
+            ? JSON.stringify(literals.at(0)?.value)
+            : codeExpression,
+      });
+      if (resolved.kind !== "repository") {
+        throw new MarkdownReaderDeclarationError(
+          `${file}: Markdown reader input is unresolved: ${entry}`,
+        );
+      }
+      return resolved.value.includes("*") ||
+        path.posix.extname(resolved.value) !== ""
+        ? resolved.value
+        : `${resolved.value}/**`;
+    });
+  }
+  if (!IDENTIFIER.test(text) || options.seen?.has(text)) {
+    throw new MarkdownReaderDeclarationError(
+      `${file}: Markdown reader input declaration is unresolved: ${text}`,
+    );
+  }
+  const seen = new Set(options.seen);
+  seen.add(text);
+  const expressions = identifierExpressions({ expression: text, code, source });
+  const results = expressions?.map((value) =>
+    declaredMarkdownInputs({ ...options, expression: value, seen }),
+  );
+  const first = results?.at(0);
+  if (first === undefined) {
+    return undefined;
+  }
+  if (
+    results?.some((value) => JSON.stringify(value) !== JSON.stringify(first))
+  ) {
+    throw new MarkdownReaderDeclarationError(
+      `${file}: Markdown reader declarations disagree: ${text}`,
+    );
+  }
+  return first;
+};
+
+type GlobPathResult =
+  | PathExpressionResult
+  | { kind: "declared"; inputs: readonly string[] };
+
 type GlobPathOptions = PathExpressionOptions & {
   target: string;
   call: string;
@@ -283,7 +364,7 @@ const globPath = ({
   code,
   file,
   temporaryFactories,
-}: GlobPathOptions): PathExpressionResult => {
+}: GlobPathOptions): GlobPathResult => {
   const extension = target.slice(target.lastIndexOf(".") + 1);
   if (
     /^(?:[A-Za-z0-9]+|\{[A-Za-z0-9,]+\})$/u.test(extension) &&
@@ -326,13 +407,19 @@ const globPath = ({
   if (directory.kind === "external" || directory.prefix !== undefined) {
     return directory;
   }
-  if (MARKDOWN.test(target) || target.startsWith("docs/")) {
-    throw new MarkdownReaderDeclarationError(
-      `${file}: Markdown glob scan has an unresolved cwd`,
-    );
+  const inputs = declaredMarkdownInputs({
+    expression: "CI_MARKDOWN_READER_INPUTS",
+    code,
+    source,
+    file,
+    temporaryFactories,
+  });
+  if (inputs !== undefined && inputs.length > 0) {
+    return { kind: "declared", inputs };
   }
-  // A generic scan of an unlocated scratch tree declares no repository input.
-  return { kind: "external" };
+  throw new MarkdownReaderDeclarationError(
+    `${file}: Markdown glob scan has an unresolved cwd; declare CI_MARKDOWN_READER_INPUTS`,
+  );
 };
 
 const readerCommand = (
@@ -671,7 +758,7 @@ export const markdownReaders = (root = ROOT): readonly MarkdownReader[] => {
         if (argument === undefined) {
           return;
         }
-        let resolved = pathExpression({
+        let resolved: GlobPathResult = pathExpression({
           expression: argument,
           code,
           source,
@@ -689,6 +776,13 @@ export const markdownReaders = (root = ROOT): readonly MarkdownReader[] => {
             file,
             temporaryFactories,
           });
+        }
+        if (resolved.kind === "declared") {
+          for (const input of resolved.inputs) {
+            inputs.add(input);
+          }
+          unresolvedInput = true;
+          return;
         }
         if (
           isDirectory &&

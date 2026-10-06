@@ -367,6 +367,61 @@ test("unresolved directory suffixes retain their known subtree and name the read
   });
 });
 
+test("unresolved glob cwd remains named and fail-closed for Markdown and generic patterns", () => {
+  for (const pattern of ["**/*.md", "**/*.{md,mdx}", "**/*", "**"]) {
+    repository((root, write) => {
+      const reader = "scripts/parameter-reader.test.ts";
+      write(
+        reader,
+        `function scan(cwd: string) { return [...new Bun.Glob(${JSON.stringify(pattern)}).scanSync({ cwd: cwd })]; } scan(process.cwd());`,
+      );
+      const errors = spyOn(console, "error").mockImplementation(() => {});
+      try {
+        expect(requiresPackageChecks({ root, changed: ["README.md"] })).toBe(
+          true,
+        );
+        expect(String(errors.mock.calls.at(0)?.at(1))).toContain(reader);
+        expect(() => markdownChecks({ root, changed: ["README.md"] })).toThrow(
+          "unresolved cwd",
+        );
+      } finally {
+        errors.mockRestore();
+      }
+    });
+  }
+});
+
+test("named unresolved scans derive their fail-closed subtree from their export inventory", () => {
+  repository((root, write) => {
+    const reader = "scripts/export-reader.test.ts";
+    write(
+      reader,
+      `const PACKAGE = "packages/example";
+const EXPORTED_PATHS = [PACKAGE, "scripts/helper.ts"];
+export const CI_MARKDOWN_READER_INPUTS = EXPORTED_PATHS;
+function scan(cwd: string) { return [...new Bun.Glob("**/*.{md,mdx}").scanSync({ cwd: cwd })]; }`,
+    );
+    expect(
+      markdownReaders(root).find(({ file }) => file === reader)?.inputs,
+    ).toEqual(["packages/example/**", "scripts/helper.ts"]);
+    const errors = spyOn(console, "error").mockImplementation(() => {});
+    try {
+      expect(
+        requiresPackageChecks({
+          root,
+          changed: ["packages/example/README.md"],
+        }),
+      ).toBe(true);
+      expect(String(errors.mock.calls.at(0)?.at(1))).toContain(reader);
+      expect(requiresPackageChecks({ root, changed: ["README.md"] })).toBe(
+        false,
+      );
+    } finally {
+      errors.mockRestore();
+    }
+  });
+});
+
 test("glob scans resolve cwd aliases through file URLs", () => {
   repository((root, write) => {
     write(
