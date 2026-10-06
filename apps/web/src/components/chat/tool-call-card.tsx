@@ -353,6 +353,10 @@ const readCachedSkillPages = ({
     : queryClient.getQueryData(skillsOptions(organizationId, user.id).queryKey)
         ?.pages;
 
+/** A follow-up a tool row offers once its call completed, such as opening
+ *  what the call saved. */
+export type ToolCallAction = { label: string; onClick: () => void };
+
 export const ToolCallCard = ({
   action,
   activeOrganizationId,
@@ -360,9 +364,7 @@ export const ToolCallCard = ({
   part,
   showDetails,
 }: {
-  /** A follow-up the row offers once its call completed, such as opening
-   *  what the call saved. */
-  action?: { label: string; onClick: () => void } | undefined;
+  action?: ToolCallAction | undefined;
   activeOrganizationId: string;
   /** Known elapsed time, used by persisted callers and visual fixtures. */
   durationMs?: number;

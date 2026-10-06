@@ -1706,9 +1706,19 @@ const AssistantMessageParts = ({
     }
 
     if (part.type === "tool-call") {
+      const playbookId = savedPlaybookId(part);
+      const action =
+        playbookId !== null && onOpenPlaybook !== undefined
+          ? {
+              label: t("knowledge.playbooks.openInPane"),
+              onClick: () => onOpenPlaybook(playbookId),
+            }
+          : undefined;
+
       if (isApprovalPart(part)) {
         return (
           <ToolApprovalCard
+            action={action}
             activeFileName={activeFileName}
             isAwaitingUser={isAwaitingUser}
             isTurnActive={isTurnActive}
@@ -1718,17 +1728,9 @@ const AssistantMessageParts = ({
         );
       }
 
-      const playbookId = savedPlaybookId(part);
       return (
         <ToolCallCard
-          action={
-            playbookId !== null && onOpenPlaybook !== undefined
-              ? {
-                  label: t("knowledge.playbooks.openInPane"),
-                  onClick: () => onOpenPlaybook(playbookId),
-                }
-              : undefined
-          }
+          action={action}
           activeOrganizationId={activeOrganizationId}
           key={part.id}
           part={part}
