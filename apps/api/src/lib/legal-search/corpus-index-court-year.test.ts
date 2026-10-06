@@ -73,9 +73,7 @@ test("empty results are complete while omitted courts, years and merge candidate
   expect(parse({ ...answer([]), sum_other_doc_count: 1 })?.truncated).toBe(
     true,
   );
-  expect(
-    parse({ ...answer([]), doc_count_error_upper_bound: 1 })?.truncated,
-  ).toBe(true);
+  expect(parse({ ...answer([]), doc_count_error_upper_bound: 1 })).toBeNull();
   expect(
     parse(answer([courtBucket("court", [range("1899", 1)])]))?.truncated,
   ).toBe(true);
@@ -179,6 +177,9 @@ test("the engine plan bounds intermediate courts and counts document identities 
   });
   expect(aggregation.terms.size).toBeLessThanOrEqual(
     CASE_LAW_COURT_YEAR_BUCKET_LIMIT,
+  );
+  expect(aggregation.terms.segment_size).toBeLessThanOrEqual(
+    aggregation.terms.size * 2,
   );
   expect(aggregation.aggs.years.range.ranges).toBe(yearRanges);
   expect(aggregation.aggs.years.aggs.decisions).toEqual({

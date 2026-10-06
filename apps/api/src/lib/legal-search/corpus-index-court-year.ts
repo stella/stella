@@ -8,7 +8,9 @@ import type { CorpusYearRange } from "./corpus-index-search-facets";
 
 /** Bound intermediate courts; the shared contract caps the published matrix. */
 const COURT_CANDIDATE_LIMIT = LIMITS.caseLawFacetLimit + 1;
-const COURT_SEGMENT_SIZE = 5000;
+// Nested year/cardinality states are allocated per candidate court. Keep the
+// split depth bounded too; incomplete merges are rejected by the decoder.
+const COURT_SEGMENT_SIZE = COURT_CANDIDATE_LIMIT * 2;
 
 type CourtYearAggregationOptions = {
   decisionCountField: string;
@@ -65,13 +67,13 @@ export const parseCourtYearAggregation = ({
     omitted < 0 ||
     typeof errorBound !== "number" ||
     !Number.isFinite(errorBound) ||
-    errorBound < 0
+    errorBound !== 0
   ) {
     return null;
   }
   const years = new Map(yearRanges.map(({ key }) => [key, Number(key)]));
   const buckets: CorpusCourtYearBucket[] = [];
-  let truncated = omitted > 0 || errorBound > 0;
+  let truncated = omitted > 0;
   for (const court of aggregation["buckets"]) {
     if (
       !isRecord(court) ||
