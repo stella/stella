@@ -495,10 +495,14 @@ describe("the request lifecycle", () => {
       metricLines
         .map((line) => JSON.parse(line))
         .filter((record) => "RequestDuration" in record)
-        .map((record) => [record["http.route"], record.class]),
+        .map((record) => [
+          record["http.route"],
+          record.class,
+          "_aws" in record,
+        ]),
     ).toEqual([
-      ["/v1/case/decisions/:decisionId/citations/summary", "search"],
-      ["/v1/case/sitemap/shards", "batch"],
+      ["/v1/case/decisions/:decisionId/citations/summary", "search", true],
+      ["/v1/case/sitemap/shards", "batch", false],
     ]);
   });
 
