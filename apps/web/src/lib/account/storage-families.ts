@@ -118,6 +118,7 @@ export const DEVICE_STORAGE_FAMILIES = [
   { area: "local", prefix: "stella.templates.density" },
   { area: "local", prefix: "stella-dev" },
   { area: "local", prefix: "stella.session-signal" },
+  { area: "local", prefix: "stella:chat-turn-notifications" },
   { area: "session", prefix: "stella:preload-reload-at" },
   { area: "session", prefix: "stella.devQuickStart.attempt" },
   { area: "session", prefix: "stella.storage-owner" },

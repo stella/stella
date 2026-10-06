@@ -73,7 +73,6 @@ import {
 import { openEntityInInspector } from "@/components/chat/entity-open";
 import "@/components/chat/create-document-draft-inspector";
 import type { CreateDocumentDestination } from "@/components/chat/needs-matter-card";
-import "@/components/chat/create-document-draft-inspector";
 import { StreamdownMentionLink } from "@/components/chat/streamdown-mention-link";
 import { useInspectorCommandStore } from "@/components/inspector/inspector-command-store";
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";

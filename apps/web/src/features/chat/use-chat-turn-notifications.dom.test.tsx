@@ -9,6 +9,7 @@ import {
 } from "bun:test";
 
 import messages from "@/i18n/langs/en.json";
+import { browserStorage, deviceStorage } from "@/lib/account/browser-storage";
 
 import type { ChatTurnPhase } from "./turn-notifications.logic";
 
@@ -61,7 +62,7 @@ beforeEach(() => {
   instances.length = 0;
   permission = "granted";
   pageInSight = false;
-  localStorage.clear();
+  browserStorage("local")?.clear();
 });
 afterEach(cleanup);
 afterAll(async () => {
@@ -152,7 +153,7 @@ describe("setChatTurnNotificationsEnabled", () => {
 
     expect(await setChatTurnNotificationsEnabled(true)).toBe("denied");
     expect(
-      localStorage.getItem(CHAT_TURN_NOTIFICATIONS_STORAGE_KEY),
+      deviceStorage("local").getItem(CHAT_TURN_NOTIFICATIONS_STORAGE_KEY),
     ).toBeNull();
   });
 
@@ -161,7 +162,7 @@ describe("setChatTurnNotificationsEnabled", () => {
 
     expect(await setChatTurnNotificationsEnabled(false)).toBe("off");
     expect(
-      localStorage.getItem(CHAT_TURN_NOTIFICATIONS_STORAGE_KEY),
+      deviceStorage("local").getItem(CHAT_TURN_NOTIFICATIONS_STORAGE_KEY),
     ).toBeNull();
   });
 
