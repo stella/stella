@@ -2,6 +2,7 @@ import { expect, test } from "@playwright/test";
 import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 
+import { courtTierLabelsForLanguage } from "@stll/api-contract/case-law-court-tier-locales";
 import { VISUAL_SANDBOX_PATH } from "@stll/api-contract/visual-sandbox";
 
 import { treemapFixture } from "../src/handlers/visual-sandbox/browser/treemap-fixture";
@@ -122,6 +123,38 @@ for (const direction of ["ltr", "rtl"] as const) {
             cells.map((cell) => cell.getAttribute("fill")),
           );
       const initialFill = await cellFills();
+      const categoryFills = new Map<string, string>();
+      for (const court of treemapFixture.children) {
+        const fill = await svg
+          .locator("text")
+          .filter({ hasText: court.label })
+          .evaluate((label) => {
+            const cellKey = label.dataset.tsKey?.replace(/:label$/u, "");
+            const cell = Array.from(
+              label.closest("svg")?.querySelectorAll("rect") ?? [],
+            ).find((candidate) => candidate.dataset.tsKey === cellKey);
+            return cell ? getComputedStyle(cell).fill : undefined;
+          });
+        expect(fill).toBeTruthy();
+        if (!fill) {
+          throw new TypeError("Court category requires a rendered cell fill");
+        }
+        const swatch = guest
+          .locator('[data-color-mode="category"] > span')
+          .filter({ hasText: courtTierLabelsForLanguage("cs")[court.tier] })
+          .locator("span");
+        expect(
+          await swatch.evaluate(
+            (element) => getComputedStyle(element).backgroundColor,
+          ),
+        ).toBe(fill);
+        const existingFill = categoryFills.get(court.tier);
+        if (existingFill !== undefined) {
+          expect(fill).toBe(existingFill);
+        }
+        categoryFills.set(court.tier, fill);
+      }
+      expect(new Set(categoryFills.values()).size).toBe(categoryFills.size);
       await guest.locator("#color").click();
       await expect(guest.locator('[data-color-mode="treatment"]')).toHaveText(
         "——",
