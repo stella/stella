@@ -6,7 +6,7 @@
   "scripts": {
     "install:browser": "playwright-core install chromium",
     "test": "bun test src",
-    "test:browser": "bun test browser",
+    "test:browser": "bun test browser ../../scripts/visual-preview-composition.browser.test.ts",
     "typecheck": "bun ../../packages/scripts/src/tsc-native.ts --noEmit",
     "lint": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --report-unused-disable-directives-severity=error --type-aware --type-check apps/visual-preview",
     "format": "bun ../../scripts/run-oxfmt.ts ."
@@ -21,5 +21,6 @@
   "devDependencies": {
     "@stll/typescript-config": "workspace:*",
     "bun-types": "catalog:"
-  }
+  },
+  "crawlPosture": "unserved"
 }

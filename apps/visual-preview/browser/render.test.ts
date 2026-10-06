@@ -1,18 +1,11 @@
 import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
-import { chromium } from "playwright-core";
 import type { Browser } from "playwright-core";
 
 import { VISUAL_PREVIEW_LIMITS } from "@stll/api-contract/visual-preview";
 
-import {
-  renderVisual,
-  VisualRenderTimeoutError,
-  type VisualPreviewLaunchOptions,
-} from "../src/render";
-
-const launch = async ({ args }: VisualPreviewLaunchOptions) =>
-  chromium.launch({ headless: true, args });
+import { renderVisual, VisualRenderTimeoutError } from "../src/render";
+import { launchPreviewBrowser as launch } from "./launch";
 
 describe("composed visual preview", () => {
   test("renders a PNG with bounded diagnostics and content size", async () => {
@@ -172,39 +165,4 @@ describe("composed visual preview", () => {
       expect(JSON.stringify(result.error)).not.toContain("Private example");
     }
   });
-});
-
-// The same document owner supplies the web frame and the preview; the renderer
-// receives its finished srcdoc rather than reconstructing its policy/runtime.
-test("previews the canonical composed sandbox document unchanged", async () => {
-  const { VISUAL_INNER_POLICY } =
-    await import("../../api/src/handlers/visual-sandbox/document");
-  const { composeVisualDocument } =
-    await import("../../api/src/handlers/visual-sandbox/srcdoc");
-  const { sanitizeVisualHtml } =
-    await import("../../api/src/handlers/visual-sandbox/sanitize");
-  const runtime = await import(
-    "../../api/src/handlers/visual-sandbox/generated/runtime.js.txt",
-    { with: { type: "text" } }
-  );
-  const html = sanitizeVisualHtml(
-    '<h1>Example composed visual</h1><script>parent.postMessage({kind:"ready"},"*")</script>',
-  ).unwrap();
-  const document = composeVisualDocument({
-    data: {},
-    html,
-    runtime: runtime.default,
-    policy: VISUAL_INNER_POLICY,
-  });
-  const result = await renderVisual({
-    launch,
-    input: { document, viewport: { width: 1200 } },
-  });
-  expect(Result.isOk(result)).toBe(true);
-  if (Result.isError(result)) {
-    return;
-  }
-  expect(result.value.readyFired).toBe(true);
-  expect(result.value.consoleErrors).toEqual([]);
-  expect(result.value.blockedRequests).toBe(0);
 });
