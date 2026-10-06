@@ -143,8 +143,8 @@ const ENVIRONMENT_NOISE_PATTERNS: readonly RegExp[] = [
 const EXTENSION_FRAME = /^(?:chrome|moz|safari(?:-web)?)-extension:\/\//u;
 
 // API answers the UI already turns into a state (sign in, no access, not
-// found, a rejected provider key or continuation). Other 4xx and every 5xx
-// stay reported.
+// found, a rejected provider key or continuation, a file the upload scan
+// refused). Other 4xx and every 5xx stay reported.
 const API_ERROR_TYPES: ReadonlySet<string> = new Set([
   "ApiError",
   "StreamReadError",
@@ -153,6 +153,7 @@ const EXPECTED_API_STATUSES: ReadonlySet<number> = new Set([401, 403, 404]);
 const EXPECTED_API_CODES: ReadonlySet<string> = new Set([
   "ai_config_provider_validation_failed",
   "chat_continuation_rejected",
+  "file_security_rejected",
 ]);
 
 const hasExtensionFrame = (entry: unknown): boolean => {
