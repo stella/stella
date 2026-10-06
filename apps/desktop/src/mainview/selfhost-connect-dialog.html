@@ -205,8 +205,9 @@
         document.getElementById("subtitle").textContent = params.get("detail");
         document.querySelector(".details").hidden = true;
         document.getElementById("cancelBtn").textContent = strings.close;
-        document.getElementById("connectBtn").textContent =
-          params.get("action");
+        const action = params.get("action");
+        document.getElementById("connectBtn").hidden = !action;
+        document.getElementById("connectBtn").textContent = action;
       }
 
       function respond(approved) {
