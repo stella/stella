@@ -57,7 +57,10 @@ describe("decision storage normalization", () => {
             [field]: value,
           };
           const languageGroupKey = decisionLanguageGroupKey({
-            ...input,
+            caseNumber: input.caseNumber,
+            country: input.country,
+            ecli: input.ecli,
+            sourceDocumentId: input.sourceDocumentId,
             sourceId: "019a08bf-0600-7000-8000-000000000001",
           });
           const fitsBytes =
@@ -120,7 +123,10 @@ describe("decision storage normalization", () => {
     const court = "😀".repeat(480);
     const sourceId = "019a08bf-0600-7000-8000-000000000001";
     const languageGroupKey = decisionLanguageGroupKey({
-      ...decision,
+      caseNumber: decision.caseNumber,
+      country: decision.country,
+      ecli: decision.ecli,
+      sourceDocumentId: decision.sourceDocumentId,
       sourceId,
     });
     const typeBytes =
@@ -134,8 +140,8 @@ describe("decision storage normalization", () => {
       decisionType: ` JMÉNEM REPUBLIKY ${"X".repeat(typeBytes)}\0 `,
     };
     const normalized = sanitizeResult(input);
-    expect(normalized.court).toBe(court);
-    expect(normalized.decisionType).toBe("x".repeat(typeBytes));
+    expect(normalized.court === court).toBe(true);
+    expect(normalized.decisionType === "x".repeat(typeBytes)).toBe(true);
     expect(
       sanitizeResult({
         ...decision,
@@ -168,7 +174,13 @@ describe("decision storage normalization", () => {
       { country: "USA", ecli: "ignored", sourceDocumentId: "é😀".repeat(100) },
     ]) {
       const input = { ...decision, ...identity, court: "" };
-      const languageGroupKey = decisionLanguageGroupKey({ ...input, sourceId });
+      const languageGroupKey = decisionLanguageGroupKey({
+        caseNumber: input.caseNumber,
+        country: input.country,
+        ecli: input.ecli,
+        sourceDocumentId: input.sourceDocumentId,
+        sourceId,
+      });
       const remaining =
         CASE_LAW_SEARCH_CANDIDATE_ROW_MAX_BYTES -
         Buffer.byteLength(languageGroupKey);
@@ -176,7 +188,11 @@ describe("decision storage normalization", () => {
         const candidate = { ...input, court: "x".repeat(remaining + delta) };
         expect(fitsDecisionSearchCandidateRow(candidate)).toBe(delta <= 0);
         expect(fitsDecisionSearchCandidateRow(candidate)).toBe(
-          fitsSearchCandidateRow({ ...candidate, languageGroupKey }),
+          fitsSearchCandidateRow({
+            court: candidate.court,
+            decisionType: candidate.decisionType,
+            languageGroupKey,
+          }),
         );
       }
     }

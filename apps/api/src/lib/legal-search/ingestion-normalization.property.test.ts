@@ -51,7 +51,10 @@ const normalizationProperty = (
         [field]: value,
       };
       const languageGroupKey = decisionLanguageGroupKey({
-        ...input,
+        caseNumber: input.caseNumber,
+        country: input.country,
+        ecli: input.ecli,
+        sourceDocumentId: input.sourceDocumentId,
         sourceId: "019a08bf-0600-7000-8000-000000000001",
       });
       const fitsBytes =
@@ -110,7 +113,10 @@ test("generated decision candidates fit the aggregate UTF8 budget or receive a t
       (court, ecli, decisionType) => {
         const input = { ...decision, court, ecli, decisionType };
         const languageGroupKey = decisionLanguageGroupKey({
-          ...input,
+          caseNumber: input.caseNumber,
+          country: input.country,
+          ecli: input.ecli,
+          sourceDocumentId: input.sourceDocumentId,
           sourceId: "019a08bf-0600-7000-8000-000000000001",
         });
         const bytes =
@@ -133,7 +139,7 @@ test("generated decision candidates fit the aggregate UTF8 budget or receive a t
           return;
         }
         const normalized = result.unwrap();
-        expect(normalized.court).toBe(court);
+        expect(normalized.court === court).toBe(true);
         expect(
           sanitizeResult({
             ...decision,
