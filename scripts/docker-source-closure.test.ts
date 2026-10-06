@@ -8,6 +8,7 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import * as v from "valibot";
 
 import {
   commandEntries,
@@ -31,6 +32,24 @@ const tree = (files: readonly string[]): SourceTree =>
   new Map(files.map((file) => [`/app/${file}`, file]));
 
 describe("Docker source closure", () => {
+  test("checks the sandbox install and cache commands without hiding source runners", () => {
+    const source = readFileSync(
+      new URL(
+        "../packages/agent-engine/docker/sandbox.Dockerfile",
+        import.meta.url,
+      ),
+      "utf-8",
+    );
+    expect(checkDockerSource(root, source, new Map(), new Map())).toEqual([]);
+    expect(
+      checkDockerSource(
+        root,
+        `${source}\nRUN bun absent.ts`,
+        new Map(),
+        new Map(),
+      ),
+    ).toEqual(["Entry is unavailable: /workspace/absent.ts"]);
+  });
   test("keeps commands after comment lines in a continued instruction", () => {
     for (const newline of ["\n", "\r\n"]) {
       expect(
@@ -92,25 +111,29 @@ describe("Docker source closure", () => {
   });
 
   test("runs after source hydration in the installed light job with a fixed total budget", () => {
-    const workflow = Bun.YAML.parse(
-      readFileSync(
-        new URL("../.github/workflows/ci.yml", import.meta.url),
-        "utf-8",
+    const workflow = v.parse(
+      v.object({
+        jobs: v.object({
+          "ci-checks-rest": v.object({
+            steps: v.array(
+              v.object({
+                name: v.optional(v.string()),
+                run: v.optional(v.string()),
+                if: v.optional(v.string()),
+                "timeout-minutes": v.optional(v.number()),
+              }),
+            ),
+          }),
+        }),
+      }),
+      Bun.YAML.parse(
+        readFileSync(
+          new URL("../.github/workflows/ci.yml", import.meta.url),
+          "utf-8",
+        ),
       ),
-    ) as {
-      jobs: Record<
-        string,
-        {
-          steps: {
-            name?: string;
-            run?: string;
-            if?: string;
-            "timeout-minutes"?: number;
-          }[];
-        }
-      >;
-    };
-    const steps = workflow.jobs["ci-checks-rest"]?.steps ?? [];
+    );
+    const steps = workflow.jobs["ci-checks-rest"].steps;
     const restore = steps.findIndex((step) =>
       step.run?.includes("ci-generated-sources.ts restore"),
     );
@@ -196,6 +219,32 @@ describe("Docker source closure", () => {
     expect(
       sourceClosureProblems(root, tree([file]), ["/app/types.ts"]),
     ).toEqual([]);
+  });
+
+  test("declarations cannot satisfy a runtime source import", () => {
+    const config = put(
+      "apps/declarations/tsconfig.json",
+      JSON.stringify({ compilerOptions: { paths: { "@/*": ["./src/*"] } } }),
+    );
+    const declaration = put(
+      "apps/declarations/src/declared.d.ts",
+      "export declare const value: number;",
+    );
+    for (const [index, specifier] of [
+      "./declared",
+      "./declared.js",
+      "@/declared",
+    ].entries()) {
+      const entry = put(
+        `apps/declarations/src/entry-${index}.ts`,
+        `import "${specifier}";`,
+      );
+      expect(
+        sourceClosureProblems(root, tree([config, declaration, entry]), [
+          `/app/${entry}`,
+        ]),
+      ).toEqual([`${entry} imports ${specifier}, unavailable in Docker stage`]);
+    }
   });
 
   test("resolves aliases using only stage sources", () => {

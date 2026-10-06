@@ -8,6 +8,7 @@ import {
 } from "node:fs";
 import path from "node:path";
 import ts from "typescript";
+import * as v from "valibot";
 
 import { specifierCandidates } from "./generated-imports";
 import { lexShell } from "./install-free-ci";
@@ -30,7 +31,15 @@ const text = (root: string, file: string) => {
 };
 
 export const dockerInstructions = (source: string): string[] => {
-  if (/^\s*(?:RUN|COPY)\s+.*<<|^\s*#\s*escape=/mu.test(source)) {
+  if (
+    source.split(/\r?\n/u).some((line) => {
+      const trimmed = line.trimStart();
+      return (
+        (/^(?:RUN|COPY)\s/iu.test(trimmed) && trimmed.includes("<<")) ||
+        /^#\s*escape=/iu.test(trimmed)
+      );
+    })
+  ) {
     panic("Unsupported Docker heredoc or escape directive");
   }
   return source
@@ -62,7 +71,11 @@ export const inDockerContext = (file: string, source: string): boolean => {
       if (include) {
         pattern = pattern.slice(1);
       }
-      pattern = pattern.replace(/^\/+|\/+$/gu, "");
+      let end = pattern.length;
+      while (pattern.at(end - 1) === "/" && end > 0) {
+        end -= 1;
+      }
+      pattern = pattern.slice(0, end).replace(/^\/+/u, "");
       if (pattern !== ".") {
         rules.push({ include, glob: new Bun.Glob(pattern) });
       }
@@ -143,7 +156,7 @@ const runtimeImports = (file: string, source: string): string[] => {
   const visit = (node: ts.Node) => {
     if (
       ts.isImportDeclaration(node) &&
-      !node.importClause?.isTypeOnly &&
+      node.importClause?.phaseModifier !== ts.SyntaxKind.TypeKeyword &&
       ts.isStringLiteral(node.moduleSpecifier)
     ) {
       const bindings = node.importClause?.namedBindings;
@@ -214,10 +227,19 @@ const configurationOptions = (
       panic(`Invalid tsconfig: ${origin}`);
     }
     const directory = path.posix.dirname(key);
-    const parent = parsed.config.extends;
-    if (parent !== undefined && typeof parent !== "string") {
-      panic(`Unsupported tsconfig extends: ${origin}`);
-    }
+    const config = v.parse(
+      v.looseObject({
+        extends: v.optional(v.string()),
+        compilerOptions: v.optional(
+          v.looseObject({
+            baseUrl: v.optional(v.string()),
+            paths: v.optional(v.record(v.string(), v.array(v.string()))),
+          }),
+        ),
+      }),
+      parsed.config,
+    );
+    const parent = config.extends;
     const inherited =
       parent === undefined
         ? {}
@@ -227,25 +249,17 @@ const configurationOptions = (
               : `/app/node_modules/${parent}`,
             active,
           );
-    const options = parsed.config.compilerOptions ?? {};
+    const options = config.compilerOptions ?? {};
     const paths: Record<string, string[]> =
       options.paths === undefined
         ? inherited
         : Object.fromEntries(
-            Object.entries(options.paths).map(([pattern, targets]) => {
-              if (
-                !Array.isArray(targets) ||
-                targets.some((target) => typeof target !== "string")
-              ) {
-                panic(`Invalid tsconfig paths: ${origin}`);
-              }
-              return [
-                pattern,
-                targets.map((target) =>
-                  absolute(absolute(directory, options.baseUrl ?? "."), target),
-                ),
-              ];
-            }),
+            Object.entries(options.paths).map(([pattern, targets]) => [
+              pattern,
+              targets.map((target) =>
+                absolute(absolute(directory, options.baseUrl ?? "."), target),
+              ),
+            ]),
           );
     active.delete(key);
     configCache.set(key, paths);
@@ -263,7 +277,6 @@ const configurationOptions = (
       resolveJsonModule: true,
       allowJs: true,
       customConditions: ["bun", "source"],
-      baseUrl: "/",
     };
     while (directory !== "/") {
       if (tree.has(`${directory}/tsconfig.json`)) {
@@ -292,8 +305,11 @@ export const sourceClosureProblems = (
   );
   const workspaces = new Map(
     manifests.map(([file, origin]) => {
-      const manifest = JSON.parse(text(root, origin));
-      return [manifest.name as string, path.posix.dirname(file)];
+      const manifest = v.parse(
+        v.object({ name: v.string() }),
+        JSON.parse(text(root, origin)),
+      );
+      return [manifest.name, path.posix.dirname(file)];
     }),
   );
   const lockfile = tree.get("/app/bun.lock");
@@ -321,14 +337,24 @@ export const sourceClosureProblems = (
     }
   }
   const physical = (file: string) => {
-    const match = /^\/app\/node_modules\/((?:@[^/]+\/)?[^/]+)(.*)$/u.exec(file);
-    const workspace =
-      match === null ? undefined : workspaces.get(match[1] ?? "");
-    return workspace === undefined ? file : workspace + (match?.[2] ?? "");
+    const prefix = "/app/node_modules/";
+    if (!file.startsWith(prefix)) {
+      return file;
+    }
+    const suffix = file.slice(prefix.length);
+    const parts = suffix.split("/");
+    const name = parts.at(0)?.startsWith("@")
+      ? parts.slice(0, 2).join("/")
+      : parts.at(0);
+    const workspace = workspaces.get(name ?? "");
+    return workspace === undefined
+      ? file
+      : workspace + suffix.slice(name?.length ?? 0);
   };
+  const sourceAvailable = (file: string) =>
+    !/\.d\.[cm]?ts$/u.test(file) && tree.has(physical(file));
   const host: ts.ModuleResolutionHost = {
-    fileExists: (file) =>
-      !/\.d\.[cm]?ts$/u.test(file) && tree.has(physical(file)),
+    fileExists: sourceAvailable,
     readFile: (file) => {
       const origin = tree.get(physical(file));
       return typeof origin === "string" ? text(root, origin) : undefined;
@@ -370,9 +396,7 @@ export const sourceClosureProblems = (
         "",
       );
       if (clean.startsWith(".")) {
-        const resolved = specifierCandidates(file, clean).find((candidate) =>
-          tree.has(candidate),
-        );
+        const resolved = specifierCandidates(file, clean).find(sourceAvailable);
         if (resolved === undefined) {
           problems.push(
             `${origin} imports ${specifier}, unavailable in Docker stage`,
@@ -406,13 +430,13 @@ export const sourceClosureProblems = (
             specifierCandidates(
               "/entry.ts",
               absolute(
-                options.baseUrl ?? "/app",
+                "/app",
                 target.replace("*", () => middle),
               ),
             ),
           );
         })
-        .find((candidate) => tree.has(candidate));
+        .find(sourceAvailable);
       const resolved =
         alias ??
         ts.resolveModuleName(clean, file, options, host).resolvedModule
@@ -483,7 +507,7 @@ const sourceCommandEntries = (
         JSON.parse(text(root, origin)).name === name,
     );
     if (owner === undefined) {
-      panic(`Filtered workspace is unavailable: ${name}`);
+      panic(`Filtered workspace is unavailable: ${String(name)}`);
     }
     commandCwd = path.posix.dirname(owner[0]);
     words = words.slice(2);
@@ -613,10 +637,14 @@ const walkCommand = (
       continue;
     }
     if (["npm", "yarn", "pnpm", "npx", "bunx", "tsc"].includes(program ?? "")) {
-      if (program === "npm" && words[0] === "install") {
+      if (
+        program === "npm" &&
+        (words[0] === "install" ||
+          (words[0] === "cache" && words[1] === "clean"))
+      ) {
         continue;
       }
-      panic(`Unsupported source runner: ${program}`);
+      panic(`Unsupported source runner: ${String(program)}`);
     }
     if (program !== "bun" && program !== "node") {
       continue;
@@ -666,7 +694,7 @@ const copyInstruction = (
   }
   const sourceTree = from === undefined ? context : stages.get(from)?.files;
   if (sourceTree === undefined) {
-    panic(`Unknown COPY stage: ${from}`);
+    panic(`Unknown COPY stage: ${String(from)}`);
   }
   // Runtime generated/native assets belong to the packaged-asset guard.
   if (from !== undefined && !["pruner", "install-inputs"].includes(from)) {
@@ -800,7 +828,7 @@ export const checkRepositoryDockerSources = (root: string): string[] => {
           { cwd: root, env: { ...process.env, TURBO_TELEMETRY_DISABLED: "1" } },
         );
         if (prune.exitCode !== 0) {
-          panic(`Turbo prune failed for ${file}: ${prune.stderr}`);
+          panic(`Turbo prune failed for ${file}: ${prune.stderr.toString()}`);
         }
         for (const entry of filesBelow(path.join(directory, "full"))) {
           if (inDockerContext(entry, ignore)) {
