@@ -172,7 +172,7 @@ test("every generated-source consumer restores the same-run artifact before chec
 test("the documentation job consumes Markdown without generated-source hydration", () => {
   const job = workflow.jobs["ci-checks-docs"];
   expect(job?.needs).toBe("ci-plan");
-  expect(job?.if).toContain(
+  expect(job?.["if"]).toContain(
     "needs.ci-plan.outputs.docs_checks_required == 'true'",
   );
   expect(

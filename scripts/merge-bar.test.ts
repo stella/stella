@@ -1879,8 +1879,16 @@ describe("green result freshness", () => {
         readFileSync(path.join(REPO_ROOT, ".github/workflows/ci.yml"), "utf-8"),
       ) ?? [];
     const byId = new Map(jobs.map((job) => [job.id, job]));
-    expect(byId.get("ci-checks-generated")?.scope).toEqual({ type: "always" });
-    expect(byId.get("parser-version-guard")?.scope).toEqual({ type: "always" });
+    for (const job of ["ci-checks-generated", "parser-version-guard"]) {
+      expect(byId.get(job)?.scope).toEqual({
+        type: "selector",
+        variable: "package_checks_required",
+      });
+    }
+    expect(byId.get("ci-checks-docs")?.scope).toEqual({
+      type: "selector",
+      variable: "docs_checks_required",
+    });
     for (const job of [
       "e2e-production-shard",
       "marketing-screenshots",

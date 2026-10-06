@@ -43,7 +43,6 @@ const workflow = readFileSync(
   "utf-8",
 );
 const selector = extractPlanSelector(workflow);
-const selectorStart = workflow.indexOf(selector);
 
 type BashCase = {
   flags: readonly string[];
@@ -1891,9 +1890,12 @@ const packageScopeStart = workflow.indexOf(
   "          package_checks_required=true\n          if [[",
 );
 const packageScopeEnd = workflow.indexOf(
-  "          # Path scopes for the build/smoke jobs",
+  "          docs_checks_required=false",
   packageScopeStart,
 );
+if (packageScopeStart === -1 || packageScopeEnd <= packageScopeStart) {
+  panic("Package scope must be bounded by the documentation scope");
+}
 const packageScope = workflow.slice(packageScopeStart, packageScopeEnd);
 
 const packageChecksPlan = (files: readonly string[]) => {
@@ -1962,7 +1964,7 @@ test("transfer read guard runs for API-only pull request changes", () => {
 
 test("CLI packaging parity runs whenever CLI sources, codegen or generated outputs change", () => {
   expect(packageScopeStart).toBeGreaterThan(-1);
-  expect(packageScopeStart).toBe(selectorStart);
+  expect(selector).toContain(packageScope);
   const parity = Object.entries(ciJobs).flatMap(([job, body]) =>
     (v.is(v.object({ steps: v.array(v.unknown()) }), body)
       ? jobSteps(body)
@@ -3701,9 +3703,9 @@ test("each folded service step follows its own dependency scope at PR depth", ()
     "true",
   ]);
   expect(runSelector(["docs/guide.md"], scopes, "full")).toEqual([
-    "true",
-    "true",
-    "true",
+    "false",
+    "false",
+    "false",
     "false",
   ]);
 });
@@ -4006,7 +4008,20 @@ test("every gated merge-group job has a required PR path or an explicit queue-on
       "pull_request",
       "fix: update checks",
     ),
-  ).toEqual(scopes.map(() => "true"));
+  ).toEqual(
+    scopes.map((scope) =>
+      scope === "docs_checks_required" ? "false" : "true",
+    ),
+  );
+  expect(
+    runSelector(
+      ["README.md", "apps/desktop/README.md"],
+      ["docs_checks_required"],
+      "fast",
+      "false",
+      "pull_request",
+    ),
+  ).toEqual(["true"]);
 });
 
 test("parity rejects new queue-only jobs, ungated PR paths and stale exemptions", () => {

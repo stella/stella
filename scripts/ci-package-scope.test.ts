@@ -235,8 +235,8 @@ test("conflicting repeated path declarations fail closed in either order", () =>
       write(
         "scripts/conflicting.test.ts",
         `import { readFileSync, mkdtempSync } from "node:fs";
-function fixture() { ${definitions.at(0)} }
-function repository() { ${definitions.at(1)} readFileSync(path.join(root, "README.md")); }`,
+function fixture() { ${definitions.at(0) ?? ""} }
+function repository() { ${definitions.at(1) ?? ""} readFileSync(path.join(root, "README.md")); }`,
       );
       const errors = spyOn(console, "error").mockImplementation(() => {});
       try {
@@ -271,6 +271,7 @@ function second() { const file = INPUT; readFileSync(file); }`,
 test("named filesystem wrappers declare their real Markdown call inputs", () => {
   for (const body of [
     'return readFileSync(name, "utf8");',
+    'const target = name; return readFileSync(target, "utf8");',
     'if (name) { return readFileSync(name, "utf8"); } return "";',
   ]) {
     repository((root, write) => {
@@ -286,6 +287,125 @@ readDoc("README.md");`,
       expect(markdownChecks({ root, changed: ["external.md"] })).toEqual([]);
     });
   }
+});
+
+test("arrow filesystem wrappers retain constant and literal call paths", () => {
+  for (const declaration of [
+    "const readDoc = name => readFileSync(name);",
+    "const readDoc = (name: string) => { const target = name; return readFileSync(target); };",
+  ]) {
+    repository((root, write) => {
+      write(
+        "scripts/arrow.test.ts",
+        `import { readFileSync } from "node:fs";
+        ${declaration} const INPUT = "README.md"; readDoc(INPUT);`,
+      );
+      expect(markdownChecks({ root, changed: ["README.md"] })).toEqual([
+        ["bun", "test", "scripts/arrow.test.ts"],
+      ]);
+    });
+  }
+});
+
+test("filesystem helpers do not turn unrelated arguments into Markdown paths", () => {
+  repository((root, write) => {
+    write(
+      "scripts/helper.test.ts",
+      `import { readFileSync, mkdtempSync } from "node:fs";
+      function run(options: { input: string }) {
+        const root = mkdtempSync("fixture-");
+        return readFileSync(path.join(root, "result.txt"));
+      }
+      const INPUT = "README.md";
+      run(INPUT);`,
+    );
+    expect(requiresPackageChecks({ root, changed: ["README.md"] })).toBe(false);
+    expect(markdownChecks({ root, changed: ["README.md"] })).toEqual([]);
+  });
+});
+
+test("temporary fixture objects retain their external root members", () => {
+  repository((root, write) => {
+    write(
+      "scripts/fixture.test.ts",
+      `import { readFileSync, mkdtempSync } from "node:fs";
+      function fixture() { const root = mkdtempSync("fixture-"); return { root }; }
+      const data = fixture();
+      const target = path.join(data.root, "README.md");
+      readFileSync(target);`,
+    );
+    expect(requiresPackageChecks({ root, changed: ["README.md"] })).toBe(false);
+    expect(markdownChecks({ root, changed: ["README.md"] })).toEqual([]);
+  });
+});
+
+test("unrelated object declarations do not obscure a temporary path constant", () => {
+  repository((root, write) => {
+    write(
+      "scripts/object.test.ts",
+      `import { readFileSync, mkdtempSync } from "node:fs";
+      function unrelated() { const output = { value: "data" }; }
+      function fixture() {
+        const root = mkdtempSync("fixture-");
+        const output = path.join(root, "README.md"); readFileSync(output);
+      }`,
+    );
+    expect(requiresPackageChecks({ root, changed: ["README.md"] })).toBe(false);
+    expect(markdownChecks({ root, changed: ["README.md"] })).toEqual([]);
+  });
+});
+
+test("existing all-Markdown policy commands cover their parameterized readers exactly", () => {
+  repository((root, write) => {
+    const reader = "scripts/policy-reader.ts";
+    const command = `bun ${reader} --check`;
+    write(
+      ".github/workflows/ci.yml",
+      JSON.stringify({
+        jobs: {
+          "ci-checks-policy": {
+            steps: [
+              {
+                name: "Policy",
+                if: "steps.install.outcome == 'success'",
+                run: command,
+              },
+            ],
+          },
+        },
+      }),
+    );
+    write(
+      reader,
+      `import { readFileSync } from "node:fs";
+      const INPUT = "README.md";
+      function check(root: string) { readFileSync(path.join(root, INPUT)); }
+      check(process.cwd());`,
+    );
+    expect(requiresPackageChecks({ root, changed: ["README.md"] })).toBe(false);
+    expect(markdownChecks({ root, changed: ["README.md"] })).toEqual([
+      ["bash", "-e", "-c", command],
+    ]);
+    write(
+      ".github/workflows/ci.yml",
+      JSON.stringify({
+        jobs: {
+          "ci-checks-policy": {
+            steps: [
+              {
+                name: "Policy",
+                if: "steps.install.outcome == 'success'",
+                run: `bun ${reader}.different --check`,
+              },
+            ],
+          },
+        },
+      }),
+    );
+    expect(() => markdownChecks({ root, changed: ["README.md"] })).toThrow(
+      `${reader}: Markdown read has an unresolved path expression`,
+    );
+  });
 });
 
 test("directory readers retain Markdown inputs at the root and outside docs", () => {
@@ -598,6 +718,100 @@ test("an unresolved Markdown path names its owner and retains package checks", (
       expect(String(errors.mock.calls.at(0)?.at(1))).toContain(
         "scripts/computed-reader.test.ts",
       );
+    } finally {
+      errors.mockRestore();
+    }
+  });
+});
+
+test("unresolved read parameters retain Markdown constants through aliases and nested calls", () => {
+  for (const expression of [
+    "path.join(root, INPUT)",
+    "path.join(root, ALIAS)",
+    "path.join(root, directory(), ALIAS)",
+    "resolveInput(root, ALIAS)",
+  ]) {
+    repository((root, write) => {
+      const reader = "scripts/parameter-reader.test.ts";
+      write(
+        reader,
+        `import { readFileSync } from "node:fs";
+         const INPUT = "README.md";
+         const ALIAS = INPUT;
+         function check(root: string) { readFileSync(${expression}); }
+         check(process.cwd());`,
+      );
+      const errors = spyOn(console, "error").mockImplementation(() => {});
+      try {
+        expect(requiresPackageChecks({ root, changed: ["README.md"] })).toBe(
+          true,
+        );
+        expect(String(errors.mock.calls.at(0)?.at(1))).toContain(reader);
+        expect(() => markdownChecks({ root, changed: ["README.md"] })).toThrow(
+          `${reader}: Markdown read has an unresolved path expression`,
+        );
+      } finally {
+        errors.mockRestore();
+      }
+    });
+  }
+});
+
+test("imported Markdown constants and aliases remain named unresolved inputs", () => {
+  repository((root, write) => {
+    write("scripts/names.ts", 'export const INPUT = "README.md";');
+    write(
+      "scripts/paths.ts",
+      'import { INPUT } from "./names"; export const ALIAS = INPUT;',
+    );
+    const reader = "scripts/imported-reader.test.ts";
+    write(
+      reader,
+      `import { readFileSync } from "node:fs";
+      import { ALIAS as DOC } from "./paths";
+      function check(root: string) { readFileSync(path.join(root, DOC)); }
+      check(process.cwd());`,
+    );
+    const errors = spyOn(console, "error").mockImplementation(() => {});
+    try {
+      expect(requiresPackageChecks({ root, changed: ["README.md"] })).toBe(
+        true,
+      );
+      expect(String(errors.mock.calls.at(0)?.at(1))).toContain(reader);
+    } finally {
+      errors.mockRestore();
+    }
+    expect(() => markdownChecks({ root, changed: ["README.md"] })).toThrow(
+      `${reader}: Markdown read has an unresolved path expression`,
+    );
+  });
+});
+
+test("declared Markdown constants retain only their unresolved reader inputs", () => {
+  repository((root, write) => {
+    const reader = "scripts/imported-root.test.ts";
+    write(
+      reader,
+      `import { readFileSync } from "node:fs";
+       import { ROOT } from "./roots";
+       const INPUT = "docs/coverage.md";
+       export const CI_MARKDOWN_READER_INPUTS = [INPUT];
+       const TARGET = path.resolve(ROOT, INPUT);
+       readFileSync(TARGET);`,
+    );
+    expect(requiresPackageChecks({ root, changed: ["README.md"] })).toBe(false);
+    expect(markdownChecks({ root, changed: ["README.md"] })).toEqual([]);
+    expect(markdownReaders(root)).toContainEqual({
+      file: reader,
+      inputs: ["docs/coverage.md"],
+      kind: "unresolved",
+    });
+    const errors = spyOn(console, "error").mockImplementation(() => {});
+    try {
+      expect(
+        requiresPackageChecks({ root, changed: ["docs/coverage.md"] }),
+      ).toBe(true);
+      expect(String(errors.mock.calls.at(0)?.at(1))).toContain(reader);
     } finally {
       errors.mockRestore();
     }
