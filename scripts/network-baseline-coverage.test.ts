@@ -28,6 +28,17 @@ import {
 } from "./network-baseline-scope";
 
 const directory = mkdtempSync(path.join(os.tmpdir(), "network-coverage-"));
+// A matter route that renders in place, derived from the smoke definitions so
+// a route that later starts redirecting cannot leave these fixtures stale.
+const renderInPlaceRoute = SMOKE_ROUTE_DEFS.find(
+  (def) =>
+    def.expectation === undefined &&
+    def.template.startsWith("/workspaces/$workspaceId/"),
+)?.template;
+if (renderInPlaceRoute === undefined) {
+  throw new Error("Expected a smoke matter route that renders in place.");
+}
+const renderInPlaceRedirectKey = `${renderInPlaceRoute} target`;
 let routeTree: string;
 const entry = { depth: 0, requests: [] };
 const baseline = () =>
@@ -47,6 +58,14 @@ beforeAll(async () => {
   writeFileSync(output, routeTree);
 });
 afterAll(() => rmSync(directory, { recursive: true, force: true }));
+
+/** `value` with the render-in-place route recorded under its redirect key. */
+const withRedirectKey = (value: ReturnType<typeof baseline>) => ({
+  ...Object.fromEntries(
+    Object.entries(value).filter(([route]) => route !== renderInPlaceRoute),
+  ),
+  [renderInPlaceRedirectKey]: entry,
+});
 
 const validate = (
   value = baseline(),
@@ -77,17 +96,9 @@ test("canonical smoke keys and declarations cover the generated authenticated tr
   );
 });
 
-test("a render-in-place expectation rejects the former lists redirect key", () => {
-  const route = SMOKE_ROUTE_DEFS.find(
-    (def) => def.template === "/workspaces/$workspaceId/lists",
-  );
-  expect(route).toBeDefined();
-  expect(route?.expectation?.kind).not.toBe("redirectsTo");
-  const stale = baseline();
-  delete stale["/workspaces/$workspaceId/lists"];
-  stale["/workspaces/$workspaceId/lists target"] = entry;
-  expect(() => validate(stale)).toThrow(
-    'Network baseline route keys differ: missing=["/workspaces/$workspaceId/lists"] stale=["/workspaces/$workspaceId/lists target"]',
+test("a render-in-place expectation rejects a redirect key for its route", () => {
+  expect(() => validate(withRedirectKey(baseline()))).toThrow(
+    `Network baseline route keys differ: missing=["${renderInPlaceRoute}"] stale=["${renderInPlaceRedirectKey}"]`,
   );
 });
 
@@ -153,7 +164,7 @@ test("reviewed declarations cannot retain inactive redirect keys", () => {
   expect(() =>
     validate(baseline(), [
       {
-        route: "/workspaces/$workspaceId/lists target",
+        route: renderInPlaceRedirectKey,
         reason: "Reviewed budget",
         budget: entry,
       },
@@ -253,10 +264,10 @@ test("real prepared context exempts changed redirects and leaves unrelated stale
   const changedRedirect = baseline();
   delete changedRedirect["/settings target"];
   validate(changedRedirect, [], changedRoutes);
-  delete changedRedirect["/workspaces/$workspaceId/lists"];
-  changedRedirect["/workspaces/$workspaceId/lists target"] = entry;
-  expect(() => validate(changedRedirect, [], changedRoutes)).toThrow(
-    'missing=["/workspaces/$workspaceId/lists"] stale=["/workspaces/$workspaceId/lists target"]',
+  expect(() =>
+    validate(withRedirectKey(changedRedirect), [], changedRoutes),
+  ).toThrow(
+    `missing=["${renderInPlaceRoute}"] stale=["${renderInPlaceRedirectKey}"]`,
   );
 });
 
@@ -272,7 +283,7 @@ test("inherited declarations cannot manufacture a missing prepared baseline key"
 
 test("an expectation change needs a matching prepared recording", () => {
   const changedDefs = SMOKE_ROUTE_DEFS.map((def) =>
-    def.template === "/workspaces/$workspaceId/lists"
+    def.template === renderInPlaceRoute
       ? {
           ...def,
           expectation: {
@@ -290,11 +301,9 @@ test("an expectation change needs a matching prepared recording", () => {
       expectedKeys,
     }),
   ).toBe(
-    'Network baseline route keys differ: missing=["/workspaces/$workspaceId/lists target"] stale=["/workspaces/$workspaceId/lists"]',
+    `Network baseline route keys differ: missing=["${renderInPlaceRedirectKey}"] stale=["${renderInPlaceRoute}"]`,
   );
-  const recorded = baseline();
-  delete recorded["/workspaces/$workspaceId/lists"];
-  recorded["/workspaces/$workspaceId/lists target"] = entry;
+  const recorded = withRedirectKey(baseline());
   expect(
     networkBaselineCoverageProblem({
       actualKeys: Object.keys(recorded),
