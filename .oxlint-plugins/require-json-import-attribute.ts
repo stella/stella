@@ -22,7 +22,11 @@ export default eslintCompatPlugin({
             }
             if (
               typeof node.source.value !== "string" ||
-              !node.source.value.endsWith(".json")
+              !(/^data:/iu.test(node.source.value)
+                ? /^data:application\/json(?:;[^,]*)?,/iu.test(
+                    node.source.value,
+                  )
+                : /^[^?#]*\.json(?:[?#]|$)/u.test(node.source.value))
             ) {
               return;
             }
