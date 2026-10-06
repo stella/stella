@@ -47,23 +47,44 @@ export const readTimingArtifact = (contents: string) => {
   );
 };
 
+/**
+ * A missing weight fails the pull request that adds the test file. Shards run
+ * after merge, where a file that landed next to a concurrent change is weighted
+ * by the median instead: a warning, never a red main.
+ */
+export const MISSING_TEST_DURATION = {
+  fail: "fail",
+  warn: "warn",
+} as const;
+
 type AssertTestDurationsOptions = {
   files: readonly string[];
   durations: ReturnType<typeof readDurationWeights>;
+  missing: (typeof MISSING_TEST_DURATION)[keyof typeof MISSING_TEST_DURATION];
   measurements?: Readonly<Record<string, number>>;
 };
+
+const MISSING_TEST_DURATION_FIX =
+  "run bun apps/api/scripts/refresh-test-durations.ts --write";
 
 export const assertTestDurations = ({
   files,
   durations,
+  missing,
   measurements = {},
 }: AssertTestDurationsOptions): void => {
   for (const file of files) {
     const entry = durations[file];
     if (entry === undefined) {
-      panic(
-        `Missing API test duration: ${file}; run bun apps/api/scripts/refresh-test-durations.ts --write`,
+      if (missing === MISSING_TEST_DURATION.fail) {
+        panic(
+          `Missing API test duration: ${file}; ${MISSING_TEST_DURATION_FIX}`,
+        );
+      }
+      console.warn(
+        `::warning::Missing API test duration: ${file} (sharded by the median weight); ${MISSING_TEST_DURATION_FIX}`,
       );
+      continue;
     }
     const recorded = entry.seconds;
     if (!Number.isFinite(recorded) || recorded < 0) {
