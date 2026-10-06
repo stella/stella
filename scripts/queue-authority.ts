@@ -12,7 +12,8 @@
 //            row whose worker module consumes no `Worker` on that queue; a
 //            `Worker` on a queue the registry assigns to another module (or
 //            to none); a `MEMBER_RUN_QUEUES` entry the registry does not
-//            classify as a member run of that module.
+//            classify as a member run of that module; a raw BullMQ worker
+//            import outside the constructor owner.
 //   members  (baselined, keyed without line numbers) a member-run queue whose
 //            worker module never calls the imported `createRootRunActor`
 //            (`<queue>::run-actor`); a member-run module the pinned-handle
@@ -73,6 +74,7 @@ const TASK_BASELINE_COMMENT =
 const API_SOURCE = "apps/api/src/";
 const HOST_TABLE_FILE = "apps/api/src/lib/bullmq-queue.ts";
 const HOST_TABLE_NAME = "BULLMQ_QUEUE_HOSTS";
+const WORKER_CONSTRUCTOR = "BullMqWorker";
 const PINNED_HANDLES_ROW = "pinned-workspace-handles";
 const RUN_ACTOR = "createRootRunActor";
 const RUN_ACTOR_MODULE = "@/api/lib/root-scoped-db";
@@ -408,8 +410,21 @@ const resolveStrings = (
     : resolveStrings(exported, { ...deeper, relativePath: target, file });
 };
 
+const accessedMemberName = (node: ts.Node): string | null => {
+  if (ts.isPropertyAccessExpression(node)) {
+    return node.name.text;
+  }
+  if (
+    ts.isElementAccessExpression(node) &&
+    ts.isStringLiteralLike(node.argumentExpression)
+  ) {
+    return node.argumentExpression.text;
+  }
+  return null;
+};
+
 /**
- * Queue names consumed by the BullMQ `Worker`s a module constructs:
+ * Queue names consumed by the owned BullMQ workers a module constructs:
  * `undefined` when it constructs none, `null` when a queue name does not
  * resolve statically.
  */
@@ -418,14 +433,62 @@ const workerQueueNames = (
   source: string,
   readFile: AuditInput["readFile"],
 ): readonly string[] | null | undefined => {
-  if (!source.includes("bullmq")) {
+  if (!source.includes("bullmq-queue")) {
     return undefined;
   }
   const file = parseSource(relativePath, source);
-  const locals = importedAs(file, "bullmq", "Worker");
-  const constructions = findNodes(file, ts.isNewExpression).filter(
-    (node) =>
-      ts.isIdentifier(node.expression) && locals.has(node.expression.text),
+  const bindings = importBindings(file);
+  const namespaces = new Map<string, string>();
+  for (const statement of file.statements) {
+    if (
+      ts.isImportDeclaration(statement) &&
+      ts.isStringLiteral(statement.moduleSpecifier) &&
+      statement.importClause?.phaseModifier !== ts.SyntaxKind.TypeKeyword &&
+      statement.importClause?.namedBindings !== undefined &&
+      ts.isNamespaceImport(statement.importClause.namedBindings)
+    ) {
+      namespaces.set(
+        statement.importClause.namedBindings.name.text,
+        statement.moduleSpecifier.text,
+      );
+    }
+  }
+  const isOwnedConstructor = (
+    expression: ts.Expression,
+    depth = 0,
+  ): boolean => {
+    if (depth > MAX_RESOLVE_DEPTH) {
+      return false;
+    }
+    const node = unwrap(expression);
+    if (ts.isIdentifier(node)) {
+      const binding = bindings.get(node.text);
+      if (binding !== undefined) {
+        return (
+          binding.imported === WORKER_CONSTRUCTOR &&
+          resolveModulePath(relativePath, binding.module) === HOST_TABLE_FILE
+        );
+      }
+      const initializer = declarationInitializer(file, node.text);
+      return (
+        initializer !== undefined && isOwnedConstructor(initializer, depth + 1)
+      );
+    }
+    const namespace =
+      (ts.isPropertyAccessExpression(node) ||
+        ts.isElementAccessExpression(node)) &&
+      ts.isIdentifier(node.expression)
+        ? namespaces.get(node.expression.text)
+        : undefined;
+    const member = accessedMemberName(node);
+    return (
+      namespace !== undefined &&
+      member === WORKER_CONSTRUCTOR &&
+      resolveModulePath(relativePath, namespace) === HOST_TABLE_FILE
+    );
+  };
+  const constructions = findNodes(file, ts.isNewExpression).filter((node) =>
+    isOwnedConstructor(node.expression),
   );
   if (constructions.length === 0) {
     return undefined;
@@ -445,6 +508,104 @@ const workerQueueNames = (
     }
   }
   return [...queues].toSorted();
+};
+
+const bindingLeavesWorkerUnavailable = (
+  element: ts.BindingElement,
+): boolean => {
+  if (element.dotDotDotToken !== undefined) {
+    return false;
+  }
+  if (element.propertyName !== undefined) {
+    const name = propertyName(element.propertyName);
+    return name !== null && name !== "Worker";
+  }
+  return ts.isIdentifier(element.name) && element.name.text !== "Worker";
+};
+
+const dynamicBullMqImportReachesWorker = (call: ts.CallExpression): boolean => {
+  const specifier = call.arguments.at(0);
+  if (
+    (call.expression.kind !== ts.SyntaxKind.ImportKeyword &&
+      !(
+        ts.isIdentifier(call.expression) && call.expression.text === "require"
+      )) ||
+    specifier === undefined ||
+    !ts.isStringLiteral(specifier) ||
+    !(specifier.text === "bullmq" || specifier.text.startsWith("bullmq/"))
+  ) {
+    return false;
+  }
+  let parent = call.parent;
+  while (
+    ts.isAwaitExpression(parent) ||
+    ts.isParenthesizedExpression(parent) ||
+    ts.isAsExpression(parent) ||
+    ts.isSatisfiesExpression(parent)
+  ) {
+    parent = parent.parent;
+  }
+  const member = accessedMemberName(parent);
+  if (member !== null && member !== "Worker") {
+    return false;
+  }
+  if (
+    ts.isVariableDeclaration(parent) &&
+    ts.isObjectBindingPattern(parent.name)
+  ) {
+    return !parent.name.elements.every(bindingLeavesWorkerUnavailable);
+  }
+  return true;
+};
+
+const rawWorkerImports = (relativePath: string, source: string): string[] => {
+  if (relativePath === HOST_TABLE_FILE || !source.includes("bullmq")) {
+    return [];
+  }
+  const file = parseSource(relativePath, source);
+  const violations: string[] = [];
+  for (const statement of file.statements) {
+    if (
+      !ts.isImportDeclaration(statement) &&
+      !ts.isExportDeclaration(statement)
+    ) {
+      continue;
+    }
+    const specifier = statement.moduleSpecifier;
+    if (
+      specifier === undefined ||
+      !ts.isStringLiteral(specifier) ||
+      !(specifier.text === "bullmq" || specifier.text.startsWith("bullmq/"))
+    ) {
+      continue;
+    }
+    const names = ts.isImportDeclaration(statement)
+      ? statement.importClause?.namedBindings
+      : statement.exportClause;
+    const reachesWorker =
+      names === undefined
+        ? ts.isExportDeclaration(statement)
+        : ts.isNamespaceImport(names) ||
+          ts.isNamespaceExport(names) ||
+          names.elements.some(
+            (element) =>
+              (element.propertyName ?? element.name).text === "Worker",
+          );
+    if (reachesWorker) {
+      violations.push(
+        `BullMQ Worker imports use ${HOST_TABLE_FILE}: ${relativePath}`,
+      );
+    }
+  }
+  for (const call of findNodes(file, ts.isCallExpression)) {
+    if (!dynamicBullMqImportReachesWorker(call)) {
+      continue;
+    }
+    violations.push(
+      `BullMQ Worker imports use ${HOST_TABLE_FILE}: ${relativePath}`,
+    );
+  }
+  return violations;
 };
 
 const revocationGap = (
@@ -903,15 +1064,17 @@ const auditSchedulerTaskAuthority = (input: TaskAuditInput): Audit => {
 };
 
 const isProductionSource = (relativePath: string): boolean =>
-  !/\.(test|type-test)\.ts$/u.test(relativePath) &&
-  !/(^|\/)(__fixtures__|__tests__|tests)\//u.test(relativePath);
+  !/\.(test|type-test)\.[cm]?[jt]sx?$/u.test(relativePath) &&
+  !/(^|\/)(__fixtures__|__tests__|test-fixtures|tests|node_modules|dist)\//u.test(
+    relativePath,
+  );
 
 const readRepoFile = (relativePath: string): string | null => {
   const absolute = path.join(ROOT, relativePath);
   return existsSync(absolute) ? readFileSync(absolute, "utf-8") : null;
 };
 
-const treeInput = (): AuditInput => {
+const treeInput = () => {
   const hostQueues = objectKeys(
     readRepoFile(HOST_TABLE_FILE) ?? "",
     HOST_TABLE_NAME,
@@ -920,16 +1083,34 @@ const treeInput = (): AuditInput => {
     return panic(`${HOST_TABLE_NAME} not found in ${HOST_TABLE_FILE}`);
   }
   const workerQueues = new Map<string, readonly string[] | null>();
-  for (const file of [
-    ...new Bun.Glob(`${API_SOURCE}**/*.ts`).scanSync({ cwd: ROOT }),
-  ]
+  const workerOwnershipErrors: string[] = [];
+  const sources = Bun.spawnSync(
+    [
+      "git",
+      "ls-files",
+      "--cached",
+      "--others",
+      "--exclude-standard",
+      "-z",
+      "--",
+      "apps",
+      "packages",
+      "scripts",
+    ],
+    { cwd: ROOT },
+  );
+  if (sources.exitCode !== 0) {
+    return panic("Cannot enumerate BullMQ worker source files");
+  }
+  for (const file of sources.stdout
+    .toString()
+    .split("\0")
+    .filter((filename) => /\.[cm]?[jt]sx?$/u.test(filename))
     .filter(isProductionSource)
     .toSorted()) {
-    const queues = workerQueueNames(
-      file,
-      readRepoFile(file) ?? "",
-      readRepoFile,
-    );
+    const source = readRepoFile(file) ?? "";
+    workerOwnershipErrors.push(...rawWorkerImports(file, source));
+    const queues = workerQueueNames(file, source, readRepoFile);
     if (queues !== undefined) {
       workerQueues.set(file, queues);
     }
@@ -943,11 +1124,12 @@ const treeInput = (): AuditInput => {
     registry: QUEUE_AUTHORITY,
     memberRunQueues: MEMBER_RUN_QUEUES,
     workerQueues,
+    workerOwnershipErrors,
     pinnedAllowed: new Set(
       pinnedRow.enforcement.allowed.map(({ path: file }) => file),
     ),
     readFile: readRepoFile,
-  };
+  } satisfies AuditInput & { workerOwnershipErrors: string[] };
 };
 
 type Ledger = {
@@ -972,6 +1154,7 @@ const treeLedgers = (): Ledger[] => {
     pinnedAllowed: queueInput.pinnedAllowed,
     readFile: readRepoFile,
   });
+  const queueAudit = auditQueueAuthority(queueInput);
   return [
     {
       path: BASELINE,
@@ -982,7 +1165,10 @@ const treeLedgers = (): Ledger[] => {
       closedGap: "Closed member-run gap still listed (run --write)",
       remediation:
         "build a new member run with createRootRunActor and a revocation test instead of listing it",
-      audit: auditQueueAuthority(queueInput),
+      audit: {
+        members: queueAudit.members,
+        errors: [...queueInput.workerOwnershipErrors, ...queueAudit.errors],
+      },
     },
     {
       path: TASK_BASELINE,
@@ -1106,7 +1292,7 @@ const check = (args: readonly string[]): number => {
 };
 
 const SELF_TEST_WORKER = `
-  import { Worker as BullWorker, type Job } from "bullmq";
+  import { BullMqWorker as BullWorker } from "@/api/lib/bullmq-queue";
   import { NAMES } from "@/api/lib/names";
   const LOCAL = "local";
   const name = NAMES[kind];
@@ -1122,11 +1308,11 @@ const SELF_TEST_WEB_WORKER = `
   export const start = () => new Worker(new URL("./w.ts", import.meta.url));
 `;
 const SELF_TEST_DYNAMIC_WORKER = `
-  import { Worker } from "bullmq";
-  export const start = (queue: string) => new Worker(queue, async () => {});
+  import { BullMqWorker } from "@/api/lib/bullmq-queue";
+  export const start = (queue: string) => new BullMqWorker(queue, async () => {});
 `;
 const workerOn = (queue: string) =>
-  `import { Worker } from "bullmq"; new Worker("${queue}", async () => {});`;
+  `import { BullMqWorker } from "@/api/lib/bullmq-queue"; new BullMqWorker("${queue}", async () => {});`;
 const SELF_TEST_ACTOR = `
   import { ${RUN_ACTOR} as actorFor } from "${RUN_ACTOR_MODULE}";
   const actor = actorFor(data);
@@ -1423,6 +1609,110 @@ const selfTestSchedulerTasks = (): string[] => {
   return failures;
 };
 
+const selfTestWorkerConstructors = (): string[] => {
+  const failures: string[] = [];
+  const resolved = workerQueueNames(
+    "apps/api/src/lib/w.ts",
+    SELF_TEST_WORKER,
+    (file) => (file === "apps/api/src/lib/names.ts" ? SELF_TEST_NAMES : null),
+  );
+  if (
+    JSON.stringify(resolved) !==
+    JSON.stringify(["imported-a", "imported-b", "local"])
+  ) {
+    failures.push(
+      `aliased Worker queue names must resolve through constants and imports; got ${JSON.stringify(resolved)}`,
+    );
+  }
+  if (
+    workerQueueNames("w.ts", SELF_TEST_WEB_WORKER, () => null) !== undefined
+  ) {
+    failures.push("a web Worker must not count as a BullMQ worker");
+  }
+  if (workerQueueNames("w.ts", SELF_TEST_DYNAMIC_WORKER, () => null) !== null) {
+    failures.push("a Worker on a runtime queue name must not resolve");
+  }
+  for (const source of [
+    'import * as queues from "@/api/lib/bullmq-queue"; new queues.BullMqWorker("q", async () => {});',
+    'import * as queues from "./bullmq-queue.ts"; new queues["BullMqWorker"]("q", async () => {});',
+    'import { BullMqWorker as OwnedWorker } from "./bullmq-queue"; const Alias = OwnedWorker; new Alias("q", async () => {});',
+  ]) {
+    const names = workerQueueNames("apps/api/src/lib/w.ts", source, () => null);
+    if (JSON.stringify(names) !== JSON.stringify(["q"])) {
+      failures.push(
+        `owned constructor aliases and namespaces must be enumerated; got ${JSON.stringify(names)}`,
+      );
+    }
+  }
+  for (const source of [
+    'import { Worker } from "bullmq"; new Worker("q", async () => {});',
+    'import { Worker as RawWorker } from "bullmq"; const Alias = RawWorker; new Alias("q", async () => {});',
+    'import * as queues from "bullmq"; new queues.Worker("q", async () => {});',
+    'import type { Worker } from "bullmq";',
+    'export { Worker as RawWorker } from "bullmq";',
+    'export * from "bullmq";',
+    'const { Worker: RawWorker } = await import("bullmq"); new RawWorker("q", async () => {});',
+    'const queues = await import("bullmq"); new queues.Worker("q", async () => {});',
+    'const { Worker: RawWorker } = require("bullmq"); new RawWorker("q", async () => {});',
+  ]) {
+    const errors = rawWorkerImports("apps/api/src/lib/w.ts", source);
+    if (errors.length !== 1) {
+      failures.push(
+        `raw worker imports must be confined to the constructor owner; got ${JSON.stringify(errors)}`,
+      );
+    }
+    if (rawWorkerImports(HOST_TABLE_FILE, source).length !== 0) {
+      failures.push("the constructor owner must be admitted");
+    }
+  }
+  for (const source of [
+    'import { Queue, type Job } from "bullmq";',
+    'const { Queue } = await import("bullmq");',
+    'const Queue = (await import("bullmq")).Queue;',
+    'const { Queue } = require("bullmq");',
+  ]) {
+    if (rawWorkerImports("apps/api/src/lib/w.ts", source).length !== 0) {
+      failures.push("other BullMQ exports must remain available");
+    }
+  }
+  const straySource =
+    'import * as queues from "@/api/lib/bullmq-queue"; new queues.BullMqWorker("stray", async () => {});';
+  const strayQueues = workerQueueNames(
+    "apps/api/src/lib/stray.ts",
+    straySource,
+    () => null,
+  );
+  const strayAudit = auditQueueAuthority({
+    hostQueues: ["q"],
+    registry: {
+      q: {
+        authority: "org-automation",
+        worker: "apps/api/src/lib/w.ts",
+        reason: "r",
+      },
+    },
+    memberRunQueues: [],
+    workerQueues: new Map([
+      ["apps/api/src/lib/w.ts", ["q"]],
+      ["apps/api/src/lib/stray.ts", strayQueues ?? null],
+    ]),
+    pinnedAllowed: new Set(),
+    readFile: () => null,
+  });
+  if (
+    JSON.stringify(strayQueues) !== JSON.stringify(["stray"]) ||
+    JSON.stringify(strayAudit.errors) !==
+      JSON.stringify([
+        "BullMQ Worker outside the queue authority registry: apps/api/src/lib/stray.ts (stray)",
+      ])
+  ) {
+    failures.push(
+      "an enumerated owned worker on an unregistered queue must fail",
+    );
+  }
+  return failures;
+};
+
 const selfTest = (): number => {
   const failures: string[] = [];
   const files: Record<string, string> = {
@@ -1535,27 +1825,7 @@ const selfTest = (): number => {
       `swapped worker rows must fail as ${JSON.stringify(expectedSwap)}; got ${JSON.stringify(swapped.errors)}`,
     );
   }
-  const resolved = workerQueueNames(
-    "apps/api/src/lib/w.ts",
-    SELF_TEST_WORKER,
-    (file) => (file === "apps/api/src/lib/names.ts" ? SELF_TEST_NAMES : null),
-  );
-  if (
-    JSON.stringify(resolved) !==
-    JSON.stringify(["imported-a", "imported-b", "local"])
-  ) {
-    failures.push(
-      `aliased Worker queue names must resolve through constants and imports; got ${JSON.stringify(resolved)}`,
-    );
-  }
-  if (
-    workerQueueNames("w.ts", SELF_TEST_WEB_WORKER, () => null) !== undefined
-  ) {
-    failures.push("a web Worker must not count as a BullMQ worker");
-  }
-  if (workerQueueNames("w.ts", SELF_TEST_DYNAMIC_WORKER, () => null) !== null) {
-    failures.push("a Worker on a runtime queue name must not resolve");
-  }
+  failures.push(...selfTestWorkerConstructors());
   const unresolved = auditQueueAuthority({
     hostQueues: [],
     registry: {},

@@ -18,6 +18,7 @@
     "action-cost:report": "bun src/scripts/action-cost-report.ts",
     "test:postgres": "bun scripts/run-postgres-tests.ts",
     "test:valkey": "bun scripts/run-valkey-tests.ts",
+    "test:corpus": "bun scripts/run-corpus-engine-suites.ts",
     "test:property": "bun --cwd=../../packages/cli run codegen:runtime && bun run generate:capability-runtime && bun scripts/run-tests.ts --property --preload @stll/property-testing/preload",
     "dev": "bun run generate:capability-runtime && bun run docker:dev && NODE_ENV=development STELLA_LOCAL_DEV=1 bun --port 3001 --preload ./src/dev/register-mock-ai.ts --watch src/server.ts",
     "docker:dev": "docker compose --profile dev up -d",
@@ -204,6 +205,12 @@
     "pdfjs-dist": "^6.3.289"
   },
   "ciGateTestRunners": {
+    "test:corpus": {
+      "gate": "STELLA_RUN_CORPUS_ENGINE_TESTS",
+      "gateValue": "true",
+      "runner": "scripts/run-corpus-engine-suites.ts",
+      "testFileGlob": "src/**/*.test.ts"
+    },
     "test:postgres": {
       "gate": "STELLA_RUN_POSTGRES_TESTS",
       "gateValue": "true",

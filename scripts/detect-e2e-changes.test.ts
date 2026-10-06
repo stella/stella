@@ -518,9 +518,48 @@ describe("detect-e2e-changes", () => {
       'echo "status=rate-limited" >> "$GITHUB_OUTPUT"',
     );
     expect(e2eStackSetup).toContain('echo "status=ready" >> "$GITHUB_OUTPUT"');
-    expect(
-      e2eStackSetup.match(/if: steps\.stack\.outputs\.status == 'ready'/gu),
-    ).toHaveLength(4);
+    const action: unknown = Bun.YAML.parse(e2eStackSetup);
+    if (
+      !isRecord(action) ||
+      !isRecord(action["runs"]) ||
+      !Array.isArray(action["runs"]["steps"])
+    ) {
+      throw new TypeError("Shared E2E action must declare composite steps");
+    }
+    const stackSteps = action["runs"]["steps"].map((value: unknown) => {
+      if (!isRecord(value)) {
+        throw new TypeError("Shared E2E action step must be an object");
+      }
+      const text = (key: string) => {
+        const field = value[key];
+        if (field === undefined || typeof field === "string") {
+          return field;
+        }
+        throw new TypeError(`Shared E2E action step ${key} must be text`);
+      };
+      return { name: text("name"), id: text("id"), if: text("if") };
+    });
+    const stackIndex = stackSteps.findIndex((step) => step.id === "stack");
+    expect(stackIndex).toBeGreaterThanOrEqual(0);
+    const afterStack = stackSteps
+      .slice(stackIndex + 1)
+      .filter((step) => step.name !== "Log out of Docker Hub");
+    expect(afterStack.length).toBeGreaterThan(0);
+    const assertReady = (steps: typeof afterStack) => {
+      for (const step of steps) {
+        expect(step.if, step.name).toBe(
+          "steps.stack.outputs.status == 'ready'",
+        );
+      }
+    };
+    assertReady(afterStack);
+    for (const [index, step] of afterStack.entries()) {
+      const mutation = afterStack.map((entry, position) =>
+        position === index ? { ...entry, if: "always()" } : entry,
+      );
+      expect(mutation.at(index)?.if).not.toBe(step.if);
+      expect(() => assertReady(mutation)).toThrow("steps.stack.outputs.status");
+    }
 
     for (const stepName of [
       "Install Playwright browsers",

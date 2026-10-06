@@ -16,7 +16,6 @@ import { panic, Result } from "better-result";
  * claimable, and findings upsert on `(runId, positionId)`. A re-delivered job
  * is therefore either a no-op or writes exactly the rows it wrote before.
  */
-import { Worker } from "bullmq";
 import { and, asc, eq, inArray, lt, or, sql } from "drizzle-orm";
 
 import { Temporal, DAY_IN_MS } from "@stll/time";
@@ -30,7 +29,7 @@ import { captureError } from "@/api/lib/analytics/capture";
 import type { AIUsageMetering } from "@/api/lib/analytics/tanstack-ai";
 import type { SafeId } from "@/api/lib/branded-types";
 import { createBullMqJobId } from "@/api/lib/bullmq-job-id";
-import { createLazyBullMqQueue } from "@/api/lib/bullmq-queue";
+import { BullMqWorker, createLazyBullMqQueue } from "@/api/lib/bullmq-queue";
 import type { BullMqWorkerContext } from "@/api/lib/bullmq-queue";
 import type { RequeueableQueue } from "@/api/lib/bullmq-requeue";
 import type { ManagedAIResidency } from "@/api/lib/chat/ai-data-policy";
@@ -338,7 +337,7 @@ export const reconcileQueuedDocumentReviewRuns = async ({
 };
 
 export const initDocumentReviewRunWorker = ({ db }: BullMqWorkerContext) => {
-  const worker = new Worker<DocumentReviewRunWorkerJobData>(
+  const worker = new BullMqWorker<DocumentReviewRunWorkerJobData>(
     QUEUE_NAME,
     async (job) => {
       if (job.data.contractVersion !== QUEUE_CONTRACT_VERSION) {

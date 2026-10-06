@@ -10,6 +10,8 @@ import { chat as runChat } from "@tanstack/ai/chat";
 // Accepted: an unrelated export of the owned package's subpath.
 // expect-clean: confine-owner/confine-owner
 import { toolDefinition } from "@tanstack/ai/tools";
+// oxlint-disable-next-line confine-owner/confine-owner -- fixture proves the worker primitive is confined even through an import alias
+import { Queue, Worker as RawQueueWorker } from "bullmq";
 
 // oxlint-disable-next-line confine-owner/confine-owner -- fixture proves an aliased import of an owned binding is rejected
 import { compileLegalSourceToDocx as compile } from "@stll/docx-core";
@@ -144,6 +146,8 @@ void createDocx;
 void compile;
 void folio;
 void paragraph;
+void RawQueueWorker;
+void Queue;
 void runChat;
 void toolDefinition;
 void relativeClient;

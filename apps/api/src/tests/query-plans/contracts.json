@@ -326,6 +326,22 @@
       }
     ]
   },
+  "case-law.top-citing-decisions": {
+    "scans": [
+      {
+        "position": "root/0/0/0/0/0/0/0/0/0/0",
+        "relation": "case_law_citations",
+        "nodeType": "Index Scan",
+        "index": "case_law_citations_cited_page_idx"
+      },
+      {
+        "position": "root/0/0/0/0/0/1",
+        "relation": "case_law_decisions",
+        "nodeType": "Index Scan",
+        "index": "case_law_decisions_pkey"
+      }
+    ]
+  },
   "legislation.list": {
     "scans": [
       {
