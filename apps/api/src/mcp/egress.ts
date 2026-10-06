@@ -357,10 +357,13 @@ const finalizeCompatSearch = async ({
 }): Promise<InternalToolResult> => {
   // `kind` and `workspaceId` are per-hit egress attribution; both are stripped
   // before the result reaches the client.
-  const results = plan.results.map(({ id, title, url }) => ({
-    id,
-    title,
-    url,
+  const results = plan.results.map((hit) => ({
+    id: hit.id,
+    title: hit.title,
+    url: hit.url,
+    ...(hit.kind === "corpus" && hit.source_url !== undefined
+      ? { source_url: hit.source_url }
+      : {}),
   }));
 
   // MCP access is for authorized Stella users only. In anonymized mode we still
@@ -450,6 +453,7 @@ const finalizeCompatFetch = async ({
       title: anonymized.title,
       text: textWindow.text,
       url: plan.url,
+      ...(plan.source_url === undefined ? {} : { source_url: plan.source_url }),
       nextCursor: textWindow.nextCursor,
       metadata: {
         kind: "document",
@@ -477,6 +481,7 @@ const finalizeCompatFetch = async ({
     title: plan.title,
     text: textWindow.text,
     url: plan.url,
+    ...(plan.source_url === undefined ? {} : { source_url: plan.source_url }),
     nextCursor: textWindow.nextCursor,
     metadata: {
       ...compatFetchSubjectMetadata(plan.subject),

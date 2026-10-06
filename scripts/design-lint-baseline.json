@@ -1251,7 +1251,6 @@
   },
   "react/no-children-prop": {
     "apps/web/src/components/chat/chat-rich-message-part.test.ts": 1,
-    "apps/web/src/components/chat/streamdown-mention-link.tsx": 1,
     "apps/web/src/components/inspector/use-file-tab-rename.dom.test.tsx": 2,
     "apps/web/src/components/workspaces/edit-field-dialog.tsx": 6,
     "apps/web/src/features/workspaces/team-avatars.test.ts": 1,
@@ -1870,7 +1869,7 @@
     "apps/web/src/components/chat/prompt-slash-list.logic.test.ts": 4,
     "apps/web/src/components/chat/recorded-conversations.dom.test.tsx": 2,
     "apps/web/src/components/chat/source-chips.logic.ts": 1,
-    "apps/web/src/components/chat/source-chips.tsx": 6,
+    "apps/web/src/components/chat/source-chips.tsx": 5,
     "apps/web/src/components/chat/spawn-subagents-card.tsx": 4,
     "apps/web/src/components/chat/streamdown-mention-link.tsx": 15,
     "apps/web/src/components/chat/tool-approval-card.tsx": 12,

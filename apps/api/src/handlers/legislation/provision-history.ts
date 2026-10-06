@@ -89,6 +89,10 @@ const decodeVersionCursor = (cursor: string): VersionCursor | null => {
 
 const versionColumns = {
   ...versionAstColumns,
+  country: legislationDocuments.country,
+  slug: legislationDocuments.slug,
+  sourceUrl: legislationDocuments.sourceUrl,
+
   versionValidFrom: legislationDocuments.versionValidFrom,
   versionValidTo: legislationDocuments.versionValidTo,
   ...legislationExpressionLabelColumns,
@@ -184,6 +188,10 @@ export const readProvisionHistoryHandler = async ({
     rows: versions.map((version, index) => ({
       allowsDerivedAi: version.allowsDerivedAi,
       documentId: version.id,
+      country: version.country,
+      slug: version.slug,
+      sourceUrl: version.sourceUrl,
+
       versionValidFrom: version.versionValidFrom,
       versionValidTo: version.versionValidTo,
       expressionKind: version.expressionKind,
