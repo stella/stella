@@ -12,7 +12,7 @@ import {
 import { tmpdir } from "node:os";
 import path from "node:path";
 
-import { CI_GENERATED_FILES } from "../../../scripts/generated-files";
+import { CI_GENERATED_FILES } from "./generated-files";
 import {
   generatedFileHash,
   generatedInputIdentity,
@@ -105,14 +105,8 @@ test("every prepared output has required identity and byte coverage", () => {
 test("CLI runtime preparation consumes a verified artifact without invoking generation", () => {
   const { root, manifest, write } = fixture();
   try {
-    write(
-      "scripts/generated-files.ts",
-      readFileSync(
-        new URL("../../../scripts/generated-files.ts", import.meta.url),
-        "utf-8",
-      ),
-    );
     for (const file of [
+      "generated-files.ts",
       "prepare-cli-runtime.ts",
       "prepared-generated-sources.ts",
       "child-exit-status.ts",
@@ -261,6 +255,90 @@ test("configured preparation fails closed and an ordinary checkout generates loc
     } else {
       process.env["CI_GENERATED_SOURCES_MANIFEST"] = previous;
     }
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("API runtime generation works with only packaged sources and rejects a root-script import mutation", () => {
+  const root = realpathSync(
+    mkdtempSync(path.join(tmpdir(), "packaged-runtime-")),
+  );
+  const write = (file: string, source: string) => {
+    const destination = path.join(root, file);
+    mkdirSync(path.dirname(destination), { recursive: true });
+    writeFileSync(destination, source);
+  };
+  try {
+    for (const file of [
+      "apps/api/scripts/generate-capability-runtime.ts",
+      "packages/cli/src/capability-catalog-data.ts",
+      "packages/scripts/src/prepared-generated-sources.ts",
+      "packages/scripts/src/generated-files.ts",
+    ]) {
+      write(
+        file,
+        readFileSync(new URL(`../../../${file}`, import.meta.url), "utf-8"),
+      );
+    }
+    symlinkSync(
+      new URL("../../../node_modules", import.meta.url).pathname,
+      path.join(root, "node_modules"),
+    );
+    write(
+      "packages/cli/capabilities/widgets.list.json",
+      JSON.stringify({ id: "widgets.list", featureId: "fixture-feature" }),
+    );
+    write(
+      "apps/api/src/mcp/generated/capability-dispatch/widgets.list.ts",
+      "export const CAPABILITY_DISPATCH = {};\n",
+    );
+    const env = Object.fromEntries(
+      Object.entries(process.env).filter(
+        ([key]) => key !== "CI_GENERATED_SOURCES_MANIFEST",
+      ),
+    );
+    const run = () =>
+      Bun.spawnSync(
+        [process.execPath, "apps/api/scripts/generate-capability-runtime.ts"],
+        { cwd: root, env },
+      );
+    const generated = run();
+    expect(generated.exitCode, generated.stderr.toString()).toBe(0);
+    expect(
+      readFileSync(
+        path.join(root, "apps/api/src/mcp/generated/capability-catalog.ts"),
+        "utf-8",
+      ),
+    ).toContain("widgets.list.json");
+    expect(
+      readFileSync(
+        path.join(root, "apps/api/src/mcp/generated/capability-dispatch.ts"),
+        "utf-8",
+      ),
+    ).toContain("widgets.list");
+    expect(
+      readFileSync(
+        path.join(
+          root,
+          "apps/api/src/mcp/generated/capability-feature-bindings.ts",
+        ),
+        "utf-8",
+      ),
+    ).toContain('["widgets.list","fixture-feature"]');
+    const owner = "packages/scripts/src/prepared-generated-sources.ts";
+    const source = readFileSync(path.join(root, owner), "utf-8");
+    const mutated = source.replace(
+      'from "./generated-files"',
+      'from "../../../scripts/generated-files"',
+    );
+    expect(mutated).not.toBe(source);
+    write(owner, mutated);
+    const broken = run();
+    expect(broken.exitCode).not.toBe(0);
+    expect(broken.stderr.toString()).toContain(
+      "Cannot find module '../../../scripts/generated-files'",
+    );
+  } finally {
     rmSync(root, { recursive: true, force: true });
   }
 });

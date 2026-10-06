@@ -155,6 +155,10 @@
     "seconds": 0.607089,
     "source": "estimated"
   },
+  "scripts/run-corpus-engine-suites.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
   "scripts/seed-dev.test.ts": {
     "seconds": 0.275845,
     "source": "estimated"
@@ -1201,6 +1205,10 @@
   },
   "src/handlers/case-law/ingestion/adapters/sk-us.test.ts": {
     "seconds": 3.12062,
+    "source": "estimated"
+  },
+  "src/handlers/case-law/ingestion/adapters/source-availability.test.ts": {
+    "seconds": 1,
     "source": "estimated"
   },
   "src/handlers/case-law/ingestion/adapters/source-field-inventory.test.ts": {
@@ -3071,6 +3079,14 @@
     "seconds": 1,
     "source": "estimated"
   },
+  "src/handlers/lists/verifications/get.db.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
+  "src/handlers/lists/verifications/get.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
   "src/handlers/mcp-app-sandbox/routes.test.ts": {
     "seconds": 0.549575,
     "source": "estimated"
@@ -4205,6 +4221,10 @@
   },
   "src/lib/bullmq-job-id.test.ts": {
     "seconds": 0.084507,
+    "source": "estimated"
+  },
+  "src/lib/bullmq-queue.valkey.test.ts": {
+    "seconds": 1,
     "source": "estimated"
   },
   "src/lib/bullmq-requeue.test.ts": {
@@ -7921,6 +7941,10 @@
   },
   "src/mcp/case-law-decision-outline.test.ts": {
     "seconds": 0.618593,
+    "source": "estimated"
+  },
+  "src/mcp/case-law-decision-read.test.ts": {
+    "seconds": 1,
     "source": "estimated"
   },
   "src/mcp/case-law-search-guidance.test.ts": {

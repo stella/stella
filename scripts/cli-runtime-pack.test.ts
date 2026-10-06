@@ -48,6 +48,7 @@ const EXPORTED_PATHS = [
   "package.json",
   CLI_DIRECTORY,
   "packages/scripts",
+  // Historical base revisions still import the root metadata.
   "scripts/generated-files.ts",
 ];
 const RUNTIME_GENERATOR =
@@ -98,7 +99,12 @@ test("fresh CLI export includes preparation metadata imports", () => {
     missingPreparationImports(
       EXPORTED_PATHS.filter((file) => file !== "scripts/generated-files.ts"),
     ),
-  ).toContain("scripts/generated-files.ts");
+  ).toEqual([]);
+  expect(
+    missingPreparationImports(
+      EXPORTED_PATHS.filter((file) => file !== "packages/scripts"),
+    ),
+  ).toContain("packages/scripts/src/generated-files.ts");
 });
 
 const Sha = v.pipe(v.string(), v.regex(/^[0-9a-f]{40}$/u));

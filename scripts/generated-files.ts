@@ -1,27 +1,10 @@
-export const CI_GENERATED_OUTPUTS = {
-  capabilityRuntime: [
-    "apps/api/src/mcp/generated/capability-dispatch.ts",
-    "apps/api/src/mcp/generated/capability-catalog.ts",
-    "apps/api/src/mcp/generated/capability-feature-bindings.ts",
-  ],
-  cliRuntime: [
-    "packages/cli/src/generated/route-map.ts",
-    "packages/cli/src/generated/tool-annotations.ts",
-  ],
-  webMessages: ["apps/web/src/i18n/langs/messages.gen.ts"],
-  prepaintLocale: ["apps/web/public/prepaint-init.js"],
-  routeTree: ["apps/web/src/routeTree.gen.ts"],
-  apiTypes: ["apps/web/src/generated/api-routes.gen.ts"],
-} as const;
-export const CI_GENERATED_FILES = Object.values(CI_GENERATED_OUTPUTS).flat();
+import { CI_GENERATED_OUTPUTS } from "../packages/scripts/src/generated-files";
 
-export const CI_GENERATION_COMMANDS = [
-  ["bun", "apps/api/scripts/generate-capability-runtime.ts"],
-  ["bun", "--cwd=packages/cli", "run", "codegen:runtime"],
-  ["bun", "--cwd=apps/web", "run", "typegen"],
-  ["bun", "--cwd=apps/web", "run", "generate:route-tree"],
-  ["bun", "--cwd=apps/web", "run", "generate:api-types"],
-] as const;
+export {
+  CI_GENERATED_OUTPUTS,
+  CI_GENERATED_FILES,
+  CI_GENERATION_COMMANDS,
+} from "../packages/scripts/src/generated-files";
 
 type GeneratorCheck =
   | { check: readonly string[]; checkedBy?: never; unchecked?: never }
@@ -305,6 +288,7 @@ export const GENERATORS = [
       "apps/web/scripts/generate-route-tree.ts",
       "packages/scripts/src/prepared-generated-sources.ts",
       "scripts/generated-files.ts",
+      "packages/scripts/src/generated-files.ts",
       "apps/web/package.json",
       "bun.lock",
     ],
