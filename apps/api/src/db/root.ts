@@ -81,6 +81,25 @@ export const rlsDb = markRlsDatabase({
   ): Promise<TResult> => await rawRlsDb.transaction(fn),
 });
 
+/**
+ * The scoped-transaction connection with `before` run first in each
+ * transaction, while it still runs as the owner and ahead of the scoped role
+ * switch. The review organization reset takes its organization-row lock and
+ * membership check here; callers receive a scoped database, never the pool.
+ */
+export const createFencedRlsDatabase = (
+  before: (tx: Transaction) => Promise<void>,
+) =>
+  markRlsDatabase({
+    transaction: async <TResult>(
+      fn: (tx: TransactionOf<typeof rawRlsDb>) => Promise<TResult>,
+    ): Promise<TResult> =>
+      await rawRlsDb.transaction(async (tx) => {
+        await before(tx);
+        return await fn(tx);
+      }),
+  });
+
 /** The connection owner supplies only a role-restricted sanctions reader. */
 export const createPublicSanctionsReader = () =>
   createSanctionsPublicReadDb(rlsDb);
