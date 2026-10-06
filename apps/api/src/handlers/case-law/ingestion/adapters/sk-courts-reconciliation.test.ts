@@ -571,8 +571,13 @@ test("failed detail fetches remain retryable and never assert publisher URL abse
           return built.decision;
         case "unread":
           return built.item.listing;
-        default:
+        case "built":
+        case "read-failed":
+        case "unkeyable":
           throw new TypeError("Expected a retryable detail observation");
+        default:
+          built satisfies never;
+          throw new TypeError("Unhandled build result");
       }
     })();
     expect(decision.metadata["sourceUrlStatus"] === "detail-unavailable").toBe(
