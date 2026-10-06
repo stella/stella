@@ -131,6 +131,8 @@ const reviewFetcher = (
     responseBody?: { step: string; body: unknown };
     maliciousDiscovery?: boolean;
     maliciousConsent?: boolean;
+    foreignEndpoint?: "authorize" | "token";
+    tokenOrigin?: "api" | "frontend";
     callbackMutation?: ReviewCallbackMutation;
     observed?: { url: string; headers: Headers; body: string }[];
   } = {},
@@ -141,15 +143,38 @@ const reviewFetcher = (
     const request = input instanceof Request ? input : undefined;
     const url = new URL(input instanceof Request ? input.url : input);
     const headers = new Headers(init.headers ?? request?.headers);
-    const body =
-      typeof init.body === "string"
-        ? init.body
-        : init.body instanceof URLSearchParams
-          ? init.body.toString()
-          : request
-            ? await request.clone().text()
-            : "";
+    let body = "";
+    if (typeof init.body === "string") {
+      body = init.body;
+    } else if (init.body instanceof URLSearchParams) {
+      body = init.body.toString();
+    } else if (request) {
+      body = await request.clone().text();
+    }
     observed.push({ url: url.toString(), headers, body });
+    let expectedOrigin = REVIEW_BASE_URL;
+    if (url.pathname.startsWith("/api/auth/")) {
+      expectedOrigin = REVIEW_FRONTEND_URL;
+    }
+    if (
+      url.pathname === "/api/auth/oauth2/token" &&
+      options.tokenOrigin === "api"
+    ) {
+      expectedOrigin = REVIEW_BASE_URL;
+    }
+    if (url.origin !== expectedOrigin) {
+      return new Response(null, { status: 404 });
+    }
+    if (
+      [
+        "/api/auth/get-session",
+        "/api/auth/oauth2/authorize",
+        "/api/auth/oauth2/consent",
+      ].includes(url.pathname) &&
+      headers.get("cookie") !== "session=review-cookie"
+    ) {
+      return Response.json({ code: "UNAUTHORIZED" }, { status: 401 });
+    }
     let step: string;
     let response: Response;
     const json = (
@@ -177,21 +202,36 @@ const reviewFetcher = (
       });
     } else if (url.pathname === "/.well-known/oauth-protected-resource/mcp") {
       step = "discovery";
-      response = json({
-        authorization_servers: [
-          options.maliciousDiscovery
-            ? "https://foreign.example/api/auth"
-            : `${REVIEW_BASE_URL}/api/auth`,
-        ],
-        resource: `${REVIEW_BASE_URL}/mcp`,
-      });
+      response = json(
+        {
+          authorization_servers: [
+            options.maliciousDiscovery
+              ? "https://foreign.example/api/auth"
+              : `${REVIEW_BASE_URL}/api/auth`,
+          ],
+          resource: `${REVIEW_BASE_URL}/mcp`,
+        },
+        200,
+        { "set-cookie": "session=api-cookie; Path=/; HttpOnly" },
+      );
     } else if (
       url.pathname === "/.well-known/oauth-authorization-server/api/auth"
     ) {
       step = "discovery";
+      const authorizationOrigin =
+        options.foreignEndpoint === "authorize"
+          ? "https://foreign.example"
+          : REVIEW_FRONTEND_URL;
+      let tokenOrigin = REVIEW_FRONTEND_URL;
+      if (options.tokenOrigin === "api") {
+        tokenOrigin = REVIEW_BASE_URL;
+      }
+      if (options.foreignEndpoint === "token") {
+        tokenOrigin = "https://foreign.example";
+      }
       response = json({
-        authorization_endpoint: `${REVIEW_BASE_URL}/api/auth/oauth2/authorize`,
-        token_endpoint: `${REVIEW_BASE_URL}/api/auth/oauth2/token`,
+        authorization_endpoint: `${authorizationOrigin}/api/auth/oauth2/authorize`,
+        token_endpoint: `${tokenOrigin}/api/auth/oauth2/token`,
         registration_endpoint: `${REVIEW_BASE_URL}/api/auth/oauth2/register`,
         code_challenge_methods_supported: ["S256"],
       });
@@ -208,12 +248,13 @@ const reviewFetcher = (
       const authorizeUrl = authorize ? new URL(authorize.url) : undefined;
       const callback = authorizeUrl?.searchParams.get("redirect_uri");
       const state = authorizeUrl?.searchParams.get("state");
-      const callbackState =
-        options.callbackMutation === "wrong-state"
-          ? "attacker-state"
-          : options.callbackMutation === "missing-state"
-            ? null
-            : state;
+      let callbackState = state;
+      if (options.callbackMutation === "wrong-state") {
+        callbackState = "attacker-state";
+      }
+      if (options.callbackMutation === "missing-state") {
+        callbackState = null;
+      }
       response = json({
         url: options.maliciousConsent
           ? `https://foreign.example/callback?code=secret-code&state=${state}`
@@ -263,39 +304,39 @@ const reviewFetcher = (
         });
       } else {
         const name = requestBody.params?.name;
-        step =
-          name === "list_tasks"
-            ? requestBody.params?.arguments?.task_id
-              ? "assert"
-              : "read"
-            : name === "save_task"
-              ? "write"
-              : "cleanup";
-        const structuredContent =
-          name === "list_tasks"
-            ? requestBody.params?.arguments?.task_id
-              ? {
-                  task: {
-                    taskId: requestBody.params.arguments.task_id,
-                    name: writtenTaskName,
-                  },
-                }
-              : {
-                  tasks: [
-                    {
-                      id: REVIEW_EXISTING_TASK_ID,
-                      name: SAMPLE_MATTERS.flatMap(({ tasks }) =>
-                        tasks.map(({ name }) => name),
-                      ).at(0),
-                      matterId: REVIEW_MATTER_ID,
-                    },
-                  ],
-                }
-            : name === "save_task"
-              ? { taskId: REVIEW_TASK_ID }
-              : { deleted: true };
-        if (name === "save_task") {
-          writtenTaskName = String(requestBody.params?.arguments?.name);
+        let structuredContent: unknown;
+        switch (name) {
+          case "list_tasks": {
+            const taskId = requestBody.params?.arguments?.task_id;
+            step = taskId ? "assert" : "read";
+            if (taskId) {
+              structuredContent = { task: { taskId, name: writtenTaskName } };
+              break;
+            }
+            structuredContent = {
+              tasks: [
+                {
+                  id: REVIEW_EXISTING_TASK_ID,
+                  name: SAMPLE_MATTERS.flatMap(({ tasks }) =>
+                    tasks.map(({ name }) => name),
+                  ).at(0),
+                  matterId: REVIEW_MATTER_ID,
+                },
+              ],
+            };
+            break;
+          }
+          case "save_task":
+            step = "write";
+            writtenTaskName = String(requestBody.params?.arguments?.name);
+            structuredContent = { taskId: REVIEW_TASK_ID };
+            break;
+          case "delete_task":
+            step = "cleanup";
+            structuredContent = { deleted: true };
+            break;
+          default:
+            throw new TypeError("fixture received an unknown tool");
         }
         response = json({
           jsonrpc: "2.0",
@@ -328,80 +369,124 @@ const reviewFetcher = (
 };
 
 describe("restricted review-account journey", () => {
-  test("completes OAuth with PKCE, scoped MCP calls, and cleanup", async () => {
-    const observed: { url: string; headers: Headers; body: string }[] = [];
-    const results = await runReviewAccountJourney(
-      {
-        baseUrl: REVIEW_BASE_URL,
-        configuredBaseUrl: REVIEW_BASE_URL,
-        frontendUrl: REVIEW_FRONTEND_URL,
-        password: REVIEW_PASSWORD,
-        mode: "full",
-      },
-      reviewFetcher({ observed }),
-    );
+  test.each(["frontend", "api"] as const)(
+    "completes OAuth across configured origins with the token endpoint on %s",
+    async (tokenOrigin) => {
+      const observed: { url: string; headers: Headers; body: string }[] = [];
+      const results = await runReviewAccountJourney(
+        {
+          baseUrl: REVIEW_BASE_URL,
+          configuredBaseUrl: REVIEW_BASE_URL,
+          frontendUrl: REVIEW_FRONTEND_URL,
+          password: REVIEW_PASSWORD,
+          mode: "full",
+        },
+        reviewFetcher({ observed, tokenOrigin }),
+      );
 
-    expect(results.map(({ name, status }) => [name, status])).toEqual([
-      ["restricted account: sign-in", "passed"],
-      ["restricted account: session", "passed"],
-      ["restricted account: discovery", "passed"],
-      ["restricted account: authorize", "passed"],
-      ["restricted account: consent", "passed"],
-      ["restricted account: callback", "passed"],
-      ["restricted account: token", "passed"],
-      ["restricted account: initialize", "passed"],
-      ["restricted account: tools/list", "passed"],
-      ["restricted account: read", "passed"],
-      ["restricted account: write", "passed"],
-      ["restricted account: assert", "passed"],
-      ["restricted account: cleanup", "passed"],
-    ]);
-    expect(
-      JSON.parse(observedRequest(observed, "/sign-in/email").body),
-    ).toEqual({
-      email: REVIEW_EMAIL,
-      password: REVIEW_PASSWORD,
-    });
-    const authorize = new URL(observedRequest(observed, "/authorize").url);
-    expect(authorize.searchParams.get("client_id")).toBe(
-      `${REVIEW_BASE_URL}/v1/mcp/oauth/cli-client-metadata.json`,
-    );
-    const tokenRequest = observedRequest(observed, "/token");
-    const verifier = new URLSearchParams(tokenRequest.body).get(
-      "code_verifier",
-    );
-    if (!verifier) {
-      throw new Error("token request did not include a PKCE verifier");
-    }
-    expect(authorize.searchParams.get("code_challenge_method")).toBe("S256");
-    expect(authorize.searchParams.get("code_challenge")).toBe(
-      await crypto.subtle
-        .digest("SHA-256", new TextEncoder().encode(verifier))
-        .then((hash) => Buffer.from(hash).toString("base64url")),
-    );
-    expect(authorize.searchParams.get("scope")).toContain("stella:admin_write");
-    expect(
-      observed
-        .filter(({ headers }) => headers.has("authorization"))
-        .every(({ url }) => new URL(url).origin === REVIEW_BASE_URL),
-    ).toBe(true);
-    expect(
-      observed.some(({ headers }) =>
-        headers.get("cookie")?.includes("review-cookie"),
-      ),
-    ).toBe(true);
-    expect(
-      observed
-        .find(({ url }) => new URL(url).pathname === "/mcp")
-        ?.headers.get("authorization"),
-    ).toBe("Bearer review-access-token");
-    expect(
-      observed.some(
-        ({ body }) =>
-          body.includes("list_audit_log") || body.includes("save_time_entry"),
-      ),
-    ).toBe(false);
-  });
+      expect(results.map(({ name, status }) => [name, status])).toEqual([
+        ["restricted account: sign-in", "passed"],
+        ["restricted account: session", "passed"],
+        ["restricted account: discovery", "passed"],
+        ["restricted account: authorize", "passed"],
+        ["restricted account: consent", "passed"],
+        ["restricted account: callback", "passed"],
+        ["restricted account: token", "passed"],
+        ["restricted account: initialize", "passed"],
+        ["restricted account: tools/list", "passed"],
+        ["restricted account: read", "passed"],
+        ["restricted account: write", "passed"],
+        ["restricted account: assert", "passed"],
+        ["restricted account: cleanup", "passed"],
+      ]);
+      expect(
+        JSON.parse(observedRequest(observed, "/sign-in/email").body),
+      ).toEqual({
+        email: REVIEW_EMAIL,
+        password: REVIEW_PASSWORD,
+      });
+      expect(
+        new URL(observedRequest(observed, "/sign-in/email").url).origin,
+      ).toBe(REVIEW_FRONTEND_URL);
+      expect(
+        new URL(observedRequest(observed, "/get-session").url).origin,
+      ).toBe(REVIEW_FRONTEND_URL);
+      const metadata = observedRequest(
+        observed,
+        "/.well-known/oauth-authorization-server/api/auth",
+      );
+      expect(new URL(metadata.url).origin).toBe(REVIEW_BASE_URL);
+      expect(metadata.headers.get("cookie")).toBe("session=api-cookie");
+      for (const request of observed) {
+        const origin = new URL(request.url).origin;
+        expect([REVIEW_BASE_URL, REVIEW_FRONTEND_URL]).toContain(origin);
+        if (request.headers.has("cookie")) {
+          expect(request.headers.get("cookie")).toBe(
+            origin === REVIEW_FRONTEND_URL
+              ? "session=review-cookie"
+              : "session=api-cookie",
+          );
+        }
+        if (request.headers.has("authorization")) {
+          expect(origin).toBe(REVIEW_BASE_URL);
+        }
+        if (request.body.includes(REVIEW_PASSWORD)) {
+          expect(origin).toBe(REVIEW_FRONTEND_URL);
+        }
+      }
+      const authorize = new URL(observedRequest(observed, "/authorize").url);
+      expect(authorize.origin).toBe(REVIEW_FRONTEND_URL);
+      expect(
+        observedRequest(observed, "/authorize").headers.get("cookie"),
+      ).toBe("session=review-cookie");
+      expect(observedRequest(observed, "/consent").headers.get("cookie")).toBe(
+        "session=review-cookie",
+      );
+      expect(authorize.searchParams.get("client_id")).toBe(
+        `${REVIEW_BASE_URL}/v1/mcp/oauth/cli-client-metadata.json`,
+      );
+      const tokenRequest = observedRequest(observed, "/token");
+      expect(new URL(tokenRequest.url).origin).toBe(
+        tokenOrigin === "api" ? REVIEW_BASE_URL : REVIEW_FRONTEND_URL,
+      );
+      const verifier = new URLSearchParams(tokenRequest.body).get(
+        "code_verifier",
+      );
+      if (!verifier) {
+        throw new Error("token request did not include a PKCE verifier");
+      }
+      expect(authorize.searchParams.get("code_challenge_method")).toBe("S256");
+      expect(authorize.searchParams.get("code_challenge")).toBe(
+        await crypto.subtle
+          .digest("SHA-256", new TextEncoder().encode(verifier))
+          .then((hash) => Buffer.from(hash).toString("base64url")),
+      );
+      expect(authorize.searchParams.get("scope")).toContain(
+        "stella:admin_write",
+      );
+      expect(
+        observed
+          .filter(({ headers }) => headers.has("authorization"))
+          .every(({ url }) => new URL(url).origin === REVIEW_BASE_URL),
+      ).toBe(true);
+      expect(
+        observed.some(({ headers }) =>
+          headers.get("cookie")?.includes("review-cookie"),
+        ),
+      ).toBe(true);
+      expect(
+        observed
+          .find(({ url }) => new URL(url).pathname === "/mcp")
+          ?.headers.get("authorization"),
+      ).toBe("Bearer review-access-token");
+      expect(
+        observed.some(
+          ({ body }) =>
+            body.includes("list_audit_log") || body.includes("save_time_entry"),
+        ),
+      ).toBe(false);
+    },
+  );
 
   test("skips when password is absent, target is unconfigured, or mode is frequent", async () => {
     const fetcher: CanaryFetcher = async () => {
@@ -424,6 +509,7 @@ describe("restricted review-account journey", () => {
         {
           baseUrl: "https://other.example",
           configuredBaseUrl: REVIEW_BASE_URL,
+          frontendUrl: REVIEW_FRONTEND_URL,
           password: REVIEW_PASSWORD,
           mode: "full",
         },
@@ -461,13 +547,12 @@ describe("restricted review-account journey", () => {
       const failures = results.filter(({ status }) => status === "failed");
       expect(failures).toHaveLength(1);
       expect(failures[0]?.name).toBe(`restricted account: ${step}`);
-      expect(failures[0]?.detail).toContain(
-        kind === "http"
-          ? "HTTP 503"
-          : kind === "malformed"
-            ? "HTTP 200"
-            : "HTTP unavailable",
-      );
+      const expectedStatus = {
+        http: "HTTP 503",
+        malformed: "HTTP 200",
+        transport: "HTTP unavailable",
+      } as const satisfies Record<ReviewFailure["kind"], string>;
+      expect(failures[0]?.detail).toContain(expectedStatus[kind]);
       expect(failures[0]?.detail).toContain("envelope code");
       for (const credential of [
         REVIEW_PASSWORD,
@@ -481,6 +566,42 @@ describe("restricted review-account journey", () => {
       expect(failures[0]?.detail).not.toContain("secret-code");
       expect(failures[0]?.detail).not.toContain("review-access-token");
       expect(failures[0]?.detail).not.toContain("review-cookie");
+    },
+  );
+
+  test.each(["authorize", "token"] as const)(
+    "refuses an advertised %s endpoint on a third origin",
+    async (foreignEndpoint) => {
+      const observed: { url: string; headers: Headers; body: string }[] = [];
+      const results = await runReviewAccountJourney(
+        {
+          baseUrl: REVIEW_BASE_URL,
+          configuredBaseUrl: REVIEW_BASE_URL,
+          frontendUrl: REVIEW_FRONTEND_URL,
+          password: REVIEW_PASSWORD,
+          mode: "full",
+        },
+        reviewFetcher({ observed, foreignEndpoint }),
+      );
+      expect(results.at(-1)).toMatchObject({
+        name: `restricted account: ${foreignEndpoint}`,
+        status: "failed",
+      });
+      expect(
+        observed.every(({ url }) =>
+          [REVIEW_BASE_URL, REVIEW_FRONTEND_URL].includes(new URL(url).origin),
+        ),
+      ).toBe(true);
+      expect(results.some(({ status }) => status === "skipped")).toBe(false);
+      for (const credential of [
+        REVIEW_PASSWORD,
+        "secret-code",
+        "review-access-token",
+        "review-cookie",
+        "api-cookie",
+      ]) {
+        expect(JSON.stringify(results)).not.toContain(credential);
+      }
     },
   );
 
@@ -507,7 +628,9 @@ describe("restricted review-account journey", () => {
         name: `restricted account: ${attack === "maliciousDiscovery" ? "discovery" : "callback"}`,
       });
       expect(
-        observed.every(({ url }) => new URL(url).origin === REVIEW_BASE_URL),
+        observed.every(({ url }) =>
+          [REVIEW_BASE_URL, REVIEW_FRONTEND_URL].includes(new URL(url).origin),
+        ),
       ).toBe(true);
       expect(
         observed

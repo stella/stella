@@ -1475,10 +1475,16 @@ export const runReviewAccountJourney = async (
   }
 
   const results: ProbeResult[] = [];
-  const cookies = new Map<string, string>();
-  // Credentials stay on the API origin, even if discovery advertises another
-  // first-party app origin. Redirects are parsed rather than followed.
-  const targetFetch = createDeploymentFetcher({ baseUrl }, fetcher);
+  const cookies = new Map<string, Map<string, string>>();
+  // Both origins come from configuration, never discovery or dispatch input.
+  // Cookies remain with the origin that set them; redirects are never followed.
+  const targetFetch = createDeploymentFetcher(
+    {
+      baseUrl: configuredBaseUrl,
+      appUrl: frontendUrl,
+    },
+    fetcher,
+  );
   let step = "sign-in";
   let lastResponse: Pick<ProbeResponse, "body" | "status"> | undefined;
   let callback: ReturnType<typeof createReviewCallback> | undefined;
@@ -1498,11 +1504,13 @@ export const runReviewAccountJourney = async (
     init: Pick<RequestInit, "body" | "headers" | "method"> = {},
   ) => {
     lastResponse = undefined;
+    const origin = new URL(url).origin;
     const headers = new Headers(init.headers);
-    if (cookies.size > 0) {
+    const requestCookies = cookies.get(origin);
+    if (requestCookies && requestCookies.size > 0) {
       headers.set(
         "cookie",
-        [...cookies].map(([key, value]) => `${key}=${value}`).join("; "),
+        [...requestCookies].map(([key, value]) => `${key}=${value}`).join("; "),
       );
     }
     headers.set("origin", new URL(frontendUrl).origin);
@@ -1511,13 +1519,18 @@ export const runReviewAccountJourney = async (
       headers,
       timeout: { type: "idle", ms: PROBE_TIMEOUT_MS },
     });
+    const responseCookies = cookies.get(origin) ?? new Map<string, string>();
     for (const cookie of response.headers.getSetCookie()) {
       const pair = cookie.split(";").at(0);
       const separator = pair?.indexOf("=") ?? -1;
       if (pair && separator > 0) {
-        cookies.set(pair.slice(0, separator), pair.slice(separator + 1));
+        responseCookies.set(
+          pair.slice(0, separator),
+          pair.slice(separator + 1),
+        );
       }
     }
+    cookies.set(origin, responseCookies);
     lastResponse = await readProbeResponse(response);
     if (lastResponse.status !== 200) {
       reject("expected HTTP 200");
@@ -1562,7 +1575,7 @@ export const runReviewAccountJourney = async (
       // Exactly one password attempt. A failed sign-in aborts the journey; there
       // is no retry and no negative-password probe against the lockout budget.
       const signedIn = await request(
-        new URL("/api/auth/sign-in/email", baseUrl),
+        new URL("/api/auth/sign-in/email", frontendUrl),
         {
           method: "POST",
           headers: { "content-type": "application/json" },
@@ -1574,13 +1587,15 @@ export const runReviewAccountJourney = async (
           v.object({ user: v.object({ email: v.literal(email) }) }),
           signedIn,
         ) ||
-        cookies.size === 0
+        !cookies.get(new URL(frontendUrl).origin)?.size
       ) {
         reject("expected the review identity and a session cookie");
       }
       complete();
       step = "session";
-      const session = await request(new URL("/api/auth/get-session", baseUrl));
+      const session = await request(
+        new URL("/api/auth/get-session", frontendUrl),
+      );
       if (
         !v.is(
           v.object({
@@ -1656,7 +1671,7 @@ export const runReviewAccountJourney = async (
           reject("expected signed consent query");
         }
         const consent = await request(
-          new URL("/api/auth/oauth2/consent", baseUrl),
+          new URL("/api/auth/oauth2/consent", frontendUrl),
           {
             method: "POST",
             headers: { "content-type": "application/json" },
