@@ -2570,7 +2570,7 @@ jobs:
       - name: Check Docker source closure
         if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
         timeout-minutes: 1
-        run: timeout 30s bash -c 'bun test scripts/docker-source-closure.test.ts && bun scripts/docker-source-closure.ts'
+        run: timeout 30s bun test scripts/docker-source-closure.test.ts
 
       # The same transformation decides what every published tarball exports.
       # Its unit coverage is what keeps a malformed source map — a wildcard, a

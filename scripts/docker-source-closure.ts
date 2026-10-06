@@ -534,7 +534,7 @@ export const dockerPruneScopes = (source: string): string[][] =>
 type SourceCommandEntry = {
   file: string;
   args: readonly string[];
-  mode: "run" | "build";
+  mode: "run" | "build" | "preload";
 };
 
 type CommandContext = {
@@ -550,85 +550,338 @@ type SourceCommandOptions = {
   cwd: string;
   expand: (command: string, cwd: string) => SourceCommandEntry[];
 };
+type BunFlagPolicy =
+  | "value"
+  | "switch"
+  | "optional-value"
+  | "preload"
+  | "cwd"
+  | "workspace"
+  | "unsupported";
+
+// Bun 1.4.2 CLI help owns this census; tests reject new undocumented decisions.
+const runtimeBunFlags = {
+  "--silent": "switch",
+  "--elide-lines": "value",
+  "-F": "workspace",
+  "--filter": "workspace",
+  "-b": "switch",
+  "--bun": "switch",
+  "--no-orphans": "switch",
+  "--shell": "value",
+  "--workspaces": "unsupported",
+  "--parallel": "switch",
+  "--sequential": "switch",
+  "--no-exit-on-error": "switch",
+  "--watch": "switch",
+  "--watch-kill-signal": "value",
+  "--hot": "switch",
+  "--no-clear-screen": "switch",
+  "--smol": "switch",
+  "--interactive": "switch",
+  "-r": "preload",
+  "--preload": "preload",
+  "--require": "preload",
+  "--import": "preload",
+  "--inspect": "optional-value",
+  "--inspect-wait": "optional-value",
+  "--inspect-brk": "optional-value",
+  "--cpu-prof": "switch",
+  "--cpu-prof-name": "value",
+  "--cpu-prof-dir": "value",
+  "--cpu-prof-md": "switch",
+  "--cpu-prof-interval": "value",
+  "--heap-prof": "switch",
+  "--heap-prof-name": "value",
+  "--heap-prof-dir": "value",
+  "--heap-prof-md": "switch",
+  "--heap-prof-interval": "value",
+  "--if-present": "switch",
+  "--no-install": "switch",
+  "--install": "value",
+  "-i": "switch",
+  "-e": "unsupported",
+  "--eval": "unsupported",
+  "-p": "unsupported",
+  "--print": "unsupported",
+  "--prefer-offline": "switch",
+  "--prefer-latest": "switch",
+  "--port": "value",
+  "--conditions": "value",
+  "--fetch-preconnect": "value",
+  "--experimental-http2-fetch": "switch",
+  "--experimental-http3-fetch": "switch",
+  "--max-http-header-size": "value",
+  "--insecure-http-parser": "switch",
+  "--dns-result-order": "value",
+  "--experimental-stream-iter": "switch",
+  "--expose-gc": "switch",
+  "--no-deprecation": "switch",
+  "--throw-deprecation": "switch",
+  "--no-warnings": "switch",
+  "--trace-warnings": "switch",
+  "--trace-deprecation": "switch",
+  "--pending-deprecation": "switch",
+  "--redirect-warnings": "value",
+  "--disable-warning": "value",
+  "--title": "value",
+  "--zero-fill-buffers": "switch",
+  "--use-system-ca": "switch",
+  "--use-openssl-ca": "switch",
+  "--use-bundled-ca": "switch",
+  "--tls-min-v1.0": "switch",
+  "--tls-min-v1.1": "switch",
+  "--tls-min-v1.2": "switch",
+  "--tls-min-v1.3": "switch",
+  "--tls-max-v1.2": "switch",
+  "--tls-max-v1.3": "switch",
+  "--redis-preconnect": "switch",
+  "--sql-preconnect": "switch",
+  "--no-addons": "switch",
+  "--no-ffi-cc": "switch",
+  "--unhandled-rejections": "value",
+  "--console-depth": "value",
+  "--user-agent": "value",
+  "--cron-title": "value",
+  "--cron-period": "value",
+  "--main-fields": "value",
+  "--preserve-symlinks": "switch",
+  "--preserve-symlinks-main": "switch",
+  "--extension-order": "value",
+  "--tsconfig-override": "unsupported",
+  "-d": "value",
+  "--define": "value",
+  "--drop": "value",
+  "--feature": "value",
+  "-l": "value",
+  "--loader": "value",
+  "--no-macros": "switch",
+  "--jsx-factory": "value",
+  "--jsx-fragment": "value",
+  "--jsx-import-source": "value",
+  "--jsx-runtime": "value",
+  "--jsx-side-effects": "switch",
+  "--ignore-dce-annotations": "switch",
+  "--env-file": "value",
+  "--no-env-file": "switch",
+  "--cwd": "cwd",
+  "-c": "unsupported",
+  "--config": "unsupported",
+  "-h": "unsupported",
+  "--help": "unsupported",
+} as const satisfies Record<string, BunFlagPolicy>;
+
+export const BUN_FLAGS = {
+  run: runtimeBunFlags,
+  build: {
+    ...runtimeBunFlags,
+    "--production": "switch",
+    "--compile": "switch",
+    "--compile-exec-argv": "value",
+    "--compile-autoload-dotenv": "switch",
+    "--no-compile-autoload-dotenv": "switch",
+    "--compile-autoload-bunfig": "switch",
+    "--no-compile-autoload-bunfig": "switch",
+    "--compile-autoload-tsconfig": "switch",
+    "--no-compile-autoload-tsconfig": "switch",
+    "--compile-autoload-package-json": "switch",
+    "--no-compile-autoload-package-json": "switch",
+    "--compile-executable-path": "unsupported",
+    "--asset": "unsupported",
+    "--bytecode": "switch",
+    "--bytecode-depth": "value",
+    "--watch": "switch",
+    "--no-clear-screen": "switch",
+    "--target": "value",
+    "--outdir": "value",
+    "--outfile": "value",
+    "--metafile": "value",
+    "--metafile-md": "value",
+    "--sourcemap": "optional-value",
+    "--banner": "value",
+    "--footer": "value",
+    "--format": "value",
+    "--root": "value",
+    "--splitting": "switch",
+    "--no-split-require": "switch",
+    "--no-module-preload": "switch",
+    "--min-chunk-size": "value",
+    "--public-path": "value",
+    "-e": "value",
+    "--external": "value",
+    "--allow-unresolved": "value",
+    "--reject-unresolved": "switch",
+    "--packages": "value",
+    "--entry-naming": "value",
+    "--chunk-naming": "value",
+    "--asset-naming": "value",
+    "--react-fast-refresh": "switch",
+    "--react-compiler": "switch",
+    "--no-bundle": "switch",
+    "--emit-dce-annotations": "switch",
+    "--no-deprecated-namespace-object-setters": "switch",
+    "--minify": "switch",
+    "--minify-syntax": "switch",
+    "--minify-whitespace": "switch",
+    "--minify-identifiers": "switch",
+    "--keep-names": "switch",
+    "--css-chunking": "switch",
+    "--conditions": "value",
+    "--app": "switch",
+    "--server-components": "switch",
+    "--env": "value",
+    "--windows-hide-console": "switch",
+    "--windows-icon": "value",
+    "--windows-title": "value",
+    "--windows-publisher": "value",
+    "--windows-version": "value",
+    "--windows-description": "value",
+    "--windows-copyright": "value",
+  },
+} as const satisfies Record<"run" | "build", Record<string, BunFlagPolicy>>;
+
+type BunFlagOptions = {
+  words: readonly string[];
+  index: number;
+  flags: ReadonlyMap<string, BunFlagPolicy>;
+};
+const readBunFlag = ({ words, index, flags }: BunFlagOptions) => {
+  const word = words[index] ?? "";
+  const equals = word.indexOf("=");
+  const name = equals === -1 ? word : word.slice(0, equals);
+  const policy = flags.get(name);
+  if (policy === undefined) {
+    panic(`Unsupported Bun flag: ${word}`);
+  }
+  if (policy === "unsupported") {
+    panic(`Unsupported Bun flag semantics: ${name}`);
+  }
+  if (policy === "switch" && equals !== -1) {
+    panic(`Bun switch does not accept a value: ${word}`);
+  }
+  if (policy === "switch" || policy === "optional-value") {
+    return { policy: "ignored", nextIndex: index } as const;
+  }
+  const nextIndex = equals === -1 ? index + 1 : index;
+  const value = equals === -1 ? words[nextIndex] : word.slice(equals + 1);
+  if (value === undefined || value.length === 0 || value.startsWith("-")) {
+    panic(`Missing Bun flag value: ${name}`);
+  }
+  return { policy, value, nextIndex } as const;
+};
+
+type PackageScriptOptions = {
+  name: string;
+  cwd: string;
+  expand: SourceCommandOptions["expand"];
+};
+const packageScriptEntries = (
+  context: CommandContext,
+  options: PackageScriptOptions,
+) => {
+  const owner = context.tree.get(`${options.cwd}/package.json`);
+  const scripts =
+    typeof owner === "string"
+      ? (JSON.parse(text(context.root, owner)).scripts ?? {})
+      : {};
+  if (!Object.hasOwn(scripts, options.name)) {
+    return undefined;
+  }
+  const key = `${options.cwd}#${options.name}`;
+  if (context.active.has(key)) {
+    panic(`Recursive build script: ${key}`);
+  }
+  context.active.add(key);
+  const entries = options.expand(scripts[options.name], options.cwd);
+  context.active.delete(key);
+  return entries;
+};
+
+const workspaceCwd = (context: CommandContext, name: string) => {
+  const owner = [...context.tree].find(
+    ([file, origin]) =>
+      file.endsWith("/package.json") &&
+      typeof origin === "string" &&
+      JSON.parse(text(context.root, origin)).name === name,
+  );
+  if (owner === undefined) {
+    panic(`Filtered workspace is unavailable: ${name}`);
+  }
+  return path.posix.dirname(owner[0]);
+};
+
 const sourceCommandEntries = (
   context: CommandContext,
   options: SourceCommandOptions,
 ): SourceCommandEntry[] => {
-  const { root, tree, active } = context;
   const { command } = options;
   const entries: SourceCommandEntry[] = [];
   let commandCwd = options.cwd;
-  let words = options.words;
-  const packageScript = words[0] === "--filter" || words[0] === "run";
-  if (words[0] === "--filter") {
-    const name = words[1];
-    const owner = [...tree].find(
-      ([file, origin]) =>
-        file.endsWith("/package.json") &&
-        typeof origin === "string" &&
-        JSON.parse(text(root, origin)).name === name,
-    );
-    if (owner === undefined) {
-      panic(`Filtered workspace is unavailable: ${String(name)}`);
-    }
-    commandCwd = path.posix.dirname(owner[0]);
-    words = words.slice(2);
-  }
+  const words = options.words;
+  let packageScript = words[0] === "run";
   if (words[0] === "run") {
     words.shift();
   }
-  const manifest = tree.get(`${commandCwd}/package.json`);
-  const scripts =
-    typeof manifest === "string"
-      ? (JSON.parse(text(root, manifest)).scripts ?? {})
-      : {};
-  const script = words[0];
-  if (
-    script !== undefined &&
-    script in scripts &&
-    (script !== "build" || packageScript)
-  ) {
-    const key = `${commandCwd}#${script}`;
-    if (active.has(key)) {
-      panic(`Recursive build script: ${key}`);
-    }
-    active.add(key);
-    entries.push(...options.expand(scripts[script], commandCwd));
-    active.delete(key);
-    return entries;
-  }
-  const mode = words[0] === "build" ? "build" : "run";
-  if (words[0] === "build") {
+  let mode: "build" | "run" =
+    words[0] === "build" && !packageScript ? "build" : "run";
+  if (mode === "build") {
     words.shift();
   }
-  const flagValues = new Set([
-    "--define",
-    "--target",
-    "--outfile",
-    "--outdir",
-    "--entry-naming",
-    "--sourcemap",
-    "--external",
-  ]);
-  const booleanFlags = new Set([
-    "--compile",
-    "--no-compile-autoload-dotenv",
-    "--minify",
-    "--splitting",
-  ]);
+  let flags = new Map(Object.entries(BUN_FLAGS[mode]));
   let found = false;
   for (let index = 0; index < words.length; index += 1) {
     const word = words[index] ?? "";
-    if (flagValues.has(word)) {
-      index += 1;
-      continue;
-    }
-    if (word.startsWith("--")) {
-      const name = word.split("=")[0] ?? "";
-      if (!flagValues.has(name) && !booleanFlags.has(name)) {
-        panic(`Unsupported Bun flag: ${word}`);
+    if (word.startsWith("-")) {
+      const flag = readBunFlag({ words, index, flags });
+      index = flag.nextIndex;
+      if (flag.policy === "ignored") {
+        continue;
+      }
+      const { policy, value } = flag;
+      if (policy === "cwd") {
+        if (entries.length > 0) {
+          panic("Unsupported Bun cwd after a source entry");
+        }
+        commandCwd = absolute(commandCwd, value);
+      } else if (policy === "workspace") {
+        if (entries.length > 0) {
+          panic("Unsupported Bun workspace after a source entry");
+        }
+        commandCwd = workspaceCwd(context, value);
+        packageScript = true;
+      } else if (policy === "preload") {
+        if (!modulePattern.test(value)) {
+          panic(`Unresolved Bun preload: ${value}`);
+        }
+        const preload = {
+          file: absolute(commandCwd, value),
+          args: [],
+          mode: "preload",
+        } satisfies SourceCommandEntry;
+        entries.push(preload);
+        context.consume?.(preload);
       }
       continue;
+    }
+    if (!found && word === "run") {
+      packageScript = true;
+      continue;
+    }
+    if (!found && word === "build" && !packageScript) {
+      mode = "build";
+      flags = new Map(Object.entries(BUN_FLAGS.build));
+      continue;
+    }
+    if (!found && (word !== "build" || packageScript)) {
+      const expanded = packageScriptEntries(context, {
+        name: word,
+        cwd: commandCwd,
+        expand: options.expand,
+      });
+      if (expanded !== undefined) {
+        entries.push(...expanded);
+        return entries;
+      }
     }
     if (!modulePattern.test(word)) {
       if (!found) {
@@ -653,6 +906,36 @@ const sourceCommandEntries = (
   }
   return entries;
 };
+
+type BunMetadataOptions = {
+  words: readonly string[];
+  tree: SourceTree;
+  cwd: string;
+};
+const checkBunMetadata = ({ words, tree, cwd }: BunMetadataOptions) => {
+  // The bootstrap prints a version from its copied manifest. Other inline
+  // programs remain unresolved reads rather than bypassing the source model.
+  if (
+    words.length !== 2 ||
+    !["-p", "--print"].includes(words[0] ?? "") ||
+    !/^require\((?:"\.\/package\.json"|'\.\/package\.json')\)\.devDependencies\.turbo$/u.test(
+      words[1] ?? "",
+    )
+  ) {
+    return false;
+  }
+  if (!tree.has(absolute(cwd, "package.json"))) {
+    panic("Bun metadata input is unavailable: package.json");
+  }
+  return true;
+};
+
+const isSourceFreeNpmCommand = (words: readonly string[]) =>
+  words[0] === "install" ||
+  (words.length === 3 &&
+    words[0] === "cache" &&
+    words[1] === "clean" &&
+    words[2] === "--force");
 
 const walkCommand = (
   context: CommandContext,
@@ -716,14 +999,7 @@ const walkCommand = (
       continue;
     }
     if (["npm", "yarn", "pnpm", "npx", "bunx", "tsc"].includes(program ?? "")) {
-      if (
-        program === "npm" &&
-        (words[0] === "install" ||
-          (words.length === 3 &&
-            words[0] === "cache" &&
-            words[1] === "clean" &&
-            words[2] === "--force"))
-      ) {
+      if (program === "npm" && isSourceFreeNpmCommand(words)) {
         continue;
       }
       panic(`Unsupported source runner: ${String(program)}`);
@@ -731,7 +1007,10 @@ const walkCommand = (
     if (program !== "bun" && program !== "node") {
       continue;
     }
-    if (["install", "i", "add", "-p", "-e"].includes(words[0] ?? "")) {
+    if (program === "bun" && checkBunMetadata({ words, tree, cwd })) {
+      continue;
+    }
+    if (["install", "i", "add"].includes(words[0] ?? "")) {
       continue;
     }
     entries.push(
@@ -867,7 +1146,28 @@ export const checkDockerSource = (
     } else if (operation === "WORKDIR") {
       stage.cwd = absolute(stage.cwd, body);
     } else if (operation === "ADD") {
-      panic(`Unsupported source instruction: ${instruction}`);
+      const words = body.split(/\s+/u);
+      const inputs = words.filter((word) => !word.startsWith("--"));
+      const archive = /\.(?:tar(?:\.(?:gz|xz|bz2))?|tgz|zip)$/iu;
+      const [url, target] = inputs;
+      if (
+        words.some(
+          (word) =>
+            word.startsWith("--") &&
+            !/^--checksum=sha256:[a-f0-9]{64}$/u.test(word),
+        ) ||
+        inputs.length !== 2 ||
+        url === undefined ||
+        target === undefined ||
+        !/^https?:\/\//u.test(url) ||
+        !archive.test(url) ||
+        !archive.test(target) ||
+        /[$\\]/u.test(body)
+      ) {
+        panic(`Unsupported source instruction: ${instruction}`);
+      }
+      // Remote archives stay opaque: neither ADD nor a later native unpack
+      // declares repository modules available to a Bun source runner.
     } else if (operation === "COPY") {
       copyInstruction(stages, stage, context, body);
     } else if (operation === "RUN") {

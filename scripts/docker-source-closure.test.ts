@@ -12,6 +12,8 @@ import ts from "typescript";
 import * as v from "valibot";
 
 import {
+  BUN_FLAGS,
+  checkRepositoryDockerSources,
   commandEntries,
   checkDockerSource,
   copySource,
@@ -131,6 +133,7 @@ describe("Docker source closure", () => {
     for (const scenario of [
       "valid",
       "missing-command",
+      "preload-only",
       "before-producer",
       "missing-producer-input",
       "missing-output",
@@ -169,7 +172,10 @@ describe("Docker source closure", () => {
         [`/${producer}`, producer],
         ["/entry.ts", "entry.ts"],
       ]);
-      const run = `RUN ${generator.write.join(" ")}`;
+      const run =
+        scenario === "preload-only"
+          ? `RUN bun --preload ${producer} entry.ts`
+          : `RUN ${generator.write.join(" ")}`;
       const build = "RUN bun entry.ts";
       const commands = [run, build];
       if (scenario === "before-producer") {
@@ -194,6 +200,7 @@ describe("Docker source closure", () => {
       } else {
         const expected = {
           "missing-command": output.slice(0, -3),
+          "preload-only": output.slice(0, -3),
           "before-producer": output.slice(0, -3),
           "missing-producer-input": "absent-helper",
           "missing-output": output,
@@ -325,6 +332,208 @@ describe("Docker source closure", () => {
     ).toThrow("Unsupported Bun flag: --unknown");
   });
 
+  test("Bun build format and output flags cannot become source entrypoints", () => {
+    const context = tree(["entry.ts"]);
+    for (const command of [
+      "bun build entry.ts --format=esm --target=node --outfile=output.ts",
+      "bun build --format esm --target node --outdir dist entry.ts",
+      "bun build --sourcemap entry.ts",
+      "bun build entry.ts --sourcemap",
+      "bun build --external excluded.ts --define CONSTANT:1 --root src entry.ts --entry-naming '[name].js' --sourcemap=external --minify-syntax --minify-whitespace --minify-identifiers --splitting",
+    ]) {
+      expect(commandEntries(root, context, command, "/app")).toEqual([
+        "/app/entry.ts",
+      ]);
+    }
+    for (const command of [
+      "bun build --format entry.ts --unknown=true",
+      "bun build entry.ts --format",
+      "bun build entry.ts --format=",
+      "bun build entry.ts --minify=true",
+    ]) {
+      expect(() => commandEntries(root, context, command, "/app")).toThrow(
+        /(?:Bun|source)/u,
+      );
+    }
+  });
+
+  test("every Bun CLI flag has an explicit arity and source-effect decision", () => {
+    for (const mode of ["build", "run"] as const) {
+      const help = Bun.spawnSync([process.execPath, mode, "--help"]);
+      expect(help.exitCode).toBe(0);
+      const supported = new Set(Object.keys(BUN_FLAGS[mode]));
+      const flags = [
+        ...help.stdout
+          .toString()
+          .matchAll(/^\s+(?:(-[A-Za-z]),?\s+)?(--[\w.-]+)(=<val>)?/gmu),
+      ];
+      expect(flags.length).toBeGreaterThan(50);
+      for (const [, short, long] of flags) {
+        expect(supported, `${mode}/${long}`).toContain(long);
+        if (short !== undefined) {
+          expect(supported, `${mode}/${short}`).toContain(short);
+        }
+      }
+      const context = tree(["entry.ts", "preload.ts"]);
+      for (const [flag, policy] of Object.entries(BUN_FLAGS[mode])) {
+        if (policy === "workspace") {
+          expect(() =>
+            commandEntries(
+              root,
+              context,
+              `bun ${mode} ${flag} unknown entry.ts`,
+              "/app",
+            ),
+          ).toThrow("Filtered workspace is unavailable");
+          continue;
+        }
+        if (policy === "unsupported") {
+          expect(() =>
+            commandEntries(
+              root,
+              context,
+              `bun ${mode} ${flag} value.ts entry.ts`,
+              "/app",
+            ),
+          ).toThrow("Unsupported Bun flag semantics");
+          continue;
+        }
+        for (const spelling of ["separate", "equals"]) {
+          let value = "value.ts";
+          if (policy === "preload") {
+            value = "preload.ts";
+          } else if (policy === "cwd") {
+            value = "/app";
+          }
+          let argument = flag;
+          if (policy !== "switch" && policy !== "optional-value") {
+            argument =
+              spelling === "equals" ? `${flag}=${value}` : `${flag} ${value}`;
+          }
+          expect(
+            commandEntries(
+              root,
+              context,
+              `bun ${mode} ${argument} entry.ts`,
+              "/app",
+            ),
+            `${mode}/${argument}`,
+          ).toEqual(
+            policy === "preload"
+              ? ["/app/preload.ts", "/app/entry.ts"]
+              : ["/app/entry.ts"],
+          );
+        }
+      }
+    }
+  });
+
+  test("Bun preloads enter the stage closure and cwd changes source resolution", () => {
+    const entry = put("flags/entry.ts", "export const value = 1;");
+    const preload = put("flags/preload.ts", "export const preloaded = 1;");
+    const context: SourceTree = new Map([
+      [`/${entry}`, entry],
+      [`/${preload}`, preload],
+    ]);
+    const source =
+      "FROM bun\nWORKDIR /app\nCOPY flags/entry.ts flags/entry.ts\nRUN bun run --cwd /app/flags --preload preload.ts entry.ts";
+    expect(
+      checkDockerSource(root, source, context, new Map()).join("\n"),
+    ).toContain("preload.ts");
+    expect(() =>
+      commandEntries(
+        root,
+        context,
+        "bun run --tsconfig-override config.json flags/entry.ts",
+        "/app",
+      ),
+    ).toThrow("Unsupported Bun flag semantics");
+  });
+
+  test("late source-resolution flags fail closed instead of reusing an earlier preload path", () => {
+    const context = tree(["preload.ts", "entry.ts"]);
+    for (const flag of ["--cwd=/other", "--filter=@stll/other"]) {
+      expect(() =>
+        commandEntries(
+          root,
+          context,
+          `bun run --preload preload.ts ${flag} entry.ts`,
+          "/app",
+        ),
+      ).toThrow("after a source entry");
+    }
+  });
+
+  test("Bun runtime options preserve explicit and filtered package scripts", () => {
+    const manifest = put(
+      "flagged/package.json",
+      JSON.stringify({
+        name: "@stll/flagged",
+        scripts: { generate: "bun entry.ts" },
+      }),
+    );
+    const entry = put("flagged/entry.ts", "export const value = 1;");
+    const context = tree([manifest, entry]);
+    for (const command of [
+      "bun --cwd=/app/flagged run --silent generate",
+      "bun run --cwd /app/flagged generate",
+      "bun --filter=@stll/flagged generate",
+      "bun run -F @stll/flagged generate",
+    ]) {
+      expect(commandEntries(root, context, command, "/app")).toEqual([
+        "/app/flagged/entry.ts",
+      ]);
+    }
+  });
+
+  test("the bootstrap metadata expression requires its exact stage input", () => {
+    const context: SourceTree = new Map([
+      ["/app/package.json", "package.json"],
+    ]);
+    for (const flag of ["-p", "--print"]) {
+      const command = `bun ${flag} 'require("./package.json").devDependencies.turbo'`;
+      expect(commandEntries(root, context, command, "/app")).toEqual([]);
+      expect(() => commandEntries(root, new Map(), command, "/app")).toThrow(
+        "Bun metadata input is unavailable",
+      );
+    }
+    expect(() =>
+      commandEntries(root, context, `bun -p 'require("./missing.ts")'`, "/app"),
+    ).toThrow("Unsupported Bun flag semantics");
+  });
+
+  test("remote native archives never manufacture copied or generated source modules", () => {
+    const entry = put("native-add/entry.ts", 'import "./missing";');
+    const context: SourceTree = new Map([["/entry.ts", entry]]);
+    const checksum = "a".repeat(64);
+    const prefix = `FROM bun\nWORKDIR /app\nCOPY entry.ts .\nADD --checksum=sha256:${checksum} https://example.invalid/native.tar /native.tar`;
+    expect(checkDockerSource(root, prefix, context, new Map())).toEqual([]);
+    expect(
+      checkDockerSource(
+        root,
+        `${prefix}\nRUN tar -xf /native.tar -C /app && bun entry.ts`,
+        context,
+        new Map(),
+      ).join("\n"),
+    ).toContain("missing");
+    for (const add of [
+      "ADD local.tar /native.tar",
+      "ADD https://example.invalid/entry.ts /app/entry.ts",
+      "ADD https://example.invalid/native.tar /app/package.json",
+      "ADD --unknown=yes https://example.invalid/native.tar /native.tar",
+    ]) {
+      expect(() =>
+        checkDockerSource(root, `FROM bun\n${add}`, context, new Map()),
+      ).toThrow("Unsupported source instruction");
+    }
+  });
+
+  test("every tracked Dockerfile passes the full hydrated repository check", () => {
+    expect(
+      checkRepositoryDockerSources(path.resolve(import.meta.dir, "..")),
+    ).toEqual([]);
+  }, 30_000);
+
   test("runs after source hydration in the installed light job with a fixed total budget", () => {
     const workflow = v.parse(
       v.object({
@@ -361,7 +570,7 @@ describe("Docker source closure", () => {
     expect(steps[guard]?.if).toContain("package_checks_required == 'true'");
     expect(steps[guard]?.["timeout-minutes"]).toBe(1);
     expect(steps[guard]?.run).toBe(
-      "timeout 30s bash -c 'bun test scripts/docker-source-closure.test.ts && bun scripts/docker-source-closure.ts'",
+      "timeout 30s bun test scripts/docker-source-closure.test.ts",
     );
   });
 
@@ -886,14 +1095,14 @@ describe("Docker source closure", () => {
     expect(() =>
       commandEntries(root, tree(files), "bun $ENTRY", "/app"),
     ).toThrow("Unsupported");
-    expect(() =>
+    expect(
       commandEntries(
         root,
         tree(files),
         "bun --cwd=elsewhere src/main.ts",
         "/app",
       ),
-    ).toThrow("Unsupported Bun flag");
+    ).toEqual(["/app/elsewhere/src/main.ts"]);
     expect(
       commandEntries(
         root,
