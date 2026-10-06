@@ -123,7 +123,7 @@ export function getRouter() {
 }
 
 declare module "@tanstack/react-router" {
-  // oxlint-disable-next-line consistent-type-definitions -- module augmentation requires interface for declaration merging
+  // oxlint-disable-next-line typescript/consistent-type-definitions -- module augmentation requires interface for declaration merging
   interface Register {
     router: ReturnType<typeof getRouter>;
   }

@@ -216,7 +216,7 @@ export const createSkillPackageFetchContext = (
   githubTrees: new Map(),
 });
 
-// oxlint-disable-next-line promise-function-async -- preserves the cached promise identity so concurrent callers share the same request
+// oxlint-disable-next-line typescript/promise-function-async -- preserves the cached promise identity so concurrent callers share the same request
 export const getOrCreateGithubTreeRequest = ({
   cacheKey,
   context,

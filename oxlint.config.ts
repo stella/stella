@@ -26,6 +26,7 @@ import {
   designLintBacklogOverrides,
 } from "./scripts/design-lint-policy.ts";
 import { OWNERSHIP, STATUS_TRANSITION_OWNERSHIP } from "./scripts/ownership.ts";
+import { withCanonicalDisableRuleIds } from "./scripts/oxlint-disable-rule-ids.ts";
 import core from "./scripts/oxlint-presets/core.mjs";
 import react from "./scripts/oxlint-presets/react.mjs";
 import shadcn from "./scripts/oxlint-presets/shadcn.mjs";
@@ -837,7 +838,7 @@ const customCssClassNames = [
   "word",
 ] satisfies string[];
 
-export default defineConfig({
+const config = defineConfig({
   extends: [core, react, shadcn],
   // `typeAware` and `reportUnusedDisableDirectives` stay CLI flags: the
   // pre-commit hook and the docs-source check run without type information,
@@ -1159,6 +1160,7 @@ export default defineConfig({
       },
     ],
     "suppression-hygiene/require-description": "error",
+    "suppression-hygiene/canonical-rule-id": "error",
     "suppression-hygiene/no-foreign-directive": "error",
     "typescript/ban-ts-comment": [
       "error",
@@ -5421,3 +5423,5 @@ export default defineConfig({
     ...designLintBacklogOverrides(designLintBaseline),
   ],
 });
+
+export default withCanonicalDisableRuleIds(config);

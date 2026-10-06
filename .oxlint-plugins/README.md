@@ -262,7 +262,7 @@ runtime validation, or integration tests.
 - [`no-internal-module-mock`](./no-internal-module-mock.ts) (`no-internal-module-mock`): rejects `mock.module` against a workspace module (relative, `@/`, or `@stll/` specifier) or a non-literal specifier; npm packages and runtime builtins stay valid as external boundaries, except the TanStack AI engine and adapter packages (`@tanstack/ai`, `@tanstack/ai-*`), which are a runtime whose chunk shape the code under test must be proven against: fake the adapter through the model resolver seam instead. Pairs listed in `scripts/internal-module-mock-ledger.json` are grandfathered, a listed pair whose mock is gone is reported as stale, and the ratchet keeps the ledger from growing.
 - [`no-static-devtools-import`](./no-static-devtools-import.ts) (`no-static-devtools-import`): prevents development-only modules from entering eager production dependency graphs.
 - [`require-function-replacer`](./require-function-replacer.ts) (`require-function-replacer`): requires function-valued state updates to use an explicit replacer wrapper so they are not invoked as updater callbacks.
-- [`suppression-hygiene`](./suppression-hygiene.ts) (`require-description`, `no-foreign-directive`): requires rule-specific, explained suppressions and rejects directives for another lint engine.
+- [`suppression-hygiene`](./suppression-hygiene.ts) (`require-description`, `no-foreign-directive`, `canonical-rule-id`): requires explained suppressions, autofixes rule IDs to their configured spelling, and rejects directives for another lint engine.
 
 ## Native and shared rules
 
