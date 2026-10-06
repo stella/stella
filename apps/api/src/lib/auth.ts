@@ -114,6 +114,7 @@ import {
   isReviewAccountConfigured,
 } from "@/api/lib/auth/review-account";
 import {
+  createReviewAccountDatabaseHooks,
   createReviewAccountPlugin,
   REVIEW_ACCOUNT_SIGN_IN_BUDGET,
   requireReviewAccountAccess,
@@ -953,6 +954,7 @@ export const createAuth = (roleAssignmentPolicy = assignableRoles) => {
   });
   const demoConfig = getDemoAccountConfig();
   const reviewConfig = getReviewAccountConfig();
+  const reviewDatabaseHooks = createReviewAccountDatabaseHooks(reviewConfig);
   const resolveSessionAccount = async (userId: SafeId<"user">) =>
     await rootDb.query.user.findFirst({
       where: { id: userId },
@@ -1627,6 +1629,9 @@ export const createAuth = (roleAssignmentPolicy = assignableRoles) => {
       reviewAccountConfigured: isReviewAccountConfigured(),
     }),
     databaseHooks: {
+      account: {
+        create: { before: reviewDatabaseHooks.accountCreateBefore },
+      },
       session: {
         create: {
           before: async (session) =>
@@ -1637,6 +1642,7 @@ export const createAuth = (roleAssignmentPolicy = assignableRoles) => {
       user: {
         create: {
           before: async (user, ctx) => {
+            await reviewDatabaseHooks.userCreateBefore(user, ctx);
             const data = Result.gen(function* () {
               yield* checkNewAccountEmailAllowedForCreation({
                 email: user.email,

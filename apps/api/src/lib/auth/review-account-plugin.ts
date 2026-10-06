@@ -14,6 +14,7 @@ import {
   isReviewAccountEmail,
   readReviewAccountOrganizationTargets,
   REVIEW_ACCOUNT_OPERATION,
+  REVIEW_ACCOUNT_REFUSAL_MESSAGE,
   resolveReviewAccountBodyEmailOperation,
   resolveReviewAccountSessionOperation,
 } from "@/api/lib/auth/review-account-policy";
@@ -122,6 +123,65 @@ const requireNamedOrganizations = async ({
     );
   }
 };
+
+const CREDENTIAL_PROVIDER_ID = "credential";
+
+/**
+ * Database-layer rules for the review account, covering every path that
+ * writes the rows (explicit linking, implicit linking on a social sign-in
+ * with a matching verified email, sign-up): no identity but its password
+ * credential is ever attached to it, and no request creates it; only the
+ * operator command does, outside any request.
+ */
+export const createReviewAccountDatabaseHooks = (
+  config: ReviewAccountConfig,
+) => ({
+  accountCreateBefore: async (
+    account: { userId: string; providerId: string },
+    // Absent outside a request (the operator command), where it is allowed.
+    context:
+      | { context: Pick<AuthContext, "internalAdapter"> }
+      | null
+      | undefined,
+  ): Promise<undefined> => {
+    if (
+      config.email === undefined ||
+      account.providerId === CREDENTIAL_PROVIDER_ID ||
+      context === null ||
+      context === undefined
+    ) {
+      return undefined;
+    }
+    const owner = await context.context.internalAdapter.findUserById(
+      account.userId,
+    );
+    if (owner) {
+      requireReviewAccountAccess(
+        checkReviewAccountAccess({
+          email: owner.email,
+          config,
+          operation: REVIEW_ACCOUNT_OPERATION.linkIdentity,
+        }),
+      );
+    }
+    return undefined;
+  },
+  userCreateBefore: async (
+    user: { email: string },
+    context: unknown,
+  ): Promise<undefined> => {
+    await Promise.resolve();
+    // Only the operator command, outside any request, creates the account.
+    const inRequest = context !== null && context !== undefined;
+    if (inRequest && isReviewAccountEmail({ email: user.email, config })) {
+      throw new APIError("FORBIDDEN", {
+        code: "account_access_unavailable",
+        message: REVIEW_ACCOUNT_REFUSAL_MESSAGE,
+      });
+    }
+    return undefined;
+  },
+});
 
 export const createReviewAccountPlugin = ({
   config,

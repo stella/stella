@@ -1,11 +1,15 @@
 import { betterAuth } from "better-auth";
+import type { BetterAuthPlugin } from "better-auth";
 import { memoryAdapter } from "better-auth/adapters/memory";
+import { createAuthEndpoint } from "better-auth/api";
+import { handleOAuthUserInfo } from "better-auth/oauth2";
 import { emailOTP, organization, twoFactor } from "better-auth/plugins";
 import { describe, expect, test } from "bun:test";
 import { SignJWT } from "jose";
 
 import { resolveEmailAndPasswordOptions } from "@/api/lib/auth/password-sign-in-options";
 import {
+  createReviewAccountDatabaseHooks,
   createReviewAccountPlugin,
   REVIEW_ACCOUNT_SIGN_IN_BUDGET,
 } from "@/api/lib/auth/review-account-plugin";
@@ -46,13 +50,53 @@ const createLocalBudget = () => {
   });
 };
 
+/**
+ * Runs Better Auth's own social sign-in account handling (the step behind
+ * every provider callback, including implicit linking by verified email)
+ * for a fixture Google identity, without a network exchange.
+ */
+const socialSignInFixturePlugin = {
+  id: "social-sign-in-fixture",
+  endpoints: {
+    socialSignInFixture: createAuthEndpoint(
+      "/fixture/social-sign-in",
+      { method: "POST" },
+      async (ctx) => {
+        const body: unknown = ctx.body;
+        const email =
+          typeof body === "object" && body !== null
+            ? Reflect.get(body, "email")
+            : undefined;
+        const result = await handleOAuthUserInfo(ctx, {
+          userInfo: {
+            id: "google-fixture-subject",
+            email: typeof email === "string" ? email : "",
+            emailVerified: true,
+            name: "Fixture",
+            image: null,
+          },
+          account: {
+            providerId: "google",
+            accountId: "google-fixture-subject",
+          },
+          callbackURL: "/",
+        });
+        return ctx.json({ error: result.error ?? null });
+      },
+    ),
+  },
+} satisfies BetterAuthPlugin;
+
 const createReviewAuth = async ({
   activeOrganizationId = reviewOrganizationId,
   localPasswordEnabled = false,
+  provisioned = true,
 }: {
   activeOrganizationId?: string;
   localPasswordEnabled?: boolean;
+  provisioned?: boolean;
 } = {}) => {
+  const databaseHooks = createReviewAccountDatabaseHooks(config);
   const auth = betterAuth({
     baseURL: "http://localhost:3001",
     secret: "test-secret-that-is-long-enough-for-better-auth",
@@ -86,6 +130,15 @@ const createReviewAuth = async ({
       },
     },
     databaseHooks: {
+      account: { create: { before: databaseHooks.accountCreateBefore } },
+      user: {
+        create: {
+          before: async (user, ctx) => {
+            await databaseHooks.userCreateBefore(user, ctx);
+            return undefined;
+          },
+        },
+      },
       session: {
         create: {
           before: async (session) => ({
@@ -103,11 +156,12 @@ const createReviewAuth = async ({
       twoFactor({ allowPasswordless: true }),
       organization({ allowUserToCreateOrganization: true }),
       emailOTP({ sendVerificationOTP: async () => undefined }),
+      socialSignInFixturePlugin,
     ],
   });
   // Accounts are provisioned out of band; sign-up is off.
   const context = await auth.$context;
-  for (const email of [reviewEmail, otherEmail]) {
+  for (const email of provisioned ? [reviewEmail, otherEmail] : [otherEmail]) {
     const user = await context.internalAdapter.createUser(
       { email, name: "Fixture", emailVerified: true },
       { method: "admin" },
@@ -466,7 +520,9 @@ describe("restricted review account password sign-in", () => {
           path,
           method: isPostLike(method) ? "POST" : "GET",
         });
+        // The test's own fixture endpoint is not part of the router.
         return operation === null &&
+          !path.startsWith("/fixture/") &&
           !isReviewAccountBodyEmailPath(path) &&
           !isReviewAccountTokenRedemptionPath(path) &&
           !isReviewAccountTargetCheckedPath(path) &&
@@ -663,5 +719,47 @@ describe("restricted review account password sign-in", () => {
       ),
     );
     expect(read.status).toBe(403);
+  });
+
+  test("refuses attaching a social identity to the account on sign-in", async () => {
+    const auth = await createReviewAuth();
+    const context = await auth.$context;
+    const userId =
+      (await context.internalAdapter.findUserByEmail(reviewEmail))?.user.id ??
+      "";
+    // A plain social sign-in with the review address: no link was requested,
+    // so Better Auth would link the verified identity implicitly.
+    const response = await postAuth(auth, "/fixture/social-sign-in", {
+      email: reviewEmail,
+    });
+    expect(response.status).toBe(403);
+    expect(await response.json()).toMatchObject({
+      code: "account_access_unavailable",
+    });
+    expect(
+      (await context.internalAdapter.findAccounts(userId)).map(
+        (account) => account.providerId,
+      ),
+    ).toEqual(["credential"]);
+    // Another verified account links as before.
+    const other = await postAuth(auth, "/fixture/social-sign-in", {
+      email: otherEmail,
+    });
+    expect(other.status).toBe(200);
+  });
+
+  test("refuses creating the account from a sign-in before it is provisioned", async () => {
+    const auth = await createReviewAuth({ provisioned: false });
+    const context = await auth.$context;
+    const response = await postAuth(auth, "/fixture/social-sign-in", {
+      email: reviewEmail,
+    });
+    expect(response.status).toBe(403);
+    expect(await response.json()).toMatchObject({
+      code: "account_access_unavailable",
+    });
+    expect(
+      await context.internalAdapter.findUserByEmail(reviewEmail),
+    ).toBeNull();
   });
 });
