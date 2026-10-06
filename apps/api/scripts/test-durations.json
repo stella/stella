@@ -211,6 +211,10 @@
     "seconds": 1.21972,
     "source": "estimated"
   },
+  "scripts/visual-sandbox-runtime.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
   "src/agent-auth/metadata.test.ts": {
     "seconds": 0.06405,
     "source": "estimated"
@@ -3784,6 +3788,10 @@
     "source": "estimated"
   },
   "src/handlers/visual-sandbox/bridge.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
+  "src/handlers/visual-sandbox/browser/treemap-model.test.ts": {
     "seconds": 1,
     "source": "estimated"
   },

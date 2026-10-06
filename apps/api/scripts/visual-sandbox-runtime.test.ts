@@ -4,11 +4,11 @@ import ts from "typescript";
 
 import { COURT_TIER_LABELS } from "@stll/api-contract/case-law-court-tiers";
 
-import { VISUAL_RUNTIME_BUILD_OPTIONS } from "../../../apps/api/scripts/visual-sandbox-build-options";
-import { escapeVisualScript } from "../../../apps/api/src/handlers/visual-sandbox/srcdoc";
+import { escapeVisualScript } from "../src/handlers/visual-sandbox/srcdoc";
+import { VISUAL_RUNTIME_BUILD_OPTIONS } from "./visual-sandbox-build-options";
 
 const runtimePath = new URL(
-  "../../../apps/api/src/handlers/visual-sandbox/generated/runtime.js.txt",
+  "../src/handlers/visual-sandbox/generated/runtime.js.txt",
   import.meta.url,
 );
 
@@ -101,7 +101,7 @@ describe("visual sandbox runtime asset", () => {
       sourcemap: "external",
       entrypoints: [
         new URL(
-          "../../../apps/api/src/handlers/visual-sandbox/browser/treemap.harness.ts",
+          "../src/handlers/visual-sandbox/browser/treemap.harness.ts",
           import.meta.url,
         ).pathname,
       ],
@@ -155,7 +155,7 @@ describe("visual sandbox runtime asset", () => {
     const generated: Record<string, Record<string, string>> = JSON.parse(
       readFileSync(
         new URL(
-          "../../../apps/api/src/handlers/visual-sandbox/generated/court-tier-labels.json",
+          "../src/handlers/visual-sandbox/generated/court-tier-labels.json",
           import.meta.url,
         ),
         "utf-8",

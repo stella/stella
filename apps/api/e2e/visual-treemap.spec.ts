@@ -4,17 +4,18 @@ import { readFileSync } from "node:fs";
 
 import { VISUAL_SANDBOX_PATH } from "@stll/api-contract/visual-sandbox";
 
-import { treemapFixture } from "../../../api/src/handlers/visual-sandbox/browser/treemap-fixture";
-import { sanitizeVisualHtml } from "../../../api/src/handlers/visual-sandbox/sanitize";
+import { treemapFixture } from "../src/handlers/visual-sandbox/browser/treemap-fixture";
+import { sanitizeVisualHtml } from "../src/handlers/visual-sandbox/sanitize";
 import {
   composeVisualDocument,
   escapeVisualJson,
-} from "../../../api/src/handlers/visual-sandbox/srcdoc";
-import { E2E_API_ORIGIN } from "../helpers/api";
+} from "../src/handlers/visual-sandbox/srcdoc";
+
+const E2E_API_ORIGIN = process.env["E2E_API_URL"] ?? "http://localhost:3001";
 
 const runtime = readFileSync(
   new URL(
-    "../../../api/src/handlers/visual-sandbox/generated/runtime.js.txt",
+    "../src/handlers/visual-sandbox/generated/runtime.js.txt",
     import.meta.url,
   ),
   "utf-8",
@@ -25,7 +26,7 @@ const harness = execFileSync(
   [
     "build",
     new URL(
-      "../../../api/src/handlers/visual-sandbox/browser/treemap.harness.ts",
+      "../src/handlers/visual-sandbox/browser/treemap.harness.ts",
       import.meta.url,
     ).pathname,
     "--minify",
