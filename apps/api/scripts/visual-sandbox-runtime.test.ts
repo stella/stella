@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
-import ts from "typescript";
+
+import { inspectBrowserRuntimeSafety } from "@stll/scripts/src/browser-runtime-safety";
 
 import { escapeVisualScript } from "../src/handlers/visual-sandbox/srcdoc";
 import { VISUAL_RUNTIME_BUILD_OPTIONS } from "./visual-sandbox-build-options";
@@ -9,88 +10,6 @@ const runtimePath = new URL(
   "../src/handlers/visual-sandbox/generated/runtime.js.txt",
   import.meta.url,
 );
-
-const isFunctionScope = (node: ts.Node) =>
-  ts.isFunctionDeclaration(node) ||
-  ts.isFunctionExpression(node) ||
-  ts.isArrowFunction(node) ||
-  ts.isMethodDeclaration(node);
-
-const hasTemplateBinding = (access: ts.PropertyAccessExpression) => {
-  const receiver = access.expression;
-  if (!ts.isIdentifier(receiver)) {
-    return false;
-  }
-  let scope: ts.Node = access;
-  while (scope.parent && !isFunctionScope(scope) && !ts.isSourceFile(scope)) {
-    scope = scope.parent;
-  }
-  let found = false;
-  const visit = (node: ts.Node) => {
-    if (node !== scope && isFunctionScope(node)) {
-      return;
-    }
-    if (
-      ts.isVariableDeclaration(node) &&
-      ts.isIdentifier(node.name) &&
-      node.name.text === receiver.text &&
-      node.initializer &&
-      ts.isCallExpression(node.initializer)
-    ) {
-      const call = node.initializer;
-      const tag = call.arguments.at(0);
-      if (
-        ts.isPropertyAccessExpression(call.expression) &&
-        call.expression.name.text === "createElement" &&
-        tag &&
-        ts.isStringLiteral(tag) &&
-        tag.text === "template"
-      ) {
-        found = true;
-      }
-    }
-    ts.forEachChild(node, visit);
-  };
-  visit(scope);
-  return found;
-};
-
-const inspectRuntime = (source: string) => {
-  const ast = ts.createSourceFile(
-    "runtime.js",
-    source,
-    ts.ScriptTarget.Latest,
-    true,
-    ts.ScriptKind.JS,
-  );
-  const problems: string[] = [];
-  let templateWrites = 0;
-  const visit = (node: ts.Node) => {
-    if (
-      ts.isIdentifier(node) &&
-      (node.text === "eval" || node.text === "Function")
-    ) {
-      problems.push("dynamic code");
-    }
-    if (
-      ts.isElementAccessExpression(node) &&
-      node.argumentExpression &&
-      ts.isStringLiteral(node.argumentExpression) &&
-      ["eval", "Function", "innerHTML"].includes(node.argumentExpression.text)
-    ) {
-      problems.push("computed code or markup sink");
-    }
-    if (ts.isPropertyAccessExpression(node) && node.name.text === "innerHTML") {
-      if (!hasTemplateBinding(node)) {
-        problems.push("markup outside template parsing");
-      }
-      templateWrites++;
-    }
-    ts.forEachChild(node, visit);
-  };
-  visit(ast);
-  return { problems, templateWrites };
-};
 
 describe("visual sandbox runtime asset", () => {
   test("contains charts without dynamic code and confines markup parsing to templates", async () => {
@@ -136,10 +55,10 @@ describe("visual sandbox runtime asset", () => {
     expect(source).toContain("setColorMode");
     expect(source).toContain("treemap");
     expect(source).not.toMatch(/<\/script|<!--/iu);
-    expect(inspectRuntime(readFileSync(runtimePath, "utf-8")).problems).toEqual(
-      [],
-    );
-    const { problems, templateWrites } = inspectRuntime(source);
+    expect(
+      inspectBrowserRuntimeSafety(readFileSync(runtimePath, "utf-8")).problems,
+    ).toEqual([]);
+    const { problems, templateWrites } = inspectBrowserRuntimeSafety(source);
     expect(problems).toEqual([]);
     // The library's SVG reconciliation must actually be inspected.
     expect(templateWrites).toBeGreaterThan(0);
@@ -154,10 +73,12 @@ describe("visual sandbox runtime asset", () => {
       "function a(){const t=document.createElement('template')} function b(t){t.innerHTML='x'}",
       "const t=document.createElement('template');t['innerHTML']='x'",
     ]) {
-      expect(inspectRuntime(source).problems.length).toBeGreaterThan(0);
+      expect(
+        inspectBrowserRuntimeSafety(source).problems.length,
+      ).toBeGreaterThan(0);
     }
     expect(
-      inspectRuntime(
+      inspectBrowserRuntimeSafety(
         "function parse(document,markup){const t=document.createElement('template');t.innerHTML=markup;return t.content}",
       ).problems,
     ).toEqual([]);
