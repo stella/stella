@@ -858,7 +858,7 @@ const readCaseLawDecisionArgsSchema = nullAsAbsent(
         v.minValue(1),
         v.maxValue(MCP_CONTENT_MAX_CHARS),
         v.description(
-          `Text window size, 1–${MCP_CONTENT_MAX_CHARS} characters. Accepted only alongside a single decision id.`,
+          `Text window size per decision, 1–${MCP_CONTENT_MAX_CHARS} characters. In a batch each decision gets its own window of this size, trimmed evenly so the call returns at most 40000 characters; omitted, the batch shares ${MCP_CONTENT_MAX_CHARS} characters.`,
         ),
       ),
     ),
@@ -1131,7 +1131,7 @@ export const STELLA_TOOL_DEFINITIONS = [
     },
     description:
       "Read decisions by `decision_ids[]`, answered in input order. Batch ids " +
-      "share the text budget; `max_chars` sizes one id’s text window. Static " +
+      "share the text budget unless `max_chars` sizes each id’s window. Static " +
       "details appear only on the cursor-less window. A single id also gets " +
       "up to 100 outline headings or numbered paragraphs: pass an outline " +
       "cursor with that id to jump there. `include` selects optional fields " +
@@ -2568,7 +2568,7 @@ type DecisionItemOptions = {
   readsSharedCorpus: boolean;
   /** Whether this call could fetch a pending document at all. */
   documentHydration: DecisionDocumentHydration["type"];
-  /** The window this entry's share of the call's text budget allows. */
+  /** This entry's text window: max_chars, or its share of the default budget. */
   maxTextChars: number;
   outline: "include" | "omit";
   read: GatedDecisionRead;
@@ -2766,6 +2766,9 @@ const decisionItemResult = ({
   };
 };
 
+/** The most decision text one read_case_law_decision call answers with. */
+export const READ_DECISION_BATCH_MAX_TEXT_CHARS = 40_000;
+
 const handleReadCaseLawDecisionTool: TypedMcpToolHandler<
   v.InferInput<typeof READ_CASE_LAW_DECISION_PROJECTION>
 > = async ({ args, context }) => {
@@ -2793,17 +2796,6 @@ const handleReadCaseLawDecisionTool: TypedMcpToolHandler<
         },
       ],
       hint: "Pass one decision id with a cursor to continue its text.",
-    });
-  }
-
-  if (maxChars !== undefined && decisionIds.length > 1) {
-    return structuredErrorResult({
-      code: "validation_error",
-      message: "max_chars sizes one decision's text window",
-      hint: "Pass one decision id with max_chars, or omit max_chars for a batch read.",
-      issues: [
-        { path: "max_chars", message: "Accepted only with one decision id." },
-      ],
     });
   }
 
@@ -2910,12 +2902,17 @@ const handleReadCaseLawDecisionTool: TypedMcpToolHandler<
     reads.set(decisionId, hydrated);
   }
 
-  // The call's text budget is shared across the entries, so a batch cannot
-  // answer with twenty full windows of decision text. A single id keeps the
-  // whole window, which is what a caller reading one decision asked for.
+  // An explicit max_chars sizes every entry's window on its own: each
+  // decision is truncated and continued by its own cursor. Without one the
+  // default text budget is shared across the entries, so a batch nobody sized
+  // cannot answer with twenty full windows of decision text. Either way the
+  // whole call stays within the batch ceiling, trimmed evenly per entry.
   const maxTextChars = Math.max(
     1,
-    Math.floor((maxChars ?? MCP_CONTENT_MAX_CHARS) / decisionIds.length),
+    Math.min(
+      maxChars ?? Math.floor(MCP_CONTENT_MAX_CHARS / decisionIds.length),
+      Math.floor(READ_DECISION_BATCH_MAX_TEXT_CHARS / decisionIds.length),
+    ),
   );
 
   return toolDataResult({

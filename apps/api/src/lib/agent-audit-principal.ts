@@ -53,11 +53,12 @@ export const resolveAgentAuditExecution = async ({
         performer: { id: userId, type: "user" },
         trigger: { source: "mcp", type: "direct" },
       };
+    case "personal_api_key":
     case "machine_api_key":
       return {
         performer: {
           type: "agent",
-          id: `machine-key:${credential.id}`,
+          id: `${credential.type === "personal_api_key" ? "personal-key" : "machine-key"}:${credential.id}`,
           name: credential.name,
         },
         trigger: {
