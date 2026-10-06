@@ -112,4 +112,73 @@ describe("visual shell document handshake", () => {
     expect(deliveries).toHaveLength(2);
     expect(session.isReloadedShell({ event: first, frameWindow })).toBe(false);
   });
+  test("never releases the payload twice for one nonce, whatever document repeats it", () => {
+    const issued = [
+      "00000000-0000-4000-8000-000000000011",
+      "00000000-0000-4000-8000-000000000012",
+      "00000000-0000-4000-8000-000000000013",
+    ];
+    const pending = [...issued];
+    const deliveries: string[] = [];
+    // A navigated frame keeps its window proxy, so every document in it posts
+    // from the same source.
+    const frameWindow = {
+      postMessage: () => {
+        deliveries.push(currentNonce);
+      },
+    };
+    let currentNonce = "";
+    const session = createVisualShellSession({
+      url,
+      newNonce: () => {
+        currentNonce = pending.shift() ?? "";
+        return currentNonce;
+      },
+    });
+    const ready = (nonce: string) => ({
+      source: frameWindow,
+      origin: "null",
+      data: { kind: "shell-ready", nonce },
+    });
+    session.beginLoad();
+    for (const [index, nonce] of issued.entries()) {
+      expect(
+        session.deliverRender({
+          event: ready(nonce),
+          frameWindow,
+          message: render,
+        }),
+      ).toBe(true);
+      // Every nonce issued so far is spent: none of them releases it again,
+      // before or after the spent one restarts the handshake.
+      for (const spent of issued.slice(0, index + 1)) {
+        expect(
+          session.deliverRender({
+            event: ready(spent),
+            frameWindow,
+            message: render,
+          }),
+        ).toBe(false);
+      }
+      if (index < issued.length - 1) {
+        expect(
+          session.isReloadedShell({ event: ready(nonce), frameWindow }),
+        ).toBe(true);
+        session.beginLoad();
+        for (const spent of issued.slice(0, index + 1)) {
+          expect(
+            session.deliverRender({
+              event: ready(spent),
+              frameWindow,
+              message: render,
+            }),
+          ).toBe(false);
+          expect(
+            session.isReloadedShell({ event: ready(spent), frameWindow }),
+          ).toBe(false);
+        }
+      }
+    }
+    expect(deliveries).toEqual(issued);
+  });
 });
