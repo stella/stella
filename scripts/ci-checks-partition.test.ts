@@ -390,6 +390,24 @@ const withoutPreparedGeneration = (step: Step): Step => {
   }
   const { run } = v.parse(v.looseObject({ run: v.optional(v.string()) }), step);
   const prepared = "bun scripts/ci-generated-sources.ts prepare\n";
+  const regeneration = [
+    "set -euo pipefail",
+    "bun scripts/ci-generated-sources.ts prepare",
+    "# Regeneration guards intentionally modify inputs and report their diff.",
+    "# Validate the artifact first, then use ordinary generation in this leg.",
+    "unset CI_GENERATED_SOURCES_MANIFEST",
+    `echo 'CI_GENERATED_SOURCES_MANIFEST=' >> "$GITHUB_ENV"`,
+    "",
+  ].join("\n");
+  if (
+    step.name === "CLI sharded registry and derived runtime guard" &&
+    run?.startsWith(regeneration)
+  ) {
+    return {
+      ...step,
+      run: `bun apps/api/scripts/generate-capability-runtime.ts\n${run.slice(regeneration.length)}`,
+    };
+  }
   return run?.startsWith(prepared)
     ? {
         ...step,

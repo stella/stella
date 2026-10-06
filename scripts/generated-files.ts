@@ -134,6 +134,7 @@ export const GENERATORS = [
       "apps/api/src/lib/chat/projections.ts",
       "apps/api/src/lib/chat/case-law-result-projections.ts",
       "apps/api/src/lib/chat/case-law-court-projection.ts",
+      "packages/api-contract/src/mcp-tool-name.ts",
       ".oxfmtrc.json",
       "packages/cli/src/**",
       "packages/cli/package.json",

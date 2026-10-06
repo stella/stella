@@ -19,10 +19,10 @@ import * as v from "valibot";
 import { compareCodeUnit } from "@stll/collation";
 import { drawPropertySamples, propertyConfig } from "@stll/property-testing";
 
-import eventPolicies from "../.github/ci-event-policy.json";
-import queuedJob from "./__fixtures__/ci-cancellation/queued-job.json";
-import supersessionAnnotations from "./__fixtures__/ci-cancellation/supersession.json";
-import timeoutAnnotations from "./__fixtures__/ci-cancellation/timeout.json";
+import eventPolicies from "../.github/ci-event-policy.json" with { type: "json" };
+import queuedJob from "./__fixtures__/ci-cancellation/queued-job.json" with { type: "json" };
+import supersessionAnnotations from "./__fixtures__/ci-cancellation/supersession.json" with { type: "json" };
+import timeoutAnnotations from "./__fixtures__/ci-cancellation/timeout.json" with { type: "json" };
 import { selectApiTestImpact } from "./api-test-impact";
 import { requiresMalwareScan } from "./check-standalone-lockfiles";
 import { planCiApiTests } from "./ci-api-test-plan";

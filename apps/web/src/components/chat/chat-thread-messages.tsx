@@ -8,6 +8,7 @@ import { isThirdPartyBoundaryRefusalError } from "@stll/anonymize-chat";
 import type { AIErrorKind } from "@stll/api-contract";
 import { Button } from "@stll/ui/button";
 import {
+  ArrowUpIcon,
   ChevronRightIcon,
   ClockIcon,
   FileTextIcon,
@@ -137,7 +138,7 @@ export const ChatThreadMessages = ({
   showToolCalls,
   stickyUserMessages = false,
   queuedMessages,
-  onRemoveQueuedMessage,
+  queuedMessageActions,
   streamdownComponents,
   threadRef,
   workspaceId,
@@ -419,12 +420,12 @@ export const ChatThreadMessages = ({
       {showThinkingIndicator && generationActive && activityIndicatorState && (
         <ThinkingIndicator state={activityIndicatorState} />
       )}
-      {onRemoveQueuedMessage &&
+      {queuedMessageActions &&
         queuedMessages !== undefined &&
         queuedMessages.length > 0 && (
           <QueuedUserMessages
+            actions={queuedMessageActions}
             messages={queuedMessages}
-            onRemove={onRemoveQueuedMessage}
           />
         )}
     </ReferenceRenderScope>
@@ -1260,7 +1261,9 @@ type ChatThreadMessagesProps = {
    * `useChatSession` dispatches them once the turn finishes.
    */
   queuedMessages?: readonly QueuedChatMessage[] | undefined;
-  onRemoveQueuedMessage?: ((id: string) => void) | undefined;
+  /** What the user can do with a queued message: cancel it, or send it now
+   *  (stops the running turn and sends it next). */
+  queuedMessageActions?: QueuedMessageActions | undefined;
   streamdownComponents: {
     a: (props: ComponentProps<"a">) => React.ReactNode;
     "stll-anon"?: (
@@ -1277,9 +1280,14 @@ type ChatResendOptions = {
   messageId?: string | undefined;
 };
 
+export type QueuedMessageActions = {
+  remove: (id: string) => void;
+  sendNow: (id: string) => void;
+};
+
 type QueuedUserMessagesProps = {
+  actions: QueuedMessageActions;
   messages: readonly QueuedChatMessage[];
-  onRemove: (id: string) => void;
 };
 
 /**
@@ -1287,10 +1295,7 @@ type QueuedUserMessagesProps = {
  * turn. Rendered below the live transcript as dimmed bubbles so the
  * user can see what is queued and cancel any of it before it sends.
  */
-const QueuedUserMessages = ({
-  messages,
-  onRemove,
-}: QueuedUserMessagesProps) => {
+const QueuedUserMessages = ({ actions, messages }: QueuedUserMessagesProps) => {
   const t = useTranslations();
   return (
     <div className="flex flex-col gap-2">
@@ -1322,9 +1327,19 @@ const QueuedUserMessages = ({
                 )}
               </MessageContent>
               <Button
+                aria-label={t("chat.sendQueuedMessageNow")}
+                className="mt-0.5 shrink-0"
+                onClick={() => actions.sendNow(queued.id)}
+                size="icon-xs"
+                title={t("chat.sendQueuedMessageNow")}
+                variant="ghost"
+              >
+                <ArrowUpIcon className="size-3.5" />
+              </Button>
+              <Button
                 aria-label={t("chat.cancelQueuedMessage")}
                 className="mt-0.5 shrink-0"
-                onClick={() => onRemove(queued.id)}
+                onClick={() => actions.remove(queued.id)}
                 size="icon-xs"
                 variant="ghost"
               >
