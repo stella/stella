@@ -3,7 +3,7 @@ import { execFileSync } from "node:child_process";
 import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { pathToFileURL } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 
 import { VISUAL_SANDBOX_PATH } from "@stll/api-contract/visual-sandbox";
 
@@ -33,7 +33,7 @@ test.beforeAll(async () => {
   const helpersBundle = path.join(bundleDir, "helpers.mjs");
   execFileSync("bun", [
     "build",
-    new URL("visual-treemap.helpers.ts", import.meta.url).pathname,
+    fileURLToPath(new URL("visual-treemap.helpers.ts", import.meta.url)),
     "--target=node",
     "--format=esm",
     `--outfile=${helpersBundle}`,
@@ -46,10 +46,12 @@ test.beforeAll(async () => {
     "bun",
     [
       "build",
-      new URL(
-        "../src/handlers/visual-sandbox/browser/treemap.harness.ts",
-        import.meta.url,
-      ).pathname,
+      fileURLToPath(
+        new URL(
+          "../src/handlers/visual-sandbox/browser/treemap.harness.ts",
+          import.meta.url,
+        ),
+      ),
       "--minify",
       "--target=browser",
       "--format=iife",
