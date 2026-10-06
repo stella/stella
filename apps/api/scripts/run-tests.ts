@@ -54,7 +54,10 @@ import {
   runInLanes,
 } from "./test-lanes";
 import { partitionRunnerArguments, selectTestPaths } from "./test-path-filters";
-import { TestProcessSupervisor } from "./test-process-supervisor";
+import {
+  TestProcessSupervisor,
+  testProcessBudgets,
+} from "./test-process-supervisor";
 
 const PROPERTY_FLAG = "--property";
 const TEST_ROOT_SET = new Set<string>(TEST_ROOTS);
@@ -161,8 +164,11 @@ const printError = (text: string) => {
 
 const processSupervisor = new TestProcessSupervisor({
   // The dedicated memory workflow allows two hours for a serial per-file
-  // sweep; regular CI shards retain the supervisor's twenty-minute deadline.
-  ...(rssMode.mode === "measure-rss" ? { deadlineMs: 110 * 60_000 } : {}),
+  // sweep; nightly jobs declare budgets explicitly, while PR defaults stay bounded.
+  ...testProcessBudgets(
+    process.env,
+    rssMode.mode === "measure-rss" ? 110 * 60_000 : undefined,
+  ),
   directory:
     process.env["API_TEST_ARTIFACT_DIR"] ??
     mkdtempSync(path.join(tmpdir(), "stella-api-test-diagnostics-")),

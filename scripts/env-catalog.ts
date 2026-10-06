@@ -1336,6 +1336,8 @@ export const TOOLING_ENV_KEYS = new Set([
   "API_DEPLOYMENT_URL",
   "API_SCOPE_UNKNOWN",
   "API_TEST_ARTIFACT_DIR",
+  "API_TEST_CHILD_TIMEOUT_MS",
+  "API_TEST_RUNNER_DEADLINE_MS",
   "API_TEST_FILES",
   // Native Bun whole-file timing artifacts and optional drift measurements.
   "API_TEST_MEASUREMENTS",
