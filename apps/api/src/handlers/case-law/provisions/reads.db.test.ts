@@ -603,7 +603,7 @@ test("both provision reads preserve applied statements independently of the deci
     ).toEqual(outgoing.items.map(({ versionBasis }) => versionBasis));
     expect(
       outgoing.items.map(({ versionValidFrom }) => versionValidFrom),
-    ).toEqual([null, "2013-12-31", null]);
+    ).toEqual([null, null, null]);
     for (const item of [...outgoing.items, ...incoming.items]) {
       expect(item.inferredVersionCandidate).toEqual({
         type: "inferred",

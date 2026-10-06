@@ -4,7 +4,10 @@ import type {
   InferredProvisionVersionCandidate,
   ProvisionVersionBasis,
 } from "@stll/api-contract/provision-version-basis";
-import { DECISION_DATE_VERSION_BASIS } from "@stll/api-contract/provision-version-basis";
+import {
+  DECISION_DATE_VERSION_BASIS,
+  provisionVersionAsOf,
+} from "@stll/api-contract/provision-version-basis";
 
 import { caseLawProvisionCitations } from "@/api/db/schema";
 import type {
@@ -93,12 +96,12 @@ const statedBasis = (row: VersionRow): ProvisionVersionBasis => {
 
 export const projectProvisionVersion = <TRow extends VersionRow>(row: TRow) => {
   const {
-    appliedVersionBasis,
-    appliedVersionDate,
+    appliedVersionBasis: _appliedVersionBasis,
+    appliedVersionDate: _appliedVersionDate,
     appliedVersionDateRelation: _appliedVersionDateRelation,
     appliedVersionAmendmentWorkIdentifier:
       _appliedVersionAmendmentWorkIdentifier,
-    appliedVersionExpressionDate,
+    appliedVersionExpressionDate: _appliedVersionExpressionDate,
     appliedVersionExpressionEli: _appliedVersionExpressionEli,
     versionEvidenceStart: _versionEvidenceStart,
     versionEvidenceEnd: _versionEvidenceEnd,
@@ -110,11 +113,11 @@ export const projectProvisionVersion = <TRow extends VersionRow>(row: TRow) => {
   return {
     ...rest,
     versionBasis,
-    // Old readers retain the selected-date field; new rows never put an inferred date here.
-    versionValidFrom:
-      appliedVersionBasis === null
-        ? versionValidFrom
-        : (appliedVersionExpressionDate ?? appliedVersionDate),
+    // The shared selection owns this field, so new rows never carry an inferred date here.
+    versionValidFrom: provisionVersionAsOf(
+      { versionBasis, versionValidFrom },
+      null,
+    ),
     inferredVersionCandidate: {
       type: "inferred",
       kind: "decision_date",

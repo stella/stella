@@ -1,6 +1,7 @@
 import { expect, test } from "bun:test";
 import fc from "fast-check";
 
+import { STATED_DATE_RELATIONS } from "@stll/api-contract/provision-applied-version";
 import { provisionVersionAsOf } from "@stll/api-contract/provision-version-basis";
 import { assertProperty } from "@stll/property-testing";
 
@@ -62,7 +63,8 @@ test("applied version selection never inherits the inferred decision-date candid
         versionEvidenceEnd: 42,
         versionEvidenceKind: "stated_date",
       });
-      expect(provisionVersionAsOf(stated, versionValidFrom)).toBe("2013-12-31");
+      expect(provisionVersionAsOf(stated, versionValidFrom)).toBeNull();
+      expect(stated.versionValidFrom).toBeNull();
       expect(stated.versionBasis).toEqual({
         type: "stated_date",
         date: "2013-12-31",
@@ -110,5 +112,30 @@ test("resolved expression identity controls the shared selection at an amendment
     type: "stated_date",
     date: "2014-01-01",
     relation: "until",
+  });
+});
+
+test("an unresolved stated date selects its own date only when the wording is in force on it", () => {
+  // At an amendment boundary, "until 2014-01-01" may name the wording that ends
+  // there, so selecting the expression starting that day would be wrong.
+  const selections = STATED_DATE_RELATIONS.map((relation) => {
+    const stated = projectProvisionVersion({
+      ...legacy,
+      appliedVersionBasis: "stated_date",
+      appliedVersionDate: "2014-01-01",
+      appliedVersionDateRelation: relation,
+      versionEvidenceStart: 0,
+      versionEvidenceEnd: 42,
+      versionEvidenceKind: "stated_date",
+    });
+    expect(stated.versionValidFrom).toBe(
+      provisionVersionAsOf(stated, "2020-01-01"),
+    );
+    return [relation, stated.versionValidFrom];
+  });
+  expect(Object.fromEntries(selections)).toEqual({
+    on: "2014-01-01",
+    from: "2014-01-01",
+    until: null,
   });
 });

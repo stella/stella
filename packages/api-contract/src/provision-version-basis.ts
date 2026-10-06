@@ -27,6 +27,28 @@ type ProvisionVersionSelection = {
   versionValidFrom: string | null;
 };
 
+type StatedDateRelation = Extract<
+  ProvisionVersionBasis,
+  { type: "stated_date" }
+>["relation"];
+
+// "In force until D" names the wording that ends at D; whether D itself is the
+// last day or the next expression's first day is ambiguous, so an unresolved
+// "until" selects nothing rather than possibly the following expression.
+const statedDateAsOf = (date: string, relation: StatedDateRelation) => {
+  switch (relation) {
+    case "on":
+    case "from":
+      return date;
+    case "until":
+      return null;
+    default: {
+      relation satisfies never;
+      return panic("Unknown stated date relation");
+    }
+  }
+};
+
 /** Only legacy links may use the decision date as a version selection. */
 export const provisionVersionAsOf = (
   { versionBasis, versionValidFrom }: ProvisionVersionSelection,
@@ -38,7 +60,10 @@ export const provisionVersionAsOf = (
     case "not_stated":
       return null;
     case "stated_date":
-      return versionBasis.expression?.date ?? versionBasis.date;
+      return (
+        versionBasis.expression?.date ??
+        statedDateAsOf(versionBasis.date, versionBasis.relation)
+      );
     case "stated_version":
       return versionBasis.expression?.date ?? null;
     default: {
