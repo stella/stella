@@ -141,29 +141,17 @@ const visibleReferenceDatabase = (ids: readonly string[]) =>
     select: () => {
       const query = {
         from: () => query,
-        where: (condition: SQL) =>
-          Object.assign(
-            Promise.resolve(
-              new PgDialect()
-                .sqlToQuery(condition)
-                .params.filter(
-                  (id): id is string =>
-                    typeof id === "string" && ids.includes(id),
-                )
-                .map((id) => ({ id })),
-            ),
-            {
-              limit: async (count: number) =>
-                new PgDialect()
-                  .sqlToQuery(condition)
-                  .params.filter(
-                    (id): id is string =>
-                      typeof id === "string" && ids.includes(id),
-                  )
-                  .slice(0, count)
-                  .map((id) => ({ id })),
-            },
-          ),
+        where: (condition: SQL) => ({
+          limit: async (count: number) =>
+            new PgDialect()
+              .sqlToQuery(condition)
+              .params.filter(
+                (id): id is string =>
+                  typeof id === "string" && ids.includes(id),
+              )
+              .slice(0, count)
+              .map((id) => ({ id })),
+        }),
       };
       return query;
     },
