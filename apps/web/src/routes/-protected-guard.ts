@@ -18,7 +18,6 @@ import {
   prefetchRouteQuery,
 } from "@/lib/react-query";
 import { returnPathOf } from "@/lib/redirect";
-import { featureAccessOptions } from "@/queries/feature-access";
 import { organizationSettingsOptions } from "@/queries/organization-settings";
 import { loadAuthContext } from "@/routes/-auth-context";
 
@@ -146,7 +145,7 @@ export const prefetchProtectedShell = async ({
     }),
     prefetchRouteQuery(
       context.queryClient,
-      featureAccessOptions({
+      organizationSettingsOptions({
         organizationId: context.user.activeOrganizationId,
         userId: context.user.id,
       }),

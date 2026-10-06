@@ -125,7 +125,6 @@ import type {
 } from "@/api/mcp/tool-types";
 import { defineMcpToolSet } from "@/api/mcp/tool-types";
 import {
-  invalidCursorResult,
   bindWorkspaceRecorder,
   cursorInput,
   DEFAULT_LIST_LIMIT,
@@ -133,10 +132,12 @@ import {
   ensureWorkspaceAccess,
   errorResult,
   internalFailureResult,
+  invalidCursorResult,
   isToolErrorResult,
   MAX_LIST_LIMIT,
   notFoundResult,
   nullAsAbsent,
+  structuredEgressPlan,
   structuredErrorResult,
   toolDataResult,
   uuidInputSchema,
@@ -750,7 +751,7 @@ const handleListDocumentsTool: TypedMcpToolHandler<
     payload,
   );
 
-  return { egress: "structured", payload, textFields };
+  return structuredEgressPlan({ payload, textFields });
 };
 
 // Version-history cursor is [versionNumber, versionId]; keyset paginates
@@ -1433,7 +1434,7 @@ const handleReadDocumentTool: TypedMcpToolHandler<
       payload,
     );
 
-    return { egress: "structured", payload, textFields };
+    return structuredEgressPlan({ payload, textFields });
   }
 
   // Specific version metadata + field values.
@@ -1485,7 +1486,7 @@ const handleReadDocumentTool: TypedMcpToolHandler<
       readDocumentVersionDetailTextFieldSpecs(workspaceId),
       payload,
     );
-    return { egress: "structured", payload, textFields };
+    return structuredEgressPlan({ payload, textFields });
   }
 
   // Default: current version metadata + field values.
@@ -1541,7 +1542,7 @@ const handleReadDocumentTool: TypedMcpToolHandler<
     payload,
   );
 
-  return { egress: "structured", payload, textFields };
+  return structuredEgressPlan({ payload, textFields });
 };
 
 const saveDocumentArgsSchema = nullAsAbsent(
@@ -2246,7 +2247,7 @@ const handleListPropertiesTool: TypedMcpToolHandler<
     payload,
   );
 
-  return { egress: "structured", payload, textFields };
+  return structuredEgressPlan({ payload, textFields });
 };
 
 const SET_FIELD_VALUE_TYPE_DESCRIPTION =

@@ -1,5 +1,8 @@
 import { describe, expect, test } from "bun:test";
 
+import { RUNTIME_MODE } from "@stll/runtime-mode";
+
+import { env } from "@/api/env";
 import readOrganizationSettings, {
   projectOrganizationSettingsRow,
 } from "@/api/handlers/organization-settings/get";
@@ -11,6 +14,8 @@ import {
   LIST_VERIFICATION_FEATURE_ID,
 } from "@/api/lib/feature-access/registry";
 import type { FeatureRegistry } from "@/api/lib/feature-access/registry";
+import { isMcpDescriptorFeatureEnabled } from "@/api/mcp/feature-access";
+import { setRuntimeModeForTesting } from "@/api/runtime-mode";
 import { createTestHandlerContext } from "@/api/tests/helpers/handler-context";
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
 
@@ -134,6 +139,23 @@ test("organization settings expose registry-derived enabled or hidden statuses w
       },
     });
     const projected = projectOrganizationSettingsRow(null, snapshot);
+    expect(projected.declaredFeatureIds).toEqual(Object.keys(registry));
+    for (const featureId of Object.keys(registry)) {
+      for (const kind of ["capabilities", "tools", "resources"] as const) {
+        expect(
+          isMcpDescriptorFeatureEnabled({
+            context: {
+              organizationId,
+              userId: toSafeId<"user">("user_test"),
+              featureAccessSnapshot: snapshot,
+            },
+            kind,
+            id: "fixture",
+            featureId,
+          }),
+        ).toBe(projected.capabilities[featureId]?.status === "enabled");
+      }
+    }
     expect(Object.keys(projected.capabilities)).toEqual(Object.keys(registry));
     expect(JSON.stringify(projected.capabilities)).not.toContain("proof");
     expect(JSON.stringify(projected.capabilities)).not.toContain(
@@ -285,4 +307,25 @@ test("organization settings project the production verification declaration for 
     expect(Object.keys(capabilities)).toEqual(Object.keys(FEATURE_REGISTRY));
     expect(JSON.stringify(capabilities)).not.toContain("proof");
   }
+});
+
+describe.serial("undeclared feature deployment discovery", () => {
+  test("the server reports the deployment decision with an empty declaration list", () => {
+    const previous = env.FEATURE_LEGAL_LISTS;
+    const restoreRuntimeMode = setRuntimeModeForTesting({
+      mode: RUNTIME_MODE.strict,
+    });
+    try {
+      for (const enabled of [false, true]) {
+        env.FEATURE_LEGAL_LISTS = enabled;
+        const result = projectOrganizationSettingsRow(null, emptySnapshot);
+        expect(result.declaredFeatureIds).toEqual([]);
+        expect(result.capabilities).toEqual({});
+        expect(result.deploymentFeatures.legalLists).toBe(enabled);
+      }
+    } finally {
+      env.FEATURE_LEGAL_LISTS = previous;
+      restoreRuntimeMode();
+    }
+  });
 });

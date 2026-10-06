@@ -89,7 +89,6 @@ import type {
   McpToolResponse,
 } from "@/api/mcp/tool-types";
 import {
-  invalidCursorResult,
   closestToolNames,
   confirmationUnavailableResult,
   cursorInput,
@@ -98,6 +97,7 @@ import {
   FEATURE_DISABLED_MESSAGE,
   featureDisabledHint,
   getWorkspaceStatus,
+  invalidCursorResult,
   MAX_LIST_LIMIT,
   MCP_INTERNAL_ERROR_HINT,
   notFoundResult,
@@ -105,6 +105,8 @@ import {
   oauthScopeRecoveryHint,
   quoteToolName,
   structuredErrorResult,
+  structuredEgressPlan,
+  untypedStructuredEgressPlan,
   validationErrorResult,
 } from "@/api/mcp/tool-utils";
 import { resolveUploadPurposeRequirement } from "@/api/mcp/upload-purpose-gate";
@@ -780,11 +782,11 @@ const withRequestReceipt = (
 const successEgress = (
   payload: unknown,
   access: "read" | "write",
-): McpEgressPlan => ({
-  egress: "structured",
-  payload: withRequestReceipt(payload, access),
-  textFields: [],
-});
+): McpEgressPlan =>
+  untypedStructuredEgressPlan({
+    payload: withRequestReceipt(payload, access),
+    textFields: [],
+  });
 
 const CAPABILITY_TRANSPORT_OUTPUT_SCHEMA = v.strictObject({
   type: v.picklist(["json", "file-input", "file-response", "file-both"]),
@@ -999,8 +1001,7 @@ const listCapabilitiesHandler: McpToolHandler<
       ? encodePaginationCursor([last.id])
       : null;
 
-  return {
-    egress: "structured",
+  return structuredEgressPlan({
     payload: projectionPayload(LIST_CAPABILITIES_OUTPUT_SCHEMA, {
       items: page.map((entry) => ({
         id: entry.id,
@@ -1020,7 +1021,7 @@ const listCapabilitiesHandler: McpToolHandler<
       limit,
     }),
     textFields: [],
-  };
+  });
 };
 
 const accessLabel = (entry: CatalogEntry): string =>
@@ -1191,8 +1192,7 @@ const describeCapabilityHandler: McpToolHandler<
       ? requirement.projectInputSchema(schema)
       : schema;
 
-  return {
-    egress: "structured",
+  return structuredEgressPlan({
     payload: projectionPayload(DESCRIBE_CAPABILITY_OUTPUT_SCHEMA, {
       id: entry.id,
       description:
@@ -1220,7 +1220,7 @@ const describeCapabilityHandler: McpToolHandler<
           : scopeSchemaAnnotations(inputSchema, hiddenIds),
     }),
     textFields: [],
-  };
+  });
 };
 
 // --- invoke_capability -------------------------------------------------------
@@ -2121,11 +2121,10 @@ const executeInvoke = async ({
   }
 
   if (validateOnly) {
-    return {
-      egress: "structured",
+    return untypedStructuredEgressPlan({
       payload: { valid: true, capability: id },
       textFields: [],
-    };
+    });
   }
 
   const request = context.request;

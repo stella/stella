@@ -15,9 +15,9 @@ import {
   ITEM_TYPE_TRANSLATION_KEYS,
 } from "@/components/workspaces/tasks/task-detail-constants";
 import { isTaskOverdue } from "@/components/workspaces/tasks/task-overdue";
-import { env } from "@/env";
-import { useFeatureAccess } from "@/hooks/use-feature-access";
 import { useFormatter } from "@/i18n/formatting-context";
+import { useCallerFeatureEnabled } from "@/lib/organization/feature-access/access";
+import { CALLER_FEATURE } from "@/lib/organization/feature-access/surfaces";
 import { UTC_CALENDAR_DATE_FORMAT } from "@/lib/relative-time";
 import type { WorkspaceEntity } from "@/lib/types";
 
@@ -46,9 +46,9 @@ type TaskBadgesProps = {
 };
 
 export const TaskBadges = ({ entity, className }: TaskBadgesProps) => {
-  const legalListsEnabled = useFeatureAccess("legal-lists");
   const format = useFormatter();
   const t = useTranslations();
+  const legalListsEnabled = useCallerFeatureEnabled(CALLER_FEATURE.legalLists);
 
   if (entity.kind !== "task") {
     return null;
@@ -64,10 +64,7 @@ export const TaskBadges = ({ entity, className }: TaskBadgesProps) => {
   const listItemType = isListItemType(entity.listItemType)
     ? entity.listItemType
     : "task";
-  const showItemType =
-    env.VITE_FEATURE_LEGAL_LISTS &&
-    legalListsEnabled &&
-    listItemType !== "task";
+  const showItemType = legalListsEnabled && listItemType !== "task";
 
   if (!priorityCfg && !entity.dueDate && !showItemType) {
     return null;

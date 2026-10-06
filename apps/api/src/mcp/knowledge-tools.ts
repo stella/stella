@@ -105,6 +105,7 @@ import type {
   McpToolDefinition,
   McpToolHandler,
   TypedMcpToolHandler,
+  TypedMcpToolResponse,
 } from "@/api/mcp/tool-types";
 import { defineMcpToolSet } from "@/api/mcp/tool-types";
 import {
@@ -115,6 +116,7 @@ import {
   internalFailureResult,
   MCP_INTERNAL_ERROR_HINT,
   nullAsAbsent,
+  structuredEgressPlan,
   structuredErrorResult,
   toolDataResult,
   uuidInputSchema,
@@ -719,7 +721,9 @@ const readClauseDetail = async ({
   clauseId: SafeId<"clause">;
   context: McpRequestContext;
   versionId: string | undefined;
-}) => {
+}): Promise<
+  TypedMcpToolResponse<v.InferInput<typeof LIST_CLAUSES_PROJECTION>>
+> => {
   const organizationId = context.organizationId;
 
   if (versionId !== undefined) {
@@ -762,11 +766,10 @@ const readClauseDetail = async ({
       ],
       { version },
     );
-    return {
-      egress: "structured",
+    return structuredEgressPlan({
       payload: projectionPayload(LIST_CLAUSES_VERSION_PROJECTION, { version }),
       textFields,
-    } as const;
+    });
   }
 
   const result = await Result.gen(() =>
@@ -847,11 +850,10 @@ const readClauseDetail = async ({
       ),
     );
   }
-  return {
-    egress: "structured",
+  return structuredEgressPlan({
     payload: projectionPayload(LIST_CLAUSES_DETAIL_PROJECTION, { clause }),
     textFields,
-  } as const;
+  });
 };
 
 const handleListClausesTool: TypedMcpToolHandler<
@@ -942,7 +944,7 @@ const handleListClausesTool: TypedMcpToolHandler<
       : []),
   ];
 
-  return { egress: "structured", payload, textFields };
+  return structuredEgressPlan({ payload, textFields });
 };
 
 // --- save_clause --------------------------------------------------------
@@ -1421,7 +1423,9 @@ const readPlaybookDetail = async ({
 }: {
   context: McpRequestContext;
   playbookId: SafeId<"playbookDefinition">;
-}) => {
+}): Promise<
+  TypedMcpToolResponse<v.InferInput<typeof LIST_PLAYBOOKS_PROJECTION>>
+> => {
   const organizationId = context.organizationId;
   const result = await Result.gen(() =>
     getPlaybookDefinitionHandler({
@@ -1469,11 +1473,10 @@ const readPlaybookDetail = async ({
     { playbook: typeof playbook },
     v.InferInput<typeof LIST_PLAYBOOKS_DETAIL_PROJECTION>
   >;
-  return {
-    egress: "structured",
+  return structuredEgressPlan({
     payload: { playbook } satisfies ListPlaybooksDetailPayload,
     textFields,
-  } as const;
+  });
 };
 
 const handleListPlaybooksTool: TypedMcpToolHandler<
@@ -1521,7 +1524,7 @@ const handleListPlaybooksTool: TypedMcpToolHandler<
     payload,
   );
 
-  return { egress: "structured", payload, textFields };
+  return structuredEgressPlan({ payload, textFields });
 };
 
 // --- save_playbook ------------------------------------------------------
