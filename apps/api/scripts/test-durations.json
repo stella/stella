@@ -5935,6 +5935,10 @@
     "seconds": 0.098636,
     "source": "estimated"
   },
+  "src/lib/legal-search/corpus-hit-disposition.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
   "src/lib/legal-search/corpus-index-client.test.ts": {
     "seconds": 0.619813,
     "source": "estimated"
@@ -5977,6 +5981,10 @@
   },
   "src/lib/legal-search/corpus-index-manifest.test.ts": {
     "seconds": 0.115643,
+    "source": "estimated"
+  },
+  "src/lib/legal-search/corpus-index-pagination-disposition.test.ts": {
+    "seconds": 1,
     "source": "estimated"
   },
   "src/lib/legal-search/corpus-index-pagination.test.ts": {
@@ -6161,6 +6169,10 @@
   },
   "src/lib/legal-search/corpus-ranking-policy.test.ts": {
     "seconds": 1.584192,
+    "source": "estimated"
+  },
+  "src/lib/legal-search/corpus-rehydration-disposition.test.ts": {
+    "seconds": 1,
     "source": "estimated"
   },
   "src/lib/legal-search/corpus-sanitize.test.ts": {
