@@ -233,7 +233,7 @@ test("baseline labels dispatch trusted main while recording permissions stay rea
   expect(Object.keys(requester.on)).toEqual(["pull_request_target"]);
   expect(requester.on["pull_request_target"]).toEqual({
     branches: ["main"],
-    types: ["labeled"],
+    types: ["labeled", "closed"],
   });
   const build = recording.jobs["build"];
   const buildCondition = v.parse(v.string(), build?.if);
@@ -274,7 +274,10 @@ test("baseline labels dispatch trusted main while recording permissions stay rea
   expect(Object.keys(requester.jobs)).toEqual(["request"]);
   const request = requester.jobs["request"];
   const requestCondition = v.parse(v.string(), request?.if);
-  expect(request?.permissions).toEqual({ actions: "write" });
+  expect(request?.permissions).toEqual({
+    actions: "write",
+    "pull-requests": "read",
+  });
   expect(request?.steps).toHaveLength(1);
   expect(request?.steps?.at(0)?.uses).toBe(
     "actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3",
@@ -288,50 +291,129 @@ test("baseline labels dispatch trusted main while recording permissions stay rea
   expect(requestScript).not.toMatch(
     /checkout|cache|exec|spawn|require\(|import\(/u,
   );
+  const dispatchFor = async ({
+    event_name,
+    action,
+    label,
+    merged,
+    files = [],
+  }: {
+    event_name: string;
+    action: string;
+    label?: string;
+    merged?: boolean;
+    files?: { filename: string; previous_filename?: string }[];
+  }): Promise<unknown[]> => {
+    const event = {
+      action,
+      ...(label === undefined ? {} : { label: { name: label } }),
+      pull_request: { number: 7, merged: merged ?? false },
+    };
+    const enabled = new Script(`Boolean(${requestCondition})`).runInNewContext({
+      github: { event_name, event },
+    });
+    if (!enabled) {
+      return [];
+    }
+    const calls: unknown[] = [];
+    const listFiles = async () => files;
+    await new Script(`(async () => { ${requestScript} })()`).runInNewContext({
+      context: {
+        repo: { owner: "example", repo: "repository" },
+        payload: {
+          ...event,
+          pull_request: { ...event.pull_request, head: { ref: "untrusted" } },
+        },
+      },
+      github: {
+        paginate: async (method: unknown, query: unknown) => {
+          expect(method).toBe(listFiles);
+          expect(query).toEqual({
+            owner: "example",
+            repo: "repository",
+            pull_number: 7,
+            per_page: 100,
+          });
+          return files;
+        },
+        rest: {
+          pulls: { listFiles },
+          actions: {
+            createWorkflowDispatch: async (query: unknown) => {
+              calls.push(query);
+            },
+          },
+        },
+      },
+    });
+    return calls;
+  };
+  const dispatched = [
+    {
+      owner: "example",
+      repo: "repository",
+      workflow_id: "network-baseline-record.yml",
+      ref: "main",
+    },
+  ];
   for (const event_name of [
     "pull_request_target",
     "workflow_dispatch",
     "schedule",
   ]) {
     for (const label of ["baseline:record", "unrelated"]) {
-      const calls: unknown[] = [];
-      const enabled = new Script(
-        `Boolean(${requestCondition})`,
-      ).runInNewContext({
-        github: { event_name, event: { label: { name: label } } },
-      });
-      if (enabled) {
-        await new Script(
-          `(async () => { ${requestScript} })()`,
-        ).runInNewContext({
-          context: {
-            repo: { owner: "example", repo: "repository" },
-            payload: { pull_request: { head: { ref: "untrusted" } } },
-          },
-          github: {
-            rest: {
-              actions: {
-                createWorkflowDispatch: async (query: unknown) => {
-                  calls.push(query);
-                },
-              },
-            },
-          },
-        });
-      }
-      expect(calls).toEqual(
+      expect(
+        await dispatchFor({ event_name, action: "labeled", label }),
+      ).toEqual(
         event_name === "pull_request_target" && label === "baseline:record"
-          ? [
-              {
-                owner: "example",
-                repo: "repository",
-                workflow_id: "network-baseline-record.yml",
-                ref: "main",
-              },
-            ]
+          ? dispatched
           : [],
       );
     }
+  }
+  // A merged PR's exempt route and budget changes need a main recording.
+  for (const files of [
+    [{ filename: "apps/web/src/routes/_protected.settings/account.tsx" }],
+    [{ filename: "apps/web/e2e/specs/route-smoke.spec.ts" }],
+    [{ filename: "apps/web/e2e/network-budgets/lists.json" }],
+    [
+      {
+        filename: "apps/web/src/components/moved.tsx",
+        previous_filename: "apps/web/src/routes/old.tsx",
+      },
+    ],
+  ]) {
+    expect(
+      await dispatchFor({
+        event_name: "pull_request_target",
+        action: "closed",
+        merged: true,
+        files,
+      }),
+    ).toEqual(dispatched);
+    expect(
+      await dispatchFor({
+        event_name: "pull_request_target",
+        action: "closed",
+        merged: false,
+        files,
+      }),
+    ).toEqual([]);
+  }
+  for (const files of [
+    [],
+    [{ filename: "apps/web/src/components/button.tsx" }],
+    [{ filename: "apps/web/e2e/network-budgets/nested/x.json" }],
+    [{ filename: "apps/web/e2e/network-baseline.json" }],
+  ]) {
+    expect(
+      await dispatchFor({
+        event_name: "pull_request_target",
+        action: "closed",
+        merged: true,
+        files,
+      }),
+    ).toEqual([]);
   }
   expect(read("network-baseline-deliver").jobs["deliver"]?.if).toContain(
     '["schedule", "workflow_dispatch"]',
