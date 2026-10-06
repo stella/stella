@@ -70,6 +70,7 @@ type Scenario = {
   tags?: string[];
   latest?: string;
   assetStatus?: number;
+  firstAssetStatus?: number;
   session?: "required" | "notification-error";
   redirect?: "once" | "chain";
 };
@@ -117,6 +118,11 @@ const redirectFixture = ({ pathname, mode }: RedirectFixtureOptions) => {
   return null;
 };
 
+const assetStatusFor = (scenario: Scenario, attempt: number | undefined) =>
+  attempt === 1 && scenario.firstAssetStatus
+    ? scenario.firstAssetStatus
+    : (scenario.assetStatus ?? 200);
+
 type RunOptions = {
   scenario?: Scenario;
   mode?: "web" | "cli" | "desktop";
@@ -160,7 +166,9 @@ const run = async ({
         return redirect;
       }
       if (req.method === "HEAD") {
-        return new Response(null, { status: scenario.assetStatus ?? 200 });
+        return new Response(null, {
+          status: assetStatusFor(scenario, counts.get(pathname)),
+        });
       }
       if (pathname.startsWith("/cli/")) {
         expect(req.headers.get("Authorization")).toBe(`Bearer ${token}`);
@@ -324,6 +332,7 @@ const run = async ({
           JOURNEY_MCP_URL: `${server.url.toString()}mcp`,
           JOURNEY_CLI_URL: server.url.toString().replace(/\/$/u, ""),
           JOURNEY_RETRY_PAUSE_SECONDS: "0",
+          STELLA_DESKTOP_RETRY_PAUSE_SECONDS: "0",
           JOURNEY_TIMEOUT_SECONDS: scenario.delay ? "0.1" : "3",
           CLI_FIXTURE: path.join(work, "stella"),
           CLI_VERSION: scenario.cliVersion ?? "10.0.0",
@@ -545,9 +554,35 @@ describe("scheduled read journeys", () => {
     expect(
       (await run({ scenario: { latest: "v2.0.0" }, mode: "desktop" })).exit,
     ).toBe(1);
-    expect(
-      (await run({ scenario: { assetStatus: 404 }, mode: "desktop" })).exit,
-    ).toBe(1);
+    expect(result.stdout).toBe("desktop-release-policy: ok\n");
+  });
+  test("reports an installer that passes only after its one retry", async () => {
+    const result = await run({
+      scenario: { firstAssetStatus: 503 },
+      mode: "desktop",
+    });
+    expect(result.exit).toBe(0);
+    expect(result.stdout).toBe(
+      [
+        "journey desktop_installer passed_after_retry http_status",
+        "journey desktop_installer passed_after_retry http_status",
+        "desktop-release-policy: ok",
+        "",
+      ].join("\n"),
+    );
+    expect(result.counts.get("/assets/Stella-macos-universal.dmg")).toBe(2);
+    expect(result.counts.get("/assets/Stella-windows-x64-setup.exe")).toBe(2);
+  });
+  test("fails an installer after one retry", async () => {
+    for (const assetStatus of [404, 503]) {
+      const result = await run({ scenario: { assetStatus }, mode: "desktop" });
+      expect(result.exit).toBe(1);
+      expect(result.stdout).not.toContain("desktop-release-policy: ok");
+      expect(result.counts.get("/assets/Stella-macos-universal.dmg")).toBe(2);
+      expect(result.counts.get("/assets/Stella-windows-x64-setup.exe")).toBe(
+        undefined,
+      );
+    }
   });
 });
 

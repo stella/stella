@@ -50,22 +50,35 @@ if [[ "$api_path" == "$latest_api_path" ]]; then
       exit 1
     fi
   fi
-  for asset in \
-    "Stella-macos-universal.dmg" \
-    "Stella-windows-x64-setup.exe"; do
-    download_url="${STELLA_DESKTOP_DOWNLOAD_BASE_URL:-https://github.com/${repo}/releases/latest/download}/${asset}"
-    if ! curl \
+  # One bounded retry per installer; a pass that needed it says so.
+  retry_pause="${STELLA_DESKTOP_RETRY_PAUSE_SECONDS:-5}"
+  head_installer() {
+    local rc=0
+    curl \
       --fail \
       --head \
       --location \
       --max-time 30 \
-      --retry 3 \
       --show-error \
       --silent \
-      "$download_url" >/dev/null 2>&1; then
-      echo "::error::Desktop latest deep link failed" >&2
-      exit 1
+      "$1" >/dev/null 2>&1 || rc=$?
+    if [[ "$rc" == 0 ]]; then return 0; fi
+    if [[ "$rc" == 28 ]]; then first_reason=timeout; else first_reason=http_status; fi
+    return 1
+  }
+  for asset in \
+    "Stella-macos-universal.dmg" \
+    "Stella-windows-x64-setup.exe"; do
+    download_url="${STELLA_DESKTOP_DOWNLOAD_BASE_URL:-https://github.com/${repo}/releases/latest/download}/${asset}"
+    first_reason=
+    if head_installer "$download_url"; then continue; fi
+    sleep "$retry_pause"
+    if head_installer "$download_url"; then
+      printf 'journey desktop_installer passed_after_retry %s\n' "$first_reason"
+      continue
     fi
+    echo "::error::Desktop latest deep link failed" >&2
+    exit 1
   done
 fi
 
