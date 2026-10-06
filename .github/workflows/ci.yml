@@ -1981,6 +1981,12 @@ jobs:
             bun scripts/network-baseline-scope.ts validate apps/web/e2e/network-baseline.json --route-tree apps/web/src/routeTree.gen.ts --context apps/web/e2e/.network-baseline-context.json
           '
 
+      - name: Restore route network baseline
+        if: ${{ always() && steps.checkout.outcome == 'success' }}
+        run: |
+          git checkout -- apps/web/e2e/network-baseline.json
+          rm -f apps/web/e2e/.network-baseline-*
+
       - name: Workspace hygiene
         if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
         # Restored from the bun postinstall lifecycle, which is bypassed

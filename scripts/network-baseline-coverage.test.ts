@@ -1,6 +1,13 @@
 import { Generator, getConfig } from "@tanstack/router-generator";
 import { expect, test, beforeAll, afterAll } from "bun:test";
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import os from "node:os";
 import path from "node:path";
 
@@ -302,6 +309,18 @@ test("light coverage prepares through the shared action before checking under th
   const coverage = job?.indexOf("name: Route network manifest coverage") ?? -1;
   expect(prepare).toBeGreaterThan(0);
   expect(coverage).toBeGreaterThan(prepare);
+  const restore = job?.indexOf("name: Restore route network baseline") ?? -1;
+  expect(restore).toBeGreaterThan(coverage);
+  const afterCoverage = job?.slice(coverage).split("      - name: ")[1];
+  expect(afterCoverage).toStartWith("Restore route network baseline");
+  expect(afterCoverage).toContain(
+    "always() && steps.checkout.outcome == 'success'",
+  );
+  expect(afterCoverage).toContain(
+    "git checkout -- apps/web/e2e/network-baseline.json",
+  );
+  expect(afterCoverage).toContain("rm -f apps/web/e2e/.network-baseline-*");
+  expect(job?.slice(0, prepare)).toContain("fetch-depth: 0");
   const steps = job?.slice(
     prepare,
     job.indexOf("name: Workspace hygiene", coverage),
@@ -315,4 +334,59 @@ test("light coverage prepares through the shared action before checking under th
   expect(steps).toContain(
     "--context apps/web/e2e/.network-baseline-context.json",
   );
+});
+
+test("cleanup restores the tracked baseline and removes preparation files after partial failure", () => {
+  const source = readFileSync(
+    path.resolve(import.meta.dirname, "../.github/workflows/ci.yml"),
+    "utf-8",
+  );
+  const step = source
+    .split("      - name: Restore route network baseline\n")[1]
+    ?.split("      - name: Workspace hygiene")[0];
+  const cleanup = step?.split("        run: |\n")[1];
+  if (!cleanup) {
+    throw new Error("Missing baseline restore step");
+  }
+  const repository = path.join(directory, "cleanup");
+  const e2e = path.join(repository, "apps/web/e2e");
+  mkdirSync(e2e, { recursive: true });
+  const run = (args: string[]) =>
+    Bun.spawnSync(args, { cwd: repository, stderr: "pipe", stdout: "pipe" });
+  expect(run(["git", "init", "-q"]).exitCode).toBe(0);
+  const baselineFile = path.join(e2e, "network-baseline.json");
+  const original = JSON.stringify({ "/contacts": entry });
+  writeFileSync(baselineFile, original);
+  expect(
+    run(["git", "add", "apps/web/e2e/network-baseline.json"]).exitCode,
+  ).toBe(0);
+  expect(
+    run([
+      "git",
+      "-c",
+      "commit.gpgsign=false",
+      "-c",
+      "user.name=Fixture",
+      "-c",
+      "user.email=fixture@example.invalid",
+      "commit",
+      "-qm",
+      "fixture",
+    ]).exitCode,
+  ).toBe(0);
+  writeFileSync(baselineFile, JSON.stringify({ "/partial": entry }));
+  const metadata = ["base.json", "changed", "context.json", "declarations"].map(
+    (name) => path.join(e2e, `.network-baseline-${name}`),
+  );
+  for (const file of metadata) {
+    writeFileSync(file, "partial");
+  }
+  const unrelated = path.join(e2e, "notes.txt");
+  writeFileSync(unrelated, "retain");
+  const result = run(["bash", "-e", "-c", cleanup]);
+  expect(result.exitCode, result.stderr.toString()).toBe(0);
+  expect(readFileSync(baselineFile, "utf-8")).toBe(original);
+  expect(metadata.every((file) => !existsSync(file))).toBe(true);
+  expect(readFileSync(unrelated, "utf-8")).toBe("retain");
+  expect(run(["git", "diff", "--exit-code"]).exitCode).toBe(0);
 });
