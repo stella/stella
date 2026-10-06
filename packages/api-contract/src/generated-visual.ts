@@ -104,7 +104,7 @@ export const generatedVisualInputSchema = v.strictObject({
             v.minLength(1),
             v.maxLength(VISUAL_SANDBOX_LIMITS.linkIdChars),
           ),
-          decisionId: v.pipe(v.string(), v.minLength(1), v.maxLength(256)),
+          decisionId: v.pipe(safeIdSchema, v.maxLength(256)),
         }),
       ),
       v.maxLength(GENERATED_VISUAL_LIMITS.links),

@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
+import { toSafeId } from "@stll/api-contract/safe-id";
 import { createVisualActionGate } from "@stll/api-contract/visual-bridge-policy";
 import type { VisualGuestMessage } from "@stll/api-contract/visual-sandbox";
 
@@ -10,7 +11,12 @@ const frameWindow = {};
 const gate = () =>
   createVisualActionGate({
     data: { courtYear: { buckets: [{ court: "court-one", year: 2026 }] } },
-    links: [{ id: "decision-one", decisionId: "decision-id" }],
+    links: [
+      {
+        id: "decision-one",
+        decisionId: toSafeId<"caseLawDecision">("decision-id"),
+      },
+    ],
     literalLinks: ["https://example.test/decision?language=cs"],
     now: () => 1000,
   });

@@ -53,7 +53,10 @@ describe("generated visual preparation", () => {
     ).toBe(true);
   });
   test("refuses duplicate decision link identifiers", () => {
-    const links = [{ id: "decision-one", decisionId: "case-one" }];
+    const links = v.parse(
+      v.nonOptional(generatedVisualInputSchema.entries.links),
+      [{ id: "decision-one", decisionId: "case-one" }],
+    );
     expect(prepareGeneratedVisual({ ...input(), links }).isOk()).toBe(true);
     const duplicate = prepareGeneratedVisual({
       ...input(),

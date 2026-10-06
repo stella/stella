@@ -63,7 +63,7 @@ export const createShowVisualTools = ({
         new ChatToolError({
           kind: "invalid-input",
           message:
-            "Use a title within 120 characters, a page within 256 KB, and finite JSON data within 1 MB and 32 levels of nesting.",
+            "Use a title within 120 characters, a page within 256 KB, finite JSON data within 1 MB and 32 levels of nesting, and nonempty well-formed decision identifiers within 256 characters.",
         }),
       );
     }

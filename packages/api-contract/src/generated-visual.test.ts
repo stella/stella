@@ -43,6 +43,19 @@ describe("generated visual contract", () => {
     }
   });
 
+  test("validates decision identifiers with the canonical identifier contract", () => {
+    for (const decisionId of ["", "\ud800", "x".repeat(257)]) {
+      expect(
+        v.safeParse(generatedVisualInputSchema, {
+          title: "Decisions",
+          html: "<p>Decisions</p>",
+          data: {},
+          links: [{ id: "one", decisionId }],
+        }).success,
+      ).toBe(false);
+    }
+  });
+
   test("bounds JSON values, nesting, node count and encoded bytes", () => {
     const input = { title: "Table", html: "<p>Values</p>" };
     for (const data of [

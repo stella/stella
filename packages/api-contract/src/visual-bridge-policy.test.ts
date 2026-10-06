@@ -1,12 +1,15 @@
 import { describe, expect, test } from "bun:test";
 
+import { toSafeId } from "./safe-id";
 import { createVisualActionGate } from "./visual-bridge-policy";
 
 describe("visual parent actions", () => {
   test("resolves only stored decision links and complete literal URLs", () => {
     const allow = createVisualActionGate({
       data: null,
-      links: [{ id: "one", decisionId: "decision-one" }],
+      links: [
+        { id: "one", decisionId: toSafeId<"caseLawDecision">("decision-one") },
+      ],
       literalLinks: ["https://example.test/view?year=2026"],
       now: () => 0,
     });

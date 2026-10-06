@@ -177,6 +177,53 @@ describe("show visual", () => {
     expect(emissions).toHaveLength(0);
   });
 
+  test("refuses invalid decision identifiers before publication or preview", async () => {
+    let saved = 0;
+    let previews = 0;
+    const emissions: unknown[] = [];
+    const tool = createShowVisualTools({
+      origin: createVisualResourceOrigin(),
+      store: async () => {
+        saved += 1;
+        return Result.ok({
+          fileId: createSafeId<"userFile">(),
+          document: "<p>Decisions</p>",
+        });
+      },
+      preview: async () => {
+        previews += 1;
+        return unavailablePreview();
+      },
+    })[VISUAL_PREVIEW_TOOL_NAME];
+    const execute = tool.execute ?? panic("Visual tool has no executor");
+    for (const decisionId of ["", "\ud800", "x".repeat(257)]) {
+      const error = await rejectionOf(
+        Promise.resolve(
+          execute(
+            {
+              title: "Decisions",
+              html: "<p>Decisions</p>",
+              data: {},
+              links: [{ id: "one", decisionId }],
+            },
+            {
+              toolCallId: "visual-call-one",
+              emitCustomEvent: (_name, value) => emissions.push(value),
+            },
+          ),
+        ),
+      );
+      expect(error).toBeInstanceOf(ChatToolError);
+      expect(error).toMatchObject({
+        kind: "invalid-input",
+        message: expect.stringContaining("decision identifiers"),
+      });
+    }
+    expect(saved).toBe(0);
+    expect(previews).toBe(0);
+    expect(emissions).toHaveLength(0);
+  });
+
   test("refuses unused data before storage and propagates a storage failure", async () => {
     let saved = 0;
     const emissions: unknown[] = [];
