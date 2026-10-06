@@ -1,3 +1,4 @@
+// parser-output-unchanged: FlowStepError moved here from the flow executor; parsers neither throw nor read it.
 // parser-output-unchanged: HTTP 426 extends handoff response typing only; adapter stop kinds and parsed records are unchanged.
 // parser-output-unchanged: optional clause provenance affects template refusals only; adapter stop kinds and parsed records are unchanged.
 // parser-output-unchanged: adapter stop kinds and TimeoutError reexport preserve successful parsed records.
@@ -192,6 +193,12 @@ export class HandlerError<
     this.issues = props.issues;
   }
 }
+
+/** Expected step-execution failure (bad AI output, doc-compile error, etc). */
+export class FlowStepError extends TaggedError("FlowStepError")<{
+  message: string;
+  cause?: unknown;
+}> {}
 
 export class DatabaseError extends TaggedError("DatabaseError")<{
   code?: string | undefined;

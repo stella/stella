@@ -17,11 +17,16 @@ import {
 import {
   createSpawnSubagentsTool,
   resolveValidatedSubagentModelId,
+  SUBAGENT_FAILED_MESSAGE,
 } from "@/api/handlers/chat/tools/spawn-subagents-tool";
 import type { SubagentProposalSink } from "@/api/handlers/chat/tools/subagent-tool-shared";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { ChatToolMap } from "@/api/lib/chat/chat-tool-types";
-import { UsageLimitExceededError } from "@/api/lib/errors/tagged-errors";
+import { ProviderCallError } from "@/api/lib/errors/provider-call-error";
+import {
+  HandlerError,
+  UsageLimitExceededError,
+} from "@/api/lib/errors/tagged-errors";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 // `spawn-subagents-tool.ts` calls `runSubagent` (a real provider/model call
@@ -524,4 +529,69 @@ describe("createSpawnSubagentsTool — incomplete subagent runs", () => {
       env.ANTHROPIC_API_KEY = previousAnthropicKey;
     }
   });
+});
+
+describe("createSpawnSubagentsTool — thrown subagent failures", () => {
+  const sentinel = "SENTINEL_SUBAGENT_THROWN_TEXT";
+  const thrown: { name: string; error: unknown; expected: string }[] = [
+    {
+      name: "a library error",
+      error: new Error(sentinel),
+      expected: SUBAGENT_FAILED_MESSAGE,
+    },
+    {
+      name: "a thrown string",
+      error: sentinel,
+      expected: SUBAGENT_FAILED_MESSAGE,
+    },
+    {
+      name: "a server-side handler error",
+      error: new HandlerError({ status: 502, message: sentinel }),
+      expected: SUBAGENT_FAILED_MESSAGE,
+    },
+    {
+      name: "a provider call error",
+      error: new ProviderCallError({
+        model: { provider: "openrouter", keySource: "instance" },
+        status: 502,
+        kind: "provider_unavailable",
+      }),
+      expected: SUBAGENT_FAILED_MESSAGE,
+    },
+    {
+      name: "a curated refusal",
+      error: new HandlerError({ status: 422, message: "Invalid brief" }),
+      expected: "Invalid brief",
+    },
+  ];
+
+  const runThrowing = async (failure: unknown) => {
+    const previousEnforcement = env.USAGE_ENFORCEMENT_ENABLED;
+    const previousProvider = env.AI_PROVIDER;
+    const previousAnthropicKey = env.ANTHROPIC_API_KEY;
+    env.USAGE_ENFORCEMENT_ENABLED = false;
+    env.AI_PROVIDER = "anthropic";
+    env.ANTHROPIC_API_KEY = "sk-test";
+    runSubagentImpl = async () => {
+      throw failure;
+    };
+    try {
+      return await buildTool()({ subagents: [{ task: "a" }] }, {});
+    } finally {
+      env.USAGE_ENFORCEMENT_ENABLED = previousEnforcement;
+      env.AI_PROVIDER = previousProvider;
+      env.ANTHROPIC_API_KEY = previousAnthropicKey;
+    }
+  };
+
+  for (const { name, error, expected } of thrown) {
+    test(`reports ${name} with application-owned text`, async () => {
+      const result = await runThrowing(error);
+
+      expect(result.results).toEqual([
+        { error: expected, index: 0, status: "failed" },
+      ]);
+      expect(JSON.stringify(result)).not.toContain(sentinel);
+    });
+  }
 });
