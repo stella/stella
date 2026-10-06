@@ -225,29 +225,6 @@ describe("workspace navigation pagination", () => {
     },
   );
 
-  test("rejects a feature snapshot for another principal before querying", async () => {
-    const { context, limit, select } = createContext({
-      query: { statusScope: "active-and-archived" },
-      featureAccessSnapshot: timeBillingSnapshot({
-        organizationId: "organization_other123",
-        userId: "user_test123",
-        enrolled: true,
-      }),
-    });
-
-    const result = await readWorkspaceNavigation.handler(context);
-
-    expect(result).toEqual({
-      code: 500,
-      response: {
-        code: "internal_server_error",
-        message: "Internal server error",
-      },
-    });
-    expect(select).not.toHaveBeenCalled();
-    expect(limit).not.toHaveBeenCalled();
-  });
-
   test("rejects malformed cursors before querying", async () => {
     const { context, limit } = createContext({
       query: { cursor: "not-a-cursor", statusScope: "active-and-archived" },

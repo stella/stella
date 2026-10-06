@@ -13,11 +13,11 @@ export const isTimeBillingPreviewEnabled = async (
   queryClient: QueryClient,
   caller: WorkspaceNavigationCaller,
 ): Promise<boolean> => {
-  const features = await ensureRouteQueryData(
+  const navigation = await ensureRouteQueryData(
     queryClient,
     workspacesNavigationOptions(caller),
   );
-  return features.features.timeBilling;
+  return navigation.features.timeBilling;
 };
 
 export const isTimeBillingRouteEnabled = isTimeBillingPreviewEnabled;
