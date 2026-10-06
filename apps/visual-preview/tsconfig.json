@@ -5,6 +5,6 @@
     "module": "ESNext",
     "types": ["bun-types"]
   },
-  "include": ["."],
+  "include": [".", "../../scripts/browser/**/*.ts"],
   "exclude": ["node_modules"]
 }
