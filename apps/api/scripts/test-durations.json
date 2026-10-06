@@ -6139,6 +6139,10 @@
     "seconds": 0.104776,
     "source": "estimated"
   },
+  "src/lib/legal-search/corpus-index-unreachable.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
   "src/lib/legal-search/corpus-location.test.ts": {
     "seconds": 0.107206,
     "source": "estimated"
@@ -8305,6 +8309,10 @@
   },
   "src/mcp/resources.test.ts": {
     "seconds": 0.467175,
+    "source": "estimated"
+  },
+  "src/mcp/search-index-unavailable.test.ts": {
+    "seconds": 1,
     "source": "estimated"
   },
   "src/mcp/server-admission.valkey.test.ts": {
