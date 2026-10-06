@@ -1,3 +1,4 @@
+import { Result } from "better-result";
 /**
  * Enqueue a view→report export.
  *
@@ -13,8 +14,6 @@
  * `templateId` come from the body but are validated against the workspace / org
  * (RLS) before use.
  */
-
-import { Result } from "better-result";
 import { eq } from "drizzle-orm";
 
 import { reportExports } from "@/api/db/schema";
@@ -27,6 +26,11 @@ import {
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
+import {
+  AVT_LAYOUT_FEATURE_ACCESS,
+  avtViewAccessStatus,
+  isAvtLayoutVisible,
+} from "@/api/lib/auth/feature-access/view-eligibility";
 import { workspaceParams } from "@/api/lib/custom-schema";
 import { queryEntities } from "@/api/lib/entities/query-entities";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -38,6 +42,7 @@ import { parseStoredViewLayout } from "@/api/lib/views-schema";
 
 const config = {
   accountAccess: ACCOUNT_ACCESS.standard,
+  featureAccess: AVT_LAYOUT_FEATURE_ACCESS,
   description:
     "Start an asynchronous DOCX or PDF export of a matter view using a selected report template. Returns an export ID to poll.",
   permissions: { workspace: ["read"], entity: ["create"] },
@@ -60,6 +65,7 @@ const exportViewReport = createSafeHandler(
     body,
     recordAuditEvent,
     request,
+    featureAccessSnapshot,
   }) {
     const organizationId = session.activeOrganizationId;
 
@@ -80,6 +86,20 @@ const exportViewReport = createSafeHandler(
       );
     }
 
+    if (
+      !isAvtLayoutVisible(
+        view.layout,
+        avtViewAccessStatus({
+          snapshot: featureAccessSnapshot,
+          organizationId,
+          userId: user.id,
+        }),
+      )
+    ) {
+      return Result.err(
+        new HandlerError({ status: 404, message: "Not found" }),
+      );
+    }
     const layout = parseStoredViewLayout(view.layout);
     if (layout.type !== "table") {
       return Result.err(

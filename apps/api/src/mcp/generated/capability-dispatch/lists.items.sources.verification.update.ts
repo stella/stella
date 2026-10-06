@@ -12,11 +12,15 @@ type CapabilityDispatchEntry = {
   load: () => Promise<Record<string, unknown>>;
   /** Present only for a named (non-default) export. */
   exportName?: string;
+  featureId?: string;
+  featureAccess?: "required" | "conditional";
 };
 
 export const CAPABILITY_DISPATCH = {
   "lists.items.sources.verification.update": {
     load: async () =>
       await import("@/api/handlers/lists/items/sources/verification/update"),
+    featureId: "list-verification",
+    featureAccess: "required",
   },
 } as const satisfies Record<string, CapabilityDispatchEntry>;
