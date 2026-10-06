@@ -12,6 +12,8 @@ import path from "node:path";
 import {
   markdownChecks,
   markdownReaders,
+  markdownReaderInputNames,
+  requiresDesktopBrowser,
   requiresLandingBuild,
   requiresPackageChecks,
 } from "./ci-package-scope";
@@ -234,6 +236,26 @@ readFileSync(INPUT, "utf8");`,
     expect(
       markdownChecks({ root, changed: ["external.md", "comment.md"] }),
     ).toEqual([]);
+  });
+});
+
+test("reader binding caches invalidate when source literals change under identical masked code", () => {
+  repository((root, write) => {
+    const file = "scripts/moving-reader.test.ts";
+    const source = (input: string) => `import { readFileSync } from "node:fs";
+      const INPUT = "${input}";
+      readFileSync(INPUT);`;
+    expect(maskSourceNonCode(source("README.md"))).toBe(
+      maskSourceNonCode(source("GUIDES.md")),
+    );
+    write(file, source("README.md"));
+    expect(
+      markdownReaders(root).find((reader) => reader.file === file)?.inputs,
+    ).toEqual(["README.md"]);
+    write(file, source("GUIDES.md"));
+    expect(
+      markdownReaders(root).find((reader) => reader.file === file)?.inputs,
+    ).toEqual(["GUIDES.md"]);
   });
 });
 
@@ -1287,6 +1309,40 @@ test("a named computed Markdown check joins the docs job without package checks"
   });
 });
 
+test("named Markdown commands require nonempty inputs under the census naming convention", () => {
+  for (const declaration of [
+    "",
+    "export const CI_MARKDOWN_READER_INPUTS = [];",
+  ]) {
+    repository((root, write) => {
+      const reader = "scripts/undeclared-reader.ts";
+      write(
+        reader,
+        `import { readFileSync } from "node:fs";
+        ${declaration}
+        export const CI_MARKDOWN_READER_COMMAND = "bun ${reader}";
+        readFileSync("README.md");`,
+      );
+      expect(() => markdownReaders(root)).toThrow(
+        `${reader}: Markdown reader command must run its declared owner directly`,
+      );
+    });
+  }
+  repository((root, write) => {
+    const reader = "scripts/owned-reader.ts";
+    write(
+      reader,
+      `import { readFileSync } from "node:fs";
+      export const CI_MARKDOWN_READER_INPUTS_OWNER = ["README.md"];
+      export const CI_MARKDOWN_READER_COMMAND = "bun ${reader}";
+      readFileSync("README.md");`,
+    );
+    expect(markdownChecks({ root, changed: ["README.md"] })).toEqual([
+      ["bun", reader],
+    ]);
+  });
+});
+
 test("named Markdown checks cannot hide a different owner or computed command", () => {
   for (const command of [
     '"bun scripts/other.ts"',
@@ -1323,10 +1379,11 @@ test("every tracked named Markdown input declaration enters the reader census", 
     .filter((file) =>
       /^(?:scripts|apps|packages)\/.+\.[cm]?[jt]sx?$/u.test(file),
     );
-  const declared = files.filter((file) =>
-    /\bexport\s+const\s+CI_MARKDOWN_READER_INPUTS(?:_[A-Za-z_$][\w$]*)?\b/u.test(
-      maskSourceNonCode(readFileSync(path.join(root, file), "utf-8")),
-    ),
+  const declared = files.filter(
+    (file) =>
+      markdownReaderInputNames(
+        maskSourceNonCode(readFileSync(path.join(root, file), "utf-8")),
+      ).length > 0,
   );
   expect(declared.length).toBeGreaterThan(0);
   const readers = new Set(markdownReaders().map(({ file }) => file));
@@ -1334,3 +1391,156 @@ test("every tracked named Markdown input declaration enters the reader census", 
     expect(readers.has(file), file).toBe(true);
   }
 }, 30_000);
+const desktopLock = () => ({
+  workspaces: {
+    "apps/desktop": {
+      name: "@stll/desktop",
+      dependencies: { "@stll/ui": "workspace:*" },
+    },
+    "packages/ui": {
+      name: "@stll/ui",
+      devDependencies: { "@stll/base": "workspace:*" },
+    },
+    "packages/base": { name: "@stll/base" },
+    "packages/unrelated": { name: "@stll/unrelated" },
+  },
+  packages: {
+    "@stll/ui": ["@stll/ui@workspace:packages/ui"],
+    "@stll/base": ["@stll/base@workspace:packages/base"],
+    "@stll/unrelated": ["@stll/unrelated@workspace:packages/unrelated"],
+  },
+});
+const desktopRepository = (
+  run: (root: string, write: (file: string, text: string) => void) => void,
+) =>
+  repository((root, write) => {
+    write("bun.lock", JSON.stringify(desktopLock()));
+    write(
+      "turbo.json",
+      JSON.stringify({
+        tasks: {
+          "@stll/desktop#test:browser": {
+            inputs: ["$TURBO_DEFAULT$", "$TURBO_ROOT$/fixtures/browser/**"],
+          },
+        },
+      }),
+    );
+    run(root, write);
+  });
+
+test("desktop browser scope excludes ordinary Markdown and retains real module readers", () => {
+  desktopRepository((root, write) => {
+    write(
+      "scripts/fixture-reader.test.ts",
+      `import { readFileSync } from "node:fs";
+      readFileSync("apps/desktop/fixture.md");`,
+    );
+    write(
+      "turbo.json",
+      JSON.stringify({
+        tasks: {
+          "@stll/desktop#test:browser": { inputs: ["$TURBO_DEFAULT$"] },
+          "@stll/example#test": {
+            inputs: ["$TURBO_ROOT$/apps/desktop/fixture.md"],
+          },
+        },
+      }),
+    );
+    expect(
+      requiresDesktopBrowser({ root, changed: ["apps/desktop/README.md"] }),
+    ).toBe(false);
+    expect(
+      requiresDesktopBrowser({
+        root,
+        changed: ["apps/api/src/a.ts", "apps/desktop/README.md"],
+      }),
+    ).toBe(false);
+    expect(
+      requiresDesktopBrowser({ root, changed: ["apps/desktop/fixture.md"] }),
+    ).toBe(true);
+    expect(
+      requiresDesktopBrowser({
+        root,
+        changed: ["apps/desktop/src/a.ts", "apps/desktop/README.md"],
+      }),
+    ).toBe(true);
+  });
+});
+
+test("desktop browser scope follows transitive workspace dependencies, declared browser inputs and global inputs", () => {
+  desktopRepository((root) => {
+    for (const file of [
+      "apps/desktop/src/new.unknown",
+      "apps/desktop/tests/browser/new.playwright.spec.ts",
+      "packages/ui/src/new.ts",
+      "packages/base/src/transitive.ts",
+      "fixtures/browser/deleted.html",
+      ".github/workflows/ci.yml",
+      "bun.lock",
+      "package.json",
+      "patches/new.patch",
+    ]) {
+      expect(requiresDesktopBrowser({ root, changed: [file] }), file).toBe(
+        true,
+      );
+    }
+    for (const changed of [
+      [],
+      ["docs/guide.md"],
+      ["apps/web/src/unrelated.ts"],
+      ["packages/unrelated/src/new.ts"],
+    ]) {
+      expect(
+        requiresDesktopBrowser({ root, changed }),
+        JSON.stringify(changed),
+      ).toBe(false);
+    }
+  });
+});
+
+test("a planted unclassified desktop file selects desktop browsers without changing the selector", () => {
+  desktopRepository((root, write) => {
+    expect(requiresDesktopBrowser({ root, changed: ["docs/guide.md"] })).toBe(
+      false,
+    );
+    const planted = "apps/desktop/new-subsystem/planted.unclassified";
+    write(planted, "new desktop input");
+    expect(requiresDesktopBrowser({ root, changed: [planted] })).toBe(true);
+  });
+});
+
+test("desktop browser scope fails closed on missing or malformed graph and input declarations", () => {
+  for (const [file, contents] of [
+    ["bun.lock", "{"],
+    ["bun.lock", JSON.stringify({ workspaces: {}, packages: {} })],
+    ["turbo.json", JSON.stringify({ tasks: {} })],
+    [
+      "turbo.json",
+      JSON.stringify({
+        tasks: { "@stll/desktop#test:browser": { inputs: [4] } },
+      }),
+    ],
+  ]) {
+    desktopRepository((root, write) => {
+      expect(requiresDesktopBrowser({ root, changed: ["docs/guide.md"] })).toBe(
+        false,
+      );
+      if (file === undefined || contents === undefined) {
+        throw new TypeError("Missing desktop scope mutation");
+      }
+      write(file, contents);
+      expect(requiresDesktopBrowser({ root, changed: ["docs/guide.md"] })).toBe(
+        true,
+      );
+    });
+  }
+  desktopRepository((root, write) => {
+    const lock = desktopLock();
+    const { "@stll/base": removed, ...packages } = lock.packages;
+    expect(removed).toBeDefined();
+    write("bun.lock", JSON.stringify({ ...lock, packages }));
+    expect(requiresDesktopBrowser({ root, changed: ["docs/guide.md"] })).toBe(
+      true,
+    );
+  });
+});

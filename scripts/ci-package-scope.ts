@@ -7,6 +7,7 @@ import {
   landingBuildRootInputs,
   landingClosure,
   parseLockfile,
+  workspaceClosure,
 } from "./landing-deploy-scope";
 import {
   maskSourceNonCode,
@@ -22,6 +23,12 @@ const GLOBAL =
 const CONTENT =
   /^(?:\.ai|\.agents|\.claude)\/|(?:^|\/)(?:AGENTS|GEMINI|SKILL)\.md$|^docs\/(?:changelog|policies)\//u;
 const MARKDOWN = /\.mdx?$/u;
+const MARKDOWN_INPUT_DECLARATION =
+  /\bconst\s+(CI_MARKDOWN_READER_INPUTS(?:_[A-Za-z_$][\w$]*)?)\b/gu;
+export const markdownReaderInputNames = (code: string) =>
+  [...code.matchAll(MARKDOWN_INPUT_DECLARATION)].flatMap((match) =>
+    match[1] === undefined ? [] : [match[1]],
+  );
 const PROVENANCE = /^(?:\.provenance\.yml$|provenance\/)/u;
 
 const matches = (file: string, pattern: string) =>
@@ -112,6 +119,14 @@ type IdentifierPathOptions = PathExpressionOptions & {
   resolve: (options: PathExpressionOptions) => PathExpressionResult;
 };
 
+let identifierBindingCache:
+  | {
+      source: string;
+      code: string;
+      expressions: Map<string, readonly string[] | undefined>;
+    }
+  | undefined;
+
 const identifierExpressions = ({
   expression: text,
   code,
@@ -119,6 +134,16 @@ const identifierExpressions = ({
 }: Pick<PathExpressionOptions, "expression" | "code" | "source">):
   | readonly string[]
   | undefined => {
+  if (
+    identifierBindingCache?.source !== source ||
+    identifierBindingCache.code !== code
+  ) {
+    identifierBindingCache = { source, code, expressions: new Map() };
+  }
+  const cache = identifierBindingCache.expressions;
+  if (cache.has(text)) {
+    return cache.get(text);
+  }
   const expressions: string[] = [];
   for (const declaration of code.matchAll(
     new RegExp(`\\bconst\\s+${text}\\b`, "gu"),
@@ -133,10 +158,12 @@ const identifierExpressions = ({
       code.indexOf("=", declaration.index + declaration[0].length) + 1;
     const end = code.indexOf(";", start);
     if (start === 0 || end === -1) {
+      cache.set(text, undefined);
       return undefined;
     }
     expressions.push(source.slice(start, end));
   }
+  cache.set(text, expressions);
   return expressions;
 };
 
@@ -508,15 +535,7 @@ const declaredMarkdownInputs = (
   // Reader metadata names may include their owner to avoid shared public exports.
   const names =
     text === "CI_MARKDOWN_READER_INPUTS"
-      ? [
-          ...new Set(
-            [
-              ...code.matchAll(
-                /\bconst\s+CI_MARKDOWN_READER_INPUTS(?:_[A-Za-z_$][\w$]*)?\b/gu,
-              ),
-            ].map((match) => match[0].replace(/^const\s+/u, "")),
-          ),
-        ]
+      ? [...new Set(markdownReaderInputNames(code))]
       : [text];
   const expressions: string[] = [];
   for (const name of names) {
@@ -671,9 +690,11 @@ const declaredMarkdownReaderCommand = ({
   source,
   code,
   file,
-}: Pick<PathExpressionOptions, "source" | "code" | "file">):
-  | readonly string[]
-  | undefined => {
+  temporaryFactories,
+}: Pick<
+  PathExpressionOptions,
+  "source" | "code" | "file" | "temporaryFactories"
+>): readonly string[] | undefined => {
   const expressions = identifierExpressions({
     expression: "CI_MARKDOWN_READER_COMMAND",
     source,
@@ -704,11 +725,13 @@ const declaredMarkdownReaderCommand = ({
     words.at(0) !== "bun" ||
     words.at(1) !== file ||
     words.some((word) => /[;&|$`]/u.test(word)) ||
-    identifierExpressions({
+    (declaredMarkdownInputs({
       expression: "CI_MARKDOWN_READER_INPUTS",
       source,
       code,
-    }) === undefined
+      file,
+      temporaryFactories,
+    })?.length ?? 0) === 0
   ) {
     throw new MarkdownReaderDeclarationError(
       `${file}: Markdown reader command must run its declared owner directly`,
@@ -1124,7 +1147,7 @@ const retainedMarkdownReader = ({
   if (
     importsFs ||
     source.includes("Bun.file") ||
-    /\bconst\s+CI_MARKDOWN_READER_INPUTS(?:_[A-Za-z_$][\w$]*)?\b/u.test(code)
+    markdownReaderInputNames(code).length > 0
   ) {
     const declared = declaredMarkdownInputs({
       expression: "CI_MARKDOWN_READER_INPUTS",
@@ -1147,6 +1170,7 @@ const retainedMarkdownReader = ({
       source,
       code,
       file,
+      temporaryFactories,
     });
     const command = declaredCommand ?? readerCommand(root, file);
     const reader = { file, inputs: [...inputs] };
@@ -1503,6 +1527,105 @@ export const requiresLandingBuild = ({
   }
 };
 
+export const requiresDesktopBrowser = ({
+  changed,
+  root = ROOT,
+}: ScopeOptions): boolean => {
+  try {
+    if (changed.some((file) => GLOBAL.test(file))) {
+      return true;
+    }
+    const lock = parseLockfile(
+      Bun.JSONC.parse(readFileSync(path.join(root, "bun.lock"), "utf-8")),
+    );
+    if (lock === undefined) {
+      return true;
+    }
+    const closure = workspaceClosure(lock, "@stll/desktop");
+    if (closure === undefined) {
+      return true;
+    }
+    for (const directory of closure.workspaceDirectories) {
+      const workspace = lock.workspaces[directory];
+      if (workspace === undefined) {
+        return true;
+      }
+      for (const kind of [
+        "dependencies",
+        "devDependencies",
+        "optionalDependencies",
+        "peerDependencies",
+      ]) {
+        const dependencies = workspace[kind];
+        if (dependencies === undefined) {
+          continue;
+        }
+        if (
+          typeof dependencies !== "object" ||
+          dependencies === null ||
+          Array.isArray(dependencies)
+        ) {
+          return true;
+        }
+        if (
+          Object.keys(dependencies).some(
+            (name) => lock.packages[name] === undefined,
+          )
+        ) {
+          return true;
+        }
+      }
+    }
+    const turbo: unknown = Bun.JSONC.parse(
+      readFileSync(path.join(root, "turbo.json"), "utf-8"),
+    );
+    if (typeof turbo !== "object" || turbo === null || !("tasks" in turbo)) {
+      return true;
+    }
+    const tasks = turbo.tasks;
+    if (
+      typeof tasks !== "object" ||
+      tasks === null ||
+      !("@stll/desktop#test:browser" in tasks)
+    ) {
+      return true;
+    }
+    const task = tasks["@stll/desktop#test:browser"];
+    if (typeof task !== "object" || task === null || !("inputs" in task)) {
+      return true;
+    }
+    const inputs = task.inputs;
+    if (
+      !Array.isArray(inputs) ||
+      inputs.length === 0 ||
+      inputs.some((input) => typeof input !== "string")
+    ) {
+      return true;
+    }
+    const rootInputs = inputs
+      .filter(
+        (input): input is string =>
+          typeof input === "string" && input.startsWith("$TURBO_ROOT$/"),
+      )
+      .map((input) => input.slice("$TURBO_ROOT$/".length));
+    return changed.some(
+      (file) =>
+        (!MARKDOWN.test(file) ||
+          requiresPackageChecks({ root, changed: [file] })) &&
+        ([...closure.workspaceDirectories].some(
+          (directory) => file === directory || file.startsWith(`${directory}/`),
+        ) ||
+          rootInputs.some((input) => matches(file, input))),
+    );
+  } catch (error) {
+    console.error(
+      "Desktop browser scope unavailable; running desktop browsers",
+      error,
+    );
+    return true;
+  }
+};
+
 if (import.meta.main) {
   const [kind, ...changed] = process.argv.slice(2);
   let required = true;
@@ -1535,6 +1658,8 @@ if (import.meta.main) {
   } else if (kind === "--markdown-checks") {
     console.log(JSON.stringify(markdownChecks({ changed })));
     process.exit(0);
+  } else if (kind === "--desktop-browser") {
+    required = requiresDesktopBrowser({ changed });
   } else if (kind === "--landing-build") {
     required = requiresLandingBuild({ changed });
   }

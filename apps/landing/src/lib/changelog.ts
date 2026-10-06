@@ -19,13 +19,15 @@ export type ChangelogRelease = {
 // A `null` entry records a stable tag whose release was built but never
 // promoted to production: its notes file exists, and nothing here lists it.
 // Computed filesystem reads retain these repository Markdown inputs.
-export const CI_MARKDOWN_READER_INPUTS_CHANGELOG = ["docs/changelog/*.md"];
+const CI_MARKDOWN_READER_INPUTS_CHANGELOG = ["docs/changelog/*.md"] as const;
 
 const RELEASE_DATES: Partial<Record<string, string | null>> = releaseDates;
 
 const isUnpromoted = (tagName: string) => RELEASE_DATES[tagName] === null;
 
-const CHANGELOG_DIR = resolveRepoPath("docs", "changelog");
+const CHANGELOG_DIR = resolveRepoPath(
+  path.dirname(CI_MARKDOWN_READER_INPUTS_CHANGELOG[0]),
+);
 const STABLE_CHANGELOG_FILE_PATTERN = /^v\d+\.\d+\.\d+\.md$/u;
 
 export const releaseAnchorId = (tagName: string) =>

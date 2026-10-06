@@ -152,6 +152,7 @@ runtime validation, or integration tests.
 - [`no-omitted-prop-respread`](./no-omitted-prop-respread.ts) (`no-omitted-prop-respread`): requires a prop a component omits from its props type to be pinned after the last props spread, because width subtyping keeps the key on the spread value at runtime. It reads literal `Omit` keys and the component's own props binding only.
 - [`no-raw-route-query-client`](./no-raw-route-query-client.ts) (`no-raw-route-query-client`): requires route freshness wrappers in loaders and synchronous cache reads in pending components.
 - [`no-raw-router-invalidation`](./no-raw-router-invalidation.ts) (`no-raw-router-invalidation`): confines navigation-grade `router.invalidate()` calls to the owned session, locale, and exhaustively classified route-metadata boundaries.
+- [`no-raw-browser-storage`](./no-raw-browser-storage.ts) (`no-raw-browser-storage`): confines browser storage access to the account storage owners; consumers use scoped or device/tab APIs.
 - [`no-raw-stored-json`](./no-raw-stored-json.ts) (`no-raw-stored-json`): requires persisted browser JSON to be parsed and schema-validated through `readStoredJson()`.
 - [`no-direct-unsaved-work-guard`](./no-direct-unsaved-work-guard.ts) (`no-direct-unsaved-work-guard`): confines TanStack route blockers and `beforeunload` handlers in `apps/web/src` to `useUnsavedWork`, which also registers the work so the stale-client refresh does not reload over it.
 - [`no-raw-use-effect`](./no-raw-use-effect.ts) (`no-raw-use-effect`): bans direct React `useEffect`; use the sanctioned lifecycle wrappers or a more precise primitive.
@@ -334,5 +335,7 @@ implies a hazard that is gone.
 - [`no-raw-child-exit-status`](./no-raw-child-exit-status.ts) (`no-raw-child-exit-status`): requires the shared `childExitStatus` helper when forwarding child-process statuses to process exit sinks, including aliases and local return values.
 
 - [`no-discarded-toast-error`](./no-discarded-toast-error.ts) (`no-discarded-toast-error`): preserves original caught errors through shared notification.
+
+- [`no-ad-hoc-inline-rename`](./no-ad-hoc-inline-rename.ts) (`no-ad-hoc-inline-rename`): enumerates native and UI input aliases in view/edit owners with blur/keyboard commit handlers and rename bindings or autofocus; requires `@stll/ui/inline-rename`. Permanent, creation, numeric and multiline fields stay outside this detection boundary.
 
 - [`require-json-import-attribute`](./require-json-import-attribute.ts) (`require-json-import-attribute`): requires the JSON type attribute on static runtime JSON imports in web browser-test files and repository scripts; erased type imports are allowed.

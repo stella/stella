@@ -28,6 +28,8 @@ import { requiresMalwareScan } from "./check-standalone-lockfiles";
 import { planCiApiTests } from "./ci-api-test-plan";
 import { CANONICAL_CANCEL_STEP } from "./ci-cancellation-contract";
 import {
+  markdownReaders,
+  requiresDesktopBrowser,
   requiresLandingBuild,
   requiresPackageChecks,
 } from "./ci-package-scope";
@@ -43,6 +45,10 @@ const workflow = readFileSync(
   "utf-8",
 );
 const selector = extractPlanSelector(workflow);
+
+// The immutable repository census is shared fixture setup. Property budgets
+// measure selector cases rather than charging its cold scan to the first case.
+markdownReaders();
 
 type BashCase = {
   flags: readonly string[];
@@ -200,6 +206,9 @@ const SERVED_BUN_SHIM = `bun() {
     printf '%s\\n' "$SERVED_PACKAGE_CHECKS"
     return
   fi
+  if [[ "$script" == scripts/ci-package-scope.ts && "\${1-}" == --desktop-browser ]]; then
+    flag=--desktop-browser; served=$SERVED_DESKTOP_BROWSER
+  else
   case "$script" in
 ${Object.entries(SELECTOR_BUN_CLIS)
   .map(
@@ -209,6 +218,7 @@ ${Object.entries(SELECTOR_BUN_CLIS)
   .join("\n")}
     *) printf 'unserved bun call: %s\\n' "$script" >&2; return 127 ;;
   esac
+  fi
   if [[ -n "$flag" ]]; then
     [[ "\${1-}" == "$flag" ]] || { printf 'unserved %s arguments\\n' "$script" >&2; return 127; }
     shift
@@ -264,13 +274,22 @@ ${selector}
 printf "%s\\n" ${outputs.map((output) => `"$${output}"`).join(" ")}`,
     args: files,
     env: {
-      SERVED_PACKAGE_CHECKS: String(requiresPackageChecks({ changed: files })),
+      // Image-only cases do not observe package/docs scope; avoid paying the
+      // repository reader census for an unrelated selector projection.
+      SERVED_PACKAGE_CHECKS: outputs.every((name) =>
+        /^(?:api|web)_image_smoke_required$/u.test(name),
+      )
+        ? "true"
+        : String(requiresPackageChecks({ changed: files })),
       E2E_LANDING_REQUIRED: e2eLandingRequired,
       EVENT_NAME: event,
       PATH: Bun.env["PATH"] ?? "",
       PR_TITLE: title,
       SUITE_DEPTH: suiteDepth,
       ...served,
+      SERVED_DESKTOP_BROWSER: outputs.includes("desktop_browser_required")
+        ? String(requiresDesktopBrowser({ changed: files }))
+        : "false",
     },
   };
 };
@@ -1171,11 +1190,10 @@ test("each job's plan scope is the ci-plan output its `if:` selects it by", () =
       ),
     ].map((match) => match[1]);
     const scope = jobScopes[job];
-    expect(selectedBy, job).toEqual(
-      scope === null
-        ? []
-        : [scope, ...(fastJobScopes[job] ? [fastJobScopes[job]] : [])],
-    );
+    expect(selectedBy, job).toEqual([
+      ...(scope === null ? [] : [scope]),
+      ...(fastJobScopes[job] ? [fastJobScopes[job]] : []),
+    ]);
   }
 });
 
@@ -3150,7 +3168,7 @@ test("every browser suite belongs to exactly one required matrix leg", () => {
     v.object({
       strategy: v.object({
         "fail-fast": v.literal(false),
-        matrix: v.object({ suite: v.array(v.string()) }),
+        matrix: v.object({ suite: v.string() }),
       }),
       steps: v.array(
         v.object({
@@ -3162,10 +3180,19 @@ test("every browser suite belongs to exactly one required matrix leg", () => {
     }),
     ciJobs["ci-browser"],
   );
-  expect(new Set(browser.strategy.matrix.suite)).toEqual(
-    new Set(["desktop", "ui"]),
+  const matrixSuites = v.parse(
+    v.array(v.string()),
+    evaluate(browser.strategy.matrix.suite, {
+      values: { "github.event_name": "merge_group" },
+    }),
   );
-  expect(browser.strategy.matrix.suite).toHaveLength(2);
+  expect(new Set(matrixSuites)).toEqual(new Set(["desktop", "ui"]));
+  expect(matrixSuites).toHaveLength(2);
+  expect(
+    evaluate(browser.strategy.matrix.suite, {
+      values: { "github.event_name": "pull_request" },
+    }),
+  ).toEqual(["desktop"]);
   const suites = browser.steps.filter(
     ({ run }) => run?.includes("test:browser") || run?.includes("test:e2e"),
   );
@@ -3178,7 +3205,7 @@ test("every browser suite belongs to exactly one required matrix leg", () => {
     ].toSorted(compareCodeUnit),
   );
   for (const suite of suites) {
-    const legs = browser.strategy.matrix.suite.filter((leg) =>
+    const legs = matrixSuites.filter((leg) =>
       suite.if?.includes(`matrix.suite == '${leg}'`),
     );
     expect(legs, suite.name).toHaveLength(1);
@@ -3767,6 +3794,7 @@ test("the production service-scope capture rejects crashed or malformed detector
             PATH: `${directory}:${process.env["PATH"] ?? ""}`,
             DETECTOR_OUTPUT: output,
             DETECTOR_EXIT: exit,
+            package_checks_required: "true",
           },
           stdout: "pipe",
           stderr: "pipe",
@@ -4283,6 +4311,7 @@ test("the exact docs-only README change plans only Markdown checks in PRs and me
   const outputs = [
     ...new Set([
       ...Object.values(jobScopes).filter((scope) => scope !== null),
+      ...Object.values(fastJobScopes),
       "docs_changed_files",
     ]),
   ];
@@ -4361,6 +4390,7 @@ test("mixed documentation and code changes retain the complete code plan", () =>
   const outputs = [
     ...new Set([
       ...Object.values(jobScopes).filter((scope) => scope !== null),
+      ...Object.values(fastJobScopes),
       "docs_changed_files",
     ]),
   ];
@@ -4621,5 +4651,92 @@ test("API planning only loads dependencies after installation and emits install-
     }
   } finally {
     rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test("a planted desktop path plans the PR desktop browser leg while unrelated paths skip it", () => {
+  const root = nodePath.resolve(import.meta.dirname, "..");
+  const directory = mkdtempSync(
+    nodePath.join(root, "apps/desktop/.ci-browser-scope-"),
+  );
+  const planted = nodePath.relative(
+    root,
+    nodePath.join(directory, "planted.unclassified"),
+  );
+  writeFileSync(nodePath.join(root, planted), "new desktop input");
+  try {
+    for (const [file, expected] of [
+      [planted, "true"],
+      ["apps/api/src/unrelated.ts", "false"],
+    ] as const) {
+      const required = runSelector([file], ["desktop_browser_required"]).at(0);
+      if (required === undefined) {
+        panic("Desktop scope selector returned no value");
+      }
+      expect(required).toBe(expected);
+      const job = v.parse(v.object({ if: v.string() }), ciJobs["ci-browser"]);
+      for (const runRequired of ["true", "false"]) {
+        expect(
+          evaluate(job.if, {
+            values: {
+              "github.event_name": "pull_request",
+              "needs.ci-plan.outputs.trusted": "true",
+              "needs.ci-plan.outputs.run_required": runRequired,
+              "needs.ci-plan.outputs.desktop_browser_required": required,
+              "needs.ci-plan.outputs.package_checks_required": "true",
+              "needs.ci-plan.outputs.suite_depth": "fast",
+              "needs.ci-plan.outputs.queue_depth": "full",
+            },
+          }),
+        ).toBe(expected === "true" && runRequired === "true");
+      }
+    }
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+  expect(fastJobScopes["ci-browser"]).toBe("desktop_browser_required");
+  expect(
+    evaluateResult({
+      event: EVENT.pullRequest,
+      results: { "ci-browser": "skipped" },
+    }),
+  ).toBe(1);
+  expect(
+    evaluateResult({
+      event: EVENT.pullRequest,
+      results: { "ci-browser": "skipped" },
+      unplannedScopes: ["desktop_browser_required"],
+    }),
+  ).toBe(0);
+});
+
+test("desktop browser detector failures and malformed output cannot skip the PR leg", () => {
+  const start = selector.indexOf("          desktop_browser_required=$(");
+  const end = selector.indexOf("          dependency_malware_required=", start);
+  expect(start).toBeGreaterThan(-1);
+  expect(end).toBeGreaterThan(start);
+  const detector = selector.slice(start, end);
+  const cases = [
+    { output: "false", status: 0, expected: "false" },
+    { output: "true", status: 0, expected: "true" },
+    { output: "", status: 0, expected: "true" },
+    { output: "unclassified", status: 0, expected: "true" },
+    { output: "false", status: 1, expected: "true" },
+  ];
+  for (const { item, stdout, exitCode, stderr } of runBashBatch(
+    cases,
+    ({ output, status }) => ({
+      flags: ["-e"],
+      args: [],
+      script: `bun() { printf '%s' "$OUTPUT"; return "$STATUS"; }; changed_files=(docs/guide.md);\n${detector}\nprintf '%s' "$desktop_browser_required"`,
+      env: {
+        PATH: Bun.env["PATH"] ?? "",
+        OUTPUT: output,
+        STATUS: String(status),
+      },
+    }),
+  )) {
+    expect(exitCode, stderr).toBe(0);
+    expect(stdout).toBe(item.expected);
   }
 });
