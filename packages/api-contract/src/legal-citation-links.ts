@@ -29,7 +29,10 @@ type ResolveLegalCitationLinksOptions = {
   appOrigins: ReadonlySet<string>;
 };
 
-const httpUrl = (value: string | null, base?: string): URL | null => {
+export const parseLegalCitationHttpUrl = (
+  value: string | null,
+  base?: string,
+): URL | null => {
   if (value === null || (!value.startsWith("/") && !URL.canParse(value))) {
     return null;
   }
@@ -46,8 +49,8 @@ export const resolveLegalCitationLinks = ({
   sourceUrl,
 }: ResolveLegalCitationLinksOptions): LegalCitationLinks => {
   const base = appOrigins.values().next().value;
-  const internal = httpUrl(appUrl, base);
-  const source = httpUrl(sourceUrl, base);
+  const internal = parseLegalCitationHttpUrl(appUrl, base);
+  const source = parseLegalCitationHttpUrl(sourceUrl, base);
   if (internal === null || !appOrigins.has(internal.origin)) {
     return { type: "external", url: source?.href ?? null };
   }

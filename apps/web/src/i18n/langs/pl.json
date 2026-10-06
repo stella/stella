@@ -1823,6 +1823,8 @@
     "notes": "Notatki",
     "open": "Otwórz",
     "openInNewTab": "Otwórz w nowej karcie",
+    "openInStella": "Otwórz w stelli",
+    "openOriginalSource": "Otwórz źródło oryginalne",
     "options": "Opcje",
     "or": "Lub",
     "organization": "Organizacja",
@@ -4739,6 +4741,7 @@
     },
     "title": "Akty prawne",
     "validity": "Obowiązuje od {from} do {to}",
+    "versionAppliedInDecision": "Wersja zastosowana w orzeczeniu <bdi>{court}</bdi> <bdi>{caseNumber}</bdi> (<bdi>{range}</bdi>) · {status}",
     "wordingValidFrom": "Brzmienie obowiązuje od {date}",
     "wordingVersionUnknown": "Data wersji brzmienia jest niedostępna"
   },

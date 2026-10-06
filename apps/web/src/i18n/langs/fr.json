@@ -1823,6 +1823,8 @@
     "notes": "Notes",
     "open": "Ouvrir",
     "openInNewTab": "Ouvrir dans un nouvel onglet",
+    "openInStella": "Ouvrir dans stella",
+    "openOriginalSource": "Ouvrir la source d’origine",
     "options": "Options",
     "or": "Ou",
     "organization": "Organisation",
@@ -4739,6 +4741,7 @@
     },
     "title": "Législation",
     "validity": "En vigueur du {from} au {to}",
+    "versionAppliedInDecision": "Version appliquée dans la décision <bdi>{court}</bdi> <bdi>{caseNumber}</bdi> (<bdi>{range}</bdi>) · {status}",
     "wordingValidFrom": "Rédaction en vigueur depuis le {date}",
     "wordingVersionUnknown": "Date de la version de la rédaction indisponible"
   },
