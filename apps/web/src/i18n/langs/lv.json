@@ -1325,6 +1325,7 @@
     "sendErrorQuotaExhausted": "AI pakalpojumu sniedzēja kvota ir izsmelta. Mēģiniet vēlreiz pēc minūtes vai sazinieties ar darba telpas administratoru.",
     "sendErrorStreamIncomplete": "AI atbilde tika pārtraukta, pirms tā bija pabeigta. Mēģiniet vēlreiz.",
     "sendPrompt": "Sūtīt ziņojumu",
+    "sendQueuedMessageNow": "Sūtīt tūlīt",
     "sendWithoutAnonymization": "Sūtīt bez anonimizācijas",
     "skills": {
       "scope": {
@@ -1472,6 +1473,14 @@
       "sourceCode": "Pirmkods",
       "toggleDetails": "Pārslēgt detaļas",
       "unrestoredFields": "Anonimizētajā režīmā ar īstajām vērtībām neizdevās aizpildīt {count, plural, zero {# laukus} one {# lauku} other {# laukus}}. Pārbaudiet: {fields}"
+    },
+    "turnNotification": {
+      "failedBody": "stellas tērzēšanas atbilde netika pabeigta.",
+      "failedTitle": "Atbilde neizdevās",
+      "needsInputBody": "Tērzēšana gaida jūsu apstiprinājumu vai atbildi.",
+      "needsInputTitle": "stellai vajadzīga jūsu rīcība",
+      "replyReadyBody": "stella pabeidza atbildēt jūsu tērzēšanā.",
+      "replyReadyTitle": "Atbilde gatava"
     },
     "unsupportedFileType": "Neatbalstīts faila tips",
     "uploadFailed": "Neizdevās apstrādāt failu",
@@ -1822,6 +1831,8 @@
     "notes": "Piezīmes",
     "open": "Atvērt",
     "openInNewTab": "Atvērt jaunā cilnē",
+    "openInStella": "Atvērt lietotnē stella",
+    "openOriginalSource": "Atvērt sākotnējo avotu",
     "options": "Iespējas",
     "or": "Vai",
     "organization": "Organizācija",
@@ -4369,6 +4380,11 @@
       "betaInbox": "Iesūtne un paziņojumi",
       "betaInboxDescription": "Rādīt iesūtni un paziņojumu zvaniņu",
       "betaTimeBillingDescription": "Rādīt laika uzskaiti, rēķinus un izdevumus",
+      "chatNotifications": "Tērzēšanas paziņojumi",
+      "chatNotificationsBlocked": "stellas paziņojumi šajā pārlūkprogrammā ir bloķēti. Atļaujiet tos pārlūkprogrammas vietnes iestatījumos.",
+      "chatNotificationsDescription": "Saņemiet paziņojumu no šīs pārlūkprogrammas, kad tērzēšanas atbilde ir pabeigta, kamēr stella darbojas fonā.",
+      "chatNotificationsToggle": "Paziņot, kad atbilde ir gatava vai gaida manu rīcību",
+      "chatNotificationsUnsupported": "Šī pārlūkprogramma neatbalsta paziņojumus.",
       "confirmDelete": "Apstiprināt konta dzēšanu",
       "dangerZone": "Bīstamā zona",
       "dangerZoneDescription": "Neatgriezeniski dzēst konta piekļuvi un privātos konta datus.",
@@ -4738,6 +4754,7 @@
     },
     "title": "Tiesību akti",
     "validity": "Spēkā no {from} līdz {to}",
+    "versionAppliedInDecision": "Nolēmumā <bdi>{court}</bdi> <bdi>{caseNumber}</bdi> piemērotā redakcija (<bdi>{range}</bdi>) · {status}",
     "wordingValidFrom": "Redakcija ir spēkā kopš {date}",
     "wordingVersionUnknown": "Redakcijas versijas datums nav pieejams"
   },
@@ -5544,7 +5561,7 @@
         "noFileDescription": "Šim dokumentam nav faila, ko parakstīt.",
         "notAPdfDescription": "Parakstīt var tikai PDF failus.",
         "placementBox": "Zīmoga novietojums",
-        "placementConfirm": "Atvērt stella desktop",
+        "placementConfirm": "Atvērt lietotnē stella desktop",
         "placementDescription": "Izvēlieties, kā paraksts tiks parādīts PDF failā.",
         "placementHint": "Velciet zīmogu, lai to pārvietotu, vai tā stūri, lai mainītu izmēru. Kad zīmogs ir atlasīts, bulttaustiņi to pārvieto, bet Shift ar bulttaustiņu maina tā izmēru.",
         "placementInvisible": "Neredzams paraksts",

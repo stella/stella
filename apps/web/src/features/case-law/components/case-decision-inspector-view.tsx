@@ -121,6 +121,8 @@ export const CaseDecisionInspectorView = ({
   const caseNumberType =
     decision?.caseNumberType ?? DECISION_IDENTIFIER_TYPES.CASE_NUMBER;
   const provisionAnchors = useDecisionProvisionAnchors({
+    court: decision?.court ?? null,
+    caseNumber: decision?.caseNumber ?? null,
     blocks: visibleDecisionBlocks(ast, caseNumberType),
     country: decision?.country ?? null,
     decisionId,

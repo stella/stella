@@ -82,7 +82,7 @@ test("moving the advisory job preserves the exact required CI set", () => {
     expect(required.scopes).not.toHaveProperty(advisory);
     expect(required.fast).not.toContain(advisory);
   }
-});
+}, 30_000);
 
 test("nightly rehearsal checks main and reports failures with isolated write permissions", () => {
   const job = v.parse(

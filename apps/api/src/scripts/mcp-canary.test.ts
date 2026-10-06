@@ -524,6 +524,40 @@ describe("authorization server probes", () => {
       "failed",
     );
   });
+
+  test("names the cause of a failed tool call in one bounded line", () => {
+    const detail = (status: number, body: unknown) =>
+      evaluateToolCall({ status, body }).detail;
+    expect(detail(502, null)).toContain("(HTTP 502)");
+    expect(
+      detail(200, {
+        jsonrpc: "2.0",
+        error: { code: -32_602, message: "Invalid params" },
+      }),
+    ).toContain("(JSON-RPC error -32602 Invalid params)");
+    expect(
+      detail(200, {
+        jsonrpc: "2.0",
+        result: {
+          isError: true,
+          content: [{ type: "text", text: "Search is\nunavailable" }],
+        },
+      }),
+    ).toContain("(tool error: Search is unavailable)");
+    expect(detail(200, { jsonrpc: "2.0", result: { content: [] } })).toContain(
+      "(result without content)",
+    );
+    expect(detail(200, "not json-rpc")).toContain("(no JSON-RPC result)");
+    const long = detail(200, {
+      jsonrpc: "2.0",
+      result: {
+        isError: true,
+        content: [{ type: "text", text: "x".repeat(500) }],
+      },
+    });
+    expect(long.length).toBeLessThan(300);
+    expect(long).toContain("...");
+  });
 });
 
 describe("OAuth client journeys", () => {

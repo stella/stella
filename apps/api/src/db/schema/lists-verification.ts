@@ -39,6 +39,7 @@ import {
   wsPolicies,
 } from "./common";
 import { workspaces } from "./contacts";
+import { entities } from "./entities";
 
 const quoted = (values: readonly string[]) =>
   sql.join(
@@ -116,9 +117,8 @@ export const legalListVerificationBudgets = p.pgTable.withRLS(
  * One immutable verification of a document against a matter's anchor facts.
  *
  * The target and the evidence are pinned by value: `evidence` embeds every
- * fact the run read, and there is no foreign key to the document or the list.
- * A finished verification therefore stays readable after the list is edited
- * or the document moves on. Workspace deletion still cascades everything.
+ * fact the run read. History survives list edits and document versions;
+ * deleting the document or its workspace cascades the pinned content.
  */
 export const legalListVerificationRuns = p.pgTable(
   "legal_list_verification_runs",
@@ -132,8 +132,7 @@ export const legalListVerificationRuns = p.pgTable(
     workspaceId: safeWorkspaceId("workspace_id")
       .notNull()
       .references(() => workspaces.id, { onDelete: "cascade" }),
-    // Target pin. No foreign keys: a deleted document must not take its
-    // verification history with it.
+    // Version and field pins survive edits; the document owns the run lifecycle.
     entityId: safeUuid<"entity">("entity_id").notNull(),
     fileFieldId: safeUuid<"field">("file_field_id").notNull(),
     entityVersionId: safeUuid<"entityVersion">("entity_version_id").notNull(),
@@ -156,6 +155,13 @@ export const legalListVerificationRuns = p.pgTable(
     finishedAt: timestamptz("finished_at"),
   },
   (table) => [
+    p
+      .foreignKey({
+        name: "legal_list_verification_runs_entity_fk",
+        columns: [table.entityId, table.workspaceId],
+        foreignColumns: [entities.id, entities.workspaceId],
+      })
+      .onDelete("cascade"),
     p
       .unique("legal_list_verification_runs_id_ws_unq")
       .on(table.id, table.workspaceId),
