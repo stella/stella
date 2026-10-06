@@ -3601,6 +3601,7 @@
       "deletePlaybook": "Ištrinti peržiūros vadovą",
       "deletePosition": "Ištrinti poziciją",
       "deleted": "Peržiūros vadovas ištrintas",
+      "deletedElsewhere": "Šis peržiūros vadovas ištrintas.",
       "derivedAutomatically": "Išgavimo klausimas ir atsakymo formatas sukuriami pagal šią poziciją. Nieko nustatyti nereikia.",
       "derivedQuestion": "Išgavimo klausimas",
       "derivedType": "Atsakymo formatas",

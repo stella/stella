@@ -3601,6 +3601,7 @@
       "deletePlaybook": "Playbook törlése",
       "deletePosition": "Álláspont törlése",
       "deleted": "Playbook törölve",
+      "deletedElsewhere": "Ezt a playbookot törölték.",
       "derivedAutomatically": "A kinyerési kérdés és a válaszformátum ebből a pozícióból készül. Nincs szükség beállításra.",
       "derivedQuestion": "Kinyerési kérdés",
       "derivedType": "Válaszformátum",

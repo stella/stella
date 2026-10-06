@@ -3601,6 +3601,7 @@
       "deletePlaybook": "حذف دليل المراجعة",
       "deletePosition": "حذف الموقف",
       "deleted": "تم حذف دليل المراجعة",
+      "deletedElsewhere": "تم حذف دليل المراجعة هذا.",
       "derivedAutomatically": "يتم إنشاء سؤال الاستخراج وتنسيق الإجابة من هذا الموقف. لا يلزم أي إعداد.",
       "derivedQuestion": "سؤال الاستخراج",
       "derivedType": "تنسيق الإجابة",

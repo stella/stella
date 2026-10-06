@@ -752,6 +752,8 @@ export const playbookDetailOptions = (
 
       return unwrapEden(response);
     },
+    // A deleted playbook answers 404; asking again will not bring it back.
+    retry: (failureCount, error) => shouldRetryAPIRequest(failureCount, error),
     staleTime: STALE_TIME.FIVE.MINUTES,
   });
 

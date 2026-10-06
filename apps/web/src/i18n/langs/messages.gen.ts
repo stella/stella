@@ -3604,6 +3604,7 @@ type Messages = {
       "deletePlaybook": "Delete playbook";
       "deletePosition": "Delete position";
       "deleted": "Playbook deleted";
+      "deletedElsewhere": "This playbook has been deleted.";
       "derivedAutomatically": "The extraction question and answer format are generated from this position. No setup is needed.";
       "derivedQuestion": "Extraction question";
       "derivedType": "Answer format";

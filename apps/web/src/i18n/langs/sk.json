@@ -3601,6 +3601,7 @@
       "deletePlaybook": "Odstrániť playbook",
       "deletePosition": "Odstrániť pozíciu",
       "deleted": "Playbook odstránený",
+      "deletedElsewhere": "Tento playbook bol odstránený.",
       "derivedAutomatically": "Otázka a formát odpovede sa vygenerujú z tejto pozície. Netreba nič nastavovať.",
       "derivedQuestion": "Otázka na získanie odpovede",
       "derivedType": "Formát odpovede",

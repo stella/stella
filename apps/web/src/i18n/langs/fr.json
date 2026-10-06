@@ -3601,6 +3601,7 @@
       "deletePlaybook": "Supprimer le playbook",
       "deletePosition": "Supprimer le critère",
       "deleted": "Playbook supprimé",
+      "deletedElsewhere": "Ce playbook a été supprimé.",
       "derivedAutomatically": "La question d’extraction et le format de réponse sont générés à partir de ce critère. Aucun réglage n’est nécessaire.",
       "derivedQuestion": "Question d’extraction",
       "derivedType": "Format de réponse",

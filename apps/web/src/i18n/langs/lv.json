@@ -3601,6 +3601,7 @@
       "deletePlaybook": "Dzēst pārbaudes ceļvedi",
       "deletePosition": "Dzēst pozīciju",
       "deleted": "Pārbaudes ceļvedis izdzēsts",
+      "deletedElsewhere": "Šis pārbaudes ceļvedis ir izdzēsts.",
       "derivedAutomatically": "Izgūšanas jautājums un atbildes formāts tiek izveidoti no šīs pozīcijas. Nekas nav jāiestata.",
       "derivedQuestion": "Izgūšanas jautājums",
       "derivedType": "Atbildes formāts",

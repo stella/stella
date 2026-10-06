@@ -3601,6 +3601,7 @@
       "deletePlaybook": "Kustuta playbook",
       "deletePosition": "Kustuta seisukoht",
       "deleted": "Playbook kustutatud",
+      "deletedElsewhere": "See playbook on kustutatud.",
       "derivedAutomatically": "Eraldusküsimus ja vastuse vorming luuakse selle positsiooni põhjal. Midagi pole vaja seadistada.",
       "derivedQuestion": "Eraldusküsimus",
       "derivedType": "Vastuse vorming",

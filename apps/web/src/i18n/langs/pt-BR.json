@@ -3601,6 +3601,7 @@
       "deletePlaybook": "Excluir playbook",
       "deletePosition": "Excluir posição",
       "deleted": "Playbook excluído",
+      "deletedElsewhere": "Este playbook foi excluído.",
       "derivedAutomatically": "A pergunta de extração e o formato de resposta são gerados com base nesta posição. Nenhuma configuração é necessária.",
       "derivedQuestion": "Pergunta de extração",
       "derivedType": "Formato da resposta",

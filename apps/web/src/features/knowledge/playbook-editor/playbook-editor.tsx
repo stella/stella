@@ -118,6 +118,9 @@ import { useQueryView } from "@/lib/use-query-view";
 import { usePlaybookNavStore } from "@/stores/knowledge/playbook-nav-store";
 
 const PLAYBOOK_JUMP_TOP_OFFSET_PX = 24;
+// Saves from a chat in this browser invalidate the detail at once; this
+// brings in the rest (the CLI, MCP, another browser) while an editor is open.
+const OPEN_EDITOR_REFETCH_INTERVAL_MS = 30_000;
 // Longer than a default error toast: the conflict toast carries the reload
 // affordance, so it has to outlive a glance.
 const VERSION_CONFLICT_TOAST_TIMEOUT_MS = 10_000;
@@ -268,7 +271,10 @@ const PlaybookEditorLoader = ({
     reloadKey: 0,
     gate: detailSeedGate(queryClient.getQueryState(detailOptions.queryKey)),
   }));
-  const detailQuery = useQuery(detailOptions);
+  const detailQuery = useQuery({
+    ...detailOptions,
+    refetchInterval: OPEN_EDITOR_REFETCH_INTERVAL_MS,
+  });
   const detailView = useQueryView(detailQuery, {
     isEmpty: (detail) => !("positions" in detail),
   });
@@ -312,6 +318,24 @@ const PlaybookEditorLoader = ({
       </Button>
     </div>
   );
+
+  // Deleted elsewhere (another editor, a chat, the CLI): the form has
+  // nothing left to save to.
+  if (APIError.is(detailQuery.error) && detailQuery.error.status === 404) {
+    return (
+      <div
+        className="flex flex-1 flex-col items-center justify-center gap-2 p-8"
+        role="status"
+      >
+        <p className="text-muted-foreground text-sm">
+          {t("knowledge.playbooks.deletedElsewhere")}
+        </p>
+        <Button onClick={() => leaveEditor(host)} variant="ghost">
+          {host.type === "page" ? t("common.goBack") : t("common.close")}
+        </Button>
+      </div>
+    );
+  }
 
   switch (detailView.type) {
     case "pending":
