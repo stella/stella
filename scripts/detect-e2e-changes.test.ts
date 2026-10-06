@@ -574,7 +574,9 @@ describe("detect-e2e-changes", () => {
     for (const leg of ["api", "web", "rest"]) {
       const codeQuality = workflowJob(`code-quality-${leg}`);
       expect(plan).not.toContain(".github/*|.provenance.yml|provenance/*)");
-      expect(plan).toContain(".provenance.yml|provenance/*)");
+      expect(plan).toContain(
+        "bun scripts/ci-package-scope.ts --package-checks",
+      );
       expect(codeQuality).toContain(
         `EVENT_NAME: ${githubExpression("github.event_name")}`,
       );
@@ -845,7 +847,15 @@ describe("detect-e2e-changes", () => {
     });
     const suites = mainHeavyContract.jobs["suites"];
     expect(suites?.with?.["heavy_only"]).toBe(true);
-    expect(suites?.if).toBe("needs.validate.result == 'success'");
+    for (const result of ["success", "failure", "cancelled", "skipped"]) {
+      for (const run of ["true", "false"]) {
+        expect(
+          evaluateExpression(requiredExpression(suites?.if), {
+            needs: { validate: { result, outputs: { run } } },
+          }),
+        ).toBe(result === "success" && run === "true");
+      }
+    }
     const callerSha = evaluateExpression(
       requiredExpression(suites?.with?.["sha"]),
       { needs: { validate: { outputs: { sha: forwardedSha } } } },

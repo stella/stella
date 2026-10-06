@@ -65,6 +65,7 @@ import {
   internalFailureResult,
   notFoundResult,
   nullAsAbsent,
+  structuredEgressPlan,
   structuredErrorResult,
   toolDataResult,
   uuidInputSchema,
@@ -311,14 +312,13 @@ const handleListTool: TypedMcpToolHandler<
     annotations: [...marks.values()],
     nextCursor: listed.value.nextCursor,
   });
-  return {
-    egress: "structured",
+  return structuredEgressPlan({
     payload,
     textFields: runTextFieldSpecs(
       readerAnnotationTextFieldSpecs(context.organizationId),
       payload,
     ),
-  };
+  });
 };
 
 // --- create_reader_annotation -------------------------------------------------
