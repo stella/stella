@@ -146,6 +146,7 @@
     "accountLinked": "Účet propojen",
     "connectToStella": "Připojit ke stella web",
     "connectToStellaDescription": "Propojte tento počítač s aktuálním účtem stella bez otevírání dokumentu.",
+    "desktopBenefit": "Dokumenty Office a místní historie schránky",
     "disconnectAccount": "Odpojit účet",
     "errorDisconnectAccount": "Aplikaci stella desktop se nepodařilo odpojit váš účet.",
     "errorReadAccount": "Aplikaci stella desktop se nepodařilo ověřit připojení účtu.",

@@ -661,7 +661,11 @@ test("each CI check leg preserves merge-base setup, supply-chain protection and 
           .map(({ name }) => name),
       ).toEqual(
         originalSteps
-          .filter(({ name }) => !preparationSteps.has(name))
+          .filter(
+            ({ name }) =>
+              !preparationSteps.has(name) &&
+              !newRemovals.some((removed) => removed.name === name),
+          )
           .map(({ name }) => name),
       );
     }
@@ -958,7 +962,7 @@ test("the baseline accepts the monolithic job and derives later split baselines"
   const split = readBaseline(jobs);
   expect(split).toEqual(partitions);
   expectCoverage({
-    current: split.flatMap(({ steps }) => steps),
+    current: legSteps(split, partitionIds),
     base: actualSteps,
     removed: [],
   });

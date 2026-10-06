@@ -1822,6 +1822,8 @@
     "notes": "Poznámky",
     "open": "Otvoriť",
     "openInNewTab": "Otvoriť na novej karte",
+    "openInStella": "Otvoriť v stelle",
+    "openOriginalSource": "Otvoriť originál",
     "options": "Možnosti",
     "or": "Alebo",
     "organization": "Organizácia",
@@ -4738,6 +4740,7 @@
     },
     "title": "Právne predpisy",
     "validity": "Platné od {from} do {to}",
+    "versionAppliedInDecision": "Znenie použité v rozhodnutí <bdi>{court}</bdi> <bdi>{caseNumber}</bdi> (<bdi>{range}</bdi>) · {status}",
     "wordingValidFrom": "Znenie účinné od {date}",
     "wordingVersionUnknown": "Dátum verzie znenia nie je k dispozícii"
   },

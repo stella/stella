@@ -1290,7 +1290,7 @@
     "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/add-entity-menu.tsx": 1,
     "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/existing-file-organizer-dialog.tsx": 1,
     "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/property-popover.tsx": 1,
-    "apps/web/src/routes/_protected.workspaces/$workspaceId/lists.tsx": 2
+    "apps/web/src/routes/_protected.workspaces/$workspaceId/lists.tsx": 1
   },
   "eslint/no-use-before-define": {
     ".claude/mcp/docs-retrieval.eval.ts": 1,
@@ -1638,7 +1638,7 @@
     "apps/api/src/lib/lists/sanctions/screening-service.ts": 1,
     "apps/api/src/lib/markdown/html-to-markdown.ts": 10,
     "apps/api/src/lib/mcp-connectors/catalog-metadata.ts": 2,
-    "apps/api/src/lib/mcp-upstream/cached-tools.ts": 2,
+    "apps/api/src/lib/mcp-upstream/cached-tools.ts": 1,
     "apps/api/src/lib/mcp-upstream/connections.test.ts": 1,
     "apps/api/src/lib/mcp-upstream/connections.ts": 19,
     "apps/api/src/lib/mcp-upstream/namespace.ts": 1,

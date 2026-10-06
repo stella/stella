@@ -1,6 +1,8 @@
 import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 
+import { Temporal } from "@stll/time";
+
 import { encodePaginationCursor } from "@/api/lib/pagination";
 
 import { parseRegistrationQuery } from "./input";
@@ -116,6 +118,23 @@ describe("registration query boundaries", () => {
       }).unwrap().cursor,
     ).toEqual({ createdAt: "2026-05-01T11:30:00Z", id: "registration-1" });
     expectInvalid({ since: "2026-05-01T10:00:00Z", cursor }, cursorError);
+  });
+
+  test("round-trips positions from later registrations as the request clock advances", () => {
+    for (const elapsed of [1, 1000, 60_000, 24 * 60 * 60 * 1000]) {
+      const createdAt = new Date(now + elapsed).toISOString();
+      const cursor = encodePaginationCursor([since, createdAt, "later-user"]);
+      expectInvalid({ since, cursor }, cursorError);
+      expect(
+        parseRegistrationQuery({
+          query: { since, cursor },
+          now: now + elapsed,
+        }).unwrap().cursor,
+      ).toEqual({
+        createdAt: Temporal.Instant.from(createdAt).toString(),
+        id: "later-user",
+      });
+    }
   });
 
   test("rejects malformed cursor shapes and invalid positions", () => {
