@@ -34,6 +34,7 @@ import { scanUploadForHandler } from "@/api/lib/file-scan/scan-upload-handler";
 import { serverBuiltFileEncryption } from "@/api/lib/files/detect-file-encryption";
 import { createTextPdf } from "@/api/lib/files/text-pdf";
 import type { AuthorizedMemberRole } from "@/api/lib/permission-authorization";
+import { inOrder } from "@/api/lib/review-organization/in-order";
 import {
   SAMPLE_CLAUSES,
   SAMPLE_CONTACTS,
@@ -193,12 +194,11 @@ const seedContacts = async (
     return Result.err(seedError("contacts", existing.error));
   }
   const existingIds = new Set(existing.value.map(({ id }) => id));
-  for (const body of bodies) {
+  return await inOrder(bodies, async (body) => {
     if (existingIds.has(body.id)) {
       counts.contacts.existing += 1;
-      continue;
+      return Result.ok(undefined);
     }
-    // db-await-in-loop: a handful of contacts, each through the shared create handler and its own capacity lock
     const created = await Result.gen(() =>
       createContactHandler({
         safeDb: actor.safeDb,
@@ -214,8 +214,8 @@ const seedContacts = async (
       );
     }
     counts.contacts.created += 1;
-  }
-  return Result.ok(undefined);
+    return Result.ok(undefined);
+  });
 };
 
 const documentBytes = async (
@@ -267,12 +267,11 @@ const seedDocuments = async ({
     return Result.err(seedError("documents", existing.error));
   }
   const existingNames = new Set(existing.value.map(({ name }) => name));
-  for (const document of matter.documents) {
+  return await inOrder(matter.documents, async (document) => {
     if (existingNames.has(document.fileName)) {
       counts.documents.existing += 1;
-      continue;
+      return Result.ok(undefined);
     }
-    // db-await-in-loop: a few small documents per matter; each is stored and recorded through the shared document writer
     const bytes = await documentBytes(document);
     if (Result.isError(bytes)) {
       return bytes;
@@ -297,8 +296,8 @@ const seedDocuments = async ({
       );
     }
     counts.documents.created += 1;
-  }
-  return Result.ok(undefined);
+    return Result.ok(undefined);
+  });
 };
 
 const seedTasks = async ({
@@ -329,13 +328,12 @@ const seedTasks = async ({
     return Result.err(seedError("tasks", existing.error));
   }
   const existingIds = new Set(existing.value.map(({ id }) => id));
-  for (const [index, task] of matter.tasks.entries()) {
+  return await inOrder(matter.tasks.entries(), async ([index, task]) => {
     const entityId = taskIds[index];
     if (entityId === undefined || existingIds.has(entityId)) {
       counts.tasks.existing += 1;
-      continue;
+      return Result.ok(undefined);
     }
-    // db-await-in-loop: one or two tasks per matter through the shared task writer
     const created = await Result.gen(() =>
       createTaskEntityHandler({
         safeDb: actor.safeDb,
@@ -355,8 +353,8 @@ const seedTasks = async ({
       return Result.err(seedError(`task ${task.name}`, created.error));
     }
     counts.tasks.created += 1;
-  }
-  return Result.ok(undefined);
+    return Result.ok(undefined);
+  });
 };
 
 /**
@@ -507,12 +505,11 @@ const seedTimeEntries = async ({
   const existingNarratives = new Set(
     existing.value.map(({ narrative }) => narrative),
   );
-  for (const entry of matter.timeEntries) {
+  return await inOrder(matter.timeEntries, async (entry) => {
     if (existingNarratives.has(entry.narrative)) {
       counts.timeEntries.existing += 1;
-      continue;
+      return Result.ok(undefined);
     }
-    // db-await-in-loop: one or two entries per matter through the shared time-entry writer and its capacity lock
     const created = await Result.gen(() =>
       createTimeEntryHandler({
         safeDb: actor.safeDb,
@@ -533,8 +530,8 @@ const seedTimeEntries = async ({
       return Result.err(seedError("time entry", created.error));
     }
     counts.timeEntries.created += 1;
-  }
-  return Result.ok(undefined);
+    return Result.ok(undefined);
+  });
 };
 
 const seedMatters = async (
@@ -561,15 +558,14 @@ const seedMatters = async (
     return Result.err(seedError("matters", existing.error));
   }
   const existingIds = new Set(existing.value.map(({ id }) => id));
-  for (const [index, matter] of SAMPLE_MATTERS.entries()) {
+  return await inOrder(SAMPLE_MATTERS.entries(), async ([index, matter]) => {
     const workspaceId = matterIds[index];
     if (workspaceId === undefined) {
-      continue;
+      return Result.ok(undefined);
     }
     if (existingIds.has(workspaceId)) {
       counts.matters.existing += 1;
     } else {
-      // db-await-in-loop: three matters, each through the shared matter writer (reference allocation, default columns and views)
       const created = await Result.gen(() =>
         createWorkspaceHandler({
           userEmail: actor.userEmail,
@@ -594,20 +590,12 @@ const seedMatters = async (
       counts.matters.created += 1;
     }
     const matterStep = { actor, workspaceId, matter, dependencies, counts };
-    for (const step of [
-      seedDocuments,
-      seedTasks,
-      seedRateTable,
-      seedTimeEntries,
-    ]) {
-      // db-await-in-loop: the three per-matter steps run in order so a failure stops before the next
-      const outcome = await step(matterStep);
-      if (Result.isError(outcome)) {
-        return outcome;
-      }
-    }
-  }
-  return Result.ok(undefined);
+    // The rate table comes before the time entries it prices.
+    return await inOrder(
+      [seedDocuments, seedTasks, seedRateTable, seedTimeEntries],
+      async (step) => await step(matterStep),
+    );
+  });
 };
 
 const seedClauses = async (
@@ -631,12 +619,11 @@ const seedClauses = async (
     return Result.err(seedError("clauses", existing.error));
   }
   const existingTitles = new Set(existing.value.map(({ title }) => title));
-  for (const clause of SAMPLE_CLAUSES) {
+  return await inOrder(SAMPLE_CLAUSES, async (clause) => {
     if (existingTitles.has(clause.title)) {
       counts.clauses.existing += 1;
-      continue;
+      return Result.ok(undefined);
     }
-    // db-await-in-loop: two clauses through the shared clause writer and its per-organization cap
     const created = await Result.gen(() =>
       createClauseHandler({
         safeDb: actor.safeDb,
@@ -655,8 +642,8 @@ const seedClauses = async (
       return Result.err(seedError(`clause ${clause.title}`, created.error));
     }
     counts.clauses.created += 1;
-  }
-  return Result.ok(undefined);
+    return Result.ok(undefined);
+  });
 };
 
 const seedTemplate = async (
@@ -845,12 +832,7 @@ export const seedReviewOrganization = async (
     async () => await seedTemplate(actor, counts),
     async () => await seedPlaybook(actor, counts),
   ];
-  for (const step of steps) {
-    // db-await-in-loop: the steps depend on each other's rows and stop at the first failure
-    const outcome = await step();
-    if (Result.isError(outcome)) {
-      return outcome;
-    }
-  }
-  return Result.ok(counts);
+  // The steps depend on each other's rows and stop at the first failure.
+  const outcome = await inOrder(steps, async (step) => await step());
+  return Result.isError(outcome) ? outcome : Result.ok(counts);
 };

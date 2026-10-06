@@ -1,0 +1,6 @@
+{
+  "metric": "no-db-await-in-loop-suppressions",
+  "file": "apps/api/src/lib/review-organization/in-order.ts",
+  "delta": 1,
+  "reason": "One sequential helper for the review organization seed and reset: a bounded set of sample rows, each through a shared handler with its own locks and caps, stopping at the first failure."
+}

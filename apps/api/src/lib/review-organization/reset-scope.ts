@@ -1,9 +1,11 @@
+import { Result } from "better-result";
 import { eq, inArray, sql } from "drizzle-orm";
 
 import type { Transaction } from "@/api/db/root";
 import { chatThreads, userFiles } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 import { executedRows } from "@/api/lib/db/executed-rows";
+import { inOrder } from "@/api/lib/review-organization/in-order";
 
 /**
  * Organization-scoped tables the reset leaves in place, each with its reason.
@@ -179,6 +181,16 @@ export const REVIEW_RESET_MATTER_TABLE = "workspaces";
 /** Tables without an organization column the sweep empties by hand first. */
 export const REVIEW_RESET_MANUAL_TABLES = ["user_files"] as const;
 
+const removedCount = (rows: unknown[]): number => {
+  const first = rows.at(0);
+  return typeof first === "object" &&
+    first !== null &&
+    "n" in first &&
+    typeof first.n === "number"
+    ? first.n
+    : 0;
+};
+
 /**
  * Empty every cleared table for one organization, in the owner transaction
  * that already recorded the organization's storage erasure. Returns the rows
@@ -188,11 +200,11 @@ export const sweepReviewOrganization = async (
   tx: Transaction,
   organizationId: SafeId<"organization">,
 ): Promise<Map<string, number>> => {
+  // audit: skip - the reset sweep; the run's totals go to the system audit
   const removed = new Map<string, number>();
   // Chat attachments name no organization; their rows hold their threads
   // (`user_files.thread_id` restricts), and the storage census already
   // recorded their objects. The organization deletion removes them the same way.
-  // audit: skip - the reset sweep; the run's totals go to the system audit
   const attachments = await tx
     .delete(userFiles)
     .where(
@@ -206,23 +218,15 @@ export const sweepReviewOrganization = async (
     )
     .returning({ id: userFiles.id });
   removed.set("user_files", attachments.length);
-  for (const name of REVIEW_RESET_CLEARED_TABLES) {
-    // db-await-in-loop: one bounded delete per cleared table, in the order foreign keys require
-    // audit: skip - the reset sweep; the run's totals go to the system audit
+  await inOrder(REVIEW_RESET_CLEARED_TABLES, async (name) => {
+    // audit: skip - one table of the reset sweep; totals go to the system audit
     const rows = executedRows(
       await tx.execute(
         sql`WITH removed AS (DELETE FROM ${sql.identifier(name)} WHERE organization_id = ${organizationId} RETURNING 1) SELECT count(*)::int AS n FROM removed`,
       ),
     );
-    const first = rows.at(0);
-    const count =
-      typeof first === "object" &&
-      first !== null &&
-      "n" in first &&
-      typeof first.n === "number"
-        ? first.n
-        : 0;
-    removed.set(name, count);
-  }
+    removed.set(name, removedCount(rows));
+    return Result.ok(undefined);
+  });
   return removed;
 };

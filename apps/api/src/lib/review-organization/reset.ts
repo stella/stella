@@ -32,6 +32,7 @@ import type { MemberRole } from "@/api/lib/member-roles";
 import { recordOrganizationStorageTeardown } from "@/api/lib/organization-storage-teardown";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import type { ReviewOrganizationConfig } from "@/api/lib/review-organization/config";
+import { inOrder } from "@/api/lib/review-organization/in-order";
 import { sweepReviewOrganization } from "@/api/lib/review-organization/reset-scope";
 import {
   ReviewSeedError,
@@ -242,18 +243,20 @@ const deleteEach = async <TRow extends { id: string }>(
 ): Promise<{ deleted: number; failures: ReviewResetFailure[] }> => {
   let deleted = 0;
   const failures: ReviewResetFailure[] = [];
-  for (const row of rows) {
+  // Every row goes through its kind's shared delete path, one short
+  // transaction each; a failed row is reported and the next one still runs.
+  await inOrder(rows, async (row) => {
     if (scope.signal.aborted) {
-      break;
+      return Result.ok(undefined);
     }
-    // db-await-in-loop: every row goes through its kind's shared delete path, one short transaction each
     const outcome = await remove(row);
     if (Result.isError(outcome)) {
       failures.push({ kind, id: row.id, reason: failureReason(outcome.error) });
     } else {
       deleted += 1;
     }
-  }
+    return Result.ok(undefined);
+  });
   return { deleted, failures };
 };
 
