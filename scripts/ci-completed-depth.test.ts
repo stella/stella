@@ -1,4 +1,5 @@
 import { expect, test } from "bun:test";
+import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { Script } from "node:vm";
 import * as v from "valibot";
@@ -43,12 +44,17 @@ if (!lookup || !aggregate) {
 const labels: { name: string }[] = [];
 const pr = {
   number: 123,
+  title: "fix: example",
+  body: "Test evidence",
   head: { sha: "a".repeat(40), repo: { id: 456 } },
   base: { sha: "b".repeat(40) },
   labels,
 };
+const scope = createHash("sha256")
+  .update(JSON.stringify([pr.title, pr.body, false]))
+  .digest("hex");
 const marker = (depth: string) =>
-  `ci-completed-v1-123-456-${pr.head.sha}-${pr.base.sha}-${depth}-normal`;
+  `ci-completed-v1-123-456-${pr.head.sha}-${pr.base.sha}-${depth}-${scope}`;
 const artifact = (depth: string) => ({
   name: marker(depth),
   expired: false,
@@ -74,6 +80,12 @@ const decide = async ({
   const outputs = new Map<string, string>();
   const requests: unknown[] = [];
   await new Script(`(async () => {${lookup}\n})()`).runInNewContext({
+    require: (name: string) => {
+      if (name !== "node:crypto") {
+        throw new Error("Unexpected module");
+      }
+      return { createHash };
+    },
     process: { env: { SUITE_DEPTH: depth } },
     context: {
       eventName: event,
@@ -132,7 +144,21 @@ test("missing, expired, mismatched or failed evidence runs CI", async () => {
     [null],
     [{ ...artifact("full"), expired: true }],
     [{ ...artifact("full"), expires_at: "2000-01-01" }],
-    [{ ...artifact("full"), workflow_run: { id: 100 } }],
+    [
+      {
+        ...artifact("full"),
+        workflow_run: { ...artifact("full").workflow_run, id: 100 },
+      },
+    ],
+    [
+      {
+        ...artifact("full"),
+        workflow_run: {
+          ...artifact("full").workflow_run,
+          head_repository_id: 789,
+        },
+      },
+    ],
     [
       {
         ...artifact("full"),
@@ -160,6 +186,12 @@ test("missing, expired, mismatched or failed evidence runs CI", async () => {
       await decide({ pull: { ...pr, labels: [{ name: "prove-fix" }] } })
     ).outputs.get("run_required"),
   ).toBe("true");
+  for (const pull of [
+    { ...pr, title: "fix: another scope" },
+    { ...pr, body: "Changed evidence" },
+  ]) {
+    expect((await decide({ pull })).outputs.get("run_required")).toBe("true");
+  }
 });
 
 test("push, dispatch and queue events always run without querying evidence", async () => {
@@ -226,5 +258,44 @@ test("the duplicate-result gate accepts skips but rejects failed or cancelled de
     expect(child.exitCode).toBe(
       ["skipped", "success"].includes(outcome) ? 0 : 1,
     );
+  }
+});
+
+test("only successful real validation publishes a completion marker", () => {
+  for (const name of [
+    "Record completed suite depth",
+    "Publish completed suite depth",
+  ]) {
+    const condition = result.steps.find((step) => step.name === name)?.if;
+    if (!condition) {
+      throw new Error("Missing completion publisher condition");
+    }
+    for (const success of [true, false]) {
+      for (const event of [
+        "pull_request",
+        "merge_group",
+        "workflow_dispatch",
+      ]) {
+        for (const runRequired of ["true", "false"]) {
+          for (const markerName of ["", marker("full")]) {
+            expect(
+              evaluate(condition, {
+                status: { success },
+                values: {
+                  "github.event_name": event,
+                  "needs.ci-plan.outputs.run_required": runRequired,
+                  "needs.ci-plan.outputs.completion_marker": markerName,
+                },
+              }),
+            ).toBe(
+              success &&
+                event === "pull_request" &&
+                runRequired === "true" &&
+                markerName !== "",
+            );
+          }
+        }
+      }
+    }
   }
 });

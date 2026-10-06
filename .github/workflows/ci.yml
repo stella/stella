@@ -200,6 +200,8 @@ jobs:
             const depth = process.env.SUITE_DEPTH;
             if (context.eventName !== "pull_request" || !pr
                 || !["fast", "full"].includes(depth)
+                || typeof pr.title !== "string"
+                || (pr.body != null && typeof pr.body !== "string")
                 || !Array.isArray(pr.labels)
                 || !Number.isSafeInteger(pr.number)
                 || !Number.isSafeInteger(pr.head?.repo?.id)
@@ -207,7 +209,9 @@ jobs:
                 || !/^[a-f0-9]{40}$/.test(pr.base?.sha || "")) return;
             const proof = Array.isArray(pr.labels)
               && pr.labels.some((label) => label.name === "prove-fix");
-            const marker = `ci-completed-v1-${pr.number}-${pr.head.repo.id}-${pr.head.sha}-${pr.base.sha}-${depth}-${proof ? "proof" : "normal"}`;
+            const scope = require("node:crypto").createHash("sha256")
+              .update(JSON.stringify([pr.title, pr.body || "", proof])).digest("hex");
+            const marker = `ci-completed-v1-${pr.number}-${pr.head.repo.id}-${pr.head.sha}-${pr.base.sha}-${depth}-${scope}`;
             core.setOutput("marker", marker);
             if (!["labeled", "unlabeled", "ready_for_review", "reopened", "auto_merge_enabled"].includes(context.payload.action)) return;
             try {
