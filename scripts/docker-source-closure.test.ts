@@ -1,3 +1,4 @@
+import { panic } from "better-result";
 import { afterAll, describe, expect, test } from "bun:test";
 import {
   mkdtempSync,
@@ -75,6 +76,120 @@ describe("Docker source closure", () => {
         ),
       ).toEqual(["RUN bun first.ts    && bun second.ts"]);
     }
+  });
+
+  test("continued instructions retain commands across whitespace and blank lines", () => {
+    for (const newline of ["\n", "\r\n"]) {
+      for (const suffix of [" ", "\t", " \t"]) {
+        const source = [
+          "FROM bun AS builder",
+          "WORKDIR /app",
+          `RUN true \\${suffix}`,
+          "",
+          "  # BuildKit ignores comments and empty continuation lines",
+          " \t",
+          "  && bun absent.ts",
+        ].join(newline);
+        expect(checkDockerSource(root, source, new Map(), new Map())).toEqual([
+          "Entry is unavailable: /app/absent.ts",
+        ]);
+      }
+    }
+  });
+
+  test("source wrappers check their inner reads without splitting quoted arguments", () => {
+    const entry = put("wrapper/entry.ts", 'import "./missing";');
+    const context: SourceTree = new Map([["/entry.ts", entry]]);
+    for (const prefix of [
+      "env VAR=x",
+      "timeout 10s",
+      "nice",
+      "nice -n 3",
+      "nice --adjustment=-2",
+      "exec",
+      "env VAR=x timeout 10s nice -n 3 exec",
+    ]) {
+      expect(
+        checkDockerSource(
+          root,
+          `FROM bun AS builder\nWORKDIR /app\nCOPY entry.ts .\nRUN ${prefix} bun entry.ts`,
+          context,
+          new Map(),
+        ),
+      ).toEqual([
+        "wrapper/entry.ts imports ./missing, unavailable in Docker stage",
+      ]);
+      expect(
+        commandEntries(
+          root,
+          tree(["entry.ts"]),
+          `${prefix} bun absent.ts`,
+          "/app",
+        ),
+      ).toEqual(["/app/absent.ts"]);
+      expect(
+        commandEntries(
+          root,
+          tree(["entry.ts"]),
+          `${prefix} bun 'entry with spaces.ts'`,
+          "/app",
+        ),
+      ).toEqual(["/app/entry with spaces.ts"]);
+    }
+    for (const shell of ["sh", "bash"]) {
+      expect(
+        checkDockerSource(
+          root,
+          `FROM bun AS builder\nWORKDIR /app\nCOPY entry.ts .\nRUN ${shell} -c 'bun entry.ts'`,
+          context,
+          new Map(),
+        ),
+      ).toEqual([
+        "wrapper/entry.ts imports ./missing, unavailable in Docker stage",
+      ]);
+      expect(
+        commandEntries(
+          root,
+          new Map(),
+          `${shell} -c 'true && bun absent.ts'`,
+          "/app",
+        ),
+      ).toEqual(["/app/absent.ts"]);
+    }
+    for (const command of [
+      "nohup bun absent.ts",
+      "unknown 'bun absent.ts'",
+      "env --unknown bun entry.ts",
+      "timeout --unknown bun entry.ts",
+      "nice --unknown bun entry.ts",
+    ]) {
+      expect(() =>
+        commandEntries(root, tree(["entry.ts"]), command, "/app"),
+      ).toThrow(/Unsupported source wrapper/u);
+    }
+  });
+
+  test("external COPY assets are opaque and cannot supply source inventory", () => {
+    for (const from of ["oven/bun:1", "unmodelled", "0"]) {
+      const source = `FROM bun AS builder\nWORKDIR /app\nCOPY --from=${from} /usr/bin/bun /usr/bin/bun`;
+      expect(checkDockerSource(root, source, new Map(), new Map())).toEqual([]);
+      expect(
+        checkDockerSource(
+          root,
+          `${source}\nRUN bun entry.ts`,
+          new Map(),
+          new Map(),
+        ),
+      ).toEqual(["Entry is unavailable: /app/entry.ts"]);
+    }
+    expect(() =>
+      checkDockerSource(
+        root,
+        "FROM bun AS builder\nCOPY --from=pruner /app/src /app/src",
+        new Map(),
+        new Map(),
+      ),
+    ).toThrow("Unknown COPY stage: pruner");
   });
 
   test("copies multiple source contents into one destination", () => {
@@ -873,6 +988,9 @@ describe("Docker source closure", () => {
       ];
       expect(flags.length).toBeGreaterThan(50);
       for (const [, short, long] of flags) {
+        if (long === undefined) {
+          panic("Bun help flag capture is missing");
+        }
         expect(supported, `${mode}/${long}`).toContain(long);
         if (short !== undefined) {
           expect(supported, `${mode}/${short}`).toContain(short);

@@ -45,9 +45,9 @@ export const dockerInstructions = (source: string): string[] => {
   }
   return source
     .split(/\r?\n/u)
-    .filter((line) => !/^\s*#/u.test(line))
+    .filter((line) => line.trim() !== "" && !/^\s*#/u.test(line))
     .join("\n")
-    .replace(/\\\n/gu, " ")
+    .replace(/\\[ \t]*\n/gu, " ")
     .split("\n")
     .map((line) => line.trim())
     .filter((line) => line !== "" && !line.startsWith("#"))
@@ -901,7 +901,7 @@ const sourceCommandEntries = (
           mode: "preload",
         } satisfies SourceCommandEntry;
         entries.push(preload);
-        context.consume?.(preload);
+        context.consume?.(preload, context.production ?? "conditional");
       }
       continue;
     }
@@ -1076,10 +1076,9 @@ const guaranteedProduction = (
 const commandScope = (context: CommandContext, command: string) =>
   ({
     ...context,
-    environment:
-      context.environment === undefined
-        ? undefined
-        : new Map(context.environment),
+    ...(context.environment === undefined
+      ? {}
+      : { environment: new Map(context.environment) }),
     production:
       context.production !== "conditional" &&
       guaranteedProduction(command, context.environment)
@@ -1103,6 +1102,52 @@ const shellProgramWords = (
     }
   }
   return words;
+};
+
+// Preserve lexer tokens: rejoining them would turn quoted arguments into commands.
+const unwrapSourceCommand = (
+  source: readonly string[],
+  environment?: Map<string, EnvironmentValue>,
+): string[] => {
+  let words = shellProgramWords(source, environment);
+  for (;;) {
+    const wrapper = words.at(0);
+    if (wrapper === "env" || wrapper === "exec") {
+      words.shift();
+      if (words.at(0) === "--") {
+        words.shift();
+      }
+      if (words.at(0)?.startsWith("-")) {
+        panic(`Unsupported source wrapper flags: ${wrapper}`);
+      }
+      words = shellProgramWords(words, environment);
+      continue;
+    }
+    if (wrapper === "timeout") {
+      words.shift();
+      const duration = words.shift();
+      if (!/^(?:\d+(?:\.\d*)?|\.\d+)[smhd]?$/u.test(duration ?? "")) {
+        panic("Unsupported source wrapper: timeout needs a literal duration");
+      }
+      continue;
+    }
+    if (wrapper === "nice") {
+      words.shift();
+      if (words.at(0) === "-n" || words.at(0) === "--adjustment") {
+        words.shift();
+        if (!/^-?\d+$/u.test(words.shift() ?? "")) {
+          panic("Unsupported source wrapper: nice needs a literal adjustment");
+        }
+      } else if (/^(?:-\d+|--adjustment=-?\d+)$/u.test(words.at(0) ?? "")) {
+        words.shift();
+      }
+      if (words.at(0)?.startsWith("-")) {
+        panic("Unsupported source wrapper: nice");
+      }
+      continue;
+    }
+    return words;
+  }
 };
 
 const walkCommand = (
@@ -1130,8 +1175,16 @@ const walkCommand = (
     if (event.type !== "command") {
       continue;
     }
-    const words = shellProgramWords(event.words, runContext.environment);
+    const words = unwrapSourceCommand(event.words, runContext.environment);
     const program = words.shift();
+    if (program === "sh" || program === "bash") {
+      const script = words.at(1);
+      if (words.at(0) !== "-c" || script === undefined || words.length !== 2) {
+        panic(`Unsupported source wrapper: ${program}`);
+      }
+      entries.push(...walkCommand(runContext, script, cwd));
+      continue;
+    }
     runContext.command?.({
       program,
       words,
@@ -1173,6 +1226,15 @@ const walkCommand = (
       panic(`Unsupported source runner: ${String(program)}`);
     }
     if (program !== "bun" && program !== "node") {
+      if (
+        words.some((word) =>
+          /(?:^|\s)(?:bun|bunx|node|vite|npm|yarn|pnpm|npx|tsc)(?:\s|$)/u.test(
+            word,
+          ),
+        )
+      ) {
+        panic(`Unsupported source wrapper: ${String(program)}`);
+      }
       continue;
     }
     if (program === "bun" && checkBunMetadata({ words, tree, cwd })) {
@@ -1265,6 +1327,10 @@ const copyInstruction = ({
     }
   }
   const from = words.find((word) => word.startsWith("--from="))?.slice(7);
+  // External images and runtime stages provide opaque packaged assets.
+  if (from !== undefined && !["pruner", "install-inputs"].includes(from)) {
+    return;
+  }
   const paths = words.filter((word) => !word.startsWith("--"));
   const destination = paths.pop();
   if (destination === undefined) {
@@ -1282,10 +1348,6 @@ const copyInstruction = ({
   const sourceTree = from === undefined ? context : stages.get(from)?.files;
   if (sourceTree === undefined) {
     panic(`Unknown COPY stage: ${String(from)}`);
-  }
-  // Runtime generated/native assets belong to the packaged-asset guard.
-  if (from !== undefined && !["pruner", "install-inputs"].includes(from)) {
-    return;
   }
   if (body.startsWith("[") || /(?<!\\)\$/u.test(body)) {
     panic(`Unsupported ${operation}: ${body}`);
@@ -1396,10 +1458,10 @@ const sourceMutation = ({
         (word) => word.startsWith("-") && !/^(?:--|-[rfv]+)$/u.test(word),
       )
     ) {
-      panic(`Unsupported source mutation flags: ${program}`);
+      panic(`Unsupported source mutation flags: ${String(program)}`);
     }
     if (inputs.some((word) => /[$\\]/u.test(word))) {
-      panic(`Unresolved source mutation: ${program}`);
+      panic(`Unresolved source mutation: ${String(program)}`);
     }
     const destinations = program === "mv" ? inputs.slice(-1) : [];
     const sources = program === "mv" ? inputs.slice(0, -1) : inputs;
