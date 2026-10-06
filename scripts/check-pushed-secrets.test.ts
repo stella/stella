@@ -102,6 +102,26 @@ exec "${REAL_GIT}" "$@"
 );
 chmodSync(path.join(unreadableGitBin, "git"), 0o755);
 
+// A Git whose merge replay reports an error yet exits 0, as when a partial
+// clone cannot fetch a blob the replay needs.
+const replayErrorGitBin = path.join(root, "replay-error-git-bin");
+mkdirSync(replayErrorGitBin);
+writeFileSync(
+  path.join(replayErrorGitBin, "git"),
+  `#!/usr/bin/env bash
+if [[ "$1" == show ]]; then
+  for arg in "$@"; do
+    if [[ "$arg" == --remerge-diff ]]; then
+      echo "fatal: remote error: upload-pack: not our ref" >&2
+      exit 0
+    fi
+  done
+fi
+exec "${REAL_GIT}" "$@"
+`,
+);
+chmodSync(path.join(replayErrorGitBin, "git"), 0o755);
+
 const initRepo = (name: string): string => {
   const dir = path.join(root, name);
   run(root, ["git", "init", "-q", "-b", "main", dir]);
@@ -123,7 +143,7 @@ run(repo, ["git", "commit", "-q", "--allow-empty", "-m", "change"]);
 const head = run(repo, ["git", "rev-parse", "HEAD"]);
 
 /** The log options the script passes for a revision range. */
-const scanOf = (range: string): string => `--remerge-diff ${range}`;
+const scanOf = (range: string): string => `--no-merges ${range}`;
 
 type ScanOptions = {
   cwd?: string;
@@ -370,6 +390,31 @@ describe("a merge resolution", () => {
     expect(result.exitCode).toBe(0);
     expect(result.patch).toContain(CONFLICT_RESOLUTION);
     expect(result.patch).toContain(CLEAN_MERGE_ADDITION);
+  });
+
+  test("a merge Git cannot replay is scanned against its first parent", () => {
+    const result = scan(
+      `refs/heads/feature ${mergeTip} refs/heads/feature ${branchTip}\n`,
+      { cwd: dir, pathPrefix: replayErrorGitBin },
+    );
+    expect(result.exitCode).toBe(0);
+    expect(result.stderr).toContain("cannot replay merge");
+    expect(result.ranges).toContain(
+      `--diff-merges=first-parent -n 1 ${mergeTip}`,
+    );
+    expect(result.patch).toContain(CONFLICT_RESOLUTION);
+    expect(result.patch).toContain(CLEAN_MERGE_ADDITION);
+  });
+
+  test("a merge the scanner did not read refuses", () => {
+    const result = scan(
+      `refs/heads/feature ${mergeTip} refs/heads/feature ${branchTip}\n`,
+      { cwd: dir, scannerScanned: "0" },
+    );
+    expect(result.exitCode).toBe(1);
+    expect(result.stderr).toContain(
+      `read 0 of 1 changed commits in merge ${mergeTip}`,
+    );
   });
 
   test("an unresolvable remote range with merges fails closed", () => {
