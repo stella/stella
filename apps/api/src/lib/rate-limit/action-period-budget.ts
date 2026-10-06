@@ -99,10 +99,7 @@ type ActionPeriodWindowOptions = { nowMs: number; periodMs: number };
  * The period window holding `nowMs`. Windows are anchored to the Unix epoch,
  * independent of host timezone.
  */
-export const actionPeriodWindow = ({
-  nowMs,
-  periodMs,
-}: ActionPeriodWindowOptions) => {
+const actionPeriodWindow = ({ nowMs, periodMs }: ActionPeriodWindowOptions) => {
   const startMs = Math.floor(nowMs / periodMs) * periodMs;
   return { startMs, endMs: startMs + periodMs };
 };

@@ -18,15 +18,12 @@ import {
   workspaceMembers,
   workspaces,
 } from "@/api/db/schema";
-import { env } from "@/api/env";
 import { resolveCaching, type OrgAIConfig } from "@/api/lib/ai-config";
 import { loadOrgAISettings } from "@/api/lib/ai-config-loader";
 import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { ManagedAIResidency } from "@/api/lib/chat/ai-data-policy";
 import { decryptContent } from "@/api/lib/content-encryption";
-import { ActionAdmissionError } from "@/api/lib/rate-limit/action-admission";
-import { actionPeriodWindow } from "@/api/lib/rate-limit/action-period-budget";
 import { createModelActionAdmitter } from "@/api/lib/rate-limit/model-action-admission";
 import { createRootSafeDb, createRootScopedDb } from "@/api/lib/root-scoped-db";
 import { brandPersistedUserId } from "@/api/lib/safe-id-boundaries";
@@ -37,7 +34,9 @@ import {
   DEADLINE_TEXT_MIN_CHARS,
   deadlineDedupeKey,
   deadlineExtractionSchema,
+  deadlineScanAdmission,
   deadlineScoutFailureStatus,
+  type DeadlineScanAdmission,
   deadlineSeverity,
   filterDeadlines,
 } from "@/api/lib/scouts/document-deadlines.logic";
@@ -151,7 +150,7 @@ type ExtractDeadlinesOptions = {
   run: ClaimedRun;
   scopedDb: ScopedDb;
   userId: SafeId<"user">;
-  onPeriodExhausted: () => void;
+  onRefused: (admission: DeadlineScanAdmission) => void;
 };
 
 /**
@@ -167,7 +166,7 @@ const extractDeadlines = async ({
   run,
   scopedDb,
   userId,
-  onPeriodExhausted,
+  onRefused,
 }: ExtractDeadlinesOptions) => {
   const admitted = await createModelActionAdmitter({
     organizationId: run.organizationId,
@@ -200,25 +199,12 @@ const extractDeadlines = async ({
   );
   if (Result.isError(admitted)) {
     const { error } = admitted;
-    if (ActionAdmissionError.is(error) && error.reason === "period_exhausted") {
-      onPeriodExhausted();
-    }
+    onRefused(deadlineScanAdmission(error));
     // An observation reports its failure by rejecting, as the model call
     // itself does; a refused scan is such a failure.
     throw error;
   }
   return admitted.value;
-};
-
-/**
- * The end of the action period that refused a scan. A period refusal comes
- * only from a configured period, so a missing one is a programming error.
- */
-const periodSkipEnd = (now: Date): Date => {
-  const periodMs =
-    env.ACTION_ADMISSION_PERIOD_MS ??
-    panic("A period refusal requires a configured action period");
-  return new Date(actionPeriodWindow({ nowMs: now.getTime(), periodMs }).endMs);
 };
 
 const currentSourceWhere = (run: ClaimedRun) =>
@@ -375,9 +361,6 @@ export const skipDeadlineScan = async ({
   });
 };
 
-/** Whether admission refused the scan for an exhausted period. */
-type DeadlineScanAdmission = "admitted" | "period_exhausted";
-
 type SettleFailedObservationOptions = RejectDeadlineObservationOptions & {
   admission: DeadlineScanAdmission;
 };
@@ -388,12 +371,12 @@ const settleFailedObservation = async ({
   admission,
   error,
 }: SettleFailedObservationOptions): Promise<void> => {
-  switch (admission) {
+  switch (admission.type) {
     case "period_exhausted":
       await skipDeadlineScan({
         db,
         runId: run.id,
-        skippedUntil: periodSkipEnd(new Date()),
+        skippedUntil: admission.skippedUntil,
       });
       return;
     case "admitted":
@@ -441,7 +424,9 @@ export const runDocumentDeadlineScout = async ({
     workspaceIds: [run.workspaceId],
   });
 
-  const scan: { admission: DeadlineScanAdmission } = { admission: "admitted" };
+  const scan: { admission: DeadlineScanAdmission } = {
+    admission: { type: "admitted" },
+  };
   // The config is read before the scout run opens: an organization barred
   // from the instance provider without a key of its own cannot observe.
   const observed = Result.flatten(
@@ -502,8 +487,8 @@ export const runDocumentDeadlineScout = async ({
               run,
               scopedDb,
               userId: actorUserId,
-              onPeriodExhausted: () => {
-                scan.admission = "period_exhausted";
+              onRefused: (admission) => {
+                scan.admission = admission;
               },
             });
 

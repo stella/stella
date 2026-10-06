@@ -87,6 +87,80 @@ const recordingRedis = () => {
 };
 
 describe("organization budgets at action admission", () => {
+  test("a period refusal names the reset of the budget it exhausted", async () => {
+    const hourMs = 3_600_000;
+    const weekMs = 7 * serviceBudgetConfig.periodMs;
+    const exhausted = {
+      send: async (_command: string, args: string[]) =>
+        args.at(1) === "3" ? -1 : 1,
+    };
+    const refusalReset = async ({
+      serviceBudgetsEnabled,
+      servicePeriodMs,
+      periodPolicy,
+    }: {
+      serviceBudgetsEnabled: boolean;
+      servicePeriodMs: number | undefined;
+      periodPolicy: { periodMs: number; limit: number } | undefined;
+    }) => {
+      const result = await withActionAdmission({
+        organizationId,
+        userId,
+        enabled: true,
+        policy,
+        periodIdentity,
+        periodPolicy,
+        serviceBudgetsEnabled,
+        serviceBudgetConfig: {
+          ...serviceBudgetConfig,
+          periodMs: servicePeriodMs,
+        },
+        budgetNow: () => nowMs,
+        readOrganizationState: async () =>
+          actionState({
+            state: ORGANIZATION_ACCESS_STATE.evaluationPeriod,
+            evaluationEndsAt: new Date(nowMs + weekMs),
+          }),
+        redis: exhausted,
+        run: async () => "completed",
+      });
+      expectRefusal(result, ACTION_ADMISSION_CODES.periodExhausted);
+      return Result.isError(result) && ActionAdmissionError.is(result.error)
+        ? result.error.retryAtMs
+        : undefined;
+    };
+    const windowEnd = (periodMs: number) =>
+      (Math.floor(nowMs / periodMs) + 1) * periodMs;
+    // The generic and service windows end apart, so a reset taken from the
+    // wrong one cannot match.
+    expect(windowEnd(weekMs)).not.toBe(windowEnd(hourMs));
+
+    // Only the organization's service period is configured.
+    expect(
+      await refusalReset({
+        serviceBudgetsEnabled: true,
+        servicePeriodMs: weekMs,
+        periodPolicy: undefined,
+      }),
+    ).toBe(windowEnd(weekMs));
+    // The generic and service periods differ: the service budget refused.
+    expect(
+      await refusalReset({
+        serviceBudgetsEnabled: true,
+        servicePeriodMs: weekMs,
+        periodPolicy: { periodMs: hourMs, limit: 3 },
+      }),
+    ).toBe(windowEnd(weekMs));
+    // Without service budgets the generic period refuses.
+    expect(
+      await refusalReset({
+        serviceBudgetsEnabled: false,
+        servicePeriodMs: weekMs,
+        periodPolicy: { periodMs: hourMs, limit: 3 },
+      }),
+    ).toBe(windowEnd(hourMs));
+  });
+
   test("queued reservations resolve organization budgets at acceptance on fresh and inherited leases", async () => {
     for (const ownership of ["fresh", "inherited"] as const) {
       for (const acceptance of ["capped", "accepted", "expired"] as const) {
