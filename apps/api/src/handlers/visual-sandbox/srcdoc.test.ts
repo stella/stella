@@ -1,11 +1,14 @@
 import { describe, expect, test } from "bun:test";
 import { load } from "cheerio";
 
+import { sanitizeVisualHtml } from "./sanitize";
 import {
   composeVisualDocument,
   escapeVisualJson,
   escapeVisualScript,
 } from "./srcdoc";
+
+const markup = sanitizeVisualHtml("<p>Timeline</p>").unwrap();
 
 describe("visual document composition", () => {
   test("preserves composer string values when embedding bundled scripts", () => {
@@ -21,7 +24,7 @@ describe("visual document composition", () => {
       expect(encoded).not.toMatch(/<\/script|<!--/iu);
       const document = load(
         composeVisualDocument({
-          html: "<p>Timeline</p>",
+          html: markup,
           runtime: `const title=${encoded};`,
           policy: "default-src 'none'",
         }),
@@ -33,7 +36,7 @@ describe("visual document composition", () => {
   test("places the policy before all presentation markup", () => {
     const $ = load(
       composeVisualDocument({
-        html: "<p>Timeline</p>",
+        html: markup,
         runtime: "void 0",
         policy: "default-src 'none'",
       }),

@@ -1,9 +1,6 @@
 import * as v from "valibot";
 
-import {
-  VISUAL_SANDBOX_LIMITS,
-  visualLinkSchema,
-} from "@stll/api-contract/visual-sandbox";
+import { VISUAL_SANDBOX_LIMITS } from "@stll/api-contract/visual-sandbox";
 
 import { createVisualMessageHandler } from "../bridge";
 import { composeVisualDocument } from "../srcdoc";
@@ -31,21 +28,6 @@ const bootGuest = () => {
     },
     { once: true },
   );
-  document.addEventListener("click", (event) => {
-    if (!event.isTrusted || !(event.target instanceof Element)) {
-      return;
-    }
-    const link = event.target.closest("a[data-stella-link]");
-    if (!(link instanceof HTMLAnchorElement)) {
-      return;
-    }
-    event.preventDefault();
-    const parsed = v.safeParse(visualLinkSchema, link.dataset.stellaLink);
-    if (!parsed.success) {
-      return;
-    }
-    window.parent.postMessage({ type: "open-link", url: parsed.output }, "*");
-  });
 };
 
 const bootOuter = (runtime: string) => {
@@ -78,7 +60,7 @@ const bootOuter = (runtime: string) => {
       origins,
       onRender: ({ title, html }) => {
         inner.title = title;
-        // safe-html: server sanitizeVisualHtml output from the allowlisted host, composed with Stella's bundled runtime and fixed policy.
+        // safe-html: sanitizeVisualHtml output validated at the message boundary, composed with Stella's bundled runtime and fixed policy.
         inner.srcdoc = composeVisualDocument({ html, runtime, policy });
       },
       onGuestMessage: (message, hostOrigin) =>

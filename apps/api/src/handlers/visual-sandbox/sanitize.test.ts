@@ -71,7 +71,7 @@ describe("visual presentation markup", () => {
         reason: "depth",
       },
       { html: "<br>".repeat(VISUAL_SANDBOX_LIMITS.nodes + 1), reason: "nodes" },
-    ];
+    ] as const;
     for (const { html, reason } of cases) {
       const result = sanitizeVisualHtml(html);
       expect(result.isErr()).toBe(true);

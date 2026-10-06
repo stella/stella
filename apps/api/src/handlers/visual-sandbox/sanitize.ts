@@ -8,6 +8,9 @@ import {
   visualLinkSchema,
 } from "@stll/api-contract/visual-sandbox";
 
+const sanitizedHtmlSchema = v.pipe(v.string(), v.brand("SanitizedVisualHtml"));
+export type SanitizedVisualHtml = v.InferOutput<typeof sanitizedHtmlSchema>;
+
 export class VisualMarkupError extends TaggedError("VisualMarkupError")<{
   message: string;
   reason: "size" | "depth" | "nodes" | "input";
@@ -228,7 +231,7 @@ const presentationAttribute = ({
 };
 
 export const sanitizeVisualHtml = (html: string) => {
-  if (Buffer.byteLength(html, "utf-8") > VISUAL_SANDBOX_LIMITS.htmlBytes) {
+  if (new TextEncoder().encode(html).length > VISUAL_SANDBOX_LIMITS.htmlBytes) {
     return Result.err(
       new VisualMarkupError({
         reason: "size",
@@ -335,7 +338,9 @@ export const sanitizeVisualHtml = (html: string) => {
       .toArray()
       .map((element) => $.html(element))
       .join("") + ($("body").html() ?? "");
-  if (Buffer.byteLength(sanitized, "utf-8") > VISUAL_SANDBOX_LIMITS.htmlBytes) {
+  if (
+    new TextEncoder().encode(sanitized).length > VISUAL_SANDBOX_LIMITS.htmlBytes
+  ) {
     return Result.err(
       new VisualMarkupError({
         reason: "size",
@@ -343,5 +348,5 @@ export const sanitizeVisualHtml = (html: string) => {
       }),
     );
   }
-  return Result.ok(sanitized);
+  return Result.ok(v.parse(sanitizedHtmlSchema, sanitized));
 };

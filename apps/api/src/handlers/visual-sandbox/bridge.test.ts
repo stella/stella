@@ -52,6 +52,51 @@ describe("visual frame bridge", () => {
     expect(onRender).toHaveBeenCalledTimes(1);
   });
 
+  test("normalizes render markup and refuses credential controls before pinning the host", () => {
+    const { parentWindow, onRender, handle } = setup();
+    handle({
+      source: parentWindow,
+      origin: "https://web.example.test",
+      data: { type: "render", title: "Form", html: '<input type="password">' },
+    });
+    expect(onRender).not.toHaveBeenCalled();
+    handle({
+      source: parentWindow,
+      origin: "https://alternate.example.test",
+      data: {
+        type: "render",
+        title: "Timeline",
+        html: '<p onclick="void 0">Dates</p>',
+      },
+    });
+    expect(onRender).toHaveBeenCalledWith({
+      type: "render",
+      title: "Timeline",
+      html: "<p>Dates</p>",
+    });
+  });
+
+  test("the frame shell forwards sizing without forwarding link actions", () => {
+    const { parentWindow, innerWindow, onGuestMessage, handle } = setup();
+    handle({
+      source: parentWindow,
+      origin: "https://web.example.test",
+      data: { type: "render", title: "Timeline", html: "<p>Dates</p>" },
+    });
+    handle({
+      source: innerWindow,
+      origin: "null",
+      data: { type: "open-link", url: "https://example.test/decision" },
+    });
+    expect(onGuestMessage).not.toHaveBeenCalled();
+    handle({
+      source: innerWindow,
+      origin: "null",
+      data: { type: "resize", height: 300 },
+    });
+    expect(onGuestMessage).toHaveBeenCalledTimes(1);
+  });
+
   test("requires matching windows, origins, bounded bytes and strict message shapes", () => {
     const { parentWindow, innerWindow, onRender, onGuestMessage, handle } =
       setup();

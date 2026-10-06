@@ -1,17 +1,25 @@
 import * as v from "valibot";
 
 import {
-  VISUAL_SANDBOX_LIMITS,
   visualGuestMessageSchema,
   visualRenderMessageSchema,
 } from "@stll/api-contract/visual-sandbox";
+
+import { sanitizeVisualHtml, type SanitizedVisualHtml } from "./sanitize";
+
+type SanitizedRenderMessage = Omit<
+  v.InferOutput<typeof visualRenderMessageSchema>,
+  "html"
+> & {
+  html: SanitizedVisualHtml;
+};
 
 type VisualMessageHandlerOptions = {
   parentWindow: unknown;
   innerWindow: unknown;
   outerOrigin: string;
   origins: readonly string[];
-  onRender: (message: v.InferOutput<typeof visualRenderMessageSchema>) => void;
+  onRender: (message: SanitizedRenderMessage) => void;
   onGuestMessage: (
     message: v.InferOutput<typeof visualGuestMessageSchema>,
     hostOrigin: string,
@@ -36,15 +44,19 @@ export const createVisualMessageHandler = ({
         return;
       }
       const parsed = v.safeParse(visualRenderMessageSchema, event.data);
-      if (
-        !parsed.success ||
-        new TextEncoder().encode(parsed.output.html).length >
-          VISUAL_SANDBOX_LIMITS.htmlBytes
-      ) {
+      if (!parsed.success) {
+        return;
+      }
+      const sanitized = sanitizeVisualHtml(parsed.output.html);
+      if (sanitized.isErr()) {
         return;
       }
       hostOrigin = event.origin;
-      onRender(parsed.output);
+      onRender({
+        type: parsed.output.type,
+        title: parsed.output.title,
+        html: sanitized.value,
+      });
       return;
     }
     if (
@@ -55,7 +67,7 @@ export const createVisualMessageHandler = ({
       return;
     }
     const parsed = v.safeParse(visualGuestMessageSchema, event.data);
-    if (!parsed.success) {
+    if (!parsed.success || parsed.output.type !== "resize") {
       return;
     }
     onGuestMessage(parsed.output, hostOrigin);

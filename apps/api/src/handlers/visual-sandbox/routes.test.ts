@@ -1,6 +1,8 @@
 import { describe, expect, test } from "bun:test";
 
 import { env } from "@/api/env";
+import { frontendOrigins } from "@/api/lib/dev-origins";
+import { runtimeMode } from "@/api/runtime-mode";
 import api from "@/api/server";
 
 import { VISUAL_INNER_POLICY } from "./document";
@@ -18,7 +20,15 @@ describe("visual sandbox page", () => {
     expect(response.headers.get("X-Frame-Options")).toBeNull();
     expect(response.headers.get("X-DNS-Prefetch-Control")).toBe("off");
     expect(response.headers.get("Content-Security-Policy")).toBe(
-      `${VISUAL_INNER_POLICY}; frame-ancestors ${new URL(env.FRONTEND_URL).origin}`,
+      `${VISUAL_INNER_POLICY}; frame-ancestors ${frontendOrigins({
+        frontendUrl: env.FRONTEND_URL,
+        runtimeMode: runtimeMode(),
+      })
+        .map((origin) => new URL(origin).origin)
+        .join(" ")}`,
+    );
+    expect(response.headers.get("Content-Security-Policy")).toContain(
+      "frame-src 'none'",
     );
     expect(VISUAL_INNER_POLICY).toBe(
       "default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data: blob:; font-src data:; media-src data: blob:; connect-src 'none'; worker-src 'none'; form-action 'none'; frame-src 'none'; child-src 'none'; base-uri 'none'; object-src 'none'; manifest-src 'none'",

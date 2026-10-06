@@ -1,3 +1,5 @@
+import type { SanitizedVisualHtml } from "./sanitize";
+
 const escapeAttribute = (value: string) =>
   value
     .replaceAll("&", "&amp;")
@@ -17,7 +19,7 @@ export const escapeVisualScript = (source: string) =>
   source.replace(/<\/script|<!--/giu, (match) => `\\u003c${match.slice(1)}`);
 
 type ComposeVisualDocumentOptions = {
-  html: string;
+  html: SanitizedVisualHtml;
   runtime: string;
   policy: string;
 };
