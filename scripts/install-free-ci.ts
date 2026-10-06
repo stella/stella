@@ -203,6 +203,91 @@ const skipHeredocBodies = ({
   return index;
 };
 
+const readSingleQuoted = (source: string, start: number) => {
+  const end = source.indexOf("'", start + 1);
+  return {
+    text: end === -1 ? "" : source.slice(start + 1, end),
+    index: end === -1 ? source.length : end + 1,
+    failure: end === -1 ? "unterminated single quote" : undefined,
+  };
+};
+
+const readAnsiQuoted = (source: string, start: number) => {
+  let text = "";
+  let index = start + 2;
+  let failure: string | undefined;
+  while (index < source.length && source[index] !== "'") {
+    const character = source[index] ?? "";
+    if (character !== "\\") {
+      text += character;
+      index += 1;
+      continue;
+    }
+    const escape = source[index + 1] ?? "";
+    const octal = /^[0-7]{1,3}/u.exec(source.slice(index + 1))?.[0];
+    const hex =
+      escape === "x"
+        ? /^[0-9a-f]{1,2}/iu.exec(source.slice(index + 2))?.[0]
+        : undefined;
+    const numeric = octal ?? hex;
+    if (numeric !== undefined) {
+      text += String.fromCodePoint(
+        (octal === undefined
+          ? Number.parseInt(numeric, 16)
+          : Number.parseInt(numeric, 8)) % 256,
+      );
+      index += numeric.length + (octal === undefined ? 2 : 1);
+      continue;
+    }
+    switch (escape) {
+      case "a":
+        text += "\u0007";
+        break;
+      case "b":
+        text += "\b";
+        break;
+      case "e":
+      case "E":
+        text += "\u001b";
+        break;
+      case "f":
+        text += "\f";
+        break;
+      case "n":
+        text += "\n";
+        break;
+      case "r":
+        text += "\r";
+        break;
+      case "t":
+        text += "\t";
+        break;
+      case "v":
+        text += "\v";
+        break;
+      case "'":
+      case '"':
+      case "\\":
+        text += escape;
+        break;
+      case "u":
+      case "U":
+      case "c":
+        failure ??= `unsupported ANSI-C escape \\${escape}`;
+        break;
+      default:
+        text += `\\${escape}`;
+    }
+    index += 2;
+  }
+  if (source[index] !== "'") {
+    failure ??= "unterminated ANSI-C quote";
+  }
+  index += 1;
+  // Shell words cannot contain NUL; the rest of this quoted segment is discarded.
+  return { text: text.split("\0").at(0) ?? "", index, failure };
+};
+
 /**
  * Splits shell source into simple commands, in execution order. Quotes are
  * removed; a command substitution (`$(…)`, backticks) or subshell becomes
@@ -281,14 +366,14 @@ export const lexShell = (source: string): ShellEvent[] => {
       if (character === "\\") {
         text += next === "\n" ? "" : next;
         index += 2;
-      } else if (character === "'") {
-        const end = source.indexOf("'", index + 1);
-        if (end === -1) {
-          failure ??= "unterminated single quote";
-          break;
-        }
-        text += source.slice(index + 1, end);
-        index = end + 1;
+      } else if (character === "'" || (character === "$" && next === "'")) {
+        const quoted = (character === "$" ? readAnsiQuoted : readSingleQuoted)(
+          source,
+          index,
+        );
+        text += quoted.text;
+        index = quoted.index;
+        failure ??= quoted.failure;
       } else if (character === '"') {
         text += readDoubleQuoted();
       } else if (character === "$" && next === "(") {
