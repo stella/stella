@@ -151,6 +151,10 @@ export const createReviewAccountPlugin = ({
               if (Result.isError(reservation)) {
                 return await Promise.reject(reservation.error);
               }
+              // Better Auth deep-merges a before-hook's `context` into the
+              // endpoint context (api/dispatch.mjs, `defuReplaceArrays`), so
+              // the inner `context` lands on the auth context the after-hook
+              // reads as `ctx.context`.
               return {
                 context: {
                   context: { [BUDGET_CONTEXT_KEY]: reservation.value },

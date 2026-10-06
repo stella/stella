@@ -241,6 +241,44 @@ describe("restricted review account password sign-in", () => {
     ).toBeNull();
   });
 
+  test("never locks the account for successful sign-ins", async () => {
+    const auth = await createReviewAuth();
+    // Through the real handler: each success must give its slot back.
+    for (
+      let attempt = 0;
+      attempt < REVIEW_ACCOUNT_SIGN_IN_BUDGET.max * 2 + 1;
+      attempt += 1
+    ) {
+      const response = await postAuth(auth, "/sign-in/email", {
+        email: reviewEmail,
+        password,
+      });
+      expect({ attempt, status: response.status }).toEqual({
+        attempt,
+        status: 200,
+      });
+    }
+    // Failures in the same window still count towards the lock.
+    for (
+      let attempt = 0;
+      attempt < REVIEW_ACCOUNT_SIGN_IN_BUDGET.max;
+      attempt += 1
+    ) {
+      expect(
+        (
+          await postAuth(auth, "/sign-in/email", {
+            email: reviewEmail,
+            password: "not the fixture password",
+          })
+        ).status,
+      ).toBe(401);
+    }
+    expect(
+      (await postAuth(auth, "/sign-in/email", { email: reviewEmail, password }))
+        .status,
+    ).toBe(429);
+  });
+
   test("locks the account after the failure budget, even for the right password", async () => {
     const auth = await createReviewAuth();
     for (
