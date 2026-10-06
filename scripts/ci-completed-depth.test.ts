@@ -473,9 +473,9 @@ test("exact-name lookup finds evidence behind more than a page of unrelated arti
 });
 
 test("switching the pilot on or off cannot reuse the other fast coverage profile", async () => {
-  for (const [profile, previous] of [
-    ["normal-v1", "pilot-fast-v1"],
-    ["pilot-fast-v1", "normal-v1"],
+  for (const { profile, previous } of [
+    { profile: "normal-v1", previous: "pilot-fast-v1" },
+    { profile: "pilot-fast-v1", previous: "normal-v1" },
   ]) {
     expect(
       (
