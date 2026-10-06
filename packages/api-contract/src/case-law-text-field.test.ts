@@ -5,6 +5,7 @@ import {
   DECISION_TEXT_ABSENCE_VERSION_METADATA_KEY,
   DECISION_TEXT_ABSENCE_SCHEMA_VERSION,
   DECISION_TEXT_FIELD_KEYS,
+  DECISION_ABSENCE_FIELD_KEYS,
   inspectDecisionTextAbsence,
   parseDecisionTextAbsence,
   TEXT_ABSENCE_REASONS,
@@ -98,5 +99,17 @@ test("malformed sidecars and unknown schema versions cannot appear complete", ()
         [DECISION_TEXT_ABSENCE_METADATA_KEY]: sidecar,
       }),
     ).toEqual({ type: "invalid", reason: "sidecar" });
+  }
+});
+
+test("the shared sidecar accepts every publisher field and existing absence reason", () => {
+  for (const field of DECISION_ABSENCE_FIELD_KEYS) {
+    for (const reason of TEXT_ABSENCE_REASONS) {
+      const entries = [{ field, reason }];
+      expect(parseDecisionTextAbsence(entries)).toEqual({
+        type: "valid",
+        entries,
+      });
+    }
   }
 });

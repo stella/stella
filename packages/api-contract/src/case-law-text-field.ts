@@ -1,6 +1,7 @@
 import { panic } from "better-result";
 
 // parser-output-unchanged: Publication provenance and its schema checks affect metadata only, not canonical document payloads.
+// parser-output-unchanged: Publisher field absence markers widen the accepted absence fields; adapters that emit none produce the same output.
 
 export const TEXT_FIELD_TYPE = {
   ABSENT: "absent",
@@ -118,9 +119,45 @@ export const DECISION_TEXT_ABSENCE_VERSION_METADATA_KEY =
   "_stellaDecisionTextAbsenceVersion";
 export const DECISION_TEXT_ABSENCE_SCHEMA_VERSION = 2;
 
-/** Stored beside nullable text; every absent field includes its reason. */
+export const DECISION_PUBLICATION_FIELD_KEYS = Object.freeze([
+  "ecli",
+  "decisionDate",
+  "decisionType",
+  "sourceUrl",
+  "documentUrl",
+] as const);
+
+export type DecisionPublicationFieldKey =
+  (typeof DECISION_PUBLICATION_FIELD_KEYS)[number];
+
+export const DECISION_ABSENCE_FIELD_KEYS = Object.freeze([
+  ...DECISION_TEXT_FIELD_KEYS,
+  ...DECISION_PUBLICATION_FIELD_KEYS,
+]);
+
+export const SK_US_ECLI_AVAILABILITY_STATUSES = [
+  "published",
+  "not_published",
+  "not_stated",
+] as const;
+
+export type SkUsEcliAvailability = {
+  status: (typeof SK_US_ECLI_AVAILABILITY_STATUSES)[number];
+};
+
+export const SK_COURTS_SOURCE_URL_STATUSES = [
+  "published",
+  "not-published-by-source",
+  "rejected-url",
+  "detail-unavailable",
+] as const;
+
+export type SkCourtsSourceUrlStatus =
+  (typeof SK_COURTS_SOURCE_URL_STATUSES)[number];
+
+/** Stored beside nullable publisher fields; each marker carries its reason. */
 export type DecisionTextAbsenceEntry = {
-  readonly field: DecisionTextFieldKey;
+  readonly field: DecisionTextFieldKey | DecisionPublicationFieldKey;
   readonly reason: TextAbsenceReason;
 };
 
@@ -171,7 +208,7 @@ export const parseDecisionTextAbsence = (
       return { type: "invalid" };
     }
     seenFields.add(entry.field);
-    const field = DECISION_TEXT_FIELD_KEYS.find(
+    const field = DECISION_ABSENCE_FIELD_KEYS.find(
       (candidate) => candidate === entry.field,
     );
     if (field === undefined) {
