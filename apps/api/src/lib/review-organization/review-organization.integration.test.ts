@@ -661,6 +661,9 @@ describe("review organization seed and reset", () => {
         signal: new AbortController().signal,
         dependencies: {
           ...resetDependencies,
+          // The auth layer's membership hooks refuse this join on every auth
+          // path; the reset defends itself below them, so the row is written
+          // directly, as only a data-layer write could.
           afterTargetResolved: async () => {
             await testDb.insert(member).values({
               id: joinedId,
