@@ -108,9 +108,28 @@ const GeneratedVisualFrame = ({
     if (!page.data) {
       return;
     }
+    const frameWindow = frame.current?.contentWindow;
+    if (
+      shell.deliverRender({
+        event,
+        frameWindow,
+        message: {
+          type: "render",
+          title: page.data.title,
+          html: page.data.html,
+          data: page.data.data,
+          links: page.data.links,
+        },
+      })
+    ) {
+      return;
+    }
+    if (!shell.isReady()) {
+      return;
+    }
     const message = parseVisualHostMessage({
       event,
-      frameWindow: frame.current?.contentWindow,
+      frameWindow,
       outerOrigin: "null",
       actionGate,
     });

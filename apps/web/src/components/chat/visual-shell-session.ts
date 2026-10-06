@@ -1,5 +1,6 @@
 import * as v from "valibot";
 
+import type { visualRenderMessageSchema } from "@stll/api-contract/generated-visual";
 import {
   VISUAL_SHELL_NONCE_PARAMETER,
   visualShellReadySchema,
@@ -27,12 +28,14 @@ export const createVisualShellSession = ({
       state = { type: "awaiting-ready", nonce };
       return target.href;
     },
-    acceptReady: ({
+    deliverRender: ({
       event,
       frameWindow,
+      message,
     }: {
       event: { source: unknown; origin: string; data: unknown };
-      frameWindow: unknown;
+      frameWindow: Pick<Window, "postMessage"> | null | undefined;
+      message: v.InferOutput<typeof visualRenderMessageSchema>;
     }) => {
       if (
         state.type !== "awaiting-ready" ||
@@ -48,6 +51,7 @@ export const createVisualShellSession = ({
         return false;
       }
       state = { type: "ready" };
+      frameWindow.postMessage(message, "*");
       return true;
     },
     isReady: () => state.type === "ready",
