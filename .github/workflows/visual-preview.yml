@@ -58,10 +58,51 @@ jobs:
       - name: Exercise Lambda image without network
         if: steps.scope.outputs.required == 'true'
         run: |
-          docker run --rm --network none -e AWS_EXECUTION_ENV=AWS_Lambda_nodejs22.x --entrypoint /var/lang/bin/node visual-preview:test \
+          timeout 75s docker run --rm --network none -e AWS_EXECUTION_ENV=AWS_Lambda_nodejs22.x --entrypoint /var/lang/bin/node visual-preview:test \
             --input-type=module -e '
+              import assert from "node:assert/strict";
               import { handler } from "/var/task/handler.mjs";
-              const result = await handler({document: "<body><h1>Example</h1><script>parent.postMessage({kind: \"ready\"}, \"*\")</script>", viewport: {width: 1200}});
-              if (!result.readyFired || result.blockedRequests !== 0 || !result.png.startsWith("iVBOR")) throw new Error("Preview smoke failed");
-              console.log(JSON.stringify({size: result.size, readyFired: result.readyFired, blockedRequests: result.blockedRequests}));
+              const readyScript = "<script>parent.postMessage({kind: \"ready\"}, \"*\")</script>";
+              const lambdaTimeoutMs = 15000;
+              const cases = [
+                {
+                  name: "ready",
+                  document: "<body><h1>Example</h1>" + readyScript,
+                  verify: (result) => {
+                    assert.equal(result.readyFired, true);
+                    assert.equal(result.blockedRequests, 0);
+                  },
+                },
+                {
+                  name: "missing-ready",
+                  document: "<body><h1>Example without readiness</h1>",
+                  verify: (result) => assert.equal(result.readyFired, false),
+                },
+                {
+                  name: "script-error",
+                  document: "<body><script>throw new Error(\"Preview example error\")</script>" + readyScript,
+                  verify: (result) => assert.ok(result.consoleErrors.some((error) => error.includes("Preview example error"))),
+                },
+                {
+                  name: "blocked-request",
+                  document: "<body><img src=\"https://preview.invalid/example.png\">" + readyScript,
+                  verify: (result) => assert.ok(result.blockedRequests > 0),
+                },
+              ];
+              for (const smoke of cases) {
+                const started = performance.now();
+                const deadline = setTimeout(() => {
+                  console.error("Preview smoke exceeded Lambda timeout: " + smoke.name);
+                  process.exit(1);
+                }, lambdaTimeoutMs);
+                try {
+                  const result = await handler({document: smoke.document, viewport: {width: 1200}});
+                  assert.ok(performance.now() - started < lambdaTimeoutMs);
+                  assert.ok(result.png.startsWith("iVBOR"));
+                  smoke.verify(result);
+                  console.log(JSON.stringify({case: smoke.name, size: result.size, readyFired: result.readyFired, blockedRequests: result.blockedRequests, consoleErrors: result.consoleErrors.length}));
+                } finally {
+                  clearTimeout(deadline);
+                }
+              }
             '
