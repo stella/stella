@@ -553,6 +553,21 @@ describe("generated imports", () => {
     expect(specifierCandidates("a/src/x.ts", "../generated/data.json")).toEqual(
       ["a/generated/data.json"],
     );
+    for (const suffix of [
+      "logic",
+      "gen",
+      "generated",
+      "query",
+      "custom.name",
+    ]) {
+      const target = `a/src/generated/y.${suffix}`;
+      expect(
+        specifierCandidates("a/src/x.ts", `./generated/y.${suffix}`),
+      ).toContain(`${target}.ts`);
+    }
+    expect(specifierCandidates("a/src/x.ts", "./generated/y.ts")).toEqual([
+      "a/src/generated/y.ts",
+    ]);
     expect(specifierCandidates("a/src/x.ts", "./generated/y")).toEqual([
       "a/src/generated/y.ts",
       "a/src/generated/y.tsx",
