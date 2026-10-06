@@ -192,7 +192,7 @@ const createPlaybookWriteScopedDb = ({
             findFirst: async () => ({
               ...STORED_PLAYBOOK,
               positions: { version: 3, items: storedPositions },
-              ...(writes.length === 0 ? {} : { updatedAt: savedAt }),
+              updatedAt: writes.length === 0 ? lockedUpdatedAt : savedAt,
             }),
           },
         },
@@ -962,9 +962,10 @@ describe("MCP knowledge tools", () => {
     },
   );
 
-  test("save_playbook answers a stale token with the calls that recover from it", async () => {
+  test("save_playbook answers a stale token with the current one and the calls that recover from it", async () => {
+    const currentUpdatedAt = new Date("2026-09-20T10:03:00.000Z");
     const { scopedDb, writes } = createPlaybookWriteScopedDb({
-      lockedUpdatedAt: new Date("2026-09-20T10:03:00.000Z"),
+      lockedUpdatedAt: currentUpdatedAt,
     });
 
     const result = await handleMcpToolCall({
@@ -982,7 +983,13 @@ describe("MCP knowledge tools", () => {
     expect(parseToolPayload(result)).toMatchObject({
       error: {
         code: "conflict",
-        hint: expect.stringContaining("list_playbooks with playbook_id"),
+        message: expect.stringContaining(currentUpdatedAt.toISOString()),
+        hint: expect.stringMatching(
+          new RegExp(
+            `expected_updated_at ${currentUpdatedAt.toISOString()}.*list_playbooks with playbook_id`,
+            "u",
+          ),
+        ),
       },
     });
   });
