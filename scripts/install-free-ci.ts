@@ -1127,6 +1127,16 @@ const classifyBun = ({
       root: context.root,
       target: subcommand,
     });
+    if (file.type !== "invalid" && file.path === "scripts/ci-install.ts") {
+      return [
+        ...single({
+          cwd: dir,
+          entries: [...preloads, file.path],
+          type: "files",
+        }),
+        ...single(classifyInstall({ args: rest.slice(1), dir })),
+      ];
+    }
     return single(
       file.type === "invalid"
         ? unclassified(file.reason)

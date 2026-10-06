@@ -13,7 +13,6 @@ import { panic, Result } from "better-result";
  * onto the `report_exports` row (`status: "failed"` + `error`) so the job is
  * never silently stuck and the status endpoint can surface it.
  */
-import { Worker } from "bullmq";
 import { and, eq, inArray } from "drizzle-orm";
 
 import { reportExports } from "@/api/db/schema";
@@ -37,6 +36,7 @@ import { assertUsageAvailableForHandler } from "@/api/lib/api-handlers";
 import { createBackgroundAuditRecorder } from "@/api/lib/audit-log";
 import { grantThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import type { SafeId } from "@/api/lib/branded-types";
+import { BullMqWorker } from "@/api/lib/bullmq-queue";
 import type { BullMqWorkerContext } from "@/api/lib/bullmq-queue";
 import type { ManagedAIResidency } from "@/api/lib/chat/ai-data-policy";
 import {
@@ -103,7 +103,7 @@ export const initReportExportWorker = ({ db }: BullMqWorkerContext) => {
     storeClass: "durable-coordination",
   });
 
-  const worker = new Worker<ReportExportJobData>(
+  const worker = new BullMqWorker<ReportExportJobData>(
     REPORT_EXPORT_QUEUE_NAME,
     async (job) => {
       await processReportExportJob(job.data);

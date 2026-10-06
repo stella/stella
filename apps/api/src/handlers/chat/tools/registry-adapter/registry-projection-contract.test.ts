@@ -25,6 +25,7 @@ import { RUNTIME_MODE } from "@stll/runtime-mode";
 import type { ScopedDb } from "@/api/db/safe-db";
 import { type contacts, INVOICE_BILLING_PURPOSE } from "@/api/db/schema";
 import { env } from "@/api/env";
+import type { readGatedDecisionCitationDigest } from "@/api/handlers/case-law/decisions/citation-digest";
 import type { readGatedDecisionCitations } from "@/api/handlers/case-law/decisions/citation-passages";
 import type { readGatedDecisionWithDocument } from "@/api/handlers/case-law/decisions/get-deferred-document";
 import type { lookupDecisionsByIdentity } from "@/api/handlers/case-law/decisions/lookup-by-identity";
@@ -107,6 +108,7 @@ const searchDecisionsHandlerMock = mock();
 const readCaseLawCoverageHandlerMock = mock();
 const readGatedDecisionWithDocumentMock = mock();
 const readGatedDecisionCitationsMock = mock();
+const readGatedDecisionCitationDigestMock = mock();
 const withRedistributableSubjectMock = mock();
 const searchLegislationHandlerMock = mock();
 const resolveStatuteExpressionMock = mock();
@@ -227,6 +229,7 @@ const buildContext = (tx: unknown): McpRequestContext => {
       readCaseLawCoverageHandler: readCaseLawCoverageHandlerMock,
       readGatedDecisionWithDocument: readGatedDecisionWithDocumentMock,
       readGatedDecisionCitations: readGatedDecisionCitationsMock,
+      readGatedDecisionCitationDigest: readGatedDecisionCitationDigestMock,
       searchLegislationHandler: searchLegislationHandlerMock,
       resolveStatuteExpression: resolveStatuteExpressionMock,
       resolveStatuteWorkVersion: resolveStatuteWorkVersionMock,
@@ -1674,6 +1677,59 @@ const CONTRACT_CORPUS = {
           createdAt: new Date("2020-05-01T00:00:00.000Z"),
           updatedAt: new Date("2020-05-01T00:00:00.000Z"),
         } satisfies Awaited<ReturnType<typeof readGatedDecisionWithDocument>>);
+        // The summary names decisions at both ends: a citing one by name and
+        // link, a cited one the corpus holds by its decision id, and one it
+        // does not hold by its text.
+        const relatedDecision = (n: number, caseNumber: string) => ({
+          id: toSafeId<"caseLawDecision">(uid(n)),
+          caseNumber,
+          caseNumberType: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
+          citationAuthority: 1.5,
+          country: "CZ",
+          court: "Nejvyšší soud",
+          decisionDate: "2021-03-04",
+          decisionType: "judgment",
+          ecli: null,
+          language: "cs",
+          languageAlternates: [],
+          slug: `ns-${String(n)}`,
+        });
+        const noCitations = {
+          negative: 0,
+          neutral: 0,
+          positive: 0,
+          supportive: 0,
+          mixed: 0,
+          unclassified: 0,
+        };
+        readGatedDecisionCitationDigestMock.mockResolvedValue({
+          summary: {
+            incoming: { ...noCitations, positive: 1, unclassified: 49 },
+            outgoing: { ...noCitations, neutral: 2 },
+            capped: { incoming: false, outgoing: false },
+            incomingByYear: [],
+          },
+          topCiting: [relatedDecision(58, "23 Cdo 200/2021")],
+          cites: [
+            {
+              id: toSafeId<"caseLawCitation">(uid(55)),
+              citationText: "21 Cdo 500/2019",
+              sectionIndex: 0,
+              treatment: "neutral",
+              decision: relatedDecision(56, "21 Cdo 500/2019"),
+            },
+            {
+              id: toSafeId<"caseLawCitation">(uid(60)),
+              citationText: "sp. zn. 20 Cdo 1/2001",
+              sectionIndex: 1,
+              treatment: "neutral",
+              decision: null,
+            },
+          ],
+          citesMore: true,
+        } satisfies Awaited<
+          ReturnType<typeof readGatedDecisionCitationDigest>
+        >);
       },
       expectRefPaths: [],
     },
@@ -2047,6 +2103,7 @@ const ALL_MOCKS = [
   readCaseLawCoverageHandlerMock,
   readGatedDecisionWithDocumentMock,
   readGatedDecisionCitationsMock,
+  readGatedDecisionCitationDigestMock,
   searchLegislationHandlerMock,
   resolveStatuteExpressionMock,
   resolveStatuteWorkVersionMock,

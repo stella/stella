@@ -6,6 +6,48 @@ import { lintSingleRule } from "./lint-single-rule.ts";
 
 setDefaultTimeout(20_000);
 
+describe.serial("BullMQ worker ownership", () => {
+  const entry = OWNERSHIP.find(({ id }) => id === "bullmq-worker");
+  const source = [
+    'import { Worker } from "bullmq";',
+    'import { Worker as RawWorker } from "bullmq";',
+    'import * as queues from "bullmq";',
+    'import type { Worker as WorkerType } from "bullmq";',
+    'export { Worker as ExportedWorker } from "bullmq";',
+    'export * from "bullmq";',
+    'const { Worker: DynamicWorker } = await import("bullmq");',
+    'const dynamicNamespace = await import("bullmq");',
+    'import { Queue, type Job } from "bullmq";',
+    'const { Queue: DynamicQueue } = await import("bullmq");',
+  ].join("\n");
+
+  test("admits only the constructor owner and leaves other queue exports available", async () => {
+    if (entry?.enforcement.kind !== "import") {
+      throw new TypeError("BullMQ worker ownership must confine imports.");
+    }
+    expect(entry.owner).toEqual(["apps/api/src/lib/bullmq-queue.ts"]);
+    expect(entry.enforcement).toEqual({
+      kind: "import",
+      specifiers: ["bullmq"],
+      names: ["Worker"],
+      allowed: [],
+    });
+    const options = { ruleOptions: { entries: [entry] } };
+    expect(
+      await lintSingleRule("confine-owner", source, {
+        ...options,
+        sourcePath: "apps/api/src/lib/example-worker.ts",
+      }),
+    ).toEqual([1, 2, 3, 4, 5, 6, 7, 8]);
+    expect(
+      await lintSingleRule("confine-owner", source, {
+        ...options,
+        sourcePath: "apps/api/src/lib/bullmq-queue.ts",
+      }),
+    ).toEqual([]);
+  });
+});
+
 describe.serial("confine-owner literal patterns", () => {
   const entry = OWNERSHIP.find(({ id }) => id === "citation-graph-transaction");
   const source = [
@@ -317,5 +359,32 @@ test("translation availability is consumed by the dialog owner", async () => {
         sourcePath,
       }),
     ).toEqual(sourcePath.endsWith("/translate-document-dialog.tsx") ? [] : [1]);
+  }
+});
+
+test("desktop observations are confined to service and membership cleanup", async () => {
+  const entry = OWNERSHIP.find(
+    ({ id }) => id === "desktop-presence-observations",
+  );
+  if (entry?.enforcement.kind !== "import") {
+    throw new TypeError("Missing desktop presence ownership");
+  }
+  const source = 'import { desktopPresence } from "@/api/db/schema";';
+  expect(
+    await lintSingleRule("confine-owner", source, {
+      ruleOptions: { entries: [entry] },
+      sourcePath: "apps/api/src/handlers/desktop-presence/other.ts",
+    }),
+  ).toEqual([1]);
+  for (const sourcePath of [
+    ...entry.owner,
+    ...entry.enforcement.allowed.map(({ path: allowedPath }) => allowedPath),
+  ]) {
+    expect(
+      await lintSingleRule("confine-owner", source, {
+        ruleOptions: { entries: [entry] },
+        sourcePath,
+      }),
+    ).toEqual([]);
   }
 });

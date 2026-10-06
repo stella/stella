@@ -32,6 +32,8 @@ export type DeferredDocumentSourceFence = {
   readonly sourceId: SafeId<"caseLawSource">;
   readonly scopedDb: ScopedDb;
   readonly signal: AbortSignal;
+  /** Refuses once a decision merge holds or has held the source. */
+  assertOwned: () => Promise<void>;
   beforeRemoteEffect: <T>(effect: () => Promise<T>) => Promise<T>;
 };
 
@@ -161,15 +163,22 @@ export const withDeferredDocumentSourceOwnership = async <T>({
                 return value;
               });
             };
+            const assertOwned = async () => {
+              assertActive();
+              await scopedDb(async (tx) => {
+                await assertNoMerge(tx);
+              });
+            };
             const fence: DeferredDocumentSourceFence = {
               [ownership]: true,
               sourceId: initial.sourceId,
               scopedDb: fencedDb,
               signal: operationSignal,
+              assertOwned,
               beforeRemoteEffect: async (effect) => {
-                await fencedDb(async () => undefined);
+                await assertOwned();
                 const value = await effect();
-                await fencedDb(async () => undefined);
+                await assertOwned();
                 return value;
               },
             };

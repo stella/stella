@@ -1,6 +1,14 @@
 import { panic } from "better-result";
 import { readFileSync } from "node:fs";
 
+import {
+  assertTestDurations,
+  durationSeconds,
+  MISSING_TEST_DURATION,
+  readDurationWeights,
+  readTimingArtifact,
+} from "./test-timings";
+
 /** Resolve the explicit selection before duration bins partition it. */
 export const restrictApiTestFiles = (
   files: readonly string[],
@@ -107,7 +115,7 @@ export const parseApiTestShard = (value: string | undefined) => {
 
 type SelectApiTestFilesOptions = {
   files: readonly string[];
-  durations: Readonly<Record<string, number>>;
+  durations: unknown;
   shardValue: string | undefined;
 };
 
@@ -120,9 +128,23 @@ export const selectApiTestFiles = ({
   if (shard === null) {
     return { testPaths: files, shard };
   }
+  const measurementPath = process.env["API_TEST_MEASUREMENTS"];
+  const weights = readDurationWeights(durations);
+  assertTestDurations({
+    files,
+    durations: weights,
+    missing: MISSING_TEST_DURATION.warn,
+    ...(measurementPath === undefined
+      ? {}
+      : {
+          measurements: readTimingArtifact(
+            readFileSync(measurementPath, "utf-8"),
+          ),
+        }),
+  });
   const testPaths = partitionTestFiles({
     files,
-    durations,
+    durations: durationSeconds(weights),
     count: shard.count,
   }).at(shard.index - 1);
   if (testPaths === undefined || testPaths.length === 0) {

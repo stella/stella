@@ -44,15 +44,26 @@ const RUNTIME_SOURCES = [
 ] as const;
 // Everything the CLI's own scripts read. Dependencies, workspace packages
 // included, resolve through the linked node_modules of the real checkout.
-const EXPORTED_PATHS = ["package.json", CLI_DIRECTORY, "packages/scripts"];
+const EXPORTED_PATHS = [
+  "package.json",
+  CLI_DIRECTORY,
+  "packages/scripts",
+  // Historical base revisions still import the root metadata.
+  "scripts/generated-files.ts",
+];
 const RUNTIME_GENERATOR =
   GENERATORS.find(({ id }) => id === "cli-runtime") ??
   panic("the generator manifest has no cli-runtime entry");
 
 const run = (args: readonly [string, ...string[]], root: string): string => {
   const [command, ...parameters] = args;
+  const childEnv = { ...process.env };
+  if (root !== REPO_ROOT) {
+    delete childEnv["CI_GENERATED_SOURCES_MANIFEST"];
+  }
   const result = spawnSync(command, parameters, {
     cwd: root,
+    env: childEnv,
     encoding: "utf-8",
     timeout: COMMAND_TIMEOUT_MS,
     maxBuffer: 32 * 1024 * 1024,
@@ -61,6 +72,40 @@ const run = (args: readonly [string, ...string[]], root: string): string => {
   expect(result.status, `${args.join(" ")}\n${result.stderr}`).toBe(0);
   return result.stdout;
 };
+
+const missingPreparationImports = (exportedPaths: readonly string[]) => {
+  const owner = "packages/scripts/src/prepared-generated-sources.ts";
+  const source = readFileSync(path.join(REPO_ROOT, owner), "utf-8");
+  return [...source.matchAll(/from\s+["'](\.[^"']+)["']/gu)]
+    .map((match) =>
+      path.posix.normalize(
+        path.posix.join(
+          path.posix.dirname(owner),
+          `${v.parse(v.string(), match.at(1))}.ts`,
+        ),
+      ),
+    )
+    .filter(
+      (file) =>
+        !exportedPaths.some(
+          (exported) => file === exported || file.startsWith(`${exported}/`),
+        ),
+    );
+};
+
+test("fresh CLI export includes preparation metadata imports", () => {
+  expect(missingPreparationImports(EXPORTED_PATHS)).toEqual([]);
+  expect(
+    missingPreparationImports(
+      EXPORTED_PATHS.filter((file) => file !== "scripts/generated-files.ts"),
+    ),
+  ).toEqual([]);
+  expect(
+    missingPreparationImports(
+      EXPORTED_PATHS.filter((file) => file !== "packages/scripts"),
+    ),
+  ).toContain("packages/scripts/src/generated-files.ts");
+});
 
 const Sha = v.pipe(v.string(), v.regex(/^[0-9a-f]{40}$/u));
 const MergeGroupEvent = v.object({

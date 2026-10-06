@@ -1,14 +1,16 @@
 import { panic } from "better-result";
 import { expect, test } from "bun:test";
 import { existsSync, readFileSync } from "node:fs";
-import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import nodePath from "node:path";
 import { pathToFileURL } from "node:url";
 import * as v from "valibot";
 
+import { generateCapabilityRuntime } from "../apps/api/scripts/generate-capability-runtime";
 import {
   GENERATORS,
+  CI_GENERATED_FILES,
   allowedOutputs,
   GUARD_A_EXCLUSIONS,
   generatorsForFiles,
@@ -28,6 +30,57 @@ const generator = (id: string) => {
   const found = GENERATORS.find((entry) => entry.id === id);
   return found ?? panic(`Missing generator ${id}`);
 };
+
+test("generation metadata loads without dependencies in a reduced checkout", async () => {
+  const directory = await mkdtemp(
+    nodePath.join(tmpdir(), "generation-metadata-"),
+  );
+  try {
+    const registry = nodePath.join(directory, "scripts/generated-files.ts");
+    await mkdir(nodePath.dirname(registry), { recursive: true });
+    const inventory = nodePath.join(
+      directory,
+      "packages/scripts/src/generated-files.ts",
+    );
+    await mkdir(nodePath.dirname(inventory), { recursive: true });
+    await writeFile(
+      inventory,
+      readFileSync(
+        new URL("../packages/scripts/src/generated-files.ts", import.meta.url),
+        "utf-8",
+      ),
+    );
+    const source = readFileSync(
+      new URL("generated-files.ts", import.meta.url),
+      "utf-8",
+    );
+    await writeFile(registry, source);
+    const load = () =>
+      Bun.spawnSync(
+        [
+          process.execPath,
+          "-e",
+          "const metadata = await import(process.argv[1]); console.log(metadata.CI_GENERATED_FILES.length);",
+          registry,
+        ],
+        { cwd: directory },
+      );
+    const ordinary = load();
+    expect(ordinary.exitCode, ordinary.stderr.toString()).toBe(0);
+    expect(ordinary.stdout.toString().trim()).toBe(
+      String(CI_GENERATED_FILES.length),
+    );
+    await writeFile(
+      registry,
+      `import "../packages/scripts/src/prepared-generated-sources";\n${source}`,
+    );
+    const misplaced = load();
+    expect(misplaced.exitCode).not.toBe(0);
+    expect(misplaced.stderr.toString()).toContain("prepared-generated-sources");
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});
 
 test("Guard A rejects an unregistered generated source and ignores ordinary comments", () => {
   const unknown = "packages/example/src/unlisted.ts";
@@ -116,6 +169,91 @@ test("derived runtime outputs have one owner and stay ignored when regenerated",
       new TextDecoder().decode(ignored.stdout).trim().split("\n").toSorted(),
       id,
     ).toEqual([...outputs].toSorted());
+  }
+});
+
+test("capability runtime cache manifests cover every file the producer writes", async () => {
+  const fixture = await mkdtemp(nodePath.join(tmpdir(), "capability-outputs-"));
+  try {
+    const generated = nodePath.join(fixture, "apps/api/src/mcp/generated");
+    const catalog = nodePath.join(fixture, "packages/cli/capabilities");
+    await mkdir(nodePath.join(generated, "capability-dispatch"), {
+      recursive: true,
+    });
+    await mkdir(catalog, { recursive: true });
+    await writeFile(
+      nodePath.join(catalog, "matters.list.json"),
+      JSON.stringify({ id: "matters.list", featureId: "matters" }),
+    );
+    await writeFile(
+      nodePath.join(generated, "capability-dispatch/matters.list.ts"),
+      "export const CAPABILITY_DISPATCH = {};\n",
+    );
+    await generateCapabilityRuntime(pathToFileURL(`${fixture}/`));
+    const outputs = (await readdir(generated))
+      .filter((file) => file.endsWith(".ts"))
+      .map((file) => `src/mcp/generated/${file}`)
+      .toSorted();
+    expect(outputs.length).toBeGreaterThan(0);
+    expect(outputs.map((file) => `apps/api/${file}`)).toEqual(
+      generator("capability-runtime").outputs.toSorted(),
+    );
+    const config = v.parse(
+      v.object({
+        tasks: v.record(
+          v.string(),
+          v.looseObject({
+            outputs: v.optional(v.array(v.string())),
+            inputs: v.optional(v.array(v.string())),
+            dependsOn: v.optional(v.array(v.string())),
+          }),
+        ),
+      }),
+      Bun.JSONC.parse(
+        readFileSync(new URL("../turbo.json", import.meta.url), "utf-8"),
+      ),
+    );
+    const assertOutputs = (tasks: typeof config.tasks) => {
+      expect(
+        tasks["@stll/api#generate:capability-runtime"]?.outputs?.toSorted(),
+      ).toEqual(outputs);
+      for (const output of outputs) {
+        expect(tasks["@stll/api#typecheck"]?.outputs).toContain(output);
+        expect(tasks["@stll/web#generate:api-types"]?.inputs).toContain(
+          `!$TURBO_ROOT$/apps/api/${output}`,
+        );
+      }
+    };
+    assertOutputs(config.tasks);
+    for (const output of outputs) {
+      const mutated = structuredClone(config.tasks);
+      const web = mutated["@stll/web#generate:api-types"];
+      if (web?.inputs === undefined) {
+        panic("Missing web API generation inputs");
+      }
+      const originalLength = web.inputs.length;
+      web.inputs = web.inputs.filter(
+        (input) => input !== `!$TURBO_ROOT$/apps/api/${output}`,
+      );
+      expect(web.inputs.length).toBe(originalLength - 1);
+      expect(() => assertOutputs(mutated)).toThrow("toContain");
+    }
+    for (const task of [
+      "@stll/api#generate:capability-runtime",
+      "@stll/api#typecheck",
+    ]) {
+      for (const output of outputs) {
+        const mutated = structuredClone(config.tasks);
+        const body = mutated[task];
+        if (!body?.outputs) {
+          panic(`Missing capability cache output fixture: ${task}`);
+        }
+        body.outputs = body.outputs.filter((file) => file !== output);
+        expect(() => assertOutputs(mutated)).toThrow("expect(received)");
+      }
+    }
+  } finally {
+    await rm(fixture, { recursive: true, force: true });
   }
 });
 

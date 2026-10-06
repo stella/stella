@@ -19,11 +19,12 @@ import { GENERATORS } from "./generated-files";
 // The detector and the modules it imports, copied into fixture checkouts.
 const DETECTOR_SOURCES = Object.fromEntries(
   [
+    "../packages/scripts/src/generated-files.ts",
     "detect-service-suite-changes.ts",
     "generated-files.ts",
     "baseline-paths.ts",
   ].map((file) => [
-    `scripts/${file}`,
+    path.posix.normalize(`scripts/${file}`),
     readFileSync(new URL(file, import.meta.url), "utf-8"),
   ]),
 );
@@ -121,6 +122,7 @@ test("a newly added transitive import is picked up without editing the detector"
   try {
     for (const [file, source] of Object.entries(sources)) {
       mkdirSync(path.dirname(path.join(root, file)), { recursive: true });
+      mkdirSync(path.dirname(path.join(root, file)), { recursive: true });
       writeFileSync(path.join(root, file), source);
     }
     for (const file of [
@@ -199,6 +201,7 @@ test("each suite follows its own import closure without planning unrelated sibli
   try {
     for (const [file, source] of Object.entries(sources)) {
       mkdirSync(path.dirname(path.join(root, file)), { recursive: true });
+      mkdirSync(path.dirname(path.join(root, file)), { recursive: true });
       writeFileSync(path.join(root, file), source);
     }
     for (const [suite, file] of [
@@ -225,6 +228,7 @@ test("removed runner metadata widens the detector inside its guarded execution",
     mkdirSync(path.join(root, "scripts"));
     mkdirSync(path.join(root, "apps/api"), { recursive: true });
     for (const [file, source] of Object.entries(DETECTOR_SOURCES)) {
+      mkdirSync(path.dirname(path.join(root, file)), { recursive: true });
       writeFileSync(path.join(root, file), source);
     }
     for (const metadata of [

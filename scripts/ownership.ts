@@ -591,6 +591,24 @@ const OWNERSHIP_DECLARATIONS = [
     },
   },
   {
+    id: "desktop-presence-observations",
+    capability: "Reading and retaining desktop presence observations",
+    owner: ["apps/api/src/handlers/desktop-presence/service.ts"],
+    summary:
+      "The service serializes reports against live membership and retains ten newest installations per organization and user. Offboarding clears observations in its membership transaction.",
+    enforcement: {
+      kind: "import",
+      specifiers: ["@/api/db/schema", "@/api/db/schema/desktop-presence"],
+      names: ["desktopPresence"],
+      allowed: [
+        {
+          path: "apps/api/src/lib/member-assignment-offboarding.ts",
+          reason: "Clears observations during organization membership removal.",
+        },
+      ],
+    },
+  },
+  {
     id: "citation-graph-transaction",
     capability: "Acquiring the citation graph transaction lock",
     owner: ["apps/api/src/handlers/case-law/citation-graph-transaction.ts"],
@@ -2531,6 +2549,20 @@ const OWNERSHIP_DECLARATIONS = [
       "contract and are relayed as text. Explicit projectors keep dynamic " +
       "results compact without changing legacy text output.",
     enforcement: { kind: "none" },
+  },
+  {
+    id: "bullmq-worker",
+    capability:
+      "Constructing BullMQ workers with a shared failure record policy",
+    owner: ["apps/api/src/lib/bullmq-queue.ts"],
+    summary:
+      "BullMqWorker owns persisted job failure records while retaining original errors in worker events. All queue workers use this constructor.",
+    enforcement: {
+      kind: "import",
+      specifiers: ["bullmq"],
+      names: ["Worker"],
+      allowed: [],
+    },
   },
   {
     id: "deterministic-job-requeue",

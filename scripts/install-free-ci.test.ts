@@ -11,6 +11,10 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 
 import {
+  boundedInstallProblems,
+  installWorkflowPolicy,
+} from "./ci-install-policy";
+import {
   conditionOperands,
   impliesCondition,
   importProblems,
@@ -25,6 +29,76 @@ import {
 
 const REPO_ROOT = path.resolve(import.meta.dir, "..");
 const CI_WORKFLOW = ".github/workflows/ci.yml";
+
+test("Windows installs and every explicit CI cold install retain bounded logs", () => {
+  for (const file of readdirSync(path.join(REPO_ROOT, ".github/workflows"))) {
+    if (!file.endsWith(".yml") && !file.endsWith(".yaml")) {
+      continue;
+    }
+    const workflow: unknown = Bun.YAML.parse(
+      readFileSync(path.join(REPO_ROOT, ".github/workflows", file), "utf-8"),
+    );
+    const policy = installWorkflowPolicy(file);
+    switch (policy.type) {
+      case "check": {
+        expect(boundedInstallProblems(workflow, policy.scope), file).toEqual(
+          [],
+        );
+        break;
+      }
+      case "pinned-release": {
+        expect(policy.reason).toContain("pinned release SHA");
+        break;
+      }
+      default: {
+        policy satisfies never;
+      }
+    }
+  }
+});
+
+test("the install guard rejects bypasses, unbounded steps and lost logs", () => {
+  const upload = {
+    uses: "actions/upload-artifact@fixture",
+    if: "failure()",
+    with: { path: `\${{ runner.temp }}/bun-install/*.log` },
+  };
+  const install = {
+    run: 'bun scripts/ci-install.ts "$RUNNER_TEMP/bun-install/scripts.log" --ignore-scripts',
+    "timeout-minutes": 3,
+  };
+  const workflow = (steps: unknown[]) => ({
+    jobs: {
+      smoke: { "runs-on": "windows-latest", "timeout-minutes": 10, steps },
+    },
+  });
+  expect(
+    boundedInstallProblems(workflow([install, upload]), "windows"),
+  ).toEqual([]);
+  expect(
+    boundedInstallProblems(
+      workflow([{ run: "bun install" }, upload]),
+      "windows",
+    ),
+  ).toContain("smoke: install bypasses scripts/ci-install.ts");
+  expect(
+    boundedInstallProblems(
+      workflow([{ ...install, "timeout-minutes": 10 }, upload]),
+      "windows",
+    ),
+  ).toContain("smoke: install needs a bounded step timeout");
+  expect(boundedInstallProblems(workflow([install]), "windows")).toContain(
+    "smoke: install needs a retained failure log",
+  );
+  const policy = installWorkflowPolicy("new-windows-smoke.yml");
+  expect(policy.type).toBe("check");
+  if (policy.type !== "check") {
+    throw new Error("A new CI workflow must not inherit a release exclusion");
+  }
+  expect(
+    boundedInstallProblems(workflow([{ run: "bun install" }]), policy.scope),
+  ).toContain("smoke: install bypasses scripts/ci-install.ts");
+});
 
 /** Install-free commands allowed to fetch a package to run it, with why. */
 const FETCH_ALLOWLIST: readonly { command: string; reason: string }[] = [];

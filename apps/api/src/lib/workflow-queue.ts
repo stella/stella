@@ -1,5 +1,5 @@
 import { panic, Result } from "better-result";
-import { Queue, Worker } from "bullmq";
+import { Queue } from "bullmq";
 import type { Job } from "bullmq";
 import { sleep } from "bun";
 import { and, eq, inArray, sql } from "drizzle-orm";
@@ -22,6 +22,7 @@ import { loadOrgAISettings } from "@/api/lib/ai-config-loader";
 import { captureError } from "@/api/lib/analytics/capture";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { BullMqWorker } from "@/api/lib/bullmq-queue";
 import type { BullMqWorkerContext } from "@/api/lib/bullmq-queue";
 import { acquireCellLocks } from "@/api/lib/cell-lock";
 import { chunked } from "@/api/lib/chunked";
@@ -196,7 +197,11 @@ const requesterCanOpenMatter = async (
 const WORKFLOW_ENTITY_JOB_NAME = "process-entity" as const;
 type WorkflowEntityJobName = typeof WORKFLOW_ENTITY_JOB_NAME;
 type WorkflowEntityQueue = Queue<EntityJobData, void, WorkflowEntityJobName>;
-type WorkflowEntityWorker = Worker<EntityJobData, void, WorkflowEntityJobName>;
+type WorkflowEntityWorker = BullMqWorker<
+  EntityJobData,
+  void,
+  WorkflowEntityJobName
+>;
 type WorkflowEntityJob = Job<EntityJobData, void, WorkflowEntityJobName>;
 
 // ── Public API ─────────────────────────────────────────
@@ -1176,7 +1181,7 @@ const createWorkflowWorker = (
   const queueName = WORKFLOW_QUEUE_NAMES[queueClass];
   // Every BullMQ Worker uses blocking commands, so each queue needs its own
   // dedicated connection rather than the producer's shared connection.
-  const worker = new Worker<EntityJobData, void, WorkflowEntityJobName>(
+  const worker = new BullMqWorker<EntityJobData, void, WorkflowEntityJobName>(
     queueName,
     async (job) => {
       await processWorkflowJob(job, extractionRuns);

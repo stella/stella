@@ -5,7 +5,6 @@ import * as v from "valibot";
 
 import { loadCatalogue } from "@stll/catalogue";
 
-import messages from "../../src/i18n/langs/en.json" with { type: "json" };
 import { getStagingReporterEnvironment } from "../staging/env";
 import { createNetworkCollector } from "./network";
 import {
@@ -13,59 +12,16 @@ import {
   isMemberOnlySmokeRequest,
   publicKnowledgeVisitorSkipReason,
 } from "./public-knowledge-smoke.logic";
+import {
+  PACK_ID,
+  PUBLIC_VISITOR_ROUTE_DEFS,
+  type VisitorRoute,
+} from "./public-visitor-route-defs";
 import { parseStagingState, STAGING_CHECKS } from "./staging-state";
 
-const PACK_ID = "general-legal";
 const PUBLIC_API = "/api/v1/public/knowledge/template-packs";
 const templateSchema = v.object({ id: v.string(), title: v.string() });
 type CatalogueTemplate = v.InferOutput<typeof templateSchema>;
-type VisitorRoute = {
-  template: string;
-  resolve: (template: CatalogueTemplate) => {
-    path: string;
-    heading: string;
-    level: 1 | 2;
-  };
-};
-const tool =
-  loadCatalogue().find(({ slug }) => slug === "contract-review") ??
-  panic("smoke catalogue entry missing");
-
-export const PUBLIC_VISITOR_ROUTE_DEFS = [
-  {
-    template: "/knowledge/templates/catalogue",
-    resolve: () => ({
-      path: "/knowledge/templates/catalogue",
-      heading: messages.knowledge.sections.templates.title,
-      level: 2,
-    }),
-  },
-  {
-    template: "/knowledge/templates/catalogue/$packId/$templateId",
-    resolve: ({ id, title }) => ({
-      path: `/knowledge/templates/catalogue/${PACK_ID}/${id}`,
-      heading: title,
-      level: 1,
-    }),
-  },
-  {
-    template: "/knowledge/tools/$entry",
-    resolve: () => ({
-      path: `/knowledge/tools/${tool.slug}`,
-      heading: tool.displayName,
-      level: 2,
-    }),
-  },
-  {
-    template: "/knowledge/tools/contribute",
-    resolve: () => ({
-      path: "/knowledge/tools/contribute",
-      heading: messages.publicTools.contribute.title,
-      level: 1,
-    }),
-  },
-] as const satisfies readonly VisitorRoute[];
-
 type VisitorCatalogue =
   | { status: "unprobed" }
   | { status: "disabled" }
@@ -164,7 +120,12 @@ export const declarePublicKnowledgeSmoke = ({
         if (current.status !== "ready") {
           panic("public route smoke ran without a ready catalogue");
         }
-        const route = def.resolve(current.template);
+        const route = def.resolve(
+          current.template,
+          () =>
+            loadCatalogue().find(({ slug }) => slug === "contract-review") ??
+            panic("smoke catalogue entry missing"),
+        );
         const requests: string[] = [];
         const unauthorized: string[] = [];
         const forbidden: string[] = [];

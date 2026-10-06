@@ -318,6 +318,8 @@ class CanaryTargetError extends TaggedError("CanaryTargetError")<{
 
 type DeploymentFetcherOptions = {
   baseUrl: string;
+  /** First-party app origin the advertised OAuth endpoints may live on. */
+  appUrl?: string | undefined;
   edgeHeaderName?: string | undefined;
   edgeHeaderValue?: string | undefined;
 };
@@ -326,12 +328,21 @@ type DeploymentFetcherOptions = {
 // credential may travel to a Location supplied by a remote response.
 export const createDeploymentFetcher =
   (
-    { baseUrl, edgeHeaderName, edgeHeaderValue }: DeploymentFetcherOptions,
+    {
+      baseUrl,
+      appUrl,
+      edgeHeaderName,
+      edgeHeaderValue,
+    }: DeploymentFetcherOptions,
     fetcher: CanaryFetcher = fetchWithTimeout,
   ): CanaryFetcher =>
   async (input, init) => {
     const url = new URL(input instanceof Request ? input.url : input);
-    if (url.origin !== new URL(baseUrl).origin) {
+    const allowedOrigins = new Set([new URL(baseUrl).origin]);
+    if (appUrl) {
+      allowedOrigins.add(new URL(appUrl).origin);
+    }
+    if (!allowedOrigins.has(url.origin)) {
       throw new CanaryTargetError({
         message: "Canary target must remain on the configured origin",
       });
@@ -353,6 +364,7 @@ const deploymentFetcher: CanaryFetcher = async (input, init) =>
     baseUrl:
       process.env["MCP_CANARY_BASE_URL"] ??
       new URL(input instanceof Request ? input.url : input).origin,
+    appUrl: process.env["MCP_CANARY_FRONTEND_URL"],
     edgeHeaderName: process.env["E2E_EDGE_HEADER_NAME"],
     edgeHeaderValue: process.env["E2E_EDGE_HEADER_VALUE"],
   })(input, init);

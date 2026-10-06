@@ -1087,6 +1087,33 @@ describe("deployment fetch boundary", () => {
     );
   });
 
+  test("allows the configured app origin alongside the API origin", async () => {
+    const origins: string[] = [];
+    const fetcher: CanaryFetcher = async (input) => {
+      origins.push(
+        new URL(input instanceof Request ? input.url : input).origin,
+      );
+      return new Response(null);
+    };
+    const deploymentFetch = createDeploymentFetcher(
+      { baseUrl: "https://api.example", appUrl: "https://app.example" },
+      fetcher,
+    );
+    await deploymentFetch("https://app.example/oauth/authorize", {
+      timeout: { type: "idle", ms: 1000 },
+    });
+    await deploymentFetch("https://api.example/mcp", {
+      timeout: { type: "idle", ms: 1000 },
+    });
+    expect(origins).toEqual(["https://app.example", "https://api.example"]);
+    const rejection = await rejectionOf(
+      deploymentFetch("https://foreign.example/path", {
+        timeout: { type: "idle", ms: 1000 },
+      }),
+    );
+    expect(rejection).toMatchObject({ _tag: "CanaryTargetError" });
+  });
+
   test("rejects a foreign origin before invoking the fetcher", async () => {
     let calls = 0;
     const fetcher: CanaryFetcher = async () => {

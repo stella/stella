@@ -1221,7 +1221,7 @@ const storeBackfilledDocumentOwned = async ({
     ) {
       throw flushed.error;
     }
-    await fence.scopedDb(async () => undefined);
+    await fence.assertOwned();
     stored = storedForCorpusOutcome(
       Result.isError(flushed)
         ? { type: "failed", error: flushed.error }
