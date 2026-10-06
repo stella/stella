@@ -5489,7 +5489,7 @@ describe("a superseded client-tool call in the engine's history", () => {
 });
 
 describe("native visual stream persistence", () => {
-  test("preserves issued resources through SDK capture, storage and reload", () => {
+  test("preserves issued resources through client-tool continuation and reload", () => {
     const origin = createVisualResourceOrigin();
     const messageId = createSafeId<"chatMessage">();
     const part = origin.issue({
@@ -5515,10 +5515,22 @@ describe("native visual stream persistence", () => {
       },
       { type: EventType.CUSTOM, name: "ui-resource", value: part },
       {
+        type: EventType.TOOL_CALL_START,
+        parentMessageId: messageId,
+        toolCallId: "client-call",
+        toolCallName: "client-view",
+      },
+      {
+        type: EventType.TOOL_CALL_ARGS,
+        toolCallId: "client-call",
+        delta: "{}",
+      },
+      { type: EventType.TOOL_CALL_END, toolCallId: "client-call" },
+      {
         type: EventType.RUN_FINISHED,
         runId: "visual-run",
         threadId: "visual-thread",
-        finishReason: "stop",
+        finishReason: "tool_calls",
       },
     ] as const satisfies readonly StreamChunk[];
     for (const chunk of chunks) {
@@ -5563,5 +5575,76 @@ describe("native visual stream persistence", () => {
         (messagePart) => messagePart.type === "ui-resource",
       ) ?? false,
     ).toBe(false);
+    expect(
+      reloaded.parts.find(
+        (messagePart) =>
+          messagePart.type === "tool-call" && messagePart.id === "client-call",
+      ),
+    ).toMatchObject({ state: "input-complete", name: "client-view" });
+    const resumedOrigin = createVisualResourceOrigin({
+      persistedParts: reloaded.parts,
+    });
+    const resumed = createStreamMessageCapture({
+      initialMessages: [reloaded],
+      capture: (message) => toChatMessage(message, resumedOrigin),
+    });
+    const resumeChunks = [
+      {
+        type: EventType.RUN_STARTED,
+        runId: "visual-resume",
+        threadId: "visual-thread",
+      },
+      {
+        type: EventType.TOOL_CALL_RESULT,
+        toolCallId: "client-call",
+        messageId: "client-result",
+        content: "View selected",
+      },
+      {
+        type: EventType.TEXT_MESSAGE_START,
+        messageId,
+        role: "assistant",
+      },
+      {
+        type: EventType.TEXT_MESSAGE_CONTENT,
+        messageId,
+        delta: "Selection received.",
+      },
+      { type: EventType.TEXT_MESSAGE_END, messageId },
+      {
+        type: EventType.RUN_FINISHED,
+        runId: "visual-resume",
+        threadId: "visual-thread",
+        finishReason: "stop",
+      },
+    ] as const satisfies readonly StreamChunk[];
+    for (const chunk of resumeChunks) {
+      resumed.processor.processChunk(chunk);
+    }
+    resumed.processor.finalizeStream();
+    const resumedMessage =
+      resumed.message() ?? panic("Continuation produced no message");
+    expect(
+      resumedMessage.parts.filter(({ type }) => type === "ui-resource"),
+    ).toEqual([part]);
+    const resumedContent = chatMessageContentFromMessage(
+      toPersistableChatMessage({
+        id: toSafeId<"chatMessage">(resumedMessage.id),
+        role: resumedMessage.role,
+        parts: resumedMessage.parts,
+      }),
+    );
+    const resumedReload = chatMessageFromPersisted({
+      id: toSafeId<"chatMessage">(resumedMessage.id),
+      role: resumedMessage.role,
+      content: resumedContent,
+    });
+    expect(
+      resumedReload.parts.filter(({ type }) => type === "ui-resource"),
+    ).toEqual([part]);
+    expect(resumedReload.parts).toContainEqual({
+      type: "text",
+      content: "Selection received.",
+    });
   });
 });

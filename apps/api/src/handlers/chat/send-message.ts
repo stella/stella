@@ -1120,6 +1120,27 @@ type ThreadValidationState = InferOk<
   Awaited<ReturnType<typeof readThreadValidationState>>
 >;
 
+type CreateTurnVisualOriginOptions = {
+  incomingMessage: Pick<PersistableChatMessage, "id" | "role">;
+  persistedMessage: ThreadValidationState["persistedMessage"];
+};
+
+const createTurnVisualOrigin = ({
+  incomingMessage,
+  persistedMessage,
+}: CreateTurnVisualOriginOptions) =>
+  createVisualResourceOrigin({
+    persistedParts:
+      incomingMessage.role === "assistant" &&
+      persistedMessage?.role === "assistant"
+        ? chatMessageFromPersisted({
+            content: persistedMessage.content,
+            id: incomingMessage.id,
+            role: persistedMessage.role,
+          }).parts
+        : [],
+  });
+
 type AcceptIncomingTurnOptions = {
   accessibleSet: ReadonlySet<string>;
   accessibleWorkspaceIds: SafeId<"workspace">[];
@@ -2661,7 +2682,10 @@ export const createSendMessage = (
         // catalog and connector tools, which are known only later. Skill
         // availability is decided over the same inputs before the catalog
         // reaches the prompt, so an offered skill always has its tools.
-        const visualOrigin = createVisualResourceOrigin();
+        const visualOrigin = createTurnVisualOrigin({
+          incomingMessage: body.message,
+          persistedMessage: validationThreadState.persistedMessage,
+        });
         const visualTools = {
           origin: visualOrigin,
           preview: (document: string) =>

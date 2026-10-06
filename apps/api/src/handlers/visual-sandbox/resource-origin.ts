@@ -17,10 +17,24 @@ type IssueVisualResourceOptions = {
   toolCallId: string;
 };
 
-// This ledger belongs to one server turn. Wire fields never establish origin:
-// only a resource issued by that turn's native tool may cross persistence.
-export const createVisualResourceOrigin = () => {
+type CreateVisualResourceOriginOptions = {
+  /** Canonical parts read from the continued assistant's database row. */
+  persistedParts?: readonly unknown[];
+};
+
+// Current-turn issuance and canonical stored resources have separate ledgers.
+// Client echoes never seed either ledger.
+export const createVisualResourceOrigin = ({
+  persistedParts = [],
+}: CreateVisualResourceOriginOptions = {}) => {
   const issued = new Map<string, string>();
+  const persisted = new Map<string, string>();
+  for (const candidate of persistedParts) {
+    const result = v.safeParse(generatedVisualPartSchema, candidate);
+    if (result.success) {
+      persisted.set(result.output.resource.uri, JSON.stringify(result.output));
+    }
+  }
   return {
     issue: ({ fileId, title, toolCallId }: IssueVisualResourceOptions) => {
       const candidate = {
@@ -46,8 +60,10 @@ export const createVisualResourceOrigin = () => {
       if (!result.success) {
         return false;
       }
+      const serialized = JSON.stringify(result.output);
       return (
-        issued.get(result.output.resource.uri) === JSON.stringify(result.output)
+        issued.get(result.output.resource.uri) === serialized ||
+        persisted.get(result.output.resource.uri) === serialized
       );
     },
   };
