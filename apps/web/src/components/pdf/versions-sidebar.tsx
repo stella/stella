@@ -166,7 +166,7 @@ export const VersionsSidebar = ({
 
     const observer = new IntersectionObserver(
       (entries) => {
-        const entry = entries.at(0);
+        const entry = entries.at(-1);
         if (!entry?.isIntersecting) {
           return;
         }
