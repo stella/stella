@@ -200,7 +200,7 @@ for (const [name, reading] of [
   });
 }
 
-// A local Postgres in a VM runs a few milliseconds ahead of the host clock.
+// Readings can carry a small clock skew from the clock that stamped them.
 for (const skewMs of [26, MAX_CLOCK_SKEW_MS]) {
   test(`readings stamped ${skewMs} ms ahead of the local clock are fresh`, async () => {
     const ahead = new Date(instant + skewMs).toISOString();
