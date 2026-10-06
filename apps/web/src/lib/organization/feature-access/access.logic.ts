@@ -27,7 +27,7 @@ const admittedByServer = (
     // Delete this undeclared policy when the server declares legal-lists.
     case "deployment-and-enabled-for":
       return (
-        availability.deploymentFeatures[feature.undeclared.key] === true &&
+        availability.deploymentFeatures[feature.undeclared.key] &&
         // Read the server decision directly: dependent features require Lists.
         feature.undeclared.featureIds.some(
           (id) =>

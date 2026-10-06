@@ -269,7 +269,7 @@ describe("sidebar list item admission", () => {
   } as const satisfies WorkspaceActivity;
   for (const listItemType of [null, ...LIST_ITEM_TYPES]) {
     for (const legalListsEnabled of [false, true]) {
-      test(`task ${listItemType} with Lists ${legalListsEnabled}`, () => {
+      test(`task ${listItemType ?? "none"} with Lists ${String(legalListsEnabled)}`, () => {
         const item = {
           ...entity,
           listItemType,

@@ -28,7 +28,7 @@ afterAll(async () => {
 
 for (const deploymentEnabled of [false, true]) {
   for (const status of [undefined, "hidden", "enabled"] as const) {
-    test(`Lists route admission: deployment ${deploymentEnabled}, verification ${status}`, async () => {
+    test(`Lists route admission: deployment ${String(deploymentEnabled)}, verification ${status ?? "undeclared"}`, async () => {
       const queryClient = new QueryClient();
       const discovery = spyOn(queryClient, "query").mockResolvedValue({
         declaredFeatureIds: [CALLER_FEATURE.verification.id],
