@@ -76,7 +76,7 @@ test("source lease purposes preserve existing owners and restrict persisted valu
     "ingestion",
     "decision-merge",
   ]);
-  for (const purpose of caseLawSources.ingestionLeasePurpose.enumValues ?? []) {
+  for (const purpose of caseLawSources.ingestionLeasePurpose.enumValues) {
     await db.query(
       "UPDATE case_law_sources SET ingestion_lease_purpose = $1 WHERE id = 2",
       [purpose],

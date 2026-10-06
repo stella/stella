@@ -169,9 +169,9 @@ export const withDeferredDocumentSourceOwnership = async <T>({
               scopedDb: fencedDb,
               signal: operationSignal,
               beforeRemoteEffect: async (effect) => {
-                await fencedDb(async () => undefined);
+                await fencedDb(() => Promise.resolve());
                 const value = await effect();
-                await fencedDb(async () => undefined);
+                await fencedDb(() => Promise.resolve());
                 return value;
               },
             };
