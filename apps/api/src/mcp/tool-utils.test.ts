@@ -12,6 +12,8 @@ import type { McpRequestContext } from "@/api/mcp/context";
 import type { InternalToolSuccess } from "@/api/mcp/tool-types";
 import {
   buildCaseLawDecisionAppUrl,
+  buildLegislationDocumentAppUrl,
+  legalCitationLinkFields,
   buildCaseLawDecisionUrl,
   closestToolNames,
   didYouMean,
@@ -26,6 +28,7 @@ import {
   serializeToolResult,
   structuredErrorResult,
   toolDataResult,
+  untypedToolDataResult,
   toPlainTextSnippet,
   validationErrorResult,
   windowTextByCursor,
@@ -321,7 +324,7 @@ describe("serializeToolResult", () => {
       v.object({ entityId: v.string(), nextStep: v.string() }),
     );
     const result = serializeToolResult(
-      toolDataResult({
+      untypedToolDataResult({
         nextStep: "Choose a file.",
         undeclared: true,
         entityId: "doc_1",
@@ -426,7 +429,7 @@ describe("serializeToolResult", () => {
 
     test("are stripped at every depth, the result returned and the defect logged", () => {
       const result = serializeToolResult(
-        toolDataResult({
+        untypedToolDataResult({
           entityId: "doc_1",
           hits: [
             {
@@ -494,7 +497,11 @@ describe("serializeToolResult", () => {
         { extra: true, hits: [] },
       ]) {
         expect(() =>
-          serializeToolResult(toolDataResult(data), contract, "search_test"),
+          serializeToolResult(
+            untypedToolDataResult(data),
+            contract,
+            "search_test",
+          ),
         ).toThrow("MCP tool output violated its advertised contract");
       }
       expect(degradeLogs()).toEqual([]);
@@ -503,7 +510,7 @@ describe("serializeToolResult", () => {
     test("a contract-clean output reports nothing", () => {
       const data = { entityId: "doc_1", hits: [] };
       const result = serializeToolResult(
-        toolDataResult(data),
+        untypedToolDataResult(data),
         contract,
         "search_test",
       );
@@ -802,5 +809,47 @@ describe("resolveWindowBounds", () => {
       end: 5,
       nextOffset: null,
     });
+  });
+});
+
+describe("primary legal citation links", () => {
+  for (const path of [
+    "/law/cze/statutes/89-2012-sb",
+    "/law/cze/statutes/89-2012-sb/v/2014-01-01#par_1729",
+    "/law/cze/cases/ns/1-24",
+  ]) {
+    test(`held ${path} keeps its publisher as a secondary source`, () => {
+      const sourceUrl = `https://publisher.example/${DECISION_ID}`;
+      const appUrl = `${BASE}${path}`;
+      expect(legalCitationLinkFields({ appUrl, sourceUrl })).toEqual({
+        appUrl,
+        url: appUrl,
+        source_url: sourceUrl,
+      });
+    });
+    test(`unserved ${path} falls back to the publisher`, () => {
+      const sourceUrl = `https://publisher.example/${DECISION_ID}`;
+      expect(legalCitationLinkFields({ appUrl: null, sourceUrl })).toEqual({
+        appUrl: null,
+        url: sourceUrl,
+      });
+    });
+  }
+  test("a held provision links its consolidation and exact anchor", () => {
+    const restore = setRuntimeModeForTesting({ mode: RUNTIME_MODE.open });
+    try {
+      expect(
+        buildLegislationDocumentAppUrl({
+          country: "CZE",
+          documentId: DECISION_ID,
+          eli: "/eli/cz/sb/2012/89",
+          slug: "89-2012-sb",
+          version: "2014-01-01",
+          anchor: "par_1729",
+        }),
+      ).toBe(`${BASE}/law/cze/statutes/89-2012-sb/v/2014-01-01#par_1729`);
+    } finally {
+      restore();
+    }
   });
 });

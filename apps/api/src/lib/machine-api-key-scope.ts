@@ -1,9 +1,12 @@
-import { and, eq, sql } from "drizzle-orm";
+import { panic } from "better-result";
+import { and, eq, isNull, or, sql } from "drizzle-orm";
 
 import { apikey } from "@/api/db/auth-schema";
 import type { SafeId } from "@/api/lib/branded-types";
-import { MACHINE_API_KEY_CONFIG_ID } from "@/api/lib/machine-api-key-config";
-
+import {
+  API_KEY_KIND,
+  MACHINE_API_KEY_CONFIG_ID,
+} from "@/api/lib/machine-api-key-config";
 /**
  * The one definition of "this organization's machine keys".
  *
@@ -15,6 +18,7 @@ import { MACHINE_API_KEY_CONFIG_ID } from "@/api/lib/machine-api-key-config";
  * filter that eventually disagrees with itself, and the half that drifts is
  * silently either a leak or a key that outlives its membership.
  */
+import type { ApiKeyKind } from "@/api/lib/machine-api-key-config";
 
 /** The owning organization id, read out of the plugin's JSON metadata column. */
 const metadataOrganizationId = sql`(${apikey.metadata}::jsonb ->> 'organizationId')`;
@@ -35,3 +39,20 @@ export const machineApiKeyOrganizationScope = (
     eq(apikey.configId, MACHINE_API_KEY_CONFIG_ID),
     sql`${metadataOrganizationId} = ${organizationId}`,
   );
+
+/** Legacy persisted machine keys omit kind; personal keys always name it. */
+export const apiKeyKindScope = (kind: ApiKeyKind) => {
+  const metadataKind = sql`(${apikey.metadata}::jsonb ->> 'kind')`;
+  switch (kind) {
+    case API_KEY_KIND.machine:
+      return or(isNull(metadataKind), sql`${metadataKind} = ${kind}`);
+    case API_KEY_KIND.personal:
+      return and(
+        sql`${apikey.metadata} IS NOT NULL`,
+        sql`${metadataKind} = 'personal'`,
+      );
+    default:
+      kind satisfies never;
+      return panic(`Unhandled API key kind: ${String(kind)}`);
+  }
+};

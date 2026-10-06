@@ -262,12 +262,15 @@ describe("network baseline workflows", () => {
     const source = workflowSource("network-baseline-record.yml");
     const parsed: unknown = Bun.YAML.parse(source);
     expect(isRecord(parsed) && parsed["on"]).toMatchObject({
-      push: { branches: ["main"] },
+      schedule: [{ cron: "17 2 * * *" }],
+      workflow_dispatch: {},
     });
     if (!isRecord(parsed) || !isRecord(parsed["on"])) {
       expect.unreachable("workflow triggers");
     }
+    expect(parsed["on"]["pull_request_target"]).toBeUndefined();
     expect(parsed["on"]["pull_request"]).toBeUndefined();
+    expect(parsed["on"]["push"]).toBeUndefined();
     const jobs = readWorkflowJobs("network-baseline-record.yml");
     expect(jobs["build"]?.if).toContain("github.ref == 'refs/heads/main'");
     expect(jobs["record"]?.needs).toBe("build");

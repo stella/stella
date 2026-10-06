@@ -1,13 +1,19 @@
 import * as v from "valibot";
 
+import { DAY_IN_MS } from "@stll/time";
+
 import { getAuth, resolveCredentialMemberAuthorization } from "@/api/lib/auth";
 import {
+  API_KEY_KIND,
+  API_KEY_POLICY,
   isMachineApiKeyAudienceAllowed,
   MACHINE_API_KEY_CONFIG_ID,
   machineApiKeyMetadataSchema,
   machineApiKeyPermissionsSchema,
   parseMachineApiKeyPermissions,
 } from "@/api/lib/machine-api-key-config";
+import { personalApiKeyPermissionsAllowed } from "@/api/lib/machine-api-keys/personal-policy";
+import { readPersonalApiKeyPolicy } from "@/api/lib/machine-api-keys/personal-policy-reader";
 import { isMemberRole } from "@/api/lib/member-roles";
 import {
   hasMemberPermission,
@@ -55,20 +61,24 @@ const rejectCredential = (): McpAuthenticationError =>
  * with no audience in its metadata predates the binding and stays usable
  * anywhere, which is what it could already do.
  */
-export const resolveMachineApiKeySession = async (
+type MachineApiKeyCredential = { session: McpSession; expiresAt: Date | null };
+
+export const resolveMachineApiKeyCredential = async (
   credential: string,
   {
     mode = "default",
     verifyApiKey = getAuth().api.verifyApiKey,
     resolveAuthorization = resolveCredentialMemberAuthorization,
+    resolvePersonalPolicy = readPersonalApiKeyPolicy,
   }: {
     mode?: McpMode | undefined;
     verifyApiKey?: (
       ...args: Parameters<ReturnType<typeof getAuth>["api"]["verifyApiKey"]>
     ) => ReturnType<ReturnType<typeof getAuth>["api"]["verifyApiKey"]>;
     resolveAuthorization?: typeof resolveCredentialMemberAuthorization;
+    resolvePersonalPolicy?: typeof readPersonalApiKeyPolicy;
   } = {},
-): Promise<McpSession> => {
+): Promise<MachineApiKeyCredential> => {
   const verification = await verifyApiKey({
     body: {
       // Scoping to this configuration means a key minted under any other
@@ -123,6 +133,19 @@ export const resolveMachineApiKeySession = async (
 
   const { organizationId, scopes } = metadata.output;
   const userId = key.referenceId;
+  const identity = brandActorSessionIdentity({ organizationId, userId });
+  const personalPolicy =
+    metadata.output.kind === API_KEY_KIND.personal &&
+    (!personalApiKeyPermissionsAllowed(
+      storedPermissions.output,
+      metadata.output.scopes,
+    ) ||
+      key.expiresAt === null ||
+      key.expiresAt.getTime() - key.createdAt.getTime() >
+        API_KEY_POLICY.personal.maxDays * DAY_IN_MS ||
+      (await resolvePersonalPolicy(identity.organizationId)) !== "enabled")
+      ? "denied"
+      : "allowed";
 
   // The live membership check. `resolveMcpSessionContext` runs this again for
   // the session it builds; doing it here as well is what lets the permission
@@ -132,11 +155,13 @@ export const resolveMachineApiKeySession = async (
   // Branding happens here, at the same boundary `resolveMcpSessionContext` uses:
   // these two ids arrive as plain strings (one parsed out of a metadata column,
   // one read off the key row) and only become ownership ids once they cross it.
-  const authorization = await resolveAuthorization(
-    brandActorSessionIdentity({ organizationId, userId }),
-  );
+  const authorization = await resolveAuthorization(identity);
 
-  if (!authorization || !isMemberRole(authorization.role)) {
+  if (
+    personalPolicy === "denied" ||
+    !authorization ||
+    !isMemberRole(authorization.role)
+  ) {
     throw rejectCredential();
   }
 
@@ -154,17 +179,28 @@ export const resolveMachineApiKeySession = async (
   }
 
   return {
-    credential: {
-      type: "machine_api_key",
-      id: key.id,
-      name: key.name ?? "Machine API key",
-      // The set the check above proved the owner's role can grant. It travels
-      // with the session so authorization can hold the key to it, rather than
-      // to the whole role the owner happens to have.
-      permissions: parsedPermissions.permissions,
+    expiresAt: key.expiresAt,
+    session: {
+      credential: {
+        type:
+          metadata.output.kind === API_KEY_KIND.personal
+            ? "personal_api_key"
+            : "machine_api_key",
+        id: key.id,
+        name: key.name ?? "Machine API key",
+        // The set the check above proved the owner's role can grant. It travels
+        // with the session so authorization can hold the key to it, rather than
+        // to the whole role the owner happens to have.
+        permissions: parsedPermissions.permissions,
+      },
+      organizationId,
+      scopes: [...scopes],
+      userId,
     },
-    organizationId,
-    scopes: [...scopes],
-    userId,
   };
 };
+
+/** MCP consumers need only the session; lifecycle observers also need expiry. */
+export const resolveMachineApiKeySession = async (
+  ...args: Parameters<typeof resolveMachineApiKeyCredential>
+) => (await resolveMachineApiKeyCredential(...args)).session;

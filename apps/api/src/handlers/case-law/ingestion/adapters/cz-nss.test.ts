@@ -36,6 +36,7 @@ import {
   CZ_NSS_CONTINUATION_PAGE_ROWS,
   CZ_NSS_FIRST_SLICE,
   CZ_NSS_FIRST_PAGE_ROWS,
+  parseCzNssDetailMetadata,
   parseResultRows,
 } from "@/api/handlers/case-law/ingestion/adapters/cz-nss";
 import type { ParsedRow } from "@/api/handlers/case-law/ingestion/adapters/cz-nss";
@@ -615,6 +616,26 @@ describe("cz-nss listing rows", () => {
       "1 Az 4/2026",
       "52 Af 4/2026",
     ]);
+  });
+
+  // Production stored references such as `63 az 17/2026 - 28` as decision
+  // types: a docket in the type field is a column out of place, not a type.
+  test("a docket number where the type belongs is not stored as the type", () => {
+    const docketTypedRow = rowBlock(MUNICIPAL_ROW).replace(
+      "<td> Rozsudek </td>",
+      "<td> 63&#xA0;Az&#xA0;17/2026&#xA0;-&#xA0;28 </td>",
+    );
+    expect(docketTypedRow).not.toContain("Rozsudek");
+    const [row] = parseResultRows(docketTypedRow);
+    expect(row?.caseNumber).toBe("1 Az 4/2026");
+    expect(row?.decisionType).toBeUndefined();
+
+    const detail = (value: string) =>
+      parseCzNssDetailMetadata(
+        `<div id="druhdokumentuavyrokrozhodnuti"><span class="det-textitle">Druh:</span><span class="det-textval" title="${value}">${value}</span></div>`,
+      ).decisionType;
+    expect(detail("Rozsudek")).toBe("Rozsudek");
+    expect(detail("8 Afs 24/2025 - 50")).toBeUndefined();
   });
 
   test("finds nothing in a page that lists nothing", () => {

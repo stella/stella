@@ -61,6 +61,49 @@ const conditional = {
 };
 
 describe("feature source declarations", () => {
+  test("shared view storage and feature execution have separate owners", () => {
+    const file = "apps/api/src/routes/ordinary.ts";
+    const shared = "apps/api/src/db/schema/views.ts";
+    const source =
+      'import { views } from "@/api/db/schema/views"; export const read = (tx) => tx.select().from(views);';
+    const sources = new Map([
+      ...baseSources,
+      [shared, 'export const views = p.pgTable("workspace_views", {});'],
+      [file, source],
+    ]);
+    const options = { sources, endpoints: [{ file, config: {} }] };
+    expect(validateFeatureAccessDeclarations({ ...options, registry })).toEqual(
+      [],
+    );
+    const broadRegistry = {
+      fixture: {
+        ...registry.fixture,
+        ownership: {
+          ...registry.fixture.ownership,
+          conditionalTableSchemas: { [shared]: ["views"] },
+        },
+      },
+    };
+    expect(
+      validateFeatureAccessDeclarations({
+        ...options,
+        registry: broadRegistry,
+      }),
+    ).toContainEqual({
+      file,
+      message: "source ownership requires featureAccess fixture",
+    });
+    sources.set(
+      file,
+      'import { run } from "@/api/feature/core"; export const execute = () => run();',
+    );
+    expect(
+      validateFeatureAccessDeclarations({ ...options, registry }),
+    ).toContainEqual({
+      file,
+      message: "source ownership requires featureAccess fixture",
+    });
+  });
   test.each(["capability", "scheduler"] as const)(
     "%s registration is a dispatch boundary with independently declared entries",
     (kind) => {
@@ -270,6 +313,76 @@ export const ${name} = { run: { featureId: "fixture", ${target} } };`;
         ]),
       }),
     ).toHaveLength(1);
+  });
+  test("conditional table consumers require the shared policy helper", () => {
+    const conditionalRegistry = {
+      fixture: {
+        ...registry.fixture,
+        ownership: {
+          ...registry.fixture.ownership,
+          conditionalTableSchemas: {
+            "apps/api/src/db/schema/layout.ts": ["layouts"],
+          },
+        },
+      },
+    } as const;
+    const file = "apps/api/src/routes/ordinary.ts";
+    const sources = new Map([
+      ...baseSources,
+      [
+        "apps/api/src/db/schema/layout.ts",
+        'export const layouts = p.pgTable("fixture_layouts", {});',
+      ],
+    ]);
+    sources.set(file, 'import { other } from "../db/schema/layout";');
+    expect(
+      validateFeatureAccessDeclarations({
+        registry: conditionalRegistry,
+        endpoints: [{ file, config: {} }],
+        sources,
+      }),
+    ).toEqual([]);
+    sources.set(
+      file,
+      'import * as tables from "../db/schema/layout"; const rows = tables.other;',
+    );
+    expect(
+      validateFeatureAccessDeclarations({
+        registry: conditionalRegistry,
+        endpoints: [{ file, config: {} }],
+        sources,
+      }),
+    ).toEqual([]);
+    for (const read of [
+      'import { layouts } from "../db/schema/layout";',
+      'import * as tables from "../db/schema/layout"; const rows = tables.layouts;',
+      'import * as tables from "../db/schema/layout"; const rows = Object.values(tables);',
+      'import * as tables from "../db/schema/layout"; const key = "layouts"; const rows = tables[key];',
+      "const rows = sql`select * from fixture_layouts`;",
+    ]) {
+      sources.set(file, read);
+      expect(
+        validateFeatureAccessDeclarations({
+          registry: conditionalRegistry,
+          endpoints: [{ file, config: conditional }],
+          sources,
+        }),
+      ).toEqual([
+        {
+          file,
+          message:
+            "featureAccess fixture conditional tables require the shared policy module",
+        },
+      ]);
+      sources.set(file, `${read} import { layout } from "../feature/layout";`);
+      expect(
+        validateFeatureAccessDeclarations({
+          registry: conditionalRegistry,
+          endpoints: [{ file, config: conditional }],
+          sources,
+        }),
+      ).toEqual([]);
+    }
   });
   test("unknown declarations, missing sources and empty ownership refuse the build", () => {
     expect(

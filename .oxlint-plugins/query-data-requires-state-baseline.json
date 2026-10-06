@@ -195,7 +195,6 @@
     "apps/web/src/routes/law/$country/statutes/index.tsx::PublicStatuteList::data": "pending migration to useQueryView",
     "apps/web/src/routes/law/$country/statutes/index.tsx::PublicStatuteList::facets": "pending migration to useQueryView",
     "apps/web/src/routes/law/-law-home/law-database-status.tsx::LawDatabaseStatus::status": "pending migration to useQueryView",
-    "apps/web/src/routes/law/cases/index.tsx::PublicCaseLawIndex::browseFacets": "pending migration to useQueryView",
     "apps/web/src/routes/law/index.tsx::LawHome::shelf": "pending migration to useQueryView",
     "apps/web/src/routes/onboarding/-components/onboarding-wizard.tsx::OnboardingWizard::nativeToolDeployAvailability": "pending migration to useQueryView",
     "apps/web/src/routes/onboarding/-components/onboarding-wizard.tsx::OnboardingWizard::sessionData": "pending migration to useQueryView"

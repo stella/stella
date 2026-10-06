@@ -6,6 +6,7 @@ import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { tPaginationCursor } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { API_KEY_KIND } from "@/api/lib/machine-api-key-config";
 import type { MachineApiKeyScope } from "@/api/lib/machine-api-key-config";
 import {
   listOrganizationMachineApiKeys,
@@ -122,7 +123,7 @@ export const createListMachineApiKeysHandler = (
     const items: MachineApiKeySummary[] = [];
     for (const row of page.items) {
       const summary = toMachineApiKeySummary(row);
-      if (summary === null) {
+      if (summary === null || summary.kind !== API_KEY_KIND.machine) {
         continue;
       }
       items.push({

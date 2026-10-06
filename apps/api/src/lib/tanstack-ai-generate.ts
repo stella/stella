@@ -898,35 +898,48 @@ export const generateTanStackObjectForRole = async <
     }),
   );
 
-  const output = await withStandardServiceTierFallback({
-    abortSignal: abortController?.signal,
-    model,
-    serviceTier: options.serviceTier,
-    run: async (serviceTier) =>
-      await generateChatObject({
-        adapter: model.adapter,
-        messages: requestMessages,
-        outputSchema: tanStackOutputSchema,
-        ...systemPromptsPatch({
-          caching: options.caching,
-          model,
-          system: guardedSystemPrompt(options),
-        }),
-        modelOptions: mergeGenerationOptions({
-          caching: options.caching,
-          model,
-          maxOutputTokens: options.maxOutputTokens,
-          serviceTier,
-          temperature: options.temperature,
-        }),
-        ...(options.analytics
-          ? { middleware: [options.analytics.middleware] }
-          : {}),
-        ...(abortController ? { abortController } : {}),
+  const generated = await Result.tryPromise({
+    try: async () =>
+      await withStandardServiceTierFallback({
+        abortSignal: abortController?.signal,
+        model,
+        serviceTier: options.serviceTier,
+        run: async (serviceTier) =>
+          await generateChatObject({
+            adapter: model.adapter,
+            messages: requestMessages,
+            outputSchema: tanStackOutputSchema,
+            ...systemPromptsPatch({
+              caching: options.caching,
+              model,
+              system: guardedSystemPrompt(options),
+            }),
+            modelOptions: mergeGenerationOptions({
+              caching: options.caching,
+              model,
+              maxOutputTokens: options.maxOutputTokens,
+              serviceTier,
+              temperature: options.temperature,
+            }),
+            ...(options.analytics
+              ? { middleware: [options.analytics.middleware] }
+              : {}),
+            ...(abortController ? { abortController } : {}),
+          }),
       }),
+    catch: (error: unknown) => error,
   });
+  if (Result.isError(generated)) {
+    // A cancelled run ends without a structured result, and the SDK reports
+    // that as a plain error rather than an abort. The caller's signal is what
+    // tells the two apart, as for text generation.
+    if (options.abortSignal?.aborted === true) {
+      throw cancelledGenerationError();
+    }
+    throw generated.error;
+  }
 
-  return v.parse(outputSchema, output);
+  return v.parse(outputSchema, generated.value);
 };
 
 export const streamTanStackObjectForRole = async function* <

@@ -6,6 +6,61 @@ import { lintSingleRule } from "./lint-single-rule.ts";
 
 setDefaultTimeout(20_000);
 
+describe.serial("confine-owner literal patterns", () => {
+  const entry = OWNERSHIP.find(({ id }) => id === "citation-graph-transaction");
+  const source = [
+    'const literal = "citation_resolution_walk";',
+    "const template = sql`SELECT pg_advisory_xact_lock(hashtext('case_law'), hashtext('citation_resolution_walk'))`;",
+    'const escaped = "citation\\x5fresolution_walk";',
+    'const sibling = "different_graph";',
+  ].join("\n");
+
+  test("rejects direct and escaped keys in strings and SQL templates", async () => {
+    expect(entry?.enforcement.kind).toBe("literal-pattern");
+    expect(
+      await lintSingleRule("confine-owner", source, {
+        ruleOptions: { entries: [entry] },
+        sourcePath: "apps/api/src/scripts/late-graph-writer.ts",
+      }),
+    ).toEqual([1, 2, 3]);
+  });
+
+  test("accepts the transaction owner and each explicit test exception", async () => {
+    if (entry?.enforcement.kind !== "literal-pattern") {
+      throw new TypeError("Missing citation graph transaction ownership");
+    }
+    for (const sourcePath of [
+      ...entry.owner,
+      ...entry.enforcement.allowed.map(({ path: allowedPath }) => allowedPath),
+    ]) {
+      expect(
+        await lintSingleRule("confine-owner", source, {
+          ruleOptions: { entries: [entry] },
+          sourcePath,
+        }),
+      ).toEqual([]);
+    }
+  });
+
+  test("per-file admission does not carry over to another writer", async () => {
+    const options = { ruleOptions: { entries: [entry] } };
+    expect(
+      await lintSingleRule("confine-owner", source, {
+        ...options,
+        sourcePath:
+          "apps/api/src/handlers/case-law/citation-graph-transaction.ts",
+      }),
+    ).toEqual([]);
+    expect(
+      await lintSingleRule("confine-owner", source, {
+        ...options,
+        sourcePath:
+          "apps/api/src/handlers/case-law/citation-graph-transaction-copy.ts",
+      }),
+    ).toEqual([1, 2, 3]);
+  });
+});
+
 test("every admission-store consumer must use the checked facade", async () => {
   const admission = OWNERSHIP.find(({ id }) => id === "admission-redis");
   if (admission?.enforcement.kind !== "import") {

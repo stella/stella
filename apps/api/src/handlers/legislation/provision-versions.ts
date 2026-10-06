@@ -27,6 +27,9 @@ import type { LegislationReadDb } from "@/api/lib/legislation-public-read-db";
  */
 export type LegislationProvisionVersion = {
   id: SafeId<"legislationDocument">;
+  country: string;
+  slug: string | null;
+  sourceUrl: string | null;
   astS3Key: string | null;
   documentAst: unknown;
   versionValidFrom: string | null;
@@ -61,6 +64,10 @@ export const readLegislationProvisionVersions = async ({
       await tx
         .select({
           ...versionAstColumns,
+          country: legislationDocuments.country,
+          slug: legislationDocuments.slug,
+          sourceUrl: legislationDocuments.sourceUrl,
+
           versionValidFrom: legislationDocuments.versionValidFrom,
           versionValidTo: legislationDocuments.versionValidTo,
           ...legislationExpressionLabelColumns,
