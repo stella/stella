@@ -13,8 +13,11 @@ document.documentElement.classList.toggle(
   params.get("theme") === "dark",
 );
 
+const empty = params.get("empty") === "true";
+const initialTitle = rtl ? "مراجعة العقد" : "Contract review";
+
 const Fixture = () => {
-  const [value, setValue] = useState(rtl ? "مراجعة العقد" : "Contract review");
+  const [value, setValue] = useState(empty ? "" : initialTitle);
   const [draft, setDraft] = useState(value);
   const [editing, setEditing] = useState(false);
   const [outcome, setOutcome] = useState("");
@@ -44,6 +47,7 @@ const Fixture = () => {
                 }
               }}
               aria-label="Title"
+              {...(empty ? { placeholder: "Add reference" } : {})}
               value={draft}
               onValueChange={setDraft}
               onCommit={commit}
@@ -65,7 +69,7 @@ const Fixture = () => {
                 setEditing(true);
               }}
             >
-              {value}
+              {value === "" && empty ? "Add reference" : value}
             </button>
           )}
         </div>

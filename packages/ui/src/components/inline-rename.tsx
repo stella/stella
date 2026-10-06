@@ -17,6 +17,18 @@ type InlineRenameInputProps = Omit<
 };
 
 /** Content-sized rename field; the title's parent owns its typography. */
+// An empty field keeps its placeholder's width, so it stays visible and
+// clickable where the mirror does the sizing.
+const mirrorTextFor = (value: string, placeholder: string | undefined) => {
+  if (value !== "") {
+    return value;
+  }
+  if (placeholder !== undefined && placeholder !== "") {
+    return placeholder;
+  }
+  return "\u200b";
+};
+
 export const InlineRenameInput = ({
   value,
   onValueChange,
@@ -45,11 +57,13 @@ export const InlineRenameInput = ({
     input.select();
   }, []);
 
+  const mirrorText = mirrorTextFor(value, props.placeholder);
+
   return (
     <span className={cn(className)} data-slot="inline-rename">
       {/* The mirror sizes older webviews without measuring or changing fonts. */}
       <span aria-hidden="true" data-slot="inline-rename-mirror">
-        {value || "\u200b"}
+        {mirrorText}
       </span>
       <input
         {...props}

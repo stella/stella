@@ -201,3 +201,27 @@ test("allows a corrected draft to commit on blur after validation retained the e
   await page.getByRole("button", { name: "Outside" }).click();
   await expect(page.locator("output")).toHaveAttribute("data-commits", "2");
 });
+
+test("an empty field keeps its placeholder's width in the mirror fallback", async ({
+  page,
+}) => {
+  await page.goto(`${fixturePath}?fallback=true&empty=true`);
+  const input = await openEditor(page);
+  await expect(input).toHaveValue("");
+  await expect(input).toHaveAttribute("placeholder", "Add reference");
+  const { inputWidth, placeholderWidth } = await input.evaluate((element) => {
+    const probe = document.createElement("span");
+    probe.textContent = "Add reference";
+    probe.style.font = getComputedStyle(element).font;
+    probe.style.position = "absolute";
+    probe.style.visibility = "hidden";
+    document.body.append(probe);
+    const measured = probe.getBoundingClientRect().width;
+    probe.remove();
+    return {
+      inputWidth: element.getBoundingClientRect().width,
+      placeholderWidth: measured,
+    };
+  });
+  expect(inputWidth).toBeGreaterThanOrEqual(placeholderWidth - TOLERANCE_PX);
+});
