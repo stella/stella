@@ -104,6 +104,7 @@
     "check:office-fixture-metadata": "bun --filter @stll/docx-utils check:office-fixture-metadata",
     "check:instruction-references": "bun scripts/check-instruction-references.ts --check",
     "check:railway-template-draft": "bun scripts/check-railway-template-draft.ts",
+    "check:playwright-config-scope": "bun scripts/check-playwright-config-scope.ts",
     "check:railway-template": "bun scripts/check-railway-template-shape.ts",
     "check:railway-template-source-runtime": "bun scripts/sync-railway-template-source.ts --check-rendered-credentials",
     "sync:railway-template-source": "bun scripts/sync-railway-template-source.ts",
