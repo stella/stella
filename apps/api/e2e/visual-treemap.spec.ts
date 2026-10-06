@@ -45,6 +45,7 @@ for (const direction of ["ltr", "rtl"] as const) {
       page,
       request,
     }) => {
+      await page.emulateMedia({ colorScheme });
       const requests: string[] = [];
       const errors: string[] = [];
       page.on("request", (networkRequest) =>
@@ -70,6 +71,7 @@ for (const direction of ["ltr", "rtl"] as const) {
       ).unwrap();
       const document = composeVisualDocument({
         html,
+        data: {},
         runtime,
         policy: policy
           .split(";")

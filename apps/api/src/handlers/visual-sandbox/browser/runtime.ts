@@ -116,6 +116,19 @@ const bootOuter = (runtime: string) => {
   if (!config || window.self === window.top) {
     return;
   }
+  const boot: {
+    current:
+      | { type: "initializing" }
+      | {
+          type: "ready";
+          receive: ReturnType<typeof createVisualMessageHandler>;
+        };
+  } = { current: { type: "initializing" } };
+  window.addEventListener("message", (event: MessageEvent<unknown>) => {
+    if (boot.current.type === "ready") {
+      boot.current.receive(event);
+    }
+  });
   const parsedConfig = parseVisualOuterConfig(config.textContent);
   if (parsedConfig.isErr()) {
     throw parsedConfig.error;
@@ -125,22 +138,20 @@ const bootOuter = (runtime: string) => {
   inner.setAttribute("sandbox", "allow-scripts");
   inner.setAttribute("referrerpolicy", "no-referrer");
   document.body.append(inner);
-  window.addEventListener(
-    "message",
-    createVisualMessageHandler({
-      parentWindow: window.parent,
-      innerWindow: inner.contentWindow,
-      outerOrigin: window.location.origin,
-      origins,
-      onRender: ({ title, html, data }) => {
-        inner.title = title;
-        // safe-html: sanitizeVisualHtml output validated at the message boundary, composed with Stella's bundled runtime and fixed policy.
-        inner.srcdoc = composeVisualDocument({ html, data, runtime, policy });
-      },
-      onGuestMessage: (message, hostOrigin) =>
-        window.parent.postMessage(message, hostOrigin),
-    }),
-  );
+  const receive = createVisualMessageHandler({
+    parentWindow: window.parent,
+    innerWindow: inner.contentWindow,
+    outerOrigin: window.location.origin,
+    origins,
+    onRender: ({ title, html, data }) => {
+      inner.title = title;
+      // safe-html: sanitizeVisualHtml output validated at the message boundary, composed with Stella's bundled runtime and fixed policy.
+      inner.srcdoc = composeVisualDocument({ html, data, runtime, policy });
+    },
+    onGuestMessage: (message, hostOrigin) =>
+      window.parent.postMessage(message, hostOrigin),
+  });
+  boot.current = { type: "ready", receive };
   const reportReady = () => {
     const message = visualShellReadyMessage(window.location.hash);
     if (message !== null) {

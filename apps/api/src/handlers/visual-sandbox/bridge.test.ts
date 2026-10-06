@@ -115,6 +115,39 @@ describe("visual frame bridge", () => {
     expect(onGuestMessage).toHaveBeenCalledTimes(1);
   });
 
+  test("primitive events and unavailable origins do not pin a host", () => {
+    for (const data of [null, undefined, 42, true, "render", []]) {
+      const { parentWindow, onRender, handle } = setup();
+      handle({
+        source: parentWindow,
+        origin: "https://web.example.test",
+        data,
+      });
+      handle({
+        source: parentWindow,
+        origin: "null",
+        data: {
+          type: "render",
+          title: "Timeline",
+          html: "<p>Dates</p>",
+          data: {},
+        },
+      });
+      expect(onRender).not.toHaveBeenCalled();
+      handle({
+        source: parentWindow,
+        origin: "https://alternate.example.test",
+        data: {
+          type: "render",
+          title: "Timeline",
+          html: "<p>Dates</p>",
+          data: {},
+        },
+      });
+      expect(onRender).toHaveBeenCalledTimes(1);
+    }
+  });
+
   test("requires matching windows, origins, bounded bytes and strict message shapes", () => {
     const { parentWindow, innerWindow, onRender, onGuestMessage, handle } =
       setup();
