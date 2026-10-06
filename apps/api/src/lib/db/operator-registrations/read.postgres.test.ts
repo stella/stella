@@ -2,6 +2,8 @@ import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 import { asc, eq, inArray, sql, TransactionRollbackError } from "drizzle-orm";
 
+import { DAY_IN_MS, Temporal } from "@stll/time";
+
 import { member, organization, user } from "@/api/db/auth-schema";
 import { systemAuditRuns } from "@/api/db/schema";
 import type { TransactionOf } from "@/api/db/scoped";
@@ -17,8 +19,21 @@ import { readAuditedRegistrationPage } from "./read";
 
 const databaseUrl = process.env["DATABASE_URL"];
 const enabled = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
-const SINCE = "2026-10-04T08:00:00Z";
-const NOW = Date.parse("2026-10-05T08:00:00Z");
+const registrationWindow = (now: number) => {
+  const since = Temporal.Instant.fromEpochMilliseconds(now)
+    .subtract({ milliseconds: DAY_IN_MS })
+    .round({ smallestUnit: "second", roundingMode: "floor" });
+  const firstCreatedAt = since.add({ seconds: 1, microseconds: 123_456 });
+  return {
+    now,
+    since: since.toString(),
+    firstCreatedAt: firstCreatedAt.toString(),
+    secondCreatedAt: since
+      .add({ seconds: 1, microseconds: 123_789 })
+      .toString(),
+    fractionalBound: firstCreatedAt.add({ nanoseconds: 1 }).toString(),
+  };
+};
 
 type AuditReader = Pick<TransactionOf<GatedTestDb>, "select">;
 
@@ -41,6 +56,8 @@ describe.skipIf(!enabled)("operator registration database pages", () => {
     if (databaseUrl === undefined) {
       throw new TypeError("DATABASE_URL required");
     }
+    // An older fixture clock must not reject newer registrations in the shared database.
+    const window = registrationWindow(Date.now() - DAY_IN_MS);
     await withGatedTestClients(databaseUrl, async ({ openClient }) => {
       const db = openClient().db;
       // All fixture writes, reads and audit rows roll back together.
@@ -59,8 +76,8 @@ describe.skipIf(!enabled)("operator registration database pages", () => {
                 id,
                 name: `Test User ${index}`,
                 email: `${id}@example.test`,
-                createdAt: sql`${index < 3 ? "2026-10-04T08:00:01.123456Z" : "2026-10-04T08:00:01.123789Z"}::timestamptz`,
-                deletedAt: index === 4 ? new Date(NOW) : null,
+                createdAt: sql`${index < 3 ? window.firstCreatedAt : window.secondCreatedAt}::timestamptz`,
+                deletedAt: index === 4 ? new Date(window.now) : null,
               });
             }
             for (const [index, id] of orgIds.entries()) {
@@ -68,7 +85,7 @@ describe.skipIf(!enabled)("operator registration database pages", () => {
                 id,
                 name: `Test Organization ${index}`,
                 slug: id,
-                createdAt: new Date(SINCE),
+                createdAt: new Date(window.since),
               });
             }
             const firstUser = ids.at(0);
@@ -86,13 +103,13 @@ describe.skipIf(!enabled)("operator registration database pages", () => {
                 id: mintAuthProviderIdValue(),
                 userId: firstUser,
                 organizationId: firstOrg,
-                createdAt: new Date(SINCE),
+                createdAt: new Date(window.since),
               },
               {
                 id: mintAuthProviderIdValue(),
                 userId: firstUser,
                 organizationId: secondOrg,
-                createdAt: new Date(NOW),
+                createdAt: new Date(window.now),
               },
             ]);
             // Equal timestamps tie-break on id in the database collation,
@@ -106,16 +123,38 @@ describe.skipIf(!enabled)("operator registration database pages", () => {
               ...tied.map(({ id }) => id),
               ...ids.slice(3, 4),
             ].map((id) => `${id}@example.test`);
+            const unrelatedIds = Array.from({ length: 3 }, () =>
+              mintAuthProviderIdValue(),
+            );
+            const unrelatedCreatedAt = Date.now();
+            await tx.insert(user).values(
+              unrelatedIds.map((id) => ({
+                id,
+                name: "Other registration",
+                email: `${id}@example.test`,
+                createdAt: new Date(unrelatedCreatedAt),
+              })),
+            );
+            const unrelatedEmails = new Set(
+              unrelatedIds.map((id) => `${id}@example.test`),
+            );
+            const observedUnrelated = new Set<string>();
             const observed: string[] = [];
             let cursor: string | undefined;
             let pageCount = 0;
+            let sawNewerRegistrationCursor = false;
             do {
               const query = parseRegistrationQuery({
-                query: { since: SINCE, limit: "2", cursor },
-                now: NOW,
+                query: { since: window.since, limit: "2", cursor },
+                // Shared registrations can be newer than this test's fixture clock.
+                // The route validates each request against its current clock too.
+                now: Date.now(),
               }).unwrap();
               const page = await readAuditedRegistrationPage(tx, query);
               for (const item of page.items) {
+                if (unrelatedEmails.has(item.email)) {
+                  observedUnrelated.add(item.email);
+                }
                 // Only inspect this fixture; a service-backed database may hold other rows.
                 if (!expected.includes(item.email)) {
                   continue;
@@ -138,11 +177,25 @@ describe.skipIf(!enabled)("operator registration database pages", () => {
               }
               pageCount += 1;
               cursor = page.nextCursor ?? undefined;
+              if (cursor !== undefined) {
+                const staleClock = parseRegistrationQuery({
+                  query: { since: window.since, limit: "2", cursor },
+                  now: window.now,
+                });
+                if (Result.isError(staleClock)) {
+                  expect(staleClock.error.message).toBe(
+                    "Invalid cursor; restart without cursor",
+                  );
+                  sawNewerRegistrationCursor = true;
+                }
+              }
               expect(pageCount).toBeLessThan(100);
             } while (cursor !== undefined);
             expect(observed).toEqual(expected);
+            expect(observedUnrelated).toEqual(unrelatedEmails);
+            expect(sawNewerRegistrationCursor).toBe(true);
             const fractionalBound = await readAuditedRegistrationPage(tx, {
-              since: "2026-10-04T08:00:01.123456001Z",
+              since: window.fractionalBound,
               limit: 100,
               cursor: null,
             });
@@ -163,7 +216,7 @@ describe.skipIf(!enabled)("operator registration database pages", () => {
               ]);
               expect(audit.counts["pageSize"]).toBe(2);
               expect(audit.counts["sinceEpochMilliseconds"]).toBe(
-                Date.parse(SINCE),
+                Date.parse(window.since),
               );
               expect(JSON.stringify(audit)).not.toContain("@example.test");
             }
@@ -195,6 +248,7 @@ describe.skipIf(!enabled)("operator registration database pages", () => {
       if (databaseUrl === undefined) {
         throw new TypeError("DATABASE_URL required");
       }
+      const window = registrationWindow(Date.now());
       await withGatedTestClients(databaseUrl, async ({ openClient }) => {
         const db = openClient().db;
         const id = mintAuthProviderIdValue();
@@ -207,11 +261,11 @@ describe.skipIf(!enabled)("operator registration database pages", () => {
                 id,
                 name: "Test User",
                 email: `${id}@example.test`,
-                createdAt: new Date(SINCE),
+                createdAt: new Date(window.since),
               });
               const app = createOperatorRoute({
                 configuredToken: () => secret,
-                now: () => NOW,
+                now: Date.now,
                 readPage: async (query) =>
                   readAuditedRegistrationPage(
                     {
@@ -238,7 +292,7 @@ describe.skipIf(!enabled)("operator registration database pages", () => {
               });
               const response = await app.handle(
                 new Request(
-                  `http://localhost/operator/registrations?since=${SINCE}`,
+                  `http://localhost/operator/registrations?since=${window.since}`,
                   { headers: { authorization: `Bearer ${secret}` } },
                 ),
               );
