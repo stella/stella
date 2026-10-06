@@ -192,10 +192,16 @@ export const GENERATORS = [
   {
     id: "visual-sandbox-bundle",
     outputKind: "committed",
-    outputs: ["apps/api/src/handlers/visual-sandbox/generated/runtime.js.txt"],
+    outputs: [
+      "apps/api/src/handlers/visual-sandbox/generated/runtime.js.txt",
+      "apps/api/src/handlers/visual-sandbox/generated/court-tier-labels.json",
+    ],
     inputs: [
       "apps/api/src/handlers/visual-sandbox/**",
       "apps/api/scripts/build-visual-sandbox.ts",
+      "apps/api/scripts/build-visual-chart-locales.ts",
+      "apps/api/scripts/visual-sandbox-build-options.ts",
+      "apps/web/src/i18n/langs/*.json",
       "packages/api-contract/**",
       "bun.lock",
     ],
