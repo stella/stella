@@ -1,6 +1,5 @@
 {
   "metric": "legacy-paint-transitions",
-  "file": "apps/api/src/mcp/apps/shared/generated/style.css",
   "delta": 2,
   "reason": "Compiling the existing @stll/ui source catalog into the self-contained MCP App stylesheet emits its transition utility and the input autofill background-delay utility. These are generated copies of existing shared UI styles; the input workaround keeps browser autofill from hiding the themed surface."
 }
