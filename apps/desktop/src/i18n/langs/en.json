@@ -144,6 +144,9 @@
   "settings": {
     "about": "About",
     "accountLinked": "Account linked",
+    "connectionExpired": "Connection expired",
+    "reconnectToStella": "Reconnect to stella web",
+    "connectionExpiredDescription": "Connection expired. Reconnect to stella web.",
     "connectToStella": "Connect to stella web",
     "connectToStellaDescription": "Link this computer to your current stella account without opening a document.",
     "desktopBenefit": "Office files and local clipboard history",

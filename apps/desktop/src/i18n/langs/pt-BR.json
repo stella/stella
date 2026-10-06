@@ -144,6 +144,9 @@
   "settings": {
     "about": "Sobre",
     "accountLinked": "Conta vinculada",
+    "connectionExpired": "Conexão expirada",
+    "reconnectToStella": "Reconectar ao stella web",
+    "connectionExpiredDescription": "A conexão expirou. Reconecte-se ao stella web.",
     "connectToStella": "Conectar à stella web",
     "connectToStellaDescription": "Vincule este computador à sua conta atual da stella sem abrir um documento.",
     "desktopBenefit": "Arquivos do Office e histórico local da área de transferência",

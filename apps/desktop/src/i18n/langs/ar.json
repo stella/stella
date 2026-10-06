@@ -144,6 +144,9 @@
   "settings": {
     "about": "حول",
     "accountLinked": "الحساب مرتبط",
+    "connectionExpired": "انتهت صلاحية الاتصال",
+    "reconnectToStella": "إعادة الاتصال بـ stella web",
+    "connectionExpiredDescription": "انتهت صلاحية الاتصال. أعد الاتصال بـ stella web.",
     "connectToStella": "الاتصال بـ stella على الويب",
     "connectToStellaDescription": "اربط هذا الحاسوب بحسابك الحالي في stella دون فتح مستند.",
     "desktopBenefit": "ملفات Office وسجل محلي للحافظة",

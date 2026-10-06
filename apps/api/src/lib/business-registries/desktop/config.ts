@@ -5,7 +5,7 @@ import type { PermissionInput } from "@stll/permissions";
 
 export const DESKTOP_REGISTRY_KEY_CONFIG = "desktop-registry";
 export const DESKTOP_REGISTRY_KEY_PREFIX = DESKTOP_ACCOUNT_POLICY.keyPrefix;
-// A revocable seven-day account link replaces the hourly registry prototype.
+// Foreground use rotates the credential and renews its inactivity deadline.
 export const DESKTOP_REGISTRY_KEY_SECONDS =
   DESKTOP_ACCOUNT_POLICY.credentialLifetimeSeconds;
 export const DESKTOP_ACCOUNT_PERMISSION = {

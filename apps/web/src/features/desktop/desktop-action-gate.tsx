@@ -58,6 +58,8 @@ export const useDesktopActionGate = (
         // Nothing answered on this computer: offer the install instead.
         if (outcome.status === "error") {
           setRequired("none");
+        } else if (outcome.status === "update-required") {
+          setRequired("outdated");
         }
       })(),
       "desktop-action-gate.connect",

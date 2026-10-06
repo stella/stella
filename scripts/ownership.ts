@@ -168,6 +168,27 @@ const FLUSHES_ITS_OWN_SEARCH_MARKS =
 // the baseline; it moves one out of it, and review of the row is the gate.
 export const ROOT_CONNECTION_DOORS = [
   {
+    id: "desktop-account-renewal",
+    capability: "Renewing account-bound desktop credentials",
+    owner: ["apps/api/src/lib/business-registries/desktop/renewal.ts"],
+    summary:
+      "Renewal locks live membership and the purpose-bound credential, rotates its digest and inactivity deadline, and commits its audit in the same transaction. Recovery probes preserve the deadline.",
+    enforcement: {
+      kind: "import",
+      specifiers: ["@/api/lib/business-registries/desktop/renewal"],
+      allowed: [
+        {
+          path: "apps/api/src/handlers/desktop-registry/renew.ts",
+          reason: "Authorizes the native renewal or recovery request.",
+        },
+        {
+          path: "apps/api/src/lib/business-registries/desktop/renewal.postgres.test.ts",
+          reason: "Exercises the lifecycle with real database transactions.",
+        },
+      ],
+    },
+  },
+  {
     id: "personal-api-key-lifecycle",
     capability: "Managing member-owned credentials in the denied auth table",
     owner: ["apps/api/src/lib/machine-api-keys/personal-lifecycle.ts"],
@@ -1820,6 +1841,11 @@ const OWNERSHIP_DECLARATIONS = [
       specifiers: ["@/api/lib/permission-authorization"],
       names: ["hasCurrentMemberPermission"],
       allowed: [
+        {
+          path: "apps/api/src/lib/business-registries/desktop/renewal.ts",
+          reason:
+            "Revalidates the locked membership after desktop credential authorization.",
+        },
         {
           path: "apps/api/src/lib/workspace-deletion.ts",
           reason:

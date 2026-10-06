@@ -4299,6 +4299,10 @@
     "seconds": 4.6,
     "source": "measured"
   },
+  "src/lib/business-registries/desktop/renewal.postgres.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
   "src/lib/business-registries/desktop/revocation.db.test.ts": {
     "seconds": 1.835933,
     "source": "estimated"

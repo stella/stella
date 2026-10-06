@@ -144,6 +144,9 @@
   "settings": {
     "about": "Névjegy",
     "accountLinked": "Fiók összekapcsolva",
+    "connectionExpired": "A kapcsolat lejárt",
+    "reconnectToStella": "Újracsatlakozás a stella webhez",
+    "connectionExpiredDescription": "A kapcsolat lejárt. Csatlakozzon újra a stella webhez.",
     "connectToStella": "Csatlakozás a stella webhez",
     "connectToStellaDescription": "Kapcsolja ezt a számítógépet az aktuális stella-fiókjához dokumentum megnyitása nélkül.",
     "desktopBenefit": "Office-fájlok és helyi vágólapelőzmények",

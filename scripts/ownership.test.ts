@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import ts from "typescript";
 
+import { lintSingleRule } from "../.oxlint-plugins/__tests__/lint-single-rule.ts";
 import {
   MEMBER_RUN_QUEUES,
   MEMBER_RUN_SCHEDULER_TASKS,
@@ -10,6 +11,7 @@ import {
 import type { OwnershipEntry } from "./ownership";
 import {
   OWNERSHIP,
+  ROOT_CONNECTION_DOORS,
   renderOwnershipDocument,
   validateOwnership,
 } from "./ownership";
@@ -297,5 +299,132 @@ describe("model-run-failure-projection coverage", () => {
         ].join("\n"),
       ),
     ).toEqual(["runA", "runB"]);
+  });
+});
+
+const RENEWAL_OWNER = "apps/api/src/lib/business-registries/desktop/renewal.ts";
+const RENEWAL_SPECIFIER = "@/api/lib/business-registries/desktop/renewal";
+
+const renewalDoor = () => {
+  const door = ROOT_CONNECTION_DOORS.find(
+    ({ id }) => id === "desktop-account-renewal",
+  );
+  if (!door || door.enforcement.kind !== "import") {
+    throw new TypeError(
+      "Desktop renewal must be an import-confined root connection door",
+    );
+  }
+  return door;
+};
+
+const assertRenewalExports = (text: string) => {
+  const source = ts.createSourceFile(
+    RENEWAL_OWNER,
+    text,
+    ts.ScriptTarget.Latest,
+    true,
+    ts.ScriptKind.TS,
+  );
+  const names: string[] = [];
+  for (const statement of source.statements) {
+    if (ts.isExportDeclaration(statement) || ts.isExportAssignment(statement)) {
+      throw new TypeError(
+        "Renewal cannot re-export a root handle or another module",
+      );
+    }
+    if (
+      !ts.canHaveModifiers(statement) ||
+      !ts
+        .getModifiers(statement)
+        ?.some(({ kind }) => kind === ts.SyntaxKind.ExportKeyword)
+    ) {
+      continue;
+    }
+    if (ts.isFunctionDeclaration(statement) && statement.name) {
+      names.push(statement.name.text);
+      continue;
+    }
+    if (!ts.isVariableStatement(statement)) {
+      throw new TypeError("Renewal exports only its two bounded operations");
+    }
+    for (const declaration of statement.declarationList.declarations) {
+      if (!ts.isIdentifier(declaration.name)) {
+        throw new TypeError(
+          "Renewal exports must have explicit operation names",
+        );
+      }
+      names.push(declaration.name.text);
+    }
+  }
+  if (
+    names.toSorted().join(",") !==
+    "probeDesktopCredential,renewDesktopCredential"
+  ) {
+    throw new TypeError(
+      "Renewal exports only probeDesktopCredential and renewDesktopCredential",
+    );
+  }
+};
+
+describe("desktop renewal root connection door", () => {
+  test("confines the exact owner and specifier to two explicit callers", () => {
+    const door = renewalDoor();
+    expect(door.owner).toEqual([RENEWAL_OWNER]);
+    expect(door.enforcement.specifiers).toEqual([RENEWAL_SPECIFIER]);
+    expect("names" in door.enforcement).toBe(false);
+    expect(door.enforcement.allowed.map(({ path }) => path)).toEqual([
+      "apps/api/src/handlers/desktop-registry/renew.ts",
+      "apps/api/src/lib/business-registries/desktop/renewal.postgres.test.ts",
+    ]);
+    expect(OWNERSHIP.filter(({ id }) => id === door.id)).toEqual([door]);
+  });
+
+  test("the real confinement rule rejects sibling and wildcard escape routes", async () => {
+    const door = renewalDoor();
+    const source = [
+      `import { renewDesktopCredential } from "${RENEWAL_SPECIFIER}";`,
+      `import * as renewal from "${RENEWAL_SPECIFIER}";`,
+      `export * from "${RENEWAL_SPECIFIER}";`,
+      `const renewalModule = await import("${RENEWAL_SPECIFIER}");`,
+      'import { probeDesktopCredential } from "./renewal";',
+    ].join("\n");
+    const ruleOptions = { entries: [door] };
+    for (const sourcePath of [
+      door.owner.at(0),
+      ...door.enforcement.allowed.map(({ path }) => path),
+    ]) {
+      if (!sourcePath) {
+        throw new TypeError("Renewal owner must exist");
+      }
+      expect(
+        await lintSingleRule("confine-owner", source, {
+          ruleOptions,
+          sourcePath,
+        }),
+      ).toEqual([]);
+    }
+    expect(
+      await lintSingleRule("confine-owner", source, {
+        ruleOptions,
+        sourcePath:
+          "apps/api/src/lib/business-registries/desktop/unapproved-renewal.ts",
+      }),
+    ).toEqual([1, 2, 3, 4, 5]);
+  }, 60_000);
+
+  test("exposes bounded renewal and probe operations without exposing the root connection", () => {
+    const source = readFileSync(
+      new URL(RENEWAL_OWNER, new URL("../", import.meta.url)),
+      "utf-8",
+    );
+    assertRenewalExports(source);
+    for (const mutation of [
+      `${source}\nexport { rootDb };`,
+      `${source}\nexport * from "@/api/db/root";`,
+      `${source}\nexport const rootHandle = rootDb;`,
+      `${source}\nexport const unrestrictedTransaction = () => rootDb;`,
+    ]) {
+      expect(() => assertRenewalExports(mutation)).toThrow(TypeError);
+    }
   });
 });

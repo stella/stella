@@ -52,6 +52,7 @@ const CONNECTION_CHANGED_EVENT = "desktop-account-changed";
 
 type Connection =
   | { status: "disconnected" }
+  | { status: "expired" }
   | { status: "unavailable" }
   | ({ status: "connected"; expiresAt: string } & DesktopRegistryConfig);
 export type DesktopConnectionStatus = Connection["status"] | "loading";
@@ -512,6 +513,8 @@ export const RegistrySearch = ({
   let emptyText = t("registrySearchHint");
   if (connection === null) {
     emptyText = t("registryLoading");
+  } else if (connection.status === "expired") {
+    emptyText = settingsT("connectionExpiredDescription");
   } else if (!connected) {
     emptyText = t("registryDisconnected");
   } else if (connection.registries.length === 0) {
@@ -745,9 +748,12 @@ export const RegistrySearch = ({
           <p role="status" className="max-w-sm text-sm">
             {errorMessage ? "" : emptyText}
           </p>
-          {connection?.status === "disconnected" ? (
+          {connection?.status === "disconnected" ||
+          connection?.status === "expired" ? (
             <Button className="min-h-11" onClick={connect}>
-              {t("registryConnect")}
+              {connection?.status === "expired"
+                ? settingsT("reconnectToStella")
+                : t("registryConnect")}
             </Button>
           ) : null}
           {connection?.status === "unavailable" ? (
@@ -783,7 +789,11 @@ export const RegistrySearch = ({
     connectionError: connectionFailure,
     connectControl: (
       <Button className="min-h-11 rounded-xl" onClick={connect} type="button">
-        {settingsT("connectToStella")}
+        {settingsT(
+          connection?.status === "expired"
+            ? "reconnectToStella"
+            : "connectToStella",
+        )}
       </Button>
     ),
     retryConnection,

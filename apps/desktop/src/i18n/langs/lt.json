@@ -144,6 +144,9 @@
   "settings": {
     "about": "Apie",
     "accountLinked": "Paskyra susieta",
+    "connectionExpired": "Ryšio galiojimas baigėsi",
+    "reconnectToStella": "Vėl prisijungti prie stella web",
+    "connectionExpiredDescription": "Ryšio galiojimas baigėsi. Prisijunkite iš naujo prie stella web.",
     "connectToStella": "Prisijungti prie stella web",
     "connectToStellaDescription": "Susiekite šį kompiuterį su dabartine stella paskyra neatidarydami dokumento.",
     "desktopBenefit": "Office failai ir vietinė iškarpinės istorija",

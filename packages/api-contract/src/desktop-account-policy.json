@@ -1,4 +1,5 @@
 {
   "keyPrefix": "stella_dr_",
-  "credentialLifetimeSeconds": 604800
+  "credentialLifetimeSeconds": 2592000,
+  "linkProtocol": 4
 }

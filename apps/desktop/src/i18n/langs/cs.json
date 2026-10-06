@@ -144,6 +144,9 @@
   "settings": {
     "about": "O aplikaci",
     "accountLinked": "Účet propojen",
+    "connectionExpired": "Platnost připojení vypršela",
+    "reconnectToStella": "Znovu připojit ke stella web",
+    "connectionExpiredDescription": "Platnost připojení vypršela. Připojte se znovu ke stella web.",
     "connectToStella": "Připojit ke stella web",
     "connectToStellaDescription": "Propojte tento počítač s aktuálním účtem stella bez otevírání dokumentu.",
     "desktopBenefit": "Dokumenty Office a místní historie schránky",

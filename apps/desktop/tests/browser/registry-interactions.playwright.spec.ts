@@ -94,6 +94,7 @@ const SNAPSHOT = {
 
 type Connection =
   | { status: "disconnected" }
+  | { status: "expired" }
   | ({
       status: "connected";
       accountLabel: string;
@@ -106,7 +107,8 @@ type BoundaryMode =
   | "defer-first-search"
   | "reject-first-state"
   | "defer-first-state"
-  | "reject-first-connect";
+  | "reject-first-connect"
+  | "reject-first-activity";
 type BoundaryOptions = {
   mode?: BoundaryMode;
   welcome?: boolean;
@@ -114,8 +116,8 @@ type BoundaryOptions = {
 };
 const SETTINGS_SNAPSHOT = {
   bridgePort: 45_901,
-  bridgeVersion: 16,
-  capabilities: [],
+  bridgeVersion: 17,
+  capabilities: ["office-edit.v1", "self-host.connect", "account-link.v4"],
   notificationPreferences: {
     documentReady: true,
     revisionCreated: true,
@@ -219,7 +221,7 @@ const installNativeBoundary = async (
           },
           expiresAt: CONNECTED_EXPIRES_AT,
         }
-      : { status: "disconnected" }
+      : { status: connection.status }
   ) satisfies DesktopAccountSnapshot;
   await page.addInitScript(
     ({
@@ -241,6 +243,7 @@ const installNativeBoundary = async (
       let searchCount = 0;
       let stateCount = 0;
       let connectCount = 0;
+      let activityCount = 0;
       let resolveFirstState: ((value: Connection) => void) | null = null;
       let currentConnection = initialConnection;
       let resolveFirstSearch:
@@ -266,10 +269,25 @@ const installNativeBoundary = async (
         invoke: async (command: string, args: Record<string, unknown> = {}) => {
           invocations.push({ args, command });
           switch (command) {
+            case "account_record_use":
+              activityCount += 1;
+              if (Object.keys(args).length !== 0) {
+                unexpected.push("account_record_use arguments");
+                throw new TypeError("Account activity must not contain data");
+              }
+              if (
+                initialMode === "reject-first-activity" &&
+                activityCount === 1
+              ) {
+                throw new TypeError("Deliberate account activity failure");
+              }
+              return null;
             case "get_desktop_language":
               return navigator.language === "ar" ? "ar" : "en";
             case "clipboard_get_snapshot":
               return clipboardSnapshot;
+            case "clipboard_complete_welcome":
+              return { ...clipboardSnapshot, welcomeStatus: "completed" };
             case "get_state":
               return settingsSnapshot;
             case "account_get_state":
@@ -1220,6 +1238,143 @@ for (const language of ["en", "ar"] as const) {
       await expect(welcome).toBeVisible();
     });
 
+    for (const status of ["connected", "disconnected", "expired"] as const) {
+      test(`${status} welcome can finish without linking or opening an account`, async ({
+        page,
+      }) => {
+        const connection = (
+          status === "connected" ? connected() : { status }
+        ) satisfies Connection;
+        await installNativeBoundary(page, connection, { welcome: true });
+        await page.goto("/");
+        const welcome = page.getByRole("dialog");
+        await expect(welcome).toBeVisible();
+        await welcome
+          .getByRole("button", {
+            name: messages.clipboard.welcomeStart,
+            exact: true,
+          })
+          .click();
+        await expect(welcome).toHaveCount(0);
+        await expect
+          .poll(async () =>
+            (await readInvocations(page)).filter(
+              ({ command }) => command === "clipboard_complete_welcome",
+            ),
+          )
+          .toEqual([{ command: "clipboard_complete_welcome", args: {} }]);
+        expect(
+          (await readInvocations(page)).filter(
+            ({ command }) => command === "open_stella_account",
+          ),
+        ).toEqual([]);
+        await expect(
+          page.locator('[data-clipboard-id="private-clip"]'),
+        ).toBeVisible();
+      });
+    }
+
+    test("expired welcome explains expiry and reconnects through the existing account action", async ({
+      page,
+    }) => {
+      await installNativeBoundary(
+        page,
+        { status: "expired" },
+        { welcome: true },
+      );
+      await page.goto("/");
+      const welcome = page.getByRole("dialog");
+      await expect(
+        welcome.getByText(messages.settings.connectionExpiredDescription, {
+          exact: true,
+        }),
+      ).toBeVisible();
+      await expect(
+        welcome.getByRole("button", {
+          name: messages.settings.connectToStella,
+          exact: true,
+        }),
+      ).toHaveCount(0);
+      await welcome
+        .getByRole("button", {
+          name: messages.settings.reconnectToStella,
+          exact: true,
+        })
+        .click();
+      await expect
+        .poll(async () =>
+          (await readInvocations(page)).filter(
+            ({ command }) => command === "open_stella_account",
+          ),
+        )
+        .toEqual([{ command: "open_stella_account", args: {} }]);
+      await expect(welcome).toBeVisible();
+    });
+
+    test("expired Settings shows an expiry badge and offers reconnect", async ({
+      page,
+    }) => {
+      await installNativeBoundary(
+        page,
+        { status: "expired" },
+        { settings: true },
+      );
+      await page.goto("/#general");
+      await expect(
+        page.getByText(messages.settings.connectionExpired, { exact: true }),
+      ).toBeVisible();
+      await expect(
+        page.getByText(messages.settings.connectionExpiredDescription, {
+          exact: true,
+        }),
+      ).toHaveCount(1);
+      await expect(
+        page.getByRole("button", {
+          name: messages.settings.connectToStella,
+          exact: true,
+        }),
+      ).toHaveCount(0);
+      await page
+        .getByRole("button", {
+          name: messages.settings.reconnectToStella,
+          exact: true,
+        })
+        .click();
+      await expect
+        .poll(async () =>
+          (await readInvocations(page)).filter(
+            ({ command }) => command === "open_stella_account",
+          ),
+        )
+        .toEqual([{ command: "open_stella_account", args: {} }]);
+    });
+
+    test("expired registry requests reconnection instead of searching", async ({
+      page,
+    }) => {
+      await openClipboard(page, { status: "expired" });
+      await activateRegistry(page, "Synthetic company");
+      await expect(
+        page
+          .getByRole("status")
+          .filter({ hasText: messages.settings.connectionExpiredDescription }),
+      ).toBeVisible();
+      expect(await searches(page)).toEqual([]);
+      await page
+        .getByRole("button", {
+          name: messages.settings.reconnectToStella,
+          exact: true,
+        })
+        .click();
+      await expect
+        .poll(async () =>
+          (await readInvocations(page)).filter(
+            ({ command }) => command === "open_stella_account",
+          ),
+        )
+        .toEqual([{ command: "open_stella_account", args: {} }]);
+    });
+
     test("connected welcome omits the connect prompt", async ({ page }) => {
       await installNativeBoundary(page, connected(), { welcome: true });
       await page.goto("/");
@@ -1426,3 +1581,104 @@ for (const language of ["en", "ar"] as const) {
     }
   });
 }
+
+test("clipboard activity is paced and never sends clipboard or keyboard contents", async ({
+  page,
+}) => {
+  await page.clock.install();
+  await openClipboard(page);
+  expect(
+    (await readInvocations(page)).filter(
+      ({ command }) => command === "account_record_use",
+    ),
+  ).toEqual([]);
+  await searchBox(page).click();
+  await page.keyboard.type(PRIVATE_CLIPBOARD_TEXT);
+  await expect
+    .poll(async () =>
+      (await readInvocations(page)).filter(
+        ({ command }) => command === "account_record_use",
+      ),
+    )
+    .toEqual([{ command: "account_record_use", args: {} }]);
+  await page.clock.fastForward(30_000);
+  await page.keyboard.press("ArrowLeft");
+  await expect
+    .poll(async () =>
+      (await readInvocations(page)).filter(
+        ({ command }) => command === "account_record_use",
+      ),
+    )
+    .toEqual([
+      { command: "account_record_use", args: {} },
+      { command: "account_record_use", args: {} },
+    ]);
+});
+
+test("native refresh and synthetic input do not count as account activity", async ({
+  page,
+}) => {
+  await openClipboard(page);
+  await page.evaluate(() => {
+    document.dispatchEvent(
+      new KeyboardEvent("keydown", { key: "a", bubbles: true }),
+    );
+    document.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true }));
+    window.dispatchEvent(new Event("focus"));
+  });
+  await expect
+    .poll(
+      async () =>
+        (await readInvocations(page)).filter(
+          ({ command }) => command === "registry_get_state",
+        ).length,
+    )
+    .toBeGreaterThan(1);
+  expect(
+    (await readInvocations(page)).filter(
+      ({ command }) => command === "account_record_use",
+    ),
+  ).toEqual([]);
+});
+
+test("foreground Settings interactions record use without passing event data", async ({
+  page,
+}) => {
+  await installNativeBoundary(page, connected(), { settings: true });
+  await page.goto("/#general");
+  await page
+    .getByRole("tab", { name: enMessages.settings.general, exact: true })
+    .click();
+  await expect
+    .poll(async () =>
+      (await readInvocations(page)).filter(
+        ({ command }) => command === "account_record_use",
+      ),
+    )
+    .toEqual([{ command: "account_record_use", args: {} }]);
+});
+
+test("activity failure reports only the existing telemetry classification", async ({
+  page,
+}) => {
+  await openClipboard(page, connected(), "reject-first-activity");
+  await searchBox(page).click();
+  await expect
+    .poll(async () =>
+      (await readInvocations(page)).filter(
+        ({ command }) => command === "desktop_report_error",
+      ),
+    )
+    .toEqual([
+      {
+        command: "desktop_report_error",
+        args: {
+          report: {
+            code: "invokeFailed",
+            operation: "runtime",
+            window: "clipboard",
+          },
+        },
+      },
+    ]);
+});

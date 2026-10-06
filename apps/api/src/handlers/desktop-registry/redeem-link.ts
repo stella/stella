@@ -1,5 +1,10 @@
 import { panic, Result } from "better-result";
 
+import { DESKTOP_HANDOFF_FAILURE } from "@stll/api-contract/desktop-handoff";
+import {
+  DESKTOP_ACCOUNT_POLICY,
+  DESKTOP_ACCOUNT_PROTOCOL_HEADER,
+} from "@stll/api-contract/desktop-registry";
 import { Temporal } from "@stll/time";
 
 import type { ScopedDb } from "@/api/db/safe-db";
@@ -167,6 +172,19 @@ export const createDesktopLinkRedeemHandler = (
       set,
     }): SafeHandlerGenerator<DesktopLinkResponse> {
       set.headers[CACHE_CONTROL_HEADER] = PRIVATE_CACHE_CONTROL;
+      if (
+        request.headers.get(DESKTOP_ACCOUNT_PROTOCOL_HEADER) !==
+        String(DESKTOP_ACCOUNT_POLICY.linkProtocol)
+      ) {
+        return Result.err(
+          new HandlerError({
+            status: 426,
+            code: DESKTOP_HANDOFF_FAILURE.updateRequired,
+            message: "Update stella desktop",
+            retryable: false,
+          }),
+        );
+      }
       const linked = request.headers.has("authorization")
         ? yield* Result.await(services.authorizeLinkedAccount(request))
         : null;
