@@ -36,6 +36,8 @@
     "retry": "إعادة المحاولة",
     "error": "خطأ",
     "open": "فتح",
+    "openInStella": "فتح في stella",
+    "openOriginalSource": "فتح المصدر الأصلي",
     "from": "من",
     "to": "إلى"
   },
@@ -76,6 +78,8 @@
     "retry": "Spustit znovu",
     "error": "Chyba",
     "open": "Otevřít",
+    "openInStella": "Otevřít ve stelle",
+    "openOriginalSource": "Otevřít originál",
     "from": "Od",
     "to": "Do"
   },
@@ -116,6 +120,8 @@
     "retry": "Erneut versuchen",
     "error": "Fehler",
     "open": "Öffnen",
+    "openInStella": "In stella öffnen",
+    "openOriginalSource": "Originalquelle öffnen",
     "from": "Von",
     "to": "Bis"
   },
@@ -156,6 +162,8 @@
     "retry": "Retry",
     "error": "Error",
     "open": "Open",
+    "openInStella": "Open in stella",
+    "openOriginalSource": "Open original source",
     "from": "From",
     "to": "To"
   },
@@ -196,6 +204,8 @@
     "retry": "Proovi uuesti",
     "error": "Viga",
     "open": "Ava",
+    "openInStella": "Ava stellas",
+    "openOriginalSource": "Ava algallikas",
     "from": "Alates",
     "to": "Kuni"
   },
@@ -236,6 +246,8 @@
     "retry": "Réessayer",
     "error": "Erreur",
     "open": "Ouvrir",
+    "openInStella": "Ouvrir dans stella",
+    "openOriginalSource": "Ouvrir la source d’origine",
     "from": "Du",
     "to": "Au"
   },
@@ -276,6 +288,8 @@
     "retry": "Újrapróbál",
     "error": "Hiba",
     "open": "Megnyitás",
+    "openInStella": "Megnyitás a Stellában",
+    "openOriginalSource": "Eredeti forrás megnyitása",
     "from": "Mettől",
     "to": "Meddig"
   },
@@ -316,6 +330,8 @@
     "retry": "Mēģināt vēlreiz",
     "error": "Kļūda",
     "open": "Atvērt",
+    "openInStella": "Atvērt lietotnē stella",
+    "openOriginalSource": "Atvērt sākotnējo avotu",
     "from": "No",
     "to": "Līdz"
   },
@@ -356,6 +372,8 @@
     "retry": "Bandyti dar kartą",
     "error": "Klaida",
     "open": "Atidaryti",
+    "openInStella": "Atverti programoje stella",
+    "openOriginalSource": "Atverti pirminį šaltinį",
     "from": "Nuo",
     "to": "Iki"
   },
@@ -396,6 +414,8 @@
     "retry": "Spróbuj ponownie",
     "error": "Błąd",
     "open": "Otwórz",
+    "openInStella": "Otwórz w stelli",
+    "openOriginalSource": "Otwórz źródło oryginalne",
     "from": "Od",
     "to": "Do"
   },
@@ -436,6 +456,8 @@
     "retry": "Tentar novamente",
     "error": "Erro",
     "open": "Abrir",
+    "openInStella": "Abrir no stella",
+    "openOriginalSource": "Abrir fonte original",
     "from": "De",
     "to": "Para"
   },
@@ -476,6 +498,8 @@
     "retry": "Skúsiť znova",
     "error": "Chyba",
     "open": "Otvoriť",
+    "openInStella": "Otvoriť v stelle",
+    "openOriginalSource": "Otvoriť originál",
     "from": "Od",
     "to": "Do"
   },
@@ -516,6 +540,8 @@
     "retry": "Reintentar",
     "error": "Error",
     "open": "Abrir",
+    "openInStella": "Abrir en stella",
+    "openOriginalSource": "Abrir fuente original",
     "from": "Desde",
     "to": "Hasta"
   }
