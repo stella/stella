@@ -24,6 +24,8 @@ export const declareVisualSandboxSmoke = () => {
     // fulfilled by page.route() does not, and Chromium blocks the frame.
     const hostUrl = new URL("/prepaint-init.js", baseURL).href;
     const sandboxUrl = new URL(VISUAL_SANDBOX_PATH, E2E_API_ORIGIN).href;
+    const nonce = crypto.randomUUID();
+    const frameUrl = `${sandboxUrl}#n=${nonce}`;
     const collector = createNetworkCollector();
     const stopTracking = collector.trackPage(page);
     const errors = createBrowserErrorCollector();
@@ -39,24 +41,43 @@ export const declareVisualSandboxSmoke = () => {
       expect(hostResponse?.ok()).toBe(true);
       const frameResponse = page.waitForResponse(sandboxUrl);
       await page.evaluate(
-        ({ frameUrl, frameOrigin }) => {
+        ({ frameUrl: shellUrl, nonce: shellNonce }) => {
           const frame = document.createElement("iframe");
           frame.title = "Timeline";
-          frame.src = frameUrl;
+          frame.setAttribute("sandbox", "allow-scripts");
+          frame.src = shellUrl;
           addEventListener("message", (event: MessageEvent<unknown>) => {
-            const { source, data } = event;
+            const { source, origin, data } = event;
             if (
               source !== frame.contentWindow ||
+              origin !== "null" ||
               typeof data !== "object" ||
               data === null ||
-              !("type" in data) ||
-              !("height" in data)
+              !("kind" in data)
             ) {
               return;
             }
-            const { type, height } = data;
+            if (data.kind === "shell-ready") {
+              if (!("nonce" in data) || data.nonce !== shellNonce) {
+                return;
+              }
+              frame.contentWindow?.postMessage(
+                {
+                  type: "render",
+                  title: "Timeline",
+                  html: "<p id=visual-smoke>Timeline</p>",
+                  data: {},
+                },
+                "*",
+              );
+              return;
+            }
+            if (!("height" in data)) {
+              return;
+            }
+            const { kind, height } = data;
             if (
-              type === "resize" &&
+              kind === "resize" &&
               typeof height === "number" &&
               Number.isInteger(height) &&
               height > 0
@@ -64,19 +85,9 @@ export const declareVisualSandboxSmoke = () => {
               document.documentElement.dataset["visualResize"] = "received";
             }
           });
-          frame.addEventListener("load", () => {
-            frame.contentWindow?.postMessage(
-              {
-                type: "render",
-                title: "Timeline",
-                html: "<p id=visual-smoke>Timeline</p>",
-              },
-              frameOrigin,
-            );
-          });
           document.body.replaceChildren(frame);
         },
-        { frameUrl: sandboxUrl, frameOrigin: new URL(sandboxUrl).origin },
+        { frameUrl, nonce },
       );
       const response = await frameResponse;
       expect(response.status()).toBe(200);
@@ -113,7 +124,7 @@ export const declareVisualSandboxSmoke = () => {
       ).toEqual([]);
       expect(page.frames().map((frame) => frame.url())).toEqual([
         hostUrl,
-        sandboxUrl,
+        frameUrl,
         "about:srcdoc",
       ]);
       expect(frameRequests).toEqual(["GET"]);
