@@ -127,7 +127,7 @@ test.each(["fixture-feature", undefined])(
           executeBootstrap({
             source: missingBootstrap,
             prepared: false,
-            generate: () => generateCapabilityRuntime(root),
+            generate: async () => generateCapabilityRuntime(root),
             buildCatalog,
           }),
         ),
@@ -135,7 +135,7 @@ test.each(["fixture-feature", undefined])(
       await executeBootstrap({
         source: bootstrap,
         prepared: false,
-        generate: () => generateCapabilityRuntime(root),
+        generate: async () => generateCapabilityRuntime(root),
         buildCatalog,
       });
       const first = await readFile(
