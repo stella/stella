@@ -77,9 +77,8 @@ import {
   withFacetValues,
 } from "@/api/lib/case-law/search-warnings";
 import {
-  type AssertNoExtraFields,
-  type LIST_MATTERS_DETAIL_PROJECTION,
-  type LIST_MATTERS_LIST_PROJECTION,
+  LIST_MATTERS_DETAIL_PROJECTION,
+  LIST_MATTERS_LIST_PROJECTION,
   LIST_MATTERS_PROJECTION,
   LOOKUP_CASE_LAW_PROJECTION,
   CASE_LAW_COVERAGE_PROJECTION,
@@ -112,6 +111,10 @@ import {
   encodePaginationCursor,
   isUuidPaginationCursorPart,
 } from "@/api/lib/pagination";
+import {
+  type AssertNoExtraFields,
+  projectionPayload,
+} from "@/api/lib/projection-totality";
 import {
   getTenantActionSizePolicy,
   normalizeTenantPageLimit as normalizePage,
@@ -1394,17 +1397,19 @@ const handleListMattersTool: TypedMcpToolHandler<
   // its own workspace scope in anonymized mode. The matter id is its workspace
   // id.
   if (matters.length === 0) {
-    return toolDataResult({
-      matters,
-      nextCursor: page.nextCursor,
-      ...(await onboardingNextStep(context)),
-    } satisfies v.InferInput<typeof LIST_MATTERS_LIST_PROJECTION>);
+    return toolDataResult(
+      projectionPayload(LIST_MATTERS_LIST_PROJECTION, {
+        matters,
+        nextCursor: page.nextCursor,
+        ...(await onboardingNextStep(context)),
+      }),
+    );
   }
 
-  const payload = {
+  const payload = projectionPayload(LIST_MATTERS_LIST_PROJECTION, {
     matters,
     nextCursor: page.nextCursor,
-  } satisfies v.InferInput<typeof LIST_MATTERS_LIST_PROJECTION>;
+  });
   const textFields = runTextFieldSpecs(
     LIST_MATTERS_LIST_TEXT_FIELD_SPECS,
     payload,
@@ -1519,13 +1524,13 @@ const readMatterOverview = async ({
       }) => entity,
     ),
   };
-  const payload = {
+  const payload = projectionPayload(LIST_MATTERS_DETAIL_PROJECTION, {
     matter,
     overview: overviewWithoutAvatarUrls,
     contacts: contactCards,
     contactsOverflow: contacts.value.overflow,
     members: memberCards,
-  } satisfies v.InferInput<typeof LIST_MATTERS_DETAIL_PROJECTION>;
+  });
 
   // Everything below belongs to one matter, so it all anonymizes under this
   // single workspace scope. Ids/status/dates pass through; user-authored
@@ -1585,11 +1590,11 @@ const handleSearchAcrossMattersTool: TypedMcpToolHandler<
   // Hits span multiple matters; each anonymizes under its own workspace scope.
   // `workspaceName` embeds the matter name (party names), so it is redacted
   // alongside the hit name and headline to stay consistent with list_matters.
-  const payload = {
+  const payload = projectionPayload(SEARCH_ACROSS_MATTERS_PROJECTION, {
     totalCount: result.totalCount,
     nextCursor: result.nextCursor,
     hits,
-  } satisfies v.InferInput<typeof SEARCH_ACROSS_MATTERS_PROJECTION>;
+  });
   const textFields = runTextFieldSpecs(
     SEARCH_ACROSS_MATTERS_TEXT_FIELD_SPECS,
     payload,
@@ -2460,24 +2465,26 @@ const handleSearchCaseLawTool: TypedMcpToolHandler<
     },
   );
 
-  return toolDataResult({
-    facets: first.exhausted ? null : first.page.facets,
-    searches,
-    nextCursor: single === undefined ? mergedCursor : single.nextCursor,
-    paginationOutcome: pages.some(
-      (outcome) =>
-        !outcome.exhausted &&
-        outcome.page.paginationOutcome.type === "truncated",
-    )
-      ? SEARCH_PAGINATION_TRUNCATED_EXCLUSION_BUDGET
-      : SEARCH_PAGINATION_COMPLETE,
-    results: merged.map(caseLawSearchResult),
-    total:
-      single === undefined
-        ? { type: SEARCH_TOTAL_TYPE.NOT_COUNTED }
-        : single.total,
-    ...(merged.length === 0 ? await onboardingNextStep(context) : {}),
-  } satisfies v.InferInput<typeof SEARCH_CASE_LAW_PROJECTION>);
+  return toolDataResult(
+    projectionPayload(SEARCH_CASE_LAW_PROJECTION, {
+      facets: first.exhausted ? null : first.page.facets,
+      searches,
+      nextCursor: single === undefined ? mergedCursor : single.nextCursor,
+      paginationOutcome: pages.some(
+        (outcome) =>
+          !outcome.exhausted &&
+          outcome.page.paginationOutcome.type === "truncated",
+      )
+        ? SEARCH_PAGINATION_TRUNCATED_EXCLUSION_BUDGET
+        : SEARCH_PAGINATION_COMPLETE,
+      results: merged.map(caseLawSearchResult),
+      total:
+        single === undefined
+          ? { type: SEARCH_TOTAL_TYPE.NOT_COUNTED }
+          : single.total,
+      ...(merged.length === 0 ? await onboardingNextStep(context) : {}),
+    }),
+  );
 };
 
 type DecisionCursorState = {
@@ -2915,22 +2922,24 @@ const handleReadCaseLawDecisionTool: TypedMcpToolHandler<
     ),
   );
 
-  return toolDataResult({
-    items: decisionIds.map((decisionId) =>
-      decisionItemResult({
-        decisionId,
-        maxTextChars,
-        outline: decisionIds.length === 1 ? "include" : "omit",
-        read: readOf(decisionId),
-        readsSharedCorpus,
-        documentHydration: onDemand.type,
-        textOffset: offsets.text,
-        firstWindow: cursor === undefined,
-        include,
-        citationsCursor: offsets.citations,
-      }),
-    ),
-  } satisfies v.InferInput<typeof READ_CASE_LAW_DECISION_PROJECTION>);
+  return toolDataResult(
+    projectionPayload(READ_CASE_LAW_DECISION_PROJECTION, {
+      items: decisionIds.map((decisionId) =>
+        decisionItemResult({
+          decisionId,
+          maxTextChars,
+          outline: decisionIds.length === 1 ? "include" : "omit",
+          read: readOf(decisionId),
+          readsSharedCorpus,
+          documentHydration: onDemand.type,
+          textOffset: offsets.text,
+          firstWindow: cursor === undefined,
+          include,
+          citationsCursor: offsets.citations,
+        }),
+      ),
+    }),
+  );
 };
 
 // --- lookup_case_law -------------------------------------------------------
@@ -3165,14 +3174,16 @@ const handleLookupCaseLawTool: TypedMcpToolHandler<
     outcomes.get(identifier) ??
     panic(`No lookup ran for identifier ${identifier}`);
 
-  return toolDataResult({
-    items: identifiers.map((identifier) =>
-      lookupItemResult({
-        identifier,
-        outcome: outcomeOf(identifier),
-      }),
-    ),
-  } satisfies v.InferInput<typeof LOOKUP_CASE_LAW_PROJECTION>);
+  return toolDataResult(
+    projectionPayload(LOOKUP_CASE_LAW_PROJECTION, {
+      items: identifiers.map((identifier) =>
+        lookupItemResult({
+          identifier,
+          outcome: outcomeOf(identifier),
+        }),
+      ),
+    }),
+  );
 };
 
 const handleReadCaseLawCitationsTool: TypedMcpToolHandler<
@@ -3213,50 +3224,52 @@ const handleReadCaseLawCitationsTool: TypedMcpToolHandler<
     });
   }
 
-  return toolDataResult({
-    decisionId,
-    direction,
-    nextCursor: read.page.nextCursor,
-    citations: read.page.items.map((item) => ({
-      citationId: item.id,
-      citationText: item.citationText,
-      polarity: item.treatment,
-      decision:
-        item.decision === null
-          ? null
-          : {
-              ...legalCitationLinkFields({
-                appUrl: buildCaseLawDecisionAppUrl({
-                  caseNumber: item.decision.caseNumber,
-                  country: item.decision.country,
-                  court: item.decision.court,
-                  decisionId: item.decision.id,
-                  language: item.decision.language,
-                  languageAlternates: item.decision.languageAlternates,
-                  slug: item.decision.slug,
+  return toolDataResult(
+    projectionPayload(READ_CASE_LAW_CITATIONS_PROJECTION, {
+      decisionId,
+      direction,
+      nextCursor: read.page.nextCursor,
+      citations: read.page.items.map((item) => ({
+        citationId: item.id,
+        citationText: item.citationText,
+        polarity: item.treatment,
+        decision:
+          item.decision === null
+            ? null
+            : {
+                ...legalCitationLinkFields({
+                  appUrl: buildCaseLawDecisionAppUrl({
+                    caseNumber: item.decision.caseNumber,
+                    country: item.decision.country,
+                    court: item.decision.court,
+                    decisionId: item.decision.id,
+                    language: item.decision.language,
+                    languageAlternates: item.decision.languageAlternates,
+                    slug: item.decision.slug,
+                  }),
+                  sourceUrl: null,
                 }),
-                sourceUrl: null,
-              }),
-              caseNumber: item.decision.caseNumber,
-              ...(item.decision.caseNumberType ===
-              DECISION_IDENTIFIER_TYPES.CASE_NUMBER
-                ? {}
-                : { caseNumberType: item.decision.caseNumberType }),
-              citationAuthority: item.decision.citationAuthority,
-              court: item.decision.court,
-              decisionDate: item.decision.decisionDate,
-              decisionId: item.decision.id,
-              decisionType: item.decision.decisionType,
-              resourceName: serializeAuthorizedCorpusMcpResourceName(
-                resourceRef({
-                  type: RESOURCE_TYPE.CASE_LAW_DECISION,
-                  id: brandPersistedCaseLawDecisionId(item.decision.id),
-                }),
-              ),
-            },
-      passage: item.passage,
-    })),
-  } satisfies v.InferInput<typeof READ_CASE_LAW_CITATIONS_PROJECTION>);
+                caseNumber: item.decision.caseNumber,
+                ...(item.decision.caseNumberType ===
+                DECISION_IDENTIFIER_TYPES.CASE_NUMBER
+                  ? {}
+                  : { caseNumberType: item.decision.caseNumberType }),
+                citationAuthority: item.decision.citationAuthority,
+                court: item.decision.court,
+                decisionDate: item.decision.decisionDate,
+                decisionId: item.decision.id,
+                decisionType: item.decision.decisionType,
+                resourceName: serializeAuthorizedCorpusMcpResourceName(
+                  resourceRef({
+                    type: RESOURCE_TYPE.CASE_LAW_DECISION,
+                    id: brandPersistedCaseLawDecisionId(item.decision.id),
+                  }),
+                ),
+              },
+        passage: item.passage,
+      })),
+    }),
+  );
 };
 
 const handleReadContactTool: TypedMcpToolHandler<
@@ -3286,7 +3299,7 @@ const handleReadContactTool: TypedMcpToolHandler<
   // Contacts are organization-scoped (no owning workspace), so the org id is
   // the anonymization scope. The placeholder card is intentional and consistent
   // with how chat anonymizes contact fields.
-  const payload = {
+  const payload = projectionPayload(READ_CONTACT_PROJECTION, {
     contactId: contact.id,
     type: contact.type,
     displayName: contact.displayName,
@@ -3299,7 +3312,7 @@ const handleReadContactTool: TypedMcpToolHandler<
     phones: arrayOrEmpty(contact.phones),
     dateOfBirth: dateOfBirthFromColumns(contact),
     nationalityCodes: contact.nationalityCodes,
-  } satisfies v.InferInput<typeof READ_CONTACT_PROJECTION>;
+  });
 
   const textFields = runTextFieldSpecs(
     buildContactTextFieldSpecs(context.organizationId),
@@ -3357,9 +3370,11 @@ const handleSetPracticeJurisdictionsTool: TypedMcpToolHandler<
     practiceJurisdictions,
   );
 
-  return toolDataResult({ practiceJurisdictions } satisfies v.InferInput<
-    typeof SET_PRACTICE_JURISDICTIONS_PROJECTION
-  >);
+  return toolDataResult(
+    projectionPayload(SET_PRACTICE_JURISDICTIONS_PROJECTION, {
+      practiceJurisdictions,
+    }),
+  );
 };
 
 const handleCaseLawCoverageTool: TypedMcpToolHandler<
