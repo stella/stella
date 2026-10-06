@@ -30,7 +30,6 @@ def percentile(values, fraction):
 
 def summarize(pulls, start, end, fast_jobs):
     merged = []
-    queue_wait = []
     fanout_wait = []
     minutes = 0.0
     failures = set()
@@ -73,8 +72,6 @@ def summarize(pulls, start, end, fast_jobs):
                         continue
                     begin, finish = timestamp(job["startedAt"]), timestamp(job["completedAt"])
                     minutes += max(0, (finish - begin).total_seconds() / 60)
-                    # check-run creation is enqueue time, not the workflow's first-job time.
-                    queue_wait.append(max(0, (begin - timestamp(job["createdAt"])).total_seconds() / 60))
                     owner = job["name"].split(" (")[0]
                     if owner not in {"ci-plan", "ci-result"}:
                         starts.append(begin)
@@ -87,7 +84,7 @@ def summarize(pulls, start, end, fast_jobs):
         "armToMergeP50Minutes": percentile(merged, .5), "armToMergeP90Minutes": percentile(merged, .9),
         "pendingArmedSampleCount": len(pending_arms),
         "armToMergeP50LowerBoundMinutes": percentile(merged + pending_arms, .5),
-        "queueWaitP50Minutes": percentile(queue_wait, .5), "queueWaitP90Minutes": percentile(queue_wait, .9),
+        "runIds": sorted(seen_runs),
         "fanoutWaitP50Minutes": percentile(fanout_wait, .5), "fanoutWaitP90Minutes": percentile(fanout_wait, .9),
         "postArmDeferredFailureHeads": len(failures),
     }
@@ -157,6 +154,30 @@ class Collector:
         response = subprocess.run(command, check=True, capture_output=True, timeout=30)
         return json.loads(response.stdout)
 
+    def queue_wait(self, run_ids):
+        # Systematic samples span the whole generation and bound daily REST reads.
+        selected = run_ids if len(run_ids) <= 100 else [run_ids[int(index * (len(run_ids) - 1) / 99)] for index in range(100)]
+        waits = []
+        pending = 0
+        complete = True
+        for run_id in selected:
+            result = self.rest(f"actions/runs/{run_id}/jobs", {"per_page": 100, "filter": "latest"})
+            complete = complete and result["total_count"] <= len(result["jobs"])
+            for job in result["jobs"]:
+                if job["conclusion"] == "skipped":
+                    continue
+                if not job.get("created_at"):
+                    complete = False
+                    continue
+                if not job["started_at"]:
+                    pending += 1
+                    continue
+                waits.append(max(0, (timestamp(job["started_at"]) - timestamp(job["created_at"])).total_seconds() / 60))
+        return {"queueWaitP50Minutes": percentile(waits, .5), "queueWaitP90Minutes": percentile(waits, .9),
+                "queueWaitSampledRuns": len(selected), "queueWaitPopulationRuns": len(run_ids),
+                "queueWaitSampledJobs": len(waits), "queueWaitPendingJobs": pending,
+                "queueWaitEvidenceComplete": complete}
+
     def queue_failures(self, since, normal_pr_deferred):
         heads = set()
         unmapped = 0
@@ -201,7 +222,7 @@ class Collector:
                   checkSuites(first:100) {pageInfo {hasNextPage} nodes {createdAt
                     workflowRun {databaseId event workflow {name}}
                     checkRuns(first:100) {pageInfo {hasNextPage} nodes {
-                      databaseId name createdAt startedAt completedAt conclusion}}}}}}}
+                      databaseId name startedAt completedAt conclusion}}}}}}}
               }
             }
           }
@@ -251,6 +272,9 @@ def main():
                           check=True, capture_output=True, text=True)
     fast_jobs = set(json.loads(plan.stdout.removeprefix("fast_jobs=")))
     report = build_report(pulls, previous, now, complete, fast_jobs, bootstrap)
+    waiting = collector.queue_wait(report["measured"].pop("runIds"))
+    report["measured"].update(waiting)
+    report["complete"] = report["complete"] and waiting["queueWaitEvidenceComplete"]
     policy = json.loads(Path(".github/ci-event-policy.json").read_text())["jobs"]
     normal_pr_deferred = {name.removeprefix("ci.yml/") for name, category in policy.items()
                           if name.startswith("ci.yml/") and category in {"pr-fast", "pr-opt-in", "schema-pr", "release-pr"}

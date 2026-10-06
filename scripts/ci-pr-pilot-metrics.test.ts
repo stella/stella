@@ -46,7 +46,13 @@ pull = {"number": 1, "mergedAt": "2026-10-10T11:00:00Z", "timelineItems": connec
  {"__typename": "AutoMergeEnabledEvent", "createdAt": "2026-10-10T10:30:00Z"}]),
  "commits": connection([{"commit": {"oid": "head", "checkSuites": connection([suite])}}])}
 start = dt.datetime(2026, 10, 10, tzinfo=dt.UTC)
-print(json.dumps(m.summarize([pull, pull], start, now, {"ci-tests"})))
+class Fixture(m.Collector):
+    def rest(self, endpoint, parameters):
+        return {"total_count": len(jobs), "jobs": [{"conclusion": "success", "created_at": job["createdAt"],
+            "started_at": job["startedAt"]} for job in jobs]}
+summary = m.summarize([pull, pull], start, now, {"ci-tests"})
+summary.update(Fixture("stella/stella").queue_wait(summary.pop("runIds")))
+print(json.dumps(summary))
 `);
   const report = v.parse(
     v.object({
