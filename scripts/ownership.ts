@@ -20,8 +20,30 @@ import { fileURLToPath } from "node:url";
 
 import { canonicalModuleId } from "../.oxlint-plugins/module-id.ts";
 import { STATUS_COLUMNS } from "../apps/api/src/lib/db/status-tables.gen.ts";
+import { SANCTIONS_MONITORING_TRANSITION_IDENTITIES } from "../apps/api/src/lib/lists/sanctions/monitoring-transition-identities.ts";
 // With its extension: oxlint.config.ts loads this file under Node's resolver.
 import { formattedLikeRepository } from "./generated-artifacts.ts";
+
+const statusTransitionColumns = () => {
+  const columns = new Map(
+    Object.entries(STATUS_COLUMNS).map(([table, names]) => [
+      table,
+      new Set<string>(names),
+    ]),
+  );
+  for (const { tableName, stateColumn } of Object.values(
+    SANCTIONS_MONITORING_TRANSITION_IDENTITIES,
+  )) {
+    const names = columns.get(tableName) ?? new Set<string>();
+    names.add(stateColumn);
+    columns.set(tableName, names);
+  }
+  return Object.fromEntries(
+    [...columns].map(([table, names]) => [table, [...names].toSorted()]),
+  );
+};
+
+const STATUS_TRANSITION_COLUMNS = statusTransitionColumns();
 
 // A file the rule accepts besides the owner itself. `path` is a
 // repo-relative file path, or a directory prefix ending in "/".
@@ -140,6 +162,51 @@ const FLUSHES_ITS_OWN_SEARCH_MARKS =
 // the baseline; it moves one out of it, and review of the row is the gate.
 export const ROOT_CONNECTION_DOORS = [
   {
+    id: "personal-api-key-lifecycle",
+    capability: "Managing member-owned credentials in the denied auth table",
+    owner: ["apps/api/src/lib/machine-api-keys/personal-lifecycle.ts"],
+    summary:
+      "Bounded lifecycle operations retain organization and owner SQL predicates, lock live membership, enforce policy and active-key limits, and audit within the mutation transaction. No raw database handle is exported.",
+    enforcement: {
+      kind: "import",
+      specifiers: ["@/api/lib/machine-api-keys/personal-lifecycle"],
+      allowed: [
+        {
+          path: "apps/api/src/handlers/api-keys/personal/create.ts",
+          reason: "Owns the session-authorized personal key operation.",
+        },
+        {
+          path: "apps/api/src/handlers/api-keys/personal/list.ts",
+          reason: "Owns the session-authorized personal key operation.",
+        },
+        {
+          path: "apps/api/src/handlers/api-keys/personal/revoke.ts",
+          reason: "Owns the session-authorized personal key operation.",
+        },
+        {
+          path: "apps/api/src/handlers/api-keys/personal/rotate.ts",
+          reason: "Owns the session-authorized personal key operation.",
+        },
+        {
+          path: "apps/api/src/handlers/api-keys/personal/list-organization.ts",
+          reason: "Owns the session-authorized personal key operation.",
+        },
+        {
+          path: "apps/api/src/handlers/api-keys/personal/revoke-organization.ts",
+          reason: "Owns the session-authorized personal key operation.",
+        },
+        {
+          path: "apps/api/src/handlers/api-keys/personal/policy.ts",
+          reason: "Owns the session-authorized personal key operation.",
+        },
+        {
+          path: "apps/api/src/lib/machine-api-keys/personal-policy-reader.ts",
+          reason: "Exposes only the read-only organization policy operation.",
+        },
+      ],
+    },
+  },
+  {
     id: "operator-registration-directory",
     capability: "Serving audited operator registration pages",
     owner: ["apps/api/src/db/root.ts"],
@@ -158,6 +225,26 @@ export const ROOT_CONNECTION_DOORS = [
       ],
     },
   },
+
+  {
+    id: "personal-api-key-policy-reader",
+    capability:
+      "Reading personal API key policy during credential verification",
+    owner: ["apps/api/src/lib/machine-api-keys/personal-policy-reader.ts"],
+    summary:
+      "The MCP authentication boundary can read policy without importing lifecycle mutations.",
+    enforcement: {
+      kind: "import",
+      specifiers: ["@/api/lib/machine-api-keys/personal-policy-reader"],
+      allowed: [
+        {
+          path: "apps/api/src/mcp/api-key-auth.ts",
+          reason: "Checks policy before accepting a personal credential.",
+        },
+      ],
+    },
+  },
+
   {
     id: "public-sanctions-reader-binding",
     capability:
@@ -463,7 +550,11 @@ export const STATUS_TRANSITION_OWNERSHIP = {
   owner: ["apps/api/src/lib/db/transitions.ts"],
   summary:
     "The transition owner checks the expected state and optional fence in the update predicate, and returns Transitioned or Stale. A required recorder audits successful updates in the caller's transaction; stale updates record nothing and recorder failure rolls the update back. Direct lifecycle writes, conflict updates and visible SQL lifecycle assignments are lint errors outside the measured backlog; per-file shrink-only guards forbid adding them. Opaque table handles and payloads count conservatively. Unmanaged declarations shrink independently per table. SQL built entirely by external functions, external payload mutation and custom SQL column names not ending in status/state/phase remain outside static inspection.",
-  enforcement: { kind: "status-set", columns: STATUS_COLUMNS, allowed: [] },
+  enforcement: {
+    kind: "status-set",
+    columns: STATUS_TRANSITION_COLUMNS,
+    allowed: [],
+  },
 } as const satisfies OwnershipEntry;
 // Case-law modules that still call the raw publisher fetch. Each migrates to
 // `readPublisher` and leaves this list; nothing is added to it.
@@ -1649,6 +1740,11 @@ const OWNERSHIP_DECLARATIONS = [
       specifiers: ["@/api/lib/permission-authorization"],
       names: ["sessionMemberRole", "authorizedMemberRole"],
       allowed: [
+        {
+          path: "apps/api/src/lib/machine-api-keys/personal-lifecycle.ts",
+          reason:
+            "Builds the key owner authority from a locked live membership before minting.",
+        },
         {
           path: "apps/api/src/lib/auth.ts",
           reason: "Builds the authenticated session context.",

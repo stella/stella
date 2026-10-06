@@ -107,7 +107,7 @@
     "ci.yml/ci-checks-generated": "pr-fast",
     "ci.yml/ci-checks-policy": "pr-fast",
     "ci.yml/ci-checks-rest": "pr-fast",
-    "ci.yml/ci-tests": "pending",
+    "ci.yml/ci-tests": "pr-fast",
     "ci.yml/ci-browser": "queue",
     "ci.yml/code-quality-api": "pr-fast",
     "ci.yml/code-quality-web": "pr-fast",
@@ -140,12 +140,6 @@
     "dependency-audit.yml/audit": "pr-fast",
     "scorecard.yml/scorecard": "main",
     "codeql.yml/scope": "release-pr"
-  },
-  "pending": {
-    "ci.yml/ci-tests": {
-      "owner": "email-inbound",
-      "reason": "event policy moves after the run-tests rework lands"
-    }
   },
   "pushMain": {
     "typecheck-base.yml": {

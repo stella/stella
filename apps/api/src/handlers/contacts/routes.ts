@@ -13,6 +13,11 @@ import previewContactImport from "@/api/handlers/contacts/import-preview";
 import validateContactImport from "@/api/handlers/contacts/import-validate";
 import readContacts from "@/api/handlers/contacts/list";
 import presignProcuracao from "@/api/handlers/contacts/presign-procuracao";
+import listSanctionsEvents from "@/api/handlers/contacts/sanctions/events/list";
+import contactSanctions from "@/api/handlers/contacts/sanctions/get";
+import listSanctionsMatches from "@/api/handlers/contacts/sanctions/matches/list";
+import updateSanctionsMonitoring from "@/api/handlers/contacts/sanctions/monitoring/update";
+import reviewSanctions from "@/api/handlers/contacts/sanctions/reviews/update";
 import searchContacts from "@/api/handlers/contacts/search";
 import updateContactById from "@/api/handlers/contacts/update";
 import { authMacro, permissionMacro } from "@/api/lib/auth";
@@ -28,6 +33,14 @@ export const contactsRoute = new Elysia({ prefix: "/contacts" })
   .get("/", readContacts.handler, {
     permissions: readContacts.config.permissions,
     query: readContacts.config.query,
+  })
+  .get("/sanctions/matches", listSanctionsMatches.handler, {
+    permissions: listSanctionsMatches.config.permissions,
+    query: listSanctionsMatches.config.query,
+  })
+  .get("/sanctions/events", listSanctionsEvents.handler, {
+    permissions: listSanctionsEvents.config.permissions,
+    query: listSanctionsEvents.config.query,
   })
   .get("/search", searchContacts.handler, {
     permissions: searchContacts.config.permissions,
@@ -82,6 +95,18 @@ export const contactsRoute = new Elysia({ prefix: "/contacts" })
       app
         .get("/", readContactById.handler, {
           permissions: readContactById.config.permissions,
+        })
+        .get("/sanctions", contactSanctions.handler, {
+          permissions: contactSanctions.config.permissions,
+          query: contactSanctions.config.query,
+        })
+        .post("/sanctions/reviews", reviewSanctions.handler, {
+          permissions: reviewSanctions.config.permissions,
+          body: reviewSanctions.config.body,
+        })
+        .post("/sanctions/monitoring", updateSanctionsMonitoring.handler, {
+          permissions: updateSanctionsMonitoring.config.permissions,
+          body: updateSanctionsMonitoring.config.body,
         })
         .post("/", updateContactById.handler, {
           body: updateContactById.config.body,

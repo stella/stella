@@ -1,5 +1,6 @@
 import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
+import { getColumns } from "drizzle-orm";
 import {
   integer,
   pgTable,
@@ -12,6 +13,7 @@ import fc from "fast-check";
 import { assertProperty } from "@stll/property-testing";
 
 import { timestamptz } from "@/api/db/columns";
+import { TRANSITIONS } from "@/api/lib/db/transition-specs";
 import {
   defineFixedLifecycle,
   defineLifecycle,
@@ -26,8 +28,51 @@ import {
   transitionScopedBatch,
   transitionUpsertBatch,
 } from "@/api/lib/db/transitions";
+import type { ScopedTransitionDeclaration } from "@/api/lib/db/transitions";
+import { SANCTIONS_MONITORING_TRANSITION_IDENTITIES } from "@/api/lib/lists/sanctions/monitoring-transition-identities";
 
 const states = ["queued", "running", "completed", "failed"] as const;
+
+test("state-column ownership covers every scoped runtime transition", () => {
+  const registered = Object.entries(TRANSITIONS).flatMap(
+    ([tableName, entry]) => {
+      const project = ({
+        key,
+        scope,
+        stateColumn,
+      }: ScopedTransitionDeclaration) => ({
+        tableName,
+        key,
+        scope,
+        stateColumn,
+      });
+      if ("scoped" in entry) {
+        return Object.values(entry.scoped).map(project);
+      }
+      if ("stateColumn" in entry) {
+        return [project(entry)];
+      }
+      return [];
+    },
+  );
+  const order = (
+    left: { stateColumn: string; tableName: string },
+    right: { stateColumn: string; tableName: string },
+  ) => {
+    const leftKey = `${left.tableName}.${left.stateColumn}`;
+    const rightKey = `${right.tableName}.${right.stateColumn}`;
+    if (leftKey < rightKey) {
+      return -1;
+    }
+    if (leftKey > rightKey) {
+      return 1;
+    }
+    return 0;
+  };
+  expect(registered.toSorted(order)).toEqual(
+    Object.values(SANCTIONS_MONITORING_TRANSITION_IDENTITIES).toSorted(order),
+  );
+});
 const jobs = pgTable("transition_test_jobs", {
   id: text().primaryKey(),
   status: text({ enum: states }).notNull(),
@@ -651,6 +696,36 @@ test("same-state upserts need a declared policy and ignored rows do not audit", 
   });
   expect(changed).toEqual([]);
   expect(auditCalls).toBe(0);
+});
+
+test("scoped identities accept only schema-declared non-null primary or unique columns", () => {
+  const rows = pgTable("declared_transition_identity", {
+    id: text().primaryKey(),
+    organizationId: text("organization_id").notNull().unique(),
+    state: text({ enum: ["active", "lapsed"] }).notNull(),
+    note: text().notNull(),
+    optionalKey: text("optional_key").unique(),
+  });
+  const columns = getColumns(rows);
+  const keys = Object.keys(columns).filter((key): key is keyof typeof columns =>
+    Object.hasOwn(columns, key),
+  );
+  for (const key of keys) {
+    const outcome = Result.try(() =>
+      defineScopedTransitions({
+        table: rows,
+        key,
+        scope: [],
+        stateColumn: "state",
+        edges: { active: ["lapsed"], lapsed: [] },
+        initial: ["active"],
+      }),
+    );
+    const column = columns[key];
+    expect(outcome.isOk()).toBe(
+      column.notNull && (column.primary || column.isUnique),
+    );
+  }
 });
 
 const leases = ["idle", "held"] as const;

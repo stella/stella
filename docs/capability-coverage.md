@@ -103,6 +103,11 @@ A compound action is a nested resource: `clauses.categories.create`, not
 | `contacts.get` | read | stella:read | — | curated tool `read_contact` |
 | `contacts.import` | write | stella:contacts_write | — | covered by `save_contact` |
 | `contacts.list` | read | stella:read | — | curated tool `list_contacts` |
+| `contacts.sanctions.events.list` | read | stella:read | — | generic invoke → `stella capability contacts sanctions-events-list` |
+| `contacts.sanctions.get` | read | stella:read | — | generic invoke → `stella capability contacts sanctions-get` |
+| `contacts.sanctions.matches.list` | read | stella:read | — | generic invoke → `stella capability contacts sanctions-matches-list` |
+| `contacts.sanctions.monitoring.update` | write | stella:contacts_write | — | generic invoke → `stella capability contacts sanctions-monitoring-update` |
+| `contacts.sanctions.reviews.update` | write | stella:contacts_write | — | generic invoke → `stella capability contacts sanctions-reviews-update` |
 | `contacts.search` | read | stella:read | — | generic invoke → `stella capability contacts search` |
 | `contacts.update` | write | stella:contacts_write | — | covered by `save_contact` |
 
@@ -342,6 +347,7 @@ A compound action is a nested resource: `clauses.categories.create`, not
 | `organization-settings.get` | read | stella:admin_read | — | generic invoke → `stella capability organization-settings get` |
 | `organization-settings.practice-jurisdictions.update` | write | stella:admin_write | — | curated tool `set_practice_jurisdictions` |
 | `organization-settings.preview` | read | stella:admin_read | — | generic invoke → `stella capability organization-settings preview` |
+| `organization-settings.sanctions-monitoring.update` | write | stella:admin_write | — | generic invoke → `stella capability organization-settings sanctions-monitoring-update` |
 | `organization-settings.update` | write | stella:admin_write | — | covered by `manage_organization` |
 
 ## playbooks
@@ -676,7 +682,7 @@ mechanics, and similar), not gaps in coverage.
 | hosted_billing | 7 |
 | mcp_transport | 12 |
 | native_tool_ui | 9 |
-| provider_secret | 27 |
+| provider_secret | 33 |
 | public_indexing | 9 |
 | realtime_stream | 4 |
 | search_ui | 15 |

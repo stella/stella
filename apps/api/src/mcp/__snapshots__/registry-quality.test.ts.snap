@@ -444,7 +444,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
     "scope": "stella:read",
     "access": "read",
     "feature": "FEATURE_PUBLIC_LAW",
-    "description": "Read decisions by \`decision_ids[]\`, answered in input order. Batch ids share the text budget; \`max_chars\` sizes one id’s text window. Static details appear only on the cursor-less window. A single id also gets up to 100 outline headings or numbered paragraphs: pass an outline cursor with that id to jump there. \`include\` selects optional fields on any window; [] returns text and identity only. Text and unfinished citation lists are paged: pass nextCursor with that one id. Citation ids carry neither treatment nor surrounding text; for those call read_case_law_citations ({ decision_id: '<uuid>', direction: 'cited_by' }). Use \`url\` for the reader and \`source_url\` for the publisher.",
+    "description": "Read decisions by \`decision_ids[]\`, answered in input order. Batch ids share the text budget unless \`max_chars\` sizes each id’s window. Static details appear only on the cursor-less window. A single id also gets up to 100 outline headings or numbered paragraphs: pass an outline cursor with that id to jump there. \`include\` selects optional fields on any window; [] returns text and identity only. Text and unfinished citation lists are paged: pass nextCursor with that one id. Citation ids carry neither treatment nor surrounding text; for those call read_case_law_citations ({ decision_id: '<uuid>', direction: 'cited_by' }). Use \`url\` for the reader and \`source_url\` for the publisher.",
     "annotations": {
       "title": "Read case-law decision",
       "destructiveHint": false,
@@ -473,7 +473,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
           "type": "integer",
           "minimum": 1,
           "maximum": 8000,
-          "description": "Text window size, 1–8000 characters. Accepted only alongside a single decision id. Use a JSON number; a value outside the range is clamped to it.",
+          "description": "Text window size per decision, 1–8000 characters. In a batch each decision gets its own window of this size, trimmed evenly so the call returns at most 40000 characters; omitted, the batch shares 8000 characters. Use a JSON number; a value outside the range is clamped to it.",
           "x-stella-agent-input": {
             "kind": "number",
             "range": "clamp"
@@ -7172,7 +7172,7 @@ exports[`MCP registry quality (anonymized surface) tool surface snapshot (name, 
     "scope": "stella:read_anonymized",
     "access": "read",
     "feature": "FEATURE_PUBLIC_LAW",
-    "description": "Read decisions by \`decision_ids[]\`, answered in input order. Batch ids share the text budget; \`max_chars\` sizes one id’s text window. Static details appear only on the cursor-less window. A single id also gets up to 100 outline headings or numbered paragraphs: pass an outline cursor with that id to jump there. \`include\` selects optional fields on any window; [] returns text and identity only. Text and unfinished citation lists are paged: pass nextCursor with that one id. Citation ids carry neither treatment nor surrounding text; for those call read_case_law_citations ({ decision_id: '<uuid>', direction: 'cited_by' }). Use \`url\` for the reader and \`source_url\` for the publisher.",
+    "description": "Read decisions by \`decision_ids[]\`, answered in input order. Batch ids share the text budget unless \`max_chars\` sizes each id’s window. Static details appear only on the cursor-less window. A single id also gets up to 100 outline headings or numbered paragraphs: pass an outline cursor with that id to jump there. \`include\` selects optional fields on any window; [] returns text and identity only. Text and unfinished citation lists are paged: pass nextCursor with that one id. Citation ids carry neither treatment nor surrounding text; for those call read_case_law_citations ({ decision_id: '<uuid>', direction: 'cited_by' }). Use \`url\` for the reader and \`source_url\` for the publisher.",
     "annotations": {
       "title": "Read case-law decision",
       "destructiveHint": false,
@@ -7201,7 +7201,7 @@ exports[`MCP registry quality (anonymized surface) tool surface snapshot (name, 
           "type": "integer",
           "minimum": 1,
           "maximum": 8000,
-          "description": "Text window size, 1–8000 characters. Accepted only alongside a single decision id. Use a JSON number; a value outside the range is clamped to it.",
+          "description": "Text window size per decision, 1–8000 characters. In a batch each decision gets its own window of this size, trimmed evenly so the call returns at most 40000 characters; omitted, the batch shares 8000 characters. Use a JSON number; a value outside the range is clamped to it.",
           "x-stella-agent-input": {
             "kind": "number",
             "range": "clamp"
@@ -8701,7 +8701,7 @@ exports[`MCP registry quality (law surface) tool surface snapshot (name, scope, 
     "scope": "stella:read",
     "access": "read",
     "feature": "FEATURE_PUBLIC_LAW",
-    "description": "Read decisions by \`decision_ids[]\`, answered in input order. Batch ids share the text budget; \`max_chars\` sizes one id’s text window. Static details appear only on the cursor-less window. A single id also gets up to 100 outline headings or numbered paragraphs: pass an outline cursor with that id to jump there. \`include\` selects optional fields on any window; [] returns text and identity only. Text and unfinished citation lists are paged: pass nextCursor with that one id. Citation ids carry neither treatment nor surrounding text; for those call read_case_law_citations ({ decision_id: '<uuid>', direction: 'cited_by' }). Use \`url\` for the reader and \`source_url\` for the publisher.",
+    "description": "Read decisions by \`decision_ids[]\`, answered in input order. Batch ids share the text budget unless \`max_chars\` sizes each id’s window. Static details appear only on the cursor-less window. A single id also gets up to 100 outline headings or numbered paragraphs: pass an outline cursor with that id to jump there. \`include\` selects optional fields on any window; [] returns text and identity only. Text and unfinished citation lists are paged: pass nextCursor with that one id. Citation ids carry neither treatment nor surrounding text; for those call read_case_law_citations ({ decision_id: '<uuid>', direction: 'cited_by' }). Use \`url\` for the reader and \`source_url\` for the publisher.",
     "annotations": {
       "title": "Read case-law decision",
       "destructiveHint": false,
@@ -8730,7 +8730,7 @@ exports[`MCP registry quality (law surface) tool surface snapshot (name, scope, 
           "type": "integer",
           "minimum": 1,
           "maximum": 8000,
-          "description": "Text window size, 1–8000 characters. Accepted only alongside a single decision id. Use a JSON number; a value outside the range is clamped to it.",
+          "description": "Text window size per decision, 1–8000 characters. In a batch each decision gets its own window of this size, trimmed evenly so the call returns at most 40000 characters; omitted, the batch shares 8000 characters. Use a JSON number; a value outside the range is clamped to it.",
           "x-stella-agent-input": {
             "kind": "number",
             "range": "clamp"

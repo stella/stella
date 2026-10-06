@@ -25,9 +25,12 @@ import {
 } from "@/api/lib/db/transitions";
 import {
   commitSanctionsMonitoringBatch,
+  createMonitoringBatchAuditCounts,
+  addMonitoringBatchAuditCounts,
   SANCTIONS_MONITORING_BATCH_SIZE,
 } from "@/api/lib/lists/sanctions/monitoring-diff";
 import { SANCTIONS_MARK_LEASE_MS } from "@/api/lib/lists/sanctions/monitoring-drain";
+import { lockSanctionsMonitoring } from "@/api/lib/lists/sanctions/monitoring-lock";
 import { prepareMonitoringContacts } from "@/api/lib/lists/sanctions/monitoring-screen";
 import { sanctionsSourceIds } from "@/api/lib/lists/sanctions/source-config";
 import { commitReplaySafeIngestionBatch } from "@/api/lib/replay-safe-ingestion";
@@ -41,6 +44,7 @@ type BackfillTransitionOptions = {
     typeof sanctionsMonitoringBackfills.$inferInsert,
     "cursorContactId" | "scheduledAt" | "editionId"
   >;
+  auditCounts?: ReturnType<typeof createMonitoringBatchAuditCounts>;
   nextGeneration?: (typeof sanctionsMonitoringBackfills.$inferSelect)["generation"];
 };
 
@@ -125,6 +129,7 @@ export const transitionMonitoringBackfill = async ({
   to,
   set,
   nextGeneration,
+  auditCounts,
 }: BackfillTransitionOptions) => {
   const recordAuditEvent = createBackgroundAuditRecorder(
     monitoringBackfillAuditBindings(job),
@@ -143,15 +148,22 @@ export const transitionMonitoringBackfill = async ({
     },
     recordTransitionAuditEvent: async (auditTx, rows) => {
       const events = rows
-        .filter((row) => row.status !== job.status)
+        .filter(
+          (row) =>
+            row.status !== job.status ||
+            Object.values(auditCounts ?? {}).some((count) => count > 0),
+        )
         .map((row) => ({
           action: AUDIT_ACTION.UPDATE,
           resourceType: AUDIT_RESOURCE_TYPE.CONTACT_DIRECTORY,
           resourceId: CONTACT_DIRECTORY_AUDIT_RESOURCE_ID,
-          changes: { status: { old: job.status, new: row.status } },
+          ...(row.status === job.status
+            ? {}
+            : { changes: { status: { old: job.status, new: row.status } } }),
           metadata: {
             sourceId: job.sourceId,
             kind: "sanctions-monitoring-backfill",
+            ...auditCounts,
           },
         }));
       if (events.length > 0) {
@@ -242,16 +254,23 @@ export const advanceSanctionsMonitoringBackfill = async ({
       panic("Monitoring outcome missing"),
   }));
   signal.throwIfAborted();
-  const checkpoint: { claim: typeof claim; transition: "hold" | "advance" } = {
+  const checkpoint: {
+    claim: typeof claim;
+    transition: "hold" | "advance";
+    auditCounts: ReturnType<typeof createMonitoringBatchAuditCounts>;
+  } = {
     claim,
     transition: "hold",
+    auditCounts: createMonitoringBatchAuditCounts(),
   };
   return await commitReplaySafeIngestionBatch({
     runInTransaction: db,
     items: results,
     checkpoint,
     persistItems: async (tx, items) => {
+      await lockSanctionsMonitoring(tx, organizationId);
       checkpoint.transition = "hold";
+      checkpoint.auditCounts = createMonitoringBatchAuditCounts();
       const job = (
         await tx
           .select()
@@ -298,6 +317,9 @@ export const advanceSanctionsMonitoringBackfill = async ({
         organizationId,
         source,
         results: items,
+        recordAuditEvent: (_auditTx, event) => {
+          addMonitoringBatchAuditCounts(checkpoint.auditCounts, event);
+        },
       });
       if (terminal.length !== items.length) {
         return "retry" as const;
@@ -307,7 +329,7 @@ export const advanceSanctionsMonitoringBackfill = async ({
     },
     persistCheckpoint: async (
       tx,
-      { claim: { job, contactRows, hasMore }, transition },
+      { claim: { job, contactRows, hasMore }, transition, auditCounts },
     ) => {
       if (transition === "hold") {
         return;
@@ -316,6 +338,7 @@ export const advanceSanctionsMonitoringBackfill = async ({
       await transitionMonitoringBackfill({
         tx,
         job,
+        auditCounts,
         to: hasMore ? "pending" : "complete",
         set: {
           cursorContactId: contactRows.at(-1)?.id ?? job.cursorContactId,

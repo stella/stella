@@ -51,9 +51,7 @@ test("repeating a fast check cannot replace another declared check", () => {
       workflows: { ...workflows, "ci.yml": parsed },
       policy,
     }),
-  ).toContain(
-    "ci.yml: FAST_REQUIRED must equal declared PR checks and the named pending job",
-  );
+  ).toContain("ci.yml: FAST_REQUIRED must equal declared PR checks");
 });
 
 test("new heavy jobs require a policy that excludes every pull request", () => {
@@ -64,10 +62,10 @@ test("new heavy jobs require a policy that excludes every pull request", () => {
   expect(
     checkCiEventPolicies({
       workflows: { "fixture.yml": workflow },
-      policy: { jobs: {}, pending: {} },
+      policy: { jobs: {} },
     }),
   ).toEqual(["fixture.yml/image: missing event policy"]);
-  const declared = { jobs: { "fixture.yml/image": "queue" }, pending: {} };
+  const declared = { jobs: { "fixture.yml/image": "queue" } };
   expect(
     checkCiEventPolicies({
       workflows: { "fixture.yml": workflow },
@@ -91,38 +89,15 @@ test("new heavy jobs require a policy that excludes every pull request", () => {
   ).toEqual(["fixture.yml/image: queue job can run on pull_request"]);
 });
 
-test("the pending exception names only the untouched test runner owner", () => {
-  expect(
-    checkCiEventPolicies({
-      workflows: {
-        "fixture.yml": { on: { pull_request: {} }, jobs: { image: {} } },
-      },
-      policy: {
-        jobs: { "fixture.yml/image": "pending" },
-        pending: {
-          "fixture.yml/image": {
-            owner: "email-inbound",
-            reason: "event policy moves after the run-tests rework lands",
-          },
-        },
-      },
-    }),
-  ).toEqual(["fixture.yml/image: undeclared pending owner or reason"]);
-});
-
-test("removed jobs cannot leave a policy or pending entry behind", () => {
+test("removed jobs cannot leave an event policy behind", () => {
   expect(
     checkCiEventPolicies({
       workflows: {},
       policy: {
         jobs: { "old.yml/image": "queue" },
-        pending: { "old.yml/image": { owner: "other", reason: "old" } },
       },
     }),
-  ).toEqual([
-    "old.yml/image: stale event policy",
-    "old.yml/image: stale pending entry",
-  ]);
+  ).toEqual(["old.yml/image: stale event policy"]);
 });
 
 test("main-push workflows require a group and publishing never cancels a running job", () => {
@@ -132,7 +107,6 @@ test("main-push workflows require a group and publishing never cancels a running
   };
   const declared = {
     jobs: { "fixture.yml/publish": "main" },
-    pending: {},
     pushMain: { "fixture.yml": { role: "publish", cancelInProgress: false } },
   };
   expect(
@@ -187,7 +161,6 @@ test("analysis cancellation is pinned to main and tag-only workflows do not cons
       workflows: { "fixture.yml": workflow },
       policy: {
         jobs: { "fixture.yml/analyze": "main" },
-        pending: {},
         pushMain: {
           "fixture.yml": { role: "analysis", cancelInProgress: true },
         },
@@ -202,7 +175,7 @@ test("analysis cancellation is pinned to main and tag-only workflows do not cons
           jobs: { publish: {} },
         },
       },
-      policy: { jobs: { "fixture.yml/publish": "main" }, pending: {} },
+      policy: { jobs: { "fixture.yml/publish": "main" } },
     }),
   ).toEqual([]);
 });
@@ -213,7 +186,6 @@ test("reusable CI main calls coalesce without cancelling their parent workflow",
   };
   const declared = {
     jobs: { "ci.yml/ci-result": "pr-fast" },
-    pending: {},
     pushMain: { "ci.yml": { role: "analysis", cancelInProgress: true } },
   };
   const concurrency = {
@@ -242,7 +214,6 @@ test("advisory fix evidence is an explicit label opt-in rather than an automatic
       "ci.yml/ci-result": "pr-fast",
       "ci.yml/fix-tests-on-base": "pr-opt-in",
     },
-    pending: {},
   };
   const proof = { if: "github.event_name == 'pull_request'" };
   const workflow = {
@@ -283,7 +254,6 @@ test("the actual reusable CI main group is distinct from its caller and coalesce
             key.startsWith("ci.yml/"),
           ),
         ),
-        pending: policy.pending,
         pushMain: { "ci.yml": policy.pushMain["ci.yml"] },
       },
     }),
@@ -297,7 +267,6 @@ test("CodeQL accepts the main release policy and rejects ordinary PR scans", () 
       "codeql.yml/scope": "release-pr",
       "codeql.yml/analyze": "release-pr",
     },
-    pending: {},
   };
   expect(
     checkCiEventPolicies({
