@@ -479,14 +479,19 @@ const expectScope = ({ current, base }: ScopeOptions) => {
     }
   }
   expect(migrated).toEqual(originalScope);
-  const tokens = conditionTokens(v.parse(v.string(), condition));
   // Ordinary scope comparisons supply fresh-run evidence. Completion reuse
-  // is exercised separately by the depth contract's true/false census.
-  const fresh =
-    /^needs\.ci-plan\.outputs\.run_required != 'false' && \(\s*(.*?)\s*\)$/u
-      .exec(tokens)
-      ?.at(1) ?? tokens;
-  const original = conditionTokens(v.parse(v.string(), originalCondition));
+  // is exercised separately by the depth contract's true/false census. A
+  // merge base may already carry the completion guard, so strip it from both.
+  const freshScope = (value: unknown) => {
+    const tokens = conditionTokens(v.parse(v.string(), value));
+    return (
+      /^needs\.ci-plan\.outputs\.run_required != 'false' && \(\s*(.*?)\s*\)$/u
+        .exec(tokens)
+        ?.at(1) ?? tokens
+    );
+  };
+  const fresh = freshScope(condition);
+  const original = freshScope(originalCondition);
   if (fresh === original) {
     return;
   }
