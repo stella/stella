@@ -140,17 +140,21 @@ cli_version() {
 
 cli_tool() {
   reason=contract_error
-  local shape="$1" nonempty="$2"
+  local shape="$1" nonempty="$2" rc=0
   shift 2
   STELLA_API_KEY="${credential}" STELLA_SERVER_URL="$cli_server" \
     XDG_CONFIG_HOME="$scratch/config" XDG_CACHE_HOME="$scratch/cache" \
-    "$cli" "$@" --json >"$scratch/payload" 2>"$scratch/error" || {
-      auth_rejection "$scratch/error" "$scratch/payload"
-      return 1
-    }
-  # A rejected server registry leaves the CLI on its built-in commands: never a pass.
-  reason=registry_rejected
-  if grep -q 'registry refresh rejected' "$scratch/error"; then return 1; fi
+    "$cli" "$@" --json >"$scratch/payload" 2>"$scratch/error" || rc=$?
+  # A rejected server registry leaves the CLI on its built-in commands: never a pass,
+  # and the root cause of any built-in failure that follows.
+  if grep -q 'registry refresh rejected' "$scratch/error"; then
+    reason=registry_rejected
+    return 1
+  fi
+  if [[ "$rc" != 0 ]]; then
+    auth_rejection "$scratch/error" "$scratch/payload"
+    return 1
+  fi
   validate_payload "$shape" "$nonempty"
 }
 
@@ -172,7 +176,7 @@ if [[ "${1:-}" == --cli ]]; then
     report cli_read failed contract_error
   else
     probe cli_search cli_tool "$case_shape" "$case_nonempty" case-law search --queries smlouva --country CZE --limit 1
-    probe cli_read cli_tool "$read_shape" "$read_nonempty" case-law read --decision-ids "$decision_id"
+    probe cli_read cli_tool "$read_shape" "$read_nonempty" case-law read --decision-ids "$decision_id" --max-chars 1000
   fi
 else
   probe web_search web_check "${JOURNEY_WEB_SEARCH_URL:-$web/law/cases?q=smlouva&country=cze}" '<a[[:space:]][^>]*href="/law/cze/cases/[^" ]+"'

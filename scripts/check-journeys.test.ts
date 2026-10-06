@@ -185,6 +185,9 @@ const run = async ({
       }
       if (pathname.startsWith("/cli/")) {
         expect(req.headers.get("Authorization")).toBe(`Bearer ${token}`);
+        if (scenario.rpc === "wrong-shape") {
+          return Response.json({ unrelated: SENTINEL });
+        }
         return Response.json(
           pathname.endsWith("read")
             ? readFixture(SENTINEL)
@@ -522,7 +525,9 @@ describe("scheduled read journeys", () => {
     );
     expect(
       result.cliCalls.some((call) =>
-        /^case-law read --decision-ids [0-9a-f-]{36} --json$/u.test(call),
+        /^case-law read --decision-ids [0-9a-f-]{36} --max-chars 1000 --json$/u.test(
+          call,
+        ),
       ),
     ).toBe(true);
   });
@@ -554,6 +559,32 @@ describe("scheduled read journeys", () => {
     expect(result.stdout).toContain("cli_version passed ok");
     expect(result.stdout).toContain("cli_search failed registry_rejected");
     expect(result.stdout).toContain("cli_read failed registry_rejected");
+  });
+  test("names rejected registry fallback when the built-in command fails", async () => {
+    const result = await run({
+      scenario: {
+        cliExit: "1",
+        cliDiagnostic:
+          "registry refresh rejected (using built-in commands): tool name is invalid: skill__fixture-name",
+      },
+      mode: "cli",
+    });
+    expect(result.exit).toBe(1);
+    expect(result.stdout).toContain("cli_search failed registry_rejected");
+    expect(result.stdout).toContain("cli_read failed registry_rejected");
+  });
+  test("keeps CLI payload faults as contract errors", async () => {
+    const result = await run({
+      scenario: {
+        rpc: "wrong-shape",
+        cliDiagnostic:
+          "server registry differs from this CLI build: 5 removed, 1 changed",
+      },
+      mode: "cli",
+    });
+    expect(result.exit).toBe(1);
+    expect(result.stdout).toContain("cli_search failed contract_error");
+    expect(result.stdout).toContain("cli_read failed contract_error");
   });
   test("passes a CLI that only reports registry drift", async () => {
     const result = await run({
