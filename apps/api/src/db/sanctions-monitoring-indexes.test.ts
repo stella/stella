@@ -41,6 +41,9 @@ test("the tenant retry page has an organization-leading ordered access path", ()
 test.each(retryIndexes)(
   "retry index $name is created concurrently with the live schema's columns",
   ({ name, columns, unique }) => {
+    if (name === undefined) {
+      panic("Monitoring retry indexes declare their names");
+    }
     const online = ONLINE_MIGRATION_INDEXES.find(
       (index) => index.name === name,
     );

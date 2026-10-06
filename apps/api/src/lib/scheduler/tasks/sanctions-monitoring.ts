@@ -81,7 +81,7 @@ export const createDrainSanctionsMonitoringTask =
           "sanctions.terminal": outcome.value.terminal,
         });
       }
-      return await drainNext(index + 1);
+      await drainNext(index + 1);
     };
     await drainNext(0);
     if (claimed > 0 || continuation.required) {

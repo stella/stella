@@ -749,22 +749,6 @@ const assertTransitionIdentity = (table: PgTable, key: string) => {
   }
 };
 
-/** The returned table handle carries the literal graph into every writer. */
-export const defineTransitions = <
-  TTable extends LifecycleTable,
-  const TEdges extends Readonly<
-    Record<Status<TTable>, readonly Status<TTable>[]>
-  >,
-  const TOptions extends {
-    terminal: readonly Status<TTable>[];
-    fence?: FenceKey<TTable>;
-  },
->(
-  table: TTable,
-  edges: TEdges,
-  options: TOptions,
-) => defineKeyedTransitions({ table, key: "id", edges, options });
-
 type DefineKeyedTransitionsArgs<
   TTable extends StatusTable,
   TKey extends keyof TTable["_"]["columns"] & string,
@@ -852,6 +836,22 @@ export const defineKeyedTransitions = <
   });
 };
 
+/** The returned table handle carries the literal graph into every writer. */
+export const defineTransitions = <
+  TTable extends LifecycleTable,
+  const TEdges extends Readonly<
+    Record<Status<TTable>, readonly Status<TTable>[]>
+  >,
+  const TOptions extends {
+    terminal: readonly Status<TTable>[];
+    fence?: FenceKey<TTable>;
+  },
+>(
+  table: TTable,
+  edges: TEdges,
+  options: TOptions,
+) => defineKeyedTransitions({ table, key: "id", edges, options });
+
 type DefinedTransitions<
   TTable extends LifecycleTable,
   TEdges extends Readonly<Record<string, readonly string[]>>,
@@ -932,6 +932,33 @@ type TransitionArgs<
     tx: TTx,
     row: { id: GetColumnData<TTable["id"]>; status: Status<TTable> },
   ) => Promise<void>;
+};
+
+type TransitionScopeOptions = {
+  table: StatusTable;
+  keys: readonly string[];
+  values: Readonly<Record<string, unknown>>;
+};
+
+const transitionScopePredicate = ({
+  table,
+  keys,
+  values,
+}: TransitionScopeOptions) => {
+  const columns: Readonly<Record<string, AnyPgColumn>> = getColumns(table);
+  if (keys.length !== Object.keys(values).length) {
+    panic("A transition must bind every declared scope column");
+  }
+  const predicates = keys.map((key) => {
+    const column = columns[key];
+    if (column === undefined || !Object.hasOwn(values, key)) {
+      panic("A transition scope binding is missing");
+    }
+    return sql`${column} = ${sql.param(values[key], column)}`;
+  });
+  return predicates.length === 0
+    ? sql``
+    : sql`AND ${sql.join(predicates, sql` AND `)}`;
 };
 
 type LifecycleMove = {
@@ -1162,33 +1189,6 @@ export const transition = async <
     return { type: "stale" };
   }
   return { type: "transitioned", row: decode(row) } as const;
-};
-
-type TransitionScopeOptions = {
-  table: StatusTable;
-  keys: readonly string[];
-  values: Readonly<Record<string, unknown>>;
-};
-
-const transitionScopePredicate = ({
-  table,
-  keys,
-  values,
-}: TransitionScopeOptions) => {
-  const columns: Readonly<Record<string, AnyPgColumn>> = getColumns(table);
-  if (keys.length !== Object.keys(values).length) {
-    panic("A transition must bind every declared scope column");
-  }
-  const predicates = keys.map((key) => {
-    const column = columns[key];
-    if (column === undefined || !Object.hasOwn(values, key)) {
-      panic("A transition scope binding is missing");
-    }
-    return sql`${column} = ${sql.param(values[key], column)}`;
-  });
-  return predicates.length === 0
-    ? sql``
-    : sql`AND ${sql.join(predicates, sql` AND `)}`;
 };
 
 type TransitionBatchArgs<

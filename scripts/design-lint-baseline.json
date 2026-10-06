@@ -1569,7 +1569,6 @@
     "apps/api/src/lib/corpus-index/chunking.ts": 1,
     "apps/api/src/lib/data-url.ts": 1,
     "apps/api/src/lib/db/arabic-normalize.test.ts": 1,
-    "apps/api/src/lib/db/transitions.ts": 1,
     "apps/api/src/lib/delete-account.ts": 1,
     "apps/api/src/lib/desktop-edit-sessions.ts": 1,
     "apps/api/src/lib/destructive-effect-chunks.ts": 1,
