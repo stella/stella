@@ -44,6 +44,7 @@ test("visual source changes select the frame bundle before API catalog generatio
   );
   expect(generator("visual-sandbox-bundle").outputs).toEqual([
     "apps/api/src/handlers/visual-sandbox/generated/runtime.js.txt",
+    "apps/api/src/handlers/visual-sandbox/generated/court-tier-labels.json",
   ]);
 });
 
