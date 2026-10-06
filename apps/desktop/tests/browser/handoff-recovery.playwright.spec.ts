@@ -1,8 +1,8 @@
 import { expect, test } from "@playwright/test";
 import { readFileSync } from "node:fs";
 
-import ar from "../../src/i18n/langs/ar.json";
-import en from "../../src/i18n/langs/en.json";
+import ar from "../../src/i18n/langs/ar.json" with { type: "json" };
+import en from "../../src/i18n/langs/en.json" with { type: "json" };
 
 const html = readFileSync(
   new URL("../../src/mainview/selfhost-connect-dialog.html", import.meta.url),
