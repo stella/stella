@@ -4,7 +4,7 @@ import { readFileSync } from "node:fs";
 import { Script } from "node:vm";
 import * as v from "valibot";
 
-import { evaluate } from "./github-expression";
+import { evaluate, UNKNOWN } from "./github-expression";
 
 const stepSchema = v.looseObject({
   name: v.string(),
@@ -19,6 +19,7 @@ const workflow = v.parse(
       v.string(),
       v.looseObject({
         if: v.optional(v.string()),
+        outputs: v.optional(v.record(v.string(), v.string()), {}),
         steps: v.optional(v.array(stepSchema), []),
       }),
     ),
@@ -242,6 +243,19 @@ test("push, dispatch and queue events always run without querying evidence", asy
 });
 
 test("reused depth prevents every nonstructural CI job and expensive planner step", () => {
+  const skippedPlanOutputs = Object.fromEntries(
+    Object.entries(planner.outputs).flatMap(([name, expression]) => {
+      const value = evaluate(expression, {
+        values: {
+          "github.event_name": "pull_request",
+          "steps.completed-depth.outputs.run_required": "false",
+        },
+      });
+      return value === UNKNOWN
+        ? []
+        : [[`needs.ci-plan.outputs.${name}`, value] as const];
+    }),
+  );
   for (const [name, job] of Object.entries(jobs)) {
     if (name === "ci-plan" || name === "ci-result") {
       continue;
@@ -250,7 +264,7 @@ test("reused depth prevents every nonstructural CI job and expensive planner ste
       evaluate(job.if ?? "true", {
         values: {
           "github.event_name": "pull_request",
-          "needs.ci-plan.outputs.run_required": "false",
+          ...skippedPlanOutputs,
         },
       }),
       name,

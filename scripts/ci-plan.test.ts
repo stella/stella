@@ -836,6 +836,7 @@ type EvaluateResultOptions = {
   suiteDepth?: SuiteDepth | "";
   unplannedScopes?: readonly string[];
   plannedOutputs?: Record<string, string>;
+  trusted?: "true" | "false";
   /** The pull request's draft state as the API reports it now; unset fails the lookup. */
   liveDraft?: boolean;
   suiteResults?: Record<string, string>;
@@ -911,6 +912,7 @@ const resultGateCase = ({
     : SUITE_DEPTH.full,
   unplannedScopes = [],
   plannedOutputs = {},
+  trusted = "true",
   liveDraft,
   suiteResults = {},
   cancellationEvidence = "timeout",
@@ -1062,11 +1064,11 @@ const resultGateCase = ({
         ...plan,
         ...plannedOutputs,
         suite_depth: suiteDepth,
-        trusted: "true",
+        trusted,
       }),
       PLAN_RESULT: needs["ci-plan"]?.result ?? "",
       SUITE_DEPTH: suiteDepth,
-      TRUSTED: "true",
+      TRUSTED: trusted,
     },
   };
 };
@@ -4534,7 +4536,7 @@ test("browser planning, scheduling and result gates agree across events and dept
       (options.event === EVENT.pullRequest
         ? options.desktopRequired === "true"
         : options.depth === SUITE_DEPTH.full && options.queueDepth !== "thin");
-    expect(planned, JSON.stringify(options)).toBe(String(expected));
+    expect(planned, JSON.stringify(options)).toBe(expected ? "true" : "false");
     expect(
       evaluate(jobIf(ciJobs["ci-browser"]), {
         values: { "needs.ci-plan.outputs.ci_browser_required": planned },
@@ -4575,6 +4577,42 @@ test("browser planning, scheduling and result gates agree across events and dept
   );
 }, 30_000);
 
+test("untrusted PRs skip browser CI while the result gate preserves its trust failure", () => {
+  const cases = [SUITE_DEPTH.fast, SUITE_DEPTH.full].flatMap((depth) =>
+    ["true", "false"].map((desktopRequired) => ({
+      depth,
+      planned: browserPlanOutput({
+        event: EVENT.pullRequest,
+        depth,
+        desktopRequired,
+        trusted: "false",
+      }),
+    })),
+  );
+  for (const { planned } of cases) {
+    expect(planned).toBe("false");
+    expect(
+      evaluate(jobIf(ciJobs["ci-browser"]), {
+        values: { "needs.ci-plan.outputs.ci_browser_required": planned },
+      }),
+    ).toBe(false);
+  }
+  for (const { exitCode, stdout } of evaluateResults(
+    cases,
+    ({ depth, planned }) => ({
+      event: EVENT.pullRequest,
+      suiteDepth: depth,
+      trusted: "false",
+      results: { "ci-browser": "skipped" },
+      plannedOutputs: { ci_browser_required: planned },
+    }),
+  )) {
+    expect(exitCode).toBe(1);
+    expect(stdout).toContain("failed the trust check");
+    expect(stdout).not.toContain("planned, skipped");
+  }
+});
+
 test("a planted desktop path plans the PR desktop browser leg while unrelated paths skip it", () => {
   const root = nodePath.resolve(import.meta.dirname, "..");
   const directory = mkdtempSync(
@@ -4603,7 +4641,7 @@ test("a planted desktop path plans the PR desktop browser leg while unrelated pa
           runRequired,
         });
         expect(planned).toBe(
-          String(expected === "true" && runRequired === "true"),
+          expected === "true" && runRequired === "true" ? "true" : "false",
         );
         expect(
           evaluate(jobIf(ciJobs["ci-browser"]), {
