@@ -1584,6 +1584,7 @@ const CONTRACT_CORPUS = {
             caseNumberType: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
             country: "CZ",
             court: "Nejvyšší soud",
+            courtAbbreviation: "NS",
             decisionDate: "2020-05-01",
             ecli: "ECLI:CZ:NS:2020:22.CDO.1000.2020.1",
             id: toSafeId<"caseLawDecision">(uid(53)),
