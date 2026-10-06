@@ -1309,6 +1309,51 @@ test("a named computed Markdown check joins the docs job without package checks"
   });
 });
 
+test("an explicit empty Markdown declaration certifies dynamic non-Markdown reads without hiding known inputs", () => {
+  for (const declaration of [
+    "",
+    "export const CI_MARKDOWN_READER_INPUTS_OWNER = [];",
+  ]) {
+    repository((root, write) => {
+      const reader = "scripts/source-reader.ts";
+      write(
+        reader,
+        `import { readFileSync } from "node:fs";
+        ${declaration}
+        const metadata = { inputs: ["README.md"] };
+        function source(options) { return readFileSync(options.path); }
+        source({ path: process.argv[2], metadata });`,
+      );
+      if (declaration === "") {
+        expect(() => markdownReaders(root)).toThrow(
+          `${reader}: Markdown read has an unresolved path expression`,
+        );
+        return;
+      }
+      expect(markdownReaders(root)).toContainEqual({
+        file: reader,
+        inputs: [],
+        kind: "unresolved",
+      });
+      expect(requiresPackageChecks({ root, changed: ["README.md"] })).toBe(
+        false,
+      );
+      write(
+        reader,
+        `import { readFileSync } from "node:fs";
+        ${declaration}
+        readFileSync("README.md");`,
+      );
+      expect(
+        markdownReaders(root).find(({ file }) => file === reader)?.inputs,
+      ).toEqual(["README.md"]);
+      expect(requiresPackageChecks({ root, changed: ["README.md"] })).toBe(
+        true,
+      );
+    });
+  }
+});
+
 test("named Markdown commands require nonempty inputs under the census naming convention", () => {
   for (const declaration of [
     "",

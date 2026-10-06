@@ -1913,10 +1913,13 @@ describe("green result freshness", () => {
       selector: extractPlanSelector(
         readFileSync(path.join(REPO_ROOT, ".github/workflows/ci.yml"), "utf-8"),
       ),
-      files: ["docs/example.md"],
+      // This census checks output completeness. Markdown behavior has its
+      // own scope tests and need not load the reader inventory here.
+      files: ["scripts/merge-bar.ts"],
       outputs,
       cwd: REPO_ROOT,
     });
+    expect(plan.isOk(), plan.isErr() ? plan.error.message : "").toBe(true);
     expect(plan.isOk() && [...plan.value.keys()]).toEqual(outputs);
   });
 

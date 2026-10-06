@@ -1115,7 +1115,9 @@ const unresolvedReadInputs = ({
     ...options,
     expression: "CI_MARKDOWN_READER_INPUTS",
   });
-  if (inputs !== undefined && inputs.length > 0) {
+  // An explicit empty list declares that dynamic reads consume no Markdown.
+  // Literal reads are still collected separately and cannot be hidden by it.
+  if (inputs !== undefined) {
     return inputs;
   }
   throw new MarkdownReaderDeclarationError(
@@ -1184,6 +1186,11 @@ const retainedMarkdownReader = ({
       return { ...reader, kind: "check", command };
     }
     return { ...reader, kind: "unresolved" };
+  }
+  // Preserve negative declarations in the census, so its declaration coverage
+  // invariant also verifies readers that explicitly consume no Markdown.
+  if (markdownReaderInputNames(code).length > 0) {
+    return { file, inputs: [], kind: "unresolved" };
   }
   return undefined;
 };
