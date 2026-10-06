@@ -180,12 +180,32 @@ describe("court/year showcase page", () => {
     expect(element("ranking-title").textContent).toBe(
       englishLabels["ranking-title"],
     );
-    expect(element("ranking").children.at(0)?.children.at(1)?.textContent).toBe(
+    expect(element("ranking").children.at(0)?.children.at(2)?.textContent).toBe(
       "31 citations",
     );
     expect(Object.keys(englishLabels).toSorted()).toEqual(
       Object.keys(fixture.data.labels).toSorted(),
     );
+    expect(ready).toBe(1);
+  });
+
+  test("zero citation counts produce finite empty bars rather than unknown values", () => {
+    const { element, ready } = render({
+      ...fixture.data,
+      topResults: fixture.data.topResults.map((hit) => ({
+        ...hit,
+        citationCount: 0,
+      })),
+    });
+    expect(element("stats").children.at(3)?.children.at(1)?.textContent).toBe(
+      "0",
+    );
+    for (const row of element("ranking").children) {
+      expect(row.children.at(1)?.children.at(0)?.style.cssText).toContain(
+        "width:0%",
+      );
+      expect(row.children.at(2)?.textContent).toBe("0 citací");
+    }
     expect(ready).toBe(1);
   });
 

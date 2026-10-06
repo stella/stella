@@ -17,3 +17,7 @@ is integrated; this fixture does not register a tool or submit chat turns.
 The focused page tests sanitize and execute the authored script, and use the
 real treemap model for aggregate areas and zoom/drill selection. Browser tests
 must separately exercise the real chart, frame bridge and composer chip.
+
+The page calls only `stella` APIs. The host owns the opaque shell's nonce
+handshake, including source/origin checks and a fresh handshake on reload;
+authored pages do not send raw bridge messages or manage frame nonces.
