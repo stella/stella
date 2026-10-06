@@ -1251,6 +1251,9 @@ const normalizeChatPartForPersistence = (part: ChatPart): ChatPart => {
   }
 };
 
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === "object" && value !== null;
+
 type ChatPartPersistenceDecision =
   | { type: "drop"; partType: string }
   | { type: "persist"; part: ChatPart };
@@ -1695,6 +1698,3 @@ const getStringProperty = (
   const property = value[key];
   return typeof property === "string" ? property : null;
 };
-
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-  typeof value === "object" && value !== null;

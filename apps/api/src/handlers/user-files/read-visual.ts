@@ -21,7 +21,6 @@ import {
 
 // JSON string escaping can expand the bounded page and data in storage.
 const STORED_VISUAL_BYTES = 4 * 1024 * 1024;
-const VISUAL_READ_TIMEOUT_MS = 30_000;
 
 export const createReadUserFileVisual = (readObject = readStoredFile) =>
   createSafeRootHandler(
@@ -89,10 +88,7 @@ export const createReadUserFileVisual = (readObject = readStoredFile) =>
             key: file.s3Key,
             mimeType: TEXT_PLAIN_MIME_TYPE,
             maxBytes: STORED_VISUAL_BYTES,
-            signal: AbortSignal.any([
-              request.signal,
-              AbortSignal.timeout(VISUAL_READ_TIMEOUT_MS),
-            ]),
+            signal: request.signal,
           }),
         catch: (cause) => cause,
       });

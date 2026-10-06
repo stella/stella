@@ -28,6 +28,18 @@ export const FEATURE_REGISTRY = {
   [GENERATED_VIEWS_FEATURE_ID]: {
     enrolment: "invitation",
     deploymentFeature: "FEATURE_GENERATED_VIEWS",
+    ownership: {
+      handlerDirectories: [],
+      tableSchemaFiles: [],
+      coreModules: ["apps/api/src/handlers/chat/tools/show-visual-tools.ts"],
+      dispatchModules: [
+        {
+          type: "admitted",
+          module: "apps/api/src/handlers/chat/tools/chat-tools.ts",
+          admission: "isMcpDescriptorFeatureEnabled",
+        },
+      ],
+    },
   },
   "time-billing": {
     enrolment: "self-serve",
