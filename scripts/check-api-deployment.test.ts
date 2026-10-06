@@ -336,6 +336,8 @@ describe("API deployment health receipt", () => {
       "{}",
       JSON.stringify({ commit: "main" }),
       JSON.stringify({ commit: commit.slice(1) }),
+      // A second output line must never ride along with a valid commit.
+      JSON.stringify({ commit: `${commit}\ncommit=main` }),
       "not json",
     ]) {
       const refused = resolve(body);

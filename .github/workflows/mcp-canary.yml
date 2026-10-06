@@ -63,7 +63,7 @@ jobs:
         run: |
           body="$(curl --fail --silent --show-error --max-time 20 --retry 3 --retry-all-errors "${BASE_URL%/}/health")"
           commit="$(printf '%s' "$body" | jq -r '.commit // empty')"
-          if ! printf '%s' "$commit" | grep -Eq '^[0-9a-f]{40}$'; then
+          if [[ ! "$commit" =~ ^[0-9a-f]{40}$ ]]; then
             echo "::error::${BASE_URL} did not report its deployed commit on /health."
             exit 1
           fi
