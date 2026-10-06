@@ -25,6 +25,7 @@ import {
   SKILL_TOOL_OUTPUT,
   SKILL_TOOL_OUTPUT_TYPE,
 } from "@/api/mcp/gateway/dynamic-tool-policy";
+import type { SkillToolOutput } from "@/api/mcp/gateway/dynamic-tool-policy";
 import {
   callGatewayExternalMcpTool,
   gatewayLoadErrorResult,
