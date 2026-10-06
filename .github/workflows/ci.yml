@@ -76,7 +76,7 @@ jobs:
       trusted: ${{ steps.check.outputs.trusted }}
       playwright_image: ${{ steps.browser-image.outputs.image }}
       # Pull requests run lightweight guards, lint and type checks.
-      # Test shards join builds, images, browsers and services at heavy depth.
+      # Test shards retain PR coverage and follow heavy merge-queue depth.
       # Builds, images, browsers and services certify the merge group.
       suite_depth: ${{ steps.depth.outputs.suite_depth }}
       queue_depth: ${{ steps.depth.outputs.queue_depth || 'full' }}
@@ -2413,8 +2413,8 @@ jobs:
   ci-tests:
     needs: ci-plan
     if: >-
-      github.event_name != 'pull_request'
-      && needs.ci-plan.outputs.queue_depth != 'thin'
+      (github.event_name != 'merge_group'
+       || needs.ci-plan.outputs.queue_depth != 'thin')
       && (
         needs.ci-plan.outputs.trusted == 'true'
         || github.event_name == 'workflow_dispatch'
@@ -5333,7 +5333,7 @@ jobs:
           FAST_JOB_SCOPES: >-
             {"service-suites": "service_suites_pr_required", "docker-checks": "docker_checks_pr_required", "legal-atlas-image": "legal_atlas_image_pr_required"}
           FAST_REQUIRED: >-
-            ["ci-checks-generated", "ci-checks-policy", "ci-checks-rest", "code-quality-api", "code-quality-rest", "code-quality-web", "dependency-malware", "parser-version-guard", "typecheck-baseline"]
+            ["ci-checks-generated", "ci-checks-policy", "ci-checks-rest", "code-quality-api", "code-quality-rest", "code-quality-web", "dependency-malware", "parser-version-guard", "typecheck-baseline", "ci-tests"]
         run: |
           if [[ "${HEAVY_ONLY:-false}" == true ]]; then
             # No main run may turn a cancellation into successful supersession.

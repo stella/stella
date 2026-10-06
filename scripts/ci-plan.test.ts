@@ -4049,7 +4049,7 @@ test("property suites and their budgets select required PR checks", () => {
     expect(packageChecksPlan([file]), file).toBe("true");
   }
   expect(packageChecksPlan(["provenance/manifest.json"])).toBe("false");
-  for (const job of ["ci-checks-policy", "ci-checks-rest"]) {
+  for (const job of ["ci-tests", "ci-checks-policy", "ci-checks-rest"]) {
     expect(
       runsAtDepth(jobIf(ciJobs[job]), {
         event: EVENT.pullRequest,
