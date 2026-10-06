@@ -1046,7 +1046,7 @@ esac
       );
       chmodSync(gh, 0o755);
       const summary = path.join(directory, "summary");
-      const prepare = (source: string, purpose: string) => {
+      const prepareRun = (source: string, purpose: string, base = head) => {
         writeFileSync(summary, "");
         checked([
           "git",
@@ -1064,7 +1064,7 @@ esac
           ],
           {
             PATH: `${path.join(directory, "bin")}:${runnerPath}`,
-            BASE_SHA: head,
+            BASE_SHA: base,
             GITHUB_EVENT_NAME: "push",
             NETWORK_BASELINE_PURPOSE: purpose,
             REPOSITORY: "fixture/fixture",
@@ -1092,6 +1092,10 @@ esac
             TEST_ZIP: path.join(directory, "baseline.zip"),
           },
         );
+        return result;
+      };
+      const prepare = (source: string, purpose: string) => {
+        const result = prepareRun(source, purpose);
         expect(result.exitCode, result.stderr.toString()).toBe(0);
         expect(read("summary")).toContain(`recording at ${source}`);
         return {
@@ -1125,6 +1129,22 @@ esac
       expect(recording.changed).toEqual([]);
       expect(recording.context).toEqual([]);
       expect(recording.summary).not.toContain("comparison exempts");
+      // A recording far behind the compared commit fails instead of
+      // exempting every route changed since it.
+      writeFileSync(path.join(directory, chatRoute), "export const x = 2;\n");
+      const later = new Date(Date.now() + 40 * 60 * 60 * 1000).toISOString();
+      const lateCommit = run(["git", "commit", "-qam", "late route change"], {
+        GIT_AUTHOR_DATE: later,
+        GIT_COMMITTER_DATE: later,
+      });
+      expect(lateCommit.exitCode, lateCommit.stderr.toString()).toBe(0);
+      const late = checked(["git", "rev-parse", "HEAD"]);
+      const stale = prepareRun(recorded, "comparison", late);
+      expect(stale.exitCode).not.toBe(0);
+      expect(stale.stderr.toString()).toContain(
+        `recording stale since ${recorded}`,
+      );
+      expect(read("summary")).toContain(`recording stale since ${recorded}`);
     } finally {
       rmSync(directory, { recursive: true, force: true });
     }

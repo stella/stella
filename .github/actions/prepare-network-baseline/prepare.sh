@@ -75,6 +75,19 @@ since=$base
 if [[ "$purpose" == comparison && -n "$recorded_source" && "$recorded_source" != "$base" ]]; then
   # Routes changed after the inherited recording have no recorded peak yet.
   since=$recorded_source
+  if ! git merge-base --is-ancestor "$since" "$base"; then
+    echo "Network baseline: recording source $since is not an ancestor of $base" >&2
+    exit 1
+  fi
+  # Main records daily and after each route change merges, so an older source
+  # means recording has stalled; exempting everything since then would not.
+  max_recording_lag_seconds=$((36 * 60 * 60))
+  lag=$(($(git show -s --format=%ct "$base") - $(git show -s --format=%ct "$since")))
+  if ((lag > max_recording_lag_seconds)); then
+    echo "Network baseline: recording stale since $since" >> "$GITHUB_STEP_SUMMARY"
+    echo "Network baseline: recording stale since $since (${lag}s behind $base); record main before comparing" >&2
+    exit 1
+  fi
 fi
 bun apps/web/scripts/network-baseline-route-tree.ts "$repository" "$since" "$base_tree"
 if [[ "$since" == "$base" ]]; then
