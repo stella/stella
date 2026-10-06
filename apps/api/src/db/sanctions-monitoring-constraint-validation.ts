@@ -3,6 +3,10 @@ import type { OnlineRepair } from "./online-migration-connection";
 
 const CONSTRAINTS = [
   {
+    tableName: "sanctions_contact_marks",
+    constraintName: "sanctions_contact_marks_attempt_count_check",
+  },
+  {
     tableName: "contacts",
     constraintName: "contacts_sanctions_monitoring_mode_check",
   },
@@ -12,7 +16,7 @@ const CONSTRAINTS = [
   },
 ] as const;
 
-// Defaults satisfy both checks; validate outside the schema transaction so the
+// Defaults satisfy these checks; validate outside the schema transaction so the
 // scan holds no additive DDL lock. Catalog completion makes retries converge.
 export const SANCTIONS_MONITORING_CONSTRAINT_VALIDATIONS = CONSTRAINTS.map(
   ({ tableName, constraintName }) =>

@@ -34,9 +34,6 @@ import {
   HighlightedText,
   InlineContent,
   WrappedParagraphRun,
-  buildDocumentAstSearchPieces,
-  buildFulltextSearchPieces,
-  firstMatchIndexInPassage,
   inlinesToPlainText,
   rangesForPiece,
 } from "@/components/legal-reader/document-ast-text";
@@ -46,11 +43,7 @@ import {
   holdLanding,
   readerBlockByAnchor,
 } from "@/components/legal-reader/reader-landing";
-import type {
-  SearchMatchRange,
-  SearchPiece,
-} from "@/components/legal-reader/reader-search";
-import { buildSearchResults } from "@/components/legal-reader/reader-search";
+import type { SearchMatchRange } from "@/components/legal-reader/reader-search";
 import { SourceLinkPolicyProvider } from "@/components/legal-reader/source-link-policy";
 import type { CitationAnchorSource } from "@/features/case-law/citation-anchors";
 import { decisionReferenceTintClassName } from "@/features/case-law/citation-treatment";
@@ -109,7 +102,6 @@ type Decision = Pick<
 >;
 
 type DecisionTextProps = {
-  activeMatchIndex: number;
   /**
    * The model's headnote and abstract, drawn in the top matter under the
    * court's own. A node rather than the analysis itself: the order the two
@@ -130,8 +122,7 @@ type DecisionTextProps = {
   decisionId: string;
   /**
    * The block the reader was sent to, from a results row or a citation. It
-   * keeps a marker while the reader is on it, and the find lands on its first
-   * match rather than on the document's first.
+   * keeps a marker while the reader is on it.
    */
   landingAnchorId?: string | undefined;
   /**
@@ -142,11 +133,9 @@ type DecisionTextProps = {
    */
   notesByAnchorId?: ReadonlyMap<string, ReactNode> | undefined;
   onAnnotationActivate?: ((annotationId: string) => void) | undefined;
-  onMatchCountChange?: ((count: number) => void) | undefined;
   /** Applied provisions whose statute is held, for inline links. */
   provisionAnchors?: readonly DecisionProvisionAnchor[] | undefined;
   expandProvisions?: boolean | undefined;
-  searchQuery: string;
   sectionMap?: Map<string, { cssVar: string; headingId: string }> | undefined;
   /** Work citations, including references with no provision locator. */
   statuteCitationAnchors?: readonly DecisionStatuteCitationAnchor[] | undefined;
@@ -154,6 +143,7 @@ type DecisionTextProps = {
 
 /** No match is the find's own: nothing carries the active mark. */
 const NO_ACTIVE_MATCH = -1;
+const NO_SEARCH_RANGES: Record<string, SearchMatchRange[]> = {};
 
 const DECISION_REFERENCE_ID = "decision-reference";
 
@@ -946,7 +936,6 @@ const NO_STATUTE_CITATION_ANCHORS: readonly DecisionStatuteCitationAnchor[] =
   [];
 
 export const DecisionText = ({
-  activeMatchIndex,
   aiHeadnotes = null,
   annotationAnchors = NO_ANNOTATION_ANCHORS,
   citationAnchors = NO_CITATION_ANCHORS,
@@ -956,9 +945,7 @@ export const DecisionText = ({
   notesByAnchorId,
   expandProvisions = false,
   onAnnotationActivate,
-  onMatchCountChange,
   provisionAnchors = NO_PROVISION_ANCHORS,
-  searchQuery,
   sectionMap,
   statuteCitationAnchors = NO_STATUTE_CITATION_ANCHORS,
 }: DecisionTextProps) => {
@@ -973,8 +960,8 @@ export const DecisionText = ({
   });
   const courtOrigin = courtHeadnoteOrigin(decision);
   // The document renders what the top matter did not take. Anchors still come
-  // from every visible block, wherever it ends up drawn; match numbering,
-  // note grouping and the landing passage follow the order the page renders,
+  // from every visible block, wherever it ends up drawn; note grouping and
+  // the landing passage follow the order the page renders,
   // which is the top matter first.
   const bodyBlocks = visibleBlocks.filter(
     (block) => !topMatter.liftedBlockIds.has(block.id),
@@ -1000,104 +987,21 @@ export const DecisionText = ({
     caseNumberType: decision.caseNumberType,
   });
 
-  const hasRenderableBody =
-    visibleBlocks.length > 0 ||
-    (decision.fulltext !== null && decision.fulltext !== "");
-
-  const searchPieces: SearchPiece[] = (() => {
-    // A match needs something on screen to scroll to, so each piece is
-    // indexed exactly where its own element renders. The reference line
-    // belongs to the body; the supplement is published separately from the
-    // text and stands even where the text did not resolve.
-    const pieces: SearchPiece[] = hasRenderableBody
-      ? [
-          {
-            id: DECISION_REFERENCE_ID,
-            text: `${decision.court}, ${displayRef}`,
-          },
-        ]
-      : [];
-
-    // Section by section, then the document: `buildSearchResults` numbers the
-    // matches in piece order, and a find that walks the page backwards is the
-    // bug that order prevents. A field the top matter does not render is not
-    // indexed at all — a match in text drawn nowhere has nothing to scroll to.
-    for (const source of [topMatter.legalSentence, topMatter.abstract]) {
-      if (source === null) {
-        continue;
-      }
-      if (source.type === "text") {
-        pieces.push({ id: source.pieceId, text: source.text });
-        continue;
-      }
-      pieces.push(...buildDocumentAstSearchPieces(source.blocks));
-    }
-
-    if (visibleBlocks.length > 0) {
-      pieces.push(...buildDocumentAstSearchPieces(bodyBlocks));
-    } else if (decision.fulltext) {
-      pieces.push(...buildFulltextSearchPieces(decision.fulltext));
-    }
-
-    return pieces;
-  })();
-
-  const searchResults = buildSearchResults({
-    pieces: searchPieces,
-    query: searchQuery,
-  });
-
-  // Where the reader is sent: the landing passage's own first match while
-  // they are still on it, the find's position once they move. The two can
-  // never disagree, because the caller drops the landing the moment the
-  // reader jumps anywhere else.
-  //
-  // A landing passage the query does not reach activates nothing rather than
-  // falling back to the find's position. The anchor a question's source chip
-  // carries was chosen by the answer, not by the query, so the query may well
-  // match somewhere else entirely; pulling the reader there would answer a
-  // question they did not ask.
-  const landingMatchIndex =
-    landingAnchorId === undefined
-      ? null
-      : firstMatchIndexInPassage({
-          anchorId: landingAnchorId,
-          blocks: renderedBlocks,
-          rangesByPieceId: searchResults.rangesByPieceId,
-        });
-  const shownMatchIndex =
-    landingAnchorId === undefined
-      ? activeMatchIndex
-      : (landingMatchIndex ?? NO_ACTIVE_MATCH);
-
-  useExternalSyncEffect(() => {
-    onMatchCountChange?.(searchResults.matchCount);
-  }, [onMatchCountChange, searchResults.matchCount]);
-
   useExternalSyncEffect(() => {
     const article = articleRef.current;
     if (!article) {
       return undefined;
     }
 
-    // The match wins where there is one; a landing passage the query does not
-    // reach is still where the reader asked to be.
-    const match =
-      shownMatchIndex === NO_ACTIVE_MATCH
-        ? null
-        : article.querySelector<HTMLElement>(
-            `[data-reader-match-index="${String(shownMatchIndex)}"]`,
-          );
     const target =
-      match ??
-      (landingAnchorId === undefined
+      landingAnchorId === undefined
         ? null
-        : readerBlockByAnchor(article, landingAnchorId));
+        : readerBlockByAnchor(article, landingAnchorId);
     if (!target) {
       return undefined;
     }
 
-    // A match inside the folded reporter apparatus is invisible while its
+    // A landing inside the folded reporter apparatus is invisible while its
     // <details> stays closed, and scrolling to a hidden descendant reveals
     // nothing: open every enclosing disclosure first.
     for (
@@ -1108,19 +1012,8 @@ export const DecisionText = ({
       disclosure.open = true;
     }
 
-    // Stepping between matches is a move the reader makes, so it glides.
-    // Landing is arrival: the passage may be screens away while the page is
-    // still settling, and an animation over that distance is a wait.
-    if (landingAnchorId === undefined) {
-      target.scrollIntoView({
-        behavior: "smooth",
-        block: "center",
-        inline: "nearest",
-      });
-      return undefined;
-    }
     return holdLanding({ article, target });
-  }, [landingAnchorId, searchQuery, searchResults.matchCount, shownMatchIndex]);
+  }, [landingAnchorId]);
 
   // A separate opinion is bylined where the court's own text does not say
   // whose it is: the names come from the read, the place from the AST, and
@@ -1190,15 +1083,12 @@ export const DecisionText = ({
             </div>
           )}
           <DecisionReference
-            activeMatchIndex={shownMatchIndex}
-            ranges={rangesForPiece(
-              searchResults.rangesByPieceId,
-              DECISION_REFERENCE_ID,
-            )}
+            activeMatchIndex={NO_ACTIVE_MATCH}
+            ranges={[]}
             text={`${decision.court}, ${displayRef}`}
           />
           <DecisionTopMatterSections
-            activeMatchIndex={shownMatchIndex}
+            activeMatchIndex={NO_ACTIVE_MATCH}
             aiHeadnotes={aiHeadnotes}
             anchorsByPieceId={anchorsByPieceId}
             courtOrigin={courtOrigin}
@@ -1208,11 +1098,11 @@ export const DecisionText = ({
             footnotes={footnotes}
             key={decisionId}
             notesByAnchorId={supplementsByAnchorId}
-            rangesByPieceId={searchResults.rangesByPieceId}
+            rangesByPieceId={NO_SEARCH_RANGES}
             topMatter={topMatter}
           />
           {renderBlocksWithHoldingZone({
-            activeMatchIndex: shownMatchIndex,
+            activeMatchIndex: NO_ACTIVE_MATCH,
             apparatusLabel: t("caseLaw.reader.headMatter"),
             anchorsByPieceId,
             blocks: bodyBlocks,
@@ -1221,7 +1111,7 @@ export const DecisionText = ({
             footnotes,
             landingAnchorId,
             notesByAnchorId: supplementsByAnchorId,
-            rangesByPieceId: searchResults.rangesByPieceId,
+            rangesByPieceId: NO_SEARCH_RANGES,
             sectionMap,
             wrappedRuns,
           })}
@@ -1242,15 +1132,12 @@ export const DecisionText = ({
           }}
         >
           <DecisionReference
-            activeMatchIndex={shownMatchIndex}
-            ranges={rangesForPiece(
-              searchResults.rangesByPieceId,
-              DECISION_REFERENCE_ID,
-            )}
+            activeMatchIndex={NO_ACTIVE_MATCH}
+            ranges={[]}
             text={`${decision.court}, ${displayRef}`}
           />
           <DecisionTopMatterSections
-            activeMatchIndex={shownMatchIndex}
+            activeMatchIndex={NO_ACTIVE_MATCH}
             aiHeadnotes={aiHeadnotes}
             anchorsByPieceId={anchorsByPieceId}
             courtOrigin={courtOrigin}
@@ -1260,15 +1147,15 @@ export const DecisionText = ({
             footnotes={footnotes}
             key={decisionId}
             notesByAnchorId={supplementsByAnchorId}
-            rangesByPieceId={searchResults.rangesByPieceId}
+            rangesByPieceId={NO_SEARCH_RANGES}
             topMatter={topMatter}
           />
           <FulltextFallback
-            activeMatchIndex={shownMatchIndex}
+            activeMatchIndex={NO_ACTIVE_MATCH}
             anchorsByPieceId={buildAnnotationAnchors(
               hydrated ? annotationAnchors : NO_ANNOTATION_ANCHORS,
             )}
-            rangesByPieceId={searchResults.rangesByPieceId}
+            rangesByPieceId={NO_SEARCH_RANGES}
             text={decision.fulltext}
           />
         </article>
@@ -1292,7 +1179,7 @@ export const DecisionText = ({
         }}
       >
         <DecisionTopMatterSections
-          activeMatchIndex={shownMatchIndex}
+          activeMatchIndex={NO_ACTIVE_MATCH}
           aiHeadnotes={aiHeadnotes}
           anchorsByPieceId={anchorsByPieceId}
           courtOrigin={courtOrigin}
@@ -1302,7 +1189,7 @@ export const DecisionText = ({
           footnotes={footnotes}
           key={decisionId}
           notesByAnchorId={supplementsByAnchorId}
-          rangesByPieceId={searchResults.rangesByPieceId}
+          rangesByPieceId={NO_SEARCH_RANGES}
           topMatter={topMatter}
         />
         <DecisionBodyUnavailable

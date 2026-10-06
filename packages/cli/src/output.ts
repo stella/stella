@@ -58,7 +58,13 @@ export type RenderPlan =
   | { kind: "single"; payload: unknown }
   /** One record holding tables; see `ToolAnnotation.composite`. */
   | { kind: "composite"; payload: unknown; view: CompositeView }
-  | { kind: "windowed-text"; text: string; nextCursor: string | null }
+  | {
+      kind: "windowed-text";
+      text: string;
+      nextCursor: string | null;
+      url?: string | null;
+      source_url?: string;
+    }
   /** A windowed-text read whose response holds no text; see `TEXT_UNAVAILABLE_REASONS`. */
   | {
       kind: "text-unavailable";
@@ -215,8 +221,18 @@ export const buildRenderPlan = ({
         payload,
       };
     }
+    const containerPath = textPath.slice(
+      0,
+      Math.max(0, textPath.lastIndexOf(".")),
+    );
+    const container =
+      containerPath === "" ? payload : valueAtPath(payload, containerPath);
+    const url = fieldOf(container, "url");
+    const sourceUrl = fieldOf(container, "source_url");
     return {
       kind: "windowed-text",
+      ...(typeof url === "string" || url === null ? { url } : {}),
+      ...(typeof sourceUrl === "string" ? { source_url: sourceUrl } : {}),
       text,
       nextCursor: asString(fieldOf(payload, "nextCursor")),
     };
@@ -575,10 +591,15 @@ export const renderResult = ({
   }
 
   if (plan.kind === "windowed-text") {
+    const textResult = {
+      text: plan.text,
+      ...(plan.url === undefined ? {} : { url: plan.url }),
+      ...(plan.source_url === undefined ? {} : { source_url: plan.source_url }),
+    };
     if (format === "json") {
-      writers.stdout(`${JSON.stringify({ text: plan.text }, null, 2)}\n`);
+      writers.stdout(`${JSON.stringify(textResult, null, 2)}\n`);
     } else if (format === "jsonl") {
-      writers.stdout(jsonlLine({ text: plan.text }));
+      writers.stdout(jsonlLine(textResult));
     } else {
       writers.stdout(plan.text.endsWith("\n") ? plan.text : `${plan.text}\n`);
     }

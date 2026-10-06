@@ -96,7 +96,8 @@ const LAW_COMPAT_TOOL_DEFINITIONS = [
       "Search the public legal corpus (case-law decisions and statutes) using " +
       "the OpenAI-compatible search tool shape, over every jurisdiction the corpus holds, " +
       `the organization's practice jurisdictions first. ${COMPAT_CORPUS_ID_VOCABULARY} Pass an id back to fetch verbatim. No ` +
-      "matter, document, contact or billing data is reachable here.",
+      "matter, document, contact or billing data is reachable here. " +
+      "Use `url` for the reader and `source_url` for the publisher.",
     feature: "FEATURE_PUBLIC_LAW",
     inputSchema: lawCompatSearchArgsSchema,
     name: "search",
@@ -117,7 +118,8 @@ const LAW_COMPAT_TOOL_DEFINITIONS = [
       "Fetch one public-corpus document by id using the OpenAI-compatible fetch " +
       `tool shape. ${COMPAT_CORPUS_ID_VOCABULARY} A decision answers with its text, a ` +
       "statute with the text in force today, and `metadata.kind` says which. Long text " +
-      "is returned in windows; pass the returned nextCursor back as cursor to read more.",
+      "is returned in windows; pass the returned nextCursor back as cursor to read more. " +
+      "Use `url` for the reader and `source_url` for the publisher.",
     feature: "FEATURE_PUBLIC_LAW",
     inputSchema: lawCompatFetchArgsSchema,
     name: "fetch",

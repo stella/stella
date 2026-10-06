@@ -48,6 +48,7 @@ import {
   nullAsAbsent,
   structuredErrorResult,
   toolDataResult,
+  legalCitationLinkFields,
   uuidInputSchema,
   validationErrorResult,
 } from "@/api/mcp/tool-utils";
@@ -463,7 +464,7 @@ const SEARCH_BOE_LEGISLATION_TOOL_DEFINITION = defineValibotMcpTool({
     openWorldHint: true,
   },
   description:
-    "Search and read Spanish consolidated legislation from the BOE. In " +
+    "Search and read Spanish consolidated legislation from the BOE. Search hits return the publisher link as primary `url`. In " +
     "search mode, pass query (free text) and/or filters (title, " +
     "department_code, legal_range_code, matter_code, date_from/date_to as " +
     "YYYYMMDD); at least one filter is required. In read mode, pass law_id " +
@@ -586,14 +587,28 @@ const handleSearchBoeLegislationTool = withThirdPartyOutbound<
   if (Result.isError(result)) {
     return internalFailureResult(result.error);
   }
-  // Passthrough: the output is public BOE statutory data and the query is
-  // caller-supplied, so no tenant-authored text needs redaction. Forwarded
-  // verbatim, so the projection tie is on the BOE client's return type.
+  // Publisher search has no held corpus identity. Its existing source URL
+  // remains primary through the same citation resolver as corpus reads.
+  const { data, ...envelope } = result.value;
+  const payload = {
+    ...envelope,
+    ...(data === undefined
+      ? {}
+      : {
+          data: data.map((item) => {
+            const { url } = legalCitationLinkFields({
+              appUrl: null,
+              sourceUrl: item.url_html_consolidada ?? item.url_eli ?? null,
+            });
+            return { ...item, url };
+          }),
+        }),
+  };
   type SearchLegislationPayload = AssertNoExtraFields<
-    typeof result.value,
+    typeof payload,
     v.InferInput<typeof SEARCH_BOE_LEGISLATION_PROJECTION>
   >;
-  return toolDataResult(result.value satisfies SearchLegislationPayload);
+  return toolDataResult(payload satisfies SearchLegislationPayload);
 });
 
 // --- list_audit_log -----------------------------------------------------

@@ -1826,27 +1826,18 @@ describe("green result freshness", () => {
         readFileSync(path.join(REPO_ROOT, ".github/workflows/ci.yml"), "utf-8"),
       ) ?? [];
     const byId = new Map(jobs.map((job) => [job.id, job]));
-    expect(byId.get("e2e-production-shard")?.scope).toEqual({
-      type: "selector",
-      variable: "e2e_production_required",
-    });
-    expect(byId.get("parser-version-guard")?.scope).toEqual({
-      type: "always",
-    });
-    expect(byId.get("marketing-screenshots")?.scope).toEqual({
-      type: "not-file-derived",
-      output: "marketing_screenshots_required",
-    });
-    const shardName = byId.get("e2e-production-shard")?.runName;
-    expect(shardName?.test("e2e-production-shard (network-baseline)")).toBe(
-      true,
-    );
-    expect(shardName?.test("e2e-production-shard-extra")).toBe(false);
-    expect(
-      byId
-        .get("api-image-smoke")
-        ?.runName.test("API release image (linux/arm64)"),
-    ).toBe(true);
+    expect(byId.get("ci-checks-generated")?.scope).toEqual({ type: "always" });
+    expect(byId.get("parser-version-guard")?.scope).toEqual({ type: "always" });
+    for (const job of [
+      "e2e-production-shard",
+      "marketing-screenshots",
+      "api-image-smoke",
+    ]) {
+      expect(byId.has(job), job).toBe(false);
+    }
+    const shardName = byId.get("ci-tests")?.runName;
+    expect(shardName?.test("ci-tests (api-1)")).toBe(true);
+    expect(shardName?.test("ci-tests-extra")).toBe(false);
 
     // Every variable the bar asks for is one the selector run actually sets.
     const outputs = [

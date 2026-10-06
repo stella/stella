@@ -167,6 +167,7 @@ import { defineMcpToolSet } from "@/api/mcp/tool-types";
 import {
   invalidCursorResult,
   buildCaseLawDecisionAppUrl,
+  legalCitationLinkFields,
   countryInputSchema,
   countryNormalization,
   FILTER_NORMALIZATION,
@@ -1008,7 +1009,7 @@ export const STELLA_TOOL_DEFINITIONS = [
       readOnlyHint: true,
       openWorldHint: false,
     },
-    description: SEARCH_CASE_LAW_TEXTS.description,
+    description: `${SEARCH_CASE_LAW_TEXTS.description} Use \`url\` for the reader and \`source_url\` for the publisher.`,
     inputSchema: searchCaseLawArgsSchema,
     inputNormalization: {
       country: countryNormalization({
@@ -1066,8 +1067,7 @@ export const STELLA_TOOL_DEFINITIONS = [
     },
     description:
       "Resolve case references to decisions: docket numbers as the courts " +
-      "write them and ECLIs. Answered from identity columns, not ranked " +
-      "text: a hit is the decision named, not one citing it. Each " +
+      "write them and ECLIs. Matches identity columns, not ranked text or citations. Each " +
       "`identifiers[]` entry is answered on its own, in input order, under " +
       "`status`: `found` carries that decision's id, resourceName, appUrl, " +
       "caseNumber (citable reference, not always a docket), court, date and " +
@@ -1076,7 +1076,8 @@ export const STELLA_TOOL_DEFINITIONS = [
       "call instead; `lookup_failed`: the read did not complete; retry that " +
       "entry. Use this when the user names a case; use search_case_law when " +
       "they describe one. Pass a `found` decisionId to " +
-      "read_case_law_decision for the text and typed identifiers.",
+      "read_case_law_decision for the text and typed identifiers. " +
+      "Use `url` for the reader and `source_url` for the publisher.",
     inputSchema: lookupCaseLawArgsSchema,
     inputNormalization: {
       country: countryNormalization({
@@ -1137,7 +1138,8 @@ export const STELLA_TOOL_DEFINITIONS = [
       "on any window; [] returns text and identity only. Text and unfinished " +
       "citation lists are paged: pass nextCursor with that one id. Citation " +
       "ids carry neither treatment nor surrounding text; for those call " +
-      "read_case_law_citations ({ decision_id: '<uuid>', direction: 'cited_by' }).",
+      "read_case_law_citations ({ decision_id: '<uuid>', direction: 'cited_by' }). " +
+      "Use `url` for the reader and `source_url` for the publisher.",
     inputSchema: readCaseLawDecisionArgsSchema,
     inputNormalization: {
       max_chars: {
@@ -1168,7 +1170,7 @@ export const STELLA_TOOL_DEFINITIONS = [
     // polarity vocabulary and the two readings a model would otherwise guess
     // at, the passage's bounds, and the next call spelled out.
     description:
-      "How the decisions citing one stood to it, or what it cited. One page, " +
+      "Read how citing decisions stood to one, or what it cited. One page, " +
       "each citation with a polarity and an excerpt of its paragraph. " +
       "`cited_by` returns the decisions that cite this one, `cites` the ones " +
       "it cites; neither means agreement. " +
@@ -1179,9 +1181,8 @@ export const STELLA_TOOL_DEFINITIONS = [
       `${LIMITS.caseLawCitationPassageChars} characters centred on the citation, cut when ` +
       "`passage.truncated`; `passage.mention` is 'sole', " +
       "'classified_section' (the mention the polarity came from), or " +
-      "'latest_of_several' (it may not be). Example: { decision_id: " +
-      "'<uuid>', direction: " +
-      "'cited_by', limit: 20 }. Pass nextCursor back as cursor.",
+      "'latest_of_several' (it may not be). Pass nextCursor back as cursor. " +
+      "Use `url` for the reader and `source_url` for the publisher.",
     inputSchema: readCaseLawCitationsArgsSchema,
     access: "read",
     readClass: "public",
@@ -2212,14 +2213,17 @@ const caseLawSearchResult = ({
   });
   return {
     matchedQueries,
-    appUrl: buildCaseLawDecisionAppUrl({
-      caseNumber: hit.caseNumber,
-      country: hit.country,
-      court: hit.court,
-      decisionId: hit.decisionId,
-      language: hit.language,
-      languageAlternates: hit.languageAlternates,
-      slug: hit.slug,
+    ...legalCitationLinkFields({
+      appUrl: buildCaseLawDecisionAppUrl({
+        caseNumber: hit.caseNumber,
+        country: hit.country,
+        court: hit.court,
+        decisionId: hit.decisionId,
+        language: hit.language,
+        languageAlternates: hit.languageAlternates,
+        slug: hit.slug,
+      }),
+      sourceUrl: hit.sourceUrl,
     }),
     caseNumber: hit.caseNumber,
     citationAuthority: hit.citationAuthority,
@@ -2692,17 +2696,21 @@ const decisionItemResult = ({
       : null,
     status: DECISION_READ_STATUS.found,
     decision: {
+      ...legalCitationLinkFields({
+        appUrl: buildCaseLawDecisionAppUrl({
+          caseNumber: read.caseNumber,
+          country: read.country,
+          court: read.court,
+          decisionId: read.id,
+          language: read.language,
+          languageAlternates: read.languageAlternates,
+          slug: read.slug,
+        }),
+        sourceUrl: read.sourceUrl,
+      }),
+
       ...(includedFields.has("details")
         ? {
-            appUrl: buildCaseLawDecisionAppUrl({
-              caseNumber: read.caseNumber,
-              country: read.country,
-              court: read.court,
-              decisionId: read.id,
-              language: read.language,
-              languageAlternates: read.languageAlternates,
-              slug: read.slug,
-            }),
             ...nonDocketReference(read),
             country: read.country,
             court: read.court,
@@ -2936,14 +2944,17 @@ const SEARCH_INSTEAD_HINT =
   "Search the decision's text with search_case_law instead, or pass the docket exactly as the court wrote it.";
 
 const decisionIdentityOf = (row: DecisionIdentityRow) => ({
-  appUrl: buildCaseLawDecisionAppUrl({
-    caseNumber: row.caseNumber,
-    country: row.country,
-    court: row.court,
-    decisionId: row.id,
-    language: row.language,
-    languageAlternates: row.languageAlternates,
-    slug: row.slug,
+  ...legalCitationLinkFields({
+    appUrl: buildCaseLawDecisionAppUrl({
+      caseNumber: row.caseNumber,
+      country: row.country,
+      court: row.court,
+      decisionId: row.id,
+      language: row.language,
+      languageAlternates: row.languageAlternates,
+      slug: row.slug,
+    }),
+    sourceUrl: null,
   }),
   caseNumber: row.caseNumber,
   // As in search: the kind is named only where the reference is not a docket.
@@ -3214,14 +3225,17 @@ const handleReadCaseLawCitationsTool: TypedMcpToolHandler<
         item.decision === null
           ? null
           : {
-              appUrl: buildCaseLawDecisionAppUrl({
-                caseNumber: item.decision.caseNumber,
-                country: item.decision.country,
-                court: item.decision.court,
-                decisionId: item.decision.id,
-                language: item.decision.language,
-                languageAlternates: item.decision.languageAlternates,
-                slug: item.decision.slug,
+              ...legalCitationLinkFields({
+                appUrl: buildCaseLawDecisionAppUrl({
+                  caseNumber: item.decision.caseNumber,
+                  country: item.decision.country,
+                  court: item.decision.court,
+                  decisionId: item.decision.id,
+                  language: item.decision.language,
+                  languageAlternates: item.decision.languageAlternates,
+                  slug: item.decision.slug,
+                }),
+                sourceUrl: null,
               }),
               caseNumber: item.decision.caseNumber,
               ...(item.decision.caseNumberType ===

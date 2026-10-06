@@ -182,6 +182,70 @@ export type Context = {
   >;
 };
 
+const nestedValue = (
+  value: Value | undefined,
+  parts: readonly string[],
+): Value | undefined => {
+  const key = parts.at(0);
+  if (key === undefined) {
+    return value;
+  }
+  if (value === undefined || value === null || typeof value !== "object") {
+    return undefined;
+  }
+  const rest = parts.slice(1);
+  if (key === "*") {
+    const projected: Value[] = [];
+    for (const item of Object.values(value)) {
+      const result = nestedValue(item, rest);
+      if (result !== undefined) {
+        projected.push(result);
+      }
+    }
+    return projected;
+  }
+  if (Array.isArray(value)) {
+    return /^(0|[1-9][0-9]*)$/u.test(key)
+      ? nestedValue(value.at(Number(key)), rest)
+      : undefined;
+  }
+  return nestedValue(value[key], rest);
+};
+
+export const contextFromNested = (context: object): Context => {
+  const values = new Map<string, Value>();
+  const status = new Map<string, boolean>();
+  for (const [key, value] of Object.entries(context)) {
+    if (typeof value !== "function") {
+      values.set(key, toValue(value));
+      continue;
+    }
+    if (
+      key !== "always" &&
+      key !== "success" &&
+      key !== "failure" &&
+      key !== "cancelled"
+    ) {
+      continue;
+    }
+    const outcome: unknown = value();
+    if (typeof outcome !== "boolean") {
+      panic(`Invalid GitHub status function result: ${key}`);
+    }
+    status.set(key, outcome);
+  }
+  return {
+    values: {},
+    status: Object.fromEntries(status),
+    fallback: (path) => {
+      const [root, ...parts] = path.split(".");
+      return root === undefined
+        ? undefined
+        : nestedValue(values.get(root), parts);
+    },
+  };
+};
+
 const STATUS_FUNCTIONS = new Set(["always", "success", "failure", "cancelled"]);
 
 const callFunction = (

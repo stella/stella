@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, beforeEach, expect, test } from "bun:test";
 import { eq, inArray, sql } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
-import { pgTable, text } from "drizzle-orm/pg-core";
+import { pgTable, text, integer, primaryKey } from "drizzle-orm/pg-core";
 import { drizzle } from "drizzle-orm/pglite";
 
 import { rejectionOf } from "@stll/property-testing/rejection";
@@ -282,6 +282,100 @@ test("a domain primary key changes ownership metadata and its status together", 
     });
     expect(changed).toEqual([{ id: "task", status: "unassigned" }]);
     await tx.execute(sql`DROP TABLE transition_keyed_fixture`);
+  });
+  expect(await db.$count(auditLogs)).toBe(1);
+});
+
+test("scoped composite transitions fence the generation and preserve another organization's same key", async () => {
+  const keyed = pgTable(
+    "transition_scoped_fixture",
+    {
+      organizationId: text("organization_id").notNull(),
+      sourceId: text("source_id").notNull(),
+      status: text({ enum: ["pending", "complete"] }).notNull(),
+      generation: integer().notNull(),
+    },
+    (table) => [
+      primaryKey({ columns: [table.organizationId, table.sourceId] }),
+    ],
+  );
+  const spec = defineKeyedTransitions({
+    table: keyed,
+    key: "sourceId",
+    scope: ["organizationId"],
+    edges: { pending: ["complete"], complete: [] },
+    options: { terminal: ["complete"], fence: "generation" },
+  });
+  await db.transaction(async (tx) => {
+    await tx.execute(
+      sql`CREATE TEMP TABLE transition_scoped_fixture (organization_id text, source_id text, status text NOT NULL, generation integer NOT NULL, PRIMARY KEY (organization_id, source_id))`,
+    );
+    await tx.insert(keyed).values([
+      {
+        organizationId: "first",
+        sourceId: "eu",
+        status: "pending",
+        generation: 2,
+      },
+      {
+        organizationId: "second",
+        sourceId: "eu",
+        status: "pending",
+        generation: 2,
+      },
+    ]);
+    const transactional = withBunRows(tx);
+    const recordTransitionAuditEvent = async (
+      auditTx: typeof transactional,
+      rows: readonly { id: string; status: string }[],
+    ) => {
+      await recorderFor(organizationId)(
+        auditTx,
+        rows.map((row) => ({
+          action: AUDIT_ACTION.UPDATE,
+          resourceType: AUDIT_RESOURCE_TYPE.WORK_OBLIGATION,
+          resourceId: row.id,
+        })),
+      );
+    };
+    expect(
+      await transitionBatch({
+        tx: transactional,
+        spec,
+        ids: ["eu"],
+        scope: { organizationId: "first" },
+        options: { from: ["pending"], to: "complete", fence: 1 },
+        recordTransitionAuditEvent,
+      }),
+    ).toEqual([]);
+    expect(await tx.select().from(auditLogs)).toHaveLength(0);
+    expect(
+      await transitionBatch({
+        tx: transactional,
+        spec,
+        ids: ["eu"],
+        scope: { organizationId: "first" },
+        options: { from: ["pending"], to: "complete", fence: 2, nextFence: 3 },
+        recordTransitionAuditEvent,
+      }),
+    ).toEqual([{ id: "eu", status: "complete" }]);
+    expect(await tx.select().from(keyed).orderBy(keyed.organizationId)).toEqual(
+      [
+        {
+          organizationId: "first",
+          sourceId: "eu",
+          status: "complete",
+          generation: 3,
+        },
+        {
+          organizationId: "second",
+          sourceId: "eu",
+          status: "pending",
+          generation: 2,
+        },
+      ],
+    );
+    await tx.execute(sql`DROP TABLE transition_scoped_fixture`);
   });
   expect(await db.$count(auditLogs)).toBe(1);
 });

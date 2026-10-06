@@ -211,12 +211,10 @@ const renderDecision = async (
   const root = createRootRoute({
     component: () => (
       <DecisionText
-        activeMatchIndex={-1}
         decision={decision}
         decisionId={decision.id}
         expandProvisions={expandProvisions}
         provisionAnchors={provisionAnchors}
-        searchQuery=""
       />
     ),
   });
