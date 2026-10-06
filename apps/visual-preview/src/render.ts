@@ -9,6 +9,8 @@ import {
   type VisualPreviewInput,
 } from "@stll/api-contract/visual-preview";
 
+const PREVIEW_VIEWPORT_HEIGHT = 800;
+
 export class VisualRenderError extends TaggedError("VisualRenderError")<{
   message: string;
   cause?: unknown;
@@ -60,9 +62,13 @@ export const renderVisual = async ({ input, launch }: RenderVisualOptions) => {
   // One Node-side deadline covers the entire browser pipeline, including
   // every evaluation and screenshot when the guest event loop is blocked.
   const render = async () => {
+    const viewport = {
+      width: input.viewport.width,
+      height: PREVIEW_VIEWPORT_HEIGHT,
+    };
     // A fresh context and browser per invocation prevents state sharing.
     const context = await browser.newContext({
-      viewport: { width: input.viewport.width, height: 800 },
+      viewport,
       serviceWorkers: "block",
       acceptDownloads: false,
       permissions: [],
@@ -97,7 +103,7 @@ export const renderVisual = async ({ input, launch }: RenderVisualOptions) => {
     });
     page.on("pageerror", (error) => recordError(error.message));
     await page.setContent(
-      '<!doctype html><style>html,body{margin:0}iframe{display:block;border:0;width:1200px;height:1px}</style><iframe sandbox="allow-scripts"></iframe>',
+      `<!doctype html><style>html,body{margin:0}iframe{display:block;border:0;width:${viewport.width}px;height:${viewport.height}px}</style><iframe sandbox="allow-scripts"></iframe>`,
     );
     // This listener belongs to the trusted parent; the composed document is
     // loaded unchanged in the same opaque-origin sandbox as the web UI.
