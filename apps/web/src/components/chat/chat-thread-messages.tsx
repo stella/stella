@@ -1539,6 +1539,25 @@ const toAssistantPartRenderGroups = (
  * and the resulting array identity churns, forcing Streamdown to
  * remount on every streaming text delta.
  */
+type OpenPlaybookActionArgs = {
+  part: Parameters<typeof savedPlaybookId>[0];
+  onOpenPlaybook: ((playbookId: string) => void) | undefined;
+  label: string;
+};
+
+/** The "Open playbook" action of a `save_playbook` card, when a pane can take it. */
+const openPlaybookAction = ({
+  part,
+  onOpenPlaybook,
+  label,
+}: OpenPlaybookActionArgs) => {
+  const playbookId = savedPlaybookId(part);
+  if (playbookId === null || onOpenPlaybook === undefined) {
+    return undefined;
+  }
+  return { label, onClick: () => onOpenPlaybook(playbookId) };
+};
+
 const AssistantMessageParts = ({
   threadRef,
   activeFileName,
@@ -1559,7 +1578,7 @@ const AssistantMessageParts = ({
   streamdownComponents,
   workspaceId,
 }: AssistantMessagePartsProps) => {
-  const t = useTranslations();
+  const label = useTranslations()("knowledge.playbooks.openInPane");
   const restorationPairs = collectAnonRestorations(message);
   const firstThinkingPartIndex = getFirstThinkingPartIndex(message.parts);
   const reasoningTokenCount = getReasoningTokenCount(message);
@@ -1706,14 +1725,7 @@ const AssistantMessageParts = ({
     }
 
     if (part.type === "tool-call") {
-      const playbookId = savedPlaybookId(part);
-      const action =
-        playbookId !== null && onOpenPlaybook !== undefined
-          ? {
-              label: t("knowledge.playbooks.openInPane"),
-              onClick: () => onOpenPlaybook(playbookId),
-            }
-          : undefined;
+      const action = openPlaybookAction({ part, onOpenPlaybook, label });
 
       if (isApprovalPart(part)) {
         return (
