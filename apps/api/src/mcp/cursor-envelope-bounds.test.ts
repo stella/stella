@@ -6,7 +6,6 @@ import * as v from "valibot";
 import { PUBLIC_CASE_LAW_COUNTRIES } from "@stll/api-contract/case-law-launch-readiness";
 import { PUBLIC_LEGISLATION_COUNTRIES } from "@stll/api-contract/legislation-publication";
 
-import { encodeDecisionCitationCursor } from "@/api/handlers/case-law/decisions/get";
 import { CONTACT_DISPLAY_NAME_MAX_LENGTH } from "@/api/handlers/contacts/list-query";
 import { encodeVersionCursor } from "@/api/handlers/entities/version-cursor";
 import { createTimestampIdCursorCodec } from "@/api/lib/db-pagination";
@@ -93,10 +92,6 @@ const timestampCursor = createTimestampIdCursorCodec({
 }).encode(TIMESTAMP, UUID);
 const idCursor = encodePaginationCursor([UUID]);
 const offsetCursor = encodePaginationCursor([Number.MAX_SAFE_INTEGER]);
-const citationsCursor = encodeDecisionCitationCursor({
-  from: { status: "continue", after: idCursor },
-  to: { status: "continue", after: idCursor },
-});
 
 // These use the same encoders as the handlers: tuple shapes come from the
 // owning cursorForItem call, while nested envelopes pass through their codec.
@@ -122,10 +117,6 @@ const cursorFixtures: Readonly<Record<string, string>> = {
     ),
   ),
   "default.read_content_across_matters.nextCursor": offsetCursor,
-  "default.read_case_law_decision.items[].nextCursor": encodePaginationCursor([
-    Number.MAX_SAFE_INTEGER,
-    citationsCursor,
-  ]),
   "default.read_case_law_citations.nextCursor": idCursor,
   "default.search_legislation.nextCursor": statuteCursor,
   "default.read_statute.nextCursor": offsetCursor,
@@ -256,7 +247,6 @@ describe("every registered pagination envelope fits its own next-call input", ()
   test("the longest optional corpus segments survive the real encoder", () => {
     expect(decodeCorpusSearchCursor(decisionCursor)).toEqual(corpusPosition);
     expect(decodeCorpusSearchCursor(statuteCursor)).toEqual(statutePosition);
-    expect(citationsCursor).not.toBeNull();
   });
 
   test("an undersized fixture input fails the same acceptance guard", () => {

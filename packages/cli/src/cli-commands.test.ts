@@ -865,11 +865,9 @@ describe("windowed text (S4)", () => {
     });
   });
 
-  test("a per-entry cursor leaf does not offer --all", async () => {
-    // The follow loop advances one top-level cursor. This payload carries a
-    // continuation per entry, so following nothing would print the first
-    // window as though it were the whole decision; the flag is absent rather
-    // than quietly truncating.
+  test("a decision read pages by number, so it offers neither --cursor nor --all", async () => {
+    // Each decision of a batch is paged with `--page`; there is no cursor for
+    // the follow loop to advance.
     const server = startMockServer(() => ({ toolPayload: { items: [] } }));
     const result = await runCli({
       args: [
@@ -890,8 +888,8 @@ describe("windowed text (S4)", () => {
     server.stop();
     expect(result.exitCode).toBe(2);
     expect(server.requests).toHaveLength(0);
-    // The cursor itself stays: one decision's text is continued by hand.
-    expect(help.stdout).toContain("--cursor");
+    expect(help.stdout).toContain("--page");
+    expect(help.stdout).not.toContain("--cursor");
     expect(help.stdout).not.toContain("--all");
   });
 });

@@ -193,6 +193,7 @@ jobs:
           ref: ${{ github.event.pull_request.head.sha }}
           sparse-checkout: |
             /scripts/
+            /packages/scripts/src/generated-files.ts
             /package.json
           sparse-checkout-cone-mode: false
 
@@ -207,7 +208,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          for path in scripts/autofix-plan.ts scripts/generated-files.ts; do
+          for path in scripts/autofix-plan.ts scripts/generated-files.ts packages/scripts/src/generated-files.ts; do
             if [[ -f "$path" ]]; then
               continue
             fi

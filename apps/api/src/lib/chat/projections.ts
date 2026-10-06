@@ -8,8 +8,6 @@ import {
 import { COURT_TIER_LABELS } from "@stll/api-contract/case-law-court-tiers";
 import {
   DECISION_TEXT_FIELD,
-  TEXT_ABSENCE_REASONS,
-  TEXT_FIELD_TYPE,
   type DecisionTextFieldKey,
 } from "@stll/api-contract/case-law-text-field";
 import {
@@ -1600,92 +1598,112 @@ export const SEARCH_CASE_LAW_PROJECTION = v.union([
   ),
 ]);
 
-const decisionTextFieldProjection = v.variant("type", [
-  projectionBranch(
-    v.strictObject({
-      type: v.literal(TEXT_FIELD_TYPE.PRESENT),
-      text: v.string(),
-    }),
-  ),
-  projectionBranch(
-    v.strictObject({
-      type: v.literal(TEXT_FIELD_TYPE.ABSENT),
-      reason: v.picklist(TEXT_ABSENCE_REASONS),
-    }),
-  ),
-]);
-
+// Publisher-authored summaries, only those the publisher published: an
+// absent field is left out rather than spelled as an absence block.
 const decisionTextFieldProjections = {
-  [DECISION_TEXT_FIELD.ABSTRACT]: decisionTextFieldProjection,
-  [DECISION_TEXT_FIELD.HEADNOTE]: decisionTextFieldProjection,
-  [DECISION_TEXT_FIELD.LEGAL_SENTENCE]: decisionTextFieldProjection,
-  [DECISION_TEXT_FIELD.SUMMARY]: decisionTextFieldProjection,
+  [DECISION_TEXT_FIELD.ABSTRACT]: v.optional(v.string()),
+  [DECISION_TEXT_FIELD.HEADNOTE]: v.optional(v.string()),
+  [DECISION_TEXT_FIELD.LEGAL_SENTENCE]: v.optional(v.string()),
+  [DECISION_TEXT_FIELD.SUMMARY]: v.optional(v.string()),
 } as const satisfies Record<
   DecisionTextFieldKey,
-  typeof decisionTextFieldProjection
+  v.OptionalSchema<v.StringSchema<undefined>, undefined>
 >;
 
+const citationTreatmentCountsProjection = v.strictObject({
+  negative: v.optional(v.number()),
+  neutral: v.optional(v.number()),
+  positive: v.optional(v.number()),
+  supportive: v.optional(v.number()),
+  mixed: v.optional(v.number()),
+  unclassified: v.optional(v.number()),
+} satisfies Record<
+  (typeof CITATION_TREATMENTS)[number],
+  v.OptionalSchema<v.NumberSchema<undefined>, undefined>
+>);
+
+// A citing or cited decision as the summary names it: no row ids, and an id
+// only where another tool can act on it.
+const caseLawCitationSummaryProjection = v.strictObject({
+  citedBy: v.strictObject({
+    // Citing references: a decision citing this one twice counts twice.
+    count: v.number(),
+    // The scan behind the count stopped at its cap: the count is a lower
+    // bound, and `top` ranks only the citations it read.
+    capped: v.optional(v.literal(true)),
+    polarity: v.optional(citationTreatmentCountsProjection),
+    top: v.optional(
+      v.array(
+        v.strictObject({
+          url: v.optional(v.string()),
+          caseNumber: v.string(),
+          court: v.string(),
+          date: v.optional(v.string()),
+          // Always held: read_case_law_decision takes it.
+          decisionId: passthroughId(),
+        }),
+      ),
+    ),
+  }),
+  cites: v.strictObject({
+    count: v.number(),
+    capped: v.optional(v.literal(true)),
+    decisions: v.optional(
+      v.array(
+        v.union([
+          projectionBranch(
+            v.strictObject({
+              url: v.optional(v.string()),
+              caseNumber: v.string(),
+              // Held by the corpus: read_case_law_decision takes it.
+              decisionId: passthroughId(),
+            }),
+          ),
+          // Not held: the reference as the decision wrote it.
+          projectionBranch(v.strictObject({ citation: v.string() })),
+        ]),
+      ),
+    ),
+    more: v.optional(v.literal(true)),
+  }),
+});
+
 const caseLawDecisionProjection = v.strictObject({
-  // Nullable for the same reason as search_case_law's `results[].appUrl`.
-  appUrl: v.optional(v.nullable(v.string())),
-  url: v.nullable(publicUrl()),
+  // The shared link contract: `url` is the reader's page (the publisher's
+  // when the app has none) and `source_url` the publisher's, beside it only
+  // when `url` is the reader's.
+  url: v.optional(v.nullable(publicUrl())),
   source_url: v.optional(publicUrl()),
   caseNumber: v.string(),
   caseNumberType: caseNumberTypeProjection,
-  citationsFrom: v.optional(
-    v.array(
-      v.strictObject({
-        id: passthroughId(),
-        citationText: v.string(),
-        citedDecisionId: v.nullable(passthroughId()),
-        sectionIndex: v.nullable(v.number()),
-      }),
-    ),
-  ),
-  citationsTo: v.optional(
-    v.array(
-      v.strictObject({
-        id: passthroughId(),
-        citationText: v.string(),
-        citingDecisionId: passthroughId(),
-        sectionIndex: v.nullable(v.number()),
-      }),
-    ),
-  ),
+  citations: v.optional(caseLawCitationSummaryProjection),
   country: v.optional(v.string()),
   court: v.optional(v.string()),
   // The court's short form as a lawyer writes it (ÚS, NS, NSS, SN, CJEU),
   // derived from the decision's ECLI or the jurisdiction's apex-court
-  // names. Null where nothing states one: it is never guessed, so a
+  // names. Absent where nothing states one: it is never guessed, so a
   // caller quoting it is quoting the court's own abbreviation.
-  courtAbbreviation: v.optional(v.nullable(v.string())),
-  decisionDate: v.optional(v.nullable(v.string())),
+  courtAbbreviation: v.optional(v.string()),
+  decisionDate: v.optional(v.string()),
   decisionId: passthroughId(),
-  resourceName: passthroughId(),
-  decisionType: v.optional(v.nullable(v.string())),
-  // The publisher's own document URL, which may embed the publisher's own
-  // UUID — never a Stella tenant id, so it is forwarded unchanged.
-  documentUrl: v.optional(v.nullable(publicUrl())),
-  ecli: v.optional(v.nullable(v.string())),
+  decisionType: v.optional(v.string()),
+  ecli: v.optional(v.string()),
   identifiers: decisionIdentifiersProjection,
   language: v.optional(v.string()),
+  // Publisher metadata less every value the fields beside it already state.
   metadata: v.optional(unenumeratedJson()),
   textFields: v.optional(v.strictObject(decisionTextFieldProjections)),
-  source: v.optional(
-    v.strictObject({
-      id: passthroughId(),
-      name: v.string(),
-      adapterKey: v.string(),
-      allowsDerivedAi: v.boolean(),
-    }),
-  ),
-  sourceUrl: v.optional(v.nullable(publicUrl())),
-  // Where this decision's data is freely available. An agent quoting the
-  // decision has to be able to attribute it, and some courts make the
-  // attribution a condition of reuse, so the tool states the page rather
-  // than leaving the caller to derive one from `source.adapterKey`.
-  sourceAttributionUrl: v.optional(v.nullable(publicUrl())),
-  text: v.nullable(v.string()),
+  // The publisher's name, where it is not the court's.
+  source: v.optional(v.string()),
+  text: v.optional(v.string()),
+  page: v.optional(v.number()),
+  pageCount: v.optional(v.number()),
+  charCount: v.optional(v.number()),
+  // Short token naming this exact text, present when it spans several pages.
+  textVersion: v.optional(v.string()),
+  // The caller's text_version named an older text: its page numbers may now
+  // address other passages.
+  versionChanged: v.optional(v.literal(true)),
   outline: v.optional(
     v.pipe(
       v.array(
@@ -1696,21 +1714,35 @@ const caseLawDecisionProjection = v.strictObject({
               "Heading or numbered paragraph opening, in document order.",
             ),
           ),
-          cursor: v.pipe(
-            v.string(),
+          page: v.pipe(
+            v.number(),
             v.description(
-              "Pass as cursor with this decision id to read from this heading; citation lists are skipped.",
+              "The page holding this heading at this call's window size.",
             ),
           ),
+          url: v.optional(v.string()),
         }),
       ),
       v.description(
-        'Navigation entries for one decision, supplied by default on the cursor-less window or requested with include: ["outline"], when AI use of the text is permitted.',
+        'Navigation entries for one decision, supplied by default on page 1 or requested with include: ["outline"], when AI use of the text is permitted.',
       ),
     ),
   ),
-  charCount: v.nullable(v.number()),
-  truncated: v.boolean(),
+  // Instead of the text window when the call passed `query`.
+  matches: v.optional(
+    v.strictObject({
+      hitCount: v.number(),
+      paragraphs: v.array(
+        v.strictObject({
+          paragraph: v.number(),
+          text: v.string(),
+          hit: v.optional(v.literal(true)),
+          url: v.optional(v.string()),
+        }),
+      ),
+      truncated: v.optional(v.literal(true)),
+    }),
+  ),
   // Why there is no text, when there is none. At most one is present, and
   // they are separate fields because the next call differs: a licence bars AI
   // use of wording this corpus holds and will not change, while an
@@ -1722,13 +1754,12 @@ const caseLawDecisionProjection = v.strictObject({
 
 /**
  * read_case_law_decision. Source of truth: `handleReadCaseLawDecisionTool`
- * (`stella-tools.ts`) over `readGatedDecisionWithDocument`. One entry per
- * requested decision id, in input order: a batch read reports per entry
- * rather than failing whole, so the union is discriminated on `status` and
- * every absence carries its own message. All ids are public case-law corpus
- * ids (decision, citation, source). `metadata` is an unenumerated public
- * jsonb subtree; publisher-authored decision text is declared separately
- * under `textFields`.
+ * (`stella-tools.ts`) over `readGatedDecisionWithDocument` and
+ * `readGatedDecisionCitationDigest`. One entry per requested decision id, in
+ * input order: a batch read reports per entry rather than failing whole, so
+ * the union is discriminated on `status` and every absence carries its own
+ * message. The only ids are public case-law decision ids another call takes;
+ * there are no row ids. `metadata` is an unenumerated public jsonb subtree.
  */
 export const READ_CASE_LAW_DECISION_PROJECTION = v.strictObject({
   items: v.array(
@@ -1738,12 +1769,9 @@ export const READ_CASE_LAW_DECISION_PROJECTION = v.strictObject({
           decision: caseLawDecisionProjection,
           decisionId: passthroughId(),
           // Present when the requested id was absorbed into the decision
-          // returned, so `decision.decisionId` is the id to cite from now on.
+          // returned, so `decision.decisionId` is the id to cite from now on,
+          // and when the requested page is past the last one.
           message: v.optional(v.string()),
-          // Opaque compound `[textOffset, citationsCursor]` cursor for THIS
-          // decision's remaining text and citations. A continuation takes one
-          // decision id, so it is per entry and not per call.
-          nextCursor: v.nullable(passthroughId()),
           status: v.literal(DECISION_READ_STATUS.found),
         }),
       ),
