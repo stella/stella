@@ -1,5 +1,11 @@
 import { expect, spyOn, test } from "bun:test";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import {
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
@@ -10,6 +16,7 @@ import {
   requiresPackageChecks,
 } from "./ci-package-scope";
 import { importProblems } from "./install-free-ci";
+import { maskSourceNonCode } from "./test-input-readers";
 
 const repository = (
   run: (root: string, write: (file: string, text: string) => void) => void,
@@ -149,11 +156,11 @@ test("a planted markdown reader joins isolated checks, including deleted input f
   });
 });
 
-test("the exact README change derives both genuine readers without package jobs", () => {
+test("the exact README change derives its genuine readers without package jobs", () => {
   const changed = ["README.md", "apps/desktop/README.md"];
   expect(requiresPackageChecks({ changed })).toBe(false);
   const checks = markdownChecks({ changed });
-  expect(checks).toHaveLength(4);
+  expect(checks).toHaveLength(5);
   expect(checks).toContainEqual([
     "bun",
     "scripts/check-railway-template-shape.ts",
@@ -162,6 +169,10 @@ test("the exact README change derives both genuine readers without package jobs"
     "bun",
     "test",
     "scripts/capability-catalog-readers.test.ts",
+  ]);
+  expect(checks).toContainEqual([
+    "bun",
+    "packages/scripts/src/workspace-hygiene.ts",
   ]);
   expect(
     markdownReaders()
@@ -1166,3 +1177,90 @@ test("unrelated Markdown options cannot certify a computed loader pattern", () =
     ).toBe(true);
   });
 });
+
+test("named computed readers remain fail-closed without a Markdown literal in the read", () => {
+  repository((root, write) => {
+    const reader = "scripts/named-computed-reader.ts";
+    write(
+      reader,
+      `import { readFileSync } from "node:fs";
+    export const CI_MARKDOWN_READER_INPUTS = ["docs/changelog/*.md"];
+    function readDoc(name) { return readFileSync(name, "utf8"); }
+    readDoc(process.argv[2]);`,
+    );
+    expect(markdownReaders(root).find(({ file }) => file === reader)).toEqual({
+      file: reader,
+      inputs: ["docs/changelog/*.md"],
+      kind: "unresolved",
+    });
+    expect(
+      requiresPackageChecks({ root, changed: ["docs/changelog/v1.2.3.md"] }),
+    ).toBe(true);
+    expect(requiresPackageChecks({ root, changed: ["README.md"] })).toBe(false);
+  });
+});
+
+test("a named computed Markdown check joins the docs job without package checks", () => {
+  repository((root, write) => {
+    const reader = "packages/example/check-docs.ts";
+    write(
+      reader,
+      `import { readFileSync } from "node:fs";
+      export const CI_MARKDOWN_READER_INPUTS = ["apps/**/*.md"];
+      export const CI_MARKDOWN_READER_COMMAND = "bun packages/example/check-docs.ts";
+      function check(name) { return readFileSync(name); }
+      check(process.argv[2]);`,
+    );
+    const changed = ["apps/desktop/README.md"];
+    expect(markdownChecks({ root, changed })).toEqual([["bun", reader]]);
+    expect(requiresPackageChecks({ root, changed })).toBe(false);
+  });
+});
+
+test("named Markdown checks cannot hide a different owner or computed command", () => {
+  for (const command of [
+    '"bun scripts/other.ts"',
+    '"bun packages/example/check-docs.ts" + suffix',
+    '"bun packages/example/check-docs.ts && bun scripts/other.ts"',
+  ]) {
+    repository((root, write) => {
+      const reader = "packages/example/check-docs.ts";
+      write(
+        reader,
+        `import { readFileSync } from "node:fs";
+        export const CI_MARKDOWN_READER_INPUTS = ["README.md"];
+        export const CI_MARKDOWN_READER_COMMAND = ${command};
+        readFileSync(process.argv[2]);`,
+      );
+      expect(() => markdownReaders(root)).toThrow(
+        `${reader}: Markdown reader command`,
+      );
+    });
+  }
+});
+
+test("every tracked named Markdown input declaration enters the reader census", () => {
+  const root = path.resolve(import.meta.dir, "..");
+  const tracked = Bun.spawnSync(["git", "ls-files", "-z"], {
+    cwd: root,
+    stdout: "pipe",
+    stderr: "pipe",
+  });
+  expect(tracked.exitCode).toBe(0);
+  const files = tracked.stdout
+    .toString()
+    .split("\0")
+    .filter((file) =>
+      /^(?:scripts|apps|packages)\/.+\.[cm]?[jt]sx?$/u.test(file),
+    );
+  const declared = files.filter((file) =>
+    /\bexport\s+const\s+CI_MARKDOWN_READER_INPUTS\b/u.test(
+      maskSourceNonCode(readFileSync(path.join(root, file), "utf-8")),
+    ),
+  );
+  expect(declared.length).toBeGreaterThan(0);
+  const readers = new Set(markdownReaders().map(({ file }) => file));
+  for (const file of declared) {
+    expect(readers.has(file), file).toBe(true);
+  }
+}, 30_000);

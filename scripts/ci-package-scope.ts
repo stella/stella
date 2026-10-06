@@ -645,6 +645,58 @@ const readerCommand = (
   return undefined;
 };
 
+// A computed reader can certify its owning direct check without selecting
+// the rest of its package. Its adjacent input declaration remains the contract.
+const declaredMarkdownReaderCommand = ({
+  source,
+  code,
+  file,
+}: Pick<PathExpressionOptions, "source" | "code" | "file">):
+  | readonly string[]
+  | undefined => {
+  const expressions = identifierExpressions({
+    expression: "CI_MARKDOWN_READER_COMMAND",
+    source,
+    code,
+  });
+  if (expressions === undefined || expressions.length === 0) {
+    return undefined;
+  }
+  const commands = expressions.map((expression) =>
+    readStringLiterals(expression),
+  );
+  const literal = commands.at(0)?.at(0)?.value;
+  if (
+    expressions.some(
+      (expression) => maskSourceNonCode(expression).trim() !== "",
+    ) ||
+    literal === undefined ||
+    commands.some(
+      (command) => command.length !== 1 || command.at(0)?.value !== literal,
+    )
+  ) {
+    throw new MarkdownReaderDeclarationError(
+      `${file}: Markdown reader command must be one static direct command`,
+    );
+  }
+  const words = literal.trim().split(/\s+/u);
+  if (
+    words.at(0) !== "bun" ||
+    words.at(1) !== file ||
+    words.some((word) => /[;&|$`]/u.test(word)) ||
+    identifierExpressions({
+      expression: "CI_MARKDOWN_READER_INPUTS",
+      source,
+      code,
+    }) === undefined
+  ) {
+    throw new MarkdownReaderDeclarationError(
+      `${file}: Markdown reader command must run its declared owner directly`,
+    );
+  }
+  return words;
+};
+
 const sourceFiles = (root: string): readonly string[] => {
   // Tracked sources avoid traversing installed dependency trees. Temporary
   // repositories in selector tests have no Git metadata and use a small glob.
@@ -1028,6 +1080,66 @@ const unresolvedReadInputs = ({
   );
 };
 
+type MarkdownReaderOptions = Pick<
+  PathExpressionOptions,
+  "source" | "code" | "file" | "temporaryFactories"
+> & {
+  root: string;
+  importsFs: boolean;
+  inputs: Set<string>;
+  unresolvedInputs: Set<string>;
+  moduleInput: boolean;
+};
+const retainedMarkdownReader = ({
+  root,
+  importsFs,
+  inputs,
+  unresolvedInputs,
+  moduleInput,
+  source,
+  code,
+  file,
+  temporaryFactories,
+}: MarkdownReaderOptions): MarkdownReader | undefined => {
+  if (importsFs || source.includes("Bun.file")) {
+    const declared = declaredMarkdownInputs({
+      expression: "CI_MARKDOWN_READER_INPUTS",
+      code,
+      source,
+      file,
+      temporaryFactories,
+    });
+    if (declared !== undefined) {
+      for (const input of declared) {
+        inputs.add(input);
+      }
+      if (declared.length > 0) {
+        unresolvedInputs.add("CI_MARKDOWN_READER_INPUTS");
+      }
+    }
+  }
+  if (inputs.size > 0) {
+    const declaredCommand = declaredMarkdownReaderCommand({
+      source,
+      code,
+      file,
+    });
+    const command = declaredCommand ?? readerCommand(root, file);
+    const reader = { file, inputs: [...inputs] };
+    if (declaredCommand !== undefined) {
+      return { ...reader, kind: "check", command: declaredCommand };
+    } else if (unresolvedInputs.size > 0) {
+      return { ...reader, kind: "unresolved" };
+    } else if (moduleInput || /^(?:apps|packages)\//u.test(file)) {
+      return { ...reader, kind: "module" };
+    } else if (command !== undefined) {
+      return { ...reader, kind: "check", command };
+    }
+    return { ...reader, kind: "unresolved" };
+  }
+  return undefined;
+};
+
 let rootReaders: readonly MarkdownReader[] | undefined;
 export const markdownReaders = (root = ROOT): readonly MarkdownReader[] => {
   // The tracked checkout is fixed during a planning process; fixture roots
@@ -1181,18 +1293,19 @@ export const markdownReaders = (root = ROOT): readonly MarkdownReader[] => {
         inputs.add(input);
       }
     });
-    if (inputs.size > 0) {
-      const command = readerCommand(root, file);
-      const reader = { file, inputs: [...inputs] };
-      if (unresolvedInputs.size > 0) {
-        readers.push({ ...reader, kind: "unresolved" });
-      } else if (moduleInput || /^(?:apps|packages)\//u.test(file)) {
-        readers.push({ ...reader, kind: "module" });
-      } else if (command !== undefined) {
-        readers.push({ ...reader, kind: "check", command });
-      } else {
-        readers.push({ ...reader, kind: "unresolved" });
-      }
+    const reader = retainedMarkdownReader({
+      root,
+      importsFs,
+      inputs,
+      unresolvedInputs,
+      moduleInput,
+      source,
+      code,
+      file,
+      temporaryFactories,
+    });
+    if (reader !== undefined) {
+      readers.push(reader);
     }
   }
   for (const [owner, inputs] of readTestInputs(root)) {

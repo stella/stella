@@ -18,6 +18,9 @@ export type ChangelogRelease = {
 // possibly absent (a new release lands before its date entry is committed).
 // A `null` entry records a stable tag whose release was built but never
 // promoted to production: its notes file exists, and nothing here lists it.
+// Computed filesystem reads retain these repository Markdown inputs.
+export const CI_MARKDOWN_READER_INPUTS = ["docs/changelog/*.md"];
+
 const RELEASE_DATES: Partial<Record<string, string | null>> = releaseDates;
 
 const isUnpromoted = (tagName: string) => RELEASE_DATES[tagName] === null;

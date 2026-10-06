@@ -16,6 +16,13 @@ import { RECORDINGS_MANIFEST_PATH } from "../apps/web/e2e/marketing/captures";
 import { parseChangesetEntry } from "./changeset-entry";
 import { computeVerdicts } from "./check-marketing-recordings";
 
+// Computed filesystem reads retain these repository Markdown inputs.
+export const CI_MARKDOWN_READER_INPUTS = [
+  ".changeset/*.md",
+  "docs/changelog/*.md",
+  "packages/*/CHANGELOG.md",
+];
+
 const ROOT_DIR = nodePath.resolve(import.meta.dirname, "..");
 const RELEASE_DATES_PATH = "apps/landing/src/data/changelog-release-dates.json";
 const CONFIRMATION_FLAG = "--confirm-current-recordings-reviewed";

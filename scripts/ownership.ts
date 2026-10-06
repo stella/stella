@@ -24,6 +24,9 @@ import { SANCTIONS_MONITORING_TRANSITION_IDENTITIES } from "../apps/api/src/lib/
 // With its extension: oxlint.config.ts loads this file under Node's resolver.
 import { formattedLikeRepository } from "./generated-artifacts.ts";
 
+// Computed filesystem reads retain these repository Markdown inputs.
+export const CI_MARKDOWN_READER_INPUTS = ["docs/module-ownership.md"];
+
 const statusTransitionColumns = () => {
   const columns = new Map(
     Object.entries(STATUS_COLUMNS).map(([table, names]) => [
