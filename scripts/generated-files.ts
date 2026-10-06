@@ -177,7 +177,7 @@ export const GENERATORS = [
     outputKind: "committed",
     outputs: [
       "apps/api/src/mcp/apps/*/generated/app.html.txt",
-      "apps/api/src/mcp/apps/shared/generated/*.json",
+      "apps/api/src/mcp/apps/shared/generated/*",
     ],
     inputs: [
       "apps/api/src/mcp/apps/**",

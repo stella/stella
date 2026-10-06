@@ -1,4 +1,6 @@
 import "../src/tests/setup-env";
+import { Ajv } from "ajv";
+import standaloneCode from "ajv/dist/standalone";
 import { panic } from "better-result";
 import path from "node:path";
 
@@ -15,18 +17,37 @@ await Bun.write(
   path.join(generatedRoot, "messages.json"),
   `${JSON.stringify(await buildMcpAppMessages(), null, 2)}\n`,
 );
+const schemas = Object.fromEntries(
+  Object.entries(MCP_APP_OUTPUT_SCHEMAS).map(([name, schema]) => [
+    name,
+    defineChatProjectionMcpToolOutput(schema).outputSchema,
+  ]),
+);
 await Bun.write(
   path.join(generatedRoot, "schemas.json"),
-  `${JSON.stringify(
-    Object.fromEntries(
-      Object.entries(MCP_APP_OUTPUT_SCHEMAS).map(([name, schema]) => [
-        name,
-        defineChatProjectionMcpToolOutput(schema).outputSchema,
-      ]),
-    ),
-    null,
-    2,
-  )}\n`,
+  `${JSON.stringify(schemas, null, 2)}\n`,
+);
+// Hosts forbid eval; compile validators before bundling rather than in the app.
+const validator = new Ajv({
+  strict: false,
+  validateFormats: false,
+  code: { source: true, esm: true },
+});
+for (const [name, schema] of Object.entries(schemas)) {
+  validator.addSchema(schema, name);
+}
+await Bun.write(
+  path.join(generatedRoot, "validators.js"),
+  standaloneCode(
+    validator,
+    Object.fromEntries(Object.keys(schemas).map((name) => [name, name])),
+  ),
+);
+await Bun.write(
+  path.join(generatedRoot, "validators.d.ts"),
+  `import type { ValidateFunction } from "ajv";\n${Object.keys(schemas)
+    .map((name) => `export declare const ${name}: ValidateFunction;`)
+    .join("\n")}\n`,
 );
 
 const MCP_APP_DIRECTORIES = MCP_APPS.map(({ directory }) => directory);

@@ -2,6 +2,7 @@ import { expect, test } from "@playwright/test";
 import type { Page } from "@playwright/test";
 import { readFile } from "node:fs/promises";
 
+import { MCP_APP_SANDBOX_CONTENT_DIRECTIVES } from "../../../api/src/handlers/mcp-app-sandbox/policy";
 import {
   APP_LOOKUP_FIXTURE,
   APP_SEARCH_FIXTURE,
@@ -27,12 +28,17 @@ type HostOptions = {
 };
 
 const mountApp = async ({ page, locale, tool, payload }: HostOptions) => {
-  const html = await readFile(
+  const bundle = await readFile(
     new URL(
       "../../../api/src/mcp/apps/case-law-results/generated/app.html.txt",
       import.meta.url,
     ),
     "utf-8",
+  );
+  const html = bundle.replace(
+    "<head>",
+    () =>
+      `<head><meta http-equiv="Content-Security-Policy" content="${MCP_APP_SANDBOX_CONTENT_DIRECTIVES.join("; ")}">`,
   );
   await page.setContent(
     '<iframe id="app" sandbox="allow-scripts allow-forms" style="width:100%;height:650px;border:0"></iframe>',

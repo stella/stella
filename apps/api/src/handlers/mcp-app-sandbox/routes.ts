@@ -14,6 +14,8 @@ import {
 } from "@/api/lib/security-headers";
 import { runtimeMode } from "@/api/runtime-mode";
 
+import { MCP_APP_SANDBOX_CONTENT_DIRECTIVES } from "./policy";
+
 const allowedHostOrigins = frontendOrigins({
   frontendUrl: env.FRONTEND_URL,
   runtimeMode: runtimeMode(),
@@ -104,17 +106,7 @@ export const MCP_APP_SANDBOX_DOCUMENT = `<!doctype html>
 </html>`;
 
 const SANDBOX_CONTENT_SECURITY_POLICY = [
-  "default-src 'none'",
-  "script-src 'unsafe-inline'",
-  "style-src 'unsafe-inline'",
-  "img-src data: blob:",
-  "media-src data: blob:",
-  "font-src data:",
-  "connect-src 'none'",
-  "frame-src 'self'",
-  "object-src 'none'",
-  "base-uri 'none'",
-  "form-action 'none'",
+  ...MCP_APP_SANDBOX_CONTENT_DIRECTIVES,
   `frame-ancestors ${frameAncestors}`,
 ].join("; ");
 

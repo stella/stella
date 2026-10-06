@@ -1424,7 +1424,7 @@ jobs:
         # production resource cannot silently exercise different app code.
         run: |
           (cd apps/api && bun run build:mcp-apps)
-          git diff --exit-code -- "apps/api/src/mcp/apps/*/generated/app.html.txt" "apps/api/src/mcp/apps/shared/generated/*.json"
+          git diff --exit-code -- "apps/api/src/mcp/apps/*/generated/app.html.txt" "apps/api/src/mcp/apps/shared/generated/*"
 
       - name: Visual sandbox document tests
         if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
