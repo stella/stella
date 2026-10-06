@@ -148,6 +148,9 @@ cli_tool() {
       auth_rejection "$scratch/error" "$scratch/payload"
       return 1
     }
+  # A rejected server registry leaves the CLI on its built-in commands: never a pass.
+  reason=registry_rejected
+  if grep -q 'registry refresh rejected' "$scratch/error"; then return 1; fi
   validate_payload "$shape" "$nonempty"
 }
 
