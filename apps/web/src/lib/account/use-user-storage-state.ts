@@ -32,5 +32,6 @@ export const useUserStorageState = <T>({
       ),
     [area, baseKey, encode],
   );
-  return useOwnerScopedState({ read, write });
+  const getDefaultValue = useCallback(() => decode(null), [decode]);
+  return useOwnerScopedState({ read, write, getDefaultValue });
 };

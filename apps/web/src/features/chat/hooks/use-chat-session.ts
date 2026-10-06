@@ -269,6 +269,8 @@ const resetAskUserToolCall = (
 
 const ignoreQueuedDispatchError = (_error: unknown): void => undefined;
 
+const emptyApprovedTools = () => new Set<ToolApprovalGrant>();
+
 export const useChatSession = ({
   chat,
   conversationId,
@@ -307,6 +309,7 @@ export const useChatSession = ({
     updateValue: updateConversationApprovedTools,
     refresh: refreshConversationApprovedTools,
   } = useOwnerScopedState({
+    getDefaultValue: emptyApprovedTools,
     read: readConversationGrants,
     write: writeConversationGrants,
   });
@@ -323,7 +326,10 @@ export const useChatSession = ({
     owner: alwaysGrantsOwner,
     value: alwaysApprovedTools,
     refresh: refreshAlwaysApprovedTools,
-  } = useOwnerScopedState({ read: readAlwaysGrants });
+  } = useOwnerScopedState({
+    read: readAlwaysGrants,
+    getDefaultValue: emptyApprovedTools,
+  });
 
   const snapshot = useSyncExternalStore(
     chat.subscribe,

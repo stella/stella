@@ -9,10 +9,10 @@ export const tab = () => window.sessionStorage;
 // oxlint-disable-next-line no-raw-browser-storage/no-raw-browser-storage -- Global browser property access crosses the owner boundary.
 export const global = () => globalThis.localStorage;
 
-// oxlint-disable-next-line no-raw-browser-storage/no-raw-browser-storage -- Destructuring cannot bypass the storage owner.
+// oxlint-disable-next-line no-raw-browser-storage/no-raw-browser-storage -- Destructured access uses the storage owner.
 export const { localStorage: local } = window;
 
-// oxlint-disable-next-line no-raw-browser-storage/no-raw-browser-storage -- Computed literal access cannot bypass the storage owner.
+// oxlint-disable-next-line no-raw-browser-storage/no-raw-browser-storage -- Computed property access uses the storage owner.
 export const computed = () => window["sessionStorage"];
 
 // expect-clean: no-raw-browser-storage/no-raw-browser-storage

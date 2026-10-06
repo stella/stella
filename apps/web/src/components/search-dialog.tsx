@@ -520,6 +520,9 @@ type SearchDialogProps = {
   mode?: SearchDialogMode;
 };
 
+const emptyRecentSearches = (): RecentSearch[] => [];
+const emptyRecentFiles = (): RecentFile[] => [];
+
 const getRecentsSnapshotKey = (open: boolean, scope: SearchRecentsScope) =>
   open && isSearchRecentsScopeCurrent(scope)
     ? `${scope.organizationId}:${scope.userId}`
@@ -607,9 +610,13 @@ export const SearchDialog = ({
     [open, searchRecentsScope],
   );
   const { value: recentSearches, setValue: setRecentSearches } =
-    useOwnerScopedState({ read: readSearches });
+    useOwnerScopedState({
+      read: readSearches,
+      getDefaultValue: emptyRecentSearches,
+    });
   const { value: recentFiles, setValue: setRecentFiles } = useOwnerScopedState({
     read: readFiles,
+    getDefaultValue: emptyRecentFiles,
   });
   const [recentPreviewFile, setRecentPreviewFile] = useState<RecentFile | null>(
     null,

@@ -5,7 +5,11 @@ import {
 } from "@/lib/account/user-scoped-storage";
 import type { StorageOwner } from "@/lib/account/user-scoped-storage";
 
+const SERVER_OWNER = { kind: "visitor" } as const;
+export const serverStorageOwner = () => SERVER_OWNER;
+
 export type OwnerScopedStateOptions<T> = {
+  getDefaultValue: () => T;
   read: (owner: StorageOwner) => T;
   write?: ((value: T, owner: StorageOwner) => void) | undefined;
 };
@@ -14,7 +18,12 @@ export type OwnerScopedStateOptions<T> = {
 export const createOwnerScopedState = <T>({
   read,
   write,
+  getDefaultValue,
 }: OwnerScopedStateOptions<T>) => {
+  const serverSnapshot = {
+    owner: serverStorageOwner(),
+    value: getDefaultValue(),
+  };
   let snapshot: { owner: StorageOwner; value: T } | undefined;
   const listeners = new Set<() => void>();
   const getSnapshot = () => {
@@ -31,6 +40,7 @@ export const createOwnerScopedState = <T>({
   };
   return {
     getSnapshot,
+    getServerSnapshot: () => serverSnapshot,
     subscribe: (listener: () => void) => {
       listeners.add(listener);
       const unsubscribeOwner = onStorageOwnerChange(() => {
