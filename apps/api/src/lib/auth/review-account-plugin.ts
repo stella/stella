@@ -1,5 +1,5 @@
 import { BASE_ERROR_CODES } from "@better-auth/core/error";
-import type { BetterAuthPlugin } from "better-auth";
+import type { AuthContext, BetterAuthPlugin } from "better-auth";
 import {
   APIError,
   createAuthMiddleware,
@@ -12,6 +12,7 @@ import {
   checkReviewAccountAccess,
   isReviewAccountBodyEmailPath,
   isReviewAccountEmail,
+  readReviewAccountOrganizationTargets,
   REVIEW_ACCOUNT_OPERATION,
   resolveReviewAccountBodyEmailOperation,
   resolveReviewAccountSessionOperation,
@@ -80,6 +81,46 @@ const sessionCheckedOperation = ({
   return path.startsWith("/oauth2/") || path.startsWith("/organization/")
     ? "session-only"
     : null;
+};
+
+/** Refuses a request naming any organization but the review account's own. */
+const requireNamedOrganizations = async ({
+  adapter,
+  body,
+  config,
+  email,
+  path,
+  query,
+}: {
+  adapter: Pick<AuthContext["adapter"], "findOne">;
+  body: unknown;
+  config: ReviewAccountConfig;
+  email: string;
+  path: string;
+  query: unknown;
+}) => {
+  const targets = readReviewAccountOrganizationTargets({ path, body, query });
+  const slugTargets = await Promise.all(
+    targets.slugs.map(
+      async (slug) =>
+        (
+          await adapter.findOne<{ id: string }>({
+            model: "organization",
+            where: [{ field: "slug", value: slug }],
+          })
+        )?.id ?? null,
+    ),
+  );
+  for (const organizationId of [...targets.ids, ...slugTargets]) {
+    requireReviewAccountAccess(
+      checkReviewAccountAccess({
+        email,
+        config,
+        operation: REVIEW_ACCOUNT_OPERATION.session,
+        organizationId,
+      }),
+    );
+  }
 };
 
 export const createReviewAccountPlugin = ({
@@ -233,6 +274,15 @@ export const createReviewAccountPlugin = ({
                 organizationId: resolved.session["activeOrganizationId"],
               }),
             );
+            // Every organization the request names, not only the session's.
+            await requireNamedOrganizations({
+              adapter: ctx.context.adapter,
+              body: ctx.body,
+              config,
+              email: resolved.user.email,
+              path,
+              query: ctx.query,
+            });
             if (operation === "session-only") {
               return undefined;
             }

@@ -1,5 +1,5 @@
 /**
- * Usage (inside the API task, which carries the deployment env):
+ * Usage:
  *   bun /app/review-account.js provision
  *   bun /app/review-account.js set-password      # password on standard input
  *

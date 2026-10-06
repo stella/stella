@@ -195,6 +195,53 @@ export const resolveReviewAccountSessionOperation = ({
 };
 
 /**
+ * Organization endpoints name the organization they act on in the body or the
+ * query, apart from the session's active organization. For the review
+ * account each named target is checked, not only the session.
+ */
+export const isReviewAccountTargetCheckedPath = (path: string): boolean =>
+  path.startsWith("/organization/");
+
+type OrganizationTargets = {
+  /** `null` asks to clear the active organization. */
+  ids: (string | null)[];
+  slugs: string[];
+};
+
+const readTargets = (source: unknown, targets: OrganizationTargets) => {
+  if (typeof source !== "object" || source === null) {
+    return;
+  }
+  if (Object.hasOwn(source, "organizationId")) {
+    const id: unknown = Reflect.get(source, "organizationId");
+    if (typeof id === "string" || id === null) {
+      targets.ids.push(id);
+    }
+  }
+  const slug: unknown = Reflect.get(source, "organizationSlug");
+  if (typeof slug === "string") {
+    targets.slugs.push(slug);
+  }
+};
+
+export const readReviewAccountOrganizationTargets = ({
+  path,
+  body,
+  query,
+}: {
+  path: string;
+  body: unknown;
+  query: unknown;
+}): OrganizationTargets => {
+  const targets: OrganizationTargets = { ids: [], slugs: [] };
+  if (isReviewAccountTargetCheckedPath(path)) {
+    readTargets(body, targets);
+    readTargets(query, targets);
+  }
+  return targets;
+};
+
+/**
  * Endpoints that name the account by an `email` in the body rather than by a
  * session: password recovery and sign-up would let whoever reads the
  * account's mailbox replace its password.

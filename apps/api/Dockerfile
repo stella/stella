@@ -142,9 +142,11 @@ RUN bun build \
     --target bun \
     --outfile /app/replay-case-law-source.js \
     apps/api/src/scripts/replay-case-law-source.ts
-# Restricted review account operator commands, run inside the API task:
+# Restricted review account commands: `provision` creates the account, its
+# organization and owner membership; `set-password` reads the password from
+# standard input.
 #   ["bun", "/app/review-account.js", "provision"]
-#   ["bun", "/app/review-account.js", "set-password"]   (password on stdin)
+#   ["bun", "/app/review-account.js", "set-password"]
 RUN bun build \
     --define __STELLA_RELEASE__=true \
     --target bun \

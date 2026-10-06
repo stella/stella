@@ -11,6 +11,7 @@ import {
 } from "@/api/lib/auth/review-account-plugin";
 import {
   isReviewAccountBodyEmailPath,
+  isReviewAccountTargetCheckedPath,
   resolveReviewAccountSessionOperation,
 } from "@/api/lib/auth/review-account-policy";
 import {
@@ -155,17 +156,6 @@ const REVIEWED_OPEN_AUTH_PATHS: ReadonlySet<string> = new Set([
   "/list-sessions",
   "/ok",
   "/error",
-  "/organization/get-active-member",
-  "/organization/get-active-member-role",
-  "/organization/get-full-organization",
-  "/organization/get-invitation",
-  "/organization/get-organization",
-  "/organization/list",
-  "/organization/list-invitations",
-  "/organization/list-members",
-  "/organization/list-user-invitations",
-  // The session rule refuses any organization but its own.
-  "/organization/set-active",
   // Sign-in and the account's own sessions.
   "/sign-in/email",
   "/sign-in/social",
@@ -432,6 +422,7 @@ describe("restricted review account password sign-in", () => {
         return operation === null &&
           !isReviewAccountBodyEmailPath(path) &&
           !isReviewAccountTokenRedemptionPath(path) &&
+          !isReviewAccountTargetCheckedPath(path) &&
           !REVIEWED_OPEN_AUTH_PATHS.has(path)
           ? [path]
           : [];
@@ -531,5 +522,65 @@ describe("restricted review account password sign-in", () => {
       expect({ path, status: response.status }).toEqual({ path, status: 403 });
     }
     expect(await context.internalAdapter.findUserById(userId)).not.toBeNull();
+  });
+
+  test("checks the organization a request names, not only the session's", async () => {
+    const auth = await createReviewAuth();
+    const context = await auth.$context;
+    const userId =
+      (await context.internalAdapter.findUserByEmail(reviewEmail))?.user.id ??
+      "";
+    // The review organization and, for this test, a second membership.
+    for (const organizationId of [reviewOrganizationId, "org_other"]) {
+      await context.adapter.create({
+        model: "organization",
+        data: {
+          id: organizationId,
+          name: organizationId,
+          slug: organizationId,
+          createdAt: new Date(),
+        },
+        forceAllowId: true,
+      });
+      await context.adapter.create({
+        model: "member",
+        data: {
+          organizationId,
+          userId,
+          role: "owner",
+          createdAt: new Date(),
+        },
+      });
+    }
+    const cookie = sessionCookie(
+      await postAuth(auth, "/sign-in/email", { email: reviewEmail, password }),
+    );
+    for (const body of [
+      { organizationId: "org_other" },
+      { organizationSlug: "org_other" },
+      { organizationId: null },
+    ]) {
+      const response = await postAuth(
+        auth,
+        "/organization/set-active",
+        body,
+        cookie,
+      );
+      expect({ body, status: response.status }).toEqual({ body, status: 403 });
+    }
+    const own = await postAuth(
+      auth,
+      "/organization/set-active",
+      { organizationId: reviewOrganizationId },
+      cookie,
+    );
+    expect(own.status).toBe(200);
+    const read = await auth.handler(
+      new Request(
+        "http://localhost:3001/api/auth/organization/get-full-organization?organizationId=org_other",
+        { headers: { cookie, origin: "http://localhost:3001" } },
+      ),
+    );
+    expect(read.status).toBe(403);
   });
 });

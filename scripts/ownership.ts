@@ -249,8 +249,7 @@ export const ROOT_CONNECTION_DOORS = [
       allowed: [
         {
           path: "apps/api/src/scripts/review-account.ts",
-          reason:
-            "Operator command run inside the API task that provisions the review account.",
+          reason: "Command that provisions the restricted review account.",
         },
       ],
     },
