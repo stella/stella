@@ -76,7 +76,7 @@ jobs:
       trusted: ${{ steps.check.outputs.trusted }}
       playwright_image: ${{ steps.browser-image.outputs.image }}
       # Pull requests run lightweight guards, lint and type checks.
-      # Unit-test event policy stays pending until the test-runner rework.
+      # Test shards join builds, images, browsers and services at heavy depth.
       # Builds, images, browsers and services certify the merge group.
       suite_depth: ${{ steps.depth.outputs.suite_depth }}
       queue_depth: ${{ steps.depth.outputs.queue_depth || 'full' }}
