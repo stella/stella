@@ -30,6 +30,7 @@ import {
 import { resolveMachineApiKeySession } from "@/api/mcp/api-key-auth";
 import { mcpMemberAuthority } from "@/api/mcp/effective-authority";
 import { McpAuthenticationError } from "@/api/mcp/errors";
+import { NO_FEATURE_ACCESS_FACTS } from "@/api/tests/helpers/member-authorization";
 
 const roleNames = Object.keys(roles).filter(isMemberRole);
 const roleArbitrary = fc.constantFrom(...roleNames);
@@ -97,6 +98,7 @@ const authorizeAs = (role: (typeof roleNames)[number]) => async () => ({
   email: "member@example.test",
   role,
   workspace: null,
+  ...NO_FEATURE_ACCESS_FACTS,
 });
 
 describe("personal API key authority", () => {
