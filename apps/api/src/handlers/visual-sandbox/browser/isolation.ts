@@ -64,8 +64,11 @@ const createIsolationPrimitives = () => {
   const TemplateType = HTMLTemplateElement;
   const ExceptionType = DOMException;
   const ObserverType = MutationObserver;
-  const attribute = Element.prototype.getAttribute;
-  const remove = Element.prototype.remove;
+  const attribute: unknown = descriptorOf(
+    Element.prototype,
+    "getAttribute",
+  )?.value;
+  const remove: unknown = descriptorOf(Element.prototype, "remove")?.value;
   const nodeItem: unknown = descriptorOf(NodeList.prototype, "item")?.value;
   const tagName = descriptorOf(Element.prototype, "tagName")?.get;
   const nodeType = descriptorOf(Node.prototype, "nodeType")?.get;
@@ -83,6 +86,8 @@ const createIsolationPrimitives = () => {
     );
   };
   if (
+    typeof attribute !== "function" ||
+    typeof remove !== "function" ||
     typeof nodeItem !== "function" ||
     !tagName ||
     !nodeType ||

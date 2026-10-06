@@ -166,9 +166,8 @@ const buildChatToolsForScenario = ({
     activeSkillContext,
     visualTools: {
       origin: createVisualResourceOrigin(),
-      store: async () => panic("The provider canary must not publish views."),
-      preview: async () =>
-        panic("The provider canary must not render previews."),
+      store: () => panic("The provider canary must not publish views."),
+      preview: () => panic("The provider canary must not render previews."),
     },
     // A live extension registers the client-executed browser tool, so its
     // schema also runs through the provider matrix.
