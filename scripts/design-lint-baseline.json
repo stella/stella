@@ -1735,7 +1735,7 @@
     "apps/api/src/mcp/template-tools.test.ts": 4,
     "apps/api/src/mcp/template-tools.ts": 7,
     "apps/api/src/mcp/tool-utils.ts": 4,
-    "apps/api/src/mcp/tools.test.ts": 3,
+    "apps/api/src/mcp/tools.test.ts": 1,
     "apps/api/src/mcp/tools.ts": 2,
     "apps/api/src/mcp/valibot-tool-definition.ts": 18,
     "apps/api/src/scripts/better-auth-migration-audit.logic.ts": 1,

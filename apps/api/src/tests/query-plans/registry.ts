@@ -11,7 +11,6 @@ import { CITATION_DIGEST_TOP_CITING } from "@/api/handlers/case-law/decisions/ci
 import {
   decisionCitationPageQuery,
   decisionCitationSummaryQuery,
-  topCitingDecisionsQuery,
 } from "@/api/handlers/case-law/decisions/citation-graph";
 import {
   decisionRecordQuery,
@@ -409,7 +408,7 @@ export const QUERY_PLAN_REGISTRY = [
         currentYear: 2026,
         decisionId: QUERY_PLAN_SAMPLE.caseLaw.decisionId,
         tx,
-      }),
+      }).summary,
     seed: "case-law",
     planMode: "covering-index",
     contract: planContracts["case-law.citation-summary"],
@@ -419,11 +418,11 @@ export const QUERY_PLAN_REGISTRY = [
     class: "aggregate",
     role: "public-law-reader",
     build: (tx) =>
-      topCitingDecisionsQuery({
+      decisionCitationSummaryQuery({
+        currentYear: 2026,
         decisionId: QUERY_PLAN_SAMPLE.caseLaw.decisionId,
-        limit: CITATION_DIGEST_TOP_CITING,
         tx,
-      }),
+      }).topCiting(CITATION_DIGEST_TOP_CITING),
     seed: "case-law",
     planMode: "covering-index",
     contract: planContracts["case-law.top-citing-decisions"],

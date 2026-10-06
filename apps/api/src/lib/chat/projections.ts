@@ -1628,7 +1628,8 @@ const caseLawCitationSummaryProjection = v.strictObject({
   citedBy: v.strictObject({
     // Citing references: a decision citing this one twice counts twice.
     count: v.number(),
-    // The count is a lower bound: the scan behind it stopped at its cap.
+    // The scan behind the count stopped at its cap: the count is a lower
+    // bound, and `top` ranks only the citations it read.
     capped: v.optional(v.literal(true)),
     polarity: v.optional(citationTreatmentCountsProjection),
     top: v.optional(

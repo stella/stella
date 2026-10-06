@@ -336,7 +336,8 @@ test("top citing decisions cap the indexed citation scan before joining decision
   ]);
   for (const { limitAbove, limitRows } of citations) {
     expect(limitAbove).toBe(true);
-    expect(limitRows).toBeLessThanOrEqual(CITATION_SUMMARY_SCAN_LIMIT);
+    // The summary's own candidates: its cap plus the one row that marks it.
+    expect(limitRows).toBeLessThanOrEqual(CITATION_SUMMARY_SCAN_LIMIT + 1);
   }
 });
 

@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, gt, inArray, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gt, inArray, lte, sql } from "drizzle-orm";
 import type { SQL, SQLWrapper } from "drizzle-orm";
 import { alias, unionAll } from "drizzle-orm/pg-core";
 import { status, t } from "elysia";
@@ -452,7 +452,7 @@ export const summarizeDecisionCitationsHandler = async ({
     currentYear,
     decisionId,
     tx,
-  });
+  }).summary;
 
   const totals: Record<CitationDirection, CitationTreatmentCounts> = {
     incoming: emptyTreatmentCounts(),
@@ -495,6 +495,12 @@ type DecisionCitationSummaryQueryOptions = {
   tx: CaseLawPublicReadTransaction;
 };
 
+/**
+ * The summary's statement, and the top citing decisions read from the same
+ * candidates: the same capped window of this decision's citations, so the
+ * summary's `capped` flag says when the top citers, like the counts, come
+ * from part of the citations rather than all of them.
+ */
 export const decisionCitationSummaryQuery = ({
   currentYear,
   decisionId,
@@ -591,11 +597,65 @@ export const decisionCitationSummaryQuery = ({
     .leftJoin(relatedSource, eq(relatedSource.id, relatedDecision.sourceId))
     .groupBy(outgoingCandidates.polarity);
 
-  // One row per (direction, year-or-null, stored polarity): the span and
-  // the polarity check constraint already cap it, this states the cap.
-  return unionAll(incoming, outgoing).limit(
-    (CITATION_TIMELINE_MAX_YEARS + 2) * (POLARITIES.length + 1),
-  );
+  /**
+   * The few decisions citing this one a reader should see first, one row per
+   * decision however often it cites the case: the most authoritative by the
+   * materialized citation authority search ranks by, the most recent among
+   * equals. Only citations the counts above count take part.
+   */
+  const topCiting = (limit: number) => {
+    const candidates = candidatesFor("incoming");
+    const citedBy = eq(relatedDecision.id, candidates.relatedId);
+    const publishedBy = eq(relatedSource.id, relatedDecision.sourceId);
+    return (
+      tx
+        .select({
+          id: relatedDecision.id,
+          caseNumber: relatedDecision.caseNumber,
+          caseNumberType: relatedDecision.caseNumberType,
+          country: relatedDecision.country,
+          court: relatedDecision.court,
+          decisionDate: relatedDecision.decisionDate,
+          decisionType: relatedDecision.decisionType,
+          ecli: relatedDecision.ecli,
+          language: relatedDecision.language,
+          languageGroupKey: relatedDecision.languageGroupKey,
+          slug: relatedDecision.slug,
+          citationAuthority: relatedDecision.citationAuthority,
+        })
+        .from(candidates)
+        .innerJoin(relatedDecision, citedBy)
+        .innerJoin(relatedSource, publishedBy)
+        .where(
+          and(
+            lte(candidates.ordinal, CITATION_SUMMARY_SCAN_LIMIT),
+            eq(candidates.kind, CITATION_KIND.PRECEDENT),
+            visibleFor({
+              keepsUnresolved: false,
+              related: candidates.relatedId,
+            }),
+          ),
+        )
+        // Grouped by the far decision's key, so its other columns are
+        // functionally dependent and one decision is one row.
+        .groupBy(relatedDecision.id)
+        .orderBy(
+          desc(relatedDecision.citationAuthority),
+          sql`${relatedDecision.decisionDate} DESC NULLS LAST`,
+          asc(relatedDecision.id),
+        )
+        .limit(limit)
+    );
+  };
+
+  return {
+    // One row per (direction, year-or-null, stored polarity): the span and
+    // the polarity check constraint already cap it, this states the cap.
+    summary: unionAll(incoming, outgoing).limit(
+      (CITATION_TIMELINE_MAX_YEARS + 2) * (POLARITIES.length + 1),
+    ),
+    topCiting,
+  };
 };
 
 type TopCitingDecisionsOptions = {
@@ -605,88 +665,28 @@ type TopCitingDecisionsOptions = {
 };
 
 /**
- * The few decisions citing this one that a reader should see first, one row
- * per decision however often it cites the case: the most authoritative by
- * the materialized citation authority search ranks by, the most recent among
- * equals. Unlike `listLeadingCitationsHandler` it is not split by treatment,
- * so a decision cited mostly one way still names `limit` citing decisions.
+ * The year the summary statement's timeline would end on. The top citers
+ * read none of the timeline, so any year builds the same ranking; a fixed
+ * one keeps this read free of a clock it has no use for.
+ */
+const TOP_CITING_TIMELINE_YEAR = 0;
+
+/**
+ * The top citing decisions, read from the summary's own capped candidates.
+ * Unlike `listLeadingCitationsHandler` it is not split by treatment, so a
+ * decision cited mostly one way still names `limit` citing decisions.
  */
 export const listTopCitingDecisionsHandler = async ({
   subject: { id: decisionId, tx },
   limit,
 }: TopCitingDecisionsOptions): Promise<RankedRelatedDecision[]> => {
-  const rows = await topCitingDecisionsQuery({ decisionId, limit, tx });
+  const rows = await decisionCitationSummaryQuery({
+    currentYear: TOP_CITING_TIMELINE_YEAR,
+    decisionId,
+    tx,
+  }).topCiting(limit);
   const toRelatedDecision = await withLanguageAlternates(tx, rows);
   return rows.map((row) => toRelatedDecision(row));
-};
-
-type TopCitingDecisionsQueryOptions = {
-  decisionId: SafeId<"caseLawDecision">;
-  limit: number;
-  tx: CaseLawPublicReadTransaction;
-};
-
-/**
- * Bounded the way the summary is: the scan reads at most
- * `CITATION_SUMMARY_SCAN_LIMIT` indexed citations of this decision in id
- * order, so a decision cited thousands of times costs the same as the summary
- * beside it, and the ranking runs over what was scanned. The precedent filter
- * applies after the cap, as the summary's does: inside it, the planner would
- * read every precedent citation of the decision and sort them before the
- * limit.
- */
-export const topCitingDecisionsQuery = ({
-  decisionId,
-  limit,
-  tx,
-}: TopCitingDecisionsQueryOptions) => {
-  const spec = DIRECTION_SPECS.incoming;
-  const candidates = tx
-    .select({
-      id: caseLawCitations.id,
-      relatedId: spec.related,
-      kind: caseLawCitations.kind,
-    })
-    .from(caseLawCitations)
-    .where(eq(spec.anchor, decisionId))
-    .orderBy(asc(caseLawCitations.id))
-    .limit(CITATION_SUMMARY_SCAN_LIMIT)
-    .as("top_citing_candidates");
-  return (
-    tx
-      .select({
-        id: relatedDecision.id,
-        caseNumber: relatedDecision.caseNumber,
-        caseNumberType: relatedDecision.caseNumberType,
-        country: relatedDecision.country,
-        court: relatedDecision.court,
-        decisionDate: relatedDecision.decisionDate,
-        decisionType: relatedDecision.decisionType,
-        ecli: relatedDecision.ecli,
-        language: relatedDecision.language,
-        languageGroupKey: relatedDecision.languageGroupKey,
-        slug: relatedDecision.slug,
-        citationAuthority: relatedDecision.citationAuthority,
-      })
-      .from(candidates)
-      .innerJoin(relatedDecision, eq(relatedDecision.id, candidates.relatedId))
-      .innerJoin(relatedSource, eq(relatedSource.id, relatedDecision.sourceId))
-      .where(
-        and(
-          eq(candidates.kind, CITATION_KIND.PRECEDENT),
-          visibleFor({ keepsUnresolved: false, related: candidates.relatedId }),
-        ),
-      )
-      // Grouped by the far decision's key, so its other columns are
-      // functionally dependent and one decision is one row.
-      .groupBy(relatedDecision.id)
-      .orderBy(
-        desc(relatedDecision.citationAuthority),
-        sql`${relatedDecision.decisionDate} DESC NULLS LAST`,
-        asc(relatedDecision.id),
-      )
-      .limit(limit)
-  );
 };
 
 /** How many decisions each treatment shows before the reader asks for all. */
