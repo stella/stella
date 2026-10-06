@@ -512,3 +512,32 @@ test("enqueue events leave every PR suite to unchanged merge-group validation", 
     ).toBe(false);
   }
 });
+
+test("enqueue aggregation accepts only the queued PR event and successful structural checks", () => {
+  const start = aggregate.indexOf('if [[ "$QUEUE_VALIDATION" == true');
+  const end = aggregate.indexOf("# Read cancellation evidence", start);
+  expect(start).toBeGreaterThan(-1);
+  expect(end).toBeGreaterThan(start);
+  const branch = `${aggregate.slice(start, end)}\nexit 9`;
+  for (const [event, action, outcome, expected] of [
+    ["pull_request", "enqueued", "success", 0],
+    ["pull_request", "enqueued", "failure", 9],
+    ["pull_request", "enqueued", "cancelled", 9],
+    ["pull_request", "synchronize", "success", 9],
+    ["merge_group", "enqueued", "success", 9],
+  ] as const) {
+    const child = Bun.spawnSync(["bash", "-c", branch], {
+      env: {
+        ...process.env,
+        QUEUE_VALIDATION: "true",
+        EVENT: event,
+        PR_ACTION: action,
+        NEEDS: JSON.stringify({
+          "ci-plan": { result: outcome },
+          checks: { result: "skipped" },
+        }),
+      },
+    });
+    expect(child.exitCode, child.stderr.toString()).toBe(expected);
+  }
+});

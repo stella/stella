@@ -31,12 +31,16 @@ const source = readFileSync(
   "utf-8",
 );
 const workflow = v.parse(schema, Bun.YAML.parse(source));
-const originalSource = Bun.spawnSync([
-  "git",
-  "show",
-  "aa367c15fa:.github/workflows/ci.yml",
-]).stdout.toString();
-const original = v.parse(schema, Bun.YAML.parse(originalSource));
+// Frozen pre-pilot predicates keep the off contract test independent of Git history.
+const original = v.parse(
+  schema,
+  JSON.parse(
+    readFileSync(
+      new URL("fixtures/ci-pr-pilot-normal-plan.json", import.meta.url),
+      "utf-8",
+    ),
+  ),
+);
 const planner = workflow.jobs["ci-plan"];
 const policy = planner?.steps.find((step) => step.id === "pilot")?.with?.script;
 if (!policy || !planner) {
