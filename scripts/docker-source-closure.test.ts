@@ -8,6 +8,7 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import ts from "typescript";
 import * as v from "valibot";
 
 import {
@@ -425,14 +426,24 @@ describe("Docker source closure", () => {
     }
   });
 
-  test("type-only imports do not enter a runtime closure", () => {
+  test("only value edges from imports and named exports enter a runtime closure", () => {
     const file = put(
       "types.ts",
-      'import type { A } from "./absent"; import { type B } from "./absent"; export type { C } from "./absent";',
+      'import type { A } from "./absent"; import { type B } from "./absent"; export type { C } from "./absent"; export { type D, type E } from "./absent";',
     );
     expect(
       sourceClosureProblems(root, tree([file]), ["/app/types.ts"]),
     ).toEqual([]);
+    for (const [index, statement] of [
+      'export { type A, value } from "./absent";',
+      'export {} from "./absent";',
+      'import { type A, value } from "./absent";',
+    ].entries()) {
+      const entry = put(`mixed-types-${index}.ts`, statement);
+      expect(
+        sourceClosureProblems(root, tree([entry]), [`/app/${entry}`]),
+      ).toEqual([`${entry} imports ./absent, unavailable in Docker stage`]);
+    }
   });
 
   test("declarations cannot satisfy a runtime source import", () => {
@@ -495,6 +506,66 @@ describe("Docker source closure", () => {
           `${entry} imports ${specifier}, unavailable in Docker stage`,
         ]);
       }
+    }
+  });
+
+  test("every tracked tsconfig alias and custom alias requires its stage source", () => {
+    const repositoryRoot = path.resolve(import.meta.dir, "..");
+    const listed = Bun.spawnSync(
+      ["git", "ls-files", "-z", "--", "*tsconfig*.json"],
+      { cwd: repositoryRoot },
+    );
+    expect(listed.exitCode, listed.stderr.toString()).toBe(0);
+    const configurations = listed.stdout.toString().split("\0").filter(Boolean);
+    expect(configurations.length).toBeGreaterThan(0);
+    const patterns = new Set<string>();
+    for (const configuration of configurations) {
+      const parsed = ts.parseConfigFileTextToJson(
+        configuration,
+        readFileSync(path.join(repositoryRoot, configuration), "utf-8"),
+      );
+      expect(parsed.error, configuration).toBeUndefined();
+      const config = v.parse(
+        v.looseObject({
+          compilerOptions: v.optional(
+            v.looseObject({
+              paths: v.optional(v.record(v.string(), v.array(v.string()))),
+            }),
+          ),
+        }),
+        parsed.config,
+      );
+      for (const pattern of Object.keys(config.compilerOptions?.paths ?? {})) {
+        patterns.add(pattern);
+      }
+    }
+    expect(patterns.size).toBeGreaterThan(0);
+    patterns.add("~/*");
+    patterns.add("custom-*-suffix");
+    for (const [index, pattern] of [...patterns].entries()) {
+      const directory = `apps/alias-census-${index}`;
+      const specifier = pattern.replace("*", "nested/value");
+      const config = put(
+        `${directory}/tsconfig.json`,
+        JSON.stringify({
+          compilerOptions: { paths: { [pattern]: ["./target.ts"] } },
+        }),
+      );
+      const entry = put(
+        `${directory}/entry.ts`,
+        `import ${JSON.stringify(specifier)};`,
+      );
+      const target = put(`${directory}/target.ts`, "export const value = 1;");
+      expect(
+        sourceClosureProblems(root, tree([config, entry, target]), [
+          `/app/${entry}`,
+        ]),
+        pattern,
+      ).toEqual([]);
+      expect(
+        sourceClosureProblems(root, tree([config, entry]), [`/app/${entry}`]),
+        pattern,
+      ).toEqual([`${entry} imports ${specifier}, unavailable in Docker stage`]);
     }
   });
 

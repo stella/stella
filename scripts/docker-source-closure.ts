@@ -177,6 +177,14 @@ const runtimeImports = (file: string, source: string): string[] => {
       node.moduleSpecifier !== undefined &&
       ts.isStringLiteral(node.moduleSpecifier)
     ) {
+      if (
+        node.exportClause !== undefined &&
+        ts.isNamedExports(node.exportClause) &&
+        node.exportClause.elements.length > 0 &&
+        node.exportClause.elements.every((item) => item.isTypeOnly)
+      ) {
+        return;
+      }
       imports.push(node.moduleSpecifier.text);
     } else if (
       ts.isCallExpression(node) &&
@@ -377,18 +385,6 @@ const sourceClosureChecker = (root: string, tree: SourceTree) => {
       }
       const imports = runtimeImports(file, text(root, origin));
       for (const specifier of imports) {
-        // Installed registry packages and builtins are outside the source twin.
-        const name = specifier.startsWith("@")
-          ? specifier.split("/").slice(0, 2).join("/")
-          : specifier.split("/")[0];
-        const local =
-          specifier.startsWith(".") ||
-          specifier.startsWith("/") ||
-          specifier.startsWith("@/") ||
-          workspaces.has(name ?? "");
-        if (!local) {
-          continue;
-        }
         const clean = specifier.replace(
           /\?(?:raw|url|worker|sharedworker)(?:&(?:raw|url|worker|sharedworker))*$/u,
           "",
@@ -407,39 +403,53 @@ const sourceClosureChecker = (root: string, tree: SourceTree) => {
           continue;
         }
         const options = optionsFor(file);
-        const alias = Object.entries(options.paths ?? {})
-          .flatMap(([pattern, targets]) => {
-            const [prefix, suffix] = pattern.split("*");
-            const wildcard = pattern.includes("*");
-            if (
-              wildcard
-                ? !clean.startsWith(prefix ?? "") ||
-                  !clean.endsWith(suffix ?? "")
-                : clean !== pattern
-            ) {
-              return [];
-            }
-            const middle = wildcard
-              ? clean.slice(
-                  (prefix ?? "").length,
-                  suffix === "" || suffix === undefined
-                    ? undefined
-                    : -suffix.length,
-                )
-              : "";
-            return targets.flatMap((target) =>
-              specifierCandidates(
-                "/entry.ts",
-                absolute(
-                  "/app",
-                  target.replace("*", () => middle),
-                ),
+        const aliases = Object.entries(options.paths ?? {}).filter(
+          ([pattern]) => {
+            const [prefix = "", suffix = ""] = pattern.split("*");
+            return pattern.includes("*")
+              ? clean.length >= prefix.length + suffix.length &&
+                  clean.startsWith(prefix) &&
+                  clean.endsWith(suffix)
+              : clean === pattern;
+          },
+        );
+        const aliasTargets = aliases.flatMap(([pattern, targets]) => {
+          const [prefix, suffix] = pattern.split("*");
+          const wildcard = pattern.includes("*");
+          const middle = wildcard
+            ? clean.slice(
+                (prefix ?? "").length,
+                suffix === "" || suffix === undefined
+                  ? undefined
+                  : -suffix.length,
+              )
+            : "";
+          return targets.flatMap((target) =>
+            specifierCandidates(
+              "/entry.ts",
+              absolute(
+                "/app",
+                target.replace("*", () => middle),
               ),
-            );
-          })
-          .find(sourceAvailable);
+            ),
+          );
+        });
+        // Match every declared alias before excluding installed dependencies:
+        // an omitted alias target must still fail the source closure.
+        const name = specifier.startsWith("@")
+          ? specifier.split("/").slice(0, 2).join("/")
+          : specifier.split("/")[0];
+        const local =
+          specifier.startsWith(".") ||
+          specifier.startsWith("/") ||
+          specifier.startsWith("@/") ||
+          workspaces.has(name ?? "") ||
+          aliases.length > 0;
+        if (!local) {
+          continue;
+        }
         const resolved =
-          alias ??
+          aliasTargets.find(sourceAvailable) ??
           ts.resolveModuleName(clean, file, options, host).resolvedModule
             ?.resolvedFileName;
         if (resolved === undefined) {
