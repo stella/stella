@@ -1,3 +1,4 @@
+import { panic } from "better-result";
 import { expect, test } from "bun:test";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -60,7 +61,9 @@ test("the JSON import fixture reports exactly its marked runtime imports", async
       expect(diagnostic.code).toBe(
         "require-json-import-attribute(require-json-import-attribute)",
       );
-      const line = diagnostic.labels.at(0)?.span.line;
+      const line =
+        diagnostic.labels.at(0)?.span.line ??
+        panic("A JSON import diagnostic must identify its source line");
       const key = `${fixturePath}:${line}:${ruleId}`;
       counts.set(key, (counts.get(key) ?? 0) + 1);
     }
