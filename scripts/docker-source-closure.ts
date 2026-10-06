@@ -18,7 +18,6 @@ import { lexShell } from "./install-free-ci";
 // Container paths map to checkout paths. Resolution never falls back from
 // this inventory to the checkout.
 export type SourceTree = Map<string, string>;
-type Stage = { files: SourceTree; cwd: string; seen: Set<string> };
 const modulePattern = /\.(?:[cm]?[jt]sx?)$/u;
 const absolute = (cwd: string, file: string) => path.posix.resolve(cwd, file);
 const sourceCache = new Map<string, string>();
@@ -295,13 +294,7 @@ const configurationOptions = (
 
 // Follow literal runtime imports (type-only imports vanish).
 // TypeScript resolves aliases and workspace exports against the virtual tree.
-export const sourceClosureProblems = (
-  root: string,
-  tree: SourceTree,
-  entries: readonly string[],
-  seen = new Set<string>(),
-): string[] => {
-  const problems: string[] = [];
+const sourceClosureChecker = (root: string, tree: SourceTree) => {
   const manifests = [...tree].filter(([file]) =>
     /^\/app\/(?:apps|packages)\/[^/]+\/package\.json$/u.test(file),
   );
@@ -365,95 +358,129 @@ export const sourceClosureProblems = (
     // No directoryExists: TypeScript probes virtual files directly.
   };
   const optionsFor = configurationOptions(root, tree, physical);
-  const pending = [...entries];
-  while (pending.length > 0) {
-    const file = pending.pop();
-    if (file === undefined || seen.has(file)) {
-      continue;
-    }
-    seen.add(file);
-    const origin = tree.get(file);
-    if (!tree.has(file)) {
-      problems.push(`Entry is unavailable: ${file}`);
-      continue;
-    }
-    if (origin === undefined || !modulePattern.test(file)) {
-      continue;
-    }
-    const imports = runtimeImports(file, text(root, origin));
-    for (const specifier of imports) {
-      // Installed registry packages and builtins are outside the source twin.
-      const name = specifier.startsWith("@")
-        ? specifier.split("/").slice(0, 2).join("/")
-        : specifier.split("/")[0];
-      const local =
-        specifier.startsWith(".") ||
-        specifier.startsWith("/") ||
-        specifier.startsWith("@/") ||
-        workspaces.has(name ?? "");
-      if (!local) {
+  return (entries: readonly string[], seen = new Set<string>()): string[] => {
+    const problems: string[] = [];
+    const pending = [...entries];
+    while (pending.length > 0) {
+      const file = pending.pop();
+      if (file === undefined || seen.has(file)) {
         continue;
       }
-      const clean = specifier.replace(
-        /\?(?:raw|url|worker|sharedworker)(?:&(?:raw|url|worker|sharedworker))*$/u,
-        "",
-      );
-      if (clean.startsWith(".")) {
-        const resolved = specifierCandidates(file, clean).find(sourceAvailable);
+      seen.add(file);
+      const origin = tree.get(file);
+      if (!tree.has(file)) {
+        problems.push(`Entry is unavailable: ${file}`);
+        continue;
+      }
+      if (origin === undefined || !modulePattern.test(file)) {
+        continue;
+      }
+      const imports = runtimeImports(file, text(root, origin));
+      for (const specifier of imports) {
+        // Installed registry packages and builtins are outside the source twin.
+        const name = specifier.startsWith("@")
+          ? specifier.split("/").slice(0, 2).join("/")
+          : specifier.split("/")[0];
+        const local =
+          specifier.startsWith(".") ||
+          specifier.startsWith("/") ||
+          specifier.startsWith("@/") ||
+          workspaces.has(name ?? "");
+        if (!local) {
+          continue;
+        }
+        const clean = specifier.replace(
+          /\?(?:raw|url|worker|sharedworker)(?:&(?:raw|url|worker|sharedworker))*$/u,
+          "",
+        );
+        if (clean.startsWith(".")) {
+          const resolved = specifierCandidates(file, clean).find(
+            sourceAvailable,
+          );
+          if (resolved === undefined) {
+            problems.push(
+              `${origin} imports ${specifier}, unavailable in Docker stage`,
+            );
+          } else {
+            pending.push(resolved);
+          }
+          continue;
+        }
+        const options = optionsFor(file);
+        const alias = Object.entries(options.paths ?? {})
+          .flatMap(([pattern, targets]) => {
+            const [prefix, suffix] = pattern.split("*");
+            const wildcard = pattern.includes("*");
+            if (
+              wildcard
+                ? !clean.startsWith(prefix ?? "") ||
+                  !clean.endsWith(suffix ?? "")
+                : clean !== pattern
+            ) {
+              return [];
+            }
+            const middle = wildcard
+              ? clean.slice(
+                  (prefix ?? "").length,
+                  suffix === "" || suffix === undefined
+                    ? undefined
+                    : -suffix.length,
+                )
+              : "";
+            return targets.flatMap((target) =>
+              specifierCandidates(
+                "/entry.ts",
+                absolute(
+                  "/app",
+                  target.replace("*", () => middle),
+                ),
+              ),
+            );
+          })
+          .find(sourceAvailable);
+        const resolved =
+          alias ??
+          ts.resolveModuleName(clean, file, options, host).resolvedModule
+            ?.resolvedFileName;
         if (resolved === undefined) {
           problems.push(
             `${origin} imports ${specifier}, unavailable in Docker stage`,
           );
         } else {
-          pending.push(resolved);
+          pending.push(physical(resolved));
         }
-        continue;
-      }
-      const options = optionsFor(file);
-      const alias = Object.entries(options.paths ?? {})
-        .flatMap(([pattern, targets]) => {
-          const [prefix, suffix] = pattern.split("*");
-          const wildcard = pattern.includes("*");
-          if (
-            wildcard
-              ? !clean.startsWith(prefix ?? "") || !clean.endsWith(suffix ?? "")
-              : clean !== pattern
-          ) {
-            return [];
-          }
-          const middle = wildcard
-            ? clean.slice(
-                (prefix ?? "").length,
-                suffix === "" || suffix === undefined
-                  ? undefined
-                  : -suffix.length,
-              )
-            : "";
-          return targets.flatMap((target) =>
-            specifierCandidates(
-              "/entry.ts",
-              absolute(
-                "/app",
-                target.replace("*", () => middle),
-              ),
-            ),
-          );
-        })
-        .find(sourceAvailable);
-      const resolved =
-        alias ??
-        ts.resolveModuleName(clean, file, options, host).resolvedModule
-          ?.resolvedFileName;
-      if (resolved === undefined) {
-        problems.push(
-          `${origin} imports ${specifier}, unavailable in Docker stage`,
-        );
-      } else {
-        pending.push(physical(resolved));
       }
     }
-  }
-  return problems;
+    return problems;
+  };
+};
+
+export const sourceClosureProblems = (
+  root: string,
+  tree: SourceTree,
+  entries: readonly string[],
+  seen = new Set<string>(),
+): string[] => sourceClosureChecker(root, tree)(entries, seen);
+
+type Stage = {
+  files: SourceTree;
+  cwd: string;
+  seen: Set<string>;
+  checker?: ReturnType<typeof sourceClosureChecker>;
+};
+
+type StageClosureOptions = {
+  root: string;
+  stage: Stage;
+  entries: readonly string[];
+};
+const stageClosureProblems = ({
+  root,
+  stage,
+  entries,
+}: StageClosureOptions) => {
+  stage.checker ??= sourceClosureChecker(root, stage.files);
+  return stage.checker(entries, stage.seen);
 };
 
 export const dockerPruneScopes = (source: string): string[][] =>
@@ -765,6 +792,7 @@ const copyInstruction = (
     panic(`Unsupported COPY: ${body}`);
   }
   stage.seen.clear();
+  delete stage.checker;
   for (const file of paths) {
     const sourcePath = absolute(from === undefined ? "/" : "/app", file);
     const target =
@@ -811,6 +839,8 @@ export const checkDockerSource = (
       copyInstruction(stages, stage, context, body);
     } else if (operation === "RUN") {
       if (/\bturbo prune\b/u.test(body)) {
+        stage.seen.clear();
+        delete stage.checker;
         for (const [file, origin] of pruned) {
           stage.files.set(`/app/out/full${file.slice(4)}`, origin);
           if (file.endsWith("/package.json")) {
@@ -820,6 +850,8 @@ export const checkDockerSource = (
         continue;
       }
       if (body.includes("find apps packages") && body.includes("/json/")) {
+        stage.seen.clear();
+        delete stage.checker;
         for (const [file, origin] of [...stage.files]) {
           if (
             file === "/app/package.json" ||
@@ -843,12 +875,11 @@ export const checkDockerSource = (
       for (const entry of entries.filter(
         ({ file }) => !file.includes("/dist/"),
       )) {
-        const closure = sourceClosureProblems(
+        const closure = stageClosureProblems({
           root,
-          stage.files,
-          [entry.file],
-          stage.seen,
-        );
+          stage,
+          entries: [entry.file],
+        });
         problems.push(...closure);
         if (closure.length > 0) {
           continue;
@@ -877,6 +908,7 @@ export const checkDockerSource = (
             stage.files.set(absolute("/app", output), output);
           }
           stage.seen.clear();
+          delete stage.checker;
         }
       }
     }

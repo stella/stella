@@ -264,6 +264,44 @@ describe("Docker source closure", () => {
     }
   });
 
+  test("later COPY instructions refresh checked entries and alias resolution", () => {
+    for (const laterEntry of ["entry.ts", "other.ts"]) {
+      const prefix = `refresh-${laterEntry}`;
+      const entry = put(`${prefix}/entry.ts`, 'import "@/dependency";');
+      const other = put(`${prefix}/other.ts`, 'import "@/dependency";');
+      const dependency = put(
+        `${prefix}/dependency.ts`,
+        "export const value = 1;",
+      );
+      const initialConfig = put(
+        `${prefix}/initial.json`,
+        JSON.stringify({ compilerOptions: { paths: { "@/*": ["./*"] } } }),
+      );
+      const replacementConfig = put(
+        `${prefix}/replacement.json`,
+        JSON.stringify({
+          compilerOptions: { paths: { "@/*": ["./missing/*"] } },
+        }),
+      );
+      const context: SourceTree = new Map([
+        ["/entry.ts", entry],
+        ["/other.ts", other],
+        ["/dependency.ts", dependency],
+        ["/initial.json", initialConfig],
+        ["/replacement.json", replacementConfig],
+      ]);
+      const beforeCopy =
+        "FROM bun AS builder\nWORKDIR /app\nCOPY entry.ts other.ts dependency.ts ./\nCOPY initial.json tsconfig.json\nRUN bun entry.ts";
+      expect(checkDockerSource(root, beforeCopy, context, new Map())).toEqual(
+        [],
+      );
+      const afterCopy = `${beforeCopy}\nCOPY replacement.json tsconfig.json\nRUN bun ${laterEntry}`;
+      expect(checkDockerSource(root, afterCopy, context, new Map())).toEqual([
+        `${laterEntry === "entry.ts" ? entry : other} imports @/dependency, unavailable in Docker stage`,
+      ]);
+    }
+  });
+
   test("source-run arguments are distinct from Bun options and build entrypoints", () => {
     const context: SourceTree = new Map([
       ["/app/entry.ts", "entry.ts"],
