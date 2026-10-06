@@ -1,7 +1,7 @@
 import { generateId } from "@better-auth/core/utils/id";
 import { and, eq } from "drizzle-orm";
 
-import { member, organization } from "@/api/db/auth-schema";
+import { invitation, member, organization } from "@/api/db/auth-schema";
 import type { Transaction } from "@/api/db/root";
 import { seedDefaultSkills } from "@/api/lib/agent-skills/default-skills";
 import {
@@ -27,7 +27,8 @@ type OwnerMembership = {
 type ProvisioningCause =
   | "review_account_organization_created"
   | "review_account_owner_added"
-  | "review_account_owner_promoted";
+  | "review_account_owner_promoted"
+  | "review_account_invitations_canceled";
 
 const provisioningAuditBindings = ({
   organizationId,
@@ -145,6 +146,32 @@ export const createReviewAccountOrganizationStore = (db: OwnerDatabase) => ({
       await insertOwner(tx, membership);
     });
   },
+  /** Deletes every pending invitation into the organization. */
+  cancelPendingInvitations: async (membership: OwnerMembership) =>
+    await db.transaction(async (tx) => {
+      const recordAuditEvent = createBackgroundAuditRecorder(
+        provisioningAuditBindings(membership),
+      );
+      const canceled = await tx
+        .delete(invitation)
+        .where(
+          and(
+            eq(invitation.organizationId, membership.organizationId),
+            eq(invitation.status, "pending"),
+          ),
+        )
+        .returning({ id: invitation.id });
+      if (canceled.length > 0) {
+        await recordAuditEvent(
+          tx,
+          provisioningAuditEvent(
+            membership.organizationId,
+            "review_account_invitations_canceled",
+          ),
+        );
+      }
+      return canceled.length;
+    }),
   /** Makes an existing sole membership the organization's owner. */
   promoteToOwner: async (membership: OwnerMembership) => {
     await db.transaction(async (tx) => {

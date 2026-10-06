@@ -954,12 +954,15 @@ export const createAuth = (roleAssignmentPolicy = assignableRoles) => {
   });
   const demoConfig = getDemoAccountConfig();
   const reviewConfig = getReviewAccountConfig();
-  const reviewDatabaseHooks = createReviewAccountDatabaseHooks(reviewConfig);
   const resolveSessionAccount = async (userId: SafeId<"user">) =>
     await rootDb.query.user.findFirst({
       where: { id: userId },
       columns: { email: true },
     });
+  const reviewDatabaseHooks = createReviewAccountDatabaseHooks(reviewConfig, {
+    findUserEmail: async (userId: SafeId<"user">) =>
+      (await resolveSessionAccount(userId))?.email,
+  });
   const hasSessionMembership = async ({
     userId,
     organizationId,
@@ -1323,6 +1326,9 @@ export const createAuth = (roleAssignmentPolicy = assignableRoles) => {
             operation: REVIEW_ACCOUNT_OPERATION.joinOrganization,
           }),
         );
+        await reviewDatabaseHooks.invitationCreateBefore({
+          organizationId: org.id,
+        });
         await refuseBeyondMemberCapacity(
           brandPersistedOrganizationId(org.id),
           "invitation",
@@ -1341,6 +1347,10 @@ export const createAuth = (roleAssignmentPolicy = assignableRoles) => {
             operation: REVIEW_ACCOUNT_OPERATION.acceptInvitation,
           }),
         );
+        await reviewDatabaseHooks.memberCreateBefore({
+          organizationId: org.id,
+          userId: user.id,
+        });
         await refuseBeyondMemberCapacity(
           brandPersistedOrganizationId(org.id),
           "membership",
@@ -1371,6 +1381,11 @@ export const createAuth = (roleAssignmentPolicy = assignableRoles) => {
             operation: "growth",
           }),
         );
+        // The review organization holds the review account alone.
+        await reviewDatabaseHooks.memberCreateBefore({
+          organizationId: org.id,
+          userId: user.id,
+        });
         // The review account belongs to its own organization only.
         if (org.id !== reviewConfig.organizationId) {
           requireReviewAccountAccess(
@@ -1631,6 +1646,12 @@ export const createAuth = (roleAssignmentPolicy = assignableRoles) => {
     databaseHooks: {
       account: {
         create: { before: reviewDatabaseHooks.accountCreateBefore },
+      },
+      member: {
+        create: { before: reviewDatabaseHooks.memberCreateBefore },
+      },
+      invitation: {
+        create: { before: reviewDatabaseHooks.invitationCreateBefore },
       },
       session: {
         create: {

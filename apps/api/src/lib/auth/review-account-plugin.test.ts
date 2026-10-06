@@ -4,6 +4,7 @@ import { memoryAdapter } from "better-auth/adapters/memory";
 import { createAuthEndpoint } from "better-auth/api";
 import { handleOAuthUserInfo } from "better-auth/oauth2";
 import { emailOTP, organization, twoFactor } from "better-auth/plugins";
+import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 import { SignJWT } from "jose";
 
@@ -11,6 +12,7 @@ import { resolveEmailAndPasswordOptions } from "@/api/lib/auth/password-sign-in-
 import {
   createReviewAccountDatabaseHooks,
   createReviewAccountPlugin,
+  createReviewOrganizationHooks,
   REVIEW_ACCOUNT_SIGN_IN_BUDGET,
 } from "@/api/lib/auth/review-account-plugin";
 import {
@@ -96,7 +98,15 @@ const createReviewAuth = async ({
   localPasswordEnabled?: boolean;
   provisioned?: boolean;
 } = {}) => {
-  const databaseHooks = createReviewAccountDatabaseHooks(config);
+  // Filled once the auth context exists; the hooks only run after that.
+  const users: {
+    findUserById?: (id: string) => Promise<{ email: string } | null>;
+  } = {};
+  const databaseHooks = createReviewAccountDatabaseHooks(config, {
+    findUserEmail: async (userId) =>
+      (await users.findUserById?.(userId))?.email,
+  });
+  const reviewOrganizationHooks = createReviewOrganizationHooks(databaseHooks);
   const auth = betterAuth({
     baseURL: "http://localhost:3001",
     secret: "test-secret-that-is-long-enough-for-better-auth",
@@ -131,6 +141,10 @@ const createReviewAuth = async ({
     },
     databaseHooks: {
       account: { create: { before: databaseHooks.accountCreateBefore } },
+      member: { create: { before: databaseHooks.memberCreateBefore } },
+      invitation: {
+        create: { before: databaseHooks.invitationCreateBefore },
+      },
       user: {
         create: {
           before: async (user, ctx) => {
@@ -154,13 +168,18 @@ const createReviewAuth = async ({
         signInBudget: createLocalBudget(),
       }),
       twoFactor({ allowPasswordless: true }),
-      organization({ allowUserToCreateOrganization: true }),
+      organization({
+        allowUserToCreateOrganization: true,
+        organizationHooks: reviewOrganizationHooks,
+      }),
       emailOTP({ sendVerificationOTP: async () => undefined }),
       socialSignInFixturePlugin,
     ],
   });
   // Accounts are provisioned out of band; sign-up is off.
   const context = await auth.$context;
+  users.findUserById = async (id) =>
+    await context.internalAdapter.findUserById(id);
   for (const email of provisioned ? [reviewEmail, otherEmail] : [otherEmail]) {
     const user = await context.internalAdapter.createUser(
       { email, name: "Fixture", emailVerified: true },
@@ -239,6 +258,16 @@ const REVIEWED_OPEN_AUTH_PATHS: ReadonlySet<string> = new Set([
   // redemption, checked by its subject.
   "/reset-password/:token",
 ]);
+
+const databaseHooksFor = (context: {
+  internalAdapter: {
+    findUserById: (id: string) => Promise<{ email: string } | null>;
+  };
+}) =>
+  createReviewAccountDatabaseHooks(config, {
+    findUserEmail: async (userId) =>
+      (await context.internalAdapter.findUserById(userId))?.email,
+  });
 
 describe("restricted review account password sign-in", () => {
   test("signs the review account in with its password", async () => {
@@ -761,5 +790,84 @@ describe("restricted review account password sign-in", () => {
     expect(
       await context.internalAdapter.findUserByEmail(reviewEmail),
     ).toBeNull();
+  });
+
+  test("lets nobody else into the review organization, whatever the invitation", async () => {
+    const auth = await createReviewAuth({ localPasswordEnabled: true });
+    const context = await auth.$context;
+    const reviewUserId =
+      (await context.internalAdapter.findUserByEmail(reviewEmail))?.user.id ??
+      "";
+    await context.adapter.create({
+      model: "organization",
+      data: {
+        id: reviewOrganizationId,
+        name: "Review",
+        slug: "review",
+        createdAt: new Date(),
+      },
+      forceAllowId: true,
+    });
+    await context.adapter.create({
+      model: "member",
+      data: {
+        organizationId: reviewOrganizationId,
+        userId: reviewUserId,
+        role: "owner",
+        createdAt: new Date(),
+      },
+    });
+    // Issued before the organization was the review account's.
+    const pending = await context.adapter.create<{ id: string }>({
+      model: "invitation",
+      data: {
+        organizationId: reviewOrganizationId,
+        email: otherEmail,
+        role: "member",
+        status: "pending",
+        inviterId: reviewUserId,
+        expiresAt: new Date(Date.now() + 60 * 60 * 1000),
+        createdAt: new Date(),
+      },
+    });
+    const cookie = sessionCookie(
+      await postAuth(auth, "/sign-in/email", { email: otherEmail, password }),
+    );
+    const accepted = await postAuth(
+      auth,
+      "/organization/accept-invitation",
+      { invitationId: pending.id },
+      cookie,
+    );
+    expect(accepted.status).toBe(403);
+    expect(await accepted.json()).toMatchObject({
+      code: "account_access_unavailable",
+    });
+    const members = await context.adapter.findMany<{ userId: string }>({
+      model: "member",
+      where: [{ field: "organizationId", value: reviewOrganizationId }],
+    });
+    expect(members.map((entry) => entry.userId)).toEqual([reviewUserId]);
+    // A direct membership write is refused as well.
+    const otherUserId =
+      (await context.internalAdapter.findUserByEmail(otherEmail))?.user.id ??
+      "";
+    const direct = await Result.tryPromise({
+      try: async () =>
+        await databaseHooksFor(context).memberCreateBefore({
+          organizationId: reviewOrganizationId,
+          userId: otherUserId,
+        }),
+      catch: (cause) => cause,
+    });
+    expect(Result.isError(direct)).toBe(true);
+    const invitation = await Result.tryPromise({
+      try: async () =>
+        await databaseHooksFor(context).invitationCreateBefore({
+          organizationId: reviewOrganizationId,
+        }),
+      catch: (cause) => cause,
+    });
+    expect(Result.isError(invitation)).toBe(true);
   });
 });

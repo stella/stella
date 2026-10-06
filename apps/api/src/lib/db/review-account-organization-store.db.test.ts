@@ -2,7 +2,7 @@ import { Result } from "better-result";
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { eq } from "drizzle-orm";
 
-import { member, organization, user } from "@/api/db/auth-schema";
+import { invitation, member, organization, user } from "@/api/db/auth-schema";
 import {
   agentSkills,
   auditLogs,
@@ -92,6 +92,7 @@ describe("review account provisioning store", () => {
         organization: "created",
         membership: "created",
         verificationsRevoked: 0,
+        invitationsCanceled: 0,
       }),
     );
 
@@ -176,6 +177,7 @@ describe("review account provisioning store", () => {
         organization: "existing",
         membership: "existing",
         verificationsRevoked: 0,
+        invitationsCanceled: 0,
       }),
     );
     expect(await snapshot()).toEqual(created);
@@ -218,6 +220,50 @@ describe("review account provisioning store", () => {
         .where(eq(auditLogs.organizationId, branded))
     ).map((row) => String(row.metadata?.["cause"]));
     expect(causes).toContain("review_account_owner_promoted");
+  });
+
+  test("cancels pending invitations into the organization, with an audit event", async () => {
+    const store = createStore();
+    const organizationId = mintAuthProviderIdValue();
+    const email = `review-${organizationId.toLowerCase()}@example.test`;
+    const userId = await store.createUser(email);
+    await store.createOrganization({ organizationId, ownerUserId: userId });
+    await testDb.insert(invitation).values({
+      id: mintAuthProviderIdValue(),
+      organizationId,
+      email: "guest@example.test",
+      role: "member",
+      status: "pending",
+      inviterId: userId,
+      expiresAt: new Date(Date.now() + 60 * 60 * 1000),
+      createdAt: new Date(),
+    });
+    const result = await provisionReviewAccount({
+      config: { email, organizationId },
+      demoEmail: undefined,
+      store,
+    });
+    expect(result).toMatchObject({ value: { invitationsCanceled: 1 } });
+    expect(
+      (
+        await testDb
+          .select({ status: invitation.status })
+          .from(invitation)
+          .where(eq(invitation.organizationId, organizationId))
+      ).map((row) => row.status),
+    ).toEqual([]);
+    const causes = (
+      await testDb
+        .select({ metadata: auditLogs.metadata })
+        .from(auditLogs)
+        .where(
+          eq(
+            auditLogs.organizationId,
+            brandPersistedOrganizationId(organizationId),
+          ),
+        )
+    ).map((row) => String(row.metadata?.["cause"]));
+    expect(causes).toContain("review_account_invitations_canceled");
   });
 
   test("refuses an enrolled account and one that belongs elsewhere, writing nothing", async () => {

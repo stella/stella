@@ -26,7 +26,9 @@ import {
   findReviewAccountTokenRedemption,
   isReviewAccountTokenRedemptionPath,
 } from "@/api/lib/auth/review-account-token-subjects";
+import type { SafeId } from "@/api/lib/branded-types";
 import type { createAccountAttemptBudget } from "@/api/lib/rate-limit/otp-account-budget";
+import { brandPersistedUserId } from "@/api/lib/safe-id-boundaries";
 import { isRecord } from "@/api/lib/type-guards";
 
 const SIGN_IN_EMAIL_PATH = "/sign-in/email";
@@ -133,9 +135,54 @@ const CREDENTIAL_PROVIDER_ID = "credential";
  * credential is ever attached to it, and no request creates it; only the
  * operator command does, outside any request.
  */
+const refuseReviewOrganizationWrite = () => {
+  throw new APIError("FORBIDDEN", {
+    code: "account_access_unavailable",
+    message: REVIEW_ACCOUNT_REFUSAL_MESSAGE,
+  });
+};
+
 export const createReviewAccountDatabaseHooks = (
   config: ReviewAccountConfig,
+  {
+    findUserEmail,
+  }: {
+    /** Reads a user's address on any path, with or without a request. */
+    findUserEmail: (userId: SafeId<"user">) => Promise<string | undefined>;
+  },
 ) => ({
+  // The review organization holds the review account alone, whatever path
+  // writes the membership (an invitation issued before it was configured,
+  // an administrator's add-member, a direct adapter write).
+  memberCreateBefore: async (member: {
+    organizationId: string;
+    userId: string;
+  }): Promise<undefined> => {
+    if (
+      config.organizationId === undefined ||
+      member.organizationId !== config.organizationId
+    ) {
+      return undefined;
+    }
+    const email = await findUserEmail(brandPersistedUserId(member.userId));
+    if (email === undefined || !isReviewAccountEmail({ email, config })) {
+      refuseReviewOrganizationWrite();
+    }
+    return undefined;
+  },
+  // Nobody is invited into the review organization.
+  invitationCreateBefore: async (invitation: {
+    organizationId: string;
+  }): Promise<undefined> => {
+    await Promise.resolve();
+    if (
+      config.organizationId !== undefined &&
+      invitation.organizationId === config.organizationId
+    ) {
+      refuseReviewOrganizationWrite();
+    }
+    return undefined;
+  },
   accountCreateBefore: async (
     account: { userId: string; providerId: string },
     // Absent outside a request (the operator command), where it is allowed.
@@ -180,6 +227,49 @@ export const createReviewAccountDatabaseHooks = (
       });
     }
     return undefined;
+  },
+});
+
+/**
+ * The same membership and invitation rules as organization plugin hooks: the
+ * plugin writes memberships and invitations through its own adapter calls,
+ * which the database hooks do not see.
+ */
+export const createReviewOrganizationHooks = (
+  databaseHooks: ReturnType<typeof createReviewAccountDatabaseHooks>,
+) => ({
+  beforeAcceptInvitation: async ({
+    organization,
+    user,
+  }: {
+    organization: { id: string };
+    user: { id: string };
+  }) => {
+    await databaseHooks.memberCreateBefore({
+      organizationId: organization.id,
+      userId: user.id,
+    });
+  },
+  beforeAddMember: async ({
+    organization,
+    user,
+  }: {
+    organization: { id: string };
+    user: { id: string };
+  }) => {
+    await databaseHooks.memberCreateBefore({
+      organizationId: organization.id,
+      userId: user.id,
+    });
+  },
+  beforeCreateInvitation: async ({
+    organization,
+  }: {
+    organization: { id: string };
+  }) => {
+    await databaseHooks.invitationCreateBefore({
+      organizationId: organization.id,
+    });
   },
 });
 

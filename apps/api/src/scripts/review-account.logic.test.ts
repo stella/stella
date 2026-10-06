@@ -73,6 +73,7 @@ const createFakeStore = (
       writes.push("membership");
       organizations.set(id, [...(organizations.get(id) ?? []), userId]);
     },
+    cancelPendingInvitations: async () => 0,
     promoteToOwner: async ({ organizationId: id, userId }) => {
       writes.push("promotion");
       roles.set(`${id}:${userId}`, "owner");
@@ -116,6 +117,7 @@ describe("review account provisioning", () => {
         organization: "created",
         membership: "created",
         verificationsRevoked: 0,
+        invitationsCanceled: 0,
       }),
     );
     const second = await provisionReviewAccount({
@@ -130,6 +132,7 @@ describe("review account provisioning", () => {
         organization: "existing",
         membership: "existing",
         verificationsRevoked: 0,
+        invitationsCanceled: 0,
       }),
     );
     expect(writes).toEqual(["user", "organization"]);

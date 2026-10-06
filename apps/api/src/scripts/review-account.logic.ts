@@ -59,6 +59,11 @@ export type ReviewAccountStore = {
     organizationId: string;
     userId: string;
   }) => Promise<void>;
+  /** Cancels pending invitations into the organization; returns the count. */
+  cancelPendingInvitations: (options: {
+    organizationId: string;
+    userId: string;
+  }) => Promise<number>;
   /** Makes the account's existing membership the organization's owner. */
   promoteToOwner: (options: {
     organizationId: string;
@@ -170,6 +175,7 @@ type OrganizationStoreHalf = Pick<
   | "createOrganization"
   | "addOwner"
   | "promoteToOwner"
+  | "cancelPendingInvitations"
 >;
 
 /**
@@ -198,6 +204,11 @@ export const bindReviewAccountOrganizationStore = (
       ownerUserId: brandPersistedUserId(ownerUserId),
     });
   },
+  cancelPendingInvitations: async ({ organizationId, userId }) =>
+    await organizations.cancelPendingInvitations({
+      organizationId: brandPersistedOrganizationId(organizationId),
+      userId: brandPersistedUserId(userId),
+    }),
   promoteToOwner: async ({ organizationId, userId }) => {
     await organizations.promoteToOwner({
       organizationId: brandPersistedOrganizationId(organizationId),
@@ -314,6 +325,7 @@ type ProvisionOutcome = {
   organization: "created" | "existing";
   membership: "created" | "existing" | "promoted";
   verificationsRevoked: number;
+  invitationsCanceled: number;
 };
 
 export const provisionReviewAccount = async ({
@@ -351,10 +363,17 @@ export const provisionReviewAccount = async ({
       organization: "created",
       membership: "created",
       verificationsRevoked,
+      invitationsCanceled: 0,
     });
   }
   // The organization holds no one else (checked above), so the account is
   // either missing, its owner, or a member promoted to owner here.
+  // An invitation issued before the organization was the review account's
+  // must not let anyone else in.
+  const invitationsCanceled = await store.cancelPendingInvitations({
+    organizationId,
+    userId,
+  });
   const membership = members.find((entry) => entry.userId === userId);
   if (membership === undefined) {
     await store.addOwner({ organizationId, userId });
@@ -367,6 +386,7 @@ export const provisionReviewAccount = async ({
     organization: "existing",
     membership: membershipOutcome(membership),
     verificationsRevoked,
+    invitationsCanceled,
   });
 };
 
