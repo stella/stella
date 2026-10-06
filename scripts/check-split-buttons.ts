@@ -1,5 +1,4 @@
 #!/usr/bin/env bun
-import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import ts from "typescript";
@@ -362,13 +361,28 @@ export const findSplitButtonMenuControls = (
 };
 
 export const censusSplitButtons = (): SplitButtonFinding[] => {
-  const files = execFileSync(
-    "rg",
-    ["--files", "apps", "packages", "-g", "*.tsx", "-g", "*.jsx"],
-    { cwd: ROOT, encoding: "utf-8" },
-  )
-    .trim()
-    .split("\n");
+  const excludedDirectories = new Set([
+    "node_modules",
+    "coverage",
+    "playwright-report",
+    "test-results",
+    "dist-ssr",
+    "out",
+    "build",
+    "dist",
+  ]);
+  const files = [
+    ...new Bun.Glob("{apps,packages}/**/*.{tsx,jsx}").scanSync({
+      cwd: ROOT,
+      onlyFiles: true,
+      dot: false,
+      followSymlinks: false,
+    }),
+  ]
+    .filter((file) =>
+      file.split("/").every((part) => !excludedDirectories.has(part)),
+    )
+    .toSorted();
   return files.flatMap((file) => {
     const content = readFileSync(path.join(ROOT, file), "utf-8");
     return [
