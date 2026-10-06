@@ -587,13 +587,11 @@ const renderWrappedDecision = (lines: readonly string[]): string =>
   renderToStaticMarkup(
     <IntlProvider locale="en" messages={messages} timeZone="UTC">
       <DecisionText
-        activeMatchIndex={-1}
         decision={textDecision({
           documentAst: { ...ast, blocks: lines.map(lineParagraph) },
         })}
         decisionId="dec-1"
         landingAnchorId="p-3"
-        searchQuery="Krajský"
       />
     </IntlProvider>,
   );
@@ -611,9 +609,6 @@ describe("a decision stored as hard-wrapped lines", () => {
     }
     // One landing marker, on the paragraph holding the landing line.
     expect(occurrences(markup, "data-reader-landing")).toBe(1);
-    // The find still marks words inside each line.
-    expect(markup).toContain('data-reader-match-index="0"');
-    expect(markup).toContain('data-reader-match-index="1"');
   });
 
   test("draws an unwrapped decision one paragraph per block", () => {
@@ -647,11 +642,10 @@ const drawnMarkup = (markup: string): string =>
 
 describe("a letter-spaced heading", () => {
   const SPACED = "O d ů v o d n ě n í :";
-  const render = (searchQuery: string): string =>
+  const render = (): string =>
     renderToStaticMarkup(
       <IntlProvider locale="en" messages={messages} timeZone="UTC">
         <DecisionText
-          activeMatchIndex={0}
           decision={textDecision({
             documentAst: {
               ...ast,
@@ -662,13 +656,12 @@ describe("a letter-spaced heading", () => {
             },
           })}
           decisionId="dec-1"
-          searchQuery={searchQuery}
         />
       </IntlProvider>,
     );
 
   test("draws the word while every source character stays in its anchor", () => {
-    const markup = render("");
+    const markup = render();
     const heading = markup.slice(
       markup.indexOf('data-anchor="p-1"'),
       markup.indexOf("</h2>"),
@@ -682,10 +675,6 @@ describe("a letter-spaced heading", () => {
     // Every source character is still in the anchored element, in order.
     expect(heading.replaceAll(/<[^>]+>/gu, "")).toContain(SPACED);
   });
-
-  test("still marks a find for the collapsed word", () => {
-    expect(render("odůvodnění")).toContain('data-reader-match-index="0"');
-  });
 });
 
 describe("quotation marks the publisher printed escaped", () => {
@@ -696,12 +685,10 @@ describe("quotation marks the publisher printed escaped", () => {
     const markup = renderToStaticMarkup(
       <IntlProvider locale="en" messages={messages} timeZone="UTC">
         <DecisionText
-          activeMatchIndex={-1}
           decision={textDecision({
             documentAst: { ...ast, blocks: [lineParagraph(ESCAPED, 1)] },
           })}
           decisionId="dec-1"
-          searchQuery=""
         />
       </IntlProvider>,
     );
@@ -755,14 +742,12 @@ const runOnCaptionAst = {
 } satisfies DocumentAst;
 
 describe("a caption stored run on", () => {
-  const render = (country: string, searchQuery = ""): string =>
+  const render = (country: string): string =>
     renderToStaticMarkup(
       <IntlProvider locale="en" messages={messages} timeZone="UTC">
         <DecisionText
-          activeMatchIndex={0}
           decision={textDecision({ country, documentAst: runOnCaptionAst })}
           decisionId="dec-1"
-          searchQuery={searchQuery}
         />
       </IntlProvider>,
     );
@@ -803,12 +788,6 @@ describe("a caption stored run on", () => {
       .replaceAll(/<a [^>]*data-reader-chrome[^>]*>¶<\/a>/gu, "")
       .replaceAll(/<[^>]+>/gu, "");
     expect(words).toBe(RUN_ON_CAPTION_PIECES.join(""));
-  });
-
-  test("still marks a find inside a caption line", () => {
-    expect(render("CZE", "ROZSUDEK")).toMatch(
-      /<h1 [^>]*><mark[^>]*data-reader-match-index="0"/u,
-    );
   });
 
   test("is drawn as stored where the jurisdiction prints no such caption", () => {

@@ -3,6 +3,8 @@ import type { ComponentProps, ReactNode } from "react";
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { afterAll, afterEach, expect, test } from "bun:test";
 
+import type { DocumentAst } from "@stll/legal-ast/document-ast";
+
 GlobalRegistrator.register({ url: "http://localhost:3000/law" });
 
 // Happy DOM has ranges but no CSS Custom Highlight API. Keep its real ranges
@@ -134,14 +136,15 @@ const matchCounter = (current: number, total: number) =>
     .replace("{current}", () => String(current))
     .replace("{total}", () => String(total));
 
-test("a rendered decision paints only CSS find ranges and Escape leaves no search marks", async () => {
+const textDecision = (overrides: { documentAst?: DocumentAst } = {}) => {
   const absent = {
     reason: TEXT_ABSENCE_REASON.NOT_PUBLISHED,
     type: TEXT_FIELD_TYPE.ABSENT,
   } as const;
-  const decision = {
+  return {
     caseNumber: "1 As 1/2026",
     caseNumberType: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
+    country: "CZE",
     court: "Test court",
     courtAbbreviation: null,
     courtTier: "other",
@@ -154,6 +157,7 @@ test("a rendered decision paints only CSS find ranges and Escape leaves no searc
     judges: [],
     language: "cs",
     sourceAttributionUrl: null,
+    ...overrides,
     textFields: {
       abstract: absent,
       headnote: absent,
@@ -161,6 +165,10 @@ test("a rendered decision paints only CSS find ranges and Escape leaves no searc
       summary: absent,
     },
   } satisfies ComponentProps<typeof DecisionText>["decision"];
+};
+
+test("a rendered decision paints only CSS find ranges and Escape leaves no search marks", async () => {
+  const decision = textDecision();
   const screen = renderReaders([
     {
       content: <DecisionText decision={decision} decisionId="decision" />,
@@ -321,4 +329,171 @@ test("an initial search query survives while the reader waits for its text", asy
     "odpovědnost",
   );
   expect(screen.getByText(matchCounter(1, 2))).toBeTruthy();
+});
+
+const readerAst = (blocks: DocumentAst["blocks"]) =>
+  ({
+    blocks,
+    metadata: {
+      caseNumber: "1 As 1/2026",
+      court: "Test court",
+      decisionDate: null,
+      decisionType: "Judgment",
+      ecli: null,
+      keywords: [],
+      statutes: [],
+    },
+    source: { documentId: "1", printUrl: "", system: "test", webUrl: "" },
+    version: 1,
+  }) satisfies DocumentAst;
+
+test("a letter-spaced heading still marks a find for the collapsed word", async () => {
+  const spaced = "O d ů v o d n ě n í :";
+  const screen = renderReaders([
+    {
+      content: (
+        <DecisionText
+          decision={textDecision({
+            documentAst: readerAst([
+              {
+                anchorId: "p-1",
+                id: "b1",
+                inlines: [{ text: spaced, type: "text" }],
+                level: 2,
+                plainText: spaced,
+                type: "heading",
+              },
+            ]),
+          })}
+          decisionId="decision"
+        />
+      ),
+      initialQuery: "odůvodnění",
+      name: "decision",
+    },
+  ]);
+  expect(
+    screen.container.querySelectorAll('[data-reader-elided="letter-spacing"]'),
+  ).toHaveLength(10);
+  await waitFor(() =>
+    expect(screen.getByText(matchCounter(1, 1))).toBeTruthy(),
+  );
+  const range = activeRange("decision");
+  expect(range).toBeDefined();
+  const drawn = range?.cloneContents();
+  for (const elided of drawn?.querySelectorAll("[data-reader-elided]") ?? []) {
+    elided.remove();
+  }
+  expect(drawn?.textContent).toBe("Odůvodnění");
+});
+
+test("a run-on caption still marks a find inside a caption line", async () => {
+  const caption = [
+    "\n",
+    "ČESKÉ REPUBLIKY\t              21 Cdo 1484/2004",
+    " ",
+    "\n",
+    "ČESKÁ REPUBLIKA ",
+    " ",
+    "\n",
+    "ROZSUDEK",
+    " ",
+    "\n",
+    "JMÉNEM REPUBLIKY",
+  ];
+  const screen = renderReaders([
+    {
+      content: (
+        <DecisionText
+          decision={textDecision({
+            documentAst: readerAst([
+              {
+                anchorId: "p-1",
+                id: "b1",
+                inlines: [{ text: "NEJVYŠŠÍ SOUD", type: "text" }],
+                plainText: "NEJVYŠŠÍ SOUD",
+                type: "paragraph",
+              },
+              {
+                anchorId: "p-2",
+                id: "b2",
+                inlines: caption.map((text) => ({ text, type: "text" })),
+                plainText:
+                  "ČESKÉ REPUBLIKY\t 21 Cdo 1484/2004 ČESKÁ REPUBLIKA ROZSUDEK JMÉNEM REPUBLIKY",
+                type: "paragraph",
+              },
+              {
+                anchorId: "p-3",
+                id: "b3",
+                inlines: [
+                  {
+                    text: "Nejvyšší soud České republiky rozhodl takto:",
+                    type: "text",
+                  },
+                ],
+                plainText: "Nejvyšší soud České republiky rozhodl takto:",
+                type: "paragraph",
+              },
+            ]),
+          })}
+          decisionId="decision"
+        />
+      ),
+      initialQuery: "ROZSUDEK",
+      name: "decision",
+    },
+  ]);
+  await waitFor(() =>
+    expect(screen.getByText(matchCounter(1, 1))).toBeTruthy(),
+  );
+  expect(highlightText("stella-inspector-find-decision")).toEqual(["ROZSUDEK"]);
+  expect(
+    activeRange("decision")?.startContainer.parentElement?.closest("h1"),
+  ).toBe(screen.container.querySelector("header h1"));
+});
+
+const HARD_WRAPPED_LINES = [
+  "Stěžovatel se ústavní stížností, která splňuje formální náležitosti",
+  "stanovené zákonem č. 182/1993 Sb., o Ústavním soudu, domáhal zrušení",
+  "v záhlaví uvedeného rozsudku, neboť podle jeho názoru jím obecné",
+  "soudy porušily jeho základní právo na spravedlivý proces zaručené",
+  "čl. 36 odst. 1 Listiny základních práv a svobod. Krajský soud podle",
+  "stěžovatele nepřihlédl k důkazům, které navrhl, a své rozhodnutí",
+  "řádně neodůvodnil, ačkoli tak byl povinen učinit podle ustanovení",
+  "§ 157 odst. 2 občanského soudního řádu.",
+  "Ústavní soud si vyžádal spis a vyjádření účastníků řízení. Krajský",
+  "soud ve svém vyjádření uvedl, že poměry stěžovatele posoudil podle",
+  "ustálené judikatury a v souladu se zákonem.",
+];
+
+test("a hard-wrapped decision finds words inside both drawn paragraphs", async () => {
+  const screen = renderReaders([
+    {
+      content: (
+        <DecisionText
+          decision={textDecision({
+            documentAst: readerAst(
+              HARD_WRAPPED_LINES.map((text, index) => ({
+                anchorId: `p-${String(index)}`,
+                id: `b${String(index)}`,
+                inlines: [{ text, type: "text" }],
+                plainText: text,
+                type: "paragraph",
+              })),
+            ),
+          })}
+          decisionId="decision"
+        />
+      ),
+      initialQuery: "Krajský",
+      name: "decision",
+    },
+  ]);
+  await waitFor(() =>
+    expect(screen.getByText(matchCounter(1, 2))).toBeTruthy(),
+  );
+  expect(highlightText("stella-inspector-find-decision")).toEqual([
+    "Krajský",
+    "Krajský",
+  ]);
 });
