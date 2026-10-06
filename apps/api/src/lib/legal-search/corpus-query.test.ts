@@ -11,6 +11,7 @@ import {
   caseLawCorpusQuery,
   type CorpusStemming,
   type CorpusFreeTextOptions,
+  corpusDecisionTypeClause,
   corpusFreeTextClause,
   type CorpusTermExpander,
   partitionCorpusQueryTokens,
@@ -237,12 +238,41 @@ test("the assembler ANDs filter clauses onto the free-text clause", () => {
   ).toBe(
     '("náhrada škody")' +
       ' AND jurisdiction:"CZE"' +
-      ' AND document_type:"rozsudek"' +
+      ` AND ${corpusDecisionTypeClause("rozsudek")}` +
       ' AND source:"7449df27-2067-4827-b22f-3091f564ae50"' +
       ' AND language:"cs"' +
       ' AND court:"Nejvyšší soud"' +
       " AND decision_date:[2020-01-01 TO 2024-12-31]",
   );
+});
+
+test("a type filter names every stored spelling of its kind, so an abbreviation is not missed", () => {
+  const order = corpusDecisionTypeClause("order");
+  expect(corpusDecisionTypeClause("usnesení")).toBe(order);
+  expect(corpusDecisionTypeClause("Usn.")).toBe(order);
+  for (const spelling of ["usnesení", "usn.", "uznesenie", "postanowienie"]) {
+    expect(order).toContain(`document_type:${quoteCorpusValue(spelling)}`);
+  }
+  expect(order).not.toContain(quoteCorpusValue("rozsudek"));
+  expect(order).toMatch(
+    /^\(document_type:"[^"]+"( OR document_type:"[^"]+")+\)$/u,
+  );
+
+  // The raw field is exact, so every stored casing and joined list is named.
+  for (const stored of ["Uznesenie", "uznesenie,uznesenie"]) {
+    expect(order).toContain(`document_type:${quoteCorpusValue(stored)}`);
+  }
+
+  // The catch-all is a stated type none of the kinds' spellings is: what is
+  // read as `other` (a docket, `jinak`) stays out of the exclusion.
+  const other = corpusDecisionTypeClause("other");
+  expect(other.startsWith("(document_type:* AND NOT (")).toBe(true);
+  expect(other).toContain(`document_type:${quoteCorpusValue("usn.")}`);
+  expect(other).not.toContain(quoteCorpusValue("jinak"));
+  expect(other).not.toContain(quoteCorpusValue("63 az 17/2026 - 28"));
+
+  // A value no kind claims is matched as stated.
+  expect(corpusDecisionTypeClause("jiné")).toBe('document_type:"jiné"');
 });
 
 test("a court filter carries its partitions beside the exact court clause, never alone", () => {

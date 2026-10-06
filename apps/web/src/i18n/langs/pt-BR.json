@@ -54,6 +54,17 @@
       "polish": "Aprimorar a redação"
     }
   },
+  "aiColumns": {
+    "countSummary": "{columns} colunas × {rows} linhas = {answers, plural, one {# resposta} other {# respostas}}. As respostas consomem o orçamento.",
+    "refusedBudget": "Não executado: orçamento de respostas indisponível",
+    "rerunAllPage": "Executar tudo novamente (esta página)",
+    "rerunColumnPage": "Executar coluna novamente (esta página)",
+    "runColumnPage": "Executar coluna (esta página)",
+    "runPageRows": "Executar para {count, plural, one {# linha desta página} other {# linhas desta página}}",
+    "runRemainingPage": "Executar restantes (esta página)",
+    "runSelectedRows": "Executar para {count, plural, one {# linha selecionada} other {# linhas selecionadas}}",
+    "selectedRun": "Executar colunas de IA para {count, plural, one {# linha} other {# linhas}}"
+  },
   "appearance": {
     "calendar": "Calendário",
     "calendarGregorian": "Gregoriano",
@@ -796,6 +807,34 @@
       "unavailable": "Os dados de cobertura estão indisponíveis no momento."
     },
     "decisionNotFound": "Decisão não encontrada",
+    "decisionTypes": {
+      "administrative_decision": "Decisão administrativa",
+      "binding_excise_information": "Informação vinculante sobre impostos especiais de consumo",
+      "binding_rate_information": "Informação vinculante sobre a alíquota do IVA",
+      "court_direction": "Despacho ordinatório",
+      "decision": "Decisão",
+      "finding": "Decisão de mérito",
+      "general_tax_ruling": "Interpretação tributária geral",
+      "individual_tax_ruling": "Interpretação tributária individual",
+      "judgment": "Sentença",
+      "leave_refused": "Inadmissão por ausência de questão jurídica relevante",
+      "merits_decision": "Julgamento do mérito",
+      "ministry_of_justice_decision": "Decisão do Ministério da Justiça",
+      "minutes_extract": "Extrato da ata",
+      "opinion": "Parecer",
+      "order": "Despacho",
+      "other": "Outros",
+      "payment_order": "Mandado de pagamento",
+      "penal_order": "Decreto penal",
+      "principle_decision": "Decisão de princípio",
+      "protective_opinion": "Parecer de salvaguarda",
+      "resolution": "Resolução",
+      "signalling_decision": "Decisão de sinalização",
+      "statement_of_reasons": "Fundamentação",
+      "tax_explanations": "Esclarecimentos tributários",
+      "top_up_tax_opinion": "Parecer sobre o imposto complementar",
+      "uniformity_decision": "Decisão de uniformização de jurisprudência"
+    },
     "emptyState": "Nenhuma decisão encontrada. Configure uma fonte e execute uma sincronização para importar jurisprudência.",
     "filters": {
       "remove": "Remover o filtro {filter}"
@@ -841,6 +880,7 @@
       "subsection": "par. {value}"
     },
     "reader": {
+      "expandProvisions": "Expandir dispositivos",
       "headMatter": "Cabeçalho",
       "sourceAttribution": "Os dados de origem estão livremente disponíveis em <link>{source}</link>."
     },
@@ -2310,6 +2350,8 @@
       "encryptedContent": "Não é possível extrair o conteúdo de um documento criptografado. Remova a senha do arquivo e tente novamente.",
       "filePropertyTypeImmutable": "Não é possível alterar o tipo de uma propriedade de arquivo. Mantenha o tipo atual; crie uma propriedade personalizada para outros valores.",
       "forbidden": "Você não tem permissão para fazer isso.",
+      "hostedCheckoutOpen": "Já existe um pagamento aberto para esta organização. Conclua-o ou inicie um novo depois que ele expirar.",
+      "hostedSubscriptionLive": "Esta organização já tem uma assinatura. Altere-a em “Gerenciar uso hospedado”.",
       "internalServerError": "Algo deu errado. Tente novamente.",
       "legalSourceEntityLimitReached": "Este assunto atingiu o limite de itens, portanto não foi possível criar o documento.",
       "legalSourceFilePropertyMissing": "Este assunto não tem uma propriedade de arquivo, portanto não foi possível criar o documento.",
@@ -4641,6 +4683,7 @@
     "compareVersionMissing": "A versão a comparar não está no histórico deste ato.",
     "compareWholeAct": "Comparar o ato inteiro",
     "compareWithVersion": "Comparar com {version}",
+    "currentWording": "Redação atual",
     "description": "Base pública de normas consolidadas, indexáveis por norma e versão.",
     "diffInserted": "Inserido:",
     "diffRemoved": "Suprimido:",
@@ -4690,7 +4733,9 @@
       "unknown": "Situação incerta"
     },
     "title": "Legislação",
-    "validity": "Vigente de {from} a {to}"
+    "validity": "Vigente de {from} a {to}",
+    "wordingValidFrom": "Redação em vigor desde {date}",
+    "wordingVersionUnknown": "Data da versão da redação indisponível"
   },
   "styleSets": {
     "create": "Criar",
@@ -5459,8 +5504,7 @@
         "signCurrent": "Assinar com o stella desktop",
         "signNone": "Baixe o stella desktop para assinar este PDF",
         "signOutdated": "Atualize o stella desktop para assinar",
-        "signReason": "A assinatura usa o certificado do seu computador, por isso acontece no stella desktop.",
-        "signShort": "Assinar"
+        "signReason": "A assinatura usa o certificado do seu computador, por isso acontece no stella desktop."
       },
       "downloadAs": "Baixar como…",
       "downloadAsZip": "Baixe como ZIP",
@@ -6002,7 +6046,6 @@
       "previewUnsupported": "A visualização não é compatível com este tipo de documento.",
       "readingFrom": "A IA lê de",
       "referencesItself": "A propriedade faz referência a si mesma por meio de outras propriedades",
-      "rerunColumn": "Reexecutar coluna",
       "resultType": "Tipo de resultado",
       "returnsLabel": "Formato",
       "scopeFile": "Arquivo atual",

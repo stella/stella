@@ -6,6 +6,7 @@ import { useNavigate, useRouterState } from "@tanstack/react-router";
 import { isEntityKind } from "@stll/api-contract";
 import { BidiText } from "@stll/ui/bidi-text";
 import { ExternalLinkIcon } from "@stll/ui/icons";
+import { Separator } from "@stll/ui/separator";
 import { cn } from "@stll/ui/utils";
 
 import { openCaseLawDecision } from "@/components/chat/case-law-open";
@@ -118,22 +119,29 @@ export const SourceChips = ({
   }
 
   return (
-    <div className="flex max-w-full [scrollbar-width:none] flex-nowrap gap-1 overflow-x-auto pb-1 [&::-webkit-scrollbar]:hidden">
-      {uniqueSources.map((part) => (
-        <SourceChip
-          key={`${messageId}-source-${part.id ?? part.data.entityId}`}
-          sourceDocument={part.data}
-          workspaceId={workspaceId}
-        />
-      ))}
-      {uniqueExternalSourcesWithIcons.map((source) => (
-        <ExternalSourceChip
-          key={`${messageId}-external-source-${source.url}`}
-          source={source}
-          workspaceId={workspaceId ?? null}
-        />
-      ))}
-    </div>
+    <>
+      <Separator
+        className="self-stretch"
+        data-chat-answer-citations-divider
+        orientation="vertical"
+      />
+      <div className="contents" data-chat-answer-citations>
+        {uniqueSources.map((part) => (
+          <SourceChip
+            key={`${messageId}-source-${part.id ?? part.data.entityId}`}
+            sourceDocument={part.data}
+            workspaceId={workspaceId}
+          />
+        ))}
+        {uniqueExternalSourcesWithIcons.map((source) => (
+          <ExternalSourceChip
+            key={`${messageId}-external-source-${source.url}`}
+            source={source}
+            workspaceId={workspaceId ?? null}
+          />
+        ))}
+      </div>
+    </>
   );
 };
 
@@ -223,7 +231,7 @@ const CaseLawDecisionSourceChip = ({
   return (
     <button
       className={cn(
-        "inline-flex shrink-0 items-center gap-1 rounded-md border",
+        "inline-flex max-w-full min-w-0 shrink-0 items-center gap-1 rounded-md border",
         "bg-muted/50 px-1.5 py-0.5 text-xs",
         "hover:bg-muted cursor-pointer",
       )}
@@ -243,7 +251,7 @@ const CaseLawDecisionSourceChip = ({
           label: decision.caseNumber,
         }}
       />
-      <BidiText as="span" className="max-w-[20ch] truncate">
+      <BidiText as="span" className="max-w-full min-w-0 truncate">
         {decision.caseNumber}
       </BidiText>
     </button>
@@ -292,7 +300,7 @@ const PublisherSourceChip = ({
   return (
     <button
       className={cn(
-        "inline-flex shrink-0 items-center gap-1 rounded-md border",
+        "inline-flex max-w-full min-w-0 shrink-0 items-center gap-1 rounded-md border",
         "bg-muted/50 px-1.5 py-0.5 text-xs",
         "hover:bg-muted cursor-pointer",
       )}
@@ -306,7 +314,7 @@ const PublisherSourceChip = ({
         loaded={faviconRequested}
         url={source.url}
       />
-      <BidiText as="span" className="max-w-[20ch] truncate">
+      <BidiText as="span" className="max-w-full min-w-0 truncate">
         {source.title}
       </BidiText>
     </button>
@@ -423,7 +431,7 @@ const SourceChip = ({
   return (
     <button
       className={cn(
-        "inline-flex shrink-0 items-center gap-1 rounded-md border",
+        "inline-flex max-w-full min-w-0 shrink-0 items-center gap-1 rounded-md border",
         "bg-muted/50 px-1.5 py-0.5 text-xs",
         resolvedWorkspaceId
           ? "hover:bg-muted cursor-pointer"
@@ -436,7 +444,7 @@ const SourceChip = ({
         sourceDocument={sourceDocument}
         workspaceId={resolvedWorkspaceId}
       />
-      <BidiText as="span" className="max-w-[20ch] truncate">
+      <BidiText as="span" className="max-w-full min-w-0 truncate">
         {sourceDocument.title}
       </BidiText>
     </button>

@@ -18,6 +18,8 @@ import { Separator } from "@stll/ui/separator";
 import { Skeleton } from "@stll/ui/skeleton";
 
 import type { ActiveLegalDocument } from "@/components/ai-suggestions/active-legal-document";
+import { FileViewerWithAI } from "@/components/ai-suggestions/file-viewer-with-ai";
+import { FILE_CHAT_OVERLAY_ACTIVATION } from "@/components/ai-suggestions/file-viewer-with-ai-config";
 import { DatePickerPopover } from "@/components/date-picker-popover";
 import { LegalReaderAIChat } from "@/components/legal-reader/legal-reader-ai-chat";
 import { OpenOriginalButton } from "@/components/legal-reader/open-original-button";
@@ -46,6 +48,7 @@ import {
 import type { StatuteCompareSearch } from "@/features/statutes/statute-compare-search";
 import { prepareStatuteReader } from "@/features/statutes/statute-reader-blocks";
 import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
+import { useMaybeAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { ChromeHeaderActions } from "@/lib/chrome-header-actions";
 import { detached } from "@/lib/detached";
 import { recordLawOpen } from "@/lib/law-search-history";
@@ -58,6 +61,11 @@ const LazyStatuteCompareView = lazy(async () => {
   const module =
     await import("@/features/statutes/components/statute-compare-view");
   return { default: module.StatuteCompareView };
+});
+
+const LazyAuthenticatedStatuteChat = lazy(async () => {
+  const module = await import("./-authenticated-statute-chat");
+  return { default: module.AuthenticatedStatuteChat };
 });
 
 type OutlineJumpState = {
@@ -97,6 +105,37 @@ type PublicStatuteViewerProps = PublicStatuteRouteData & {
 };
 
 /**
+ * Records the act in the reader's recent law, titled `number/year · title`
+ * when the stored title carries no citation of its own.
+ */
+const useRecordStatuteOpen = ({
+  eli,
+  title,
+}: {
+  eli: string;
+  title: string;
+}) => {
+  const openedPath = useRouterState({
+    select: ({ location }) => location.pathname,
+  });
+  useExternalSyncEffect(() => {
+    const citation = splitStatuteTitleCitation(title).citation;
+    const eliCitation = /\/(\d{4})\/(\d+)$/u.exec(eli);
+    const year = eliCitation?.at(1);
+    const number = eliCitation?.at(2);
+    recordLawOpen({
+      kind: "statute",
+      id: eli,
+      title:
+        citation !== null || year === undefined || number === undefined
+          ? title
+          : `${number}/${year} · ${title}`,
+      path: openedPath,
+    });
+  }, [title, eli, openedPath]);
+};
+
+/**
  * The public statute reader. It renders whichever consolidation the route
  * resolved; picking another version or another day is a navigation, because
  * every consolidation has its own address.
@@ -110,6 +149,7 @@ export const PublicStatuteViewer = ({
   windowGap,
   work,
 }: PublicStatuteViewerProps) => {
+  const user = useMaybeAuthenticatedUser();
   const t = useTranslations();
   const navigate = useNavigate();
   const asOfLabelId = useId();
@@ -117,25 +157,7 @@ export const PublicStatuteViewer = ({
   const readerRef = useRef<HTMLDivElement>(null);
 
   const header = statute ?? work;
-  const openedPath = useRouterState({
-    select: ({ location }) => location.pathname,
-  });
-  useExternalSyncEffect(() => {
-    const citation = splitStatuteTitleCitation(header.title).citation;
-    const eliCitation = /\/(\d{4})\/(\d+)$/u.exec(work.eli);
-    const year = eliCitation?.at(1);
-    const number = eliCitation?.at(2);
-    const title =
-      citation !== null || year === undefined || number === undefined
-        ? header.title
-        : `${number}/${year} · ${header.title}`;
-    recordLawOpen({
-      kind: "statute",
-      id: work.eli,
-      title,
-      path: openedPath,
-    });
-  }, [header.title, work.eli, openedPath]);
+  useRecordStatuteOpen({ eli: work.eli, title: header.title });
   // Picking a day means going to that day's consolidation, and only the
   // readable segment can address one. A document the corpus holds no segment
   // for keeps the version menu, which switches by id.
@@ -333,6 +355,32 @@ export const PublicStatuteViewer = ({
     </div>
   );
 
+  let readerWithChat = readerBody;
+  if (activeLegal !== null) {
+    readerWithChat =
+      user === null ? (
+        <LegalReaderAIChat activeLegal={activeLegal} className="h-full">
+          {readerBody}
+        </LegalReaderAIChat>
+      ) : (
+        <Suspense
+          fallback={
+            <FileViewerWithAI
+              activeLegal={activeLegal}
+              className="h-full"
+              overlayActivation={FILE_CHAT_OVERLAY_ACTIVATION.gated}
+            >
+              {readerBody}
+            </FileViewerWithAI>
+          }
+        >
+          <LazyAuthenticatedStatuteChat activeLegal={activeLegal}>
+            {readerBody}
+          </LazyAuthenticatedStatuteChat>
+        </Suspense>
+      );
+  }
+
   return (
     <main className="relative min-h-0 flex-1">
       <ChromeHeaderActions>
@@ -445,13 +493,7 @@ export const PublicStatuteViewer = ({
           decision, bound to this consolidation and so to its one
           conversation. A page with no version in force has no document to
           bind, so it keeps its text alone. */}
-          {activeLegal === null ? (
-            readerBody
-          ) : (
-            <LegalReaderAIChat activeLegal={activeLegal} className="h-full">
-              {readerBody}
-            </LegalReaderAIChat>
-          )}
+          {readerWithChat}
         </>
       )}
     </main>

@@ -54,6 +54,17 @@
       "polish": "Popraw sformułowanie"
     }
   },
+  "aiColumns": {
+    "countSummary": "{columns} kolumn × {rows} wierszy = {answers, plural, one {# odpowiedź} few {# odpowiedzi} many {# odpowiedzi} other {# odpowiedzi}}. Odpowiedzi zużywają budżet.",
+    "refusedBudget": "Nie uruchomiono: budżet odpowiedzi niedostępny",
+    "rerunAllPage": "Uruchom wszystko ponownie (ta strona)",
+    "rerunColumnPage": "Uruchom kolumnę ponownie (ta strona)",
+    "runColumnPage": "Uruchom kolumnę (ta strona)",
+    "runPageRows": "Uruchom dla {count, plural, one {# wiersza na tej stronie} few {# wierszy na tej stronie} many {# wierszy na tej stronie} other {# wiersza na tej stronie}}",
+    "runRemainingPage": "Uruchom pozostałe (ta strona)",
+    "runSelectedRows": "Uruchom dla {count, plural, one {# wybranego wiersza} few {# wybranych wierszy} many {# wybranych wierszy} other {# wybranego wiersza}}",
+    "selectedRun": "Uruchom kolumny AI dla {count, plural, one {# wiersza} few {# wierszy} many {# wierszy} other {# wiersza}}"
+  },
   "appearance": {
     "calendar": "Kalendarz",
     "calendarGregorian": "Gregoriański",
@@ -796,6 +807,34 @@
       "unavailable": "Dane o zakresie są chwilowo niedostępne."
     },
     "decisionNotFound": "Nie znaleziono orzeczenia",
+    "decisionTypes": {
+      "administrative_decision": "Decyzja administracyjna",
+      "binding_excise_information": "Wiążąca informacja akcyzowa",
+      "binding_rate_information": "Wiążąca informacja stawkowa",
+      "court_direction": "Zarządzenie",
+      "decision": "Orzeczenie",
+      "finding": "Orzeczenie merytoryczne",
+      "general_tax_ruling": "Interpretacja ogólna",
+      "individual_tax_ruling": "Interpretacja indywidualna",
+      "judgment": "Wyrok",
+      "leave_refused": "Odrzucenie z braku istotnego zagadnienia prawnego",
+      "merits_decision": "Rozstrzygnięcie co do istoty",
+      "ministry_of_justice_decision": "Rozstrzygnięcie Ministerstwa Sprawiedliwości",
+      "minutes_extract": "Wyciąg z protokołu",
+      "opinion": "Opinia",
+      "order": "Postanowienie",
+      "other": "Inne",
+      "payment_order": "Nakaz zapłaty",
+      "penal_order": "Nakaz karny",
+      "principle_decision": "Orzeczenie zasadnicze",
+      "protective_opinion": "Opinia zabezpieczająca",
+      "resolution": "Uchwała",
+      "signalling_decision": "Sygnalizacja",
+      "statement_of_reasons": "Uzasadnienie",
+      "tax_explanations": "Objaśnienia podatkowe",
+      "top_up_tax_opinion": "Opinia w sprawie opodatkowania wyrównawczego",
+      "uniformity_decision": "Orzeczenie w sprawie jednolitości orzecznictwa"
+    },
     "emptyState": "Brak orzeczeń. Skonfiguruj źródło i uruchom synchronizację, aby zaimportować orzecznictwo.",
     "filters": {
       "remove": "Usuń filtr {filter}"
@@ -841,6 +880,7 @@
       "subsection": "ust. {value}"
     },
     "reader": {
+      "expandProvisions": "Rozwiń przepisy",
       "headMatter": "Część wstępna",
       "sourceAttribution": "Dane źródłowe są ogólnodostępne pod adresem <link>{source}</link>."
     },
@@ -2310,6 +2350,8 @@
       "encryptedContent": "Nie można wyodrębnić zawartości zaszyfrowanego dokumentu. Usuń hasło z pliku i spróbuj ponownie.",
       "filePropertyTypeImmutable": "Nie można zmienić typu właściwości pliku. Zachowaj obecny typ; dla innych wartości utwórz własną właściwość.",
       "forbidden": "Nie masz uprawnień do wykonania tej czynności.",
+      "hostedCheckoutOpen": "Dla tej organizacji jest już otwarta płatność. Dokończ ją albo rozpocznij nową po jej wygaśnięciu.",
+      "hostedSubscriptionLive": "Ta organizacja ma już subskrypcję. Zmień ją w sekcji „Zarządzaj użyciem hostowanym”.",
       "internalServerError": "Coś poszło nie tak. Spróbuj ponownie.",
       "legalSourceEntityLimitReached": "Ta sprawa osiągnęła limit elementów, dlatego nie można było utworzyć dokumentu.",
       "legalSourceFilePropertyMissing": "W tej sprawie brakuje właściwości pliku, dlatego nie można było utworzyć dokumentu.",
@@ -4641,6 +4683,7 @@
     "compareVersionMissing": "Wersji do porównania nie ma w historii tego aktu.",
     "compareWholeAct": "Porównaj cały akt",
     "compareWithVersion": "Porównaj z brzmieniem {version}",
+    "currentWording": "Aktualne brzmienie",
     "description": "Publiczna baza ujednoliconych aktów prawnych, indeksowana według aktu i jego wersji.",
     "diffInserted": "Dodano:",
     "diffRemoved": "Usunięto:",
@@ -4690,7 +4733,9 @@
       "unknown": "Status niejasny"
     },
     "title": "Akty prawne",
-    "validity": "Obowiązuje od {from} do {to}"
+    "validity": "Obowiązuje od {from} do {to}",
+    "wordingValidFrom": "Brzmienie obowiązuje od {date}",
+    "wordingVersionUnknown": "Data wersji brzmienia jest niedostępna"
   },
   "styleSets": {
     "create": "Utwórz",
@@ -5459,8 +5504,7 @@
         "signCurrent": "Podpisz w stella desktop",
         "signNone": "Pobierz stella desktop, aby podpisać ten PDF",
         "signOutdated": "Zaktualizuj stella desktop, aby podpisywać",
-        "signReason": "Podpis korzysta z certyfikatu na Twoim komputerze, dlatego odbywa się w stella desktop.",
-        "signShort": "Podpisz"
+        "signReason": "Podpis korzysta z certyfikatu na Twoim komputerze, dlatego odbywa się w stella desktop."
       },
       "downloadAs": "Pobierz jako…",
       "downloadAsZip": "Pobierz plik .zip",
@@ -6002,7 +6046,6 @@
       "previewUnsupported": "Podgląd niedostępny dla tego typu dokumentu.",
       "readingFrom": "AI czyta z",
       "referencesItself": "Właściwość odwołuje się do siebie przez inne właściwości",
-      "rerunColumn": "Uruchom kolumnę ponownie",
       "resultType": "Typ wyniku",
       "returnsLabel": "Format",
       "scopeFile": "Bieżący plik",

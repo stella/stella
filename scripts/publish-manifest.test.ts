@@ -4,12 +4,16 @@ import path from "node:path";
 
 import webManifest from "../apps/web/package.json" with { type: "json" };
 import rootManifest from "../package.json" with { type: "json" };
+import cliManifest from "../packages/cli/package.json" with { type: "json" };
 import uiManifest from "../packages/ui/package.json" with { type: "json" };
 import {
+  assertShippedAssetPatternsMatch,
   distEntryFiles,
+  matchShippedAssetPattern,
   sourceExportTargets,
   toPublishedManifest,
 } from "./publish-manifest";
+import { ALL_PACKAGE_ORDER } from "./publish-packages";
 
 const ATLASKIT_DRAG_PACKAGE = "@atlaskit/pragmatic-drag-and-drop";
 const ATLASKIT_AUTO_SCROLL_PACKAGE =
@@ -86,6 +90,82 @@ describe("sourceExportTargets", () => {
       ".": { types: "./dist/index.d.ts", import: "./dist/index.js" },
       "./contract.json": "./contract.json",
     });
+  });
+
+  test("accepts a JSON asset directory pattern the files allowlist ships", () => {
+    const withShards = {
+      ...manifest({
+        ".": "./src/index.ts",
+        "./capabilities/*.json": "./capabilities/*.json",
+      }),
+      files: ["capabilities", "dist", "src", "README.md"],
+    };
+
+    expect(sourceExportTargets(withShards)["./capabilities/*.json"]).toBe(
+      "./capabilities/*.json",
+    );
+    const published = toPublishedManifest(withShards);
+    expect(published.exports["./capabilities/*.json"]).toBe(
+      "./capabilities/*.json",
+    );
+    expect(published["files"]).toEqual(["dist", "README.md", "capabilities"]);
+  });
+
+  // The release workflow is the only other place these manifests are
+  // transformed, so a shape it would refuse has to fail here, on the PR.
+  test("transforms every package the release publishes", async () => {
+    for (const directory of ALL_PACKAGE_ORDER) {
+      const source: unknown = await Bun.file(
+        path.join(REPO_ROOT, "packages", directory, "package.json"),
+      ).json();
+      expect(() => toPublishedManifest(source), directory).not.toThrow();
+    }
+  });
+
+  test("ships the CLI's capability shards as an asset pattern", () => {
+    const published = toPublishedManifest(cliManifest);
+    expect(published.exports["./capabilities/*.json"]).toBe(
+      "./capabilities/*.json",
+    );
+    expect(published["files"]).toContain("capabilities");
+  });
+
+  test("rejects a JSON asset pattern whose directory files does not ship", () => {
+    expect(() =>
+      sourceExportTargets(
+        manifest({
+          ".": "./src/index.ts",
+          "./capabilities/*.json": "./capabilities/*.json",
+        }),
+      ),
+    ).toThrow(/expected source export "\.\/capabilities\/\*\.json"/u);
+  });
+
+  test("rejects asset patterns in any other shape", () => {
+    const shipping = (exports: Record<string, unknown>) => ({
+      ...manifest(exports),
+      files: ["capabilities", "dist", "src", "README.md", "..", ".hidden"],
+    });
+    for (const [subpath, target] of [
+      // Remapped: the subpath has to name the file it resolves to.
+      ["./caps/*.json", "./capabilities/*.json"],
+      // Not JSON, or not one level of files.
+      ["./capabilities/*", "./capabilities/*"],
+      ["./capabilities/*.js", "./capabilities/*.js"],
+      ["./capabilities/**/*.json", "./capabilities/**/*.json"],
+      // Built directories go through the module and stylesheet rules.
+      ["./src/*.json", "./src/*.json"],
+      ["./dist/*.json", "./dist/*.json"],
+      // Nothing may climb out of the package or hide in a dot directory.
+      ["./../*.json", "./../*.json"],
+      ["./.hidden/*.json", "./.hidden/*.json"],
+    ] as const) {
+      expect(() =>
+        sourceExportTargets(
+          shipping({ ".": "./src/index.ts", [subpath]: target }),
+        ),
+      ).toThrow(/expected source export/u);
+    }
   });
 
   test("rejects a root JSON asset omitted from files", () => {
@@ -183,6 +263,44 @@ describe("toPublishedManifest", () => {
 
     expect(realpathSync(uiAdapter)).toBe(realpathSync(webAdapter));
     expect(realpathSync(autoScrollAdapter)).toBe(realpathSync(webAdapter));
+  });
+});
+
+describe("shipped asset patterns after the build", () => {
+  const published = toPublishedManifest({
+    ...manifest({
+      ".": "./src/index.ts",
+      "./capabilities/*.json": "./capabilities/*.json",
+    }),
+    files: ["capabilities", "dist"],
+  });
+
+  test("matches only JSON files directly inside the directory, sorted", () => {
+    expect(
+      matchShippedAssetPattern("./capabilities/*.json", [
+        "b.get.json",
+        "README.md",
+        "a.list.json",
+        "nested/c.json",
+      ]),
+    ).toEqual(["capabilities/a.list.json", "capabilities/b.get.json"]);
+  });
+
+  test("passes when the built directory holds a matching file", () => {
+    expect(() =>
+      assertShippedAssetPatternsMatch(published, (directory) =>
+        directory === "capabilities" ? ["a.list.json"] : undefined,
+      ),
+    ).not.toThrow();
+  });
+
+  test("refuses a pattern whose directory is missing or holds no match", () => {
+    expect(() =>
+      assertShippedAssetPatternsMatch(published, () => undefined),
+    ).toThrow(/matches no file in capabilities\/ after the build/u);
+    expect(() =>
+      assertShippedAssetPatternsMatch(published, () => ["README.md"]),
+    ).toThrow(/matches no file in capabilities\/ after the build/u);
   });
 });
 
