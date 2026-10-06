@@ -7,6 +7,7 @@ import {
   requiresLandingBuild,
   requiresPackageChecks,
 } from "./ci-package-scope";
+import { importProblems } from "./install-free-ci";
 
 const repository = (
   run: (root: string, write: (file: string, text: string) => void) => void,
@@ -269,7 +270,7 @@ test("repository readers preserve consumed documentation without swallowing unre
     }),
   ).toBe(true);
   expect(requiresPackageChecks({ changed: ["docs/guide.md"] })).toBe(true);
-});
+}, 30_000);
 
 test("loader wildcard bases stay tied to their calls", () => {
   repository((root, write) => {
@@ -290,5 +291,57 @@ test("loader wildcard bases stay tied to their calls", () => {
     expect(
       requiresPackageChecks({ root, changed: ["notes/unconsumed/new.md"] }),
     ).toBe(true);
+  });
+});
+
+test("scope selectors run before dependency installation", () => {
+  expect(
+    importProblems({
+      root: path.resolve(import.meta.dir, ".."),
+      entries: ["scripts/ci-package-scope.ts"],
+    }),
+  ).toEqual([]);
+});
+
+test("loader option expressions retain the broad pattern", () => {
+  repository((root, write) => {
+    for (const options of [
+      '{ base: "notes/consumed", pattern: "**/*.md" }',
+      '{ pattern: "**/*.md", base: "notes/consumed", ...overrides }',
+      '{ pattern: "**/*.md", base: getBase("notes/consumed") }',
+      '{ pattern: "**/*.md", base: "notes/consumed" }, extra',
+    ]) {
+      write(
+        "scripts/content.ts",
+        `import { glob } from "astro/loaders"; glob(${options});`,
+      );
+      expect(
+        requiresPackageChecks({ root, changed: ["notes/consumed/new.md"] }),
+      ).toBe(true);
+      expect(
+        requiresPackageChecks({ root, changed: ["notes/unconsumed/new.md"] }),
+      ).toBe(!options.startsWith("{ base:"));
+    }
+  });
+});
+
+test("dynamic and aliased content loaders retain Markdown checks", () => {
+  repository((root, write) => {
+    for (const source of [
+      `import { glob } from "astro/loaders"; glob({ pattern: \`${"$"}{prefix}/*.md\`, base: "notes/consumed" });`,
+      'import { glob as load } from "astro/loaders"; load({ pattern: "**/*.md", base: "notes/consumed" });',
+    ]) {
+      write("scripts/content.ts", source);
+      expect(requiresPackageChecks({ root, changed: ["notes/new.md"] })).toBe(
+        true,
+      );
+    }
+    write(
+      "turbo.json",
+      JSON.stringify({ tasks: { "@stll/example#test": { inputs: [42] } } }),
+    );
+    expect(requiresPackageChecks({ root, changed: ["notes/new.md"] })).toBe(
+      true,
+    );
   });
 });

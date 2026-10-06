@@ -1,17 +1,13 @@
 import { readFileSync } from "node:fs";
 import path from "node:path";
-import ts from "typescript";
 
-import {
-  readStringLiterals,
-  readTestInputs,
-} from "./check-test-input-coverage";
 import { GENERATORS } from "./generated-files";
 import {
   landingBuildRootInputs,
   landingClosure,
   parseLockfile,
 } from "./landing-deploy-scope";
+import { readStringLiterals, readTestInputs } from "./test-input-readers";
 
 const ROOT = path.resolve(import.meta.dir, "..");
 const GLOBAL =
@@ -27,43 +23,36 @@ const matches = (file: string, pattern: string) =>
 // Astro globs are relative to the loader's base, not the repository root.
 // Unknown call shapes retain the broad pattern rather than guessing a base.
 const loaderPatterns = (source: string, file: string, target: string) => {
-  const tree = ts.createSourceFile(file, source, ts.ScriptTarget.Latest, true);
   const patterns: string[] = [];
   let unknown = false;
   const workspace = /^(?:apps|packages)\//u.test(file)
     ? file.split("/").slice(0, 2).join("/")
     : ".";
-  const visit = (node: ts.Node) => {
-    if (ts.isCallExpression(node) && node.expression.getText(tree) === "glob") {
-      const literals = readStringLiterals(node.getText(tree));
-      if (literals.some(({ value }) => value === target)) {
-        const options = node.arguments[0];
-        const properties =
-          options && ts.isObjectLiteralExpression(options)
-            ? options.properties.filter(ts.isPropertyAssignment)
-            : [];
-        const pattern = properties.find(
-          (property) => property.name.getText(tree) === "pattern",
-        )?.initializer;
-        const base = properties.find(
-          (property) => property.name.getText(tree) === "base",
-        )?.initializer;
-        if (
-          pattern &&
-          ts.isStringLiteral(pattern) &&
-          pattern.text === target &&
-          base &&
-          ts.isStringLiteral(base)
-        ) {
-          patterns.push(path.posix.join(workspace, base.text, target));
-        } else {
-          unknown = true;
-        }
-      }
+  readStringLiterals(source, (callee, call) => {
+    if (
+      callee !== "glob" ||
+      !readStringLiterals(call).some(({ value }) => value === target)
+    ) {
+      return;
     }
-    ts.forEachChild(node, visit);
-  };
-  visit(tree);
+    // Only a flat options object with two static properties proves a base.
+    // Spreads, expressions, nested options and extra arguments remain broad.
+    const forward =
+      /^\(\s*\{\s*pattern\s*:\s*(["'])([^"'\\]*?)\1\s*,\s*base\s*:\s*(["'])([^"'\\]*?)\3\s*,?\s*\}\s*\)$/u.exec(
+        call,
+      );
+    const reverse =
+      /^\(\s*\{\s*base\s*:\s*(["'])([^"'\\]*?)\1\s*,\s*pattern\s*:\s*(["'])([^"'\\]*?)\3\s*,?\s*\}\s*\)$/u.exec(
+        call,
+      );
+    const pattern = forward?.[2] ?? reverse?.[4];
+    const base = forward?.[4] ?? reverse?.[2];
+    if (pattern === target && base !== undefined) {
+      patterns.push(path.posix.join(workspace, base, target));
+    } else {
+      unknown = true;
+    }
+  });
   return !unknown && patterns.length > 0 ? patterns : [target];
 };
 
@@ -98,6 +87,25 @@ const markdownInputs = (root: string) => {
       )
     ) {
       continue;
+    }
+    if (/from\s*["']astro\/loaders["']/u.test(source)) {
+      let calls = 0;
+      readStringLiterals(source, (callee, call) => {
+        if (callee !== "glob") {
+          return;
+        }
+        calls += 1;
+        if (
+          !readStringLiterals(call).some(({ value }) => MARKDOWN.test(value))
+        ) {
+          patterns.add("**/*.md");
+          patterns.add("**/*.mdx");
+        }
+      });
+      if (calls === 0) {
+        patterns.add("**/*.md");
+        patterns.add("**/*.mdx");
+      }
     }
     for (const { value, callee } of readStringLiterals(source)) {
       const target = value.replace(/^(?:\.\.\/)+/u, "");
