@@ -1,0 +1,25 @@
+{
+  "name": "@stll/visual-preview",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "install:browser": "playwright-core install chromium",
+    "test": "bun test src",
+    "test:browser": "bun test browser",
+    "typecheck": "bun ../../packages/scripts/src/tsc-native.ts --noEmit",
+    "lint": "cd ../.. && bun --bun oxlint -c oxlint.config.ts apps/visual-preview",
+    "format": "bun ../../scripts/run-oxfmt.ts ."
+  },
+  "dependencies": {
+    "@sparticuz/chromium-min": "153.0.0",
+    "@stll/api-contract": "workspace:*",
+    "better-result": "catalog:",
+    "playwright-core": "1.63.0",
+    "valibot": "catalog:"
+  },
+  "devDependencies": {
+    "@stll/typescript-config": "workspace:*",
+    "bun-types": "catalog:"
+  }
+}

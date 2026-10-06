@@ -1,0 +1,108 @@
+name: Visual preview
+on:
+  pull_request:
+    paths:
+      - apps/visual-preview/**
+      - apps/api/src/handlers/visual-sandbox/**
+      - packages/api-contract/src/visual-sandbox.ts
+      - packages/api-contract/src/visual-preview.ts
+      - bun.lock
+      - .github/workflows/visual-preview.yml
+  merge_group:
+  workflow_dispatch:
+env:
+  NPM_TOKEN: ""
+permissions:
+  contents: read
+concurrency:
+  group: visual-preview-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  preview:
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Select preview changes
+        id: scope
+        env:
+          BASE_SHA: ${{ github.event.merge_group.base_sha }}
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          if [ "$EVENT_NAME" != merge_group ]; then
+            echo 'required=true' >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          git fetch --no-tags --depth=1 origin "$BASE_SHA"
+          if git diff --name-only "$BASE_SHA" HEAD | rg '^(apps/visual-preview/|apps/api/src/handlers/visual-sandbox/|packages/api-contract/src/visual-sandbox.ts$|packages/api-contract/src/visual-preview|bun.lock$|.github/workflows/visual-preview.yml$)'; then
+            echo 'required=true' >> "$GITHUB_OUTPUT"
+          else
+            echo 'required=false' >> "$GITHUB_OUTPUT"
+          fi
+      - if: steps.scope.outputs.required == 'true'
+        uses: stella/.github/actions/setup-bun-cached@167fb396c6c0f4e07296ad2cd72e6ef15367c776
+        with:
+          bun-version-file: package.json
+      - name: Install renderer and browser harness dependencies
+        if: steps.scope.outputs.required == 'true'
+        run: bun install --frozen-lockfile --ignore-scripts --filter @stll/visual-preview --filter @stll/web --filter @stll/api
+      - name: Test renderer validation
+        if: steps.scope.outputs.required == 'true'
+        run: bun --filter @stll/visual-preview test
+      - name: Test preview in the pinned browser image
+        if: steps.scope.outputs.required == 'true'
+        run: bash .github/actions/setup-playwright/run-in-image.sh --offline bun --filter @stll/visual-preview test:browser
+      - name: Build Lambda image
+        if: steps.scope.outputs.required == 'true'
+        run: docker build --platform linux/arm64 -f apps/visual-preview/Dockerfile -t visual-preview:test .
+      - name: Exercise Lambda image without network
+        if: steps.scope.outputs.required == 'true'
+        run: |
+          timeout 75s docker run --rm --network none -e AWS_EXECUTION_ENV=AWS_Lambda_nodejs22.x --entrypoint /var/lang/bin/node visual-preview:test \
+            --input-type=module -e '
+              import assert from "node:assert/strict";
+              import { handler } from "/var/task/handler.mjs";
+              const readyScript = "<script>parent.postMessage({kind: \"ready\"}, \"*\")</script>";
+              const lambdaTimeoutMs = 15000;
+              const cases = [
+                {
+                  name: "ready",
+                  document: "<body><h1>Example</h1>" + readyScript,
+                  verify: (result) => {
+                    assert.equal(result.readyFired, true);
+                    assert.equal(result.blockedRequests, 0);
+                  },
+                },
+                {
+                  name: "missing-ready",
+                  document: "<body><h1>Example without readiness</h1>",
+                  verify: (result) => assert.equal(result.readyFired, false),
+                },
+                {
+                  name: "script-error",
+                  document: "<body><script>throw new Error(\"Preview example error\")</script>" + readyScript,
+                  verify: (result) => assert.ok(result.consoleErrors.some((error) => error.includes("Preview example error"))),
+                },
+                {
+                  name: "blocked-request",
+                  document: "<body><img src=\"https://preview.invalid/example.png\">" + readyScript,
+                  verify: (result) => assert.ok(result.blockedRequests > 0),
+                },
+              ];
+              for (const smoke of cases) {
+                const started = performance.now();
+                const deadline = setTimeout(() => {
+                  console.error("Preview smoke exceeded Lambda timeout: " + smoke.name);
+                  process.exit(1);
+                }, lambdaTimeoutMs);
+                try {
+                  const result = await handler({document: smoke.document, viewport: {width: 1200}});
+                  assert.ok(performance.now() - started < lambdaTimeoutMs);
+                  assert.ok(result.png.startsWith("iVBOR"));
+                  smoke.verify(result);
+                  console.log(JSON.stringify({case: smoke.name, size: result.size, readyFired: result.readyFired, blockedRequests: result.blockedRequests, consoleErrors: result.consoleErrors.length}));
+                } finally {
+                  clearTimeout(deadline);
+                }
+              }
+            '

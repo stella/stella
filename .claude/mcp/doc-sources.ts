@@ -380,6 +380,22 @@ export const DOC_SOURCE_EXCLUSIONS = [
   .concat(
     {
       checkedAt: "2026-10-06T00:00:00.000Z",
+      dependency: "playwright-core",
+      explanation:
+        "https://playwright.dev/llms.txt returns 404. Use the canonical documentation at https://playwright.dev/docs/api/class-browser directly.",
+      expiresAt: "2026-11-05T00:00:00.000Z",
+      reason: "no-llms-txt",
+    },
+    {
+      checkedAt: "2026-10-06T00:00:00.000Z",
+      dependency: "@sparticuz/chromium-min",
+      explanation:
+        "https://raw.githubusercontent.com/Sparticuz/chromium/main/llms.txt returns 404. Use the canonical documentation at https://github.com/Sparticuz/chromium directly.",
+      expiresAt: "2026-11-05T00:00:00.000Z",
+      reason: "no-llms-txt",
+    },
+    {
+      checkedAt: "2026-10-06T00:00:00.000Z",
       dependency: "@tailwindcss/postcss",
       explanation:
         "https://tailwindcss.com/llms.txt returns 404. Use the PostCSS installation guide at https://tailwindcss.com/docs/installation/using-postcss directly.",

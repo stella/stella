@@ -30,19 +30,30 @@ import {
   ACTION_ADMISSION_CODES,
   ACTION_ADMISSION_REFUSALS,
 } from "@stll/api-contract/action-admission";
+import {
+  VISUAL_PREVIEW_TOOL_NAME,
+  visualPreviewToolOutputSchema,
+  type VisualPreviewOutput,
+} from "@stll/api-contract/visual-preview";
 
 import {
   createChatAttachmentPart,
   chatMessageContentFromMessage,
   chatMessageFromPersisted,
   toPersistableChatMessage,
+  normalizePersistedChatMessageContent,
+  toPersistedChatMessageContentV3,
 } from "@/api/handlers/chat/chat-message-parts";
 import {
   CHAT_RUN_MODE,
   validateToolCallParts,
 } from "@/api/handlers/chat/chat-schema";
+import { cutShortAssistantMessage } from "@/api/handlers/chat/chat-turn-persistence";
 import { CHAT_TURN_OWNER_LOST_REASON } from "@/api/handlers/chat/chat-turn-run";
-import { settleHistoryForRun } from "@/api/handlers/chat/chat-turn-settlement";
+import {
+  findUnsettledStoredToolCalls,
+  settleHistoryForRun,
+} from "@/api/handlers/chat/chat-turn-settlement";
 import {
   COMPACTION_SUMMARY_MESSAGE_ID,
   createCompactionSummaryMessage,
@@ -85,6 +96,8 @@ import { logger } from "@/api/lib/observability/logger";
 import { ActionAdmissionError } from "@/api/lib/rate-limit/action-admission";
 import { abortControllerFromSignal } from "@/api/lib/tanstack-ai-generate";
 import { toUserFileUrl } from "@/api/lib/user-files/types";
+import { visualPreviewModelContent } from "@/api/lib/visual-preview";
+import { projectVisualPreviewStream } from "@/api/lib/visual-preview-stream";
 import { PDF_MIME_TYPE } from "@/api/mime-types";
 import {
   buildEngineSnapshot,
@@ -491,6 +504,245 @@ const persistNativeInterruptTurn = async (
   }
   return { emitted, finish: terminal.finish, source };
 };
+
+test("transient visual preview reaches the in-turn model but not wire, persistence or reload", async () => {
+  const preview = {
+    png: "iVBORw0KGgo=",
+    consoleErrors: ["Example diagnostic"],
+    blockedRequests: 1,
+    size: { width: 1200, height: 200 },
+    readyFired: true,
+  } satisfies VisualPreviewOutput;
+  const output = visualPreviewModelContent({ title: "Example", preview });
+  const scripted = createToolCallSequenceAdapter([
+    { toolName: VISUAL_PREVIEW_TOOL_NAME, arguments: "{}" },
+    { toolName: "finish_preview", arguments: "{}" },
+  ]);
+  const observed: { modelMessages: ModelMessage[] | null; calls: number } = {
+    modelMessages: null,
+    calls: 0,
+  };
+  const adapter = {
+    ...scripted,
+    async *chatStream(options) {
+      if (options.messages.some((message) => message.role === "tool")) {
+        observed.modelMessages = structuredClone(options.messages);
+      }
+      yield* scripted.chatStream(options);
+    },
+  } satisfies AnyTextAdapter;
+  const visualTool = toolDefinition({
+    name: VISUAL_PREVIEW_TOOL_NAME,
+    description: "Return the visual preview fixture",
+    inputSchema: toTanStackToolSchema(v.strictObject({})),
+    outputSchema: toTanStackToolSchema(visualPreviewToolOutputSchema),
+  }).server(() => {
+    observed.calls += 1;
+    return output;
+  });
+  const finishTool = toolDefinition({
+    name: "finish_preview",
+    description: "Pause after checking the visual",
+    inputSchema: toTanStackToolSchema(v.strictObject({})),
+  }).client();
+  const { emitted, finish, source } = await persistNativeInterruptTurn(
+    projectVisualPreviewStream(
+      chat({
+        adapter,
+        tools: [visualTool, finishTool],
+        messages: [{ role: "user", content: "Show the example" }],
+        agentLoopStrategy: maxIterations(3),
+        threadId: "preview-thread",
+      }),
+    ),
+  );
+  expect(observed.calls).toBe(1);
+  expect(
+    observed.modelMessages?.find((message) => message.role === "tool")?.content,
+  ).toEqual(output);
+  expect(
+    source.some((chunk) => chunk.type === EventType.MESSAGES_SNAPSHOT),
+  ).toBe(true);
+  expect(JSON.stringify(emitted)).not.toContain(preview.png);
+  expect(JSON.stringify(emitted)).not.toContain('"type":"image"');
+  expect(JSON.stringify(emitted)).toContain("screenshot omitted from history");
+  if (finish === null) {
+    throw new Error("Expected preview turn persistence");
+  }
+  const persisted = toPersistedChatMessageContentV3({
+    data: finish.responseMessage.parts,
+  });
+  const reloaded = normalizePersistedChatMessageContent(persisted);
+  expect(JSON.stringify(persisted)).not.toContain(preview.png);
+  expect(JSON.stringify(persisted)).not.toContain('"type":"image"');
+  expect(JSON.stringify(reloaded)).not.toContain(preview.png);
+  expect(JSON.stringify(reloaded)).not.toContain('"type":"image"');
+  expect(JSON.stringify(reloaded)).toContain("screenshot omitted from history");
+  expect(JSON.stringify(reloaded)).toContain("Example diagnostic");
+  const settled = settleHistoryForRun({
+    messages: [
+      {
+        ...finish.responseMessage,
+        parts: reloaded.parts.filter(
+          (part) =>
+            (part.type === "tool-call" &&
+              part.name === VISUAL_PREVIEW_TOOL_NAME) ||
+            (part.type === "tool-result" && part.toolCallId === "call-1"),
+        ),
+      },
+    ],
+    resumedMessageId: undefined,
+  });
+  const settledMessage = settled.at(0);
+  if (settledMessage === undefined) {
+    throw new Error("Expected settled preview message");
+  }
+  const previewCall = settledMessage.parts.find(
+    (part) =>
+      part.type === "tool-call" && part.name === VISUAL_PREVIEW_TOOL_NAME,
+  );
+  if (previewCall?.type !== "tool-call") {
+    throw new Error("Expected settled preview output");
+  }
+  expect(
+    v.safeParse(visualPreviewToolOutputSchema, previewCall.output).success,
+  ).toBe(true);
+  validateToolCallParts({
+    message: settledMessage,
+    tools: { [VISUAL_PREVIEW_TOOL_NAME]: visualTool },
+  }).unwrap();
+  expect(JSON.stringify(settledMessage)).not.toContain(preview.png);
+  expect(output).toHaveLength(2);
+});
+
+describe("transient visual preview fault persistence", () => {
+  for (const fault of ["error-event", "source-error", "abort"] as const) {
+    for (const cut of ["before-result", "partial-result"] as const) {
+      test(`${fault} at ${cut} persists no screenshot and settles the turn`, async () => {
+        const abort = new AbortController();
+        const deadline = new AbortController();
+        const terminalError = {
+          type: EventType.RUN_ERROR,
+          message: "provider_unavailable",
+          code: "provider_unavailable",
+        } as const;
+        const partial = { png: "iVBORw0KGgo=", readyFired: true };
+        const lifecycle = { closed: false };
+        const source = async function* (): AsyncIterable<PublicStreamChunk> {
+          try {
+            yield {
+              type: EventType.RUN_STARTED,
+              runId: "preview-run",
+              threadId: "preview-thread",
+            };
+            yield {
+              type: EventType.TEXT_MESSAGE_START,
+              messageId: "preview-message",
+              role: "assistant",
+            };
+            yield {
+              type: EventType.TOOL_CALL_START,
+              toolCallId: "preview-call",
+              toolCallName: VISUAL_PREVIEW_TOOL_NAME,
+            };
+            yield {
+              type: EventType.TOOL_CALL_ARGS,
+              toolCallId: "preview-call",
+              delta: "{}",
+            };
+            yield* normalizeStreamChunk({
+              type: EventType.TOOL_CALL_END,
+              toolCallId: "preview-call",
+              toolName: VISUAL_PREVIEW_TOOL_NAME,
+              output: partial,
+              input: {},
+            });
+            if (cut === "partial-result") {
+              yield {
+                type: EventType.TOOL_CALL_RESULT,
+                toolCallId: "preview-call",
+                messageId: "preview-message",
+                content: `[{"type":"image","source":{"type":"data","value":"${partial.png}"`,
+              };
+            }
+            if (fault === "error-event") {
+              yield terminalError;
+              return;
+            }
+            if (fault === "abort") {
+              abort.abort("Preview source aborted");
+              throw new DOMException("Preview source aborted", "AbortError");
+            }
+            throw new Error("Preview source failed");
+          } finally {
+            lifecycle.closed = true;
+          }
+        };
+        const {
+          emitted,
+          finish,
+          source: projected,
+        } = await persistNativeInterruptTurn(
+          projectVisualPreviewStream(source()),
+          { abortSignal: abort.signal, deadlineSignal: deadline.signal },
+        );
+        expect(lifecycle.closed).toBe(true);
+        expect(JSON.stringify(emitted)).not.toContain(partial.png);
+        if (fault === "error-event") {
+          expect(
+            projected.find((chunk) => chunk.type === EventType.RUN_ERROR),
+          ).toBe(terminalError);
+        }
+        if (finish === null) {
+          throw new Error("Expected interrupted preview persistence");
+        }
+        expect(finish.outcome.type).toBe(
+          fault === "abort" ? "interrupted" : "failed",
+        );
+        const storedMessage =
+          finish.outcome.type === "interrupted"
+            ? cutShortAssistantMessage({
+                message: toPersistableChatMessage(finish.responseMessage),
+                outcome: finish.outcome,
+              })
+            : toPersistableChatMessage(finish.responseMessage);
+        const persisted = toPersistedChatMessageContentV3({
+          data: storedMessage.parts,
+        });
+        const reloaded = normalizePersistedChatMessageContent(persisted);
+        expect(JSON.stringify(persisted)).not.toContain(partial.png);
+        expect(JSON.stringify(reloaded)).not.toContain(partial.png);
+        expect(JSON.stringify(persisted)).not.toContain('"type":"image"');
+        if (cut === "partial-result") {
+          expect(JSON.stringify(reloaded)).toContain(
+            "screenshot omitted from history",
+          );
+        }
+        expect(
+          findUnsettledStoredToolCalls({
+            outcome: finish.outcome.type,
+            parts: reloaded.parts,
+          }),
+        ).toEqual([]);
+        const next = await persistNativeInterruptTurn(
+          projectVisualPreviewStream(
+            chat({
+              adapter: createTextReplyAdapter("The next turn is clean."),
+              messages: [{ role: "user", content: "Continue" }],
+              threadId: "preview-thread",
+            }),
+          ),
+        );
+        expect(next.finish?.outcome.type).toBe("completed");
+        expect(
+          next.finish?.responseMessage.parts.some(
+            (part) => part.type === "tool-call",
+          ),
+        ).toBe(false);
+      });
+    }
+  }
+});
 
 test("whitespace rejected as an empty completion remains in the raw live processor", async () => {
   const whitespace = " \n\t\u00a0";
