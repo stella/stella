@@ -15,6 +15,14 @@ export const CI_GENERATED_OUTPUTS = {
 } as const;
 export const CI_GENERATED_FILES = Object.values(CI_GENERATED_OUTPUTS).flat();
 
+export const CI_GENERATION_COMMANDS = [
+  ["bun", "apps/api/scripts/generate-capability-runtime.ts"],
+  ["bun", "--cwd=packages/cli", "run", "codegen:runtime"],
+  ["bun", "--cwd=apps/web", "run", "typegen"],
+  ["bun", "--cwd=apps/web", "run", "generate:route-tree"],
+  ["bun", "--cwd=apps/web", "run", "generate:api-types"],
+] as const;
+
 type GeneratorCheck =
   | { check: readonly string[]; checkedBy?: never; unchecked?: never }
   | { check: null; checkedBy: string; unchecked?: never }

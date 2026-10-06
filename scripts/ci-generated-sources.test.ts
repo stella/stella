@@ -1,7 +1,9 @@
 import { panic } from "better-result";
 import { expect, test } from "bun:test";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import * as v from "valibot";
+
+import { CI_GENERATION_COMMANDS } from "./generated-files";
 
 const stepSchema = v.looseObject({
   name: v.string(),
@@ -286,4 +288,63 @@ test("CLI runtime determinism remains a fresh generation proof", () => {
   );
   expect(source).toContain('["packages/cli/src/codegen.ts", "--runtime-only"]');
   expect(source).not.toContain('"codegen:runtime"');
+});
+
+const generationCommandViolations = (command: readonly string[]) => {
+  const [binary, target, action, script, ...extra] = command;
+  if (binary !== "bun" || target === undefined) {
+    return ["Expected Bun generator command"];
+  }
+  if (!target.startsWith("--cwd=")) {
+    return command.length === 2 &&
+      existsSync(new URL(`../${target}`, import.meta.url))
+      ? []
+      : ["Expected a direct generator file or explicit package script"];
+  }
+  if (action !== "run" || script === undefined || extra.length !== 0) {
+    return ["Expected explicit package script invocation"];
+  }
+  const packageManifest = v.parse(
+    v.object({ scripts: v.record(v.string(), v.string()) }),
+    JSON.parse(
+      readFileSync(
+        new URL(
+          `../${target.slice("--cwd=".length)}/package.json`,
+          import.meta.url,
+        ),
+        "utf-8",
+      ),
+    ),
+  );
+  return Object.hasOwn(packageManifest.scripts, script)
+    ? []
+    : ["Package script does not exist"];
+};
+
+test("every preparation command resolves a real generator file or package script", () => {
+  for (const command of CI_GENERATION_COMMANDS) {
+    expect(generationCommandViolations(command), command.join(" ")).toEqual([]);
+  }
+  const producer = readFileSync(
+    new URL("ci-generated-sources.ts", import.meta.url),
+    "utf-8",
+  );
+  expect(producer).toContain("for (const command of CI_GENERATION_COMMANDS)");
+  expect(
+    generationCommandViolations([
+      "bun",
+      "--filter",
+      "@stll/web",
+      "run",
+      "typegen",
+    ]).length,
+  ).toBeGreaterThan(0);
+  expect(
+    generationCommandViolations([
+      "bun",
+      "--cwd=apps/web",
+      "run",
+      "missing-fixture-script",
+    ]).length,
+  ).toBeGreaterThan(0);
 });

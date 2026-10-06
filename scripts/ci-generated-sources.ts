@@ -9,19 +9,12 @@ import {
   restorePreparedGeneratedSources,
   hasPreparedGeneratedSources,
 } from "../packages/scripts/src/prepared-generated-sources";
-import { CI_GENERATED_FILES } from "./generated-files";
+import { CI_GENERATED_FILES, CI_GENERATION_COMMANDS } from "./generated-files";
 
 const root = new URL("../", import.meta.url).pathname;
-const commands = [
-  ["bun", "apps/api/scripts/generate-capability-runtime.ts"],
-  ["bun", "--cwd=packages/cli", "run", "codegen:runtime"],
-  ["bun", "--filter", "@stll/web", "run", "typegen"],
-  ["bun", "--filter", "@stll/web", "generate:route-tree"],
-  ["bun", "--filter", "@stll/web", "generate:api-types"],
-];
 
 const generate = () => {
-  for (const command of commands) {
+  for (const command of CI_GENERATION_COMMANDS) {
     const result = Bun.spawnSync(command, {
       cwd: root,
       stdout: "inherit",
