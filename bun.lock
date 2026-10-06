@@ -186,7 +186,6 @@
         "pdfjs-dist": "^6.3.289",
         "postcss": "catalog:",
         "tailwindcss": "catalog:",
-        "typescript": "catalog:",
       },
     },
     "apps/collab": {
