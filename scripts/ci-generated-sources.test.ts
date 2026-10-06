@@ -164,6 +164,123 @@ const assertHandoff = (source: Workflow) => {
   }
 };
 
+const assertRegenerationBoundary = (source: Workflow) => {
+  const job = source.jobs["ci-checks-generated"];
+  if (!job) {
+    panic("Missing regeneration guard leg");
+  }
+  const restored = job.steps.findIndex(
+    ({ name }) => name === "Restore generated sources",
+  );
+  const firstCheck = job.steps.findIndex(
+    ({ run }, index) => index > restored && /\bbun\s/u.test(run ?? ""),
+  );
+  const first = job.steps.at(firstCheck);
+  expect(first?.name, "verify before regeneration").toBe(
+    "CLI sharded registry and derived runtime guard",
+  );
+  const run = first?.run ?? "";
+  const verification = "bun scripts/ci-generated-sources.ts prepare";
+  const detach = "unset CI_GENERATED_SOURCES_MANIFEST";
+  const laterSteps = `echo 'CI_GENERATED_SOURCES_MANIFEST=' >> "$GITHUB_ENV"`;
+  const regeneration = "(cd packages/cli && bun run codegen)";
+  expect(run, "verify before regeneration").toStartWith(
+    `set -euo pipefail\n${verification}\n`,
+  );
+  expect(run.indexOf(detach), "detach current guard").toBeGreaterThan(
+    run.indexOf(verification),
+  );
+  expect(run.indexOf(laterSteps), "detach subsequent guards").toBeGreaterThan(
+    run.indexOf(detach),
+  );
+  expect(
+    run.indexOf(regeneration),
+    "verify before regeneration",
+  ).toBeGreaterThan(run.indexOf(laterSteps));
+  for (const step of job.steps.slice(firstCheck + 1)) {
+    expect(
+      step.env?.["CI_GENERATED_SOURCES_MANIFEST"],
+      `no reattached manifest: ${step.name}`,
+    ).toBeUndefined();
+  }
+  for (const id of consumerIds(source).filter(
+    (consumerId) => consumerId !== "ci-checks-generated",
+  )) {
+    for (const step of source.jobs[id]?.steps ?? []) {
+      expect(step.run ?? "", `strict consumer: ${id}`).not.toContain(detach);
+      expect(step.run ?? "", `strict consumer: ${id}`).not.toContain(
+        laterSteps,
+      );
+    }
+  }
+};
+
+test("regeneration validates its artifact before clearing both current and subsequent guard reuse", () => {
+  assertRegenerationBoundary(workflow);
+});
+
+test("missing or late verification and retained manifest reuse break the regeneration boundary", () => {
+  for (const mutation of [
+    "remove verification",
+    "late verification",
+    "current manifest",
+    "subsequent manifest",
+    "early check",
+    "reattach",
+  ] as const) {
+    const mutated = structuredClone(workflow);
+    const job = mutated.jobs["ci-checks-generated"];
+    const first = job?.steps.find(
+      ({ name }) => name === "CLI sharded registry and derived runtime guard",
+    );
+    if (!job || !first?.run) {
+      panic("Missing regeneration mutation fixture");
+    }
+    const verification = "bun scripts/ci-generated-sources.ts prepare\n";
+    switch (mutation) {
+      case "remove verification":
+        first.run = first.run.replace(verification, "");
+        break;
+      case "late verification":
+        first.run = `${first.run.replace(verification, "")}${verification}`;
+        break;
+      case "current manifest":
+        first.run = first.run.replace(
+          "unset CI_GENERATED_SOURCES_MANIFEST\n",
+          "",
+        );
+        break;
+      case "subsequent manifest":
+        first.run = first.run.replace(
+          `echo 'CI_GENERATED_SOURCES_MANIFEST=' >> "$GITHUB_ENV"\n`,
+          "",
+        );
+        break;
+      case "early check": {
+        const restoreIndex = job.steps.findIndex(
+          ({ name }) => name === "Restore generated sources",
+        );
+        job.steps.splice(restoreIndex + 1, 0, {
+          name: "New generator",
+          run: "bun run build:mcp-apps",
+        });
+        break;
+      }
+      case "reattach":
+        job.steps.push({
+          name: "New guard",
+          run: "bun check",
+          env: { CI_GENERATED_SOURCES_MANIFEST: manifest },
+        });
+        break;
+    }
+    expect(job).not.toEqual(workflow.jobs["ci-checks-generated"]);
+    expect(() => assertRegenerationBoundary(mutated), mutation).toThrow(
+      /verify before regeneration|detach current guard|detach subsequent guards|no reattached manifest/u,
+    );
+  }
+});
+
 test("every generated-source consumer restores the same-run artifact before checks", () => {
   expect(consumerIds(workflow).length).toBeGreaterThan(0);
   assertHandoff(workflow);
