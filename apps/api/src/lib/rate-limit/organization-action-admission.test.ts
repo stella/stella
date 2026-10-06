@@ -766,7 +766,9 @@ describe("the free floor's service budget", () => {
       redis.commands
         .filter((args) => args.at(1) === "3")
         .map((args) => args.at(11)),
-    ).toEqual(Array.from({ length: FREE_ACTIONS + 1 }, () => String(FREE_ACTIONS)));
+    ).toEqual(
+      Array.from({ length: FREE_ACTIONS + 1 }, () => String(FREE_ACTIONS)),
+    );
   });
 
   test("managed services stay counted on the organization's own key", async () => {
