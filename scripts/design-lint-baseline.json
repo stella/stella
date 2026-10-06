@@ -9,7 +9,7 @@
     "apps/web/src/components/ai-suggestions/review-position-row.tsx": 12,
     "apps/web/src/components/app-sidebar.tsx": 40,
     "apps/web/src/components/auth/otp-panel.tsx": 9,
-    "apps/web/src/components/auth/sign-in-panel.tsx": 7,
+    "apps/web/src/components/auth/sign-in-panel.tsx": 4,
     "apps/web/src/components/auth/two-factor-panel.tsx": 6,
     "apps/web/src/components/bilingual-review-rows.tsx": 1,
     "apps/web/src/components/billing/duration-input.tsx": 2,
