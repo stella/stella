@@ -2410,7 +2410,9 @@ test("direct web compiler checks materialize ignored API contracts before checki
           expect(
             beforeCheck,
             `${workflowName}/${job} generates before direct compiler checks`,
-          ).toContain("bun run generate");
+          ).toMatch(
+            /bun run generate|bun scripts\/ci-generated-sources\.ts restore/u,
+          );
           if (commands.includes("--measure")) {
             expect(
               commands.slice(0, consumer.index),
@@ -2456,7 +2458,9 @@ test("direct web compiler package scripts generate before inspecting types", () 
       expect(
         command.slice(0, consumer.index),
         `${manifest} ${name} materializes the API contract`,
-      ).toMatch(/bun run(?: --cwd \.\.\/\.\.)? generate/u);
+      ).toMatch(
+        /bun run(?: --cwd \.\.\/\.\.)? generate|bun scripts\/ci-generated-sources\.ts prepare/u,
+      );
       if (command.includes("$TURBO_HASH")) {
         const task = `${manifest === "../package.json" ? "//" : owner}#${name}`;
         expect(
