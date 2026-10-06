@@ -46,6 +46,8 @@ export const readVerificationBudget = async ({
     await tx
       .select({
         active: legalListVerificationBudgets.activeRuns,
+        activeLimit: legalListVerificationBudgets.activeLimit,
+        dailyLimit: legalListVerificationBudgets.dailyLimit,
         starts: sql<number>`CASE WHEN ${legalListVerificationBudgets.startsDay} = stella_list_verification_day(clock_timestamp())
       THEN ${legalListVerificationBudgets.startsToday} ELSE 0 END`,
       })
@@ -102,7 +104,15 @@ export const checkVerificationDispatchBudget = async ({
   caps = getVerificationRunCaps(),
 }: CheckVerificationDispatchBudgetArgs) => {
   const budget = await readVerificationBudget({ tx, organizationId });
-  return decideVerificationBudget({ ...budget, caps, phase: "dispatch" });
+  return decideVerificationBudget({
+    active: budget.active,
+    starts: budget.starts,
+    caps: {
+      active: Math.min(caps.active, budget.activeLimit),
+      startsPerDay: Math.min(caps.startsPerDay, budget.dailyLimit),
+    },
+    phase: "dispatch",
+  });
 };
 
 export const verificationCapErrorFromDatabase = (cause: unknown) => {

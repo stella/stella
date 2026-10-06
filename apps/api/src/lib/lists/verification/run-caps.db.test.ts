@@ -382,6 +382,42 @@ describe.skipIf(!enabled)(
         }
       }));
 
+    test("dispatch honors persisted admission limits when current configuration is higher", async () =>
+      await withFixture(async (fixture) => {
+        const caps = { active: 2, startsPerDay: 20 };
+        const first = fixture.run();
+        expect(Result.isOk(await fixture.start(first, caps))).toBe(true);
+        expect(Result.isOk(await fixture.start(fixture.run(), caps))).toBe(
+          true,
+        );
+        for (const { limits, reason } of [
+          { limits: { activeLimit: 1, dailyLimit: 20 }, reason: "active" },
+          { limits: { activeLimit: 2, dailyLimit: 1 }, reason: "daily" },
+        ]) {
+          await fixture.db
+            .update(legalListVerificationBudgets)
+            .set(limits)
+            .where(
+              eq(
+                legalListVerificationBudgets.organizationId,
+                fixture.organizationId,
+              ),
+            );
+          const refused = await fixture.scoped(first)(
+            async (tx) =>
+              await checkVerificationDispatchBudget({
+                tx,
+                organizationId: fixture.organizationId,
+                caps,
+              }),
+          );
+          expect(Result.isError(refused)).toBe(true);
+          if (Result.isError(refused)) {
+            expect(refused.error).toMatchObject({ reason });
+          }
+        }
+      }));
+
     test("daily rollover preserves active slots and workers reject lowered budgets", async () =>
       await withFixture(async (fixture) => {
         const first = fixture.run();
