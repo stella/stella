@@ -54,6 +54,17 @@
       "polish": "Vylepšiť znenie"
     }
   },
+  "aiColumns": {
+    "countSummary": "{columns} stĺpcov × {rows} riadkov = {answers, plural, one {# odpoveď} few {# odpovede} many {# odpovede} other {# odpovedí}}. Odpovede čerpajú rozpočet.",
+    "refusedBudget": "Nespustené: rozpočet na odpovede nie je k dispozícii",
+    "rerunAllPage": "Spustiť všetko znova (táto stránka)",
+    "rerunColumnPage": "Spustiť stĺpec znova (táto stránka)",
+    "runColumnPage": "Spustiť stĺpec (táto stránka)",
+    "runPageRows": "Spustiť pre {count, plural, one {# riadok na tejto stránke} few {# riadky na tejto stránke} many {# riadka na tejto stránke} other {# riadkov na tejto stránke}}",
+    "runRemainingPage": "Spustiť zostávajúce (táto stránka)",
+    "runSelectedRows": "Spustiť pre {count, plural, one {# vybraný riadok} few {# vybrané riadky} many {# vybraného riadka} other {# vybraných riadkov}}",
+    "selectedRun": "Spustiť AI stĺpce pre {count, plural, one {# riadok} few {# riadky} many {# riadka} other {# riadkov}}"
+  },
   "appearance": {
     "calendar": "Kalendár",
     "calendarGregorian": "Gregoriánsky",
@@ -841,6 +852,7 @@
       "subsection": "ods. {value}"
     },
     "reader": {
+      "expandProvisions": "Rozbaliť ustanovenia",
       "headMatter": "Úvodná časť",
       "sourceAttribution": "Zdroj údajov je voľne dostupný na <link>{source}</link>."
     },
@@ -2310,6 +2322,8 @@
       "encryptedContent": "Obsah šifrovaného dokumentu nie je možné extrahovať. Odstráňte zo súboru heslo a skúste to znova.",
       "filePropertyTypeImmutable": "Typ súborovej vlastnosti nie je možné zmeniť. Ponechajte existujúci typ; pre iné hodnoty vytvorte vlastnú vlastnosť.",
       "forbidden": "Na túto akciu nemáte oprávnenie.",
+      "hostedCheckoutOpen": "Pre túto organizáciu je už otvorená objednávka. Dokončite ju alebo začnite novú, keď vyprší.",
+      "hostedSubscriptionLive": "Táto organizácia už má predplatné. Zmeňte ho v časti Spravovať hostované využitie.",
       "internalServerError": "Niečo sa pokazilo. Skúste to prosím znova.",
       "legalSourceEntityLimitReached": "Tento spis dosiahol limit položiek, preto dokument nebolo možné vytvoriť.",
       "legalSourceFilePropertyMissing": "V tomto spise chýba vlastnosť súboru, preto dokument nebolo možné vytvoriť.",
@@ -4637,6 +4651,7 @@
     "compareVersionMissing": "Verzia na porovnanie v histórii tohto predpisu nie je.",
     "compareWholeAct": "Porovnať celý predpis",
     "compareWithVersion": "Porovnať so znením {version}",
+    "currentWording": "Aktuálne znenie",
     "description": "Verejná databáza konsolidovaných právnych predpisov, indexovateľných podľa predpisu a jeho znenia.",
     "diffInserted": "Vložené:",
     "diffRemoved": "Vypustené:",
@@ -4686,7 +4701,9 @@
       "unknown": "Stav nejasný"
     },
     "title": "Právne predpisy",
-    "validity": "Platné od {from} do {to}"
+    "validity": "Platné od {from} do {to}",
+    "wordingValidFrom": "Znenie účinné od {date}",
+    "wordingVersionUnknown": "Dátum verzie znenia nie je k dispozícii"
   },
   "styleSets": {
     "create": "Vytvoriť",
@@ -5455,8 +5472,7 @@
         "signCurrent": "Podpísať v stella desktop",
         "signNone": "Stiahnite si stella desktop a podpíšte toto PDF",
         "signOutdated": "Aktualizujte stella desktop a podpisujte",
-        "signReason": "Podpis používa certifikát vo vašom počítači, preto prebieha v stella desktop.",
-        "signShort": "Podpísať"
+        "signReason": "Podpis používa certifikát vo vašom počítači, preto prebieha v stella desktop."
       },
       "downloadAs": "Stiahnuť ako…",
       "downloadAsZip": "Stiahnuť .zip súbor",
@@ -5998,7 +6014,6 @@
       "previewUnsupported": "Náhľad nie je pre tento typ dokumentu podporovaný.",
       "readingFrom": "AI číta z",
       "referencesItself": "Vlastnosť odkazuje sama na seba cez iné vlastnosti",
-      "rerunColumn": "Spustiť stĺpec znovu",
       "resultType": "Typ výsledku",
       "returnsLabel": "Formát",
       "scopeFile": "Aktuálny súbor",

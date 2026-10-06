@@ -38,6 +38,8 @@ export const SOLO_TEST_PATHS: ReadonlySet<string> = new Set([
   // Fault injection advances the clock across session cooldowns retained by
   // publisher gate singletons; those clocks must not escape into other suites.
   "src/handlers/case-law/ingestion/adapters/source-availability.test.ts",
+  // Owns the CIMD transport module and the AS JWKS fetch for the whole process.
+  "src/lib/oauth-cimd-private-key-jwt.db.test.ts",
 ]);
 
 /**

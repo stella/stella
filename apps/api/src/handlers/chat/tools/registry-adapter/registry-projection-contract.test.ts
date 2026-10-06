@@ -44,6 +44,7 @@ import type { SearchResult } from "@/api/lib/search/types";
 import type { DescribeTemplateResult } from "@/api/lib/templates/template-fill-service";
 import type { McpRequestContext } from "@/api/mcp/context";
 import type { READ_CONTACT_COLUMNS } from "@/api/mcp/read-contact-columns";
+import { CASE_LAW_COVERAGE_FIXTURE } from "@/api/tests/helpers/case-law-coverage-fixture";
 import { installRecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
 import type { RecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
@@ -71,9 +72,11 @@ import { READ_TOOL_REF_FIELD_MAP } from "./ref-field-map";
  * 1. The corpus is keyed by `ProjectableReadToolName` via `satisfies`, so a
  *    read tool marked `chatProjectable: true` without a fixture here fails
  *    typecheck (plus a runtime both-ways check for `bun test` alone).
- * 2. Every call must produce a payload free of undeclared UUIDs — this is
- *    `runRegistryReadTool`'s own fail-closed backstop; the corpus asserts it
- *    returns ok instead of the anonymization failure.
+ * 2. Every call must produce a payload free of undeclared UUIDs and
+ *    undeclared fields. At runtime the projection degrades instead of
+ *    failing (drops the offending leaf, strips the undeclared key) and
+ *    reports a defect; the corpus asserts it returns ok with NO defect
+ *    reported, so a fixture that only projects degraded still fails here.
  * 3. Anti-vacuity: per tool, the union of the calls' `expectRefPaths` must
  *    equal the map's declared `outputRefs` paths, and each such path must
  *    resolve to at least one minted chat ref in the actual payload. A fixture
@@ -91,6 +94,7 @@ const describeStoredTemplateMock = mock();
 const searchProviderSearchMock = mock();
 const lookupDecisionsByIdentityMock = mock();
 const searchDecisionsHandlerMock = mock();
+const readCaseLawCoverageHandlerMock = mock();
 const readGatedDecisionWithDocumentMock = mock();
 const readGatedDecisionCitationsMock = mock();
 const withRedistributableSubjectMock = mock();
@@ -213,6 +217,7 @@ const buildContext = (tx: unknown): McpRequestContext => {
       getSearchReader: () => asTestRaw({ search: searchProviderSearchMock }),
       lookupDecisionsByIdentity: lookupDecisionsByIdentityMock,
       searchDecisionsHandler: searchDecisionsHandlerMock,
+      readCaseLawCoverageHandler: readCaseLawCoverageHandlerMock,
       readGatedDecisionWithDocument: readGatedDecisionWithDocumentMock,
       readGatedDecisionCitations: readGatedDecisionCitationsMock,
       searchLegislationHandler: searchLegislationHandlerMock,
@@ -1409,6 +1414,18 @@ const CONTRACT_CORPUS = {
       expectRefPaths: [],
     },
   ],
+  case_law_coverage: [
+    {
+      mode: "search",
+      buildArgs: () => ({}),
+      setup: () => {
+        readCaseLawCoverageHandlerMock.mockResolvedValue(
+          CASE_LAW_COVERAGE_FIXTURE,
+        );
+      },
+      expectRefPaths: [],
+    },
+  ],
   search_case_law: [
     {
       mode: "search",
@@ -1936,6 +1953,7 @@ const ALL_MOCKS = [
   searchProviderSearchMock,
   lookupDecisionsByIdentityMock,
   searchDecisionsHandlerMock,
+  readCaseLawCoverageHandlerMock,
   readGatedDecisionWithDocumentMock,
   readGatedDecisionCitationsMock,
   searchLegislationHandlerMock,
@@ -2078,9 +2096,16 @@ describe("registry projection contract", () => {
         }
 
         // A clean projection reports nothing: no refusal or defect hides
-        // behind a payload that merely looks well formed.
+        // behind a payload that merely looks well formed. This is the guard
+        // on the runtime degrade: a stripped undeclared field or a dropped
+        // unmappable id succeeds at runtime but reports a defect, which
+        // fails the corpus here (its `defect` and `paths` name the leak).
         expect(
-          recordedExceptions(),
+          recordedExceptions().map((event) => ({
+            class: event.properties["error.class"],
+            defect: event.properties["defect"],
+            paths: event.properties["paths"],
+          })),
           `${toolName} (${call.mode}): the call reported an exception`,
         ).toEqual([]);
       });
