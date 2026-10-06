@@ -43,9 +43,9 @@ jobs:
         uses: stella/.github/actions/setup-bun-cached@167fb396c6c0f4e07296ad2cd72e6ef15367c776
         with:
           bun-version-file: package.json
-      - name: Install renderer dependencies
+      - name: Install renderer and browser harness dependencies
         if: steps.scope.outputs.required == 'true'
-        run: bun install --frozen-lockfile --ignore-scripts --filter @stll/visual-preview
+        run: bun install --frozen-lockfile --ignore-scripts --filter @stll/visual-preview --filter @stll/web
       - name: Test renderer validation
         if: steps.scope.outputs.required == 'true'
         run: bun --filter @stll/visual-preview test
