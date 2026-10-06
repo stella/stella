@@ -1,0 +1,15 @@
+@import "tailwindcss" source(none);
+@import "@stll/ui/theme.css";
+@source "../case-law-results";
+@source "../../../../../../packages/ui/src";
+
+:root {
+  font-family: var(--font-sans);
+  font-size: 14px;
+  -webkit-font-smoothing: antialiased;
+}
+body {
+  margin: 0;
+  background: var(--color-background-primary, var(--background));
+  color: var(--color-text-primary, var(--foreground));
+}
