@@ -281,7 +281,10 @@ printf '%s %s\\n' "$*" "$(jq -c .)" >> "$STUB_CALLS_PATH"
   git("init", "-q", "-b", "main");
   baseSha = commit("base");
   mainSha = commit("tip");
-  git("update-ref", "refs/remotes/origin/main", mainSha);
+  const origin = path.join(workspace, "origin.git");
+  git("init", "--bare", "-q", "-b", "main", origin);
+  git("remote", "add", "origin", origin);
+  git("push", "-q", "origin", "main");
   git("checkout", "-q", "-b", "side", baseSha);
   sideSha = commit("side");
 
@@ -407,17 +410,21 @@ describe("staging deploy commit", () => {
     expect(resolve("")).toEqual({
       exitCode: 0,
       stderr: "",
-      stdout: `sha=${mainSha}\ntip=true\n`,
+      stdout: `sha=${mainSha}\ntip=true\nmain-sha=${mainSha}\n`,
     });
   });
 
-  test("deploys a pinned commit that main contains, after main moved on", () => {
+  test("deploys a pinned first-parent commit after main moved on", () => {
     expect(resolve(baseSha)).toEqual({
       exitCode: 0,
       stderr: "",
-      stdout: `sha=${baseSha}\ntip=false\n`,
+      stdout: `sha=${baseSha}\ntip=false\nmain-sha=${mainSha}\n`,
     });
-    expect(resolve(mainSha).stdout).toBe(`sha=${mainSha}\ntip=true\n`);
+    expect(resolve(mainSha)).toEqual({
+      exitCode: 0,
+      stderr: "",
+      stdout: `sha=${mainSha}\ntip=true\nmain-sha=${mainSha}\n`,
+    });
   });
 
   test("refuses a pinned commit that main does not contain", () => {
@@ -426,7 +433,9 @@ describe("staging deploy commit", () => {
     expect(result.exitCode).toBe(1);
     expect(result.stdout).toBe("");
     expect(result.stderr).toContain("STAGING_SHA_REFUSED");
-    expect(result.stderr).toContain(`${sideSha} is not an ancestor`);
+    expect(result.stderr).toBe(
+      `::error::STAGING_SHA_REFUSED: ${sideSha} is not on the first-parent history of origin/main (${mainSha})\n`,
+    );
   });
 
   test.each([
