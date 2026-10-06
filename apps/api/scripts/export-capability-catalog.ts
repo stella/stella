@@ -39,16 +39,17 @@ import { mkdtemp, rm } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 
+import { parseCapabilityCatalog } from "../../../packages/cli/src/capability-catalog-load";
+import { expandSchemaDefs } from "../../../packages/cli/src/expand-schema-defs";
+import { buildCliRouteTree } from "../../../packages/cli/src/generate-capability-tree";
+import type { RouteNode } from "../../../packages/cli/src/route-types";
 // Pure CLI generator modules (constants, classes, pure functions; no env, no
 // I/O at import time), imported relatively because `@stll/cli`'s exports map
 // only exposes its bin entry. The coverage doc computes each capability's REAL
 // generated command path through the same `buildCliRouteTree` codegen uses, so
 // collision fallbacks (curated command wins, capability relocates under
 // `stella capability <domain> <action>`) are never hand-replicated here.
-import { parseCapabilityCatalog } from "../../../packages/cli/src/capability-catalog-load";
-import { expandSchemaDefs } from "../../../packages/cli/src/expand-schema-defs";
-import { buildCliRouteTree } from "../../../packages/cli/src/generate-capability-tree";
-import type { RouteNode } from "../../../packages/cli/src/route-types";
+import { hasPreparedGeneratedSources } from "../../../packages/scripts/src/prepared-generated-sources";
 import type { CapabilityTransport } from "../src/lib/capability-transport";
 import {
   isTransportInvocable,
@@ -1774,6 +1775,11 @@ const computeCliCommandPaths = async (
 
 const main = async (): Promise<number> => {
   const checkMode = process.argv.includes("--check");
+  if (
+    !hasPreparedGeneratedSources(new URL("../../../", import.meta.url).pathname)
+  ) {
+    await generateCapabilityRuntime();
+  }
   const { entries, dispatchRecords, errors, internalWaiverCounts } =
     await buildCatalog();
 

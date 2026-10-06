@@ -13,7 +13,11 @@ import {
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import { ADAPTER_KEYS } from "@/api/lib/legal-search/ingestion-constants";
 import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
-import { asTestRaw, readTestJson } from "@/api/tests/helpers/test-tool-set";
+import {
+  asTestRaw,
+  readTestJson,
+  asFetchMock,
+} from "@/api/tests/helpers/test-tool-set";
 
 import type { FirstPageNumber } from "./pagination";
 import {
@@ -536,6 +540,34 @@ describe("a page the origin never answered does not move the cursor", () => {
     return cursor;
   };
 
+  test("a transport timeout exhausts retries and keeps the cursor", async () => {
+    const originalFetch = globalThis.fetch;
+    const requestedPages: string[] = [];
+    globalThis.fetch = asFetchMock(
+      async (input: Parameters<typeof globalThis.fetch>[0]) => {
+        const url = new URL(
+          input instanceof Request ? input.url : String(input),
+        );
+        requestedPages.push(url.searchParams.get("page") ?? "");
+        throw new DOMException("Request timed out", "TimeoutError");
+      },
+    );
+    restore = () => {
+      globalThis.fetch = originalFetch;
+    };
+    const fetchPage = createTestFetch({ firstPage: 0 });
+    const result = await fetchPage("offset:30", {});
+    expect(result.isErr()).toBe(true);
+    if (result.isErr()) {
+      expect(result.error.stopKind).toBe("source_unreachable");
+      expect(result.error.cursor).toBe("offset:30");
+    }
+    expect(requestedPages).toEqual(["10", "10", "10"]);
+    requestedPages.length = 0;
+    expect(await walk(fetchPage, "offset:30", 2)).toBe("offset:30");
+    expect(requestedPages).toEqual(["10", "10", "10", "10", "10", "10"]);
+  });
+
   test("a bad-gateway outage holds the cursor instead of consuming the collection", async () => {
     // The gateway got nothing from the origin, so this page's items are
     // unknown. Every page answers alike while it is down, so a skip that
@@ -557,8 +589,7 @@ describe("a page the origin never answered does not move the cursor", () => {
   /**
    * The origin answered, so the refusal is about this page and skipping it is
    * what keeps one page from stalling a source. A 504 is the publisher proxy's
-   * own read timeout, which the origin earns by being slow on this page — the
-   * same event `page_skipped_timeout` skips when our timeout fires first.
+   * own read timeout; a transport timeout has no response and holds the cursor.
    */
   test.each([500, 503, 504])(
     "a %i still skips its own page",

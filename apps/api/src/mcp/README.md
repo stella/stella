@@ -125,7 +125,7 @@ Only the outer MCP transport boundary serializes the finished result into a
 `CallToolResult`. Anonymize-before-window keeps entity names from splitting
 across a window edge and keeps placeholders stable across windows of one
 document. With no mode in scope, per-mode divergence inside a handler is
-structurally impossible. Tools with compound windowing (e.g.
+structurally impossible. Tools that page by number (e.g.
 `read_case_law_decision`) keep that logic tool-local and mode-agnostic.
 
 Most read tools use the generic `{ egress: "structured" }` plan: the handler

@@ -1,3 +1,4 @@
+// parser-output-unchanged: Read scope passes through the gate; successful decision text and parsing are unchanged.
 import { Result, TaggedError, panic } from "better-result";
 import * as cheerio from "cheerio";
 
@@ -2088,7 +2089,7 @@ const readNalusText = async (
   }: NalusRequestInit & { refusalScope: ReadRefusalScope },
 ): Promise<ReadOutcome<string>> => {
   const read = await readGatedResponseText({
-    request: async () => await nalusResponse(url, init),
+    request: async () => await nalusResponse(url, { ...init, refusalScope }),
     signal: init.signal,
     refusalScope,
   });

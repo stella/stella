@@ -444,7 +444,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
     "scope": "stella:read",
     "access": "read",
     "feature": "FEATURE_PUBLIC_LAW",
-    "description": "Read decisions by \`decision_ids[]\`, answered in input order. Batch ids share the text budget unless \`max_chars\` sizes each id’s window. Static details appear only on the cursor-less window. A single id also gets up to 100 outline headings or numbered paragraphs: pass an outline cursor with that id to jump there. \`include\` selects optional fields on any window; [] returns text and identity only. Text and unfinished citation lists are paged: pass nextCursor with that one id. Citation ids carry neither treatment nor surrounding text; for those call read_case_law_citations ({ decision_id: '<uuid>', direction: 'cited_by' }). Use \`url\` for the reader and \`source_url\` for the publisher.",
+    "description": "Read decisions by \`decision_ids[]\`, in input order. \`page\` N is the Nth window of \`max_chars\`; entries give page/pageCount. Pass a page's textVersion back as text_version; versionChanged flags a changed text. \`full: true\` (whole text, up to 200000 chars) for reasoning or citation work; pages for skimming. \`query\` returns matching paragraphs with neighbours. Page 1 adds details (\`url\` the reader, \`source_url\` the publisher), metadata, published textFields and a citation summary: citedBy count of citing references, polarity counts, top 5 citers, what it cites (decisionId where held). All citations: read_case_law_citations ({ decision_id: '<uuid>', direction: 'cited_by' }). One id gets an outline with pages; outline and query entries deep-link. \`include\` picks fields; [] returns text and identity only.",
     "annotations": {
       "title": "Read case-law decision",
       "destructiveHint": false,
@@ -473,17 +473,34 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
           "type": "integer",
           "minimum": 1,
           "maximum": 8000,
-          "description": "Text window size per decision, 1–8000 characters. In a batch each decision gets its own window of this size, trimmed evenly so the call returns at most 40000 characters; omitted, the batch shares 8000 characters. Use a JSON number; a value outside the range is clamped to it.",
+          "description": "Page size per decision, 1–8000 characters. In a batch each decision gets its own page of this size, trimmed evenly so the call returns at most 40000 characters; omitted, the batch shares 8000 characters. Use a JSON number; a value outside the range is clamped to it.",
           "x-stella-agent-input": {
             "kind": "number",
             "range": "clamp"
           }
         },
-        "cursor": {
+        "page": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Which page of the text to return, from 1 (the default): page N is the Nth window of the page size. Applies to every decision of a batch. Keep max_chars the same while paging. Use a JSON number; a value outside the range is clamped to it.",
+          "x-stella-agent-input": {
+            "kind": "number",
+            "range": "clamp"
+          }
+        },
+        "full": {
+          "type": "boolean",
+          "description": "true returns the whole text in one page, up to 200000 characters (shared evenly by a batch); a longer text continues on page 2. Takes no max_chars."
+        },
+        "text_version": {
           "type": "string",
-          "minLength": 1,
-          "maxLength": 512,
-          "description": "Opaque cursor from a previous call to read the next window of one decision's text and citations. Accepted only alongside a single decision id."
+          "maxLength": 24,
+          "description": "The textVersion a previous page returned. If the text has changed since, the answer is the requested page of the current text, marked versionChanged. Single decision id only."
+        },
+        "query": {
+          "type": "string",
+          "maxLength": 256,
+          "description": "Words to find: returns only the paragraphs containing all of them (any inflection), each with its neighbours, paragraph number and deep link, instead of a page. Takes no page or full."
         },
         "include": {
           "type": "array",
@@ -498,7 +515,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
             ],
             "type": "string"
           },
-          "description": "Optional fields to return: details (court, dates, identifiers and URLs), metadata, textFields (abstract, headnote, legalSentence, summary), source, citations (both directions), outline (single decision only). Omit for all on the cursor-less window and only unfinished citation pages on continuations. An empty list returns text and identity only. Pass selected fields again with a cursor to request them on that window. Use a JSON array of strings; a single string is read as a one-item list.",
+          "description": "Optional fields: details (court, date, ECLI, url, source_url), metadata (publisher fields not stated elsewhere), textFields (published abstract, headnote, legalSentence, summary), source (publisher name), citations (summary), outline (single decision only). Omit for all on page 1 and none on later pages or with query. [] returns text and identity only. Use a JSON array of strings; a single string is read as a one-item list.",
           "x-stella-agent-input": {
             "kind": "string-list"
           }
@@ -7172,7 +7189,7 @@ exports[`MCP registry quality (anonymized surface) tool surface snapshot (name, 
     "scope": "stella:read_anonymized",
     "access": "read",
     "feature": "FEATURE_PUBLIC_LAW",
-    "description": "Read decisions by \`decision_ids[]\`, answered in input order. Batch ids share the text budget unless \`max_chars\` sizes each id’s window. Static details appear only on the cursor-less window. A single id also gets up to 100 outline headings or numbered paragraphs: pass an outline cursor with that id to jump there. \`include\` selects optional fields on any window; [] returns text and identity only. Text and unfinished citation lists are paged: pass nextCursor with that one id. Citation ids carry neither treatment nor surrounding text; for those call read_case_law_citations ({ decision_id: '<uuid>', direction: 'cited_by' }). Use \`url\` for the reader and \`source_url\` for the publisher.",
+    "description": "Read decisions by \`decision_ids[]\`, in input order. \`page\` N is the Nth window of \`max_chars\`; entries give page/pageCount. Pass a page's textVersion back as text_version; versionChanged flags a changed text. \`full: true\` (whole text, up to 200000 chars) for reasoning or citation work; pages for skimming. \`query\` returns matching paragraphs with neighbours. Page 1 adds details (\`url\` the reader, \`source_url\` the publisher), metadata, published textFields and a citation summary: citedBy count of citing references, polarity counts, top 5 citers, what it cites (decisionId where held). All citations: read_case_law_citations ({ decision_id: '<uuid>', direction: 'cited_by' }). One id gets an outline with pages; outline and query entries deep-link. \`include\` picks fields; [] returns text and identity only.",
     "annotations": {
       "title": "Read case-law decision",
       "destructiveHint": false,
@@ -7201,17 +7218,34 @@ exports[`MCP registry quality (anonymized surface) tool surface snapshot (name, 
           "type": "integer",
           "minimum": 1,
           "maximum": 8000,
-          "description": "Text window size per decision, 1–8000 characters. In a batch each decision gets its own window of this size, trimmed evenly so the call returns at most 40000 characters; omitted, the batch shares 8000 characters. Use a JSON number; a value outside the range is clamped to it.",
+          "description": "Page size per decision, 1–8000 characters. In a batch each decision gets its own page of this size, trimmed evenly so the call returns at most 40000 characters; omitted, the batch shares 8000 characters. Use a JSON number; a value outside the range is clamped to it.",
           "x-stella-agent-input": {
             "kind": "number",
             "range": "clamp"
           }
         },
-        "cursor": {
+        "page": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Which page of the text to return, from 1 (the default): page N is the Nth window of the page size. Applies to every decision of a batch. Keep max_chars the same while paging. Use a JSON number; a value outside the range is clamped to it.",
+          "x-stella-agent-input": {
+            "kind": "number",
+            "range": "clamp"
+          }
+        },
+        "full": {
+          "type": "boolean",
+          "description": "true returns the whole text in one page, up to 200000 characters (shared evenly by a batch); a longer text continues on page 2. Takes no max_chars."
+        },
+        "text_version": {
           "type": "string",
-          "minLength": 1,
-          "maxLength": 512,
-          "description": "Opaque cursor from a previous call to read the next window of one decision's text and citations. Accepted only alongside a single decision id."
+          "maxLength": 24,
+          "description": "The textVersion a previous page returned. If the text has changed since, the answer is the requested page of the current text, marked versionChanged. Single decision id only."
+        },
+        "query": {
+          "type": "string",
+          "maxLength": 256,
+          "description": "Words to find: returns only the paragraphs containing all of them (any inflection), each with its neighbours, paragraph number and deep link, instead of a page. Takes no page or full."
         },
         "include": {
           "type": "array",
@@ -7226,7 +7260,7 @@ exports[`MCP registry quality (anonymized surface) tool surface snapshot (name, 
             ],
             "type": "string"
           },
-          "description": "Optional fields to return: details (court, dates, identifiers and URLs), metadata, textFields (abstract, headnote, legalSentence, summary), source, citations (both directions), outline (single decision only). Omit for all on the cursor-less window and only unfinished citation pages on continuations. An empty list returns text and identity only. Pass selected fields again with a cursor to request them on that window. Use a JSON array of strings; a single string is read as a one-item list.",
+          "description": "Optional fields: details (court, date, ECLI, url, source_url), metadata (publisher fields not stated elsewhere), textFields (published abstract, headnote, legalSentence, summary), source (publisher name), citations (summary), outline (single decision only). Omit for all on page 1 and none on later pages or with query. [] returns text and identity only. Use a JSON array of strings; a single string is read as a one-item list.",
           "x-stella-agent-input": {
             "kind": "string-list"
           }
@@ -8701,7 +8735,7 @@ exports[`MCP registry quality (law surface) tool surface snapshot (name, scope, 
     "scope": "stella:read",
     "access": "read",
     "feature": "FEATURE_PUBLIC_LAW",
-    "description": "Read decisions by \`decision_ids[]\`, answered in input order. Batch ids share the text budget unless \`max_chars\` sizes each id’s window. Static details appear only on the cursor-less window. A single id also gets up to 100 outline headings or numbered paragraphs: pass an outline cursor with that id to jump there. \`include\` selects optional fields on any window; [] returns text and identity only. Text and unfinished citation lists are paged: pass nextCursor with that one id. Citation ids carry neither treatment nor surrounding text; for those call read_case_law_citations ({ decision_id: '<uuid>', direction: 'cited_by' }). Use \`url\` for the reader and \`source_url\` for the publisher.",
+    "description": "Read decisions by \`decision_ids[]\`, in input order. \`page\` N is the Nth window of \`max_chars\`; entries give page/pageCount. Pass a page's textVersion back as text_version; versionChanged flags a changed text. \`full: true\` (whole text, up to 200000 chars) for reasoning or citation work; pages for skimming. \`query\` returns matching paragraphs with neighbours. Page 1 adds details (\`url\` the reader, \`source_url\` the publisher), metadata, published textFields and a citation summary: citedBy count of citing references, polarity counts, top 5 citers, what it cites (decisionId where held). All citations: read_case_law_citations ({ decision_id: '<uuid>', direction: 'cited_by' }). One id gets an outline with pages; outline and query entries deep-link. \`include\` picks fields; [] returns text and identity only.",
     "annotations": {
       "title": "Read case-law decision",
       "destructiveHint": false,
@@ -8730,17 +8764,34 @@ exports[`MCP registry quality (law surface) tool surface snapshot (name, scope, 
           "type": "integer",
           "minimum": 1,
           "maximum": 8000,
-          "description": "Text window size per decision, 1–8000 characters. In a batch each decision gets its own window of this size, trimmed evenly so the call returns at most 40000 characters; omitted, the batch shares 8000 characters. Use a JSON number; a value outside the range is clamped to it.",
+          "description": "Page size per decision, 1–8000 characters. In a batch each decision gets its own page of this size, trimmed evenly so the call returns at most 40000 characters; omitted, the batch shares 8000 characters. Use a JSON number; a value outside the range is clamped to it.",
           "x-stella-agent-input": {
             "kind": "number",
             "range": "clamp"
           }
         },
-        "cursor": {
+        "page": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Which page of the text to return, from 1 (the default): page N is the Nth window of the page size. Applies to every decision of a batch. Keep max_chars the same while paging. Use a JSON number; a value outside the range is clamped to it.",
+          "x-stella-agent-input": {
+            "kind": "number",
+            "range": "clamp"
+          }
+        },
+        "full": {
+          "type": "boolean",
+          "description": "true returns the whole text in one page, up to 200000 characters (shared evenly by a batch); a longer text continues on page 2. Takes no max_chars."
+        },
+        "text_version": {
           "type": "string",
-          "minLength": 1,
-          "maxLength": 512,
-          "description": "Opaque cursor from a previous call to read the next window of one decision's text and citations. Accepted only alongside a single decision id."
+          "maxLength": 24,
+          "description": "The textVersion a previous page returned. If the text has changed since, the answer is the requested page of the current text, marked versionChanged. Single decision id only."
+        },
+        "query": {
+          "type": "string",
+          "maxLength": 256,
+          "description": "Words to find: returns only the paragraphs containing all of them (any inflection), each with its neighbours, paragraph number and deep link, instead of a page. Takes no page or full."
         },
         "include": {
           "type": "array",
@@ -8755,7 +8806,7 @@ exports[`MCP registry quality (law surface) tool surface snapshot (name, scope, 
             ],
             "type": "string"
           },
-          "description": "Optional fields to return: details (court, dates, identifiers and URLs), metadata, textFields (abstract, headnote, legalSentence, summary), source, citations (both directions), outline (single decision only). Omit for all on the cursor-less window and only unfinished citation pages on continuations. An empty list returns text and identity only. Pass selected fields again with a cursor to request them on that window. Use a JSON array of strings; a single string is read as a one-item list.",
+          "description": "Optional fields: details (court, date, ECLI, url, source_url), metadata (publisher fields not stated elsewhere), textFields (published abstract, headnote, legalSentence, summary), source (publisher name), citations (summary), outline (single decision only). Omit for all on page 1 and none on later pages or with query. [] returns text and identity only. Use a JSON array of strings; a single string is read as a one-item list.",
           "x-stella-agent-input": {
             "kind": "string-list"
           }
