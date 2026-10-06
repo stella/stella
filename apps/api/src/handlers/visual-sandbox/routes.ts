@@ -36,6 +36,11 @@ export const handleVisualSandboxRequest = (
       [CACHE_CONTROL_HEADER]: PRIVATE_CACHE_CONTROL,
       "Content-Security-Policy": policy,
       "Content-Type": "text/html; charset=utf-8",
+      // The web app is cross-origin isolated (COEP credentialless), so a
+      // frame it embeds must opt into the same embedder policy and allow
+      // cross-origin embedding, or the browser refuses to render it.
+      "Cross-Origin-Embedder-Policy": "credentialless",
+      "Cross-Origin-Resource-Policy": "cross-origin",
       "Permissions-Policy": "camera=(), microphone=(), geolocation=()",
       "Referrer-Policy": "no-referrer",
       "X-Content-Type-Options": "nosniff",
