@@ -1,8 +1,6 @@
 import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
-import { eq, inArray } from "drizzle-orm";
 
-import { member, organization, user } from "@/api/db/auth-schema";
 import type { Transaction } from "@/api/db/root";
 import { createMembershipFence } from "@/api/lib/review-organization/reset";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
@@ -13,7 +11,8 @@ const databaseUrl = process.env["DATABASE_URL"];
 const enabled = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
 
 // Row locks need two real sessions; PGlite runs one connection, so this
-// suite needs a real server.
+// suite needs a real server. Rows are written by column so the suite runs on
+// the migrated schema and on a bare user/organization/member slice of it.
 if (!databaseUrl || !enabled) {
   describe.skip("review organization membership fence (postgres)", () => {
     test("requires STELLA_RUN_POSTGRES_TESTS=true and DATABASE_URL", () => {});
@@ -27,30 +26,18 @@ if (!databaseUrl || !enabled) {
         const reviewUserId = mintAuthProviderId<"user">();
         const otherUserId = mintAuthProviderId<"user">();
         const organizationId = mintAuthProviderId<"organization">();
-        const now = new Date();
-        await reset.db.insert(user).values(
-          [reviewUserId, otherUserId].map((id) => ({
-            id,
-            name: id,
-            email: `${id}@example.test`,
-            emailVerified: true,
-            createdAt: now,
-            updatedAt: now,
-          })),
-        );
-        await reset.db.insert(organization).values({
-          id: organizationId,
-          name: "Fence fixture",
-          slug: `fence-${organizationId}`,
-          createdAt: now,
-        });
-        await reset.db.insert(member).values({
-          id: Bun.randomUUIDv7(),
-          organizationId,
-          userId: reviewUserId,
-          role: "owner",
-          createdAt: now,
-        });
+        const joinedMemberId = Bun.randomUUIDv7();
+        await reset.sql`
+          INSERT INTO "user" (id, name, email, email_verified, created_at, updated_at)
+          VALUES
+            (${reviewUserId}, 'Review', ${`${reviewUserId}@example.test`}, true, now(), now()),
+            (${otherUserId}, 'Other', ${`${otherUserId}@example.test`}, true, now(), now())`;
+        await reset.sql`
+          INSERT INTO organization (id, name, slug, created_at)
+          VALUES (${organizationId}, 'Fence fixture', ${`fence-${organizationId}`}, now())`;
+        await reset.sql`
+          INSERT INTO member (id, organization_id, user_id, role, created_at)
+          VALUES (${Bun.randomUUIDv7()}, ${organizationId}, ${reviewUserId}, 'owner', now())`;
         const target = {
           organizationId,
           userId: reviewUserId,
@@ -69,32 +56,22 @@ if (!databaseUrl || !enabled) {
           });
           await held.promise;
 
-          let joined = false;
-          const join = joiner.db
-            .insert(member)
-            .values({
-              id: Bun.randomUUIDv7(),
-              organizationId,
-              userId: otherUserId,
-              role: "member",
-              createdAt: new Date(),
-            })
-            .then(() => {
-              joined = true;
-              return joined;
-            });
-          // The insert's foreign-key check waits on the locked organization.
+          // The insert's foreign-key check takes FOR KEY SHARE on the
+          // organization row the fenced transaction holds FOR UPDATE.
+          const join = joiner.sql`
+            INSERT INTO member (id, organization_id, user_id, role, created_at)
+            VALUES (${joinedMemberId}, ${organizationId}, ${otherUserId}, 'member', now())`.then(
+            () => "joined" as const,
+          );
           const waited = await Promise.race([
-            join.then(() => "joined" as const),
+            join,
             Bun.sleep(500).then(() => "waiting" as const),
           ]);
           expect(waited).toBe("waiting");
-          expect(joined).toBe(false);
 
           release.resolve(undefined);
           await fenced;
-          await join;
-          expect(joined).toBe(true);
+          expect(await join).toBe("joined");
           expect(fence.tripped).toBe(false);
 
           // The next fenced transaction sees the new member and refuses.
@@ -109,12 +86,8 @@ if (!databaseUrl || !enabled) {
           expect(Result.isError(refused)).toBe(true);
           expect(next.tripped).toBe(true);
         } finally {
-          await reset.db
-            .delete(organization)
-            .where(eq(organization.id, organizationId));
-          await reset.db
-            .delete(user)
-            .where(inArray(user.id, [reviewUserId, otherUserId]));
+          await reset.sql`DELETE FROM organization WHERE id = ${organizationId}`;
+          await reset.sql`DELETE FROM "user" WHERE id IN (${reviewUserId}, ${otherUserId})`;
         }
       });
     });

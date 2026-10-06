@@ -17,6 +17,12 @@ import type { SchedulerTaskContext } from "@/api/lib/scheduler/types";
 import type { SystemAuditCounts } from "@/api/lib/system-audit/actors";
 import { recordSystemAudit } from "@/api/lib/system-audit/record";
 
+// The seed writes time-billing data: rate tables and time entries.
+export const featureAccess = {
+  type: "required",
+  featureId: "time-billing",
+} as const;
+
 export const RESET_REVIEW_ORGANIZATION_TASK =
   "reviewOrganization.reset" as const;
 
