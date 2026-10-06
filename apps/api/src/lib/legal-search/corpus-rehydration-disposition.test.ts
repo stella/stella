@@ -84,8 +84,8 @@ test("canonical disposition accounting preserves eligible rows and counts unique
           "rows",
         ]);
         expect(output.rows).toEqual(expectedRows);
-        for (const [index, row] of output.rows.entries()) {
-          expect(row).toBe(expectedRows.at(index));
+        for (const [index, expectedRow] of expectedRows.entries()) {
+          expect(output.rows.at(index)).toBe(expectedRow);
         }
         expect(
           output.dispositions.toSorted((left, right) =>

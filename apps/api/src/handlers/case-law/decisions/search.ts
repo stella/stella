@@ -1197,6 +1197,75 @@ const extractCorpusSnippet = (
   return raw.replaceAll("<b>", "<mark>").replaceAll("</b>", "</mark>");
 };
 
+/**
+ * Reapply the request filters against the current rows: a stale corpus hit
+ * (metadata changed, async re-index/delete pending) must not satisfy filters
+ * it no longer matches. Both reads apply them, so the page read that actually
+ * emits publisher text re-proves the row is still servable rather than
+ * inheriting the candidate read's answer.
+ */
+type CaseLawSearchRowFilterBody = Pick<
+  SearchDecisionsBody,
+  | "country"
+  | "court"
+  | "courts"
+  | "category"
+  | "hasLegalSentence"
+  | "dateFrom"
+  | "dateTo"
+  | "decisionType"
+  | "sourceId"
+  | "language"
+>;
+
+export const caseLawSearchRowFilters = (
+  body: CaseLawSearchRowFilterBody,
+  generation: string,
+): SQL[] => {
+  const filters: SQL[] = [
+    redistributableCaseLawSource,
+    publishedCaseLawDecision,
+    // The generation's projection state rejects a scrubbed or pending row, so
+    // a stale physical copy cannot serve outdated or erased snippets.
+    currentCaseLawCorpusProjection(generation),
+  ];
+  if (body.court) {
+    filters.push(eq(caseLawDecisions.court, body.court));
+  }
+  if (body.courts !== undefined) {
+    filters.push(inArray(caseLawDecisions.court, body.courts));
+  }
+  if (body.category !== undefined) {
+    filters.push(
+      sql`${decisionSearchCategorySql(caseLawDecisions.metadata)} = ${body.category}`,
+    );
+  }
+  if (body.hasLegalSentence !== undefined) {
+    filters.push(
+      sql`${decisionHasLegalSentenceSql(caseLawDecisions.metadata)} = ${body.hasLegalSentence}`,
+    );
+  }
+  filters.push(eq(caseLawDecisions.country, body.country));
+  if (body.dateFrom) {
+    filters.push(sql`${caseLawDecisions.decisionDate} >= ${body.dateFrom}`);
+  }
+  if (body.dateTo) {
+    filters.push(sql`${caseLawDecisions.decisionDate} <= ${body.dateTo}`);
+  }
+  if (body.decisionType) {
+    filters.push(
+      decisionTypeFilterSql(caseLawDecisions.decisionType, body.decisionType),
+    );
+  }
+  if (body.sourceId) {
+    filters.push(eq(caseLawDecisions.sourceId, body.sourceId));
+  }
+  if (body.language) {
+    filters.push(eq(caseLawDecisions.language, body.language));
+  }
+  return filters;
+};
+
 type DecisionRowsQueryOptions = {
   body: CaseLawSearchRowFilterBody;
   generation: string;
@@ -1335,75 +1404,6 @@ type PageDecisionRow = Awaited<
  * database work grows with the square of the rounds.
  */
 type HydratedDecisionRows = Map<string, CandidateDecisionRow | null>;
-
-/**
- * Reapply the request filters against the current rows: a stale corpus hit
- * (metadata changed, async re-index/delete pending) must not satisfy filters
- * it no longer matches. Both reads apply them, so the page read that actually
- * emits publisher text re-proves the row is still servable rather than
- * inheriting the candidate read's answer.
- */
-type CaseLawSearchRowFilterBody = Pick<
-  SearchDecisionsBody,
-  | "country"
-  | "court"
-  | "courts"
-  | "category"
-  | "hasLegalSentence"
-  | "dateFrom"
-  | "dateTo"
-  | "decisionType"
-  | "sourceId"
-  | "language"
->;
-
-export const caseLawSearchRowFilters = (
-  body: CaseLawSearchRowFilterBody,
-  generation: string,
-): SQL[] => {
-  const filters: SQL[] = [
-    redistributableCaseLawSource,
-    publishedCaseLawDecision,
-    // The generation's projection state rejects a scrubbed or pending row, so
-    // a stale physical copy cannot serve outdated or erased snippets.
-    currentCaseLawCorpusProjection(generation),
-  ];
-  if (body.court) {
-    filters.push(eq(caseLawDecisions.court, body.court));
-  }
-  if (body.courts !== undefined) {
-    filters.push(inArray(caseLawDecisions.court, body.courts));
-  }
-  if (body.category !== undefined) {
-    filters.push(
-      sql`${decisionSearchCategorySql(caseLawDecisions.metadata)} = ${body.category}`,
-    );
-  }
-  if (body.hasLegalSentence !== undefined) {
-    filters.push(
-      sql`${decisionHasLegalSentenceSql(caseLawDecisions.metadata)} = ${body.hasLegalSentence}`,
-    );
-  }
-  filters.push(eq(caseLawDecisions.country, body.country));
-  if (body.dateFrom) {
-    filters.push(sql`${caseLawDecisions.decisionDate} >= ${body.dateFrom}`);
-  }
-  if (body.dateTo) {
-    filters.push(sql`${caseLawDecisions.decisionDate} <= ${body.dateTo}`);
-  }
-  if (body.decisionType) {
-    filters.push(
-      decisionTypeFilterSql(caseLawDecisions.decisionType, body.decisionType),
-    );
-  }
-  if (body.sourceId) {
-    filters.push(eq(caseLawDecisions.sourceId, body.sourceId));
-  }
-  if (body.language) {
-    filters.push(eq(caseLawDecisions.language, body.language));
-  }
-  return filters;
-};
 
 /**
  * Brackets the database call a read makes, so a caller measuring Postgres
