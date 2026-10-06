@@ -108,6 +108,11 @@ const provisionRow = {
   anchor: "par_2895",
   versionValidFrom: historical.versionValidFrom,
   versionBasis: { type: "inferred", kind: "decision_date" },
+  inferredVersionCandidate: {
+    type: "inferred",
+    kind: "decision_date",
+    versionValidFrom: historical.versionValidFrom,
+  },
   sentenceText: decisionSentence,
   spanStart: decisionSentence.indexOf("§"),
   spanEnd: decisionSentence.indexOf("§") + "§ 2895".length,
