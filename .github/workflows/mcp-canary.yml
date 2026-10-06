@@ -77,7 +77,7 @@ jobs:
         env:
           MCP_CANARY_ENVIRONMENT: production
           MCP_CANARY_BASE_URL: ${{ steps.target.outputs.base_url }}
-          MCP_CANARY_FRONTEND_URL: ${{ vars.MCP_CANARY_FRONTEND_URL || 'https://stll.app' }}
+          MCP_CANARY_FRONTEND_URL: ${{ vars.MCP_CANARY_FRONTEND_URL || 'https://my.stll.app' }}
           MCP_CANARY_MODE: ${{ github.event.schedule == '43 2 * * *' && 'full' || inputs.mode || 'frequent' }}
           MCP_CANARY_TOKEN: ${{ steps.target.outputs.authenticated == 'true' && secrets.MCP_CANARY_TOKEN || '' }}
         run: bun run canary:mcp
