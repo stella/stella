@@ -52,21 +52,43 @@ export const VISUAL_BLOCKED_GLOBALS = [
   "open",
 ] as const;
 
+type NativeMethod = (this: unknown, ...args: unknown[]) => unknown;
+
+const isNativeMethod = (value: unknown): value is NativeMethod =>
+  typeof value === "function";
+
 const createNativeCapture = (reject: () => never) => {
   const descriptorOf = Object.getOwnPropertyDescriptor;
-  return (target: object, name: string) => {
-    const native: unknown = descriptorOf(target, name)?.value;
-    if (typeof native !== "function") {
+  return (
+    target: object,
+    name: string,
+    kind: "value" | "get" | "set" = "value",
+  ) => {
+    const descriptor = descriptorOf(target, name);
+    const native: unknown = descriptor?.[kind];
+    if (!isNativeMethod(native)) {
       return reject();
     }
     return native;
   };
 };
 
+const createStringReader = (reject: () => never) => (value: unknown) => {
+  if (typeof value !== "string") {
+    return reject();
+  }
+  return value;
+};
+
 const createIsolationPrimitives = () => {
   // Keep native operations private before page scripts can replace globals,
   // prototype methods, or instance accessors used by these checks.
-  const apply = Reflect.apply;
+  const nativeApply = Reflect.apply;
+  const apply = (
+    method: NativeMethod,
+    receiver: unknown,
+    args: unknown[],
+  ): unknown => nativeApply(method, receiver, args);
   const defineProperty = Object.defineProperty;
   const descriptorOf = Object.getOwnPropertyDescriptor;
   const prototypeOf = Object.getPrototypeOf;
@@ -85,11 +107,16 @@ const createIsolationPrimitives = () => {
   const attribute = captureNative(Element.prototype, "getAttribute");
   const remove = captureNative(Element.prototype, "remove");
   const nodeItem = captureNative(NodeList.prototype, "item");
-  const tagName = descriptorOf(Element.prototype, "tagName")?.get;
-  const nodeType = descriptorOf(Node.prototype, "nodeType")?.get;
-  const namespace = descriptorOf(Element.prototype, "namespaceURI")?.get;
-  const templateContent = descriptorOf(TemplateType.prototype, "content")?.get;
-  const innerHtml = descriptorOf(Element.prototype, "innerHTML");
+  const readTagName = captureNative(Element.prototype, "tagName", "get");
+  const readNodeType = captureNative(Node.prototype, "nodeType", "get");
+  const readNamespace = captureNative(Element.prototype, "namespaceURI", "get");
+  const readTemplateContent = captureNative(
+    TemplateType.prototype,
+    "content",
+    "get",
+  );
+  const readHtml = captureNative(Element.prototype, "innerHTML", "get");
+  const setHtml = captureNative(Element.prototype, "innerHTML", "set");
   const selectors = captureNative(
     DocumentFragment.prototype,
     "querySelectorAll",
@@ -99,30 +126,18 @@ const createIsolationPrimitives = () => {
     "querySelectorAll",
   );
   const elementSelectors = captureNative(Element.prototype, "querySelectorAll");
-  const createElement = document.createElement.bind(document);
-  if (
-    !tagName ||
-    !nodeType ||
-    !namespace ||
-    !templateContent ||
-    !innerHtml?.get ||
-    !innerHtml.set
-  ) {
-    return reject();
-  }
-  const readTagName = tagName;
-  const readNodeType = nodeType;
-  const readNamespace = namespace;
-  const readTemplateContent = templateContent;
-  const readHtml = innerHtml.get;
-  const setHtml = innerHtml.set;
+  const createElement = captureNative(Document.prototype, "createElement");
   const passwordHint = /password|passwd|credential|one-time-code/iu;
-  const regexExec = RegExp.prototype.exec;
-  const lower = String.prototype.toLowerCase;
-  const trim = String.prototype.trim;
-  const normalize = (value: string) => apply(lower, apply(trim, value, []), []);
-  const attr = (element: Element, name: string): string =>
-    apply(attribute, element, [name]) ?? "";
+  const regexExec = captureNative(RegExp.prototype, "exec");
+  const lower = captureNative(String.prototype, "toLowerCase");
+  const trim = captureNative(String.prototype, "trim");
+  const requireString = createStringReader(reject);
+  const normalize = (value: unknown) =>
+    requireString(apply(lower, apply(trim, value, []), []));
+  const attr = (element: Element, name: string) => {
+    const value = apply(attribute, element, [name]);
+    return value === null ? "" : requireString(value);
+  };
   // Native brand checks also work after a page changes a node's prototype.
   // Object arguments that are not DOM nodes are refused by these wrappers.
   const isNode = (value: unknown): value is Node => {
@@ -166,9 +181,10 @@ const createIsolationPrimitives = () => {
         return false;
     }
   };
-  const inspect = (node: Node) => {
+  const inspect = (input: unknown) => {
+    const node = isNode(input) ? input : reject();
     const elementNode = isElement(node);
-    const kind: number = apply(readNodeType, node, []);
+    const kind = apply(readNodeType, node, []);
     const documentNode = kind === 9;
     if (!elementNode && !documentNode && kind !== 11) {
       return;
@@ -187,15 +203,13 @@ const createIsolationPrimitives = () => {
     } else if (documentNode) {
       query = documentSelectors;
     }
-    const matches: NodeListOf<Element> = apply(query, node, ["*"]);
+    const matches = apply(query, node, ["*"]);
     for (let index = 0; ; index += 1) {
-      const element: unknown = apply(nodeItem, matches, [index]);
-      if (!element) {
+      const item = apply(nodeItem, matches, [index]);
+      if (item === null) {
         break;
       }
-      if (!isElement(element)) {
-        return reject();
-      }
+      const element = isElement(item) ? item : reject();
       if (isProhibited(element)) {
         reject();
       }
@@ -205,10 +219,10 @@ const createIsolationPrimitives = () => {
     }
   };
   const parseMarkup = (markup: unknown) => {
-    const template = createElement("template");
+    const template = apply(createElement, document, ["template"]);
     apply(setHtml, template, [stringify(markup)]);
     inspect(apply(readTemplateContent, template, []));
-    return apply(readHtml, template, []);
+    return requireString(apply(readHtml, template, []));
   };
   type LockPropertyOptions = { target: object; name: string; value: unknown };
   const lockProperty = ({ target, name, value }: LockPropertyOptions) => {
@@ -223,12 +237,18 @@ const createIsolationPrimitives = () => {
           enumerable: descriptor?.enumerable ?? false,
         });
       }
-      current = prototypeOf(current);
+      const prototype: unknown = prototypeOf(current);
+      current =
+        prototype === null ||
+        typeof prototype === "object" ||
+        typeof prototype === "function"
+          ? prototype
+          : reject();
     }
   };
   const wrapInsertion = (target: object, name: string) => {
-    const method = get(target, name);
-    if (typeof method !== "function") {
+    const method: unknown = get(target, name);
+    if (!isNativeMethod(method)) {
       return;
     }
     lockProperty({
@@ -250,6 +270,7 @@ const createIsolationPrimitives = () => {
   return {
     apply,
     descriptorOf,
+    captureNative,
     defineProperty,
     get,
     lockProperty,
@@ -269,6 +290,7 @@ export const isolateVisualGuest = () => {
   const {
     apply,
     descriptorOf,
+    captureNative,
     defineProperty,
     get,
     lockProperty,
@@ -322,7 +344,7 @@ export const isolateVisualGuest = () => {
       if (!descriptor?.set) {
         continue;
       }
-      const setter = descriptor.set;
+      const setter = captureNative(target, name, "set");
       defineProperty(target, name, {
         ...descriptor,
         configurable: false,
@@ -332,8 +354,8 @@ export const isolateVisualGuest = () => {
       });
     }
     for (const name of ["setHTML", "setHTMLUnsafe", "insertAdjacentHTML"]) {
-      const method = get(target, name);
-      if (typeof method !== "function") {
+      const method: unknown = get(target, name);
+      if (!isNativeMethod(method)) {
         continue;
       }
       lockProperty({
@@ -347,7 +369,7 @@ export const isolateVisualGuest = () => {
       });
     }
   }
-  const strip = (node: Node) => {
+  const strip = (node: unknown) => {
     if (!isElement(node)) {
       return;
     }
@@ -355,30 +377,28 @@ export const isolateVisualGuest = () => {
       apply(remove, node, []);
       return;
     }
-    const matches: NodeListOf<Element> = apply(elementSelectors, node, ["*"]);
+    const matches = apply(elementSelectors, node, ["*"]);
     for (let index = 0; ; index += 1) {
-      const element: unknown = apply(nodeItem, matches, [index]);
-      if (!element) {
+      const item = apply(nodeItem, matches, [index]);
+      if (item === null) {
         break;
       }
-      if (!isElement(element)) {
-        return reject();
-      }
+      const element = isElement(item) ? item : reject();
       if (isProhibited(element)) {
         apply(remove, element, []);
       }
     }
   };
-  const mutationTarget = descriptorOf(MutationRecord.prototype, "target")?.get;
-  const mutationNodes = descriptorOf(
+  const readMutationTarget = captureNative(
+    MutationRecord.prototype,
+    "target",
+    "get",
+  );
+  const readMutationNodes = captureNative(
     MutationRecord.prototype,
     "addedNodes",
-  )?.get;
-  if (!mutationTarget || !mutationNodes) {
-    return reject();
-  }
-  const readMutationTarget = mutationTarget;
-  const readMutationNodes = mutationNodes;
+    "get",
+  );
   new ObserverType((records) => {
     let index = 0;
     while (index < records.length) {
@@ -388,10 +408,10 @@ export const isolateVisualGuest = () => {
         continue;
       }
       strip(apply(readMutationTarget, record, []));
-      const addedNodes: NodeList = apply(readMutationNodes, record, []);
+      const addedNodes = apply(readMutationNodes, record, []);
       for (let nodeIndex = 0; ; nodeIndex += 1) {
-        const node: Node | null = apply(nodeItem, addedNodes, [nodeIndex]);
-        if (!node) {
+        const node = apply(nodeItem, addedNodes, [nodeIndex]);
+        if (node === null) {
           break;
         }
         strip(node);

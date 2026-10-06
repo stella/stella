@@ -2688,7 +2688,7 @@ export const createSendMessage = (
         });
         const visualTools = {
           origin: visualOrigin,
-          preview: (document: string) =>
+          preview: async (document: string) =>
             previewVisual({
               document,
               functionArn: env.VISUAL_PREVIEW_FUNCTION_NAME,

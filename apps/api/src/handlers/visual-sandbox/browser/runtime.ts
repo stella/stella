@@ -20,13 +20,13 @@ import { isolateVisualGuest } from "./isolation";
 import { installVisualPresentation } from "./presentation";
 import { visualShellReadyMessage } from "./shell-ready";
 
-const bootGuest = () => {
+const bootGuest = (): void => {
   try {
     isolateVisualGuest();
     installVisualPresentation(document);
     const dataElement = document.querySelector(`#${VISUAL_DATA_SCRIPT_ID}`);
     if (!dataElement) {
-      return panic("The visual document has no data payload");
+      panic("The visual document has no data payload");
     }
     const data = v.parse(
       generatedVisualInputSchema.entries.data,
@@ -62,20 +62,31 @@ const bootGuest = () => {
     throw error;
   }
   const NativeElement = Element;
-  const closest = Element.prototype.closest;
-  const getAttribute = Element.prototype.getAttribute;
+  const closest: unknown = Object.getOwnPropertyDescriptor(
+    Element.prototype,
+    "closest",
+  )?.value;
+  const getAttribute: unknown = Object.getOwnPropertyDescriptor(
+    Element.prototype,
+    "getAttribute",
+  )?.value;
+  if (typeof closest !== "function" || typeof getAttribute !== "function") {
+    panic("The visual link methods are unavailable");
+  }
   const requestLink = (event: Event) => {
     if (!(event.target instanceof NativeElement)) {
       return;
     }
-    const anchor = closest.call(event.target, "a[data-stella-link]");
-    if (!anchor) {
+    const anchor: unknown = Reflect.apply(closest, event.target, [
+      "a[data-stella-link]",
+    ]);
+    if (!(anchor instanceof NativeElement)) {
       return;
     }
     event.preventDefault();
     const parsed = v.safeParse(
       visualLinkSchema,
-      getAttribute.call(anchor, "data-stella-link"),
+      Reflect.apply(getAttribute, anchor, ["data-stella-link"]),
     );
     if (parsed.success) {
       window.parent.postMessage({ kind: "open-link", url: parsed.output }, "*");

@@ -88,7 +88,7 @@ export const createShowVisualTools = ({
     context.emitCustomEvent("ui-resource", part);
     const rendered = (
       await Result.tryPromise({
-        try: () => preview(stored.value.document),
+        try: async () => preview(stored.value.document),
         catch: () =>
           new VisualPreviewError({
             code: "unavailable",

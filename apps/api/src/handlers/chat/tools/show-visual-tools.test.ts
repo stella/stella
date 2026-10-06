@@ -102,7 +102,9 @@ describe("show visual", () => {
       { title: "Revenue", html: "<p>Revenue</p>", data: {} },
       {
         toolCallId: "visual-call-preview",
-        emitCustomEvent: (_name, value) => emissions.push(value),
+        emitCustomEvent: (_name, value) => {
+          emissions.push(value);
+        },
       },
     );
     expect(invocations).toBe(1);
@@ -156,7 +158,9 @@ describe("show visual", () => {
       { title: "Revenue", html: "<p>Revenue</p>", data: {} },
       {
         toolCallId: "visual-call-rejected-preview",
-        emitCustomEvent: (_name, value) => emissions.push(value),
+        emitCustomEvent: (_name, value) => {
+          emissions.push(value);
+        },
       },
     );
     expect(publications).toBe(1);
@@ -260,7 +264,9 @@ describe("show visual", () => {
             },
             {
               toolCallId: "visual-call-one",
-              emitCustomEvent: (_name, value) => emissions.push(value),
+              emitCustomEvent: (_name, value) => {
+                emissions.push(value);
+              },
             },
           ),
         ),
