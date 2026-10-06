@@ -121,6 +121,7 @@ export const withDeferredDocumentSourceOwnership = async <T>({
         await withTimeout(
           async (operationSignal) => {
             const initial = await readOwnership();
+            operationSignal.throwIfAborted();
             if (initial.status !== "ready") {
               return initial;
             }
