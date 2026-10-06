@@ -1027,7 +1027,10 @@ const resolveExecutionBudget = async ({
     execution === "queued-kickoff"
       ? await resolveQueuedBudget(organizationBudgetOptions)
       : await resolveAdmissionBudget(organizationBudgetOptions);
-  return resolved.map(admittedPeriodBudget);
+  if (Result.isError(resolved)) {
+    return Result.err(resolved.error);
+  }
+  return Result.ok(admittedPeriodBudget(resolved.value));
 };
 
 const settledAdmissionOutcome = <T>(
