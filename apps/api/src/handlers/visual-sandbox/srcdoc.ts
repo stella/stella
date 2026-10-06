@@ -1,3 +1,5 @@
+import { VISUAL_GUEST_MARKER_ATTRIBUTE } from "@stll/api-contract/visual-sandbox";
+
 import type { SanitizedVisualHtml } from "./sanitize";
 
 const escapeAttribute = (value: string) =>
@@ -29,4 +31,4 @@ export const composeVisualDocument = ({
   runtime,
   policy,
 }: ComposeVisualDocumentOptions) =>
-  `<!doctype html><html><head><meta http-equiv="Content-Security-Policy" content="${escapeAttribute(policy)}"><meta http-equiv="x-dns-prefetch-control" content="off"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><script>${runtime}</script></head><body>${html}</body></html>`;
+  `<!doctype html><html ${VISUAL_GUEST_MARKER_ATTRIBUTE}><head><meta http-equiv="Content-Security-Policy" content="${escapeAttribute(policy)}"><meta http-equiv="x-dns-prefetch-control" content="off"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><script>${runtime}</script></head><body>${html}</body></html>`;

@@ -1,5 +1,7 @@
 import * as v from "valibot";
 
+export const VISUAL_GUEST_MARKER_ATTRIBUTE = "data-stella-visual-guest";
+
 export const VISUAL_SANDBOX_PATH = "/visual-sandbox";
 
 export const VISUAL_SANDBOX_LIMITS = {

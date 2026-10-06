@@ -1,6 +1,8 @@
 import { describe, expect, test } from "bun:test";
 import { load } from "cheerio";
 
+import { VISUAL_GUEST_MARKER_ATTRIBUTE } from "@stll/api-contract/visual-sandbox";
+
 import { sanitizeVisualHtml } from "./sanitize";
 import {
   composeVisualDocument,
@@ -47,6 +49,7 @@ describe("visual document composition", () => {
     expect($("head").children().first().attr("content")).toBe(
       "default-src 'none'",
     );
+    expect($("html").attr(VISUAL_GUEST_MARKER_ATTRIBUTE)).toBe("");
     expect($("body p").text()).toBe("Timeline");
     expect($("head script").text()).toBe("void 0");
     expect($("head").children().eq(1).attr("http-equiv")).toBe(

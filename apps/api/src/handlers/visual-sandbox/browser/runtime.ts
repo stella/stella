@@ -1,6 +1,9 @@
 import * as v from "valibot";
 
-import { VISUAL_SANDBOX_LIMITS } from "@stll/api-contract/visual-sandbox";
+import {
+  VISUAL_GUEST_MARKER_ATTRIBUTE,
+  VISUAL_SANDBOX_LIMITS,
+} from "@stll/api-contract/visual-sandbox";
 
 import { createVisualMessageHandler } from "../bridge";
 import { composeVisualDocument } from "../srcdoc";
@@ -71,7 +74,7 @@ const bootOuter = (runtime: string) => {
 
 const runtime = document.currentScript?.textContent;
 if (runtime) {
-  if (window.origin === "null") {
+  if (document.documentElement.hasAttribute(VISUAL_GUEST_MARKER_ATTRIBUTE)) {
     bootGuest();
   } else {
     bootOuter(runtime);
