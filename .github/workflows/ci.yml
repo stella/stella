@@ -2870,6 +2870,16 @@ jobs:
         if: ${{ !cancelled() && steps.checkout.outcome == 'success' && steps.install.outcome != 'failure' && steps.standalone_lockfiles.outcome != 'failure' && steps.lockfile_ages.outcome != 'failure' }}
         run: bash scripts/pull-base-images.test.sh
 
+      - name: Verify runner tool availability
+        if: ${{ !cancelled() && steps.checkout.outcome == 'success' && steps.install.outcome != 'failure' }}
+        run: |
+          bun scripts/check-ci-runner-tools.ts . stella/stella
+          bun test scripts/check-ci-runner-tools.test.ts
+
+      - name: Test preview scope tool availability
+        if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
+        run: bun test scripts/visual-preview-scope.test.ts
+
       # Both guards decide whether a change may reach a live database or the
       # default branch, and both fail open if their comparison logic breaks:
       # a migration identity check that always returns null passes every PR,

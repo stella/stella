@@ -721,7 +721,7 @@ const changeDirectory = ({ from, to }: ChangeDirectoryOptions): string => {
 const TIMEOUT_DURATION = /^(?:\d+(?:\.\d*)?|\.\d+)[smhd]?$/u;
 
 /** The program and its arguments, past keywords, assignments and wrappers. */
-const programWords = (words: readonly string[]): readonly string[] => {
+export const programWords = (words: readonly string[]): readonly string[] => {
   let rest = words;
   for (;;) {
     const first = rest.at(0);
