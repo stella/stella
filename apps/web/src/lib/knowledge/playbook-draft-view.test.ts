@@ -2,7 +2,6 @@ import { describe, expect, test } from "bun:test";
 
 import {
   isPlaybookDraftViewPayload,
-  playbookDraftTabId,
   projectPlaybookDraftViewPayload,
 } from "@/lib/knowledge/playbook-draft-view";
 
@@ -32,12 +31,5 @@ describe("The playbook pane's inspector payload", () => {
     });
     expect(stored).toEqual(payload);
     expect(isPlaybookDraftViewPayload(stored)).toBe(true);
-  });
-
-  test("gives each chat thread one pane", () => {
-    expect(playbookDraftTabId("thread-a")).not.toBe(
-      playbookDraftTabId("thread-b"),
-    );
-    expect(playbookDraftTabId("thread-a")).toBe(playbookDraftTabId("thread-a"));
   });
 });

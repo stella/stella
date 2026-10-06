@@ -417,7 +417,7 @@ export const draftToAdopt = ({
   }
 };
 
-type AutosavesArgs = {
+type CanAutosaveArgs = {
   host: "page" | "pane";
   /** False for a playbook not yet created. */
   exists: boolean;
@@ -435,7 +435,7 @@ export const canAutosave = ({
   exists,
   status,
   canUpdate,
-}: AutosavesArgs): boolean =>
+}: CanAutosaveArgs): boolean =>
   host === "pane" && exists && status === "draft" && canUpdate;
 
 /**

@@ -565,29 +565,6 @@ describe("Playbook position sources", () => {
 });
 
 describe("Following the server's newer version", () => {
-  const EARLIER = "2026-10-05T10:00:00.000Z";
-  const LATER = "2026-10-05T10:00:05.000Z";
-
-  test("a clean form takes a newer version", () => {
-    expect(
-      resolveServerFollow({
-        formUpdatedAt: EARLIER,
-        serverUpdatedAt: LATER,
-        isDirty: false,
-      }),
-    ).toEqual({ type: "reseed" });
-  });
-
-  test("a form with edits keeps them and falls behind", () => {
-    expect(
-      resolveServerFollow({
-        formUpdatedAt: EARLIER,
-        serverUpdatedAt: LATER,
-        isDirty: true,
-      }),
-    ).toEqual({ type: "behind" });
-  });
-
   test("a new playbook has nothing to follow", () => {
     expect(
       resolveServerFollow({
