@@ -1,3 +1,5 @@
+import type { ComponentProps } from "react";
+
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { afterAll, afterEach, expect, test } from "bun:test";
 
@@ -37,7 +39,10 @@ const TEST_LOCALES = UI_LOCALES.filter(
   (locale) => locale === "en" || locale === "ar",
 );
 
-const mountCard = (locale: (typeof TEST_LOCALES)[number] = "en") =>
+const mountCard = (
+  locale: (typeof TEST_LOCALES)[number] = "en",
+  cardPart: ComponentProps<typeof SpawnSubagentsCard>["part"] = part,
+) =>
   render(
     <IntlProvider
       locale={locale}
@@ -46,7 +51,7 @@ const mountCard = (locale: (typeof TEST_LOCALES)[number] = "en") =>
     >
       <FormattingProvider locale={locale} timeZone="UTC">
         <SpawnSubagentsCard
-          part={part}
+          part={cardPart}
           streamdownComponents={{
             a: ({ children, ...props }) => <a {...props}>{children}</a>,
           }}
@@ -73,12 +78,16 @@ test.each(TEST_LOCALES)(
         view.getByRole("heading", { name: "Verified provisions" }).tagName,
       ).toBe("H3"),
     );
-    expect(
-      view.getByRole("link", { name: "Civil Code" }).getAttribute("href"),
-    ).toBe("https://example.test/eli/cz/sb/2012/89");
-    expect(view.container.querySelector("li strong")?.textContent).toBe(
-      "Invalidity:",
-    );
+    await waitFor(() => {
+      expect(
+        view.getByRole("link", { name: "Civil Code" }).getAttribute("href"),
+      ).toBe("https://example.test/eli/cz/sb/2012/89");
+      expect(
+        view.getByText("Invalidity:", {
+          selector: 'li [data-streamdown="strong"]',
+        }).textContent,
+      ).toBe("Invalidity:");
+    });
     expect(view.container.textContent).not.toContain("###");
     expect(view.container.textContent).not.toContain("**");
 
@@ -93,5 +102,72 @@ test.each(TEST_LOCALES)(
     expect(view.container.textContent).not.toContain("019dd47d");
     expect(view.container.textContent).not.toContain("internal-document");
     expect(view.container.textContent).toContain("No writes.");
+  },
+);
+
+const error =
+  "Cannot review documentId=private-document for matter 019dd47d-f507-7c84-b827-980af11b8980. Please retry.";
+const failedPart = {
+  type: "tool-call",
+  name: "spawn_subagents",
+  id: "failed-subagent-run",
+  state: "complete",
+  arguments: "{}",
+  input: { subagents: [{ title, task }] },
+  output: { results: [{ index: 0, status: "failed", error }] },
+} satisfies RegisteredChatUIToolCallPart;
+const runningPart = {
+  type: "tool-call",
+  name: "spawn_subagents",
+  id: "running-subagent-run",
+  state: "input-complete",
+  arguments: "{}",
+  input: { subagents: [{ title, task }] },
+} satisfies RegisteredChatUIToolCallPart;
+
+test.each(TEST_LOCALES)(
+  "%s failed subagent exposes its error with technical identifiers masked",
+  async (locale) => {
+    const catalog = locale === "ar" ? arabic : english;
+    const view = mountCard(locale, failedPart);
+    const row = view.getByRole("button", { name: new RegExp(title, "u") });
+    expect(row.textContent).toContain(catalog.common.failed);
+    expect(row.getAttribute("aria-expanded")).toBe("false");
+    expect(view.queryByText(/Please retry\./u)).toBeNull();
+    fireEvent.click(row);
+    await waitFor(() => {
+      expect(
+        view.getByText(
+          "Cannot review documentId=[…] for matter […]. Please retry.",
+        ).textContent,
+      ).toBe("Cannot review documentId=[…] for matter […]. Please retry.");
+    });
+    expect(view.container.textContent).not.toContain("private-document");
+    expect(view.container.textContent).not.toContain(
+      "019dd47d-f507-7c84-b827-980af11b8980",
+    );
+    expect(
+      view.queryByRole("heading", { name: "Verified provisions" }),
+    ).toBeNull();
+  },
+);
+
+test.each(TEST_LOCALES)(
+  "%s running subagent keeps a pending indicator without a completed result",
+  async (locale) => {
+    const catalog = locale === "ar" ? arabic : english;
+    const view = mountCard(locale, runningPart);
+    const row = view.getByRole("button", { name: new RegExp(title, "u") });
+    expect(row.textContent).toContain(catalog.tasks.statusValues.in_progress);
+    expect(row.querySelector("svg.animate-spin")).not.toBeNull();
+    expect(row.textContent).not.toContain(catalog.common.done);
+    expect(row.textContent).not.toContain(catalog.common.failed);
+    expect(row.getAttribute("aria-expanded")).toBe("false");
+    fireEvent.click(row);
+    await waitFor(() => expect(row.getAttribute("aria-expanded")).toBe("true"));
+    expect(
+      view.queryByRole("heading", { name: "Verified provisions" }),
+    ).toBeNull();
+    expect(view.container.textContent).not.toContain(task);
   },
 );

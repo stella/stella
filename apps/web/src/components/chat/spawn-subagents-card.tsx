@@ -159,7 +159,9 @@ const SpawnSubagentsSubtaskList = ({
                   <div className="space-y-2">
                     {result?.status === "completed" && result.result && (
                       <MessageResponse
-                        components={streamdownComponents}
+                        {...(streamdownComponents === undefined
+                          ? {}
+                          : { components: streamdownComponents })}
                         fallbackChildren={assistantMessageFallbackText(
                           result.result,
                         )}

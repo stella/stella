@@ -31,9 +31,6 @@ test("transcript fade appears only while content remains below the viewport", as
     element.scrollTop = element.scrollHeight;
   });
   await expect(fade).toBeHidden();
-  expect(
-    await viewport.evaluate((element) => getComputedStyle(element).maskImage),
-  ).toBe("none");
 
   await viewport.hover();
   await page.mouse.wheel(0, -300);

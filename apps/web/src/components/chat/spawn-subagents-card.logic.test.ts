@@ -69,6 +69,8 @@ describe("subagent prompt identifier masking", () => {
   });
 });
 
+const LONG_NUMBER_RUN_LENGTH = 4096;
+
 describe("subagent title citation isolation", () => {
   test.each([
     ["القانون المدني §§ 576–588", "§§ 576–588"],
@@ -82,6 +84,16 @@ describe("subagent title citation isolation", () => {
     expect(
       runs.filter(({ type }) => type === "citation").map(({ text }) => text),
     ).toEqual([citation]);
+  });
+
+  test("preserves long number runs and isolates the complete Unicode range", () => {
+    const plainNumber = "٥".repeat(LONG_NUMBER_RUN_LENGTH);
+    const title = `${plainNumber} validity; ٥٧٦–٥٨٨`;
+    const runs = subagentTitleRuns(title);
+    expect(runs.map(({ text }) => text).join("")).toBe(title);
+    expect(
+      runs.filter(({ type }) => type === "citation").map(({ text }) => text),
+    ).toEqual(["٥٧٦–٥٨٨"]);
   });
 
   test.each(["", "القانون المدني", "Draft review", "قانون ٥٧٦"])(

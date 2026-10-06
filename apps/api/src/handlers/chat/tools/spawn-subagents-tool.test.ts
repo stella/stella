@@ -220,18 +220,15 @@ const buildTool = (
   if (execute === undefined) {
     return panic("The subagent tool is missing its executor");
   }
-  return (
+  return async (
     input: Parameters<typeof execute>[0],
     ctx: { abortSignal?: AbortSignal },
-  ) => execute(input, { ...ctx, emitCustomEvent: () => {} });
+  ) => await execute(input, { ...ctx, emitCustomEvent: () => {} });
 };
 
 describe("subagent titles are required and bounded at the model boundary", () => {
   test("rejects absent, blank, invalid and overlong titles", async () => {
     const schema = SPAWN_SUBAGENTS_TOOL_DEFINITION.inputSchema;
-    if (schema === undefined) {
-      return panic("The subagent tool is missing its input schema");
-    }
     for (const subagent of [
       { task: "Find relevant case law" },
       { title: "", task: "Find relevant case law" },
@@ -262,9 +259,6 @@ describe("subagent titles are required and bounded at the model boundary", () =>
 
   test("preserves localized human titles separately from the full prompt", async () => {
     const schema = SPAWN_SUBAGENTS_TOOL_DEFINITION.inputSchema;
-    if (schema === undefined) {
-      return panic("The subagent tool is missing its input schema");
-    }
     for (const title of [
       "Neplatnost právního jednání",
       "بطلان العقد",
@@ -279,7 +273,7 @@ describe("subagent titles are required and bounded at the model boundary", () =>
         ],
       });
       if (result.issues !== undefined) {
-        return panic("A valid subagent title was rejected");
+        panic("A valid subagent title was rejected");
       }
       expect(result.value.subagents.at(0)).toEqual({
         title,
@@ -631,7 +625,7 @@ describe("createSpawnSubagentsTool — incomplete subagent runs", () => {
       expect(result.results[0]).toMatchObject({ index: 0, status: "failed" });
       const entry = result.results.at(0);
       if (entry?.status !== "failed") {
-        return panic("The incomplete subagent did not report a failure");
+        panic("The incomplete subagent did not report a failure");
       }
       expect(entry.error).toStartWith(cutOff);
       expect(entry.error).toContain('1. update_field {"value":"x"}');
@@ -773,7 +767,7 @@ describe("createSpawnSubagentsTool — delegation without an approval pause", ()
       expect(result.results[0]?.status).toBe("completed");
       const entry = result.results.at(0);
       if (entry?.status !== "completed") {
-        return panic("The subagent did not complete its proposal");
+        panic("The subagent did not complete its proposal");
       }
       expect(entry.result).toContain("PROPOSED WRITES");
       expect(entry.result).toContain('1. save_matter {"name":"Acme"}');

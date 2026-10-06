@@ -85,7 +85,7 @@ const spawnSubagentsInputSchema = v.strictObject({
           v.minLength(1),
           v.maxLength(SUBAGENT_TITLE_MAX_CHARS),
           v.description(
-            `Short human-readable task title in the user's language (1–${SUBAGENT_TITLE_MAX_CHARS} characters). Summarize the subject, without internal instructions or identifiers. Shown in the chat; keep the full instructions in task.`,
+            `User-facing subject in the user's language (1–${SUBAGENT_TITLE_MAX_CHARS} characters); no identifiers or instructions.`,
           ),
         ),
         task: v.pipe(
@@ -405,9 +405,7 @@ export const SPAWN_SUBAGENTS_TOOL_DEFINITION = toolDefinition({
     "reports back a short result or an error. Prefer this over doing " +
     "independent work serially yourself; it is cheaper and faster. Do not " +
     "use it for a single sequential task, or when later steps depend on " +
-    "an earlier subagent's output. Give every subagent a short title in the " +
-    "user's language describing its subject, without internal instructions " +
-    "or identifiers; put the full prompt in task.",
+    "an earlier subagent's output.",
   inputSchema: toTanStackToolSchema(spawnSubagentsInputSchema),
   outputSchema: toTanStackToolSchema(spawnSubagentsOutputSchema),
 });

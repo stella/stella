@@ -104,8 +104,10 @@ export const maskSubagentIdentifiers = (text: string) =>
       (_match, prefix: string) => `${prefix}${MASKED_IDENTIFIER}`,
     );
 
+// Start a numerical range only at the beginning of a number run: failed
+// matches must not retry the remaining suffix at every digit.
 const TITLE_CITATION_RUN =
-  /§{1,2}\s*\p{N}+(?:[./:–—-]\p{N}+)*|\p{N}+(?:[./:–—-]\p{N}+)+/gu;
+  /§{1,2}\s*\p{N}+(?:[./:–—-]\p{N}+)*|(?<!\p{N})\p{N}+(?:[./:–—-]\p{N}+)+/gu;
 
 type SubagentTitleRun = {
   type: "text" | "citation";
