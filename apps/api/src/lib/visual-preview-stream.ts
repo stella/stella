@@ -123,7 +123,7 @@ export const projectVisualPreviewStream = async function* (
       previewCallIds.has(chunk.toolCallId)
     ) {
       if (typeof chunk.content !== "string") {
-        return panic("The engine emits preview wire results as strings");
+        panic("The engine emits preview wire results as strings");
       }
       const projected = {
         ...chunk,

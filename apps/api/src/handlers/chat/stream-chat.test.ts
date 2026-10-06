@@ -578,6 +578,39 @@ test("transient visual preview reaches the in-turn model but not wire, persisten
   expect(JSON.stringify(reloaded)).not.toContain('"type":"image"');
   expect(JSON.stringify(reloaded)).toContain("screenshot omitted from history");
   expect(JSON.stringify(reloaded)).toContain("Example diagnostic");
+  const settled = settleHistoryForRun({
+    messages: [
+      {
+        ...finish.responseMessage,
+        parts: reloaded.parts.filter(
+          (part) =>
+            (part.type === "tool-call" &&
+              part.name === VISUAL_PREVIEW_TOOL_NAME) ||
+            (part.type === "tool-result" && part.toolCallId === "call-1"),
+        ),
+      },
+    ],
+    resumedMessageId: undefined,
+  });
+  const settledMessage = settled.at(0);
+  if (settledMessage === undefined) {
+    throw new Error("Expected settled preview message");
+  }
+  const previewCall = settledMessage.parts.find(
+    (part) =>
+      part.type === "tool-call" && part.name === VISUAL_PREVIEW_TOOL_NAME,
+  );
+  if (previewCall?.type !== "tool-call") {
+    throw new Error("Expected settled preview output");
+  }
+  expect(
+    v.safeParse(visualPreviewToolOutputSchema, previewCall.output).success,
+  ).toBe(true);
+  validateToolCallParts({
+    message: settledMessage,
+    tools: { [VISUAL_PREVIEW_TOOL_NAME]: visualTool },
+  }).unwrap();
+  expect(JSON.stringify(settledMessage)).not.toContain(preview.png);
   expect(output).toHaveLength(2);
 });
 
