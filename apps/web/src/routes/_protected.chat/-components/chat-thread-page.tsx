@@ -224,6 +224,7 @@ export const ChatThreadPage = ({
     sendMessage,
     queuedMessages,
     removeQueuedMessage,
+    sendQueuedMessageNow,
     stop,
     leave,
     isGenerating,
@@ -643,9 +644,12 @@ export const ChatThreadPage = ({
                           handleOpenCreateDocumentDraft
                         }
                         onOpenCreatedDocument={handleOpenCreatedDocument}
-                        onRemoveQueuedMessage={removeQueuedMessage}
                         onResend={resendLatestMessage}
                         onSendWithoutAnonymization={sendWithoutAnonymization}
+                        queuedMessageActions={{
+                          remove: removeQueuedMessage,
+                          sendNow: sendQueuedMessageNow,
+                        }}
                         queuedMessages={queuedMessages}
                         showThinkingIndicator
                         stickyUserMessages

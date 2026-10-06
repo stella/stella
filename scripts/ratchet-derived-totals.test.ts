@@ -12,7 +12,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 
 import { inspectConfiguration, scanAll, type RatchetMetric } from "./ratchet";
-import ratchetDefinitionPaths from "./ratchet-definition-paths.json";
+import ratchetDefinitionPaths from "./ratchet-definition-paths.json" with { type: "json" };
 
 const metric = {
   id: "test-metric",
