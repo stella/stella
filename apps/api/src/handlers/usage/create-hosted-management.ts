@@ -13,7 +13,7 @@ import { getApiCredentials } from "@/api/lib/hosted-usage-provider/config";
 
 const config = {
   permissions: { organizationSettings: ["update"] },
-  accountAccess: ACCOUNT_ACCESS.standard,
+  accountAccess: ACCOUNT_ACCESS.accountControl,
   mcp: { type: "internal", reason: "hosted_billing" },
 } satisfies HandlerConfig;
 

@@ -145,6 +145,7 @@
       "useBackupCode": "Stattdessen Wiederherstellungscode verwenden"
     },
     "useDifferentEmail": "Andere E-Mail verwenden",
+    "usePassword": "Stattdessen mit Passwort anmelden",
     "weSentCodeTo": "Wir haben einen Code an <email>{emailAddress}</email> gesendet"
   },
   "avt": {

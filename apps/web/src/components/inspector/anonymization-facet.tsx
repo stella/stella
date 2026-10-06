@@ -37,13 +37,8 @@ import {
   Trash2Icon as Trash2,
 } from "@stll/ui/icons";
 import { Input } from "@stll/ui/input";
-import {
-  Menu,
-  MenuItem,
-  MenuPopup,
-  MenuPortal,
-  MenuTrigger,
-} from "@stll/ui/menu";
+import { MenuItem, MenuPopup } from "@stll/ui/menu";
+import { SplitButton } from "@stll/ui/split-button";
 import { stellaToast } from "@stll/ui/toast";
 import { cn } from "@stll/ui/utils";
 
@@ -991,79 +986,64 @@ export const AnonymizationFacet = ({
                               <RotateCcw className="size-3.5" />
                             </Button>
                           ) : (
-                            <>
-                              <Button
-                                aria-label={t(
-                                  "inspector.anonymization.ignoreAction",
-                                )}
-                                disabled={createAllowlistMutation.isPending}
-                                onClick={() => {
-                                  createAllowlistMutation.mutate({
-                                    workspaceId,
-                                    entityId,
-                                    canonical: row.canonical,
-                                    label,
-                                    scope: "document",
-                                  });
-                                }}
-                                size="icon"
-                                title={t(
-                                  "inspector.anonymization.ignoreAction",
-                                )}
-                                variant="ghost"
-                              >
-                                <EyeOff className="size-3.5" />
-                              </Button>
-                              <Menu>
-                                <MenuTrigger
-                                  render={
-                                    <Button
-                                      aria-label={t(
-                                        "inspector.anonymization.ignoreScopeMenuAriaLabel",
-                                      )}
-                                      size="icon"
-                                      variant="ghost"
-                                    >
-                                      <ChevronDown className="size-3.5" />
-                                    </Button>
-                                  }
-                                />
-                                <MenuPortal>
-                                  <MenuPopup>
-                                    <MenuItem
-                                      onClick={() => {
-                                        createAllowlistMutation.mutate({
-                                          workspaceId,
-                                          entityId,
-                                          canonical: row.canonical,
-                                          label,
-                                          scope: "document",
-                                        });
-                                      }}
-                                    >
-                                      {t(
-                                        "inspector.anonymization.ignoreScopeDocument",
-                                      )}
-                                    </MenuItem>
-                                    <MenuItem
-                                      onClick={() => {
-                                        createAllowlistMutation.mutate({
-                                          workspaceId,
-                                          entityId,
-                                          canonical: row.canonical,
-                                          label,
-                                          scope: "workspace",
-                                        });
-                                      }}
-                                    >
-                                      {t(
-                                        "inspector.anonymization.ignoreScopeAlways",
-                                      )}
-                                    </MenuItem>
-                                  </MenuPopup>
-                                </MenuPortal>
-                              </Menu>
-                            </>
+                            <SplitButton
+                              menuDisabled={createAllowlistMutation.isPending}
+                              menuLabel={t(
+                                "inspector.anonymization.ignoreScopeMenuAriaLabel",
+                              )}
+                              onPrimaryClick={() => {
+                                createAllowlistMutation.mutate({
+                                  workspaceId,
+                                  entityId,
+                                  canonical: row.canonical,
+                                  label,
+                                  scope: "document",
+                                });
+                              }}
+                              primaryDisabled={
+                                createAllowlistMutation.isPending
+                              }
+                              primaryLabel={t(
+                                "inspector.anonymization.ignoreAction",
+                              )}
+                              size="sm"
+                              menu={
+                                <MenuPopup>
+                                  <MenuItem
+                                    onClick={() => {
+                                      createAllowlistMutation.mutate({
+                                        workspaceId,
+                                        entityId,
+                                        canonical: row.canonical,
+                                        label,
+                                        scope: "document",
+                                      });
+                                    }}
+                                  >
+                                    {t(
+                                      "inspector.anonymization.ignoreScopeDocument",
+                                    )}
+                                  </MenuItem>
+                                  <MenuItem
+                                    onClick={() => {
+                                      createAllowlistMutation.mutate({
+                                        workspaceId,
+                                        entityId,
+                                        canonical: row.canonical,
+                                        label,
+                                        scope: "workspace",
+                                      });
+                                    }}
+                                  >
+                                    {t(
+                                      "inspector.anonymization.ignoreScopeAlways",
+                                    )}
+                                  </MenuItem>
+                                </MenuPopup>
+                              }
+                            >
+                              <EyeOff aria-hidden="true" className="size-3.5" />
+                            </SplitButton>
                           )}
                         </div>
                       </li>

@@ -4219,6 +4219,18 @@
     "seconds": 3.1,
     "source": "measured"
   },
+  "src/lib/auth/review-account-inert.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
+  "src/lib/auth/review-account-plugin.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
+  "src/lib/auth/review-account-policy.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
   "src/lib/auth/session-bearer.test.ts": {
     "seconds": 0.219057,
     "source": "estimated"
@@ -4849,6 +4861,10 @@
   },
   "src/lib/db/read-bounded.db.test.ts": {
     "seconds": 1.81079,
+    "source": "estimated"
+  },
+  "src/lib/db/review-account-organization-store.db.test.ts": {
+    "seconds": 1,
     "source": "estimated"
   },
   "src/lib/db/rls-role-posture.db.test.ts": {
@@ -6021,6 +6037,10 @@
   },
   "src/lib/legal-search/corpus-index-config.test.ts": {
     "seconds": 0.071361,
+    "source": "estimated"
+  },
+  "src/lib/legal-search/corpus-index-court-year.test.ts": {
+    "seconds": 1,
     "source": "estimated"
   },
   "src/lib/legal-search/corpus-index-delete-survivor.contract.test.ts": {
@@ -8383,6 +8403,10 @@
     "seconds": 0.467175,
     "source": "estimated"
   },
+  "src/mcp/review-account-exposure.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
   "src/mcp/search-index-unavailable.test.ts": {
     "seconds": 1,
     "source": "estimated"
@@ -8650,6 +8674,10 @@
   "src/scripts/replay-tick.test.ts": {
     "seconds": 0.4,
     "source": "measured"
+  },
+  "src/scripts/review-account.logic.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
   },
   "src/scripts/seed-migration-rehearsal-plan.db.test.ts": {
     "seconds": 2.451865,
