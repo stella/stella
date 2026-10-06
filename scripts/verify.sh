@@ -439,6 +439,7 @@ run_failure_as_empty_guard() {
 run_step "Failure-as-empty baseline" run_failure_as_empty_guard
 run_step "Oxlint override union guard" bun test \
   scripts/oxlint-override-union.test.ts scripts/oxlint-config-liveness.test.ts
+run_step "SHA-256 migration ledger" bun scripts/sha256-migration-ledger.ts --base "$base_ref"
 run_step "Oxlint rule decisions" bun scripts/check-oxlint-rule-decisions.ts
 run_oxlint_effective_config_guard() {
   bun test scripts/oxlint-effective-config.test.ts || return 1

@@ -1,0 +1,914 @@
+[
+  {
+    "id": ".oxlint-plugins/__fixtures__/no-ambient-nondeterminism.fixture.ts",
+    "reason": "migrates in a follow-up"
+  },
+  {
+    "id": ".oxlint-plugins/no-swallowed-item-error.ts",
+    "reason": "migrates in a follow-up"
+  },
+  {
+    "id": "apps/api/scripts/ai-native-image-canary.test.ts",
+    "reason": "migrates in a follow-up"
+  },
+  {
+    "id": "apps/api/scripts/ai-native-image-canary.ts",
+    "reason": "migrates in a follow-up"
+  },
+  {
+    "id": "apps/api/scripts/ai-provider-cassette.ts",
+    "reason": "migrates in a follow-up"
+  },
+  {
+    "id": "apps/api/scripts/api-test-command.ts",
+    "reason": "migrates in a follow-up"
+  },
+  {
+    "id": "apps/api/scripts/lib/compact-schema-defs.ts",
+    "reason": "migrates in a follow-up"
+  },
+  {
+    "id": "apps/api/scripts/lib/web-api-alias-names.ts",
+    "reason": "migrates in a follow-up"
+  },
+  {
+    "id": "apps/api/scripts/provider-request-schemas.ts",
+    "reason": "migrates in a follow-up"
+  },
+  {
+    "id": "apps/api/scripts/seed-dev.ts",
+    "reason": "migrates in a follow-up"
+  },
+  {
+    "id": "apps/api/scripts/seed-email-viewer-demo.ts",
+    "reason": "migrates in a follow-up"
+  },
+  {
+    "id": "apps/api/scripts/seed-firm-knowledge.logic.ts",
+    "reason": "migrates in a follow-up"
+  },
+  {
+    "id": "apps/api/scripts/seed-firm-knowledge.ts",
+    "reason": "migrates in a follow-up"
+  },
+  {
+    "id": "apps/api/scripts/seed-test-user.ts",
+    "reason": "migrates in a follow-up"
+  },
+  {
+    "id": "apps/api/scripts/seed-utils.ts",
+    "reason": "migrates in a follow-up"
+  },
+  {
+    "id": "apps/api/scripts/test-db-snapshot-cache.ts",
+    "reason": "migrates in a follow-up"
+  },
+  {
+    "id": "apps/api/src/db/case-law-provision-extraction-state.db.test.ts",
+    "reason": "migrates in a follow-up"
+  },
+  {
+    "id": "apps/api/src/db/migration-concurrent-index.test.ts",
+    "reason": "migrates in a follow-up"
+  },
+  {
+    "id": "apps/api/src/handlers/case-law/analysis/significance.ts",
+    "reason": "migrates in a follow-up"
+  },
+  {
+    "id": "apps/api/src/handlers/case-law/decisions/slug.ts",
+    "reason": "migrates in a follow-up"
+  },
+  {
+    "id": "apps/api/src/handlers/case-law/ingestion/adapters/pl-kis.ts",
+    "reason": "migrates in a follow-up"
+  },
+  {
+    "id": "apps/api/src/handlers/case-law/ingestion/adapters/pl-nsa-dataset.ts",
+    "reason": "migrates in a follow-up"
+  },
+  {
+    "id": "apps/api/src/handlers/case-law/ingestion/adapters/pl-nsa.test.ts",
+    "reason": "migrates in a follow-up"
+  },
+  {
+    "id": "apps/api/src/handlers/case-law/ingestion/adapters/pl-uodo.ts",
+    "reason": "migrates in a follow-up"
+  },
+  {
+    "id": "apps/api/src/handlers/case-law/ingestion/adapters/pl-uokik.ts",
+    "reason": "migrates in a follow-up"
+  },
+  {
+    "id": "apps/api/src/handlers/case-law/ingestion/adapters/utils.ts",
+    "reason": "migrates in a follow-up"
+  },
+  {
+    "id": "apps/api/src/handlers/case-law/ingestion/citation-scopes.test.ts",
+    "reason": "migrates in a follow-up"
+  },
+  {
+    "id": "apps/api/src/handlers/case-law/ingestion/citation-scopes.ts",
+    "reason": "migrates in a follow-up"
+  },
+  {
+    "id": "apps/api/src/handlers/case-law/ingestion/eu-completion-protection.ts",
+    "reason": "migrates in a follow-up"
+  },
+  {
+    "id": "apps/api/src/handlers/case-law/ingestion/eu-completion-runner.ts",
+    "reason": "migrates in a follow-up"
+  },
+  {
+    "id": "apps/api/src/handlers/case-law/ingestion/eu-completion-store.postgres.test.ts",
+    "reason": "migrates in a follow-up"
+  },
+  {
+    "id": "apps/api/src/handlers/case-law/ingestion/eu-completion-store.ts",
+    "reason": "migrates in a follow-up"
+  },
+  {
+    "id": "apps/api/src/handlers/case-law/ingestion/pipeline.test.ts",
+    "reason": "migrates in a follow-up"
+  },
+  {
+    "id": "apps/api/src/handlers/case-law/ingestion/pipeline/unread-items.ts",
+    "reason": "migrates in a follow-up"
+  },
+  {
+    "id": "apps/api/src/handlers/case-law/ingestion/reconciliation-engine.db.test.ts",
+    "reason": "migrates in a follow-up"
+  },
+  {
+    "id": "apps/api/src/handlers/case-law/ingestion/replay-apply.db.test.ts",
+    "reason": "migrates in a follow-up"
+  },
+  {
+    "id": "apps/api/src/handlers/case-law/ingestion/source-fingerprint.property.test.ts",
+    "reason": "migrates in a follow-up"
+  },
+  {
+    "id": "apps/api/src/handlers/case-law/ingestion/source-fingerprint.ts",
+    "reason": "migrates in a follow-up"
+  },
+  {
+    "id": "apps/api/src/handlers/case-law/ingestion/source-raw-writes.db.test.ts",
+    "reason": "migrates in a follow-up"
+  },
+  {
+    "id": "apps/api/src/handlers/case-law/ingestion/source-totals.ts",
+    "reason": "migrates in a follow-up"
+  },
+  {
+    "id": "apps/api/src/handlers/case-law/ingestion/supplement-composition.ts",
+    "reason": "migrates in a follow-up"
+  },
+  {
+    "id": "apps/api/src/handlers/case-law/judges/import-cz-us-roster.ts",
+    "reason": "migrates in a follow-up"
+  },
+  {
+    "id": "apps/api/src/handlers/case-law/raw-erasure.db.test.ts",
+    "reason": "migrates in a follow-up"
+  },
+  {
+    "id": "apps/api/src/handlers/catalogue/bundled-skill-resources.ts",
+    "reason": "migrates in a follow-up"
+  },
+  {
+    "id": "apps/api/src/handlers/chat/chat-prompt.ts",
+    "reason": "migrates in a follow-up"
+  },
+  {
+    "id": "apps/api/src/handlers/chat/loop-detector.ts",
+    "reason": "migrates in a follow-up"
+  },
+  {
+    "id": "apps/api/src/handlers/chat/upload-files.ts",
+    "reason": "migrates in a follow-up"
+  },
+  {
+    "id": "apps/api/src/handlers/contacts/contact-import-receipt.ts",
+    "reason": "migrates in a follow-up"
+  },
+  {
+    "id": "apps/api/src/handlers/contacts/sanctions/monitoring-dispatch.db.test.ts",
+    "reason": "migrates in a follow-up"
+  },
+  {
+    "id": "apps/api/src/handlers/entities/checkpoint-desktop-edit-session.ts",
+    "reason": "migrates in a follow-up"
+  },
+  {
+    "id": "apps/api/src/handlers/entities/checkpoint-folio-collab-room.ts",
+    "reason": "migrates in a follow-up"
+  },
+  {
+    "id": "apps/api/src/handlers/entities/finalize-desktop-edit-session.ts",
+    "reason": "migrates in a follow-up"
+  },
+  {
+    "id": "apps/api/src/handlers/entities/placements/suggest.ts",
+    "reason": "migrates in a follow-up"
+  },
+  {
+    "id": "apps/api/src/handlers/entities/publish-folio-collab-version.ts",
+    "reason": "migrates in a follow-up"
+  },
+  {
+    "id": "apps/api/src/handlers/entities/upload-cleanup.test.ts",
+    "reason": "migrates in a follow-up"
+  },
+  {
+    "id": "apps/api/src/handlers/entities/upload.ts",
+    "reason": "migrates in a follow-up"
+  },
+  {
+    "id": "apps/api/src/handlers/feedback/sanitize-report.ts",
+    "reason": "migrates in a follow-up"
+  },
+  {
+    "id": "apps/api/src/handlers/hosted-usage-webhook/receive.test.ts",
+    "reason": "migrates in a follow-up"
+  },
+  {
+    "id": "apps/api/src/handlers/legislation/ingestion.test.ts",
+    "reason": "migrates in a follow-up"
+  },
+  {
+    "id": "apps/api/src/handlers/legislation/revision.ts",
+    "reason": "migrates in a follow-up"
+  },
+  {
+    "id": "apps/api/src/handlers/legislation/search.ts",
+    "reason": "migrates in a follow-up"
+  },
+  {
+    "id": "apps/api/src/handlers/legislation/statute-recall.contract.test.ts",
+    "reason": "migrates in a follow-up"
+  },
+  {
+    "id": "apps/api/src/handlers/mcp/transport-rate-limit.ts",
+    "reason": "migrates in a follow-up"
+  },
+  {
+    "id": "apps/api/src/handlers/playbooks/derive-ask.ts",
+    "reason": "migrates in a follow-up"
+  },
+  {
+    "id": "apps/api/src/handlers/sanctions/production-mount.postgres.test.ts",
+    "reason": "migrates in a follow-up"
+  },
+  {
+    "id": "apps/api/src/handlers/sanctions/public-routes.db.test.ts",
+    "reason": "migrates in a follow-up"
+  },
+  {
+    "id": "apps/api/src/handlers/sharepoint/graph-oauth.ts",
+    "reason": "migrates in a follow-up"
+  },
+  {
+    "id": "apps/api/src/handlers/skills/skill-body-audit.db.test.ts",
+    "reason": "migrates in a follow-up"
+  },
+  {
+    "id": "apps/api/src/handlers/smoke/routes.ts",
+    "reason": "migrates in a follow-up"
+  },
+  {
+    "id": "apps/api/src/handlers/time-entries/suggestions/cluster.ts",
+    "reason": "migrates in a follow-up"
+  },
+  {
+    "id": "apps/api/src/handlers/uploads/presigned-upload.integration.test.ts",
+    "reason": "migrates in a follow-up"
+  },
+  {
+    "id": "apps/api/src/handlers/uploads/update.ts",
+    "reason": "migrates in a follow-up"
+  },
+  {
+    "id": "apps/api/src/handlers/workspaces/read-overview-activity-actors.logic.ts",
+    "reason": "migrates in a follow-up"
+  },
+  {
+    "id": "apps/api/src/handlers/workspaces/read-overview-activity.logic.ts",
+    "reason": "migrates in a follow-up"
+  },
+  {
+    "id": "apps/api/src/lib/account-deletion-ai-memory.integration.test.ts",
+    "reason": "migrates in a follow-up"
+  },
+  {
+    "id": "apps/api/src/lib/agent-auth.ts",
+    "reason": "migrates in a follow-up"
+  },
+  {
+    "id": "apps/api/src/lib/agent-skills/audited-body.ts",
+    "reason": "migrates in a follow-up"
+  },
+  {
+    "id": "apps/api/src/lib/agent-skills/content-hash.ts",
+    "reason": "migrates in a follow-up"
+  },
+  {
+    "id": "apps/api/src/lib/auth/session-token.ts",
+    "reason": "migrates in a follow-up"
+  },
+  {
+    "id": "apps/api/src/lib/business-registries/credentials.ts",
+    "reason": "migrates in a follow-up"
+  },
+  {
+    "id": "apps/api/src/lib/business-registries/desktop/link-grant-store.ts",
+    "reason": "migrates in a follow-up"
+  },
+  {
+    "id": "apps/api/src/lib/business-registries/desktop/link-grants.test.ts",
+    "reason": "migrates in a follow-up"
+  },
+  {
+    "id": "apps/api/src/lib/case-law/analysis-prompt.ts",
+    "reason": "migrates in a follow-up"
+  },
+  {
+    "id": "apps/api/src/lib/chat/provider-image-input.ts",
+    "reason": "migrates in a follow-up"
+  },
+  {
+    "id": "apps/api/src/lib/chat/ref-registry.ts",
+    "reason": "migrates in a follow-up"
+  },
+  {
+    "id": "apps/api/src/lib/client-ip.ts",
+    "reason": "migrates in a follow-up"
+  },
+  {
+    "id": "apps/api/src/lib/configured-bearer-access.ts",
+    "reason": "migrates in a follow-up"
+  },
+  {
+    "id": "apps/api/src/lib/db/migration-history.property.test.ts",
+    "reason": "migrates in a follow-up"
+  },
+  {
+    "id": "apps/api/src/lib/db/migration-history.ts",
+    "reason": "migrates in a follow-up"
+  },
+  {
+    "id": "apps/api/src/lib/destructive-effect-chunks.ts",
+    "reason": "migrates in a follow-up"
+  },
+  {
+    "id": "apps/api/src/lib/document-review/finding-fingerprint.ts",
+    "reason": "migrates in a follow-up"
+  },
+  {
+    "id": "apps/api/src/lib/document-review/review-document-messages.ts",
+    "reason": "migrates in a follow-up"
+  },
+  {
+    "id": "apps/api/src/lib/email/correspondence/create.ts",
+    "reason": "migrates in a follow-up"
+  },
+  {
+    "id": "apps/api/src/lib/email/inbound/ingest.ts",
+    "reason": "migrates in a follow-up"
+  },
+  {
+    "id": "apps/api/src/lib/email/inbound/message.ts",
+    "reason": "migrates in a follow-up"
+  },
+  {
+    "id": "apps/api/src/lib/email/inbound/ses.ts",
+    "reason": "migrates in a follow-up"
+  },
+  {
+    "id": "apps/api/src/lib/entities/create-from-buffer.ts",
+    "reason": "migrates in a follow-up"
+  },
+  {
+    "id": "apps/api/src/lib/entities/opaque-tokens.ts",
+    "reason": "migrates in a follow-up"
+  },
+  {
+    "id": "apps/api/src/lib/entity-versions/comparison-version-id.ts",
+    "reason": "migrates in a follow-up"
+  },
+  {
+    "id": "apps/api/src/lib/entity-versions/create-entity-version-from-buffer.test.ts",
+    "reason": "migrates in a follow-up"
+  },
+  {
+    "id": "apps/api/src/lib/entity-versions/create-entity-version-from-buffer.ts",
+    "reason": "migrates in a follow-up"
+  },
+  {
+    "id": "apps/api/src/lib/files/office-evidence-worker.ts",
+    "reason": "migrates in a follow-up"
+  },
+  {
+    "id": "apps/api/src/lib/files/organization-file-usage-reconcile.db.test.ts",
+    "reason": "migrates in a follow-up"
+  },
+  {
+    "id": "apps/api/src/lib/files/organization-file-usage.ts",
+    "reason": "migrates in a follow-up"
+  },
+  {
+    "id": "apps/api/src/lib/files/pdf-signing/certificate.test.ts",
+    "reason": "migrates in a follow-up"
+  },
+  {
+    "id": "apps/api/src/lib/files/pdf-signing/certificate.ts",
+    "reason": "migrates in a follow-up"
+  },
+  {
+    "id": "apps/api/src/lib/files/pdf-signing/finalize.ts",
+    "reason": "migrates in a follow-up"
+  },
+  {
+    "id": "apps/api/src/lib/files/pdf-signing/revocation.ts",
+    "reason": "migrates in a follow-up"
+  },
+  {
+    "id": "apps/api/src/lib/files/pdf-signing/sign-pdf.test.ts",
+    "reason": "migrates in a follow-up"
+  },
+  {
+    "id": "apps/api/src/lib/files/pdf-signing/sign-pdf.ts",
+    "reason": "migrates in a follow-up"
+  },
+  {
+    "id": "apps/api/src/lib/files/pdf-signing/stamp-glyphs.ts",
+    "reason": "migrates in a follow-up"
+  },
+  {
+    "id": "apps/api/src/lib/flows/flow-run-worker.integration.test.ts",
+    "reason": "migrates in a follow-up"
+  },
+  {
+    "id": "apps/api/src/lib/folio-collab-rooms.ts",
+    "reason": "migrates in a follow-up"
+  },
+  {
+    "id": "apps/api/src/lib/hosted-usage-provider/webhook-record.test.ts",
+    "reason": "migrates in a follow-up"
+  },
+  {
+    "id": "apps/api/src/lib/hosted-usage-provider/webhook-record.ts",
+    "reason": "migrates in a follow-up"
+  },
+  {
+    "id": "apps/api/src/lib/infosoud/agenda-import.ts",
+    "reason": "migrates in a follow-up"
+  },
+  {
+    "id": "apps/api/src/lib/legal-search/corpus-content-hash.ts",
+    "reason": "migrates in a follow-up"
+  },
+  {
+    "id": "apps/api/src/lib/legal-search/corpus-index-manifest.ts",
+    "reason": "migrates in a follow-up"
+  },
+  {
+    "id": "apps/api/src/lib/legal-search/corpus-index-scored-scan.test.ts",
+    "reason": "migrates in a follow-up"
+  },
+  {
+    "id": "apps/api/src/lib/legal-search/corpus-pack.ts",
+    "reason": "migrates in a follow-up"
+  },
+  {
+    "id": "apps/api/src/lib/legal-search/corpus-query-variant-policy.ts",
+    "reason": "migrates in a follow-up"
+  },
+  {
+    "id": "apps/api/src/lib/legal-search/corpus-ranking-policy.ts",
+    "reason": "migrates in a follow-up"
+  },
+  {
+    "id": "apps/api/src/lib/legal-search/corpus-search-cursor.ts",
+    "reason": "migrates in a follow-up"
+  },
+  {
+    "id": "apps/api/src/lib/legal-search/expansion.ts",
+    "reason": "migrates in a follow-up"
+  },
+  {
+    "id": "apps/api/src/lib/legal-search/legal-alternatives.ts",
+    "reason": "migrates in a follow-up"
+  },
+  {
+    "id": "apps/api/src/lib/legal-search/plain-text-assembly.ts",
+    "reason": "migrates in a follow-up"
+  },
+  {
+    "id": "apps/api/src/lib/legal-search/raw-source-storage.ts",
+    "reason": "migrates in a follow-up"
+  },
+  {
+    "id": "apps/api/src/lib/legal-search/reconciliation-payload.ts",
+    "reason": "migrates in a follow-up"
+  },
+  {
+    "id": "apps/api/src/lib/legal-search/soft-law-fingerprint.ts",
+    "reason": "migrates in a follow-up"
+  },
+  {
+    "id": "apps/api/src/lib/lists/sanctions/monitoring-concurrency.postgres.test.ts",
+    "reason": "migrates in a follow-up"
+  },
+  {
+    "id": "apps/api/src/lib/lists/sanctions/monitoring-diff.db.test.ts",
+    "reason": "migrates in a follow-up"
+  },
+  {
+    "id": "apps/api/src/lib/lists/sanctions/monitoring-drain.db.test.ts",
+    "reason": "migrates in a follow-up"
+  },
+  {
+    "id": "apps/api/src/lib/lists/sanctions/monitoring-input.ts",
+    "reason": "migrates in a follow-up"
+  },
+  {
+    "id": "apps/api/src/lib/lists/sanctions/monitoring-opt-out.postgres.test.ts",
+    "reason": "migrates in a follow-up"
+  },
+  {
+    "id": "apps/api/src/lib/lists/sanctions/monitoring-throughput.postgres.test.ts",
+    "reason": "migrates in a follow-up"
+  },
+  {
+    "id": "apps/api/src/lib/lists/sanctions/refresh.db.test.ts",
+    "reason": "migrates in a follow-up"
+  },
+  {
+    "id": "apps/api/src/lib/lists/sanctions/refresh.ts",
+    "reason": "migrates in a follow-up"
+  },
+  {
+    "id": "apps/api/src/lib/lists/sanctions/screening-service.db.test.ts",
+    "reason": "migrates in a follow-up"
+  },
+  {
+    "id": "apps/api/src/lib/lists/sanctions/source-fetch.test.ts",
+    "reason": "migrates in a follow-up"
+  },
+  {
+    "id": "apps/api/src/lib/lists/sanctions/source-fetch.ts",
+    "reason": "migrates in a follow-up"
+  },
+  {
+    "id": "apps/api/src/lib/mcp-upstream/namespace.ts",
+    "reason": "migrates in a follow-up"
+  },
+  {
+    "id": "apps/api/src/lib/mcp-upstream/oauth.ts",
+    "reason": "migrates in a follow-up"
+  },
+  {
+    "id": "apps/api/src/lib/member-credential-lifecycle.db.test.ts",
+    "reason": "migrates in a follow-up"
+  },
+  {
+    "id": "apps/api/src/lib/memory/memory-dedup.ts",
+    "reason": "migrates in a follow-up"
+  },
+  {
+    "id": "apps/api/src/lib/oauth-cimd-private-key-jwt.db.test.ts",
+    "reason": "migrates in a follow-up"
+  },
+  {
+    "id": "apps/api/src/lib/rate-limit/action-period-budget.ts",
+    "reason": "migrates in a follow-up"
+  },
+  {
+    "id": "apps/api/src/lib/rate-limit/otp-account-budget.ts",
+    "reason": "migrates in a follow-up"
+  },
+  {
+    "id": "apps/api/src/lib/s3-presign.test.ts",
+    "reason": "migrates in a follow-up"
+  },
+  {
+    "id": "apps/api/src/lib/s3-presign.ts",
+    "reason": "migrates in a follow-up"
+  },
+  {
+    "id": "apps/api/src/lib/s3.ts",
+    "reason": "migrates in a follow-up"
+  },
+  {
+    "id": "apps/api/src/lib/safe-id-boundaries.ts",
+    "reason": "migrates in a follow-up"
+  },
+  {
+    "id": "apps/api/src/lib/security-canary.test.ts",
+    "reason": "migrates in a follow-up"
+  },
+  {
+    "id": "apps/api/src/lib/security-canary.ts",
+    "reason": "migrates in a follow-up"
+  },
+  {
+    "id": "apps/api/src/lib/selfhost-auth.ts",
+    "reason": "migrates in a follow-up"
+  },
+  {
+    "id": "apps/api/src/lib/signup-abuse.test.ts",
+    "reason": "migrates in a follow-up"
+  },
+  {
+    "id": "apps/api/src/lib/skills/install.db.test.ts",
+    "reason": "migrates in a follow-up"
+  },
+  {
+    "id": "apps/api/src/lib/skills/skill-package.ts",
+    "reason": "migrates in a follow-up"
+  },
+  {
+    "id": "apps/api/src/lib/tanstack-ai-generate.ts",
+    "reason": "migrates in a follow-up"
+  },
+  {
+    "id": "apps/api/src/lib/tanstack-ai-models.ts",
+    "reason": "migrates in a follow-up"
+  },
+  {
+    "id": "apps/api/src/lib/uploads/runtime.test.ts",
+    "reason": "migrates in a follow-up"
+  },
+  {
+    "id": "apps/api/src/mcp/apps/document-upload/app.ts",
+    "reason": "migrates in a follow-up"
+  },
+  {
+    "id": "apps/api/src/mcp/apps/file-comparison/app.ts",
+    "reason": "migrates in a follow-up"
+  },
+  {
+    "id": "apps/api/src/mcp/case-law-decision-read.ts",
+    "reason": "migrates in a follow-up"
+  },
+  {
+    "id": "apps/api/src/mcp/document-file-upload.test.ts",
+    "reason": "migrates in a follow-up"
+  },
+  {
+    "id": "apps/api/src/mcp/document-file-upload.ts",
+    "reason": "migrates in a follow-up"
+  },
+  {
+    "id": "apps/api/src/mcp/feedback-approval.ts",
+    "reason": "migrates in a follow-up"
+  },
+  {
+    "id": "apps/api/src/mcp/file-comparison-links-tool.ts",
+    "reason": "migrates in a follow-up"
+  },
+  {
+    "id": "apps/api/src/mcp/file-comparison-run.test.ts",
+    "reason": "migrates in a follow-up"
+  },
+  {
+    "id": "apps/api/src/mcp/file-comparison-run.ts",
+    "reason": "migrates in a follow-up"
+  },
+  {
+    "id": "apps/api/src/mcp/reader-annotation-tools.ts",
+    "reason": "migrates in a follow-up"
+  },
+  {
+    "id": "apps/api/src/mcp/template-persistence.ts",
+    "reason": "migrates in a follow-up"
+  },
+  {
+    "id": "apps/api/src/scripts/better-auth-17-backfill.logic.ts",
+    "reason": "migrates in a follow-up"
+  },
+  {
+    "id": "apps/api/src/scripts/better-auth-migration-audit.logic.ts",
+    "reason": "migrates in a follow-up"
+  },
+  {
+    "id": "apps/api/src/scripts/build-expansion-dictionary.ts",
+    "reason": "migrates in a follow-up"
+  },
+  {
+    "id": "apps/api/src/scripts/eu-completion-tick.postgres.test.ts",
+    "reason": "migrates in a follow-up"
+  },
+  {
+    "id": "apps/api/src/scripts/eu-ecj-formex-refresh.ts",
+    "reason": "migrates in a follow-up"
+  },
+  {
+    "id": "apps/api/src/scripts/fetch-ocr-models.ts",
+    "reason": "migrates in a follow-up"
+  },
+  {
+    "id": "apps/api/src/scripts/mcp-canary.ts",
+    "reason": "migrates in a follow-up"
+  },
+  {
+    "id": "apps/api/src/scripts/subset-stamp-fonts.ts",
+    "reason": "migrates in a follow-up"
+  },
+  {
+    "id": "apps/api/src/tests/fixture-provenance.ts",
+    "reason": "migrates in a follow-up"
+  },
+  {
+    "id": "apps/api/src/tests/helpers/document-numbering-upload.ts",
+    "reason": "migrates in a follow-up"
+  },
+  {
+    "id": "apps/api/src/tests/helpers/docx-engine-parity.ts",
+    "reason": "migrates in a follow-up"
+  },
+  {
+    "id": "apps/api/src/tests/helpers/fake-s3.test.ts",
+    "reason": "migrates in a follow-up"
+  },
+  {
+    "id": "apps/api/src/tests/helpers/fake-s3.ts",
+    "reason": "migrates in a follow-up"
+  },
+  {
+    "id": "apps/api/src/tests/helpers/oauth-grant.ts",
+    "reason": "migrates in a follow-up"
+  },
+  {
+    "id": "apps/api/src/tests/helpers/signed-pdf.ts",
+    "reason": "migrates in a follow-up"
+  },
+  {
+    "id": "apps/api/src/tests/helpers/timestamp-token.ts",
+    "reason": "migrates in a follow-up"
+  },
+  {
+    "id": "apps/api/src/tests/security/ai-memories-rls.test.ts",
+    "reason": "migrates in a follow-up"
+  },
+  {
+    "id": "apps/api/src/tests/security/multipart-json-fields.test.ts",
+    "reason": "migrates in a follow-up"
+  },
+  {
+    "id": "apps/api/src/tests/security/rls-helpers.ts",
+    "reason": "migrates in a follow-up"
+  },
+  {
+    "id": "apps/web/e2e/agent/drive.ts",
+    "reason": "migrates in a follow-up"
+  },
+  {
+    "id": "apps/web/e2e/specs/oauth-consent.spec.ts",
+    "reason": "migrates in a follow-up"
+  },
+  {
+    "id": "apps/web/e2e/specs/oauth-ui-redirect.spec.ts",
+    "reason": "migrates in a follow-up"
+  },
+  {
+    "id": "apps/web/src/lib/files/sha256.ts",
+    "reason": "migrates in a follow-up"
+  },
+  {
+    "id": "apps/web/src/lib/files/upload-entity-version.ts",
+    "reason": "migrates in a follow-up"
+  },
+  {
+    "id": "apps/web/src/lib/workspaces/mutations/use-create-file-entities.ts",
+    "reason": "migrates in a follow-up"
+  },
+  {
+    "id": "apps/web/src/routes/_protected.contacts/-contact-import-request.ts",
+    "reason": "migrates in a follow-up"
+  },
+  {
+    "id": "packages/api-contract/src/sk-court-succession.test.ts",
+    "reason": "migrates in a follow-up"
+  },
+  {
+    "id": "packages/api-contract/src/us-courts-generator.test.ts",
+    "reason": "migrates in a follow-up"
+  },
+  {
+    "id": "packages/api-contract/src/us-courts.test.ts",
+    "reason": "migrates in a follow-up"
+  },
+  {
+    "id": "packages/cli/src/auth/pkce.ts",
+    "reason": "migrates in a follow-up"
+  },
+  {
+    "id": "packages/cli/src/cli-commands.test.ts",
+    "reason": "migrates in a follow-up"
+  },
+  {
+    "id": "packages/cli/src/registry-cache.ts",
+    "reason": "migrates in a follow-up"
+  },
+  {
+    "id": "packages/cli/src/registry-trust.ts",
+    "reason": "migrates in a follow-up"
+  },
+  {
+    "id": "packages/cli/src/upload-document.ts",
+    "reason": "migrates in a follow-up"
+  },
+  {
+    "id": "packages/legal-ast/src/projection-digest.ts",
+    "reason": "migrates in a follow-up"
+  },
+  {
+    "id": "packages/legal-atlas/src/provision-key.test.ts",
+    "reason": "migrates in a follow-up"
+  },
+  {
+    "id": "packages/property-testing/src/failure-fingerprint.ts",
+    "reason": "migrates in a follow-up"
+  },
+  {
+    "id": "packages/sanctions/src/test-fixtures/monitoring-corpus.ts",
+    "reason": "migrates in a follow-up"
+  },
+  {
+    "id": "packages/scripts/src/agent-session.ts",
+    "reason": "migrates in a follow-up"
+  },
+  {
+    "id": "packages/scripts/src/auth-md-spec-drift.ts",
+    "reason": "migrates in a follow-up"
+  },
+  {
+    "id": "packages/scripts/src/dev-runner.ts",
+    "reason": "migrates in a follow-up"
+  },
+  {
+    "id": "packages/scripts/src/prepared-generated-sources.ts",
+    "reason": "migrates in a follow-up"
+  },
+  {
+    "id": "packages/template-packs/scripts/generate-manifest.ts",
+    "reason": "migrates in a follow-up"
+  },
+  {
+    "id": "packages/template-packs/src/catalogue.ts",
+    "reason": "migrates in a follow-up"
+  },
+  {
+    "id": "scripts/cargo-deny-install.test.ts",
+    "reason": "migrates in a follow-up"
+  },
+  {
+    "id": "scripts/check-duplicate-raster-assets.ts",
+    "reason": "migrates in a follow-up"
+  },
+  {
+    "id": "scripts/check-marketing-recordings.ts",
+    "reason": "migrates in a follow-up"
+  },
+  {
+    "id": "scripts/check-migration-order.test.ts",
+    "reason": "migrates in a follow-up"
+  },
+  {
+    "id": "scripts/check-migration-order.ts",
+    "reason": "migrates in a follow-up"
+  },
+  {
+    "id": "scripts/check-migration-safety.ts",
+    "reason": "migrates in a follow-up"
+  },
+  {
+    "id": "scripts/detect-security-workflow-changes.test.ts",
+    "reason": "migrates in a follow-up"
+  },
+  {
+    "id": "scripts/generate-snowball-stemmers.ts",
+    "reason": "migrates in a follow-up"
+  },
+  {
+    "id": "scripts/generate-us-courts.ts",
+    "reason": "migrates in a follow-up"
+  },
+  {
+    "id": "scripts/osv-scanner-install.test.ts",
+    "reason": "migrates in a follow-up"
+  },
+  {
+    "id": "scripts/product-media.test.ts",
+    "reason": "migrates in a follow-up"
+  },
+  {
+    "id": "scripts/product-media.ts",
+    "reason": "migrates in a follow-up"
+  },
+  {
+    "id": "scripts/safe-chain-install.test.ts",
+    "reason": "migrates in a follow-up"
+  }
+]

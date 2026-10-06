@@ -977,6 +977,7 @@
         "fast-check": "catalog:",
       },
       "devDependencies": {
+        "@stll/sha256": "workspace:*",
         "@stll/typescript-config": "workspace:*",
         "bun-types": "catalog:",
       },
@@ -1048,6 +1049,13 @@
         "@stll/typescript-config": "workspace:*",
         "bun-types": "catalog:",
         "fast-check": "catalog:",
+      },
+    },
+    "packages/sha256": {
+      "name": "@stll/sha256",
+      "devDependencies": {
+        "@stll/typescript-config": "workspace:*",
+        "bun-types": "catalog:",
       },
     },
     "packages/skills": {
@@ -2973,6 +2981,8 @@
     "@stll/sanctions": ["@stll/sanctions@workspace:packages/sanctions"],
 
     "@stll/scripts": ["@stll/scripts@workspace:packages/scripts"],
+
+    "@stll/sha256": ["@stll/sha256@workspace:packages/sha256"],
 
     "@stll/skills": ["@stll/skills@workspace:packages/skills"],
 
