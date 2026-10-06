@@ -240,3 +240,18 @@ test("declared Legal Lists decisions do not require verification", () => {
     }
   }
 });
+
+test("undeclared verification decisions do not admit Legal Lists", () => {
+  expect(
+    callerFeatureEnabled(
+      {
+        declaredFeatureIds: [],
+        deploymentFeatures: { legalLists: true },
+        capabilities: {
+          [CALLER_FEATURE.verification.id]: { status: "enabled" },
+        },
+      },
+      CALLER_FEATURE.legalLists,
+    ),
+  ).toBe(false);
+});

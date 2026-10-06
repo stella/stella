@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
+import type { WorkspaceActivity } from "@/components/app-sidebar.logic";
 import {
   matterActivityIsKnownEmpty,
   matterActivityItemVisible,
@@ -253,14 +254,26 @@ describe("sidebar entity activity navigation", () => {
 });
 
 describe("sidebar list item admission", () => {
+  const entity = {
+    activityAt: "2026-07-01T12:00:00.000Z",
+    entityKind: "task",
+    fieldId: null,
+    fileName: null,
+    hasThumbnail: false,
+    id: "entity-a",
+    listItemType: null,
+    mimeType: null,
+    status: "open",
+    title: "Review contract",
+    type: "entity",
+  } as const satisfies WorkspaceActivity;
   for (const listItemType of [null, ...LIST_ITEM_TYPES]) {
     for (const legalListsEnabled of [false, true]) {
       test(`task ${listItemType} with Lists ${legalListsEnabled}`, () => {
         const item = {
-          type: "entity",
-          entityKind: "task",
+          ...entity,
           listItemType,
-        } as const;
+        } as const satisfies WorkspaceActivity;
         const visible = matterActivityItemVisible(item, legalListsEnabled);
         expect(visible).toBe(
           legalListsEnabled || listItemType === null || listItemType === "task",
@@ -283,10 +296,20 @@ describe("sidebar list item admission", () => {
     }
   }
   test("documents and threads remain visible without Lists", () => {
-    expect(matterActivityItemVisible({ type: "thread" }, false)).toBe(true);
     expect(
       matterActivityItemVisible(
-        { type: "entity", entityKind: "document", listItemType: null },
+        {
+          type: "thread",
+          id: "thread-a",
+          title: "Review notes",
+          activityAt: entity.activityAt,
+        } satisfies WorkspaceActivity,
+        false,
+      ),
+    ).toBe(true);
+    expect(
+      matterActivityItemVisible(
+        { ...entity, entityKind: "document" } satisfies WorkspaceActivity,
         false,
       ),
     ).toBe(true);

@@ -30,7 +30,9 @@ const admittedByServer = (
         availability.deploymentFeatures[feature.undeclared.key] === true &&
         // Read the server decision directly: dependent features require Lists.
         feature.undeclared.featureIds.some(
-          (id) => availability.capabilities[id]?.status === "enabled",
+          (id) =>
+            availability.declaredFeatureIds.includes(id) &&
+            availability.capabilities[id]?.status === "enabled",
         )
       );
     default:

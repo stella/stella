@@ -1,6 +1,7 @@
 import { panic } from "better-result";
 
-import type { EntityKind, WorkspaceEntity } from "@/lib/types";
+import type { WebApiRoutes } from "@/lib/eden-client";
+import type { EntityKind } from "@/lib/types";
 
 export const resolveSidebarWorkspaceId = ({
   chatWorkspaceId,
@@ -174,16 +175,11 @@ export const resolveEntityActivityDestination = (
   }
 };
 
-type MatterActivityItem =
-  | { type: "thread" }
-  | {
-      type: "entity";
-      entityKind: EntityKind;
-      listItemType: WorkspaceEntity["listItemType"];
-    };
+export type WorkspaceActivity =
+  WebApiRoutes["workspaces"][":workspaceId"]["activity"]["get"]["response"][200]["items"][number];
 
 export const matterActivityItemVisible = (
-  item: MatterActivityItem,
+  item: WorkspaceActivity,
   legalListsEnabled: boolean,
 ): boolean =>
   item.type === "thread" ||
