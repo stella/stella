@@ -121,6 +121,9 @@ const PLAYBOOK_JUMP_TOP_OFFSET_PX = 24;
 // Longer than a default error toast: the conflict toast carries the reload
 // affordance, so it has to outlive a glance.
 const VERSION_CONFLICT_TOAST_TIMEOUT_MS = 10_000;
+// A draft save keeps no version, so once this toast goes, a removed
+// position is gone for good.
+const POSITION_REMOVED_TOAST_TIMEOUT_MS = 10_000;
 
 // A 409 the optimistic-concurrency guard raised, off either channel the
 // editor uses: Eden's error field on a direct call, or the `APIError`
@@ -1012,6 +1015,7 @@ const PlaybookEditorForm = ({
     }
     stellaToast.add({
       title: t("knowledge.playbooks.positionRemoved"),
+      timeout: POSITION_REMOVED_TOAST_TIMEOUT_MS,
       actionProps: {
         children: t("common.undo"),
         onClick: () =>
