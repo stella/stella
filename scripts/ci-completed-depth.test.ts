@@ -306,9 +306,6 @@ test("completion lookup conditions belong only to the planner job", () => {
       if (step.if?.includes("steps.completed-depth")) {
         expect(name, step.name).toBe("ci-plan");
       }
-      if (step.if?.includes("${{")) {
-        expect(step.if, step.name).toMatch(/^\$\{\{[\s\S]*\}\}$/u);
-      }
     }
   }
   const condition = jobs["docker-checks"]?.steps.find(
@@ -328,4 +325,36 @@ test("completion lookup conditions belong only to the planner job", () => {
       ).toBe(!cancelled && required === "true");
     }
   }
+});
+
+test("every CI condition is one expression without partial interpolation", () => {
+  const conditions = new Set<string>();
+  const visit = (value: unknown, location: string) => {
+    if (value === null || typeof value !== "object") {
+      return;
+    }
+    for (const [key, entry] of Object.entries(value)) {
+      const current = `${location}.${key}`;
+      if (key === "if") {
+        conditions.add(current);
+        expect(typeof entry, current).toBe("string");
+        if (typeof entry === "string" && entry.includes("${{")) {
+          const expression = entry.trim();
+          expect(expression, current).toMatch(/^\$\{\{[\s\S]*\}\}$/u);
+          expect(expression.slice(3, -2), current).not.toContain("${{");
+        }
+      }
+      visit(entry, current);
+    }
+  };
+  visit(
+    Bun.YAML.parse(
+      readFileSync(
+        new URL("../.github/workflows/ci.yml", import.meta.url),
+        "utf-8",
+      ),
+    ),
+    "ci.yml",
+  );
+  expect(conditions.size).toBeGreaterThan(0);
 });
