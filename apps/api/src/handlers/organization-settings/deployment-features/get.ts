@@ -4,7 +4,10 @@ import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { resolveFeatureAccessSnapshot } from "@/api/lib/auth/feature-access/context";
 import { isFeatureEnabled } from "@/api/lib/auth/feature-access/policy";
-import type { FeatureAccessSnapshot } from "@/api/lib/auth/feature-access/policy";
+import type {
+  FeatureAccessPrincipal,
+  FeatureAccessSnapshot,
+} from "@/api/lib/auth/feature-access/policy";
 
 const config = {
   description:
@@ -16,24 +19,30 @@ const config = {
   access: "read",
 } satisfies HandlerConfig;
 
-/** The features the web may show to this caller in this organization. */
-export const readDeploymentFeatures = (snapshot: FeatureAccessSnapshot) => ({
-  timeBilling: isFeatureEnabled(snapshot, "time-billing", snapshot),
+/** The features the web may show to this caller in this organization. A
+ *  snapshot resolved for anyone else enables nothing. */
+export const readDeploymentFeatures = ({
+  principal,
+  snapshot,
+}: {
+  principal: FeatureAccessPrincipal;
+  snapshot: FeatureAccessSnapshot;
+}) => ({
+  timeBilling: isFeatureEnabled(snapshot, "time-billing", principal),
 });
 
 export default createSafeRootHandler(
   config,
   async function* ({ safeDb, session, user }) {
+    const principal = {
+      organizationId: session.activeOrganizationId,
+      userId: user.id,
+    };
     const snapshot = yield* Result.await(
       safeDb(
-        async (tx) =>
-          await resolveFeatureAccessSnapshot({
-            tx,
-            organizationId: session.activeOrganizationId,
-            userId: user.id,
-          }),
+        async (tx) => await resolveFeatureAccessSnapshot({ tx, ...principal }),
       ),
     );
-    return Result.ok(readDeploymentFeatures(snapshot));
+    return Result.ok(readDeploymentFeatures({ principal, snapshot }));
   },
 );

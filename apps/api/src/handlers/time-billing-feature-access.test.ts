@@ -50,6 +50,7 @@ const FEATURE_ID = "time-billing";
 const ORGANIZATION_ID = "org_test";
 const USER_ID = "user_test";
 const PATH_ID = "00000000-0000-4000-8000-000000000001";
+const CALLER = { organizationId: ORGANIZATION_ID, userId: USER_ID };
 
 const snapshotFor = (enabled: boolean, deploymentEnabled = true) =>
   createFeatureAccessSnapshot({
@@ -454,9 +455,38 @@ describe("time billing for the web client", () => {
   test("the deployment features answer follows the flag the routes follow", async () => {
     for (const enabled of [false, true]) {
       const features = await withTimeBilling(enabled, async () =>
-        readDeploymentFeatures(snapshotFor(true, enabled)),
+        readDeploymentFeatures({
+          principal: CALLER,
+          snapshot: snapshotFor(true, enabled),
+        }),
       );
       expect(features.timeBilling).toBe(enabled);
+    }
+  });
+
+  test("the deployment features answer is off for a caller who has not enrolled", async () => {
+    const features = await withTimeBilling(true, async () =>
+      readDeploymentFeatures({
+        principal: CALLER,
+        snapshot: snapshotFor(false),
+      }),
+    );
+    expect(features.timeBilling).toBe(false);
+  });
+
+  test("an enrolled snapshot resolved for another caller enables nothing", async () => {
+    for (const principal of [
+      { organizationId: ORGANIZATION_ID, userId: "user_other" },
+      { organizationId: "org_other", userId: USER_ID },
+      { organizationId: ORGANIZATION_ID, userId: null },
+    ]) {
+      const features = await withTimeBilling(true, async () =>
+        readDeploymentFeatures({ principal, snapshot: snapshotFor(true) }),
+      );
+      expect({ principal, timeBilling: features.timeBilling }).toEqual({
+        principal,
+        timeBilling: false,
+      });
     }
   });
 
