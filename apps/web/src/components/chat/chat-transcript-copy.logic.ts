@@ -50,6 +50,7 @@ export const serializeChatSelection = ({
 
   const range = selection.getRangeAt(0);
   let excluded = false;
+  let trailingSelectedBreaks = 0;
   const read = (node: Node): string => {
     if (!range.intersectsNode(node)) {
       return "";
@@ -61,7 +62,11 @@ export const serializeChatSelection = ({
     if (node instanceof Text) {
       const start = node === range.startContainer ? range.startOffset : 0;
       const end = node === range.endContainer ? range.endOffset : node.length;
-      return node.data.slice(start, end);
+      const text = node.data.slice(start, end);
+      if (text !== "") {
+        trailingSelectedBreaks = text.match(/\n+$/u)?.at(0)?.length ?? 0;
+      }
+      return text;
     }
     let text = "";
     for (const child of node.childNodes) {
@@ -79,6 +84,7 @@ export const serializeChatSelection = ({
       return text;
     }
     if (node.tagName === "BR") {
+      trailingSelectedBreaks += 1;
       return "\n";
     }
     const display =
@@ -92,7 +98,7 @@ export const serializeChatSelection = ({
   const filteredText = read(root);
   // Keep the browser's exact whitespace and Unicode when nothing is excluded.
   const text = excluded
-    ? filteredText.replace(/\n+$/u, "")
+    ? filteredText.replace(/\n+$/u, () => "\n".repeat(trailingSelectedBreaks))
     : selection.toString();
   const html = root.ownerDocument.createElement("pre");
   html.textContent = text;

@@ -16,7 +16,23 @@ test("a word copied from a transcript pastes only that selection", async ({
     timeout: 30_000,
   });
 
-  await transcript.getByText("Clipboard", { exact: true }).dblclick();
+  const message = transcript.getByText("Clipboard", { exact: true });
+  const wordPosition = await message.evaluate((element) => {
+    const textNodes = document.createTreeWalker(element, NodeFilter.SHOW_TEXT);
+    const text = textNodes.nextNode();
+    if (text === null) {
+      throw new Error("Message is missing its visible text node");
+    }
+    const range = document.createRange();
+    range.selectNodeContents(text);
+    const word = range.getBoundingClientRect();
+    const messageRect = element.getBoundingClientRect();
+    return {
+      x: word.left - messageRect.left + word.width / 2,
+      y: word.top - messageRect.top + word.height / 2,
+    };
+  });
+  await message.dblclick({ position: wordPosition });
   expect(await page.evaluate(() => window.getSelection()?.toString())).toBe(
     "Clipboard",
   );

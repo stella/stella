@@ -31,6 +31,25 @@ const select = (start: Node, end = start) => {
 };
 
 describe("transcript copy contains only selected visible text", () => {
+  test("filtering hidden nodes preserves selected trailing code newlines", () => {
+    const root = fixture(
+      '<pre data-chat-message-id="one"><span data-chat-copy-exclude>Copy</span>code\n\n</pre>',
+    );
+    const message = root.querySelector("pre");
+    const start = message?.firstChild?.firstChild;
+    const end = message?.lastChild;
+    if (
+      start === undefined ||
+      start === null ||
+      end === undefined ||
+      end === null
+    ) {
+      throw new Error("Missing code fixture");
+    }
+    expect(
+      serializeChatSelection({ selection: select(start, end), root })?.text,
+    ).toBe("code\n\n");
+  });
   test("keeps a partial word selection and escapes markup without copying ancestor attributes", () => {
     const root = fixture(
       '<article style="--font-private:secret"><p data-chat-message-id="one">Selected &lt;word&gt; only</p><p data-chat-message-id="two">Unrelated thread</p></article>',
