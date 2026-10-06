@@ -146,6 +146,7 @@
     "accountLinked": "Konto lingitud",
     "connectToStella": "Ühenda stella webiga",
     "connectToStellaDescription": "Siduge see arvuti oma praeguse stella kontoga ilma dokumenti avamata.",
+    "desktopBenefit": "Office’i failid ja kohalik lõikelaua ajalugu",
     "disconnectAccount": "Katkestage konto ühendus",
     "errorDisconnectAccount": "stella desktop ei saanud teie konto ühendust katkestada.",
     "errorReadAccount": "stella desktop ei saanud teie konto ühendust kontrollida.",
