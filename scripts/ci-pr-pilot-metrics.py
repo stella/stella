@@ -51,7 +51,7 @@ def summarize(pulls, start, end, fast_jobs):
         if first_arm and start <= first_arm < end:
             if merge and first_arm <= merge < end:
                 merged.append((merge - first_arm).total_seconds() / 60)
-            elif merge is None:
+            elif merge is None and pull.get("closedAt") is None:
                 pending_arms.append((end - first_arm).total_seconds() / 60)
         for commit in pull["commits"]["nodes"]:
             for suite in commit["commit"]["checkSuites"]["nodes"]:
@@ -218,7 +218,7 @@ class Collector:
           repository(owner:$owner,name:$repo) {
             pullRequests(first:100,after:$cursor,orderBy:{field:UPDATED_AT,direction:DESC}) {
               pageInfo {hasNextPage endCursor}
-              nodes {number updatedAt mergedAt
+              nodes {number updatedAt mergedAt closedAt
                 timelineItems(first:100,itemTypes:[AUTO_MERGE_ENABLED_EVENT,ADDED_TO_MERGE_QUEUE_EVENT,HEAD_REF_FORCE_PUSHED_EVENT]) {
                   pageInfo {hasNextPage} nodes {__typename ... on AutoMergeEnabledEvent {createdAt}
                     ... on AddedToMergeQueueEvent {createdAt}

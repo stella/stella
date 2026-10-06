@@ -188,3 +188,14 @@ print(json.dumps([complete, normal.batch_sizes, missing_complete, m.complete_pul
 `);
   expect(values).toEqual([true, [5, 5, 1], false, false, false, 600, 5, false]);
 });
+
+test("closed unmerged PRs cannot inflate pending arm latency", () => {
+  const result = execute(`
+pull = {"number": 1, "mergedAt": None, "closedAt": now.isoformat(),
+    "timelineItems": {"nodes": [{"__typename": "AutoMergeEnabledEvent",
+        "createdAt": (now - dt.timedelta(hours=4)).isoformat()}]}, "commits": {"nodes": []}}
+summary = m.summarize([pull], now - dt.timedelta(days=1), now, set())
+print(json.dumps([summary["pendingArmedSampleCount"], summary["armToMergeP50LowerBoundMinutes"]]))
+`);
+  expect(result).toEqual([0, null]);
+});
