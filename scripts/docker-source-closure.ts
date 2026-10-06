@@ -484,20 +484,26 @@ export const dockerPruneScopes = (source: string): string[][] =>
 
 // Expand the package script actually named by a Docker RUN. Shell branching
 // visits both sides conservatively; cd changes the path within that RUN only.
+type SourceCommandEntry = {
+  file: string;
+  args: readonly string[];
+  mode: "run" | "build";
+};
+
 type CommandContext = { root: string; tree: SourceTree; active: Set<string> };
 type SourceCommandOptions = {
   command: string;
   words: string[];
   cwd: string;
-  expand: (command: string, cwd: string) => string[];
+  expand: (command: string, cwd: string) => SourceCommandEntry[];
 };
 const sourceCommandEntries = (
   context: CommandContext,
   options: SourceCommandOptions,
-): string[] => {
+): SourceCommandEntry[] => {
   const { root, tree, active } = context;
   const { command } = options;
-  const entries: string[] = [];
+  const entries: SourceCommandEntry[] = [];
   let commandCwd = options.cwd;
   let words = options.words;
   const packageScript = words[0] === "--filter" || words[0] === "run";
@@ -538,6 +544,7 @@ const sourceCommandEntries = (
     active.delete(key);
     return entries;
   }
+  const mode = words[0] === "build" ? "build" : "run";
   if (words[0] === "build") {
     words.shift();
   }
@@ -576,7 +583,11 @@ const sourceCommandEntries = (
       }
       break;
     }
-    entries.push(absolute(commandCwd, word));
+    entries.push({
+      file: absolute(commandCwd, word),
+      args: words.slice(index + 1),
+      mode,
+    });
     found = true;
   }
   if (!found) {
@@ -589,10 +600,10 @@ const walkCommand = (
   context: CommandContext,
   command: string,
   initialCwd: string,
-): string[] => {
+): SourceCommandEntry[] => {
   const { tree } = context;
   let cwd = initialCwd;
-  const entries: string[] = [];
+  const entries: SourceCommandEntry[] = [];
   const directories: string[] = [];
   for (const event of lexShell(command)) {
     if (event.type === "unparsed") {
@@ -629,13 +640,15 @@ const walkCommand = (
       if (config === undefined) {
         panic(`Vite config is unavailable: ${cwd}`);
       }
-      entries.push(config);
+      entries.push({ file: config, args: [], mode: "build" });
       // Vite discovers route modules rather than importing them from config.
       entries.push(
-        ...[...tree.keys()].filter(
-          (file) =>
-            file.startsWith(`${directory}/src/`) && modulePattern.test(file),
-        ),
+        ...[...tree.keys()]
+          .filter(
+            (file) =>
+              file.startsWith(`${directory}/src/`) && modulePattern.test(file),
+          )
+          .map((file) => ({ file, args: [], mode: "build" as const })),
       );
       continue;
     }
@@ -675,13 +688,16 @@ export const commandEntries = (
   tree: SourceTree,
   command: string,
   cwd: string,
-): string[] => walkCommand({ root, tree, active: new Set() }, command, cwd);
+): string[] =>
+  walkCommand({ root, tree, active: new Set() }, command, cwd).map(
+    ({ file }) => file,
+  );
 
 const generatorEntries = (
   root: string,
   context: SourceTree,
   generator: Generator,
-): readonly string[] => {
+): readonly SourceCommandEntry[] => {
   const inventory: SourceTree = new Map(
     [...context].map(([file, origin]) => [`/app${file}`, origin]),
   );
@@ -706,7 +722,11 @@ const generatorEntries = (
   ) {
     return [];
   }
-  return commandEntries(root, inventory, words.join(" "), cwd);
+  return walkCommand(
+    { root, tree: inventory, active: new Set() },
+    words.join(" "),
+    cwd,
+  );
 };
 
 const copyInstruction = (
@@ -812,12 +832,18 @@ export const checkDockerSource = (
       if (!/\b(?:bun|node|vite|npm|yarn|pnpm|npx|bunx|tsc)\b/u.test(body)) {
         continue;
       }
-      const entries = commandEntries(root, stage.files, body, stage.cwd);
-      for (const entry of entries.filter((file) => !file.includes("/dist/"))) {
+      const entries = walkCommand(
+        { root, tree: stage.files, active: new Set() },
+        body,
+        stage.cwd,
+      );
+      for (const entry of entries.filter(
+        ({ file }) => !file.includes("/dist/"),
+      )) {
         const closure = sourceClosureProblems(
           root,
           stage.files,
-          [entry],
+          [entry.file],
           stage.seen,
         );
         problems.push(...closure);
@@ -828,7 +854,14 @@ export const checkDockerSource = (
         // source closure. Only hydrated outputs of that exact producer enter
         // the stage; later imports still resolve against this inventory.
         for (const { generator, entries: producerEntries } of producers) {
-          if (!producerEntries.includes(entry)) {
+          if (
+            entry.mode !== "run" ||
+            !producerEntries.some(
+              (producer) =>
+                producer.file === entry.file &&
+                JSON.stringify(producer.args) === JSON.stringify(entry.args),
+            )
+          ) {
             continue;
           }
           for (const output of generator.outputs) {

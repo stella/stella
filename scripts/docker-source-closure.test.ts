@@ -250,6 +250,17 @@ describe("Docker source closure", () => {
         new Map(),
       ).join("\n"),
     ).toContain("routeTree.gen");
+    for (const command of [
+      "bun apps/web/scripts/generate-route-tree.ts --check",
+      "bun build apps/web/scripts/generate-route-tree.ts",
+    ]) {
+      const validationOnly = `FROM bun AS builder\nWORKDIR /app\nCOPY . .\nRUN ${command}\nRUN bun apps/web/src/entry.ts`;
+      expect(
+        checkDockerSource(fixtureRoot, validationOnly, context, new Map()).join(
+          "\n",
+        ),
+      ).toContain("routeTree.gen");
+    }
   });
 
   test("runs after source hydration in the installed light job with a fixed total budget", () => {
