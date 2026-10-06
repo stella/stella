@@ -23,8 +23,8 @@ globalThis.fetch = Object.assign(
 const { QueryClient } = await import("@tanstack/react-query");
 const { isRedirect } = await import("@tanstack/react-router");
 const { roleOptions } = await import("@/lib/auth-queries");
-const { deploymentFeaturesOptions } =
-  await import("@/queries/deployment-features");
+const { workspacesNavigationOptions } =
+  await import("@/lib/workspaces/queries");
 
 const CALLER = { userId: "unenrolled-owner", organizationId: "org-a" };
 
@@ -83,8 +83,9 @@ describe("server enrollment admission across dedicated billing routes", () => {
       const queryClient = new QueryClient({
         defaultOptions: { queries: { retry: false } },
       });
-      queryClient.setQueryData(deploymentFeaturesOptions(CALLER).queryKey, {
-        timeBilling: false,
+      queryClient.setQueryData(workspacesNavigationOptions(CALLER).queryKey, {
+        workspaces: [],
+        features: { timeBilling: false },
       });
       queryClient.setQueryData(roleOptions.queryKey, "owner");
       const requestCount = requests.length;

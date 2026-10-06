@@ -1477,6 +1477,14 @@ type Messages = {
       "toggleDetails": "Toggle details";
       "unrestoredFields": "{count, plural, one {# field} other {# fields}} could not be filled with real values in anonymized mode. Review: {fields}";
     };
+    "turnNotification": {
+      "failedBody": "A chat reply in stella did not finish.";
+      "failedTitle": "Reply failed";
+      "needsInputBody": "A chat is waiting for your approval or answer.";
+      "needsInputTitle": "stella needs your input";
+      "replyReadyBody": "stella finished answering in your chat.";
+      "replyReadyTitle": "Reply ready";
+    };
     "unsupportedFileType": "Unsupported file type";
     "uploadFailed": "Failed to process file";
     "usageFallbackNotice": "Daily AI allowance used — replies continue on the standard model.";
@@ -4375,6 +4383,11 @@ type Messages = {
       "betaInbox": "Inbox & notifications";
       "betaInboxDescription": "Show the Inbox and the notification bell";
       "betaTimeBillingDescription": "Show time tracking, invoices, and expenses";
+      "chatNotifications": "Chat notifications";
+      "chatNotificationsBlocked": "Notifications are blocked for stella in this browser. Allow them in the browser’s site settings.";
+      "chatNotificationsDescription": "Get a notification from this browser when a chat reply finishes while stella is in the background.";
+      "chatNotificationsToggle": "Notify me when a reply is ready or needs my input";
+      "chatNotificationsUnsupported": "This browser does not support notifications.";
       "confirmDelete": "Confirm delete account";
       "dangerZone": "Danger zone";
       "dangerZoneDescription": "Permanently delete your account access and private account data.";

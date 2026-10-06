@@ -166,6 +166,9 @@ const derivedAttributeRuleOptions = {
 };
 
 const fixtureRuleOverrides = [
+  fixtureRuleOverride("require-json-import-attribute.fixture.ts", [
+    "require-json-import-attribute/require-json-import-attribute",
+  ]),
   fixtureRuleOverride("drizzle.fixture.ts", [
     "drizzle/enforce-delete-with-where",
     "drizzle/enforce-update-with-where",
@@ -248,6 +251,9 @@ const fixtureRuleOverrides = [
   ]),
   fixtureRuleOverride("no-inline-endpoint-in-routes.fixture.ts", [
     "no-inline-endpoint-in-routes/no-inline-endpoint-in-routes",
+  ]),
+  fixtureRuleOverride("no-ad-hoc-inline-rename.fixture.tsx", [
+    "no-ad-hoc-inline-rename/no-ad-hoc-inline-rename",
   ]),
   fixtureRuleOverride("no-inline-style-colors.fixture.tsx", [
     "no-inline-style-colors/no-inline-style-colors",
@@ -1390,6 +1396,7 @@ export default defineConfig({
     "./.oxlint-plugins/no-unformatted-number.ts",
     "./.oxlint-plugins/no-literal-minor-unit-scale.ts",
     "./.oxlint-plugins/no-raw-foreground-opacity.ts",
+    "./.oxlint-plugins/no-ad-hoc-inline-rename.ts",
     "./.oxlint-plugins/no-inline-style-colors.ts",
     "./.oxlint-plugins/no-ad-hoc-find-shortcut.ts",
     "./.oxlint-plugins/no-hand-rolled-typed-character.ts",
@@ -1544,6 +1551,7 @@ export default defineConfig({
     "./.oxlint-plugins/no-imported-class-constant.ts",
     "./.oxlint-plugins/no-static-devtools-import.ts",
     "./.oxlint-plugins/no-static-catalogue-route-import.ts",
+    "./.oxlint-plugins/require-json-import-attribute.ts",
     "./.oxlint-plugins/no-workspace-field-value-drift.ts",
     "./.oxlint-plugins/icon-button-requires-tooltip.ts",
     "./.oxlint-plugins/no-disabled-tooltip-trigger.ts",
@@ -1590,6 +1598,12 @@ export default defineConfig({
   ],
 
   overrides: [
+    {
+      files: ["apps/web/e2e/**", "scripts/**"],
+      rules: {
+        "require-json-import-attribute/require-json-import-attribute": "error",
+      },
+    },
     {
       // Plugin fixtures are inputs for the local rules' tests; route fixtures
       // name their component before declaring it, as route modules do.
@@ -2247,6 +2261,7 @@ export default defineConfig({
       rules: {
         "no-raw-colors/no-raw-colors": "error",
         "no-raw-foreground-opacity/no-raw-foreground-opacity": "error",
+        "no-ad-hoc-inline-rename/no-ad-hoc-inline-rename": "error",
         "no-inline-style-colors/no-inline-style-colors": "error",
         "no-physical-properties/no-physical-properties": "error",
         "no-layout-motion-classes/no-layout-motion-classes": [

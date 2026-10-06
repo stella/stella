@@ -244,6 +244,7 @@ const heavyCheckoutCensus = (workflow: CheckoutWorkflow) => {
         scope === null ? [] : [[scope, "true"]],
       ),
     ),
+    run_required: "true",
     trusted: "true",
     suite_depth: "full",
     queue_depth: "full",

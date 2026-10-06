@@ -53,7 +53,7 @@ import {
   printPdfBuffer,
 } from "@/components/pdf/peek/peek-pdf-print";
 import { QuerySuspenseBoundary } from "@/components/query-suspense-boundary";
-import { StellaMark } from "@/components/stella-mark";
+import { DefaultPendingComponent } from "@/components/route-components";
 import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { DOCX_MIME } from "@/lib/consts";
@@ -323,11 +323,7 @@ const defaultPeekViewerErrorFallback = ({ reset }: { reset: () => void }) => (
   <PeekViewerErrorFallback onRetry={reset} />
 );
 
-export const PeekSuspenseFallback = () => (
-  <div className="flex h-full w-full items-center justify-center">
-    <StellaMark className="text-muted-foreground size-8 animate-pulse" />
-  </div>
-);
+export const PeekSuspenseFallback = DefaultPendingComponent;
 
 const PeekViewerErrorFallback = ({ onRetry }: { onRetry: () => void }) => {
   const t = useTranslations();
