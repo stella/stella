@@ -356,7 +356,7 @@ const pathExpression = ({
   seen = new Set<string>(),
   temporaryFactories,
 }: PathExpressionOptions): PathExpressionResult => {
-  const text = expression.trim();
+  const text = expression.trim().replace(/^await\s+/u, "");
   if (text === "import.meta.dir" || text === "import.meta.dirname") {
     return { kind: "repository", value: path.posix.dirname(file) };
   }

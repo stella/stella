@@ -28,6 +28,7 @@ import type {
 } from "@/components/chat/chat-ui-tools";
 import {
   getExternalMcpConnectorApprovalGrant,
+  getAwaitedAssistantMessageId,
   getChatAssistantTurnError,
   getCurrentApprovalPendingMessageId,
   getExternalMcpConnectorSlugFromToolName,
@@ -69,9 +70,9 @@ import {
   setCreateDocumentDraftPayloadStatus,
   terminalizeUnsettledCreateDocumentDraft,
 } from "@/components/chat/create-document-draft.logic";
-import "@/components/chat/create-document-draft-inspector";
 import { openEntityInInspector } from "@/components/chat/entity-open";
 import type { CreateDocumentDestination } from "@/components/chat/needs-matter-card";
+import "@/components/chat/create-document-draft-inspector";
 import { StreamdownMentionLink } from "@/components/chat/streamdown-mention-link";
 import { useInspectorCommandStore } from "@/components/inspector/inspector-command-store";
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
@@ -104,6 +105,8 @@ import {
   type SendQueueState,
 } from "@/features/chat/hooks/use-chat-session-send-queue.logic";
 import { fetchOlderMessages } from "@/features/chat/queries";
+import { getChatTurnPhase } from "@/features/chat/turn-notifications.logic";
+import { useChatTurnNotifications } from "@/features/chat/use-chat-turn-notifications";
 import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { userStorageKey } from "@/lib/account/user-scoped-storage";
@@ -277,7 +280,8 @@ export const useChatSession = ({
 }: UseChatSessionOptions) => {
   useMountEffect(mountBrowserExtensionBridge);
   const t = useTranslations();
-  const organizationId = useAuthenticatedUser().activeOrganizationId;
+  const { activeOrganizationId: organizationId, id: userId } =
+    useAuthenticatedUser();
   const { data: mcpCatalog } = useQuery(mcpConnectorsOptions(organizationId));
   const mcpConnectorIdentities =
     mcpCatalog?.connectors ?? EMPTY_MCP_CONNECTOR_IDENTITIES;
@@ -737,6 +741,30 @@ export const useChatSession = ({
     [applySendQueueEvent],
   );
 
+  // "Send now" on a queued message: it moves to the front of the queue.
+  // During a turn the turn is stopped, and the queue drain sends it once
+  // the stop settles; with the queue held after a failed turn it is sent
+  // at once, like a manual send.
+  const sendQueuedMessageNow = useCallback(
+    (id: string) => {
+      applySendQueueEvent({ type: "queued-message-promoted", id });
+      if (sendQueueRef.current.isGenerating) {
+        stop();
+        return;
+      }
+      const dispatched = applySendQueueEvent({
+        type: "oldest-dispatch-started",
+      });
+      if (dispatched) {
+        detached(
+          dispatchQueuedMessage(dispatched).catch(ignoreQueuedDispatchError),
+          "use-chat-session.send-queued-message-now",
+        );
+      }
+    },
+    [applySendQueueEvent, dispatchQueuedMessage, stop],
+  );
+
   const resendLatestMessage = useCallback(
     async ({ messageId, sendMode }: ResendLatestMessageOptions = {}) => {
       const latestAssistant = messages.findLast(
@@ -935,7 +963,7 @@ export const useChatSession = ({
 
   const createDocumentMattersView = useQueryView(
     useQuery({
-      ...workspacesNavigationOptions(organizationId),
+      ...workspacesNavigationOptions({ organizationId, userId }),
       select: (navigation) =>
         navigation.workspaces.map((matter) => ({
           id: matter.id,
@@ -1306,6 +1334,14 @@ export const useChatSession = ({
   useExternalSyncEffect(() => {
     applySendQueueEvent({ type: "generation-status-synced", isGenerating });
   }, [applySendQueueEvent, isGenerating]);
+  useChatTurnNotifications({
+    conversationId,
+    phase: getChatTurnPhase({
+      awaitingUser: getAwaitedAssistantMessageId(messages) !== null,
+      hasError: error !== undefined,
+      isGenerating,
+    }),
+  });
 
   // Notify `onError` exactly once per new error instance. TanStack keeps
   // the same Error reference alive across renders until the turn is
@@ -1455,6 +1491,7 @@ export const useChatSession = ({
     sendMessage,
     queuedMessages,
     removeQueuedMessage,
+    sendQueuedMessageNow,
     stop,
     leave,
     isGenerating,

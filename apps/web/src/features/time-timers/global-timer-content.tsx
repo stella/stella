@@ -59,7 +59,10 @@ export const GlobalTimerContent = ({
     timeTimersOptions(user.activeOrganizationId, user.id),
   );
   const matters = useQuery(
-    workspacesNavigationOptions(user.activeOrganizationId),
+    workspacesNavigationOptions({
+      organizationId: user.activeOrganizationId,
+      userId: user.id,
+    }),
   );
   const mutation = useTimerMutation();
   const canCreate = usePermissions({ timeEntry: ["create"] });

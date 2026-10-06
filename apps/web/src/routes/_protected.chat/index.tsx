@@ -123,7 +123,10 @@ export const Route = createFileRoute("/_protected/chat/")({
       Promise.all([
         prefetchRouteQuery(
           context.queryClient,
-          workspacesNavigationOptions(activeOrganizationId),
+          workspacesNavigationOptions({
+            organizationId: activeOrganizationId,
+            userId: context.user.id,
+          }),
           onPrefetchError,
         ),
         prefetchNonCriticalInfiniteQuery(
@@ -222,7 +225,10 @@ function ChatIndex() {
     select: (ctx) => ctx.user.id,
   });
   const { data: workspacesData } = useQuery(
-    workspacesNavigationOptions(activeOrganizationId),
+    workspacesNavigationOptions({
+      organizationId: activeOrganizationId,
+      userId,
+    }),
   );
   const workspaces = workspacesData?.workspaces;
   const { data: groupedThreadPages } = useInfiniteQuery(

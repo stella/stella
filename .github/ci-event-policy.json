@@ -1,5 +1,6 @@
 {
   "jobs": {
+    "visual-preview.yml/preview": "pr-fast",
     "railway-smoke.yml/smoke": "main",
     "autofix.yml/dependabot-bun-autofix": "pr-fast",
     "autofix.yml/regenerate-scope": "pr-fast",

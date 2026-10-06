@@ -362,6 +362,28 @@ test("filesystem helpers do not turn unrelated arguments into Markdown paths", (
   });
 });
 
+test("awaited temporary roots keep generated Markdown fixtures outside repository inputs", () => {
+  repository((root, write) => {
+    write(
+      "scripts/async-fixture.test.ts",
+      `import { mkdtemp } from "node:fs/promises";
+      import path from "node:path";
+      async function fixture(workspace: string) {
+        const directory = await mkdtemp(path.join(workspace, "case-"));
+        const summaryPath = path.join(directory, "summary.md");
+        return Bun.file(summaryPath).text();
+      }`,
+    );
+    expect(requiresPackageChecks({ root, changed: ["README.md"] })).toBe(false);
+    expect(markdownChecks({ root, changed: ["README.md"] })).toEqual([]);
+    expect(
+      markdownReaders(root).some(
+        (reader) => reader.file === "scripts/async-fixture.test.ts",
+      ),
+    ).toBe(false);
+  });
+});
+
 test("temporary fixture objects retain their external root members", () => {
   repository((root, write) => {
     write(

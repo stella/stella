@@ -20,6 +20,17 @@
   // package, not one task's declared inputs.
   "globalDependencies": ["patches/**"],
   "tasks": {
+    "@stll/visual-preview#typecheck": {
+      "inputs": ["$TURBO_DEFAULT$", "$TURBO_ROOT$/scripts/browser/**"]
+    },
+    "@stll/visual-preview#test:browser": {
+      "inputs": [
+        "$TURBO_DEFAULT$",
+        "$TURBO_ROOT$/scripts/browser/visual-preview-composition.spec.ts",
+        "$TURBO_ROOT$/apps/api/src/handlers/visual-sandbox/**",
+        "$TURBO_ROOT$/packages/api-contract/src/visual-sandbox.ts"
+      ]
+    },
     // Outputs are ignored by Git, but restored by Turbo on a cache hit.
     "@stll/web#generate:route-tree": {
       "inputs": [
@@ -563,7 +574,10 @@
     // these lists and the tests in sync in both directions.
     "@stll/cli#test": {
       "dependsOn": ["codegen:runtime"],
-      "inputs": ["$TURBO_DEFAULT$"]
+      "inputs": [
+        "$TURBO_DEFAULT$",
+        "$TURBO_ROOT$/packages/api-contract/src/mcp-tool-name.ts"
+      ]
     },
     "@stll/agent-engine#test": {
       "dependsOn": [],
