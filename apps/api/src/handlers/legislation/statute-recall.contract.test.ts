@@ -4,11 +4,11 @@ import { panic } from "better-result";
 import { afterAll, beforeAll, describe, expect, spyOn, test } from "bun:test";
 import { drizzle } from "drizzle-orm/pglite";
 import Elysia from "elysia";
-import { createHash } from "node:crypto";
 import * as v from "valibot";
 
 import { normalizeEli } from "@stll/agent-input";
 import { readStatuteQueryReferences } from "@stll/api-contract/statute-query-intent";
+import { sha256Hex as hashSha256Hex } from "@stll/sha256/bun";
 
 import {
   corpusIndexGenerations,
@@ -85,9 +85,9 @@ const baselineSchema = v.strictObject({
 });
 const baseline = v.parse(baselineSchema, fixtureBaseline);
 export const STATUTE_RECALL_TOP5_FLOOR = baseline.top5Floor;
-const fixtureFingerprint = createHash("sha256")
-  .update(JSON.stringify([fixtureQueries, fixtureDocuments]))
-  .digest("hex");
+const fixtureFingerprint = hashSha256Hex(
+  JSON.stringify([fixtureQueries, fixtureDocuments]),
+);
 const PROTECTED_RELAXED_QUERY_ID = "land-register-good-faith";
 const protectedRelaxedQuery =
   fixtureQueries.find(({ id }) => id === PROTECTED_RELAXED_QUERY_ID) ??
@@ -107,14 +107,14 @@ const VERSIONS = v
   .parse(v.array(documentSchema), fixtureDocuments)
   .map((document) => {
     // Stable identities keep document-ID tie breaking reproducible across CI runs.
-    const documentIdentity = createHash("sha256")
-      .update(`document:${document.id}`)
-      .digest("hex")
-      .slice(0, 12);
-    const revisionIdentity = createHash("sha256")
-      .update(`revision:${document.id}`)
-      .digest("hex")
-      .slice(0, 12);
+    const documentIdentity = hashSha256Hex(`document:${document.id}`).slice(
+      0,
+      12,
+    );
+    const revisionIdentity = hashSha256Hex(`revision:${document.id}`).slice(
+      0,
+      12,
+    );
     return {
       eli: document.eli,
       title: document.title,

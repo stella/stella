@@ -5,6 +5,7 @@ import type { Static } from "elysia";
 import * as v from "valibot";
 
 import { agentInputNormalizationMetadata } from "@stll/agent-input";
+import { createSha256 } from "@stll/sha256/bun";
 
 import type { SafeDb } from "@/api/db/safe-db";
 import {
@@ -1067,7 +1068,7 @@ const hashSummarySource = ({
   indexedTitle,
   searchDocumentUpdatedAt,
 }: HashSummarySourceOptions): string => {
-  const hasher = new Bun.CryptoHasher("sha256");
+  const hasher = createSha256();
   hasher.update(entityVersionId);
   hasher.update("\n");
   hasher.update(originalName);

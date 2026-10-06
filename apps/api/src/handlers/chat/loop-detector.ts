@@ -1,5 +1,6 @@
 import type { ModelMessage } from "@tanstack/ai";
 
+import { sha256Hex as hashSha256Hex } from "@stll/sha256/bun";
 import { stableStringify } from "@stll/stable-stringify";
 
 import { type JsonValue, toJsonValue } from "@/api/lib/json-value";
@@ -173,7 +174,7 @@ const collectToolCallSignatures = (
         parseToolArguments(toolCall.function.arguments),
       );
       signatures.push({
-        key: hashString(`${toolCall.function.name}:${serializedInput}`),
+        key: hashSha256Hex(`${toolCall.function.name}:${serializedInput}`),
         toolName: toolCall.function.name,
       });
     }
@@ -221,7 +222,7 @@ const detectContentLoop = (
       const nextCandidate = {
         lastIndex,
         repetitionCount: indices.length,
-        signature: hashString(chunk),
+        signature: hashSha256Hex(chunk),
       };
       if (isPreferredContentLoopCandidate(candidate, nextCandidate)) {
         candidate = nextCandidate;
@@ -418,6 +419,3 @@ const describeLoopDetection = (
 
   return `${detection.repetitionCount} repeated assistant text chunks`;
 };
-
-const hashString = (value: string): string =>
-  new Bun.CryptoHasher("sha256").update(value).digest("hex");

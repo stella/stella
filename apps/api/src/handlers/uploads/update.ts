@@ -23,6 +23,8 @@ import { and, eq, sql } from "drizzle-orm";
 
 import { API_FILE_SECURITY_REJECTED_ERROR_CODE } from "@stll/api-contract";
 import type { ApiFileSecurityRejectionDetails } from "@stll/api-contract";
+import { sha256Base64ToHex } from "@stll/sha256";
+import { sha256Hex as hashSha256Hex } from "@stll/sha256/bun";
 
 import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
 import { pendingUploads } from "@/api/db/schema";
@@ -56,7 +58,6 @@ import { promoteTmpObjectWithUsage } from "@/api/lib/uploads/promote-tmp-object"
 import {
   FINALIZE_CLAIM_TIMEOUT_MS,
   legacyTmpUploadKey,
-  sha256Base64ToHex,
   tmpUploadKey,
   tmpUploadKeys,
   UploadFinalizeError,
@@ -461,9 +462,7 @@ const runFinalize = async function* ({
   // 3. Download for scan.
   const fileBuffer = await readS3ArrayBuffer(tmpKey);
   if (!head.checksumSHA256) {
-    const uploadedSha256 = new Bun.CryptoHasher("sha256")
-      .update(fileBuffer)
-      .digest("hex");
+    const uploadedSha256 = hashSha256Hex(new Uint8Array(fileBuffer));
     if (uploadedSha256 !== claimed.declaredSha256) {
       return Result.err(
         new UploadFinalizeError({
@@ -510,7 +509,7 @@ const runFinalize = async function* ({
   const storedSha256Hex =
     strippedArchive === null
       ? claimed.declaredSha256
-      : new Bun.CryptoHasher("sha256").update(storedBytes).digest("hex");
+      : hashSha256Hex(storedBytes);
 
   // A server-side copy is the cheap promotion, but it would publish the bytes
   // the client staged. Stripped bytes exist only here, so they are written.

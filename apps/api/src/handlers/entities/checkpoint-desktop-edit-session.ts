@@ -4,6 +4,7 @@ import { status, t } from "elysia";
 import type { Static } from "elysia";
 
 import { resourceRef, RESOURCE_TYPE } from "@stll/api-contract";
+import { sha256Hex as hashSha256Hex } from "@stll/sha256/bun";
 import { Temporal } from "@stll/time";
 
 import { desktopEditSessions, workspaces } from "@/api/db/schema";
@@ -102,7 +103,7 @@ export const checkpointDesktopEditSessionHandler = async ({
 
   const fileName = authorizedSession.value.fileName;
   const buffer = await file.arrayBuffer();
-  const sha256Hex = new Bun.CryptoHasher("sha256").update(buffer).digest("hex");
+  const sha256Hex = hashSha256Hex(new Uint8Array(buffer));
 
   const validation = await validateDesktopEditFileBuffer({
     buffer,

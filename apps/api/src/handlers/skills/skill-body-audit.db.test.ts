@@ -1,6 +1,8 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { desc, eq } from "drizzle-orm";
 
+import { sha256Hex as hashSha256Hex } from "@stll/sha256/bun";
+
 import type { SafeDb } from "@/api/db/safe-db";
 import {
   agentSkillProposals,
@@ -60,17 +62,14 @@ const recordingAudit = () => {
   return { events, recordAuditEvent };
 };
 
-const sha256 = (text: string) =>
-  new Bun.CryptoHasher("sha256").update(text).digest("hex");
-
 const expectedBodyChange = {
   old: {
     sizeBytes: new TextEncoder().encode(OLD_BODY).byteLength,
-    sha256: sha256(OLD_BODY),
+    sha256: hashSha256Hex(OLD_BODY),
   },
   new: {
     sizeBytes: new TextEncoder().encode(NEW_BODY).byteLength,
-    sha256: sha256(NEW_BODY),
+    sha256: hashSha256Hex(NEW_BODY),
   },
 };
 

@@ -41,6 +41,7 @@ import type {
 import { PUBLIC_LEGISLATION_COUNTRIES } from "@stll/api-contract/legislation-publication";
 import { describeSuggestChangesCapabilities } from "@stll/folio-agents";
 import { isFolioAIContentBlock } from "@stll/folio-core/server";
+import { sha256Hex as hashSha256Hex } from "@stll/sha256/bun";
 import type { SkillMetadata } from "@stll/skills";
 
 import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
@@ -548,10 +549,7 @@ export const extendChatUntrustedPromptSuffix = (
 export const buildChatPromptCacheKey = (
   cacheStablePrefix: ChatCacheStablePrefix,
 ) => {
-  const hash = new Bun.CryptoHasher("sha256")
-    .update(cacheStablePrefix)
-    .digest("hex")
-    .slice(0, 24);
+  const hash = hashSha256Hex(cacheStablePrefix).slice(0, 24);
 
   return `stella-chat:v1:${hash}`;
 };

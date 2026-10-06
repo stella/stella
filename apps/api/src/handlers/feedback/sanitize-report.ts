@@ -1,3 +1,4 @@
+import { FEEDBACK_LIMITS } from "@stll/api-contract/feedback";
 /**
  * Report-level sanitization: the one place every entry point runs a feedback
  * report through the redaction passes, so `prepare_feedback` shows the human
@@ -11,12 +12,11 @@
  * character class instead and dropped when it does not match. `context.client`
  * is a picklist, so there is nothing in it to redact.
  */
-
-import { FEEDBACK_LIMITS } from "@stll/api-contract/feedback";
 import type {
   FeedbackReportContext,
   FeedbackReportInput,
 } from "@stll/api-contract/feedback";
+import { sha256Hex as hashSha256Hex } from "@stll/sha256/bun";
 
 import { sanitizeFeedbackText } from "@/api/mcp/feedback-sanitize";
 
@@ -174,7 +174,4 @@ const sanitizeContext = (
 export const feedbackFingerprint = (
   report: FeedbackReportInput,
   instance: string | undefined,
-): string =>
-  new Bun.CryptoHasher("sha256")
-    .update(JSON.stringify([report, instance ?? null]))
-    .digest("hex");
+): string => hashSha256Hex(JSON.stringify([report, instance ?? null]));

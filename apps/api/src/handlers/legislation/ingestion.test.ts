@@ -3,6 +3,8 @@ import { afterAll, beforeAll, expect, spyOn, test } from "bun:test";
 import { eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 
+import { sha256Hex as hashSha256Hex, createSha256 } from "@stll/sha256/bun";
+
 import type { ScopedDb } from "@/api/db/safe-db";
 import { legislationDocuments, legislationSources } from "@/api/db/schema";
 import {
@@ -94,7 +96,7 @@ const docInput = (fulltext: string) => ({
   effectiveDate: "2020-01-01",
   version: { type: "unversioned" } as const,
   fulltext,
-  rawHash: Bun.SHA256.hash(fulltext, "hex"),
+  rawHash: hashSha256Hex(fulltext),
 });
 
 /** Narrow to the branch that wrote a row; anything else fails the test. */
@@ -110,7 +112,7 @@ const recordingRawWriter = () => {
   const calls: Parameters<WriteRawSourcePayload>[0][] = [];
   const write: WriteRawSourcePayload = async (options) => {
     calls.push(options);
-    const hasher = new Bun.CryptoHasher("sha256");
+    const hasher = createSha256();
     hasher.update(options.data);
     return await Promise.resolve(
       `${options.owner.family}/raw/${options.owner.sourceId}/${hasher.digest("hex")}`,
@@ -414,7 +416,7 @@ test("the publisher's payload round-trips onto the row", async () => {
     })
     .from(legislationDocuments)
     .where(eq(legislationDocuments.id, result.id));
-  const expectedKey = `legislation/raw/${sourceId}/${Bun.SHA256.hash(sourceRaw, "hex")}`;
+  const expectedKey = `legislation/raw/${sourceId}/${hashSha256Hex(sourceRaw)}`;
   expect(row?.sourceRawS3Key).toBe(expectedKey);
   expect(row?.sourceRawContentType).toBe("text/html; charset=utf-8");
 });
@@ -442,7 +444,7 @@ test("a later observation without a payload keeps the stored one", async () => {
     .from(legislationDocuments)
     .where(eq(legislationDocuments.id, first.id));
   expect(row?.sourceRawS3Key).toBe(
-    `legislation/raw/${sourceId}/${Bun.SHA256.hash(sourceRaw, "hex")}`,
+    `legislation/raw/${sourceId}/${hashSha256Hex(sourceRaw)}`,
   );
 });
 
@@ -481,7 +483,7 @@ const runnerDocument = (
   version: { type: "unversioned" },
   fulltext: "the wording",
   documentUrl,
-  rawHash: Bun.SHA256.hash(eli, "hex"),
+  rawHash: hashSha256Hex(eli),
 });
 
 const runnerAdapter = (

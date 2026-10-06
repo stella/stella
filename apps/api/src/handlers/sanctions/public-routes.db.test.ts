@@ -3,11 +3,11 @@ import { panic } from "better-result";
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { eq, getTableName, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
-import { createHash } from "node:crypto";
 import { Worker } from "node:worker_threads";
 
 import { buildScreeningIndex, SANCTIONS_SOURCES } from "@stll/sanctions";
 import type { SanctionsEntry, SanctionsSource } from "@stll/sanctions";
+import { sha256Hex as hashSha256Hex, createSha256 } from "@stll/sha256/bun";
 
 import type { Transaction } from "@/api/db/root";
 import type { ScopedDb } from "@/api/db/safe-db";
@@ -79,9 +79,6 @@ const editionIds = new Map<
   SanctionsSource,
   ReturnType<typeof toSafeId<"sanctionsEdition">>
 >();
-
-const hash = (value: string) =>
-  createHash("sha256").update(value).digest("hex");
 
 type EntryOptions = {
   source: SanctionsSource;
@@ -173,7 +170,7 @@ const seedEntries = async (
     const batch = entries.slice(offset, offset + INSERT_BATCH_SIZE);
     await db.insert(sanctionsEntryPayloads).values(
       batch.map((payload) => ({
-        contentHash: hash(JSON.stringify(payload)),
+        contentHash: hashSha256Hex(JSON.stringify(payload)),
         payload,
       })),
     );
@@ -181,7 +178,7 @@ const seedEntries = async (
       batch.map((payload) => ({
         editionId: activeEdition(source),
         sourceEntryId: payload.sourceId,
-        contentHash: hash(JSON.stringify(payload)),
+        contentHash: hashSha256Hex(JSON.stringify(payload)),
       })),
     );
   }
@@ -215,10 +212,10 @@ beforeAll(async () => {
     await db.insert(sanctionsEditions).values({
       id,
       sourceId: source,
-      markerKey: hash(`${source}:marker`),
+      markerKey: hashSha256Hex(`${source}:marker`),
       publishedAt: "2026-09-19",
       fileId: null,
-      contentHash: hash(`${source}:content`),
+      contentHash: hashSha256Hex(`${source}:content`),
       entryCount: entries.length,
       state: "ready",
       activatedAt: VERIFIED_AT,
@@ -805,10 +802,10 @@ describe("public sanctions search parity", () => {
       await db.insert(sanctionsEditions).values({
         id: heldId,
         sourceId: "ch",
-        markerKey: hash("ch:held"),
+        markerKey: hashSha256Hex("ch:held"),
         publishedAt: "2026-09-20",
         fileId: null,
-        contentHash: hash("ch:held-content"),
+        contentHash: hashSha256Hex("ch:held-content"),
         entryCount: 0,
         state: "staging",
       });
@@ -960,16 +957,16 @@ describe("public sanctions search parity", () => {
         await db.insert(sanctionsEditions).values({
           id,
           sourceId: "eu",
-          markerKey: hash(id),
+          markerKey: hashSha256Hex(id),
           publishedAt: "2026-09-20",
-          contentHash: hash(`${id}:content`),
+          contentHash: hashSha256Hex(`${id}:content`),
           entryCount,
           state: "ready",
           activatedAt: VERIFIED_AT,
         });
         await db.insert(sanctionsEntryPayloads).values(
           entries.map((payload) => ({
-            contentHash: hash(JSON.stringify(payload)),
+            contentHash: hashSha256Hex(JSON.stringify(payload)),
             payload,
           })),
         );
@@ -977,7 +974,7 @@ describe("public sanctions search parity", () => {
           entries.map((payload) => ({
             editionId: id,
             sourceEntryId: payload.sourceId,
-            contentHash: hash(JSON.stringify(payload)),
+            contentHash: hashSha256Hex(JSON.stringify(payload)),
           })),
         );
         await db
@@ -1021,7 +1018,7 @@ describe("public sanctions search parity", () => {
             .where(
               eq(
                 sanctionsEntryPayloads.contentHash,
-                hash(JSON.stringify(payload)),
+                hashSha256Hex(JSON.stringify(payload)),
               ),
             );
         }
@@ -1140,7 +1137,7 @@ describe("public sanctions search parity", () => {
         .where(eq(sanctionsEditions.id, activeEdition("eu")));
       const inputDigests = new Map<SanctionsSource, string>();
       const digest = (lists: Parameters<typeof buildScreeningIndex>[0]) => {
-        const inputHash = createHash("sha256");
+        const inputHash = createSha256();
         for (const input of lists) {
           inputHash.update(
             JSON.stringify({

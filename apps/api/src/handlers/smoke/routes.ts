@@ -1,3 +1,4 @@
+import Elysia from "elysia";
 /**
  * Synthetic-monitoring session endpoint.
  *
@@ -24,9 +25,9 @@
  *    dedicated org whose AI the caller configures through the regular
  *    organization settings API.
  */
-
-import Elysia from "elysia";
 import { timingSafeEqual } from "node:crypto";
+
+import { sha256Bytes as hashSha256Bytes } from "@stll/sha256/bun";
 
 import { env } from "@/api/env";
 import { logger } from "@/api/lib/observability/logger";
@@ -42,8 +43,8 @@ const isAuthorizedSmokeCaller = (headerSecret: string | null): boolean => {
   if (!configured || !headerSecret) {
     return false;
   }
-  const a = new Bun.CryptoHasher("sha256").update(configured).digest();
-  const b = new Bun.CryptoHasher("sha256").update(headerSecret).digest();
+  const a = hashSha256Bytes(configured);
+  const b = hashSha256Bytes(headerSecret);
   return timingSafeEqual(a, b);
 };
 

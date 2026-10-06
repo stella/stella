@@ -2,6 +2,8 @@ import { panic, Result, TaggedError } from "better-result";
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { and, eq, sql } from "drizzle-orm";
 
+import { sha256Hex as hashSha256Hex } from "@stll/sha256/bun";
+
 import type { SafeDb } from "@/api/db/safe-db";
 import {
   BUFFER_OBJECT_CLEANUP_INTENT_STATUS,
@@ -485,9 +487,7 @@ const defineFlagTests = (flag: boolean) => {
         messageId,
         toolCallId: "cleanup-draft",
         threadWorkspaceId: ids.wsA1,
-        contentSha256Hex: new Bun.CryptoHasher("sha256")
-          .update("Upload cleanup regression bytes")
-          .digest("hex"),
+        contentSha256Hex: hashSha256Hex("Upload cleanup regression bytes"),
       };
       await testDb.insert(chatThreads).values({
         id: threadId,

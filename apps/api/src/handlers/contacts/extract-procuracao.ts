@@ -3,6 +3,7 @@ import { and, eq, gt, lt, or } from "drizzle-orm";
 import { t } from "elysia";
 import * as v from "valibot";
 
+import { sha256Base64ToHex } from "@stll/sha256";
 import { Temporal } from "@stll/time";
 
 import { contactExtractionUploads } from "@/api/db/schema";
@@ -23,7 +24,6 @@ import {
 } from "@/api/lib/search/extract-content";
 import { generateTanStackObjectForRole } from "@/api/lib/tanstack-ai-generate";
 import { requireTanStackAIAvailableForRole } from "@/api/lib/tanstack-ai-models";
-import { sha256Base64ToHex } from "@/api/lib/uploads/runtime";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
 
 const MAX_SOURCE_CHARS = 30_000;

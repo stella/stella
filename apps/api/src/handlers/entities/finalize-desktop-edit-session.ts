@@ -4,6 +4,7 @@ import { status, t } from "elysia";
 import type { Static } from "elysia";
 
 import { resourceRef, RESOURCE_TYPE } from "@stll/api-contract";
+import { sha256Hex as hashSha256Hex } from "@stll/sha256/bun";
 
 import { safeDbFromScoped } from "@/api/db/safe-db";
 import {
@@ -536,7 +537,7 @@ export const finalizeDesktopEditSessionHandler = async ({
       const storedSha256Hex =
         strippedArchive === null
           ? editSession.checkpointSha256Hex
-          : new Bun.CryptoHasher("sha256").update(storedBytes).digest("hex");
+          : hashSha256Hex(storedBytes);
       const storedSizeBytes = storedBytes.byteLength;
 
       const nextVersionId = createSafeId<"entityVersion">();

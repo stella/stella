@@ -15,6 +15,7 @@ import {
 } from "@stll/api-contract";
 import type { ApiFileSecurityRejectionDetails } from "@stll/api-contract";
 import { ATTACHED_TEMPLATE_SECURITY_RULE } from "@stll/docx-utils";
+import { sha256Hex as hashSha256Hex } from "@stll/sha256/bun";
 
 import { pendingUploads } from "@/api/db/schema";
 import { createSafeDb, createScopedDb } from "@/api/db/scoped";
@@ -261,9 +262,7 @@ describe("presigned upload mutation flow", () => {
             name: "attached-template.docx",
             mimeType: DOCX_MIME,
             size: bytes.byteLength,
-            sha256Hex: new Bun.CryptoHasher("sha256")
-              .update(bytes)
-              .digest("hex"),
+            sha256Hex: hashSha256Hex(bytes),
           },
           workspaceId: ids.wsA1,
           organizationId: ids.orgA,
@@ -343,9 +342,7 @@ describe("presigned upload mutation flow", () => {
             name: "large.docx",
             mimeType: DOCX_MIME,
             size: bytes.byteLength,
-            sha256Hex: new Bun.CryptoHasher("sha256")
-              .update(bytes)
-              .digest("hex"),
+            sha256Hex: hashSha256Hex(bytes),
           },
           workspaceId: ids.wsA1,
           organizationId: ids.orgA,

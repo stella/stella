@@ -4,6 +4,7 @@ import { t } from "elysia";
 import type { Static } from "elysia";
 
 import { resourceRef, RESOURCE_TYPE } from "@stll/api-contract";
+import { sha256Hex as hashSha256Hex } from "@stll/sha256/bun";
 import { Temporal } from "@stll/time";
 
 import type { Transaction } from "@/api/db/root";
@@ -305,9 +306,7 @@ const readPublishableCheckpoint = async ({
 > => {
   const checkpoint = await readS3ArrayBuffer(checkpointKey, signal);
   const checkpointBytes = new Uint8Array(checkpoint);
-  const actualSha256Hex = new Bun.CryptoHasher("sha256")
-    .update(checkpointBytes)
-    .digest("hex");
+  const actualSha256Hex = hashSha256Hex(checkpointBytes);
   if (actualSha256Hex !== expectedSha256Hex) {
     return Result.err(
       new HandlerError({
@@ -977,7 +976,7 @@ const publishFolioCollabVersion = createSafeHandler(
     const storedSha256Hex =
       strippedArchive === null
         ? body.expectedSha256Hex
-        : new Bun.CryptoHasher("sha256").update(storedBytes).digest("hex");
+        : hashSha256Hex(storedBytes);
 
     const sourceFileId = allocateFileObject();
     const sourceKey = createFileKey({

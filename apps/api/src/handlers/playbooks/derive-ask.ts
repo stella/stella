@@ -1,6 +1,8 @@
 import { Result } from "better-result";
 import * as v from "valibot";
 
+import { sha256Hex as hashSha256Hex } from "@stll/sha256/bun";
+
 import type { PropertyContent } from "@/api/db/schema-validators";
 import { resolveCaching } from "@/api/lib/ai-config";
 import type { OrgAIConfig } from "@/api/lib/ai-config";
@@ -67,9 +69,7 @@ const canonicalRulesInput = (position: TierStandardPosition) => {
 };
 
 export const computeRulesHash = (position: TierStandardPosition): string =>
-  new Bun.CryptoHasher("sha256")
-    .update(JSON.stringify(canonicalRulesInput(position)))
-    .digest("hex");
+  hashSha256Hex(JSON.stringify(canonicalRulesInput(position)));
 
 const buildDeriveAskUserMessage = (position: TierStandardPosition): string => {
   const { tiers } = position.standard;

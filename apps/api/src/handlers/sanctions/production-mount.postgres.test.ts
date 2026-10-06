@@ -3,10 +3,10 @@ import { makeSignature } from "better-auth/crypto";
 import { RedisClient } from "bun";
 import { describe, expect, setSystemTime, spyOn, test } from "bun:test";
 import { eq, inArray } from "drizzle-orm";
-import { createHash } from "node:crypto";
 
 import { SANCTIONS_SOURCES } from "@stll/sanctions";
 import type { SanctionsEntry } from "@stll/sanctions";
+import { sha256Hex as hashSha256Hex } from "@stll/sha256/bun";
 
 import {
   sanctionsSources,
@@ -30,8 +30,6 @@ import { withGatedTestClients } from "@/api/tests/gated-test-database";
 
 const databaseUrl = process.env["DATABASE_URL"];
 const runPostgresTests = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
-const hash = (value: string) =>
-  createHash("sha256").update(value).digest("hex");
 
 describe.skipIf(!runPostgresTests)("production sanctions mount", () => {
   test("production sanctions search is anonymous and independent of signed-in tenant context", async () => {
@@ -85,7 +83,7 @@ describe.skipIf(!runPostgresTests)("production sanctions mount", () => {
           listedOn: null,
           sourceUrl: "https://lists.example/eu",
         } as const satisfies SanctionsEntry;
-        const contentHash = hash(JSON.stringify(payload));
+        const contentHash = hashSha256Hex(JSON.stringify(payload));
         try {
           for (const { source, id } of editions) {
             await db
@@ -99,8 +97,8 @@ describe.skipIf(!runPostgresTests)("production sanctions mount", () => {
             await db.insert(sanctionsEditions).values({
               id,
               sourceId: source,
-              markerKey: hash(id),
-              contentHash: hash(`${id}:edition`),
+              markerKey: hashSha256Hex(id),
+              contentHash: hashSha256Hex(`${id}:edition`),
               publishedAt: "2026-10-02",
               entryCount: source === "eu" ? 1 : 0,
               state: "ready",

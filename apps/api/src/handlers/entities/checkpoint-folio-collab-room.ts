@@ -3,6 +3,7 @@ import { and, eq } from "drizzle-orm";
 import { t } from "elysia";
 import type { Static } from "elysia";
 
+import { sha256Hex as hashSha256Hex } from "@stll/sha256/bun";
 import { Temporal } from "@stll/time";
 
 import {
@@ -330,9 +331,7 @@ const checkpointFolioCollabRoom = createSafeHandler(
             .map(({ message }) => message)
         : null;
     const checkpointBytes = new Uint8Array(materialized);
-    const sha256Hex = new Bun.CryptoHasher("sha256")
-      .update(checkpointBytes)
-      .digest("hex");
+    const sha256Hex = hashSha256Hex(checkpointBytes);
     const nextFileId = createSafeId<"userFile">();
     const checkpointKey = createFileKey({
       fileId: nextFileId,

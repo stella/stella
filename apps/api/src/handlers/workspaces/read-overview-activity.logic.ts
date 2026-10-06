@@ -1,7 +1,7 @@
 import { Result, panic } from "better-result";
-import { createHash } from "node:crypto";
 
 import type { MatterActivityFilters } from "@stll/api-contract/matter-activity";
+import { sha256Base64Url as hashSha256Base64Url } from "@stll/sha256/bun";
 import { Temporal } from "@stll/time";
 import { isUuid } from "@stll/uuid-codec";
 
@@ -36,9 +36,9 @@ export const matterActivityFilterKey = ({
   from,
   toExclusive,
 }: MatterActivityFilters): string =>
-  createHash("sha256")
-    .update(JSON.stringify([category, action, actorId, from, toExclusive]))
-    .digest("base64url");
+  hashSha256Base64Url(
+    JSON.stringify([category, action, actorId, from, toExclusive]),
+  );
 
 export const timestampMicroseconds = (value: string): bigint | null => {
   const instant = Result.try(() => Temporal.Instant.from(value));
