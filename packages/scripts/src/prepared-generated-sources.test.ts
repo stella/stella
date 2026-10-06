@@ -105,6 +105,7 @@ test("CLI runtime preparation consumes a verified artifact without invoking gene
     for (const file of [
       "prepare-cli-runtime.ts",
       "prepared-generated-sources.ts",
+      "child-exit-status.ts",
     ]) {
       write(
         `packages/scripts/src/${file}`,
