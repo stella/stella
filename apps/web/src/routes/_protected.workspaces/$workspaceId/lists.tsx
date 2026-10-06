@@ -69,6 +69,7 @@ import {
   legalListsOptions,
 } from "@/lib/workspaces/queries/legal-lists";
 import { propertiesOptions } from "@/lib/workspaces/queries/properties";
+import { SourceVerificationAction } from "@/routes/_protected.workspaces/$workspaceId/-components/lists/source-verification-action";
 import { useDefaultWorkspaceViewRedirect } from "@/routes/_protected.workspaces/$workspaceId/-default-view-redirect";
 
 const searchSchema = v.object({
@@ -823,7 +824,6 @@ const ItemSourcesPanel = ({
 }: ItemSourcesPanelProps) => {
   const t = useTranslations();
   const formatter = useFormatter();
-  const queryClient = useQueryClient();
   const openSourceDocument = useOpenSourceDocument(workspaceId);
   const { data, isPending } = useQuery(
     legalListSourcesOptions(workspaceId, listId, itemEntityId),
@@ -831,29 +831,6 @@ const ItemSourcesPanel = ({
   const activity = useQuery(
     legalListActivityOptions(workspaceId, listId, itemEntityId),
   );
-
-  const verifySource = async (sourceId: string) => {
-    const response = await api
-      .lists({ workspaceId: toSafeId<"workspace">(workspaceId) })
-      ["item-sources"].patch({
-        id: toSafeId<"legalListItemSource">(sourceId),
-        listId: toSafeId<"legalList">(listId),
-        itemEntityId: toSafeId<"entity">(itemEntityId),
-        status: "verified",
-      });
-    if (response.error) {
-      notifyUserError(toAPIError(response.error), t("errors.actionFailed"));
-      return;
-    }
-    await Promise.all([
-      queryClient.invalidateQueries({
-        queryKey: legalListKeys.sources(workspaceId, listId, itemEntityId),
-      }),
-      queryClient.invalidateQueries({
-        queryKey: legalListKeys.activity(workspaceId, listId, itemEntityId),
-      }),
-    ]);
-  };
 
   return (
     <aside className="bg-background max-h-72 shrink-0 overflow-y-auto border-t p-4">
@@ -890,17 +867,13 @@ const ItemSourcesPanel = ({
                       <SourceLocatorLabel locator={source.locator} />
                     </span>
                   </Button>
-                  <Button
-                    aria-label={t("common.accept")}
-                    disabled={source.verificationStatus === "verified"}
-                    onClick={() =>
-                      detached(verifySource(source.id), "lists.verify-source")
-                    }
-                    size="icon-sm"
-                    variant="ghost"
-                  >
-                    <CheckIcon />
-                  </Button>
+                  <SourceVerificationAction
+                    itemEntityId={itemEntityId}
+                    listId={listId}
+                    sourceId={source.id}
+                    verified={source.verificationStatus === "verified"}
+                    workspaceId={workspaceId}
+                  />
                 </div>
                 {source.quote && (
                   <blockquote className="text-muted-foreground mt-2 line-clamp-3 text-xs">

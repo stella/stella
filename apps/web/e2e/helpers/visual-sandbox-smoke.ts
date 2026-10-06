@@ -2,7 +2,7 @@ import { expect, test } from "@playwright/test";
 
 import { VISUAL_SANDBOX_PATH } from "@stll/api-contract/visual-sandbox";
 
-import declaration from "../visual-sandbox-network-budgets/frame-shell.json";
+import declaration from "../visual-sandbox-network-budgets/frame-shell.json" with { type: "json" };
 import { E2E_API_ORIGIN } from "./api";
 import {
   createNetworkCollector,
