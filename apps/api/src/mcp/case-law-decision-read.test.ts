@@ -253,7 +253,7 @@ describe("citation summary", () => {
         caseNumber: "9 Cdo 9/2020",
         court: "Nejvyšší soud",
         decisionId: decisionId(9),
-        appUrl: "https://app.test/law/ns-9",
+        url: "https://app.test/law/ns-9",
       },
     ]);
   });
@@ -291,7 +291,7 @@ describe("citation summary", () => {
       {
         caseNumber: "5 Cdo 5/2020",
         decisionId: decisionId(5),
-        appUrl: "https://app.test/law/ns-5",
+        url: "https://app.test/law/ns-5",
       },
     ]);
     expect(summary.cites.more).toBe(true);

@@ -5374,14 +5374,14 @@ describe("OpenAI-compatible MCP tools", () => {
       matches?: {
         hitCount: number;
         paragraphs: {
-          appUrl?: string;
           hit?: true;
+          url?: string;
           paragraph: number;
           text: string;
         }[];
         truncated?: true;
       };
-      outline?: { appUrl?: string; page: number; title: string }[];
+      outline?: { page: number; title: string; url?: string }[];
       page?: number;
       pageCount?: number;
       text?: string;
@@ -5483,7 +5483,7 @@ describe("OpenAI-compatible MCP tools", () => {
                     court: "Nejvyšší soud",
                     date: "2025-01-15",
                     decisionId: CITING_DECISION_ID,
-                    appUrl: `${APP_BASE_URL}/law/cze/cases/nejvyssi-soud/ns-31-cdo-2-2025`,
+                    url: `${APP_BASE_URL}/law/cze/cases/nejvyssi-soud/ns-31-cdo-2-2025`,
                   },
                 ],
               },
@@ -5497,7 +5497,7 @@ describe("OpenAI-compatible MCP tools", () => {
               {
                 title: "29 Cdo 123/2024",
                 page: 1,
-                appUrl: `${DECISION_APP_URL}#a-1`,
+                url: `${DECISION_APP_URL}#a-1`,
               },
             ],
           },
@@ -5594,8 +5594,9 @@ describe("OpenAI-compatible MCP tools", () => {
       });
       // No text is no `text` field, never an empty string.
       expect(
-        asTestRaw<{ items: { decision: Record<string, unknown> }[] }>(mcp)
-          .items.at(0)?.decision,
+        asTestRaw<{ items: { decision: Record<string, unknown> }[] }>(
+          mcp,
+        ).items.at(0)?.decision,
       ).not.toHaveProperty("text");
       expect(cli.printed).toEqual(mcp);
     });
@@ -5967,14 +5968,14 @@ describe("OpenAI-compatible MCP tools", () => {
     expect(entry.decision?.matches).toEqual({
       hitCount: 1,
       paragraphs: [
-        { paragraph: 1, text: "Úvod.", appUrl: `${DECISION_APP_URL}#p-1` },
+        { paragraph: 1, text: "Úvod.", url: `${DECISION_APP_URL}#p-1` },
         {
           paragraph: 2,
           text: "Nájemce zaplatil nájemné včas.",
           hit: true,
-          appUrl: `${DECISION_APP_URL}#p-2`,
+          url: `${DECISION_APP_URL}#p-2`,
         },
-        { paragraph: 3, text: "Mezitím.", appUrl: `${DECISION_APP_URL}#p-3` },
+        { paragraph: 3, text: "Mezitím.", url: `${DECISION_APP_URL}#p-3` },
       ],
     });
     // The matches replace the window, and a query call carries no static

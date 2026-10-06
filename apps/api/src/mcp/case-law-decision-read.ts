@@ -233,7 +233,7 @@ export const citationSummaryOutput = (
       ...(decision.decisionDate === null
         ? {}
         : { date: decision.decisionDate }),
-      ...(appUrl === null ? {} : { appUrl }),
+      ...(appUrl === null ? {} : { url: appUrl }),
     };
   });
 
@@ -241,7 +241,7 @@ export const citationSummaryOutput = (
   // not hold the decision it names.
   const cited = new Map<
     string,
-    | { caseNumber: string; decisionId: string; appUrl?: string }
+    | { caseNumber: string; decisionId: string; url?: string }
     | { citation: string }
   >();
   for (const row of digest.cites) {
@@ -258,7 +258,7 @@ export const citationSummaryOutput = (
       cited.set(key, {
         caseNumber: row.decision.caseNumber,
         decisionId: String(row.decision.id),
-        ...(appUrl === null ? {} : { appUrl }),
+        ...(appUrl === null ? {} : { url: appUrl }),
       });
     }
   }

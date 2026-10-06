@@ -103,7 +103,7 @@ const lawInstructions = (
 
 ${lawTools(publicLawEnabled)}
 
-Pagination: a paged tool takes a \`cursor\`, and most take a \`limit\`. A response's \`nextCursor\` (null on the last page) is the \`cursor\` for the next page; long text fields are windowed the same way, except read_case_law_decision, which pages by number (\`page\`).
+Pagination: a paged tool takes a \`cursor\`, and most take a \`limit\`. A response's \`nextCursor\` (null on the last page) is the \`cursor\` for the next page; long text fields are windowed the same way.
 
 ${MCP_CASING_RULE}
 

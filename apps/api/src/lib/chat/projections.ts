@@ -1634,7 +1634,7 @@ const caseLawCitationSummaryProjection = v.strictObject({
     top: v.optional(
       v.array(
         v.strictObject({
-          appUrl: v.optional(v.string()),
+          url: v.optional(v.string()),
           caseNumber: v.string(),
           court: v.string(),
           date: v.optional(v.string()),
@@ -1652,7 +1652,7 @@ const caseLawCitationSummaryProjection = v.strictObject({
         v.union([
           projectionBranch(
             v.strictObject({
-              appUrl: v.optional(v.string()),
+              url: v.optional(v.string()),
               caseNumber: v.string(),
               // Held by the corpus: read_case_law_decision takes it.
               decisionId: passthroughId(),
@@ -1719,7 +1719,7 @@ const caseLawDecisionProjection = v.strictObject({
               "The page holding this heading at this call's window size.",
             ),
           ),
-          appUrl: v.optional(v.string()),
+          url: v.optional(v.string()),
         }),
       ),
       v.description(
@@ -1736,7 +1736,7 @@ const caseLawDecisionProjection = v.strictObject({
           paragraph: v.number(),
           text: v.string(),
           hit: v.optional(v.literal(true)),
-          appUrl: v.optional(v.string()),
+          url: v.optional(v.string()),
         }),
       ),
       truncated: v.optional(v.literal(true)),

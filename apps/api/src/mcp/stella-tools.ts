@@ -1194,21 +1194,19 @@ export const STELLA_TOOL_DEFINITIONS = [
       openWorldHint: false,
     },
     description:
-      "Read decisions by `decision_ids[]`, in input order. Text is paged: " +
-      "`page` N is the Nth window of `max_chars`; entries state " +
-      "page and pageCount. Pass a page's textVersion back as text_version; " +
-      "versionChanged flags a changed text. Use `full: " +
-      `true\` for reasoning or citation work (whole text, up to ${READ_DECISION_FULL_MAX_TEXT_CHARS} ` +
-      "chars), pages for skimming. `query` returns only matching paragraphs " +
-      "with neighbours. Page 1 adds details, metadata, " +
+      "Read decisions by `decision_ids[]`, in input order. `page` N is the " +
+      "Nth window of `max_chars`; entries give page/pageCount. Pass a " +
+      "page's textVersion back as text_version; versionChanged flags a " +
+      "changed text. `full: true` (whole text, up to " +
+      `${READ_DECISION_FULL_MAX_TEXT_CHARS} chars) for reasoning or citation work; pages for skimming. ` +
+      "`query` returns matching paragraphs with neighbours. Page 1 adds " +
+      "details (`url` the reader, `source_url` the publisher), metadata, " +
       "published textFields and a citation summary: citedBy count of citing " +
-      "references, polarity counts, top 5 citers, and what it cites " +
-      "(decisionId where " +
-      "held). All citations: read_case_law_citations ({ decision_id: " +
-      "'<uuid>', direction: 'cited_by' }). One id gets an outline with pages; " +
-      "outline and query entries deep-link. `include` picks optional " +
-      "fields; [] returns text and identity only. `url` is the reader, " +
-      "`source_url` the publisher.",
+      "references, polarity counts, top 5 citers, what it cites (decisionId " +
+      "where held). All citations: read_case_law_citations ({ decision_id: " +
+      "'<uuid>', direction: 'cited_by' }). One id gets an outline with " +
+      "pages; outline and query entries deep-link. `include` picks fields; " +
+      "[] returns text and identity only.",
     inputSchema: readCaseLawDecisionArgsSchema,
     inputNormalization: {
       max_chars: {
@@ -2672,7 +2670,7 @@ const decisionIncludedFields = ({
 const deepLink = (appUrl: string | null, anchorId: string | null) =>
   appUrl === null || anchorId === null
     ? {}
-    : { appUrl: `${appUrl}#${encodeURIComponent(anchorId)}` };
+    : { url: `${appUrl}#${encodeURIComponent(anchorId)}` };
 
 const caseLawDecisionAppUrlOf = (decision: {
   caseNumber: string;
