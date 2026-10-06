@@ -71,23 +71,48 @@ const historyWireContent = (content: string) => {
 
 const historyMetadata = (metadata: unknown) => {
   if (!isRecord(metadata) || !isRecord(metadata["tanstack"])) {
-    return metadata;
+    return undefined;
   }
-  const tanstack = { ...metadata["tanstack"] };
-  if (tanstack["output"] !== undefined) {
-    tanstack["output"] = historyContent(tanstack["output"]);
-  }
+  const tanstack = metadata["tanstack"];
   const toolResult = tanstack["toolResult"];
-  if (isRecord(toolResult) && toolResult["content"] !== undefined) {
-    tanstack["toolResult"] = {
-      ...toolResult,
-      content:
-        typeof toolResult["content"] === "string"
-          ? historyWireContent(toolResult["content"])
-          : historyContent(toolResult["content"]),
-    };
-  }
-  return { ...metadata, tanstack };
+  // SDK metadata is an open bag. Only diagnostics and reconstruction fields
+  // belong in history; aliases and future payload fields must drop by default.
+  return {
+    tanstack: {
+      ...(typeof tanstack["createdAt"] === "string" && {
+        createdAt: tanstack["createdAt"],
+      }),
+      ...(typeof tanstack["model"] === "string" && {
+        model: tanstack["model"],
+      }),
+      ...(typeof tanstack["runId"] === "string" && {
+        runId: tanstack["runId"],
+      }),
+      ...((tanstack["state"] === "output-available" ||
+        tanstack["state"] === "output-error") && {
+        state: tanstack["state"],
+      }),
+      ...(tanstack["output"] !== undefined && {
+        output: historyContent(tanstack["output"]),
+      }),
+      ...(isRecord(toolResult) && {
+        toolResult: {
+          ...(typeof toolResult["id"] === "string" && {
+            id: toolResult["id"],
+          }),
+          ...(typeof toolResult["createdAt"] === "string" && {
+            createdAt: toolResult["createdAt"],
+          }),
+          ...(toolResult["content"] !== undefined && {
+            content:
+              typeof toolResult["content"] === "string"
+                ? historyWireContent(toolResult["content"])
+                : historyContent(toolResult["content"]),
+          }),
+        },
+      }),
+    },
+  };
 };
 
 // Project only the engine's wire copy. The SDK retains the original parts for
@@ -137,9 +162,20 @@ export const projectVisualPreviewStream = async function* (
         panic("The engine emits preview wire results as strings");
       }
       const projected = {
-        ...chunk,
+        type: chunk.type,
+        toolCallId: chunk.toolCallId,
+        messageId: chunk.messageId,
         content: historyWireContent(chunk.content),
-      };
+      } satisfies PublicStreamChunk;
+      if (chunk.timestamp !== undefined) {
+        Object.assign(projected, { timestamp: chunk.timestamp });
+      }
+      if (chunk.subagentRunId !== undefined) {
+        Object.assign(projected, { subagentRunId: chunk.subagentRunId });
+      }
+      if (chunk.role !== undefined) {
+        Object.assign(projected, { role: chunk.role });
+      }
       if (chunk.metadata !== undefined) {
         Object.assign(projected, { metadata: historyMetadata(chunk.metadata) });
       }
@@ -149,8 +185,7 @@ export const projectVisualPreviewStream = async function* (
     if (chunk.type === EventType.MESSAGES_SNAPSHOT) {
       // Snapshots fan tool results out as AG-UI role:tool messages. Seed all
       // identities first, because a snapshot can arrive without prior events.
-      const messages = structuredClone(chunk.messages);
-      for (const message of messages) {
+      for (const message of chunk.messages) {
         if (message.role !== "assistant") {
           continue;
         }
@@ -160,14 +195,49 @@ export const projectVisualPreviewStream = async function* (
           }
         }
       }
-      for (const message of messages) {
+      const messages = chunk.messages.map((message) => {
+        if (
+          message.role === "assistant" &&
+          message.toolCalls?.some((call) => previewCallIds.has(call.id))
+        ) {
+          return {
+            role: message.role,
+            id: message.id,
+            ...(message.content !== undefined && { content: message.content }),
+            ...(message.name !== undefined && { name: message.name }),
+            ...(message.encryptedValue !== undefined && {
+              encryptedValue: message.encryptedValue,
+            }),
+            ...(message.subagentRunId !== undefined && {
+              subagentRunId: message.subagentRunId,
+            }),
+            toolCalls: message.toolCalls.map((call) =>
+              previewCallIds.has(call.id)
+                ? {
+                    id: call.id,
+                    type: call.type,
+                    function: {
+                      name: call.function.name,
+                      arguments: call.function.arguments,
+                    },
+                    ...(call.encryptedValue !== undefined && {
+                      encryptedValue: call.encryptedValue,
+                    }),
+                  }
+                : call,
+            ),
+            ...(message.metadata !== undefined && {
+              metadata: historyMetadata(message.metadata),
+            }),
+          };
+        }
         if (
           message.role !== "tool" ||
           !previewCallIds.has(message.toolCallId)
         ) {
-          continue;
+          return message;
         }
-        message.content =
+        const content =
           typeof message.content === "string"
             ? historyWireContent(message.content)
             : JSON.stringify(
@@ -179,13 +249,32 @@ export const projectVisualPreviewStream = async function* (
                   ),
                 ),
               );
-        if (message.metadata !== undefined) {
-          Object.assign(message, {
+        return {
+          role: message.role,
+          id: message.id,
+          toolCallId: message.toolCallId,
+          content,
+          ...(message.name !== undefined && { name: message.name }),
+          ...(message.error !== undefined && { error: message.error }),
+          ...(message.subagentRunId !== undefined && {
+            subagentRunId: message.subagentRunId,
+          }),
+          ...(message.metadata !== undefined && {
             metadata: historyMetadata(message.metadata),
-          });
-        }
+          }),
+        };
+      });
+      const projected = {
+        type: chunk.type,
+        messages,
+      } satisfies PublicStreamChunk;
+      if (chunk.timestamp !== undefined) {
+        Object.assign(projected, { timestamp: chunk.timestamp });
       }
-      yield { ...chunk, messages };
+      if (chunk.subagentRunId !== undefined) {
+        Object.assign(projected, { subagentRunId: chunk.subagentRunId });
+      }
+      yield projected;
       continue;
     }
     yield chunk;

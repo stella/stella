@@ -560,6 +560,41 @@ test("transient visual preview reaches the in-turn model but not wire, persisten
         };
         continue;
       }
+      if (
+        chunk.type === EventType.TOOL_CALL_RESULT &&
+        chunk.toolCallId === "call-1"
+      ) {
+        yield {
+          ...chunk,
+          result: output,
+          metadata: {
+            tanstack: {
+              result: output,
+              toolResult: { content: output, result: output },
+            },
+          },
+        };
+        continue;
+      }
+      if (chunk.type === EventType.MESSAGES_SNAPSHOT) {
+        yield {
+          ...chunk,
+          messages: chunk.messages.map((message) =>
+            message.role === "tool" && message.toolCallId === "call-1"
+              ? {
+                  ...message,
+                  metadata: {
+                    tanstack: {
+                      result: output,
+                      toolResult: { content: output, result: output },
+                    },
+                  },
+                }
+              : message,
+          ),
+        };
+        continue;
+      }
       yield chunk;
     }
   };
