@@ -37,7 +37,8 @@ jobs:
             exit 0
           fi
           git fetch --no-tags --depth=1 origin "$BASE_SHA"
-          if git diff --name-only "$BASE_SHA" HEAD | rg '^(apps/visual-preview/|scripts/browser/|apps/api/src/handlers/visual-sandbox/|packages/api-contract/src/visual-sandbox.ts$|packages/api-contract/src/visual-preview|packages/api-contract/src/generated-visual.ts$|packages/api-contract/src/visual-bridge-policy.ts$|bun.lock$|.github/workflows/visual-preview.yml$)'; then
+          changed_files=$(git diff --name-only "$BASE_SHA" HEAD)
+          if grep -E '^(apps/visual-preview/|scripts/browser/|apps/api/src/handlers/visual-sandbox/|packages/api-contract/src/visual-sandbox.ts$|packages/api-contract/src/visual-preview|packages/api-contract/src/generated-visual.ts$|packages/api-contract/src/visual-bridge-policy.ts$|bun.lock$|.github/workflows/visual-preview.yml$)' <<< "$changed_files"; then
             echo 'required=true' >> "$GITHUB_OUTPUT"
           else
             echo 'required=false' >> "$GITHUB_OUTPUT"
