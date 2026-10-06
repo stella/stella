@@ -5,6 +5,7 @@ import {
   VISUAL_PREVIEW_LIMITS,
   visualPreviewInputSchema,
   visualPreviewOutputSchema,
+  visualPreviewToolOutputSchema,
 } from "./visual-preview";
 
 const output = {
@@ -67,5 +68,65 @@ describe("visual preview boundary", () => {
     { ...output, size: { width: 1201, height: 1 } },
   ])("rejects malformed and unbounded diagnostics", (value) => {
     expect(v.safeParse(visualPreviewOutputSchema, value).success).toBe(false);
+  });
+});
+
+describe("visual preview tool output boundary", () => {
+  const text = { type: "text", content: "Example diagnostics" };
+  const image = {
+    type: "image",
+    source: { type: "data", value: output.png, mimeType: "image/png" },
+  };
+
+  test.each([[text], [text, image]].map((parts) => ({ parts })))(
+    "accepts one text part and optional PNG",
+    ({ parts }) => {
+      expect(v.safeParse(visualPreviewToolOutputSchema, parts).success).toBe(
+        true,
+      );
+    },
+  );
+
+  test("accepts text at its ceiling", () => {
+    expect(
+      v.safeParse(visualPreviewToolOutputSchema, [
+        { ...text, content: "x".repeat(VISUAL_PREVIEW_LIMITS.modelTextChars) },
+      ]).success,
+    ).toBe(true);
+  });
+
+  test.each(
+    [
+      [],
+      [image],
+      [image, text],
+      [text, text],
+      [text, image, image],
+      [{ ...text, extra: true }],
+      [
+        {
+          ...text,
+          content: "x".repeat(VISUAL_PREVIEW_LIMITS.modelTextChars + 1),
+        },
+      ],
+      [text, { ...image, source: { ...image.source, type: "url" } }],
+      [text, { ...image, source: { ...image.source, mimeType: "image/jpeg" } }],
+      [text, { ...image, source: { ...image.source, value: "not-png" } }],
+      [text, { ...image, source: { ...image.source, extra: true } }],
+      [
+        text,
+        {
+          ...image,
+          source: {
+            ...image.source,
+            value: `iVBORw0KGgo${"a".repeat(VISUAL_PREVIEW_LIMITS.pngBase64Chars)}`,
+          },
+        },
+      ],
+    ].map((parts) => ({ parts })),
+  )("rejects unsupported, duplicate and unbounded parts", ({ parts }) => {
+    expect(v.safeParse(visualPreviewToolOutputSchema, parts).success).toBe(
+      false,
+    );
   });
 });

@@ -1,5 +1,4 @@
 import { InvokeCommand, LambdaClient } from "@aws-sdk/client-lambda";
-import type { ContentPart } from "@tanstack/ai";
 import { Result, TaggedError } from "better-result";
 import * as v from "valibot";
 
@@ -9,6 +8,7 @@ import {
   visualPreviewOutputSchema,
   type VisualPreviewInput,
   type VisualPreviewOutput,
+  type VisualPreviewToolOutput,
 } from "@stll/api-contract/visual-preview";
 
 type VisualPreviewModelContentOptions = {
@@ -35,7 +35,7 @@ export const visualPreviewModelContent = ({
       type: "image",
       source: { type: "data", value: png, mimeType: "image/png" },
     },
-  ] satisfies ContentPart[];
+  ] satisfies VisualPreviewToolOutput;
 
 type PreviewFailureCode =
   | "unavailable"
@@ -47,6 +47,30 @@ export class VisualPreviewError extends TaggedError("VisualPreviewError")<{
   code: PreviewFailureCode;
   message: string;
 }> {}
+
+type VisualPreviewFailureModelContentOptions = {
+  title: string;
+  error: VisualPreviewError;
+};
+
+export const visualPreviewFailureModelContent = ({
+  title,
+  error,
+}: VisualPreviewFailureModelContentOptions) =>
+  [
+    {
+      type: "text",
+      content: JSON.stringify({
+        success: true,
+        title,
+        preview: {
+          status: "unavailable",
+          reason: error.code,
+          message: error.message,
+        },
+      }),
+    },
+  ] satisfies VisualPreviewToolOutput;
 
 type PreviewInvocation = {
   input: VisualPreviewInput;

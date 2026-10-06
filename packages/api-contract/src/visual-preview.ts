@@ -5,6 +5,7 @@ export const VISUAL_PREVIEW_LIMITS = {
   pngBase64Chars: 1.5 * 1024 * 1024,
   consoleErrors: 20,
   errorChars: 500,
+  modelTextChars: 64 * 1024,
   width: 1200,
   height: 2400,
   readyTimeoutMs: 3000,
@@ -54,7 +55,33 @@ export const visualPreviewOutputSchema = v.strictObject({
   readyFired: v.boolean(),
 });
 
+const visualPreviewTextPartSchema = v.strictObject({
+  type: v.literal("text"),
+  content: v.pipe(
+    v.string(),
+    v.maxLength(VISUAL_PREVIEW_LIMITS.modelTextChars),
+  ),
+});
+
+const visualPreviewImagePartSchema = v.strictObject({
+  type: v.literal("image"),
+  source: v.strictObject({
+    type: v.literal("data"),
+    value: visualPreviewOutputSchema.entries.png,
+    mimeType: v.literal("image/png"),
+  }),
+});
+
+// One diagnostic part, followed by the screenshot when rendering succeeds.
+export const visualPreviewToolOutputSchema = v.union([
+  v.strictTuple([visualPreviewTextPartSchema, visualPreviewImagePartSchema]),
+  v.strictTuple([visualPreviewTextPartSchema]),
+]);
+
 export type VisualPreviewInput = v.InferOutput<typeof visualPreviewInputSchema>;
 export type VisualPreviewOutput = v.InferOutput<
   typeof visualPreviewOutputSchema
+>;
+export type VisualPreviewToolOutput = v.InferOutput<
+  typeof visualPreviewToolOutputSchema
 >;
