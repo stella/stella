@@ -3,9 +3,8 @@ import { readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 
 // A `steps.<id>` expression that names no step in its job evaluates to an
-// empty value, so a condition built on it silently never holds (a staging
-// smoke step was skipped on every deploy this way). Every reference must name
-// a step declared in the same job or composite action.
+// empty value, so a condition built on it silently never holds. Every
+// reference must name a step declared in the same job or composite action.
 
 const ROOT = path.resolve(import.meta.dir, "..");
 const STEP_REFERENCE = /\bsteps\.([A-Za-z_][\w-]*)\./gu;
