@@ -122,6 +122,18 @@ describe("exposed tool names", () => {
     );
   });
 
+  test("repeated collisions on one long name stay unique and inside the contract", () => {
+    const baseName = namespaceSkillToolName(`${"b".repeat(70)}-report`);
+    const seen = new Set<string>();
+    const names = Array.from({ length: 5 }, () =>
+      collisionSafeToolName({ baseName, rawName: "report", seen }),
+    );
+    expect(new Set(names).size).toBe(names.length);
+    for (const name of names) {
+      expect(name).toMatch(TOOL_NAME_PATTERN);
+    }
+  });
+
   test("long slugs sharing a prefix keep distinct names", () => {
     const prefix = "a".repeat(60);
     const first = namespaceSkillToolName(`${prefix}-one`);
