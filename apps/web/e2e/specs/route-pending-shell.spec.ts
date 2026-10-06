@@ -35,10 +35,11 @@ const holdProtectedLoader = async (page: Page) => {
       { once: true },
     );
     route.update({
-      loader: async (context) => {
-        await original(context);
+      loader: async (context: Parameters<typeof original>[0]) => {
+        const result = await original(context);
         document.documentElement.dataset["parentLoaderHeld"] = "true";
         await gate.promise;
+        return result;
       },
     });
   });

@@ -200,11 +200,11 @@ test.each([
   },
 );
 
-test("allows content loaders, document canvas and page toolbars without traversing unrelated shell imports", async () => {
+test("allows content skeletons, document canvas and page toolbars without traversing unrelated shell imports", async () => {
   await withSources(
     {
       "routes/index.tsx":
-        "import {Loader} from '@stll/ui/loader'; import {Content} from '@/mixed'; const Pending=()=> <div><Loader/><Content/></div>; export const Route=createFileRoute('/')({pendingComponent:Pending});",
+        "import {Skeleton} from '@stll/ui/skeleton'; import {Content} from '@/mixed'; const Pending=()=> <div><Skeleton/><Content/></div>; export const Route=createFileRoute('/')({pendingComponent:Pending});",
       "mixed.tsx":
         "import {Sidebar} from '@/components/sidebar'; import type {Generated} from '@/generated/missing'; export const Frame=()=> <Sidebar/>; function Unrelated(){const Content=()=> <Sidebar/>; return <Content/>;} export const Content=()=> <main><header>Document toolbar</header>{identity<Generated>(<article/>)}</main>;",
     },
@@ -226,6 +226,40 @@ test("a missing generated census fails rather than silently validating no routes
     },
   );
 });
+
+test.each([
+  ["named alias", "import {Loader as Pending} from '@stll/ui/loader';"],
+  [
+    "namespace",
+    "import * as Loading from '@stll/ui/loader'; const Pending=()=> <Loading.Loader/>;",
+  ],
+  ["default alias", "import Pending from '@stll/ui/loader';"],
+  [
+    "lazy named",
+    "import {lazy} from 'react'; const Pending=lazy(()=> import('@stll/ui/loader').then(module=> ({default:module.Loader})));",
+  ],
+])(
+  "rejects canonical logo Loader through %s in nested fallbacks",
+  async (_name, source) => {
+    await withSources(
+      {
+        "routes/index.tsx": `${source} export const Route=createFileRoute('/')({pendingComponent:Pending});`,
+      },
+      (directory) => {
+        const result = checkRouteFallbacks(directory);
+        expect(result.census).toHaveLength(2);
+        expect(result.violations).toHaveLength(1);
+        expect(result.violations.at(0)).toMatchObject({
+          file: "routes/index.tsx",
+          kind: "pendingComponent",
+        });
+        expect(result.violations.at(0)?.chrome.at(0)).toStartWith(
+          "@stll/ui/loader#",
+        );
+      },
+    );
+  },
+);
 
 test.each([
   [

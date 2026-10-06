@@ -50,6 +50,7 @@ const SHELL_SYMBOLS = new Set([
   "StellaWordmarkArabic",
   "StellaMark",
 ]);
+const LOGO_LOADER_MODULE = "@stll/ui/loader";
 
 class FallbackSymbols {
   private readonly modules = new Map<string, Module>();
@@ -141,7 +142,7 @@ class FallbackSymbols {
     }
     const specifier = node.moduleSpecifier.text;
     const clause = node.importClause;
-    if (!clause || clause.isTypeOnly) {
+    if (!clause || clause.phaseModifier === ts.SyntaxKind.TypeKeyword) {
       return;
     }
     if (clause.name) {
@@ -201,9 +202,8 @@ class FallbackSymbols {
     const module = this.load(file);
     const imported = module.imports.get(name) ?? module.exports.get(name);
     if (imported) {
-      // The animated mark in the canonical Loader is a content indicator.
-      if (imported.module === "@stll/ui/loader") {
-        return [];
+      if (imported.module === LOGO_LOADER_MODULE) {
+        return [`${imported.module}#${imported.name}`];
       }
       if (SHELL_SYMBOLS.has(imported.name)) {
         return [`${imported.module}#${imported.name}`];
@@ -243,6 +243,9 @@ class FallbackSymbols {
       ts.isIdentifier(node.expression)
     ) {
       const imported = this.load(file).imports.get(node.expression.text);
+      if (imported?.module === LOGO_LOADER_MODULE) {
+        return [`${imported.module}#${node.name.text}`];
+      }
       if (imported?.name === "*") {
         if (SHELL_SYMBOLS.has(node.name.text)) {
           return [`${imported.module}#${node.name.text}`];
@@ -261,6 +264,9 @@ class FallbackSymbols {
     ) {
       const specifier = node.arguments.at(0);
       if (specifier && ts.isStringLiteral(specifier)) {
+        if (specifier.text === LOGO_LOADER_MODULE) {
+          return [`${specifier.text}#default`];
+        }
         const target = this.resolveModule(file, specifier.text);
         return target ? this.inspectSymbol(target, "default", visited) : [];
       }
@@ -449,6 +455,9 @@ class FallbackSymbols {
           parameter &&
           ts.isIdentifier(parameter)
         ) {
+          if (specifier.text === LOGO_LOADER_MODULE) {
+            return [`${specifier.text}#Loader`];
+          }
           const target = this.resolveModule(file, specifier.text);
           const findings: string[] = [];
           const namedExports = (child: ts.Node) => {
