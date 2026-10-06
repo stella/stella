@@ -522,7 +522,8 @@ const isValidDispatchBoundary = (
       for (const statement of ast.statements) {
         if (
           !runtimeImport(statement) ||
-          statement.moduleSpecifier.text !== "@/api/mcp/feature-access"
+          statement.moduleSpecifier.text !==
+            (boundary.specifier ?? "@/api/mcp/feature-access")
         ) {
           continue;
         }

@@ -49,12 +49,17 @@ import type {
 } from "@/api/lib/review-organization/reset";
 import { SAMPLE_COUNTS } from "@/api/lib/review-organization/sample-data";
 import { seedReviewOrganization } from "@/api/lib/review-organization/seed";
-import type { ReviewSeedActor } from "@/api/lib/review-organization/seed";
+import type { ReviewSeedActor } from "@/api/lib/review-organization/seed-common";
 import {
   createRootMembershipSafeDb,
   createRootMembershipScopedDb,
 } from "@/api/lib/root-scoped-db";
-import { createResetReviewOrganizationTask } from "@/api/lib/scheduler/tasks/review-organization-reset";
+import { createSchedulerTaskRegistry } from "@/api/lib/scheduler/registry";
+import {
+  createResetReviewOrganizationTask,
+  RESET_REVIEW_ORGANIZATION_TASK,
+  resetReviewOrganizationTask,
+} from "@/api/lib/scheduler/tasks/review-organization-reset";
 import type {
   SchedulerDb,
   SchedulerTaskContext,
@@ -772,6 +777,60 @@ describe("review organization reset task", () => {
       seededMatters: SAMPLE_COUNTS.matters,
       seededDocuments: SAMPLE_COUNTS.documents,
     });
+    expect(await countRows(fixture.reviewOrgId)).toEqual({ ...SAMPLE_COUNTS });
+  });
+
+  test("is registered ungated and, without time billing, seeds everything else", async () => {
+    // The registry runs the task itself, with no feature gate in front of it.
+    expect(
+      createSchedulerTaskRegistry(async () => {}).get(
+        RESET_REVIEW_ORGANIZATION_TASK,
+      ),
+    ).toBe(resetReviewOrganizationTask);
+
+    // Enrolments survive resets (they are the account's preferences).
+    await testDb
+      .delete(featureEnrolments)
+      .where(eq(featureEnrolments.organizationId, fixture.reviewOrgId));
+    const task = createResetReviewOrganizationTask({
+      readConfig: () => config(fixture.reviewOrgId),
+      dependencies: {
+        ...resetDependencies,
+        seed: {
+          documents: documentDependencies,
+          timeBillingAdmitted: () => false,
+        },
+      },
+      rlsDatabase: rlsDatabase(),
+    });
+    (await task(contextFor(Bun.randomUUIDv7()))).unwrap(
+      "Expected the reset run to succeed without time billing",
+    );
+    expect(await countRows(fixture.reviewOrgId)).toEqual({
+      ...SAMPLE_COUNTS,
+      timeEntries: 0,
+      rateTables: 0,
+      rateEntries: 0,
+    });
+    expect(
+      await testDb.$count(
+        featureEnrolments,
+        and(
+          eq(featureEnrolments.organizationId, fixture.reviewOrgId),
+          eq(featureEnrolments.featureId, "time-billing"),
+        ),
+      ),
+    ).toBe(0);
+
+    // With time billing back, the next run completes the sample data.
+    const restored = createResetReviewOrganizationTask({
+      readConfig: () => config(fixture.reviewOrgId),
+      dependencies: resetDependencies,
+      rlsDatabase: rlsDatabase(),
+    });
+    (await restored(contextFor(Bun.randomUUIDv7()))).unwrap(
+      "Expected the reset run to succeed",
+    );
     expect(await countRows(fixture.reviewOrgId)).toEqual({ ...SAMPLE_COUNTS });
   });
 });

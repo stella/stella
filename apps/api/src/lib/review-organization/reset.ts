@@ -37,14 +37,12 @@ import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import type { ReviewOrganizationConfig } from "@/api/lib/review-organization/config";
 import { inOrder } from "@/api/lib/review-organization/in-order";
 import { sweepReviewOrganization } from "@/api/lib/review-organization/reset-scope";
-import {
-  ReviewSeedError,
-  seedReviewOrganization,
-} from "@/api/lib/review-organization/seed";
+import { seedReviewOrganization } from "@/api/lib/review-organization/seed";
+import { ReviewSeedError } from "@/api/lib/review-organization/seed-common";
 import type {
   ReviewSeedCounts,
   ReviewSeedDependencies,
-} from "@/api/lib/review-organization/seed";
+} from "@/api/lib/review-organization/seed-common";
 import {
   createRootMembershipSafeDb,
   createRootMembershipScopedDb,
