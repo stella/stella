@@ -210,8 +210,6 @@ for (const transport of [
             }),
           )["result"];
         } else {
-          const handler =
-            capability === "lists.items.sources.list" ? readSources : readItems;
           const synthesized = await synthesizeCapabilityContext({
             context,
             capabilityId: capability,
@@ -222,10 +220,25 @@ for (const transport of [
               params: { ...input.params, workspaceId: matterId },
             },
           });
-          const execute = async () =>
-            await handler.handler(
-              asTestRaw<Parameters<typeof handler.handler>[0]>(synthesized),
-            );
+          const execute = async () => {
+            switch (capability) {
+              case "lists.items.sources.list":
+                return await readSources.handler(
+                  asTestRaw<Parameters<typeof readSources.handler>[0]>(
+                    synthesized,
+                  ),
+                );
+              case "lists.items.list":
+                return await readItems.handler(
+                  asTestRaw<Parameters<typeof readItems.handler>[0]>(
+                    synthesized,
+                  ),
+                );
+              default:
+                capability satisfies never;
+                return panic("Unexpected list capability");
+            }
+          };
           if (transport === "REST HTTP") {
             const response = await new Elysia()
               .get("/fixture", execute)
@@ -311,13 +324,13 @@ for (const { id } of requiredCapabilities) {
       if (!isRecord(payload) || !isRecord(payload["error"])) {
         return panic("Expected an error object");
       }
-      expect(payload.error).toEqual({
+      expect(payload["error"]).toEqual({
         code: "not_found",
         message: `No capability with id "${id}"`,
         hint: expect.any(String),
       });
       for (const hidden of requiredCapabilities) {
-        expect(payload.error.hint).not.toContain(`"${hidden.id}"`);
+        expect(payload["error"]["hint"]).not.toContain(`"${hidden.id}"`);
       }
       results.push(result);
     }

@@ -8015,6 +8015,10 @@
     "seconds": 0.41,
     "source": "estimated"
   },
+  "src/mcp/caller-feature-projection.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
   "src/mcp/capability-feature.test.ts": {
     "seconds": 0.141302,
     "source": "estimated"
