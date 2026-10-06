@@ -43,7 +43,7 @@ test("fixture lifecycle preloading leaves runtime mode resolution to the test", 
       file,
       `import { test, expect } from "bun:test";
 process.env.NODE_ENV = "production";
-process.env.STELLA_LOCAL_DEV = "0";
+delete process.env.STELLA_LOCAL_DEV;
 const { isLocalDevOpen, isLocalTestRun } = await import(${JSON.stringify(runtimeMode)});
 test("strict fixture runtime", () => {
   expect(isLocalDevOpen()).toBe(false);
