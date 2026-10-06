@@ -1640,7 +1640,7 @@
     "apps/api/src/lib/lists/sanctions/screening-service.ts": 1,
     "apps/api/src/lib/markdown/html-to-markdown.ts": 10,
     "apps/api/src/lib/mcp-connectors/catalog-metadata.ts": 2,
-    "apps/api/src/lib/mcp-upstream/cached-tools.ts": 2,
+    "apps/api/src/lib/mcp-upstream/cached-tools.ts": 1,
     "apps/api/src/lib/mcp-upstream/connections.test.ts": 1,
     "apps/api/src/lib/mcp-upstream/connections.ts": 19,
     "apps/api/src/lib/mcp-upstream/namespace.ts": 1,
