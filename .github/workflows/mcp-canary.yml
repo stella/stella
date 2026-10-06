@@ -34,23 +34,6 @@ jobs:
       group: mcp-canary
       cancel-in-progress: false
     steps:
-      - name: Checkout default branch
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          ref: ${{ github.event.repository.default_branch }}
-          persist-credentials: false
-
-      - name: Setup Bun
-        uses: stella/.github/actions/setup-bun-cached@167fb396c6c0f4e07296ad2cd72e6ef15367c776
-        with:
-          save: ${{ github.ref == 'refs/heads/main' }}
-          bun-version-file: "package.json"
-
-      - name: Install dependencies
-        run: bash scripts/retry.sh bun ci --ignore-scripts
-        env:
-          NPM_TOKEN: ""
-
       # The dispatch input takes any URL, and the token is a bearer credential
       # the probe sends to whatever it is pointed at, so the two are resolved
       # together here: the credential travels only to the configured endpoint,
@@ -69,6 +52,39 @@ jobs:
           else
             echo "authenticated=false" >> "$GITHUB_OUTPUT"
           fi
+
+      # The probes exercise what the target serves, so they run from the commit
+      # the target reports on /health, never from main: a route merged but not
+      # yet released would otherwise fail every probe against production.
+      - name: Resolve the deployed commit
+        id: deployed
+        env:
+          BASE_URL: ${{ steps.target.outputs.base_url }}
+        run: |
+          body="$(curl --fail --silent --show-error --max-time 20 --retry 3 --retry-all-errors "${BASE_URL%/}/health")"
+          commit="$(printf '%s' "$body" | jq -r '.commit // empty')"
+          if ! printf '%s' "$commit" | grep -Eq '^[0-9a-f]{40}$'; then
+            echo "::error::${BASE_URL} did not report its deployed commit on /health."
+            exit 1
+          fi
+          echo "commit=$commit" >> "$GITHUB_OUTPUT"
+
+      - name: Checkout the deployed commit
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ steps.deployed.outputs.commit }}
+          persist-credentials: false
+
+      - name: Setup Bun
+        uses: stella/.github/actions/setup-bun-cached@167fb396c6c0f4e07296ad2cd72e6ef15367c776
+        with:
+          save: ${{ github.ref == 'refs/heads/main' }}
+          bun-version-file: "package.json"
+
+      - name: Install dependencies
+        run: bash scripts/retry.sh bun ci --ignore-scripts
+        env:
+          NPM_TOKEN: ""
 
       # The token is optional on purpose: without it the public probes still
       # run and the authenticated ones report as skipped, so a missing secret

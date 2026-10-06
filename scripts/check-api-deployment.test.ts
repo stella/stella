@@ -14,6 +14,9 @@ const isRecord = (value: unknown): value is Record<string, unknown> =>
 
 type WorkflowStep = { run: string; env: Record<string, unknown> };
 
+/** A workflow `${{ … }}` expression, as the parsed YAML holds it. */
+const githubExpression = (inner: string) => `\${{ ${inner} }}`;
+
 const workflowSteps = (workflow: unknown, file: string): WorkflowStep[] => {
   const jobs = isRecord(workflow) ? workflow["jobs"] : undefined;
   expect(isRecord(jobs), `${file}: jobs`).toBe(true);
@@ -225,6 +228,92 @@ describe("API deployment health receipt", () => {
       );
       expect(mcpStep.env["MCP_CANARY_DESKTOP_KEY"], file).toBeUndefined();
       expect(mcpStep.env["MCP_CANARY_SESSION_COOKIE"], file).toBeUndefined();
+    }
+  });
+
+  test("the production MCP canary probes the commit the target reports, not main", async () => {
+    const workflow = Bun.YAML.parse(
+      await Bun.file(
+        new URL("../.github/workflows/mcp-canary.yml", import.meta.url),
+      ).text(),
+    );
+    const jobs = isRecord(workflow) ? workflow["jobs"] : undefined;
+    const job = isRecord(jobs) ? jobs["mcp-canary"] : undefined;
+    const rawSteps = isRecord(job) ? job["steps"] : undefined;
+    const steps = (Array.isArray(rawSteps) ? rawSteps : []).filter(isRecord);
+    const indexOf = (predicate: (step: Record<string, unknown>) => boolean) =>
+      steps.findIndex(predicate);
+
+    const checkouts = steps.filter(
+      (step) =>
+        typeof step["uses"] === "string" &&
+        step["uses"].startsWith("actions/checkout@"),
+    );
+    expect(checkouts).toHaveLength(1);
+    const checkoutWith = checkouts.at(0)?.["with"];
+    expect(isRecord(checkoutWith) && checkoutWith["ref"]).toBe(
+      githubExpression("steps.deployed.outputs.commit"),
+    );
+
+    const deployedIndex = indexOf((step) => step["id"] === "deployed");
+    const targetIndex = indexOf((step) => step["id"] === "target");
+    const checkoutIndex = indexOf((step) => step === checkouts.at(0));
+    expect(targetIndex).toBeGreaterThanOrEqual(0);
+    expect(targetIndex).toBeLessThan(deployedIndex);
+    expect(deployedIndex).toBeLessThan(checkoutIndex);
+
+    const deployed = steps[deployedIndex];
+    const deployedEnv = deployed?.["env"];
+    expect(isRecord(deployedEnv) && deployedEnv["BASE_URL"]).toBe(
+      githubExpression("steps.target.outputs.base_url"),
+    );
+    const script = typeof deployed?.["run"] === "string" ? deployed["run"] : "";
+    const commit = "0123456789abcdef0123456789abcdef01234567";
+    const resolve = (healthBody: string) => {
+      const directory = mkdtempSync(path.join(tmpdir(), "mcp-canary-"));
+      try {
+        const output = path.join(directory, "output");
+        const result = Bun.spawnSync(
+          [
+            "bash",
+            "-c",
+            `curl() { printf '%s\\n' "$*" >> "$CURL_LOG"; printf '%s' "$HEALTH_BODY"; }\nset -e\n${script}`,
+          ],
+          {
+            env: {
+              ...process.env,
+              BASE_URL: "https://api.example.test/",
+              CURL_LOG: path.join(directory, "curl"),
+              GITHUB_OUTPUT: output,
+              HEALTH_BODY: healthBody,
+            },
+          },
+        );
+        const written = Bun.spawnSync(["cat", output]).stdout.toString();
+        const requested = Bun.spawnSync([
+          "cat",
+          path.join(directory, "curl"),
+        ]).stdout.toString();
+        return { exitCode: result.exitCode, written, requested };
+      } finally {
+        rmSync(directory, { force: true, recursive: true });
+      }
+    };
+
+    const reported = resolve(JSON.stringify({ commit, version: "0.9.50" }));
+    expect(reported.exitCode).toBe(0);
+    expect(reported.written).toBe(`commit=${commit}\n`);
+    expect(reported.requested).toContain("https://api.example.test/health");
+
+    for (const body of [
+      "{}",
+      JSON.stringify({ commit: "main" }),
+      JSON.stringify({ commit: commit.slice(1) }),
+      "not json",
+    ]) {
+      const refused = resolve(body);
+      expect(refused.exitCode, body).not.toBe(0);
+      expect(refused.written, body).toBe("");
     }
   });
 
