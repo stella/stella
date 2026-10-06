@@ -267,6 +267,9 @@ test("case-law app filters, pages and opens links through the MCP host", async (
     .click();
   await app.getByRole("button", { name: /^From/u }).click();
   await app.getByRole("button", { name: "Today", exact: true }).click();
+  const today = app.locator('[role="gridcell"][aria-current="date"]');
+  const selectedDate = await today.getAttribute("data-date");
+  await today.click();
   await app.getByRole("button", { name: "Filter", exact: true }).click();
   await expect
     .poll(async () => (await hostHistory(page, "appCalls")).at(-1))
@@ -277,7 +280,7 @@ test("case-law app filters, pages and opens links through the MCP host", async (
         country: "CZE",
         limit: 10,
         courts: ["Ústavní soud"],
-        date_from: "2024-04-15",
+        date_from: selectedDate,
       },
     });
   await page.evaluate(() =>
@@ -358,6 +361,9 @@ test("a selected court tier survives a later response without facets", async ({
   await app
     .getByRole("option", { name: "Constitutional courts", exact: true })
     .click();
+  await expect(
+    app.getByRole("combobox", { name: "Court", exact: true }),
+  ).toHaveText("Constitutional courts");
   await page.evaluate(
     (payload) =>
       globalThis.appFixtureHost.sendAppResult({
@@ -368,6 +374,9 @@ test("a selected court tier survives a later response without facets", async ({
     APP_SEARCH_FIXTURE,
   );
   await expect(app.locator("tbody tr")).toHaveCount(0);
+  await expect(
+    app.getByRole("combobox", { name: "Court", exact: true }),
+  ).toHaveText("Constitutional courts");
   await app.getByRole("button", { name: "Filter", exact: true }).click();
   await expect
     .poll(async () => hostHistory(page, "appCalls"))
@@ -485,7 +494,9 @@ test("desktop rows stay single-line with long references and summaries", async (
       };
     }),
   );
-  expect(new Set(geometry.map(({ height }) => height)).size).toBe(1);
+  // Collapsed borders contribute half a pixel to the last row.
+  const heights = geometry.map(({ height }) => height);
+  expect(Math.max(...heights) - Math.min(...heights)).toBeLessThanOrEqual(1);
   expect(
     geometry.every(
       ({ referenceLines, nowrap, ellipsis, referenceNowrap }) =>

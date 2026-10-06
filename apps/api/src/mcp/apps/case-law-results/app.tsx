@@ -444,6 +444,14 @@ const SearchControls = ({
                     {defaults.court}
                   </SelectItem>
                 )}
+              {court.value.startsWith("tier:") &&
+                !facets?.court.some(
+                  ({ tierLabel }) => court.value === `tier:${tierLabel}`,
+                ) && (
+                  <SelectItem value={court.value}>
+                    {t(court.value.slice("tier:".length))}
+                  </SelectItem>
+                )}
               {facets?.court.map(({ tierLabel, courts }) => (
                 <SelectGroup key={tierLabel}>
                   <SelectGroupLabel>{t(tierLabel)}</SelectGroupLabel>
