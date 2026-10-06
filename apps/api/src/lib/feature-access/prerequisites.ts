@@ -10,14 +10,14 @@ export const featurePrerequisiteClosure = (
   const active = new Set<string>();
   const visit = (id: string) => {
     if (active.has(id)) {
-      return panic("Feature prerequisites must be acyclic");
+      panic("Feature prerequisites must be acyclic");
     }
     if (completed.has(id)) {
       return;
     }
     const definition = Object.hasOwn(registry, id) ? registry[id] : undefined;
     if (definition === undefined) {
-      return panic("Feature access requires a registered feature");
+      panic("Feature access requires a registered feature");
     }
     active.add(id);
     if (definition.prerequisites !== undefined) {

@@ -97,11 +97,9 @@ export const entityFeaturePolicies = (
       );
       continue;
     }
-    if (classification.target === "fields") {
-      conditions.push(
-        sql`(CASE WHEN ${column} IS NULL THEN true ELSE EXISTS (SELECT 1 FROM public.fields f WHERE f.id = ${column}) END)`,
-      );
-    }
+    conditions.push(
+      sql`(CASE WHEN ${column} IS NULL THEN true ELSE EXISTS (SELECT 1 FROM public.fields f WHERE f.id = ${column}) END)`,
+    );
   }
   if (conditions.length === 0) {
     return [];

@@ -117,24 +117,18 @@ export const entityFeatureCoverageViolations = (
           continue;
         }
       }
-      let alias: string | undefined;
-      if (
-        target === "entities" ||
-        target === "entity_versions" ||
-        target === "fields"
-      ) {
-        alias = ENTITY_RELATION_ALIASES[target];
-      }
+      const relationExpression =
+        target === undefined
+          ? undefined
+          : `FROM public.${target} ${ENTITY_RELATION_ALIASES[target]} WHERE ${ENTITY_RELATION_ALIASES[target]}.id = "${config.name}"."${column.name}"`;
       if (
         policy?.as !== "restrictive" ||
         policy.for !== "all" ||
         policy.withCheck === undefined ||
         dialect.sqlToQuery(policy.withCheck).sql !== expression ||
         !expression.includes(`"${config.name}"."${column.name}"`) ||
-        (target !== undefined &&
-          !expression.includes(
-            `FROM public.${target} ${alias} WHERE ${alias}.id = "${config.name}"."${column.name}"`,
-          ))
+        (relationExpression !== undefined &&
+          !expression.includes(relationExpression))
       ) {
         violations.push(
           `${config.name}.${column.name} requires the entity feature owner`,

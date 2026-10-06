@@ -9135,13 +9135,11 @@ describe("OpenAI-compatible MCP tools", () => {
       select: () => ({
         from: () => ({
           where: () => ({
-            limit: (count: number) =>
-              Promise.resolve(
-                [
-                  { id: "00000000-0000-4000-8000-00000007a001" },
-                  { id: "00000000-0000-4000-8000-00000007a002" },
-                ].slice(0, count),
-              ),
+            limit: async (count: number) =>
+              [
+                { id: "00000000-0000-4000-8000-00000007a001" },
+                { id: "00000000-0000-4000-8000-00000007a002" },
+              ].slice(0, count),
           }),
         }),
       }),
