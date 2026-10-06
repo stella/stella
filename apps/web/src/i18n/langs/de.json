@@ -960,6 +960,9 @@
     },
     "viewer": {
       "abstract": "Zusammenfassung",
+      "appliedVersionNotStated": "Angewandte Fassung nicht angegeben",
+      "appliedVersionStatedAmendment": "Fassung gemäß Änderungsgesetz <reference>{amendment}</reference>",
+      "appliedVersionStatedDate": "{relation, select, on {Am {date} geltende Fassung} until {Bis einschließlich {date} geltende Fassung} from {Ab {date} geltende Fassung} other {Am {date} geltende Fassung}}",
       "caseFileMayHoldOthers": "Diese Verfahrensakte kann auch weitere Entscheidungen enthalten.",
       "citedBy": "Zitiert von",
       "cites": "Zitiert",

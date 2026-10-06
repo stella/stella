@@ -423,6 +423,10 @@
     "seconds": 0.06332,
     "source": "estimated"
   },
+  "src/db/provision-applied-version.postgres.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
   "src/db/public-sanctions-reader.postgres.test.ts": {
     "seconds": 0.78131,
     "source": "estimated"
@@ -1745,6 +1749,10 @@
   },
   "src/handlers/case-law/provisions/response.test.ts": {
     "seconds": 0.975067,
+    "source": "estimated"
+  },
+  "src/handlers/case-law/provisions/version-response.test.ts": {
+    "seconds": 1,
     "source": "estimated"
   },
   "src/handlers/case-law/public-response-schemas.test.ts": {
@@ -3765,6 +3773,22 @@
   },
   "src/handlers/views/template-columns-credential.db.test.ts": {
     "seconds": 3.147615,
+    "source": "estimated"
+  },
+  "src/handlers/visual-sandbox/bridge.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
+  "src/handlers/visual-sandbox/routes.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
+  "src/handlers/visual-sandbox/sanitize.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
+  "src/handlers/visual-sandbox/srcdoc.test.ts": {
+    "seconds": 1,
     "source": "estimated"
   },
   "src/handlers/work-obligations/queues/list.integration.test.ts": {
@@ -5927,6 +5951,10 @@
     "seconds": 0.098636,
     "source": "estimated"
   },
+  "src/lib/legal-search/corpus-hit-disposition.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
   "src/lib/legal-search/corpus-index-client.test.ts": {
     "seconds": 0.619813,
     "source": "estimated"
@@ -5969,6 +5997,10 @@
   },
   "src/lib/legal-search/corpus-index-manifest.test.ts": {
     "seconds": 0.115643,
+    "source": "estimated"
+  },
+  "src/lib/legal-search/corpus-index-pagination-disposition.test.ts": {
+    "seconds": 1,
     "source": "estimated"
   },
   "src/lib/legal-search/corpus-index-pagination.test.ts": {
@@ -6153,6 +6185,10 @@
   },
   "src/lib/legal-search/corpus-ranking-policy.test.ts": {
     "seconds": 1.584192,
+    "source": "estimated"
+  },
+  "src/lib/legal-search/corpus-rehydration-disposition.test.ts": {
+    "seconds": 1,
     "source": "estimated"
   },
   "src/lib/legal-search/corpus-sanitize.test.ts": {
@@ -6491,11 +6527,23 @@
     "seconds": 0.250833,
     "source": "estimated"
   },
+  "src/lib/lists/verification/run-caps.db.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
+  "src/lib/lists/verification/run-caps.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
   "src/lib/lists/verification/run-persistence.db.test.ts": {
     "seconds": 1.671187,
     "source": "estimated"
   },
   "src/lib/lists/verification/run-queue.db.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
+  "src/lib/lists/verification/run-start-census.test.ts": {
     "seconds": 1,
     "source": "estimated"
   },
@@ -6561,6 +6609,10 @@
   },
   "src/lib/mcp-upstream/crypto.test.ts": {
     "seconds": 0.220722,
+    "source": "estimated"
+  },
+  "src/lib/mcp-upstream/namespace.property.test.ts": {
+    "seconds": 1,
     "source": "estimated"
   },
   "src/lib/mcp-upstream/oauth.test.ts": {

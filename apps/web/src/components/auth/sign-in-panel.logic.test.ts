@@ -1,7 +1,12 @@
 import { describe, expect, test } from "bun:test";
 
 import type { AuthCapabilities } from "@/components/auth/sign-in-panel.logic";
-import { resolveSignInOptions } from "@/components/auth/sign-in-panel.logic";
+import {
+  resolveLastUsedSignInMethod,
+  resolveSignInOptions,
+  SIGN_IN_METHOD,
+  signInMethodVariant,
+} from "@/components/auth/sign-in-panel.logic";
 
 const authCapabilities = {
   emailOtp: true,
@@ -51,5 +56,99 @@ describe("sign-in panel options", () => {
       showSocialProviders: true,
       hasAboveEmailOptions: true,
     });
+  });
+});
+
+const everyOption = resolveSignInOptions({
+  authCapabilities: {
+    emailOtp: true,
+    localPassword: true,
+    bootstrap: false,
+    social: { google: true, microsoft: true },
+  },
+  socialProviderFlags: { google: true, microsoft: true },
+});
+
+describe("last-used sign-in method", () => {
+  test.each(Object.values(SIGN_IN_METHOD))(
+    "keeps %s when the page offers it",
+    (method) => {
+      expect(
+        resolveLastUsedSignInMethod({ stored: method, options: everyOption }),
+      ).toBe(method);
+    },
+  );
+
+  test.each([null, "", "passkey", "constructor", "GOOGLE"])(
+    "ignores a missing or unknown stored value (%p)",
+    (stored) => {
+      expect(
+        resolveLastUsedSignInMethod({ stored, options: everyOption }),
+      ).toBeNull();
+    },
+  );
+
+  test("ignores a method this deployment no longer offers", () => {
+    const emailOnly = resolveSignInOptions({
+      authCapabilities,
+      socialProviderFlags: { google: true, microsoft: true },
+    });
+    for (const method of [
+      SIGN_IN_METHOD.google,
+      SIGN_IN_METHOD.microsoft,
+      SIGN_IN_METHOD.password,
+    ]) {
+      expect(
+        resolveLastUsedSignInMethod({ stored: method, options: emailOnly }),
+      ).toBeNull();
+    }
+  });
+
+  test("does not mark the first-account form as the password sign-in", () => {
+    const bootstrap = resolveSignInOptions({
+      authCapabilities: {
+        ...authCapabilities,
+        localPassword: true,
+        bootstrap: true,
+      },
+      socialProviderFlags: { google: false, microsoft: false },
+    });
+    expect(
+      resolveLastUsedSignInMethod({
+        stored: SIGN_IN_METHOD.password,
+        options: bootstrap,
+      }),
+    ).toBeNull();
+  });
+
+  test("fills only the last-used method and keeps normal emphasis without one", () => {
+    expect(
+      signInMethodVariant({
+        method: SIGN_IN_METHOD.google,
+        lastUsed: SIGN_IN_METHOD.google,
+        fallback: "outline",
+      }),
+    ).toBe("default");
+    expect(
+      signInMethodVariant({
+        method: SIGN_IN_METHOD.emailOtp,
+        lastUsed: SIGN_IN_METHOD.google,
+        fallback: "default",
+      }),
+    ).toBe("outline");
+    expect(
+      signInMethodVariant({
+        method: SIGN_IN_METHOD.emailOtp,
+        lastUsed: null,
+        fallback: "default",
+      }),
+    ).toBe("default");
+    expect(
+      signInMethodVariant({
+        method: SIGN_IN_METHOD.google,
+        lastUsed: null,
+        fallback: "outline",
+      }),
+    ).toBe("outline");
   });
 });

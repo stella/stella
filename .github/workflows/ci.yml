@@ -1426,6 +1426,12 @@ jobs:
           (cd apps/api && bun run build:mcp-apps)
           git diff --exit-code -- "apps/api/src/mcp/apps/*/generated/app.html.txt"
 
+      - name: Visual sandbox document tests
+        if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
+        run: |
+          (cd apps/api && bun run build:visual-sandbox)
+          git diff --exit-code -- apps/api/src/handlers/visual-sandbox/generated/runtime.js.txt
+
       - name: Capability catalog drift guard
         if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
         # The committed capability catalog (every `tool`/`covered` safe handler,
@@ -1627,6 +1633,10 @@ jobs:
           args=()
           [[ -z "$AFFECTED_FLAG" ]] || args+=("$AFFECTED_FLAG")
           bun --bun turbo run format "${args[@]}" -- --check
+
+      - name: Test unsignalled skip detection
+        if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
+        run: bun test scripts/unsignalled-skip.test.ts
 
       - name: Select measured ratchet base from the target branch
         if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}

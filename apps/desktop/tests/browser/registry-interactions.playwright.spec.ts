@@ -9,6 +9,7 @@ import type {
 import type { ClipboardSnapshot } from "../../src/clipboard/clipboard-types";
 import arMessages from "../../src/i18n/langs/ar.json" with { type: "json" };
 import enMessages from "../../src/i18n/langs/en.json" with { type: "json" };
+import type { AppSnapshot, DesktopAccountSnapshot } from "../../src/shared/rpc";
 
 const REGISTRIES = [
   {
@@ -103,7 +104,40 @@ type BoundaryMode =
   | "normal"
   | "reject-first-search"
   | "defer-first-search"
-  | "reject-first-state";
+  | "reject-first-state"
+  | "defer-first-state"
+  | "reject-first-connect";
+type BoundaryOptions = {
+  mode?: BoundaryMode;
+  welcome?: boolean;
+  settings?: boolean;
+};
+const SETTINGS_SNAPSHOT = {
+  bridgePort: 45_901,
+  bridgeVersion: 16,
+  capabilities: [],
+  notificationPreferences: {
+    documentReady: true,
+    revisionCreated: true,
+    syncIssues: true,
+  },
+  runningSince: "2026-09-08T05:00:00.000Z",
+  sessions: [],
+  trustedSelfHostConnections: [],
+  update: {
+    baseUrl: null,
+    channel: null,
+    currentHash: null,
+    currentVersion: null,
+    lastCheckedAt: null,
+    latestHash: null,
+    latestVersion: null,
+    status: "idle",
+    statusMessage: "",
+    updateAvailable: false,
+    updateReady: false,
+  },
+} satisfies AppSnapshot;
 type Audit = {
   consoleErrors: string[];
   external: string[];
@@ -166,8 +200,27 @@ test.afterEach(async ({ page }) => {
 const installNativeBoundary = async (
   page: Page,
   connection: Connection,
-  mode: BoundaryMode = "normal",
+  options: BoundaryMode | BoundaryOptions = "normal",
 ) => {
+  const configuration =
+    typeof options === "string" ? { mode: options } : options;
+  const account = (
+    connection.status === "connected"
+      ? {
+          status: "connected",
+          account: {
+            name: "Synthetic Member",
+            email: "member@example.test",
+            verifiedAt: "2026-09-08T05:00:00.000Z",
+          },
+          identity: {
+            userId: "synthetic-user",
+            organizationId: "synthetic-organization",
+          },
+          expiresAt: CONNECTED_EXPIRES_AT,
+        }
+      : { status: "disconnected" }
+  ) satisfies DesktopAccountSnapshot;
   await page.addInitScript(
     ({
       initialConnection,
@@ -177,6 +230,9 @@ const installNativeBoundary = async (
       secondResponse,
       clipboardSnapshot,
       signedInConnection,
+      settingsSnapshot,
+      accountSnapshot,
+      windowLabel,
     }) => {
       const invocations: Invocation[] = [];
       const unexpected: string[] = [];
@@ -184,10 +240,15 @@ const installNativeBoundary = async (
       let callbackId = 0;
       let searchCount = 0;
       let stateCount = 0;
+      let connectCount = 0;
+      let resolveFirstState: ((value: Connection) => void) | null = null;
       let currentConnection = initialConnection;
       let resolveFirstSearch:
         | ((value: DesktopRegistrySearchResponse) => void)
         | null = null;
+      Reflect.set(window, "__STELLA_RESOLVE_FIRST_STATE__", () =>
+        resolveFirstState?.(currentConnection),
+      );
       Reflect.set(window, "__STELLA_REGISTRY_INVOCATIONS__", invocations);
       Reflect.set(window, "__STELLA_REGISTRY_UNEXPECTED__", unexpected);
       Reflect.set(window, "__STELLA_COMPLETE_SIGN_IN__", () => {
@@ -209,6 +270,19 @@ const installNativeBoundary = async (
               return navigator.language === "ar" ? "ar" : "en";
             case "clipboard_get_snapshot":
               return clipboardSnapshot;
+            case "get_state":
+              return settingsSnapshot;
+            case "account_get_state":
+              return accountSnapshot;
+            case "open_stella_account":
+              connectCount += 1;
+              if (
+                initialMode === "reject-first-connect" &&
+                connectCount === 1
+              ) {
+                throw new TypeError("Deliberate connect failure");
+              }
+              return undefined;
             case "is_autostart_enabled":
               return false;
             case "plugin:event|listen":
@@ -217,7 +291,6 @@ const installNativeBoundary = async (
             case "desktop_report_timing":
             case "desktop_report_error":
             case "clipboard_hide":
-            case "open_stella_account":
             case "account_disconnect":
             case "registry_copy":
             case "registry_open_company_format":
@@ -226,6 +299,11 @@ const installNativeBoundary = async (
               stateCount += 1;
               if (initialMode === "reject-first-state" && stateCount === 1) {
                 throw new TypeError("Deliberate connection failure");
+              }
+              if (initialMode === "defer-first-state" && stateCount === 1) {
+                return await new Promise<Connection>((resolve) => {
+                  resolveFirstState = resolve;
+                });
               }
               return currentConnection;
             }
@@ -266,8 +344,8 @@ const installNativeBoundary = async (
           }
         },
         metadata: {
-          currentWebview: { label: "clipboard", windowLabel: "clipboard" },
-          currentWindow: { label: "clipboard" },
+          currentWebview: { label: windowLabel, windowLabel },
+          currentWindow: { label: windowLabel },
         },
         runCallback: (id: number, data: unknown) => callbacks.get(id)?.(data),
         transformCallback: (
@@ -289,11 +367,17 @@ const installNativeBoundary = async (
     },
     {
       initialConnection: connection,
-      initialMode: mode,
+      initialMode: configuration.mode ?? "normal",
       formatResponse: FORMAT_RESPONSE,
       searchResponse: SEARCH_RESPONSE,
       secondResponse: SECOND_RESPONSE,
-      clipboardSnapshot: SNAPSHOT,
+      clipboardSnapshot: {
+        ...SNAPSHOT,
+        welcomeStatus: configuration.welcome ? "pending" : "completed",
+      },
+      settingsSnapshot: SETTINGS_SNAPSHOT,
+      accountSnapshot: account,
+      windowLabel: configuration.settings ? "main" : "clipboard",
       signedInConnection: connected(),
     },
   );
@@ -1095,6 +1179,249 @@ for (const language of ["en", "ar"] as const) {
             path: test.info().outputPath(`unified-registry-${colorScheme}.png`),
           });
         }
+      });
+    }
+  });
+}
+
+for (const language of ["en", "ar"] as const) {
+  test.describe(`${language} first launch account connection`, () => {
+    test.use({ locale: language });
+    const messages = language === "ar" ? arMessages : enMessages;
+
+    test("welcome connects through the existing account action without clipboard data", async ({
+      page,
+    }) => {
+      await installNativeBoundary(
+        page,
+        { status: "disconnected" },
+        { welcome: true },
+      );
+      await page.goto("/");
+      const welcome = page.getByRole("dialog");
+      await expect(welcome).toBeVisible();
+      await expect(welcome).toHaveCSS(
+        "direction",
+        language === "ar" ? "rtl" : "ltr",
+      );
+      const connect = welcome.getByRole("button", {
+        name: messages.settings.connectToStella,
+        exact: true,
+      });
+      await expect(connect).toBeVisible();
+      await connect.click();
+      await expect
+        .poll(async () =>
+          (await readInvocations(page)).filter(
+            ({ command }) => command === "open_stella_account",
+          ),
+        )
+        .toEqual([{ command: "open_stella_account", args: {} }]);
+      await expect(welcome).toBeVisible();
+    });
+
+    test("connected welcome omits the connect prompt", async ({ page }) => {
+      await installNativeBoundary(page, connected(), { welcome: true });
+      await page.goto("/");
+      const welcome = page.getByRole("dialog");
+      await expect(welcome).toBeVisible();
+      await expect
+        .poll(
+          async () =>
+            (await readInvocations(page)).filter(
+              ({ command }) => command === "registry_get_state",
+            ).length,
+        )
+        .toBeGreaterThan(0);
+      await page.evaluate(async () => {
+        await new Promise<void>((resolve) => {
+          requestAnimationFrame(() => {
+            requestAnimationFrame(() => resolve());
+          });
+        });
+      });
+      await expect(
+        welcome.getByRole("button", {
+          name: messages.settings.connectToStella,
+          exact: true,
+        }),
+      ).toHaveCount(0);
+      await expect(
+        welcome.getByText(messages.settings.connectToStellaDescription, {
+          exact: true,
+        }),
+      ).toHaveCount(0);
+      await expect(
+        welcome.getByRole("button", {
+          name: messages.clipboard.welcomeStart,
+          exact: true,
+        }),
+      ).toBeEnabled();
+    });
+
+    test("loading welcome never pretends the account is disconnected", async ({
+      page,
+    }) => {
+      await installNativeBoundary(
+        page,
+        { status: "disconnected" },
+        { welcome: true, mode: "defer-first-state" },
+      );
+      await page.goto("/");
+      const welcome = page.getByRole("dialog");
+      await expect(welcome).toBeVisible();
+      await expect(
+        welcome.getByRole("button", {
+          name: messages.settings.connectToStella,
+          exact: true,
+        }),
+      ).toHaveCount(0);
+      await expect(
+        welcome.getByRole("button", {
+          name: messages.settings.tryAgain,
+          exact: true,
+        }),
+      ).toHaveCount(0);
+      await expect
+        .poll(
+          async () =>
+            (await readInvocations(page)).filter(
+              ({ command }) => command === "registry_get_state",
+            ).length,
+        )
+        .toBe(1);
+      await page.evaluate(() => {
+        const resolve = Reflect.get(window, "__STELLA_RESOLVE_FIRST_STATE__");
+        if (typeof resolve !== "function") {
+          throw new TypeError("Missing state resolver");
+        }
+        resolve();
+      });
+      await expect(
+        welcome.getByRole("button", {
+          name: messages.clipboard.welcomeStart,
+          exact: true,
+        }),
+      ).toBeEnabled();
+      await expect(
+        welcome.getByRole("button", {
+          name: messages.settings.connectToStella,
+          exact: true,
+        }),
+      ).toBeVisible();
+    });
+
+    test("failed connection lookup exposes retry and recovers", async ({
+      page,
+    }) => {
+      await installNativeBoundary(page, connected(), {
+        welcome: true,
+        mode: "reject-first-state",
+      });
+      await page.goto("/");
+      const welcome = page.getByRole("dialog");
+      await expect(welcome.getByRole("alert")).toHaveText(
+        messages.clipboard.registryErrorState,
+      );
+      await expect(
+        welcome.getByRole("button", {
+          name: messages.settings.connectToStella,
+          exact: true,
+        }),
+      ).toHaveCount(0);
+      await welcome
+        .getByRole("button", { name: messages.settings.tryAgain, exact: true })
+        .click();
+      await expect(welcome.getByRole("alert")).toHaveCount(0);
+      await expect(
+        welcome.getByRole("button", {
+          name: messages.settings.tryAgain,
+          exact: true,
+        }),
+      ).toHaveCount(0);
+    });
+
+    test("failed connect remains recoverable through the same account action", async ({
+      page,
+    }) => {
+      await installNativeBoundary(
+        page,
+        { status: "disconnected" },
+        { welcome: true, mode: "reject-first-connect" },
+      );
+      await page.goto("/");
+      const welcome = page.getByRole("dialog");
+      const connect = welcome.getByRole("button", {
+        name: messages.settings.connectToStella,
+        exact: true,
+      });
+      await connect.click();
+      await expect(welcome.getByRole("alert")).toHaveText(
+        messages.clipboard.registryErrorConnect,
+      );
+      await connect.click();
+      await expect(welcome.getByRole("alert")).toHaveCount(0);
+      await expect
+        .poll(async () =>
+          (await readInvocations(page)).filter(
+            ({ command }) => command === "open_stella_account",
+          ),
+        )
+        .toEqual([
+          { command: "open_stella_account", args: {} },
+          { command: "open_stella_account", args: {} },
+        ]);
+    });
+
+    for (const status of ["connected", "disconnected"] as const) {
+      test(`${status} Settings header keeps its complete subtitle at the native window size`, async ({
+        page,
+      }) => {
+        await page.setViewportSize({ width: 480, height: 460 });
+        await installNativeBoundary(
+          page,
+          status === "connected" ? connected() : { status: "disconnected" },
+          { settings: true },
+        );
+        await page.goto("/#general");
+        const subtitle = page.getByText(
+          status === "connected"
+            ? "member@example.test"
+            : messages.settings.desktopBenefit,
+          { exact: true },
+        );
+        await expect(subtitle).toHaveCount(1);
+        await expect(subtitle).toBeVisible();
+        if (status === "connected") {
+          await expect(
+            page.getByText("Synthetic Member", { exact: true }),
+          ).toBeVisible();
+        } else {
+          await expect(
+            page.getByText(messages.settings.connectToStellaDescription, {
+              exact: true,
+            }),
+          ).toHaveCount(1);
+        }
+        await expect(subtitle).toHaveCSS(
+          "direction",
+          language === "ar" ? "rtl" : "ltr",
+        );
+        const geometry = await subtitle.evaluate((element) => {
+          const style = getComputedStyle(element);
+          return {
+            textOverflow: style.textOverflow,
+            whiteSpace: style.whiteSpace,
+            width: element.clientWidth,
+            scrollWidth: element.scrollWidth,
+            height: element.clientHeight,
+            scrollHeight: element.scrollHeight,
+          };
+        });
+        expect(geometry.textOverflow).not.toBe("ellipsis");
+        expect(geometry.whiteSpace).not.toBe("nowrap");
+        expect(geometry.scrollWidth).toBeLessThanOrEqual(geometry.width);
+        expect(geometry.scrollHeight).toBeLessThanOrEqual(geometry.height);
       });
     }
   });

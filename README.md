@@ -57,7 +57,7 @@ MCP-compatible tools that extend the agent.
 **Web app.** Matters, documents, Word .docx editing, review, research, chat and
 knowledge tools in one workspace.
 
-**Desktop app.** Local desktop bridge for editing Office documents from stella.
+**Desktop app.** Opens Office documents from stella in your local apps and saves edits back, and keeps a clipboard history that stays on your device.
 
 **[stella MCP server](apps/api/src/mcp/README.md).** A central gateway to
 access and control stella data, including matters, documents and case law.

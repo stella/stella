@@ -146,6 +146,7 @@
     "accountLinked": "Konto połączone",
     "connectToStella": "Połącz ze stella web",
     "connectToStellaDescription": "Połącz ten komputer z bieżącym kontem stella bez otwierania dokumentu.",
+    "desktopBenefit": "Pliki Office i lokalna historia schowka",
     "disconnectAccount": "Odłącz konto",
     "errorDisconnectAccount": "stella desktop nie mogła odłączyć konta.",
     "errorReadAccount": "stella desktop nie mogła sprawdzić połączenia konta.",

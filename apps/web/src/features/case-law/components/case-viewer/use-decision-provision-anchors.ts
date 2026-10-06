@@ -1,6 +1,10 @@
 import { useQueries, useQuery } from "@tanstack/react-query";
 
 import { isCaseLawJurisdiction } from "@stll/api-contract/case-law-jurisdictions";
+import {
+  DECISION_DATE_VERSION_BASIS,
+  provisionVersionAsOf,
+} from "@stll/api-contract/provision-version-basis";
 import type { Block } from "@stll/legal-ast/document-ast";
 import { provisionHeadingAnchor } from "@stll/legal-ast/provision-preview";
 import { PROVISION_CITATION_GRAMMARS } from "@stll/legal-atlas/provision-citation-grammars";
@@ -11,6 +15,7 @@ import { locateAbbreviatedProvisionCitations } from "@/features/case-law/fallbac
 import type { ProvisionAnchorSource } from "@/features/case-law/provision-anchors";
 import { formatProvisionReference } from "@/features/case-law/provision-label";
 import {
+  allowsLegacyProvisionFallback,
   citedWorkAtDateKey,
   decisionProvisionsForLinkingOptions,
   statuteByCitedWork,
@@ -81,7 +86,9 @@ type WorkKey = { asOf: string; eli: string; jurisdiction: string };
  * one the grouping accumulates into, so references seen after the work was
  * collected are in it too.
  */
-type LinkedWork = WorkKey & { rows: { versionValidFrom: string | null }[] };
+type LinkedWork = WorkKey & {
+  rows: Parameters<typeof provisionVersionAsOf>[0][];
+};
 
 const workKeyOf = ({
   eli,
@@ -116,7 +123,7 @@ export const useDecisionProvisionAnchors = ({
 
   const grammar = useCitingProvisionCitationGrammar(country);
   const fallbackReferences =
-    grammar === null
+    grammar === null || !allowsLegacyProvisionFallback(data)
       ? []
       : locateAbbreviatedProvisionCitations(blocks, grammar);
   const works: LinkedWork[] = [];
@@ -134,7 +141,7 @@ export const useDecisionProvisionAnchors = ({
       rowsByWork.set(key, workRows);
     }
     workRows.push(row);
-    const asOf = row.versionValidFrom ?? decisionAsOf;
+    const asOf = provisionVersionAsOf(row, decisionAsOf);
     if (asOf === null) {
       continue;
     }
@@ -159,7 +166,10 @@ export const useDecisionProvisionAnchors = ({
     });
     const existing = works.find((work) => workKeyOf(work) === key);
     if (existing !== undefined) {
-      existing.rows.push({ versionValidFrom: decisionAsOf });
+      existing.rows.push({
+        versionBasis: DECISION_DATE_VERSION_BASIS,
+        versionValidFrom: decisionAsOf,
+      });
       continue;
     }
     seen.add(key);
@@ -167,7 +177,12 @@ export const useDecisionProvisionAnchors = ({
       asOf: decisionAsOf,
       eli: reference.abbreviation.eli,
       jurisdiction: reference.jurisdiction,
-      rows: [{ versionValidFrom: decisionAsOf }],
+      rows: [
+        {
+          versionBasis: DECISION_DATE_VERSION_BASIS,
+          versionValidFrom: decisionAsOf,
+        },
+      ],
     });
   }
 
@@ -199,7 +214,10 @@ export const useDecisionProvisionAnchors = ({
     const statute = statuteByWork.get(key);
     if (
       statute === undefined ||
-      !referencesOutsideVersion(statute, work.rows)
+      !referencesOutsideVersion(statute, {
+        decisionAsOf,
+        references: work.rows,
+      })
     ) {
       continue;
     }
@@ -231,14 +249,13 @@ export const useDecisionProvisionAnchors = ({
     if (statute === undefined) {
       continue;
     }
-    const document =
-      row.versionValidFrom === null ||
-      versionCoversDate(statute, row.versionValidFrom)
-        ? statute
-        : pickVersionAt(
-            optionalArray(versionsByWork.get(key)),
-            row.versionValidFrom,
-          );
+    const asOf = provisionVersionAsOf(row, decisionAsOf);
+    if (asOf === null) {
+      continue;
+    }
+    const document = versionCoversDate(statute, asOf)
+      ? statute
+      : pickVersionAt(optionalArray(versionsByWork.get(key)), asOf);
     if (document === null) {
       continue;
     }

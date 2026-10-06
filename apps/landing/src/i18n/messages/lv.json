@@ -831,8 +831,8 @@
           "title": "Tērzēšana un zināšanu rīki"
         },
         "4": {
-          "body": "Datora lietotne darbojas kā vietējs tilts Office dokumentu rediģēšanai no lietotnes stella.",
-          "title": "Tilts uz datoru"
+          "body": "Atver Office dokumentus no lietotnes stella jūsu datora lietotnēs un saglabā izmaiņas atpakaļ lietotnē stella. Uztur arī starpliktuves vēsturi, kas paliek jūsu ierīcē.",
+          "title": "Datora lietotne"
         },
         "5": {
           "body": "Saglabātie labojumi un augšupielādes kļūst par dokumenta versijām, tāpēc pašreizējais fails un tā vēsture paliek kopā.",

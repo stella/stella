@@ -1,3 +1,5 @@
+import { panic } from "better-result";
+
 import type { ProvisionVersionBasis } from "@stll/api-contract/provision-version-basis";
 import type { ProvisionReference } from "@stll/legal-ast/provision-reference";
 
@@ -17,7 +19,10 @@ export type ProvisionRow = ProvisionReference & {
 };
 
 /** One mention of a provision in the decision's text. */
-type ProvisionOccurrence = Pick<ProvisionRow, "sentenceText" | "spanStart">;
+type ProvisionOccurrence = Pick<
+  ProvisionRow,
+  "sentenceText" | "spanStart" | "versionBasis"
+>;
 
 /** A distinct provision, with every place the decision names it. */
 export type ProvisionGroup = ProvisionReference &
@@ -72,6 +77,34 @@ const KEY_SEPARATOR = "\u0000";
  * reference to an earlier wording is a different text, so it stays its own
  * row even when the designation matches.
  */
+const versionIdentity = (basis: ProvisionVersionBasis): readonly string[] => {
+  switch (basis.type) {
+    case "inferred":
+      return [basis.type, basis.kind];
+    case "not_stated":
+      return [basis.type];
+    case "stated_date":
+      return [
+        basis.type,
+        basis.date,
+        basis.relation,
+        basis.expression?.date ?? "",
+        basis.expression?.eli ?? "",
+      ];
+    case "stated_version":
+      return [
+        basis.type,
+        basis.amendmentWorkIdentifier,
+        basis.expression?.date ?? "",
+        basis.expression?.eli ?? "",
+      ];
+    default: {
+      basis satisfies never;
+      return panic("Unknown provision version basis");
+    }
+  }
+};
+
 const provisionKey = (row: ProvisionRow): string =>
   [
     row.unit,
@@ -82,6 +115,7 @@ const provisionKey = (row: ProvisionRow): string =>
     row.point ?? "",
     row.sentence ?? "",
     row.openEnded ? "1" : "0",
+    ...versionIdentity(row.versionBasis),
     row.versionValidFrom ?? "",
     row.anchor,
   ].join(KEY_SEPARATOR);
@@ -168,6 +202,7 @@ export const groupProvisionsByWork = (
     const occurrence: ProvisionOccurrence = {
       sentenceText: row.sentenceText,
       spanStart: row.spanStart,
+      versionBasis: row.versionBasis,
     };
     const existing = entry.byProvision.get(key);
 

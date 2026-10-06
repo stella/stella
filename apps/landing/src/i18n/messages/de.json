@@ -831,8 +831,8 @@
           "title": "Chat und Wissenswerkzeuge"
         },
         "4": {
-          "body": "Eine Desktop-App dient als lokale Brücke, um Office-Dokumente aus stella zu bearbeiten.",
-          "title": "Desktop-Brücke"
+          "body": "Öffnet Office-Dokumente aus stella in Ihren lokalen Apps und speichert Änderungen zurück in stella. Führt auch einen Zwischenablageverlauf, der auf Ihrem Gerät bleibt.",
+          "title": "Desktop-App"
         },
         "5": {
           "body": "Gespeicherte Änderungen und Uploads werden zu Dokumentversionen, sodass die aktuelle Datei und ihre Historie beisammenbleiben.",

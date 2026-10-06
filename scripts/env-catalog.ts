@@ -60,6 +60,8 @@ export type EnvCatalogEntry = {
 type SchemaRecord = Record<string, v.GenericSchema>;
 
 const INTERNAL_SERVER_KEYS = new Set([
+  "LIST_VERIFICATION_ACTIVE_RUNS_MAX",
+  "LIST_VERIFICATION_DAILY_STARTS_MAX",
   "UNUSED_CLIENT_RETENTION_DAYS",
   "AGENT_REGISTRATION_DAILY_LIMIT",
   "OPEN_CLIENT_REGISTRATION_DAILY_LIMIT",
@@ -283,6 +285,10 @@ const EXAMPLE_VALUES: Record<string, string> = {
 };
 
 const DESCRIPTION_OVERRIDES: Record<string, string> = {
+  LIST_VERIFICATION_ACTIVE_RUNS_MAX:
+    "Maximum queued and running document verifications per organization (1–100; default 2).",
+  LIST_VERIFICATION_DAILY_STARTS_MAX:
+    "Maximum document verification starts per organization per Europe/Prague day (1–1000; default 20).",
   CASE_LAW_EU_COMPLETION_ENABLED:
     "Enable bounded EU case-law completion. Defaults to false.",
   CASE_LAW_EU_COMPLETION_KILL_SWITCH:
@@ -646,6 +652,8 @@ type EnvCatalogName =
   | keyof typeof envWebClientSchema;
 
 export const ENV_CREDENTIAL_CLASSIFICATION = {
+  LIST_VERIFICATION_ACTIVE_RUNS_MAX: ENV_CREDENTIAL_KIND.notCredential,
+  LIST_VERIFICATION_DAILY_STARTS_MAX: ENV_CREDENTIAL_KIND.notCredential,
   ACTION_ADMISSION_BACKGROUND_ORG_CONCURRENCY:
     ENV_CREDENTIAL_KIND.notCredential,
   ACTION_ADMISSION_BACKGROUND_USER_CONCURRENCY:
@@ -1319,11 +1327,13 @@ export const TOOLING_ENV_KEYS = new Set([
   "API_DEPLOYMENT_URL",
   "API_SCOPE_UNKNOWN",
   "API_TEST_ARTIFACT_DIR",
+  "API_TEST_CHILD_TIMEOUT_MS",
   "API_TEST_FILES",
   // Native Bun whole-file timing artifacts and optional drift measurements.
   "API_TEST_MEASUREMENTS",
-  "API_TEST_TIMINGS_DIR",
+  "API_TEST_RUNNER_DEADLINE_MS",
   "API_TEST_SHARD_COUNT",
+  "API_TEST_TIMINGS_DIR",
   "APP_VERSION",
   "AWS_ENDPOINT_URL_BEDROCK_RUNTIME",
   "BASE_REF",
