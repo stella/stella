@@ -190,32 +190,6 @@ const touchedRoutesInTree = (
   return touched;
 };
 
-export const prepareComparisonBaseline = ({
-  base,
-  changedPaths,
-  baseRouteTree,
-  routeTree,
-  declarations,
-}: {
-  base: Baseline;
-  changedPaths: string[];
-  baseRouteTree: string;
-  routeTree: string;
-  declarations: unknown[];
-}) => {
-  const changed = new Set(changedPaths.map(normalizeSource));
-  const changedRoutes = [
-    ...new Set([
-      ...touchedRoutesInTree(baseRouteTree, changed),
-      ...touchedRoutesInTree(routeTree, changed),
-    ]),
-  ].toSorted();
-  return {
-    ...applyNetworkBudgetDeclarations(base, declarations),
-    changedRoutes,
-  };
-};
-
 const applyNetworkBudgetDeclarations = (
   base: Baseline,
   declarations: unknown[],
@@ -248,6 +222,32 @@ const applyNetworkBudgetDeclarations = (
     notices.push(`- ${code(route)}: ${code(declaration["reason"])}`);
   }
   return { baseline, notices };
+};
+
+export const prepareComparisonBaseline = ({
+  base,
+  changedPaths,
+  baseRouteTree,
+  routeTree,
+  declarations,
+}: {
+  base: Baseline;
+  changedPaths: string[];
+  baseRouteTree: string;
+  routeTree: string;
+  declarations: unknown[];
+}) => {
+  const changed = new Set(changedPaths.map(normalizeSource));
+  const changedRoutes = [
+    ...new Set([
+      ...touchedRoutesInTree(baseRouteTree, changed),
+      ...touchedRoutesInTree(routeTree, changed),
+    ]),
+  ].toSorted();
+  return {
+    ...applyNetworkBudgetDeclarations(base, declarations),
+    changedRoutes,
+  };
 };
 
 export const networkBudgetDeclarationProblem = ({
