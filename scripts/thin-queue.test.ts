@@ -612,7 +612,22 @@ test("one variable moves only derived heavy jobs from merge groups to ordinary m
           expect(runs, `${event.event}/${variable}/${job}`).toBe(false);
           continue;
         }
-        let expected = selected(baseline.jobs[job]?.if, value);
+        // An admitted browser suite keeps its full-depth queue selection in a
+        // thin group while the switch is unset.
+        const certified =
+          thinQueue && admitted.includes(job)
+            ? {
+                ...value,
+                needs: {
+                  ...value.needs,
+                  "ci-plan": {
+                    ...planner,
+                    outputs: { ...planner.outputs, queue_depth: "full" },
+                  },
+                },
+              }
+            : value;
+        let expected = selected(baseline.jobs[job]?.if, certified);
         if (job === "route-smoke") {
           expected = expectedRouteSelection(value);
         } else if (event.event === "pull_request") {
