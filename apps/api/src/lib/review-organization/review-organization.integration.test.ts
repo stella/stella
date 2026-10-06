@@ -16,7 +16,12 @@ import {
   clauses,
   contacts,
   entities,
+  chatThreads,
+  featureEnrolments,
+  organizationSettings,
   playbookDefinitions,
+  rateTables,
+  savedSearches,
   systemAuditRuns,
   templates,
   timeEntries,
@@ -28,6 +33,7 @@ import { createWorkspaceHandler } from "@/api/handlers/workspaces/create";
 import { createBackgroundAuditRecorder } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import type { CreateEntityFromBufferDependencies } from "@/api/lib/entities/create-from-buffer";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import type { ReviewOrganizationConfig } from "@/api/lib/review-organization/config";
@@ -42,10 +48,7 @@ import type {
 } from "@/api/lib/review-organization/reset";
 import { SAMPLE_COUNTS } from "@/api/lib/review-organization/sample-data";
 import { seedReviewOrganization } from "@/api/lib/review-organization/seed";
-import type {
-  ReviewSeedActor,
-  ReviewSeedKind,
-} from "@/api/lib/review-organization/seed";
+import type { ReviewSeedActor } from "@/api/lib/review-organization/seed";
 import {
   createRootMembershipSafeDb,
   createRootMembershipScopedDb,
@@ -63,6 +66,8 @@ import { getTestDb, releaseTestDb } from "@/api/tests/security/test-utils";
 import type { TestDatabase } from "@/api/tests/security/test-utils";
 
 setDefaultTimeout(120_000);
+
+type SampleKind = keyof typeof SAMPLE_COUNTS;
 
 // Stored documents skip extraction and derivative queues: the test proves
 // what lands in the database and the object store, not the workers after it.
@@ -179,7 +184,7 @@ const actorFor = (
 /** Rows of each seeded kind the organization holds now. */
 const countRows = async (
   organizationId: SafeId<"organization">,
-): Promise<Record<ReviewSeedKind, number>> => {
+): Promise<Record<SampleKind, number>> => {
   const matterIds = testDb
     .select({ id: workspaces.id })
     .from(workspaces)
@@ -193,6 +198,7 @@ const countRows = async (
     clauseCount,
     templateCount,
     playbookCount,
+    rateTableCount,
   ] = await Promise.all([
     testDb.$count(contacts, eq(contacts.organizationId, organizationId)),
     testDb.$count(workspaces, eq(workspaces.organizationId, organizationId)),
@@ -215,8 +221,16 @@ const countRows = async (
       playbookDefinitions,
       eq(playbookDefinitions.organizationId, organizationId),
     ),
+    testDb.$count(
+      rateTables,
+      and(
+        eq(rateTables.organizationId, organizationId),
+        eq(rateTables.isDefault, true),
+      ),
+    ),
   ]);
   return {
+    rateTables: rateTableCount,
     contacts: contactCount,
     matters: matterCount,
     documents: documentCount,
@@ -404,7 +418,7 @@ describe("review organization seed and reset", () => {
     const again = (
       await seedReviewOrganization(actor, { documents: documentDependencies })
     ).unwrap("Expected the second seed to succeed");
-    const kinds: readonly ReviewSeedKind[] = [
+    const kinds: readonly SampleKind[] = [
       "contacts",
       "matters",
       "documents",
@@ -413,6 +427,7 @@ describe("review organization seed and reset", () => {
       "clauses",
       "templates",
       "playbooks",
+      "rateTables",
     ];
     for (const kind of kinds) {
       expect({ kind, ...again[kind] }).toEqual({
@@ -422,6 +437,28 @@ describe("review organization seed and reset", () => {
       });
     }
     expect(await countRows(fixture.reviewOrgId)).toEqual({ ...SAMPLE_COUNTS });
+    // Time billing is on for the account wherever the deployment offers it,
+    // and every sample entry is billable at the sample rate.
+    expect(again.enrolments.created).toBe(0);
+    expect(
+      await testDb.$count(
+        featureEnrolments,
+        and(
+          eq(featureEnrolments.organizationId, fixture.reviewOrgId),
+          eq(featureEnrolments.userId, fixture.reviewUserId),
+          eq(featureEnrolments.featureId, "time-billing"),
+        ),
+      ),
+    ).toBe(isDeploymentFeatureEnabled("FEATURE_TIME_BILLING") ? 1 : 0);
+    expect(
+      await testDb.$count(
+        timeEntries,
+        and(
+          eq(timeEntries.organizationId, fixture.reviewOrgId),
+          eq(timeEntries.billable, true),
+        ),
+      ),
+    ).toBe(SAMPLE_COUNTS.timeEntries);
   });
 
   test("reset removes what the reviewer added, reseeds, and leaves other organizations alone", async () => {
@@ -463,6 +500,27 @@ describe("review organization seed and reset", () => {
       .update(workspaces)
       .set({ status: "archived" })
       .where(eq(workspaces.id, extraMatterId));
+    // Rows no per-kind delete names: the sweep must take them too, while the
+    // kept organization settings stay.
+    const extraThreadId = createSafeId<"chatThread">();
+    await testDb.insert(chatThreads).values({
+      id: extraThreadId,
+      organizationId: fixture.reviewOrgId,
+      userId: fixture.reviewUserId,
+      title: "Reviewer chat",
+    });
+    await testDb.insert(savedSearches).values({
+      organizationId: fixture.reviewOrgId,
+      userId: fixture.reviewUserId,
+      name: "Reviewer search",
+      criteria: asTestRaw<typeof savedSearches.$inferInsert.criteria>({
+        version: 1,
+      }),
+    });
+    await testDb
+      .insert(organizationSettings)
+      .values({ organizationId: fixture.reviewOrgId })
+      .onConflictDoNothing();
 
     const outcome = await resetReviewOrganization({
       config: config(fixture.reviewOrgId),
@@ -481,6 +539,23 @@ describe("review organization seed and reset", () => {
       templates: SAMPLE_COUNTS.templates,
       playbooks: SAMPLE_COUNTS.playbooks,
     });
+    expect(report.swept.get("chat_threads")).toBe(1);
+    expect(report.swept.get("saved_searches")).toBe(1);
+    expect(
+      await testDb.$count(chatThreads, eq(chatThreads.id, extraThreadId)),
+    ).toBe(0);
+    expect(
+      await testDb.$count(
+        savedSearches,
+        eq(savedSearches.organizationId, fixture.reviewOrgId),
+      ),
+    ).toBe(0);
+    expect(
+      await testDb.$count(
+        organizationSettings,
+        eq(organizationSettings.organizationId, fixture.reviewOrgId),
+      ),
+    ).toBe(1);
     report.seed.unwrap("Expected the reseed to succeed");
     expect(await countRows(fixture.reviewOrgId)).toEqual({ ...SAMPLE_COUNTS });
     expect(

@@ -33,6 +33,10 @@ export const reviewResetAuditCounts = (
     deletedClauses: report.deleted.clauses,
     deletedTemplates: report.deleted.templates,
     deletedPlaybooks: report.deleted.playbooks,
+    sweptRows: [...report.swept.values()].reduce(
+      (total, rows) => total + rows,
+      0,
+    ),
     failedDeletes: report.failures.length,
     seededContacts: seeded?.contacts.created ?? 0,
     seededMatters: seeded?.matters.created ?? 0,
@@ -42,6 +46,8 @@ export const reviewResetAuditCounts = (
     seededClauses: seeded?.clauses.created ?? 0,
     seededTemplates: seeded?.templates.created ?? 0,
     seededPlaybooks: seeded?.playbooks.created ?? 0,
+    seededRateTables: seeded?.rateTables.created ?? 0,
+    enabledTimeBilling: seeded?.enrolments.created ?? 0,
     seedFailed: seeded === null ? 1 : 0,
   };
 };

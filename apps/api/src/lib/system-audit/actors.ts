@@ -64,6 +64,7 @@ export const SYSTEM_RUN_ACTOR_COUNTS = {
     "deletedClauses",
     "deletedTemplates",
     "deletedPlaybooks",
+    "sweptRows",
     "failedDeletes",
     "seededContacts",
     "seededMatters",
@@ -73,6 +74,8 @@ export const SYSTEM_RUN_ACTOR_COUNTS = {
     "seededClauses",
     "seededTemplates",
     "seededPlaybooks",
+    "seededRateTables",
+    "enabledTimeBilling",
     "seedFailed",
   ],
   "system:eu-corpus-completion": [

@@ -6,22 +6,30 @@ import {
   clauses,
   contacts,
   entities,
+  featureEnrolments,
   playbookDefinitions,
+  rateTables,
   templates,
   timeEntries,
   workspaces,
 } from "@/api/db/schema";
 import { createClauseHandler } from "@/api/handlers/clauses/create";
 import { createContactHandler } from "@/api/handlers/contacts/create";
+import { enrolFeatureHandler } from "@/api/handlers/organization-settings/feature-enrolments/enrol";
 import { createPlaybookDefinitionHandler } from "@/api/handlers/playbooks/create-shared";
+import { createRateTableHandler } from "@/api/handlers/rates/create";
+import { createRateEntryHandler } from "@/api/handlers/rates/entries/create";
 import { createWorkspaceHandler } from "@/api/handlers/workspaces/create";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { createTimeEntryHandler } from "@/api/lib/billing/time-entry-insert";
 import type { SafeId, SafeIdType } from "@/api/lib/branded-types";
 import { DEFAULT_MANAGED_AI_RESIDENCY } from "@/api/lib/chat/ai-data-policy";
+import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
+import { ensureDefaultDocumentTypes } from "@/api/lib/document-types/defaults";
 import { markdownToStellaDocx } from "@/api/lib/docx-authoring/from-markdown";
 import { createEntityFromBuffer } from "@/api/lib/entities/create-from-buffer";
 import type { CreateEntityFromBufferDependencies } from "@/api/lib/entities/create-from-buffer";
+import { FEATURE_REGISTRY } from "@/api/lib/feature-access/registry";
 import { scanUploadForHandler } from "@/api/lib/file-scan/scan-upload-handler";
 import { serverBuiltFileEncryption } from "@/api/lib/files/detect-file-encryption";
 import { createTextPdf } from "@/api/lib/files/text-pdf";
@@ -31,6 +39,7 @@ import {
   SAMPLE_CONTACTS,
   SAMPLE_MATTERS,
   SAMPLE_PLAYBOOK,
+  SAMPLE_RATE_TABLE,
   SAMPLE_TEMPLATE,
 } from "@/api/lib/review-organization/sample-data";
 import type {
@@ -85,7 +94,9 @@ export type ReviewSeedKind =
   | "timeEntries"
   | "clauses"
   | "templates"
-  | "playbooks";
+  | "playbooks"
+  | "rateTables"
+  | "enrolments";
 
 /** Per kind: items this run wrote, and items an earlier run had written. */
 export type ReviewSeedCounts = Record<
@@ -102,6 +113,8 @@ const emptyCounts = (): ReviewSeedCounts => ({
   clauses: { created: 0, existing: 0 },
   templates: { created: 0, existing: 0 },
   playbooks: { created: 0, existing: 0 },
+  rateTables: { created: 0, existing: 0 },
+  enrolments: { created: 0, existing: 0 },
 });
 
 /**
@@ -346,6 +359,126 @@ const seedTasks = async ({
   return Result.ok(undefined);
 };
 
+/**
+ * A default rate table with one fallback rate per matter, through the same
+ * writers the rate settings use, so sample time entries are billable as the
+ * product's default entry is.
+ */
+const TIME_BILLING_FEATURE_ID = "time-billing";
+
+const seedRateTable = async ({
+  actor,
+  workspaceId,
+  counts,
+}: MatterStep): Promise<Result<void, ReviewSeedError>> => {
+  const existing = await actor.safeDb((tx) =>
+    tx
+      .select({ id: rateTables.id })
+      .from(rateTables)
+      .where(
+        and(
+          eq(rateTables.workspaceId, workspaceId),
+          eq(rateTables.isDefault, true),
+        ),
+      )
+      .limit(1),
+  );
+  if (Result.isError(existing)) {
+    return Result.err(seedError("rate table", existing.error));
+  }
+  if (existing.value.length > 0) {
+    counts.rateTables.existing += 1;
+    return Result.ok(undefined);
+  }
+  const recordAuditEvent = actor.recorderFor(workspaceId);
+  const table = await Result.gen(() =>
+    createRateTableHandler({
+      safeDb: actor.safeDb,
+      organizationId: actor.organizationId,
+      workspaceId,
+      body: {
+        name: SAMPLE_RATE_TABLE.name,
+        currency: SAMPLE_RATE_TABLE.currency,
+        isDefault: true,
+      },
+      recordAuditEvent,
+    }),
+  );
+  if (Result.isError(table)) {
+    return Result.err(seedError("rate table", table.error));
+  }
+  const entry = await Result.gen(() =>
+    createRateEntryHandler({
+      safeDb: actor.safeDb,
+      workspaceId,
+      session: { activeOrganizationId: actor.organizationId },
+      params: { rateTableId: table.value.id },
+      body: {
+        hourlyRate: SAMPLE_RATE_TABLE.hourlyRateMinor,
+        effectiveFrom: SAMPLE_RATE_TABLE.effectiveFrom,
+      },
+      recordAuditEvent,
+    }),
+  );
+  if (Result.isError(entry)) {
+    return Result.err(seedError("rate entry", entry.error));
+  }
+  counts.rateTables.created += 1;
+  return Result.ok(undefined);
+};
+
+/**
+ * Turn on time billing for the review account through the self-serve toggle
+ * the settings page uses. A deployment without time billing has nothing to
+ * enable, and the seed goes on without it.
+ */
+const seedTimeBilling = async (
+  actor: ReviewSeedActor,
+  counts: ReviewSeedCounts,
+): Promise<Result<void, ReviewSeedError>> => {
+  if (
+    !isDeploymentFeatureEnabled(
+      FEATURE_REGISTRY[TIME_BILLING_FEATURE_ID].deploymentFeature,
+    )
+  ) {
+    return Result.ok(undefined);
+  }
+  const existing = await actor.safeDb((tx) =>
+    tx
+      .select({ featureId: featureEnrolments.featureId })
+      .from(featureEnrolments)
+      .where(
+        and(
+          eq(featureEnrolments.organizationId, actor.organizationId),
+          eq(featureEnrolments.userId, actor.userId),
+          eq(featureEnrolments.featureId, TIME_BILLING_FEATURE_ID),
+        ),
+      )
+      .limit(1),
+  );
+  if (Result.isError(existing)) {
+    return Result.err(seedError("time billing", existing.error));
+  }
+  if (existing.value.length > 0) {
+    counts.enrolments.existing += 1;
+    return Result.ok(undefined);
+  }
+  const enrolled = await Result.gen(() =>
+    enrolFeatureHandler({
+      safeDb: actor.safeDb,
+      organizationId: actor.organizationId,
+      userId: actor.userId,
+      featureId: TIME_BILLING_FEATURE_ID,
+      recordAuditEvent: actor.recorderFor(null),
+    }),
+  );
+  if (Result.isError(enrolled)) {
+    return Result.err(seedError("time billing", enrolled.error));
+  }
+  counts.enrolments.created += 1;
+  return Result.ok(undefined);
+};
+
 const SAMPLE_TIME_ZONE = "Europe/Prague";
 
 const seedTimeEntries = async ({
@@ -393,9 +526,6 @@ const seedTimeEntries = async ({
           timezoneId: SAMPLE_TIME_ZONE,
           durationMinutes: entry.durationMinutes,
           narrative: entry.narrative,
-          // A billable entry needs a rate table; the sample organization
-          // has none, so its entries record time without a charge.
-          billable: false,
         },
       }),
     );
@@ -464,7 +594,12 @@ const seedMatters = async (
       counts.matters.created += 1;
     }
     const matterStep = { actor, workspaceId, matter, dependencies, counts };
-    for (const step of [seedDocuments, seedTasks, seedTimeEntries]) {
+    for (const step of [
+      seedDocuments,
+      seedTasks,
+      seedRateTable,
+      seedTimeEntries,
+    ]) {
       // db-await-in-loop: the three per-matter steps run in order so a failure stops before the next
       const outcome = await step(matterStep);
       if (Result.isError(outcome)) {
@@ -693,6 +828,17 @@ export const seedReviewOrganization = async (
   const counts = emptyCounts();
   // Contacts first: the matters name them as clients.
   const steps = [
+    // The default document-type taxonomy an organization starts with; the
+    // reset clears the organization's types with everything else.
+    async () =>
+      Result.mapError(
+        await actor.safeDb(
+          async (tx) =>
+            await ensureDefaultDocumentTypes(actor.organizationId, tx),
+        ),
+        (cause) => seedError("document types", cause),
+      ),
+    async () => await seedTimeBilling(actor, counts),
     async () => await seedContacts(actor, counts),
     async () => await seedMatters(actor, dependencies, counts),
     async () => await seedClauses(actor, counts),

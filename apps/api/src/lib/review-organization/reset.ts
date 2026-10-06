@@ -16,6 +16,7 @@ import { deleteClauseHandler } from "@/api/handlers/clauses/delete";
 import { deleteContactHandler } from "@/api/handlers/contacts/delete";
 import { deleteTemplateHandler } from "@/api/handlers/templates/delete";
 import { unarchiveWorkspaceHandler } from "@/api/handlers/workspaces/unarchive";
+import { captureError } from "@/api/lib/analytics/capture";
 import {
   AUDIT_ACTION,
   AUDIT_RESOURCE_TYPE,
@@ -23,11 +24,15 @@ import {
 } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
+import { handoffCommittedEntityDeletionCleanupBatch } from "@/api/lib/entity-deletion-cleanup-handoff";
+import { enqueueEntityDeletionCleanup } from "@/api/lib/entity-deletion-cleanup-queue";
 import { LIMITS } from "@/api/lib/limits";
 import { isMemberRole } from "@/api/lib/member-roles";
 import type { MemberRole } from "@/api/lib/member-roles";
+import { recordOrganizationStorageTeardown } from "@/api/lib/organization-storage-teardown";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import type { ReviewOrganizationConfig } from "@/api/lib/review-organization/config";
+import { sweepReviewOrganization } from "@/api/lib/review-organization/reset-scope";
 import {
   ReviewSeedError,
   seedReviewOrganization,
@@ -178,7 +183,8 @@ export type ReviewResetKind =
   | "contacts"
   | "clauses"
   | "templates"
-  | "playbooks";
+  | "playbooks"
+  | "sweep";
 
 /** One row the reset could not delete, and why. */
 export type ReviewResetFailure = {
@@ -188,7 +194,9 @@ export type ReviewResetFailure = {
 };
 
 export type ReviewResetReport = {
-  deleted: Record<ReviewResetKind, number>;
+  deleted: Record<Exclude<ReviewResetKind, "sweep">, number>;
+  /** Rows the closing sweep removed, per table. */
+  swept: ReadonlyMap<string, number>;
   failures: ReviewResetFailure[];
   seed: Result<ReviewSeedCounts, ReviewSeedError>;
 };
@@ -400,6 +408,71 @@ const deletePlaybooks = async (scope: ResetScope) => {
 };
 
 /**
+ * Empty every remaining organization-scoped table (see `reset-scope.ts`) in
+ * one owner transaction. The organization's storage erasure is recorded first,
+ * exactly as an organization deletion records it, so no object loses the row
+ * that names it; the cleanup workers erase the objects after the commit.
+ */
+const sweepRemainingRows = async (
+  scope: ResetScope,
+): Promise<{
+  swept: ReadonlyMap<string, number>;
+  failures: ReviewResetFailure[];
+}> => {
+  const { organizationId } = scope.target;
+  // The storage census seals and records every matter still standing; a
+  // matter whose own deletion failed must keep its objects, so the sweep waits.
+  const remainingMatters = await scope.db.$count(
+    workspaces,
+    eq(workspaces.organizationId, organizationId),
+  );
+  if (remainingMatters > 0) {
+    return {
+      swept: new Map(),
+      failures: [
+        {
+          kind: "sweep",
+          id: organizationId,
+          reason: `${remainingMatters} matter(s) remain; the sweep did not run`,
+        },
+      ],
+    };
+  }
+  const outcome = await Result.tryPromise({
+    try: async () =>
+      await scope.db.transaction(async (tx) => {
+        const teardown = await recordOrganizationStorageTeardown({
+          organizationId,
+          tx,
+        });
+        const removed = await sweepReviewOrganization(tx, organizationId);
+        return { removed, requestIds: teardown.requestIds };
+      }),
+    catch: (cause) => cause,
+  });
+  if (Result.isError(outcome)) {
+    return {
+      swept: new Map(),
+      failures: [
+        {
+          kind: "sweep",
+          id: organizationId,
+          reason: failureReason(outcome.error),
+        },
+      ],
+    };
+  }
+  await handoffCommittedEntityDeletionCleanupBatch({
+    captureDeliveryError: captureError,
+    enqueueCleanup:
+      scope.dependencies.workspaceDeletion?.enqueueCleanup ??
+      enqueueEntityDeletionCleanup,
+    requestIds: outcome.value.requestIds,
+  });
+  return { swept: outcome.value.removed, failures: [] };
+};
+
+/**
  * Delete everything the review organization holds and seed it again. Refuses
  * (see `resolveReviewTarget`) unless the configured organization is the
  * restricted review organization. Each row goes through the same delete path
@@ -467,17 +540,21 @@ export const resetReviewOrganization = async ({
     templates: templatesOutcome.deleted,
     playbooks: playbooks.deleted,
   };
+  const sweep = await sweepRemainingRows(scope);
   const failures = [
     ...matters.failures,
     ...contactsOutcome.failures,
     ...clausesOutcome.failures,
     ...templatesOutcome.failures,
     ...playbooks.failures,
+    ...sweep.failures,
   ];
+  const { swept } = sweep;
 
   if (signal.aborted) {
     return Result.ok({
       deleted,
+      swept,
       failures,
       seed: Result.err(
         new ReviewSeedError({
@@ -505,5 +582,5 @@ export const resetReviewOrganization = async ({
     dependencies.seed,
   );
 
-  return Result.ok({ deleted, failures, seed });
+  return Result.ok({ deleted, swept, failures, seed });
 };

@@ -386,6 +386,15 @@ export const SAMPLE_PLAYBOOK = {
   positions: readonly SamplePlaybookPosition[];
 };
 
+/** Each sample matter's default rate table: one fallback hourly rate. */
+export const SAMPLE_RATE_TABLE = {
+  name: "Sample rates",
+  currency: "CZK",
+  /** 3 500 CZK an hour, in minor units. */
+  hourlyRateMinor: 350_000,
+  effectiveFrom: "2026-01-01",
+} as const;
+
 /** How many items of each kind a complete seed holds. */
 export const SAMPLE_COUNTS = {
   contacts: SAMPLE_CONTACTS.length,
@@ -405,4 +414,5 @@ export const SAMPLE_COUNTS = {
   clauses: SAMPLE_CLAUSES.length,
   templates: 1,
   playbooks: 1,
+  rateTables: SAMPLE_MATTERS.length,
 } as const;
