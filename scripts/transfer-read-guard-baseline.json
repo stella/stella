@@ -1876,34 +1876,6 @@
     "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
   },
   {
-    "file": "apps/api/src/scripts/mcp-canary.ts",
-    "function": "module/postJsonRpc",
-    "kind": "numeric-timeout",
-    "count": 1,
-    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
-  },
-  {
-    "file": "apps/api/src/scripts/mcp-canary.ts",
-    "function": "module/runAuthenticatedStreamProbe",
-    "kind": "numeric-timeout",
-    "count": 1,
-    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
-  },
-  {
-    "file": "apps/api/src/scripts/mcp-canary.ts",
-    "function": "module/runAuthenticatedStreamProbe",
-    "kind": "total-timeout-body",
-    "count": 1,
-    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
-  },
-  {
-    "file": "apps/api/src/scripts/mcp-canary.ts",
-    "function": "module/runPublicProbes",
-    "kind": "numeric-timeout",
-    "count": 2,
-    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
-  },
-  {
     "file": "apps/api/src/scripts/post-deploy-response-policy.ts",
     "function": "module/deploymentFetch",
     "kind": "numeric-timeout",

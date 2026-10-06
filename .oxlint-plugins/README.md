@@ -48,6 +48,7 @@ runtime validation, or integration tests.
 
 ### Security, identity, files, and external boundaries
 
+- [`require-caller-feature-access`](./require-caller-feature-access.ts) (`require-caller-feature-access`): requires routes importing caller-gated features to admit their loaders through the feature-access owner before feature reads, and rejects browser feature flags and preview state.
 - [`auth-lifecycle`](./auth-lifecycle.ts) (`member-removal-revokes-artifacts`, `no-direct-auth-artifact-delete`): keeps authentication-artifact deletion behind the lifecycle that revokes all member-owned credentials; tables, root database, and helper resolve by import; member removal must await the owning operation unconditionally inside the before hook’s root transaction.
 - [`mcp-security`](./mcp-security.ts) (`redact-oauth-registration-response`, `no-direct-oauth-client-join`): redacts OAuth registration secrets and confines OAuth client joins to the authorized MCP boundary.
 - [`no-auth-token-in-web-storage`](./no-auth-token-in-web-storage.ts) (`no-auth-token-in-web-storage`): rejects credential-like keys (literal, `const`, or imported) and serialized credential fields written to browser storage, directly or through a local forwarding helper; authentication secrets belong in server-set secure cookies.

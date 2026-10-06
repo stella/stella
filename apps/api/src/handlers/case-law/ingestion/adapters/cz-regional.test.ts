@@ -489,6 +489,38 @@ describe("the decision type is the publisher's enum in the local language", () =
       ),
     ).toContain("TRESTNÍ PŘÍKAZ");
   });
+
+  const storedType = async (type: string) => {
+    const built = assembleCzRegionalDecision({
+      item: await itemByDocket(LISTING, APPELLATE_DOCKET),
+      document: readCzRegionalDocument(
+        await documentWithMetadata(APPELLATE_DOCUMENT, { type }),
+      ),
+      chain: null,
+    });
+    return built.type === "built" ? built.decision.decisionType : "unbuilt";
+  };
+
+  // The API spells the ministry's members both ways; production holds
+  // `ministery_of_justice_order` and `ministry_of_justice_resolution` alike.
+  test("every Ministry of Justice member, in either spelling, is stored in Czech", async () => {
+    for (const [instrument, czech] of [
+      ["DECISION", "rozhodnutí ministerstva spravedlnosti"],
+      ["ORDER", "příkaz ministerstva spravedlnosti"],
+      ["RESOLUTION", "usnesení ministerstva spravedlnosti"],
+    ] as const) {
+      for (const spelling of ["MINISTRY", "MINISTERY"]) {
+        expect(await storedType(`${spelling}_OF_JUSTICE_${instrument}`)).toBe(
+          czech,
+        );
+      }
+    }
+  });
+
+  test("the API's not-stated member stores no type rather than the word none", async () => {
+    expect(await storedType("NONE")).toBeUndefined();
+    expect(await storedType("JUDGEMENT")).toBe("rozsudek");
+  });
 });
 
 /**

@@ -8,6 +8,7 @@
   // would silently run the default seed.
   "globalPassThroughEnv": [
     "CI",
+    "CI_GENERATED_SOURCES_MANIFEST",
     "PROPERTY_TEST_NUM_RUNS_FACTOR",
     "PROPERTY_TEST_SEED"
   ],
@@ -26,6 +27,9 @@
         "vite.config.ts",
         "route-tree.config.ts",
         "scripts/generate-route-tree.ts",
+        "$TURBO_ROOT$/packages/scripts/src/prepared-generated-sources.ts",
+        "$TURBO_ROOT$/packages/scripts/src/generated-files.ts",
+        "$TURBO_ROOT$/scripts/generated-files.ts",
         "package.json",
         "$TURBO_ROOT$/bun.lock"
       ],
@@ -40,9 +44,14 @@
       "cache": false
     },
     "@stll/web#generate:api-types": {
-      "dependsOn": ["generate:route-tree"],
+      "dependsOn": [
+        "generate:route-tree",
+        "@stll/api#generate:capability-runtime"
+      ],
       "inputs": [
         "$TURBO_ROOT$/apps/api/**",
+        "$TURBO_ROOT$/packages/scripts/src/generated-files.ts",
+        "$TURBO_ROOT$/scripts/generated-files.ts",
         "$TURBO_ROOT$/apps/web/src/**",
         "$TURBO_ROOT$/apps/web/package.json",
         "$TURBO_ROOT$/apps/web/tsconfig*.json",
@@ -65,6 +74,9 @@
         "!$TURBO_ROOT$/packages/**/.env*",
         "!$TURBO_ROOT$/packages/**/.turbo/**",
         "!$TURBO_ROOT$/packages/**/*.tsbuildinfo",
+        "!$TURBO_ROOT$/apps/api/src/mcp/generated/capability-dispatch.ts",
+        "!$TURBO_ROOT$/apps/api/src/mcp/generated/capability-catalog.ts",
+        "!$TURBO_ROOT$/apps/api/src/mcp/generated/capability-feature-bindings.ts",
         "!src/generated/api-routes.gen.ts",
         "!src/routeTree.gen.ts"
       ],
@@ -103,6 +115,8 @@
         "$TURBO_ROOT$/scripts/status-write-shapes.ts",
         "$TURBO_ROOT$/scripts/parse-memo.ts",
         "$TURBO_ROOT$/apps/api/src/lib/db/status-tables.gen.ts",
+        "$TURBO_ROOT$/apps/api/src/lib/lists/sanctions/monitoring-transition-identities.ts",
+        "$TURBO_ROOT$/apps/api/src/lib/db/read-bounded.ts",
         "$TURBO_ROOT$/scripts/result-boundary-globs.ts",
         "$TURBO_ROOT$/scripts/sql-perf-detector.ts",
         "$TURBO_ROOT$/apps/api/src/db/high-volume-tables.ts",
@@ -132,6 +146,8 @@
         "$TURBO_ROOT$/scripts/status-write-shapes.ts",
         "$TURBO_ROOT$/scripts/parse-memo.ts",
         "$TURBO_ROOT$/apps/api/src/lib/db/status-tables.gen.ts",
+        "$TURBO_ROOT$/apps/api/src/lib/lists/sanctions/monitoring-transition-identities.ts",
+        "$TURBO_ROOT$/apps/api/src/lib/db/read-bounded.ts",
         "$TURBO_ROOT$/scripts/result-boundary-globs.ts",
         "$TURBO_ROOT$/scripts/sql-perf-detector.ts",
         "$TURBO_ROOT$/apps/api/src/db/high-volume-tables.ts",
@@ -298,6 +314,8 @@
         "$TURBO_ROOT$/scripts/status-write-shapes.ts",
         "$TURBO_ROOT$/scripts/parse-memo.ts",
         "$TURBO_ROOT$/apps/api/src/lib/db/status-tables.gen.ts",
+        "$TURBO_ROOT$/apps/api/src/lib/lists/sanctions/monitoring-transition-identities.ts",
+        "$TURBO_ROOT$/apps/api/src/lib/db/read-bounded.ts",
         "$TURBO_ROOT$/scripts/result-boundary-globs.ts",
         "$TURBO_ROOT$/scripts/sql-perf-detector.ts",
         "$TURBO_ROOT$/apps/api/src/db/high-volume-tables.ts",
@@ -341,6 +359,8 @@
         "$TURBO_ROOT$/scripts/status-write-shapes.ts",
         "$TURBO_ROOT$/scripts/parse-memo.ts",
         "$TURBO_ROOT$/apps/api/src/lib/db/status-tables.gen.ts",
+        "$TURBO_ROOT$/apps/api/src/lib/lists/sanctions/monitoring-transition-identities.ts",
+        "$TURBO_ROOT$/apps/api/src/lib/db/read-bounded.ts",
         "$TURBO_ROOT$/scripts/result-boundary-globs.ts",
         "$TURBO_ROOT$/scripts/sql-perf-detector.ts",
         "$TURBO_ROOT$/apps/api/src/db/high-volume-tables.ts",
@@ -375,6 +395,8 @@
         "$TURBO_ROOT$/scripts/status-write-shapes.ts",
         "$TURBO_ROOT$/scripts/parse-memo.ts",
         "$TURBO_ROOT$/apps/api/src/lib/db/status-tables.gen.ts",
+        "$TURBO_ROOT$/apps/api/src/lib/lists/sanctions/monitoring-transition-identities.ts",
+        "$TURBO_ROOT$/apps/api/src/lib/db/read-bounded.ts",
         "$TURBO_ROOT$/scripts/result-boundary-globs.ts",
         "$TURBO_ROOT$/scripts/sql-perf-detector.ts",
         "$TURBO_ROOT$/apps/api/src/db/high-volume-tables.ts",
@@ -404,6 +426,8 @@
         "$TURBO_ROOT$/scripts/status-write-shapes.ts",
         "$TURBO_ROOT$/scripts/parse-memo.ts",
         "$TURBO_ROOT$/apps/api/src/lib/db/status-tables.gen.ts",
+        "$TURBO_ROOT$/apps/api/src/lib/lists/sanctions/monitoring-transition-identities.ts",
+        "$TURBO_ROOT$/apps/api/src/lib/db/read-bounded.ts",
         "$TURBO_ROOT$/scripts/result-boundary-globs.ts",
         "$TURBO_ROOT$/scripts/sql-perf-detector.ts",
         "$TURBO_ROOT$/apps/api/src/db/high-volume-tables.ts",
@@ -446,6 +470,11 @@
         "src/codegen.ts",
         "src/capability-catalog-data.ts",
         "src/write-generated-file.ts",
+        "$TURBO_ROOT$/packages/scripts/src/prepare-cli-runtime.ts",
+        "$TURBO_ROOT$/packages/scripts/src/child-exit-status.ts",
+        "$TURBO_ROOT$/packages/scripts/src/prepared-generated-sources.ts",
+        "$TURBO_ROOT$/packages/scripts/src/generated-files.ts",
+        "$TURBO_ROOT$/scripts/generated-files.ts",
         "src/capability-catalog-load.ts",
         "src/generate-capability-tree.ts",
         "src/generate-route-map.ts",
@@ -504,6 +533,8 @@
         "$TURBO_ROOT$/scripts/status-write-shapes.ts",
         "$TURBO_ROOT$/scripts/parse-memo.ts",
         "$TURBO_ROOT$/apps/api/src/lib/db/status-tables.gen.ts",
+        "$TURBO_ROOT$/apps/api/src/lib/lists/sanctions/monitoring-transition-identities.ts",
+        "$TURBO_ROOT$/apps/api/src/lib/db/read-bounded.ts",
         "$TURBO_ROOT$/scripts/result-boundary-globs.ts",
         "$TURBO_ROOT$/scripts/sql-perf-detector.ts",
         "$TURBO_ROOT$/apps/api/src/db/high-volume-tables.ts",
@@ -550,11 +581,15 @@
         "scripts/generate-capability-runtime.ts",
         "src/mcp/generated/capability-dispatch/**",
         "$TURBO_ROOT$/packages/cli/capabilities/**",
-        "$TURBO_ROOT$/packages/cli/src/capability-catalog-data.ts"
+        "$TURBO_ROOT$/packages/cli/src/capability-catalog-data.ts",
+        "$TURBO_ROOT$/packages/scripts/src/prepared-generated-sources.ts",
+        "$TURBO_ROOT$/packages/scripts/src/generated-files.ts",
+        "$TURBO_ROOT$/scripts/generated-files.ts"
       ],
       "outputs": [
         "src/mcp/generated/capability-dispatch.ts",
-        "src/mcp/generated/capability-catalog.ts"
+        "src/mcp/generated/capability-catalog.ts",
+        "src/mcp/generated/capability-feature-bindings.ts"
       ]
     },
     "@stll/api#build": {
@@ -582,6 +617,7 @@
         "**/.cache/tsbuildinfo*.json",
         "src/mcp/generated/capability-dispatch.ts",
         "src/mcp/generated/capability-catalog.ts",
+        "src/mcp/generated/capability-feature-bindings.ts",
         "$TURBO_ROOT$/packages/cli/src/generated/route-map.ts",
         "$TURBO_ROOT$/packages/cli/src/generated/tool-annotations.ts"
       ]
@@ -602,6 +638,8 @@
         "$TURBO_ROOT$/scripts/status-write-shapes.ts",
         "$TURBO_ROOT$/scripts/parse-memo.ts",
         "$TURBO_ROOT$/apps/api/src/lib/db/status-tables.gen.ts",
+        "$TURBO_ROOT$/apps/api/src/lib/lists/sanctions/monitoring-transition-identities.ts",
+        "$TURBO_ROOT$/apps/api/src/lib/db/read-bounded.ts",
         "$TURBO_ROOT$/scripts/result-boundary-globs.ts",
         "$TURBO_ROOT$/scripts/sql-perf-detector.ts",
         "$TURBO_ROOT$/apps/api/src/db/high-volume-tables.ts",
@@ -628,14 +666,20 @@
     },
     "@stll/api#test:property": {
       "dependsOn": ["@stll/cli#codegen:runtime", "generate:capability-runtime"],
+      "passThroughEnv": ["API_TEST_TIMINGS_DIR", "API_TEST_MEASUREMENTS"],
       "cache": false
     },
     "@stll/api#test": {
       "dependsOn": ["@stll/cli#codegen:runtime", "generate:capability-runtime"],
-      "env": ["API_TEST_SHARD"],
-      // Lane count and diagnostics destination never change test results;
+      "env": ["API_TEST_SHARD", "API_TEST_FILES"],
+      // Lane count and diagnostics destinations never change test results;
       // pass them through without entering the cache key.
-      "passThroughEnv": ["API_TEST_ARTIFACT_DIR", "API_TEST_LANES"],
+      "passThroughEnv": [
+        "API_TEST_ARTIFACT_DIR",
+        "API_TEST_LANES",
+        "API_TEST_TIMINGS_DIR",
+        "API_TEST_MEASUREMENTS"
+      ],
       "inputs": [
         "$TURBO_DEFAULT$",
         "$TURBO_ROOT$/.github/workflows/ai-provider-canary.yml",
@@ -673,6 +717,8 @@
         "src/i18n/langs/**",
         "src/clipboard/clipboard-types.ts",
         "$TURBO_ROOT$/packages/api-contract/src/desktop-account-policy.json",
+        "$TURBO_ROOT$/packages/api-contract/src/desktop-presence-policy.json",
+        "$TURBO_ROOT$/packages/api-contract/src/desktop-presence-request.fixture.json",
         "$TURBO_ROOT$/packages/api-contract/src/desktop-edit-file-types.ts",
         "$TURBO_ROOT$/packages/api-contract/src/desktop-rpc.gen.ts"
       ]

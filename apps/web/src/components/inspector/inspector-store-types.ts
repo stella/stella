@@ -4,6 +4,7 @@ import type { Draft } from "immer";
 import type { TaskStatus } from "@stll/api-contract";
 
 import type { ComposerSource } from "@/components/chat-editor-source";
+import type { FileTab } from "@/components/inspector/file-tab";
 import type { StructuredCloneable } from "@/components/inspector/view-registry";
 import type { LegalDocumentChatKey } from "@/features/chat/legal-document-chat-key";
 import type { ChatThreadId } from "@/lib/chat-thread-ref";
@@ -14,34 +15,9 @@ export type ExternalTabId = `external:${string}`;
 /** The route a page-owned tab belongs to; the tab closes when it leaves. */
 export type InspectorOwnerRouteId = RouteIds<RegisteredRouter["routeTree"]>;
 
-/** Canonical file-inspector facet domain shared by state, UI, and broadcast validation. */
-export const FILE_FACETS = [
-  "preview",
-  "attachments",
-  "metadata",
-  "versions",
-  "playbook",
-  "anonymization",
-] as const;
-
-export type FileFacet = (typeof FILE_FACETS)[number];
-
-export type FileTab = {
-  type: "pdf";
-  id: string;
-  renderId?: string | undefined;
-  entityId: string;
-  label: string;
-  fileName: string;
-  mimeType?: string | undefined;
-  pdfFileId: string | null;
-  workspaceId: string;
-  justificationFieldId?: string | undefined;
-  propertyId?: string | undefined;
-  metadataLane?: "closed" | "expanded" | undefined;
-  facet?: FileFacet | undefined;
-  facetPulseSeq?: number | undefined;
-};
+export { FILE_FACETS } from "@stll/api-contract/inspector-file-facet";
+export type { FileFacet } from "@stll/api-contract/inspector-file-facet";
+export type { FileTab } from "@/components/inspector/file-tab";
 
 export type TaskTab = {
   type: "task";

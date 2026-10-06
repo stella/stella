@@ -12,6 +12,7 @@ on:
       - Agent sandbox canary
       - Desktop release canary
       - Landing canary
+      - Journey canary
       - Model Catalog Upstream Check
       # Not scheduled, but unattended: a failed publication leaves the
       # previous build serving, and nobody would learn the new one never
@@ -19,6 +20,7 @@ on:
       - Deploy Landing
       # Its daily run fails when a temporary advisory acceptance lapses.
       - Dependency Audit
+      - Mirror CI service images
     types: [completed]
 
 permissions: {}
@@ -31,12 +33,43 @@ jobs:
       github.event_name == 'workflow_dispatch'
       || (contains(fromJSON('["failure", "startup_failure", "timed_out"]'), github.event.workflow_run.conclusion)
       && github.event.workflow_run.head_repository.full_name == github.repository
-      && contains(fromJSON('[".github/workflows/nightly-test.yml", ".github/workflows/nightly-typecheck.yml", ".github/workflows/ai-provider-canary.yml", ".github/workflows/mcp-canary.yml", ".github/workflows/agent-sandbox-canary.yml", ".github/workflows/desktop-release-canary.yml", ".github/workflows/landing-canary.yml", ".github/workflows/model-catalog-check.yml", ".github/workflows/deploy-landing.yml", ".github/workflows/dependency-audit.yml"]'), github.event.workflow_run.path)
+      && contains(fromJSON('[".github/workflows/nightly-test.yml", ".github/workflows/nightly-typecheck.yml", ".github/workflows/ai-provider-canary.yml", ".github/workflows/mcp-canary.yml", ".github/workflows/agent-sandbox-canary.yml", ".github/workflows/desktop-release-canary.yml", ".github/workflows/landing-canary.yml", ".github/workflows/journey-canary.yml", ".github/workflows/model-catalog-check.yml", ".github/workflows/deploy-landing.yml", ".github/workflows/dependency-audit.yml", ".github/workflows/mirror-ci-service-images.yml"]'), github.event.workflow_run.path)
       && contains(fromJSON('["push", "schedule", "workflow_dispatch"]'), github.event.workflow_run.event))
     runs-on: ubuntu-latest
     timeout-minutes: 5
+    permissions:
+      actions: read
     steps:
+      # A recovery resets the outage. Cancelled/skipped runs and unfinished
+      # newer runs do not reset it, and manual delivery tests always send.
+      - name: Detect a continuing outage
+        id: outage
+        if: github.event_name == 'workflow_run'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          WORKFLOW_ID: ${{ github.event.workflow_run.workflow_id }}
+          RUN_NUMBER: ${{ github.event.workflow_run.run_number }}
+          RUN_BRANCH: ${{ github.event.workflow_run.head_branch }}
+          RUN_EVENT: ${{ github.event.workflow_run.event }}
+        run: |
+          set -euo pipefail
+          previous=$(gh api --method GET "repos/${GITHUB_REPOSITORY}/actions/workflows/${WORKFLOW_ID}/runs" \
+            -f branch="$RUN_BRANCH" -f event="$RUN_EVENT" -f status=completed -f per_page=100 |
+            jq -r --argjson number "$RUN_NUMBER" '
+              [.workflow_runs[]
+                | select(.run_number < $number)
+                | select(.conclusion != "cancelled" and .conclusion != "skipped")]
+              | sort_by(.run_number) | last | .conclusion // "none"')
+          case "$previous" in
+            failure|startup_failure|timed_out)
+              echo "send=false" >> "$GITHUB_OUTPUT"
+              echo "::notice::Suppressing repeated workflow failure during a continuing outage."
+              ;;
+            *) echo "send=true" >> "$GITHUB_OUTPUT" ;;
+          esac
+
       - name: Send failure alert
+        if: github.event_name == 'workflow_dispatch' || steps.outage.outputs.send == 'true'
         env:
           WEBHOOK_URL: ${{ secrets.SCHEDULED_ALERTS_WEBHOOK_URL }}
           WEBHOOK_TOKEN: ${{ secrets.SCHEDULED_ALERTS_WEBHOOK_TOKEN }}

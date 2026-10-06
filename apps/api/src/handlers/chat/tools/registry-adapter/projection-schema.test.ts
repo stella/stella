@@ -36,12 +36,12 @@ import type {
 } from "@/api/lib/chat/projection-schema";
 import { READ_DOCUMENT_VERSION_PROJECTION } from "@/api/lib/chat/projections";
 import type {
-  AssertNoExtraFields,
   LIST_MATTERS_LIST_PROJECTION,
   LIST_PROPERTIES_PROJECTION,
 } from "@/api/lib/chat/projections";
 import { createChatRefRegistry } from "@/api/lib/chat/ref-registry";
 import { TOOL_OUTPUT_CONTRACT_DEGRADED_EVENT } from "@/api/lib/chat/tool-output-degrade";
+import type { AssertNoExtraFields } from "@/api/lib/projection-totality";
 // The fail-closed and degrade tests assert the exact telemetry contract
 // (paths only, never values) on the event the real capture path would have
 // shipped.

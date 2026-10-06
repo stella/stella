@@ -145,7 +145,7 @@ const contactRateUpdates = async ({
   }
 
   if (exponentShift === 0) {
-    return Result.ok({});
+    return Result.ok({ defaultHourlyRate: undefined });
   }
   return Result.ok({
     defaultHourlyRate: sql`ROUND(${contacts.defaultHourlyRate} * power(10::numeric, ${exponentShift}))::bigint`,
@@ -162,13 +162,9 @@ export const updateContactHandler = async function* ({
   recordAuditEvent,
   body,
 }: UpdateContactHandlerProps) {
-  const attorneyIds: string[] = [];
-  if (body.originatingAttorneyId) {
-    attorneyIds.push(body.originatingAttorneyId);
-  }
-  if (body.responsibleAttorneyId) {
-    attorneyIds.push(body.responsibleAttorneyId);
-  }
+  const attorneyIds = [body.originatingAttorneyId, body.responsibleAttorneyId]
+    .filter((id) => id !== undefined && id !== null)
+    .filter((id) => id.length > 0);
 
   const {
     defaultHourlyRate,
@@ -284,7 +280,7 @@ export const updateContactHandler = async function* ({
                 ? nationalityCodes
                 : [],
             }),
-        ...rateUpdates.value,
+        ...pickDefined(rateUpdates.value, ["defaultHourlyRate"]),
       };
       if (Object.keys(updates).length === 0) {
         return {
@@ -296,7 +292,36 @@ export const updateContactHandler = async function* ({
 
       const rows = await tx
         .update(contacts)
-        .set(updates)
+        .set({
+          type: updates.type,
+          prefix: updates.prefix,
+          firstName: updates.firstName,
+          middleName: updates.middleName,
+          lastName: updates.lastName,
+          suffix: updates.suffix,
+          organizationName: updates.organizationName,
+          displayName: updates.displayName,
+          notes: updates.notes,
+          emails: updates.emails,
+          phones: updates.phones,
+          addresses: updates.addresses,
+          color: updates.color,
+          tags: updates.tags,
+          registrationNumber: updates.registrationNumber,
+          taxId: updates.taxId,
+          bankAccounts: updates.bankAccounts,
+          billingAddress: updates.billingAddress,
+          currency: updates.currency,
+          paymentTermDays: updates.paymentTermDays,
+          originatingAttorneyId: updates.originatingAttorneyId,
+          responsibleAttorneyId: updates.responsibleAttorneyId,
+          metadata: updates.metadata,
+          dateOfBirthYear: updates.dateOfBirthYear,
+          dateOfBirthMonth: updates.dateOfBirthMonth,
+          dateOfBirthDay: updates.dateOfBirthDay,
+          nationalityCodes: updates.nationalityCodes,
+          defaultHourlyRate: updates.defaultHourlyRate,
+        })
         .where(
           and(
             eq(contacts.id, contactId),

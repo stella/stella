@@ -54,6 +54,17 @@
       "polish": "Améliorer la formulation"
     }
   },
+  "aiColumns": {
+    "countSummary": "{columns} colonnes × {rows} lignes = {answers, plural, one {# réponse} other {# réponses}}. Les réponses consomment le budget.",
+    "refusedBudget": "Non exécuté : budget de réponses indisponible",
+    "rerunAllPage": "Tout relancer (cette page)",
+    "rerunColumnPage": "Relancer la colonne (cette page)",
+    "runColumnPage": "Exécuter la colonne (cette page)",
+    "runPageRows": "Exécuter pour {count, plural, one {# ligne de cette page} other {# lignes de cette page}}",
+    "runRemainingPage": "Exécuter le reste (cette page)",
+    "runSelectedRows": "Exécuter pour {count, plural, one {# ligne sélectionnée} other {# lignes sélectionnées}}",
+    "selectedRun": "Exécuter les colonnes IA pour {count, plural, one {# ligne} other {# lignes}}"
+  },
   "appearance": {
     "calendar": "Calendrier",
     "calendarGregorian": "Grégorien",
@@ -264,6 +275,7 @@
     "runs": {
       "back": "Tous les documents",
       "errors": {
+        "accessRevoked": "La vérification a été arrêtée car l’accès est indisponible.",
         "aiUnavailable": "Aucun modèle d’IA n’est disponible pour vérifier les documents. Vérifiez les paramètres d’IA de l’organisation.",
         "enqueueFailed": "La vérification n’a pas pu être lancée. Réessayez.",
         "extractionFailed": "Les affirmations de ce document n’ont pas pu être extraites.",
@@ -796,6 +808,34 @@
       "unavailable": "Les chiffres de couverture sont indisponibles pour le moment."
     },
     "decisionNotFound": "Décision introuvable",
+    "decisionTypes": {
+      "administrative_decision": "Décision administrative",
+      "binding_excise_information": "Renseignement contraignant en matière d’accises",
+      "binding_rate_information": "Renseignement contraignant sur le taux de TVA",
+      "court_direction": "Mesure de procédure",
+      "decision": "Décision",
+      "finding": "Arrêt au fond",
+      "general_tax_ruling": "Interprétation fiscale générale",
+      "individual_tax_ruling": "Rescrit fiscal individuel",
+      "judgment": "Jugement",
+      "leave_refused": "Rejet faute de question de droit importante",
+      "merits_decision": "Décision sur le fond",
+      "ministry_of_justice_decision": "Décision du ministère de la Justice",
+      "minutes_extract": "Extrait du procès-verbal",
+      "opinion": "Avis",
+      "order": "Ordonnance",
+      "other": "Autres",
+      "payment_order": "Injonction de payer",
+      "penal_order": "Ordonnance pénale",
+      "principle_decision": "Décision de principe",
+      "protective_opinion": "Avis de sécurisation",
+      "resolution": "Résolution",
+      "signalling_decision": "Décision de signalement",
+      "statement_of_reasons": "Motifs",
+      "tax_explanations": "Explications fiscales",
+      "top_up_tax_opinion": "Avis sur l’impôt complémentaire",
+      "uniformity_decision": "Décision d’unification de la jurisprudence"
+    },
     "emptyState": "Aucune décision trouvée. Configurez une source et lancez une synchronisation pour importer la jurisprudence.",
     "filters": {
       "remove": "Retirer le filtre {filter}"
@@ -3747,11 +3787,15 @@
     }
   },
   "lawHome": {
+    "clearRecent": "Effacer les éléments récents",
     "enteringIntoForce": "Entrée en vigueur prochaine",
     "inForceFrom": "En vigueur à partir du {date}",
-    "noRecentSearches": "Aucune recherche pour l'instant",
+    "noRecent": "Aucune activité récente",
     "noSignals": "Aucun signal pour l'instant",
     "prompt": "Que cherchez-vous ?",
+    "recent": "Récents",
+    "recentCasesFilter": "Décisions",
+    "recentSearchFilter": "Recherches",
     "recentlyInForce": "Entrée en vigueur récente",
     "searchLabel": "Rechercher dans la base juridique",
     "searchPlaceholder": "Numéro d'affaire, numéro de texte, ECLI ou mots-clés",
@@ -6006,7 +6050,6 @@
       "previewUnsupported": "Aperçu non disponible pour ce type de document.",
       "readingFrom": "L’IA lit à partir de",
       "referencesItself": "La propriété se référence elle-même via d'autres propriétés",
-      "rerunColumn": "Relancer la colonne",
       "resultType": "Type de résultat",
       "returnsLabel": "Format",
       "scopeFile": "Fichier actuel",

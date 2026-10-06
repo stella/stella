@@ -24,6 +24,7 @@ import {
   internalFailureResult,
   nullAsAbsent,
   structuredErrorResult,
+  structuredEgressPlan,
   uuidInputSchema,
 } from "@/api/mcp/tool-utils";
 
@@ -382,9 +383,8 @@ export const uploadRemoteDocumentVersion = async ({
       new Error("uploads.update returned an invalid entity-version result"),
     );
   }
-  return {
-    egress: "structured",
+  return structuredEgressPlan({
     payload: parsedFinalized.output,
     textFields: [],
-  };
+  });
 };

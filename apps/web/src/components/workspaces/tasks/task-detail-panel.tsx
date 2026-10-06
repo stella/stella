@@ -64,6 +64,8 @@ import { detached } from "@/lib/detached";
 import { APIError, toAPIError, unwrapEden } from "@/lib/errors/api";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { localISODate } from "@/lib/local-iso-date";
+import { useCallerFeatureEnabled } from "@/lib/organization/feature-access/access";
+import { CALLER_FEATURE } from "@/lib/organization/feature-access/surfaces";
 import { DAY_AND_MONTH_FORMAT } from "@/lib/relative-time";
 import { toSafeId } from "@/lib/safe-id";
 import { workspacesKeys } from "@/lib/workspaces/queries";
@@ -94,6 +96,7 @@ const TaskDetailPanelContent = ({
   taskId,
 }: TaskDetailPanelProps) => {
   const t = useTranslations("tasks");
+  const legalListsEnabled = useCallerFeatureEnabled(CALLER_FEATURE.legalLists);
   const tCommon = useTranslations("common");
   const format = useFormatter();
   const closeTab = useInspectorTabsStore((s) => s.closeTab);
@@ -603,7 +606,7 @@ const TaskDetailPanelContent = ({
 
         {/* Metadata */}
         <div className="space-y-3 px-4 py-3">
-          {env.VITE_FEATURE_LEGAL_LISTS && (
+          {legalListsEnabled && (
             <MetadataRow label={tCommon("type")}>
               <ItemTypeSelect
                 ariaLabel={tCommon("type")}

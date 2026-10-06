@@ -26,16 +26,10 @@ import {
   type StatuteQueryIntent,
 } from "@stll/api-contract/statute-query-intent";
 import { createStatuteRouteParams } from "@stll/api-contract/statute-route";
-import {
-  ActivityIcon,
-  CaseLawIcon,
-  HistoryIcon,
-  LandmarkIcon,
-} from "@stll/ui/icons";
+import { ActivityIcon, CaseLawIcon, LandmarkIcon } from "@stll/ui/icons";
 import {
   LANDING_ROW_CLASS,
   LANDING_SECTION_HEADING_CLASS,
-  LandingButton,
   LandingEmpty,
   LandingGreeting,
   LandingItemText,
@@ -65,7 +59,7 @@ import { getMessageLocale, getTranslator } from "@/i18n/i18n-store";
 import { resolveCaseLawRouteCountry } from "@/lib/case-law-route";
 import { detached } from "@/lib/detached";
 import { notifyUserError } from "@/lib/errors/user-toast";
-import { recordLawSearch, useLawSearchHistory } from "@/lib/law-search-history";
+import { recordLawSearch } from "@/lib/law-search-history";
 import { pageTitle } from "@/lib/page-title";
 import {
   createLegalCollectionJsonLd,
@@ -73,7 +67,6 @@ import {
   createPublicLawHead,
 } from "@/lib/public-law-seo";
 import { ensureRouteQueryData } from "@/lib/react-query";
-import { formatRelativeTime } from "@/lib/relative-time";
 import {
   type LawScope,
   lawHomeDescriptor,
@@ -81,6 +74,7 @@ import {
 } from "@/routes/law/-law-home/jurisdictions";
 import { LawDatabaseStatus } from "@/routes/law/-law-home/law-database-status";
 import { LawEntryBox } from "@/routes/law/-law-home/law-entry-box";
+import { LawRecent } from "@/routes/law/-law-home/law-recent";
 import {
   type LawHomeScope,
   LawScopePicker,
@@ -309,7 +303,6 @@ function LawHome() {
     ...legislationShelfOptions(scope),
     enabled: statuteCountry !== null,
   });
-  const history = useLawSearchHistory();
 
   /**
    * The one dispatch every entry takes, whether typed and submitted or
@@ -518,27 +511,7 @@ function LawHome() {
           <LandingEmpty>{t("lawHome.noSignals")}</LandingEmpty>
         )}
       </LandingSection>
-      <LandingSection
-        heading={
-          <span className={LANDING_SECTION_HEADING_CLASS}>
-            <HistoryIcon className="size-4" />
-            {t("search.recentSearches")}
-          </span>
-        }
-      >
-        {history.length > 0 ? (
-          history.map((entry) => (
-            <LandingButton
-              key={entry.query}
-              meta={formatRelativeTime(entry.at)}
-              onClick={() => rerunSearch(entry.query)}
-              title={entry.query}
-            />
-          ))
-        ) : (
-          <LandingEmpty>{t("lawHome.noRecentSearches")}</LandingEmpty>
-        )}
-      </LandingSection>
+      <LawRecent onSearch={rerunSearch} />
     </LandingLayout>
   );
 }

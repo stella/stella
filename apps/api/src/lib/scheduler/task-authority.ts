@@ -223,6 +223,14 @@ export const SCHEDULER_TASK_AUTHORITY = {
     "report-export-reconcile.ts",
     "Recovers stuck exports and hands queued ones back to their queue, whose worker resolves the requester's run actor.",
   ),
+  "sanctions.backfillMonitoring": platform(
+    "sanctions-monitoring-backfill.ts",
+    "Refreshes organization-scoped contact coverage after sanctions source changes.",
+  ),
+  "sanctions.drainMonitoring": platform(
+    "sanctions-monitoring.ts",
+    "Processes organization-scoped contact screening marks without a member run.",
+  ),
   "sanctions.refreshSources": platform(
     "sanctions-refresh.ts",
     "Refreshes public sanctions lists.",

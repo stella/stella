@@ -4,9 +4,9 @@ import { useQuery } from "@tanstack/react-query";
 import { useTranslations } from "use-intl";
 
 import { BidiText } from "@stll/ui/bidi-text";
+import { DetailsItem } from "@stll/ui/details-grid";
 import { ScrollArea } from "@stll/ui/scroll-area";
 import { Skeleton } from "@stll/ui/skeleton";
-import { cn } from "@stll/ui/utils";
 
 import type { CaseDecisionViewPayload } from "@/components/inspector/case-decision-view";
 import { InspectorTabHeader } from "@/components/inspector/inspector-tab-header";
@@ -19,9 +19,6 @@ import { decisionOptions } from "@/features/case-law/queries/decisions";
 import { useFormatter } from "@/i18n/formatting-context";
 import { parseDeterministicDate } from "@/lib/deterministic-date";
 import { toSafeId } from "@/lib/safe-id";
-
-/** Labels beside their values, sized to the longest label rather than a fixed column. */
-const FACTS_GRID_CLASS = "grid-cols-[auto_minmax(0,1fr)] gap-x-4 gap-y-1.5";
 
 /**
  * The facts of a decision, on the inspector's bounded width: the court and
@@ -67,36 +64,32 @@ export const CaseDecisionDetailsInspectorView = ({
                 <BidiText as="span">{tab.payload.caseNumber}</BidiText>
               </h1>
               <Section title={t("common.details")}>
-                <dl
-                  className={cn(
-                    "text-muted-foreground grid text-xs",
-                    FACTS_GRID_CLASS,
-                  )}
-                >
-                  <Row label={t("common.court")}>{decision.court}</Row>
-                  {decided !== null && (
-                    <Row label={t("common.date")}>
-                      {format.dateTime(decided, {
-                        dateStyle: "medium",
-                        timeZone: "UTC",
-                      })}
-                    </Row>
-                  )}
-                  {decision.ecli !== null && (
-                    <Row label="ECLI">
-                      <BidiText as="span">{decision.ecli}</BidiText>
-                    </Row>
-                  )}
-                </dl>
                 <DecisionFacts
-                  className={cn("mb-0", FACTS_GRID_CLASS)}
+                  className="mb-0"
                   decisionType={decision.decisionType}
                   facts={DECISION_FACT_KINDS}
                   judges={decision.judges}
                   metadata={decision.metadata}
                   source={decision.source}
                   sourceUrl={decision.sourceUrl}
-                />
+                >
+                  <DetailsItem label={t("common.court")}>
+                    {decision.court}
+                  </DetailsItem>
+                  {decided !== null && (
+                    <DetailsItem label={t("common.date")}>
+                      {format.dateTime(decided, {
+                        dateStyle: "medium",
+                        timeZone: "UTC",
+                      })}
+                    </DetailsItem>
+                  )}
+                  {decision.ecli !== null && (
+                    <DetailsItem label="ECLI" span="wide">
+                      <BidiText as="span">{decision.ecli}</BidiText>
+                    </DetailsItem>
+                  )}
+                </DecisionFacts>
               </Section>
               {/* Who cites this decision and what it cites, off the page so
                   the text starts at the top and the lists have room. */}
@@ -138,15 +131,6 @@ const Section = ({ children, title }: SectionProps) => (
     </h2>
     {children}
   </section>
-);
-
-const Row = ({ children, label }: { children: ReactNode; label: string }) => (
-  <>
-    <dt className="text-foreground-disabled font-medium tracking-wide uppercase">
-      {label}
-    </dt>
-    <dd className="text-foreground-strong-muted min-w-0">{children}</dd>
-  </>
 );
 
 const DetailsLoader = () => (

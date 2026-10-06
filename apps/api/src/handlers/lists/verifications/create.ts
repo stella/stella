@@ -9,7 +9,7 @@ import { and, eq, sql } from "drizzle-orm";
 import { t } from "elysia";
 
 import { legalListVerificationRuns } from "@/api/db/schema";
-import { memberAIAccessError } from "@/api/lib/ai-config-response";
+import { orgAIConfigStatusError } from "@/api/lib/ai-config-response";
 import {
   ACCOUNT_ACCESS,
   assertRunSizeConfirmedForHandler,
@@ -20,6 +20,7 @@ import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { LIST_VERIFICATION_FEATURE_ID } from "@/api/lib/feature-access/registry";
 import { encryptedContentError } from "@/api/lib/files/detect-file-encryption";
 import {
   VERIFICATION_PIPELINE_VERSION,
@@ -51,6 +52,7 @@ const config = {
   permissions: { workspace: ["read"], entity: ["update"] },
   accountAccess: ACCOUNT_ACCESS.sandbox,
   access: "write",
+  featureAccess: { featureId: LIST_VERIFICATION_FEATURE_ID, type: "required" },
   mcp: {
     type: "capability",
     reason: "document_processing",
@@ -86,7 +88,7 @@ const createVerification = createSafeHandler(
     user,
     workspaceId,
   }) {
-    const accessError = memberAIAccessError(orgAIConfigStatus);
+    const accessError = orgAIConfigStatusError(orgAIConfigStatus);
     if (accessError) {
       return Result.err(accessError);
     }
@@ -238,7 +240,6 @@ const createVerification = createSafeHandler(
             listId,
             entityId,
             fileFieldId,
-            documentName: target.entity?.name ?? null,
             factCount: evidence.evidence.facts.length,
           },
         });

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import type { RefObject } from "react";
 
 import { panic, Result } from "better-result";
@@ -13,7 +13,6 @@ import {
   CHAT_SELECTION_ACTION,
   chatQuoteChip,
   chatSelectionActions,
-  isRectWithinBounds,
   normalizeChatSelectionText,
 } from "@/components/chat/chat-selection-branch.logic";
 import type { ChatBranchSource } from "@/components/chat/chat-selection-branch.logic";
@@ -24,6 +23,11 @@ import {
 import { SIDE_PANEL_CHAT_STATUS } from "@/components/chat/side-panel-chat-status.logic";
 import { useSidePanelChat } from "@/components/chat/use-request-chat-about";
 import { SelectionToolbar } from "@/components/selection-toolbar";
+import {
+  selectionToolbarAnchor,
+  selectionToolbarBounds,
+} from "@/components/selection-toolbar.logic";
+import type { SelectionToolbarAnchor } from "@/components/selection-toolbar.logic";
 import { useMountEffect } from "@/hooks/use-effect";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { getAnalytics } from "@/lib/analytics/provider";
@@ -41,8 +45,13 @@ const ACTION_LABEL_CLASS = "max-sm:sr-only";
 
 type Selected = {
   quote: string;
-  rect: DOMRect;
-};
+} & SelectionToolbarAnchor;
+
+const sameRect = (a: DOMRect, b: DOMRect): boolean =>
+  a.left === b.left &&
+  a.top === b.top &&
+  a.right === b.right &&
+  a.bottom === b.bottom;
 
 const messageElementOf = (node: Node | null, root: HTMLElement) => {
   const element =
@@ -93,47 +102,112 @@ export const ChatSelectionToolbar = ({
   const [copied, setCopied] = useState(false);
   // Where the bar stood when its words went to a new chat: the confirmation
   // stays there, where the reader is looking, after the selection is gone.
-  const [confirmAt, setConfirmAt] = useState<DOMRect | null>(null);
+  const [confirmAt, setConfirmAt] = useState<SelectionToolbarAnchor | null>(
+    null,
+  );
+  const ignorePointerSelectionChange = useRef(false);
 
-  const readSelection = useLatestCallback((ownerDoc: Document) => {
-    const root = rootRef.current;
-    const selection = ownerDoc.getSelection();
-    const range =
-      root === null || selection === null
-        ? null
-        : selectedMessageRange(selection, root);
-    const quote =
-      range === null || selection === null
-        ? ""
-        : normalizeChatSelectionText(selection.toString());
-    if (range === null || root === null || quote === "") {
-      setSelected(null);
-      return;
-    }
-    const rect = range.getBoundingClientRect();
-    if (!isRectWithinBounds(rect, root.getBoundingClientRect())) {
-      setSelected(null);
-      return;
-    }
-    // A fresh selection must not inherit the previous one's confirmation.
-    if (selected?.quote !== quote) {
-      setCopied(false);
-    }
-    // Nor may the last confirmation return once this selection goes.
-    setConfirmAt(null);
-    setSelected({ quote, rect });
-  });
+  const readSelection = useLatestCallback(
+    (ownerDoc: Document, pointer?: { x: number; y: number }) => {
+      const root = rootRef.current;
+      const selection = ownerDoc.getSelection();
+      const range =
+        root === null || selection === null
+          ? null
+          : selectedMessageRange(selection, root);
+      const quote =
+        range === null || selection === null
+          ? ""
+          : normalizeChatSelectionText(selection.toString());
+      if (range === null || root === null || quote === "") {
+        setSelected(null);
+        return;
+      }
+      const anchor = selectionToolbarAnchor({
+        range,
+        root,
+        ...(pointer === undefined ? {} : { pointer }),
+      });
+      if (anchor === null) {
+        setSelected(null);
+        return;
+      }
+      // A fresh selection must not inherit the previous one's confirmation.
+      if (selected?.quote !== quote) {
+        setCopied(false);
+      }
+      // Nor may the last confirmation return once this selection goes.
+      setConfirmAt(null);
+      setSelected({ ...anchor, quote });
+    },
+  );
 
   useMountEffect(() => {
-    const ownerDoc = rootRef.current?.ownerDocument ?? document;
+    const root = rootRef.current;
+    if (root === null) {
+      setDoc(null);
+      return undefined;
+    }
+    const ownerDoc = root.ownerDocument;
     setDoc(ownerDoc);
     let frame = 0;
     const onChange = () => {
+      if (ignorePointerSelectionChange.current) {
+        ignorePointerSelectionChange.current = false;
+        return;
+      }
       cancelAnimationFrame(frame);
       frame = requestAnimationFrame(() => readSelection(ownerDoc));
     };
+    const onPointerUp = (event: PointerEvent) => {
+      const NodeConstructor = ownerDoc.defaultView?.Node;
+      if (
+        NodeConstructor === undefined ||
+        !(event.target instanceof NodeConstructor) ||
+        !root.contains(event.target)
+      ) {
+        return;
+      }
+      cancelAnimationFrame(frame);
+      ignorePointerSelectionChange.current = true;
+      readSelection(ownerDoc, { x: event.clientX, y: event.clientY });
+    };
+    const onKeyDown = () => {
+      // A keyboard-modified range belongs to its textual end, not the last
+      // pointer position that happened to create an earlier selection.
+      ignorePointerSelectionChange.current = false;
+    };
+    const onScroll = () => {
+      ignorePointerSelectionChange.current = false;
+      onChange();
+    };
+    const updateConfirmationBounds = () => {
+      const bounds = selectionToolbarBounds(root);
+      if (bounds === null) {
+        setConfirmAt(null);
+        return;
+      }
+      setConfirmAt((current) => {
+        if (current === null || sameRect(current.bounds, bounds)) {
+          return current;
+        }
+        return { bounds, rect: current.rect };
+      });
+    };
+    const onLayoutChange = () => {
+      onScroll();
+      updateConfirmationBounds();
+    };
     const controller = new AbortController();
     ownerDoc.addEventListener("selectionchange", onChange, {
+      signal: controller.signal,
+    });
+    ownerDoc.addEventListener("pointerup", onPointerUp, {
+      capture: true,
+      signal: controller.signal,
+    });
+    ownerDoc.addEventListener("keydown", onKeyDown, {
+      capture: true,
       signal: controller.signal,
     });
     // The transcript scrolls (and streams) under a selection; the bar
@@ -141,14 +215,24 @@ export const ChatSelectionToolbar = ({
     // confirmation ignores scrolling: opening the side panel narrows and
     // scrolls the transcript itself, so only a new selection or its timeout
     // ends it, and it stays where the reader was looking.
-    ownerDoc.addEventListener("scroll", onChange, {
+    ownerDoc.addEventListener("scroll", onLayoutChange, {
       capture: true,
       passive: true,
       signal: controller.signal,
     });
+    ownerDoc.defaultView?.addEventListener("resize", onLayoutChange, {
+      signal: controller.signal,
+    });
+    const ResizeObserverConstructor = ownerDoc.defaultView?.ResizeObserver;
+    const resizeObserver =
+      ResizeObserverConstructor === undefined
+        ? null
+        : new ResizeObserverConstructor(onLayoutChange);
+    resizeObserver?.observe(root);
     return () => {
       cancelAnimationFrame(frame);
       controller.abort();
+      resizeObserver?.disconnect();
     };
   });
 
@@ -163,7 +247,12 @@ export const ChatSelectionToolbar = ({
     return (
       <>
         {confirming ? (
-          <SelectionToolbar anchorRect={confirmAt} doc={doc} key="confirm">
+          <SelectionToolbar
+            anchorRect={confirmAt.rect}
+            boundaryRect={confirmAt.bounds}
+            doc={doc}
+            key="confirm"
+          >
             <SidePanelChatNote
               className="min-h-7 px-2 py-1"
               status={sidePanelChat.status}
@@ -191,7 +280,7 @@ export const ChatSelectionToolbar = ({
   // Opens at once (nothing to wait on), so it goes straight to confirming.
   const askInNewChat = () => {
     const chip = quoteChip();
-    setConfirmAt(selected.rect);
+    setConfirmAt({ bounds: selected.bounds, rect: selected.rect });
     releaseSelection();
     sidePanelChat.open({
       contextMatterIds: source.contextMatterIds,
@@ -231,6 +320,7 @@ export const ChatSelectionToolbar = ({
     <>
       <SelectionToolbar
         anchorRect={selected.rect}
+        boundaryRect={selected.bounds}
         ariaLabel={t("chat.selection.toolbarLabel")}
         doc={doc}
         key="actions"

@@ -36,6 +36,7 @@ export const RESULT_CONVENTION_ENABLED_GLOBS = [
   "apps/api/src/handlers/billing-codes/**/*.ts",
   "apps/api/src/handlers/clauses/**/*.ts",
   "apps/api/src/handlers/contacts/**/*.ts",
+  "apps/api/src/handlers/desktop-presence/**/*.ts",
   "apps/api/src/handlers/desktop-registry/**/*.ts",
   "apps/api/src/handlers/dev/**/*.ts",
   "apps/api/src/handlers/document-translations/**/*.ts",
@@ -53,6 +54,7 @@ export const RESULT_CONVENTION_ENABLED_GLOBS = [
   "apps/api/src/handlers/me/**/*.ts",
   "apps/api/src/handlers/memories/**/*.ts",
   "apps/api/src/handlers/notifications/**/*.ts",
+  "apps/api/src/handlers/operator/**/*.ts",
   "apps/api/src/handlers/number-series/**/*.ts",
   "apps/api/src/handlers/vat-rates/**/*.ts",
   "apps/api/src/handlers/organization-settings/**/*.ts",
@@ -91,6 +93,7 @@ export const RESULT_CONVENTION_ENABLED_GLOBS = [
   "apps/api/src/lib/infosoud/**/*.ts",
   "apps/api/src/lib/json-schema/**/*.ts",
   "apps/api/src/lib/lists/**/*.ts",
+  "apps/api/src/lib/machine-api-keys/**/*.ts",
   "apps/api/src/lib/markdown/**/*.ts",
   "apps/api/src/lib/mcp-connectors/**/*.ts",
   "apps/api/src/lib/memory/**/*.ts",
@@ -244,6 +247,10 @@ export const RESULT_BOUNDARY_GLOBS = [
   // The publisher HTTP boundary keeps the fetch-compatible rejection contract;
   // adapters convert its typed failures to Result at their ingestion boundary.
   "apps/api/src/handlers/case-law/ingestion/adapters/retry.ts",
+  // The CLI entry point catches the dynamic load of the application shell so
+  // a checkout without installed packages gets one actionable line; it cannot
+  // import the Result library, which is one of the packages that may be missing.
+  "packages/cli/src/cli.ts",
   "packages/start-runtime/src/runtime.ts",
   "packages/ssr-testkit/src/assert-document.ts",
   "packages/property-testing/src/index.ts",

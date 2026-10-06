@@ -1,12 +1,21 @@
 import { describe, expect, test } from "bun:test";
 
+import { RUNTIME_MODE } from "@stll/runtime-mode";
+
+import { env } from "@/api/env";
 import readOrganizationSettings, {
   projectOrganizationSettingsRow,
 } from "@/api/handlers/organization-settings/get";
 import { resolveFeatureAccessSnapshot } from "@/api/lib/auth/feature-access/context";
 import { createFeatureAccessSnapshot } from "@/api/lib/auth/feature-access/policy";
 import { toSafeId } from "@/api/lib/branded-types";
+import {
+  FEATURE_REGISTRY,
+  LIST_VERIFICATION_FEATURE_ID,
+} from "@/api/lib/feature-access/registry";
 import type { FeatureRegistry } from "@/api/lib/feature-access/registry";
+import { isMcpDescriptorFeatureEnabled } from "@/api/mcp/feature-access";
+import { setRuntimeModeForTesting } from "@/api/runtime-mode";
 import { createTestHandlerContext } from "@/api/tests/helpers/handler-context";
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
 
@@ -130,6 +139,23 @@ test("organization settings expose registry-derived enabled or hidden statuses w
       },
     });
     const projected = projectOrganizationSettingsRow(null, snapshot);
+    expect(projected.declaredFeatureIds).toEqual(Object.keys(registry));
+    for (const featureId of Object.keys(registry)) {
+      for (const kind of ["capabilities", "tools", "resources"] as const) {
+        expect(
+          isMcpDescriptorFeatureEnabled({
+            context: {
+              organizationId,
+              userId: toSafeId<"user">("user_test"),
+              featureAccessSnapshot: snapshot,
+            },
+            kind,
+            id: "fixture",
+            featureId,
+          }),
+        ).toBe(projected.capabilities[featureId]?.status === "enabled");
+      }
+    }
     expect(Object.keys(projected.capabilities)).toEqual(Object.keys(registry));
     expect(JSON.stringify(projected.capabilities)).not.toContain("proof");
     expect(JSON.stringify(projected.capabilities)).not.toContain(
@@ -138,12 +164,17 @@ test("organization settings expose registry-derived enabled or hidden statuses w
   }
 });
 
-test("organization settings derive an empty capability object from the empty production registry", async () => {
+test("organization settings derive hidden verification capability from unconfigured grants", async () => {
   let identityQueries = 0;
   const database = createScopedDbMock({
     query: { organizationSettings: { findFirst: async () => undefined } },
     select: () => {
       identityQueries += 1;
+      return {
+        from: () => ({
+          innerJoin: () => ({ where: () => ({ limit: async () => [] }) }),
+        }),
+      };
     },
   });
   const result = await readOrganizationSettings.handler(
@@ -154,9 +185,11 @@ test("organization settings derive an empty capability object from the empty pro
       scopedDb: database.scopedDb,
     }),
   );
-  expect(result).toMatchObject({ capabilities: {} });
-  expect(identityQueries).toBe(0);
-  expect(database.getCallCount()).toBe(1);
+  expect(result).toMatchObject({
+    capabilities: { "list-verification": { status: "hidden" } },
+  });
+  expect(identityQueries).toBe(1);
+  expect(database.getCallCount()).toBe(2);
 });
 
 test("organization settings recompute a supplied snapshot when the user or active organization changes", async () => {
@@ -213,6 +246,86 @@ test("organization settings recompute a supplied snapshot when the user or activ
         user: { id: toSafeId<"user">(principal.userId) },
       }),
     );
-    expect(result).toMatchObject({ capabilities: {} });
+    expect(result).toMatchObject({
+      capabilities: { "list-verification": { status: "hidden" } },
+    });
   }
+});
+
+test("organization settings project the production verification declaration for granted and ungranted current members", async () => {
+  const organizationId = toSafeId<"organization">("org_test");
+  for (const granted of [false, true]) {
+    const database = createScopedDbMock({
+      query: { organizationSettings: { findFirst: async () => undefined } },
+      select: () => ({
+        from: () => ({
+          innerJoin: () => ({
+            where: () => ({
+              limit: async () => [
+                { email: "member@example.test", emailVerified: true },
+              ],
+            }),
+          }),
+        }),
+      }),
+    });
+    const snapshot = await database.scopedDb(
+      async (tx) =>
+        await resolveFeatureAccessSnapshot({
+          tx,
+          organizationId,
+          userId: "user_test",
+          grants: granted
+            ? {
+                [LIST_VERIFICATION_FEATURE_ID]: [
+                  { type: "organization", organizationId },
+                ],
+              }
+            : {},
+        }),
+    );
+    const result = await readOrganizationSettings.handler(
+      createTestHandlerContext<
+        Parameters<typeof readOrganizationSettings.handler>[0]
+      >({
+        safeDb: database.safeDb,
+        scopedDb: database.scopedDb,
+        featureAccessSnapshot: snapshot,
+      }),
+    );
+    expect(result).toMatchObject({
+      capabilities: {
+        [LIST_VERIFICATION_FEATURE_ID]: {
+          status: granted ? "enabled" : "hidden",
+        },
+      },
+    });
+    const capabilities = projectOrganizationSettingsRow(
+      null,
+      snapshot,
+    ).capabilities;
+    expect(Object.keys(capabilities)).toEqual(Object.keys(FEATURE_REGISTRY));
+    expect(JSON.stringify(capabilities)).not.toContain("proof");
+  }
+});
+
+describe.serial("undeclared feature deployment discovery", () => {
+  test("the server reports the deployment decision with an empty declaration list", () => {
+    const previous = env.FEATURE_LEGAL_LISTS;
+    const restoreRuntimeMode = setRuntimeModeForTesting({
+      mode: RUNTIME_MODE.strict,
+    });
+    try {
+      for (const enabled of [false, true]) {
+        env.FEATURE_LEGAL_LISTS = enabled;
+        const result = projectOrganizationSettingsRow(null, emptySnapshot);
+        expect(result.declaredFeatureIds).toEqual([]);
+        expect(result.capabilities).toEqual({});
+        expect(result.deploymentFeatures.legalLists).toBe(enabled);
+      }
+    } finally {
+      env.FEATURE_LEGAL_LISTS = previous;
+      restoreRuntimeMode();
+    }
+  });
 });

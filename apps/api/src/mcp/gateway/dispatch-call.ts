@@ -17,10 +17,12 @@ import {
   isExternalMcpToolName,
   isSkillToolName,
 } from "@/api/lib/mcp-upstream/namespace";
+import { projectionPayload } from "@/api/lib/projection-totality";
 import type { McpMode } from "@/api/mcp/constants";
 import type { McpRequestContext } from "@/api/mcp/context";
 import {
   SKILL_TOOL_INPUT,
+  SKILL_TOOL_OUTPUT,
   SKILL_TOOL_OUTPUT_TYPE,
 } from "@/api/mcp/gateway/dynamic-tool-policy";
 import type { SkillToolOutput } from "@/api/mcp/gateway/dynamic-tool-policy";
@@ -38,7 +40,10 @@ import type {
   SkillToolRead,
 } from "@/api/mcp/gateway/skills";
 import { getStaticMcpToolDefinition } from "@/api/mcp/static-tool-definitions";
-import type { InternalToolResult } from "@/api/mcp/tool-types";
+import type {
+  InternalToolErrorResult,
+  InternalToolResult,
+} from "@/api/mcp/tool-types";
 import {
   oauthScopeRecoveryHint,
   structuredErrorResult,
@@ -83,7 +88,7 @@ const unavailableSkillResult = ({
   grantedScopes: readonly string[];
   missingTools: readonly string[];
   skillName: string;
-}): InternalToolResult => {
+}): InternalToolErrorResult => {
   const message = `The skill "${skillName}" cannot run in this session. ${describeMissingSkillTools(missingTools)}`;
   const missingScopes = [
     ...new Set(
@@ -120,7 +125,7 @@ const unavailableSkillResult = ({
 
 export type GatewayDispatchResult =
   | { type: "external_mcp"; result: CallToolResult }
-  | { type: "internal"; result: InternalToolResult };
+  | { type: "internal"; result: InternalToolResult<SkillToolOutput> };
 
 export const dispatchGatewayToolCall = async ({
   args,
@@ -232,31 +237,35 @@ export const dispatchGatewayToolCall = async ({
       // validates the served value against the same Valibot source at runtime.
       return {
         type: "internal",
-        result: toolDataResult({
-          type: SKILL_TOOL_OUTPUT_TYPE.skill,
-          body: read.skill.body,
-          compatibility: read.skill.compatibility,
-          id: chatSkillId(read.skill),
-          license: read.skill.license,
-          metadata: read.skill.metadata,
-          name: read.skill.name,
-          origin: chatSkillOrigin(read.skill),
-          resources: read.skill.resources,
-          version: read.skill.version,
-        } satisfies SkillToolOutput),
+        result: toolDataResult(
+          projectionPayload(SKILL_TOOL_OUTPUT.outputSchemaSource, {
+            type: SKILL_TOOL_OUTPUT_TYPE.skill,
+            body: read.skill.body,
+            compatibility: read.skill.compatibility,
+            id: chatSkillId(read.skill),
+            license: read.skill.license,
+            metadata: read.skill.metadata,
+            name: read.skill.name,
+            origin: chatSkillOrigin(read.skill),
+            resources: read.skill.resources,
+            version: read.skill.version,
+          }),
+        ),
       };
     case SKILL_TOOL_READ_TYPE.resource:
       await auditRead(SKILL_READ_OUTCOME.success);
       return {
         type: "internal",
-        result: toolDataResult({
-          type: SKILL_TOOL_OUTPUT_TYPE.resource,
-          content: read.content,
-          id: chatSkillId(read.skill),
-          kind: read.kind,
-          name: read.skill.name,
-          path: read.path,
-        } satisfies SkillToolOutput),
+        result: toolDataResult(
+          projectionPayload(SKILL_TOOL_OUTPUT.outputSchemaSource, {
+            type: SKILL_TOOL_OUTPUT_TYPE.resource,
+            content: read.content,
+            id: chatSkillId(read.skill),
+            kind: read.kind,
+            name: read.skill.name,
+            path: read.path,
+          }),
+        ),
       };
     default: {
       read satisfies never;

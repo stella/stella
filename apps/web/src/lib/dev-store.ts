@@ -11,7 +11,6 @@ type State = {
   workflowsPreview: boolean;
   inboxPreview: boolean;
   timeBillingPreview: boolean;
-  avtPreview: boolean;
   simulateSlowLoad: boolean;
 };
 
@@ -22,7 +21,6 @@ type Actions = {
   setWorkflowsPreview: (value: boolean) => void;
   setInboxPreview: (value: boolean) => void;
   setTimeBillingPreview: (value: boolean) => void;
-  setAvtPreview: (value: boolean) => void;
   setSimulateSlowLoad: (value: boolean) => void;
 };
 
@@ -41,7 +39,6 @@ export const useDevStore = create<State & Actions>()(
       workflowsPreview: false,
       inboxPreview: false,
       timeBillingPreview: false,
-      avtPreview: false,
       simulateSlowLoad: false,
 
       setTanstackDevtools: (tanstackDevtools) => {
@@ -61,9 +58,6 @@ export const useDevStore = create<State & Actions>()(
       },
       setTimeBillingPreview: (timeBillingPreview) => {
         set({ timeBillingPreview });
-      },
-      setAvtPreview: (avtPreview) => {
-        set({ avtPreview });
       },
       setSimulateSlowLoad: (simulateSlowLoad) => {
         set({ simulateSlowLoad });

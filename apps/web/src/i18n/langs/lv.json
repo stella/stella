@@ -54,6 +54,17 @@
       "polish": "Uzlabot formulējumu"
     }
   },
+  "aiColumns": {
+    "countSummary": "{columns} kolonnas × {rows} rindas = {answers, plural, zero {# atbildes} one {# atbilde} other {# atbildes}}. Atbildes patērē budžetu.",
+    "refusedBudget": "Nav palaists: atbilžu budžets nav pieejams",
+    "rerunAllPage": "Palaist visu vēlreiz (šajā lapā)",
+    "rerunColumnPage": "Palaist kolonnu vēlreiz (šajā lapā)",
+    "runColumnPage": "Palaist kolonnu (šajā lapā)",
+    "runPageRows": "Palaist {count, plural, zero {# rindai šajā lapā} one {# rindai šajā lapā} other {# rindām šajā lapā}}",
+    "runRemainingPage": "Palaist atlikušās (šajā lapā)",
+    "runSelectedRows": "Palaist {count, plural, zero {# atlasītai rindai} one {# atlasītai rindai} other {# atlasītām rindām}}",
+    "selectedRun": "Palaist AI kolonnas {count, plural, zero {# rindai} one {# rindai} other {# rindām}}"
+  },
   "appearance": {
     "calendar": "Kalendārs",
     "calendarGregorian": "Gregora",
@@ -264,6 +275,7 @@
     "runs": {
       "back": "Visi dokumenti",
       "errors": {
+        "accessRevoked": "Pārbaude tika apturēta, jo piekļuve nav pieejama.",
         "aiUnavailable": "Dokumentu pārbaudei nav pieejams neviens AI modelis. Pārbaudiet organizācijas AI iestatījumus.",
         "enqueueFailed": "Neizdevās sākt pārbaudi. Mēģiniet vēlreiz.",
         "extractionFailed": "Neizdevās iegūt šajā dokumentā ietvertos apgalvojumus.",
@@ -796,6 +808,34 @@
       "unavailable": "Aptvēruma dati pašlaik nav pieejami."
     },
     "decisionNotFound": "Lēmums nav atrasts",
+    "decisionTypes": {
+      "administrative_decision": "Administratīvais akts",
+      "binding_excise_information": "Saistoša informācija par akcīzes nodokli",
+      "binding_rate_information": "Saistoša informācija par PVN likmi",
+      "court_direction": "Rīkojums",
+      "decision": "Nolēmums",
+      "finding": "Spriedums pēc būtības",
+      "general_tax_ruling": "Vispārējs nodokļu skaidrojums",
+      "individual_tax_ruling": "Individuāls nodokļu skaidrojums",
+      "judgment": "Spriedums",
+      "leave_refused": "Noraidīts būtiska tiesību jautājuma trūkuma dēļ",
+      "merits_decision": "Nolēmums pēc būtības",
+      "ministry_of_justice_decision": "Tieslietu ministrijas lēmums",
+      "minutes_extract": "Protokola izraksts",
+      "opinion": "Atzinums",
+      "order": "Lēmums",
+      "other": "Citi",
+      "payment_order": "Maksājuma rīkojums",
+      "penal_order": "Sodu rīkojums",
+      "principle_decision": "Principiāls nolēmums",
+      "protective_opinion": "Aizsargājošs atzinums",
+      "resolution": "Rezolūcija",
+      "signalling_decision": "Signalizācijas lēmums",
+      "statement_of_reasons": "Motivācija",
+      "tax_explanations": "Nodokļu paskaidrojumi",
+      "top_up_tax_opinion": "Atzinums par papildu nodokli",
+      "uniformity_decision": "Judikatūras vienveidošanas lēmums"
+    },
     "emptyState": "Lēmumi nav atrasti. Konfigurējiet avotu un palaidiet sinhronizāciju, lai importētu tiesu praksi.",
     "filters": {
       "remove": "Noņemt filtru {filter}"
@@ -3747,11 +3787,15 @@
     }
   },
   "lawHome": {
+    "clearRecent": "Notīrīt nesenos",
     "enteringIntoForce": "Drīzumā stāsies spēkā",
     "inForceFrom": "Stājas spēkā {date}",
-    "noRecentSearches": "Meklējumu vēl nav",
+    "noRecent": "Vēl nav nesenu darbību",
     "noSignals": "Signālu vēl nav",
     "prompt": "Ko jūs meklējat?",
+    "recent": "Nesenie",
+    "recentCasesFilter": "Nolēmumi",
+    "recentSearchFilter": "Meklējumi",
     "recentlyInForce": "Nesen stājās spēkā",
     "searchLabel": "Meklēt tiesību datubāzē",
     "searchPlaceholder": "Lietas numurs, akta numurs, ECLI vai atslēgvārdi",
@@ -6006,7 +6050,6 @@
       "previewUnsupported": "Priekšskatījums šim dokumenta tipam nav atbalstīts.",
       "readingFrom": "AI lasa no",
       "referencesItself": "Rekvizīts atsaucas pats uz sevi caur citiem rekvizītiem",
-      "rerunColumn": "Palaist kolonnu vēlreiz",
       "resultType": "Rezultāta tips",
       "returnsLabel": "Formāts",
       "scopeFile": "Pašreizējais fails",

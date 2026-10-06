@@ -2068,19 +2068,29 @@ export const getAuth = () => {
 
 export type { MemberRole } from "@/api/lib/member-roles";
 
+type AuthSessionReadOptions = {
+  headers: Headers | Record<string, string>;
+  returnHeaders: true;
+};
+const readAuthSession = async (options: AuthSessionReadOptions) =>
+  await getAuth().api.getSession(options);
+type AuthSessionReader = typeof readAuthSession;
+
 type GetSessionAndMemberAuthorizationOptions = {
+  getSession?: AuthSessionReader | undefined;
   headers: Headers | Record<string, string>;
   responseHeaders: Context["set"]["headers"];
   workspaceId?: SafeId<"workspace"> | undefined;
 };
 
 const getSessionAndMemberAuthorization = async ({
+  getSession = readAuthSession,
   headers,
   responseHeaders,
   workspaceId,
 }: GetSessionAndMemberAuthorizationOptions) => {
   const sessionResult = await Result.tryPromise(async () => {
-    const resolved = await getAuth().api.getSession({
+    const resolved = await getSession({
       headers,
       returnHeaders: true,
     });
@@ -2467,6 +2477,7 @@ export const realtimeAuthorizers = {
  * what every handler's `ctx.scopedDb`/`ctx.safeDb` callback expects.
  */
 type ResolveValidateAuthOptions = {
+  getSession?: AuthSessionReader | undefined;
   request: Request;
   server: Parameters<typeof createAuditRecorder>[0]["server"];
   initialWorkspaceId: SafeId<"workspace"> | null;
@@ -2474,6 +2485,7 @@ type ResolveValidateAuthOptions = {
 };
 
 const resolveValidateAuth = async ({
+  getSession,
   request,
   server,
   initialWorkspaceId,
@@ -2481,6 +2493,7 @@ const resolveValidateAuth = async ({
 }: ResolveValidateAuthOptions) => {
   const { sessionResult, memberAuthorizationResult } =
     await getSessionAndMemberAuthorization({
+      getSession,
       headers: request.headers,
       responseHeaders,
       workspaceId: initialWorkspaceId ?? undefined,
@@ -2704,39 +2717,46 @@ export type ValidateAuthValue = Extract<
 
 type ValidateAuthResolution = Awaited<ReturnType<typeof resolveValidateAuth>>;
 
-const validateAuthResolutionCache = new WeakMap<
-  Request,
-  Promise<ValidateAuthResolution>
->();
+export const createAuthMacro = ({
+  getSession,
+}: { getSession?: AuthSessionReader } = {}) => {
+  const validateAuthResolutionCache = new WeakMap<
+    Request,
+    Promise<ValidateAuthResolution>
+  >();
 
-export const authMacro = new Elysia({ name: "authMacro" }).macro({
-  validateAuth: {
-    detail: { [TENANT_ACTION_DETAIL]: true },
-    async resolve({ params, query, status, request, server, set }) {
-      const initialWorkspaceId = readInitialWorkspaceId(params, query);
-      const result = await memoizePerRequest(
-        validateAuthResolutionCache,
-        request,
-        async () =>
-          await resolveValidateAuth({
-            request,
-            server,
-            initialWorkspaceId,
-            responseHeaders: set.headers,
-          }),
-      );
-
-      if (!result.ok) {
-        return status(
-          result.statusCode,
-          AUTH_REJECTION_BODY[result.statusCode],
+  return new Elysia({ name: "authMacro" }).macro({
+    validateAuth: {
+      detail: { [TENANT_ACTION_DETAIL]: true },
+      async resolve({ params, query, status, request, server, set }) {
+        const initialWorkspaceId = readInitialWorkspaceId(params, query);
+        const result = await memoizePerRequest(
+          validateAuthResolutionCache,
+          request,
+          async () =>
+            await resolveValidateAuth({
+              getSession,
+              request,
+              server,
+              initialWorkspaceId,
+              responseHeaders: set.headers,
+            }),
         );
-      }
 
-      return result.value;
+        if (!result.ok) {
+          return status(
+            result.statusCode,
+            AUTH_REJECTION_BODY[result.statusCode],
+          );
+        }
+
+        return result.value;
+      },
     },
-  },
-});
+  });
+};
+
+export const authMacro = createAuthMacro();
 
 export const permissionMacro = new Elysia({ name: "permissionMacro" })
   .use(authMacro)

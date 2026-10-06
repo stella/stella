@@ -24,8 +24,20 @@ const grants = {
   "fixture-two": [{ type: "organization", organizationId: "org-a" }],
 } as const;
 
-test("the empty production registry skips the feature snapshot transaction", async () => {
-  const database = createScopedDbMock({});
+test("the production feature snapshot resolves current identity once", async () => {
+  const database = createScopedDbMock({
+    select: () => ({
+      from: () => ({
+        innerJoin: () => ({
+          where: () => ({
+            limit: async () => [
+              { email: "member@example.test", emailVerified: true },
+            ],
+          }),
+        }),
+      }),
+    }),
+  });
   const result = await loadFeatureAccessSnapshot({
     safeDb: database.safeDb,
     organizationId,
@@ -35,9 +47,11 @@ test("the empty production registry skips the feature snapshot transaction", asy
   if (result.isOk()) {
     expect(result.value.organizationId).toBe(organizationId);
     expect(result.value.userId).toBe("user-a");
-    expect(result.value.decisions.size).toBe(0);
+    expect(result.value.decisions.get("list-verification")).toEqual({
+      status: "hidden",
+    });
   }
-  expect(database.getCallCount()).toBe(0);
+  expect(database.getCallCount()).toBe(1);
 });
 
 test("feature snapshots batch current identity across every registered feature", async () => {

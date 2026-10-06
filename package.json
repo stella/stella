@@ -27,7 +27,7 @@
     "agent:attach": "bun packages/scripts/src/agent-session.ts attach",
     "typegen": "turbo run typegen",
     "typecheck": "turbo run typecheck",
-    "typecheck:repo": "([ -n \"$TURBO_HASH\" ] || bun run generate) && bun --cwd=packages/cli run codegen:runtime && bun apps/api/scripts/generate-capability-runtime.ts && bun packages/scripts/src/tsc-native.ts --noEmit -p tsconfig.scripts.json && bun packages/scripts/src/tsc-native.ts --noEmit -p tsconfig.tooling.json && bun packages/scripts/src/tsc-native.ts --noEmit -p tsconfig.oxlint-plugins.json",
+    "typecheck:repo": "bun scripts/ci-generated-sources.ts prepare && bun packages/scripts/src/tsc-native.ts --noEmit -p tsconfig.scripts.json && bun packages/scripts/src/tsc-native.ts --noEmit -p tsconfig.tooling.json && bun packages/scripts/src/tsc-native.ts --noEmit -p tsconfig.oxlint-plugins.json",
     "code-check": "bun run generate && bun scripts/code-check-affected.ts --all",
     "code-check:affected": "bun run generate && bun scripts/code-check-affected.ts",
     "secrets:check:staged": "bash scripts/check-staged-secrets.sh",
@@ -127,7 +127,7 @@
     "hooks:uninstall": "lefthook uninstall",
     "postinstall": "bun run lint:ws && bun run generate",
     "dependencies:check": "DATABASE_URL=postgresql://invalid bun --no-env-file run knip --no-progress --include dependencies,unlisted",
-    "generate": "turbo run generate:route-tree generate:api-types --filter=@stll/web"
+    "generate": "turbo run generate:route-tree generate:api-types generate:capability-runtime --filter=@stll/web --filter=@stll/api"
   },
   "devDependencies": {
     "@changesets/changelog-github": "^1.0.1",
@@ -188,6 +188,7 @@
     "prosemirror-transform": "1.12.0",
     "prosemirror-view": "1.42.5",
     "react-native-screens": "4.26.2",
+    "seroval": "1.6.8",
     "svgo": "4.1.0",
     "undici": "8.10.2"
   },

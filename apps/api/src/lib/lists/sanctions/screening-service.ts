@@ -425,84 +425,115 @@ type ScreenSanctionsSubjectProps = {
   matcher?: SanctionsListMatcher;
 };
 
-/**
- * Screen one subject against every registered list's active edition. Each
- * list answers for itself: a list that is stale, not loaded or unreadable is
- * `unavailable` and never `clear`, and the others still answer.
- */
-export const screenSanctionsSubject = async ({
+export const SANCTIONS_SCREENING_BATCH_SIZE = 100;
+
+type ScreenSanctionsSubjectsOptions = Omit<
+  ScreenSanctionsSubjectProps,
+  "subject"
+> & {
+  subjects: readonly SanctionsScreeningSubject[];
+};
+
+/** Load freshness and full indices once for one bounded subject batch. */
+export const screenSanctionsSubjects = async ({
   db,
-  subject,
+  subjects,
   nameSource = "free-text",
   practiceJurisdictions,
   now = new Date(),
   resultMode = "bounded",
   indexCache = sharedSanctionsIndexCache,
   matcher,
-}: ScreenSanctionsSubjectProps): Promise<
-  Result<SanctionsScreening, SanctionsSubjectError>
+}: ScreenSanctionsSubjectsOptions): Promise<
+  Result<SanctionsScreening, SanctionsSubjectError>[]
 > => {
-  const query = toScreeningQuery(subject, nameSource);
-  const validated = screen(EMPTY_INDEX, query, { cutoff: DEFAULT_CUTOFF });
-  if (validated.isErr()) {
-    if (validated.error.code === "work-limit") {
-      return Result.ok(
-        unavailableSanctionsScreening({
-          reason: "load-failed",
-          practiceJurisdictions,
-          now,
-        }),
-      );
-    }
-    return Result.err(
-      new SanctionsSubjectError({
-        code: validated.error.code,
-        message: validated.error.message,
-      }),
-    );
+  if (subjects.length > SANCTIONS_SCREENING_BATCH_SIZE) {
+    panic("Sanctions screening batch exceeds its bound");
   }
-  const checkedAt = now.toISOString();
-  const freshness = await Result.tryPromise(
-    async () => await readSanctionsFreshness({ db, now }),
-  );
-  if (freshness.isErr()) {
-    return Result.ok(
+  const unavailable = () =>
+    Result.ok(
       unavailableSanctionsScreening({
         reason: "load-failed",
         practiceJurisdictions,
         now,
       }),
     );
-  }
-  const lists: SanctionsListOutcome[] = [];
-  for (const sourceFreshness of freshness.value) {
-    await new Promise<void>((resolve) => {
-      setImmediate(resolve);
-    });
-    lists.push(
-      // db-await-in-loop: one bounded read per sanctions source; sequential macrotask yields prevent warm indexes from monopolizing the event loop
-      await screenList({
-        db,
-        freshness: sourceFreshness,
-        query,
-        base: listBase({
-          source: sourceFreshness.source,
-          practiceJurisdictions,
-          heldUpdate: sourceFreshness.heldUpdate,
+  const validated = subjects.map((subject) => {
+    const query = toScreeningQuery(subject, nameSource);
+    const result = screen(EMPTY_INDEX, query, { cutoff: DEFAULT_CUTOFF });
+    if (result.isOk()) {
+      return { status: "ready", query } as const;
+    }
+    if (result.error.code === "work-limit") {
+      return { status: "answered", result: unavailable() } as const;
+    }
+    return {
+      status: "answered",
+      result: Result.err(
+        new SanctionsSubjectError({
+          code: result.error.code,
+          message: result.error.message,
         }),
-        indexCache,
-        matcher,
-        resultMode,
+      ),
+    } as const;
+  });
+  if (validated.every((query) => query.status === "answered")) {
+    return validated.map((query) => query.result);
+  }
+  const freshness = await Result.tryPromise(
+    async () => await readSanctionsFreshness({ db, now }),
+  );
+  if (freshness.isErr()) {
+    return validated.map((query) =>
+      query.status === "answered" ? query.result : unavailable(),
+    );
+  }
+  const results: Result<SanctionsScreening, SanctionsSubjectError>[] = [];
+  for (const query of validated) {
+    if (query.status === "answered") {
+      results.push(query.result);
+      continue;
+    }
+    const lists: SanctionsListOutcome[] = [];
+    for (const sourceFreshness of freshness.value) {
+      await new Promise<void>((resolve) => {
+        setImmediate(resolve);
+      });
+      lists.push(
+        // db-await-in-loop: bounded sources and subjects; sequential macrotask yields keep warm matching responsive
+        await screenList({
+          db,
+          freshness: sourceFreshness,
+          query: query.query,
+          base: listBase({
+            source: sourceFreshness.source,
+            practiceJurisdictions,
+            heldUpdate: sourceFreshness.heldUpdate,
+          }),
+          indexCache,
+          matcher,
+          resultMode,
+        }),
+      );
+    }
+    results.push(
+      Result.ok({
+        status: aggregateSanctionsStatus(lists),
+        checkedAt: now.toISOString(),
+        cutoff: DEFAULT_CUTOFF,
+        lists,
       }),
     );
   }
-  return Result.ok({
-    status: aggregateSanctionsStatus(lists),
-    checkedAt,
-    cutoff: DEFAULT_CUTOFF,
-    lists,
-  });
+  return results;
 };
+
+export const screenSanctionsSubject = async ({
+  subject,
+  ...options
+}: ScreenSanctionsSubjectProps) =>
+  (await screenSanctionsSubjects({ ...options, subjects: [subject] })).at(0) ??
+  panic("Single screening outcome missing");
 
 /**
  * Every list unavailable for one reason, for a subject that could not be

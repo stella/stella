@@ -67,6 +67,19 @@ A file over the ceiling is refused, naming the limit; send such a document from
 an MCP host that can attach it to the tool's file reference rather than
 re-exporting it to fit.
 
+## Case-law coverage
+
+Use `stella case-law coverage --json` before concluding a decision is missing.
+It reports availability, decision counts, year ranges, court breakdowns, and
+the data's `asOf` timestamp. Omit `--country` for all jurisdictions, or pass a
+country code or name:
+
+```sh
+stella case-law coverage --country CZE --json
+```
+
+Jurisdictions in preparation report held counts; public search is unavailable.
+
 ## Legislation search
 
 `stella legislation search --json` reports each hit's `match.type` as `strict`

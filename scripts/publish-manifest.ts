@@ -50,6 +50,91 @@ const isShippedRootJsonAsset = (
   Array.isArray(manifest["files"]) &&
   manifest["files"].includes(target.slice(2));
 
+// "./capabilities/*.json": every JSON file directly inside a directory the
+// package ships verbatim. Segments may not start with a dot, so the pattern
+// can never climb out of the package.
+const SHIPPED_ASSET_PATTERN =
+  /^\.\/(?<directory>[A-Za-z0-9_-][\w.-]*(?:\/[A-Za-z0-9_-][\w.-]*)*)\/\*\.json$/u;
+const BUILT_DIRECTORIES = new Set(["src", "dist"]);
+
+/** The directory a shipped asset pattern lists, or undefined for any other target. */
+export const shippedAssetPatternDirectory = (
+  target: string,
+): string | undefined =>
+  SHIPPED_ASSET_PATTERN.exec(target)?.groups?.["directory"];
+
+/**
+ * A wildcard export is accepted only in one shape: the subpath maps onto the
+ * identical path (so every match keeps its own name), every match is a JSON
+ * file directly inside one directory, and the package's `files` allowlist
+ * ships that directory as-is. Anything looser names files no check can list.
+ */
+const isShippedAssetPattern = (
+  subpath: string,
+  target: string,
+  manifest: Record<string, unknown>,
+): boolean => {
+  const directory = shippedAssetPatternDirectory(target);
+  if (directory === undefined || subpath !== target) {
+    return false;
+  }
+  const [root = ""] = directory.split("/");
+  return (
+    !BUILT_DIRECTORIES.has(root) &&
+    Array.isArray(manifest["files"]) &&
+    manifest["files"].includes(root)
+  );
+};
+
+/** Whether a published export entry is a shipped asset pattern. */
+export const isShippedAssetPatternEntry = (entry: DistEntry): entry is string =>
+  typeof entry === "string" &&
+  shippedAssetPatternDirectory(entry) !== undefined;
+
+/**
+ * Package-relative files (`capabilities/a.json`) a shipped asset pattern
+ * matches, given the names inside its directory. Sorted, so reports and the
+ * resolution probe are stable.
+ */
+export const matchShippedAssetPattern = (
+  pattern: string,
+  directoryEntries: readonly string[],
+): string[] => {
+  const directory =
+    shippedAssetPatternDirectory(pattern) ??
+    panic(`${JSON.stringify(pattern)} is not a shipped asset pattern`);
+  return directoryEntries
+    .filter((name) => name.endsWith(".json") && !name.includes("/"))
+    .toSorted()
+    .map((name) => `${directory}/${name}`);
+};
+
+/**
+ * Refuse a published manifest whose asset patterns match nothing in the built
+ * package. `listDirectory` returns the file names in a package-relative
+ * directory, or undefined when it does not exist.
+ */
+export const assertShippedAssetPatternsMatch = (
+  manifest: PublishedManifest,
+  listDirectory: (directory: string) => readonly string[] | undefined,
+): void => {
+  for (const [subpath, entry] of Object.entries(manifest.exports)) {
+    if (!isShippedAssetPatternEntry(entry)) {
+      continue;
+    }
+    const directory = shippedAssetPatternDirectory(entry) ?? "";
+    const entries = listDirectory(directory);
+    if (
+      entries === undefined ||
+      matchShippedAssetPattern(entry, entries).length === 0
+    ) {
+      panic(
+        `${manifest.name}: export "${subpath}" matches no file in ${directory}/ after the build`,
+      );
+    }
+  }
+};
+
 // "./src/model/document.ts" -> "./dist/model/document"
 const distBase = (srcPath: string): string =>
   srcPath.replace(/^\.\/src\//u, "./dist/").replace(/\.tsx?$/u, "");
@@ -62,9 +147,11 @@ const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
 
 // Validated `exports` map of a source-shaped manifest: subpath -> a single
-// source file or explicitly shipped root JSON asset. Wildcards are rejected:
-// the published map has to name every subpath, or the checks below (and the
-// export-resolution guard in CI) have nothing to resolve.
+// source file, an explicitly shipped root JSON asset, or a shipped asset
+// pattern (`"./capabilities/*.json": "./capabilities/*.json"`, see
+// isShippedAssetPattern). Every other wildcard is rejected: the published map
+// has to name what it ships, or the checks below (and the export-resolution
+// guard in CI) have nothing to resolve.
 export const sourceExportTargets = (
   manifest: unknown,
 ): Record<string, string> => {
@@ -84,11 +171,12 @@ export const sourceExportTargets = (
         (target.startsWith("./src/") &&
           (hasExtension(target, MODULE_EXTENSIONS) ||
             hasExtension(target, COPIED_EXTENSIONS))) ||
-        isShippedRootJsonAsset(target, manifest)
+        isShippedRootJsonAsset(target, manifest) ||
+        isShippedAssetPattern(subpath, target, manifest)
       )
     ) {
       panic(
-        `${manifest["name"]}: expected source export "${subpath}" to be a ./src/*.{ts,tsx,css} string or an explicitly shipped root JSON asset, got ${JSON.stringify(target)}`,
+        `${manifest["name"]}: expected source export "${subpath}" to be a ./src/*.{ts,tsx,css} string, an explicitly shipped root JSON asset, or a "./<dir>/*.json" pattern mapped onto itself whose <dir> the files allowlist ships, got ${JSON.stringify(target)}`,
       );
     }
     targets[subpath] = target;
@@ -107,7 +195,10 @@ export const toPublishedManifest = (manifest: unknown): PublishedManifest => {
 
   const distExports: Record<string, DistEntry> = {};
   for (const [subpath, target] of Object.entries(sourceTargets)) {
-    if (isShippedRootJsonAsset(target, manifest)) {
+    if (
+      isShippedRootJsonAsset(target, manifest) ||
+      isShippedAssetPattern(subpath, target, manifest)
+    ) {
       distExports[subpath] = target;
       continue;
     }

@@ -48,6 +48,7 @@ import {
   pendingApprovalCallOf,
 } from "@/api/tests/helpers/chat-approval-harness";
 import { composerAttachmentPart } from "@/api/tests/helpers/chat-attachment-parts";
+import { createChatHarnessProfile } from "@/api/tests/helpers/chat-harness-profile";
 import { CHAT_ORACLE } from "@/api/tests/helpers/chat-oracles";
 import type { OracleViolation } from "@/api/tests/helpers/chat-oracles";
 import { createPromptPrefixLedger } from "@/api/tests/helpers/chat-prompt-prefix";
@@ -114,6 +115,7 @@ import {
   releaseRlsFixture,
 } from "@/api/tests/security/rls-fixture";
 import type { TestIds } from "@/api/tests/security/rls-helpers";
+import { withQueryLogger } from "@/api/tests/security/test-utils";
 import type { TestDatabase } from "@/api/tests/security/test-utils";
 
 // Every chat request the send path sends a provider, held to what the
@@ -344,6 +346,10 @@ const webSources = {
   },
 } as const;
 
+const profile = createChatHarnessProfile(
+  "provider-request-schemas.integration.test.ts",
+);
+
 let testDb: TestDatabase;
 let ids: TestIds;
 let safeDb: SafeDb;
@@ -354,42 +360,55 @@ let previousMockAI: typeof env.USE_MOCK_AI;
 let previousBedrockEndpoint: string | undefined;
 const seededThreadIds: SafeId<"chatThread">[] = [];
 
-beforeAll(async () => {
-  const fixture = await getRlsFixture();
-  testDb = fixture.testDb;
-  ids = fixture.ids;
-  scopedDb = asTestRaw<ScopedDb>(
-    createScopedDb(testDb, [ids.wsA1, ids.wsA2], ids.orgA, ids.userA1),
-  );
-  safeDb = toSafeDbMock(scopedDb);
-  previousMockAI = env.USE_MOCK_AI;
-  env.USE_MOCK_AI = false;
-  previousBedrockEndpoint = process.env["AWS_ENDPOINT_URL_BEDROCK_RUNTIME"];
-  process.env["AWS_ENDPOINT_URL_BEDROCK_RUNTIME"] =
-    "https://bedrock-runtime.us-east-1.amazonaws.com.cassette.invalid";
-  fakeS3 = startFakeS3();
-  replay = installProviderWireReplay({ passThroughOrigins: [fakeS3.endpoint] });
-});
+beforeAll(
+  async () =>
+    await profile.measure("fixture", async () => {
+      const fixture = await getRlsFixture();
+      testDb = withQueryLogger(fixture.testDb, profile.logger);
+      ids = fixture.ids;
+      scopedDb = asTestRaw<ScopedDb>(
+        createScopedDb(testDb, [ids.wsA1, ids.wsA2], ids.orgA, ids.userA1),
+      );
+      safeDb = toSafeDbMock(scopedDb);
+      previousMockAI = env.USE_MOCK_AI;
+      env.USE_MOCK_AI = false;
+      previousBedrockEndpoint = process.env["AWS_ENDPOINT_URL_BEDROCK_RUNTIME"];
+      process.env["AWS_ENDPOINT_URL_BEDROCK_RUNTIME"] =
+        "https://bedrock-runtime.us-east-1.amazonaws.com.cassette.invalid";
+      fakeS3 = startFakeS3();
+      replay = installProviderWireReplay({
+        passThroughOrigins: [fakeS3.endpoint],
+        profile,
+      });
+    }),
+);
 
 afterAll(async () => {
-  replay.restore();
-  fakeS3.stop();
-  env.USE_MOCK_AI = previousMockAI;
-  if (previousBedrockEndpoint === undefined) {
-    delete process.env["AWS_ENDPOINT_URL_BEDROCK_RUNTIME"];
-  } else {
-    process.env["AWS_ENDPOINT_URL_BEDROCK_RUNTIME"] = previousBedrockEndpoint;
+  try {
+    await profile.measure("close", async () => {
+      replay.restore();
+      fakeS3.stop();
+      env.USE_MOCK_AI = previousMockAI;
+      if (previousBedrockEndpoint === undefined) {
+        delete process.env["AWS_ENDPOINT_URL_BEDROCK_RUNTIME"];
+      } else {
+        process.env["AWS_ENDPOINT_URL_BEDROCK_RUNTIME"] =
+          previousBedrockEndpoint;
+      }
+      if (seededThreadIds.length > 0) {
+        // Uploaded attachments belong to their thread.
+        await testDb
+          .delete(userFiles)
+          .where(inArray(userFiles.threadId, seededThreadIds));
+        await testDb
+          .delete(chatThreads)
+          .where(inArray(chatThreads.id, seededThreadIds));
+      }
+      await releaseRlsFixture();
+    });
+  } finally {
+    profile.report();
   }
-  if (seededThreadIds.length > 0) {
-    // Uploaded attachments belong to their thread.
-    await testDb
-      .delete(userFiles)
-      .where(inArray(userFiles.threadId, seededThreadIds));
-    await testDb
-      .delete(chatThreads)
-      .where(inArray(chatThreads.id, seededThreadIds));
-  }
-  await releaseRlsFixture();
 });
 
 /** The organization whose chat model is `endpoint`'s, with the provider's
@@ -430,6 +449,7 @@ const openSession = async ({
     replay,
   });
   const harness = createApprovalHarness({
+    profile,
     ids,
     model: seam,
     organizationAIConfig: orgConfigOf(endpoint, model),
@@ -508,169 +528,179 @@ const STORED_STRUCTURED_OUTPUT = {
  * combination's attachment and tool surface, rebuilds its request from the
  * stored thread.
  */
-const converse = async (
-  combination: ChatCombination,
-): Promise<Conversation> => {
-  const {
-    attempt,
-    attachment,
-    caching,
-    compaction,
-    effort,
-    history,
-    origin,
-    selection,
-    sendMode,
-    stored,
-    target,
-    tools,
-  } = combination;
-  const threadId = toSafeId<"chatThread">(Bun.randomUUIDv7());
-  seededThreadIds.push(threadId);
-  replay.forgetSignedCalls();
-  const first = await openSession({
-    caching,
-    endpoint: origin,
-    threadId,
-    tools: "default",
-  });
-  let originRequests: readonly ReplayedRequest[];
-  try {
-    replay.serve(
-      cassetteForModel(
-        toolCallAnswerFor({
-          cassette: cassetteFor(cassettes, origin.provider, "tool-call"),
-          history,
-          provider: origin.provider,
-        }),
-        first.model,
-      ),
-    );
-    await first.client.sendUserMessage(Bun.randomUUIDv7(), "Delete the draft");
-    await first.harness.expectSoundWebClient({
-      client: first.client,
-      threadId,
-    });
-    const call = pendingApprovalCallOf(
-      (await first.harness.lastAssistant(threadId)).parts,
-    );
-    replay.enqueue(first.answer);
-    await first.client.approve(call.id, true);
-    await first.harness.expectSoundWebClient({
-      client: first.client,
-      threadId,
-    });
-    originRequests = [...first.seam.sentRequests()];
-  } finally {
-    await first.close();
-  }
-
-  if (stored === "structured-output") {
-    await testDb.insert(chatMessages).values({
-      content: toPersistedChatMessageContentV3({
-        data: [STORED_STRUCTURED_OUTPUT],
-      }),
-      id: toSafeId<"chatMessage">(Bun.randomUUIDv7()),
-      role: "assistant",
-      threadId,
-      userId: ids.userA1,
-      workspaceId: null,
-    });
-  }
-
-  let compactionRequests: ReplayedRequest[] = [];
-  if (compaction === "compacted") {
-    const originModel = modelOf(cassettes, origin);
-    compactionRequests = await requestsOf(
-      cassetteForModel(
-        cassetteFor(cassettes, origin.provider, "text"),
-        originModel,
-      ),
-      async () => {
-        const outcome = await runChatThreadCompaction({
-          abortSignal: AbortSignal.timeout(CONVERSATION_TIMEOUT_MS),
-          dataWorkspaceIds: [],
-          orgAIConfig: orgConfigOf(origin),
-          managedAIResidency: "eu",
-          organizationId: ids.orgA,
-          preserveTokens: 1,
-          safeDb,
-          threadId,
-          triggerTokens: 1,
-        });
-        expect(
-          Result.isOk(outcome) ? outcome.value.type : outcome.error.message,
-        ).toBe("advanced");
-      },
-    );
-  }
-
-  const targetModel = modelOf(cassettes, target);
-  await testDb
-    .update(chatThreads)
-    .set({
-      // What the model picker writes (`update-thread-model.ts`).
-      chatModel:
-        selection === "thread-pick"
-          ? encodeChatModelSelection({
-              modelId: targetModel,
-              provider: target.provider,
-            })
-          : null,
-      chatReasoningEffort: effort === "default" ? null : effort,
-      webSearchEnabled: tools === "extended",
-    })
-    .where(eq(chatThreads.id, threadId));
-
-  const second = await openSession({
-    caching,
-    endpoint: target,
-    threadId,
-    tools,
-  });
-  try {
-    replay.serve(
-      attempt === "fallback"
-        ? silentAnswerOf(target.provider, second.answer)
-        : second.answer,
-    );
-    const attached = ATTACHMENTS[attachment];
-    if (attached === undefined) {
-      await second.client.sendUserMessage(Bun.randomUUIDv7(), "Thanks", {
-        sendMode,
+const converse = async (combination: ChatCombination): Promise<Conversation> =>
+  await profile.measure("action", async () => {
+    const {
+      attempt,
+      attachment,
+      caching,
+      compaction,
+      effort,
+      history,
+      origin,
+      selection,
+      sendMode,
+      stored,
+      target,
+      tools,
+    } = combination;
+    const threadId = toSafeId<"chatThread">(Bun.randomUUIDv7());
+    seededThreadIds.push(threadId);
+    replay.forgetSignedCalls();
+    const prepared = await profile.measure("prepare", async () => {
+      const first = await openSession({
+        caching,
+        endpoint: origin,
+        threadId,
+        tools: "default",
       });
-    } else {
-      await second.client.sendUserContent(
-        Bun.randomUUIDv7(),
-        [
-          { type: "text", content: "Read this." },
-          await composerAttachmentPart(attached),
-        ],
-        { sendMode },
-      );
-    }
-    await second.harness.expectSoundWebClient({
-      client: second.client,
-      threadId,
+      let originRequests: readonly ReplayedRequest[];
+      try {
+        replay.serve(
+          cassetteForModel(
+            toolCallAnswerFor({
+              cassette: cassetteFor(cassettes, origin.provider, "tool-call"),
+              history,
+              provider: origin.provider,
+            }),
+            first.model,
+          ),
+        );
+        await first.client.sendUserMessage(
+          Bun.randomUUIDv7(),
+          "Delete the draft",
+        );
+        await first.harness.expectSoundWebClient({
+          client: first.client,
+          threadId,
+        });
+        const call = pendingApprovalCallOf(
+          (await first.harness.lastAssistant(threadId)).parts,
+        );
+        replay.enqueue(first.answer);
+        await first.client.approve(call.id, true);
+        await first.harness.expectSoundWebClient({
+          client: first.client,
+          threadId,
+        });
+        originRequests = [...first.seam.sentRequests()];
+      } finally {
+        await first.close();
+      }
+
+      if (stored === "structured-output") {
+        await testDb.insert(chatMessages).values({
+          content: toPersistedChatMessageContentV3({
+            data: [STORED_STRUCTURED_OUTPUT],
+          }),
+          id: toSafeId<"chatMessage">(Bun.randomUUIDv7()),
+          role: "assistant",
+          threadId,
+          userId: ids.userA1,
+          workspaceId: null,
+        });
+      }
+
+      let compactionRequests: ReplayedRequest[] = [];
+      if (compaction === "compacted") {
+        const originModel = modelOf(cassettes, origin);
+        compactionRequests = await requestsOf(
+          cassetteForModel(
+            cassetteFor(cassettes, origin.provider, "text"),
+            originModel,
+          ),
+          async () => {
+            const outcome = await runChatThreadCompaction({
+              abortSignal: AbortSignal.timeout(CONVERSATION_TIMEOUT_MS),
+              dataWorkspaceIds: [],
+              orgAIConfig: orgConfigOf(origin),
+              managedAIResidency: "eu",
+              organizationId: ids.orgA,
+              preserveTokens: 1,
+              safeDb,
+              threadId,
+              triggerTokens: 1,
+            });
+            expect(
+              Result.isOk(outcome) ? outcome.value.type : outcome.error.message,
+            ).toBe("advanced");
+          },
+        );
+      }
+
+      const targetModel = modelOf(cassettes, target);
+      await testDb
+        .update(chatThreads)
+        .set({
+          // What the model picker writes (`update-thread-model.ts`).
+          chatModel:
+            selection === "thread-pick"
+              ? encodeChatModelSelection({
+                  modelId: targetModel,
+                  provider: target.provider,
+                })
+              : null,
+          chatReasoningEffort: effort === "default" ? null : effort,
+          webSearchEnabled: tools === "extended",
+        })
+        .where(eq(chatThreads.id, threadId));
+
+      return { originRequests, compactionRequests };
     });
-    const storedMessages = await second.harness.readThreadMessages(threadId);
-    const targetRequests = [...second.seam.sentRequests()];
-    const checkpoints = await testDb
-      .select({ id: chatThreadCompactions.id })
-      .from(chatThreadCompactions)
-      .where(eq(chatThreadCompactions.threadId, threadId));
-    return {
-      compacted: checkpoints.length > 0,
-      partKinds: new Set<string>(
-        storedMessages.flatMap(({ parts }) => parts.map(({ type }) => type)),
-      ),
-      sent: [...originRequests, ...compactionRequests, ...targetRequests],
-      targetRequests,
-    };
-  } finally {
-    await second.close();
-  }
-};
+
+    const second = await openSession({
+      caching,
+      endpoint: target,
+      threadId,
+      tools,
+    });
+    try {
+      replay.serve(
+        attempt === "fallback"
+          ? silentAnswerOf(target.provider, second.answer)
+          : second.answer,
+      );
+      const attached = ATTACHMENTS[attachment];
+      if (attached === undefined) {
+        await second.client.sendUserMessage(Bun.randomUUIDv7(), "Thanks", {
+          sendMode,
+        });
+      } else {
+        await second.client.sendUserContent(
+          Bun.randomUUIDv7(),
+          [
+            { type: "text", content: "Read this." },
+            await composerAttachmentPart(attached),
+          ],
+          { sendMode },
+        );
+      }
+      await second.harness.expectSoundWebClient({
+        client: second.client,
+        threadId,
+      });
+      const storedMessages = await second.harness.readThreadMessages(threadId);
+      const targetRequests = [...second.seam.sentRequests()];
+      const checkpoints = await testDb
+        .select({ id: chatThreadCompactions.id })
+        .from(chatThreadCompactions)
+        .where(eq(chatThreadCompactions.threadId, threadId));
+      return {
+        compacted: checkpoints.length > 0,
+        partKinds: new Set<string>(
+          storedMessages.flatMap(({ parts }) => parts.map(({ type }) => type)),
+        ),
+        sent: [
+          ...prepared.originRequests,
+          ...prepared.compactionRequests,
+          ...targetRequests,
+        ],
+        targetRequests,
+      };
+    } finally {
+      await second.close();
+    }
+  });
 
 const conversations = new Map<string, Promise<Conversation>>();
 /** A combination's conversation, run once for every test that reads it. */

@@ -73,6 +73,7 @@ const TOOL_COVERAGE = {
   search_across_matters: excluded(SEARCH_INDEX),
   search_case_law: excluded(PUBLIC_CORPUS),
   lookup_case_law: excluded(PUBLIC_CORPUS),
+  case_law_coverage: excluded(PUBLIC_CORPUS),
   read_case_law_decision: excluded(PUBLIC_CORPUS),
   read_case_law_citations: excluded(PUBLIC_CORPUS),
   set_practice_jurisdictions: RUN,

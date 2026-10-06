@@ -1,9 +1,14 @@
+import { panic } from "better-result";
 import { inArray } from "drizzle-orm";
 
 import {
   COURT_TIER_LABELS,
   type CourtTierLabel,
 } from "@stll/api-contract/case-law-court-tiers";
+import {
+  isDecisionTypeKind,
+  type DecisionTypeKind,
+} from "@stll/api-contract/case-law-decision-types";
 import {
   FACET_COUNT_TYPE,
   type FacetCountType,
@@ -15,6 +20,7 @@ import {
   courtTierLabelFromMap,
   type CourtWeightMap,
 } from "@/api/lib/case-law/court-weights";
+import { decisionTypeKind } from "@/api/lib/case-law/decision-type-kind";
 import { LIMITS } from "@/api/lib/limits";
 import { brandPersistedCaseLawSourceId } from "@/api/lib/safe-id-boundaries";
 
@@ -61,7 +67,7 @@ type SearchCourtTier = {
 export type DecisionSearchFacets = {
   court: SearchCourtTier[];
   year: SearchFacetBucket[];
-  decisionType: SearchFacetBucket[];
+  decisionType: DecisionTypeFacetBucket[];
   source: SourceFacetBucket[];
   language: SearchFacetBucket[];
 };
@@ -87,6 +93,48 @@ export const compareFacetBuckets = (
   a: SearchFacetBucket,
   b: SearchFacetBucket,
 ): number => b.count - a.count || compareValue(a.value, b.value);
+
+/** A type facet bucket: its value is a canonical kind, never a stated spelling. */
+type DecisionTypeFacetBucket = Omit<SearchFacetBucket, "value"> & {
+  value: DecisionTypeKind;
+};
+
+/**
+ * The type facet from stated spellings (`usn.`, `usnesení`), as the corpus
+ * index aggregates them: each folded into the kind it states, counts summed,
+ * the list cut only after the fold. Summing is exact because a decision version
+ * states one type, so no version sits in two spellings' buckets. A spelling no
+ * kind claims lands in the catch-all kind rather than reaching a reader raw.
+ */
+export const foldStatedDecisionTypeBuckets = (
+  buckets: readonly SearchFacetBucket[],
+): DecisionTypeFacetBucket[] => {
+  const counts = new Map<DecisionTypeKind, number>();
+  for (const { value, count } of buckets) {
+    const kind = decisionTypeKind(value);
+    counts.set(kind, (counts.get(kind) ?? 0) + count);
+  }
+  return [...counts]
+    .map(([value, count]) => ({ value, label: null, count }))
+    .toSorted(compareFacetBuckets)
+    .slice(0, LIMITS.caseLawFacetLimit);
+};
+
+/**
+ * The type facet the Postgres statement already grouped by kind
+ * (`decisionTypeKindSql`), whose values are kinds by construction: a value
+ * that is not one is a broken statement, not data.
+ */
+export const decisionTypeKindBuckets = (
+  buckets: readonly SearchFacetBucket[],
+): DecisionTypeFacetBucket[] =>
+  buckets.map(({ value, label, count }) => ({
+    value: isDecisionTypeKind(value)
+      ? value
+      : panic(`Decision type facet grouped by a non-kind: ${value}`),
+    label,
+    count,
+  }));
 
 /** Newest year first; the values are civil years, so the order is numeric. */
 export const compareYearBuckets = (

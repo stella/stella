@@ -996,10 +996,6 @@
     "reason": "Local test input domain or bound; retained for fixture coverage."
   },
   {
-    "id": "apps/web/src/components/inspector/inspector-store-types.ts::FILE_FACETS::domain:[\"preview\",\"attachments\",\"metadata\",\"versions\",\"playbook\",\"anonymization\"]::1",
-    "reason": "Existing FILE_FACETS domain; contract ownership pending migration."
-  },
-  {
     "id": "apps/web/src/components/inspector/inspector-tabs-slice.test.ts::entityIds::domain:[\"task-1\",\"file-1\",\"task-2\",\"file-2\"]::1",
     "reason": "Local test input domain or bound; retained for fixture coverage."
   },

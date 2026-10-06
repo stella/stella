@@ -8,7 +8,7 @@ import type { SQL } from "drizzle-orm";
 import { sql } from "drizzle-orm";
 import * as v from "valibot";
 
-import { lockCitationGraph } from "@/api/handlers/case-law/citation-resolution";
+import { runCitationGraphTransaction } from "@/api/handlers/case-law/citation-graph-transaction";
 import { REVIEWABLE_POLARITIES } from "@/api/handlers/case-law/polarity/consts";
 import type { ReviewablePolarity } from "@/api/handlers/case-law/polarity/consts";
 import { createSafeId } from "@/api/lib/branded-types";
@@ -328,17 +328,11 @@ type ExecutingTransaction = {
  * One run, inside the caller's transaction: resolve the entries, report what
  * they change, and under `apply` store the reviews and relabel the rows.
  */
-export const runReviewedCitationLabels = async (
+const runReviewedCitationLabelsTx = async (
   tx: ExecutingTransaction,
   entries: readonly ReviewedCitationLabelEntry[],
   mode: ReviewedLabelRunMode,
 ): Promise<ReviewedLabelRunOutcome> => {
-  if (mode === "apply") {
-    // Ingestion re-inserts a decision's citations and reads its reviews under
-    // this lock, so a review lands either before that read or after the
-    // re-insert, never between them.
-    await lockCitationGraph(tx);
-  }
   const citationIds = citationIdsOf(entries);
   const identities = parseCitationIdentities(
     citationIds.length === 0
@@ -377,3 +371,17 @@ export const runReviewedCitationLabels = async (
   ).length;
   return { type: "applied", summary, relabelled };
 };
+
+export const runReviewedCitationLabels = async (
+  transact: <T>(run: (tx: ExecutingTransaction) => Promise<T>) => Promise<T>,
+  entries: readonly ReviewedCitationLabelEntry[],
+  mode: ReviewedLabelRunMode,
+): Promise<ReviewedLabelRunOutcome> =>
+  mode === "apply"
+    ? await runCitationGraphTransaction(
+        transact,
+        async (tx) => await runReviewedCitationLabelsTx(tx, entries, mode),
+      )
+    : await transact(
+        async (tx) => await runReviewedCitationLabelsTx(tx, entries, mode),
+      );

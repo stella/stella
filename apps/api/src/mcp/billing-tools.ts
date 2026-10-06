@@ -23,11 +23,11 @@ import type { SafeId } from "@/api/lib/branded-types";
 import {
   DELETE_TIME_ENTRY_PROJECTION,
   GET_USAGE_PROJECTION,
-  type LIST_INVOICES_DETAIL_PROJECTION,
-  type LIST_INVOICES_LIST_PROJECTION,
+  LIST_INVOICES_DETAIL_PROJECTION,
+  LIST_INVOICES_LIST_PROJECTION,
   LIST_INVOICES_PROJECTION,
-  type LIST_TIME_ENTRIES_DETAIL_PROJECTION,
-  type LIST_TIME_ENTRIES_LIST_PROJECTION,
+  LIST_TIME_ENTRIES_DETAIL_PROJECTION,
+  LIST_TIME_ENTRIES_LIST_PROJECTION,
   LIST_TIME_ENTRIES_PROJECTION,
   RESOLVE_RATE_PROJECTION,
   SAVE_TIME_ENTRY_PROJECTION,
@@ -40,6 +40,7 @@ import {
   isDateOnlyPaginationCursorPart,
   isUuidPaginationCursorPart,
 } from "@/api/lib/pagination";
+import { projectionPayload } from "@/api/lib/projection-totality";
 import { normalizeTenantPageLimit } from "@/api/lib/rate-limit/action-size-limits";
 import {
   brandPersistedEntityId,
@@ -66,7 +67,6 @@ import type {
 } from "@/api/mcp/tool-types";
 import { defineMcpToolSet } from "@/api/mcp/tool-types";
 import {
-  invalidCursorResult,
   bindWorkspaceRecorder,
   cursorInput,
   DEFAULT_LIST_LIMIT,
@@ -74,10 +74,12 @@ import {
   ensureWorkspaceAccess,
   errorResult,
   internalFailureResult,
+  invalidCursorResult,
   ISO_DATE_SCHEMA,
   MAX_LIST_LIMIT,
   notFoundResult,
   nullAsAbsent,
+  structuredEgressPlan,
   toolDataResult,
   uuidInputSchema,
   validationErrorResult,
@@ -621,16 +623,15 @@ const handleListTimeEntriesTool: TypedMcpToolHandler<
       }),
       { entry },
     );
-    return {
-      egress: "structured",
-      payload: {
+    return structuredEgressPlan({
+      payload: projectionPayload(LIST_TIME_ENTRIES_DETAIL_PROJECTION, {
         visibility: canReview
           ? TIME_ENTRY_VISIBILITY.ALL_ENTRIES
           : TIME_ENTRY_VISIBILITY.OWN_ENTRIES,
         entry,
-      } satisfies v.InferInput<typeof LIST_TIME_ENTRIES_DETAIL_PROJECTION>,
+      }),
       textFields,
-    };
+    });
   }
 
   // List mode. matter_id is guaranteed present by the schema.
@@ -737,17 +738,16 @@ const handleListTimeEntriesTool: TypedMcpToolHandler<
     { entries },
   );
 
-  return {
-    egress: "structured",
-    payload: {
+  return structuredEgressPlan({
+    payload: projectionPayload(LIST_TIME_ENTRIES_LIST_PROJECTION, {
       visibility: canReview
         ? TIME_ENTRY_VISIBILITY.ALL_ENTRIES
         : TIME_ENTRY_VISIBILITY.OWN_ENTRIES,
       entries,
       nextCursor: page.nextCursor,
-    } satisfies v.InferInput<typeof LIST_TIME_ENTRIES_LIST_PROJECTION>,
+    }),
     textFields,
-  };
+  });
 };
 
 // --- save_time_entry ----------------------------------------------------
@@ -997,9 +997,11 @@ const handleSaveTimeEntryTool: TypedMcpToolHandler<
     if (Result.isError(created)) {
       return internalFailureResult(created.error);
     }
-    return toolDataResult({
-      timeEntryId: created.value.id,
-    } satisfies v.InferInput<typeof SAVE_TIME_ENTRY_PROJECTION>);
+    return toolDataResult(
+      projectionPayload(SAVE_TIME_ENTRY_PROJECTION, {
+        timeEntryId: created.value.id,
+      }),
+    );
   }
 
   // Update branch.
@@ -1070,10 +1072,12 @@ const handleSaveTimeEntryTool: TypedMcpToolHandler<
   if (Result.isError(updated)) {
     return internalFailureResult(updated.error);
   }
-  return toolDataResult({
-    timeEntryId,
-    updated: true,
-  } satisfies v.InferInput<typeof SAVE_TIME_ENTRY_PROJECTION>);
+  return toolDataResult(
+    projectionPayload(SAVE_TIME_ENTRY_PROJECTION, {
+      timeEntryId,
+      updated: true,
+    }),
+  );
 };
 
 // --- delete_time_entry --------------------------------------------------
@@ -1130,9 +1134,11 @@ const handleDeleteTimeEntryTool: TypedMcpToolHandler<
   if (Result.isError(deleted)) {
     return internalFailureResult(deleted.error);
   }
-  return toolDataResult({
-    deleted: deleted.value.deleted,
-  } satisfies v.InferInput<typeof DELETE_TIME_ENTRY_PROJECTION>);
+  return toolDataResult(
+    projectionPayload(DELETE_TIME_ENTRY_PROJECTION, {
+      deleted: deleted.value.deleted,
+    }),
+  );
 };
 
 // --- resolve_rate -------------------------------------------------------
@@ -1206,9 +1212,10 @@ const handleResolveRateTool: McpToolHandler<
   // tenant-authored text.
   return toolDataResult(
     resolved.value ??
-      ({ hourlyRate: null, currency: null } satisfies v.InferInput<
-        typeof RESOLVE_RATE_PROJECTION
-      >),
+      projectionPayload(RESOLVE_RATE_PROJECTION, {
+        hourlyRate: null,
+        currency: null,
+      }),
   );
 };
 
@@ -1380,13 +1387,10 @@ const handleListInvoicesTool: TypedMcpToolHandler<
       { invoice },
     );
 
-    return {
-      egress: "structured",
-      payload: { invoice } satisfies v.InferInput<
-        typeof LIST_INVOICES_DETAIL_PROJECTION
-      >,
+    return structuredEgressPlan({
+      payload: projectionPayload(LIST_INVOICES_DETAIL_PROJECTION, { invoice }),
       textFields,
-    };
+    });
   }
 
   // List mode. matter_id is guaranteed present by the schema.
@@ -1453,14 +1457,13 @@ const handleListInvoicesTool: TypedMcpToolHandler<
     invoices: invoiceList,
   });
 
-  return {
-    egress: "structured",
-    payload: {
+  return structuredEgressPlan({
+    payload: projectionPayload(LIST_INVOICES_LIST_PROJECTION, {
       invoices: invoiceList,
       nextCursor: page.nextCursor,
-    } satisfies v.InferInput<typeof LIST_INVOICES_LIST_PROJECTION>,
+    }),
     textFields,
-  };
+  });
 };
 
 // --- get_usage ----------------------------------------------------------
@@ -1494,7 +1497,9 @@ const handleGetUsageTool: TypedMcpToolHandler<
   // The two payload branches are tied to GET_USAGE_NO_PLAN_PROJECTION /
   // GET_USAGE_ENTITLED_PROJECTION where they are built
   // (`readOrgEntitlementHandler`, handlers/usage/entitlement/get.ts).
-  return toolDataResult(entitlement.value);
+  return toolDataResult(
+    projectionPayload(GET_USAGE_PROJECTION, entitlement.value),
+  );
 };
 
 export const BILLING_TOOL_DEFINITIONS = [

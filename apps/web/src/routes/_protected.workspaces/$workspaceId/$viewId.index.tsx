@@ -1,13 +1,14 @@
 import { lazy, Suspense } from "react";
 
 import { useSuspenseQuery } from "@tanstack/react-query";
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, notFound } from "@tanstack/react-router";
 import { panic } from "better-result";
 import * as v from "valibot";
 
-import { isAvtPreviewEnabled } from "@/hooks/use-avt-preview";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { detached } from "@/lib/detached";
+import { loadCallerFeature } from "@/lib/organization/feature-access/access";
+import { CALLER_FEATURE } from "@/lib/organization/feature-access/surfaces";
 import {
   ensureRouteInfiniteQueryData,
   ensureRouteQueryData,
@@ -33,6 +34,7 @@ import {
 import { legalListsOptions } from "@/lib/workspaces/queries/legal-lists";
 import { propertiesOptions } from "@/lib/workspaces/queries/properties";
 import { viewsOptions } from "@/lib/workspaces/queries/views";
+import { selectAvailableWorkspaceView } from "@/lib/workspaces/queries/views.logic";
 import { isAvtView, isTableView } from "@/lib/workspaces/view-layout";
 import { CalendarView } from "@/routes/_protected.workspaces/$workspaceId/-components/calendar/calendar-view";
 import { CorrespondenceView } from "@/routes/_protected.workspaces/$workspaceId/-components/correspondence-view";
@@ -41,7 +43,7 @@ import { KanbanView } from "@/routes/_protected.workspaces/$workspaceId/-compone
 import { OverviewView } from "@/routes/_protected.workspaces/$workspaceId/-components/overview-view";
 import { TableLayout } from "@/routes/_protected.workspaces/$workspaceId/-components/table/table-layout";
 
-// The AVT view is a beta surface: it loads only when an AVT view opens.
+// The AVT view loads only after caller feature admission.
 const AvtRoute = lazy(async () => {
   const m = await import("@/features/avt/avt-route");
   return { default: m.AvtRoute };
@@ -144,14 +146,26 @@ export const Route = createFileRoute(
         // Not yet implemented — RouteComponent renders null.
       },
       avt: async () => {
-        // A disabled preview redirects instead of rendering the view.
-        if (!isAvtPreviewEnabled()) {
-          return;
+        const admission = await loadCallerFeature({
+          queryClient,
+          principal: {
+            organizationId: context.user.activeOrganizationId,
+            userId: context.user.id,
+          },
+          feature: CALLER_FEATURE.verification,
+          load: async () => {
+            await Promise.all([
+              ensureRouteQueryData(queryClient, legalListsOptions(workspaceId)),
+              ensureRouteQueryData(
+                queryClient,
+                workspaceFilesOptions(workspaceId),
+              ),
+            ]);
+          },
+        });
+        if (admission.isErr()) {
+          notFound({ throw: true });
         }
-        await Promise.all([
-          ensureRouteQueryData(queryClient, legalListsOptions(workspaceId)),
-          ensureRouteQueryData(queryClient, workspaceFilesOptions(workspaceId)),
-        ]);
       },
       correspondence: async () => {
         // The list suspends on its first page; the address card reads its
@@ -187,7 +201,7 @@ function RouteComponent() {
   const navigate = Route.useNavigate();
   const { data: activeView } = useSuspenseQuery({
     ...viewsOptions(workspaceId),
-    select: (data) => data.find((view) => view.id === viewId) ?? data.at(0),
+    select: (data) => selectAvailableWorkspaceView(data, viewId),
   });
 
   if (!activeView) {

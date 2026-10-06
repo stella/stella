@@ -42,6 +42,7 @@ jobs:
       - name: Setup Bun
         uses: stella/.github/actions/setup-bun-cached@167fb396c6c0f4e07296ad2cd72e6ef15367c776
         with:
+          save: ${{ github.ref == 'refs/heads/main' }}
           bun-version-file: "package.json"
 
       # No install is needed. --lockfile-only and --ignore-scripts keep the
@@ -192,12 +193,14 @@ jobs:
           ref: ${{ github.event.pull_request.head.sha }}
           sparse-checkout: |
             /scripts/
+            /packages/scripts/src/generated-files.ts
             /package.json
           sparse-checkout-cone-mode: false
 
       - name: Setup Bun
         uses: stella/.github/actions/setup-bun-cached@167fb396c6c0f4e07296ad2cd72e6ef15367c776
         with:
+          save: ${{ github.ref == 'refs/heads/main' }}
           bun-version-file: "package.json"
 
       - name: Check planner availability
@@ -205,7 +208,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          for path in scripts/autofix-plan.ts scripts/generated-files.ts; do
+          for path in scripts/autofix-plan.ts scripts/generated-files.ts packages/scripts/src/generated-files.ts; do
             if [[ -f "$path" ]]; then
               continue
             fi
@@ -270,6 +273,7 @@ jobs:
       - name: Setup Bun
         uses: stella/.github/actions/setup-bun-cached@167fb396c6c0f4e07296ad2cd72e6ef15367c776
         with:
+          save: ${{ github.ref == 'refs/heads/main' }}
           bun-version-file: "package.json"
 
       - name: Align Tauri counterparts

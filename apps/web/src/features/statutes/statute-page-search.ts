@@ -27,6 +27,7 @@ const MAX_PROVISION_ANCHOR_LENGTH = 256;
  * link should still open the act.
  */
 export const publicStatuteSearchSchema = v.object({
+  q: v.optional(v.pipe(v.string(), v.trim())),
   asOf: v.optional(
     v.pipe(
       v.string(),

@@ -1,4 +1,3 @@
-import { KindGuard } from "@sinclair/typebox";
 // Dev-only exporter: projects the safe-handler universe down to a capability
 // catalog and writes a deterministic JSON snapshot
 // (`packages/cli/capabilities/*.json`).
@@ -40,16 +39,17 @@ import { mkdtemp, rm } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 
+import { parseCapabilityCatalog } from "../../../packages/cli/src/capability-catalog-load";
+import { expandSchemaDefs } from "../../../packages/cli/src/expand-schema-defs";
+import { buildCliRouteTree } from "../../../packages/cli/src/generate-capability-tree";
+import type { RouteNode } from "../../../packages/cli/src/route-types";
 // Pure CLI generator modules (constants, classes, pure functions; no env, no
 // I/O at import time), imported relatively because `@stll/cli`'s exports map
 // only exposes its bin entry. The coverage doc computes each capability's REAL
 // generated command path through the same `buildCliRouteTree` codegen uses, so
 // collision fallbacks (curated command wins, capability relocates under
 // `stella capability <domain> <action>`) are never hand-replicated here.
-import { parseCapabilityCatalog } from "../../../packages/cli/src/capability-catalog-load";
-import { expandSchemaDefs } from "../../../packages/cli/src/expand-schema-defs";
-import { buildCliRouteTree } from "../../../packages/cli/src/generate-capability-tree";
-import type { RouteNode } from "../../../packages/cli/src/route-types";
+import { hasPreparedGeneratedSources } from "../../../packages/scripts/src/prepared-generated-sources";
 import type { CapabilityTransport } from "../src/lib/capability-transport";
 import {
   isTransportInvocable,
@@ -62,9 +62,7 @@ import {
   type ServiceClassification,
 } from "../src/lib/rate-limit/service-classification";
 import type { HandlerKind } from "../src/lib/safe-handler-factories";
-import { advertisedSchema } from "../src/mcp/advertised-schema";
 import { CONTEXT_FIDELITY_WAIVERS } from "../src/mcp/capability-waivers";
-import { PUBLIC_FIELD_NAME } from "../src/mcp/public-field-names";
 import type { McpReadClass, McpToolDefinition } from "../src/mcp/tool-types";
 import { WRITE_PRIMITIVE_SCOPES } from "../src/mcp/write-primitive-scopes";
 import { generateCapabilityRuntime } from "./generate-capability-runtime";
@@ -103,6 +101,10 @@ import {
   WRITE_ONLY_SCOPES,
   writePrimitivesImportedBy,
 } from "./lib/capability-catalog";
+import {
+  buildInputSchema,
+  parseFeatureRequirement,
+} from "./lib/capability-input-schema";
 import {
   serializeCapabilityShard,
   syncCapabilityShards,
@@ -602,127 +604,6 @@ const extractVerbs = (permissions: unknown): string[] => {
   return verbs;
 };
 
-// The config's `body`/`params`/`query` are TypeBox schemas: plain JSON Schema
-// objects at runtime plus non-enumerable symbol metadata. The final
-// `JSON.stringify` of the whole catalog drops those symbols, leaving clean JSON
-// Schema on disk, so the raw schema value can go straight into the entry.
-const buildInputSchema = (
-  config: Record<string, unknown>,
-): CapabilityInputSchema => {
-  const inputSchema: CapabilityInputSchema = {};
-  if ("body" in config) {
-    inputSchema.body = withPublicFieldNames(advertisedPart(config["body"]));
-  }
-  if ("params" in config) {
-    inputSchema.params = withPublicFieldNames(advertisedPart(config["params"]));
-  }
-  if ("query" in config) {
-    inputSchema.query = withPublicFieldNames(advertisedPart(config["query"]));
-  }
-  return inputSchema;
-};
-
-/**
- * The catalog carries the same projection `describe_capability` advertises
- * (coercion unions flattened to their scalar), so the CLI's generated flags
- * and the MCP surface enforce one contract. A part that is not a TypeBox
- * schema is left as the handler declared it.
- */
-const advertisedPart = (part: unknown): unknown =>
-  KindGuard.IsSchema(part) ? advertisedSchema(part) : part;
-
-/** Schema keywords whose value is itself a schema node. */
-const SCHEMA_NODE_KEYWORDS = ["items", "additionalProperties", "not"] as const;
-/** Schema keywords whose value is a list of schema nodes. */
-const SCHEMA_NODE_LIST_KEYWORDS = ["anyOf", "oneOf", "allOf"] as const;
-/** Schema keywords whose value maps names to schema nodes. */
-const SCHEMA_NODE_MAP_KEYWORDS = [
-  "properties",
-  "$defs",
-  "definitions",
-] as const;
-
-/**
- * Rename internal input fields to their public spelling on the way out, at
- * every depth.
- *
- * The container is a `workspaceId` in the DB, the handler config and the REST
- * route; it is a `matterId` to every agent. This is the outbound half of that
- * split: `describe_capability` and the CLI's generated `--matter-id` flag both
- * read this schema. The inbound half is `withInternalFieldNames`
- * (apps/api/src/mcp/capability-tools.ts), which renames the field back before
- * the handler's own schema validates it, so the two names never both reach a
- * handler. Both halves derive from `PUBLIC_FIELD_NAME`'s one table.
- *
- * The walk covers every place a schema node can hide (`properties`, `items`,
- * `additionalProperties`, `anyOf`/`oneOf`/`allOf`, `$defs`), because the
- * container is not always top level: `flows.create` carries it inside a union
- * branch of `body.trigger`, `playbooks.create` inside an array of passages,
- * `signals.acceptances.create` inside `body.result`. Renaming only the top
- * level would advertise `--matter-id` on one capability and
- * `--body-trigger-workspace-id` on the next.
- *
- * The exemption is evaluated per NODE, not per part: a node that already owns
- * the public name (`expenses.create` body declares its own `matterId`) has no
- * internal name to rename, so the two cannot meet.
- */
-const withPublicFieldNames = (node: unknown): unknown => {
-  if (Array.isArray(node)) {
-    return node.map((entry) => withPublicFieldNames(entry));
-  }
-  if (!isRecord(node)) {
-    return node;
-  }
-  const rename = (name: string): string => PUBLIC_FIELD_NAME[name] ?? name;
-  const projected: Record<string, unknown> = { ...node };
-
-  for (const keyword of SCHEMA_NODE_KEYWORDS) {
-    if (keyword in node) {
-      projected[keyword] = withPublicFieldNames(node[keyword]);
-    }
-  }
-  for (const keyword of SCHEMA_NODE_LIST_KEYWORDS) {
-    const branches = node[keyword];
-    if (Array.isArray(branches)) {
-      projected[keyword] = branches.map((branch) =>
-        withPublicFieldNames(branch),
-      );
-    }
-  }
-  for (const keyword of SCHEMA_NODE_MAP_KEYWORDS) {
-    const members = node[keyword];
-    if (!isRecord(members)) {
-      continue;
-    }
-    // `$defs`/`definitions` name reusable schemas, not input fields, so only
-    // `properties` keys are renamed; every value is still descended into.
-    const renameKeys = keyword === "properties";
-    if (renameKeys) {
-      for (const [internal, publicName] of Object.entries(PUBLIC_FIELD_NAME)) {
-        if (internal in members && publicName in members) {
-          panic(
-            `capability input declares both ${internal} and ${publicName}; the public rename would drop one`,
-          );
-        }
-      }
-    }
-    projected[keyword] = Object.fromEntries(
-      Object.entries(members).map(([name, member]) => [
-        renameKeys ? rename(name) : name,
-        withPublicFieldNames(member),
-      ]),
-    );
-  }
-
-  const required = node["required"];
-  if (Array.isArray(required)) {
-    projected["required"] = required.map((name) =>
-      typeof name === "string" ? rename(name) : name,
-    );
-  }
-  return projected;
-};
-
 /**
  * The handler config's tool-level `description`. A non-string or empty value is
  * reported as absent rather than emitted, so a malformed config shows up as a
@@ -1215,17 +1096,6 @@ const collectClassGuardErrors = ({
     }
   }
   return errors;
-};
-
-const parseFeatureRequirement = (value: unknown) => {
-  if (!isRecord(value) || typeof value["featureId"] !== "string") {
-    return undefined;
-  }
-  const type = value["type"];
-  if (type !== "required" && type !== "conditional") {
-    return undefined;
-  }
-  return { featureId: value["featureId"], type } as const;
 };
 
 const readFeatureDeclarationSources = async () => {
@@ -1905,6 +1775,11 @@ const computeCliCommandPaths = async (
 
 const main = async (): Promise<number> => {
   const checkMode = process.argv.includes("--check");
+  if (
+    !hasPreparedGeneratedSources(new URL("../../../", import.meta.url).pathname)
+  ) {
+    await generateCapabilityRuntime();
+  }
   const { entries, dispatchRecords, errors, internalWaiverCounts } =
     await buildCatalog();
 

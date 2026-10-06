@@ -14,10 +14,12 @@ import {
   supportsStreamingToolUse,
 } from "@stll/ai-catalog";
 import type { ModelRole } from "@stll/ai-catalog";
+import type { AIErrorKind } from "@stll/api-contract";
 
 import { toTanStackToolSchema } from "@/api/handlers/chat/tools/tanstack-tool-schema";
 import type { CachingDecision, OrgAIConfig } from "@/api/lib/ai-config";
 import { streamChatChunks } from "@/api/lib/chat/tanstack-chat-runtime";
+import { ProviderCallError } from "@/api/lib/errors/provider-call-error";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { providerSafeJsonSchemaOptionsForTanStackProvider } from "@/api/lib/provider-safe-json-schema";
 import { buildBudgetEdgeSchema } from "@/api/lib/structured-output-budget-probe";
@@ -223,6 +225,18 @@ const RETRYABLE_TRANSPORT_CODES = new Set([
   "UND_ERR_HEADERS_TIMEOUT",
   "UND_ERR_SOCKET",
 ]);
+
+const PROVIDER_CALL_ERROR_RETRYABILITY = {
+  quota_exhausted: true,
+  provider_billing: false,
+  provider_credentials_rejected: false,
+  model_unavailable: false,
+  provider_unavailable: true,
+  provider_stream_incomplete: true,
+  loop_detected: false,
+  empty_completion: false,
+  unknown: false,
+} as const satisfies Record<AIErrorKind, boolean>;
 
 type CanaryRunStage =
   | "before-tool-call"
@@ -693,6 +707,20 @@ export const isRetryableCanaryError = (
 ): boolean => {
   if (signal.aborted) {
     return true;
+  }
+
+  if (error instanceof ProviderCallError) {
+    if (credentialRejectionStatus(error.providerStatus ?? null) !== null) {
+      return false;
+    }
+    const explicitRetryabilityFromFacts = explicitRetryability(error);
+    if (explicitRetryabilityFromFacts !== null) {
+      return explicitRetryabilityFromFacts;
+    }
+    if (error.providerStatus !== undefined) {
+      return isRetryableProviderStatus(error.providerStatus);
+    }
+    return PROVIDER_CALL_ERROR_RETRYABILITY[error.kind];
   }
 
   // A rejected credential fails every remaining attempt identically.

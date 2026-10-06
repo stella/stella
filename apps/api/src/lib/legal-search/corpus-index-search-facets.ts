@@ -91,11 +91,14 @@ export const CORPUS_SEARCH_FACET_SPEC = {
     candidates: LIMITS.caseLawFacetCandidateBuckets,
     display: LIMITS.caseLawFacetCandidateBuckets,
   },
+  // Kept whole like court: the buckets are stated spellings, and the caller
+  // folds them into canonical kinds before cutting the list, so a kind spread
+  // over several small spellings is not lost behind one large one.
   decisionType: {
     kind: "terms",
     field: "document_type",
     candidates: LIMITS.caseLawFacetCandidateBuckets,
-    display: LIMITS.caseLawFacetLimit,
+    display: LIMITS.caseLawFacetCandidateBuckets,
   },
   source: {
     kind: "terms",

@@ -54,6 +54,17 @@
       "polish": "Aprimorar a redação"
     }
   },
+  "aiColumns": {
+    "countSummary": "{columns} colunas × {rows} linhas = {answers, plural, one {# resposta} other {# respostas}}. As respostas consomem o orçamento.",
+    "refusedBudget": "Não executado: orçamento de respostas indisponível",
+    "rerunAllPage": "Executar tudo novamente (esta página)",
+    "rerunColumnPage": "Executar coluna novamente (esta página)",
+    "runColumnPage": "Executar coluna (esta página)",
+    "runPageRows": "Executar para {count, plural, one {# linha desta página} other {# linhas desta página}}",
+    "runRemainingPage": "Executar restantes (esta página)",
+    "runSelectedRows": "Executar para {count, plural, one {# linha selecionada} other {# linhas selecionadas}}",
+    "selectedRun": "Executar colunas de IA para {count, plural, one {# linha} other {# linhas}}"
+  },
   "appearance": {
     "calendar": "Calendário",
     "calendarGregorian": "Gregoriano",
@@ -264,6 +275,7 @@
     "runs": {
       "back": "Todos os documentos",
       "errors": {
+        "accessRevoked": "A verificação foi interrompida porque o acesso não está disponível.",
         "aiUnavailable": "Nenhum modelo de IA está disponível para verificar documentos. Verifique as configurações de IA da organização.",
         "enqueueFailed": "Não foi possível iniciar a verificação. Tente novamente.",
         "extractionFailed": "Não foi possível extrair as alegações deste documento.",
@@ -796,6 +808,34 @@
       "unavailable": "Os dados de cobertura estão indisponíveis no momento."
     },
     "decisionNotFound": "Decisão não encontrada",
+    "decisionTypes": {
+      "administrative_decision": "Decisão administrativa",
+      "binding_excise_information": "Informação vinculante sobre impostos especiais de consumo",
+      "binding_rate_information": "Informação vinculante sobre a alíquota do IVA",
+      "court_direction": "Despacho ordinatório",
+      "decision": "Decisão",
+      "finding": "Decisão de mérito",
+      "general_tax_ruling": "Interpretação tributária geral",
+      "individual_tax_ruling": "Interpretação tributária individual",
+      "judgment": "Sentença",
+      "leave_refused": "Inadmissão por ausência de questão jurídica relevante",
+      "merits_decision": "Julgamento do mérito",
+      "ministry_of_justice_decision": "Decisão do Ministério da Justiça",
+      "minutes_extract": "Extrato da ata",
+      "opinion": "Parecer",
+      "order": "Despacho",
+      "other": "Outros",
+      "payment_order": "Mandado de pagamento",
+      "penal_order": "Decreto penal",
+      "principle_decision": "Decisão de princípio",
+      "protective_opinion": "Parecer de salvaguarda",
+      "resolution": "Resolução",
+      "signalling_decision": "Decisão de sinalização",
+      "statement_of_reasons": "Fundamentação",
+      "tax_explanations": "Esclarecimentos tributários",
+      "top_up_tax_opinion": "Parecer sobre o imposto complementar",
+      "uniformity_decision": "Decisão de uniformização de jurisprudência"
+    },
     "emptyState": "Nenhuma decisão encontrada. Configure uma fonte e execute uma sincronização para importar jurisprudência.",
     "filters": {
       "remove": "Remover o filtro {filter}"
@@ -3747,11 +3787,15 @@
     }
   },
   "lawHome": {
+    "clearRecent": "Limpar recentes",
     "enteringIntoForce": "Entrada em vigor em breve",
     "inForceFrom": "Em vigor a partir de {date}",
-    "noRecentSearches": "Ainda não há pesquisas",
+    "noRecent": "Nenhuma atividade recente",
     "noSignals": "Ainda não há sinais",
     "prompt": "O que você procura?",
+    "recent": "Recentes",
+    "recentCasesFilter": "Decisões",
+    "recentSearchFilter": "Pesquisas",
     "recentlyInForce": "Em vigor recentemente",
     "searchLabel": "Pesquisar na base jurídica",
     "searchPlaceholder": "Número do processo, número da norma, ECLI ou palavras-chave",
@@ -6006,7 +6050,6 @@
       "previewUnsupported": "A visualização não é compatível com este tipo de documento.",
       "readingFrom": "A IA lê de",
       "referencesItself": "A propriedade faz referência a si mesma por meio de outras propriedades",
-      "rerunColumn": "Reexecutar coluna",
       "resultType": "Tipo de resultado",
       "returnsLabel": "Formato",
       "scopeFile": "Arquivo atual",

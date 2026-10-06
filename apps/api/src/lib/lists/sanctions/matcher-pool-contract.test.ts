@@ -13,6 +13,7 @@ import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 import { createSanctionsMatcherPool } from "./matcher-pool";
 import type { SanctionsMatcherRequest } from "./matcher-protocol";
+import { createMatcherTestClock } from "./test-fixtures/matcher-test-clock";
 
 const personList = (name: string): ParsedList => ({
   version: { source: "eu", publishedAt: "2026-09-20", fileId: null },
@@ -93,7 +94,10 @@ test.each(multilingualCases)(
   "real worker preserves multilingual identity and partial-date evidence ($name)",
   async (fixture) => {
     expect("Čeněk Říha".normalize("NFD")).not.toBe("Čeněk Říha");
-    const pool = createSanctionsMatcherPool({ size: 1, deadlineMs: 5000 });
+    const pool = createSanctionsMatcherPool({
+      size: 1,
+      clock: createMatcherTestClock(),
+    });
     const list = personList(fixture.listed);
     const index = buildScreeningIndex([list]);
     try {
@@ -146,7 +150,10 @@ test.each(multilingualCases)(
 test.each([1, 2])(
   "pool refuses excess simultaneous waiters and serves admitted callers (size %s)",
   async (size) => {
-    const pool = createSanctionsMatcherPool({ size, deadlineMs: 8000 });
+    const pool = createSanctionsMatcherPool({
+      size,
+      clock: createMatcherTestClock(),
+    });
     const activeEntered = Promise.withResolvers<undefined>();
     const releaseActive = Promise.withResolvers<undefined>();
     const queued = Array.from({ length: 2 }, () => ({
@@ -234,7 +241,7 @@ test("close cancels active and queued leases and prevents respawn", async () => 
   let invoked = 0;
   const pool = createSanctionsMatcherPool({
     size: 1,
-    deadlineMs: 8000,
+    clock: createMatcherTestClock(),
     createWorker: () => {
       spawned += 1;
       const worker = new Worker(
@@ -299,7 +306,7 @@ test("close waits for actual worker retirement", async () => {
   let retired = 0;
   let closed = false;
   const pool = createSanctionsMatcherPool({
-    deadlineMs: 8000,
+    clock: createMatcherTestClock(),
     createWorker: () => {
       const events = { on: () => undefined };
       return asTestRaw<Worker>(
@@ -377,7 +384,10 @@ test("real worker honors cutoff and limit on cold and cached requests", async ()
   expect(
     high.possibleMatches.map(({ entry }) => entry.sourceId).toSorted(),
   ).toEqual(["exact-0", "exact-1", "exact-2"]);
-  const pool = createSanctionsMatcherPool({ size: 1, deadlineMs: 5000 });
+  const pool = createSanctionsMatcherPool({
+    size: 1,
+    clock: createMatcherTestClock(),
+  });
   try {
     for (const cutoff of [0.5, 0.999]) {
       for (const limit of [1, 2, 20]) {

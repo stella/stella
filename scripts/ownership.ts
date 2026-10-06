@@ -20,8 +20,30 @@ import { fileURLToPath } from "node:url";
 
 import { canonicalModuleId } from "../.oxlint-plugins/module-id.ts";
 import { STATUS_COLUMNS } from "../apps/api/src/lib/db/status-tables.gen.ts";
+import { SANCTIONS_MONITORING_TRANSITION_IDENTITIES } from "../apps/api/src/lib/lists/sanctions/monitoring-transition-identities.ts";
 // With its extension: oxlint.config.ts loads this file under Node's resolver.
 import { formattedLikeRepository } from "./generated-artifacts.ts";
+
+const statusTransitionColumns = () => {
+  const columns = new Map(
+    Object.entries(STATUS_COLUMNS).map(([table, names]) => [
+      table,
+      new Set<string>(names),
+    ]),
+  );
+  for (const { tableName, stateColumn } of Object.values(
+    SANCTIONS_MONITORING_TRANSITION_IDENTITIES,
+  )) {
+    const names = columns.get(tableName) ?? new Set<string>();
+    names.add(stateColumn);
+    columns.set(tableName, names);
+  }
+  return Object.fromEntries(
+    [...columns].map(([table, names]) => [table, [...names].toSorted()]),
+  );
+};
+
+const STATUS_TRANSITION_COLUMNS = statusTransitionColumns();
 
 // A file the rule accepts besides the owner itself. `path` is a
 // repo-relative file path, or a directory prefix ending in "/".
@@ -32,6 +54,11 @@ export type AllowedFile = {
 
 export type OwnershipEnforcement =
   | { readonly kind: "none" }
+  | {
+      readonly kind: "literal-pattern";
+      readonly pattern: string;
+      readonly allowed: readonly AllowedFile[];
+    }
   | {
       readonly kind: "status-set";
       readonly columns: Readonly<Record<string, readonly string[]>>;
@@ -134,6 +161,90 @@ const FLUSHES_ITS_OWN_SEARCH_MARKS =
 // exemptions cannot drift apart. Adding a door here does not add a shape to
 // the baseline; it moves one out of it, and review of the row is the gate.
 export const ROOT_CONNECTION_DOORS = [
+  {
+    id: "personal-api-key-lifecycle",
+    capability: "Managing member-owned credentials in the denied auth table",
+    owner: ["apps/api/src/lib/machine-api-keys/personal-lifecycle.ts"],
+    summary:
+      "Bounded lifecycle operations retain organization and owner SQL predicates, lock live membership, enforce policy and active-key limits, and audit within the mutation transaction. No raw database handle is exported.",
+    enforcement: {
+      kind: "import",
+      specifiers: ["@/api/lib/machine-api-keys/personal-lifecycle"],
+      allowed: [
+        {
+          path: "apps/api/src/handlers/api-keys/personal/create.ts",
+          reason: "Owns the session-authorized personal key operation.",
+        },
+        {
+          path: "apps/api/src/handlers/api-keys/personal/list.ts",
+          reason: "Owns the session-authorized personal key operation.",
+        },
+        {
+          path: "apps/api/src/handlers/api-keys/personal/revoke.ts",
+          reason: "Owns the session-authorized personal key operation.",
+        },
+        {
+          path: "apps/api/src/handlers/api-keys/personal/rotate.ts",
+          reason: "Owns the session-authorized personal key operation.",
+        },
+        {
+          path: "apps/api/src/handlers/api-keys/personal/list-organization.ts",
+          reason: "Owns the session-authorized personal key operation.",
+        },
+        {
+          path: "apps/api/src/handlers/api-keys/personal/revoke-organization.ts",
+          reason: "Owns the session-authorized personal key operation.",
+        },
+        {
+          path: "apps/api/src/handlers/api-keys/personal/policy.ts",
+          reason: "Owns the session-authorized personal key operation.",
+        },
+        {
+          path: "apps/api/src/lib/machine-api-keys/personal-policy-reader.ts",
+          reason: "Exposes only the read-only organization policy operation.",
+        },
+      ],
+    },
+  },
+  {
+    id: "operator-registration-directory",
+    capability: "Serving audited operator registration pages",
+    owner: ["apps/api/src/db/root.ts"],
+    summary:
+      "Reads bounded registration pages through the owner connection and records each read transactionally; callers receive only the declared directory fields, never a database handle.",
+    enforcement: {
+      kind: "import",
+      specifiers: ["@/api/db/root"],
+      names: ["readOperatorRegistrationPage"],
+      allowed: [
+        {
+          path: "apps/api/src/handlers/operator/registrations.ts",
+          reason:
+            "Authorizes the deployment credential before reading the directory.",
+        },
+      ],
+    },
+  },
+
+  {
+    id: "personal-api-key-policy-reader",
+    capability:
+      "Reading personal API key policy during credential verification",
+    owner: ["apps/api/src/lib/machine-api-keys/personal-policy-reader.ts"],
+    summary:
+      "The MCP authentication boundary can read policy without importing lifecycle mutations.",
+    enforcement: {
+      kind: "import",
+      specifiers: ["@/api/lib/machine-api-keys/personal-policy-reader"],
+      allowed: [
+        {
+          path: "apps/api/src/mcp/api-key-auth.ts",
+          reason: "Checks policy before accepting a personal credential.",
+        },
+      ],
+    },
+  },
+
   {
     id: "public-sanctions-reader-binding",
     capability:
@@ -439,7 +550,11 @@ export const STATUS_TRANSITION_OWNERSHIP = {
   owner: ["apps/api/src/lib/db/transitions.ts"],
   summary:
     "The transition owner checks the expected state and optional fence in the update predicate, and returns Transitioned or Stale. A required recorder audits successful updates in the caller's transaction; stale updates record nothing and recorder failure rolls the update back. Direct lifecycle writes, conflict updates and visible SQL lifecycle assignments are lint errors outside the measured backlog; per-file shrink-only guards forbid adding them. Opaque table handles and payloads count conservatively. Unmanaged declarations shrink independently per table. SQL built entirely by external functions, external payload mutation and custom SQL column names not ending in status/state/phase remain outside static inspection.",
-  enforcement: { kind: "status-set", columns: STATUS_COLUMNS, allowed: [] },
+  enforcement: {
+    kind: "status-set",
+    columns: STATUS_TRANSITION_COLUMNS,
+    allowed: [],
+  },
 } as const satisfies OwnershipEntry;
 // Case-law modules that still call the raw publisher fetch. Each migrates to
 // `readPublisher` and leaves this list; nothing is added to it.
@@ -463,6 +578,54 @@ const UNMIGRATED_PUBLISHER_READERS = [
 
 const OWNERSHIP_DECLARATIONS = [
   STATUS_TRANSITION_OWNERSHIP,
+  {
+    id: "desktop-presence-observations",
+    capability: "Reading and retaining desktop presence observations",
+    owner: ["apps/api/src/handlers/desktop-presence/service.ts"],
+    summary:
+      "The service serializes reports against live membership and retains ten newest installations per organization and user. Offboarding clears observations in its membership transaction.",
+    enforcement: {
+      kind: "import",
+      specifiers: ["@/api/db/schema", "@/api/db/schema/desktop-presence"],
+      names: ["desktopPresence"],
+      allowed: [
+        {
+          path: "apps/api/src/lib/member-assignment-offboarding.ts",
+          reason: "Clears observations during organization membership removal.",
+        },
+      ],
+    },
+  },
+  {
+    id: "citation-graph-transaction",
+    capability: "Acquiring the citation graph transaction lock",
+    owner: ["apps/api/src/handlers/case-law/citation-graph-transaction.ts"],
+    summary:
+      "The graph owner acquires its advisory lock before domain row locks and passes a branded transaction to graph writers. The conditional owner declines busy walks before reading their cursor.",
+    enforcement: {
+      kind: "literal-pattern",
+      pattern: "citation_resolution_walk",
+      allowed: [
+        {
+          path: "scripts/ownership.ts",
+          reason: "Declares the confined lock key.",
+        },
+        {
+          path: "apps/api/src/handlers/case-law/citation-graph-transaction.test.ts",
+          reason: "Checks graph admission and failed acquisition.",
+        },
+        {
+          path: "apps/api/src/handlers/case-law/ingestion/citation-graph-lock-order.postgres.test.ts",
+          reason: "Exercises graph lock ordering and the rejecting mutation.",
+        },
+        {
+          path: ".oxlint-plugins/__tests__/confine-owner.test.ts",
+          reason:
+            "Exercises rejected literal and SQL fixtures through the lint rule.",
+        },
+      ],
+    },
+  },
   {
     id: "task-assignment-membership",
     capability: "Writing task assignments for current matter members",
@@ -1188,6 +1351,8 @@ const OWNERSHIP_DECLARATIONS = [
     summary:
       "`readBounded` applies a cap-plus-one SQL limit and returns either the " +
       "complete rows or an explicit overflow result without a partial set. " +
+      "`readCursorPage` uses the same sentinel and the existing `Page` owner " +
+      "to preserve worker continuation without claiming a partial set is complete. " +
       "This owner handles expected export ceilings; `boundedAll` instead " +
       "panics when a write-path cardinality invariant is violated. " +
       "`scripts/transfer-read-guard.ts` enumerates fixed-limit reads and " +
@@ -1593,6 +1758,11 @@ const OWNERSHIP_DECLARATIONS = [
       specifiers: ["@/api/lib/permission-authorization"],
       names: ["sessionMemberRole", "authorizedMemberRole"],
       allowed: [
+        {
+          path: "apps/api/src/lib/machine-api-keys/personal-lifecycle.ts",
+          reason:
+            "Builds the key owner authority from a locked live membership before minting.",
+        },
         {
           path: "apps/api/src/lib/auth.ts",
           reason: "Builds the authenticated session context.",
@@ -2369,6 +2539,20 @@ const OWNERSHIP_DECLARATIONS = [
     enforcement: { kind: "none" },
   },
   {
+    id: "bullmq-worker",
+    capability:
+      "Constructing BullMQ workers with a shared failure record policy",
+    owner: ["apps/api/src/lib/bullmq-queue.ts"],
+    summary:
+      "BullMqWorker owns persisted job failure records while retaining original errors in worker events. All queue workers use this constructor.",
+    enforcement: {
+      kind: "import",
+      specifiers: ["bullmq"],
+      names: ["Worker"],
+      allowed: [],
+    },
+  },
+  {
     id: "deterministic-job-requeue",
     capability:
       "Re-enqueueing a row's work under its deterministic BullMQ job id",
@@ -2601,6 +2785,9 @@ const enforcementCell = (enforcement: OwnershipEnforcement): string => {
     }
     case "status-set": {
       return "lifecycle updates, conflict sets and visible SQL assignments; lint errors plus measured per-file backlog and shrink-only ratchet";
+    }
+    case "literal-pattern": {
+      return `literal pattern \`${enforcement.pattern}\``;
     }
     default: {
       enforcement satisfies never;

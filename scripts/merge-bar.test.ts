@@ -1663,6 +1663,61 @@ describe("green result freshness", () => {
       throw new Error("unexpected run jobs read");
     },
     ratchet: baseDefinitions({}),
+    mergeGroupRetests: true,
+  });
+
+  test("a direct merge still refuses a green result once main has moved", () => {
+    const direct = (comparison: unknown, pullFiles = ["scripts/shared.ts"]) =>
+      checkGreenResultFreshness({
+        ...readers(comparison),
+        readPullFiles: () => pullFiles,
+        mergeGroupRetests: false,
+      });
+    for (const [comparison, pullFiles, message] of [
+      [
+        { status: "ahead", ahead_by: 21, files: [] },
+        undefined,
+        "main advanced 21 commits since the green run (limit 20)",
+      ],
+      [
+        {
+          status: "ahead",
+          ahead_by: 1,
+          files: Array.from({ length: 300 }, () => ({
+            filename: "unrelated.ts",
+          })),
+        },
+        undefined,
+        "cannot establish complete changed-file coverage for main",
+      ],
+      [
+        {
+          status: "ahead",
+          ahead_by: 1,
+          files: [{ filename: "scripts/shared.ts" }],
+        },
+        undefined,
+        "main changed files also touched by this PR: scripts/shared.ts",
+      ],
+      [
+        {
+          status: "ahead",
+          ahead_by: 1,
+          files: [{ filename: "scripts/ownership.ts" }],
+        },
+        ["scripts/ratchet.ts"],
+        "main changed the ratchet since the green run (scripts/ownership.ts) and this PR changes it too",
+      ],
+    ] as const) {
+      const result = direct(
+        comparison,
+        pullFiles === undefined ? undefined : [...pullFiles],
+      );
+      expect(result.isErr(), message).toBe(true);
+      if (result.isErr()) {
+        expect(result.error.message).toContain(message);
+      }
+    }
   });
 
   test("unchanged base and up to twenty unrelated commits retain green results", () => {
@@ -1682,7 +1737,9 @@ describe("green result freshness", () => {
     }
   });
 
-  test("overlapping edits and rename sources require refreshed CI", () => {
+  // The merge group re-runs full CI on the real merge commit, so main moving
+  // under a green PR is never by itself a reason to run its CI again.
+  test("overlapping edits and rename sources keep a green result queueable", () => {
     for (const file of [
       { filename: "scripts/shared.ts" },
       {
@@ -1693,11 +1750,7 @@ describe("green result freshness", () => {
       const result = checkGreenResultFreshness(
         readers({ status: "ahead", ahead_by: 1, files: [file] }),
       );
-      expect(result.isErr()).toBe(true);
-      if (result.isErr()) {
-        expect(result.error.message).toContain("scripts/shared.ts");
-        expect(result.error.message).toContain("merge main and let CI re-run");
-      }
+      expect(result.isOk()).toBe(true);
     }
   });
 
@@ -1826,27 +1879,18 @@ describe("green result freshness", () => {
         readFileSync(path.join(REPO_ROOT, ".github/workflows/ci.yml"), "utf-8"),
       ) ?? [];
     const byId = new Map(jobs.map((job) => [job.id, job]));
-    expect(byId.get("e2e-production-shard")?.scope).toEqual({
-      type: "selector",
-      variable: "e2e_production_required",
-    });
-    expect(byId.get("parser-version-guard")?.scope).toEqual({
-      type: "always",
-    });
-    expect(byId.get("marketing-screenshots")?.scope).toEqual({
-      type: "not-file-derived",
-      output: "marketing_screenshots_required",
-    });
-    const shardName = byId.get("e2e-production-shard")?.runName;
-    expect(shardName?.test("e2e-production-shard (network-baseline)")).toBe(
-      true,
-    );
-    expect(shardName?.test("e2e-production-shard-extra")).toBe(false);
-    expect(
-      byId
-        .get("api-image-smoke")
-        ?.runName.test("API release image (linux/arm64)"),
-    ).toBe(true);
+    expect(byId.get("ci-checks-generated")?.scope).toEqual({ type: "always" });
+    expect(byId.get("parser-version-guard")?.scope).toEqual({ type: "always" });
+    for (const job of [
+      "e2e-production-shard",
+      "marketing-screenshots",
+      "api-image-smoke",
+    ]) {
+      expect(byId.has(job), job).toBe(false);
+    }
+    const shardName = byId.get("ci-tests")?.runName;
+    expect(shardName?.test("ci-tests (api-1)")).toBe(true);
+    expect(shardName?.test("ci-tests-extra")).toBe(false);
 
     // Every variable the bar asks for is one the selector run actually sets.
     const outputs = [
@@ -2007,7 +2051,8 @@ jobs:
     }
   });
 
-  test("a PR that edits the ratchet itself refuses without a recheck", () => {
+  test("a PR that edits the ratchet itself queues without a recheck", () => {
+    const rechecks: unknown[] = [];
     const result = checkGreenResultFreshness({
       ...readers({
         status: "ahead",
@@ -2015,16 +2060,20 @@ jobs:
         files: [{ filename: "scripts/ownership.ts" }],
       }),
       readPullFiles: () => ["scripts/ratchet.ts"],
+      ratchet: baseDefinitions({
+        recheck: (input) => {
+          rechecks.push(input);
+          return Result.ok();
+        },
+      }),
     });
-    expect(result.isErr()).toBe(true);
-    if (result.isErr()) {
-      expect(result.error.message).toContain(
-        "main changed the ratchet since the green run (scripts/ownership.ts) and this PR changes it too",
-      );
-    }
+    // The base's checker cannot judge an edited checker; the merge group runs
+    // the merged one.
+    expect(result.isOk()).toBe(true);
+    expect(rechecks).toEqual([]);
   });
 
-  test("a passing ratchet recheck still applies the overlap gate", () => {
+  test("a passing ratchet recheck with overlapping edits stays queueable", () => {
     const result = checkGreenResultFreshness({
       ...readers({
         status: "ahead",
@@ -2036,12 +2085,7 @@ jobs:
       }),
       ratchet: baseDefinitions({ recheck: () => Result.ok() }),
     });
-    expect(result.isErr()).toBe(true);
-    if (result.isErr()) {
-      expect(result.error.message).toContain(
-        "main changed files also touched by this PR: scripts/shared.ts",
-      );
-    }
+    expect(result.isOk()).toBe(true);
   });
 
   test("an unreadable ratchet definition list refuses green results", () => {
@@ -2135,21 +2179,40 @@ jobs:
     ).toEqual(ratchetDefinitionPaths.toSorted());
   });
 
-  test("more than twenty commits, rewritten history and truncated files refuse stale green", () => {
+  test("rewritten history refuses a stale green result", () => {
+    for (const comparison of [{ status: "diverged" }, { status: "behind" }]) {
+      expect(checkGreenResultFreshness(readers(comparison)).isErr()).toBe(true);
+    }
+  });
+
+  test("a long or unreadable drift on main keeps a green result queueable", () => {
+    const rechecks: unknown[] = [];
     for (const comparison of [
       { status: "ahead", ahead_by: 21, files: [] },
-      { status: "diverged" },
-      { status: "behind" },
       {
         status: "ahead",
         ahead_by: 1,
         files: Array.from({ length: 300 }, () => ({
-          filename: "unrelated.ts",
+          filename: "scripts/ownership.ts",
         })),
       },
     ]) {
-      expect(checkGreenResultFreshness(readers(comparison)).isErr()).toBe(true);
+      const result = checkGreenResultFreshness({
+        ...readers(comparison),
+        ratchet: baseDefinitions({
+          recheck: (input) => {
+            rechecks.push(input);
+            return Result.err(
+              new RatchetRecheckError({ message: "would refuse" }),
+            );
+          },
+        }),
+      });
+      // The comparison is skipped rather than guessed from; the merge group
+      // re-runs the ratchet on the real merge commit.
+      expect(result.isOk()).toBe(true);
     }
+    expect(rechecks).toEqual([]);
   });
 
   test("missing or mismatched workflow snapshots cannot establish freshness", () => {

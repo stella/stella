@@ -30,6 +30,7 @@ import {
   AddQuestionColumn,
   questionColumnAddAction,
 } from "@/features/case-law/research/add-question-column";
+import { QuestionColumnSelectionBar } from "@/features/case-law/research/question-columns-controller";
 import type { QuestionColumnSurface } from "@/features/case-law/research/question-columns.logic";
 
 export type { Decision } from "@/features/case-law/components/decision-cells";
@@ -154,6 +155,7 @@ export const DecisionTable = ({
 
   return (
     <DecisionRenderScope value={renderScope}>
+      <QuestionColumnSelectionBar surface={questions} />
       <PublicLawTable
         columns={columns}
         emptyState={emptyState}

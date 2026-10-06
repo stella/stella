@@ -193,6 +193,8 @@ const RETAINED_MEMBER_COLUMNS = {
     "Assignment suggestions; accepting a suggestion validates current membership.",
   "sanctions_contact_matches.reviewed_by":
     "Screening review attribution; current membership gates review actions.",
+  "sanctions_screening_events.reviewer_id":
+    "Screening decision history; attribution grants no membership or review authority.",
   "audit_logs.user_id": "Audit performer history.",
   "audit_logs.trigger_user_id": "Audit trigger history.",
   "audit_logs.approved_by_user_id": "Audit approval history.",
@@ -317,6 +319,8 @@ const RETAINED_MEMBER_COLUMNS = {
     "Retained attribution or request history; this column grants no matter membership.",
   "legal_list_verification_runs.requested_by":
     "Retained attribution or request history; this column grants no matter membership.",
+  "legal_list_verification_read_receipts.user_id":
+    "Read-audit dedupe receipt; retained with the run, cascades on user deletion, and grants no membership.",
   "legal_lists.created_by":
     "Retained attribution or request history; this column grants no matter membership.",
   "legal_reader_annotations.user_id":
@@ -443,6 +447,8 @@ const RETAINED_MEMBER_COLUMNS = {
  * the person stays a member of the organization.
  */
 const MATTER_REMOVAL_RETAINED_COLUMNS = {
+  "desktop_presence.user_id":
+    "Organization-scoped presence; the person stays an organization member.",
   "member.user_id": "Organization membership outlives a matter removal.",
   "contacts.originating_attorney_id":
     "Organization-level attorney; the person stays an organization member.",

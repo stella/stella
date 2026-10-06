@@ -1,3 +1,4 @@
+import { panic } from "better-result";
 /**
  * Repair `case_law_decisions.decision_date` values no publisher could have
  * meant.
@@ -66,8 +67,7 @@
  * an operator who reads the report first.
  */
 
-import { panic } from "better-result";
-
+import { runCitationGraphTransaction } from "@/api/handlers/case-law/citation-graph-transaction";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
   enterCaseLawMaintenanceLane,
@@ -180,28 +180,31 @@ const printSurvey = async (): Promise<number> => {
 };
 
 const repairBatch = async (size: number): Promise<DecisionDateRepairBatch> =>
-  await rootDb.transaction(async (tx) => {
-    const batch = await repairDecisionDateBatch(tx, size, {
-      // The source lock is what keeps a crawl refreshing the same decision
-      // from interleaving with the repair and its reconcile.
-      reconcileProjection: async (entityId: SafeId<"caseLawDecision">) => {
-        const subject = { family: "case_law", entityId } as const;
-        const lock = await lockActiveCorpusProjectionSourceTx(tx, subject);
-        if (lock !== null) {
-          await synchronizeLockedCorpusProjectionDesiredStateTx(tx, {
-            lock,
-            subject,
-          });
-        }
-      },
-    });
-    for (const row of batch.unannounced) {
-      console.error(
-        `${row.id}: country ${row.country} declares no resolution policy; key not re-announced`,
-      );
-    }
-    return batch;
-  });
+  await runCitationGraphTransaction(
+    rootDb.transaction.bind(rootDb),
+    async (tx) => {
+      const batch = await repairDecisionDateBatch(tx, size, {
+        // The source lock is what keeps a crawl refreshing the same decision
+        // from interleaving with the repair and its reconcile.
+        reconcileProjection: async (entityId: SafeId<"caseLawDecision">) => {
+          const subject = { family: "case_law", entityId } as const;
+          const lock = await lockActiveCorpusProjectionSourceTx(tx, subject);
+          if (lock !== null) {
+            await synchronizeLockedCorpusProjectionDesiredStateTx(tx, {
+              lock,
+              subject,
+            });
+          }
+        },
+      });
+      for (const row of batch.unannounced) {
+        console.error(
+          `${row.id}: country ${row.country} declares no resolution policy; key not re-announced`,
+        );
+      }
+      return batch;
+    },
+  );
 
 /**
  * Repair batches until the population is empty or `--limit` is reached.

@@ -22,8 +22,8 @@ import type {
   ChatAnonRestoration,
   RegisteredChatUIToolCallPart,
 } from "@/components/chat/chat-ui-tools";
-import { EntityLink } from "@/components/chat/entity-link";
 import { rehypeAnonSpans } from "@/components/chat/rehype-anon-spans";
+import { StreamdownMentionLink } from "@/components/chat/streamdown-mention-link";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { detached } from "@/lib/detached";
 
@@ -80,7 +80,7 @@ const EMPTY_RESTORATION_PAIRS: readonly ChatAnonRestoration[] = Object.freeze(
 const createAnalysisAnchor =
   (workspaceId: string | undefined) =>
   (props: AnchorHTMLAttributes<HTMLAnchorElement>) => (
-    <EntityLink {...props} workspaceId={workspaceId} />
+    <StreamdownMentionLink {...props} interactive workspaceId={workspaceId} />
   );
 
 const renderAnalysisAnonymizedSpan = (

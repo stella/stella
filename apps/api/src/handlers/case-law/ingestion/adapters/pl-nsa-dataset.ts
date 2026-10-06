@@ -1,4 +1,4 @@
-// parser-output-unchanged: stage labels route identical byte ranges through telemetry only.
+// parser-output-unchanged: Transport failures retain their typed cause; successfully read dataset records parse unchanged.
 /**
  * The Hugging Face dataset `JuDDGES/pl-nsa`, pinned to one revision, and the
  * reader that walks it.
@@ -763,10 +763,12 @@ const refusedAddress = (): AdapterFetchError =>
 const requestFailure =
   (path: string) =>
   (cause: unknown): AdapterFetchError =>
-    plNsaDatasetError(
-      PL_NSA_FAILURE.TRANSIENT,
-      `${path} could not be read: ${errorTag(cause)}`,
-    );
+    new AdapterFetchError({
+      message: `${failurePrefix(PL_NSA_FAILURE.TRANSIENT)}${path} could not be read: ${errorTag(cause)}`,
+      adapterKey: ADAPTER_KEYS.PL_NSA,
+      cursor: null,
+      cause,
+    });
 
 type RangeRequest = {
   fetchStage: DocumentFetchStage;

@@ -30,7 +30,10 @@
 // to `navigator.clipboard.writeText`) is untouched. A `member-call` row matches
 // a call of the named method on any receiver, including the optional-chained
 // form, in files under one of its `within` prefixes; the method name alone is
-// too common to confine repository-wide. A value reached through an alias, a
+// too common to confine repository-wide. A `literal-pattern` row matches its
+// regular expression against cooked string and template text; constructing
+// the value across separate expressions is outside this syntax boundary.
+// A value reached through an alias, a
 // re-export of a local binding, or a computed member access is out of scope.
 
 import { eslintCompatPlugin } from "@oxlint/plugins";
@@ -79,6 +82,13 @@ type MemberCallEntry = {
   within: readonly string[];
 };
 
+type LiteralPatternEntry = {
+  id: string;
+  owner: string;
+  paths: readonly string[];
+  pattern: RegExp;
+};
+
 const stringsFrom = (value: unknown): readonly string[] =>
   Array.isArray(value)
     ? value.filter((item): item is string => typeof item === "string")
@@ -103,6 +113,7 @@ type ConfiguredEntries = {
   importEntries: ImportEntry[];
   globalMemberEntries: GlobalMemberEntry[];
   memberCallEntries: MemberCallEntry[];
+  literalPatternEntries: LiteralPatternEntry[];
 };
 
 const configuredEntries = (context: {
@@ -111,7 +122,13 @@ const configuredEntries = (context: {
   const importEntries: ImportEntry[] = [];
   const globalMemberEntries: GlobalMemberEntry[] = [];
   const memberCallEntries: MemberCallEntry[] = [];
-  const configured = { importEntries, globalMemberEntries, memberCallEntries };
+  const literalPatternEntries: LiteralPatternEntry[] = [];
+  const configured = {
+    importEntries,
+    globalMemberEntries,
+    memberCallEntries,
+    literalPatternEntries,
+  };
   const options = context.options?.[0];
   if (typeof options !== "object" || options === null) {
     return configured;
@@ -137,6 +154,20 @@ const configuredEntries = (context: {
     const owner = owners.join(", ");
     const paths = allowedPathsFrom(entry, enforcement);
     const kind = Reflect.get(enforcement, "kind");
+
+    if (kind === "literal-pattern") {
+      const pattern = Reflect.get(enforcement, "pattern");
+      if (typeof pattern !== "string") {
+        continue;
+      }
+      literalPatternEntries.push({
+        id,
+        owner,
+        paths,
+        pattern: new RegExp(pattern),
+      });
+      continue;
+    }
 
     if (kind === "import") {
       const names = Reflect.get(enforcement, "names");
@@ -354,6 +385,7 @@ export default eslintCompatPlugin({
         let activeGlobalMembers: readonly GlobalMemberEntry[] = [];
         let importerPath = "";
         let activeMemberCalls: readonly MemberCallEntry[] = [];
+        let activeLiteralPatterns: readonly LiteralPatternEntry[] = [];
 
         // `takesOwnedName` is `null` when the declaration reaches every
         // export (a star re-export, or a dynamic import held whole), which
@@ -386,13 +418,35 @@ export default eslintCompatPlugin({
           }
         };
 
+        const reportOwnedLiteral = (
+          node: NonNullable<Parameters<typeof context.report>[0]["node"]>,
+          text: unknown,
+        ) => {
+          if (typeof text !== "string") {
+            return;
+          }
+          for (const entry of activeLiteralPatterns) {
+            if (entry.pattern.test(text)) {
+              context.report({
+                node,
+                messageId: "unownedUse",
+                data: { id: entry.id, owner: entry.owner },
+              });
+            }
+          }
+        };
+
         return {
           before() {
             const filename = filenameForContext(context);
             importerPath = repoRelativeFilename(context);
             configured ??= configuredEntries(context);
-            const { importEntries, globalMemberEntries, memberCallEntries } =
-              configured;
+            const {
+              importEntries,
+              globalMemberEntries,
+              memberCallEntries,
+              literalPatternEntries,
+            } = configured;
             const applies = (entry: { paths: readonly string[] }) =>
               !entry.paths.some((allowedPath) =>
                 coversFile(allowedPath, filename),
@@ -400,6 +454,7 @@ export default eslintCompatPlugin({
 
             activeImports = importEntries.filter(applies);
             activeGlobalMembers = globalMemberEntries.filter(applies);
+            activeLiteralPatterns = literalPatternEntries.filter(applies);
             activeMemberCalls = memberCallEntries.filter(
               (entry) =>
                 applies(entry) &&
@@ -408,13 +463,20 @@ export default eslintCompatPlugin({
             return (
               activeImports.length > 0 ||
               activeGlobalMembers.length > 0 ||
-              activeMemberCalls.length > 0
+              activeMemberCalls.length > 0 ||
+              activeLiteralPatterns.length > 0
             );
           },
           ImportDeclaration(node) {
             reportOwnedBinding(node, node.source.value, (names) =>
               bindsOwnedName(node.specifiers, names),
             );
+          },
+          Literal(node) {
+            reportOwnedLiteral(node, node.value);
+          },
+          TemplateElement(node) {
+            reportOwnedLiteral(node, node.value.cooked ?? node.value.raw);
           },
           // `export { x } from "..."`; a re-export of a local binding has no
           // source and is out of scope.

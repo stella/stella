@@ -20,6 +20,10 @@
       {
         "reason": "Organization time-zone setting",
         "tokens": 33953
+      },
+      {
+        "reason": "Citation tools state the Stella reader link (url) and the publisher source (source_url) once, merged with main's prompt changes",
+        "tokens": 34134
       }
     ],
     "anthropic/extended": [
@@ -42,6 +46,10 @@
       {
         "reason": "Organization time-zone setting",
         "tokens": 34442
+      },
+      {
+        "reason": "Citation tools state the Stella reader link (url) and the publisher source (source_url) once, merged with main's prompt changes",
+        "tokens": 34624
       }
     ],
     "bedrock/default": [
@@ -64,6 +72,10 @@
       {
         "reason": "Organization time-zone setting",
         "tokens": 34186
+      },
+      {
+        "reason": "Citation tools state the Stella reader link (url) and the publisher source (source_url) once, merged with main's prompt changes",
+        "tokens": 34367
       }
     ],
     "bedrock/extended": [
@@ -86,6 +98,10 @@
       {
         "reason": "Organization time-zone setting",
         "tokens": 34674
+      },
+      {
+        "reason": "Citation tools state the Stella reader link (url) and the publisher source (source_url) once, merged with main's prompt changes",
+        "tokens": 34855
       }
     ],
     "google/default": [
@@ -108,6 +124,10 @@
       {
         "reason": "Organization time-zone setting",
         "tokens": 33097
+      },
+      {
+        "reason": "Citation tools state the Stella reader link (url) and the publisher source (source_url) once, merged with main's prompt changes",
+        "tokens": 33264
       }
     ],
     "google/extended": [
@@ -152,6 +172,10 @@
       {
         "reason": "Organization time-zone setting",
         "tokens": 35563
+      },
+      {
+        "reason": "Citation tools state the Stella reader link (url) and the publisher source (source_url) once, merged with main's prompt changes",
+        "tokens": 35754
       }
     ],
     "mistral/extended": [
@@ -174,6 +198,10 @@
       {
         "reason": "Organization time-zone setting",
         "tokens": 36089
+      },
+      {
+        "reason": "Citation tools state the Stella reader link (url) and the publisher source (source_url) once, merged with main's prompt changes",
+        "tokens": 36280
       }
     ],
     "openai/default": [
@@ -196,6 +224,10 @@
       {
         "reason": "Organization time-zone setting",
         "tokens": 35166
+      },
+      {
+        "reason": "Citation tools state the Stella reader link (url) and the publisher source (source_url) once, merged with main's prompt changes",
+        "tokens": 35357
       }
     ],
     "openai/extended": [
@@ -218,6 +250,10 @@
       {
         "reason": "Organization time-zone setting",
         "tokens": 35681
+      },
+      {
+        "reason": "Citation tools state the Stella reader link (url) and the publisher source (source_url) once, merged with main's prompt changes",
+        "tokens": 35871
       }
     ],
     "openrouter-anthropic/default": [
@@ -240,6 +276,10 @@
       {
         "reason": "Organization time-zone setting",
         "tokens": 35035
+      },
+      {
+        "reason": "Citation tools state the Stella reader link (url) and the publisher source (source_url) once, merged with main's prompt changes",
+        "tokens": 35220
       }
     ],
     "openrouter-anthropic/extended": [
@@ -262,6 +302,10 @@
       {
         "reason": "Organization time-zone setting",
         "tokens": 35534
+      },
+      {
+        "reason": "Citation tools state the Stella reader link (url) and the publisher source (source_url) once, merged with main's prompt changes",
+        "tokens": 35719
       }
     ],
     "openrouter/default": [
@@ -284,6 +328,10 @@
       {
         "reason": "Organization time-zone setting",
         "tokens": 35035
+      },
+      {
+        "reason": "Citation tools state the Stella reader link (url) and the publisher source (source_url) once, merged with main's prompt changes",
+        "tokens": 35220
       }
     ],
     "openrouter/extended": [
@@ -306,6 +354,10 @@
       {
         "reason": "Organization time-zone setting",
         "tokens": 35534
+      },
+      {
+        "reason": "Citation tools state the Stella reader link (url) and the publisher source (source_url) once, merged with main's prompt changes",
+        "tokens": 35719
       }
     ]
   },

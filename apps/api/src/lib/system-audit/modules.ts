@@ -14,6 +14,10 @@
 import type { SystemRunActor } from "./actors";
 
 export const SYSTEM_AUDIT_MODULES = {
+  "apps/api/src/lib/lists/sanctions/monitoring-fanout.ts":
+    "system:sanctions-monitoring-fanout",
+  "apps/api/src/lib/db/operator-registrations/read.ts":
+    "system:operator-registrations",
   "apps/api/src/lib/lists/sanctions/refresh.ts": "system:sanctions-refresh",
   "apps/api/src/lib/case-law/sitemap-shard-refresh.ts":
     "system:case-law-sitemap-refresh",

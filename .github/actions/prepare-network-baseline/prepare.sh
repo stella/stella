@@ -22,9 +22,7 @@ base_tree="$RUNNER_TEMP/base-route-tree.gen.ts"
 head_tree="$RUNNER_TEMP/head-route-tree.gen.ts"
 repository=$(git rev-parse --show-toplevel)
 head=$(git rev-parse HEAD)
-bun apps/web/scripts/network-baseline-route-tree.ts "$repository" "$base" "$base_tree"
 bun apps/web/scripts/network-baseline-route-tree.ts "$repository" "$head" "$head_tree"
-git diff --name-only --no-renames "$base" HEAD > apps/web/e2e/.network-baseline-changed
 recorded=false
 recorded_source=''
 load_recording() {
@@ -72,6 +70,37 @@ fi
 # Bootstrap/retention fallback is pinned to the same merge base, never PR JSON.
 if [[ "$recorded" == false ]]; then
   echo "Network baseline: committed bootstrap at merge base $base (recording unavailable)" >> "$GITHUB_STEP_SUMMARY"
+fi
+since=$base
+if [[ "$purpose" == comparison && "$recorded" == true && "$recorded_source" != "$base" ]]; then
+  # Routes changed after the inherited recording have no recorded peak yet.
+  since=$recorded_source
+  if ! git merge-base --is-ancestor "$since" "$base"; then
+    echo "Network baseline: recording source $since is not an ancestor of $base" >&2
+    exit 1
+  fi
+  # Main records daily and after each route change merges, so an older source
+  # means recording has stalled; exempting everything since then would not.
+  max_recording_lag_seconds=$((36 * 60 * 60))
+  lag=$(($(git show -s --format=%ct "$base") - $(git show -s --format=%ct "$since")))
+  if ((lag > max_recording_lag_seconds)); then
+    echo "Network baseline: recording stale since $since" >> "$GITHUB_STEP_SUMMARY"
+    echo "Network baseline: recording stale since $since (${lag}s behind $base); record main before comparing" >&2
+    exit 1
+  fi
+fi
+bun apps/web/scripts/network-baseline-route-tree.ts "$repository" "$since" "$base_tree"
+if [[ "$since" == "$base" ]]; then
+  git diff --name-only --no-renames "$base" HEAD > apps/web/e2e/.network-baseline-changed
+else
+  # Main's own baseline edits before the merge base are not PR edits.
+  {
+    git diff --name-only --no-renames "$since" "$base" -- . ':(exclude)apps/web/e2e/network-baseline.json'
+    git diff --name-only --no-renames "$base" HEAD
+  } | sort -u > apps/web/e2e/.network-baseline-changed
+fi
+if [[ "$purpose" == comparison ]]; then
+  echo "Network baseline: comparison exempts routes changed since $since" >> "$GITHUB_STEP_SUMMARY"
 fi
 if [[ "$purpose" == recording ]]; then
   # Each reviewed main commit can replace a route's declaration. Replay only

@@ -12,6 +12,7 @@ import {
   PublicLawUnavailableError,
   unwrapPublicLawEden,
 } from "@/lib/public-law-api";
+import { createAppQueryClient } from "@/lib/react-query";
 
 const thrownBy = (status: number, value: unknown): unknown => {
   try {
@@ -104,6 +105,37 @@ describe("isSearchUnavailableError", () => {
         thrownBy(503, { message: "Search is temporarily unavailable" }),
       ),
     ).toBe(true);
+  });
+
+  test("a corpus at its concurrency limit is a passing outage, not the route's failure", () => {
+    const busy = thrownBy(429, { message: "Too many requests" });
+    expect(isSearchUnavailableError(busy)).toBe(true);
+    expect(shouldRetryAPIRequest(0, busy)).toBe(true);
+  });
+
+  test("a final answer is never retried", () => {
+    expect(
+      shouldRetryAPIRequest(0, thrownBy(422, { message: "Invalid" })),
+    ).toBe(false);
+  });
+
+  test("a route load that meets a busy corpus once recovers instead of failing", async () => {
+    const queryClient = createAppQueryClient();
+    let calls = 0;
+    const result = await queryClient.query({
+      // A loader's fetch: no retry of its own beyond the app default.
+      retryDelay: 0,
+      queryKey: ["public-law-busy-once"],
+      queryFn: async () => {
+        calls += 1;
+        if (calls === 1) {
+          throw thrownBy(429, { message: "Too many requests" });
+        }
+        return "answered";
+      },
+    });
+    expect(result).toBe("answered");
+    expect(calls).toBe(2);
   });
 
   test("classifies by status, not by the message the API happens to send", () => {

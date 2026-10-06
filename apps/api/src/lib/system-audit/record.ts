@@ -1,8 +1,8 @@
 import { panic } from "better-result";
+import type { PgAsyncDatabase, PgQueryResultHKT } from "drizzle-orm/pg-core";
 
 import { systemAuditRuns } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
-import type { SchedulerDb } from "@/api/lib/scheduler/types";
 
 import { SYSTEM_RUN_ACTOR_COUNTS } from "./actors";
 import type { SystemAuditCounts, SystemRunActor } from "./actors";
@@ -52,7 +52,7 @@ export const systemAuditRow = <A extends SystemRunActor>(
  * `SYSTEM_AUDIT_MODULES` attributes to the actor.
  */
 export const recordSystemAudit = async <A extends SystemRunActor>(
-  db: Pick<SchedulerDb, "insert">,
+  db: Pick<PgAsyncDatabase<PgQueryResultHKT>, "insert">,
   actor: A,
   event: SystemAuditEvent<A>,
 ): Promise<boolean> => {

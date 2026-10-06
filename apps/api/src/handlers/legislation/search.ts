@@ -506,16 +506,27 @@ export const rehydrateLegislationCandidates = async ({
     return { rows, named, cursorWork, representatives };
   });
 
-  const matchedIds = new Set(read.rows.map((row) => String(row.id)));
   const byId = new Map<string, LegislationSearchRow>(
     read.rows.map((row) => [String(row.id), row]),
   );
   const authorityById = new Map(
     read.rows.map((row) => [String(row.id), row.citationAuthority]),
   );
-  const workOf = new Map(
-    read.rows.map((row) => [String(row.id), legislationWorkRefKey(row)]),
-  );
+  const rankedCandidates =
+    ranking === "authority"
+      ? blendStableCitationAuthority({ candidates, authorityById })
+      : candidates.map(({ id, score }) => ({
+          id,
+          score,
+          lexicalScore: score,
+          citationAuthority: 0,
+        }));
+  const ranked = rankedCandidates.flatMap((hit) => {
+    const row = byId.get(hit.id);
+    return row === undefined
+      ? []
+      : [{ ...hit, work: legislationWorkRefKey(row) }];
+  });
   const representatives = new Map<string, LegislationWorkRepresentative>();
   for (const { isCurrent, ...row } of read.representatives) {
     byId.set(String(row.id), row);
@@ -526,23 +537,7 @@ export const rehydrateLegislationCandidates = async ({
   }
 
   const collapsed = collapseLegislationHitsByWork({
-    ranked:
-      ranking === "authority"
-        ? blendStableCitationAuthority({
-            candidates: candidates.filter((candidate) =>
-              matchedIds.has(candidate.id),
-            ),
-            authorityById,
-          })
-        : candidates
-            .filter((candidate) => matchedIds.has(candidate.id))
-            .map(({ id, score }) => ({
-              id,
-              score,
-              lexicalScore: score,
-              citationAuthority: 0,
-            })),
-    workOf,
+    ranked,
     representatives,
     // Named Works that apply today are placed first; a name only repealed or
     // not-yet-effective acts carry still places those.

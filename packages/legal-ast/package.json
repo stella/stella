@@ -47,9 +47,17 @@
       "types": "./src/czech-document-roles.ts",
       "import": "./src/czech-document-roles.ts"
     },
+    "./decision-caption": {
+      "types": "./src/decision-caption.ts",
+      "import": "./src/decision-caption.ts"
+    },
     "./decision-identifier": {
       "types": "./src/decision-identifier.ts",
       "import": "./src/decision-identifier.ts"
+    },
+    "./display-elision": {
+      "types": "./src/display-elision.ts",
+      "import": "./src/display-elision.ts"
     },
     "./document-ast": {
       "types": "./src/document-ast.ts",
@@ -58,6 +66,10 @@
     "./inline": {
       "types": "./src/inline.ts",
       "import": "./src/inline.ts"
+    },
+    "./line-wrap": {
+      "types": "./src/line-wrap.ts",
+      "import": "./src/line-wrap.ts"
     },
     "./provision-preview": {
       "types": "./src/provision-preview.ts",

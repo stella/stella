@@ -198,6 +198,7 @@ import type {
   ChatToolCallPart,
   PersistedChatMessage,
 } from "@/components/chat/chat-ui-tools";
+import { StreamdownMentionLink } from "@/components/chat/streamdown-mention-link";
 import { ToolCallCard } from "@/components/chat/tool-call-card";
 import { DatePickerPopover } from "@/components/date-picker-popover";
 import { AIKeyRequiredDialog } from "@/components/require-ai-key";
@@ -209,7 +210,9 @@ const renderPlaygroundAnchor = ({
   children,
   ...props
 }: React.AnchorHTMLAttributes<HTMLAnchorElement>) => (
-  <a {...props}>{children}</a>
+  <StreamdownMentionLink {...props} interactive={false}>
+    {children}
+  </StreamdownMentionLink>
 );
 
 type ComboboxOption = {

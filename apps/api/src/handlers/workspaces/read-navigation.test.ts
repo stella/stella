@@ -1,5 +1,6 @@
 import { describe, expect, mock, test } from "bun:test";
 
+import { createFeatureAccessSnapshot } from "@/api/lib/auth/feature-access/policy";
 import { toSafeId } from "@/api/lib/branded-types";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
@@ -80,6 +81,11 @@ const createContext = ({
 
   return {
     context: asTestRaw<ReadWorkspaceNavigationContext>({
+      featureAccessSnapshot: createFeatureAccessSnapshot({
+        organizationId: "organization_test123",
+        userId: "user_test123",
+        decisions: new Map(),
+      }),
       memberRole: sessionMemberRole("owner"),
       orgAIConfig: null,
       query,

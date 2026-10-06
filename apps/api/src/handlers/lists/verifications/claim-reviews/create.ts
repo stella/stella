@@ -15,6 +15,7 @@ import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { LIST_VERIFICATION_FEATURE_ID } from "@/api/lib/feature-access/registry";
 import {
   CLAIM_OVERRIDE_STATES,
   CLAIM_REVIEW_STATUSES,
@@ -84,6 +85,7 @@ const bodySchema = t.Object({
 });
 
 const config = {
+  featureAccess: { featureId: LIST_VERIFICATION_FEATURE_ID, type: "required" },
   description:
     "Record one reviewer action on a claim of a list verification and return " +
     "the claim's review after it. `status` marks the claim reviewed or " +

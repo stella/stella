@@ -1,5 +1,9 @@
 import { isBusinessRegistrySlug } from "@stll/api-contract";
-import { isCaseLawDecisionId } from "@stll/api-contract/case-law-decision-route";
+import {
+  isCaseLawDecisionId,
+  parseCaseLawDecisionPath,
+} from "@stll/api-contract/case-law-decision-route";
+import { parseStatutePath } from "@stll/api-contract/statute-route";
 
 import type {
   BusinessRegistrySourceReference,
@@ -53,6 +57,15 @@ const isHttpUrl = (value: unknown): value is string => {
   const safeHref = sanitizeHref(value);
   if (!safeHref) {
     return false;
+  }
+
+  // A root-relative URL is only a source when it opens a legal reader page.
+  if (safeHref.startsWith("/")) {
+    const { pathname } = new URL(safeHref, "https://app.invalid");
+    return (
+      parseStatutePath(pathname) !== null ||
+      parseCaseLawDecisionPath(pathname) !== null
+    );
   }
 
   try {
@@ -257,9 +270,13 @@ export const collectExternalSources = (
     return;
   }
 
+  const appUrl = getStringField(value, ["appUrl"]);
+  const publisherUrl = getStringField(value, ["source_url", "sourceUrl"]);
   const url = getStringField(value, [
     "url",
+    "source_url",
     "sourceUrl",
+    "appUrl",
     "pdfUrl",
     "rtfUrl",
     "registryUrl",
@@ -268,6 +285,11 @@ export const collectExternalSources = (
     const safeUrl = sanitizeHref(url);
     if (safeUrl) {
       sources.push({
+        appUrl: appUrl !== undefined ? sanitizeHref(appUrl) : undefined,
+        sourceUrl:
+          publisherUrl !== undefined && isHttpUrl(publisherUrl)
+            ? sanitizeHref(publisherUrl)
+            : undefined,
         businessRegistry: getBusinessRegistryReference(value, url),
         caseLawDecision: getCaseLawDecisionReference(value),
         url: safeUrl,
@@ -280,7 +302,7 @@ export const collectExternalSources = (
             "caseNumber",
             "ecli",
             "cite_as",
-          ]) ?? new URL(safeUrl).hostname,
+          ]) ?? (safeUrl.startsWith("/") ? safeUrl : new URL(safeUrl).hostname),
         provider: getStringField(value, [
           "provider",
           "source",
@@ -310,6 +332,8 @@ export const dedupeExternalSources = (
       source.url,
       existing
         ? {
+            appUrl: source.appUrl ?? existing.appUrl,
+            sourceUrl: source.sourceUrl ?? existing.sourceUrl,
             businessRegistry:
               source.businessRegistry ?? existing.businessRegistry,
             caseLawDecision: source.caseLawDecision ?? existing.caseLawDecision,

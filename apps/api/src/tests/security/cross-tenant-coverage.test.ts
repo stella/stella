@@ -123,6 +123,10 @@ const CROSS_TENANT_WAIVERS: Record<string, WaiverReason> = {
   "mcp-app-sandbox": WAIVER_REASON.noTenantReadSurface,
   mcp: WAIVER_REASON.noTenantReadSurface,
   "mcp-connectors": WAIVER_REASON.noTenantReadSurface,
+  // Deployment-owned directory access, independent of tenant membership;
+  // credential denial and the projected read are covered by operator/routes.test.ts
+  // and lib/db/operator-registrations/read.postgres.test.ts.
+  operator: WAIVER_REASON.noTenantReadSurface,
   // Unauthenticated reads of bundled deployment content (public template
   // packs, starter playbooks); no database access or tenant-scoped input.
   "public-knowledge": WAIVER_REASON.noTenantReadSurface,

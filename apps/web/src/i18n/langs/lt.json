@@ -54,6 +54,17 @@
       "polish": "Patobulinti formuluotę"
     }
   },
+  "aiColumns": {
+    "countSummary": "{columns} stulpeliai × {rows} eilutės = {answers, plural, one {# atsakymas} few {# atsakymai} many {# atsakymo} other {# atsakymų}}. Atsakymai naudoja biudžetą.",
+    "refusedBudget": "Nevykdyta: atsakymų biudžetas nepasiekiamas",
+    "rerunAllPage": "Vykdyti viską iš naujo (šiame puslapyje)",
+    "rerunColumnPage": "Vykdyti stulpelį iš naujo (šiame puslapyje)",
+    "runColumnPage": "Vykdyti stulpelį (šiame puslapyje)",
+    "runPageRows": "Vykdyti {count, plural, one {# šio puslapio eilutei} few {# šio puslapio eilutėms} many {# šio puslapio eilutės} other {# šio puslapio eilučių}}",
+    "runRemainingPage": "Vykdyti likusius (šiame puslapyje)",
+    "runSelectedRows": "Vykdyti {count, plural, one {# pasirinktai eilutei} few {# pasirinktoms eilutėms} many {# pasirinktos eilutės} other {# pasirinktų eilučių}}",
+    "selectedRun": "Vykdyti DI stulpelius {count, plural, one {# eilutei} few {# eilutėms} many {# eilutės} other {# eilučių}}"
+  },
   "appearance": {
     "calendar": "Kalendorius",
     "calendarGregorian": "Grigaliaus",
@@ -264,6 +275,7 @@
     "runs": {
       "back": "Visi dokumentai",
       "errors": {
+        "accessRevoked": "Tikrinimas sustabdytas, nes prieiga nepasiekiama.",
         "aiUnavailable": "Dokumentams tikrinti nėra prieinamo DI modelio. Patikrinkite organizacijos DI nustatymus.",
         "enqueueFailed": "Nepavyko pradėti tikrinimo. Bandykite dar kartą.",
         "extractionFailed": "Nepavyko išskirti šiame dokumente esančių teiginių.",
@@ -796,6 +808,34 @@
       "unavailable": "Aprėpties duomenys šiuo metu nepasiekiami."
     },
     "decisionNotFound": "Sprendimas nerastas",
+    "decisionTypes": {
+      "administrative_decision": "Administracinis sprendimas",
+      "binding_excise_information": "Privaloma informacija apie akcizus",
+      "binding_rate_information": "Privaloma informacija apie PVM tarifą",
+      "court_direction": "Potvarkis",
+      "decision": "Sprendimas",
+      "finding": "Sprendimas iš esmės",
+      "general_tax_ruling": "Bendroji mokesčių interpretacija",
+      "individual_tax_ruling": "Individuali mokesčių interpretacija",
+      "judgment": "Teismo sprendimas",
+      "leave_refused": "Atsisakyta nesant reikšmingo teisės klausimo",
+      "merits_decision": "Sprendimas byloje",
+      "ministry_of_justice_decision": "Teisingumo ministerijos sprendimas",
+      "minutes_extract": "Protokolo išrašas",
+      "opinion": "Nuomonė",
+      "order": "Nutartis",
+      "other": "Kita",
+      "payment_order": "Teismo įsakymas",
+      "penal_order": "Baudžiamasis įsakymas",
+      "principle_decision": "Principinis sprendimas",
+      "protective_opinion": "Apsauginė nuomonė",
+      "resolution": "Nutarimas",
+      "signalling_decision": "Signalinė nutartis",
+      "statement_of_reasons": "Motyvai",
+      "tax_explanations": "Mokesčių paaiškinimai",
+      "top_up_tax_opinion": "Nuomonė dėl papildomo mokesčio",
+      "uniformity_decision": "Teismų praktikos vienodinimo sprendimas"
+    },
     "emptyState": "Sprendimų nerasta. Sukonfigūruokite šaltinį ir paleiskite sinchronizavimą, kad importuotumėte teismų praktiką.",
     "filters": {
       "remove": "Pašalinti filtrą {filter}"
@@ -3747,11 +3787,15 @@
     }
   },
   "lawHome": {
+    "clearRecent": "Išvalyti naujausius",
     "enteringIntoForce": "Netrukus įsigalios",
     "inForceFrom": "Įsigalioja {date}",
-    "noRecentSearches": "Paieškų dar nėra",
+    "noRecent": "Naujausios veiklos dar nėra",
     "noSignals": "Signalų dar nėra",
     "prompt": "Ko ieškote?",
+    "recent": "Naujausi",
+    "recentCasesFilter": "Sprendimai",
+    "recentSearchFilter": "Paieškos",
     "recentlyInForce": "Neseniai įsigaliojo",
     "searchLabel": "Ieškoti teisės duomenų bazėje",
     "searchPlaceholder": "Bylos numeris, akto numeris, ECLI arba raktažodžiai",
@@ -6006,7 +6050,6 @@
       "previewUnsupported": "Peržiūra šio tipo dokumentui nepalaikoma.",
       "readingFrom": "DI skaito iš",
       "referencesItself": "Savybė nurodo pati save per kitas savybes",
-      "rerunColumn": "Paleisti stulpelį iš naujo",
       "resultType": "Rezultato tipas",
       "returnsLabel": "Formatas",
       "scopeFile": "Dabartinis failas",

@@ -40,7 +40,7 @@ export type McpSession = {
      * so the field is required on this branch.
      */
     | {
-        type: "machine_api_key";
+        type: "machine_api_key" | "personal_api_key";
         id: string;
         name: string;
         permissions: PermissionInput;
@@ -112,6 +112,7 @@ const isMcpCredential = (
       return (
         typeof value["clientId"] === "string" && value["clientId"].length > 0
       );
+    case "personal_api_key":
     case "machine_api_key":
       return (
         typeof value["id"] === "string" &&

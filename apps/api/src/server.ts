@@ -37,6 +37,7 @@ import {
   clausesRoute,
 } from "@/api/handlers/clauses/routes";
 import { contactsRoute } from "@/api/handlers/contacts/routes";
+import { desktopPresenceRoute } from "@/api/handlers/desktop-presence/routes";
 import { desktopRegistryRoute } from "@/api/handlers/desktop-registry/routes";
 import { documentReviewPassagesRoute } from "@/api/handlers/document-reviews/passages-routes";
 import { documentReviewsRoute } from "@/api/handlers/document-reviews/routes";
@@ -80,6 +81,7 @@ import { meRoute } from "@/api/handlers/me/routes";
 import { memoriesRoute } from "@/api/handlers/memories/routes";
 import { notificationsRoute } from "@/api/handlers/notifications/routes";
 import { numberSeriesRoute } from "@/api/handlers/number-series/routes";
+import { operatorRoute } from "@/api/handlers/operator/routes";
 import { organizationSettingsRoute } from "@/api/handlers/organization-settings/routes";
 import { playbooksRoute } from "@/api/handlers/playbooks/routes";
 import { playbookRunsRoute } from "@/api/handlers/playbooks/run-route";
@@ -427,6 +429,7 @@ const api = new Elysia()
       .use(agentAuthConfirmRoute),
   )
   .use(healthRoute)
+  .use(operatorRoute)
   .use(wellKnownRoute)
   .use(hostedUsageWebhookRoute)
   .use(
@@ -558,7 +561,7 @@ const api = new Elysia()
   // TypeScript's instantiation limit for the browser's Eden client. The
   // signing route carries the version prefix itself.
   .use(feedbackRoute)
-  .use(pdfSigningSessionsRoute);
+  .use(new Elysia().use(pdfSigningSessionsRoute).use(desktopPresenceRoute));
 
 export default api;
 

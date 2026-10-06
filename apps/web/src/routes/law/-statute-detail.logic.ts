@@ -162,6 +162,7 @@ const redirectToCanonicalStatutePath = ({
   // which is the same instruction spelled as a fragment. A comparison is
   // what to show of that text, so it survives too.
   const redirectSearch = {
+    q: search.q,
     compare: search.compare,
     jump: search.jump,
     provision: search.provision,

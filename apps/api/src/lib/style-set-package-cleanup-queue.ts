@@ -1,5 +1,4 @@
 import { Result } from "better-result";
-import { Worker } from "bullmq";
 import { and, asc, eq, isNotNull, lt } from "drizzle-orm";
 
 import { Temporal } from "@stll/time";
@@ -9,7 +8,7 @@ import { styleSets } from "@/api/db/schema";
 import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
 import { createBullMqJobId } from "@/api/lib/bullmq-job-id";
-import { createLazyBullMqQueue } from "@/api/lib/bullmq-queue";
+import { BullMqWorker, createLazyBullMqQueue } from "@/api/lib/bullmq-queue";
 import type { BullMqWorkerContext } from "@/api/lib/bullmq-queue";
 import {
   QUEUE_REQUEUE_OUTCOME,
@@ -331,7 +330,7 @@ export const initStyleSetPackageCleanupWorker = ({
   const workerConnection = createBullMqConnection({
     storeClass: "durable-coordination",
   });
-  const worker = new Worker<StyleSetPackageCleanupJobData>(
+  const worker = new BullMqWorker<StyleSetPackageCleanupJobData>(
     QUEUE_NAME,
     async (job) => {
       await deleteUnreferencedStyleSetPackage(job.data.s3Key, db);

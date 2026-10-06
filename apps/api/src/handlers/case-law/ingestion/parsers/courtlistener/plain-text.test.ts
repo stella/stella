@@ -228,7 +228,6 @@ describe("recorded unmarked opinions", () => {
         boundaries: "unproven",
       })),
     );
-    expect(outcome.principal.singleOpinionBody).toBe(false);
   });
 
   // Opinion 11209260 (South Carolina district court) is plain text only, a

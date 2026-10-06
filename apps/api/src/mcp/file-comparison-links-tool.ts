@@ -1,17 +1,17 @@
+import { Result } from "better-result";
 /**
  * `prepare_file_comparison_from_links`: stage two DOCX files for
  * `compare_documents` by downloading them server-side from HTTPS links, so no
  * bytes pass through the model. It reserves the same slots and writes the same
  * rows as `prepare_file_comparison`; only who fetches the bytes differs.
  */
-
-import { Result } from "better-result";
 import * as v from "valibot";
 
 import { FILE_COMPARISON_TRANSPORT } from "@stll/api-contract";
 
 import { ENCRYPTED_CONTENT_MESSAGE } from "@/api/lib/files/detect-file-encryption";
 import { probeEncryptedOoxml } from "@/api/lib/files/encrypted-ooxml";
+import { projectionPayload } from "@/api/lib/projection-totality";
 import { presignUploadUrl, putPresignedUpload } from "@/api/lib/s3-presign";
 import {
   parseSafeOutboundUrl,
@@ -388,26 +388,28 @@ export const handlePrepareFileComparisonFromLinksTool = async (
     return transferFailure("target");
   }
 
-  return toolDataResult({
-    base: {
-      uploadId: reserved.value.base.id,
-      name: reserved.value.base.declaredName,
-      size: reserved.value.base.declaredSize,
-    },
-    target: {
-      uploadId: reserved.value.target.id,
-      name: reserved.value.target.declaredName,
-      size: reserved.value.target.declaredSize,
-    },
-    next: {
-      tool: FILE_COMPARISON_TRANSPORT.compareToolName,
-      source: {
-        type: "uploads",
-        base_upload_id: reserved.value.base.id,
-        target_upload_id: reserved.value.target.id,
+  return toolDataResult(
+    projectionPayload(PREPARE_FILE_COMPARISON_FROM_LINKS_OUTPUT_SCHEMA, {
+      base: {
+        uploadId: reserved.value.base.id,
+        name: reserved.value.base.declaredName,
+        size: reserved.value.base.declaredSize,
       },
-    },
-  });
+      target: {
+        uploadId: reserved.value.target.id,
+        name: reserved.value.target.declaredName,
+        size: reserved.value.target.declaredSize,
+      },
+      next: {
+        tool: FILE_COMPARISON_TRANSPORT.compareToolName,
+        source: {
+          type: "uploads",
+          base_upload_id: reserved.value.base.id,
+          target_upload_id: reserved.value.target.id,
+        },
+      },
+    }),
+  );
 };
 
 /** The handler's extra dependency argument is optional, so it still is one. */

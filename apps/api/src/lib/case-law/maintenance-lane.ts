@@ -24,7 +24,7 @@ import { panic, Result } from "better-result";
  * Both return the same shape, so a script with a plan mode and an apply mode
  * picks its door after parsing arguments and runs one body against either.
  *
- * This is a different lock from `lockCitationGraph` in the resolver. That one
+ * This is a different lock from the citation-graph transaction owner. That one
  * is transaction-scoped and serializes the standing walk's batches against
  * ingestion; this one is session-scoped and serializes whole operator runs
  * against each other. A pass that also writes the graph still takes the graph

@@ -54,6 +54,17 @@
       "polish": "Viimistle sõnastust"
     }
   },
+  "aiColumns": {
+    "countSummary": "{columns} veergu × {rows} rida = {answers, plural, one {# vastus} other {# vastust}}. Vastused kasutavad eelarvet.",
+    "refusedBudget": "Käivitamata: vastuste eelarve pole saadaval",
+    "rerunAllPage": "Käivita kõik uuesti (sellel lehel)",
+    "rerunColumnPage": "Käivita veerg uuesti (sellel lehel)",
+    "runColumnPage": "Käivita veerg (sellel lehel)",
+    "runPageRows": "Käivita {count, plural, one {# selle lehe real} other {# selle lehe real}}",
+    "runRemainingPage": "Käivita ülejäänud (sellel lehel)",
+    "runSelectedRows": "Käivita {count, plural, one {# valitud real} other {# valitud real}}",
+    "selectedRun": "Käivita tehisintellekti veerud {count, plural, one {# real} other {# real}}"
+  },
   "appearance": {
     "calendar": "Kalender",
     "calendarGregorian": "Gregoriuse",
@@ -264,6 +275,7 @@
     "runs": {
       "back": "Kõik dokumendid",
       "errors": {
+        "accessRevoked": "Kontroll peatati, sest juurdepääs pole saadaval.",
         "aiUnavailable": "Dokumentide kontrollimiseks pole ühtegi AI-mudelit saadaval. Kontrollige organisatsiooni AI seadeid.",
         "enqueueFailed": "Kontrolli ei õnnestunud käivitada. Proovige uuesti.",
         "extractionFailed": "Selle dokumendi väiteid ei õnnestunud eraldada.",
@@ -796,6 +808,34 @@
       "unavailable": "Kaetuse andmed ei ole praegu saadaval."
     },
     "decisionNotFound": "Otsust ei leitud",
+    "decisionTypes": {
+      "administrative_decision": "Haldusakt",
+      "binding_excise_information": "Siduv aktsiisiteave",
+      "binding_rate_information": "Siduv käibemaksumäära teave",
+      "court_direction": "Korraldus",
+      "decision": "Otsus",
+      "finding": "Sisuline otsus",
+      "general_tax_ruling": "Üldine maksutõlgendus",
+      "individual_tax_ruling": "Individuaalne maksutõlgendus",
+      "judgment": "Kohtuotsus",
+      "leave_refused": "Tagasi lükatud olulise õigusküsimuse puudumise tõttu",
+      "merits_decision": "Sisulahend",
+      "ministry_of_justice_decision": "Justiitsministeeriumi otsus",
+      "minutes_extract": "Väljavõte protokollist",
+      "opinion": "Arvamus",
+      "order": "Määrus",
+      "other": "Muu",
+      "payment_order": "Maksekäsk",
+      "penal_order": "Karistuskäsk",
+      "principle_decision": "Põhimõtteline otsus",
+      "protective_opinion": "Kaitsev arvamus",
+      "resolution": "Resolutsioon",
+      "signalling_decision": "Märguandeotsus",
+      "statement_of_reasons": "Põhjendus",
+      "tax_explanations": "Maksualased selgitused",
+      "top_up_tax_opinion": "Arvamus täiendava maksu kohta",
+      "uniformity_decision": "Kohtupraktika ühtlustamise otsus"
+    },
     "emptyState": "Otsuseid ei leitud. Seadistage allikas ja käivitage sünkroonimine kohtupraktika importimiseks.",
     "filters": {
       "remove": "Eemalda filter {filter}"
@@ -3747,11 +3787,15 @@
     }
   },
   "lawHome": {
+    "clearRecent": "Kustuta hiljutised",
     "enteringIntoForce": "Peagi jõustuv",
     "inForceFrom": "Jõustub {date}",
-    "noRecentSearches": "Otsinguid veel pole",
+    "noRecent": "Hiljutisi tegevusi pole",
     "noSignals": "Signaale veel pole",
     "prompt": "Mida otsite?",
+    "recent": "Hiljutised",
+    "recentCasesFilter": "Kohtulahendid",
+    "recentSearchFilter": "Otsingud",
     "recentlyInForce": "Hiljuti jõustunud",
     "searchLabel": "Otsi õigusandmebaasist",
     "searchPlaceholder": "Kohtuasja number, akti number, ECLI või märksõnad",
@@ -6006,7 +6050,6 @@
       "previewUnsupported": "Eelvaade pole selle dokumenditüübi jaoks toetatud.",
       "readingFrom": "AI loeb:",
       "referencesItself": "Omadus viitab iseendale teiste omaduste kaudu",
-      "rerunColumn": "Käivita veerg uuesti",
       "resultType": "Tulemuse tüüp",
       "returnsLabel": "Vorming",
       "scopeFile": "Praegune fail",

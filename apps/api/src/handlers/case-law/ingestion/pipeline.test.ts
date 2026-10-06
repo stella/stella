@@ -2,7 +2,13 @@ import { Result } from "better-result";
 import { SQL } from "bun";
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 
-import { TEXT_ABSENCE_REASONS } from "@stll/api-contract/case-law-text-field";
+import {
+  DECISION_TEXT_ABSENCE_METADATA_KEY,
+  DECISION_TEXT_ABSENCE_VERSION_METADATA_KEY,
+  DECISION_TEXT_ABSENCE_SCHEMA_VERSION,
+  DECISION_TEXT_FIELD,
+  TEXT_ABSENCE_REASONS,
+} from "@stll/api-contract/case-law-text-field";
 import {
   DECISION_DOCUMENT_ROLE,
   DECISION_DOCUMENT_ROLE_METADATA_KEY,
@@ -50,6 +56,7 @@ import {
   absentTextField,
   presentTextField,
   readDecisionTextMetadata,
+  splitStoredDecisionTextMetadata,
 } from "@/api/lib/case-law/decision-text";
 import { canonicalDecisionDate } from "@/api/lib/dates";
 import { errorTag } from "@/api/lib/errors/error-tag";
@@ -199,7 +206,12 @@ describe("publisher document role persistence", () => {
       expect(input.metadata[DECISION_DOCUMENT_ROLE_METADATA_KEY]).toBe(
         "untrusted",
       );
-      expect(sanitizeResult(stored)).toEqual(stored);
+      expect(
+        sanitizeResult({
+          ...stored,
+          ...splitStoredDecisionTextMetadata(stored.metadata),
+        }),
+      ).toEqual(stored);
     },
   );
 
@@ -217,7 +229,12 @@ describe("publisher document role persistence", () => {
       Object.hasOwn(stored.metadata, DECISION_DOCUMENT_ROLE_METADATA_KEY),
     ).toBe(false);
     expect(stored.decisionType === input.decisionType).toBe(true);
-    expect(sanitizeResult(stored)).toEqual(stored);
+    expect(
+      sanitizeResult({
+        ...stored,
+        ...splitStoredDecisionTextMetadata(stored.metadata),
+      }),
+    ).toEqual(stored);
   });
 });
 
@@ -488,6 +505,7 @@ describe("sanitizeResult — shared partial-observation quality", () => {
 
     const recovered = sanitizeResult({
       ...partial,
+      ...splitStoredDecisionTextMetadata(partial.metadata),
       caseNumberIsPlaceholder: undefined,
       isListingOnly: undefined,
       observationDetail: "complete",
@@ -1916,7 +1934,25 @@ describe("processDecision — fields on an existing row", () => {
       },
     });
 
-    expect(updated?.["metadata"]).toEqual({ abstract: "Stored abstract" });
+    expect(updated?.["metadata"]).toEqual({
+      abstract: "Stored abstract",
+      [DECISION_TEXT_ABSENCE_VERSION_METADATA_KEY]:
+        DECISION_TEXT_ABSENCE_SCHEMA_VERSION,
+      [DECISION_TEXT_ABSENCE_METADATA_KEY]: [
+        {
+          field: DECISION_TEXT_FIELD.HEADNOTE,
+          reason: TEXT_ABSENCE_REASON.NOT_PUBLISHED,
+        },
+        {
+          field: DECISION_TEXT_FIELD.LEGAL_SENTENCE,
+          reason: TEXT_ABSENCE_REASON.NOT_PUBLISHED,
+        },
+        {
+          field: DECISION_TEXT_FIELD.SUMMARY,
+          reason: TEXT_ABSENCE_REASON.NOT_PUBLISHED,
+        },
+      ],
+    });
   });
 });
 

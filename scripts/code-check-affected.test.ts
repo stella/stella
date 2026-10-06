@@ -296,7 +296,11 @@ describe("affected code-check planning", () => {
     }
     const commands = scopedCommands(planned);
 
-    expect(commands).toContainEqual(["bun", "run", "generate"]);
+    expect(commands).toContainEqual([
+      "bun",
+      "scripts/ci-generated-sources.ts",
+      "prepare",
+    ]);
     const oxc = commands.find((command) => command.includes("oxlint"));
     expect(oxc).toContain("--type-aware");
     expect(oxc).toContain("--type-check");
@@ -372,6 +376,19 @@ describe("affected code-check planning", () => {
       });
     },
   );
+
+  test("a bounded-read owner change invalidates all lint and its owning typecheck", () => {
+    const planned = plan(["apps/api/src/lib/db/read-bounded.ts"], ["apps/api"]);
+    if (planned.type !== "scoped") {
+      throw new Error("Expected a scoped code-check plan");
+    }
+    expect(planned.lint).toEqual({ type: "all" });
+    expect(planned.typecheck).toEqual({
+      type: "targets",
+      targets: ["apps/api"],
+    });
+    expect(planned.rootChecks).toContain("plugin-fixtures");
+  });
 
   test("the shared tooling config invalidates only workspace lint", () => {
     expect(plan(["tsconfig.tooling.json"], [])).toEqual({

@@ -205,6 +205,8 @@ export const envApiServerSchema = {
    * Unset disables the service-only load/store routes.
    */
   STELLA_COLLAB_SERVICE_TOKEN: v.optional(v.pipe(v.string(), v.minLength(32))),
+  /** Deployment-owned operator credential. Unset disables operator HTTP access. */
+  OPERATOR_API_TOKEN: v.optional(v.pipe(v.string(), v.minLength(32))),
   /**
    * SHA-256 digest of a deployment-owned decoy machine API key. The
    * plaintext decoy belongs only in a honey resource; presenting it to any

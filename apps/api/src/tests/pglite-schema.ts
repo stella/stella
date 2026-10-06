@@ -395,6 +395,27 @@ const PDF_SIGNING_TOKEN_SCOPE_STATEMENT_PREFIXES = [
   "GRANT EXECUTE ON FUNCTION",
 ] as const;
 
+/** Apply the presence migration's forced owner boundary, which schema push omits. */
+export const installPgliteDesktopPresenceRls = async (
+  db: PgliteSchemaDb,
+): Promise<void> => {
+  const statement = readMigrationStatements(
+    nodePath.join(
+      DRIZZLE_DIR,
+      "20261004120300_desktop_presence",
+      "migration.sql",
+    ),
+  ).find((candidate) =>
+    executableSql(candidate).startsWith(
+      'ALTER TABLE "desktop_presence" FORCE ROW LEVEL SECURITY',
+    ),
+  );
+  if (!statement) {
+    panic("Desktop presence FORCE RLS migration statement is missing");
+  }
+  await db.execute(sql.raw(statement));
+};
+
 /**
  * Install what schema push cannot say about PDF signing sessions: forced row
  * security and the token-scope lookups the desktop's calls go through.
@@ -700,6 +721,32 @@ export const installPglitePlaybookDocumentTypeKey = async (
   if (statements.length !== 2) {
     panic("Expected the playbook document type key function and trigger");
   }
+  for (const statement of statements) {
+    await db.execute(sql.raw(statement));
+  }
+};
+
+/** Install monitoring transition triggers from their owning migrations. */
+export const installPgliteSanctionsMonitoringTriggers = async (
+  db: PgliteSchemaDb,
+) => {
+  const statements = [
+    "20261003122900_sanctions_monitoring_marks",
+    "20261003123000_sanctions_monitoring_backfills",
+    "20261004120300_sanctions_drain_retry",
+  ]
+    .flatMap((migration) =>
+      readMigrationStatements(
+        nodePath.join(DRIZZLE_DIR, migration, "migration.sql"),
+      ),
+    )
+    .filter((statement) => {
+      const source = executableSql(statement);
+      return (
+        source.startsWith("CREATE FUNCTION") ||
+        source.startsWith("CREATE TRIGGER")
+      );
+    });
   for (const statement of statements) {
     await db.execute(sql.raw(statement));
   }

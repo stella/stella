@@ -313,3 +313,30 @@ test("inbound mail receiving is configured all-or-none and requires its domain",
     expect(v.safeParse(envApiServerSchema[name], invalid).success).toBe(false);
   }
 });
+
+test("list verification grants use the shared registered-feature configuration", () => {
+  expect(
+    v.parse(
+      envApiServerSchema.API_FEATURE_ACCESS_GRANTS,
+      JSON.stringify({
+        "list-verification": [
+          {
+            type: "member",
+            organizationId: "org-a",
+            email: " Member@Example.test ",
+          },
+        ],
+      }),
+    ),
+  ).toEqual({
+    "list-verification": [
+      { type: "member", organizationId: "org-a", email: "member@example.test" },
+    ],
+  });
+  expect(
+    v.safeParse(
+      envApiServerSchema.API_FEATURE_ACCESS_GRANTS,
+      '{"list-verification":[{"type":"member","organizationId":"org-a","email":"*@example.test"}]}',
+    ).success,
+  ).toBe(false);
+});

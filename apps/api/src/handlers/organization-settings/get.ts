@@ -23,6 +23,7 @@ import {
 import type { FeatureAccessSnapshot } from "@/api/lib/auth/feature-access/policy";
 import { DEFAULT_MANAGED_AI_RESIDENCY } from "@/api/lib/chat/ai-data-policy";
 import type { ManagedAIResidency } from "@/api/lib/chat/ai-data-policy";
+import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import {
   DEFAULT_MATTER_NUMBER_PADDING,
   DEFAULT_MATTER_NUMBER_PATTERN,
@@ -37,7 +38,9 @@ const config = {
     "Read the organization's general settings: document processing mode, " +
     "matter-number pattern and padding, practice jurisdictions, prompt " +
     "caching, memory extraction, time policy, and the time zone whose calendar " +
-    "decides the organization's day. timeZoneSource says whether the zone was " +
+    "decides the organization's day. declaredFeatureIds identifies policies in force; " +
+    "capabilities contains caller decisions; deploymentFeatures supplies deployment availability. " +
+    "timeZoneSource says whether the zone was " +
     "chosen or derived from the primary practice jurisdiction (Europe/Prague " +
     "for CZ and SK, UTC otherwise). An organization that has never saved " +
     "settings gets the defaults rather than an error.",
@@ -71,6 +74,10 @@ export const projectOrganizationSettingsRow = (
   row: OrganizationSettingsRow | null | undefined,
   snapshot: FeatureAccessSnapshot,
 ) => ({
+  declaredFeatureIds: Array.from(snapshot.decisions.keys()),
+  deploymentFeatures: {
+    legalLists: isDeploymentFeatureEnabled("FEATURE_LEGAL_LISTS"),
+  },
   capabilities: Object.fromEntries(
     Array.from(
       snapshot.decisions,

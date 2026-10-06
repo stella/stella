@@ -71,6 +71,11 @@ describe("feature access safe-handler admission", () => {
     const database = createScopedDbMock({
       select: () => {
         identityQueries += 1;
+        return {
+          from: () => ({
+            innerJoin: () => ({ where: () => ({ limit: async () => [] }) }),
+          }),
+        };
       },
     });
     const result = await endpoint.handler(
@@ -84,7 +89,7 @@ describe("feature access safe-handler admission", () => {
       response: { message: "Not found" },
     });
     expect(executions).toBe(0);
-    expect(identityQueries).toBe(0);
+    expect(identityQueries).toBe(1);
     expect(database.getCallCount()).toBe(1);
   });
 
@@ -107,7 +112,13 @@ describe("feature access safe-handler admission", () => {
           return Result.ok({ ok: true });
         },
       );
-      const database = createScopedDbMock({});
+      const database = createScopedDbMock({
+        select: () => ({
+          from: () => ({
+            innerJoin: () => ({ where: () => ({ limit: async () => [] }) }),
+          }),
+        }),
+      });
       const result = await endpoint.handler(
         createTestHandlerContext<Parameters<typeof endpoint.handler>[0]>({
           safeDb: database.safeDb,
@@ -178,6 +189,7 @@ describe("feature access safe-handler admission", () => {
 
   test("conditional metadata failures use the shared handler error response", async () => {
     let executions = 0;
+    let observedUserId: unknown;
     const endpoint = createSafeRootHandler(
       {
         accountAccess: ACCOUNT_ACCESS.sandbox,
@@ -186,7 +198,8 @@ describe("feature access safe-handler admission", () => {
         featureAccess: {
           type: "conditional",
           featureId: requiredFeatureId,
-          usesFeature: async () => {
+          usesFeature: async ({ userId }) => {
+            observedUserId = userId;
             throw new DatabaseError({ message: "Fixture metadata failure" });
           },
           projectInputSchema: (schemas) => schemas,
@@ -208,6 +221,7 @@ describe("feature access safe-handler admission", () => {
       code: 500,
       response: { message: "Internal server error" },
     });
+    expect(observedUserId).toBe("user_1");
     expect(executions).toBe(0);
   });
 

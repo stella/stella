@@ -4,6 +4,7 @@ import { readdirSync } from "node:fs";
 import { writeFile } from "node:fs/promises";
 
 import { readCapabilityCatalog } from "../../../packages/cli/src/capability-catalog-data";
+import { hasPreparedGeneratedSources } from "../../../packages/scripts/src/prepared-generated-sources";
 
 export const generateCapabilityRuntime = async (
   root = new URL("../../../", import.meta.url),
@@ -79,6 +80,9 @@ export const generateCapabilityRuntime = async (
   );
 };
 
-if (import.meta.main) {
+if (
+  import.meta.main &&
+  !hasPreparedGeneratedSources(new URL("../../../", import.meta.url).pathname)
+) {
   await generateCapabilityRuntime();
 }

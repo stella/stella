@@ -24,10 +24,11 @@
 //   bun apps/api/scripts/chat-mutation-matrix.ts            run every active entry
 //   bun apps/api/scripts/chat-mutation-matrix.ts --only ID  run one entry
 //   bun apps/api/scripts/chat-mutation-matrix.ts --check    validate the data only
+//   Add --matrix PATH to validate or run an alternate matrix (e.g. a fixture).
 //   bun apps/api/scripts/chat-mutation-matrix.ts --self-test check the restore
 //
-// On demand and nightly (`.github/workflows/nightly-property-test.yml`), never
-// per PR: each entry runs its scenario twice.
+// Scenarios run on demand and nightly; PR CI validates the targets with --check.
+// Each scenario entry runs twice, once unchanged and once mutated.
 
 import { panic } from "better-result";
 import {
@@ -93,14 +94,14 @@ const isEntry = (value: unknown): value is Entry => {
   );
 };
 
-const readMatrix = (): Entry[] => {
-  const parsed: unknown = JSON.parse(readFileSync(MATRIX_PATH, "utf-8"));
+const readMatrix = (matrixPath: string): Entry[] => {
+  const parsed: unknown = JSON.parse(readFileSync(matrixPath, "utf-8"));
   const entries =
     typeof parsed === "object" && parsed !== null && "entries" in parsed
       ? parsed.entries
       : undefined;
   if (!Array.isArray(entries) || !entries.every(isEntry)) {
-    return panic(`${MATRIX_PATH} does not match the entry shape`);
+    return panic(`${matrixPath} does not match the entry shape`);
   }
   return entries;
 };
@@ -458,7 +459,12 @@ const main = async (): Promise<number> => {
   if (args.includes("--self-test")) {
     return await selfTest();
   }
-  const entries = readMatrix();
+  const matrixIndex = args.indexOf("--matrix");
+  const matrixPath =
+    matrixIndex === -1
+      ? MATRIX_PATH
+      : (args[matrixIndex + 1] ?? panic("--matrix needs a file"));
+  const entries = readMatrix(matrixPath);
   const problems = validate(entries);
   if (problems.length > 0) {
     for (const problem of problems) {

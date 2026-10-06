@@ -28,10 +28,24 @@ export type SanctionsMatcherSession = {
   match: (request: SanctionsMatcherRequest) => Promise<SanctionsMatcherReply>;
 };
 
+type MatcherDeadlineClock = {
+  now: () => number;
+  schedule: (expire: () => void, durationMs: number) => () => void;
+};
+
+const matcherDeadlineClock = {
+  now: () => performance.now(),
+  schedule: (expire, durationMs) => {
+    const timer = setTimeout(expire, durationMs);
+    return () => clearTimeout(timer);
+  },
+} satisfies MatcherDeadlineClock;
+
 type MatcherPoolOptions = {
   size?: number;
   deadlineMs?: number;
   createWorker?: () => Worker;
+  clock?: MatcherDeadlineClock;
 };
 
 type Slot = {
@@ -190,6 +204,7 @@ export const createSanctionsMatcherPool = ({
   size = SANCTIONS_MATCHER_CONFIG.poolSize,
   deadlineMs = SANCTIONS_MATCHER_CONFIG.deadlineMs,
   createWorker = createMatcherWorker,
+  clock = matcherDeadlineClock,
 }: MatcherPoolOptions = {}) => {
   if (
     !Number.isInteger(size) ||
@@ -264,8 +279,8 @@ export const createSanctionsMatcherPool = ({
         failed.resolve(null);
       };
       const durationMs = options?.deadlineMs ?? deadlineMs;
-      const expiresAt = performance.now() + durationMs;
-      const timer = setTimeout(fail, durationMs);
+      const expiresAt = clock.now() + durationMs;
+      const cancelDeadline = clock.schedule(fail, durationMs);
       const work = async (): Promise<MatcherWorkOutcome<T>> => {
         lease.slot = await acquire(controller.signal);
         if (
@@ -320,7 +335,7 @@ export const createSanctionsMatcherPool = ({
           fail();
           return { status: "unavailable" };
         }
-        if (performance.now() >= expiresAt) {
+        if (clock.now() >= expiresAt) {
           fail();
           return { status: "unavailable" };
         }
@@ -333,7 +348,7 @@ export const createSanctionsMatcherPool = ({
           ? null
           : outcome.value;
       } finally {
-        clearTimeout(timer);
+        cancelDeadline();
         controller.abort();
         if (lease.slot !== null) {
           const slot = lease.slot;

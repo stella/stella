@@ -92,6 +92,25 @@ const score = (listed: string, query: string) =>
   matchesFor(buildNameIndex([entry(listed)]), query).get(0)?.score ?? 0;
 
 describe("name matching (properties)", () => {
+  test("shares raw and folded vocabularies only when every token is unchanged", () => {
+    const plainIndex = buildNameIndex([entry("Robert Martin")]);
+    expect(plainIndex.raw).toBe(plainIndex.folded);
+
+    const accentedIndex = buildNameIndex([entry("José Alvarez")]);
+    expect(accentedIndex.raw).not.toBe(accentedIndex.folded);
+    expect(accentedIndex.raw.ids).not.toBe(accentedIndex.folded.ids);
+    expect(matchesFor(accentedIndex, "José Alvarez").get(0)?.score).toBe(1);
+    expect(
+      matchesFor(accentedIndex, "Jose Alvarez").get(0)?.score,
+    ).toBeGreaterThan(0);
+  });
+
+  test("keeps supplementary-plane letters in compact character histograms", () => {
+    const index = buildNameIndex([entry("𐐨obert Smith")]);
+    expect(matchesFor(index, "𐐨obert Smith").get(0)?.score).toBe(1);
+    expect(matchesFor(index, "𐐨obertt Smith").get(0)?.score).toBeGreaterThan(0);
+  });
+
   test(
     "matches every generated strong name with full coverage",
     () => {

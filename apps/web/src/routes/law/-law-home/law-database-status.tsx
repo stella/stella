@@ -3,6 +3,7 @@ import { Link } from "@tanstack/react-router";
 import { useTranslations } from "use-intl";
 
 import { COMPOSER_PICKER_TRIGGER_CLASS } from "@stll/ui/composer";
+import { DetailsGrid, DetailsItem } from "@stll/ui/details-grid";
 import {
   Popover,
   PopoverPanel,
@@ -91,20 +92,20 @@ export const LawDatabaseStatus = ({ country }: { country: string }) => {
         <PopoverTitle className="text-sm font-medium">
           {caseLawCountryName(format, country)}
         </PopoverTitle>
-        <dl className="grid grid-cols-[auto_1fr] gap-x-6 gap-y-1.5 text-xs">
-          <dt className="text-muted-foreground">{t("common.decisions")}</dt>
-          <dd className="text-end tabular-nums">
-            {format.number(status.decisions)}
-          </dd>
-          <dt className="text-muted-foreground">{t("common.lastUpdated")}</dt>
-          <dd className="text-end">
+        <DetailsGrid>
+          <DetailsItem label={t("common.decisions")}>
+            <span className="tabular-nums">
+              {format.number(status.decisions)}
+            </span>
+          </DetailsItem>
+          <DetailsItem label={t("common.lastUpdated")}>
             {updatedAtDate !== null &&
               format.dateTime(updatedAtDate, FULL_DATE_MEDIUM_TIME_FORMAT)}
             <span className="text-muted-foreground block">
               {relativeTime(updatedAt)}
             </span>
-          </dd>
-        </dl>
+          </DetailsItem>
+        </DetailsGrid>
         {status.courts.length > 0 && <CourtBreakdown courts={status.courts} />}
         {/* This panel answers for one jurisdiction; the coverage page answers
             for the corpus, source by source, including the countries the

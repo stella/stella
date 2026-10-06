@@ -2,6 +2,7 @@ name: MCP canary
 
 on:
   schedule:
+    - cron: "*/10 * * * *"
     # Overnight, offset from the other nightly jobs so a shared runner queue
     # does not delay the probe past its own timeout.
     - cron: "43 2 * * *"
@@ -11,12 +12,20 @@ on:
         description: API base URL to probe
         required: false
         type: string
+      mode:
+        description: Probe mode (full also registers an OAuth client)
+        required: true
+        default: frequent
+        type: choice
+        options:
+          - frequent
+          - full
 
 permissions: {}
 
 jobs:
   mcp-canary:
-    name: MCP transport contract
+    name: MCP user journeys
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
@@ -34,6 +43,7 @@ jobs:
       - name: Setup Bun
         uses: stella/.github/actions/setup-bun-cached@167fb396c6c0f4e07296ad2cd72e6ef15367c776
         with:
+          save: ${{ github.ref == 'refs/heads/main' }}
           bun-version-file: "package.json"
 
       - name: Install dependencies
@@ -63,8 +73,11 @@ jobs:
       # The token is optional on purpose: without it the public probes still
       # run and the authenticated ones report as skipped, so a missing secret
       # never masquerades as full coverage.
-      - name: Probe the MCP transport contract
+      - name: Probe MCP user journeys
         env:
+          MCP_CANARY_ENVIRONMENT: production
           MCP_CANARY_BASE_URL: ${{ steps.target.outputs.base_url }}
+          MCP_CANARY_FRONTEND_URL: ${{ vars.MCP_CANARY_FRONTEND_URL || 'https://my.stll.app' }}
+          MCP_CANARY_MODE: ${{ github.event.schedule == '43 2 * * *' && 'full' || inputs.mode || 'frequent' }}
           MCP_CANARY_TOKEN: ${{ steps.target.outputs.authenticated == 'true' && secrets.MCP_CANARY_TOKEN || '' }}
         run: bun run canary:mcp

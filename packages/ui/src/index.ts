@@ -22,6 +22,7 @@ export * from "./components/command";
 export * from "./components/copy-button";
 export * from "./calendar";
 export * from "./components/date-picker-popover";
+export * from "./components/details-grid";
 export * from "./components/destructive-action-confirmation";
 export * from "./components/destructive-confirm-dialog";
 export * from "./components/dialog";

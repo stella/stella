@@ -544,6 +544,8 @@ const DESCRIPTION_OVERRIDES: Record<string, string> = {
     "Redis URL used for cross-replica Yjs and awareness broadcast. Treated as secret because it may contain credentials.",
   STELLA_COLLAB_SERVICE_TOKEN:
     "Bearer credential used by the collaboration service for snapshot load and store requests.",
+  OPERATOR_API_TOKEN:
+    "Deployment-owned bearer credential for operator HTTP access. Unset disables access; use at least 32 characters.",
   STELLA_SIGNUP_RATE_LIMIT_IP_SOURCE:
     'Client-IP source for signup limits. Use "direct" without a proxy and "trusted_proxy" behind configured proxies.',
   STELLA_CLIENT_ADDRESS_HEADER:
@@ -586,8 +588,6 @@ const DESCRIPTION_OVERRIDES: Record<string, string> = {
     "Show governed work-obligation fields on a task (owner, acknowledgement, hard deadline).",
   VITE_FEATURE_INBOX:
     "Show the Inbox and the notification bell for everyone, without the per-browser beta toggle.",
-  VITE_FEATURE_LEGAL_LISTS:
-    "Show first-class legal lists and list-item task controls.",
   VITE_POSTHOG_KEY:
     'Public PostHog project key. The placeholder "phc_" disables local capture.',
   VITE_POSTHOG_LOCAL_DEBUG:
@@ -890,6 +890,7 @@ export const ENV_CREDENTIAL_CLASSIFICATION = {
   STELLA_COLLAB_PORT: ENV_CREDENTIAL_KIND.notCredential,
   STELLA_COLLAB_REDIS_URL: ENV_CREDENTIAL_KIND.notCredential,
   STELLA_COLLAB_SERVICE_TOKEN: ENV_CREDENTIAL_KIND.credential,
+  OPERATOR_API_TOKEN: ENV_CREDENTIAL_KIND.credential,
   STELLA_COMMIT_SHA: ENV_CREDENTIAL_KIND.notCredential,
   STELLA_OCR_PDF_FONT_PATH: ENV_CREDENTIAL_KIND.notCredential,
   STELLA_ORIGIN_VERIFY_SECRET: ENV_CREDENTIAL_KIND.credential,
@@ -919,7 +920,6 @@ export const ENV_CREDENTIAL_CLASSIFICATION = {
   VITE_FEATURE_FOLIO_COLLAB: ENV_CREDENTIAL_KIND.notCredential,
   VITE_FEATURE_GOVERNED_WORKFLOW: ENV_CREDENTIAL_KIND.notCredential,
   VITE_FEATURE_INBOX: ENV_CREDENTIAL_KIND.notCredential,
-  VITE_FEATURE_LEGAL_LISTS: ENV_CREDENTIAL_KIND.notCredential,
   VITE_FEATURE_TIME_BILLING: ENV_CREDENTIAL_KIND.notCredential,
   VITE_FEATURE_USAGE: ENV_CREDENTIAL_KIND.notCredential,
   VITE_POSTHOG_HOST: ENV_CREDENTIAL_KIND.notCredential,
@@ -977,6 +977,7 @@ const ACTIVE_EXAMPLE_KEYS = new Set([
   "SMTP_PORT",
   "SMTP_USERNAME",
   "STELLA_COLLAB_SERVICE_TOKEN",
+  "OPERATOR_API_TOKEN",
   "STELLA_SIGNUP_RATE_LIMIT_IP_SOURCE",
   "TRANSACTIONAL_EMAIL_FROM",
   "USE_MOCK_AI",
@@ -1312,6 +1313,7 @@ export const TOOLING_ENV_KEYS = new Set([
   "BUN_INSTALL_CACHE_DIR",
   // Browser commands use only executables baked into the pinned image.
   "PLAYWRIGHT_BROWSERS_PATH",
+  "PLAYWRIGHT_JSON_OUTPUT_FILE",
   "PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD",
   "AGENT_ENGINE_DOCKER_CANARY_URL",
   "AGENT_ENGINE_DOCKER_IMAGE",
@@ -1332,7 +1334,13 @@ export const TOOLING_ENV_KEYS = new Set([
   "API_DEPLOYMENT_PROBE_PATH",
   "API_DEPLOYMENT_STABLE_PROBES",
   "API_DEPLOYMENT_URL",
+  "API_SCOPE_UNKNOWN",
   "API_TEST_ARTIFACT_DIR",
+  "API_TEST_FILES",
+  // Native Bun whole-file timing artifacts and optional drift measurements.
+  "API_TEST_MEASUREMENTS",
+  "API_TEST_TIMINGS_DIR",
+  "API_TEST_SHARD_COUNT",
   "APP_VERSION",
   "AWS_ENDPOINT_URL_BEDROCK_RUNTIME",
   "BASE_REF",
@@ -1367,6 +1375,18 @@ export const TOOLING_ENV_KEYS = new Set([
   "EXPECTED_COMMIT",
   "GH_READ_TOKEN",
   "HEAD_SHA",
+  // Scheduled journey checks: endpoint overrides and bounded request/retry timing.
+  "JOURNEY_CLI_URL",
+  "JOURNEY_MAIN_REF",
+  "JOURNEY_MCP_URL",
+  "JOURNEY_NPM_REGISTRY_URL",
+  "JOURNEY_REGISTRY_TIMEOUT_MS",
+  "JOURNEY_RETRY_PAUSE_SECONDS",
+  "JOURNEY_TIMEOUT_SECONDS",
+  "JOURNEY_WEB_DECISION_URL",
+  "JOURNEY_WEB_SEARCH_URL",
+  "JOURNEY_WEB_STATUTES_URL",
+  "JOURNEY_WEB_URL",
   "LANDING_SITE",
   "MARKETING_CAPTURE",
   "MARKETING_COMMIT",
@@ -1375,6 +1395,10 @@ export const TOOLING_ENV_KEYS = new Set([
   "MATTER_ACTIVITY_WORKSPACE_ID",
   "MCP_APP_INPUT",
   "MCP_CANARY_BASE_URL",
+  "MCP_CANARY_ENVIRONMENT",
+  "MCP_CANARY_FRONTEND_URL",
+  "MCP_CANARY_MODE",
+  "MCP_CANARY_REQUIRE_CREDENTIALS",
   "MCP_CANARY_TOKEN",
   "MERGE_GROUP_HEAD_REF",
   "MODE",
@@ -1401,6 +1425,7 @@ export const TOOLING_ENV_KEYS = new Set([
   "PROPERTY_TEST_TIMEOUT_BASE_MS",
   "PROVIDER_REQUEST_COMBINATIONS",
   "PROVIDER_REQUEST_SHARD",
+  "PUSH_BEFORE",
   "RAILWAY_API_TOKEN",
   "RAILWAY_PROJECT_TOKEN",
   "RAILWAY_SMOKE_API_URL",
@@ -1442,8 +1467,12 @@ export const TOOLING_ENV_KEYS = new Set([
   "STELLA_AGENT_CAPTURE_LOG",
   "STELLA_COLLAB_TEST_REDIS_CONTAINER_ID",
   "STELLA_COLLAB_TEST_REDIS_URL",
+  // Private loopback endpoint passed to the isolated corpus-suite preload.
+  "STELLA_CORPUS_ENGINE_TEST_ENDPOINT",
+  "STELLA_DESKTOP_DOWNLOAD_BASE_URL",
   "STELLA_DESKTOP_RELEASE_API_PATH",
   "STELLA_DESKTOP_RELEASE_EXPECTED_TAG",
+  "STELLA_DESKTOP_RETRY_PAUSE_SECONDS",
   "STELLA_DESKTOP_SMOKE_API_URL",
   "STELLA_DEV_INSTANCE",
   "STELLA_INFRA_OFFSET",
@@ -1466,6 +1495,7 @@ export const TOOLING_ENV_KEYS = new Set([
   "TANSTACK_DRIFT_INSTALL_OUTCOME",
   "TEST_API_ERROR",
   "TEST_LATER",
+  "CI_GENERATED_SOURCES_MANIFEST",
   "TURBO_HASH",
   "TURBO_SCM_BASE",
   "TURN_OUTCOME_COMBINATIONS",

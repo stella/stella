@@ -518,9 +518,48 @@ describe("detect-e2e-changes", () => {
       'echo "status=rate-limited" >> "$GITHUB_OUTPUT"',
     );
     expect(e2eStackSetup).toContain('echo "status=ready" >> "$GITHUB_OUTPUT"');
-    expect(
-      e2eStackSetup.match(/if: steps\.stack\.outputs\.status == 'ready'/gu),
-    ).toHaveLength(4);
+    const action: unknown = Bun.YAML.parse(e2eStackSetup);
+    if (
+      !isRecord(action) ||
+      !isRecord(action["runs"]) ||
+      !Array.isArray(action["runs"]["steps"])
+    ) {
+      throw new TypeError("Shared E2E action must declare composite steps");
+    }
+    const stackSteps = action["runs"]["steps"].map((value: unknown) => {
+      if (!isRecord(value)) {
+        throw new TypeError("Shared E2E action step must be an object");
+      }
+      const text = (key: string) => {
+        const field = value[key];
+        if (field === undefined || typeof field === "string") {
+          return field;
+        }
+        throw new TypeError(`Shared E2E action step ${key} must be text`);
+      };
+      return { name: text("name"), id: text("id"), if: text("if") };
+    });
+    const stackIndex = stackSteps.findIndex((step) => step.id === "stack");
+    expect(stackIndex).toBeGreaterThanOrEqual(0);
+    const afterStack = stackSteps
+      .slice(stackIndex + 1)
+      .filter((step) => step.name !== "Log out of Docker Hub");
+    expect(afterStack.length).toBeGreaterThan(0);
+    const assertReady = (steps: typeof afterStack) => {
+      for (const step of steps) {
+        expect(step.if, step.name).toBe(
+          "steps.stack.outputs.status == 'ready'",
+        );
+      }
+    };
+    assertReady(afterStack);
+    for (const [index, step] of afterStack.entries()) {
+      const mutation = afterStack.map((entry, position) =>
+        position === index ? { ...entry, if: "always()" } : entry,
+      );
+      expect(mutation.at(index)?.if).not.toBe(step.if);
+      expect(() => assertReady(mutation)).toThrow("steps.stack.outputs.status");
+    }
 
     for (const stepName of [
       "Install Playwright browsers",
@@ -574,7 +613,9 @@ describe("detect-e2e-changes", () => {
     for (const leg of ["api", "web", "rest"]) {
       const codeQuality = workflowJob(`code-quality-${leg}`);
       expect(plan).not.toContain(".github/*|.provenance.yml|provenance/*)");
-      expect(plan).toContain(".provenance.yml|provenance/*)");
+      expect(plan).toContain(
+        "bun scripts/ci-package-scope.ts --package-checks",
+      );
       expect(codeQuality).toContain(
         `EVENT_NAME: ${githubExpression("github.event_name")}`,
       );
@@ -721,19 +762,18 @@ describe("detect-e2e-changes", () => {
                     cancelled: () => cancelled,
                   };
                   expect(Boolean(evaluateExpression(predicate, context))).toBe(
-                    planned &&
+                    event !== "pull_request" &&
+                      planned &&
                       (trusted || event === "workflow_dispatch") &&
                       (!buildRequired ||
                         webResult === "success" ||
                         heavyResult === "success") &&
                       (event !== "merge_group" || !cancelled),
                   );
-                  if (predicate.includes("queue_depth")) {
-                    context.needs["ci-plan"].outputs.queue_depth = "thin";
-                    expect(
-                      Boolean(evaluateExpression(predicate, context)),
-                    ).toBe(false);
-                  }
+                  context.needs["ci-plan"].outputs.queue_depth = "thin";
+                  expect(Boolean(evaluateExpression(predicate, context))).toBe(
+                    false,
+                  );
                 }
               }
             }
@@ -846,7 +886,15 @@ describe("detect-e2e-changes", () => {
     });
     const suites = mainHeavyContract.jobs["suites"];
     expect(suites?.with?.["heavy_only"]).toBe(true);
-    expect(suites?.if).toBe("needs.validate.result == 'success'");
+    for (const result of ["success", "failure", "cancelled", "skipped"]) {
+      for (const run of ["true", "false"]) {
+        expect(
+          evaluateExpression(requiredExpression(suites?.if), {
+            needs: { validate: { result, outputs: { run } } },
+          }),
+        ).toBe(result === "success" && run === "true");
+      }
+    }
     const callerSha = evaluateExpression(
       requiredExpression(suites?.with?.["sha"]),
       { needs: { validate: { outputs: { sha: forwardedSha } } } },
@@ -1046,18 +1094,17 @@ describe("detect-e2e-changes", () => {
                       Boolean(evaluateExpression(predicate, context)),
                       `${event}/${depth}/${planned}/${trusted}/${webResult}/${heavyResult}/${heavyOnly}/${cancelled}`,
                     ).toBe(
-                      planned &&
+                      event !== "pull_request" &&
+                        planned &&
                         (trusted || event === "workflow_dispatch") &&
                         (webResult === "success" ||
                           heavyResult === "success") &&
                         (event !== "merge_group" || !cancelled),
                     );
-                    if (predicate.includes("queue_depth")) {
-                      context.needs["ci-plan"].outputs.queue_depth = "thin";
-                      expect(
-                        Boolean(evaluateExpression(predicate, context)),
-                      ).toBe(false);
-                    }
+                    context.needs["ci-plan"].outputs.queue_depth = "thin";
+                    expect(
+                      Boolean(evaluateExpression(predicate, context)),
+                    ).toBe(false);
                   }
                 }
               }

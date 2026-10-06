@@ -1084,10 +1084,10 @@ fn open_dialog(
     percent_encode(crate::i18n::text_direction()),
   );
 
-  let builder = tauri::WebviewWindowBuilder::new(
+  let builder = crate::app_window::builder(
     app_handle,
     DIALOG_LABEL,
-    tauri::WebviewUrl::App(format!("pdf-sign-dialog.html#{hash}").into()),
+    format!("pdf-sign-dialog.html#{hash}"),
   )
   .title(crate::i18n::t("dialog.pdfSignWindowTitle"))
   .inner_size(DIALOG_WIDTH, DIALOG_HEIGHT)

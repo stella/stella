@@ -26,6 +26,7 @@ import {
 } from "@/api/lib/custom-schema";
 import { createTimestampIdCursorCodec } from "@/api/lib/db-pagination";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { LIST_VERIFICATION_FEATURE_ID } from "@/api/lib/feature-access/registry";
 import { LIMITS } from "@/api/lib/limits";
 import {
   CLAIM_COUNT_COLUMNS,
@@ -51,6 +52,7 @@ const runCursor = createTimestampIdCursorCodec({
 });
 
 const config = {
+  featureAccess: { featureId: LIST_VERIFICATION_FEATURE_ID, type: "required" },
   description:
     "List the list verifications of one document, newest first with cursor " +
     "pagination: each run's status, failure code, the list it checked " +

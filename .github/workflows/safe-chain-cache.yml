@@ -3,6 +3,9 @@ name: Warm Safe Chain cache
 on:
   push:
     branches: [main]
+    paths:
+      - .github/actions/safe-chain/**
+      - .github/workflows/safe-chain-cache.yml
   schedule:
     - cron: "23 4 * * *"
   workflow_dispatch:

@@ -40,11 +40,12 @@ import { stellaToast } from "@stll/ui/toast";
 import { cn } from "@stll/ui/utils";
 
 import { useStartWorkflow } from "@/components/workspaces/hooks/use-start-workflow";
-import { useAvtPreviewEnabled } from "@/hooks/use-avt-preview";
 import { usePermissions } from "@/hooks/use-permissions";
 import type { ViewLayoutType } from "@/lib/api-contract";
 import { detached } from "@/lib/detached";
 import { notifyUserError } from "@/lib/errors/user-toast";
+import { useCallerFeatureEnabled } from "@/lib/organization/feature-access/access";
+import { CALLER_FEATURE } from "@/lib/organization/feature-access/surfaces";
 import { useCreateView } from "@/lib/workspaces/mutations/views";
 import type { WorkspaceViewTemplate } from "@/lib/workspaces/queries/view-templates";
 import { viewTemplatesOptions } from "@/lib/workspaces/queries/view-templates";
@@ -102,7 +103,9 @@ export const TemplatePickerDialog = ({
     (template) => !disallowedLayoutTypes.has(template.layoutType),
   );
   // AVT has no saved template to start from, so the preview offers its own.
-  const offersAvt = useAvtPreviewEnabled() && !disallowedLayoutTypes.has("avt");
+  const offersAvt =
+    useCallerFeatureEnabled(CALLER_FEATURE.verification) &&
+    !disallowedLayoutTypes.has("avt");
   const hasSavedTemplates = (visibleTemplates?.length ?? 0) > 0;
   const hasTemplates = hasSavedTemplates || offersAvt;
 
@@ -407,6 +410,7 @@ const DeleteTemplateConfirm = ({
   return (
     <AlertDialog onOpenChange={setOpen} open={open}>
       <AlertDialogTrigger
+        nativeButton
         render={
           <Button
             aria-label={t("workspaces.views.templates.delete")}

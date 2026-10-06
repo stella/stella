@@ -22,6 +22,7 @@ import { createSafeId } from "@/api/lib/branded-types";
 import {
   TEXT_ABSENCE_REASON,
   absentDecisionTextFields,
+  splitStoredDecisionTextMetadata,
 } from "@/api/lib/case-law/decision-text";
 import { DatabaseError, TimeoutError } from "@/api/lib/errors/tagged-errors";
 import type { CaseLawSourceIngestionLease } from "@/api/lib/legal-search/case-law-source-ingestion-lease";
@@ -661,9 +662,15 @@ describe("processDecision — canonical storage mode", () => {
           schema,
         );
         const normalized = sanitizeResult(input, schema);
-        expect(sanitizeResult(normalized, schema).metadata).toEqual(
-          normalized.metadata,
-        );
+        expect(
+          sanitizeResult(
+            {
+              ...normalized,
+              ...splitStoredDecisionTextMetadata(normalized.metadata),
+            },
+            schema,
+          ).metadata,
+        ).toEqual(normalized.metadata);
         const outcome = await processDecision({
           input,
           observationOrder: 1n,
@@ -691,7 +698,13 @@ describe("processDecision — canonical storage mode", () => {
         // The row write owns the partial-observation marker; projection omits it.
         expect({
           value: sanitizeResult(
-            plainTextIngestionResult({ ...input, metadata: reloaded }, schema),
+            plainTextIngestionResult(
+              {
+                ...input,
+                metadata: splitStoredDecisionTextMetadata(reloaded).metadata,
+              },
+              schema,
+            ),
             schema,
           ).metadata,
         }).toHaveProperty("value", normalized.metadata);

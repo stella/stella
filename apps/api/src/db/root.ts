@@ -8,6 +8,8 @@ import { sharedPoolConnectionSettings } from "@/api/db/shared-pool-connection-se
 import { envBase } from "@/api/env-base";
 import { queryCountLogger } from "@/api/lib/db-query-counter";
 import { runTransactionsInCallerContext } from "@/api/lib/db/caller-async-context";
+import type { RegistrationQuery } from "@/api/lib/db/operator-registrations/input";
+import { readAuditedRegistrationPage } from "@/api/lib/db/operator-registrations/read";
 import { createSanctionsPublicReadDb } from "@/api/lib/lists/sanctions/read-db";
 import { isLocalDevOpen } from "@/api/runtime-mode";
 
@@ -81,6 +83,10 @@ export const rlsDb = markRlsDatabase({
 /** The connection owner supplies only a role-restricted sanctions reader. */
 export const createPublicSanctionsReader = () =>
   createSanctionsPublicReadDb(rlsDb);
+
+/** The operator handler receives a bounded audited page, never the owner handle. */
+export const readOperatorRegistrationPage = async (query: RegistrationQuery) =>
+  await readAuditedRegistrationPage(rootDb, query);
 
 type Database = typeof rootDb;
 export type Transaction = TransactionOf<Database>;

@@ -1182,6 +1182,34 @@ const countDirectRedistributableCalls: FileCounter = (content, { file }) => {
   return total;
 };
 
+// A satisfies tie only checks fresh literal keys. Forwarded domain objects
+// need projectionPayload's recursive exactness gate before return annotations.
+const countWeakMcpProjectionTies: FileCounter = (content, { file }) => {
+  const source = parseSource({ fileName: file, text: content });
+  let total = 0;
+  const visit = (node: ts.Node) => {
+    if (ts.isSatisfiesExpression(node)) {
+      const type = node.type;
+      if (
+        ts.isTypeReferenceNode(type) &&
+        ts.isQualifiedName(type.typeName) &&
+        type.typeName.right.text === "InferInput" &&
+        type.typeArguments?.some(
+          (argument) =>
+            ts.isTypeQueryNode(argument) &&
+            ts.isIdentifier(argument.exprName) &&
+            argument.exprName.text.endsWith("_PROJECTION"),
+        )
+      ) {
+        total += 1;
+      }
+    }
+    node.forEachChild(visit);
+  };
+  visit(source);
+  return total;
+};
+
 const BOUNDARY_HELPER = "pgTimestampCursorBoundary";
 
 const countRepeatedTimestampCursorBoundaries: FileCounter = (
@@ -3285,6 +3313,15 @@ export const RATCHET_METRICS: readonly RatchetMetric[] = [
     ],
     exclude: isExcludedSource,
     count: countDirectRedistributableCalls,
+  },
+  {
+    scope: "file",
+    id: "weak-mcp-projection-ties",
+    description:
+      "satisfies-only MCP projection ties miss nested producer fields; use projectionPayload to bind forwarded domain results recursively. Stays at 0",
+    include: ["apps/api/src/mcp/**/*.ts"],
+    exclude: isExcludedSource,
+    count: countWeakMcpProjectionTies,
   },
   {
     scope: "file",
@@ -6110,6 +6147,48 @@ const schemaIntrospectionSelfTestFailures = (snapshot: Baseline): string[] => {
   return failures;
 };
 
+const projectionTieSelfTestFailures = (): string[] => {
+  const failures: string[] = [];
+  const projectionTieCases = [
+    {
+      code: "payload satisfies v.InferInput<typeof SEARCH_CASE_LAW_PROJECTION>;",
+      expected: 1,
+    },
+    {
+      code: "payload satisfies v.InferInput<\n typeof READ_STATUTE_PROJECTION\n>;",
+      expected: 1,
+    },
+    {
+      code: "payload satisfies v.InferInput<typeof INPUT_SCHEMA>;",
+      expected: 0,
+    },
+    {
+      code: "payload satisfies AssertNoExtraFields<typeof payload, v.InferInput<typeof READ_STATUTE_PROJECTION>>;",
+      expected: 0,
+    },
+    {
+      code: "projectionPayload(READ_STATUTE_PROJECTION, payload);",
+      expected: 0,
+    },
+    {
+      code: "// payload satisfies v.InferInput<typeof READ_STATUTE_PROJECTION>;",
+      expected: 0,
+    },
+  ];
+  for (const { code, expected } of projectionTieCases) {
+    const counted = countWeakMcpProjectionTies(code, {
+      file: "apps/api/src/mcp/tool.ts",
+    });
+    if (counted !== expected) {
+      failures.push(
+        `weak-mcp-projection-ties counted ${counted}, expected ${expected}, for: ${code}`,
+      );
+    }
+  }
+
+  return failures;
+};
+
 const runSelfTest = (): number => {
   const failures: string[] = [];
   const root = mkdtempSync(path.join(tmpdir(), "ratchet-selftest-"));
@@ -6951,6 +7030,8 @@ const runSelfTest = (): number => {
         );
       }
     }
+
+    failures.push(...projectionTieSelfTestFailures());
 
     // Diff behavior: equal passes, a rise regresses, a fall is a drop.
     const equal = diffMetric(

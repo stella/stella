@@ -54,6 +54,17 @@
       "polish": "تحسين الصياغة"
     }
   },
+  "aiColumns": {
+    "countSummary": "{columns} أعمدة × {rows} صفوف = {answers, plural, zero {# إجابة} one {# إجابة} two {# إجابتين} few {# إجابات} many {# إجابة} other {# إجابة}}. الإجابات تستهلك الميزانية.",
+    "refusedBudget": "لم يُشغّل: ميزانية الإجابات غير متاحة",
+    "rerunAllPage": "إعادة تشغيل الكل (هذه الصفحة)",
+    "rerunColumnPage": "إعادة تشغيل العمود (هذه الصفحة)",
+    "runColumnPage": "تشغيل العمود (هذه الصفحة)",
+    "runPageRows": "تشغيل لـ {count, plural, zero {# صف في هذه الصفحة} one {# صف في هذه الصفحة} two {# صفين في هذه الصفحة} few {# صفوف في هذه الصفحة} many {# صفًا في هذه الصفحة} other {# صف في هذه الصفحة}}",
+    "runRemainingPage": "تشغيل المتبقي (هذه الصفحة)",
+    "runSelectedRows": "تشغيل لـ {count, plural, zero {# صف محدد} one {# صف محدد} two {# صفين محددين} few {# صفوف محددة} many {# صفًا محددًا} other {# صف محدد}}",
+    "selectedRun": "تشغيل أعمدة الذكاء الاصطناعي لـ {count, plural, zero {# صف} one {# صف} two {# صفين} few {# صفوف} many {# صفًا} other {# صف}}"
+  },
   "appearance": {
     "calendar": "تقويم",
     "calendarGregorian": "الميلادي",
@@ -264,6 +275,7 @@
     "runs": {
       "back": "جميع المستندات",
       "errors": {
+        "accessRevoked": "توقف التحقق لأن الوصول غير متاح.",
         "aiUnavailable": "لا يتوفر أي نموذج ذكاء اصطناعي للتحقق من المستندات. تحقق من إعدادات الذكاء الاصطناعي للمؤسسة.",
         "enqueueFailed": "تعذّر بدء التحقق. حاول مرة أخرى.",
         "extractionFailed": "تعذّر استخراج الادعاءات الواردة في هذا المستند.",
@@ -796,6 +808,34 @@
       "unavailable": "أرقام التغطية غير متاحة حاليًا."
     },
     "decisionNotFound": "لم يُعثر على القرار",
+    "decisionTypes": {
+      "administrative_decision": "قرار إداري",
+      "binding_excise_information": "معلومة ملزمة بشأن الضريبة الانتقائية",
+      "binding_rate_information": "معلومة ملزمة بشأن سعر ضريبة القيمة المضافة",
+      "court_direction": "توجيه إجرائي",
+      "decision": "قرار",
+      "finding": "حكم في الموضوع",
+      "general_tax_ruling": "تفسير ضريبي عام",
+      "individual_tax_ruling": "تفسير ضريبي فردي",
+      "judgment": "حكم",
+      "leave_refused": "رفض لعدم وجود مسألة قانونية جوهرية",
+      "merits_decision": "قرار في أصل النزاع",
+      "ministry_of_justice_decision": "قرار وزارة العدل",
+      "minutes_extract": "مستخرج من المحضر",
+      "opinion": "رأي",
+      "order": "أمر",
+      "other": "أخرى",
+      "payment_order": "أمر بالأداء",
+      "penal_order": "أمر جزائي",
+      "principle_decision": "قرار مبدئي",
+      "protective_opinion": "رأي وقائي",
+      "resolution": "قرار تفسيري",
+      "signalling_decision": "قرار تنبيه",
+      "statement_of_reasons": "تسبيب",
+      "tax_explanations": "إيضاحات ضريبية",
+      "top_up_tax_opinion": "رأي بشأن الضريبة التكميلية",
+      "uniformity_decision": "قرار توحيد الاجتهاد القضائي"
+    },
     "emptyState": "لم يُعثر على أي قرارات. اضبط مصدرًا وشغّل مزامنة لاستيراد الاجتهاد القضائي.",
     "filters": {
       "remove": "إزالة عامل التصفية {filter}"
@@ -3747,11 +3787,15 @@
     }
   },
   "lawHome": {
+    "clearRecent": "مسح السجل الأخير",
     "enteringIntoForce": "يدخل حيز النفاذ قريبًا",
     "inForceFrom": "نافذ اعتبارًا من {date}",
-    "noRecentSearches": "لا توجد عمليات بحث بعد",
+    "noRecent": "لا يوجد نشاط حديث",
     "noSignals": "لا توجد إشارات بعد",
     "prompt": "عمّ تبحث؟",
+    "recent": "الأخيرة",
+    "recentCasesFilter": "الأحكام",
+    "recentSearchFilter": "عمليات البحث",
     "recentlyInForce": "دخل حيز النفاذ مؤخرًا",
     "searchLabel": "البحث في قاعدة البيانات القانونية",
     "searchPlaceholder": "رقم القضية أو رقم التشريع أو ECLI أو كلمات مفتاحية",
@@ -6006,7 +6050,6 @@
       "previewUnsupported": "المعاينة غير مدعومة لهذا النوع من المستندات.",
       "readingFrom": "يقرأ الذكاء الاصطناعي من",
       "referencesItself": "الخاصية تشير إلى نفسها عبر خصائص أخرى",
-      "rerunColumn": "إعادة تشغيل العمود",
       "resultType": "نوع النتيجة",
       "returnsLabel": "التنسيق",
       "scopeFile": "الملف الحالي",

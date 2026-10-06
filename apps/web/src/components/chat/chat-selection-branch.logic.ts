@@ -74,10 +74,3 @@ export const chatSelectionActions = ({
     CHAT_SELECTION_ACTION.copy,
   ];
 };
-
-/** Whether the selected words are still on screen inside the transcript;
- *  the bar hides once they scroll out of it. */
-export const isRectWithinBounds = (
-  rect: Pick<DOMRect, "bottom" | "top">,
-  bounds: Pick<DOMRect, "bottom" | "top">,
-): boolean => rect.bottom > bounds.top && rect.top < bounds.bottom;

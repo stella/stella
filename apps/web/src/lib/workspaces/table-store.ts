@@ -354,7 +354,8 @@ const isViewList = (data: unknown): data is readonly { id: string }[] =>
  * path that removes a view ends in a fetch of that list (`useDeleteView`
  * invalidates rather than writing the cache optimistically), so this is the
  * one owner of per-view cleanup. The list is complete
- * (`handlers/views/list.ts`), so absence means deleted. Installed beside the
+ * (`handlers/views/list.ts`), including unavailable view identities. This reads
+ * the raw cache before query selection, so absence means deleted. Installed beside the
  * `QueryClient`, like the PDF and chat runtime cleanups, rather than inside
  * the query function, to keep this persisted store out of the query module
  * every route and chat provider imports.

@@ -6,7 +6,7 @@
  * corpus (Harasta, Masaryk University).
  */
 
-import type { Polarity } from "./consts";
+import { REPORTED_PARTY_SUBMISSION_GROUP, type Polarity } from "./consts";
 
 type SeedRule = {
   pattern: string;
@@ -24,9 +24,9 @@ type RetiredSeedRule = Pick<SeedRule, "pattern" | "language">;
  * and says nothing about the citation. Words for the matter itself (věc,
  * případ, situace) are deliberately absent for that reason.
  */
-const CS_DECISION_ANCHOR =
+export const CS_DECISION_ANCHOR =
   "(?:závěr|rozsud|usnesen|nález|judikat|rozhodnut|stanovisk)";
-const SK_DECISION_ANCHOR =
+export const SK_DECISION_ANCHOR =
   "(?:záver|rozsud|uznesen|nález|judikat|rozhodnut|stanovisk)";
 
 /**
@@ -36,7 +36,15 @@ const SK_DECISION_ANCHOR =
  * says the cue's object is the court; "Rozsudek uvádí, že § 1765 nelze
  * aplikovat" likewise. A clause break ends the search.
  */
-const WORDS_BETWEEN = "(?:[^\\s,;.()]+\\s+){0,3}?";
+export const WORDS_BETWEEN = "(?:[^\\s,;.()]+\\s+){0,3}?";
+
+/**
+ * A named capture declares the extent of a reported submission. The engine
+ * uses its span, so a party's treatment cannot govern a later court sentence.
+ * Docket abbreviations are consumed whole, including their final period,
+ * so a Roman-numbered docket cannot terminate the submission. Dates also fit.
+ */
+const PARTY_SUBMISSION_TEXT = `(?:(?!,\\s*(?:(?:avšak|ale|nicméně)\\s+)?${WORDS_BETWEEN}(?:soud|súd|senát)\\s+)(?:(?:sp\\.\\s*zn\\.|č\\.\\s*j\\.)|\\d{1,2}\\.\\s*(?:\\d{1,2}\\.|\\p{L}+)\\s*\\d{4}|(?:Pl|[IVXLCDM]+)\\.\\s*ÚS|[^.!?;\\n]|\\.(?=\\s*\\d)))*`;
 
 /**
  * The bodies whose departure from a decision is a doctrinal act. A velký
@@ -137,6 +145,12 @@ export const SEED_RULES: readonly SeedRule[] = [
     language: "cs",
   },
 
+  {
+    pattern: `(?:stěžovatel|žalob|dovolatel|obviněn|navrhovatel|žalovan)\\p{L}*\\s+${WORDS_BETWEEN}(?:tvrdí|uvedl\\p{L}*|uvádí|namít\\p{L}*|vyjádřil\\p{L}*\\s+přesvědčení),?\\s+že\\s+(?<${REPORTED_PARTY_SUBMISSION_GROUP}>${PARTY_SUBMISSION_TEXT})`,
+    polarity: "neutral",
+    language: "cs",
+  },
+
   // -- Czech: negative -------------------------------------------
   // A negative cue must have the cited decision as its object. "na rozdíl
   // od" mostly compares parties or courts, and "nelze aplikovat" mostly
@@ -171,8 +185,7 @@ export const SEED_RULES: readonly SeedRule[] = [
   // it abandons, it does not share, and the practice "byla změněna" by its
   // ruling. Each cue is bound to the body or to a decision word so the
   // appellate-court formula stays out of it. A party reporting the body's
-  // departure reads the same as the body; the rule tier has no speaker
-  // guard, and that is the tier's known limit, not this cue's.
+  // departure is neutral inside an explicitly scoped reported submission.
   ...CS_BODY_DEPARTS.map((pattern): SeedRule => ({
     pattern,
     polarity: "negative",
@@ -238,6 +251,12 @@ export const SEED_RULES: readonly SeedRule[] = [
   { pattern: "porov\\.", polarity: "supportive", language: "sk" },
   { pattern: "pozri", polarity: "supportive", language: "sk" },
   { pattern: "obdobne", polarity: "supportive", language: "sk" },
+
+  {
+    pattern: `(?:sťažovateľ|navrhovateľ|žalob|obvinen|dovolateľ|žalovan)\\p{L}*\\s+${WORDS_BETWEEN}(?:tvrdí|uviedol|uvádza|namiet\\p{L}*|vyjadril\\s+presvedčenie),?\\s+že\\s+(?<${REPORTED_PARTY_SUBMISSION_GROUP}>${PARTY_SUBMISSION_TEXT})`,
+    polarity: "neutral",
+    language: "sk",
+  },
 
   // -- Slovak: negative ------------------------------------------
   {

@@ -54,6 +54,17 @@
       "polish": "Popraw sformułowanie"
     }
   },
+  "aiColumns": {
+    "countSummary": "{columns} kolumn × {rows} wierszy = {answers, plural, one {# odpowiedź} few {# odpowiedzi} many {# odpowiedzi} other {# odpowiedzi}}. Odpowiedzi zużywają budżet.",
+    "refusedBudget": "Nie uruchomiono: budżet odpowiedzi niedostępny",
+    "rerunAllPage": "Uruchom wszystko ponownie (ta strona)",
+    "rerunColumnPage": "Uruchom kolumnę ponownie (ta strona)",
+    "runColumnPage": "Uruchom kolumnę (ta strona)",
+    "runPageRows": "Uruchom dla {count, plural, one {# wiersza na tej stronie} few {# wierszy na tej stronie} many {# wierszy na tej stronie} other {# wiersza na tej stronie}}",
+    "runRemainingPage": "Uruchom pozostałe (ta strona)",
+    "runSelectedRows": "Uruchom dla {count, plural, one {# wybranego wiersza} few {# wybranych wierszy} many {# wybranych wierszy} other {# wybranego wiersza}}",
+    "selectedRun": "Uruchom kolumny AI dla {count, plural, one {# wiersza} few {# wierszy} many {# wierszy} other {# wiersza}}"
+  },
   "appearance": {
     "calendar": "Kalendarz",
     "calendarGregorian": "Gregoriański",
@@ -264,6 +275,7 @@
     "runs": {
       "back": "Wszystkie dokumenty",
       "errors": {
+        "accessRevoked": "Weryfikacja została zatrzymana, ponieważ dostęp jest niedostępny.",
         "aiUnavailable": "Do weryfikacji dokumentów nie jest dostępny żaden model AI. Sprawdź ustawienia AI organizacji.",
         "enqueueFailed": "Nie udało się rozpocząć weryfikacji. Spróbuj ponownie.",
         "extractionFailed": "Nie udało się wyodrębnić twierdzeń z tego dokumentu.",
@@ -796,6 +808,34 @@
       "unavailable": "Dane o zakresie są chwilowo niedostępne."
     },
     "decisionNotFound": "Nie znaleziono orzeczenia",
+    "decisionTypes": {
+      "administrative_decision": "Decyzja administracyjna",
+      "binding_excise_information": "Wiążąca informacja akcyzowa",
+      "binding_rate_information": "Wiążąca informacja stawkowa",
+      "court_direction": "Zarządzenie",
+      "decision": "Orzeczenie",
+      "finding": "Orzeczenie merytoryczne",
+      "general_tax_ruling": "Interpretacja ogólna",
+      "individual_tax_ruling": "Interpretacja indywidualna",
+      "judgment": "Wyrok",
+      "leave_refused": "Odrzucenie z braku istotnego zagadnienia prawnego",
+      "merits_decision": "Rozstrzygnięcie co do istoty",
+      "ministry_of_justice_decision": "Rozstrzygnięcie Ministerstwa Sprawiedliwości",
+      "minutes_extract": "Wyciąg z protokołu",
+      "opinion": "Opinia",
+      "order": "Postanowienie",
+      "other": "Inne",
+      "payment_order": "Nakaz zapłaty",
+      "penal_order": "Nakaz karny",
+      "principle_decision": "Orzeczenie zasadnicze",
+      "protective_opinion": "Opinia zabezpieczająca",
+      "resolution": "Uchwała",
+      "signalling_decision": "Sygnalizacja",
+      "statement_of_reasons": "Uzasadnienie",
+      "tax_explanations": "Objaśnienia podatkowe",
+      "top_up_tax_opinion": "Opinia w sprawie opodatkowania wyrównawczego",
+      "uniformity_decision": "Orzeczenie w sprawie jednolitości orzecznictwa"
+    },
     "emptyState": "Brak orzeczeń. Skonfiguruj źródło i uruchom synchronizację, aby zaimportować orzecznictwo.",
     "filters": {
       "remove": "Usuń filtr {filter}"
@@ -3747,11 +3787,15 @@
     }
   },
   "lawHome": {
+    "clearRecent": "Wyczyść ostatnie",
     "enteringIntoForce": "Wkrótce wejdzie w życie",
     "inForceFrom": "Obowiązuje od {date}",
-    "noRecentSearches": "Brak wyszukiwań",
+    "noRecent": "Brak ostatniej aktywności",
     "noSignals": "Brak sygnałów",
     "prompt": "Czego szukasz?",
+    "recent": "Ostatnie",
+    "recentCasesFilter": "Orzeczenia",
+    "recentSearchFilter": "Wyszukiwania",
     "recentlyInForce": "Niedawno weszło w życie",
     "searchLabel": "Szukaj w bazie prawnej",
     "searchPlaceholder": "Sygnatura, numer aktu, ECLI lub słowa kluczowe",
@@ -6006,7 +6050,6 @@
       "previewUnsupported": "Podgląd niedostępny dla tego typu dokumentu.",
       "readingFrom": "AI czyta z",
       "referencesItself": "Właściwość odwołuje się do siebie przez inne właściwości",
-      "rerunColumn": "Uruchom kolumnę ponownie",
       "resultType": "Typ wyniku",
       "returnsLabel": "Format",
       "scopeFile": "Bieżący plik",

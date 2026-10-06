@@ -212,8 +212,33 @@ const withRegistryCredentialQuery = (transaction: unknown): unknown => {
       }
       return { rows: [{ taken: false }] };
     },
-    select: selectChatMessages,
     ...transaction,
+    select: (selection: unknown) => {
+      if (
+        typeof selection === "object" &&
+        selection !== null &&
+        "emailVerified" in selection
+      ) {
+        return {
+          from: () => ({
+            innerJoin: () => ({
+              where: () => ({
+                limit: async () => [
+                  { email: "member@example.test", emailVerified: true },
+                ],
+              }),
+            }),
+          }),
+        };
+      }
+      if ("select" in transaction && typeof transaction.select === "function") {
+        const result: unknown = Reflect.apply(transaction.select, transaction, [
+          selection,
+        ]);
+        return result;
+      }
+      return selectChatMessages();
+    },
     query: {
       businessRegistryCredentials: { findMany: async () => [] },
       ...(typeof query === "object" && query !== null ? query : {}),

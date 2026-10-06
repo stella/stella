@@ -280,82 +280,103 @@ export const gradeClaims = async ({
     batches.push(prompted.slice(start, start + BATCH_SIZE));
   }
 
-  return await Result.tryPromise({
-    try: async () => {
-      const perBatch = await mapWithConcurrency({
-        items: batches,
-        limit: CONCURRENCY,
-        operation: async (batch) => {
-          const request = call.request(
-            `Claims:\n${batch
-              .map(
-                ({ promptId, claim }) =>
-                  `- ${promptId}: ${claim.text}\n  passage: ${claimPassage(claim.context.text, claim.context.anchor)}`,
-              )
-              .join("\n")}`,
-          );
-          const graded = new Map<string, ClaimGrade>();
-          const asked = new Set(batch.map(({ promptId }) => promptId));
-          const hold = (answers: readonly RawGrade[]): Violation[] => {
-            const violations: Violation[] = [];
-            for (const raw of answers) {
-              if (!asked.has(raw.claimId) || graded.has(raw.claimId)) {
-                continue;
+  return Result.flatten(
+    await Result.tryPromise({
+      try: async () => {
+        const perBatch = await mapWithConcurrency({
+          items: batches,
+          limit: CONCURRENCY,
+          operation: async (batch) => {
+            const request = call.request(
+              `Claims:\n${batch
+                .map(
+                  ({ promptId, claim }) =>
+                    `- ${promptId}: ${claim.text}\n  passage: ${claimPassage(claim.context.text, claim.context.anchor)}`,
+                )
+                .join("\n")}`,
+            );
+            const graded = new Map<string, ClaimGrade>();
+            const asked = new Set(batch.map(({ promptId }) => promptId));
+            const hold = (answers: readonly RawGrade[]): Violation[] => {
+              const violations: Violation[] = [];
+              for (const raw of answers) {
+                if (!asked.has(raw.claimId) || graded.has(raw.claimId)) {
+                  continue;
+                }
+                const grade = normalizeGrade(raw, factIdByPromptId);
+                if (Result.isOk(grade)) {
+                  graded.set(raw.claimId, grade.value);
+                } else {
+                  violations.push({
+                    claimId: raw.claimId,
+                    reason: grade.error,
+                  });
+                }
               }
-              const grade = normalizeGrade(raw, factIdByPromptId);
-              if (Result.isOk(grade)) {
-                graded.set(raw.claimId, grade.value);
-              } else {
-                violations.push({ claimId: raw.claimId, reason: grade.error });
+              return violations;
+            };
+            const output = await call.generate([request]);
+            if (Result.isError(output)) {
+              return output;
+            }
+            const violations = hold(output.value.grades);
+            for (const { promptId } of batch) {
+              if (
+                !graded.has(promptId) &&
+                !violations.some((violation) => violation.claimId === promptId)
+              ) {
+                violations.push({
+                  claimId: promptId,
+                  reason: "was not answered",
+                });
               }
             }
-            return violations;
-          };
-          const output = await call.generate([request]);
-          const violations = hold(output.grades);
-          for (const { promptId } of batch) {
-            if (
-              !graded.has(promptId) &&
-              !violations.some((violation) => violation.claimId === promptId)
-            ) {
-              violations.push({
-                claimId: promptId,
-                reason: "was not answered",
-              });
+            if (violations.length > 0) {
+              const repaired = await call.generate([
+                request,
+                { role: "assistant", content: JSON.stringify(output.value) },
+                { role: "user", content: repairMessage(violations) },
+              ]);
+              if (Result.isError(repaired)) {
+                return repaired;
+              }
+              hold(repaired.value.grades);
             }
-          }
-          if (violations.length > 0) {
-            const repaired = await call.generate([
-              request,
-              { role: "assistant", content: JSON.stringify(output) },
-              { role: "user", content: repairMessage(violations) },
-            ]);
-            hold(repaired.grades);
-          }
-          return graded;
-        },
-      });
+            return Result.ok(graded);
+          },
+        });
 
-      const grades = new Map<string, ClaimGrade>();
-      for (const graded of perBatch) {
-        for (const [promptId, grade] of graded) {
-          const key = keyByPromptId.get(promptId);
-          if (key !== undefined) {
-            grades.set(key, grade);
+        const grades = new Map<string, ClaimGrade>();
+        for (const batch of perBatch) {
+          if (batch.isErr()) {
+            return Result.err(
+              new WorkflowIntegrationError({
+                message: "Claim grading failed",
+                cause: batch.error,
+              }),
+            );
+          }
+          for (const [promptId, grade] of batch.value) {
+            const key = keyByPromptId.get(promptId);
+            if (key !== undefined) {
+              grades.set(key, grade);
+            }
           }
         }
-      }
-      const ungraded = claims.length - grades.size;
-      return ungraded === 0
-        ? ({ type: "graded", grades } as const)
-        : ({ type: "incomplete", ungraded } as const);
-    },
-    catch: (cause) => {
-      call.captureError(cause);
-      return new WorkflowIntegrationError({
-        message: "Claim grading failed",
-        cause,
-      });
-    },
-  });
+        const ungraded = claims.length - grades.size;
+        return Result.ok(
+          ungraded === 0
+            ? ({ type: "graded", grades } as const)
+            : ({ type: "incomplete", ungraded } as const),
+        );
+      },
+      catch: (cause) => {
+        call.captureError(cause);
+        return new WorkflowIntegrationError({
+          message: "Claim grading failed",
+          cause,
+        });
+      },
+    }),
+  );
 };

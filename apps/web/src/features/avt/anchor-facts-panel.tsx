@@ -45,6 +45,8 @@ import {
 import { usePermissions } from "@/hooks/use-permissions";
 import { useFormatter } from "@/i18n/formatting-context";
 import { detached } from "@/lib/detached";
+import { useCallerFeatureEnabled } from "@/lib/organization/feature-access/access";
+import { CALLER_FEATURE } from "@/lib/organization/feature-access/surfaces";
 import { legalListItemsOptions } from "@/lib/workspaces/queries/legal-lists";
 
 type AnchorFactsPanelProps = {
@@ -56,6 +58,7 @@ export const AnchorFactsPanel = ({
   workspaceId,
   listId,
 }: AnchorFactsPanelProps) => {
+  const legalListsEnabled = useCallerFeatureEnabled(CALLER_FEATURE.legalLists);
   const format = useFormatter();
   const t = useTranslations();
   const { data, fetchNextPage, hasNextPage, isFetchingNextPage } =
@@ -78,19 +81,21 @@ export const AnchorFactsPanel = ({
             {t("avt.anchorFacts.description")}
           </p>
         </div>
-        <Button
-          render={
-            <Link
-              params={{ workspaceId }}
-              search={{ list: listId }}
-              to="/workspaces/$workspaceId/lists"
-            />
-          }
-          size="sm"
-          variant="outline"
-        >
-          {t("avt.anchorFacts.openList")}
-        </Button>
+        {legalListsEnabled && (
+          <Button
+            render={
+              <Link
+                params={{ workspaceId }}
+                search={{ list: listId }}
+                to="/workspaces/$workspaceId/lists"
+              />
+            }
+            size="sm"
+            variant="outline"
+          >
+            {t("avt.anchorFacts.openList")}
+          </Button>
+        )}
       </div>
 
       {heldCount > 0 && (

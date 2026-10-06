@@ -53,6 +53,7 @@
     "./calendar": "./src/calendar/index.ts",
     "./data-table": "./src/data-table/index.ts",
     "./date-picker-popover": "./src/components/date-picker-popover.tsx",
+    "./details-grid": "./src/components/details-grid.tsx",
     "./destructive-action-confirmation": "./src/components/destructive-action-confirmation.tsx",
     "./destructive-confirm-dialog": "./src/components/destructive-confirm-dialog.tsx",
     "./dialog": "./src/components/dialog.tsx",

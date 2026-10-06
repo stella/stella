@@ -83,6 +83,37 @@ for range in "${ranges[@]}"; do
   fi
 done
 
+# Every changed commit must be read by the scanner. It counts a commit whose
+# patch changes text lines in a file the commit keeps (not deleted); the scan
+# passes only when its reported count covers the same count of the range.
+scanner_log="$(mktemp)"
+trap 'rm -f "${scanner_log}"' EXIT
+
 for range in "${ranges[@]}"; do
-  gitleaks git --redact --no-banner --no-color --log-opts="--remerge-diff ${range}" .
+  read -r -a revisions <<<"${range}"
+  expected="$(
+    git log -p --remerge-diff --no-ext-diff --no-color --format=%x01 "${revisions[@]}" |
+      awk '
+        /^\001/ { counted = 0; next }
+        /^diff --git / { deleted = 0; next }
+        /^deleted file mode / { deleted = 1; next }
+        /^@@ / && !deleted && !counted { commits++; counted = 1 }
+        END { print commits + 0 }
+      '
+  )"
+  status=0
+  gitleaks git --redact --no-banner --no-color --log-opts="--remerge-diff ${range}" . 2>"${scanner_log}" || status=$?
+  cat "${scanner_log}" >&2
+  if [[ ${status} -ne 0 ]]; then
+    exit "${status}"
+  fi
+  scanned="$(sed -n 's/.* \([0-9][0-9]*\) commits scanned.*/\1/p' "${scanner_log}" | tail -n 1)"
+  if [[ -z "${scanned}" ]]; then
+    echo "error: the scanner did not report how many commits of ${range} it read; secret scanning refused." >&2
+    exit 1
+  fi
+  if ((scanned < expected)); then
+    echo "error: the scanner read ${scanned} of ${expected} changed commits in ${range}; secret scanning refused." >&2
+    exit 1
+  fi
 done

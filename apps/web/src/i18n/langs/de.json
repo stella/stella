@@ -54,6 +54,17 @@
       "polish": "Formulierung verbessern"
     }
   },
+  "aiColumns": {
+    "countSummary": "{columns} Spalten × {rows} Zeilen = {answers, plural, one {# Antwort} other {# Antworten}}. Antworten verbrauchen Budget.",
+    "refusedBudget": "Nicht ausgeführt: Antwortbudget nicht verfügbar",
+    "rerunAllPage": "Alle erneut ausführen (diese Seite)",
+    "rerunColumnPage": "Spalte erneut ausführen (diese Seite)",
+    "runColumnPage": "Spalte ausführen (diese Seite)",
+    "runPageRows": "Ausführen für {count, plural, one {# Zeile auf dieser Seite} other {# Zeilen auf dieser Seite}}",
+    "runRemainingPage": "Verbleibende ausführen (diese Seite)",
+    "runSelectedRows": "Ausführen für {count, plural, one {# ausgewählte Zeile} other {# ausgewählte Zeilen}}",
+    "selectedRun": "KI-Spalten ausführen für {count, plural, one {# Zeile} other {# Zeilen}}"
+  },
   "appearance": {
     "calendar": "Kalender",
     "calendarGregorian": "Gregorianisch",
@@ -264,6 +275,7 @@
     "runs": {
       "back": "Alle Dokumente",
       "errors": {
+        "accessRevoked": "Die Überprüfung wurde beendet, da kein Zugriff verfügbar ist.",
         "aiUnavailable": "Für die Dokumentenprüfung ist kein KI-Modell verfügbar. Prüfen Sie die KI-Einstellungen der Organisation.",
         "enqueueFailed": "Die Prüfung konnte nicht gestartet werden. Versuchen Sie es erneut.",
         "extractionFailed": "Die Behauptungen in diesem Dokument konnten nicht extrahiert werden.",
@@ -796,6 +808,34 @@
       "unavailable": "Die Abdeckungszahlen sind derzeit nicht verfügbar."
     },
     "decisionNotFound": "Entscheidung nicht gefunden",
+    "decisionTypes": {
+      "administrative_decision": "Bescheid",
+      "binding_excise_information": "Verbindliche Verbrauchsteuerauskunft",
+      "binding_rate_information": "Verbindliche Auskunft zum Umsatzsteuersatz",
+      "court_direction": "Verfügung",
+      "decision": "Entscheidung",
+      "finding": "Erkenntnis",
+      "general_tax_ruling": "Allgemeine Steuerauslegung",
+      "individual_tax_ruling": "Individuelle Steuerauskunft",
+      "judgment": "Urteil",
+      "leave_refused": "Zurückweisung mangels erheblicher Rechtsfrage",
+      "merits_decision": "Sachentscheidung",
+      "ministry_of_justice_decision": "Entscheidung des Justizministeriums",
+      "minutes_extract": "Protokollauszug",
+      "opinion": "Stellungnahme",
+      "order": "Beschluss",
+      "other": "Sonstige",
+      "payment_order": "Zahlungsbefehl",
+      "penal_order": "Strafbefehl",
+      "principle_decision": "Grundsatzentscheidung",
+      "protective_opinion": "Absichernde Stellungnahme",
+      "resolution": "Beschluss (Uchwała)",
+      "signalling_decision": "Signalisierungsbeschluss",
+      "statement_of_reasons": "Begründung",
+      "tax_explanations": "Steuerliche Erläuterungen",
+      "top_up_tax_opinion": "Stellungnahme zur Ergänzungssteuer",
+      "uniformity_decision": "Entscheidung zur Wahrung der Rechtseinheit"
+    },
     "emptyState": "Keine Entscheidungen gefunden. Konfigurieren Sie eine Quelle und führen Sie eine Synchronisierung durch, um Rechtsprechung zu importieren.",
     "filters": {
       "remove": "Filter {filter} entfernen"
@@ -3747,11 +3787,15 @@
     }
   },
   "lawHome": {
+    "clearRecent": "Verlauf löschen",
     "enteringIntoForce": "Tritt demnächst in Kraft",
     "inForceFrom": "In Kraft ab {date}",
-    "noRecentSearches": "Noch keine Suchen",
+    "noRecent": "Noch keine kürzlichen Aktivitäten",
     "noSignals": "Noch keine Signale",
     "prompt": "Wonach suchen Sie?",
+    "recent": "Zuletzt verwendet",
+    "recentCasesFilter": "Entscheidungen",
+    "recentSearchFilter": "Suchen",
     "recentlyInForce": "Kürzlich in Kraft getreten",
     "searchLabel": "Rechtsdatenbank durchsuchen",
     "searchPlaceholder": "Aktenzeichen, Gesetzesnummer, ECLI oder Stichwörter",
@@ -6006,7 +6050,6 @@
       "previewUnsupported": "Vorschau für diesen Dokumenttyp nicht unterstützt.",
       "readingFrom": "KI liest aus",
       "referencesItself": "Eigenschaft referenziert sich selbst über andere Eigenschaften",
-      "rerunColumn": "Spalte neu ausführen",
       "resultType": "Ergebnistyp",
       "returnsLabel": "Format",
       "scopeFile": "Aktuelle Datei",

@@ -679,13 +679,18 @@ describe("public law sitemap", () => {
   });
 
   test("public case-law list route preloads first page for SSR links", async () => {
-    const source = await readSource("apps/web/src/routes/law/cases/index.tsx");
+    const [source, facets] = await Promise.all([
+      readSource("apps/web/src/routes/law/cases/index.tsx"),
+      readSource("apps/web/src/features/case-law/decision-filter-facets.ts"),
+    ]);
 
     expect(source).toContain("loader:");
     expect(source).toContain("ensureRouteInfiniteQueryData");
-    expect(source).toContain(
-      "ensureRouteQueryData(queryClient, decisionFacetsOptions(scope))",
-    );
+    expect(source).toContain("await prefetchDecisionFacetsAfterSearch({");
+    expect(source).toContain("country: scope,");
+    expect(facets).toContain("search.finally(");
+    expect(facets).toContain("prefetchRouteQuery(");
+    expect(facets).toContain("decisionFacetsOptions(country)");
     expect(source).not.toContain("decisionFacetsOptions()");
     expect(source).toContain("decisionsInfiniteOptions(");
     expect(source).toContain("validateSearch: searchSchema");

@@ -17,6 +17,7 @@ import {
   createCaseLawDecisionRouteParams,
 } from "@stll/api-contract/case-law-decision-route";
 import type { CaseLawDecisionRouteInput } from "@stll/api-contract/case-law-decision-route";
+import { resolveLegalCitationLinks } from "@stll/api-contract/legal-citation-links";
 import {
   createStatutePath,
   createStatuteRouteParams,
@@ -51,6 +52,7 @@ import {
   projectMcpRefusal,
   statusCodeToErrorCode,
 } from "@/api/mcp/error-codes";
+import type { CheckedOutput } from "@/api/mcp/output-excess-keys";
 import { MCP_INTERNAL_TOOL_FAILURE } from "@/api/mcp/tool-call-outcome";
 import { TOOL_CONFIRMATION } from "@/api/mcp/tool-confirmation";
 import type { ToolConfirmation } from "@/api/mcp/tool-confirmation";
@@ -58,6 +60,7 @@ import type {
   InternalToolErrorResult,
   InternalToolResult,
   InternalToolSuccess,
+  McpEgressPlan,
   RuntimeMcpToolOutputContract,
 } from "@/api/mcp/tool-types";
 
@@ -412,12 +415,54 @@ export const confirmProp = (
     description,
   }) as const;
 
-export const toolDataResult = <TData>(
-  data: TData,
+/**
+ * A tool's successful output. `TData` is read from the return context (the
+ * handler's declared output), and `data` may carry no property that type
+ * lacks: a strict output schema would reject it after the handler succeeded.
+ */
+export const toolDataResult = <TData, TActual extends TData>(
+  data: CheckedOutput<TActual, TData>,
 ): InternalToolSuccess<TData> => ({
   status: "success",
   data,
 });
+
+/**
+ * Output for a surface without a declared output type (gateway families,
+ * capability passthrough), which nothing validates against a Stella schema.
+ */
+export const untypedToolDataResult = (data: unknown): InternalToolSuccess => ({
+  status: "success",
+  data,
+});
+
+type StructuredEgressPlan<TPayload> = Extract<
+  McpEgressPlan<TPayload>,
+  { egress: "structured" }
+>;
+
+type StructuredEgressPlanOptions<TPayload, TActual> = Omit<
+  StructuredEgressPlan<TPayload>,
+  "egress" | "payload"
+> & { payload: CheckedOutput<TActual, TPayload> };
+
+/** `toolDataResult` for a payload the egress pipeline finalizes. */
+export const structuredEgressPlan = <TPayload, TActual extends TPayload>({
+  payload,
+  ...plan
+}: StructuredEgressPlanOptions<
+  TPayload,
+  TActual
+>): StructuredEgressPlan<TPayload> => ({
+  egress: "structured",
+  payload,
+  ...plan,
+});
+
+/** `untypedToolDataResult` for a payload the egress pipeline finalizes. */
+export const untypedStructuredEgressPlan = (
+  plan: Omit<StructuredEgressPlan<unknown>, "egress">,
+): StructuredEgressPlan<unknown> => ({ egress: "structured", ...plan });
 
 // TypeScript's JSON.stringify overload for `unknown` claims it always returns
 // a string, but the runtime returns undefined for unsupported root values.
@@ -557,7 +602,7 @@ export const serializeToolResult = (
  */
 export const serializeMcpData = (data: unknown): CallToolResult => {
   const { structuredContent: _upstream, ...result } = serializeToolResult(
-    toolDataResult(data),
+    untypedToolDataResult(data),
   );
   return result;
 };
@@ -1156,6 +1201,28 @@ export const buildMatterUrl = (workspaceId: string) =>
 
 export { buildDocumentUrl } from "@/api/lib/mcp-connectors/app-urls";
 
+/** Keep the legacy app URL beside the shared primary/source link contract. */
+export const legalCitationLinkFields = ({
+  appUrl,
+  sourceUrl,
+}: {
+  appUrl: string | null;
+  sourceUrl: string | null;
+}) => {
+  const links = resolveLegalCitationLinks({
+    appUrl,
+    sourceUrl,
+    appOrigins: new Set([new URL(getAppBaseUrl()).origin]),
+  });
+  return {
+    appUrl,
+    url: links.url,
+    ...(links.type === "external" || links.source_url === undefined
+      ? {}
+      : { source_url: links.source_url }),
+  };
+};
+
 export const buildCaseLawDecisionAppUrl = (
   input: CaseLawDecisionRouteInput,
 ): string | null =>
@@ -1201,8 +1268,8 @@ export const toPlainCorpusText = ({
 };
 
 /**
- * A statute's canonical public address, always the latest consolidation of
- * the Work: its stored slug, or the id form when the corpus holds none. The
+ * A statute's canonical public address: its stored slug, or the id form when
+ * the corpus holds none. A version and provision anchor preserve a dated read. The
  * route shape is owned by `@stll/api-contract/statute-route`, so the address
  * a tool reports and the page the web serves cannot diverge. Null only when
  * the public-law surface is off.
@@ -1212,7 +1279,12 @@ export const buildLegislationDocumentAppUrl = ({
   documentId,
   eli,
   slug,
-}: Omit<StatuteRouteInput, "version">): string | null =>
+  version = null,
+  anchor,
+}: Omit<StatuteRouteInput, "version"> & {
+  version?: string | null;
+  anchor?: string;
+}): string | null =>
   isDeploymentFeatureEnabled("FEATURE_PUBLIC_LAW")
     ? `${getAppBaseUrl()}${createStatutePath(
         createStatuteRouteParams({
@@ -1220,9 +1292,9 @@ export const buildLegislationDocumentAppUrl = ({
           documentId,
           eli,
           slug,
-          version: null,
+          version,
         }),
-      )}`
+      )}${anchor === undefined ? "" : `#${encodeURIComponent(anchor)}`}`
     : null;
 
 /**

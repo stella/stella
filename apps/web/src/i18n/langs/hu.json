@@ -54,6 +54,17 @@
       "polish": "Megfogalmazás javítása"
     }
   },
+  "aiColumns": {
+    "countSummary": "{columns} oszlop × {rows} sor = {answers, plural, one {# válasz} other {# válasz}}. A válaszok felhasználják a keretet.",
+    "refusedBudget": "Nem futott le: a válaszkeret nem érhető el",
+    "rerunAllPage": "Összes újrafuttatása (ezen az oldalon)",
+    "rerunColumnPage": "Oszlop újrafuttatása (ezen az oldalon)",
+    "runColumnPage": "Oszlop futtatása (ezen az oldalon)",
+    "runPageRows": "Futtatás {count, plural, one {# sorra ezen az oldalon} other {# sorra ezen az oldalon}}",
+    "runRemainingPage": "Hátralévők futtatása (ezen az oldalon)",
+    "runSelectedRows": "Futtatás {count, plural, one {# kijelölt sorra} other {# kijelölt sorra}}",
+    "selectedRun": "AI-oszlopok futtatása {count, plural, one {# sorra} other {# sorra}}"
+  },
   "appearance": {
     "calendar": "Naptár",
     "calendarGregorian": "Gergely",
@@ -264,6 +275,7 @@
     "runs": {
       "back": "Összes irat",
       "errors": {
+        "accessRevoked": "Az ellenőrzés leállt, mert a hozzáférés nem érhető el.",
         "aiUnavailable": "Nem érhető el AI-modell az iratok ellenőrzéséhez. Ellenőrizze a szervezet AI-beállításait.",
         "enqueueFailed": "Az ellenőrzést nem sikerült elindítani. Próbálja újra.",
         "extractionFailed": "Ennek az iratnak az állításait nem sikerült kinyerni.",
@@ -796,6 +808,34 @@
       "unavailable": "A lefedettségi adatok jelenleg nem érhetők el."
     },
     "decisionNotFound": "A határozat nem található",
+    "decisionTypes": {
+      "administrative_decision": "Hatósági határozat",
+      "binding_excise_information": "Kötelező erejű jövedéki tájékoztatás",
+      "binding_rate_information": "Kötelező erejű áfakulcs-tájékoztatás",
+      "court_direction": "Intézkedés",
+      "decision": "Határozat",
+      "finding": "Érdemi határozat",
+      "general_tax_ruling": "Általános adójogi értelmezés",
+      "individual_tax_ruling": "Egyedi adójogi értelmezés",
+      "judgment": "Ítélet",
+      "leave_refused": "Elutasítás jelentős jogkérdés hiányában",
+      "merits_decision": "Ügydöntő határozat",
+      "ministry_of_justice_decision": "Igazságügyi minisztériumi határozat",
+      "minutes_extract": "Jegyzőkönyvi kivonat",
+      "opinion": "Vélemény",
+      "order": "Végzés",
+      "other": "Egyéb",
+      "payment_order": "Fizetési meghagyás",
+      "penal_order": "Büntetővégzés",
+      "principle_decision": "Elvi határozat",
+      "protective_opinion": "Biztosító vélemény",
+      "resolution": "Határozat (uchwała)",
+      "signalling_decision": "Jelzés",
+      "statement_of_reasons": "Indokolás",
+      "tax_explanations": "Adózási magyarázatok",
+      "top_up_tax_opinion": "Vélemény a kiegészítő adóról",
+      "uniformity_decision": "Jogegységi határozat"
+    },
     "emptyState": "Nem található határozat. Adjon meg egy forrást, és futtasson szinkronizálást az ítélkezési gyakorlat importálásához.",
     "filters": {
       "remove": "A(z) {filter} szűrő eltávolítása"
@@ -3747,11 +3787,15 @@
     }
   },
   "lawHome": {
+    "clearRecent": "Előzmények törlése",
     "enteringIntoForce": "Hamarosan hatályba lép",
     "inForceFrom": "Hatálybalépés: {date}",
-    "noRecentSearches": "Még nincsenek keresések",
+    "noRecent": "Még nincs legutóbbi tevékenység",
     "noSignals": "Még nincsenek jelzések",
     "prompt": "Mit keres?",
+    "recent": "Legutóbbiak",
+    "recentCasesFilter": "Határozatok",
+    "recentSearchFilter": "Keresések",
     "recentlyInForce": "Nemrég hatályba lépett",
     "searchLabel": "Keresés a jogi adatbázisban",
     "searchPlaceholder": "Ügyszám, jogszabályszám, ECLI vagy kulcsszavak",
@@ -6006,7 +6050,6 @@
       "previewUnsupported": "Az előnézet ehhez a dokumentumtípushoz nem támogatott.",
       "readingFrom": "Az AI innen olvas:",
       "referencesItself": "A tulajdonság más tulajdonságokon keresztül hivatkozik önmagára",
-      "rerunColumn": "Oszlop újrafuttatása",
       "resultType": "Eredmény típusa",
       "returnsLabel": "Formátum",
       "scopeFile": "Aktuális fájl",

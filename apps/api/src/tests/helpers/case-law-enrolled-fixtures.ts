@@ -28,6 +28,7 @@ import {
   SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
 } from "@/api/handlers/case-law/ingestion/adapter";
 import type { IngestionResult } from "@/api/handlers/case-law/ingestion/adapter";
+import type { SourceRegistrationKey } from "@/api/handlers/case-law/ingestion/adapters/adapter-registry";
 import { AT_ASYLGH_SOURCE } from "@/api/handlers/case-law/ingestion/adapters/at-asylgh";
 import { AT_BKS_SOURCE } from "@/api/handlers/case-law/ingestion/adapters/at-bks";
 import { AT_BVWG_SOURCE } from "@/api/handlers/case-law/ingestion/adapters/at-bvwg";
@@ -55,6 +56,8 @@ import { AT_UVS_SOURCE } from "@/api/handlers/case-law/ingestion/adapters/at-uvs
 import { AT_VERG_SOURCE } from "@/api/handlers/case-law/ingestion/adapters/at-verg";
 import { AT_VFGH_SOURCE } from "@/api/handlers/case-law/ingestion/adapters/at-vfgh";
 import { AT_VWGH_SOURCE } from "@/api/handlers/case-law/ingestion/adapters/at-vwgh";
+import { courtListenerConformanceFixture } from "@/api/handlers/case-law/ingestion/adapters/courtlistener/conformance-fixture";
+import { COURTLISTENER_IMPORT_KEY } from "@/api/handlers/case-law/ingestion/adapters/courtlistener/map";
 import { buildCzNsDecision } from "@/api/handlers/case-law/ingestion/adapters/cz-ns";
 import { buildCzNssDecision } from "@/api/handlers/case-law/ingestion/adapters/cz-nss";
 import {
@@ -2713,3 +2716,40 @@ export const plUokikRulingFixture = (): EnrolledAdapterFixture => ({
     };
   },
 });
+
+/** Total fixture coverage shared by field inventory and publication invariants. */
+export const CASE_LAW_CONFORMANCE_FIXTURES = {
+  [COURTLISTENER_IMPORT_KEY]: courtListenerConformanceFixture,
+  [ADAPTER_KEYS.CZ_NS]: czNsFixture,
+  [ADAPTER_KEYS.CZ_NSS]: czNssFixture,
+  [ADAPTER_KEYS.CZ_US]: czUsFixture,
+  [ADAPTER_KEYS.CZ_REGIONAL]: czRegionalFixture,
+  [ADAPTER_KEYS.SK_COURTS]: skCourtsFixture,
+  [ADAPTER_KEYS.SK_US]: skUsFixture,
+  [ADAPTER_KEYS.PL_COURTS]: plCourtsFixture,
+  [ADAPTER_KEYS.PL_SN]: plSnFixture,
+  [ADAPTER_KEYS.PL_KIO]: plKioFixture,
+  [ADAPTER_KEYS.PL_TK]: plTkFixture,
+  [ADAPTER_KEYS.PL_NSA]: plNsaFixture,
+  [ADAPTER_KEYS.PL_NCOURT]: plNcourtFixture,
+  [ADAPTER_KEYS.AT_COURTS]: () => atRisFixture(ADAPTER_KEYS.AT_COURTS),
+  [ADAPTER_KEYS.AT_VFGH]: () => atRisFixture(ADAPTER_KEYS.AT_VFGH),
+  [ADAPTER_KEYS.AT_VWGH]: () => atRisFixture(ADAPTER_KEYS.AT_VWGH),
+  [ADAPTER_KEYS.AT_BVWG]: () => atRisFixture(ADAPTER_KEYS.AT_BVWG),
+  [ADAPTER_KEYS.AT_LVWG]: () => atRisFixture(ADAPTER_KEYS.AT_LVWG),
+  [ADAPTER_KEYS.AT_ASYLGH]: () => atRisFixture(ADAPTER_KEYS.AT_ASYLGH),
+  [ADAPTER_KEYS.AT_UBAS]: () => atRisFixture(ADAPTER_KEYS.AT_UBAS),
+  [ADAPTER_KEYS.AT_UVS]: () => atRisFixture(ADAPTER_KEYS.AT_UVS),
+  [ADAPTER_KEYS.AT_VERG]: () => atRisFixture(ADAPTER_KEYS.AT_VERG),
+  [ADAPTER_KEYS.AT_UMSE]: () => atRisFixture(ADAPTER_KEYS.AT_UMSE),
+  [ADAPTER_KEYS.AT_BKS]: () => atRisFixture(ADAPTER_KEYS.AT_BKS),
+  [ADAPTER_KEYS.AT_FINDOK]: atFindokFixture,
+  [ADAPTER_KEYS.EU_ECJ]: euEcjFixture,
+  [ADAPTER_KEYS.HU_BHGY]: huBhgyFixture,
+  [ADAPTER_KEYS.PL_KIS]: plKisFixture,
+  [ADAPTER_KEYS.PL_UODO]: plUodoFixture,
+  [ADAPTER_KEYS.PL_UOKIK]: plUokikFixture,
+} as const satisfies Record<
+  SourceRegistrationKey,
+  () => EnrolledAdapterFixture
+>;

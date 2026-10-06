@@ -227,6 +227,10 @@ afterAll(async () => {
   await client.close();
 });
 
+const reviewedTransact: Parameters<
+  typeof runReviewedCitationLabels
+>[0] = async (run) => await run(db);
+
 describe("reviewed citation labels", () => {
   test("a review moves a label off negative, is idempotent, and survives a refresh", async () => {
     const cited = "sp. zn. 23 Cdo 5068/2014";
@@ -237,7 +241,11 @@ describe("reviewed citation labels", () => {
     });
     const entries = [labelFor(labelled, POLARITY.POSITIVE)];
 
-    const planned = await runReviewedCitationLabels(db, entries, "plan");
+    const planned = await runReviewedCitationLabels(
+      reviewedTransact,
+      entries,
+      "plan",
+    );
     expect(planned).toEqual({
       type: "planned",
       summary: {
@@ -251,7 +259,11 @@ describe("reviewed citation labels", () => {
     expect(await readReviews()).toEqual([]);
     expect(await readCitation(cited)).toEqual(labelled);
 
-    const applied = await runReviewedCitationLabels(db, entries, "apply");
+    const applied = await runReviewedCitationLabels(
+      reviewedTransact,
+      entries,
+      "apply",
+    );
     expect(applied).toMatchObject({ type: "applied", relabelled: 1 });
     expect(await readCitation(cited)).toMatchObject({
       id: labelled.id,
@@ -261,7 +273,11 @@ describe("reviewed citation labels", () => {
     const stored = await readReviews();
     expect(stored).toHaveLength(1);
 
-    const reapplied = await runReviewedCitationLabels(db, entries, "apply");
+    const reapplied = await runReviewedCitationLabels(
+      reviewedTransact,
+      entries,
+      "apply",
+    );
     expect(reapplied).toEqual({
       type: "applied",
       summary: {
@@ -307,7 +323,7 @@ describe("reviewed citation labels", () => {
       rawHash: "first-sight",
     });
     await runReviewedCitationLabels(
-      db,
+      reviewedTransact,
       [labelFor(labelled, POLARITY.POSITIVE)],
       "apply",
     );
@@ -355,7 +371,7 @@ describe("reviewed citation labels", () => {
         .where(eq(caseLawCitations.id, id));
     }
     const applied = await runReviewedCitationLabels(
-      db,
+      reviewedTransact,
       [
         {
           citationId: reviewed.id,
@@ -464,7 +480,11 @@ describe("reviewed citation labels", () => {
         },
       ],
     ]) {
-      const outcome = await runReviewedCitationLabels(db, entries, "apply");
+      const outcome = await runReviewedCitationLabels(
+        reviewedTransact,
+        entries,
+        "apply",
+      );
       expect(outcome.type).toBe("rejected");
     }
     expect(await readCitation(cited)).toEqual(labelled);
@@ -493,7 +513,7 @@ describe("reviewed citation labels", () => {
     }
     expect(unreviewed.polarityRuleId).toBe(ruleId);
     await runReviewedCitationLabels(
-      db,
+      reviewedTransact,
       [labelFor(reviewed, POLARITY.NEUTRAL)],
       "apply",
     );

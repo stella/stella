@@ -54,6 +54,17 @@
       "polish": "Vylepšiť znenie"
     }
   },
+  "aiColumns": {
+    "countSummary": "{columns} stĺpcov × {rows} riadkov = {answers, plural, one {# odpoveď} few {# odpovede} many {# odpovede} other {# odpovedí}}. Odpovede čerpajú rozpočet.",
+    "refusedBudget": "Nespustené: rozpočet na odpovede nie je k dispozícii",
+    "rerunAllPage": "Spustiť všetko znova (táto stránka)",
+    "rerunColumnPage": "Spustiť stĺpec znova (táto stránka)",
+    "runColumnPage": "Spustiť stĺpec (táto stránka)",
+    "runPageRows": "Spustiť pre {count, plural, one {# riadok na tejto stránke} few {# riadky na tejto stránke} many {# riadka na tejto stránke} other {# riadkov na tejto stránke}}",
+    "runRemainingPage": "Spustiť zostávajúce (táto stránka)",
+    "runSelectedRows": "Spustiť pre {count, plural, one {# vybraný riadok} few {# vybrané riadky} many {# vybraného riadka} other {# vybraných riadkov}}",
+    "selectedRun": "Spustiť AI stĺpce pre {count, plural, one {# riadok} few {# riadky} many {# riadka} other {# riadkov}}"
+  },
   "appearance": {
     "calendar": "Kalendár",
     "calendarGregorian": "Gregoriánsky",
@@ -264,6 +275,7 @@
     "runs": {
       "back": "Všetky dokumenty",
       "errors": {
+        "accessRevoked": "Overovanie bolo zastavené, pretože prístup nie je dostupný.",
         "aiUnavailable": "Na overenie dokumentov nie je dostupný žiadny model AI. Skontrolujte nastavenia AI organizácie.",
         "enqueueFailed": "Overenie sa nepodarilo spustiť. Skúste to znova.",
         "extractionFailed": "Tvrdenia v tomto dokumente sa nepodarilo extrahovať.",
@@ -796,6 +808,34 @@
       "unavailable": "Údaje o pokrytí momentálne nie sú k dispozícii."
     },
     "decisionNotFound": "Rozhodnutie sa nenašlo",
+    "decisionTypes": {
+      "administrative_decision": "Správne rozhodnutie",
+      "binding_excise_information": "Záväzná informácia o spotrebnej dani",
+      "binding_rate_information": "Záväzná informácia o sadzbe DPH",
+      "court_direction": "Opatrenie",
+      "decision": "Rozhodnutie",
+      "finding": "Nález",
+      "general_tax_ruling": "Všeobecná daňová interpretácia",
+      "individual_tax_ruling": "Individuálna daňová interpretácia",
+      "judgment": "Rozsudok",
+      "leave_refused": "Odmietnuté pre nedostatok zásadnej právnej otázky",
+      "merits_decision": "Rozhodnutie vo veci samej",
+      "ministry_of_justice_decision": "Rozhodnutie ministerstva spravodlivosti",
+      "minutes_extract": "Výpis zo zápisnice",
+      "opinion": "Stanovisko",
+      "order": "Uznesenie",
+      "other": "Ostatné",
+      "payment_order": "Platobný rozkaz",
+      "penal_order": "Trestný rozkaz",
+      "principle_decision": "Zásadné rozhodnutie",
+      "protective_opinion": "Zabezpečovacie stanovisko",
+      "resolution": "Uznesenie (uchwała)",
+      "signalling_decision": "Signalizačné uznesenie",
+      "statement_of_reasons": "Odôvodnenie",
+      "tax_explanations": "Daňové vysvetlenia",
+      "top_up_tax_opinion": "Stanovisko k dorovnávacej dani",
+      "uniformity_decision": "Rozhodnutie o zjednotení judikatúry"
+    },
     "emptyState": "Žiadne rozhodnutia. Nakonfigurujte zdroj a spustite synchronizáciu na import judikatúry.",
     "filters": {
       "remove": "Odstrániť filter {filter}"
@@ -3747,11 +3787,15 @@
     }
   },
   "lawHome": {
+    "clearRecent": "Vymazať nedávne",
     "enteringIntoForce": "Čoskoro nadobudne účinnosť",
     "inForceFrom": "Účinné od {date}",
-    "noRecentSearches": "Zatiaľ žiadne vyhľadávania",
+    "noRecent": "Zatiaľ žiadna nedávna aktivita",
     "noSignals": "Zatiaľ žiadne signály",
     "prompt": "Čo hľadáte?",
+    "recent": "Nedávne",
+    "recentCasesFilter": "Rozhodnutia",
+    "recentSearchFilter": "Vyhľadávania",
     "recentlyInForce": "Nedávno nadobudlo účinnosť",
     "searchLabel": "Hľadať v právnej databáze",
     "searchPlaceholder": "Spisová značka, číslo predpisu, ECLI alebo kľúčové slová",
@@ -6006,7 +6050,6 @@
       "previewUnsupported": "Náhľad nie je pre tento typ dokumentu podporovaný.",
       "readingFrom": "AI číta z",
       "referencesItself": "Vlastnosť odkazuje sama na seba cez iné vlastnosti",
-      "rerunColumn": "Spustiť stĺpec znovu",
       "resultType": "Typ výsledku",
       "returnsLabel": "Formát",
       "scopeFile": "Aktuálny súbor",

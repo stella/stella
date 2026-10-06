@@ -1,5 +1,11 @@
 import { describe, expect, test } from "bun:test";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import {
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
@@ -155,6 +161,41 @@ describe("lifecycle write shapes", () => {
     expect(() =>
       unmanagedTransitionTables('export { TRANSITIONS } from "./elsewhere";'),
     ).toThrow("statically readable TRANSITIONS");
+  });
+  test("scoped transition state columns enter direct-write enforcement from the canonical registry", () => {
+    expect(columns["contacts"]).toContain("sanctionsMonitoringMode");
+    expect(columns["organizationSettings"]).toContain(
+      "sanctionsMonitoringMode",
+    );
+    expect(columns["sanctionsContactMatches"]).toEqual([
+      "disposition",
+      "state",
+    ]);
+    expect(columns["sanctionsContactScreenings"]).toContain("status");
+    const guardedFields = [
+      { table: "contacts", column: "sanctionsMonitoringMode" },
+      { table: "organizationSettings", column: "sanctionsMonitoringMode" },
+      { table: "sanctionsContactMatches", column: "disposition" },
+    ] as const;
+    for (const { table, column } of guardedFields) {
+      expect(
+        measure(`db.update(${table}).set({ ${column}: "changed" });`),
+      ).toBe(1);
+    }
+    const registry = readFileSync(
+      new URL("../apps/api/src/lib/db/transition-specs.ts", import.meta.url),
+      "utf-8",
+    );
+    expect(
+      unmanagedTransitionTables(registry).filter((table) =>
+        [
+          "contacts",
+          "organizationSettings",
+          "sanctionsContactMatches",
+          "sanctionsContactScreenings",
+        ].includes(table),
+      ),
+    ).toEqual([]);
   });
 });
 

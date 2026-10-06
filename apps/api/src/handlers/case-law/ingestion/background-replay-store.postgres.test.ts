@@ -54,6 +54,7 @@ import {
 import { createSafeId, toSafeId } from "@/api/lib/branded-types";
 import {
   absentDecisionTextFields,
+  splitStoredDecisionTextMetadata,
   TEXT_ABSENCE_REASON,
 } from "@/api/lib/case-law/decision-text";
 import { acquireCaseLawSourceIngestionLease } from "@/api/lib/legal-search/case-law-source-ingestion-lease";
@@ -398,7 +399,7 @@ if (!databaseUrl || !enabled) {
             court: stored.court,
             country: "CZE",
             language: stored.language,
-            metadata: stored.metadata,
+            metadata: splitStoredDecisionTextMetadata(stored.metadata).metadata,
             parserVersion: 2,
             rawHash: "replay-store-new-parser",
             textFields: absentDecisionTextFields(
@@ -598,7 +599,8 @@ if (!databaseUrl || !enabled) {
               court: stored.court,
               country: "CZE",
               language: stored.language,
-              metadata: stored.metadata,
+              metadata: splitStoredDecisionTextMetadata(stored.metadata)
+                .metadata,
               parserVersion: 2,
               rawHash: "replay-slot-fence",
               textFields: absentDecisionTextFields(

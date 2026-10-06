@@ -301,6 +301,9 @@ jobs:
         env:
           EVENT_NAME: ${{ github.event_name }}
           MANUAL_PACKAGE: ${{ inputs.package || 'all' }}
+          # A merge-queue push can carry several commits; select from all of
+          # them, not only the last one.
+          PUSH_BEFORE: ${{ github.event.before || '' }}
         run: |
           set -euo pipefail
           # A historical source checkout predates this selector. Recovery is
@@ -661,3 +664,55 @@ jobs:
     secrets:
       RELEASE_APP_ID: ${{ secrets.STELLA_RELEASE_APP_ID }}
       RELEASE_APP_PRIVATE_KEY: ${{ secrets.STELLA_RELEASE_APP_PRIVATE_KEY }}
+
+  verify-npm:
+    name: Verify npm serves the released versions
+    # A release run that fails, or publishes nothing, must not stay a quiet
+    # red X: this job fails with a per-package table of what npm lacks.
+    needs: [release-trigger, pack, release]
+    if: >-
+      always()
+      && needs.release-trigger.outputs.eligible == 'true'
+      && (github.event_name == 'workflow_run'
+      || (github.ref == 'refs/heads/main'
+      && (github.event_name == 'push' || inputs.publish)))
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      # The guard comes from this workflow's own commit; only the manifests
+      # are read at the released source, so a recovery of an old commit still
+      # runs the current check.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version-file: "package.json"
+          no-cache: true
+
+      # No install: the guard uses only Bun, Node built-ins, git and npm.
+      - name: Compare npm latest with the released versions
+        env:
+          PACKAGES: ${{ needs.pack.outputs.packages || '' }}
+          # Registry reads lag a fresh publish; wait only when one happened.
+          ATTEMPTS: ${{ needs.release.result == 'success' && '10' || '1' }}
+          SOURCE_SHA: ${{ needs.pack.outputs.source_sha || needs.release-trigger.outputs.release_sha || github.sha }}
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          set -euo pipefail
+          packages=""
+          if [[ -n "$PACKAGES" ]]; then
+            packages="$(jq -r 'join(",")' <<< "$PACKAGES")"
+          elif [[ "$EVENT_NAME" == "workflow_run" ]]; then
+            packages="cli"
+          fi
+          bun scripts/check-npm-publish-lag.ts \
+            --ref "$SOURCE_SHA" \
+            --packages "$packages" \
+            --attempts "$ATTEMPTS" \
+            --interval-seconds 30
