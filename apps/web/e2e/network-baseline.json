@@ -3084,7 +3084,7 @@
       "POST /v1/workspaces/:id/active": 1024
     }
   },
-  "/workspaces/$workspaceId/lists target": {
+  "/workspaces/$workspaceId/lists": {
     "depth": 9,
     "requests": [
       "GET /api/auth/get-session",
