@@ -661,7 +661,11 @@ test("each CI check leg preserves merge-base setup, supply-chain protection and 
           .map(({ name }) => name),
       ).toEqual(
         originalSteps
-          .filter(({ name }) => !preparationSteps.has(name))
+          .filter(
+            ({ name }) =>
+              !preparationSteps.has(name) &&
+              !newRemovals.some((removed) => removed.name === name),
+          )
           .map(({ name }) => name),
       );
     }
