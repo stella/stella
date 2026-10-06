@@ -612,7 +612,6 @@ const resultJob = v.parse(
 
 const CANCEL_REUSABLE_JOB = "marketing-screenshots-cancel";
 const CANCELLATION_EXCEPTIONS = new Set([
-  "ci-tests",
   "fix-tests-on-base",
   "heavy-web-build",
   "marketing-screenshots",

@@ -13,7 +13,6 @@ const policySchema = v.object({
       "schema-pr",
       "pr-opt-in",
       "release-pr",
-      "pending",
     ]),
   ),
   pushMain: v.optional(
@@ -25,10 +24,6 @@ const policySchema = v.object({
       }),
     ),
     {},
-  ),
-  pending: v.record(
-    v.string(),
-    v.object({ owner: v.string(), reason: v.string() }),
   ),
 });
 export const workflowSchema = v.looseObject({
@@ -213,7 +208,6 @@ type CheckJobEventPolicyOptions = {
   file: string;
   job: v.InferOutput<typeof workflowSchema>["jobs"][string];
   eventPolicy: v.InferOutput<typeof policySchema>["jobs"][string];
-  pending: v.InferOutput<typeof policySchema>["pending"][string] | undefined;
   triggers: v.InferOutput<typeof workflowSchema>["on"];
 };
 
@@ -222,7 +216,6 @@ const checkJobEventPolicy = ({
   file,
   job,
   eventPolicy,
-  pending,
   triggers,
 }: CheckJobEventPolicyOptions) => {
   const problems: string[] = [];
@@ -234,16 +227,6 @@ const checkJobEventPolicy = ({
       return [`${key}: nightly/manual/release policy belongs to CodeQL`];
     }
     return [];
-  }
-  if (eventPolicy === "pending") {
-    if (
-      key !== "ci.yml/ci-tests" ||
-      pending?.owner !== "email-inbound" ||
-      pending.reason !== "event policy moves after the run-tests rework lands"
-    ) {
-      problems.push(`${key}: undeclared pending owner or reason`);
-    }
-    return problems;
   }
   if (eventPolicy === "pr-opt-in") {
     const condition =
@@ -369,7 +352,6 @@ export const checkCiEventPolicies = ({
           file,
           job,
           eventPolicy,
-          pending: declared.pending[key],
           triggers: workflow.on,
         }),
       );
@@ -387,18 +369,14 @@ export const checkCiEventPolicies = ({
     );
     const needs = v.parse(v.array(v.string()), result?.needs);
     const expected = needs.filter(
-      (id) =>
-        id !== "ci-plan" &&
-        ["pr-fast", "pending"].includes(declared.jobs[`${file}/${id}`] ?? ""),
+      (id) => id !== "ci-plan" && declared.jobs[`${file}/${id}`] === "pr-fast",
     );
     if (
       actual.length !== expected.length ||
       new Set(actual).size !== actual.length ||
       actual.some((id) => !expected.includes(id))
     ) {
-      problems.push(
-        "ci.yml: FAST_REQUIRED must equal declared PR checks and the named pending job",
-      );
+      problems.push("ci.yml: FAST_REQUIRED must equal declared PR checks");
     }
   }
   for (const file of Object.keys(declared.pushMain)) {
@@ -409,11 +387,6 @@ export const checkCiEventPolicies = ({
   for (const key of Object.keys(declared.jobs)) {
     if (!seen.has(key)) {
       problems.push(`${key}: stale event policy`);
-    }
-  }
-  for (const key of Object.keys(declared.pending)) {
-    if (declared.jobs[key] !== "pending") {
-      problems.push(`${key}: stale pending entry`);
     }
   }
   return problems;

@@ -293,7 +293,8 @@ const heavyCheckoutCensus = (workflow: CheckoutWorkflow) => {
   for (const job of mainHeavyJobs(workflow)) {
     visit(job);
   }
-  const checkouts = [...executed].flatMap((job) =>
+  const checkoutOwners = new Set([...mainHeavyJobs(workflow), ...executed]);
+  const checkouts = [...checkoutOwners].flatMap((job) =>
     (workflow.jobs[job]?.steps ?? [])
       .filter(({ uses }) => uses?.startsWith("actions/checkout@"))
       .map((step) => ({ job, step })),
@@ -323,6 +324,7 @@ test("every executed heavy checkout targets the validated source or workflow too
   const checkouts = heavyCheckoutCensus(ciWorkflow);
   expect(checkouts.some(({ job }) => job === "ci-plan")).toBe(true);
   expect(checkouts.some(({ job }) => job === "heavy-web-build")).toBe(true);
+  expect(checkouts.some(({ job }) => job === "ci-tests")).toBe(true);
   for (const { job, step } of checkouts) {
     const mutant = structuredClone(ciWorkflow);
     const checkout = mutant.jobs[job]?.steps?.find(
@@ -341,6 +343,53 @@ test("every executed heavy checkout targets the validated source or workflow too
       expect(() => heavyCheckoutCensus(mutant)).toThrow(
         /Expected: "c{40}"\nReceived: "a{40}"/u,
       );
+    }
+  }
+});
+
+test("heavy test shards execute full scope while ordinary runs retain affected scope", () => {
+  const affected = ciWorkflow.jobs["ci-tests"]?.steps?.find(
+    ({ name }) => name === "Compute affected flag",
+  );
+  const script = v.parse(v.string(), affected?.run);
+  expect(affected?.env?.["HEAVY_ONLY"]).toBe(`\${{ inputs.heavy_only }}`);
+  for (const event of [
+    "push",
+    "schedule",
+    "workflow_dispatch",
+    "merge_group",
+  ]) {
+    for (const heavyOnly of [false, true]) {
+      const fixture = mkdtempSync(path.join(tmpdir(), "heavy-test-scope-"));
+      try {
+        const output = path.join(fixture, "output");
+        const environment = path.join(fixture, "environment");
+        writeFileSync(output, "");
+        writeFileSync(environment, "");
+        const result = Bun.spawnSync(["bash", "-euc", script], {
+          cwd: fixture,
+          env: {
+            ...Bun.env,
+            EVENT_NAME: event,
+            HEAVY_ONLY: String(heavyOnly),
+            BASE_REF: "main",
+            GITHUB_OUTPUT: output,
+            GITHUB_ENV: environment,
+          },
+        });
+        expect(result.exitCode, `${event}/${String(heavyOnly)}`).toBe(0);
+        const full = heavyOnly || event === "workflow_dispatch";
+        expect(
+          readFileSync(output, "utf-8"),
+          `${event}/${String(heavyOnly)}`,
+        ).toBe(full ? "flag=\n" : "flag=--affected\n");
+        expect(
+          readFileSync(environment, "utf-8"),
+          `${event}/${String(heavyOnly)}`,
+        ).toBe(full ? "" : "TURBO_SCM_BASE=origin/main\n");
+      } finally {
+        rmSync(fixture, { recursive: true, force: true });
+      }
     }
   }
 });
