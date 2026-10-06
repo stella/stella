@@ -183,7 +183,17 @@ const seed = async (db: GatedTestDb) => {
           userId,
         ),
         recordAuditEvent: record,
+        createAuditRecorder: () => record,
       }),
+    );
+  const receipts = async () =>
+    await scoped()(
+      async (tx) =>
+        await tx
+          .select()
+          .from(legalListVerificationReadReceipts)
+          .where(eq(legalListVerificationReadReceipts.workspaceId, workspaceId))
+          .limit(10),
     );
   const capabilityRead = async () => {
     const scopedDb = scoped();
@@ -249,6 +259,7 @@ const seed = async (db: GatedTestDb) => {
     scoped,
     read,
     events,
+    receipts,
     invoke,
     recorder,
   };
@@ -369,6 +380,46 @@ describe.skipIf(!enabled)("verification point-read audit", () => {
       }
     }));
 
+  test.each(["MCP", "REST"])(
+    "the first MCP capability read records an audit and receipt, deduping a subsequent %s read",
+    async (nextReader) =>
+      await withFixture(async (f) => {
+        expect(await f.events()).toHaveLength(0);
+        expect(await f.receipts()).toHaveLength(0);
+
+        const first = await f.capabilityRead();
+        expect(first.isError).not.toBe(true);
+        expect(first.structuredContent).toMatchObject({
+          result: { id: f.runIds.completed, status: "completed" },
+        });
+        const events = await f.events();
+        expect(events).toHaveLength(1);
+        expect(events.at(0)).toMatchObject({
+          userId: f.actor,
+          workspaceId: f.workspaceId,
+          metadata: { runId: f.runIds.completed },
+        });
+        const receipts = await f.receipts();
+        expect(receipts).toHaveLength(1);
+        expect(receipts.at(0)).toMatchObject({
+          organizationId: f.organizationId,
+          workspaceId: f.workspaceId,
+          runId: f.runIds.completed,
+          userId: f.actor,
+        });
+
+        if (nextReader === "REST") {
+          expect(first.structuredContent).toEqual({ result: await f.invoke() });
+        } else {
+          const second = await f.capabilityRead();
+          expect(second.isError).not.toBe(true);
+          expect(second.structuredContent).toEqual(first.structuredContent);
+        }
+        expect(await f.events()).toEqual(events);
+        expect(await f.receipts()).toEqual(receipts);
+      }),
+  );
+
   test("audit failure returns no content and rolls back the receipt", async () =>
     await withFixture(async (f) => {
       const broken: AuditRecorder = async (tx, event) => {
@@ -385,17 +436,7 @@ describe.skipIf(!enabled)("verification point-read audit", () => {
       expect(result).toMatchObject({ code: 500 });
       expect(JSON.stringify(result)).not.toContain(CANARY);
       expect(await f.events()).toHaveLength(0);
-      const receipts = await f.scoped()(
-        async (tx) =>
-          await tx
-            .select()
-            .from(legalListVerificationReadReceipts)
-            .where(
-              eq(legalListVerificationReadReceipts.workspaceId, f.workspaceId),
-            )
-            .limit(10),
-      );
-      expect(receipts).toHaveLength(0);
+      expect(await f.receipts()).toHaveLength(0);
       expect(await f.invoke()).toHaveProperty("blocks");
       expect(await f.events()).toHaveLength(1);
     }));
