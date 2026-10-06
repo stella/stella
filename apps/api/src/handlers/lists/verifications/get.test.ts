@@ -6,6 +6,7 @@ import {
   createFeatureAccessSnapshot,
   decideFeatureAccess,
 } from "@/api/lib/auth/feature-access/policy";
+import { toSafeId } from "@/api/lib/branded-types";
 import {
   FEATURE_REGISTRY,
   LIST_VERIFICATION_FEATURE_ID,
@@ -15,7 +16,10 @@ import { getStaticMcpToolDefinition } from "@/api/mcp/static-tool-definitions";
 // A granted caller exercises the offered tool set, rather than passing because
 // feature admission has hidden a future verification reader.
 test("chat offers no verification point reader or generic capability invocation", () => {
-  const principal = { organizationId: "org_reader", userId: "user_reader" };
+  const principal = {
+    organizationId: toSafeId<"organization">("org_reader"),
+    userId: toSafeId<"user">("user_reader"),
+  };
   const decision = decideFeatureAccess({
     ...principal,
     registry: FEATURE_REGISTRY,
