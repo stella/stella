@@ -1,8 +1,10 @@
 import { Value } from "@sinclair/typebox/value";
 import { describe, expect, expectTypeOf, test } from "bun:test";
 import type { Static, UnwrapSchema } from "elysia";
+import * as v from "valibot";
 
 import { COURT_TIER_LABELS } from "@stll/api-contract/case-law-court-tiers";
+import { caseLawCourtYearSchema } from "@stll/api-contract/case-law-court-year";
 import { DECISION_TYPE_KINDS } from "@stll/api-contract/case-law-decision-types";
 import {
   TEXT_ABSENCE_REASON,
@@ -246,6 +248,39 @@ describe("case-law search response schema", () => {
       ).toBe(false);
     },
   );
+
+  test("HTTP court/year validation matches the canonical aggregate schema", () => {
+    const matrixBucket = {
+      court: "Nejvyšší soud",
+      courtName: "Nejvyšší soud",
+      courtAbbreviation: "NS",
+      tier: "supreme",
+      year: 2024,
+      count: 3,
+      citationSum: null,
+      treatment: null,
+    };
+    for (const courtYear of [
+      null,
+      { buckets: [matrixBucket], truncated: false },
+      { buckets: [{ ...matrixBucket, count: -1 }], truncated: false },
+      { buckets: [{ ...matrixBucket, count: 1.5 }], truncated: false },
+      { buckets: [{ ...matrixBucket, citationSum: -1 }], truncated: false },
+      { buckets: [{ ...matrixBucket, tier: "invented" }], truncated: false },
+      { buckets: [{ ...matrixBucket, extra: true }], truncated: false },
+      {
+        buckets: Array.from({ length: 401 }, () => matrixBucket),
+        truncated: true,
+      },
+    ]) {
+      expect(
+        Value.Check(searchDecisionsSuccessResponseSchema, {
+          ...validResponse,
+          facets: { ...firstPageFacets, courtYear },
+        }),
+      ).toBe(v.safeParse(caseLawCourtYearSchema, courtYear).success);
+    }
+  });
 
   // Page one carries the facets; a cursor page carries null, because the
   // counts describe the result set and do not change as a reader pages.

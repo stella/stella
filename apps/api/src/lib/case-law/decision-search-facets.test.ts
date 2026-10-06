@@ -359,7 +359,7 @@ test("court/year presentation shares hit abbreviations and keeps unavailable sig
 
 test("every matrix court belongs to the filter rail and preserves its decision count", () => {
   assertProperty(
-    "court/year presentation belongs to filter rail and preserves decision counts",
+    "every matrix court belongs to the filter rail and preserves its decision count",
     fc.property(
       fc.uniqueArray(
         fc.record({

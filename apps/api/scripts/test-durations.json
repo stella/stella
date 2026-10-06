@@ -5967,6 +5967,10 @@
     "seconds": 0.071361,
     "source": "estimated"
   },
+  "src/lib/legal-search/corpus-index-court-year.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
   "src/lib/legal-search/corpus-index-delete-survivor.contract.test.ts": {
     "seconds": 0.063251,
     "source": "estimated"

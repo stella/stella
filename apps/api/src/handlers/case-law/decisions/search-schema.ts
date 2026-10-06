@@ -48,7 +48,11 @@ import { CASE_SEARCH_TEXT_BYTES as bytes } from "./search-response-limits";
 
 // Runtime JSON Schema and static type both derive from the shared Valibot schema.
 const courtYearSchema = Type.Unsafe<CaseLawCourtYear>(
-  toJsonSchema(caseLawCourtYearSchema),
+  Object.fromEntries(
+    Object.entries(toJsonSchema(caseLawCourtYearSchema)).filter(
+      ([, value]) => value !== undefined,
+    ),
+  ),
 );
 
 export const searchDecisionsBodySchema = t.Object({

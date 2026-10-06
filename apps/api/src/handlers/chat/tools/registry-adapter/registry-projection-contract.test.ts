@@ -1505,6 +1505,7 @@ const CONTRACT_CORPUS = {
         searchDecisionsHandlerMock.mockResolvedValue({
           paginationOutcome: SEARCH_PAGINATION_COMPLETE,
           facets: {
+            courtYear: null,
             court: [
               {
                 tierLabel: "supreme",

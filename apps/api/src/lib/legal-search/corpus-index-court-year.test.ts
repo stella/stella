@@ -55,9 +55,13 @@ test("unreadable matrix answers remain unavailable", () => {
     null,
     {},
     { buckets: [] },
-    answer([
-      { key: "court", years: { buckets: [{ key: "2024", doc_count: 20 }] } },
-    ]),
+    {
+      buckets: [
+        { key: "court", years: { buckets: [{ key: "2024", doc_count: 20 }] } },
+      ],
+      sum_other_doc_count: 0,
+      doc_count_error_upper_bound: 0,
+    },
   ]) {
     expect(parse(aggregation)).toBeNull();
   }
@@ -96,7 +100,7 @@ test("the published matrix has at most 400 buckets and deterministic ties", () =
 
 test("court/year partitions preserve nonnegative counts and their court identities", () => {
   assertProperty(
-    "corpus court/year partitions preserve counts and court identity",
+    "court/year partitions preserve nonnegative counts and their court identities",
     fc.property(
       fc.uniqueArray(
         fc.record({

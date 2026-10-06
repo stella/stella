@@ -535,6 +535,7 @@ describe.skipIf(!RUN_ENGINE)("query features on stock 0.9.0", () => {
       const yearRanges = corpusYearRanges(2026);
       const started = performance.now();
       const result = await getCorpusIndexClient("q09").aggregate({
+        observer: "unobserved",
         indexId: INDEX_ID,
         // All ten passages match: passage volume must never become the count.
         query: `decision_key:[1000 TO 1119]`,
@@ -564,6 +565,7 @@ describe.skipIf(!RUN_ENGINE)("query features on stock 0.9.0", () => {
       }
       // A matching non-opening passage still includes its decision in the year.
       const onePassage = await getCorpusIndexClient("q09").aggregate({
+        observer: "unobserved",
         indexId: INDEX_ID,
         query: "passage_key:10001",
         aggs: {
