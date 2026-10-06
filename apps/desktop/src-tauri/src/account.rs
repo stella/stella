@@ -57,6 +57,8 @@ pub struct LinkedAccount {
   pub account: LinkedAccountSnapshot,
   pub identity: DesktopAccountIdentity,
   pub credential: DesktopAccountCredential,
+  #[serde(skip)]
+  pub(crate) device_key: crate::device_proof::DeviceKey,
 }
 
 #[derive(Deserialize)]
@@ -109,6 +111,7 @@ impl LinkedAccount {
       )?,
       web_origin: crate::config::normalize_self_host_web_origin(web_origin)?,
       credential: request.credential,
+      device_key: crate::device_proof::DeviceKey::default(),
     })
   }
 
@@ -125,6 +128,7 @@ struct PendingLinkedAccount {
   api_base_url: String,
   web_origin: String,
   credential: DesktopAccountCredential,
+  device_key: crate::device_proof::DeviceKey,
 }
 
 impl PendingLinkedAccount {
@@ -161,6 +165,7 @@ impl PendingLinkedAccount {
       account,
       identity,
       credential: self.credential,
+      device_key: self.device_key,
     })
   }
 }
@@ -182,13 +187,15 @@ pub enum AccountStore {
 impl AccountStore {
   async fn load(&self) -> Result<Option<LinkedAccount>, String> {
     match self {
-      Self::Keychain => crate::keychain::get_account_connection()
-        .await?
-        .map(|value| {
-          serde_json::from_str(&value)
-            .map_err(|_| "Desktop account connection is unreadable".into())
-        })
-        .transpose(),
+      Self::Keychain => {
+        let Some(value) = crate::keychain::get_account_connection().await? else {
+          return Ok(None);
+        };
+        let mut account: LinkedAccount = serde_json::from_str(&value)
+          .map_err(|_| "Desktop account connection is unreadable")?;
+        account.device_key = crate::device_proof::required().await?;
+        Ok(Some(account))
+      }
       #[cfg(test)]
       Self::Memory(account) | Self::ReadOnly(account) => Ok(account.clone()),
       #[cfg(test)]
@@ -386,6 +393,7 @@ impl RenewalTransport for HttpRenewal {
       crate::registry::RegistryRequestAuth {
         api_base_url: &account.api_base_url,
         credential_key: &account.credential.key,
+        device_key: &account.device_key,
       },
       body,
     )
@@ -449,6 +457,7 @@ async fn recover_rotation(
     web_origin: account.web_origin.clone(),
     account: account.account.clone(),
     identity: account.identity.clone(),
+    device_key: account.device_key.clone(),
     credential: DesktopAccountCredential {
       key: pending.successor_key.clone(),
       expires_at: account.credential.expires_at.clone(),
@@ -518,10 +527,12 @@ impl AccountRequest {
     crate::registry::RegistryRequestAuth {
       api_base_url: &self.api_base_url,
       credential_key: &self.credential.key,
+      device_key: &self.device_key,
     }
   }
   #[cfg(test)]
-  pub(crate) async fn fixture(account: LinkedAccount) -> Self {
+  pub(crate) async fn fixture(mut account: LinkedAccount) -> Self {
+    account.device_key = crate::device_proof::DeviceKey::fixture();
     Self {
       account,
       _lease: lock_requests().await,
@@ -648,10 +659,11 @@ pub async fn link(
   web_origin: &str,
   expected_identity: &DesktopAccountIdentity,
 ) -> Result<LinkOutcome, String> {
-  let pending = LinkedAccount::from_request(request, web_origin)?;
+  let mut pending = LinkedAccount::from_request(request, web_origin)?;
   let _lease = lock_requests().await;
   // Do not publish a profile for a credential the API has not accepted.
   let mut store = state.lock().await;
+  pending.device_key = crate::device_proof::required().await?;
   let outcome = prepare_replacement(&mut store, &pending).await?;
   if outcome == LinkOutcome::Unchanged {
     return Ok(outcome);
@@ -660,6 +672,7 @@ pub async fn link(
     crate::registry::RegistryRequestAuth {
       api_base_url: &pending.api_base_url,
       credential_key: &pending.credential.key,
+      device_key: &pending.device_key,
     },
     serde_json::json!({"type":"config"}),
   )
@@ -709,8 +722,13 @@ pub async fn account_get_state(
   state: State<'_, AccountState>,
 ) -> Result<DesktopAccountSnapshot, String> {
   require_account_window(&window)?;
-  if let Some(saved) = current(&state).await? {
-    return Ok(saved.snapshot());
+  match current(&state).await {
+    Ok(Some(saved)) => return Ok(saved.snapshot()),
+    Err(error) if error == crate::device_proof::RECONNECT => {
+      return Ok(DesktopAccountSnapshot::ReconnectRequired);
+    }
+    Err(error) => return Err(error),
+    Ok(None) => {}
   }
   if state.lock().await.expired().await? {
     return Ok(DesktopAccountSnapshot::Expired);
@@ -728,7 +746,12 @@ pub async fn account_disconnect(
   let _lease = lock_requests().await;
   let account = match load_account_for_request(&state, RecoveryMode::Disconnect).await {
     Ok(account) => account,
-    Err(error) if error == crate::registry::not_connected() => None,
+    Err(error)
+      if error == crate::registry::not_connected()
+        || error == crate::device_proof::RECONNECT =>
+    {
+      None
+    }
     Err(error) => return Err(error),
   };
   if let Some(saved) = &account {
@@ -736,6 +759,7 @@ pub async fn account_disconnect(
       crate::registry::RegistryRequestAuth {
         api_base_url: &saved.api_base_url,
         credential_key: &saved.credential.key,
+        device_key: &saved.device_key,
       },
       serde_json::json!({"type":"revoke"}),
     )
@@ -748,7 +772,13 @@ pub async fn account_disconnect(
   }
   let mut store = state.lock().await;
   store.clear().await?;
+  if matches!(*store, AccountStore::Keychain) {
+    crate::device_proof::unlink().await?;
+  }
   drop(store);
+  *BROWSER_CONNECTION
+    .lock()
+    .map_err(|_| "Desktop connection is unavailable")? = None;
   notify(&app);
   Ok(())
 }
@@ -761,6 +791,7 @@ struct BrowserConnection {
   api_base_url: String,
   web_origin: String,
   port_secret: String,
+  device_key: crate::device_proof::DeviceKey,
   expires_at: std::time::Instant,
   redemption: LinkRedemption,
 }
@@ -788,9 +819,10 @@ fn random_secret() -> Result<String, String> {
   Ok(hex::encode(bytes))
 }
 
-fn new_browser_connection(
+fn new_browser_connection_with_key(
   api_base_url: &str,
   web_origin: &str,
+  device_key: crate::device_proof::DeviceKey,
 ) -> Result<(BrowserConnection, String), String> {
   use sha2::{Digest, Sha256};
   let api_base_url = crate::config::normalize_self_host_api_base_url(api_base_url)?;
@@ -802,6 +834,7 @@ fn new_browser_connection(
   let mut url = reqwest::Url::parse(&format!("{web_origin}/settings/account/desktop"))
     .map_err(|_| "Could not start desktop connection".to_string())?;
   let protocol = policy().link_protocol.to_string();
+  let device_jkt = device_key.thumbprint()?;
   let params = reqwest::Url::parse_with_params(
     "https://localhost",
     [
@@ -809,6 +842,7 @@ fn new_browser_connection(
       ("verifierHash", verifier_hash.as_str()),
       ("portSecret", port_secret.as_str()),
       ("protocol", protocol.as_str()),
+      ("deviceJkt", device_jkt.as_str()),
     ],
   )
   .map_err(|_| "Could not start desktop connection".to_string())?;
@@ -822,6 +856,7 @@ fn new_browser_connection(
       api_base_url,
       web_origin,
       port_secret,
+      device_key,
       expires_at: std::time::Instant::now() + LINK_APPROVAL_TIMEOUT,
       redemption: LinkRedemption::Waiting { verifier },
     },
@@ -829,11 +864,17 @@ fn new_browser_connection(
   ))
 }
 
-fn begin_browser_connection(
+async fn begin_browser_connection(
   api_base_url: &str,
   web_origin: &str,
 ) -> Result<String, String> {
-  let (connection, url) = new_browser_connection(api_base_url, web_origin)?;
+  let api_base_url = crate::config::normalize_self_host_api_base_url(api_base_url)?;
+  let web_origin = crate::config::normalize_self_host_web_origin(web_origin)?;
+  let _lease = lock_requests().await;
+  let has_link = crate::keychain::get_account_connection().await?.is_some();
+  let key = crate::device_proof::prepare(has_link).await?;
+  let (connection, url) =
+    new_browser_connection_with_key(&api_base_url, &web_origin, key)?;
   let mut pending = BROWSER_CONNECTION
     .lock()
     .map_err(|_| "Desktop connection is unavailable")?;
@@ -859,13 +900,13 @@ fn reserve_browser_connection(
   Ok(())
 }
 
-pub fn open_browser_connection(
+pub async fn open_browser_connection(
   app: &tauri::AppHandle,
   api_base_url: &str,
   web_origin: &str,
 ) -> Result<(), String> {
   use tauri_plugin_opener::OpenerExt;
-  let url = begin_browser_connection(api_base_url, web_origin)?;
+  let url = begin_browser_connection(api_base_url, web_origin).await?;
   app
     .opener()
     .open_url(url, None::<&str>)
@@ -935,6 +976,35 @@ struct RedeemLinkRequest<'a> {
   verifier: &'a str,
   expected_user_id: &'a str,
   expected_organization_id: &'a str,
+  device_jkt: &'a str,
+}
+
+struct RedeemRequestOptions<'a> {
+  client: &'a crate::http_client::DesktopHttpClient,
+  api_base_url: &'a str,
+  device_key: &'a crate::device_proof::DeviceKey,
+  body: RedeemLinkRequest<'a>,
+  bearer: Option<&'a str>,
+}
+
+fn redemption_request(
+  options: RedeemRequestOptions<'_>,
+) -> Result<crate::http_client::DeviceProofRequest, String> {
+  let builder = options
+    .client
+    .post(format!(
+      "{}/v1/desktop-registry/redeem-link",
+      options.api_base_url
+    ))
+    .header(ACCOUNT_PROTOCOL_HEADER, policy().link_protocol.to_string())
+    .json(&options.body)
+    .timeout(std::time::Duration::from_secs(20));
+  crate::http_client::device_proof_request(
+    builder,
+    options.device_key,
+    options.bearer,
+    Some(options.body.correlation_id),
+  )
 }
 
 #[derive(Deserialize)]
@@ -1061,6 +1131,7 @@ impl Drop for BridgeProofFixture {
 }
 
 struct PendingRedemption {
+  device_key: crate::device_proof::DeviceKey,
   correlation_id: String,
   api_base_url: String,
   web_origin: String,
@@ -1085,6 +1156,7 @@ impl BrowserConnection {
       unreachable!("only a waiting connection can be claimed");
     };
     Ok(PendingRedemption {
+      device_key: self.device_key.clone(),
       correlation_id: self.correlation_id.clone(),
       api_base_url: self.api_base_url.clone(),
       web_origin: self.web_origin.clone(),
@@ -1130,6 +1202,7 @@ async fn redeem_browser_connection(
 ) -> Result<(), String> {
   use tauri::Manager;
   let PendingRedemption {
+    device_key,
     api_base_url,
     web_origin,
     verifier,
@@ -1152,19 +1225,22 @@ async fn redeem_browser_connection(
       timeout: None,
     })
     .map_err(|_| "Desktop connection is unavailable")?;
-  let mut redeem_request = client
-    .post(format!("{api_base_url}/v1/desktop-registry/redeem-link"))
-    .header(ACCOUNT_PROTOCOL_HEADER, policy().link_protocol.to_string())
-    .json(&RedeemLinkRequest {
+  let device_jkt = device_key.thumbprint()?;
+  let redeem_request = redemption_request(RedeemRequestOptions {
+    client: &client,
+    api_base_url: &api_base_url,
+    device_key: &device_key,
+    body: RedeemLinkRequest {
       correlation_id: &correlation_id,
       verifier: &verifier,
       expected_user_id: &expected_identity.user_id,
       expected_organization_id: &expected_identity.organization_id,
-    })
-    .timeout(std::time::Duration::from_secs(20));
-  if let Some(saved) = &saved {
-    redeem_request = redeem_request.bearer_auth(&saved.credential.key);
-  }
+      device_jkt: &device_jkt,
+    },
+    bearer: saved
+      .as_ref()
+      .map(|account| account.credential.key.as_str()),
+  })?;
   let response = redeem_request
     .send()
     .await
@@ -1221,6 +1297,7 @@ async fn redeem_browser_connection(
           crate::registry::RegistryRequestAuth {
             api_base_url: &api_base_url,
             credential_key: &key,
+            device_key: &device_key,
           },
           serde_json::json!({"type":"revoke"}),
         )
@@ -1244,6 +1321,7 @@ async fn redeem_browser_connection(
       crate::registry::RegistryRequestAuth {
         api_base_url: &api_base_url,
         credential_key: &credential_key,
+        device_key: &device_key,
       },
       serde_json::json!({"type":"revoke"}),
     )
@@ -1255,8 +1333,65 @@ async fn redeem_browser_connection(
 }
 
 #[cfg(test)]
+fn new_browser_connection(
+  api_base_url: &str,
+  web_origin: &str,
+) -> Result<(BrowserConnection, String), String> {
+  new_browser_connection_with_key(
+    api_base_url,
+    web_origin,
+    crate::device_proof::DeviceKey::fixture(),
+  )
+}
+
+#[cfg(test)]
 mod tests {
   use super::*;
+
+  #[test]
+  fn initial_and_linked_redemptions_bind_the_grant_nonce_to_the_device_key() {
+    let client = crate::http_client::DesktopHttpClient::new(
+      crate::http_client::HttpClientOptions::default(),
+    )
+    .unwrap();
+    let key = crate::device_proof::DeviceKey::fixture();
+    let jkt = key.thumbprint().unwrap();
+    for bearer in [None, Some("stella_dr_account")] {
+      let request = redemption_request(RedeemRequestOptions {
+        client: &client,
+        api_base_url: "https://api.example.test",
+        device_key: &key,
+        body: RedeemLinkRequest {
+          correlation_id: "correlation",
+          verifier: "verifier",
+          expected_user_id: "user_fixture",
+          expected_organization_id: "org_fixture",
+          device_jkt: &jkt,
+        },
+        bearer,
+      })
+      .unwrap()
+      .build()
+      .unwrap();
+      crate::device_proof::tests::verify_request(
+        &request,
+        &jkt,
+        bearer,
+        Some("correlation"),
+      );
+      assert_eq!(
+        request.headers()[ACCOUNT_PROTOCOL_HEADER].to_str().unwrap(),
+        policy().link_protocol.to_string()
+      );
+      assert_eq!(request.url().path(), "/v1/desktop-registry/redeem-link");
+      let body: serde_json::Value =
+        serde_json::from_slice(request.body().unwrap().as_bytes().unwrap()).unwrap();
+      assert_eq!(
+        body,
+        serde_json::json!({"correlationId":"correlation", "verifier":"verifier", "expectedUserId":"user_fixture", "expectedOrganizationId":"org_fixture", "deviceJkt":jkt})
+      );
+    }
+  }
 
   #[test]
   fn an_unexpired_connection_cannot_be_replaced() {
@@ -1326,7 +1461,7 @@ mod tests {
         .query_pairs()
         .into_owned()
         .collect();
-    assert_eq!(fields.len(), 4);
+    assert_eq!(fields.len(), 5);
     assert_eq!(
       fields.get("protocol"),
       Some(&policy().link_protocol.to_string())
@@ -1340,6 +1475,10 @@ mod tests {
       Some(&hex::encode(Sha256::digest(verifier.as_bytes())))
     );
     assert_eq!(fields.get("portSecret"), Some(&connection.port_secret));
+    assert_eq!(
+      fields.get("deviceJkt"),
+      Some(&connection.device_key.thumbprint().unwrap())
+    );
     assert!(!url.contains(verifier.as_str()));
     assert_ne!(verifier.as_str(), connection.port_secret.as_str());
   }
@@ -1424,6 +1563,7 @@ mod tests {
 
   fn fixture(key: &str, expires_in: i64) -> LinkedAccount {
     LinkedAccount {
+      device_key: crate::device_proof::DeviceKey::fixture(),
       api_base_url: "https://api.stll.app".into(),
       web_origin: "https://my.stll.app".into(),
       identity: DesktopAccountIdentity {
@@ -1445,6 +1585,7 @@ mod tests {
 
   fn pending(key: &str) -> PendingLinkedAccount {
     PendingLinkedAccount {
+      device_key: crate::device_proof::DeviceKey::fixture(),
       api_base_url: "https://api.stll.app".into(),
       web_origin: "https://my.stll.app".into(),
       credential: fixture(key, 60).credential,
@@ -1730,6 +1871,35 @@ mod tests {
   }
 
   #[tokio::test]
+  async fn accepted_credential_rotation_keeps_the_device_key() {
+    let original = fixture("stella_dr_original", 60);
+    let jkt = original.device_key.thumbprint().unwrap();
+    let mut store = AccountStore::Memory(Some(original.clone()));
+    let transport = QueuedRenewal::new(vec![Ok(renewal_reply(&original))]);
+    let rotated = rotate_account(
+      &mut store,
+      original,
+      "stella_dr_successor".into(),
+      &transport,
+    )
+    .await
+    .unwrap();
+    assert_eq!(rotated.credential.key, "stella_dr_successor");
+    assert_eq!(rotated.device_key.thumbprint().unwrap(), jkt);
+    assert_eq!(
+      store
+        .load()
+        .await
+        .unwrap()
+        .unwrap()
+        .device_key
+        .thumbprint()
+        .unwrap(),
+      jkt
+    );
+  }
+
+  #[tokio::test]
   async fn lost_rotation_response_survives_restart_and_only_probes_the_successor() {
     let original = fixture("stella_dr_original", 60);
     let mut store = AccountStore::Fixture(AccountFixture {
@@ -1777,6 +1947,10 @@ mod tests {
       vec![("stella_dr_successor".into(), None)]
     );
     assert_eq!(recovered.credential.key, "stella_dr_successor");
+    assert_eq!(
+      recovered.device_key.thumbprint().unwrap(),
+      original.device_key.thumbprint().unwrap()
+    );
     assert_eq!(
       restarted.load().await.unwrap().unwrap().credential.key,
       "stella_dr_successor"

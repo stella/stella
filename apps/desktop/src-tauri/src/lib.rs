@@ -1,4 +1,5 @@
 mod account;
+mod device_proof;
 mod app_lifecycle;
 mod app_window;
 mod autostart;

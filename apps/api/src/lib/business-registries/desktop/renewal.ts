@@ -16,6 +16,7 @@ import {
   DESKTOP_REGISTRY_KEY_SECONDS,
   parseDesktopRegistryMetadata,
 } from "@/api/lib/business-registries/desktop/config";
+import type { ConsumedDesktopDeviceProof } from "@/api/lib/business-registries/desktop/proof-store";
 import { desktopRegistryKeyOrganizationScope } from "@/api/lib/business-registries/desktop/scope";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { isMemberRole } from "@/api/lib/member-roles";
@@ -37,6 +38,7 @@ type RenewDesktopCredentialOptions = {
   organizationId: SafeId<"organization">;
   currentKey: string;
   successorKey: string;
+  consumedProof: ConsumedDesktopDeviceProof;
   recordAuditEvent: AuditRecorder;
   db?: Pick<typeof rootDb, "transaction">;
   now?: Date;
@@ -50,6 +52,7 @@ export const renewDesktopCredential = async ({
   organizationId,
   currentKey,
   successorKey,
+  consumedProof,
   recordAuditEvent,
   db = rootDb,
   now,
@@ -107,6 +110,11 @@ export const renewDesktopCredential = async ({
           !key.enabled ||
           key.expiresAt !== null ||
           !metadata.success ||
+          !consumedProof.authorizesCredential({
+            keyId,
+            credentialHash: currentHash,
+            thumbprint: metadata.output.deviceJkt,
+          }) ||
           Temporal.Instant.from(metadata.output.inactivityExpiresAt)
             .epochMilliseconds <= usedAt.getTime()
         ) {
@@ -169,7 +177,7 @@ export const renewDesktopCredential = async ({
 
 type ProbeDesktopCredentialOptions = Omit<
   RenewDesktopCredentialOptions,
-  "successorKey" | "recordAuditEvent"
+  "successorKey" | "recordAuditEvent" | "consumedProof"
 >;
 
 // Recovery only observes the current generation; polling must never renew it.

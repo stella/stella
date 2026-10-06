@@ -80,8 +80,8 @@ const CAMEL_CASE = /^[a-z][a-zA-Z0-9]*$/u;
 // runtime `toEqual` is the on-disk half.
 const appSnapshot = {
   bridgePort: 45_901,
-  bridgeVersion: 17,
-  capabilities: ["office-edit.v1", "self-host.connect", "account-link.v4"],
+  bridgeVersion: 18,
+  capabilities: ["office-edit.v1", "self-host.connect", "account-link.v5"],
   notificationPreferences: {
     documentReady: true,
     revisionCreated: true,

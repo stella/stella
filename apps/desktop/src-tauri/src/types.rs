@@ -182,6 +182,7 @@ pub struct DesktopAccountIdentity {
 #[serde(tag = "status", rename_all = "camelCase")]
 pub enum DesktopAccountSnapshot {
   Disconnected,
+  ReconnectRequired,
   Expired,
   Connected {
     account: LinkedAccountSnapshot,

@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { createHmac } from "node:crypto";
 import { readFileSync } from "node:fs";
+import { Script } from "node:vm";
 
 import { DESKTOP_ACCOUNT_POLICY } from "@stll/api-contract/desktop-registry";
 
@@ -15,6 +16,7 @@ import {
 const challenge = {
   correlationId: "90123344-5566-7788-9900-aabbccddeeff",
   verifierHash: "a".repeat(64),
+  deviceJkt: "A".repeat(43),
   portSecret: "b".repeat(64),
   protocol: String(DESKTOP_ACCOUNT_POLICY.linkProtocol),
 };
@@ -24,6 +26,29 @@ describe("account link challenges", () => {
   test("accepts a complete native challenge", () => {
     expect(parseDesktopAccountChallenge(fragment) !== null).toBe(true);
     expect(parseDesktopAccountChallenge(fragment)).toEqual(challenge);
+  });
+
+  test("rejects legacy challenges and malformed device thumbprints", () => {
+    for (const deviceJkt of [
+      "",
+      "A".repeat(42),
+      "A".repeat(44),
+      `${"A".repeat(42)}=`,
+      `${"A".repeat(42)}+`,
+      `${"A".repeat(42)}/`,
+    ]) {
+      const params = new URLSearchParams({ ...challenge, deviceJkt });
+      expect(
+        parseDesktopAccountChallenge(`#desktop-account?${params.toString()}`),
+      ).toBeNull();
+    }
+    for (const protocol of ["4", String(DESKTOP_ACCOUNT_POLICY.linkProtocol)]) {
+      const params = new URLSearchParams({ ...challenge, protocol });
+      params.delete("deviceJkt");
+      expect(
+        parseDesktopAccountChallenge(`#desktop-account?${params.toString()}`),
+      ).toBeNull();
+    }
   });
 
   test("rejects missing, duplicate, malformed, and extra fields", () => {
@@ -232,6 +257,39 @@ describe("authenticated account status", () => {
       }
     }
   });
+});
+
+test("the actual grant request binds the validated native device thumbprint", async () => {
+  const source = readFileSync(
+    new URL("desktop-bridge.ts", import.meta.url),
+    "utf-8",
+  );
+  const request = source
+    .match(/await api\["desktop-registry"\]\.grant\.post\(\{[\s\S]*?\}\)/u)
+    ?.at(0);
+  if (!request) {
+    throw new TypeError("Desktop grant request must exist");
+  }
+  const calls: unknown[] = [];
+  await new Script(`(async () => { ${request}; })()`).runInNewContext({
+    challenge,
+    api: {
+      "desktop-registry": {
+        grant: {
+          post: async (body: unknown) => {
+            calls.push(body);
+          },
+        },
+      },
+    },
+  });
+  expect(calls).toEqual([
+    {
+      correlationId: challenge.correlationId,
+      verifierHash: challenge.verifierHash,
+      deviceJkt: challenge.deviceJkt,
+    },
+  ]);
 });
 
 test("browser bridge traffic cannot post document sessions or credentials", () => {

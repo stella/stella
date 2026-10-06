@@ -57,6 +57,7 @@ const CONNECTION_CHANGED_EVENT = "desktop-account-changed";
 type Connection =
   | { status: "disconnected" }
   | { status: "expired" }
+  | { status: "reconnectRequired" }
   | { status: "unavailable" }
   | ({ status: "connected"; expiresAt: string } & DesktopRegistryConfig);
 export type DesktopConnectionStatus = Connection["status"] | "loading";
@@ -317,7 +318,14 @@ export const RegistrySearch = ({
     setError(null);
     setConnectionFailure(null);
     onConnectionFlowChange("signIn");
-    void onConnectAccount().catch(() => {
+    const reconnect = async () => {
+      if (connection?.status === "reconnectRequired") {
+        await invoke("account_disconnect");
+        setConnection({ status: "disconnected" });
+      }
+      await onConnectAccount();
+    };
+    void reconnect().catch(() => {
       onConnectionFlowChange("idle");
       setConnectionFailure("connect");
     });
@@ -755,10 +763,12 @@ export const RegistrySearch = ({
           <p role="status" className="max-w-sm text-sm">
             {errorMessage ? "" : emptyText}
           </p>
-          {connection?.status === "disconnected" ||
-          connection?.status === "expired" ? (
+          {connection !== null &&
+          !connected &&
+          connection.status !== "unavailable" ? (
             <Button className="min-h-11" onClick={connect}>
-              {connection?.status === "expired"
+              {connection?.status === "expired" ||
+              connection?.status === "reconnectRequired"
                 ? settingsT("reconnectToStella")
                 : t("registryConnect")}
             </Button>
@@ -797,7 +807,8 @@ export const RegistrySearch = ({
     connectControl: (
       <Button className="min-h-11 rounded-xl" onClick={connect} type="button">
         {settingsT(
-          connection?.status === "expired"
+          connection?.status === "expired" ||
+            connection?.status === "reconnectRequired"
             ? "reconnectToStella"
             : "connectToStella",
         )}

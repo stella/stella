@@ -168,6 +168,49 @@ const FLUSHES_ITS_OWN_SEARCH_MARKS =
 // the baseline; it moves one out of it, and review of the row is the gate.
 export const ROOT_CONNECTION_DOORS = [
   {
+    id: "desktop-device-proof-replay",
+    capability: "Claiming desktop device proofs once",
+    owner: ["apps/api/src/lib/business-registries/desktop/proof-store.ts"],
+    summary:
+      "The denied replay table records each verified proof once independently of business transactions. Indexed pruning removes only its expired rows in bounded batches.",
+    enforcement: {
+      kind: "import",
+      specifiers: ["@/api/lib/business-registries/desktop/proof-store"],
+      allowed: [
+        {
+          path: "apps/api/src/lib/business-registries/desktop/auth.ts",
+          reason:
+            "Consumes a request proof before accepting an account credential.",
+        },
+        {
+          path: "apps/api/src/lib/business-registries/desktop/link-grants.ts",
+          reason:
+            "Consumes the device proof before claiming an issuance grant.",
+        },
+        {
+          path: "apps/api/src/lib/business-registries/desktop/renewal.ts",
+          reason:
+            "Requires the consumed authority when rotating the locked credential.",
+        },
+        {
+          path: "apps/api/src/lib/business-registries/desktop/proof.postgres.test.ts",
+          reason:
+            "Exercises replay exclusion and bounded expiry pruning with real transactions.",
+        },
+        {
+          path: "apps/api/src/lib/business-registries/desktop/renewal.postgres.test.ts",
+          reason:
+            "Exercises proof-bound credential rotation with real transactions.",
+        },
+        {
+          path: "apps/api/src/tests/helpers/desktop-device-proof.ts",
+          reason:
+            "Builds verified proof authorities for handler fixtures with an injected receipt store.",
+        },
+      ],
+    },
+  },
+  {
     id: "desktop-account-renewal",
     capability: "Renewing account-bound desktop credentials",
     owner: ["apps/api/src/lib/business-registries/desktop/renewal.ts"],

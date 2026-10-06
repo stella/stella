@@ -4,6 +4,13 @@ import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { panic, Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 import { eq, sql, TransactionRollbackError } from "drizzle-orm";
+import {
+  calculateJwkThumbprint,
+  exportJWK,
+  generateKeyPair,
+  SignJWT,
+} from "jose";
+import { createHash } from "node:crypto";
 
 import {
   account,
@@ -15,6 +22,7 @@ import {
   verification,
 } from "@/api/db/auth-schema";
 import { auditLogs } from "@/api/db/schema";
+import { desktopDeviceProofReplays } from "@/api/db/schema/desktop-device-proof-replay";
 import type { TransactionOf } from "@/api/db/scoped";
 import { createAuditRecorder } from "@/api/lib/audit-log";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -29,6 +37,8 @@ import {
   DESKTOP_REGISTRY_KEY_CONFIG,
   desktopRegistryKeyConfig,
 } from "./config";
+import { VerifiedDesktopDeviceProof } from "./proof";
+import { ConsumedDesktopDeviceProof } from "./proof-store";
 import { probeDesktopCredential, renewDesktopCredential } from "./renewal";
 import { revokeDesktopRegistryCredential } from "./revocation";
 
@@ -43,7 +53,10 @@ const SUCCESSOR_KEY = token("2");
 const THIRD_KEY = token("3");
 
 type FixtureDb = GatedTestDb | TransactionOf<GatedTestDb>;
-const seedFixture = async (db: FixtureDb) => {
+const seedFixture = async (db: FixtureDb, proofDb: GatedTestDb) => {
+  const signingKeys = await generateKeyPair("ES256", { extractable: true });
+  const deviceJwk = await exportJWK(signingKeys.publicKey);
+  const deviceJkt = await calculateJwkThumbprint(deviceJwk);
   const userId = mintAuthProviderId<"user">();
   const organizationId = mintAuthProviderId<"organization">();
   const memberId = mintAuthProviderIdValue();
@@ -80,6 +93,7 @@ const seedFixture = async (db: FixtureDb) => {
     expiresAt: null,
     metadata: JSON.stringify({
       purpose: DESKTOP_REGISTRY_KEY_CONFIG,
+      deviceJkt,
       organizationId,
       inactivityExpiresAt: new Date(NOW.getTime() + LIFETIME_MS).toISOString(),
     }),
@@ -91,7 +105,17 @@ const seedFixture = async (db: FixtureDb) => {
     request: new Request("https://api.example.test/v1/desktop-account/renew"),
     server: null,
   });
-  return { keyId, memberId, userId, organizationId, recordAuditEvent };
+  return {
+    keyId,
+    memberId,
+    userId,
+    organizationId,
+    recordAuditEvent,
+    signingKeys,
+    deviceJwk,
+    deviceJkt,
+    proofDb,
+  };
 };
 type Fixture = Awaited<ReturnType<typeof seedFixture>>;
 const input = (db: FixtureDb, fixture: Fixture) => ({
@@ -102,8 +126,68 @@ const input = (db: FixtureDb, fixture: Fixture) => ({
   currentKey: CURRENT_KEY,
   successorKey: SUCCESSOR_KEY,
   recordAuditEvent: fixture.recordAuditEvent,
+  signingKeys: fixture.signingKeys,
+  deviceJwk: fixture.deviceJwk,
+  deviceJkt: fixture.deviceJkt,
+  proofDb: fixture.proofDb,
   now: NOW,
 });
+type RenewalFixtureOptions = Omit<
+  Parameters<typeof renewDesktopCredential>[0],
+  "consumedProof"
+> &
+  Pick<Fixture, "signingKeys" | "deviceJwk" | "deviceJkt" | "proofDb"> & {
+    consumedProof?: ConsumedDesktopDeviceProof;
+  };
+const consumeFixtureProof = async ({
+  currentKey,
+  keyId,
+  signingKeys,
+  deviceJwk,
+  deviceJkt,
+  proofDb,
+  now = NOW,
+}: RenewalFixtureOptions) => {
+  const url = "https://api.example.test/v1/desktop-account/renew";
+  const compact = await new SignJWT({
+    htm: "POST",
+    htu: url,
+    iat: Math.floor(now.getTime() / 1000),
+    jti: Bun.randomUUIDv7(),
+    ath: createHash("sha256").update(currentKey).digest("base64url"),
+  })
+    .setProtectedHeader({ typ: "dpop+jwt", alg: "ES256", jwk: deviceJwk })
+    .sign(signingKeys.privateKey);
+  const verified = await VerifiedDesktopDeviceProof.verify({
+    request: new Request(url, { method: "POST", headers: { DPoP: compact } }),
+    expectedUrl: url,
+    expectedThumbprint: deviceJkt,
+    binding: { type: "account", keyId, credential: currentKey },
+    now,
+  });
+  if (verified.isErr()) {
+    panic(verified.error.message);
+  }
+  const consumed = await ConsumedDesktopDeviceProof.claim({
+    proof: verified.value,
+    db: proofDb,
+    now,
+  });
+  if (consumed.isErr()) {
+    panic(consumed.error.message);
+  }
+  return consumed.value;
+};
+const renewWithProof = async (options: RenewalFixtureOptions) =>
+  await renewDesktopCredential({
+    ...options,
+    consumedProof:
+      options.consumedProof ?? (await consumeFixtureProof(options)),
+  });
+const cleanProofFixture = async ({ proofDb, deviceJkt }: Fixture) =>
+  await proofDb
+    .delete(desktopDeviceProofReplays)
+    .where(eq(desktopDeviceProofReplays.jkt, deviceJkt));
 const readKey = async (db: FixtureDb, keyId: string) => {
   const row = (
     await db
@@ -150,15 +234,20 @@ const withRollbackFixture = async (
   }
   await withGatedTestClients(databaseUrl, async ({ openClient }) => {
     const db = openClient().db;
+    const proofDb = openClient().db;
+    let fixture: Fixture | undefined;
     const outcome = await Result.tryPromise({
       try: async () =>
         await db.transaction(async (tx) => {
-          const fixture = await seedFixture(tx);
+          fixture = await seedFixture(tx, proofDb);
           await body(tx, fixture);
           tx.rollback();
         }),
       catch: (cause) => cause,
     });
+    if (fixture) {
+      await cleanProofFixture(fixture);
+    }
     if (
       outcome.isErr() &&
       !(outcome.error instanceof TransactionRollbackError)
@@ -222,7 +311,7 @@ describe.skipIf(!enabled || !databaseUrl)(
           `stella_dr_${"2".repeat(129)}`,
         ]) {
           await expectUnauthorized(
-            renewDesktopCredential({ ...input(db, fixture), successorKey }),
+            renewWithProof({ ...input(db, fixture), successorKey }),
           );
           expect(await readKey(db, fixture.keyId)).toEqual(before);
           expect(await readAudit(db, fixture.keyId)).toEqual([]);
@@ -260,7 +349,7 @@ describe.skipIf(!enabled || !databaseUrl)(
       await withRollbackFixture(async (db, fixture) => {
         const firstUse = new Date(NOW.getTime() + 20 * DAY_MS);
         const first = requireSuccess(
-          await renewDesktopCredential({
+          await renewWithProof({
             ...input(db, fixture),
             now: firstUse,
           }),
@@ -275,11 +364,11 @@ describe.skipIf(!enabled || !databaseUrl)(
           inactivityExpiresAt: first.expiresAt,
         });
         await expectUnauthorized(
-          renewDesktopCredential({ ...input(db, fixture), now: firstUse }),
+          renewWithProof({ ...input(db, fixture), now: firstUse }),
         );
         const secondUse = new Date(NOW.getTime() + 40 * DAY_MS);
         const second = requireSuccess(
-          await renewDesktopCredential({
+          await renewWithProof({
             ...input(db, fixture),
             currentKey: SUCCESSOR_KEY,
             successorKey: THIRD_KEY,
@@ -320,6 +409,7 @@ describe.skipIf(!enabled || !databaseUrl)(
                 .set({
                   metadata: JSON.stringify({
                     purpose: DESKTOP_REGISTRY_KEY_CONFIG,
+                    deviceJkt: fixture.deviceJkt,
                     organizationId: fixture.organizationId,
                     inactivityExpiresAt: new Date(
                       NOW.getTime() - 1,
@@ -334,6 +424,7 @@ describe.skipIf(!enabled || !databaseUrl)(
                 .set({
                   metadata: JSON.stringify({
                     purpose: DESKTOP_REGISTRY_KEY_CONFIG,
+                    deviceJkt: fixture.deviceJkt,
                     organizationId: fixture.organizationId,
                     inactivityExpiresAt: NOW.toISOString(),
                   }),
@@ -400,6 +491,7 @@ describe.skipIf(!enabled || !databaseUrl)(
                 .set({
                   metadata: JSON.stringify({
                     purpose: "other",
+                    deviceJkt: fixture.deviceJkt,
                     organizationId: fixture.organizationId,
                     inactivityExpiresAt: new Date(
                       NOW.getTime() + LIFETIME_MS,
@@ -412,7 +504,7 @@ describe.skipIf(!enabled || !databaseUrl)(
               state satisfies never;
           }
           const before = await readKey(db, fixture.keyId);
-          await expectUnauthorized(renewDesktopCredential(options));
+          await expectUnauthorized(renewWithProof(options));
           // The HTTP probe authenticates live membership before reaching this
           // read-only owner; its own key predicates still enforce actor scope.
           if (state !== "removed-member") {
@@ -433,12 +525,70 @@ describe.skipIf(!enabled || !databaseUrl)(
       });
     }
 
+    test("proof authority for another credential, key or device cannot rotate a live credential", async () => {
+      await withRollbackFixture(async (db, fixture) => {
+        const before = await readKey(db, fixture.keyId);
+        const otherKeys = await generateKeyPair("ES256", { extractable: true });
+        const otherJwk = await exportJWK(otherKeys.publicKey);
+        const otherJkt = await calculateJwkThumbprint(otherJwk);
+        try {
+          for (const proofOptions of [
+            { ...input(db, fixture), currentKey: THIRD_KEY },
+            { ...input(db, fixture), keyId: "other-key" },
+            {
+              ...input(db, fixture),
+              signingKeys: otherKeys,
+              deviceJwk: otherJwk,
+              deviceJkt: otherJkt,
+            },
+          ]) {
+            const consumedProof = await consumeFixtureProof(proofOptions);
+            await expectUnauthorized(
+              renewWithProof({ ...input(db, fixture), consumedProof }),
+            );
+            expect(await readKey(db, fixture.keyId)).toEqual(before);
+            expect(await readAudit(db, fixture.keyId)).toEqual([]);
+          }
+        } finally {
+          await fixture.proofDb
+            .delete(desktopDeviceProofReplays)
+            .where(eq(desktopDeviceProofReplays.jkt, otherJkt));
+        }
+      });
+    });
+
+    test("rotation refuses predecessor proof authority for the successor generation", async () => {
+      await withRollbackFixture(async (db, fixture) => {
+        const consumedProof = await consumeFixtureProof(input(db, fixture));
+        requireSuccess(
+          await renewWithProof({ ...input(db, fixture), consumedProof }),
+        );
+        const after = await readKey(db, fixture.keyId);
+        await expectUnauthorized(
+          renewWithProof({
+            ...input(db, fixture),
+            currentKey: SUCCESSOR_KEY,
+            successorKey: THIRD_KEY,
+            consumedProof,
+          }),
+        );
+        expect(await readKey(db, fixture.keyId)).toEqual(after);
+        expect(await readAudit(db, fixture.keyId)).toHaveLength(1);
+      });
+    });
+
     test("audit failure rolls back the successor digest, deadline and inserted audit", async () => {
       await withRollbackFixture(async (db, fixture) => {
         const before = await readKey(db, fixture.keyId);
-        const outcome = await renewDesktopCredential({
+        const now = new Date(NOW.getTime() + DAY_MS);
+        const consumedProof = await consumeFixtureProof({
           ...input(db, fixture),
-          now: new Date(NOW.getTime() + DAY_MS),
+          now,
+        });
+        const outcome = await renewWithProof({
+          ...input(db, fixture),
+          now,
+          consumedProof,
           recordAuditEvent: async (tx, event) => {
             await fixture.recordAuditEvent(tx, event);
             throw new HandlerError({
@@ -456,7 +606,19 @@ describe.skipIf(!enabled || !databaseUrl)(
         }
         expect(await readKey(db, fixture.keyId)).toEqual(before);
         expect(await readAudit(db, fixture.keyId)).toEqual([]);
-        requireSuccess(await renewDesktopCredential(input(db, fixture)));
+        const replay = await ConsumedDesktopDeviceProof.claim({
+          proof: consumedProof.proof,
+          db: fixture.proofDb,
+          now,
+        });
+        expect(replay.isErr()).toBe(true);
+        if (replay.isErr()) {
+          expect(replay.error).toMatchObject({
+            status: 401,
+            code: "desktop_proof_replayed",
+          });
+        }
+        requireSuccess(await renewWithProof(input(db, fixture)));
         expect(await readAudit(db, fixture.keyId)).toHaveLength(1);
       });
     });
@@ -464,7 +626,7 @@ describe.skipIf(!enabled || !databaseUrl)(
     test("stale expiry cleanup cannot revoke a renewed successor generation", async () => {
       await withRollbackFixture(async (db, fixture) => {
         requireSuccess(
-          await renewDesktopCredential({
+          await renewWithProof({
             ...input(db, fixture),
             now: new Date(NOW.getTime() + 20 * DAY_MS),
           }),
@@ -512,7 +674,7 @@ describe.skipIf(!enabled || !databaseUrl)(
         const db = openClient().db;
         const providerDb = openClient().db;
         const fixture = await db.transaction(
-          async (tx) => await seedFixture(tx),
+          async (tx) => await seedFixture(tx, openClient().db),
         );
         let captured = Promise.withResolvers<undefined>();
         let resume = Promise.withResolvers<undefined>();
@@ -572,7 +734,7 @@ describe.skipIf(!enabled || !databaseUrl)(
             });
             if (operation === "renew") {
               requireSuccess(
-                await renewDesktopCredential({
+                await renewWithProof({
                   ...input(db, fixture),
                   now: new Date(NOW.getTime() + DAY_MS),
                 }),
@@ -645,6 +807,7 @@ describe.skipIf(!enabled || !databaseUrl)(
           if (pending) {
             await Promise.allSettled([pending]);
           }
+          await cleanProofFixture(fixture);
           await db
             .delete(auditLogs)
             .where(eq(auditLogs.resourceId, fixture.keyId));
@@ -669,7 +832,7 @@ describe.skipIf(!enabled || !databaseUrl)(
           const controlDb = openClient().db;
           const observerDb = openClient().db;
           const fixture = await db.transaction(
-            async (tx) => await seedFixture(tx),
+            async (tx) => await seedFixture(tx, openClient().db),
           );
           try {
             const firstWorker = (
@@ -699,13 +862,13 @@ describe.skipIf(!enabled || !databaseUrl)(
                   .from(apikey)
                   .where(eq(apikey.id, fixture.keyId))
                   .for("update");
-                const first = renewDesktopCredential({
+                const first = renewWithProof({
                   ...input(db, fixture),
                   now: new Date(NOW.getTime() + DAY_MS),
                 });
                 const second =
                   competitor === "renew"
-                    ? renewDesktopCredential({
+                    ? renewWithProof({
                         ...input(secondDb, fixture),
                         successorKey: THIRD_KEY,
                         now: new Date(NOW.getTime() + DAY_MS),
@@ -777,11 +940,14 @@ describe.skipIf(!enabled || !databaseUrl)(
                   await probeDesktopCredential({
                     ...fixture,
                     db,
-                    currentKey: SUCCESSOR_KEY,
+                    currentKey:
+                      row.key === (await defaultKeyHasher(SUCCESSOR_KEY))
+                        ? SUCCESSOR_KEY
+                        : THIRD_KEY,
                     now: new Date(NOW.getTime() + DAY_MS),
                   }),
                 ).expiresAt,
-              ).toBe(committed.inactivityExpiresAt);
+              ).toBe(row.inactivityExpiresAt);
               expect(await readAudit(db, fixture.keyId)).toHaveLength(1);
             } else {
               const revocation = pending.at(1);
@@ -818,17 +984,16 @@ describe.skipIf(!enabled || !databaseUrl)(
                 expect(await readAudit(db, fixture.keyId)).toHaveLength(1);
               }
               await expectUnauthorized(
-                renewDesktopCredential({
+                renewWithProof({
                   ...input(db, fixture),
                   currentKey: SUCCESSOR_KEY,
                   successorKey: THIRD_KEY,
                 }),
               );
             }
-            await expectUnauthorized(
-              renewDesktopCredential(input(db, fixture)),
-            );
+            await expectUnauthorized(renewWithProof(input(db, fixture)));
           } finally {
+            await cleanProofFixture(fixture);
             await db
               .delete(auditLogs)
               .where(eq(auditLogs.resourceId, fixture.keyId));

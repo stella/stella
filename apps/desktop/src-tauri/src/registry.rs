@@ -74,6 +74,7 @@ pub fn not_connected() -> String {
 pub(crate) struct RegistryRequestAuth<'a> {
   pub api_base_url: &'a str,
   pub credential_key: &'a str,
+  pub device_key: &'a crate::device_proof::DeviceKey,
 }
 
 pub async fn request(
@@ -96,13 +97,18 @@ async fn request_path(
   body: serde_json::Value,
 ) -> Result<serde_json::Value, String> {
   let client = registry_client()?;
-  let mut response = client
+  let builder = client
     .post(format!("{}/v1/desktop-registry/{path}", auth.api_base_url))
-    .bearer_auth(auth.credential_key)
-    .json(&body)
-    .send()
-    .await
-    .map_err(|_| "Registry search is unavailable")?;
+    .json(&body);
+  let mut response = crate::http_client::device_proof_request(
+    builder,
+    auth.device_key,
+    Some(auth.credential_key),
+    None,
+  )?
+  .send()
+  .await
+  .map_err(|_| "Registry search is unavailable")?;
   if response.status() == reqwest::StatusCode::UNAUTHORIZED {
     return Err(not_connected());
   }
@@ -151,10 +157,17 @@ pub async fn registry_get_state(
   window: WebviewWindow,
 ) -> Result<serde_json::Value, String> {
   require_registry(&window)?;
-  let Some(saved) = account::request_account(&state).await? else {
-    return Ok(
-      serde_json::json!({"status": if account::expired(&state).await? { "expired" } else { "disconnected" }}),
-    );
+  let saved = match account::request_account(&state).await {
+    Ok(Some(saved)) => saved,
+    Ok(None) => {
+      return Ok(
+        serde_json::json!({"status": if account::expired(&state).await? { "expired" } else { "disconnected" }}),
+      );
+    }
+    Err(error) if error == crate::device_proof::RECONNECT => {
+      return Ok(serde_json::json!({"status":"reconnectRequired"}));
+    }
+    Err(error) => return Err(error),
   };
   let config =
     match request(saved.request_auth(), serde_json::json!({"type":"config"})).await {
@@ -277,6 +290,7 @@ mod tests {
   #[ignore = "requires STELLA_DESKTOP_SMOKE_API_URL; runs in hosted desktop CI"]
   async fn hosted_api_accepts_native_desktop_requests() {
     let saved = LinkedAccount {
+      device_key: crate::device_proof::DeviceKey::fixture(),
       api_base_url: std::env::var("STELLA_DESKTOP_SMOKE_API_URL")
         .expect("set the hosted API origin for the native transport smoke"),
       web_origin: "https://my.stll.app".into(),
@@ -329,6 +343,7 @@ mod tests {
       axum::serve(listener, router).await.unwrap();
     });
     let saved = LinkedAccount {
+      device_key: crate::device_proof::DeviceKey::fixture(),
       api_base_url: format!("http://{address}"),
       web_origin: "http://localhost:3000".into(),
       identity: crate::types::DesktopAccountIdentity {
