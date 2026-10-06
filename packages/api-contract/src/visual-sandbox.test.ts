@@ -21,7 +21,7 @@ describe("visual frame messages", () => {
     ).toEqual({
       data: {},
       type: "render",
-      title: "Timeline",
+      title: " Timeline ",
       html: "<p>Dates</p>",
     });
     expect(

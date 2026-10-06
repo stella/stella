@@ -156,6 +156,7 @@ test("previews the canonical composed sandbox document unchanged", async () => {
   ).unwrap();
   const document = composeVisualDocument({
     html,
+    data: {},
     runtime: runtime.default,
     policy: VISUAL_INNER_POLICY,
   });

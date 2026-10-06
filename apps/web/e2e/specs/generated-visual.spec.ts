@@ -22,7 +22,7 @@ const externalUrl = "https://example.test/decision?language=cs&year=2026";
 const title = "Court timeline";
 const visual = v.parse(generatedVisualPageSchema, {
   title,
-  html: `<section class="stella-card"><button id="drill">Court year</button><button id="internal">Open decision</button><a href="${externalUrl}">Decision source</a></section><script>const bucket=stella.data.courtYear.buckets[0];document.querySelector('#drill').addEventListener('click',()=>stella.drill({court:bucket.court,year:bucket.year}));document.querySelector('#internal').addEventListener('click',()=>stella.openDecision('decision'));stella.ready();</script>`,
+  html: `<section class="stella-card"><button id="drill">Court year</button><button id="internal">Open decision</button><a href="${externalUrl}">Decision source</a></section><script>const bucket=stella.data.courtYear.buckets[0];document.querySelector('#drill').addEventListener('click',()=>stella.drill({court:bucket.court,year:bucket.year}));document.querySelector('#internal').addEventListener('click',()=>stella.openDecision('decision'));stella.drill({court:bucket.court,year:bucket.year});stella.openDecision('decision');document.querySelector('a').click();document.body.dataset.initialActions='sent';stella.ready();</script>`,
   data: { courtYear: { buckets: [{ court: "CZ:ns", year: 2026 }] } },
   links: [{ id: "decision", decisionId: DOCKED_CHAT_LEGAL_ROUTES.decision.id }],
   literalLinks: [externalUrl],
@@ -94,8 +94,25 @@ test("generated view activates, reloads and offers user-controlled chat actions"
   const guest = page
     .frameLocator(`iframe[title="${title}"]`)
     .frameLocator("iframe");
-  await expect(guest.locator("#drill")).toHaveText("Court year");
+  await expect(guest.locator("body")).toHaveAttribute(
+    "data-initial-actions",
+    "sent",
+  );
+  const composer = page.locator('[role="textbox"][contenteditable="true"]');
+  await expect(composer.locator('[data-source="prompt"]')).toHaveCount(0);
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+  await expect(page).toHaveURL(new RegExp(`/chat/${threadId}$`, "u"));
+  expect(popups).toEqual([]);
   const card = outer.locator("xpath=ancestor::section[1]");
+  await card
+    .getByRole("button")
+    .first()
+    .evaluate((element) => {
+      if (element instanceof HTMLElement) {
+        element.click();
+      }
+    });
+  await expect(outer).toHaveAttribute("inert", "");
   await card.getByRole("button").first().click();
   await expect(outer).not.toHaveAttribute("inert", "");
   await expect(outer).toBeFocused();
@@ -106,9 +123,16 @@ test("generated view activates, reloads and offers user-controlled chat actions"
     }
   });
   await expect(outer).not.toHaveAttribute("src", initialSrc ?? "");
-  await expect(guest.locator("#drill")).toHaveText("Court year");
+  await expect(guest.locator("body")).toHaveAttribute(
+    "data-initial-actions",
+    "sent",
+  );
+  await expect(outer).toHaveAttribute("inert", "");
+  await expect(composer.locator('[data-source="prompt"]')).toHaveCount(0);
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+  await card.getByRole("button").first().click();
+  await expect(outer).not.toHaveAttribute("inert", "");
   await guest.locator("#drill").click();
-  const composer = page.locator('[role="textbox"][contenteditable="true"]');
   await expect(composer.locator('[data-source="prompt"]')).toContainText(
     "CZ:ns",
   );

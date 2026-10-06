@@ -37,6 +37,7 @@ import { detachedUserAction } from "@/lib/errors/user-toast";
 import { openIsolatedWindow } from "@/lib/open-isolated-window";
 import { toSafeId } from "@/lib/safe-id";
 
+import type { VisualInteraction } from "./generated-visual.logic";
 import { parseVisualHostMessage } from "./generated-visual.logic";
 import { createVisualShellSession } from "./visual-shell-session";
 
@@ -58,9 +59,9 @@ const GeneratedVisualFrame = ({
   const t = useTranslations();
   const frame = useRef<HTMLIFrameElement>(null);
   const [height, setHeight] = useState(320);
-  const [interaction, setInteraction] = useState<"preview" | "interactive">(
-    "preview",
-  );
+  const [interaction, setInteraction] = useState<VisualInteraction>({
+    status: "preview",
+  });
   const [confirmUrl, setConfirmUrl] = useState<string | null>(null);
   const { insertPastedTextIntoThread } = useChatEditorManager();
   const { open: openDecision } = useOpenDecisionTab();
@@ -133,6 +134,7 @@ const GeneratedVisualFrame = ({
       frameWindow,
       outerOrigin: "null",
       actionGate,
+      interaction,
     });
     if (message === null) {
       return;
@@ -197,6 +199,7 @@ const GeneratedVisualFrame = ({
     return () => window.removeEventListener("message", receive);
   }, [receive]);
   const loadShell = () => {
+    setInteraction({ status: "preview" });
     const element = frame.current;
     if (element !== null) {
       element.src = shell.beginLoad();
@@ -232,8 +235,12 @@ const GeneratedVisualFrame = ({
         <Button
           size="sm"
           variant="outline"
-          onClick={() => {
-            setInteraction("interactive");
+          onClick={(event) => {
+            const activatedFrame = frame.current?.contentWindow;
+            if (!event.nativeEvent.isTrusted || !activatedFrame) {
+              return;
+            }
+            setInteraction({ status: "interactive", activatedFrame });
             requestAnimationFrame(() => frame.current?.focus());
           }}
         >
@@ -247,11 +254,11 @@ const GeneratedVisualFrame = ({
           referrerPolicy="no-referrer"
           sandbox="allow-scripts"
           onLoad={loadShell}
-          inert={interaction === "preview"}
+          inert={interaction.status === "preview"}
           className="block w-full border-0"
           style={{ height }}
         />
-        {interaction === "preview" && (
+        {interaction.status === "preview" && (
           <button
             type="button"
             className="absolute inset-0 cursor-pointer"

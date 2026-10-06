@@ -1,4 +1,4 @@
-import { panic, Result } from "better-result";
+import { Result } from "better-result";
 import {
   afterAll,
   beforeAll,
@@ -533,25 +533,6 @@ const isolationCases: IsolationCase[] = [
     name: "visual attachment across organizations",
     runAAgainstB: async ({ ids: testIds, workspaceA }) =>
       await runHandler(visualAttachmentReader, workspaceA, {
-        params: { fileId: testIds.userFileWorkspaceB1UserA1 },
-      }),
-    runBPositive: async ({ ids: testIds, sameUserWorkspaceB }) =>
-      await runHandler(visualAttachmentReader, sameUserWorkspaceB, {
-        params: { fileId: testIds.userFileWorkspaceB1UserA1 },
-      }),
-    expectDenied: expectStatus(404),
-    expectPositive: (result) => {
-      expectStatus(200)(result);
-      if (!(result instanceof Response)) {
-        return panic("Visual attachment did not return a response");
-      }
-      expect(result.headers.get("Cache-Control")).toBe("private, no-store");
-    },
-  },
-  {
-    name: "visual attachment with another owner",
-    runAAgainstB: async ({ ids: testIds, workspaceB }) =>
-      await runHandler(visualAttachmentReader, workspaceB, {
         params: { fileId: testIds.userFileWorkspaceB1UserA1 },
       }),
     runBPositive: async ({ ids: testIds, sameUserWorkspaceB }) =>

@@ -37,6 +37,7 @@ describe("generated view parent messages", () => {
           event,
           frameWindow,
           outerOrigin,
+          interaction: { status: "interactive", activatedFrame: frameWindow },
           actionGate: gate(),
         }),
       ).toEqual(data);
@@ -51,6 +52,7 @@ describe("generated view parent messages", () => {
             event: rejected,
             frameWindow,
             outerOrigin,
+            interaction: { status: "interactive", activatedFrame: frameWindow },
             actionGate: gate(),
           }),
         ).toBeNull();
@@ -61,6 +63,7 @@ describe("generated view parent messages", () => {
             event,
             frameWindow: missing,
             outerOrigin,
+            interaction: { status: "interactive", activatedFrame: frameWindow },
             actionGate: gate(),
           }),
         ).toBeNull();
@@ -70,11 +73,61 @@ describe("generated view parent messages", () => {
           event,
           frameWindow,
           outerOrigin,
+          interaction: { status: "interactive", activatedFrame: frameWindow },
           actionGate: null,
         }),
       ).toBeNull();
     }
   });
+  test("drops actions before parent activation without consuming their rate limit", () => {
+    const actionGate = gate();
+    const actions = [
+      { kind: "drill", court: "court-one", year: 2026 },
+      { kind: "open-internal", linkId: "decision-one" },
+      { kind: "open-link", url: "https://example.test/decision?language=cs" },
+    ];
+    for (const data of actions) {
+      const options = {
+        event: { source: frameWindow, origin: outerOrigin, data },
+        frameWindow,
+        outerOrigin,
+        actionGate,
+      };
+      expect(
+        parseVisualHostMessage({
+          ...options,
+          interaction: { status: "preview" },
+        }),
+      ).toBeNull();
+      expect(
+        parseVisualHostMessage({
+          ...options,
+          interaction: { status: "interactive", activatedFrame: {} },
+        }),
+      ).toBeNull();
+      expect(
+        parseVisualHostMessage({
+          ...options,
+          interaction: { status: "interactive", activatedFrame: frameWindow },
+        }),
+      ).toEqual(data);
+    }
+    for (const data of [
+      { kind: "resize", height: 320 },
+      { kind: "ready", size: { width: 1200, height: 320 } },
+    ]) {
+      expect(
+        parseVisualHostMessage({
+          event: { source: frameWindow, origin: outerOrigin, data },
+          frameWindow,
+          outerOrigin,
+          actionGate,
+          interaction: { status: "preview" },
+        }),
+      ).toEqual(data);
+    }
+  });
+
   test("requires stored link and drill targets before the UI sees an action", () => {
     for (const data of [
       { kind: "open-link", url: "https://example.test/decision?language=en" },
@@ -86,6 +139,7 @@ describe("generated view parent messages", () => {
           event: { source: frameWindow, origin: outerOrigin, data },
           frameWindow,
           outerOrigin,
+          interaction: { status: "interactive", activatedFrame: frameWindow },
           actionGate: gate(),
         }),
       ).toBeNull();
