@@ -195,7 +195,7 @@
     "sharp": "0.35.5",
     "shell-quote": "1.11.0",
     "svgo": "4.1.0",
-    "undici": "8.10.2"
+    "undici": "8.11.2"
   },
   "packageManager": "bun@1.4.2",
   "catalog": {
