@@ -7,6 +7,7 @@ import type { AnyElysia } from "elysia";
 import * as v from "valibot";
 
 import { MCP_CAPABILITY_EXECUTORS } from "@stll/api-contract/mcp-capability-executors";
+import { readCapabilityCatalog } from "@stll/cli/capability-catalog-data";
 import { RUNTIME_MODE } from "@stll/runtime-mode";
 
 import { env } from "@/api/env";
@@ -35,10 +36,12 @@ import { featureAccessGate } from "@/api/lib/auth/feature-access/route";
 import { toSafeId } from "@/api/lib/branded-types";
 import { FEATURE_REGISTRY } from "@/api/lib/feature-access/registry";
 import { isRecord } from "@/api/lib/type-guards";
-import { featureOmittedCapabilityIds } from "@/api/mcp/capability-tools";
+import {
+  featureOmittedCapabilityIds,
+  parseCatalog,
+} from "@/api/mcp/capability-tools";
 import { MCP_ALL_RESOURCE_SCOPES, MCP_MODES } from "@/api/mcp/constants";
 import type { McpRequestContext } from "@/api/mcp/context";
-import capabilityCatalog from "@/api/mcp/generated/capability-catalog";
 import { mcpOmittedToolNamesByReason } from "@/api/mcp/server-core";
 import { listStaticMcpToolDefinitions } from "@/api/mcp/static-tool-definitions";
 import { FEATURE_DISABLED_MESSAGE } from "@/api/mcp/tool-utils";
@@ -46,6 +49,8 @@ import { getMcpToolDefinition, handleMcpToolCall } from "@/api/mcp/tools";
 import { setRuntimeModeForTesting } from "@/api/runtime-mode";
 import { createTestHandlerContext } from "@/api/tests/helpers/handler-context";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
+
+const capabilityCatalog = parseCatalog(readCapabilityCatalog());
 
 const FLAG = "FEATURE_TIME_BILLING";
 const FEATURE_ID = "time-billing";

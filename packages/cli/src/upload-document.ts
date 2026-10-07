@@ -22,14 +22,16 @@ import type { CallToolResult, McpClientError } from "./mcp-client.js";
 import { callTool } from "./mcp-client.js";
 import { parsePayload } from "./run-leaf-command.js";
 
+const LIST_PROPERTIES_CAPABILITY = "properties.list";
 const UPLOAD_CAPABILITIES = {
   abort: DOCUMENT_VERSION_UPLOAD_TRANSPORT.capability.abort,
   create: DOCUMENT_VERSION_UPLOAD_TRANSPORT.capability.reserve,
   finalize: DOCUMENT_VERSION_UPLOAD_TRANSPORT.capability.finalize,
-  listProperties: "properties.list",
+  listProperties: LIST_PROPERTIES_CAPABILITY,
 } as const;
 type UploadCapability =
-  (typeof UPLOAD_CAPABILITIES)[keyof typeof UPLOAD_CAPABILITIES];
+  | (typeof DOCUMENT_VERSION_UPLOAD_TRANSPORT.capability)[keyof typeof DOCUMENT_VERSION_UPLOAD_TRANSPORT.capability]
+  | typeof LIST_PROPERTIES_CAPABILITY;
 
 const UPLOAD_CAPABILITY_ACCESS = {
   [UPLOAD_CAPABILITIES.abort]: "write",

@@ -1,5 +1,6 @@
 import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
+import * as v from "valibot";
 
 import { respondToMcpLifecycle } from "../tests/mcp-test-lifecycle.js";
 import { DOCUMENT_VERSION_UPLOAD_TRANSPORT } from "./generated/document-version-upload-transport.js";
@@ -77,18 +78,28 @@ test("upload transport routes property discovery to reads and every lifecycle st
       if (request.method === "GET") {
         return new Response(null, { status: 405 });
       }
-      const body: {
-        id?: number;
-        method?: string;
-        params: { name: string; arguments: { capability: string } };
-      } = await request.json();
+      const body = v.parse(
+        v.object({
+          id: v.optional(v.union([v.number(), v.string()])),
+          method: v.optional(v.string()),
+          params: v.optional(v.unknown()),
+        }),
+        await request.json(),
+      );
       const lifecycle = respondToMcpLifecycle(body);
       if (lifecycle !== null) {
         return lifecycle;
       }
+      const params = v.parse(
+        v.object({
+          name: v.string(),
+          arguments: v.object({ capability: v.string() }),
+        }),
+        body.params,
+      );
       calls.push({
-        name: body.params.name,
-        capability: body.params.arguments.capability,
+        name: params.name,
+        capability: params.arguments.capability,
       });
       return Response.json({
         jsonrpc: "2.0",

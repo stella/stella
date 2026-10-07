@@ -137,9 +137,9 @@ CLI package version.
 
 Generated capability commands select `read_capability` or `write_capability`
 from the catalog's access classification. For an explicit capability id, use
-`stella capability read <id> --input '<json>'` or
-`stella capability write <id> --input '<json>'`. Discover its input schema with
-`stella capability describe <id>`.
+`stella capability read --capability <id> --input '<json>'` or
+`stella capability write --capability <id> --input '<json>'`. Discover its input schema with
+`stella capability describe --capability <id>`.
 
 ## Links
 
