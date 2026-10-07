@@ -384,7 +384,7 @@ export const createRepairFileDerivativesTask =
           nextCursor: null,
         });
       }
-      return;
+      return Result.ok(undefined);
     }
 
     let requeued = 0;
