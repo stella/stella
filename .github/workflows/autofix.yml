@@ -336,6 +336,8 @@ jobs:
 
       - name: Add missing API test weights
         id: weights
+        env:
+          STELLA_LOCAL_AUTOFIX: "true"
         shell: bash
         run: |
           set -euo pipefail

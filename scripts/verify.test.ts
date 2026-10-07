@@ -19,6 +19,7 @@ import {
   BOTH_GATES_REFUSED,
   withCheckAdmission,
 } from "./verify-admission";
+import { VerifyError } from "./verify-error";
 import { readVerifyWorkflow, type VerifyWorkflowStep } from "./verify-workflow";
 
 const root = path.resolve(import.meta.dirname, "..");
@@ -272,8 +273,29 @@ test("fix mode executes exact autofix workflow blocks", () => {
     }),
   ).toBe(0);
   expect(executed).toEqual(steps);
+  const lint = steps.find(({ run }) => run.includes("oxlint"));
+  expect(lint).toBeDefined();
+  if (lint === undefined) {
+    throw new VerifyError("Marked autofix must include the lint fixer");
+  }
+  for (const command of [
+    "set -euo pipefail",
+    "ci-generated-sources.ts prepare",
+    "typecheck-coverage.ts --autofix",
+    "--type-aware --fix",
+  ]) {
+    expect(lint.run).toContain(command);
+  }
+  expect(lint.run.indexOf("ci-generated-sources.ts prepare")).toBeLessThan(
+    lint.run.indexOf("typecheck-coverage.ts --autofix"),
+  );
+  expect(lint.run.indexOf("typecheck-coverage.ts --autofix")).toBeLessThan(
+    lint.run.indexOf("--type-aware --fix"),
+  );
   expect(
-    steps.some(({ run }) => run.includes("oxlint") && run.includes("--fix")),
+    steps.some(({ run }) =>
+      run.includes("refresh-test-durations.ts --add-missing"),
+    ),
   ).toBe(true);
   expect(steps.some(({ run }) => run.includes("oxfmt"))).toBe(true);
   expect(parseVerifyArgs(["--fix"])).toMatchObject({ mode: "fix-check" });
