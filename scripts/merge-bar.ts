@@ -1539,14 +1539,52 @@ export class DisarmError extends TaggedError("DisarmError")<{
 type DisarmPullRequestOptions = {
   gateway: Pick<GitHubGateway, "readArmState" | "mutateHandoff">;
   dryRun: boolean;
+  expectedHeadSha?: string;
+};
+
+const checkDisarmHead = (raw: unknown, expectedHeadSha: string) => {
+  const pull = readRecord(raw, "disarm pull request");
+  const commits = readRecord(pull["commits"], "disarm commits")["nodes"];
+  if (!Array.isArray(commits) || commits.length !== 1) {
+    return Result.err(
+      new DisarmError({ message: "NOT DISARMED: head rollup unavailable" }),
+    );
+  }
+  const commit = readRecord(
+    readRecord(commits[0], "disarm commit node")["commit"],
+    "disarm commit",
+  );
+  const rollup = readRecord(commit["statusCheckRollup"], "disarm head rollup");
+  if (
+    pull["state"] !== "OPEN" ||
+    pull["headRefOid"] !== expectedHeadSha ||
+    commit["oid"] !== expectedHeadSha ||
+    rollup["state"] !== "FAILURE"
+  ) {
+    return Result.err(
+      new DisarmError({
+        message:
+          "NOT DISARMED: expected head changed or its rollup is no longer red",
+      }),
+    );
+  }
+  return Result.ok();
 };
 
 export const disarmPullRequest = ({
   gateway,
   dryRun,
+  expectedHeadSha,
 }: DisarmPullRequestOptions) =>
   Result.try(() => {
-    const before = armState(gateway.readArmState());
+    const beforeRaw = gateway.readArmState();
+    const before = armState(beforeRaw);
+    if (expectedHeadSha !== undefined) {
+      const pinned = checkDisarmHead(beforeRaw, expectedHeadSha);
+      if (pinned.isErr()) {
+        return pinned;
+      }
+    }
     if (dryRun) {
       return Result.ok({ status: "dry-run", id: before.id } as const);
     }
@@ -1559,11 +1597,18 @@ export const disarmPullRequest = ({
     }
     // Disabling can race with auto-merge enqueueing; inspect queue membership
     // again before removing it, then verify both independent fields are clear.
-    const current = armState(gateway.readArmState());
+    const currentRaw = gateway.readArmState();
+    const current = armState(currentRaw);
     if (current.id !== before.id) {
       panic("Disarm read returned a different pull request");
     }
     if (current.queue !== null) {
+      if (expectedHeadSha !== undefined) {
+        const pinned = checkDisarmHead(currentRaw, expectedHeadSha);
+        if (pinned.isErr()) {
+          return pinned;
+        }
+      }
       gateway.mutateHandoff(
         `mutation($id:ID!) { dequeuePullRequest(input:{id:$id}) { clientMutationId } }`,
         variables,
@@ -1881,7 +1926,8 @@ export const armAndVerify = ({
       mutate(
         `mutation($id:ID!, $sha:GitObjectID!) {
       enablePullRequestAutoMerge(input:{pullRequestId:$id,expectedHeadOid:$sha,mergeMethod:SQUASH}) {
-        pullRequest { id headRefOid updatedAt autoMergeRequest { enabledAt } mergeQueueEntry { id position jump state } }
+        pullRequest { id state headRefOid updatedAt autoMergeRequest { enabledAt }
+            commits(last:1) { nodes { commit { oid statusCheckRollup { state } } } } mergeQueueEntry { id position jump state } }
       }
     }`,
         { id: pullRequestId, sha: expectedHeadSha },
@@ -2939,7 +2985,7 @@ type MergeBarCommonOptions = {
 type MergeBarOptions = MergeBarCommonOptions &
   (
     | { mode: "merge"; jump: boolean }
-    | { mode: "disarm"; jump: false }
+    | { mode: "disarm"; jump: false; expectedHeadSha?: string }
     | { mode: "update-branch"; jump: false; expectedHeadSha: string }
   );
 
@@ -3043,8 +3089,8 @@ export const parseOptions = (argv: readonly string[]): MergeBarOptions => {
   if (mode !== "merge" && jump) {
     panic(`--${mode} cannot be combined with --jump`);
   }
-  if (mode !== "update-branch" && expectedHeadSha !== undefined) {
-    panic("--expected-head-sha requires --update-branch");
+  if (mode === "merge" && expectedHeadSha !== undefined) {
+    panic("--expected-head-sha requires --update-branch or --disarm");
   }
   switch (mode) {
     case "update-branch":
@@ -3053,7 +3099,7 @@ export const parseOptions = (argv: readonly string[]): MergeBarOptions => {
       }
       return { mode, pullNumber, repo, dryRun, jump: false, expectedHeadSha };
     case "disarm":
-      return { mode, pullNumber, repo, dryRun, jump: false };
+      return { mode, pullNumber, repo, dryRun, jump: false, expectedHeadSha };
     case "merge":
       return { mode, pullNumber, repo, dryRun, jump };
     default:
@@ -3234,7 +3280,11 @@ if (import.meta.main) {
   });
 
   if (options.mode === "disarm") {
-    const receipt = disarmPullRequest({ gateway, dryRun: options.dryRun });
+    const receipt = disarmPullRequest({
+      gateway,
+      dryRun: options.dryRun,
+      expectedHeadSha: options.expectedHeadSha,
+    });
     if (receipt.isErr()) {
       console.error(receipt.error.message);
       process.exit(1);

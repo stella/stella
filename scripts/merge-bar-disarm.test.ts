@@ -117,6 +117,78 @@ describe("holding pull requests", () => {
     },
   );
 
+  test.each([
+    { head: "a".repeat(40), rollup: "SUCCESS", state: "OPEN" },
+    { head: "b".repeat(40), rollup: "FAILURE", state: "OPEN" },
+    { head: "a".repeat(40), rollup: "FAILURE", state: "CLOSED" },
+  ])(
+    "pinned disarm refuses moved, recovered or closed heads: %j",
+    (current) => {
+      const result = disarmPullRequest({
+        dryRun: false,
+        expectedHeadSha: "a".repeat(40),
+        gateway: {
+          readArmState: () => ({
+            ...state({ armed: true }),
+            state: current.state,
+            headRefOid: current.head,
+            commits: {
+              nodes: [
+                {
+                  commit: {
+                    oid: current.head,
+                    statusCheckRollup: { state: current.rollup },
+                  },
+                },
+              ],
+            },
+          }),
+          mutateHandoff: () => {
+            throw new Error("unexpected write on refused head");
+          },
+        },
+      });
+      expect(result.isErr()).toBe(true);
+      if (result.isErr()) {
+        expect(result.error.message).toContain(
+          "expected head changed or its rollup is no longer red",
+        );
+      }
+    },
+  );
+
+  test("pinned disarm accepts the expected red head", () => {
+    let armed = true;
+    const head = "a".repeat(40);
+    const result = disarmPullRequest({
+      dryRun: false,
+      expectedHeadSha: head,
+      gateway: {
+        readArmState: () => ({
+          ...state({ armed }),
+          state: "OPEN",
+          headRefOid: head,
+          commits: {
+            nodes: [
+              {
+                commit: { oid: head, statusCheckRollup: { state: "FAILURE" } },
+              },
+            ],
+          },
+        }),
+        mutateHandoff: () => {
+          armed = false;
+          return {};
+        },
+      },
+    });
+    expect(result.isOk()).toBe(true);
+    expect(armed).toBe(false);
+    expect(
+      parseOptions(["--disarm", "123", "--expected-head-sha", head]),
+    ).toMatchObject({ mode: "disarm", expectedHeadSha: head });
+  });
+
   test("disarm is explicit and rejects jump", () => {
     expect(
       parseOptions(["--disarm", "123", "--repo", "stella/folio"]).mode,
