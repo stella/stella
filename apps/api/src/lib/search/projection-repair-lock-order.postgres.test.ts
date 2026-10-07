@@ -171,22 +171,23 @@ if (!databaseUrl || !runPostgresTests) {
               }
               case "entity":
                 await upsertSearchDocument(entityId, { database });
-                return;
+                return undefined;
               case "contact":
                 await upsertContactSearchDocument(contactId, database);
-                return;
+                return undefined;
               case "workspace":
                 if (parent === "workspace") {
                   await upsertWorkspaceSearchDocuments(
                     [survivingWorkspaceId, workspaceId],
                     database,
                   );
-                  return;
+                  return undefined;
                 }
                 await upsertWorkspaceSearchDocument(workspaceId, database);
-                return;
+                return undefined;
               default:
                 kind satisfies never;
+                return undefined;
             }
           };
           // Replacement owns an existing projection before preview FK checks.

@@ -63,12 +63,14 @@ const extractionEntity = {
 };
 let findFirstResult: typeof extractionEntity | null = null;
 const findFirstMock = mock(async () => findFirstResult);
-const executeMock = mock(async (_query: SQL) => [
+// Lock queries bind the locked id first; echo it so the parents read as live.
+const executeRows = async (query: SQL) => [
   {
-    id: new PgDialect().sqlToQuery(_query).params.at(0),
+    id: new PgDialect().sqlToQuery(query).params.at(0),
     entityId,
   },
-]);
+];
+const executeMock = mock(executeRows);
 const transactionMock = mock(
   async (
     runTransaction: (tx: { execute: typeof executeMock }) => Promise<unknown>,
@@ -252,7 +254,7 @@ beforeEach(() => {
   findFirstResult = null;
   findFirstMock.mockClear();
   executeMock.mockReset();
-  executeMock.mockImplementation(async (_query: SQL) => [{ entityId }]);
+  executeMock.mockImplementation(executeRows);
   transactionMock.mockClear();
   insertMock.mockClear();
   valuesMock.mockClear();
