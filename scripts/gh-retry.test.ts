@@ -502,3 +502,133 @@ test("a new request without a response does not inherit a redirect status", asyn
   expect(result.calls).toHaveLength(2);
   expect(result.stderr).toContain("transport error");
 });
+
+for (const args of [
+  ["release", "upload", "v1", "one.txt", "two.txt", "--clobber"],
+  ["api", "repos/example/project"],
+]) {
+  for (const http of [503, 429, 403]) {
+    for (const trailing of [201, 503]) {
+      test(`mixed responses recover ${http} then ${trailing}: ${args.join(" ")}`, async () => {
+        const result = await scenario({
+          args,
+          responses: [
+            { exit: 1, http, after: 7, error: `< HTTP/2.0 ${trailing}` },
+            success,
+          ],
+        });
+        expect(result.exit).toBe(0);
+        expect(result.calls).toHaveLength(2);
+        expect(result.sleeps).toEqual([7]);
+        expect(result.stderr).not.toContain("private-token-do-not-print");
+      });
+    }
+  }
+  for (const http of [404, 403, 422]) {
+    for (const trailing of [201, 503]) {
+      test(`mixed responses retain permanent ${http} before ${trailing}: ${args.join(" ")}`, async () => {
+        const result = await scenario({
+          args,
+          responses: [
+            { exit: 1, http, error: `< HTTP/2.0 ${trailing}` },
+            success,
+          ],
+        });
+        expect(result.exit).toBe(1);
+        expect(result.calls).toHaveLength(1);
+        expect(result.sleeps).toEqual([]);
+      });
+    }
+  }
+}
+for (const args of [
+  ["release", "upload", "v1", "one.txt", "two.txt"],
+  ["api", "repos/example/project", "--method", "POST"],
+]) {
+  test(`mixed response writes stay single-shot: ${args.join(" ")}`, async () => {
+    const result = await scenario({
+      args,
+      responses: [{ exit: 1, http: 503, error: "< HTTP/2.0 201" }, success],
+    });
+    expect(result.exit).toBe(1);
+    expect(result.calls).toHaveLength(1);
+    expect(result.sleeps).toEqual([]);
+  });
+}
+
+test("a later permanent response vetoes earlier transient recovery", async () => {
+  const result = await scenario({
+    args: ["release", "upload", "v1", "one.txt", "two.txt", "--clobber"],
+    responses: [
+      { exit: 1, http: 503, error: "< HTTP/2.0 404\n< HTTP/2.0 201" },
+      success,
+    ],
+  });
+  expect(result.exit).toBe(1);
+  expect(result.calls).toHaveLength(1);
+  expect(result.sleeps).toEqual([]);
+});
+
+test("an invalid 403 retry header remains a permanent veto across responses", async () => {
+  const result = await scenario({
+    args: ["release", "upload", "v1", "one.txt", "two.txt", "--clobber"],
+    responses: [
+      {
+        exit: 1,
+        http: 403,
+        after: "invalid",
+        error: "< HTTP/2.0 503\n< Retry-After: 7",
+      },
+      success,
+    ],
+  });
+  expect(result.exit).toBe(1);
+  expect(result.calls).toHaveLength(1);
+  expect(result.sleeps).toEqual([]);
+});
+
+for (const first of ["numeric", "date"]) {
+  test(`mixed retry headers keep the largest normalized delay: ${first} first`, async () => {
+    const date = "Wed, 07 Oct 2026 12:00:07 GMT";
+    const result = await scenario({
+      args: ["release", "upload", "v1", "one.txt", "two.txt", "--clobber"],
+      responses: [
+        {
+          exit: 1,
+          http: 429,
+          after: first === "numeric" ? 1 : date,
+          error: `< HTTP/2.0 503\n< Retry-After: ${first === "numeric" ? date : 1}\n< HTTP/2.0 201`,
+        },
+        success,
+      ],
+    });
+    expect(result.exit).toBe(0);
+    expect(result.calls).toHaveLength(2);
+    expect(result.sleeps).toEqual([7]);
+  });
+}
+
+for (const after of ["08", "0009", "000000000000000000000000000000008"]) {
+  test(`decimal retry seconds are normalized before arithmetic: ${after}`, async () => {
+    const result = await scenario({
+      responses: [{ exit: 1, http: 403, after }, success],
+    });
+    expect(result.exit).toBe(0);
+    expect(result.calls).toHaveLength(2);
+    expect(result.sleeps).toEqual([Number(after)]);
+    expect(result.stderr).not.toContain("value too great for base");
+  });
+}
+
+test("oversized decimal retry seconds exhaust the budget without overflow", async () => {
+  const result = await scenario({
+    responses: [
+      { exit: 1, http: 429, after: "99999999999999999999999999999999" },
+      success,
+    ],
+  });
+  expect(result.exit).toBe(1);
+  expect(result.calls).toHaveLength(1);
+  expect(result.sleeps).toEqual([]);
+  expect(result.stderr).toContain("GitHub retry budget exhausted");
+});

@@ -172,3 +172,112 @@ test(
   },
   REPOSITORY_SCAN_TIMEOUT_MS,
 );
+
+test.each([
+  "echo ready; gh api repos/owner/repo",
+  "printf x | gh api repos/owner/repo",
+  "echo a && gh run view 1",
+  "echo a || gh release view v1",
+])("prose commands cannot hide subsequent GitHub commands: %s", (source) => {
+  expect(rawGithubCommands("scripts/fixture.sh", source)).toEqual([1]);
+});
+
+test("quoted prose separators are not executable commands", () => {
+  for (const source of [
+    'echo "ready; gh api repos/owner/repo"',
+    "printf '%s' 'x | gh api repos/owner/repo'",
+    'echo "a && gh run view 1 || gh release view v1"',
+    'echo "escaped \\" quote; gh api repos/owner/repo"',
+  ]) {
+    expect(rawGithubCommands("scripts/fixture.sh", source)).toEqual([]);
+  }
+});
+
+test("command continuation retains physical diagnostic lines", () => {
+  expect(
+    rawGithubCommands(
+      "scripts/fixture.sh",
+      "echo ready \\\n  more\necho next; gh api \\\n  repos/owner/repo\ngh run view 1",
+    ),
+  ).toEqual([3, 5]);
+});
+
+test.each([
+  "echo `gh api repos/owner/repo`",
+  "printf '%s' `gh run view 1`",
+  'echo "$(gh api repos/owner/repo)"',
+  'printf "%s" "`gh release view v1`"',
+])("checks executable prose substitutions: %s", (source) => {
+  expect(rawGithubCommands("scripts/fixture.sh", source)).toEqual([1]);
+});
+
+test.each([
+  "echo '$(gh api repos/owner/repo)'",
+  "printf '%s' '`gh run view 1`'",
+  'echo "\\$(gh api repos/owner/repo)"',
+])("keeps quoted and escaped substitution prose literal: %s", (source) => {
+  expect(rawGithubCommands("scripts/fixture.sh", source)).toEqual([]);
+});
+
+test("ANSI C quoted escaped prose cannot hide the following command", () => {
+  expect(
+    rawGithubCommands(
+      "scripts/fixture.sh",
+      "echo $'it\\'s ready'; gh api repos/owner/repo",
+    ),
+  ).toEqual([1]);
+  expect(
+    rawGithubCommands(
+      "scripts/fixture.sh",
+      "echo $'it\\'s ready; gh api repos/owner/repo'",
+    ),
+  ).toEqual([]);
+});
+
+test("nested prose substitutions distinguish printed text from execution", () => {
+  expect(
+    rawGithubCommands(
+      "scripts/fixture.sh",
+      `echo "$(printf '%s' 'gh api repos/owner/repo')"`,
+    ),
+  ).toEqual([]);
+  expect(
+    rawGithubCommands(
+      "scripts/fixture.sh",
+      `echo "$(printf '%s' "$(gh api repos/owner/repo)")"`,
+    ),
+  ).toEqual([1]);
+});
+
+test.each([
+  `echo "$(printf x; gh api repos/owner/repo)"`,
+  `echo "$(printf x | gh api repos/owner/repo)"`,
+  `echo "$(printf x && gh run view 1)"`,
+  `echo "$(printf x || gh release view v1)"`,
+])("nested prose commands cannot hide subsequent execution: %s", (source) => {
+  expect(rawGithubCommands("scripts/fixture.sh", source)).toEqual([1]);
+});
+
+test("nested quoted separators remain printf data", () => {
+  expect(
+    rawGithubCommands(
+      "scripts/fixture.sh",
+      `echo "$(printf '%s' 'x; gh api repos/owner/repo | gh run view 1 && gh release view v1 || gh api example')"`,
+    ),
+  ).toEqual([]);
+});
+
+test("nested ANSI C quoted prose retains its command boundary", () => {
+  expect(
+    rawGithubCommands(
+      "scripts/fixture.sh",
+      "echo \"$(printf $'it\\'s ready'; gh api example)\"",
+    ),
+  ).toEqual([1]);
+  expect(
+    rawGithubCommands(
+      "scripts/fixture.sh",
+      "echo \"$(printf $'it\\'s ready; gh api example')\"",
+    ),
+  ).toEqual([]);
+});

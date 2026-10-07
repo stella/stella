@@ -166,6 +166,7 @@ for ((attempt=1; attempt<=4; attempt+=1)); do
   watchdog=''
   if ((attempt > 1)) || [[ "${args[0]}" == api ]]; then
     remaining=$((60 - SECONDS + started))
+    ((remaining > 0)) || remaining=1
     (
       # Own the timer before forking, including the window before $! is saved.
       trap stop_owned_jobs EXIT
@@ -207,34 +208,58 @@ for ((attempt=1; attempt<=4; attempt+=1)); do
     cat "$scratch/output"
     exit 0
   fi
-  # cli/cli's HTTP logger prefixes response headers with "< ".
-  # Select the last response, including its Retry-After, not a redirect/page.
-  read -r http retry_after < <(awk '
+  # A high-level command can finish another request after one failed.
+  # Normalize each response before selecting recovery and its largest delay.
+  http=0
+  permanent=0
+  transient_http=0
+  retry_after=-1
+  while read -r response_http response_after; do
+    if [[ "$response_after" =~ ^[0-9]+$ ]]; then
+      # Strip decimal padding before Bash arithmetic; large waits exceed the budget.
+      response_after="${response_after#"${response_after%%[!0]*}"}"
+      if ((${#response_after} > 2)); then
+        response_after=60
+      else
+        response_after=$((10#${response_after:-0}))
+      fi
+    fi
+    if [[ "$response_after" != -1 && ! "$response_after" =~ ^[0-9]+$ ]]; then
+      # Retry-After accepts seconds or an HTTP date. GNU and BSD date differ.
+      if epoch=$(LC_ALL=C date -u -d "$response_after" +%s 2>/dev/null) ||
+        epoch=$(LC_ALL=C date -j -u -f '%a, %d %b %Y %H:%M:%S GMT' "$response_after" +%s 2>/dev/null); then
+        response_after=$((epoch - $(date +%s)))
+        ((response_after >= 0)) || response_after=0
+      else
+        response_after=-1
+      fi
+    fi
+    http=$response_http
+    if ((http >= 500 && http <= 599 || http == 429 || http == 403 && response_after >= 0)); then
+      transient_http=$http
+      ((response_after <= retry_after)) || retry_after=$response_after
+    elif ((http >= 400 && http <= 499)); then
+      permanent=$http
+    fi
+  done < <(awk '
     BEGIN { after=-1 }
-    /^\* Request to / { status=0; after=-1 }
-    /^< HTTP\/[0-9.]+ [0-9]+/ { status=$3; after=-1 }
+    /^\* Request to / { if (status) print status, after; status=0; after=-1 }
+    /^< HTTP\/[0-9.]+ [0-9]+/ { if (status) print status, after; status=$3; after=-1 }
     tolower($0) ~ /^< retry-after:/ { after=$0; sub(/^<[^:]*: */, "", after); sub(/\r$/, "", after) }
+    /^gh:.*\(HTTP [0-9][0-9][0-9]\)/ {
+      native=$0; sub(/^.*\(HTTP /, "", native); sub(/\).*$/, "", native)
+      if (native+0 != status) { if (status) print status, after; status=native+0; after=-1 }
+    }
     END { print status+0, after }
   ' "$scratch/trace")
-  if [[ "$retry_after" != -1 && ! "$retry_after" =~ ^[0-9]+$ ]]; then
-    # Retry-After accepts either seconds or an HTTP date. GNU and BSD date
-    # have different parsing switches; both produce the same epoch value.
-    if epoch=$(LC_ALL=C date -u -d "$retry_after" +%s 2>/dev/null) ||
-      epoch=$(LC_ALL=C date -j -u -f '%a, %d %b %Y %H:%M:%S GMT' "$retry_after" +%s 2>/dev/null); then
-      retry_after=$((epoch - $(date +%s)))
-      ((retry_after >= 0)) || retry_after=0
-    else
-      retry_after=-1
-    fi
-  fi
-  # Native gh errors also carry a status when the transport did not log headers.
-  if ((http == 0)); then
-    native_http=$(sed -n 's/^gh:.*(HTTP \([0-9][0-9][0-9]\)).*$/\1/p' "$scratch/trace" | tail -n 1)
-    [[ -z "$native_http" ]] || http="$native_http"
+  if ((permanent > 0)); then
+    http=$permanent
+  elif ((transient_http > 0)); then
+    http=$transient_http
   fi
   failure="HTTP $http"
   transient=false
-  if ((http >= 500 && http <= 599 || http == 429 || http == 403 && retry_after >= 0)); then
+  if ((permanent == 0 && (http >= 500 && http <= 599 || http == 429 || http == 403 && retry_after >= 0))); then
     transient=true
   elif ((http == 0)) && [[ "$transport_retryable" == true ]] && awk '
     # Match Go transport errors logged by gh, not headers, payloads or decoder
