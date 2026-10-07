@@ -10,7 +10,11 @@
 
 import nodePath from "node:path";
 
-import { computeVerdicts, type Verdict } from "./check-marketing-recordings";
+import {
+  computeProvenanceVerdicts,
+  computeVerdicts,
+  type Verdict,
+} from "./check-marketing-recordings";
 import { syncProductMedia } from "./product-media";
 
 const ROOT_DIR = nodePath.resolve(import.meta.dirname, "..");
@@ -168,12 +172,12 @@ const runRecorder = (staleIds: readonly string[]) => {
 };
 
 const main = async () => {
-  const verdicts = computeVerdicts();
+  const verdicts = DRY_RUN ? computeProvenanceVerdicts() : computeVerdicts();
   const staleIds = staleCaptureIds(verdicts);
 
   if (staleIds.length === 0) {
     process.stdout.write(
-      `marketing-reshoot: all ${verdicts.length} recordings fresh — nothing to reshoot\n`,
+      `marketing-reshoot: ${DRY_RUN ? "--dry-run, source metadata matches; rendered output not checked" : `all ${verdicts.length} recordings fresh — nothing to reshoot`}\n`,
     );
     return;
   }

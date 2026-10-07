@@ -198,16 +198,16 @@ PROVENANCE_MATCH/PROVENANCE_CHANGED; it does not certify rendered freshness.
 ## Reshooting on release
 
 `bun run marketing:reshoot` re-records only the captures `marketing:stale`
-finds stale — never the whole matrix, so a reshoot never pays to re-record
-scenes that already match the product:
+finds stale. If the shared rendered comparison fails, candidates with matching
+source metadata remain stale too; its screenshot diagnostics identify the drift:
 
 ```sh
 bun run marketing:reshoot          # re-record whatever is stale
-bun run marketing:reshoot --dry-run # print the stale set and the commands, do nothing
+bun run marketing:reshoot --dry-run # report source provenance and commands without rendering
 ```
 
 If everything is already fresh, it prints `all N recordings fresh — nothing
-to reshoot` and exits without touching the app. Otherwise it preflights the
+to reshoot` after the rendered comparison, without recording new media. Otherwise it preflights the
 local stack (`E2E_WEB_URL` / `E2E_API_URL`, defaulting to the URLs above), and
 if either is unreachable it prints the same "Refreshing the images" commands
 from this file and exits without recording anything — it never starts

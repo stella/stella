@@ -1,7 +1,9 @@
 import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 import { execFileSync } from "node:child_process";
-import { readFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import path from "node:path";
 
 import { captureDefinitions } from "../apps/web/e2e/marketing/captures";
 import {
@@ -244,4 +246,70 @@ describe("rendered marketing freshness", () => {
     expect(comparisons).toBe(1);
     expect(result).toBe(false);
   });
+});
+
+test("rendered checking skips already-stale entries and preserves their reasons in a mixed result", () => {
+  const stale = {
+    basis: null,
+    captureId: "agent",
+    theme: "light",
+    status: "STALE",
+    reasons: ["source changed"],
+  } as const satisfies Verdict;
+  const fresh = {
+    ...stale,
+    basis: "recording",
+    status: "FRESH",
+    reasons: [],
+  } as const satisfies Verdict;
+  expect(
+    computeVerdicts([stale], () =>
+      panic("Already-stale media must not render"),
+    ),
+  ).toEqual([stale]);
+  const mixed = computeVerdicts([stale, fresh], () => false);
+  expect(mixed.at(0)).toBe(stale);
+  expect(mixed.at(1)?.status).toBe("STALE");
+});
+
+test("provenance-only reporting and reshoot dry-run never spawn rendered comparison", () => {
+  const directory = mkdtempSync(path.join(tmpdir(), "marketing-source-only-"));
+  try {
+    writeFileSync(
+      path.join(directory, "bun"),
+      "#!/usr/bin/env bash\necho RENDERED_COMPARISON_IN_SOURCE_ONLY >&2\nexit 91\n",
+      { mode: 0o755 },
+    );
+    for (const { script, flag, output } of [
+      {
+        script: "check-marketing-recordings.ts",
+        flag: "--provenance-only",
+        output: /PROVENANCE_(?:MATCH|CHANGED)/u,
+      },
+      {
+        script: "marketing-reshoot.ts",
+        flag: "--dry-run",
+        output: /--dry-run/u,
+      },
+    ]) {
+      const result = Bun.spawnSync(
+        [process.execPath, new URL(script, import.meta.url).pathname, flag],
+        {
+          env: {
+            ...process.env,
+            PATH: `${directory}:${process.env["PATH"] ?? ""}`,
+          },
+          timeout: 10_000,
+        },
+      );
+      expect(result.exitCode, result.stderr.toString()).toBe(0);
+      expect(result.stderr.toString()).not.toContain(
+        "RENDERED_COMPARISON_IN_SOURCE_ONLY",
+      );
+      expect(result.stdout.toString()).toMatch(output);
+      expect(result.stdout.toString()).not.toMatch(/\bFRESH\b/u);
+    }
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
 });
