@@ -57,6 +57,7 @@ const PREVIEW_FAILURE_REASON = {
 export class VisualPreviewError extends TaggedError("VisualPreviewError")<{
   code: PreviewFailureCode;
   message: string;
+  cause?: unknown;
 }> {
   static {
     declareFailureClass(this, ({ code }) => PREVIEW_FAILURE_REASON[code]);

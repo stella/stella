@@ -99,11 +99,12 @@ export const createShowVisualTools = ({
     const rendered = (
       await Result.tryPromise({
         try: async () => preview(stored.value.document),
-        catch: () =>
+        catch: (cause) =>
           new VisualPreviewError({
             code: "unavailable",
             message:
               "The generated view was published; its preview is unavailable.",
+            cause,
           }),
       })
     ).andThen((result) => result);
