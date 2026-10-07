@@ -244,7 +244,7 @@ export const MODEL_RATES = {
     kind: "flat",
     inputPerMTok: 200_000,
     outputPerMTok: 1_000_000,
-    cachedInputPerMTok: 20_000,
+    cachedInputPerMTok: 10_000,
     cachedWriteInputPerMTok: 250_000,
   },
   // models.dev: anthropic:claude-sonnet-5
