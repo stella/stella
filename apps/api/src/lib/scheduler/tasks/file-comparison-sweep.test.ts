@@ -296,7 +296,8 @@ describe("comparison sweep replay and runner capture", () => {
         }
         return await safeDb(run);
       };
-      const failedIds = [uploadIds[0], uploadIds[2]];
+      // The first and last uploads fail; the middle one stays healthy.
+      const failedIds = uploadIds.filter((_, index) => index !== 1);
       const task = createSweepFileComparisonUploadsTask({
         rootSafeDb,
         sweep: async (options) =>
