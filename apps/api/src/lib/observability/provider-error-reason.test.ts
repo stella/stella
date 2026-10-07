@@ -1,9 +1,12 @@
 import { describe, expect, test } from "bun:test";
 
-import { providerErrorReason } from "@/api/lib/observability/provider-error-reason";
+import {
+  providerErrorReason,
+  type ProviderErrorReason,
+} from "@/api/lib/observability/provider-error-reason";
 
 describe("providerErrorReason", () => {
-  test.each([
+  const KNOWN: readonly (readonly [string, ProviderErrorReason])[] = [
     [
       "Item 'rs_68e4' of type 'reasoning' was provided without its required following item.",
       "reasoning_without_following_item",
@@ -22,9 +25,13 @@ describe("providerErrorReason", () => {
     ],
     ["Item with id 'fc_123' not found.", "item_not_found"],
     ["Duplicate item found with id rs_123.", "duplicate_item"],
-  ])("names %p", (message, reason) => {
-    expect(providerErrorReason(message)).toBe(reason);
-  });
+  ];
+
+  for (const [message, reason] of KNOWN) {
+    test(`names ${reason}`, () => {
+      expect(providerErrorReason(message)).toBe(reason);
+    });
+  }
 
   test("anything else, including text around a template, is unrecognized", () => {
     for (const message of [
