@@ -36,6 +36,7 @@ export class InfoSoudSyncIncomplete extends TaggedError(
   message: string;
   failed: number;
   synced: number;
+  superseded: number;
   total: number;
   reasons: Readonly<Record<InfoSoudSyncFailureReason, number>>;
 }> {}
@@ -54,6 +55,7 @@ export const createSyncInfoSoudTrackedCasesTask =
   async ({ db, dueAt, logger, signal }: SchedulerTaskContext) => {
     const syncStartedAt = dueAt.claimedAtDate();
     let synced = 0;
+    let superseded = 0;
     let total = 0;
     const reasons = {
       "agenda-limit": 0,
@@ -94,13 +96,17 @@ export const createSyncInfoSoudTrackedCasesTask =
 
           if (agendaItems.length > LIMITS.infoSoudAgendaImportItemsMax) {
             // db-await-in-loop: the attempt stamp lands right after this case's throttled court lookup, so an abort mid-page resumes at the first unstamped case
-            await markTrackedCaseFailed({
+            const stamp = await markTrackedCaseFailed({
               attemptAt: syncStartedAt,
               db,
               error: "InfoSoudAgendaImportLimit",
               trackedCaseId: trackedCase.id,
             });
-            reasons["agenda-limit"] += 1;
+            if (stamp === "superseded") {
+              superseded += 1;
+            } else {
+              reasons["agenda-limit"] += 1;
+            }
             continue;
           }
 
@@ -121,33 +127,38 @@ export const createSyncInfoSoudTrackedCasesTask =
                 ? { organizationId: workspace.organizationId }
                 : undefined,
             });
-
             if (!result.ok) {
-              return result;
+              return "import-refused";
             }
 
-            await markTrackedCaseSynced({
+            return await markTrackedCaseSynced({
               syncedAt: syncStartedAt,
               trackedCaseId: trackedCase.id,
               tx,
             });
-
-            return result;
           });
 
-          if (!importResult.ok) {
+          if (importResult === "import-refused") {
             // db-await-in-loop: the attempt stamp lands right after this case's throttled court lookup, so an abort mid-page resumes at the first unstamped case
-            await markTrackedCaseFailed({
+            const stamp = await markTrackedCaseFailed({
               attemptAt: syncStartedAt,
               db,
               error: "InfoSoudAgendaImportFailed",
               trackedCaseId: trackedCase.id,
             });
-            reasons["import-refused"] += 1;
+            if (stamp === "superseded") {
+              superseded += 1;
+            } else {
+              reasons["import-refused"] += 1;
+            }
             continue;
           }
 
-          synced += 1;
+          if (importResult === "superseded") {
+            superseded += 1;
+          } else {
+            synced += 1;
+          }
         } catch (error: unknown) {
           // oxlint-disable-next-line typescript/no-unnecessary-condition -- Avoid marking an intentionally aborted task as a failed tracked case.
           if (signal.aborted) {
@@ -155,13 +166,17 @@ export const createSyncInfoSoudTrackedCasesTask =
           }
 
           // db-await-in-loop: the attempt stamp lands right after this case's throttled court lookup, so an abort mid-page resumes at the first unstamped case
-          await markTrackedCaseFailed({
+          const stamp = await markTrackedCaseFailed({
             attemptAt: syncStartedAt,
             db,
             error: errorTag(error),
             trackedCaseId: trackedCase.id,
           });
-          reasons["case-failed"] += 1;
+          if (stamp === "superseded") {
+            superseded += 1;
+          } else {
+            reasons["case-failed"] += 1;
+          }
         }
       }
     }
@@ -177,14 +192,20 @@ export const createSyncInfoSoudTrackedCasesTask =
     const counts = {
       "infosoud.failed": failed,
       "infosoud.synced": synced,
+      "infosoud.superseded": superseded,
       "infosoud.total": total,
     };
+
+    if (superseded > 0) {
+      logger.info("scheduler.infosoud_sync_superseded", counts);
+    }
 
     if (failed > 0) {
       const error = new InfoSoudSyncIncomplete({
         message: "InfoSoud sync did not complete for every tracked case",
         failed,
         synced,
+        superseded,
         total,
         reasons,
       });
@@ -207,6 +228,13 @@ export const createSyncInfoSoudTrackedCasesTask =
 
 export const syncInfoSoudTrackedCases = createSyncInfoSoudTrackedCasesTask();
 
+const awaitingSyncAttempt = (syncStartedAt: Date) =>
+  or(
+    isNull(infoSoudTrackedCases.lastSyncAttemptAt),
+    // oxlint-disable-next-line no-truncated-timestamp-comparison/no-truncated-timestamp-comparison -- Run cutoff and attempt stamps share the same claim instant; equal or newer attempts are owned by another writer.
+    lt(infoSoudTrackedCases.lastSyncAttemptAt, syncStartedAt),
+  );
+
 const loadNextTrackedCaseBatch = async (db: SchedulerDb, syncStartedAt: Date) =>
   await db
     .select()
@@ -214,11 +242,7 @@ const loadNextTrackedCaseBatch = async (db: SchedulerDb, syncStartedAt: Date) =>
     .where(
       and(
         eq(infoSoudTrackedCases.enabled, true),
-        or(
-          isNull(infoSoudTrackedCases.lastSyncAttemptAt),
-          // oxlint-disable-next-line no-truncated-timestamp-comparison/no-truncated-timestamp-comparison -- Run cutoff and attempt stamps share the same claim instant, so attempted cases compare equal and leave the page.
-          lt(infoSoudTrackedCases.lastSyncAttemptAt, syncStartedAt),
-        ),
+        awaitingSyncAttempt(syncStartedAt),
       ),
     )
     .orderBy(
@@ -237,15 +261,22 @@ const markTrackedCaseSynced = async ({
   syncedAt,
   trackedCaseId,
   tx,
-}: MarkTrackedCaseSyncedOptions): Promise<void> => {
-  await tx
+}: MarkTrackedCaseSyncedOptions) => {
+  const stamped = await tx
     .update(infoSoudTrackedCases)
     .set({
       lastSyncAttemptAt: syncedAt,
       lastSyncError: null,
       lastSyncedAt: syncedAt,
     })
-    .where(eq(infoSoudTrackedCases.id, trackedCaseId));
+    .where(
+      and(
+        eq(infoSoudTrackedCases.id, trackedCaseId),
+        awaitingSyncAttempt(syncedAt),
+      ),
+    )
+    .returning({ id: infoSoudTrackedCases.id });
+  return stamped.length === 0 ? "superseded" : "synced";
 };
 
 type MarkTrackedCaseFailedOptions = {
@@ -260,12 +291,19 @@ const markTrackedCaseFailed = async ({
   db,
   error,
   trackedCaseId,
-}: MarkTrackedCaseFailedOptions): Promise<void> => {
-  await db
+}: MarkTrackedCaseFailedOptions) => {
+  const stamped = await db
     .update(infoSoudTrackedCases)
     .set({
       lastSyncAttemptAt: attemptAt,
       lastSyncError: error,
     })
-    .where(eq(infoSoudTrackedCases.id, trackedCaseId));
+    .where(
+      and(
+        eq(infoSoudTrackedCases.id, trackedCaseId),
+        awaitingSyncAttempt(attemptAt),
+      ),
+    )
+    .returning({ id: infoSoudTrackedCases.id });
+  return stamped.length === 0 ? "superseded" : "failed";
 };

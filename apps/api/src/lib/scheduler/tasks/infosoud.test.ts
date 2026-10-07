@@ -1,5 +1,7 @@
 import { panic } from "better-result";
 import { expect, mock, test } from "bun:test";
+import type { SQL } from "drizzle-orm";
+import { PgDialect } from "drizzle-orm/pg-core";
 
 import type { CaseSearchResultWithHearings } from "@stll/infosoud";
 import { rejectionOf } from "@stll/property-testing/rejection";
@@ -119,7 +121,7 @@ const failureCases = {
 >;
 
 const fixture = (count = 3) => {
-  const rows = Array.from(
+  const rows: (typeof infoSoudTrackedCases.$inferSelect)[] = Array.from(
     { length: count },
     (_, index) =>
       ({
@@ -144,8 +146,30 @@ const fixture = (count = 3) => {
   }[] = [];
   const update = () => ({
     set: (values: (typeof writes)[number]) => ({
-      where: async () => {
-        writes.push(values);
+      where: (condition: SQL) => {
+        const statement = new PgDialect().sqlToQuery(condition);
+        const row = rows.find(({ id }) => statement.params.includes(id));
+        if (row === undefined) {
+          panic("Expected a tracked case update");
+        }
+        const fenced = statement.sql.includes('"last_sync_attempt_at"');
+        if (fenced) {
+          expect(statement.sql).toMatch(/is null or .* < \$\d+/u);
+          expect(statement.params).toContain(
+            values.lastSyncAttemptAt.toISOString(),
+          );
+        }
+        const affected =
+          !fenced ||
+          row.lastSyncAttemptAt === null ||
+          row.lastSyncAttemptAt < values.lastSyncAttemptAt;
+        if (affected) {
+          Object.assign(row, values);
+          writes.push(values);
+        }
+        return {
+          returning: async () => (affected ? [{ id: row.id }] : []),
+        };
       },
     }),
   });
@@ -184,6 +208,102 @@ const fixture = (count = 3) => {
   });
   return { context, controller, rows, pages, writes, warn, info };
 };
+
+const stampCases = {
+  success: {
+    lookup: async () => lookup,
+    importAgenda: async () => successfulImport,
+  },
+  ...failureCases,
+};
+
+test.each(
+  Object.entries(stampCases).flatMap(([path, behavior]) =>
+    [0, 1].map((offset) => ({ path, behavior, offset })),
+  ),
+)(
+  "$path preserves an attempt at or after the claim instant ($offset)",
+  async ({ behavior, offset }) => {
+    const { context, rows, writes, warn, info } = fixture(1);
+    const row = rows.at(0);
+    if (row === undefined) {
+      panic("Expected a tracked case fixture");
+    }
+    const newer = new Date(context.dueAt.claimedAtDate().getTime() + offset);
+    const task = createSyncInfoSoudTrackedCasesTask({
+      searchCaseWithHearings: async () => {
+        row.lastSyncAttemptAt = newer;
+        row.lastSyncedAt = newer;
+        row.lastSyncError = "Synthetic newer writer";
+        return await behavior.lookup();
+      },
+      importAgendaItems: behavior.importAgenda,
+    });
+    expect((await task(context)).isOk()).toBe(true);
+    expect(writes).toEqual([]);
+    expect(row).toMatchObject({
+      lastSyncAttemptAt: newer,
+      lastSyncedAt: newer,
+      lastSyncError: "Synthetic newer writer",
+    });
+    expect(warn).not.toHaveBeenCalled();
+    expect(info).toHaveBeenCalledWith("scheduler.infosoud_sync_superseded", {
+      "infosoud.failed": 0,
+      "infosoud.synced": 0,
+      "infosoud.superseded": 1,
+      "infosoud.total": 1,
+    });
+  },
+);
+
+test("superseded rows do not inflate success or failure counts in a mixed page", async () => {
+  const { context, rows, warn, info } = fixture();
+  let visited = 0;
+  const task = createSyncInfoSoudTrackedCasesTask({
+    searchCaseWithHearings: async () => {
+      visited += 1;
+      if (visited === 1) {
+        const row = rows.at(0);
+        if (row === undefined) {
+          panic("Expected a tracked case fixture");
+        }
+        row.lastSyncAttemptAt = new Date(
+          context.dueAt.claimedAtDate().getTime() + 1,
+        );
+        return await failureCases["case-failed"].lookup();
+      }
+      return lookup;
+    },
+    importAgendaItems: async () =>
+      visited === 2 ? refusedImport : successfulImport,
+  });
+  const result = await task(context);
+  expect(result.isErr()).toBe(true);
+  if (result.isErr()) {
+    expect(result.error.cause).toMatchObject({
+      failed: 1,
+      synced: 1,
+      superseded: 1,
+      total: 3,
+    });
+  }
+  const counts = {
+    "infosoud.failed": 1,
+    "infosoud.synced": 1,
+    "infosoud.superseded": 1,
+    "infosoud.total": 3,
+  };
+  expect(info).toHaveBeenCalledWith(
+    "scheduler.infosoud_sync_superseded",
+    counts,
+  );
+  expect(warn).toHaveBeenCalledWith("scheduler.infosoud_sync_incomplete", {
+    ...counts,
+    "infosoud.failure.agenda-limit": 0,
+    "infosoud.failure.import-refused": 1,
+    "infosoud.failure.case-failed": 0,
+  });
+});
 
 for (const reason of INFO_SOUD_SYNC_FAILURE_REASONS) {
   test.each([0, 1, 2])(
@@ -238,6 +358,7 @@ for (const reason of INFO_SOUD_SYNC_FAILURE_REASONS) {
       expect(warn).toHaveBeenCalledWith("scheduler.infosoud_sync_incomplete", {
         "infosoud.failed": 1,
         "infosoud.synced": 2,
+        "infosoud.superseded": 0,
         "infosoud.total": 3,
         ...Object.fromEntries(
           INFO_SOUD_SYNC_FAILURE_REASONS.map((key) => [
@@ -335,6 +456,7 @@ test("an import exception remains a reported case failure", async () => {
     "infosoud.failed": 1,
     "infosoud.synced": 0,
     "infosoud.total": 1,
+    "infosoud.superseded": 0,
     "infosoud.failure.agenda-limit": 0,
     "infosoud.failure.import-refused": 0,
     "infosoud.failure.case-failed": 1,
@@ -363,6 +485,7 @@ test.each([0, 3])(
     expect(info).toHaveBeenCalledWith("scheduler.infosoud_sync_completed", {
       "infosoud.failed": 0,
       "infosoud.synced": count,
+      "infosoud.superseded": 0,
       "infosoud.total": count,
     });
   },
