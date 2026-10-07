@@ -180,7 +180,7 @@
     "hyparquet": "^1.31.2",
     "jose": "^6.2.12",
     "jszip": "catalog:",
-    "mailauth": "5.0.3",
+    "mailauth": "7.1.0",
     "nodemailer": "^10.0.13",
     "onnxruntime-node": "1.30.0",
     "pkijs": "3.4.1",
