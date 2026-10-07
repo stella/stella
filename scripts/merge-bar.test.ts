@@ -36,6 +36,7 @@ import {
   mergeBarRepositoryPolicy,
   mergeWhenReadyAction,
   parseMergeQueueRemovals,
+  pullRequestCheckRuns,
   type RatchetFreshness,
   ratchetFreshnessFor,
   RatchetRecheckError,
@@ -71,6 +72,7 @@ type MigrationGatewayOptions = {
   repo?: string;
   detailsUrl?: string;
   claTitle?: string;
+  dispatchedCiConclusion?: string;
 };
 
 const runMigrationGateway = (
@@ -80,6 +82,7 @@ const runMigrationGateway = (
     repo = "stella/stella",
     detailsUrl = "https://github.com/stella/stella/actions/runs/1",
     claTitle = "",
+    dispatchedCiConclusion = "",
   }: MigrationGatewayOptions = {},
 ) => {
   const directory = mkdtempSync(path.join(tmpdir(), "merge-bar-files-"));
@@ -111,11 +114,19 @@ case "$*" in
   *reviewThreads*) printf '%s\\n' '{"nodes":[],"pageInfo":{"hasNextPage":false}}';;
   *'api graphql'*) printf '%s\\n' "$FIXTURE_PULL_REQUEST";;
   *rules/branches/main*) printf '%s\\n' '[{"type":"required_status_checks","parameters":{"required_status_checks":[{"context":"ci-result"}]}}]';;
+  *'actions/runs?head_sha='*)
+    printf '7\\t.github/workflows/ci.yml\\tpull_request\\n'
+    if [ -n "$FIXTURE_DISPATCHED_CI" ]; then
+      printf '8\\t.github/workflows/ci.yml\\tworkflow_dispatch\\n'
+    fi;;
   *check-runs/1*) printf '%s\\n' "$FIXTURE_CHECK_RUN";;
   *actions/runs/1*) printf '%s\\n' '{"head_sha":"${HEAD_SHA}","pull_requests":[{"number":123,"head":{"sha":"${HEAD_SHA}"},"base":{"ref":"main","sha":"${OTHER_SHA}"}}]}';;
   *compare/*) printf '%s\\n' '{"status":"identical"}';;
   *check-runs*)
-    printf '1\\tci-result\\tcompleted\\tsuccess\\t\\n'
+    printf '1\\tci-result\\tcompleted\\tsuccess\\t\\t7\\n'
+    if [ -n "$FIXTURE_DISPATCHED_CI" ]; then
+      printf '9\\tci-result\\tcompleted\\t%s\\t\\t8\\n' "$FIXTURE_DISPATCHED_CI"
+    fi
     if [ -n "$FIXTURE_CLA_TITLE" ]; then
       case "$*" in
         *'.output.title'*) printf '2\\tcla\\tcompleted\\tfailure\\t%s\\n' "$FIXTURE_CLA_TITLE";;
@@ -147,6 +158,7 @@ esac
         FIXTURE_PULL_REQUEST: pullRequest,
         FIXTURE_CHECK_RUN: JSON.stringify({ details_url: detailsUrl }),
         FIXTURE_CLA_TITLE: claTitle,
+        FIXTURE_DISPATCHED_CI: dispatchedCiConclusion,
         FIXTURE_FILES: files.map((file) => JSON.stringify(file)).join("\n"),
         FIXTURE_CHANGED_FILES: String(changedFiles),
       },
@@ -167,8 +179,19 @@ const checkRun = (
   name: string,
   status: string,
   conclusion: string | null,
-  { id = 1, outputTitle = "" } = {},
-) => ({ id, name, status, conclusion, outputTitle });
+  {
+    id = 1,
+    outputTitle = "",
+    checkSuiteId,
+  }: { id?: number; outputTitle?: string; checkSuiteId?: number } = {},
+) => ({
+  id,
+  name,
+  status,
+  conclusion,
+  outputTitle,
+  ...(checkSuiteId === undefined ? {} : { checkSuiteId }),
+});
 
 /** A declared repository without stella's migrations or ratchet. */
 const PRIVATE_REPO = "stella/stella-infra";
@@ -212,6 +235,7 @@ case "$*" in
   'variable get STELLA_MERGE_HOLD --repo '*) printf '%s\\n' 'variable STELLA_MERGE_HOLD was not found' >&2; exit 1;;
   *reviewThreads*) printf '%s\\n' '{"nodes":[],"pageInfo":{"hasNextPage":false}}';;
   *rules/branches/main*) printf '%s\\n' '[{"type":"required_status_checks","parameters":{"required_status_checks":[{"context":"Overlay check"}]}}]';;
+  *'actions/runs?head_sha='*) ;;
   *check-runs/1*) printf '%s\\n' '{"details_url":"https://github.com/stella/stella/actions/runs/1"}';;
   *actions/runs/1*) printf '%s\\n' '{"head_sha":"${HEAD_SHA}","pull_requests":[{"number":123,"head":{"sha":"${HEAD_SHA}"},"base":{"ref":"main","sha":"${OTHER_SHA}"}}]}';;
   *compare/*) printf '%s\\n' '{"status":"identical"}';;
@@ -431,6 +455,7 @@ case "$*" in
     printf '%s\\n' '${queue}';;
   *reviewThreads*) printf '%s\\n' '{"nodes":[],"pageInfo":{"hasNextPage":false}}';;
   *rules/branches/main*) printf '%s\\n' '[{"type":"required_status_checks","parameters":{"required_status_checks":[{"context":"ci-result"}]}},{"type":"merge_queue","parameters":{}}]';;
+  *'actions/runs?head_sha='*) ;;
   *check-runs/1*) printf '%s\\n' '{"details_url":"https://github.com/stella/stella/actions/runs/1"}';;
   *actions/runs/1*) printf '%s\\n' '{"head_sha":"${HEAD_SHA}","pull_requests":[{"number":123,"head":{"sha":"${HEAD_SHA}"},"base":{"ref":"main","sha":"${OTHER_SHA}"}}]}';;
   *compare/*) printf '%s\\n' '{"status":"identical"}';;
@@ -519,6 +544,7 @@ case "$*" in
   *REMOVED_FROM_MERGE_QUEUE_EVENT*) printf '%s\\n' '[]';;
   *reviewThreads*) printf '%s\\n' '{"nodes":[],"pageInfo":{"hasNextPage":false}}';;
   *rules/branches/main*) printf '%s\\n' '[{"type":"required_status_checks","parameters":{"required_status_checks":[{"context":"ci-result"}]}},{"type":"merge_queue","parameters":{}}]';;
+  *'actions/runs?head_sha='*) ;;
   *check-runs/1*) printf '%s\\n' '{"details_url":"https://github.com/stella/stella/actions/runs/1"}';;
   *actions/runs/1*) printf '%s\\n' '{"head_sha":"${HEAD_SHA}","pull_requests":[{"number":123,"head":{"sha":"${HEAD_SHA}"},"base":{"ref":"main","sha":"${OTHER_SHA}"}}]}';;
   *compare/*) printf '%s\\n' '{"status":"identical"}';;
@@ -605,6 +631,15 @@ describe("migration file gateway", () => {
     ]);
     expect(withInventory.exitCode).toBe(0);
     expect(withInventory.stdout).toContain("verdict: MERGE (dry run");
+  });
+
+  test("a dispatched CI run on the head does not override the pull request's CI", () => {
+    const result = runMigrationGateway([], {
+      changedFiles: 0,
+      dispatchedCiConclusion: "failure",
+    });
+    expect(result.exitCode).toBe(0);
+    expect(result.stdout).toContain("verdict: MERGE (dry run");
   });
 
   test("a renamed inventory file is recognized as an inventory change", () => {
@@ -1429,6 +1464,78 @@ describe("explicit merge queue jumps", () => {
         requiredCheckRuns: required,
       }),
     ).toBe(false);
+  });
+});
+
+describe("pull request check runs", () => {
+  const ci = (checkSuiteId: number, event: string) => ({
+    checkSuiteId,
+    path: ".github/workflows/ci.yml",
+    event,
+  });
+
+  test("a dispatched CI run on the same head neither blocks nor passes the pull request", () => {
+    const required = ["ci-result"];
+    const prGreen = checkRun("ci-result", "completed", "success", {
+      id: 10,
+      checkSuiteId: 1,
+    });
+    const dispatchedRed = checkRun("ci-result", "completed", "failure", {
+      id: 20,
+      checkSuiteId: 2,
+    });
+    const workflowRuns = [ci(1, "pull_request"), ci(2, "workflow_dispatch")];
+
+    const judged = pullRequestCheckRuns({
+      checkRuns: [prGreen, dispatchedRed],
+      workflowRuns,
+    });
+    expect(judged).toEqual([prGreen]);
+    expect(
+      requiredChecksSucceeded({
+        checkRuns: judged,
+        requiredCheckRuns: required,
+      }),
+    ).toBe(true);
+
+    const dispatchedGreen = { ...dispatchedRed, conclusion: "success" };
+    const prRed = { ...prGreen, conclusion: "failure" };
+    expect(
+      requiredChecksSucceeded({
+        checkRuns: pullRequestCheckRuns({
+          checkRuns: [prRed, dispatchedGreen],
+          workflowRuns,
+        }),
+        requiredCheckRuns: required,
+      }),
+    ).toBe(false);
+  });
+
+  test("merge-group CI runs and check runs from other workflows are kept", () => {
+    const mergeGroup = checkRun("ci-result", "completed", "success", {
+      id: 30,
+      checkSuiteId: 3,
+    });
+    const cla = checkRun("cla", "completed", "success", {
+      id: 40,
+      checkSuiteId: 4,
+    });
+    const unknownSuite = checkRun("dependency-review", "completed", "success", {
+      id: 50,
+    });
+    expect(
+      pullRequestCheckRuns({
+        checkRuns: [mergeGroup, cla, unknownSuite],
+        workflowRuns: [
+          ci(3, "merge_group"),
+          {
+            checkSuiteId: 4,
+            path: ".github/workflows/cla.yml",
+            event: "workflow_dispatch",
+          },
+        ],
+      }),
+    ).toEqual([mergeGroup, cla, unknownSuite]);
   });
 });
 
@@ -2584,6 +2691,7 @@ case "$*" in
   *commits/main*) printf '%s\\n' "$FIXTURE_MAIN_TIP";;
   *reviewThreads*) printf '%s\\n' '{"nodes":[],"pageInfo":{"hasNextPage":false}}';;
   *rules/branches/main*) printf '%s\\n' '[{"type":"required_status_checks","parameters":{"required_status_checks":[{"context":"ci-result"}]}},{"type":"merge_queue","parameters":{}}]';;
+  *'actions/runs?head_sha='*) ;;
   *check-runs/1*) printf '%s\\n' '{"details_url":"https://github.com/stella/stella-infra/actions/runs/1"}';;
   *actions/runs/1*) printf '%s\\n' '{"head_sha":"${HEAD_SHA}","pull_requests":[{"number":123,"head":{"sha":"${HEAD_SHA}"},"base":{"ref":"main","sha":"${OTHER_SHA}"}}]}';;
   *compare/*) printf '%s\\n' '{"status":"identical"}';;
@@ -2851,6 +2959,7 @@ case "$*" in
   *actions/runs/1/jobs*) printf '%s\\n' "$FIXTURE_RUN_JOBS";;
   *reviewThreads*) printf '%s\\n' '{"nodes":[],"pageInfo":{"hasNextPage":false}}';;
   *rules/branches/main*) printf '%s\\n' '[{"type":"required_status_checks","parameters":{"required_status_checks":[{"context":"ci-result"}]}},{"type":"merge_queue","parameters":{}}]';;
+  *'actions/runs?head_sha='*) ;;
   *check-runs/1*) printf '%s\\n' '{"details_url":"https://github.com/stella/stella-infra/actions/runs/1"}';;
   *actions/runs/1*) printf '%s\\n' '{"id":1,"head_sha":"${HEAD_SHA}","pull_requests":[{"number":123,"head":{"sha":"${HEAD_SHA}"},"base":{"ref":"main","sha":"${OTHER_SHA}"}}]}';;
   *compare/*) printf '%s\\n' "$FIXTURE_COMPARISON";;
@@ -3590,6 +3699,7 @@ case "$*" in
   *timelineItems*) printf '%s\\n' '[]';;
   *reviewThreads*) printf '%s\\n' '{"nodes":[],"pageInfo":{"hasNextPage":false}}';;
   *rules/branches/main*) printf '%s\\n' '[{"type":"required_status_checks","parameters":{"required_status_checks":[{"context":"ci-result"}]}},{"type":"merge_queue","parameters":{}}]';;
+  *'actions/runs?head_sha='*) ;;
   *check-runs*) printf '1\\tci-result\\tin_progress\\t\\n';;
   *updatedAt*)
     printf '%s\\n' arm-read >> "$FIXTURE_CALLS"
@@ -3692,6 +3802,7 @@ case "$*" in
   *timelineItems*) printf '%s\\n' '[]';;
   *reviewThreads*) printf '%s\\n' '{"nodes":[],"pageInfo":{"hasNextPage":false}}';;
   *rules/branches/main*) printf '%s\\n' '[{"type":"required_status_checks","parameters":{"required_status_checks":[{"context":"ci-result"}]}},{"type":"merge_queue","parameters":{}}]';;
+  *'actions/runs?head_sha='*) ;;
   *check-runs*) printf '1\\tci-result\\tin_progress\\t\\n';;
   *updatedAt*) printf '%s\\n' "$FIXTURE_ARM_RESPONSE";;
   *'api graphql'*) printf '%s\\n' "$FIXTURE_PULL_RESPONSE";;
