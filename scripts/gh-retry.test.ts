@@ -383,31 +383,28 @@ const transportErrors = [
   'Get "https://api.github.com/example": dial tcp 127.0.0.1:443: connect: connection refused',
 ];
 
-test.each(transportErrors)(
-  "recognized transport failures recover only for safe reads: %s",
-  async (error) => {
-    for (const method of ["GET", "HEAD"]) {
+for (const error of transportErrors) {
+  test.each(["GET", "HEAD", "POST", "PATCH", "PUT", "DELETE"])(
+    `recognized transport failures recover only for safe reads: ${error} (%s)`,
+    async (method) => {
       const result = await scenario({
         args: ["api", "repos/example/project", "--method", method],
         responses: [{ exit: 1, error, output: "00ff" }, success],
       });
-      expect(result.exit).toBe(0);
-      expect(result.calls).toHaveLength(2);
-      expect(result.sleeps).toHaveLength(1);
-      expect(result.stdout).toEqual(Buffer.from("ok"));
       expect(result.stderr).not.toContain(error);
-    }
-    for (const method of ["POST", "PATCH", "PUT", "DELETE"]) {
-      const result = await scenario({
-        args: ["api", "repos/example/project", "--method", method],
-        responses: [{ exit: 1, error }, success],
-      });
+      if (method === "GET" || method === "HEAD") {
+        expect(result.exit).toBe(0);
+        expect(result.calls).toHaveLength(2);
+        expect(result.sleeps).toHaveLength(1);
+        expect(result.stdout).toEqual(Buffer.from("ok"));
+        return;
+      }
       expect(result.exit).toBe(1);
       expect(result.calls).toHaveLength(1);
       expect(result.sleeps).toEqual([]);
-    }
-  },
-);
+    },
+  );
+}
 
 test("unknown non-HTTP errors and errors after a non-transient HTTP response fail fast", async () => {
   for (const response of [

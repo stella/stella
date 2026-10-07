@@ -18,17 +18,38 @@ umask 077
 scratch=$(mktemp -d)
 command_pid=''
 watchdog=''
+stop_owned_jobs() {
+  trap '' TERM INT
+  trap - EXIT
+  local owned_jobs pid
+  # A startup TERM can be lost while GNU Bash initializes subshell traps.
+  : > "$scratch/stop-watchdog"
+  # Capture jobs before PID assignment too; cancellation can arrive after fork.
+  owned_jobs=$(jobs -p)
+  for pid in $owned_jobs; do
+    if ((BASH_SUBSHELL > 0)); then
+      # The disposable timer can lose TERM before exec too; it owns no cleanup.
+      kill -KILL "$pid" 2>/dev/null || true
+    else
+      kill "$pid" 2>/dev/null || true
+    fi
+  done
+  for pid in $owned_jobs; do
+    wait "$pid" 2>/dev/null || true
+  done
+}
 cleanup() {
   # Early watchdog termination can run the inherited EXIT trap on GNU Bash.
   # Only the owning shell may remove response files or terminate commands.
   ((BASH_SUBSHELL == 0)) || return 0
-  [[ -z "$command_pid" ]] || kill "$command_pid" 2>/dev/null || true
-  [[ -z "$watchdog" ]] || kill "$watchdog" 2>/dev/null || true
+  trap '' TERM INT
+  trap - EXIT
+  stop_owned_jobs
   rm -rf "$scratch"
 }
 trap cleanup EXIT
-trap 'exit 130' INT
-trap 'exit 143' TERM
+trap 'cleanup; exit 130' INT
+trap 'cleanup; exit 143' TERM
 
 args=("$@")
 retryable=false
@@ -139,16 +160,19 @@ for ((attempt=1; attempt<=4; attempt+=1)); do
   fi
   # REST requests and recovery share a 60-second wall budget. High-level
   # first attempts keep their normal lifetime (watching/uploading artifacts).
+  rm -f "$scratch/stop-watchdog"
   GH_DEBUG=api gh "${args[@]}" < "$scratch/input" > "$scratch/output" 2> "$scratch/trace" &
   command_pid=$!
   watchdog=''
   if ((attempt > 1)) || [[ "${args[0]}" == api ]]; then
     remaining=$((60 - SECONDS + started))
     (
+      # Own the timer before forking, including the window before $! is saved.
+      trap stop_owned_jobs EXIT
+      trap 'stop_owned_jobs; exit 0' TERM INT
       sleep "$remaining" &
       timer=$!
-      trap 'kill "$timer" 2>/dev/null || true' EXIT
-      trap 'exit 0' TERM
+      [[ ! -e "$scratch/stop-watchdog" ]] || exit 0
       wait "$timer"
       : > "$scratch/deadline"
       kill "$command_pid" 2>/dev/null || true
@@ -158,6 +182,7 @@ for ((attempt=1; attempt<=4; attempt+=1)); do
   if wait "$command_pid"; then status=0; else status=$?; fi
   command_pid=''
   if [[ -n "$watchdog" ]]; then
+    : > "$scratch/stop-watchdog"
     kill "$watchdog" 2>/dev/null || true
     wait "$watchdog" 2>/dev/null || true
     watchdog=''

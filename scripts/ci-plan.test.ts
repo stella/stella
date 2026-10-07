@@ -1,5 +1,5 @@
 import { panic } from "better-result";
-import { afterAll, expect, setDefaultTimeout, test } from "bun:test";
+import { afterAll, expect, test } from "bun:test";
 import fc from "fast-check";
 import {
   chmodSync,
@@ -39,12 +39,6 @@ import { serviceSuiteCliOutput } from "./detect-service-suite-changes";
 import { GENERATORS } from "./generated-files";
 import { evaluate } from "./github-expression";
 import { mainHeavyJobs } from "./main-heavy-plan";
-
-// The ci-result cases run the evaluator in bash batches, and every GitHub read
-// goes through the real retry helper (scratch files, watchdog subshell), so a
-// batch takes seconds on a shared runner. The file carries its own budget
-// instead of the 5 s default.
-setDefaultTimeout(30_000);
 
 const workflow = readFileSync(
   new URL("../.github/workflows/ci.yml", import.meta.url),
