@@ -766,6 +766,28 @@ jobs:
           } > NOTES.with-manual.md
           mv NOTES.with-manual.md NOTES.md
 
+      # Stable store packages share this existing standard Linux job. Upload
+      # directly to the release; no intermediate Actions artifact is retained.
+      - name: Setup Bun for the Chrome extension
+        if: ${{ !contains(needs.resolve.outputs.release_ref, '-') }}
+        uses: stella/.github/actions/setup-bun-cached@167fb396c6c0f4e07296ad2cd72e6ef15367c776
+        with:
+          bun-version-file: "package.json"
+          save: false
+
+      - name: Build and verify the production Chrome extension ZIP
+        if: ${{ !contains(needs.resolve.outputs.release_ref, '-') }}
+        env:
+          VERSION: ${{ needs.resolve.outputs.version }}
+          WXT_STELLA_ORIGINS: ""
+          NPM_TOKEN: ""
+        run: |
+          bun ci --filter @stll/extension --ignore-scripts
+          bun --filter @stll/extension zip
+          # Check the packaged manifest, rather than only the build directory.
+          unzip -p "apps/extension/.output/stella-extension-chrome-${VERSION}.zip" manifest.json > "$RUNNER_TEMP/extension-manifest.json"
+          bun apps/extension/scripts/assert-manifest.ts production "$VERSION" "$RUNNER_TEMP/extension-manifest.json"
+
       - name: Create draft GitHub release with the manifest
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -794,6 +816,10 @@ jobs:
               "${extra_args[@]}"
           fi
           bash "$GH_RETRY_SCRIPT" release upload "$RELEASE_REF" release-manifest.json --clobber
+          if [[ "$RELEASE_REF" != *-* ]]; then
+            bash "$GH_RETRY_SCRIPT" release upload "$RELEASE_REF" \
+              "apps/extension/.output/stella-extension-chrome-${RELEASE_REF#v}.zip" --clobber
+          fi
 
   promote:
     # Auto-promote stable releases (vX.Y.Z) to production. Any tag

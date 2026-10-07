@@ -1,9 +1,22 @@
-# Stella browser extension
+# stella browser extension
 
 Chrome-only Manifest V3 extension for approved browser actions from stella chat.
 It uses the current Chrome profile, so a controlled tab shares the user's normal
 signed-in website sessions. The extension does not expose cookies, raw HTML,
 downloads, or arbitrary JavaScript.
+
+## Release package
+
+Stable product tags (`vX.Y.Z`) build a production Chrome ZIP in the existing
+release workflow and attach `stella-extension-chrome-X.Y.Z.zip` to the GitHub
+release. The manifest version comes from the repository `VERSION`, verified
+against the tag; the packaged manifest must trust exactly the production
+origins. Prerelease tags do not produce a store package. Store submission is
+manual.
+
+`bun --filter @stll/extension zip` builds the same ZIP locally. Development
+and staging builds use the product's numeric version too; `version_name`
+preserves any prerelease label.
 
 ## Local installation
 

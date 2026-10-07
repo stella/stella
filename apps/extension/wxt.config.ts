@@ -1,8 +1,28 @@
+import { panic } from "better-result";
+import { readFileSync } from "node:fs";
 import { defineConfig } from "wxt";
+
+const releaseVersion = readFileSync(
+  new URL("../../VERSION", import.meta.url),
+  "utf-8",
+).trim();
+if (!/^\d+\.\d+\.\d+(?:-(?:rc|beta|alpha)\.\d+)?$/u.test(releaseVersion)) {
+  panic("Extension version must come from a valid product release VERSION");
+}
+// Chrome accepts only numeric versions; prerelease builds retain their label.
+const chromeVersion = releaseVersion.replace(/-.*$/u, "");
 
 export default defineConfig({
   imports: false,
   manifest: {
+    version: chromeVersion,
+    version_name: releaseVersion,
+    icons: {
+      16: "icon/16.png",
+      32: "icon/32.png",
+      48: "icon/48.png",
+      128: "icon/128.png",
+    },
     action: {
       default_popup: "popup.html",
       default_title: "__MSG_extensionName__",
@@ -23,4 +43,5 @@ export default defineConfig({
     permissions: ["activeTab", "declarativeNetRequest", "scripting", "storage"],
   },
   srcDir: "src",
+  zip: { artifactTemplate: "stella-extension-chrome-{{version}}.zip" },
 });
