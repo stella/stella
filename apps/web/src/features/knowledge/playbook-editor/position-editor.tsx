@@ -454,7 +454,7 @@ export const PositionEditor = ({
         title={
           <Input
             aria-invalid={showErrors && errors.issue !== undefined}
-            className="hover:border-input focus-visible:bg-background h-8 w-full border-transparent bg-transparent px-1.5 text-sm font-medium shadow-none [&>input]:text-ellipsis"
+            className="hover:border-input focus-visible:bg-background h-8 w-full border-transparent bg-transparent px-1.5 text-sm font-medium shadow-none"
             onChange={(e) => onChange({ ...position, issue: e.target.value })}
             onFocus={() => {
               if (!open) {
