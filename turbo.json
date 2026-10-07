@@ -743,6 +743,8 @@
       "dependsOn": ["generate:api-types", "generate:route-tree"],
       "inputs": [
         "$TURBO_DEFAULT$",
+        "$TURBO_ROOT$/packages/ui/src/**",
+        "$TURBO_ROOT$/packages/workspace-ui/src/**",
         "$TURBO_ROOT$/.oxlint-plugins/**",
         "$TURBO_ROOT$/apps/api/src/**",
         "$TURBO_ROOT$/apps/desktop/src/**",

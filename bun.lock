@@ -151,11 +151,11 @@
         "hyparquet": "^1.31.2",
         "jose": "^6.2.12",
         "jszip": "catalog:",
-        "mailauth": "5.0.3",
+        "mailauth": "7.1.0",
         "nodemailer": "^10.0.13",
         "onnxruntime-node": "1.30.0",
         "pkijs": "3.4.1",
-        "postal-mime": "^3.0.1",
+        "postal-mime": "4.0.2",
         "posthog-node": "^5.55.0",
         "quickjs-emscripten-core": "^0.32.0",
         "react": "catalog:react19",
@@ -380,9 +380,9 @@
       "name": "@stll/web",
       "version": "0.0.0",
       "dependencies": {
-        "@atlaskit/pragmatic-drag-and-drop": "^3.1.0",
-        "@atlaskit/pragmatic-drag-and-drop-auto-scroll": "^3.2.0",
-        "@atlaskit/pragmatic-drag-and-drop-hitbox": "^2.2.2",
+        "@atlaskit/pragmatic-drag-and-drop": "^4.0.0",
+        "@atlaskit/pragmatic-drag-and-drop-auto-scroll": "^3.2.1",
+        "@atlaskit/pragmatic-drag-and-drop-hitbox": "^3.0.0",
         "@atlaskit/pragmatic-drag-and-drop-live-region": "^2.1.0",
         "@base-ui/react": "catalog:",
         "@better-auth/oauth-provider": "catalog:",
@@ -1207,8 +1207,8 @@
         "temporal-polyfill": "catalog:",
       },
       "devDependencies": {
-        "@atlaskit/pragmatic-drag-and-drop": "^3.1.0",
-        "@atlaskit/pragmatic-drag-and-drop-auto-scroll": "^3.2.0",
+        "@atlaskit/pragmatic-drag-and-drop": "^4.0.0",
+        "@atlaskit/pragmatic-drag-and-drop-auto-scroll": "^3.2.1",
         "@base-ui/react": "catalog:",
         "@playwright/test": "^1.63.0",
         "@stll/typescript-config": "workspace:*",
@@ -1224,8 +1224,8 @@
         "vite": "catalog:",
       },
       "peerDependencies": {
-        "@atlaskit/pragmatic-drag-and-drop": "^3.1.0",
-        "@atlaskit/pragmatic-drag-and-drop-auto-scroll": "^3.2.0",
+        "@atlaskit/pragmatic-drag-and-drop": "^4.0.0",
+        "@atlaskit/pragmatic-drag-and-drop-auto-scroll": "^3.2.1",
         "@base-ui/react": "^1.7.0",
         "@tanstack/react-virtual": "^3.14.13",
         "@types/react": ">=19",
@@ -1286,8 +1286,8 @@
         "use-intl": "catalog:",
       },
       "devDependencies": {
-        "@atlaskit/pragmatic-drag-and-drop": "^3.1.0",
-        "@atlaskit/pragmatic-drag-and-drop-hitbox": "^2.2.2",
+        "@atlaskit/pragmatic-drag-and-drop": "^4.0.0",
+        "@atlaskit/pragmatic-drag-and-drop-hitbox": "^3.0.0",
         "@base-ui/react": "catalog:",
         "@stll/property-testing": "workspace:*",
         "@stll/typescript-config": "workspace:*",
@@ -1302,8 +1302,8 @@
         "tsdown": "catalog:",
       },
       "peerDependencies": {
-        "@atlaskit/pragmatic-drag-and-drop": "^3.1.0",
-        "@atlaskit/pragmatic-drag-and-drop-hitbox": "^2.2.2",
+        "@atlaskit/pragmatic-drag-and-drop": "^4.0.0",
+        "@atlaskit/pragmatic-drag-and-drop-hitbox": "^3.0.0",
         "@base-ui/react": "^1.7.0",
         "@tanstack/react-table": "^9.1.2",
         "@types/react": ">=19",
@@ -1324,12 +1324,12 @@
   "patchedDependencies": {
     "@tanstack/ai-mcp@0.4.6": "patches/@tanstack%2Fai-mcp@0.4.6.patch",
     "@tanstack/ai-bedrock@0.3.15": "patches/@tanstack%2Fai-bedrock@0.3.15.patch",
+    "mailauth@7.1.0": "patches/mailauth@7.1.0.patch",
     "@tanstack/ai-openrouter@0.19.20": "patches/@tanstack%2Fai-openrouter@0.19.20.patch",
     "@tanstack/ai-anthropic@0.19.1": "patches/@tanstack%2Fai-anthropic@0.19.1.patch",
     "better-call@1.4.0": "patches/better-call@1.4.0.patch",
     "@tanstack/ai-mistral@0.6.10": "patches/@tanstack%2Fai-mistral@0.6.10.patch",
     "@better-auth/cimd@1.7.6": "patches/@better-auth%2Fcimd@1.7.6.patch",
-    "mailauth@5.0.3": "patches/mailauth@5.0.3.patch",
     "@tanstack/ai-code-mode@0.4.16": "patches/@tanstack%2Fai-code-mode@0.4.16.patch",
     "@tanstack/openai-base@0.11.1": "patches/@tanstack%2Fopenai-base@0.11.1.patch",
     "drizzle-kit@1.0.0-rc.4": "patches/drizzle-kit@1.0.0-rc.4.patch",
@@ -1339,8 +1339,8 @@
     "@tanstack/ai@0.61.0": "patches/@tanstack%2Fai@0.61.0.patch",
   },
   "overrides": {
-    "@atlaskit/pragmatic-drag-and-drop": "3.1.0",
-    "@atlaskit/pragmatic-drag-and-drop-auto-scroll": "3.2.0",
+    "@atlaskit/pragmatic-drag-and-drop": "4.0.0",
+    "@atlaskit/pragmatic-drag-and-drop-auto-scroll": "3.2.1",
     "@emnapi/core": "1.9.1",
     "@emnapi/runtime": "1.9.1",
     "@expo/cli": "57.0.27",
@@ -1371,7 +1371,7 @@
     "sharp": "0.35.5",
     "shell-quote": "1.11.0",
     "svgo": "4.1.0",
-    "undici": "8.10.2",
+    "undici": "8.11.2",
   },
   "catalog": {
     "@base-ui/react": "1.8.0",
@@ -1518,11 +1518,11 @@
 
     "@astrojs/yaml2ts": ["@astrojs/yaml2ts@0.2.4", "", { "dependencies": { "yaml": "^2.8.3" } }, "sha512-8oddpOae35pJsXPQXhTkM0ypfKPskVsh2bCxRtbf7e+/Epw2nReakFYpLKjZMEr75CsoF203PMnCocpfz0s69A=="],
 
-    "@atlaskit/pragmatic-drag-and-drop": ["@atlaskit/pragmatic-drag-and-drop@3.1.0", "", { "dependencies": { "@babel/runtime": "^7.0.0", "bind-event-listener": "^3.0.0", "raf-schd": "^4.0.3" } }, "sha512-VU+2Oh6OgvC6D1xiX3lfm1gZJsaSPD+ZKjAHodOQ9IO6RfOvAyReLlK5ut9gIUpPmbD8d09wlCs7y4A6/I8c5Q=="],
+    "@atlaskit/pragmatic-drag-and-drop": ["@atlaskit/pragmatic-drag-and-drop@4.0.0", "", { "dependencies": { "@babel/runtime": "^7.0.0", "bind-event-listener": "^3.0.0", "raf-schd": "^4.0.3" } }, "sha512-pyDo2B5NiaExoKGmgeXKGNUL4aR4UzzSZm8QWWjYTEyBLVqSqKyKUwtVxMw2YEkakagOGFONUdHM32LAH2nPug=="],
 
-    "@atlaskit/pragmatic-drag-and-drop-auto-scroll": ["@atlaskit/pragmatic-drag-and-drop-auto-scroll@3.2.0", "", { "dependencies": { "@atlaskit/pragmatic-drag-and-drop": "^3.1.0", "@babel/runtime": "^7.0.0" } }, "sha512-vuL+AJae6c6lkmFd63v7c/7J7seyi7ZA8uMLNe9GvvApySToun3Zlv8SfyZU0d+wcNG4+Ix6qpRb8jOobZgNNg=="],
+    "@atlaskit/pragmatic-drag-and-drop-auto-scroll": ["@atlaskit/pragmatic-drag-and-drop-auto-scroll@3.2.1", "", { "dependencies": { "@atlaskit/pragmatic-drag-and-drop": "^4.0.0", "@babel/runtime": "^7.0.0" } }, "sha512-2fhWAG48EjPoKhoHLG6RcT3/VaCzYEbRb6BtA/Vcfx4FrL0P1KrEgBJ6OAwB0X8MOV6UH22YgjFFHjv8fQD9rA=="],
 
-    "@atlaskit/pragmatic-drag-and-drop-hitbox": ["@atlaskit/pragmatic-drag-and-drop-hitbox@2.2.2", "", { "dependencies": { "@atlaskit/pragmatic-drag-and-drop": "^3.1.0", "@babel/runtime": "^7.0.0" } }, "sha512-2Or4BWVX9ZlgsCCvgbmGEwjv2134vZARL5SezP8Dsrh3ayPYThU55Ug4dBzDAqiIJE2q8aPn+zO8YYoATa4wuA=="],
+    "@atlaskit/pragmatic-drag-and-drop-hitbox": ["@atlaskit/pragmatic-drag-and-drop-hitbox@3.0.0", "", { "dependencies": { "@atlaskit/pragmatic-drag-and-drop": "^4.0.0", "@babel/runtime": "^7.0.0" } }, "sha512-AGLp1ewjm07eRN2NL62awllSM19FrWVZMQYfZA/jugQlpaeoTr5ah2DE7zfiEt7yrg34htoKQVM+y6SGIQYs2A=="],
 
     "@atlaskit/pragmatic-drag-and-drop-live-region": ["@atlaskit/pragmatic-drag-and-drop-live-region@2.1.0", "", { "dependencies": { "@babel/runtime": "^7.0.0" } }, "sha512-7THqnYhsSQnVqyVBCdMvdjWTjE3bUd5WKqs8g2SVv6UgJTIKunVmCH5lg6oySmqGGyVtHyOf7aXgpVpgUS9kbg=="],
 
@@ -4074,7 +4074,7 @@
 
     "encodeurl": ["encodeurl@2.0.0", "", {}, "sha512-Q0n9HRi4m6JuGIV1eFlmvJB7ZEVxu93IrMyiMsGC0lrMJMWzRgx6WGquyfQgZVb31vhGgXnfmPNNXmxnOkRBrg=="],
 
-    "encoding-japanese": ["encoding-japanese@2.2.0", "", {}, "sha512-EuJWwlHPZ1LbADuKTClvHtwbaFn4rOD+dRAbWysqEOXRc2Uui0hJInNJrsdH0c+OhJA4nrCBdSkW4DD5YxAo6A=="],
+    "encoding-japanese": ["encoding-japanese@2.4.0", "", {}, "sha512-PE0KjlsDy9JSsoU4C2Q8NXb1kC4c+bZRac9ZvHXUE4q1Ht63gScKMdEy9jst9+Fi3M4eDkqzkEhBZvix4blP2A=="],
 
     "encoding-sniffer": ["encoding-sniffer@0.2.1", "", { "dependencies": { "iconv-lite": "^0.6.3", "whatwg-encoding": "^3.1.1" } }, "sha512-5gvq20T6vfpekVtqrYQsSCFZ1wEg5+wW0/QaZMWkFr6BqD3NfKs0rLCx4rrVlSWJeZb5NBJgVLswK/w2MWU+Gw=="],
 
@@ -4660,7 +4660,7 @@
 
     "libbase64": ["libbase64@1.3.0", "", {}, "sha512-GgOXd0Eo6phYgh0DJtjQ2tO8dc0IVINtZJeARPeiIJqge+HdsWSuaDTe8ztQ7j/cONByDZ3zeB325AHiv5O0dg=="],
 
-    "libmime": ["libmime@5.4.1", "", { "dependencies": { "encoding-japanese": "2.2.0", "iconv-lite": "0.7.3", "libbase64": "1.3.0", "libqp": "2.1.1" } }, "sha512-0wHGhsofo9IdQPenr3BBHXuxcwMq4atFUTsZ9Ogc1OvI5h4rUdDIrBQEN9JHjCXfDMrE59LUMJWsTD82wTYk8A=="],
+    "libmime": ["libmime@5.4.4", "", { "dependencies": { "encoding-japanese": "2.4.0", "iconv-lite": "0.7.3", "libbase64": "1.3.0", "libqp": "2.1.1" } }, "sha512-d3zZ2k8s6iO+8u9Vfkl6HfhD5lSVocGcmOViTz/i0CJcwhJADyubEJ/+TkBhuLDUSIBOiG+D8G5kJKwXwKbXXA=="],
 
     "libqp": ["libqp@2.1.1", "", {}, "sha512-0Wd+GPz1O134cP62YU2GTOPNA7Qgl09XwCqM5zpBv87ERCXdfDtyKXvV7c9U22yWJh44QZqBocFnXN11K96qow=="],
 
@@ -4730,7 +4730,7 @@
 
     "magicast": ["magicast@0.5.4", "", { "dependencies": { "@babel/parser": "^7.29.7", "@babel/types": "^7.29.7", "source-map-js": "^1.2.1" } }, "sha512-llBEhWm1SacoRwgHUoQJYtwp4PBLF4faQi5TCpIGyGs9n4y5+juI0tDgyKIfpqxckRHaHzouUEph3THklWh03w=="],
 
-    "mailauth": ["mailauth@5.0.3", "", { "dependencies": { "@postalsys/vmc": "1.1.5", "commander": "15.0.0", "fast-xml-parser": "5.10.1", "ipaddr.js": "2.5.0", "joi": "18.2.3", "libmime": "5.4.1", "nodemailer": "9.0.4", "punycode.js": "2.3.1", "tldts": "7.4.10", "undici": "8.10.0" }, "bin": { "mailauth": "bin/mailauth.js" } }, "sha512-eAOpTwU2zKDCOusM6AIxl9ZZqkUWUoyoE+Ax3HzqdPs6R8xL/DqqbjpSFB14DUuBywKfrBLCa7qOE9++1V3h/Q=="],
+    "mailauth": ["mailauth@7.1.0", "", { "dependencies": { "@postalsys/vmc": "1.1.5", "commander": "15.0.0", "fast-xml-parser": "5.11.1", "ipaddr.js": "2.5.0", "joi": "18.2.9", "libmime": "5.4.4", "nodemailer": "10.0.10", "punycode.js": "2.3.1", "tldts": "7.4.15", "undici": "8.11.2" }, "bin": { "mailauth": "bin/mailauth.js" } }, "sha512-EhB06n6s9nypIQks4oAIrnAHPuJKu5vxIsvf6Y3Djd9WeM746Bcf0iK7csGxkVZtHwqZv4lkDm5b1cfFC58sEA=="],
 
     "makeerror": ["makeerror@1.0.12", "", { "dependencies": { "tmpl": "1.0.5" } }, "sha512-JmqCvUhmt43madlpFzG4BQzG2Z3m6tvQDNKdClZnO3VbIudJYmxsT0FNJMeiB2+JTSlTQTSbU8QdesVmwJcmLg=="],
 
@@ -5118,7 +5118,7 @@
 
     "points-on-path": ["points-on-path@0.2.1", "", { "dependencies": { "path-data-parser": "0.1.0", "points-on-curve": "0.2.0" } }, "sha512-25ClnWWuw7JbWZcgqY/gJ4FQWadKxGWk+3kR/7kD0tCaDtPPMj7oHu2ToLaVhfpnHrZzYby2w6tUA0eOIuUg8g=="],
 
-    "postal-mime": ["postal-mime@3.0.1", "", {}, "sha512-N86EnYOxZjW1uHQIgSXnnRdnJz+wxmtDsnk3C4R/9rQ1utj8A2znauXZ3Q3+stCHxG5ckY4/NrO09WiPU6rcdQ=="],
+    "postal-mime": ["postal-mime@4.0.2", "", {}, "sha512-b/FqJGdS+Y+leh30r2ord1gWZNPfYcTiFBR1BIPvZYvQrKJjYYqGeECh9sQ5BpkWtcjSj39ngIAiE2w6XNfMjA=="],
 
     "postcss": ["postcss@8.5.28", "", { "dependencies": { "nanoid": "^3.3.18", "picocolors": "^1.1.1", "source-map-js": "^1.2.1" } }, "sha512-RRuzqDtt5Y9h3quz5hWhK+TPnsmVs6WwSU6LkJMeY4HstUEDuYTG8UJSdawMRzmzAtV+KEoG8N3Qg2qLy5vM/A=="],
 
@@ -5684,7 +5684,7 @@
 
     "uncrypto": ["uncrypto@0.1.3", "", {}, "sha512-Ql87qFHB3s/De2ClA9e0gsnS6zXG27SkTiSJwjCc9MebbfapQfuPzumMIUMi38ezPZVNFcHI9sUIepeQfw8J8Q=="],
 
-    "undici": ["undici@8.10.2", "", {}, "sha512-/y4/bH9YNU5hi9NIrpOuvGXFcxrj3CMrV+/AYpowAYTpHn8gX/XPFjNy766FPoYY0miQhdW977JFWKGNhBdwyQ=="],
+    "undici": ["undici@8.11.2", "", {}, "sha512-u4UB2/IrKdU6lFxumHmmo1a3fCQO5tzQllRorfoRS63txhrB7xTpSn1PftwC4qEHkOaqP95fCWW4lJzwErwzhQ=="],
 
     "undici-types": ["undici-types@8.9.0", "", {}, "sha512-KTDyRTYX8sWmKXAikPHHSyc63CRPETMctyjKFupcC6OBLXT3xsN0e9aF7m+mIXutFWpUXuedtowG7iLOzp0kQg=="],
 
@@ -6184,7 +6184,7 @@
 
     "log-symbols/chalk": ["chalk@2.4.2", "", { "dependencies": { "ansi-styles": "^3.2.1", "escape-string-regexp": "^1.0.5", "supports-color": "^5.3.0" } }, "sha512-Mti+f9lpJNcwF4tWV8/OrTTtF1gZi+f8FqlyAdouralcFWFQWF2+NgCHShjkCb+IFBLq9buZwE1xckQU4peSuQ=="],
 
-    "mailauth/tldts": ["tldts@7.4.10", "", { "dependencies": { "tldts-core": "^7.4.10" }, "bin": { "tldts": "bin/cli.js" } }, "sha512-GgouD1B+sWwvkaEq8vXC15DjQitxbvs12oIXELpconwm+Tg3zfcEv4jgzq3vtKverDXsg3VI8aRgNL2Nra0Iog=="],
+    "mailauth/tldts": ["tldts@7.4.15", "", { "dependencies": { "tldts-core": "^7.4.15" }, "bin": { "tldts": "bin/cli.js" } }, "sha512-SJVBeHOxDbNoq14CvpAoA2mLEWdbldGK8nR+yumpjY5nrlZxOflcA7p1Qj1gbTGmbu9DY9qLj/bENSWhBzjxRQ=="],
 
     "mdast-util-find-and-replace/escape-string-regexp": ["escape-string-regexp@5.0.0", "", {}, "sha512-/veY75JbMK4j1yjvuUxuVsiS/hr/4iHs9FTT6cgTexxdE0Ly/glccBAkloH/DofkjRbZU3bnoj38mOmhkZ0lHw=="],
 
