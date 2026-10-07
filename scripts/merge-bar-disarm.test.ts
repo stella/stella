@@ -326,7 +326,11 @@ if (args.some(arg => arg.includes("disablePullRequestAutoMerge"))) {
   writeFileSync(process.env.FIXTURE_MARKER, "disabled");
   console.log(JSON.stringify({data:{}}));
 } else {
-  console.log(existsSync(process.env.FIXTURE_MARKER) ? process.env.FIXTURE_AFTER : process.env.FIXTURE_BEFORE);
+  const query = args.find(arg => arg.startsWith("query=")) || "";
+  const snapshot = JSON.parse(existsSync(process.env.FIXTURE_MARKER) ? process.env.FIXTURE_AFTER : process.env.FIXTURE_BEFORE);
+  if (!query.includes("id state headRefOid")) delete snapshot.data.repository.pullRequest.state;
+  if (!query.includes("commits(last:1)")) delete snapshot.data.repository.pullRequest.commits;
+  console.log(JSON.stringify(snapshot));
 }
 `,
         );
@@ -371,6 +375,17 @@ if (args.some(arg => arg.includes("disablePullRequestAutoMerge"))) {
           .trim()
           .split("\n")
           .map((line) => JSON.parse(line));
+        const reads = recorded.filter((args) =>
+          args.some((arg) => arg.startsWith("query=query(")),
+        );
+        expect(reads).toHaveLength(2);
+        for (const args of reads) {
+          const query = args.find((arg) => arg.startsWith("query="));
+          expect(query).toContain("id state headRefOid");
+          expect(query).toContain(
+            "commits(last:1) { nodes { commit { oid statusCheckRollup { state } } } }",
+          );
+        }
         expect(
           recorded.filter((args) =>
             args.some((arg) => arg.includes("disablePullRequestAutoMerge")),

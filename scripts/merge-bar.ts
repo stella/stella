@@ -1953,8 +1953,7 @@ export const armAndVerify = ({
       mutate(
         `mutation($id:ID!, $sha:GitObjectID!) {
       enablePullRequestAutoMerge(input:{pullRequestId:$id,expectedHeadOid:$sha,mergeMethod:SQUASH}) {
-        pullRequest { id state headRefOid updatedAt autoMergeRequest { enabledAt }
-            commits(last:1) { nodes { commit { oid statusCheckRollup { state } } } } mergeQueueEntry { id position jump state } }
+        pullRequest { id headRefOid updatedAt autoMergeRequest { enabledAt } mergeQueueEntry { id position jump state } }
       }
     }`,
         { id: pullRequestId, sha: expectedHeadSha },
@@ -2823,7 +2822,8 @@ const createGhGateway = ({
           "-f",
           `query=query($owner:String!, $name:String!, $number:Int!) {
           repository(owner:$owner,name:$name) { pullRequest(number:$number) {
-            id headRefOid updatedAt autoMergeRequest { enabledAt }
+            id state headRefOid updatedAt autoMergeRequest { enabledAt }
+            commits(last:1) { nodes { commit { oid statusCheckRollup { state } } } }
             mergeQueueEntry { id position jump state }
           } }
         }`,
