@@ -88,7 +88,7 @@ describe("decision storage normalization", () => {
     const court = "😀".repeat(512);
     expect(Array.from(court).length).toBe(CITATION_STORAGE_WIDTHS.court);
     const normalized = sanitizeResult({ ...decision, court });
-    expect(normalized.court).toBe(court);
+    expect(court).toBe(normalized.court);
     expect(fitsDecisionSearchCandidateRow(normalized)).toBe(false);
   });
 
