@@ -122,7 +122,7 @@ const STUDIO_FACETS = ["fields", "guidance", "history", "fill"] as const;
 type StudioFacet = (typeof STUDIO_FACETS)[number];
 type TemplateStudioPayload = { templateId: string };
 
-export function TemplateStudioInspectorView({
+function TemplateStudioInspectorView({
   tab,
   onClose,
 }: InspectorViewRenderProps<TemplateStudioPayload>) {
@@ -321,7 +321,7 @@ export function TemplateStudioInspectorView({
  * full check dialog. The check query lives under the templates subtree, so the
  * save handler's `templates.all` invalidation refetches it after every save.
  */
-export const StudioHealthBadge = ({ templateId }: { templateId: string }) => {
+const StudioHealthBadge = ({ templateId }: { templateId: string }) => {
   const t = useTranslations();
   const format = useFormatter();
   const organizationId = useAuthenticatedUser().activeOrganizationId;
@@ -364,7 +364,7 @@ export const StudioHealthBadge = ({ templateId }: { templateId: string }) => {
 };
 
 /** Save lives in the tab's title row; enabled only with unsaved edits. */
-export const StudioSaveAction = () => {
+const StudioSaveAction = () => {
   const t = useTranslations();
   const actions = useTemplateStudioStore((s) => s.actions);
   const ui = useTemplateStudioStore((s) => s.ui);
@@ -393,7 +393,7 @@ export const StudioSaveAction = () => {
 // field kind/itemFields, so re-discover the stored DOCX (the same merge the
 // fill endpoint uses) to get the real field shape — `{% for %}` array fields
 // included — rather than reconstructing it from the flat manifest.
-export const TemplateFillFacet = ({
+const TemplateFillFacet = ({
   templateId,
   onEditField,
 }: {
@@ -821,7 +821,7 @@ const queueLookupPreviews = (
  *  rendering to insert: the first format as the default (`{{ path }}`), each
  *  later format keyed (`{{ path.key }}`). Single-format lookups and non-lookup
  *  fields insert with one click as `{{ path }}`. */
-export const InsertExistingFieldItem = ({
+const InsertExistingFieldItem = ({
   field,
   onInsert,
 }: {
@@ -886,7 +886,7 @@ const effectiveSlotByLink = (
  *  registers the handlers + UI state in the session store. */
 const MENU_ITEM_PRESS_REASON = "item-press";
 
-export const StudioInsertRow = () => {
+const StudioInsertRow = () => {
   const t = useTranslations();
   const actions = useTemplateStudioStore((s) => s.actions);
   const fields = useTemplateStudioStore((s) => s.fields);
@@ -1163,7 +1163,7 @@ export const StudioInsertRow = () => {
   );
 };
 
-export const TemplateStudioRailIcon = (
+const TemplateStudioRailIcon = (
   _props: InspectorRailIconProps<TemplateStudioPayload>,
 ) => <LayoutTemplateIcon size={SIDE_RAIL_TAB_ICON_SIZE_PX} />;
 
@@ -1188,7 +1188,7 @@ type InspectorProps = {
   onFieldBack?: () => void;
 };
 
-export const Inspector = ({
+const Inspector = ({
   selected,
   fields,
   outline,
@@ -1251,7 +1251,7 @@ export const Inspector = ({
 /** Subtle count strip pinned above the insert row on the template overview:
  *  fields · conditions · clauses. Conditions ARE the template's boolean
  *  fields, so they are derived rather than fetched. */
-export const StudioOverviewSummary = ({
+const StudioOverviewSummary = ({
   fields,
   templateId,
 }: {
@@ -1372,11 +1372,7 @@ export const ClauseDriftPopover = ({
 /** "When to use" subtab: free-text guidance that steers agents (and humans)
  *  toward or away from this template. Its own tab because the guidance matters
  *  to agents picking a template, not just to the author drafting one. */
-export const TemplateGuidanceFacet = ({
-  templateId,
-}: {
-  templateId: string;
-}) => {
+const TemplateGuidanceFacet = ({ templateId }: { templateId: string }) => {
   const t = useTranslations();
   const activeOrganizationId = useAuthenticatedUser().activeOrganizationId;
   const { data: detailData } = useQuery(
@@ -1408,7 +1404,7 @@ export const TemplateGuidanceFacet = ({
 /** Both guidance notes, committed on blur via the template update endpoint
  *  (the same fields the list's guidance dialog writes). Keyed on templateId so
  *  switching templates resets the local drafts. */
-export const GuidanceFields = ({
+const GuidanceFields = ({
   organizationId,
   templateId,
   whenToUse,
@@ -1485,7 +1481,7 @@ const GUIDANCE_RECOMMENDED_LENGTH = 500;
 
 /** One guidance note: label, a height-capped textarea that scrolls internally
  *  once it fills, and a live character count that warns past the soft limit. */
-export const GuidanceNote = ({
+const GuidanceNote = ({
   label,
   value,
   onChange,

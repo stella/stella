@@ -101,7 +101,7 @@ const toRowDisplay = (entry: CatalogueDisplayEntry): CatalogueRowDisplay => ({
 
 /** The organization's tools: the shared catalogue view with the member's
  *  install state, detail inspector, and custom-tool tools in its slots. */
-export const CatalogueBrowser = ({
+const CatalogueBrowser = ({
   organizationId,
   initialKind,
   initialSlug,

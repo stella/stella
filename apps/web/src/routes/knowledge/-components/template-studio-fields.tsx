@@ -471,7 +471,7 @@ export const FieldNavigator = ({
 /** Shown in the overview when the template has no fields, conditions, or clause
  *  slots yet: three plain-language steps pointing at the selection popover, the
  *  `/` menu, and the Fill tab. Disappears as soon as the first marker exists. */
-export const StudioGettingStarted = () => {
+const StudioGettingStarted = () => {
   const t = useTranslations();
   return (
     <div className="flex flex-col gap-3 px-4 py-4">

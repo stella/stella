@@ -228,10 +228,7 @@ const operationAnchorBlockId = (operation: DocxEditOperation): string =>
 
 /** Stable per-operation id echoed to the model in queued/skipped: the
  *  model-supplied contract id when present, else a positional fallback. */
-export const operationSpecId = (
-  operation: DocxEditOperation,
-  index: number,
-): string =>
+const operationSpecId = (operation: DocxEditOperation, index: number): string =>
   operation.id ??
   `tpl-edit-${String(index + 1)}-${operationAnchorBlockId(operation)}`;
 
