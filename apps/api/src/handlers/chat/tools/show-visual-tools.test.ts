@@ -1,6 +1,6 @@
 import { convertSchemaToJsonSchema } from "@tanstack/ai";
 import { panic, Result } from "better-result";
-import { describe, expect, test } from "bun:test";
+import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 
 import { VISUAL_PREVIEW_TOOL_NAME } from "@stll/api-contract/visual-preview";
 import type { VisualPreviewOutput } from "@stll/api-contract/visual-preview";
@@ -10,7 +10,16 @@ import { VISUAL_SHOWCASE_GUIDANCE } from "@/api/handlers/chat/tools/visual-showc
 import { createVisualResourceOrigin } from "@/api/handlers/visual-sandbox/resource-origin";
 import { createSafeId } from "@/api/lib/branded-types";
 import { ChatToolError } from "@/api/lib/errors/tagged-errors";
+import { resetFailureObservationsForTesting } from "@/api/lib/observability/failure-shadow";
 import { VisualPreviewError } from "@/api/lib/visual-preview";
+import {
+  installRecordingAnalytics,
+  installRecordingLogger,
+} from "@/api/tests/helpers/recording-telemetry";
+import type {
+  RecordingAnalytics,
+  RecordingLogger,
+} from "@/api/tests/helpers/recording-telemetry";
 
 import { createShowVisualTools } from "./show-visual-tools";
 
@@ -22,7 +31,94 @@ const unavailablePreview = async () =>
     }),
   );
 
+const previewFailures = {
+  unavailable: new VisualPreviewError({
+    code: "unavailable",
+    message: "Synthetic unavailable preview",
+  }),
+  timeout: new VisualPreviewError({
+    code: "timeout",
+    message: "Synthetic preview timeout",
+  }),
+  "invalid-input": new VisualPreviewError({
+    code: "invalid-input",
+    message: "Synthetic invalid preview input",
+  }),
+  "invalid-response": new VisualPreviewError({
+    code: "invalid-response",
+    message: "Synthetic invalid preview response",
+  }),
+} satisfies Record<VisualPreviewError["code"], VisualPreviewError>;
+
+let logs: RecordingLogger;
+let analytics: RecordingAnalytics;
+
+beforeEach(() => {
+  logs = installRecordingLogger();
+  analytics = installRecordingAnalytics();
+  resetFailureObservationsForTesting();
+});
+
+afterEach(() => {
+  logs.restore();
+  analytics.restore();
+  resetFailureObservationsForTesting();
+});
+
 describe("show visual", () => {
+  test.each(Object.entries(previewFailures))(
+    "reports a %s preview failure while keeping the published resource",
+    async (code, failure) => {
+      expect(failure.code).toBe(code);
+      const origin = createVisualResourceOrigin();
+      const emissions: unknown[] = [];
+      const tool = createShowVisualTools({
+        origin,
+        store: async () =>
+          Result.ok({
+            fileId: createSafeId<"userFile">(),
+            document: "<!doctype html><p>Revenue</p>",
+          }),
+        preview: async () => Result.err(failure),
+      })[VISUAL_PREVIEW_TOOL_NAME];
+      const execute = tool.execute ?? panic("Visual tool has no executor");
+      const output = await execute(
+        { title: "Revenue", html: "<p>Revenue</p>", data: {} },
+        {
+          toolCallId: "visual-call-failed-preview",
+          emitCustomEvent: (_name, value) => emissions.push(value),
+        },
+      );
+      expect(emissions).toHaveLength(1);
+      expect(origin.accepts(emissions.at(0))).toBe(true);
+      expect(output).toEqual([
+        {
+          type: "text",
+          content: JSON.stringify({
+            success: true,
+            title: "Revenue",
+            preview: {
+              status: "unavailable",
+              reason: code,
+              message: failure.message,
+            },
+          }),
+        },
+      ]);
+      const failures = logs
+        .at("ERROR")
+        .filter(({ message }) => message === "visual.preview_failed");
+      expect(failures).toHaveLength(1);
+      expect(failures.at(0)?.attributes).toMatchObject({
+        "error.type": "VisualPreviewError",
+        "error.code": code,
+        "failure.grade": "defect",
+        tool: VISUAL_PREVIEW_TOOL_NAME,
+      });
+      expect(analytics.exceptions()).toHaveLength(1);
+    },
+  );
+
   test("carries the court and year guidance in its description", () => {
     const tool = createShowVisualTools({
       origin: createVisualResourceOrigin(),
@@ -139,6 +235,8 @@ describe("show visual", () => {
         source: { type: "data", value: preview.png, mimeType: "image/png" },
       },
     ]);
+    expect(logs.at("ERROR")).toEqual([]);
+    expect(analytics.exceptions()).toEqual([]);
   });
 
   test("keeps publication successful when the optional preview rejects", async () => {
@@ -193,6 +291,12 @@ describe("show visual", () => {
         }),
       },
     ]);
+    expect(
+      logs
+        .at("ERROR")
+        .filter(({ message }) => message === "visual.preview_failed"),
+    ).toHaveLength(1);
+    expect(analytics.exceptions()).toHaveLength(1);
   });
 
   test("keeps data checks at execution after their provider projection", async () => {

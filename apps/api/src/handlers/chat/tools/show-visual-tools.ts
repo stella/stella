@@ -16,6 +16,8 @@ import type { PreparedGeneratedVisual } from "@/api/handlers/visual-sandbox/prep
 import type { VisualResourceOrigin } from "@/api/handlers/visual-sandbox/resource-origin";
 import type { SafeId } from "@/api/lib/branded-types";
 import { ChatToolError } from "@/api/lib/errors/tagged-errors";
+import { failureSink } from "@/api/lib/observability/failure";
+import { observeFailure } from "@/api/lib/observability/observe-failure";
 import {
   VisualPreviewError,
   visualPreviewFailureModelContent,
@@ -32,6 +34,11 @@ type CreateShowVisualToolsOptions = {
   >;
   preview: (document: string) => ReturnType<typeof previewVisual>;
 };
+
+const PREVIEW_FAILED_SINK = failureSink({
+  event: "visual.preview_failed",
+  expected: [],
+});
 
 const SHOW_VISUAL_INSTRUCTIONS =
   "Display an interactive Generated view in this chat. Supply a short title, HTML and finite JSON data. " +
@@ -101,6 +108,10 @@ export const createShowVisualTools = ({
       })
     ).andThen((result) => result);
     if (rendered.isErr()) {
+      observeFailure(rendered.error, {
+        sink: PREVIEW_FAILED_SINK,
+        ctx: { tool: VISUAL_PREVIEW_TOOL_NAME },
+      });
       return visualPreviewFailureModelContent({
         title: prepared.value.title,
         error: rendered.error,
