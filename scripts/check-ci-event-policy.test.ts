@@ -291,3 +291,28 @@ test("CodeQL accepts the main release policy and rejects ordinary PR scans", () 
     "codeql.yml: pull_request/feature/example/false differs from nightly/manual/release policy",
   );
 });
+
+test("release-periodic jobs also run on non-release schedules and stay off pull requests", () => {
+  const declared = { jobs: { "fixture.yml/compiler": "release-periodic" } };
+  const job = {
+    if: "github.event_name != 'pull_request' && inputs.heavy_only == true && needs.ci-plan.outputs.compiler_required == 'true'",
+  };
+  const workflow = {
+    on: { schedule: [], pull_request: {} },
+    jobs: { compiler: job },
+  };
+  const check = () =>
+    checkCiEventPolicies({
+      workflows: { "fixture.yml": workflow },
+      policy: declared,
+    });
+  expect(check()).toEqual([]);
+  job.if += " && github.event_name != 'schedule'";
+  expect(check()).toContain(
+    "fixture.yml/compiler: release-periodic job must run on non-release scheduled main",
+  );
+  job.if = "true";
+  expect(check()).toContain(
+    "fixture.yml/compiler: release-periodic job can run on pull_request",
+  );
+});

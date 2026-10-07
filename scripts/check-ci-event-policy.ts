@@ -13,6 +13,7 @@ const policySchema = v.object({
       "schema-pr",
       "pr-opt-in",
       "release-pr",
+      "release-periodic",
     ]),
   ),
   pushMain: v.optional(
@@ -250,7 +251,39 @@ const checkJobEventPolicy = ({
   if (eventPolicy === "schema-pr" && file !== "db-migrations.yml") {
     problems.push(`${key}: schema policy belongs to Database Migrations`);
   }
-  if (eventPolicy !== "queue" && eventPolicy !== "main") {
+  if (eventPolicy === "release-periodic") {
+    const condition =
+      typeof job.if === "boolean" ? String(job.if) : (job.if ?? "true");
+    const scopeValues = Object.fromEntries(
+      Array.from(
+        condition.matchAll(/needs\.ci-plan\.outputs\.(\w+_required)/gu),
+        (match) => [match[0], "true"],
+      ),
+    );
+    if (
+      evaluate(condition, {
+        values: {
+          ...scopeValues,
+          "github.event_name": "schedule",
+          "github.ref": "refs/heads/main",
+          "github.event.head_commit.message": "ordinary main change",
+          "inputs.heavy_only": true,
+          "needs.ci-plan.outputs.run_required": "true",
+          "needs.ci-plan.outputs.queue_depth": "full",
+          "needs.ci-plan.outputs.trusted": "true",
+        },
+      }) !== true
+    ) {
+      problems.push(
+        `${key}: release-periodic job must run on non-release scheduled main`,
+      );
+    }
+  }
+  if (
+    eventPolicy !== "queue" &&
+    eventPolicy !== "main" &&
+    eventPolicy !== "release-periodic"
+  ) {
     return problems;
   }
   for (const event of ["pull_request", "pull_request_target"]) {

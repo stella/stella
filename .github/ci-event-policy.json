@@ -119,7 +119,7 @@
     "ci.yml/code-quality-rest": "pr-fast",
     "ci.yml/service-suites": "queue",
     "ci.yml/migration-upgrade-rehearsal": "queue",
-    "ci.yml/release-typecheck": "queue",
+    "ci.yml/release-typecheck": "release-periodic",
     "ci.yml/fix-tests-on-base": "pr-opt-in",
     "ci.yml/typecheck-baseline": "pr-fast",
     "ci.yml/web-build": "queue",

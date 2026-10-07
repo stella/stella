@@ -482,8 +482,11 @@ jobs:
               e2e_production_required=true
             fi
             release_typecheck_required=false
-            if [[ "${HEAVY_ONLY:-false}" == true ]] && ! git diff --quiet HEAD^ HEAD -- VERSION; then
-              release_typecheck_required=true
+            if [[ "${HEAVY_ONLY:-false}" == true ]]; then
+              # Exercise release compiler memory and timing before VERSION changes.
+              if [[ "$EVENT_NAME" == schedule ]] || ! git diff --quiet HEAD^ HEAD -- VERSION; then
+                release_typecheck_required=true
+              fi
             fi
             route_smoke_required=false
             if [[ "$EVENT_NAME" == "pull_request" || "$EVENT_NAME" == "merge_group" || "${HEAVY_ONLY:-false}" == true ]]; then
