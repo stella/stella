@@ -727,3 +727,22 @@ test("staging SHA build groups are isolated and its shared deploy group cannot c
     expect(new Set(candidates).size).toBe(candidates.length);
   }
 });
+
+test("same-SHA dispatches coalesce with the running run preserved and newer pending runs replacing older pending runs", () => {
+  const sha = "a".repeat(40);
+  for (const workflow of [mainWorkflow, ciWorkflow]) {
+    const groups = [1, 2, 3].map((runId) =>
+      concurrencyGroup(
+        workflow.concurrency.group,
+        concurrencyContext("workflow_dispatch", sha, runId),
+      ),
+    );
+    expect(new Set(groups).size).toBe(1);
+    expect(
+      expressionValue(
+        workflow.concurrency["cancel-in-progress"],
+        concurrencyContext("workflow_dispatch", sha),
+      ),
+    ).toBe(false);
+  }
+});
