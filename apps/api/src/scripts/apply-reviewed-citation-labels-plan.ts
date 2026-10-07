@@ -35,17 +35,24 @@ const MAX_LABELS = 5000;
 
 const uuidSchema = v.pipe(v.string(), v.uuid());
 const polaritySchema = v.picklist(REVIEWABLE_POLARITIES);
-const reviewRefSchema = v.pipe(v.string(), v.minLength(1), v.maxLength(200));
-const provenanceTextSchema = v.pipe(
-  v.string(),
-  v.minLength(1),
-  v.maxLength(200),
-);
+/**
+ * Free text bound as a Postgres text parameter. Postgres refuses NUL in text,
+ * and that refusal would abort the whole batch, so it is invalid here.
+ */
+const storedTextSchema = (maxLength: number) =>
+  v.pipe(
+    v.string(),
+    v.minLength(1),
+    v.maxLength(maxLength),
+    v.check((value) => !value.includes("\u0000"), "text must not contain NUL"),
+  );
+const reviewRefSchema = storedTextSchema(200);
+const provenanceTextSchema = storedTextSchema(200);
 const sha256Schema = v.pipe(v.string(), v.regex(/^[0-9a-f]{64}$/u));
 
 const byCitationKeyEntries = {
   citingDecisionId: uuidSchema,
-  citationKey: v.pipe(v.string(), v.minLength(1), v.maxLength(128)),
+  citationKey: storedTextSchema(128),
 };
 
 const byCitationIdEntries = { citationId: uuidSchema };
