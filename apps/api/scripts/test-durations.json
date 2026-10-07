@@ -635,6 +635,10 @@
     "seconds": 0.627056,
     "source": "estimated"
   },
+  "src/handlers/audit-logs/feature-details.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
   "src/handlers/audit-logs/query-scope.integration.test.ts": {
     "seconds": 1.960507,
     "source": "estimated"
@@ -4153,6 +4157,10 @@
   },
   "src/lib/api-handlers.test.ts": {
     "seconds": 12.574555,
+    "source": "estimated"
+  },
+  "src/lib/audit-log-details.test.ts": {
+    "seconds": 1,
     "source": "estimated"
   },
   "src/lib/audit-log.test.ts": {
