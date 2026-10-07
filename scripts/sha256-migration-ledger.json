@@ -708,6 +708,10 @@
     "reason": "migrates in a follow-up"
   },
   {
+    "id": "apps/api/src/scripts/mcp-canary.test.ts",
+    "reason": "migrates in a follow-up"
+  },
+  {
     "id": "apps/api/src/scripts/mcp-canary.ts",
     "reason": "migrates in a follow-up"
   },
@@ -881,6 +885,10 @@
   },
   {
     "id": "scripts/check-migration-safety.ts",
+    "reason": "migrates in a follow-up"
+  },
+  {
+    "id": "scripts/ci-completed-depth.test.ts",
     "reason": "migrates in a follow-up"
   },
   {
