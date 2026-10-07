@@ -14,6 +14,7 @@ import {
   isCatalogTransportInvocable,
 } from "./generate-capability-tree.js";
 import { generateRouteMap } from "./generate-route-map.js";
+import registrySnapshot from "./generated/registry-snapshot.json" with { type: "json" };
 import { generatedToolAnnotations } from "./generated/tool-annotations.js";
 import {
   CACHE_SCHEMA_VERSION,
@@ -161,6 +162,64 @@ const currentRegistry = (deploymentEnabled: boolean): CurrentRegistry => ({
 });
 
 describe("deployment command census", () => {
+  test("every static tool deployment feature survives generation and hides off or unknown", () => {
+    const declared = new Map<string, string>();
+    for (const { name, cli } of registrySnapshot) {
+      if ("feature" in cli && typeof cli.feature === "string") {
+        declared.set(name, cli.feature);
+      }
+    }
+    expect(declared.size).toBeGreaterThan(0);
+    const emitted = leaves(catalogTree).filter((leaf) => leaf.kind === "leaf");
+    expect(
+      new Set(
+        emitted
+          .filter((leaf) => leaf.spec.feature !== undefined)
+          .map((leaf) => leaf.spec.toolName),
+      ),
+    ).toEqual(new Set(declared.keys()));
+    for (const [name, feature] of declared) {
+      const commands = emitted.filter((leaf) => leaf.spec.toolName === name);
+      expect(commands.length).toBeGreaterThan(0);
+      for (const { spec } of commands) {
+        expect(spec.feature).toBe(feature);
+      }
+    }
+    for (const featureOmittedTools of [undefined, [...declared.keys()]]) {
+      const projected = projectDeploymentCommands({
+        tree: catalogTree,
+        featureOmittedTools,
+        featureOmittedCapabilities: [],
+      });
+      expect(ids(projected).toSorted()).toEqual(
+        leaves(catalogTree)
+          .filter(
+            (leaf) =>
+              leaf.kind === "capability-leaf" ||
+              !declared.has(leaf.spec.toolName),
+          )
+          .map((leaf) =>
+            leaf.kind === "leaf" ? leaf.spec.toolName : leaf.spec.capabilityId,
+          )
+          .toSorted(),
+      );
+      expect(
+        projectDeploymentCommands({
+          tree: projected,
+          featureOmittedTools,
+          featureOmittedCapabilities: [],
+        }),
+      ).toEqual(projected);
+    }
+    expect(
+      projectDeploymentCommands({
+        tree: catalogTree,
+        featureOmittedTools: [],
+        featureOmittedCapabilities: [],
+      }),
+    ).toEqual(catalogTree);
+  });
+
   test("every invocable catalog deployment feature survives parsing and hides off or unknown", () => {
     const declared = new Map<string, string>();
     for (const raw of rawCatalog) {
