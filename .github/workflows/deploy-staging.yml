@@ -19,6 +19,14 @@ on:
         description: "Commit SHA on main to deploy (blank deploys the main tip)"
         required: false
         type: string
+      waive_check:
+        description: "Named staging check waiver (explicit SHA required)"
+        type: choice
+        options: [none, corpus-search]
+        default: none
+      waive_reason:
+        description: "Required reason including evidence=<path> (single line, maximum 116 characters)"
+        type: string
       deploy_when_unreachable:
         description: "Deploy even when staging does not answer its health probe"
         required: false
@@ -44,8 +52,38 @@ jobs:
       sha: ${{ steps.resolve.outputs.sha }}
       tip: ${{ steps.resolve.outputs.tip }}
       main-sha: ${{ steps.resolve.outputs.main-sha }}
+      corpus_search_waived: ${{ steps.waiver.outputs.corpus_search_waived }}
 
     steps:
+      - name: Validate staging waiver
+        id: waiver
+        env:
+          WAIVE_CHECK: ${{ inputs.waive_check || 'none' }}
+          WAIVE_REASON: ${{ inputs.waive_reason }}
+          REQUESTED_SHA: ${{ inputs.sha }}
+        run: |
+          set -euo pipefail
+          case "$WAIVE_CHECK" in
+            none) echo "corpus_search_waived=false" >> "$GITHUB_OUTPUT" ;;
+            corpus-search)
+              if [[ "$GITHUB_EVENT_NAME" != "workflow_dispatch" || -z "${REQUESTED_SHA//[[:space:]]/}" ]]; then
+                echo "::error::The corpus-search waiver requires a manual dispatch with an explicit SHA."
+                exit 1
+              fi
+              if [[ -z "${WAIVE_REASON//[[:space:]]/}" || "$WAIVE_REASON" == *$'\n'* || "$WAIVE_REASON" == *$'\r'* ]] || (( ${#WAIVE_REASON} > 116 )); then
+                echo "::error::The corpus-search waiver requires a non-empty single-line reason of at most 116 characters."
+                exit 1
+              fi
+              evidence_path='(^|[[:space:]])evidence=[^[:space:]]*/[^[:space:]]+($|[[:space:]])'
+              if [[ ! "$WAIVE_REASON" =~ $evidence_path ]]; then
+                echo "::error::The corpus-search waiver reason must include evidence=<path>."
+                exit 1
+              fi
+              echo "corpus_search_waived=true" >> "$GITHUB_OUTPUT"
+              ;;
+            *) echo "::error::Unknown staging check waiver."; exit 1 ;;
+          esac
+
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -543,6 +581,7 @@ jobs:
 
       - name: Check staging corpus search backend
         id: corpus-preflight
+        continue-on-error: ${{ needs.resolve.outputs.corpus_search_waived == 'true' }}
         if: ${{ !cancelled() && steps.smoke-deps.conclusion == 'success' }}
         timeout-minutes: 2
         env:
@@ -562,7 +601,7 @@ jobs:
             --header 'Content-Type: application/json' \
             ${curl_edge_args[@]+"${curl_edge_args[@]}"} \
             --data '{"query":"contract","country":"CZ","limit":1,"strict":true}' \
-            "${E2E_API_URL}/case/decisions/search")"; then
+            "${E2E_API_URL}/v1/case/decisions/search")"; then
             http_status="000"
           fi
           if [[ "$http_status" != "200" ]] || ! jq -e \
@@ -576,7 +615,7 @@ jobs:
 
       - name: Run staging MCP user journeys
         id: mcp-smoke
-        if: ${{ !cancelled() && steps.smoke-deps.conclusion == 'success' && steps.corpus-preflight.conclusion == 'success' }}
+        if: ${{ !cancelled() && steps.smoke-deps.conclusion == 'success' && steps.corpus-preflight.outcome == 'success' }}
         run: bun run canary:mcp
         env:
           MCP_CANARY_ENVIRONMENT: staging
@@ -607,16 +646,38 @@ jobs:
           WEB_SMOKE: ${{ steps.web-smoke.outcome }}
           API_SMOKE: ${{ steps.api-smoke.outcome }}
           MCP_SMOKE: ${{ steps.mcp-smoke.outcome }}
+          CORPUS_PREFLIGHT: ${{ steps.corpus-preflight.outcome }}
+          CORPUS_SEARCH_WAIVED: ${{ needs.resolve.outputs.corpus_search_waived }}
+          WAIVE_REASON: ${{ inputs.waive_reason }}
           JOB_STATUS: ${{ job.status }}
         run: |
           set -euo pipefail
           state=failure
-          if [[ "$WEB_SMOKE" == "success" && "$API_SMOKE" == "success" && "$MCP_SMOKE" == "success" && "$JOB_STATUS" != "cancelled" ]]; then
-            state=success
+          description="Staging smoke failure: run ${GITHUB_RUN_ID}"
+          if [[ "$WEB_SMOKE" == "success" && "$API_SMOKE" == "success" && "$JOB_STATUS" == "success" ]]; then
+            if [[ "$CORPUS_PREFLIGHT" == "success" && "$MCP_SMOKE" == "success" ]]; then
+              state=success
+              description="Staging smoke success: run ${GITHUB_RUN_ID}"
+            elif [[ "$CORPUS_SEARCH_WAIVED" == "true" && "$CORPUS_PREFLIGHT" == "failure" && "$MCP_SMOKE" == "skipped" ]]; then
+              state=success
+              description="waived: corpus-search (${WAIVE_REASON})"
+            fi
+          fi
+          if [[ "$CORPUS_SEARCH_WAIVED" == "true" ]]; then
+            {
+              echo "### Named staging waiver: corpus-search"
+              printf 'Reason: %s\n' "$WAIVE_REASON"
+              printf 'Corpus preflight result: %s; dependent MCP smoke result: %s.\n' "$CORPUS_PREFLIGHT" "$MCP_SMOKE"
+              if [[ "$CORPUS_PREFLIGHT" == "success" ]]; then
+                echo "Waiver unused: the corpus preflight passed."
+              else
+                printf 'Verification status: %s.\n' "$state"
+              fi
+            } >> "$GITHUB_STEP_SUMMARY"
           fi
           run_url="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
-          jq -n --arg state "$state" --arg run "$GITHUB_RUN_ID" --arg url "$run_url" \
-            '{state: $state, context: "staging/verified", description: ("Staging smoke " + $state + ": run " + $run), target_url: $url}' |
+          jq -n --arg state "$state" --arg description "$description" --arg url "$run_url" \
+            '{state: $state, context: "staging/verified", description: $description, target_url: $url}' |
             gh api "repos/${GITHUB_REPOSITORY}/statuses/${DEPLOY_SHA}" \
               --method POST --input - >/dev/null
           jq -n --arg state "$state" --arg url "$run_url" \

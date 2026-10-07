@@ -26,6 +26,7 @@ import {
   designLintBacklogOverrides,
 } from "./scripts/design-lint-policy.ts";
 import { OWNERSHIP, STATUS_TRANSITION_OWNERSHIP } from "./scripts/ownership.ts";
+import { withCanonicalDisableRuleIds } from "./scripts/oxlint-disable-rule-ids.ts";
 import core from "./scripts/oxlint-presets/core.mjs";
 import react from "./scripts/oxlint-presets/react.mjs";
 import shadcn from "./scripts/oxlint-presets/shadcn.mjs";
@@ -34,6 +35,7 @@ import {
   RESULT_CONVENTION_ENABLED_GLOBS,
   RESULT_CONVENTION_EXCLUDE_GLOBS,
 } from "./scripts/result-boundary-globs.ts";
+import sha256MigrationLedger from "./scripts/sha256-migration-ledger.json" with { type: "json" };
 import sourceFingerprintBaseline from "./scripts/source-fingerprint-baseline.json" with { type: "json" };
 import {
   SQL_PERF_LINT_EXCLUDES,
@@ -166,6 +168,18 @@ const derivedAttributeRuleOptions = {
 };
 
 const fixtureRuleOverrides = [
+  {
+    files: [".oxlint-plugins/__fixtures__/no-raw-sha256.fixture.ts"],
+    rules: {
+      "no-raw-sha256/no-raw-sha256": "error",
+      "no-unused-vars": "off",
+      "no-new": "off",
+      "prefer-const": "off",
+      "typescript/no-floating-promises": "off",
+      "typescript/dot-notation": "off",
+      "typescript/unbound-method": "off",
+    },
+  } as const satisfies OxlintOverride,
   fixtureRuleOverride("require-json-import-attribute.fixture.ts", [
     "require-json-import-attribute/require-json-import-attribute",
   ]),
@@ -843,7 +857,7 @@ const customCssClassNames = [
   "word",
 ] satisfies string[];
 
-export default defineConfig({
+const config = defineConfig({
   extends: [core, react, shadcn],
   // `typeAware` and `reportUnusedDisableDirectives` stay CLI flags: the
   // pre-commit hook and the docs-source check run without type information,
@@ -896,6 +910,10 @@ export default defineConfig({
     },
   },
   rules: {
+    "no-raw-sha256/no-raw-sha256": [
+      "error",
+      { allowedFiles: sha256MigrationLedger.map(({ id }) => id) },
+    ],
     // Every base rule is decided here or in the vendored presets, never by a
     // spread: a spread replaces preset severities without naming the rules,
     // and scripts/check-oxlint-effective-config.ts fails on that.
@@ -932,15 +950,15 @@ export default defineConfig({
       { ignorePrimitives: { string: true, boolean: true } },
     ],
     "typescript/return-await": ["error", "error-handling-correctness-only"],
-    // A `let`, `const` or class read before its declaration runs throws in
-    // the temporal dead zone. A function declaration is hoisted, so calling
-    // one declared further down is not a defect.
+    // Same-scope lexical reads retain temporal-dead-zone checks. References
+    // inside functions may name variables declared later; their call order
+    // decides when those reads run. Class ordering stays checked.
     "eslint/no-use-before-define": [
       "error",
       {
         functions: false,
         classes: true,
-        variables: true,
+        variables: false,
         allowNamedExports: false,
       },
     ],
@@ -1165,6 +1183,7 @@ export default defineConfig({
       },
     ],
     "suppression-hygiene/require-description": "error",
+    "suppression-hygiene/canonical-rule-id": "error",
     "suppression-hygiene/no-foreign-directive": "error",
     "typescript/ban-ts-comment": [
       "error",
@@ -1381,6 +1400,7 @@ export default defineConfig({
     stellaLowercasePluginSpecifier,
     "./.oxlint-plugins/no-raw-cache-control.ts",
     "./.oxlint-plugins/raw-hash-from-source-fingerprint.ts",
+    "./.oxlint-plugins/no-raw-sha256.ts",
     "@tanstack/eslint-plugin-query",
     "@tanstack/eslint-plugin-router",
     "./.oxlint-plugins/drizzle.ts",
@@ -1606,10 +1626,13 @@ export default defineConfig({
       },
     },
     {
-      // Plugin fixtures are inputs for the local rules' tests; route fixtures
-      // name their component before declaring it, as route modules do.
+      // Plugin fixtures include intentional lexical reads and class references
+      // before declaration to exercise rule diagnostics.
       files: [".oxlint-plugins/__fixtures__/**"],
-      rules: { "eslint/no-use-before-define": "off" },
+      rules: {
+        "no-raw-sha256/no-raw-sha256": "off",
+        "eslint/no-use-before-define": "off",
+      },
     },
     {
       files: ["apps/api/src/**/*.ts", "apps/api/scripts/**/*.ts"],
@@ -2502,6 +2525,12 @@ export default defineConfig({
           "error",
           {
             approvedAdapters: [
+              {
+                path: "apps/api/src/handlers/case-law/decisions/search-schema.ts",
+                binding: "courtYearSchema",
+                reason:
+                  "Runtime JSON Schema and static type are derived from the same shared Valibot schema.",
+              },
               {
                 path: "apps/api/src/handlers/case-law/decisions/search-schema.ts",
                 binding: "decisionIdentifiersSchema",
@@ -5448,3 +5477,5 @@ export default defineConfig({
     ...designLintBacklogOverrides(designLintBaseline),
   ],
 });
+
+export default withCanonicalDisableRuleIds(config);

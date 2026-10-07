@@ -145,6 +145,7 @@
       "useBackupCode": "استخدام رمز احتياطي بدلاً من ذلك"
     },
     "useDifferentEmail": "استخدام بريد إلكتروني مختلف",
+    "usePassword": "استخدام كلمة المرور بدلًا من ذلك",
     "weSentCodeTo": "أرسلنا رمزًا إلى <email>{emailAddress}</email>"
   },
   "avt": {

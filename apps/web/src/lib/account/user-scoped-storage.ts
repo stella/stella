@@ -4,6 +4,12 @@ import type { StateStorage } from "zustand/middleware";
 import { browserStorage } from "@/lib/account/browser-storage";
 import { USER_STORAGE_FAMILIES } from "@/lib/account/storage-families";
 import type { StorageArea } from "@/lib/account/storage-families";
+import {
+  ownerStorageKey,
+  type StorageOwner,
+  USER_SEGMENT,
+  VISITOR_SUFFIX,
+} from "@/lib/account/storage-key";
 import { detached } from "@/lib/detached";
 
 /**
@@ -14,14 +20,9 @@ import { detached } from "@/lib/detached";
  * own, and a visitor without a session keeps only the visitor's.
  */
 
-/** Whose entries the browser holds: a signed-in user, or a visitor. */
-export type StorageOwner =
-  | { kind: "user"; userId: string }
-  | { kind: "visitor" };
+export type { StorageOwner };
 
 const VISITOR: StorageOwner = { kind: "visitor" };
-const VISITOR_SUFFIX = ":visitor";
-const USER_SEGMENT = ":u:";
 
 /** Who this tab last belonged to, kept across its reloads. */
 const TAB_OWNER_KEY = "stella.storage-owner";
@@ -51,9 +52,7 @@ export const userStorageKey = (
   ) {
     panic(`Unregistered user storage family: ${base}`);
   }
-  return owner.kind === "user"
-    ? `${base}${USER_SEGMENT}${owner.userId}`
-    : `${base}${VISITOR_SUFFIX}`;
+  return ownerStorageKey(base, owner);
 };
 
 /** Runs `listener` whenever the owner changes; returns the unsubscribe. */

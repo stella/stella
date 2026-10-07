@@ -287,6 +287,10 @@ const EXAMPLE_VALUES: Record<string, string> = {
 };
 
 const DESCRIPTION_OVERRIDES: Record<string, string> = {
+  APP_REVIEW_ACCOUNT_EMAIL:
+    "Restricted review account allowed password sign-in. Set together with APP_REVIEW_ORGANIZATION_ID.",
+  APP_REVIEW_ORGANIZATION_ID:
+    "Organization the restricted review account is confined to. Set together with APP_REVIEW_ACCOUNT_EMAIL.",
   FEATURE_GENERATED_VIEWS:
     "Enable generated views for callers granted access to the feature. Disabled by default.",
   VISUAL_PREVIEW_FUNCTION_NAME:
@@ -693,6 +697,8 @@ export const ENV_CREDENTIAL_CLASSIFICATION = {
   AI_PROVIDER: ENV_CREDENTIAL_KIND.notCredential,
   AI_PROVIDER_BASE_URL: ENV_CREDENTIAL_KIND.notCredential,
   ANTHROPIC_API_KEY: ENV_CREDENTIAL_KIND.credential,
+  APP_REVIEW_ACCOUNT_EMAIL: ENV_CREDENTIAL_KIND.notCredential,
+  APP_REVIEW_ORGANIZATION_ID: ENV_CREDENTIAL_KIND.notCredential,
   AZURE_API_KEY: ENV_CREDENTIAL_KIND.credential,
   AZURE_API_VERSION: ENV_CREDENTIAL_KIND.notCredential,
   AZURE_BASE_URL: ENV_CREDENTIAL_KIND.notCredential,
@@ -1396,6 +1402,7 @@ export const TOOLING_ENV_KEYS = new Set([
   "MATTER_ACTIVITY_WORKSPACE_ID",
   "MCP_APP_INPUT",
   "MCP_CANARY_BASE_URL",
+  "MCP_CANARY_CONFIGURED_BASE_URL",
   "MCP_CANARY_ENVIRONMENT",
   "MCP_CANARY_FRONTEND_URL",
   "MCP_CANARY_MODE",
@@ -1454,6 +1461,8 @@ export const TOOLING_ENV_KEYS = new Set([
   "REPOSITORY",
   "RETRY_ATTEMPTS",
   "RETRY_DELAYS_SECONDS",
+  // Credential used only by the restricted account canary.
+  "REVIEW_ACCOUNT_PASSWORD",
   // Nightly issue reporter: workflow run linked from the failure issue.
   "RUN_URL",
   "SMOKE_AI_JOURNEY",
@@ -1497,6 +1506,7 @@ export const TOOLING_ENV_KEYS = new Set([
   "TEST_API_ERROR",
   "TEST_LATER",
   "CI_GENERATED_SOURCES_MANIFEST",
+  "CHANGED_MARKDOWN",
   "TURBO_HASH",
   "TURBO_SCM_BASE",
   "TURN_OUTCOME_COMBINATIONS",

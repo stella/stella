@@ -1,9 +1,41 @@
 import { describe, expect, test } from "bun:test";
 
+import { rewriteFixture } from "../../scripts/check-oxlint-fixture-counts.ts";
 import { lintSingleRule } from "./lint-single-rule";
 
 const RULE = "require-audit-on-mutation";
 const SOURCE_PATH = "apps/api/src/lib/sample-store.ts";
+
+test("the fixture reports every declared mutation diagnostic", async () => {
+  const fixturePath =
+    ".oxlint-plugins/__fixtures__/require-audit-on-mutation.fixture.ts";
+  const fixture = await Bun.file(
+    new URL(
+      "../__fixtures__/require-audit-on-mutation.fixture.ts",
+      import.meta.url,
+    ),
+  ).text();
+  const rewritten = rewriteFixture(fixturePath, fixture);
+  expect(rewritten.problems).toEqual([]);
+  const expected = [...rewritten.expected]
+    .flatMap(([key, count]) => {
+      if (!key.endsWith(`:${RULE}/${RULE}`)) {
+        return [];
+      }
+      const line = Number(
+        key
+          .slice(fixturePath.length + 1)
+          .split(":")
+          .at(0),
+      );
+      return Array.from({ length: count }, () => line);
+    })
+    .toSorted((left, right) => left - right);
+  expect(expected.length).toBeGreaterThan(0);
+  expect(
+    await lintSingleRule(RULE, rewritten.source, { sourcePath: SOURCE_PATH }),
+  ).toEqual(expected);
+});
 
 // Three owners: `saveRow` writes twice to `rows` inside an anonymous
 // transaction callback, `clearRows` deletes once, and two `try` callbacks in
@@ -196,4 +228,153 @@ export const unaudited = async (db: Writer) => {
       await lintSingleRule(RULE, recorded, { sourcePath: SOURCE_PATH }),
     ).toEqual([17]);
   });
+});
+
+const lintDirective = async (body: string) =>
+  await lintSingleRule(
+    RULE,
+    [
+      "declare const tx: { insert: (row: unknown) => void; delete: (row: unknown) => void };",
+      "declare const rows: unknown;",
+      "declare const read: () => void;",
+      body,
+    ].join("\n"),
+    { sourcePath: SOURCE_PATH },
+  );
+
+describe("audit directive placement", () => {
+  test("block-body and adjacent expression-body directives are accepted", async () => {
+    expect(
+      await lintDirective(
+        [
+          "export const block = () => {",
+          "  // audit: skip - scheduler reconciliation records its own event",
+          "  return tx.insert(rows);",
+          "};",
+          "export const expression = () =>",
+          "  // audit: skip - scheduler reconciliation records its own event",
+          "  tx.insert(rows);",
+          "export const awaited = async () =>",
+          "  // audit: skip - scheduler reconciliation records its own event",
+          "  await tx.insert(rows);",
+        ].join("\n"),
+      ),
+    ).toEqual([]);
+  });
+
+  test("a directive describes only its adjacent mutation expression", async () => {
+    expect(
+      await lintDirective(
+        [
+          "export const write = () => [",
+          "  // audit: skip - scheduler reconciliation records its own event",
+          "  tx.insert(rows),",
+          "  tx.delete(rows)",
+          "];",
+        ].join("\n"),
+      ),
+    ).toEqual([7]);
+  });
+
+  test("a directive above another call or value leaves subsequent mutations checked", async () => {
+    for (const expression of ["read()", "1"]) {
+      expect(
+        await lintDirective(
+          [
+            "export const write = () => [",
+            "  // audit: skip - scheduler reconciliation records its own event",
+            `  ${expression},`,
+            "  tx.insert(rows)",
+            "];",
+          ].join("\n"),
+        ),
+      ).toEqual([7]);
+    }
+  });
+
+  test("a gap or an unjustified reason leaves the mutation checked", async () => {
+    for (const before of [
+      "  // audit: skip - scheduler reconciliation records its own event\n",
+      "  // audit: skip - scheduler",
+      "",
+    ]) {
+      const directiveSource = [
+        "export const write = () =>",
+        before,
+        "  tx.insert(rows);",
+      ].join("\n");
+      expect(await lintDirective(directiveSource)).toEqual([
+        directiveSource.split("\n").length + 3,
+      ]);
+    }
+  });
+
+  test("an adjacent directive on a nested arrow leaves the parent mutation checked", async () => {
+    expect(
+      await lintDirective(
+        [
+          "export const parent = () => {",
+          "  const child = () =>",
+          "    // audit: skip - scheduler reconciliation records its own event",
+          "    tx.insert(rows);",
+          "  tx.delete(rows);",
+          "  child();",
+          "};",
+        ].join("\n"),
+      ),
+    ).toEqual([8]);
+  });
+
+  test("one directive covers only the first mutation when calls share a line", async () => {
+    expect(
+      await lintDirective(
+        [
+          "export const write = () => [",
+          "  // audit: skip - scheduler reconciliation records its own event",
+          "  tx.insert(rows), tx.delete(rows)",
+          "];",
+        ].join("\n"),
+      ),
+    ).toEqual([6]);
+  });
+});
+
+test("directive placement leaves ledger write counts identical", async () => {
+  const placements = [
+    [
+      "export const skipped = () => {",
+      "  // audit: skip - scheduler reconciliation records its own event",
+      "  return tx.insert(rows);",
+      "};",
+    ],
+    [
+      "export const skipped = () =>",
+      "  // audit: skip - scheduler reconciliation records its own event",
+      "  tx.insert(rows);",
+    ],
+  ];
+  for (const placement of placements) {
+    const directiveSource = [
+      "declare const tx: { insert: (row: unknown) => void; delete: (row: unknown) => void };",
+      "declare const rows: unknown;",
+      ...placement,
+      "export const counted = () => tx.delete(rows);",
+    ].join("\n");
+    const countedLine = directiveSource.split("\n").length;
+    expect(
+      await lintSingleRule(RULE, directiveSource, {
+        sourcePath: SOURCE_PATH,
+        ruleOptionsForRoot: (root) => ({ root, census: true }),
+      }),
+    ).toEqual([countedLine]);
+    expect(
+      await lintSingleRule(RULE, directiveSource, {
+        sourcePath: SOURCE_PATH,
+        ruleOptionsForRoot: (root) => ({
+          root,
+          budgets: { [`${SOURCE_PATH}::counted`]: { "delete:rows": 1 } },
+        }),
+      }),
+    ).toEqual([]);
+  }
 });

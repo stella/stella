@@ -1,7 +1,11 @@
 import { isUuid } from "@stll/uuid-codec";
 
 import { toSafeId } from "@/api/lib/branded-types";
-import type { AuthProviderIdType, SafeId } from "@/api/lib/branded-types";
+import type {
+  AuthProviderIdType,
+  SafeId,
+  SafeIdType,
+} from "@/api/lib/branded-types";
 
 type ActorSessionIdentityInput = {
   organizationId: string;
@@ -65,6 +69,21 @@ export const brandDerivedPropertyId = (seed: string): SafeId<"property"> => {
   const digest = new Bun.CryptoHasher("sha256").update(seed).digest("hex");
   return toSafeId<"property">(
     `${digest.slice(0, 8)}-${digest.slice(8, 12)}-${digest.slice(12, 16)}-${digest.slice(16, 20)}-${digest.slice(20, 32)}`,
+  );
+};
+
+/**
+ * An id derived from a stable seed for server-authored sample data: the same
+ * seed always yields the same id, so a rerun of the seeder finds what an
+ * earlier run wrote. Shaped like a name-based UUID.
+ */
+export const brandDerivedSampleId = <T extends SafeIdType>(
+  seed: string,
+): SafeId<T> => {
+  const hex = new Bun.CryptoHasher("sha256").update(seed).digest("hex");
+  const raw = `${hex.slice(0, 12)}5${hex.slice(13, 16)}8${hex.slice(17, 32)}`;
+  return toSafeId<T>(
+    `${raw.slice(0, 8)}-${raw.slice(8, 12)}-${raw.slice(12, 16)}-${raw.slice(16, 20)}-${raw.slice(20, 32)}`,
   );
 };
 

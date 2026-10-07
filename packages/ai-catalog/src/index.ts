@@ -361,6 +361,7 @@ export const BYOK_MODEL_OPTIONS = {
     "openai.gpt-oss-20b-1:0",
   ],
   mistral: [
+    "mistral-large-4",
     "mistral-large-latest",
     "mistral-medium-latest",
     "mistral-small-latest",
@@ -675,6 +676,10 @@ export const MODEL_DISPLAY_METADATA = {
   "openai.gpt-oss-20b-1:0": {
     displayName: "GPT OSS 20B",
     iconProvider: "openai",
+  },
+  "mistral-large-4": {
+    displayName: "Mistral Large 4",
+    iconProvider: "mistral",
   },
   "mistral-large-latest": {
     displayName: "Mistral Large",
@@ -1100,6 +1105,7 @@ export const MODEL_STREAMING_TOOL_USE = {
   "us.amazon.nova-micro-v1:0": "supported",
   "openai.gpt-oss-120b-1:0": "supported",
   "openai.gpt-oss-20b-1:0": "supported",
+  "mistral-large-4": "supported",
   "mistral-large-latest": "supported",
   "mistral-medium-latest": "supported",
   "mistral-small-latest": "supported",
@@ -1303,8 +1309,9 @@ export const CONTEXT_WINDOW_TOKENS = {
   "claude-opus-5-5": 1_000_000,
   "claude-fable-5": 200_000,
   "claude-fable-5-1": 1_000_000,
-  // Mistral: 128K across the offered text/vision models.
+  // Mistral: 128K across the offered text/vision models; Large 4 is 512K.
   "mistral-small-latest": 128_000,
+  "mistral-large-4": 524_288,
   "mistral-large-latest": 128_000,
   "mistral-medium-latest": 128_000,
   "mistral-medium-3-5": 128_000,

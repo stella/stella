@@ -233,10 +233,9 @@ const trackSurfaceForm = async ({
   // and `@>` compares against a jsonb string instead of the array.
   const formJson = JSON.stringify([keyPhrase]);
 
-  // oxlint-disable-next-line arrow-body-style -- block body holds the audit-skip directive that the require-audit-on-mutation rule scans for inside this arrow's body range
-  await scopedDb((tx) => {
+  await scopedDb((tx) =>
     // audit: skip — background polarity classification pipeline; no user-facing state change
-    return tx
+    tx
       .insert(caseLawPolarityRules)
       .values({
         pattern,
@@ -301,8 +300,8 @@ const trackSurfaceForm = async ({
             ${observedAt}
           )`,
         },
-      });
-  });
+      }),
+  );
 };
 
 /**
@@ -317,10 +316,9 @@ export const persistPolarity = async (
   result: ClassifyResult,
   scopedDb: ScopedDb,
 ) => {
-  // oxlint-disable-next-line arrow-body-style -- block body holds the audit-skip directive that the require-audit-on-mutation rule scans for inside this arrow's body range
-  await scopedDb((tx) => {
+  await scopedDb((tx) =>
     // audit: skip — background polarity classification pipeline; no user-facing state change
-    return tx
+    tx
       .update(caseLawCitations)
       .set({
         polarity: result.polarity,
@@ -331,6 +329,6 @@ export const persistPolarity = async (
           eq(caseLawCitations.id, citationId),
           unreviewedCitationSql(caseLawCitations),
         ),
-      );
-  });
+      ),
+  );
 };
