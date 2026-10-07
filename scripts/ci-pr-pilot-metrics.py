@@ -17,6 +17,7 @@ WINDOW = dt.timedelta(days=7)
 COMMIT_SAMPLE_LIMIT = 120
 QUEUE_SAMPLE_LIMIT = 25
 QUEUE_RUN_PAGE_LIMIT = 5
+QUEUE_FAILURE_STOP = 2
 
 def sample(values, limit):
     return values if len(values) <= limit else [values[int(index * (len(values) - 1) / (limit - 1))] for index in range(limit)]
@@ -135,6 +136,16 @@ def build_report(pulls, previous, now, complete, fast_jobs, bootstrap=None):
         "estimatedJobMinutesSaved": baseline_daily * elapsed_days - measured["jobMinutes"],
         "estimateBasis": "phase-3 daily workload; workload changes affect the estimate",
     }
+
+
+def apply_queue_failures(report, queue):
+    report["measured"].update(queue)
+    report["complete"] = report["complete"] and queue["queueFailureEvidenceComplete"]
+    # Each deferred-check failure in the merge group ejects a PR and restarts
+    # the queue for everyone; unattributed failures eject just the same.
+    failures = queue["postArmDeferredQueueFailureHeads"] + queue["unmappedDeferredQueueFailureRuns"]
+    report["stopped"] = report["stopped"] or failures >= QUEUE_FAILURE_STOP
+    return report
 
 
 class Collector:
@@ -405,8 +416,7 @@ def main():
                           if name.startswith("ci.yml/") and category in {"pr-fast", "pr-opt-in", "schema-pr", "release-pr"}
                           and name.removeprefix("ci.yml/") not in fast_jobs}
     queue = collector.queue_failures(start, normal_pr_deferred)
-    report["measured"].update(queue)
-    report["complete"] = report["complete"] and queue["queueFailureEvidenceComplete"]
+    apply_queue_failures(report, queue)
     report["postArmCycleDefinition"] = "distinct observed PR heads and tested merge-group commits failing normal-PR checks deferred by pilot-fast; unmapped runs are reported separately"
     write_evidence(args, report, pulls)
     print(f"Pilot metrics complete={report['complete']} stopped={report['stopped']}")
