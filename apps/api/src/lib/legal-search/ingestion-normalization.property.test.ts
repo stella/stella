@@ -15,7 +15,10 @@ import {
   UnpersistableDecisionFieldError,
 } from "@/api/lib/errors/tagged-errors";
 import { decisionLanguageGroupKey } from "@/api/lib/legal-search/decision-language-identity";
-import { sanitizeResult } from "@/api/lib/legal-search/ingestion-normalization";
+import {
+  fitsDecisionSearchCandidateRow,
+  sanitizeResult,
+} from "@/api/lib/legal-search/ingestion-normalization";
 import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
 
 const decision = plainTextIngestionResult({
@@ -60,20 +63,19 @@ const normalizationProperty = (
       const fitsBytes =
         Buffer.byteLength(input.court) + Buffer.byteLength(languageGroupKey) <=
         CASE_LAW_SEARCH_CANDIDATE_ROW_MAX_BYTES;
-      if (characters.length <= width && fitsBytes) {
-        expect(value).toBe(result.unwrap()[field]);
+      // Normalization refuses only the field width; the aggregate byte budget
+      // is the write planner's check, made on the normalized value.
+      if (characters.length <= width) {
+        const normalized = result.unwrap();
+        expect(value).toBe(normalized[field]);
+        expect(fitsDecisionSearchCandidateRow(normalized)).toBe(fitsBytes);
       } else {
         expect(result.isErr()).toBe(true);
         if (result.isOk()) {
           throw new Error("Expected storage refusal");
         }
         expect(result.error).toBeInstanceOf(UnpersistableDecisionFieldError);
-        expect(result.error).toMatchObject({
-          field:
-            characters.length > width
-              ? errorField
-              : UNPERSISTABLE_DECISION_FIELDS.SEARCH_CANDIDATE_BYTES,
-        });
+        expect(result.error).toMatchObject({ field: errorField });
       }
     },
   );
@@ -96,7 +98,7 @@ test("court storage is exact or a typed refusal for generated Unicode values", (
   );
 });
 
-test("generated decision candidates fit the aggregate UTF8 budget or receive a typed refusal", () => {
+test("generated decision candidates normalize intact and are judged against the aggregate UTF8 budget", () => {
   const unicode = (maximum: number) =>
     fc
       .array(fc.constantFrom("x", "é", "😀", "\u0301"), {
@@ -105,7 +107,7 @@ test("generated decision candidates fit the aggregate UTF8 budget or receive a t
       })
       .map((characters) => characters.join(""));
   assertProperty(
-    "generated decision candidates fit the aggregate UTF8 budget or receive a typed refusal",
+    "generated decision candidates normalize intact and are judged against the aggregate UTF8 budget",
     fc.property(
       unicode(CITATION_STORAGE_WIDTHS.court),
       unicode(256),
@@ -123,23 +125,11 @@ test("generated decision candidates fit the aggregate UTF8 budget or receive a t
           Buffer.byteLength(court) +
           Buffer.byteLength(languageGroupKey) +
           Buffer.byteLength(decisionType);
-        const result = Result.try({
-          try: () => sanitizeResult(input),
-          catch: (error: unknown) => error,
-        });
-        if (bytes > CASE_LAW_SEARCH_CANDIDATE_ROW_MAX_BYTES) {
-          expect(result.isErr()).toBe(true);
-          if (result.isOk()) {
-            throw new Error("Expected aggregate byte refusal");
-          }
-          expect(result.error).toBeInstanceOf(UnpersistableDecisionFieldError);
-          expect(result.error).toMatchObject({
-            field: UNPERSISTABLE_DECISION_FIELDS.SEARCH_CANDIDATE_BYTES,
-          });
-          return;
-        }
-        const normalized = result.unwrap();
+        const normalized = sanitizeResult(input);
         expect(normalized.court === court).toBe(true);
+        expect(fitsDecisionSearchCandidateRow(normalized)).toBe(
+          bytes <= CASE_LAW_SEARCH_CANDIDATE_ROW_MAX_BYTES,
+        );
         expect(
           sanitizeResult({
             ...decision,
