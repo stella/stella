@@ -159,7 +159,11 @@ describe.skipIf(!runPostgresTests)("production sanctions mount", () => {
                 }),
               { deadlineMs: 10_000 },
             );
-            expect(warmed?.status).toBe("screened");
+            expect(warmed.status).toBe("completed");
+            if (warmed.status !== "completed") {
+              throw new TypeError("Sanctions matcher warmup unavailable");
+            }
+            expect(warmed.value.status).toBe("screened");
           }
           const auth = getAuth();
           const authContext = await auth.$context;
