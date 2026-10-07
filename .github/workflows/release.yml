@@ -770,10 +770,10 @@ jobs:
       # directly to the release; no intermediate Actions artifact is retained.
       - name: Setup Bun for the Chrome extension
         if: ${{ !contains(needs.resolve.outputs.release_ref, '-') }}
-        uses: stella/.github/actions/setup-bun-cached@167fb396c6c0f4e07296ad2cd72e6ef15367c776
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
         with:
           bun-version-file: "package.json"
-          save: false
+          no-cache: true
 
       - name: Build and verify the production Chrome extension ZIP
         id: extension-zip
