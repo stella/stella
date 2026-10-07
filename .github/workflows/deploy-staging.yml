@@ -682,6 +682,7 @@ jobs:
           # authenticated probes, rather than accepting partial coverage.
           MCP_CANARY_REQUIRE_CREDENTIALS: "true"
           APP_REVIEW_ACCOUNT_EMAIL: ${{ vars.APP_REVIEW_ACCOUNT_EMAIL || 'review@stll.app' }}
+          APP_REVIEW_ORGANIZATION_ID: ${{ vars.STAGING_APP_REVIEW_ORGANIZATION_ID }}
           REVIEW_ACCOUNT_PASSWORD: ${{ secrets.REVIEW_ACCOUNT_PASSWORD }}
           SMOKE_SESSION_SECRET: ${{ secrets.SMOKE_SESSION_SECRET }}
           E2E_EDGE_HEADER_NAME: x-stella-edge-token

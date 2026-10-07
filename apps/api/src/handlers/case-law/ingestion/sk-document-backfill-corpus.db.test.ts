@@ -19,6 +19,8 @@ import { Result } from "better-result";
 import { beforeAll, describe, expect, test } from "bun:test";
 import { and, eq, inArray, sql } from "drizzle-orm";
 
+import type { DocumentAst } from "@stll/legal-ast/document-ast";
+
 import type { ScopedDb } from "@/api/db/safe-db";
 import {
   CASE_LAW_CORPUS_MIRROR_STATUS,
@@ -30,7 +32,6 @@ import {
   caseLawSources,
 } from "@/api/db/schema";
 import { ADAPTER_KEYS } from "@/api/handlers/case-law/consts";
-import type { DocumentAst } from "@/api/handlers/case-law/document-ast";
 import { createSafeId, type SafeId } from "@/api/lib/branded-types";
 import { parseCorpusLocation } from "@/api/lib/legal-search/corpus-location";
 import {

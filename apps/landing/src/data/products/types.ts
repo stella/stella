@@ -93,7 +93,7 @@ export const frameAccents = {
 
 export type FrameAccent = (typeof frameAccents)[keyof typeof frameAccents];
 
-export type ProductSectionPresentation = {
+type ProductSectionPresentation = {
   media: ProductMedia;
   /** Frame recipe for this section's media frame; dormant, see `FrameVariant`. */
   frameVariant?: FrameVariant;
@@ -133,10 +133,9 @@ export const productCtaLabels = {
   getCli: "common.getCli",
 } as const satisfies Record<string, TranslationKey>;
 
-export type ProductCtaLabel =
-  (typeof productCtaLabels)[keyof typeof productCtaLabels];
+type ProductCtaLabel = (typeof productCtaLabels)[keyof typeof productCtaLabels];
 
-export type ProductEvidence =
+type ProductEvidence =
   | { type: "capability"; id: string }
   | { type: "source"; path: string; contains: readonly string[] };
 
@@ -149,7 +148,7 @@ type CliMcpSetupClientId =
 
 type NumericCliMcpSetupClientId = Extract<CliMcpSetupClientId, `${number}`>;
 
-export type ProductSetup = {
+type ProductSetup = {
   endpoint: string;
   clients: NumericCliMcpSetupClientId extends never
     ? Readonly<

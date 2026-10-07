@@ -118,9 +118,7 @@ export const collectEvidenceReferences = (doc: ProseMirrorNode) => {
   return { references, invalidPositions };
 };
 
-export const evidenceReferencesKey = new PluginKey(
-  "stella-evidence-references",
-);
+const evidenceReferencesKey = new PluginKey("stella-evidence-references");
 
 type EvidenceReferencesPluginOptions = {
   isEditable?: () => boolean;
