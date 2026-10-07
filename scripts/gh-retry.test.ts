@@ -371,8 +371,10 @@ test("Retry-After HTTP dates use the same bounded recovery path", async () => {
   expect(result.sleeps).toEqual([7]);
 });
 
+const connectionReset =
+  'Get "https://api.github.com/example": read tcp 127.0.0.1:1234->127.0.0.1:443: read: connection reset by peer';
 const transportErrors = [
-  'Get "https://api.github.com/example": read tcp 127.0.0.1:1234->127.0.0.1:443: read: connection reset by peer',
+  connectionReset,
   "* dial tcp 127.0.0.1:443: i/o timeout",
   'Get "https://api.github.com/example": net/http: TLS handshake timeout',
   "* dial tcp: lookup api.github.com: no such host",
@@ -417,7 +419,7 @@ test("unknown non-HTTP errors and errors after a non-transient HTTP response fai
         'Get "https://api.github.com/example": x509: certificate signed by unknown authority',
     },
     { exit: 1, error: "> Authorization: connection reset by peer" },
-    { exit: 1, http: 400, error: transportErrors.at(0) },
+    { exit: 1, http: 400, error: connectionReset },
   ]) {
     const result = await scenario({ responses: [response, success] });
     expect(result.exit).toBe(1);
@@ -434,7 +436,7 @@ test("transport recovery keeps writes single-shot even when HTTP recovery admits
   ]) {
     const result = await scenario({
       args,
-      responses: [{ exit: 1, error: transportErrors.at(0) }, success],
+      responses: [{ exit: 1, error: connectionReset }, success],
     });
     expect(result.exit).toBe(1);
     expect(result.calls).toHaveLength(1);
@@ -442,7 +444,7 @@ test("transport recovery keeps writes single-shot even when HTTP recovery admits
 });
 
 test("recognized transport recovery is bounded and also covers high-level reads", async () => {
-  const failed = { exit: 1, error: transportErrors.at(0) };
+  const failed = { exit: 1, error: connectionReset };
   const persistent = await scenario({ responses: [failed] });
   expect(persistent.exit).toBe(1);
   expect(persistent.calls).toHaveLength(4);

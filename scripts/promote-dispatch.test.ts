@@ -10,7 +10,6 @@ import {
 import { tmpdir } from "node:os";
 import path from "node:path";
 import * as v from "valibot";
-import { parse } from "yaml";
 
 const ACTION = path.resolve(
   import.meta.dir,
@@ -86,7 +85,7 @@ const promotionScenario = async ({
     v.object({
       runs: v.object({ steps: v.tuple([v.object({ run: v.string() })]) }),
     }),
-    parse(await readFile(ACTION, "utf-8")),
+    Bun.YAML.parse(await readFile(ACTION, "utf-8")),
   );
   const directory = await mkdtemp(
     path.join(tmpdir(), "promote-dispatch-test-"),
