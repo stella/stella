@@ -3,10 +3,12 @@
  * runs, kept importable so a database test can execute them.
  */
 
-import { panic } from "better-result";
+import { panic, Result } from "better-result";
 import type { SQL } from "drizzle-orm";
 import { sql } from "drizzle-orm";
 import * as v from "valibot";
+
+import { Temporal } from "@stll/time";
 
 import { runCitationGraphTransaction } from "@/api/handlers/case-law/citation-graph-transaction";
 import {
@@ -62,7 +64,16 @@ const aiReviewEntries = {
   /** Digest of the passage the label was read from. */
   evidenceSha256: sha256Schema,
   runId: provenanceTextSchema,
-  producedAt: v.pipe(v.string(), v.isoTimestamp()),
+  producedAt: v.pipe(
+    v.string(),
+    v.isoTimestamp(),
+    // `isoTimestamp` checks the shape only; a day the calendar lacks
+    // (2026-02-30) would fail the timestamptz cast and abort the batch.
+    v.check(
+      (value) => Result.isOk(Result.try(() => Temporal.Instant.from(value))),
+      "producedAt must be a real instant",
+    ),
+  ),
 };
 
 /** One entry: a citation named either way, and who produced its label. */
@@ -675,18 +686,16 @@ const summarize = (
   rows: readonly ReviewedLabelRowResult[],
   citationRows: number,
 ): ReviewedLabelSummary => {
-  const summary: ReviewedLabelSummary = {
-    applied: 0,
-    unchanged: 0,
-    unmatched: 0,
-    "refused-precedence": 0,
-    invalid: 0,
+  const count = (outcome: ReviewedLabelOutcome): number =>
+    rows.filter((row) => row.outcome === outcome).length;
+  return {
+    applied: count(REVIEWED_LABEL_OUTCOME.APPLIED),
+    unchanged: count(REVIEWED_LABEL_OUTCOME.UNCHANGED),
+    unmatched: count(REVIEWED_LABEL_OUTCOME.UNMATCHED),
+    "refused-precedence": count(REVIEWED_LABEL_OUTCOME.REFUSED_PRECEDENCE),
+    invalid: count(REVIEWED_LABEL_OUTCOME.INVALID),
     citationRows,
   };
-  for (const row of rows) {
-    summary[row.outcome] += 1;
-  }
-  return summary;
 };
 
 type ExecutingTransaction = {

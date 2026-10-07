@@ -504,6 +504,8 @@ describe("reviewed citation labels", () => {
       { ...valid, model: "annotator-1" },
       { ...annotated, promptSha256: "not-a-digest" },
       { ...annotated, producedAt: "yesterday" },
+      // ISO-shaped, but the calendar has no 30 February.
+      { ...annotated, producedAt: "2026-02-30T08:00:00Z" },
       {
         citationId: missingCitation,
         polarity: POLARITY.NEUTRAL,
@@ -535,15 +537,15 @@ describe("reviewed citation labels", () => {
         citationKey: keyOf(labelled),
         outcome: REVIEWED_LABEL_OUTCOME.APPLIED,
       },
-      ...[1, 2, 3, 4, 5, 6, 7].map(schemaInvalid),
+      ...[1, 2, 3, 4, 5, 6, 7, 8].map(schemaInvalid),
       {
-        index: 8,
+        index: 9,
         citationId: missingCitation,
         outcome: REVIEWED_LABEL_OUTCOME.INVALID,
         reason: REVIEWED_LABEL_INVALID_REASON.NO_SUCH_CITATION,
       },
       {
-        index: 9,
+        index: 10,
         citingDecisionId: missingDecision,
         citationKey: "no-such-decision",
         outcome: REVIEWED_LABEL_OUTCOME.INVALID,
@@ -565,7 +567,7 @@ describe("reviewed citation labels", () => {
     );
     expect(lines).toHaveLength(input.length);
     const resultKeys = new Set(
-      lines.flatMap((line) => Object.keys(Object(line))),
+      lines.flatMap((line) => Object.keys(new Object(line))),
     );
     expect(
       [...resultKeys].filter(
