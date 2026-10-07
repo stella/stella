@@ -632,6 +632,64 @@ test("citation summary marks the first unseen row without counting it", async ()
   }
 }, 120_000);
 
+test("an exact projection keeps ranking bounded when procedural edges fill the raw window", async () => {
+  const windowSubjectId = createSafeId<"caseLawDecision">();
+  await db.insert(caseLawDecisions).values({
+    caseNumber: "window-subject",
+    country: "CZE",
+    court: "Court",
+    id: windowSubjectId,
+    language: "cs",
+    sourceId: openSourceId,
+  });
+  try {
+    // One visible precedent edge behind a full window of procedural ones:
+    // the projected total stays far below the window, so only the raw
+    // overflow sentinel can tell the ranking it did not see every edge.
+    await db.execute(sql`
+      INSERT INTO ${caseLawCitations}
+        (id, citing_decision_id, cited_decision_id, citation_text, kind, polarity)
+      SELECT
+        ('00000000-0000-7000-8000-' || lpad((30000 + n)::text, 12, '0'))::uuid,
+        ${openRelatedId}::uuid,
+        ${windowSubjectId}::uuid,
+        'raw-window-' || n::text,
+        CASE WHEN n <= ${CITATION_SUMMARY_SCAN_LIMIT} THEN ${CITATION_KIND.PROCEDURAL} ELSE ${CITATION_KIND.PRECEDENT} END,
+        ${POLARITY.POSITIVE}
+      FROM generate_series(1, ${CITATION_SUMMARY_SCAN_LIMIT + 1}) AS generated(n)
+    `);
+    await db.execute(
+      sql`SELECT refresh_decision_citation_stats(${windowSubjectId}::uuid)`,
+    );
+    const top = await withSubject(windowSubjectId, async (subject) => {
+      const summary = await summaryOf({ currentYear: 2026, subject });
+      expect(summary.precision).toEqual({ status: "exact" });
+      expect(
+        Object.values(summary.incoming).reduce(
+          (total, count) => total + count,
+          0,
+        ),
+      ).toBeLessThanOrEqual(CITATION_SUMMARY_SCAN_LIMIT);
+      return await listTopCitingDecisionsHandler({
+        subject,
+        summary,
+        limit: 5,
+      });
+    });
+    expect(top).toMatchObject({
+      precision: "bounded",
+      candidateWindow: CITATION_SUMMARY_SCAN_LIMIT,
+    });
+  } finally {
+    await db
+      .delete(caseLawCitations)
+      .where(eq(caseLawCitations.citedDecisionId, windowSubjectId));
+    await db
+      .delete(caseLawDecisions)
+      .where(eq(caseLawDecisions.id, windowSubjectId));
+  }
+}, 120_000);
+
 test("top citing decisions are one row per visible precedent citer", async () => {
   // Fifty-four precedent citations from one decision are one row; the
   // restricted, unavailable and procedural citers are not there at all.
