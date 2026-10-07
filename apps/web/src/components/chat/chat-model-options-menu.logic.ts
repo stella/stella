@@ -100,7 +100,7 @@ export type ModelPickerView<TOption extends ModelPickerOption> =
  * model that only an unconfigured provider beats is still the best choice
  * here, so the picker re-derives the frontier over its own routes.
  */
-export const classifySelectableModels = (
+const classifySelectableModels = (
   options: readonly ModelPickerOption[],
   benchmarks: readonly ModelPickerBenchmark[],
   lineageOf: (value: string) => ModelLineage | undefined = catalogueLineage,

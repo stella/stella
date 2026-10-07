@@ -38,7 +38,7 @@ const shellReadyNonce = (event: ShellEvent, frameWindow: ShellFrameWindow) => {
 // handshake loads a new shell document: a cross-origin frame fires a load
 // event even for a fragment-only change, so the URL also differs before its
 // fragment, and each handshake ends in exactly one document load.
-export const VISUAL_SHELL_LOAD_PARAMETER = "load";
+const VISUAL_SHELL_LOAD_PARAMETER = "load";
 
 export const createVisualShellSession = ({
   url,

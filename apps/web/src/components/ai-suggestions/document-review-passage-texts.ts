@@ -42,10 +42,10 @@ export type ReferencePassageTexts = {
 
 /** The ids as the cache reads them: deduplicated and ordered, so two surfaces
  *  quoting the same passages in different orders share one entry. */
-export const passageTextIds = (ids: readonly string[]): string[] =>
+const passageTextIds = (ids: readonly string[]): string[] =>
   [...new Set(ids)].toSorted();
 
-export const documentReviewPassageTextKeys = {
+const documentReviewPassageTextKeys = {
   all: ["document-review-passage-texts"] as const,
   list: (ids: readonly string[]) =>
     [...documentReviewPassageTextKeys.all, ids] as const,
@@ -88,7 +88,7 @@ const textByIdOf = (
  * that list is the question: a proposal that has streamed twelve positions is
  * asking something the answer for eleven does not contain.
  */
-export const documentReviewPassageTextsOptions = (ids: readonly string[]) => {
+const documentReviewPassageTextsOptions = (ids: readonly string[]) => {
   const keyIds = passageTextIds(ids);
   return queryOptions({
     queryKey: documentReviewPassageTextKeys.list(keyIds),
