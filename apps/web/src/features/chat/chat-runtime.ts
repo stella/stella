@@ -482,10 +482,18 @@ export const createChatRuntime = ({
     }
     return url.toString();
   };
+  const loadedResume = v.safeParse(
+    chatResumeSnapshotSchema,
+    initialMessages.at(-1)?.metadata?.resumeSnapshot,
+  );
   const { connection: upstreamConnection, persistence } =
     createDurableChatTransport({
       initialMessages,
-      initialTurn: activeTurnId === null ? "settled" : "active",
+      initialTurn:
+        loadedResume.success &&
+        (loadedResume.output.pendingInterrupts?.length ?? 0) > 0
+          ? { type: "parked", runId: loadedResume.output.resumeState.runId }
+          : { type: activeTurnId === null ? "settled" : "active" },
       threadId: key.threadId,
       sendUrl: getChatApiPath(),
       joinUrl: () => turnUrl("join"),

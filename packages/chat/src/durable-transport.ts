@@ -58,9 +58,30 @@ const waitForReconnect = async (
     signal?.addEventListener("abort", abort, { once: true });
   });
 
+type ChatLoadedTurn =
+  | { type: "active" }
+  | { type: "parked"; runId: string }
+  | { type: "settled" };
+
+const loadedTurnNeedsRefresh = (
+  loaded: ChatLoadedTurn,
+  transcript: Extract<ChatTurnResumeProbe, { type: "transcript" }>,
+): boolean => {
+  switch (loaded.type) {
+    case "active":
+      return true;
+    case "parked":
+      return transcript.resumeSnapshot?.resumeState.runId !== loaded.runId;
+    case "settled":
+      return false;
+    default:
+      return panic(loaded satisfies never);
+  }
+};
+
 type DurableChatTransportOptions<TTools extends readonly AnyClientTool[]> = {
   initialMessages: ChatPersistedState<TTools>["messages"];
-  initialTurn: "active" | "settled";
+  initialTurn: ChatLoadedTurn;
   threadId: string;
   /** Server truth is checked on mount and before every read-only retry. */
   probe: (signal?: AbortSignal | null) => Promise<ChatResumeProbe>;
@@ -153,8 +174,8 @@ const createChatResumePersistence = <TTools extends readonly AnyClientTool[]>({
                 },
               };
             case "transcript":
-              if (initialTurnState === "active") {
-                initialTurnState = "settled";
+              if (loadedTurnNeedsRefresh(initialTurnState, result.value)) {
+                initialTurnState = { type: "settled" };
                 onTranscript();
               }
               onReconnectChange(false);

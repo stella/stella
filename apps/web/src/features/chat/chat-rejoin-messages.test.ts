@@ -242,7 +242,7 @@ test("equal lifecycle states retain atomic payloads and advanced tools retain ap
   }
 });
 
-test("native SDK completed raw arguments catch up to the loader's canonical input", async () => {
+test("native SDK final tool input catches up to equivalent canonical loader key ordering", async () => {
   const raw = '{ "title" : "Terms", "count" : 1 }';
   const input = { title: "Terms", count: 1 };
   const events = [
@@ -284,7 +284,7 @@ test("native SDK completed raw arguments catch up to the loader's canonical inpu
   const part = replayed
     .at(0)
     ?.parts.find((candidate) => candidate.type === "tool-call");
-  expect(part?.arguments).toBe(raw);
+  expect(part?.arguments).toBe(JSON.stringify(input));
   expect(part?.input).toEqual(input);
   const shown: UIMessage[] = [
     {

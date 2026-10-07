@@ -59,7 +59,7 @@ const setup = (cut?: number) => {
     { preconnect: () => undefined },
   );
   const transport = createDurableChatTransport({
-    initialTurn: "settled",
+    initialTurn: { type: "settled" },
     threadId: THREAD_ID,
     initialMessages: [],
     sendUrl: "https://chat.test/chat",
@@ -149,7 +149,7 @@ describe("durable chat transport", () => {
     let requests = 0;
     let reloads = 0;
     const transport = createDurableChatTransport({
-      initialTurn: "settled",
+      initialTurn: { type: "settled" },
       threadId: THREAD_ID,
       initialMessages: [],
       sendUrl: "https://chat.test/chat",
@@ -182,7 +182,7 @@ describe("durable chat transport", () => {
     let probes = 0;
     const delays: number[] = [];
     const transport = createDurableChatTransport({
-      initialTurn: "settled",
+      initialTurn: { type: "settled" },
       threadId: THREAD_ID,
       initialMessages: [],
       sendUrl: "https://chat.test/chat",
@@ -226,7 +226,7 @@ describe("durable chat transport", () => {
       ],
     };
     const transport = createDurableChatTransport({
-      initialTurn: "settled",
+      initialTurn: { type: "settled" },
       threadId: THREAD_ID,
       initialMessages: [],
       sendUrl: "https://chat.test/chat",
@@ -253,6 +253,7 @@ describe("durable chat transport", () => {
 
   test("reloading a parked approval restores its card and resumes the same native turn once", async () => {
     const requests: unknown[] = [];
+    let reloads = 0;
     const restored = Promise.withResolvers<undefined>();
     const completed = Promise.withResolvers<undefined>();
     let loading: "idle" | "started" = "idle";
@@ -285,7 +286,7 @@ describe("durable chat transport", () => {
       ],
     };
     const transport = createDurableChatTransport({
-      initialTurn: "settled",
+      initialTurn: { type: "parked", runId: RUN_ID },
       threadId: THREAD_ID,
       initialMessages: [
         {
@@ -321,7 +322,9 @@ describe("durable chat transport", () => {
         resumeSnapshot,
       }),
       onReconnectChange: () => undefined,
-      onTranscript: () => undefined,
+      onTranscript: () => {
+        reloads += 1;
+      },
       onError: (error) => {
         restored.reject(error);
         completed.reject(error);
@@ -352,6 +355,7 @@ describe("durable chat transport", () => {
     client.attach();
     try {
       await restored.promise;
+      expect(reloads).toBe(0);
       expect(requests).toHaveLength(0);
       expect(client.getResumeState()).toEqual({
         threadId: THREAD_ID,
@@ -401,7 +405,7 @@ describe("durable chat transport", () => {
     const errors: Error[] = [];
     let reloads = 0;
     const transport = createDurableChatTransport({
-      initialTurn: "settled",
+      initialTurn: { type: "settled" },
       threadId: THREAD_ID,
       initialMessages: [],
       sendUrl: "https://chat.test/chat",
@@ -431,8 +435,44 @@ describe("durable chat transport", () => {
     expect(errors.at(0)?.message).toBe("Invalid chat rejoin response.");
     expect(reloads).toBe(0);
   });
-  test("a loader turn that settles before its first probe refreshes the transcript once", async () => {
-    for (const initialTurn of ["active", "settled"] as const) {
+  test("loader lifecycle refreshes changed server truth once and retains the same parked turn", async () => {
+    const parkedSnapshot = {
+      resumeState: { threadId: THREAD_ID, runId: RUN_ID },
+      pendingInterrupts: [{ id: "approval", reason: "tool_call" }],
+    };
+    const cases = [
+      {
+        initialTurn: { type: "active" },
+        resumeSnapshot: undefined,
+        expectedReloads: 1,
+      },
+      {
+        initialTurn: { type: "active" },
+        resumeSnapshot: parkedSnapshot,
+        expectedReloads: 1,
+      },
+      {
+        initialTurn: { type: "settled" },
+        resumeSnapshot: undefined,
+        expectedReloads: 0,
+      },
+      {
+        initialTurn: { type: "parked", runId: RUN_ID },
+        resumeSnapshot: undefined,
+        expectedReloads: 1,
+      },
+      {
+        initialTurn: { type: "parked", runId: "previous-run" },
+        resumeSnapshot: parkedSnapshot,
+        expectedReloads: 1,
+      },
+      {
+        initialTurn: { type: "parked", runId: RUN_ID },
+        resumeSnapshot: parkedSnapshot,
+        expectedReloads: 0,
+      },
+    ] as const;
+    for (const { initialTurn, resumeSnapshot, expectedReloads } of cases) {
       let reloads = 0;
       const transport = createDurableChatTransport({
         initialTurn,
@@ -449,7 +489,18 @@ describe("durable chat transport", () => {
         fetchClient: Object.assign(async () => response(0, undefined), {
           preconnect: () => undefined,
         }),
-        probe: async () => ({ type: "transcript", turnId: "turn-rejoin" }),
+        probe: async () => ({
+          type: "transcript",
+          turnId: "turn-rejoin",
+          ...(resumeSnapshot === undefined
+            ? {}
+            : {
+                resumeSnapshot: {
+                  resumeState: resumeSnapshot.resumeState,
+                  pendingInterrupts: [...resumeSnapshot.pendingInterrupts],
+                },
+              }),
+        }),
         onReconnectChange: () => undefined,
         onTranscript: () => {
           reloads += 1;
@@ -460,7 +511,7 @@ describe("durable chat transport", () => {
       });
       await transport.persistence.getItem(THREAD_ID);
       await transport.persistence.getItem(THREAD_ID);
-      expect(reloads).toBe(initialTurn === "active" ? 1 : 0);
+      expect(reloads).toBe(expectedReloads);
     }
   });
 });
