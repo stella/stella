@@ -6,7 +6,7 @@
  * of jobs. Driven against a real (PGlite) database with a stubbed queue.
  */
 
-import { panic } from "better-result";
+import { panic, Result } from "better-result";
 import {
   afterAll,
   afterEach,
@@ -16,6 +16,8 @@ import {
   test,
 } from "bun:test";
 import { eq, inArray, sql } from "drizzle-orm";
+
+import { rejectionOf } from "@stll/property-testing/rejection";
 
 import {
   entities,
@@ -27,6 +29,7 @@ import type { FieldContent } from "@/api/db/schema-validators";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { createBullMqJobId } from "@/api/lib/bullmq-job-id";
+import { FileDerivativeRepairError } from "@/api/lib/errors/tagged-errors";
 import {
   FILE_DERIVATIVE_KIND,
   requeueFileDerivative,
@@ -37,8 +40,15 @@ import { logger } from "@/api/lib/observability/logger";
 import type { createRootScopedDb } from "@/api/lib/root-scoped-db";
 import { DueSlot } from "@/api/lib/scheduler/due-slot";
 import type { SchedulerDb } from "@/api/lib/scheduler/types";
-import { installRecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
-import type { RecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
+import { SchedulerTaskFailure } from "@/api/lib/scheduler/types";
+import {
+  installRecordingAnalytics,
+  installRecordingLogger,
+} from "@/api/tests/helpers/recording-telemetry";
+import type {
+  RecordingAnalytics,
+  RecordingLogger,
+} from "@/api/tests/helpers/recording-telemetry";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
   getRlsFixture,
@@ -194,14 +204,17 @@ const readDerivativeStatus = async (fieldId: SafeId<"field">) => {
   return row?.content.type === "file" ? row.content.pdfDerivative : undefined;
 };
 
-const runRepair = async () => {
+const runRepair = async (
+  task = repairFileDerivatives,
+  signal = new AbortController().signal,
+) => {
   const job = await testDb.query.schedulerJobs.findFirst({
     where: { id: { eq: SCHEDULER_JOB_ID } },
   });
   if (!job) {
     panic("expected the repair scheduler job row");
   }
-  await repairFileDerivatives({
+  return await task({
     db: asTestRaw<SchedulerDb>(testDb),
     job,
     payload: job.payload,
@@ -209,7 +222,7 @@ const runRepair = async () => {
 
     runId: createSafeId<"schedulerJobRun">(),
     scheduleContinuation: () => undefined,
-    signal: new AbortController().signal,
+    signal,
     logger,
   });
 };
@@ -219,9 +232,11 @@ const jobIdsFor = (kind: string) =>
 
 describe("file derivative repair", () => {
   let analytics: RecordingAnalytics;
+  let logs: RecordingLogger;
 
   beforeEach(async () => {
     analytics = installRecordingAnalytics();
+    logs = installRecordingLogger();
     queued.length = 0;
     removedJobIds.length = 0;
     priorJobs.clear();
@@ -246,6 +261,7 @@ describe("file derivative repair", () => {
   // next test's sweep would pick it up along with its own.
   afterEach(async () => {
     analytics.restore();
+    logs.restore();
     if (seededFieldIds.length > 0) {
       await testDb.delete(fields).where(inArray(fields.id, seededFieldIds));
       await testDb
@@ -462,27 +478,124 @@ describe("file derivative repair", () => {
   // A row whose repair throws stops the tick (the queue may be down), but the
   // cursor still moves past it: the next tick continues behind the row
   // instead of replaying the same failure forever and starving what follows.
-  test("advances the cursor past a row whose repair throws", async () => {
-    const failing = await seedFileField();
-    const stuck = await seedFileField();
-    failingAddJobIds.add(
-      createBullMqJobId(ids.wsA1, failing, FILE_DERIVATIVE_KIND.PDF),
-    );
+  test.each([0, 1, 2])(
+    "reports a failed repair at row %i and advances its cursor",
+    async (failureIndex) => {
+      const seeded: SafeId<"field">[] = [];
+      for (let index = 0; index < 3; index += 1) {
+        seeded.push(await seedFileField());
+      }
+      const failing = seeded.at(failureIndex) ?? panic("expected failure row");
+      failingAddJobIds.add(
+        createBullMqJobId(ids.wsA1, failing, FILE_DERIVATIVE_KIND.PDF),
+      );
 
-    await runRepair();
+      const outcome = await runRepair();
+      if (!outcome || !Result.isError(outcome)) {
+        panic("expected a failed repair task result");
+      }
+      expect(outcome.error).toBeInstanceOf(SchedulerTaskFailure);
+      expect(outcome.error.cause).toBeInstanceOf(FileDerivativeRepairError);
 
-    expect(queued).toHaveLength(0);
-    expect(
-      analytics
-        .exceptions()
-        .some(
-          ({ properties }) =>
-            properties["error.class"] === "FileDerivativeRepairError",
+      expect(queued.map(({ data }) => data.fieldId)).toEqual(
+        seeded.slice(0, failureIndex),
+      );
+      const failures = logs.records.filter(
+        ({ message }) => message === "file_derivative.repair_failed",
+      );
+      expect(failures).toHaveLength(1);
+      expect(failures.at(0)?.severityText).toBe("ERROR");
+      expect(failures.at(0)?.attributes).toMatchObject({
+        "failure.grade": "defect",
+        stage: "requeue",
+      });
+      expect(
+        logs.records.find(
+          ({ message }) => message === "scheduler.file_derivatives_repaired",
+        )?.attributes,
+      ).toMatchObject({ "fileDerivatives.failed": 1 });
+      expect(
+        analytics
+          .exceptions()
+          .some(
+            ({ properties }) =>
+              properties["error.class"] === "FileDerivativeRepairError",
+          ),
+      ).toBe(true);
+
+      const job = await testDb.query.schedulerJobs.findFirst({
+        columns: { payload: true },
+        where: { id: { eq: SCHEDULER_JOB_ID } },
+      });
+      expect(job?.payload).toEqual({ cursor: failing });
+      queued.length = 0;
+      logs.records.length = 0;
+      const recovered = await runRepair();
+      expect(recovered && Result.isError(recovered)).not.toBe(true);
+
+      expect(queued.map(({ data }) => data.fieldId)).toEqual(
+        seeded.slice(failureIndex + 1),
+      );
+      expect(
+        logs.records.filter(
+          ({ message }) => message === "file_derivative.repair_failed",
         ),
-    ).toBe(true);
+      ).toHaveLength(0);
+    },
+  );
 
-    await runRepair();
+  test("a canceled requeue emits no repair failure or cursor update", async () => {
+    await seedFileField();
+    const controller = new AbortController();
+    const task = createRepairFileDerivativesTask({
+      requeue: async () => {
+        controller.abort();
+        throw new FileDerivativeRepairError({
+          message: "Queue write refused",
+          cause: undefined,
+        });
+      },
+    });
 
-    expect(queued.map(({ data }) => data.fieldId)).toEqual([stuck]);
+    expect(await rejectionOf(runRepair(task, controller.signal))).toMatchObject(
+      {
+        name: "AbortError",
+      },
+    );
+    expect(
+      logs.records.filter(
+        ({ message }) => message === "file_derivative.repair_failed",
+      ),
+    ).toHaveLength(0);
+    expect(analytics.exceptions()).toHaveLength(0);
+    const job = await testDb.query.schedulerJobs.findFirst({
+      columns: { payload: true },
+      where: { id: { eq: SCHEDULER_JOB_ID } },
+    });
+    expect(job?.payload).toEqual({ cursor: null });
+  });
+
+  test("a transient queue failure stays WARN and fails the task", async () => {
+    await seedFileField();
+    const task = createRepairFileDerivativesTask({
+      requeue: async () => {
+        throw Object.assign(new Error("Redis connection reset"), {
+          code: "ECONNRESET",
+        });
+      },
+    });
+
+    const outcome = await runRepair(task);
+    expect(outcome && Result.isError(outcome)).toBe(true);
+    const failures = logs.records.filter(
+      ({ message }) => message === "file_derivative.repair_failed",
+    );
+    expect(failures).toHaveLength(1);
+    expect(failures.at(0)?.severityText).toBe("WARN");
+    expect(failures.at(0)?.attributes).toMatchObject({
+      "failure.grade": "transient",
+      "failure.reason": "network_reset",
+    });
+    expect(analytics.exceptions()).toHaveLength(0);
   });
 });

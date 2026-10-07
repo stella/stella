@@ -28,13 +28,21 @@ import {
 import type { FileDerivativeKind } from "@/api/lib/file-derivative-queue";
 import { shouldGenerateImageThumbnail } from "@/api/lib/files/image-derivative";
 import { shouldGeneratePdfDerivative } from "@/api/lib/files/pdf-derivative-policy";
+import { failureSink } from "@/api/lib/observability/failure";
+import { observeFailure } from "@/api/lib/observability/observe-failure";
 import {
   brandPersistedFieldId,
   brandPersistedUserId,
 } from "@/api/lib/safe-id-boundaries";
 import type { SchedulerDb, SchedulerTask } from "@/api/lib/scheduler/types";
+import { SchedulerTaskFailure } from "@/api/lib/scheduler/types";
 
 export const REPAIR_FILE_DERIVATIVES_TASK = "files.repairDerivatives" as const;
+
+const REPAIR_FAILED = failureSink({
+  event: "file_derivative.repair_failed",
+  expected: [],
+});
 
 /** Fields read per tick. The cursor below carries the scan across ticks. */
 const SCAN_PAGE_SIZE = 200;
@@ -390,14 +398,17 @@ export const createRepairFileDerivativesTask =
     let scanned = 0;
     let unrecognized = 0;
 
-    const repairFrom = async (index: number): Promise<void> => {
+    const repairFrom = async (
+      index: number,
+    ): Promise<Result<void, FileDerivativeRepairError>> => {
       const row = page.at(index);
       if (row === undefined || signal.aborted || requeued >= REQUEUE_LIMIT) {
-        return;
+        return Result.ok(undefined);
       }
       const outcome = await Result.tryPromise(
         async () => await requeueRow(row, requeue),
       );
+      signal.throwIfAborted();
       // The row counts as scanned either way: the cursor must advance past a
       // row whose repair fails deterministically, or the sweep pins itself
       // there, re-captures every tick, and starves every field after it.
@@ -405,14 +416,20 @@ export const createRepairFileDerivativesTask =
       if (Result.isError(outcome)) {
         // The queue is unreachable, or this one row cannot be repaired. Stop
         // the tick; the next full pass retries the row.
-        captureError(
-          new FileDerivativeRepairError({
-            message: "Requeueing one stuck file derivative failed",
-            cause: outcome.error,
-          }),
-          { fieldId: row.fieldId, workspaceId: row.workspaceId },
-        );
-        return;
+        const error = new FileDerivativeRepairError({
+          message: "Requeueing one stuck file derivative failed",
+          cause: outcome.error,
+        });
+        observeFailure(error, {
+          sink: REPAIR_FAILED,
+          ctx: {
+            entityId: row.entityId,
+            jobId: job.id,
+            stage: "requeue",
+            workspaceId: row.workspaceId,
+          },
+        });
+        return Result.err(error);
       }
       requeued += outcome.value.requeued;
       unrecognized += outcome.value.unrecognized.length;
@@ -427,10 +444,10 @@ export const createRepairFileDerivativesTask =
           workspaceId: row.workspaceId,
         });
       }
-      await repairFrom(index + 1);
+      return await repairFrom(index + 1);
     };
 
-    await repairFrom(0);
+    const repair = await repairFrom(0);
 
     // Advance only over rows this tick actually visited, so a page cut short
     // by the requeue bound or an unreachable queue is resumed, not skipped.
@@ -446,7 +463,17 @@ export const createRepairFileDerivativesTask =
       "fileDerivatives.requeued": requeued,
       "fileDerivatives.scanned": scanned,
       "fileDerivatives.unrecognized": unrecognized,
+      "fileDerivatives.failed": Result.isError(repair) ? 1 : 0,
     });
+    if (Result.isError(repair)) {
+      return Result.err(
+        new SchedulerTaskFailure({
+          message: repair.error.message,
+          cause: repair.error,
+        }),
+      );
+    }
+    return Result.ok(undefined);
   };
 
 export const repairFileDerivatives = createRepairFileDerivativesTask();
