@@ -160,7 +160,7 @@ const scanSource = (file: string, source: string): HistoryWalkFinding[] => {
 };
 
 const mightWalkHistory = (source: string): boolean =>
-  source.includes("git") &&
+  /git/iu.test(source) &&
   /\b(?:annotate|blame|log|rev-list|shortlog|whatchanged)\b/u.test(source);
 
 export const findHistoryWalks = (
