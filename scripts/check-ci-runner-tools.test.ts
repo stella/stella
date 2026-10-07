@@ -719,3 +719,35 @@ test("the deploy runner profile comes from the repository's toolchain lock", () 
     rmSync(root, { recursive: true, force: true });
   }
 });
+
+test("a deploy runner job gets exactly the tools its repository's toolchain lock pins", () => {
+  const jobs = {
+    deploy: {
+      "runs-on": ["self-hosted", "mini-infra-deploy"],
+      steps: [{ run: "jq --version" }],
+    },
+  };
+  withFixture(
+    {
+      jobs,
+      files: {
+        "ci/deploy-runner/toolchain.lock":
+          "artifact jq 1.8.2 bbb https://example.invalid/jq\n",
+      },
+    },
+    (root) => expect(problems(root)).toEqual([]),
+  );
+  withFixture(
+    {
+      jobs,
+      files: {
+        "ci/deploy-runner/toolchain.lock":
+          "artifact terraform 1.15.9 ccc https://example.invalid/t.zip\n",
+      },
+    },
+    (root) => expect(problems(root).length).toBeGreaterThan(0),
+  );
+  withFixture({ jobs }, (root) =>
+    expect(problems(root).length).toBeGreaterThan(0),
+  );
+});
