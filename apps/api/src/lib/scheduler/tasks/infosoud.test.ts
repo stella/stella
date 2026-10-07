@@ -3,6 +3,7 @@ import { expect, mock, test } from "bun:test";
 import type { SQL } from "drizzle-orm";
 import { PgDialect } from "drizzle-orm/pg-core";
 
+import { formatSpisZnCanonical } from "@stll/infosoud";
 import type { CaseSearchResultWithHearings } from "@stll/infosoud";
 import { rejectionOf } from "@stll/property-testing/rejection";
 
@@ -328,7 +329,9 @@ for (const reason of INFO_SOUD_SYNC_FAILURE_REASONS) {
       );
       const task = createSyncInfoSoudTrackedCasesTask({
         searchCaseWithHearings: async ({ spisZn }) => {
-          visited.push(String(spisZn));
+          visited.push(
+            typeof spisZn === "string" ? spisZn : formatSpisZnCanonical(spisZn),
+          );
           return visited.length - 1 === failureIndex
             ? await failure.lookup()
             : lookup;
