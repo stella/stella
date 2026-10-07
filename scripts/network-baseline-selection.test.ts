@@ -35,7 +35,7 @@ const replay = ({
   const bin = path.join(directory, "bin");
   mkdirSync(bin);
   mkdirSync(path.join(directory, "apps/web/e2e"), { recursive: true });
-  writeFileSync(path.join(directory, "walk"), `${walk.path.join("\n")}\n`);
+  writeFileSync(path.join(directory, "walk"), `${walk.join("\n")}\n`);
   writeFileSync(
     path.join(directory, "responses.json"),
     JSON.stringify({ ...fixture.responses, ...overrides }),
@@ -149,6 +149,11 @@ for (const endpoint of [
 
 const deliveredRun = fixture.responses["run-37564499381"];
 for (const change of [
+  {
+    path: ".github/workflows/ci.yml",
+    event: "pull_request",
+    head_branch: "feature",
+  },
   { path: ".github/workflows/ci.yml" },
   { event: "pull_request" },
   { conclusion: "failure" },
