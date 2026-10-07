@@ -35,6 +35,7 @@ import { locateQuote } from "@/api/lib/lists/verification/quote-locate";
 import { ListVerificationRunCapError } from "@/api/lib/lists/verification/run-caps";
 import type { generateTanStackObjectForRole } from "@/api/lib/tanstack-ai-generate";
 import { setRuntimeModeForTesting } from "@/api/runtime-mode";
+import { testModelAdmission } from "@/api/tests/helpers/model-dispatch-admission";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 type Captured = { tenantWorkspaceIds: readonly string[]; messages: unknown[] };
@@ -67,6 +68,7 @@ if (access.status !== "enabled") {
   throw new Error("Fixture requires access");
 }
 const deps: VerificationModelDeps = {
+  admission: testModelAdmission(organizationId),
   accessProof: access.proof,
   refreshAccessProof: async () => access.proof,
   checkRunBudget: async () => Result.ok(),

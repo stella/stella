@@ -57,6 +57,7 @@ import {
 import {
   parseCiCoverageLog,
   type CiCoverageEvidence,
+  type CiRunEvidence,
 } from "./merge-bar-ci-coverage";
 import { RATCHET_METRICS } from "./ratchet";
 import ratchetDefinitionPaths from "./ratchet-definition-paths.json" with { type: "json" };
@@ -2165,16 +2166,21 @@ env:
     const expected = {
       "merge-bar-coverage-pilot-pr-37632840538.log": pilot,
       "merge-bar-coverage-pilot-pr-37636655670.log": pilot,
-      "merge-bar-coverage-normal-arm-37635149518.log": { profile: "normal-v1" },
+      "merge-bar-coverage-queue-validation-37635149518.log": {
+        profile: "queue-validation",
+      },
       "merge-bar-coverage-merge-group-37635202900.log": {
         profile: "normal-v1",
       },
       "merge-bar-coverage-merge-group-37635199875.log": {
         profile: "normal-v1",
       },
+      "merge-bar-coverage-queue-validation-37646416358.log": {
+        profile: "queue-validation",
+      },
       // Retain the previously saved single-line env envelope too.
       "merge-bar-pilot-coverage.log": pilot,
-    } satisfies Record<string, CiCoverageEvidence>;
+    } satisfies Record<string, CiRunEvidence>;
     const directory = path.join(REPO_ROOT, "scripts/fixtures");
     expect(
       readdirSync(directory)
@@ -2195,6 +2201,149 @@ env:
       ).toBe(true);
       expect(result.isOk() && result.value, file).toEqual(evidence);
     }
+  });
+
+  describe("an ejected head's queue validation", () => {
+    // Real runs of one head: the pilot-fast coverage run, then the pull_request
+    // `enqueued` validation that outlived its ejected merge-queue entry.
+    const COVERAGE_RUN = 37_636_655_670;
+    const VALIDATION_RUN = 37_646_416_358;
+    const fixture = (file: string) =>
+      parseCiCoverageLog(
+        readFileSync(path.join(REPO_ROOT, "scripts/fixtures", file), "utf-8"),
+      );
+    const logs = new Map([
+      [COVERAGE_RUN, fixture("merge-bar-coverage-pilot-pr-37636655670.log")],
+      [
+        VALIDATION_RUN,
+        fixture("merge-bar-coverage-queue-validation-37646416358.log"),
+      ],
+    ]);
+    const source = readFileSync(
+      path.join(REPO_ROOT, ".github/workflows/ci.yml"),
+      "utf-8",
+    );
+    const jobs = readFastRequiredJobs(source) ?? [];
+    const fast = pilotFastJobs(Bun.YAML.parse(source));
+    if (fast.status !== "valid") {
+      panic(fast.message);
+    }
+    const fastJobs = fast.jobs;
+    const plan = new Map(
+      jobs.flatMap(({ scope }) =>
+        scope.type === "selector" ? [[scope.variable, true] as const] : [],
+      ),
+    );
+    // The validation run plans and aggregates; every other job is skipped.
+    const runJobs = new Map<number, RunJob[]>([
+      [
+        COVERAGE_RUN,
+        jobs
+          .filter(({ id }) => fastJobs.includes(id))
+          .map(({ id }) => ({ name: id, conclusion: "success" })),
+      ],
+      [
+        VALIDATION_RUN,
+        jobs.map(({ id }) => ({
+          name: id,
+          conclusion: id === "ci-result" ? "success" : "skipped",
+        })),
+      ],
+    ]);
+    const ciResult = (id: number, conclusion = "success") => ({
+      id,
+      name: "ci-result",
+      status: "completed",
+      conclusion,
+    });
+    const evaluate = (
+      ciResults: ReturnType<typeof ciResult>[],
+      overrides: Partial<Parameters<typeof checkGreenResultFreshness>[0]> = {},
+    ) => {
+      const coverageReads: number[] = [];
+      const snapshot = passingSnapshot();
+      const result = checkGreenResultFreshness({
+        ...readers({ status: "ahead", ahead_by: 1, files: [] }),
+        checkRuns: [
+          ...snapshot.checkRuns.filter(({ name }) => name !== "ci-result"),
+          ...ciResults,
+        ],
+        // Check-run ids stand in for their workflow runs here.
+        readWorkflowRun: (checkRunId: number) => ({ ...run, id: checkRunId }),
+        readBaseComparison: () => ({ status: "ahead", ahead_by: 1, files: [] }),
+        readBaseWorkflow: () => source,
+        runSelector: () => Result.ok(plan),
+        readRunCoverage: (runId: number) => {
+          coverageReads.push(runId);
+          return logs.get(runId) ?? panic(`unexpected run ${runId}`);
+        },
+        readRunJobs: (runId: number) =>
+          runJobs.get(runId) ?? panic(`unexpected run ${runId}`),
+        ...overrides,
+      });
+      return { result, coverageReads };
+    };
+
+    test("the real logs carry the evidence this relies on", () => {
+      const evidence = (runId: number) => {
+        const log = logs.get(runId);
+        return log?.match({
+          ok: (value): CiRunEvidence | string => value,
+          err: (error) => error.message,
+        });
+      };
+      expect(evidence(VALIDATION_RUN)).toEqual({ profile: "queue-validation" });
+      expect(evidence(COVERAGE_RUN)).toEqual({
+        profile: "pilot-fast-v1",
+        jobs: fastJobs,
+      });
+    });
+
+    test("is judged by the coverage run it re-checked", () => {
+      const { result, coverageReads } = evaluate([
+        ciResult(COVERAGE_RUN),
+        ciResult(VALIDATION_RUN),
+      ]);
+      expect(result.isOk(), result.isErr() ? result.error.message : "").toBe(
+        true,
+      );
+      expect(coverageReads).toEqual([VALIDATION_RUN, COVERAGE_RUN]);
+    });
+
+    test("without a green run below it, refuses instead of trusting skipped jobs", () => {
+      const alone = evaluate([ciResult(VALIDATION_RUN)]).result;
+      expect(alone.isErr() && alone.error.message).toContain(
+        "no green ci-result run below the queue validation covers this head",
+      );
+      for (const conclusion of ["failure", "cancelled", "skipped"]) {
+        const { result, coverageReads } = evaluate([
+          ciResult(COVERAGE_RUN, conclusion),
+          ciResult(VALIDATION_RUN),
+        ]);
+        expect(result.isErr(), conclusion).toBe(true);
+        expect(coverageReads).toEqual([VALIDATION_RUN]);
+      }
+    });
+
+    test("the coverage run below it still faces main's new plan", () => {
+      const missing = new Map(runJobs);
+      missing.set(
+        COVERAGE_RUN,
+        (runJobs.get(COVERAGE_RUN) ?? []).filter(
+          ({ name }) => name !== "ci-tests",
+        ),
+      );
+      const { result } = evaluate(
+        [ciResult(COVERAGE_RUN), ciResult(VALIDATION_RUN)],
+        {
+          readRunJobs: (runId: number) =>
+            missing.get(runId) ?? panic(`unexpected run ${runId}`),
+        },
+      );
+      expect(result.isErr() && result.error.message).toContain(
+        "STALE_PLAN: main's CI plan now selects ci-tests",
+      );
+    });
   });
 
   test("CI result coverage evidence reads producer-shaped environment logs", () => {
@@ -3221,7 +3370,9 @@ case "$*" in
   *commits/main*) printf '%s\\n' "$FIXTURE_MAIN_TIP";;
   *contents/scripts/ratchet-definition-paths.json*) printf '%s\\n' "$FIXTURE_RATCHET_DEFINITIONS";;
   *contents/.github/workflows/ci.yml*) printf '%s\\n' "$FIXTURE_WORKFLOW";;
+  *'actions/runs/1/jobs'*'select(.name == "ci-result") | .id'*) printf '%s\\n' '2';;
   *actions/runs/1/jobs*) printf '%s\\n' "$FIXTURE_RUN_JOBS";;
+  *actions/jobs/2/logs*) printf '%s\\n' "$FIXTURE_COVERAGE_LOG";;
   *reviewThreads*) printf '%s\\n' '{"nodes":[],"pageInfo":{"hasNextPage":false}}';;
   *rules/branches/main*) printf '%s\\n' '[{"type":"required_status_checks","parameters":{"required_status_checks":[{"context":"ci-result"}]}},{"type":"merge_queue","parameters":{}}]';;
   *'actions/runs?head_sha='*) ;;
@@ -3308,6 +3459,13 @@ esac
         FIXTURE_RUN_JOBS: runJobs
           .map(({ name, conclusion }) => `${name}\t${conclusion}`)
           .join("\n"),
+        FIXTURE_COVERAGE_LOG: readFileSync(
+          path.join(
+            REPO_ROOT,
+            "scripts/fixtures/merge-bar-coverage-merge-group-37635202900.log",
+          ),
+          "utf-8",
+        ),
       },
       stdout: "pipe",
       stderr: "pipe",

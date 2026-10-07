@@ -10,7 +10,8 @@
 
 import type { AnyNode } from "domhandler";
 
-import type { Block } from "@/api/handlers/case-law/document-ast";
+// parser-output-unchanged: imports the document AST from its package owner
+import type { Block } from "@stll/legal-ast/document-ast";
 
 import type { UnitPosition } from "./opinion-class";
 

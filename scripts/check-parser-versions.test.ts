@@ -270,6 +270,80 @@ test("a marker in another changed file does not exempt an unmarked parser change
   );
 });
 
+const deletedFacade = (facadeSource: string) => {
+  const base = fixture();
+  const facade = `${PARSERS}facade.ts`;
+  const parser = `${PARSERS}parser-a.ts`;
+  base.set(facade, facadeSource);
+  base.set(
+    parser,
+    'import { helper } from "./facade";\nexport const parseA = () => helper();\n',
+  );
+  const head = new Map(base);
+  head.delete(facade);
+  head.set(
+    parser,
+    "// parser-output-unchanged: imports helper directly from its owner\n" +
+      'import { helper } from "./shared-helper";\nexport const parseA = () => helper();\n',
+  );
+  return { base, head, facade, parser };
+};
+
+test("deleted modules containing only reexports need no parser version bump", () => {
+  for (const source of [
+    'export { helper } from "./shared-helper";\n',
+    '// facade\nexport { helper as helper } from "./shared-helper";\n',
+    '/* types too */\nexport type { Helper } from "./shared-helper";\nexport { helper } from "./shared-helper";\n',
+    'export * from "./shared-helper";\n',
+    'export type * from "./shared-helper";\nexport { helper } from "./shared-helper";\n',
+    'export /* const local = 1 */ { helper } /* comment */ from "./shared-helper";\n',
+    'export { type Helper, helper, } from "./shared-helper";\n',
+    'export type { Helper as Renamed } from "./shared-helper";\nexport { helper } from "./shared-helper";\n',
+
+    'export {\n helper,\n} from "./shared-helper"\n\n// trailing comment\n',
+  ]) {
+    const { base, head } = deletedFacade(source);
+    expect(changed(base, head)).toEqual([]);
+  }
+});
+
+test("deleted reexport modules with any local code still need a bump", () => {
+  for (const localCode of [
+    "export const local = 1;",
+    "const local = 1;",
+    "type Local = string;",
+    "export type Local = string;",
+    "declare const local: string;",
+    "const unused = '/* export */';",
+    "export default 1;",
+
+    "interface Local { value: string }",
+    'import "./shared-helper";',
+    "export { helper };",
+    'void "export * from ./shared-helper";',
+  ]) {
+    const { base, head, facade } = deletedFacade(
+      `export { helper } from "./shared-helper";\n${localCode}\n`,
+    );
+    expect(changed(base, head)).toEqual([
+      `test-a: parser version 1 must exceed base 1; changed: ${facade}`,
+    ]);
+  }
+});
+
+test("deleting a reexport module cannot exempt another unmarked parser change", () => {
+  const { base, head, parser } = deletedFacade(
+    'export { helper } from "./shared-helper";\n',
+  );
+  head.set(
+    parser,
+    'import { helper } from "./shared-helper";\nexport const parseA = () => helper();\n',
+  );
+  expect(changed(base, head)).toEqual([
+    `test-a: parser version 1 must exceed base 1; changed: ${parser}`,
+  ]);
+});
+
 test("registry additions are discovered automatically and still require versions", () => {
   const withoutC = fixture();
   const addedC = fixture({ adapters: ["A", "B", "C"] });

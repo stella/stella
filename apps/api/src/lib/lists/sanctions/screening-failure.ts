@@ -40,7 +40,7 @@ export type SanctionsScreeningFailureCause =
   | "matcher-unavailable"
   | "truncated-empty";
 
-export type SanctionsScreeningFailureStage =
+type SanctionsScreeningFailureStage =
   | "matcher-pool"
   | "public-matcher"
   | "list-screening"
@@ -67,7 +67,7 @@ const SCREENING_FAILURE_REASON = {
   operation: "unclassified",
 } as const satisfies Record<SanctionsScreeningFailureCause, FailureReason>;
 
-export class SanctionsScreeningFailure extends TaggedError(
+class SanctionsScreeningFailure extends TaggedError(
   "SanctionsScreeningFailure",
 )<{
   message: string;

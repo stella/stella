@@ -5,6 +5,7 @@ import { SERVER_ANALYTICS_EVENTS } from "@/api/lib/analytics/server-analytics";
 import { toSafeId } from "@/api/lib/branded-types";
 import { WorkflowIntegrationError } from "@/api/lib/errors/tagged-errors";
 import type { generateTanStackObjectForRole } from "@/api/lib/tanstack-ai-generate";
+import { testModelAdmission } from "@/api/tests/helpers/model-dispatch-admission";
 import {
   installRecordingAnalytics,
   installRecordingLogger,
@@ -31,6 +32,7 @@ const generate = async () =>
     abortSignal: AbortSignal.timeout(1000),
     justificationId: "justification_test",
     organizationId: toSafeId<"organization">("org_test"),
+    admission: testModelAdmission(toSafeId<"organization">("org_test")),
     pageNumber: 1,
     workspaceId: toSafeId<"workspace">("ws_test"),
     orgAIConfig: null,
