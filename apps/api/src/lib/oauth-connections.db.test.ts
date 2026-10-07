@@ -165,6 +165,10 @@ describe("resource-bound OAuth refresh", () => {
           await response.json(),
         );
         expect(tokens.scope.split(" ")).toContain("offline_access");
+        // The resource scopes granted at consent survive alongside it.
+        expect(tokens.scope.split(" ").toSorted()).toEqual(
+          requestedScope.split(" ").toSorted(),
+        );
         grant = {
           accessToken: tokens.access_token,
           refreshToken: tokens.refresh_token,
