@@ -93,7 +93,7 @@
     "@libpdf/core": "catalog:",
     "@litko/yara-x": "^0.7.2",
     "@modelcontextprotocol/server": "2.2.0",
-    "@openrouter/sdk": "0.13.67",
+    "@openrouter/sdk": "1.4.18",
     "@opentelemetry/api-logs": "^0.222.0",
     "@opentelemetry/exporter-logs-otlp-http": "^0.222.0",
     "@opentelemetry/resources": "^2.11.0",

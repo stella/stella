@@ -62,7 +62,7 @@
         "@libpdf/core": "catalog:",
         "@litko/yara-x": "^0.7.2",
         "@modelcontextprotocol/server": "2.2.0",
-        "@openrouter/sdk": "0.13.67",
+        "@openrouter/sdk": "1.4.18",
         "@opentelemetry/api-logs": "^0.222.0",
         "@opentelemetry/exporter-logs-otlp-http": "^0.222.0",
         "@opentelemetry/resources": "^2.11.0",
@@ -2294,7 +2294,7 @@
 
     "@oozcitak/util": ["@oozcitak/util@10.0.0", "", {}, "sha512-hAX0pT/73190NLqBPPWSdBVGtbY6VOhWYK3qqHqtXQ1gK7kS2yz4+ivsN07hpJ6I3aeMtKP6J6npsEKOAzuTLA=="],
 
-    "@openrouter/sdk": ["@openrouter/sdk@0.13.67", "", { "dependencies": { "zod": "^3.25.0 || ^4.0.0" } }, "sha512-kUVaFYA9Xehq67ndTk98i+tRLfYH/F6xSf/WuC8dsukBzcgBvYQydoeKw4Xe+peXG/wOVtDxukWt5SqzhbloKw=="],
+    "@openrouter/sdk": ["@openrouter/sdk@1.4.18", "", { "dependencies": { "zod": "^3.25.0 || ^4.0.0" } }, "sha512-I7Ojn6/7378oTl0tgankmAOG+c6VYNvUlpBUPF8xV/GNTLjZG8gEfVai9LCUJ0Kl+cR65RL48kda6ikXwDWw+Q=="],
 
     "@opentelemetry/api": ["@opentelemetry/api@1.9.1", "", {}, "sha512-gLyJlPHPZYdAk1JENA9LeHejZe1Ti77/pTeFm/nMXmQH/HFZlcS/O2XJB+L8fkbrNSqhdtlvjBVjxwUYanNH5Q=="],
 
