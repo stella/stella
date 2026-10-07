@@ -18,6 +18,7 @@ const workflow = v.parse(
             v.looseObject({
               name: v.optional(v.string()),
               run: v.optional(v.string()),
+              env: v.optional(v.record(v.string(), v.string())),
             }),
           ),
         ),
@@ -31,25 +32,74 @@ const workflow = v.parse(
     ),
   ),
 );
-const script =
+const plannerStep =
   workflow.jobs["ci-plan"]?.steps?.find(
     ({ name }) => name === "Check changed file scope",
-  )?.run ?? panic("Missing changed-file planner");
+  ) ?? panic("Missing changed-file planner");
+const script = plannerStep.run ?? panic("Missing planner script");
+const plannerEnv = plannerStep.env ?? panic("Missing planner env");
+const caller = v.parse(
+  v.looseObject({
+    on: v.looseObject({ schedule: v.array(v.object({ cron: v.string() })) }),
+    jobs: v.looseObject({
+      suites: v.looseObject({
+        uses: v.literal("./.github/workflows/ci.yml"),
+        with: v.looseObject({
+          heavy_only: v.literal(true),
+          depth: v.literal("full"),
+          sha: v.string(),
+        }),
+      }),
+    }),
+  }),
+  Bun.YAML.parse(
+    readFileSync(
+      new URL("../.github/workflows/main-heavy.yml", import.meta.url),
+      "utf-8",
+    ),
+  ),
+);
+
 type PlanOptions = {
   event: string;
   heavyOnly: boolean;
   versionChanged?: boolean;
   candidate?: string;
+  bindings?: Record<string, string>;
+  depth?: string;
 };
 const plan = ({
   event,
   heavyOnly,
   versionChanged = false,
   candidate = script,
+  bindings = plannerEnv,
+  depth = "full",
 }: PlanOptions) => {
   const directory = mkdtempSync(path.join(tmpdir(), "periodic-typecheck-"));
   const output = path.join(directory, "output");
   try {
+    const env = Object.fromEntries(
+      Object.entries(bindings).map(([name, expression]) => {
+        const value = evaluate(expression, {
+          values: {
+            "github.event_name": event,
+            "github.base_ref": "main",
+            "github.event.pull_request.title": "ordinary change",
+            "steps.depth.outputs.suite_depth": depth,
+            "inputs.heavy_only": heavyOnly,
+          },
+        });
+        if (
+          typeof value !== "string" &&
+          typeof value !== "boolean" &&
+          typeof value !== "number"
+        ) {
+          panic(`Planner env ${name} did not resolve to a scalar`);
+        }
+        return [name, String(value)];
+      }),
+    );
     const result = Bun.spawnSync(
       [
         "bash",
@@ -59,11 +109,7 @@ const plan = ({
       {
         env: {
           PATH: process.env["PATH"] ?? "",
-          EVENT_NAME: event,
-          BASE_REF: "main",
-          PR_TITLE: "ordinary change",
-          SUITE_DEPTH: "full",
-          HEAVY_ONLY: String(heavyOnly),
+          ...env,
           VERSION_DIFF: versionChanged ? "1" : "0",
           RUNNER_TEMP: directory,
           GITHUB_OUTPUT: output,
@@ -88,8 +134,14 @@ const plan = ({
     rmSync(directory, { recursive: true, force: true });
   }
 };
-const assertPeriodic = (candidate = script) => {
-  const required = plan({ event: "schedule", heavyOnly: true, candidate });
+const assertPeriodic = (candidate = script, bindings = plannerEnv) => {
+  const required = plan({
+    event: "schedule",
+    heavyOnly: caller.jobs.suites.with.heavy_only,
+    depth: caller.jobs.suites.with.depth,
+    candidate,
+    bindings,
+  });
   expect(
     required,
     "non-release scheduled heavy runs must plan the full compiler",
@@ -98,7 +150,7 @@ const assertPeriodic = (candidate = script) => {
     evaluate(workflow.jobs["release-typecheck"]?.if ?? "false", {
       values: {
         "github.event_name": "schedule",
-        "inputs.heavy_only": true,
+        "inputs.heavy_only": caller.jobs.suites.with.heavy_only,
         "needs.ci-plan.outputs.release_typecheck_required": required,
         "needs.ci-plan.outputs.trusted": "true",
         "needs.ci-plan.outputs.run_required": "true",
@@ -109,22 +161,6 @@ const assertPeriodic = (candidate = script) => {
 };
 
 test("hourly main-heavy plans and runs release typechecks without a VERSION change", () => {
-  const caller = v.parse(
-    v.looseObject({
-      on: v.looseObject({ schedule: v.array(v.object({ cron: v.string() })) }),
-      jobs: v.looseObject({
-        suites: v.looseObject({
-          with: v.looseObject({ heavy_only: v.literal(true) }),
-        }),
-      }),
-    }),
-    Bun.YAML.parse(
-      readFileSync(
-        new URL("../.github/workflows/main-heavy.yml", import.meta.url),
-        "utf-8",
-      ),
-    ),
-  );
   expect(
     caller.on.schedule.some(({ cron }) => /^\d+ \* \* \* \*$/u.test(cron)),
   ).toBe(true);
@@ -142,4 +178,14 @@ test("restoring VERSION-only planning loses the non-release compiler trigger", (
   expect(() => assertPeriodic(mutant)).toThrow(
     "non-release scheduled heavy runs must plan the full compiler",
   );
+});
+
+test("replacing the caller event binding with workflow_call loses the periodic trigger", () => {
+  expect(plannerEnv["EVENT_NAME"]).toMatch(/^\$\{\{ github\.event_name \}\}$/u);
+  expect(() =>
+    assertPeriodic(script, {
+      ...plannerEnv,
+      EVENT_NAME: "'workflow_call'",
+    }),
+  ).toThrow("non-release scheduled heavy runs must plan the full compiler");
 });
