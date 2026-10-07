@@ -7,7 +7,7 @@ import type {
 
 import { ineligibleExpressionLabelKey } from "@/features/statutes/statute-expression";
 import { useFormatter } from "@/i18n/formatting-context";
-import { formatStatedWindow } from "@/lib/statute-format";
+import { formatStatedWindow } from "@/lib/statutes/statute-format";
 
 type StatedWindow = {
   versionValidFrom: string | null;

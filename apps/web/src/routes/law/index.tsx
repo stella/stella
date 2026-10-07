@@ -66,7 +66,7 @@ import {
   createPublicLawHead,
 } from "@/lib/public-law-seo";
 import { ensureRouteQueryData } from "@/lib/react-query";
-import { formatValidityDate } from "@/lib/statute-format";
+import { formatValidityDate } from "@/lib/statutes/statute-format";
 import {
   type LawScope,
   lawHomeDescriptor,

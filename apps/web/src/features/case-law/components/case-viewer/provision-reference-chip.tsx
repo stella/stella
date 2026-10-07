@@ -21,9 +21,9 @@ import type { ProvisionGroup } from "@/features/case-law/components/case-viewer/
 import type { ResolvedCitedStatute } from "@/features/case-law/queries/provisions";
 import { useFormatter } from "@/i18n/formatting-context";
 import { detached } from "@/lib/detached";
-import { provisionPreviewOptions } from "@/lib/provision-preview";
-import { formatValidityRange } from "@/lib/statute-format";
-import { createStatuteLinkTarget } from "@/lib/statute-route";
+import { provisionPreviewOptions } from "@/lib/statutes/provision-preview";
+import { formatValidityRange } from "@/lib/statutes/statute-format";
+import { createStatuteLinkTarget } from "@/lib/statutes/statute-route";
 
 type ProvisionDocument = Pick<
   ResolvedCitedStatute,

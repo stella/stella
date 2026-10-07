@@ -17,7 +17,7 @@ import type { api } from "@/lib/api";
 import { optionalArray } from "@/lib/arrays";
 import { detached } from "@/lib/detached";
 import type { PublicLawData } from "@/lib/public-law-api";
-import { formatValidityDate } from "@/lib/statute-format";
+import { formatValidityDate } from "@/lib/statutes/statute-format";
 
 /** One decision citing the provision, as the citing-decisions read answers it. */
 export type CitingDecisionRow = PublicLawData<

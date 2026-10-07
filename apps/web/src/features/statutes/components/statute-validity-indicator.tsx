@@ -12,7 +12,7 @@ import {
   type StatuteDisplayStatus,
 } from "@/features/statutes/statute-status";
 import { useFormatter } from "@/i18n/formatting-context";
-import { formatValidityRange } from "@/lib/statute-format";
+import { formatValidityRange } from "@/lib/statutes/statute-format";
 
 const STATUS_TONE = {
   current: "success",

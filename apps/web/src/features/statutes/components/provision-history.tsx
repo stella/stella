@@ -29,8 +29,8 @@ import {
   EM_DASH,
   formatValidityDate,
   formatValidityRange,
-} from "@/lib/statute-format";
-import { createStatuteLinkTarget } from "@/lib/statute-route";
+} from "@/lib/statutes/statute-format";
+import { createStatuteLinkTarget } from "@/lib/statutes/statute-route";
 
 // The history marks its diff only; it carries no find.
 const NO_ACTIVE_MATCH = -1;

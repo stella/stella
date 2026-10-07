@@ -62,8 +62,8 @@ import { prepareStatuteReader } from "@/features/statutes/statute-reader-blocks"
 import type { StatuteMasthead as StatuteMastheadData } from "@/features/statutes/statute-reader-blocks";
 import { useFormatter } from "@/i18n/formatting-context";
 import type { TranslationKey } from "@/i18n/types";
-import { provisionInVersionOptions } from "@/lib/provision-preview";
-import { formatValidityDate } from "@/lib/statute-format";
+import { provisionInVersionOptions } from "@/lib/statutes/provision-preview";
+import { formatValidityDate } from "@/lib/statutes/statute-format";
 
 const READER_STYLE = {
   fontFamily: "var(--reader-body-font)",

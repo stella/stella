@@ -21,7 +21,7 @@ import {
 } from "@/features/statutes/provision-inspector.logic";
 import { useSessionStorage } from "@/hooks/use-session-storage";
 import { useFormatter } from "@/i18n/formatting-context";
-import { formatValidityDate } from "@/lib/statute-format";
+import { formatValidityDate } from "@/lib/statutes/statute-format";
 
 const QUESTION_MAX_LENGTH = 2000;
 

@@ -19,7 +19,10 @@ import {
   type StatuteDisplayStatus,
 } from "@/features/statutes/statute-status";
 import { useFormatter } from "@/i18n/formatting-context";
-import { formatValidityDate, formatValidityRange } from "@/lib/statute-format";
+import {
+  formatValidityDate,
+  formatValidityRange,
+} from "@/lib/statutes/statute-format";
 
 const ROW_LABELLED_STATUSES: ReadonlySet<StatuteDisplayStatus> = new Set([
   "repealed",

@@ -19,7 +19,7 @@ import {
   useChatDraftStore,
 } from "@/lib/chat-draft-store";
 import { getChatThreadKey } from "@/lib/chat-thread-ref";
-import { formatStatuteCitation } from "@/lib/statute-format";
+import { formatStatuteCitation } from "@/lib/statutes/statute-format";
 
 /**
  * The document a reader is marking, in the terms a citation and a chat

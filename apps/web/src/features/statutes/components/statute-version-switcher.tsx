@@ -13,7 +13,7 @@ import {
 
 import { ineligibleExpressionLabelKey } from "@/features/statutes/statute-expression";
 import { useFormatter } from "@/i18n/formatting-context";
-import { formatValidityRange } from "@/lib/statute-format";
+import { formatValidityRange } from "@/lib/statutes/statute-format";
 
 export type StatuteVersion = LegislationExpressionEligibility & {
   id: string;

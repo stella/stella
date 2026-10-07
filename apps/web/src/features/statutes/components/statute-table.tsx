@@ -64,7 +64,7 @@ import type {
 } from "@/features/statutes/statute-columns.logic";
 import { statuteTabId } from "@/features/statutes/statute-inspector.logic";
 import { useFormatter } from "@/i18n/formatting-context";
-import { EM_DASH, formatValidityDate } from "@/lib/statute-format";
+import { EM_DASH, formatValidityDate } from "@/lib/statutes/statute-format";
 
 /** The icon each statute column wears in its header menu and the chooser. */
 export const STATUTE_COLUMN_ICONS = {
