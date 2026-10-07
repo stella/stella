@@ -15,9 +15,17 @@ import {
   createSanctionsMatcherPool,
   SANCTIONS_MATCHER_CONFIG,
 } from "./matcher-pool";
+import type { MatcherWorkOutcome } from "./matcher-pool";
 import type { SanctionsMatcherRequest } from "./matcher-protocol";
+import type {
+  SanctionsMatcherFailureCause,
+  reportSanctionsScreeningFailure,
+} from "./screening-failure";
 import { createMatcherTestClock } from "./test-fixtures/matcher-test-clock";
 import { recordingMatcherWorker } from "./test-fixtures/recording-matcher-worker";
+
+const outcomeValue = <T>(outcome: MatcherWorkOutcome<T>): T | null =>
+  outcome.status === "completed" ? outcome.value : null;
 
 const MATCHER_WORK_BUDGET = 2_000_000;
 const MAXIMUM_TRANSFER_ENTRIES = 1000;
@@ -63,7 +71,9 @@ for (const fault of ["hang", "crash"] as const) {
     const clock = createMatcherTestClock();
     const entered = Promise.withResolvers<undefined>();
     const { port1, port2 } = new MessageChannel();
-    port1.once("message", () => entered.resolve(undefined));
+    port1.once("message", () => {
+      entered.resolve(undefined);
+    });
     const crashed = Promise.withResolvers<undefined>();
     const pool = createSanctionsMatcherPool({
       deadlineMs: 150,
@@ -84,15 +94,17 @@ for (const fault of ["hang", "crash"] as const) {
               )
             : actualWorker();
         if (spawned === 1) {
-          worker.once("exit", () => crashed.resolve(undefined));
+          worker.once("exit", () => {
+            crashed.resolve(undefined);
+          });
         }
         return worker;
       },
     });
     try {
-      const failed = pool.run(
-        async (session) => await session.match(request("Acme Trading")),
-      );
+      const failed = pool
+        .run(async (session) => await session.match(request("Acme Trading")))
+        .then(outcomeValue);
       await entered.promise;
       // Reverting to wall-clock scheduling fails here before any worker timing matters.
       expect(clock.pending()).toEqual([150]);
@@ -103,11 +115,13 @@ for (const fault of ["hang", "crash"] as const) {
       }
       expect(await failed).toBeNull();
       expect(clock.pending()).toEqual([]);
-      const next = await pool.run(
-        async (session) => await session.match(request("Acme Trading")),
-        // Recycling starts a cold worker; retain the short fault deadline above.
-        { deadlineMs: SANCTIONS_MATCHER_CONFIG.warmupDeadlineMs },
-      );
+      const next = await pool
+        .run(
+          async (session) => await session.match(request("Acme Trading")),
+          // Recycling starts a cold worker; retain the short fault deadline above.
+          { deadlineMs: SANCTIONS_MATCHER_CONFIG.warmupDeadlineMs },
+        )
+        .then(outcomeValue);
       expect(next?.status).toBe("screened");
       expect(spawned).toBe(2);
     } finally {
@@ -131,7 +145,9 @@ test("cached worker results match direct screening and replace changed editions"
       },
     ).unwrap();
     expect(
-      await pool.run(async (session) => await session.match(first)),
+      await pool
+        .run(async (session) => await session.match(first))
+        .then(outcomeValue),
     ).toEqual({ status: "screened", result: expected });
     const changed = request("Different Enterprise", "second");
     changed.query = first.query;
@@ -141,22 +157,26 @@ test("cached worker results match direct screening and replace changed editions"
       { cutoff: changed.cutoff, limit: changed.limit },
     ).unwrap();
     expect(
-      await pool.run(async (session) => await session.match(changed)),
+      await pool
+        .run(async (session) => await session.match(changed))
+        .then(outcomeValue),
     ).toEqual({ status: "screened", result: newExpected });
     expect(newExpected.possibleMatches).toHaveLength(0);
     expect(
-      await pool.run(async (session) => {
-        expect(session.hasEdition("eu", "first")).toBe(false);
-        expect(session.hasEdition("eu", "second")).toBe(true);
-        return await session.match({ ...changed, list: null });
-      }),
+      await pool
+        .run(async (session) => {
+          expect(session.hasEdition("eu", "first")).toBe(false);
+          expect(session.hasEdition("eu", "second")).toBe(true);
+          return await session.match({ ...changed, list: null });
+        })
+        .then(outcomeValue),
     ).toEqual({ status: "screened", result: newExpected });
   } finally {
     await pool.close();
   }
 });
 
-test("bundled runtime loads the deployed matcher worker", async () => {
+test("compiled runtime loads the deployed matcher worker", async () => {
   const { mkdtempSync, mkdirSync, rmSync, writeFileSync } =
     await import("node:fs");
   const { default: path } = await import("node:path");
@@ -174,7 +194,7 @@ import { createMatcherTestClock } from ${JSON.stringify(path.join(import.meta.di
 const pool = createSanctionsMatcherPool({ clock: createMatcherTestClock() });
 const response = await pool.run(async (session) => await session.match(${JSON.stringify(request("Acme Trading"))}));
 await pool.close();
-if (response?.status !== "screened" || response.result.possibleMatches.length !== 1) { process.exit(1); }
+if (response.status !== "completed" || response.value.status !== "screened" || response.value.result.possibleMatches.length !== 1) { process.exit(1); }
 `,
     );
     const workerBuild = await Bun.build({
@@ -184,23 +204,34 @@ if (response?.status !== "screened" || response.result.possibleMatches.length !=
       target: "bun",
     });
     expect(workerBuild.success).toBe(true);
-    const parentBuild = await Bun.build({
-      entrypoints: [entrypoint],
-      outdir: parent,
-      target: "bun",
+    const binary = path.join(parent, "screening-probe");
+    const parentBuild = Bun.spawn({
+      cmd: [
+        process.execPath,
+        "build",
+        "--compile",
+        entrypoint,
+        "--outfile",
+        binary,
+      ],
+      cwd: directory,
+      stderr: "pipe",
+      stdout: "pipe",
     });
-    expect(parentBuild.success).toBe(true);
+    const buildError = await new Response(parentBuild.stderr).text();
+    expect(await parentBuild.exited, buildError).toBe(0);
     const child = Bun.spawn({
-      cmd: ["bun", path.join(parent, "entrypoint.js")],
+      cmd: [binary],
       env: { ...process.env, STELLA_WORKER_DIR: workers },
       stderr: "pipe",
       stdout: "pipe",
     });
-    expect(await child.exited).toBe(0);
+    const childError = await new Response(child.stderr).text();
+    expect(await child.exited, childError).toBe(0);
   } finally {
     rmSync(directory, { recursive: true, force: true });
   }
-});
+}, 60_000);
 
 test("cold construction and adversarial warm matching stay within work budgets", async () => {
   const template = list("Acme").entries.at(0);
@@ -245,10 +276,15 @@ test("cold construction and adversarial warm matching stay within work budgets",
       ticks += 1;
     }, 1);
     try {
-      const response = await pool.run(
-        async (session) =>
-          await session.match({ ...request(name), list: cold ? corpus : null }),
-      );
+      const response = await pool
+        .run(
+          async (session) =>
+            await session.match({
+              ...request(name),
+              list: cold ? corpus : null,
+            }),
+        )
+        .then(outcomeValue);
       const totalMs = performance.now() - start;
       maxGapMs = Math.max(maxGapMs, performance.now() - previous);
       expect(response).toEqual({ status: "screened", result: expected });
@@ -310,7 +346,7 @@ test("deadline replies retain admission until unfinished operations settle", asy
   };
   try {
     for (const _attempt of Array.from({ length: 8 })) {
-      const pending = pool.run(operation);
+      const pending = pool.run(operation).then(outcomeValue);
       await new Promise<void>((resolve) => {
         setImmediate(resolve);
       });
@@ -326,9 +362,11 @@ test("deadline replies retain admission until unfinished operations settle", asy
       setImmediate(resolve);
     });
     expect(unfinished).toBe(0);
-    expect(await pool.run(async () => "recovered", { deadlineMs: 1000 })).toBe(
-      "recovered",
-    );
+    expect(
+      await pool
+        .run(async () => "recovered", { deadlineMs: 1000 })
+        .then(outcomeValue),
+    ).toBe("recovered");
   } finally {
     held.resolve(undefined);
     await pool.close();
@@ -367,7 +405,7 @@ test("late retired-worker errors cannot release a held acquisition or a replacem
       workers.push(state);
       return asTestRaw<Worker>(
         Object.assign(state.events, {
-          unref: () => state.events,
+          unref: () => {},
           terminate: async () => {
             state.terminations += 1;
             return await (ordinal === 0
@@ -388,7 +426,7 @@ test("late retired-worker errors cannot release a held acquisition or a replacem
     return "settled";
   };
   try {
-    const first = pool.run(operation);
+    const first = pool.run(operation).then(outcomeValue);
     await new Promise<void>((resolve) => {
       setImmediate(resolve);
     });
@@ -402,7 +440,7 @@ test("late retired-worker errors cannot release a held acquisition or a replacem
     await new Promise<void>((resolve) => {
       setImmediate(resolve);
     });
-    const queued = pool.run(operation);
+    const queued = pool.run(operation).then(outcomeValue);
     expect(clock.pending()).toEqual([20]);
     clock.advance(20);
     expect(await queued).toBeNull();
@@ -413,7 +451,9 @@ test("late retired-worker errors cannot release a held acquisition or a replacem
     await new Promise<void>((resolve) => {
       setImmediate(resolve);
     });
-    expect(await pool.run(async () => "recovered")).toBe("recovered");
+    expect(await pool.run(async () => "recovered").then(outcomeValue)).toBe(
+      "recovered",
+    );
     expect(workers).toHaveLength(2);
     const replacement = workers.at(1);
     retired?.events.emit("error");
@@ -422,9 +462,9 @@ test("late retired-worker errors cannot release a held acquisition or a replacem
       setImmediate(resolve);
     });
     expect(replacement?.terminations).toBe(0);
-    expect(await pool.run(async () => "still recovered")).toBe(
-      "still recovered",
-    );
+    expect(
+      await pool.run(async () => "still recovered").then(outcomeValue),
+    ).toBe("still recovered");
     expect(workers).toHaveLength(2);
     expect(unfinished).toBe(0);
   } finally {
@@ -436,8 +476,8 @@ test("late retired-worker errors cannot release a held acquisition or a replacem
 
 const inertWorker = () =>
   asTestRaw<Worker>({
-    on: () => undefined,
-    unref: () => undefined,
+    on: () => {},
+    unref: () => {},
     terminate: async () => 0,
   });
 
@@ -457,10 +497,12 @@ test.each(deadlineCases)(
       createWorker: inertWorker,
     });
     try {
-      const pending = pool.run(async () => {
-        entered.resolve(undefined);
-        return await response.promise;
-      });
+      const pending = pool
+        .run(async () => {
+          entered.resolve(undefined);
+          return await response.promise;
+        })
+        .then(outcomeValue);
       await entered.promise;
       expect(clock.pending()).toEqual([deadlineMs]);
       clock.elapse(elapsedMs);
@@ -484,17 +526,305 @@ test("the deadline harness rejects the wall-clock mutation before worker timing 
     createWorker: inertWorker,
   });
   try {
-    const pending = pool.run(async () => {
-      entered.resolve(undefined);
-      await release.promise;
-      return "reply";
-    });
+    const pending = pool
+      .run(async () => {
+        entered.resolve(undefined);
+        await release.promise;
+        return "reply";
+      })
+      .then(outcomeValue);
     await entered.promise;
     expect(clock.pending()).not.toEqual([150]);
     release.resolve(undefined);
     await pending;
   } finally {
     release.resolve(undefined);
+    await pool.close();
+  }
+});
+
+const observableFaults = {
+  "worker-create": "worker-create",
+  "worker-error": "worker-error",
+  "worker-exit": "worker-exit",
+  "worker-send": "worker-send",
+  "worker-reply": "worker-reply",
+  operation: "operation",
+  deadline: "deadline",
+} as const satisfies {
+  [
+    Cause in Exclude<
+      SanctionsMatcherFailureCause,
+      "closed" | "admission" | "worker-retire"
+    >
+  ]: Cause;
+};
+
+test.each(Object.values(observableFaults))(
+  "reports %s once and releases its worker lease for recovery",
+  async (fault) => {
+    const { EventEmitter } = await import("node:events");
+    const clock = createMatcherTestClock();
+    const observations: Parameters<typeof reportSanctionsScreeningFailure>[] =
+      [];
+    let spawned = 0;
+    let retired = 0;
+    const pool = createSanctionsMatcherPool({
+      clock,
+      reportFailure: (...args) => {
+        observations.push(args);
+      },
+      createWorker: () => {
+        spawned += 1;
+        if (spawned === 1 && fault === "worker-create") {
+          throw new TypeError("Worker creation fault");
+        }
+        // oxlint-disable-next-line unicorn/prefer-event-target -- This fake implements node Worker on/once/off, whose contract requires EventEmitter.
+        const worker = new EventEmitter();
+        return asTestRaw<Worker>(
+          Object.assign(worker, {
+            unref: () => {},
+            terminate: async () => {
+              retired += 1;
+              return 0;
+            },
+            postMessage: () => {
+              if (fault === "worker-send") {
+                throw new TypeError("Worker sending fault");
+              }
+              if (fault === "worker-error") {
+                worker.emit("error", new TypeError("Worker fault"));
+                return;
+              }
+              if (fault === "worker-exit") {
+                worker.emit("exit", 1);
+                return;
+              }
+              if (fault === "deadline") {
+                clock.advance(SANCTIONS_MATCHER_CONFIG.deadlineMs);
+                return;
+              }
+              worker.emit("message", { status: "unavailable" });
+            },
+          }),
+        );
+      },
+    });
+    try {
+      const failed = await pool.run(async (session) => {
+        if (fault === "operation") {
+          throw new TypeError("Operation fault");
+        }
+        return await session.match(request("Private Subject"));
+      });
+      expect(failed).toEqual({ status: "unavailable", cause: fault });
+      expect(
+        observations.map(([observation]) => ({
+          stage: observation.stage,
+          reason: observation.reason,
+        })),
+      ).toEqual([{ stage: "matcher-pool", reason: fault }]);
+      await new Promise<void>((resolve) => {
+        setImmediate(resolve);
+      });
+      expect(await pool.run(async () => "recovered")).toEqual({
+        status: "completed",
+        value: "recovered",
+      });
+      expect(spawned).toBe(2);
+      expect(retired).toBe(fault === "worker-create" ? 0 : 1);
+    } finally {
+      await pool.close();
+    }
+  },
+);
+
+test("failed worker retirement is observed and releases admission for another request", async () => {
+  const reports: Parameters<typeof reportSanctionsScreeningFailure>[0][] = [];
+  const pool = createSanctionsMatcherPool({
+    clock: createMatcherTestClock(),
+    reportFailure: (report) => {
+      reports.push(report);
+    },
+    createWorker: () =>
+      asTestRaw<Worker>({
+        on: () => {},
+        unref: () => {},
+        terminate: async () => {
+          throw new TypeError("Retirement failure");
+        },
+      }),
+  });
+  try {
+    expect(
+      await pool.run(async () => {
+        throw new TypeError("Operation failure");
+      }),
+    ).toEqual({ status: "unavailable", cause: "operation" });
+    await new Promise<void>((resolve) => {
+      setImmediate(resolve);
+    });
+    expect(reports.map(({ reason }) => reason)).toEqual([
+      "operation",
+      "worker-retire",
+    ]);
+    expect(await pool.run(async () => "recovered")).toEqual({
+      status: "completed",
+      value: "recovered",
+    });
+  } finally {
+    await pool.close();
+  }
+});
+
+test("lease settlement callbacks fire exactly once after work, including acquisitions without a lease", async () => {
+  const clock = createMatcherTestClock();
+  const entered = Promise.withResolvers<undefined>();
+  const held = Promise.withResolvers<undefined>();
+  const counts = { active: 0, queued: 0, closed: 0 };
+  const pool = createSanctionsMatcherPool({
+    clock,
+    deadlineMs: 10,
+    createWorker: inertWorker,
+    reportFailure: () => {},
+  });
+  const active = pool.run(
+    async () => {
+      entered.resolve(undefined);
+      await held.promise;
+      return "finished";
+    },
+    {
+      onSettled: () => {
+        counts.active += 1;
+      },
+    },
+  );
+  try {
+    await entered.promise;
+    clock.advance(10);
+    expect(await active).toEqual({ status: "unavailable", cause: "deadline" });
+    expect(counts.active).toBe(0);
+    const queued = pool.run(async () => "never entered", {
+      onSettled: () => {
+        counts.queued += 1;
+      },
+    });
+    await new Promise<void>((resolve) => {
+      setImmediate(resolve);
+    });
+    expect(counts.queued).toBe(0);
+    clock.advance(10);
+    expect(await queued).toEqual({ status: "unavailable", cause: "deadline" });
+    await new Promise<void>((resolve) => {
+      setImmediate(resolve);
+    });
+    expect(counts.queued).toBe(1);
+    expect(counts.active).toBe(0);
+    held.resolve(undefined);
+    await new Promise<void>((resolve) => {
+      setImmediate(resolve);
+    });
+    expect(counts.active).toBe(1);
+    await pool.close();
+    expect(
+      await pool.run(async () => "closed", {
+        onSettled: () => {
+          counts.closed += 1;
+        },
+      }),
+    ).toEqual({ status: "unavailable", cause: "closed" });
+    expect(counts).toEqual({ active: 1, queued: 1, closed: 1 });
+    await pool.close();
+    expect(counts).toEqual({ active: 1, queued: 1, closed: 1 });
+  } finally {
+    held.resolve(undefined);
+    await pool.close();
+    await active;
+  }
+});
+
+test("real worker work exhaustion retains its edition and screens the next cached query without reload", async () => {
+  const template = list("Acme").entries.at(0);
+  if (template === undefined) {
+    throw new TypeError("Missing work-limit fixture entry");
+  }
+  const corpus = {
+    version: list("Acme").version,
+    entries: Array.from({ length: 20_000 }, (_, index) => ({
+      ...template,
+      sourceId: `work-limit-${index}`,
+      names: [
+        {
+          name: `Registered Entity ${index} Holdings`,
+          quality: "strong" as const,
+        },
+      ],
+    })),
+  } satisfies ParsedList;
+  const query = {
+    name: "Registered a b c d e f g h i j k l m n o p q r s t u v z",
+    entityType: "organisation" as const,
+  };
+  const direct = screen(buildScreeningIndex([corpus]), query, {
+    cutoff: DEFAULT_CUTOFF,
+    limit: 10,
+  });
+  expect(direct.isErr() && direct.error.code).toBe("work-limit");
+  const recorded = recordingMatcherWorker();
+  const reports: Parameters<typeof reportSanctionsScreeningFailure>[0][] = [];
+  let spawned = 0;
+  const pool = createSanctionsMatcherPool({
+    clock: createMatcherTestClock(),
+    reportFailure: (report) => {
+      reports.push(report);
+    },
+    createWorker: () => {
+      spawned += 1;
+      return recorded.createWorker();
+    },
+  });
+  try {
+    const requestBase = {
+      source: "eu",
+      editionId: "work-limit",
+      cutoff: DEFAULT_CUTOFF,
+      limit: 10,
+    } as const;
+    expect(
+      await pool.run(
+        async (session) =>
+          await session.match({ ...requestBase, list: corpus, query }),
+      ),
+    ).toEqual({ status: "completed", value: { status: "work-limit" } });
+    const transferred = { ...recorded.work };
+    const safeQuery = {
+      name: "Registered Entity 42 Holdings",
+      entityType: "organisation" as const,
+    };
+    const expected = screen(buildScreeningIndex([corpus]), safeQuery, {
+      cutoff: DEFAULT_CUTOFF,
+      limit: 10,
+    }).unwrap();
+    expect(
+      await pool.run(async (session) => {
+        expect(session.hasEdition("eu", "work-limit")).toBe(true);
+        return await session.match({
+          ...requestBase,
+          list: null,
+          query: safeQuery,
+        });
+      }),
+    ).toEqual({
+      status: "completed",
+      value: { status: "screened", result: expected },
+    });
+    expect(recorded.work.entries).toBe(transferred.entries);
+    expect(recorded.work.entryBatches).toBe(transferred.entryBatches);
+    expect(recorded.work.screenings).toBe(transferred.screenings + 1);
+    expect(spawned).toBe(1);
+    expect(reports).toEqual([]);
+  } finally {
     await pool.close();
   }
 });

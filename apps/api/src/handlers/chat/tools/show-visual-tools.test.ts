@@ -1,28 +1,161 @@
 import { convertSchemaToJsonSchema } from "@tanstack/ai";
 import { panic, Result } from "better-result";
-import { describe, expect, test } from "bun:test";
+import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 
 import { VISUAL_PREVIEW_TOOL_NAME } from "@stll/api-contract/visual-preview";
 import type { VisualPreviewOutput } from "@stll/api-contract/visual-preview";
+import type { FailureGrade, FailureReason } from "@stll/errors";
 import { rejectionOf } from "@stll/property-testing/rejection";
 
 import { VISUAL_SHOWCASE_GUIDANCE } from "@/api/handlers/chat/tools/visual-showcase-guidance";
 import { createVisualResourceOrigin } from "@/api/handlers/visual-sandbox/resource-origin";
 import { createSafeId } from "@/api/lib/branded-types";
 import { ChatToolError } from "@/api/lib/errors/tagged-errors";
+import { resetFailureObservationsForTesting } from "@/api/lib/observability/failure-shadow";
 import { VisualPreviewError } from "@/api/lib/visual-preview";
+import {
+  installRecordingAnalytics,
+  installRecordingLogger,
+} from "@/api/tests/helpers/recording-telemetry";
+import type {
+  RecordingAnalytics,
+  RecordingLogger,
+} from "@/api/tests/helpers/recording-telemetry";
 
 import { createShowVisualTools } from "./show-visual-tools";
 
 const unavailablePreview = async () =>
   Result.err(
     new VisualPreviewError({
-      code: "unavailable",
+      code: "not-configured",
       message: "Preview is not configured",
     }),
   );
 
+const previewFailures = {
+  unavailable: {
+    error: new VisualPreviewError({
+      code: "unavailable",
+      message: "Synthetic unavailable preview",
+    }),
+    grade: "defect",
+    reason: "visual_preview_unavailable",
+  },
+  "not-configured": {
+    error: new VisualPreviewError({
+      code: "not-configured",
+      message: "Synthetic preview without configuration",
+    }),
+    grade: "anticipated",
+    reason: "visual_preview_not_configured",
+  },
+  timeout: {
+    error: new VisualPreviewError({
+      code: "timeout",
+      message: "Synthetic preview timeout",
+    }),
+    grade: "defect",
+    reason: "visual_preview_timeout",
+  },
+  "invalid-input": {
+    error: new VisualPreviewError({
+      code: "invalid-input",
+      message: "Synthetic invalid preview input",
+    }),
+    grade: "anticipated",
+    reason: "visual_preview_input_invalid",
+  },
+  "invalid-response": {
+    error: new VisualPreviewError({
+      code: "invalid-response",
+      message: "Synthetic invalid preview response",
+    }),
+    grade: "defect",
+    reason: "visual_preview_response_invalid",
+  },
+} as const satisfies Record<
+  VisualPreviewError["code"],
+  { error: VisualPreviewError; grade: FailureGrade; reason: FailureReason }
+>;
+
+let logs: RecordingLogger;
+let analytics: RecordingAnalytics;
+
+beforeEach(() => {
+  logs = installRecordingLogger();
+  analytics = installRecordingAnalytics();
+  resetFailureObservationsForTesting();
+});
+
+afterEach(() => {
+  logs.restore();
+  analytics.restore();
+  resetFailureObservationsForTesting();
+});
+
 describe("show visual", () => {
+  test.each(Object.entries(previewFailures))(
+    "reports a %s preview failure while keeping the published resource",
+    async (code, { error: failure, grade, reason }) => {
+      expect(code).toBe(failure.code);
+      const origin = createVisualResourceOrigin();
+      const emissions: unknown[] = [];
+      const tool = createShowVisualTools({
+        origin,
+        store: async () =>
+          Result.ok({
+            fileId: createSafeId<"userFile">(),
+            document: "<!doctype html><p>Revenue</p>",
+          }),
+        preview: async () => Result.err(failure),
+      })[VISUAL_PREVIEW_TOOL_NAME];
+      const execute = tool.execute ?? panic("Visual tool has no executor");
+      const output = await execute(
+        { title: "Revenue", html: "<p>Revenue</p>", data: {} },
+        {
+          toolCallId: "visual-call-failed-preview",
+          emitCustomEvent: (_name, value) => {
+            emissions.push(value);
+          },
+        },
+      );
+      expect(emissions).toHaveLength(1);
+      expect(origin.accepts(emissions.at(0))).toBe(true);
+      expect(output).toEqual([
+        {
+          type: "text",
+          content: JSON.stringify({
+            success: true,
+            title: "Revenue",
+            preview: {
+              status: "unavailable",
+              reason: code,
+              message: failure.message,
+            },
+          }),
+        },
+      ]);
+      const failures = logs
+        .at(grade === "defect" ? "ERROR" : "WARN")
+        .filter(({ message }) => message === "visual.preview_failed");
+      expect(failures).toHaveLength(1);
+      expect(failures.at(0)?.attributes).toMatchObject({
+        "error.type": "VisualPreviewError",
+        "error.code": code,
+        "failure.grade": grade,
+        "failure.reason": reason,
+        "failure.rule": "brand",
+        tool: VISUAL_PREVIEW_TOOL_NAME,
+      });
+      expect(
+        logs.records.filter(
+          ({ message }) => message === "visual.preview_failed",
+        ),
+      ).toHaveLength(1);
+      expect(analytics.exceptions()).toHaveLength(grade === "defect" ? 1 : 0);
+    },
+  );
+
   test("carries the court and year guidance in its description", () => {
     const tool = createShowVisualTools({
       origin: createVisualResourceOrigin(),
@@ -75,7 +208,7 @@ describe("show visual", () => {
           title: "Revenue",
           preview: {
             status: "unavailable",
-            reason: "unavailable",
+            reason: "not-configured",
             message: "Preview is not configured",
           },
         }),
@@ -139,6 +272,8 @@ describe("show visual", () => {
         source: { type: "data", value: preview.png, mimeType: "image/png" },
       },
     ]);
+    expect(logs.at("ERROR")).toEqual([]);
+    expect(analytics.exceptions()).toEqual([]);
   });
 
   test("keeps publication successful when the optional preview rejects", async () => {
@@ -193,6 +328,12 @@ describe("show visual", () => {
         }),
       },
     ]);
+    expect(
+      logs
+        .at("ERROR")
+        .filter(({ message }) => message === "visual.preview_failed"),
+    ).toHaveLength(1);
+    expect(analytics.exceptions()).toHaveLength(1);
   });
 
   test("keeps data checks at execution after their provider projection", async () => {
