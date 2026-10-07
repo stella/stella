@@ -375,10 +375,10 @@
       "search": "if (serializedInput !== void 0) existingToolCall.arguments = serializedInput;",
       "replace": "void serializedInput;",
       "scenario": {
-        "file": "src/handlers/chat/provider-wire-replay.integration.test.ts",
-        "test": "openai: a tool call reaches its card, runs once approved, and the answer reloads"
+        "file": "src/handlers/chat/tool-call-end-arguments.test.ts",
+        "test": "an OpenAI strict-mode null on an optional field never reaches the persisted arguments"
       },
-      "oracle": "chat.live.equals-reload"
+      "oracle": "chat.provider-wire.tool-input"
     },
     {
       "id": "tool-input-null-optionals-omitted",
