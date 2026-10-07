@@ -132,6 +132,30 @@ describe("updating a pull request from its base", () => {
     expect(f.writes).toEqual([]);
   });
 
+  test.each([1, 2])(
+    "propagates receipt read errors before PUT at read %i",
+    (failedRead) => {
+      const f = fixture();
+      let reads = 0;
+      const result = updatePullRequestBranch({
+        ...f.options,
+        store: {
+          ...f.options.store,
+          recorded: (key) =>
+            ++reads === failedRead
+              ? Result.err(
+                  new BranchUpdateError({ message: "receipt read failed" }),
+                )
+              : f.options.store.recorded(key),
+        },
+      });
+      expect(errorMessage(result)).toBe("receipt read failed");
+      expect(f.writes).toEqual([]);
+      expect(f.receipts.size).toBe(0);
+      expect(f.locks.has(KEY)).toBe(failedRead === 2);
+    },
+  );
+
   test("observes a receipt committed between initial check and lock acquisition", () => {
     const f = fixture();
     let reads = 0;

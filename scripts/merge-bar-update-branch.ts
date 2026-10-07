@@ -59,7 +59,11 @@ export const updatePullRequestBranch = ({
 }: UpdatePullRequestBranchOptions) =>
   Result.try(() => {
     const key = `${repo.toLowerCase()}#${pullNumber}@${expectedHeadSha}`;
-    if (store.recorded(key).unwrap()) {
+    const recorded = store.recorded(key);
+    if (recorded.isErr()) {
+      return recorded;
+    }
+    if (recorded.value) {
       return Result.ok({ status: "already-updated", key } as const);
     }
     const current = readPullRequest();
@@ -89,7 +93,11 @@ export const updatePullRequestBranch = ({
       return lease;
     }
     // Another invocation may have completed between the first read and lock acquisition.
-    if (store.recorded(key).unwrap()) {
+    const recordedAfterAcquire = store.recorded(key);
+    if (recordedAfterAcquire.isErr()) {
+      return recordedAfterAcquire;
+    }
+    if (recordedAfterAcquire.value) {
       lease.value.release();
       return Result.ok({ status: "already-updated", key } as const);
     }
@@ -212,12 +220,20 @@ export const createBranchUpdateStore = (
         fsyncSync(descriptor);
       });
       closeSync(descriptor);
-      written.unwrap();
+      if (written.isErr()) {
+        throw new BranchUpdateError({
+          message: `Cannot persist branch-update receipt: ${written.error.message}`,
+        });
+      }
       renameSync(temporary, receipt);
       const parent = openSync(directory, "r");
       const synced = Result.try(() => fsyncSync(parent));
       closeSync(parent);
-      synced.unwrap();
+      if (synced.isErr()) {
+        throw new BranchUpdateError({
+          message: `Cannot sync branch-update receipt directory: ${synced.error.message}`,
+        });
+      }
     },
   };
 };
