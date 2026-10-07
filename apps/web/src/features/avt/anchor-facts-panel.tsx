@@ -175,7 +175,7 @@ const FactRow = ({ workspaceId, listId, fact }: FactRowProps) => {
   // required: a fact nobody has described gets a detail once a reviewer
   // picks a confidence, and the other edits wait for that.
   const save = (changes: Partial<EditableFactDetails>) => {
-    if (details === null || details.scoring === undefined) {
+    if (details?.scoring === undefined) {
       return;
     }
     saveDetails(fact.id, {

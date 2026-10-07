@@ -239,11 +239,15 @@ for (const transport of [
             }
           };
           if (transport === "REST HTTP") {
+            const featureAccessSnapshot = synthesized.featureAccessSnapshot;
+            if (featureAccessSnapshot === undefined) {
+              panic("Missing feature access snapshot in HTTP fixture");
+            }
             const app = new Elysia().resolve(() => ({
               workspaceId: toSafeId<"workspace">(matterId),
               user: synthesized.user,
               session: synthesized.session,
-              featureAccessSnapshot: synthesized.featureAccessSnapshot,
+              featureAccessSnapshot,
               safeDb: synthesized.safeDb,
               scopedDb: synthesized.scopedDb,
               getActiveWorkspaceIds: synthesized.getActiveWorkspaceIds,
