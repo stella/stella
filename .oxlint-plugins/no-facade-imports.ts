@@ -101,7 +101,17 @@ const stringLiteralValue = (node: unknown): string | undefined => {
   return node.value;
 };
 
-const reportInvalidImport = (context: Context, source: Node | null): void => {
+type ReportInvalidImportOptions = {
+  context: Context;
+  source: Node | null;
+  kind: "import" | "reexport";
+};
+
+const reportInvalidImport = ({
+  context,
+  source,
+  kind,
+}: ReportInvalidImportOptions): void => {
   const specifier = stringLiteralValue(source);
   if (reportRemovedAstFacade(context, source, specifier)) {
     return;
@@ -110,32 +120,13 @@ const reportInvalidImport = (context: Context, source: Node | null): void => {
     source === null ||
     specifier === undefined ||
     !isManagedSpecifier(specifier) ||
-    ALLOWED_LEAF_IMPORTS.has(specifier)
+    (kind === "import" && ALLOWED_LEAF_IMPORTS.has(specifier))
   ) {
     return;
   }
   context.report({
     node: source,
-    messageId: "facadeImport",
-    data: { specifier },
-  });
-};
-
-const reportLeafReexport = (context: Context, source: Node | null): void => {
-  const specifier = stringLiteralValue(source);
-  if (reportRemovedAstFacade(context, source, specifier)) {
-    return;
-  }
-  if (
-    source === null ||
-    specifier === undefined ||
-    !isManagedSpecifier(specifier)
-  ) {
-    return;
-  }
-  context.report({
-    node: source,
-    messageId: "leafReexport",
+    messageId: kind === "reexport" ? "leafReexport" : "facadeImport",
     data: { specifier },
   });
 };
@@ -159,16 +150,46 @@ export default eslintCompatPlugin({
       createOnce(context) {
         return {
           ImportDeclaration(node) {
-            reportInvalidImport(context, node.source);
+            reportInvalidImport({
+              context,
+              source: node.source,
+              kind: "import",
+            });
           },
           ExportAllDeclaration(node) {
-            reportLeafReexport(context, node.source);
+            reportInvalidImport({
+              context,
+              source: node.source,
+              kind: "reexport",
+            });
           },
           ExportNamedDeclaration(node) {
-            reportLeafReexport(context, node.source);
+            reportInvalidImport({
+              context,
+              source: node.source,
+              kind: "reexport",
+            });
+          },
+          TSExternalModuleReference(node) {
+            reportInvalidImport({
+              context,
+              source: node.expression,
+              kind: "import",
+            });
+          },
+          TSImportType(node) {
+            reportInvalidImport({
+              context,
+              source: node.source,
+              kind: "import",
+            });
           },
           ImportExpression(node) {
-            reportInvalidImport(context, node.source);
+            reportInvalidImport({
+              context,
+              source: node.source,
+              kind: "import",
+            });
           },
         };
       },

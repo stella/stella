@@ -1,5 +1,6 @@
 import { Result, TaggedError } from "better-result";
 
+// parser-output-unchanged: imports the document AST from its package owner
 import type { Block, DocumentAst } from "@stll/legal-ast/document-ast";
 import { isDocumentAst } from "@stll/legal-ast/document-ast";
 

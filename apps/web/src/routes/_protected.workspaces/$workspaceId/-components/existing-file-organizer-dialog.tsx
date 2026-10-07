@@ -63,14 +63,14 @@ import {
 } from "@/routes/_protected.workspaces/$workspaceId/-components/import-organizer.logic";
 import type { FileNameSuggestion } from "@/routes/_protected.workspaces/$workspaceId/-components/import-organizer.logic";
 
-export type ExistingImportFolder = {
+type ExistingImportFolder = {
   entityId: string;
   name: string;
   path: string;
   parentId: string | null;
 };
 
-export type ExistingOrganizerFile = {
+type ExistingOrganizerFile = {
   entityId: string;
   originalName: string;
   parentId: string | null;

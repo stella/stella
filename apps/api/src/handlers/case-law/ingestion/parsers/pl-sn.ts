@@ -18,6 +18,7 @@
 import { PDF } from "@libpdf/core";
 import { panic } from "better-result";
 
+// parser-output-unchanged: imports the document AST from its package owner
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
 import { collapseSpacedLetters } from "@stll/text-normalize";
 

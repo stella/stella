@@ -5,6 +5,7 @@
  * never read as one.
  */
 
+// parser-output-unchanged: imports the document AST from its package owner
 import type { ParagraphRole } from "@stll/legal-ast/document-ast";
 
 import type { OpinionType } from "@/api/handlers/case-law/ingestion/adapters/courtlistener/vocabulary";
