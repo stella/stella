@@ -1,0 +1,49 @@
+name: Fetch public source documents for verification
+
+on:
+  workflow_dispatch:
+    inputs:
+      urls:
+        description: Newline-separated public HTTPS URLs
+        required: true
+        type: string
+
+permissions: {}
+
+jobs:
+  fetch:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 110
+    steps:
+      - name: Checkout fetch script
+        env:
+          SOURCE_REPOSITORY: ${{ github.server_url }}/${{ github.repository }}
+          SOURCE_REVISION: ${{ github.sha }}
+        run: |
+          git init .
+          git remote add origin "$SOURCE_REPOSITORY"
+          git sparse-checkout set --no-cone /scripts/fetch-public-documents.ts /packages/sha256/src/node.ts /packages/sha256/src/types.ts
+          git -c credential.helper= fetch --depth=1 --filter=blob:none origin "$SOURCE_REVISION"
+          git checkout --detach FETCH_HEAD
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version: "1.4.2"
+          no-cache: true
+      - name: Install PDF extractor
+        run: |
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends -y poppler-utils=24.02.0-1ubuntu9.9
+      - name: Fetch public source documents for verification
+        timeout-minutes: 100
+        env:
+          PUBLIC_DOCUMENT_URLS: ${{ inputs.urls }}
+        run: bun scripts/fetch-public-documents.ts
+      - name: Upload documents
+        if: ${{ always() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: public-documents
+          path: public-documents/
+          retention-days: 1
+          if-no-files-found: error
