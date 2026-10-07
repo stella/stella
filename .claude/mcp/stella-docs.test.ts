@@ -69,9 +69,7 @@ describe("documentation MCP startup", () => {
       const config = Bun.TOML.parse(
         await Bun.file(path.join(repo, ".codex/config.toml")).text(),
       );
-      assert.ok(
-        config && typeof config === "object" && "mcp_servers" in config,
-      );
+      assert.ok("mcp_servers" in config);
       const servers = config["mcp_servers"];
       assert.ok(
         servers && typeof servers === "object" && "stella-docs" in servers,
