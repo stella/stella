@@ -142,6 +142,9 @@ describe("API deployment health receipt", () => {
       WEB_SMOKE: "success",
       API_SMOKE: "success",
       MCP_SMOKE: "success",
+      CORPUS_PREFLIGHT: "success",
+      CORPUS_SEARCH_WAIVED: "false",
+      WAIVE_REASON: "",
       JOB_STATUS: "success",
     };
     const cases = [

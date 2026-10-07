@@ -23,6 +23,7 @@ import { STATUS_COLUMNS } from "../apps/api/src/lib/db/status-tables.gen.ts";
 import { SANCTIONS_MONITORING_TRANSITION_IDENTITIES } from "../apps/api/src/lib/lists/sanctions/monitoring-transition-identities.ts";
 // With its extension: oxlint.config.ts loads this file under Node's resolver.
 import { formattedLikeRepository } from "./generated-artifacts.ts";
+import { SHA256_OWNERS } from "./sha256-owners.ts";
 
 // Computed filesystem reads retain these repository Markdown inputs.
 export const CI_MARKDOWN_READER_INPUTS = ["docs/module-ownership.md"];
@@ -641,6 +642,14 @@ const UNMIGRATED_PUBLISHER_READERS = [
 
 const OWNERSHIP_DECLARATIONS = [
   STATUS_TRANSITION_OWNERSHIP,
+  {
+    id: "sha256",
+    capability: "Hashing content with SHA-256 across runtimes",
+    owner: Object.keys(SHA256_OWNERS),
+    summary:
+      "Private runtime helpers and a published-package local owner preserve bytes, update order and digest encodings. no-raw-sha256 confines primitives to registered owners; the enumerating migration ledger only shrinks.",
+    enforcement: { kind: "none" },
+  },
   {
     id: "desktop-presence-observations",
     capability: "Reading and retaining desktop presence observations",
