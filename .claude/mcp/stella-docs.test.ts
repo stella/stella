@@ -7,6 +7,8 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 
 const repo = path.resolve(import.meta.dir, "../..");
+const inheritedPath = process.env["PATH"];
+assert.ok(typeof inheritedPath === "string");
 
 describe("documentation MCP startup", () => {
   for (const installation of ["missing", "partial"]) {
@@ -39,7 +41,7 @@ describe("documentation MCP startup", () => {
           cwd: directory,
           env: {
             ...process.env,
-            PATH: `${bin}${path.delimiter}${process.env.PATH}`,
+            PATH: `${bin}${path.delimiter}${inheritedPath}`,
           },
           stdin: "ignore",
           stdout: "pipe",
@@ -66,6 +68,9 @@ describe("documentation MCP startup", () => {
     test(`completes discovery and a local tool call from ${path.relative(repo, cwd) || "the repository root"}`, async () => {
       const config = Bun.TOML.parse(
         await Bun.file(path.join(repo, ".codex/config.toml")).text(),
+      );
+      assert.ok(
+        config && typeof config === "object" && "mcp_servers" in config,
       );
       const servers = config["mcp_servers"];
       assert.ok(
