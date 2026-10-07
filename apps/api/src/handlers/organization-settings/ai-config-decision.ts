@@ -110,7 +110,8 @@ const resolveDecisionProbe = ({
   if (!resolvedKey) {
     return {
       valid: false,
-      error: "An OpenAI API key is required for the decision model",
+      error:
+        "The decision model reuses your OpenAI API key. Keep that provider and key, add a separate decision API key, or switch the decision provider.",
     };
   }
   const previousKey =
@@ -123,7 +124,7 @@ const resolveDecisionProbe = ({
       inputApiKey !== undefined &&
       !!inputApiKey.trim()) ||
     existing?.provider !== decision.provider ||
-    existing.modelId !== decision.modelId ||
+    existing?.modelId !== decision.modelId ||
     previousKey !== resolvedKey ||
     (decision.provider === "openai" &&
       (existing?.provider !== "openai" || existing.region !== decision.region));

@@ -194,6 +194,46 @@ describe("decision model request policy", () => {
 });
 
 describe("OpenAI decision credentials", () => {
+  test.each(["customer", "public_corpus"] as const)(
+    "missing reused credentials fall back for %s and report one config defect",
+    async (dataClass) => {
+      const config = {
+        ...organization,
+        providers: [{ provider: "anthropic", apiKey: "other-key" }],
+        decision: {
+          provider: "openai",
+          modelId: "gpt-6-luna",
+          region: "eu",
+        },
+      } as const satisfies OrgAIConfig;
+      expect(resolveDecisionModel(config, dataClass)).toBeNull();
+      const result = await decideMany({
+        id: "test.missing-decision-key",
+        orgAIConfig: config,
+        dataClass,
+        state: "eligible",
+        questions,
+      });
+      expect(result).toEqual({
+        decisions: {
+          eligible: {
+            state: "undecided",
+            reason: "no-backend",
+            confidence: null,
+          },
+        },
+        model: null,
+      });
+      expect(runtime.analytics.exceptions()).toHaveLength(1);
+      expect(runtime.analytics.exceptions().at(0)?.properties).toMatchObject({
+        "error.class": "ConfigurationError",
+        source: "resolveDecisionModel",
+        provider: "openai",
+      });
+      expect(runtime.fetch).not.toHaveBeenCalled();
+    },
+  );
+
   test.each([undefined, "separate-key"])(
     "uses the org OpenAI key unless overridden (%s)",
     async (override) => {

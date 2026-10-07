@@ -16,8 +16,10 @@ import type {
   OrgAIConfig,
   OrgDecisionModelConfig,
 } from "@/api/lib/ai-config";
+import { captureError } from "@/api/lib/analytics/capture";
 import type { AIDataClass } from "@/api/lib/chat/ai-data-policy";
 import { isManagedProviderAvailable } from "@/api/lib/chat/provider-data-policy";
+import { ConfigurationError } from "@/api/lib/errors/tagged-errors";
 import { createOpenAIDecisionsClient } from "@/api/lib/workflow/decisions/openai-decisions";
 import {
   createSystemOneClient,
@@ -78,7 +80,13 @@ export const resolveDecisionModel = (
       orgAIConfig?.providers.find((provider) => provider.provider === "openai")
         ?.apiKey;
     if (apiKey === undefined) {
-      return panic("Configured OpenAI decision model has no organization key");
+      captureError(
+        new ConfigurationError({
+          message: "Configured OpenAI decision model has no organization key",
+        }),
+        { source: "resolveDecisionModel", provider: decision.provider },
+      );
+      return null;
     }
     return { ...orgClient({ ...decision, apiKey }), keySource: "byok" };
   }

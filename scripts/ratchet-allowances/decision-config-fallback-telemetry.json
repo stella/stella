@@ -1,0 +1,6 @@
+{
+  "metric": "direct-failure-sinks",
+  "file": "apps/api/src/lib/workflow/decisions/decision-model.ts",
+  "delta": 1,
+  "reason": "Report missing reused decision credentials at the resolver before returning no backend. This recoverable configuration defect has no thrown error for a request boundary to capture; the existing capture owner throttles repeat reports."
+}

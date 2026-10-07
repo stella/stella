@@ -1,11 +1,15 @@
-import { Result } from "better-result";
-import { describe, expect, test } from "bun:test";
+import { panic, Result } from "better-result";
+import { afterAll, beforeAll, describe, expect, spyOn, test } from "bun:test";
 
 import { TANSTACK_AI_PROVIDERS, BYOK_DEFAULT_MODELS } from "@stll/ai-catalog";
 
 import type { Transaction } from "@/api/db/root";
 import type { SafeDb } from "@/api/db/safe-db";
-import type { DataRegion, OrgAIConfig } from "@/api/lib/ai-config";
+import type {
+  DataRegion,
+  OrgAIConfig,
+  OrgDecisionModelConfig,
+} from "@/api/lib/ai-config";
 import { decryptAIConfig } from "@/api/lib/ai-config-crypto";
 import { toSafeId } from "@/api/lib/branded-types";
 import { createTestHandlerContext } from "@/api/tests/helpers/handler-context";
@@ -23,7 +27,10 @@ const overrideModels = {
   pdf: { provider: "google", modelId: models.pdf },
 } as const;
 
-const createSettingsDb = (region: DataRegion | undefined = "global") => {
+const createSettingsDb = (
+  region: DataRegion | undefined = "global",
+  decision: OrgDecisionModelConfig | null = null,
+) => {
   const storedConfig: OrgAIConfig = {
     providers: TANSTACK_AI_PROVIDERS.map((provider) => ({
       provider,
@@ -31,7 +38,7 @@ const createSettingsDb = (region: DataRegion | undefined = "global") => {
       region,
     })),
     overrideModels,
-    decision: null,
+    decision,
   };
   const row = {
     aiConfigEncrypted: Buffer.from(JSON.stringify(storedConfig)),
@@ -110,4 +117,113 @@ describe("organization AI settings validation", () => {
       ]);
     });
   }
+});
+
+const openaiDecision = {
+  provider: "openai",
+  modelId: "gpt-6-luna",
+  region: "eu",
+} as const;
+
+const createDecisionRequestSpy = () =>
+  spyOn(globalThis, "fetch").mockImplementation(
+    Object.assign(
+      async () =>
+        Response.json({
+          model: "gpt-6-luna",
+          answers: [{ type: "predicate", name: "probe", probability: 0.99 }],
+          usage: { input_tokens: 10, output_tokens: 0 },
+        }),
+      { preconnect: globalThis.fetch.preconnect },
+    ),
+  );
+
+let fetch: ReturnType<typeof createDecisionRequestSpy>;
+beforeAll(() => {
+  fetch = createDecisionRequestSpy();
+});
+afterAll(() => {
+  fetch.mockRestore();
+});
+
+describe("decision credential dependencies on settings save", () => {
+  test.each(["omitted", "reuse"] as const)(
+    "rejects removing a reused provider with decision %s before probing or writing",
+    async (decisionMode) => {
+      fetch.mockClear();
+      const db = createSettingsDb("global", openaiDecision);
+      const result = await updateAIConfig.handler(
+        createTestHandlerContext<UpdateContext>({
+          safeDb: db.safeDb,
+          body: {
+            providers: [{ provider: "google" }],
+            overrideModels,
+            ...(decisionMode === "reuse"
+              ? { decision: { ...openaiDecision, apiKey: null } }
+              : {}),
+          },
+        }),
+      );
+      expect(result).toMatchObject({
+        code: 400,
+        response: {
+          code: "ai_config_decision_invalid",
+          message:
+            "The decision model reuses your OpenAI API key. Keep that provider and key, add a separate decision API key, or switch the decision provider.",
+        },
+      });
+      expect(db.written()).toBeUndefined();
+      expect(db.operations()).toBe(1);
+      expect(fetch).not.toHaveBeenCalled();
+    },
+  );
+
+  test.each(["existing", "new"] as const)(
+    "allows removing the provider using a separate decision key (%s)",
+    async (keyMode) => {
+      fetch.mockClear();
+      const db = createSettingsDb(
+        "global",
+        keyMode === "existing"
+          ? { ...openaiDecision, apiKey: "separate-key" }
+          : openaiDecision,
+      );
+      const result = await updateAIConfig.handler(
+        createTestHandlerContext<UpdateContext>({
+          safeDb: db.safeDb,
+          body: {
+            providers: [{ provider: "google" }],
+            overrideModels,
+            ...(keyMode === "new"
+              ? { decision: { ...openaiDecision, apiKey: "separate-key" } }
+              : {}),
+          },
+        }),
+      );
+      expect(result).toMatchObject({
+        providers: [{ provider: "google", region: "global" }],
+        decision: { ...openaiDecision, apiKeyMasked: "sep****************" },
+      });
+      const written = db.written();
+      expect(written).toBeDefined();
+      if (!written) {
+        panic("Expected saved settings");
+      }
+      const saved = await decryptAIConfig(
+        toSafeId<"organization">("org_test"),
+        written.aiConfigEncrypted,
+        written.aiConfigIv,
+      );
+      expect(saved.decision).toEqual({
+        ...openaiDecision,
+        apiKey: "separate-key",
+      });
+      expect(fetch).toHaveBeenCalledTimes(keyMode === "new" ? 1 : 0);
+      if (keyMode === "new") {
+        expect(fetch.mock.calls.at(0)?.at(0)).toBe(
+          "https://eu.api.openai.com/v1/decisions",
+        );
+      }
+    },
+  );
 });

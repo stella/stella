@@ -187,7 +187,8 @@ describe("OpenAI decision key ownership", () => {
       }),
     ).toEqual({
       valid: false,
-      error: "An OpenAI API key is required for the decision model",
+      error:
+        "The decision model reuses your OpenAI API key. Keep that provider and key, add a separate decision API key, or switch the decision provider.",
     });
   });
   test("an override survives omitted edits, and null returns to reuse", () => {
@@ -229,24 +230,30 @@ describe("OpenAI decision key ownership", () => {
       probeConfig: { ...openaiDecision, apiKey: "rotated" },
     });
   });
-  test("removing a reused key fails while an override remains usable", () => {
-    expect(
-      resolve({
-        input: undefined,
-        existing: openaiDecision,
-        providers: [],
-        existingProviders: [openaiProvider],
-      }).valid,
-    ).toBe(false);
-    expect(
-      resolve({
-        input: undefined,
-        existing: { ...openaiDecision, apiKey: "override" },
-        providers: [],
-        existingProviders: [openaiProvider],
-      }).valid,
-    ).toBe(true);
-  });
+  test.each([
+    { providers: [] },
+    { providers: [{ ...openaiProvider, apiKey: "" }] },
+  ])(
+    "removing the reused provider or its key fails while an override remains usable (%j)",
+    ({ providers }) => {
+      expect(
+        resolve({
+          input: undefined,
+          existing: openaiDecision,
+          providers,
+          existingProviders: [openaiProvider],
+        }).valid,
+      ).toBe(false);
+      expect(
+        resolve({
+          input: undefined,
+          existing: { ...openaiDecision, apiKey: "override" },
+          providers,
+          existingProviders: [openaiProvider],
+        }).valid,
+      ).toBe(true);
+    },
+  );
   test("region changes require a decision probe", () => {
     expect(
       resolve({
