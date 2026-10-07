@@ -286,7 +286,7 @@ test("an OpenAI strict-mode null on an optional field never reaches the persiste
   // patch: the chat pipeline re-derives `arguments` from the validated input
   // too, so no end-to-end scenario can see the patch on its own.
   const violations = violationsOf(
-    CHAT_ORACLE.providerWireToolInput,
+    CHAT_ORACLE.providerWireToolArguments,
     Bun.deepEquals(JSON.parse(part.arguments), NORMALIZED_INPUT)
       ? []
       : [{ arguments: part.arguments, expected: NORMALIZED_INPUT }],

@@ -378,7 +378,7 @@
         "file": "src/handlers/chat/tool-call-end-arguments.test.ts",
         "test": "an OpenAI strict-mode null on an optional field never reaches the persisted arguments"
       },
-      "oracle": "chat.provider-wire.tool-input"
+      "oracle": "chat.provider-wire.tool-arguments"
     },
     {
       "id": "tool-input-null-optionals-omitted",
