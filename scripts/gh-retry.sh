@@ -32,6 +32,7 @@ trap 'exit 143' TERM
 
 args=("$@")
 retryable=false
+transport_retryable=false
 method=GET
 explicit_method=''
 endpoint=''
@@ -73,16 +74,16 @@ done
 case "${args[0]}" in
   api)
     if [[ "$method" == GET || "$method" == HEAD ]]; then
-      retryable=true
+      retryable=true; transport_retryable=true
     elif [[ "$endpoint" == graphql && "$query" =~ ^[[:space:]]*(query[[:space:]\(\{]|\{) && ! "$query" =~ (^|[^[:alnum:]_])mutation([^[:alnum:]_]|$) ]]; then
       # GraphQL queries use POST transport, but do not mutate repository state.
       retryable=true
     fi
     ;;
-  run) [[ "${args[1]:-}" != list && "${args[1]:-}" != view && "${args[1]:-}" != watch && "${args[1]:-}" != download ]] || retryable=true ;;
+  run) [[ "${args[1]:-}" != list && "${args[1]:-}" != view && "${args[1]:-}" != watch && "${args[1]:-}" != download ]] || { retryable=true; transport_retryable=true; } ;;
   release)
     case "${args[1]:-}" in
-      view|download) retryable=true ;;
+      view|download) retryable=true; transport_retryable=true ;;
       upload)
         # Replacing assets by name is the only admitted write. Partial uploads
         # are replaced; creation, dispatch, status rows and mutations run once.
@@ -180,6 +181,7 @@ for ((attempt=1; attempt<=4; attempt+=1)); do
   # Select the last response, including its Retry-After, not a redirect/page.
   read -r http retry_after < <(awk '
     BEGIN { after=-1 }
+    /^\* Request to / { status=0; after=-1 }
     /^< HTTP\/[0-9.]+ [0-9]+/ { status=$3; after=-1 }
     tolower($0) ~ /^< retry-after:/ { after=$0; sub(/^<[^:]*: */, "", after); sub(/\r$/, "", after) }
     END { print status+0, after }
@@ -200,9 +202,26 @@ for ((attempt=1; attempt<=4; attempt+=1)); do
     native_http=$(sed -n 's/^gh:.*(HTTP \([0-9][0-9][0-9]\)).*$/\1/p' "$scratch/trace" | tail -n 1)
     [[ -z "$native_http" ]] || http="$native_http"
   fi
-  echo "GitHub command failed: HTTP $http, attempt $attempt/4 (exit $status)" >&2
+  failure="HTTP $http"
   transient=false
-  if ((http >= 500 && http <= 599 || http == 429 || http == 403 && retry_after >= 0)); then transient=true; fi
+  if ((http >= 500 && http <= 599 || http == 429 || http == 403 && retry_after >= 0)); then
+    transient=true
+  elif ((http == 0)) && [[ "$transport_retryable" == true ]] && awk '
+    # Match Go transport errors logged by gh, not headers, payloads or decoder
+    # failures mentioning EOF. Unknown non-HTTP failures stay single-shot.
+    {
+      line=tolower($0); sub(/^\* /, "", line)
+      network = line ~ /^((get|head|post|patch|put|delete) +"https?:\/\/[^"]+": |(read|write|dial|lookup) +|net\/http: |(unexpected )?eof[[:space:]]*$)/
+      if (network && line ~ /(^|: )(connection reset( by peer)?|i\/o timeout|tls handshake timeout|no such host|(unexpected )?eof|connection refused)[[:space:]]*$/) found=1
+    }
+    END { exit !found }
+  ' "$scratch/trace"; then
+    # POST queries and clobber uploads retain their HTTP-status policy, but
+    # a missing response can hide a completed write; never replay it.
+    failure="transport error"
+    transient=true
+  fi
+  echo "GitHub command failed: $failure, attempt $attempt/4 (exit $status)" >&2
   if [[ "$retryable" != true || "$transient" != true ]] || ((attempt == 4)); then
     # Traces are never forwarded: URLs, request bodies and even native error
     # messages can contain credentials. Exit codes and status remain observable.
@@ -214,6 +233,6 @@ for ((attempt=1; attempt<=4; attempt+=1)); do
     echo 'GitHub retry budget exhausted' >&2
     exit "$status"
   fi
-  echo "Retrying GitHub HTTP $http after attempt $attempt/4 in ${delay}s" >&2
+  echo "Retrying GitHub $failure after attempt $attempt/4 in ${delay}s" >&2
   sleep "$delay"
 done

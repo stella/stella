@@ -35,6 +35,7 @@ if 'download' in args:
 sys.stdout.buffer.write(bytes.fromhex(response.get('output','')))
 if response.get('http') is not None:sys.stderr.write('< HTTP/2.0 '+str(response['http'])+'\\n')
 if response.get('after') is not None:sys.stderr.write('< Retry-After: '+str(response['after'])+'\\n')
+sys.stderr.write(response.get('error','')+'\\n')
 sys.stderr.write('private-token-do-not-print\\n')
 if response.get('hang'):
  sys.stdout.buffer.flush();sys.stderr.flush()
@@ -82,6 +83,7 @@ type FakeResponse = {
   after?: number | string;
   output?: string;
   hang?: boolean;
+  error?: string;
 };
 type ScenarioOptions = {
   args?: string[];
@@ -367,4 +369,107 @@ test("Retry-After HTTP dates use the same bounded recovery path", async () => {
   expect(result.exit).toBe(0);
   expect(result.calls).toHaveLength(2);
   expect(result.sleeps).toEqual([7]);
+});
+
+const transportErrors = [
+  'Get "https://api.github.com/example": read tcp 127.0.0.1:1234->127.0.0.1:443: read: connection reset by peer',
+  "* dial tcp 127.0.0.1:443: i/o timeout",
+  'Get "https://api.github.com/example": net/http: TLS handshake timeout',
+  "* dial tcp: lookup api.github.com: no such host",
+  'Get "https://api.github.com/example": EOF',
+  "* unexpected EOF",
+  'Get "https://api.github.com/example": dial tcp 127.0.0.1:443: connect: connection refused',
+];
+
+test.each(transportErrors)(
+  "recognized transport failures recover only for safe reads: %s",
+  async (error) => {
+    for (const method of ["GET", "HEAD"]) {
+      const result = await scenario({
+        args: ["api", "repos/example/project", "--method", method],
+        responses: [{ exit: 1, error, output: "00ff" }, success],
+      });
+      expect(result.exit).toBe(0);
+      expect(result.calls).toHaveLength(2);
+      expect(result.sleeps).toHaveLength(1);
+      expect(result.stdout).toEqual(Buffer.from("ok"));
+      expect(result.stderr).not.toContain(error);
+    }
+    for (const method of ["POST", "PATCH", "PUT", "DELETE"]) {
+      const result = await scenario({
+        args: ["api", "repos/example/project", "--method", method],
+        responses: [{ exit: 1, error }, success],
+      });
+      expect(result.exit).toBe(1);
+      expect(result.calls).toHaveLength(1);
+      expect(result.sleeps).toEqual([]);
+    }
+  },
+);
+
+test("unknown non-HTTP errors and errors after a non-transient HTTP response fail fast", async () => {
+  for (const response of [
+    { exit: 1, error: "unsupported command option" },
+    { exit: 1, error: "error decoding JSON: unexpected EOF" },
+    {
+      exit: 1,
+      error:
+        'Get "https://api.github.com/example": x509: certificate signed by unknown authority',
+    },
+    { exit: 1, error: "> Authorization: connection reset by peer" },
+    { exit: 1, http: 400, error: transportErrors.at(0) },
+  ]) {
+    const result = await scenario({ responses: [response, success] });
+    expect(result.exit).toBe(1);
+    expect(result.calls).toHaveLength(1);
+    expect(result.sleeps).toEqual([]);
+  }
+});
+
+test("transport recovery keeps writes single-shot even when HTTP recovery admits them", async () => {
+  for (const args of [
+    ["api", "graphql", "-f", "query=query { viewer { login } }"],
+    ["release", "upload", "v1", "asset.txt", "--clobber"],
+    ["run", "cancel", "123"],
+  ]) {
+    const result = await scenario({
+      args,
+      responses: [{ exit: 1, error: transportErrors.at(0) }, success],
+    });
+    expect(result.exit).toBe(1);
+    expect(result.calls).toHaveLength(1);
+  }
+});
+
+test("recognized transport recovery is bounded and also covers high-level reads", async () => {
+  const failed = { exit: 1, error: transportErrors.at(0) };
+  const persistent = await scenario({ responses: [failed] });
+  expect(persistent.exit).toBe(1);
+  expect(persistent.calls).toHaveLength(4);
+  expect(persistent.sleeps).toHaveLength(3);
+  for (const args of [
+    ["run", "view", "123"],
+    ["release", "view", "v1"],
+  ]) {
+    const result = await scenario({ args, responses: [failed, success] });
+    expect(result.exit).toBe(0);
+    expect(result.calls).toHaveLength(2);
+  }
+});
+
+test("a new request without a response does not inherit a redirect status", async () => {
+  const result = await scenario({
+    responses: [
+      {
+        exit: 1,
+        http: 302,
+        error:
+          '* Request to https://api.github.com/example\nGet "https://api.github.com/example": EOF',
+      },
+      success,
+    ],
+  });
+  expect(result.exit).toBe(0);
+  expect(result.calls).toHaveLength(2);
+  expect(result.stderr).toContain("transport error");
 });
