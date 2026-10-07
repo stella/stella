@@ -73,6 +73,7 @@ import { evaluate } from "./github-expression";
 import {
   parseCiCoverageLog,
   type CiCoverageEvidence,
+  type CiRunEvidence,
   type CiCoverageLogError,
 } from "./merge-bar-ci-coverage";
 import { decideBarFreshness, readBarFreshness } from "./merge-bar-freshness";
@@ -1190,9 +1191,7 @@ type CheckGreenResultFreshnessOptions = {
     title: string;
   }) => Result<ReadonlyMap<string, boolean>, PlanSelectorError>;
   readRunJobs: (runId: number) => readonly RunJob[];
-  readRunCoverage: (
-    runId: number,
-  ) => Result<CiCoverageEvidence, CiCoverageLogError>;
+  readRunCoverage: (runId: number) => Result<CiRunEvidence, CiCoverageLogError>;
   ratchet: RatchetFreshness;
   // True where landing hands the PR to a merge queue, whose merge group re-runs
   // the ratchet and full CI on the real merge commit. A direct merge has no such
@@ -1200,20 +1199,23 @@ type CheckGreenResultFreshnessOptions = {
   mergeGroupRetests: boolean;
 };
 
-export const checkGreenResultFreshness = ({
-  pullRequest,
-  jump,
-  checkRuns,
-  readWorkflowRun,
-  readBaseComparison,
-  readPullFiles,
-  readBaseWorkflow,
-  runSelector,
-  readRunJobs,
-  readRunCoverage,
-  ratchet,
-  mergeGroupRetests,
-}: CheckGreenResultFreshnessOptions) => {
+export const checkGreenResultFreshness = (
+  options: CheckGreenResultFreshnessOptions,
+): Result<void, StaleGreenResultError> => {
+  const {
+    pullRequest,
+    jump,
+    checkRuns,
+    readWorkflowRun,
+    readBaseComparison,
+    readPullFiles,
+    readBaseWorkflow,
+    runSelector,
+    readRunJobs,
+    readRunCoverage,
+    ratchet,
+    mergeGroupRetests,
+  } = options;
   if (jump || isReleasePullRequest(pullRequest)) {
     return Result.ok();
   }
@@ -1316,20 +1318,47 @@ export const checkGreenResultFreshness = ({
   if (typeof runId !== "number") {
     return panic("Expected a numeric workflow run id");
   }
-  const coverage = jobs.some((job) => job.pilotGate === "deferred-capable")
-    ? readRunCoverage(runId)
-    : Result.ok({ profile: "normal-v1" } as const);
-  if (coverage.isErr()) {
-    return refuse(`cannot read green CI coverage: ${coverage.error.message}`);
+  const evidence = readRunCoverage(runId);
+  if (evidence.isErr()) {
+    return refuse(`cannot read green CI coverage: ${evidence.error.message}`);
   }
-  if (coverage.value.profile === "pilot-fast-v1" && !mergeGroupRetests) {
-    return refuse("Pilot deferral requires mandatory merge-group validation");
+  const coverage = evidence.value;
+  switch (coverage.profile) {
+    case "queue-validation": {
+      // The pull_request `enqueued` run re-checks earlier coverage and runs
+      // no jobs itself; it outlives the queue entry when the PR is ejected.
+      // Judge the run below it, from its own base: older evidence can only
+      // refuse more, never less.
+      const below = checkRuns.filter(({ id }) => id !== green.id);
+      const previous = latestRunByName(below).get("ci-result");
+      if (
+        previous?.status !== "completed" ||
+        previous.conclusion !== "success"
+      ) {
+        return refuse(
+          "no green ci-result run below the queue validation covers this head",
+        );
+      }
+      return checkGreenResultFreshness({ ...options, checkRuns: below });
+    }
+    case "pilot-fast-v1":
+      if (!mergeGroupRetests) {
+        return refuse(
+          "Pilot deferral requires mandatory merge-group validation",
+        );
+      }
+      break;
+    case "normal-v1":
+      break;
+    default:
+      coverage satisfies never;
+      return panic("Unhandled CI run evidence");
   }
   const unrun = unrunPlannedJobs({
     jobs,
     plan: plan.value,
     runJobs: readRunJobs(runId),
-    coverage: coverage.value,
+    coverage,
   });
   if (unrun.length > 0) {
     return Result.err(
@@ -1614,9 +1643,7 @@ type GitHubGateway = {
   readPullFiles: () => readonly string[];
   readBaseWorkflow: (ref: string) => string | null;
   readRunJobs: (runId: number) => readonly RunJob[];
-  readRunCoverage: (
-    runId: number,
-  ) => Result<CiCoverageEvidence, CiCoverageLogError>;
+  readRunCoverage: (runId: number) => Result<CiRunEvidence, CiCoverageLogError>;
   readRatchetDefinitionPaths: (baseRefName: string) => unknown;
   readReviewThreads: () => readonly ReviewThreadSnapshot[];
   readMigrationDirectories: () => MigrationSnapshot;
