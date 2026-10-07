@@ -305,7 +305,6 @@
       // for the `import.meta.env` and browser declarations.
       "inputs": [
         "$TURBO_DEFAULT$",
-        "$TURBO_ROOT$/VERSION",
         "$TURBO_ROOT$/.npmrc",
         "$TURBO_ROOT$/bunfig.toml",
         "$TURBO_ROOT$/package.json",
