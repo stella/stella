@@ -468,8 +468,8 @@ test("the adjustment command consolidates every added allowance for the metric",
     expect(result.output).toContain(
       `Adjust ${files.join(", ")}, merging their funding into ${files[0]}`,
     );
-    const command = result.output
-      .match(/After deciding the increase is required, run: ([^\n]+)/u)
+    const command = /After deciding the increase is required, run: ([^\n]+)/u
+      .exec(result.output)
       ?.at(1);
     if (command === undefined) {
       throw new TypeError("Missing allowance adjustment command");
