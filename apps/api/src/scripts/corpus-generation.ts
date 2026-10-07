@@ -10,13 +10,17 @@
  * projection coordinator, and `register` covers an environment that has none.
  * Both mutating subcommands report the planned transition and every
  * precondition they checked, and write only under `--apply`, in one
- * transaction that re-checks the registry under a row lock and records a
- * system audit run. The state machine itself is the generation store's
+ * transaction that re-checks the registry under the fences canonical writers
+ * take, in their order, and records a system audit run. The state machine itself is the generation store's
  * (`corpus-index-generation-store.ts`); this command adds the refusals an
- * operator needs to read, and the one precondition the store cannot check:
- * that the target's indexes exist and hold documents on the search endpoint
- * readers will query. Flipping to a generation whose index set is empty would
- * answer every search with no results rather than with an error.
+ * operator needs to read, and the launch proof the store cannot check: that
+ * the target's indexes exist and hold documents on the search endpoint readers
+ * will query, that its projection has converged (no pending, blocked,
+ * outstanding or unpublished work), and that a full engine census finds no
+ * drift. The proof is taken at one projection revision under the exclusive
+ * mutation fence, and the flip applies only while the promotion fence still
+ * reads that revision, so no projection change can land between the census
+ * and the flip.
  */
 
 import { Result, TaggedError, panic } from "better-result";
@@ -44,6 +48,7 @@ import {
   readCorpusIndexSearchBaseUrl,
 } from "@/api/lib/legal-search/corpus-index-client";
 import {
+  lockCorpusIndexGenerationActivationTx,
   registerCorpusIndexGenerationTx,
   setServingCorpusIndexGenerationTx,
 } from "@/api/lib/legal-search/corpus-index-generation-store";
@@ -53,6 +58,21 @@ import {
   requireCorpusIndexManifest,
   type CorpusIndexManifest,
 } from "@/api/lib/legal-search/corpus-index-manifest";
+import {
+  censusAppliedCorpusProjections,
+  censusSettledCorpusProjections,
+} from "@/api/lib/legal-search/corpus-index-projection-census";
+import { readCorpusProjectionCensusIndexIdsTx } from "@/api/lib/legal-search/corpus-index-projection-census-store";
+import {
+  type CorpusIndexProjectionConvergenceStatus,
+  readCorpusIndexProjectionConvergenceTx,
+} from "@/api/lib/legal-search/corpus-index-projection-convergence";
+import { CORPUS_PROJECTION_DELETE_MAX_REVISIONS } from "@/api/lib/legal-search/corpus-index-projection-engine";
+import {
+  lockCorpusIndexProjectionPromotionTx,
+  lockCorpusIndexProjectionRevisionTx,
+  readCorpusIndexProjectionRevisionTx,
+} from "@/api/lib/legal-search/corpus-index-projection-revision";
 import { corpusIndexReadContract } from "@/api/lib/legal-search/corpus-index-read-contract";
 import { corpusIndexPattern } from "@/api/lib/legal-search/index-naming";
 import { recordSystemAudit } from "@/api/lib/system-audit/record";
@@ -132,6 +152,32 @@ class CorpusGenerationIndexUnreadableError extends TaggedError(
   "CorpusGenerationIndexUnreadableError",
 )<{ message: string; indexId: string; cause: unknown }> {}
 
+type CensusExpectation = "present" | "absent";
+
+class CorpusGenerationNotConvergedError extends TaggedError(
+  "CorpusGenerationNotConvergedError",
+)<{
+  message: string;
+  convergence: CorpusIndexProjectionConvergenceStatus;
+}> {}
+
+class CorpusGenerationCensusDriftError extends TaggedError(
+  "CorpusGenerationCensusDriftError",
+)<{
+  message: string;
+  indexId: string;
+  expected: CensusExpectation;
+  driftRevisions: string[];
+}> {}
+
+class CorpusGenerationCensusUnreadableError extends TaggedError(
+  "CorpusGenerationCensusUnreadableError",
+)<{ message: string; indexId: string; cause: unknown }> {}
+
+class CorpusGenerationProjectionMovedError extends TaggedError(
+  "CorpusGenerationProjectionMovedError",
+)<{ message: string; provenRevision: number; currentRevision: number }> {}
+
 export class CorpusGenerationLaneBusyError extends TaggedError(
   "CorpusGenerationLaneBusyError",
 )<{ message: string }> {}
@@ -148,11 +194,18 @@ type IndexRefusal =
   | CorpusGenerationIndexEmptyError
   | CorpusGenerationIndexUnreadableError;
 
+type LaunchRefusal =
+  | CorpusGenerationNotConvergedError
+  | CorpusGenerationCensusDriftError
+  | CorpusGenerationCensusUnreadableError;
+
 type CorpusGenerationRefusal =
   | CorpusGenerationUsageError
   | CorpusGenerationUndeclaredError
   | RegistryRefusal
   | IndexRefusal
+  | LaunchRefusal
+  | CorpusGenerationProjectionMovedError
   | CorpusGenerationLaneBusyError;
 
 /** A target the code declares, with the manifest it is bound to. */
@@ -461,7 +514,7 @@ type IndexEvidence = { indexId: string; documents: number };
 /** The status the engine answers a search of an index that does not exist with. */
 const HTTP_NOT_FOUND = 404;
 
-type CorpusIndexSearcher = Pick<CorpusIndexClient, "search">;
+type CorpusIndexReader = Pick<CorpusIndexClient, "search" | "aggregate">;
 
 /**
  * Count each required index's documents (opening passages, one per
@@ -470,7 +523,7 @@ type CorpusIndexSearcher = Pick<CorpusIndexClient, "search">;
  */
 const checkServedIndexes = async (
   target: DeclaredTarget,
-  client: CorpusIndexSearcher,
+  client: CorpusIndexReader,
 ): Promise<Result<IndexEvidence[], IndexRefusal>> => {
   const { openingPassageQuery } = corpusIndexReadContract(
     target.family,
@@ -550,7 +603,7 @@ const withOperatorDatabase: WithCorpusDatabase = async (access, work) => {
 
 type CommandContext = {
   withDatabase: WithCorpusDatabase;
-  indexClient: (manifest: CorpusIndexManifest) => CorpusIndexSearcher;
+  indexClient: (manifest: CorpusIndexManifest) => CorpusIndexReader;
   searchEndpoint: (manifest: CorpusIndexManifest) => string | null;
   write: (line: string) => void;
 };
@@ -643,11 +696,8 @@ const modeLine = (mode: Mode, applied: string): string => {
   }
 };
 
-const planRegisterTx = async (
-  tx: Transaction,
-  target: DeclaredTarget,
-  lock: RowLock,
-) => planRegister(await readFamilyRowsTx(tx, target.family, lock), target);
+const planRegisterTx = async (tx: Transaction, target: DeclaredTarget) =>
+  planRegister(await readFamilyRowsTx(tx, target.family, "none"), target);
 
 const runRegister = async (
   context: CommandContext,
@@ -659,9 +709,7 @@ const runRegister = async (
   const planned = await withDatabase(
     ACCESS.read,
     async (rootDb) =>
-      await rootDb.transaction(
-        async (tx) => await planRegisterTx(tx, target, "none"),
-      ),
+      await rootDb.transaction(async (tx) => await planRegisterTx(tx, target)),
   );
   if (planned.isErr()) {
     return Result.err(planned.error);
@@ -691,7 +739,13 @@ const runRegister = async (
     ACCESS.write,
     async (rootDb) =>
       await rootDb.transaction(async (tx) => {
-        const locked = await planRegisterTx(tx, target, "update");
+        // The activation fence first, as canonical writers take their source
+        // lock before any registry row; it also serializes every
+        // registration of the family, so the re-check needs no row lock, and
+        // a row lock here would precede the projection mutation fence the
+        // insert takes, which projection writers take before the row.
+        await lockCorpusIndexGenerationActivationTx(tx, target.family);
+        const locked = await planRegisterTx(tx, target);
         if (locked.isErr() || locked.value.type === "already_registered") {
           return locked;
         }
@@ -733,10 +787,259 @@ const transitionLine = (
     ? `plan: ${plan.target.generation} building -> serving (first serving generation of ${plan.target.family})`
     : `plan: ${plan.target.generation} building -> serving; ${plan.demotes} serving -> retiring`;
 
+/** Why a projection convergence state holds back the flip; null proceeds. */
+const CONVERGENCE_REFUSAL_REASONS = {
+  empty: "has no projected entities, so it would serve nothing",
+  known_blocked: "has blocked projection work that must be cleared first",
+  pending: "has projection work pending",
+  intent_outstanding: "has append or cleanup revisions outstanding",
+  publish_pending:
+    "has applied revisions the engine has not certainly published yet",
+  ready_for_census: null,
+} as const satisfies Record<
+  CorpusIndexProjectionConvergenceStatus,
+  string | null
+>;
+
+type LaunchSnapshot = {
+  revision: number;
+  convergence: CorpusIndexProjectionConvergenceStatus;
+};
+
+/**
+ * The target's projection revision and convergence, read together. Under
+ * --apply the revision is read under the exclusive mutation fence: an
+ * unfenced read can miss a writer that drew a lower revision and commits
+ * later, and the flip trusts the census only while this number holds.
+ */
+const readLaunchSnapshot = async (
+  { withDatabase }: CommandContext,
+  { target, mode }: Extract<CorpusGenerationCommand, { type: "serve" }>,
+): Promise<Result<LaunchSnapshot, CorpusGenerationLaneBusyError>> => {
+  const snapshotTx = async (
+    tx: Transaction,
+    revision: number,
+  ): Promise<LaunchSnapshot> => ({
+    revision,
+    convergence: await readCorpusIndexProjectionConvergenceTx(tx, target),
+  });
+  switch (mode) {
+    case "dry_run":
+      return await withDatabase(
+        ACCESS.read,
+        async (rootDb) =>
+          await rootDb.transaction(
+            async (tx) =>
+              await snapshotTx(
+                tx,
+                await readCorpusIndexProjectionRevisionTx(tx, target),
+              ),
+          ),
+      );
+    case "apply":
+      return await withDatabase(
+        ACCESS.write,
+        async (rootDb) =>
+          await rootDb.transaction(
+            async (tx) =>
+              await snapshotTx(
+                tx,
+                await lockCorpusIndexProjectionRevisionTx(tx, target),
+              ),
+          ),
+      );
+    default:
+      mode satisfies never;
+      return panic(`Unhandled mode: ${String(mode)}`);
+  }
+};
+
+const requireConverged = (
+  target: DeclaredTarget,
+  { convergence }: LaunchSnapshot,
+): Result<void, CorpusGenerationNotConvergedError> => {
+  const reason = CONVERGENCE_REFUSAL_REASONS[convergence];
+  return reason === null
+    ? Result.ok()
+    : Result.err(
+        new CorpusGenerationNotConvergedError({
+          message: `${target.family}/${target.generation} ${reason} (projection ${convergence})`,
+          convergence,
+        }),
+      );
+};
+
+/** The passes a full census runs over every index, applied revisions first. */
+const CENSUS_PASSES = [
+  { kind: "applied", pass: censusAppliedCorpusProjections },
+  { kind: "settled", pass: censusSettledCorpusProjections },
+] as const;
+
+type CensusPass = (typeof CENSUS_PASSES)[number]["pass"];
+
+type CensusPassOptions = {
+  pass: CensusPass;
+  runInTransaction: <T>(work: (tx: Transaction) => Promise<T>) => Promise<T>;
+  client: CorpusIndexReader;
+  target: DeclaredTarget;
+  indexId: string;
+};
+
+type CensusRefusal =
+  | CorpusGenerationCensusDriftError
+  | CorpusGenerationCensusUnreadableError;
+
+/** Page one census pass over one index to its end; resolves with the revisions inspected. */
+const runCensusPass = async ({
+  pass,
+  runInTransaction,
+  client,
+  target,
+  indexId,
+}: CensusPassOptions): Promise<Result<number, CensusRefusal>> => {
+  let after: string | null = null;
+  let inspected = 0;
+  for (;;) {
+    // db-await-in-loop: a keyset walk; each page's cursor comes from the one before it
+    const page = await pass({
+      runInTransaction,
+      client,
+      family: target.family,
+      generation: target.generation,
+      indexId,
+      after,
+      limit: CORPUS_PROJECTION_DELETE_MAX_REVISIONS,
+    });
+    if (page.isErr()) {
+      return Result.err(
+        new CorpusGenerationCensusUnreadableError({
+          message: `The census of ${indexId} could not be read: ${page.error.message}`,
+          indexId,
+          cause: page.error,
+        }),
+      );
+    }
+    const { expected, driftRevisions, nextCursor, complete } = page.value;
+    if (driftRevisions.length > 0) {
+      return Result.err(
+        new CorpusGenerationCensusDriftError({
+          message: `The census of ${indexId} found ${String(driftRevisions.length)} revisions not ${expected} in the engine as recorded; let the projection repair them first`,
+          indexId,
+          expected,
+          driftRevisions,
+        }),
+      );
+    }
+    inspected += page.value.inspected;
+    if (complete || nextCursor === null) {
+      return Result.ok(inspected);
+    }
+    after = nextCursor;
+  }
+};
+
+type CensusEvidence = { indexIds: string[]; applied: number; settled: number };
+
+/**
+ * The full zero-drift census: every applied revision present in the engine
+ * with its expected document count, every settled one absent. Read-only and
+ * outside any write transaction: it proves the snapshot's revision, which the
+ * flip re-checks under the promotion fence.
+ */
+const censusGeneration = async (
+  { withDatabase, indexClient }: CommandContext,
+  target: DeclaredTarget,
+): Promise<
+  Result<Result<CensusEvidence, CensusRefusal>, CorpusGenerationLaneBusyError>
+> =>
+  await withDatabase(ACCESS.read, async (rootDb) => {
+    const runInTransaction = async <T>(
+      work: (tx: Transaction) => Promise<T>,
+    ): Promise<T> => await rootDb.transaction(work);
+    const indexIds = await runInTransaction(
+      async (tx) => await readCorpusProjectionCensusIndexIdsTx(tx, target),
+    );
+    const client = indexClient(target.manifest);
+    const evidence: CensusEvidence = { indexIds, applied: 0, settled: 0 };
+    const passes = indexIds.flatMap((indexId) =>
+      CENSUS_PASSES.map(({ kind, pass }) => ({ indexId, kind, pass })),
+    );
+    for (const { indexId, kind, pass } of passes) {
+      // db-await-in-loop: sequential, so the first drifted index is the one an operator acts on
+      const inspected = await runCensusPass({
+        pass,
+        runInTransaction,
+        client,
+        target,
+        indexId,
+      });
+      if (inspected.isErr()) {
+        return Result.err(inspected.error);
+      }
+      switch (kind) {
+        case "applied":
+          evidence.applied += inspected.value;
+          break;
+        case "settled":
+          evidence.settled += inspected.value;
+          break;
+        default:
+          kind satisfies never;
+          return panic(`Unhandled census pass: ${String(kind)}`);
+      }
+    }
+    return Result.ok(evidence);
+  });
+
+/**
+ * Decide the flip under the promotion fence. The fence comes before any
+ * registry row lock, the order projection writers take: their shared side of
+ * the fence, then a key-share lock on the generation row through the
+ * projection foreign keys.
+ */
+const applyServeTx = async (
+  tx: Transaction,
+  target: DeclaredTarget,
+  snapshot: LaunchSnapshot,
+): Promise<
+  Result<ServePlan, RegistryRefusal | CorpusGenerationProjectionMovedError>
+> => {
+  const currentRevision = await lockCorpusIndexProjectionPromotionTx(
+    tx,
+    target,
+  );
+  if (currentRevision !== snapshot.revision) {
+    return Result.err(
+      new CorpusGenerationProjectionMovedError({
+        message: `${target.family}/${target.generation} changed after the census (projection revision ${String(snapshot.revision)} -> ${String(currentRevision)}); run serve again`,
+        provenRevision: snapshot.revision,
+        currentRevision,
+      }),
+    );
+  }
+  // The registry may have moved since the report: decide again under the
+  // row locks, and apply what this decision says.
+  const locked = await planServeTx(tx, target, "update");
+  if (locked.isErr() || locked.value.type === "already_serving") {
+    return locked;
+  }
+  await setServingCorpusIndexGenerationTx(tx, target);
+  await recordSystemAudit(tx, "system:corpus-generation-operator", {
+    subject: createSafeId<"systemScriptRun">(),
+    counts: {
+      registered: 0,
+      promoted: 1,
+      demoted: locked.value.demotes === null ? 0 : 1,
+    },
+  });
+  return locked;
+};
+
 const runServe = async (
   context: CommandContext,
-  { target, mode }: Extract<CorpusGenerationCommand, { type: "serve" }>,
+  command: Extract<CorpusGenerationCommand, { type: "serve" }>,
 ): Promise<Result<void, CorpusGenerationRefusal>> => {
+  const { target, mode } = command;
   const { withDatabase, write } = context;
   write(`serve ${target.family}/${target.generation} (${mode})`);
   write(declaredLine(target));
@@ -768,6 +1071,18 @@ const runServe = async (
       return panic(`Unhandled serve plan: ${String(plan)}`);
   }
 
+  const snapshot = await readLaunchSnapshot(context, command);
+  if (snapshot.isErr()) {
+    return Result.err(snapshot.error);
+  }
+  const converged = requireConverged(target, snapshot.value);
+  if (converged.isErr()) {
+    return Result.err(converged.error);
+  }
+  write(
+    `checked: projection converged at revision ${String(snapshot.value.revision)}; nothing pending, blocked, outstanding or unpublished`,
+  );
+
   const endpoint = context.searchEndpoint(target.manifest);
   if (endpoint === null) {
     return Result.err(
@@ -789,41 +1104,37 @@ const runServe = async (
       `checked: ${indexId} holds ${String(documents)} documents on ${endpoint}`,
     );
   }
+  const census = await censusGeneration(context, target);
+  if (census.isErr()) {
+    return Result.err(census.error);
+  }
+  if (census.value.isErr()) {
+    return Result.err(census.value.error);
+  }
+  const { indexIds, applied, settled } = census.value.value;
+  write(
+    `checked: census found no drift across ${String(indexIds.length)} indexes (${String(applied)} applied revisions present, ${String(settled)} settled revisions absent)`,
+  );
   write(transitionLine(plan));
   if (mode === MODES.dryRun) {
     write(modeLine(mode, ""));
     return Result.ok();
   }
 
-  const applied = await withDatabase(
+  const flipped = await withDatabase(
     ACCESS.write,
     async (rootDb) =>
-      await rootDb.transaction(async (tx) => {
-        // The registry may have moved since the report: decide again under the
-        // row locks, and apply what this decision says.
-        const locked = await planServeTx(tx, target, "update");
-        if (locked.isErr() || locked.value.type === "already_serving") {
-          return locked;
-        }
-        await setServingCorpusIndexGenerationTx(tx, target);
-        await recordSystemAudit(tx, "system:corpus-generation-operator", {
-          subject: createSafeId<"systemScriptRun">(),
-          counts: {
-            registered: 0,
-            promoted: 1,
-            demoted: locked.value.demotes === null ? 0 : 1,
-          },
-        });
-        return locked;
-      }),
+      await rootDb.transaction(
+        async (tx) => await applyServeTx(tx, target, snapshot.value),
+      ),
   );
-  if (applied.isErr()) {
-    return Result.err(applied.error);
+  if (flipped.isErr()) {
+    return Result.err(flipped.error);
   }
-  if (applied.value.isErr()) {
-    return Result.err(applied.value.error);
+  if (flipped.value.isErr()) {
+    return Result.err(flipped.value.error);
   }
-  const done = applied.value.value;
+  const done = flipped.value.value;
   switch (done.type) {
     case "already_serving":
       write(
@@ -847,7 +1158,7 @@ const runServe = async (
 type RunCorpusGenerationOptions = {
   args: readonly string[];
   withDatabase?: WithCorpusDatabase;
-  indexClient?: (manifest: CorpusIndexManifest) => CorpusIndexSearcher;
+  indexClient?: (manifest: CorpusIndexManifest) => CorpusIndexReader;
   searchEndpoint?: (manifest: CorpusIndexManifest) => string | null;
   write?: (line: string) => void;
   writeError?: (line: string) => void;

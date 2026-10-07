@@ -2,7 +2,7 @@
  * The corpus generation operator command against a real PostgreSQL registry,
  * with the search engine replaced by a counting fake: register, a family's
  * first flip, a second flip that retires the first, and every refusal an
- * operator can meet. A report run goes through the same read-only wrapper the
+ * operator can meet, the launch proof's among them. A report run goes through the same read-only wrapper the
  * production door uses, so "a dry run writes nothing" is a property of the
  * connection, and is checked against the rows besides.
  */
@@ -20,7 +20,13 @@ import { and, eq, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 
 import type { Transaction } from "@/api/db/root";
-import { corpusIndexGenerations, systemAuditRuns } from "@/api/db/schema";
+import {
+  corpusIndexGenerations,
+  corpusIndexProjectionIntents,
+  corpusIndexProjectionStates,
+  systemAuditRuns,
+} from "@/api/db/schema";
+import { toSafeId } from "@/api/lib/branded-types";
 import {
   type CaseLawRootHandle,
   readOnlyHandles,
@@ -31,6 +37,7 @@ import {
   corpusIndexManifestDigest,
   requireCorpusIndexManifest,
 } from "@/api/lib/legal-search/corpus-index-manifest";
+import type { CorpusIndexProjectionConvergenceStatus } from "@/api/lib/legal-search/corpus-index-projection-convergence";
 import {
   CorpusGenerationLaneBusyError,
   runCorpusGenerationCommand,
@@ -60,12 +67,159 @@ type EngineState = {
   documents: Map<string, number>;
   /** Index ids a run asked about, in order. */
   searched: string[];
+  /** Projection revisions the engine holds, with their document counts. */
+  revisions: Map<string, number>;
+  /** Runs when the census reads the engine. */
+  onCensus: () => Promise<void>;
 };
 
 const engineWith = (indexIds: readonly string[]): EngineState => ({
   documents: new Map(indexIds.map((indexId) => [indexId, INDEX_DOCUMENTS])),
   searched: [],
+  revisions: new Map(),
+  onCensus: async () => {},
 });
+
+/** The census asks for revisions by exact term; the fake answers the same way. */
+const PROJECTION_REVISION_TERM = /projection_revision:"(?<revision>[^"]+)"/gu;
+
+const censusBuckets = (engine: EngineState, query: string) =>
+  [...query.matchAll(PROJECTION_REVISION_TERM)].flatMap(({ groups }) => {
+    const revision = groups?.["revision"];
+    const count =
+      revision === undefined ? undefined : engine.revisions.get(revision);
+    return count === undefined ? [] : [{ key: revision, doc_count: count }];
+  });
+
+const NOW = new Date("2026-08-26T00:00:00.000Z");
+const FINGERPRINT = "a".repeat(64);
+const PROJECTED_ENTITY_ID = "0198e331-e578-7000-8000-000000000701";
+/** One applied revision per generation, so two generations can coexist. */
+const PROJECTION_REVISIONS = {
+  case_law_v6: "0198e331-e578-7000-8000-000000000706",
+  case_law_v7: "0198e331-e578-7000-8000-000000000707",
+  legislation_v2: "0198e331-e578-7000-8000-000000000712",
+} as const;
+
+type ProjectedGeneration = keyof typeof PROJECTION_REVISIONS;
+
+/**
+ * Give a registered generation one entity the projection has applied, and
+ * the engine the revision it wrote: a converged generation with no drift.
+ */
+const seedConvergedProjection = async (
+  generation: ProjectedGeneration,
+  engine?: EngineState,
+) => {
+  const family = generation === "legislation_v2" ? "legislation" : "case_law";
+  const indexId =
+    family === "legislation" ? `${generation}_cze` : `${generation}_cs_sk`;
+  const revision = toSafeId<"corpusIndexProjectionIntent">(
+    PROJECTION_REVISIONS[generation],
+  );
+  await db.insert(corpusIndexProjectionIntents).values({
+    id: revision,
+    family,
+    generation,
+    entityId: PROJECTED_ENTITY_ID,
+    epoch: 1n,
+    fingerprint: FINGERPRINT,
+    indexId,
+    status: "applied",
+    appendStartedAt: NOW,
+    appendCommittedAt: NOW,
+    expectedDocumentCount: 1,
+    appliedAt: NOW,
+  });
+  await db.insert(corpusIndexProjectionStates).values({
+    family,
+    generation,
+    entityId: PROJECTED_ENTITY_ID,
+    desiredAction: "upsert",
+    desiredEpoch: 1n,
+    desiredFingerprint: FINGERPRINT,
+    desiredIndexId: indexId,
+    appliedAction: "upsert",
+    appliedEpoch: 1n,
+    appliedRevision: revision,
+    appliedFingerprint: FINGERPRINT,
+    appliedIndexId: indexId,
+    appliedAt: NOW,
+  });
+  engine?.revisions.set(revision, 1);
+  return { revision };
+};
+
+const PENDING_ENTITY_ID = "0198e331-e578-7000-8000-000000000799";
+
+/**
+ * How to leave `case_law_v7` short of convergence in each launch-blocking
+ * way the probe names. Total over the statuses, so a new one needs a case.
+ */
+const seedPendingEntity = async () => {
+  await db.insert(corpusIndexProjectionStates).values({
+    family: "case_law",
+    generation: "case_law_v7",
+    entityId: PENDING_ENTITY_ID,
+    desiredAction: "upsert",
+    desiredEpoch: 1n,
+    desiredFingerprint: FINGERPRINT,
+    desiredIndexId: "case_law_v7_cs_sk",
+  });
+};
+
+const LAUNCH_BLOCKING_FIXTURES = {
+  empty: async () => {},
+  pending: async () => {
+    await seedConvergedProjection("case_law_v7");
+    await seedPendingEntity();
+  },
+  known_blocked: async () => {
+    await seedConvergedProjection("case_law_v7");
+    await seedPendingEntity();
+    await db
+      .update(corpusIndexProjectionStates)
+      .set({
+        workStatus: "blocked",
+        failureAttempts: 1,
+        lastFailureKind: "payload_unavailable",
+        lastFailureMessage: "fixture payload is unavailable",
+      })
+      .where(eq(corpusIndexProjectionStates.entityId, PENDING_ENTITY_ID));
+  },
+  intent_outstanding: async () => {
+    // An applied revision no state names: written, but not authoritative.
+    await seedConvergedProjection("case_law_v7");
+    await db.insert(corpusIndexProjectionIntents).values({
+      id: toSafeId<"corpusIndexProjectionIntent">(
+        "0198e331-e578-7000-8000-000000000798",
+      ),
+      family: "case_law",
+      generation: "case_law_v7",
+      entityId: PROJECTED_ENTITY_ID,
+      epoch: 2n,
+      fingerprint: "b".repeat(64),
+      indexId: "case_law_v7_cs_sk",
+      status: "applied",
+      appendStartedAt: NOW,
+      appendCommittedAt: NOW,
+      expectedDocumentCount: 1,
+      appliedAt: NOW,
+    });
+  },
+  publish_pending: async () => {
+    // Accepted just now: the engine has not certainly published it.
+    const { revision } = await seedConvergedProjection("case_law_v7");
+    const now = new Date();
+    await db
+      .update(corpusIndexProjectionIntents)
+      .set({ appendStartedAt: now, appendCommittedAt: now, appliedAt: now })
+      .where(eq(corpusIndexProjectionIntents.id, revision));
+  },
+} as const satisfies Record<
+  Exclude<CorpusIndexProjectionConvergenceStatus, "ready_for_census">,
+  () => Promise<void>
+>;
 
 const rootHandle = (): CaseLawRootHandle =>
   asTestRaw<CaseLawRootHandle>({
@@ -127,6 +281,16 @@ const run = async ({
     withDatabase: database,
     searchEndpoint: () => searchEndpoint,
     indexClient: () => ({
+      aggregate: async ({ query }) => {
+        await engine.onCensus();
+        return Result.ok({
+          projection_revisions: {
+            buckets: censusBuckets(engine, query),
+            doc_count_error_upper_bound: 0,
+            sum_other_doc_count: 0,
+          },
+        });
+      },
       search: async ({ indexId }) => {
         engine.searched.push(indexId);
         const documents = engine.documents.get(indexId);
@@ -241,6 +405,7 @@ describe("corpus generation operator command", () => {
       ...createdIndexes("case_law_v6"),
       ...createdIndexes("case_law_v7"),
     ]);
+    await seedConvergedProjection("case_law_v6", engine);
     const serveReport = await run({
       args: caseLaw("serve", "case_law_v6"),
       engine,
@@ -251,6 +416,10 @@ describe("corpus generation operator command", () => {
     );
     expect(serveReport.out).toContain(
       `checked: case_law_v6_cs_sk holds ${String(INDEX_DOCUMENTS)} documents on ${SEARCH_ENDPOINT}`,
+    );
+    expect(serveReport.out).toContain("checked: projection converged");
+    expect(serveReport.out).toContain(
+      "checked: census found no drift across 1 indexes (1 applied revisions present, 0 settled revisions absent)",
     );
     expect(engine.searched).toEqual(createdIndexes("case_law_v6"));
     expect(await statusOf("case_law_v6")).toBe("building");
@@ -274,6 +443,7 @@ describe("corpus generation operator command", () => {
     expect(
       (await run({ args: caseLaw("register", "case_law_v7", "--apply") })).code,
     ).toBe(0);
+    await seedConvergedProjection("case_law_v7", engine);
     const second = await run({
       args: caseLaw("serve", "case_law_v7", "--apply"),
       engine,
@@ -318,10 +488,12 @@ describe("corpus generation operator command", () => {
       ...createdIndexes("case_law_v6"),
       ...createdIndexes("case_law_v7"),
     ]);
-    for (const generation of ["case_law_v6", "case_law_v7"]) {
-      // db-await-in-loop: two fixture steps that must run in order
+    for (const generation of ["case_law_v6", "case_law_v7"] as const) {
+      // db-await-in-loop: fixture steps that must run in order
       await run({ args: caseLaw("register", generation, "--apply") });
-      // db-await-in-loop: two fixture steps that must run in order
+      // db-await-in-loop: fixture steps that must run in order
+      await seedConvergedProjection(generation, engine);
+      // db-await-in-loop: fixture steps that must run in order
       await run({ args: caseLaw("serve", generation, "--apply"), engine });
     }
     expect(await statusOf("case_law_v6")).toBe("retiring");
@@ -359,6 +531,7 @@ describe("corpus generation operator command", () => {
 
   test("a target whose indexes are missing or empty on the search endpoint is refused", async () => {
     await run({ args: caseLaw("register", "case_law_v7", "--apply") });
+    await seedConvergedProjection("case_law_v7");
     const before = await registryRows();
 
     const missingGroup = engineWith(
@@ -423,6 +596,7 @@ describe("corpus generation operator command", () => {
       ],
     });
     const engine = engineWith(["legislation_v2_*"]);
+    await seedConvergedProjection("legislation_v2", engine);
     const served = await run({
       args: [
         "serve",
@@ -493,6 +667,79 @@ describe("corpus generation operator command", () => {
     expect(busy.code).toBe(1);
     expect(busy.err).toContain("refused (CorpusGenerationLaneBusyError)");
     expect(await statusOf("case_law_v7")).toBe("building");
+  });
+
+  test.each(Object.entries(LAUNCH_BLOCKING_FIXTURES))(
+    "a generation whose every index holds documents is refused while its projection is %s",
+    async (convergence, arrange) => {
+      await run({ args: caseLaw("register", "case_law_v7", "--apply") });
+      await arrange();
+      const before = await registryRows();
+      for (const flags of [[], ["--apply"]]) {
+        const engine = engineWith(createdIndexes("case_law_v7"));
+        // db-await-in-loop: the report and the write meet the same refusal
+        const refused = await run({
+          args: caseLaw("serve", "case_law_v7", ...flags),
+          engine,
+        });
+        expect(refused.code).toBe(1);
+        expect(refused.out).toContain(
+          "checked: registered as building with the declared manifest",
+        );
+        expect(refused.err).toContain(
+          `refused (CorpusGenerationNotConvergedError): case_law/case_law_v7`,
+        );
+        expect(refused.err).toContain(`(projection ${convergence})`);
+        expect(engine.searched).toEqual([]);
+      }
+      expect(await registryRows()).toEqual(before);
+      expect(await auditCounts()).toEqual([
+        { registered: 1, promoted: 0, demoted: 0 },
+      ]);
+    },
+  );
+
+  test("a census that finds an applied revision missing or miscounted refuses the flip", async () => {
+    await run({ args: caseLaw("register", "case_law_v7", "--apply") });
+    const { revision } = await seedConvergedProjection("case_law_v7");
+    const missing = engineWith(createdIndexes("case_law_v7"));
+    const miscounted = engineWith(createdIndexes("case_law_v7"));
+    miscounted.revisions.set(revision, 2);
+    for (const engine of [missing, miscounted]) {
+      // db-await-in-loop: each engine is checked against the same registry
+      const refused = await run({
+        args: caseLaw("serve", "case_law_v7", "--apply"),
+        engine,
+      });
+      expect(refused.code).toBe(1);
+      expect(refused.err).toContain(
+        "refused (CorpusGenerationCensusDriftError): The census of case_law_v7_cs_sk found 1 revisions not present",
+      );
+    }
+    expect(await statusOf("case_law_v7")).toBe("building");
+  });
+
+  test("a projection change between the census and the flip refuses the flip", async () => {
+    await run({ args: caseLaw("register", "case_law_v7", "--apply") });
+    const engine = engineWith(createdIndexes("case_law_v7"));
+    await seedConvergedProjection("case_law_v7", engine);
+    engine.onCensus = async () => {
+      engine.onCensus = async () => {};
+      await seedPendingEntity();
+    };
+    const moved = await run({
+      args: caseLaw("serve", "case_law_v7", "--apply"),
+      engine,
+    });
+    expect(moved.code).toBe(1);
+    expect(moved.out).toContain("checked: census found no drift");
+    expect(moved.err).toContain(
+      "refused (CorpusGenerationProjectionMovedError)",
+    );
+    expect(await statusOf("case_law_v7")).toBe("building");
+    expect(await auditCounts()).toEqual([
+      { registered: 1, promoted: 0, demoted: 0 },
+    ]);
   });
 
   test("malformed command lines are refused with the usage", async () => {
