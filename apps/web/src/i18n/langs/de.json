@@ -349,6 +349,7 @@
     },
     "view": {
       "chooseList": "Liste auswählen",
+      "createList": "Liste erstellen",
       "evidenceList": "Fakten aus",
       "noLists": "Diese Akte hat keine Listen.",
       "pickList": "Wählen Sie die Liste, mit deren Fakten die Dokumente dieser Akte abgeglichen werden."
