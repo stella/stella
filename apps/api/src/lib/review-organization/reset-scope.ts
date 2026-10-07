@@ -30,6 +30,8 @@ export const REVIEW_RESET_KEPT_TABLES = {
   action_cost_calls: "Usage ledger: action cost history.",
   action_cost_records: "Usage ledger: action cost history.",
   hosted_checkout_claims: "Billing state, never reviewer content.",
+  organization_professional_use_acceptances:
+    "The acceptance the organization was created under; written once at creation.",
   legal_list_verification_budgets: "Usage ledger: verification budget.",
   organization_file_objects:
     "Storage accounting, settled by the cleanup workers as objects are erased.",
