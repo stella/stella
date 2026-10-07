@@ -16,8 +16,16 @@ type ReconcilePlaybookSaveToolCallsOptions = {
   queryClient: QueryClient;
 };
 
+type PlaybookSaveReconciliation = {
+  playbookId: string;
+  /** Settles when the playbook queries have refetched. */
+  refetched: Promise<void>;
+};
+
 /**
- * Resolves to the playbook the latest newly handled save wrote, or null.
+ * Returns the playbook the latest newly handled save wrote, with the refetch
+ * it started, or null. The caller follows the save once `refetched` settles,
+ * so the pane's label can read the fresh name.
  *
  * A chat save runs outside the playbooks page's own mutations, so every
  * playbook query is refetched: an open list, and a detail the editor or the
@@ -29,18 +37,18 @@ type ReconcilePlaybookSaveToolCallsOptions = {
  * its form from whatever the cache holds at mount, and an invalidated entry
  * is still served while it refetches.
  */
-export const reconcilePlaybookSaveToolCalls = async ({
+export const reconcilePlaybookSaveToolCalls = ({
   handledToolCallIds,
   messages,
   organizationId,
   playbookKeys,
   queryClient,
-}: ReconcilePlaybookSaveToolCallsOptions): Promise<string | null> => {
-  const latestPlaybookId = consumePlaybookSaveToolCalls({
+}: ReconcilePlaybookSaveToolCallsOptions): PlaybookSaveReconciliation | null => {
+  const playbookId = consumePlaybookSaveToolCalls({
     handledToolCallIds,
     messages,
   });
-  if (latestPlaybookId === null) {
+  if (playbookId === null) {
     return null;
   }
   queryClient.removeQueries({
@@ -48,10 +56,12 @@ export const reconcilePlaybookSaveToolCalls = async ({
     predicate: (query) =>
       playbookKeys.isDetail(query.queryKey) && !query.isActive(),
   });
-  await queryClient.invalidateQueries({
-    queryKey: playbookKeys.all(organizationId),
-  });
-  return latestPlaybookId;
+  return {
+    playbookId,
+    refetched: queryClient.invalidateQueries({
+      queryKey: playbookKeys.all(organizationId),
+    }),
+  };
 };
 
 /**

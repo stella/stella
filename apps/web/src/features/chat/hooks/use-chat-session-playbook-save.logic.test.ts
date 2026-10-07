@@ -74,14 +74,20 @@ const reconcile = async ({
   handledToolCallIds?: Set<string>;
   messages: PlaybookSaveMessage[];
   queryClient: QueryClient;
-}) =>
-  await reconcilePlaybookSaveToolCalls({
+}) => {
+  const reconciliation = reconcilePlaybookSaveToolCalls({
     handledToolCallIds,
     messages,
     organizationId: ORGANIZATION_ID,
     playbookKeys: knowledgeKeys.playbooks,
     queryClient,
   });
+  if (reconciliation === null) {
+    return null;
+  }
+  await reconciliation.refetched;
+  return reconciliation.playbookId;
+};
 
 describe("playbook save cache reconciliation", () => {
   test("a completed save invalidates this organization's lists and drops its unwatched details", async () => {
@@ -175,6 +181,33 @@ describe("playbook save cache reconciliation", () => {
     expect(
       await reconcile({ messages, queryClient: seededQueryClient() }),
     ).toBe("playbook-b");
+  });
+
+  test("older history paged in behind a handled save is consumed, not followed", async () => {
+    const handledToolCallIds = new Set<string>();
+    const latest = saveMessages({
+      output: { playbookId: "playbook-b" },
+      callNumber: 2,
+    });
+    await reconcile({
+      handledToolCallIds,
+      messages: latest,
+      queryClient: seededQueryClient(),
+    });
+    const queryClient = seededQueryClient();
+    const withOlder = [
+      ...saveMessages({ output: { playbookId: "playbook-a" } }),
+      ...latest,
+    ];
+
+    expect(
+      await reconcile({ handledToolCallIds, messages: withOlder, queryClient }),
+    ).toBeNull();
+    expect(handledToolCallIds.has("tool-call-1")).toBe(true);
+
+    for (const queryKey of PLAYBOOK_QUERY_KEYS) {
+      expect(isInvalidated(queryClient, queryKey)).toBe(false);
+    }
   });
 });
 

@@ -1202,7 +1202,8 @@ export type PlaybookSaveMessage = DocumentDeletionMessage;
  * Consume the successful `save_playbook` calls this session has not handled,
  * returning the playbook the latest of them saved, or null if there was none.
  * A refused save returns an error envelope with no `playbookId`, and wrote
- * nothing, so it is not a reason to refetch.
+ * nothing, so it is not a reason to refetch. Older history paged in behind a
+ * save already handled is consumed but not returned: nothing newer was saved.
  */
 export const consumePlaybookSaveToolCalls = ({
   handledToolCallIds,
@@ -1225,9 +1226,12 @@ export const consumePlaybookSaveToolCalls = ({
         part["state"] !== "complete" ||
         typeof part["id"] !== "string" ||
         !isJsonObject(part["output"]) ||
-        typeof part["output"]["playbookId"] !== "string" ||
-        handledToolCallIds.has(part["id"])
+        typeof part["output"]["playbookId"] !== "string"
       ) {
+        continue;
+      }
+      if (handledToolCallIds.has(part["id"])) {
+        latestPlaybookId = null;
         continue;
       }
 

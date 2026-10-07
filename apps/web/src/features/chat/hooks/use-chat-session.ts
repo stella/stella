@@ -1166,23 +1166,33 @@ export const useChatSession = ({
   );
 
   // A chat `save_playbook` writes an org-level playbook from any surface, so
-  // an open playbooks list or editor refetches once per completed save.
+  // an open playbooks list or editor refetches once per completed save. The
+  // pane follows only the newest save: a refetch that settles after a later
+  // save's is dropped.
+  const playbookSaveSequenceRef = useRef(0);
   useExternalSyncEffect(() => {
+    const reconciliation = reconcilePlaybookSaveToolCalls({
+      handledToolCallIds: handledPlaybookSaveToolCallIdsRef.current,
+      messages,
+      organizationId,
+      playbookKeys: knowledgeKeys.playbooks,
+      queryClient,
+    });
+    if (reconciliation === null) {
+      return;
+    }
     const paneTabId = playbookPaneTabId;
-    const reconcileAndFollow = async () => {
-      const playbookId = await reconcilePlaybookSaveToolCalls({
-        handledToolCallIds: handledPlaybookSaveToolCallIdsRef.current,
-        messages,
-        organizationId,
-        playbookKeys: knowledgeKeys.playbooks,
-        queryClient,
-      });
-      if (playbookId !== null) {
-        followPlaybookSave({ playbookId, paneTabId });
+    playbookSaveSequenceRef.current += 1;
+    const sequence = playbookSaveSequenceRef.current;
+    const followWhenRefetched = async () => {
+      await reconciliation.refetched;
+      if (playbookSaveSequenceRef.current !== sequence) {
+        return;
       }
+      followPlaybookSave({ playbookId: reconciliation.playbookId, paneTabId });
     };
     detached(
-      reconcileAndFollow(),
+      followWhenRefetched(),
       "use-chat-session.reconcile-playbook-save-tool-calls",
     );
   }, [
