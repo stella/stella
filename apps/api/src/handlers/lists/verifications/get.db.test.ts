@@ -318,8 +318,12 @@ const seed = async (db: GatedTestDb) => {
     const stderr = new PassThrough();
     const output: string[] = [];
     const errors: string[] = [];
-    stdout.on("data", (chunk: Buffer) => output.push(chunk.toString()));
-    stderr.on("data", (chunk: Buffer) => errors.push(chunk.toString()));
+    stdout.on("data", (chunk: Buffer) => {
+      output.push(chunk.toString());
+    });
+    stderr.on("data", (chunk: Buffer) => {
+      errors.push(chunk.toString());
+    });
     let exitCode: unknown;
     const cliProcess = new Proxy(process, {
       get(target, property, receiver) {
