@@ -20,8 +20,7 @@ import { decisionOptions } from "@/features/case-law/queries/decisions";
 import { useFormatter } from "@/i18n/formatting-context";
 import { parseDeterministicDate } from "@/lib/deterministic-date";
 import { toSafeId } from "@/lib/safe-id";
-import { useQueryView } from "@/lib/use-query-view";
-import { useQueryViewError } from "@/lib/use-query-view-error";
+import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
 
 /**
  * The facts of a decision, on the inspector's bounded width: the court and

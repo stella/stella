@@ -55,8 +55,7 @@ import { TOOLBAR_ROW_HEIGHT } from "@/lib/consts";
 import { mcpConnectorsOptions } from "@/lib/knowledge/queries";
 import { catalogueOptions } from "@/lib/knowledge/queries/catalogue";
 import { getMatterSwatch } from "@/lib/matter-colors";
-import { useQueryView } from "@/lib/use-query-view";
-import { useQueryViewError } from "@/lib/use-query-view-error";
+import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
 
 export const InspectorRail = ({
   activeId,

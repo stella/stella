@@ -15,8 +15,7 @@ import {
 import { evidenceSourceDocumentName } from "@/features/avt/fact-source.logic";
 import type { EvidenceFact } from "@/features/avt/types";
 import type { LegalListSourceLocator } from "@/lib/api-contract";
-import { useQueryView } from "@/lib/use-query-view";
-import { useQueryViewError } from "@/lib/use-query-view-error";
+import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
 import { workspaceFilesOptions } from "@/lib/workspaces/queries/entities";
 
 type FactSourceProps = {

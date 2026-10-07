@@ -7,7 +7,6 @@ import {
   type PipelineRun,
 } from "@/components/inspector/pipeline-run-registry.logic";
 import { fetchPrintPdf } from "@/components/pdf/peek/peek-pdf-print";
-import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { detectFileAnonymizationTerms } from "@/lib/anonymize/file-anonymization-policy";
 import { extractPdfAnonymizationText } from "@/lib/anonymize/pdf-anonymization-geometry";
@@ -26,8 +25,7 @@ import type {
   EntityOverlay,
   FileAnonymization,
 } from "@/lib/pdf/anonymization-types";
-import { useQueryView } from "@/lib/use-query-view";
-import { useQueryViewError } from "@/lib/use-query-view-error";
+import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
 import { anonymizationAllowlistOptions } from "@/lib/workspaces/queries/anonymization-allowlist";
 import { anonymizationTermsOptions } from "@/lib/workspaces/queries/anonymization-terms";
 
@@ -82,12 +80,14 @@ export const useFileAnonymizationPipeline = ({
   mimeType,
   workspaceId,
   entityId,
+  runPipeline = anonymizePdf,
 }: {
   enabled: boolean;
   fieldId: string;
   mimeType?: string | undefined;
   workspaceId: string;
   entityId: string | null;
+  runPipeline?: typeof anonymizePdf;
 }): void => {
   const retry = useInspectorAnonymizationStore(
     (state) => state.anonymizationRetryByFieldId[fieldId] ?? 0,
@@ -108,15 +108,6 @@ export const useFileAnonymizationPipeline = ({
   });
   const allowlistQueryView = useQueryView(allowlistQuery);
   useQueryViewError(allowlistQueryView);
-  const policyReadFailed =
-    vocabularyQuery.status === "error" || allowlistQuery.status === "error";
-  useExternalSyncEffect(() => {
-    if (enabled && policyReadFailed) {
-      useInspectorAnonymizationStore
-        .getState()
-        .markAnonymizationPipelineFailed(fieldId);
-    }
-  }, [enabled, fieldId, policyReadFailed]);
   useQuery({
     enabled:
       enabled &&
@@ -124,7 +115,7 @@ export const useFileAnonymizationPipeline = ({
       vocabularyQuery.status === "success" &&
       allowlistQuery.status === "success",
     queryFn: async ({ client: queryClient }) => {
-      const result = await anonymizePdf({
+      const result = await runPipeline({
         workspaceId,
         fieldId,
         entityId,

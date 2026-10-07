@@ -4,8 +4,7 @@ import type { PermissionInput } from "@stll/permissions";
 
 import { authClient } from "@/lib/auth-client";
 import { roleOptions } from "@/lib/auth-queries";
-import { useQueryView } from "@/lib/use-query-view";
-import { useQueryViewError } from "@/lib/use-query-view-error";
+import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
 
 /**
  * Returns whether the active member's role grants the requested

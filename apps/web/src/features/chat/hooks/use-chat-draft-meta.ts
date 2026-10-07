@@ -2,8 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 
 import { chatDraftMetaOptions } from "@/features/chat/queries";
 import type { ChatThreadRef } from "@/lib/chat-thread-ref";
-import { useQueryView } from "@/lib/use-query-view";
-import { useQueryViewError } from "@/lib/use-query-view-error";
+import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
 
 type UseChatDraftMetaArgs = {
   activeOrganizationId: string;

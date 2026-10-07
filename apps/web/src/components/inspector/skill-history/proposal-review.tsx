@@ -4,8 +4,7 @@ import { QueryViewFeedback } from "@/components/query-view-feedback";
 import { toEditorMarkdown } from "@/components/skill-body-markdown";
 import { detached } from "@/lib/detached";
 import { skillProposalOptions } from "@/lib/knowledge/queries";
-import { useQueryView } from "@/lib/use-query-view";
-import { useQueryViewError } from "@/lib/use-query-view-error";
+import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
 
 import { ProposalBodyEditor } from "./proposal-body-editor";
 import { ProposalActionBar } from "./proposal-panel";

@@ -18,8 +18,7 @@ import {
   skillRevisionsOptions,
 } from "@/lib/knowledge/queries";
 import { organizationOptions } from "@/lib/organization/queries";
-import { useQueryView } from "@/lib/use-query-view";
-import { useQueryViewError } from "@/lib/use-query-view-error";
+import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
 
 import { CommentList } from "./comment-list";
 import { ProposalReview } from "./proposal-review";
@@ -148,7 +147,6 @@ export const SkillBodyWorkspace = ({
   const canManage =
     detail.status === "success" &&
     role.status === "success" &&
-    detail.data !== undefined &&
     canManageSkill({
       scope: detail.data.scope,
       ownerUserId: detail.data.userId,

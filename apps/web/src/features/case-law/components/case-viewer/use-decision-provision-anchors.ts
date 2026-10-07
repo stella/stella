@@ -36,11 +36,11 @@ import { decisionDateToIso } from "@/lib/decision-date";
 import { ClientTelemetryError } from "@/lib/errors/telemetry";
 import { queryView } from "@/lib/query-view.logic";
 import type { SafeId } from "@/lib/safe-id";
-import { useQueryView } from "@/lib/use-query-view";
 import {
+  useQueryView,
   useQueryViewError,
   useQueryViewErrors,
-} from "@/lib/use-query-view-error";
+} from "@/lib/use-query-view";
 
 export type DecisionProvisionAnchor =
   ProvisionAnchorSource<CitedProvisionTarget>;

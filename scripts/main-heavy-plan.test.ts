@@ -91,7 +91,15 @@ const context = (
           heavyOnly && THIN_JOBS.some((thin) => thin === job)
             ? "skipped"
             : "success",
-        outputs: job === "ci-plan" ? { run_required: "true", ...plan } : {},
+        outputs:
+          job === "ci-plan"
+            ? {
+                run_required: "true",
+                coverage_profile: "normal-v1",
+                queue_required_jobs: "[]",
+                ...plan,
+              }
+            : {},
       },
     ]),
   ),
@@ -111,6 +119,9 @@ const allPlanned = Object.fromEntries(
 const heavyPlan = {
   ...allPlanned,
   trusted: "true",
+  coverage_profile: "normal-v1",
+  pilot_fast_jobs: "[]",
+  queue_required_jobs: "[]",
   suite_depth: "full",
   queue_depth: "full",
   fix_tests_on_base_required: "false",

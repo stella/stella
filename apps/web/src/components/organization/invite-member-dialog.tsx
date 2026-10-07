@@ -44,8 +44,7 @@ import {
   roleAssignmentOptions,
 } from "@/lib/organization/role-assignment.logic";
 import { schemaFormOptions, toFormErrors } from "@/lib/schema";
-import { useQueryView } from "@/lib/use-query-view";
-import { useQueryViewError } from "@/lib/use-query-view-error";
+import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
 
 type InviteMemberDialogProps = {
   buttonLabel?: string;

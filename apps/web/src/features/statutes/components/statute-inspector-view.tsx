@@ -38,8 +38,7 @@ import {
 import { optionalArray } from "@/lib/arrays";
 import { detached } from "@/lib/detached";
 import { createStatuteLinkTarget } from "@/lib/statute-route";
-import { useQueryView } from "@/lib/use-query-view";
-import { useQueryViewError } from "@/lib/use-query-view-error";
+import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
 
 /**
  * The act a decision cites, beside the decision: the consolidation that

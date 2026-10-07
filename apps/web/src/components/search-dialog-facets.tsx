@@ -27,8 +27,7 @@ import type { TimeFilter } from "@/components/search-filters.logic";
 import { useFormatter } from "@/i18n/formatting-context";
 import { searchFacetOptions, TIME_PRESETS } from "@/lib/search";
 import type { SearchableFacet, TimePreset } from "@/lib/search";
-import { useQueryView } from "@/lib/use-query-view";
-import { useQueryViewError } from "@/lib/use-query-view-error";
+import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
 
 type FacetGroupProps = {
   title: string;

@@ -3,8 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { roleOptions } from "@/lib/auth-queries";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { skillDetailOptions } from "@/lib/knowledge/queries";
-import { useQueryView } from "@/lib/use-query-view";
-import { useQueryViewError } from "@/lib/use-query-view-error";
+import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
 
 import type { SkillEditAccess } from "./skill-history.logic";
 import { skillEditAccess } from "./skill-history.logic";

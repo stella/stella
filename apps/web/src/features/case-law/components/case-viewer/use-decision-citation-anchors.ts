@@ -4,8 +4,7 @@ import type { CitationAnchorSource } from "@/features/case-law/citation-anchors"
 import { decisionCitationsInfiniteOptions } from "@/features/case-law/queries/citations";
 import { optionalArray } from "@/lib/arrays";
 import type { SafeId } from "@/lib/safe-id";
-import { useQueryView } from "@/lib/use-query-view";
-import { useQueryViewError } from "@/lib/use-query-view-error";
+import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
 
 /** Resolved outgoing citations already loaded for inline linking in a decision. */
 export const useDecisionCitationAnchors = (

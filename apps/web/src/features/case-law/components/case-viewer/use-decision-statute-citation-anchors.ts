@@ -11,8 +11,7 @@ import {
   statutesResolveOptions,
 } from "@/features/case-law/queries/provisions";
 import { decisionDateToIso } from "@/lib/decision-date";
-import { useQueryView } from "@/lib/use-query-view";
-import { useQueryViewError } from "@/lib/use-query-view-error";
+import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
 
 export type DecisionStatuteCitationAnchor = StatuteCitationAnchor & {
   target: CitedStatuteTarget;

@@ -10,8 +10,7 @@ import {
   playbookStartersOptions,
   recentPlaybooksOptions,
 } from "@/lib/knowledge/queries";
-import { useQueryView } from "@/lib/use-query-view";
-import { useQueryViewError } from "@/lib/use-query-view-error";
+import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
 
 type StarterId = Parameters<
   (typeof api.playbooks)["from-starter"]["post"]

@@ -14,8 +14,7 @@ import type {
   KnowledgeTemplate,
 } from "@/features/knowledge/views/templates/templates-seam";
 import { detached } from "@/lib/detached";
-import { useQueryView } from "@/lib/use-query-view";
-import { useQueryViewError } from "@/lib/use-query-view-error";
+import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
 
 /** A catalogue template's id in the shared views: its pack and its slug. */
 const catalogueTemplateKey = (template: CatalogueTemplate): string =>

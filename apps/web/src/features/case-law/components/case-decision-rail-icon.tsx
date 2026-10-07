@@ -8,8 +8,7 @@ import type { InspectorRailIconProps } from "@/components/inspector/view-registr
 import { railCourtAbbreviation } from "@/features/case-law/components/case-decision-rail-icon.logic";
 import { CourtTierBadge } from "@/features/case-law/components/court-name";
 import { decisionOptions } from "@/features/case-law/queries/decisions";
-import { useQueryView } from "@/lib/use-query-view";
-import { useQueryViewError } from "@/lib/use-query-view-error";
+import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
 
 /**
  * The court's chip stands for the tab, the way it stands beside the court in

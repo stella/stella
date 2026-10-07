@@ -16,8 +16,7 @@ import { cn } from "@stll/ui/utils";
 import type { FieldOption } from "@/components/conditions/condition-builder-logic";
 import { SelectColorIcon } from "@/components/workspaces/properties/shared";
 import { normalizeOptionalArray } from "@/lib/arrays";
-import { useQueryView } from "@/lib/use-query-view";
-import { useQueryViewError } from "@/lib/use-query-view-error";
+import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
 import type { PropertyFacetCounts } from "@/lib/workspaces/queries/property-facets";
 import { propertyFacetsOptions } from "@/lib/workspaces/queries/property-facets";
 

@@ -7,11 +7,11 @@ import { panic } from "better-result";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { queryView } from "@/lib/query-view.logic";
 import type { WorkspaceJustification } from "@/lib/types";
-import { useQueryView } from "@/lib/use-query-view";
 import {
+  useQueryView,
   useQueryViewError,
   useQueryViewErrors,
-} from "@/lib/use-query-view-error";
+} from "@/lib/use-query-view";
 import { justificationsOptions } from "@/lib/workspaces/queries/workspace";
 import { useWorkspaceStore } from "@/lib/workspaces/store";
 

@@ -43,8 +43,7 @@ import {
 import { resolveStatuteDisplayStatus } from "@/features/statutes/statute-status";
 import { optionalArray } from "@/lib/arrays";
 import { createStatuteLinkTarget } from "@/lib/statute-route";
-import { useQueryView } from "@/lib/use-query-view";
-import { useQueryViewError } from "@/lib/use-query-view-error";
+import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
 
 // The ask actions pull the prompt builders the chat needs; the pane is read
 // far more often than it is asked a question, so they arrive on demand.

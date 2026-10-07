@@ -12,8 +12,7 @@ import { useFormatter } from "@/i18n/formatting-context";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { parseDeterministicDate } from "@/lib/deterministic-date";
 import { organizationAccessOptions } from "@/lib/usage-queries";
-import { useQueryView } from "@/lib/use-query-view";
-import { useQueryViewError } from "@/lib/use-query-view-error";
+import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
 
 const ACCESS_REFRESH_INTERVAL_MS = 60_000;
 

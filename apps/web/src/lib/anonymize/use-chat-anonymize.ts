@@ -8,8 +8,7 @@ import type { ChatAnonPair } from "@stll/anonymize-chat";
 
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { anonymizeChatTextInWorker } from "@/lib/anonymize/anonymize-chat-worker-client";
-import { useQueryView } from "@/lib/use-query-view";
-import { useQueryViewError } from "@/lib/use-query-view-error";
+import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
 
 /**
  * Watch a TipTap editor's plain-text content. Returns the

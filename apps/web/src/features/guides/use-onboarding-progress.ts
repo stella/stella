@@ -18,8 +18,7 @@ import { sessionOptions } from "@/lib/auth-queries";
 import { unwrapEden } from "@/lib/errors/api";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { readStoredJson } from "@/lib/stored-json";
-import { useQueryView } from "@/lib/use-query-view";
-import { useQueryViewError } from "@/lib/use-query-view-error";
+import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
 
 // Progress is the source of truth in the DB: it rides the `["session"]` query
 // (`user.guideProgress`, a serialized JSON map), so reads add no request and it

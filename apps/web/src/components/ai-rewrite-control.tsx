@@ -63,6 +63,7 @@ export const AiRewriteControl = ({
   onRewrite,
 }: AiRewriteControlProps) => {
   const t = useTranslations("ai");
+  const tCommon = useTranslations("common");
   const [open, setOpen] = useState(false);
   const [customInstruction, setCustomInstruction] = useState("");
   const customInstructionId = useId();
@@ -159,7 +160,7 @@ export const AiRewriteControl = ({
         }
       >
         {isPending ? (
-          <Loader className="size-3.5" label={t("common.loading")} size="sm" />
+          <Loader className="size-3.5" label={tCommon("loading")} size="sm" />
         ) : (
           <AiActionIcon aria-hidden className="size-3.5" />
         )}

@@ -29,8 +29,7 @@ import { provisionPreviewOptions } from "@/features/statutes/queries/provision-p
 import type { ProvisionPreviewData } from "@/features/statutes/queries/provision-preview";
 import { formatValidityDate } from "@/features/statutes/statute-format";
 import { createStatuteLinkTarget } from "@/lib/statute-route";
-import { useQueryView } from "@/lib/use-query-view";
-import { useQueryViewError } from "@/lib/use-query-view-error";
+import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
 
 export type CitedProvisionTarget = {
   /** The consolidation the reference was made against, in the statute reader. */

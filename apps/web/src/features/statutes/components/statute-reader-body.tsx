@@ -10,8 +10,7 @@ import { statuteCitationCountsOptions } from "@/features/statutes/queries/citing
 import type { PublicStatute } from "@/features/statutes/queries/statutes";
 import { provisionCitationCountByBlockAnchor } from "@/features/statutes/statute-reader-blocks";
 import type { StatuteMasthead } from "@/features/statutes/statute-reader-blocks";
-import { useQueryView } from "@/lib/use-query-view";
-import { useQueryViewError } from "@/lib/use-query-view-error";
+import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
 
 type StatuteReaderBodyProps = {
   /** Parsed blocks. The caller owns the parse: the page also builds an outline. */

@@ -39,8 +39,7 @@ import {
   getMatterSwatch,
   resolveMatterColor,
 } from "@/lib/matter-colors";
-import { useQueryView } from "@/lib/use-query-view";
-import { useQueryViewError } from "@/lib/use-query-view-error";
+import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
 import {
   workspacesNavigationOptions,
   workspacesRouteOptions,

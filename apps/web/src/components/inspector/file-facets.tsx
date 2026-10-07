@@ -12,8 +12,7 @@ import type {
 } from "@/components/inspector/inspector-store-types";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { DOCX_MIME, isEmailFile } from "@/lib/consts";
-import { useQueryView } from "@/lib/use-query-view";
-import { useQueryViewError } from "@/lib/use-query-view-error";
+import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
 import { entityVersionsOptions } from "@/lib/workspaces/queries/entity-versions";
 
 export type Facet = FileFacet;

@@ -48,8 +48,7 @@ import {
   updateCachedAIAvailability,
 } from "@/lib/organization/ai-config-queries";
 import { afterOnboardingNavigation } from "@/lib/redirect";
-import { useQueryView } from "@/lib/use-query-view";
-import { useQueryViewError } from "@/lib/use-query-view-error";
+import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
 import { CatalogueDetailPreview } from "@/routes/onboarding/-components/catalogue-detail-preview";
 import { CatalogueStackPreview } from "@/routes/onboarding/-components/catalogue-stack-preview";
 import {

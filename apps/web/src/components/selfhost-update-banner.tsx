@@ -1,5 +1,6 @@
 import { useState } from "react";
 
+import { Result } from "better-result";
 import { useTranslations } from "use-intl";
 import * as v from "valibot";
 
@@ -13,11 +14,11 @@ import { env } from "@/env";
 import { useChromeQuery } from "@/hooks/use-chrome-query";
 import { useLocalStorageFlag } from "@/hooks/use-local-storage-flag";
 import { deviceStorage } from "@/lib/account/browser-storage";
+import { readQueryResult } from "@/lib/errors/query-result";
 import { ClientTelemetryError } from "@/lib/errors/telemetry";
 import { sanitizeHref } from "@/lib/sanitize-href";
 import { compareSemver } from "@/lib/semver-compare";
-import { useQueryView } from "@/lib/use-query-view";
-import { useQueryViewError } from "@/lib/use-query-view-error";
+import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
 
 const RELEASES_API_URL =
   "https://api.github.com/repos/stella/stella/releases/latest";
@@ -53,20 +54,28 @@ export const SelfhostUpdateBanner = () => {
         timeoutMs: 8000,
       });
       if (!response.ok) {
-        throw new FetchBoundaryError({
-          url: RELEASES_API_URL,
-          status: response.status,
-          statusText: response.statusText,
-          message: "Release update check failed",
-        });
+        return readQueryResult(
+          Result.err(
+            new FetchBoundaryError({
+              url: RELEASES_API_URL,
+              status: response.status,
+              statusText: response.statusText,
+              message: "Release update check failed",
+            }),
+          ),
+        );
       }
       const json: unknown = await response.json();
       const parsed = v.safeParse(releaseSchema, json);
       if (!parsed.success) {
-        throw new ClientTelemetryError({
-          area: "selfhost-update-check",
-          message: "Release update response failed validation",
-        });
+        return readQueryResult(
+          Result.err(
+            new ClientTelemetryError({
+              area: "selfhost-update-check",
+              message: "Release update response failed validation",
+            }),
+          ),
+        );
       }
       return parsed.output;
     },

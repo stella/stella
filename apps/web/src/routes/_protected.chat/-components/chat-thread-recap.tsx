@@ -11,8 +11,7 @@ import type { PersistedChatMessage } from "@/components/chat/chat-ui-tools";
 import { chatThreadRecapOptions } from "@/features/chat/queries";
 import { useMountEffect } from "@/hooks/use-effect";
 import type { ChatThreadRef } from "@/lib/chat-thread-ref";
-import { useQueryView } from "@/lib/use-query-view";
-import { useQueryViewError } from "@/lib/use-query-view-error";
+import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
 
 // Mirrors RECAP_STALENESS_THRESHOLD_MS in
 // apps/api/src/handlers/chat/thread-recap.ts. The server re-checks

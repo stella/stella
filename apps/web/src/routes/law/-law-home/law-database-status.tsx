@@ -22,8 +22,7 @@ import {
   FULL_DATE_MEDIUM_TIME_FORMAT,
   isWithinLast,
 } from "@/lib/relative-time";
-import { useQueryView } from "@/lib/use-query-view";
-import { useQueryViewError } from "@/lib/use-query-view-error";
+import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
 
 /**
  * How recent the newest change may be for the corpus to count as current:

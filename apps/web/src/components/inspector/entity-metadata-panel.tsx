@@ -44,8 +44,7 @@ import type {
   PropertyId,
   WorkspaceProperty,
 } from "@/lib/types";
-import { useQueryView } from "@/lib/use-query-view";
-import { useQueryViewError } from "@/lib/use-query-view-error";
+import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
 import {
   isPlaybookVerdictProperty,
   playbookVerdictByAskId,

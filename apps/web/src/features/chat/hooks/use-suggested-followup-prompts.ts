@@ -10,8 +10,7 @@ import {
 import { chatThreadSuggestedPromptsOptions } from "@/features/chat/queries";
 import { useIsChatDraftEmpty } from "@/lib/chat-draft-store";
 import type { ChatThreadRef } from "@/lib/chat-thread-ref";
-import { useQueryView } from "@/lib/use-query-view";
-import { useQueryViewError } from "@/lib/use-query-view-error";
+import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
 
 type UseSuggestedFollowupPromptsOptions = {
   activeOrganizationId: string;

@@ -25,8 +25,7 @@ import { notifyUserError } from "@/lib/errors/user-toast";
 import type { TemplateIntent } from "@/lib/knowledge/catalogue-intent";
 import { openIsolatedWindow } from "@/lib/open-isolated-window";
 import { organizationListOptions } from "@/lib/organization/queries";
-import { useQueryView } from "@/lib/use-query-view";
-import { useQueryViewError } from "@/lib/use-query-view-error";
+import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
 import { UseTemplateDialog } from "@/routes/knowledge/-components/use-template-dialog";
 
 type MemberCatalogueTemplateActionsProps = {

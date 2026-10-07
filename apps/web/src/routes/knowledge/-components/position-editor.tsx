@@ -110,8 +110,7 @@ import {
   type PositionDecisionSummary,
 } from "@/lib/knowledge/position-decisions";
 import { clauseDetailOptions, clausesOptions } from "@/lib/knowledge/queries";
-import { useQueryView } from "@/lib/use-query-view";
-import { useQueryViewError } from "@/lib/use-query-view-error";
+import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
 import type { ResolvedPositionSource } from "@/routes/knowledge/-components/playbook-editor.logic";
 
 // Drag payload shared by the position cards; the parent list interprets a drop

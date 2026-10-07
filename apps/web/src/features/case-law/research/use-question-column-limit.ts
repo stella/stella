@@ -4,8 +4,7 @@ import { CASE_LAW_RESEARCH_COLUMNS_PER_ORGANIZATION_MAX } from "@stll/api-contra
 
 import { questionColumnsOptions } from "@/features/case-law/research/queries";
 import { useClientAuthStatus } from "@/hooks/use-client-auth-status";
-import { useQueryView } from "@/lib/use-query-view";
-import { useQueryViewError } from "@/lib/use-query-view-error";
+import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
 
 /**
  * Whether the organization already holds every question column it may add.

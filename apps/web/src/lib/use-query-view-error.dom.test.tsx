@@ -10,7 +10,7 @@ const { cleanup, renderHook } = await import("@testing-library/react");
 const { AnalyticsContext } = await import("./analytics/provider");
 const { noopAnalytics } = await import("./analytics/noop");
 const { queryView } = await import("./query-view.logic");
-const { useQueryViewErrors } = await import("./use-query-view-error");
+const { useQueryViewErrors } = await import("./use-query-view");
 
 afterEach(cleanup);
 afterAll(async () => {

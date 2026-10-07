@@ -53,8 +53,7 @@ import {
   aiConfigOptions,
   updateCachedAIAvailability,
 } from "@/lib/organization/ai-config-queries";
-import { useQueryView } from "@/lib/use-query-view";
-import { useQueryViewError } from "@/lib/use-query-view-error";
+import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
 
 type AIAvailabilityContextValue = {
   ensureAIAvailable: () => Promise<boolean>;
