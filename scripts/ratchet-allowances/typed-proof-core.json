@@ -1,0 +1,5 @@
+{
+  "metric": "api-lib-top-level-entries",
+  "delta": 1,
+  "reason": "Give transaction-bound proof types, naming and checked minting one shared owner for domain predicates, with import confinement."
+}

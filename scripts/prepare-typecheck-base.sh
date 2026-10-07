@@ -1,12 +1,14 @@
 #!/usr/bin/env bash
 set -euo pipefail
+
+gh_retry_script="${GH_RETRY_SCRIPT:-$(dirname "${BASH_SOURCE[0]}")/gh-retry.sh}"
 base_sha=$(git merge-base origin/main HEAD)
 name="typecheck-base-v1-$base_sha"
 base_dir="$RUNNER_TEMP/typecheck-base"
 recording_unavailable() {
   echo "::warning::Typecheck baseline: $1; measuring exact base $base_sha." >&2
 }
-if ! artifacts=$(gh api --method GET "repos/$REPOSITORY/actions/artifacts" -f name="$name" -f per_page=100); then
+if ! artifacts=$(bash "$gh_retry_script" api --method GET "repos/$REPOSITORY/actions/artifacts" -f name="$name" -f per_page=100); then
   recording_unavailable "recording lookup unavailable"
   artifacts='{"artifacts":[]}'
 fi
@@ -16,7 +18,7 @@ if ! candidates=$(jq -r --arg name "$name" '.artifacts | sort_by(.id) | reverse 
 fi
 while IFS=$'\t' read -r id run_id; do
   [[ -n "$id" ]] || continue
-  if ! run=$(gh api "repos/$REPOSITORY/actions/runs/$run_id"); then
+  if ! run=$(bash "$gh_retry_script" api "repos/$REPOSITORY/actions/runs/$run_id"); then
     recording_unavailable "recording workflow metadata unavailable"
     continue
   fi
@@ -24,7 +26,7 @@ while IFS=$'\t' read -r id run_id; do
     continue
   fi
   bundle=$(mktemp -d "$RUNNER_TEMP/typecheck-recording.XXXXXX")
-  if ! gh api "repos/$REPOSITORY/actions/artifacts/$id/zip" > "$bundle/recording.zip"; then
+  if ! bash "$gh_retry_script" api "repos/$REPOSITORY/actions/artifacts/$id/zip" > "$bundle/recording.zip"; then
     recording_unavailable "recording download unavailable"
     continue
   fi

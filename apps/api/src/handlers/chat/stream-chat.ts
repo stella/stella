@@ -195,6 +195,7 @@ import {
 import type { ChatTerminalError } from "@/api/lib/errors/tagged-errors";
 import { errorFingerprint } from "@/api/lib/errors/utils";
 import { logger } from "@/api/lib/observability/logger";
+import { providerErrorReason } from "@/api/lib/observability/provider-error-reason";
 import type { PromptCacheMetricSurface } from "@/api/lib/observability/request-metrics";
 import { providerSafeJsonSchemaOptionsForTanStackProvider } from "@/api/lib/provider-safe-json-schema";
 import {
@@ -1743,7 +1744,11 @@ export const classifyRunErrorChunk = (chunk: RunErrorChunk): AIErrorKind => {
 // service raised for a configuration state the caller can act on; only an
 // unanticipated shape is logged at ERROR severity and reported as a defect.
 // Fingerprint only — provider error messages can echo request content.
-const reportStreamFailure = (error: unknown, kind: AIErrorKind): void => {
+const reportStreamFailure = (
+  error: unknown,
+  kind: AIErrorKind,
+  providerMessage?: string,
+): void => {
   if (isAnticipatedAIFailure(error, kind)) {
     return;
   }
@@ -1752,13 +1757,17 @@ const reportStreamFailure = (error: unknown, kind: AIErrorKind): void => {
     kind,
     ...errorFingerprint(error),
     ...providerStatusFields(error),
+    // The template name only; the message itself can echo request content.
+    ...(providerMessage === undefined
+      ? {}
+      : { "error.provider.reason": providerErrorReason(providerMessage) }),
   });
 };
 
 const normalizeRunErrorChunk = (chunk: RunErrorChunk): RunErrorChunk => {
   const error = errorForRunErrorChunk(chunk);
   const kind = classifyRunErrorChunk(chunk);
-  reportStreamFailure(error, kind);
+  reportStreamFailure(error, kind, chunk.message);
   const usage = safeTokenUsageFromTerminalChunk(chunk);
   return {
     type: EventType.RUN_ERROR,

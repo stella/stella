@@ -5,6 +5,7 @@ import { Result } from "better-result";
 import { useTranslations } from "use-intl";
 
 import { fetchWithTimeout } from "@stll/fetch";
+import { sha256Hex } from "@stll/sha256/browser";
 import { openFilePicker } from "@stll/ui/file-picker";
 import { AlertTriangleIcon, FileTextIcon, Loader2Icon } from "@stll/ui/icons";
 import { stellaToast } from "@stll/ui/toast";
@@ -18,7 +19,6 @@ import { contactsKeys } from "@/lib/contacts/queries";
 import { toAPIError } from "@/lib/errors/api";
 import { ClientOperationError } from "@/lib/errors/client";
 import { notifyUserError } from "@/lib/errors/user-toast";
-import { sha256Hex } from "@/lib/files/sha256";
 import { customFieldId } from "@/routes/_protected.contacts/-import-candidate";
 import type {
   ImportCandidate,

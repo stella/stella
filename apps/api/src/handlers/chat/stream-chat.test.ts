@@ -3373,10 +3373,51 @@ describe("outgoing chat stream message ids", () => {
       expect(errorSpy).toHaveBeenCalledWith("chat.stream_failed", {
         kind: "unknown",
         "error.class": "UnknownError",
+        "error.provider.reason": "unrecognized",
         "error.provider.status": "403",
         "failure.shadow_grade": "defect",
         "failure.shadow_reason": "unclassified",
       });
+    } finally {
+      errorSpy.mockRestore();
+    }
+  });
+
+  test("names the template of a refused OpenAI request, never its text", async () => {
+    const messageId = toSafeId<"chatMessage">(
+      "11111111-1111-4111-8111-111111111111",
+    );
+    const errorSpy = spyOn(logger, "error");
+    try {
+      const stream = processServerChatStream({
+        abortSignal: new AbortController().signal,
+        deadlineSignal: new AbortController().signal,
+        getResponseMessage: () => null,
+        initialMessages: [],
+        mapMessageId: createChatMessageIdMapper(() => messageId),
+        onFinish: () => undefined,
+        processor: new StreamProcessor(),
+        source: streamChunks([
+          { type: EventType.RUN_STARTED, runId: "run-1", threadId: "thread-1" },
+          {
+            type: EventType.RUN_ERROR,
+            message:
+              "Item 'rs_0a1b' of type 'reasoning' was provided without its required following item.",
+            rawEvent: { statusCode: 400 },
+          },
+        ]),
+      });
+
+      await collectChunks(stream);
+
+      expect(errorSpy).toHaveBeenCalledWith(
+        "chat.stream_failed",
+        expect.objectContaining({
+          "error.provider.reason": "reasoning_without_following_item",
+          "error.provider.status": "400",
+        }),
+      );
+      expect(JSON.stringify(errorSpy.mock.calls)).not.toContain("rs_0a1b");
     } finally {
       errorSpy.mockRestore();
     }

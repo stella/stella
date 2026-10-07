@@ -1,5 +1,8 @@
 import { describe, expect, test } from "bun:test";
+import assert from "node:assert/strict";
 import PostalMime from "postal-mime";
+
+import { sanitizeFilename } from "@/api/lib/sanitize-filename";
 
 import { INBOUND_MAIL_LIMITS } from "./limits";
 import type { InboundMessageError } from "./message";
@@ -41,6 +44,71 @@ const baseHeaders = [
 ].join("\n");
 
 describe("inbound MIME normalization", () => {
+  test.each(["attachment", "inline", "x-document"])(
+    "preserves encoded headers and multipart attachment bytes with disposition %s",
+    async (disposition) => {
+      const raw = message(
+        [
+          'From: "=?UTF-8?Q?Ji=C5=99=C3=AD_Nov=C3=A1k?=" <member@example.test>',
+          "To: =?UTF-8?Q?Pr=C3=A1vn=C3=AD_t=C3=BDm?= <matter@example.test>",
+          "Cc: recipient@example.net",
+          "Subject: =?UTF-8?Q?N=C3=A1vrh_smlouvy?=",
+          "Date: Sat, 26 Sep 2026 14:00:00 +0200",
+          "Message-ID: <multipart@example.test>",
+          "MIME-Version: 1.0",
+          'Content-Type: multipart/mixed; boundary="mixed"',
+        ].join("\n"),
+        [
+          "--mixed",
+          'Content-Type: multipart/alternative; boundary="alternative"',
+          "",
+          "--alternative",
+          "Content-Type: text/plain; charset=utf-8",
+          "Content-Transfer-Encoding: quoted-printable",
+          "",
+          "P=C5=99ilo=C5=BEen=C3=BD n=C3=A1vrh.",
+          "--alternative",
+          "Content-Type: text/html; charset=utf-8",
+          "Content-Transfer-Encoding: base64",
+          "",
+          Buffer.from("<p>Přiložený návrh.</p>").toString("base64"),
+          "--alternative--",
+          "--mixed",
+          "Content-Type: application/pdf",
+          `Content-Disposition: ${disposition}; filename*=utf-8''n%C3%A1vrh.pdf`,
+          "Content-Transfer-Encoding: base64",
+          "",
+          Buffer.from("%PDF-1.7\nfixture\n").toString("base64"),
+          "--mixed--",
+          "",
+        ].join("\r\n"),
+      );
+      const parsed = await parseValidInboundMessage(raw);
+      expect(parsed.forwardSource).toBe("none");
+      expect(parsed.outerSender).toBe("member@example.test");
+      expect(parsed.message).toMatchObject({
+        from: "member@example.test",
+        to: ["matter@example.test"],
+        cc: ["recipient@example.net"],
+        subject: "Návrh smlouvy",
+        text: "Přiložený návrh.",
+        messageId: "<multipart@example.test>",
+      });
+      assert.ok(
+        parsed.message.html !== null,
+        "Expected the multipart HTML alternative",
+      );
+      expect(parsed.message.html).toContain("Přiložený návrh.");
+      expect(parsed.message.attachments).toEqual([
+        {
+          fileName: sanitizeFilename("návrh.pdf"),
+          mimeType: "application/pdf",
+          bytes: bytes("%PDF-1.7\nfixture\n"),
+        },
+      ]);
+    },
+  );
+
   test("keeps a member's CC filing as their own message", async () => {
     const parsed = await parseValidInboundMessage(
       await fixture("member-cc.eml"),

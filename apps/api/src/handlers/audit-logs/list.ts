@@ -29,7 +29,14 @@ const config = {
 
 const readAuditLogs = createSafeRootHandler(
   config,
-  async function* ({ safeDb, session, recordAuditEvent, query }) {
+  async function* ({
+    safeDb,
+    session,
+    user,
+    featureAccessSnapshot,
+    recordAuditEvent,
+    query,
+  }) {
     const invalid = validateAuditLogFilter(query);
     if (invalid !== null) {
       return Result.err(new HandlerError({ status: 400, message: invalid }));
@@ -38,6 +45,8 @@ const readAuditLogs = createSafeRootHandler(
     return yield* queryAuditLogPage({
       safeDb,
       organizationId: session.activeOrganizationId,
+      userId: user.id,
+      featureAccessSnapshot,
       recordAuditEvent,
       query,
     });

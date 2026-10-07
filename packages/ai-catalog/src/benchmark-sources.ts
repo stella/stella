@@ -219,6 +219,7 @@ export const MODEL_BENCHMARK_SOURCES = {
   "openai.gpt-oss-20b-1:0": [
     { sourceModelId: "gpt-oss-20b", reasoningEffort: null },
   ],
+  "mistral-large-4": [],
   // `-latest` aliases move between pinned releases; Arena ranks pinned ones.
   "mistral-large-latest": [],
   "mistral-medium-latest": [],
@@ -263,6 +264,7 @@ export const MODEL_UNRATED_REASON = {
   "anthropic/claude-sonnet-4.6": "named_default_effort",
   "gpt-6.1-sol": "too_new",
   "claude-sonnet-5-5": "too_new",
+  "mistral-large-4": "too_new",
   "mistral-large-latest": "floating_alias",
   "mistral-medium-latest": "floating_alias",
   "mistral-small-latest": "floating_alias",
