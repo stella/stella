@@ -5,6 +5,7 @@ import {
   existsSync,
   mkdtempSync,
   readFileSync,
+  readdirSync,
   rmSync,
   writeFileSync,
 } from "node:fs";
@@ -53,7 +54,10 @@ import {
   type MergeQueueRemoval,
   type RunJob,
 } from "./merge-bar";
-import { parseCiCoverageLog } from "./merge-bar-ci-coverage";
+import {
+  parseCiCoverageLog,
+  type CiCoverageEvidence,
+} from "./merge-bar-ci-coverage";
 import { RATCHET_METRICS } from "./ratchet";
 import ratchetDefinitionPaths from "./ratchet-definition-paths.json" with { type: "json" };
 
@@ -2140,23 +2144,57 @@ env:
     expect(parseCiCoverageLog(continued).isErr()).toBe(true);
   });
 
-  test("coverage evidence parses the entire constructed real-log envelope", () => {
-    const result = parseCiCoverageLog(
-      readFileSync(
-        path.join(
-          REPO_ROOT,
-          "scripts/fixtures/merge-bar-multiline-coverage.log",
-        ),
-        "utf-8",
-      ),
-    );
-    expect(result.isOk(), result.isErr() ? result.error.message : "").toBe(
-      true,
-    );
-    expect(result.isOk() && result.value).toEqual({
+  test("every saved real CI-result log yields its declared coverage evidence", () => {
+    const pilot = {
       profile: "pilot-fast-v1",
-      jobs: ["ci-tests"],
-    });
+      jobs: [
+        "ci-checks-docs",
+        "ci-checks-generated",
+        "ci-checks-policy",
+        "ci-checks-rest",
+        "ci-generated-sources",
+        "ci-plan",
+        "ci-result",
+        "ci-tests",
+        "code-quality-api",
+        "code-quality-rest",
+        "code-quality-web",
+        "typecheck-baseline",
+      ],
+    } satisfies CiCoverageEvidence;
+    const expected = {
+      "merge-bar-coverage-pilot-pr-37632840538.log": pilot,
+      "merge-bar-coverage-pilot-pr-37636655670.log": pilot,
+      "merge-bar-coverage-normal-arm-37635149518.log": { profile: "normal-v1" },
+      "merge-bar-coverage-merge-group-37635202900.log": {
+        profile: "normal-v1",
+      },
+      "merge-bar-coverage-merge-group-37635199875.log": {
+        profile: "normal-v1",
+      },
+      // Retain the previously saved single-line env envelope too.
+      "merge-bar-pilot-coverage.log": pilot,
+    } satisfies Record<string, CiCoverageEvidence>;
+    const directory = path.join(REPO_ROOT, "scripts/fixtures");
+    expect(
+      readdirSync(directory)
+        .filter(
+          (file) =>
+            file.startsWith("merge-bar-coverage-") ||
+            file === "merge-bar-pilot-coverage.log",
+        )
+        .toSorted(),
+    ).toEqual(Object.keys(expected).toSorted());
+    for (const [file, evidence] of Object.entries(expected)) {
+      const result = parseCiCoverageLog(
+        readFileSync(path.join(directory, file), "utf-8"),
+      );
+      expect(
+        result.isOk(),
+        `${file}: ${result.isErr() ? result.error.message : ""}`,
+      ).toBe(true);
+      expect(result.isOk() && result.value, file).toEqual(evidence);
+    }
   });
 
   test("CI result coverage evidence reads producer-shaped environment logs", () => {
