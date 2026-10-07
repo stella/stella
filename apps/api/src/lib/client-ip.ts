@@ -21,7 +21,7 @@ import { panic } from "better-result";
  * `STELLA_CLIENT_ADDRESS_HEADER`. That header is read only from a trusted
  * peer and takes precedence over the `x-forwarded-for` chain.
  *
- * Browser calls pass a second edge first (the frontend distribution), so the
+ * Browser calls pass a second edge first (the frontend edge), so the
  * API edge's viewer address names that edge. The frontend edge writes the
  * browser's address to {@link FRONTEND_ADDRESS_HEADER} and proves it with
  * {@link FRONTEND_VERIFY_HEADER}. From a trusted peer the
@@ -315,8 +315,8 @@ const addressFromTrustedPeer = ({
   edgeAddressFormat,
   frontendSecrets,
 }: TrustedPeerInput): ClientAddress | null => {
-  // The frontend edge's function writes the bare address (CloudFront
-  // Functions see no viewer port); any other spelling falls through.
+  // The frontend edge writes the bare address; any other spelling falls
+  // through.
   if (carriesSecret(request, FRONTEND_VERIFY_HEADER, frontendSecrets)) {
     const address = parseEdgeClientAddress(
       request.headers.get(FRONTEND_ADDRESS_HEADER),

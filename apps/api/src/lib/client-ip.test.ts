@@ -513,16 +513,15 @@ describe("edge origin verification", () => {
 });
 
 /*
- * Contract with the infrastructure repository (client-ip-config.ts holds the
- * full table): the frontend /api/* function writes the browser's bare address
- * to x-stella-viewer-address, the frontend distribution adds
- * x-stella-frontend-verify, and the API task receives the accepted values as
- * STELLA_FRONTEND_VERIFY_SECRET. The header names are fixed on both sides.
+ * The frontend edge writes the browser's bare address to
+ * x-stella-viewer-address and adds x-stella-frontend-verify; the API accepts
+ * the values in STELLA_FRONTEND_VERIFY_SECRET. The deployment configuration
+ * uses the same header names (client-ip-config.ts holds the table).
  */
 describe("frontend edge address", () => {
   const FRONTEND_HEADER = FRONTEND_ADDRESS_HEADER;
 
-  test("the header names match the infrastructure contract", () => {
+  test("the header names match the deployment configuration", () => {
     expect(FRONTEND_ADDRESS_HEADER).toBe("x-stella-viewer-address");
     expect(FRONTEND_VERIFY_HEADER).toBe("x-stella-frontend-verify");
     expect(ORIGIN_VERIFY_HEADER).toBe("x-stella-origin-verify");
@@ -566,6 +565,12 @@ describe("frontend edge address", () => {
     address: "192.0.2.10",
     source: CLIENT_ADDRESS_SOURCE.edgeHeader,
   };
+
+  test("a matching frontend value without the address header falls through to the API edge", () => {
+    const request = browserCall();
+    request.headers.delete(FRONTEND_HEADER);
+    expect(resolve(request)).toEqual(viaApiEdge);
+  });
 
   test("reads the browser address first when the frontend value matches", () => {
     for (const value of [FRONTEND_CURRENT, FRONTEND_NEXT]) {

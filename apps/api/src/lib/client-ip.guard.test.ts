@@ -81,8 +81,7 @@ const apiSources = async (): Promise<{ file: string; source: string }[]> =>
 
 /**
  * Verify values are compared only as equal-length digests through
- * `timingSafeEqual`; an ordinary comparison would let the response time leak
- * how much of a guess matched. Flags `===`, `!==`, `==`, `!=` and
+ * `timingSafeEqual`. Flags `===`, `!==`, `==`, `!=` and
  * `.includes(...)`/`.indexOf(...)` whose operands name a presented or
  * configured value.
  */
