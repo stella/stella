@@ -1,0 +1,5 @@
+{
+  "metric": "throw-outside-boundary",
+  "delta": 4,
+  "reason": "Decision merge fencing aborts settlement transactions; document and corpus operations propagate refusals and cancellation without committing abandoned work."
+}

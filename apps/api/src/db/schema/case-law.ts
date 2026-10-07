@@ -342,6 +342,10 @@ const DECISION_IDENTIFIER_TYPE_SQL_VALUES = Object.values(
 const DECISION_PRIMARY_REFERENCE_TYPE_SQL_VALUES =
   DECISION_PRIMARY_REFERENCE_TYPES.map((type) => sql.raw(`'${type}'`));
 
+const CASE_LAW_SOURCE_LEASE_PURPOSES = ["ingestion", "decision-merge"] as const;
+const CASE_LAW_SOURCE_LEASE_PURPOSE_SQL_VALUES =
+  CASE_LAW_SOURCE_LEASE_PURPOSES.map((purpose) => sql.raw(`'${purpose}'`));
+
 export const caseLawSources = p.pgTable(
   "case_law_sources",
   {
@@ -361,6 +365,16 @@ export const caseLawSources = p.pgTable(
       .notNull(),
     ingestionLeaseToken: p.uuid("ingestion_lease_token"),
     ingestionLeaseExpiresAt: timestamptz("ingestion_lease_expires_at"),
+    ingestionLeasePurpose: p
+      .text("ingestion_lease_purpose", { enum: CASE_LAW_SOURCE_LEASE_PURPOSES })
+      .default("ingestion")
+      .notNull(),
+    // Advances on every decision-merge claim, so a document writer detects a
+    // merge that started and finished while it was not looking.
+    decisionMergeEpoch: p
+      .bigint("decision_merge_epoch", { mode: "bigint" })
+      .default(0n)
+      .notNull(),
     config: jsonb().$type<Record<string, unknown>>().default({}),
     // License / redistribution terms. null = legacy source (public
     // court records, treated as redistributable); see corpus-source.ts. A
@@ -412,6 +426,10 @@ export const caseLawSources = p.pgTable(
     p.check(
       "case_law_sources_ingestion_lease_pair",
       sql`(${t.ingestionLeaseToken} IS NULL) = (${t.ingestionLeaseExpiresAt} IS NULL)`,
+    ),
+    p.check(
+      "case_law_sources_ingestion_lease_purpose_valid",
+      sql`${t.ingestionLeasePurpose} IN (${sql.join(CASE_LAW_SOURCE_LEASE_PURPOSE_SQL_VALUES, sql`, `)})`,
     ),
     p.check(
       "case_law_sources_reported_total_trio",

@@ -643,6 +643,18 @@ const UNMIGRATED_PUBLISHER_READERS = [
 const OWNERSHIP_DECLARATIONS = [
   STATUS_TRANSITION_OWNERSHIP,
   {
+    id: "deferred-document-source-ownership",
+    capability: "Owning deferred document writes",
+    owner: ["apps/api/src/lib/legal-search/sk-document-backfill.ts"],
+    summary:
+      "Deferred document operations acquire source ownership before remote and database effects. Raw write functions stay within the writer module.",
+    enforcement: {
+      kind: "import",
+      specifiers: ["@/api/lib/legal-search/deferred-document-source-ownership"],
+      allowed: [],
+    },
+  },
+  {
     id: "sha256",
     capability: "Hashing content with SHA-256 across runtimes",
     owner: Object.keys(SHA256_OWNERS),
