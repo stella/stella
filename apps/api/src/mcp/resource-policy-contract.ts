@@ -5,6 +5,7 @@ import {
   MCP_DOCUMENTS_HTTP_PATH,
   MCP_HTTP_PATH,
   MCP_LAW_HTTP_PATH,
+  MCP_OAUTH_PROTOCOL_SCOPES,
 } from "@stll/api-contract";
 
 /**
@@ -105,7 +106,8 @@ export const getMcpResourceScopes = (mode: McpMode) =>
  * (`db/better-auth-oauth-resource-repair.ts`, registered in
  * `db/online-migrations.ts`) runs on the migrate entrypoint before the API
  * rolls, inserts any resource this set names and the table lacks, and links
- * every existing client registration to it.
+ * every existing client registration to it. It also upgrades the exact
+ * predecessor policy that omitted protocol scopes from token issuance.
  * `better-auth-oauth-policy-census.db.test.ts` pins that, the idempotence, and
  * the refusal to overwrite a conflicting definition.
  */
@@ -113,7 +115,10 @@ export const buildBetterAuthOAuthResources = (baseUrl: string) =>
   MCP_MODES.map((mode) => {
     const config = getMcpResourceModeConfig(mode);
     return {
-      allowedScopes: [...config.resourceScopes],
+      // Better Auth intersects the entire grant with this list and persists
+      // that result on refresh tokens. Protocol scopes must survive issuance;
+      // protected-resource metadata still advertises only resourceScopes.
+      allowedScopes: [...config.resourceScopes, ...MCP_OAUTH_PROTOCOL_SCOPES],
       identifier: new URL(
         config.httpPath,
         `${baseUrl.replace(/\/$/u, "")}/`,
