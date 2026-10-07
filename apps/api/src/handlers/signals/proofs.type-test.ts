@@ -2,6 +2,7 @@ import { name } from "@gdp-ts/core";
 import type { Named } from "@gdp-ts/core";
 
 import type { Transaction } from "@/api/db/root";
+import { emitSignalRequest } from "@/api/handlers/signals/requests/write";
 import { transitionSignal } from "@/api/handlers/signals/transition";
 import type { SignalTransitionArgs } from "@/api/handlers/signals/transition";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -76,4 +77,37 @@ export const requestProofOrganizationMistakes = <U, W, T, O, Other>(
     organizationId: otherOrganization,
   };
   return { replaced, renamed, differentOrganization };
+};
+
+type SignalRequestProofMistakesOptions<U, W, T, O, Other> = {
+  args: Parameters<typeof emitSignalRequest<U, W, T, O>>[0];
+  otherWorkspace: Named<Other, SafeId<"workspace"> | null>;
+  otherActor: Named<Other, SafeId<"user">>;
+  otherTransaction: Named<Other, Transaction>;
+};
+
+export const signalRequestProofMistakes = async <U, W, T, O, Other>({
+  args,
+  otherWorkspace,
+  otherActor,
+  otherTransaction,
+}: SignalRequestProofMistakesOptions<U, W, T, O, Other>) => {
+  const { proof, ...withoutProof } = args;
+  // @ts-expect-error Request writes require evidence.
+  await emitSignalRequest(withoutProof);
+  // @ts-expect-error The recorded actor must match the proof.
+  await emitSignalRequest({ ...args, actor: otherActor });
+  // @ts-expect-error Evidence for one matter does not authorize another.
+  await emitSignalRequest({ ...args, workspace: otherWorkspace });
+  // @ts-expect-error Evidence belongs to the transaction that checked it.
+  await emitSignalRequest({ ...args, tx: otherTransaction });
+  // @ts-expect-error A raw actor ID has no exact value name.
+  await emitSignalRequest({ ...args, actor: args.actor.value });
+  // @ts-expect-error A raw matter ID has no exact value name.
+  await emitSignalRequest({ ...args, workspace: args.workspace.value });
+  // @ts-expect-error A raw transaction has no exact value name.
+  await emitSignalRequest({ ...args, tx: args.tx.value });
+  // @ts-expect-error A boolean is not authorization evidence.
+  await emitSignalRequest({ ...args, proof: true });
+  return proof;
 };
