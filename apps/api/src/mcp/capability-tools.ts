@@ -1761,7 +1761,7 @@ const invokeCapabilityHandler = async ({
   if (unconfirmable !== null) {
     return unconfirmable;
   }
-  if (entry.destructive && confirm !== true) {
+  if (entry.destructive && !confirm) {
     return structuredErrorResult({
       code: "confirmation_required",
       message: `Capability "${id}" is an irreversible operation and was called without confirmation`,
@@ -2354,10 +2354,10 @@ const CAPABILITY_TOOL_DEFINITIONS = [
 export const CAPABILITY_TOOL_HANDLERS = {
   list_capabilities: listCapabilitiesHandler,
   describe_capability: describeCapabilityHandler,
-  [MCP_CAPABILITY_EXECUTORS.read]: ({ args, context }) =>
-    invokeCapabilityHandler({ args, context, access: "read" }),
-  [MCP_CAPABILITY_EXECUTORS.write]: ({ args, context }) =>
-    invokeCapabilityHandler({ args, context, access: "write" }),
+  [MCP_CAPABILITY_EXECUTORS.read]: async ({ args, context }) =>
+    await invokeCapabilityHandler({ args, context, access: "read" }),
+  [MCP_CAPABILITY_EXECUTORS.write]: async ({ args, context }) =>
+    await invokeCapabilityHandler({ args, context, access: "write" }),
 } satisfies Record<
   "list_capabilities" | "describe_capability" | McpCapabilityExecutor,
   McpToolHandler
