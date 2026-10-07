@@ -22,13 +22,13 @@ test("reloading a running turn rejoins its answer without duplication", async ({
   await expect(stop).toBeHidden({ timeout: 30_000 });
   const answer = transcript.getByText(ANSWER_START, { exact: false });
   await expect(answer).toBeVisible();
-  const uninterrupted = await answer.innerText();
+  const uninterrupted = await answer.textContent();
 
   await composer.fill(SLOW_STREAM_PROMPT);
   await page.getByRole("button", { name: "Send message" }).click();
   await expect(stop).toBeVisible();
   await expect(answer).toHaveCount(2);
-  const partial = await answer.last().innerText();
+  const partial = await answer.last().textContent();
   expect(partial.length).toBeLessThan(uninterrupted.length);
   await page.screenshot({ path: test.info().outputPath("before-reload.png") });
   const join = page.waitForResponse(
@@ -127,7 +127,7 @@ test("Stop in another tab cancels a detached turn and settles both viewers", asy
     const stoppedText = await observer
       .getByRole("log")
       .getByText(ANSWER_START, { exact: false })
-      .innerText();
+      .textContent();
     await page.reload({ waitUntil: "commit" });
     await expect(
       page.getByRole("log").getByText(ANSWER_START, { exact: false }),
