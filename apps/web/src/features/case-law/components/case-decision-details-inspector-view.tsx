@@ -11,6 +11,7 @@ import { Skeleton } from "@stll/ui/skeleton";
 import type { CaseDecisionViewPayload } from "@/components/inspector/case-decision-view";
 import { InspectorTabHeader } from "@/components/inspector/inspector-tab-header";
 import type { InspectorViewRenderProps } from "@/components/inspector/view-registry";
+import { QueryViewFeedback } from "@/components/query-view-feedback";
 import { DecisionCitationBox } from "@/features/case-law/components/case-viewer/decision-citation-box";
 import { DecisionFacts } from "@/features/case-law/components/case-viewer/decision-facts";
 import { DECISION_FACT_KINDS } from "@/features/case-law/components/case-viewer/decision-facts.logic";
@@ -19,6 +20,8 @@ import { decisionOptions } from "@/features/case-law/queries/decisions";
 import { useFormatter } from "@/i18n/formatting-context";
 import { parseDeterministicDate } from "@/lib/deterministic-date";
 import { toSafeId } from "@/lib/safe-id";
+import { useQueryView } from "@/lib/use-query-view";
+import { useQueryViewError } from "@/lib/use-query-view-error";
 
 /**
  * The facts of a decision, on the inspector's bounded width: the court and
@@ -33,7 +36,12 @@ export const CaseDecisionDetailsInspectorView = ({
   const t = useTranslations();
   const format = useFormatter();
   const decisionId = toSafeId<"caseLawDecision">(tab.payload.decisionId);
-  const { data: decision, isPending } = useQuery(decisionOptions(decisionId));
+  const decisionQuery = useQuery(decisionOptions(decisionId));
+  const decisionView = useQueryView(decisionQuery);
+  useQueryViewError(decisionView);
+  const { isPending } = decisionQuery;
+  const decision =
+    decisionView.type === "items" ? decisionView.items : undefined;
   const decided =
     decision?.decisionDate === undefined || decision.decisionDate === null
       ? null
@@ -47,6 +55,9 @@ export const CaseDecisionDetailsInspectorView = ({
         onClose={onClose}
       />
       <ScrollArea axis="vertical" className="min-h-0 flex-1">
+        {decisionView.type !== "pending" && (
+          <QueryViewFeedback view={decisionView} />
+        )}
         {/* The pane no longer scrolls sideways, so a value that cannot wrap
             would be clipped instead of read: an ECLI is one unbroken token
             longer than the room this grid leaves it at the 320px minimum.

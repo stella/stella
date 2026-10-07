@@ -29,6 +29,8 @@ import { provisionPreviewOptions } from "@/features/statutes/queries/provision-p
 import type { ProvisionPreviewData } from "@/features/statutes/queries/provision-preview";
 import { formatValidityDate } from "@/features/statutes/statute-format";
 import { createStatuteLinkTarget } from "@/lib/statute-route";
+import { useQueryView } from "@/lib/use-query-view";
+import { useQueryViewError } from "@/lib/use-query-view-error";
 
 export type CitedProvisionTarget = {
   /** The consolidation the reference was made against, in the statute reader. */
@@ -72,7 +74,7 @@ const useProvisionWording = ({
   preview,
   provision,
 }: ProvisionWordingArgs) => {
-  const { data, isPending } = useQuery({
+  const dataQuery = useQuery({
     ...provisionPreviewOptions({
       anchor: provision.anchorId,
       citedAnchor: provision.highlightAnchorId,
@@ -80,6 +82,10 @@ const useProvisionWording = ({
     }),
     enabled: enabled && preview === null,
   });
+  const dataView = useQueryView(dataQuery);
+  useQueryViewError(dataView);
+  const { isPending } = dataQuery;
+  const data = dataView.type === "items" ? dataView.items : undefined;
 
   return { isPending, wording: preview ?? data };
 };

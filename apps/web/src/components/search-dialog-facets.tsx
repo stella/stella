@@ -11,6 +11,7 @@ import { Input } from "@stll/ui/input";
 import { MenuSection } from "@stll/ui/menu-section";
 
 import { DatePickerPopover } from "@/components/date-picker-popover";
+import { QueryViewFeedback } from "@/components/query-view-feedback";
 import { rememberSelectedFacetLabels } from "@/components/search-dialog.logic";
 import {
   dateInputToIsoEnd,
@@ -26,6 +27,8 @@ import type { TimeFilter } from "@/components/search-filters.logic";
 import { useFormatter } from "@/i18n/formatting-context";
 import { searchFacetOptions, TIME_PRESETS } from "@/lib/search";
 import type { SearchableFacet, TimePreset } from "@/lib/search";
+import { useQueryView } from "@/lib/use-query-view";
+import { useQueryViewError } from "@/lib/use-query-view-error";
 
 type FacetGroupProps = {
   title: string;
@@ -240,7 +243,7 @@ export const SearchableFacetGroup = ({
     {},
   );
   const isSearching = debouncedSearch.trim().length > 0;
-  const { data: searchData } = useQuery({
+  const searchDataQuery = useQuery({
     ...searchFacetOptions({
       facet,
       search: debouncedSearch,
@@ -249,6 +252,10 @@ export const SearchableFacetGroup = ({
     }),
     enabled: isSearching && searchParams.enabled,
   });
+  const searchDataView = useQueryView(searchDataQuery);
+  useQueryViewError(searchDataView);
+  const searchData =
+    searchDataView.type === "items" ? searchDataView.items : undefined;
   const resolveLabel = (bucket: FacetBucket): string =>
     formatLabel ? formatLabel(bucket) : (bucket.label ?? bucket.value);
 
@@ -287,6 +294,9 @@ export const SearchableFacetGroup = ({
   }
   return (
     <MenuSection title={title}>
+      {isSearching && searchParams.enabled && (
+        <QueryViewFeedback view={searchDataView} />
+      )}
       <Input
         onChange={(event) => {
           const value = event.target.value;

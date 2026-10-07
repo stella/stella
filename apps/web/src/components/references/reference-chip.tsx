@@ -35,6 +35,8 @@ import { useMaybeAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { detached } from "@/lib/detached";
 import { resolveMatterColor } from "@/lib/matter-colors";
 import { organizationOptions } from "@/lib/organization/queries";
+import { useQueryView } from "@/lib/use-query-view";
+import { useQueryViewError } from "@/lib/use-query-view-error";
 import { workspacesNavigationOptions } from "@/lib/workspaces/queries";
 import { entityOptions } from "@/lib/workspaces/queries/entities";
 import { navigateToWorkspaceFolder } from "@/lib/workspaces/reveal-navigation";
@@ -112,6 +114,8 @@ const useReferenceFacts = (reference: ChatReference): ReferenceLiveFacts => {
       reference.type === "entity" ? reference.entityId : null,
     ),
   );
+  const hintQueryView = useQueryView(hintQuery);
+  useQueryViewError(hintQueryView);
   // The navigation list is already in flight on every chat surface, so the
   // matter colour is a cache read rather than a fetch.
   const mattersQuery = useQuery({
@@ -143,8 +147,8 @@ const useReferenceFacts = (reference: ChatReference): ReferenceLiveFacts => {
       return { kind: data.kind, fileName: null, mimeType: null };
     }),
     hint:
-      reference.type === "entity" && hintQuery.data !== undefined
-        ? hintQuery.data
+      reference.type === "entity" && hintQueryView.type === "items"
+        ? hintQueryView.items
         : null,
     matter: toLiveFact(
       mattersQuery,

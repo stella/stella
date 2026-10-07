@@ -10,6 +10,8 @@ import { statuteCitationCountsOptions } from "@/features/statutes/queries/citing
 import type { PublicStatute } from "@/features/statutes/queries/statutes";
 import { provisionCitationCountByBlockAnchor } from "@/features/statutes/statute-reader-blocks";
 import type { StatuteMasthead } from "@/features/statutes/statute-reader-blocks";
+import { useQueryView } from "@/lib/use-query-view";
+import { useQueryViewError } from "@/lib/use-query-view-error";
 
 type StatuteReaderBodyProps = {
   /** Parsed blocks. The caller owns the parse: the page also builds an outline. */
@@ -51,11 +53,13 @@ export const StatuteReaderBody = ({
     enabled:
       citationWork !== null && typeof statute.citationCaseCount === "number",
   });
+  const citationCountsView = useQueryView(citationCounts);
+  useQueryViewError(citationCountsView);
+  const countsData =
+    citationCountsView.type === "items" ? citationCountsView.items : undefined;
   const provisionCitationCounts = provisionCitationCountByBlockAnchor(
     blocks,
-    citationCounts.data?.status === "ready"
-      ? citationCounts.data.provisions
-      : [],
+    countsData?.status === "ready" ? countsData.provisions : [],
   );
 
   return (

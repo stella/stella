@@ -55,6 +55,8 @@ import { TOOLBAR_ROW_HEIGHT } from "@/lib/consts";
 import { mcpConnectorsOptions } from "@/lib/knowledge/queries";
 import { catalogueOptions } from "@/lib/knowledge/queries/catalogue";
 import { getMatterSwatch } from "@/lib/matter-colors";
+import { useQueryView } from "@/lib/use-query-view";
+import { useQueryViewError } from "@/lib/use-query-view-error";
 
 export const InspectorRail = ({
   activeId,
@@ -75,10 +77,18 @@ export const InspectorRail = ({
   }, [routeErrorLifecycle, inspectorState]);
   const activeTab = tabs.find((tab) => tab.id === activeId);
   const { activeOrganizationId, id: userId } = useAuthenticatedUser();
-  const { data: activeSkillCatalogueData } = useQuery({
+  const activeSkillCatalogueDataQuery = useQuery({
     ...catalogueOptions(activeOrganizationId, userId),
     enabled: activeTab?.type === "view" && activeTab.viewType === "tool-detail",
   });
+  const activeSkillCatalogueDataView = useQueryView(
+    activeSkillCatalogueDataQuery,
+  );
+  useQueryViewError(activeSkillCatalogueDataView);
+  const activeSkillCatalogueData =
+    activeSkillCatalogueDataView.type === "items"
+      ? activeSkillCatalogueDataView.items
+      : undefined;
   const activeSkill = getActiveSkillChatContext(
     activeTab,
     activeSkillCatalogueData?.entries,
@@ -493,12 +503,18 @@ const VerticalTab = ({
     tab.type === "external" ? tab.connectorSlug : undefined;
   const storedExternalIconHref =
     tab.type === "external" ? tab.iconHref : undefined;
-  const { data: mcpConnectorsData } = useQuery({
+  const mcpConnectorsDataQuery = useQuery({
     ...mcpConnectorsOptions(activeOrganizationId),
     enabled:
       externalConnectorSlug !== undefined &&
       storedExternalIconHref === undefined,
   });
+  const mcpConnectorsDataView = useQueryView(mcpConnectorsDataQuery);
+  useQueryViewError(mcpConnectorsDataView);
+  const mcpConnectorsData =
+    mcpConnectorsDataView.type === "items"
+      ? mcpConnectorsDataView.items
+      : undefined;
   const availableConnectors = mcpConnectorsData
     ? mcpConnectorsData.connectors
     : [];

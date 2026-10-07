@@ -10,6 +10,8 @@ import { useClientAuthStatus } from "@/hooks/use-client-auth-status";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { authClient } from "@/lib/auth-client";
 import { roleOptions } from "@/lib/auth-queries";
+import { useQueryView } from "@/lib/use-query-view";
+import { useQueryViewError } from "@/lib/use-query-view-error";
 
 /**
  * The search filters with the legal-vocabulary alternatives the reader's
@@ -30,15 +32,19 @@ export const useExpandedDecisionFilters = (
   const authStatus = useClientAuthStatus();
   const analytics = useAnalytics();
   const signedIn = authStatus.status === "authenticated";
-  const { data: role } = useQuery({ ...roleOptions, enabled: signedIn });
+  const roleQuery = useQuery({ ...roleOptions, enabled: signedIn });
+  const roleView = useQueryView(roleQuery);
+  useQueryViewError(roleView);
+  const role = roleView.type === "items" ? roleView.items : undefined;
   const maySpendAI =
+    roleQuery.status === "success" &&
     role !== undefined &&
     authClient.organization.checkRolePermission({
       role,
       permissions: { chat: ["create"] },
     });
   const query = typed.search ?? "";
-  const { data: expansion } = useQuery({
+  const expansionQuery = useQuery({
     ...caseLawQueryExpansionOptions({
       activeOrganizationId: signedIn
         ? authStatus.user.activeOrganizationId
@@ -54,6 +60,10 @@ export const useExpandedDecisionFilters = (
       query.length > 0 &&
       typed.strict === undefined,
   });
+  const expansionView = useQueryView(expansionQuery);
+  useQueryViewError(expansionView);
+  const expansion =
+    expansionView.type === "items" ? expansionView.items : undefined;
   if (expansion === undefined || expansion.alternatives.length === 0) {
     return typed;
   }

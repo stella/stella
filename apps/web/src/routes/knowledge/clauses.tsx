@@ -6,6 +6,7 @@ import { useTranslations } from "use-intl";
 
 import { Skeleton } from "@stll/ui/skeleton";
 
+import { QueryViewFeedback } from "@/components/query-view-feedback";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
@@ -20,6 +21,8 @@ import {
 import { prefetchRouteQuery } from "@/lib/react-query";
 import type { SafeId } from "@/lib/safe-id";
 import { toSafeId } from "@/lib/safe-id";
+import { useQueryView } from "@/lib/use-query-view";
+import { useQueryViewError } from "@/lib/use-query-view-error";
 import { ClauseDetailView } from "@/routes/knowledge/-components/clause-detail";
 import { ClauseFormDialog } from "@/routes/knowledge/-components/clause-form-dialog";
 import { ClauseList } from "@/routes/knowledge/-components/clause-list";
@@ -150,9 +153,13 @@ function RouteComponent() {
   // Abort in-flight load-more requests when filters change.
   const loadMoreAbort = useRef<AbortController | null>(null);
 
-  const { data: categoriesData } = useQuery(
+  const categoriesDataQuery = useQuery(
     clauseCategoriesOptions(activeOrganizationId),
   );
+  const categoriesDataView = useQueryView(categoriesDataQuery);
+  useQueryViewError(categoriesDataView);
+  const categoriesData =
+    categoriesDataView.type === "items" ? categoriesDataView.items : undefined;
   const {
     data: clausesData,
     isLoading,
@@ -332,6 +339,7 @@ function RouteComponent() {
 
   return (
     <>
+      <QueryViewFeedback view={categoriesDataView} />
       <ClauseList
         categories={categories}
         clauses={clauses}

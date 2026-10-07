@@ -1,8 +1,11 @@
 import { useQuery } from "@tanstack/react-query";
 
+import { QueryViewFeedback } from "@/components/query-view-feedback";
 import { toEditorMarkdown } from "@/components/skill-body-markdown";
 import { detached } from "@/lib/detached";
 import { skillProposalOptions } from "@/lib/knowledge/queries";
+import { useQueryView } from "@/lib/use-query-view";
+import { useQueryViewError } from "@/lib/use-query-view-error";
 
 import { ProposalBodyEditor } from "./proposal-body-editor";
 import { ProposalActionBar } from "./proposal-panel";
@@ -36,9 +39,13 @@ export const ProposalReview = ({
   onClose,
 }: ProposalReviewProps) => {
   const actions = useSkillHistoryActions({ organizationId, skillId, userId });
-  const { data: proposal } = useQuery(
+  const proposalQuery = useQuery(
     skillProposalOptions(organizationId, userId, skillId, proposalId),
   );
+  const proposalView = useQueryView(proposalQuery);
+  useQueryViewError(proposalView);
+  const proposal =
+    proposalView.type === "items" ? proposalView.items : undefined;
 
   const isAuthor = proposal?.authorId === userId;
   const isOpen =
@@ -61,6 +68,7 @@ export const ProposalReview = ({
 
   return (
     <>
+      <QueryViewFeedback view={proposalView} />
       {proposal === undefined ? null : (
         <ProposalActionBar
           canManage={canManage}

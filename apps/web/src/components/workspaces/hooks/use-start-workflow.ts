@@ -19,6 +19,8 @@ import { unwrapEden } from "@/lib/errors/api";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { aiAvailabilityOptions } from "@/lib/organization/ai-config-queries";
 import { toSafeId } from "@/lib/safe-id";
+import { useQueryView } from "@/lib/use-query-view";
+import { useQueryViewError } from "@/lib/use-query-view-error";
 import { workspaceKeys } from "@/lib/workspaces/queries/workspace";
 
 /**
@@ -36,10 +38,17 @@ export const useStartWorkflow = (workspaceId: string) => {
     from: "/_protected",
     select: (ctx) => ctx.user.activeOrganizationId,
   });
-  const aiAvailabilityQuery = aiAvailabilityOptions({
+  const aiAvailabilityQueryOptions = aiAvailabilityOptions({
     organizationId: activeOrganizationId,
   });
-  const { data: aiAvailability } = useQuery(aiAvailabilityQuery);
+  const aiAvailabilityQuery = useQuery(aiAvailabilityQueryOptions);
+  const aiAvailabilityView = useQueryView(aiAvailabilityQuery);
+  useQueryViewError(aiAvailabilityView);
+  const aiAvailability =
+    aiAvailabilityView.type === "items" &&
+    aiAvailabilityView.refetchError === undefined
+      ? aiAvailabilityView.items
+      : undefined;
   const confirmLargeRun = useWorkflowStartConfirmationPrompt();
   const promptForServiceTier = useWorkflowServiceTierPrompt();
 
@@ -50,7 +59,7 @@ export const useStartWorkflow = (workspaceId: string) => {
   return async (args?: StartWorkflowArgs) => {
     try {
       const availability =
-        aiAvailability ?? (await queryClient.query(aiAvailabilityQuery));
+        aiAvailability ?? (await queryClient.query(aiAvailabilityQueryOptions));
       if (!availability.available) {
         return WORKFLOW_START_AI_UNAVAILABLE;
       }

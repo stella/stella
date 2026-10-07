@@ -13,6 +13,8 @@ import { usePermissions } from "@/hooks/use-permissions";
 import { useTimeBillingPreviewEnabled } from "@/hooks/use-time-billing-preview";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { useEffectiveShortcutGroups } from "@/lib/use-effective-shortcuts";
+import { useQueryView } from "@/lib/use-query-view";
+import { useQueryViewError } from "@/lib/use-query-view-error";
 import { useCreateMatterStore } from "@/lib/workspaces/create-matter-store";
 import { useCreateTask } from "@/lib/workspaces/mutations/tasks";
 import { entitySummariesCountOptions } from "@/lib/workspaces/queries/entities";
@@ -56,15 +58,25 @@ export function useCommandActions(open: boolean): UseCommandActionsResult {
   });
   const { mutate: createTask, isPending: isCreatingTask } = useCreateTask();
   const canCreateEntity = usePermissions({ entity: ["create"] });
-  const { data: entityCount } = useQuery({
+  const entityCountQuery = useQuery({
     ...entitySummariesCountOptions(workspaceId ?? ""),
     enabled: open && workspaceId !== undefined && canCreateEntity,
   });
-  const { data: workflow } = useQuery({
+  const entityCountView = useQueryView(entityCountQuery);
+  useQueryViewError(entityCountView);
+  const entityCount =
+    entityCountView.type === "items" ? entityCountView.items : undefined;
+  const workflowQuery = useQuery({
     ...workflowOptions({ key: { workspaceId: workspaceId ?? "" } }),
     enabled: open && workspaceId !== undefined && canCreateEntity,
   });
+  const workflowView = useQueryView(workflowQuery);
+  useQueryViewError(workflowView);
+  const workflow =
+    workflowView.type === "items" ? workflowView.items : undefined;
   const canCreateTask =
+    entityCountQuery.status === "success" &&
+    workflowQuery.status === "success" &&
     canCreateEntity &&
     workspaceId !== undefined &&
     entityCount !== undefined &&

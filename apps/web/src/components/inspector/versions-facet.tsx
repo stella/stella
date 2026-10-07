@@ -24,6 +24,7 @@ import { CompareVersionsPanel } from "@/components/inspector/compare-versions-pa
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
 import { VersionsSidebar } from "@/components/pdf/versions-sidebar";
 import type { Version } from "@/components/pdf/versions-sidebar";
+import { QueryViewFeedback } from "@/components/query-view-feedback";
 import { useMountEffect } from "@/hooks/use-effect";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { DOCX_MIME, TOOLBAR_ROW_HEIGHT } from "@/lib/consts";
@@ -31,6 +32,8 @@ import { detached } from "@/lib/detached";
 import { APIError } from "@/lib/errors/api";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { fileContentQueryKey } from "@/lib/files/file-metadata-query.logic";
+import { useQueryView } from "@/lib/use-query-view";
+import { useQueryViewError } from "@/lib/use-query-view-error";
 import {
   entityVersionsOptions,
   fetchOlderVersions,
@@ -55,13 +58,16 @@ export const VersionsFacet = ({
     select: (state) => state.location.pathname,
   });
   const openFileForEntity = useInspectorTabsStore((s) => s.openFileForEntity);
-  const { data } = useQuery(
+  const dataQuery = useQuery(
     entityVersionsOptions({
       workspaceId,
       entityId,
       filePropertyId: currentFilePropertyId,
     }),
   );
+  const dataView = useQueryView(dataQuery);
+  useQueryViewError(dataView);
+  const data = dataView.type === "items" ? dataView.items : undefined;
 
   // Accumulated list seeded from the query's newest page and extended
   // by each older page. Re-seed whenever a fresh `data` object arrives:
@@ -184,7 +190,7 @@ export const VersionsFacet = ({
   );
 
   if (!data) {
-    return null;
+    return <QueryViewFeedback view={dataView} />;
   }
 
   const handleSwitchVersion = async (fieldId: string, versionId: string) => {
@@ -275,6 +281,7 @@ export const VersionsFacet = ({
 
   return (
     <div className="bg-background h-full overflow-y-auto">
+      <QueryViewFeedback view={dataView} />
       {shouldLoadDeepLinkedVersion && olderCursor !== null && (
         <LoadOlderVersionLifecycle key={olderCursor} loadOlder={loadOlder} />
       )}

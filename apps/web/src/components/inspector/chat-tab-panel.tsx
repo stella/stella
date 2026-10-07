@@ -112,6 +112,8 @@ import { notifyUserError } from "@/lib/errors/user-toast";
 import type { PromptSuggestion } from "@/lib/prompts/types";
 import { useSuggestedSkills } from "@/lib/prompts/use-suggested-skills";
 import { runReservedChatCommand } from "@/lib/reserved-chat-commands";
+import { useQueryView } from "@/lib/use-query-view";
+import { useQueryViewError } from "@/lib/use-query-view-error";
 import { workspacesNavigationOptions } from "@/lib/workspaces/queries";
 
 type ChatTabPanelProps = {
@@ -726,12 +728,15 @@ const useBoundLegalDocumentLabel = (tab: ChatTab): string | undefined => {
 const useChatContextLabel = (tab: ChatTab, activeOrganizationId: string) => {
   const t = useTranslations();
   const { id: userId } = useAuthenticatedUser();
-  const { data } = useQuery(
+  const dataQuery = useQuery(
     workspacesNavigationOptions({
       organizationId: activeOrganizationId,
       userId,
     }),
   );
+  const dataView = useQueryView(dataQuery);
+  useQueryViewError(dataView);
+  const data = dataView.type === "items" ? dataView.items : undefined;
   const boundDocumentLabel = useBoundLegalDocumentLabel(tab);
   const workspaces = data?.workspaces ?? [];
   const matterNames = tab.contextMatterIds

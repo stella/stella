@@ -26,6 +26,8 @@ import { unwrapEden } from "@/lib/errors/api";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
 import { filesKeys } from "@/lib/files/queries";
 import { toSafeId } from "@/lib/safe-id";
+import { useQueryView } from "@/lib/use-query-view";
+import { useQueryViewError } from "@/lib/use-query-view-error";
 import {
   type EntityVersion,
   entityVersionsKeys,
@@ -131,6 +133,8 @@ export const CompareVersionsPanel = ({
     ...outcomeOptions,
     enabled: false,
   });
+  const outcomeQueryView = useQueryView(outcomeQuery);
+  useQueryViewError(outcomeQueryView);
   const [requestedSelection, setRequestedSelection] =
     useState<CompareVersionSelection | null>(null);
   const [baseTrackedChanges, setBaseTrackedChanges] =

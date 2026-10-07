@@ -8,6 +8,8 @@ import { useMaybeAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { detached } from "@/lib/detached";
 import { skillsOptions } from "@/lib/knowledge/queries";
 import { useChatUnavailableSkillIds } from "@/lib/prompts/use-chat-unavailable-skills";
+import { useQueryView } from "@/lib/use-query-view";
+import { useQueryViewError } from "@/lib/use-query-view-error";
 
 import type { ChatPrompt } from "./types";
 
@@ -29,28 +31,38 @@ export const useSuggestedSkills = (): SuggestedSkill[] => {
   const user = useMaybeAuthenticatedUser();
   const activeOrganizationId = user?.activeOrganizationId;
   const userId = user?.id;
-  const {
-    data: skillPages,
-    fetchNextPage,
-    hasNextPage,
-    isFetchingNextPage,
-  } = useInfiniteQuery({
+  const skillPagesQuery = useInfiniteQuery({
     ...skillsOptions(
       activeOrganizationId ?? "",
       userId ?? SIGNED_OUT_QUERY_OWNER,
     ),
     enabled: activeOrganizationId !== undefined && userId !== undefined,
   });
+  const { fetchNextPage, hasNextPage, isFetchingNextPage } = skillPagesQuery;
+  const skillPagesView = useQueryView(skillPagesQuery);
+  useQueryViewError(skillPagesView);
+  const skillPages =
+    skillPagesView.type === "items" ? skillPagesView.items : undefined;
+  const canLoadSkillPages =
+    skillPagesView.type === "items" &&
+    skillPagesView.refetchError === undefined;
   useExternalSyncEffect(() => {
     if (
       activeOrganizationId === undefined ||
+      !canLoadSkillPages ||
       !hasNextPage ||
       isFetchingNextPage
     ) {
       return;
     }
     detached(fetchNextPage(), "use-suggested-skills.fetch-next-page");
-  }, [activeOrganizationId, fetchNextPage, hasNextPage, isFetchingNextPage]);
+  }, [
+    activeOrganizationId,
+    canLoadSkillPages,
+    fetchNextPage,
+    hasNextPage,
+    isFetchingNextPage,
+  ]);
   const unavailableSkillIds = useChatUnavailableSkillIds(
     activeOrganizationId,
     userId,

@@ -41,6 +41,8 @@ import { formatHotkeyForPlatform } from "@/lib/hotkeys";
 import { resolveRecentFilePreviewFieldId } from "@/lib/search";
 import type { SearchAISummaryParams } from "@/lib/search";
 import type { RecentFile, RecentSearch } from "@/lib/search-recents";
+import { useQueryView } from "@/lib/use-query-view";
+import { useQueryViewError } from "@/lib/use-query-view-error";
 import { entityOptions } from "@/lib/workspaces/queries/entities";
 
 type SearchSummaryData = NonNullable<
@@ -151,7 +153,7 @@ export const SearchSummaryItem = ({
       >
         <span className="bg-background text-foreground mt-0.5 flex size-6 shrink-0 items-center justify-center rounded-md border">
           {isPending ? (
-            <Loader className="size-3.5" size="sm" variant="decorative" />
+            <Loader variant="decorative" size="sm" className="size-3.5" />
           ) : (
             <AiActionIcon className="size-3.5" />
           )}
@@ -187,15 +189,15 @@ export const SearchSummaryItem = ({
       </div>
       <div className="border-border/70 mt-2 border-t pt-2">
         <Button
-          aria-busy={isOpeningChat || undefined}
           className="h-auto gap-2 px-1.5 py-1"
+          aria-busy={isOpeningChat || undefined}
           disabled={isOpeningChat}
           onClick={onOpenChat}
           size="sm"
           variant="ghost"
         >
           {isOpeningChat ? (
-            <Loader className="size-3.5" size="sm" variant="decorative" />
+            <Loader variant="decorative" size="sm" className="size-3.5" />
           ) : (
             <MessageSquareIcon className="size-3.5" />
           )}
@@ -446,10 +448,13 @@ export const SearchResultItem = ({
 export const RecentFileIcon = ({ file }: { file: RecentFile }) => {
   // Recents store identifiers, not thumbnail availability. Observe metadata
   // already loaded by the file view without fetching every recent on open.
-  const { data: entity } = useQuery({
+  const entityQuery = useQuery({
     ...entityOptions(file.workspaceId, file.entityId),
     enabled: false,
   });
+  const entityView = useQueryView(entityQuery);
+  useQueryViewError(entityView);
+  const entity = entityView.type === "items" ? entityView.items : undefined;
   const fieldId = entity
     ? resolveRecentFilePreviewFieldId({
         fields: entity.fields,

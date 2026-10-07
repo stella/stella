@@ -16,11 +16,14 @@ import {
 
 import { openEntityInInspector } from "@/components/chat/entity-open";
 import { MatterRefLink } from "@/components/matter-ref-link";
+import { QueryViewFeedback } from "@/components/query-view-feedback";
 import { usePermissions } from "@/hooks/use-permissions";
 import { useFormatter } from "@/i18n/formatting-context";
 import { detached } from "@/lib/detached";
 import { ensureRouteQueryData } from "@/lib/react-query";
 import { MEDIUM_DATE_SHORT_TIME_FORMAT } from "@/lib/relative-time";
+import { useQueryView } from "@/lib/use-query-view";
+import { useQueryViewError } from "@/lib/use-query-view-error";
 import {
   CORRESPONDENCE_AUTH_LABEL_KEYS,
   correspondenceByIdOptions,
@@ -60,13 +63,16 @@ function CorrespondenceDetailPage() {
   );
   const { record, filers, attachments } = data;
   const provenance = correspondenceProvenancePresentation(record);
-  const { data: members = [] } = useQuery(workspaceMembersOptions(workspaceId));
+  const membersQuery = useQuery(workspaceMembersOptions(workspaceId));
+  const membersView = useQueryView(membersQuery);
+  const members = membersView.type === "items" ? membersView.items : [];
   const update = useUpdateCorrespondence();
   const canUpdate = usePermissions({ workspace: ["update"] });
   const tCommon = useTranslations("common");
 
   return (
     <div className="flex h-full flex-col">
+      <QueryViewFeedback view={membersView} />
       <div className="flex items-center gap-3 border-b px-4 py-3">
         <BackToCorrespondenceLink workspaceId={workspaceId} />
 
@@ -328,10 +334,13 @@ function CorrespondenceDetailPage() {
 // opens its first view.
 const BackToCorrespondenceLink = ({ workspaceId }: { workspaceId: string }) => {
   const t = useTranslations();
-  const { data: viewId = null } = useQuery({
+  const viewIdQuery = useQuery({
     ...viewsOptions(workspaceId),
     select: correspondenceViewId,
   });
+  const viewIdView = useQueryView(viewIdQuery);
+  useQueryViewError(viewIdView);
+  const viewId = viewIdView.type === "items" ? viewIdView.items : null;
   const label = (
     <span className="text-muted-foreground hover:text-foreground flex min-h-11 items-center px-2 text-sm">
       {t("correspondence.backToList")}
@@ -339,7 +348,14 @@ const BackToCorrespondenceLink = ({ workspaceId }: { workspaceId: string }) => {
   );
 
   if (viewId === null) {
-    return <MatterRefLink workspaceId={workspaceId}>{label}</MatterRefLink>;
+    return (
+      <>
+        {viewIdView.type !== "pending" && (
+          <QueryViewFeedback view={viewIdView} />
+        )}
+        <MatterRefLink workspaceId={workspaceId}>{label}</MatterRefLink>
+      </>
+    );
   }
   return (
     <Link

@@ -13,6 +13,8 @@ import {
 } from "@/components/inspector/inspector-anonymization-store";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { getAnalytics } from "@/lib/analytics/provider";
+import { useQueryView } from "@/lib/use-query-view";
+import { useQueryViewError } from "@/lib/use-query-view-error";
 import { anonymizationAllowlistOptions } from "@/lib/workspaces/queries/anonymization-allowlist";
 import { anonymizationTermsOptions } from "@/lib/workspaces/queries/anonymization-terms";
 
@@ -51,6 +53,8 @@ export const useDocxAnonymizationHighlights = ({
   const anonymizationTermsQuery = useQuery(
     anonymizationTermsOptions(workspaceId),
   );
+  const anonymizationTermsQueryView = useQueryView(anonymizationTermsQuery);
+  useQueryViewError(anonymizationTermsQueryView);
   const workspaceAnonymizationTerms = useMemo<AnonymizationTerm[]>(() => {
     if (!anonymizationTermsQuery.data) {
       return [];
@@ -87,12 +91,30 @@ export const useDocxAnonymizationHighlights = ({
   const detectionRetry = useInspectorAnonymizationStore(
     (state) => state.anonymizationRetryByFieldId[fieldId] ?? 0,
   );
+  const allowlistQuery = useQuery({
+    ...anonymizationAllowlistOptions({ workspaceId, entityId }),
+    enabled: isAnonymizationActive,
+  });
+  const allowlistQueryView = useQueryView(allowlistQuery);
+  useQueryViewError(allowlistQueryView);
+  const policyReady =
+    anonymizationTermsQuery.status === "success" &&
+    allowlistQuery.status === "success";
+  const policyReadFailed =
+    anonymizationTermsQuery.status === "error" ||
+    allowlistQuery.status === "error";
+  useExternalSyncEffect(() => {
+    if (isAnonymizationActive && policyReadFailed) {
+      useInspectorAnonymizationStore
+        .getState()
+        .markAnonymizationPipelineFailed(fieldId);
+    }
+  }, [fieldId, isAnonymizationActive, policyReadFailed]);
   useExternalSyncEffect(() => {
     const view = editorView;
-    if (!view || !isAnonymizationActive) {
-      // Facet not on screen: skip the wasm pipeline entirely and
-      // drop any previously detected terms so a re-mount starts
-      // from a clean slate.
+    if (!view || !isAnonymizationActive || !policyReady) {
+      // Never detect against missing policy. Leaving the facet or losing
+      // its policy clears previous detections until a complete read returns.
       setDetectedAnonymizationTerms([]);
       return undefined;
     }
@@ -112,16 +134,19 @@ export const useDocxAnonymizationHighlights = ({
       runDetectionRef.current = null;
       detection.stop();
     };
-  }, [editorView, isAnonymizationActive, workspaceId, fieldId, detectionRetry]);
+  }, [
+    editorView,
+    isAnonymizationActive,
+    policyReady,
+    workspaceId,
+    fieldId,
+    detectionRetry,
+  ]);
   // Per-doc allowlist: canonicals the user has flagged as false
   // positives. The chat-anon worker filters these out of its
   // detected entities itself; we still need to strip them from
   // the workspace catalog list, because catalog terms are sent
   // straight to Folio without going through the worker.
-  const allowlistQuery = useQuery({
-    ...anonymizationAllowlistOptions({ workspaceId, entityId }),
-    enabled: isAnonymizationActive,
-  });
   const excludedCanonicalsSet = useMemo(
     () =>
       buildExcludedCanonicalsSet(

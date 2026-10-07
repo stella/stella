@@ -11,6 +11,8 @@ import {
   statutesResolveOptions,
 } from "@/features/case-law/queries/provisions";
 import { decisionDateToIso } from "@/lib/decision-date";
+import { useQueryView } from "@/lib/use-query-view";
+import { useQueryViewError } from "@/lib/use-query-view-error";
 
 export type DecisionStatuteCitationAnchor = StatuteCitationAnchor & {
   target: CitedStatuteTarget;
@@ -25,7 +27,7 @@ export const useDecisionStatuteCitationAnchors = (
   const asOf = decisionDateToIso(decisionDate);
   // Every cited work resolves in one request, however many the text names;
   // the query deduplicates repeated citations of one act.
-  const { data: resolved } = useQuery(
+  const resolvedQuery = useQuery(
     statutesResolveOptions(
       asOf === null
         ? []
@@ -36,6 +38,10 @@ export const useDecisionStatuteCitationAnchors = (
           })),
     ),
   );
+  const resolvedView = useQueryView(resolvedQuery);
+  useQueryViewError(resolvedView);
+  const resolved =
+    resolvedView.type === "items" ? resolvedView.items : undefined;
   const statuteByWork = statuteByCitedWork(resolved);
 
   return references.flatMap((reference) => {

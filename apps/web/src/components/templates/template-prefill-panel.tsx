@@ -20,6 +20,7 @@ import { Textarea } from "@stll/ui/textarea";
 import { stellaToast } from "@stll/ui/toast";
 import { cn } from "@stll/ui/utils";
 
+import { QueryViewFeedback } from "@/components/query-view-feedback";
 import { resolveAppTimeZone } from "@/i18n/time-zone";
 import { api } from "@/lib/api";
 import { optionalArray } from "@/lib/arrays";
@@ -28,6 +29,8 @@ import { detached } from "@/lib/detached";
 import { toAPIError } from "@/lib/errors/api";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { toSafeId } from "@/lib/safe-id";
+import { useQueryView } from "@/lib/use-query-view";
+import { useQueryViewError } from "@/lib/use-query-view-error";
 import { workspaceFilesOptions } from "@/lib/workspaces/queries/entities";
 
 /**
@@ -268,7 +271,10 @@ const MatterDocumentPicker = ({
   onChange,
 }: MatterDocumentPickerProps) => {
   const t = useTranslations();
-  const { data: files } = useQuery(workspaceFilesOptions(workspaceId));
+  const filesQuery = useQuery(workspaceFilesOptions(workspaceId));
+  const filesView = useQueryView(filesQuery);
+  useQueryViewError(filesView);
+  const files = filesView.type === "items" ? filesView.items : undefined;
 
   const availableFiles = optionalArray(files);
   const documents = availableFiles
@@ -276,7 +282,7 @@ const MatterDocumentPicker = ({
     .slice(0, MAX_MATTER_DOCUMENTS);
 
   if (documents.length === 0) {
-    return null;
+    return <QueryViewFeedback view={filesView} />;
   }
 
   const toggle = (entityId: string) => {
@@ -292,6 +298,7 @@ const MatterDocumentPicker = ({
 
   return (
     <div className="flex flex-col gap-1.5">
+      <QueryViewFeedback view={filesView} />
       <span className="text-muted-foreground text-xs font-medium">
         {t("templates.prefillMatterDocuments")}
       </span>

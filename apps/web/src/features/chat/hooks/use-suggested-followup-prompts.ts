@@ -10,6 +10,8 @@ import {
 import { chatThreadSuggestedPromptsOptions } from "@/features/chat/queries";
 import { useIsChatDraftEmpty } from "@/lib/chat-draft-store";
 import type { ChatThreadRef } from "@/lib/chat-thread-ref";
+import { useQueryView } from "@/lib/use-query-view";
+import { useQueryViewError } from "@/lib/use-query-view-error";
 
 type UseSuggestedFollowupPromptsOptions = {
   activeOrganizationId: string;
@@ -74,7 +76,7 @@ export const useSuggestedFollowupPrompts = ({
     suggestedPromptsAvailability.status === "eligible"
       ? suggestedPromptsAvailability.lastMessageId
       : "";
-  const { data: suggestedPromptsData } = useQuery(
+  const suggestedPromptsDataQuery = useQuery(
     chatThreadSuggestedPromptsOptions({
       activeOrganizationId,
       enabled: suggestedPromptsAvailability.status === "eligible",
@@ -82,6 +84,12 @@ export const useSuggestedFollowupPrompts = ({
       threadRef,
     }),
   );
+  const suggestedPromptsDataView = useQueryView(suggestedPromptsDataQuery);
+  useQueryViewError(suggestedPromptsDataView);
+  const suggestedPromptsData =
+    suggestedPromptsDataView.type === "items"
+      ? suggestedPromptsDataView.items
+      : undefined;
   const suggestedPrompts =
     suggestedPromptsAvailability.status === "eligible" && suggestedPromptsData
       ? suggestedPromptsData.prompts

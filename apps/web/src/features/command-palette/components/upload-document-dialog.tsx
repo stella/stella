@@ -17,6 +17,7 @@ import { openFilePicker } from "@stll/ui/file-picker";
 import { UploadIcon } from "@stll/ui/icons";
 
 import { QuerySuspenseBoundary } from "@/components/query-suspense-boundary";
+import { QueryViewFeedback } from "@/components/query-view-feedback";
 import { useEntitiesCountLimit } from "@/components/workspaces/hooks/use-limits";
 import { MatterCombobox } from "@/components/workspaces/matter-combobox";
 import type { MatterOption } from "@/components/workspaces/matter-combobox";
@@ -24,6 +25,8 @@ import { WorkflowQueryFeedback } from "@/components/workspaces/workflow-query-fe
 import { usePermissions } from "@/hooks/use-permissions";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { detached } from "@/lib/detached";
+import { useQueryView } from "@/lib/use-query-view";
+import { useQueryViewError } from "@/lib/use-query-view-error";
 import { useCreateFileEntities } from "@/lib/workspaces/mutations/use-create-file-entities";
 import { workspacesNavigationOptions } from "@/lib/workspaces/queries";
 import { useIsWorkflowRunning } from "@/lib/workspaces/queries/workspace";
@@ -43,11 +46,7 @@ export const UploadDocumentDialog = ({
   // The picked matter, or the one the caller opened the dialog for, resolved
   // from the same list the picker offers so both paths show the same name.
   const [picked, setPicked] = useState<MatterOption | null>(null);
-  const {
-    data: matters,
-    isPending,
-    refetch,
-  } = useQuery({
+  const mattersQuery = useQuery({
     ...workspacesNavigationOptions({
       organizationId: activeOrganizationId,
       userId,
@@ -60,6 +59,10 @@ export const UploadDocumentDialog = ({
       })),
     enabled: workspaceId !== undefined,
   });
+  const mattersView = useQueryView(mattersQuery);
+  useQueryViewError(mattersView);
+  const { refetch } = mattersQuery;
+  const matters = mattersView.type === "items" ? mattersView.items : undefined;
   const selectedMatter =
     workspaceId === undefined
       ? picked
@@ -99,16 +102,14 @@ export const UploadDocumentDialog = ({
               />
             </div>
           )}
-          {workspaceId !== undefined && isPending && (
-            <p className="text-muted-foreground text-sm">
-              {t("common.loading")}
-            </p>
+          {workspaceId !== undefined && (
+            <QueryViewFeedback view={mattersView} />
           )}
           {workspaceId !== undefined &&
-            !isPending &&
+            mattersQuery.status === "success" &&
             selectedMatter === null && (
               // The caller named a matter the navigation list does not carry —
-              // a failed read, or a list that arrived without it. Reading it
+              // a list that arrived without it. Reading it
               // again is the whole recovery, so offer that rather than leaving
               // the reader an upload they cannot start.
               <div className="flex items-center justify-between gap-2 text-sm">

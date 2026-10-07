@@ -13,6 +13,8 @@ import { cn } from "@stll/ui/utils";
 
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { organizationSettingsOptions } from "@/lib/organization/settings-queries";
+import { useQueryView } from "@/lib/use-query-view";
+import { useQueryViewError } from "@/lib/use-query-view-error";
 
 export type MatterNumberHintProps = InlineProps | PopoverProps;
 
@@ -20,12 +22,16 @@ export const MatterNumberHint = (props: MatterNumberHintProps) => {
   const t = useTranslations();
   const now = useNow();
   const { activeOrganizationId, id: userId } = useAuthenticatedUser();
-  const { data: settings } = useQuery(
+  const settingsQuery = useQuery(
     organizationSettingsOptions({
       organizationId: activeOrganizationId,
       userId,
     }),
   );
+  const settingsView = useQueryView(settingsQuery);
+  useQueryViewError(settingsView);
+  const settings =
+    settingsView.type === "items" ? settingsView.items : undefined;
 
   if (!settings) {
     return null;

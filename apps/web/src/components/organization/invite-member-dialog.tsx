@@ -32,6 +32,7 @@ import {
 } from "@stll/ui/select";
 import { stellaToast } from "@stll/ui/toast";
 
+import { QueryViewFeedback } from "@/components/query-view-feedback";
 import type { Role } from "@/lib/auth-client";
 import { roleOptions } from "@/lib/auth-queries";
 import { detached } from "@/lib/detached";
@@ -43,6 +44,8 @@ import {
   roleAssignmentOptions,
 } from "@/lib/organization/role-assignment.logic";
 import { schemaFormOptions, toFormErrors } from "@/lib/schema";
+import { useQueryView } from "@/lib/use-query-view";
+import { useQueryViewError } from "@/lib/use-query-view-error";
 
 type InviteMemberDialogProps = {
   buttonLabel?: string;
@@ -54,19 +57,36 @@ type InviteMemberDialogProps = {
 };
 
 export const useCanInviteMembers = () => {
-  const { data: currentUserRole } = useQuery({
+  const currentUserRoleQuery = useQuery({
     ...roleOptions,
     staleTime: Number.POSITIVE_INFINITY,
   });
+  const currentUserRoleView = useQueryView(currentUserRoleQuery);
+  useQueryViewError(currentUserRoleView);
+  const currentUserRole =
+    currentUserRoleView.type === "items"
+      ? currentUserRoleView.items
+      : undefined;
 
-  return currentUserRole ? assignableRoles(currentUserRole).length > 0 : false;
+  return currentUserRoleQuery.status === "success" && currentUserRole
+    ? assignableRoles(currentUserRole).length > 0
+    : false;
 };
 
 export const InviteMemberDialog = (props: InviteMemberDialogProps) => {
-  const { data: currentUserRole } = useQuery({
+  const currentUserRoleQuery = useQuery({
     ...roleOptions,
     staleTime: Number.POSITIVE_INFINITY,
   });
+  const currentUserRoleView = useQueryView(currentUserRoleQuery);
+  useQueryViewError(currentUserRoleView);
+  const currentUserRole =
+    currentUserRoleView.type === "items"
+      ? currentUserRoleView.items
+      : undefined;
+  if (currentUserRoleQuery.status !== "success") {
+    return <QueryViewFeedback view={currentUserRoleView} />;
+  }
   const defaultRole =
     currentUserRole === undefined
       ? undefined
@@ -76,10 +96,10 @@ export const InviteMemberDialog = (props: InviteMemberDialogProps) => {
   }
   return (
     <InviteMemberForm
+      key={currentUserRole}
       {...props}
       currentUserRole={currentUserRole}
       defaultRole={defaultRole}
-      key={currentUserRole}
     />
   );
 };

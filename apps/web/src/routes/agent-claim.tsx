@@ -24,6 +24,8 @@ import { APIError } from "@/lib/errors/api";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { organizationListOptions } from "@/lib/organization/queries";
 import { pageTitle } from "@/lib/page-title";
+import { useQueryView } from "@/lib/use-query-view";
+import { useQueryViewError } from "@/lib/use-query-view-error";
 import { loadAuthContext } from "@/routes/-auth-context";
 
 const searchSchema = v.object({
@@ -62,7 +64,12 @@ function AgentClaimPage() {
     select: (ctx) => ctx.session?.activeOrganizationId ?? null,
   });
   const userId = Route.useRouteContext({ select: (ctx) => ctx.userId });
-  const { data: organizations } = useQuery(organizationListOptions(userId));
+  const organizationsView = useQueryView(
+    useQuery(organizationListOptions(userId)),
+  );
+  useQueryViewError(organizationsView);
+  const organizations =
+    organizationsView.type === "items" ? organizationsView.items : undefined;
 
   const [userCode, setUserCode] = useState(initialUserCode);
   const [status, setStatus] = useState<ClaimStatus>("idle");

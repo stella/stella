@@ -27,6 +27,8 @@ import { detached } from "@/lib/detached";
 import { unwrapEden } from "@/lib/errors/api";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { toSafeId } from "@/lib/safe-id";
+import { useQueryView } from "@/lib/use-query-view";
+import { useQueryViewError } from "@/lib/use-query-view-error";
 import { workspacesRouteOptions } from "@/lib/workspaces/queries";
 import { entitiesKeys } from "@/lib/workspaces/queries/entities";
 
@@ -67,10 +69,13 @@ export const useInspectorGroupTransfer = (
   const t = useTranslations();
   const { activeOrganizationId, id: userId } = useAuthenticatedUser();
   const [pending, setPending] = useState<PendingTransfer | null>(null);
-  const { data } = useQuery({
+  const dataQuery = useQuery({
     ...workspacesRouteOptions(activeOrganizationId),
     enabled: pending !== null,
   });
+  const dataView = useQueryView(dataQuery);
+  useQueryViewError(dataView);
+  const data = dataView.type === "items" ? dataView.items : undefined;
   const queryClient = useQueryClient();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const submittingRef = useRef(false);

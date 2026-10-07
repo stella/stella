@@ -8,6 +8,8 @@ import type { InspectorRailIconProps } from "@/components/inspector/view-registr
 import { railCourtAbbreviation } from "@/features/case-law/components/case-decision-rail-icon.logic";
 import { CourtTierBadge } from "@/features/case-law/components/court-name";
 import { decisionOptions } from "@/features/case-law/queries/decisions";
+import { useQueryView } from "@/lib/use-query-view";
+import { useQueryViewError } from "@/lib/use-query-view-error";
 
 /**
  * The court's chip stands for the tab, the way it stands beside the court in
@@ -20,7 +22,11 @@ export const CaseDecisionRailIcon = ({
   active,
   tab,
 }: InspectorRailIconProps<CaseDecisionViewPayload>) => {
-  const { data: decision } = useQuery(decisionOptions(tab.payload.decisionId));
+  const decisionQuery = useQuery(decisionOptions(tab.payload.decisionId));
+  const decisionView = useQueryView(decisionQuery);
+  useQueryViewError(decisionView);
+  const decision =
+    decisionView.type === "items" ? decisionView.items : undefined;
   const abbreviation = railCourtAbbreviation(decision?.courtAbbreviation);
   if (decision === undefined || abbreviation === null) {
     return <FileTextIcon className={cn("size-3.5", !active && "opacity-70")} />;

@@ -30,6 +30,7 @@ import {
 import { cn } from "@stll/ui/utils";
 
 import { DevSidebarGroup } from "@/components/dev-sidebar-group";
+import { QueryViewFeedback } from "@/components/query-view-feedback";
 import {
   sidebarIdentityTriggerClassName,
   SidebarMenuItem,
@@ -56,6 +57,8 @@ import { notifyUserError } from "@/lib/errors/user-toast";
 import { getDisplayName } from "@/lib/get-display-name";
 import { organizationListOptions } from "@/lib/organization/queries";
 import { sanitizeHref } from "@/lib/sanitize-href";
+import { useQueryView } from "@/lib/use-query-view";
+import { useQueryViewError } from "@/lib/use-query-view-error";
 
 const CHANGELOG_URL = "https://stll.app/changelog";
 const isDev = import.meta.env.DEV;
@@ -82,7 +85,10 @@ export const SidebarUserMenu = ({ user }: SidebarUserMenuProps) => {
   const { theme, setTheme, palette, setPalette } = useTheme();
   const lang = useI18nStore((s) => s.lang);
   const setLang = useI18nStore((s) => s.setLang);
-  const { data: role } = useChromeQuery(roleOptions);
+  const roleQuery = useChromeQuery(roleOptions);
+  const roleView = useQueryView(roleQuery);
+  useQueryViewError(roleView);
+  const role = roleView.type === "items" ? roleView.items : undefined;
 
   const displayName = getDisplayName(user.name, user.email) ?? t("common.user");
 
@@ -295,9 +301,11 @@ const OrganizationMenuSection = ({
   const navigate = useNavigate();
   const analytics = useAnalytics();
   const invalidateSession = useInvalidateSession();
-  const { data: organizations } = useChromeQuery(
-    organizationListOptions(userId),
-  );
+  const organizationsQuery = useChromeQuery(organizationListOptions(userId));
+  const organizationsView = useQueryView(organizationsQuery);
+  useQueryViewError(organizationsView);
+  const organizations =
+    organizationsView.type === "items" ? organizationsView.items : undefined;
 
   const { isPending: isSwitchPending, mutate: switchOrganization } =
     useMutation({
@@ -330,6 +338,7 @@ const OrganizationMenuSection = ({
   if (organizations.length < 2) {
     return (
       <>
+        <QueryViewFeedback view={organizationsView} />
         <MenuGroup>
           <MenuGroupLabel className="flex min-w-0 items-center gap-1.5 text-sm">
             <BidiText as="span" className="min-w-0 truncate">
@@ -345,6 +354,7 @@ const OrganizationMenuSection = ({
 
   return (
     <>
+      <QueryViewFeedback view={organizationsView} />
       <MenuSub>
         <MenuSubTrigger>
           <BuildingIcon />

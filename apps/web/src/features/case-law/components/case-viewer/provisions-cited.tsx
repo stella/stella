@@ -11,6 +11,7 @@ import { ChevronRightIcon } from "@stll/ui/icons";
 import { cn } from "@stll/ui/utils";
 
 import { ProvisionVersionBasisLabel } from "@/components/provision-version-basis";
+import { QueryViewFeedback } from "@/components/query-view-feedback";
 import {
   groupProvisionsByWork,
   type ProvisionGroup,
@@ -43,6 +44,8 @@ import { detached } from "@/lib/detached";
 import type { SafeId } from "@/lib/safe-id";
 import type { StatuteLinkTarget } from "@/lib/statute-route";
 import { createStatuteLinkTarget } from "@/lib/statute-route";
+import { useQueryView } from "@/lib/use-query-view";
+import { useQueryViewError } from "@/lib/use-query-view-error";
 
 /**
  * The statutes a decision applies, as the decision itself states them.
@@ -97,10 +100,14 @@ export const ProvisionsCited = ({
       });
     }
   }
-  const { data: resolved } = useQuery({
+  const resolvedQuery = useQuery({
     ...statutesResolveOptions([...citedWorkByGroup.values()]),
     enabled: open && citedWorkByGroup.size > 0,
   });
+  const resolvedView = useQueryView(resolvedQuery);
+  useQueryViewError(resolvedView);
+  const resolved =
+    resolvedView.type === "items" ? resolvedView.items : undefined;
   const statuteByWork = statuteByCitedWork(resolved);
   const inconsistentWorks = publisherInconsistentCitedWorks(resolved);
 
@@ -225,7 +232,7 @@ const WorkReferences = ({
   statute: ResolvedCitedStatute | undefined;
 }) => {
   const t = useTranslations();
-  const { data: versions } = useQuery({
+  const versionsQuery = useQuery({
     ...statuteVersionsOptions(statute?.id ?? ""),
     enabled:
       statute !== undefined &&
@@ -234,6 +241,10 @@ const WorkReferences = ({
         references: group.provisions,
       }),
   });
+  const versionsView = useQueryView(versionsQuery);
+  useQueryViewError(versionsView);
+  const versions =
+    versionsView.type === "items" ? versionsView.items : undefined;
 
   /**
    * The consolidation a reference was made against, or null while it is not
@@ -265,6 +276,11 @@ const WorkReferences = ({
 
   return (
     <div className="flex flex-col gap-1">
+      {statute !== undefined &&
+        referencesOutsideVersion(statute, {
+          decisionAsOf,
+          references: group.provisions,
+        }) && <QueryViewFeedback view={versionsView} />}
       <p className="text-muted-foreground flex min-w-0 items-baseline gap-1.5 text-[calc(0.7rem*var(--reader-text-scale))] tracking-wide">
         <BidiText as="span" className="shrink-0">
           {group.title}

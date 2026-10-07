@@ -30,6 +30,8 @@ import { useOptionalPDFStore } from "@/lib/pdf/pdf-context";
 import { getPDFPageIdByNumber } from "@/lib/pdf/utils";
 import { renderJustificationContent } from "@/lib/render-justification-content";
 import { toSafeId } from "@/lib/safe-id";
+import { useQueryView } from "@/lib/use-query-view";
+import { useQueryViewError } from "@/lib/use-query-view-error";
 import { entityOptions } from "@/lib/workspaces/queries/entities";
 import { propertiesOptions } from "@/lib/workspaces/queries/properties";
 import { workspaceKeys } from "@/lib/workspaces/queries/workspace";
@@ -56,8 +58,12 @@ export const DocumentAiSourceBar = ({
   const openFile = useInspectorTabsStore((s) => s.openFile);
 
   const propertiesQuery = useQuery(propertiesOptions(workspaceId));
+  const propertiesQueryView = useQueryView(propertiesQuery);
+  useQueryViewError(propertiesQueryView);
   const properties = propertiesQuery.data;
   const entityQuery = useQuery(entityOptions(workspaceId, activeTab.entityId));
+  const entityQueryView = useQueryView(entityQuery);
+  useQueryViewError(entityQueryView);
   const entity = entityQuery.data;
   useSyncJustifications({
     workspaceId,
@@ -411,9 +417,9 @@ export const DocumentAiSourceBar = ({
       >
         {isGeneratingBoxes && (
           <Loader
-            className="size-3 shrink-0"
-            label={t("common.loading")}
             size="sm"
+            label={t("common.loading")}
+            className="size-3 shrink-0"
           />
         )}
         <button

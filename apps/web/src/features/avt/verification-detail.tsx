@@ -14,6 +14,7 @@ import { ArrowLeftIcon, PlayIcon } from "@stll/ui/icons";
 import { Loader } from "@stll/ui/loader";
 import { Skeleton } from "@stll/ui/skeleton";
 
+import { QueryViewFeedback } from "@/components/query-view-feedback";
 import { RunSizeConfirmDialog } from "@/components/usage/run-size-confirm-dialog";
 import { verificationRunOptions } from "@/features/avt/queries";
 import { RunHistoryPicker } from "@/features/avt/run-history-picker";
@@ -25,6 +26,8 @@ import { usePermissions } from "@/hooks/use-permissions";
 import { useFormatter } from "@/i18n/formatting-context";
 import { detached } from "@/lib/detached";
 import { MEDIUM_DATE_SHORT_TIME_FORMAT } from "@/lib/relative-time";
+import { useQueryView } from "@/lib/use-query-view";
+import { useQueryViewError } from "@/lib/use-query-view-error";
 import { workspaceFilesOptions } from "@/lib/workspaces/queries/entities";
 
 type VerificationDetailProps = {
@@ -49,7 +52,10 @@ export const VerificationDetail = ({
     isPending,
     isError,
   } = useQuery(verificationRunOptions(workspaceId, runId));
-  const { data: files } = useQuery(workspaceFilesOptions(workspaceId));
+  const filesQuery = useQuery(workspaceFilesOptions(workspaceId));
+  const filesView = useQueryView(filesQuery);
+  useQueryViewError(filesView);
+  const files = filesView.type === "items" ? filesView.items : undefined;
   // The document as it stands now: an earlier run may pin a file field a
   // newer version replaced, and history and re-verification follow the
   // current one.
@@ -61,6 +67,7 @@ export const VerificationDetail = ({
 
   return (
     <>
+      <QueryViewFeedback view={filesView} />
       <div className="flex flex-wrap items-center gap-2">
         <Button onClick={onBack} size="sm" variant="ghost">
           <DirectionalIcon icon={ArrowLeftIcon} />
