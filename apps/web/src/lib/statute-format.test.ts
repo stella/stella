@@ -1,10 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { createFormatter } from "use-intl/core";
 
-import {
-  formatStatedWindow,
-  formatValidityRange,
-} from "@/features/statutes/statute-format";
+import { formatStatedWindow, formatValidityRange } from "@/lib/statute-format";
 
 const format = createFormatter({ locale: "cs", timeZone: "UTC" });
 

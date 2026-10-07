@@ -25,9 +25,9 @@ import {
 import { ReaderInsetBox } from "@/components/legal-reader/reader-inset-box";
 import { createProvisionViewTab } from "@/features/statutes/provision-inspector.logic";
 import type { ProvisionViewPayload } from "@/features/statutes/provision-inspector.logic";
-import { provisionPreviewOptions } from "@/features/statutes/queries/provision-preview";
-import type { ProvisionPreviewData } from "@/features/statutes/queries/provision-preview";
-import { formatValidityDate } from "@/features/statutes/statute-format";
+import { provisionPreviewOptions } from "@/lib/provision-preview";
+import type { ProvisionPreviewData } from "@/lib/provision-preview";
+import { formatValidityDate } from "@/lib/statute-format";
 import { createStatuteLinkTarget } from "@/lib/statute-route";
 
 export type CitedProvisionTarget = {

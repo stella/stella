@@ -14,12 +14,12 @@ import { openPublicLawChat } from "@/components/public-law-ask";
 import { formatDecisionCitation } from "@/features/case-law/citation-format";
 import { decisionChatKey } from "@/features/chat/legal-document-chat-key";
 import { ensureLegalDocumentChatThread } from "@/features/chat/legal-document-chat-threads";
-import { formatStatuteCitation } from "@/features/statutes/statute-format";
 import {
   createChatDraftState,
   useChatDraftStore,
 } from "@/lib/chat-draft-store";
 import { getChatThreadKey } from "@/lib/chat-thread-ref";
+import { formatStatuteCitation } from "@/lib/statute-format";
 
 /**
  * The document a reader is marking, in the terms a citation and a chat

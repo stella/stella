@@ -26,7 +26,6 @@ import {
   StatuteMasthead,
 } from "@/features/statutes/components/statute-text";
 import { StatuteValidityIndicator } from "@/features/statutes/components/statute-validity-indicator";
-import { provisionInVersionOptions } from "@/features/statutes/queries/provision-preview";
 import { statuteOptions } from "@/features/statutes/queries/statutes";
 import type {
   PublicStatute,
@@ -59,11 +58,12 @@ import type {
 } from "@/features/statutes/statute-compare-search";
 import { compareText, markSide } from "@/features/statutes/statute-diff-marks";
 import type { StatuteCompareSide } from "@/features/statutes/statute-diff-marks";
-import { formatValidityDate } from "@/features/statutes/statute-format";
 import { prepareStatuteReader } from "@/features/statutes/statute-reader-blocks";
 import type { StatuteMasthead as StatuteMastheadData } from "@/features/statutes/statute-reader-blocks";
 import { useFormatter } from "@/i18n/formatting-context";
 import type { TranslationKey } from "@/i18n/types";
+import { provisionInVersionOptions } from "@/lib/provision-preview";
+import { formatValidityDate } from "@/lib/statute-format";
 
 const READER_STYLE = {
   fontFamily: "var(--reader-body-font)",

@@ -2015,7 +2015,7 @@
     "apps/web/src/features/case-law/components/case-viewer/decision-judges.tsx": 1,
     "apps/web/src/features/case-law/components/case-viewer/decision-workspace.tsx": 2,
     "apps/web/src/features/case-law/components/case-viewer/leading-citations.tsx": 5,
-    "apps/web/src/features/case-law/components/case-viewer/provisions-cited.tsx": 2,
+    "apps/web/src/features/case-law/components/case-viewer/provisions-cited.tsx": 1,
     "apps/web/src/features/case-law/components/citation-timeline-panel.tsx": 7,
     "apps/web/src/features/case-law/components/decision-cells.tsx": 12,
     "apps/web/src/features/case-law/components/decision-column-groups.tsx": 1,

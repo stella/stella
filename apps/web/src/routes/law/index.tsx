@@ -52,7 +52,6 @@ import { openDecisionMatch } from "@/features/case-law/open-decision-match";
 import { latestDecisionsOptions } from "@/features/case-law/queries/decisions";
 import { openStatuteMatch } from "@/features/statutes/open-statute-match";
 import { legislationShelfOptions } from "@/features/statutes/queries/statutes";
-import { formatValidityDate } from "@/features/statutes/statute-format";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useFormatter, useLocale } from "@/i18n/formatting-context";
 import { getMessageLocale, getTranslator } from "@/i18n/i18n-store";
@@ -67,6 +66,7 @@ import {
   createPublicLawHead,
 } from "@/lib/public-law-seo";
 import { ensureRouteQueryData } from "@/lib/react-query";
+import { formatValidityDate } from "@/lib/statute-format";
 import {
   type LawScope,
   lawHomeDescriptor,

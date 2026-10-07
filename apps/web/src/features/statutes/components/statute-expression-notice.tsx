@@ -6,8 +6,8 @@ import type {
 } from "@stll/api-contract/legislation-expression";
 
 import { ineligibleExpressionLabelKey } from "@/features/statutes/statute-expression";
-import { formatStatedWindow } from "@/features/statutes/statute-format";
 import { useFormatter } from "@/i18n/formatting-context";
+import { formatStatedWindow } from "@/lib/statute-format";
 
 type StatedWindow = {
   versionValidFrom: string | null;

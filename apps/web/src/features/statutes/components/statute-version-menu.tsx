@@ -14,15 +14,12 @@ import { StatuteStatusDot } from "@/features/statutes/components/statute-validit
 import type { PublicStatuteVersion } from "@/features/statutes/queries/statutes";
 import { ineligibleExpressionLabelKey } from "@/features/statutes/statute-expression";
 import {
-  formatValidityDate,
-  formatValidityRange,
-} from "@/features/statutes/statute-format";
-import {
   resolveStatuteDisplayStatus,
   STATUTE_STATUS_LABEL_KEYS,
   type StatuteDisplayStatus,
 } from "@/features/statutes/statute-status";
 import { useFormatter } from "@/i18n/formatting-context";
+import { formatValidityDate, formatValidityRange } from "@/lib/statute-format";
 
 const ROW_LABELLED_STATUSES: ReadonlySet<StatuteDisplayStatus> = new Set([
   "repealed",

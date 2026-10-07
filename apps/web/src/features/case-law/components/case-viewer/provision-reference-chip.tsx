@@ -19,10 +19,10 @@ import { Tooltip, TooltipPopup, TooltipTrigger } from "@stll/ui/tooltip";
 import { ProvisionVersionBasisLabel } from "@/components/provision-version-basis";
 import type { ProvisionGroup } from "@/features/case-law/components/case-viewer/provisions-cited.logic";
 import type { ResolvedCitedStatute } from "@/features/case-law/queries/provisions";
-import { provisionPreviewOptions } from "@/features/statutes/queries/provision-preview";
-import { formatValidityRange } from "@/features/statutes/statute-format";
 import { useFormatter } from "@/i18n/formatting-context";
 import { detached } from "@/lib/detached";
+import { provisionPreviewOptions } from "@/lib/provision-preview";
+import { formatValidityRange } from "@/lib/statute-format";
 import { createStatuteLinkTarget } from "@/lib/statute-route";
 
 type ProvisionDocument = Pick<

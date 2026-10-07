@@ -12,8 +12,8 @@ import {
 } from "@stll/ui/select";
 
 import { ineligibleExpressionLabelKey } from "@/features/statutes/statute-expression";
-import { formatValidityRange } from "@/features/statutes/statute-format";
 import { useFormatter } from "@/i18n/formatting-context";
+import { formatValidityRange } from "@/lib/statute-format";
 
 export type StatuteVersion = LegislationExpressionEligibility & {
   id: string;

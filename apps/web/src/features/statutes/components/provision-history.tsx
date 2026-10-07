@@ -23,13 +23,13 @@ import { provisionHistoryOptions } from "@/features/statutes/queries/provision-h
 import { statuteOptions } from "@/features/statutes/queries/statutes";
 import { diffMarkRanges } from "@/features/statutes/statute-diff-marks";
 import { ineligibleExpressionLabelKey } from "@/features/statutes/statute-expression";
+import { useFormatter } from "@/i18n/formatting-context";
+import { detached } from "@/lib/detached";
 import {
   EM_DASH,
   formatValidityDate,
   formatValidityRange,
-} from "@/features/statutes/statute-format";
-import { useFormatter } from "@/i18n/formatting-context";
-import { detached } from "@/lib/detached";
+} from "@/lib/statute-format";
 import { createStatuteLinkTarget } from "@/lib/statute-route";
 
 // The history marks its diff only; it carries no find.
