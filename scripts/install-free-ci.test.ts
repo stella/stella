@@ -770,6 +770,71 @@ describe("install-free invocation classification", () => {
     }
   });
 
+  test("parallel cancellation dominates sibling waits without losing other install scopes", () => {
+    for (const depth of [0, 1, 2]) {
+      for (const siblingWaitPosition of [
+        "absent",
+        "before",
+        "after",
+      ] as const) {
+        for (const barrier of ["wait: tools", "wait-all: null"]) {
+          const cancelBranch = [
+            ...Array.from(
+              { length: depth },
+              (_, index) => `${"  ".repeat(index)}- parallel:`,
+            ),
+            `${"  ".repeat(depth)}- cancel: tools`,
+          ].join("\n");
+          const siblingWait = "- wait: tools";
+          const parallelBranches = [cancelBranch];
+          if (siblingWaitPosition === "before") {
+            parallelBranches.unshift(siblingWait);
+          }
+          if (siblingWaitPosition === "after") {
+            parallelBranches.push(siblingWait);
+          }
+          const parallelSteps = parallelBranches
+            .flatMap((branch) =>
+              branch.split("\n").map((line) => `          ${line}`),
+            )
+            .join("\n");
+          const root = repository(
+            [
+              "jobs:",
+              "  job:",
+              "    steps:",
+              "      - id: retained",
+              "        background: true",
+              "        run: bun ci",
+              "        working-directory: packages/tool",
+              "      - wait: retained",
+              "      - id: tools",
+              "        background: true",
+              "        run: bun ci",
+              "      - parallel:",
+              parallelSteps,
+              `      - ${barrier}`,
+              "      - name: After cancel",
+              "        run: bun scripts/check.ts",
+              "      - name: Retained install scope",
+              "        run: bun gen.ts",
+              "        working-directory: packages/tool",
+            ].join("\n"),
+          );
+          const files = installFreeInvocations({
+            root,
+            workflow: CI_WORKFLOW,
+          }).filter(({ classification }) => classification.type === "files");
+          const scenario = { depth, siblingWaitPosition, barrier };
+          expect(files, JSON.stringify(scenario)).toHaveLength(1);
+          expect(files.at(0)?.step, JSON.stringify(scenario)).toBe(
+            "After cancel",
+          );
+        }
+      }
+    }
+  });
+
   const continuationCases: readonly {
     continuation: string;
     kinds: Classification["type"][];

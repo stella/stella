@@ -209,6 +209,56 @@ test("cancelled background tools stay unavailable after a wait barrier", () => {
   }
 });
 
+test("parallel cancellation dominates sibling waits and preserves completed tools", () => {
+  for (const depth of [0, 1, 2]) {
+    for (const siblingWaitPosition of ["absent", "before", "after"] as const) {
+      for (const barrier of [{ wait: "tools" }, { "wait-all": null }]) {
+        let cancelBranch: unknown = { cancel: "tools" };
+        for (let nested = 0; nested < depth; nested += 1) {
+          cancelBranch = { parallel: [cancelBranch] };
+        }
+        const siblingWait = { wait: "tools" };
+        const parallel = [cancelBranch];
+        if (siblingWaitPosition === "before") {
+          parallel.unshift(siblingWait);
+        }
+        if (siblingWaitPosition === "after") {
+          parallel.push(siblingWait);
+        }
+        const scenario = { depth, siblingWaitPosition, barrier };
+        withFixture(
+          {
+            jobs: {
+              check: {
+                "runs-on": "unknown",
+                steps: [
+                  { run: "sudo apt-get install -y jq" },
+                  {
+                    id: "tools",
+                    background: true,
+                    run: "sudo apt-get install -y ripgrep",
+                  },
+                  { parallel },
+                  barrier,
+                  { name: "After cancel", run: "rg --version" },
+                  { name: "Completed tool proof", run: "jq --version" },
+                ],
+              },
+            },
+          },
+          (root) => {
+            const findings = problems(root);
+            expect(findings, JSON.stringify(scenario)).toHaveLength(1);
+            expect(findings.at(0), JSON.stringify(scenario)).toContain(
+              "After cancel",
+            );
+          },
+        );
+      }
+    }
+  }
+});
+
 test("malformed step metadata and execution settings are reported without coercion", () => {
   withFixture(
     {
