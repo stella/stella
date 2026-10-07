@@ -42,22 +42,51 @@ const readYaml = (file: string): unknown =>
 // Hosted inventories promise jq; x64 Ubuntu and macOS also provide yq.
 // Unknown and container images inherit no hosted-runner tools.
 // https://github.com/actions/runner-images/blob/main/images/ubuntu/Ubuntu2404-Readme.md
+export type SelfHostedProfiles = ReadonlyMap<string, ReadonlySet<string>>;
+
+// Tools a pinned-toolchain lock declares (`artifact <name> ...` lines),
+// limited to the tracked executables.
+export const toolchainLockTools = (lock: string): ReadonlySet<string> =>
+  new Set(
+    lock
+      .split("\n")
+      .map((line) => /^artifact\s+(\S+)\s/u.exec(line.trim())?.[1])
+      .filter(
+        (name): name is string => name !== undefined && tracked.has(name),
+      ),
+  );
+
+// The deploy runner's installer puts the toolchain its lock pins first on
+// every job's PATH, so the lock in the checked-out repository is the
+// contract for that label. Repositories without the lock declare nothing.
+const DEPLOY_RUNNER_LABEL = "mini-infra-deploy";
+const DEPLOY_RUNNER_LOCK = "ci/deploy-runner/toolchain.lock";
+export const selfHostedProfiles = (root: string): SelfHostedProfiles => {
+  const lock = path.join(root, DEPLOY_RUNNER_LOCK);
+  return existsSync(lock)
+    ? new Map([
+        [DEPLOY_RUNNER_LABEL, toolchainLockTools(readFileSync(lock, "utf-8"))],
+      ])
+    : new Map();
+};
+
 export const runnerTools = (
   runner: unknown,
   container: unknown,
+  selfHosted: SelfHostedProfiles = new Map(),
 ): ReadonlySet<string> => {
   if (container !== undefined) {
     return new Set();
   }
-  // The self-hosted deploy runner's installer puts a pinned toolchain
-  // (including jq) first on every job's PATH; that installer is the contract.
+  // A self-hosted runner provides only what its repository declares for its
+  // exact label pair (see selfHostedProfiles).
   if (
     Array.isArray(runner) &&
     runner.length === 2 &&
-    runner.includes("self-hosted") &&
-    runner.includes("mini-infra-deploy")
+    runner[0] === "self-hosted" &&
+    typeof runner[1] === "string"
   ) {
-    return new Set(["jq"]);
+    return selfHosted.get(runner[1]) ?? new Set();
   }
   if (typeof runner !== "string") {
     return new Set();
@@ -77,14 +106,17 @@ export const runnerTools = (
   return new Set();
 };
 
-const jobTools = (job: Record<string, unknown>) => {
+const jobTools = (
+  job: Record<string, unknown>,
+  selfHosted: SelfHostedProfiles,
+) => {
   const runner = job["runs-on"];
   if (typeof runner !== "string") {
-    return runnerTools(runner, job["container"]);
+    return runnerTools(runner, job["container"], selfHosted);
   }
   const axis = /^\$\{\{\s*matrix\.(\w+)\s*\}\}$/u.exec(runner)?.[1];
   if (axis === undefined) {
-    return runnerTools(runner, job["container"]);
+    return runnerTools(runner, job["container"], selfHosted);
   }
   const strategy = job["strategy"];
   const matrix = isRecord(strategy) ? strategy["matrix"] : undefined;
@@ -105,7 +137,9 @@ const jobTools = (job: Record<string, unknown>) => {
   if (runners.length === 0) {
     return new Set<string>();
   }
-  const profiles = runners.map((label) => runnerTools(label, job["container"]));
+  const profiles = runners.map((label) =>
+    runnerTools(label, job["container"], selfHosted),
+  );
   return new Set(
     [...tracked].filter((tool) =>
       profiles.every((profile) => profile.has(tool)),
@@ -131,7 +165,10 @@ const eventOperand = (operand: string) => {
 };
 const operands = (condition: unknown) =>
   conditionOperands(condition).map(eventOperand);
-const runnerCases = (job: Record<string, unknown>) => {
+const runnerCases = (
+  job: Record<string, unknown>,
+  selfHosted: SelfHostedProfiles,
+) => {
   const runner = job["runs-on"];
   const match =
     typeof runner === "string"
@@ -140,7 +177,7 @@ const runnerCases = (job: Record<string, unknown>) => {
         )
       : null;
   if (match === null) {
-    return [{ guaranteed: jobTools(job), condition: [] }];
+    return [{ guaranteed: jobTools(job, selfHosted), condition: [] }];
   }
   const condition = match[1];
   const operator = match[2];
@@ -161,11 +198,11 @@ const runnerCases = (job: Record<string, unknown>) => {
     jsonRunner === undefined ? plainRunner : Bun.YAML.parse(jsonRunner);
   return [
     {
-      guaranteed: runnerTools(firstRunner, job["container"]),
+      guaranteed: runnerTools(firstRunner, job["container"], selfHosted),
       condition: [eventOperand(condition)],
     },
     {
-      guaranteed: runnerTools(fallbackRunner, job["container"]),
+      guaranteed: runnerTools(fallbackRunner, job["container"], selfHosted),
       condition: [
         `github.event_name ${operator === "==" ? "!=" : "=="} '${event}'`,
       ],
@@ -681,6 +718,7 @@ export const runnerToolProblems = ({
   repository,
 }: RunnerToolProblemsOptions): string[] => {
   const root = realpathSync(inputRoot);
+  const selfHosted = selfHostedProfiles(root);
   const source = readYaml(path.join(root, workflow));
   if (!isRecord(source) || !isRecord(source["jobs"])) {
     return [`${workflow}: expected workflow jobs`];
@@ -710,7 +748,7 @@ export const runnerToolProblems = ({
         aliases.set(inputs["path"], "");
       }
     }
-    for (const runnerCase of runnerCases(job)) {
+    for (const runnerCase of runnerCases(job, selfHosted)) {
       const guaranteed = runnerCase.guaranteed;
       const installs: Install[] = [];
       const active = new Set<string>();

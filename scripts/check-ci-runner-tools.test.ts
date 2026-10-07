@@ -12,7 +12,9 @@ import path from "node:path";
 import {
   runnerToolProblems,
   runnerTools,
+  selfHostedProfiles,
   TOOL_PACKAGES,
+  toolchainLockTools,
 } from "./check-ci-runner-tools";
 
 type FixtureOptions = { jobs: unknown; files?: Record<string, string> };
@@ -124,16 +126,20 @@ test("runner defaults are specific to the image and do not leak into containers"
     expect(runnerTools(runner, { image: "ubuntu:24.04" }).size, runner).toBe(0);
   }
   expect(runnerTools(["self-hosted", "custom"], undefined).size).toBe(0);
-  // The deploy runner's pinned toolchain provides jq, and only jq.
-  const deploy = runnerTools(["self-hosted", "mini-infra-deploy"], undefined);
-  expect([...deploy]).toEqual(["jq"]);
+  // A self-hosted label provides only what its declared profile lists, and
+  // only for the exact [self-hosted, label] pair outside a container.
+  const declared = new Map([["mini-infra-deploy", new Set(["jq"])]]);
+  const deployRunner = ["self-hosted", "mini-infra-deploy"];
+  expect(runnerTools(deployRunner, undefined).size).toBe(0);
+  expect([...runnerTools(deployRunner, undefined, declared)]).toEqual(["jq"]);
   expect(
-    runnerTools(["self-hosted", "mini-infra-deploy"], { image: "ubuntu:24.04" })
-      .size,
+    runnerTools(deployRunner, { image: "ubuntu:24.04" }, declared).size,
   ).toBe(0);
-  expect(runnerTools(["self-hosted", "mini-infra"], undefined).size).toBe(0);
   expect(
-    runnerTools(["self-hosted", "mini-infra-deploy", "extra"], undefined).size,
+    runnerTools(["self-hosted", "mini-infra"], undefined, declared).size,
+  ).toBe(0);
+  expect(
+    runnerTools([...deployRunner, "extra"], undefined, declared).size,
   ).toBe(0);
   withFixture(
     {
@@ -684,4 +690,32 @@ test("Bun run traverses literal script paths", () => {
     },
     (root) => expect(problems(root)).toHaveLength(1),
   );
+});
+
+test("the deploy runner profile comes from the repository's toolchain lock", () => {
+  expect([
+    ...toolchainLockTools(
+      [
+        "# comment jq",
+        "artifact coreutils 9.12 aaa https://example.invalid/c.tar.xz",
+        "artifact jq 1.8.2 bbb https://example.invalid/jq",
+        "artifact terraform 1.15.9 ccc https://example.invalid/t.zip",
+        "pkg-team-id awscli X",
+      ].join("\n"),
+    ),
+  ]).toEqual(["jq"]);
+  const root = mkdtempSync(path.join(tmpdir(), "runner-tools-lock-"));
+  try {
+    expect(selfHostedProfiles(root).size).toBe(0);
+    mkdirSync(path.join(root, "ci/deploy-runner"), { recursive: true });
+    writeFileSync(
+      path.join(root, "ci/deploy-runner/toolchain.lock"),
+      "artifact jq 1.8.2 bbb https://example.invalid/jq\n",
+    );
+    expect([
+      ...(selfHostedProfiles(root).get("mini-infra-deploy") ?? []),
+    ]).toEqual(["jq"]);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
 });
