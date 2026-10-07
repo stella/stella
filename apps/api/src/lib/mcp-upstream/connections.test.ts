@@ -910,6 +910,52 @@ describe("MCP upstream connection lifecycle", () => {
     expect(state.refreshCalls).toBe(0);
   });
 
+  test("uses the token another attempt refreshed while this one waited", async () => {
+    const safeDb = makeSafeDb();
+    const row = oauthRow();
+    const { claimMcpRefreshLease } =
+      await import("@/api/lib/mcp-upstream/connections");
+    Result.unwrap(
+      await claimMcpRefreshLease({
+        safeDb,
+        organizationId,
+        userId,
+        connectionId: row.userConnectionId,
+        now: state.now,
+      }),
+    );
+    const client = await createMcpClientForConnectionImpl({
+      organizationId,
+      permit: outboundPermit,
+      row,
+      safeDb,
+      userId,
+      outboundFetch,
+      dependencies: {
+        ...connectionDependencies,
+        // The lease holder stores a fresh token during the first wait.
+        wait: async () => {
+          Result.unwrap(
+            await safeDb(async (tx) => {
+              await tx
+                .update(mcpUserConnections)
+                .set({
+                  expiresAt: new Date(state.now.getTime() + 3_600_000),
+                  refreshLeaseExpiresAt: null,
+                })
+                .where(undefined);
+            }),
+          );
+        },
+      },
+    });
+    expect(client).not.toBeNull();
+    expect(state.refreshCalls).toBe(0);
+    expect(
+      state.transports.map((transport) => transport.headers?.["Authorization"]),
+    ).toContain("Bearer decrypted-mcp_access_token");
+  });
+
   test("defers retryable refresh outcomes", async () => {
     state.refresh = () =>
       Result.err(

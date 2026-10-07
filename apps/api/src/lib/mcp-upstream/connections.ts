@@ -1156,6 +1156,7 @@ type ResolveMcpTokenDuringRefreshOptions =
 const resolveMcpTokenDuringRefresh = async ({
   dependencies,
   organizationId,
+  permit,
   row,
   safeDb,
   userId,
@@ -1398,6 +1399,7 @@ const resolveOAuthAuthorizationToken = async ({
     return await resolveMcpTokenDuringRefresh({
       dependencies,
       organizationId,
+      permit,
       row,
       safeDb,
       userId,
