@@ -7,7 +7,6 @@ import { env } from "@/api/env";
 import { ACCOUNT_ACCESS, createSafeTokenHandler } from "@/api/lib/api-handlers";
 import type { TokenHandlerConfig } from "@/api/lib/api-handlers";
 import { authorizeConfiguredBearer } from "@/api/lib/configured-bearer-access";
-import { ACTIVITY_UNAVAILABLE_REASONS } from "@/api/lib/db/operator-activity/read";
 import type { OperatorActivitySummary } from "@/api/lib/db/operator-activity/read";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { logger } from "@/api/lib/observability/logger";
@@ -73,13 +72,30 @@ export const createOperatorActivity = ({
     const summary = yield* Result.ok(await readSummary(now()));
     return Result.ok({
       generated_at: summary.generated_at,
-      users_acting_5m: summary.users_acting_5m,
-      users_acting_today: summary.users_acting_today,
-      signups_today: summary.signups_today,
-      signups_7d: summary.signups_7d,
-      chat_turns_1h: summary.chat_turns_1h,
-      tool_calls_1h: summary.tool_calls_1h,
-      unavailable_reasons: ACTIVITY_UNAVAILABLE_REASONS,
+      timezone: summary.timezone,
+      weeks: summary.weeks.map((week) => ({
+        week_start: week.week_start,
+        partial: week.partial,
+        active_orgs: week.active_orgs,
+        signups: week.signups,
+        new_paying: week.new_paying,
+        mrr:
+          week.mrr === null
+            ? null
+            : {
+                currency: week.mrr.currency,
+                amount_minor: week.mrr.amount_minor,
+              },
+        activated_24h_pct: week.activated_24h_pct,
+        trial_to_paid_pct: week.trial_to_paid_pct,
+        weekly_retention_pct: week.weekly_retention_pct,
+      })),
+      same_point_last_week: {
+        active_orgs: summary.same_point_last_week.active_orgs,
+        signups: summary.same_point_last_week.signups,
+        new_paying: summary.same_point_last_week.new_paying,
+      },
+      unavailable_reasons: summary.unavailable_reasons,
     });
   });
 
