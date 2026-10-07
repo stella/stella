@@ -32,7 +32,7 @@ const rankOf = (standing: CitationReviewStanding): number =>
 describe("review origin precedence", () => {
   test("a better origin replaces a worse one, never the reverse, whatever was produced when", () => {
     assertProperty(
-      "citation-review-precedence-across-origins",
+      "a better origin replaces a worse one, never the reverse, whatever was produced when",
       fc.property(standingArb, standingArb, (stored, incoming) => {
         fc.pre(stored.origin !== incoming.origin);
         // The declared order is human, adjudicated, annotation.
@@ -47,7 +47,7 @@ describe("review origin precedence", () => {
 
   test("at one model origin only a later label replaces, so an older run applied late is refused", () => {
     assertProperty(
-      "citation-review-precedence-same-ai-origin-produced-at",
+      "at one model origin only a later label replaces, so an older run applied late is refused",
       fc.property(
         fc.constantFrom(...AI_CITATION_REVIEW_ORIGINS),
         fc.integer({ min: 0, max: 3 }),
@@ -78,7 +78,7 @@ describe("review origin precedence", () => {
 
   test("a human review replaces a human review, and no model label replaces one", () => {
     assertProperty(
-      "citation-review-precedence-human-review",
+      "a human review replaces a human review, and no model label replaces one",
       fc.property(standingArb, (incoming) => {
         const human = { origin: CITATION_REVIEW_ORIGIN.HUMAN_REVIEW };
         expect(citationReviewMayReplace({ stored: human, incoming })).toBe(
@@ -90,7 +90,7 @@ describe("review origin precedence", () => {
 
   test("outranking is a strict order", () => {
     assertProperty(
-      "citation-review-outranks-strict-order",
+      "outranking is a strict order",
       fc.property(
         standingArb,
         standingArb,
