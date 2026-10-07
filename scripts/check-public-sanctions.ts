@@ -164,7 +164,7 @@ export const probe = async (
   { requestHttps = https.request, deadlineMs = TIMEOUT_MS }: ProbeOptions = {},
 ): Promise<void> => {
   let timer: ReturnType<typeof setTimeout> | undefined;
-  return await new Promise<void>((resolve, reject) => {
+  await new Promise<void>((resolve, reject) => {
     let target: URL;
     try {
       target = new URL(url);
@@ -239,6 +239,7 @@ export const probe = async (
   }).finally(() => {
     clearTimeout(timer);
   });
+  return;
 };
 
 type RunCanaryOptions = {
