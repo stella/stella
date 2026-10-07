@@ -7,7 +7,20 @@ import * as v from "valibot";
 const reportSchema = v.object({
   diagnostics: v.array(v.object({ message: v.string() })),
 });
-const lint = async (source: string, ruleNames: string[]) => {
+type LintOptions = {
+  ruleNames: string[];
+  pluginSpecifier?: string;
+};
+const lint = async (
+  source: string,
+  {
+    ruleNames,
+    pluginSpecifier = path.join(
+      import.meta.dir,
+      "oxlint-presets/gdp-plugin.mjs",
+    ),
+  }: LintOptions,
+) => {
   const directory = await mkdtemp(path.join(tmpdir(), "stella-proof-lint-"));
   try {
     const input = path.join(directory, "input.ts");
@@ -20,10 +33,7 @@ const lint = async (source: string, ruleNames: string[]) => {
         jsPlugins: [
           {
             name: "gdp-ts",
-            specifier: path.join(
-              import.meta.dir,
-              "oxlint-presets/gdp-plugin.mjs",
-            ),
+            specifier: pluginSpecifier,
           },
         ],
         rules: Object.fromEntries(
@@ -52,13 +62,31 @@ const lint = async (source: string, ruleNames: string[]) => {
   }
 };
 const messages = async (source: string, ruleNames: string[]) =>
-  (await lint(source, ruleNames)).map(({ message }) => message);
+  (await lint(source, { ruleNames })).map(({ message }) => message);
 
-describe("GDP proof anti-forgery rules", async () => {
+describe("GDP proof anti-forgery rules", () => {
+  test("upstream rejects renamed imports while the wrapper adds named call diagnostics", async () => {
+    const source = `import { defineProof as mint } from "@gdp-ts/core";
+      const proof = mint("Visible");`;
+    const upstream = await lint(source, {
+      ruleNames: ["no-define-proof"],
+      pluginSpecifier: Bun.resolveSync(
+        "@gdp-ts/core/lint/plugin",
+        import.meta.dir,
+      ),
+    });
+    expect(upstream.map(({ message }) => message)).toEqual([
+      "Only modules in proofs/ may import defineProof.",
+    ]);
+    expect(await messages(source, ["no-define-proof"])).toEqual([
+      "Only modules in proofs/ may import defineProof.",
+      "Only modules in proofs/ may call defineProof.",
+    ]);
+  });
   test("rejects importing or calling the proof constructor outside proofs/", async () => {
     const violations = await messages(
-      `import { defineProof as mint } from "@/api/lib/signals/proofs/core";
-       import * as proofs from "@/api/lib/signals/proofs/core";
+      `import { defineProof as mint } from "@gdp-ts/core";
+       import * as proofs from "@gdp-ts/core";
        const first = mint(() => true);
        const second = proofs.defineProof(() => true);`,
       ["no-define-proof"],
@@ -74,7 +102,7 @@ describe("GDP proof anti-forgery rules", async () => {
 
   test("rejects exporting a prover, including an aliased constructor result", async () => {
     const violations = await messages(
-      `import { defineProof as mint } from "@/api/lib/signals/proofs/core";
+      `import { defineProof as mint } from "@gdp-ts/core";
        const localProver = mint(() => true);
        export { localProver as publicProver };`,
       ["no-exported-prover"],
@@ -87,7 +115,7 @@ describe("GDP proof anti-forgery rules", async () => {
 
   test("rejects assertions to imported proof and Named types", async () => {
     const violations = await messages(
-      `import type { Proof, Named } from "@/api/lib/signals/proofs/core";
+      `import type { Proof, Named } from "@gdp-ts/core";
        import type { CanRead } from "../proofs/can-read";
        const forged = {} as Proof<string>;
        const named = {} as Named<string>;
@@ -105,13 +133,14 @@ describe("GDP proof anti-forgery rules", async () => {
 
   test("rejects assertion and any shortcuts in strict pilot paths", async () => {
     expect(
-      await lint("const value = null as any;", ["no-type-assertion", "no-any"]),
+      await lint("const value = null as any;", {
+        ruleNames: ["no-type-assertion", "no-any"],
+      }),
     ).toHaveLength(2);
     expect(
-      await lint("const value = { kind: 'visible' } as const;", [
-        "no-type-assertion",
-        "no-any",
-      ]),
+      await lint("const value = { kind: 'visible' } as const;", {
+        ruleNames: ["no-type-assertion", "no-any"],
+      }),
     ).toHaveLength(0);
   });
 });

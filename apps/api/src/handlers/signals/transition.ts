@@ -1,3 +1,4 @@
+import type { Named } from "@gdp-ts/core";
 import { Result } from "better-result";
 import { and, eq, inArray } from "drizzle-orm";
 
@@ -14,7 +15,6 @@ import {
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
-import type { Named } from "@/api/lib/signals/proofs/core";
 import type { SignalVisibleTo } from "@/api/lib/signals/proofs/signal-visible-to";
 
 export type SignalTransitionArgs<U, S, T> = {

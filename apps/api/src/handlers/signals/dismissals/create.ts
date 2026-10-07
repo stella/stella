@@ -51,7 +51,7 @@ const dismissSignal = createSafeRootHandler(
     const canTriage = canTriageSignals(memberRole);
     const reason = body.reason?.trim() || null;
     yield* Result.await(
-      resultTx(safeDb, (transaction) =>
+      resultTx(safeDb, async (transaction) =>
         withVisibleSignal(
           {
             tx: transaction,

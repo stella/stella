@@ -108,7 +108,7 @@ describe("signal authorization evidence", () => {
     "transition evidence follows scope and credential $scope $expected",
     async ({ scope, permissions, expected }) => {
       const signalId = await seed(scope === "matter" ? ids.wsA1 : null);
-      const outcome = await resultTx(safeDbA1(), (transaction) =>
+      const outcome = await resultTx(safeDbA1(), async (transaction) =>
         withVisibleSignal(
           {
             tx: transaction,
@@ -150,7 +150,7 @@ describe("signal authorization evidence", () => {
   }[])(
     "request evidence follows scope and credential $scope $expected",
     async ({ scope, permissions, expected }) => {
-      const outcome = await resultTx(safeDbA1(), (transaction) =>
+      const outcome = await resultTx(safeDbA1(), async (transaction) =>
         withSignalRequestAuthorization(
           {
             tx: transaction,
@@ -178,7 +178,7 @@ describe("signal authorization evidence", () => {
 
   test("a checked transition records its actor and uses the current row", async () => {
     const signalId = await seed(ids.wsA1);
-    const outcome = await resultTx(safeDbA1(), (transaction) =>
+    const outcome = await resultTx(safeDbA1(), async (transaction) =>
       withVisibleSignal(
         {
           tx: transaction,
@@ -233,7 +233,7 @@ describe("signal authorization evidence", () => {
       .update(signals)
       .set({ updatedAt: new Date(prepared.updatedAt.getTime() + 1000) })
       .where(eq(signals.id, signalId));
-    const outcome = await resultTx(safeDbA1(), (transaction) =>
+    const outcome = await resultTx(safeDbA1(), async (transaction) =>
       withVisibleSignal(
         {
           tx: transaction,
@@ -253,7 +253,7 @@ describe("signal authorization evidence", () => {
   });
 
   test("request creation obtains scope evidence in its write transaction", async () => {
-    const outcome = await resultTx(safeDbA1(), (transaction) =>
+    const outcome = await resultTx(safeDbA1(), async (transaction) =>
       withSignalRequestAuthorization(
         {
           tx: transaction,

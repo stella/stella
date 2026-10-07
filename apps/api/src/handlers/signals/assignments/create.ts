@@ -54,7 +54,7 @@ const assignSignal = createSafeRootHandler(
     const assigneeUserId = body.assigneeUserId;
 
     yield* Result.await(
-      resultTx(safeDb, (transaction) =>
+      resultTx(safeDb, async (transaction) =>
         withVisibleSignal(
           {
             tx: transaction,

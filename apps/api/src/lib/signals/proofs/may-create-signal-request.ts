@@ -1,3 +1,5 @@
+import { defineProof, name } from "@gdp-ts/core";
+import type { Named, Proof } from "@gdp-ts/core";
 import { Result } from "better-result";
 import { and, eq } from "drizzle-orm";
 
@@ -7,8 +9,6 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { hasMemberPermission } from "@/api/lib/permission-authorization";
 import type { AuthorizedMemberRole } from "@/api/lib/permission-authorization";
-import { defineProof, name } from "@/api/lib/signals/proofs/core";
-import type { Named, Proof } from "@/api/lib/signals/proofs/core";
 import { canTriageSignals } from "@/api/lib/signals/read";
 
 const MayCreateSignalRequestProver = defineProof("MayCreateSignalRequest");
@@ -24,7 +24,7 @@ type WithSignalRequestAuthorizationOptions = {
   workspaceId: SafeId<"workspace"> | null;
 };
 
-export const withSignalRequestAuthorization = <R>(
+export const withSignalRequestAuthorization = async <R>(
   {
     tx,
     organizationId,

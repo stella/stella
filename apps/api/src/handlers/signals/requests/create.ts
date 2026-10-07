@@ -86,7 +86,7 @@ const createRequest = createSafeRootHandler(
     const summary = body.description.trim().slice(0, 280);
 
     const { insertedIds } = yield* Result.await(
-      resultTx(safeDb, (transaction) =>
+      resultTx(safeDb, async (transaction) =>
         withSignalRequestAuthorization(
           {
             tx: transaction,

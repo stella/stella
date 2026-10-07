@@ -1,3 +1,5 @@
+import { defineProof, name } from "@gdp-ts/core";
+import type { Named, Proof } from "@gdp-ts/core";
 import { Result } from "better-result";
 import { and, eq } from "drizzle-orm";
 
@@ -7,8 +9,6 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { hasMemberPermission } from "@/api/lib/permission-authorization";
 import type { AuthorizedMemberRole } from "@/api/lib/permission-authorization";
-import { defineProof, name } from "@/api/lib/signals/proofs/core";
-import type { Named, Proof } from "@/api/lib/signals/proofs/core";
 import {
   canTriageSignals,
   selectVisibleSignalInTransaction,
@@ -32,7 +32,7 @@ type WithVisibleSignalOptions = {
 };
 
 /** Keep the check, locked row, and exact actor/resource/transaction names together. */
-export const withVisibleSignal = <R, E>(
+export const withVisibleSignal = async <R, E>(
   {
     tx,
     organizationId,

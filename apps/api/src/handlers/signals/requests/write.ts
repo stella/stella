@@ -1,10 +1,11 @@
+import type { Named } from "@gdp-ts/core";
+
 import type { SIGNAL_KIND } from "@stll/api-contract/signals";
 
 import type { Transaction } from "@/api/db/root";
 import type { SafeId } from "@/api/lib/branded-types";
 import { emitSignals } from "@/api/lib/signals/emit";
 import type { NewSignal } from "@/api/lib/signals/emit";
-import type { Named } from "@/api/lib/signals/proofs/core";
 import type { MayCreateSignalRequest } from "@/api/lib/signals/proofs/may-create-signal-request";
 
 type EmitSignalRequestOptions<U, W, T> = {
@@ -18,7 +19,7 @@ type EmitSignalRequestOptions<U, W, T> = {
   >;
 };
 
-export const emitSignalRequest = <U, W, T>({
+export const emitSignalRequest = async <U, W, T>({
   tx,
   workspace,
   actor,

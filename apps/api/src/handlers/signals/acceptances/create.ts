@@ -291,7 +291,7 @@ export const createAcceptSignal = (
       }
 
       yield* Result.await(
-        resultTx(safeDb, (transaction) =>
+        resultTx(safeDb, async (transaction) =>
           withVisibleSignal(
             {
               tx: transaction,

@@ -1,9 +1,10 @@
+import { name } from "@gdp-ts/core";
+import type { Named } from "@gdp-ts/core";
+
 import type { Transaction } from "@/api/db/root";
 import { transitionSignal } from "@/api/handlers/signals/transition";
 import type { SignalTransitionArgs } from "@/api/handlers/signals/transition";
 import type { SafeId } from "@/api/lib/branded-types";
-import { name } from "@/api/lib/signals/proofs/core";
-import type { Named } from "@/api/lib/signals/proofs/core";
 
 // Compile-only: these functions are never invoked.
 export const signalProofMistakes = async <U, S, T, Other>(
