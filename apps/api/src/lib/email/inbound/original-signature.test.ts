@@ -1,6 +1,7 @@
 import { Result } from "better-result";
 import { expect, test } from "bun:test";
 import { authenticate, dkimSign, dkimVerify } from "mailauth";
+import assert from "node:assert/strict";
 import { generateKeyPairSync } from "node:crypto";
 
 import {
@@ -101,6 +102,7 @@ test("verifies a raw multipart fixture with genuine DKIM, ARC, SPF and DMARC res
   };
   const results = await authenticate(raw, options);
   expect(results.dkim.results.at(0)?.status.result).toBe("pass");
+  assert.ok(results.spf !== false, "Expected an SPF verification result");
   expect(results.spf.status.result).toBe("pass");
   expect(results.dmarc && results.dmarc.status.result).toBe("pass");
   expect(results.arc && results.arc.status.result).toBe("pass");
@@ -137,6 +139,10 @@ test("verifies a raw multipart fixture with genuine DKIM, ARC, SPF and DMARC res
     result: "neutral",
     comment: "body hash did not verify",
   });
+  assert.ok(
+    tampered.spf !== false,
+    "Expected an SPF result for the tampered message",
+  );
   expect(tampered.spf.status.result).toBe("fail");
   expect(tampered.dmarc && tampered.dmarc.status.result).toBe("fail");
   expect(tampered.arc && tampered.arc.status.result).toBe("fail");

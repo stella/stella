@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import assert from "node:assert/strict";
 import PostalMime from "postal-mime";
 
 import { INBOUND_MAIL_LIMITS } from "./limits";
@@ -91,6 +92,10 @@ describe("inbound MIME normalization", () => {
         text: "Přiložený návrh.",
         messageId: "<multipart@example.test>",
       });
+      assert.ok(
+        parsed.message.html !== null,
+        "Expected the multipart HTML alternative",
+      );
       expect(parsed.message.html).toContain("Přiložený návrh.");
       expect(parsed.message.attachments).toEqual([
         {
