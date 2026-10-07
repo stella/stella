@@ -21,6 +21,21 @@ import {
 } from "@/api/lib/safe-id-boundaries";
 import { isRecord } from "@/api/lib/type-guards";
 
+import {
+  CHAT_PROJECTION_METADATA_KEY,
+  getProjectionBranchSource,
+  getSelectedProjectionBranch,
+} from "./projection-fields";
+import type { ChatProjectionSchema } from "./projection-fields";
+
+export {
+  passthroughId,
+  publicUrl,
+  projectionBranch,
+} from "./projection-fields";
+export type { ChatProjectionSchema } from "./projection-fields";
+export type { ChatRefKind as RegistryRefKind } from "@/api/lib/chat/ref-registry";
+
 /**
  * Chat projection schemas: one Valibot `strictObject` per converted tool that
  * describes exactly what the chat surface forwards, with each id-bearing
@@ -52,7 +67,6 @@ import { isRecord } from "@/api/lib/type-guards";
  * module that must know all four (it keys one ref state per kind), and a second
  * declaration here would be a hand-maintained mirror of that set.
  */
-export type { ChatRefKind as RegistryRefKind } from "@/api/lib/chat/ref-registry";
 type RegistryRefKind = ChatRefKind;
 
 export type SimpleRefKind = Exclude<RegistryRefKind, "entity">;
@@ -156,49 +170,6 @@ const annotationSchema = v.variant("role", [
 
 type ChatProjectionAnnotation = v.InferOutput<typeof annotationSchema>;
 
-const CHAT_PROJECTION_METADATA_KEY = "chatProjection";
-
-/**
- * The widened schema type used by the runtime projection registry. Individual
- * annotated field builders retain their inferred input/output types so the
- * same schemas can provide precise handler contracts at compile time; only the
- * heterogeneous registry boundary widens them for AST walking.
- */
-export type ChatProjectionSchema = v.GenericSchema<
-  Record<string, unknown>,
-  Record<string, unknown>
->;
-
-const selectedProjectionBranches = new WeakMap<
-  Record<string, unknown>,
-  ChatProjectionSchema
->();
-
-const projectionBranchSources = new WeakMap<
-  v.GenericSchema,
-  ChatProjectionSchema
->();
-
-/**
- * Mark one union/variant option as a projection branch. Its Valibot transform
- * records which schema produced the canonical output object during the one
- * strict parse; the annotation walk can then follow that branch without
- * validating it again.
- */
-export const projectionBranch = <TSchema extends ChatProjectionSchema>(
-  schema: TSchema,
-) => {
-  const branch = v.pipe(
-    schema,
-    v.transform((output) => {
-      selectedProjectionBranches.set(output, schema);
-      return output;
-    }),
-  );
-  projectionBranchSources.set(branch, schema);
-  return branch;
-};
-
 type SimpleRefId<TKind extends SimpleRefKind> = {
   contact: SafeId<"contact">;
   matter: SafeId<"workspace">;
@@ -228,31 +199,6 @@ export const chatEntityRef = (workspace: EntityWorkspaceSource) =>
     v.metadata({
       [CHAT_PROJECTION_METADATA_KEY]: { role: "entityRef", workspace },
     }),
-  );
-
-/**
- * A non-tenant handle (user/version/link/library id, opaque cursor) the model
- * may pass back verbatim; licensed to survive the runtime UUID backstop.
- */
-export const passthroughId = () =>
-  v.pipe(
-    v.string(),
-    v.metadata({ [CHAT_PROJECTION_METADATA_KEY]: { role: "passthroughId" } }),
-  );
-
-/**
- * A public URL assigned by an external publisher (a court's decision portal,
- * a legislature's official gazette), which may embed a UUID of the
- * publisher's own minting rather than a Stella tenant id. Forwarded verbatim
- * and excluded from the runtime UUID invariant: the publisher's UUID is not a
- * tenant identifier the chat ref registry needs to mediate, and rewriting or
- * refusing it would break the link. Distinct from `passthroughId`, which is
- * reserved for opaque internal handles, not externally owned URLs.
- */
-export const publicUrl = () =>
-  v.pipe(
-    v.string(),
-    v.metadata({ [CHAT_PROJECTION_METADATA_KEY]: { role: "publicUrl" } }),
   );
 
 /**
@@ -442,7 +388,7 @@ const walkContainerSchema = (
       if (!isSchemaNode(option)) {
         panic("union option is not a valibot schema");
       }
-      if (!projectionBranchSources.has(option)) {
+      if (getProjectionBranchSource(option) === undefined) {
         panic(
           "chat projection union option is not wrapped in projectionBranch",
         );
@@ -928,7 +874,7 @@ const selectUnionOption = (
   if (!isRecord(value)) {
     return panic("chat projection unions must contain object branches");
   }
-  const selected = selectedProjectionBranches.get(value);
+  const selected = getSelectedProjectionBranch(value);
   if (selected === undefined) {
     return panic("parsed projection union value has no branch proof");
   }
@@ -936,7 +882,7 @@ const selectUnionOption = (
     if (!isSchemaNode(option)) {
       panic("union option is not a valibot schema");
     }
-    const source = projectionBranchSources.get(option);
+    const source = getProjectionBranchSource(option);
     if (source === undefined) {
       panic("chat projection union option is not wrapped in projectionBranch");
     }

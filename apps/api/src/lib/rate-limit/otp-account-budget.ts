@@ -36,20 +36,29 @@ const isOtpVerificationPath = (
 ): path is keyof typeof OTP_VERIFICATION_TYPES =>
   path !== undefined && Object.hasOwn(OTP_VERIFICATION_TYPES, path);
 
-export const createOtpAccountBudget = (
+type AccountAttemptBudget = { max: number; durationMs: number };
+
+/**
+ * Counts an account's attempts in a fixed window and refuses once the window
+ * holds more than `max`. A successful attempt gives its slot back, so the
+ * count is the window's failures (plus attempts still in flight).
+ */
+export const createAccountAttemptBudget = (
   context: Pick<RateLimitContext, "increment" | "decrement">,
-  demoAccountEmail: string | undefined,
+  {
+    counterPrefix,
+    budgetFor,
+  }: {
+    counterPrefix: string;
+    budgetFor: (normalizedEmail: string) => AccountAttemptBudget;
+  },
 ) => ({
   reserve: async (email: string) => {
     const normalizedEmail = email.trim().toLowerCase();
-    const isDemoAccount =
-      normalizedEmail === demoAccountEmail?.trim().toLowerCase();
-    const accountBudget = isDemoAccount
-      ? DEMO_OTP_ACCOUNT_BUDGET
-      : OTP_ACCOUNT_BUDGET;
+    const accountBudget = budgetFor(normalizedEmail);
     const account = createHash("sha256").update(normalizedEmail).digest("hex");
     const key = createRedisRateLimitRequestKey({
-      counterKey: `otp-account:${account}`,
+      counterKey: `${counterPrefix}:${account}`,
       requestId: Bun.randomUUIDv7(),
     });
     const { count, nextReset } = await context.increment(
@@ -84,6 +93,18 @@ export const createOtpAccountBudget = (
     }
   },
 });
+
+export const createOtpAccountBudget = (
+  context: Pick<RateLimitContext, "increment" | "decrement">,
+  demoAccountEmail: string | undefined,
+) =>
+  createAccountAttemptBudget(context, {
+    counterPrefix: "otp-account",
+    budgetFor: (normalizedEmail) =>
+      normalizedEmail === demoAccountEmail?.trim().toLowerCase()
+        ? DEMO_OTP_ACCOUNT_BUDGET
+        : OTP_ACCOUNT_BUDGET,
+  });
 
 type OtpAccountLimitPluginOptions = {
   enabled: boolean;

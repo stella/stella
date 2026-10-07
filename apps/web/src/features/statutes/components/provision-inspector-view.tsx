@@ -5,6 +5,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Link, useNavigate, useRouterState } from "@tanstack/react-router";
 import { useTranslations } from "use-intl";
 
+import { Temporal } from "@stll/time";
 import { Button } from "@stll/ui/button";
 import { InfoIcon } from "@stll/ui/icons";
 import { ScrollArea } from "@stll/ui/scroll-area";
@@ -25,6 +26,7 @@ import { ZoomControls } from "@/components/inspector/zoom-controls";
 import { LegalReaderAIChat } from "@/components/legal-reader/legal-reader-ai-chat";
 import { OpenOriginalButton } from "@/components/legal-reader/open-original-button";
 import { useReaderTextScale } from "@/components/legal-reader/use-reader-text-scale";
+import { pickVersionAt } from "@/features/case-law/statute-version";
 import {
   CitingDecisionItem,
   ProvisionCitingDecisions,
@@ -32,8 +34,8 @@ import {
 import type { CitingDecisionRow } from "@/features/statutes/components/provision-citing-decisions";
 import { ProvisionHistory } from "@/features/statutes/components/provision-history";
 import { ProvisionLeadingDecisions } from "@/features/statutes/components/provision-leading-decisions";
+import { ProvisionVersionContext } from "@/features/statutes/components/provision-version-context";
 import { ProvisionWording } from "@/features/statutes/components/provision-wording";
-import { StatuteValidityIndicator } from "@/features/statutes/components/statute-validity-indicator";
 import { StatuteVersionSwitcher } from "@/features/statutes/components/statute-version-switcher";
 import type { ProvisionViewPayload } from "@/features/statutes/provision-inspector.logic";
 import {
@@ -48,10 +50,11 @@ import {
   readProvisionCitingSearch,
   updateProvisionCitingSearch,
 } from "@/features/statutes/statute-page-search";
+import { resolveStatuteDisplayStatus } from "@/features/statutes/statute-status";
 import { useFormatter } from "@/i18n/formatting-context";
 import { optionalArray } from "@/lib/arrays";
 import { detached } from "@/lib/detached";
-import { createStatuteLinkTarget } from "@/lib/statute-route";
+import { createStatuteLinkTarget } from "@/lib/statutes/statute-route";
 import { useQueryView } from "@/lib/use-query-view";
 
 // The ask actions pull the prompt builders the chat needs; the pane is read
@@ -101,6 +104,18 @@ export const ProvisionInspectorView = ({
   // reason to read the work's versions carries one.
   const versionCount =
     versions === undefined ? payload.versionCount : availableVersions.length;
+  const today = Temporal.Now.plainDateISO(Temporal.Now.timeZoneId()).toString();
+  const currentVersion = pickVersionAt(
+    availableVersions.filter(
+      (version) =>
+        resolveStatuteDisplayStatus({
+          status: version.status,
+          validFrom: version.versionValidFrom,
+          today,
+        }) === "current",
+    ),
+    today,
+  );
   const selectedVersion = availableVersions.find(
     (version) => version.id === payload.documentId,
   );
@@ -170,7 +185,11 @@ export const ProvisionInspectorView = ({
       <InspectorFindBar find={find} />
       {/* The bar floats over the provision the way it floats over a PDF page;
           the scroll area below it moves, the corner does not. */}
-      <LegalReaderAIChat activeLegal={activeLegal} className="min-h-0 flex-1">
+      <LegalReaderAIChat
+        activeLegal={activeLegal}
+        aiMode="enabled"
+        className="min-h-0 flex-1"
+      >
         <ScrollArea axis="vertical" className="h-full">
           {/* The gutter and the trailing room the composer needs belong to the
               column; the text root inside it carries the reader's own scale. */}
@@ -184,7 +203,11 @@ export const ProvisionInspectorView = ({
             >
               {selectedVersion !== undefined && (
                 <div className="flex flex-wrap items-center justify-between gap-2">
-                  <StatuteValidityIndicator
+                  <ProvisionVersionContext
+                    decisionContext={payload.decisionContext}
+                    documentId={payload.documentId}
+                    currentVersionId={currentVersion?.id}
+                    onVersionChange={switchVersion}
                     expression={selectedVersion}
                     status={selectedVersion.status}
                     validFrom={selectedVersion.versionValidFrom}

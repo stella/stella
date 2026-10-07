@@ -9,12 +9,36 @@ import config, {
   rewriteBrowserApiPath,
 } from "./vite.config";
 
-const KANBAN_DRAG_INTERACTIONS_PATH = path.resolve(
-  import.meta.dirname,
-  "../../packages/ui/src/kanban/drag-interactions.ts",
-);
-const ATLASKIT_DRAG_IMPORT =
-  /from "(@atlaskit\/pragmatic-drag-and-drop[^"]+)";/gu;
+const PRAGMATIC_IMPORT_PREFIX = "@atlaskit/pragmatic-";
+const DRAG_RUNTIME_SOURCE_ROOTS = [
+  path.resolve(import.meta.dirname, "src"),
+  path.resolve(import.meta.dirname, "../../packages/ui/src"),
+  path.resolve(import.meta.dirname, "../../packages/workspace-ui/src"),
+];
+const runtimeDragImports = () => {
+  const imports = new Set<string>();
+  const sourceFiles = new Bun.Glob("**/*.{ts,tsx}");
+  const ts = new Bun.Transpiler({ loader: "ts" });
+  const tsx = new Bun.Transpiler({ loader: "tsx" });
+  for (const root of DRAG_RUNTIME_SOURCE_ROOTS) {
+    for (const file of sourceFiles.scanSync({ cwd: root })) {
+      if (/\.(?:test|spec)\.tsx?$/u.test(file)) {
+        continue;
+      }
+      const source = readFileSync(path.join(root, file), "utf-8");
+      if (!source.includes(PRAGMATIC_IMPORT_PREFIX)) {
+        continue;
+      }
+      const transpiler = file.endsWith(".tsx") ? tsx : ts;
+      for (const entry of transpiler.scanImports(source)) {
+        if (entry.path.startsWith(PRAGMATIC_IMPORT_PREFIX)) {
+          imports.add(entry.path);
+        }
+      }
+    }
+  }
+  return [...imports].toSorted();
+};
 const I18N_STORE_PATH = path.resolve(
   import.meta.dirname,
   "src/i18n/i18n-store.ts",
@@ -139,17 +163,52 @@ describe("vite config", () => {
     );
   });
 
-  test("prebundles the kanban drag runtime before lazy-route navigation", () => {
-    const runtimeSource = readFileSync(KANBAN_DRAG_INTERACTIONS_PATH, "utf-8");
-    const runtimeImports = Array.from(
-      runtimeSource.matchAll(ATLASKIT_DRAG_IMPORT),
-      (match) => match[1],
-    );
-
+  test("prebundles exactly the drag runtime imports without duplicate entries", () => {
+    const included = resolveConfig("test").optimizeDeps?.include ?? [];
+    expect(included).not.toHaveLength(0);
+    expect(included.length).toBe(new Set(included).size);
+    const runtimeImports = runtimeDragImports();
     expect(runtimeImports).not.toHaveLength(0);
-    expect(resolveConfig("test").optimizeDeps?.include).toEqual(
-      expect.arrayContaining(runtimeImports),
+    expect(
+      included
+        .filter((entry) => entry.startsWith(PRAGMATIC_IMPORT_PREFIX))
+        .toSorted(),
+    ).toEqual(runtimeImports);
+  });
+
+  test("every prebundled drag entry resolves from the web app", () => {
+    const entries = (resolveConfig("test").optimizeDeps?.include ?? []).filter(
+      (entry) => entry.startsWith(PRAGMATIC_IMPORT_PREFIX),
     );
+    expect(entries).not.toHaveLength(0);
+    for (const entry of entries) {
+      expect(Bun.resolveSync(entry, import.meta.dirname)).toBeString();
+    }
+  });
+
+  test("the drag resolver rejects a nonexistent entry", () => {
+    expect(
+      Bun.resolveSync(
+        "@atlaskit/pragmatic-drag-and-drop/adapter/element-adapter",
+        import.meta.dirname,
+      ),
+    ).toBeString();
+    const bogus = "@atlaskit/pragmatic-drag-and-drop/does-not-exist";
+    expect(() => Bun.resolveSync(bogus, import.meta.dirname)).toThrow(
+      "Cannot find package '@atlaskit/pragmatic-drag-and-drop'",
+    );
+  });
+
+  test("the runtime import scan excludes type-only drag entries", () => {
+    const imports = new Bun.Transpiler({ loader: "ts" }).scanImports(`
+      import type { Edge } from "@atlaskit/pragmatic-drag-and-drop-hitbox/types";
+      import { combine } from "@atlaskit/pragmatic-drag-and-drop/utils/combine";
+      export { combine };
+      export type { Edge };
+    `);
+    expect(imports.map((entry) => entry.path)).toEqual([
+      "@atlaskit/pragmatic-drag-and-drop/utils/combine",
+    ]);
   });
 
   test("prebundles every folio locale catalog the i18n store loads", () => {

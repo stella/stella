@@ -92,6 +92,8 @@ export type AIGenerationFailedProperties = SafeAIAnalyticsMetadata & {
 export type McpSessionInitializedProperties = {
   client_name: string;
   client_version?: string;
+  ui_apps_supported: boolean;
+  ui_apps_mime_types: string[];
   credential_type: McpCredentialType | "unspecified";
   mode: McpMode;
 };

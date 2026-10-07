@@ -1,8 +1,16 @@
 import { describe, expect, test } from "bun:test";
 
+import { MCP_TOOL_NAME_PATTERN } from "@stll/api-contract/mcp-tool-name";
+
 import { LIMITS } from "@/api/lib/limits";
-import { normalizeDiscoveredMcpTools } from "@/api/lib/mcp-upstream/cached-tools";
-import { shortToolNameHash } from "@/api/lib/mcp-upstream/namespace";
+import {
+  normalizeDiscoveredMcpTools,
+  readCachedMcpTools,
+} from "@/api/lib/mcp-upstream/cached-tools";
+import {
+  EMITTED_TOOL_NAME_MAX_LENGTH,
+  shortToolNameHash,
+} from "@/api/lib/mcp-upstream/namespace";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 describe("MCP upstream tool cache", () => {
@@ -21,7 +29,7 @@ describe("MCP upstream tool cache", () => {
     expect(tools).toEqual([
       {
         description: "Search companies",
-        exposedName: "mcp__Legal_Data__search_company",
+        exposedName: "mcp__legal_data__search_company",
         inputSchema: { type: "object", properties: {} },
         rawName: "search.company",
       },
@@ -118,5 +126,27 @@ describe("MCP upstream tool cache", () => {
     });
 
     expect(tools).toEqual([]);
+  });
+
+  test("drops a cached tool whose exposed name is outside the name contract", () => {
+    const inputSchema = { type: "object", properties: {} };
+    const oversizedName = `mcp__${"a".repeat(EMITTED_TOOL_NAME_MAX_LENGTH)}`;
+    const hyphenatedName = "mcp__legal-data__lookup";
+    // The wider acceptance rule admits both, but the emission contract keeps
+    // existing clients' length and normalized alphabet intact.
+    expect(oversizedName).toMatch(MCP_TOOL_NAME_PATTERN);
+    expect(hyphenatedName).toMatch(MCP_TOOL_NAME_PATTERN);
+    expect(
+      readCachedMcpTools([
+        { exposedName: "mcp__Legal-Data__lookup", inputSchema, rawName: "a" },
+        {
+          exposedName: oversizedName,
+          inputSchema,
+          rawName: "oversized",
+        },
+        { exposedName: hyphenatedName, inputSchema, rawName: "hyphenated" },
+        { exposedName: "mcp__legal_data__lookup", inputSchema, rawName: "b" },
+      ]).map(({ rawName }) => rawName),
+    ).toEqual(["b"]);
   });
 });

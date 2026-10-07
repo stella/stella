@@ -91,7 +91,7 @@ export const shadowed = () => {
   const key = detailOptions("one").queryKey;
   client.getQueryData(key);
   {
-    // oxlint-disable-next-line eslint/no-shadow -- Exercise lexical shadowing in the detector.
+    // oxlint-disable-next-line no-shadow -- Exercise lexical shadowing in the detector.
     const key = fixtureKeys.detail("one");
     // oxlint-disable-next-line require-query-options-key/require-query-options-key -- Resolve lexical bindings, not identifier spellings.
     client.getQueryData(key);

@@ -18,7 +18,10 @@ downloads, or arbitrary JavaScript.
 ## Trust boundary
 
 The bridge content script runs only on the configured stella origins. The
-default list is the hosted stella origins; a self-hosted deployment sets
+default list is the hosted production stella origins; `build:staging` builds
+an extension that trusts only the hosted staging app instead, and `build`
+checks that the release manifest never names staging. The controlled tab
+never loads any hosted stella, trusted or not. A self-hosted deployment sets
 `WXT_STELLA_ORIGINS` at build time to a comma-separated list of exact HTTPS
 origins:
 

@@ -79,5 +79,13 @@
       "note": "Regression coverage",
       "date": "2026-10-04"
     }
+  ],
+  "scripts/ci-checks-partition.test.ts::continued guard conditions preserve every previously runnable plan outcome": [
+    {
+      "seed": 20260901,
+      "path": "0:0:0:0:0:0",
+      "note": "Regression coverage",
+      "date": "2026-10-07"
+    }
   ]
 }

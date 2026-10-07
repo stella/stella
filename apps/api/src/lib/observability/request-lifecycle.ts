@@ -34,10 +34,10 @@ import { logger } from "@/api/lib/observability/logger";
 import {
   getRequestContext,
   getRequestFailure,
-  isAiRequest,
 } from "@/api/lib/observability/request-context";
 import { emitRequestDurationMetric } from "@/api/lib/observability/request-metrics";
 import { resolveResponseStatus } from "@/api/lib/observability/response-status";
+import { requestClassAtCompletion } from "@/api/lib/observability/route-latency-class";
 import { isLocalDevOpen } from "@/api/runtime-mode";
 
 const HEALTH_PATHS = new Set(["/health", "/live", "/ready", "/started"]);
@@ -186,7 +186,10 @@ export const answerRequestError = ({
 
     emitRequestDurationMetric({
       durationMs,
-      requestClass: isAiRequest() ? "ai" : "crud",
+      requestClass: requestClassAtCompletion({
+        method: request.method,
+        route: getRouteName(route),
+      }),
       statusCode,
       route: getRouteName(route),
     });
@@ -316,7 +319,10 @@ export const completeRequest = async ({
     // class is `ai` either way, which is excluded from the CRUD p95 SLO.
     emitRequestDurationMetric({
       durationMs,
-      requestClass: isAiRequest() ? "ai" : "crud",
+      requestClass: requestClassAtCompletion({
+        method: request.method,
+        route: getRouteName(route),
+      }),
       statusCode,
       route: getRouteName(route),
     });

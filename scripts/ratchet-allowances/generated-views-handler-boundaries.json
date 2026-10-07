@@ -1,0 +1,5 @@
+{
+  "metric": "cross-handler-imports",
+  "delta": 11,
+  "reason": "Chat persistence, the chat tool and private attachment reads share the frozen visual-sandbox owner slice instead of duplicating its preparation, provenance and storage boundaries."
+}

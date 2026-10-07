@@ -4,8 +4,8 @@ import { useTranslations } from "use-intl";
 import type { ProvisionVersionBasis } from "@stll/api-contract/provision-version-basis";
 import { BidiText } from "@stll/ui/bidi-text";
 
-import { formatValidityDate } from "@/features/statutes/statute-format";
 import { useFormatter } from "@/i18n/formatting-context";
+import { formatValidityDate } from "@/lib/statutes/statute-format";
 
 /** A shared label for a cited version, expanded in previews and quiet in lists. */
 export const ProvisionVersionBasisLabel = ({

@@ -1,5 +1,6 @@
 {
   "jobs": {
+    "visual-preview.yml/preview": "pr-fast",
     "railway-smoke.yml/smoke": "main",
     "autofix.yml/dependabot-bun-autofix": "pr-fast",
     "autofix.yml/regenerate-scope": "pr-fast",
@@ -66,6 +67,7 @@
     "marketing-screenshots.yml/check": "main",
     "marketing-screenshots.yml/update": "main",
     "model-catalog-check.yml/model-catalog-check": "main",
+    "ci-pr-pilot-metrics.yml/metrics": "main",
     "network-baseline-record.yml/build": "main",
     "network-baseline-record.yml/record": "main",
     "network-baseline-request.yml/request": "pr-fast",
@@ -107,11 +109,12 @@
     "ci.yml/ci-generated-sources": "pr-fast",
     "ci.yml/docker-checks": "queue",
     "ci.yml/parser-version-guard": "pr-fast",
+    "ci.yml/ci-checks-docs": "pr-fast",
     "ci.yml/ci-checks-generated": "pr-fast",
     "ci.yml/ci-checks-policy": "pr-fast",
     "ci.yml/ci-checks-rest": "pr-fast",
     "ci.yml/ci-tests": "pr-fast",
-    "ci.yml/ci-browser": "queue",
+    "ci.yml/ci-browser": "pr-fast",
     "ci.yml/code-quality-api": "pr-fast",
     "ci.yml/code-quality-web": "pr-fast",
     "ci.yml/code-quality-rest": "pr-fast",
@@ -177,5 +180,6 @@
       "role": "analysis",
       "cancelInProgress": true
     }
-  }
+  },
+  "periodicJobs": ["ci.yml/release-typecheck"]
 }

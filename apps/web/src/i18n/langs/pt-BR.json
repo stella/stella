@@ -145,6 +145,7 @@
       "useBackupCode": "Usar um código de backup em vez disso"
     },
     "useDifferentEmail": "Use um e-mail diferente",
+    "usePassword": "Usar uma senha",
     "weSentCodeTo": "Enviamos um código para <email>{emailAddress}</email>"
   },
   "avt": {
@@ -348,6 +349,7 @@
     },
     "view": {
       "chooseList": "Escolher uma lista",
+      "createList": "Criar uma lista",
       "evidenceList": "Fatos de",
       "noLists": "Este caso não tem listas.",
       "pickList": "Escolha a lista cujos fatos são usados para verificar os documentos deste caso."
@@ -1055,6 +1057,7 @@
       "toastDescription": "O chat em página inteira virá com conversas persistidas.",
       "toastTitle": "Visualização completa ainda não disponível"
     },
+    "activateGeneratedView": "Interagir com esta visualização",
     "aiPrompt": "Campo de mensagem de IA",
     "aiThread": "Conversa de IA",
     "analyzingSources": "Analisando fontes",
@@ -1200,6 +1203,8 @@
     "forkedFromUnavailable": "Criado a partir de um chat que não está mais disponível",
     "forkedThread": "De outro chat",
     "forkingThread": "Criando um novo chat…",
+    "generatedView": "Visualização gerada",
+    "generatedViewDrill": "Busque decisões com o filtro de tribunal {court} e o ano {year}.",
     "greeting": "No que você gostaria de trabalhar?",
     "greetingSubtitle": "Comece com um caso, documento ou pergunta simples.",
     "hideThread": "Ocultar conversa",
@@ -1331,6 +1336,7 @@
     "sendErrorQuotaExhausted": "A cota do provedor de IA foi esgotada. Tente novamente em um minuto ou fale com o administrador do espaço de trabalho.",
     "sendErrorStreamIncomplete": "A resposta da IA foi interrompida antes de terminar. Tente novamente.",
     "sendPrompt": "Enviar mensagem",
+    "sendQueuedMessageNow": "Enviar agora",
     "sendWithoutAnonymization": "Enviar sem anonimização",
     "skills": {
       "scope": {
@@ -1478,6 +1484,14 @@
       "sourceCode": "Código-fonte",
       "toggleDetails": "Alternar detalhes",
       "unrestoredFields": "{count, plural, one {# campo não pôde ser preenchido} other {# campos não puderam ser preenchidos}} com valores reais no modo anonimizado. Revise: {fields}"
+    },
+    "turnNotification": {
+      "failedBody": "Uma resposta do chat na stella não foi concluída.",
+      "failedTitle": "A resposta falhou",
+      "needsInputBody": "Um chat está aguardando sua aprovação ou resposta.",
+      "needsInputTitle": "A stella precisa de você",
+      "replyReadyBody": "A stella terminou de responder no seu chat.",
+      "replyReadyTitle": "Resposta pronta"
     },
     "unsupportedFileType": "Tipo de arquivo não suportado",
     "uploadFailed": "Falha ao processar o arquivo",
@@ -1693,6 +1707,7 @@
     "deletedCount": "{count, plural, one {# item excluído} many {# itens excluídos} other {# itens excluídos}}",
     "description": "Descrição",
     "details": "Detalhes",
+    "detailsHiddenFeatureUnavailable": "Detalhes ocultos: recurso não ativado",
     "disconnect": "Desconectar",
     "dismiss": "Descartar",
     "displayName": "Nome de exibição",
@@ -1828,6 +1843,8 @@
     "notes": "Notas",
     "open": "Abrir",
     "openInNewTab": "Abrir em nova aba",
+    "openInStella": "Abrir no stella",
+    "openOriginalSource": "Abrir fonte original",
     "options": "Opções",
     "or": "Ou",
     "organization": "Organização",
@@ -4375,6 +4392,11 @@
       "betaInbox": "Caixa de entrada e notificações",
       "betaInboxDescription": "Mostrar a caixa de entrada e o sino de notificações",
       "betaTimeBillingDescription": "Mostrar o controle de tempo, as faturas e as despesas",
+      "chatNotifications": "Notificações do chat",
+      "chatNotificationsBlocked": "As notificações da stella estão bloqueadas neste navegador. Permita-as nas configurações do site no navegador.",
+      "chatNotificationsDescription": "Receba uma notificação deste navegador quando uma resposta do chat terminar enquanto a stella estiver em segundo plano.",
+      "chatNotificationsToggle": "Avisar quando uma resposta estiver pronta ou precisar de mim",
+      "chatNotificationsUnsupported": "Este navegador não oferece suporte a notificações.",
       "confirmDelete": "Confirmar exclusão de conta",
       "dangerZone": "Zona de perigo",
       "dangerZoneDescription": "Excluir permanentemente o acesso à conta e os dados privados da conta.",
@@ -4755,6 +4777,7 @@
     },
     "title": "Legislação",
     "validity": "Vigente de {from} a {to}",
+    "versionAppliedInDecision": "Versão aplicada na decisão <bdi>{court}</bdi> <bdi>{caseNumber}</bdi> (<bdi>{range}</bdi>) · {status}",
     "wordingValidFrom": "Redação em vigor desde {date}",
     "wordingVersionUnknown": "Data da versão da redação indisponível"
   },

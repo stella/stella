@@ -121,6 +121,8 @@ const CROSS_TENANT_WAIVERS: Record<string, WaiverReason> = {
   "hosted-usage-webhook": WAIVER_REASON.noTenantReadSurface,
   // Fixed-CSP HTML shell with no database access or tenant-scoped input.
   "mcp-app-sandbox": WAIVER_REASON.noTenantReadSurface,
+  // Fixed-CSP HTML shell with no database access or tenant-scoped input.
+  "visual-sandbox": WAIVER_REASON.noTenantReadSurface,
   mcp: WAIVER_REASON.noTenantReadSurface,
   "mcp-connectors": WAIVER_REASON.noTenantReadSurface,
   // Deployment-owned directory access, independent of tenant membership;

@@ -41,6 +41,14 @@
       "expected_output_url": null
     },
     {
+      "description": "Look up a case-law decision by its published identifier.",
+      "user_prompt": "Using stella, look up Czech decision ECLI:CZ:NS:2020:22.CDO.1000.2020.1 and show its court and reference.",
+      "file_attachment_urls": null,
+      "tools_triggered": "lookup_case_law",
+      "expected_output": "Returns the decision identity, canonical courtAbbreviation (or null where unknown), court name, date and decision link; the court abbreviation matches search_case_law.",
+      "expected_output_url": null
+    },
+    {
       "description": "Discover available document templates.",
       "user_prompt": "Using stella, list the document templates available to my organization and identify their fillable fields.",
       "file_attachment_urls": null,

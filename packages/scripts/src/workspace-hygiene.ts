@@ -6,6 +6,16 @@ import { validateWorkspaceAppBoundaries } from "./workspace-app-boundaries";
 import type { AppBoundaryOptions } from "./workspace-app-boundaries";
 
 export const WORKSPACE_PARENT_DIRS = ["apps", "packages"] as const;
+// Computed filesystem reads retain these repository Markdown inputs.
+export const CI_MARKDOWN_READER_INPUTS = [
+  "apps/**/*.md",
+  "packages/**/*.md",
+  "scripts/**/*.md",
+  "docs/**/*.md",
+];
+export const CI_MARKDOWN_READER_COMMAND =
+  "bun packages/scripts/src/workspace-hygiene.ts";
+
 const DEPENDENCY_FIELDS = [
   "dependencies",
   "devDependencies",

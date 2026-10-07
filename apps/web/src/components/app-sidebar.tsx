@@ -46,7 +46,7 @@ import {
   SearchIcon,
   UsersIcon,
 } from "@stll/ui/icons";
-import { Input } from "@stll/ui/input";
+import { InlineRenameInput } from "@stll/ui/inline-rename";
 import { SIDE_RAIL_ICON_BUTTON_SIZE } from "@stll/ui/inspector";
 import {
   Menu,
@@ -61,6 +61,7 @@ import { cn } from "@stll/ui/utils";
 
 import {
   matterActivityIsKnownEmpty,
+  matterActivityItemVisible,
   resolveEntityActivityDestination,
   resolveAutomaticExpandedMatterId,
   resolveMatterNavigationTarget,
@@ -218,7 +219,12 @@ export const AppSidebar = (props: AppSidebarProps) => {
     isError: workspacesFailed,
     isFetching: workspacesFetching,
     refetch: refetchWorkspaces,
-  } = useChromeQuery(workspacesNavigationOptions(user.activeOrganizationId));
+  } = useChromeQuery(
+    workspacesNavigationOptions({
+      organizationId: user.activeOrganizationId,
+      userId: user.id,
+    }),
+  );
   const inboxQuery = useChromeQuery({
     ...inboxCountOptions(user.activeOrganizationId, user.id),
     enabled: inboxPreviewEnabled,
@@ -1155,7 +1161,10 @@ const MatterItem = ({
   );
   const activityIsKnownEmpty = matterActivityIsKnownEmpty({
     isInvalidated: activityIsInvalidated,
-    pages: cachedActivity?.pages,
+    pages: cachedActivity?.pages.map((page) => ({
+      ...page,
+      items: page.items.filter(matterActivityItemVisible),
+    })),
     status: activityStatus,
   });
   const hasExpandableContent = !activityIsKnownEmpty || showTimesheetLink;
@@ -1307,22 +1316,13 @@ const MatterItem = ({
             className="size-4 shrink-0"
             matter={{ id: ws.id, color: ws.color }}
           />
-          <Input
-            autoFocus
-            className="h-auto min-w-0 flex-1 border-0 bg-transparent p-0 text-sm shadow-none outline-none focus-visible:ring-0"
-            onBlur={() => {
+          <InlineRenameInput
+            className="text-sm"
+            onCommit={() => {
               detached(rename.commit(), "app-sidebar.commit");
             }}
-            onChange={(e) => rename.setDraft(e.currentTarget.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") {
-                e.currentTarget.blur();
-              }
-              if (e.key === "Escape") {
-                rename.cancel();
-                e.currentTarget.blur();
-              }
-            }}
+            onValueChange={rename.setDraft}
+            onCancel={rename.cancel}
             value={rename.state.draft}
           />
         </div>
@@ -1429,7 +1429,10 @@ const MatterItem = ({
               </MatterColorContextPicker>
             )}
             <span className="relative flex min-w-0 flex-col">
-              <BidiText as="span" className="truncate">
+              <BidiText
+                as="span"
+                className="overflow-hidden text-ellipsis whitespace-pre"
+              >
                 {ws.name}
               </BidiText>
               <Tooltip
@@ -1581,7 +1584,8 @@ const MatterActivityList = ({
     }),
     enabled: mounted,
   });
-  const items = data ? data.pages.flatMap((page) => page.items) : [];
+  const activityItems = data?.pages.flatMap((page) => page.items) ?? [];
+  const items = activityItems.filter(matterActivityItemVisible);
 
   const openEntity = async ({
     entityKind,

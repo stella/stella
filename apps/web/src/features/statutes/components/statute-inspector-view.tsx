@@ -37,7 +37,7 @@ import {
 } from "@/features/statutes/statute-reader-blocks";
 import { optionalArray } from "@/lib/arrays";
 import { detached } from "@/lib/detached";
-import { createStatuteLinkTarget } from "@/lib/statute-route";
+import { createStatuteLinkTarget } from "@/lib/statutes/statute-route";
 
 /**
  * The act a decision cites, beside the decision: the consolidation that
@@ -121,7 +121,11 @@ export const StatuteInspectorView = ({
         onClose={onClose}
       />
       <InspectorFindBar find={find} />
-      <LegalReaderAIChat activeLegal={activeLegal} className="min-h-0 flex-1">
+      <LegalReaderAIChat
+        activeLegal={activeLegal}
+        aiMode="enabled"
+        className="min-h-0 flex-1"
+      >
         <ScrollArea axis="vertical" className="h-full">
           {/* The gutter and the room the composer needs belong to the column;
               the text root inside it carries the reader's own scale. */}

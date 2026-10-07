@@ -25,10 +25,10 @@ import {
 import { ReaderInsetBox } from "@/components/legal-reader/reader-inset-box";
 import { createProvisionViewTab } from "@/features/statutes/provision-inspector.logic";
 import type { ProvisionViewPayload } from "@/features/statutes/provision-inspector.logic";
-import { provisionPreviewOptions } from "@/features/statutes/queries/provision-preview";
-import type { ProvisionPreviewData } from "@/features/statutes/queries/provision-preview";
-import { formatValidityDate } from "@/features/statutes/statute-format";
-import { createStatuteLinkTarget } from "@/lib/statute-route";
+import { provisionPreviewOptions } from "@/lib/statutes/provision-preview";
+import type { ProvisionPreviewData } from "@/lib/statutes/provision-preview";
+import { formatValidityDate } from "@/lib/statutes/statute-format";
+import { createStatuteLinkTarget } from "@/lib/statutes/statute-route";
 
 export type CitedProvisionTarget = {
   /** The consolidation the reference was made against, in the statute reader. */

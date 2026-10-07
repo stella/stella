@@ -15,7 +15,7 @@ import { opensCitationInInspector } from "@/components/inspector/case-decision-v
 import { useInspectorView } from "@/components/inspector/use-inspector-view";
 import { LEGAL_CITATION_LINK_CLASS_NAME } from "@/components/legal-reader/citation-link";
 import { createStatuteViewTab } from "@/features/statutes/statute-inspector.logic";
-import { createStatuteLinkTarget } from "@/lib/statute-route";
+import { createStatuteLinkTarget } from "@/lib/statutes/statute-route";
 
 /** A work-level statute citation: the consolidation it resolved to, named. */
 export type CitedStatuteTarget = {

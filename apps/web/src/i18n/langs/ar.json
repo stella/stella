@@ -145,6 +145,7 @@
       "useBackupCode": "استخدام رمز احتياطي بدلاً من ذلك"
     },
     "useDifferentEmail": "استخدام بريد إلكتروني مختلف",
+    "usePassword": "استخدام كلمة المرور بدلًا من ذلك",
     "weSentCodeTo": "أرسلنا رمزًا إلى <email>{emailAddress}</email>"
   },
   "avt": {
@@ -348,6 +349,7 @@
     },
     "view": {
       "chooseList": "اختيار قائمة",
+      "createList": "إنشاء قائمة",
       "evidenceList": "الوقائع من",
       "noLists": "لا توجد قوائم في هذا الملف القانوني.",
       "pickList": "اختر القائمة التي تُفحص مستندات هذا الملف القانوني في ضوء وقائعها."
@@ -1055,6 +1057,7 @@
       "toastDescription": "ستتوفّر الدردشة بملء الصفحة مع إطلاق السلاسل المحفوظة.",
       "toastTitle": "العرض الكامل غير متاح بعد"
     },
+    "activateGeneratedView": "التفاعل مع هذا العرض",
     "aiPrompt": "أداة تحرير رسائل الذكاء الاصطناعي",
     "aiThread": "محادثة مع الذكاء الاصطناعي",
     "analyzingSources": "جارٍ تحليل المصادر",
@@ -1200,6 +1203,8 @@
     "forkedFromUnavailable": "تم إنشاؤها من دردشة لم تعد متاحة",
     "forkedThread": "من دردشة أخرى",
     "forkingThread": "جارٍ إنشاء دردشة جديدة…",
+    "generatedView": "عرض مُنشأ",
+    "generatedViewDrill": "ابحث عن القرارات باستخدام مرشح المحكمة {court} والسنة {year}.",
     "greeting": "ما الذي تودّ العمل عليه؟",
     "greetingSubtitle": "ابدأ بملف قانوني أو مستند أو سؤال مباشر.",
     "hideThread": "إخفاء المحادثة",
@@ -1331,6 +1336,7 @@
     "sendErrorQuotaExhausted": "نفدت حصة مزوّد الذكاء الاصطناعي. حاول مجدداً بعد دقيقة، أو تواصل مع مسؤول مساحة العمل.",
     "sendErrorStreamIncomplete": "انقطع ردّ الذكاء الاصطناعي قبل أن يكتمل. حاول مجدداً.",
     "sendPrompt": "إرسال الرسالة",
+    "sendQueuedMessageNow": "إرسال الآن",
     "sendWithoutAnonymization": "إرسال دون تجهيل",
     "skills": {
       "scope": {
@@ -1478,6 +1484,14 @@
       "sourceCode": "الشيفرة المصدرية",
       "toggleDetails": "إظهار/إخفاء التفاصيل",
       "unrestoredFields": "تعذّر ملء {count, plural, zero {# حقل} one {حقل واحد} two {حقلين} few {# حقول} many {# حقلًا} other {# حقل}} بالقيم الحقيقية في وضع إخفاء الهوية. راجِع: {fields}"
+    },
+    "turnNotification": {
+      "failedBody": "لم يكتمل رد في دردشة stella.",
+      "failedTitle": "فشل الرد",
+      "needsInputBody": "تنتظر دردشة موافقتك أو إجابتك.",
+      "needsInputTitle": "تحتاج stella إلى مدخلاتك",
+      "replyReadyBody": "أنهت stella الرد في الدردشة.",
+      "replyReadyTitle": "الرد جاهز"
     },
     "unsupportedFileType": "نوع ملف غير مدعوم",
     "uploadFailed": "تعذّرت معالجة الملف",
@@ -1693,6 +1707,7 @@
     "deletedCount": "{count, plural, zero {تم حذف أي عنصر} one {تم حذف عنصر واحد} two {تم حذف عنصرين} few {تم حذف # عناصر} many {تم حذف # عنصرًا} other {تم حذف # عنصر}}",
     "description": "الوصف",
     "details": "التفاصيل",
+    "detailsHiddenFeatureUnavailable": "التفاصيل مخفية: الميزة غير مفعّلة",
     "disconnect": "قطع الاتصال",
     "dismiss": "تجاهل",
     "displayName": "الاسم المعروض",
@@ -1828,6 +1843,8 @@
     "notes": "الملاحظات",
     "open": "فتح",
     "openInNewTab": "فتح في علامة تبويب جديدة",
+    "openInStella": "فتح في stella",
+    "openOriginalSource": "فتح المصدر الأصلي",
     "options": "الخيارات",
     "or": "أو",
     "organization": "المؤسسة",
@@ -4375,6 +4392,11 @@
       "betaInbox": "صندوق الوارد والإشعارات",
       "betaInboxDescription": "إظهار صندوق الوارد وجرس الإشعارات",
       "betaTimeBillingDescription": "إظهار تتبع الوقت والفواتير والمصروفات",
+      "chatNotifications": "إشعارات الدردشة",
+      "chatNotificationsBlocked": "الإشعارات محظورة لـ stella في هذا المتصفح. اسمح بها من إعدادات الموقع في المتصفح.",
+      "chatNotificationsDescription": "تلقَّ إشعارًا من هذا المتصفح عند اكتمال رد في الدردشة بينما تعمل stella في الخلفية.",
+      "chatNotificationsToggle": "أعلمني عندما يكون الرد جاهزًا أو يحتاج إلى مدخلاتي",
+      "chatNotificationsUnsupported": "لا يدعم هذا المتصفح الإشعارات.",
       "confirmDelete": "تأكيد حذف الحساب",
       "dangerZone": "منطقة الخطر",
       "dangerZoneDescription": "احذف الوصول إلى حسابك وبيانات الحساب الخاصة نهائيًا.",
@@ -4755,6 +4777,7 @@
     },
     "title": "التشريعات",
     "validity": "نافذ من {from} إلى {to}",
+    "versionAppliedInDecision": "الصيغة المطبقة في قرار <bdi>{court}</bdi> <bdi>{caseNumber}</bdi> (<bdi>{range}</bdi>) · {status}",
     "wordingValidFrom": "الصياغة النافذة منذ {date}",
     "wordingVersionUnknown": "تاريخ نسخة الصياغة غير متاح"
   },

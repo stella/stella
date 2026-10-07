@@ -168,6 +168,61 @@ const REVIEWED_STANDARD_OPERATIONS = [
   "apps/api/src/handlers/workspaces/members/remove.ts",
 ] as const;
 
+// Endpoints the restricted review account is refused as well (a subset of the
+// list above); a change here is a policy change.
+const REVIEWED_ACCOUNT_CONTROL_OPERATIONS = [
+  "apps/api/src/handlers/agent-auth/confirm.ts",
+  "apps/api/src/handlers/ai-config/validate-provider.ts",
+  "apps/api/src/handlers/api-keys/create.ts",
+  "apps/api/src/handlers/api-keys/list.ts",
+  "apps/api/src/handlers/api-keys/personal/create.ts",
+  "apps/api/src/handlers/api-keys/personal/list.ts",
+  "apps/api/src/handlers/api-keys/personal/policy.ts",
+  "apps/api/src/handlers/api-keys/personal/revoke-organization.ts",
+  "apps/api/src/handlers/api-keys/personal/revoke.ts",
+  "apps/api/src/handlers/api-keys/personal/rotate.ts",
+  "apps/api/src/handlers/api-keys/revoke.ts",
+  "apps/api/src/handlers/api-keys/rotate.ts",
+  "apps/api/src/handlers/mcp-connectors/approve-authorization.ts",
+  "apps/api/src/handlers/mcp-connectors/connect.ts",
+  "apps/api/src/handlers/mcp-connectors/create-connection.ts",
+  "apps/api/src/handlers/mcp-connectors/create-connector.ts",
+  "apps/api/src/handlers/mcp-connectors/delete-connection.ts",
+  "apps/api/src/handlers/mcp-connectors/delete-connector.ts",
+  "apps/api/src/handlers/mcp-connectors/oauth-callback.ts",
+  "apps/api/src/handlers/mcp-connectors/probe-connector.ts",
+  "apps/api/src/handlers/mcp-connectors/update-connection.ts",
+  "apps/api/src/handlers/mcp-connectors/update-native-tool.ts",
+  "apps/api/src/handlers/me/disconnect-oauth-connection.ts",
+  "apps/api/src/handlers/me/verify-delete.ts",
+  "apps/api/src/handlers/organization-settings/business-registry-credentials.ts#deleteBusinessRegistryCredential",
+  "apps/api/src/handlers/organization-settings/business-registry-credentials.ts#saveBusinessRegistryCredential",
+  "apps/api/src/handlers/organization-settings/correspondence/allowed-senders/create.ts",
+  "apps/api/src/handlers/organization-settings/correspondence/allowed-senders/delete.ts",
+  "apps/api/src/handlers/organization-settings/correspondence/allowed-senders/list.ts",
+  "apps/api/src/handlers/organization-settings/correspondence/allowed-senders/scope/add.ts",
+  "apps/api/src/handlers/organization-settings/correspondence/allowed-senders/scope/remove.ts",
+  "apps/api/src/handlers/organization-settings/delete-ai-config.ts",
+  "apps/api/src/handlers/organization-settings/delete-deepl-key.ts",
+  "apps/api/src/handlers/organization-settings/delete-web-search-key.ts",
+  "apps/api/src/handlers/organization-settings/read-ai-config.ts",
+  "apps/api/src/handlers/organization-settings/read-deepl-config.ts",
+  "apps/api/src/handlers/organization-settings/read-web-search-config.ts",
+  "apps/api/src/handlers/organization-settings/sanctions-monitoring/update.ts",
+  "apps/api/src/handlers/organization-settings/update-ai-config.ts",
+  "apps/api/src/handlers/organization-settings/update-deepl-key.ts",
+  "apps/api/src/handlers/organization-settings/update-web-search-key.ts",
+  "apps/api/src/handlers/organization-settings/update.ts",
+  "apps/api/src/handlers/sharepoint/connect.ts",
+  "apps/api/src/handlers/sharepoint/disconnect.ts",
+  "apps/api/src/handlers/sharepoint/oauth-callback.ts",
+  "apps/api/src/handlers/sharepoint/set-enablement.ts",
+  "apps/api/src/handlers/usage/assign-seat.ts",
+  "apps/api/src/handlers/usage/create-hosted-management.ts",
+  "apps/api/src/handlers/usage/create-hosted-setup.ts",
+  "apps/api/src/handlers/usage/unassign-seat.ts",
+] as const;
+
 describe("handler account policy census", () => {
   test("every endpoint declares its account access", async () => {
     const discovery = await discoverSafeHandlers();
@@ -176,6 +231,7 @@ describe("handler account policy census", () => {
     const undeclared: string[] = [];
     const sandboxResourceWrites: string[] = [];
     const standardOperations: string[] = [];
+    const accountControlOperations: string[] = [];
     for (const endpoint of discovery.endpoints) {
       const parsed = v.safeParse(configSchema, endpoint.config);
       if (!parsed.success) {
@@ -183,7 +239,10 @@ describe("handler account policy census", () => {
         continue;
       }
       const { accountAccess, permissions = {} } = parsed.output;
-      if (accountAccess === ACCOUNT_ACCESS.standard) {
+      if (accountAccess === ACCOUNT_ACCESS.accountControl) {
+        accountControlOperations.push(endpoint.id);
+      }
+      if (accountAccess !== ACCOUNT_ACCESS.sandbox) {
         standardOperations.push(endpoint.id);
         continue;
       }
@@ -196,6 +255,9 @@ describe("handler account policy census", () => {
     expect(standardOperations.toSorted()).toEqual([
       ...REVIEWED_STANDARD_OPERATIONS,
     ]);
+    expect(accountControlOperations.toSorted()).toEqual(
+      [...REVIEWED_ACCOUNT_CONTROL_OPERATIONS].toSorted(),
+    );
   });
 
   test("standard operations apply account access before their implementation", async () => {

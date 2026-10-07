@@ -51,6 +51,7 @@ import {
 } from "../helpers/smoke-route-defs";
 import { createBrowserErrorCollector } from "../helpers/test";
 import { listTimeBillingRoutes } from "../helpers/time-billing-routes";
+import { declareVisualSandboxSmoke } from "../helpers/visual-sandbox-smoke";
 import {
   type TestWorkspace,
   createTestWorkspace,
@@ -122,15 +123,16 @@ const resolveRoute = (def: SmokeRouteDef, world: SmokeWorld): SmokeRoute => {
 
 type TimeBillingRedirectDestinationOptions = {
   template: string;
-  workspaceId: string;
+  workspace: TestWorkspace;
 };
 
 const timeBillingRedirectDestination = ({
   template,
-  workspaceId,
+  workspace,
 }: TimeBillingRedirectDestinationOptions): string => {
+  // The workspace index forwards to the workspace's default view.
   if (template.startsWith("/workspaces/")) {
-    return `/workspaces/${workspaceId}`;
+    return `/workspaces/${workspace.id}/${workspace.viewId}`;
   }
   if (template.startsWith("/settings/organization/")) {
     return "/settings/organization/members";
@@ -171,12 +173,12 @@ const declareRouteSmokeGroup = ({
         storageState: STORAGE_STATE,
       });
       browserForPages = browser;
-      const features = await apiGet<{ timeBilling: boolean }>(
+      const navigation = await apiGet<{ features: { timeBilling: boolean } }>(
         apiRequest,
-        "/organization-settings/deployment-features",
+        "/workspaces/navigation",
       );
       expect(
-        features.timeBilling,
+        navigation.features.timeBilling,
         "the persisted smoke principal is enrolled and verified",
       ).toBe(true);
 
@@ -316,14 +318,14 @@ const declareRouteSmokeGroup = ({
             negativeRequest,
             "unenrolled-route-smoke",
           );
-          const workspaceId = negativeWorkspace.id;
+          const workspace = negativeWorkspace;
+          const workspaceId = workspace.id;
           const storageState = await negativeRequest.storageState();
-          const features = await apiGet<{ timeBilling: boolean }>(
-            negativeRequest,
-            "/organization-settings/deployment-features",
-          );
+          const navigation = await apiGet<{
+            features: { timeBilling: boolean };
+          }>(negativeRequest, "/workspaces/navigation");
           expect(
-            features.timeBilling,
+            navigation.features.timeBilling,
             "the isolated verified principal is not enrolled",
           ).toBe(false);
           const isolatedBrowser = browserForPages;
@@ -334,7 +336,7 @@ const declareRouteSmokeGroup = ({
               .replace("$invoiceId", () => randomUUID());
             const destination = timeBillingRedirectDestination({
               template,
-              workspaceId,
+              workspace,
             });
             await test.step(template, async () => {
               const { context, page } = await openCleanPage(
@@ -400,6 +402,7 @@ const declareRouteSmokeGroup = ({
 };
 
 const baselineMode = process.env["E2E_NETWORK_BASELINE"];
+declareVisualSandboxSmoke();
 declarePublicKnowledgeSmoke({ mode: "disabled" });
 
 test("route coverage matches the authenticated route tree", async () => {

@@ -1147,6 +1147,9 @@ const ACTION_COVERAGE: Record<string, ActionCoverage> = {
       SupersedeCards.allows(model) ||
       isBusy(model),
   ),
+  "send-queued-message-now": notModelled(
+    "The send queue lives in the session hook, which the harness does not render; the stop it issues is modelled as stop.",
+  ),
   stop: byCommands("StopRunningCall, StopMidStream", StopRunningCall.allows),
   "toggle-anonymization": PAGE_STATE,
   "toggle-web-search": PAGE_STATE,

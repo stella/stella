@@ -1,11 +1,10 @@
-import { Result } from "better-result";
+import { Result, TaggedError } from "better-result";
 import { and, asc, eq, isNotNull, lt } from "drizzle-orm";
 
 import { Temporal } from "@stll/time";
 
 import type { rootDb } from "@/api/db/root";
 import { styleSets } from "@/api/db/schema";
-import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
 import { createBullMqJobId } from "@/api/lib/bullmq-job-id";
 import { BullMqWorker, createLazyBullMqQueue } from "@/api/lib/bullmq-queue";
@@ -148,6 +147,18 @@ type ReconcilePendingStyleSetPackageCleanupsOptions = {
   db: Pick<typeof rootDb, "select">;
 };
 
+type StyleSetPackageCleanupReconcileResult = ReconcileScanResult & {
+  failed: number;
+};
+
+export class StyleSetPackageCleanupRequeueError extends TaggedError(
+  "StyleSetPackageCleanupRequeueError",
+)<{
+  cause: unknown;
+  message: string;
+  summary: StyleSetPackageCleanupReconcileResult;
+}> {}
+
 /**
  * Re-drive package cleanups a row still owes.
  *
@@ -167,7 +178,15 @@ type ReconcilePendingStyleSetPackageCleanupsOptions = {
 export const reconcilePendingStyleSetPackageCleanups = async ({
   cleanupQueue = getQueue(),
   db,
-}: ReconcilePendingStyleSetPackageCleanupsOptions): Promise<ReconcileScanResult> => {
+}: ReconcilePendingStyleSetPackageCleanupsOptions): Promise<
+  Result<
+    StyleSetPackageCleanupReconcileResult,
+    StyleSetPackageCleanupRequeueError
+  >
+> => {
+  let failure: { cause: unknown; count: number } | undefined;
+  // The scan's concurrent handlers update this state across an await.
+  const readFailure = () => failure;
   const settledBefore = new Date(
     Temporal.Now.instant().epochMilliseconds - RECONCILE_SETTLE_MS,
   );
@@ -240,7 +259,15 @@ export const reconcilePendingStyleSetPackageCleanups = async ({
       catch: (cause) => cause,
     });
     if (Result.isError(outcome)) {
-      captureError(outcome.error, { styleSetId: id });
+      failure = {
+        cause: failure === undefined ? outcome.error : failure.cause,
+        count: (failure?.count ?? 0) + 1,
+      };
+      // The scheduler runner captures the aggregate failure once per tick.
+      logger.warn("style_set.package_cleanup_requeue_failed", {
+        stage: "requeue",
+        styleSetId: id,
+      });
       return false;
     }
     // Only a job this sweep actually added spends budget. A key the queue
@@ -251,7 +278,19 @@ export const reconcilePendingStyleSetPackageCleanups = async ({
     return outcome.value === QUEUE_REQUEUE_OUTCOME.REQUEUED;
   };
 
-  return await scanPendingRows({ handle, readPage });
+  const scan = await scanPendingRows({ handle, readPage });
+  const queueFailure = readFailure();
+  const summary = { ...scan, failed: queueFailure?.count ?? 0 };
+  if (queueFailure !== undefined) {
+    return Result.err(
+      new StyleSetPackageCleanupRequeueError({
+        cause: queueFailure.cause,
+        message: "Requeueing style set package cleanups did not complete",
+        summary,
+      }),
+    );
+  }
+  return Result.ok(summary);
 };
 
 export const deleteQueuedStyleSetPackages = async (
