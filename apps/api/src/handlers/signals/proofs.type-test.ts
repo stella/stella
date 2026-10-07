@@ -143,8 +143,8 @@ export const signalRequestProofMistakes = async <U, W, T, O, Other>({
 export const signalProofOutcomeInference = async (
   options: Parameters<typeof withVisibleSignal>[0],
 ) => {
-  const outcome = await withVisibleSignal(options, () =>
-    Promise.resolve(Result.ok({ type: "visible" } as const)),
+  const outcome = await withVisibleSignal(options, async () =>
+    Result.ok(await Promise.resolve({ type: "visible" } as const)),
   );
   if (Result.isError(outcome)) {
     return outcome.error.status;
@@ -155,8 +155,8 @@ export const signalProofOutcomeInference = async (
 export const signalRequestOutcomeInference = async (
   options: Parameters<typeof withSignalRequestAuthorization>[0],
 ) => {
-  const outcome = await withSignalRequestAuthorization(options, () =>
-    Promise.resolve(Result.ok({ type: "created" } as const)),
+  const outcome = await withSignalRequestAuthorization(options, async () =>
+    Result.ok(await Promise.resolve({ type: "created" } as const)),
   );
   if (Result.isError(outcome)) {
     return outcome.error.status;
@@ -168,8 +168,8 @@ export const signalProofErrorInference = async <E>(
   options: Parameters<typeof withVisibleSignal>[0],
   failure: E,
 ) => {
-  const outcome = await withVisibleSignal(options, () =>
-    Promise.resolve(Result.err(failure)),
+  const outcome = await withVisibleSignal(options, async () =>
+    Result.err(await Promise.resolve(failure)),
   );
   if (Result.isError(outcome)) {
     return outcome.error satisfies HandlerError | E;
