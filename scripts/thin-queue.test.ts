@@ -970,13 +970,13 @@ test("ordinary pushes cannot bypass the hourly heavy scheduling contract", () =>
   expect(() => assertMainSelection(mutated)).toThrow("push/ordinary/");
 }, 30_000);
 
-test("invalid configuration is validated before fetching code and publishes no commit status", () => {
+test("invalid configuration blocks ordinary heavy selection and publishes no commit status", () => {
   const validation = step({
     workflow: main,
     job: "validate",
     name: "Validate merge queue depth",
   });
-  expect(main.jobs["validate"]?.steps?.at(0)).toEqual(validation);
+  expect(main.jobs["validate"]?.steps?.at(1)).toEqual(validation);
   expect(validation.env?.["MERGE_QUEUE_DEPTH"]).toBe(
     `\${{ vars.MERGE_QUEUE_DEPTH }}`,
   );

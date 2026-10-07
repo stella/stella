@@ -15,6 +15,11 @@ name: Deploy main to staging
 on:
   workflow_dispatch:
     inputs:
+      release_candidate:
+        description: "Validate the pending release VERSION before running this pinned gate"
+        required: false
+        type: boolean
+        default: false
       sha:
         description: "Commit SHA on main to deploy (blank deploys the main tip)"
         required: false
@@ -55,6 +60,26 @@ jobs:
       corpus_search_waived: ${{ steps.waiver.outputs.corpus_search_waived }}
 
     steps:
+      - name: Check release candidate
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.sha != '' && inputs.release_candidate == true }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+          SERVER_URL: ${{ github.server_url }}
+          REQUESTED_SHA: ${{ inputs.sha }}
+        run: |
+          set -euo pipefail
+          directory="$RUNNER_TEMP/release-candidate-validation"
+          mkdir -p "$directory"
+          git -C "$directory" init
+          git -C "$directory" remote add origin "$SERVER_URL/$REPOSITORY.git"
+          auth=$(printf 'x-access-token:%s' "$GH_TOKEN" | base64 | tr -d '\n')
+          echo "::add-mask::$auth"
+          git -C "$directory" -c "http.extraheader=AUTHORIZATION: basic $auth" fetch --tags origin main:refs/remotes/origin/main
+          git -C "$directory" show origin/main:scripts/check-release-candidate.sh > "$RUNNER_TEMP/check-release-candidate.sh"
+          cd "$directory"
+          bash "$RUNNER_TEMP/check-release-candidate.sh" "$REQUESTED_SHA"
+
       - name: Validate staging waiver
         id: waiver
         env:
