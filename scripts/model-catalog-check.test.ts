@@ -77,6 +77,7 @@ esac
         .filter((entry) => entry !== undefined)
         .join(path.delimiter),
       GH_REPO: "fixture/repository",
+      GH_RETRY_SCRIPT: path.resolve(import.meta.dir, "gh-retry.sh"),
       FAKE_ZIP_FILE: zipFile,
       FAKE_ARTIFACT_FILE: artifactFile,
       LIST_EXIT: String(listExit),

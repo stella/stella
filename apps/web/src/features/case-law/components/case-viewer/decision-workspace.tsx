@@ -498,6 +498,7 @@ export const DecisionWorkspace = (props: DecisionWorkspaceProps) => {
         >
           <LegalReaderAIChat
             activeLegal={activeLegalFromReaderTarget(annotationTarget)}
+            aiMode={props.aiMode}
             className="h-full"
           >
             <div className="reader-scroll h-full overflow-y-auto" ref={mainRef}>

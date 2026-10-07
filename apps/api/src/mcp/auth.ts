@@ -9,6 +9,9 @@ import {
   getAuthEndpointUrl,
   getAuthIssuerUrl,
 } from "@/api/lib/auth/auth-paths";
+import { getReviewAccountConfig } from "@/api/lib/auth/review-account";
+import { narrowReviewOrganizationScopes } from "@/api/lib/auth/review-account-policy";
+import type { ReviewAccountConfig } from "@/api/lib/auth/review-account-policy";
 import {
   isMachineApiKeyCredential,
   machineApiKeyPermissionsSchema,
@@ -290,9 +293,11 @@ export const authenticateMcpRequest = async (
   {
     mode = "default",
     resolveApiKeySession = defaultResolveMachineApiKeySession,
+    reviewAccount = getReviewAccountConfig(),
     verifyToken,
   }: {
     mode?: McpMode | undefined;
+    reviewAccount?: Pick<ReviewAccountConfig, "organizationId"> | undefined;
     resolveApiKeySession?:
       | typeof defaultResolveMachineApiKeySession
       | undefined;
@@ -314,5 +319,7 @@ export const authenticateMcpRequest = async (
           catch: classifyMcpTokenVerificationError,
         })
       ).andThen(extractMcpSession);
-  return authenticated;
+  return authenticated.map((session) =>
+    narrowReviewOrganizationScopes(session, reviewAccount),
+  );
 };

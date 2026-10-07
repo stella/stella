@@ -1,6 +1,11 @@
 import { toolDefinition } from "@tanstack/ai";
 import { panic, Result } from "better-result";
-import * as v from "valibot";
+
+import {
+  spawnSubagentsInputSchema,
+  spawnSubagentsOutputSchema,
+  type SpawnSubagentsInput,
+} from "@stll/api-contract/spawn-subagents";
 
 import type { SafeDb } from "@/api/db/safe-db";
 import { env } from "@/api/env";
@@ -48,9 +53,6 @@ export { SPAWN_SUBAGENTS_TOOL_NAME };
  */
 export const SUBAGENT_DELEGATION_DEPTH_CAP = 1;
 
-/** Upper bound on how many subtasks one `spawn_subagents` call may batch. */
-const MAX_SUBAGENTS_PER_CALL = 8;
-
 export const SUBAGENT_FAILED_MESSAGE = "The subagent run failed.";
 
 /**
@@ -74,74 +76,7 @@ const SUBAGENT_MAX_STEPS = 25;
  */
 const SUBAGENT_FALLBACK_TIMEOUT_MS = 300_000;
 
-const spawnSubagentsInputSchema = v.strictObject({
-  subagents: v.pipe(
-    v.array(
-      v.strictObject({
-        task: v.pipe(
-          v.string(),
-          v.minLength(1),
-          v.maxLength(4000),
-          v.description("The subtask for this subagent to complete."),
-        ),
-        context: v.optional(
-          v.pipe(
-            v.string(),
-            v.maxLength(4000),
-            v.description("Optional background/context the subagent needs."),
-          ),
-        ),
-        expectedOutput: v.optional(
-          v.pipe(
-            v.string(),
-            v.maxLength(1000),
-            v.description(
-              "Optional description of the result shape you want back.",
-            ),
-          ),
-        ),
-        model: v.optional(
-          v.pipe(
-            v.string(),
-            v.description(
-              "Optional exact model id; omit to use the default fast tier.",
-            ),
-          ),
-        ),
-      }),
-    ),
-    v.minLength(1),
-    v.maxLength(MAX_SUBAGENTS_PER_CALL),
-    v.description(
-      "One or more independent subtasks to run in parallel on cheap subagents.",
-    ),
-  ),
-});
-
-// A discriminated union (not shared optional `result`/`error` fields):
-// exactly one of them is meaningful per status, and every producer
-// (`runOneSubagent` below) and consumer (`SpawnSubagentsCard` on the
-// frontend) already branches on `status` first.
-const spawnSubagentsResultSchema = v.variant("status", [
-  v.strictObject({
-    index: v.number(),
-    status: v.literal("completed"),
-    result: v.string(),
-  }),
-  v.strictObject({
-    index: v.number(),
-    status: v.literal("failed"),
-    error: v.string(),
-  }),
-]);
-
-const spawnSubagentsOutputSchema = v.strictObject({
-  results: v.array(spawnSubagentsResultSchema),
-});
-
-type SpawnSubagentsToolInput = v.InferOutput<typeof spawnSubagentsInputSchema>;
-
-type SubagentSpec = SpawnSubagentsToolInput["subagents"][number];
+type SubagentSpec = SpawnSubagentsInput["subagents"][number];
 
 type BuildSubagentSystemPromptOptions = {
   expectedOutput: string | undefined;

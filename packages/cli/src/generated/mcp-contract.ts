@@ -3,6 +3,9 @@
 export const MCP_HTTP_PATH = "/mcp" as const;
 export const MCP_DISCOVERY_PATH =
   "/.well-known/oauth-protected-resource/mcp" as const;
+export const MCP_TOOL_NAME_MAX_LENGTH = 71;
+export const MCP_TOOL_NAME_PATTERN_SOURCE = "^[a-z][a-z0-9_-]{0,70}$" as const;
+export const MCP_TOOL_NAME_PATTERN_FLAGS = "u" as const;
 export const CLI_KNOWN_SCOPES = [
   "openid",
   "profile",
@@ -57,6 +60,7 @@ export const MCP_ERROR_CODES = [
   "conflict",
   "rate_limited",
   "upstream_unavailable",
+  "search_index_unavailable",
   "unknown_tool",
   "internal_error",
 ] as const;

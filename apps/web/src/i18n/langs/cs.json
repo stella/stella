@@ -145,6 +145,7 @@
       "useBackupCode": "Použít místo toho záložní kód"
     },
     "useDifferentEmail": "Použít jiný e-mail",
+    "usePassword": "Přihlásit se raději heslem",
     "weSentCodeTo": "Kód jsme odeslali na <email>{emailAddress}</email>"
   },
   "avt": {
@@ -348,6 +349,7 @@
     },
     "view": {
       "chooseList": "Vybrat seznam",
+      "createList": "Vytvořit seznam",
       "evidenceList": "Fakta ze seznamu",
       "noLists": "Tento spis nemá žádné seznamy.",
       "pickList": "Vyberte seznam, s jehož fakty se porovnávají dokumenty tohoto spisu."
@@ -1049,6 +1051,7 @@
       "toastDescription": "Celostránkový chat bude k dispozici s perzistentními vlákny.",
       "toastTitle": "Celé zobrazení zatím není dostupné"
     },
+    "activateGeneratedView": "Pracovat s přehledem",
     "aiPrompt": "Pole pro zprávu AI",
     "aiThread": "Konverzace s AI",
     "analyzingSources": "Analyzuji zdroje",
@@ -1194,6 +1197,8 @@
     "forkedFromUnavailable": "Vytvořeno z chatu, který už není dostupný",
     "forkedThread": "Z jiného chatu",
     "forkingThread": "Vytváří se nový chat…",
+    "generatedView": "Vygenerovaný přehled",
+    "generatedViewDrill": "Vyhledej rozhodnutí s filtrem soudu {court} a rokem {year}.",
     "greeting": "Na čem chcete pracovat?",
     "greetingSubtitle": "Začněte spisem, dokumentem nebo obyčejnou otázkou.",
     "hideThread": "Skrýt konverzaci",
@@ -1325,6 +1330,7 @@
     "sendErrorQuotaExhausted": "Kvóta poskytovatele AI je vyčerpaná. Zkuste to za minutu znovu nebo se obraťte na správce pracovního prostoru.",
     "sendErrorStreamIncomplete": "Odpověď AI se přerušila dřív, než byla dokončena. Zkuste to znovu.",
     "sendPrompt": "Odeslat zprávu",
+    "sendQueuedMessageNow": "Odeslat hned",
     "sendWithoutAnonymization": "Odeslat bez anonymizace",
     "skills": {
       "scope": {
@@ -1472,6 +1478,14 @@
       "sourceCode": "Zdrojový kód",
       "toggleDetails": "Přepnout detaily",
       "unrestoredFields": "{count, plural, one {# pole se nepodařilo} few {# pole se nepodařilo} many {# pole se nepodařilo} other {# polí se nepodařilo}} v anonymizovaném režimu vyplnit skutečnými hodnotami. Zkontrolujte: {fields}"
+    },
+    "turnNotification": {
+      "failedBody": "Odpověď v chatu stelly se nedokončila.",
+      "failedTitle": "Odpověď selhala",
+      "needsInputBody": "Chat čeká na vaše schválení nebo odpověď.",
+      "needsInputTitle": "stella potřebuje váš vstup",
+      "replyReadyBody": "stella dokončila odpověď ve vašem chatu.",
+      "replyReadyTitle": "Odpověď je hotová"
     },
     "unsupportedFileType": "Nepodporovaný typ souboru",
     "uploadFailed": "Zpracování souboru selhalo",
@@ -1687,6 +1701,7 @@
     "deletedCount": "{count, plural, one {# položka smazána} few {# položky smazány} other {# položek smazáno}}",
     "description": "Popis",
     "details": "Detaily",
+    "detailsHiddenFeatureUnavailable": "Podrobnosti jsou skryté: funkce není zapnutá",
     "disconnect": "Odpojit",
     "dismiss": "Zamítnout",
     "displayName": "Zobrazované jméno",
@@ -4371,6 +4386,11 @@
       "betaInbox": "Doručené a oznámení",
       "betaInboxDescription": "Zobrazit Doručené a zvonek oznámení",
       "betaTimeBillingDescription": "Zobrazit sledování času, faktury a výdaje",
+      "chatNotifications": "Oznámení z chatu",
+      "chatNotificationsBlocked": "Oznámení jsou pro stellu v tomto prohlížeči zablokovaná. Povolte je v nastavení webu v prohlížeči.",
+      "chatNotificationsDescription": "Dostanete oznámení z tohoto prohlížeče, když se odpověď v chatu dokončí, zatímco je stella na pozadí.",
+      "chatNotificationsToggle": "Upozornit mě, když je odpověď hotová nebo potřebuje můj vstup",
+      "chatNotificationsUnsupported": "Tento prohlížeč oznámení nepodporuje.",
       "confirmDelete": "Potvrdit smazání účtu",
       "dangerZone": "Nebezpečná zóna",
       "dangerZoneDescription": "Trvale smazat přístup k účtu a soukromá data účtu.",

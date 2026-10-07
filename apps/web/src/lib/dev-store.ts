@@ -1,8 +1,8 @@
 import { create } from "zustand";
 import { createJSONStorage, persist } from "zustand/middleware";
-import type { StateStorage } from "zustand/middleware";
 
 import { getStorageKey } from "@/consts";
+import { deviceStorage } from "@/lib/account/browser-storage";
 
 type State = {
   tanstackDevtools: boolean;
@@ -20,12 +20,6 @@ type Actions = {
   setWorkflowsPreview: (value: boolean) => void;
   setInboxPreview: (value: boolean) => void;
   setSimulateSlowLoad: (value: boolean) => void;
-};
-
-const serverStorage: StateStorage = {
-  getItem: () => null,
-  removeItem: () => undefined,
-  setItem: () => undefined,
 };
 
 export const useDevStore = create<State & Actions>()(
@@ -58,9 +52,7 @@ export const useDevStore = create<State & Actions>()(
       },
     }),
     {
-      storage: createJSONStorage(() =>
-        typeof window === "undefined" ? serverStorage : window.localStorage,
-      ),
+      storage: createJSONStorage(() => deviceStorage("local")),
       name: getStorageKey("dev"),
     },
   ),

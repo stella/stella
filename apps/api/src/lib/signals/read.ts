@@ -277,6 +277,29 @@ export const listSignalsHandler = async function* ({
   return Result.ok({ ...page, items: page.items.map(serializeSignal) });
 };
 
+type SelectVisibleSignalOptions = {
+  tx: Transaction;
+  organizationId: SafeId<"organization">;
+  canTriage: boolean;
+  signalId: SafeId<"signal">;
+};
+
+export const selectVisibleSignalInTransaction = ({
+  tx,
+  organizationId,
+  canTriage,
+  signalId,
+}: SelectVisibleSignalOptions) =>
+  selectSignals(tx, organizationId)
+    .where(
+      and(
+        eq(signals.id, signalId),
+        eq(signals.organizationId, organizationId),
+        signalVisibilityCondition(canTriage),
+      ),
+    )
+    .limit(1);
+
 type GetSignalProps = {
   safeDb: SafeDb;
   organizationId: SafeId<"organization">;
@@ -296,15 +319,12 @@ export const loadVisibleSignal = async function* ({
 }: GetSignalProps) {
   const rows = yield* Result.await(
     safeDb((tx) =>
-      selectSignals(tx, organizationId)
-        .where(
-          and(
-            eq(signals.id, signalId),
-            eq(signals.organizationId, organizationId),
-            signalVisibilityCondition(canTriage),
-          ),
-        )
-        .limit(1),
+      selectVisibleSignalInTransaction({
+        tx,
+        organizationId,
+        canTriage,
+        signalId,
+      }),
     ),
   );
   const row = rows.at(0);

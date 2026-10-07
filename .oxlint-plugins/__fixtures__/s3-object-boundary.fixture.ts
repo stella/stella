@@ -100,7 +100,7 @@ const _viaFetch = await (await fetch(_signed)).arrayBuffer();
 
 // A parameter shadowing a tracked local is not known to be an S3 client.
 const readShadowedClient = async (
-  // oxlint-disable-next-line eslint/no-shadow -- the shadow is the case under test
+  // oxlint-disable-next-line no-shadow -- the shadow is the case under test
   accessorClient: ReturnType<typeof getS3>,
 ) =>
   // expect-clean: s3-object-boundary/no-native-s3-object-read

@@ -40,6 +40,21 @@ jobs:
     permissions:
       actions: read
     steps:
+      - name: Checkout GitHub API tooling
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: ${{ github.repository }}
+          ref: ${{ github.workflow_sha }}
+          path: .gh-retry
+          persist-credentials: false
+          sparse-checkout: scripts/gh-retry.sh
+          sparse-checkout-cone-mode: false
+
+      - name: Preserve GitHub API tooling across source checkouts
+        run: |
+          cp "$GITHUB_WORKSPACE/.gh-retry/scripts/gh-retry.sh" "$RUNNER_TEMP/gh-retry.sh"
+          echo "GH_RETRY_SCRIPT=$RUNNER_TEMP/gh-retry.sh" >> "$GITHUB_ENV"
+
       # A recovery resets the outage. Cancelled/skipped runs and unfinished
       # newer runs do not reset it, and manual delivery tests always send.
       - name: Detect a continuing outage
@@ -53,7 +68,7 @@ jobs:
           RUN_EVENT: ${{ github.event.workflow_run.event }}
         run: |
           set -euo pipefail
-          previous=$(gh api --method GET "repos/${GITHUB_REPOSITORY}/actions/workflows/${WORKFLOW_ID}/runs" \
+          previous=$(bash "$GH_RETRY_SCRIPT" api --method GET "repos/${GITHUB_REPOSITORY}/actions/workflows/${WORKFLOW_ID}/runs" \
             -f branch="$RUN_BRANCH" -f event="$RUN_EVENT" -f status=completed -f per_page=100 |
             jq -r --argjson number "$RUN_NUMBER" '
               [.workflow_runs[]

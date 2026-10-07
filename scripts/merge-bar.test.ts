@@ -1,16 +1,18 @@
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 import {
   chmodSync,
   existsSync,
   mkdtempSync,
   readFileSync,
+  readdirSync,
   rmSync,
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import * as v from "valibot";
 
 import {
   extractPlanSelector,
@@ -18,6 +20,7 @@ import {
   runPlanScopes,
   runPlanSelector,
 } from "./ci-plan-selector";
+import { pilotFastJobs } from "./ci-pr-pilot-plan";
 import {
   armAndVerify,
   checkEjectedHead,
@@ -36,6 +39,7 @@ import {
   mergeBarRepositoryPolicy,
   mergeWhenReadyAction,
   parseMergeQueueRemovals,
+  pullRequestCheckRuns,
   type RatchetFreshness,
   ratchetFreshnessFor,
   RatchetRecheckError,
@@ -50,7 +54,12 @@ import {
   type MergeQueueRemoval,
   type RunJob,
 } from "./merge-bar";
-import ratchetDefinitionPaths from "./ratchet-definition-paths.json";
+import {
+  parseCiCoverageLog,
+  type CiCoverageEvidence,
+} from "./merge-bar-ci-coverage";
+import { RATCHET_METRICS } from "./ratchet";
+import ratchetDefinitionPaths from "./ratchet-definition-paths.json" with { type: "json" };
 
 // The CLI runs below spawn the real script offline against a fake gh, as a
 // local test run; its source freshness check is covered in
@@ -71,6 +80,7 @@ type MigrationGatewayOptions = {
   repo?: string;
   detailsUrl?: string;
   claTitle?: string;
+  dispatchedCiConclusion?: string;
 };
 
 const runMigrationGateway = (
@@ -80,6 +90,7 @@ const runMigrationGateway = (
     repo = "stella/stella",
     detailsUrl = "https://github.com/stella/stella/actions/runs/1",
     claTitle = "",
+    dispatchedCiConclusion = "",
   }: MigrationGatewayOptions = {},
 ) => {
   const directory = mkdtempSync(path.join(tmpdir(), "merge-bar-files-"));
@@ -111,11 +122,19 @@ case "$*" in
   *reviewThreads*) printf '%s\\n' '{"nodes":[],"pageInfo":{"hasNextPage":false}}';;
   *'api graphql'*) printf '%s\\n' "$FIXTURE_PULL_REQUEST";;
   *rules/branches/main*) printf '%s\\n' '[{"type":"required_status_checks","parameters":{"required_status_checks":[{"context":"ci-result"}]}}]';;
+  *'actions/runs?head_sha='*)
+    printf '7\\t.github/workflows/ci.yml\\tpull_request\\n'
+    if [ -n "$FIXTURE_DISPATCHED_CI" ]; then
+      printf '8\\t.github/workflows/ci.yml\\tworkflow_dispatch\\n'
+    fi;;
   *check-runs/1*) printf '%s\\n' "$FIXTURE_CHECK_RUN";;
   *actions/runs/1*) printf '%s\\n' '{"head_sha":"${HEAD_SHA}","pull_requests":[{"number":123,"head":{"sha":"${HEAD_SHA}"},"base":{"ref":"main","sha":"${OTHER_SHA}"}}]}';;
   *compare/*) printf '%s\\n' '{"status":"identical"}';;
   *check-runs*)
-    printf '1\\tci-result\\tcompleted\\tsuccess\\t\\n'
+    printf '1\\tci-result\\tcompleted\\tsuccess\\t\\t7\\n'
+    if [ -n "$FIXTURE_DISPATCHED_CI" ]; then
+      printf '9\\tci-result\\tcompleted\\t%s\\t\\t8\\n' "$FIXTURE_DISPATCHED_CI"
+    fi
     if [ -n "$FIXTURE_CLA_TITLE" ]; then
       case "$*" in
         *'.output.title'*) printf '2\\tcla\\tcompleted\\tfailure\\t%s\\n' "$FIXTURE_CLA_TITLE";;
@@ -147,6 +166,7 @@ esac
         FIXTURE_PULL_REQUEST: pullRequest,
         FIXTURE_CHECK_RUN: JSON.stringify({ details_url: detailsUrl }),
         FIXTURE_CLA_TITLE: claTitle,
+        FIXTURE_DISPATCHED_CI: dispatchedCiConclusion,
         FIXTURE_FILES: files.map((file) => JSON.stringify(file)).join("\n"),
         FIXTURE_CHANGED_FILES: String(changedFiles),
       },
@@ -167,8 +187,19 @@ const checkRun = (
   name: string,
   status: string,
   conclusion: string | null,
-  { id = 1, outputTitle = "" } = {},
-) => ({ id, name, status, conclusion, outputTitle });
+  {
+    id = 1,
+    outputTitle = "",
+    checkSuiteId,
+  }: { id?: number; outputTitle?: string; checkSuiteId?: number } = {},
+) => ({
+  id,
+  name,
+  status,
+  conclusion,
+  outputTitle,
+  ...(checkSuiteId === undefined ? {} : { checkSuiteId }),
+});
 
 /** A declared repository without stella's migrations or ratchet. */
 const PRIVATE_REPO = "stella/stella-infra";
@@ -212,6 +243,7 @@ case "$*" in
   'variable get STELLA_MERGE_HOLD --repo '*) printf '%s\\n' 'variable STELLA_MERGE_HOLD was not found' >&2; exit 1;;
   *reviewThreads*) printf '%s\\n' '{"nodes":[],"pageInfo":{"hasNextPage":false}}';;
   *rules/branches/main*) printf '%s\\n' '[{"type":"required_status_checks","parameters":{"required_status_checks":[{"context":"Overlay check"}]}}]';;
+  *'actions/runs?head_sha='*) ;;
   *check-runs/1*) printf '%s\\n' '{"details_url":"https://github.com/stella/stella/actions/runs/1"}';;
   *actions/runs/1*) printf '%s\\n' '{"head_sha":"${HEAD_SHA}","pull_requests":[{"number":123,"head":{"sha":"${HEAD_SHA}"},"base":{"ref":"main","sha":"${OTHER_SHA}"}}]}';;
   *compare/*) printf '%s\\n' '{"status":"identical"}';;
@@ -431,6 +463,7 @@ case "$*" in
     printf '%s\\n' '${queue}';;
   *reviewThreads*) printf '%s\\n' '{"nodes":[],"pageInfo":{"hasNextPage":false}}';;
   *rules/branches/main*) printf '%s\\n' '[{"type":"required_status_checks","parameters":{"required_status_checks":[{"context":"ci-result"}]}},{"type":"merge_queue","parameters":{}}]';;
+  *'actions/runs?head_sha='*) ;;
   *check-runs/1*) printf '%s\\n' '{"details_url":"https://github.com/stella/stella/actions/runs/1"}';;
   *actions/runs/1*) printf '%s\\n' '{"head_sha":"${HEAD_SHA}","pull_requests":[{"number":123,"head":{"sha":"${HEAD_SHA}"},"base":{"ref":"main","sha":"${OTHER_SHA}"}}]}';;
   *compare/*) printf '%s\\n' '{"status":"identical"}';;
@@ -519,6 +552,7 @@ case "$*" in
   *REMOVED_FROM_MERGE_QUEUE_EVENT*) printf '%s\\n' '[]';;
   *reviewThreads*) printf '%s\\n' '{"nodes":[],"pageInfo":{"hasNextPage":false}}';;
   *rules/branches/main*) printf '%s\\n' '[{"type":"required_status_checks","parameters":{"required_status_checks":[{"context":"ci-result"}]}},{"type":"merge_queue","parameters":{}}]';;
+  *'actions/runs?head_sha='*) ;;
   *check-runs/1*) printf '%s\\n' '{"details_url":"https://github.com/stella/stella/actions/runs/1"}';;
   *actions/runs/1*) printf '%s\\n' '{"head_sha":"${HEAD_SHA}","pull_requests":[{"number":123,"head":{"sha":"${HEAD_SHA}"},"base":{"ref":"main","sha":"${OTHER_SHA}"}}]}';;
   *compare/*) printf '%s\\n' '{"status":"identical"}';;
@@ -605,6 +639,15 @@ describe("migration file gateway", () => {
     ]);
     expect(withInventory.exitCode).toBe(0);
     expect(withInventory.stdout).toContain("verdict: MERGE (dry run");
+  });
+
+  test("a dispatched CI run on the head does not override the pull request's CI", () => {
+    const result = runMigrationGateway([], {
+      changedFiles: 0,
+      dispatchedCiConclusion: "failure",
+    });
+    expect(result.exitCode).toBe(0);
+    expect(result.stdout).toContain("verdict: MERGE (dry run");
   });
 
   test("a renamed inventory file is recognized as an inventory change", () => {
@@ -1432,6 +1475,78 @@ describe("explicit merge queue jumps", () => {
   });
 });
 
+describe("pull request check runs", () => {
+  const ci = (checkSuiteId: number, event: string) => ({
+    checkSuiteId,
+    path: ".github/workflows/ci.yml",
+    event,
+  });
+
+  test("a dispatched CI run on the same head neither blocks nor passes the pull request", () => {
+    const required = ["ci-result"];
+    const prGreen = checkRun("ci-result", "completed", "success", {
+      id: 10,
+      checkSuiteId: 1,
+    });
+    const dispatchedRed = checkRun("ci-result", "completed", "failure", {
+      id: 20,
+      checkSuiteId: 2,
+    });
+    const workflowRuns = [ci(1, "pull_request"), ci(2, "workflow_dispatch")];
+
+    const judged = pullRequestCheckRuns({
+      checkRuns: [prGreen, dispatchedRed],
+      workflowRuns,
+    });
+    expect(judged).toEqual([prGreen]);
+    expect(
+      requiredChecksSucceeded({
+        checkRuns: judged,
+        requiredCheckRuns: required,
+      }),
+    ).toBe(true);
+
+    const dispatchedGreen = { ...dispatchedRed, conclusion: "success" };
+    const prRed = { ...prGreen, conclusion: "failure" };
+    expect(
+      requiredChecksSucceeded({
+        checkRuns: pullRequestCheckRuns({
+          checkRuns: [prRed, dispatchedGreen],
+          workflowRuns,
+        }),
+        requiredCheckRuns: required,
+      }),
+    ).toBe(false);
+  });
+
+  test("merge-group CI runs and check runs from other workflows are kept", () => {
+    const mergeGroup = checkRun("ci-result", "completed", "success", {
+      id: 30,
+      checkSuiteId: 3,
+    });
+    const cla = checkRun("cla", "completed", "success", {
+      id: 40,
+      checkSuiteId: 4,
+    });
+    const unknownSuite = checkRun("dependency-review", "completed", "success", {
+      id: 50,
+    });
+    expect(
+      pullRequestCheckRuns({
+        checkRuns: [mergeGroup, cla, unknownSuite],
+        workflowRuns: [
+          ci(3, "merge_group"),
+          {
+            checkSuiteId: 4,
+            path: ".github/workflows/cla.yml",
+            event: "workflow_dispatch",
+          },
+        ],
+      }),
+    ).toEqual([mergeGroup, cla, unknownSuite]);
+  });
+});
+
 describe("repository merge hold", () => {
   test.each([
     { checkedByWorkflow: "1", githubActions: "true", expectedReads: 0 },
@@ -1659,6 +1774,7 @@ describe("green result freshness", () => {
     runSelector: () => {
       throw new Error("unexpected plan run");
     },
+    readRunCoverage: () => Result.ok({ profile: "normal-v1" as const }),
     readRunJobs: () => {
       throw new Error("unexpected run jobs read");
     },
@@ -1873,14 +1989,278 @@ describe("green result freshness", () => {
     },
   );
 
+  test("green pilot coverage defers only jobs guarded by the actual pilot predicate", () => {
+    const source = readFileSync(
+      path.join(REPO_ROOT, ".github/workflows/ci.yml"),
+      "utf-8",
+    );
+    const jobs = readFastRequiredJobs(source) ?? [];
+    const fast = pilotFastJobs(Bun.YAML.parse(source));
+    if (fast.status !== "valid") {
+      panic(fast.message);
+    }
+    const deferred = jobs.filter(
+      (job) =>
+        job.pilotGate === "deferred-capable" && !fast.jobs.includes(job.id),
+    );
+    expect(deferred.map((job) => job.id)).toContain("dependency-malware");
+    expect(deferred.map((job) => job.id)).toContain("parser-version-guard");
+    const plan = new Map(
+      jobs.flatMap(({ scope }) =>
+        scope.type === "selector" ? [[scope.variable, true] as const] : [],
+      ),
+    );
+    const completed = jobs
+      .filter((job) => !deferred.includes(job))
+      .map((job) => ({ name: job.id, conclusion: "success" }));
+    const evaluateFreshness = (
+      profile: "normal-v1" | "pilot-fast-v1",
+      runs: readonly RunJob[],
+    ) =>
+      checkGreenResultFreshness({
+        ...readers({ status: "ahead", ahead_by: 1, files: [] }),
+        readBaseWorkflow: () => source,
+        runSelector: () => Result.ok(plan),
+        readRunJobs: () => runs,
+        readRunCoverage: () =>
+          Result.ok(
+            profile === "normal-v1"
+              ? { profile }
+              : { profile, jobs: fast.jobs },
+          ),
+      });
+    expect(evaluateFreshness("pilot-fast-v1", completed).isOk()).toBe(true);
+    const missing = evaluateFreshness(
+      "pilot-fast-v1",
+      completed.filter((job) => job.name !== "ci-tests"),
+    );
+    expect(missing.isErr() && missing.error.message).toContain(
+      "STALE_PLAN: main's CI plan now selects ci-tests",
+    );
+    const normal = evaluateFreshness("normal-v1", completed);
+    expect(normal.isErr() && normal.error.message).toContain(
+      "parser-version-guard",
+    );
+    expect(
+      evaluateFreshness(
+        "normal-v1",
+        jobs.map((job) => ({ name: job.id, conclusion: "success" })),
+      ).isOk(),
+    ).toBe(true);
+  });
+
+  test("every fast-required predicate rejects a planted unmodeled gate", () => {
+    const source = readFileSync(
+      path.join(REPO_ROOT, ".github/workflows/ci.yml"),
+      "utf-8",
+    );
+    const original = readFastRequiredJobs(source) ?? [];
+    expect(original.length).toBeGreaterThan(0);
+    for (const job of original) {
+      const workflow = v.parse(
+        v.record(v.string(), v.unknown()),
+        Bun.YAML.parse(source),
+      );
+      const jobs = v.parse(v.record(v.string(), v.unknown()), workflow["jobs"]);
+      const body = v.parse(v.record(v.string(), v.unknown()), jobs[job.id]);
+      jobs[job.id] = body;
+      workflow["jobs"] = jobs;
+      body["if"] =
+        `(${v.parse(v.string(), body["if"])}) && vars.UNMODELED_GATE == 'on'`;
+      expect(
+        () => readFastRequiredJobs(JSON.stringify(workflow)),
+        job.id,
+      ).toThrow(`Unmodeled fast-required predicate: ${job.id}`);
+      const condition = v.parse(v.string(), body["if"]);
+      const contexts = [
+        ...new Set(
+          Array.from(
+            condition.matchAll(
+              /(?:needs\.ci-plan\.outputs\.\w+|inputs\.heavy_only|github\.event_name)/gu,
+            ),
+            (match) => match[0],
+          ),
+        ),
+      ];
+      expect(contexts.length, job.id).toBeGreaterThan(0);
+      for (const gate of contexts) {
+        body["if"] = condition
+          .replaceAll(gate, "vars.UNMODELED_GATE")
+          .replace(" && vars.UNMODELED_GATE == 'on'", "");
+        expect(
+          () => readFastRequiredJobs(JSON.stringify(workflow)),
+          `${job.id}: ${gate}`,
+        ).toThrow(`Unmodeled fast-required predicate: ${job.id}`);
+      }
+    }
+  });
+
+  test("coverage log parsing retains the zero super-linear-regex budget", () => {
+    const metric = RATCHET_METRICS.find(
+      (entry) => entry.id === "super-linear-regexes",
+    );
+    if (metric?.scope !== "file" || metric.measurement !== undefined) {
+      panic("Missing super-linear regex file metric");
+    }
+    const file = "scripts/merge-bar-ci-coverage.ts";
+    const legacy = String.raw`const entry = /^\s+([A-Z_]+):\s*(.*)$/u;`;
+    expect(metric.count(legacy, { file })).toBe(1);
+    expect(
+      metric.count(readFileSync(path.join(REPO_ROOT, file), "utf-8"), { file }),
+    ).toBe(0);
+  });
+
+  test("coverage evidence follows timestamped entries across raw multiline values", () => {
+    const log = `2000-01-01T00:00:00.0000000Z ##[group]Run neutral command
+2000-01-01T00:00:00.0000000Z env:
+2000-01-01T00:00:00.0000000Z   NEEDS: {
+  "neutral": {
+    "result": "success"
+  }
+}
+2000-01-01T00:00:00.0000000Z   MULTILINE: neutral
+  COVERAGE_PROFILE: normal-v1
+  PILOT_FAST_JOBS: []
+##[endgroup]
+env:
+2000-01-01T00:00:00.0000000Z   COVERAGE_PROFILE: pilot-fast-v1
+2000-01-01T00:00:00.0000000Z   PILOT_FAST_JOBS: ["ci-tests"]
+2000-01-01T00:00:00.0000000Z ##[endgroup]
+`;
+    const result = parseCiCoverageLog(log);
+    expect(result.isOk() && result.value).toEqual({
+      profile: "pilot-fast-v1",
+      jobs: ["ci-tests"],
+    });
+    const forged = log.replace(
+      "2000-01-01T00:00:00.0000000Z   COVERAGE_PROFILE: pilot-fast-v1\n",
+      "",
+    );
+    expect(parseCiCoverageLog(forged).isErr()).toBe(true);
+    const continued = log.replace(
+      "  COVERAGE_PROFILE: pilot-fast-v1\n",
+      "  COVERAGE_PROFILE: pilot-fast-v1\ninvalid continuation\n",
+    );
+    expect(parseCiCoverageLog(continued).isErr()).toBe(true);
+  });
+
+  test("every saved real CI-result log yields its declared coverage evidence", () => {
+    const pilot = {
+      profile: "pilot-fast-v1",
+      jobs: [
+        "ci-checks-docs",
+        "ci-checks-generated",
+        "ci-checks-policy",
+        "ci-checks-rest",
+        "ci-generated-sources",
+        "ci-plan",
+        "ci-result",
+        "ci-tests",
+        "code-quality-api",
+        "code-quality-rest",
+        "code-quality-web",
+        "typecheck-baseline",
+      ],
+    } satisfies CiCoverageEvidence;
+    const expected = {
+      "merge-bar-coverage-pilot-pr-37632840538.log": pilot,
+      "merge-bar-coverage-pilot-pr-37636655670.log": pilot,
+      "merge-bar-coverage-normal-arm-37635149518.log": { profile: "normal-v1" },
+      "merge-bar-coverage-merge-group-37635202900.log": {
+        profile: "normal-v1",
+      },
+      "merge-bar-coverage-merge-group-37635199875.log": {
+        profile: "normal-v1",
+      },
+      // Retain the previously saved single-line env envelope too.
+      "merge-bar-pilot-coverage.log": pilot,
+    } satisfies Record<string, CiCoverageEvidence>;
+    const directory = path.join(REPO_ROOT, "scripts/fixtures");
+    expect(
+      readdirSync(directory)
+        .filter(
+          (file) =>
+            file.startsWith("merge-bar-coverage-") ||
+            file === "merge-bar-pilot-coverage.log",
+        )
+        .toSorted(),
+    ).toEqual(Object.keys(expected).toSorted());
+    for (const [file, evidence] of Object.entries(expected)) {
+      const result = parseCiCoverageLog(
+        readFileSync(path.join(directory, file), "utf-8"),
+      );
+      expect(
+        result.isOk(),
+        `${file}: ${result.isErr() ? result.error.message : ""}`,
+      ).toBe(true);
+      expect(result.isOk() && result.value, file).toEqual(evidence);
+    }
+  });
+
+  test("CI result coverage evidence reads producer-shaped environment logs", () => {
+    const log = (
+      profile: string,
+      jobs: string,
+    ) => `2000-01-01T00:00:00.0000000Z ##[group]Run if [[ "$QUEUE_DEPTH" == thin ]]; then
+2000-01-01T00:00:00.0000000Z shell: /usr/bin/bash -e {0}
+2000-01-01T00:00:00.0000000Z env:
+2000-01-01T00:00:00.0000000Z   COVERAGE_PROFILE: ${profile}
+2000-01-01T00:00:00.0000000Z   PILOT_FAST_JOBS: ${jobs}
+2000-01-01T00:00:00.0000000Z ##[endgroup]
+`;
+    const pilot = parseCiCoverageLog(
+      readFileSync(
+        path.join(REPO_ROOT, "scripts/fixtures/merge-bar-pilot-coverage.log"),
+        "utf-8",
+      ),
+    );
+    expect(pilot.isOk(), pilot.isErr() ? pilot.error.message : "").toBe(true);
+    expect(pilot.isOk() && pilot.value).toEqual({
+      profile: "pilot-fast-v1",
+      jobs: [
+        "ci-checks-docs",
+        "ci-checks-generated",
+        "ci-checks-policy",
+        "ci-checks-rest",
+        "ci-generated-sources",
+        "ci-plan",
+        "ci-result",
+        "ci-tests",
+        "code-quality-api",
+        "code-quality-rest",
+        "code-quality-web",
+        "typecheck-baseline",
+      ],
+    });
+    expect(parseCiCoverageLog(log("normal-v1", "")).isOk()).toBe(true);
+    for (const malformed of [
+      "",
+      log("unknown", "[]"),
+      log("pilot-fast-v1", "[]"),
+      log("pilot-fast-v1", '["ci-tests","ci-tests"]'),
+      log("pilot-fast-v1", "invalid"),
+      log("pilot-fast-v1", '["ci-tests"]') + log("normal-v1", "[]"),
+    ]) {
+      expect(parseCiCoverageLog(malformed).isErr()).toBe(true);
+    }
+  });
+
   test("main's real gate maps fast-required jobs to how they are planned", () => {
     const jobs =
       readFastRequiredJobs(
         readFileSync(path.join(REPO_ROOT, ".github/workflows/ci.yml"), "utf-8"),
       ) ?? [];
     const byId = new Map(jobs.map((job) => [job.id, job]));
-    expect(byId.get("ci-checks-generated")?.scope).toEqual({ type: "always" });
-    expect(byId.get("parser-version-guard")?.scope).toEqual({ type: "always" });
+    for (const job of ["ci-checks-generated", "parser-version-guard"]) {
+      expect(byId.get(job)?.scope).toEqual({
+        type: "selector",
+        variable: "package_checks_required",
+      });
+    }
+    expect(byId.get("ci-checks-docs")?.scope).toEqual({
+      type: "selector",
+      variable: "docs_checks_required",
+    });
     for (const job of [
       "e2e-production-shard",
       "marketing-screenshots",
@@ -1905,10 +2285,13 @@ describe("green result freshness", () => {
       selector: extractPlanSelector(
         readFileSync(path.join(REPO_ROOT, ".github/workflows/ci.yml"), "utf-8"),
       ),
-      files: ["docs/example.md"],
+      // This census checks output completeness. Markdown behavior has its
+      // own scope tests and need not load the reader inventory here.
+      files: ["scripts/merge-bar.ts"],
       outputs,
       cwd: REPO_ROOT,
     });
+    expect(plan.isOk(), plan.isErr() ? plan.error.message : "").toBe(true);
     expect(plan.isOk() && [...plan.value.keys()]).toEqual(outputs);
   });
 
@@ -2573,6 +2956,7 @@ case "$*" in
   *commits/main*) printf '%s\\n' "$FIXTURE_MAIN_TIP";;
   *reviewThreads*) printf '%s\\n' '{"nodes":[],"pageInfo":{"hasNextPage":false}}';;
   *rules/branches/main*) printf '%s\\n' '[{"type":"required_status_checks","parameters":{"required_status_checks":[{"context":"ci-result"}]}},{"type":"merge_queue","parameters":{}}]';;
+  *'actions/runs?head_sha='*) ;;
   *check-runs/1*) printf '%s\\n' '{"details_url":"https://github.com/stella/stella-infra/actions/runs/1"}';;
   *actions/runs/1*) printf '%s\\n' '{"head_sha":"${HEAD_SHA}","pull_requests":[{"number":123,"head":{"sha":"${HEAD_SHA}"},"base":{"ref":"main","sha":"${OTHER_SHA}"}}]}';;
   *compare/*) printf '%s\\n' '{"status":"identical"}';;
@@ -2840,6 +3224,7 @@ case "$*" in
   *actions/runs/1/jobs*) printf '%s\\n' "$FIXTURE_RUN_JOBS";;
   *reviewThreads*) printf '%s\\n' '{"nodes":[],"pageInfo":{"hasNextPage":false}}';;
   *rules/branches/main*) printf '%s\\n' '[{"type":"required_status_checks","parameters":{"required_status_checks":[{"context":"ci-result"}]}},{"type":"merge_queue","parameters":{}}]';;
+  *'actions/runs?head_sha='*) ;;
   *check-runs/1*) printf '%s\\n' '{"details_url":"https://github.com/stella/stella-infra/actions/runs/1"}';;
   *actions/runs/1*) printf '%s\\n' '{"id":1,"head_sha":"${HEAD_SHA}","pull_requests":[{"number":123,"head":{"sha":"${HEAD_SHA}"},"base":{"ref":"main","sha":"${OTHER_SHA}"}}]}';;
   *compare/*) printf '%s\\n' "$FIXTURE_COMPARISON";;
@@ -3579,6 +3964,7 @@ case "$*" in
   *timelineItems*) printf '%s\\n' '[]';;
   *reviewThreads*) printf '%s\\n' '{"nodes":[],"pageInfo":{"hasNextPage":false}}';;
   *rules/branches/main*) printf '%s\\n' '[{"type":"required_status_checks","parameters":{"required_status_checks":[{"context":"ci-result"}]}},{"type":"merge_queue","parameters":{}}]';;
+  *'actions/runs?head_sha='*) ;;
   *check-runs*) printf '1\\tci-result\\tin_progress\\t\\n';;
   *updatedAt*)
     printf '%s\\n' arm-read >> "$FIXTURE_CALLS"
@@ -3681,6 +4067,7 @@ case "$*" in
   *timelineItems*) printf '%s\\n' '[]';;
   *reviewThreads*) printf '%s\\n' '{"nodes":[],"pageInfo":{"hasNextPage":false}}';;
   *rules/branches/main*) printf '%s\\n' '[{"type":"required_status_checks","parameters":{"required_status_checks":[{"context":"ci-result"}]}},{"type":"merge_queue","parameters":{}}]';;
+  *'actions/runs?head_sha='*) ;;
   *check-runs*) printf '1\\tci-result\\tin_progress\\t\\n';;
   *updatedAt*) printf '%s\\n' "$FIXTURE_ARM_RESPONSE";;
   *'api graphql'*) printf '%s\\n' "$FIXTURE_PULL_RESPONSE";;
