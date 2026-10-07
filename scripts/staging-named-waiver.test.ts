@@ -205,7 +205,7 @@ test("the sole named waiver validates before checkout and derives its downstream
     workflow.on.workflow_dispatch.inputs,
   );
   expect(inputs.waive_check.options).toEqual(["none", "corpus-search"]);
-  expect(workflow.jobs["resolve"]?.steps?.at(0)?.id).toBe("waiver");
+  expect(workflow.jobs["resolve"]?.steps?.at(1)?.id).toBe("waiver");
   expect(workflow.jobs["resolve"]?.outputs?.["corpus_search_waived"]).toBe(
     `\${{ steps.waiver.outputs.corpus_search_waived }}`,
   );

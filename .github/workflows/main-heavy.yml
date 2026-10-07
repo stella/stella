@@ -8,6 +8,11 @@ on:
     - cron: "17 * * * *"
   workflow_dispatch:
     inputs:
+      release_candidate:
+        description: "Validate the pending release VERSION before running this pinned gate"
+        required: false
+        type: boolean
+        default: false
       sha:
         description: Full lowercase commit SHA already on main
         required: true
@@ -37,6 +42,26 @@ jobs:
       sha: ${{ steps.ancestor.outputs.sha }}
       run: ${{ steps.selection.outputs.run }}
     steps:
+      - name: Check release candidate
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.sha != '' && inputs.release_candidate == true }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+          SERVER_URL: ${{ github.server_url }}
+          REQUESTED_SHA: ${{ inputs.sha }}
+        run: |
+          set -euo pipefail
+          directory="$RUNNER_TEMP/release-candidate-validation"
+          mkdir -p "$directory"
+          git -C "$directory" init
+          git -C "$directory" remote add origin "$SERVER_URL/$REPOSITORY.git"
+          auth=$(printf 'x-access-token:%s' "$GH_TOKEN" | base64 | tr -d '\n')
+          echo "::add-mask::$auth"
+          git -C "$directory" -c "http.extraheader=AUTHORIZATION: basic $auth" fetch --tags origin main:refs/remotes/origin/main
+          git -C "$directory" show origin/main:scripts/check-release-candidate.sh > "$RUNNER_TEMP/check-release-candidate.sh"
+          cd "$directory"
+          bash "$RUNNER_TEMP/check-release-candidate.sh" "$REQUESTED_SHA"
+
       - name: Validate merge queue depth
         env:
           MERGE_QUEUE_DEPTH: ${{ vars.MERGE_QUEUE_DEPTH }}
@@ -76,7 +101,7 @@ jobs:
               ? "Main has an untested heavy SHA; running suites."
               : "Main heavy SHA is unchanged; skipping suites.").write();
 
-      # No repository code executes before the target has been validated.
+      # Suite code only executes after the target has been validated.
       - name: Validate SHA format
         if: steps.selection.outputs.run == 'true'
         env:
