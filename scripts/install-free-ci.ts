@@ -36,7 +36,10 @@
 import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 
-import { synchronizeWorkflowBackgroundSteps } from "./workflow-steps";
+import {
+  mergeWorkflowParallelProofs,
+  synchronizeWorkflowBackgroundSteps,
+} from "./workflow-steps";
 
 export type Classification =
   /** Files Bun loads: a script, test files and preloads. */
@@ -1460,6 +1463,7 @@ const stepTitle = (step: Record<string, unknown>, position: number): string => {
 };
 
 type WalkStepsOptions = {
+  readonly cancelled?: ReadonlySet<string>;
   readonly context: ClassifyContext;
   readonly defaults: StepDefaults;
   readonly initial: readonly InstallRecord[];
@@ -1476,12 +1480,13 @@ type WalkStepsResult = {
 };
 
 type WalkParallelStepsOptions = {
+  readonly cancelled: ReadonlySet<string>;
   readonly context: ClassifyContext;
   readonly defaults: StepDefaults;
   readonly initial: readonly InstallRecord[];
   readonly job: string;
   readonly prefix: string;
-  readonly pending: ReadonlyMap<string, readonly InstallRecord[]>;
+  readonly pending: Map<string, InstallRecord[]>;
   readonly siblings: readonly unknown[];
 };
 
@@ -1491,6 +1496,7 @@ type WalkParallelStepsResult = {
 };
 
 const walkParallelSteps = ({
+  cancelled,
   context,
   defaults,
   initial,
@@ -1499,34 +1505,32 @@ const walkParallelSteps = ({
   pending,
   siblings,
 }: WalkParallelStepsOptions): WalkParallelStepsResult => {
-  const before = initial.length;
-  const pendingBefore = new Map(
-    [...pending].map(([id, records]) => [id, records.length]),
-  );
-  const additions: InstallRecord[] = [];
   const invocations: InstallFreeInvocation[] = [];
-  for (const sibling of siblings) {
-    const branchPending = new Map(
-      [...pending].map(([id, records]) => [id, [...records]]),
-    );
-    const branch = walkSteps({
-      context,
-      defaults,
-      initial,
-      job,
+  const additions = mergeWorkflowParallelProofs({
+    steps: siblings,
+    installs: initial,
+    pending,
+    cancelled,
+    walk: ({
+      step,
+      installs,
       pending: branchPending,
-      prefix,
-      steps: [sibling],
-    });
-    invocations.push(...branch.invocations);
-    additions.push(...branch.installs.slice(before));
-    for (const [id, records] of branch.pending) {
-      const priorCount = pendingBefore.get(id) ?? 0;
-      if (records.length > priorCount) {
-        additions.push(...records.slice(priorCount));
-      }
-    }
-  }
+      cancelled: branchCancelled,
+    }) => {
+      const branch = walkSteps({
+        cancelled: branchCancelled,
+        context,
+        defaults,
+        initial: installs,
+        job,
+        pending: branchPending,
+        prefix,
+        steps: [step],
+      });
+      invocations.push(...branch.invocations);
+      return branch.installs;
+    },
+  });
   return { installs: additions, invocations };
 };
 
@@ -1655,6 +1659,7 @@ const walkWorkflowStep = ({
 };
 
 const walkSteps = ({
+  cancelled = new Set<string>(),
   context,
   defaults,
   initial,
@@ -1688,6 +1693,7 @@ const walkSteps = ({
         continue;
       }
       const parallel = walkParallelSteps({
+        cancelled,
         context,
         defaults,
         initial: installs,

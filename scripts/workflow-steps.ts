@@ -122,3 +122,83 @@ export const synchronizeWorkflowBackgroundSteps = <Proof>(
   }
   return completed;
 };
+
+type WorkflowParallelBranch<Proof> = {
+  readonly step: unknown;
+  readonly installs: Proof[];
+  readonly pending: Map<string, Proof[]>;
+  readonly cancelled: ReadonlySet<string>;
+};
+
+type MergeWorkflowParallelProofsOptions<Proof> = {
+  readonly steps: readonly unknown[];
+  readonly installs: readonly Proof[];
+  readonly pending: Map<string, Proof[]>;
+  readonly cancelled: ReadonlySet<string>;
+  readonly walk: (branch: WorkflowParallelBranch<Proof>) => readonly Proof[];
+};
+
+/** Join isolated branches; any sibling cancellation invalidates that id's proof. */
+export const mergeWorkflowParallelProofs = <Proof>({
+  steps,
+  installs,
+  pending,
+  cancelled: inheritedCancelled,
+  walk,
+}: MergeWorkflowParallelProofsOptions<Proof>): Proof[] => {
+  const cancelled = new Set(inheritedCancelled);
+  const remaining = [...steps];
+  while (remaining.length > 0) {
+    const step = remaining.pop();
+    if (typeof step !== "object" || step === null || Array.isArray(step)) {
+      continue;
+    }
+    if ("cancel" in step && typeof step.cancel === "string") {
+      cancelled.add(step.cancel);
+    }
+    if (
+      Object.keys(step).length === 1 &&
+      "parallel" in step &&
+      Array.isArray(step.parallel)
+    ) {
+      remaining.push(...step.parallel);
+    }
+  }
+  // Gather first: a wait sibling must never certify work canceled by another branch.
+  for (const id of cancelled) {
+    pending.delete(id);
+  }
+  const before = installs.length;
+  const pendingBefore = new Map(
+    [...pending].map(([id, records]) => [id, records.length]),
+  );
+  const additions: Proof[] = [];
+  for (const step of steps) {
+    const branchPending = new Map(
+      [...pending].map(([id, records]) => [id, [...records]]),
+    );
+    const branch = walk({
+      step,
+      installs: [...installs],
+      pending: branchPending,
+      cancelled,
+    });
+    const cancelledStep =
+      typeof step === "object" &&
+      step !== null &&
+      "id" in step &&
+      typeof step.id === "string" &&
+      cancelled.has(step.id);
+    if (!cancelledStep) {
+      additions.push(...branch.slice(before));
+    }
+    for (const [id, records] of branchPending) {
+      if (cancelled.has(id)) {
+        continue;
+      }
+      const priorCount = pendingBefore.get(id) ?? 0;
+      additions.push(...records.slice(priorCount));
+    }
+  }
+  return additions;
+};

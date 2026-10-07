@@ -16,6 +16,7 @@ import {
 import { readStringLiterals } from "./test-input-readers";
 import {
   flattenWorkflowSteps,
+  mergeWorkflowParallelProofs,
   synchronizeWorkflowBackgroundSteps,
 } from "./workflow-steps";
 
@@ -674,6 +675,7 @@ type RunnerStepContext = {
 };
 
 type WalkRunnerStepsOptions = {
+  readonly cancelled?: ReadonlySet<string>;
   readonly context: RunnerStepContext;
   readonly entries: unknown[];
   readonly prefix: string;
@@ -711,6 +713,7 @@ const deferRunnerBackgroundInstalls = ({
 };
 
 const walkRunnerSteps = ({
+  cancelled = new Set<string>(),
   context: state,
   entries,
   prefix,
@@ -753,6 +756,7 @@ const walkRunnerSteps = ({
         continue;
       }
       walkRunnerParallelSteps({
+        cancelled,
         siblings: step["parallel"],
         context: state,
         prefix: `${prefix}parallel-${index}/`,
@@ -887,6 +891,7 @@ const walkRunnerSteps = ({
 };
 
 type WalkRunnerParallelStepsOptions = {
+  readonly cancelled: ReadonlySet<string>;
   readonly siblings: readonly unknown[];
   readonly context: RunnerStepContext;
   readonly prefix: string;
@@ -897,6 +902,7 @@ type WalkRunnerParallelStepsOptions = {
 };
 
 const walkRunnerParallelSteps = ({
+  cancelled,
   siblings,
   context,
   prefix,
@@ -905,33 +911,25 @@ const walkRunnerParallelSteps = ({
   availableInstalls,
   availablePending,
 }: WalkRunnerParallelStepsOptions) => {
-  const before = availableInstalls.length;
-  const pendingBefore = new Map(
-    [...availablePending].map(([id, records]) => [id, records.length]),
-  );
-  const additions: Install[] = [];
-  for (const sibling of siblings) {
-    const branch = [...availableInstalls];
-    const branchPending = new Map(
-      [...availablePending].map(([id, records]) => [id, [...records]]),
-    );
-    walkRunnerSteps({
-      context,
-      entries: [sibling],
-      prefix,
-      parent,
-      owner,
-      availableInstalls: branch,
-      availablePending: branchPending,
-    });
-    additions.push(...branch.slice(before));
-    for (const [id, records] of branchPending) {
-      const priorCount = pendingBefore.get(id) ?? 0;
-      if (records.length > priorCount) {
-        additions.push(...records.slice(priorCount));
-      }
-    }
-  }
+  const additions = mergeWorkflowParallelProofs({
+    steps: siblings,
+    installs: availableInstalls,
+    pending: availablePending,
+    cancelled,
+    walk: ({ step, installs, pending, cancelled: branchCancelled }) => {
+      walkRunnerSteps({
+        cancelled: branchCancelled,
+        context,
+        entries: [step],
+        prefix,
+        parent,
+        owner,
+        availableInstalls: installs,
+        availablePending: pending,
+      });
+      return installs;
+    },
+  });
   availableInstalls.push(...additions);
 };
 
