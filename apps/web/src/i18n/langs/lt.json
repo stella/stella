@@ -349,6 +349,7 @@
     },
     "view": {
       "chooseList": "Pasirinkti sąrašą",
+      "createList": "Sukurti sąrašą",
       "evidenceList": "Faktai iš",
       "noLists": "Šioje byloje nėra sąrašų.",
       "pickList": "Pasirinkite sąrašą, pagal kurio faktus tikrinami šios bylos dokumentai."
@@ -1700,6 +1701,7 @@
     "deletedCount": "{count, plural, one {# elementas ištrintas} few {# elementai ištrinti} other {# elementų ištrinta}}",
     "description": "Aprašymas",
     "details": "Detalės",
+    "detailsHiddenFeatureUnavailable": "Išsami informacija paslėpta: funkcija neįjungta",
     "disconnect": "Atjungti",
     "dismiss": "Atmesti",
     "displayName": "Rodomas vardas",
@@ -5340,7 +5342,6 @@
       "noLanguagesFound": "Kalbų nerasta",
       "notConfigured": "DeepL nesukonfigūruotas šiai organizacijai. Norėdami įjungti vertimą, organizacijos nustatymuose pridėkite DeepL API raktą.",
       "outputLabel": "Vertimo tipas",
-      "progress": "Vertimo eiga",
       "progressCount": "Atlikta {completed} iš {total}",
       "providerUnavailable": "Vertimo paslauga nepasiekiama. Bandykite vėliau dar kartą arba susisiekite su administratoriumi.",
       "runFailed": "Vertimo nepavyko užbaigti.",

@@ -810,14 +810,17 @@ const hasPersistedActiveDraftChatBinding = ({
     );
   });
 
-const fallback = (
-  <div
-    className="pointer-events-none absolute inset-x-0 bottom-8 flex justify-center"
-    aria-busy="true"
-  >
-    <Loader label={getTranslator()("common.loading")} size="sm" />
-  </div>
-);
+const FileChatFallback = () => {
+  const t = useTranslations("common");
+  return (
+    <div
+      className="pointer-events-none absolute inset-x-0 bottom-8 flex justify-center"
+      aria-busy="true"
+    >
+      <Loader label={t("loading")} size="sm" />
+    </div>
+  );
+};
 
 export const FileChatOverlay = ({
   workspaceId,
@@ -848,7 +851,7 @@ export const FileChatOverlay = ({
     }
 
     return (
-      <Suspense fallback={fallback}>
+      <Suspense fallback={<FileChatFallback />}>
         <ResolvedFileChatOverlay
           activeFile={{ ...activeFile, fileFieldId }}
           draftPersistence={draftPersistence}
@@ -866,7 +869,7 @@ export const FileChatOverlay = ({
   }
 
   return (
-    <Suspense fallback={fallback}>
+    <Suspense fallback={<FileChatFallback />}>
       <FileChatOverlayInner
         activeExternal={activeExternal}
         activeDraft={activeDraft}

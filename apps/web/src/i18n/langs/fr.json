@@ -349,6 +349,7 @@
     },
     "view": {
       "chooseList": "Choisir une liste",
+      "createList": "Créer une liste",
       "evidenceList": "Faits de",
       "noLists": "Ce dossier n’a aucune liste.",
       "pickList": "Choisissez la liste dont les faits servent à vérifier les documents de ce dossier."
@@ -1700,6 +1701,7 @@
     "deletedCount": "{count, plural, one {# élément supprimé} other {# éléments supprimés}}",
     "description": "Description",
     "details": "Détails",
+    "detailsHiddenFeatureUnavailable": "Détails masqués : fonctionnalité non activée",
     "disconnect": "Déconnecter",
     "dismiss": "Ignorer",
     "displayName": "Nom affiché",
@@ -5340,7 +5342,6 @@
       "noLanguagesFound": "Aucune langue trouvée",
       "notConfigured": "DeepL n'est pas configuré pour cette organisation. Ajoutez une clé API DeepL dans les paramètres de l'organisation pour activer la traduction.",
       "outputLabel": "Type de traduction",
-      "progress": "Progression de la traduction",
       "progressCount": "{completed} sur {total} terminés",
       "providerUnavailable": "Le service de traduction est indisponible. Réessayez plus tard ou contactez votre administrateur.",
       "runFailed": "La traduction n'a pas pu être terminée.",

@@ -352,6 +352,7 @@ type Messages = {
     };
     "view": {
       "chooseList": "Choose a list";
+      "createList": "Create a list";
       "evidenceList": "Facts from";
       "noLists": "This matter has no lists";
       "pickList": "Choose the list whose facts this matter's documents are checked against.";
@@ -1703,6 +1704,7 @@ type Messages = {
     "deletedCount": "{count, plural, one {# item} other {# items}} deleted";
     "description": "Description";
     "details": "Details";
+    "detailsHiddenFeatureUnavailable": "Details hidden: feature not enabled";
     "disconnect": "Disconnect";
     "dismiss": "Dismiss";
     "displayName": "Display name";
@@ -5343,7 +5345,6 @@ type Messages = {
       "noLanguagesFound": "No languages found";
       "notConfigured": "DeepL is not configured for this organisation. Add a DeepL API key in organisation settings to enable translation.";
       "outputLabel": "Translation type";
-      "progress": "Translation progress";
       "progressCount": "{completed} of {total} completed";
       "providerUnavailable": "The translation service is unavailable. Try again later or contact your administrator.";
       "runFailed": "The translation could not be completed.";

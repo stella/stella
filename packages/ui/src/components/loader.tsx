@@ -16,16 +16,16 @@ const Loader = ({
   ...props
 }: LoaderProps) => (
   <span
-    {...props}
-    aria-busy={variant === "status" ? true : undefined}
-    aria-hidden={variant === "decorative" ? true : undefined}
-    aria-label={label}
     className={cn(
       "inline-flex shrink-0 items-center justify-center",
       LOADER_SIZE[size],
       className,
     )}
     data-slot="loader"
+    {...props}
+    aria-busy={variant === "status" ? true : undefined}
+    aria-hidden={variant === "decorative" ? true : undefined}
+    aria-label={label}
     role={variant === "status" ? "status" : undefined}
   >
     <LoaderMark />

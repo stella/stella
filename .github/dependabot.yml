@@ -357,6 +357,18 @@ updates:
           - "major"
     versioning-strategy: increase
     ignore:
+      # Remove when @tanstack/ai-anthropic accepts a newer SDK.
+      - dependency-name: "@anthropic-ai/sdk"
+        versions:
+          - ">=0.98"
+      # Remove when @tanstack/ai-openai accepts a newer SDK.
+      - dependency-name: "openai"
+        versions:
+          - ">=7"
+      # Remove when @tanstack/ai-openrouter accepts a newer SDK.
+      - dependency-name: "@openrouter/sdk"
+        versions:
+          - ">=0.14"
       # Remove when the streamdown math renderer and markdown editor move to KaTeX 0.17+.
       - dependency-name: "katex"
         versions:

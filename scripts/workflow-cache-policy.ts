@@ -1,6 +1,8 @@
 // This classification owns both cache prohibition and raw Bun setup eligibility.
 // Existing cold-scanner wiring and explicit no-cache runtime inputs are contracts,
 // not a separate list of exempt workflow/job names.
+import { flattenWorkflowSteps } from "./workflow-steps";
+
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
 
@@ -99,7 +101,7 @@ const hasPublishToken = (workflow: unknown, job: unknown) => {
 const hasArtifactStep = (job: unknown, operation: string) =>
   isRecord(job) &&
   Array.isArray(job["steps"]) &&
-  job["steps"].some(
+  flattenWorkflowSteps(job["steps"]).some(
     (step: unknown) =>
       isRecord(step) &&
       typeof step["uses"] === "string" &&
@@ -167,7 +169,7 @@ export const jobCachePolicy = ({ workflow, job }: JobCachePolicyOptions) => {
   if (usesDefaultCacheScope(workflow)) {
     return "default-scope";
   }
-  const steps = Array.isArray(job["steps"]) ? job["steps"] : [];
+  const steps = flattenWorkflowSteps(job["steps"] ?? []);
   if (
     steps.some(
       (step: unknown) =>
@@ -221,7 +223,7 @@ export const workflowCacheProblems = (workflow: unknown): string[] => {
             `job '${name}' calls ${reusable}, which is not reviewed for cache use`,
           ];
     }
-    const steps = Array.isArray(job["steps"]) ? job["steps"] : [];
+    const steps = flattenWorkflowSteps(job["steps"] ?? []);
     return steps.flatMap((step: unknown) => {
       if (!isRecord(step)) {
         return [];

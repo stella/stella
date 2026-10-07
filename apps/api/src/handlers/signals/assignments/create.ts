@@ -2,6 +2,7 @@ import { Result } from "better-result";
 
 import { SIGNAL_STATUS } from "@stll/api-contract/signals";
 
+import { resultTx } from "@/api/db/safe-db";
 import {
   assignBodySchema,
   signalParamsSchema,
@@ -13,11 +14,13 @@ import {
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { withVisibleSignal } from "@/api/lib/signals/proofs/signal-visible-to";
 import {
   canTriageSignals,
   loadVisibleSignal,
   serializeSignal,
 } from "@/api/lib/signals/read";
+import { lockOrgUserIdsForAssignment } from "@/api/lib/validated-org-user-id";
 
 const config = {
   description:
@@ -48,58 +51,63 @@ const assignSignal = createSafeRootHandler(
   }) {
     const organizationId = session.activeOrganizationId;
     const canTriage = canTriageSignals(memberRole);
-    const existing = yield* yield* loadVisibleSignal({
-      safeDb,
-      organizationId,
-      canTriage,
-      signalId: params.signalId,
-    });
     const assigneeUserId = body.assigneeUserId;
-    if (assigneeUserId) {
-      const orgMember = yield* Result.await(
-        safeDb((tx) =>
-          tx.query.member.findFirst({
-            where: {
-              userId: { eq: assigneeUserId },
-              organizationId: { eq: organizationId },
-            },
-            columns: { id: true },
-          }),
-        ),
-      );
-      if (!orgMember) {
-        return Result.err(
-          new HandlerError({
-            status: 400,
-            message: "Assignee is not a member of this organization",
-          }),
-        );
-      }
-    }
-    const transition = yield* Result.await(
-      safeDb(
-        async (tx) =>
-          await transitionSignal({
-            tx,
+
+    yield* Result.await(
+      resultTx(safeDb, async (transaction) =>
+        withVisibleSignal(
+          {
+            tx: transaction,
             organizationId,
-            signalId: params.signalId,
             actorUserId: user.id,
-            from: [SIGNAL_STATUS.NEW, SIGNAL_STATUS.SNOOZED],
-            set: { assigneeUserId: body.assigneeUserId },
-            event: {
-              type: SIGNAL_EVENT_TYPE.ASSIGNED,
-              payload: { assigneeUserId: body.assigneeUserId },
-            },
-            audit: {
-              recordAuditEvent,
-              workspaceId: existing.workspaceId,
-              previousStatus: existing.status,
-              metadata: { kind: existing.kind, scoutKey: existing.scoutKey },
-            },
-          }),
+            memberRole,
+            signalId: params.signalId,
+          },
+          async ({
+            tx,
+            signal,
+            actor,
+            proof,
+            existing,
+          }): Promise<Result<undefined, HandlerError<400 | 409>>> => {
+            if (assigneeUserId) {
+              const orgMember = await lockOrgUserIdsForAssignment({
+                tx: tx.value,
+                userIds: [assigneeUserId],
+                organizationId,
+              });
+              if (!orgMember) {
+                return Result.err(
+                  new HandlerError({
+                    status: 400,
+                    message: "Assignee is not a member of this organization",
+                  }),
+                );
+              }
+            }
+
+            return await transitionSignal({
+              tx,
+              visibility: proof,
+              signalId: signal,
+              actorUserId: actor,
+              from: [SIGNAL_STATUS.NEW, SIGNAL_STATUS.SNOOZED],
+              set: { assigneeUserId: body.assigneeUserId },
+              event: {
+                type: SIGNAL_EVENT_TYPE.ASSIGNED,
+                payload: { assigneeUserId: body.assigneeUserId },
+              },
+              audit: {
+                recordAuditEvent,
+                workspaceId: existing.workspaceId,
+                previousStatus: existing.status,
+                metadata: { kind: existing.kind, scoutKey: existing.scoutKey },
+              },
+            });
+          },
+        ),
       ),
     );
-    yield* transition;
     const row = yield* yield* loadVisibleSignal({
       safeDb,
       organizationId,
