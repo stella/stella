@@ -67,6 +67,14 @@ export const resolveAnalysisInput = async ({
   if (!decision) {
     return { kind: "decision-not-found" };
   }
+  // Decided from the row alone, before the tree is read from storage.
+  const systemPrompt = getSystemPrompt(decision.language);
+  if (Result.isError(systemPrompt)) {
+    return {
+      kind: "unsupported-language",
+      language: systemPrompt.error.language,
+    };
+  }
 
   // The text the reader sees: in development that may be the tree's own
   // parse rather than the stored one, and the anchors must agree. Resolved
@@ -90,13 +98,6 @@ export const resolveAnalysisInput = async ({
     reparsed ?? (await readDecisionAnalysisAst(decision, readCorpusTombstones));
   if (ast === null) {
     return { kind: "unparseable-document" };
-  }
-  const systemPrompt = getSystemPrompt(decision.language);
-  if (Result.isError(systemPrompt)) {
-    return {
-      kind: "unsupported-language",
-      language: systemPrompt.error.language,
-    };
   }
 
   return {
