@@ -103,6 +103,9 @@ const aiReviewEntries = {
     v.string(),
     v.isoTimestamp(),
     v.check(isPlausibleProductionInstant, "producedAt must be a real instant"),
+    // Bound as UTC: an offset the database cannot parse (+16:00) never
+    // reaches the timestamptz cast.
+    v.transform((value) => Temporal.Instant.from(value).toString()),
   ),
 };
 

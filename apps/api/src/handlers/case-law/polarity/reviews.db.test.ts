@@ -881,6 +881,44 @@ describe("reviewed citation labels", () => {
   });
 
   // Last: it retires a shipped rule for the rest of the file.
+  test("a production instant with any offset is stored as the same UTC instant", async () => {
+    const labelled = await ingestRuleLabelled({
+      caseNumber: "30 Cdo 1016/2026",
+      cited: "sp. zn. 29 Cdo 4016/2015",
+      rawHash: "offset",
+    });
+    // +16:00 is a real offset the database's timestamptz input refuses.
+    const producedAt = "2026-10-07T08:00:00+16:00";
+    const entry = {
+      ...labelFor(labelled, POLARITY.NEUTRAL),
+      ...provenanceFor(
+        CITATION_REVIEW_ORIGIN.AI_ANNOTATION,
+        "run-offset",
+        producedAt,
+      ),
+    };
+    expect((await applyLabels([entry])).rows).toEqual([
+      {
+        index: 0,
+        citingDecisionId: labelled.citingDecisionId,
+        citationKey: keyOf(labelled),
+        outcome: REVIEWED_LABEL_OUTCOME.APPLIED,
+      },
+    ]);
+    const stored = await db.execute(sql`
+      SELECT extract(epoch FROM produced_at)::bigint::text AS epoch
+        FROM ${caseLawCitationReviews}
+       WHERE citing_decision_id = ${labelled.citingDecisionId}::uuid
+    `);
+    expect(stored.rows).toEqual([
+      {
+        epoch: String(
+          Temporal.Instant.from(producedAt).epochMilliseconds / 1000,
+        ),
+      },
+    ]);
+  });
+
   test("retiring a rule leaves a reviewed row's label", async () => {
     const unreviewed = await ingestRuleLabelled({
       caseNumber: "30 Cdo 1005/2026",
