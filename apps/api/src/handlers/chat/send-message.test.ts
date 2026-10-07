@@ -42,6 +42,7 @@ import type { AdmittedActionIdentity } from "@/api/lib/rate-limit/action-kinds";
 import { actionAdmissionErrorFor } from "@/api/tests/helpers/action-admission-error";
 import { CHAT_ORACLE, violationsOf } from "@/api/tests/helpers/chat-oracles";
 import { testFileKey } from "@/api/tests/helpers/file-key";
+import { testModelAdmission } from "@/api/tests/helpers/model-dispatch-admission";
 import { installRecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
 import type { RecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
@@ -1270,6 +1271,7 @@ describe("send message disconnect handling", () => {
     period_exhausted: "period_exhausted",
     daily_exhausted: "daily_exhausted",
     not_enabled: "not_enabled",
+    not_on_plan: "not_on_plan",
     unavailable: "unavailable",
   } as const satisfies { [Reason in ActionAdmissionError["reason"]]: Reason };
   for (const reason of Object.values(refusalReasons)) {
@@ -1372,6 +1374,7 @@ describe("send message disconnect handling", () => {
               release: async () => {
                 releases += 1;
               },
+              modelAdmission: testModelAdmission(options.organizationId),
               reservePeriod: async (identity: AdmittedActionIdentity) => {
                 expect(turnUpdates).toContainEqual({ runId: "run-test" });
                 expect(identity).toEqual({

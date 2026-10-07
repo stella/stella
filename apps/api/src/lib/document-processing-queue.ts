@@ -119,6 +119,7 @@ import {
   writeTenantS3Object,
 } from "@/api/lib/s3-presign";
 import { brandPersistedFieldId } from "@/api/lib/safe-id-boundaries";
+import { deadlineScoutDue } from "@/api/lib/scouts/document-deadline-skip";
 import { documentScoutsEnabled } from "@/api/lib/scouts/document-scout-config";
 import { upsertSearchDocument } from "@/api/lib/search/index-entity";
 import {
@@ -719,6 +720,7 @@ const completeDocumentProcessingRun = async ({
       deadlineScoutAttemptCount: 0,
       deadlineScoutClaimedAt: null,
       deadlineScoutErrorCode: null,
+      deadlineScoutSkippedUntil: null,
       deadlineScoutStatus: shouldDispatchDeadlineScout
         ? "pending"
         : "not_requested",
@@ -1859,7 +1861,12 @@ export const recoverDocumentDeadlineScoutDispatches = async ({
   const pending = await database
     .select({ sourceRunId: documentProcessingRuns.id })
     .from(documentProcessingRuns)
-    .where(eq(documentProcessingRuns.deadlineScoutStatus, "pending"))
+    .where(
+      and(
+        eq(documentProcessingRuns.deadlineScoutStatus, "pending"),
+        deadlineScoutDue(new Date()),
+      ),
+    )
     .orderBy(
       asc(documentProcessingRuns.updatedAt),
       asc(documentProcessingRuns.id),
