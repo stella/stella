@@ -423,13 +423,15 @@ describe.skipIf(!enabled)("list evidence row security", () => {
         expect(posture).toEqual(tables.map((name) => ({ name, forced: true })));
         for (const table of tables) {
           await client.unsafe(`SET ROLE ${ownerRole}`);
-          expect(await client.unsafe(`SELECT id FROM ${table}`)).toEqual([
-            { id: 1 },
-          ]);
+          expect(
+            await client.unsafe<{ id: number }[]>(`SELECT id FROM ${table}`),
+          ).toEqual([{ id: 1 }]);
           await client.unsafe(`INSERT INTO ${table} VALUES (2)`);
           await client.unsafe("RESET ROLE");
           await client.unsafe("SET ROLE stella");
-          expect(await client.unsafe(`SELECT id FROM ${table}`)).toEqual([]);
+          expect(
+            await client.unsafe<{ id: number }[]>(`SELECT id FROM ${table}`),
+          ).toEqual([]);
           expect(
             await rejectionOf(client.unsafe(`INSERT INTO ${table} VALUES (3)`)),
           ).toMatchObject({ code: "42501" });
