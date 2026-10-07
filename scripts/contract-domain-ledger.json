@@ -876,10 +876,6 @@
     "reason": "Existing PLAIN_TEXT_NODE_NAMES domain; contract ownership pending migration."
   },
   {
-    "id": "apps/web/src/components/chat/chat-ui-tools.test.ts::<module>::domain:[\"delete_clause\",\"delete_contact\",\"delete_document\",\"delete_matter\",\"delete_time_entry\",\"manage_organization\",\"suggest_changes\"]::1",
-    "reason": "Local test input domain or bound; retained for fixture coverage."
-  },
-  {
     "id": "apps/web/src/components/chat/chat-user-actions.test.ts::<module>::domain:[\"idle\",\"pending\",\"failed\"]::1",
     "reason": "Local test input domain or bound; retained for fixture coverage."
   },

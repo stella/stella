@@ -38,6 +38,7 @@ import type {
   DocumentDeletionMessage,
   PersistedChatMessage,
 } from "@/components/chat/chat-ui-tools";
+import { MCP_CHAT_TOOL_GRANT_POLICIES } from "@/lib/api-contract";
 import { actionAdmissionOutcome } from "@/lib/errors/action-admission";
 
 describe("assistant turn outcomes", () => {
@@ -523,18 +524,13 @@ describe("tool approval grants", () => {
     expect(isApprovalOnceChatToolName("save_clause")).toBe(true);
   });
 
-  test("rejects persistent grants for deletes and update-capable writes, without the stronger never-auto bar", () => {
-    for (const name of [
-      "delete_clause",
-      "delete_contact",
-      "delete_document",
-      "delete_matter",
-      "delete_time_entry",
-      "manage_organization",
-      "suggest_changes",
-    ] as const) {
-      expect(isApprovalOnceChatToolName(name)).toBe(true);
-      expect(isNonPersistentGrantChatToolName(name)).toBe(false);
+  test("rejects persistent grants for every projected approve-once write", () => {
+    const approveOnceTools = Object.entries(
+      MCP_CHAT_TOOL_GRANT_POLICIES,
+    ).filter(([, policy]) => policy === "approve-once");
+    expect(approveOnceTools.length).toBeGreaterThan(0);
+    for (const [name] of approveOnceTools) {
+      expect(isNonPersistentGrantChatToolName(name)).toBe(true);
     }
   });
 
