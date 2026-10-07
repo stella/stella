@@ -43,6 +43,5 @@ export const isSearchIndexUnavailable = (error: unknown): boolean =>
  * through `isSearchIndexUnavailable`.
  */
 export const refuseSearchIndexUnavailable = (cause: unknown): never => {
-  // oxlint-disable-next-line result-boundary/no-throw-outside-boundary -- search handlers return status envelopes; the route boundary and MCP resolve this thrown HandlerError by code
   throw searchIndexUnavailableError(cause);
 };
