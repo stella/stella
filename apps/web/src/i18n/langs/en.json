@@ -2383,6 +2383,8 @@
       "providerRateLimited": "The provider rate limit was reached. Try again shortly.",
       "thirdPartyBoundaryRefusal": "The request tried to use content outside the allowed workspace context.",
       "usageLimitExceeded": "Usage limit reached.",
+      "verificationActiveLimitReached": "Your organization has reached its active verification limit. Wait for a verification to finish, then try again.",
+      "verificationDailyLimitReached": "Your organization has reached its daily verification limit. Try again after midnight (Europe/Prague).",
       "versionConflict": "Someone else changed this while you were editing. Reload to get the current version."
     },
     "failedToAcceptInvitation": "Failed to accept invitation",

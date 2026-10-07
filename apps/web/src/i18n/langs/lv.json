@@ -2383,6 +2383,8 @@
       "providerRateLimited": "Sasniegts pakalpojuma sniedzēja pieprasījumu limits. Drīzumā mēģiniet vēlreiz.",
       "thirdPartyBoundaryRefusal": "Pieprasījums mēģināja izmantot saturu ārpus atļautā darbvietas konteksta.",
       "usageLimitExceeded": "Sasniegts lietošanas limits.",
+      "verificationActiveLimitReached": "Jūsu organizācija ir sasniegusi vienlaicīgu pārbaužu limitu. Pagaidiet, līdz kāda pārbaude beidzas, un mēģiniet vēlreiz.",
+      "verificationDailyLimitReached": "Jūsu organizācija ir sasniegusi pārbaužu dienas limitu. Mēģiniet vēlreiz pēc pusnakts (Europe/Prague).",
       "versionConflict": "Kāds cits to mainīja, kamēr rediģējāt. Pārlādējiet, lai iegūtu pašreizējo versiju."
     },
     "failedToAcceptInvitation": "Neizdevās pieņemt uzaicinājumu",

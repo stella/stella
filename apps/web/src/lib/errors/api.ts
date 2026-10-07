@@ -16,6 +16,8 @@ import {
 import { HOSTED_CHECKOUT_REFUSAL_CODE } from "@stll/api-contract/hosted-checkout";
 import { FILE_PROPERTY_TYPE_IMMUTABLE_CODE } from "@stll/api-contract/property-policy";
 import { PUBLIC_COUNTRY_UNAVAILABLE_CODE } from "@stll/api-contract/public-country-capability";
+import { VERIFICATION_RUN_CAP_CODES } from "@stll/api-contract/verification-run-caps";
+import type { VerificationRunCapCode } from "@stll/api-contract/verification-run-caps";
 import { MATTER_CONTACT_CAPACITY_CODE } from "@stll/api-contract/workspace-contacts";
 
 import { getTranslator } from "@/i18n/translator";
@@ -109,7 +111,15 @@ const RAW_INTERNAL_TOOL_ERROR_CODE = {
     "legal_source_structural_repair_required",
 } as const;
 
+const VERIFICATION_RUN_CAP_ERROR_KEYS = {
+  [VERIFICATION_RUN_CAP_CODES.active]:
+    "errors.apiCodes.verificationActiveLimitReached",
+  [VERIFICATION_RUN_CAP_CODES.daily]:
+    "errors.apiCodes.verificationDailyLimitReached",
+} as const satisfies Record<VerificationRunCapCode, TranslationKey>;
+
 const CODE_ERROR_KEYS = {
+  ...VERIFICATION_RUN_CAP_ERROR_KEYS,
   [FILE_PROPERTY_TYPE_IMMUTABLE_CODE]:
     "errors.apiCodes.filePropertyTypeImmutable",
   [MATTER_CONTACT_CAPACITY_CODE.reached]:

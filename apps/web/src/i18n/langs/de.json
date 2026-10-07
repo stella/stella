@@ -2383,6 +2383,8 @@
       "providerRateLimited": "Das Anfragelimit des Anbieters wurde erreicht. Versuchen Sie es in Kürze erneut.",
       "thirdPartyBoundaryRefusal": "Die Anfrage hat versucht, Inhalte außerhalb des erlaubten Arbeitsbereichs-Kontexts zu verwenden.",
       "usageLimitExceeded": "Nutzungslimit erreicht.",
+      "verificationActiveLimitReached": "Ihre Organisation hat das Limit für gleichzeitige Überprüfungen erreicht. Warten Sie, bis eine Überprüfung abgeschlossen ist, und versuchen Sie es erneut.",
+      "verificationDailyLimitReached": "Ihre Organisation hat das Tageslimit für Überprüfungen erreicht. Versuchen Sie es nach Mitternacht (Europe/Prague) erneut.",
       "versionConflict": "Jemand anderes hat dies während Ihrer Bearbeitung geändert. Laden Sie die aktuelle Version neu."
     },
     "failedToAcceptInvitation": "Einladung konnte nicht angenommen werden",

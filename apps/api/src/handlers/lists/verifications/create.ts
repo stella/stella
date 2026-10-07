@@ -221,6 +221,7 @@ const createVerification = createSafeHandler(
       ListVerificationRunCapError.is(error)
         ? new HandlerError({
             status: 429,
+            code: error.code,
             message: error.message,
             hint: error.hint,
             retryable: true,
