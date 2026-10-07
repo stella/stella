@@ -117,6 +117,21 @@ jobs:
       release_ref: ${{ steps.source.outputs.release_ref }}
       release_sha: ${{ steps.source.outputs.release_sha }}
     steps:
+      - name: Checkout GitHub API tooling
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: ${{ github.repository }}
+          ref: ${{ github.workflow_sha }}
+          path: .gh-retry
+          persist-credentials: false
+          sparse-checkout: scripts/gh-retry.sh
+          sparse-checkout-cone-mode: false
+
+      - name: Preserve GitHub API tooling across source checkouts
+        run: |
+          cp "$GITHUB_WORKSPACE/.gh-retry/scripts/gh-retry.sh" "$RUNNER_TEMP/gh-retry.sh"
+          echo "GH_RETRY_SCRIPT=$RUNNER_TEMP/gh-retry.sh" >> "$GITHUB_ENV"
+
       - name: Resolve upstream release receipt
         id: source
         env:
@@ -139,7 +154,7 @@ jobs:
           fi
 
           receipt_dir="${RUNNER_TEMP}/release-source-receipt"
-          gh run download "$UPSTREAM_RUN_ID" \
+          bash "$GH_RETRY_SCRIPT" run download "$UPSTREAM_RUN_ID" \
             --repo "$GITHUB_REPOSITORY" \
             --name release-source-receipt \
             --dir "$receipt_dir"
@@ -167,9 +182,9 @@ jobs:
               echo "::error::Upstream tag push does not match the release receipt." >&2
               exit 1
             fi
-            tag_object="$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/tags/${release_ref}" --jq '.object.type + " " + .object.sha')"
+            tag_object="$(bash "$GH_RETRY_SCRIPT" api "repos/${GITHUB_REPOSITORY}/git/ref/tags/${release_ref}" --jq '.object.type + " " + .object.sha')"
             if [[ "$tag_object" == tag\ * ]]; then
-              tag_sha="$(gh api "repos/${GITHUB_REPOSITORY}/git/tags/${tag_object#tag }" --jq 'select(.object.type == "commit") | .object.sha')"
+              tag_sha="$(bash "$GH_RETRY_SCRIPT" api "repos/${GITHUB_REPOSITORY}/git/tags/${tag_object#tag }" --jq 'select(.object.type == "commit") | .object.sha')"
             else
               tag_sha="${tag_object#commit }"
             fi
@@ -177,7 +192,7 @@ jobs:
               echo "::error::${release_ref} does not resolve to the receipt's release_sha in ${GITHUB_REPOSITORY}." >&2
               exit 1
             fi
-            on_default="$(gh api "repos/${GITHUB_REPOSITORY}/compare/${release_sha}...${DEFAULT_BRANCH}" --jq '.status')"
+            on_default="$(bash "$GH_RETRY_SCRIPT" api "repos/${GITHUB_REPOSITORY}/compare/${release_sha}...${DEFAULT_BRANCH}" --jq '.status')"
             if [[ "$on_default" != "ahead" && "$on_default" != "identical" ]]; then
               echo "::error::release_sha is not on ${DEFAULT_BRANCH}." >&2
               exit 1
@@ -650,7 +665,7 @@ jobs:
       contents: write # Create immutable package tags and GitHub releases.
       id-token: write # Exchange a short-lived npm trusted-publishing credential.
     # The repository owner publishes this versioned shared contract.
-    uses: stella/.github/.github/workflows/npm-independent-release.yml@28f9f43d5c1e820500f8526a5527465bcbcdf425 # release job environment input
+    uses: stella/.github/.github/workflows/npm-independent-release.yml@167fb396c6c0f4e07296ad2cd72e6ef15367c776 # release job environment input
     with:
       # The release App key is an environment secret; the shared job runs in
       # this environment so only main and release tags can mint the token.

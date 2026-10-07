@@ -135,10 +135,14 @@ marketing:reshoot` re-records only the stale captures (see
 6. Deploy that exact commit to staging:
 
    ```bash
-   gh workflow run deploy-staging.yml --ref main -f sha=<release-sha>
+   gh workflow run deploy-staging.yml --ref main -f sha=<release-sha> -F release_candidate=true
+   gh workflow run main-heavy.yml --ref main -f sha=<release-sha> -F release_candidate=true
    ```
 
-   The run refuses a SHA that `main` does not contain. When its smokes pass,
+   Both gates first refuse a candidate whose VERSION is already tagged or differs
+   from the pending VERSION on main. Ordinary pinned dispatches leave
+   `release_candidate` false and skip this check. The staging run also refuses a
+   SHA that `main` does not contain. When its smokes pass,
    the commit carries `staging/verified` = `success`. `main-heavy.yml`
    records `main/heavy` on the same commit. If the run is cancelled because
    a newer staging dispatch replaced it while it waited, dispatch it again
