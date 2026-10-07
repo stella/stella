@@ -2452,7 +2452,7 @@ const createGhGateway = ({
           conclusion:
             conclusion === undefined || conclusion === "" ? null : conclusion,
           outputTitle: outputTitle ?? "",
-          checkSuiteId,
+          ...(checkSuiteId === undefined ? {} : { checkSuiteId }),
         });
       }
       return runs;

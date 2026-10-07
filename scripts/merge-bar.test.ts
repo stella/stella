@@ -184,7 +184,14 @@ const checkRun = (
     outputTitle = "",
     checkSuiteId,
   }: { id?: number; outputTitle?: string; checkSuiteId?: number } = {},
-) => ({ id, name, status, conclusion, outputTitle, checkSuiteId });
+) => ({
+  id,
+  name,
+  status,
+  conclusion,
+  outputTitle,
+  ...(checkSuiteId === undefined ? {} : { checkSuiteId }),
+});
 
 /** A declared repository without stella's migrations or ratchet. */
 const PRIVATE_REPO = "stella/stella-infra";
