@@ -69,6 +69,27 @@ test("real census enumerates raw hashing while admitting exact registered owners
         'new Bun.CryptoHasher("sha256");',
       );
     }
+    // A file the repository does not track (a checked-out submodule's
+    // content) never enters the census.
+    await mkdir(path.join(root, "packages/content/scripts"), {
+      recursive: true,
+    });
+    await writeFile(
+      path.join(root, "packages/content/scripts/external.ts"),
+      'new Bun.CryptoHasher("sha256");',
+    );
+    for (const command of [
+      ["git", "init", "-q"],
+      [
+        "git",
+        "add",
+        "packages/sha256/src/node.ts",
+        "apps/example/packages/sha256/src/node.ts",
+        "scripts/example.ts",
+      ],
+    ]) {
+      expect(Bun.spawnSync(command, { cwd: root }).exitCode).toBe(0);
+    }
     expect(sha256MigrationFiles(root)).toEqual([
       "apps/example/packages/sha256/src/node.ts",
       "scripts/example.ts",

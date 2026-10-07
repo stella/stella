@@ -51,6 +51,24 @@ export const sha256MigrationFiles = (root: string): string[] => {
     );
   }
   const output = v.parse(outputSchema, JSON.parse(result.stdout.toString()));
+  // Only files this repository tracks count: a checked-out submodule holds
+  // another repository's files and exists in some checkouts but not others.
+  const listed = Bun.spawnSync(["git", "ls-files", "-z"], {
+    cwd: root,
+    stdout: "pipe",
+    stderr: "pipe",
+  });
+  if (listed.exitCode !== 0) {
+    panic(
+      `SHA-256 census could not list tracked files: ${listed.stderr.toString()}`,
+    );
+  }
+  const tracked = new Set(
+    listed.stdout
+      .toString()
+      .split("\0")
+      .filter((file) => file !== ""),
+  );
   return [
     ...new Set(
       output.diagnostics
@@ -59,7 +77,8 @@ export const sha256MigrationFiles = (root: string): string[] => {
           path
             .relative(root, path.resolve(root, filename))
             .replaceAll("\\", "/"),
-        ),
+        )
+        .filter((file) => tracked.has(file)),
     ),
   ].toSorted();
 };
