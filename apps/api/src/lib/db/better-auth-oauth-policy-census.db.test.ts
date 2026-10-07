@@ -215,10 +215,7 @@ const STORED_SCOPE_SETS = {
   empty: () => [],
 } as const;
 
-const ACCEPTED_SCOPE_SETS = new Set<keyof typeof STORED_SCOPE_SETS>([
-  "configured",
-  "predecessor",
-]);
+const ACCEPTED_SCOPE_SETS = new Set<string>(["configured", "predecessor"]);
 
 const givenStoredResources = async (
   transaction: TestDatabaseTransaction,
@@ -249,12 +246,12 @@ test("the configured resources differ from their predecessor scope sets", () => 
   }
 });
 
-test.each(Object.keys(STORED_SCOPE_SETS) as (keyof typeof STORED_SCOPE_SETS)[])(
+test.each(Object.entries(STORED_SCOPE_SETS))(
   "the boot census over %s scope rows",
-  async (shape) => {
+  async (shape, storedScopes) => {
     try {
       await database.transaction(async (transaction) => {
-        await givenStoredResources(transaction, STORED_SCOPE_SETS[shape]);
+        await givenStoredResources(transaction, storedScopes);
         const outcome = await captureCensusRejection(
           assertBetterAuthOAuthPolicyCensus(transaction, CONFIGURED_RESOURCES),
         );
