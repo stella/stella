@@ -56,7 +56,7 @@ describe("API deployment health receipt", () => {
       ).text(),
     );
     const script = workflowSteps(workflow, "scheduled-run-alerts.yml").find(
-      ({ run }) => run.includes("previous=$(gh api"),
+      ({ run }) => run.includes('previous=$(bash "$GH_RETRY_SCRIPT" api'),
     )?.run;
     expect(script).toBeDefined();
     if (script === undefined) {
@@ -85,11 +85,16 @@ describe("API deployment health receipt", () => {
       const outputPath = path.join(outputDir, "github-output");
       try {
         const result = Bun.spawnSync(
-          ["bash", "-c", `gh() { printf '%s' "$TEST_HISTORY"; }\n${script}`],
+          [
+            "bash",
+            "-c",
+            `gh() { printf '%s' "$TEST_HISTORY"; }; export -f gh\n${script}`,
+          ],
           {
             env: {
               ...process.env,
               GITHUB_OUTPUT: outputPath,
+              GH_RETRY_SCRIPT: path.resolve(import.meta.dir, "gh-retry.sh"),
               GITHUB_REPOSITORY: "stella/stella",
               RUN_NUMBER: "100",
               RUN_BRANCH: "main",
@@ -137,6 +142,9 @@ describe("API deployment health receipt", () => {
       WEB_SMOKE: "success",
       API_SMOKE: "success",
       MCP_SMOKE: "success",
+      CORPUS_PREFLIGHT: "success",
+      CORPUS_SEARCH_WAIVED: "false",
+      WAIVE_REASON: "",
       JOB_STATUS: "success",
     };
     const cases = [
@@ -154,12 +162,13 @@ describe("API deployment health receipt", () => {
         [
           "bash",
           "-c",
-          `gh() { cat >/dev/null; }\n${script}\nprintf '%s' "$state"`,
+          `gh() { cat >/dev/null; }; export -f gh\n${script}\nprintf '%s' "$state"`,
         ],
         {
           env: {
             ...process.env,
             ...outcomes,
+            GH_RETRY_SCRIPT: path.resolve(import.meta.dir, "gh-retry.sh"),
             GITHUB_REPOSITORY: "stella/stella",
             GITHUB_RUN_ID: "1",
             GITHUB_SERVER_URL: "https://github.com",
@@ -174,17 +183,21 @@ describe("API deployment health receipt", () => {
     }
   });
 
-  test("uses only the existing canary and staging session secrets for MCP journeys", async () => {
+  test("uses only the declared canary and staging session secrets for MCP journeys", async () => {
     const cases = [
       {
         file: "mcp-canary.yml",
         environment: "production",
-        secrets: ["MCP_CANARY_TOKEN"],
+        secrets: ["MCP_CANARY_TOKEN", "REVIEW_ACCOUNT_PASSWORD"],
       },
       {
         file: "deploy-staging.yml",
         environment: "staging",
-        secrets: ["SMOKE_SESSION_SECRET", "STAGING_VIEWER_ACCESS_TOKEN"],
+        secrets: [
+          "SMOKE_SESSION_SECRET",
+          "STAGING_VIEWER_ACCESS_TOKEN",
+          "REVIEW_ACCOUNT_PASSWORD",
+        ],
       },
     ];
     for (const { file, environment, secrets } of cases) {
@@ -474,16 +487,32 @@ describe("API deployment health receipt", () => {
       "/etc/apt/sources.list.d/google-chrome.list",
     );
     expect(promoteJob).not.toContain("playwright install");
-    // The gate only reads: it decides whether to promote, never promotes.
+    // The gate records an off status but cannot write source or deployments.
     // Both delimiters are asserted so a missing block cannot slice to "" and
-    // satisfy the write check by being empty.
+    // satisfy the permission check by being empty.
     const permissionsStart = healthJob.indexOf("permissions:");
     const outputsStart = healthJob.indexOf("outputs:");
     expect(permissionsStart).toBeGreaterThanOrEqual(0);
     expect(outputsStart).toBeGreaterThan(permissionsStart);
     const healthPermissions = healthJob.slice(permissionsStart, outputsStart);
-    expect(healthPermissions).toContain("contents: read");
-    expect(healthPermissions).not.toContain("write");
+    const assertHealthPermissions = (permissions: unknown) =>
+      expect(
+        permissions,
+        "Staging gate permissions are confined to status writes",
+      ).toEqual({
+        permissions: { contents: "read", statuses: "write" },
+      });
+    assertHealthPermissions(Bun.YAML.parse(healthPermissions));
+    for (const mutated of [
+      healthPermissions.replace("contents: read", "contents: write"),
+      `${healthPermissions.trimEnd()}\n      deployments: write\n`,
+      healthPermissions.replace("      statuses: write\n", ""),
+    ]) {
+      expect(mutated).not.toBe(healthPermissions);
+      expect(() => assertHealthPermissions(Bun.YAML.parse(mutated))).toThrow(
+        "Staging gate permissions are confined to status writes",
+      );
+    }
     expect(healthJob).toContain(
       "STAGING_HEALTH_URL: https://api-staging.stll.app/ready",
     );
@@ -492,7 +521,7 @@ describe("API deployment health receipt", () => {
     expect(healthJob).toContain('status="$NOT_READY_STATUS"');
     expect(healthJob).toContain('status="$READY_STATUS"');
     expect(healthJob).toContain(`echo "status=\${status}" >> "$GITHUB_OUTPUT"`);
-    // An unreachable environment is normally off: skip, unless asked to
+    // An unreachable environment is normally off: fail, unless asked to
     // deploy into it anyway.
     expect(healthJob).toContain("DEPLOY_WHEN_UNREACHABLE");
     expect(healthJob).toContain(
@@ -631,7 +660,7 @@ describe("API deployment health receipt", () => {
     );
     expect(webBuildJob).toContain(".targetEnvironment == $target_environment");
     expect(webBuildJob).not.toContain("stella-infra");
-    expect(webBuildJob).not.toContain("gh run download");
+    expect(webBuildJob).not.toMatch(/(?:gh|\$GH_RETRY_SCRIPT"?) run download/u);
     expect(webBuildJob).not.toContain("build-release-web.yml");
     expect(webBuildJob).not.toContain(`tags+=("\${IMAGE}:latest")`);
     expect(manifestJob).toContain(
@@ -645,7 +674,7 @@ describe("API deployment health receipt", () => {
     // Publication is the promote job's last act: the release object is a
     // draft and the mutable image aliases stay put until production
     // verifiably serves the release.
-    expect(manifestJob).toContain("gh release create");
+    expect(manifestJob).toContain('bash "$GH_RETRY_SCRIPT" release create');
     expect(manifestJob).toContain(
       "*-rc.*) extra_args+=(--draft --prerelease) ;;",
     );
@@ -692,19 +721,21 @@ describe("API deployment health receipt", () => {
     expect(apiSmoke).toContain('fetch("http://127.0.0.1:3001/live")');
     expect(apiSmoke).toContain(`grep -F '"message":"scheduler.started"'`);
     expect(promoteAction).toContain("readonly TOKEN_REFRESH_SECONDS=2700");
-    expect(promoteAction).toContain("readonly TOKEN_REFRESH_ATTEMPTS=20");
+    expect(promoteAction).not.toContain("TOKEN_REFRESH_ATTEMPTS");
+    expect(promoteAction).not.toContain("lookup_failures");
+    expect(promoteAction).not.toContain("consecutive_read_failures");
     expect(promoteAction).toContain("refresh_app_token");
     expect(promoteAction).toContain(
       "now - token_refreshed_at >= TOKEN_REFRESH_SECONDS",
     );
     expect(promoteAction).toContain('"/installation/token"');
-    expect(promoteAction).toContain("retaining the current token and retrying");
+    expect(promoteAction).toContain('if ! token="$(mint_app_token)"');
     expect(promoteAction).toContain(`echo "::add-mask::\${jwt}" >&2`);
     expect(promoteAction).toContain(`printf '%s\\n' "$APP_PRIVATE_KEY"`);
     expect(
       promoteAction.match(/Authorization: Bearer \$\{jwt\}/gu),
     ).toHaveLength(2);
-    expect(promoteAction).not.toContain("gh run watch");
+    expect(promoteAction).not.toMatch(/(?:gh|gh-retry\.sh"?) run watch/u);
     expect(promoteAction).toContain(
       `run_url="https://github.com/\${INFRA_REPO}/actions/runs/\${run_id}"`,
     );
@@ -795,7 +826,9 @@ describe("API deployment health receipt", () => {
       "needs.verify-production.result == 'success'",
     );
     expect(desktopManifest).toContain("needs.build.result == 'success'");
-    expect(desktopManifest).not.toContain("gh release edit");
+    expect(desktopManifest).not.toMatch(
+      /(?:gh|\$GH_RETRY_SCRIPT"?) release edit/u,
+    );
     expect(desktopPromote).toContain("needs.manifest.result == 'success'");
     expect(desktopPromote).toContain(`GH_REPO: \${{ github.repository }}`);
     expect(desktopPromote).toContain("Checkout release policy");
@@ -806,7 +839,11 @@ describe("API deployment health receipt", () => {
     expect(desktopPromote).toContain("bash scripts/promote-desktop-release.sh");
     expect(
       desktopCarry.indexOf("Verify production serves the release commit"),
-    ).toBeGreaterThan(desktopCarry.indexOf('gh release upload "$RELEASE_REF"'));
+    ).toBeGreaterThan(
+      desktopCarry.indexOf(
+        'bash "$GH_RETRY_SCRIPT" release upload "$RELEASE_REF"',
+      ),
+    );
     expect(desktopCarry).toContain("timeout-minutes: 15");
     expect(desktopCarry.indexOf("Promote release to latest")).toBeGreaterThan(
       desktopCarry.indexOf("Verify production web serves the release commit"),

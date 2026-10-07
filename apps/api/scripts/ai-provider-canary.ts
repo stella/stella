@@ -54,6 +54,32 @@ import type {
 } from "./ai-provider-canary-config";
 import { createWeeklyToolShapeDefinition } from "./ai-provider-canary-weekly";
 
+export class CanaryProviderRunError extends TypeError {
+  readonly code: string | null;
+  readonly failure: CanaryFailure;
+  readonly incompleteReason: string | null;
+  readonly rejectionReason: ProviderRejectionReason | null;
+  readonly retryCode: string | null;
+  readonly retryable: boolean | null;
+  readonly stage: CanaryRunStage;
+  readonly status: number | null;
+  readonly terminalCode: string | null;
+
+  constructor(event: unknown, stage: CanaryRunStage) {
+    super("Provider stream failed.");
+    this.name = "CanaryProviderRunError";
+    this.retryCode = rawProviderCode(event);
+    this.retryable = explicitRetryability(event);
+    this.code = safeProviderCode(this.retryCode);
+    this.failure = canaryEventFailure(event);
+    this.incompleteReason = safeIncompleteReason(event);
+    this.rejectionReason = providerRejectionReason(event);
+    this.stage = stage;
+    this.status = providerStatus(event);
+    this.terminalCode = terminalProviderCode(event);
+  }
+}
+
 const CAPABILITY_ROLE = "fast" satisfies ModelRole;
 const TOOL_CALL_ROLE = "chat" satisfies ModelRole;
 const CAPABILITY_PROBE_TIMEOUT_MS = 20_000;
@@ -633,32 +659,6 @@ const canaryEventFailure = (event: unknown): CanaryFailure => {
     ? PROVIDER_FAILURE
     : { kind: "credential-rejected", reason: signature };
 };
-
-export class CanaryProviderRunError extends TypeError {
-  readonly code: string | null;
-  readonly failure: CanaryFailure;
-  readonly incompleteReason: string | null;
-  readonly rejectionReason: ProviderRejectionReason | null;
-  readonly retryCode: string | null;
-  readonly retryable: boolean | null;
-  readonly stage: CanaryRunStage;
-  readonly status: number | null;
-  readonly terminalCode: string | null;
-
-  constructor(event: unknown, stage: CanaryRunStage) {
-    super("Provider stream failed.");
-    this.name = "CanaryProviderRunError";
-    this.retryCode = rawProviderCode(event);
-    this.retryable = explicitRetryability(event);
-    this.code = safeProviderCode(this.retryCode);
-    this.failure = canaryEventFailure(event);
-    this.incompleteReason = safeIncompleteReason(event);
-    this.rejectionReason = providerRejectionReason(event);
-    this.stage = stage;
-    this.status = providerStatus(event);
-    this.terminalCode = terminalProviderCode(event);
-  }
-}
 
 // A failure the canary itself detected. Its message is canary-authored and
 // bounded, so the top-level handler prints it. Provider errors are never

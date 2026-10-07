@@ -19,7 +19,6 @@ import {
 import { captureObservedError } from "@/api/lib/analytics/capture";
 import type { AuditExecutionContext, AuditRecorder } from "@/api/lib/audit-log";
 import type { AccessibleWorkspace } from "@/api/lib/auth";
-import { checkDemoAccountOperation } from "@/api/lib/auth/demo-account";
 import { resolveFeatureAccessSnapshot } from "@/api/lib/auth/feature-access/context";
 import {
   isFeatureEnabled,
@@ -30,6 +29,7 @@ import type {
   FeatureAccessProof,
 } from "@/api/lib/auth/feature-access/policy";
 import type { FeatureAccessRequirement } from "@/api/lib/auth/feature-access/requirements";
+import { checkRestrictedAccountOperation } from "@/api/lib/auth/review-account";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { CapabilityTransport } from "@/api/lib/capability-transport";
 import type { ManagedAIResidency } from "@/api/lib/chat/ai-data-policy";
@@ -440,19 +440,22 @@ export type WorkspaceHandlerConfig = WorkspaceHandlerConfigOf<HandlerConfig>;
  * their handlers admit the demo account and can only declare `sandbox`.
  */
 /**
- * Whether the configured demo account may call a handler. Every handler config
- * declares one: `standard` refuses the demo account, `sandbox` admits it.
+ * Which restricted accounts may call a handler. Every handler config declares
+ * one: `sandbox` admits every account, `standard` refuses the demo account,
+ * and `account-control` (credentials, keys, billing, external connections,
+ * organization configuration) also refuses the restricted review account.
  */
 export const ACCOUNT_ACCESS = {
   standard: "standard",
   sandbox: "sandbox",
+  accountControl: "account-control",
 } as const;
 
 export type AccountAccess =
   (typeof ACCOUNT_ACCESS)[keyof typeof ACCOUNT_ACCESS];
 
-const requiresStandardAccount = (accountAccess: AccountAccess) =>
-  accountAccess === ACCOUNT_ACCESS.standard;
+const requiresAccountCheck = (accountAccess: AccountAccess) =>
+  accountAccess !== ACCOUNT_ACCESS.sandbox;
 
 type SandboxAccountAccess = {
   accountAccess: typeof ACCOUNT_ACCESS.sandbox;
@@ -1202,7 +1205,7 @@ export const admitFiniteAction = async function* <
 
 type HandlerAdmissionDependencies = {
   admit?: typeof withActionAdmission;
-  checkAccountOperation?: typeof checkDemoAccountOperation;
+  checkAccountOperation?: typeof checkRestrictedAccountOperation;
   announce?: typeof announceResourceSetUpdates;
 };
 
@@ -1220,7 +1223,7 @@ const createSafeScopedHandler = <
   handler: SafeHandlerFn<TContext, TResult>,
   {
     admit = withActionAdmission,
-    checkAccountOperation = checkDemoAccountOperation,
+    checkAccountOperation = checkRestrictedAccountOperation,
     announce = announceResourceSetUpdates,
   }: HandlerAdmissionDependencies = {},
 ): SafeHandlerDefinition<TConfig, TContext, TResult> =>
@@ -1235,8 +1238,11 @@ const createSafeScopedHandler = <
         });
       }
 
-      if (requiresStandardAccount(config.accountAccess)) {
-        const accountAccess = checkAccountOperation(ctx.user.email);
+      if (requiresAccountCheck(config.accountAccess)) {
+        const accountAccess = checkAccountOperation(
+          ctx.user.email,
+          config.accountAccess,
+        );
         if (Result.isError(accountAccess)) {
           return toSafeStatusResponse(403, {
             code: "account_access_unavailable",
@@ -1833,7 +1839,7 @@ export const createSafeHandler = <
   );
 
 type SessionHandlerDependencies = {
-  checkAccountOperation?: typeof checkDemoAccountOperation;
+  checkAccountOperation?: typeof checkRestrictedAccountOperation;
 };
 
 export const createSafeSessionHandler = <
@@ -1843,14 +1849,17 @@ export const createSafeSessionHandler = <
   config: TConfig,
   handler: SafeHandlerFn<SessionHandlerContext<TConfig>, TResult>,
   {
-    checkAccountOperation = checkDemoAccountOperation,
+    checkAccountOperation = checkRestrictedAccountOperation,
   }: SessionHandlerDependencies = {},
 ): SafeHandlerDefinition<TConfig, SessionHandlerContext<TConfig>, TResult> =>
   recordSafeHandler({
     config,
     handler: async (ctx): Promise<SafeHandlerResult<TResult>> => {
-      if (requiresStandardAccount(config.accountAccess)) {
-        const accountAccess = checkAccountOperation(ctx.user.email);
+      if (requiresAccountCheck(config.accountAccess)) {
+        const accountAccess = checkAccountOperation(
+          ctx.user.email,
+          config.accountAccess,
+        );
         if (Result.isError(accountAccess)) {
           return toSafeStatusResponse(403, {
             code: "account_access_unavailable",

@@ -1,11 +1,22 @@
+import { QueryClient } from "@tanstack/react-query";
 import { describe, expect, test } from "bun:test";
 
 import type { BrowserControlCommand } from "@stll/api-contract/browser-control";
 
+import { installUserScopedStorage } from "@/lib/account/install-user-scoped-storage";
+import {
+  releaseUserStorage,
+  userStorageKey,
+} from "@/lib/account/user-scoped-storage";
+
 import {
   BROWSER_APPROVAL_MODE,
+  beginBrowserCommand,
   createBrowserApprovalStore,
+  getBrowserApprovalMode,
   isBrowserCommandAutoApproved,
+  setBrowserApprovalMode,
+  subscribeBrowserApproval,
 } from "./browser-approval-mode";
 
 const read = { action: "snapshot" } satisfies BrowserControlCommand;
@@ -15,7 +26,7 @@ const act = {
   target: { name: "Submit", ref: "e:0:0.1", role: "button" },
 } satisfies BrowserControlCommand;
 
-const STORAGE_KEY = "stella.chat.browserApprovalMode";
+const STORAGE_KEY = userStorageKey("stella.chat.browserApprovalMode");
 
 const memoryStorage = (values: Record<string, string> = {}): Storage => {
   const entries = new Map(Object.entries(values));
@@ -40,6 +51,67 @@ const blockedStorage = (): Storage => {
 };
 
 describe("browser approval mode", () => {
+  test("subscribers follow the current account's snapshot and subsequent changes", () => {
+    const previousWindow = Object.getOwnPropertyDescriptor(
+      globalThis,
+      "window",
+    );
+    const storage = memoryStorage();
+    Object.defineProperty(globalThis, "window", {
+      configurable: true,
+      value: { sessionStorage: storage },
+    });
+    const areas = () => ({ local: null, session: storage });
+    const queryClient = new QueryClient();
+    const unsubscribeOwner = installUserScopedStorage(queryClient, areas);
+    const snapshots: ReturnType<typeof getBrowserApprovalMode>[] = [];
+    let unsubscribe = () => {};
+    try {
+      queryClient.setQueryData(["session"], { user: { id: "account-a" } });
+      setBrowserApprovalMode(BROWSER_APPROVAL_MODE.autoApproveReads);
+      expect(getBrowserApprovalMode()).toBe(
+        BROWSER_APPROVAL_MODE.autoApproveReads,
+      );
+      const finishEarlierCommand = beginBrowserCommand();
+      unsubscribe = subscribeBrowserApproval(() => {
+        snapshots.push(getBrowserApprovalMode());
+      });
+      releaseUserStorage(areas());
+      expect(snapshots).toEqual([BROWSER_APPROVAL_MODE.askEveryTime]);
+      storage.setItem(
+        userStorageKey("stella.chat.browserApprovalMode", {
+          kind: "user",
+          userId: "account-b",
+        }),
+        JSON.stringify(BROWSER_APPROVAL_MODE.autoApproveReads),
+      );
+      queryClient.setQueryData(["session"], { user: { id: "account-b" } });
+      expect(snapshots).toEqual([
+        BROWSER_APPROVAL_MODE.askEveryTime,
+        BROWSER_APPROVAL_MODE.autoApproveReads,
+      ]);
+      finishEarlierCommand(true);
+      expect(snapshots).toHaveLength(2);
+      setBrowserApprovalMode(BROWSER_APPROVAL_MODE.askEveryTime);
+      expect(snapshots).toEqual([
+        BROWSER_APPROVAL_MODE.askEveryTime,
+        BROWSER_APPROVAL_MODE.autoApproveReads,
+        BROWSER_APPROVAL_MODE.askEveryTime,
+      ]);
+      unsubscribe();
+      setBrowserApprovalMode(BROWSER_APPROVAL_MODE.autoApproveReads);
+      expect(snapshots).toHaveLength(3);
+    } finally {
+      unsubscribe();
+      unsubscribeOwner();
+      releaseUserStorage(areas());
+      if (previousWindow === undefined) {
+        Reflect.deleteProperty(globalThis, "window");
+      } else {
+        Object.defineProperty(globalThis, "window", previousWindow);
+      }
+    }
+  });
   test("never auto-approves in the ask-every-time mode", () => {
     expect(
       isBrowserCommandAutoApproved({
@@ -142,6 +214,18 @@ describe("resetting browser approval", () => {
 });
 
 describe("last browser command outcome", () => {
+  test("commands started before the owner refresh cannot vouch for it", () => {
+    const store = createBrowserApprovalStore(memoryStorage);
+    const finishEarlierCommand = store.beginCommand();
+
+    store.restoreOwner();
+    finishEarlierCommand(true);
+    expect(store.lastCommandSucceeded()).toBe(false);
+
+    store.beginCommand()(true);
+    expect(store.lastCommandSucceeded()).toBe(true);
+  });
+
   test("reads wait for a successful command in this tab session", () => {
     const store = createBrowserApprovalStore(memoryStorage);
     expect(store.lastCommandSucceeded()).toBe(false);

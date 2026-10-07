@@ -1,3 +1,4 @@
+import type { Named } from "@gdp-ts/core";
 import { Result } from "better-result";
 import { and, eq, inArray } from "drizzle-orm";
 
@@ -14,12 +15,13 @@ import {
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import type { SignalVisibleTo } from "@/api/lib/signals/proofs/signal-visible-to";
 
-export type SignalTransitionArgs = {
-  tx: Transaction;
-  organizationId: SafeId<"organization">;
-  signalId: SafeId<"signal">;
-  actorUserId: SafeId<"user">;
+export type SignalTransitionArgs<U, S, T, O> = {
+  tx: Named<T, Transaction>;
+  visibility: SignalVisibleTo<NoInfer<U>, NoInfer<S>, NoInfer<T>, O>;
+  signalId: Named<S, SafeId<"signal">>;
+  actorUserId: Named<U, SafeId<"user">>;
   /** Statuses the row must currently be in; the UPDATE's WHERE closes the race. */
   from: readonly SignalStatus[];
   set: Partial<{
@@ -44,16 +46,20 @@ export type SignalTransitionArgs = {
  * Conditional state transition plus its audit event, in one transaction.
  * Returns a 409 when the row was no longer in an allowed `from` state.
  */
-export const transitionSignal = async ({
-  tx,
-  organizationId,
-  signalId,
-  actorUserId,
+export const transitionSignal = async <U, S, T, O>({
+  tx: transaction,
+  visibility,
+  signalId: signal,
+  actorUserId: actor,
   from,
   set,
   event,
   audit,
-}: SignalTransitionArgs) => {
+}: SignalTransitionArgs<U, S, T, O>) => {
+  const tx = transaction.value;
+  const signalId = signal.value;
+  const actorUserId = actor.value;
+  const organizationId = visibility.organizationId.value;
   const updated = await tx
     .update(signals)
     .set({ ...set, updatedAt: new Date() })

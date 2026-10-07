@@ -18,6 +18,7 @@ import {
   agentInputNormalizationMetadata,
   COUNTRY_INPUT_MAX_CHARS,
 } from "@stll/agent-input";
+import type { CaseLawCourtYear } from "@stll/api-contract/case-law-court-year";
 import { DECISION_READ_RESOLUTION } from "@stll/api-contract/case-law-decision-resolution";
 import { CASE_LAW_JURISDICTIONS } from "@stll/api-contract/case-law-jurisdictions";
 import { PUBLIC_CASE_LAW_COUNTRIES } from "@stll/api-contract/case-law-launch-readiness";
@@ -247,6 +248,22 @@ const makeDocxBytes = async () => {
     bytes.byteOffset + bytes.byteLength,
   );
 };
+
+const COURT_YEAR_FIXTURE = {
+  buckets: [
+    {
+      court: "Nejvyšší soud",
+      courtName: "Nejvyšší soud",
+      courtAbbreviation: "NS",
+      tier: "supreme",
+      year: 2024,
+      count: 1,
+      citationSum: null,
+      treatment: null,
+    },
+  ],
+  truncated: false,
+} as const satisfies CaseLawCourtYear;
 
 const ORGANIZATION_ID = toSafeId<"organization">("org_1");
 
@@ -2342,6 +2359,7 @@ describe("OpenAI-compatible MCP tools", () => {
     searchDecisionsHandlerMock.mockResolvedValue({
       paginationOutcome: SEARCH_PAGINATION_COMPLETE,
       facets: {
+        courtYear: COURT_YEAR_FIXTURE,
         court: [
           {
             tierLabel: "supreme",
@@ -2454,6 +2472,7 @@ describe("OpenAI-compatible MCP tools", () => {
 
     expect(parseToolPayload(result)).toEqual({
       facets: {
+        courtYear: COURT_YEAR_FIXTURE,
         court: [
           {
             tierLabel: "supreme",
@@ -2546,6 +2565,7 @@ describe("OpenAI-compatible MCP tools", () => {
     searchDecisionsHandlerMock.mockResolvedValue({
       paginationOutcome: SEARCH_PAGINATION_COMPLETE,
       facets: {
+        courtYear: null,
         court: [],
         // A bucket field the output contract does not declare.
         year: [{ count: 1, label: null, value: "2024", undeclared: true }],
@@ -2598,6 +2618,7 @@ describe("OpenAI-compatible MCP tools", () => {
     searchDecisionsHandlerMock.mockResolvedValue({
       paginationOutcome: SEARCH_PAGINATION_COMPLETE,
       facets: {
+        courtYear: null,
         court: [],
         // A declared bucket field with the wrong type.
         year: [{ count: "one", label: null, value: "2024" }],
@@ -2647,6 +2668,7 @@ describe("OpenAI-compatible MCP tools", () => {
     searchDecisionsHandlerMock.mockResolvedValue({
       paginationOutcome: SEARCH_PAGINATION_COMPLETE,
       facets: {
+        courtYear: null,
         court: [],
         year: [],
         decisionType: [],
@@ -2698,6 +2720,7 @@ describe("OpenAI-compatible MCP tools", () => {
 
     expect(parseToolPayload(result)).toEqual({
       facets: {
+        courtYear: null,
         court: [],
         year: [],
         decisionType: [],
@@ -3246,6 +3269,7 @@ describe("OpenAI-compatible MCP tools", () => {
       async ({ body: { query } }: { body: { query: string } }) => ({
         paginationOutcome: SEARCH_PAGINATION_COMPLETE,
         facets: {
+          courtYear: null,
           court: [],
           year: [
             {
@@ -3308,6 +3332,7 @@ describe("OpenAI-compatible MCP tools", () => {
     expect(payload.results.at(0)?.snippet).toBe("c from second");
     // Facets describe the first phrasing; overlapping counts are not summed.
     expect(payload.facets).toEqual({
+      courtYear: null,
       court: [],
       year: [{ value: "2024", count: 3, label: null }],
       decisionType: [],
@@ -3342,6 +3367,7 @@ describe("OpenAI-compatible MCP tools", () => {
       async ({ body: { query } }: { body: { query: string } }) => ({
         paginationOutcome: SEARCH_PAGINATION_COMPLETE,
         facets: {
+          courtYear: null,
           court: [],
           year: [],
           decisionType: [],
@@ -3365,6 +3391,7 @@ describe("OpenAI-compatible MCP tools", () => {
     expect(result.isError).not.toBe(true);
     const payload = asTestRaw<MergedSearchPage>(parseToolPayload(result));
     expect(payload.facets).toEqual({
+      courtYear: null,
       court: [],
       year: [],
       decisionType: [],
@@ -3681,6 +3708,7 @@ describe("OpenAI-compatible MCP tools", () => {
         searchDecisionsHandlerMock.mockResolvedValue({
           paginationOutcome: SEARCH_PAGINATION_COMPLETE,
           facets: {
+            courtYear: null,
             court: [],
             year: [],
             decisionType: [],
@@ -5172,6 +5200,7 @@ describe("OpenAI-compatible MCP tools", () => {
       searchDecisionsHandlerMock.mockResolvedValue({
         paginationOutcome: SEARCH_PAGINATION_COMPLETE,
         facets: {
+          courtYear: null,
           court: [
             {
               tierLabel: "supreme",

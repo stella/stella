@@ -19,6 +19,12 @@ describe("visual sandbox page", () => {
     );
     expect(response.headers.get("X-Frame-Options")).toBeNull();
     expect(response.headers.get("X-DNS-Prefetch-Control")).toBe("off");
+    expect(response.headers.get("Cross-Origin-Embedder-Policy")).toBe(
+      "credentialless",
+    );
+    expect(response.headers.get("Cross-Origin-Resource-Policy")).toBe(
+      "cross-origin",
+    );
     expect(response.headers.get("Content-Security-Policy")).toBe(
       `${VISUAL_INNER_POLICY}; frame-ancestors ${frontendOrigins({
         frontendUrl: env.FRONTEND_URL,

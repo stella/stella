@@ -14,7 +14,7 @@ import { CI_GENERATED_FILES } from "./generated-files";
 
 const generated = new Set<string>(CI_GENERATED_FILES);
 const hashSchema = v.pipe(v.string(), v.regex(/^[a-f0-9]{64}$/u));
-export const preparedManifestSchema = v.strictObject({
+const preparedManifestSchema = v.strictObject({
   sourceSha: v.pipe(v.string(), v.regex(/^[a-f0-9]{40}$/u)),
   inputHash: hashSchema,
   bunVersion: v.string(),
@@ -120,7 +120,7 @@ export const verifyPreparedGeneratedFiles = (root: string, raw: unknown) => {
 
 export const hasPreparedGeneratedSources = (root: string) => {
   const configured = process.env["CI_GENERATED_SOURCES_MANIFEST"];
-  if (configured === undefined) {
+  if (configured === undefined || configured === "") {
     return false;
   }
   if (configured !== preparedManifestPath(root)) {

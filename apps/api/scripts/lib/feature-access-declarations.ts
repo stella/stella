@@ -93,21 +93,38 @@ const insideDispatchRegistry = (node: ts.Node): boolean => {
   }
   return false;
 };
+const runtimeReferenceIndex = new WeakMap<
+  ts.SourceFile,
+  ReadonlyMap<string, readonly ts.Identifier[]>
+>();
+/**
+ * Value-position identifiers by name, outside imports and type nodes. One
+ * walk per parsed file; binding checks look names up instead of re-walking.
+ */
+const runtimeReferences = (ast: ts.SourceFile, name: string) => {
+  let index = runtimeReferenceIndex.get(ast);
+  if (index === undefined) {
+    const references = new Map<string, ts.Identifier[]>();
+    const visit = (node: ts.Node) => {
+      if (ts.isImportDeclaration(node) || ts.isTypeNode(node)) {
+        return;
+      }
+      if (ts.isIdentifier(node)) {
+        const named = references.get(node.text) ?? [];
+        named.push(node);
+        references.set(node.text, named);
+      }
+      ts.forEachChild(node, visit);
+    };
+    visit(ast);
+    index = references;
+    runtimeReferenceIndex.set(ast, index);
+  }
+  return index.get(name) ?? [];
+};
 const dispatchRegistrationOnly = (ast: ts.SourceFile, name: string) => {
-  let references = 0;
-  let valid = true;
-  const visit = (node: ts.Node) => {
-    if (ts.isImportDeclaration(node) || ts.isTypeNode(node)) {
-      return;
-    }
-    if (ts.isIdentifier(node) && node.text === name) {
-      references += 1;
-      valid &&= insideDispatchRegistry(node);
-    }
-    ts.forEachChild(node, visit);
-  };
-  visit(ast);
-  return references > 0 && valid;
+  const references = runtimeReferences(ast, name);
+  return references.length > 0 && references.every(insideDispatchRegistry);
 };
 const literalProperty = (node: ts.Expression, name: string) => {
   const value = unwrapExpression(node);
@@ -177,23 +194,14 @@ const schemaRegistrationReference = (
 // Registration defines a database handle; it does not consume feature tables.
 // Any other runtime use of the same binding keeps the dependency in the graph.
 const registrationOnly = (ast: ts.SourceFile, name: string) => {
+  const references = runtimeReferences(ast, name);
+  if (references.length === 0) {
+    return false;
+  }
   const constructors = drizzleConstructors(ast);
-  let references = 0;
-  let valid = true;
-  const visit = (node: ts.Node) => {
-    if (ts.isImportDeclaration(node) || ts.isTypeNode(node)) {
-      return;
-    }
-    if (ts.isIdentifier(node) && node.text === name) {
-      references += 1;
-      if (!schemaRegistrationReference(node, constructors)) {
-        valid = false;
-      }
-    }
-    ts.forEachChild(node, visit);
-  };
-  visit(ast);
-  return references > 0 && valid;
+  return references.every((reference) =>
+    schemaRegistrationReference(reference, constructors),
+  );
 };
 
 /** Parses source once; no handler or runtime dependency is loaded. */
@@ -522,7 +530,8 @@ const isValidDispatchBoundary = (
       for (const statement of ast.statements) {
         if (
           !runtimeImport(statement) ||
-          statement.moduleSpecifier.text !== "@/api/mcp/feature-access"
+          statement.moduleSpecifier.text !==
+            (boundary.specifier ?? "@/api/mcp/feature-access")
         ) {
           continue;
         }
@@ -740,19 +749,111 @@ const moduleRequirements = (registry: FeatureRegistry, module: string) => {
   }
   return required;
 };
+type ModuleUse = readonly [featureId: string, type: Requirement];
+/**
+ * Feature uses visible in a module's own source: conditional query symbols
+ * and owned table names. Pure per module, so one validation run computes
+ * each module once instead of once per endpoint that reaches it.
+ */
+const collectModuleUses = (
+  ast: ts.SourceFile,
+  registry: FeatureRegistry,
+  tables: ReturnType<typeof validateOwnership>["tables"],
+): ModuleUse[] => {
+  const uses: ModuleUse[] = [];
+  const visit = (node: ts.Node) => {
+    if (dispatchRegistry(node)) {
+      return;
+    }
+    if (
+      (ts.isPropertyAccessExpression(node) ||
+        (ts.isElementAccessExpression(node) &&
+          ts.isStringLiteral(node.argumentExpression))) &&
+      ts.isPropertyAccessExpression(node.expression) &&
+      node.expression.name.text === "query"
+    ) {
+      let symbol: string | undefined;
+      if (ts.isPropertyAccessExpression(node)) {
+        symbol = node.name.text;
+      } else if (ts.isStringLiteral(node.argumentExpression)) {
+        symbol = node.argumentExpression.text;
+      }
+      for (const [id, { ownership }] of Object.entries(registry)) {
+        if (
+          symbol !== undefined &&
+          Object.values(ownership?.conditionalTableSchemas ?? {}).some(
+            (symbols) => symbols.includes(symbol),
+          )
+        ) {
+          uses.push([id, "conditional"]);
+        }
+      }
+    }
+    if (
+      ts.isStringLiteralLike(node) ||
+      ts.isTemplateHead(node) ||
+      ts.isTemplateMiddle(node) ||
+      ts.isTemplateTail(node)
+    ) {
+      for (const { matcher, owners } of tables) {
+        if (matcher.test(node.text)) {
+          uses.push(...owners);
+        }
+      }
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(ast);
+  return uses;
+};
+type ModuleFacts = {
+  boundary: (module: string) => ReadonlyMap<string, Requirement>;
+  uses: (module: string, ast: ts.SourceFile) => readonly ModuleUse[];
+};
+/**
+ * Per-module facts are independent of the endpoint that reaches the module.
+ * Endpoints share most of their graph, so compute each fact once per run.
+ */
+const moduleFacts = (
+  registry: FeatureRegistry,
+  tables: ReturnType<typeof validateOwnership>["tables"],
+): ModuleFacts => {
+  const boundaries = new Map<string, ReadonlyMap<string, Requirement>>();
+  const uses = new Map<string, readonly ModuleUse[]>();
+  return {
+    boundary: (module) => {
+      const cached = boundaries.get(module);
+      if (cached !== undefined) {
+        return cached;
+      }
+      const boundary = moduleRequirements(registry, module);
+      boundaries.set(module, boundary);
+      return boundary;
+    },
+    uses: (module, ast) => {
+      const cached = uses.get(module);
+      if (cached !== undefined) {
+        return cached;
+      }
+      const moduleUses = collectModuleUses(ast, registry, tables);
+      uses.set(module, moduleUses);
+      return moduleUses;
+    },
+  };
+};
 type EndpointOptions = {
   endpoint: DeclarationOptions["endpoints"][number];
   registry: FeatureRegistry;
   graph: DeclarationSourceGraph;
-  tables: ReturnType<typeof validateOwnership>["tables"];
   dispatchModules: ReturnType<typeof validateOwnership>["dispatchModules"];
+  modules: ModuleFacts;
 };
 const inspectEndpoint = ({
   endpoint,
   registry,
   graph,
-  tables,
   dispatchModules,
+  modules,
 }: EndpointOptions) => {
   const file = endpoint.file.split("#").at(0) ?? endpoint.file;
   const declaration = parseDeclaration(endpoint.config, file, registry);
@@ -791,7 +892,7 @@ const inspectEndpoint = ({
       violations.push({ file, message: `missing source module ${module}` });
       return;
     }
-    const boundary = moduleRequirements(registry, module);
+    const boundary = modules.boundary(module);
     for (const [id, type] of boundary) {
       add(id, type);
     }
@@ -805,51 +906,9 @@ const inspectEndpoint = ({
     for (const target of dependencies.targets) {
       walk(target);
     }
-    const visit = (node: ts.Node) => {
-      if (dispatchRegistry(node)) {
-        return;
-      }
-      if (
-        (ts.isPropertyAccessExpression(node) ||
-          (ts.isElementAccessExpression(node) &&
-            ts.isStringLiteral(node.argumentExpression))) &&
-        ts.isPropertyAccessExpression(node.expression) &&
-        node.expression.name.text === "query"
-      ) {
-        let symbol: string | undefined;
-        if (ts.isPropertyAccessExpression(node)) {
-          symbol = node.name.text;
-        } else if (ts.isStringLiteral(node.argumentExpression)) {
-          symbol = node.argumentExpression.text;
-        }
-        for (const [id, { ownership }] of Object.entries(registry)) {
-          if (
-            symbol !== undefined &&
-            Object.values(ownership?.conditionalTableSchemas ?? {}).some(
-              (symbols) => symbols.includes(symbol),
-            )
-          ) {
-            add(id, "conditional");
-          }
-        }
-      }
-      if (
-        ts.isStringLiteralLike(node) ||
-        ts.isTemplateHead(node) ||
-        ts.isTemplateMiddle(node) ||
-        ts.isTemplateTail(node)
-      ) {
-        for (const { matcher, owners } of tables) {
-          if (matcher.test(node.text)) {
-            for (const [id, type] of owners) {
-              add(id, type);
-            }
-          }
-        }
-      }
-      ts.forEachChild(node, visit);
-    };
-    visit(ast);
+    for (const [id, type] of modules.uses(module, ast)) {
+      add(id, type);
+    }
   };
   walk(file);
   for (const [id, types] of required) {
@@ -1028,6 +1087,7 @@ export const validateFeatureAccessDeclarations = ({
   }
   const ownership = validateOwnership(registry, graph);
   const violations = ownership.violations;
+  const modules = moduleFacts(registry, ownership.tables);
   for (const endpoint of [
     ...endpoints,
     ...tasks.values(),
@@ -1038,8 +1098,8 @@ export const validateFeatureAccessDeclarations = ({
         endpoint,
         registry,
         graph,
-        tables: ownership.tables,
         dispatchModules: ownership.dispatchModules,
+        modules,
       }),
     );
   }

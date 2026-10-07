@@ -145,6 +145,7 @@
       "useBackupCode": "Inkább biztonsági kód használata"
     },
     "useDifferentEmail": "Másik e-mail-cím használata",
+    "usePassword": "Bejelentkezés jelszóval",
     "weSentCodeTo": "Kódot küldtünk a következő címre: <email>{emailAddress}</email>"
   },
   "avt": {
@@ -348,6 +349,7 @@
     },
     "view": {
       "chooseList": "Lista kiválasztása",
+      "createList": "Lista létrehozása",
       "evidenceList": "Tények forrása",
       "noLists": "Ehhez az ügyhöz nem tartozik lista.",
       "pickList": "Válassza ki azt a listát, amelynek tényeihez az ügy iratait viszonyítja a rendszer."
@@ -1049,6 +1051,7 @@
       "toastDescription": "A teljes oldalas csevegés a csevegések mentésével együtt érkezik.",
       "toastTitle": "A teljes nézet még nem érhető el"
     },
+    "activateGeneratedView": "A nézet használata",
     "aiPrompt": "AI-üzenetmező",
     "aiThread": "AI-beszélgetés",
     "analyzingSources": "Források elemzése",
@@ -1194,6 +1197,8 @@
     "forkedFromUnavailable": "Egy már nem elérhető csevegésből létrehozva",
     "forkedThread": "Másik csevegésből",
     "forkingThread": "Új csevegés létrehozása…",
+    "generatedView": "Létrehozott nézet",
+    "generatedViewDrill": "Keress határozatokat a(z) {court} bíróságszűrővel és a(z) {year} évre.",
     "greeting": "Min szeretne dolgozni?",
     "greetingSubtitle": "Kezdje egy üggyel, dokumentummal vagy egyszerű kérdéssel.",
     "hideThread": "Beszélgetés elrejtése",
@@ -1325,6 +1330,7 @@
     "sendErrorQuotaExhausted": "Az AI-szolgáltató kvótája kimerült. Próbálja újra egy perc múlva, vagy forduljon a munkaterület adminisztrátorához.",
     "sendErrorStreamIncomplete": "Az AI válasza megszakadt, mielőtt elkészült volna. Próbálja újra.",
     "sendPrompt": "Üzenet küldése",
+    "sendQueuedMessageNow": "Küldés most",
     "sendWithoutAnonymization": "Küldés anonimizálás nélkül",
     "skills": {
       "scope": {
@@ -1472,6 +1478,14 @@
       "sourceCode": "Forráskód",
       "toggleDetails": "Részletek megjelenítése",
       "unrestoredFields": "Anonimizált módban {count, plural, one {# mezőt} other {# mezőt}} nem sikerült valódi értékekkel kitölteni. Ellenőrizze: {fields}"
+    },
+    "turnNotification": {
+      "failedBody": "Egy stella-csevegés válasza nem fejeződött be.",
+      "failedTitle": "A válasz sikertelen",
+      "needsInputBody": "Egy csevegés az Ön jóváhagyására vagy válaszára vár.",
+      "needsInputTitle": "A stellának szüksége van Önre",
+      "replyReadyBody": "A stella befejezte a választ a csevegésben.",
+      "replyReadyTitle": "Kész a válasz"
     },
     "unsupportedFileType": "Nem támogatott fájltípus",
     "uploadFailed": "A fájl feldolgozása sikertelen",
@@ -1687,6 +1701,7 @@
     "deletedCount": "{count, plural, one {# elem} other {# elem}} törölve",
     "description": "Leírás",
     "details": "Részletek",
+    "detailsHiddenFeatureUnavailable": "A részletek rejtve vannak: a funkció nincs bekapcsolva",
     "disconnect": "Leválasztás",
     "dismiss": "Elvetés",
     "displayName": "Megjelenítendő név",
@@ -4371,6 +4386,11 @@
       "betaInbox": "Beérkezett üzenetek és értesítések",
       "betaInboxDescription": "A Beérkezett üzenetek és az értesítési harang megjelenítése",
       "betaTimeBillingDescription": "Időkövetés, számlák és költségek megjelenítése",
+      "chatNotifications": "Csevegési értesítések",
+      "chatNotificationsBlocked": "A stella értesítései le vannak tiltva ebben a böngészőben. Engedélyezze őket a böngésző webhely-beállításaiban.",
+      "chatNotificationsDescription": "Értesítést kap ettől a böngészőtől, amikor egy csevegési válasz elkészül, miközben a stella a háttérben fut.",
+      "chatNotificationsToggle": "Értesítsen, ha egy válasz elkészült, vagy a közreműködésemre vár",
+      "chatNotificationsUnsupported": "Ez a böngésző nem támogatja az értesítéseket.",
       "confirmDelete": "Fiók törlésének megerősítése",
       "dangerZone": "Veszélyes zóna",
       "dangerZoneDescription": "Fiókhozzáférése és a fiók privát adatainak végleges törlése.",

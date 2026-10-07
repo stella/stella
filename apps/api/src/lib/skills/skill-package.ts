@@ -216,7 +216,7 @@ export const createSkillPackageFetchContext = (
   githubTrees: new Map(),
 });
 
-// oxlint-disable-next-line promise-function-async -- preserves the cached promise identity so concurrent callers share the same request
+// oxlint-disable-next-line typescript/promise-function-async -- preserves the cached promise identity so concurrent callers share the same request
 export const getOrCreateGithubTreeRequest = ({
   cacheKey,
   context,
@@ -342,6 +342,7 @@ export const fetchSkillPackageFromUrl = async (
  * catalogue installs include the pinned SKILL.md and all allowed resources.
  */
 export const fetchGithubCatalogueSkillPackage = async ({
+  githubToken,
   fetchFiles = async (skillTarget) => {
     const fetched = await fetchGithubSkillFiles(skillTarget, {
       githubAccess: {
@@ -352,7 +353,6 @@ export const fetchGithubCatalogueSkillPackage = async ({
     });
     return fetched.map(({ files }) => files);
   },
-  githubToken,
   sourceUrl,
   target,
 }: {

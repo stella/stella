@@ -101,7 +101,7 @@ const externalMcpToolAccess = ({
       };
       destructiveBehavior: { type: "upstream" };
       permissions: McpWriteToolPermissions;
-      accountAccess: "standard";
+      accountAccess: "account-control";
     } =>
   readOnlyHint === true
     ? {
@@ -130,7 +130,7 @@ const externalMcpToolAccess = ({
         },
         // Connector administration is reserved to standard accounts over
         // REST; a connector's tools follow it.
-        accountAccess: "standard",
+        accountAccess: "account-control",
       };
 
 const projectFeatureToolDefinition = (

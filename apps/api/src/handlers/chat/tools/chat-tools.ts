@@ -62,6 +62,7 @@ import {
   createRememberTool,
   REMEMBER_TOOL_NAME,
 } from "@/api/handlers/chat/tools/remember-tool";
+import { createShowVisualTools } from "@/api/handlers/chat/tools/show-visual-tools";
 import {
   createSpawnSubagentsTool,
   SPAWN_SUBAGENTS_TOOL_NAME,
@@ -109,6 +110,7 @@ import type {
   DocumentWriteAccess,
   NewDocumentVersionOperation,
 } from "@/api/lib/entities/authorize-document-write";
+import { CHAT_ONLY_FEATURE_TOOL_DEFINITIONS } from "@/api/lib/feature-access/registry";
 import { FIELD_VALUE_WRITE_PERMISSIONS } from "@/api/lib/fields/write-field";
 import { hasMemberPermission } from "@/api/lib/permission-authorization";
 import type { AuthorizedMemberRole } from "@/api/lib/permission-authorization";
@@ -357,6 +359,7 @@ type FolderConsistencyReviewTools = ReturnType<
 type RegistryWriteTools = ChatRegistryWriteToolMap;
 type SubagentTools = ReturnType<typeof createSpawnSubagentsTool>;
 type RememberTools = ReturnType<typeof createRememberTools>;
+type ShowVisualTools = ReturnType<typeof createShowVisualTools>;
 
 type BuiltInChatTools = OrgTools &
   ChatExecutionTools &
@@ -380,7 +383,8 @@ type BuiltInChatTools = OrgTools &
   FolderConsistencyReviewTools &
   RegistryWriteTools &
   SubagentTools &
-  RememberTools;
+  RememberTools &
+  ShowVisualTools;
 
 export type ChatTools = BuiltInChatTools;
 
@@ -394,6 +398,8 @@ type BuiltInChatToolPolicyName =
   | CurrentSkillEditToolName;
 
 export type GetChatToolsProps = {
+  /** Only the owning chat turn can issue and store displayed visual resources. */
+  visualTools?: Parameters<typeof createShowVisualTools>[0] | undefined;
   featureAccessSnapshot?: FeatureAccessSnapshot | undefined;
   testDependencies?: ChatRegistryContextDeps["testDependencies"] | undefined;
   /** Deployment gate; injectable so both disabled and enabled toolsets test. */
@@ -1191,6 +1197,7 @@ export const getChatTools = (props: GetChatToolsProps): ChatToolMap => {
           getChatTools({
             ...props,
             browserClient: undefined,
+            visualTools: undefined,
             hasActiveDocxEditClient: false,
             delegationDepth: delegationDepth + 1,
             projectToolSet: (tools) =>
@@ -1212,6 +1219,9 @@ export const getChatTools = (props: GetChatToolsProps): ChatToolMap => {
   const registered = applyChatToolPolicies({
     policyKinds,
     tools: {
+      ...(props.visualTools === undefined
+        ? {}
+        : createShowVisualTools(props.visualTools)),
       ...orgTools,
       ...executionTools,
       ...skillTools,
@@ -1249,7 +1259,10 @@ export const getChatTools = (props: GetChatToolsProps): ChatToolMap => {
         },
         kind: "tools",
         id: name,
-        featureId: getStaticMcpToolDefinition(name)?.featureId,
+        featureId:
+          CHAT_ONLY_FEATURE_TOOL_DEFINITIONS.find(
+            (definition) => definition.name === name,
+          )?.featureId ?? getStaticMcpToolDefinition(name)?.featureId,
       }),
     ),
   );

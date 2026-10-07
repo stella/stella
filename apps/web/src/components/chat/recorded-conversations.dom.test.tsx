@@ -1,5 +1,5 @@
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
-import { Result } from "better-result";
+import { Result, panic } from "better-result";
 import {
   afterAll,
   afterEach,
@@ -10,6 +10,14 @@ import {
 } from "bun:test";
 import { readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
+
+import { browserStorage } from "@/lib/account/browser-storage";
+import { userStorageKey } from "@/lib/account/user-scoped-storage";
+
+const localArea = () =>
+  browserStorage("local") ?? panic("Test requires local browser storage");
+const sessionArea = () =>
+  browserStorage("session") ?? panic("Test requires session browser storage");
 
 // A DOM for this file only: the rendered chat is clicked and its effects run,
 // which a static render cannot do. Everything that touches the DOM is loaded
@@ -382,8 +390,8 @@ afterEach(() => {
   testing.cleanup();
   routeRequest = undefined;
   __resetChatRequestStateForTests();
-  sessionStorage.clear();
-  localStorage.clear();
+  sessionArea().clear();
+  localArea().clear();
 });
 
 const { act, fireEvent, waitFor, within } = testing;
@@ -723,8 +731,8 @@ const grantConversationTools = (recording: RecordedConversation) => {
   if (granted.size === 0) {
     return;
   }
-  sessionStorage.setItem(
-    `${CONVERSATION_GRANTS_KEY}${recording.threadId}`,
+  sessionArea().setItem(
+    userStorageKey(`${CONVERSATION_GRANTS_KEY}${recording.threadId}`),
     JSON.stringify(
       [...granted].map((name) =>
         isApprovalToolName(name)
@@ -1029,6 +1037,9 @@ const RECORDED_ACTIONS: Record<string, RecordedCoverage> = {
     "The recorder scripts one model; a model switch needs a second one.",
   ),
   send: recordedAs(({ type }) => type === "send"),
+  "send-queued-message-now": notRecorded(
+    "The recorder has no send queue; it lives in the session hook this replay renders.",
+  ),
   stop: recordedAs(({ type }) => type === "stop"),
   "toggle-anonymization": OUTSIDE_THE_CONVERSATION,
   "toggle-web-search": OUTSIDE_THE_CONVERSATION,

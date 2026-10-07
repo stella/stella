@@ -180,8 +180,8 @@ const getThreadRecap = createSafeRootHandler(config, async function* (ctx) {
   // Cache best-effort: a write failure should not fail the read, so
   // the recap still reaches the user (it just regenerates next time).
   const persistResult = await safeDb((tx) =>
+    // audit: skip — derived recap cache maintenance; no user-authored state change
     tx
-      // audit: skip — derived recap cache maintenance; no user-authored state change
       .update(chatThreads)
       .set({
         recapText: recap,
