@@ -17,6 +17,7 @@
 import * as cheerio from "cheerio";
 import { type AnyNode, isTag, isText } from "domhandler";
 
+// parser-output-unchanged: imports the document AST from its package owner
 import type {
   Block,
   DocumentAst,
@@ -24,7 +25,8 @@ import type {
   Inline,
   ParagraphBlock,
   ParagraphRole,
-} from "@/api/handlers/case-law/document-ast";
+} from "@stll/legal-ast/document-ast";
+
 import {
   inlinesToPlainText,
   isExcludedHtmlTag,

@@ -9,10 +9,6 @@ import {
   useSyncExternalStore,
 } from "react";
 
-import {
-  draggable,
-  dropTargetForElements,
-} from "@atlaskit/pragmatic-drag-and-drop/adapter/element-adapter";
 import { combine } from "@atlaskit/pragmatic-drag-and-drop/utils/combine";
 import { useHotkey } from "@tanstack/react-hotkeys";
 import {
@@ -134,6 +130,10 @@ import { useFormatter } from "@/i18n/formatting-context";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { isPlaceholderThreadTitle } from "@/lib/chat-thread-title";
 import { detached } from "@/lib/detached";
+import {
+  draggable,
+  dropTargetForElements,
+} from "@/lib/drag-and-drop/element-registration";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { formatHotkeyForPlatform, NAV_KEY } from "@/lib/hotkeys";
 import { inboxCountOptions } from "@/lib/inbox/queries";

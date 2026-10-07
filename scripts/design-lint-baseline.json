@@ -1,7 +1,7 @@
 {
   "shadcn/no-restyle": {
     "apps/desktop/src/clipboard/ClipboardApp.tsx": 3,
-    "apps/web/src/components/ai-elements/conversation.tsx": 5,
+    "apps/web/src/components/ai-elements/conversation.tsx": 2,
     "apps/web/src/components/ai-rewrite-control.tsx": 3,
     "apps/web/src/components/ai-suggestions/host.tsx": 14,
     "apps/web/src/components/ai-suggestions/pending-review-new-thread-prompt.tsx": 2,

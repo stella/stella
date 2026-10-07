@@ -44,6 +44,7 @@
 import * as cheerio from "cheerio";
 import { type AnyNode, type Element, isTag, isText } from "domhandler";
 
+// parser-output-unchanged: imports the document AST from its package owner
 import type {
   Block,
   DocumentAst,
@@ -51,8 +52,9 @@ import type {
   Inline,
   ParagraphBlock,
   ParagraphRole,
-} from "@/api/handlers/case-law/document-ast";
-import { hasInlineChildren } from "@/api/handlers/case-law/document-ast";
+} from "@stll/legal-ast/document-ast";
+import { hasInlineChildren } from "@stll/legal-ast/document-ast";
+
 import { validateAndLog } from "@/api/lib/legal-search/parsers/validate-ast";
 import { sanitizeUrl } from "@/api/lib/sanitize-url";
 
