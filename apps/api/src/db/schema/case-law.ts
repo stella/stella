@@ -2649,9 +2649,9 @@ export const caseLawCitationReviews = p.pgTable(
     origin: p.text("origin", { enum: CITATION_REVIEW_ORIGINS }).notNull(),
     model: p.text("model"),
     promptVersion: p.text("prompt_version"),
-    promptSha256: p.char("prompt_sha256", { length: 64 }),
+    promptSha256: p.varchar("prompt_sha256", { length: 64 }),
     /** Digest of the passage the label was read from. */
-    evidenceSha256: p.char("evidence_sha256", { length: 64 }),
+    evidenceSha256: p.varchar("evidence_sha256", { length: 64 }),
     runId: p.text("run_id"),
     producedAt: timestamptz("produced_at"),
     /** When the current review was made; a changed review moves it. */

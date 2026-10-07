@@ -10,8 +10,8 @@ ALTER TABLE "case_law_citation_reviews"
   ADD COLUMN "origin" text DEFAULT 'human-review' NOT NULL,
   ADD COLUMN "model" text,
   ADD COLUMN "prompt_version" text,
-  ADD COLUMN "prompt_sha256" char(64),
-  ADD COLUMN "evidence_sha256" char(64),
+  ADD COLUMN "prompt_sha256" varchar(64),
+  ADD COLUMN "evidence_sha256" varchar(64),
   ADD COLUMN "run_id" text,
   ADD COLUMN "produced_at" timestamptz;--> statement-breakpoint
 
