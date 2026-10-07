@@ -4326,7 +4326,8 @@ test("the exact docs-only README change plans only Markdown checks in PRs and me
   const outputs = [
     ...new Set([
       ...Object.values(jobScopes).filter(
-        (scope) => scope !== null && scope !== "ci_browser_required",
+        (scope): scope is string =>
+          scope !== null && scope !== "ci_browser_required",
       ),
       "desktop_browser_required",
       ...Object.values(fastJobScopes),
@@ -4416,7 +4417,8 @@ test("mixed documentation and code changes retain the complete code plan", () =>
   const outputs = [
     ...new Set([
       ...Object.values(jobScopes).filter(
-        (scope) => scope !== null && scope !== "ci_browser_required",
+        (scope): scope is string =>
+          scope !== null && scope !== "ci_browser_required",
       ),
       "desktop_browser_required",
       ...Object.values(fastJobScopes),
