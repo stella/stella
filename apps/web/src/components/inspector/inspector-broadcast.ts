@@ -9,6 +9,10 @@ import { Temporal } from "@stll/time";
 import { useInspectorCommandStore } from "@/components/inspector/inspector-command-store";
 import { normalizeInspectorGroupAssignments } from "@/components/inspector/inspector-groups.logic";
 import {
+  inspectorMinimizedStorageKey,
+  inspectorStateStorageKey,
+} from "@/components/inspector/inspector-storage-keys";
+import {
   FILE_FACETS,
   parseSkillResourceSource,
   type ChatTab,
@@ -18,11 +22,11 @@ import {
   type InspectorTabsStore,
   type TaskTab,
 } from "@/components/inspector/inspector-store-types";
+import "@/components/inspector/inspector-persistence-references";
 import {
   isGenericInspectorTab,
   reconcileSharedInspectorTabs,
 } from "@/components/inspector/inspector-tabs-slice";
-import "@/components/inspector/inspector-persistence-references";
 import {
   getInspectorPersistenceReference,
   getInspectorView,
@@ -39,7 +43,6 @@ import {
   isCurrentStorageOwner,
   onStorageOwnerChange,
   storageOwner,
-  userStorageKey,
 } from "@/lib/account/user-scoped-storage";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { notifyUserError } from "@/lib/errors/user-toast";
@@ -100,27 +103,7 @@ type InspectorBroadcastClock = {
 };
 
 const INSPECTOR_TABS_CHANNEL_PREFIX = "stella:inspector-tabs:v1";
-const INSPECTOR_MINIMIZED_STORAGE_PREFIX = "stella:inspector-minimized:v1";
-const INSPECTOR_STATE_STORAGE_PREFIX = "stella:inspector-state:v1";
 const noopInspectorBroadcastCleanup = () => undefined;
-
-const getInspectorMinimizedStorageKey = ({
-  userId,
-  organizationId,
-}: InspectorBroadcastScope) =>
-  userStorageKey(`${INSPECTOR_MINIMIZED_STORAGE_PREFIX}:${organizationId}:`, {
-    kind: "user",
-    userId,
-  });
-
-const getInspectorStateStorageKey = ({
-  userId,
-  organizationId,
-}: InspectorBroadcastScope) =>
-  userStorageKey(`${INSPECTOR_STATE_STORAGE_PREFIX}:${organizationId}:`, {
-    kind: "user",
-    userId,
-  });
 
 const readPersistedMinimized = (scope: InspectorBroadcastScope): boolean => {
   if (typeof window === "undefined") {
@@ -128,7 +111,7 @@ const readPersistedMinimized = (scope: InspectorBroadcastScope): boolean => {
   }
   return requireBrowserStorage("local")
     .andThen((storage) =>
-      Result.try(() => storage.getItem(getInspectorMinimizedStorageKey(scope))),
+      Result.try(() => storage.getItem(inspectorMinimizedStorageKey(scope))),
     )
     .map((value) => value === "1")
     .unwrapOr(false);
@@ -145,7 +128,7 @@ const writePersistedMinimized = (
     .andThen((storage) =>
       Result.try(() =>
         storage.setItem(
-          getInspectorMinimizedStorageKey(scope),
+          inspectorMinimizedStorageKey(scope),
           minimized ? "1" : "0",
         ),
       ),
@@ -538,7 +521,7 @@ const readPersistedInspectorState = (
   const readResult = requireBrowserStorage("local").andThen((storage) =>
     Result.try(() =>
       readStoredJson(
-        storage.getItem(getInspectorStateStorageKey(scope)),
+        storage.getItem(inspectorStateStorageKey(scope)),
         v.unknown(),
       ),
     ),
@@ -603,7 +586,7 @@ const writePersistedInspectorState = (
       tabIds.has(tabId),
     ),
   );
-  const storageKey = getInspectorStateStorageKey(scope);
+  const storageKey = inspectorStateStorageKey(scope);
   const writeResult = requireBrowserStorage("local").andThen((storage) =>
     Result.try(() =>
       storage.setItem(
