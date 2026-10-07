@@ -114,7 +114,7 @@ type ListRunSummariesArgs = {
   workspaceId: SafeId<"workspace">;
   entityId: SafeId<"entity">;
   fileFieldId: SafeId<"field">;
-  cursor?: string;
+  cursor: string | undefined;
   limit: number;
 };
 
