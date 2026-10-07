@@ -5474,14 +5474,8 @@
     "exportToCsv": "Exportar a CSV",
     "fields": {
       "calculating": "Calculando...",
-      "currencyLabel": "Moneda (opcional)",
-      "currencyPlaceholder": "p. ej. USD, EUR",
-      "editFieldValue": "Editar valor del campo",
       "errored": "Error",
-      "fieldValueLabel": "Valor del campo",
-      "fieldValuePlaceholder": "Introduzca el valor del campo",
       "formatNotSupported": "Formato no compatible",
-      "numberPlaceholder": "Introduzca un número",
       "selectAValue": "Seleccione un valor",
       "selectValues": "Seleccione valores"
     },

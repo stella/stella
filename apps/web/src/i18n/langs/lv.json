@@ -5474,14 +5474,8 @@
     "exportToCsv": "Eksportēt uz CSV",
     "fields": {
       "calculating": "Aprēķina...",
-      "currencyLabel": "Valūta (neobligāti)",
-      "currencyPlaceholder": "piem., USD, EUR",
-      "editFieldValue": "Rediģēt lauka vērtību",
       "errored": "Kļūda",
-      "fieldValueLabel": "Lauka vērtība",
-      "fieldValuePlaceholder": "Ievadiet lauka vērtību",
       "formatNotSupported": "Formāts netiek atbalstīts",
-      "numberPlaceholder": "Ievadiet skaitli",
       "selectAValue": "Izvēlieties vērtību",
       "selectValues": "Izvēlieties vērtības"
     },

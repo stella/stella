@@ -80,7 +80,7 @@ export const EntityIcon = ({
 
 /** Whether a folder is drawn open or shut. Only trees and tables that own
  *  an expand affordance know this; everything else draws a shut folder. */
-export type FolderState = "collapsed" | "expanded";
+type FolderState = "collapsed" | "expanded";
 
 type EntityKindIconProps = {
   kind: EntityKind;

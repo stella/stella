@@ -5477,14 +5477,8 @@ type Messages = {
     "exportToCsv": "Export to CSV";
     "fields": {
       "calculating": "Calculating...";
-      "currencyLabel": "Currency (optional)";
-      "currencyPlaceholder": "e.g. USD, EUR";
-      "editFieldValue": "Edit field value";
       "errored": "Errored";
-      "fieldValueLabel": "Field value";
-      "fieldValuePlaceholder": "Enter field value";
       "formatNotSupported": "Format not supported";
-      "numberPlaceholder": "Enter number";
       "selectAValue": "Select a value";
       "selectValues": "Select values";
     };

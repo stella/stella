@@ -5474,14 +5474,8 @@
     "exportToCsv": "Ekspordi CSV-sse",
     "fields": {
       "calculating": "Arvutamine...",
-      "currencyLabel": "Valuuta (valikuline)",
-      "currencyPlaceholder": "nt USD, EUR",
-      "editFieldValue": "Muuda välja väärtust",
       "errored": "Viga",
-      "fieldValueLabel": "Välja väärtus",
-      "fieldValuePlaceholder": "Sisestage välja väärtus",
       "formatNotSupported": "Formaat ei ole toetatud",
-      "numberPlaceholder": "Sisestage number",
       "selectAValue": "Valige väärtus",
       "selectValues": "Valige väärtused"
     },

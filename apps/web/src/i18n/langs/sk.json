@@ -5474,14 +5474,8 @@
     "exportToCsv": "Exportovať do CSV",
     "fields": {
       "calculating": "Počíta sa...",
-      "currencyLabel": "Mena (nepovinné)",
-      "currencyPlaceholder": "napr. USD, EUR",
-      "editFieldValue": "Upraviť hodnotu poľa",
       "errored": "Chyba",
-      "fieldValueLabel": "Hodnota poľa",
-      "fieldValuePlaceholder": "Zadajte hodnotu poľa",
       "formatNotSupported": "Formát nie je podporovaný",
-      "numberPlaceholder": "Zadajte číslo",
       "selectAValue": "Vyberte hodnotu",
       "selectValues": "Vyberte hodnoty"
     },

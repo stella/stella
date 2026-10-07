@@ -44,7 +44,6 @@
     "apps/web/src/components/matter-number-hint.tsx::MatterNumberHint::settings": "pending migration to useQueryView",
     "apps/web/src/components/matter-target-picker.tsx::MatterTargetPicker::data": "pending migration to useQueryView",
     "apps/web/src/components/organization/invite-member-dialog.tsx::InviteMemberDialog::currentUserRole": "pending migration to useQueryView",
-    "apps/web/src/components/organization/invite-member-dialog.tsx::useCanInviteMembers::currentUserRole": "pending migration to useQueryView",
     "apps/web/src/components/references/reference-chip.tsx::useReferenceFacts::hintQuery": "pending migration to useQueryView",
     "apps/web/src/components/require-ai-key.tsx::AIAvailabilityProvider::data": "pending migration to useQueryView",
     "apps/web/src/components/require-ai-key.tsx::AIKeyRequiredDialog::config": "pending migration to useQueryView",
