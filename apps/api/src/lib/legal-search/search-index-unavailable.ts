@@ -35,3 +35,14 @@ export const searchIndexUnavailableError = (cause: unknown): HandlerError =>
  */
 export const isSearchIndexUnavailable = (error: unknown): boolean =>
   resolveHandlerError(error)?.code === SEARCH_INDEX_UNAVAILABLE_CODE;
+
+/**
+ * Refuses the search with the typed 503. The search handlers answer
+ * envelopes, not `Result`, so the refusal travels as a thrown `HandlerError`
+ * that the route error mapping and MCP `internalFailureResult` both resolve
+ * through `isSearchIndexUnavailable`.
+ */
+export const refuseSearchIndexUnavailable = (cause: unknown): never => {
+  // oxlint-disable-next-line result-boundary/no-throw-outside-boundary -- search handlers return status envelopes; the route boundary and MCP resolve this thrown HandlerError by code
+  throw searchIndexUnavailableError(cause);
+};

@@ -230,7 +230,7 @@ import type {
   RankedHit,
   ScoredCandidate,
 } from "@/api/lib/legal-search/rerank";
-import { searchIndexUnavailableError } from "@/api/lib/legal-search/search-index-unavailable";
+import { refuseSearchIndexUnavailable } from "@/api/lib/legal-search/search-index-unavailable";
 import { LIMITS } from "@/api/lib/limits";
 import { failureSink } from "@/api/lib/observability/failure";
 import { logger } from "@/api/lib/observability/logger";
@@ -2087,10 +2087,10 @@ const servingTargetRefusal = (
 ): never => {
   switch (failure._tag) {
     case "CorpusServingGenerationAbsentError":
-      throw searchIndexUnavailableError(failure);
+      return refuseSearchIndexUnavailable(failure);
     case "CorpusIndexGroupNotReadyError":
       observeFailure(failure, { sink: corpusIndexGroupNotReady });
-      throw searchIndexUnavailableError(failure);
+      return refuseSearchIndexUnavailable(failure);
     default:
       failure satisfies never;
       return panic(`Unhandled serving target failure: ${String(failure)}`);

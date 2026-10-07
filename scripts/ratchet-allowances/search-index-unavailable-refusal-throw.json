@@ -1,0 +1,5 @@
+{
+  "metric": "throw-outside-boundary",
+  "delta": 1,
+  "reason": "refuseSearchIndexUnavailable is the one throw site for the typed search_index_unavailable 503: the search handlers return status envelopes, and the route error mapping and MCP internalFailureResult resolve the thrown HandlerError by code."
+}

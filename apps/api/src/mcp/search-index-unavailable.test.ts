@@ -254,7 +254,7 @@ describe("search_index_unavailable", () => {
       requested.length = 0;
       globalThis.fetch = Object.assign(
         async (input: string | URL | Request) => {
-          requested.push(new Request(input).url);
+          requested.push(input instanceof Request ? input.url : String(input));
           return await Promise.resolve(Response.json({}, { status: 500 }));
         },
         { preconnect: originalFetch.preconnect },

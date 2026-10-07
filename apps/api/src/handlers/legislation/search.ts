@@ -117,7 +117,7 @@ import {
   stableBlendUpperBound,
 } from "@/api/lib/legal-search/rerank";
 import type { ScoredCandidate } from "@/api/lib/legal-search/rerank";
-import { searchIndexUnavailableError } from "@/api/lib/legal-search/search-index-unavailable";
+import { refuseSearchIndexUnavailable } from "@/api/lib/legal-search/search-index-unavailable";
 import {
   legislationPublicReadDb,
   type LegislationReadDb,
@@ -1236,7 +1236,7 @@ const readLegislationServingGeneration = async (
       )(tx, "legislation"),
   );
   if (Result.isError(read)) {
-    throw searchIndexUnavailableError(read.error);
+    return refuseSearchIndexUnavailable(read.error);
   }
   return read.value;
 };

@@ -137,7 +137,7 @@ describe("a search against a serving cluster that holds no index", () => {
       const requested: string[] = [];
       globalThis.fetch = Object.assign(
         async (input: string | URL | Request) => {
-          requested.push(new Request(input).url);
+          requested.push(input instanceof Request ? input.url : String(input));
           return await Promise.resolve(
             Response.json(
               { message: "could not find indexes matching the IDs" },
@@ -236,7 +236,7 @@ test.each(SERVING_TARGET_REFUSALS)(
     const originalFetch = globalThis.fetch;
     globalThis.fetch = Object.assign(
       async (input: string | URL | Request) => {
-        requested.push(new Request(input).url);
+        requested.push(input instanceof Request ? input.url : String(input));
         return await Promise.resolve(Response.json({}, { status: 500 }));
       },
       { preconnect: originalFetch.preconnect },

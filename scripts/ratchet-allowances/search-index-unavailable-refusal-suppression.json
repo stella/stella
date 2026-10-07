@@ -1,0 +1,5 @@
+{
+  "metric": "lint-suppression-directives",
+  "delta": 1,
+  "reason": "Names result-boundary/no-throw-outside-boundary on refuseSearchIndexUnavailable, the single throw site for the typed search_index_unavailable 503."
+}
