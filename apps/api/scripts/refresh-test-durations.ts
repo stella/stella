@@ -93,7 +93,7 @@ export const addMissingTestDurations = (
   }
   const estimated = estimateMissingTestDurations({ files, previous });
   const additions = Object.fromEntries(
-    missing.toSorted(compareCodeUnit).map((file) => [file, estimated[file]]),
+    Object.entries(estimated).filter(([file]) => previous[file] === undefined),
   );
   const closing = text.lastIndexOf("}");
   const prefix = text.slice(0, closing).trimEnd();
