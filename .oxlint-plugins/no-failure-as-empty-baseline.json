@@ -63,7 +63,6 @@
     "apps/api/src/lib/rate-limit/action-admission.ts::scheduleRenewal::promise-catch-empty#1": "Existing site pending review: return a ReadOutcome or propagate the failure.",
     "apps/api/src/lib/rate-limit/redis-context.ts::openRedis::promise-catch-empty#1": "Existing site pending review: return a ReadOutcome or propagate the failure.",
     "apps/api/src/lib/report-export-enqueue.ts::handle::result-error-returns-empty#1": "Existing site pending review: return a ReadOutcome or propagate the failure.",
-    "apps/api/src/lib/report-export-recovery.ts::hasLostItsJob::result-error-returns-empty#1": "Existing site pending review: return a ReadOutcome or propagate the failure.",
     "apps/api/src/lib/s3.ts::fetchCredentialJson::not-ok-returns-empty#1": "Existing site pending review: return a ReadOutcome or propagate the failure.",
     "apps/api/src/lib/s3.ts::fetchEcsCredentials::result-error-returns-empty#1": "Existing site pending review: return a ReadOutcome or propagate the failure.",
     "apps/api/src/lib/s3.ts::fetchImdsCredentials::not-ok-returns-empty#1": "Existing site pending review: return a ReadOutcome or propagate the failure.",

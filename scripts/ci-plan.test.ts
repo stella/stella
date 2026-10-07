@@ -39,6 +39,7 @@ import { serviceSuiteCliOutput } from "./detect-service-suite-changes";
 import { GENERATORS } from "./generated-files";
 import { evaluate } from "./github-expression";
 import { mainHeavyJobs, queueAdmittedJobs } from "./main-heavy-plan";
+import { flattenWorkflowSteps } from "./workflow-steps";
 
 const workflow = readFileSync(
   new URL("../.github/workflows/ci.yml", import.meta.url),
@@ -1739,17 +1740,33 @@ const MatrixJob = v.object({
 const jobSteps = (job: unknown) =>
   v.parse(
     v.object({
-      steps: v.array(
-        v.object({
-          name: v.optional(v.string()),
-          run: v.optional(v.string()),
-          if: v.optional(v.string()),
-          env: v.optional(v.record(v.string(), v.string())),
-        }),
+      steps: v.pipe(
+        v.unknown(),
+        v.transform(flattenWorkflowSteps),
+        v.array(
+          v.object({
+            name: v.optional(v.string()),
+            run: v.optional(v.string()),
+            if: v.optional(v.string()),
+            env: v.optional(v.record(v.string(), v.string())),
+          }),
+        ),
       ),
     }),
     job,
   ).steps;
+
+test("CI plan guards see checks nested inside parallel groups", () => {
+  const guard = {
+    name: "Nested check",
+    run: "bun test scripts/ci-plan.test.ts",
+    if: "!cancelled() && steps.install.outcome == 'success'",
+    env: { CHECK_REQUIRED: "true" },
+  };
+  expect(jobSteps({ steps: [{ parallel: [{ parallel: [guard] }] }] })).toEqual([
+    guard,
+  ]);
+});
 
 type ResolveDepthOptions = {
   ref?: string;
@@ -2010,6 +2027,7 @@ test("transfer read guard runs for API-only pull request changes", () => {
   expect(fastRequired).toContain("ci-checks-rest");
 });
 
+// Scope subprocesses take 1.6 s serial and exceed 5 s while CI checks run in parallel.
 test("CLI packaging parity runs whenever CLI sources, codegen or generated outputs change", () => {
   expect(packageScopeStart).toBeGreaterThan(-1);
   expect(selector).toContain(packageScope);
@@ -2064,7 +2082,7 @@ test("CLI packaging parity runs whenever CLI sources, codegen or generated outpu
       expect(packageChecksPlan(files), files.join(" ")).toBe("true");
     }
   }
-});
+}, 15_000);
 
 const smokeCommands = (job: unknown) =>
   jobSteps(job).flatMap(({ run }) =>
