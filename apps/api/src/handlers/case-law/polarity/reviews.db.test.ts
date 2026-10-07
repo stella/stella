@@ -828,7 +828,7 @@ describe("reviewed citation labels", () => {
       origin,
       producedAt,
     }: (typeof standings)[number]): CitationReviewStanding =>
-      origin === CITATION_REVIEW_ORIGIN.HUMAN_REVIEW || producedAt === null
+      origin === CITATION_REVIEW_ORIGIN.HUMAN_REVIEW
         ? { origin: CITATION_REVIEW_ORIGIN.HUMAN_REVIEW }
         : { origin, producedAt: Temporal.Instant.from(producedAt) };
     const rows = (
