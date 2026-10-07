@@ -20,6 +20,8 @@ count.write_text(str(attempt))
 args=sys.argv[1:]
 stdin=sys.stdin.buffer.read()
 with (root/'calls').open('a') as f:f.write(json.dumps({'args':args,'stdin':stdin.hex()})+'\\n')
+if os.environ['FAKE_WATCHDOG_STARTUP']=='interrupted':
+ while not (root/'startup-interrupted').exists():select.select([],[],[],0.01)
 responses=json.loads(os.environ['FAKE_RESPONSES'])
 response=responses[min(attempt-1,len(responses)-1)]
 if 'download' in args:
@@ -60,6 +62,20 @@ if '-d' in sys.argv or '-f' in sys.argv:
 else:print(1000)
 `;
 
+// Model GNU Bash's inherited EXIT cleanup before watchdog trap setup on every
+// platform. DEBUG inheritance reaches the first subshell command.
+const INTERRUPT_WATCHDOG_STARTUP = `set -T
+interrupt_watchdog_startup() {
+  if ((BASH_SUBSHELL > 0)) && [[ "$BASH_COMMAND" == 'sleep "$remaining"' ]]; then
+    while [[ ! -s "$FAKE_ROOT/calls" ]]; do /bin/sleep 0.01; done
+    : > "$FAKE_ROOT/startup-interrupted"
+    trap cleanup EXIT
+    exit 143
+  fi
+}
+trap interrupt_watchdog_startup DEBUG
+`;
+
 type FakeResponse = {
   exit: number;
   http?: number;
@@ -73,6 +89,7 @@ type ScenarioOptions = {
   input?: string;
   existingAsset?: boolean;
   expireWatchdog?: boolean;
+  watchdogStartup?: "normal" | "interrupted";
 };
 const scenario = async ({
   args = ["api", "repos/example/project"],
@@ -80,6 +97,7 @@ const scenario = async ({
   input = "",
   existingAsset = false,
   expireWatchdog = false,
+  watchdogStartup = "normal",
 }: ScenarioOptions) => {
   const directory = await mkdtemp(path.join(tmpdir(), "gh-retry-test-"));
   await writeFile(path.join(directory, "gh"), FAKE_GH);
@@ -88,6 +106,8 @@ const scenario = async ({
   await chmod(path.join(directory, "date"), 0o700);
   await chmod(path.join(directory, "gh"), 0o700);
   await chmod(path.join(directory, "sleep"), 0o700);
+  const shellStartup = path.join(directory, "shell-startup");
+  await writeFile(shellStartup, INTERRUPT_WATCHDOG_STARTUP);
   const destination = path.join(directory, "output");
   if (existingAsset) {
     await mkdir(destination);
@@ -103,8 +123,12 @@ const scenario = async ({
       cwd: directory,
       env: {
         ...Bun.env,
+        ...(watchdogStartup === "interrupted"
+          ? { BASH_ENV: shellStartup }
+          : {}),
         PATH: `${directory}:${Bun.env["PATH"] ?? ""}`,
         FAKE_ROOT: directory,
+        FAKE_WATCHDOG_STARTUP: watchdogStartup,
         FAKE_EXPIRE_WATCHDOG: expireWatchdog ? "1" : "0",
         FAKE_RESPONSES: JSON.stringify(responses),
       },
@@ -144,6 +168,9 @@ const scenario = async ({
         .trim()
         .split("\n")
     : [];
+  const startupInterrupted = await Bun.file(
+    path.join(directory, "startup-interrupted"),
+  ).exists();
   await rm(directory, { recursive: true, force: true });
   expect(stderr).not.toContain("private-token-do-not-print");
   return {
@@ -155,11 +182,23 @@ const scenario = async ({
     downloaded,
     partialExists,
     destinations,
+    startupInterrupted,
   };
 };
 
 const unavailable = { exit: 1, http: 503 };
 const success = { exit: 0, http: 200, output: "6f6b" };
+
+test("watchdog termination before trap setup preserves the command response", async () => {
+  const result = await scenario({
+    responses: [success],
+    watchdogStartup: "interrupted",
+  });
+  expect(result.startupInterrupted).toBe(true);
+  expect(result.exit).toBe(0);
+  expect(result.calls).toHaveLength(1);
+  expect(result.stdout).toEqual(Buffer.from("ok"));
+});
 
 test("503 then success retries once and discards partial binary stdout", async () => {
   const result = await scenario({

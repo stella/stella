@@ -19,6 +19,9 @@ scratch=$(mktemp -d)
 command_pid=''
 watchdog=''
 cleanup() {
+  # Early watchdog termination can run the inherited EXIT trap on GNU Bash.
+  # Only the owning shell may remove response files or terminate commands.
+  ((BASH_SUBSHELL == 0)) || return 0
   [[ -z "$command_pid" ]] || kill "$command_pid" 2>/dev/null || true
   [[ -z "$watchdog" ]] || kill "$watchdog" 2>/dev/null || true
   rm -rf "$scratch"
