@@ -41,7 +41,7 @@ const languageForLocale = (
   return isDocumentTranslationTargetCode(mapped) ? mapped : null;
 };
 
-export type DefaultLanguagePair = {
+type DefaultLanguagePair = {
   source: DocumentTranslationTargetLanguageCode;
   target: DocumentTranslationTargetLanguageCode;
 };

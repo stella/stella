@@ -38,7 +38,7 @@ test("accepts factories named predicate owners module constants and blanket refr
   ).toEqual([]);
 });
 
-test("leaves mutable keys and one-level alias boundaries outside local literal detection", async () => {
+test("reports local literal aliases while leaving mutable bindings unresolved", async () => {
   expect(
     await lintSingleRule(
       "require-query-key-factory",
@@ -54,5 +54,24 @@ test("leaves mutable keys and one-level alias boundaries outside local literal d
         "}",
       ].join("\n"),
     ),
-  ).toEqual([]);
+  ).toEqual([3]);
+});
+
+test("follows local key and filter aliases to literal provenance", async () => {
+  expect(
+    await lintSingleRule(
+      "require-query-key-factory",
+      [
+        "function refresh() {",
+        'const key = ["chat"];',
+        "const alias = key;",
+        "const finalAlias = alias;",
+        "const filters = { queryKey: finalAlias };",
+        "const options = filters;",
+        "client.setQueryData(finalAlias, next);",
+        "client.invalidateQueries(options);",
+        "}",
+      ].join("\n"),
+    ),
+  ).toEqual([2, 2]);
 });

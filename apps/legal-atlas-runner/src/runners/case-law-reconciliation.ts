@@ -34,7 +34,7 @@ export const RECONCILIATION_TURN = {
   MISCONFIGURED: "misconfigured",
 } as const;
 
-export type ReconciliationTurn =
+type ReconciliationTurn =
   (typeof RECONCILIATION_TURN)[keyof typeof RECONCILIATION_TURN];
 
 /**

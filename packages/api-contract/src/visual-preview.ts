@@ -18,6 +18,7 @@ export const VISUAL_PREVIEW_LIMITS = {
 export const visualPreviewInputSchema = v.strictObject({
   document: v.pipe(
     v.string(),
+    v.check((value) => value.trim().length > 0),
     v.maxLength(VISUAL_PREVIEW_LIMITS.documentBytes),
     v.check(
       (value) =>
