@@ -104,8 +104,13 @@ const aiReviewEntries = {
     v.isoTimestamp(),
     v.check(isPlausibleProductionInstant, "producedAt must be a real instant"),
     // Bound as UTC: an offset the database cannot parse (+16:00) never
-    // reaches the timestamptz cast.
-    v.transform((value) => Temporal.Instant.from(value).toString()),
+    // reaches the timestamptz cast. Truncated to the microseconds timestamptz
+    // stores, so a file orders its labels as the database later compares them.
+    v.transform((value) =>
+      Temporal.Instant.from(value)
+        .round({ smallestUnit: "microsecond", roundingMode: "trunc" })
+        .toString(),
+    ),
   ),
 };
 

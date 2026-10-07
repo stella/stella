@@ -881,6 +881,52 @@ describe("reviewed citation labels", () => {
   });
 
   // Last: it retires a shipped rule for the rest of the file.
+  test("instants within one microsecond tie in one file and across runs alike", async () => {
+    const labelled = await ingestRuleLabelled({
+      caseNumber: "30 Cdo 1017/2026",
+      cited: "sp. zn. 29 Cdo 4017/2015",
+      rawHash: "sub-microsecond",
+    });
+    const ids = {
+      citingDecisionId: labelled.citingDecisionId,
+      citationKey: keyOf(labelled),
+    };
+    // timestamptz keeps microseconds: these two are one stored instant.
+    const run = (
+      polarity: typeof POLARITY.POSITIVE | typeof POLARITY.NEUTRAL,
+      runId: string,
+      producedAt: string,
+    ) => ({
+      ...labelFor(labelled, polarity),
+      ...provenanceFor(CITATION_REVIEW_ORIGIN.AI_ANNOTATION, runId, producedAt),
+    });
+    const first = run(
+      POLARITY.NEUTRAL,
+      "run-a",
+      "2026-10-07T10:00:00.000000100Z",
+    );
+    const second = run(
+      POLARITY.POSITIVE,
+      "run-b",
+      "2026-10-07T10:00:00.000000200Z",
+    );
+
+    expect((await applyLabels([first, second])).rows).toEqual(
+      [0, 1].map((index) => ({
+        ...ids,
+        index,
+        outcome: REVIEWED_LABEL_OUTCOME.INVALID,
+        reason: REVIEWED_LABEL_INVALID_REASON.DUPLICATE,
+      })),
+    );
+    expect((await applyLabels([first])).rows).toEqual([
+      { ...ids, index: 0, outcome: REVIEWED_LABEL_OUTCOME.APPLIED },
+    ]);
+    expect((await applyLabels([second])).rows).toEqual([
+      { ...ids, index: 0, outcome: REVIEWED_LABEL_OUTCOME.REFUSED_PRECEDENCE },
+    ]);
+  });
+
   test("a production instant with any offset is stored as the same UTC instant", async () => {
     const labelled = await ingestRuleLabelled({
       caseNumber: "30 Cdo 1016/2026",
