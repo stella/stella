@@ -1,4 +1,4 @@
-import { panic, Result } from "better-result";
+import { panic, Result, TaggedError } from "better-result";
 import { and, eq, exists, inArray, sql } from "drizzle-orm";
 
 import type { CaseLawResearchAnswerFailureReason } from "@stll/api-contract";
@@ -46,7 +46,6 @@ import {
 } from "@/api/lib/case-law/research-answers-system-one";
 import type { ManagedAIResidency } from "@/api/lib/chat/ai-data-policy";
 import { getCorpusIndexClient } from "@/api/lib/legal-search/corpus-index-client";
-import type { CorpusIndexHit } from "@/api/lib/legal-search/corpus-index-client";
 import { readServingCorpusIndexTargetTx } from "@/api/lib/legal-search/corpus-index-group-enrollment-store";
 import { corpusIndexRoute } from "@/api/lib/legal-search/corpus-index-manifest";
 import {
@@ -67,6 +66,8 @@ import {
   readCorpusPayloadOrFallback,
 } from "@/api/lib/legal-search/corpus-storage";
 import { LIMITS } from "@/api/lib/limits";
+import { failureSink } from "@/api/lib/observability/failure";
+import { observeFailure } from "@/api/lib/observability/observe-failure";
 import { generateTanStackObjectForRole } from "@/api/lib/tanstack-ai-generate";
 import { getTanStackTextModelInfoForRole } from "@/api/lib/tanstack-ai-models";
 import {
@@ -77,7 +78,24 @@ import { decideMany } from "@/api/lib/workflow/decisions/decide";
 import type { DecisionModel } from "@/api/lib/workflow/decisions/decision-model";
 
 const ANSWER_TIMEOUT_MS = 120_000;
-const NO_HITS: readonly CorpusIndexHit[] = [];
+
+const RESEARCH_PASSAGE_RETRIEVAL_FAILED_SINK = failureSink({
+  event: "case_law.research_passage_retrieval_failed",
+  expected: [],
+});
+
+const RESEARCH_PASSAGE_RETRIEVAL_REASON = {
+  TARGET_UNAVAILABLE: "target-unavailable",
+  SEARCH_FAILED: "search-failed",
+} as const;
+
+export class ResearchPassageRetrievalError extends TaggedError(
+  "ResearchPassageRetrievalError",
+)<{
+  message: string;
+  reason: (typeof RESEARCH_PASSAGE_RETRIEVAL_REASON)[keyof typeof RESEARCH_PASSAGE_RETRIEVAL_REASON];
+  cause: unknown;
+}> {}
 
 export type ResearchRunColumn = ResearchQuestion & {
   columnId: SafeId<"caseLawResearchColumn">;
@@ -554,10 +572,14 @@ const resolveDecisionText = async (
     return { kind: "passages", passages, retrieved: false };
   }
 
-  const retrieved = await retrievePassages(decision, questions, caseLawDb);
+  const retrieved = await retrieveResearchPassages({
+    decision,
+    questions,
+    caseLawDb,
+  });
   return selectDecisionPassages({
     fallback: passages,
-    retrieved,
+    retrieved: retrieved.unwrapOr([]),
     budgetChars,
   });
 };
@@ -620,53 +642,92 @@ const readDecisionFulltextPassage = async (
   return trimmed.length === 0 ? [] : [{ anchorId: "text", excerpt: trimmed }];
 };
 
+type RetrieveResearchPassagesOptions = {
+  decision: Pick<ResearchDecisionRow, "id" | "country">;
+  questions: readonly { question: string }[];
+  caseLawDb: CaseLawPublicReadDb;
+  clientForCluster?: typeof getCorpusIndexClient;
+};
+
 /** The passages of one decision that match the questions, best first. */
-const retrievePassages = async (
-  decision: ResearchDecisionRow,
-  questions: readonly { question: string }[],
-  caseLawDb: CaseLawPublicReadDb,
-): Promise<ResearchPassage[]> => {
+export const retrieveResearchPassages = async ({
+  decision,
+  questions,
+  caseLawDb,
+  clientForCluster = getCorpusIndexClient,
+}: RetrieveResearchPassagesOptions) => {
   const freeText = corpusFreeTextClause(
     questions.map((question) => question.question).join(" "),
   );
   if (freeText === null) {
-    return [];
+    return Result.ok([]);
   }
-  const searched = await Result.tryPromise(async () => {
-    const target = await caseLawDb(
-      async (tx) =>
-        await readServingCorpusIndexTargetTx(tx, {
-          family: "case_law",
-          jurisdiction: decision.country,
-        }),
-    );
-    // An unready index group reads as no passages, as a failed search does.
-    if (Result.isError(target)) {
-      return NO_HITS;
-    }
-    const { serving, manifest } = target.value;
+  const searched = await Result.gen(async function* () {
+    const target = yield* (
+      await Result.tryPromise(
+        async () =>
+          await caseLawDb(
+            async (tx) =>
+              await readServingCorpusIndexTargetTx(tx, {
+                family: "case_law",
+                jurisdiction: decision.country,
+              }),
+          ),
+      )
+    )
+      .andThen((result) => result)
+      .mapError(
+        (cause) =>
+          new ResearchPassageRetrievalError({
+            message:
+              "Research passage retrieval could not read its serving target",
+            reason: RESEARCH_PASSAGE_RETRIEVAL_REASON.TARGET_UNAVAILABLE,
+            cause,
+          }),
+      );
+    const { serving, manifest } = target;
     const { indexId } = corpusIndexRoute(manifest, decision.country);
-    const response = await getCorpusIndexClient(serving.cluster).search({
-      observer: "unobserved",
-      indexId,
-      query: `document_id:${quoteCorpusValue(decision.id)} AND ${freeText}`,
-      maxHits: LIMITS.caseLawResearchAnswerPassagesMax,
-      sortBy: "_score",
+    const response = yield* (
+      await Result.tryPromise(
+        async () =>
+          await clientForCluster(serving.cluster).search({
+            observer: "unobserved",
+            indexId,
+            query: `document_id:${quoteCorpusValue(decision.id)} AND ${freeText}`,
+            maxHits: LIMITS.caseLawResearchAnswerPassagesMax,
+            sortBy: "_score",
+          }),
+      )
+    )
+      .andThen((result) => result)
+      .mapError(
+        (cause) =>
+          new ResearchPassageRetrievalError({
+            message:
+              "Research passage retrieval could not search its serving index",
+            reason: RESEARCH_PASSAGE_RETRIEVAL_REASON.SEARCH_FAILED,
+            cause,
+          }),
+      );
+    return Result.ok(
+      response.hits.flatMap((hit) => {
+        const anchorId = hit["anchor_id"];
+        const text = hit["text"];
+        return typeof anchorId === "string" &&
+          anchorId.length > 0 &&
+          typeof text === "string"
+          ? [{ anchorId, excerpt: text }]
+          : [];
+      }),
+    );
+  });
+  if (searched.isErr()) {
+    observeFailure(searched.error, {
+      sink: RESEARCH_PASSAGE_RETRIEVAL_FAILED_SINK,
+      ctx: { decisionId: decision.id, stage: searched.error.reason },
     });
-    return Result.isError(response) ? NO_HITS : response.value.hits;
-  });
-  if (Result.isError(searched)) {
-    return [];
   }
-  return searched.value.flatMap((hit) => {
-    const anchorId = hit["anchor_id"];
-    const text = hit["text"];
-    return typeof anchorId === "string" &&
-      anchorId.length > 0 &&
-      typeof text === "string"
-      ? [{ anchorId, excerpt: text }]
-      : [];
-  });
+  return searched;
 };
 
 type SystemOnePassOptions = {
@@ -713,7 +774,13 @@ const answerWithSystemOne = async ({
   const overBudget = exceedsSystemOneSourceBudget(text.passages);
   const ranked =
     overBudget && !text.retrieved
-      ? await retrievePassages(decision, asked, caseLawDb)
+      ? (
+          await retrieveResearchPassages({
+            decision,
+            questions: asked,
+            caseLawDb,
+          })
+        ).unwrapOr([])
       : [];
   const sources = systemOneSourcesFromPassages(
     ranked.length > 0 ? ranked : text.passages,
