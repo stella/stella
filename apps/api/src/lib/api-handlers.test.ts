@@ -5,6 +5,7 @@ import { API_FILE_SECURITY_REJECTED_ERROR_CODE } from "@stll/api-contract";
 import type { ApiFileSecurityIssue } from "@stll/api-contract";
 import { ACTION_ADMISSION_REFUSALS } from "@stll/api-contract/action-admission";
 
+import { safeDbFromScoped } from "@/api/db/safe-db";
 import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
 import { env } from "@/api/env";
 import type { OrgAIConfig } from "@/api/lib/ai-config";
@@ -111,6 +112,74 @@ describe("createSafeHandler workspace audit binding", () => {
 });
 
 describe("createSafeRootHandler usage preflight", () => {
+  test("retains the complete static refusal response for exhausted managed usage", async () => {
+    const previousEnforcement = env.USAGE_ENFORCEMENT_ENABLED;
+    const previousProvider = env.AI_PROVIDER;
+    const previousKey = env.OPENROUTER_API_KEY;
+    const previousConfiguredAccess = env.FEATURE_CONFIGURED_ACCESS;
+    env.USAGE_ENFORCEMENT_ENABLED = true;
+    env.FEATURE_CONFIGURED_ACCESS = false;
+    env.AI_PROVIDER = "openrouter";
+    env.OPENROUTER_API_KEY = "sk-test";
+    try {
+      let bodyRan = false;
+      const endpoint = createSafeRootHandler(
+        {
+          permissions: { workspace: ["read"] },
+          accountAccess: ACCOUNT_ACCESS.sandbox,
+          mcp: { type: "internal", reason: "health_infra" },
+          requiresUsage: { actionType: "chat" },
+        },
+        async function* () {
+          bodyRan = true;
+          return Result.ok({ ok: true });
+        },
+      );
+      const safeDb = safeDbFromScoped(
+        async (run) =>
+          await run(
+            asTestRaw({
+              select: () => ({
+                from: () => ({
+                  where: () =>
+                    Object.assign([{ total: 0 }], {
+                      limit: async () =>
+                        await Promise.resolve([
+                          {
+                            status: "active",
+                            currentPeriodStart: new Date("2020-01-01"),
+                            currentPeriodEnd: new Date("2099-01-01"),
+                          },
+                        ]),
+                    }),
+                }),
+              }),
+            }),
+          ),
+      );
+      const result = await endpoint.handler(createContext(endpoint, safeDb));
+      expect(bodyRan).toBe(false);
+      if (!("code" in result)) {
+        throw new TypeError("Expected static admission refusal");
+      }
+      expect({ status: result.code, body: result.response }).toEqual({
+        status: 402,
+        body: {
+          code: "usage_limit_exceeded",
+          message: "Usage limit exceeded: need 2, have 0",
+          reason: "usage_limit_exceeded",
+          required: 2,
+          available: 0,
+        },
+      });
+    } finally {
+      env.USAGE_ENFORCEMENT_ENABLED = previousEnforcement;
+      env.FEATURE_CONFIGURED_ACCESS = previousConfiguredAccess;
+      env.AI_PROVIDER = previousProvider;
+      env.OPENROUTER_API_KEY = previousKey;
+    }
+  });
+
   test("uses effective provider tier for preflight cost", () => {
     const previousProvider = env.AI_PROVIDER;
     const previousAnthropicKey = env.ANTHROPIC_API_KEY;
@@ -345,9 +414,14 @@ describe("createSafeRootHandler member AI access", () => {
       if (!("code" in result)) {
         throw new Error("expected a status response");
       }
-      expect(result.code).toBe(403);
-      expect(result.response).toMatchObject({
-        code: AI_MEMBER_ASSIGNMENT_REQUIRED_ERROR_CODE,
+      expect({ status: result.code, body: result.response }).toEqual({
+        status: 403,
+        body: {
+          code: AI_MEMBER_ASSIGNMENT_REQUIRED_ERROR_CODE,
+          message:
+            "AI is available only to members with an assigned seat in this " +
+            "organization. Ask an organization admin to assign you one.",
+        },
       });
     } finally {
       env.USAGE_ENFORCEMENT_ENABLED = previousEnforcement;
