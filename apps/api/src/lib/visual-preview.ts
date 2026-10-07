@@ -141,7 +141,7 @@ export const previewVisual = async ({
     return Result.err(
       new VisualPreviewError({
         code: "invalid-input",
-        message: "Visual preview input exceeds its bounds",
+        message: "Visual preview input is empty or exceeds its bounds",
       }),
     );
   }

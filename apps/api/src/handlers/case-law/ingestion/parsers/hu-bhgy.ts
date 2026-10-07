@@ -39,8 +39,7 @@ import {
   DECISION_IDENTIFIER_TYPES,
   isDecisionIdentifier,
 } from "@stll/legal-ast/decision-identifier";
-import { collapseSpacedLetters } from "@stll/text-normalize";
-
+// parser-output-unchanged: imports the document AST from its package owner
 import type {
   Block,
   DocumentAst,
@@ -50,7 +49,9 @@ import type {
   ParagraphRole,
   TableBlock,
   TableCell,
-} from "@/api/handlers/case-law/document-ast";
+} from "@stll/legal-ast/document-ast";
+import { collapseSpacedLetters } from "@stll/text-normalize";
+
 import {
   inlinesToPlainText,
   stripInlinePrefix,

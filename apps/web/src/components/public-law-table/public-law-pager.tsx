@@ -24,7 +24,7 @@ import type {
  * own search, so the rest of the URL — the query, the filters, the size —
  * travels with the reader.
  */
-export type PublicLawPageLink = (input: {
+type PublicLawPageLink = (input: {
   label: string;
   page: number;
 }) => ReactElement;

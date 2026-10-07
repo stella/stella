@@ -37,7 +37,7 @@ export type ViewerSurface =
  * function may return `undefined` to keep the generic failed state for the
  * errors it does not recognise.
  */
-export type ViewerFinalFallback = ReactNode | ((error: Error) => ReactNode);
+type ViewerFinalFallback = ReactNode | ((error: Error) => ReactNode);
 
 const resolveFinalFallback = (
   fallback: ViewerFinalFallback | undefined,

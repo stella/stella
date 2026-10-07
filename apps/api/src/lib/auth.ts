@@ -126,6 +126,7 @@ import {
 import {
   createReviewAccountDatabaseHooks,
   createReviewAccountPlugin,
+  createReviewAccountUserPlugin,
   REVIEW_ACCOUNT_SIGN_IN_BUDGET,
   requireReviewAccountAccess,
 } from "@/api/lib/auth/review-account-plugin";
@@ -1772,6 +1773,7 @@ export const createAuth = (roleAssignmentPolicy = assignableRoles) => {
       REGISTRATION_RETENTION_SCHEMA_PLUGIN,
       sessionLifetime.plugin,
       createAgentUserPlugin(),
+      createReviewAccountUserPlugin(reviewConfig),
       createSessionBearer(),
       createDemoSessionFilter(demoConfig),
       createOtpAccountLimitPlugin({

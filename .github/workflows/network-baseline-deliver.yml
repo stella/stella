@@ -2,20 +2,16 @@ name: Deliver network baseline
 
 # Publish a validated, immutable main recording; no branch writes or PR threads.
 on:
-  workflow_run: # zizmor: ignore[dangerous-triggers] only successful main runs are accepted; artifacts are validated as data with read-only credentials
-    workflows: [Record network baseline]
-    types: [completed]
+  workflow_call:
 
 permissions: {}
 
 jobs:
   deliver:
     if: >-
-      github.event.workflow_run.conclusion == 'success'
-      && github.event.workflow_run.head_branch == github.event.repository.default_branch
-      && github.event.workflow_run.head_repository.full_name == github.repository
-      && github.event.workflow_run.path == '.github/workflows/network-baseline-record.yml'
-      && contains(fromJSON('["schedule", "workflow_dispatch"]'), github.event.workflow_run.event)
+      github.ref == 'refs/heads/main'
+      && github.workflow_ref == format('{0}/.github/workflows/network-baseline-record.yml@refs/heads/main', github.repository)
+      && contains(fromJSON('["schedule", "workflow_dispatch"]'), github.event_name)
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:
@@ -53,8 +49,8 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           REPOSITORY: ${{ github.repository }}
-          RUN_ID: ${{ github.event.workflow_run.id }}
-          RECORDED_SHA: ${{ github.event.workflow_run.head_sha }}
+          RUN_ID: ${{ github.run_id }}
+          RECORDED_SHA: ${{ github.sha }}
         run: |
           set -euo pipefail
           [[ "$RECORDED_SHA" =~ ^[a-f0-9]{40}$ ]]
@@ -73,7 +69,7 @@ jobs:
       - name: Publish validated main baseline
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: network-baseline-main-${{ github.event.workflow_run.head_sha }}
+          name: network-baseline-main-${{ github.sha }}
           path: ${{ runner.temp }}/recorded/network-baseline.json
           if-no-files-found: error
           retention-days: 90

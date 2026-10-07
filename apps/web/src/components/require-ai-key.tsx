@@ -168,21 +168,6 @@ export const AIUnavailableDialogTrigger = () => {
 };
 
 /**
- * Whether AI features are available right now: either the org has
- * BYOK or the instance has provisioned keys.
- */
-export function useAIAvailable(): boolean {
-  const activeOrganizationId = useAuthenticatedUser().activeOrganizationId;
-  const { data, isError } = useChromeQuery(
-    aiAvailabilityOptions({ organizationId: activeOrganizationId }),
-  );
-  if (isError || data === undefined) {
-    return false;
-  }
-  return data.available;
-}
-
-/**
  * Gate AI routes when the instance has no provisioned keys and
  * the org has not supplied their own. Send-time surfaces should
  * use `useAIKeyGate()` so every AI action opens the same dialog.

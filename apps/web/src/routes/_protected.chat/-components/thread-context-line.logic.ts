@@ -1,7 +1,7 @@
 /** Matters a history row shows by name before folding the rest into "+N". */
-export const THREAD_CONTEXT_INLINE_MATTERS = 2;
+const THREAD_CONTEXT_INLINE_MATTERS = 2;
 /** Files a history row shows by name before folding the rest into "+N". */
-export const THREAD_CONTEXT_INLINE_FILES = 2;
+const THREAD_CONTEXT_INLINE_FILES = 2;
 
 /**
  * A thread's context as the list endpoint returns it: a bounded, ordered

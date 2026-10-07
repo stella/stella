@@ -21,7 +21,6 @@ import { HighlightedText } from "@/components/workspaces/table/find-highlight";
 import { MetadataPopover } from "@/components/workspaces/table/metadata-popover";
 import type {
   WorkspaceColumnDescriptor,
-  WorkspaceColumnRender,
   WorkspaceTableSchema,
 } from "@/components/workspaces/table/table-schema";
 import type {
@@ -287,5 +286,3 @@ const renderLastUpdatedCell = ({ row }: TableCellContext) => (
 const renderVersionCell = ({ row }: TableCellContext) => (
   <VersionCell entity={row.original} />
 );
-
-export type { WorkspaceColumnRender };
