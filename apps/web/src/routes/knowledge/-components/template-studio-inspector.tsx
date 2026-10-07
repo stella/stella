@@ -1354,16 +1354,14 @@ export const ClauseDriftPopover = ({
         </ul>
         <Button
           className="w-full"
-          disabled={syncingAll}
+          loading={syncingAll}
           onClick={() => {
             detached(handleSyncAll(), "template-studio-inspector.sync-all");
           }}
           size="sm"
           variant="outline"
         >
-          <RefreshCwIcon
-            className={cn("size-3.5", syncingAll && "animate-spin")}
-          />
+          <RefreshCwIcon className="size-3.5" />
           {t("clauses.syncAllOutdated")}
         </Button>
       </PopoverPopup>

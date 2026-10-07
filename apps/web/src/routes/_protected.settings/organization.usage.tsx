@@ -90,7 +90,7 @@ function UsageBody({
 }
 
 // Mirrors ActiveEntitlementCard: title + meta row with a trailing action,
-// then the usage label/value row above the meter, so the card does not
+// then the usage label/value row and percentage, so the card does not
 // jump when the entitlement query resolves.
 function EntitlementCardSkeleton() {
   return (
@@ -109,7 +109,7 @@ function EntitlementCardSkeleton() {
             <Skeleton className="h-4 w-36" />
             <Skeleton className="h-4 w-24" />
           </div>
-          <Skeleton className="h-2 w-full rounded-full" />
+          <Skeleton className="h-4 w-12" />
         </div>
       </FramePanel>
     </Frame>
@@ -185,19 +185,9 @@ function ActiveEntitlementCard({ data }: { data: UsageEntitlement }) {
               })}
             </span>
           </div>
-          <div
-            aria-label={t("settings.organization.usageUnitsThisPeriod")}
-            aria-valuemax={100}
-            aria-valuemin={0}
-            aria-valuenow={usedPct}
-            className="bg-muted h-2 w-full overflow-hidden rounded-full"
-            role="progressbar"
-          >
-            <div
-              className="bg-foreground h-full transition-[width]"
-              style={{ width: `${usedPct}%` }}
-            />
-          </div>
+          <p className="text-muted-foreground text-sm tabular-nums">
+            {format.number(usedPct / 100, { style: "percent" })}
+          </p>
         </div>
       </FramePanel>
     </Frame>

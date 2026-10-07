@@ -60,7 +60,7 @@ import type {
   FolioAIEditSeverity,
   FolioAIEditSnapshot,
 } from "@stll/folio-react";
-import { LoaderCircleIcon } from "@stll/ui/icons";
+import { Loader } from "@stll/ui/loader";
 import { stellaToast } from "@stll/ui/toast";
 
 import { activeLegalDocumentRef } from "@/components/ai-suggestions/active-legal-document";
@@ -812,10 +812,10 @@ const hasPersistedActiveDraftChatBinding = ({
 
 const fallback = (
   <div
-    aria-hidden="true"
     className="pointer-events-none absolute inset-x-0 bottom-8 flex justify-center"
+    aria-busy="true"
   >
-    <LoaderCircleIcon className="text-muted-foreground size-4 animate-spin" />
+    <Loader label={getTranslator()("common.loading")} size="sm" />
   </div>
 );
 

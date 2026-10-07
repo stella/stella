@@ -19,9 +19,9 @@ import { DirectionalIcon } from "@stll/ui/directional-icon";
 import {
   ChevronDownIcon,
   ChevronRightIcon,
-  Loader2Icon,
   AiActionIcon,
 } from "@stll/ui/icons";
+import { Loader } from "@stll/ui/loader";
 import {
   ReviewDiffDeletion,
   ReviewDiffInsertion,
@@ -253,6 +253,7 @@ export const VersionRow = ({
           {summarize && (
             <Button
               aria-label={t("common.summarizeChanges")}
+              aria-busy={summary.status === "loading" || undefined}
               disabled={summary.status === "loading"}
               onClick={() => {
                 detached(handleSummarize(), "version-list.summarize");
@@ -262,7 +263,7 @@ export const VersionRow = ({
               variant="muted"
             >
               {summary.status === "loading" ? (
-                <Loader2Icon className="size-3.5 animate-spin" />
+                <Loader className="size-3.5" size="sm" variant="decorative" />
               ) : (
                 <AiActionIcon className="size-3.5" />
               )}
@@ -323,7 +324,7 @@ export const VersionDiffBlock = ({
   if (state.status === "loading") {
     return (
       <div className="text-muted-foreground flex items-center gap-1.5 px-1 text-xs">
-        <Loader2Icon className="size-3 animate-spin" />
+        <Loader className="size-3" label={t("common.loading")} size="sm" />
       </div>
     );
   }

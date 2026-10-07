@@ -38,7 +38,6 @@ import {
 import {
   ChevronDownIcon,
   ChevronUpIcon,
-  Loader2Icon,
   MoreHorizontalIcon,
   PencilIcon,
   PlusIcon,
@@ -47,6 +46,7 @@ import {
   Trash2Icon,
 } from "@stll/ui/icons";
 import { Input } from "@stll/ui/input";
+import { Loader } from "@stll/ui/loader";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -1693,7 +1693,7 @@ export const HistoryTab = ({
 
       {loading && (
         <div className="flex items-center justify-center py-4">
-          <Loader2Icon className="text-muted-foreground size-4 animate-spin" />
+          <Loader className="size-4" label={t("common.loading")} size="sm" />
         </div>
       )}
 

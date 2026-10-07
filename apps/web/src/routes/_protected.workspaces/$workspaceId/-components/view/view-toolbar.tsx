@@ -15,7 +15,6 @@ import {
   ClockIcon,
   DownloadIcon,
   HashIcon,
-  Loader2Icon,
   PlayIcon,
   Rows3Icon,
   SparklesIcon,
@@ -23,6 +22,7 @@ import {
   AiActionIcon,
   WrapTextIcon,
 } from "@stll/ui/icons";
+import { Loader } from "@stll/ui/loader";
 import {
   Menu,
   MenuGroup,
@@ -511,11 +511,10 @@ const ExportFormatIcon = ({ Icon, pending }: ExportFormatIconProps) => {
 
   if (pending) {
     return (
-      <Loader2Icon
-        aria-hidden={false}
-        aria-label={t("common.loading")}
-        className="text-muted-foreground size-4.5 animate-spin sm:size-4"
-        role="img"
+      <Loader
+        className="size-4.5 sm:size-4"
+        label={t("common.loading")}
+        size="sm"
       />
     );
   }
@@ -595,7 +594,7 @@ const TableExportMenu = ({ view, workspaceId }: TableExportMenuProps) => {
           {exportingFormat === null ? (
             <DownloadIcon className="size-3.5" />
           ) : (
-            <Loader2Icon className="size-3.5 animate-spin" />
+            <Loader className="size-3.5" size="sm" variant="decorative" />
           )}
         </MenuTrigger>
         <MenuPopup className="min-w-56">

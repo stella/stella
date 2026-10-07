@@ -19,15 +19,14 @@ import {
   AlertTriangleIcon,
   ChevronDownIcon,
   ChevronRightIcon,
-  Loader2Icon,
   PlusIcon,
   RefreshCwIcon,
   Trash2Icon,
   AiActionIcon,
   XIcon,
 } from "@stll/ui/icons";
+import { Loader } from "@stll/ui/loader";
 import { stellaToast } from "@stll/ui/toast";
-import { cn } from "@stll/ui/utils";
 
 import {
   VersionDiffBlock,
@@ -174,7 +173,11 @@ export const TemplateClausesTab = ({ templateId }: TemplateClausesTabProps) => {
               size="sm"
               variant="outline"
             >
-              <RefreshCwIcon className={cn(syncingAll && "animate-spin")} />
+              {syncingAll ? (
+                <Loader label={t("common.loading")} size="sm" />
+              ) : (
+                <RefreshCwIcon />
+              )}
               {t("clauses.syncAllOutdated")}
             </Button>
           )}
@@ -446,6 +449,7 @@ export const OutdatedChanges = ({
         </Button>
         <Button
           aria-label={t("common.summarizeChanges")}
+          aria-busy={summary.status === "loading" || undefined}
           disabled={summary.status === "loading"}
           onClick={() => {
             detached(handleSummarize(), "template-clauses-tab.summarize");
@@ -455,7 +459,7 @@ export const OutdatedChanges = ({
           variant="muted"
         >
           {summary.status === "loading" ? (
-            <Loader2Icon className="size-3.5 animate-spin" />
+            <Loader className="size-3.5" size="sm" variant="decorative" />
           ) : (
             <AiActionIcon className="size-3.5" />
           )}

@@ -11,7 +11,6 @@
   "icon-button-requires-tooltip/icon-button-requires-tooltip::untested": "Existing rule lacks reporting and clean coverage recorded by the shared harness.",
   "legislation-window/legislation-window-hint-display-only::untested": "Existing rule lacks reporting and clean coverage recorded by the shared harness.",
   "legislation-window/legislation-window-through-helper::untested": "Existing rule lacks reporting and clean coverage recorded by the shared harness.",
-  "no-adhoc-loader/no-adhoc-loader::untested": "Existing rule lacks reporting and clean coverage recorded by the shared harness.",
   "no-ambient-nondeterminism/no-ambient-nondeterminism::untested": "Existing rule lacks reporting and clean coverage recorded by the shared harness.",
   "no-auth-token-in-web-storage/no-auth-token-in-web-storage::untested": "Existing rule lacks reporting and clean coverage recorded by the shared harness.",
   "no-awaited-builder-union/no-awaited-builder-union::untested": "Existing rule lacks reporting and clean coverage recorded by the shared harness.",

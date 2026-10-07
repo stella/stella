@@ -177,7 +177,7 @@ test.each(TEST_LOCALES)(
     const view = mountCard(locale, runningPart);
     const row = view.getByRole("button", { name: new RegExp(title, "u") });
     expect(row.textContent).toContain(catalog.tasks.statusValues.in_progress);
-    expect(row.querySelector("svg.animate-spin")).not.toBeNull();
+    expect(row.querySelector('[data-slot="loader"]')).not.toBeNull();
     expect(row.textContent).not.toContain(catalog.common.done);
     expect(row.textContent).not.toContain(catalog.common.failed);
     expect(row.getAttribute("aria-expanded")).toBe("false");
@@ -303,7 +303,9 @@ test.each(TEST_LOCALES)(
     expect(view.getByText(catalog.chat.tool.spawn_subagents).textContent).toBe(
       catalog.chat.tool.spawn_subagents,
     );
-    expect(view.container.querySelector("svg.animate-spin")).not.toBeNull();
+    expect(
+      view.container.querySelector('[data-slot="loader"][aria-hidden="true"]'),
+    ).not.toBeNull();
     expect(view.container.textContent).toBe(catalog.chat.tool.spawn_subagents);
     expect(view.queryAllByRole("button")).toHaveLength(0);
     expect(view.container.textContent).not.toContain(title);
