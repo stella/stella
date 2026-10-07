@@ -4,24 +4,29 @@ import fc from "fast-check";
 
 import { assertProperty } from "@stll/property-testing";
 
-import { CS_SYSTEM_PROMPT } from "./cs";
-import { DE_SYSTEM_PROMPT } from "./de";
-import { EN_SYSTEM_PROMPT } from "./en";
-import { PL_SYSTEM_PROMPT } from "./pl";
-import { getSystemPrompt } from "./prompt-registry";
-import { SK_SYSTEM_PROMPT } from "./sk";
+import { ANALYSIS_SYSTEM_PROMPTS, getSystemPrompt } from "./prompt-registry";
 
-const WRITTEN = {
-  cs: CS_SYSTEM_PROMPT,
-  de: DE_SYSTEM_PROMPT,
-  en: EN_SYSTEM_PROMPT,
-  pl: PL_SYSTEM_PROMPT,
-  sk: SK_SYSTEM_PROMPT,
-};
+const WRITTEN_LANGUAGES = Object.keys(ANALYSIS_SYSTEM_PROMPTS);
+
+// Near misses of every written code, derived from the registry so a new
+// language is covered the moment it is added: case, region tags, padding,
+// truncation, and the inherited keys a plain object lookup would answer.
+const NEAR_MISSES = [
+  ...WRITTEN_LANGUAGES.flatMap((language) => [
+    language.toUpperCase(),
+    `${language}-${language.toUpperCase()}`,
+    `${language}_${language.toUpperCase()}`,
+    ` ${language}`,
+    `${language} `,
+    language.slice(0, -1),
+    `${language}x`,
+  ]),
+  ...Object.getOwnPropertyNames(Object.prototype),
+];
 
 describe("analysis prompt selection", () => {
   test("answers each written language with its own prompt", () => {
-    for (const [language, prompt] of Object.entries(WRITTEN)) {
+    for (const [language, prompt] of Object.entries(ANALYSIS_SYSTEM_PROMPTS)) {
       expect(getSystemPrompt(language).unwrap()).toBe(prompt);
     }
   });
@@ -30,22 +35,9 @@ describe("analysis prompt selection", () => {
     await assertProperty(
       "analysis-prompt-registry-refuses-every-unwritten-language",
       fc.property(
-        fc.oneof(
-          fc.string(),
-          // Inherited object keys and near misses of the written codes.
-          fc.constantFrom(
-            "constructor",
-            "__proto__",
-            "toString",
-            "hasOwnProperty",
-            "CS",
-            "cs-CZ",
-            "ces",
-            "fr",
-          ),
-        ),
+        fc.oneof(fc.string(), fc.constantFrom(...NEAR_MISSES)),
         (language) => {
-          fc.pre(!Object.hasOwn(WRITTEN, language));
+          fc.pre(!Object.hasOwn(ANALYSIS_SYSTEM_PROMPTS, language));
           const prompt = getSystemPrompt(language);
           expect(Result.isError(prompt)).toBe(true);
           if (Result.isError(prompt)) {

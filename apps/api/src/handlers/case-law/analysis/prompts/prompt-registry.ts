@@ -13,7 +13,8 @@ import { EN_SYSTEM_PROMPT } from "./en";
 import { PL_SYSTEM_PROMPT } from "./pl";
 import { SK_SYSTEM_PROMPT } from "./sk";
 
-const PROMPT_MAP = {
+/** The source of truth for which languages have an analysis prompt. */
+export const ANALYSIS_SYSTEM_PROMPTS = {
   cs: CS_SYSTEM_PROMPT,
   sk: SK_SYSTEM_PROMPT,
   de: DE_SYSTEM_PROMPT,
@@ -21,7 +22,7 @@ const PROMPT_MAP = {
   pl: PL_SYSTEM_PROMPT,
 } as const satisfies Record<string, string>;
 
-type AnalysisPromptLanguage = keyof typeof PROMPT_MAP;
+type AnalysisPromptLanguage = keyof typeof ANALYSIS_SYSTEM_PROMPTS;
 
 export class UnsupportedAnalysisLanguageError extends TaggedError(
   "UnsupportedAnalysisLanguageError",
@@ -29,14 +30,15 @@ export class UnsupportedAnalysisLanguageError extends TaggedError(
 
 const isAnalysisPromptLanguage = (
   language: string,
-): language is AnalysisPromptLanguage => Object.hasOwn(PROMPT_MAP, language);
+): language is AnalysisPromptLanguage =>
+  Object.hasOwn(ANALYSIS_SYSTEM_PROMPTS, language);
 
 /** The system prompt for a decision's language code, or a typed miss. */
 export const getSystemPrompt = (
   language: string,
 ): Result<string, UnsupportedAnalysisLanguageError> =>
   isAnalysisPromptLanguage(language)
-    ? Result.ok(PROMPT_MAP[language])
+    ? Result.ok(ANALYSIS_SYSTEM_PROMPTS[language])
     : Result.err(
         new UnsupportedAnalysisLanguageError({
           language,
