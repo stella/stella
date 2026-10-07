@@ -352,6 +352,7 @@ type Messages = {
     };
     "view": {
       "chooseList": "Choose a list";
+      "createList": "Create a list";
       "evidenceList": "Facts from";
       "noLists": "This matter has no lists";
       "pickList": "Choose the list whose facts this matter's documents are checked against.";
