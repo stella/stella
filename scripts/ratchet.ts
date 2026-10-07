@@ -4254,6 +4254,27 @@ const parseAllowance = (filename: string, head: string): AllowanceParse => {
   };
 };
 
+const shellArgument = (value: string): string =>
+  `'${value.replaceAll("'", "'\\''")}'`;
+
+export const allowanceRemovalCommand = (paths: readonly string[]): string =>
+  `rm -- ${paths.map(shellArgument).join(" ")}`;
+
+type AllowanceAdjustmentCommandOptions = {
+  target: string;
+  remove: readonly string[];
+  template: RatchetAllowance;
+};
+export const allowanceAdjustmentCommand = ({
+  target,
+  remove,
+  template,
+}: AllowanceAdjustmentCommandOptions): string => {
+  const consolidate =
+    remove.length === 0 ? "" : `${allowanceRemovalCommand(remove)} && `;
+  return `mkdir -p ${shellArgument(ALLOWANCE_DIRECTORY)} && ${consolidate}printf '%s\\n' ${shellArgument(JSON.stringify(template))} > ${shellArgument(target)}`;
+};
+
 // Presence in the measured base makes an allowance inert, even if the head
 // edits its contents. Read committed head files so funding has the same Git
 // boundary.
@@ -4343,24 +4364,25 @@ const checkAllowances = ({
         delta,
         reason: "Explain why this increase is needed",
       };
-      const quotedTemplate = JSON.stringify(template).replaceAll("'", "'\\''");
-      const otherPaths = funded?.paths.slice(1) ?? [];
-      const consolidate =
-        otherPaths.length === 0 ? "" : `rm -- ${otherPaths.join(" ")} && `;
+      const command = allowanceAdjustmentCommand({
+        target: filename,
+        remove: funded?.paths.slice(1) ?? [],
+        template,
+      });
       const adjustment =
         funded === undefined
           ? `Add ${filename}`
           : `Adjust ${funded.paths.join(", ")}, merging their funding into ${filename}`;
       errors.push(
         `${diff.id}${file === undefined ? "" : ` (${file})`}: actual increase ${delta}, funded ${funded?.delta ?? 0} (${(funded?.delta ?? 0) > delta ? "over-funded" : "unfunded increase"}). ${adjustment} so added deltas total exactly ${delta}: ${JSON.stringify(template)}\n` +
-          `    After deciding the increase is required, run: mkdir -p ${ALLOWANCE_DIRECTORY} && ${consolidate}printf '%s\\n' '${quotedTemplate}' > ${filename}\n` +
+          `    After deciding the increase is required, run: ${command}\n` +
           "    Replace the reason with the justification, review all added deltas, then run `bun scripts/ratchet.ts --check`.",
       );
     }
   }
   for (const [key, { paths, delta }] of funding) {
     errors.push(
-      `${paths.join(", ")}: ${key} actual increase 0, funded ${delta}; allowance with no increase, remove it with: rm -- ${paths.join(" ")}`,
+      `${paths.join(", ")}: ${key} actual increase 0, funded ${delta}; allowance with no increase, remove it with: ${allowanceRemovalCommand(paths)}`,
     );
   }
   return errors;

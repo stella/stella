@@ -3,6 +3,7 @@ import {
   copyFileSync,
   mkdirSync,
   readFileSync,
+  readdirSync,
   mkdtempSync,
   rmSync,
   symlinkSync,
@@ -11,7 +12,13 @@ import {
 import { tmpdir } from "node:os";
 import path from "node:path";
 
-import { inspectConfiguration, scanAll, type RatchetMetric } from "./ratchet";
+import {
+  allowanceAdjustmentCommand,
+  allowanceRemovalCommand,
+  inspectConfiguration,
+  scanAll,
+  type RatchetMetric,
+} from "./ratchet";
 import ratchetDefinitionPaths from "./ratchet-definition-paths.json" with { type: "json" };
 
 const metric = {
@@ -422,11 +429,11 @@ for (const { name, count, delta, code, diagnostic } of [
           expect(result.output).toContain(ALLOWANCE);
           if (count > 2) {
             expect(result.output).toContain(
-              `mkdir -p scripts/ratchet-allowances && printf '%s\\n'`,
+              `mkdir -p 'scripts/ratchet-allowances' && printf '%s\\n'`,
             );
-            expect(result.output).toContain(`> ${ALLOWANCE}`);
+            expect(result.output).toContain(`> '${ALLOWANCE}'`);
           } else {
-            expect(result.output).toContain(`rm -- ${ALLOWANCE}`);
+            expect(result.output).toContain(`rm -- '${ALLOWANCE}'`);
           }
           expect(result.output).toContain("bun scripts/ratchet.ts --check");
         }
@@ -450,6 +457,53 @@ test("multiple added allowances must sum to the actual increase", () => {
     expect(check(root).code).toBe(0);
   });
 }, 30_000);
+
+test("allowance repair commands preserve each complete filename and JSON payload", () => {
+  const root = mkdtempSync(path.join(tmpdir(), "allowance-command-"));
+  try {
+    const target = "scripts/ratchet-allowances/one space;quote'.json";
+    const remove = "scripts/ratchet-allowances/two space;quote'.json";
+    const untouched = "scripts/ratchet-allowances/unchanged.json";
+    for (const relative of [target, remove, untouched]) {
+      write({ root, relative, contents: "unchanged bytes\n" });
+    }
+    const template = {
+      metric: "as-casts",
+      delta: 1,
+      reason: "Fixture's adjustment",
+    };
+    const command = allowanceAdjustmentCommand({
+      target,
+      remove: [remove],
+      template,
+    });
+    succeed(root, ["bash", "-euo", "pipefail", "-c", command]);
+    expect(JSON.parse(readFileSync(path.join(root, target), "utf-8"))).toEqual(
+      template,
+    );
+    expect(
+      readdirSync(path.join(root, "scripts/ratchet-allowances")).toSorted(),
+    ).toEqual([path.basename(target), path.basename(untouched)].toSorted());
+    expect(readFileSync(path.join(root, untouched), "utf-8")).toBe(
+      "unchanged bytes\n",
+    );
+    succeed(root, [
+      "bash",
+      "-euo",
+      "pipefail",
+      "-c",
+      allowanceRemovalCommand([target]),
+    ]);
+    expect(readdirSync(path.join(root, "scripts/ratchet-allowances"))).toEqual([
+      path.basename(untouched),
+    ]);
+    expect(readFileSync(path.join(root, untouched), "utf-8")).toBe(
+      "unchanged bytes\n",
+    );
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
 
 test("the adjustment command consolidates every added allowance for the metric", () => {
   withClone((root) => {
