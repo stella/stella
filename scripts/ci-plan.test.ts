@@ -3553,7 +3553,9 @@ test("the selector plans the same with its detector CLIs spawned as served in pr
     ciJobs["ci-plan"],
   );
   const outputs = Object.entries(plan.outputs).flatMap(([name, value]) =>
-    value.includes("steps.changed-files.outputs.") ? [name] : [],
+    /^\$\{\{ steps\.changed-files\.outputs\.\w+ \}\}$/u.test(value)
+      ? [name]
+      : [],
   );
   expect(outputs).toContain("service_suites_pr_required");
   expect(outputs).toContain("dependency_malware_required");
@@ -4788,6 +4790,64 @@ test("Postgres plans are visible on PRs while execution requires explicit opt-in
         plannedOutputs: { postgres_pr_required: "true" },
       }),
     ).toBe(result === "success" ? 0 : 1);
+  }
+});
+
+test("Postgres planning generates ignored runtime inputs and widens when any stage fails", () => {
+  const planner = jobSteps(ciJobs["ci-plan"]).find(
+    (step) => step.name === "Select affected Postgres test files",
+  );
+  const commands = [
+    "--cwd=packages/cli run codegen:runtime",
+    "--cwd=apps/api run generate:capability-runtime",
+    "scripts/ci-postgres-test-plan.ts",
+  ];
+  const directory = mkdtempSync(
+    nodePath.join(tmpdir(), "postgres-runtime-plan-"),
+  );
+  try {
+    for (const failedCommand of ["", ...commands]) {
+      const output = nodePath.join(directory, "output");
+      const trace = nodePath.join(directory, "trace");
+      writeFileSync(output, "");
+      writeFileSync(trace, "");
+      const result = Bun.spawnSync({
+        cmd: [
+          "bash",
+          "-e",
+          "-c",
+          `timeout() { shift 2; "$@"; }
+bun() {
+  printf '%s\\n' "$*" >> "$TRACE"
+  if [[ "$*" == "$FAILED_COMMAND" ]]; then return 1; fi
+  if [[ "$*" == scripts/ci-postgres-test-plan.ts ]]; then
+    printf '%s\\n' 'postgres_test_selection={"mode":"selected","files":["src/db.test.ts"]}' >> "$GITHUB_OUTPUT"
+  fi
+}
+${planner?.run ?? panic("Missing Postgres planner")}`,
+        ],
+        env: {
+          PATH: process.env["PATH"] ?? "",
+          TRACE: trace,
+          FAILED_COMMAND: failedCommand,
+          GITHUB_OUTPUT: output,
+        },
+        stdout: "pipe",
+        stderr: "pipe",
+      });
+      expect(result.exitCode, result.stderr.toString()).toBe(0);
+      const invoked = readFileSync(trace, "utf-8").trim().split("\n");
+      expect(invoked).toEqual(
+        failedCommand === ""
+          ? commands
+          : commands.slice(0, commands.indexOf(failedCommand) + 1),
+      );
+      expect(readFileSync(output, "utf-8")).toContain(
+        failedCommand === "" ? '"mode":"selected"' : '"mode":"all"',
+      );
+    }
+  } finally {
+    rmSync(directory, { force: true, recursive: true });
   }
 });
 

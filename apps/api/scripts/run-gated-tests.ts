@@ -18,7 +18,7 @@ type RunGatedTestsOptions = {
   // them instead of skipping every suite.
   requiredEnv: readonly string[];
   script: GatedTestScript;
-  selection?: string;
+  selection?: string | undefined;
 };
 
 const apiRoot = path.resolve(import.meta.dir, "..");

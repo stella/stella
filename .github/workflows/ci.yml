@@ -1083,8 +1083,14 @@ jobs:
           EVENT_NAME: ${{ github.event_name }}
           API_SCOPE_UNKNOWN: ${{ steps.changed-files.outputs.api_scope_unknown }}
         run: |
-          if ! timeout --kill-after=10s 120s bun scripts/ci-postgres-test-plan.ts; then
+          # The graph reads ignored runtime aggregates even after --ignore-scripts.
+          if ! (
+            timeout --kill-after=10s 120s bun --cwd=packages/cli run codegen:runtime &&
+            timeout --kill-after=10s 120s bun --cwd=apps/api run generate:capability-runtime &&
+            timeout --kill-after=10s 120s bun scripts/ci-postgres-test-plan.ts
+          ); then
             echo 'postgres_test_selection={"mode":"all"}' >> "$GITHUB_OUTPUT"
+            echo 'postgres_selection_reason=Runtime generation or selection unavailable; full suite retained.' >> "$GITHUB_OUTPUT"
           fi
 
       - name: Summarize Postgres test selection
@@ -4288,7 +4294,7 @@ jobs:
     if: >-
       needs.ci-plan.outputs.run_required != 'false'
       && (
-      (github.event_name != 'pull_request' || (vars.CI_POSTGRES_PR_SELECTION == 'on' && needs.ci-plan.outputs.postgres_pr_required == 'true')) && (
+      (github.event_name != 'pull_request' || vars.CI_POSTGRES_PR_SELECTION == 'on') && (
       needs.ci-plan.outputs.queue_depth != 'thin'
       && (needs.ci-plan.outputs.service_suites_required == 'true'
       && (needs.ci-plan.outputs.trusted == 'true'

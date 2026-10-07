@@ -26,7 +26,9 @@ const junit = `<?xml version="1.0" encoding="UTF-8"?>
 
 test("JUnit parsing preserves its report and reports failure testcase files", () => {
   const failures: (string | undefined)[] = [];
-  const report = parseJunit(junit, (file) => failures.push(file));
+  const report = parseJunit(junit, (file) => {
+    failures.push(file);
+  });
   expect(report.cases.map(({ status }) => status)).toEqual([
     "fail",
     "fail",

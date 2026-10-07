@@ -85,7 +85,7 @@ const runCommand = (command: string[]) => {
   });
   if (result.exitCode !== 0) {
     panic(
-      `Selector miss evidence command failed: ${command[0]}: ${result.stderr.toString()}`,
+      `Selector miss evidence command failed: ${command.at(0) ?? "unknown"}: ${result.stderr.toString()}`,
     );
   }
   return result.stdout.toString();
@@ -136,7 +136,8 @@ if (import.meta.main) {
       v.object({ workflow_runs: v.array(fullRunSchema) }),
       JSON.parse(
         runCommand([
-          "gh",
+          "bash",
+          path.join(import.meta.dir, "gh-retry.sh"),
           "api",
           `repos/${repository}/actions/workflows/main-heavy.yml/runs?status=completed&branch=main&per_page=100`,
         ]),
@@ -188,7 +189,8 @@ if (import.meta.main) {
         }),
         JSON.parse(
           runCommand([
-            "gh",
+            "bash",
+            path.join(import.meta.dir, "gh-retry.sh"),
             "api",
             `repos/${repository}/actions/runs/${candidate.id}/jobs?per_page=100`,
           ]),
@@ -236,7 +238,7 @@ if (import.meta.main) {
     );
   });
   if (checked.isErr()) {
-    const message = String(checked.error)
+    const message = checked.error.message
       .replaceAll("%", "%25")
       .replaceAll("\r", "%0D")
       .replaceAll("\n", "%0A");
