@@ -1827,7 +1827,8 @@ test("baseline cancellation normalization uses its own owner and rejects changed
     const leaves = flattenWorkflowSteps(raw.steps).filter(
       (step) => !isWorkflowBarrier(step),
     );
-    expect(normalized.steps).toEqual(leaves.slice(0, -1));
+    // The leaves are the wider type, so they are the subject of the match.
+    expect(leaves.slice(0, -1)).toEqual(normalized.steps);
     const tail = leaves.at(-1);
     if (!tail) {
       panic("Baseline cancellation tail unavailable");
@@ -1840,10 +1841,10 @@ test("baseline cancellation normalization uses its own owner and rejects changed
         { ...tail, "continue-on-error": true },
       ],
     };
-    expect(v.parse(baseJobSchema, mutated).steps).toEqual([
+    expect([
       ...leaves.slice(0, -1),
       { ...tail, "continue-on-error": true },
-    ]);
+    ]).toEqual(v.parse(baseJobSchema, mutated).steps);
   }
 });
 
