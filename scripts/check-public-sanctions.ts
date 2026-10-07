@@ -1,4 +1,4 @@
-import type { EventEmitter } from "node:events";
+import type { IncomingMessage } from "node:http";
 import https, { type RequestOptions } from "node:https";
 
 export const SOURCES = [
@@ -144,29 +144,27 @@ export const validateScreening = (value: unknown): void => {
   }
 };
 
-export type CanaryResponse = {
-  statusCode?: number;
-} & Pick<EventEmitter, "on">;
-export type CanaryRequest = {
+type CanaryRequest = {
+  on: (event: "error" | "close", listener: (error?: Error) => void) => void;
   destroy: (error: Error) => void;
   end: (payload: string) => void;
-} & Pick<EventEmitter, "on">;
+};
 export type RequestHttps = (
   url: URL,
   options: RequestOptions,
-  callback: (response: CanaryResponse) => void,
+  callback: (response: IncomingMessage) => void,
 ) => CanaryRequest;
 
 type ProbeOptions = {
   requestHttps?: RequestHttps;
   deadlineMs?: number;
 };
-export const probe = (
+export const probe = async (
   url: string,
   { requestHttps = https.request, deadlineMs = TIMEOUT_MS }: ProbeOptions = {},
 ): Promise<void> => {
   let timer: ReturnType<typeof setTimeout> | undefined;
-  return new Promise<void>((resolve, reject) => {
+  return await new Promise<void>((resolve, reject) => {
     let target: URL;
     try {
       target = new URL(url);
@@ -220,7 +218,11 @@ export const probe = (
             validateScreening(body);
             resolve();
           } catch (error) {
-            reject(error);
+            reject(
+              error instanceof Error
+                ? error
+                : new CanaryFailureError("invalid-response"),
+            );
           }
         });
       },

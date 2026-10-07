@@ -2,7 +2,9 @@ import { test } from "bun:test";
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
 import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { IncomingMessage } from "node:http";
 import https from "node:https";
+import { Socket } from "node:net";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { PassThrough } from "node:stream";
@@ -72,7 +74,9 @@ const transport =
           subject: { type: "organization", name: "Voice of Europe" },
         });
         queueMicrotask(() => {
-          const response = Object.assign(new PassThrough(), { statusCode });
+          const response = Object.assign(new IncomingMessage(new Socket()), {
+            statusCode,
+          });
           onResponse(response);
           response.emit("data", Buffer.from(responseBody));
           response.emit("end");
@@ -188,7 +192,7 @@ test("slow headers and response bodies fail at the wall-clock deadline", async (
           if (phase === "headers") {
             return;
           }
-          const response = Object.assign(new PassThrough(), {
+          const response = Object.assign(new IncomingMessage(new Socket()), {
             statusCode: 200,
           });
           onResponse(response);
@@ -325,7 +329,7 @@ test.each(["oversized", "never-ending"] as const)(
         },
         end() {
           queueMicrotask(() => {
-            const response = Object.assign(new PassThrough(), {
+            const response = Object.assign(new IncomingMessage(new Socket()), {
               statusCode: 503,
             });
             onResponse(response);
@@ -364,8 +368,10 @@ test("scheduled entrypoint reports one safe result and the matching exit status"
     }
     const exitCode = await runCanary({
       targetUrl: "https://my.example.test/api/v1/sanctions/search",
-      probe: (url) =>
-        probe(url, { requestHttps: transport(200, JSON.stringify(body)) }),
+      probe: async (url) =>
+        await probe(url, {
+          requestHttps: transport(200, JSON.stringify(body)),
+        }),
       log: (line) => {
         logs.push(line);
       },
@@ -388,7 +394,7 @@ test("hourly workflow failures reach both scheduled alert allowlists", () => {
     new URL("../.github/workflows/scheduled-run-alerts.yml", import.meta.url),
     "utf-8",
   );
-  const name = workflow.match(/^name:\s*(.+)$/mu)?.at(1);
+  const name = /^name:\s*(.+)$/mu.exec(workflow)?.at(1);
   assert.ok(name);
   assert.match(workflow, /cron:\s*["']41 \* \* \* \*["']/u);
   assert.match(workflow, /workflow_dispatch:/u);
@@ -448,7 +454,9 @@ test("malformed response names and arbitrary transport errors never enter logs",
           const request = new PassThrough();
           return Object.assign(request, {
             end() {
-              queueMicrotask(() => request.emit("error", new Error(sentinel)));
+              queueMicrotask(() => {
+                request.emit("error", new Error(sentinel));
+              });
             },
             destroy(error: Error) {
               request.emit("error", error);
@@ -458,7 +466,7 @@ test("malformed response names and arbitrary transport errors never enter logs",
       : transport(200, `{"name":"${sentinel}", BROKEN`);
     const exitCode = await runCanary({
       targetUrl: "https://my.example.test/api/v1/sanctions/search",
-      probe: (url) => probe(url, { requestHttps }),
+      probe: async (url) => await probe(url, { requestHttps }),
       log: (line) => {
         logs.push(line);
       },
