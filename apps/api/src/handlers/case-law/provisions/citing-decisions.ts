@@ -2,7 +2,6 @@ import { and, desc, eq, gte, isNull, lt, sql } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
 import { status, t } from "elysia";
 import type { Static } from "elysia";
-import { createHash } from "node:crypto";
 
 import {
   PUBLIC_CASE_LAW_COUNTRIES,
@@ -13,6 +12,7 @@ import {
   PROVISION_CITING_FILTER_LIMITS,
   PROVISION_CITING_SNAPSHOT_LIMIT,
 } from "@stll/api-contract/provision-citing-decisions";
+import { sha256Hex } from "@stll/sha256/bun";
 
 import {
   caseLawDecisions,
@@ -73,11 +73,16 @@ export const listCitingDecisionsQuerySchema = t.Object({
     ),
   ),
   cursor: t.Optional(tPaginationCursor()),
+  // A spread of mapped literals widens the union's static type to `never`;
+  // the derived enum keeps the contract's sorts and stays undefined when absent.
   sort: t.Optional(
-    t.Union([
-      ...PROVISION_CITING_DECISION_SORTS.map((sort) => t.Literal(sort)),
-      t.Literal("authority"),
-    ]),
+    t.Enum(
+      Object.fromEntries(
+        [...PROVISION_CITING_DECISION_SORTS, "authority" as const].map(
+          (sort) => [sort, sort] as const,
+        ),
+      ),
+    ),
   ),
   court: t.Optional(
     t.String({
@@ -329,20 +334,18 @@ export const listCitingDecisionsHandler = async (
   if (byCitations && query.cursor !== undefined) {
     return status(400, { message: "Citations order has no cursor" });
   }
-  const context = createHash("sha256")
-    .update(
-      JSON.stringify([
-        jurisdiction,
-        query.work ?? null,
-        query.eli ?? null,
-        query.anchor ?? null,
-        query.court ?? null,
-        query.year ?? null,
-        query.sort ?? "newest",
-        query.excerpt ?? null,
-      ]),
-    )
-    .digest("hex");
+  const context = sha256Hex(
+    JSON.stringify([
+      jurisdiction,
+      query.work ?? null,
+      query.eli ?? null,
+      query.anchor ?? null,
+      query.court ?? null,
+      query.year ?? null,
+      query.sort ?? "newest",
+      query.excerpt ?? null,
+    ]),
+  );
   const cursor = query.cursor
     ? decodeCitingDecisionsCursor(query.cursor)
     : null;
