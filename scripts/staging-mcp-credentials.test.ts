@@ -78,6 +78,7 @@ const assertTarget = (env: Record<string, string>) => {
 test("staging requiring complete MCP journeys supplies every credential read by those journeys", () => {
   expect(credentials).toContain("REVIEW_ACCOUNT_PASSWORD");
   expect(credentials).toContain("APP_REVIEW_ACCOUNT_EMAIL");
+  expect(credentials).toContain("APP_REVIEW_ORGANIZATION_ID");
   expect(credentials).toContain("MCP_CANARY_CONFIGURED_BASE_URL");
   expect(staging["MCP_CANARY_REQUIRE_CREDENTIALS"]).toBe("true");
   assertCredentials(staging);
