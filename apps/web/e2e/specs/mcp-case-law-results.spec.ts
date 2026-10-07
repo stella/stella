@@ -1,5 +1,6 @@
 import { expect, test } from "@playwright/test";
 import type { Page } from "@playwright/test";
+import { execFileSync } from "node:child_process";
 import { readFile } from "node:fs/promises";
 
 import { MCP_APP_SANDBOX_CONTENT_DIRECTIVES } from "@stll/api-contract/mcp-app-sandbox-policy";
@@ -26,6 +27,7 @@ type HostOptions = {
   tool: "search_case_law" | "lookup_case_law";
   payload: typeof APP_SEARCH_FIXTURE | typeof APP_LOOKUP_FIXTURE;
   queries?: string[];
+  bundle?: "committed" | "country-fixture";
 };
 
 const mountApp = async ({
@@ -34,14 +36,27 @@ const mountApp = async ({
   tool,
   payload,
   queries = ["náhrada škody"],
+  bundle: bundleKind = "committed",
 }: HostOptions) => {
-  const bundle = await readFile(
-    new URL(
-      "../../../api/src/mcp/apps/case-law-results/generated/app.html.txt",
-      import.meta.url,
-    ),
-    "utf-8",
-  );
+  const bundle =
+    bundleKind === "country-fixture"
+      ? execFileSync(
+          "bun",
+          [
+            new URL(
+              "../../../api/scripts/build-mcp-country-filter-fixture.ts",
+              import.meta.url,
+            ).pathname,
+          ],
+          { encoding: "utf-8", maxBuffer: 32 * 1024 * 1024 },
+        )
+      : await readFile(
+          new URL(
+            "../../../api/src/mcp/apps/case-law-results/generated/app.html.txt",
+            import.meta.url,
+          ),
+          "utf-8",
+        );
   const html = bundle.replace(
     "<head>",
     () =>
@@ -344,6 +359,54 @@ test("court filters preserve multiple query phrasings until the search text is e
       },
     });
 });
+
+for (const { selection, filter } of [
+  { selection: "Ústavní soud", filter: { court: "Ústavní soud" } },
+  { selection: "Constitutional courts", filter: { courts: ["Ústavní soud"] } },
+]) {
+  test(`changing country clears the ${selection} court selection`, async ({
+    page,
+  }) => {
+    const app = await mountApp({
+      page,
+      locale: "en-GB",
+      tool: "search_case_law",
+      payload: APP_SEARCH_FIXTURE,
+      bundle: "country-fixture",
+    });
+    await expect(app.locator("tbody tr")).toHaveCount(1);
+    await app.getByRole("combobox", { name: "Court", exact: true }).click();
+    await app.getByRole("option", { name: selection, exact: true }).click();
+    await app.getByRole("button", { name: "Filter", exact: true }).click();
+    await expect
+      .poll(async () => (await hostHistory(page, "appCalls")).at(-1))
+      .toEqual({
+        name: "search_case_law",
+        arguments: {
+          queries: ["náhrada škody"],
+          country: "CZE",
+          limit: 10,
+          ...filter,
+        },
+      });
+    await app.getByRole("combobox", { name: "Country", exact: true }).click();
+    await app.getByRole("option", { name: "SVK", exact: true }).click();
+    await expect(
+      app.getByRole("combobox", { name: "Court", exact: true }),
+    ).toHaveText("All");
+    await app.getByRole("button", { name: "Filter", exact: true }).click();
+    await expect
+      .poll(async () => (await hostHistory(page, "appCalls")).at(-1))
+      .toEqual({
+        name: "search_case_law",
+        arguments: {
+          queries: ["náhrada škody"],
+          country: "SVK",
+          limit: 10,
+        },
+      });
+  });
+}
 
 test("a selected court tier survives a later response without facets", async ({
   page,
