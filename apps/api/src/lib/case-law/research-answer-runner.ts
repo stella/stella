@@ -2,6 +2,8 @@ import { panic, Result, TaggedError } from "better-result";
 import { and, eq, exists, inArray, sql } from "drizzle-orm";
 
 import type { CaseLawResearchAnswerFailureReason } from "@stll/api-contract";
+import { declareFailureClass } from "@stll/errors";
+import type { FailureReason } from "@stll/errors";
 import { parseUsableDocumentAst } from "@stll/legal-ast/document-ast";
 import { Temporal } from "@stll/time";
 
@@ -46,7 +48,10 @@ import {
 } from "@/api/lib/case-law/research-answers-system-one";
 import type { ManagedAIResidency } from "@/api/lib/chat/ai-data-policy";
 import { getCorpusIndexClient } from "@/api/lib/legal-search/corpus-index-client";
-import { readServingCorpusIndexTargetTx } from "@/api/lib/legal-search/corpus-index-group-enrollment-store";
+import {
+  CorpusIndexGroupNotReadyError,
+  readServingCorpusIndexTargetTx,
+} from "@/api/lib/legal-search/corpus-index-group-enrollment-store";
 import { corpusIndexRoute } from "@/api/lib/legal-search/corpus-index-manifest";
 import {
   corpusFreeTextClause,
@@ -85,17 +90,34 @@ const RESEARCH_PASSAGE_RETRIEVAL_FAILED_SINK = failureSink({
 });
 
 const RESEARCH_PASSAGE_RETRIEVAL_REASON = {
+  INDEX_NOT_READY: "index-not-ready",
   TARGET_UNAVAILABLE: "target-unavailable",
   SEARCH_FAILED: "search-failed",
 } as const;
+
+type ResearchPassageRetrievalReason =
+  (typeof RESEARCH_PASSAGE_RETRIEVAL_REASON)[keyof typeof RESEARCH_PASSAGE_RETRIEVAL_REASON];
+
+const RESEARCH_PASSAGE_FAILURE_REASON = {
+  "index-not-ready": "research_index_not_ready",
+  "target-unavailable": "research_passage_target_failed",
+  "search-failed": "research_passage_search_failed",
+} as const satisfies Record<ResearchPassageRetrievalReason, FailureReason>;
 
 export class ResearchPassageRetrievalError extends TaggedError(
   "ResearchPassageRetrievalError",
 )<{
   message: string;
-  reason: (typeof RESEARCH_PASSAGE_RETRIEVAL_REASON)[keyof typeof RESEARCH_PASSAGE_RETRIEVAL_REASON];
+  reason: ResearchPassageRetrievalReason;
   cause: unknown;
-}> {}
+}> {
+  static {
+    declareFailureClass(
+      this,
+      ({ reason }) => RESEARCH_PASSAGE_FAILURE_REASON[reason],
+    );
+  }
+}
 
 export type ResearchRunColumn = ResearchQuestion & {
   columnId: SafeId<"caseLawResearchColumn">;
@@ -681,7 +703,9 @@ export const retrieveResearchPassages = async ({
           new ResearchPassageRetrievalError({
             message:
               "Research passage retrieval could not read its serving target",
-            reason: RESEARCH_PASSAGE_RETRIEVAL_REASON.TARGET_UNAVAILABLE,
+            reason: CorpusIndexGroupNotReadyError.is(cause)
+              ? RESEARCH_PASSAGE_RETRIEVAL_REASON.INDEX_NOT_READY
+              : RESEARCH_PASSAGE_RETRIEVAL_REASON.TARGET_UNAVAILABLE,
             cause,
           }),
       );
@@ -724,7 +748,11 @@ export const retrieveResearchPassages = async ({
   if (searched.isErr()) {
     observeFailure(searched.error, {
       sink: RESEARCH_PASSAGE_RETRIEVAL_FAILED_SINK,
-      ctx: { decisionId: decision.id, stage: searched.error.reason },
+      ctx: {
+        decisionId: decision.id,
+        jurisdiction: decision.country,
+        stage: searched.error.reason,
+      },
     });
   }
   return searched;

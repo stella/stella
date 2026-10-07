@@ -1,6 +1,8 @@
 import { panic, Result } from "better-result";
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 
+import type { FailureGrade, FailureReason } from "@stll/errors";
+
 import { toSafeId } from "@/api/lib/branded-types";
 import type { CaseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
 import {
@@ -60,56 +62,76 @@ const clientForSearch = (search: CorpusIndexClient["search"]) =>
   asTestRaw<typeof getCorpusIndexClient>(() => ({ search }));
 
 const failurePaths = {
-  "target-unavailable": [
-    {
-      name: "a refused serving target",
-      caseLawDb: asTestRaw<CaseLawPublicReadDb>(async () =>
-        Result.err(
-          new CorpusIndexGroupNotReadyError({
-            message: "Synthetic pending group",
-            indexId: servingTarget.route.indexId,
-            reason: "pending",
-          }),
+  "index-not-ready": {
+    grade: "anticipated",
+    failureReason: "research_index_not_ready",
+    paths: [
+      {
+        name: "a refused serving target",
+        caseLawDb: asTestRaw<CaseLawPublicReadDb>(async () =>
+          Result.err(
+            new CorpusIndexGroupNotReadyError({
+              message: "Synthetic pending group",
+              indexId: servingTarget.route.indexId,
+              reason: "pending",
+            }),
+          ),
         ),
-      ),
-      clientForCluster: clientForSearch(emptySearch),
-    },
-    {
-      name: "a rejected serving read",
-      caseLawDb: asTestRaw<CaseLawPublicReadDb>(async () => {
-        throw new TypeError("Synthetic serving read failure");
-      }),
-      clientForCluster: clientForSearch(emptySearch),
-    },
-  ],
-  "search-failed": [
-    {
-      name: "a returned search error",
-      caseLawDb: readyDb,
-      clientForCluster: clientForSearch(async () =>
-        Result.err(new CorpusIndexError({ message: "Synthetic search error" })),
-      ),
-    },
-    {
-      name: "a rejected search",
-      caseLawDb: readyDb,
-      clientForCluster: clientForSearch(async () => {
-        throw new TypeError("Synthetic search rejection");
-      }),
-    },
-    {
-      name: "a rejected client resolution",
-      caseLawDb: readyDb,
-      clientForCluster: () => panic("Synthetic client resolution failure"),
-    },
-  ],
+        clientForCluster: clientForSearch(emptySearch),
+      },
+    ],
+  },
+  "target-unavailable": {
+    grade: "defect",
+    failureReason: "research_passage_target_failed",
+    paths: [
+      {
+        name: "a rejected serving read",
+        caseLawDb: asTestRaw<CaseLawPublicReadDb>(async () => {
+          throw new TypeError("Synthetic serving read failure");
+        }),
+        clientForCluster: clientForSearch(emptySearch),
+      },
+    ],
+  },
+  "search-failed": {
+    grade: "defect",
+    failureReason: "research_passage_search_failed",
+    paths: [
+      {
+        name: "a returned search error",
+        caseLawDb: readyDb,
+        clientForCluster: clientForSearch(async () =>
+          Result.err(
+            new CorpusIndexError({ message: "Synthetic search error" }),
+          ),
+        ),
+      },
+      {
+        name: "a rejected search",
+        caseLawDb: readyDb,
+        clientForCluster: clientForSearch(async () => {
+          throw new TypeError("Synthetic search rejection");
+        }),
+      },
+      {
+        name: "a rejected client resolution",
+        caseLawDb: readyDb,
+        clientForCluster: () => panic("Synthetic client resolution failure"),
+      },
+    ],
+  },
 } satisfies Record<
   ResearchPassageRetrievalError["reason"],
-  readonly {
-    name: string;
-    caseLawDb: CaseLawPublicReadDb;
-    clientForCluster: typeof getCorpusIndexClient;
-  }[]
+  {
+    grade: FailureGrade;
+    failureReason: FailureReason;
+    paths: readonly {
+      name: string;
+      caseLawDb: CaseLawPublicReadDb;
+      clientForCluster: typeof getCorpusIndexClient;
+    }[];
+  }
 >;
 
 let logs: RecordingLogger;
@@ -127,12 +149,13 @@ afterEach(() => {
 
 describe("research passage retrieval", () => {
   test.each(
-    Object.entries(failurePaths).flatMap(([reason, paths]) =>
-      paths.map((path) => ({ ...path, reason })),
+    Object.entries(failurePaths).flatMap(
+      ([reason, { grade, failureReason, paths }]) =>
+        paths.map((path) => ({ ...path, reason, grade, failureReason })),
     ),
   )(
     "reports $name without presenting it as an empty search",
-    async ({ caseLawDb, clientForCluster, reason }) => {
+    async ({ caseLawDb, clientForCluster, reason, grade, failureReason }) => {
       const result = await retrieveResearchPassages({
         decision,
         questions: [{ question: "synthetic question" }],
@@ -149,13 +172,17 @@ describe("research passage retrieval", () => {
           message === "case_law.research_passage_retrieval_failed",
       );
       expect(failures).toHaveLength(1);
-      expect(failures.at(0)?.severityText).toBe("ERROR");
+      expect(failures.at(0)?.severityText).toBe(
+        grade === "defect" ? "ERROR" : "WARN",
+      );
       expect(failures.at(0)?.attributes).toMatchObject({
         decisionId: decision.id,
+        jurisdiction: decision.country,
         stage: reason,
-        "failure.grade": "defect",
+        "failure.grade": grade,
+        "failure.reason": failureReason,
       });
-      expect(analytics.exceptions()).toHaveLength(1);
+      expect(analytics.exceptions()).toHaveLength(grade === "defect" ? 1 : 0);
       expect(
         selectDecisionPassages({
           fallback: [{ anchorId: "text", excerpt: "Synthetic fallback" }],
