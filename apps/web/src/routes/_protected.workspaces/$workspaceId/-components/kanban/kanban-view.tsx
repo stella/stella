@@ -1,7 +1,7 @@
 import { useMemo, useRef, useState } from "react";
 import type { ComponentProps, ReactNode } from "react";
 
-import { extractClosestEdge } from "@atlaskit/pragmatic-drag-and-drop-hitbox/closest-edge";
+import { extractClosestEdge } from "@atlaskit/pragmatic-drag-and-drop-hitbox/closest-edge/extract-closest-edge";
 import type { Edge } from "@atlaskit/pragmatic-drag-and-drop-hitbox/types";
 import { monitorForElements } from "@atlaskit/pragmatic-drag-and-drop/adapter/element-adapter";
 import { combine } from "@atlaskit/pragmatic-drag-and-drop/utils/combine";
