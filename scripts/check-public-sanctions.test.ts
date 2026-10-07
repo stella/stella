@@ -269,6 +269,14 @@ test("empty, incomplete, duplicate, unknown and malformed responses cannot pass"
     },
     {
       ...screening(),
+      lists: screening().lists.map((list) => ({ ...list, reason: {} })),
+    },
+    {
+      ...screening(),
+      lists: screening().lists.map((list) => ({ ...list, publishedAt: 123 })),
+    },
+    {
+      ...screening(),
       lists: screening().lists.map((list) => ({
         ...list,
         status: "unavailable",
@@ -319,7 +327,9 @@ test("scheduled entrypoint reports one safe result and the matching exit status"
       targetUrl: "https://my.example.test/api/v1/sanctions/search",
       probe: (url) =>
         probe(url, { requestHttps: transport(200, JSON.stringify(body)) }),
-      log: (line) => logs.push(line),
+      log: (line) => {
+        logs.push(line);
+      },
     });
     assert.equal(exitCode, healthy ? 0 : 1);
     assert.equal(logs.length, 1);
@@ -410,7 +420,9 @@ test("malformed response names and arbitrary transport errors never enter logs",
     const exitCode = await runCanary({
       targetUrl: "https://my.example.test/api/v1/sanctions/search",
       probe: (url) => probe(url, { requestHttps }),
-      log: (line) => logs.push(line),
+      log: (line) => {
+        logs.push(line);
+      },
     });
     assert.equal(exitCode, 1);
     assert.equal(logs.length, 1);
@@ -457,7 +469,9 @@ test("real HTTPS transport screens a response and rejects invalid bodies and red
       assert.equal(request.method, "POST");
       assert.equal(request.url, "/api/v1/sanctions/search");
       const chunks: Buffer[] = [];
-      request.on("data", (chunk) => chunks.push(chunk));
+      request.on("data", (chunk) => {
+        chunks.push(chunk);
+      });
       request.on("end", () => {
         assert.deepEqual(JSON.parse(Buffer.concat(chunks).toString()), {
           subject: { type: "organization", name: "Voice of Europe" },

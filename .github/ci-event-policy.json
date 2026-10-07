@@ -61,6 +61,7 @@
     "cla.yml/verify-signatures": "pr-fast",
     "label-sync.yml/label-sync": "main",
     "landing-canary.yml/served": "main",
+    "public-sanctions-canary.yml/screening": "main",
     "network-baseline-deliver.yml/deliver": "main",
     "provider-request-schemas-check.yml/provider-request-schemas-check": "main",
     "staging-response-policy.yml/check": "main",

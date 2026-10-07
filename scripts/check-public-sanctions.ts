@@ -54,27 +54,45 @@ const isStatus = (value: unknown): value is (typeof STATUSES)[number] =>
   STATUSES.some((status) => status === value);
 const isSource = (value: unknown): value is (typeof SOURCES)[number] =>
   SOURCES.some((source) => source === value);
-const isEditionField = (value: unknown) =>
+const isEditionField = (value: unknown): value is string | null =>
   value === null || (typeof value === "string" && value.length > 0);
 
-export const validateScreening = (body: unknown): void => {
-  if (!isRecord(body) || !isStatus(body.status) || !Array.isArray(body.lists)) {
+const parseScreeningList = (value: unknown) => {
+  if (!isRecord(value)) {
+    throw new CanaryFailureError("invalid-list");
+  }
+  const { source, status, reason, editionId, publishedAt } = value;
+  if (
+    !isSource(source) ||
+    !isStatus(status) ||
+    !(reason === null || typeof reason === "string") ||
+    !isEditionField(editionId) ||
+    !isEditionField(publishedAt)
+  ) {
+    throw new CanaryFailureError("invalid-list");
+  }
+  return { source, status, reason, editionId, publishedAt };
+};
+
+const parseScreening = (value: unknown) => {
+  if (!isRecord(value)) {
     throw new CanaryFailureError("invalid-response");
   }
+  const { status, lists } = value;
+  if (!isStatus(status) || !Array.isArray(lists)) {
+    throw new CanaryFailureError("invalid-response");
+  }
+  return { status, lists: lists.map(parseScreeningList) };
+};
+
+export const validateScreening = (value: unknown): void => {
+  const body = parseScreening(value);
   const seen = new Set<string>();
   const matched = new Set<string>();
   let published = 0;
   let aggregate: (typeof STATUSES)[number] = "clear";
-  for (const entry of body.lists) {
-    const list: unknown = entry;
-    if (
-      !isRecord(list) ||
-      !isSource(list.source) ||
-      seen.has(list.source) ||
-      !isStatus(list.status) ||
-      !isEditionField(list.editionId) ||
-      !isEditionField(list.publishedAt)
-    ) {
+  for (const list of body.lists) {
+    if (seen.has(list.source)) {
       throw new CanaryFailureError("invalid-list");
     }
     seen.add(list.source);
@@ -208,14 +226,17 @@ export const probe = (
       },
     );
     // Covers TLS setup, response headers and the entire response body.
-    timer = setTimeout(
-      () => request.destroy(new CanaryFailureError("deadline-exceeded")),
-      deadlineMs,
-    );
+    timer = setTimeout(() => {
+      request.destroy(new CanaryFailureError("deadline-exceeded"));
+    }, deadlineMs);
     request.on("error", reject);
-    request.on("close", () => clearTimeout(timer));
+    request.on("close", () => {
+      clearTimeout(timer);
+    });
     request.end(SUBJECT);
-  }).finally(() => clearTimeout(timer));
+  }).finally(() => {
+    clearTimeout(timer);
+  });
 };
 
 type RunCanaryOptions = {
