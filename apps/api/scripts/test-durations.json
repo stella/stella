@@ -3483,6 +3483,10 @@
     "seconds": 2.498113,
     "source": "estimated"
   },
+  "src/handlers/signals/proofs.integration.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
   "src/handlers/signals/schema.test.ts": {
     "seconds": 0.45172,
     "source": "estimated"

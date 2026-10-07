@@ -1395,6 +1395,7 @@ const config = defineConfig({
   ],
 
   jsPlugins: [
+    { name: "gdp-ts", specifier: "./scripts/oxlint-presets/gdp-plugin.mjs" },
     "./.oxlint-plugins/require-contract-domains.ts",
     ...SHADCN_LINT_JS_PLUGINS,
     stellaLowercasePluginSpecifier,
@@ -1619,6 +1620,33 @@ const config = defineConfig({
   ],
 
   overrides: [
+    {
+      files: ["apps/api/src/**/*.ts"],
+      rules: {
+        "gdp-ts/no-define-proof": "error",
+        "gdp-ts/no-proof-assertion": "error",
+      },
+    },
+    {
+      files: [
+        "apps/api/src/handlers/signals/**/*.ts",
+        "apps/api/src/lib/signals/**/*.ts",
+      ],
+      rules: {
+        "gdp-ts/no-type-assertion": "error",
+        "gdp-ts/no-any": "error",
+      },
+    },
+    {
+      files: [
+        "apps/api/src/lib/signals/proofs/signal-visible-to.ts",
+        "apps/api/src/lib/signals/proofs/may-create-signal-request.ts",
+      ],
+      rules: {
+        "gdp-ts/no-define-proof": "off",
+        "gdp-ts/no-exported-prover": "error",
+      },
+    },
     {
       files: ["apps/web/e2e/**", "scripts/**"],
       rules: {

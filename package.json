@@ -134,6 +134,7 @@
   "devDependencies": {
     "@changesets/changelog-github": "^1.0.1",
     "@changesets/cli": "^3.0.3",
+    "@gdp-ts/core": "0.1.0",
     "@oxlint/plugins": "catalog:",
     "@shadcn/lint": "catalog:",
     "@stll/collation": "workspace:*",
