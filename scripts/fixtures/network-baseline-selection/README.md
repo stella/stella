@@ -1,5 +1,3 @@
-`main-history.json` replays GitHub API responses captured on 2026-10-07 for the main ancestry from `00ebb45` through `6502b4e`. It preserves the complete ordered commit walk, the successful recording workflow list, every candidate's artifact response, and the referenced delivery runs. Responses are projected to selection fields; repository identities of actors and unrelated API metadata are omitted.
+`main-history.json` contains public main ancestry and the API fields used for recording selection. Commit SHAs and their ordering preserve the candidate walk; run and artifact identifiers are stable synthetic values.
 
-The newest delivered ancestor is `32af2b1`, artifact `11457891846` from delivery run `37564499381`. The newer successful recordings at `ce8d31c`, `84d35ae`, and `e78ae30` have no delivered artifact in this capture.
-
-Capture requests: `GET /repos/stella/stella/actions/workflows/network-baseline-record.yml/runs?branch=main&status=success&per_page=100`; `GET /repos/stella/stella/actions/artifacts?name=network-baseline-main-<sha>&per_page=100` for the base and recording candidates in the walk; `GET /repos/stella/stella/actions/runs/<id>` for every artifact's run. The replay makes no network calls.
+The replay proves that selection chooses the nearest ancestor with an accepted recording. Tests run offline.

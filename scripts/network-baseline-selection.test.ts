@@ -127,13 +127,13 @@ test("recorded main history selects the newest delivered ancestor and explains e
     expect(result.stderr).toContain(sha);
     expect(result.summary).toContain(sha);
   }
-  expect(result.stderr).toContain("11457891846");
+  expect(result.stderr).toContain("artifact=2016");
 });
 
 for (const endpoint of [
   `artifacts-${fixture.base}`,
   "record-runs",
-  "run-37564499381",
+  "run-1112",
 ]) {
   test(`API errors terminate selection with the reason: ${endpoint}`, () => {
     const result = replay({
@@ -153,7 +153,7 @@ for (const endpoint of [
   });
 }
 
-const deliveredRun = fixture.responses["run-37564499381"];
+const deliveredRun = fixture.responses["run-1112"];
 for (const change of [
   {
     path: ".github/workflows/ci.yml",
@@ -169,11 +169,11 @@ for (const change of [
   test(`untrusted artifact is skipped with a verdict: ${JSON.stringify(change)}`, () => {
     const result = replay({
       walk: fixture.walk.slice(0, fixture.walk.indexOf(fixture.expected) + 1),
-      overrides: { "run-37564499381": { ...deliveredRun, ...change } },
+      overrides: { "run-1112": { ...deliveredRun, ...change } },
     });
     expect(result.code).toBe(0);
     expect(result.stdout).toContain("recorded=false");
-    expect(result.stderr).toContain("11457891846");
+    expect(result.stderr).toContain("artifact=2016");
     expect(result.stderr).toMatch(/reject|skip|untrusted/iu);
     expect(result.summary).toContain("committed bootstrap");
   });
@@ -200,7 +200,7 @@ for (const [endpoint, response] of [
     "record-runs",
     { workflow_runs: [{ event: "schedule", head_sha: "invalid" }] },
   ],
-  ["run-37564499381", { ...deliveredRun, head_repository: null }],
+  ["run-1112", { ...deliveredRun, head_repository: null }],
 ] as const) {
   test(`well-formed JSON with an invalid API shape fails: ${endpoint}`, () => {
     const result = replay({ overrides: { [endpoint]: response } });
@@ -214,7 +214,7 @@ for (const event of ["schedule", "workflow_dispatch"]) {
   test(`a successful main ${event} run can publish directly through reusable delivery`, () => {
     const result = replay({
       overrides: {
-        "run-37564499381": {
+        "run-1112": {
           ...deliveredRun,
           path: ".github/workflows/network-baseline-record.yml",
           event,
@@ -233,7 +233,7 @@ test("a recording artifact cannot claim a different main commit", () => {
   const result = replay({
     walk: fixture.walk.slice(0, fixture.walk.indexOf(fixture.expected) + 1),
     overrides: {
-      "run-37564499381": {
+      "run-1112": {
         ...deliveredRun,
         path: ".github/workflows/network-baseline-record.yml",
         event: "workflow_dispatch",
@@ -266,7 +266,7 @@ test("removing recorder source identity admits the mismatched recording", () => 
   const result = replay({
     selectorSource: mutant,
     overrides: {
-      "run-37564499381": {
+      "run-1112": {
         ...deliveredRun,
         path: ".github/workflows/network-baseline-record.yml",
         event: "workflow_dispatch",
