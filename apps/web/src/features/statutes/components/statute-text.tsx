@@ -35,7 +35,7 @@ import { useExternalSyncEffect } from "@/hooks/use-effect";
  * document states none, in which case the reader offers no provision tab at
  * all: the tab is keyed by it.
  */
-export type StatuteCitationWork = {
+type StatuteCitationWork = {
   eli: string;
   jurisdiction: string;
 };

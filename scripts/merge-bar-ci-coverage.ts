@@ -14,16 +14,27 @@ export class CiCoverageLogError extends TaggedError("CiCoverageLogError")<{
 const error = (message: string) =>
   Result.err(new CiCoverageLogError({ message }));
 
-const stripTimestamp = (line: string) =>
-  line.replace(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,9})?Z[ \t]/u, "");
+const logLine = (line: string) => {
+  const timestamp =
+    /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,9})?Z[ \t]/u.exec(line)?.[0];
+  return {
+    text: timestamp === undefined ? line : line.slice(timestamp.length),
+    timestamped: timestamp !== undefined,
+  };
+};
+type LogLine = ReturnType<typeof logLine>;
 
 type LogGroup = { start: number; end: number };
 type EnvironmentSection = { index: number; values: Map<string, string[]> };
 
-const logGroups = (lines: readonly string[]) => {
+const logGroups = (lines: readonly LogLine[]) => {
   const open: number[] = [];
   const groups: LogGroup[] = [];
-  for (const [index, line] of lines.entries()) {
+  for (const [index, entry] of lines.entries()) {
+    if (!entry.timestamped) {
+      continue;
+    }
+    const line = entry.text;
     if (line.trimStart().startsWith(GROUP_START)) {
       open.push(index);
       continue;
@@ -44,19 +55,32 @@ const logGroups = (lines: readonly string[]) => {
 };
 
 const environmentSections = (
-  lines: readonly string[],
+  lines: readonly LogLine[],
   group: LogGroup,
 ): EnvironmentSection[] => {
   const sections: EnvironmentSection[] = [];
   for (let index = group.start + 1; index < group.end; index += 1) {
-    const header = lines[index] ?? "";
-    if (header.trim() !== "env:") {
+    const headerLine = lines[index];
+    if (!headerLine?.timestamped || headerLine.text.trim() !== "env:") {
       continue;
     }
-    const envIndent = /^\s*/u.exec(header)?.[0].length ?? 0;
+    const envIndent = /^\s*/u.exec(headerLine.text)?.[0].length ?? 0;
     const values = new Map<string, string[]>();
+    let activeName: string | undefined;
     for (let child = index + 1; child < group.end; child += 1) {
-      const line = lines[child] ?? "";
+      const entryLine = lines[child];
+      // GitHub timestamps entry starts, but leaves multiline continuations raw.
+      // Raw values cannot terminate env, introduce keys, or forge group markers.
+      if (!entryLine?.timestamped) {
+        const entries =
+          activeName === undefined ? undefined : values.get(activeName);
+        const previous = entries?.pop();
+        if (previous !== undefined && entryLine) {
+          entries?.push(`${previous}\n${entryLine.text}`);
+        }
+        continue;
+      }
+      const line = entryLine.text;
       if (line.trim() === "") {
         continue;
       }
@@ -67,9 +91,11 @@ const environmentSections = (
       const entry = line.trim();
       const separator = entry.indexOf(":");
       const name = entry.slice(0, separator);
+      activeName = undefined;
       if (name !== "COVERAGE_PROFILE" && name !== "PILOT_FAST_JOBS") {
         continue;
       }
+      activeName = name;
       const entries = values.get(name) ?? [];
       entries.push(entry.slice(separator + 1).trim());
       values.set(name, entries);
@@ -127,7 +153,7 @@ const coverageEvidence = (
 export const parseCiCoverageLog = (
   raw: string,
 ): Result<CiCoverageEvidence, CiCoverageLogError> => {
-  const lines = raw.split(/\r?\n/u).map(stripTimestamp);
+  const lines = raw.split(/\r?\n/u).map(logLine);
   const groupsResult = logGroups(lines);
   if (groupsResult.isErr()) {
     return groupsResult;
