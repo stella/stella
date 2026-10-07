@@ -2,6 +2,8 @@
 # Resolve a release candidate without changing the checkout or creating a tag.
 set -euo pipefail
 
+gh_retry_script="${GH_RETRY_SCRIPT:-$(dirname "${BASH_SOURCE[0]}")/gh-retry.sh}"
+
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 repo=""
 sha=""
@@ -19,7 +21,7 @@ required_contexts='["staging/verified","main/heavy"]'
 
 release_states() {
   # Statuses arrive newest first. A later failure invalidates an earlier success.
-  gh api --paginate --slurp "repos/$repo/commits/$1/statuses?per_page=100" \
+  bash "$gh_retry_script" api --paginate --slurp "repos/$repo/commits/$1/statuses?per_page=100" \
     | jq -r --argjson contexts "$required_contexts" '
         [.[][]] as $all
         | $contexts[]

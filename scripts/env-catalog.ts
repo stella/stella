@@ -1312,6 +1312,8 @@ export const TOOLING_ENV_KEYS = new Set([
   "STELLA_DEV_SESSION_ID",
   // ci-result evaluates each independently scoped suite in folded jobs.
   "FOLDED_SUITES",
+  // CI steps export the GitHub API retry helper's path after installing it.
+  "GH_RETRY_SCRIPT",
   // merge-bar CLI tests skip the origin/main freshness check (local test runs only).
   "STELLA_MERGE_BAR_TEST_SKIP_FRESHNESS",
   // Preserve Bun global-store links inside browser containers.
@@ -1526,6 +1528,8 @@ export const AMBIENT_ENV_KEYS = new Set([
   "CARGO_MANIFEST_DIR",
   "CARGO_PKG_VERSION",
   "CI",
+  // Read by the Docker CLI; fixtures point it at an empty config.
+  "DOCKER_CONFIG",
   "ECS_CONTAINER_METADATA_URI_V4",
   "GITHUB_TOKEN",
   "GH_REPO",

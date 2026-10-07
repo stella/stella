@@ -140,6 +140,23 @@ jobs:
       web_image_smoke_required: ${{ steps.changed-files.outputs.web_image_smoke_required }}
       windows_scripts_required: ${{ steps.changed-files.outputs.windows_scripts_required }}
     steps:
+      - name: Fetch GitHub API tooling
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: ${{ github.repository }}
+          ref: ${{ github.workflow_sha }}
+          path: .workflow-tooling
+          persist-credentials: false
+          sparse-checkout: |
+            scripts/gh-retry.sh
+            scripts/retry.sh
+          sparse-checkout-cone-mode: false
+
+      - name: Preserve GitHub API tooling across source checkouts
+        run: |
+          cp "$GITHUB_WORKSPACE/.workflow-tooling/scripts/gh-retry.sh" "$RUNNER_TEMP/gh-retry.sh"
+          echo "GH_RETRY_SCRIPT=$RUNNER_TEMP/gh-retry.sh" >> "$GITHUB_ENV"
+
       - name: Resolve suite depth
         id: depth
         env:
@@ -296,14 +313,14 @@ jobs:
           fi
           queued_number="${BASH_REMATCH[1]}"
           read -r queued_head_repo queued_head_sha < <(
-            gh api "repos/$BASE_REPO/pulls/$queued_number" --jq '.head.repo.full_name + " " + .head.sha'
+            bash "$GH_RETRY_SCRIPT" api "repos/$BASE_REPO/pulls/$queued_number" --jq '.head.repo.full_name + " " + .head.sha'
           )
           if [[ "$queued_head_repo" == "$BASE_REPO" ]]; then
             echo "trusted=true" >> "$GITHUB_OUTPUT"
             exit 0
           fi
           passed_runs=$(
-            gh api "repos/$BASE_REPO/actions/workflows/ci.yml/runs?event=pull_request&status=success&head_sha=$queued_head_sha" \
+            bash "$GH_RETRY_SCRIPT" api "repos/$BASE_REPO/actions/workflows/ci.yml/runs?event=pull_request&status=success&head_sha=$queued_head_sha" \
               --jq '.total_count'
           )
           if [[ "${passed_runs:-0}" -gt 0 ]]; then
@@ -1889,6 +1906,12 @@ jobs:
         run: |
           bun apps/api/scripts/deployment-feature-guard.ts --self-test
           bun apps/api/scripts/deployment-feature-guard.ts --base "$RATCHET_BASE_REF"
+
+      - name: GitHub API command ownership
+        if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
+        run: |
+          bun test scripts/check-gh-retry.test.ts scripts/gh-retry.test.ts scripts/promote-dispatch.test.ts
+          bun scripts/check-gh-retry.ts
 
       - name: SHA-256 migration ledger
         if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
@@ -4503,6 +4526,23 @@ jobs:
       pull-requests: read
 
     steps:
+      - name: Fetch GitHub API tooling
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: ${{ github.repository }}
+          ref: ${{ github.workflow_sha }}
+          path: .workflow-tooling
+          persist-credentials: false
+          sparse-checkout: |
+            scripts/gh-retry.sh
+            scripts/retry.sh
+          sparse-checkout-cone-mode: false
+
+      - name: Preserve GitHub API tooling across source checkouts
+        run: |
+          cp "$GITHUB_WORKSPACE/.workflow-tooling/scripts/gh-retry.sh" "$RUNNER_TEMP/gh-retry.sh"
+          echo "GH_RETRY_SCRIPT=$RUNNER_TEMP/gh-retry.sh" >> "$GITHUB_ENV"
+
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -4536,7 +4576,7 @@ jobs:
           REPO: ${{ github.repository }}
         run: |
           body_file="$RUNNER_TEMP/pull-request-body.md"
-          gh api "repos/$REPO/pulls/$PR_NUMBER" --jq '.body // ""' > "$body_file"
+          bash "$GH_RETRY_SCRIPT" api "repos/$REPO/pulls/$PR_NUMBER" --jq '.body // ""' > "$body_file"
           # The checkout is the test merge: its first parent is the base.
           bun scripts/fix-tests-on-base.ts --base HEAD^1 --title "$PR_TITLE" --body-file "$body_file"
 
@@ -6984,6 +7024,23 @@ jobs:
       # A skipped plan passes only while the pull request is still a draft.
       pull-requests: read
     steps:
+      - name: Fetch GitHub API tooling
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: ${{ github.repository }}
+          ref: ${{ github.workflow_sha }}
+          path: .workflow-tooling
+          persist-credentials: false
+          sparse-checkout: |
+            scripts/gh-retry.sh
+            scripts/retry.sh
+          sparse-checkout-cone-mode: false
+
+      - name: Preserve GitHub API tooling across source checkouts
+        run: |
+          cp "$GITHUB_WORKSPACE/.workflow-tooling/scripts/gh-retry.sh" "$RUNNER_TEMP/gh-retry.sh"
+          echo "GH_RETRY_SCRIPT=$RUNNER_TEMP/gh-retry.sh" >> "$GITHUB_ENV"
+
       - name: Evaluate CI outcome
         env:
           EVENT: ${{ github.event_name }}
@@ -7055,7 +7112,7 @@ jobs:
           # Read cancellation evidence before any early aggregation exit.
           cancelled_jobs=""
           if jq -e 'any(.[]; .result == "cancelled")' <<< "$NEEDS" > /dev/null; then
-            cancelled_jobs=$(gh api --paginate --slurp "repos/$REPO/actions/runs/$GITHUB_RUN_ID/attempts/$GITHUB_RUN_ATTEMPT/jobs?per_page=100") || {
+            cancelled_jobs=$(bash "$GH_RETRY_SCRIPT" api --paginate --slurp "repos/$REPO/actions/runs/$GITHUB_RUN_ID/attempts/$GITHUB_RUN_ATTEMPT/jobs?per_page=100") || {
               echo "::error::Cancelled CI job failed-step lookup was unavailable."
               exit 1
             }
@@ -7088,10 +7145,10 @@ jobs:
           # job timed out. Every API lookup fails closed.
           cancelled_dependencies_were_superseded() {
             local current workflow created runs urls url annotations
-            current=$(gh api "repos/$REPO/actions/runs/$GITHUB_RUN_ID") || return 1
+            current=$(bash "$GH_RETRY_SCRIPT" api "repos/$REPO/actions/runs/$GITHUB_RUN_ID") || return 1
             workflow=$(jq -er '.workflow_id | select(type == "number")' <<< "$current") || return 1
             created=$(jq -er '.created_at | select(type == "string" and length > 0) | @uri' <<< "$current") || return 1
-            runs=$(gh api --paginate --slurp "repos/$REPO/actions/workflows/$workflow/runs?event=$EVENT&created=%3E%3D$created&per_page=100") || return 1
+            runs=$(bash "$GH_RETRY_SCRIPT" api --paginate --slurp "repos/$REPO/actions/workflows/$workflow/runs?event=$EVENT&created=%3E%3D$created&per_page=100") || return 1
             jq -e --argjson current "$current" --arg event "$EVENT" --arg pr "$PR_NUMBER" '
               any(.[].workflow_runs[];
                 .workflow_id == $current.workflow_id and .name == $current.name and .event == $event
@@ -7109,7 +7166,7 @@ jobs:
             while IFS= read -r url; do
               [[ -n "$url" ]] || continue
               [[ "$url" == "https://api.github.com/repos/$REPO/check-runs/"* ]] || return 1
-              annotations=$(gh api --paginate --slurp "$url/annotations?per_page=100") || return 1
+              annotations=$(bash "$GH_RETRY_SCRIPT" api --paginate --slurp "$url/annotations?per_page=100") || return 1
               jq -e '
                 flatten
                 | any(.[]; (.message // "") | contains("has exceeded the maximum execution time")) | not
@@ -7125,7 +7182,7 @@ jobs:
           if [[ "$PLAN_RESULT" == "skipped" ]]; then
             draft=""
             if [[ "$EVENT" == "pull_request" ]]; then
-              draft="$(gh api "repos/$REPO/pulls/$PR_NUMBER" --jq .draft)"
+              draft="$(bash "$GH_RETRY_SCRIPT" api "repos/$REPO/pulls/$PR_NUMBER" --jq .draft)"
             fi
             if [[ "$draft" == "true" ]]; then
               echo "CI plan skipped for a draft pull request. Passing."

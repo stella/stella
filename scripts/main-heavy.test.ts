@@ -575,6 +575,7 @@ test("status step publishes success only when both workflow jobs succeeded", () 
           env: {
             ...Bun.env,
             GH_LOG: logPath,
+            GH_RETRY_SCRIPT: path.resolve(import.meta.dirname, "gh-retry.sh"),
             GH_TOKEN: "fixture-token",
             GITHUB_OUTPUT: outputPath,
             PATH: `${bin}:${Bun.env["PATH"] ?? ""}`,

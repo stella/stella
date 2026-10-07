@@ -1,6 +1,13 @@
 import { panic } from "better-result";
 import { expect, test } from "bun:test";
-import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { Script } from "node:vm";
@@ -45,10 +52,20 @@ const run = (script: string, env: Record<string, string>) => {
   const output = path.join(directory, "output");
   const summary = path.join(directory, "summary");
   const payloads = path.join(directory, "payloads");
+  // The retry helper runs gh in its own process, so the stub is an executable
+  // on PATH rather than a shell function.
+  const bin = path.join(directory, "bin");
+  mkdirSync(bin);
+  writeFileSync(
+    path.join(bin, "gh"),
+    '#!/bin/bash\njq -c . >> "$STUB_PAYLOADS"\n',
+    { mode: 0o755 },
+  );
   try {
     const result = Bun.spawnSync(["bash", "-c", script], {
       env: {
-        PATH: process.env["PATH"] ?? "",
+        PATH: `${bin}:${process.env["PATH"] ?? ""}`,
+        GH_RETRY_SCRIPT: path.resolve(import.meta.dir, "gh-retry.sh"),
         ...env,
         GITHUB_OUTPUT: output,
         GITHUB_STEP_SUMMARY: summary,
