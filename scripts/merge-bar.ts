@@ -3126,6 +3126,9 @@ export const parseOptions = (argv: readonly string[]): MergeBarOptions => {
       }
       return { mode, pullNumber, repo, dryRun, jump: false, expectedHeadSha };
     case "disarm":
+      if (expectedHeadSha === undefined) {
+        return { mode, pullNumber, repo, dryRun, jump: false };
+      }
       return { mode, pullNumber, repo, dryRun, jump: false, expectedHeadSha };
     case "merge":
       return { mode, pullNumber, repo, dryRun, jump };
