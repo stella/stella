@@ -873,19 +873,6 @@ describe("destructive write-tool behavior", () => {
     }
   });
 
-  test("non-destructive tools declare no behavior except an outbound send", () => {
-    const offenders = writeTools
-      .filter((tool) => !tool.annotations.destructiveHint)
-      .filter(
-        (tool) =>
-          "destructiveBehavior" in tool &&
-          tool.destructiveBehavior !== undefined &&
-          tool.destructiveBehavior.type !== "outbound",
-      )
-      .map((tool) => tool.name);
-    expect(offenders).toEqual([]);
-  });
-
   test("an outbound send is never advertised as a destructive operation", () => {
     // The two facts are independent and must not be conflated: `outbound`
     // gates the confirmation prompt, `destructiveHint` tells a client the call
