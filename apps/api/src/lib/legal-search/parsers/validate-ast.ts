@@ -10,6 +10,7 @@
 
 import * as cheerio from "cheerio";
 
+// parser-output-unchanged: imports the document AST from its package owner
 import type { Block, Inline } from "@stll/legal-ast/document-ast";
 
 import { visibleHtmlText } from "@/api/handlers/case-law/ingestion/parsers/shared-inlines";

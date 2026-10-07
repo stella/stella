@@ -1,4 +1,5 @@
 import path from "node:path";
+import ts from "typescript";
 
 const REGISTRY_PATH =
   "apps/api/src/handlers/case-law/ingestion/adapters/adapter-registry.ts";
@@ -480,6 +481,20 @@ class StaticTree {
 export const sourceOwners = (files: SourceTree): SourceOwnersResult =>
   new StaticTree(files).owners();
 
+// Inspect original source: transpilation erases local type declarations, which
+// must still require a version decision when their module is deleted.
+const isReexportOnlyModule = (file: string, source: string): boolean => {
+  const tree = ts.createSourceFile(file, source, ts.ScriptTarget.Latest);
+  return tree.statements.every(
+    (statement) =>
+      ts.isExportDeclaration(statement) &&
+      statement.moduleSpecifier !== undefined &&
+      ts.isStringLiteral(statement.moduleSpecifier) &&
+      (statement.exportClause === undefined ||
+        ts.isNamedExports(statement.exportClause)),
+  );
+};
+
 type CheckParserVersionsOptions = { base: SourceTree; head: SourceTree };
 
 export const checkParserVersions = ({
@@ -491,6 +506,12 @@ export const checkParserVersions = ({
   const before = baseTree.owners();
   const after = headTree.owners();
   const errors = [...before.errors, ...after.errors];
+  const deletedReexports = new Set<string>();
+  for (const [file, source] of base) {
+    if (!head.has(file) && isReexportOnlyModule(file, source)) {
+      deletedReexports.add(file);
+    }
+  }
   for (const [key, current] of after.owners) {
     const previous = before.owners.get(key);
     if (previous === undefined) {
@@ -512,6 +533,9 @@ export const checkParserVersions = ({
       continue;
     }
     const unexempted = changed.filter((file) => {
+      if (deletedReexports.has(file)) {
+        return false;
+      }
       const baseLines = new Set((base.get(file) ?? "").split("\n"));
       return !(head.get(file) ?? "").split("\n").some((line) => {
         if (baseLines.has(line)) {

@@ -22,6 +22,7 @@ import {
   Text,
 } from "domhandler";
 
+// parser-output-unchanged: imports the document AST from its package owner
 import {
   type Block,
   hasInlineChildren,

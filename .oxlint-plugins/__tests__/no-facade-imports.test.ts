@@ -118,3 +118,22 @@ test("accepts direct canonical AST imports and reexports", async () => {
     ),
   ).toEqual([]);
 });
+
+test("type queries reject retired facades while accepting the package owner", async () => {
+  expect(
+    await lintSingleRule(
+      "no-facade-imports",
+      [
+        'type HandlerAst = import("@/api/handlers/case-law/document-ast").DocumentAst;',
+        'type LibAst = import("@/api/lib/case-law/document-ast").DocumentAst;',
+        'type OwnerAst = import("@stll/legal-ast/document-ast").DocumentAst;',
+        'type RelativeAst = import("../../document-ast").DocumentAst;',
+      ].join("\n"),
+      {
+        cwd: "scratch",
+        sourcePath:
+          "apps/api/src/handlers/case-law/ingestion/parsers/sample.ts",
+      },
+    ),
+  ).toEqual([1, 2, 4]);
+});

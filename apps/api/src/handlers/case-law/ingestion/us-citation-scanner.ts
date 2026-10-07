@@ -22,6 +22,7 @@ import {
 } from "@stll/api-contract/us-reporter-citation";
 import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
 import type { ReporterCitationIdentifier } from "@stll/legal-ast/decision-identifier";
+// parser-output-unchanged: imports the document AST from its package owner
 import { plainTextOf } from "@stll/legal-ast/document-ast";
 import type { Inline } from "@stll/legal-ast/document-ast";
 import {

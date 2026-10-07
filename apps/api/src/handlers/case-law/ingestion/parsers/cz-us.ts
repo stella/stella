@@ -52,6 +52,7 @@ import {
   CZ_JUDGE_NAME_RE as JUDGE_NAME_RE,
   CZ_JUDGE_TITLE_RE as SIGNATURE_RE,
 } from "@stll/legal-ast/czech-document-roles";
+// parser-output-unchanged: imports the document AST from its package owner
 import type {
   Block,
   DocumentAst,

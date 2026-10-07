@@ -41,6 +41,7 @@ import type { SkUsEcliAvailability } from "@stll/api-contract/case-law-text-fiel
  * at the bottom of this file.
  */
 import { classifyFailure } from "@stll/errors";
+// parser-output-unchanged: imports the document AST from its package owner
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
 import type { DocumentFetchStage } from "@stll/legal-atlas/document-fetch-diagnostics";
 import { decodeDeclared } from "@stll/mojibake/declared-charset";

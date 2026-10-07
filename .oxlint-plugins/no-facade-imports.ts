@@ -167,6 +167,9 @@ export default eslintCompatPlugin({
           ExportNamedDeclaration(node) {
             reportLeafReexport(context, node.source);
           },
+          TSImportType(node) {
+            reportInvalidImport(context, node.source);
+          },
           ImportExpression(node) {
             reportInvalidImport(context, node.source);
           },
