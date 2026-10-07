@@ -3705,7 +3705,7 @@ test("pending template admission retains nested execution values", async () => {
     aiCollaborators: checkedTestAiCollaborators(
       async () => ({
         generateAiValue: async ({ values: checkedValues }) => {
-          expect(checkedValues.person).toEqual({ name: "Authorized" });
+          expect(checkedValues["person"]).toEqual({ name: "Authorized" });
           return { type: "drafted", value: "Authorized summary" };
         },
       }),
@@ -3721,7 +3721,7 @@ test("pending template admission retains nested execution values", async () => {
   proceed.resolve(undefined);
   const filled = await filling;
   if ("usageRejection" in filled) {
-    return panic("Expected admitted template fixture");
+    throw new TypeError("Expected admitted template fixture");
   }
   expect(await filledTexts(filled)).toEqual(["Authorized summary"]);
 });
