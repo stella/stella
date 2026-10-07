@@ -16,6 +16,7 @@ import {
   RouteGenerationError,
 } from "./generate-route-map.js";
 import { DOCUMENT_VERSION_UPLOAD_TRANSPORT } from "./generated/document-version-upload-transport.js";
+import { MCP_CAPABILITY_EXECUTORS } from "./generated/mcp-contract.js";
 import {
   buildCompactInputUnionHints,
   buildInputContractHelp,
@@ -363,7 +364,7 @@ const renderCapabilitySection = (summary: CapabilitySkillSummary): string => {
     "",
     `Beyond the curated commands above, the CLI generates ${summary.commandCount}`,
     "capability commands from the server's capability catalog: every safe handler",
-    "that is not a curated tool, reached through `read_capability` or `write_capability`",
+    `that is not a curated tool, reached through \`${MCP_CAPABILITY_EXECUTORS.read}\` or \`${MCP_CAPABILITY_EXECUTORS.write}\``,
     `paths. Every generated command lives at \`stella ${CAPABILITY_NAMESPACE} <domain> <action>\`;`,
     "multi-segment capability actions are flattened with hyphens into `<action>`.",
     "",
