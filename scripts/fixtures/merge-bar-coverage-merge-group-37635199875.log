@@ -1,0 +1,678 @@
+﻿2000-01-01T00:00:00.0000000Z Current runner version: '2.337.0'
+2000-01-01T00:00:00.0000000Z ##[group]Runner Image Provisioner
+2000-01-01T00:00:00.0000000Z Hosted Compute Agent
+2000-01-01T00:00:00.0000000Z Version: 20261002.596
+2000-01-01T00:00:00.0000000Z Commit: c3d12f3313a95f25162a1503be624f3b0617f8c0
+2000-01-01T00:00:00.0000000Z Build Date: 2000-01-01T00:00:00.0000000Z
+2000-01-01T00:00:00.0000000Z Worker ID: {7b04a323-0a97-4286-b316-12c6b6658828}
+2000-01-01T00:00:00.0000000Z Region: westcentralus
+2000-01-01T00:00:00.0000000Z Cloud: Azure
+2000-01-01T00:00:00.0000000Z ##[endgroup]
+2000-01-01T00:00:00.0000000Z ##[group]Operating System
+2000-01-01T00:00:00.0000000Z Ubuntu
+2000-01-01T00:00:00.0000000Z 24.04.5
+2000-01-01T00:00:00.0000000Z LTS
+2000-01-01T00:00:00.0000000Z ##[endgroup]
+2000-01-01T00:00:00.0000000Z ##[group]Runner Image
+2000-01-01T00:00:00.0000000Z Image: ubuntu-24.04
+2000-01-01T00:00:00.0000000Z Version: 20261004.327.1
+2000-01-01T00:00:00.0000000Z Included Software: https://github.com/actions/runner-images/blob/ubuntu24/20261004.327/images/ubuntu/Ubuntu2404-Readme.md
+2000-01-01T00:00:00.0000000Z Image Release: https://github.com/actions/runner-images/releases/tag/ubuntu24%2F20261004.327
+2000-01-01T00:00:00.0000000Z ##[endgroup]
+2000-01-01T00:00:00.0000000Z ##[group]GITHUB_TOKEN Permissions
+2000-01-01T00:00:00.0000000Z Actions: write
+2000-01-01T00:00:00.0000000Z Checks: read
+2000-01-01T00:00:00.0000000Z Contents: read
+2000-01-01T00:00:00.0000000Z Metadata: read
+2000-01-01T00:00:00.0000000Z PullRequests: read
+2000-01-01T00:00:00.0000000Z ##[endgroup]
+2000-01-01T00:00:00.0000000Z Secret source: Actions
+2000-01-01T00:00:00.0000000Z Cache mode: write
+2000-01-01T00:00:00.0000000Z Prepare workflow directory
+2000-01-01T00:00:00.0000000Z Prepare all required actions
+2000-01-01T00:00:00.0000000Z Getting action download info
+2000-01-01T00:00:00.0000000Z Download action repository 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1' (SHA:3d3c42e5aac5ba805825da76410c181273ba90b1)
+2000-01-01T00:00:00.0000000Z Download action repository 'actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a' (SHA:043fb46d1a93c77aae656e7c1c64a875d1fc6a0a)
+2000-01-01T00:00:00.0000000Z Download action repository 'actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3' (SHA:3a2844b7e9c422d3c10d287c895573f7108da1b3)
+2000-01-01T00:00:00.0000000Z Complete job name: ci-result
+2000-01-01T00:00:00.0000000Z ##[group]Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+2000-01-01T00:00:00.0000000Z with:
+2000-01-01T00:00:00.0000000Z   repository: stella/stella
+2000-01-01T00:00:00.0000000Z   ref: 1363b9ad46113403a6595fc4b9220d35a5208b0d
+2000-01-01T00:00:00.0000000Z   path: .workflow-tooling
+2000-01-01T00:00:00.0000000Z   persist-credentials: false
+2000-01-01T00:00:00.0000000Z   sparse-checkout: scripts/gh-retry.sh
+scripts/retry.sh
+
+2000-01-01T00:00:00.0000000Z   sparse-checkout-cone-mode: false
+2000-01-01T00:00:00.0000000Z   token: ***
+2000-01-01T00:00:00.0000000Z   ssh-strict: true
+2000-01-01T00:00:00.0000000Z   ssh-user: git
+2000-01-01T00:00:00.0000000Z   clean: true
+2000-01-01T00:00:00.0000000Z   fetch-depth: 1
+2000-01-01T00:00:00.0000000Z   fetch-tags: false
+2000-01-01T00:00:00.0000000Z   show-progress: true
+2000-01-01T00:00:00.0000000Z   lfs: false
+2000-01-01T00:00:00.0000000Z   submodules: false
+2000-01-01T00:00:00.0000000Z   set-safe-directory: true
+2000-01-01T00:00:00.0000000Z   allow-unsafe-pr-checkout: false
+2000-01-01T00:00:00.0000000Z env:
+2000-01-01T00:00:00.0000000Z   TURBO_CACHE: local:rw,remote:r
+2000-01-01T00:00:00.0000000Z   DB_LOAD_GATE_EBS_SIGNAL: disabled
+2000-01-01T00:00:00.0000000Z   DB_LOAD_GATE_BUSY_WINDOWS: []
+2000-01-01T00:00:00.0000000Z ##[endgroup]
+2000-01-01T00:00:00.0000000Z Syncing repository: stella/stella
+2000-01-01T00:00:00.0000000Z ##[group]Getting Git version info
+2000-01-01T00:00:00.0000000Z Working directory is '/home/runner/work/stella/stella/.workflow-tooling'
+2000-01-01T00:00:00.0000000Z [command]/usr/bin/git version
+2000-01-01T00:00:00.0000000Z git version 2.55.0
+2000-01-01T00:00:00.0000000Z ##[endgroup]
+2000-01-01T00:00:00.0000000Z Temporarily overriding HOME='/home/runner/work/_temp/1358b256-e5cf-437a-bcb3-9e3131af8af7' before making global git config changes
+2000-01-01T00:00:00.0000000Z Adding repository directory to the temporary git global config as a safe directory
+2000-01-01T00:00:00.0000000Z [command]/usr/bin/git config --global --add safe.directory /home/runner/work/stella/stella/.workflow-tooling
+2000-01-01T00:00:00.0000000Z ##[group]Determining repository object format
+2000-01-01T00:00:00.0000000Z ##[endgroup]
+2000-01-01T00:00:00.0000000Z ##[group]Initializing the repository
+2000-01-01T00:00:00.0000000Z [command]/usr/bin/git init /home/runner/work/stella/stella/.workflow-tooling
+2000-01-01T00:00:00.0000000Z hint: Using 'master' as the name for the initial branch. This default branch name
+2000-01-01T00:00:00.0000000Z hint: will change to "main" in Git 3.0. To configure the initial branch name
+2000-01-01T00:00:00.0000000Z hint: to use in all of your new repositories, which will suppress this warning,
+2000-01-01T00:00:00.0000000Z hint: call:
+2000-01-01T00:00:00.0000000Z hint:
+2000-01-01T00:00:00.0000000Z hint: 	git config --global init.defaultBranch <name>
+2000-01-01T00:00:00.0000000Z hint:
+2000-01-01T00:00:00.0000000Z hint: Names commonly chosen instead of 'master' are 'main', 'trunk' and
+2000-01-01T00:00:00.0000000Z hint: 'development'. The just-created branch can be renamed via this command:
+2000-01-01T00:00:00.0000000Z hint:
+2000-01-01T00:00:00.0000000Z hint: 	git branch -m <name>
+2000-01-01T00:00:00.0000000Z hint:
+2000-01-01T00:00:00.0000000Z hint: Disable this message with "git config set advice.defaultBranchName false"
+2000-01-01T00:00:00.0000000Z Initialized empty Git repository in /home/runner/work/stella/stella/.workflow-tooling/.git/
+2000-01-01T00:00:00.0000000Z [command]/usr/bin/git remote add origin https://github.com/stella/stella
+2000-01-01T00:00:00.0000000Z ##[endgroup]
+2000-01-01T00:00:00.0000000Z ##[group]Disabling automatic garbage collection
+2000-01-01T00:00:00.0000000Z [command]/usr/bin/git config --local gc.auto 0
+2000-01-01T00:00:00.0000000Z ##[endgroup]
+2000-01-01T00:00:00.0000000Z ##[group]Setting up auth
+2000-01-01T00:00:00.0000000Z Removing SSH command configuration
+2000-01-01T00:00:00.0000000Z [command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+2000-01-01T00:00:00.0000000Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+2000-01-01T00:00:00.0000000Z Removing HTTP extra header
+2000-01-01T00:00:00.0000000Z [command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+2000-01-01T00:00:00.0000000Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+2000-01-01T00:00:00.0000000Z Removing includeIf entries pointing to credentials config files
+2000-01-01T00:00:00.0000000Z [command]/usr/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
+2000-01-01T00:00:00.0000000Z [command]/usr/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
+2000-01-01T00:00:00.0000000Z [command]/usr/bin/git config --file /home/runner/work/_temp/git-credentials-7753e5d6-eda8-4536-ab20-72bade5191ae.config http.https://github.com/.extraheader AUTHORIZATION: basic ***
+2000-01-01T00:00:00.0000000Z [command]/usr/bin/git config --local includeIf.gitdir:/home/runner/work/stella/stella/.workflow-tooling/.git.path /home/runner/work/_temp/git-credentials-7753e5d6-eda8-4536-ab20-72bade5191ae.config
+2000-01-01T00:00:00.0000000Z [command]/usr/bin/git config --local includeIf.gitdir:/home/runner/work/stella/stella/.workflow-tooling/.git/worktrees/*.path /home/runner/work/_temp/git-credentials-7753e5d6-eda8-4536-ab20-72bade5191ae.config
+2000-01-01T00:00:00.0000000Z [command]/usr/bin/git config --local includeIf.gitdir:/github/workspace/.workflow-tooling/.git.path /github/runner_temp/git-credentials-7753e5d6-eda8-4536-ab20-72bade5191ae.config
+2000-01-01T00:00:00.0000000Z [command]/usr/bin/git config --local includeIf.gitdir:/github/workspace/.workflow-tooling/.git/worktrees/*.path /github/runner_temp/git-credentials-7753e5d6-eda8-4536-ab20-72bade5191ae.config
+2000-01-01T00:00:00.0000000Z ##[endgroup]
+2000-01-01T00:00:00.0000000Z ##[group]Fetching the repository
+2000-01-01T00:00:00.0000000Z [command]/usr/bin/git -c protocol.version=2 fetch --no-tags --prune --no-recurse-submodules --filter=blob:none --depth=1 origin 1363b9ad46113403a6595fc4b9220d35a5208b0d
+2000-01-01T00:00:00.0000000Z From https://github.com/stella/stella
+2000-01-01T00:00:00.0000000Z  * branch            1363b9ad46113403a6595fc4b9220d35a5208b0d -> FETCH_HEAD
+2000-01-01T00:00:00.0000000Z [command]/usr/bin/git rev-parse --verify --quiet 1363b9ad46113403a6595fc4b9220d35a5208b0d^{object}
+2000-01-01T00:00:00.0000000Z 1363b9ad46113403a6595fc4b9220d35a5208b0d
+2000-01-01T00:00:00.0000000Z ##[endgroup]
+2000-01-01T00:00:00.0000000Z ##[group]Determining the checkout info
+2000-01-01T00:00:00.0000000Z ##[endgroup]
+2000-01-01T00:00:00.0000000Z ##[group]Setting up sparse checkout
+2000-01-01T00:00:00.0000000Z [command]/usr/bin/git config core.sparseCheckout true
+2000-01-01T00:00:00.0000000Z [command]/usr/bin/git rev-parse --git-path info/sparse-checkout
+2000-01-01T00:00:00.0000000Z .git/info/sparse-checkout
+2000-01-01T00:00:00.0000000Z ##[endgroup]
+2000-01-01T00:00:00.0000000Z ##[group]Checking out the ref
+2000-01-01T00:00:00.0000000Z [command]/usr/bin/git checkout --progress --force 1363b9ad46113403a6595fc4b9220d35a5208b0d
+2000-01-01T00:00:00.0000000Z Note: switching to '1363b9ad46113403a6595fc4b9220d35a5208b0d'.
+2000-01-01T00:00:00.0000000Z 
+2000-01-01T00:00:00.0000000Z You are in 'detached HEAD' state. You can look around, make experimental
+2000-01-01T00:00:00.0000000Z changes and commit them, and you can discard any commits you make in this
+2000-01-01T00:00:00.0000000Z state without impacting any branches by switching back to a branch.
+2000-01-01T00:00:00.0000000Z 
+2000-01-01T00:00:00.0000000Z If you want to create a new branch to retain commits you create, you may
+2000-01-01T00:00:00.0000000Z do so (now or later) by using -c with the switch command. Example:
+2000-01-01T00:00:00.0000000Z 
+2000-01-01T00:00:00.0000000Z   git switch -c <new-branch-name>
+2000-01-01T00:00:00.0000000Z 
+2000-01-01T00:00:00.0000000Z Or undo this operation with:
+2000-01-01T00:00:00.0000000Z 
+2000-01-01T00:00:00.0000000Z   git switch -
+2000-01-01T00:00:00.0000000Z 
+2000-01-01T00:00:00.0000000Z Turn off this advice by setting config variable advice.detachedHead to false
+2000-01-01T00:00:00.0000000Z 
+2000-01-01T00:00:00.0000000Z HEAD is now at 1363b9a fix(api): make queue failure stack fixtures deterministic (#5230)
+2000-01-01T00:00:00.0000000Z ##[endgroup]
+2000-01-01T00:00:00.0000000Z [command]/usr/bin/git log -1 --format=%H
+2000-01-01T00:00:00.0000000Z 1363b9ad46113403a6595fc4b9220d35a5208b0d
+2000-01-01T00:00:00.0000000Z ##[group]Removing auth
+2000-01-01T00:00:00.0000000Z Removing SSH command configuration
+2000-01-01T00:00:00.0000000Z [command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+2000-01-01T00:00:00.0000000Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+2000-01-01T00:00:00.0000000Z Removing HTTP extra header
+2000-01-01T00:00:00.0000000Z [command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+2000-01-01T00:00:00.0000000Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+2000-01-01T00:00:00.0000000Z Removing includeIf entries pointing to credentials config files
+2000-01-01T00:00:00.0000000Z [command]/usr/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
+2000-01-01T00:00:00.0000000Z includeif.gitdir:/home/runner/work/stella/stella/.workflow-tooling/.git.path
+2000-01-01T00:00:00.0000000Z includeif.gitdir:/home/runner/work/stella/stella/.workflow-tooling/.git/worktrees/*.path
+2000-01-01T00:00:00.0000000Z includeif.gitdir:/github/workspace/.workflow-tooling/.git.path
+2000-01-01T00:00:00.0000000Z includeif.gitdir:/github/workspace/.workflow-tooling/.git/worktrees/*.path
+2000-01-01T00:00:00.0000000Z [command]/usr/bin/git config --local --get-all includeif.gitdir:/home/runner/work/stella/stella/.workflow-tooling/.git.path
+2000-01-01T00:00:00.0000000Z /home/runner/work/_temp/git-credentials-7753e5d6-eda8-4536-ab20-72bade5191ae.config
+2000-01-01T00:00:00.0000000Z [command]/usr/bin/git config --local --unset includeif.gitdir:/home/runner/work/stella/stella/.workflow-tooling/.git.path \/home\/runner\/work\/_temp\/git\-credentials\-7753e5d6\-eda8\-4536\-ab20\-72bade5191ae\.config
+2000-01-01T00:00:00.0000000Z [command]/usr/bin/git config --local --get-all includeif.gitdir:/home/runner/work/stella/stella/.workflow-tooling/.git/worktrees/*.path
+2000-01-01T00:00:00.0000000Z /home/runner/work/_temp/git-credentials-7753e5d6-eda8-4536-ab20-72bade5191ae.config
+2000-01-01T00:00:00.0000000Z [command]/usr/bin/git config --local --unset includeif.gitdir:/home/runner/work/stella/stella/.workflow-tooling/.git/worktrees/*.path \/home\/runner\/work\/_temp\/git\-credentials\-7753e5d6\-eda8\-4536\-ab20\-72bade5191ae\.config
+2000-01-01T00:00:00.0000000Z [command]/usr/bin/git config --local --get-all includeif.gitdir:/github/workspace/.workflow-tooling/.git.path
+2000-01-01T00:00:00.0000000Z /github/runner_temp/git-credentials-7753e5d6-eda8-4536-ab20-72bade5191ae.config
+2000-01-01T00:00:00.0000000Z [command]/usr/bin/git config --local --unset includeif.gitdir:/github/workspace/.workflow-tooling/.git.path \/github\/runner_temp\/git\-credentials\-7753e5d6\-eda8\-4536\-ab20\-72bade5191ae\.config
+2000-01-01T00:00:00.0000000Z [command]/usr/bin/git config --local --get-all includeif.gitdir:/github/workspace/.workflow-tooling/.git/worktrees/*.path
+2000-01-01T00:00:00.0000000Z /github/runner_temp/git-credentials-7753e5d6-eda8-4536-ab20-72bade5191ae.config
+2000-01-01T00:00:00.0000000Z [command]/usr/bin/git config --local --unset includeif.gitdir:/github/workspace/.workflow-tooling/.git/worktrees/*.path \/github\/runner_temp\/git\-credentials\-7753e5d6\-eda8\-4536\-ab20\-72bade5191ae\.config
+2000-01-01T00:00:00.0000000Z [command]/usr/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
+2000-01-01T00:00:00.0000000Z Removing credentials config '/home/runner/work/_temp/git-credentials-7753e5d6-eda8-4536-ab20-72bade5191ae.config'
+2000-01-01T00:00:00.0000000Z ##[endgroup]
+2000-01-01T00:00:00.0000000Z ##[group]Run cp "$GITHUB_WORKSPACE/.workflow-tooling/scripts/gh-retry.sh" "$RUNNER_TEMP/gh-retry.sh"
+2000-01-01T00:00:00.0000000Z [36;1mcp "$GITHUB_WORKSPACE/.workflow-tooling/scripts/gh-retry.sh" "$RUNNER_TEMP/gh-retry.sh"[0m
+2000-01-01T00:00:00.0000000Z [36;1mecho "GH_RETRY_SCRIPT=$RUNNER_TEMP/gh-retry.sh" >> "$GITHUB_ENV"[0m
+2000-01-01T00:00:00.0000000Z shell: /usr/bin/bash -e {0}
+2000-01-01T00:00:00.0000000Z env:
+2000-01-01T00:00:00.0000000Z   TURBO_CACHE: local:rw,remote:r
+2000-01-01T00:00:00.0000000Z   DB_LOAD_GATE_EBS_SIGNAL: disabled
+2000-01-01T00:00:00.0000000Z   DB_LOAD_GATE_BUSY_WINDOWS: []
+2000-01-01T00:00:00.0000000Z ##[endgroup]
+2000-01-01T00:00:00.0000000Z ##[group]Run if [[ "$QUEUE_DEPTH" == thin ]]; then
+2000-01-01T00:00:00.0000000Z [36;1mif [[ "$QUEUE_DEPTH" == thin ]]; then[0m
+2000-01-01T00:00:00.0000000Z [36;1m  THIN_JOBS=$(jq -cn --argjson thin "$THIN_JOBS" --argjson required "$QUEUE_REQUIRED_JOBS" '$thin + $required | unique') || exit 1[0m
+2000-01-01T00:00:00.0000000Z [36;1mfi[0m
+2000-01-01T00:00:00.0000000Z [36;1mif [[ "$COVERAGE_PROFILE" == pilot-fast-v1 ]]; then[0m
+2000-01-01T00:00:00.0000000Z [36;1m  FAST_REQUIRED="$PILOT_FAST_JOBS"[0m
+2000-01-01T00:00:00.0000000Z [36;1mfi[0m
+2000-01-01T00:00:00.0000000Z [36;1mif [[ "$QUEUE_VALIDATION" == true && "$EVENT" == pull_request && "$PR_ACTION" == enqueued ]] &&[0m
+2000-01-01T00:00:00.0000000Z [36;1m  jq -e 'all(.[]; .result == "success" or .result == "skipped")' <<< "$NEEDS" >/dev/null; then[0m
+2000-01-01T00:00:00.0000000Z [36;1m  echo "Queued tree validation belongs to merge_group."[0m
+2000-01-01T00:00:00.0000000Z [36;1m  exit 0[0m
+2000-01-01T00:00:00.0000000Z [36;1mfi[0m
+2000-01-01T00:00:00.0000000Z [36;1m# Read cancellation evidence before any early aggregation exit.[0m
+2000-01-01T00:00:00.0000000Z [36;1mcancelled_jobs=""[0m
+2000-01-01T00:00:00.0000000Z [36;1mif jq -e 'any(.[]; .result == "cancelled")' <<< "$NEEDS" > /dev/null; then[0m
+2000-01-01T00:00:00.0000000Z [36;1m  cancelled_jobs=$(bash "$GH_RETRY_SCRIPT" api --paginate --slurp "repos/$REPO/actions/runs/$GITHUB_RUN_ID/attempts/$GITHUB_RUN_ATTEMPT/jobs?per_page=100") || {[0m
+2000-01-01T00:00:00.0000000Z [36;1m    echo "::error::Cancelled CI job failed-step lookup was unavailable."[0m
+2000-01-01T00:00:00.0000000Z [36;1m    exit 1[0m
+2000-01-01T00:00:00.0000000Z [36;1m  }[0m
+2000-01-01T00:00:00.0000000Z [36;1m  failed_steps=$(jq -r '[0m
+2000-01-01T00:00:00.0000000Z [36;1m    .[].jobs[] | select(.conclusion == "cancelled") | . as $job[0m
+2000-01-01T00:00:00.0000000Z [36;1m    | (.steps // [])[] | select(.conclusion == "failure")[0m
+2000-01-01T00:00:00.0000000Z [36;1m    | "\($job.name) / \(.number): \(.name) (\($job.html_url))"[0m
+2000-01-01T00:00:00.0000000Z [36;1m    | gsub("%"; "%25") | gsub("\r"; "%0D") | gsub("\n"; "%0A")[0m
+2000-01-01T00:00:00.0000000Z [36;1m    ' <<< "$cancelled_jobs")[0m
+2000-01-01T00:00:00.0000000Z [36;1m  if [[ -n "$failed_steps" ]]; then[0m
+2000-01-01T00:00:00.0000000Z [36;1m    while IFS= read -r failed_step; do[0m
+2000-01-01T00:00:00.0000000Z [36;1m      echo "::error::Cancelled CI job contains a failed step: $failed_step"[0m
+2000-01-01T00:00:00.0000000Z [36;1m    done <<< "$failed_steps"[0m
+2000-01-01T00:00:00.0000000Z [36;1m    exit 1[0m
+2000-01-01T00:00:00.0000000Z [36;1m  fi[0m
+2000-01-01T00:00:00.0000000Z [36;1mfi[0m
+2000-01-01T00:00:00.0000000Z [36;1mif [[ "${HEAVY_ONLY:-false}" == true ]]; then[0m
+2000-01-01T00:00:00.0000000Z [36;1m  # No main run may turn a cancellation into successful supersession.[0m
+2000-01-01T00:00:00.0000000Z [36;1m  # Keep only the derived heavy set; thin jobs intentionally skipped.[0m
+2000-01-01T00:00:00.0000000Z [36;1m  NEEDS=$(jq -ce --argjson heavy "$HEAVY_JOBS" '[0m
+2000-01-01T00:00:00.0000000Z [36;1m    with_entries(select(.key as $job | $job == "ci-plan" or ($heavy | index($job))))[0m
+2000-01-01T00:00:00.0000000Z [36;1m    ' <<< "$NEEDS")[0m
+2000-01-01T00:00:00.0000000Z [36;1m  if jq -e 'any(.[]; .result == "cancelled")' <<< "$NEEDS" > /dev/null; then[0m
+2000-01-01T00:00:00.0000000Z [36;1m    echo "::error::Main heavy suites were cancelled."[0m
+2000-01-01T00:00:00.0000000Z [36;1m    exit 1[0m
+2000-01-01T00:00:00.0000000Z [36;1m  fi[0m
+2000-01-01T00:00:00.0000000Z [36;1mfi[0m
+2000-01-01T00:00:00.0000000Z [36;1m# Queued jobs may have no concurrency annotation. A newer run in[0m
+2000-01-01T00:00:00.0000000Z [36;1m# the same workflow/group proves supersession, unless any cancelled[0m
+2000-01-01T00:00:00.0000000Z [36;1m# job timed out. Every API lookup fails closed.[0m
+2000-01-01T00:00:00.0000000Z [36;1mcancelled_dependencies_were_superseded() {[0m
+2000-01-01T00:00:00.0000000Z [36;1m  local current workflow created runs urls url annotations[0m
+2000-01-01T00:00:00.0000000Z [36;1m  current=$(bash "$GH_RETRY_SCRIPT" api "repos/$REPO/actions/runs/$GITHUB_RUN_ID") || return 1[0m
+2000-01-01T00:00:00.0000000Z [36;1m  workflow=$(jq -er '.workflow_id | select(type == "number")' <<< "$current") || return 1[0m
+2000-01-01T00:00:00.0000000Z [36;1m  created=$(jq -er '.created_at | select(type == "string" and length > 0) | @uri' <<< "$current") || return 1[0m
+2000-01-01T00:00:00.0000000Z [36;1m  runs=$(bash "$GH_RETRY_SCRIPT" api --paginate --slurp "repos/$REPO/actions/workflows/$workflow/runs?event=$EVENT&created=%3E%3D$created&per_page=100") || return 1[0m
+2000-01-01T00:00:00.0000000Z [36;1m  jq -e --argjson current "$current" --arg event "$EVENT" --arg pr "$PR_NUMBER" '[0m
+2000-01-01T00:00:00.0000000Z [36;1m    any(.[].workflow_runs[];[0m
+2000-01-01T00:00:00.0000000Z [36;1m      .workflow_id == $current.workflow_id and .name == $current.name and .event == $event[0m
+2000-01-01T00:00:00.0000000Z [36;1m      and .id > $current.id and .run_number > $current.run_number[0m
+2000-01-01T00:00:00.0000000Z [36;1m      and .created_at >= $current.created_at[0m
+2000-01-01T00:00:00.0000000Z [36;1m      and (if $event == "workflow_dispatch" then .head_branch == $current.head_branch[0m
+2000-01-01T00:00:00.0000000Z [36;1m        elif $event == "pull_request" then any(.pull_requests[]; (.number | tostring) == $pr)[0m
+2000-01-01T00:00:00.0000000Z [36;1m        else false end))[0m
+2000-01-01T00:00:00.0000000Z [36;1m    ' <<< "$runs" > /dev/null || return 1[0m
+2000-01-01T00:00:00.0000000Z [36;1m  urls=$(jq -er '[0m
+2000-01-01T00:00:00.0000000Z [36;1m    [.[].jobs[] | select(.conclusion == "cancelled")][0m
+2000-01-01T00:00:00.0000000Z [36;1m    | if length == 0 then error("Cancelled run has no cancelled jobs")[0m
+2000-01-01T00:00:00.0000000Z [36;1m      else [.[] | .check_run_url | select(. != null)] | join("\n") end[0m
+2000-01-01T00:00:00.0000000Z [36;1m    ' <<< "$cancelled_jobs") || return 1[0m
+2000-01-01T00:00:00.0000000Z [36;1m  while IFS= read -r url; do[0m
+2000-01-01T00:00:00.0000000Z [36;1m    [[ -n "$url" ]] || continue[0m
+2000-01-01T00:00:00.0000000Z [36;1m    [[ "$url" == "https://api.github.com/repos/$REPO/check-runs/"* ]] || return 1[0m
+2000-01-01T00:00:00.0000000Z [36;1m    annotations=$(bash "$GH_RETRY_SCRIPT" api --paginate --slurp "$url/annotations?per_page=100") || return 1[0m
+2000-01-01T00:00:00.0000000Z [36;1m    jq -e '[0m
+2000-01-01T00:00:00.0000000Z [36;1m      flatten[0m
+2000-01-01T00:00:00.0000000Z [36;1m      | any(.[]; (.message // "") | contains("has exceeded the maximum execution time")) | not[0m
+2000-01-01T00:00:00.0000000Z [36;1m      ' <<< "$annotations" > /dev/null || return 1[0m
+2000-01-01T00:00:00.0000000Z [36;1m  done <<< "$urls"[0m
+2000-01-01T00:00:00.0000000Z [36;1m}[0m
+2000-01-01T00:00:00.0000000Z [36;1m[0m
+2000-01-01T00:00:00.0000000Z [36;1m# The plan skips a draft pull request, and every job with it. The[0m
+2000-01-01T00:00:00.0000000Z [36;1m# event's draft flag can be stale: a push to a draft followed by[0m
+2000-01-01T00:00:00.0000000Z [36;1m# marking it ready queues the draft run after the ready one, which[0m
+2000-01-01T00:00:00.0000000Z [36;1m# it then cancels. So the skip passes only while the pull request is[0m
+2000-01-01T00:00:00.0000000Z [36;1m# still a draft; a ready one has to run its checks.[0m
+2000-01-01T00:00:00.0000000Z [36;1mif [[ "$PLAN_RESULT" == "skipped" ]]; then[0m
+2000-01-01T00:00:00.0000000Z [36;1m  draft=""[0m
+2000-01-01T00:00:00.0000000Z [36;1m  if [[ "$EVENT" == "pull_request" ]]; then[0m
+2000-01-01T00:00:00.0000000Z [36;1m    draft="$(bash "$GH_RETRY_SCRIPT" api "repos/$REPO/pulls/$PR_NUMBER" --jq .draft)"[0m
+2000-01-01T00:00:00.0000000Z [36;1m  fi[0m
+2000-01-01T00:00:00.0000000Z [36;1m  if [[ "$draft" == "true" ]]; then[0m
+2000-01-01T00:00:00.0000000Z [36;1m    echo "CI plan skipped for a draft pull request. Passing."[0m
+2000-01-01T00:00:00.0000000Z [36;1m    exit 0[0m
+2000-01-01T00:00:00.0000000Z [36;1m  fi[0m
+2000-01-01T00:00:00.0000000Z [36;1m  echo "::error::CI plan was skipped, but the pull request is not a draft; re-run CI Checks."[0m
+2000-01-01T00:00:00.0000000Z [36;1m  exit 1[0m
+2000-01-01T00:00:00.0000000Z [36;1mfi[0m
+2000-01-01T00:00:00.0000000Z [36;1m[0m
+2000-01-01T00:00:00.0000000Z [36;1m# Only a pull request or a manual run is ever superseded by a newer[0m
+2000-01-01T00:00:00.0000000Z [36;1m# run; a cancelled merge group certifies nothing.[0m
+2000-01-01T00:00:00.0000000Z [36;1mif [[ "$PLAN_RESULT" == "cancelled" && "$EVENT" != "merge_group" ]]; then[0m
+2000-01-01T00:00:00.0000000Z [36;1m  if jq -e 'all(.[]; .result == "success" or .result == "skipped" or .result == "cancelled")' <<< "$NEEDS" > /dev/null && cancelled_dependencies_were_superseded; then[0m
+2000-01-01T00:00:00.0000000Z [36;1m    echo "CI run was superseded by a newer run (cancel-in-progress). Passing."[0m
+2000-01-01T00:00:00.0000000Z [36;1m    exit 0[0m
+2000-01-01T00:00:00.0000000Z [36;1m  fi[0m
+2000-01-01T00:00:00.0000000Z [36;1m  echo "::error::CI planning was cancelled without verified supersession."[0m
+2000-01-01T00:00:00.0000000Z [36;1m  exit 1[0m
+2000-01-01T00:00:00.0000000Z [36;1mfi[0m
+2000-01-01T00:00:00.0000000Z [36;1m[0m
+2000-01-01T00:00:00.0000000Z [36;1mif [[ "$PLAN_RESULT" != "success" ]]; then[0m
+2000-01-01T00:00:00.0000000Z [36;1m  echo "::error::CI planning did not succeed ($PLAN_RESULT)."[0m
+2000-01-01T00:00:00.0000000Z [36;1m  exit 1[0m
+2000-01-01T00:00:00.0000000Z [36;1mfi[0m
+2000-01-01T00:00:00.0000000Z [36;1m[0m
+2000-01-01T00:00:00.0000000Z [36;1mif [[ "$TRUSTED" != "true" ]]; then[0m
+2000-01-01T00:00:00.0000000Z [36;1m  echo "::error::CI did not run: the merge group failed the trust check; see the ci-plan job for the reason."[0m
+2000-01-01T00:00:00.0000000Z [36;1m  exit 1[0m
+2000-01-01T00:00:00.0000000Z [36;1mfi[0m
+2000-01-01T00:00:00.0000000Z [36;1m[0m
+2000-01-01T00:00:00.0000000Z [36;1mif [[ "$QUEUE_DEPTH" == thin && "$EVENT" != merge_group ]]; then[0m
+2000-01-01T00:00:00.0000000Z [36;1m  echo "::error::Thin queue depth is valid only for merge_group."[0m
+2000-01-01T00:00:00.0000000Z [36;1m  exit 1[0m
+2000-01-01T00:00:00.0000000Z [36;1mfi[0m
+2000-01-01T00:00:00.0000000Z [36;1mif [[ "$QUEUE_DEPTH" == thin ]] && ! jq -e 'type == "array" and length > 0 and all(.[]; type == "string")' <<< "$THIN_JOBS" > /dev/null; then[0m
+2000-01-01T00:00:00.0000000Z [36;1m  echo "::error::Thin queue has no derived required job set."[0m
+2000-01-01T00:00:00.0000000Z [36;1m  exit 1[0m
+2000-01-01T00:00:00.0000000Z [36;1mfi[0m
+2000-01-01T00:00:00.0000000Z [36;1mif [[ "${RUN_REQUIRED:-true}" == false ]]; then[0m
+2000-01-01T00:00:00.0000000Z [36;1m  if [[ "$EVENT" != pull_request || ! "$COMPLETED_RUN_ID" =~ ^[1-9][0-9]*$ ]] || ! jq -e 'all(.[]; .result == "success" or .result == "skipped")' <<< "$NEEDS" > /dev/null; then[0m
+2000-01-01T00:00:00.0000000Z [36;1m    echo "::error::Invalid completed-depth reuse or unexpected dependency outcome."[0m
+2000-01-01T00:00:00.0000000Z [36;1m    exit 1[0m
+2000-01-01T00:00:00.0000000Z [36;1m  fi[0m
+2000-01-01T00:00:00.0000000Z [36;1m  echo "CI validation already completed for this head, base and depth."[0m
+2000-01-01T00:00:00.0000000Z [36;1m  exit 0[0m
+2000-01-01T00:00:00.0000000Z [36;1mfi[0m
+2000-01-01T00:00:00.0000000Z [36;1mcase "$SUITE_DEPTH" in[0m
+2000-01-01T00:00:00.0000000Z [36;1m  full)[0m
+2000-01-01T00:00:00.0000000Z [36;1m    # Planned checks must succeed. A thin queue allows only the[0m
+2000-01-01T00:00:00.0000000Z [36;1m    # heavy skips selected by the same plan, and rejects failures.[0m
+2000-01-01T00:00:00.0000000Z [36;1m    violations=$(jq -r --argjson plan "$PLAN" --argjson scopes "$JOB_SCOPES" --arg queue "${QUEUE_DEPTH:-full}" --argjson thin "${THIN_JOBS:-[]}" '[0m
+2000-01-01T00:00:00.0000000Z [36;1m      [to_entries[] | select(.key != "ci-plan") | .key as $job | .value.result as $result[0m
+2000-01-01T00:00:00.0000000Z [36;1m        | if $queue == "thin" and ($thin | index($job) | not) then[0m
+2000-01-01T00:00:00.0000000Z [36;1m            (if $result == "success" or $result == "skipped" then empty else "\($job) (\($result))" end)[0m
+2000-01-01T00:00:00.0000000Z [36;1m          elif ($scopes | has($job) | not) then "\($job) (no entry in JOB_SCOPES)"[0m
+2000-01-01T00:00:00.0000000Z [36;1m          elif ($scopes[$job] == null or $plan[$scopes[$job]] == "true") then[0m
+2000-01-01T00:00:00.0000000Z [36;1m            (if $result == "success" then empty else "\($job) (planned, \($result))" end)[0m
+2000-01-01T00:00:00.0000000Z [36;1m          elif $result == "success" or $result == "skipped" then empty[0m
+2000-01-01T00:00:00.0000000Z [36;1m          else "\($job) (\($result))"[0m
+2000-01-01T00:00:00.0000000Z [36;1m          end][0m
+2000-01-01T00:00:00.0000000Z [36;1m      | join(", ")' <<< "$NEEDS")[0m
+2000-01-01T00:00:00.0000000Z [36;1m    folded_violations=$(jq -r --arg queue "${QUEUE_DEPTH:-full}" --argjson thin "${THIN_JOBS:-[]}" --argjson plan "$PLAN" --argjson suites "$FOLDED_SUITES" '[0m
+2000-01-01T00:00:00.0000000Z [36;1m      . as $needs[0m
+2000-01-01T00:00:00.0000000Z [36;1m      | [$suites | to_entries[] | .key as $job | .value | to_entries[][0m
+2000-01-01T00:00:00.0000000Z [36;1m        | select(($queue != "thin" or ($thin | index($job))) and $plan[.value] == "true") | .key as $suite[0m
+2000-01-01T00:00:00.0000000Z [36;1m        | ($needs[$job].outputs[$suite] // "missing") as $result[0m
+2000-01-01T00:00:00.0000000Z [36;1m        | select($result != "success") | "\($suite) (planned, \($result))"][0m
+2000-01-01T00:00:00.0000000Z [36;1m      | join(", ")' <<< "$NEEDS")[0m
+2000-01-01T00:00:00.0000000Z [36;1m    violations="${violations}${violations:+${folded_violations:+, }}${folded_violations}"[0m
+2000-01-01T00:00:00.0000000Z [36;1m    if [[ -n "$violations" ]]; then[0m
+2000-01-01T00:00:00.0000000Z [36;1m      echo "::error::CI checks did not succeed: $violations"[0m
+2000-01-01T00:00:00.0000000Z [36;1m      exit 1[0m
+2000-01-01T00:00:00.0000000Z [36;1m    fi[0m
+2000-01-01T00:00:00.0000000Z [36;1m    ;;[0m
+2000-01-01T00:00:00.0000000Z [36;1m  fast)[0m
+2000-01-01T00:00:00.0000000Z [36;1m    # Only an unlabelled pull request or a manual run plans `fast`:[0m
+2000-01-01T00:00:00.0000000Z [36;1m    # its heavy suites skip by design. A cancelled dependency can[0m
+2000-01-01T00:00:00.0000000Z [36;1m    # also mean a timeout; verify a newer run and reject timeout annotations.[0m
+2000-01-01T00:00:00.0000000Z [36;1m    if [[ "$EVENT" == "merge_group" ]]; then[0m
+2000-01-01T00:00:00.0000000Z [36;1m      echo "::error::$EVENT run planned suite depth 'fast'; the heavy suites must run."[0m
+2000-01-01T00:00:00.0000000Z [36;1m      exit 1[0m
+2000-01-01T00:00:00.0000000Z [36;1m    fi[0m
+2000-01-01T00:00:00.0000000Z [36;1m    # A failure stands even when a sibling job was cancelled.[0m
+2000-01-01T00:00:00.0000000Z [36;1m    failed=$(jq -r '[to_entries[] | select(.value.result as $r | ["success", "skipped", "cancelled"] | index($r) | not) | "\(.key) (\(.value.result))"] | join(", ")' <<< "$NEEDS")[0m
+2000-01-01T00:00:00.0000000Z [36;1m    if [[ -n "$failed" ]]; then[0m
+2000-01-01T00:00:00.0000000Z [36;1m      echo "::error::CI checks failed: $failed"[0m
+2000-01-01T00:00:00.0000000Z [36;1m      exit 1[0m
+2000-01-01T00:00:00.0000000Z [36;1m    fi[0m
+2000-01-01T00:00:00.0000000Z [36;1m    # Fast-required jobs must run when their scope is planned;[0m
+2000-01-01T00:00:00.0000000Z [36;1m    # scope-less jobs are always planned.[0m
+2000-01-01T00:00:00.0000000Z [36;1m    skipped=$(jq -r --argjson plan "$PLAN" --argjson scopes "$(jq -cn --argjson full "$JOB_SCOPES" --argjson fast "$FAST_JOB_SCOPES" '$full + $fast')" --argjson required "$FAST_REQUIRED" '[0m
+2000-01-01T00:00:00.0000000Z [36;1m      [to_entries[] | .key as $job | select($required | index($job))[0m
+2000-01-01T00:00:00.0000000Z [36;1m        | select(($scopes[$job] == null or $plan[$scopes[$job]] == "true") and .value.result == "skipped")[0m
+2000-01-01T00:00:00.0000000Z [36;1m        | "\($job) (planned, skipped)"][0m
+2000-01-01T00:00:00.0000000Z [36;1m      | join(", ")' <<< "$NEEDS")[0m
+2000-01-01T00:00:00.0000000Z [36;1m    if [[ -n "$skipped" ]]; then[0m
+2000-01-01T00:00:00.0000000Z [36;1m      echo "::error::CI checks did not run: $skipped"[0m
+2000-01-01T00:00:00.0000000Z [36;1m      exit 1[0m
+2000-01-01T00:00:00.0000000Z [36;1m    fi[0m
+2000-01-01T00:00:00.0000000Z [36;1m    cancelled=$(jq -r '[to_entries[] | select(.value.result == "cancelled") | .key] | join(", ")' <<< "$NEEDS")[0m
+2000-01-01T00:00:00.0000000Z [36;1m    if [[ -n "$cancelled" ]]; then[0m
+2000-01-01T00:00:00.0000000Z [36;1m      if ! cancelled_dependencies_were_superseded; then[0m
+2000-01-01T00:00:00.0000000Z [36;1m        echo "::error::CI jobs were cancelled without verified supersession: $cancelled"[0m
+2000-01-01T00:00:00.0000000Z [36;1m        exit 1[0m
+2000-01-01T00:00:00.0000000Z [36;1m      fi[0m
+2000-01-01T00:00:00.0000000Z [36;1m      echo "CI run was superseded by a newer run (cancel-in-progress): $cancelled. Passing."[0m
+2000-01-01T00:00:00.0000000Z [36;1m    fi[0m
+2000-01-01T00:00:00.0000000Z [36;1m    ;;[0m
+2000-01-01T00:00:00.0000000Z [36;1m  *)[0m
+2000-01-01T00:00:00.0000000Z [36;1m    echo "::error::CI plan produced no suite depth ('$SUITE_DEPTH')."[0m
+2000-01-01T00:00:00.0000000Z [36;1m    exit 1[0m
+2000-01-01T00:00:00.0000000Z [36;1m    ;;[0m
+2000-01-01T00:00:00.0000000Z [36;1mesac[0m
+2000-01-01T00:00:00.0000000Z shell: /usr/bin/bash -e {0}
+2000-01-01T00:00:00.0000000Z env:
+2000-01-01T00:00:00.0000000Z   TURBO_CACHE: local:rw,remote:r
+2000-01-01T00:00:00.0000000Z   DB_LOAD_GATE_EBS_SIGNAL: disabled
+2000-01-01T00:00:00.0000000Z   DB_LOAD_GATE_BUSY_WINDOWS: []
+2000-01-01T00:00:00.0000000Z   GH_RETRY_SCRIPT: /home/runner/work/_temp/gh-retry.sh
+2000-01-01T00:00:00.0000000Z   EVENT: merge_group
+2000-01-01T00:00:00.0000000Z   GH_TOKEN: ***
+2000-01-01T00:00:00.0000000Z   PR_NUMBER: 
+2000-01-01T00:00:00.0000000Z   REPO: stella/stella
+2000-01-01T00:00:00.0000000Z   NEEDS: {
+  "ci-plan": {
+    "result": "success",
+    "outputs": {
+      "queue_depth": "thin",
+      "docker_checks_required": "true",
+      "collab_redis_required": "false",
+      "e2e_landing_required": "false",
+      "dependency_malware_required": "false",
+      "postgres_suites_required": "true",
+      "service_suites_required": "true",
+      "coverage_profile": "normal-v1",
+      "desktop_rust_checks_required": "false",
+      "desktop_browser_required": "false",
+      "package_checks_required": "true",
+      "route_smoke_required": "true",
+      "route_tree_required": "true",
+      "web_api_types_required": "true",
+      "web_image_smoke_required": "false",
+      "playwright_image": "mcr.microsoft.com/playwright:v1.63.0-noble@sha256:eff16c30e6f3f4af0a03fa4b706120d5e9b0891c344a27d64559aff5900a4a27",
+      "suite_depth": "full",
+      "thin_jobs": "[\"parser-version-guard\",\"ci-generated-sources\",\"ci-checks-docs\",\"ci-checks-generated\",\"ci-checks-policy\",\"ci-checks-rest\",\"code-quality-api\",\"code-quality-web\",\"code-quality-rest\",\"typecheck-baseline\",\"web-build\"]",
+      "docker_checks_pr_required": "false",
+      "legal_atlas_image_required": "true",
+      "published_exports_required": "true",
+      "web_build_required": "true",
+      "fix_tests_on_base_required": "false",
+      "ci_browser_required": "true",
+      "mobile_build_required": "false",
+      "docs_changed_files": "[]",
+      "collaboration_suite_required": "false",
+      "release_typecheck_required": "false",
+      "landing_build_required": "false",
+      "model_catalog_drift_required": "false",
+      "corpus_suites_required": "true",
+      "service_suites_pr_required": "true",
+      "windows_scripts_required": "false",
+      "queue_required_jobs": "[\"ci-browser\",\"dependency-malware\",\"parser-version-guard\"]",
+      "agent_sandbox_docker_required": "false",
+      "api_image_smoke_required": "true",
+      "e2e_production_required": "true",
+      "legal_atlas_image_pr_required": "false",
+      "lockfile_ages_required": "false",
+      "marketing_screenshots_required": "false",
+      "trusted": "true",
+      "api_test_shards": "4",
+      "heavy_web_build_required": "false",
+      "api_image_platforms": "[{\"runner\":\"ubuntu-24.04-arm\",\"platform\":\"linux/arm64\"},{\"runner\":\"ubuntu-latest\",\"platform\":\"linux/amd64\"}]",
+      "e2e_core_required": "true",
+      "migration_rehearsal_required": "false",
+      "ci_tests_matrix": "{\"shard\":[\"api-1\",\"api-2\",\"api-3\",\"api-4\",\"rest-web\"]}",
+      "heavy_jobs": "[\"dependency-malware\",\"docker-checks\",\"ci-browser\",\"ci-tests\",\"service-suites\",\"release-typecheck\",\"fix-tests-on-base\",\"heavy-web-build\",\"web-image-smoke\",\"mobile-build\",\"landing-build\",\"marketing-screenshots\",\"migration-upgrade-rehearsal\",\"route-smoke\",\"e2e-production-shard\",\"e2e-vite-canary\",\"e2e-landing\",\"stack-redaction-browsers\",\"api-image-smoke\",\"legal-atlas-image\",\"windows-scripts\",\"desktop-clippy\"]",
+      "api_image_deps_required": "true",
+      "docs_checks_required": "false",
+      "valkey_suites_required": "true",
+      "stack_redaction_browsers_required": "false",
+      "run_required": "true"
+    }
+  },
+  "ci-generated-sources": {
+    "result": "success",
+    "outputs": {
+      "input_hash": "dd54ed1e55eaac095e807f0658e2b7252451526ac961649d71254e079b538570"
+    }
+  },
+  "dependency-malware": {
+    "result": "skipped",
+    "outputs": {}
+  },
+  "docker-checks": {
+    "result": "skipped",
+    "outputs": {}
+  },
+  "parser-version-guard": {
+    "result": "success",
+    "outputs": {}
+  },
+  "ci-checks-docs": {
+    "result": "skipped",
+    "outputs": {}
+  },
+  "ci-checks-generated": {
+    "result": "success",
+    "outputs": {}
+  },
+  "ci-checks-policy": {
+    "result": "success",
+    "outputs": {}
+  },
+  "ci-checks-rest": {
+    "result": "success",
+    "outputs": {}
+  },
+  "ci-browser": {
+    "result": "success",
+    "outputs": {}
+  },
+  "ci-tests": {
+    "result": "skipped",
+    "outputs": {}
+  },
+  "code-quality-api": {
+    "result": "success",
+    "outputs": {}
+  },
+  "code-quality-web": {
+    "result": "success",
+    "outputs": {}
+  },
+  "code-quality-rest": {
+    "result": "success",
+    "outputs": {}
+  },
+  "service-suites": {
+    "result": "skipped",
+    "outputs": {}
+  },
+  "release-typecheck": {
+    "result": "skipped",
+    "outputs": {}
+  },
+  "fix-tests-on-base": {
+    "result": "skipped",
+    "outputs": {}
+  },
+  "typecheck-baseline": {
+    "result": "success",
+    "outputs": {}
+  },
+  "web-build": {
+    "result": "success",
+    "outputs": {}
+  },
+  "heavy-web-build": {
+    "result": "skipped",
+    "outputs": {}
+  },
+  "web-image-smoke": {
+    "result": "skipped",
+    "outputs": {}
+  },
+  "mobile-build": {
+    "result": "skipped",
+    "outputs": {}
+  },
+  "landing-build": {
+    "result": "skipped",
+    "outputs": {}
+  },
+  "marketing-screenshots": {
+    "result": "skipped",
+    "outputs": {}
+  },
+  "migration-upgrade-rehearsal": {
+    "result": "skipped",
+    "outputs": {}
+  },
+  "route-smoke": {
+    "result": "success",
+    "outputs": {}
+  },
+  "e2e-production-shard": {
+    "result": "success",
+    "outputs": {}
+  },
+  "e2e-vite-canary": {
+    "result": "skipped",
+    "outputs": {}
+  },
+  "e2e-landing": {
+    "result": "skipped",
+    "outputs": {}
+  },
+  "stack-redaction-browsers": {
+    "result": "skipped",
+    "outputs": {}
+  },
+  "api-image-smoke": {
+    "result": "skipped",
+    "outputs": {}
+  },
+  "legal-atlas-image": {
+    "result": "skipped",
+    "outputs": {}
+  },
+  "windows-scripts": {
+    "result": "skipped",
+    "outputs": {}
+  },
+  "desktop-clippy": {
+    "result": "skipped",
+    "outputs": {}
+  }
+}
+2000-01-01T00:00:00.0000000Z   PLAN: {
+  "queue_depth": "thin",
+  "docker_checks_required": "true",
+  "collab_redis_required": "false",
+  "e2e_landing_required": "false",
+  "dependency_malware_required": "false",
+  "postgres_suites_required": "true",
+  "service_suites_required": "true",
+  "coverage_profile": "normal-v1",
+  "desktop_rust_checks_required": "false",
+  "desktop_browser_required": "false",
+  "package_checks_required": "true",
+  "route_smoke_required": "true",
+  "route_tree_required": "true",
+  "web_api_types_required": "true",
+  "web_image_smoke_required": "false",
+  "playwright_image": "mcr.microsoft.com/playwright:v1.63.0-noble@sha256:eff16c30e6f3f4af0a03fa4b706120d5e9b0891c344a27d64559aff5900a4a27",
+  "suite_depth": "full",
+  "thin_jobs": "[\"parser-version-guard\",\"ci-generated-sources\",\"ci-checks-docs\",\"ci-checks-generated\",\"ci-checks-policy\",\"ci-checks-rest\",\"code-quality-api\",\"code-quality-web\",\"code-quality-rest\",\"typecheck-baseline\",\"web-build\"]",
+  "docker_checks_pr_required": "false",
+  "legal_atlas_image_required": "true",
+  "published_exports_required": "true",
+  "web_build_required": "true",
+  "fix_tests_on_base_required": "false",
+  "ci_browser_required": "true",
+  "mobile_build_required": "false",
+  "docs_changed_files": "[]",
+  "collaboration_suite_required": "false",
+  "release_typecheck_required": "false",
+  "landing_build_required": "false",
+  "model_catalog_drift_required": "false",
+  "corpus_suites_required": "true",
+  "service_suites_pr_required": "true",
+  "windows_scripts_required": "false",
+  "queue_required_jobs": "[\"ci-browser\",\"dependency-malware\",\"parser-version-guard\"]",
+  "agent_sandbox_docker_required": "false",
+  "api_image_smoke_required": "true",
+  "e2e_production_required": "true",
+  "legal_atlas_image_pr_required": "false",
+  "lockfile_ages_required": "false",
+  "marketing_screenshots_required": "false",
+  "trusted": "true",
+  "api_test_shards": "4",
+  "heavy_web_build_required": "false",
+  "api_image_platforms": "[{\"runner\":\"ubuntu-24.04-arm\",\"platform\":\"linux/arm64\"},{\"runner\":\"ubuntu-latest\",\"platform\":\"linux/amd64\"}]",
+  "e2e_core_required": "true",
+  "migration_rehearsal_required": "false",
+  "ci_tests_matrix": "{\"shard\":[\"api-1\",\"api-2\",\"api-3\",\"api-4\",\"rest-web\"]}",
+  "heavy_jobs": "[\"dependency-malware\",\"docker-checks\",\"ci-browser\",\"ci-tests\",\"service-suites\",\"release-typecheck\",\"fix-tests-on-base\",\"heavy-web-build\",\"web-image-smoke\",\"mobile-build\",\"landing-build\",\"marketing-screenshots\",\"migration-upgrade-rehearsal\",\"route-smoke\",\"e2e-production-shard\",\"e2e-vite-canary\",\"e2e-landing\",\"stack-redaction-browsers\",\"api-image-smoke\",\"legal-atlas-image\",\"windows-scripts\",\"desktop-clippy\"]",
+  "api_image_deps_required": "true",
+  "docs_checks_required": "false",
+  "valkey_suites_required": "true",
+  "stack_redaction_browsers_required": "false",
+  "run_required": "true"
+}
+2000-01-01T00:00:00.0000000Z   RUN_REQUIRED: true
+2000-01-01T00:00:00.0000000Z   COMPLETED_RUN_ID: 
+2000-01-01T00:00:00.0000000Z   QUEUE_VALIDATION: 
+2000-01-01T00:00:00.0000000Z   PR_ACTION: checks_requested
+2000-01-01T00:00:00.0000000Z   PLAN_RESULT: success
+2000-01-01T00:00:00.0000000Z   SUITE_DEPTH: full
+2000-01-01T00:00:00.0000000Z   COVERAGE_PROFILE: normal-v1
+2000-01-01T00:00:00.0000000Z   PILOT_FAST_JOBS: 
+2000-01-01T00:00:00.0000000Z   HEAVY_ONLY: 
+2000-01-01T00:00:00.0000000Z   HEAVY_JOBS: ["dependency-malware","docker-checks","ci-browser","ci-tests","service-suites","release-typecheck","fix-tests-on-base","heavy-web-build","web-image-smoke","mobile-build","landing-build","marketing-screenshots","migration-upgrade-rehearsal","route-smoke","e2e-production-shard","e2e-vite-canary","e2e-landing","stack-redaction-browsers","api-image-smoke","legal-atlas-image","windows-scripts","desktop-clippy"]
+2000-01-01T00:00:00.0000000Z   QUEUE_DEPTH: thin
+2000-01-01T00:00:00.0000000Z   THIN_JOBS: ["parser-version-guard","ci-generated-sources","ci-checks-docs","ci-checks-generated","ci-checks-policy","ci-checks-rest","code-quality-api","code-quality-web","code-quality-rest","typecheck-baseline","web-build"]
+2000-01-01T00:00:00.0000000Z   QUEUE_REQUIRED_JOBS: ["ci-browser","dependency-malware","parser-version-guard"]
+2000-01-01T00:00:00.0000000Z   TRUSTED: true
+2000-01-01T00:00:00.0000000Z   JOB_SCOPES: { "docker-checks": "docker_checks_required", "api-image-smoke": "api_image_smoke_required", "ci-browser": "ci_browser_required", "ci-generated-sources": "package_checks_required", "ci-checks-docs": "docs_checks_required", "ci-checks-generated": "package_checks_required", "ci-checks-policy": "package_checks_required", "ci-checks-rest": "package_checks_required", "ci-tests": "package_checks_required", "code-quality-api": "package_checks_required", "code-quality-web": "package_checks_required", "code-quality-rest": "package_checks_required", "dependency-malware": "dependency_malware_required", "desktop-clippy": "desktop_rust_checks_required", "e2e-landing": "e2e_landing_required", "route-smoke": "route_smoke_required", "e2e-production-shard": "e2e_production_required", "e2e-vite-canary": "e2e_core_required", "fix-tests-on-base": "fix_tests_on_base_required", "landing-build": "landing_build_required", "legal-atlas-image": "legal_atlas_image_required", "marketing-screenshots": "marketing_screenshots_required", "migration-upgrade-rehearsal": "migration_rehearsal_required", "mobile-build": "mobile_build_required", "parser-version-guard": "package_checks_required", "release-typecheck": "release_typecheck_required", "service-suites": "service_suites_required", "stack-redaction-browsers": "stack_redaction_browsers_required", "typecheck-baseline": "package_checks_required", "web-build": "web_build_required", "heavy-web-build": "heavy_web_build_required", "web-image-smoke": "web_image_smoke_required", "windows-scripts": "windows_scripts_required" }
+2000-01-01T00:00:00.0000000Z   FOLDED_SUITES: {"docker-checks": {"agent-sandbox-docker": "agent_sandbox_docker_required", "api-image-deps": "api_image_deps_required"}}
+2000-01-01T00:00:00.0000000Z   FAST_JOB_SCOPES: {"service-suites": "service_suites_pr_required", "docker-checks": "docker_checks_pr_required", "legal-atlas-image": "legal_atlas_image_pr_required"}
+2000-01-01T00:00:00.0000000Z   FAST_REQUIRED: ["ci-browser", "ci-generated-sources", "ci-checks-docs", "ci-checks-generated", "ci-checks-policy", "ci-checks-rest", "code-quality-api", "code-quality-rest", "code-quality-web", "dependency-malware", "parser-version-guard", "typecheck-baseline", "ci-tests"]
+2000-01-01T00:00:00.0000000Z ##[endgroup]
+2000-01-01T00:00:00.0000000Z Post job cleanup.
+2000-01-01T00:00:00.0000000Z [command]/usr/bin/git version
+2000-01-01T00:00:00.0000000Z git version 2.55.0
+2000-01-01T00:00:00.0000000Z Temporarily overriding HOME='/home/runner/work/_temp/844b3432-d332-409f-ada2-2b47292c25b7' before making global git config changes
+2000-01-01T00:00:00.0000000Z Adding repository directory to the temporary git global config as a safe directory
+2000-01-01T00:00:00.0000000Z [command]/usr/bin/git config --global --add safe.directory /home/runner/work/stella/stella/.workflow-tooling
+2000-01-01T00:00:00.0000000Z Removing SSH command configuration
+2000-01-01T00:00:00.0000000Z [command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+2000-01-01T00:00:00.0000000Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+2000-01-01T00:00:00.0000000Z Removing HTTP extra header
+2000-01-01T00:00:00.0000000Z [command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+2000-01-01T00:00:00.0000000Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+2000-01-01T00:00:00.0000000Z Removing includeIf entries pointing to credentials config files
+2000-01-01T00:00:00.0000000Z [command]/usr/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
+2000-01-01T00:00:00.0000000Z [command]/usr/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
+2000-01-01T00:00:00.0000000Z Cleaning up orphan processes
