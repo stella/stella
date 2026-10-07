@@ -66,7 +66,7 @@ type PlaybookPaneReactionArgs = {
   mode: PlaybookPaneMode;
   /** Below `md` the inspector is a sheet over the whole chat. */
   isMobile: boolean;
-  /** The pane was already opened once while this session was mounted. */
+  /** This thread's pane was already shown once while the session was mounted. */
   openedThisSession: boolean;
   /** The playbook the thread's pane shows; null while the pane is closed. */
   shownPlaybookId: string | null;
@@ -76,9 +76,9 @@ type PlaybookPaneReactionArgs = {
 /**
  * What a newly saved playbook does to the thread's pane. An open pane on
  * another playbook moves to the saved one without taking focus; one already
- * showing it is left as it is. A closed pane opens once per mounted session,
- * like a document draft: also on arrival at a thread that already saved one,
- * and never again after the user closed it.
+ * showing it is left as it is. A closed pane opens once per thread while the
+ * session is mounted, like a document draft: also on arrival at a thread that
+ * already saved one, and never again after the user closed it.
  */
 export const playbookPaneReaction = ({
   mode,

@@ -219,6 +219,12 @@ type OpenCreateDocumentDraftOptions = {
   mode: "automatic" | "explicit";
 };
 
+type FollowPlaybookSaveOptions = {
+  playbookId: string;
+  /** The thread pane that was current when the save was reconciled. */
+  paneTabId: string;
+};
+
 const prepareCreateDocumentDraft = async (
   toolCallId: string,
   input: CreateDocumentInput,
@@ -1091,11 +1097,21 @@ export const useChatSession = ({
   );
 
   const isMobile = useIsMobile();
-  const openedPlaybookPaneRef = useRef(false);
+  const openedPlaybookPaneIdsRef = useRef(new Set<string>());
+  const playbookPaneShown = useInspectorTabsStore((state) =>
+    state.tabs.some(({ id }) => id === playbookPaneTabId),
+  );
+  // A pane restored with the inspector counts as opened, so closing it keeps
+  // the next save from reopening it.
+  useExternalSyncEffect(() => {
+    if (playbookPaneShown) {
+      openedPlaybookPaneIdsRef.current.add(playbookPaneTabId);
+    }
+  }, [playbookPaneShown, playbookPaneTabId]);
   /** Opens (or focuses) this thread's playbook pane on `playbookId`. */
   const handleOpenPlaybook = useCallback(
     (playbookId: string) => {
-      openedPlaybookPaneRef.current = true;
+      openedPlaybookPaneIdsRef.current.add(playbookPaneTabId);
       useInspectorTabsStore.getState().openView({
         type: PLAYBOOK_DRAFT_VIEW,
         id: playbookPaneTabId,
@@ -1106,44 +1122,53 @@ export const useChatSession = ({
     [playbookPaneLabel, playbookPaneTabId],
   );
 
-  /** Moves or opens this thread's pane as `playbookPaneReaction` decides. */
-  const followPlaybookSave = useLatestCallback((playbookId: string) => {
-    const inspector = useInspectorTabsStore.getState();
-    const tab = inspector.tabs.find(({ id }) => id === playbookPaneTabId);
-    const reaction = playbookPaneReaction({
-      mode: playbookPane,
-      isMobile,
-      openedThisSession: openedPlaybookPaneRef.current,
-      shownPlaybookId:
-        tab?.type === "view" &&
-        tab.viewType === PLAYBOOK_DRAFT_VIEW &&
-        isPlaybookDraftViewPayload(tab.payload)
-          ? tab.payload.playbookId
-          : null,
-      savedPlaybookId: playbookId,
-    });
-    switch (reaction) {
-      case "none":
+  /**
+   * Moves or opens this thread's pane as `playbookPaneReaction` decides. A
+   * save that finishes after the page moved to another thread is dropped.
+   */
+  const followPlaybookSave = useLatestCallback(
+    ({ playbookId, paneTabId }: FollowPlaybookSaveOptions) => {
+      if (paneTabId !== playbookPaneTabId) {
         return;
-      case "open":
-        handleOpenPlaybook(playbookId);
-        return;
-      case "update":
-        inspector.updateView({
-          id: playbookPaneTabId,
-          label: playbookPaneLabel(playbookId),
-          payload: { type: "playbook", playbookId },
-        });
-        return;
-      default:
-        reaction satisfies never;
-        panic(`Unhandled playbook pane reaction: ${String(reaction)}`);
-    }
-  });
+      }
+      const inspector = useInspectorTabsStore.getState();
+      const tab = inspector.tabs.find(({ id }) => id === playbookPaneTabId);
+      const reaction = playbookPaneReaction({
+        mode: playbookPane,
+        isMobile,
+        openedThisSession: openedPlaybookPaneIdsRef.current.has(paneTabId),
+        shownPlaybookId:
+          tab?.type === "view" &&
+          tab.viewType === PLAYBOOK_DRAFT_VIEW &&
+          isPlaybookDraftViewPayload(tab.payload)
+            ? tab.payload.playbookId
+            : null,
+        savedPlaybookId: playbookId,
+      });
+      switch (reaction) {
+        case "none":
+          return;
+        case "open":
+          handleOpenPlaybook(playbookId);
+          return;
+        case "update":
+          inspector.updateView({
+            id: playbookPaneTabId,
+            label: playbookPaneLabel(playbookId),
+            payload: { type: "playbook", playbookId },
+          });
+          return;
+        default:
+          reaction satisfies never;
+          panic(`Unhandled playbook pane reaction: ${String(reaction)}`);
+      }
+    },
+  );
 
   // A chat `save_playbook` writes an org-level playbook from any surface, so
   // an open playbooks list or editor refetches once per completed save.
   useExternalSyncEffect(() => {
+    const paneTabId = playbookPaneTabId;
     const reconcileAndFollow = async () => {
       const playbookId = await reconcilePlaybookSaveToolCalls({
         handledToolCallIds: handledPlaybookSaveToolCallIdsRef.current,
@@ -1153,14 +1178,20 @@ export const useChatSession = ({
         queryClient,
       });
       if (playbookId !== null) {
-        followPlaybookSave(playbookId);
+        followPlaybookSave({ playbookId, paneTabId });
       }
     };
     detached(
       reconcileAndFollow(),
       "use-chat-session.reconcile-playbook-save-tool-calls",
     );
-  }, [followPlaybookSave, messages, organizationId, queryClient]);
+  }, [
+    followPlaybookSave,
+    messages,
+    organizationId,
+    playbookPaneTabId,
+    queryClient,
+  ]);
 
   // A chat highlight or comment on the open decision or statute writes outside
   // the reader's own mutations, so its margin refetches once per completed write.
