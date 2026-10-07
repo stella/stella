@@ -8,6 +8,7 @@ import * as v from "valibot";
 import eventPolicies from "../.github/ci-event-policy.json" with { type: "json" };
 import {
   contextFromNested,
+  contextWithPlanOutputs,
   evaluate as evaluateExpression,
   UNKNOWN,
 } from "./github-expression";
@@ -30,12 +31,17 @@ const workflowSchema = v.object({
     v.string(),
     v.looseObject({
       if: v.optional(v.string()),
+      outputs: v.optional(v.record(v.string(), v.string())),
       needs: v.optional(v.union([v.string(), v.array(v.string())])),
       steps: v.optional(v.array(stepSchema)),
     }),
   ),
 });
 const workflow = v.parse(workflowSchema, Bun.YAML.parse(source));
+const planOutputs = v.parse(
+  v.record(v.string(), v.string()),
+  workflow.jobs["ci-plan"]?.outputs,
+);
 const THIN_JOBS = thinJobs(workflow);
 const heavy = mainHeavyJobs(workflow);
 const outcome = workflow.jobs["ci-result"]?.steps?.find(
@@ -55,7 +61,13 @@ const expectedHeavy = Object.keys(scopes).filter(
 const ciNeeds = v.parse(v.array(v.string()), workflow.jobs["ci-result"]?.needs);
 
 const selected = (condition: string, context: object) => {
-  const result = evaluateExpression(condition, contextFromNested(context));
+  const result = evaluateExpression(
+    condition,
+    contextWithPlanOutputs({
+      context: contextFromNested(context),
+      outputs: planOutputs,
+    }),
+  );
   if (result === UNKNOWN) {
     panic(`Unresolved heavy-plan expression: ${condition}`);
   }

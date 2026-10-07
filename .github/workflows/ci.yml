@@ -105,6 +105,14 @@ jobs:
       fix_tests_on_base_required: ${{ steps.changed-files.outputs.fix_tests_on_base_required }}
       landing_build_required: ${{ steps.changed-files.outputs.landing_build_required }}
       desktop_browser_required: ${{ steps.changed-files.outputs.desktop_browser_required }}
+      # The job and result gate consume the same event/depth decision.
+      ci_browser_required: >-
+        ${{ steps.completed-depth.outputs.run_required != 'false'
+        && (steps.check.outputs.trusted == 'true' || github.event_name == 'workflow_dispatch')
+        && steps.changed-files.outputs.package_checks_required == 'true'
+        && ((github.event_name == 'pull_request' && steps.changed-files.outputs.desktop_browser_required == 'true')
+        || (github.event_name != 'pull_request' && steps.depth.outputs.queue_depth != 'thin'
+        && steps.depth.outputs.suite_depth == 'full')) && 'true' || 'false' }}
       legal_atlas_image_required: ${{ steps.changed-files.outputs.legal_atlas_image_required }}
       legal_atlas_image_pr_required: ${{ steps.changed-files.outputs.legal_atlas_image_pr_required }}
       dependency_malware_required: ${{ steps.changed-files.outputs.dependency_malware_required }}
@@ -2293,6 +2301,16 @@ jobs:
         if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
         run: bun run i18n:check
 
+      - name: Playwright config scope
+        if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
+        # Lists every Playwright config from its package. A spec that does not
+        # load, or a project that collects another package's specs, fails here
+        # on the pull request instead of failing every e2e shard in the queue.
+        # The fixture tests run first so a broken guard cannot pass silently.
+        run: |
+          bun test scripts/check-playwright-config-scope.test.ts
+          bun run check:playwright-config-scope
+
       - name: Release changelog guard
         if: ${{ !cancelled() && steps.checkout.outcome == 'success' && steps.install.outcome != 'failure' && steps.standalone_lockfiles.outcome != 'failure' && steps.lockfile_ages.outcome != 'failure' && (github.event_name == 'pull_request' || github.event_name == 'merge_group') }}
         env:
@@ -3329,15 +3347,7 @@ jobs:
   # in a single job rather than one per suite.
   ci-browser:
     needs: ci-plan
-    if: >-
-      needs.ci-plan.outputs.run_required != 'false'
-      && (needs.ci-plan.outputs.trusted == 'true' || github.event_name == 'workflow_dispatch')
-      && needs.ci-plan.outputs.package_checks_required == 'true'
-      && (
-        (github.event_name == 'pull_request' && needs.ci-plan.outputs.desktop_browser_required == 'true')
-        || (github.event_name != 'pull_request' && needs.ci-plan.outputs.queue_depth != 'thin'
-        && needs.ci-plan.outputs.suite_depth == 'full')
-      )
+    if: needs.ci-plan.outputs.ci_browser_required == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 35
     strategy:
@@ -5472,6 +5482,17 @@ jobs:
           --grep-invert='route-smoke'
           --shard=${{ matrix.shard }}/2
 
+      # API-owned browser checks (visual sandbox) need the API from this stack
+      # but no web app; one shard runs them.
+      - name: Run API browser checks
+        if: >-
+          !cancelled()
+          && steps.e2e-stack.outputs.status == 'ready'
+          && matrix.shard == 1
+        env:
+          PLAYWRIGHT_JSON_OUTPUT_FILE: ${{ github.workspace }}/.cache/playwright-timings/run-api-browser-checks.json
+        run: bash "$GITHUB_WORKSPACE/.github/actions/setup-playwright/run-in-image.sh" bun --filter @stll/api test:e2e:browser
+
       - name: Run route-smoke Playwright shard
         if: >-
           always()
@@ -6973,7 +6994,7 @@ jobs:
             {
             "docker-checks": "docker_checks_required",
             "api-image-smoke": "api_image_smoke_required",
-            "ci-browser": "package_checks_required",
+            "ci-browser": "ci_browser_required",
             "ci-generated-sources": "package_checks_required",
             "ci-checks-docs": "docs_checks_required",
             "ci-checks-generated": "package_checks_required",
@@ -7010,7 +7031,7 @@ jobs:
           # Jobs a fast-depth run must also see succeed once their scope is
           # planned; any other job may skip there.
           FAST_JOB_SCOPES: >-
-            {"ci-browser": "desktop_browser_required", "service-suites": "service_suites_pr_required", "docker-checks": "docker_checks_pr_required", "legal-atlas-image": "legal_atlas_image_pr_required"}
+            {"service-suites": "service_suites_pr_required", "docker-checks": "docker_checks_pr_required", "legal-atlas-image": "legal_atlas_image_pr_required"}
           FAST_REQUIRED: >-
             ["ci-browser", "ci-generated-sources", "ci-checks-docs", "ci-checks-generated", "ci-checks-policy", "ci-checks-rest", "code-quality-api", "code-quality-rest", "code-quality-web", "dependency-malware", "parser-version-guard", "typecheck-baseline", "ci-tests"]
         run: |

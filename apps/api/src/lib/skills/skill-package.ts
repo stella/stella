@@ -342,6 +342,7 @@ export const fetchSkillPackageFromUrl = async (
  * catalogue installs include the pinned SKILL.md and all allowed resources.
  */
 export const fetchGithubCatalogueSkillPackage = async ({
+  githubToken,
   fetchFiles = async (skillTarget) => {
     const fetched = await fetchGithubSkillFiles(skillTarget, {
       githubAccess: {
@@ -352,7 +353,6 @@ export const fetchGithubCatalogueSkillPackage = async ({
     });
     return fetched.map(({ files }) => files);
   },
-  githubToken,
   sourceUrl,
   target,
 }: {

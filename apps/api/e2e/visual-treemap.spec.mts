@@ -1,16 +1,14 @@
 import { expect, test } from "@playwright/test";
+import { panic } from "better-result";
 import { execFileSync } from "node:child_process";
-import { readFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import path from "node:path";
+import { fileURLToPath, pathToFileURL } from "node:url";
 
-import { courtTierLabelsForLanguage } from "@stll/api-contract/case-law-court-tier-locales";
 import { VISUAL_SANDBOX_PATH } from "@stll/api-contract/visual-sandbox";
 
-import { treemapFixture } from "../src/handlers/visual-sandbox/browser/treemap-fixture";
-import { sanitizeVisualHtml } from "../src/handlers/visual-sandbox/sanitize";
-import {
-  composeVisualDocument,
-  escapeVisualJson,
-} from "../src/handlers/visual-sandbox/srcdoc";
+import type * as TreemapHelpers from "./visual-treemap.helpers";
 
 const E2E_API_ORIGIN = process.env["E2E_API_URL"] ?? "http://localhost:3001";
 
@@ -23,15 +21,57 @@ const runtime = readFileSync(
 );
 
 const harness = { source: "" };
-test.beforeAll(() => {
+const loaded: { helpers?: typeof TreemapHelpers } = {};
+const helpers = (): typeof TreemapHelpers => {
+  if (!loaded.helpers) {
+    panic("Treemap helpers load in beforeAll");
+  }
+  return loaded.helpers;
+};
+
+const HELPER_EXPORTS = [
+  "composeVisualDocument",
+  "courtTierLabelsForLanguage",
+  "escapeVisualJson",
+  "sanitizeVisualHtml",
+] as const;
+
+const isTreemapHelpers = (value: unknown): value is typeof TreemapHelpers =>
+  typeof value === "object" &&
+  value !== null &&
+  "treemapFixture" in value &&
+  HELPER_EXPORTS.every(
+    (name) =>
+      name in value &&
+      typeof (value as Record<string, unknown>)[name] === "function",
+  );
+
+test.beforeAll(async () => {
+  const bundleDir = mkdtempSync(path.join(tmpdir(), "visual-treemap-"));
+  const helpersBundle = path.join(bundleDir, "helpers.mjs");
+  execFileSync("bun", [
+    "build",
+    fileURLToPath(new URL("visual-treemap.helpers.ts", import.meta.url)),
+    "--target=node",
+    "--format=esm",
+    `--outfile=${helpersBundle}`,
+  ]);
+  const bundle: unknown = await import(pathToFileURL(helpersBundle).href);
+  if (!isTreemapHelpers(bundle)) {
+    panic("Treemap helpers bundle is missing an export");
+  }
+  loaded.helpers = bundle;
+  rmSync(bundleDir, { force: true, recursive: true });
   harness.source = execFileSync(
     "bun",
     [
       "build",
-      new URL(
-        "../src/handlers/visual-sandbox/browser/treemap.harness.ts",
-        import.meta.url,
-      ).pathname,
+      fileURLToPath(
+        new URL(
+          "../src/handlers/visual-sandbox/browser/treemap.harness.ts",
+          import.meta.url,
+        ),
+      ),
       "--minify",
       "--target=browser",
       "--format=iife",
@@ -46,6 +86,13 @@ for (const direction of ["ltr", "rtl"] as const) {
       page,
       request,
     }) => {
+      const {
+        composeVisualDocument,
+        courtTierLabelsForLanguage,
+        escapeVisualJson,
+        sanitizeVisualHtml,
+        treemapFixture,
+      } = helpers();
       const requests: string[] = [];
       const errors: string[] = [];
       page.on("request", (networkRequest) =>
@@ -64,7 +111,7 @@ for (const direction of ["ltr", "rtl"] as const) {
       const policy = response.headers()["content-security-policy"];
       expect(policy).toBeDefined();
       if (!policy) {
-        throw new TypeError("Sandbox response requires a policy");
+        panic("Sandbox response requires a policy");
       }
       const html = sanitizeVisualHtml(
         `<div dir="${direction}" lang="cs" id="chart" style="width:900px"></div><button id="color">Barva</button><button id="citations">Citace</button><button id="category">Kategorie</button><button id="empty">Prázdný strom</button><button id="destroy">Zavřít</button><script>document.documentElement.dir=${escapeVisualJson(direction)};document.documentElement.lang="cs";${harness.source}</script>`,
@@ -110,9 +157,19 @@ for (const direction of ["ltr", "rtl"] as const) {
       );
       await page.keyboard.press("Escape");
       await expect(svg).toHaveAttribute("aria-label", treemapFixture.label);
-      await svg.locator("text").filter({ hasText: "Nejvyšší soud" }).click();
+      // Keyboard focus draws a marker over the focused node's label centre,
+      // so pointer clicks land on the label's start edge instead.
+      const clickLabel = async (text: string) => {
+        const label = svg.locator("text").filter({ hasText: text });
+        const box = await label.boundingBox();
+        if (!box) {
+          panic(`Treemap label ${text} requires a layout box`);
+        }
+        await label.click({ position: { x: 2, y: box.height / 2 } });
+      };
+      await clickLabel("Nejvyšší soud");
       await expect(svg).toHaveAttribute("aria-label", "Nejvyšší soud");
-      await svg.locator("text").filter({ hasText: "2024" }).click();
+      await clickLabel("2024");
       await expect(guest.locator("#chart")).toHaveAttribute(
         "data-selected",
         "CZ:ns:2024",
@@ -143,7 +200,7 @@ for (const direction of ["ltr", "rtl"] as const) {
           });
         expect(fill).toBeTruthy();
         if (!fill) {
-          throw new TypeError("Court category requires a rendered cell fill");
+          panic("Court category requires a rendered cell fill");
         }
         const swatch = guest
           .locator('[data-color-mode="category"] > span')

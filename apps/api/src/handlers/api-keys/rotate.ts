@@ -22,7 +22,7 @@ const rotateApiKeyBody = t.Object({
 
 const config = {
   permissions: { organizationSettings: ["update"] },
-  accountAccess: ACCOUNT_ACCESS.standard,
+  accountAccess: ACCOUNT_ACCESS.accountControl,
   mcp: { type: "internal", reason: "provider_secret" },
   body: rotateApiKeyBody,
 } satisfies HandlerConfig;

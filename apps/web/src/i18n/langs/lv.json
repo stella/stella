@@ -145,6 +145,7 @@
       "useBackupCode": "Tā vietā izmantot rezerves kodu"
     },
     "useDifferentEmail": "Izmantot citu e-pasta adresi",
+    "usePassword": "Izmantot paroli",
     "weSentCodeTo": "Mēs nosūtījām kodu uz <email>{emailAddress}</email>"
   },
   "avt": {

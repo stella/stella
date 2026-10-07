@@ -72,6 +72,24 @@ const environment = {
   runtimeMode: { mode: "strict" },
 } as const satisfies Parameters<typeof envApiInvariantViolation>[0];
 
+test("the restricted review account is configured with both keys or neither", () => {
+  for (const email of [undefined, "review@example.test"]) {
+    for (const organizationId of [undefined, "org_review"]) {
+      expect(
+        envApiInvariantViolation({
+          ...environment,
+          APP_REVIEW_ACCOUNT_EMAIL: email,
+          APP_REVIEW_ORGANIZATION_ID: organizationId,
+        }),
+      ).toBe(
+        (email === undefined) === (organizationId === undefined)
+          ? null
+          : "APP_REVIEW_ACCOUNT_EMAIL and APP_REVIEW_ORGANIZATION_ID must be set together.",
+      );
+    }
+  }
+});
+
 test("managed checks require an explicit supported provider and bounded configuration", () => {
   for (const provider of [
     undefined,

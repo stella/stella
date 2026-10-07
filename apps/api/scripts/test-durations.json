@@ -4219,6 +4219,18 @@
     "seconds": 3.1,
     "source": "measured"
   },
+  "src/lib/auth/review-account-inert.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
+  "src/lib/auth/review-account-plugin.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
+  "src/lib/auth/review-account-policy.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
   "src/lib/auth/session-bearer.test.ts": {
     "seconds": 0.219057,
     "source": "estimated"
@@ -4849,6 +4861,10 @@
   },
   "src/lib/db/read-bounded.db.test.ts": {
     "seconds": 1.81079,
+    "source": "estimated"
+  },
+  "src/lib/db/review-account-organization-store.db.test.ts": {
+    "seconds": 1,
     "source": "estimated"
   },
   "src/lib/db/rls-role-posture.db.test.ts": {
@@ -7163,6 +7179,18 @@
     "seconds": 0.123218,
     "source": "estimated"
   },
+  "src/lib/review-organization/membership-fence.postgres.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
+  "src/lib/review-organization/reset-scope.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
+  "src/lib/review-organization/review-organization.integration.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
   "src/lib/root-scoped-db.postgres.test.ts": {
     "seconds": 0.6,
     "source": "measured"
@@ -8387,6 +8415,10 @@
     "seconds": 0.467175,
     "source": "estimated"
   },
+  "src/mcp/review-account-exposure.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
   "src/mcp/search-index-unavailable.test.ts": {
     "seconds": 1,
     "source": "estimated"
@@ -8654,6 +8686,10 @@
   "src/scripts/replay-tick.test.ts": {
     "seconds": 0.4,
     "source": "measured"
+  },
+  "src/scripts/review-account.logic.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
   },
   "src/scripts/seed-migration-rehearsal-plan.db.test.ts": {
     "seconds": 2.451865,

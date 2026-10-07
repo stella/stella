@@ -13,7 +13,13 @@ type FeatureDefinition = {
     conditionalModules?: readonly string[];
     dispatchModules?: readonly (
       | { type: "registry"; module: string; registry: string }
-      | { type: "admitted"; module: string; admission: string }
+      | {
+          type: "admitted";
+          module: string;
+          admission: string;
+          /** Where the admission comes from; the MCP feature gate by default. */
+          specifier?: string;
+        }
     )[];
   };
 };
@@ -78,6 +84,14 @@ export const FEATURE_REGISTRY = {
           module:
             "apps/api/src/handlers/chat/tools/registry-adapter/run-registry-write-tool.ts",
           admission: "isMcpDescriptorFeatureEnabled",
+        },
+        {
+          // The review organization reset seeds time-billing sample data
+          // only where the deployment offers the feature.
+          type: "admitted",
+          module: "apps/api/src/lib/review-organization/time-billing-seed.ts",
+          admission: "isDeploymentFeatureEnabled",
+          specifier: "@/api/lib/deployment-feature",
         },
       ],
     },
