@@ -1,5 +1,7 @@
 import { panic, Result } from "better-result";
 import { describe, expect, test } from "bun:test";
+import path from "node:path";
+import ts from "typescript";
 import * as v from "valibot";
 
 import { MODEL_ROLES } from "@stll/ai-catalog";
@@ -27,8 +29,13 @@ import type {
 } from "@/api/lib/rate-limit/action-kinds";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
+import { canonicalModuleId } from "../../../../../.oxlint-plugins/module-id.ts";
+import { OWNERSHIP } from "../../../../../scripts/ownership";
 import { discoverConditionalOperations } from "../../../scripts/lib/enumerate-checked-operations";
-import { discoverSafeHandlers } from "../../../scripts/lib/enumerate-safe-handlers";
+import {
+  discoverSafeHandlers,
+  REPO_ROOT,
+} from "../../../scripts/lib/enumerate-safe-handlers";
 
 const meteringSchema = v.object({
   actionType: v.picklist(USAGE_ACTION_TYPES),
@@ -190,8 +197,61 @@ for (const kind of actionKinds) {
 const conditionalOperations = await discoverConditionalOperations();
 
 describe.serial("registered conditional admission", () => {
-  test("discovers conditional operation inputs", () => {
-    expect(conditionalOperations.length).toBeGreaterThan(0);
+  test("discovers exactly the registered runtime conditional operation owners", async () => {
+    const entry = OWNERSHIP.find(
+      ({ id }) => id === "conditional-operation-predicates",
+    );
+    if (
+      entry?.enforcement.kind !== "import" ||
+      entry.enforcement.names === undefined
+    ) {
+      panic("Conditional operation owners must have import enforcement");
+    }
+    const { names: checkerNames, specifiers } = entry.enforcement;
+    const names = new Set(checkerNames);
+    const expectedOwners: string[] = [];
+    for (const file of entry.owner) {
+      const text = await Bun.file(path.join(REPO_ROOT, file)).text();
+      const source = ts.createSourceFile(file, text, ts.ScriptTarget.Latest);
+      const hasRuntimeChecker = source.statements.some((statement) => {
+        if (
+          !ts.isImportDeclaration(statement) ||
+          !ts.isStringLiteral(statement.moduleSpecifier) ||
+          statement.importClause?.phaseModifier === ts.SyntaxKind.TypeKeyword
+        ) {
+          return false;
+        }
+        const moduleId = canonicalModuleId(
+          statement.moduleSpecifier.text,
+          file,
+        );
+        if (
+          !specifiers.some(
+            (specifier) => canonicalModuleId(specifier, file) === moduleId,
+          )
+        ) {
+          return false;
+        }
+        const bindings = statement.importClause?.namedBindings;
+        if (bindings === undefined) {
+          return false;
+        }
+        if (ts.isNamespaceImport(bindings)) {
+          return true;
+        }
+        return bindings.elements.some(
+          (binding) =>
+            !binding.isTypeOnly &&
+            names.has(binding.propertyName?.text ?? binding.name.text),
+        );
+      });
+      if (hasRuntimeChecker) {
+        expectedOwners.push(file);
+      }
+    }
+    expect(conditionalOperations.map(({ file }) => file).toSorted()).toEqual(
+      expectedOwners.toSorted(),
+    );
   });
   for (const operation of conditionalOperations) {
     for (const allowed of [true, false]) {

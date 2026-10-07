@@ -736,6 +736,7 @@
         "$TURBO_ROOT$/apps/web/src/components/chat/**",
         "$TURBO_ROOT$/apps/web/src/features/chat/chat-runtime.ts",
         "$TURBO_ROOT$/oxlint.config.ts",
+        "$TURBO_ROOT$/scripts/ownership.ts",
         "$TURBO_ROOT$/scripts/source-fingerprint-baseline.json"
       ]
     },
