@@ -165,7 +165,7 @@ describe("research passage retrieval", () => {
       expect(result.isErr()).toBe(true);
       if (result.isErr()) {
         expect(ResearchPassageRetrievalError.is(result.error)).toBe(true);
-        expect(result.error.reason).toBe(reason);
+        expect(reason).toBe(result.error.reason);
       }
       const failures = logs.records.filter(
         ({ message }) =>
