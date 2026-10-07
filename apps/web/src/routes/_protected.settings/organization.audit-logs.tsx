@@ -33,6 +33,7 @@ import { APIError, unwrapEden } from "@/lib/errors/api";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { prefetchRouteQuery } from "@/lib/react-query";
 import { downloadFile } from "@/lib/utils";
+import { AuditChangeDetails } from "@/routes/_protected.settings/-components/audit-change-details";
 import { SettingsPageHeader } from "@/routes/_protected.settings/-components/settings-page-header";
 import { toAuditLogDateRange } from "@/routes/_protected.settings/-queries/audit-log-date-range";
 import {
@@ -448,12 +449,10 @@ function AuditLogsTableBody({
           >
             <bdi>{log.resourceId}</bdi>
           </TableCell>
-          <TableCell
-            className="max-w-[200px] truncate font-mono text-xs"
-            title={log.changes ? JSON.stringify(log.changes) : ""}
-          >
-            <bdi>{log.changes ? JSON.stringify(log.changes) : "-"}</bdi>
-          </TableCell>
+          <AuditChangeDetails
+            changes={log.changes}
+            changesStatus={log.changesStatus}
+          />
         </TableRow>
       ))}
     </>

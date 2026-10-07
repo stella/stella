@@ -5,10 +5,16 @@ import {
   AUDIT_RESOURCE_TYPE,
 } from "@/api/lib/audit-log.constants";
 import type { AuditResourceType } from "@/api/lib/audit-log.constants";
-import { createFeatureAccessSnapshot } from "@/api/lib/auth/feature-access/policy";
+import {
+  createFeatureAccessSnapshot,
+  decideFeatureAccess,
+} from "@/api/lib/auth/feature-access/policy";
 import { toSafeId } from "@/api/lib/branded-types";
+import { FEATURE_REGISTRY } from "@/api/lib/feature-access/registry";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
+import { mapHandlerResult } from "@/api/mcp/capability-tools";
 import type { McpRequestContext } from "@/api/mcp/context";
+import { CAPABILITY_DISPATCH } from "@/api/mcp/generated/capability-dispatch/audit-logs.list";
 import { RESEARCH_ADMIN_TOOL_HANDLERS } from "@/api/mcp/research-admin-tools";
 import { isMcpEgressPlan } from "@/api/mcp/tool-types";
 import { serializeToolResult } from "@/api/mcp/tool-utils";
@@ -41,7 +47,19 @@ const BILLING_RESOURCES = [
   AUDIT_RESOURCE_TYPE.VAT_RATE,
 ] as const;
 
-const contextFor = (resourceType: AuditResourceType, enrolled: boolean) => {
+type AuditFixtureOptions = {
+  resourceType: AuditResourceType;
+  enrolled: boolean;
+  operation?: string;
+  featureId?: "time-billing" | "list-verification";
+};
+
+const contextFor = ({
+  resourceType,
+  enrolled,
+  operation,
+  featureId = "time-billing",
+}: AuditFixtureOptions) => {
   let selects = 0;
   const { safeDb } = createScopedDbMock({
     select: () => {
@@ -63,6 +81,7 @@ const contextFor = (resourceType: AuditResourceType, enrolled: boolean) => {
                     resourceType,
                     resourceId: "resource_test",
                     changes: CHANGES,
+                    metadata: operation ? { operation } : null,
                   },
                 ],
               }),
@@ -95,12 +114,35 @@ const contextFor = (resourceType: AuditResourceType, enrolled: boolean) => {
     session: { activeOrganizationId: PRINCIPAL.organizationId },
     set: { headers: {} },
     user: { id: PRINCIPAL.userId, email: "test@example.test" },
-    featureAccessSnapshot: enrolled
-      ? enrolledTimeBillingSnapshot(PRINCIPAL)
-      : createFeatureAccessSnapshot({
-          ...PRINCIPAL,
-          decisions: new Map([["time-billing", { status: "hidden" }]]),
-        }),
+    featureAccessSnapshot:
+      featureId === "time-billing" && enrolled
+        ? enrolledTimeBillingSnapshot(PRINCIPAL)
+        : createFeatureAccessSnapshot({
+            ...PRINCIPAL,
+            decisions: new Map([
+              [
+                featureId,
+                enrolled
+                  ? decideFeatureAccess({
+                      ...PRINCIPAL,
+                      registry: FEATURE_REGISTRY,
+                      grants: {
+                        [featureId]: [
+                          {
+                            type: "organization",
+                            organizationId: PRINCIPAL.organizationId,
+                          },
+                        ],
+                      },
+                      featureId,
+                      user: { email: "test@example.test", emailVerified: true },
+                      membership: true,
+                      enrolments: [{ ...PRINCIPAL, featureId }],
+                    })
+                  : { status: "hidden" },
+              ],
+            ]),
+          }),
   };
 };
 
@@ -112,7 +154,7 @@ describe("audit details follow feature enrolment", () => {
       test(`${resourceType} list details are ${changesStatus}`, async () => {
         const result = await readAuditLogs.handler(
           asTestRaw<Parameters<typeof readAuditLogs.handler>[0]>(
-            contextFor(resourceType, enrolled),
+            contextFor({ resourceType, enrolled }),
           ),
         );
         expect(result).toMatchObject({
@@ -134,7 +176,7 @@ describe("audit details follow feature enrolment", () => {
       test(`${resourceType} export details are ${changesStatus}`, async () => {
         const result = await exportAuditLogs.handler(
           asTestRaw<Parameters<typeof exportAuditLogs.handler>[0]>(
-            contextFor(resourceType, enrolled),
+            contextFor({ resourceType, enrolled }),
           ),
         );
         expect(result).toBe(
@@ -149,7 +191,10 @@ describe("audit details follow feature enrolment", () => {
 
   for (const enrolled of [false, true]) {
     test(`native MCP audit details follow enrolment ${enrolled}`, async () => {
-      const fixture = contextFor(AUDIT_RESOURCE_TYPE.TIME_ENTRY, enrolled);
+      const fixture = contextFor({
+        resourceType: AUDIT_RESOURCE_TYPE.TIME_ENTRY,
+        enrolled,
+      });
       const result = await RESEARCH_ADMIN_TOOL_HANDLERS.list_audit_log({
         args: {},
         context: asTestRaw<McpRequestContext>({
@@ -175,5 +220,71 @@ describe("audit details follow feature enrolment", () => {
         ],
       });
     });
+  }
+});
+
+describe("audit operation details follow verification enrolment", () => {
+  for (const operation of [
+    "fact_details_set",
+    "source_verification_changed",
+    "item_updated",
+  ]) {
+    for (const enrolled of [false, true]) {
+      const visible = operation === "item_updated" || enrolled;
+      const fixture = () =>
+        contextFor({
+          resourceType: AUDIT_RESOURCE_TYPE.LEGAL_LIST_ITEM,
+          operation,
+          featureId: "list-verification",
+          enrolled,
+        });
+      test(`${operation} list and export follow enrolment ${enrolled}`, async () => {
+        const result = await readAuditLogs.handler(
+          asTestRaw<Parameters<typeof readAuditLogs.handler>[0]>(fixture()),
+        );
+        expect(result).toMatchObject({
+          items: [
+            {
+              resourceType: AUDIT_RESOURCE_TYPE.LEGAL_LIST_ITEM,
+              action: AUDIT_ACTION.UPDATE,
+              userId: PRINCIPAL.userId,
+              changes: visible ? CHANGES : null,
+              changesStatus: visible ? "visible" : "feature_unavailable",
+            },
+          ],
+        });
+        const csv = await exportAuditLogs.handler(
+          asTestRaw<Parameters<typeof exportAuditLogs.handler>[0]>(fixture()),
+        );
+        expect(csv).toContain(",legal_list_item,resource_test,");
+        expect(
+          csv.endsWith(visible ? ",visible" : ",feature_unavailable"),
+        ).toBe(true);
+        expect(csv.includes('""amount""')).toBe(visible);
+      });
+      test(`${operation} generated MCP and CLI dispatch preserve status for enrolment ${enrolled}`, async () => {
+        const context = fixture();
+        const endpoint = await CAPABILITY_DISPATCH["audit-logs.list"].load();
+        const result = await endpoint.default.handler(
+          asTestRaw<Parameters<typeof endpoint.default.handler>[0]>(context),
+        );
+        const mapped = mapHandlerResult({
+          id: "audit-logs.list",
+          result,
+          access: "read",
+        });
+        if (!isMcpEgressPlan(mapped) || mapped.egress !== "structured") {
+          throw new TypeError("Audit capabilities return structured results");
+        }
+        expect(mapped.payload).toMatchObject({
+          items: [
+            {
+              changes: visible ? CHANGES : null,
+              changesStatus: visible ? "visible" : "feature_unavailable",
+            },
+          ],
+        });
+      });
+    }
   }
 });

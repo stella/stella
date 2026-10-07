@@ -719,3 +719,44 @@ describe("CLI legal citation projection", () => {
     }
   }
 });
+
+describe("audit detail status output", () => {
+  for (const format of ["json", "jsonl", "table"] as const) {
+    for (const changesStatus of ["visible", "feature_unavailable"] as const) {
+      test(`${format} preserves ${changesStatus} beside audit changes`, () => {
+        const item = {
+          id: "entry",
+          changes:
+            changesStatus === "visible"
+              ? { amount: { old: 100, new: 200 } }
+              : null,
+          changesStatus,
+        };
+        const envelope = { result: { items: [item], nextCursor: null } };
+        const payload = parsePayload({
+          content: [{ type: "text", text: JSON.stringify(envelope) }],
+          structuredContent: envelope,
+        });
+        const plan = buildRenderPlan({
+          payload,
+          itemsKey: "items",
+          textPath: undefined,
+          singleReadActive: false,
+          columns: undefined,
+        });
+        const { out, err, writers } = capture();
+        renderResult({ plan, format, writers, allActive: false });
+        const output = out.join("");
+        expect(output).toContain("changesStatus");
+        expect(output).toContain(changesStatus);
+        if (format === "json") {
+          expect(JSON.parse(output)).toEqual(envelope.result);
+        }
+        if (format === "jsonl") {
+          expect(JSON.parse(output)).toEqual(item);
+        }
+        expect(err).toEqual([]);
+      });
+    }
+  }
+});

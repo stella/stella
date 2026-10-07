@@ -227,6 +227,7 @@ export const queryAuditLogPage = async function* ({
           resourceType: auditLogs.resourceType,
           resourceId: auditLogs.resourceId,
           changes: auditLogs.changes,
+          metadata: auditLogs.metadata,
           createdAtCursor: auditLogCursor.cursorValue.as("created_at_cursor"),
         })
         .from(auditLogs)
@@ -272,6 +273,7 @@ export const queryAuditLogPage = async function* ({
           ...projectAuditReadChanges({
             resourceType: row.resourceType,
             changes: row.changes,
+            metadata: row.metadata,
             featureAccessSnapshot,
             principal: { organizationId, userId },
           }),

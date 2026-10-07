@@ -62,6 +62,7 @@ const exportAuditLogs = createSafeRootHandler(
               resourceType: auditLogs.resourceType,
               resourceId: auditLogs.resourceId,
               changes: auditLogs.changes,
+              metadata: auditLogs.metadata,
             })
             .from(auditLogs)
             .where(and(...conditions))
@@ -140,6 +141,7 @@ const exportAuditLogs = createSafeRootHandler(
       const details = projectAuditReadChanges({
         resourceType: row.resourceType,
         changes: row.changes,
+        metadata: row.metadata,
         featureAccessSnapshot,
         principal: {
           organizationId: session.activeOrganizationId,

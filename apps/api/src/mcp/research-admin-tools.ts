@@ -1,6 +1,7 @@
 import { Result } from "better-result";
 import * as v from "valibot";
 
+import { AUDIT_CHANGES_STATUS } from "@stll/api-contract/audit-log";
 import { BOE_SEARCH_PAGE_LIMITS, RELATION_TYPES } from "@stll/boe";
 import { parsePlainDate } from "@stll/time";
 
@@ -14,7 +15,6 @@ import { mapBoeError } from "@/api/handlers/legislation/boe-error";
 import { updateOrganizationSettingsHandler } from "@/api/handlers/organization-settings/update";
 import { addWorkspaceMemberHandler } from "@/api/handlers/workspaces/members/add";
 import { removeWorkspaceMemberHandler } from "@/api/handlers/workspaces/members/remove";
-import { AUDIT_CHANGES_STATUS } from "@/api/lib/audit-log-details";
 import {
   MANAGE_ORGANIZATION_ADD_MEMBER_PROJECTION,
   MANAGE_ORGANIZATION_REMOVE_MEMBER_PROJECTION,
