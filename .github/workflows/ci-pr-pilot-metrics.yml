@@ -1,0 +1,103 @@
+name: PR CI pilot metrics
+
+on:
+  schedule:
+    - cron: "37 3 * * *"
+  workflow_dispatch:
+    inputs:
+      baseline:
+        description: Bootstrap metrics from the preceding audit; omit to continue the existing generation
+        type: string
+        default: ""
+
+permissions: {}
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: false
+
+jobs:
+  metrics:
+    if: github.ref == 'refs/heads/main' && vars.CI_PR_DEPTH_PILOT == 'on'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      checks: read
+      pull-requests: read
+      actions: read
+    steps:
+      - name: Checkout trusted metrics code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Setup metrics runtime
+        uses: stella/.github/actions/setup-bun-cached@167fb396c6c0f4e07296ad2cd72e6ef15367c776
+        with:
+          save: ${{ github.ref == 'refs/heads/main' }}
+
+      - name: Find the preceding generation
+        id: previous
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
+        with:
+          retries: 0
+          script: |
+            const name = "ci-pr-depth-pilot-v1";
+            const { data } = await github.rest.actions.listArtifactsForRepo({
+              ...context.repo, name, per_page: 100, request: { timeout: 10000 },
+            });
+            const artifact = data.artifacts.filter(item => item.name === name && !item.expired
+              && item.workflow_run?.id !== context.runId).sort((a, b) => b.id - a.id)[0];
+            if (!artifact) return;
+            await new Promise(resolve => setTimeout(resolve, 1100));
+            const { data: run } = await github.rest.actions.getWorkflowRun({
+              ...context.repo, run_id: artifact.workflow_run.id, request: { timeout: 10000 },
+            });
+            await new Promise(resolve => setTimeout(resolve, 1100));
+            const { data: repository } = await github.rest.repos.get({
+              ...context.repo, request: { timeout: 10000 },
+            });
+            if (run.path !== ".github/workflows/ci-pr-pilot-metrics.yml"
+                || !["schedule", "workflow_dispatch"].includes(run.event)
+                || run.head_branch !== repository.default_branch
+                || run.head_sha !== artifact.workflow_run.head_sha
+                || run.status !== "completed" || run.conclusion !== "success") return;
+            core.setOutput("run_id", String(run.id));
+
+      - name: Download the preceding report
+        if: steps.previous.outputs.run_id != ''
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: ci-pr-depth-pilot-v1
+          run-id: ${{ steps.previous.outputs.run_id }}
+          github-token: ${{ github.token }}
+          path: ${{ runner.temp }}/previous
+
+      - name: Collect bounded daily metrics
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+          BOOTSTRAP: ${{ inputs.baseline }}
+        run: |
+          printf '%s' "$BOOTSTRAP" > "$RUNNER_TEMP/bootstrap.json"
+          args=(--repository "$REPOSITORY" --output "$RUNNER_TEMP/ci-pr-pilot.json"
+            --private-output "$RUNNER_TEMP/private/ci-pr-pilot.json"
+            --cache-output "$RUNNER_TEMP/ci-pr-pilot-cache.json.gz")
+          if [[ -s "$RUNNER_TEMP/bootstrap.json" ]]; then
+            args+=(--bootstrap "$RUNNER_TEMP/bootstrap.json")
+          else
+            args+=(--previous "$RUNNER_TEMP/previous/ci-pr-pilot.json"
+              --cache "$RUNNER_TEMP/previous/ci-pr-pilot-cache.json.gz")
+          fi
+          python3 scripts/ci-pr-pilot-metrics.py "${args[@]}"
+
+      - name: Publish daily pilot evidence
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: ci-pr-depth-pilot-v1
+          path: |
+            ${{ runner.temp }}/ci-pr-pilot.json
+            ${{ runner.temp }}/ci-pr-pilot-cache.json.gz
+          overwrite: true
+          if-no-files-found: error
+          retention-days: 14

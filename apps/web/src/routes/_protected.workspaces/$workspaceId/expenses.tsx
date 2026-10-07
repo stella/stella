@@ -29,7 +29,12 @@ export const Route = createFileRoute(
   "/_protected/workspaces/$workspaceId/expenses",
 )({
   beforeLoad: async ({ context, params }) => {
-    if (!(await isTimeBillingRouteEnabled(context.queryClient))) {
+    if (
+      !(await isTimeBillingRouteEnabled(context.queryClient, {
+        userId: context.user.id,
+        organizationId: context.user.activeOrganizationId,
+      }))
+    ) {
       throw redirect({
         to: "/workspaces/$workspaceId",
         params: { workspaceId: params.workspaceId },

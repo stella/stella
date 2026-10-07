@@ -95,36 +95,66 @@ const wrapInlineCode = (text: string): string => {
   return `${fence}${padded}${fence}`;
 };
 
-const renderInlineElement = (el: Element): string => {
+/**
+ * Where inline output lands. GFM splits a table row on every unescaped `|`
+ * before inline parsing, code spans and link destinations included, so a cell
+ * must escape the pipes those emit raw everywhere else.
+ */
+type InlineContext = "flow" | "table-cell";
+
+const escapeTableCellPipes = (text: string, context: InlineContext): string =>
+  context === "table-cell" ? text.replace(/\|/g, "\\|") : text;
+
+const CODE_HTML_ESCAPES: Record<string, string> = {
+  "&": "&amp;",
+  "<": "&lt;",
+  ">": "&gt;",
+  "|": "&#124;",
+};
+
+/**
+ * Inline code for a table cell. The row splitter drops one backslash before
+ * each `\|`, so code text with its own backslash before a pipe cannot be
+ * written as a code span that keeps both the cell and the text: it is written
+ * as an HTML `<code>` element, which carries the pipe as an entity.
+ */
+const renderTableCellCode = (text: string): string =>
+  text.includes("\\|")
+    ? `<code>${text.replace(/[&<>|]/g, (char) => CODE_HTML_ESCAPES[char] ?? char)}</code>`
+    : escapeTableCellPipes(wrapInlineCode(text), "table-cell");
+
+const renderInlineElement = (el: Element, context: InlineContext): string => {
   const tag = tagNameOf(el);
   switch (tag) {
     case "strong":
     case "b":
-      return `**${renderInline(el.children)}**`;
+      return `**${renderInline(el.children, context)}**`;
     case "em":
     case "i":
-      return `*${renderInline(el.children)}*`;
+      return `*${renderInline(el.children, context)}*`;
     case "del":
     case "s":
-      return `~~${renderInline(el.children)}~~`;
+      return `~~${renderInline(el.children, context)}~~`;
     case "code":
-      return wrapInlineCode(rawText(el));
+      return context === "table-cell"
+        ? renderTableCellCode(rawText(el))
+        : wrapInlineCode(rawText(el));
     case "br":
       return "  \n";
     case "a": {
       const href = el.attribs["href"] ?? "";
-      return `[${renderInline(el.children)}](${renderLinkDestination(href)})`;
+      return `[${renderInline(el.children, context)}](${escapeTableCellPipes(renderLinkDestination(href), context)})`;
     }
     case "u":
     case "sub":
     case "sup":
-      return `<${tag}>${renderInline(el.children)}</${tag}>`;
+      return `<${tag}>${renderInline(el.children, context)}</${tag}>`;
     default:
-      return renderInline(el.children);
+      return renderInline(el.children, context);
   }
 };
 
-const renderInline = (nodes: AnyNode[]): string => {
+const renderInline = (nodes: AnyNode[], context: InlineContext): string => {
   let out = "";
   for (const node of nodes) {
     if (isText(node)) {
@@ -136,7 +166,7 @@ const renderInline = (nodes: AnyNode[]): string => {
       continue;
     }
     if (isTag(node)) {
-      out += renderInlineElement(node);
+      out += renderInlineElement(node, context);
     }
   }
   return out;
@@ -150,7 +180,7 @@ const renderMixed = (nodes: AnyNode[]): string => {
     if (inlineRun.length === 0) {
       return;
     }
-    const text = renderInline(inlineRun).trim();
+    const text = renderInline(inlineRun, "flow").trim();
     if (text) {
       blocks.push(text);
     }
@@ -190,9 +220,10 @@ const renderList = (el: Element, ordered: boolean): string => {
 };
 
 const renderTableCell = (cell: Element): string =>
-  // Pipes are escaped upstream by escapeText/INLINE_ESCAPE; here we only need to
-  // flatten embedded newlines so a cell stays on one table row.
-  renderInline(cell.children).replace(/\n/g, " ");
+  // Pipes are escaped upstream (escapeText for text, the "table-cell" context
+  // for code and link destinations); here we only flatten embedded newlines so
+  // a cell stays on one table row.
+  renderInline(cell.children, "table-cell").replace(/\n/g, " ");
 
 const collectTableRows = (parent: Element): string[][] => {
   const rows: string[][] = [];
@@ -226,7 +257,7 @@ const findTableCaption = (el: Element): string => {
   const caption = el.children.find(
     (c): c is Element => isTag(c) && tagNameOf(c) === "caption",
   );
-  return caption ? renderInline(caption.children).trim() : "";
+  return caption ? renderInline(caption.children, "flow").trim() : "";
 };
 
 const renderTable = (el: Element): string => {
@@ -261,11 +292,11 @@ const renderBlock = (el: Element): string => {
   const tag = tagNameOf(el);
   const headingLevel = HEADING_LEVELS[tag];
   if (headingLevel !== undefined) {
-    return `${"#".repeat(headingLevel)} ${renderInline(el.children).trim()}`;
+    return `${"#".repeat(headingLevel)} ${renderInline(el.children, "flow").trim()}`;
   }
   switch (tag) {
     case "p":
-      return renderInline(el.children).trim();
+      return renderInline(el.children, "flow").trim();
     case "hr":
       return "---";
     case "blockquote": {

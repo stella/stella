@@ -14,7 +14,10 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 
 import { buildApiTestCommand } from "./api-test-command";
-import { TestProcessSupervisor } from "./test-process-supervisor";
+import {
+  TestProcessSupervisor,
+  testProcessBudgets,
+} from "./test-process-supervisor";
 
 const createFixture = (
   options: Partial<ConstructorParameters<typeof TestProcessSupervisor>[0]> = {},
@@ -673,3 +676,43 @@ posixTest(
   },
   10_000,
 );
+
+test("explicit child budgets retain PR and memory defaults and reject invalid limits", () => {
+  expect(testProcessBudgets({})).toEqual({
+    childTimeoutMs: 600_000,
+    deadlineMs: 1_200_000,
+  });
+  expect(testProcessBudgets({}, 110 * 60_000)).toEqual({
+    childTimeoutMs: 600_000,
+    deadlineMs: 6_600_000,
+  });
+  expect(
+    testProcessBudgets({
+      API_TEST_CHILD_TIMEOUT_MS: "1200000",
+      API_TEST_RUNNER_DEADLINE_MS: "2100000",
+    }),
+  ).toEqual({ childTimeoutMs: 1_200_000, deadlineMs: 2_100_000 });
+  for (const name of [
+    "API_TEST_CHILD_TIMEOUT_MS",
+    "API_TEST_RUNNER_DEADLINE_MS",
+  ]) {
+    for (const value of [
+      "",
+      "1",
+      "-1",
+      "1.5",
+      "NaN",
+      "Infinity",
+      "9007199254740992",
+    ]) {
+      expect(() => testProcessBudgets({ [name]: value })).toThrow(
+        `${name} must be an integer of at least two`,
+      );
+    }
+  }
+  for (const child of ["1200000", "1200001"]) {
+    expect(() =>
+      testProcessBudgets({ API_TEST_CHILD_TIMEOUT_MS: child }),
+    ).toThrow("API test child budget must be below the runner deadline");
+  }
+});

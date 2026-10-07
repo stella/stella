@@ -10,7 +10,6 @@ import type { ClientAuthStatus } from "@/hooks/use-client-auth-status";
 import type { AuthenticatedUser } from "@/lib/authenticated-user-context";
 import { detached } from "@/lib/detached";
 import { isPublicKnowledgeEnabled } from "@/lib/knowledge/public-knowledge-launch";
-import { usePinnedStore } from "@/lib/pinned-store";
 import { resetAuthTransition } from "@/lib/session-cache-guard";
 import {
   frameVisitor,
@@ -113,16 +112,6 @@ export const AppFrameHost = ({ children, frames }: AppFrameHostProps) => {
     (audience === "member" && authStatus.status === "authenticated"
       ? authStatus.user
       : undefined);
-
-  // A signed-in page's guard seeds the pinned matters before the sidebar
-  // renders; a page without one does it here, before the first paint.
-  const sessionMemberId =
-    routeUser === undefined && frame === "member" ? memberUser?.id : undefined;
-  useLayoutEffect(() => {
-    if (sessionMemberId !== undefined) {
-      usePinnedStore.getState().init(sessionMemberId);
-    }
-  }, [sessionMemberId]);
 
   // When the page moves on to another visitor (sign-out, another
   // organization, an expired session), nothing read for the previous one may

@@ -576,7 +576,7 @@ const CHAT_TURN_FILES: ReadonlySet<string> = new Set([
 ]);
 
 const MODEL_HELPER_CALL =
-  /\b(?:generateTanStackTextForRole|generateTanStackObjectForRole|streamTanStackTextForRole|streamTanStackObjectForRole|streamChatChunks|generateChatObject|streamChatObject|runSubagent)\(/u;
+  /\b(?:generateTanStackTextForRole|generateTanStackObjectForRole|streamTanStackTextForRole|streamTanStackObjectForRole|streamChatChunks|generateChatObject|streamChatObject|generateTanStackChatObject|streamTanStackChatRun|runSubagent)\(/u;
 
 const SOURCE_ROOT = path.resolve(import.meta.dir, "../..");
 

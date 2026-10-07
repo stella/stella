@@ -9,6 +9,7 @@ import * as v from "valibot";
 import { compareCodeUnit } from "@stll/collation";
 import { assertProperty } from "@stll/property-testing";
 
+import { testProcessBudgets } from "../apps/api/scripts/test-process-supervisor";
 import { CUSTOM_LINT_TEST_ARGS } from "./check-oxlint-rule-coverage.ts";
 import { CANONICAL_CANCEL_STEP } from "./ci-cancellation-contract";
 import { jobCachePolicy } from "./workflow-cache-policy.ts";
@@ -42,6 +43,142 @@ const removalSchema = v.array(
 const workflowPath = ".github/workflows/ci.yml";
 const removalsPath = "scripts/ci-checks-removed.json";
 const repository = new URL("../", import.meta.url).pathname;
+const processBudgetEnvSchema = v.optional(v.record(v.string(), v.unknown()));
+const processBudgetWorkflowSchema = v.looseObject({
+  env: processBudgetEnvSchema,
+  jobs: v.record(
+    v.string(),
+    v.looseObject({
+      env: processBudgetEnvSchema,
+      "timeout-minutes": v.optional(v.unknown()),
+      steps: v.optional(
+        v.array(v.looseObject({ env: processBudgetEnvSchema })),
+      ),
+    }),
+  ),
+});
+const declaredProcessBudgetsSchema = v.object({
+  API_TEST_CHILD_TIMEOUT_MS: v.optional(v.string()),
+  API_TEST_RUNNER_DEADLINE_MS: v.optional(v.string()),
+});
+
+const assertJobProcessBudgets = (
+  workflow: v.InferOutput<typeof processBudgetWorkflowSchema>,
+  requireNightlyBudget: boolean,
+) => {
+  for (const [name, job] of Object.entries(workflow.jobs)) {
+    for (const step of job.steps ?? [{}]) {
+      const declared = v.parse(declaredProcessBudgetsSchema, {
+        ...workflow.env,
+        ...job.env,
+        ...step.env,
+      });
+      if (requireNightlyBudget) {
+        expect(
+          declared.API_TEST_CHILD_TIMEOUT_MS,
+          `${name} needs an explicit nightly child budget`,
+        ).toBeDefined();
+        expect(
+          declared.API_TEST_RUNNER_DEADLINE_MS,
+          `${name} needs an explicit nightly runner deadline`,
+        ).toBeDefined();
+      }
+      if (
+        declared.API_TEST_CHILD_TIMEOUT_MS === undefined &&
+        declared.API_TEST_RUNNER_DEADLINE_MS === undefined
+      ) {
+        continue;
+      }
+      const timeout = v.parse(v.number(), job["timeout-minutes"]) * 60_000;
+      const limits = testProcessBudgets(declared);
+      expect(
+        limits.childTimeoutMs,
+        `${name} child budget must fit inside its job`,
+      ).toBeLessThan(timeout);
+      expect(
+        limits.deadlineMs,
+        `${name} runner deadline must leave job cleanup time`,
+      ).toBeLessThan(timeout);
+      if (requireNightlyBudget) {
+        expect(limits.childTimeoutMs).toBeGreaterThan(
+          testProcessBudgets({}).childTimeoutMs,
+        );
+      }
+    }
+  }
+};
+
+test("explicit API process budgets leave cleanup time in every consuming workflow job", () => {
+  for (const file of new Bun.Glob(".github/workflows/*.{yml,yaml}").scanSync({
+    cwd: repository,
+  })) {
+    const workflow = v.parse(
+      processBudgetWorkflowSchema,
+      Bun.YAML.parse(
+        readFileSync(new URL(`../${file}`, import.meta.url), "utf-8"),
+      ),
+    );
+    assertJobProcessBudgets(
+      workflow,
+      file === ".github/workflows/nightly-property-test.yml",
+    );
+  }
+});
+
+test("process budget guard rejects missing, inherited and step-level timeout violations", () => {
+  const workflow = v.parse(processBudgetWorkflowSchema, {
+    env: {
+      API_TEST_CHILD_TIMEOUT_MS: "1200000",
+      API_TEST_RUNNER_DEADLINE_MS: "2100000",
+    },
+    jobs: { property: { "timeout-minutes": 45, steps: [{ env: {} }] } },
+  });
+  assertJobProcessBudgets(workflow, true);
+  const missing = structuredClone(workflow);
+  delete missing.env?.["API_TEST_CHILD_TIMEOUT_MS"];
+  expect(() => assertJobProcessBudgets(missing, true)).toThrow(
+    "explicit nightly child budget",
+  );
+  const shortJob = structuredClone(workflow);
+  for (const job of Object.values(shortJob.jobs)) {
+    job["timeout-minutes"] = 20;
+  }
+  expect(() => assertJobProcessBudgets(shortJob, true)).toThrow(
+    "child budget must fit inside its job",
+  );
+  for (const deadline of ["2700000", "2700001"]) {
+    const mutation = structuredClone(workflow);
+    mutation.env = {
+      ...workflow.env,
+      API_TEST_RUNNER_DEADLINE_MS: deadline,
+    };
+    expect(() => assertJobProcessBudgets(mutation, true)).toThrow(
+      "runner deadline must leave job cleanup time",
+    );
+  }
+  for (const level of ["workflow", "job", "step"] as const) {
+    const mutation = structuredClone(workflow);
+    const environment = {
+      API_TEST_CHILD_TIMEOUT_MS: "2700000",
+      API_TEST_RUNNER_DEADLINE_MS: "3000000",
+    };
+    if (level === "workflow") {
+      mutation.env = environment;
+    }
+    for (const job of Object.values(mutation.jobs)) {
+      if (level === "job") {
+        job.env = environment;
+      }
+      if (level === "step") {
+        job.steps = [{ env: environment }];
+      }
+    }
+    expect(() => assertJobProcessBudgets(mutation, true)).toThrow(
+      "child budget must fit inside its job",
+    );
+  }
+});
+
 const git = (args: string[]) => {
   const result = Bun.spawnSync(["git", ...args], { cwd: repository });
   if (result.exitCode !== 0) {
@@ -253,6 +390,24 @@ const withoutPreparedGeneration = (step: Step): Step => {
   }
   const { run } = v.parse(v.looseObject({ run: v.optional(v.string()) }), step);
   const prepared = "bun scripts/ci-generated-sources.ts prepare\n";
+  const regeneration = [
+    "set -euo pipefail",
+    "bun scripts/ci-generated-sources.ts prepare",
+    "# Regeneration guards intentionally modify inputs and report their diff.",
+    "# Validate the artifact first, then use ordinary generation in this leg.",
+    "unset CI_GENERATED_SOURCES_MANIFEST",
+    `echo 'CI_GENERATED_SOURCES_MANIFEST=' >> "$GITHUB_ENV"`,
+    "",
+  ].join("\n");
+  if (
+    step.name === "CLI sharded registry and derived runtime guard" &&
+    run?.startsWith(regeneration)
+  ) {
+    return {
+      ...step,
+      run: `bun apps/api/scripts/generate-capability-runtime.ts\n${run.slice(regeneration.length)}`,
+    };
+  }
   return run?.startsWith(prepared)
     ? {
         ...step,
@@ -289,7 +444,8 @@ const conditionTokens = (condition: string) =>
     .replaceAll(/'(?:[^']|'')*'|\s+/gu, (token) =>
       token.startsWith("'") ? token : " ",
     )
-    .trim();
+    .trim()
+    .replace(/^\$\{\{\s*([\s\S]*?)\s*\}\}$/u, "$1");
 type ScopeOptions = {
   current: Record<string, unknown>;
   base: Record<string, unknown>;
@@ -323,17 +479,26 @@ const expectScope = ({ current, base }: ScopeOptions) => {
     }
   }
   expect(migrated).toEqual(originalScope);
-  if (condition === originalCondition) {
+  // Ordinary scope comparisons supply fresh-run evidence. Completion reuse
+  // is exercised separately by the depth contract's true/false census. A
+  // merge base may already carry the completion guard, so strip it from both.
+  const freshScope = (value: unknown) => {
+    const tokens = conditionTokens(v.parse(v.string(), value));
+    return (
+      /^needs\.ci-plan\.outputs\.run_required != 'false' && \(\s*(.*?)\s*\)$/u
+        .exec(tokens)
+        ?.at(1) ?? tokens
+    );
+  };
+  const fresh = freshScope(condition);
+  const original = freshScope(originalCondition);
+  if (fresh === original || fresh === `${original} && ${PACKAGE_SCOPE}`) {
     return;
   }
-  // Heavy-only main runs skip the thin ci-checks legs. Only this wrapper
-  // may change their scope; every token of the base condition stays intact.
   const wrapped = /^inputs\.heavy_only != true && \(\s*(.*?)\s*\)$/u.exec(
-    conditionTokens(v.parse(v.string(), condition)),
+    fresh,
   );
-  expect(wrapped?.at(1)).toBe(
-    conditionTokens(v.parse(v.string(), originalCondition)),
-  );
+  expect(wrapped?.at(1)).toBe(original);
 };
 
 type CoverageOptions = {
@@ -524,7 +689,11 @@ test("each CI check leg preserves merge-base setup, supply-chain protection and 
           .map(({ name }) => name),
       ).toEqual(
         originalSteps
-          .filter(({ name }) => !preparationSteps.has(name))
+          .filter(
+            ({ name }) =>
+              !preparationSteps.has(name) &&
+              !newRemovals.some((removed) => removed.name === name),
+          )
           .map(({ name }) => name),
       );
     }
@@ -601,6 +770,74 @@ test("CI check scope permits only the heavy-only wrapper around the unchanged co
   expect(() => expectScope({ current: missingCondition, base })).toThrow(
     "Invalid type",
   );
+});
+
+test("package scope narrows check legs while retaining baseline trust and completion gates", () => {
+  const trust =
+    "inputs.heavy_only != true && ( needs.ci-plan.outputs.trusted == 'true' || github.event_name == 'workflow_dispatch' )";
+  for (const completion of [false, true]) {
+    const wrap = (scope: string) =>
+      completion
+        ? `needs.ci-plan.outputs.run_required != 'false' && (${scope})`
+        : scope;
+    const base = {
+      if: wrap(trust),
+      needs: ["ci-plan", "ci-generated-sources"],
+    };
+    const narrowed = { ...base, if: wrap(`${trust} && ${PACKAGE_SCOPE}`) };
+    expectScope({ base, current: narrowed });
+    expectScope({ base: narrowed, current: narrowed });
+    for (const suffix of [
+      " || true",
+      " && needs.ci-plan.outputs.other == 'true'",
+      ` && ${PACKAGE_SCOPE} && needs.ci-plan.outputs.unapproved == 'true'`,
+      " && needs.ci-plan.outputs.package_checks_required != 'true'",
+    ]) {
+      expect(() =>
+        expectScope({
+          base,
+          current: { ...base, if: wrap(`${trust}${suffix}`) },
+        }),
+      ).toThrow("Expected:");
+    }
+    if (completion) {
+      for (const invalid of [
+        wrap(
+          `${trust.replace("inputs.heavy_only != true && ", "")} && ${PACKAGE_SCOPE}`,
+        ),
+      ]) {
+        expect(() =>
+          expectScope({ base, current: { ...base, if: invalid } }),
+        ).toThrow("Expected:");
+      }
+    }
+  }
+});
+
+test("fresh scope compares either completion wrapper while retaining the underlying condition", () => {
+  const trusted = "needs.ci-plan.outputs.trusted == 'true'";
+  const heavy = `inputs.heavy_only != true && (${trusted})`;
+  const completion = (scope: string) =>
+    `needs.ci-plan.outputs.run_required != 'false' && (${scope})`;
+  for (const scope of [trusted, heavy]) {
+    for (const baseScope of [scope, completion(scope)]) {
+      for (const currentScope of [scope, completion(scope)]) {
+        expectScope({ base: { if: baseScope }, current: { if: currentScope } });
+      }
+      for (const invalid of [
+        "true",
+        completion("true"),
+        completion(completion(scope)),
+        completion(scope).replace("!= 'false'", "== 'false'"),
+        completion(`${scope} && needs.ci-plan.outputs.unapproved == 'true'`),
+        ...(scope === heavy ? [trusted, completion(trusted)] : []),
+      ]) {
+        expect(() =>
+          expectScope({ base: { if: baseScope }, current: { if: invalid } }),
+        ).toThrow("Expected:");
+      }
+    }
+  }
 });
 
 test("CI check scope migrates only the complete producer handoff and preserves an existing handoff", () => {
@@ -821,7 +1058,7 @@ test("the baseline accepts the monolithic job and derives later split baselines"
   const split = readBaseline(jobs);
   expect(split).toEqual(partitions);
   expectCoverage({
-    current: split.flatMap(({ steps }) => steps),
+    current: legSteps(split, partitionIds),
     base: actualSteps,
     removed: [],
   });

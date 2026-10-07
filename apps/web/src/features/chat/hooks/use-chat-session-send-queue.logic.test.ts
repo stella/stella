@@ -306,3 +306,70 @@ describe("reduceSendQueue", () => {
     expect(result.state.isGenerating).toBe(true);
   });
 });
+
+describe("queued-message-promoted", () => {
+  const queued = (ids: readonly string[]): SendQueueState => ({
+    ...createInitialSendQueueState(CONVERSATION_ID),
+    isGenerating: true,
+    queue: ids.map(makeEntry),
+    wasGenerating: true,
+  });
+  const queueIds = (state: SendQueueState) =>
+    state.queue.map((entry) => entry.id);
+
+  test("moves the message to the front and keeps the rest in order", () => {
+    const { state, dispatchedEntry } = reduceSendQueue(
+      queued(["a", "b", "c"]),
+      { type: "queued-message-promoted", id: "c" },
+    );
+
+    expect(queueIds(state)).toEqual(["c", "a", "b"]);
+    expect(dispatchedEntry).toBeNull();
+    expect(state.isGenerating).toBe(true);
+  });
+
+  test("leaves the state untouched for the front message or an unknown id", () => {
+    const before = queued(["a", "b"]);
+
+    for (const id of ["a", "gone"]) {
+      const { state, dispatchedEntry } = reduceSendQueue(before, {
+        type: "queued-message-promoted",
+        id,
+      });
+      expect(state).toBe(before);
+      expect(dispatchedEntry).toBeNull();
+    }
+  });
+
+  test("the promoted message is the one sent when the stopped turn ends", () => {
+    const promoted = reduceSendQueue(queued(["a", "b"]), {
+      type: "queued-message-promoted",
+      id: "b",
+    }).state;
+
+    const { state, dispatchedEntry } = applyRenderTick(
+      promoted,
+      false,
+      "ready",
+    );
+
+    expect(dispatchedEntry?.id).toBe("b");
+    expect(queueIds(state)).toEqual(["a"]);
+  });
+
+  test("after a failed turn the promoted message waits for an explicit send", () => {
+    const promoted = reduceSendQueue(queued(["a", "b"]), {
+      type: "queued-message-promoted",
+      id: "b",
+    }).state;
+
+    const errored = applyRenderTick(promoted, false, "error");
+    expect(errored.dispatchedEntry).toBeNull();
+
+    const sent = reduceSendQueue(errored.state, {
+      type: "oldest-dispatch-started",
+    });
+    expect(sent.dispatchedEntry?.id).toBe("b");
+    expect(sent.state.isGenerating).toBe(true);
+  });
+});

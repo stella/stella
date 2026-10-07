@@ -17,6 +17,10 @@ import type {
 import { panic, Result } from "better-result";
 import { beforeEach, describe, expect, mock, test } from "bun:test";
 
+import {
+  MCP_APP_EXTENSION_ID,
+  MCP_APP_RESOURCE_MIME_TYPE,
+} from "@stll/api-contract";
 import { ACTION_ADMISSION_REFUSALS } from "@stll/api-contract/action-admission";
 
 import { env } from "@/api/env";
@@ -1027,7 +1031,13 @@ describe("handleMcpHttpRequest", () => {
         jsonrpc: "2.0",
         method: "initialize",
         params: {
-          capabilities: {},
+          capabilities: {
+            extensions: {
+              [MCP_APP_EXTENSION_ID]: {
+                mimeTypes: [MCP_APP_RESOURCE_MIME_TYPE, "application/private"],
+              },
+            },
+          },
           clientInfo: { name: `  ${"n".repeat(200)}  `, version: "1.2.3" },
           protocolVersion: "2025-06-18",
         },
@@ -1043,6 +1053,8 @@ describe("handleMcpHttpRequest", () => {
         properties: {
           client_name: "n".repeat(128),
           client_version: "1.2.3",
+          ui_apps_supported: true,
+          ui_apps_mime_types: [MCP_APP_RESOURCE_MIME_TYPE],
           credential_type: "oauth_client",
           mode: "default",
         },
@@ -1972,7 +1984,7 @@ describe("mcpOmittedToolNamesByReason", () => {
   test("attests each omitted tool under exactly one reason", () => {
     const omitted = mcpOmittedToolNamesByReason({
       grantedScopes: ["stella:read"],
-      isFeatureEnabled: (feature) => feature !== "FEATURE_TIME_BILLING",
+      isFeatureEnabled: (feature) => feature !== "FEATURE_PUBLIC_LAW",
       mode: "default",
     });
 

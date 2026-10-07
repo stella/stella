@@ -61,6 +61,73 @@ const conditional = {
 };
 
 describe("feature source declarations", () => {
+  test.each(["registry", "admitted"] as const)(
+    "%s dispatch boundaries preserve direct-access ownership enforcement",
+    (type) => {
+      const module = "apps/api/src/dispatch/tools.ts";
+      const boundary =
+        type === "registry"
+          ? { type, module, registry: "TOOL_SETS" }
+          : { type, module, admission: "isMcpDescriptorFeatureEnabled" };
+      const declaration =
+        type === "registry"
+          ? "export const TOOL_SETS = [core];"
+          : 'import { isMcpDescriptorFeatureEnabled as admit } from "@/api/mcp/feature-access"; export const run = () => admit({}) && core();';
+      const sources = new Map([
+        ...baseSources,
+        [
+          "apps/api/src/mcp/feature-access.ts",
+          "export const isMcpDescriptorFeatureEnabled = () => true;",
+        ],
+        [
+          module,
+          `import { run as core } from "../feature/core"; ${declaration}`,
+        ],
+        [
+          "apps/api/src/routes/ordinary.ts",
+          'import * as tools from "../dispatch/tools"; export const run = () => tools;',
+        ],
+      ]);
+      const validate = () =>
+        validateFeatureAccessDeclarations({
+          registry: {
+            fixture: {
+              ...registry.fixture,
+              ownership: {
+                ...registry.fixture.ownership,
+                dispatchModules: [boundary],
+              },
+            },
+          },
+          endpoints: [{ file: "apps/api/src/routes/ordinary.ts", config: {} }],
+          sources,
+        });
+      expect(validate()).toEqual([]);
+      sources.set(
+        "apps/api/src/routes/ordinary.ts",
+        'import { run } from "../feature/core"; export const direct = () => run();',
+      );
+      expect(validate()).toContainEqual({
+        file: "apps/api/src/routes/ordinary.ts",
+        message: "source ownership requires featureAccess fixture",
+      });
+      sources.set(
+        module,
+        type === "registry"
+          ? "export const TOOL_SETS = {};"
+          : 'import { isMcpDescriptorFeatureEnabled } from "@/api/mcp/feature-access"; export const run = () => true;',
+      );
+      expect(validate()).toContainEqual({
+        file: module,
+        message: `feature fixture has an invalid ${type} dispatch boundary`,
+      });
+      sources.delete(module);
+      expect(validate()).toContainEqual({
+        file: module,
+        message: "feature fixture owns a missing dispatch module",
+      });
+    },
+  );
   test("shared view storage and feature execution have separate owners", () => {
     const file = "apps/api/src/routes/ordinary.ts";
     const shared = "apps/api/src/db/schema/views.ts";
@@ -449,5 +516,99 @@ export const ${name} = { run: { featureId: "fixture", ${target} } };`;
           violation.message.includes("requires featureAccess fixture"),
       ),
     ).toBe(true);
+  });
+
+  test("every endpoint reaching a shared module receives its feature uses", () => {
+    const declared = "apps/api/src/routes/declared.ts";
+    const throughTable = "apps/api/src/routes/through-table.ts";
+    const throughCore = "apps/api/src/routes/through-core.ts";
+    // The declared endpoint is checked first and reaches both shared modules,
+    // so the later endpoints read the table use and the ownership boundary
+    // from the per-run cache.
+    expect(
+      validateFeatureAccessDeclarations({
+        registry,
+        endpoints: [
+          { file: declared, config: required },
+          { file: throughTable, config: {} },
+          { file: throughCore, config: {} },
+        ],
+        sources: new Map([
+          ...baseSources,
+          [
+            "apps/api/src/lib/rows.ts",
+            'export const read = (tx) => tx.execute("select * from fixture_rows");',
+          ],
+          [
+            declared,
+            'import { read } from "../lib/rows"; import { run } from "../feature/core"; export default () => run() && read;',
+          ],
+          [
+            throughTable,
+            'import { read } from "../lib/rows"; export default read;',
+          ],
+          [
+            throughCore,
+            'import { run } from "../feature/core"; export default run;',
+          ],
+        ]),
+      }),
+    ).toEqual([
+      {
+        file: throughCore,
+        message: "source ownership requires featureAccess fixture",
+      },
+      {
+        file: throughTable,
+        message: "source ownership requires featureAccess fixture",
+      },
+    ]);
+  });
+
+  // The capability exporter runs this over ~1,400 endpoints sharing most of
+  // one module graph. Re-analysing every reachable module per endpoint once
+  // cost ~30 s per export. Module analysis enumerates the registry, so the
+  // enumerations each extra endpoint adds must stay below the shared module
+  // count (per-endpoint re-analysis added ~11 per module).
+  test("shared modules are analysed once, not once per endpoint", () => {
+    const moduleCount = 20;
+    const body = Array.from(
+      { length: 10 },
+      (_, index) =>
+        `export const f${index} = (db: Db) => db.query.rows${index}.findMany({ where: "ordinary_rows_${index}" });`,
+    ).join("\n");
+    const shared = new Map(baseSources);
+    for (let index = 0; index < moduleCount; index += 1) {
+      const next =
+        index + 1 < moduleCount
+          ? `import { f0 as next } from "./m${index + 1}";\nexport const chain = () => next;\n`
+          : "";
+      shared.set(`apps/api/src/lib/m${index}.ts`, `${next}${body}`);
+    }
+    const registryReads = (count: number) => {
+      let reads = 0;
+      const counted = new Proxy(registry, {
+        ownKeys: (target) => {
+          reads += 1;
+          return Reflect.ownKeys(target);
+        },
+      });
+      const endpoints = Array.from({ length: count }, (_, index) => ({
+        file: `apps/api/src/routes/e${index}.ts`,
+        config: {},
+      }));
+      const sources = new Map(shared);
+      for (const { file } of endpoints) {
+        sources.set(file, 'import { f0 } from "../lib/m0"; export default f0;');
+      }
+      validateFeatureAccessDeclarations({
+        registry: counted,
+        endpoints,
+        sources,
+      });
+      return reads;
+    };
+    const perEndpoint = (registryReads(9) - registryReads(1)) / 8;
+    expect(perEndpoint).toBeLessThan(moduleCount);
   });
 });

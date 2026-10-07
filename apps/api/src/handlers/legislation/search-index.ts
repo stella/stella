@@ -354,11 +354,10 @@ export const removeLegislationFromIndex = async (
   documentId: SafeId<"legislationDocument">,
   scopedDb: ScopedDb,
 ): Promise<void> => {
-  // oxlint-disable-next-line arrow-body-style -- block body holds the audit-skip directive that the require-audit-on-mutation rule scans for inside this arrow's body range
-  await scopedDb((tx) => {
+  await scopedDb((tx) =>
     // audit: skip — search index maintenance; rebuilds derived state
-    return tx
+    tx
       .delete(legislationSearchDocuments)
-      .where(eq(legislationSearchDocuments.documentId, documentId));
-  });
+      .where(eq(legislationSearchDocuments.documentId, documentId)),
+  );
 };

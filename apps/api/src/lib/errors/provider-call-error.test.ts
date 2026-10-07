@@ -1,4 +1,7 @@
 import { describe, expect, test } from "bun:test";
+import fc from "fast-check";
+
+import { assertProperty } from "@stll/property-testing";
 
 import {
   aiHandlerError,
@@ -6,7 +9,11 @@ import {
   providerStatusCode,
 } from "@/api/lib/ai-error";
 import { MANAGED_PROVIDER_UNAVAILABLE_CODE } from "@/api/lib/chat/provider-data-policy";
-import { PROVIDER_CALL_ERROR_MESSAGE } from "@/api/lib/errors/provider-call-error";
+import { INCOMPLETE_STREAM_CODE } from "@/api/lib/chat/provider-stream-contract";
+import {
+  PROVIDER_CALL_ERROR_MESSAGE,
+  PROVIDER_ERROR_CODE,
+} from "@/api/lib/errors/provider-call-error";
 import { createProviderCallError } from "@/api/lib/errors/provider-call-failure";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { failureSink } from "@/api/lib/observability/failure";
@@ -125,4 +132,75 @@ describe("provider call error structural contract", () => {
       });
     });
   }
+});
+
+describe("provider call error codes", () => {
+  test("keep the application's own codes and name every other value provider_error", () => {
+    const ownCodes = [
+      MANAGED_PROVIDER_UNAVAILABLE_CODE,
+      INCOMPLETE_STREAM_CODE,
+      "max_tokens",
+    ] as const;
+    assertProperty(
+      "keep the application's own codes and name every other value provider_error",
+      fc.property(
+        fc.oneof(fc.string(), fc.constantFrom(...ownCodes)),
+        fc.constantFrom(400, 429, 500, 502, 503),
+        (code, status) => {
+          const error = createProviderCallError({
+            model: { provider: "openrouter", keySource: "byok" },
+            status: 502,
+            code,
+            evidence: { error: { code: status, message: code } },
+          });
+          const expected =
+            ownCodes.find((own) => own === code) ?? PROVIDER_ERROR_CODE;
+          expect(error.code).toBe(expected);
+          expect(error.message).toBe(PROVIDER_CALL_ERROR_MESSAGE);
+          const fallback = {
+            status: 502,
+            message: "Generation failed",
+          } as const;
+          expect(aiHandlerError(error, fallback).code).toBe(expected);
+        },
+      ),
+    );
+  });
+
+  test("leaves an absent code absent", () => {
+    expect(
+      createProviderCallError({
+        model: { provider: "openrouter", keySource: "byok" },
+        status: 502,
+        evidence: {},
+      }).code,
+    ).toBeUndefined();
+  });
+
+  test("reach the HTTP body and telemetry as the closed value", () => {
+    const sentinel = "SENTINEL_PROVIDER_CODE";
+    const error = createProviderCallError({
+      model: { provider: "openrouter", keySource: "byok" },
+      status: 502,
+      code: sentinel,
+      evidence: { error: { code: 503, message: sentinel } },
+    });
+    const fallback = { status: 502, message: "Generation failed" } as const;
+    expect(aiHandlerError(error, fallback).code).toBe(PROVIDER_ERROR_CODE);
+    const analytics = installRecordingAnalytics();
+    const logs = installRecordingLogger();
+    try {
+      const sink = failureSink({
+        event: "provider_call.failure",
+        expected: [],
+      });
+      observeFailure(aiHandlerError(error, fallback), { sink });
+      expect(JSON.stringify(analytics.events)).not.toContain(sentinel);
+      expect(JSON.stringify(logs.records)).not.toContain(sentinel);
+    } finally {
+      analytics.restore();
+      logs.restore();
+    }
+    expect(JSON.stringify(error)).not.toContain(sentinel);
+  });
 });

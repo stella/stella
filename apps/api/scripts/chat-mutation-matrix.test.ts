@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 
 import { CHAT_ORACLE } from "../src/tests/helpers/chat-oracles";
+import { namedOracles } from "./chat-mutation-matrix";
 
 test("data-only checking requires exactly one mutation target without executing scenarios", async () => {
   const directory = mkdtempSync(path.join(tmpdir(), "mutation-targets-"));
@@ -66,4 +67,17 @@ test("data-only checking requires exactly one mutation target without executing 
   } finally {
     rmSync(directory, { recursive: true, force: true });
   }
+});
+
+test("a non-kill names each oracle the failed scenario reported, once, in order", () => {
+  expect(
+    namedOracles(
+      [
+        `{"oracle":"${CHAT_ORACLE.persistedTurnOutcome}","detail":"x"}`,
+        `error: {"oracle": "${CHAT_ORACLE.clientNoErrors}"}`,
+        `{"oracle":"${CHAT_ORACLE.persistedTurnOutcome}"}`,
+      ].join("\n"),
+    ),
+  ).toEqual([CHAT_ORACLE.persistedTurnOutcome, CHAT_ORACLE.clientNoErrors]);
+  expect(namedOracles("error: script exited with code 124")).toEqual([]);
 });

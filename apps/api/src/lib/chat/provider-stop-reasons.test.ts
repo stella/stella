@@ -174,6 +174,20 @@ describe("a provider stop reason", () => {
     expect(endings).toEqual(expected);
   });
 
+  test("a Google continuation leaves a partial answer unfinished", async () => {
+    for (const chunks of [
+      [started],
+      [started, delta],
+      [started, delta, toolCall],
+    ]) {
+      expect(
+        endingOf(
+          await decide("google", [...chunks, finishedWith("CONTINUATION")]),
+        ),
+      ).toBe("error:provider_stream_incomplete");
+    }
+  });
+
   test("that never arrived leaves the answer unfinished", async () => {
     // The adapters now fail most such streams themselves; this is the
     // decision for one that still finishes without a reason.

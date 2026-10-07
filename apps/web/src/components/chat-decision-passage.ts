@@ -38,7 +38,7 @@ export const writeDecisionPassage = (
 };
 
 export const readDecisionPassage = (
-  dataTransfer: DataTransfer,
+  dataTransfer: Pick<DataTransfer, "getData">,
 ): DecisionPassage | null => {
   const raw = dataTransfer.getData(DECISION_PASSAGE_MIME);
   if (raw === "") {

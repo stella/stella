@@ -272,6 +272,13 @@ type CheckRunSnapshot = {
   status: string;
   conclusion: string | null;
   outputTitle?: string;
+  checkSuiteId?: number;
+};
+
+type WorkflowRunSnapshot = {
+  checkSuiteId: number;
+  path: string;
+  event: string;
 };
 
 type ReviewThreadSnapshot = { id: string; isResolved: boolean };
@@ -355,6 +362,40 @@ const evaluateMergeable = (pullRequest: PullRequestSnapshot): GateVerdict => {
 };
 
 const CI_PLAN_CHECK_RUN = "ci-plan";
+
+// The events whose CI runs judge a pull request. A dispatched run on the same
+// head (a manual full-depth validation, for one) reports its own ci-result and
+// ci-checks, which must neither block nor pass the PR.
+const PULL_REQUEST_CI_EVENTS: ReadonlySet<string> = new Set([
+  "pull_request",
+  "merge_group",
+]);
+
+/**
+ * Drops the check runs that a CI workflow run outside the pull request events
+ * produced on the head. Check runs from any other workflow or app are kept.
+ */
+export const pullRequestCheckRuns = ({
+  checkRuns,
+  workflowRuns,
+}: {
+  checkRuns: readonly CheckRunSnapshot[];
+  workflowRuns: readonly WorkflowRunSnapshot[];
+}): readonly CheckRunSnapshot[] => {
+  const offEventSuites = new Set(
+    workflowRuns
+      .filter(
+        (run) =>
+          run.path.split("@")[0] === CI_WORKFLOW &&
+          !PULL_REQUEST_CI_EVENTS.has(run.event),
+      )
+      .map((run) => run.checkSuiteId),
+  );
+  return checkRuns.filter(
+    (run) =>
+      run.checkSuiteId === undefined || !offEventSuites.has(run.checkSuiteId),
+  );
+};
 
 const latestRunByName = (
   checkRuns: readonly CheckRunSnapshot[],
@@ -1415,6 +1456,7 @@ type GitHubGateway = {
   // needs the SHA, and a narrow read makes the TOCTOU window smaller.
   readHeadSha: () => string;
   readCheckRuns: (headSha: string) => readonly CheckRunSnapshot[];
+  readHeadWorkflowRuns: (headSha: string) => readonly WorkflowRunSnapshot[];
   readWorkflowRun: (checkRunId: number) => unknown;
   readBaseComparison: (testedBaseSha: string, baseRefName: string) => unknown;
   readPullFiles: () => readonly string[];
@@ -1994,11 +2036,14 @@ const runGhProcess = (
   args: readonly string[],
   access: "read" | "write" = "read",
 ) =>
-  Bun.spawnSync(["gh", ...args], {
-    env: githubEnvironment(access),
-    stdout: "pipe",
-    stderr: "pipe",
-  });
+  Bun.spawnSync(
+    ["bash", fileURLToPath(new URL("gh-retry.sh", import.meta.url)), ...args],
+    {
+      env: githubEnvironment(access),
+      stdout: "pipe",
+      stderr: "pipe",
+    },
+  );
 
 const runGh = (
   args: readonly string[],
@@ -2381,20 +2426,25 @@ const createGhGateway = ({
         "--paginate",
         `repos/${repo}/commits/${headSha}/check-runs`,
         "--jq",
-        '.check_runs[] | [.id, .name, .status, (.conclusion // ""), (.output.title // "")] | @tsv',
+        '.check_runs[] | [.id, .name, .status, (.conclusion // ""), (.output.title // ""), (.check_suite.id // "")] | @tsv',
       ])
         .split("\n")
         .filter(Boolean);
 
       const runs: CheckRunSnapshot[] = [];
       for (const line of lines) {
-        const [rawId, runName, status, conclusion, outputTitle] =
+        const [rawId, runName, status, conclusion, outputTitle, rawSuiteId] =
           line.split("\t");
         const id = Number(rawId);
+        const checkSuiteId =
+          rawSuiteId === undefined || rawSuiteId === ""
+            ? undefined
+            : Number(rawSuiteId);
         if (
           !Number.isSafeInteger(id) ||
           runName === undefined ||
-          status === undefined
+          status === undefined ||
+          (checkSuiteId !== undefined && !Number.isSafeInteger(checkSuiteId))
         ) {
           panic(`Malformed check-run row from gh: ${line}`);
         }
@@ -2405,10 +2455,34 @@ const createGhGateway = ({
           conclusion:
             conclusion === undefined || conclusion === "" ? null : conclusion,
           outputTitle: outputTitle ?? "",
+          ...(checkSuiteId === undefined ? {} : { checkSuiteId }),
         });
       }
       return runs;
     },
+
+    readHeadWorkflowRuns: (headSha) =>
+      runGh([
+        "api",
+        "--paginate",
+        `repos/${repo}/actions/runs?head_sha=${headSha}&per_page=100`,
+        "--jq",
+        ".workflow_runs[] | [.check_suite_id, .path, .event] | @tsv",
+      ])
+        .split("\n")
+        .filter(Boolean)
+        .map((line) => {
+          const [rawSuiteId, workflowPath, event] = line.split("\t");
+          const checkSuiteId = Number(rawSuiteId);
+          if (
+            !Number.isSafeInteger(checkSuiteId) ||
+            workflowPath === undefined ||
+            event === undefined
+          ) {
+            return panic(`Malformed workflow-run row from gh: ${line}`);
+          }
+          return { checkSuiteId, path: workflowPath, event };
+        }),
 
     readWorkflowRun: (checkRunId) => {
       const check = readRecord(
@@ -2461,7 +2535,7 @@ const createGhGateway = ({
       if (result.exitCode === 0) {
         return result.stdout.toString();
       }
-      if (result.stderr.toString().includes("(HTTP 404)")) {
+      if (result.stderr.toString().includes("HTTP 404")) {
         return null;
       }
       return panic(
@@ -3086,7 +3160,10 @@ if (import.meta.main) {
   }
   // Read order is load-bearing: each gate's window is the time between its
   // own read and the write, so the head SHA the write pins is read last.
-  const checkRuns = gateway.readCheckRuns(pullRequest.headSha);
+  const checkRuns = pullRequestCheckRuns({
+    checkRuns: gateway.readCheckRuns(pullRequest.headSha),
+    workflowRuns: gateway.readHeadWorkflowRuns(pullRequest.headSha),
+  });
   const freshness = checkGreenResultFreshness({
     pullRequest,
     jump: options.jump,

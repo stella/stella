@@ -145,6 +145,7 @@
       "useBackupCode": "Vietoj to naudoti atsarginį kodą"
     },
     "useDifferentEmail": "Naudoti kitą el. pašto adresą",
+    "usePassword": "Naudoti slaptažodį",
     "weSentCodeTo": "Išsiuntėme kodą adresu <email>{emailAddress}</email>"
   },
   "avt": {
@@ -960,6 +961,9 @@
     },
     "viewer": {
       "abstract": "Santrauka",
+      "appliedVersionNotStated": "Taikyta redakcija nenurodyta",
+      "appliedVersionStatedAmendment": "Redakcija su <reference>{amendment}</reference> pakeitimais",
+      "appliedVersionStatedDate": "{relation, select, on {{date} galiojusi redakcija} until {Iki {date} galiojusi redakcija} from {Nuo {date} galiojanti redakcija} other {{date} galiojusi redakcija}}",
       "caseFileMayHoldOthers": "Šioje byloje gali būti ir kitų sprendimų.",
       "citedBy": "Cituojama",
       "cites": "Cituoja",
@@ -1046,6 +1050,7 @@
       "toastDescription": "Pokalbis per visą puslapį su išsaugomomis gijomis netrukus pasirodys.",
       "toastTitle": "Pilnas rodinys dar negalimas"
     },
+    "activateGeneratedView": "Naudoti šį vaizdą",
     "aiPrompt": "DI pranešimo laukas",
     "aiThread": "DI pokalbis",
     "analyzingSources": "Analizuojami šaltiniai",
@@ -1191,6 +1196,8 @@
     "forkedFromUnavailable": "Sukurta iš pokalbio, kuris nebepasiekiamas",
     "forkedThread": "Iš kito pokalbio",
     "forkingThread": "Kuriamas naujas pokalbis…",
+    "generatedView": "Sugeneruotas vaizdas",
+    "generatedViewDrill": "Ieškok sprendimų pagal teismo filtrą {court} ir metus {year}.",
     "greeting": "Prie ko norėtumėte dirbti?",
     "greetingSubtitle": "Pradėkite nuo bylos, dokumento arba paprasto klausimo.",
     "hideThread": "Slėpti pokalbį",
@@ -1322,6 +1329,7 @@
     "sendErrorQuotaExhausted": "DI teikėjo kvota išnaudota. Pabandykite dar kartą po minutės arba susisiekite su darbo srities administratoriumi.",
     "sendErrorStreamIncomplete": "DI atsakymas nutrūko nepasibaigęs. Bandykite dar kartą.",
     "sendPrompt": "Siųsti pranešimą",
+    "sendQueuedMessageNow": "Siųsti dabar",
     "sendWithoutAnonymization": "Siųsti be anonimizavimo",
     "skills": {
       "scope": {
@@ -1469,6 +1477,14 @@
       "sourceCode": "Pirminis kodas",
       "toggleDetails": "Perjungti detales",
       "unrestoredFields": "Anonimizuotu režimu nepavyko tikromis reikšmėmis užpildyti {count, plural, one {# lauko} few {# laukų} many {# lauko} other {# laukų}}. Patikrinkite: {fields}"
+    },
+    "turnNotification": {
+      "failedBody": "stellos pokalbio atsakymas nebuvo baigtas.",
+      "failedTitle": "Atsakymas nepavyko",
+      "needsInputBody": "Pokalbis laukia jūsų patvirtinimo ar atsakymo.",
+      "needsInputTitle": "stellai reikia jūsų",
+      "replyReadyBody": "stella baigė atsakyti jūsų pokalbyje.",
+      "replyReadyTitle": "Atsakymas paruoštas"
     },
     "unsupportedFileType": "Nepalaikomas failo tipas",
     "uploadFailed": "Nepavyko apdoroti failo",
@@ -1684,6 +1700,7 @@
     "deletedCount": "{count, plural, one {# elementas ištrintas} few {# elementai ištrinti} other {# elementų ištrinta}}",
     "description": "Aprašymas",
     "details": "Detalės",
+    "detailsHiddenFeatureUnavailable": "Išsami informacija paslėpta: funkcija neįjungta",
     "disconnect": "Atjungti",
     "dismiss": "Atmesti",
     "displayName": "Rodomas vardas",
@@ -1819,6 +1836,8 @@
     "notes": "Pastabos",
     "open": "Atidaryti",
     "openInNewTab": "Atidaryti naujame skirtuke",
+    "openInStella": "Atverti programoje stella",
+    "openOriginalSource": "Atverti pirminį šaltinį",
     "options": "Parinktys",
     "or": "Arba",
     "organization": "Organizacija",
@@ -4366,6 +4385,11 @@
       "betaInbox": "Gautieji ir pranešimai",
       "betaInboxDescription": "Rodyti gautuosius ir pranešimų varpelį",
       "betaTimeBillingDescription": "Rodyti laiko stebėjimą, sąskaitas ir išlaidas",
+      "chatNotifications": "Pokalbių pranešimai",
+      "chatNotificationsBlocked": "stellos pranešimai šioje naršyklėje užblokuoti. Leiskite juos naršyklės svetainės nustatymuose.",
+      "chatNotificationsDescription": "Gaukite pranešimą iš šios naršyklės, kai pokalbio atsakymas baigiamas, kol stella veikia fone.",
+      "chatNotificationsToggle": "Pranešti, kai atsakymas paruoštas arba laukia mano veiksmo",
+      "chatNotificationsUnsupported": "Ši naršyklė nepalaiko pranešimų.",
       "confirmDelete": "Patvirtinti paskyros ištrynimą",
       "dangerZone": "Pavojinga zona",
       "dangerZoneDescription": "Visam laikui ištrinti paskyros prieigą ir privačius paskyros duomenis.",
@@ -4735,6 +4759,7 @@
     },
     "title": "Teisės aktai",
     "validity": "Galioja nuo {from} iki {to}",
+    "versionAppliedInDecision": "Sprendime <bdi>{court}</bdi> <bdi>{caseNumber}</bdi> taikyta redakcija (<bdi>{range}</bdi>) · {status}",
     "wordingValidFrom": "Redakcija galioja nuo {date}",
     "wordingVersionUnknown": "Redakcijos versijos data nežinoma"
   },

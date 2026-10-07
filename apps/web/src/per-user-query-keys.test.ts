@@ -8,6 +8,7 @@ import { companyFormatKeys } from "@/components/company-format-library";
 import { readerAnnotationKeys } from "@/components/legal-reader/annotations/reader-annotations-query";
 import { savedSearchKeys } from "@/components/saved-searches.logic";
 import { chatKeys } from "@/features/chat/chat-query-contract";
+import { desktopPresenceOptions } from "@/features/desktop/desktop-presence";
 import { timeTimersOptions } from "@/features/time-timers/queries";
 import {
   linkedAccountsOptions,
@@ -27,6 +28,7 @@ import { notificationsOptions } from "@/lib/notification-queries";
 import { organizationListOptions } from "@/lib/organization/queries";
 import { searchPreviewOptions } from "@/lib/search";
 import { usageLaneOptions } from "@/lib/usage-queries";
+import { workspacesNavigationOptions } from "@/lib/workspaces/queries";
 import { workspacesKeys } from "@/lib/workspaces/queries.logic";
 import {
   entityViewKeys,
@@ -37,12 +39,15 @@ import { reportExportsKeys } from "@/lib/workspaces/queries/report-exports";
 import { timeEntriesKeys } from "@/lib/workspaces/queries/time-entries";
 import { viewTemplateKeys } from "@/lib/workspaces/queries/view-templates";
 import { workspaceMemberPreviewsOptions } from "@/lib/workspaces/queries/workspace-member-previews";
+import { featureEnrolmentsOptions } from "@/queries/feature-enrolments";
 import {
   organizationSettingsOptions,
   optionalOrganizationSettingsOptions,
 } from "@/queries/organization-settings";
+import { auditLogOptions } from "@/routes/_protected.settings/-queries/audit-logs";
 import { connectedAppsOptions } from "@/routes/_protected.settings/-queries/connections";
 import { memoriesKeys } from "@/routes/_protected.settings/-queries/memories";
+import { memoryMattersOptions } from "@/routes/_protected.settings/-queries/memory-matters";
 
 // API reads that answer for the signed-in user are cached under a key that
 // names that user. The manifests below list every such read:
@@ -98,8 +103,13 @@ const KEY_TYPE_HAS_USER = "the key argument's type requires userId";
 // Keyed by handler path under apps/api/src/handlers.
 const PER_USER_READS: Record<string, PerUserRead> = {
   "desktop-presence/read.ts": {
-    kind: "no-web-caller",
+    kind: "keyed",
     calls: ["api.desktop.presence.get"],
+    files: ["features/desktop/desktop-presence.ts"],
+    keys: () => [
+      desktopPresenceOptions({ userId: USER, organizationId: ORG }).queryKey,
+    ],
+    opaqueKeys: { "desktopPresenceKeys.all(key)": KEY_TYPE_HAS_USER },
   },
   "views/list.ts": {
     kind: "caller-marker",
@@ -107,9 +117,22 @@ const PER_USER_READS: Record<string, PerUserRead> = {
       "Shared view identities carry caller eligibility; session-cache-guard clears them on member changes.",
   },
   "workspaces/read-navigation.ts": {
-    kind: "caller-marker",
-    reason:
-      "Shared matter navigation chooses caller-eligible layouts; session-cache-guard clears it on member changes.",
+    kind: "keyed",
+    calls: ["api.workspaces.navigation.get", "fetchWorkspaceNavigationPage"],
+    files: [
+      "lib/memory-api.ts",
+      "lib/workspaces/queries.ts",
+      "routes/_protected.settings/-queries/memory-matters.ts",
+    ],
+    keys: () => [
+      workspacesNavigationOptions({ organizationId: ORG, userId: USER })
+        .queryKey,
+      memoryMattersOptions({ organizationId: ORG, userId: USER }).queryKey,
+    ],
+    opaqueKeys: {
+      "workspacesKeys.navigation(caller)": KEY_TYPE_HAS_USER,
+      "memoryMatterKeys.all(caller)": KEY_TYPE_HAS_USER,
+    },
   },
   "api-keys/personal/list.ts": {
     kind: "no-web-caller",
@@ -130,7 +153,27 @@ const PER_USER_READS: Record<string, PerUserRead> = {
       }).queryKey,
     ],
   },
+  "organization-settings/feature-enrolments/get.ts": {
+    kind: "keyed",
+    calls: ['api["organization-settings"]["feature-enrolments"].get'],
+    files: ["queries/feature-enrolments.ts"],
+    keys: () => [
+      featureEnrolmentsOptions({ organizationId: ORG, userId: USER }).queryKey,
+    ],
+  },
   "audit-logs/export.ts": { kind: "not-per-user", reason: DOWNLOAD },
+  "audit-logs/list.ts": {
+    kind: "keyed",
+    calls: ['api["audit-logs"].get'],
+    files: ["routes/_protected.settings/-queries/audit-logs.ts"],
+    keys: () => [
+      auditLogOptions({
+        viewer: { userId: USER, organizationId: ORG },
+        key: {},
+      }).queryKey,
+    ],
+    opaqueKeys: { "auditLogKeys.filtered(viewer, key)": KEY_TYPE_HAS_USER },
+  },
   "lists/verifications/get.ts": {
     kind: "not-per-user",
     reason:
@@ -472,6 +515,11 @@ const PER_USER_READS: Record<string, PerUserRead> = {
     keys: () => [
       usageLaneOptions({ organizationId: ORG, userId: USER }).queryKey,
     ],
+  },
+  "user-files/read-visual.ts": {
+    kind: "owned-id",
+    reason:
+      "Cached by attachment id; generated views are private and owner-filtered.",
   },
   "user-files/read-content.ts": { kind: "owned-id", reason: OWNED_FILE },
   "user-files/read-thumbnail.ts": { kind: "owned-id", reason: OWNED_FILE },

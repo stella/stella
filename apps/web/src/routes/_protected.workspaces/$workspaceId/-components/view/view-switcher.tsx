@@ -469,7 +469,6 @@ const ViewRenameEditor = ({
 
   return (
     <InlineEdit
-      inputClassName="w-24"
       onCancel={() => {
         onStop();
         setRenameValue(name);

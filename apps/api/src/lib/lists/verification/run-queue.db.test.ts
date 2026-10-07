@@ -13,12 +13,14 @@ import {
   entityVersions,
   fields,
   legalListVerificationRuns,
+  organizationSettings,
   properties,
   workspaces,
   workspaceMembers,
 } from "@/api/db/schema";
 import type { RlsDatabase } from "@/api/db/scoped";
 import { env } from "@/api/env";
+import { encryptAIConfig } from "@/api/lib/ai-config-crypto";
 import type { SafeId } from "@/api/lib/branded-types";
 import { createSafeId, toSafeId } from "@/api/lib/branded-types";
 import type { FeatureAccessGrants } from "@/api/lib/feature-access/grants-schema";
@@ -95,12 +97,16 @@ afterAll(async () => await releaseTestDb());
 
 const seedRun = async (status: "queued" | "running" = "queued") => {
   const id = createSafeId<"legalListVerificationRun">();
+  const entityId = createSafeId<"entity">();
+  await db
+    .insert(entities)
+    .values({ id: entityId, workspaceId, name: "Verification document" });
   await db.insert(legalListVerificationRuns).values({
     id,
     organizationId,
     workspaceId,
     requestedBy: userId,
-    entityId: createSafeId<"entity">(),
+    entityId,
     fileFieldId: createSafeId<"field">(),
     entityVersionId: createSafeId<"entityVersion">(),
     contentSha256: "a".repeat(64),
@@ -124,9 +130,6 @@ const seedPinnedRun = async () => {
   if (run === undefined) {
     throw new Error("Expected pinned run fixture");
   }
-  await db
-    .insert(entities)
-    .values({ id: run.entityId, workspaceId, name: "Verification document" });
   await db
     .insert(entityVersions)
     .values({ id: run.entityVersionId, entityId: run.entityId, workspaceId });
@@ -197,14 +200,22 @@ const revokeExecutionPrerequisite = async (kind: ExecutionRevocation) => {
 const withProductionPrerequisites = async (run: () => Promise<void>) => {
   const previousGrants = env.API_FEATURE_ACCESS_GRANTS;
   const previousDeployment = env.FEATURE_LEGAL_LISTS;
+  const previousActive = env.LIST_VERIFICATION_ACTIVE_RUNS_MAX;
+  const previousDaily = env.LIST_VERIFICATION_DAILY_STARTS_MAX;
   const restoreMode = setRuntimeModeForTesting({ mode: RUNTIME_MODE.strict });
   env.FEATURE_LEGAL_LISTS = true;
   env.API_FEATURE_ACCESS_GRANTS = grants;
+  // Shared queue fixtures intentionally retain runs; ordinary execution tests
+  // use the supported upper limits, and budget tests lower them explicitly.
+  env.LIST_VERIFICATION_ACTIVE_RUNS_MAX = 100;
+  env.LIST_VERIFICATION_DAILY_STARTS_MAX = 1000;
   try {
     await run();
   } finally {
     env.API_FEATURE_ACCESS_GRANTS = previousGrants;
     env.FEATURE_LEGAL_LISTS = previousDeployment;
+    env.LIST_VERIFICATION_ACTIVE_RUNS_MAX = previousActive;
+    env.LIST_VERIFICATION_DAILY_STARTS_MAX = previousDaily;
     restoreMode();
   }
 };
@@ -694,6 +705,7 @@ test.each([
           const call = createVerificationCall({
             deps: {
               accessProof,
+              checkRunBudget: async () => Result.ok(),
               refreshAccessProof: async () => {
                 const decision = await actor.writeDb(
                   async (tx) =>
@@ -849,4 +861,68 @@ test("queue handoff failures surface while the persisted run remains recoverable
     });
     expect(recovered.isOk()).toBe(true);
     expect(healthy.added).toHaveLength(1);
+  }));
+
+test("worker budget refusal stops model dispatch and releases its active slot", async () =>
+  await withProductionPrerequisites(async () => {
+    const configured = await encryptAIConfig(organizationId, {
+      providers: [{ provider: "google", apiKey: "fixture-key" }],
+      overrideModels: {
+        chat: { provider: "google", modelId: "model-a" },
+        fast: { provider: "google", modelId: "model-a" },
+        pdf: { provider: "google", modelId: "model-a" },
+        reasoning: { provider: "google", modelId: "model-a" },
+      },
+      decision: null,
+    });
+    await db.insert(organizationSettings).values({
+      id: createSafeId<"organizationSettings">(),
+      organizationId,
+      aiConfigEncrypted: configured.ciphertext,
+      aiConfigIv: configured.iv,
+    });
+    const runId = await seedPinnedRun();
+    const previousActive = env.LIST_VERIFICATION_ACTIVE_RUNS_MAX;
+    const previousDaily = env.LIST_VERIFICATION_DAILY_STARTS_MAX;
+    const modelDispatches: unknown[] = [];
+    try {
+      env.LIST_VERIFICATION_ACTIVE_RUNS_MAX = 1;
+      env.LIST_VERIFICATION_DAILY_STARTS_MAX = 1;
+      await seedRun();
+      await processListVerificationRun({
+        data: { runId, organizationId, workspaceId, userId },
+        actor: actorFor(runId),
+        grants,
+        execution: {
+          readDocument: async () => ({
+            type: "read",
+            blocks: [
+              {
+                id: "p1",
+                text: "A meeting happened.",
+                source: { type: "docx-block", blockId: "p1" },
+              },
+            ],
+          }),
+          generateObjectForRole: asTestRaw<
+            typeof generateTanStackObjectForRole
+          >(async (request: unknown) => {
+            modelDispatches.push(request);
+            return { claims: [] };
+          }),
+        },
+      });
+      expect(modelDispatches).toHaveLength(0);
+      expect(await readRun(runId)).toEqual({
+        status: "failed",
+        errorCode: "run_limit_reached",
+      });
+      expect(await readAudits(runId)).toHaveLength(1);
+    } finally {
+      env.LIST_VERIFICATION_ACTIVE_RUNS_MAX = previousActive;
+      env.LIST_VERIFICATION_DAILY_STARTS_MAX = previousDaily;
+      await db
+        .delete(organizationSettings)
+        .where(eq(organizationSettings.organizationId, organizationId));
+    }
   }));

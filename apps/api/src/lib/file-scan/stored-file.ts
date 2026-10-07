@@ -1,7 +1,12 @@
+import { envBase } from "@/api/env-base";
 import type { FileKey } from "@/api/lib/file-key";
 import type { ScannedFile } from "@/api/lib/file-scan/scanned-file";
 import { mintScannedFile } from "@/api/lib/file-scan/scanned-file";
-import { getS3ObjectWithSignal, readS3ArrayBuffer } from "@/api/lib/s3";
+import {
+  getS3ObjectWithSignal,
+  readS3ArrayBuffer,
+  readS3ObjectBounded,
+} from "@/api/lib/s3";
 import type { S3SigningScope } from "@/api/lib/s3-presign";
 import { readTenantS3ArrayBuffer } from "@/api/lib/s3-presign";
 
@@ -10,9 +15,10 @@ type ReadStoredFileInput = {
   mimeType: string;
   fileName?: string;
 } & (
-  | { scope?: undefined; signal?: AbortSignal }
+  | { scope?: undefined; signal?: AbortSignal; maxBytes?: undefined }
+  | { scope?: undefined; signal: AbortSignal; maxBytes: number }
   /** Read through the tenant client, refusing keys outside this scope. */
-  | { scope: S3SigningScope; signal: AbortSignal }
+  | { scope: S3SigningScope; signal: AbortSignal; maxBytes?: undefined }
 );
 
 const readBytes = async (input: ReadStoredFileInput): Promise<ArrayBuffer> => {
@@ -22,6 +28,15 @@ const readBytes = async (input: ReadStoredFileInput): Promise<ArrayBuffer> => {
       scope: input.scope,
       signal: input.signal,
     });
+  }
+  if (input.maxBytes !== undefined) {
+    const bytes = await readS3ObjectBounded({
+      bucket: envBase.S3_BUCKET,
+      key: input.key,
+      maxBytes: input.maxBytes,
+      signal: input.signal,
+    });
+    return bytes.slice().buffer;
   }
   return input.signal === undefined
     ? await readS3ArrayBuffer(input.key)
