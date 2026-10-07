@@ -1,9 +1,13 @@
 import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 import { execFileSync } from "node:child_process";
+import { readFileSync } from "node:fs";
 
 import { captureDefinitions } from "../apps/web/e2e/marketing/captures";
 import {
+  computeVerdicts,
+  compareRenderedScreenshots,
+  type Verdict,
   judgeEntry,
   manualVerificationMatches,
   recordingArtifactsHash,
@@ -183,5 +187,61 @@ describe("marketing recording freshness", () => {
 
     expect([...partition.attestableKeys]).toEqual(["workspace:light"]);
     expect(partition.neverRecorded).toEqual(["missing:dark"]);
+  });
+});
+
+describe("rendered marketing freshness", () => {
+  test("matching source hashes or manual verification cannot hide a failed rendered comparison", () => {
+    for (const basis of ["recording", "manual-verification"] as const) {
+      const source = {
+        basis,
+        captureId: "agent",
+        theme: "light",
+        status: "FRESH",
+        reasons: [],
+      } as const satisfies Verdict;
+      let comparisons = 0;
+      const verdicts = computeVerdicts([source], () => {
+        comparisons += 1;
+        return false;
+      });
+      expect(comparisons).toBe(1);
+      expect(verdicts).toEqual([
+        {
+          ...source,
+          basis: null,
+          status: "STALE",
+          reasons: [
+            "rendered screenshot comparison did not pass; source metadata cannot certify freshness",
+          ],
+        },
+      ]);
+      expect(computeVerdicts([source], () => true)).toEqual([source]);
+    }
+  });
+
+  test("rendered freshness delegates to the same screenshot command as CI without changing its threshold", () => {
+    const action = readFileSync(
+      new URL(
+        "../.github/actions/marketing-capture/action.yml",
+        import.meta.url,
+      ),
+      "utf-8",
+    );
+    let comparisons = 0;
+    const result = compareRenderedScreenshots((command) => {
+      comparisons += 1;
+      expect(command).toEqual([
+        "bun",
+        "--filter",
+        "@stll/web",
+        "test:e2e:marketing",
+      ]);
+      expect(action).toContain(command.join(" "));
+      expect(command).not.toContain("--update-snapshots");
+      return false;
+    });
+    expect(comparisons).toBe(1);
+    expect(result).toBe(false);
   });
 });
