@@ -1,5 +1,9 @@
 import type { TokenUsage } from "@tanstack/ai";
-import type { MessagePart, UIMessage } from "@tanstack/ai-client";
+import type {
+  ChatResumeSnapshot,
+  MessagePart,
+  UIMessage,
+} from "@tanstack/ai-client";
 import type { DocumentPart, ImagePart } from "@tanstack/ai/client";
 
 import type { ActionAdmissionRefusal } from "@stll/api-contract/action-admission";
@@ -154,6 +158,9 @@ export type ChatMessageMetadata = {
   refEncoding?: ChatRefEncoding | undefined;
   /** Server-owned replay context for persisted tool references. */
   refContext?: ChatRefContext | undefined;
+  /** Server-owned native interrupt identity, retained with the transcript
+   * after the delivery log expires. Incoming metadata cannot set this. */
+  resumeSnapshot?: ChatResumeSnapshot | undefined;
   /** Server-owned provenance. Incoming client metadata validation deliberately
    *  does not accept this field. */
   serverProvenance?:

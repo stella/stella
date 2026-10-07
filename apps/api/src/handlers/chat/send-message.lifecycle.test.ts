@@ -1,4 +1,4 @@
-import { EventType } from "@tanstack/ai";
+import { EventType, memoryStream } from "@tanstack/ai";
 import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 
@@ -62,10 +62,14 @@ describe("send lifecycle checkpoint indexing", () => {
           }),
         ),
       ).toBe(true);
+      const viewer = new AbortController();
+      viewer.abort();
+      expect(lifecycle.isClientConnectionAborted(viewer.signal)).toBe(true);
       lifecycle.claimTurn(
         { id: toSafeId<"chatTurn">(turn), executionId: turn },
         undefined,
       );
+      expect(lifecycle.isClientConnectionAborted(viewer.signal)).toBe(false);
       for (const runId of [
         "initial",
         "initial",
@@ -76,6 +80,7 @@ describe("send lifecycle checkpoint indexing", () => {
         expect(Result.isOk(outcome)).toBe(true);
       }
       const run = lifecycle.startRun(undefined);
+      expect(lifecycle.isClientConnectionAborted(viewer.signal)).toBe(false);
       const response = run.produce(
         (async function* () {
           yield {
@@ -86,6 +91,7 @@ describe("send lifecycle checkpoint indexing", () => {
           } as const;
           await run.settle(async () => ({ type: "not-owned" }));
         })(),
+        memoryStream({ runId: Bun.randomUUIDv7() }),
       );
       await response.text();
       await lifecycle.cleanup();

@@ -81,7 +81,7 @@ describe("buildRequestDurationRecord", () => {
   });
 });
 
-test("chat shadow metrics emit append latency and per-turn write volume without identifier dimensions", () => {
+test("chat run log metrics emit append latency and per-turn write volume without identifier dimensions", () => {
   const lines: string[] = [];
   setMetricLineSinkForTesting((line) => {
     lines.push(line);

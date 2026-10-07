@@ -615,6 +615,7 @@
       "name": "@stll/api-contract",
       "version": "0.0.0",
       "dependencies": {
+        "@ag-ui/core": "1.0.0",
         "@stll/anonymize-chat": "workspace:*",
         "@stll/legal-ast": "workspace:*",
         "@stll/template-conditions": "workspace:*",
@@ -624,6 +625,7 @@
         "@valibot/to-json-schema": "^1.8.0",
         "better-result": "catalog:",
         "valibot": "catalog:",
+        "zod": "^4.5.4",
       },
       "devDependencies": {
         "@stll/property-testing": "workspace:*",
@@ -703,13 +705,18 @@
       "version": "0.1.38",
       "dependencies": {
         "@stll/ai-catalog": "workspace:^",
+        "@stll/api-contract": "workspace:*",
         "@stll/ui": "workspace:^",
+        "@tanstack/ai-client": "catalog:",
         "better-result": "catalog:",
+        "valibot": "catalog:",
       },
       "devDependencies": {
+        "@stll/property-testing": "workspace:*",
         "@stll/typescript-config": "workspace:*",
         "@types/react": "catalog:react19",
         "bun-types": "catalog:",
+        "fast-check": "catalog:",
         "react": "catalog:react19",
         "tsdown": "catalog:",
       },

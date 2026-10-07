@@ -101,6 +101,7 @@
     "format": "bun ../../scripts/run-oxfmt.ts ."
   },
   "dependencies": {
+    "@ag-ui/core": "1.0.0",
     "@stll/anonymize-chat": "workspace:*",
     "@stll/legal-ast": "workspace:*",
     "@stll/template-conditions": "workspace:*",
@@ -109,7 +110,8 @@
     "@stll/uuid-codec": "workspace:*",
     "@valibot/to-json-schema": "^1.8.0",
     "better-result": "catalog:",
-    "valibot": "catalog:"
+    "valibot": "catalog:",
+    "zod": "^4.5.4"
   },
   "devDependencies": {
     "@stll/property-testing": "workspace:*",

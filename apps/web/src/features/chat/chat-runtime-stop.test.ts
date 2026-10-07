@@ -289,6 +289,40 @@ describe("the composer's Stop", () => {
     expect(await sent).toEqual(Result.ok(undefined));
   });
 
+  test("Stop before response headers cancels the accepted turn once it is named", async () => {
+    const server = installServer([TURN_A]);
+    const serverFetch = globalThis.fetch;
+    const headers = Promise.withResolvers<undefined>();
+    globalThis.fetch = Object.assign(
+      async (input: RequestInfo | URL, init?: RequestInit) => {
+        const response = await serverFetch(input, init);
+        if (
+          new URL(
+            input instanceof Request ? input.url : input,
+          ).pathname.endsWith("/chat")
+        ) {
+          await headers.promise;
+        }
+        return response;
+      },
+      { preconnect: () => undefined },
+    );
+    const page = openPage();
+    const sent = send(page, "018f0000-0000-7000-8000-000000000008");
+    await tick();
+    page.runtime.stop();
+    await tick();
+    expect(server.chats.at(0)?.aborted()).toBe(false);
+    expect(server.cancels).toHaveLength(0);
+    headers.resolve(undefined);
+    await tick();
+    expect(server.cancels.map(({ turnId }) => turnId)).toEqual([TURN_A]);
+    server.cancels.at(0)?.answer.resolve(settled(TURN_A, "cancelled"));
+    await tick();
+    expect(server.chats.at(0)?.aborted()).toBe(true);
+    expect(await sent).toEqual(Result.ok(undefined));
+  });
+
   test("keeps Stop available when the server refuses it", async () => {
     const server = installServer([TURN_A]);
     const page = openPage();

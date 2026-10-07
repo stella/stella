@@ -30,7 +30,8 @@
     "./composer": "./src/composer.tsx",
     "./model-selector": "./src/model-selector.tsx",
     "./runtime": "./src/runtime.ts",
-    "./stream": "./src/stream.tsx"
+    "./stream": "./src/stream.tsx",
+    "./durable-transport": "./src/durable-transport.ts"
   },
   "publishConfig": {
     "access": "public"
@@ -48,13 +49,18 @@
   },
   "dependencies": {
     "@stll/ai-catalog": "workspace:^",
+    "@stll/api-contract": "workspace:*",
     "@stll/ui": "workspace:^",
-    "better-result": "catalog:"
+    "@tanstack/ai-client": "catalog:",
+    "better-result": "catalog:",
+    "valibot": "catalog:"
   },
   "devDependencies": {
+    "@stll/property-testing": "workspace:*",
     "@stll/typescript-config": "workspace:*",
     "@types/react": "catalog:react19",
     "bun-types": "catalog:",
+    "fast-check": "catalog:",
     "react": "catalog:react19",
     "tsdown": "catalog:"
   },

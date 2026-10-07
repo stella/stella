@@ -72,9 +72,16 @@ export const attachTerminalTurnOutcome = ({
   message: PersistableChatMessage;
   turnOutcome: NonNullable<ChatMessageMetadata["turnOutcome"]>;
 }): PersistableTerminalAssistantMessage => {
+  const { resumeSnapshot, ...metadata } = message.metadata ?? {};
   const terminalMessage = toPersistableChatMessage({
     ...message,
-    metadata: { ...message.metadata, turnOutcome },
+    metadata: {
+      ...metadata,
+      ...(turnOutcome.type === "awaiting-user" && resumeSnapshot !== undefined
+        ? { resumeSnapshot }
+        : {}),
+      turnOutcome,
+    },
   });
   if (!isPersistableTerminalAssistantMessage(terminalMessage)) {
     panic("Terminal chat turn must be an assistant message with an outcome");
@@ -1677,6 +1684,7 @@ const isChatMessageMetadataEmpty = (metadata: ChatMessageMetadata): boolean =>
   metadata.mentions === undefined &&
   metadata.refContext === undefined &&
   metadata.refEncoding === undefined &&
+  metadata.resumeSnapshot === undefined &&
   metadata.serverProvenance === undefined &&
   metadata.sourceDocuments === undefined &&
   metadata.turnOutcome === undefined &&

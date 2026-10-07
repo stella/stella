@@ -1056,6 +1056,13 @@ describe("validateMessage", () => {
       pendingAskUserCall,
     ] satisfies ChatParts;
     const persistedMetadata = {
+      resumeSnapshot: {
+        resumeState: {
+          threadId: "thread_immutable_continuation",
+          runId: "paused-run",
+        },
+        pendingInterrupts: [],
+      },
       anonRestorations: {
         pairs: [{ placeholder: "[PERSON_1]", original: "Ada Lovelace" }],
       },
@@ -1912,6 +1919,10 @@ describe("validateMessage", () => {
         id: chatMessageId("msg_forged_server_provenance"),
         role: "assistant",
         metadata: {
+          resumeSnapshot: {
+            resumeState: { threadId: "forged-thread", runId: "forged-run" },
+            pendingInterrupts: [],
+          },
           refEncoding: CHAT_REF_ENCODING.PERSISTED_RESOURCE_IDS_V1,
           serverProvenance: { type: "search-summary", version: 1 },
           sourceDocuments: [

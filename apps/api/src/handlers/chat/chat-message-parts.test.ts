@@ -10,6 +10,7 @@ import { propertyConfig } from "@stll/property-testing";
 
 import {
   applyChatPartPersistenceBudget,
+  attachTerminalTurnOutcome,
   chatMessageContentFromMessage,
   chatMessageFromPersisted,
   classifyChatPartForPersistence,
@@ -33,6 +34,7 @@ import {
 } from "@/api/handlers/chat/chat-message-parts";
 import type {
   ChatPart,
+  ChatTurnOutcome,
   PersistableChatMessageCandidate,
 } from "@/api/handlers/chat/types";
 import { toSafeId } from "@/api/lib/branded-types";
@@ -775,6 +777,45 @@ describe("persisted chat message parts", () => {
       },
     });
   });
+});
+
+test("native resume identity survives persistence only while the turn awaits the user", () => {
+  const resumeSnapshot = {
+    resumeState: { threadId: "paused-thread", runId: "paused-run" },
+    pendingInterrupts: [
+      { id: "approval_1", reason: "tool-approval", toolCallId: "call_1" },
+    ],
+  };
+  const outcomes = {
+    "awaiting-user": {
+      type: "awaiting-user",
+      interaction: { type: "approval", toolCallId: "call_1" },
+    },
+    completed: { type: "completed" },
+    cancelled: { type: "cancelled", reason: "user-stop" },
+    failed: { type: "failed", error: "unknown" },
+    interrupted: { type: "interrupted", reason: "owner-lost" },
+  } as const satisfies Record<ChatTurnOutcome["type"], ChatTurnOutcome>;
+  for (const turnOutcome of Object.values(outcomes)) {
+    const settled = attachTerminalTurnOutcome({
+      message: toPersistableChatMessage({
+        id: toSafeId<"chatMessage">("019eb9fa-c91f-7000-9b9c-9365977dda80"),
+        role: "assistant",
+        parts: [{ type: "text", content: "Approval requested" }],
+        metadata: { resumeSnapshot },
+      }),
+      turnOutcome,
+    });
+    const restored = chatMessageFromPersisted({
+      id: settled.id,
+      role: settled.role,
+      content: chatMessageContentFromMessage(settled),
+    });
+    expect(restored.metadata?.resumeSnapshot).toEqual(
+      turnOutcome.type === "awaiting-user" ? resumeSnapshot : undefined,
+    );
+    expect(restored.metadata?.turnOutcome).toEqual(turnOutcome);
+  }
 });
 
 describe("chat attachment parts", () => {
