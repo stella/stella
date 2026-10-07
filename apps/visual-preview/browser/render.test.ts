@@ -60,6 +60,23 @@ describe("composed visual preview", () => {
     expect(output.size.height).toBe(1100);
     expect(Buffer.from(output.png, "base64").readUInt32BE(20)).toBe(1100);
   });
+  test("captures content that grows again after a second resize", async () => {
+    const result = await renderVisual({
+      launch,
+      input: {
+        document: `<style>html,body{margin:0}body{height:900px}</style><script>
+          addEventListener('resize', () => {
+            document.body.style.height = innerHeight < 1100 ? '1100px' : '1200px';
+          });
+          parent.postMessage({kind:'ready'}, '*');
+        </script>`,
+        viewport: { width: 1200 },
+      },
+    });
+    const output = result.unwrap();
+    expect(output.size.height).toBe(1200);
+    expect(Buffer.from(output.png, "base64").readUInt32BE(20)).toBe(1200);
+  });
   test("renders a PNG with bounded diagnostics and content size", async () => {
     const result = await renderVisual({
       launch,

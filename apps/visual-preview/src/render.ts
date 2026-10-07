@@ -36,6 +36,8 @@ type RenderVisualOptions = {
   launch: (options: VisualPreviewLaunchOptions) => Promise<Browser>;
 };
 
+const MAX_RESIZE_ATTEMPTS = 4;
+
 const measureContentHeight = () => {
   // document.body is typed as always present; a bodyless document has none.
   const body = document.querySelector("body");
@@ -203,30 +205,32 @@ export const renderVisual = async ({ input, launch }: RenderVisualOptions) => {
         new VisualRenderError({ message: "Preview document has no body" }),
       );
     }
-    const initialHeight = Math.min(
-      VISUAL_PREVIEW_LIMITS.height,
-      Math.max(1, Math.ceil(contentHeight)),
-    );
-    await resizePreview(page, initialHeight);
-    await frame.evaluate(settleLayout);
-    const resizedContentHeight = await frame.evaluate(measureContentHeight);
-    if (resizedContentHeight === null) {
-      return Result.err(
-        new VisualRenderError({ message: "Preview document has no body" }),
-      );
+    const clampHeight = (measured: number) =>
+      Math.min(VISUAL_PREVIEW_LIMITS.height, Math.max(1, Math.ceil(measured)));
+    // Content may change height each time the viewport does, so resize,
+    // settle and measure until it is stable, a bounded number of times.
+    let height = clampHeight(contentHeight);
+    let stable = false;
+    for (
+      let attempt = 0;
+      attempt < MAX_RESIZE_ATTEMPTS && !stable;
+      attempt += 1
+    ) {
+      await resizePreview(page, height);
+      await frame.evaluate(settleLayout);
+      const measured = await frame.evaluate(measureContentHeight);
+      if (measured === null) {
+        return Result.err(
+          new VisualRenderError({ message: "Preview document has no body" }),
+        );
+      }
+      const next = clampHeight(measured);
+      stable = next === height;
+      height = next;
     }
-    const height = Math.min(
-      VISUAL_PREVIEW_LIMITS.height,
-      Math.max(1, Math.ceil(resizedContentHeight)),
-    );
-    if (height !== initialHeight) {
-      await page.setViewportSize({
-        width: VISUAL_PREVIEW_LIMITS.width,
-        height,
-      });
-      await page.locator("iframe").evaluate((iframe, size) => {
-        iframe.style.height = `${size}px`;
-      }, height);
+    if (!stable) {
+      await resizePreview(page, height);
+      await frame.evaluate(settleLayout);
     }
     const png = await page.screenshot({
       type: "png",
