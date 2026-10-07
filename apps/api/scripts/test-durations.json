@@ -8643,6 +8643,10 @@
     "seconds": 0.052954,
     "source": "estimated"
   },
+  "src/scripts/decision-analysis-candidates.db.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
   "src/scripts/decision-analysis-save.db.test.ts": {
     "seconds": 2.00794,
     "source": "estimated"
