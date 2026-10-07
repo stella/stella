@@ -349,6 +349,7 @@
     },
     "view": {
       "chooseList": "Choisir une liste",
+      "createList": "Créer une liste",
       "evidenceList": "Faits de",
       "noLists": "Ce dossier n’a aucune liste.",
       "pickList": "Choisissez la liste dont les faits servent à vérifier les documents de ce dossier."
