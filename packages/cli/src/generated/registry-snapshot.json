@@ -5543,7 +5543,6 @@
     "annotations": {
       "title": "Read capability",
       "destructiveHint": false,
-      "idempotentHint": true,
       "openWorldHint": true,
       "readOnlyHint": true
     }

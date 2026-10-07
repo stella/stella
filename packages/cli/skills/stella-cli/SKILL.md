@@ -96,8 +96,9 @@ requires (request it at `stella auth login --scopes`).
 | annotation | `stella annotation update` | knowledge_write | destructive (needs `--yes` off a TTY) |
 | audit-log | `stella audit-log list` | admin_read | paginated |
 | capability | `stella capability describe` | read |  |
-| capability | `stella capability invoke` | read |  |
 | capability | `stella capability list` | read | paginated |
+| capability | `stella capability read` | read |  |
+| capability | `stella capability write` | read |  |
 | case-law | `stella case-law citations` | read | paginated |
 | case-law | `stella case-law coverage` | read |  |
 | case-law | `stella case-law lookup` | read |  |
@@ -184,12 +185,16 @@ are omitted here. Input union keys are required unless marked `?`.
   - optional: --matter-id, --action, --resource-type, --resource-id, --user-id, --from, --to
 - `stella capability describe`
   - `--capability` — Capability id to describe, as returned by list_capabilities (e.g. "time-entries.create"). (string)
-- `stella capability invoke`
+- `stella capability list`
+  - optional: --domain, --access (all|read|write)
+- `stella capability read`
   - `--capability` — Capability id to invoke. Use an id list_capabilities returned. (string)
   - optional: --validate-only
   - via `--input` only: input
-- `stella capability list`
-  - optional: --domain, --access (all|read|write)
+- `stella capability write`
+  - `--capability` — Capability id to invoke. Use an id list_capabilities returned. (string)
+  - optional: --validate-only
+  - via `--input` only: input
 - `stella case-law citations`
   - `--decision-id` — Case-law decision ID (string)
   - `--direction` — Which side of the citation graph to read: 'cites' for the decisions this decision cites, 'cited_by' for the decisions that cite it. Citing is not agreeing: both sides carry negative treatments. (enum: cites, cited_by)
@@ -398,15 +403,16 @@ code (no envelope) still maps to 5; anything else falls to 4.
 
 Beyond the curated commands above, the CLI generates 409
 capability commands from the server's capability catalog: every safe handler
-that is not a curated tool, reached through the generic `invoke_capability`
-path. Every generated command lives at `stella capability <domain> <action>`;
+that is not a curated tool, reached through `read_capability` or `write_capability`
+paths. Every generated command lives at `stella capability <domain> <action>`;
 multi-segment capability actions are flattened with hyphens into `<action>`.
 
 - **Discover**: `stella capability list [--domain <d>] [--access read|write]`
   enumerates them (paginated); `stella capability describe <id>` prints one
   capability's full input schema, scope, and flags.
-- **Invoke by id** (forward-compatible with any server): `stella capability
-  invoke <id> --input '<json>'`, where the JSON is `{ body?, params?, query? }`.
+- **Invoke by id**: `stella capability read <id> --input '<json>'` or
+  `stella capability write <id> --input '<json>'` for writes.
+  The JSON is `{ body?, params?, query? }`.
 - **Flags**: each capability command derives flags from its input schema;
   matter-scoped capabilities take a required `--matter-id <id>`. Deep or
   ambiguous payloads use `--input` (the whole `{ body?, params?, query? }`).
