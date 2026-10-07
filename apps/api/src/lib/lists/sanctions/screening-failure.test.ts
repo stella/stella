@@ -20,7 +20,9 @@ test("real worker startup failure reaches the bound logger and metric without mo
   const analytics = installRecordingAnalytics();
   const metrics: string[] = [];
   const sentinel = "UNAVAILABLE-MODULE-SENTINEL";
-  setMetricLineSinkForTesting((line) => metrics.push(line));
+  setMetricLineSinkForTesting((line) => {
+    metrics.push(line);
+  });
   const pool = createSanctionsMatcherPool({
     deadlineMs: 10_000,
     createWorker: () => new Worker(new URL(`${sentinel}.ts`, import.meta.url)),
@@ -75,7 +77,9 @@ for (const code of ["42501", "ERR_POSTGRES_CONNECTION_CLOSED"] as const) {
     const logs = installRecordingLogger();
     const analytics = installRecordingAnalytics();
     const metrics: string[] = [];
-    setMetricLineSinkForTesting((line) => metrics.push(line));
+    setMetricLineSinkForTesting((line) => {
+      metrics.push(line);
+    });
     try {
       const driver = Object.assign(new Error(sentinel), {
         code,
