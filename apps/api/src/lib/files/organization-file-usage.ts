@@ -1066,15 +1066,19 @@ export const reserveOrganizationFilesBytes = async (
   inputs: readonly FileUsageInput[],
   db?: FileUsageDb,
 ): Promise<Result<FileUsageReservation[], OrganizationFileUsageError>> => {
-  const reserved = await reserveOrganizationFilesBytesOnce(inputs, db);
+  const checkedInputs = snapshotOperationInput(inputs);
+  const reserved = await reserveOrganizationFilesBytesOnce(checkedInputs, db);
   if (Result.isOk(reserved) || reserved.error.reason !== "reservation_busy") {
     return reserved;
   }
-  const recovered = await recoverOrganizationFileReservations(inputs, db);
+  const recovered = await recoverOrganizationFileReservations(
+    checkedInputs,
+    db,
+  );
   if (Result.isError(recovered)) {
     return Result.err(recovered.error);
   }
-  return await reserveOrganizationFilesBytesOnce(inputs, db);
+  return await reserveOrganizationFilesBytesOnce(checkedInputs, db);
 };
 
 export const ORGANIZATION_FILE_ACCOUNTING_BATCH_LIMIT = 128;
@@ -1290,10 +1294,11 @@ export const writeOrganizationFiles = async <T>(
 ): Promise<
   Result<Result<T, OrganizationFileUsageError>[], OrganizationFileUsageError>
 > => {
+  const checkedInputs = snapshotOperationInput(inputs);
   const { copyOrganizationFiles } =
     await import("@/api/lib/files/copy-organization-files");
   return await copyOrganizationFiles({
-    inputs: inputs.map(({ write, ...input }) => ({
+    inputs: checkedInputs.map(({ write, ...input }) => ({
       ...input,
       copy: async () =>
         await Result.tryPromise({ try: write, catch: storageUnavailable }),

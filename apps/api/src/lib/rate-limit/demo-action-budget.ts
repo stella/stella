@@ -8,6 +8,7 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { ActionAdmissionError } from "@/api/lib/errors/action-admission-error";
 import { failureSink } from "@/api/lib/observability/failure";
 import { observeFailure } from "@/api/lib/observability/observe-failure";
+import { snapshotOperationInput } from "@/api/lib/proofs/checked-transaction";
 import type { RateLimitContext } from "@/api/lib/rate-limit/rate-limit";
 import {
   createRedisRateLimitRequestKey,
@@ -117,13 +118,11 @@ const refund = async (counter: DemoActionCounter, key: string) => {
  * again; an attempt refused by this budget or before its work starts is
  * refunded, so refusals never consume budget.
  */
-export const withDemoActionBudget = async <T>({
-  budget,
-  organizationId,
-  userId,
-  scope,
-  run,
-}: WithDemoActionBudgetOptions<T>): Promise<Result<T, unknown>> => {
+export const withDemoActionBudget = async <T>(
+  options: WithDemoActionBudgetOptions<T>,
+): Promise<Result<T, unknown>> => {
+  const { budget, organizationId, userId, scope, run } =
+    snapshotOperationInput(options);
   const enclosing = demoActionScope.getStore();
   if (
     scope === "inherit" &&

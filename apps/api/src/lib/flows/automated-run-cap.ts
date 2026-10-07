@@ -7,6 +7,7 @@ import { flowRuns, flowRunSteps } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 import { isAutomatedRunCapReached } from "@/api/lib/flows/flow-trigger-logic";
 import type { FlowRunRows } from "@/api/lib/flows/start-flow-run";
+import { snapshotOperationInput } from "@/api/lib/proofs/checked-transaction";
 
 /**
  * Atomic daily spend rail for automated (schedule / file-upload) flow runs,
@@ -59,14 +60,18 @@ export type InsertAutomatedFlowRunWithinCapResult =
   | { outcome: "started" }
   | { outcome: "capped"; dailyRunCount: number };
 
-export const insertAutomatedFlowRunWithinCap = async ({
-  definitionId,
-  rows,
-  now = new Date(),
-  reservePeriod,
-  database,
-}: InsertAutomatedFlowRunWithinCapInput): Promise<InsertAutomatedFlowRunWithinCapResult> =>
-  await database.transaction(async (tx) => {
+export const insertAutomatedFlowRunWithinCap = async (
+  input: InsertAutomatedFlowRunWithinCapInput,
+): Promise<InsertAutomatedFlowRunWithinCapResult> => {
+  const {
+    definitionId,
+    rows,
+    now = new Date(),
+    reservePeriod,
+    database,
+  } = snapshotOperationInput(input);
+  const cutoff = startOfUtcDay(now);
+  return await database.transaction(async (tx) => {
     // Serialize concurrent automated starts for this definition. The xact lock
     // releases on commit/rollback, after the prior holder's run row is visible,
     // so the count below can never miss a committed sibling.
@@ -79,7 +84,7 @@ export const insertAutomatedFlowRunWithinCap = async ({
       and(
         eq(flowRuns.definitionId, definitionId),
         // oxlint-disable-next-line no-truncated-timestamp-comparison/no-truncated-timestamp-comparison -- cutoff read from the caller's clock, never round-tripped through the database
-        gte(flowRuns.createdAt, startOfUtcDay(now)),
+        gte(flowRuns.createdAt, cutoff),
         sql`${flowRuns.triggerSource}->>'type' in ('schedule', 'file-upload')`,
       ),
     );
@@ -94,3 +99,4 @@ export const insertAutomatedFlowRunWithinCap = async ({
     await reservePeriod?.();
     return { outcome: "started" };
   });
+};

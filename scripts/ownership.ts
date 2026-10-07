@@ -802,7 +802,13 @@ const OWNERSHIP_DECLARATIONS = [
       kind: "import",
       specifiers: ["@/api/lib/api-handlers"],
       names: ["authorizeHandlerUsage", "authorizeHandlerRunSize"],
-      allowed: [],
+      allowed: [
+        {
+          path: "apps/api/src/lib/safe-handler-factories.type-test.ts",
+          reason:
+            "Reads the module's export names at type level to bind the factory map; calls nothing.",
+        },
+      ],
     },
   },
   {
@@ -834,7 +840,13 @@ const OWNERSHIP_DECLARATIONS = [
         "runCheckedOrganizationFileCopy",
         "runCheckedSubagentBatch",
       ],
-      allowed: [],
+      allowed: [
+        {
+          path: "apps/api/src/lib/safe-handler-factories.type-test.ts",
+          reason:
+            "Reads the module's export names at type level to bind the factory map; calls nothing.",
+        },
+      ],
     },
   },
   {

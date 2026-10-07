@@ -1383,10 +1383,11 @@ const createSafeScopedHandler = <
           safeErrorBody(authorization.error),
         );
       }
-      const result = await authorization.value.execute(
-        async (operation) =>
-          await runCheckedScopedHandler(operation, usageLane),
-      );
+      const result = await authorization.value.execute(async (operation) => {
+        // Response state belongs to the request; handler data belongs to this execution.
+        operation.input.value.ctx.set = ctx.set;
+        return await runCheckedScopedHandler(operation, usageLane);
+      });
       // The transaction has settled; realtime delivery cannot change its result.
       if (
         config.realtime !== undefined &&

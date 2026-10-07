@@ -13,6 +13,7 @@ import type {
   FlowStep,
   FlowTriggerSource,
 } from "@/api/lib/flows/flow-types";
+import { snapshotOperationInput } from "@/api/lib/proofs/checked-transaction";
 import { ActionAdmissionError } from "@/api/lib/rate-limit/action-admission";
 import { QUEUED_ACTION_KIND } from "@/api/lib/rate-limit/action-kinds";
 import { runQueuedKickoff } from "@/api/lib/rate-limit/queued-action-admission";
@@ -138,20 +139,23 @@ type StartFlowRunOutcome = Result<
   FlowRunStartError | SafeDbError | ActionAdmissionError
 >;
 
-export const startFlowRun = async ({
-  safeDb,
-  organizationId,
-  workspaceId,
-  definitionId,
-  triggerSource,
-  inputEntityIds,
-  enqueueDelayMs,
-  admit,
-  enqueueStep = enqueueFlowStep,
-  kickoff = runQueuedKickoff,
-}: StartFlowRunOptions): Promise<StartFlowRunOutcome> =>
-  await Result.gen(async function* () {
-    const definition = yield* Result.await(
+export const startFlowRun = async (
+  options: StartFlowRunOptions,
+): Promise<StartFlowRunOutcome> => {
+  const {
+    safeDb,
+    organizationId,
+    workspaceId,
+    definitionId,
+    triggerSource,
+    inputEntityIds,
+    enqueueDelayMs,
+    admit,
+    enqueueStep = enqueueFlowStep,
+    kickoff = runQueuedKickoff,
+  } = snapshotOperationInput(options);
+  return await Result.gen(async function* () {
+    const loadedDefinition = yield* Result.await(
       safeDb((tx) =>
         tx.query.flowDefinitions.findFirst({
           where: {
@@ -168,7 +172,7 @@ export const startFlowRun = async ({
         }),
       ),
     );
-    if (!definition) {
+    if (!loadedDefinition) {
       return Result.err(
         new FlowRunStartError({
           reason: "definition-not-found",
@@ -176,6 +180,7 @@ export const startFlowRun = async ({
         }),
       );
     }
+    const definition = snapshotOperationInput(loadedDefinition);
     if (!definition.enabled) {
       return Result.err(
         new FlowRunStartError({
@@ -286,3 +291,4 @@ export const startFlowRun = async ({
         }),
     );
   });
+};

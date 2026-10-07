@@ -3,11 +3,15 @@ import { describe, expect, test } from "bun:test";
 
 import { rejectionOf } from "@stll/property-testing/rejection";
 
+import type { Transaction } from "@/api/db/root";
+import { toSafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import {
   authorizeOperation,
   withAdmittedOperation,
+  withCheckedTransaction,
 } from "@/api/lib/proofs/checked-transaction";
+import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 describe("checked operation continuations", () => {
   test("checks before exposing the exact input for execution", async () => {
@@ -43,23 +47,26 @@ describe("checked operation continuations", () => {
     expect(events).toEqual(["check", "execute"]);
   });
 
-  test("checking and execution share protected nested input", async () => {
+  test("execution owns mutable data isolated from checked nested input", async () => {
     const handle = new AbortController();
     const input = {
       nested: { key: "authorized" },
       items: [{ bytes: 3 }],
       handle,
     };
+    const checked = { input };
     const firstItem =
       input.items.at(0) ?? panic("Evidence fixture has no item");
     const authorization = await authorizeOperation({
       kind: "OperationAllowed",
       input,
       check: async (checkedInput) => {
+        checked.input = checkedInput;
         input.nested.key = "changed during check";
         firstItem.bytes = 7;
         await Promise.resolve();
         expect(checkedInput.nested.key).toBe("authorized");
+        expect(Object.isFrozen(checkedInput.nested)).toBe(true);
         return Result.ok(undefined);
       },
     });
@@ -72,10 +79,16 @@ describe("checked operation continuations", () => {
       expect(named.value.nested.key).toBe("authorized");
       expect(named.value.items).toEqual([{ bytes: 3 }]);
       expect(named.value.handle).toBe(handle);
-      expect(Object.isFrozen(named.value)).toBe(true);
-      expect(Object.isFrozen(named.value.nested)).toBe(true);
-      expect(Object.isFrozen(named.value.items)).toBe(true);
-      expect(Object.isFrozen(named.value.items.at(0))).toBe(true);
+      expect(named.value).not.toBe(checked.input);
+      expect(Object.isFrozen(named.value)).toBe(false);
+      expect(Object.isFrozen(named.value.nested)).toBe(false);
+      expect(Object.isFrozen(named.value.items)).toBe(false);
+      expect(Object.isFrozen(named.value.items.at(0))).toBe(false);
+      named.value.nested.key = "execution-owned";
+      named.value.items.push({ bytes: 13 });
+      expect(checked.input.nested.key).toBe("authorized");
+      expect(checked.input.items).toEqual([{ bytes: 3 }]);
+      expect(input.nested.key).toBe("changed after check");
       await Promise.resolve();
     });
     expect(Object.isFrozen(input)).toBe(false);
@@ -106,8 +119,8 @@ describe("checked operation continuations", () => {
       );
       expect(first.key).toBe("authorized");
       expect(Reflect.get(first, "parent")).toBe(named.value);
-      expect(Object.isFrozen(first)).toBe(true);
-      expect(Object.isFrozen(named.value)).toBe(true);
+      expect(Object.isFrozen(first)).toBe(false);
+      expect(Object.isFrozen(named.value)).toBe(false);
       await Promise.resolve();
     });
   });
@@ -152,6 +165,36 @@ describe("checked operation continuations", () => {
   });
 });
 
+test("a transaction check and execution retain structured entity input", async () => {
+  const entered = Promise.withResolvers<undefined>();
+  const proceed = Promise.withResolvers<undefined>();
+  const entityId = { nested: { key: "authorized" } };
+  const tx = asTestRaw<Transaction>(new AbortController());
+  const operation = withCheckedTransaction(
+    {
+      kind: "EntityChecked",
+      tx,
+      organizationId: toSafeId<"organization">("org_a"),
+      actorUserId: toSafeId<"user">("user_a"),
+      entityId,
+      check: async (checkedEntity) => {
+        entered.resolve(undefined);
+        await proceed.promise;
+        expect(checkedEntity.nested.key).toBe("authorized");
+        return Result.ok(undefined);
+      },
+    },
+    async ({ entity, tx: namedTransaction }) => {
+      expect(namedTransaction.value).toBe(tx);
+      return Result.ok(await Promise.resolve(entity.value.nested.key));
+    },
+  );
+  await entered.promise;
+  entityId.nested.key = "changed";
+  proceed.resolve(undefined);
+  expect(await operation).toEqual(Result.ok("authorized"));
+});
+
 describe("scoped admitted operations", () => {
   for (const allowed of [true, false]) {
     test(
@@ -166,9 +209,12 @@ describe("scoped admitted operations", () => {
           kind: "OperationAdmitted",
           input,
           admit: async (
+            checkedInput,
             execute: (scope: typeof admission) => Promise<string>,
           ) => {
             events.push("check");
+            expect(checkedInput).not.toBe(input);
+            expect(checkedInput).toEqual(input);
             if (!allowed) {
               return Result.err("unavailable");
             }
@@ -182,7 +228,8 @@ describe("scoped admitted operations", () => {
             proof,
           }) => {
             events.push("execute");
-            expect(namedInput.value).toBe(input);
+            expect(namedInput.value).not.toBe(input);
+            expect(namedInput.value).toEqual(input);
             expect(namedAdmission.value).toBe(admission);
             expect(proof.kind).toBe("OperationAdmitted");
             return await Promise.resolve("done");
@@ -198,6 +245,43 @@ describe("scoped admitted operations", () => {
     );
   }
 
+  test("pending admission retains its checked organization and callback", async () => {
+    const entered = Promise.withResolvers<undefined>();
+    const proceed = Promise.withResolvers<undefined>();
+    const input = {
+      organizationId: "org_a",
+      nested: { action: "authorized" },
+      execute: async (organization: string) =>
+        await Promise.resolve(`original:${organization}`),
+    };
+    const operation = withAdmittedOperation({
+      kind: "OperationAdmitted",
+      input,
+      admit: async (
+        checkedInput,
+        execute: (scope: string) => Promise<string>,
+      ) => {
+        entered.resolve(undefined);
+        await proceed.promise;
+        expect(checkedInput.organizationId).toBe("org_a");
+        expect(checkedInput.nested.action).toBe("authorized");
+        return Result.ok(await execute(checkedInput.organizationId));
+      },
+      run: async ({ input: named, admission }) => {
+        expect(named.value.organizationId).toBe(admission.value);
+        expect(Object.isFrozen(named.value.nested)).toBe(false);
+        return await named.value.execute(named.value.organizationId);
+      },
+    });
+    await entered.promise;
+    input.organizationId = "org_b";
+    input.nested.action = "changed";
+    input.execute = async (organization) =>
+      await Promise.resolve(`changed:${organization}`);
+    proceed.resolve(undefined);
+    expect(await operation).toEqual(Result.ok("original:org_a"));
+  });
+
   test("operation failures preserve admission cleanup", async () => {
     const error = new HandlerError({
       status: 409,
@@ -207,7 +291,10 @@ describe("scoped admitted operations", () => {
     const result = await withAdmittedOperation({
       kind: "OperationAdmitted",
       input: { actor: "actor_a", organization: "org_a" },
-      admit: async (execute: (admission: string) => Promise<never>) =>
+      admit: async (
+        _checkedInput,
+        execute: (admission: string) => Promise<never>,
+      ) =>
         await Result.tryPromise({
           try: async () => {
             try {

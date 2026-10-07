@@ -11,6 +11,7 @@ import type {
   FileUsageInput,
   FileUsageReservation,
 } from "@/api/lib/files/organization-file-usage";
+import { snapshotOperationInput } from "@/api/lib/proofs/checked-transaction";
 
 type CopyOrganizationFilesOptions<T, E> = {
   inputs: (FileUsageInput & {
@@ -22,16 +23,15 @@ type CopyOrganizationFilesOptions<T, E> = {
 };
 
 /** Settle each bounded round before opening reservations for the next. */
-export const copyOrganizationFiles = async <T, E>({
-  inputs,
-  concurrency,
-  db,
-}: CopyOrganizationFilesOptions<T, E>): Promise<
+export const copyOrganizationFiles = async <T, E>(
+  options: CopyOrganizationFilesOptions<T, E>,
+): Promise<
   Result<
     Result<T, E | OrganizationFileUsageError>[],
     OrganizationFileUsageError
   >
 > => {
+  const { inputs, concurrency, db } = snapshotOperationInput(options);
   if (!Number.isSafeInteger(concurrency) || concurrency < 1) {
     panic("Copy concurrency must be a positive safe integer");
   }

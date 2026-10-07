@@ -219,7 +219,7 @@ describe("organization file usage", () => {
         expect(checked.input.value.operation.sizeBytes).toBe(3);
         expect(checked.input.value.operation.metadata.label).toBe("authorized");
         expect(Object.isFrozen(checked.input.value.operation.metadata)).toBe(
-          true,
+          false,
         );
         return await runCheckedOrganizationFileWrite(checked);
       });

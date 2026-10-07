@@ -50,7 +50,7 @@ export const withSignalRequestAuthorization = async <R>(
       organizationId,
       actorUserId,
       entityId: workspaceId,
-      check: async () => {
+      check: async (checkedEntityId) => {
         if (!hasMemberPermission(memberRole, { signal: ["create"] })) {
           return Result.err(
             new HandlerError({
@@ -59,13 +59,13 @@ export const withSignalRequestAuthorization = async <R>(
             }),
           );
         }
-        if (workspaceId) {
+        if (checkedEntityId) {
           const visible = await tx
             .select({ id: workspaces.id })
             .from(workspaces)
             .where(
               and(
-                eq(workspaces.id, workspaceId),
+                eq(workspaces.id, checkedEntityId),
                 eq(workspaces.organizationId, organizationId),
               ),
             )

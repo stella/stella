@@ -32,7 +32,7 @@ type WithCheckedTransactionOptions<Kind extends string, Entity, Checked> = {
   organizationId: SafeId<"organization">;
   actorUserId: SafeId<"user">;
   entityId: Entity;
-  check: () => Promise<Result<Checked, HandlerError>>;
+  check: (entityId: Entity) => Promise<Result<Checked, HandlerError>>;
 };
 
 // Only trusted predicate modules may import this minting boundary.
@@ -55,26 +55,31 @@ export const withCheckedTransaction = async <
     context: CheckedTransactionContext<Kind, Entity, Checked, U, S, T, O>,
   ) => Promise<Result<R, E>>,
 ): Promise<Result<R, E | HandlerError>> =>
-  name(actorUserId, entityId, tx, async (actor, entity, transaction) => {
-    const result = await check();
-    if (Result.isError(result)) {
-      return Result.err(result.error);
-    }
-    return await name(organizationId, async (organization) => {
-      const prover = defineProof(kind);
-      const proof = {
-        ...prover.prove(actor, entity, transaction, organization),
-        organizationId: organization,
-      };
-      return await run({
-        tx: transaction,
-        entity,
-        actor,
-        proof,
-        checked: result.value,
+  name(
+    actorUserId,
+    snapshotOperationInput(entityId),
+    tx,
+    async (actor, entity, transaction) => {
+      const result = await check(entity.value);
+      if (Result.isError(result)) {
+        return Result.err(result.error);
+      }
+      return await name(organizationId, async (organization) => {
+        const prover = defineProof(kind);
+        const proof = {
+          ...prover.prove(actor, entity, transaction, organization),
+          organizationId: organization,
+        };
+        return await run({
+          tx: transaction,
+          entity,
+          actor,
+          proof,
+          checked: result.value,
+        });
       });
-    });
-  });
+    },
+  );
 
 export type CheckedOperationContext<Kind extends string, Input, N> = {
   input: Named<N, Input>;
@@ -91,51 +96,79 @@ const isPlainOperationData = (value: unknown): value is object => {
   );
 };
 
-const copyOperationProperties = (
-  source: object,
-  target: object,
-  copies: WeakMap<object, object>,
-) => {
+type OperationCopyContext = {
+  copies: WeakMap<object, object>;
+  mode: "protected" | "execution";
+};
+
+type CopyOperationPropertiesOptions = OperationCopyContext & {
+  source: object;
+  target: object;
+};
+
+const copyOperationProperties = ({
+  source,
+  target,
+  copies,
+  mode,
+}: CopyOperationPropertiesOptions) => {
   copies.set(source, target);
   for (const key of Reflect.ownKeys(source)) {
     const value: unknown = Reflect.get(source, key);
     Object.defineProperty(target, key, {
-      value: copyOperationData(value, copies),
+      value: copyOperationData(value, { copies, mode }),
       enumerable: Object.prototype.propertyIsEnumerable.call(source, key),
       configurable: key !== "length" || !Array.isArray(source),
       writable: true,
     });
   }
-  Object.freeze(target);
+  if (mode === "protected") {
+    Object.freeze(target);
+  }
 };
 
 const copyOperationData = (
   value: unknown,
-  copies: WeakMap<object, object>,
+  context: OperationCopyContext,
 ): unknown => {
   if (!isPlainOperationData(value)) {
     return value;
   }
-  const existing = copies.get(value);
+  const existing = context.copies.get(value);
   if (existing) {
     return existing;
   }
   const copy = Array.isArray(value) ? [] : {};
   Object.setPrototypeOf(copy, Reflect.getPrototypeOf(value));
-  copyOperationProperties(value, copy, copies);
+  copyOperationProperties({ source: value, target: copy, ...context });
+  return copy;
+};
+
+const copyOperationInput = <Input>(
+  input: Input,
+  mode: OperationCopyContext["mode"],
+): Input => {
+  if (!isPlainOperationData(input)) {
+    return input;
+  }
+  const copy = Object.assign(Array.isArray(input) ? [] : {}, { ...input });
+  Object.setPrototypeOf(copy, Reflect.getPrototypeOf(input));
+  copyOperationProperties({
+    source: input,
+    target: copy,
+    copies: new WeakMap(),
+    mode,
+  });
   return copy;
 };
 
 // Plain data is copied and frozen; runtime handles and functions retain their identity.
-export const snapshotOperationInput = <Input>(input: Input): Input => {
-  if (!isPlainOperationData(input)) {
-    return input;
-  }
-  const snapshot = Object.assign(Array.isArray(input) ? [] : {}, { ...input });
-  Object.setPrototypeOf(snapshot, Reflect.getPrototypeOf(input));
-  copyOperationProperties(input, snapshot, new WeakMap());
-  return snapshot;
-};
+export const snapshotOperationInput = <Input>(input: Input): Input =>
+  copyOperationInput(input, "protected");
+
+// Execution owns mutable plain data copied from the checked snapshot.
+export const cloneOperationInput = <Input>(input: Input): Input =>
+  copyOperationInput(input, "execution");
 
 class AuthorizedOperation<Kind extends string, Input> {
   readonly #input: Input;
@@ -157,7 +190,7 @@ class AuthorizedOperation<Kind extends string, Input> {
     }
     this.#state = "consumed";
     return await name(
-      this.#input,
+      cloneOperationInput(this.#input),
       async (input) => await run({ input, proof: this.#prover.prove(input) }),
     );
   }
@@ -209,7 +242,10 @@ type WithAdmittedOperationOptions<
 > = {
   kind: Kind;
   input: Input;
-  admit: (run: (admission: Admission) => Promise<R>) => Promise<Outcome>;
+  admit: (
+    input: Input,
+    run: (admission: Admission) => Promise<R>,
+  ) => Promise<Outcome>;
   run: <N, A>(
     context: AdmittedOperationContext<Kind, Input, Admission, N, A>,
   ) => Promise<R>;
@@ -233,11 +269,13 @@ export const withAdmittedOperation = async <
   Admission,
   R,
   Outcome
->): Promise<Outcome> =>
-  await admit(
+>): Promise<Outcome> => {
+  const snapshot = snapshotOperationInput(input);
+  return await admit(
+    snapshot,
     async (admission) =>
       await name(
-        input,
+        cloneOperationInput(snapshot),
         admission,
         async (namedInput, namedAdmission) =>
           await run({
@@ -247,3 +285,4 @@ export const withAdmittedOperation = async <
           }),
       ),
   );
+};

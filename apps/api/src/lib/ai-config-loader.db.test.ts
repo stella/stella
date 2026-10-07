@@ -526,6 +526,14 @@ test("strict configuration readers expose settings only for admitted actors", as
         organizationId: ids.orgA,
         userId: ids.userA2,
       });
+      const admittedReader = { organizationId: ids.orgA, userId: ids.userA1 };
+      const admittedRead = load(testDb, admittedReader);
+      admittedReader.userId = ids.userA2;
+      expect((await admittedRead).status).toBe("ok");
+      const refusedReader = { organizationId: ids.orgA, userId: ids.userA2 };
+      const refusedRead = load(testDb, refusedReader);
+      refusedReader.userId = ids.userA1;
+      expect((await refusedRead).status).toBe("error");
       expect(allowed.status).toBe("ok");
       expect(denied.status).toBe("error");
       if (denied.status === "error") {

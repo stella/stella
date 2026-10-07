@@ -31,7 +31,10 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { DEFAULT_MANAGED_AI_RESIDENCY } from "@/api/lib/chat/ai-data-policy";
 import type { ManagedAIResidency } from "@/api/lib/chat/ai-data-policy";
 import type { HandlerError } from "@/api/lib/errors/tagged-errors";
-import { authorizeOperation } from "@/api/lib/proofs/checked-transaction";
+import {
+  authorizeOperation,
+  snapshotOperationInput,
+} from "@/api/lib/proofs/checked-transaction";
 import type { CheckedOperationContext } from "@/api/lib/proofs/checked-transaction";
 import { memberMayUseAI } from "@/api/lib/usage/member-capacity";
 import { mayUseInstanceModels } from "@/api/lib/usage/organization-access-state";
@@ -152,7 +155,8 @@ export const loadOrgAIConfig = async (
   db: OrgSettingsReader,
   reader: OrgAIConfigReader,
 ): Promise<Result<OrgAIConfig | null, HandlerError<403>>> => {
-  const { organizationId } = reader;
+  const checkedReader = snapshotOperationInput(reader);
+  const { organizationId } = checkedReader;
   const rows = await db
     .select({
       aiConfigEncrypted: sql<
@@ -170,7 +174,7 @@ export const loadOrgAIConfig = async (
   });
   return await readAIConfiguration({
     db,
-    reader,
+    reader: checkedReader,
     orgAIConfig,
     settings: orgAIConfig,
   });
@@ -204,7 +208,8 @@ export const loadOrgAISettings = async (
   db: OrgSettingsReader,
   reader: OrgAIConfigReader,
 ): Promise<Result<OrgAISettings, HandlerError<403>>> => {
-  const { organizationId } = reader;
+  const checkedReader = snapshotOperationInput(reader);
+  const { organizationId } = checkedReader;
   const row = await selectAISettingsRow(db, organizationId);
   const orgAIConfig = await decryptOrgAIConfigRowOrThrow({
     decrypt: decryptAIConfig,
@@ -213,7 +218,7 @@ export const loadOrgAISettings = async (
   });
   return await readAIConfiguration({
     db,
-    reader,
+    reader: checkedReader,
     orgAIConfig,
     settings: {
       orgAIConfig,

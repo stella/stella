@@ -1,3 +1,4 @@
+import { Result } from "better-result";
 /**
  * The AI wiring every REST template-fill route hands to the fill service: a
  * usage preflight and a collaborator builder over one lazily-loaded org AI
@@ -7,8 +8,6 @@
  * lib-level fill logic each route wraps — can depend on it without an
  * endpoint-module-to-endpoint-module import.
  */
-
-import { Result } from "better-result";
 
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import { loadOrgAISettings } from "@/api/lib/ai-config-loader";
@@ -21,6 +20,7 @@ import {
   buildAiOccurrenceAdapter,
 } from "@/api/lib/docx/ai-field-generator";
 import type { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { snapshotOperationInput } from "@/api/lib/proofs/checked-transaction";
 import { hasTanStackInstanceProvider } from "@/api/lib/tanstack-ai-models";
 
 import type { AiFillCollaboratorProvider } from "./template-fill-service";
@@ -52,14 +52,17 @@ type TemplateFillAiWiring = {
  * matter binding), so there is no workspace scope to redact tenant ids
  * against.
  */
-export const buildTemplateFillAiWiring = ({
-  organizationId,
-  userId,
-  safeDb,
-  scopedDb,
-  feature,
-  documentLanguages,
-}: TemplateFillAiWiringArgs): TemplateFillAiWiring => {
+export const buildTemplateFillAiWiring = (
+  options: TemplateFillAiWiringArgs,
+): TemplateFillAiWiring => {
+  const {
+    organizationId,
+    userId,
+    safeDb,
+    scopedDb,
+    feature,
+    documentLanguages,
+  } = snapshotOperationInput(options);
   let configPromise: ReturnType<typeof loadOrgAISettings> | undefined;
   const orgAISettings = async () => {
     configPromise ??= scopedDb(

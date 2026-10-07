@@ -60,7 +60,7 @@ export const withVisibleSignal = async <R, E>(
       organizationId,
       actorUserId,
       entityId: signalId,
-      check: async () => {
+      check: async (checkedEntityId) => {
         if (!hasMemberPermission(memberRole, { signal: ["resolve"] })) {
           return Result.err(
             new HandlerError({
@@ -75,7 +75,7 @@ export const withVisibleSignal = async <R, E>(
           .from(signals)
           .where(
             and(
-              eq(signals.id, signalId),
+              eq(signals.id, checkedEntityId),
               eq(signals.organizationId, organizationId),
             ),
           )
@@ -85,7 +85,7 @@ export const withVisibleSignal = async <R, E>(
           tx,
           organizationId,
           canTriage: canTriageSignals(memberRole),
-          signalId,
+          signalId: checkedEntityId,
         });
         const existing = rows.at(0);
         if (!existing) {

@@ -1196,15 +1196,18 @@ export const withActionAdmission = async <T>(
     input: options,
     run: runCheckedAction,
     // The demo account's daily admission limit also applies when admission is disabled.
-    admit: async (execute: (admission: ActionExecution) => Promise<T>) =>
+    admit: async (
+      checkedOptions,
+      execute: (admission: ActionExecution) => Promise<T>,
+    ) =>
       await withDemoActionBudget({
-        budget: options.demoActionBudget ?? configuredDemoActionBudget,
-        organizationId: options.organizationId,
-        userId: options.userId,
+        budget: checkedOptions.demoActionBudget ?? configuredDemoActionBudget,
+        organizationId: checkedOptions.organizationId,
+        userId: checkedOptions.userId,
         scope:
-          options.execution === "background-job"
+          checkedOptions.execution === "background-job"
             ? "independent"
-            : (options.scope ?? "inherit"),
+            : (checkedOptions.scope ?? "inherit"),
         run: async (markStarted) => {
           const startedRun = async (
             signal: AbortSignal,
@@ -1215,7 +1218,7 @@ export const withActionAdmission = async <T>(
           };
           if (
             !(
-              options.enabled ??
+              checkedOptions.enabled ??
               isDeploymentFeatureEnabled("FEATURE_ACTION_ADMISSION")
             )
           ) {
@@ -1226,22 +1229,23 @@ export const withActionAdmission = async <T>(
             });
           }
           return await withEnabledActionAdmission({
-            ...options,
+            ...checkedOptions,
             run: startedRun,
             organizationBudgetOptions: {
-              organizationId: options.organizationId,
-              userId: options.userId,
-              periodIdentity: options.periodIdentity,
-              periodPolicy: options.periodPolicy,
+              organizationId: checkedOptions.organizationId,
+              userId: checkedOptions.userId,
+              periodIdentity: checkedOptions.periodIdentity,
+              periodPolicy: checkedOptions.periodPolicy,
               serviceBudgetsEnabled:
-                options.serviceBudgetsEnabled ??
+                checkedOptions.serviceBudgetsEnabled ??
                 isDeploymentFeatureEnabled("FEATURE_ORG_SERVICE_BUDGETS"),
               serviceBudgetConfig:
-                options.serviceBudgetConfig ?? configuredServiceBudgets(),
-              organizationStateDb: options.organizationStateDb,
-              readOrganizationState: options.readOrganizationState,
+                checkedOptions.serviceBudgetConfig ??
+                configuredServiceBudgets(),
+              organizationStateDb: checkedOptions.organizationStateDb,
+              readOrganizationState: checkedOptions.readOrganizationState,
               budgetNow:
-                options.budgetNow ??
+                checkedOptions.budgetNow ??
                 (() => Temporal.Now.instant().epochMilliseconds),
             },
           });
