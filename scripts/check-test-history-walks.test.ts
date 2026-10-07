@@ -1,14 +1,22 @@
 import { expect, test } from "bun:test";
 
 import {
+  type AllowedHistoryWalk,
   checkTestHistoryWalks,
   findHistoryWalks,
 } from "./check-test-history-walks.ts";
 
 const FILE = "scripts/example.test.ts";
 
-const scan = (source: string, allowed: Record<string, string> = {}) =>
-  findHistoryWalks(new Map([[FILE, source]]), allowed);
+const scan = (
+  source: string,
+  allowed: Record<string, AllowedHistoryWalk> = {},
+) => findHistoryWalks(new Map([[FILE, source]]), allowed);
+
+const fixture = (walks: number): AllowedHistoryWalk => ({
+  walks,
+  reason: "fixture repository",
+});
 
 test("flags every spawn shape that walks history", () => {
   for (const source of [
@@ -48,15 +56,33 @@ test("reports each walk with its line", () => {
   ).toEqual([expect.objectContaining({ file: FILE, line: 2 })]);
 });
 
-test("the allowlist shrinks: stale and unknown entries fail", () => {
+test("the allowlist pins each file's walk count and shrinks", () => {
   const walk = 'Bun.spawnSync(["git", "log"]);';
-  expect(scan(walk, { [FILE]: "fixture repository" })).toEqual([]);
-  expect(scan("const a = 1;", { [FILE]: "fixture repository" })).toEqual([
+  const two = `${walk}\nBun.spawnSync(["git", "blame", "a.ts"]);`;
+  expect(scan(walk, { [FILE]: fixture(1) })).toEqual([]);
+  // A new walk in an allowed file still fails.
+  expect(scan(two, { [FILE]: fixture(1) })).toHaveLength(2);
+  // A removed walk lowers the count.
+  expect(scan(walk, { [FILE]: fixture(2) })).toEqual([
+    expect.objectContaining({ file: FILE, line: 1 }),
+  ]);
+  expect(scan("const a = 1;", { [FILE]: fixture(1) })).toEqual([
     expect.objectContaining({ file: FILE }),
   ]);
   expect(
-    scan(walk, { [FILE]: "fixture", "scripts/gone.test.ts": "fixture" }),
+    scan(walk, { [FILE]: fixture(1), "scripts/gone.test.ts": fixture(1) }),
   ).toEqual([expect.objectContaining({ file: "scripts/gone.test.ts" })]);
+});
+
+test("scans shell tests line by line and skips comments", () => {
+  const shell = (source: string) =>
+    findHistoryWalks(new Map([["scripts/example.test.sh", source]]), {});
+  expect(shell('#!/bin/bash\nset -e\ngit -C "$repo" log -p\n')).toEqual([
+    expect.objectContaining({ line: 3 }),
+  ]);
+  expect(shell("# git log -p is slow in CI\ngit show HEAD:a.txt\n")).toEqual(
+    [],
+  );
 });
 
 test("no tracked test walks history outside the allowlist", () => {

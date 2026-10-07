@@ -13,7 +13,9 @@ import path from "node:path";
 import ts from "typescript";
 
 const REPO_ROOT = path.resolve(import.meta.dir, "..");
-const TEST_FILE = /\.test\.(?:[cm]?ts|tsx)$/u;
+// Every test convention a CI runner picks up, script and shell tests included.
+const SCRIPT_TEST_FILE = /\.(?:test|spec)\.(?:[cm]?[jt]s|[jt]sx)$/u;
+const SHELL_TEST_FILE = /\.test\.sh$/u;
 const HISTORY_SUBCOMMANDS = new Set([
   "annotate",
   "blame",
@@ -29,16 +31,34 @@ const GIT_CALLEE = /git$/iu;
 const SHELL_HISTORY_WALK =
   /\bgit\b[^\n;&|]*?(?<![\w./-])(?:annotate|blame|log|rev-list|shortlog|whatchanged)(?![\w./-])/u;
 
-// Shrink-only. Every entry names why the walk cannot reach the CI checkout.
-export const ALLOWED_HISTORY_WALKS: Readonly<Record<string, string>> = {
-  "scripts/check-test-history-walks.test.ts":
-    "planted fixtures for this guard; nothing is spawned",
-  "scripts/check-pushed-secrets.test.ts":
-    "the walk runs in a stub hook inside a fixture repository the test creates",
-  "scripts/staging-source-provenance.test.ts":
-    "the walk runs in a fixture repository the test creates",
-  "scripts/thin-queue.test.ts":
-    "path-limited log needs no blobs; it stops at the first qualifying revision, normally the newest one",
+export type AllowedHistoryWalk = {
+  // The exact number of flagged lines, so a new walk in the file still fails.
+  walks: number;
+  reason: string;
+};
+
+// Shrink-only. Every entry names why its walks cannot reach the CI checkout.
+export const ALLOWED_HISTORY_WALKS: Readonly<
+  Record<string, AllowedHistoryWalk>
+> = {
+  "scripts/check-test-history-walks.test.ts": {
+    walks: 17,
+    reason: "planted fixtures for this guard; nothing is spawned",
+  },
+  "scripts/check-pushed-secrets.test.ts": {
+    walks: 1,
+    reason:
+      "the walk runs in a stub hook inside a fixture repository the test creates",
+  },
+  "scripts/staging-source-provenance.test.ts": {
+    walks: 2,
+    reason: "the walks run in a fixture repository the test creates",
+  },
+  "scripts/thin-queue.test.ts": {
+    walks: 2,
+    reason:
+      "path-limited log needs no blobs; it stops at the first qualifying revision, normally the newest one",
+  },
 };
 
 export type HistoryWalkFinding = {
@@ -108,13 +128,32 @@ const walksHistory = (node: ts.Node): boolean => {
   return text !== undefined && SHELL_HISTORY_WALK.test(text);
 };
 
+const walkFinding = (file: string, line: number): HistoryWalkFinding => ({
+  file,
+  line,
+  message:
+    "walks git history; CI fetches one blob per commit. Read a pinned commit with `git show <sha>:path` instead",
+});
+
+const scanShell = (file: string, source: string): HistoryWalkFinding[] =>
+  source
+    .split("\n")
+    .flatMap((text, index) =>
+      !text.trimStart().startsWith("#") && SHELL_HISTORY_WALK.test(text)
+        ? [walkFinding(file, index + 1)]
+        : [],
+    );
+
 const scanSource = (file: string, source: string): HistoryWalkFinding[] => {
+  if (SHELL_TEST_FILE.test(file)) {
+    return scanShell(file, source);
+  }
   const parsed = ts.createSourceFile(
     file,
     source,
     ts.ScriptTarget.Latest,
     true,
-    file.endsWith(".tsx") ? ts.ScriptKind.TSX : ts.ScriptKind.TS,
+    /x$/u.test(file) ? ts.ScriptKind.TSX : ts.ScriptKind.TS,
   );
   const lines = new Set<number>();
   const visit = (node: ts.Node) => {
@@ -126,12 +165,7 @@ const scanSource = (file: string, source: string): HistoryWalkFinding[] => {
     ts.forEachChild(node, visit);
   };
   visit(parsed);
-  return [...lines].map((line) => ({
-    file,
-    line,
-    message:
-      "walks git history; CI fetches one blob per commit. Read a pinned commit with `git show <sha>:path` instead",
-  }));
+  return [...lines].map((line) => walkFinding(file, line));
 };
 
 const mightWalkHistory = (source: string): boolean =>
@@ -140,23 +174,21 @@ const mightWalkHistory = (source: string): boolean =>
 
 export const findHistoryWalks = (
   sources: ReadonlyMap<string, string>,
-  allowed: Readonly<Record<string, string>> = ALLOWED_HISTORY_WALKS,
+  allowed: Readonly<Record<string, AllowedHistoryWalk>> = ALLOWED_HISTORY_WALKS,
 ): HistoryWalkFinding[] => {
   const findings: HistoryWalkFinding[] = [];
   for (const [file, source] of sources) {
     const walks = mightWalkHistory(source) ? scanSource(file, source) : [];
-    if (Object.hasOwn(allowed, file)) {
-      if (walks.length === 0) {
-        findings.push({
-          file,
-          line: 1,
-          message:
-            "no longer walks git history; remove its ALLOWED_HISTORY_WALKS entry",
-        });
-      }
-      continue;
+    const allowance = Object.hasOwn(allowed, file) ? allowed[file] : undefined;
+    if (allowance === undefined || walks.length > allowance.walks) {
+      findings.push(...walks);
+    } else if (walks.length < allowance.walks) {
+      findings.push({
+        file,
+        line: 1,
+        message: `has ${walks.length} of ${allowance.walks} allowed history walks; lower its ALLOWED_HISTORY_WALKS count`,
+      });
     }
-    findings.push(...walks);
   }
   for (const file of Object.keys(allowed)) {
     if (!sources.has(file)) {
@@ -177,7 +209,9 @@ const trackedTests = (): Map<string, string> => {
     encoding: "utf-8",
   })
     .split("\0")
-    .filter((file) => TEST_FILE.test(file));
+    .filter(
+      (file) => SCRIPT_TEST_FILE.test(file) || SHELL_TEST_FILE.test(file),
+    );
   return new Map(
     files.map((file) => [
       file,
