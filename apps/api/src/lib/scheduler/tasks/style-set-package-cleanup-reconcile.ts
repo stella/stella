@@ -23,7 +23,7 @@ export const createReconcileStyleSetPackageCleanupsTask =
       panic("SchedulerAborted");
     }
     const outcome = await reconcilePendingStyleSetPackageCleanups({
-      cleanupQueue,
+      ...(cleanupQueue === undefined ? {} : { cleanupQueue }),
       db,
     });
     const summary = Result.isError(outcome)

@@ -442,7 +442,7 @@ describe("pending style set package cleanup reconciliation", () => {
       ).toBe(true);
       const firstReported = failedRows.find(
         ({ styleSetId }) =>
-          styleSetId === failures.at(0)?.attributes.styleSetId,
+          styleSetId === failures.at(0)?.attributes?.["styleSetId"],
       );
       expect(firstReported).toBeDefined();
       expect(outcome.error.cause).toBe(firstReported?.cause);
@@ -450,7 +450,7 @@ describe("pending style set package cleanup reconciliation", () => {
         expect(await readCleanupKey(styleSetId)).toBe(cleanupS3Key);
         expect(
           failures.find(
-            ({ attributes }) => attributes.styleSetId === styleSetId,
+            ({ attributes }) => attributes?.["styleSetId"] === styleSetId,
           )?.attributes,
         ).toEqual({ stage: "requeue", styleSetId });
       }
