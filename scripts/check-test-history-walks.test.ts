@@ -18,6 +18,7 @@ test("flags every spawn shape that walks history", () => {
     'git(checkout, "log", "-G", "needle");',
     'runGit(["shortlog", "-s"]);',
     `const out = $\`git log -p -- \${file}\`;`,
+    `const out = $\`git -C \${repo} log -p\`;`,
     'execSync("git -C repo whatchanged");',
     'const hook = `#!/bin/sh\ngit log -p -U0 "$@"\n`;',
   ]) {

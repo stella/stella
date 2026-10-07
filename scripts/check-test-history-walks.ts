@@ -119,10 +119,12 @@ const walkedSubcommands = (node: ts.Node): string[] => {
     return [];
   }
   if (ts.isTemplateExpression(node)) {
+    // Each interpolation stays one argument, so `git -C ${repo} log` still
+    // reads as `log` after the option value.
     const text = [
       node.head.text,
       ...node.templateSpans.map((span) => span.literal.text),
-    ].join(" ");
+    ].join("ARG");
     return [SHELL_HISTORY_WALK.exec(text)?.[1] ?? ""];
   }
   const text = literalText(node);
