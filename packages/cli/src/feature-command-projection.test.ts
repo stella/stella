@@ -266,8 +266,8 @@ test("only a current authenticated response enables feature commands over the ca
     fetchRaw: async () =>
       Result.ok({
         rawBody: body(enabled),
-        featureOmittedTools: [TOOL],
-        featureOmittedCapabilities: [CAPABILITY],
+        featureOmittedTools: [],
+        featureOmittedCapabilities: [],
       }),
     bakedListings: listings,
   });
@@ -341,6 +341,8 @@ test("callers and same-credential grant changes use fresh projections without cr
           rawBody: body(snapshot),
           grantedScopes: ["stella:read"],
           scopeOmittedTools: ["save_document"],
+          featureOmittedTools: [],
+          featureOmittedCapabilities: [],
         });
       },
       bakedListings: listings,
@@ -366,6 +368,8 @@ test("callers and same-credential grant changes use fresh projections without cr
       serverOrigin: ORIGIN,
       fetchedAt: "2026-10-02T10:00:00.000Z",
       ttlSeconds: DEFAULT_TTL_SECONDS,
+      featureOmittedTools: [],
+      featureOmittedCapabilities: [],
     });
     expect(leafIds(current.tree).includes(CAPABILITY)).toBe(
       snapshot === enabled,

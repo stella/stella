@@ -60,7 +60,7 @@ const deriveCliAnnotation = (
   const declared = DEFAULT_MCP_CLI_ANNOTATIONS[tool.name];
   const annotation = {
     ...declared,
-    ...pickDefined(tool, ["featureId"]),
+    ...pickDefined(tool, ["feature", "featureId"]),
   };
   const behavior =
     "destructiveBehavior" in tool ? tool.destructiveBehavior : undefined;
@@ -107,8 +107,7 @@ const deriveCliAnnotation = (
   };
 };
 
-// The four wire fields exposed by `tools/list` (scope/feature/access/anonymized
-// are server-internal and never leave the server).
+// The tools/list wire fields plus build-time CLI metadata.
 type RegistryToolListing = {
   cli: McpCliToolAnnotation;
   name: string;
