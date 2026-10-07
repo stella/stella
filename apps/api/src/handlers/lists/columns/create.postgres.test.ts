@@ -165,7 +165,9 @@ if (!databaseUrl || !runPostgres) {
               .from(legalLists)
               .where(eq(legalLists.id, listId))
               .for("update");
-            pending.push(...workers.map((worker) => worker.create()));
+            pending.push(
+              ...workers.map(async (worker) => await worker.create()),
+            );
             const deadline = performance.now() + 5000;
             while (performance.now() < deadline) {
               const snapshot = await db.execute<{ waiting: number }>(sql`
