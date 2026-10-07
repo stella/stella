@@ -5,6 +5,10 @@ import path from "node:path";
 import * as v from "valibot";
 
 import type { FileTab } from "../../src/components/inspector/file-tab";
+import {
+  inspectorMinimizedStorageKey,
+  inspectorStateStorageKey,
+} from "../../src/components/inspector/inspector-storage-keys";
 import { apiDelete, apiPut, apiUploadTemplate, E2E_API_ORIGIN } from "./api";
 import {
   dockedChatFileThreadPage,
@@ -132,11 +136,16 @@ export const restoreGeometryInspector = async (
   page: Page,
   { world, presentation }: RestoreGeometryInspectorOptions,
 ) => {
+  // The keys come from the app's own owner, so a change to how the
+  // inspector keys its entries reaches this seed too.
+  const scope = {
+    userId: world.session.user.id,
+    organizationId: world.session.session.activeOrganizationId,
+  };
   await page.addInitScript(
-    ({ userId, organizationId, fileTab, mode }) => {
-      const suffix = `${organizationId}:${userId}`;
+    ({ stateKey, minimizedKey, fileTab, mode }) => {
       localStorage.setItem(
-        `stella:inspector-state:v1:${suffix}`,
+        stateKey,
         JSON.stringify({
           tabs: mode === "inspector" ? [fileTab] : [],
           groups: [],
@@ -145,14 +154,11 @@ export const restoreGeometryInspector = async (
           collapsedGroupIds: [],
         }),
       );
-      localStorage.setItem(
-        `stella:inspector-minimized:v1:${suffix}`,
-        mode === "inspector" ? "0" : "1",
-      );
+      localStorage.setItem(minimizedKey, mode === "inspector" ? "0" : "1");
     },
     {
-      userId: world.session.user.id,
-      organizationId: world.session.session.activeOrganizationId,
+      stateKey: inspectorStateStorageKey(scope),
+      minimizedKey: inspectorMinimizedStorageKey(scope),
       fileTab: world.fileTab,
       mode: presentation,
     },

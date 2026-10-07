@@ -190,7 +190,7 @@ test("main heavy workflow dispatches exactly the validated commit through ci.yml
 
   expect(mainWorkflow.concurrency.group).toContain("github.ref");
   expect(mainWorkflow.concurrency.group).toContain("github.run_id");
-  expect(mainWorkflow.concurrency["cancel-in-progress"]).toBe(true);
+  expect(mainWorkflow.concurrency["cancel-in-progress"]).toBeDefined();
 
   const suites = mainWorkflow.jobs.suites;
   expect(suites.uses).toBe("./.github/workflows/ci.yml");
@@ -244,6 +244,7 @@ const heavyCheckoutCensus = (workflow: CheckoutWorkflow) => {
         scope === null ? [] : [[scope, "true"]],
       ),
     ),
+    run_required: "true",
     trusted: "true",
     suite_depth: "full",
     queue_depth: "full",
@@ -602,3 +603,146 @@ test("status step publishes success only when both workflow jobs succeeded", () 
     }
   }
 }, 30_000);
+
+const concurrencyContext = (
+  event: string,
+  sha = "",
+  runId = 1,
+  message = "fix: change",
+) => ({
+  github: {
+    workflow: "Main heavy suites",
+    event_name: event,
+    ref: "refs/heads/main",
+    run_id: runId,
+    event: { head_commit: { message } },
+  },
+  inputs: { sha, heavy_only: sha !== "" },
+  needs: { resolve: { outputs: { sha } } },
+});
+const concurrencyGroup = (group: string, context: object) =>
+  group.replaceAll(/\$\{\{(.*?)\}\}/gu, (_, expression: string) => {
+    const value: unknown = new Script(expression).runInNewContext({
+      ...context,
+      startsWith: (text: string, prefix: string) => text.startsWith(prefix),
+      format: (template: string, ...values: unknown[]) =>
+        template.replaceAll(/\{(\d+)\}/gu, (_match, index: string) => {
+          const argument = values.at(Number(index));
+          if (typeof argument !== "string" && typeof argument !== "number") {
+            return panic("Unresolved concurrency format argument");
+          }
+          return String(argument);
+        }),
+    });
+    if (typeof value !== "string" && typeof value !== "number") {
+      return panic(`Concurrency group fragment is not resolved: ${expression}`);
+    }
+    return String(value);
+  });
+const assertPinnedIsolation = (group: string) => {
+  const pinned = ["a".repeat(40), "b".repeat(40)].map((sha) =>
+    concurrencyGroup(group, concurrencyContext("workflow_dispatch", sha)),
+  );
+  expect(new Set(pinned).size).toBe(pinned.length);
+  for (const event of ["schedule", "push"]) {
+    for (const message of ["fix: change", "chore: release v1.0.0"]) {
+      expect(pinned).not.toContain(
+        concurrencyGroup(group, concurrencyContext(event, "", 2, message)),
+      );
+    }
+  }
+};
+test("pinned heavy gates remain independent of schedules, pushes and other candidate SHAs", () => {
+  assertPinnedIsolation(mainWorkflow.concurrency.group);
+  assertPinnedIsolation(ciWorkflow.concurrency.group);
+  for (const sha of ["a".repeat(40), "b".repeat(40)]) {
+    for (const workflow of [mainWorkflow, ciWorkflow]) {
+      expect(
+        expressionValue(
+          workflow.concurrency["cancel-in-progress"],
+          concurrencyContext("workflow_dispatch", sha),
+        ),
+      ).toBe(false);
+    }
+  }
+  expect(
+    expressionValue(
+      mainWorkflow.concurrency["cancel-in-progress"],
+      concurrencyContext("schedule"),
+    ),
+  ).toBe(true);
+  expect(
+    concurrencyGroup(
+      mainWorkflow.concurrency.group,
+      concurrencyContext("schedule", "", 1),
+    ),
+  ).toBe(
+    concurrencyGroup(
+      mainWorkflow.concurrency.group,
+      concurrencyContext("schedule", "", 2),
+    ),
+  );
+});
+test("removing the pinned SHA concurrency key violates isolation", () => {
+  const changed = mainWorkflow.concurrency.group.replace(
+    "format('release-{0}', inputs.sha)",
+    "github.ref",
+  );
+  expect(changed).not.toBe(mainWorkflow.concurrency.group);
+  expect(() => assertPinnedIsolation(changed)).toThrow(/Expected/u);
+});
+test("staging SHA build groups are isolated and its shared deploy group cannot cancel", () => {
+  const workflow = v.parse(
+    v.object({
+      jobs: v.record(
+        v.string(),
+        v.looseObject({
+          concurrency: v.optional(
+            v.object({ group: v.string(), "cancel-in-progress": v.boolean() }),
+          ),
+        }),
+      ),
+    }),
+    Bun.YAML.parse(
+      readFileSync(
+        new URL("../.github/workflows/deploy-staging.yml", import.meta.url),
+        "utf-8",
+      ),
+    ),
+  );
+  const groups = Object.values(workflow.jobs).flatMap((job) =>
+    job.concurrency ? [job.concurrency] : [],
+  );
+  expect(groups.length).toBeGreaterThan(0);
+  for (const group of groups) {
+    if (!group["cancel-in-progress"]) {
+      continue;
+    }
+    const candidates = ["a".repeat(40), "b".repeat(40)].map((sha) =>
+      concurrencyGroup(
+        group.group,
+        concurrencyContext("workflow_dispatch", sha),
+      ),
+    );
+    expect(new Set(candidates).size).toBe(candidates.length);
+  }
+});
+
+test("same-SHA dispatches coalesce with the running run preserved and newer pending runs replacing older pending runs", () => {
+  const sha = "a".repeat(40);
+  for (const workflow of [mainWorkflow, ciWorkflow]) {
+    const groups = [1, 2, 3].map((runId) =>
+      concurrencyGroup(
+        workflow.concurrency.group,
+        concurrencyContext("workflow_dispatch", sha, runId),
+      ),
+    );
+    expect(new Set(groups).size).toBe(1);
+    expect(
+      expressionValue(
+        workflow.concurrency["cancel-in-progress"],
+        concurrencyContext("workflow_dispatch", sha),
+      ),
+    ).toBe(false);
+  }
+});

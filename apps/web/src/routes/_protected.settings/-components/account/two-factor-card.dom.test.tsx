@@ -82,6 +82,7 @@ const mount = (emailAvailable: boolean) => {
   client.setQueryData(authCapabilitiesOptions.queryKey, {
     emailOtp: emailAvailable,
     localPassword: false,
+    reviewPasswordSignIn: false,
     bootstrap: false,
     social: { google: false, microsoft: false },
     transactionalEmail: emailAvailable,

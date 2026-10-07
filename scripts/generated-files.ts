@@ -134,6 +134,7 @@ export const GENERATORS = [
       "apps/api/src/lib/chat/projections.ts",
       "apps/api/src/lib/chat/case-law-result-projections.ts",
       "apps/api/src/lib/chat/case-law-court-projection.ts",
+      "packages/api-contract/src/case-law-court-year.ts",
       "packages/api-contract/src/mcp-tool-name.ts",
       ".oxfmtrc.json",
       "packages/cli/src/**",
@@ -191,6 +192,7 @@ export const GENERATORS = [
       "apps/api/src/lib/chat/projections.ts",
       "apps/api/src/lib/chat/case-law-result-projections.ts",
       "apps/api/src/lib/chat/case-law-court-projection.ts",
+      "packages/api-contract/src/case-law-court-year.ts",
       "apps/api/src/lib/chat/projection-fields.ts",
       "apps/web/src/fonts.css",
       "apps/web/public/fonts/**",
@@ -213,6 +215,7 @@ export const GENERATORS = [
     inputs: [
       "apps/api/src/handlers/visual-sandbox/**",
       "apps/api/scripts/build-visual-sandbox.ts",
+      "apps/api/scripts/visual-sandbox-build-options.ts",
       "packages/api-contract/**",
       "bun.lock",
     ],

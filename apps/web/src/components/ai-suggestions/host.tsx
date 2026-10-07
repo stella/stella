@@ -1020,7 +1020,7 @@ export const SuggestionCard = (props: SuggestionCardProps) => {
     // button stays the keyboard/AT path); clicks owned by interior
     // buttons (header, accept, reject) are skipped so they don't
     // double-fire.
-    // oxlint-disable-next-line jsx_a11y/no-static-element-interactions, jsx_a11y/click-events-have-key-events
+    // oxlint-disable-next-line jsx-a11y/no-static-element-interactions, jsx-a11y/click-events-have-key-events
     <div
       data-status={suggestion.status}
       onClick={(event) => {

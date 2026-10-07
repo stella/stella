@@ -145,6 +145,7 @@
       "useBackupCode": "Kasuta selle asemel varukoodi"
     },
     "useDifferentEmail": "Kasuta teist e-posti aadressi",
+    "usePassword": "Kasuta hoopis parooli",
     "weSentCodeTo": "Saatsime koodi aadressile <email>{emailAddress}</email>"
   },
   "avt": {
@@ -1049,6 +1050,7 @@
       "toastDescription": "Täisleheküljel vestlus koos salvestatud lõimedega on tulekul.",
       "toastTitle": "Täisvaade ei ole veel saadaval"
     },
+    "activateGeneratedView": "Kasuta seda vaadet",
     "aiPrompt": "AI sõnumiväli",
     "aiThread": "AI vestlus",
     "analyzingSources": "Allikate analüüsimine",
@@ -1194,6 +1196,8 @@
     "forkedFromUnavailable": "Loodud vestlusest, mis pole enam saadaval",
     "forkedThread": "Teisest vestlusest",
     "forkingThread": "Uue vestluse loomine…",
+    "generatedView": "Loodud vaade",
+    "generatedViewDrill": "Otsi kohtulahendeid kohtufiltriga {court} ja aastaga {year}.",
     "greeting": "Millega soovite tegeleda?",
     "greetingSubtitle": "Alustage toimikust, dokumendist või lihtsast küsimusest.",
     "hideThread": "Peida vestlus",

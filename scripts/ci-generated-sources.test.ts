@@ -54,7 +54,7 @@ type Workflow = v.InferOutput<typeof workflowSchema>;
 const consumerIds = (source: Workflow) =>
   Object.keys(source.jobs).filter(
     (id) =>
-      id.startsWith("ci-checks-") ||
+      (id.startsWith("ci-checks-") && id !== "ci-checks-docs") ||
       id.startsWith("code-quality-") ||
       id === "typecheck-baseline",
   );
@@ -95,7 +95,7 @@ const assertHandoff = (source: Workflow) => {
     JSON.parse(outcome?.env?.["JOB_SCOPES"] ?? ""),
   );
   expect(Object.hasOwn(scopes, "ci-generated-sources")).toBe(true);
-  expect(scopes["ci-generated-sources"]).toBeNull();
+  expect(scopes["ci-generated-sources"]).toBe("package_checks_required");
   const fast = v.parse(
     v.array(v.string()),
     JSON.parse(outcome?.env?.["FAST_REQUIRED"] ?? ""),
@@ -284,6 +284,27 @@ test("missing or late verification and retained manifest reuse break the regener
 test("every generated-source consumer restores the same-run artifact before checks", () => {
   expect(consumerIds(workflow).length).toBeGreaterThan(0);
   assertHandoff(workflow);
+});
+
+test("the documentation job consumes Markdown without generated-source hydration", () => {
+  const job = workflow.jobs["ci-checks-docs"];
+  expect(job?.needs).toBe("ci-plan");
+  expect(job?.["if"]).toContain(
+    "needs.ci-plan.outputs.docs_checks_required == 'true'",
+  );
+  expect(
+    job?.steps.filter(({ run }) => run?.includes("--run-markdown-checks")),
+  ).toHaveLength(1);
+  expect(
+    job?.steps.some(({ name }) => name === "Restore generated sources"),
+  ).toBe(false);
+  expect(consumerIds(workflow)).not.toContain("ci-checks-docs");
+  const mutated = structuredClone(workflow);
+  mutated.jobs["ci-checks-new"] = {
+    needs: "ci-plan",
+    steps: [{ name: "Check", run: "bun check" }],
+  };
+  expect(() => assertHandoff(mutated)).toThrow("ci-checks-new");
 });
 
 test("new consumers cannot omit generated-source hydration", () => {

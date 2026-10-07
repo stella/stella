@@ -28,3 +28,11 @@ console.log("documented inline");
 console.log("documented same line"); // oxlint-disable-line no-console -- fixture: same-line reason is valid
 
 void foreignDirective;
+
+// Canonical IDs leave both the directive and its reason intact.
+// expect-clean: suppression-hygiene/canonical-rule-id
+console.log("canonical"); // oxlint-disable-line no-console -- fixture: configured spelling
+
+// oxlint-disable-next-line suppression-hygiene/canonical-rule-id -- fixture: alias spelling is reported on the directive
+// oxlint-disable-next-line eslint/no-console -- fixture: alias maps to configured spelling
+console.log("alias");

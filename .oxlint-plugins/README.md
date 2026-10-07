@@ -60,6 +60,7 @@ runtime validation, or integration tests.
 - [`no-path-prefix-containment`](./no-path-prefix-containment.ts) (`no-path-prefix-containment`): rejects filesystem containment checks based on a bare string prefix, which also accepts sibling paths.
 - [`no-raw-api-url`](./no-raw-api-url.ts) (`no-direct-api-env`, `no-raw-api-url`): confines the browser and external API bases to one resolver and rejects hand-written API request paths, preventing same-origin routing from drifting back to direct cross-origin calls.
 - [`raw-hash-from-source-fingerprint`](./raw-hash-from-source-fingerprint.ts) (`raw-hash-from-source-fingerprint`): in case-law adapters, a `rawHash` property or assignment must be a `sourceFingerprint(...)` call or another decision's `.rawHash`; files that predate the owner are listed, shrink-only, in `scripts/source-fingerprint-baseline.json`, which `scripts/source-fingerprint-baseline.ts` regenerates by running this rule in census mode.
+- [`no-raw-sha256`](./no-raw-sha256.ts) (`no-raw-sha256`): confines SHA-256 primitives and aliases to registered runtime owners. The generated migration ledger is reasoned and shrink-only; keyed HMAC and other algorithms remain available.
 - [`no-raw-cache-control`](./no-raw-cache-control.ts) (`no-raw-cache-control`): confines API `Cache-Control` names and caching directive literals to `lib/security-headers.ts`; isolated `public` and `private` domain literals are left alone.
 - [`failure-sink-handle`](./failure-sink-handle.ts) (`failure-sink-handle`): requires `observeFailure`'s `sink` to be a handle passed by name, created once by `failureSink(...)` at module scope, so every site's failure policy is a reviewed declaration.
 - [`no-raw-error-logging`](./no-raw-error-logging.ts) (`no-raw-error-logging`): keeps raw messages, stacks, causes, and stringified errors out of production logs and process streams (including `Bun.write` to `Bun.stderr`/`Bun.stdout`), and the raw `error.msg` key out of production code outside the legacy field helpers.
@@ -152,6 +153,7 @@ runtime validation, or integration tests.
 - [`no-omitted-prop-respread`](./no-omitted-prop-respread.ts) (`no-omitted-prop-respread`): requires a prop a component omits from its props type to be pinned after the last props spread, because width subtyping keeps the key on the spread value at runtime. It reads literal `Omit` keys and the component's own props binding only.
 - [`no-raw-route-query-client`](./no-raw-route-query-client.ts) (`no-raw-route-query-client`): requires route freshness wrappers in loaders and synchronous cache reads in pending components.
 - [`no-raw-router-invalidation`](./no-raw-router-invalidation.ts) (`no-raw-router-invalidation`): confines navigation-grade `router.invalidate()` calls to the owned session, locale, and exhaustively classified route-metadata boundaries.
+- [`no-raw-browser-storage`](./no-raw-browser-storage.ts) (`no-raw-browser-storage`): confines browser storage access to the account storage owners; consumers use scoped or device/tab APIs.
 - [`no-raw-stored-json`](./no-raw-stored-json.ts) (`no-raw-stored-json`): requires persisted browser JSON to be parsed and schema-validated through `readStoredJson()`.
 - [`no-direct-unsaved-work-guard`](./no-direct-unsaved-work-guard.ts) (`no-direct-unsaved-work-guard`): confines TanStack route blockers and `beforeunload` handlers in `apps/web/src` to `useUnsavedWork`, which also registers the work so the stale-client refresh does not reload over it.
 - [`no-raw-use-effect`](./no-raw-use-effect.ts) (`no-raw-use-effect`): bans direct React `useEffect`; use the sanctioned lifecycle wrappers or a more precise primitive.
@@ -262,7 +264,7 @@ runtime validation, or integration tests.
 - [`no-internal-module-mock`](./no-internal-module-mock.ts) (`no-internal-module-mock`): rejects `mock.module` against a workspace module (relative, `@/`, or `@stll/` specifier) or a non-literal specifier; npm packages and runtime builtins stay valid as external boundaries, except the TanStack AI engine and adapter packages (`@tanstack/ai`, `@tanstack/ai-*`), which are a runtime whose chunk shape the code under test must be proven against: fake the adapter through the model resolver seam instead. Pairs listed in `scripts/internal-module-mock-ledger.json` are grandfathered, a listed pair whose mock is gone is reported as stale, and the ratchet keeps the ledger from growing.
 - [`no-static-devtools-import`](./no-static-devtools-import.ts) (`no-static-devtools-import`): prevents development-only modules from entering eager production dependency graphs.
 - [`require-function-replacer`](./require-function-replacer.ts) (`require-function-replacer`): requires function-valued state updates to use an explicit replacer wrapper so they are not invoked as updater callbacks.
-- [`suppression-hygiene`](./suppression-hygiene.ts) (`require-description`, `no-foreign-directive`): requires rule-specific, explained suppressions and rejects directives for another lint engine.
+- [`suppression-hygiene`](./suppression-hygiene.ts) (`require-description`, `no-foreign-directive`, `canonical-rule-id`): requires explained suppressions, autofixes rule IDs to their configured spelling, and rejects directives for another lint engine.
 
 ## Native and shared rules
 
@@ -334,5 +336,7 @@ implies a hazard that is gone.
 - [`no-raw-child-exit-status`](./no-raw-child-exit-status.ts) (`no-raw-child-exit-status`): requires the shared `childExitStatus` helper when forwarding child-process statuses to process exit sinks, including aliases and local return values.
 
 - [`no-discarded-toast-error`](./no-discarded-toast-error.ts) (`no-discarded-toast-error`): preserves original caught errors through shared notification.
+
+- [`no-ad-hoc-inline-rename`](./no-ad-hoc-inline-rename.ts) (`no-ad-hoc-inline-rename`): enumerates native and UI input aliases in view/edit owners with blur/keyboard commit handlers and rename bindings or autofocus; requires `@stll/ui/inline-rename`. Permanent, creation, numeric and multiline fields stay outside this detection boundary.
 
 - [`require-json-import-attribute`](./require-json-import-attribute.ts) (`require-json-import-attribute`): requires the JSON type attribute on static runtime JSON imports in web browser-test files and repository scripts; erased type imports are allowed.

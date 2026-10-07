@@ -1,4 +1,4 @@
-/* oxlint-disable unicorn/prefer-module, node/global-require, react-hooks/rules-of-hooks, typescript/dot-notation, no-shadow -- fixture: each call form stands on its own line */
+/* oxlint-disable unicorn/prefer-module, node/global-require, react/rules-of-hooks, typescript/dot-notation, no-shadow -- fixture: each call form stands on its own line */
 
 // Passive regression fixture for `no-raw-use-effect/no-raw-use-effect`.
 //

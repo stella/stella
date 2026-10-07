@@ -32,8 +32,8 @@ describe.skipIf(!enabled)("document-owned verification history", () => {
       const documentId = createSafeId<"entity">();
       const retainedDocumentId = createSafeId<"entity">();
       const userId = toSafeId<"user">(`user_${Bun.randomUUIDv7()}`);
-      await client.unsafe(`CREATE SCHEMA ${schema}`);
       try {
+        await client.unsafe(`CREATE SCHEMA ${schema}`);
         await client.unsafe(`SET search_path TO ${schema}, public`);
         // The verification tables come from committed migrations; only their
         // external parent relations are minimal fixtures.
@@ -48,6 +48,14 @@ describe.skipIf(!enabled)("document-owned verification history", () => {
           GRANT SELECT ON stella_authorized_workspaces TO stella;
           GRANT SELECT, DELETE ON entities TO stella;
         `);
+        // The cleanup records each removed run; keep that record in this
+        // schema with the shared table's columns, defaults and organization
+        // reference, so a row the shared table would reject fails here too.
+        await client.unsafe(`
+          CREATE TABLE audit_logs (
+            LIKE public.audit_logs INCLUDING DEFAULTS,
+            FOREIGN KEY (organization_id) REFERENCES organization (id) ON DELETE CASCADE
+          )`);
         const applyMigration = async (name: string) => {
           const source = await Bun.file(
             new URL(
@@ -164,13 +172,53 @@ describe.skipIf(!enabled)("document-owned verification history", () => {
           }
           return result;
         };
-        await seedRun(createSafeId<"entity">(), "completed");
+        const orphanRunId = await seedRun(
+          createSafeId<"entity">(),
+          "completed",
+        );
         expect(Object.values(await counts())).toEqual(dependents.map(() => 1));
         await applyMigration(migrationName);
         await applyMigration(
           "20261005120700_validate_verification_document_cascade",
         );
         expect(Object.values(await counts())).toEqual(dependents.map(() => 0));
+        const constraints = await client<{ validated: boolean }[]>`
+          SELECT convalidated AS validated FROM pg_constraint
+          WHERE conname = 'legal_list_verification_runs_entity_fk'
+            AND conrelid = ${`${schema}.legal_list_verification_runs`}::regclass`;
+        expect([...constraints]).toEqual([{ validated: true }]);
+        const missingDocumentError = await seedRun(
+          createSafeId<"entity">(),
+          "completed",
+        ).then(
+          () => null,
+          (error: unknown) => error,
+        );
+        expect(missingDocumentError).toMatchObject({
+          cause: {
+            errno: "23503",
+            constraint: "legal_list_verification_runs_entity_fk",
+          },
+        });
+        expect(Object.values(await counts())).toEqual(dependents.map(() => 0));
+        const removalAudits = await client<
+          {
+            resource_id: string;
+            organization_id: string;
+            action: string;
+            trigger_source_id: string;
+          }[]
+        >`
+          SELECT resource_id, organization_id, action, trigger_source_id
+          FROM audit_logs`;
+        expect([...removalAudits]).toEqual([
+          {
+            resource_id: orphanRunId,
+            organization_id: organizationId,
+            action: "delete",
+            trigger_source_id: migrationName,
+          },
+        ]);
         for (const status of VERIFICATION_RUN_STATUSES) {
           await seedRun(documentId, status);
         }
@@ -199,7 +247,8 @@ describe.skipIf(!enabled)("document-owned verification history", () => {
         >`SELECT entity_id FROM legal_list_verification_runs`;
         expect(remaining).toEqual([{ entity_id: retainedDocumentId }]);
       } finally {
-        await client.unsafe(`DROP SCHEMA ${schema} CASCADE`);
+        await client.unsafe(`RESET search_path`);
+        await client.unsafe(`DROP SCHEMA IF EXISTS ${schema} CASCADE`);
       }
     });
   });

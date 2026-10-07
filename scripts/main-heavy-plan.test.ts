@@ -8,6 +8,7 @@ import * as v from "valibot";
 import eventPolicies from "../.github/ci-event-policy.json" with { type: "json" };
 import {
   contextFromNested,
+  contextWithPlanOutputs,
   evaluate as evaluateExpression,
   UNKNOWN,
 } from "./github-expression";
@@ -30,12 +31,17 @@ const workflowSchema = v.object({
     v.string(),
     v.looseObject({
       if: v.optional(v.string()),
+      outputs: v.optional(v.record(v.string(), v.string())),
       needs: v.optional(v.union([v.string(), v.array(v.string())])),
       steps: v.optional(v.array(stepSchema)),
     }),
   ),
 });
 const workflow = v.parse(workflowSchema, Bun.YAML.parse(source));
+const planOutputs = v.parse(
+  v.record(v.string(), v.string()),
+  workflow.jobs["ci-plan"]?.outputs,
+);
 const THIN_JOBS = thinJobs(workflow);
 const heavy = mainHeavyJobs(workflow);
 const outcome = workflow.jobs["ci-result"]?.steps?.find(
@@ -55,7 +61,13 @@ const expectedHeavy = Object.keys(scopes).filter(
 const ciNeeds = v.parse(v.array(v.string()), workflow.jobs["ci-result"]?.needs);
 
 const selected = (condition: string, context: object) => {
-  const result = evaluateExpression(condition, contextFromNested(context));
+  const result = evaluateExpression(
+    condition,
+    contextWithPlanOutputs({
+      context: contextFromNested(context),
+      outputs: planOutputs,
+    }),
+  );
   if (result === UNKNOWN) {
     panic(`Unresolved heavy-plan expression: ${condition}`);
   }
@@ -79,7 +91,7 @@ const context = (
           heavyOnly && THIN_JOBS.some((thin) => thin === job)
             ? "skipped"
             : "success",
-        outputs: job === "ci-plan" ? plan : {},
+        outputs: job === "ci-plan" ? { run_required: "true", ...plan } : {},
       },
     ]),
   ),
@@ -207,6 +219,23 @@ test("main heavy runs execute the release compiler exactly when VERSION is plann
   }
 });
 
+test("completed-depth reuse skips every nonstructural main heavy job", () => {
+  for (const event of heavyEvents) {
+    const reused = context(event, true, {
+      ...heavyPlan,
+      run_required: "false",
+    });
+    for (const [job, body] of Object.entries(workflow.jobs)) {
+      if (job === "ci-plan" || job === "ci-result") {
+        continue;
+      }
+      expect(selected(body.if ?? "true", reused), `${event}/${job}`).toBe(
+        false,
+      );
+    }
+  }
+});
+
 test("dropping a heavy job cannot pass the scheduling invariant", () => {
   const removed = heavy.at(0);
   expect(removed).toBeDefined();
@@ -281,6 +310,13 @@ test("heavy event policies exclude pull requests and preserve existing full cert
           );
           if (event === "pull_request" && queueJob) {
             expected = false;
+          }
+          if (
+            current.includes(
+              "needs.ci-plan.outputs.package_checks_required == 'true'",
+            )
+          ) {
+            expected = expected && required === "true";
           }
           if (job === "route-smoke" && event === "merge_group") {
             expected = required === "true";
@@ -423,6 +459,7 @@ test("heavy scope selection plans full suites even on an empty main diff", () =>
           HEAVY_ONLY: "true",
           SUITE_DEPTH: "full",
           GITHUB_OUTPUT: output,
+          RUNNER_TEMP: directory,
         },
       });
       expect(run.exitCode, run.stderr.toString()).toBe(0);

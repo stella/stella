@@ -40,7 +40,7 @@ const OWNER_MAP_NAME = "LOCAL_DEV_ACCESS_BY_FLAG";
 const OWNER_CALL = "isDeploymentFeatureEnabled";
 const GATE_PLUGIN = "deploymentFeatureGate";
 const FEATURE_PREFIX = "FEATURE_";
-const FEATURE_TAG_PROPERTY = "feature";
+const FEATURE_TAG_PROPERTIES = new Set(["feature", "deploymentFeature"]);
 const API_ALIAS_PREFIX = "@/api/";
 const API_SRC_PREFIX = "apps/api/src/";
 export const SERVER_ROOT_FILE = "apps/api/src/server.ts";
@@ -250,7 +250,7 @@ const collectFlagReads = (file: string, root: ts.Node): FlagRead[] => {
       }
     } else if (
       ts.isPropertyAssignment(node) &&
-      propertyNameText(node.name) === FEATURE_TAG_PROPERTY
+      FEATURE_TAG_PROPERTIES.has(propertyNameText(node.name) ?? "")
     ) {
       const flag = featureName(literalText(unwrap(node.initializer)));
       if (flag !== undefined) {
