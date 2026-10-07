@@ -8,7 +8,7 @@ import { panic, Result } from "better-result";
  * The wire values live in @stll/api-contract so producers and consumers are
  * checked against one source.
  */
-import { AI_ERROR_KINDS, type AIErrorKind } from "@stll/api-contract";
+import type { AIErrorKind } from "@stll/api-contract";
 import { classifyFailure } from "@stll/errors";
 import type { FailureReason } from "@stll/errors";
 import { isNonNullObject } from "@stll/template-conditions/path";
@@ -36,7 +36,6 @@ import {
   readProviderStatus,
 } from "@/api/lib/observability/failure-evidence";
 
-export { AI_ERROR_KINDS };
 export type { AIErrorKind };
 
 const HTTP_SERVER_ERROR_MIN = 500;
