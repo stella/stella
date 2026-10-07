@@ -469,6 +469,43 @@ describe("the request lifecycle", () => {
     }
   });
 
+  test("measures a declared route under its class on the completion and error paths", async () => {
+    // Mounted the way the server mounts it: a `/v1` group around a prefixed
+    // plugin, so the hooks see the same full route pattern the class map keys.
+    const app = new Elysia()
+      .onRequest(({ request }) => {
+        initRequestContext(request);
+      })
+      .onError((context) => answerRequestError(context))
+      .onAfterHandle(async (context) => await completeRequest(context))
+      .group("/v1", (versioned) =>
+        versioned.use(
+          new Elysia({ prefix: "/case" })
+            .get("/decisions/:decisionId/citations/summary", () => "ok")
+            .get("/sitemap/shards", () => {
+              throw pgFailover();
+            }),
+        ),
+      );
+
+    await app.handle(get("/v1/case/decisions/d1/citations/summary")());
+    await app.handle(get("/v1/case/sitemap/shards")());
+
+    expect(
+      metricLines
+        .map((line) => JSON.parse(line))
+        .filter((record) => "RequestDuration" in record)
+        .map((record) => [
+          record["http.route"],
+          record.class,
+          "_aws" in record,
+        ]),
+    ).toEqual([
+      ["/v1/case/decisions/:decisionId/citations/summary", "search", true],
+      ["/v1/case/sitemap/shards", "batch", false],
+    ]);
+  });
+
   test("a failed analytics flush is logged and never captured", async () => {
     setAnalyticsForTesting({
       capture: (params) => {

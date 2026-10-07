@@ -14,6 +14,7 @@
 // Usage:
 //   bun scripts/typecheck-coverage.ts
 //   bun scripts/typecheck-coverage.ts --self-test
+//   bun scripts/typecheck-coverage.ts --autofix <changed-source>...
 
 import { panic } from "better-result";
 import { existsSync, readFileSync, readdirSync } from "node:fs";
@@ -75,6 +76,14 @@ const OXC_PROJECT_PROXIES = [
   {
     config: "apps/api/src/mcp/apps/tsconfig.json",
     target: "apps/api/tsconfig.mcp-apps.json",
+  },
+  {
+    config: "apps/api/src/handlers/visual-sandbox/browser/tsconfig.json",
+    target: "apps/api/tsconfig.visual-sandbox.json",
+  },
+  {
+    config: "apps/api/e2e/tsconfig.json",
+    target: "apps/api/tsconfig.visual-sandbox.json",
   },
   {
     config: "apps/desktop/tests/tsconfig.json",
@@ -430,20 +439,95 @@ const assertProxyTargets = (proxies: readonly OxcProjectProxy[]): void => {
   }
 };
 
+type NearestOxcConfigOptions = {
+  file: string;
+  configExists: (config: string) => boolean;
+};
+
+const nearestOxcConfig = ({
+  file,
+  configExists,
+}: NearestOxcConfigOptions): string | null => {
+  let directory = path.posix.dirname(file);
+  while (true) {
+    const config = path.posix.join(directory, CONVENTIONAL_TSCONFIG);
+    if (configExists(config)) {
+      return config;
+    }
+    if (directory === ".") {
+      return null;
+    }
+    directory = path.posix.dirname(directory);
+  }
+};
+
 const hasDiscoverableAncestorConfig = (
   file: string,
   discoverableConfigFiles: Map<string, Set<string>>,
   configExists: (config: string) => boolean,
 ): boolean => {
-  let directory = path.posix.dirname(file);
-  while (directory !== ".") {
-    const config = `${directory}/${CONVENTIONAL_TSCONFIG}`;
-    if (configExists(config)) {
-      return discoverableConfigFiles.get(config)?.has(file) ?? false;
-    }
-    directory = path.posix.dirname(directory);
+  const config = nearestOxcConfig({ file, configExists });
+  return config === null
+    ? false
+    : (discoverableConfigFiles.get(config)?.has(file) ?? false);
+};
+
+// A changed-file Oxc pass filters compiler diagnostics to its targets. Compile
+// the complete discovered projects first, including unchanged dependencies;
+// membership proof rejects excluded targets and the empty root project.
+const typecheckAutofixFiles = (files: readonly string[]): void => {
+  if (files.length === 0) {
+    panic("Autofix typecheck requires source files");
   }
-  return false;
+  const projects = new Map<string, string[]>();
+  for (const rawFile of files) {
+    const file = normalizeRepoPath(
+      path.relative(REPO_ROOT, path.resolve(REPO_ROOT, rawFile)),
+    );
+    if (file === ".." || file.startsWith("../") || path.isAbsolute(file)) {
+      panic(`Autofix source is outside the repository: ${rawFile}`);
+    }
+    const project = nearestOxcConfig({
+      file,
+      configExists: (config) => existsSync(path.join(REPO_ROOT, config)),
+    });
+    if (project === null) {
+      panic(`Autofix source has no TypeScript project: ${file}`);
+    }
+    const targets = projects.get(project);
+    if (targets === undefined) {
+      projects.set(project, [file]);
+    } else {
+      targets.push(file);
+    }
+  }
+  for (const [project, targets] of projects) {
+    const output = run([
+      "bun",
+      TSC_NATIVE,
+      "--noEmit",
+      "--pretty",
+      "false",
+      "--listFiles",
+      "-p",
+      project,
+    ]);
+    const covered = new Set(
+      lines(output).map((file) =>
+        normalizeRepoPath(path.resolve(REPO_ROOT, file)),
+      ),
+    );
+    for (const file of targets) {
+      if (!covered.has(normalizeRepoPath(path.resolve(REPO_ROOT, file)))) {
+        panic(
+          `Autofix source is excluded from the checked project ${project}: ${file}`,
+        );
+      }
+    }
+    console.log(
+      `Autofix types checked: ${project} (${targets.length} targets)`,
+    );
+  }
 };
 
 const findSourcesWithoutDiscoverableConfig = (
@@ -785,6 +869,10 @@ const selfTest = (): void => {
 };
 
 const main = (): void => {
+  if (process.argv.at(2) === "--autofix") {
+    typecheckAutofixFiles(process.argv.slice(3));
+    return;
+  }
   const options = parseArgs(process.argv.slice(2));
   if (options.selfTest) {
     selfTest();

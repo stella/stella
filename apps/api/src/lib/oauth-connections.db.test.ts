@@ -133,6 +133,48 @@ const readGrantState = async ({
   ),
 });
 
+describe("resource-bound OAuth refresh", () => {
+  test.each(["original", "omitted"] as const)(
+    "preserves offline access across repeated refreshes with %s scopes",
+    async (scopeMode) => {
+      const browser = await signInHuman(
+        `refresh-${Bun.randomUUIDv7()}@stella.dev`,
+      );
+      const organization = await getAuth().api.createOrganization({
+        body: { name: "Refresh", slug: `refresh-${Bun.randomUUIDv7()}` },
+        headers: browser.headers(),
+      });
+      await browser.setActiveOrganization(organization.id);
+      const client = await registerOAuthClient();
+      let grant = await grantOAuthClient(browser, client);
+      const requestedScope = grant.scope;
+      expect(grant.scope.split(" ")).toContain("offline_access");
+      for (let rotation = 0; rotation < 2; rotation += 1) {
+        const response = await refreshOAuthGrant({
+          client,
+          refreshToken: grant.refreshToken,
+          ...(scopeMode === "original" ? { scope: requestedScope } : {}),
+        });
+        expect(response.status, await response.clone().text()).toBe(200);
+        const tokens = v.parse(
+          v.looseObject({
+            access_token: v.pipe(v.string(), v.minLength(1)),
+            refresh_token: v.pipe(v.string(), v.minLength(1)),
+            scope: v.string(),
+          }),
+          await response.json(),
+        );
+        expect(tokens.scope.split(" ")).toContain("offline_access");
+        grant = {
+          accessToken: tokens.access_token,
+          refreshToken: tokens.refresh_token,
+          scope: tokens.scope,
+        };
+      }
+    },
+  );
+});
+
 describe("disconnecting a connected app", () => {
   test("ends that grant's tokens and consent and leaves the user's other connected apps working", async () => {
     const browser = await signInHuman(

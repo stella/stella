@@ -1,5 +1,6 @@
 import { panic } from "better-result";
 
+import type { WebApiRoutes } from "@/lib/eden-client";
 import type { EntityKind } from "@/lib/types";
 
 export const resolveSidebarWorkspaceId = ({
@@ -173,3 +174,12 @@ export const resolveEntityActivityDestination = (
       return panic("Unsupported entity kind");
   }
 };
+
+export type WorkspaceActivity =
+  WebApiRoutes["workspaces"][":workspaceId"]["activity"]["get"]["response"][200]["items"][number];
+
+export const matterActivityItemVisible = (item: WorkspaceActivity): boolean =>
+  item.type === "thread" ||
+  item.entityKind !== "task" ||
+  item.listItemType === null ||
+  item.listItemType === "task";

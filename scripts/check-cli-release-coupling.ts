@@ -44,6 +44,9 @@ import path from "node:path";
 import { compareCodeUnit } from "../packages/collation/src/collation";
 import { isChangesetEntry } from "./changeset-guard";
 
+// Computed filesystem reads retain these repository Markdown inputs.
+export const CI_MARKDOWN_READER_INPUTS = [".changeset/*.md"];
+
 const REPO_ROOT = path.resolve(import.meta.dirname, "..");
 const CLI_PACKAGE_NAME = "@stll/cli";
 const CLI_DIRECTORY = "packages/cli";

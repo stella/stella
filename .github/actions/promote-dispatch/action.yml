@@ -77,8 +77,6 @@ runs:
         set -euo pipefail
 
         readonly TOKEN_REFRESH_SECONDS=2700
-        readonly TOKEN_REFRESH_ATTEMPTS=20
-        readonly TOKEN_REFRESH_RETRY_SECONDS=15
         readonly WATCH_POLL_SECONDS=10
 
         base64url() {
@@ -105,7 +103,7 @@ runs:
           echo "::add-mask::${jwt}" >&2
 
           installation_id="$(
-            GH_TOKEN="$jwt" gh api -H "Authorization: Bearer ${jwt}" \
+            GH_TOKEN="$jwt" bash "$GITHUB_ACTION_PATH/../../../scripts/gh-retry.sh" api -H "Authorization: Bearer ${jwt}" \
               "/repos/${INFRA_REPO}/installation" --jq '.id'
           )"
           repository_name="${INFRA_REPO#*/}"
@@ -113,29 +111,22 @@ runs:
             jq -cn --arg repository "$repository_name" \
               '{repositories: [$repository], permissions: {actions: "write"}}'
           )"
-          GH_TOKEN="$jwt" gh api -H "Authorization: Bearer ${jwt}" \
+          GH_TOKEN="$jwt" bash "$GITHUB_ACTION_PATH/../../../scripts/gh-retry.sh" api -H "Authorization: Bearer ${jwt}" \
             --method POST \
             "/app/installations/${installation_id}/access_tokens" \
             --input - --jq '.token' <<<"$request_body"
         }
 
         refresh_app_token() {
-          local attempt token=""
-          for ((attempt = 1; attempt <= TOKEN_REFRESH_ATTEMPTS; attempt += 1)); do
-            if token="$(mint_app_token)" && [[ -n "$token" ]]; then
-              break
-            fi
-            token=""
-            echo "Token mint failed (${attempt}/${TOKEN_REFRESH_ATTEMPTS}); retaining the current token and retrying..." >&2
-            sleep "$TOKEN_REFRESH_RETRY_SECONDS"
-          done
-          if [[ -z "$token" ]]; then
-            echo "::error::Could not renew the GitHub App token after ${TOKEN_REFRESH_ATTEMPTS} attempts." >&2
+          local token
+          # Token creation is a single request; retrying can mint another token.
+          if ! token="$(mint_app_token)" || [[ -z "$token" ]]; then
+            echo "::error::GitHub App token renewal failed." >&2
             exit 1
           fi
           if [[ -n "${current_app_token:-}" ]]; then
-            GH_TOKEN="$current_app_token" gh api --method DELETE \
-              "/installation/token" >/dev/null 2>&1 || true
+            GH_TOKEN="$current_app_token" bash "$GITHUB_ACTION_PATH/../../../scripts/gh-retry.sh" api --method DELETE \
+              "/installation/token" >/dev/null || true
           fi
           echo "::add-mask::${token}"
           current_app_token="$token"
@@ -145,8 +136,8 @@ runs:
 
         revoke_app_token() {
           if [[ -n "${current_app_token:-}" ]]; then
-            GH_TOKEN="$current_app_token" gh api --method DELETE \
-              "/installation/token" >/dev/null 2>&1 || true
+            GH_TOKEN="$current_app_token" bash "$GITHUB_ACTION_PATH/../../../scripts/gh-retry.sh" api --method DELETE \
+              "/installation/token" >/dev/null || true
           fi
         }
 
@@ -200,7 +191,7 @@ runs:
         # the step in well under a second with no output. Any failure here
         # surfaces as a real HTTP error in the log.
         echo "Dispatching ${WORKFLOW_FILE} on ${INFRA_REPO} (target=${TARGET_ENV}, release=${RELEASE_REF})..."
-        gh api --method POST \
+        bash "$GITHUB_ACTION_PATH/../../../scripts/gh-retry.sh" api --method POST \
           "/repos/${INFRA_REPO}/actions/workflows/${WORKFLOW_FILE}/dispatches" \
           "${dispatch_args[@]}"
 
@@ -210,21 +201,17 @@ runs:
         # (v1.2.3 vs v1.2.3-rc.1, v1.2.3-rc.1 vs v1.2.3-rc.10) never collide.
         echo "Dispatch accepted. Polling for the new run..."
         run_id=""
-        lookup_failures=0
         for attempt in {1..30}; do
-          # `if !` keeps a failed lookup from tripping `set -e`. Empty output
-          # means the run has not appeared yet; a non-zero exit means the API
-          # call itself failed (rate limit, 5xx, network blip). Both are worth
-          # retrying, but only the second is worth reporting.
+          # Poll successful reads until the run appears. HTTP recovery belongs
+          # to the shared owner; a failed read exhausts that request's budget.
           if ! run_id="$(
-            gh api \
+            bash "$GITHUB_ACTION_PATH/../../../scripts/gh-retry.sh" api \
               "/repos/${INFRA_REPO}/actions/workflows/${WORKFLOW_FILE}/runs?event=workflow_dispatch&per_page=10" \
               --jq ".workflow_runs[] | select(.created_at >= \"${dispatched_at}\") | select(.display_title == \"${expected_title}\") | .id" \
               | head -n 1
           )"; then
-            lookup_failures=$((lookup_failures + 1))
-            echo "Run lookup failed (attempt ${attempt}/30); retrying..."
-            run_id=""
+            echo "::error::Dispatched run lookup failed." >&2
+            exit 1
           fi
           if [[ -n "$run_id" ]]; then
             echo "Found dispatched run: ${run_id} (attempt ${attempt}/30)"
@@ -234,16 +221,11 @@ runs:
         done
 
         if [[ -z "$run_id" ]]; then
-          if [[ "$lookup_failures" -gt 0 ]]; then
-            echo "::error::Dispatched a promote run but could not look it up (${lookup_failures}/30 lookups failed). The promote may still be running: check ${INFRA_REPO}." >&2
-          else
-            echo "::error::Dispatched a promote run but never observed it in the workflow's run list." >&2
-          fi
+          echo "::error::Dispatched run did not appear in the workflow run list." >&2
           exit 1
         fi
 
         run_url="https://github.com/${INFRA_REPO}/actions/runs/${run_id}"
-        consecutive_read_failures=0
         echo "Watching run ${run_id}..."
         while true; do
           now="$(date +%s)"
@@ -253,19 +235,12 @@ runs:
           fi
 
           if ! run_state="$(
-            gh api "/repos/${INFRA_REPO}/actions/runs/${run_id}" \
+            bash "$GITHUB_ACTION_PATH/../../../scripts/gh-retry.sh" api "/repos/${INFRA_REPO}/actions/runs/${run_id}" \
               --jq '[.status, .conclusion, .html_url] | @tsv'
           )"; then
-            consecutive_read_failures=$((consecutive_read_failures + 1))
-            if (( consecutive_read_failures >= 3 )); then
-              echo "::error::Lost track of promote run ${run_id} after ${consecutive_read_failures} consecutive API failures. Check ${run_url}" >&2
-              exit 1
-            fi
-            echo "Run status lookup failed (${consecutive_read_failures}/3); retrying..."
-            sleep "$WATCH_POLL_SECONDS"
-            continue
+            echo "::error::Promote run status lookup failed. Check ${run_url}" >&2
+            exit 1
           fi
-          consecutive_read_failures=0
           status="$(cut -f1 <<<"$run_state")"
           conclusion="$(cut -f2 <<<"$run_state")"
           run_url="$(cut -f3 <<<"$run_state")"

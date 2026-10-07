@@ -191,6 +191,114 @@ describe.serial("confine-owner member-call rows", () => {
   });
 });
 
+describe.serial("confine-owner function-call rows", () => {
+  const source = [
+    "const id = extractId(hit);",
+    "const optional = extractId?.(hit);",
+    "const wrapped = (extractId)(hit);",
+    "const asserted = (extractId as (hit: unknown) => string)(hit);",
+    "const other = extractSnippet(hit);",
+    "const member = reader.extractId(hit);",
+    "const reference = extractId;",
+    "",
+  ].join("\n");
+  const options = {
+    entries: [
+      {
+        id: "corpus-hit-classification",
+        owner: ["apps/api/src/lib/legal-search/corpus-hit-disposition.ts"],
+        enforcement: {
+          kind: "function-call",
+          name: "extractId",
+          within: ["apps/api/src/lib/legal-search/", "apps/api/src/handlers/"],
+          allowed: [
+            { path: "apps/api/src/handlers/allowed.ts", reason: "test" },
+          ],
+        },
+      },
+    ],
+  };
+  const lintFunction = async (sourcePath: string) =>
+    await lintSingleRule("confine-owner", source, {
+      ruleOptions: options,
+      sourcePath,
+    });
+
+  test("reports direct function calls in every scoped path and spelling", async () => {
+    expect(await lintFunction("apps/api/src/lib/legal-search/scan.ts")).toEqual(
+      [1, 2, 3, 4],
+    );
+    expect(await lintFunction("apps/api/src/handlers/search.ts")).toEqual([
+      1, 2, 3, 4,
+    ]);
+  });
+
+  test("leaves the function owner and allowed files alone", async () => {
+    expect(
+      await lintFunction(
+        "apps/api/src/lib/legal-search/corpus-hit-disposition.ts",
+      ),
+    ).toEqual([]);
+    expect(await lintFunction("apps/api/src/handlers/allowed.ts")).toEqual([]);
+  });
+
+  test("leaves function calls outside the declared scope alone", async () => {
+    expect(await lintFunction("apps/api/src/lib/unrelated.ts")).toEqual([]);
+    expect(await lintFunction("apps/web/src/search.ts")).toEqual([]);
+  });
+});
+
+describe.serial("corpus hit ownership rows", () => {
+  const source = [
+    "extractId(hit);",
+    'import { candidateDecisionRowsStatement } from "@/api/handlers/case-law/decisions/search";',
+    'import { rehydrateCorpusIndexProviderCandidatesStatement } from "@/api/lib/legal-search/corpus-index-provider";',
+    'import { pageDecisionRowsStatement } from "@/api/handlers/case-law/decisions/search";',
+    "",
+  ].join("\n");
+  const ruleOptions = { entries: OWNERSHIP };
+
+  test("rejects direct extraction and raw candidate readers outside their owners", async () => {
+    for (const sourcePath of [
+      "apps/api/src/lib/legal-search/new-scan.ts",
+      "apps/api/src/handlers/new-search.ts",
+    ]) {
+      expect(
+        await lintSingleRule("confine-owner", source, {
+          ruleOptions,
+          sourcePath,
+        }),
+      ).toEqual([1, 2, 3, 4]);
+    }
+  });
+
+  test("accepts the hit classifier and the candidate query owners", async () => {
+    expect(
+      await lintSingleRule("confine-owner", "extractId(hit);", {
+        ruleOptions,
+        sourcePath: "apps/api/src/lib/legal-search/corpus-hit-disposition.ts",
+      }),
+    ).toEqual([]);
+    for (const sourcePath of [
+      "apps/api/src/handlers/case-law/decisions/search.ts",
+      "apps/api/src/lib/legal-search/corpus-index-provider.ts",
+      "apps/api/src/lib/legal-search/corpus-rehydration-disposition.ts",
+      "apps/api/src/handlers/case-law/decisions/search-hydration.db.test.ts",
+    ]) {
+      expect(
+        await lintSingleRule(
+          "confine-owner",
+          source.split("\n").slice(1).join("\n"),
+          {
+            ruleOptions,
+            sourcePath,
+          },
+        ),
+      ).toEqual([]);
+    }
+  });
+});
+
 describe.serial("member authority context ownership", () => {
   test("allows construction only in declared context builders", async () => {
     const source =
@@ -387,4 +495,71 @@ test("desktop observations are confined to service and membership cleanup", asyn
       }),
     ).toEqual([]);
   }
+});
+
+describe.serial("transaction proof ownership", () => {
+  test("confines minting even inside another proofs directory", async () => {
+    const entry = OWNERSHIP.find(
+      ({ id }) => id === "transaction-proof-minting",
+    );
+    if (entry?.enforcement.kind !== "import") {
+      throw new TypeError("Transaction proof minting must confine imports");
+    }
+    const source = [
+      'import { defineProof as mint } from "@gdp-ts/core"; const second = mint("Second");',
+      'import * as core from "@gdp-ts/core"; const third = core.defineProof("Third");',
+      'export { defineProof } from "@gdp-ts/core";',
+      'export * from "@gdp-ts/core";',
+      'const { defineProof } = await import("@gdp-ts/core");',
+      'import { name, type Named, type Proof } from "@gdp-ts/core";',
+    ].join("\n");
+    for (const sourcePath of [
+      "apps/api/src/lib/signals/proofs/second-mint.ts",
+      "apps/api/src/lib/proofs/second-mint.ts",
+      "apps/api/src/handlers/signals/unchecked.ts",
+    ]) {
+      expect(
+        await lintSingleRule("confine-owner", source, {
+          sourcePath,
+          ruleOptions: { entries: [entry] },
+        }),
+      ).toEqual([1, 2, 3, 4, 5]);
+    }
+    for (const sourcePath of entry.owner) {
+      expect(
+        await lintSingleRule("confine-owner", source, {
+          sourcePath,
+          ruleOptions: { entries: [entry] },
+        }),
+      ).toEqual([]);
+    }
+  });
+
+  test("only predicate owners can invoke the checking boundary", async () => {
+    const entry = OWNERSHIP.find(
+      ({ id }) => id === "transaction-proof-predicates",
+    );
+    if (entry?.enforcement.kind !== "import") {
+      throw new TypeError("Transaction proof predicates must confine imports");
+    }
+    const source = [
+      'import { withCheckedTransaction as mint } from "@/api/lib/proofs/checked-transaction";',
+      'export { withCheckedTransaction } from "@/api/lib/proofs/checked-transaction";',
+      'import type { TransactionProof } from "@/api/lib/proofs/checked-transaction";',
+    ].join("\n");
+    expect(
+      await lintSingleRule("confine-owner", source, {
+        sourcePath: "apps/api/src/handlers/signals/unchecked.ts",
+        ruleOptions: { entries: [entry] },
+      }),
+    ).toEqual([1, 2]);
+    for (const sourcePath of entry.owner) {
+      expect(
+        await lintSingleRule("confine-owner", source, {
+          sourcePath,
+          ruleOptions: { entries: [entry] },
+        }),
+      ).toEqual([]);
+    }
+  });
 });

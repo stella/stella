@@ -44,6 +44,8 @@ type UseDecisionProvisionAnchorsOptions = {
   /** The citing court's jurisdiction; null while the decision is loading. */
   country: string | null;
   decisionDate: string | null;
+  court: string | null;
+  caseNumber: string | null;
   decisionId: SafeId<"caseLawDecision">;
 };
 
@@ -102,6 +104,8 @@ const workKeyOf = ({
 export const useDecisionProvisionAnchors = ({
   blocks,
   country,
+  court,
+  caseNumber,
   decisionDate,
   decisionId,
 }: UseDecisionProvisionAnchorsOptions): DecisionProvisionAnchor[] => {
@@ -277,6 +281,10 @@ export const useDecisionProvisionAnchors = ({
         },
         preview: preview?.documentId === document.id ? preview : null,
         payload: {
+          decisionContext:
+            court === null || caseNumber === null
+              ? undefined
+              : { court, caseNumber, appliedDocumentId: document.id },
           anchorId: provisionHeadingAnchor(row.anchor),
           highlightAnchorId: row.anchor,
           documentId: document.id,
@@ -326,6 +334,10 @@ export const useDecisionProvisionAnchors = ({
           versionValidFrom: document.versionValidFrom,
         },
         payload: {
+          decisionContext:
+            court === null || caseNumber === null
+              ? undefined
+              : { court, caseNumber, appliedDocumentId: document.id },
           anchorId: provisionHeadingAnchor(reference.anchor),
           highlightAnchorId: reference.anchor,
           documentId: document.id,

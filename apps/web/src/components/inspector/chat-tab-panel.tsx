@@ -247,6 +247,7 @@ export const ChatTabPanel = ({
     sendMessage,
     queuedMessages,
     removeQueuedMessage,
+    sendQueuedMessageNow,
     stop,
     leave,
     isGenerating,
@@ -616,9 +617,12 @@ export const ChatTabPanel = ({
                   onCreateDocumentResolve={handleCreateDocumentResolve}
                   onOpenCreateDocumentDraft={handleOpenCreateDocumentDraft}
                   onOpenCreatedDocument={handleOpenCreatedDocument}
-                  onRemoveQueuedMessage={removeQueuedMessage}
                   onResend={resendLatestMessage}
                   onSendWithoutAnonymization={sendWithoutAnonymization}
+                  queuedMessageActions={{
+                    remove: removeQueuedMessage,
+                    sendNow: sendQueuedMessageNow,
+                  }}
                   queuedMessages={queuedMessages}
                   showThinkingIndicator
                   streamdownComponents={streamdownComponents}
@@ -721,7 +725,13 @@ const useBoundLegalDocumentLabel = (tab: ChatTab): string | undefined => {
 
 const useChatContextLabel = (tab: ChatTab, activeOrganizationId: string) => {
   const t = useTranslations();
-  const { data } = useQuery(workspacesNavigationOptions(activeOrganizationId));
+  const { id: userId } = useAuthenticatedUser();
+  const { data } = useQuery(
+    workspacesNavigationOptions({
+      organizationId: activeOrganizationId,
+      userId,
+    }),
+  );
   const boundDocumentLabel = useBoundLegalDocumentLabel(tab);
   const workspaces = data?.workspaces ?? [];
   const matterNames = tab.contextMatterIds

@@ -38,5 +38,13 @@
   {
     "name": "Model catalog snapshot drift guard",
     "reason": "Renamed to Model catalog snapshot drift check; it now runs with the package checks, after the dependency install"
+  },
+  {
+    "name": "MCP App bundle guard",
+    "reason": "Replaced by MCP App bundle and shared assets guard: regenerates the existing HTML bundles and also checks their shared generated messages, schemas and stylesheet."
+  },
+  {
+    "name": "Release marketing staleness warning",
+    "reason": "Replaced by Release marketing provenance warning: CI checks source provenance without invoking rendered screenshots; rendered freshness remains covered by the marketing screenshot job."
   }
 ]

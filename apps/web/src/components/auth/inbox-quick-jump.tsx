@@ -36,7 +36,7 @@ type ProviderShape = {
   readonly domains: readonly string[];
 };
 
-const PROVIDERS = [
+export const PROVIDERS = [
   {
     name: "Gmail",
     url: "https://mail.google.com/mail/u/0/#inbox",
@@ -77,20 +77,20 @@ type Provider = Omit<ProviderShape, "name"> & { readonly name: ProviderName };
 const isFallbackProvider = (name: ProviderName) =>
   name === "Gmail" || name === "Outlook";
 
-const getProductIconUrl = (name: ProviderName) => {
-  if (name === "Gmail") {
-    return "https://upload.wikimedia.org/wikipedia/commons/7/7e/Gmail_icon_%282020%29.svg";
-  }
-
-  if (name === "Outlook") {
-    return "https://upload.wikimedia.org/wikipedia/commons/c/cc/Microsoft_Outlook_Icon_%282025%E2%80%93present%29.svg";
-  }
-
-  return null;
-};
+// Self-hosted so the sign-in page never tells a third party which
+// inbox the visitor uses. A provider without an accurate official mark
+// maps to null; the Record keeps every provider listed here.
+export const PROVIDER_ICON_URLS = {
+  Gmail: "/branding/mail/gmail.svg",
+  Outlook: "/branding/apps/microsoft-outlook.svg",
+  iCloud: "/branding/mail/icloud.svg",
+  Yahoo: null,
+  "Proton Mail": "/branding/mail/proton-mail.svg",
+  Fastmail: null,
+} as const satisfies Record<ProviderName, `/branding/${string}.svg` | null>;
 
 const ProviderIcon = ({ name }: { name: ProviderName }) => {
-  const iconUrl = getProductIconUrl(name);
+  const iconUrl = PROVIDER_ICON_URLS[name];
   if (!iconUrl) {
     return null;
   }

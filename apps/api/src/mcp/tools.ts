@@ -7,6 +7,7 @@ import { Panic, panic, Result } from "better-result";
 import { DOCUMENT_VERSION_UPLOAD_CAPABILITY_IDS } from "@stll/api-contract";
 
 import { captureError } from "@/api/lib/analytics/capture";
+import { isSearchIndexUnavailable } from "@/api/lib/legal-search/search-index-unavailable";
 import {
   isExternalMcpToolName,
   isSkillToolName,
@@ -53,6 +54,7 @@ import {
   featureDisabledHint,
   MCP_INTERNAL_ERROR_HINT,
   McpOutputContractError,
+  searchIndexUnavailableResult,
   serializeToolResult,
   structuredErrorResult,
 } from "@/api/mcp/tool-utils";
@@ -597,7 +599,9 @@ const MCP_OUTPUT_CONTRACT_SINK = failureSink({
  * message: never leak internals to the caller. `captureError` keeps the real
  * exception for observability. An output-contract violation goes through the
  * failure owner instead, which grades it a defect and logs it at ERROR: the
- * caller sees an ordinary tool error, so nothing else would surface it.
+ * caller sees an ordinary tool error, so nothing else would surface it. A
+ * search index that could not be reached is not a defect of the call, so it
+ * keeps its own retryable `search_index_unavailable` envelope.
  */
 const internalErrorResult = ({
   mode,
@@ -614,6 +618,14 @@ const internalErrorResult = ({
     Panic.is(error) && McpOutputContractError.is(error.cause)
       ? error.cause
       : undefined;
+  if (isSearchIndexUnavailable(error)) {
+    return serializeToolResult(
+      scopeToolResultToSurface(searchIndexUnavailableResult(error), {
+        mode,
+        context,
+      }),
+    );
+  }
   if (contractViolation !== undefined) {
     observeFailure(contractViolation, {
       sink: MCP_OUTPUT_CONTRACT_SINK,

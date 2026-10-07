@@ -65,7 +65,12 @@ test("composer ignores whole-page HTML when plain text is short or absent", asyn
   const html =
     "<main><nav>Unselected navigation</nav><article><p>Unselected thread</p><button>Technical action</button></article><footer>Unselected footer</footer></main>";
   for (const plain of ["Selected word", ""]) {
-    await composer.fill("");
+    // Clear through the editor: a programmatic fill does not reliably empty
+    // the rich-text composer in production builds.
+    await composer.click();
+    await page.keyboard.press("ControlOrMeta+A");
+    await page.keyboard.press("Delete");
+    await expect(composer).toHaveText("");
     await composer.evaluate(
       (element, data) => {
         const clipboardData = new DataTransfer();

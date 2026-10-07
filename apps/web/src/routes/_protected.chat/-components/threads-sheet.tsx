@@ -388,6 +388,15 @@ const ThreadRow = ({
   const committedTitle = isPlaceholderThreadTitle(thread.title)
     ? ""
     : thread.title;
+  const contextLine = (
+    <span className="text-muted-foreground flex min-w-0 items-center gap-1.5 text-xs font-normal whitespace-nowrap">
+      <ChatThreadOriginPrefix origin={thread.origin} />
+      <ThreadContextLine context={thread.context} />
+      <span className="shrink-0 tabular-nums">
+        {format.dateTime(new Date(thread.updatedAt).getTime())}
+      </span>
+    </span>
+  );
   return (
     <div
       className={cn(
@@ -401,9 +410,9 @@ const ThreadRow = ({
           prefilled with a suggestion, replacing the navigation link until
           committed or cancelled. Listed threads always have messages. */}
       <ChatTitleRename
-        editClassName="min-w-0 flex-1 px-3 py-1.5"
+        editClassName="min-w-0 flex-1 gap-0.5 px-3 py-2 text-sm font-medium"
+        editDescription={contextLine}
         hasMessages
-        inputClassName="min-w-0 flex-1 text-sm"
         ownsRenameCommand={false}
         renderView={({
           displayTitle,
@@ -438,20 +447,17 @@ const ThreadRow = ({
                 />
               }
             >
-              <BidiText as="span" className="truncate text-sm font-medium">
+              <BidiText
+                as="span"
+                className="overflow-hidden text-sm font-medium text-ellipsis whitespace-pre"
+              >
                 {displayTitle}
               </BidiText>
               {/* One line that never wraps: provenance, the matters and files
                   the chat drew on (chips truncate, the rest fold into "+N"),
                   then the date, which always stays visible. A matter chat's
                   own matter leads the context, so it is not repeated. */}
-              <span className="text-muted-foreground flex min-w-0 items-center gap-1.5 text-xs whitespace-nowrap">
-                <ChatThreadOriginPrefix origin={thread.origin} />
-                <ThreadContextLine context={thread.context} />
-                <span className="shrink-0 tabular-nums">
-                  {format.dateTime(new Date(thread.updatedAt).getTime())}
-                </span>
-              </span>
+              {contextLine}
             </Tooltip>
             <ChatTitleSuggestButton
               className="opacity-0 group-hover:opacity-100 focus-visible:opacity-100"

@@ -145,6 +145,7 @@
       "useBackupCode": "Utiliser plutôt un code de secours"
     },
     "useDifferentEmail": "Utiliser une autre adresse e-mail",
+    "usePassword": "Utiliser plutôt un mot de passe",
     "weSentCodeTo": "Nous avons envoyé un code à <email>{emailAddress}</email>"
   },
   "avt": {
@@ -348,6 +349,7 @@
     },
     "view": {
       "chooseList": "Choisir une liste",
+      "createList": "Créer une liste",
       "evidenceList": "Faits de",
       "noLists": "Ce dossier n’a aucune liste.",
       "pickList": "Choisissez la liste dont les faits servent à vérifier les documents de ce dossier."
@@ -1055,6 +1057,7 @@
       "toastDescription": "L’affichage des conversations en plein écran arrivera avec leur enregistrement.",
       "toastTitle": "Vue plein écran pas encore disponible"
     },
+    "activateGeneratedView": "Interagir avec cette vue",
     "aiPrompt": "Champ de message IA",
     "aiThread": "Conversation IA",
     "analyzingSources": "Analyse des sources",
@@ -1200,6 +1203,8 @@
     "forkedFromUnavailable": "Créée à partir d’une conversation qui n’est plus disponible",
     "forkedThread": "Issue d’une autre conversation",
     "forkingThread": "Création d’une nouvelle conversation…",
+    "generatedView": "Vue générée",
+    "generatedViewDrill": "Recherche les décisions avec le filtre de juridiction {court} pour l’année {year}.",
     "greeting": "Sur quoi souhaitez-vous travailler ?",
     "greetingSubtitle": "Commencez par un dossier, un document ou une question simple.",
     "hideThread": "Masquer la conversation",
@@ -1331,6 +1336,7 @@
     "sendErrorQuotaExhausted": "Le quota du fournisseur d’IA est épuisé. Réessayez dans une minute ou contactez l’administrateur de l’espace de travail.",
     "sendErrorStreamIncomplete": "La réponse de l’IA a été interrompue avant la fin. Réessayez.",
     "sendPrompt": "Envoyer le message",
+    "sendQueuedMessageNow": "Envoyer maintenant",
     "sendWithoutAnonymization": "Envoyer sans anonymisation",
     "skills": {
       "scope": {
@@ -1478,6 +1484,14 @@
       "sourceCode": "Code source",
       "toggleDetails": "Afficher les détails",
       "unrestoredFields": "En mode anonymisé, {count, plural, one {# champ n’a pas pu être rempli} other {# champs n’ont pas pu être remplis}} avec des valeurs réelles. À vérifier : {fields}"
+    },
+    "turnNotification": {
+      "failedBody": "Une réponse dans une conversation stella n’a pas abouti.",
+      "failedTitle": "Échec de la réponse",
+      "needsInputBody": "Une conversation attend votre approbation ou votre réponse.",
+      "needsInputTitle": "stella a besoin de vous",
+      "replyReadyBody": "stella a fini de répondre dans votre conversation.",
+      "replyReadyTitle": "Réponse prête"
     },
     "unsupportedFileType": "Type de fichier non pris en charge",
     "uploadFailed": "Échec du traitement du fichier",
@@ -1693,6 +1707,7 @@
     "deletedCount": "{count, plural, one {# élément supprimé} other {# éléments supprimés}}",
     "description": "Description",
     "details": "Détails",
+    "detailsHiddenFeatureUnavailable": "Détails masqués : fonctionnalité non activée",
     "disconnect": "Déconnecter",
     "dismiss": "Ignorer",
     "displayName": "Nom affiché",
@@ -1828,6 +1843,8 @@
     "notes": "Notes",
     "open": "Ouvrir",
     "openInNewTab": "Ouvrir dans un nouvel onglet",
+    "openInStella": "Ouvrir dans stella",
+    "openOriginalSource": "Ouvrir la source d’origine",
     "options": "Options",
     "or": "Ou",
     "organization": "Organisation",
@@ -4375,6 +4392,11 @@
       "betaInbox": "Boîte de réception et notifications",
       "betaInboxDescription": "Afficher la boîte de réception et la cloche de notifications",
       "betaTimeBillingDescription": "Afficher le suivi du temps, les factures et les dépenses",
+      "chatNotifications": "Notifications des conversations",
+      "chatNotificationsBlocked": "Les notifications de stella sont bloquées dans ce navigateur. Autorisez-les dans les paramètres du site du navigateur.",
+      "chatNotificationsDescription": "Recevez une notification de ce navigateur lorsqu’une réponse dans une conversation se termine pendant que stella est en arrière-plan.",
+      "chatNotificationsToggle": "M’avertir quand une réponse est prête ou attend mon intervention",
+      "chatNotificationsUnsupported": "Ce navigateur ne prend pas en charge les notifications.",
       "confirmDelete": "Confirmer la suppression du compte",
       "dangerZone": "Zone de danger",
       "dangerZoneDescription": "Supprimer définitivement votre accès au compte et les données privées du compte.",
@@ -4744,6 +4766,7 @@
     },
     "title": "Législation",
     "validity": "En vigueur du {from} au {to}",
+    "versionAppliedInDecision": "Version appliquée dans la décision <bdi>{court}</bdi> <bdi>{caseNumber}</bdi> (<bdi>{range}</bdi>) · {status}",
     "wordingValidFrom": "Rédaction en vigueur depuis le {date}",
     "wordingVersionUnknown": "Date de la version de la rédaction indisponible"
   },

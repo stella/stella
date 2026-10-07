@@ -21,6 +21,7 @@ import {
 
 const packageRoot = path.join(import.meta.dirname, "..");
 const defaultEntriesRoot = path.join(packageRoot, "entries");
+export const CI_MARKDOWN_READER_INPUTS = [defaultEntriesRoot];
 const outputPath = path.join(packageRoot, "src", "catalogue.gen.ts");
 const installPayloadsOutputPath = path.join(
   packageRoot,

@@ -11,6 +11,7 @@ export type ChatToolActivityCategory =
   | "user-input";
 
 const BUILT_IN_CHAT_TOOL_ACTIVITY_CATEGORIES = {
+  show_visual: "artifact",
   add_comment: "mutation",
   "ask-user": "user-input",
   boe_find_related_laws: "research",
