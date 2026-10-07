@@ -182,7 +182,10 @@ test("main heavy workflow dispatches exactly the validated commit through ci.yml
     `Main heavy suites \${{ inputs.sha || github.sha }}`,
   );
   expect(mainTriggers.push.branches).toEqual(["main"]);
-  expect(Object.keys(mainTriggers.workflow_dispatch.inputs)).toEqual(["sha"]);
+  expect(Object.keys(mainTriggers.workflow_dispatch.inputs)).toEqual([
+    "release_candidate",
+    "sha",
+  ]);
   expect(mainTriggers.workflow_dispatch.inputs["sha"]).toMatchObject({
     required: true,
     type: "string",
@@ -572,6 +575,7 @@ test("status step publishes success only when both workflow jobs succeeded", () 
           env: {
             ...Bun.env,
             GH_LOG: logPath,
+            GH_RETRY_SCRIPT: path.resolve(import.meta.dirname, "gh-retry.sh"),
             GH_TOKEN: "fixture-token",
             GITHUB_OUTPUT: outputPath,
             PATH: `${bin}:${Bun.env["PATH"] ?? ""}`,
