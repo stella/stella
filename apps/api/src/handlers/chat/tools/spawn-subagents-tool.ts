@@ -472,13 +472,14 @@ export const createSpawnSubagentsTool = (
             fastModelInfo,
             abortSignal: ctx?.abortSignal,
           },
-          check: async () => {
+          check: async (checkedInput) => {
             const checked = await preflightSubagentBatchUsage({
-              fastModelInfo,
-              organizationId: props.organizationId,
-              safeDb: props.safeDb,
-              subtaskCount: subagents.length,
-              assertUsageAvailable: dependencies.assertUsageAvailable,
+              fastModelInfo: checkedInput.fastModelInfo,
+              organizationId: checkedInput.props.organizationId,
+              safeDb: checkedInput.props.safeDb,
+              subtaskCount: checkedInput.subagents.length,
+              assertUsageAvailable:
+                checkedInput.dependencies.assertUsageAvailable,
             });
             return checked.ok
               ? Result.ok(undefined)

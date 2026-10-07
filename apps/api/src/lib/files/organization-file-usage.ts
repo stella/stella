@@ -15,7 +15,10 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { executedRows } from "@/api/lib/db/executed-rows";
 import type { MaintenanceDb } from "@/api/lib/db/maintenance-db";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
-import { authorizeOperation } from "@/api/lib/proofs/checked-transaction";
+import {
+  authorizeOperation,
+  snapshotOperationInput,
+} from "@/api/lib/proofs/checked-transaction";
 import type { CheckedOperationContext } from "@/api/lib/proofs/checked-transaction";
 import { isRecord } from "@/api/lib/type-guards";
 import {
@@ -355,13 +358,14 @@ export const authorizeOrganizationFileWrite = async <
   input: Input,
   db?: FileUsageDb,
 ) => {
-  const reservation = await reserveOrganizationFileBytes(input, db);
+  const operation = snapshotOperationInput(input);
+  const reservation = await reserveOrganizationFileBytes(operation, db);
   if (Result.isError(reservation)) {
     return Result.err(reservation.error);
   }
   return await authorizeOperation({
     kind: FILE_WRITE_RESERVED,
-    input: { operation: input, reservation: reservation.value },
+    input: { operation, reservation: reservation.value },
     check: async () => await Promise.resolve(reservation.map(() => undefined)),
   });
 };
@@ -372,13 +376,14 @@ export const authorizeOrganizationFileBatch = async <
   input: Input,
   db?: FileUsageDb,
 ) => {
-  const reservations = await reserveOrganizationFilesBytes(input, db);
+  const operation = snapshotOperationInput(input);
+  const reservations = await reserveOrganizationFilesBytes(operation, db);
   if (Result.isError(reservations)) {
     return Result.err(reservations.error);
   }
   return await authorizeOperation({
     kind: FILE_BATCH_RESERVED,
-    input: { operation: input, reservations: reservations.value },
+    input: { operation, reservations: reservations.value },
     check: async () => await Promise.resolve(reservations.map(() => undefined)),
   });
 };

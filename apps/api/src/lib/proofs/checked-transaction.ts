@@ -81,6 +81,62 @@ export type CheckedOperationContext<Kind extends string, Input, N> = {
   proof: Proof<Kind, [NoInfer<N>]>;
 };
 
+const isPlainOperationData = (value: unknown): value is object => {
+  if (typeof value !== "object" || value === null) {
+    return false;
+  }
+  const prototype = Reflect.getPrototypeOf(value);
+  return (
+    Array.isArray(value) || prototype === Object.prototype || prototype === null
+  );
+};
+
+const copyOperationProperties = (
+  source: object,
+  target: object,
+  copies: WeakMap<object, object>,
+) => {
+  copies.set(source, target);
+  for (const key of Reflect.ownKeys(source)) {
+    const value: unknown = Reflect.get(source, key);
+    Object.defineProperty(target, key, {
+      value: copyOperationData(value, copies),
+      enumerable: Object.prototype.propertyIsEnumerable.call(source, key),
+      configurable: key !== "length" || !Array.isArray(source),
+      writable: true,
+    });
+  }
+  Object.freeze(target);
+};
+
+const copyOperationData = (
+  value: unknown,
+  copies: WeakMap<object, object>,
+): unknown => {
+  if (!isPlainOperationData(value)) {
+    return value;
+  }
+  const existing = copies.get(value);
+  if (existing) {
+    return existing;
+  }
+  const copy = Array.isArray(value) ? [] : {};
+  Object.setPrototypeOf(copy, Reflect.getPrototypeOf(value));
+  copyOperationProperties(value, copy, copies);
+  return copy;
+};
+
+// Plain data is copied and frozen; runtime handles and functions retain their identity.
+export const snapshotOperationInput = <Input>(input: Input): Input => {
+  if (!isPlainOperationData(input)) {
+    return input;
+  }
+  const snapshot = Object.assign(Array.isArray(input) ? [] : {}, { ...input });
+  Object.setPrototypeOf(snapshot, Reflect.getPrototypeOf(input));
+  copyOperationProperties(input, snapshot, new WeakMap());
+  return snapshot;
+};
+
 class AuthorizedOperation<Kind extends string, Input> {
   readonly #input: Input;
   readonly #prover: Prover<Kind>;
@@ -115,7 +171,7 @@ export type OperationAuthorization<
 type AuthorizeOperationOptions<Kind extends string, Input, E> = {
   kind: Kind;
   input: Input;
-  check: () => Promise<Result<void, E>>;
+  check: (input: Input) => Promise<Result<void, E>>;
 };
 
 // The continuation retains exact names while operations may outlive a read transaction.
@@ -124,11 +180,12 @@ export const authorizeOperation = async <const Kind extends string, Input, E>({
   input,
   check,
 }: AuthorizeOperationOptions<Kind, Input, E>) => {
-  const checked = await check();
+  const snapshot = snapshotOperationInput(input);
+  const checked = await check(snapshot);
   if (Result.isError(checked)) {
     return Result.err(checked.error);
   }
-  return Result.ok(new AuthorizedOperation(input, defineProof(kind)));
+  return Result.ok(new AuthorizedOperation(snapshot, defineProof(kind)));
 };
 
 export type AdmittedOperationContext<

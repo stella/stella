@@ -1198,17 +1198,20 @@ export const runCheckedScopedHandler = async <
   TContext extends BaseHandlerContext<TConfig>,
   TResult extends SafeHandlerPayload,
   N,
->({
-  input,
-}: CheckedOperationContext<
-  typeof HANDLER_USAGE_ALLOWED,
-  ScopedOperationInput<TConfig, TContext, TResult>,
-  N
->): Promise<SafeHandlerResult<TResult>> => {
+>(
+  {
+    input,
+  }: CheckedOperationContext<
+    typeof HANDLER_USAGE_ALLOWED,
+    ScopedOperationInput<TConfig, TContext, TResult>,
+    N
+  >,
+  usageLane?: UsageLaneDecision,
+): Promise<SafeHandlerResult<TResult>> => {
   const { ctx, config, handler, admit } = input.value;
   const admission = config.actionAdmission;
   return await runSafeHandler({
-    ctx,
+    ctx: { ...ctx, ...(usageLane === undefined ? {} : { usageLane }) },
     contentDelivery: config.contentDelivery,
     handler:
       admission === undefined
@@ -1338,29 +1341,38 @@ const createSafeScopedHandler = <
         }
       }
 
+      let usageLane = ctx.usageLane;
       const authorization = await authorizeOperation({
         kind: HANDLER_USAGE_ALLOWED,
         input: { ctx, config, handler, admit },
-        check: async (): Promise<Result<void, HandlerError>> => {
-          const configStatusError = config.requiresUsage
-            ? orgAIConfigStatusError(ctx.orgAIConfigStatus)
+        check: async ({
+          ctx: checkedContext,
+          config: checkedConfig,
+        }): Promise<Result<void, HandlerError>> => {
+          const configStatusError = checkedConfig.requiresUsage
+            ? orgAIConfigStatusError(checkedContext.orgAIConfigStatus)
             : null;
           if (configStatusError) {
             return Result.err(configStatusError);
           }
-          if (config.requiresUsage && env.USAGE_ENFORCEMENT_ENABLED) {
+          if (checkedConfig.requiresUsage && env.USAGE_ENFORCEMENT_ENABLED) {
             const meteringContext = resolveMeteringContext({
-              metering: config.requiresUsage,
-              organizationId: ctx.session.activeOrganizationId,
-              orgAIConfig: ctx.orgAIConfig,
-              workspaceId: hasWorkspaceId(ctx) ? ctx.workspaceId : null,
-              userId: ctx.user.id,
+              metering: checkedConfig.requiresUsage,
+              organizationId: checkedContext.session.activeOrganizationId,
+              orgAIConfig: checkedContext.orgAIConfig,
+              workspaceId: hasWorkspaceId(checkedContext)
+                ? checkedContext.workspaceId
+                : null,
+              userId: checkedContext.user.id,
             });
-            const preflight = await runUsagePreflight({ ctx, meteringContext });
+            const preflight = await runUsagePreflight({
+              ctx: checkedContext,
+              meteringContext,
+            });
             if (Result.isError(preflight)) {
               return Result.err(preflight.error);
             }
-            ctx.usageLane = preflight.value;
+            usageLane = preflight.value;
           }
           return Result.ok(undefined);
         },
@@ -1372,7 +1384,8 @@ const createSafeScopedHandler = <
         );
       }
       const result = await authorization.value.execute(
-        async (operation) => await runCheckedScopedHandler(operation),
+        async (operation) =>
+          await runCheckedScopedHandler(operation, usageLane),
       );
       // The transaction has settled; realtime delivery cannot change its result.
       if (
@@ -1641,8 +1654,8 @@ export const authorizeHandlerUsage = async <Input extends UsagePreflightInput>(
   await authorizeOperation({
     kind: CONDITIONAL_USAGE_ALLOWED,
     input,
-    check: async () => {
-      const error = await checkUsageAvailableForHandler(input);
+    check: async (checkedInput) => {
+      const error = await checkUsageAvailableForHandler(checkedInput);
       return error === null ? Result.ok(undefined) : Result.err(error);
     },
   });
@@ -1755,8 +1768,8 @@ export const authorizeHandlerRunSize = async <
   await authorizeOperation({
     kind: RUN_SIZE_CONFIRMED,
     input,
-    check: async () => {
-      const error = await checkRunSizeConfirmedForHandler(input);
+    check: async (checkedInput) => {
+      const error = await checkRunSizeConfirmedForHandler(checkedInput);
       return error === null ? Result.ok(undefined) : Result.err(error);
     },
   });

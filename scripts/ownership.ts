@@ -929,7 +929,7 @@ const OWNERSHIP_DECLARATIONS = [
     capability: "Checking stored object admission",
     owner: ["apps/api/src/lib/files/organization-file-usage.ts"],
     summary:
-      "Only the reservation owner exposes an admitted continuation; external writers cannot bypass that boundary through raw reservation calls.",
+      "Reservation writes run through the owner's admitted continuation.",
     enforcement: {
       kind: "import",
       specifiers: ["@/api/lib/files/organization-file-usage"],

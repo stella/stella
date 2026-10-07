@@ -1,4 +1,4 @@
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { eq } from "drizzle-orm";
 
@@ -19,6 +19,8 @@ import {
   deleteOrganizationFileWithSignal,
 } from "@/api/lib/files/delete-organization-file";
 import {
+  authorizeOrganizationFileWrite,
+  runCheckedOrganizationFileWrite,
   commitOrganizationFileBytes,
   commitOrganizationFilesBytes,
   copyOrganizationFile,
@@ -190,6 +192,45 @@ describe("organization file usage", () => {
       } finally {
         await removeOrganizationFileBytes(key(family, true), db());
       }
+    }
+  });
+
+  test("reserved execution retains the checked object and nested input", async () => {
+    const objectKey = "fixture/evidence-snapshot";
+    const operation = {
+      ...input(objectKey, 3),
+      metadata: { label: "authorized" },
+      write: async () => await Promise.resolve("stored"),
+      db: db(),
+    };
+    try {
+      const authorization = await authorizeOrganizationFileWrite(
+        operation,
+        operation.db,
+      );
+      if (Result.isError(authorization)) {
+        panic("Successful evidence fixture was refused", authorization.error);
+      }
+      operation.objectKey = "fixture/evidence-changed";
+      operation.sizeBytes = 7;
+      operation.metadata.label = "changed";
+      const written = await authorization.value.execute(async (checked) => {
+        expect(checked.input.value.operation.objectKey).toBe(objectKey);
+        expect(checked.input.value.operation.sizeBytes).toBe(3);
+        expect(checked.input.value.operation.metadata.label).toBe("authorized");
+        expect(Object.isFrozen(checked.input.value.operation.metadata)).toBe(
+          true,
+        );
+        return await runCheckedOrganizationFileWrite(checked);
+      });
+      expect(written).toEqual(Result.ok("stored"));
+      const rows = await testDb
+        .select()
+        .from(organizationFileObjects)
+        .where(eq(organizationFileObjects.objectKey, objectKey));
+      expect(rows.at(0)?.sizeBytes).toBe(3n);
+    } finally {
+      await removeOrganizationFileBytes(objectKey, db());
     }
   });
 

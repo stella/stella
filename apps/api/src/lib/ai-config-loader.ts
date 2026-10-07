@@ -126,8 +126,8 @@ const readAIConfiguration = async <Settings>({
   const authorization = await authorizeOperation({
     kind: AI_CONFIGURATION_ALLOWED,
     input: { actor, settings },
-    check: async () =>
-      (await requireAIAccessAllowed(db, actor, orgAIConfig)).map(
+    check: async ({ actor: checkedActor }) =>
+      (await requireAIAccessAllowed(db, checkedActor, orgAIConfig)).map(
         () => undefined,
       ),
   });
