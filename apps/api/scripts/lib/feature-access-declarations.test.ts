@@ -470,6 +470,36 @@ export const ${name} = { run: { featureId: "fixture", ${target} } };`;
       }),
     ).toThrow("missing source");
   });
+  test("only desktop features may omit API source ownership", () => {
+    expect(
+      validateFeatureAccessDeclarations({
+        registry: { "activity-timeline": { enrolment: "invitation" } },
+        endpoints: [],
+        sources: new Map(),
+      }),
+    ).toEqual([]);
+    expect(
+      validateFeatureAccessDeclarations({
+        registry: {
+          "activity-timeline": {
+            enrolment: "invitation",
+            ownership: {
+              handlerDirectories: [],
+              tableSchemaFiles: [],
+              coreModules: [],
+            },
+          },
+        },
+        endpoints: [],
+        sources: new Map(),
+      }),
+    ).toEqual([
+      {
+        file: "feature registry",
+        message: "feature activity-timeline requires nonempty ownership",
+      },
+    ]);
+  });
   test("real ordinary and verification handlers distinguish source ownership", async () => {
     const apiDirectory = fileURLToPath(new URL("../../", import.meta.url));
     const sources = new Map<string, string>();
