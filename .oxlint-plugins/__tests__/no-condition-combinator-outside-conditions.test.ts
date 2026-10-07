@@ -12,11 +12,11 @@ test("rejects member and destructured condition semantics", async () => {
   ).toEqual([1, 2, 3, 3, 4]);
 });
 
-test("accepts aliased executable folds from the condition owner", async () => {
+test("accepts reads inside aliased executable folds from the condition owner", async () => {
   expect(
     await lintSingleRule(
       "no-condition-combinator-outside-conditions",
-      'import { foldCondition as fold, foldConditions as folds } from "@stll/conditions";\nconst a = node.combinator;\nconst { negated } = node;',
+      'import { foldCondition as fold, foldConditions as folds } from "@stll/conditions";\nconst a = fold(node, (group) => group.combinator);\nconst b = folds(nodes, ({ negated }) => negated);',
       { sourcePath: "apps/web/src/components/condition.ts" },
     ),
   ).toEqual([]);
