@@ -278,34 +278,38 @@ const seed = async (db: GatedTestDb) => {
         if (request.method !== "POST") {
           return new Response(null, { status: 405 });
         }
-        const body = v.parse(
+        const raw: unknown = await request.json();
+        const envelope = v.parse(
           v.object({
             id: v.exactOptional(v.union([v.string(), v.number()])),
             method: v.string(),
-            params: v.exactOptional(
-              v.object({
-                name: v.string(),
-                arguments: v.exactOptional(v.record(v.string(), v.unknown())),
-              }),
-            ),
           }),
-          await request.json(),
+          raw,
         );
-        const lifecycle = respondToMcpLifecycle(body);
+        const lifecycle = respondToMcpLifecycle(envelope);
         if (lifecycle !== null) {
           return lifecycle;
         }
-        if (body.method !== "tools/call" || body.params === undefined) {
+        if (envelope.method !== "tools/call") {
           return new Response(null, { status: 400 });
         }
-        calls.push(body.params);
+        const { params } = v.parse(
+          v.object({
+            params: v.object({
+              name: v.string(),
+              arguments: v.exactOptional(v.record(v.string(), v.unknown())),
+            }),
+          }),
+          raw,
+        );
+        calls.push(params);
         return Response.json({
           jsonrpc: "2.0",
-          id: body.id,
+          id: envelope.id,
           result: await handleMcpToolCall({
             context,
-            toolName: body.params.name,
-            args: body.params.arguments ?? {},
+            toolName: params.name,
+            args: params.arguments ?? {},
           }),
         });
       },
