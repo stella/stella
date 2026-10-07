@@ -131,6 +131,8 @@ export const PREPARE_FILE_COMPARISON_FROM_LINKS_TOOL_DEFINITION =
     },
     access: "write",
     accountAccess: "sandbox",
+    nonDestructiveReason:
+      "Stages linked files in temporary uploads without modifying existing stored documents or versions.",
     permissions: { type: "all", permissions: { entity: ["update"] } },
     anonymized: { exposure: "excluded", reason: "write" },
     name: FILE_COMPARISON_TRANSPORT.linksToolName,

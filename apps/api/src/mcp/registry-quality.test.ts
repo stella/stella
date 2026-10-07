@@ -1,3 +1,4 @@
+import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
 
@@ -5,6 +6,7 @@ import {
   MCP_TOOL_NAME_MAX_LENGTH,
   MCP_TOOL_NAME_PATTERN,
 } from "@stll/api-contract/mcp-tool-name";
+import type { PermissionInput } from "@stll/permissions";
 import { propertyConfig } from "@stll/property-testing";
 
 import { SKILL_SLUG_MAX_LENGTH } from "@/api/handlers/skills/slug";
@@ -17,7 +19,6 @@ import {
   namespaceMcpToolName,
   namespaceSkillToolName,
 } from "@/api/lib/mcp-upstream/namespace";
-import { loadCapabilityCatalog } from "@/api/mcp/capability-tools";
 import { MCP_MODES } from "@/api/mcp/constants";
 import {
   DYNAMIC_TOOL_FAMILY_POLICIES,
@@ -40,6 +41,7 @@ import {
   defineMcpToolOutput,
   deriveUncompactedMcpOutputSchema,
 } from "@/api/mcp/valibot-tool-definition";
+import { selectableOperations } from "@/api/mcp/write-tool-authority";
 import {
   compileWireSchema,
   createWireSchemaValidator,
@@ -793,66 +795,82 @@ const getInputProperties = (
   isRecord(tool.inputSchema.properties) ? tool.inputSchema.properties : {};
 
 describe("destructive write-tool behavior", () => {
-  const writeTools: readonly McpToolDefinition[] =
-    DEFAULT_MCP_TOOL_DEFINITIONS.filter((tool) => tool.access === "write");
+  const writeTools = DEFAULT_MCP_TOOL_DEFINITIONS.filter(
+    (tool) => tool.access === "write",
+  );
 
-  const updateDeleteHintOffenders = async (
-    tools: readonly McpToolDefinition[],
-  ) => {
-    const catalogTools = new Set<string>();
-    for (const entry of await loadCapabilityCatalog()) {
-      if (!/\.(update|delete)$/u.test(entry.id)) {
-        continue;
-      }
-      switch (entry.mcp.type) {
-        case "tool":
-          catalogTools.add(entry.mcp.name);
-          break;
-        case "covered":
-          catalogTools.add(entry.mcp.by);
-          break;
-        case "capability":
-          break;
-      }
-    }
-    return tools
-      .filter((tool) => {
-        if (tool.access !== "write" || tool.annotations.destructiveHint) {
-          return false;
-        }
-        const updatesExistingVersion =
-          /create_version|new version of (?:an existing|one)|publish over an existing|materializes/iu.test(
-            tool.description,
-          );
-        return (
-          catalogTools.has(tool.name) ||
-          /^(update|delete|set|configure)_/u.test(tool.name) ||
-          updatesExistingVersion
+  type WriteHintMetadata = Pick<
+    Extract<McpToolDefinition, { access: "write" }>,
+    "name" | "permissions" | "annotations" | "nonDestructiveReason"
+  >;
+
+  const needsUpdateDeleteHint = (tool: WriteHintMetadata) => {
+    const authority = tool.permissions;
+    let grants: readonly PermissionInput[];
+    switch (authority.type) {
+      case "all":
+        grants = [authority.permissions];
+        break;
+      case "input":
+        grants = selectableOperations(authority.select).map(
+          ({ permissions }) => permissions,
         );
-      })
-      .map((tool) => tool.name);
+        break;
+      case "any":
+        grants = authority.alternatives;
+        break;
+      case "delegated":
+        return true;
+      default:
+        authority satisfies never;
+        return panic(`Unhandled tool authority: ${String(authority)}`);
+    }
+    return grants.some((grant) =>
+      Object.values(grant).some((actions) =>
+        actions.some(
+          (action) =>
+            action === "delete" ||
+            (action === "update" && tool.nonDestructiveReason === undefined),
+        ),
+      ),
+    );
   };
 
-  test("every update or delete tool advertises a destructive hint", async () => {
-    expect(await updateDeleteHintOffenders(defaultTools)).toEqual([]);
-  });
-
-  test("the update and delete hint guard detects incorrect registry metadata", async () => {
-    const mutations = writeTools
+  const updateDeleteHintOffenders = (tools: readonly WriteHintMetadata[]) =>
+    tools
       .filter(
         (tool) =>
-          tool.annotations.destructiveHint &&
-          tool.destructiveBehavior === undefined,
+          needsUpdateDeleteHint(tool) && !tool.annotations.destructiveHint,
       )
-      .map((tool) => ({
-        ...tool,
-        annotations: { ...tool.annotations, destructiveHint: false as const },
-        destructiveBehavior: undefined,
-      }));
-    expect(mutations.length).toBeGreaterThan(0);
-    expect(await updateDeleteHintOffenders(mutations)).toEqual(
+      .map((tool) => tool.name);
+
+  test("every update or delete grant advertises a destructive hint", () => {
+    expect(updateDeleteHintOffenders(writeTools)).toEqual([]);
+  });
+
+  test("the grant-derived guard detects incorrect metadata regardless of tool wording", () => {
+    const guardedTools = writeTools.filter(needsUpdateDeleteHint);
+    const mutations = guardedTools.map((tool, index) => ({
+      name: `unrelated_${index}`,
+      permissions: tool.permissions,
+      annotations: { ...tool.annotations, destructiveHint: false },
+    }));
+    expect(guardedTools.some((tool) => tool.name === "compare_documents")).toBe(
+      true,
+    );
+    expect(updateDeleteHintOffenders(mutations)).toEqual(
       mutations.map((tool) => tool.name),
     );
+  });
+
+  test("every grant exception states the handler's non-modifying behavior", () => {
+    for (const tool of writeTools) {
+      if (!("nonDestructiveReason" in tool)) {
+        continue;
+      }
+      expect(tool.nonDestructiveReason.trim().length).toBeGreaterThan(0);
+      expect(tool.annotations.destructiveHint).toBe(false);
+    }
   });
 
   test("non-destructive tools declare no behavior except an outbound send", () => {

@@ -2104,7 +2104,7 @@
     },
     "annotations": {
       "title": "Open document version upload",
-      "destructiveHint": true,
+      "destructiveHint": false,
       "idempotentHint": false,
       "openWorldHint": false,
       "readOnlyHint": false
@@ -2256,7 +2256,7 @@
     },
     "annotations": {
       "title": "Compare document versions",
-      "destructiveHint": false,
+      "destructiveHint": true,
       "idempotentHint": true,
       "openWorldHint": false,
       "readOnlyHint": false

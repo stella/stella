@@ -555,7 +555,7 @@ const OPEN_DOCUMENT_VERSION_UPLOAD_TOOL_DEFINITION = defineValibotMcpTool({
   },
   annotations: {
     title: "Open document version upload",
-    destructiveHint: true,
+    destructiveHint: false,
     idempotentHint: false,
     openWorldHint: false,
     readOnlyHint: false,
@@ -565,6 +565,8 @@ const OPEN_DOCUMENT_VERSION_UPLOAD_TOOL_DEFINITION = defineValibotMcpTool({
     "document. Use only when upload_document_version cannot receive a host file " +
     "reference; do not use when the host already supplied an attached file.",
   inputSchema: OPEN_DOCUMENT_VERSION_UPLOAD_INPUT_SCHEMA,
+  nonDestructiveReason:
+    "Validates document access and returns upload panel metadata without modifying any document or version.",
   access: "write",
   accountAccess: "sandbox",
   permissions: { type: "all", permissions: { entity: ["update"] } },

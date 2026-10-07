@@ -408,24 +408,24 @@
       "annotations": {
         "readOnlyHint": false,
         "openWorldHint": false,
-        "destructiveHint": true
+        "destructiveHint": false
       },
       "justifications": {
-        "read_only_justification": "Starts or completes a private document-version upload in the user’s stella workspace.",
+        "read_only_justification": "Validates document access and returns upload panel metadata without modifying any document or version.",
         "open_world_justification": "Operates within stella’s private workspace and does not change public internet or third-party state.",
-        "destructive_justification": "Can modify or replace existing stored data in the user’s private stella workspace."
+        "destructive_justification": "Does not delete, revoke access, overwrite irreversibly, or perform another destructive action."
       }
     },
     "compare_documents": {
       "annotations": {
         "readOnlyHint": false,
         "openWorldHint": false,
-        "destructiveHint": false
+        "destructiveHint": true
       },
       "justifications": {
         "read_only_justification": "Creates, updates, or starts work inside the user’s private stella workspace.",
         "open_world_justification": "Operates within stella’s private workspace and does not change public internet or third-party state.",
-        "destructive_justification": "Does not delete, revoke access, overwrite irreversibly, or perform another destructive action."
+        "destructive_justification": "Can modify or replace existing stored data in the user’s private stella workspace."
       }
     },
     "prepare_file_comparison": {
@@ -435,7 +435,7 @@
         "destructiveHint": false
       },
       "justifications": {
-        "read_only_justification": "Creates, updates, or starts work inside the user’s private stella workspace.",
+        "read_only_justification": "Creates temporary comparison upload reservations without modifying existing stored documents or versions.",
         "open_world_justification": "Operates within stella’s private workspace and does not change public internet or third-party state.",
         "destructive_justification": "Does not delete, revoke access, overwrite irreversibly, or perform another destructive action."
       }
@@ -447,7 +447,7 @@
         "destructiveHint": false
       },
       "justifications": {
-        "read_only_justification": "Creates, updates, or starts work inside the user’s private stella workspace.",
+        "read_only_justification": "Stages linked files in temporary uploads without modifying existing stored documents or versions.",
         "open_world_justification": "May contact an external public-data provider or a selected external capability, while keeping resulting workspace changes private.",
         "destructive_justification": "Does not delete, revoke access, overwrite irreversibly, or perform another destructive action."
       }
@@ -459,7 +459,7 @@
         "destructiveHint": false
       },
       "justifications": {
-        "read_only_justification": "Creates, updates, or starts work inside the user’s private stella workspace.",
+        "read_only_justification": "Validates the target and opens a file picker without modifying the document.",
         "open_world_justification": "Operates within stella’s private workspace and does not change public internet or third-party state.",
         "destructive_justification": "Does not delete, revoke access, overwrite irreversibly, or perform another destructive action."
       }

@@ -225,9 +225,12 @@ type McpToolDestructiveBranch =
   | {
       annotations: McpToolAnnotations & { destructiveHint: false };
       destructiveBehavior?: undefined;
+      /** Why a broader update grant does not imply this handler modifies data. */
+      nonDestructiveReason?: string;
     }
   | {
       annotations: McpToolAnnotations & { destructiveHint: false };
+      nonDestructiveReason?: never;
       destructiveBehavior: Extract<
         McpToolConfirmationBehavior,
         { type: "outbound" }
@@ -238,6 +241,7 @@ type McpToolDestructiveBranch =
       // Updating existing data needs the client hint even when the server
       // requires no irreversible-action confirmation.
       destructiveBehavior?: McpToolDestructiveBehavior;
+      nonDestructiveReason?: never;
     };
 
 export type McpToolDefinition = McpToolAccessBranch &

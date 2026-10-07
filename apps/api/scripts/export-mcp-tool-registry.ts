@@ -209,6 +209,10 @@ const submissionTools = Object.fromEntries(
         "Stores the human-approved feedback report and delivers it to the maintainers configured by the deployment.";
     }
 
+    if ("nonDestructiveReason" in tool) {
+      readOnlyJustification = tool.nonDestructiveReason;
+    }
+
     let openWorldJustification = privateOpenWorldJustification;
     if (tool.annotations.openWorldHint) {
       openWorldJustification = externalOpenWorldJustification;
