@@ -8,13 +8,23 @@ import {
   setDefaultTimeout,
   test,
 } from "bun:test";
-import { and, eq, inArray, isNull } from "drizzle-orm";
+import {
+  and,
+  eq,
+  inArray,
+  isNull,
+  sql,
+  TransactionRollbackError,
+} from "drizzle-orm";
+import { readFileSync } from "node:fs";
 
 import { member, organization, user } from "@/api/db/auth-schema";
 import type { Transaction } from "@/api/db/root";
 import {
   clauses,
   contacts,
+  CORRESPONDENCE_REVIEW_RESET_SETTING,
+  correspondenceAllowedSenders,
   entities,
   chatThreads,
   entityDeletionCleanupRequests,
@@ -36,6 +46,7 @@ import { createWorkspaceHandler } from "@/api/handlers/workspaces/create";
 import { createBackgroundAuditRecorder } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { executedRows } from "@/api/lib/db/executed-rows";
 import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import type { CreateEntityFromBufferDependencies } from "@/api/lib/entities/create-from-buffer";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
@@ -49,6 +60,7 @@ import type {
   ReviewResetDependencies,
   ReviewResetRefusalReason,
 } from "@/api/lib/review-organization/reset";
+import { sweepReviewOrganization } from "@/api/lib/review-organization/reset-scope";
 import { SAMPLE_COUNTS } from "@/api/lib/review-organization/sample-data";
 import { seedReviewOrganization } from "@/api/lib/review-organization/seed";
 import type { ReviewSeedActor } from "@/api/lib/review-organization/seed-common";
@@ -416,6 +428,119 @@ describe("review organization reset refusals", () => {
       REVIEW_RESET_REFUSAL.accountMissing,
     );
   });
+});
+
+describe("review organization sender reset", () => {
+  test.each(["schema", "migration"] as const)(
+    "the owner sweep clears only the reset organization's sender approvals (%s)",
+    async (policySource) => {
+      const outcome = await Result.tryPromise({
+        try: async () =>
+          await testDb.transaction(async (tx) => {
+            const senderId = createSafeId<"correspondenceAllowedSender">();
+            const foreignSenderId =
+              createSafeId<"correspondenceAllowedSender">();
+            await tx.insert(correspondenceAllowedSenders).values([
+              {
+                id: senderId,
+                organizationId: fixture.reviewOrgId,
+                address: `${senderId}@example.test`,
+                kind: "verified_alias",
+                scope: "organization",
+                ownerUserId: fixture.reviewUserId,
+              },
+              {
+                id: foreignSenderId,
+                organizationId: fixture.foreignOrgId,
+                address: `${foreignSenderId}@example.test`,
+                kind: "verified_alias",
+                scope: "organization",
+                ownerUserId: fixture.otherUserId,
+              },
+            ]);
+            await tx.execute(
+              sql`CREATE ROLE correspondence_reset_owner_probe NOLOGIN NOSUPERUSER NOBYPASSRLS`,
+            );
+            await tx.execute(
+              sql`GRANT USAGE ON SCHEMA public TO correspondence_reset_owner_probe`,
+            );
+            await tx.execute(
+              sql`GRANT SELECT, DELETE ON ALL TABLES IN SCHEMA public TO correspondence_reset_owner_probe`,
+            );
+            await tx.execute(
+              sql`ALTER TABLE correspondence_allowed_senders OWNER TO correspondence_reset_owner_probe`,
+            );
+            await tx.execute(
+              sql`ALTER TABLE correspondence_allowed_senders FORCE ROW LEVEL SECURITY`,
+            );
+            if (policySource === "migration") {
+              await tx.execute(
+                sql`DROP POLICY correspondence_allowed_senders_owner_review_reset_delete ON correspondence_allowed_senders`,
+              );
+              const statements = readFileSync(
+                new URL(
+                  "../../../drizzle/20261005120900_correspondence_sender_lookup_scope/migration.sql",
+                  import.meta.url,
+                ),
+                "utf-8",
+              ).split("--> statement-breakpoint");
+              for (const statement of statements) {
+                await tx.execute(sql.raw(statement));
+              }
+            }
+            await tx.execute(
+              sql`SET LOCAL ROLE correspondence_reset_owner_probe`,
+            );
+            const senders = async () =>
+              await tx
+                .select({ id: correspondenceAllowedSenders.id })
+                .from(correspondenceAllowedSenders);
+            expect(await senders()).toEqual([]);
+            expect(
+              await tx
+                .delete(correspondenceAllowedSenders)
+                .where(
+                  eq(
+                    correspondenceAllowedSenders.organizationId,
+                    fixture.reviewOrgId,
+                  ),
+                )
+                .returning({ id: correspondenceAllowedSenders.id }),
+            ).toEqual([]);
+            await tx.execute(
+              sql`SELECT set_config(${CORRESPONDENCE_REVIEW_RESET_SETTING.organizationId}, ${fixture.reviewOrgId}, true)`,
+            );
+            expect(await senders()).toEqual([{ id: senderId }]);
+            expect(
+              await tx
+                .delete(correspondenceAllowedSenders)
+                .where(eq(correspondenceAllowedSenders.id, foreignSenderId))
+                .returning({ id: correspondenceAllowedSenders.id }),
+            ).toEqual([]);
+            await tx.execute(
+              sql`SELECT set_config(${CORRESPONDENCE_REVIEW_RESET_SETTING.organizationId}, '', true)`,
+            );
+            const removed = await sweepReviewOrganization(
+              asTestRaw<Transaction>(tx),
+              fixture.reviewOrgId,
+            );
+            expect(removed.get("correspondence_allowed_senders")).toBe(1);
+            expect(await senders()).toEqual([]);
+            const context = await tx.execute(
+              sql`SELECT current_setting(${CORRESPONDENCE_REVIEW_RESET_SETTING.organizationId}, true) AS organization_id`,
+            );
+            expect(executedRows(context)).toEqual([{ organization_id: "" }]);
+            await tx.execute(sql`RESET ROLE`);
+            expect(await senders()).toEqual([{ id: foreignSenderId }]);
+            tx.rollback();
+          }),
+        catch: (cause) => cause,
+      });
+      expect(outcome).toMatchObject({
+        error: expect.any(TransactionRollbackError),
+      });
+    },
+  );
 });
 
 describe("review organization seed and reset", () => {

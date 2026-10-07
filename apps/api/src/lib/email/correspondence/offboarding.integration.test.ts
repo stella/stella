@@ -6,6 +6,12 @@ import { readFileSync } from "node:fs";
 
 import type { CorrespondenceActorDisplay } from "@stll/api-contract/correspondence";
 
+import {
+  SETTING_ORGANIZATION_ID,
+  SETTING_WORKSPACE_ACCESS_MODE,
+  SETTING_WORKSPACE_IDS,
+  WORKSPACE_ACCESS_MODE,
+} from "@/api/db/rls";
 import type { Transaction } from "@/api/db/root";
 import type { SafeDb } from "@/api/db/safe-db";
 import {
@@ -13,6 +19,7 @@ import {
   correspondence,
   CORRESPONDENCE_ERASURE_SETTING,
   CORRESPONDENCE_OFFBOARDING_SETTING,
+  CORRESPONDENCE_REVIEW_RESET_SETTING,
   correspondenceAllowedSenderMatters,
   correspondenceAllowedSenders,
   correspondenceFilers,
@@ -23,6 +30,7 @@ import { removeWorkspaceMemberHandler } from "@/api/handlers/workspaces/members/
 import { reassignActiveTaskAssignmentsAndDropMemberships } from "@/api/lib/account-deletion-steps";
 import { createAuditRecorder } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
+import { resolveInboundSender } from "@/api/lib/email/inbound/sender";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
   getRlsFixture,
@@ -63,6 +71,14 @@ const migrationOwnerPolicies = migrationStatements.filter((statement) =>
 const inboundMigrationStatements = readFileSync(
   new URL(
     "../../../../drizzle/20260928150200_inbound_token_lookup/migration.sql",
+    import.meta.url,
+  ),
+  "utf-8",
+).split("--> statement-breakpoint");
+
+const senderLookupMigrationStatements = readFileSync(
+  new URL(
+    "../../../../drizzle/20261005120900_correspondence_sender_lookup_scope/migration.sql",
     import.meta.url,
   ),
   "utf-8",
@@ -681,6 +697,9 @@ describe("correspondence offboarding", () => {
           const otherAddressId = createSafeId<"matterInboundAddress">();
           const senderId = createSafeId<"correspondenceAllowedSender">();
           const scopeId = createSafeId<"correspondenceAllowedSenderMatter">();
+          const otherSenderId = createSafeId<"correspondenceAllowedSender">();
+          const otherOrgSenderId =
+            createSafeId<"correspondenceAllowedSender">();
           await tx.insert(matterInboundAddresses).values([
             {
               id: addressId,
@@ -704,6 +723,26 @@ describe("correspondence offboarding", () => {
             approvedBy: ids.userA1,
             approvedByDisplay: actorDisplay,
           });
+          await tx.insert(correspondenceAllowedSenders).values([
+            {
+              id: otherSenderId,
+              organizationId: ids.orgA,
+              address: `${otherSenderId}@example.test`,
+              kind: "shared_mailbox",
+              scope: "organization",
+              approvedBy: ids.userA2,
+              approvedByDisplay: otherActorDisplay,
+            },
+            {
+              id: otherOrgSenderId,
+              organizationId: ids.orgB,
+              address: `${senderId}@example.test`,
+              kind: "shared_mailbox",
+              scope: "organization",
+              approvedBy: ids.userB1,
+              approvedByDisplay: otherActorDisplay,
+            },
+          ]);
           await tx.insert(correspondenceAllowedSenderMatters).values({
             id: scopeId,
             organizationId: ids.orgA,
@@ -789,6 +828,12 @@ describe("correspondence offboarding", () => {
             for (const statement of inboundLookups) {
               await tx.execute(sql.raw(statement));
             }
+            await tx.execute(
+              sql`DROP POLICY correspondence_allowed_senders_owner_review_reset_delete ON correspondence_allowed_senders`,
+            );
+            for (const statement of senderLookupMigrationStatements) {
+              await tx.execute(sql.raw(statement));
+            }
           }
           await tx.execute(
             sql`SET LOCAL ROLE correspondence_lookup_owner_probe`,
@@ -801,12 +846,19 @@ describe("correspondence offboarding", () => {
                 inArray(matterInboundAddresses.id, [addressId, otherAddressId]),
               );
           expect(await addresses()).toEqual([]);
-          expect(
+          const senders = async () =>
             await tx
               .select({ id: correspondenceAllowedSenders.id })
-              .from(correspondenceAllowedSenders)
-              .where(eq(correspondenceAllowedSenders.id, senderId)),
-          ).toEqual([{ id: senderId }]);
+              .from(correspondenceAllowedSenders);
+          expect(await senders()).toEqual([]);
+          await tx.execute(
+            sql`SELECT set_config(${CORRESPONDENCE_ERASURE_SETTING.userId}, ${ids.userA1}, true)`,
+          );
+          expect(await senders()).toEqual([{ id: senderId }]);
+          await tx.execute(
+            sql`SELECT set_config(${CORRESPONDENCE_ERASURE_SETTING.userId}, '', true)`,
+          );
+          expect(await senders()).toEqual([]);
           await tx.execute(
             sql`SELECT set_config('app.inbound_token', ${createSafeId<"matterInboundAddress">()}, true)`,
           );
@@ -823,6 +875,12 @@ describe("correspondence offboarding", () => {
                 .where(eq(table.id, id)),
             ).toEqual([]);
           }
+          await tx.execute(
+            sql`SELECT set_config(${CORRESPONDENCE_ERASURE_SETTING.userId}, ${ids.userA1}, true)`,
+          );
+          await tx.execute(
+            sql`SELECT set_config(${CORRESPONDENCE_REVIEW_RESET_SETTING.organizationId}, ${ids.orgA}, true)`,
+          );
           for (const role of ["stella", "correspondence_lookup_reader_probe"]) {
             await tx.execute(sql`SET LOCAL ROLE ${sql.identifier(role)}`);
             for (const { table, id } of lookups) {
@@ -834,6 +892,39 @@ describe("correspondence offboarding", () => {
               ).toEqual([]);
             }
           }
+          await tx.execute(sql`SET LOCAL ROLE stella`);
+          await tx.execute(sql`SELECT
+            set_config(${SETTING_ORGANIZATION_ID}, ${ids.orgA}, true),
+            set_config(${SETTING_WORKSPACE_ACCESS_MODE}, ${WORKSPACE_ACCESS_MODE.explicit}, true),
+            set_config(${SETTING_WORKSPACE_IDS}, ${`{${ids.wsA2}}`}, true)
+          `);
+          expect(await senders()).toEqual(
+            expect.arrayContaining([{ id: senderId }, { id: otherSenderId }]),
+          );
+          expect(await senders()).toHaveLength(2);
+          expect(
+            await resolveInboundSender({
+              tx: asTestRaw<Transaction>(tx),
+              organizationId: ids.orgA,
+              workspaceId: ids.wsA2,
+              sender: `${senderId}@example.test`,
+              receivedAt: "2026-09-26T12:00:00.000Z",
+              primaryUserId: null,
+            }),
+          ).toMatchObject({
+            status: "allowed",
+            filer: { type: "shared_mailbox", allowedSenderId: senderId },
+          });
+          expect(
+            await resolveInboundSender({
+              tx: asTestRaw<Transaction>(tx),
+              organizationId: ids.orgB,
+              workspaceId: ids.wsB1,
+              sender: `${senderId}@example.test`,
+              receivedAt: "2026-09-26T12:00:00.000Z",
+              primaryUserId: null,
+            }),
+          ).toEqual({ status: "denied" });
           await tx.execute(sql`RESET ROLE`);
           tx.rollback();
         });
