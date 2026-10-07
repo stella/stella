@@ -339,6 +339,7 @@ describe("streaming list downloads", () => {
       let cancelled = 0;
       const signal = new AbortController();
       const result = await fetchSanctionsMarker("un", {
+        permit: grantThirdPartyOutboundPermit(),
         signal: signal.signal,
         fetchStreamRequest: async ({ headers }) => {
           expect(new Headers(headers).has("authorization")).toBe(false);

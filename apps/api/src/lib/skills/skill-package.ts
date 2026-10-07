@@ -974,7 +974,9 @@ const fetchGithubSkillFiles = async (
     }
 
     const raw = await fetchSafeBytes({
-      access: context.githubAccess,
+      ...(context.githubAccess === undefined
+        ? {}
+        : { access: context.githubAccess }),
       budget: context.requestBudget,
       maxBytes: GITHUB_SKILL_FILE_MAX_BYTES,
       url: githubRawUrl({
@@ -1222,7 +1224,7 @@ const fetchGithubTreeRequest = async ({
     load: async () =>
       await fetchGithubTree({
         ...(context.githubAccess ? { access: context.githubAccess } : {}),
-        ...(context.requestBudget ? { budget: context.requestBudget } : {}),
+        budget: context.requestBudget,
         owner,
         recursive,
         repo,
@@ -1577,13 +1579,13 @@ export const resolveGithubRefAndPath = async ({
   minPathParts,
   owner,
   parts,
-  refExists = githubRefExists,
+  refExists,
   repo,
 }: {
   minPathParts: number;
   owner: string;
   parts: readonly string[];
-  refExists?: GithubRefExists;
+  refExists: GithubRefExists;
   repo: string;
 }): Promise<Result<ResolvedGithubPath | null, HandlerError>> => {
   // Commit-pinned URLs are unambiguous: the SHA is always one path segment.

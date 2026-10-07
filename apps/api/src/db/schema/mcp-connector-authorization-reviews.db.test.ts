@@ -180,8 +180,9 @@ const approveAuthorization = async ({
   confirmedIssuer,
   activeOrganizationId,
 }: ApprovalRequestOptions) => {
-  const approval = createApproveMcpAuthorizationHandler(async (connectorUrl) =>
-    discoveredIssuerMetadata({ connectorUrl, issuer: discoveredIssuer }),
+  const approval = createApproveMcpAuthorizationHandler(
+    async ({ rawMcpUrl: connectorUrl }) =>
+      discoveredIssuerMetadata({ connectorUrl, issuer: discoveredIssuer }),
   );
   return await approval.handler(
     asTestRaw<Parameters<typeof approval.handler>[0]>({
@@ -218,7 +219,7 @@ const connectAsMember = async ({
   audits = [],
 }: MemberConnectOptions) => {
   const connect = createConnectMcpConnectorHandler({
-    discoverMetadata: async (connectorUrl) =>
+    discoverMetadata: async ({ rawMcpUrl: connectorUrl }) =>
       discoveredIssuerMetadata({ connectorUrl, issuer }),
     curatedOAuthApproval: () => curatedApproval ?? null,
   });
@@ -425,7 +426,7 @@ describe("MCP connector authorization reviews", () => {
       );
     const audits: unknown[] = [];
     const approval = createApproveMcpAuthorizationHandler(
-      async (connectorUrl) =>
+      async ({ rawMcpUrl: connectorUrl }) =>
         Result.ok({
           protectedResource: {
             resource: connectorUrl,
@@ -652,7 +653,11 @@ describe("MCP connector authorization reviews", () => {
       resourceUrl: legacyUrl,
       authorizationServerUrl: legacyIssuer,
     });
-    const discoverLegacyMetadata = async (url: string) =>
+    const discoverLegacyMetadata = async ({
+      rawMcpUrl: url,
+    }: {
+      rawMcpUrl: string;
+    }) =>
       Result.ok({
         protectedResource: {
           resource: url,

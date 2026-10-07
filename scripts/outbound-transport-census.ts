@@ -458,7 +458,11 @@ export const OUTBOUND_TRANSPORT_CENSUS = [
     class: "package-owned-client",
     reason:
       "Validates destinations and pins resolved addresses for HTTP requests.",
-    transports: ["module:node:http", "module:node:https"],
+    transports: [
+      "module:node:dns/promises",
+      "module:node:http",
+      "module:node:https",
+    ],
   },
   {
     path: "apps/api/src/mcp/apps/document-upload/app.ts",
@@ -625,7 +629,7 @@ export const OUTBOUND_TRANSPORT_CENSUS = [
     class: "vendor-sdk",
     reason:
       "Validates inbound mail authentication through the mail protocol library.",
-    transports: ["module:mailauth"],
+    transports: ["module:mailauth", "module:node:dns/promises"],
   },
   {
     path: "apps/api/src/scripts/mcp-canary.ts",
@@ -783,6 +787,10 @@ export type OutboundPermitGrantOwner = {
 
 /** Direct request boundaries allowed to create outbound permits. */
 export const OUTBOUND_PERMIT_GRANT_OWNERS = [
+  {
+    path: "apps/api/src/handlers/catalogue/install.ts",
+    reason: "Issues request authority for catalogue skill installation.",
+  },
   {
     path: "apps/api/src/handlers/ai-config/validate-provider.ts",
     reason: "Issues request authority for provider credential validation.",

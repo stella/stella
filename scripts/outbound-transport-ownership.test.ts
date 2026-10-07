@@ -145,6 +145,10 @@ describe("outbound transport ownership", () => {
       "node:net",
       "node:tls",
       "node:dgram",
+      "dns",
+      "node:dns",
+      "dns/promises",
+      "node:dns/promises",
       "@mistralai/mistralai",
       "bullmq",
       "mailauth",
@@ -209,6 +213,31 @@ describe("outbound transport ownership", () => {
           `${file}: transport census differs (observed global:fetch; declared )`,
         );
       }
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  test("enumerates a DNS source and requires its transport owner", async () => {
+    const root = await mkdtemp(path.join(tmpdir(), "stella-dns-owner-"));
+    const file = "apps/api/src/handlers/dns-fixture.ts";
+    try {
+      await mkdir(path.dirname(path.join(root, file)), { recursive: true });
+      await Bun.write(
+        path.join(root, file),
+        'import { Resolver } from "node:dns/promises"; new Resolver();',
+      );
+      const sources = readApiProductionSources(root);
+      expect([...sources.keys()]).toEqual([file]);
+      expect(
+        validateOutboundTransportCensus({
+          sources,
+          census: [],
+          grantOwners: [],
+        }),
+      ).toEqual([
+        `${file}: transport census differs (observed module:node:dns/promises; declared )`,
+      ]);
     } finally {
       await rm(root, { recursive: true, force: true });
     }

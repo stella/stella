@@ -29,6 +29,10 @@ const NETWORK_MODULES = new Set([
   "node:tls",
   "dgram",
   "node:dgram",
+  "dns",
+  "node:dns",
+  "dns/promises",
+  "node:dns/promises",
   "axios",
   "ky",
   "got",
@@ -623,6 +627,10 @@ export const validateOutboundTransportCensus = ({
     }
   }
   for (const [file, text] of sources) {
+    if (!isApiProductionModule(file)) {
+      problems.push(`${file}: source belongs to an API production module`);
+      continue;
+    }
     const references = outboundTransportReferences({ file, text });
     if (references.includes("permit:grant")) {
       grantsSeen.add(file);
@@ -664,7 +672,9 @@ const EXCLUDED_DIRECTORIES = new Set([
   "contracts",
 ]);
 
-export const isApiProductionModule = (file: string): boolean =>
+export const isApiProductionModule = (
+  file: string,
+): file is OutboundTransportCensusEntry["path"] =>
   file.startsWith("apps/api/") &&
   /\.[cm]?[jt]sx?$/u.test(file) &&
   !/\.(?:test|type-test|spec|d)\.[cm]?[jt]sx?$/u.test(file) &&

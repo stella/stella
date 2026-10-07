@@ -32,7 +32,7 @@ const dependencies = asTestRaw<
 const loadExternalMcpToolsForUserForTest = async (
   input: Omit<
     Parameters<typeof loadExternalMcpToolsForUser>[0],
-    "dependencies"
+    "dependencies" | "permit"
   >,
 ) =>
   await loadExternalMcpToolsForUser({

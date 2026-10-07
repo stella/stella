@@ -989,7 +989,9 @@ describe("MCP upstream connection lifecycle", () => {
     const row = oauthRow();
     const dependencies = {
       ...connectionDependencies,
-      discoverOAuthMetadata: async ({ rawMcpUrl: connectorUrl }) => {
+      discoverOAuthMetadata: async ({
+        rawMcpUrl: connectorUrl,
+      }: Parameters<typeof discoverOAuthMetadata>[0]) => {
         if (!stalled) {
           return await connectionDependenciesTestDouble.discoverOAuthMetadata({
             rawMcpUrl: connectorUrl,

@@ -211,7 +211,6 @@ test(
       code: "contracted",
     });
     const stale = await readSanctionsFreshness({
-      permit,
       db: scopedDb,
       now: new Date(Date.now() + 15 * 24 * 60 * 60 * 1000),
     });
