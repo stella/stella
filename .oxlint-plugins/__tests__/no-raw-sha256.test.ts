@@ -236,3 +236,141 @@ test("constant absent-key aliases use the digest owner", async () => {
     ),
   ).toEqual([2, 3]);
 });
+
+const cryptoReExports = [
+  "const parts = flag ? [safe] : [crypto]; const bag = [...parts]; export const raw = bag[0];",
+  "const parts = flag ? [safe] : [crypto]; export const [raw] = [...parts];",
+  "const parts = flag ? [safe] : [crypto]; export const [...raw] = [...parts];",
+  "const parts = [safe, crypto]; const bag = [...parts]; export const raw = bag[1];",
+  "const parts = [safe, crypto]; export const [first, raw] = [...parts];",
+  "const parts = [safe, crypto]; export const [first, ...raw] = [...parts];",
+  "const bag = { runtime: crypto }; export default bag.runtime.subtle;",
+  "const bag = [crypto]; export const raw = bag[0];",
+  "const bag = { runtime: crypto }; export default bag.runtime;",
+  "const bag = { runtime: Bun }; export const raw = bag.runtime;",
+  "const bag = { runtime: crypto }; const alias = bag; export const { runtime } = alias;",
+  "export const [api = crypto] = [];",
+  "export const [api = crypto] = unknownValues;",
+  "export const { nested: { api = crypto } } = { nested: {} };",
+  "const runtime = Bun; export const { SHA256: { hash: make } } = runtime;",
+  'import * as runtime from "node:crypto"; const { webcrypto: { subtle: api } } = runtime; export { api };',
+  "let runtime = Bun; runtime = safe; export const { SHA256 } = runtime;",
+  "export const { api } = flag ? { api: crypto } : { api: safe };",
+  "export const [api] = flag ? [crypto] : [safe];",
+  "export const { api } = fallback || { api: crypto };",
+
+  'import nc from "node:crypto"; export const { webcrypto: { subtle: api } } = nc;',
+  "export const [...api] = [crypto];",
+  "export const { api = crypto } = {};",
+
+  "export const { ...api } = Bun;",
+  "const { randomUUID, ...api } = crypto; export { api };",
+  'import * as runtime from "bun"; export const { ...api } = runtime;',
+  "export const [api] = [crypto];",
+  "const [api] = [crypto]; export { api };",
+
+  'export default await import("node:crypto");',
+  'export default require("node:crypto");',
+  "export default { subtle: crypto.subtle };",
+  "export const api = { crypto };",
+  "const api = { crypto }; export { api };",
+  "const api = [Bun]; export default api;",
+  "let api = globalThis.crypto; api = safe; export { api };",
+  "let api; api = globalThis.crypto; export { api };",
+
+  ...["node:crypto", "crypto"].flatMap((module) => [
+    `export { webcrypto } from "${module}";`,
+    `export { webcrypto as api } from "${module}";`,
+    `export { subtle } from "${module}";`,
+    `export { default } from "${module}";`,
+    `export { default as api } from "${module}";`,
+    `export * from "${module}";`,
+    `export * as api from "${module}";`,
+    `import { webcrypto as api } from "${module}"; export { api };`,
+    `import { subtle as api } from "${module}"; export { api };`,
+  ]),
+  'export { default } from "bun";',
+  'export * from "bun";',
+  'export * as runtime from "bun";',
+  'import * as runtime from "bun"; export { runtime };',
+  'import runtime from "bun"; export { runtime };',
+  'export { CryptoHasher } from "bun";',
+  'export { SHA256 } from "bun";',
+  "export default globalThis.crypto;",
+  "export default crypto;",
+  "export default Bun;",
+  "export default crypto.subtle;",
+  "const api = globalThis.crypto; export { api };",
+  "const { subtle: api } = globalThis.crypto; export { api };",
+  "const runtime = Bun; export { runtime };",
+  "export const api = globalThis.crypto;",
+  "export const runtime = Bun;",
+  "export const { subtle: api } = crypto;",
+];
+
+test.each(cryptoReExports)(
+  "confines crypto-bearing re-exports: %s",
+  async (bridge) => {
+    const reports = await lintSingleRule("no-raw-sha256", bridge, {
+      sourcePath: "apps/example/crypto-bridge.ts",
+      cwd: "scratch",
+    });
+    expect(reports).toEqual([1]);
+    for (const owner of Object.keys(SHA256_OWNERS)) {
+      expect(
+        await lintSingleRule("no-raw-sha256", bridge, {
+          sourcePath: owner,
+          cwd: "scratch",
+        }),
+      ).toEqual([]);
+    }
+  },
+);
+
+test("rejects the namespace bridge used by an opaque consumer import", async () => {
+  const bridge = 'export { webcrypto } from "node:crypto";';
+  const consumer =
+    'import { webcrypto } from "./crypto-bridge";\nwebcrypto.subtle.digest("SHA-256", bytes);';
+  expect(await lintSingleRule("no-raw-sha256", consumer)).toEqual([]);
+  expect(await lintSingleRule("no-raw-sha256", bridge)).toEqual([1]);
+});
+
+test("preserves erased re-exports, unrelated exports and shadowed crypto names", async () => {
+  expect(
+    await lintSingleRule(
+      "no-raw-sha256",
+      [
+        'export type { webcrypto } from "node:crypto";',
+        'export { type CryptoHasher } from "bun";',
+        'export { serve } from "bun";',
+
+        'export { default } from "./safe-owner";',
+        "const crypto = { subtle: { digest: safeDigest } }; export { crypto };",
+        "const Bun = { SHA256: safeDigest }; export default Bun;",
+      ].join("\n"),
+    ),
+  ).toEqual([]);
+});
+
+test("exports noncrypto runtime bindings without exporting their namespace", async () => {
+  expect(
+    await lintSingleRule(
+      "no-raw-sha256",
+      "export const { serve } = Bun;\nexport const { randomUUID } = crypto;\nexport const [first] = [safe, crypto];",
+    ),
+  ).toEqual([]);
+});
+
+test("preserves nested and default noncrypto export bindings", async () => {
+  expect(
+    await lintSingleRule(
+      "no-raw-sha256",
+      [
+        'export const { options: { mode = "safe" } } = { options: { mode: "safe", crypto } };',
+        "const [first, ...rest] = [crypto, safe]; export { rest };",
+        "export const { api = safe } = {};",
+        "const { crypto: removed, ...remaining } = { crypto, safe }; export { remaining };",
+      ].join("\n"),
+    ),
+  ).toEqual([]);
+});
