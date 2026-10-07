@@ -474,11 +474,13 @@ if (!databaseUrl || !runPostgresTests) {
       } finally {
         arrived.resolve(undefined);
         await Promise.allSettled(pending);
-        await Promise.all(pending).finally(async () => {
+        try {
+          await Promise.all(pending);
+        } finally {
           await setup.db
             .delete(organization)
             .where(eq(organization.id, organizationId));
-        });
+        }
       }
     });
   }, 15_000);

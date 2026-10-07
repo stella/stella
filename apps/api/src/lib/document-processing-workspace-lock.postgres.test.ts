@@ -257,7 +257,11 @@ if (!databaseUrl || !runPostgresTests) {
         } finally {
           releaseFirst.resolve(undefined);
           await Promise.allSettled(pending);
-          await Promise.all(pending).finally(fixture.cleanup);
+          try {
+            await Promise.all(pending);
+          } finally {
+            await fixture.cleanup();
+          }
         }
       });
     },
