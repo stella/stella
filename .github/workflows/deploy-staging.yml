@@ -646,6 +646,9 @@ jobs:
           MCP_CANARY_ENVIRONMENT: staging
           MCP_CANARY_BASE_URL: https://api-staging.stll.app
           MCP_CANARY_FRONTEND_URL: https://staging.stll.app
+          MCP_CANARY_CONFIGURED_BASE_URL: https://api-staging.stll.app
+          APP_REVIEW_ACCOUNT_EMAIL: review@stll.app
+          REVIEW_ACCOUNT_PASSWORD: ${{ secrets.REVIEW_ACCOUNT_PASSWORD }}
           MCP_CANARY_MODE: full
           # Release verification requires every journey, including the
           # authenticated probes, rather than accepting partial coverage.

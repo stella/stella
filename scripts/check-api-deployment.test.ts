@@ -133,6 +133,15 @@ describe("API deployment health receipt", () => {
     expect(mcpStep?.env["SMOKE_SESSION_SECRET"]).toBe(
       `\${{ secrets.SMOKE_SESSION_SECRET }}`,
     );
+    // The restricted account journey only sends its credential to the
+    // configured endpoint, so a required run must name its own target there.
+    expect(mcpStep?.env["MCP_CANARY_CONFIGURED_BASE_URL"]).toBe(
+      mcpStep?.env["MCP_CANARY_BASE_URL"],
+    );
+    expect(mcpStep?.env["APP_REVIEW_ACCOUNT_EMAIL"]).toBeDefined();
+    expect(mcpStep?.env["REVIEW_ACCOUNT_PASSWORD"]).toBe(
+      `\${{ secrets.REVIEW_ACCOUNT_PASSWORD }}`,
+    );
     const success = {
       WEB_SMOKE: "success",
       API_SMOKE: "success",
@@ -187,7 +196,11 @@ describe("API deployment health receipt", () => {
       {
         file: "deploy-staging.yml",
         environment: "staging",
-        secrets: ["SMOKE_SESSION_SECRET", "STAGING_VIEWER_ACCESS_TOKEN"],
+        secrets: [
+          "REVIEW_ACCOUNT_PASSWORD",
+          "SMOKE_SESSION_SECRET",
+          "STAGING_VIEWER_ACCESS_TOKEN",
+        ],
       },
     ];
     for (const { file, environment, secrets } of cases) {
