@@ -5,7 +5,8 @@
  * never read as one.
  */
 
-import type { ParagraphRole } from "@/api/handlers/case-law/document-ast";
+import type { ParagraphRole } from "@stll/legal-ast/document-ast";
+
 import type { OpinionType } from "@/api/handlers/case-law/ingestion/adapters/courtlistener/vocabulary";
 
 type BodyClass = Extract<

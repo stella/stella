@@ -41,6 +41,7 @@ import type { SkUsEcliAvailability } from "@stll/api-contract/case-law-text-fiel
  * at the bottom of this file.
  */
 import { classifyFailure } from "@stll/errors";
+import type { DocumentAst } from "@stll/legal-ast/document-ast";
 import type { DocumentFetchStage } from "@stll/legal-atlas/document-fetch-diagnostics";
 import { decodeDeclared } from "@stll/mojibake/declared-charset";
 import { Temporal } from "@stll/time";
@@ -50,7 +51,6 @@ import {
   ADAPTER_TIMEOUT,
   PARSER_VERSIONS,
 } from "@/api/handlers/case-law/consts";
-import type { DocumentAst } from "@/api/handlers/case-law/document-ast";
 import {
   backlogSurface,
   decodeSourceRawEnvelope,

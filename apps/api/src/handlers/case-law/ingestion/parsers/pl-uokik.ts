@@ -11,9 +11,9 @@
  */
 
 import { DECISION_DOCKET_GRAMMARS } from "@stll/api-contract/decision-docket-grammar";
+import type { DocumentAst } from "@stll/legal-ast/document-ast";
 import { parsePlainDate } from "@stll/time";
 
-import type { DocumentAst } from "@/api/handlers/case-law/document-ast";
 import { PL_NCOURT_COURT_NAMES } from "@/api/handlers/case-law/ingestion/adapters/pl-ncourt-courts";
 import { parsePlDecisionContent } from "@/api/handlers/case-law/ingestion/parsers/pl-courts";
 import {

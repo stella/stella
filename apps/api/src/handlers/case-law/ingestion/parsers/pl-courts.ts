@@ -20,7 +20,8 @@ import type {
   Inline,
   ParagraphRole,
   TableCell,
-} from "@/api/handlers/case-law/document-ast";
+} from "@stll/legal-ast/document-ast";
+
 import { stripHtml } from "@/api/handlers/case-law/ingestion/adapters/utils";
 import {
   buildValidationHtml,

@@ -33,8 +33,8 @@
 import type * as cheerio from "cheerio";
 import { type AnyNode, type Element, isTag, isText } from "domhandler";
 
-import type { Inline } from "@/api/handlers/case-law/document-ast";
-import { hasInlineChildren } from "@/api/handlers/case-law/document-ast";
+import type { Inline } from "@stll/legal-ast/document-ast";
+import { hasInlineChildren } from "@stll/legal-ast/document-ast";
 
 const EXCLUDED_HTML_TAGS = ["script", "style"];
 const EXCLUDED_HTML_SELECTOR = EXCLUDED_HTML_TAGS.join(", ");

@@ -4,6 +4,7 @@
 import { panic, Result } from "better-result";
 
 import { classifyFailure } from "@stll/errors";
+import type { DocumentAst } from "@stll/legal-ast/document-ast";
 import { readCappedBytes } from "@stll/skills/streaming";
 import { Temporal } from "@stll/time";
 
@@ -13,7 +14,6 @@ import {
   ADAPTER_TIMEOUT,
   PARSER_VERSIONS,
 } from "@/api/handlers/case-law/consts";
-import type { DocumentAst } from "@/api/handlers/case-law/document-ast";
 import {
   decodeSourceRawEnvelope,
   defineSourceAdapter,

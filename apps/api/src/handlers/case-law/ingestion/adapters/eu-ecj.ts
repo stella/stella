@@ -3,6 +3,7 @@
 import { panic, Result } from "better-result";
 import JSZip from "jszip";
 
+import type { DocumentAst } from "@stll/legal-ast/document-ast";
 import { Temporal } from "@stll/time";
 
 import {
@@ -10,7 +11,6 @@ import {
   ADAPTER_TIMEOUT,
   PARSER_VERSIONS,
 } from "@/api/handlers/case-law/consts";
-import type { DocumentAst } from "@/api/handlers/case-law/document-ast";
 import {
   backlogSurface,
   decodeSourceRawEnvelope,

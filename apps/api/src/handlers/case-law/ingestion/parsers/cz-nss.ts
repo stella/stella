@@ -31,13 +31,9 @@ import {
   CZ_CLOSING_RE as CLOSING_RE,
   CZ_JUDGE_TITLE_RE as SIGNATURE_RE,
 } from "@stll/legal-ast/czech-document-roles";
+import type { Block, DocumentAst, Inline } from "@stll/legal-ast/document-ast";
 import { collapseSpacedLetters } from "@stll/text-normalize";
 
-import type {
-  Block,
-  DocumentAst,
-  Inline,
-} from "@/api/handlers/case-law/document-ast";
 import { validateAndLog } from "@/api/lib/legal-search/parsers/validate-ast";
 
 import {

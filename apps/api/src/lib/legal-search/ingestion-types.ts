@@ -24,12 +24,12 @@ import type {
   DecisionIdentifiers,
   DecisionPrimaryReferenceType,
 } from "@stll/legal-ast/decision-identifier";
+import type { DocumentAst } from "@stll/legal-ast/document-ast";
 import type {
   DocumentStage,
   DocumentStageObserver,
 } from "@stll/legal-atlas/document-fetch-diagnostics";
 
-import type { DocumentAst } from "@/api/lib/case-law/document-ast";
 import {
   toPlainText,
   PlainTextError,

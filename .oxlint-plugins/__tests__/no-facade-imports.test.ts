@@ -46,3 +46,75 @@ test("accepts unrelated module namespaces", async () => {
     ),
   ).toEqual([]);
 });
+
+test("rejects both removed AST facades and their type imports", async () => {
+  expect(
+    await lintSingleRule(
+      "no-facade-imports",
+      [
+        'import { hasUsableAst } from "@/api/handlers/case-law/document-ast";',
+        'import type { DocumentAst } from "@/api/handlers/case-law/document-ast";',
+        'import { plainTextOf } from "@/api/lib/case-law/document-ast";',
+        'import type { Inline } from "@/api/lib/case-law/document-ast";',
+      ].join("\n"),
+    ),
+  ).toEqual([1, 2, 3, 4]);
+});
+
+test("rejects reexports and dynamic imports of removed AST facades", async () => {
+  expect(
+    await lintSingleRule(
+      "no-facade-imports",
+      [
+        'export { hasUsableAst } from "@/api/handlers/case-law/document-ast";',
+        'export type { DocumentAst } from "@/api/lib/case-law/document-ast";',
+        'const handlerAst = import("@/api/handlers/case-law/document-ast");',
+        'const libAst = import("@/api/lib/case-law/document-ast");',
+      ].join("\n"),
+    ),
+  ).toEqual([1, 2, 3, 4]);
+});
+
+test("rejects relative imports resolving to removed AST facades", async () => {
+  expect(
+    await lintSingleRule(
+      "no-facade-imports",
+      [
+        'import type { DocumentAst } from "../../document-ast";',
+        'const ast = import("../../document-ast");',
+      ].join("\n"),
+      {
+        cwd: "scratch",
+        sourcePath:
+          "apps/api/src/handlers/case-law/ingestion/parsers/sample.ts",
+      },
+    ),
+  ).toEqual([1, 2]);
+  expect(
+    await lintSingleRule(
+      "no-facade-imports",
+      [
+        'export { hasUsableAst } from "./document-ast";',
+        'const ast = import("./document-ast");',
+      ].join("\n"),
+      {
+        cwd: "scratch",
+        sourcePath: "apps/api/src/lib/case-law/sample.ts",
+      },
+    ),
+  ).toEqual([1, 2]);
+});
+
+test("accepts direct canonical AST imports and reexports", async () => {
+  expect(
+    await lintSingleRule(
+      "no-facade-imports",
+      [
+        'import { hasUsableAst } from "@stll/legal-ast/document-ast";',
+        'import type { DocumentAst } from "@stll/legal-ast/document-ast";',
+        'export { plainTextOf } from "@stll/legal-ast/document-ast";',
+        'const ast = import("@stll/legal-ast/document-ast");',
+      ].join("\n"),
+    ),
+  ).toEqual([]);
+});
