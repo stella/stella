@@ -3285,10 +3285,11 @@ if (import.meta.main) {
           ],
           "write",
         );
-        return branchUpdateResponse(
-          response.stdout.toString(),
-          response.exitCode,
-        );
+        return branchUpdateResponse({
+          stdout: response.stdout.toString(),
+          stderr: response.stderr.toString(),
+          exitCode: response.exitCode,
+        });
       },
     });
     if (receipt.isErr()) {

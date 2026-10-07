@@ -181,15 +181,16 @@ describe("updating a pull request from its base", () => {
     expect(f.locks.size).toBe(0);
   });
 
-  test.each([409, 422])(
+  test.each([409, 422, 429])(
     "reports HTTP %i without an accepted receipt",
     (status) => {
       const f = fixture();
       f.response(
-        branchUpdateResponse(
-          `HTTP/2.0 ${status} Unprocessable Entity\n\n{}`,
-          1,
-        ),
+        branchUpdateResponse({
+          stdout: `HTTP/2.0 ${status} Unprocessable Entity\n\n{}`,
+          stderr: "",
+          exitCode: 1,
+        }),
       );
       expect(errorMessage(updatePullRequestBranch(f.options))).toContain(
         `HTTP ${status}`,
@@ -204,7 +205,9 @@ describe("updating a pull request from its base", () => {
     "retains a lock for an ambiguous response: %j",
     (output) => {
       const f = fixture();
-      f.response(branchUpdateResponse(output, 1));
+      f.response(
+        branchUpdateResponse({ stdout: output, stderr: "", exitCode: 1 }),
+      );
       expect(errorMessage(updatePullRequestBranch(f.options))).toContain(
         "outcome is unknown",
       );
@@ -335,23 +338,54 @@ describe("accepted update storage", () => {
 });
 
 describe("HTTP acceptance contract", () => {
+  test("sanitized wrapper metadata rejects every 4xx without a response body", () => {
+    for (let status = 400; status < 500; status += 1) {
+      expect(
+        branchUpdateResponse({
+          stdout: "",
+          stderr: `GitHub command failed: HTTP ${status}, attempt 1/4 (exit 1)`,
+          exitCode: 1,
+        }).type,
+      ).toBe("rejected");
+    }
+    for (const stderr of [
+      "HTTP 422 mentioned by a body",
+      "GitHub command failed: HTTP 0, attempt 1/4 (exit 1)",
+      "GitHub command failed: HTTP 503, attempt 1/4 (exit 1)",
+    ]) {
+      expect(
+        branchUpdateResponse({ stdout: "", stderr, exitCode: 1 }).type,
+      ).toBe("unknown");
+    }
+  });
+
   test("exactly HTTP 202 establishes acceptance across every HTTP status", () => {
     for (let status = 100; status < 600; status += 1) {
       expect(
-        branchUpdateResponse(
-          `HTTP/2.0 ${status} Status\n\n{}`,
-          status < 400 ? 0 : 1,
-        ).type === "accepted",
+        branchUpdateResponse({
+          stdout: `HTTP/2.0 ${status} Status\n\n{}`,
+          stderr: "",
+          exitCode: status < 400 ? 0 : 1,
+        }).type === "accepted",
       ).toBe(status === 202);
     }
-    expect(branchUpdateResponse("HTTP/1.1 202 Accepted\r\n\r\n", 0).type).toBe(
-      "accepted",
-    );
     expect(
-      branchUpdateResponse('{"message":"Updating pull request branch."}', 0)
-        .type,
+      branchUpdateResponse({
+        stdout: "HTTP/1.1 202 Accepted\r\n\r\n",
+        stderr: "",
+        exitCode: 0,
+      }).type,
+    ).toBe("accepted");
+    expect(
+      branchUpdateResponse({
+        stdout: '{"message":"Updating pull request branch."}',
+        stderr: "",
+        exitCode: 0,
+      }).type,
     ).toBe("unknown");
-    expect(branchUpdateResponse("", 0).type).toBe("unknown");
+    expect(
+      branchUpdateResponse({ stdout: "", stderr: "", exitCode: 0 }).type,
+    ).toBe("unknown");
   });
 });
 
@@ -414,6 +448,22 @@ describe("branch-update CLI contract", () => {
 
 describe("branch-update CLI against a hermetic gh executable", () => {
   test.each([
+    {
+      status: 429,
+      headRepository: REPO,
+      headSha: HEAD,
+      exitCode: 1,
+      expectedWrites: 1,
+      expectedExit: 1,
+    },
+    {
+      status: 0,
+      headRepository: REPO,
+      headSha: HEAD,
+      exitCode: 1,
+      expectedWrites: 1,
+      expectedExit: 1,
+    },
     {
       status: 202,
       headRepository: REPO,
@@ -478,6 +528,11 @@ const args = Bun.argv.slice(2);
 appendFileSync(process.env.FIXTURE_CALLS, JSON.stringify(args) + "\\n");
 if (args.includes("PUT")) {
   console.log("HTTP/2.0 " + process.env.FIXTURE_STATUS + " Status\\n\\n{}");
+  if (Number(process.env.FIXTURE_STATUS) > 0) {
+    console.error("< HTTP/2.0 " + process.env.FIXTURE_STATUS + " Status");
+  } else {
+    console.error('Put "https://github.com/fixture": connection reset by peer');
+  }
   process.exit(Number(process.env.FIXTURE_EXIT));
 }
 console.log(process.env.FIXTURE_PR);
@@ -548,6 +603,50 @@ console.log(process.env.FIXTURE_PR);
           expect(
             createBranchUpdateStore(stateRoot).recorded(KEY).unwrap(),
           ).toBe(false);
+          const locks = readdirSync(stateRoot).filter((name) =>
+            name.endsWith(".lock"),
+          );
+          if (
+            scenario.expectedWrites &&
+            scenario.status >= 400 &&
+            scenario.status < 500
+          ) {
+            expect(first.stderr.toString()).toContain(
+              `GitHub rejected the update (HTTP ${scenario.status})`,
+            );
+            expect(locks).toHaveLength(0);
+            const retry = Bun.spawnSync(command, {
+              env,
+              stdout: "pipe",
+              stderr: "pipe",
+            });
+            expect(retry.stderr.toString()).toContain(
+              `GitHub rejected the update (HTTP ${scenario.status})`,
+            );
+            const retried: string[][] = readFileSync(callsPath, "utf-8")
+              .trim()
+              .split("\n")
+              .map((line) => JSON.parse(line));
+            expect(retried.filter((args) => args.includes("PUT"))).toHaveLength(
+              2,
+            );
+          } else if (scenario.expectedWrites) {
+            expect(first.stderr.toString()).toContain("outcome is unknown");
+            expect(locks).toHaveLength(1);
+            const retry = Bun.spawnSync(command, {
+              env,
+              stdout: "pipe",
+              stderr: "pipe",
+            });
+            expect(retry.stderr.toString()).toContain("per-head lock");
+            const retried: string[][] = readFileSync(callsPath, "utf-8")
+              .trim()
+              .split("\n")
+              .map((line) => JSON.parse(line));
+            expect(retried.filter((args) => args.includes("PUT"))).toHaveLength(
+              1,
+            );
+          }
         }
       } finally {
         rmSync(directory, { recursive: true, force: true });

@@ -117,16 +117,31 @@ export const updatePullRequestBranch = ({
     )
     .andThen((result) => result);
 
-/** Only HTTP 202 establishes acceptance, even when gh returned no body. */
-export const branchUpdateResponse = (output: string, exitCode: number) => {
-  const status = Number(/^HTTP\/\S+\s+(\d{3})\b/mu.exec(output)?.at(1));
+type BranchUpdateResponseOptions = {
+  stdout: string;
+  stderr: string;
+  exitCode: number;
+};
+
+/** The retry wrapper suppresses failed payloads but preserves sanitized status metadata. */
+export const branchUpdateResponse = ({
+  stdout,
+  stderr,
+  exitCode,
+}: BranchUpdateResponseOptions) => {
+  const includedStatus = /^HTTP\/\S+\s+(\d{3})\b/mu.exec(stdout)?.at(1);
+  const failureStatus =
+    /^GitHub command failed: HTTP (\d{3}), attempt [1-4]\/4 \(exit \d+\)$/mu
+      .exec(stderr)
+      ?.at(1);
+  const status = Number(includedStatus ?? failureStatus);
   if (status === 202) {
     return { type: "accepted" } as const;
   }
-  if ([400, 401, 403, 404, 405, 409, 422, 429].includes(status)) {
+  if (status >= 400 && status < 500) {
     return {
       type: "rejected",
-      message: `NOT UPDATED: GitHub rejected the update (HTTP ${status}); resolve conflicts or refresh the expected head before proceeding`,
+      message: `NOT UPDATED: GitHub rejected the update (HTTP ${status}); resolve the rejection before retrying`,
     } as const;
   }
   return {
