@@ -10,7 +10,6 @@ import {
   systemAuditRuns,
   chatMessages,
   chatThreads,
-  chatTurns,
 } from "@/api/db/schema";
 import type { TransactionOf } from "@/api/db/scoped";
 import { clampSharedPoolTimeout } from "@/api/db/shared-pool-timeout-policy";
@@ -27,15 +26,9 @@ import {
   type GatedTestDb,
   withGatedTestClients,
 } from "@/api/tests/gated-test-database";
-import {
-  mintAuthProviderId,
-  mintAuthProviderIdValue,
-} from "@/api/tests/helpers/auth-provider-id";
+import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
 
-import {
-  ACTIVITY_UNAVAILABLE_REASONS,
-  readAuditedActivitySummary,
-} from "./read";
+import { readAuditedActivitySummary } from "./read";
 
 const databaseUrl = process.env["DATABASE_URL"];
 const enabled = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
@@ -104,116 +97,286 @@ const recordHistoricalAudit = async ({
   expect(updated).toHaveLength(1);
 };
 
-// Explicit UTC boundaries are independent of the production calendar calculation.
-const daylightSavingDays = [
-  { now: "2026-03-29T21:30:00Z", start: "2026-03-28T23:00:00Z" },
-  { now: "2026-10-25T22:30:00Z", start: "2026-10-24T22:00:00Z" },
+// Explicit Monday boundaries bracket Prague's short and long DST weeks.
+const daylightSavingWeeks = [
+  {
+    now: "2030-04-03T12:00:00Z",
+    current: "2030-03-31T22:00:00Z",
+    previous: "2030-03-24T23:00:00Z",
+    comparisonEnd: "2030-03-27T13:00:00Z",
+    dates: [
+      "2030-02-11",
+      "2030-02-18",
+      "2030-02-25",
+      "2030-03-04",
+      "2030-03-11",
+      "2030-03-18",
+      "2030-03-25",
+      "2030-04-01",
+    ],
+  },
+  {
+    now: "2030-10-30T12:00:00Z",
+    current: "2030-10-27T23:00:00Z",
+    previous: "2030-10-20T22:00:00Z",
+    comparisonEnd: "2030-10-23T11:00:00Z",
+    dates: [
+      "2030-09-09",
+      "2030-09-16",
+      "2030-09-23",
+      "2030-09-30",
+      "2030-10-07",
+      "2030-10-14",
+      "2030-10-21",
+      "2030-10-28",
+    ],
+  },
 ];
 
 describe.skipIf(!enabled)("operator activity database summary", () => {
-  test.each(daylightSavingDays)(
-    "counts both tenants within the Prague day starting $start",
-    async ({ now, start }) => {
+  test.each(daylightSavingWeeks)(
+    "aggregates eight Prague weeks ending in $current with distinct organizations and signup cohorts",
+    async ({ now, current, previous, comparisonEnd, dates }) => {
       await withRollback(async (tx) => {
         const nowMs = Date.parse(now);
-        const startMs = Date.parse(start);
-        // A service-backed database can contain unrelated rows; compare fixture deltas.
-        const before = await readAuditedActivitySummary(tx, nowMs);
+        const currentMs = Date.parse(current);
+        const previousMs = Date.parse(previous);
+        const baseline = await readAuditedActivitySummary(tx, nowMs);
+        // Future fixture clocks keep percentage denominators independent of existing data.
+        expect(
+          baseline.weeks.every(
+            ({ active_orgs, signups }) => active_orgs === 0 && signups === 0,
+          ),
+        ).toBe(true);
         const previousAudits = new Set(
           (await auditIds(tx)).map(({ id }) => id),
         );
-        const createdTimes = [
-          startMs - 1,
-          startMs,
-          nowMs - 1,
-          nowMs,
-          nowMs + 1,
-          nowMs - 7 * 24 * 60 * 60 * 1000,
-          nowMs - 7 * 24 * 60 * 60 * 1000 - 1,
-          startMs + 1,
-        ];
-        const users = createdTimes.map(() => mintAuthProviderIdValue());
-        await tx.insert(user).values(
-          createdTimes.map((createdAt, index) => {
-            const id = users.at(index);
-            if (id === undefined) {
-              throw new TypeError("Fixture user required");
-            }
-            return {
-              id,
-              name: "Activity fixture",
-              email: `${id}@example.test`,
-              createdAt: new Date(createdAt),
-              deletedAt: index === 7 ? new Date(nowMs) : null,
-            };
-          }),
+        const orgA = mintAuthProviderId<"organization">();
+        const orgB = mintAuthProviderId<"organization">();
+        await tx.insert(organization).values(
+          [orgA, orgB].map((id) => ({
+            id,
+            name: "Weekly fixture",
+            slug: id,
+            createdAt: new Date(previousMs),
+          })),
         );
-        const turnTimes = [
-          nowMs - 60 * 60 * 1000 - 1,
-          nowMs - 60 * 60 * 1000,
-          nowMs - 1,
-          nowMs,
-          nowMs + 1,
-        ];
-        for (const tenant of [0, 1]) {
-          const userId = users.at(tenant);
-          if (userId === undefined) {
-            throw new TypeError("Fixture user required");
+        const actor = mintAuthProviderId<"user">();
+        await tx.insert(user).values({
+          id: actor,
+          name: "Weekly fixture",
+          email: `${actor}@example.test`,
+          createdAt: new Date(previousMs - 10 * 7 * 24 * 60 * 60_000),
+        });
+        const threadId = createSafeId<"chatThread">();
+        await tx.insert(chatThreads).values({
+          id: threadId,
+          userId: actor,
+          organizationId: orgA,
+          title: "Weekly fixture",
+        });
+        for (const date of dates) {
+          // UTC noon belongs to this Monday in either Prague offset.
+          const at = new Date(`${date}T12:00:00Z`);
+          if (date !== dates.at(0)) {
+            await recordHistoricalAudit({
+              tx,
+              bindings: {
+                organizationId: orgA,
+                workspaceId: null,
+                userId: actor,
+                execution: {
+                  performer: { type: "user", id: actor },
+                  trigger: { type: "direct" },
+                },
+              },
+              createdAt: at,
+              performerId: null,
+            });
           }
-          const organizationId = mintAuthProviderId<"organization">();
-          await tx.insert(organization).values({
-            id: organizationId,
-            name: "Activity fixture",
-            slug: organizationId,
-            createdAt: new Date(startMs),
+          await tx.insert(chatMessages).values({
+            id: createSafeId<"chatMessage">(),
+            threadId,
+            userId: actor,
+            role: "user",
+            createdAt: at,
+            content: toPersistedChatMessageContentV3({ data: [] }),
           });
-          for (const createdAt of turnTimes) {
-            // Accepted turns are unique per thread, including fixture rows.
-            const threadId = createSafeId<"chatThread">();
-            await tx.insert(chatThreads).values({
-              id: threadId,
-              userId,
-              organizationId,
-              title: "Activity fixture",
-            });
-            const userMessageId = createSafeId<"chatMessage">();
-            await tx.insert(chatMessages).values({
-              id: userMessageId,
-              userId,
-              threadId,
-              role: "user",
-              createdAt: new Date(createdAt),
-              content: toPersistedChatMessageContentV3({
-                data: [{ type: "text", content: "Activity fixture" }],
-              }),
-            });
-            await tx.insert(chatTurns).values({
-              id: createSafeId<"chatTurn">(),
-              organizationId,
-              userId,
-              threadId,
-              userMessageId,
-              createdAt: new Date(createdAt),
-              leaseExpiresAt: new Date(nowMs + 60_000),
-            });
+        }
+        await recordHistoricalAudit({
+          tx,
+          bindings: {
+            organizationId: orgA,
+            workspaceId: null,
+            userId: actor,
+            execution: {
+              performer: { type: "user", id: actor },
+              trigger: { type: "direct" },
+            },
+          },
+          createdAt: new Date(previousMs),
+          performerId: actor,
+        });
+        // This prior-week event is after the same-point comparison cutoff.
+        await recordHistoricalAudit({
+          tx,
+          bindings: {
+            organizationId: orgB,
+            workspaceId: null,
+            userId: actor,
+            execution: {
+              performer: { type: "user", id: actor },
+              trigger: { type: "direct" },
+            },
+          },
+          createdAt: new Date(Date.parse(comparisonEnd) + 1),
+          performerId: actor,
+        });
+        // Automated actions and actions exactly at now do not activate a second org.
+        for (const at of [nowMs - 1, nowMs]) {
+          await recordHistoricalAudit({
+            tx,
+            bindings: {
+              organizationId: orgB,
+              workspaceId: null,
+              userId: actor,
+              execution: {
+                performer:
+                  at === nowMs
+                    ? { type: "user", id: actor }
+                    : { type: "agent", id: actor, name: null },
+                trigger: { type: "direct" },
+              },
+            },
+            createdAt: new Date(at),
+            performerId: actor,
+          });
+        }
+        // A newly active org must not inflate retention of the prior cohort.
+        const orgC = mintAuthProviderId<"organization">();
+        await tx.insert(organization).values({
+          id: orgC,
+          name: "Newly active fixture",
+          slug: orgC,
+          createdAt: new Date(currentMs),
+        });
+        await recordHistoricalAudit({
+          tx,
+          bindings: {
+            organizationId: orgC,
+            workspaceId: null,
+            userId: actor,
+            execution: {
+              performer: { type: "user", id: actor },
+              trigger: { type: "direct" },
+            },
+          },
+          createdAt: new Date(currentMs),
+          performerId: actor,
+        });
+        const assistantThreadId = createSafeId<"chatThread">();
+        await tx.insert(chatThreads).values({
+          id: assistantThreadId,
+          userId: actor,
+          organizationId: orgB,
+          title: "Automated fixture",
+        });
+        await tx.insert(chatMessages).values({
+          id: createSafeId<"chatMessage">(),
+          threadId: assistantThreadId,
+          userId: actor,
+          role: "assistant",
+          createdAt: new Date(nowMs - 1),
+          content: toPersistedChatMessageContentV3({ data: [] }),
+        });
+        const cohorts = [
+          {
+            signup: previousMs + 60_000,
+            action: previousMs + 60_000,
+            lifecycle: "live",
+          },
+          {
+            signup: previousMs + 120_000,
+            action: previousMs + 120_000 + 24 * 60 * 60_000,
+            lifecycle: "live",
+          },
+          {
+            signup: currentMs - 60_000,
+            action: currentMs + 60_000,
+            lifecycle: "live",
+          },
+          { signup: nowMs - 1, action: null, lifecycle: "live" },
+          { signup: nowMs, action: null, lifecycle: "live" },
+          {
+            signup: previousMs + 180_000,
+            action: previousMs + 180_000,
+            lifecycle: "deleted",
+          },
+        ] as const;
+        for (const { signup, action, lifecycle } of cohorts) {
+          const userId = mintAuthProviderId<"user">();
+          await tx.insert(user).values({
+            id: userId,
+            name: "Signup fixture",
+            email: `${userId}@example.test`,
+            createdAt: new Date(signup),
+            deletedAt: lifecycle === "deleted" ? new Date(nowMs) : null,
+          });
+          if (action === null) {
+            continue;
           }
+          await recordHistoricalAudit({
+            tx,
+            bindings: {
+              organizationId: orgA,
+              workspaceId: null,
+              userId: actor,
+              execution: {
+                performer: { type: "user", id: userId },
+                trigger: { type: "direct" },
+              },
+            },
+            createdAt: new Date(action),
+            performerId: userId,
+          });
         }
         const summary = await readAuditedActivitySummary(tx, nowMs);
-        expect(summary.signups_today - before.signups_today).toBe(2);
-        expect(summary.signups_7d - before.signups_7d).toBe(4);
-        expect(summary.chat_turns_1h - before.chat_turns_1h).toBe(4);
         expect(summary.generated_at).toBe(now);
-        expect(summary.users_acting_5m - before.users_acting_5m).toBe(2);
-        expect(summary.users_acting_today - before.users_acting_today).toBe(2);
-        expect(summary.tool_calls_1h).toBeNull();
-        expect(summary.unavailable_reasons).toEqual(
-          ACTIVITY_UNAVAILABLE_REASONS,
+        expect(summary.timezone).toBe("Europe/Prague");
+        expect(summary.weeks.map(({ week_start }) => week_start)).toEqual(
+          dates,
         );
-        const audits = await tx
-          .select()
-          .from(systemAuditRuns)
-          .where(eq(systemAuditRuns.actor, "system:operator-activity"));
-        const added = audits.filter(({ id }) => !previousAudits.has(id));
+        expect(summary.weeks.map(({ partial }) => partial)).toEqual([
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          true,
+        ]);
+        expect(summary.weeks.map(({ active_orgs }) => active_orgs)).toEqual([
+          1, 1, 1, 1, 1, 1, 2, 2,
+        ]);
+        expect(summary.weeks.map(({ signups }) => signups)).toEqual([
+          0, 0, 0, 0, 0, 0, 3, 1,
+        ]);
+        const previousWeek = summary.weeks.at(6);
+        const currentWeek = summary.weeks.at(7);
+        expect(previousWeek?.activated_24h_pct).toBeCloseTo(200 / 3);
+        expect(currentWeek?.activated_24h_pct).toBe(0);
+        expect(
+          summary.weeks.map(({ weekly_retention_pct }) => weekly_retention_pct),
+        ).toEqual([null, 100, 100, 100, 100, 100, 100, 50]);
+        expect(summary.same_point_last_week.active_orgs).toBe(1);
+        expect(summary.same_point_last_week.signups).toBe(2);
+        const added = (
+          await tx
+            .select()
+            .from(systemAuditRuns)
+            .where(eq(systemAuditRuns.actor, "system:operator-activity"))
+        ).filter(({ id }) => !previousAudits.has(id));
         expect(added).toHaveLength(1);
         expect(added.at(0)?.counts).toEqual({ reads: 1 });
         expect(JSON.stringify(added)).not.toContain("@example.test");
@@ -221,179 +384,38 @@ describe.skipIf(!enabled)("operator activity database summary", () => {
     },
   );
 
-  test.each(daylightSavingDays)(
-    "deduplicates human actions across sources and tenants on the Prague day starting $start",
-    async ({ now, start }) => {
-      await withRollback(async (tx) => {
-        const nowMs = Date.parse(now);
-        const startMs = Date.parse(start);
-        const before = await readAuditedActivitySummary(tx, nowMs);
-        const cases = [
-          { at: startMs - 1, actor: "user", source: "both", lifecycle: "live" },
-          { at: startMs, actor: "user", source: "both", lifecycle: "live" },
-          {
-            at: nowMs - 5 * 60_000 - 1,
-            actor: "user",
-            source: "both",
-            lifecycle: "live",
-          },
-          {
-            at: nowMs - 5 * 60_000,
-            actor: "user",
-            source: "both",
-            lifecycle: "live",
-          },
-          { at: nowMs - 1, actor: "user", source: "both", lifecycle: "live" },
-          { at: nowMs, actor: "user", source: "both", lifecycle: "live" },
-          { at: nowMs + 1, actor: "user", source: "both", lifecycle: "live" },
-          { at: nowMs - 1, actor: "agent", source: "both", lifecycle: "live" },
-          {
-            at: nowMs - 1,
-            actor: "user",
-            source: "both",
-            lifecycle: "deleted",
-          },
-          { at: nowMs - 1, actor: "user", source: "chat", lifecycle: "live" },
-          { at: nowMs - 1, actor: "user", source: "audit", lifecycle: "live" },
-        ] as const;
-        const sharedActorId = mintAuthProviderId<"user">();
-        for (const tenant of [0, 1]) {
-          const organizationId = mintAuthProviderId<"organization">();
-          await tx.insert(organization).values({
-            id: organizationId,
-            name: `Action fixture ${tenant}`,
-            slug: organizationId,
-            createdAt: new Date(startMs),
-          });
-          await recordHistoricalAudit({
-            tx,
-            bindings: {
-              organizationId,
-              workspaceId: null,
-              userId: sharedActorId,
-              execution: {
-                performer: { type: "user", id: sharedActorId },
-                trigger: { type: "direct" },
-              },
-            },
-            createdAt: new Date(nowMs - 1),
-            performerId: null,
-          });
-          const recordedUserId = mintAuthProviderIdValue();
-          await tx.insert(user).values({
-            id: recordedUserId,
-            name: "Recorded audit owner",
-            email: `${recordedUserId}@example.test`,
-            createdAt: new Date(startMs - 1),
-          });
-          for (const { at, actor, source, lifecycle } of cases) {
-            const userId = mintAuthProviderId<"user">();
-            await tx.insert(user).values({
-              id: userId,
-              name: "Action fixture",
-              email: `${userId}@example.test`,
-              createdAt: new Date(startMs - 1),
-              deletedAt: lifecycle === "deleted" ? new Date(nowMs) : null,
-            });
-            const threadId = createSafeId<"chatThread">();
-            await tx.insert(chatThreads).values({
-              id: threadId,
-              userId,
-              organizationId,
-              title: "Action fixture",
-            });
-            // Repeated rows and both sources must still count this actor once.
-            for (const repetition of [0, 1]) {
-              if (source !== "audit") {
-                await tx.insert(chatMessages).values({
-                  id: createSafeId<"chatMessage">(),
-                  threadId,
-                  userId,
-                  role: actor === "user" ? "user" : "assistant",
-                  createdAt: new Date(at),
-                  content: toPersistedChatMessageContentV3({
-                    data: [{ type: "text", content: "Action fixture" }],
-                  }),
-                });
-              }
-              if (source !== "chat") {
-                await recordHistoricalAudit({
-                  tx,
-                  bindings: {
-                    organizationId,
-                    workspaceId: null,
-                    userId: repetition === 0 ? recordedUserId : userId,
-                    execution: {
-                      performer:
-                        actor === "user"
-                          ? { type: "user", id: userId }
-                          : { type: "agent", id: userId, name: null },
-                      trigger: { type: "direct" },
-                    },
-                  },
-                  createdAt: new Date(at),
-                  performerId: repetition === 0 ? userId : null,
-                });
-              }
-            }
-          }
-        }
-        const summary = await readAuditedActivitySummary(tx, nowMs);
-        expect(summary.users_acting_5m - before.users_acting_5m).toBe(11);
-        expect(summary.users_acting_today - before.users_acting_today).toBe(15);
-      });
-    },
-  );
-
-  test("the five-minute window can include actions before the Prague day starts", async () => {
-    await withRollback(async (tx) => {
-      const now = Date.parse("2026-03-28T23:02:00Z");
-      const before = await readAuditedActivitySummary(tx, now);
-      const organizationId = mintAuthProviderId<"organization">();
-      await tx.insert(organization).values({
-        id: organizationId,
-        name: "Midnight fixture",
-        slug: organizationId,
-        createdAt: new Date(now),
-      });
-      const userId = mintAuthProviderId<"user">();
-      await recordHistoricalAudit({
-        tx,
-        bindings: {
-          organizationId,
-          workspaceId: null,
-          userId,
-          execution: {
-            performer: { type: "user", id: userId },
-            trigger: { type: "direct" },
-          },
-        },
-        createdAt: new Date("2026-03-28T22:59:59.999Z"),
-        performerId: null,
-      });
-      const summary = await readAuditedActivitySummary(tx, now);
-      expect(summary.users_acting_5m - before.users_acting_5m).toBe(1);
-      expect(summary.users_acting_today - before.users_acting_today).toBe(0);
-    });
-  });
-
-  test("an empty future window returns zero counts and records an access audit", async () => {
+  test("an empty future window returns eight zero weeks with explicit unavailable ratios and an audit", async () => {
     await withRollback(async (tx) => {
       const previous = new Set((await auditIds(tx)).map(({ id }) => id));
       const summary = await readAuditedActivitySummary(
         tx,
         Date.parse("9999-01-08T12:00:00Z"),
       );
-      expect(summary.signups_today).toBe(0);
-      expect(summary.signups_7d).toBe(0);
-      expect(summary.chat_turns_1h).toBe(0);
-      expect(summary.users_acting_5m).toBe(0);
-      expect(summary.users_acting_today).toBe(0);
-      const audits = await tx
-        .select()
-        .from(systemAuditRuns)
-        .where(eq(systemAuditRuns.actor, "system:operator-activity"));
-      const added = audits.filter(({ id }) => !previous.has(id));
+      expect(summary.weeks).toHaveLength(8);
+      for (const week of summary.weeks) {
+        expect(week.active_orgs).toBe(0);
+        expect(week.signups).toBe(0);
+        expect(week.activated_24h_pct).toBeNull();
+        expect(week.weekly_retention_pct).toBeNull();
+        expect(
+          summary.unavailable_reasons[
+            `weeks.${week.week_start}.activated_24h_pct`
+          ],
+        ).toBe("No signups in this week.");
+        expect(
+          summary.unavailable_reasons[
+            `weeks.${week.week_start}.weekly_retention_pct`
+          ],
+        ).toBe("No active organizations in the preceding week.");
+      }
+      expect(summary.same_point_last_week.active_orgs).toBe(0);
+      expect(summary.same_point_last_week.signups).toBe(0);
+      const added = (
+        await tx
+          .select()
+          .from(systemAuditRuns)
+          .where(eq(systemAuditRuns.actor, "system:operator-activity"))
+      ).filter(({ id }) => !previous.has(id));
       expect(added).toHaveLength(1);
       expect(added.at(0)?.counts).toEqual({ reads: 1 });
     });
@@ -479,7 +501,8 @@ describe.skipIf(!enabled)("operator activity database summary", () => {
             const aggregate = statements.find(
               ({ query }) =>
                 query.startsWith("select") &&
-                query.includes('"chat_turns"') &&
+                query.includes('"chat_messages"') &&
+                query.includes('"audit_logs"') &&
                 query.includes('"user"'),
             );
             if (aggregate === undefined) {
@@ -500,9 +523,8 @@ describe.skipIf(!enabled)("operator activity database summary", () => {
             const rendered = JSON.stringify(plan);
             expect(rendered).not.toContain("Seq Scan");
             expect(rendered).toContain("Index");
-            expect(rendered).toContain("chat_turns");
-            expect(rendered).toContain("chat_messages");
-            expect(rendered).toContain("audit_logs");
+            expect(rendered).toContain("chat_messages_created_at_brin_idx");
+            expect(rendered).toContain("audit_logs_created_at_brin_idx");
             tx.rollback();
           }),
         catch: (cause) => cause,

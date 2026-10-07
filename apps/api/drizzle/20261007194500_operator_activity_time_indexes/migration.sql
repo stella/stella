@@ -11,12 +11,6 @@ SET lock_timeout = 0;
 --> statement-breakpoint
 
 -- Rebuild this migration's indexes on retry, including cancelled INVALID builds.
-DROP INDEX CONCURRENTLY IF EXISTS "chat_turns_created_at_idx";
---> statement-breakpoint
--- The operator aggregate spans organizations and filters only creation time.
--- squawk-ignore prefer-robust-stmts
-CREATE INDEX CONCURRENTLY "chat_turns_created_at_idx" ON "chat_turns" ("created_at");
---> statement-breakpoint
 DROP INDEX CONCURRENTLY IF EXISTS "chat_messages_created_at_brin_idx";
 --> statement-breakpoint
 -- BRIN bounds recent activity reads on the append-oriented global timelines.

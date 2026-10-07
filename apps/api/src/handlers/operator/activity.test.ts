@@ -8,15 +8,32 @@ import { createOperatorActivity } from "./activity";
 const NOW = Date.parse("2026-10-05T08:00:00Z");
 const summary = {
   generated_at: "2026-10-05T08:00:00Z",
-  users_acting_5m: 2,
-  users_acting_today: 5,
-  signups_today: 2,
-  signups_7d: 8,
-  chat_turns_1h: 3,
-  tool_calls_1h: null,
+  timezone: "Europe/Prague",
+  weeks: [
+    "2026-08-17",
+    "2026-08-24",
+    "2026-08-31",
+    "2026-09-07",
+    "2026-09-14",
+    "2026-09-21",
+    "2026-09-28",
+    "2026-10-05",
+  ].map((week_start, index) => ({
+    week_start,
+    partial: index === 7,
+    active_orgs: 2,
+    signups: 5,
+    new_paying: null,
+    mrr: { currency: "EUR", amount_minor: 1200 },
+    activated_24h_pct: 40,
+    trial_to_paid_pct: null,
+    weekly_retention_pct: 50,
+  })),
+  same_point_last_week: { active_orgs: 1, signups: 3, new_paying: null },
   unavailable_reasons: {
-    tool_calls_1h:
-      "No durable tool-call event source records execution timestamps.",
+    "weeks.2026-08-17.new_paying": "Paid subscription history unavailable.",
+    "weeks.2026-08-17.trial_to_paid_pct": "Trial outcome history unavailable.",
+    "same_point_last_week.new_paying": "Paid subscription history unavailable.",
   },
 } satisfies OperatorActivitySummary;
 
@@ -73,7 +90,7 @@ describe("operator activity HTTP boundary", () => {
     }
   });
 
-  test("projects only activity counts, timestamp and unavailable reasons", async () => {
+  test("projects only weekly aggregates, timestamp, timezone and unavailable reasons", async () => {
     const secret = Bun.randomUUIDv7();
     const readTimes: number[] = [];
     const app = createApp({
@@ -84,10 +101,21 @@ describe("operator activity HTTP boundary", () => {
         return {
           ...summary,
           email: "private@example.test",
-          user_id: "private-user",
-          unavailable_reasons: {
-            ...summary.unavailable_reasons,
+          userId: "private-user",
+          weeks: summary.weeks.map((week) => ({
+            ...week,
             email: "private@example.test",
+            userId: "private-user",
+            mrr: {
+              ...week.mrr,
+              email: "private@example.test",
+              userId: "private-user",
+            },
+          })),
+          same_point_last_week: {
+            ...summary.same_point_last_week,
+            email: "private@example.test",
+            userId: "private-user",
           },
         };
       },
