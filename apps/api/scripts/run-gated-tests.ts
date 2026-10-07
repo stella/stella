@@ -4,6 +4,7 @@ import { childExitStatus } from "@stll/scripts/src/child-exit-status";
 
 import packageJson from "../package.json" with { type: "json" };
 import { buildApiTestCommand } from "./api-test-command";
+import { parseGatedTestSelection } from "./gated-test-selection";
 import {
   normalizeAbsoluteTestPatterns,
   partitionRunnerArguments,
@@ -17,6 +18,7 @@ type RunGatedTestsOptions = {
   // them instead of skipping every suite.
   requiredEnv: readonly string[];
   script: GatedTestScript;
+  selection?: string;
 };
 
 const apiRoot = path.resolve(import.meta.dir, "..");
@@ -57,6 +59,7 @@ export const discoverGatedTestFiles = async ({
 export const runGatedTests = async ({
   requiredEnv,
   script,
+  selection,
 }: RunGatedTestsOptions): Promise<number> => {
   const runner = packageJson.ciGateTestRunners[script];
   const missing = requiredEnv.filter((name) => !process.env[name]);
@@ -71,14 +74,22 @@ export const runGatedTests = async ({
     testFileGlob: runner.testFileGlob,
   });
 
+  const plan = parseGatedTestSelection(selection, discoveredGatedFiles);
+  if (plan.mode === "none") {
+    console.log(`No affected ${runner.gate} test files.`);
+    return 0;
+  }
+  const plannedFiles =
+    plan.mode === "selected" ? plan.files : discoveredGatedFiles;
+
   const { bunArguments, patterns } = partitionRunnerArguments(
     Bun.argv.slice(2),
   );
   const selectedPaths = selectTestPaths(
-    discoveredGatedFiles,
+    plannedFiles,
     normalizeAbsoluteTestPatterns(patterns, apiRoot),
   );
-  const testFiles = discoveredGatedFiles.filter(
+  const testFiles = plannedFiles.filter(
     (testFile) => selectedPaths === null || selectedPaths.has(testFile),
   );
 
