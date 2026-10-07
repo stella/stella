@@ -71,6 +71,20 @@ impl LocalWindowFeature for ClipboardWindows {
 
 pub type ClipboardCaller = LocalCaller<ClipboardWindows>;
 
+pub struct ActivityWindows;
+
+impl LocalWindowFeature for ActivityWindows {
+  const WINDOW_LABELS: &'static [&'static str] =
+    &[crate::activity_window::ACTIVITY_WINDOW_LABEL];
+  const REFUSAL: &'static str = "activity timeline is not available here";
+
+  fn is_available<R: Runtime>(app: &AppHandle<R>) -> bool {
+    crate::activity::is_enabled(app)
+  }
+}
+
+pub type ActivityCaller = LocalCaller<ActivityWindows>;
+
 #[cfg(test)]
 mod tests {
   use super::*;
@@ -115,5 +129,20 @@ mod tests {
   #[test]
   fn clipboard_callers_are_clipboard_windows_on_the_app_origin() {
     assert_only_feature_windows_on_the_app_origin::<ClipboardWindows>();
+  }
+
+  #[test]
+  fn activity_callers_are_the_activity_window_on_the_app_origin() {
+    assert_only_feature_windows_on_the_app_origin::<ActivityWindows>();
+    for label in ClipboardWindows::WINDOW_LABELS {
+      assert!(
+        LocalCaller::<ActivityWindows>::verify(
+          label,
+          Some(&tauri::Url::parse("tauri://localhost/index.html").unwrap()),
+          None
+        )
+        .is_none()
+      );
+    }
   }
 }

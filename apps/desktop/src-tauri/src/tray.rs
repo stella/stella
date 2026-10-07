@@ -9,6 +9,7 @@ use crate::types::{AppSnapshot, SessionSnapshot};
 const QUIT_ACTION: &str = "quit";
 const OPEN_PREFERENCES_ACTION: &str = "open-preferences";
 const OPEN_CLIPBOARD_ACTION: &str = "open-clipboard";
+const OPEN_ACTIVITY_ACTION: &str = "open-activity";
 const OPEN_ABOUT_ACTION: &str = "open-about";
 const CHECK_FOR_UPDATES_ACTION: &str = "check-for-updates";
 const OPEN_EDIT_ROOT_ACTION: &str = "open-edit-root";
@@ -114,6 +115,11 @@ pub fn build_tray_menu(
   builder = builder.item(
     &MenuItemBuilder::with_id(OPEN_CLIPBOARD_ACTION, t("tray.clipboard")).build(app)?,
   );
+  if crate::activity::is_enabled(app) {
+    builder = builder.item(
+      &MenuItemBuilder::with_id(OPEN_ACTIVITY_ACTION, t("tray.activity")).build(app)?,
+    );
+  }
 
   // Settings
   builder = builder.item(
@@ -243,6 +249,9 @@ pub fn handle_menu_action(action: &str) -> MenuAction {
   if action == OPEN_CLIPBOARD_ACTION {
     return MenuAction::OpenClipboard;
   }
+  if action == OPEN_ACTIVITY_ACTION {
+    return MenuAction::OpenActivity;
+  }
   if action == OPEN_ABOUT_ACTION {
     return MenuAction::OpenPreferences("about");
   }
@@ -282,6 +291,7 @@ pub enum MenuAction {
   Quit,
   OpenPreferences(&'static str),
   OpenClipboard,
+  OpenActivity,
   CheckForUpdates,
   OpenEditRoot,
   CopyDiagnostics,

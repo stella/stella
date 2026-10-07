@@ -34,6 +34,7 @@ const REACT_ROOT_KEY = Symbol.for("legal.stella.desktop.react-root");
 const ClipboardEditor = lazy(
   async () => import("../clipboard/ClipboardEditor"),
 );
+const ActivityApp = lazy(async () => import("../activity/ActivityApp"));
 
 const isReactRoot = (value: unknown): value is ReactRoot =>
   typeof value === "object" &&
@@ -119,6 +120,12 @@ const Root = () => {
   let content = <App />;
   if (windowLabel === "clipboard") {
     content = <ClipboardApp />;
+  } else if (windowLabel === "activity") {
+    content = (
+      <Suspense fallback={<main className="bg-background min-h-dvh" />}>
+        <ActivityApp />
+      </Suspense>
+    );
   } else if (windowLabel === "clipboard-editor") {
     content = (
       <Suspense
