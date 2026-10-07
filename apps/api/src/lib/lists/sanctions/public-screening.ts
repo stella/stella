@@ -32,7 +32,7 @@ export const createPublicSanctionsScreening = ({
   >();
   const execute = async (
     props: Parameters<typeof screenSanctionsSubject>[0],
-    options?: { deadlineMs: number },
+    options?: { deadlineMs: number; onSettled: () => void },
   ) => {
     const result = await pool.run(
       async (session) =>
@@ -152,10 +152,12 @@ export const createPublicSanctionsScreening = ({
         },
         {
           deadlineMs: SANCTIONS_MATCHER_CONFIG.warmupDeadlineMs,
+          // A deadline answers early; only finished reads release this warmup.
+          onSettled: () => {
+            warming.pending = null;
+          },
         },
-      ).finally(() => {
-        warming.pending = null;
-      });
+      );
     }
     if (result.status === "completed") {
       return result.value;

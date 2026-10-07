@@ -353,7 +353,7 @@ export const createSanctionsMatcherPoolCore = ({
   return {
     run: async <T>(
       operation: (session: SanctionsMatcherSession) => Promise<T>,
-      options?: { deadlineMs?: number },
+      options?: { deadlineMs?: number; onSettled?: () => void },
     ): Promise<MatcherWorkOutcome<T>> => {
       const controller = new AbortController();
       const failed = Promise.withResolvers<MatcherWorkOutcome<T>>();
@@ -447,7 +447,8 @@ export const createSanctionsMatcherPoolCore = ({
         }
         return { status: "completed", value: result.value };
       };
-      const pendingWork = work();
+      // The caller deadline may finish first; lifecycle ownership ends with work.
+      const pendingWork = work().finally(options?.onSettled);
       try {
         const outcome = await Promise.race([pendingWork, failed.promise]);
         return outcome;

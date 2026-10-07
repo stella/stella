@@ -1148,3 +1148,108 @@ test("work exhaustion reports its actual list cause once rather than counting an
     { stage: "list-screening", reason: "work-limit", source: "eu" },
   ]);
 });
+
+test("a stalled cold read retains one warmup after its deadline until underlying work settles", async () => {
+  const clock = createMatcherTestClock();
+  const held = Promise.withResolvers<undefined>();
+  const started = Promise.withResolvers<undefined>();
+  const warmupSettled = Promise.withResolvers<undefined>();
+  const reports: Parameters<typeof reportSanctionsScreeningFailure>[0][] = [];
+  const pool = createSanctionsMatcherPool({
+    size: 2,
+    deadlineMs: 30,
+    clock,
+    reportFailure: (report) => reports.push(report),
+  });
+  let warmups = 0;
+  let unfinished = 0;
+  const publicScreen = createPublicSanctionsScreening({
+    reportFailure: (report) => reports.push(report),
+    pool: {
+      ...pool,
+      run: async (work, options) => {
+        if (options?.deadlineMs === SANCTIONS_MATCHER_CONFIG.warmupDeadlineMs) {
+          warmups += 1;
+          return await pool.run(work, {
+            ...options,
+            onSettled: () => {
+              options.onSettled?.();
+              warmupSettled.resolve(undefined);
+            },
+          });
+        }
+        return await pool.run(work, options);
+      },
+    },
+    loadEntries: async (options) => {
+      unfinished += 1;
+      started.resolve(undefined);
+      await held.promise;
+      const entries = await loadEditionEntries(options);
+      unfinished -= 1;
+      return entries;
+    },
+  });
+  const props = {
+    db: requestDb,
+    subject: {
+      type: "organization",
+      name: "Synthetic Company",
+      identifiers: [],
+    },
+    practiceJurisdictions: [],
+    now: FRESH_NOW,
+  } as const;
+  try {
+    const first = publicScreen(props);
+    await started.promise;
+    clock.advance(30);
+    expect((await first).unwrap().status).toBe("unavailable");
+    await new Promise<void>((resolve) => {
+      setImmediate(resolve);
+    });
+    expect(warmups).toBe(1);
+    expect(clock.pending()).toEqual([
+      SANCTIONS_MATCHER_CONFIG.warmupDeadlineMs,
+    ]);
+    clock.advance(SANCTIONS_MATCHER_CONFIG.warmupDeadlineMs);
+    await new Promise<void>((resolve) => {
+      setImmediate(resolve);
+    });
+    expect(unfinished).toBe(1);
+    for (const _attempt of Array.from({ length: 3 })) {
+      const pending = publicScreen(props);
+      await new Promise<void>((resolve) => {
+        setImmediate(resolve);
+      });
+      clock.advance(30);
+      expect((await pending).unwrap().status).toBe("unavailable");
+      await new Promise<void>((resolve) => {
+        setImmediate(resolve);
+      });
+      expect(warmups).toBe(1);
+    }
+    clock.advance(SANCTIONS_MATCHER_CONFIG.warmupDeadlineMs);
+    await new Promise<void>((resolve) => {
+      setImmediate(resolve);
+    });
+    expect(
+      reports.filter(
+        ({ stage, reason }) =>
+          stage === "matcher-pool" && reason === "deadline",
+      ),
+    ).toHaveLength(5);
+    held.resolve(undefined);
+    await warmupSettled.promise;
+    await pool.close();
+    await new Promise<void>((resolve) => {
+      setImmediate(resolve);
+    });
+    expect(unfinished).toBe(0);
+    expect((await publicScreen(props)).unwrap().status).toBe("unavailable");
+    expect(warmups).toBe(2);
+  } finally {
+    held.resolve(undefined);
+    await pool.close();
+  }
+});

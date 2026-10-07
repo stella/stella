@@ -668,3 +668,70 @@ test("failed worker retirement is observed and releases admission for another re
     await pool.close();
   }
 });
+
+test("lease settlement callbacks fire exactly once after work, including acquisitions without a lease", async () => {
+  const clock = createMatcherTestClock();
+  const entered = Promise.withResolvers<undefined>();
+  const held = Promise.withResolvers<undefined>();
+  const counts = { active: 0, queued: 0, closed: 0 };
+  const pool = createSanctionsMatcherPool({
+    clock,
+    deadlineMs: 10,
+    createWorker: inertWorker,
+    reportFailure: () => undefined,
+  });
+  const active = pool.run(
+    async () => {
+      entered.resolve(undefined);
+      await held.promise;
+      return "finished";
+    },
+    {
+      onSettled: () => {
+        counts.active += 1;
+      },
+    },
+  );
+  try {
+    await entered.promise;
+    clock.advance(10);
+    expect(await active).toEqual({ status: "unavailable", cause: "deadline" });
+    expect(counts.active).toBe(0);
+    const queued = pool.run(async () => "never entered", {
+      onSettled: () => {
+        counts.queued += 1;
+      },
+    });
+    await new Promise<void>((resolve) => {
+      setImmediate(resolve);
+    });
+    expect(counts.queued).toBe(0);
+    clock.advance(10);
+    expect(await queued).toEqual({ status: "unavailable", cause: "deadline" });
+    await new Promise<void>((resolve) => {
+      setImmediate(resolve);
+    });
+    expect(counts.queued).toBe(1);
+    expect(counts.active).toBe(0);
+    held.resolve(undefined);
+    await new Promise<void>((resolve) => {
+      setImmediate(resolve);
+    });
+    expect(counts.active).toBe(1);
+    await pool.close();
+    expect(
+      await pool.run(async () => "closed", {
+        onSettled: () => {
+          counts.closed += 1;
+        },
+      }),
+    ).toEqual({ status: "unavailable", cause: "closed" });
+    expect(counts).toEqual({ active: 1, queued: 1, closed: 1 });
+    await pool.close();
+    expect(counts).toEqual({ active: 1, queued: 1, closed: 1 });
+  } finally {
+    held.resolve(undefined);
+    await pool.close();
+    await active;
+  }
+});

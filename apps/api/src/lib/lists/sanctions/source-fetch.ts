@@ -270,6 +270,10 @@ const fetchStream = async ({
     SanctionsRefreshError
   >
 > => {
+  const canonical = parseSafeOutboundUrl(url);
+  if (canonical.isErr()) {
+    return Result.err(refreshError(source, "fetch-failed"));
+  }
   const requestSignal = AbortSignal.any([
     signal,
     AbortSignal.timeout(streamTotalTimeoutMs),
@@ -284,6 +288,7 @@ const fetchStream = async ({
       }
       if (
         hop > 0 &&
+        parsed.value.origin !== canonical.value.origin &&
         !SANCTIONS_SOURCE_CONFIG[source].allowedRedirectHosts.some(
           (host) => host === parsed.value.hostname,
         )
