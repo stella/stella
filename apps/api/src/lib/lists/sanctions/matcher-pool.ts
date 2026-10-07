@@ -1,9 +1,13 @@
-import { panic, Result } from "better-result";
+import { panic, Result, TaggedError } from "better-result";
 import { Worker } from "node:worker_threads";
 
+import type { FailureReason } from "@stll/errors";
+import { declareFailureClass } from "@stll/errors";
 import type { SanctionsSource } from "@stll/sanctions";
 
 import { detached } from "@/api/lib/analytics/capture";
+import { failureSink } from "@/api/lib/observability/failure";
+import { observeFailure } from "@/api/lib/observability/observe-failure";
 import {
   RUNTIME_WORKER_FILES,
   resolveRuntimeWorkerPath,
@@ -21,6 +25,47 @@ export const SANCTIONS_MATCHER_CONFIG = {
   deadlineMs: 250,
   warmupDeadlineMs: 10_000,
 } as const;
+
+const MATCHER_FAILURE_REASON = {
+  "deadline-exceeded": "sanctions_matcher_deadline",
+  "admission-refused": "sanctions_matcher_saturated",
+  "pool-closed": "sanctions_matcher_closed",
+  "worker-failed": "sanctions_matcher_failed",
+  "operation-failed": "sanctions_matcher_failed",
+} as const satisfies Record<string, FailureReason>;
+
+export class SanctionsMatcherFailure extends TaggedError(
+  "SanctionsMatcherFailure",
+)<{
+  code: keyof typeof MATCHER_FAILURE_REASON;
+  message: string;
+  cause?: unknown;
+}> {
+  static {
+    declareFailureClass(this, ({ code }) => MATCHER_FAILURE_REASON[code]);
+  }
+}
+
+const matcherFailure = (
+  code: SanctionsMatcherFailure["code"],
+  cause?: unknown,
+) =>
+  new SanctionsMatcherFailure({
+    code,
+    message: "Sanctions matcher could not complete its lease",
+    cause,
+  });
+
+const MATCHER_FAILED_SINK = failureSink({
+  event: "sanctions.matcher_failed",
+  expected: [],
+});
+
+const reportMatcherFailure = (failure: SanctionsMatcherFailure) =>
+  observeFailure(failure, {
+    sink: MATCHER_FAILED_SINK,
+    ctx: { feature: "sanctions.matcher", stage: failure.code },
+  });
 
 export type SanctionsMatcherSession = {
   signal: AbortSignal;
@@ -52,7 +97,7 @@ type Slot = {
   worker: Worker | null;
   busy: boolean;
   editions: Map<SanctionsSource, string>;
-  fail: (() => void) | null;
+  fail: ((failure: SanctionsMatcherFailure) => void) | null;
   termination: Promise<void> | null;
 };
 
@@ -75,16 +120,27 @@ const retireMatcherSlot = async (slot: Slot) => {
   await slot.termination;
 };
 
-type MatcherExitOptions = { slot: Slot; worker: Worker; notify: () => void };
+type MatcherExitOptions = {
+  slot: Slot;
+  worker: Worker;
+  notify: () => void;
+  cause?: unknown;
+};
 
-const handleMatcherExit = ({ slot, worker, notify }: MatcherExitOptions) => {
+const handleMatcherExit = ({
+  slot,
+  worker,
+  notify,
+  cause,
+}: MatcherExitOptions) => {
   if (slot.worker !== worker) {
     return;
   }
   if (slot.fail !== null) {
-    slot.fail();
+    slot.fail(matcherFailure("worker-failed", cause));
     return;
   }
+  reportMatcherFailure(matcherFailure("worker-failed", cause));
   slot.busy = true;
   detached(
     retireMatcherSlot(slot).then(() => {
@@ -115,7 +171,7 @@ type ExchangeMatcherMessageOptions = {
   worker: Worker;
   signal: AbortSignal;
   message: SanctionsMatcherMessage;
-  fail: () => void;
+  fail: (cause: unknown) => void;
 };
 
 const exchangeMatcherMessage = async ({
@@ -142,7 +198,7 @@ const exchangeMatcherMessage = async ({
     worker.once("message", listeners.reply);
     const sent = Result.try(() => worker.postMessage(message, []));
     if (sent.isErr()) {
-      fail();
+      fail(sent.error);
     }
   });
 };
@@ -151,7 +207,7 @@ type MatchSanctionsRequestOptions = {
   worker: Worker;
   signal: AbortSignal;
   request: SanctionsMatcherRequest;
-  fail: () => void;
+  fail: (cause: unknown) => void;
 };
 
 const matchSanctionsRequest = async ({
@@ -271,7 +327,11 @@ export const createSanctionsMatcherPool = ({
         slot: null,
         retirement: null,
       };
-      const fail = () => {
+      const fail = (failure: SanctionsMatcherFailure) => {
+        if (isSanctionsMatcherCancelled(controller.signal)) {
+          return;
+        }
+        reportMatcherFailure(failure);
         controller.abort();
         if (lease.slot !== null && lease.retirement === null) {
           lease.retirement = retireMatcherSlot(lease.slot);
@@ -280,13 +340,17 @@ export const createSanctionsMatcherPool = ({
       };
       const durationMs = options?.deadlineMs ?? deadlineMs;
       const expiresAt = clock.now() + durationMs;
-      const cancelDeadline = clock.schedule(fail, durationMs);
+      const cancelDeadline = clock.schedule(
+        () => fail(matcherFailure("deadline-exceeded")),
+        durationMs,
+      );
       const work = async (): Promise<MatcherWorkOutcome<T>> => {
         lease.slot = await acquire(controller.signal);
         if (
           lease.slot === null ||
           isSanctionsMatcherCancelled(controller.signal)
         ) {
+          fail(matcherFailure(closed ? "pool-closed" : "admission-refused"));
           return { status: "unavailable" };
         }
         const slot = lease.slot;
@@ -294,12 +358,14 @@ export const createSanctionsMatcherPool = ({
         if (slot.worker === null) {
           const created = Result.try(createWorker);
           if (created.isErr()) {
-            fail();
+            fail(matcherFailure("worker-failed", created.error));
             return { status: "unavailable" };
           }
           const worker = created.value;
           slot.worker = worker;
-          worker.on("error", () => handleMatcherExit({ slot, worker, notify }));
+          worker.on("error", (cause) =>
+            handleMatcherExit({ slot, worker, notify, cause }),
+          );
           worker.on("exit", () => handleMatcherExit({ slot, worker, notify }));
           // An idle cache must not prevent shutdown of tests or the API.
           worker.unref();
@@ -317,7 +383,7 @@ export const createSanctionsMatcherPool = ({
               worker,
               signal: controller.signal,
               request,
-              fail,
+              fail: (cause) => fail(matcherFailure("worker-failed", cause)),
             });
             if (
               !isSanctionsMatcherCancelled(controller.signal) &&
@@ -332,11 +398,11 @@ export const createSanctionsMatcherPool = ({
           async () => await operation(session),
         );
         if (result.isErr()) {
-          fail();
+          fail(matcherFailure("operation-failed", result.error));
           return { status: "unavailable" };
         }
         if (clock.now() >= expiresAt) {
-          fail();
+          fail(matcherFailure("deadline-exceeded"));
           return { status: "unavailable" };
         }
         return { status: "completed", value: result.value };
@@ -376,7 +442,7 @@ export const createSanctionsMatcherPool = ({
     close: async () => {
       closed = true;
       for (const slot of slots) {
-        slot.fail?.();
+        slot.fail?.(matcherFailure("pool-closed"));
       }
       notify();
       await Promise.all(slots.map(retireMatcherSlot));

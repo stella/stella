@@ -49,6 +49,9 @@ export const FAILURE_REASON_GRADE = {
   credentials_token_unreadable: "anticipated",
   client_disconnected: "anticipated",
   optional_file_absent: "anticipated",
+  sanctions_matcher_closed: "anticipated",
+  sanctions_matcher_deadline: "transient",
+  sanctions_matcher_saturated: "transient",
   request_invalid: "client",
   access_denied: "client",
   usage_limited: "client",
@@ -63,6 +66,7 @@ export const FAILURE_REASON_GRADE = {
   unobserved_5xx: "defect",
   rls_denied: "defect",
   response_invalid: "defect",
+  sanctions_matcher_failed: "defect",
   // 40P01 reaches a sink only after the transaction retry gave up, so what is
   // left is a lock-order signal rather than contention.
   pg_deadlock: "defect",
