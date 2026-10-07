@@ -7351,6 +7351,10 @@
     "seconds": 0.085742,
     "source": "estimated"
   },
+  "src/lib/scheduler/tasks/infosoud.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
   "src/lib/scheduler/tasks/legislation-expression-id-backfill-plan.db.test.ts": {
     "seconds": 17.8,
     "source": "measured"

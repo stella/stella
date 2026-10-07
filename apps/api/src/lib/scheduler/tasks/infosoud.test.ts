@@ -154,7 +154,9 @@ const fixture = (count = 3) => {
         }
         const fenced = statement.sql.includes('"last_sync_attempt_at"');
         if (fenced) {
-          expect(statement.sql).toMatch(/is null or .* < \$\d+/u);
+          expect(statement.sql).toMatch(
+            /"last_sync_attempt_at" is null\)+ or \(+"infosoud_tracked_cases"\."last_sync_attempt_at" < \$\d+/u,
+          );
           expect(statement.params).toContain(
             values.lastSyncAttemptAt.toISOString(),
           );
@@ -317,7 +319,7 @@ for (const reason of INFO_SOUD_SYNC_FAILURE_REASONS) {
           workspaceId,
           agendaItems,
         }: Parameters<typeof importInfoSoudAgendaItems>[0]) => {
-          expect(workspaceId).toBe(rows.at(0)?.workspaceId);
+          expect(rows.at(0)?.workspaceId).toBe(workspaceId);
           expect(agendaItems).toEqual([]);
           return visited.length - 1 === failureIndex
             ? await failure.importAgenda()
