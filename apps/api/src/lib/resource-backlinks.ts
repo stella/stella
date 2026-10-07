@@ -18,7 +18,7 @@ const UNSUPPORTED = { type: "unsupported" } as const;
  * authorization and query logic; this registry only declares where backlinks
  * exist, so identity does not become a generic fetch bypass.
  */
-export const RESOURCE_BACKLINK_DISPOSITION = {
+const RESOURCE_BACKLINK_DISPOSITION = {
   [RESOURCE_TYPE.AGENT_SKILL]: UNSUPPORTED,
   [RESOURCE_TYPE.AGENT_SKILL_COMMENT]: UNSUPPORTED,
   [RESOURCE_TYPE.AGENT_SKILL_PROPOSAL]: UNSUPPORTED,

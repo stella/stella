@@ -1,7 +1,9 @@
 import { Result, TaggedError } from "better-result";
 
-import type { Block, DocumentAst } from "@/api/lib/case-law/document-ast";
-import { isDocumentAst } from "@/api/lib/case-law/document-ast";
+// parser-output-unchanged: imports the document AST from its package owner
+import type { Block, DocumentAst } from "@stll/legal-ast/document-ast";
+import { isDocumentAst } from "@stll/legal-ast/document-ast";
+
 import type { CitationOpinionScope } from "@/api/lib/legal-search/ingestion-types";
 import { sortDeep } from "@/api/lib/sort-deep";
 import { isRecord } from "@/api/lib/type-guards";
