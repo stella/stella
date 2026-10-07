@@ -102,6 +102,7 @@ type MatcherExitOptions = {
   reason: "worker-error" | "worker-exit";
   error?: unknown;
   reportFailure: typeof reportSanctionsScreeningFailure;
+  reportUnownedFailure: typeof reportSanctionsScreeningFailure;
   detached: ReturnType<typeof createDetached>;
 };
 
@@ -112,6 +113,7 @@ const handleMatcherExit = ({
   reason,
   error,
   reportFailure,
+  reportUnownedFailure,
   detached,
 }: MatcherExitOptions) => {
   if (slot.worker !== worker) {
@@ -121,7 +123,8 @@ const handleMatcherExit = ({
     slot.fail(reason, error);
     return;
   }
-  reportFailure({ stage: "matcher-pool", reason, error });
+  // The idle exit owns this incident; retirement fallout stays diagnostic.
+  reportUnownedFailure({ stage: "matcher-pool", reason, error });
   slot.busy = true;
   detached(
     retireMatcherSlot(slot, reportFailure).then(() => {
@@ -247,6 +250,7 @@ type EnsureMatcherWorkerOptions = {
   createWorker: () => Worker;
   notify: () => void;
   reportFailure: typeof reportSanctionsScreeningFailure;
+  reportUnownedFailure: typeof reportSanctionsScreeningFailure;
   detached: ReturnType<typeof createDetached>;
   fail: NonNullable<Slot["fail"]>;
 };
@@ -257,6 +261,7 @@ const ensureMatcherWorker = ({
   createWorker,
   notify,
   reportFailure,
+  reportUnownedFailure,
   detached,
   fail,
 }: EnsureMatcherWorkerOptions): Worker | null => {
@@ -278,6 +283,7 @@ const ensureMatcherWorker = ({
       reason: "worker-error",
       error,
       reportFailure,
+      reportUnownedFailure,
       detached,
     });
   });
@@ -288,6 +294,7 @@ const ensureMatcherWorker = ({
       notify,
       reason: "worker-exit",
       reportFailure,
+      reportUnownedFailure,
       detached,
     });
   });
@@ -401,10 +408,7 @@ export const createSanctionsMatcherPoolCore = ({
         reportFailure({ stage: "matcher-pool", reason: cause, error });
         controller.abort();
         if (lease.slot !== null && lease.retirement === null) {
-          lease.retirement = retireMatcherSlot(
-            lease.slot,
-            reportUnownedFailure,
-          );
+          lease.retirement = retireMatcherSlot(lease.slot, reportFailure);
         }
         failed.resolve(outcome);
         return outcome;
@@ -428,7 +432,8 @@ export const createSanctionsMatcherPoolCore = ({
           slot,
           createWorker,
           notify,
-          reportFailure: reportUnownedFailure,
+          reportFailure,
+          reportUnownedFailure,
           detached,
           fail,
         });

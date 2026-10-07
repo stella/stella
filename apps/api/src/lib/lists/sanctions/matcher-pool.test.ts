@@ -1,5 +1,5 @@
 import { panic } from "better-result";
-import { expect, test } from "bun:test";
+import { expect, spyOn, test } from "bun:test";
 import { MessageChannel, Worker } from "node:worker_threads";
 
 import {
@@ -956,6 +956,62 @@ test("the API binding captures an unowned retirement failure exactly once", asyn
     ).toHaveLength(1);
     await pool.close();
     expect(analytics.exceptions()).toHaveLength(1);
+  } finally {
+    await pool.close();
+    analytics.restore();
+    logs.restore();
+  }
+});
+
+test("an idle worker exit and rejected retirement have one capture owner", async () => {
+  const analytics = installRecordingAnalytics();
+  const logs = installRecordingLogger();
+  const workers: Worker[] = [];
+  const exited = Promise.withResolvers<undefined>();
+  const retired = Promise.withResolvers<undefined>();
+  const pool = createSanctionsMatcherPool({
+    clock: createMatcherTestClock(),
+    createWorker: () => {
+      const worker = actualWorker();
+      workers.push(worker);
+      worker.once("exit", () => exited.resolve(undefined));
+      return worker;
+    },
+  });
+  try {
+    expect(
+      (
+        await pool.run(
+          async (session) => await session.match(request("Acme Trading")),
+        )
+      ).status,
+    ).toBe("completed");
+    const worker = workers.at(0);
+    if (!worker) {
+      panic("Expected a real matcher worker");
+    }
+    const terminate = worker.terminate.bind(worker);
+    spyOn(worker, "terminate").mockImplementation(async () => {
+      retired.resolve(undefined);
+      throw new TypeError("Retirement refused after idle exit");
+    });
+    await terminate();
+    await exited.promise;
+    await retired.promise;
+    await pool.close();
+    expect(analytics.exceptions()).toHaveLength(1);
+    expect(logs.at("ERROR")).toHaveLength(1);
+    expect(
+      logs.records
+        .filter(({ message }) => message === "sanctions.screening_failed")
+        .map(({ attributes }) => attributes?.["phase"]),
+    ).toEqual(["worker-exit"]);
+    expect(
+      logs.records
+        .filter(({ message }) => message === "sanctions.matcher_failed")
+        .map(({ attributes }) => attributes?.["phase"]),
+    ).toEqual(["worker-retire"]);
+    expect(logs.at("WARN")).toHaveLength(1);
   } finally {
     await pool.close();
     analytics.restore();
