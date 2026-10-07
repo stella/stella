@@ -1250,6 +1250,7 @@ export const MANUAL_SCHEMA_KEYS = new Set([
   "STELLA_WEB_PORT",
   "XDG_CACHE_HOME",
   "XDG_CONFIG_HOME",
+  "XDG_STATE_HOME",
   "SSR",
 ]);
 
@@ -1319,6 +1320,8 @@ export const TOOLING_ENV_KEYS = new Set([
   "GH_RETRY_SCRIPT",
   // merge-bar CLI tests skip the origin/main freshness check (local test runs only).
   "STELLA_MERGE_BAR_TEST_SKIP_FRESHNESS",
+  // Durable branch-update receipts and locks can use an operator-selected directory.
+  "STELLA_MERGE_BAR_STATE_DIR",
   // Preserve Bun global-store links inside browser containers.
   "BUN_INSTALL_CACHE_DIR",
   // Browser commands use only executables baked into the pinned image.
