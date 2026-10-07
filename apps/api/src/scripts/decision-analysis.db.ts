@@ -25,7 +25,10 @@ import type { CorpusSourceDescriptor } from "@/api/lib/legal-search/corpus-sourc
 import { corpusTombstoneReaderForTx } from "@/api/lib/legal-search/corpus-tombstones";
 import type { CorpusTombstoneReader } from "@/api/lib/legal-search/corpus-tombstones";
 
-import type { DecisionAnalysisRow } from "./decision-analysis.logic";
+import type {
+  CourtFilter,
+  DecisionAnalysisRow,
+} from "./decision-analysis.logic";
 
 /** Small pool: these scripts run one decision at a time under an operator. */
 const POOL_SIZE = 4;
@@ -152,6 +155,8 @@ export type CandidateCursor = {
 
 type ListCandidatesOptions = {
   country?: string | undefined;
+  /** Exact stored court names; absent means every court. */
+  courts?: CourtFilter;
   minCitations: number;
   /** Rows to read in this page. */
   scan: number;
@@ -172,7 +177,7 @@ type ListCandidatesOptions = {
  */
 export const listCandidateRows = async (
   db: Pick<PgAsyncDatabase<PgQueryResultHKT>, "select">,
-  { after, country, minCitations, scan }: ListCandidatesOptions,
+  { after, country, courts, minCitations, scan }: ListCandidatesOptions,
 ): Promise<CandidateRow[]> => {
   const filters: SqlFragment[] = [
     isNull(caseLawDecisions.redactedAt),
@@ -180,6 +185,9 @@ export const listCandidateRows = async (
   ];
   if (country !== undefined) {
     filters.push(eq(caseLawDecisions.country, country));
+  }
+  if (courts !== undefined) {
+    filters.push(inArray(caseLawDecisions.court, [...courts]));
   }
   if (after !== undefined) {
     // The ordering key as one tuple comparison, sound only because every

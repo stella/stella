@@ -5,7 +5,7 @@
  * when they disagree inside a tie the next page re-serves rows already
  * printed and skips the rest, which no mocked store can show. Heavy ties on
  * (authority, count) and pages of one to four rows put page boundaries
- * inside ties.
+ * inside ties; a drawn court filter must hold on every page.
  */
 
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
@@ -25,6 +25,7 @@ import type {
 
 import { listCandidateRows } from "./decision-analysis.db";
 import type { CandidateCursor, CandidateRow } from "./decision-analysis.db";
+import type { CourtFilter } from "./decision-analysis.logic";
 
 /**
  * Fixture counts sit far above anything another suite stores, so the
@@ -32,6 +33,18 @@ import type { CandidateCursor, CandidateRow } from "./decision-analysis.db";
  */
 const COUNT_BASE = 1_000_000_000;
 const MIN_CITATIONS = COUNT_BASE + 1;
+
+const COURTS = ["Nejvyšší soud", "Ústavní soud", "Krajský soud v Brně"];
+
+const courtFilterArbitrary = fc.option(
+  fc
+    .tuple(fc.constantFrom(...COURTS), fc.subarray(COURTS))
+    .map(([first, more]): CourtFilter => [
+      first,
+      ...more.filter((court) => court !== first),
+    ]),
+  { nil: undefined },
+);
 
 const fixtureRow = fc.record({
   // Few distinct values, so most rows tie with a neighbour on the key.
@@ -45,6 +58,7 @@ const fixtureRow = fc.record({
     COUNT_BASE + 2,
   ),
   redacted: fc.constantFrom(false, false, false, true),
+  court: fc.constantFrom(...COURTS),
 });
 
 /** Ranking order: authority descending, then count descending. */
@@ -59,12 +73,17 @@ const cursorOf = (row: CandidateRow): CandidateCursor => ({
   id: row.id,
 });
 
-type WalkOptions = { tx: TestDatabaseTransaction; scan: number };
+type WalkOptions = {
+  tx: TestDatabaseTransaction;
+  scan: number;
+  courts: CourtFilter;
+};
 
 /** The script's own loop: resume after each page's last row until empty. */
 const walkAllPages = async ({
   tx,
   scan,
+  courts,
 }: WalkOptions): Promise<CandidateRow[]> => {
   const served: CandidateRow[] = [];
   let after: CandidateCursor | undefined;
@@ -74,6 +93,7 @@ const walkAllPages = async ({
     // db-await-in-loop: keyset paging is the behaviour under test
     const rows = await listCandidateRows(tx, {
       after,
+      courts,
       minCitations: MIN_CITATIONS,
       scan,
     });
@@ -117,7 +137,8 @@ describe("analysis candidate paging", () => {
       fc.asyncProperty(
         fc.array(fixtureRow, { minLength: 1, maxLength: 24 }),
         fc.integer({ min: 1, max: 4 }),
-        async (fixtures, scan) => {
+        courtFilterArbitrary,
+        async (fixtures, scan, courts) => {
           await db
             .transaction(async (tx) => {
               const inserted = await tx
@@ -128,7 +149,7 @@ describe("analysis candidate paging", () => {
                     return {
                       sourceId,
                       caseNumber: `Cdo ${String(counter)}/2026`,
-                      court: "Nejvyšší soud",
+                      court: fixture.court,
                       country: "CZE",
                       language: "cs",
                       citationAuthority: fixture.citationAuthority,
@@ -139,6 +160,7 @@ describe("analysis candidate paging", () => {
                 )
                 .returning({
                   id: caseLawDecisions.id,
+                  court: caseLawDecisions.court,
                   citationCount: caseLawDecisions.citationCount,
                   redactedAt: caseLawDecisions.redactedAt,
                 });
@@ -146,11 +168,12 @@ describe("analysis candidate paging", () => {
                 .filter(
                   (row) =>
                     row.redactedAt === null &&
-                    row.citationCount >= MIN_CITATIONS,
+                    row.citationCount >= MIN_CITATIONS &&
+                    (courts === undefined || courts.includes(row.court)),
                 )
                 .map((row) => row.id);
 
-              const served = await walkAllPages({ tx, scan });
+              const served = await walkAllPages({ tx, scan, courts });
               const servedIds = served.map((row) => row.id);
 
               // Exactly once: no repeats, and nothing eligible left behind.
@@ -158,6 +181,7 @@ describe("analysis candidate paging", () => {
               expect(servedIds.toSorted()).toEqual(eligible.toSorted());
               // In order: the pages concatenate to the one-page ranking.
               const onePage = await listCandidateRows(tx, {
+                courts,
                 minCitations: MIN_CITATIONS,
                 scan: fixtures.length + 1,
               });

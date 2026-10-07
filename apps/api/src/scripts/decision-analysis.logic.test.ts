@@ -16,6 +16,7 @@ import { toSafeId } from "@/api/lib/branded-types";
 
 import {
   ANALYSIS_REJECTION,
+  courtFilter,
   describeUpdateOutcome,
   flagValue,
   hasFlag,
@@ -356,6 +357,37 @@ describe("argument and environment handling", () => {
     expect(positiveInteger("many", 100)).toBe(100);
     expect(nonNegativeInteger("0", 1)).toBe(0);
     expect(nonNegativeInteger("-1", 1)).toBe(1);
+  });
+
+  test("collects every --court, in order and without repeats", () => {
+    expect(courtFilter(["--limit", "5"]).unwrap()).toBeUndefined();
+    expect(
+      courtFilter([
+        "--court",
+        "Nejvyšší soud",
+        "--ids-only",
+        "--court",
+        "Ústavní soud",
+        "--court",
+        "Nejvyšší soud",
+      ]).unwrap(),
+    ).toEqual(["Nejvyšší soud", "Ústavní soud"]);
+  });
+
+  test("refuses a --court without a usable name instead of widening the run", () => {
+    for (const argv of [
+      ["--court"],
+      ["--court", "--ids-only"],
+      ["--court", "  "],
+      ["--court", "x".repeat(513)],
+      ["--court", "Nejvyšší soud", "--court"],
+    ]) {
+      const parsed = courtFilter(argv);
+      expect(Result.isError(parsed)).toBe(true);
+      if (Result.isError(parsed)) {
+        expect(parsed.error.message).toContain("--court needs a court name");
+      }
+    }
   });
 
   test("names the connection variable when it is missing", () => {
