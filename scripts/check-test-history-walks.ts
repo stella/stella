@@ -31,6 +31,10 @@ const GIT_CALLEE = /git$/iu;
 const SHELL_HISTORY_WALK =
   /\bgit\b[^\n;&|]*?(?<![\w./-])(?:annotate|blame|log|rev-list|shortlog|whatchanged)(?![\w./-])/u;
 
+// Joins backslash-continued lines so `git \` + `log` reads as one command.
+const walksShell = (text: string): boolean =>
+  SHELL_HISTORY_WALK.test(text.replaceAll(/\\\r?\n/gu, " "));
+
 export type AllowedHistoryWalk = {
   // The exact number of flagged lines, so a new walk in the file still fails.
   walks: number;
@@ -42,7 +46,7 @@ export const ALLOWED_HISTORY_WALKS: Readonly<
   Record<string, AllowedHistoryWalk>
 > = {
   "scripts/check-test-history-walks.test.ts": {
-    walks: 17,
+    walks: 19,
     reason: "planted fixtures for this guard; nothing is spawned",
   },
   "scripts/check-pushed-secrets.test.ts": {
@@ -122,10 +126,10 @@ const walksHistory = (node: ts.Node): boolean => {
       node.head.text,
       ...node.templateSpans.map((span) => span.literal.text),
     ].join("ARG");
-    return SHELL_HISTORY_WALK.test(text);
+    return walksShell(text);
   }
   const text = literalText(node);
-  return text !== undefined && SHELL_HISTORY_WALK.test(text);
+  return text !== undefined && walksShell(text);
 };
 
 const walkFinding = (file: string, line: number): HistoryWalkFinding => ({
@@ -135,14 +139,27 @@ const walkFinding = (file: string, line: number): HistoryWalkFinding => ({
     "walks git history; CI fetches one blob per commit. Read a pinned commit with `git show <sha>:path` instead",
 });
 
-const scanShell = (file: string, source: string): HistoryWalkFinding[] =>
-  source
-    .split("\n")
-    .flatMap((text, index) =>
-      !text.trimStart().startsWith("#") && SHELL_HISTORY_WALK.test(text)
-        ? [walkFinding(file, index + 1)]
-        : [],
-    );
+// Each finding points at the first physical line of its logical command.
+const scanShell = (file: string, source: string): HistoryWalkFinding[] => {
+  const findings: HistoryWalkFinding[] = [];
+  let command = "";
+  let start = 0;
+  for (const [index, text] of source.split("\n").entries()) {
+    if (command === "") {
+      start = index;
+    }
+    if (text.endsWith("\\")) {
+      command += `${text.slice(0, -1)} `;
+      continue;
+    }
+    command += text;
+    if (!command.trimStart().startsWith("#") && walksShell(command)) {
+      findings.push(walkFinding(file, start + 1));
+    }
+    command = "";
+  }
+  return findings;
+};
 
 const scanSource = (file: string, source: string): HistoryWalkFinding[] => {
   if (SHELL_TEST_FILE.test(file)) {

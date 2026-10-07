@@ -32,6 +32,7 @@ test("flags every spawn shape that walks history", () => {
     `execSync('git -C "my repo" log -p');`,
     'git("/tmp/repo", "log", "-p");',
     'const hook = `#!/bin/sh\ngit log -p -U0 "$@"\n`;',
+    'const hook = `git -C "$repo" \\\\\n  log -p\n`;',
   ]) {
     expect(scan(source), source).toHaveLength(1);
   }
@@ -79,6 +80,9 @@ test("scans shell tests line by line and skips comments", () => {
     findHistoryWalks(new Map([["scripts/example.test.sh", source]]), {});
   expect(shell('#!/bin/bash\nset -e\ngit -C "$repo" log -p\n')).toEqual([
     expect.objectContaining({ line: 3 }),
+  ]);
+  expect(shell('set -e\ngit -C "$repo" \\\n  log -p\n')).toEqual([
+    expect.objectContaining({ line: 2 }),
   ]);
   expect(shell("# git log -p is slow in CI\ngit show HEAD:a.txt\n")).toEqual(
     [],
