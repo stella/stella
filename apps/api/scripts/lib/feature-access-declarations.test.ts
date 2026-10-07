@@ -517,4 +517,45 @@ export const ${name} = { run: { featureId: "fixture", ${target} } };`;
       ),
     ).toBe(true);
   });
+
+  // The capability exporter runs this over ~1,400 endpoints sharing most of
+  // one module graph. Re-reading every reachable module per endpoint once
+  // cost ~30 s per export; per-module work must not grow with endpoints.
+  test("per-module work does not grow with the endpoint count", () => {
+    const moduleCount = 60;
+    const body = Array.from(
+      { length: 40 },
+      (_, index) =>
+        `export const f${index} = (db: Db) => db.query.rows${index}.findMany({ where: "ordinary_rows_${index}" });`,
+    ).join("\n");
+    const shared = new Map(baseSources);
+    for (let index = 0; index < moduleCount; index += 1) {
+      const next =
+        index + 1 < moduleCount
+          ? `import { f0 as next } from "./m${index + 1}";\nexport const chain = () => next;\n`
+          : "";
+      shared.set(`apps/api/src/lib/m${index}.ts`, `${next}${body}`);
+    }
+    const elapsed = (count: number) => {
+      const endpoints = Array.from({ length: count }, (_, index) => ({
+        file: `apps/api/src/routes/e${index}.ts`,
+        config: {},
+      }));
+      const sources = new Map(shared);
+      for (const { file } of endpoints) {
+        sources.set(file, 'import { f0 } from "../lib/m0"; export default f0;');
+      }
+      const started = performance.now();
+      validateFeatureAccessDeclarations({ registry, endpoints, sources });
+      return performance.now() - started;
+    };
+    // Minimum of three samples per size absorbs scheduler noise. Per-endpoint
+    // module walks measured 15x at 16x the endpoints; shared work stays ~1x.
+    const fastest = (count: number) =>
+      Math.min(elapsed(count), elapsed(count), elapsed(count));
+    elapsed(4);
+    const few = fastest(8);
+    const many = fastest(128);
+    expect(many / few).toBeLessThan(4);
+  });
 });
