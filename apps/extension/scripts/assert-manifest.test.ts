@@ -21,14 +21,24 @@ const productionManifest = {
 test("store manifests require the release version and exactly production origins", async () => {
   const directory = await mkdtemp(path.join(tmpdir(), "extension-manifest-"));
   const manifestPath = path.join(directory, "manifest.json");
-  const check = async (manifest: typeof productionManifest, origins = "") => {
+  type CheckManifestOptions = {
+    origins?: string;
+    releaseVersion?: string;
+  };
+  const check = async (
+    manifest: typeof productionManifest,
+    {
+      origins = "",
+      releaseVersion = productionManifest.version,
+    }: CheckManifestOptions = {},
+  ) => {
     await Bun.write(manifestPath, JSON.stringify(manifest));
     return Bun.spawnSync(
       [
         process.execPath,
         path.join(import.meta.dirname, "assert-manifest.ts"),
         "production",
-        "1.2.3",
+        releaseVersion,
         manifestPath,
       ],
       { env: { ...process.env, WXT_STELLA_ORIGINS: origins } },
@@ -46,12 +56,22 @@ test("store manifests require the release version and exactly production origins
         ...productionManifest,
         content_scripts: [{ matches: ["https://other.example/*"] }],
       },
-      "https://other.example",
+      { origins: "https://other.example" },
     );
     expect(selfHosted.exitCode).not.toBe(0);
     expect(selfHosted.stderr.toString()).toContain(
       "exactly the production origins",
     );
+    for (const releaseVersion of ["1.2.3-rc.1", "1.2.3-beta.0"]) {
+      const prerelease = await check(
+        { ...productionManifest, version: releaseVersion },
+        { releaseVersion },
+      );
+      expect(prerelease.exitCode).not.toBe(0);
+      expect(prerelease.stderr.toString()).toContain(
+        "Store releases require a stable production version",
+      );
+    }
     for (const origin of [
       "https://staging.stll.app/*",
       "http://localhost/*",

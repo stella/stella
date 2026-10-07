@@ -12,7 +12,8 @@ release workflow and attach `stella-extension-chrome-X.Y.Z.zip` to the GitHub
 release. The manifest version comes from the repository `VERSION`, verified
 against the tag; the packaged manifest must trust exactly the production
 origins. Prerelease tags do not produce a store package. Store submission is
-manual.
+manual. Historical tags predating `scripts/release-zip.sh` skip the extension
+asset when rerun; tags supporting it must pass the packaging checks.
 
 `bun --filter @stll/extension zip` builds the same ZIP locally. Development
 and staging builds use the product's numeric version too; `version_name`
