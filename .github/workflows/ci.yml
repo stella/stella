@@ -3026,7 +3026,7 @@ jobs:
 
       - name: Test nightly rehearsal and retry guards
         if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
-        run: bun test scripts/nightly-exact-base.test.ts scripts/check-test-retries.test.ts
+        run: bun test scripts/nightly-exact-base.test.ts scripts/check-test-retries.test.ts scripts/check-test-history-walks.test.ts
 
       - name: Reject automatic test retries
         if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
