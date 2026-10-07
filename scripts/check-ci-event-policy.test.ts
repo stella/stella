@@ -293,7 +293,10 @@ test("CodeQL accepts the main release policy and rejects ordinary PR scans", () 
 });
 
 test("release-periodic jobs also run on non-release schedules and stay off pull requests", () => {
-  const declared = { jobs: { "fixture.yml/compiler": "release-periodic" } };
+  const declared = {
+    jobs: { "fixture.yml/compiler": "queue" },
+    periodicJobs: ["fixture.yml/compiler"],
+  };
   const job = {
     if: "github.event_name != 'pull_request' && inputs.heavy_only == true && needs.ci-plan.outputs.compiler_required == 'true'",
   };
@@ -313,6 +316,8 @@ test("release-periodic jobs also run on non-release schedules and stay off pull 
   );
   job.if = "true";
   expect(check()).toContain(
-    "fixture.yml/compiler: release-periodic job can run on pull_request",
+    "fixture.yml/compiler: queue job can run on pull_request",
   );
+  declared.periodicJobs.push("fixture.yml/removed");
+  expect(check()).toContain("fixture.yml/removed: stale periodic job");
 });

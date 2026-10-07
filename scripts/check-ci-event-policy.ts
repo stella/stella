@@ -13,9 +13,9 @@ const policySchema = v.object({
       "schema-pr",
       "pr-opt-in",
       "release-pr",
-      "release-periodic",
     ]),
   ),
+  periodicJobs: v.optional(v.array(v.string()), []),
   pushMain: v.optional(
     v.record(
       v.string(),
@@ -210,6 +210,7 @@ type CheckJobEventPolicyOptions = {
   job: v.InferOutput<typeof workflowSchema>["jobs"][string];
   eventPolicy: v.InferOutput<typeof policySchema>["jobs"][string];
   triggers: v.InferOutput<typeof workflowSchema>["on"];
+  periodic: boolean;
 };
 
 const checkJobEventPolicy = ({
@@ -218,6 +219,7 @@ const checkJobEventPolicy = ({
   job,
   eventPolicy,
   triggers,
+  periodic,
 }: CheckJobEventPolicyOptions) => {
   const problems: string[] = [];
   if (file === "codeql.yml" && eventPolicy !== "release-pr") {
@@ -251,7 +253,7 @@ const checkJobEventPolicy = ({
   if (eventPolicy === "schema-pr" && file !== "db-migrations.yml") {
     problems.push(`${key}: schema policy belongs to Database Migrations`);
   }
-  if (eventPolicy === "release-periodic") {
+  if (periodic) {
     const condition =
       typeof job.if === "boolean" ? String(job.if) : (job.if ?? "true");
     const scopeValues = Object.fromEntries(
@@ -279,11 +281,7 @@ const checkJobEventPolicy = ({
       );
     }
   }
-  if (
-    eventPolicy !== "queue" &&
-    eventPolicy !== "main" &&
-    eventPolicy !== "release-periodic"
-  ) {
+  if (eventPolicy !== "queue" && eventPolicy !== "main") {
     return problems;
   }
   for (const event of ["pull_request", "pull_request_target"]) {
@@ -386,6 +384,7 @@ export const checkCiEventPolicies = ({
           job,
           eventPolicy,
           triggers: workflow.on,
+          periodic: declared.periodicJobs.includes(key),
         }),
       );
     }
@@ -415,6 +414,11 @@ export const checkCiEventPolicies = ({
   for (const file of Object.keys(declared.pushMain)) {
     if (!mainWorkflows.has(file)) {
       problems.push(`${file}: stale main-push concurrency policy`);
+    }
+  }
+  for (const key of declared.periodicJobs) {
+    if (!seen.has(key)) {
+      problems.push(`${key}: stale periodic job`);
     }
   }
   for (const key of Object.keys(declared.jobs)) {

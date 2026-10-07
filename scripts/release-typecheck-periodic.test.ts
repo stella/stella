@@ -80,7 +80,10 @@ const plan = ({
           return [line.slice(0, separator), line.slice(separator + 1)];
         }),
     );
-    return outputs["release_typecheck_required"];
+    return (
+      outputs["release_typecheck_required"] ??
+      panic("Planner omitted release_typecheck_required")
+    );
   } finally {
     rmSync(directory, { recursive: true, force: true });
   }
