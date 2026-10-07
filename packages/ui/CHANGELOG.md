@@ -1,5 +1,25 @@
 # @stll/ui
 
+## 0.43.0
+
+### Minor Changes
+
+- [#4940](https://github.com/stella/stella/pull/4940) [`83b4487`](https://github.com/stella/stella/commit/83b44876fe05b865329a622176ee8fd8fc51a4d8) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Add form dirtiness signals and a shared dialog Escape policy: unchanged dialogs close immediately; changed dialogs show a localized discard hint before a second Escape closes them.
+
+- [#4905](https://github.com/stella/stella/pull/4905) [`bf6a6a3`](https://github.com/stella/stella/commit/bf6a6a3e2f27df61169ddaabf85d3392dde5d222) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Add semantic DetailsGrid and DetailsItem primitives with container-responsive columns, aligned labels, and full-width facts.
+
+- [#5038](https://github.com/stella/stella/pull/5038) [`598f3c4`](https://github.com/stella/stella/commit/598f3c44be0666ebca901a214e4fbf5bed547d3d) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Add a shared split button with independent actions, accessible menu navigation, and quiet hover chrome.
+
+- [#4907](https://github.com/stella/stella/pull/4907) [`b982f7f`](https://github.com/stella/stella/commit/b982f7fbbc86741e6d9df68a7da46bfaa5be669e) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Add `ToolbarIconAction`, an icon-only toolbar button whose label is its tooltip and accessible name.
+
+### Patch Changes
+
+- [#5066](https://github.com/stella/stella/pull/5066) [`e571295`](https://github.com/stella/stella/commit/e57129541729f01b92c5c64fbb2e3451507a4e7a) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Add an inline rename field that keeps the surrounding title typography and sizes to its text.
+
+- [#5123](https://github.com/stella/stella/pull/5123) [`684f296`](https://github.com/stella/stella/commit/684f2963fdfab360198780bfcc0b188c5692b913) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Let an inline rename field fill its row instead of sizing to its text.
+
+- [#5006](https://github.com/stella/stella/pull/5006) [`7bb8e47`](https://github.com/stella/stella/commit/7bb8e47bc85fad689ff939399eb5f553e65b1f54) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Focus the selected or current day when opening a date picker and keep field trigger text on one line.
+
 ## 0.42.1
 
 ### Patch Changes
