@@ -855,9 +855,9 @@ describe("detect-e2e-changes", () => {
 
     // Updates capture the named branch; ordinary checks keep the event's
     // ref. Only the validated main-heavy caller selects an explicit SHA.
-    expect(workflowStep(update, "Checkout")).toContain(
-      `ref: ${githubExpression("inputs.ref")}`,
-    );
+    expect(workflowStepValue(update, "Checkout")["with"]).toMatchObject({
+      ref: githubExpression("inputs.ref"),
+    });
     expect(checkoutRefs.length).toBeGreaterThan(0);
     for (const event of ["pull_request", "merge_group", "workflow_dispatch"]) {
       const context = {
@@ -982,30 +982,32 @@ describe("detect-e2e-changes", () => {
     // The push is an API commit appended to the named branch: GitHub signs
     // it, so it cannot leave a person's pull request behind the
     // signed-commits rule.
-    const push = workflowStep(update, "Push regenerated baselines");
-    expect(push).toContain(
-      "uses: stella/.github/.github/actions/signed-commit@",
+    const push = workflowStepValue(update, "Push regenerated baselines");
+    expect(push["uses"]).toContain(
+      "stella/.github/.github/actions/signed-commit@",
     );
-    expect(push).toContain("mode: append");
-    expect(push).toContain(`branch: ${githubExpression("inputs.ref")}`);
+    expect(push["with"]).toMatchObject({
+      mode: "append",
+      branch: githubExpression("inputs.ref"),
+    });
 
     // Nightly checks continue to use their triggering ref.
     expect(nightlyWorkflow).not.toContain("ref: ");
   });
 
   test("publishes regenerated baselines a fork pull request can commit itself", () => {
-    const upload = workflowStep(
+    const upload = workflowStepValue(
       jobOf(marketingWorkflow, "update"),
       "Upload regenerated baselines",
     );
-    expect(upload).toContain(
-      "uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a",
+    expect(upload["uses"]).toBe(
+      "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a",
     );
-    expect(upload).toContain(
-      `name: marketing-screenshots-${githubExpression("github.run_id")}`,
-    );
-    expect(upload).toContain("path: apps/landing/public/media/products/*.png");
-    expect(upload).toContain("retention-days: 7");
+    expect(upload["with"]).toMatchObject({
+      name: `marketing-screenshots-${githubExpression("github.run_id")}`,
+      path: "apps/landing/public/media/products/*.png",
+      "retention-days": 7,
+    });
     // Published before the push, so a run that cannot push still hands over
     // the PNGs.
     expect(

@@ -2021,6 +2021,7 @@ test("transfer read guard runs for API-only pull request changes", () => {
   expect(fastRequired).toContain("ci-checks-rest");
 });
 
+// Scope subprocesses take 1.6 s serial and exceed 5 s while CI checks run in parallel.
 test("CLI packaging parity runs whenever CLI sources, codegen or generated outputs change", () => {
   expect(packageScopeStart).toBeGreaterThan(-1);
   expect(selector).toContain(packageScope);
@@ -2075,7 +2076,7 @@ test("CLI packaging parity runs whenever CLI sources, codegen or generated outpu
       expect(packageChecksPlan(files), files.join(" ")).toBe("true");
     }
   }
-});
+}, 15_000);
 
 const smokeCommands = (job: unknown) =>
   jobSteps(job).flatMap(({ run }) =>
