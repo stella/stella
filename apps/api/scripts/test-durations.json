@@ -9110,5 +9110,13 @@
   "src/tests/test-path-filters.test.ts": {
     "seconds": 0.2855,
     "source": "estimated"
+  },
+  "src/lib/document-processing-workspace-lock.postgres.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
+  "src/lib/search/projection-repair-lock-order.postgres.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
   }
 }
