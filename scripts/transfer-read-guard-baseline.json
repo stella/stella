@@ -420,20 +420,6 @@
     "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
   },
   {
-    "file": "apps/api/src/handlers/case-law/ingestion/adapters/test-utils.ts",
-    "function": "module/recordFixture",
-    "kind": "numeric-timeout",
-    "count": 1,
-    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
-  },
-  {
-    "file": "apps/api/src/handlers/case-law/ingestion/adapters/test-utils.ts",
-    "function": "module/recordFixture",
-    "kind": "total-timeout-body",
-    "count": 1,
-    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
-  },
-  {
     "file": "apps/api/src/handlers/case-law/ingestion/pipeline/decision-identity.ts",
     "function": "module/resolveDecisionIdentityTx",
     "kind": "constant-limit",
