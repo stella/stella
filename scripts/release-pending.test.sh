@@ -53,7 +53,7 @@ export TEST_VERSION=1.2.3
 for endpoint in contents/VERSION matching-refs; do
   export TEST_FAIL_ENDPOINT="$endpoint"
   expect_failure
-  grep -q 'API unavailable' "$fixture/error"
+  grep -q 'GitHub command failed: HTTP 0, attempt 1/4 (exit 1)' "$fixture/error"
 done
 export TEST_FAIL_ENDPOINT='' TEST_REFS='not-json'
 expect_failure

@@ -1,4 +1,4 @@
-// oxlint-disable-next-line typescript-eslint/triple-slash-reference -- loads the ambient "*.md" module declaration; no ES import equivalent
+// oxlint-disable-next-line typescript/triple-slash-reference -- loads the ambient "*.md" module declaration; no ES import equivalent
 /// <reference path="./markdown.d.ts" />
 
 import skill0 from "../skills/playbook-builder/SKILL.md" with { type: "text" };

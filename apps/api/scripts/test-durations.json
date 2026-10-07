@@ -3203,6 +3203,10 @@
     "seconds": 1,
     "source": "estimated"
   },
+  "src/handlers/organization-settings/ai-availability/get.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
   "src/handlers/organization-settings/ai-config-decision.test.ts": {
     "seconds": 0.283187,
     "source": "estimated"
@@ -3811,7 +3815,7 @@
     "seconds": 1,
     "source": "estimated"
   },
-  "src/handlers/visual-sandbox/treemap-model.test.ts": {
+  "src/handlers/visual-sandbox/fixtures/showcase/showcase.test.ts": {
     "seconds": 1,
     "source": "estimated"
   },
@@ -3836,6 +3840,10 @@
     "source": "estimated"
   },
   "src/handlers/visual-sandbox/srcdoc.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
+  "src/handlers/visual-sandbox/treemap-model.test.ts": {
     "seconds": 1,
     "source": "estimated"
   },
@@ -6879,6 +6887,10 @@
     "seconds": 0.106227,
     "source": "estimated"
   },
+  "src/lib/observability/route-latency-class.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
   "src/lib/ocr-derivative-pages.db.test.ts": {
     "seconds": 2.63501,
     "source": "estimated"
@@ -7337,6 +7349,10 @@
   },
   "src/lib/scheduler/tasks/hosted-usage-webhook-retention.test.ts": {
     "seconds": 0.085742,
+    "source": "estimated"
+  },
+  "src/lib/scheduler/tasks/infosoud.test.ts": {
+    "seconds": 1,
     "source": "estimated"
   },
   "src/lib/scheduler/tasks/legislation-expression-id-backfill-plan.db.test.ts": {

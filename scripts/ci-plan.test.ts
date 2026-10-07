@@ -38,7 +38,7 @@ import { routeSmokeAffected } from "./detect-route-smoke-changes";
 import { serviceSuiteCliOutput } from "./detect-service-suite-changes";
 import { GENERATORS } from "./generated-files";
 import { evaluate } from "./github-expression";
-import { mainHeavyJobs } from "./main-heavy-plan";
+import { mainHeavyJobs, queueAdmittedJobs } from "./main-heavy-plan";
 
 const workflow = readFileSync(
   new URL("../.github/workflows/ci.yml", import.meta.url),
@@ -639,6 +639,25 @@ const releaseJobs = workflowJobs(
     "utf-8",
   ),
 );
+// An undeclared output becomes an empty string, overriding even an environment
+// value established by an earlier step.
+test("CI planner output references name declared outputs", () => {
+  const plan = v.parse(
+    v.object({ outputs: v.record(v.string(), v.string()) }),
+    ciJobs["ci-plan"],
+  );
+  const declared = new Set(Object.keys(plan.outputs));
+  const references = new Set(
+    [
+      ...JSON.stringify(ciJobs).matchAll(/needs\.ci-plan\.outputs\.([\w-]+)/gu),
+    ].flatMap(([, output]) => (output === undefined ? [] : [output])),
+  );
+  expect(references.size).toBeGreaterThan(0);
+  expect(
+    [...references].filter((output) => !declared.has(output)).toSorted(),
+  ).toEqual([]);
+});
+
 const resultJob = v.parse(
   v.object({
     needs: v.array(v.string()),
@@ -1056,6 +1075,7 @@ const resultGateCase = ({
     script: outcomeScript,
     args: [],
     env: {
+      GH_RETRY_SCRIPT: nodePath.resolve(import.meta.dir, "gh-retry.sh"),
       EVENT: event,
       COVERAGE_PROFILE: "normal-v1",
       PILOT_FAST_JOBS: "[]",
@@ -3288,6 +3308,30 @@ test("route-relevant changes plan the required merge-group smoke", () => {
   ).toBe(0);
 }, 30_000);
 
+test("a merge group plans both browser suites for app changes and neither for docs", () => {
+  const scopes = ["route_smoke_required", "e2e_production_required"];
+  const appChange = [
+    "apps/api/src/handlers/workspaces/read-activity.ts",
+    "apps/web/src/components/app-sidebar.logic.ts",
+    "apps/web/src/components/app-sidebar.tsx",
+    "apps/web/src/lib/organization/feature-access/access.logic.ts",
+    "apps/web/src/lib/organization/feature-access/surfaces.ts",
+    "apps/web/src/routes/-legal-lists-route-gates.dom.test.tsx",
+  ];
+  expect(
+    runSelector(appChange, scopes, "full", "false", EVENT.mergeGroup),
+  ).toEqual(["true", "true"]);
+  expect(
+    runSelector(
+      ["README.md", "apps/desktop/README.md"],
+      scopes,
+      "full",
+      "false",
+      EVENT.mergeGroup,
+    ),
+  ).toEqual(["false", "false"]);
+}, 30_000);
+
 test("route smoke consumes the production build and fails when its stack cannot run", () => {
   const plan = jobSteps(ciJobs["ci-plan"]).find(
     ({ name }) => name === "Check changed file scope",
@@ -3844,6 +3888,8 @@ type DepthContext = {
   heavyOnly?: boolean;
   queueDepth?: "full" | "thin";
   proveFix?: boolean;
+  /** The QUEUE_BROWSER_SUITES repository variable; GitHub reads unset as ''. */
+  queueBrowserSuites?: string;
 };
 const runsAtDepth = (
   condition: string,
@@ -3853,6 +3899,7 @@ const runsAtDepth = (
     heavyOnly,
     queueDepth = "full",
     proveFix = false,
+    queueBrowserSuites = "",
   }: DepthContext,
 ) => {
   const selectedQueueDepth = event === EVENT.mergeGroup ? queueDepth : "full";
@@ -3869,6 +3916,7 @@ const runsAtDepth = (
         "needs.ci-plan.outputs.pilot_fast_jobs": "[]",
         "needs.ci-plan.outputs.suite_depth": depth,
         "needs.ci-plan.outputs.queue_depth": selectedQueueDepth,
+        "vars.QUEUE_BROWSER_SUITES": queueBrowserSuites,
         "needs.ci-plan.outputs.ci_browser_required": browserPlanOutput({
           event,
           depth,
@@ -4067,6 +4115,7 @@ test("parity rejects new queue-only jobs, ungated PR paths and stale exemptions"
 
 test("thin merge groups intentionally skip heavy jobs while full parity stays enforced", () => {
   const heavy = new Set(mainHeavyJobs({ jobs: ciJobs }));
+  const admitted = new Set(queueAdmittedJobs({ jobs: ciJobs }));
   for (const { name, condition } of parityJobs) {
     const full = runsAtDepth(condition, {
       event: EVENT.mergeGroup,
@@ -4087,6 +4136,16 @@ test("thin merge groups intentionally skip heavy jobs while full parity stays en
         queueDepth: "thin",
       }),
       name,
+    ).toBe(heavy.has(name) && !admitted.has(name) ? false : full);
+    // The off switch restores the thin skip for the admitted browser suites.
+    expect(
+      runsAtDepth(condition, {
+        event: EVENT.mergeGroup,
+        depth: SUITE_DEPTH.full,
+        queueDepth: "thin",
+        queueBrowserSuites: "off",
+      }),
+      `${name}/off`,
     ).toBe(heavy.has(name) ? false : full);
     for (const event of [EVENT.pullRequest, EVENT.workflowDispatch]) {
       expect(

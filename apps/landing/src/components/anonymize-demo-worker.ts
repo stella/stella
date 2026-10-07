@@ -41,7 +41,7 @@ const describeError = (error: unknown): string =>
 
 let enginePromise: Promise<DemoEngine> | null = null;
 
-// oxlint-disable-next-line @typescript-eslint/promise-function-async -- lazy init returns the cached promise without awaiting
+// oxlint-disable-next-line typescript/promise-function-async -- lazy init returns the cached promise without awaiting
 const getEngine = (): Promise<DemoEngine> => {
   enginePromise ??= loadDemoEngine();
   return enginePromise;
