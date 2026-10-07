@@ -3314,7 +3314,9 @@ if (import.meta.main) {
     const receipt = disarmPullRequest({
       gateway,
       dryRun: options.dryRun,
-      expectedHeadSha: options.expectedHeadSha,
+      ...(options.expectedHeadSha === undefined
+        ? {}
+        : { expectedHeadSha: options.expectedHeadSha }),
     });
     if (receipt.isErr()) {
       console.error(receipt.error.message);
