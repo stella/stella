@@ -19,7 +19,7 @@ diff --git a/index.d.ts b/index.d.ts
  
  /**
   * Input types accepted by mailauth functions
-@@ -661,7 +661,7 @@
+@@ -661,7 +662,7 @@
      /**
       * Alignment results
       */
