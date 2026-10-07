@@ -2082,13 +2082,15 @@ const corpusIndexRequestConfiguration = ({
  * generation is the search index being unavailable, so it throws the typed
  * retryable refusal every REST route and MCP tool resolves.
  */
-const servingTargetRefusal = (failure: ServingCorpusIndexTargetError) => {
+const servingTargetRefusal = (
+  failure: ServingCorpusIndexTargetError,
+): never => {
   switch (failure._tag) {
     case "CorpusServingGenerationAbsentError":
       throw searchIndexUnavailableError(failure);
     case "CorpusIndexGroupNotReadyError":
       observeFailure(failure, { sink: corpusIndexGroupNotReady });
-      return status(503, { message: "Search is temporarily unavailable" });
+      throw searchIndexUnavailableError(failure);
     default:
       failure satisfies never;
       return panic(`Unhandled serving target failure: ${String(failure)}`);

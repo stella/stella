@@ -14,6 +14,7 @@ import { bodyPreviewJoin } from "@/api/lib/case-law/search-sql";
 import { resolveHandlerError } from "@/api/lib/errors/handler-error-resolution";
 import { CorpusServingGenerationAbsentError } from "@/api/lib/legal-search/corpus-index-generation-store";
 import { corpusIndexReadTarget } from "@/api/lib/legal-search/corpus-index-group-contract";
+import { CorpusIndexGroupNotReadyError } from "@/api/lib/legal-search/corpus-index-group-enrollment-store";
 import type { ServingCorpusIndexTarget } from "@/api/lib/legal-search/corpus-index-group-enrollment-store";
 import { CORPUS_INDEX_MANIFESTS } from "@/api/lib/legal-search/corpus-index-manifest";
 import {
@@ -210,51 +211,65 @@ describe("a search against a serving cluster that holds no index", () => {
   );
 });
 
-test("a search before any case-law generation serves answers the typed retryable 503", async () => {
-  const requested: string[] = [];
-  const originalFetch = globalThis.fetch;
-  globalThis.fetch = Object.assign(
-    async (input: string | URL | Request) => {
-      requested.push(new Request(input).url);
-      return await Promise.resolve(Response.json({}, { status: 500 }));
-    },
-    { preconnect: originalFetch.preconnect },
-  );
-  const unreadableDb = Object.assign(
-    async () => panic("No serving generation must not read decision rows"),
-    caseLawPublicReadDb,
-  );
-  const outcome = await searchCorpusIndexDecisions({
-    body: { query: "smlouva", country: "CZE", limit: 1 },
-    caseLawDb: unreadableDb,
-    observer: "unobserved",
-    dependencies: {
-      readServingTarget: async () =>
-        await Promise.resolve(
-          Result.err(
-            new CorpusServingGenerationAbsentError({
-              message: "No serving corpus generation: case_law",
-              family: "case_law",
-            }),
-          ),
-        ),
-    },
-  })
-    .then(
-      () => panic("Expected the search to fail without a serving generation"),
-      (error: unknown) => error,
-    )
-    .finally(() => {
-      globalThis.fetch = originalFetch;
-    });
+const SERVING_TARGET_REFUSALS = [
+  {
+    name: "before any case-law generation serves",
+    failure: new CorpusServingGenerationAbsentError({
+      message: "No serving corpus generation: case_law",
+      family: "case_law",
+    }),
+  },
+  {
+    name: "while its index group is not ready",
+    failure: new CorpusIndexGroupNotReadyError({
+      message: "Corpus index group is not ready",
+      indexId: "case_law_v7_cs_sk",
+      reason: "pending",
+    }),
+  },
+];
 
-  expect(requested).toEqual([]);
-  expect(
-    resolveHandlerError(new UnhandledException({ cause: outcome })),
-  ).toMatchObject({
-    status: 503,
-    code: SEARCH_INDEX_UNAVAILABLE_CODE,
-    retryable: true,
-    cause: expect.any(CorpusServingGenerationAbsentError),
-  });
-});
+test.each(SERVING_TARGET_REFUSALS)(
+  "a search $name answers the typed retryable 503",
+  async ({ failure }) => {
+    const requested: string[] = [];
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = Object.assign(
+      async (input: string | URL | Request) => {
+        requested.push(new Request(input).url);
+        return await Promise.resolve(Response.json({}, { status: 500 }));
+      },
+      { preconnect: originalFetch.preconnect },
+    );
+    const unreadableDb = Object.assign(
+      async () => panic("No serving generation must not read decision rows"),
+      caseLawPublicReadDb,
+    );
+    const outcome = await searchCorpusIndexDecisions({
+      body: { query: "smlouva", country: "CZE", limit: 1 },
+      caseLawDb: unreadableDb,
+      observer: "unobserved",
+      dependencies: {
+        readServingTarget: async () =>
+          await Promise.resolve(Result.err(failure)),
+      },
+    })
+      .then(
+        () => panic("Expected the search to fail without a serving generation"),
+        (error: unknown) => error,
+      )
+      .finally(() => {
+        globalThis.fetch = originalFetch;
+      });
+
+    expect(requested).toEqual([]);
+    expect(
+      resolveHandlerError(new UnhandledException({ cause: outcome })),
+    ).toMatchObject({
+      status: 503,
+      code: SEARCH_INDEX_UNAVAILABLE_CODE,
+      retryable: true,
+      cause: failure,
+    });
+  },
+);
