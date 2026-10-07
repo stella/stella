@@ -324,7 +324,7 @@ describe("sanctions screening service", () => {
               ]),
             );
           },
-          refresh: async () => undefined,
+          refresh: async () => {},
         },
       });
       expect(result.unwrap().status).toBe("clear");
@@ -446,7 +446,9 @@ describe("sanctions screening service", () => {
         [];
       const result = await screenSanctionsSubject({
         db: requestDb,
-        reportFailure: (report) => reports.push(report),
+        reportFailure: (report) => {
+          reports.push(report);
+        },
         subject: {
           type: "organization",
           name: "Blue Meadow Bakery",
@@ -764,7 +766,9 @@ test.each(["hang", "crash"])(
     const entered = Promise.withResolvers<undefined>();
     const crashed = Promise.withResolvers<undefined>();
     const { port1, port2 } = new MessageChannel();
-    port1.once("message", () => entered.resolve(undefined));
+    port1.once("message", () => {
+      entered.resolve(undefined);
+    });
     const clock = createMatcherTestClock();
     let spawned = 0;
     const pool = createSanctionsMatcherPool({
@@ -788,7 +792,9 @@ test.each(["hang", "crash"])(
                 new URL("sanctions-matcher-worker.ts", import.meta.url),
               );
         if (spawned === 1) {
-          worker.once("exit", () => crashed.resolve(undefined));
+          worker.once("exit", () => {
+            crashed.resolve(undefined);
+          });
         }
         return worker;
       },
@@ -929,7 +935,9 @@ test.each(["matcher-unavailable", "operation", "truncated-empty"] as const)(
       },
       practiceJurisdictions: [],
       now: FRESH_NOW,
-      reportFailure: (report) => reports.push(report),
+      reportFailure: (report) => {
+        reports.push(report);
+      },
       matcher: async ({ query }) => {
         if (reason === "matcher-unavailable") {
           return Result.err({
@@ -988,7 +996,9 @@ test("freshness read fallback observes its cause before answering all lists unav
       identifiers: [],
     },
     practiceJurisdictions: [],
-    reportFailure: (report) => reports.push(report),
+    reportFailure: (report) => {
+      reports.push(report);
+    },
   });
   expect(
     result
@@ -1019,7 +1029,9 @@ test.each(["entries-read", "short-read"] as const)(
     const reports: Parameters<typeof reportSanctionsScreeningFailure>[0][] = [];
     const publicScreen = createPublicSanctionsScreening({
       pool,
-      reportFailure: (report) => reports.push(report),
+      reportFailure: (report) => {
+        reports.push(report);
+      },
       loadEntries: async () => {
         if (reason === "entries-read") {
           throw new TypeError("Private Test Identity");
@@ -1060,7 +1072,9 @@ test("failed public leases observe the whole fallback and bounded warmup can set
   let creations = 0;
   const reports: Parameters<typeof reportSanctionsScreeningFailure>[0][] = [];
   const pool = createSanctionsMatcherPool({
-    reportFailure: (report) => reports.push(report),
+    reportFailure: (report) => {
+      reports.push(report);
+    },
     createWorker: () => {
       creations += 1;
       throw new TypeError("Worker unavailable");
@@ -1068,7 +1082,9 @@ test("failed public leases observe the whole fallback and bounded warmup can set
   });
   const publicScreen = createPublicSanctionsScreening({
     pool,
-    reportFailure: (report) => reports.push(report),
+    reportFailure: (report) => {
+      reports.push(report);
+    },
   });
   const props = {
     db: requestDb,
@@ -1112,7 +1128,9 @@ test("work exhaustion reports its actual list cause once rather than counting an
     },
     practiceJurisdictions: [],
     now: FRESH_NOW,
-    reportFailure: (report) => reports.push(report),
+    reportFailure: (report) => {
+      reports.push(report);
+    },
     indexCache: {
       get: async (props) => {
         const loaded = await healthy.get(props);
@@ -1137,7 +1155,7 @@ test("work exhaustion reports its actual list cause once rather than counting an
         expect(reached.isErr() && reached.error.code).toBe("work-limit");
         return Result.ok(index);
       },
-      refresh: async () => undefined,
+      refresh: async () => {},
     },
   });
   expect(listOf(result.unwrap().lists, "eu")).toMatchObject({
@@ -1159,12 +1177,16 @@ test("a stalled cold read retains one warmup after its deadline until underlying
     size: 2,
     deadlineMs: 30,
     clock,
-    reportFailure: (report) => reports.push(report),
+    reportFailure: (report) => {
+      reports.push(report);
+    },
   });
   let warmups = 0;
   let unfinished = 0;
   const publicScreen = createPublicSanctionsScreening({
-    reportFailure: (report) => reports.push(report),
+    reportFailure: (report) => {
+      reports.push(report);
+    },
     pool: {
       ...pool,
       run: async (work, options) => {
@@ -1260,11 +1282,15 @@ test("public matcher work exhaustion reports the typed list cause without pool f
   const reports: Parameters<typeof reportSanctionsScreeningFailure>[0][] = [];
   const pool = createSanctionsMatcherPool({
     clock: createMatcherTestClock(),
-    reportFailure: (report) => poolReports.push(report),
+    reportFailure: (report) => {
+      poolReports.push(report);
+    },
   });
   let leases = 0;
   const publicScreen = createPublicSanctionsScreening({
-    reportFailure: (report) => reports.push(report),
+    reportFailure: (report) => {
+      reports.push(report);
+    },
     pool: {
       ...pool,
       run: async (work, options) => {

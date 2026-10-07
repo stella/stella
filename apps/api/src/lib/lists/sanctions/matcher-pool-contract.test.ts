@@ -162,7 +162,9 @@ test.each([1, 2])(
   async (size) => {
     const reports: Parameters<typeof reportSanctionsScreeningFailure>[0][] = [];
     const pool = createSanctionsMatcherPool({
-      reportFailure: (report) => reports.push(report),
+      reportFailure: (report) => {
+        reports.push(report);
+      },
       size,
       clock: createMatcherTestClock(),
     });
@@ -255,12 +257,16 @@ test("close cancels active and queued leases and prevents respawn", async () => 
   const { port1, port2 } = new MessageChannel();
   const entered = Promise.withResolvers<undefined>();
   const exited = Promise.withResolvers<undefined>();
-  port1.once("message", () => entered.resolve(undefined));
+  port1.once("message", () => {
+    entered.resolve(undefined);
+  });
   let spawned = 0;
   let invoked = 0;
   const reports: Parameters<typeof reportSanctionsScreeningFailure>[0][] = [];
   const pool = createSanctionsMatcherPool({
-    reportFailure: (report) => reports.push(report),
+    reportFailure: (report) => {
+      reports.push(report);
+    },
     size: 1,
     clock: createMatcherTestClock(),
     createWorker: () => {
@@ -272,7 +278,9 @@ test("close cancels active and queued leases and prevents respawn", async () => 
           transferList: [port2],
         },
       );
-      worker.once("exit", () => exited.resolve(undefined));
+      worker.once("exit", () => {
+        exited.resolve(undefined);
+      });
       return worker;
     },
   });
@@ -340,10 +348,10 @@ test("close waits for actual worker retirement", async () => {
   const pool = createSanctionsMatcherPool({
     clock: createMatcherTestClock(),
     createWorker: () => {
-      const events = { on: () => undefined };
+      const events = { on: () => {} };
       return asTestRaw<Worker>(
         Object.assign(events, {
-          unref: () => events,
+          unref: () => {},
           terminate: async () => {
             retired += 1;
             return await retirement.promise;
@@ -356,9 +364,15 @@ test("close waits for actual worker retirement", async () => {
     .run(async (session) => {
       entered.resolve(undefined);
       await new Promise<void>((resolve) => {
-        session.signal.addEventListener("abort", () => resolve(), {
-          once: true,
-        });
+        session.signal.addEventListener(
+          "abort",
+          () => {
+            resolve();
+          },
+          {
+            once: true,
+          },
+        );
       });
       return "cancelled";
     })

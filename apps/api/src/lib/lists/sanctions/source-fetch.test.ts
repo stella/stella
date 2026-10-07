@@ -426,7 +426,9 @@ describe("streaming list downloads", () => {
               start(controller) {
                 signal?.addEventListener(
                   "abort",
-                  () => controller.error(signal.reason),
+                  () => {
+                    controller.error(signal.reason);
+                  },
                   { once: true },
                 );
               },

@@ -141,7 +141,9 @@ describe("fetchWithResolvedAddress", () => {
           timeoutMs: 1000,
           url: new URL(`http://example.test:${port}/stalled`),
         });
-        setTimeout(() => controller.abort(), 10);
+        setTimeout(() => {
+          controller.abort();
+        }, 10);
         const result = await pending;
         expect(Result.isError(result)).toBe(true);
       },

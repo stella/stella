@@ -88,7 +88,12 @@ const attachRequestGuards = ({
     return null;
   }
   signal?.addEventListener("abort", abort, { once: true });
-  return { clearHeaderTimeout: () => clearTimeout(timeout), cleanup };
+  return {
+    clearHeaderTimeout: () => {
+      clearTimeout(timeout);
+    },
+    cleanup,
+  };
 };
 
 type SafeOutboundRedirectMode = "error" | "manual";

@@ -41,7 +41,9 @@ const matcherDeadlineClock = {
   now: () => performance.now(),
   schedule: (expire, durationMs) => {
     const timer = setTimeout(expire, durationMs);
-    return () => clearTimeout(timer);
+    return () => {
+      clearTimeout(timer);
+    };
   },
 } satisfies MatcherDeadlineClock;
 
@@ -261,7 +263,7 @@ const ensureMatcherWorker = ({
   }
   const worker = created.value;
   slot.worker = worker;
-  worker.on("error", (error) =>
+  worker.on("error", (error) => {
     handleMatcherExit({
       slot,
       worker,
@@ -270,9 +272,9 @@ const ensureMatcherWorker = ({
       error,
       reportFailure,
       detached,
-    }),
-  );
-  worker.on("exit", () =>
+    });
+  });
+  worker.on("exit", () => {
     handleMatcherExit({
       slot,
       worker,
@@ -280,8 +282,8 @@ const ensureMatcherWorker = ({
       reason: "worker-exit",
       reportFailure,
       detached,
-    }),
-  );
+    });
+  });
   // An idle cache must not keep tests or the API process alive.
   worker.unref();
   return worker;
@@ -304,9 +306,9 @@ export const createSanctionsMatcherPoolCore = ({
   ) {
     panic("Invalid sanctions matcher pool configuration");
   }
-  const detached = createDetached((error) =>
-    reportFailure({ stage: "matcher-pool", reason: "worker-retire", error }),
-  );
+  const detached = createDetached((error) => {
+    reportFailure({ stage: "matcher-pool", reason: "worker-retire", error });
+  });
   const slots: Slot[] = Array.from({ length: size }, () => ({
     worker: null,
     busy: false,
@@ -380,7 +382,9 @@ export const createSanctionsMatcherPoolCore = ({
       };
       const durationMs = options?.deadlineMs ?? deadlineMs;
       const expiresAt = clock.now() + durationMs;
-      const cancelDeadline = clock.schedule(() => fail("deadline"), durationMs);
+      const cancelDeadline = clock.schedule(() => {
+        fail("deadline");
+      }, durationMs);
       const work = async (): Promise<MatcherWorkOutcome<T>> => {
         lease.slot = await acquire(controller.signal);
         if (

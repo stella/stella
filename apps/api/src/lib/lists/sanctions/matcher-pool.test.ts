@@ -71,7 +71,9 @@ for (const fault of ["hang", "crash"] as const) {
     const clock = createMatcherTestClock();
     const entered = Promise.withResolvers<undefined>();
     const { port1, port2 } = new MessageChannel();
-    port1.once("message", () => entered.resolve(undefined));
+    port1.once("message", () => {
+      entered.resolve(undefined);
+    });
     const crashed = Promise.withResolvers<undefined>();
     const pool = createSanctionsMatcherPool({
       deadlineMs: 150,
@@ -92,7 +94,9 @@ for (const fault of ["hang", "crash"] as const) {
               )
             : actualWorker();
         if (spawned === 1) {
-          worker.once("exit", () => crashed.resolve(undefined));
+          worker.once("exit", () => {
+            crashed.resolve(undefined);
+          });
         }
         return worker;
       },
@@ -401,7 +405,7 @@ test("late retired-worker errors cannot release a held acquisition or a replacem
       workers.push(state);
       return asTestRaw<Worker>(
         Object.assign(state.events, {
-          unref: () => state.events,
+          unref: () => {},
           terminate: async () => {
             state.terminations += 1;
             return await (ordinal === 0
@@ -472,8 +476,8 @@ test("late retired-worker errors cannot release a held acquisition or a replacem
 
 const inertWorker = () =>
   asTestRaw<Worker>({
-    on: () => undefined,
-    unref: () => undefined,
+    on: () => {},
+    unref: () => {},
     terminate: async () => 0,
   });
 
@@ -567,7 +571,9 @@ test.each(Object.values(observableFaults))(
     let retired = 0;
     const pool = createSanctionsMatcherPool({
       clock,
-      reportFailure: (...args) => observations.push(args),
+      reportFailure: (...args) => {
+        observations.push(args);
+      },
       createWorker: () => {
         spawned += 1;
         if (spawned === 1 && fault === "worker-create") {
@@ -577,7 +583,7 @@ test.each(Object.values(observableFaults))(
         const worker = new EventEmitter();
         return asTestRaw<Worker>(
           Object.assign(worker, {
-            unref: () => worker,
+            unref: () => {},
             terminate: async () => {
               retired += 1;
               return 0;
@@ -637,11 +643,13 @@ test("failed worker retirement is observed and releases admission for another re
   const reports: Parameters<typeof reportSanctionsScreeningFailure>[0][] = [];
   const pool = createSanctionsMatcherPool({
     clock: createMatcherTestClock(),
-    reportFailure: (report) => reports.push(report),
+    reportFailure: (report) => {
+      reports.push(report);
+    },
     createWorker: () =>
       asTestRaw<Worker>({
-        on: () => undefined,
-        unref: () => undefined,
+        on: () => {},
+        unref: () => {},
         terminate: async () => {
           throw new TypeError("Retirement failure");
         },
@@ -678,7 +686,7 @@ test("lease settlement callbacks fire exactly once after work, including acquisi
     clock,
     deadlineMs: 10,
     createWorker: inertWorker,
-    reportFailure: () => undefined,
+    reportFailure: () => {},
   });
   const active = pool.run(
     async () => {
@@ -768,7 +776,9 @@ test("real worker work exhaustion retains its edition and screens the next cache
   let spawned = 0;
   const pool = createSanctionsMatcherPool({
     clock: createMatcherTestClock(),
-    reportFailure: (report) => reports.push(report),
+    reportFailure: (report) => {
+      reports.push(report);
+    },
     createWorker: () => {
       spawned += 1;
       return recorded.createWorker();
