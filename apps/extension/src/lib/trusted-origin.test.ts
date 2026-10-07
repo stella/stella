@@ -82,6 +82,25 @@ describe("stella hosts the controlled tab never loads", () => {
     ]);
   });
 
+  test("a staging build trusts staging but never production", () => {
+    const trust = createStellaOriginTrust({
+      hostedOrigins: parseTrustedOriginList(undefined, "staging"),
+      trustLoopback: buildTrustsLoopback("staging"),
+    });
+    expect(trust.contentScriptMatches).toEqual(["https://staging.stll.app/*"]);
+    expect(trust.originFromUrl("https://staging.stll.app/chat")).toBe(
+      "https://staging.stll.app",
+    );
+    expect(trust.originFromUrl("https://app.stll.app/chat")).toBeNull();
+    expect(trust.originFromUrl("https://my.stll.app/chat")).toBeNull();
+    expect(trust.originFromUrl("http://localhost:3210/chat")).toBeNull();
+    expect(trust.hostnames).toEqual([
+      "staging.stll.app",
+      "app.stll.app",
+      "my.stll.app",
+    ]);
+  });
+
   test("add a self-hosted origin to the hosted ones", () => {
     const trust = createStellaOriginTrust({
       hostedOrigins: ["https://stella.example.org"],
