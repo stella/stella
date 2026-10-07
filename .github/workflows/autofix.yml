@@ -317,15 +317,22 @@ jobs:
           NPM_TOKEN: ""
 
       - name: Prepare environment
+        env:
+          STELLA_LOCAL_AUTOFIX: "true"
         run: |
-          cp apps/api/.env.example apps/api/.env
-          cp apps/web/.env.example apps/web/.env
+          for app in apps/api apps/web; do
+            [[ -f "$app/.env" ]] || cp "$app/.env.example" "$app/.env"
+          done
 
       - name: Regenerate selected files
         if: needs.regenerate-scope.outputs.run == 'true'
         env:
+          STELLA_LOCAL_AUTOFIX: "true"
           GENERATOR_IDS: ${{ needs.regenerate-scope.outputs.ids }}
-        run: bun scripts/autofix-plan.ts run "$GENERATOR_IDS"
+        run: |
+          if [[ -n "$GENERATOR_IDS" ]]; then
+            bun scripts/autofix-plan.ts run "$GENERATOR_IDS"
+          fi
 
       - name: Add missing API test weights
         id: weights
@@ -344,6 +351,8 @@ jobs:
           fi
 
       - name: Fix changed files
+        env:
+          STELLA_LOCAL_AUTOFIX: "true"
         shell: bash
         run: |
           set -euo pipefail

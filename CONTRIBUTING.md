@@ -90,12 +90,24 @@ to explore the codebase.
    safe lint fixes and formats the changed files. CI does this on
    same-repository pull requests but not on pull requests from forks, so
    from a fork run it and commit the result.
-   `verify` mirrors CI's package checks (lint, format, typecheck, tests,
-   i18n, dependency hygiene) against the canonical repository's `main`.
-   A pass covers the package checks, not all of `ci-result`: the web and
-   landing builds run in CI, and browser, e2e and service-backed suites
-   run in the merge queue. Use `bun run verify --all` to check every
-   package instead of only those affected by your branch.
+   `verify` derives cheap pre-push checks from the `STELLA_VERIFY` steps in
+   `.github/workflows/ci.yml`: affected lint and typecheck, type-cost,
+   ratchets, design backlog, test weights and policy guards. `--fix` runs
+   the workflow's safe changed-file fixes first; `--all` checks all packages,
+   and `--list` prints the derived plan. Expensive suites remain in CI.
+
+   Hosts with resource admission configure `~/.config/stella/verify.json`:
+   `localGate` defaults to `["load-admit"]` and receives `-- <argv...>`
+   for the derived workflow commands (`0` admits, `75` refuses, `64` reports
+   usage errors). `remote` defaults to `["remote-check"]` and `installer`
+   to `"serial-install"`. Put these executables on `PATH`, or configure their
+   absolute paths on each host. On local refusal, the command probes
+   remote admission and runs there. Remote fix patches are checked against the
+   local tree before applying. If both hosts refuse, it prints that CI will
+   validate and exits `75`. The exact-base type-cost fallback uses the configured
+   serialized installer. Remote execution still requests local admission and
+   uses `REMOTE_CHECK=1` to prevent recursive offload.
+
 4. Open a pull request against `main`.
 5. Fill in the PR template and link a related issue.
 

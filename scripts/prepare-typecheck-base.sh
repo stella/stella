@@ -2,7 +2,7 @@
 set -euo pipefail
 
 gh_retry_script="${GH_RETRY_SCRIPT:-$(dirname "${BASH_SOURCE[0]}")/gh-retry.sh}"
-base_sha=$(git merge-base origin/main HEAD)
+base_sha=$(git merge-base "${CHECK_BASE_REF:-origin/main}" HEAD)
 name="typecheck-base-v1-$base_sha"
 base_dir="$RUNNER_TEMP/typecheck-base"
 recording_unavailable() {
@@ -57,7 +57,12 @@ git -C "$base_dir" submodule update --init --recursive
 (
   cd "$base_dir"
   unset CI_GENERATED_SOURCES_MANIFEST
-  bash scripts/retry.sh bun ci --ignore-scripts
+  if [[ "${STELLA_VERIFY_LOCAL:-false}" == true ]]; then
+    # The host owns install admission and serialization for local worktrees.
+    "${STELLA_WORKTREE_INSTALLER:-serial-install}" "$base_dir"
+  else
+    bash scripts/retry.sh bun ci --ignore-scripts
+  fi
   # Older merge bases still commit the runtime aggregates.
   if [[ -f apps/api/scripts/generate-capability-runtime.ts ]]; then
     bun --filter @stll/api generate:capability-runtime

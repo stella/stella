@@ -123,12 +123,16 @@ type FallbackOptions = {
     | "download"
     | "invalid-response"
     | "invalid-archive";
+  local?: boolean;
+  installerExit?: number;
   source?: string;
   measurementExit?: number;
 };
 
 const runFallback = ({
   failure,
+  local = false,
+  installerExit = 0,
   source,
   measurementExit = 0,
 }: FallbackOptions) => {
@@ -148,6 +152,8 @@ const runFallback = ({
       '#!/bin/bash\nexec "$@"\n',
     );
     for (const [name, stub] of Object.entries({
+      "serial-install":
+        '#!/bin/bash\nprintf "installer:%s\\n" "$*" >> "$TEST_COMMANDS"\nexit "$TEST_INSTALLER_EXIT"\n',
       git: '#!/bin/bash\nif [[ "$1" == merge-base ]]; then printf "%s" "$TEST_SHA"; else printf "git:%s\\n" "$*" >> "$TEST_COMMANDS"; fi\n',
       gh: `#!/bin/bash
 case "$*" in
@@ -185,6 +191,9 @@ printf '%s' "$response"
         TEST_SHA: sha,
         TEST_FAILURE: failure,
         TEST_MEASUREMENT_EXIT: String(measurementExit),
+        STELLA_VERIFY_LOCAL: String(local),
+        STELLA_WORKTREE_INSTALLER: path.join(bin, "serial-install"),
+        TEST_INSTALLER_EXIT: String(installerExit),
         TEST_RUN: JSON.stringify({
           path: ".github/workflows/typecheck-base.yml",
           event: "push",
@@ -287,3 +296,15 @@ test("restoring a fatal recording lookup prevents the required exact-base fallba
   expect(result.stderr).not.toContain("Service Unavailable");
   expect(result.commands).toBe("");
 });
+
+for (const installerExit of [0, 75]) {
+  test(`local exact-base preparation uses the admitted installer (status ${installerExit})`, () => {
+    const result = runFallback({ failure: "none", local: true, installerExit });
+    expect(result.exitCode).toBe(installerExit);
+    expect(result.commands).toContain(`installer:${result.base}`);
+    expect(result.commands).not.toContain("ci --ignore-scripts");
+    if (installerExit !== 0) {
+      expect(result.commands).not.toContain("--measure");
+    }
+  });
+}
