@@ -32,7 +32,7 @@ const decodeCssToken = (token: string): string =>
     );
 
 const startsInline = (value: string): boolean =>
-  /^\s*["']?\s*data:/iu.test(value);
+  /^\s*(?:["']\s*)?data:/iu.test(value);
 
 /**
  * Fails closed: every reference-shaped construct counts, even inside a CSS
