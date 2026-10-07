@@ -158,7 +158,7 @@ test("a status error offers retry, keeps verification disabled, and recovers", a
 });
 test("a loaded document keeps verification disabled without update permission", async () => {
   answerLatest(() => Response.json({ runs: [] }));
-  const view = mountDocuments([document], "viewer");
+  const view = mountDocuments([document], "external");
   await waitFor(() =>
     expect(view.getByText(messages.avt.documents.notVerified)).toBeTruthy(),
   );
