@@ -1071,6 +1071,8 @@ describe("detect-e2e-changes", () => {
                     const context = {
                       github: { event_name: event },
                       inputs: { heavy_only: heavyOnly },
+                      // GitHub reads an unset repository variable as ''.
+                      vars: { QUEUE_BROWSER_SUITES: "" },
                       needs: {
                         "ci-plan": {
                           outputs: {
@@ -1087,20 +1089,28 @@ describe("detect-e2e-changes", () => {
                       always: () => true,
                       cancelled: () => cancelled,
                     };
+                    const certified =
+                      event !== "pull_request" &&
+                      planned &&
+                      (trusted || event === "workflow_dispatch") &&
+                      (webResult === "success" || heavyResult === "success") &&
+                      (event !== "merge_group" || !cancelled);
+                    const label = `${event}/${depth}/${planned}/${trusted}/${webResult}/${heavyResult}/${heavyOnly}/${cancelled}`;
                     expect(
                       Boolean(evaluateExpression(predicate, context)),
-                      `${event}/${depth}/${planned}/${trusted}/${webResult}/${heavyResult}/${heavyOnly}/${cancelled}`,
-                    ).toBe(
-                      event !== "pull_request" &&
-                        planned &&
-                        (trusted || event === "workflow_dispatch") &&
-                        (webResult === "success" ||
-                          heavyResult === "success") &&
-                        (event !== "merge_group" || !cancelled),
-                    );
+                      label,
+                    ).toBe(certified);
+                    // A thin merge group keeps planned browser suites unless
+                    // the queue switch is off; no other event runs them thin.
                     context.needs["ci-plan"].outputs.queue_depth = "thin";
                     expect(
                       Boolean(evaluateExpression(predicate, context)),
+                      `${label}/thin`,
+                    ).toBe(event === "merge_group" && certified);
+                    context.vars.QUEUE_BROWSER_SUITES = "off";
+                    expect(
+                      Boolean(evaluateExpression(predicate, context)),
+                      `${label}/thin/off`,
                     ).toBe(false);
                   }
                 }
