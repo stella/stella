@@ -739,6 +739,37 @@ describe("install-free invocation classification", () => {
     expect(files.at(0)?.step).toBe("Before wait");
   });
 
+  test("cancelled background installs stay unavailable after a wait barrier", () => {
+    for (const barrier of ["- wait: cancelled", "- wait-all: null"]) {
+      const root = repository(
+        [
+          "jobs:",
+          "  job:",
+          "    steps:",
+          "      - id: cancelled",
+          "        background: true",
+          "        run: bun ci",
+          "      - cancel: cancelled",
+          `      ${barrier}`,
+          "      - name: After cancel",
+          "        run: bun scripts/check.ts",
+          "      - id: retained",
+          "        background: true",
+          "        run: bun ci",
+          "      - wait: retained",
+          "      - name: After retained wait",
+          "        run: bun scripts/check.ts",
+        ].join("\n"),
+      );
+      const files = installFreeInvocations({
+        root,
+        workflow: CI_WORKFLOW,
+      }).filter(({ classification }) => classification.type === "files");
+      expect(files, barrier).toHaveLength(1);
+      expect(files.at(0)?.step, barrier).toBe("After cancel");
+    }
+  });
+
   const continuationCases: readonly {
     continuation: string;
     kinds: Classification["type"][];

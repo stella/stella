@@ -35,7 +35,7 @@ export const isWorkflowBarrier = (step: Record<string, unknown>): boolean =>
   "wait" in step || "wait-all" in step || "cancel" in step;
 
 /** Resolve the background ids a wait barrier completes. */
-export const workflowWaitTargets = (
+const workflowWaitTargets = (
   step: Record<string, unknown>,
   pendingIds: Iterable<string>,
 ): string[] | undefined => {
@@ -51,4 +51,35 @@ export const workflowWaitTargets = (
   return Array.isArray(step["wait"])
     ? step["wait"].filter((id): id is string => typeof id === "string")
     : [];
+};
+
+/** Consume synchronization barriers without certifying canceled work. */
+export const synchronizeWorkflowBackgroundSteps = <Proof>(
+  step: Record<string, unknown>,
+  pending: Map<string, Proof[]>,
+): Proof[] | undefined => {
+  if ("cancel" in step) {
+    if (typeof step["cancel"] !== "string") {
+      throw new WorkflowStepsInvariantError(
+        "Workflow cancel target must be a step id",
+      );
+    }
+    pending.delete(step["cancel"]);
+    return [];
+  }
+  const targets = workflowWaitTargets(step, pending.keys());
+  if (targets === undefined) {
+    return undefined;
+  }
+  const completed: Proof[] = [];
+  for (const id of targets) {
+    // Read-only background steps need no install proof and may be absent here.
+    const proofs = pending.get(id);
+    if (proofs === undefined) {
+      continue;
+    }
+    completed.push(...proofs);
+    pending.delete(id);
+  }
+  return completed;
 };

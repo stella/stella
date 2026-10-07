@@ -36,7 +36,7 @@
 import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 
-import { workflowWaitTargets } from "./workflow-steps";
+import { synchronizeWorkflowBackgroundSteps } from "./workflow-steps";
 
 export type Classification =
   /** Files Bun loads: a script, test files and preloads. */
@@ -1669,11 +1669,9 @@ const walkSteps = ({
     if (!isRecord(step)) {
       continue;
     }
-    if ("wait" in step || "wait-all" in step) {
-      for (const id of workflowWaitTargets(step, pending.keys()) ?? []) {
-        installs.push(...(pending.get(id) ?? []));
-        pending.delete(id);
-      }
+    const completed = synchronizeWorkflowBackgroundSteps(step, pending);
+    if (completed !== undefined) {
+      installs.push(...completed);
       continue;
     }
     if ("parallel" in step) {

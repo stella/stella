@@ -6,7 +6,7 @@ import { assertProperty } from "@stll/property-testing";
 import {
   flattenWorkflowSteps,
   isWorkflowBarrier,
-  workflowWaitTargets,
+  synchronizeWorkflowBackgroundSteps,
 } from "./workflow-steps";
 
 test("parallel grouping preserves every leaf in execution order", () => {
@@ -39,13 +39,60 @@ test("background commands and synchronization barriers remain visible", () => {
 });
 
 test("wait barriers release only their requested pending steps", () => {
-  const pending = ["first", "second"];
-  expect(workflowWaitTargets({ wait: "second" }, pending)).toEqual(["second"]);
-  expect(workflowWaitTargets({ wait: ["first", 2] }, pending)).toEqual([
-    "first",
-  ]);
-  expect(workflowWaitTargets({ "wait-all": null }, pending)).toEqual(pending);
-  expect(workflowWaitTargets({ run: "true" }, pending)).toBeUndefined();
+  for (const wait of ["second", ["second"]]) {
+    const pending = new Map([
+      ["first", ["first"]],
+      ["second", ["second"]],
+    ]);
+    expect(synchronizeWorkflowBackgroundSteps({ wait }, pending)).toEqual([
+      "second",
+    ]);
+    expect([...pending.keys()]).toEqual(["first"]);
+    expect(
+      synchronizeWorkflowBackgroundSteps({ run: "true" }, pending),
+    ).toBeUndefined();
+    expect(
+      synchronizeWorkflowBackgroundSteps({ "wait-all": null }, pending),
+    ).toEqual(["first"]);
+    expect(pending.size).toBe(0);
+  }
+});
+
+test("synchronization promotes every completed proof and no canceled proof", () => {
+  assertProperty(
+    "synchronization promotes every completed proof and no canceled proof",
+    fc.property(
+      fc.dictionary(
+        fc.stringMatching(/^[a-z][a-z0-9_]{0,8}$/u),
+        fc.constantFrom("cancel", "complete"),
+        { minKeys: 1, maxKeys: 10 },
+      ),
+      (dispositions) => {
+        for (const wait of [
+          { "wait-all": null },
+          { wait: Object.keys(dispositions) },
+        ]) {
+          const pending = new Map(
+            Object.keys(dispositions).map((id) => [id, [id]]),
+          );
+          for (const [id, disposition] of Object.entries(dispositions)) {
+            if (disposition === "cancel") {
+              expect(
+                synchronizeWorkflowBackgroundSteps({ cancel: id }, pending),
+              ).toEqual([]);
+            }
+          }
+          const expected = Object.keys(dispositions).filter(
+            (id) => dispositions[id] === "complete",
+          );
+          expect(synchronizeWorkflowBackgroundSteps(wait, pending)).toEqual(
+            expected,
+          );
+          expect(pending.size).toBe(0);
+        }
+      },
+    ),
+  );
 });
 
 test("malformed parallel steps fail instead of hiding workflow commands", () => {

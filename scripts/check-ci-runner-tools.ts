@@ -14,7 +14,10 @@ import {
   programWords,
 } from "./install-free-ci";
 import { readStringLiterals } from "./test-input-readers";
-import { flattenWorkflowSteps, workflowWaitTargets } from "./workflow-steps";
+import {
+  flattenWorkflowSteps,
+  synchronizeWorkflowBackgroundSteps,
+} from "./workflow-steps";
 
 // This guard must run before dependencies are installed.
 class RunnerToolInvariantError extends Error {
@@ -731,12 +734,12 @@ const walkRunnerSteps = ({
     if (!isRecord(step)) {
       continue;
     }
-    if ("wait" in step || "wait-all" in step) {
-      for (const id of workflowWaitTargets(step, availablePending.keys()) ??
-        []) {
-        availableInstalls.push(...(availablePending.get(id) ?? []));
-        availablePending.delete(id);
-      }
+    const completed = synchronizeWorkflowBackgroundSteps(
+      step,
+      availablePending,
+    );
+    if (completed !== undefined) {
+      availableInstalls.push(...completed);
       continue;
     }
     if ("parallel" in step) {

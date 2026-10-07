@@ -171,6 +171,44 @@ test("background runner-tool installs take effect only after a wait", () => {
   );
 });
 
+test("cancelled background tools stay unavailable after a wait barrier", () => {
+  for (const barrier of [{ wait: "cancelled" }, { "wait-all": null }]) {
+    withFixture(
+      {
+        jobs: {
+          check: {
+            "runs-on": "unknown",
+            steps: [
+              {
+                id: "cancelled",
+                background: true,
+                run: "sudo apt-get install -y ripgrep",
+              },
+              { cancel: "cancelled" },
+              barrier,
+              { name: "After cancel", run: "rg --version" },
+              {
+                id: "retained",
+                background: true,
+                run: "sudo apt-get install -y ripgrep",
+              },
+              { wait: "retained" },
+              { name: "After retained wait", run: "rg --version" },
+            ],
+          },
+        },
+      },
+      (root) => {
+        const findings = problems(root);
+        expect(findings, JSON.stringify(barrier)).toHaveLength(1);
+        expect(findings.at(0), JSON.stringify(barrier)).toContain(
+          "After cancel",
+        );
+      },
+    );
+  }
+});
+
 test("malformed step metadata and execution settings are reported without coercion", () => {
   withFixture(
     {
