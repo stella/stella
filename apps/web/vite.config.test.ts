@@ -187,8 +187,16 @@ describe("vite config", () => {
   });
 
   test("the drag resolver rejects a nonexistent entry", () => {
+    expect(
+      Bun.resolveSync(
+        "@atlaskit/pragmatic-drag-and-drop/adapter/element-adapter",
+        import.meta.dirname,
+      ),
+    ).toBeString();
     const bogus = "@atlaskit/pragmatic-drag-and-drop/does-not-exist";
-    expect(() => Bun.resolveSync(bogus, import.meta.dirname)).toThrow(bogus);
+    expect(() => Bun.resolveSync(bogus, import.meta.dirname)).toThrow(
+      "Cannot find package '@atlaskit/pragmatic-drag-and-drop'",
+    );
   });
 
   test("the runtime import scan excludes type-only drag entries", () => {
