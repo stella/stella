@@ -17,6 +17,11 @@ import {
 } from "../helpers/docked-chat-legal-fixtures";
 import { expect, test } from "../helpers/test";
 
+// Trace snapshots run script inside every frame, and Chromium counts that
+// as a user gesture in the frame. This spec checks which actions need a
+// gesture, so it runs without tracing.
+test.use({ trace: "off" });
+
 const threadId = "019a0000-0000-7000-8000-000000000001";
 const fileId = "019a0000-0000-7000-8000-000000000003";
 const externalUrl = "https://example.test/decision?language=cs&year=2026";
