@@ -1,3 +1,4 @@
+import type { ToolResultOutcome } from "@tanstack/ai";
 import type { ToolCallState, ToolResultState } from "@tanstack/ai-client";
 import { panic } from "better-result";
 
@@ -52,6 +53,7 @@ export type PersistedToolResultContent =
   | { type: "text"; value: string };
 
 export type PersistedToolResultPart = {
+  outcome?: ToolResultOutcome | undefined;
   content?: PersistedToolResultContent | undefined;
   error?: string | undefined;
   state: ToolResultState;

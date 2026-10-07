@@ -1,56 +1,28 @@
-1. processor.js: a tool-call part stores the canonical TOOL_CALL_END.input
-   as its arguments, including after the call is already input-complete, so
-   a strict-mode null on an optional field never reaches validation.
-2. tool-calls.js: while a step waits for approvals, a call that needs no
-   approval runs now, like a client request, so no server call ends a run
-   without its result.
-3. error-payload.js: toRunErrorRawEvent keeps the provider's HTTP status next
-   to the body it forwards, forwards an AWS service exception's name, fault
-   side and status (it has no body), and forwards the status alone when the
-   error has no body. `code` precedence (#985) is unchanged.
-Upstream: still absent in @tanstack/ai 0.61.0. Remove each hunk when a
-@tanstack/ai release does the same.
+Canonical TOOL_CALL_END input updates completed calls without resetting their state.
+No-approval server calls execute while sibling calls await approval.
+RUN_ERROR raw evidence retains HTTP status and AWS exception identity.
+Remove each hunk when upstream preserves the same behavior.
 
 diff --git a/dist/esm/activities/chat/stream/processor.js b/dist/esm/activities/chat/stream/processor.js
-index a213fe273bfcbb1b1bd1b96dc67fb5bd57eb71b6..a789bf79f3832ac5aec5c23f7742a0c36799473a 100644
+index c21d483b5ed97eb9b4f64f4d6783ec3ba148a8f0..d8ae7d353e94e6634962124d15422d5e5035f14d 100644
 --- a/dist/esm/activities/chat/stream/processor.js
 +++ b/dist/esm/activities/chat/stream/processor.js
-@@ -39,6 +39,15 @@ function interruptBatchHasGeneric(interrupts) {
- 		return binding !== null && typeof binding === "object" && !Array.isArray(binding) && binding.kind === "generic";
- 	});
- }
-+function serializeToolInput(input) {
-+	if (input === void 0) return void 0;
-+	try {
-+		const serialized = JSON.stringify(input);
-+		return typeof serialized === "string" ? serialized : void 0;
-+	} catch {
-+		return void 0;
-+	}
-+}
- /**
- * StreamProcessor - State machine for processing AI response streams
- *
-@@ -1125,19 +1134,22 @@ var StreamProcessor = class StreamProcessor {
+@@ -1405,18 +1405,22 @@ var StreamProcessor = class StreamProcessor {
  		if (!msgState) return;
  		const input = chunk.input !== void 0 ? chunk.input : tanstackMetadata(chunk)?.input;
  		const existingToolCall = msgState.toolCalls.get(chunk.toolCallId);
 -		if (existingToolCall && existingToolCall.state !== "input-complete") {
--			if (input !== void 0 && !existingToolCall.arguments) try {
--				existingToolCall.arguments = JSON.stringify(input);
--			} catch {}
++		if (existingToolCall) {
+ 			const serializedInput = serializeToolInput(input);
+ 			if (serializedInput !== void 0) existingToolCall.arguments = serializedInput;
 -			const index = msgState.toolCallOrder.indexOf(chunk.toolCallId);
 -			this.completeToolCall(messageId, index, existingToolCall);
--			if (input !== void 0) {
-+		if (existingToolCall) {
-+			const serializedInput = serializeToolInput(input);
-+			if (serializedInput !== void 0) existingToolCall.arguments = serializedInput;
 +			const wasComplete = existingToolCall.state === "input-complete";
 +			if (!wasComplete) {
 +				const index = msgState.toolCallOrder.indexOf(chunk.toolCallId);
 +				this.completeToolCall(messageId, index, existingToolCall);
 +			}
-+			if (serializedInput !== void 0) {
+ 			if (serializedInput !== void 0) {
  				existingToolCall.parsedArguments = input;
 +				const currentPart = wasComplete ? this.messages.find((m) => m.id === messageId)?.parts.find((p) => p.type === "tool-call" && p.id === existingToolCall.id) : void 0;
  				this.messages = updateToolCallPart(this.messages, messageId, {
@@ -63,10 +35,10 @@ index a213fe273bfcbb1b1bd1b96dc67fb5bd57eb71b6..a789bf79f3832ac5aec5c23f7742a0c3
  					...existingToolCall.metadata !== void 0 && { metadata: existingToolCall.metadata }
  				});
 diff --git a/dist/esm/activities/chat/tools/tool-calls.js b/dist/esm/activities/chat/tools/tool-calls.js
-index be146e30a827771c31ba3fbdbe02e9da4b6fb6dc..fcb52b689aaa1cd47b106e4eeac6204246e5b0a9 100644
+index 9cce36e8652ace7754d552766ccf24a7d9f610ac..bb27288037336af171b7d2666def9f2164e471ef 100644
 --- a/dist/esm/activities/chat/tools/tool-calls.js
 +++ b/dist/esm/activities/chat/tools/tool-calls.js
-@@ -471,9 +471,12 @@ async function* executeToolCalls(toolCalls, tools, approvals = /* @__PURE__ */ n
+@@ -536,9 +536,12 @@ async function* executeToolCalls(toolCalls, tools, approvals = /* @__PURE__ */ n
  			continue;
  		}
  		if (hasPendingApprovals) {

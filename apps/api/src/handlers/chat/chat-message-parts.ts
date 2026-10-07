@@ -1,3 +1,4 @@
+import { isToolResultOutcome } from "@tanstack/ai";
 import type { ContentPartSource } from "@tanstack/ai";
 import type { ToolCallPart as TanStackToolCallPart } from "@tanstack/ai-client";
 import { panic, Result } from "better-result";
@@ -390,6 +391,7 @@ const persistedV3PartToChatPart = ({
     const candidate: unknown = {
       content,
       ...(part.error === undefined ? {} : { error: part.error }),
+      ...(part.outcome === undefined ? {} : { outcome: part.outcome }),
       state: part.state,
       toolCallId: part.toolCallId,
       type: "tool-result",
@@ -545,6 +547,11 @@ type ChatPartPolicy = {
 // explicit here also prevents audio/video replay into a model that may not
 // support those modalities on the next turn.
 const CHAT_PART_POLICY = {
+  activity: {
+    clientAcceptance: "server-only",
+    invalidHandling: "drop",
+    providerVisibility: "ui-only",
+  },
   audio: {
     clientAcceptance: "server-only",
     invalidHandling: "drop",
@@ -980,6 +987,8 @@ type ChatPartPersistence = "drop" | "persist";
 // Every TanStack part must receive an explicit persistence policy. A future SDK
 // variant fails typecheck here until it is deliberately persisted or dropped.
 const CHAT_PART_PERSISTENCE = {
+  // The chat runtime does not emit AG-UI activities.
+  activity: "drop",
   audio: "persist",
   document: "persist",
   image: "persist",
@@ -1040,6 +1049,7 @@ const isStructuredOutputPart = (part: Record<string, unknown>): boolean => {
 // Validators are independently exhaustive over the persistable subset, so a
 // part cannot enter the persistence boundary without structural validation.
 const CHAT_PART_VALIDATORS = {
+  activity: () => false,
   audio: (part) => isMediaPart(part, "audio/"),
   document: isContentPartWithSource,
   image: isContentPartWithSource,
@@ -1056,7 +1066,8 @@ const CHAT_PART_VALIDATORS = {
     typeof part["toolCallId"] === "string" &&
     isTanStackToolResultContent(part["content"]) &&
     isTanStackToolResultState(part["state"]) &&
-    (!("error" in part) || typeof part["error"] === "string"),
+    (!("error" in part) || typeof part["error"] === "string") &&
+    (part["outcome"] === undefined || isToolResultOutcome(part["outcome"])),
   "ui-resource": isUiResourcePart,
   video: (part) => isMediaPart(part, "video/"),
 } satisfies Record<PersistableChatPartType, ChatPartValidator>;
@@ -1242,8 +1253,9 @@ const normalizeChatPartForPersistence = (part: ChatPart): ChatPart => {
     case "tool-call":
     case "tool-result":
       return part;
+    case "activity":
     case "subagent":
-      return panic("A subagent part is never persisted");
+      return panic(`A ${part.type} part is never persisted`);
     default: {
       part satisfies never;
       return panic(`Unhandled part: ${String(part)}`);
@@ -1436,6 +1448,7 @@ const chatPartToPersistedV3Part = ({
     return {
       ...(content === undefined ? {} : { content }),
       ...(part.error === undefined ? {} : { error: part.error }),
+      ...(part.outcome === undefined ? {} : { outcome: part.outcome }),
       state: part.state,
       toolCallId: part.toolCallId,
       type: "tool-result",
@@ -1470,7 +1483,10 @@ const isPersistedV3Part = (part: PersistedV3Part): boolean => {
     return part.id.length > 0 && part.name.length > 0;
   }
   if (part.type === "tool-result") {
-    return part.toolCallId.length > 0;
+    return (
+      part.toolCallId.length > 0 &&
+      (part.outcome === undefined || isToolResultOutcome(part.outcome))
+    );
   }
   return isChatPart(part);
 };

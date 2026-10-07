@@ -25,6 +25,7 @@ const extractTitleContext = (message: TitleContextMessage): string =>
     .slice(0, TITLE_CONTEXT_MAX_LENGTH);
 
 const TITLE_ROLE_LABELS = {
+  activity: "Activity",
   assistant: "Assistant",
   system: "System",
   user: "User",
@@ -39,6 +40,7 @@ export const buildThreadTitlePrompt = (
   messages: readonly TitleContextMessage[],
 ): string => {
   const transcript = messages
+    .filter((message) => message.role !== "activity")
     .map(
       (message) =>
         `${TITLE_ROLE_LABELS[message.role]}: ${extractTitleContext(message)}`,

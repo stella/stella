@@ -176,10 +176,14 @@ export const TANSTACK_CONNECTION_STATE_LIFECYCLE = {
 
 /** Compile-time seam with roles accepted by TanStack's chat protocol. */
 export const TANSTACK_CHAT_MESSAGE_ROLE_POLICY = {
+  activity: "presentation",
   assistant: "conversation",
   system: "instructions",
   user: "conversation",
-} as const satisfies Record<UIMessage["role"], "conversation" | "instructions">;
+} as const satisfies Record<
+  UIMessage["role"],
+  "conversation" | "instructions" | "presentation"
+>;
 
 /** Compile-time seam with rich content accepted inside tool results. */
 export const TANSTACK_CONTENT_PART_POLICY = {

@@ -201,15 +201,17 @@ type ChatOptions = Omit<Parameters<typeof chat>[0], "middleware"> & {
   middleware?: ChatMiddleware[];
 };
 
-/** The streaming text form. `stream` and `outputSchema` belong to the owner. */
+/** The streaming text form. Output shape and tool ordering belong to the owner. */
 export type StreamChatChunksOptions = Omit<
   ChatOptions,
-  "outputSchema" | "stream"
+  "outputSchema" | "stream" | "toolExecution"
 >;
 
 export const streamChatChunks = (
   options: StreamChatChunksOptions,
-): AsyncIterable<PublicStreamChunk> => chat(options);
+): AsyncIterable<PublicStreamChunk> =>
+  // Same-document mutations and dependent reads must finish in call order.
+  chat({ ...options, toolExecution: "sequential" });
 
 export type ChatObjectOptions = StreamChatChunksOptions & {
   outputSchema: SchemaInput;

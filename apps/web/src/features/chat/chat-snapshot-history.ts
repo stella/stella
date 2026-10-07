@@ -1,4 +1,4 @@
-import { EventType } from "@tanstack/ai";
+import { EventType, uiMessagesToWire } from "@tanstack/ai";
 import type { StreamChunk, UIMessage as StreamUIMessage } from "@tanstack/ai";
 import type { UIMessage } from "@tanstack/ai-client";
 import { panic } from "better-result";
@@ -9,6 +9,9 @@ type SnapshotChunk = Extract<
 >;
 type SnapshotMessage = SnapshotChunk["messages"][number];
 type ReasoningSnapshotMessage = Extract<SnapshotMessage, { role: "reasoning" }>;
+
+// TanStack's wire discriminator for Anthropic's opaque redacted thinking.
+const REDACTED_THINKING_ID_PREFIX = "redacted_thinking-";
 
 /**
  * A snapshot's messages with every message the page posted put back where
@@ -35,6 +38,12 @@ export const keepPostedMessages = (
   const restore = (from: number, to: number) => {
     for (const message of posted.slice(from, to)) {
       if (!inSnapshot.has(message.id)) {
+        if (message.role === "activity") {
+          restored.push(
+            ...uiMessagesToWire([message], { includeActivity: true }),
+          );
+          continue;
+        }
         // AG-UI requires `content`; the client reads `parts` instead.
         restored.push({ ...message, content: "" });
       }
@@ -113,6 +122,9 @@ export const keepReasoningSteps = (
                 content: message.content,
                 stepId: message.id,
                 type: "thinking",
+                ...(message.id.startsWith(REDACTED_THINKING_ID_PREFIX)
+                  ? { redacted: true }
+                  : {}),
                 ...(signature === undefined ? {} : { signature }),
               },
             ],

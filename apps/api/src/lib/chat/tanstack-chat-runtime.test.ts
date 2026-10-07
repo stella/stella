@@ -1,10 +1,16 @@
-import { EventType, normalizeStreamChunk } from "@tanstack/ai";
-import type { AdapterYieldChunk, StreamChunk } from "@tanstack/ai";
+import { EventType, normalizeStreamChunk, toolDefinition } from "@tanstack/ai";
+import type {
+  AdapterYieldChunk,
+  AnyTextAdapter,
+  StreamChunk,
+} from "@tanstack/ai";
+import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 
 import {
   finishReasonOf,
   STRIPPED_CHUNK_KEYS,
+  streamChatChunks,
   toolCallEndInputOf,
   toolCallEndOutputOf,
   toolCallNameOf,
@@ -16,6 +22,76 @@ import type {
   PublicToolCallEndChunk,
   PublicToolCallStartChunk,
 } from "@/api/lib/chat/tanstack-chat-runtime";
+import {
+  scriptedAdapterBase,
+  scriptedTurnChunks,
+} from "@/api/tests/helpers/chat-round-trip";
+
+test("finishes an asynchronous document mutation before a sibling read starts", async () => {
+  let documentVersion = 1;
+  let observedVersion = 0;
+  let iteration = 0;
+  const adapter: AnyTextAdapter = {
+    ...scriptedAdapterBase,
+    async *chatStream({ model, runId, threadId }) {
+      const index = iteration++;
+      yield* scriptedTurnChunks(
+        index === 0
+          ? {
+              type: "step",
+              toolCalls: [
+                {
+                  toolCallId: "write",
+                  toolName: "write_document",
+                  arguments: "{}",
+                },
+                {
+                  toolCallId: "read",
+                  toolName: "read_document",
+                  arguments: "{}",
+                },
+              ],
+            }
+          : { type: "step", text: "Document updated", toolCalls: [] },
+        { index, model, runId: runId ?? "run", threadId: threadId ?? "thread" },
+      );
+    },
+    structuredOutput: () => panic("No structured output in this test"),
+  };
+  const tools = [
+    toolDefinition({
+      name: "write_document",
+      description: "Write the document",
+    }).server(async () => {
+      await new Promise<void>((resolve) => {
+        setTimeout(resolve, 0);
+      });
+      documentVersion = 2;
+      return { version: documentVersion };
+    }),
+    toolDefinition({
+      name: "read_document",
+      description: "Read the document",
+    }).server(() => {
+      observedVersion = documentVersion;
+      return { version: observedVersion };
+    }),
+  ];
+  const results: string[] = [];
+  for await (const chunk of streamChatChunks({
+    adapter,
+    messages: [],
+    tools,
+  })) {
+    if (chunk.type === EventType.TOOL_CALL_RESULT) {
+      results.push(chunk.content);
+    }
+  }
+  expect(iteration).toBe(2);
+  expect(results).toHaveLength(2);
+  expect(documentVersion).toBe(2);
+  expect(observedVersion).toBe(documentVersion);
+});
 
 type StrippedChunkType = keyof typeof STRIPPED_CHUNK_KEYS;
 

@@ -1,3 +1,4 @@
+import type { ToolResultOutcome } from "@tanstack/ai";
 import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
 
@@ -989,4 +990,42 @@ describe("merging a message's anonymization restorations", () => {
     ]);
     expect(merged.conflicts).toBe(1);
   });
+});
+
+const TOOL_RESULT_OUTCOME_CASES = {
+  cancelled: "cancelled",
+  denied: "denied",
+} as const satisfies Record<ToolResultOutcome, ToolResultOutcome>;
+
+test.each(Object.values(TOOL_RESULT_OUTCOME_CASES))(
+  "preserves the %s tool outcome through persistence and reload",
+  (outcome) => {
+    const part = {
+      content: "Tool did not run",
+      error: "Tool did not run",
+      outcome,
+      state: "error",
+      toolCallId: "tool-outcome",
+      type: "tool-result",
+    } as const satisfies ChatPart;
+    const content = toPersistedChatMessageContentV3({ data: [part] });
+    const restored = chatMessageFromPersisted({
+      content,
+      id: toSafeId<"chatMessage">("11111111-1111-4111-8111-111111111111"),
+      role: "assistant",
+    });
+    expect(restored.parts).toEqual([part]);
+  },
+);
+
+test("rejects unknown tool outcomes at the wire boundary", () => {
+  expect(
+    isChatPart({
+      content: "Tool did not run",
+      outcome: "unknown",
+      state: "error",
+      toolCallId: "tool-outcome",
+      type: "tool-result",
+    }),
+  ).toBe(false);
 });

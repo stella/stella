@@ -842,6 +842,7 @@ const applyValidatedContinuationTransitions = ({
       content: part.content,
       state: part.state,
       ...(part.error === undefined ? {} : { error: part.error }),
+      ...(part.outcome === undefined ? {} : { outcome: part.outcome }),
     });
     resultCallIds.add(part.toolCallId);
   }
