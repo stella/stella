@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
 
 import { VISUAL_SANDBOX_LIMITS } from "@stll/api-contract/visual-sandbox";
+import { VISUAL_THEME_VARIABLES } from "@stll/api-contract/visual-theme";
 import { assertProperty } from "@stll/property-testing";
 
 import { sanitizeVisualHtml } from "./sanitize";
@@ -30,6 +31,36 @@ describe("visual presentation markup", () => {
     expect(result.value).toContain("<summary>Dates</summary>");
     expect(result.value).toContain('style="color:#333;padding:12px"');
     expect(result.value).toContain('scope="col"');
+  });
+
+  test("allows only theme token var() references in inline styles", () => {
+    const declarations = VISUAL_THEME_VARIABLES.map(
+      (variable) => `color:var(${variable})`,
+    );
+    const allowed = sanitizeVisualHtml(
+      `<p style="${declarations.join(";")}">Themed</p>`,
+    );
+    expect(allowed.isOk()).toBe(true);
+    if (allowed.isOk()) {
+      expect(String(allowed.value)).toContain(declarations.join(";"));
+    }
+
+    const rejectedValues = [
+      "var(--not-allowlisted)",
+      "var(--border, red)",
+      "url(https://example.test/image.svg)",
+      "expression(alert(1))",
+      "calc(1px + 2px)",
+      "\\75rl(https://example.test/image.svg)",
+      "red}@import url(https://example.test/style.css)",
+    ];
+    for (const value of rejectedValues) {
+      const result = sanitizeVisualHtml(`<p style="color:${value}">Text</p>`);
+      expect(result.isOk()).toBe(true);
+      if (result.isOk()) {
+        expect(String(result.value)).not.toContain("style=");
+      }
+    }
   });
 
   test("represents links as presentation metadata", () => {

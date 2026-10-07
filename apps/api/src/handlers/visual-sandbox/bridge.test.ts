@@ -12,6 +12,7 @@ const setup = () => {
     "https://alternate.example.test",
   ];
   const onRender = mock(() => undefined);
+  const onTheme = mock(() => undefined);
   const onGuestMessage = mock(() => undefined);
   const activation = { active: false };
   const clock = { now: 0 };
@@ -21,6 +22,7 @@ const setup = () => {
     origins,
     outerOrigin: "https://api.example.test",
     onRender,
+    onTheme,
     onGuestMessage,
     hasUserActivation: () => activation.active,
     now: () => clock.now,
@@ -29,6 +31,7 @@ const setup = () => {
     parentWindow,
     innerWindow,
     onRender,
+    onTheme,
     onGuestMessage,
     handle,
     activation,
@@ -37,6 +40,29 @@ const setup = () => {
 };
 
 describe("visual frame bridge", () => {
+  test("forwards validated themes only from the pinned host after a valid render", () => {
+    const { parentWindow, innerWindow, onRender, onTheme, onGuestMessage, handle } = setup();
+    const theme = { appearance: "dark", variables: { "--foreground": "white" } };
+    const data = { kind: "theme", theme };
+    handle({ source: parentWindow, origin: "https://alternate.example.test", data });
+    expect(onTheme).not.toHaveBeenCalled();
+    handle({ source: parentWindow, origin: "https://web.example.test", data: { type: "render", title: "Theme", html: "<p>Theme</p>", data: {}, theme } });
+    expect(onRender).toHaveBeenCalledWith({ type: "render", title: "Theme", html: "<p>Theme</p>", data: {}, links: [], theme });
+    for (const event of [
+      { source: innerWindow, origin: "null", data },
+      { source: {}, origin: "https://web.example.test", data },
+      { source: parentWindow, origin: "https://alternate.example.test", data },
+      { source: parentWindow, origin: "https://web.example.test", data: { kind: "theme", theme: { appearance: "dark", variables: { "--foreground": "red; background:blue" } } } },
+      { source: parentWindow, origin: "https://web.example.test", data: { kind: "theme", theme: { appearance: "dark", variables: { "--unknown": "red" } } } },
+    ]) {
+      handle(event);
+    }
+    expect(onTheme).not.toHaveBeenCalled();
+    expect(onGuestMessage).not.toHaveBeenCalled();
+    handle({ source: parentWindow, origin: "https://web.example.test", data });
+    expect(onTheme).toHaveBeenCalledExactlyOnceWith(theme);
+  });
+
   test("pins the first valid parent origin and returns validated guest messages to it", () => {
     const { parentWindow, innerWindow, onRender, onGuestMessage, handle } =
       setup();
