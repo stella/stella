@@ -106,9 +106,15 @@ const eventOperand = (operand: string) => {
   const match = /^github\.event_name\s*(==|!=)\s*(['"])([\w-]+)\2$/u.exec(
     operand,
   );
-  return match === null
-    ? operand
-    : `github.event_name ${match[1]} '${match[3]}'`;
+  if (match === null) {
+    return operand;
+  }
+  const operator = match[1];
+  const event = match[3];
+  if (operator === undefined || event === undefined) {
+    return operand;
+  }
+  return `github.event_name ${operator} '${event}'`;
 };
 const operands = (condition: unknown) =>
   conditionOperands(condition).map(eventOperand);
@@ -123,17 +129,32 @@ const runnerCases = (job: Record<string, unknown>) => {
   if (match === null) {
     return [{ guaranteed: jobTools(job), condition: [] }];
   }
+  const condition = match[1];
+  const operator = match[2];
+  const event = match[3];
+  const jsonRunner = match[5];
+  const plainRunner = match[6];
+  const fallbackRunner = match[7];
+  if (
+    condition === undefined ||
+    operator === undefined ||
+    event === undefined ||
+    (jsonRunner === undefined && plainRunner === undefined) ||
+    fallbackRunner === undefined
+  ) {
+    return [{ guaranteed: new Set<string>(), condition: [] }];
+  }
   const firstRunner: unknown =
-    match[5] === undefined ? match[6] : Bun.YAML.parse(match[5]);
+    jsonRunner === undefined ? plainRunner : Bun.YAML.parse(jsonRunner);
   return [
     {
       guaranteed: runnerTools(firstRunner, job["container"]),
-      condition: [eventOperand(match[1] ?? "")],
+      condition: [eventOperand(condition)],
     },
     {
-      guaranteed: runnerTools(match[7], job["container"]),
+      guaranteed: runnerTools(fallbackRunner, job["container"]),
       condition: [
-        `github.event_name ${match[2] === "==" ? "!=" : "=="} '${match[3]}'`,
+        `github.event_name ${operator === "==" ? "!=" : "=="} '${event}'`,
       ],
     },
   ];
@@ -143,7 +164,7 @@ const contradictoryEvents = (conditions: readonly string[]) => {
   const unequal = new Set<string>();
   for (const operand of conditions) {
     const match = /^github\.event_name (==|!=) '([\w-]+)'$/u.exec(operand);
-    if (match === null || match[2] === undefined) {
+    if (match?.[2] === undefined) {
       continue;
     }
     (match[1] === "==" ? equal : unequal).add(match[2]);
@@ -590,6 +611,52 @@ const inspectShell = (source: string, context: ScanContext) => {
   }
 };
 
+type StepExecutionOptions = {
+  step: Record<string, unknown>;
+  jobDefaults: Record<string, unknown>;
+  workflowDefaults: Record<string, unknown>;
+  labelPrefix: string;
+  index: number;
+};
+const stepExecution = ({
+  step,
+  jobDefaults,
+  workflowDefaults,
+  labelPrefix,
+  index,
+}: StepExecutionOptions):
+  | { problem: string }
+  | { label: string; cwd: string; shell: string } => {
+  const stepName = step["name"];
+  const id = step["id"];
+  if (stepName !== undefined && typeof stepName !== "string") {
+    return { problem: `${labelPrefix}${index}: name must be a string` };
+  }
+  if (id !== undefined && typeof id !== "string") {
+    return { problem: `${labelPrefix}${index}: id must be a string` };
+  }
+  const label = `${labelPrefix}${stepName ?? id ?? index}`;
+  const configuredDirectory = [
+    step["working-directory"],
+    jobDefaults["working-directory"],
+    workflowDefaults["working-directory"],
+  ].find((value) => value !== undefined);
+  const cwd = configuredDirectory === undefined ? "" : configuredDirectory;
+  const configuredShell = [
+    step["shell"],
+    jobDefaults["shell"],
+    workflowDefaults["shell"],
+  ].find((value) => value !== undefined);
+  const shell = configuredShell === undefined ? "bash" : configuredShell;
+  if (typeof cwd !== "string") {
+    return { problem: `${label}: working-directory must be a string` };
+  }
+  if (typeof shell !== "string") {
+    return { problem: `${label}: shell must be a string` };
+  }
+  return { label, cwd, shell };
+};
+
 type RunnerToolProblemsOptions = {
   root: string;
   workflow: string;
@@ -649,16 +716,22 @@ export const runnerToolProblems = ({
         owner: string,
       ) => {
         for (const [index, step] of entries.entries()) {
-          const label = `${workflow}/${jobName}/${prefix}${String(step["name"] ?? step["id"] ?? index)}`;
+          const execution = stepExecution({
+            step,
+            jobDefaults,
+            workflowDefaults,
+            labelPrefix: `${workflow}/${jobName}/${prefix}`,
+            index,
+          });
+          if ("problem" in execution) {
+            problems.push(execution.problem);
+            continue;
+          }
+          const { label, cwd, shell } = execution;
           const context = {
             root,
             file: owner,
-            cwd: String(
-              step["working-directory"] ??
-                jobDefaults["working-directory"] ??
-                workflowDefaults["working-directory"] ??
-                "",
-            ),
+            cwd,
             label,
             guaranteed,
             installs,
@@ -671,12 +744,6 @@ export const runnerToolProblems = ({
           if (contradictoryEvents(context.condition)) {
             continue;
           }
-          const shell = String(
-            step["shell"] ??
-              jobDefaults["shell"] ??
-              workflowDefaults["shell"] ??
-              "bash",
-          );
           if (
             typeof step["run"] === "string" &&
             !/^(?:pwsh|powershell|python)/u.test(shell)

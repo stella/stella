@@ -83,6 +83,33 @@ test("every tracked executable is rejected on an unknown image and accepted afte
   }
 });
 
+test("malformed step metadata and execution settings are reported without coercion", () => {
+  withFixture(
+    {
+      jobs: {
+        invalid: {
+          "runs-on": "custom",
+          steps: [
+            { name: { label: "install" }, run: "jq --version" },
+            { shell: { command: "bash" }, run: "jq --version" },
+            {
+              "working-directory": ["infra"],
+              run: "jq --version",
+            },
+          ],
+        },
+      },
+    },
+    (root) => {
+      expect(problems(root)).toEqual([
+        expect.stringContaining("name must be a string"),
+        expect.stringContaining("shell must be a string"),
+        expect.stringContaining("working-directory must be a string"),
+      ]);
+    },
+  );
+});
+
 test("runner defaults are specific to the image and do not leak into containers", () => {
   for (const runner of [
     "ubuntu-latest",
