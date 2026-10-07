@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { and, eq } from "drizzle-orm";
 import { PassThrough } from "node:stream";
+import * as v from "valibot";
 
 import { member, organization, user } from "@/api/db/auth-schema";
 import {
@@ -277,11 +278,19 @@ const seed = async (db: GatedTestDb) => {
         if (request.method !== "POST") {
           return new Response(null, { status: 405 });
         }
-        const body: {
-          id?: string | number;
-          method?: string;
-          params?: { name: string; arguments?: Record<string, unknown> };
-        } = await request.json();
+        const body = v.parse(
+          v.object({
+            id: v.exactOptional(v.union([v.string(), v.number()])),
+            method: v.string(),
+            params: v.exactOptional(
+              v.object({
+                name: v.string(),
+                arguments: v.exactOptional(v.record(v.string(), v.unknown())),
+              }),
+            ),
+          }),
+          await request.json(),
+        );
         const lifecycle = respondToMcpLifecycle(body);
         if (lifecycle !== null) {
           return lifecycle;
