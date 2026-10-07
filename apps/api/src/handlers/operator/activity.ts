@@ -73,8 +73,8 @@ export const createOperatorActivity = ({
     const summary = yield* Result.ok(await readSummary(now()));
     return Result.ok({
       generated_at: summary.generated_at,
-      sessions_active_5m: summary.sessions_active_5m,
-      users_active_today: summary.users_active_today,
+      users_acting_5m: summary.users_acting_5m,
+      users_acting_today: summary.users_acting_today,
       signups_today: summary.signups_today,
       signups_7d: summary.signups_7d,
       chat_turns_1h: summary.chat_turns_1h,

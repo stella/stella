@@ -332,6 +332,7 @@ export const chatMessages = p.pgTable(
     createdAt: timestamptz("created_at").notNull().defaultNow(),
   },
   (table) => [
+    p.index("chat_messages_created_at_brin_idx").using("brin", table.createdAt),
     p
       .index("chat_messages_thread_created_idx")
       .on(table.threadId, table.createdAt),

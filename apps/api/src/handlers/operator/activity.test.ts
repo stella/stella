@@ -8,17 +8,13 @@ import { createOperatorActivity } from "./activity";
 const NOW = Date.parse("2026-10-05T08:00:00Z");
 const summary = {
   generated_at: "2026-10-05T08:00:00Z",
-  sessions_active_5m: null,
-  users_active_today: null,
+  users_acting_5m: 2,
+  users_acting_today: 5,
   signups_today: 2,
   signups_7d: 8,
   chat_turns_1h: 3,
   tool_calls_1h: null,
   unavailable_reasons: {
-    sessions_active_5m:
-      "Session observations are throttled and do not record every request.",
-    users_active_today:
-      "No durable per-user activity history covers the calendar day.",
     tool_calls_1h:
       "No durable tool-call event source records execution timestamps.",
   },

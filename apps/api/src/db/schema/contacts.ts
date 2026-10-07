@@ -594,6 +594,7 @@ export const auditLogs = p.pgTable(
     p
       .index("audit_logs_org_created_id_idx")
       .on(table.organizationId, table.createdAt, table.id),
+    p.index("audit_logs_created_at_brin_idx").using("brin", table.createdAt),
     p
       .index("audit_logs_org_workspace_created_id_idx")
       .on(table.organizationId, table.workspaceId, table.createdAt, table.id),
