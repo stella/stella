@@ -137,6 +137,9 @@ describe("API deployment health receipt", () => {
       WEB_SMOKE: "success",
       API_SMOKE: "success",
       MCP_SMOKE: "success",
+      CORPUS_PREFLIGHT: "success",
+      CORPUS_SEARCH_WAIVED: "false",
+      WAIVE_REASON: "",
       JOB_STATUS: "success",
     };
     const cases = [
@@ -174,12 +177,12 @@ describe("API deployment health receipt", () => {
     }
   });
 
-  test("uses only the existing canary and staging session secrets for MCP journeys", async () => {
+  test("uses only the declared canary and staging session secrets for MCP journeys", async () => {
     const cases = [
       {
         file: "mcp-canary.yml",
         environment: "production",
-        secrets: ["MCP_CANARY_TOKEN"],
+        secrets: ["MCP_CANARY_TOKEN", "REVIEW_ACCOUNT_PASSWORD"],
       },
       {
         file: "deploy-staging.yml",

@@ -15,6 +15,10 @@ import { GENERATORS, type Generator } from "./generated-files";
 import { specifierCandidates } from "./generated-imports";
 import { lexShell } from "./install-free-ci";
 
+// Reads module sources, Dockerfiles, ignore rules, package/lock and tsconfig
+// files. Generator metadata may mention Markdown, but its contents are not read.
+export const CI_MARKDOWN_READER_INPUTS_DOCKER_SOURCE_CLOSURE = [];
+
 // Container paths map to checkout paths. Resolution never falls back from
 // this inventory to the checkout.
 export type SourceTree = Map<string, string>;
