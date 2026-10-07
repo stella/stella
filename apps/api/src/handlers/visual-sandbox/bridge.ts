@@ -24,7 +24,16 @@ type VisualMessageHandlerOptions = {
     message: v.InferOutput<typeof visualGuestMessageSchema>,
     hostOrigin: string,
   ) => void;
+  /**
+   * Whether this frame holds transient user activation. A gesture inside the
+   * view activates its ancestor frames, this shell included; a gesture
+   * elsewhere in the app does not.
+   */
+  hasUserActivation: () => boolean;
+  now: () => number;
 };
+
+const GUEST_ACTION_INTERVAL_MS = 1000;
 
 export const createVisualMessageHandler = ({
   parentWindow,
@@ -33,8 +42,11 @@ export const createVisualMessageHandler = ({
   origins,
   onRender,
   onGuestMessage,
+  hasUserActivation,
+  now,
 }: VisualMessageHandlerOptions) => {
   let hostOrigin: string | undefined;
+  const lastAction = new Map<string, number>();
   let actionGate: ReturnType<typeof createVisualActionGate> | undefined;
   return (event: { source: unknown; origin: string; data: unknown }) => {
     if (event.source === parentWindow) {
@@ -57,7 +69,7 @@ export const createVisualMessageHandler = ({
         data: sanitized.value.data,
         links: sanitized.value.links,
         literalLinks: sanitized.value.literalLinks,
-        now: () => performance.now(),
+        now,
       });
       onRender({
         type: parsed.output.type,
@@ -76,7 +88,29 @@ export const createVisualMessageHandler = ({
       return;
     }
     const parsed = v.safeParse(visualGuestMessageSchema, event.data);
-    if (!parsed.success || !actionGate?.(parsed.output)) {
+    if (!parsed.success) {
+      return;
+    }
+    const sizing =
+      parsed.output.kind === "resize" || parsed.output.kind === "ready";
+    // The view is live from the start, so an action reaches the app only
+    // right after a gesture inside it, and at most one of each kind per
+    // interval. Script that runs on load cannot act on the user's behalf.
+    if (!sizing) {
+      const current = now();
+      const previous =
+        lastAction.get(parsed.output.kind) ?? Number.NEGATIVE_INFINITY;
+      if (
+        !hasUserActivation() ||
+        current - previous < GUEST_ACTION_INTERVAL_MS
+      ) {
+        return;
+      }
+      if (!actionGate?.(parsed.output)) {
+        return;
+      }
+      lastAction.set(parsed.output.kind, current);
+    } else if (!actionGate?.(parsed.output)) {
       return;
     }
     onGuestMessage(parsed.output, hostOrigin);

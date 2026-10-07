@@ -161,6 +161,11 @@ const bootOuter = (runtime: string) => {
     },
     onGuestMessage: (message, hostOrigin) =>
       window.parent.postMessage(message, hostOrigin),
+    // An engine without the API fails closed: the view still renders, but
+    // its actions never reach the app.
+    hasUserActivation: () =>
+      "userActivation" in navigator && navigator.userActivation.isActive,
+    now: () => performance.now(),
   });
   boot.current = { type: "ready", receive };
   const reportReady = () => {

@@ -13,6 +13,8 @@ const setup = () => {
   ];
   const onRender = mock(() => undefined);
   const onGuestMessage = mock(() => undefined);
+  const activation = { active: false };
+  const clock = { now: 0 };
   const handle = createVisualMessageHandler({
     parentWindow,
     innerWindow,
@@ -20,8 +22,18 @@ const setup = () => {
     outerOrigin: "https://api.example.test",
     onRender,
     onGuestMessage,
+    hasUserActivation: () => activation.active,
+    now: () => clock.now,
   });
-  return { parentWindow, innerWindow, onRender, onGuestMessage, handle };
+  return {
+    parentWindow,
+    innerWindow,
+    onRender,
+    onGuestMessage,
+    handle,
+    activation,
+    clock,
+  };
 };
 
 describe("visual frame bridge", () => {
@@ -210,5 +222,63 @@ describe("visual frame bridge", () => {
       handle(event);
     }
     expect(onGuestMessage).not.toHaveBeenCalled();
+  });
+
+  test("forwards guest actions only right after a gesture inside the view, one of each kind per second", () => {
+    const {
+      parentWindow,
+      innerWindow,
+      onGuestMessage,
+      handle,
+      activation,
+      clock,
+    } = setup();
+    handle({
+      source: parentWindow,
+      origin: "https://web.example.test",
+      data: {
+        type: "render",
+        data: { courtYear: { buckets: [{ court: "CZ:ns", year: 2026 }] } },
+        title: "Timeline",
+        html: '<p>Dates</p><a href="https://example.test/decision">Source</a><script>const bucket = stella.data.courtYear.buckets[0]; [bucket.court, bucket.year];</script>',
+        links: [{ id: "decision", decisionId: "decision-id" }],
+      },
+    });
+    const actions = [
+      { kind: "drill", court: "CZ:ns", year: 2026 },
+      { kind: "open-internal", linkId: "decision" },
+      { kind: "open-link", url: "https://example.test/decision" },
+    ] as const;
+    const send = (data: unknown) =>
+      handle({ source: innerWindow, origin: "null", data });
+    // Script on load, with no gesture: nothing reaches the app.
+    for (const action of actions) {
+      send(action);
+    }
+    expect(onGuestMessage).not.toHaveBeenCalled();
+    // Sizing never needs a gesture.
+    send({ kind: "resize", height: 300 });
+    expect(onGuestMessage).toHaveBeenCalledTimes(1);
+    activation.active = true;
+    for (const [index, action] of actions.entries()) {
+      clock.now = 1000 * (index + 1);
+      send(action);
+      expect(onGuestMessage).toHaveBeenLastCalledWith(
+        action,
+        "https://web.example.test",
+      );
+      // The same kind again within the second is dropped.
+      clock.now += 999;
+      send(action);
+      expect(onGuestMessage).toHaveBeenCalledTimes(index + 2);
+    }
+    // Different kinds are independent: each is accepted again after a second.
+    clock.now += 1;
+    send(actions[0]);
+    expect(onGuestMessage).toHaveBeenCalledTimes(actions.length + 2);
+    activation.active = false;
+    clock.now += 10_000;
+    send(actions[1]);
+    expect(onGuestMessage).toHaveBeenCalledTimes(actions.length + 2);
   });
 });

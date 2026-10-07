@@ -37,16 +37,7 @@ import { detachedUserAction } from "@/lib/errors/user-toast";
 import { openIsolatedWindow } from "@/lib/open-isolated-window";
 import { toSafeId } from "@/lib/safe-id";
 
-import type {
-  VisualFrameHandshake,
-  VisualInteraction,
-} from "./generated-visual.logic";
-import {
-  activateVisual,
-  advanceVisualHandshake,
-  pendingVisualHandshake,
-  parseVisualHostMessage,
-} from "./generated-visual.logic";
+import { parseVisualHostMessage } from "./generated-visual.logic";
 import { createVisualShellSession } from "./visual-shell-session";
 
 type GeneratedVisualProps = {
@@ -59,32 +50,6 @@ type GeneratedVisualFrameProps = Omit<GeneratedVisualProps, "part"> & {
   part: v.InferOutput<typeof generatedVisualPartSchema>;
 };
 
-// Tracks the current shell handshake and moves the view to preview when it
-// settles. Any document load after that (a reload, or another document in the
-// frame) also returns the view to preview.
-const useFrameHandshake = (
-  setInteraction: (interaction: VisualInteraction) => void,
-) => {
-  const handshake = useRef<VisualFrameHandshake>(pendingVisualHandshake());
-  return {
-    restart: () => {
-      handshake.current = pendingVisualHandshake();
-    },
-    advance: (event: "load" | "delivered") => {
-      if (handshake.current.status === "settled") {
-        if (event === "load") {
-          setInteraction({ status: "preview" });
-        }
-        return;
-      }
-      handshake.current = advanceVisualHandshake(handshake.current, event);
-      if (handshake.current.status === "settled") {
-        setInteraction({ status: "preview" });
-      }
-    },
-  };
-};
-
 const GeneratedVisualFrame = ({
   part,
   organizationId,
@@ -93,10 +58,6 @@ const GeneratedVisualFrame = ({
   const t = useTranslations();
   const frame = useRef<HTMLIFrameElement>(null);
   const [height, setHeight] = useState(320);
-  const [interaction, setInteraction] = useState<VisualInteraction>({
-    status: "loading",
-  });
-  const handshake = useFrameHandshake(setInteraction);
   const [confirmUrl, setConfirmUrl] = useState<string | null>(null);
   const { insertPastedTextIntoThread } = useChatEditorManager();
   const { open: openDecision } = useOpenDecisionTab();
@@ -138,7 +99,6 @@ const GeneratedVisualFrame = ({
   const attachFrame = useLatestCallback((element: HTMLIFrameElement | null) => {
     frame.current = element;
     if (element !== null) {
-      handshake.restart();
       element.src = shell.beginLoad();
     }
   });
@@ -160,14 +120,11 @@ const GeneratedVisualFrame = ({
         },
       })
     ) {
-      handshake.advance("delivered");
       return;
     }
     if (shell.isReloadedShell({ event, frameWindow })) {
       const element = frame.current;
       if (element !== null) {
-        handshake.restart();
-        setInteraction({ status: "loading" });
         element.src = shell.beginLoad();
       }
       return;
@@ -180,7 +137,8 @@ const GeneratedVisualFrame = ({
       frameWindow,
       outerOrigin: "null",
       actionGate,
-      interaction,
+      userActivated:
+        "userActivation" in navigator && navigator.userActivation.isActive,
     });
     if (message === null) {
       return;
@@ -244,17 +202,6 @@ const GeneratedVisualFrame = ({
     window.addEventListener("message", receive);
     return () => window.removeEventListener("message", receive);
   }, [receive]);
-  const activate = () => {
-    const next = activateVisual(interaction, frame.current?.contentWindow);
-    if (next === interaction) {
-      return;
-    }
-    setInteraction(next);
-    requestAnimationFrame(() => frame.current?.focus());
-  };
-  const loadShell = () => {
-    handshake.advance("load");
-  };
   if (page.isError) {
     return <p role="status">{t("chat.richContentUnavailable")}</p>;
   }
@@ -271,54 +218,23 @@ const GeneratedVisualFrame = ({
     queryStart >= 0 && (fragmentStart < 0 || queryStart < fragmentStart);
   const queryEnd = fragmentStart < 0 ? confirmUrl?.length : fragmentStart;
   return (
-    <section
-      className="overflow-hidden rounded-md border"
-      aria-label={t("chat.generatedView")}
-    >
-      <header className="bg-muted/40 flex items-center justify-between gap-3 border-b px-3 py-2">
-        <div className="min-w-0">
-          <p className="text-muted-foreground text-xs">
-            {t("chat.generatedView")}
-          </p>
-          <p className="truncate text-sm font-medium">{view.title}</p>
-        </div>
-        <Button
-          size="sm"
-          variant="outline"
-          disabled={interaction.status === "loading"}
-          onClick={(event) => {
-            if (event.nativeEvent.isTrusted) {
-              activate();
-            }
-          }}
-        >
-          {t("chat.activateGeneratedView")}
-        </Button>
+    <section aria-label={t("chat.generatedView")} className="space-y-1.5">
+      <header className="text-muted-foreground flex min-w-0 items-baseline gap-1.5 text-xs">
+        <span className="shrink-0">{t("chat.generatedView")}</span>
+        <span aria-hidden="true">·</span>
+        <span className="text-foreground truncate font-medium">
+          {view.title}
+        </span>
       </header>
-      <div className="relative">
+      <div className="overflow-hidden rounded-md border">
         <iframe
           ref={attachFrame}
           title={view.title}
           referrerPolicy="no-referrer"
           sandbox="allow-scripts"
-          onLoad={loadShell}
-          inert={interaction.status !== "interactive"}
           className="block w-full border-0"
           style={{ height }}
         />
-        {interaction.status !== "interactive" && (
-          <button
-            type="button"
-            className="absolute inset-0 cursor-pointer"
-            aria-label={t("chat.activateGeneratedView")}
-            disabled={interaction.status === "loading"}
-            onClick={(event) => {
-              if (event.nativeEvent.isTrusted) {
-                activate();
-              }
-            }}
-          />
-        )}
       </div>
       <Dialog
         open={confirmUrl !== null}
