@@ -4343,14 +4343,17 @@ const checkAllowances = ({
         delta,
         reason: "Explain why this increase is needed",
       };
+      const quotedTemplate = JSON.stringify(template).replaceAll("'", "'\\''");
       errors.push(
-        `${diff.id}${file === undefined ? "" : ` (${file})`}: actual increase ${delta}, funded ${funded?.delta ?? 0} (${(funded?.delta ?? 0) > delta ? "over-funded" : "unfunded increase"}). ${funded === undefined ? "Add" : "Adjust"} ${filename} so added deltas total exactly ${delta}: ${JSON.stringify(template)}`,
+        `${diff.id}${file === undefined ? "" : ` (${file})`}: actual increase ${delta}, funded ${funded?.delta ?? 0} (${(funded?.delta ?? 0) > delta ? "over-funded" : "unfunded increase"}). ${funded === undefined ? "Add" : "Adjust"} ${filename} so added deltas total exactly ${delta}: ${JSON.stringify(template)}\n` +
+          `    After deciding the increase is required, run: mkdir -p ${ALLOWANCE_DIRECTORY} && printf '%s\\n' '${quotedTemplate}' > ${filename}\n` +
+          "    Replace the reason with the justification, review all added deltas, then run `bun scripts/ratchet.ts --check`.",
       );
     }
   }
   for (const [key, { paths, delta }] of funding) {
     errors.push(
-      `${paths.join(", ")}: ${key} actual increase 0, funded ${delta}; allowance with no increase, remove the added allowance`,
+      `${paths.join(", ")}: ${key} actual increase 0, funded ${delta}; allowance with no increase, remove it with: rm -- ${paths.join(" ")}`,
     );
   }
   return errors;
@@ -4453,7 +4456,7 @@ const runCheck = (): number => {
     console.error(`\n${remedy}`);
   }
   console.error(
-    "\nIncreases relative to the measured base tree require exact, justified allowances added in this PR.",
+    "\nIncreases relative to the measured base tree require exact, justified allowances added in this PR. Recheck with `bun scripts/ratchet.ts --check`.",
   );
   return 1;
 };

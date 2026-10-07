@@ -3085,6 +3085,9 @@ jobs:
           scripts/detect-e2e-changes.test.ts
           scripts/network-baseline-scope.test.ts
           scripts/autofix-workflow.test.ts
+          scripts/autofix-protected-paths.test.ts
+          scripts/autofix-type-aware.test.ts
+          apps/api/scripts/refresh-test-durations.test.ts
           scripts/check-release-upload-retry.test.ts
           scripts/check-base-image-pulls.test.ts
           scripts/dependabot-changeset.test.ts

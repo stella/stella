@@ -335,7 +335,7 @@ describe("changeset package relevance", () => {
           entries: [entry(["@stll/cli"])],
           policy,
         }),
-      ).toThrow("no changed release-gated files");
+      ).toThrow("bun run changeset --empty");
     }
   });
 
@@ -526,6 +526,14 @@ describe("catalog versions a published package ships", () => {
           catalogInputs: jszipBump,
         }),
       ).toThrow(`${DOCX_UTILS}: jszip@catalog:`);
+      expect(() =>
+        checkChangesetPackages({
+          changedFiles,
+          entries,
+          policy,
+          catalogInputs: jszipBump,
+        }),
+      ).toThrow("bun run changeset");
     }
     expect(
       decideChangesetGate({

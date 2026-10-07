@@ -365,25 +365,19 @@ describe("changed-file autofix boundary", () => {
     expect(job).toContain(
       'git diff --name-only -z --diff-filter=ACMR "$BASE_SHA"..."$HEAD_SHA" -- > "$RUNNER_TEMP/autofix-changed-paths"',
     );
-    expect(fix).toContain(
-      "mapfile -d '' -t changed < \"$RUNNER_TEMP/autofix-changed-paths\"",
-    );
+    expect(fix).toContain("while IFS= read -r -d '' path; do");
     expect(fix).toContain('[[ -f "$path" && ! -L "$path" ]]');
     expect(fix).toContain(
       'if [[ "$path" == .github/workflows/* || "$path" == scripts/ratchet-baseline.json ]]; then',
     );
     expect(fix).toContain(
-      `bun --bun oxlint -c oxlint.config.ts --no-error-on-unmatched-pattern --fix "\${lint_paths[@]}"`,
+      `bun --bun oxlint -c oxlint.config.ts --no-error-on-unmatched-pattern --type-aware --fix "\${lint_paths[@]}"`,
     );
     expect(fix).toContain("lint_status > 1");
     expect(fix).toContain(
       `bun --bun oxfmt -c .oxfmtrc.json --no-error-on-unmatched-pattern "\${format_paths[@]}"`,
     );
-    for (const unsafe of [
-      "--fix-suggestions",
-      "--fix-dangerously",
-      "--type-aware",
-    ]) {
+    for (const unsafe of ["--fix-suggestions", "--fix-dangerously"]) {
       expect(fix).not.toContain(unsafe);
     }
     expect(job.slice(restrictionStep, pushStep)).toContain(
@@ -409,7 +403,7 @@ describe("changed-file autofix boundary", () => {
     expect(plan).toBeGreaterThan(availability);
     expect(job).toContain(`ready: \${{ steps.planner.outputs.ready }}`);
     expect(scope).toContain(
-      "scripts/autofix-plan.ts scripts/generated-files.ts packages/scripts/src/generated-files.ts",
+      "scripts/autofix-plan.ts scripts/autofix-protected-paths.ts scripts/baseline-paths.ts scripts/generated-files.ts packages/scripts/src/generated-files.ts",
     );
     expect(scope).toContain('git cat-file -e "HEAD:$path"');
     expect(scope).toContain('echo "ready=false" >> "$GITHUB_OUTPUT"');

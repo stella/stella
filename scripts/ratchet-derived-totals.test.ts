@@ -420,6 +420,15 @@ for (const { name, count, delta, code, diagnostic } of [
         expect(result.output).toContain(diagnostic);
         if (code !== 0) {
           expect(result.output).toContain(ALLOWANCE);
+          if (count > 2) {
+            expect(result.output).toContain(
+              `mkdir -p scripts/ratchet-allowances && printf '%s\\n'`,
+            );
+            expect(result.output).toContain(`> ${ALLOWANCE}`);
+          } else {
+            expect(result.output).toContain(`rm -- ${ALLOWANCE}`);
+          }
+          expect(result.output).toContain("bun scripts/ratchet.ts --check");
         }
       });
     },
