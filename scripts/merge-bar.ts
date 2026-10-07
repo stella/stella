@@ -69,6 +69,7 @@ import {
 import { pilotFastJobs, pilotQueueJobs } from "./ci-pr-pilot-plan";
 import { evaluate } from "./github-expression";
 import {
+  ciCoverageLogArguments,
   parseCiCoverageLog,
   type CiCoverageEvidence,
   type CiCoverageLogError,
@@ -817,7 +818,8 @@ const checkFastJobPredicate = ({
     panic(fast.message);
   }
   const deferred = gated && !fast.jobs.includes(id);
-  if (deferred && !fallback.jobs.includes(id)) {
+  const fallbackJob = fallback.jobs.find((job) => job === id);
+  if (deferred && fallbackJob === undefined) {
     panic(`No mandatory queue fallback for pilot-deferred ${id}`);
   }
   for (const selected of [false, true]) {
@@ -2702,11 +2704,12 @@ const createGhGateway = ({
       }
       Bun.sleepSync(1100);
       return parseCiCoverageLog(
-        runGh([
-          "api",
-          "--allow-escape-sequences",
-          `repos/${repo}/actions/jobs/${jobId}/logs`,
-        ]),
+        runGh(
+          ciCoverageLogArguments({
+            apiHelp: runGh(["api", "--help"]),
+            endpoint: `repos/${repo}/actions/jobs/${jobId}/logs`,
+          }),
+        ),
       );
     },
 

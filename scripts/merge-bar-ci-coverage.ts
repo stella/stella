@@ -15,7 +15,7 @@ const error = (message: string) =>
   Result.err(new CiCoverageLogError({ message }));
 
 const stripTimestamp = (line: string) =>
-  line.replace(/^\d{4}-\d{2}-\d{2}T\S+?Z?[ \t]/u, "");
+  line.replace(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,9})?Z[ \t]/u, "");
 
 type LogGroup = { start: number; end: number };
 type EnvironmentSection = { index: number; values: Map<string, string[]> };
@@ -64,13 +64,14 @@ const environmentSections = (
       if (indent <= envIndent) {
         break;
       }
-      const match = /^\s+([A-Z_]+):\s*(.*)$/u.exec(line);
-      const name = match?.[1];
+      const entry = line.trim();
+      const separator = entry.indexOf(":");
+      const name = entry.slice(0, separator);
       if (name !== "COVERAGE_PROFILE" && name !== "PILOT_FAST_JOBS") {
         continue;
       }
       const entries = values.get(name) ?? [];
-      entries.push((match?.[2] ?? "").trim());
+      entries.push(entry.slice(separator + 1).trim());
       values.set(name, entries);
     }
     sections.push({ index, values });
@@ -118,7 +119,7 @@ const coverageEvidence = (
         ? error("pilot-fast-v1 requires at least one selected fast job")
         : Result.ok({ profile, jobs: jobIds });
     default:
-      return error(`Unknown CI coverage profile: ${profile}`);
+      return error("Unknown CI coverage profile");
   }
 };
 
@@ -159,3 +160,20 @@ export const parseCiCoverageLog = (
   }
   return coverageEvidence(section.values);
 };
+
+type CiCoverageLogArgumentsOptions = {
+  apiHelp: string;
+  endpoint: string;
+};
+
+// Older installed CLIs lack this flag; raw logs stay inside the parser.
+export const ciCoverageLogArguments = ({
+  apiHelp,
+  endpoint,
+}: CiCoverageLogArgumentsOptions) => [
+  "api",
+  ...(apiHelp.includes("--allow-escape-sequences")
+    ? ["--allow-escape-sequences"]
+    : []),
+  endpoint,
+];

@@ -53,7 +53,11 @@ import {
   type MergeQueueRemoval,
   type RunJob,
 } from "./merge-bar";
-import { parseCiCoverageLog } from "./merge-bar-ci-coverage";
+import {
+  ciCoverageLogArguments,
+  parseCiCoverageLog,
+} from "./merge-bar-ci-coverage";
+import { RATCHET_METRICS } from "./ratchet";
 import ratchetDefinitionPaths from "./ratchet-definition-paths.json" with { type: "json" };
 
 // The CLI runs below spawn the real script offline against a fake gh, as a
@@ -2088,6 +2092,36 @@ describe("green result freshness", () => {
         ).toThrow(`Unmodeled fast-required predicate: ${job.id}`);
       }
     }
+  });
+
+  test("coverage log reads work with installed CLIs on either side of the escape flag", () => {
+    const endpoint = "repos/example/project/actions/jobs/123/logs";
+    for (const apiHelp of [
+      "Usage: gh api <endpoint>",
+      "Flags: --allow-escape-sequences Allow printing terminal escape sequences",
+    ]) {
+      const argumentsForCli = ciCoverageLogArguments({ apiHelp, endpoint });
+      expect(argumentsForCli).toEqual(
+        apiHelp.includes("--allow-escape-sequences")
+          ? ["api", "--allow-escape-sequences", endpoint]
+          : ["api", endpoint],
+      );
+    }
+  });
+
+  test("coverage log parsing retains the zero super-linear-regex budget", () => {
+    const metric = RATCHET_METRICS.find(
+      (entry) => entry.id === "super-linear-regexes",
+    );
+    if (metric?.scope !== "file" || metric.measurement !== undefined) {
+      panic("Missing super-linear regex file metric");
+    }
+    const file = "scripts/merge-bar-ci-coverage.ts";
+    const legacy = String.raw`const entry = /^\s+([A-Z_]+):\s*(.*)$/u;`;
+    expect(metric.count(legacy, { file })).toBe(1);
+    expect(
+      metric.count(readFileSync(path.join(REPO_ROOT, file), "utf-8"), { file }),
+    ).toBe(0);
   });
 
   test("CI result coverage evidence reads producer-shaped environment logs", () => {
