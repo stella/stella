@@ -29,7 +29,7 @@ const GIT_CALLEE = /git$/iu;
 // argument position, not only the first one after the global options, keeps
 // option values, quoting and working directories from hiding the subcommand.
 const SHELL_HISTORY_WALK =
-  /\bgit\b[^\n;&|]*?(?<![\w./-])(?:annotate|blame|log|rev-list|shortlog|whatchanged)(?![\w./-])/u;
+  /\bgit\b[^\n;&|]*?(?<![\w./:-])(?:annotate|blame|log|rev-list|shortlog|whatchanged)(?![\w./:-])/u;
 
 // Joins backslash-continued lines so `git \` + `log` reads as one command.
 const walksShell = (text: string): boolean =>

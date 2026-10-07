@@ -42,6 +42,7 @@ test("allows pinned reads and commands that do not walk history", () => {
   for (const source of [
     `Bun.spawnSync(["git", "show", \`\${sha}:a.yml\`]);`,
     'git(["merge-base", "origin/main", "HEAD"]);',
+    'execSync("git show HEAD:log");',
     'spawnSync("git", ["-c", "core.quotepath=off", "diff", "--name-only"]);',
     'spyOn(console, "log");',
     'logger("log", "rev-list");',
