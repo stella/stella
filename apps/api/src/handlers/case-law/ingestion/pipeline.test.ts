@@ -61,6 +61,7 @@ import {
   readDecisionTextMetadata,
   splitStoredDecisionTextMetadata,
 } from "@/api/lib/case-law/decision-text";
+import { CASE_LAW_SEARCH_CANDIDATE_ROW_MAX_BYTES } from "@/api/lib/case-law/search-candidate-row-bound-sql";
 import { canonicalDecisionDate } from "@/api/lib/dates";
 import { errorTag } from "@/api/lib/errors/error-tag";
 import {
@@ -74,6 +75,7 @@ import type { CaseLawSourceIngestionLease } from "@/api/lib/legal-search/case-la
 import { observePublisherDocumentFetch } from "@/api/lib/legal-search/document-stage-observation";
 import { ADAPTER_KEYS } from "@/api/lib/legal-search/ingestion-constants";
 import {
+  fitsDecisionSearchCandidateRow,
   markListingOnly,
   observedDocketOf,
   sanitizeResult,
@@ -911,7 +913,7 @@ describe("runIngestionPipeline — failure records", () => {
   /**
    * Reject the third database call to simulate a decision failure after its
    * observation and source read. With rejection disabled, planning reads reach
-   * the citation validation; both paths record the refusal and advance the cursor.
+   * storage validation; both paths record the refusal and advance the cursor.
    */
   const failingDecisionDb = (
     insertError: Error | null,
@@ -1044,6 +1046,40 @@ describe("runIngestionPipeline — failure records", () => {
       expect(state.persistedCursor).toBe("cursor-2");
     });
   }
+
+  test("records an aggregate search-candidate byte refusal before writing and advances the cursor", async () => {
+    const source = caseLawSourceRow({
+      name: "Search candidate failure source",
+    });
+    const input = plainTextIngestionResult({
+      ...baseResult(EMPTY_AST),
+      decisionType: "é".repeat(
+        CASE_LAW_SEARCH_CANDIDATE_ROW_MAX_BYTES / Buffer.byteLength("é"),
+      ),
+      fulltext: "Decision text",
+    });
+    expect(fitsDecisionSearchCandidateRow(input)).toBe(false);
+    czNsAdapter.fetchPage = async () =>
+      Result.ok({ decisions: [input], nextCursor: "cursor-2" });
+    const { scopedDb, state } = failingDecisionDb(null, false);
+    const result = await runIngestionPipeline({
+      acquireStoredTotalAdmission: async () => "held",
+      source,
+      sourceLease: testSourceLease(source),
+      scopedDb,
+      maxPages: 1,
+    });
+    expect(state.insertedRows).toHaveLength(1);
+    expect(state.insertedRows.at(0)?.errorMessage).toContain(
+      "Decision search candidate exceeds storage byte limits",
+    );
+    expect(state.decisionWrites).toBe(0);
+    expect(result.inserted).toBe(0);
+    expect(result.skipped).toBe(1);
+    expect(result.haltReason).toBeNull();
+    expect(result.nextCursor).toBe("cursor-2");
+    expect(state.persistedCursor).toBe("cursor-2");
+  });
 
   test.each(["text", "normalizedIdentifier"] as const)(
     "records an extracted citation exceeding %s width before writing the decision and advances the cursor",

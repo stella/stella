@@ -425,21 +425,7 @@ export const sanitizeResult = (
 
   const decisionType = normalizeDecisionType(strip(result.decisionType));
   const ecli = strip(result.ecli);
-  if (
-    !fitsDecisionSearchCandidateRow({
-      caseNumber,
-      country: result.country,
-      court,
-      decisionType,
-      ecli,
-      sourceDocumentId,
-    })
-  ) {
-    throw new UnpersistableDecisionFieldError({
-      message: "Decision search candidate exceeds storage byte limits",
-      field: UNPERSISTABLE_DECISION_FIELDS.SEARCH_CANDIDATE_BYTES,
-    });
-  }
+  // The write planner checks aggregate index bytes against its actual language group key.
 
   return plainTextIngestionResult(
     {

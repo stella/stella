@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import ts from "typescript";
 
-const apiRoot = path.resolve(import.meta.dir, "../../..");
+const apiRoot = path.resolve(import.meta.dir, "../../../apps/api");
 const fields = new Set([
   "citationKey",
   "citationText",

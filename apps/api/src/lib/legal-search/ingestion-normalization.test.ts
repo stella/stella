@@ -52,22 +52,7 @@ describe("decision storage normalization", () => {
             try: () => sanitizeResult({ ...decision, [field]: value }),
             catch: (error: unknown) => error,
           });
-          const input = {
-            ...decision,
-            [field]: value,
-          };
-          const languageGroupKey = decisionLanguageGroupKey({
-            caseNumber: input.caseNumber,
-            country: input.country,
-            ecli: input.ecli,
-            sourceDocumentId: input.sourceDocumentId,
-            sourceId: "019a08bf-0600-7000-8000-000000000001",
-          });
-          const fitsBytes =
-            Buffer.byteLength(input.court) +
-              Buffer.byteLength(languageGroupKey) <=
-            CASE_LAW_SEARCH_CANDIDATE_ROW_MAX_BYTES;
-          if (length <= width && fitsBytes) {
+          if (length <= width) {
             expect(value).toBe(result.unwrap()[field]);
           } else {
             expect(result.isErr()).toBe(true);
@@ -78,10 +63,7 @@ describe("decision storage normalization", () => {
               UnpersistableDecisionFieldError,
             );
             expect(result.error).toMatchObject({
-              field:
-                length > width
-                  ? errorField
-                  : UNPERSISTABLE_DECISION_FIELDS.SEARCH_CANDIDATE_BYTES,
+              field: errorField,
             });
           }
         }
@@ -102,21 +84,12 @@ describe("decision storage normalization", () => {
     });
   }
 
-  test("a 512 character emoji court receives an aggregate byte refusal", () => {
+  test("a 512 character emoji court is normalized intact and fails the aggregate byte check", () => {
     const court = "😀".repeat(512);
     expect(Array.from(court).length).toBe(CITATION_STORAGE_WIDTHS.court);
-    const refused = Result.try({
-      try: () => sanitizeResult({ ...decision, court }),
-      catch: (error: unknown) => error,
-    });
-    expect(refused.isErr()).toBe(true);
-    if (refused.isOk()) {
-      throw new Error("Expected aggregate byte refusal");
-    }
-    expect(refused.error).toBeInstanceOf(UnpersistableDecisionFieldError);
-    expect(refused.error).toMatchObject({
-      field: UNPERSISTABLE_DECISION_FIELDS.SEARCH_CANDIDATE_BYTES,
-    });
+    const normalized = sanitizeResult({ ...decision, court });
+    expect(normalized.court).toBe(court);
+    expect(fitsDecisionSearchCandidateRow(normalized)).toBe(false);
   });
 
   test("the combined UTF8 budget uses the stored docket and normalized decision type", () => {
@@ -149,21 +122,12 @@ describe("decision storage normalization", () => {
         decisionType: normalized.decisionType,
       }),
     ).toEqual(normalized);
-    const refused = Result.try({
-      try: () =>
-        sanitizeResult({
-          ...input,
-          decisionType: ` JMÉNEM REPUBLIKY ${"X".repeat(typeBytes + 1)}\0 `,
-        }),
-      catch: (error: unknown) => error,
+    expect(fitsDecisionSearchCandidateRow(normalized)).toBe(true);
+    const overBudget = sanitizeResult({
+      ...input,
+      decisionType: ` JMÉNEM REPUBLIKY ${"X".repeat(typeBytes + 1)}\0 `,
     });
-    expect(refused.isErr()).toBe(true);
-    if (refused.isOk()) {
-      throw new Error("Expected aggregate byte refusal");
-    }
-    expect(refused.error).toMatchObject({
-      field: UNPERSISTABLE_DECISION_FIELDS.SEARCH_CANDIDATE_BYTES,
-    });
+    expect(fitsDecisionSearchCandidateRow(overBudget)).toBe(false);
   });
 
   test("adapter byte reservation agrees with real generated keys for every identity policy", () => {
