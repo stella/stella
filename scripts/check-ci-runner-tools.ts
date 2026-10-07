@@ -46,7 +46,20 @@ export const runnerTools = (
   runner: unknown,
   container: unknown,
 ): ReadonlySet<string> => {
-  if (container !== undefined || typeof runner !== "string") {
+  if (container !== undefined) {
+    return new Set();
+  }
+  // The self-hosted deploy runner's installer puts a pinned toolchain
+  // (including jq) first on every job's PATH; that installer is the contract.
+  if (
+    Array.isArray(runner) &&
+    runner.length === 2 &&
+    runner.includes("self-hosted") &&
+    runner.includes("mini-infra-deploy")
+  ) {
+    return new Set(["jq"]);
+  }
+  if (typeof runner !== "string") {
     return new Set();
   }
   if (/^ubuntu-(?:latest|22\.04|24\.04|26\.04)$/u.test(runner)) {

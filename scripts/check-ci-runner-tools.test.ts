@@ -124,6 +124,17 @@ test("runner defaults are specific to the image and do not leak into containers"
     expect(runnerTools(runner, { image: "ubuntu:24.04" }).size, runner).toBe(0);
   }
   expect(runnerTools(["self-hosted", "custom"], undefined).size).toBe(0);
+  // The deploy runner's pinned toolchain provides jq, and only jq.
+  const deploy = runnerTools(["self-hosted", "mini-infra-deploy"], undefined);
+  expect([...deploy]).toEqual(["jq"]);
+  expect(
+    runnerTools(["self-hosted", "mini-infra-deploy"], { image: "ubuntu:24.04" })
+      .size,
+  ).toBe(0);
+  expect(runnerTools(["self-hosted", "mini-infra"], undefined).size).toBe(0);
+  expect(
+    runnerTools(["self-hosted", "mini-infra-deploy", "extra"], undefined).size,
+  ).toBe(0);
   withFixture(
     {
       jobs: {
