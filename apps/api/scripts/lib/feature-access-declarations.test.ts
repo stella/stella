@@ -518,6 +518,38 @@ export const ${name} = { run: { featureId: "fixture", ${target} } };`;
     ).toBe(true);
   });
 
+  test("every endpoint reaching a shared module receives its feature uses", () => {
+    const declared = "apps/api/src/routes/declared.ts";
+    const undeclared = "apps/api/src/routes/undeclared.ts";
+    const endpointSource =
+      'import { read } from "../lib/rows"; export default read;';
+    // The declared endpoint is checked first, so the undeclared one reads the
+    // shared module's analysis from the per-run cache.
+    expect(
+      validateFeatureAccessDeclarations({
+        registry,
+        endpoints: [
+          { file: declared, config: required },
+          { file: undeclared, config: {} },
+        ],
+        sources: new Map([
+          ...baseSources,
+          [
+            "apps/api/src/lib/rows.ts",
+            'export const read = (tx) => tx.execute("select * from fixture_rows");',
+          ],
+          [declared, endpointSource],
+          [undeclared, endpointSource],
+        ]),
+      }),
+    ).toEqual([
+      {
+        file: undeclared,
+        message: "source ownership requires featureAccess fixture",
+      },
+    ]);
+  });
+
   // The capability exporter runs this over ~1,400 endpoints sharing most of
   // one module graph. Re-analysing every reachable module per endpoint once
   // cost ~30 s per export. Module analysis enumerates the registry, so the
