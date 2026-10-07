@@ -472,8 +472,6 @@ const emptyWorkspaceFacetQuery = sql`
   SELECT NULL::uuid AS value, NULL::text AS label WHERE false
 `;
 
-export { contactWorkspaceAccessSql };
-
 const toStringFacetMap = (
   rows: RawRow[],
 ): Map<string, { label: string; count: number }> => {
@@ -1388,7 +1386,7 @@ export const searchGlobal = async (
 // to look up bucket values that the top-N default may have hidden.
 // ---------------------------------------------------------------------------
 
-export type GlobalFacetName = "editor" | "workspace" | "mimeType";
+type GlobalFacetName = "editor" | "workspace" | "mimeType";
 
 export type GlobalFacetSearchQuery = {
   facet: GlobalFacetName;

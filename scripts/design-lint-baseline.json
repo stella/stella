@@ -847,7 +847,7 @@
     "apps/api/src/lib/legal-search/corpus-index-generation-store.ts": 4,
     "apps/api/src/lib/legal-search/corpus-index-group-enrollment-store.ts": 2,
     "apps/api/src/lib/legal-search/corpus-index-projection-census-store.ts": 2,
-    "apps/api/src/lib/legal-search/corpus-index-projection-cleanup-store.ts": 12,
+    "apps/api/src/lib/legal-search/corpus-index-projection-cleanup-store.ts": 11,
     "apps/api/src/lib/legal-search/corpus-index-projection-desired-state.ts": 1,
     "apps/api/src/lib/legal-search/corpus-index-projection-erasure-store.ts": 3,
     "apps/api/src/lib/legal-search/corpus-index-projection-store.ts": 15,
