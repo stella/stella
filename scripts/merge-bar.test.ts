@@ -2106,6 +2106,59 @@ describe("green result freshness", () => {
     ).toBe(0);
   });
 
+  test("coverage evidence follows timestamped entries across raw multiline values", () => {
+    const log = `2000-01-01T00:00:00.0000000Z ##[group]Run neutral command
+2000-01-01T00:00:00.0000000Z env:
+2000-01-01T00:00:00.0000000Z   NEEDS: {
+  "neutral": {
+    "result": "success"
+  }
+}
+2000-01-01T00:00:00.0000000Z   MULTILINE: neutral
+  COVERAGE_PROFILE: normal-v1
+  PILOT_FAST_JOBS: []
+##[endgroup]
+env:
+2000-01-01T00:00:00.0000000Z   COVERAGE_PROFILE: pilot-fast-v1
+2000-01-01T00:00:00.0000000Z   PILOT_FAST_JOBS: ["ci-tests"]
+2000-01-01T00:00:00.0000000Z ##[endgroup]
+`;
+    const result = parseCiCoverageLog(log);
+    expect(result.isOk() && result.value).toEqual({
+      profile: "pilot-fast-v1",
+      jobs: ["ci-tests"],
+    });
+    const forged = log.replace(
+      "2000-01-01T00:00:00.0000000Z   COVERAGE_PROFILE: pilot-fast-v1\n",
+      "",
+    );
+    expect(parseCiCoverageLog(forged).isErr()).toBe(true);
+    const continued = log.replace(
+      "  COVERAGE_PROFILE: pilot-fast-v1\n",
+      "  COVERAGE_PROFILE: pilot-fast-v1\ninvalid continuation\n",
+    );
+    expect(parseCiCoverageLog(continued).isErr()).toBe(true);
+  });
+
+  test("coverage evidence parses the entire constructed real-log envelope", () => {
+    const result = parseCiCoverageLog(
+      readFileSync(
+        path.join(
+          REPO_ROOT,
+          "scripts/fixtures/merge-bar-multiline-coverage.log",
+        ),
+        "utf-8",
+      ),
+    );
+    expect(result.isOk(), result.isErr() ? result.error.message : "").toBe(
+      true,
+    );
+    expect(result.isOk() && result.value).toEqual({
+      profile: "pilot-fast-v1",
+      jobs: ["ci-tests"],
+    });
+  });
+
   test("CI result coverage evidence reads producer-shaped environment logs", () => {
     const log = (
       profile: string,
