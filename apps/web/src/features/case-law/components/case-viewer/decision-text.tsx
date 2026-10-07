@@ -1186,6 +1186,7 @@ export const DecisionText = ({
           <FulltextFallback
             activeMatchIndex={NO_ACTIVE_MATCH}
             anchorsByPieceId={anchorsByPieceId}
+            notesByAnchorId={supplementsByAnchorId}
             rangesByPieceId={NO_SEARCH_RANGES}
             text={decision.fulltext}
           />
@@ -1231,12 +1232,17 @@ export const DecisionText = ({
     );
   })();
 
-  // A note whose paragraph the flow above did not draw — a decision that only
-  // resolved to fulltext, or an anchor the text no longer carries — follows
-  // the text rather than going with its anchor. Counted over the blocks the
-  // page renders, top matter included, so a note on a lifted headnote draws
-  // under it instead of at the end.
-  const drawnAnchorIds = new Set(renderedBlocks.map((block) => block.anchorId));
+  // A note whose paragraph the flow above did not draw (an anchor the text no
+  // longer carries, or a document anchor on a decision that only resolved to
+  // fulltext) follows the text rather than going with its anchor. Counted
+  // over the blocks the page renders, top matter and fulltext paragraphs
+  // included, so a note on a lifted headnote draws under it instead of at the
+  // end.
+  const drawnBlocks =
+    visibleBlocks.length === 0 && decision.fulltext
+      ? [...renderedBlocks, ...placementBlocks]
+      : renderedBlocks;
+  const drawnAnchorIds = new Set(drawnBlocks.map((block) => block.anchorId));
   const trailingNotes =
     notesByAnchorId === undefined
       ? []

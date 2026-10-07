@@ -105,7 +105,9 @@ const renderDecision = (abstract: string): string =>
     </IntlProvider>,
   );
 
-test("storage-resolved fulltext retains stored provision and decision links without an AST", async () => {
+const renderStorageFulltext = async (
+  expandProvisions: boolean,
+): Promise<string> => {
   const fulltext = "Soud použil § 42 zákona.\n\nSoud odkázal na 2 As 2/2025.";
   const rootRoute = createRootRoute({
     component: () => (
@@ -113,6 +115,7 @@ test("storage-resolved fulltext retains stored provision and decision links with
         surface="development"
         decision={textDecision({ documentAst: null, fulltext })}
         decisionId="dec-1"
+        expandProvisions={expandProvisions}
         isHydrated
         citationAnchors={[
           {
@@ -178,7 +181,7 @@ test("storage-resolved fulltext retains stored provision and decision links with
     history: createMemoryHistory({ initialEntries: ["/"] }),
   });
   await router.load();
-  const markup = renderToStaticMarkup(
+  return renderToStaticMarkup(
     <IntlProvider locale="en" messages={messages} timeZone="UTC">
       <FormattingProvider locale="en" timeZone="UTC">
         <QueryClientProvider client={new QueryClient()}>
@@ -187,10 +190,23 @@ test("storage-resolved fulltext retains stored provision and decision links with
       </FormattingProvider>
     </IntlProvider>,
   );
+};
+
+test("storage-resolved fulltext retains stored provision and decision links without an AST", async () => {
+  const markup = await renderStorageFulltext(false);
   expect(markup).toContain('data-anchor="fulltext:0"');
   expect(markup).toContain('data-anchor="fulltext:1"');
   expect(markup).toMatch(/<a[^>]*href="[^"]*par_42"/u);
   expect(markup).toMatch(/<a[^>]*href="[^"]*2-as-2-2025"/u);
+  expect(markup).not.toContain('data-slot="provision-card"');
+});
+
+test("expanded provisions on storage-resolved fulltext draw under their paragraph", async () => {
+  const markup = await renderStorageFulltext(true);
+  const card = markup.indexOf('data-slot="provision-card"');
+  expect(card).toBeGreaterThan(markup.indexOf('data-anchor="fulltext:0"'));
+  expect(card).toBeLessThan(markup.indexOf('data-anchor="fulltext:1"'));
+  expect(markup.slice(card)).toContain("§ 42");
 });
 
 describe("editorial legal text annotations", () => {
