@@ -27,8 +27,9 @@
  * package.json script's commands; there, any program besides Bun and a few
  * shell builtins may come from the install. Whatever the walk cannot follow
  * (a computed path, an unknown flag, Bun handed to another program) is
- * unclassified, and the test fails on it. Out of scope: commands that a shell
- * script or a Bun script starts itself.
+ * unclassified, and the test fails on it. Literal Bun subprocess arrays that
+ * launch installed CLIs are checked too. Other subprocess commands remain
+ * outside this import walk.
  *
  * Needs no dependency install: node builtins and Bun APIs only.
  */
@@ -1831,6 +1832,77 @@ const resolveRelative = ({
   );
 };
 
+/** Skip quoted fixture source and comments before inspecting executable calls. */
+const installedBunSubprocesses = (source: string): string[] => {
+  const tokens = [
+    ...source.matchAll(
+      /\/\*[\s\S]*?\*\/|\/\/[^\n]*|`(?:\\[\s\S]|[^`\\])*`|"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|[A-Za-z_$][\w$]*|[^\s]/gu,
+    ),
+  ]
+    .map(([token]) => token)
+    .filter((token) => !token.startsWith("//") && !token.startsWith("/*"));
+  const packages: string[] = [];
+  for (let index = 0; index < tokens.length; index += 1) {
+    if (
+      tokens[index] !== "Bun" ||
+      tokens[index + 1] !== "." ||
+      !["spawn", "spawnSync"].includes(tokens[index + 2] ?? "") ||
+      tokens[index + 3] !== "(" ||
+      tokens[index + 4] !== "["
+    ) {
+      continue;
+    }
+    let cursor = index + 5;
+    const literal = (token: string | undefined) => {
+      if (token === undefined || !["'", '"', "`"].includes(token.charAt(0))) {
+        return undefined;
+      }
+      // Command names and flags need no escape sequences; reject computed forms.
+      if (
+        token.includes("\\") ||
+        (token.startsWith("`") && token.includes("${"))
+      ) {
+        return undefined;
+      }
+      return token.slice(1, -1);
+    };
+    if (
+      tokens[cursor] === "process" &&
+      tokens[cursor + 1] === "." &&
+      tokens[cursor + 2] === "execPath"
+    ) {
+      cursor += 3;
+    } else if (literal(tokens[cursor]) === "bun") {
+      cursor += 1;
+    } else {
+      continue;
+    }
+    const args: string[] = [];
+    while (tokens[cursor] === ",") {
+      const value = literal(tokens[cursor + 1]);
+      if (value === undefined) {
+        break;
+      }
+      args.push(value);
+      cursor += 2;
+    }
+    const command = args.filter((arg) => arg !== "--bun");
+    const name = command.at(0) === "run" ? command.at(1) : command.at(0);
+    if (
+      name !== undefined &&
+      !name.startsWith("-") &&
+      !name.includes("/") &&
+      !SOURCE_FILE.test(name) &&
+      !BUN_BUILTIN_SUBCOMMANDS.has(name) &&
+      !INSTALL_SUBCOMMANDS.has(name) &&
+      name !== "test"
+    ) {
+      packages.push(name);
+    }
+  }
+  return packages;
+};
+
 type ImportClosureOptions = {
   readonly root: string;
   /** Repo-relative files Bun loads. */
@@ -1860,6 +1932,9 @@ export const importProblems = ({
     readonly source: string;
   };
   const scan = ({ from, label, loader, source }: ScanOptions) => {
+    for (const binary of installedBunSubprocesses(source)) {
+      problems.push(`${label} launches installed Bun CLI ${binary}`);
+    }
     const transpiler = new Bun.Transpiler({ loader });
     for (const { path: specifier } of transpiler.scanImports(source)) {
       if (!specifier.startsWith(".")) {
