@@ -1,6 +1,6 @@
 import { createSanctionsMatcherPoolCore } from "./matcher-pool-core";
 import type { MatcherPoolOptions } from "./matcher-pool-core";
-import { reportSanctionsScreeningFailure } from "./screening-failure";
+import { reportSanctionsMatcherFailure } from "./screening-failure";
 
 export {
   SANCTIONS_MATCHER_CONFIG,
@@ -12,12 +12,12 @@ export type {
 } from "./matcher-pool-core";
 
 type BoundMatcherPoolOptions = Omit<MatcherPoolOptions, "reportFailure"> & {
-  reportFailure?: typeof reportSanctionsScreeningFailure;
+  reportFailure?: typeof reportSanctionsMatcherFailure;
 };
 
 /** Bind the reusable worker pool to API failure telemetry. */
 export const createSanctionsMatcherPool = ({
-  reportFailure = reportSanctionsScreeningFailure,
+  reportFailure = reportSanctionsMatcherFailure,
   ...options
 }: BoundMatcherPoolOptions = {}) =>
   createSanctionsMatcherPoolCore({ ...options, reportFailure });

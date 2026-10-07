@@ -132,9 +132,15 @@ const handleMatcherExit = ({
   );
 };
 
+type MatcherUnavailable = {
+  status: "unavailable";
+  cause: SanctionsMatcherFailureCause;
+  error?: unknown;
+};
+
 export type MatcherWorkOutcome<T> =
   | { status: "completed"; value: T }
-  | { status: "unavailable"; cause: SanctionsMatcherFailureCause };
+  | MatcherUnavailable;
 
 const createMatcherWorker = () =>
   new Worker(
@@ -359,9 +365,7 @@ export const createSanctionsMatcherPoolCore = ({
     ): Promise<MatcherWorkOutcome<T>> => {
       const controller = new AbortController();
       const failed = Promise.withResolvers<MatcherWorkOutcome<T>>();
-      const failure: { cause: SanctionsMatcherFailureCause | null } = {
-        cause: null,
-      };
+      const failure: { outcome: MatcherUnavailable | null } = { outcome: null };
       // Written inside `work` and `fail`, read in `finally`: a holder, so
       // the checker does not pin either to its initial `null` across closures.
       const lease: { slot: Slot | null; retirement: Promise<void> | null } = {
@@ -369,16 +373,22 @@ export const createSanctionsMatcherPoolCore = ({
         retirement: null,
       };
       const fail = (cause: SanctionsMatcherFailureCause, error?: unknown) => {
-        if (failure.cause !== null) {
-          return;
+        if (failure.outcome !== null) {
+          return failure.outcome;
         }
-        failure.cause = cause;
+        const outcome = {
+          status: "unavailable",
+          cause,
+          ...(error === undefined ? {} : { error }),
+        } as const satisfies MatcherUnavailable;
+        failure.outcome = outcome;
         reportFailure({ stage: "matcher-pool", reason: cause, error });
         controller.abort();
         if (lease.slot !== null && lease.retirement === null) {
           lease.retirement = retireMatcherSlot(lease.slot, reportFailure);
         }
-        failed.resolve({ status: "unavailable", cause });
+        failed.resolve(outcome);
+        return outcome;
       };
       const durationMs = options?.deadlineMs ?? deadlineMs;
       const expiresAt = clock.now() + durationMs;
@@ -391,10 +401,7 @@ export const createSanctionsMatcherPoolCore = ({
           lease.slot === null ||
           isSanctionsMatcherCancelled(controller.signal)
         ) {
-          if (failure.cause === null) {
-            fail(closed ? "closed" : "admission");
-          }
-          return { status: "unavailable", cause: failure.cause ?? "admission" };
+          return failure.outcome ?? fail(closed ? "closed" : "admission");
         }
         const slot = lease.slot;
         slot.fail = fail;
@@ -407,7 +414,7 @@ export const createSanctionsMatcherPoolCore = ({
           fail,
         });
         if (worker === null) {
-          return { status: "unavailable", cause: "worker-create" };
+          return fail("worker-create");
         }
         const session: SanctionsMatcherSession = {
           signal: controller.signal,
@@ -444,12 +451,10 @@ export const createSanctionsMatcherPoolCore = ({
           async () => await operation(session),
         );
         if (result.isErr()) {
-          fail("operation", result.error);
-          return { status: "unavailable", cause: "operation" };
+          return fail("operation", result.error);
         }
         if (clock.now() >= expiresAt) {
-          fail("deadline");
-          return { status: "unavailable", cause: "deadline" };
+          return fail("deadline");
         }
         return { status: "completed", value: result.value };
       };
