@@ -2,6 +2,21 @@ import { expect, test } from "bun:test";
 
 import { failureFingerprint } from "./failure-fingerprint";
 
+test("failure fingerprints retain their stored byte encoding", () => {
+  expect(
+    failureFingerprint({
+      id: "case-law digest",
+      error: '  Expected "generated" at 42\r\nignored detail',
+    }),
+  ).toBe("8bdeb09e18b107ed");
+  expect(
+    failureFingerprint({
+      id: "právní\0identity",
+      error: "Mismatch café 0x1234",
+    }),
+  ).toBe("2f9e76cd8ada8018");
+});
+
 test("quoted values preserve escaped delimiters and unmatched literal text", () => {
   const fingerprint = (error: string): string =>
     failureFingerprint({ id: "quoted values", error });

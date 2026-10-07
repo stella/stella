@@ -1,4 +1,5 @@
 #!/usr/bin/env bun
+import { panic, Result } from "better-result";
 // A signed-in local stack in one blocking command, for agents and scripts.
 //
 //   bun run agent:up       start (or reuse) this checkout's seeded stack
@@ -13,10 +14,8 @@
 // it writes once every service is ready, then mints a machine API key for the
 // seeded owner through the same HTTP route a person would use. Everything it
 // produces lives in `.stella-dev/` (gitignored) and is local-only data.
-
-import { panic, Result } from "better-result";
 import { spawn } from "node:child_process";
-import { createHash, randomUUID } from "node:crypto";
+import { randomUUID } from "node:crypto";
 import {
   closeSync,
   existsSync,
@@ -34,6 +33,7 @@ import * as v from "valibot";
 
 import { MCP_DEFAULT_RESOURCE_SCOPES } from "@stll/api-contract";
 import { roles } from "@stll/permissions";
+import { sha256Hex as hashSha256Hex } from "@stll/sha256/node";
 import { Temporal } from "@stll/time";
 
 import {
@@ -724,8 +724,7 @@ const drive = async (root: string, args: readonly string[]) => {
   process.exit(exitCode);
 };
 
-const sha256File = (filePath: string) =>
-  createHash("sha256").update(readFileSync(filePath)).digest("hex");
+const sha256File = (filePath: string) => hashSha256Hex(readFileSync(filePath));
 
 // The only way screenshots reach a pull request: each must be an unaltered
 // agent:drive capture of a stack that held only seeded content.

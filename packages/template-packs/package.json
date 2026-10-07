@@ -29,6 +29,7 @@
     "format": "bun ../../scripts/run-oxfmt.ts scripts src"
   },
   "dependencies": {
+    "@stll/sha256": "workspace:^",
     "better-result": "catalog:",
     "valibot": "catalog:"
   },

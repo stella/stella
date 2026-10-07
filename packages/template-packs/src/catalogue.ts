@@ -1,13 +1,14 @@
+import { Result, TaggedError } from "better-result";
 /**
  * Loader over a generated pack manifest. The manifest is committed data; the
  * DOCX bytes stay in the content tree and are read by path, so a checkout
  * without the content submodule still imports this module and simply serves
  * an empty catalogue.
  */
-
-import { Result, TaggedError } from "better-result";
 import { existsSync, readFileSync, statSync } from "node:fs";
 import path from "node:path";
+
+import { sha256Hex as hashSha256Hex } from "@stll/sha256/bun";
 
 import { GENERATED_TEMPLATE_PACKS } from "./packs.gen";
 import type {
@@ -52,9 +53,6 @@ export const bundledTemplatePackContentRoot = (): string =>
   path.join(import.meta.dir, "..", "content");
 
 const PACKS_DIRECTORY = "packs";
-
-const sha256Hex = (bytes: Uint8Array): string =>
-  new Bun.CryptoHasher("sha256").update(bytes).digest("hex");
 
 export type CreateTemplatePackCatalogueOptions = {
   packs: readonly GeneratedTemplatePack[];
@@ -143,7 +141,7 @@ export const createTemplatePackCatalogue = ({
       return read;
     }
     const bytes = read.value;
-    const sha256 = sha256Hex(bytes);
+    const sha256 = hashSha256Hex(bytes);
     if (sha256 !== template.sha256) {
       return Result.err(
         new TemplatePackContentError({

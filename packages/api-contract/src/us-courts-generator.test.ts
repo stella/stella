@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
-import { createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
+
+import { sha256Hex as hashSha256Hex } from "@stll/sha256/node";
 
 import {
   ABBREVIATED_COURTS_PATH,
@@ -25,9 +26,6 @@ import {
   US_COURT_DIRECTORY_SOURCES,
 } from "./us-courts";
 
-const sha256 = (text: string): string =>
-  createHash("sha256").update(text).digest("hex");
-
 describe("the committed court directory", () => {
   test("is what its committed inputs generate, the same way every time", async () => {
     const files = await readInputFiles();
@@ -42,9 +40,9 @@ describe("the committed court directory", () => {
     expect(second).toBe(first);
     expect(await readFile(DIRECTORY_PATH, "utf-8")).toBe(first);
     expect(US_COURT_DIRECTORY_SOURCES).toMatchObject({
-      courtListenerProjectionSha256: sha256(files.courtListener),
-      courtsDbProjectionSha256: sha256(files.courtsDb),
-      overridesSha256: sha256(files.overrides),
+      courtListenerProjectionSha256: hashSha256Hex(files.courtListener),
+      courtsDbProjectionSha256: hashSha256Hex(files.courtsDb),
+      overridesSha256: hashSha256Hex(files.overrides),
     });
   });
 

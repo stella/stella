@@ -1,6 +1,7 @@
 import { panic } from "better-result";
 import { expect, test } from "bun:test";
 import {
+  existsSync,
   mkdirSync,
   mkdtempSync,
   readFileSync,
@@ -9,8 +10,11 @@ import {
   symlinkSync,
   writeFileSync,
 } from "node:fs";
+import { isBuiltin } from "node:module";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
+import * as v from "valibot";
 
 import { CI_GENERATED_FILES } from "./generated-files";
 import {
@@ -105,28 +109,51 @@ test("every prepared output has required identity and byte coverage", () => {
 test("CLI runtime preparation consumes a verified artifact without invoking generation", () => {
   const { root, manifest, write } = fixture();
   try {
+    const dependencies = new Map<string, string>();
+    const transpiler = new Bun.Transpiler({ loader: "ts" });
     for (const file of [
       "generated-files.ts",
       "prepare-cli-runtime.ts",
       "prepared-generated-sources.ts",
       "child-exit-status.ts",
     ]) {
-      write(
-        `packages/scripts/src/${file}`,
-        readFileSync(new URL(file, import.meta.url), "utf-8"),
-      );
+      const source = readFileSync(new URL(file, import.meta.url), "utf-8");
+      write(`packages/scripts/src/${file}`, source);
+      for (const { path: specifier } of transpiler.scanImports(source)) {
+        if (specifier.startsWith(".") || isBuiltin(specifier)) {
+          continue;
+        }
+        const dependency = specifier
+          .split("/")
+          .slice(0, specifier.startsWith("@") ? 2 : 1)
+          .join("/");
+        dependencies.set(dependency, specifier);
+      }
     }
-    for (const dependency of ["better-result", "valibot"]) {
-      const entry = import.meta.resolve(dependency);
-      let directory = path.dirname(new URL(entry).pathname);
-      while (path.basename(directory) !== dependency) {
+    for (const [dependency, specifier] of dependencies) {
+      let directory = path.dirname(
+        fileURLToPath(import.meta.resolve(specifier)),
+      );
+      while (true) {
+        const manifestPath = path.join(directory, "package.json");
+        if (
+          existsSync(manifestPath) &&
+          v.parse(
+            v.object({ name: v.string() }),
+            JSON.parse(readFileSync(manifestPath, "utf-8")),
+          ).name === dependency
+        ) {
+          break;
+        }
         const parent = path.dirname(directory);
         if (parent === directory) {
           panic(`Fixture dependency directory not found: ${dependency}`);
         }
         directory = parent;
       }
-      symlinkSync(directory, path.join(root, "node_modules", dependency));
+      const destination = path.join(root, "node_modules", dependency);
+      mkdirSync(path.dirname(destination), { recursive: true });
+      symlinkSync(directory, destination);
     }
     write(
       "packages/cli/src/codegen.ts",
