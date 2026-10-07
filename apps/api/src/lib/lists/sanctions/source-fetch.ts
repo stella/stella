@@ -28,6 +28,11 @@ import type {
 import { INGESTION_USER_AGENT } from "@/api/lib/case-law/ingestion-user-agent";
 import { SANCTIONS_SOURCE_CONFIG } from "@/api/lib/lists/sanctions/source-config";
 import {
+  fetchStreamFollowingRedirects,
+  RedirectChainError,
+} from "@/api/lib/redirect-fetch";
+import {
+  parseSafeOutboundUrl,
   safeOutboundFetchBytes,
   safeOutboundFetchStream,
 } from "@/api/lib/safe-outbound-fetch";
@@ -37,6 +42,7 @@ const LIST_MAX_BYTES = 64_000_000;
 const REQUEST_TIMEOUT_MS = 30_000;
 const STREAM_TOTAL_TIMEOUT_MS = 5 * 60_000;
 const MAX_ATTEMPTS = 3;
+const MAX_REDIRECT_HOPS = 3;
 const EU_XML_TITLE = "Consolidated Financial Sanctions File 1.1";
 const EU_XML_PATH = "/fsd/fsf/public/files/xmlFullSanctionsList_1_1/content";
 const CZ_CSV_NAME = /^Vnitrostatni_sankcni_seznam_\d{4}_\d{2}_\d{2}\.csv$/u;
@@ -264,18 +270,58 @@ const fetchStream = async ({
     SanctionsRefreshError
   >
 > => {
-  const response = await fetchStreamRequest({
+  const canonical = parseSafeOutboundUrl(url);
+  if (canonical.isErr()) {
+    return Result.err(refreshError(source, "fetch-failed"));
+  }
+  const requestSignal = AbortSignal.any([
+    signal,
+    AbortSignal.timeout(streamTotalTimeoutMs),
+  ]);
+  const response = await fetchStreamFollowingRedirects({
     url,
-    maxBytes: LIST_MAX_BYTES,
-    timeoutMs: REQUEST_TIMEOUT_MS,
-    headers: headersFor({ userAgent }),
-    signal: AbortSignal.any([
-      signal,
-      AbortSignal.timeout(streamTotalTimeoutMs),
-    ]),
+    maxHops: MAX_REDIRECT_HOPS,
+    fetchStream: async (target, hop) => {
+      const parsed = parseSafeOutboundUrl(target);
+      if (parsed.isErr()) {
+        return parsed;
+      }
+      if (
+        hop > 0 &&
+        parsed.value.origin !== canonical.value.origin &&
+        !SANCTIONS_SOURCE_CONFIG[source].allowedRedirectHosts.some(
+          (host) => host === parsed.value.hostname,
+        )
+      ) {
+        return Result.err(
+          new RedirectChainError({
+            code: "destination_not_allowed",
+            message: "publisher redirect destination is not declared",
+          }),
+        );
+      }
+      // Public downloads reconstruct only the user agent on every hop; no
+      // authorization, cookies, or URL credentials cross publisher hosts.
+      return await fetchStreamRequest({
+        url: parsed.value,
+        maxBytes: LIST_MAX_BYTES,
+        timeoutMs: REQUEST_TIMEOUT_MS,
+        headers: headersFor({ userAgent }),
+        redirect: "manual",
+        signal: requestSignal,
+      });
+    },
   });
   if (response.isErr()) {
-    return Result.err(refreshError(source, "fetch-failed"));
+    return Result.err(
+      refreshError(
+        source,
+        RedirectChainError.is(response.error) &&
+          response.error.code === "destination_not_allowed"
+          ? "access-denied"
+          : "fetch-failed",
+      ),
+    );
   }
   if (!response.value.ok) {
     const discarded = await Result.tryPromise(

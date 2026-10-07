@@ -1,5 +1,15 @@
 # @stll/ai-catalog
 
+## 0.6.0
+
+### Minor Changes
+
+- [#4935](https://github.com/stella/stella/pull/4935) [`ef2de9c`](https://github.com/stella/stella/commit/ef2de9c14bdc4f7f2fd248a46df18dabac55b73c) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Add `RECOMMENDED_CHAT_MODELS`, the curated list behind the chat model picker's Recommended section, and a `supersededBy` field in model display metadata that names the newer model replacing an older one.
+
+### Patch Changes
+
+- [#5162](https://github.com/stella/stella/pull/5162) [`78d2827`](https://github.com/stella/stella/commit/78d28278c6ab3b03a70afe426893a357a453b724) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Offer Mistral Large 4 in the model catalog.
+
 ## 0.5.0
 
 ### Minor Changes

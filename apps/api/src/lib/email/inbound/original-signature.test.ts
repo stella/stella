@@ -1,9 +1,13 @@
 import { Result } from "better-result";
 import { expect, test } from "bun:test";
-import { dkimSign, dkimVerify } from "mailauth";
+import { authenticate, dkimSign, dkimVerify } from "mailauth";
+import assert from "node:assert/strict";
 import { generateKeyPairSync } from "node:crypto";
 
-import { createOriginalSignatureVerifier } from "./authentication";
+import {
+  createLocalMailVerifier,
+  createOriginalSignatureVerifier,
+} from "./authentication";
 import {
   ingestInboundMail,
   type InboundDeliveryOutcome,
@@ -14,14 +18,25 @@ import { parseInboundMessage } from "./message";
 
 const original = Buffer.from(
   [
-    "From: Author <author@outside.test>",
+    "From: =?UTF-8?Q?Ji=C5=99=C3=AD_Nov=C3=A1k?= <author@outside.test>",
     "To: Member <member@example.test>",
-    "Subject: Signed original",
+    "Subject: =?UTF-8?Q?Podepsan=C3=A1_zpr=C3=A1va?=",
     "Date: Fri, 25 Sep 2026 11:00:00 +0000",
     "Message-ID: <signed-original@outside.test>",
+    "MIME-Version: 1.0",
+    'Content-Type: multipart/mixed; boundary="signed-parts"',
+    "",
+    "--signed-parts",
     "Content-Type: text/plain; charset=UTF-8",
     "",
     "Original body",
+    "--signed-parts",
+    "Content-Type: application/pdf",
+    'Content-Disposition: attachment; filename="document.pdf"',
+    "Content-Transfer-Encoding: base64",
+    "",
+    "JVBERi0xLjcK",
+    "--signed-parts--",
     "",
   ].join("\r\n"),
 );
@@ -47,6 +62,91 @@ const attachOriginal = (raw: Uint8Array) =>
       "",
     ].join("\r\n"),
   );
+
+test("verifies a raw multipart fixture with genuine DKIM, ARC, SPF and DMARC results", async () => {
+  // Store the fixture with repository line endings; restore the signed SMTP bytes.
+  const raw = Buffer.from(
+    (
+      await Bun.file(
+        new URL("fixtures/authenticated-multipart.eml", import.meta.url),
+      ).text()
+    ).replaceAll("\n", "\r\n"),
+  );
+  const key = (
+    await Bun.file(
+      new URL("fixtures/authenticated-multipart-key.txt", import.meta.url),
+    ).text()
+  ).trim();
+  const resolve = async (domain: string, rrtype: string) => {
+    if (rrtype !== "TXT") {
+      return [];
+    }
+    switch (domain) {
+      case "case._domainkey.outside.test":
+        return [[key]];
+      case "outside.test":
+        return [["v=spf1 ip4:192.0.2.1 -all"]];
+      case "_dmarc.outside.test":
+        return [["v=DMARC1; p=reject; adkim=s; aspf=s"]];
+      default:
+        return [];
+    }
+  };
+  const options = {
+    resolver: resolve,
+    sender: "author@outside.test",
+    ip: "192.0.2.1",
+    helo: "mail.outside.test",
+    mta: "mx.example.test",
+    disableBimi: true,
+  };
+  const results = await authenticate(raw, options);
+  expect(results.dkim.results.at(0)?.status.result).toBe("pass");
+  assert.ok(results.spf !== false, "Expected an SPF verification result");
+  expect(results.spf.status.result).toBe("pass");
+  expect(results.dmarc && results.dmarc.status.result).toBe("pass");
+  expect(results.arc && results.arc.status.result).toBe("pass");
+  const verify = createLocalMailVerifier(() => ({ resolve, cancel: () => {} }));
+  const verdict = await verify({
+    raw,
+    fromAddress: "author@outside.test",
+    envelope: {
+      mailFrom: "author@outside.test",
+      recipients: ["member@example.test"],
+      remoteIp: "192.0.2.1",
+      helo: "mail.outside.test",
+    },
+  });
+  expect(verdict.unwrap()).toMatchObject({
+    spf: { result: "pass", alignment: "strict" },
+    dkim: [{ result: "pass", domain: "outside.test", alignment: "strict" }],
+    dmarc: "pass",
+  });
+  const parsed = (await parseInboundMessage(raw)).unwrap();
+  expect(parsed.message.subject).toBe("Podepsaná zpráva");
+  expect(parsed.message.text).toBe("Original body");
+  expect(parsed.message.attachments).toMatchObject([
+    {
+      fileName: "document.pdf",
+      bytes: new TextEncoder().encode("%PDF-1.7\n"),
+    },
+  ]);
+  const tampered = await authenticate(
+    Buffer.from(raw.toString().replace("Original body", "Tampered body")),
+    { ...options, ip: "192.0.2.99" },
+  );
+  expect(tampered.dkim.results.at(0)?.status).toMatchObject({
+    result: "neutral",
+    comment: "body hash did not verify",
+  });
+  assert.ok(
+    tampered.spf !== false,
+    "Expected an SPF result for the tampered message",
+  );
+  expect(tampered.spf.status.result).toBe("fail");
+  expect(tampered.dmarc && tampered.dmarc.status.result).toBe("fail");
+  expect(tampered.arc && tampered.arc.status.result).toBe("fail");
+});
 
 test("verifies only a complete DKIM signature over the exact attached original bytes", async () => {
   const { privateKey, publicKey } = generateKeyPairSync("rsa", {
@@ -90,6 +190,15 @@ test("verifies only a complete DKIM signature over the exact attached original b
   }
   expect(parsed.outerSender).toBe("member@example.test");
   expect(parsed.message.from).toBe("author@outside.test");
+  expect(parsed.message.subject).toBe("Podepsaná zpráva");
+  expect(parsed.message.text).toBe("Original body");
+  expect(parsed.message.attachments).toMatchObject([
+    {
+      fileName: "document.pdf",
+      mimeType: "application/pdf",
+      bytes: new TextEncoder().encode("%PDF-1.7\n"),
+    },
+  ]);
   expect(Buffer.from(parsed.originalRaw)).toEqual(signed);
   const signedVerdict = await verify(parsed.originalRaw);
   expect(signedVerdict.isOk() && signedVerdict.value).toEqual({

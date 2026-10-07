@@ -14,7 +14,7 @@ import { CI_GENERATED_FILES } from "./generated-files";
 
 const generated = new Set<string>(CI_GENERATED_FILES);
 const hashSchema = v.pipe(v.string(), v.regex(/^[a-f0-9]{64}$/u));
-export const preparedManifestSchema = v.strictObject({
+const preparedManifestSchema = v.strictObject({
   sourceSha: v.pipe(v.string(), v.regex(/^[a-f0-9]{40}$/u)),
   inputHash: hashSchema,
   bunVersion: v.string(),

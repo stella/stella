@@ -175,7 +175,9 @@ describe("API and CLI release contract", () => {
     ]);
 
     expect(releaseWorkflow).toContain("name: release-source-receipt");
-    expect(publishWorkflow).toContain('gh run download "$UPSTREAM_RUN_ID"');
+    expect(publishWorkflow).toContain(
+      'bash "$GH_RETRY_SCRIPT" run download "$UPSTREAM_RUN_ID"',
+    );
     expect(publishWorkflow).toContain(
       `UPSTREAM_RELEASE_REF: \${{ needs.release-trigger.outputs.release_ref }}`,
     );

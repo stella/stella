@@ -9,12 +9,15 @@ import { describe, expect, mock, test } from "bun:test";
 // wiring calls as a module-load side effect) is passed through untouched
 // so unrelated kanban tests sharing this bun:test process are unaffected.
 const realAdapter =
-  await import("@atlaskit/pragmatic-drag-and-drop/element/adapter");
-void mock.module("@atlaskit/pragmatic-drag-and-drop/element/adapter", () => ({
-  ...realAdapter,
-  dropTargetForElements: () => () => undefined,
-  draggable: () => () => undefined,
-}));
+  await import("@atlaskit/pragmatic-drag-and-drop/adapter/element-adapter");
+void mock.module(
+  "@atlaskit/pragmatic-drag-and-drop/adapter/element-adapter",
+  () => ({
+    ...realAdapter,
+    dropTargetForElements: () => () => undefined,
+    draggable: () => () => undefined,
+  }),
+);
 
 const { attachElementDropTarget, readSourceSubgroupValue } =
   await import("./use-kanban-drop-targets");

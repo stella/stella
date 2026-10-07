@@ -23,7 +23,7 @@ export type GuidePlacement = "top" | "right" | "bottom" | "left";
 // keys are safe to pass to `t(key)` with a single argument. Narrowing to the
 // no-argument subset (rather than the full `TranslationKey` union, which
 // includes keys that require interpolation values) is what makes that typecheck.
-export type GuideMessageKey = Extract<TranslationKey, `guides.tours.${string}`>;
+type GuideMessageKey = Extract<TranslationKey, `guides.tours.${string}`>;
 
 // A step may seed a harmless demo value. The runner applies it only when the
 // seed target resolves to a real text input; otherwise it is skipped.
