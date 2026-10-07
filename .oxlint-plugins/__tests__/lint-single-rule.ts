@@ -1,5 +1,5 @@
 import { panic, Result } from "better-result";
-import { appendFileSync } from "node:fs";
+import { appendFileSync, readFileSync } from "node:fs";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -33,6 +33,8 @@ type LintSingleRuleOptions = {
   builtin?: boolean;
   /** The plugin that carries the rule, when it is not named after it. */
   plugin?: string;
+  settings?: Record<string, unknown>;
+  fix?: boolean;
   /** The rule's options object, for a rule configured by data. */
   ruleOptions?: unknown;
   /** Options that name paths under the scratch root the source is written to. */
@@ -46,17 +48,19 @@ type LintSingleRuleOptions = {
  * real oxlint CLI with only that rule enabled. Read from the JSON report, not
  * the rendered output, which varies with terminal and environment.
  */
-export const lintSingleRule = async (
+export const runSingleRule = async (
   ruleName: string,
   source: string,
   {
     builtin = false,
     plugin = ruleName,
+    settings,
+    fix = false,
     ruleOptions,
     ruleOptionsForRoot,
     sourcePath = "source.ts",
   }: LintSingleRuleOptions = {},
-): Promise<number[]> => {
+) => {
   const directory = await mkdtemp(path.join(tmpdir(), `stella-${ruleName}-`));
   const options = ruleOptionsForRoot?.(directory) ?? ruleOptions;
   const lintResult = await Result.tryPromise(async () => {
@@ -65,6 +69,7 @@ export const lintSingleRule = async (
       configPath,
       `export default ${JSON.stringify({
         categories: { correctness: "off" },
+        settings,
         ...(builtin
           ? { plugins: [plugin] }
           : {
@@ -89,6 +94,7 @@ export const lintSingleRule = async (
         configPath,
         "-f",
         "json",
+        ...(fix ? ["--fix"] : []),
         sourceFile,
       ],
       { cwd: REPOSITORY_ROOT, stderr: "pipe", stdout: "pipe" },
@@ -98,7 +104,12 @@ export const lintSingleRule = async (
       new Response(spawned.stderr).text(),
       spawned.exited,
     ]);
-    return { stdout, stderr, exitCode };
+    return {
+      stdout,
+      stderr,
+      exitCode,
+      source: readFileSync(sourceFile, "utf-8"),
+    };
   });
   await rm(directory, { force: true, recursive: true });
   if (Result.isError(lintResult)) {
@@ -156,5 +167,11 @@ export const lintSingleRule = async (
       `${JSON.stringify({ ruleId: `${plugin}/${ruleName}`, outcome: lines.length === 0 ? "clean" : "report" })}\n`,
     );
   }
-  return lines;
+  return { lines, source: lintResult.value.source };
 };
+
+export const lintSingleRule = async (
+  ruleName: string,
+  source: string,
+  options: LintSingleRuleOptions = {},
+): Promise<number[]> => (await runSingleRule(ruleName, source, options)).lines;
