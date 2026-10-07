@@ -1,6 +1,16 @@
 import { describe, expect, test } from "bun:test";
-import { readFileSync } from "node:fs";
-import { fileURLToPath } from "node:url";
+import {
+  copyFileSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync,
+} from "node:fs";
+import { tmpdir } from "node:os";
+import path from "node:path";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import ts from "typescript";
 
 import {
@@ -10,9 +20,11 @@ import {
 import type { OwnershipEntry } from "./ownership";
 import {
   OWNERSHIP,
+  SCHEMA_INTROSPECTION,
   renderOwnershipDocument,
   validateOwnership,
 } from "./ownership";
+import { loadOwnershipDeclarations } from "./ownership-loader.ts";
 
 const repoRoot = fileURLToPath(new URL("..", import.meta.url));
 
@@ -24,6 +36,175 @@ const entry = (overrides: Partial<OwnershipEntry>): OwnershipEntry => ({
   enforcement: { kind: "none" },
   ...overrides,
 });
+
+const withDirectory = (exercise: (root: string) => void) => {
+  const root = mkdtempSync(path.join(tmpdir(), "ownership-"));
+  try {
+    exercise(root);
+  } finally {
+    rmSync(root, { force: true, recursive: true });
+  }
+};
+
+const run = (root: string, command: string[]) => {
+  const result = Bun.spawnSync(command, {
+    cwd: root,
+    env: {
+      ...process.env,
+      GIT_CONFIG_GLOBAL: "/dev/null",
+      GIT_CONFIG_NOSYSTEM: "1",
+    },
+    stdout: "pipe",
+    stderr: "pipe",
+  });
+  const output = result.stdout.toString() + result.stderr.toString();
+  expect(result.exitCode, output).toBe(0);
+  return output;
+};
+
+describe("ownership file loading", () => {
+  test("loads every row in filename order and ignores documentation", () => {
+    withDirectory((root) => {
+      for (const id of ["z-last", "a-first"]) {
+        writeFileSync(
+          path.join(root, `${id}.ts`),
+          `export default ${JSON.stringify(entry({ id }))};`,
+        );
+      }
+      writeFileSync(path.join(root, "notes.md"), "not a row");
+      expect(
+        loadOwnershipDeclarations(pathToFileURL(`${root}/`)).map(
+          ({ id }) => id,
+        ),
+      ).toEqual(["a-first", "z-last"]);
+    });
+  });
+
+  test("rejects duplicate ids across files through the filename contract", () => {
+    withDirectory((root) => {
+      for (const file of ["example", "other"]) {
+        writeFileSync(
+          path.join(root, `${file}.ts`),
+          `export default ${JSON.stringify(entry({}))};`,
+        );
+      }
+      expect(() =>
+        loadOwnershipDeclarations(pathToFileURL(`${root}/`)),
+      ).toThrow("ownership filename must match id: other.ts (example)");
+    });
+  });
+
+  test("loads the same registry under Node's extension-aware resolver", () => {
+    const output = run(repoRoot, [
+      "node",
+      "--input-type=module",
+      "-e",
+      'const { OWNERSHIP } = await import("./scripts/ownership.ts"); console.log(JSON.stringify(OWNERSHIP));',
+    ]);
+    expect(JSON.parse(output.split("\n").at(0) ?? "")).toEqual(OWNERSHIP);
+  });
+});
+
+test("independent row additions merge cleanly and pass the production check", () => {
+  withDirectory((root) => {
+    const write = (file: string, contents: string) => {
+      mkdirSync(path.dirname(path.join(root, file)), { recursive: true });
+      writeFileSync(path.join(root, file), contents);
+    };
+    for (const file of [
+      "scripts/ownership.ts",
+      "scripts/ownership-types.ts",
+      "scripts/ownership-loader.ts",
+      "scripts/generated-artifacts.ts",
+      "scripts/schema-introspection.ts",
+      "scripts/ownership/status-transition.ts",
+      ".oxlint-plugins/module-id.ts",
+      ".oxlint-plugins/database-access.ts",
+      "apps/api/src/lib/db/status-tables.gen.ts",
+      "apps/api/src/lib/lists/sanctions/monitoring-transition-identities.ts",
+      ".oxfmtrc.json",
+    ]) {
+      mkdirSync(path.dirname(path.join(root, file)), { recursive: true });
+      copyFileSync(path.join(repoRoot, file), path.join(root, file));
+    }
+    for (const { path: file } of SCHEMA_INTROSPECTION) {
+      write(
+        file,
+        file === "apps/api/src/db/schema.ts"
+          ? 'export * from "./schema/metadata.ts";\n'
+          : 'import * as schema from "@/api/db/schema";\nexport const names = Object.keys(schema);\n',
+      );
+    }
+    write(
+      "apps/api/src/db/schema/metadata.ts",
+      'export const tableName = "metadata";\n',
+    );
+    write("apps/api/src/lib/db/transitions.ts", "export {};\n");
+    write(".gitignore", "node_modules\n");
+    symlinkSync(
+      path.join(repoRoot, "node_modules"),
+      path.join(root, "node_modules"),
+      "dir",
+    );
+    const git = (...args: string[]) => run(root, ["git", ...args]);
+    const ownership = (mode: string) =>
+      run(root, [process.execPath, "scripts/ownership.ts", mode]);
+    const commit = () => {
+      git("add", ".");
+      git("commit", "-m", "fixture");
+    };
+    git("init", "-b", "base");
+    git("config", "user.name", "Ownership fixture");
+    git("config", "user.email", "ownership@example.invalid");
+    ownership("--write");
+    commit();
+    for (const id of ["adjacent-a", "adjacent-b"]) {
+      git("switch", "-c", id, "base");
+      write(
+        `scripts/ownership/${id}.ts`,
+        `import type { OwnershipEntry } from "../ownership-types.ts";\nexport default ${JSON.stringify(entry({ id }))} as const satisfies OwnershipEntry;\n`,
+      );
+      ownership("--write");
+      expect(git("diff", "--name-only", "base")).toBe("");
+      expect(
+        git("ls-files", "--others", "--exclude-standard")
+          .trim()
+          .split("\n")
+          .toSorted(),
+      ).toEqual([
+        `docs/module-ownership/${id}.md`,
+        `scripts/ownership/${id}.ts`,
+      ]);
+      commit();
+    }
+    git("merge", "--no-edit", "adjacent-a");
+    expect(ownership("--check")).toContain("ownership: OK (3 rows");
+    const printed = ownership("--print");
+    expect(printed).toContain("`adjacent-a`");
+    expect(printed).toContain("`adjacent-b`");
+    write("docs/module-ownership/adjacent-a.md", "stale\n");
+    const stale = Bun.spawnSync(
+      [process.execPath, "scripts/ownership.ts", "--check"],
+      { cwd: root },
+    );
+    expect(stale.exitCode).toBe(1);
+    expect(stale.stderr.toString()).toContain(
+      "docs/module-ownership/adjacent-a.md is stale",
+    );
+    ownership("--write");
+    write("docs/module-ownership/orphan.md", "orphan\n");
+    const orphan = Bun.spawnSync(
+      [process.execPath, "scripts/ownership.ts", "--check"],
+      { cwd: root },
+    );
+    expect(orphan.exitCode).toBe(1);
+    expect(orphan.stderr.toString()).toContain(
+      "obsolete ownership document: docs/module-ownership/orphan.md",
+    );
+    ownership("--write");
+    expect(ownership("--check")).toContain("ownership: OK");
+  });
+}, 30_000);
 
 describe("renderOwnershipDocument", () => {
   test("renders the same bytes for the same table", () => {
@@ -133,7 +314,7 @@ test("the run actor allowlist names exactly the member-run modules", () => {
   const row = OWNERSHIP.find(({ id }) => id === "member-run-actor");
   const allowed =
     row?.enforcement.kind === "import"
-      ? row.enforcement.allowed.map(({ path }) => path)
+      ? row.enforcement.allowed.map(({ path: allowedPath }) => allowedPath)
       : [];
   // One module can host several queues (workflow and workflow-flex).
   const memberRunModules: string[] = [

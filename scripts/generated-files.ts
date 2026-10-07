@@ -245,9 +245,12 @@ export const GENERATORS = [
   {
     id: "module-ownership",
     outputKind: "committed",
-    outputs: ["docs/module-ownership.md"],
+    outputs: ["docs/module-ownership.md", "docs/module-ownership/*.md"],
     inputs: [
       "scripts/ownership.ts",
+      "scripts/ownership/*.ts",
+      "scripts/ownership-loader.ts",
+      "scripts/ownership-types.ts",
       "scripts/generated-artifacts.ts",
       ".oxfmtrc.json",
       "apps/**",

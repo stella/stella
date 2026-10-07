@@ -1,0 +1,7 @@
+# Model work with no organization budget
+
+Generated from `scripts/ownership/no-organization-model-dispatch.ts`. See [Module ownership](../module-ownership.md).
+
+| Capability                                                                | Owner                                                     | Enforcement                                                                                                         | Summary                                                                                                                                                                                                      |
+| ------------------------------------------------------------------------- | --------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `no-organization-model-dispatch` — Model work with no organization budget | `apps/api/src/lib/rate-limit/model-dispatch-admission.ts` | import `NO_ORGANIZATION_MODEL_DISPATCH` from `@/api/lib/rate-limit/model-dispatch-admission` (plus 6 allowed files) | A dispatch with no organization (corpus-wide work, provider canaries, evaluations) carries `NO_ORGANIZATION_MODEL_DISPATCH`; the dispatch type ties it to a null organization, so tenant work cannot use it. |

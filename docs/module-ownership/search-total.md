@@ -1,0 +1,7 @@
+# Declaring whether a search result total was counted
+
+Generated from `scripts/ownership/search-total.ts`. See [Module ownership](../module-ownership.md).
+
+| Capability                                                           | Owner                                                                            | Enforcement | Summary                                                                                                                                                                                                                                                                         |
+| -------------------------------------------------------------------- | -------------------------------------------------------------------------------- | ----------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `search-total` — Declaring whether a search result total was counted | `packages/api-contract/src/search.ts`, `apps/api/src/lib/search/total-schema.ts` | none        | One discriminated contract distinguishes an exact count, an estimate, and a search that did not compute a count. The API schema enforces the same closed branches at response boundaries, so consumers never infer count semantics from null or from the search implementation. |

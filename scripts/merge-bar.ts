@@ -1087,16 +1087,16 @@ const ratchetFreshnessFailure = ({
   ) {
     return "cannot read the ratchet definition paths from the base";
   }
-  const ratchetChanges = definitions.filter((filename) =>
-    changedPaths.has(filename),
-  );
+  const isDefinition = (filename: string) =>
+    definitions.some((pattern) => new Bun.Glob(pattern).match(filename));
+  const ratchetChanges = [...changedPaths].filter(isDefinition);
   if (ratchetChanges.length === 0) {
     return null;
   }
   // The recheck runs the base's checker, which cannot judge a PR that edits
   // the checker itself; the merge group runs the merged checker instead, and
   // a direct merge has none, so it needs CI on the merged tree.
-  if (pullFiles.some((filename) => definitions.includes(filename))) {
+  if (pullFiles.some(isDefinition)) {
     return mergeGroupRetests
       ? null
       : `main changed the ratchet since the green run (${ratchetChanges.join(", ")}) and this PR changes it too`;
