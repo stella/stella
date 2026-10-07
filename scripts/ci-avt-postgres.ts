@@ -1,7 +1,6 @@
 import path from "node:path";
 
 import packageJson from "../apps/api/package.json" with { type: "json" };
-import { discoverGatedTestFiles } from "../apps/api/scripts/run-gated-tests";
 
 // Job admission and suite selection share this set: every database test inside
 // an admitted API path participates in the verification PR slice.
@@ -32,6 +31,8 @@ export const requiresAvtPostgres = (changedPaths: readonly string[]) =>
 export const avtPostgresTestFiles = async (
   apiRoot = path.resolve(import.meta.dir, "../apps/api"),
 ) => {
+  const { discoverGatedTestFiles } =
+    await import("../apps/api/scripts/run-gated-tests");
   const runner = packageJson.ciGateTestRunners["test:postgres"];
   const discovered = await discoverGatedTestFiles({
     apiRoot,

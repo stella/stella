@@ -118,7 +118,7 @@
     "ci.yml/code-quality-api": "pr-fast",
     "ci.yml/code-quality-web": "pr-fast",
     "ci.yml/code-quality-rest": "pr-fast",
-    "ci.yml/service-suites": "queue",
+    "ci.yml/service-suites": "pr-fast",
     "ci.yml/migration-upgrade-rehearsal": "queue",
     "ci.yml/release-typecheck": "queue",
     "ci.yml/fix-tests-on-base": "pr-opt-in",

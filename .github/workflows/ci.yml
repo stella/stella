@@ -149,8 +149,12 @@ jobs:
       corpus_suites_required: ${{ steps.changed-files.outputs.corpus_suites_required }}
       valkey_suites_required: ${{ steps.changed-files.outputs.valkey_suites_required }}
       collaboration_suite_required: ${{ steps.changed-files.outputs.collaboration_suite_required }}
-      service_suites_pr_required: ${{ steps.changed-files.outputs.service_suites_pr_required }}
-      service_suites_required: ${{ github.event_name == 'pull_request' && steps.changed-files.outputs.service_suites_pr_required == 'true' || github.event_name != 'pull_request' && (steps.changed-files.outputs.package_checks_required == 'true' || steps.changed-files.outputs.collab_redis_required == 'true') }}
+      service_suites_pr_required: >-
+        ${{ steps.completed-depth.outputs.run_required != 'false'
+        && steps.check.outputs.trusted == 'true'
+        && steps.changed-files.outputs.service_suites_pr_required == 'true'
+        && 'true' || 'false' }}
+      service_suites_required: ${{ github.event_name == 'pull_request' && steps.check.outputs.trusted == 'true' && steps.changed-files.outputs.service_suites_pr_required == 'true' || github.event_name != 'pull_request' && (steps.changed-files.outputs.package_checks_required == 'true' || steps.changed-files.outputs.collab_redis_required == 'true') }}
       published_exports_required: ${{ steps.changed-files.outputs.published_exports_required }}
       release_typecheck_required: ${{ steps.changed-files.outputs.release_typecheck_required }}
       route_smoke_required: ${{ steps.changed-files.outputs.route_smoke_required }}

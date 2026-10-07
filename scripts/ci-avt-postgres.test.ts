@@ -1,5 +1,11 @@
 import { expect, test } from "bun:test";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import {
+  copyFileSync,
+  mkdirSync,
+  mkdtempSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
@@ -91,6 +97,36 @@ test("new nested suites in every verification path join selection automatically"
     expect([...(selected ?? [])].toSorted()).toEqual(expected);
     for (const file of expected) {
       expect(requiresAvtPostgres([`apps/api/${file}`])).toBe(true);
+    }
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("path planning runs from a checkout without installed workspace dependencies", () => {
+  const root = mkdtempSync(path.join(tmpdir(), "avt-postgres-plan-"));
+  try {
+    mkdirSync(path.join(root, "scripts"));
+    mkdirSync(path.join(root, "apps/api"), { recursive: true });
+    copyFileSync(
+      path.join(import.meta.dir, "ci-avt-postgres.ts"),
+      path.join(root, "scripts/ci-avt-postgres.ts"),
+    );
+    copyFileSync(
+      path.join(apiRoot, "package.json"),
+      path.join(root, "apps/api/package.json"),
+    );
+    for (const changed of [...changedPaths, "docs/guide.md"]) {
+      const cli = Bun.spawnSync({
+        cmd: [process.execPath, "scripts/ci-avt-postgres.ts", changed],
+        cwd: root,
+        stdout: "pipe",
+        stderr: "pipe",
+      });
+      expect(cli.exitCode, cli.stderr.toString()).toBe(0);
+      expect(cli.stdout.toString().trim()).toBe(
+        String(requiresAvtPostgres([changed])),
+      );
     }
   } finally {
     rmSync(root, { recursive: true, force: true });

@@ -1227,10 +1227,12 @@ test("each job's plan scope is the ci-plan output its `if:` selects it by", () =
       ),
     ].map((match) => match[1]);
     const scope = jobScopes[job];
-    expect(selectedBy, job).toEqual([
-      ...(scope === null ? [] : [scope]),
-      ...(fastJobScopes[job] ? [fastJobScopes[job]] : []),
-    ]);
+    expect(new Set(selectedBy), job).toEqual(
+      new Set([
+        ...(scope === null ? [] : [scope]),
+        ...(fastJobScopes[job] ? [fastJobScopes[job]] : []),
+      ]),
+    );
   }
 });
 
@@ -2807,7 +2809,7 @@ test("folded service suites preserve both scopes and independent verdicts", () =
     ciJobs["ci-plan"],
   );
   expect(plan.outputs["service_suites_required"]).toBe(
-    `\${{ github.event_name == 'pull_request' && steps.changed-files.outputs.service_suites_pr_required == 'true' || github.event_name != 'pull_request' && (steps.changed-files.outputs.package_checks_required == 'true' || steps.changed-files.outputs.collab_redis_required == 'true') }}`,
+    `\${{ github.event_name == 'pull_request' && steps.check.outputs.trusted == 'true' && steps.changed-files.outputs.service_suites_pr_required == 'true' || github.event_name != 'pull_request' && (steps.changed-files.outputs.package_checks_required == 'true' || steps.changed-files.outputs.collab_redis_required == 'true') }}`,
   );
   expect(jobScopes["service-suites"]).toBe("service_suites_required");
   expect(ciJobs).not.toHaveProperty("collab-redis");
@@ -3461,8 +3463,8 @@ test("verification paths select only scoped Postgres suites on pull requests", (
     v.object({ outputs: v.record(v.string(), v.string()) }),
     ciJobs["ci-plan"],
   );
-  expect(plan.outputs[scope]).toBe(
-    `\${{ steps.changed-files.outputs.${scope} }}`,
+  expect(plan.outputs[scope]).toContain(
+    `steps.changed-files.outputs.${scope} == 'true'`,
   );
   const cases = [
     ...[
@@ -3577,6 +3579,79 @@ test("verification paths select only scoped Postgres suites on pull requests", (
   );
 }, 30_000);
 
+test("verification service planning and admission preserve the trust verdict", () => {
+  const { outputs } = v.parse(
+    v.object({ outputs: v.record(v.string(), v.string()) }),
+    ciJobs["ci-plan"],
+  );
+  const file = "apps/api/src/lib/lists/verification/run-queue.ts";
+  const [changedScope] = runSelector([file], ["service_suites_pr_required"]);
+  expect(changedScope).toBe("true");
+  const step = jobSteps(ciJobs["ci-plan"]).find(
+    ({ name }) => name === "Check changed file scope",
+  );
+  const cases = ["true", "false"].flatMap((trusted) =>
+    [SUITE_DEPTH.fast, SUITE_DEPTH.full].map((depth) => {
+      const values = {
+        "github.event_name": EVENT.pullRequest,
+        "steps.completed-depth.outputs.run_required": "true",
+        "steps.check.outputs.trusted": trusted,
+        // Even a populated path scope cannot require an ineligible job.
+        "steps.changed-files.outputs.service_suites_pr_required": changedScope,
+      };
+      expect(evaluate(step?.if ?? "", { values })).toBe(trusted === "true");
+      const planned = v.parse(
+        v.picklist(["true", "false"]),
+        evaluate(outputs["service_suites_pr_required"] ?? "", { values }),
+      );
+      expect(planned).toBe(trusted);
+      const fullPlanned = String(
+        evaluate(outputs["service_suites_required"] ?? "", { values }),
+      );
+      expect(fullPlanned).toBe(trusted);
+      expect(
+        evaluate(jobIf(ciJobs["service-suites"]), {
+          values: {
+            "github.event_name": EVENT.pullRequest,
+            "needs.ci-plan.outputs.trusted": trusted,
+            "needs.ci-plan.outputs.run_required": "true",
+            "needs.ci-plan.outputs.suite_depth": depth,
+            "needs.ci-plan.outputs.service_suites_pr_required": planned,
+            "needs.ci-plan.outputs.service_suites_required": fullPlanned,
+          },
+        }),
+      ).toBe(trusted === "true");
+      return { trusted, depth, planned, fullPlanned };
+    }),
+  );
+  for (const { item, exitCode, stdout } of evaluateResults(
+    cases.flatMap((plannedCase) =>
+      ["success", "failure", "skipped"].map((result) => ({
+        ...plannedCase,
+        result,
+      })),
+    ),
+    ({ trusted, depth, planned, fullPlanned, result }) => ({
+      event: EVENT.pullRequest,
+      suiteDepth: depth,
+      trusted,
+      results: { "service-suites": result },
+      plannedOutputs: {
+        service_suites_pr_required: planned,
+        service_suites_required: fullPlanned,
+      },
+    }),
+  )) {
+    expect(exitCode).toBe(
+      item.trusted === "true" && item.result === "success" ? 0 : 1,
+    );
+    if (item.trusted === "false") {
+      expect(stdout).toContain("failed the trust check");
+      expect(stdout).not.toContain("planned, skipped");
+    }
+  }
+});
+
 // The one selector run that spawns the real detector CLIs: it proves the
 // wiring the in-process plans above stand in for. Each case starts three bun
 // processes, and each service-suite process rebuilds its import graph (about
@@ -3595,6 +3670,7 @@ test("the selector plans the same with its detector CLIs spawned as served in pr
   expect(outputs).toContain("route_smoke_required");
   const cases = [
     { files: ["apps/api/src/server.ts"], outputs },
+    { files: ["apps/api/src/lib/lists/verification/run-queue.ts"], outputs },
     { files: ["apps/api/src/db/schema/new.ts", "bun.lock"], outputs },
     { files: ["apps/web/src/routes/index.tsx"], outputs },
     { files: ["docs/guide.md", "packages/time/src/index.ts"], outputs },
