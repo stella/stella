@@ -263,6 +263,10 @@
     "seconds": 6.4,
     "source": "measured"
   },
+  "src/db/case-law-citation-review-provenance-migration.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
   "src/db/case-law-citation-reviews-migration.test.ts": {
     "seconds": 4.6,
     "source": "measured"
@@ -277,6 +281,10 @@
   },
   "src/db/case-law-replay-rls.db.test.ts": {
     "seconds": 1.753123,
+    "source": "estimated"
+  },
+  "src/db/case-law-source-lease-purpose-migration.test.ts": {
+    "seconds": 1,
     "source": "estimated"
   },
   "src/db/chat-matter-document-tool-rename.db.test.ts": {
@@ -797,6 +805,10 @@
   },
   "src/handlers/case-law/decisions/document-on-demand.test.ts": {
     "seconds": 6.156543,
+    "source": "estimated"
+  },
+  "src/handlers/case-law/decisions/document-ownership-route.db.test.ts": {
+    "seconds": 1,
     "source": "estimated"
   },
   "src/handlers/case-law/decisions/document-state.test.ts": {
@@ -1725,6 +1737,10 @@
   },
   "src/handlers/case-law/polarity/aggregate.test.ts": {
     "seconds": 0.154141,
+    "source": "estimated"
+  },
+  "src/handlers/case-law/polarity/consts.test.ts": {
+    "seconds": 1,
     "source": "estimated"
   },
   "src/handlers/case-law/polarity/context.test.ts": {
@@ -6353,6 +6369,14 @@
   },
   "src/lib/legal-search/decision-primary-reference.test.ts": {
     "seconds": 0.078638,
+    "source": "estimated"
+  },
+  "src/lib/legal-search/deferred-document-ownership-contract.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
+  "src/lib/legal-search/deferred-document-source-ownership.db.test.ts": {
+    "seconds": 1,
     "source": "estimated"
   },
   "src/lib/legal-search/document-stage-observation.test.ts": {
