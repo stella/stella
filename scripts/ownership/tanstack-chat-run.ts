@@ -7,10 +7,10 @@ export default {
   summary:
     "`chat()` emits AG-UI spec-shaped chunks: the engine keeps only the spec " +
     "keys of each event type and moves the rest into `metadata.tanstack`. " +
-    "Two defects came from reading a moved key at the top level, so the owner " +
-    "returns `PublicStreamChunk` — the same union without those keys — and " +
-    "holds the readers that look in both places. A caller that reaches for " +
-    "`chat()` itself gets the raw union back and the compile error with it.",
+    "The owner returns `PublicStreamChunk`, the same union without those " +
+    "top-level keys, and provides readers for both spec keys and " +
+    "`metadata.tanstack`. Callers start runs and read chunks through this " +
+    "owner to use that contract.",
   enforcement: {
     kind: "import",
     specifiers: ["@tanstack/ai"],

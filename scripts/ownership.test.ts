@@ -1,10 +1,12 @@
 import { describe, expect, test } from "bun:test";
 import {
   copyFileSync,
+  existsSync,
   mkdirSync,
   mkdtempSync,
   readFileSync,
   rmSync,
+  statSync,
   symlinkSync,
   writeFileSync,
 } from "node:fs";
@@ -207,6 +209,32 @@ test("independent row additions merge cleanly and pass the production check", ()
 }, 30_000);
 
 describe("renderOwnershipDocument", () => {
+  test("every relative link in a generated row document resolves to a file", () => {
+    for (const { id } of OWNERSHIP) {
+      const document = pathToFileURL(
+        path.join(repoRoot, `docs/module-ownership/${id}.md`),
+      );
+      const links = [
+        ...readFileSync(document, "utf-8").matchAll(/\]\(([^)\s]+)\)/gu),
+      ];
+      expect(links.length, id).toBeGreaterThan(0);
+      for (const link of links) {
+        const target = link.at(1);
+        if (target === undefined) {
+          throw new TypeError("Markdown link requires a destination");
+        }
+        if (/^(?:[a-z][a-z\d+.-]*:|\/|#)/iu.test(target)) {
+          continue;
+        }
+        const resolved = new URL(target, document);
+        expect(
+          existsSync(resolved) && statSync(resolved).isFile(),
+          `${id}: ${target}`,
+        ).toBe(true);
+      }
+    }
+  });
+
   test("renders the same bytes for the same table", () => {
     expect(renderOwnershipDocument(OWNERSHIP)).toBe(
       renderOwnershipDocument(OWNERSHIP),

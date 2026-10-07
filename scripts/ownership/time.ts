@@ -14,6 +14,6 @@ export default {
     "DST transition, so moving to another date uses Temporal calendar " +
     "arithmetic. Elapsed-time math uses the duration constants. The date " +
     "lint rules route callers here and reserve legacy `Date` for named " +
-    "library boundaries. See [Temporal conventions](temporal.md).",
+    "library boundaries. See [Temporal conventions](../temporal.md).",
   enforcement: { kind: "none" },
 } as const satisfies OwnershipEntry;
