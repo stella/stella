@@ -4639,6 +4639,10 @@
     "seconds": 0.585545,
     "source": "estimated"
   },
+  "src/lib/chat/provider-bound-reasoning.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
   "src/lib/chat/provider-data-policy.test.ts": {
     "seconds": 0.486159,
     "source": "estimated"
@@ -6882,6 +6886,10 @@
   "src/lib/observability/logger.test.ts": {
     "seconds": 0.3,
     "source": "measured"
+  },
+  "src/lib/observability/provider-error-reason.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
   },
   "src/lib/observability/request-context.test.ts": {
     "seconds": 0.191397,
