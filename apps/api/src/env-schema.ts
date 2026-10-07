@@ -11,6 +11,8 @@ import {
 import { featureFlagSchema } from "@/api/env-base-schema";
 import {
   AUTH_CLIENT_ADDRESS_HEADER,
+  FRONTEND_ADDRESS_HEADER,
+  FRONTEND_VERIFY_HEADER,
   ORIGIN_VERIFY_HEADER,
   SIGNUP_RATE_LIMIT_IP_SOURCE,
 } from "@/api/lib/client-ip-config";
@@ -70,6 +72,37 @@ export const resolveEmailProvider = ({
  * etc.). Scripts and CLI tools that only need DB + S3 import
  * envBase from env-base.ts instead.
  */
+// A header an edge sets to the viewer's address; never one the API sets,
+// verifies or reads only beside the frontend verify value.
+const edgeAddressHeaderName = v.pipe(
+  v.string(),
+  v.trim(),
+  v.toLowerCase(),
+  v.regex(/^[a-z0-9-]+$/u, "must be a header name"),
+  v.check(
+    (name) =>
+      name !== AUTH_CLIENT_ADDRESS_HEADER &&
+      name !== ORIGIN_VERIFY_HEADER &&
+      name !== FRONTEND_VERIFY_HEADER &&
+      name !== FRONTEND_ADDRESS_HEADER,
+    "must not be a header the API sets, verifies or reads from the frontend edge",
+  ),
+);
+
+// Comma-separated values an edge proves itself with, each long enough not to
+// be guessed.
+const edgeVerifyValues = v.pipe(
+  v.string(),
+  v.check(
+    (value) =>
+      value
+        .split(",")
+        .map((part) => part.trim())
+        .every((part) => part.length >= 32),
+    "each value must be at least 32 characters",
+  ),
+);
+
 export const envApiServerSchema = {
   ...verificationRunCapEnvSchema,
   VISUAL_PREVIEW_FUNCTION_NAME: v.optional(
@@ -375,19 +408,7 @@ export const envApiServerSchema = {
    * `STELLA_TRUSTED_PROXY_CIDRS`, ahead of the `x-forwarded-for` chain. Set it
    * only when every route to the API adds this header.
    */
-  STELLA_CLIENT_ADDRESS_HEADER: v.optional(
-    v.pipe(
-      v.string(),
-      v.trim(),
-      v.toLowerCase(),
-      v.regex(/^[a-z0-9-]+$/u, "must be a header name"),
-      v.check(
-        (name) =>
-          name !== AUTH_CLIENT_ADDRESS_HEADER && name !== ORIGIN_VERIFY_HEADER,
-        "must not be a header the API sets or verifies itself",
-      ),
-    ),
-  ),
+  STELLA_CLIENT_ADDRESS_HEADER: v.optional(edgeAddressHeaderName),
 
   /**
    * How `STELLA_CLIENT_ADDRESS_HEADER` spells the address: `with-port` (as
@@ -403,19 +424,16 @@ export const envApiServerSchema = {
    * first, then the next one during a rotation). When set, the client address
    * header is read only from requests carrying one of them.
    */
-  STELLA_ORIGIN_VERIFY_SECRET: v.optional(
-    v.pipe(
-      v.string(),
-      v.check(
-        (value) =>
-          value
-            .split(",")
-            .map((part) => part.trim())
-            .every((part) => part.length >= 32),
-        "each value must be at least 32 characters",
-      ),
-    ),
-  ),
+  STELLA_ORIGIN_VERIFY_SECRET: v.optional(edgeVerifyValues),
+
+  /**
+   * Comma-separated values the frontend edge sends in
+   * `x-stella-frontend-verify` (current first, then the next one during a
+   * rotation). From peers in `STELLA_TRUSTED_PROXY_CIDRS` carrying one of
+   * them, the browser's bare address in `x-stella-viewer-address` is read
+   * ahead of every other source; unset, that header is never read.
+   */
+  STELLA_FRONTEND_VERIFY_SECRET: v.optional(edgeVerifyValues),
 
   /**
    * Comma-separated user IDs allowed to publish an in-app announcement to
