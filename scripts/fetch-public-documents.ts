@@ -346,11 +346,23 @@ const pinnedFetch = async (
           resolve(new Response(body, { status, headers: responseHeaders }));
         } catch (error) {
           response.destroy();
-          reject(error);
+          reject(
+            new PublicDocumentFetchError(
+              "HTTP response is invalid",
+              classifyFailure(error),
+            ),
+          );
         }
       },
     );
-    request.on("error", reject);
+    request.on("error", (error) => {
+      reject(
+        new PublicDocumentFetchError(
+          "HTTP request failed",
+          classifyFailure(error),
+        ),
+      );
+    });
     request.end();
   });
 
