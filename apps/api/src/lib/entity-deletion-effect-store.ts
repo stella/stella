@@ -19,7 +19,7 @@ import { createEffectLease } from "@/api/lib/effect-lease";
 import type { EffectLease } from "@/api/lib/effect-lease";
 
 export const ENTITY_DELETION_EFFECT_KIND = "entity-deletion-s3" as const;
-export const ENTITY_DELETION_EFFECT_LEASE_MS = 15 * 60_000;
+const ENTITY_DELETION_EFFECT_LEASE_MS = 15 * 60_000;
 const RECOVERY_STATE_LIMIT = 50;
 
 export type EntityDeletionEffectClaim = {
