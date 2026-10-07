@@ -29,6 +29,21 @@ jobs:
     permissions:
       contents: read
     steps:
+      - name: Checkout GitHub API tooling
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: ${{ github.repository }}
+          ref: ${{ github.workflow_sha }}
+          path: .gh-retry
+          persist-credentials: false
+          sparse-checkout: scripts/gh-retry.sh
+          sparse-checkout-cone-mode: false
+
+      - name: Preserve GitHub API tooling across source checkouts
+        run: |
+          cp "$GITHUB_WORKSPACE/.gh-retry/scripts/gh-retry.sh" "$RUNNER_TEMP/gh-retry.sh"
+          echo "GH_RETRY_SCRIPT=$RUNNER_TEMP/gh-retry.sh" >> "$GITHUB_ENV"
+
       - name: Mint App token for the private workflows repo
         id: app-token
         uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
@@ -65,7 +80,7 @@ jobs:
           run_id=""
           for _ in {1..30}; do
             run_id="$(
-              gh run list \
+              bash "$GH_RETRY_SCRIPT" run list \
                 --repo "$PRIVATE_WORKFLOWS_REPO" \
                 --workflow publish-product-media.yml \
                 --event workflow_dispatch \
@@ -85,7 +100,7 @@ jobs:
             exit 1
           fi
 
-          gh run watch "$run_id" \
+          bash "$GH_RETRY_SCRIPT" run watch "$run_id" \
             --repo "$PRIVATE_WORKFLOWS_REPO" \
             --compact \
             --exit-status

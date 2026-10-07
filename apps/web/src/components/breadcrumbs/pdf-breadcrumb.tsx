@@ -108,7 +108,6 @@ export const PdfBreadcrumb = () => {
             return (
               <InlineEdit
                 inputAriaLabel={tCommon("documentName")}
-                inputClassName="h-5 w-48 text-xs"
                 onCancel={rename.cancel}
                 onChange={rename.setDraft}
                 onCommit={() => {
@@ -129,7 +128,10 @@ export const PdfBreadcrumb = () => {
           if (pendingName !== null) {
             return (
               <BreadcrumbPage>
-                <BidiText as="span" className="max-w-64 truncate">
+                <BidiText
+                  as="span"
+                  className="max-w-64 overflow-hidden text-ellipsis whitespace-pre"
+                >
                   {pendingName}
                 </BidiText>
               </BreadcrumbPage>
@@ -144,7 +146,7 @@ export const PdfBreadcrumb = () => {
                 explicitUndefined: true,
               }}
               activeProps={{ className: "text-foreground font-semibold" }}
-              className="hover:text-foreground max-w-64 truncate"
+              className="hover:text-foreground max-w-64 overflow-hidden text-ellipsis whitespace-pre"
               params={{ workspaceId, viewId }}
               onDoubleClick={(event) => {
                 if (!isRenameable) {

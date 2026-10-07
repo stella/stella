@@ -1,6 +1,8 @@
 // This classification owns both cache prohibition and raw Bun setup eligibility.
 // Existing cold-scanner wiring and explicit no-cache runtime inputs are contracts,
 // not a separate list of exempt workflow/job names.
+import { flattenWorkflowSteps } from "./workflow-steps";
+
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
 
@@ -22,10 +24,10 @@ const triggers = (on: unknown): string[] => {
 // and a reusable workflow they call must be one reviewed for that.
 const DEFAULT_SCOPE_EVENTS = ["pull_request_target", "workflow_run"];
 const REVIEWED_REUSABLE_WORKFLOWS: Record<string, string> = {
-  "stella/.github/.github/workflows/pr-lint.yml@aff5017c264acce5a2bcdf15876da08835e6de70":
+  "stella/.github/.github/workflows/pr-lint.yml@167fb396c6c0f4e07296ad2cd72e6ef15367c776":
     "title, label, size and assignee actions only; no cache",
-  "stella/.github/.github/workflows/npm-independent-release.yml@28f9f43d5c1e820500f8526a5527465bcbcdf425":
-    "checkout, artifact download, setup-node without a cache input and the hardened publish action; no cache",
+  "stella/.github/.github/workflows/npm-independent-release.yml@167fb396c6c0f4e07296ad2cd72e6ef15367c776":
+    "checkout, artifact download, setup-node with Bun manifests and no cache input, hardened publish action; no cache",
 };
 
 export const MAIN_ONLY_BUN_CACHE_SAVE = `\${{ github.ref == 'refs/heads/main' }}`;
@@ -99,7 +101,7 @@ const hasPublishToken = (workflow: unknown, job: unknown) => {
 const hasArtifactStep = (job: unknown, operation: string) =>
   isRecord(job) &&
   Array.isArray(job["steps"]) &&
-  job["steps"].some(
+  flattenWorkflowSteps(job["steps"]).some(
     (step: unknown) =>
       isRecord(step) &&
       typeof step["uses"] === "string" &&
@@ -167,7 +169,7 @@ export const jobCachePolicy = ({ workflow, job }: JobCachePolicyOptions) => {
   if (usesDefaultCacheScope(workflow)) {
     return "default-scope";
   }
-  const steps = Array.isArray(job["steps"]) ? job["steps"] : [];
+  const steps = flattenWorkflowSteps(job["steps"] ?? []);
   if (
     steps.some(
       (step: unknown) =>
@@ -221,7 +223,7 @@ export const workflowCacheProblems = (workflow: unknown): string[] => {
             `job '${name}' calls ${reusable}, which is not reviewed for cache use`,
           ];
     }
-    const steps = Array.isArray(job["steps"]) ? job["steps"] : [];
+    const steps = flattenWorkflowSteps(job["steps"] ?? []);
     return steps.flatMap((step: unknown) => {
       if (!isRecord(step)) {
         return [];

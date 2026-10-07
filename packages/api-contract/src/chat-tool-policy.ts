@@ -33,6 +33,8 @@ export type NeedsApprovalPolicyKind = {
 
 export const BUILT_IN_CHAT_TOOL_POLICY_KINDS = {
   "ask-user": CHAT_TOOL_POLICY_KIND.internal,
+  // Chat-only presentation: its private attachment belongs to this chat turn.
+  show_visual: CHAT_TOOL_POLICY_KIND.internal,
   boe_find_related_laws: CHAT_TOOL_POLICY_KIND.publicOfficial,
   boe_get_law: CHAT_TOOL_POLICY_KIND.publicOfficial,
   boe_get_law_block: CHAT_TOOL_POLICY_KIND.publicOfficial,

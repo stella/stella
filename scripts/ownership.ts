@@ -23,6 +23,10 @@ import { STATUS_COLUMNS } from "../apps/api/src/lib/db/status-tables.gen.ts";
 import { SANCTIONS_MONITORING_TRANSITION_IDENTITIES } from "../apps/api/src/lib/lists/sanctions/monitoring-transition-identities.ts";
 // With its extension: oxlint.config.ts loads this file under Node's resolver.
 import { formattedLikeRepository } from "./generated-artifacts.ts";
+import { SHA256_OWNERS } from "./sha256-owners.ts";
+
+// Computed filesystem reads retain these repository Markdown inputs.
+export const CI_MARKDOWN_READER_INPUTS = ["docs/module-ownership.md"];
 
 const statusTransitionColumns = () => {
   const columns = new Map(
@@ -227,6 +231,50 @@ export const ROOT_CONNECTION_DOORS = [
           path: "apps/api/src/handlers/operator/registrations.ts",
           reason:
             "Authorizes the deployment credential before reading the directory.",
+        },
+      ],
+    },
+  },
+
+  {
+    id: "review-account-provisioning",
+    capability:
+      "Provisioning the restricted review account's organization and owner membership",
+    owner: [
+      "apps/api/src/db/root.ts",
+      "apps/api/src/lib/db/review-account-organization-store.ts",
+    ],
+    summary:
+      "The organization plugin refuses the review account by policy, so its single organization, the creation seeds and the owner membership are written on the owner connection in one transaction. The connection owner binds the store; the operator command receives the operations, never a database handle.",
+    enforcement: {
+      kind: "import",
+      specifiers: ["@/api/db/root"],
+      names: ["bindOwnerReviewAccountOrganizationStore"],
+      allowed: [
+        {
+          path: "apps/api/src/scripts/review-account.ts",
+          reason: "Command that provisions the restricted review account.",
+        },
+      ],
+    },
+  },
+
+  {
+    id: "review-organization-reset-fence",
+    capability:
+      "Locking the restricted review organization before each reset transaction",
+    owner: ["apps/api/src/db/root.ts"],
+    summary:
+      "Runs the caller's organization-row lock and sole-membership check as the owner at the start of each scoped transaction, before the role switch; the caller receives a scoped database, never the pool.",
+    enforcement: {
+      kind: "import",
+      specifiers: ["@/api/db/root"],
+      names: ["createFencedRlsDatabase"],
+      allowed: [
+        {
+          path: "apps/api/src/lib/review-organization/reset.ts",
+          reason:
+            "Fences every reset transaction to the review account's sole membership.",
         },
       ],
     },
@@ -607,6 +655,14 @@ const OWNERSHIP_DECLARATIONS = [
     },
   },
   {
+    id: "sha256",
+    capability: "Hashing content with SHA-256 across runtimes",
+    owner: Object.keys(SHA256_OWNERS),
+    summary:
+      "Private runtime helpers and a published-package local owner preserve bytes, update order and digest encodings. no-raw-sha256 confines primitives to registered owners; the enumerating migration ledger only shrinks.",
+    enforcement: { kind: "none" },
+  },
+  {
     id: "desktop-presence-observations",
     capability: "Reading and retaining desktop presence observations",
     owner: ["apps/api/src/handlers/desktop-presence/service.ts"],
@@ -696,6 +752,53 @@ const OWNERSHIP_DECLARATIONS = [
         {
           path: "apps/api/src/mcp/matter-tools.ts",
           reason: "Read task detail projection.",
+        },
+      ],
+    },
+  },
+  {
+    id: "transaction-proof-minting",
+    capability: "Minting transaction-bound checked proofs",
+    owner: ["apps/api/src/lib/proofs/checked-transaction.ts"],
+    summary:
+      "The shared proof core names the actor, entity and transaction, runs the trusted predicate, and supplies evidence only after success. Predicate modules retain their domain checks.",
+    enforcement: {
+      kind: "import",
+      specifiers: ["@gdp-ts/core"],
+      names: ["defineProof"],
+      allowed: [],
+    },
+  },
+  {
+    id: "transaction-proof-predicates",
+    capability: "Checking facts for transaction-bound proofs",
+    owner: [
+      "apps/api/src/lib/signals/proofs/signal-visible-to.ts",
+      "apps/api/src/lib/signals/proofs/may-create-signal-request.ts",
+    ],
+    summary:
+      "Only trusted predicate modules may invoke the shared proof boundary; operation callers use their domain checking functions.",
+    enforcement: {
+      kind: "import",
+      specifiers: ["@/api/lib/proofs/checked-transaction"],
+      names: ["withCheckedTransaction"],
+      allowed: [],
+    },
+  },
+  {
+    id: "audit-detail-projection",
+    capability: "Projecting audit change details for storage and reads",
+    owner: ["apps/api/src/lib/audit-log-details.ts"],
+    summary:
+      "Audit readers share a total resource policy and principal-bound feature projection. The storage projection is confined to the audit writer; pages, exports and tools use the read projection.",
+    enforcement: {
+      kind: "import",
+      specifiers: ["@/api/lib/audit-log-details"],
+      names: ["auditChangesForResource"],
+      allowed: [
+        {
+          path: "apps/api/src/lib/audit-log.ts",
+          reason: "Applies the storage projection when recording audit events.",
         },
       ],
     },
@@ -1816,6 +1919,11 @@ const OWNERSHIP_DECLARATIONS = [
           path: "apps/api/scripts/ai-provider-canary-chat-toolsets.ts",
           reason:
             "Builds an owner session to assemble the full chat tool set for provider schema checks; serves no request.",
+        },
+        {
+          path: "apps/api/src/lib/review-organization/reset.ts",
+          reason:
+            "Builds the restricted review account's authority from the sole membership the reset just proved, for the sample-data seed.",
         },
       ],
     },

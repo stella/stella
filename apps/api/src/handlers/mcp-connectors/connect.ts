@@ -52,7 +52,7 @@ const routeParams = t.Object({
 
 const config = {
   permissions: { integration: ["create"] },
-  accountAccess: ACCOUNT_ACCESS.standard,
+  accountAccess: ACCOUNT_ACCESS.accountControl,
   realtime: mcpConnectorRealtimeUpdates,
   mcp: { type: "internal", reason: "mcp_transport" },
   params: routeParams,
@@ -98,10 +98,9 @@ export const createConnectMcpConnectorHandler = ({
 
       if (connector.authType === "none") {
         const saved = yield* Result.await(
-          // oxlint-disable-next-line arrow-body-style -- block body holds the audit-skip directive
-          safeDb((tx) => {
+          safeDb((tx) =>
             // audit: skip — per-user MCP connection toggle; SOC 2 relevance lives at the connector-config layer (audited in create-connector / delete-connector).
-            return tx
+            tx
               .insert(mcpUserConnections)
               .values({
                 organizationId: session.activeOrganizationId,
@@ -132,8 +131,8 @@ export const createConnectMcpConnectorHandler = ({
                   updatedAt: new Date(),
                 },
               })
-              .returning({ id: mcpUserConnections.id });
-          }),
+              .returning({ id: mcpUserConnections.id }),
+          ),
         );
 
         const connection = saved.at(0);
@@ -198,10 +197,9 @@ export const createConnectMcpConnectorHandler = ({
       const state = createOAuthState();
 
       yield* Result.await(
-        // oxlint-disable-next-line arrow-body-style -- block body holds the audit-skip directive
-        safeDb((tx) => {
+        safeDb((tx) =>
           // audit: skip — ephemeral OAuth state row consumed by the callback; the resulting connection is recorded at callback time.
-          return tx.insert(mcpOAuthState).values({
+          tx.insert(mcpOAuthState).values({
             state,
             connectorId: connector.id,
             organizationId: session.activeOrganizationId,
@@ -210,8 +208,8 @@ export const createConnectMcpConnectorHandler = ({
             redirectUri,
             resourceUrl: metadata.protectedResource.resource,
             authorizationServerUrl: metadata.authorizationServer.issuer,
-          });
-        }),
+          }),
+        ),
       );
 
       const authorizeUrl = buildAuthorizeUrl({
@@ -511,10 +509,9 @@ const ensureOAuthClient = async ({
       : null;
 
     const insertedClient = yield* Result.await(
-      // oxlint-disable-next-line arrow-body-style -- block body holds the audit-skip directive
-      safeDb((tx) => {
+      safeDb((tx) =>
         // audit: skip — Dynamic Client Registration metadata for the MCP authorization server; per-user connection state is the auditable surface.
-        return tx
+        tx
           .insert(mcpOAuthClients)
           .values({
             organizationId,
@@ -536,8 +533,8 @@ const ensureOAuthClient = async ({
           })
           .returning({
             clientId: mcpOAuthClients.clientId,
-          });
-      }),
+          }),
+      ),
     );
 
     if (insertedClient.length === 0) {

@@ -212,6 +212,7 @@ export const isSuggestChangesApplyOutput = (
   typeof output.success === "boolean";
 
 const CHAT_TOOL_TITLE_KEYS = {
+  show_visual: "chat.generatedView",
   add_comment: "chat.tool.add_comment",
   "ask-user": "chat.tool.ask-user",
   boe_find_related_laws: "chat.tool.boe_find_related_laws",
@@ -1123,10 +1124,11 @@ const isCanonicalChatUIMessage = (
   );
 
 /**
- * Prove the runtime-to-UI contract without parsing tool arguments again.
- * Completed built-in calls must already carry their canonical parsed input;
- * only protocol-partial calls, and calls that ended before their input did,
- * may omit it.
+ * Project known tool names and protocol-shaped payloads into the UI.
+ * This checks object shape, not the current tool schema. Persisted payloads
+ * can predate that schema; specialized cards must validate before reading
+ * schema-dependent fields. Only protocol-partial or interrupted calls may
+ * omit input.
  */
 export const projectCanonicalChatUIMessages = (
   messages: readonly PersistedChatMessage[],

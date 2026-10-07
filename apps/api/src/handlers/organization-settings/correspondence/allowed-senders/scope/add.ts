@@ -21,7 +21,7 @@ const config = {
   description:
     "Allow an approved shared mailbox to file correspondence for one matter.",
   permissions: { organizationSettings: ["update"] },
-  accountAccess: ACCOUNT_ACCESS.standard,
+  accountAccess: ACCOUNT_ACCESS.accountControl,
   mcp: {
     type: "capability",
     reason: "correspondence",

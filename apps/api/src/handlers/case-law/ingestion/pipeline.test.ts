@@ -89,7 +89,7 @@ import type { RecordingLogger } from "@/api/tests/helpers/recording-telemetry";
 
 // An insert whose values can be awaited directly or chained into an upsert,
 // as the refresh path does for identifier rows.
-// oxlint-disable-next-line typescript-eslint/promise-function-async -- the double returns a promise that also carries onConflictDoUpdate; `async` would drop the extra method
+// oxlint-disable-next-line typescript/promise-function-async -- the double returns a promise that also carries onConflictDoUpdate; `async` would drop the extra method
 const insertedValues = () =>
   Object.assign(Promise.resolve(undefined), {
     onConflictDoUpdate: async () => await Promise.resolve(undefined),

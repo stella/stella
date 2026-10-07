@@ -46,7 +46,7 @@ import {
   SearchIcon,
   UsersIcon,
 } from "@stll/ui/icons";
-import { Input } from "@stll/ui/input";
+import { InlineRenameInput } from "@stll/ui/inline-rename";
 import { SIDE_RAIL_ICON_BUTTON_SIZE } from "@stll/ui/inspector";
 import {
   Menu,
@@ -141,8 +141,6 @@ import { knowledgeSections } from "@/lib/knowledge/navigation";
 import { isPublicKnowledgeEnabled } from "@/lib/knowledge/public-knowledge-launch";
 import { publicToolsBasePath } from "@/lib/knowledge/public-tools-path";
 import { localISODate } from "@/lib/local-iso-date";
-import { useCallerFeatureEnabled } from "@/lib/organization/feature-access/access";
-import { CALLER_FEATURE } from "@/lib/organization/feature-access/surfaces";
 import { usePinnedStore } from "@/lib/pinned-store";
 import { formatFullTimestamp, formatRelativeTime } from "@/lib/relative-time";
 import type { EntityKind } from "@/lib/types";
@@ -221,7 +219,12 @@ export const AppSidebar = (props: AppSidebarProps) => {
     isError: workspacesFailed,
     isFetching: workspacesFetching,
     refetch: refetchWorkspaces,
-  } = useChromeQuery(workspacesNavigationOptions(user.activeOrganizationId));
+  } = useChromeQuery(
+    workspacesNavigationOptions({
+      organizationId: user.activeOrganizationId,
+      userId: user.id,
+    }),
+  );
   const inboxQuery = useChromeQuery({
     ...inboxCountOptions(user.activeOrganizationId, user.id),
     enabled: inboxPreviewEnabled,
@@ -1156,14 +1159,11 @@ const MatterItem = ({
     () => queryClient.getQueryState(activityQueryKey)?.isInvalidated ?? false,
     () => false,
   );
-  const legalListsEnabled = useCallerFeatureEnabled(CALLER_FEATURE.legalLists);
   const activityIsKnownEmpty = matterActivityIsKnownEmpty({
     isInvalidated: activityIsInvalidated,
     pages: cachedActivity?.pages.map((page) => ({
       ...page,
-      items: page.items.filter((item) =>
-        matterActivityItemVisible(item, legalListsEnabled),
-      ),
+      items: page.items.filter(matterActivityItemVisible),
     })),
     status: activityStatus,
   });
@@ -1316,22 +1316,13 @@ const MatterItem = ({
             className="size-4 shrink-0"
             matter={{ id: ws.id, color: ws.color }}
           />
-          <Input
-            autoFocus
-            className="h-auto min-w-0 flex-1 border-0 bg-transparent p-0 text-sm shadow-none outline-none focus-visible:ring-0"
-            onBlur={() => {
+          <InlineRenameInput
+            className="text-sm"
+            onCommit={() => {
               detached(rename.commit(), "app-sidebar.commit");
             }}
-            onChange={(e) => rename.setDraft(e.currentTarget.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") {
-                e.currentTarget.blur();
-              }
-              if (e.key === "Escape") {
-                rename.cancel();
-                e.currentTarget.blur();
-              }
-            }}
+            onValueChange={rename.setDraft}
+            onCancel={rename.cancel}
             value={rename.state.draft}
           />
         </div>
@@ -1438,7 +1429,10 @@ const MatterItem = ({
               </MatterColorContextPicker>
             )}
             <span className="relative flex min-w-0 flex-col">
-              <BidiText as="span" className="truncate">
+              <BidiText
+                as="span"
+                className="overflow-hidden text-ellipsis whitespace-pre"
+              >
                 {ws.name}
               </BidiText>
               <Tooltip
@@ -1590,12 +1584,8 @@ const MatterActivityList = ({
     }),
     enabled: mounted,
   });
-  const legalListsEnabled = useCallerFeatureEnabled(CALLER_FEATURE.legalLists);
-  const items = data
-    ? data.pages
-        .flatMap((page) => page.items)
-        .filter((item) => matterActivityItemVisible(item, legalListsEnabled))
-    : [];
+  const activityItems = data?.pages.flatMap((page) => page.items) ?? [];
+  const items = activityItems.filter(matterActivityItemVisible);
 
   const openEntity = async ({
     entityKind,

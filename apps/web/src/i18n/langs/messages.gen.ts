@@ -148,6 +148,7 @@ type Messages = {
       "useBackupCode": "Use a backup code instead";
     };
     "useDifferentEmail": "Use a different email";
+    "usePassword": "Use a password instead";
     "weSentCodeTo": "We sent a code to <email>{emailAddress}</email>";
   };
   "avt": {
@@ -351,6 +352,7 @@ type Messages = {
     };
     "view": {
       "chooseList": "Choose a list";
+      "createList": "Create a list";
       "evidenceList": "Facts from";
       "noLists": "This matter has no lists";
       "pickList": "Choose the list whose facts this matter's documents are checked against.";
@@ -1052,6 +1054,7 @@ type Messages = {
       "toastDescription": "Full-page chat lands with persisted threads.";
       "toastTitle": "Full view not yet available";
     };
+    "activateGeneratedView": "Interact with this view";
     "aiPrompt": "AI message composer";
     "aiThread": "AI conversation";
     "analyzingSources": "Analyzing sources";
@@ -1197,6 +1200,8 @@ type Messages = {
     "forkedFromUnavailable": "Created from a chat that is no longer available";
     "forkedThread": "From another chat";
     "forkingThread": "Creating a new chat…";
+    "generatedView": "Generated view";
+    "generatedViewDrill": "Search decisions with court filter {court} and year {year}.";
     "greeting": "What would you like to work on?";
     "greetingSubtitle": "Start with a matter, document, or plain question.";
     "hideThread": "Hide conversation";
@@ -1328,6 +1333,7 @@ type Messages = {
     "sendErrorQuotaExhausted": "The AI provider's quota is exhausted. Try again in a minute, or contact your workspace admin.";
     "sendErrorStreamIncomplete": "The AI reply was cut off before it finished. Try again.";
     "sendPrompt": "Send message";
+    "sendQueuedMessageNow": "Send now";
     "sendWithoutAnonymization": "Send without anonymization";
     "skills": {
       "scope": {
@@ -1475,6 +1481,14 @@ type Messages = {
       "sourceCode": "Source code";
       "toggleDetails": "Toggle details";
       "unrestoredFields": "{count, plural, one {# field} other {# fields}} could not be filled with real values in anonymized mode. Review: {fields}";
+    };
+    "turnNotification": {
+      "failedBody": "A chat reply in stella did not finish.";
+      "failedTitle": "Reply failed";
+      "needsInputBody": "A chat is waiting for your approval or answer.";
+      "needsInputTitle": "stella needs your input";
+      "replyReadyBody": "stella finished answering in your chat.";
+      "replyReadyTitle": "Reply ready";
     };
     "unsupportedFileType": "Unsupported file type";
     "uploadFailed": "Failed to process file";
@@ -1690,6 +1704,7 @@ type Messages = {
     "deletedCount": "{count, plural, one {# item} other {# items}} deleted";
     "description": "Description";
     "details": "Details";
+    "detailsHiddenFeatureUnavailable": "Details hidden: feature not enabled";
     "disconnect": "Disconnect";
     "dismiss": "Dismiss";
     "displayName": "Display name";
@@ -4374,6 +4389,11 @@ type Messages = {
       "betaInbox": "Inbox & notifications";
       "betaInboxDescription": "Show the Inbox and the notification bell";
       "betaTimeBillingDescription": "Show time tracking, invoices, and expenses";
+      "chatNotifications": "Chat notifications";
+      "chatNotificationsBlocked": "Notifications are blocked for stella in this browser. Allow them in the browser’s site settings.";
+      "chatNotificationsDescription": "Get a notification from this browser when a chat reply finishes while stella is in the background.";
+      "chatNotificationsToggle": "Notify me when a reply is ready or needs my input";
+      "chatNotificationsUnsupported": "This browser does not support notifications.";
       "confirmDelete": "Confirm delete account";
       "dangerZone": "Danger zone";
       "dangerZoneDescription": "Permanently delete your account access and private account data.";

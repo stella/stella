@@ -15,6 +15,16 @@ const cached = {
   with: { save: MAIN_ONLY_BUN_CACHE_SAVE },
 };
 
+test("parallel groups cannot hide cache writers from protected jobs", () => {
+  const cache = { uses: "actions/cache@fixture", with: { path: "dist" } };
+  const workflow = {
+    on: ["workflow_run"],
+    jobs: { fixture: { steps: [{ parallel: [{ parallel: [cache] }] }] } },
+  };
+  expect(workflowCacheProblems(workflow)).toHaveLength(1);
+  expect(workflowCacheProblems(workflow).at(0)).toContain("saves a cache");
+});
+
 test("raw setup and cache prohibition share the same job classification", () => {
   for (const protection of [
     "default-scope",

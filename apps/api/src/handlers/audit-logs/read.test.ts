@@ -33,6 +33,7 @@ describe("queryAuditLogPage", () => {
                       resourceType: "workspace",
                       resourceId: "workspace_test",
                       changes: null,
+                      changesStatus: "visible",
                     },
                   ],
                 }),
@@ -57,6 +58,8 @@ describe("queryAuditLogPage", () => {
       queryAuditLogPage({
         safeDb,
         organizationId: toSafeId<"organization">("organization_test"),
+        userId,
+        featureAccessSnapshot: undefined,
         recordAuditEvent: async (_tx, event) => {
           events.push(event);
         },
@@ -78,6 +81,7 @@ describe("queryAuditLogPage", () => {
         resourceType: "workspace",
         resourceId: "workspace_test",
         changes: null,
+        changesStatus: "visible",
       },
     ]);
     expect(events).toEqual([
@@ -109,6 +113,8 @@ describe("queryAuditLogPage", () => {
       queryAuditLogPage({
         safeDb,
         organizationId: toSafeId<"organization">("organization_test"),
+        userId: null,
+        featureAccessSnapshot: undefined,
         recordAuditEvent: async () => {
           auditCallCount += 1;
         },

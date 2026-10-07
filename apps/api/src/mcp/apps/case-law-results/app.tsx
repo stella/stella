@@ -373,8 +373,9 @@ const SearchControls = ({
           <Select
             value={country}
             onValueChange={(value) => {
-              if (value !== null) {
+              if (value !== null && value !== country) {
                 setCountry(value);
+                setCourt({ value: "all", selection: { type: "all" } });
               }
             }}
           >
@@ -442,6 +443,14 @@ const SearchControls = ({
                   )) && (
                   <SelectItem value={`court:${defaults.court}`}>
                     {defaults.court}
+                  </SelectItem>
+                )}
+              {court.value.startsWith("tier:") &&
+                !facets?.court.some(
+                  ({ tierLabel }) => court.value === `tier:${tierLabel}`,
+                ) && (
+                  <SelectItem value={court.value}>
+                    {t(court.value.slice("tier:".length))}
                   </SelectItem>
                 )}
               {facets?.court.map(({ tierLabel, courts }) => (

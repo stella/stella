@@ -24,6 +24,8 @@ export const declareVisualSandboxSmoke = () => {
     // fulfilled by page.route() does not, and Chromium blocks the frame.
     const hostUrl = new URL("/prepaint-init.js", baseURL).href;
     const sandboxUrl = new URL(VISUAL_SANDBOX_PATH, E2E_API_ORIGIN).href;
+    const nonce = crypto.randomUUID();
+    const frameUrl = `${sandboxUrl}#n=${nonce}`;
     const collector = createNetworkCollector();
     const stopTracking = collector.trackPage(page);
     const errors = createBrowserErrorCollector();
@@ -34,17 +36,59 @@ export const declareVisualSandboxSmoke = () => {
         frameRequests.push(request.method());
       }
     });
-    const hostDocument = `<script>addEventListener("message",({source,data})=>{const frame=document.querySelector("iframe");if(source===frame.contentWindow&&data.type==="resize"&&Number.isInteger(data.height)&&data.height>0)document.documentElement.dataset.visualResize="received"})</script><iframe title="Timeline" src="${sandboxUrl}" onload='this.contentWindow.postMessage({type:"render",title:"Timeline",html:"<p id=visual-smoke>Timeline</p>"},${JSON.stringify(new URL(sandboxUrl).origin)})'></iframe>`;
     try {
       const hostResponse = await page.goto(hostUrl);
       expect(hostResponse?.ok()).toBe(true);
       const frameResponse = page.waitForResponse(sandboxUrl);
-      await page.evaluate((markup) => {
-        document.open();
-        // safe-html: hostDocument is a constant test fixture defined above.
-        document.write(markup);
-        document.close();
-      }, hostDocument);
+      await page.evaluate(
+        ({ frameUrl: shellUrl, nonce: shellNonce }) => {
+          const frame = document.createElement("iframe");
+          frame.title = "Timeline";
+          frame.setAttribute("sandbox", "allow-scripts");
+          frame.src = shellUrl;
+          addEventListener("message", (event: MessageEvent<unknown>) => {
+            const { source, origin, data } = event;
+            if (
+              source !== frame.contentWindow ||
+              origin !== "null" ||
+              typeof data !== "object" ||
+              data === null ||
+              !("kind" in data)
+            ) {
+              return;
+            }
+            if (data.kind === "shell-ready") {
+              if (!("nonce" in data) || data.nonce !== shellNonce) {
+                return;
+              }
+              frame.contentWindow?.postMessage(
+                {
+                  type: "render",
+                  title: "Timeline",
+                  html: "<p id=visual-smoke>Timeline</p>",
+                  data: {},
+                },
+                "*",
+              );
+              return;
+            }
+            if (!("height" in data)) {
+              return;
+            }
+            const { kind, height } = data;
+            if (
+              kind === "resize" &&
+              typeof height === "number" &&
+              Number.isInteger(height) &&
+              height > 0
+            ) {
+              document.documentElement.dataset["visualResize"] = "received";
+            }
+          });
+          document.body.replaceChildren(frame);
+        },
+        { frameUrl, nonce },
+      );
       const response = await frameResponse;
       expect(response.status()).toBe(200);
       expect(response.headers()["cache-control"]).toBe("private, no-store");
@@ -80,7 +124,7 @@ export const declareVisualSandboxSmoke = () => {
       ).toEqual([]);
       expect(page.frames().map((frame) => frame.url())).toEqual([
         hostUrl,
-        sandboxUrl,
+        frameUrl,
         "about:srcdoc",
       ]);
       expect(frameRequests).toEqual(["GET"]);

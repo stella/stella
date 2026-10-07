@@ -1,6 +1,8 @@
 import { expect, test } from "@playwright/test";
 import type { Page } from "@playwright/test";
+import { execFileSync } from "node:child_process";
 import { readFile } from "node:fs/promises";
+import { fileURLToPath } from "node:url";
 
 import { MCP_APP_SANDBOX_CONTENT_DIRECTIVES } from "@stll/api-contract/mcp-app-sandbox-policy";
 import {
@@ -26,7 +28,24 @@ type HostOptions = {
   tool: "search_case_law" | "lookup_case_law";
   payload: typeof APP_SEARCH_FIXTURE | typeof APP_LOOKUP_FIXTURE;
   queries?: string[];
+  bundle?: "committed" | "country-fixture";
 };
+
+let countryFixture: string | undefined;
+/** Built once per worker; the build takes seconds. */
+const countryFixtureBundle = (): string =>
+  (countryFixture ??= execFileSync(
+    "bun",
+    [
+      fileURLToPath(
+        new URL(
+          "../../../api/scripts/build-mcp-country-filter-fixture.ts",
+          import.meta.url,
+        ),
+      ),
+    ],
+    { encoding: "utf-8", maxBuffer: 32 * 1024 * 1024 },
+  ));
 
 const mountApp = async ({
   page,
@@ -34,14 +53,18 @@ const mountApp = async ({
   tool,
   payload,
   queries = ["náhrada škody"],
+  bundle: bundleKind = "committed",
 }: HostOptions) => {
-  const bundle = await readFile(
-    new URL(
-      "../../../api/src/mcp/apps/case-law-results/generated/app.html.txt",
-      import.meta.url,
-    ),
-    "utf-8",
-  );
+  const bundle =
+    bundleKind === "country-fixture"
+      ? countryFixtureBundle()
+      : await readFile(
+          new URL(
+            "../../../api/src/mcp/apps/case-law-results/generated/app.html.txt",
+            import.meta.url,
+          ),
+          "utf-8",
+        );
   const html = bundle.replace(
     "<head>",
     () =>
@@ -267,6 +290,9 @@ test("case-law app filters, pages and opens links through the MCP host", async (
     .click();
   await app.getByRole("button", { name: /^From/u }).click();
   await app.getByRole("button", { name: "Today", exact: true }).click();
+  const today = app.locator('[role="gridcell"][aria-current="date"]');
+  const selectedDate = await today.getAttribute("data-date");
+  await today.click();
   await app.getByRole("button", { name: "Filter", exact: true }).click();
   await expect
     .poll(async () => (await hostHistory(page, "appCalls")).at(-1))
@@ -277,7 +303,7 @@ test("case-law app filters, pages and opens links through the MCP host", async (
         country: "CZE",
         limit: 10,
         courts: ["Ústavní soud"],
-        date_from: "2024-04-15",
+        date_from: selectedDate,
       },
     });
   await page.evaluate(() =>
@@ -342,6 +368,54 @@ test("court filters preserve multiple query phrasings until the search text is e
     });
 });
 
+for (const { selection, filter } of [
+  { selection: "Ústavní soud", filter: { court: "Ústavní soud" } },
+  { selection: "Constitutional courts", filter: { courts: ["Ústavní soud"] } },
+]) {
+  test(`changing country clears the ${selection} court selection`, async ({
+    page,
+  }) => {
+    const app = await mountApp({
+      page,
+      locale: "en-GB",
+      tool: "search_case_law",
+      payload: APP_SEARCH_FIXTURE,
+      bundle: "country-fixture",
+    });
+    await expect(app.locator("tbody tr")).toHaveCount(1);
+    await app.getByRole("combobox", { name: "Court", exact: true }).click();
+    await app.getByRole("option", { name: selection, exact: true }).click();
+    await app.getByRole("button", { name: "Filter", exact: true }).click();
+    await expect
+      .poll(async () => (await hostHistory(page, "appCalls")).at(-1))
+      .toEqual({
+        name: "search_case_law",
+        arguments: {
+          queries: ["náhrada škody"],
+          country: "CZE",
+          limit: 10,
+          ...filter,
+        },
+      });
+    await app.getByRole("combobox", { name: "Country", exact: true }).click();
+    await app.getByRole("option", { name: "SVK", exact: true }).click();
+    await expect(
+      app.getByRole("combobox", { name: "Court", exact: true }),
+    ).toHaveText("All");
+    await app.getByRole("button", { name: "Filter", exact: true }).click();
+    await expect
+      .poll(async () => (await hostHistory(page, "appCalls")).at(-1))
+      .toEqual({
+        name: "search_case_law",
+        arguments: {
+          queries: ["náhrada škody"],
+          country: "SVK",
+          limit: 10,
+        },
+      });
+  });
+}
+
 test("a selected court tier survives a later response without facets", async ({
   page,
 }) => {
@@ -358,6 +432,9 @@ test("a selected court tier survives a later response without facets", async ({
   await app
     .getByRole("option", { name: "Constitutional courts", exact: true })
     .click();
+  await expect(
+    app.getByRole("combobox", { name: "Court", exact: true }),
+  ).toHaveText("Constitutional courts");
   await page.evaluate(
     (payload) =>
       globalThis.appFixtureHost.sendAppResult({
@@ -368,6 +445,9 @@ test("a selected court tier survives a later response without facets", async ({
     APP_SEARCH_FIXTURE,
   );
   await expect(app.locator("tbody tr")).toHaveCount(0);
+  await expect(
+    app.getByRole("combobox", { name: "Court", exact: true }),
+  ).toHaveText("Constitutional courts");
   await app.getByRole("button", { name: "Filter", exact: true }).click();
   await expect
     .poll(async () => hostHistory(page, "appCalls"))
@@ -485,7 +565,9 @@ test("desktop rows stay single-line with long references and summaries", async (
       };
     }),
   );
-  expect(new Set(geometry.map(({ height }) => height)).size).toBe(1);
+  // Collapsed borders contribute half a pixel to the last row.
+  const heights = geometry.map(({ height }) => height);
+  expect(Math.max(...heights) - Math.min(...heights)).toBeLessThanOrEqual(1);
   expect(
     geometry.every(
       ({ referenceLines, nowrap, ellipsis, referenceNowrap }) =>

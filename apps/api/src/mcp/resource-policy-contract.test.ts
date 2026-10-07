@@ -1,11 +1,29 @@
 import { describe, expect, test } from "bun:test";
 
+import { MCP_OAUTH_PROTOCOL_SCOPES } from "@stll/api-contract";
+
 import {
   buildBetterAuthOAuthResources,
+  getMcpResourceScopes,
+  MCP_MODES,
   normalizeBetterAuthOAuthBaseUrl,
 } from "@/api/mcp/resource-policy-contract";
 
 describe("Better Auth OAuth resource policy contract", () => {
+  test("preserves protocol scopes in every grant without advertising them as resource scopes", () => {
+    const resources = buildBetterAuthOAuthResources("https://api.stll.app");
+    for (const [index, mode] of MCP_MODES.entries()) {
+      const resource = resources.at(index);
+      expect(resource?.allowedScopes).toEqual([
+        ...getMcpResourceScopes(mode),
+        ...MCP_OAUTH_PROTOCOL_SCOPES,
+      ]);
+      for (const protocolScope of MCP_OAUTH_PROTOCOL_SCOPES) {
+        expect(getMcpResourceScopes(mode)).not.toContain(protocolScope);
+      }
+    }
+  });
+
   test("derives every resource from an explicit origin", () => {
     expect(
       buildBetterAuthOAuthResources("https://api.stll.app").map(

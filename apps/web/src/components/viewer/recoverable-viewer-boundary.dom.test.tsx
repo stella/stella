@@ -1,11 +1,16 @@
 import type { ReactNode } from "react";
 
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
+import { panic } from "better-result";
 import { afterAll, afterEach, describe, expect, test } from "bun:test";
 
 import { Temporal } from "@stll/time";
 
 import messages from "@/i18n/langs/en.json";
+import { browserStorage } from "@/lib/account/browser-storage";
+
+const sessionArea = () =>
+  browserStorage("session") ?? panic("Test requires session browser storage");
 
 GlobalRegistrator.register({ url: "http://localhost:3000/" });
 
@@ -28,7 +33,7 @@ afterEach(async () => {
   await act(async () => {
     cleanup();
   });
-  window.sessionStorage.clear();
+  sessionArea().clear();
 });
 afterAll(async () => {
   await GlobalRegistrator.unregister();
@@ -176,7 +181,7 @@ describe("RecoverableViewerBoundary", () => {
   });
 
   test("a stale build that already reloaded once fails instead of looping", async () => {
-    window.sessionStorage.setItem(
+    sessionArea().setItem(
       RELOAD_GUARD_KEY,
       String(Temporal.Now.instant().epochMilliseconds),
     );
