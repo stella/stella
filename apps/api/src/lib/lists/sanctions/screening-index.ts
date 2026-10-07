@@ -49,7 +49,7 @@ const SanctionsIndexLoadFailureBase: TaggedErrorClass<"SanctionsIndexLoadFailure
   TaggedError("SanctionsIndexLoadFailure");
 
 /** Why an edition's index could not be built; reported to error telemetry. */
-class SanctionsIndexLoadFailure extends SanctionsIndexLoadFailureBase<{
+export class SanctionsIndexLoadFailure extends SanctionsIndexLoadFailureBase<{
   stage: LoadStage;
   message: string;
   cause?: unknown;
@@ -214,7 +214,7 @@ const INDEX_LOAD_FAILURE_SINK = failureSink({
   expected: [],
 });
 
-const observeLoadFailure: NonNullable<
+export const observeSanctionsIndexLoadFailure: NonNullable<
   CreateSanctionsIndexCacheOptions["reportFailure"]
 > = (failure, { source, editionId }) => {
   observeFailure(failure, {
@@ -241,7 +241,7 @@ export const createSanctionsIndexCache = ({
   build = buildScreeningIndex,
   failureMemoMs = SANCTIONS_INDEX_FAILURE_MEMO_MS,
   nowMs = () => Temporal.Now.instant().epochMilliseconds,
-  reportFailure = observeLoadFailure,
+  reportFailure = observeSanctionsIndexLoadFailure,
 }: CreateSanctionsIndexCacheOptions = {}): SanctionsIndexCache => {
   const bySource = new Map<
     SanctionsSource,

@@ -32,6 +32,11 @@ import {
   SANCTIONS_SOURCE_CONFIG,
   sanctionsSourceIds,
 } from "@/api/lib/lists/sanctions/source-config";
+import { resetFailureObservationsForTesting } from "@/api/lib/observability/failure-shadow";
+import {
+  installRecordingAnalytics,
+  installRecordingLogger,
+} from "@/api/tests/helpers/recording-telemetry";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { createTestPglite } from "@/api/tests/pglite-test-db";
 
@@ -740,6 +745,71 @@ test(
   DB_TEST_TIMEOUT_MS,
 );
 
+test.each(["missing", "extra"] as const)(
+  "public screening reports %s edition entries for every registered source",
+  async (mismatch) => {
+    const logs = installRecordingLogger();
+    const analytics = installRecordingAnalytics();
+    resetFailureObservationsForTesting();
+    const pool = createSanctionsMatcherPool({
+      clock: createMatcherTestClock(),
+    });
+    const publicScreen = createPublicSanctionsScreening({
+      pool,
+      loadEntries: async (options) => {
+        const entries = await loadEditionEntries(options);
+        expect(entries).toHaveLength(options.edition.entryCount);
+        return mismatch === "missing"
+          ? entries.slice(0, -1)
+          : entries.concat(entries);
+      },
+    });
+    try {
+      const outcome = (
+        await publicScreen({
+          db: requestDb,
+          subject: {
+            type: "organization",
+            name: "Synthetic Company",
+            identifiers: [],
+          },
+          practiceJurisdictions: [],
+          now: FRESH_NOW,
+        })
+      ).unwrap();
+      expect(outcome.status).toBe("unavailable");
+      expect(
+        outcome.lists.every(
+          ({ status, reason }) =>
+            status === "unavailable" && reason === "load-failed",
+        ),
+      ).toBe(true);
+      const failures = logs.records.filter(
+        ({ message }) => message === "sanctions.index_load_failed",
+      );
+      expect(failures).toHaveLength(sanctionsSourceIds().length);
+      expect(
+        new Set(failures.map(({ attributes }) => attributes["source"])),
+      ).toEqual(new Set(sanctionsSourceIds()));
+      for (const failure of failures) {
+        expect(failure.severityText).toBe("ERROR");
+        expect(failure.attributes).toMatchObject({
+          stage: "short-read",
+          feature: "sanctions.index_load",
+          "failure.grade": "defect",
+          "error.type": "SanctionsIndexLoadFailure",
+        });
+      }
+      expect(analytics.exceptions()).toHaveLength(sanctionsSourceIds().length);
+    } finally {
+      await pool.close();
+      logs.restore();
+      analytics.restore();
+      resetFailureObservationsForTesting();
+    }
+  },
+);
+
 test.each(["hang", "crash"])(
   "public worker %s never answers clear and recovers",
   async (fault) => {
@@ -826,6 +896,7 @@ test.each(["hang", "crash"])(
 );
 
 test("repeated public deadlines bound unfinished cold loads until held reads settle", async () => {
+  const logs = installRecordingLogger();
   const clock = createMatcherTestClock();
   const pool = createSanctionsMatcherPool({ size: 2, deadlineMs: 30, clock });
   const held = Promise.withResolvers<undefined>();
@@ -891,8 +962,14 @@ test("repeated public deadlines bound unfinished cold loads until held reads set
     });
     expect(unfinished).toBe(0);
     expect(pagesAfterCancellation).toBe(0);
+    expect(
+      logs.records.filter(
+        ({ message }) => message === "sanctions.index_load_failed",
+      ),
+    ).toEqual([]);
   } finally {
     held.resolve(undefined);
     await pool.close();
+    logs.restore();
   }
 });

@@ -7,7 +7,11 @@ import {
   sharedSanctionsMatcherPool,
   isSanctionsMatcherCancelled,
 } from "./matcher-pool";
-import { loadEditionEntries } from "./screening-index";
+import {
+  loadEditionEntries,
+  observeSanctionsIndexLoadFailure,
+  SanctionsIndexLoadFailure,
+} from "./screening-index";
 import {
   screenSanctionsSubject,
   unavailableSanctionsScreening,
@@ -67,10 +71,17 @@ export const createPublicSanctionsScreening = ({
                 }
               }
             }
-            if (
-              isSanctionsMatcherCancelled(session.signal) ||
-              (entries !== null && entries.length !== edition.entryCount)
-            ) {
+            if (isSanctionsMatcherCancelled(session.signal)) {
+              return null;
+            }
+            if (entries !== null && entries.length !== edition.entryCount) {
+              observeSanctionsIndexLoadFailure(
+                new SanctionsIndexLoadFailure({
+                  stage: "short-read",
+                  message: `Read ${entries.length} of ${edition.entryCount} entries`,
+                }),
+                { source, editionId: edition.id },
+              );
               return null;
             }
             const reply = await session.match({
