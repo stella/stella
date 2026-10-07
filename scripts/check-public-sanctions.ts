@@ -190,6 +190,10 @@ export const probe = (
         },
       },
       (response) => {
+        if (response.statusCode !== 200) {
+          request.destroy(new CanaryFailureError("http-status"));
+          return;
+        }
         const chunks: Buffer[] = [];
         let bytes = 0;
         response.on("data", (chunk: Buffer) => {
@@ -205,10 +209,6 @@ export const probe = (
           reject(new CanaryFailureError("response-aborted")),
         );
         response.on("end", () => {
-          if (response.statusCode !== 200) {
-            reject(new CanaryFailureError("http-status"));
-            return;
-          }
           let body: unknown;
           try {
             body = JSON.parse(Buffer.concat(chunks).toString("utf-8"));

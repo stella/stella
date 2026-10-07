@@ -310,6 +310,45 @@ test("public request uses the real POST contract; non-200 and invalid JSON fail"
   }
 });
 
+test.each(["oversized", "never-ending"] as const)(
+  "non-200 %s responses fail from headers before reading the body",
+  async (bodyKind) => {
+    const failures: Error[] = [];
+    let dataListeners = -1;
+    const requestHttps: RequestHttps = (_url, _options, onResponse) => {
+      const request = new PassThrough();
+      return Object.assign(request, {
+        destroy(error: Error) {
+          failures.push(error);
+          request.emit("error", error);
+          request.emit("close");
+        },
+        end() {
+          queueMicrotask(() => {
+            const response = Object.assign(new PassThrough(), {
+              statusCode: 503,
+            });
+            onResponse(response);
+            dataListeners = response.listenerCount("data");
+            if (bodyKind === "oversized") {
+              response.emit("data", Buffer.alloc(1024 * 1024 + 1));
+              response.emit("end");
+            }
+          });
+        },
+      });
+    };
+    await assert.rejects(
+      probe("https://example.test/", { requestHttps, deadlineMs: 1 }),
+      {
+        code: "http-status",
+      },
+    );
+    assert.equal(failures.length, 1);
+    assert.equal(dataListeners, 0);
+  },
+);
+
 test("scheduled entrypoint reports one safe result and the matching exit status", async () => {
   for (const healthy of [true, false]) {
     const logs: string[] = [];
