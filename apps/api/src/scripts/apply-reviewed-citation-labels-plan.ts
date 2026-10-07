@@ -3,9 +3,10 @@
  * runs, kept importable so a database test can execute them.
  */
 
-import { panic, Result } from "better-result";
+import { panic, Result, TaggedError } from "better-result";
 import type { SQL } from "drizzle-orm";
 import { sql } from "drizzle-orm";
+import { open, rename, rm } from "node:fs/promises";
 import * as v from "valibot";
 
 import { Temporal } from "@stll/time";
@@ -985,12 +986,93 @@ const applyReviewedLabelsTx = async (
   return { type: "applied", rows, summary, relabelled };
 };
 
-/** Store the accepted reviews and relabel their rows. */
-export const applyReviewedCitationLabels = async (
-  transact: Transact,
-  input: readonly unknown[],
-): Promise<ReviewedLabelApplication> =>
-  await runCitationGraphTransaction(
-    transact,
-    async (tx) => await applyReviewedLabelsTx(tx, input),
+const REVIEWED_LABEL_APPLY_FAILURES = [
+  "not-applied",
+  "results-not-placed",
+] as const;
+
+type ReviewedLabelApplyFailure = (typeof REVIEWED_LABEL_APPLY_FAILURES)[number];
+
+export const REVIEWED_LABEL_APPLY_FAILURE = {
+  NOT_APPLIED: "not-applied",
+  RESULTS_NOT_PLACED: "results-not-placed",
+} as const satisfies ConstantMap<ReviewedLabelApplyFailure>;
+
+class ReviewedLabelApplyError extends TaggedError("ReviewedLabelApplyError")<{
+  code: ReviewedLabelApplyFailure;
+  message: string;
+  cause: unknown;
+}> {}
+
+/** Write and flush a file, so it is on disk before the caller commits. */
+const writeDurably = async (path: string, content: string): Promise<void> => {
+  const file = await open(path, "w");
+  try {
+    await file.writeFile(content);
+    await file.sync();
+  } finally {
+    await file.close();
+  }
+};
+
+type ApplyReviewedCitationLabelsOptions = {
+  transact: Transact;
+  input: readonly unknown[];
+  /** Where the per-entry results land once the run commits. */
+  resultsPath: string;
+};
+
+/**
+ * Apply a run and record its per-entry results with it. The results are
+ * written next to `resultsPath` inside the transaction, so a failed write
+ * rolls the labels back; only a committed run moves them into place. A run
+ * that does not commit leaves no results file behind.
+ */
+export const applyReviewedCitationLabels = async ({
+  transact,
+  input,
+  resultsPath,
+}: ApplyReviewedCitationLabelsOptions): Promise<
+  Result<ReviewedLabelApplication, ReviewedLabelApplyError>
+> => {
+  const temporaryPath = `${resultsPath}.${process.pid}.tmp`;
+  const applied = await Result.tryPromise(
+    async () =>
+      await runCitationGraphTransaction(transact, async (tx) => {
+        const application = await applyReviewedLabelsTx(tx, input);
+        await writeDurably(
+          temporaryPath,
+          reviewedLabelResultLines(application.rows, "apply"),
+        );
+        return application;
+      }),
   );
+  if (applied.isErr()) {
+    const removed = await Result.tryPromise(
+      async () => await rm(temporaryPath, { force: true }),
+    );
+    const leftover = removed.isErr()
+      ? `; could not remove ${temporaryPath}: ${removed.error.message}`
+      : "";
+    return Result.err(
+      new ReviewedLabelApplyError({
+        code: REVIEWED_LABEL_APPLY_FAILURE.NOT_APPLIED,
+        message: `Nothing was applied: ${applied.error.message}${leftover}`,
+        cause: applied.error,
+      }),
+    );
+  }
+  const placed = await Result.tryPromise(
+    async () => await rename(temporaryPath, resultsPath),
+  );
+  if (placed.isErr()) {
+    return Result.err(
+      new ReviewedLabelApplyError({
+        code: REVIEWED_LABEL_APPLY_FAILURE.RESULTS_NOT_PLACED,
+        message: `The labels were applied and their results are in ${temporaryPath}, but moving them to ${resultsPath} failed: ${placed.error.message}`,
+        cause: placed.error,
+      }),
+    );
+  }
+  return Result.ok(applied.value);
+};

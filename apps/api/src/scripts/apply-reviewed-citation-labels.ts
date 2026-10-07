@@ -15,7 +15,9 @@
  * at equal origin a human review replaces the stored one, and a model label
  * replaces it only when produced later. An entry that may not replace the
  * stored review is refused and the stored review stands. `--results` writes one JSON line per entry with its
- * identifiers and outcome, and nothing of its content.
+ * identifiers and outcome, and nothing of its content. Under `--apply` the
+ * results are written before the run commits, so labels never change without
+ * their record: a run whose results cannot be written applies nothing.
  *
  * A review outlives refreshes of the citing decision: ingestion re-applies it
  * to the re-inserted rows, and the classifier passes leave reviewed rows
@@ -84,27 +86,41 @@ const { rootDb } = apply
   ? await enterCaseLawMaintenanceLane()
   : await openCaseLawReadOnlySession();
 
-const mode = apply ? "apply" : "plan";
-const outcome = apply
-  ? await applyReviewedCitationLabels(
-      rootDb.transaction.bind(rootDb),
-      parsed.output,
-    )
-  : await planReviewedCitationLabels(
-      rootDb.transaction.bind(rootDb),
-      parsed.output,
-    );
-
-const written = await Result.tryPromise(
-  async () =>
-    await Bun.write(resultsPath, reviewedLabelResultLines(outcome.rows, mode)),
-);
-if (written.isErr()) {
-  console.error(
-    `Could not write results to ${resultsPath}: ${written.error.message}`,
+const recordPlan = async () => {
+  const planned = await planReviewedCitationLabels(
+    rootDb.transaction.bind(rootDb),
+    parsed.output,
   );
-  process.exit(1);
-}
+  const written = await Result.tryPromise(
+    async () =>
+      await Bun.write(
+        resultsPath,
+        reviewedLabelResultLines(planned.rows, "plan"),
+      ),
+  );
+  if (written.isErr()) {
+    console.error(
+      `Could not write results to ${resultsPath}: ${written.error.message}`,
+    );
+    process.exit(1);
+  }
+  return planned;
+};
+
+const recordApplication = async () => {
+  const applied = await applyReviewedCitationLabels({
+    transact: rootDb.transaction.bind(rootDb),
+    input: parsed.output,
+    resultsPath,
+  });
+  if (applied.isErr()) {
+    console.error(applied.error.message);
+    process.exit(1);
+  }
+  return applied.value;
+};
+
+const outcome = apply ? await recordApplication() : await recordPlan();
 
 const { summary } = outcome;
 const verb = outcome.type === "applied" ? "" : "would be ";

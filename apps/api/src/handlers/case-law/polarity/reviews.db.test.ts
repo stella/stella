@@ -1,4 +1,6 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
+import { desc, eq, sql } from "drizzle-orm";
+import { drizzle } from "drizzle-orm/pglite";
 /**
  * A reviewed citation label against every writer of citation polarity: the
  * ingestion refresh, the recheck walk, the classifier's write, rule
@@ -8,8 +10,9 @@ import { afterAll, beforeAll, describe, expect, test } from "bun:test";
  * so every fixture is asserted to carry a rule's verdict before a review or a
  * pass is applied to it.
  */
-import { desc, eq, sql } from "drizzle-orm";
-import { drizzle } from "drizzle-orm/pglite";
+import { mkdtemp, readdir, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import path from "node:path";
 import * as v from "valibot";
 
 import { Temporal } from "@stll/time";
@@ -58,6 +61,7 @@ import {
 } from "@/api/lib/case-law/decision-text";
 import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
 import {
+  REVIEWED_LABEL_APPLY_FAILURE,
   REVIEWED_LABEL_INVALID_REASON,
   REVIEWED_LABEL_OUTCOME,
   applyReviewedCitationLabels,
@@ -79,6 +83,7 @@ let client: Awaited<ReturnType<typeof createTestPglite>>;
 let db: ReturnType<typeof connect>;
 let sourceId: SafeId<"caseLawSource">;
 let observationOrder = 0n;
+let resultsDir: string;
 
 const scopedDb: ScopedDb = async (callback) =>
   // SAFETY: pglite stands in for the transaction the pipeline expects.
@@ -262,6 +267,7 @@ const readReviews = async () =>
     .from(caseLawCitationReviews);
 
 beforeAll(async () => {
+  resultsDir = await mkdtemp(path.join(tmpdir(), "reviewed-labels-"));
   client = await createTestPglite();
   db = connect(client);
   sourceId = createSafeId<"caseLawSource">();
@@ -282,17 +288,29 @@ beforeAll(async () => {
 
 afterAll(async () => {
   await client.close();
+  await rm(resultsDir, { recursive: true, force: true });
 });
 
 const reviewedTransact: Parameters<
   typeof planReviewedCitationLabels
 >[0] = async (run) => await db.transaction(async (tx) => await run(tx));
 
+const resultsPath = (): string => path.join(resultsDir, "results.jsonl");
+
 const planLabels = async (input: readonly unknown[]) =>
   await planReviewedCitationLabels(reviewedTransact, input);
 
-const applyLabels = async (input: readonly unknown[]) =>
-  await applyReviewedCitationLabels(reviewedTransact, input);
+const applyLabels = async (input: readonly unknown[]) => {
+  const applied = await applyReviewedCitationLabels({
+    transact: reviewedTransact,
+    input,
+    resultsPath: resultsPath(),
+  });
+  if (applied.isErr()) {
+    throw applied.error;
+  }
+  return applied.value;
+};
 
 describe("reviewed citation labels", () => {
   test("a review moves a label off negative, is idempotent, and survives a refresh", async () => {
@@ -561,7 +579,9 @@ describe("reviewed citation labels", () => {
     });
 
     // One line per entry, in order, with identifiers and the outcome only.
-    const lines = reviewedLabelResultLines(outcome.rows, "apply")
+    const written = await Bun.file(resultsPath()).text();
+    expect(written).toBe(reviewedLabelResultLines(outcome.rows, "apply"));
+    const lines = written
       .trimEnd()
       .split("\n")
       .map((line): unknown => JSON.parse(line));
@@ -834,6 +854,30 @@ describe("reviewed citation labels", () => {
         }),
       })),
     );
+  });
+
+  test("a run whose results cannot be written applies nothing", async () => {
+    const cited = "sp. zn. 29 Cdo 1010/2015";
+    const labelled = await ingestRuleLabelled({
+      caseNumber: "30 Cdo 1010/2026",
+      cited,
+      rawHash: "results-unwritable",
+    });
+    const reviewsBefore = await readReviews();
+    const applied = await applyReviewedCitationLabels({
+      transact: reviewedTransact,
+      input: [labelFor(labelled, POLARITY.POSITIVE)],
+      resultsPath: path.join(resultsDir, "missing", "results.jsonl"),
+    });
+    if (applied.isOk()) {
+      throw new TypeError("a run whose results cannot be written must fail");
+    }
+    expect(applied.error.code).toBe(REVIEWED_LABEL_APPLY_FAILURE.NOT_APPLIED);
+    expect(await readReviews()).toEqual(reviewsBefore);
+    expect(await readCitation(cited)).toEqual(labelled);
+    expect(
+      (await readdir(resultsDir)).filter((name) => name.endsWith(".tmp")),
+    ).toEqual([]);
   });
 
   // Last: it retires a shipped rule for the rest of the file.
