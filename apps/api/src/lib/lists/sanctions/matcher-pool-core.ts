@@ -53,6 +53,7 @@ export type MatcherPoolOptions = {
   createWorker?: () => Worker;
   clock?: MatcherDeadlineClock;
   reportFailure: typeof reportSanctionsScreeningFailure;
+  reportUnownedFailure?: typeof reportSanctionsScreeningFailure;
 };
 
 type Slot = {
@@ -295,14 +296,13 @@ const ensureMatcherWorker = ({
   return worker;
 };
 
-/** Ephemeral, reconstructible indexes; each lease owns a worker for the entire request. */
-export const createSanctionsMatcherPoolCore = ({
-  size = SANCTIONS_MATCHER_CONFIG.poolSize,
-  deadlineMs = SANCTIONS_MATCHER_CONFIG.deadlineMs,
-  createWorker = createMatcherWorker,
-  clock = matcherDeadlineClock,
-  reportFailure,
-}: MatcherPoolOptions) => {
+const validateMatcherPoolConfig = ({
+  size,
+  deadlineMs,
+}: {
+  size: number;
+  deadlineMs: number;
+}) => {
   if (
     !Number.isInteger(size) ||
     size < 1 ||
@@ -312,8 +312,24 @@ export const createSanctionsMatcherPoolCore = ({
   ) {
     panic("Invalid sanctions matcher pool configuration");
   }
+};
+
+/** Ephemeral, reconstructible indexes; each lease owns a worker for the entire request. */
+export const createSanctionsMatcherPoolCore = ({
+  size = SANCTIONS_MATCHER_CONFIG.poolSize,
+  deadlineMs = SANCTIONS_MATCHER_CONFIG.deadlineMs,
+  createWorker = createMatcherWorker,
+  clock = matcherDeadlineClock,
+  reportFailure,
+  reportUnownedFailure = reportFailure,
+}: MatcherPoolOptions) => {
+  validateMatcherPoolConfig({ size, deadlineMs });
   const detached = createDetached((error) => {
-    reportFailure({ stage: "matcher-pool", reason: "worker-retire", error });
+    reportUnownedFailure({
+      stage: "matcher-pool",
+      reason: "worker-retire",
+      error,
+    });
   });
   const slots: Slot[] = Array.from({ length: size }, () => ({
     worker: null,
@@ -385,7 +401,10 @@ export const createSanctionsMatcherPoolCore = ({
         reportFailure({ stage: "matcher-pool", reason: cause, error });
         controller.abort();
         if (lease.slot !== null && lease.retirement === null) {
-          lease.retirement = retireMatcherSlot(lease.slot, reportFailure);
+          lease.retirement = retireMatcherSlot(
+            lease.slot,
+            reportUnownedFailure,
+          );
         }
         failed.resolve(outcome);
         return outcome;
@@ -409,7 +428,7 @@ export const createSanctionsMatcherPoolCore = ({
           slot,
           createWorker,
           notify,
-          reportFailure,
+          reportFailure: reportUnownedFailure,
           detached,
           fail,
         });
@@ -496,7 +515,9 @@ export const createSanctionsMatcherPoolCore = ({
       }
       notify();
       await Promise.all(
-        slots.map(async (slot) => await retireMatcherSlot(slot, reportFailure)),
+        slots.map(
+          async (slot) => await retireMatcherSlot(slot, reportUnownedFailure),
+        ),
       );
     },
   };

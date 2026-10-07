@@ -1,3 +1,4 @@
+import { panic } from "better-result";
 import { expect, test } from "bun:test";
 import { MessageChannel, Worker } from "node:worker_threads";
 
@@ -9,6 +10,10 @@ import {
 } from "@stll/sanctions";
 import type { ParsedList } from "@stll/sanctions";
 
+import {
+  installRecordingAnalytics,
+  installRecordingLogger,
+} from "@/api/tests/helpers/recording-telemetry";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 import {
@@ -16,6 +21,7 @@ import {
   SANCTIONS_MATCHER_CONFIG,
 } from "./matcher-pool";
 import type { MatcherWorkOutcome } from "./matcher-pool";
+import { createSanctionsMatcherPoolCore } from "./matcher-pool-core";
 import type { SanctionsMatcherRequest } from "./matcher-protocol";
 import type {
   SanctionsMatcherFailureCause,
@@ -617,7 +623,13 @@ test.each(Object.values(observableFaults))(
         }
         return await session.match(request("Private Subject"));
       });
-      expect(failed).toEqual({ status: "unavailable", cause: fault });
+      expect(failed).toEqual({
+        status: "unavailable",
+        cause: fault,
+        ...(observations.at(0)?.at(0)?.error === undefined
+          ? {}
+          : { error: observations.at(0)?.at(0)?.error }),
+      });
       expect(
         observations.map(([observation]) => ({
           stage: observation.stage,
@@ -646,6 +658,9 @@ test("failed worker retirement is observed and releases admission for another re
     reportFailure: (report) => {
       reports.push(report);
     },
+    reportUnownedFailure: (report) => {
+      reports.push(report);
+    },
     createWorker: () =>
       asTestRaw<Worker>({
         on: () => {},
@@ -660,7 +675,7 @@ test("failed worker retirement is observed and releases admission for another re
       await pool.run(async () => {
         throw new TypeError("Operation failure");
       }),
-    ).toEqual({ status: "unavailable", cause: "operation" });
+    ).toMatchObject({ status: "unavailable", cause: "operation" });
     await new Promise<void>((resolve) => {
       setImmediate(resolve);
     });
@@ -826,5 +841,124 @@ test("real worker work exhaustion retains its edition and screens the next cache
     expect(reports).toEqual([]);
   } finally {
     await pool.close();
+  }
+});
+
+test("an externally exited idle worker reports once without a lease failure", async () => {
+  const leased: Parameters<typeof reportSanctionsScreeningFailure>[0][] = [];
+  const unowned: Parameters<typeof reportSanctionsScreeningFailure>[0][] = [];
+  const reported = Promise.withResolvers<undefined>();
+  const workers: Worker[] = [];
+  const pool = createSanctionsMatcherPool({
+    clock: createMatcherTestClock(),
+    createWorker: () => {
+      const worker = actualWorker();
+      workers.push(worker);
+      return worker;
+    },
+    reportFailure: (report) => {
+      leased.push(report);
+    },
+    reportUnownedFailure: (report) => {
+      unowned.push(report);
+      reported.resolve(undefined);
+    },
+  });
+  try {
+    const completed = await pool.run(
+      async (session) => await session.match(request("Acme Trading")),
+    );
+    expect(completed.status).toBe("completed");
+    const worker = workers.at(0);
+    if (!worker) {
+      panic("Expected a real matcher worker");
+    }
+    await worker.terminate();
+    await reported.promise;
+    expect(unowned).toEqual([
+      { stage: "matcher-pool", reason: "worker-exit", error: undefined },
+    ]);
+    expect(leased).toEqual([]);
+    expect(
+      (
+        await pool.run(
+          async (session) => await session.match(request("Acme Trading")),
+        )
+      ).status,
+    ).toBe("completed");
+    expect(workers).toHaveLength(2);
+  } finally {
+    await pool.close();
+  }
+  expect(unowned).toHaveLength(1);
+});
+
+test("direct core users retain retirement reporting through their default reporter", async () => {
+  const reports: Parameters<typeof reportSanctionsScreeningFailure>[0][] = [];
+  const pool = createSanctionsMatcherPoolCore({
+    createWorker: () =>
+      asTestRaw<Worker>({
+        on: () => {},
+        unref: () => {},
+        terminate: async () => {
+          throw new TypeError("Retirement refused");
+        },
+      }),
+    reportFailure: (report) => {
+      reports.push(report);
+    },
+  });
+  expect(await pool.run(async () => "completed")).toEqual({
+    status: "completed",
+    value: "completed",
+  });
+  await pool.close();
+  expect(reports).toHaveLength(1);
+  expect(reports.at(0)).toMatchObject({
+    stage: "matcher-pool",
+    reason: "worker-retire",
+  });
+});
+
+test("the API binding captures an unowned retirement failure exactly once", async () => {
+  const analytics = installRecordingAnalytics();
+  const logs = installRecordingLogger();
+  const leased: Parameters<typeof reportSanctionsScreeningFailure>[0][] = [];
+  const pool = createSanctionsMatcherPool({
+    createWorker: () =>
+      asTestRaw<Worker>({
+        on: () => {},
+        unref: () => {},
+        terminate: async () => {
+          throw new TypeError("Retirement refused");
+        },
+      }),
+    reportFailure: (report) => {
+      leased.push(report);
+    },
+  });
+  try {
+    expect(await pool.run(async () => "completed")).toEqual({
+      status: "completed",
+      value: "completed",
+    });
+    await pool.close();
+    expect(leased).toEqual([]);
+    expect(analytics.exceptions()).toHaveLength(1);
+    expect(analytics.exceptions().at(0)?.properties).toMatchObject({
+      "failure.grade": "defect",
+      "failure.reason": "sanctions_screening_failed",
+    });
+    expect(
+      logs.records.filter(
+        ({ message }) => message === "sanctions.screening_failed",
+      ),
+    ).toHaveLength(1);
+    await pool.close();
+    expect(analytics.exceptions()).toHaveLength(1);
+  } finally {
+    await pool.close();
+    analytics.restore();
+    logs.restore();
   }
 });
