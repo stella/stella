@@ -13,6 +13,7 @@ import path from "node:path";
 
 import { inspectConfiguration, scanAll, type RatchetMetric } from "./ratchet";
 import ratchetDefinitionPaths from "./ratchet-definition-paths.json" with { type: "json" };
+import { workflowJobSteps, workflowStepByName } from "./workflow-steps";
 
 const metric = {
   id: "test-metric",
@@ -284,24 +285,30 @@ test("a counter cannot supply an inflated total detached from its files", () => 
   ).toThrow("does not equal its per-file total");
 });
 
-const workflow = readFileSync(
-  new URL("../.github/workflows/ci.yml", import.meta.url),
-  "utf-8",
+const workflow = Bun.YAML.parse(
+  readFileSync(
+    new URL("../.github/workflows/ci.yml", import.meta.url),
+    "utf-8",
+  ),
 );
-const selection = workflow.slice(
-  workflow.indexOf("      - name: Select measured ratchet base"),
-  workflow.indexOf("      - name: Ratchet guard"),
+const policySteps = workflowJobSteps(workflow, "ci-checks-policy");
+const selectionStep = workflowStepByName(
+  policySteps,
+  "Select measured ratchet base from the target branch",
 );
-const selectionCommand = selection
-  .slice(selection.indexOf("        run: |\n") + "        run: |\n".length)
-  .split("\n")
-  .map((line) => line.replace(/^ {10}/u, ""))
-  .join("\n");
+const ratchetGuardStep = workflowStepByName(policySteps, "Ratchet guard");
+const selectionCommand = selectionStep["run"];
+if (typeof selectionCommand !== "string") {
+  throw new TypeError("Ratchet base selection step must have a run command");
+}
 
 test("CI selects the merge base on PRs and the event base on merge groups", () => {
-  expect(selection).toContain("github.event.merge_group.base_sha");
-  expect(workflow.indexOf("Select measured ratchet base")).toBeLessThan(
-    workflow.indexOf("Ratchet guard"),
+  expect(selectionStep["env"]).toMatchObject({
+    MERGE_GROUP_BASE_SHA: `\${{ github.event.merge_group.base_sha }}`,
+    BASE_REF: `\${{ github.base_ref || 'main' }}`,
+  });
+  expect(policySteps.indexOf(selectionStep)).toBeLessThan(
+    policySteps.indexOf(ratchetGuardStep),
   );
   withClone((root) => {
     const base = git(root, "rev-parse", "HEAD");

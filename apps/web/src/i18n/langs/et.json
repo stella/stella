@@ -349,6 +349,7 @@
     },
     "view": {
       "chooseList": "Vali loend",
+      "createList": "Loo loend",
       "evidenceList": "Faktid allikast",
       "noLists": "Sellel toimikul pole ühtegi loendit.",
       "pickList": "Valige loend, mille faktide alusel selle toimiku dokumente kontrollitakse."

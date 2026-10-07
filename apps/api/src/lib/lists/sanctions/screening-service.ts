@@ -39,6 +39,9 @@ import type {
 } from "@/api/lib/lists/sanctions/screening-vocabulary";
 import { sanctionsSourceIds } from "@/api/lib/lists/sanctions/source-config";
 
+import { reportSanctionsScreeningFailure } from "./screening-failure";
+import type { SanctionsScreeningFailureCause } from "./screening-failure";
+
 // One screening service for every surface that screens a name: the
 // counterparty check now and the public search later. Both read the same
 // active editions through the same index, cutoff and freshness rules, so a
@@ -47,7 +50,7 @@ import { sanctionsSourceIds } from "@/api/lib/lists/sanctions/source-config";
 // input.
 //
 // Names, birth dates and nationalities are personal data. Nothing in this
-// module logs, and callers must not log the subject either.
+// module logs identity fields, and callers must not log the subject either.
 
 /** Possible matches returned per list; `totalMatches` counts the rest. */
 export const SANCTIONS_MATCH_LIMIT = 10;
@@ -296,13 +299,20 @@ const toPossibleMatch = (
   },
 });
 
+type SanctionsListMatchFailure = {
+  code: "load-failed";
+  stage: "public-matcher" | "list-screening";
+  reason: SanctionsScreeningFailureCause;
+  cause?: unknown;
+};
+
 type SanctionsListMatcher = (props: {
   db: SanctionsReadDb;
   source: SanctionsSource;
   edition: SanctionsActiveEdition;
   query: ScreeningQuery;
   limit: number;
-}) => Promise<ScreeningResult | null>;
+}) => Promise<Result<ScreeningResult, SanctionsListMatchFailure>>;
 
 type ScreenListProps = {
   db: SanctionsReadDb;
@@ -312,6 +322,7 @@ type ScreenListProps = {
   indexCache: SanctionsIndexCache;
   matcher: SanctionsListMatcher | undefined;
   resultMode: "bounded" | "complete";
+  reportFailure: typeof reportSanctionsScreeningFailure;
 };
 
 const screenList = async ({
@@ -322,6 +333,7 @@ const screenList = async ({
   indexCache,
   matcher,
   resultMode,
+  reportFailure,
 }: ScreenListProps): Promise<SanctionsListOutcome> => {
   const { edition, lastSuccessfulVerifiedAt } = freshness;
   // Stale or missing data never answers: only a fresh edition can be clear.
@@ -338,15 +350,13 @@ const screenList = async ({
       : SANCTIONS_MATCH_LIMIT;
   const matched = await Result.tryPromise(async () => {
     if (matcher !== undefined) {
-      return Result.ok(
-        await matcher({
-          db,
-          source: freshness.source,
-          edition,
-          query,
-          limit,
-        }),
-      );
+      return await matcher({
+        db,
+        source: freshness.source,
+        edition,
+        query,
+        limit,
+      });
     }
     const index = await indexCache.get({
       db,
@@ -354,7 +364,11 @@ const screenList = async ({
       edition,
     });
     if (index.isErr()) {
-      return Result.err(index.error);
+      return Result.err({
+        code: index.error.code,
+        reason: "index-load" as const,
+        stage: "list-screening" as const,
+      });
     }
     const screened = screen(index.value, query, {
       cutoff: DEFAULT_CUTOFF,
@@ -362,20 +376,34 @@ const screenList = async ({
     });
     if (screened.isErr()) {
       if (screened.error.code === "work-limit") {
-        return Result.err({ code: "load-failed" as const });
+        return Result.err({
+          code: "load-failed" as const,
+          reason: "work-limit" as const,
+          stage: "list-screening" as const,
+        });
       }
       return panic("A validated sanctions query was rejected");
     }
     return Result.ok(screened.value);
   });
   if (matched.isErr()) {
+    reportFailure({
+      stage: "list-screening",
+      reason: "operation",
+      source: freshness.source,
+      error: matched.error,
+    });
     return unavailableList(base, "load-failed", freshness);
   }
   if (matched.value.isErr()) {
+    reportFailure({
+      stage: matched.value.error.stage,
+      reason: matched.value.error.reason,
+      error:
+        "cause" in matched.value.error ? matched.value.error.cause : undefined,
+      source: freshness.source,
+    });
     return unavailableList(base, matched.value.error.code, freshness);
-  }
-  if (matched.value.value === null) {
-    return unavailableList(base, "load-failed", freshness);
   }
   const screened = matched.value.value;
   const screenedEdition: ScreenedEdition = {
@@ -388,6 +416,11 @@ const screenList = async ({
   );
   if (first === undefined) {
     if (screened.truncated) {
+      reportFailure({
+        stage: "list-screening",
+        reason: "truncated-empty",
+        source: freshness.source,
+      });
       return unavailableList(base, "load-failed", freshness);
     }
     return {
@@ -423,6 +456,7 @@ type ScreenSanctionsSubjectProps = {
   now?: Date | undefined;
   indexCache?: SanctionsIndexCache | undefined;
   matcher?: SanctionsListMatcher;
+  reportFailure?: typeof reportSanctionsScreeningFailure;
 };
 
 export const SANCTIONS_SCREENING_BATCH_SIZE = 100;
@@ -444,6 +478,7 @@ export const screenSanctionsSubjects = async ({
   resultMode = "bounded",
   indexCache = sharedSanctionsIndexCache,
   matcher,
+  reportFailure = reportSanctionsScreeningFailure,
 }: ScreenSanctionsSubjectsOptions): Promise<
   Result<SanctionsScreening, SanctionsSubjectError>[]
 > => {
@@ -465,6 +500,7 @@ export const screenSanctionsSubjects = async ({
       return { status: "ready", query } as const;
     }
     if (result.error.code === "work-limit") {
+      reportFailure({ stage: "whole-screening", reason: "work-limit" });
       return { status: "answered", result: unavailable() } as const;
     }
     return {
@@ -484,6 +520,11 @@ export const screenSanctionsSubjects = async ({
     async () => await readSanctionsFreshness({ db, now }),
   );
   if (freshness.isErr()) {
+    reportFailure({
+      stage: "whole-screening",
+      reason: "freshness-read",
+      error: freshness.error,
+    });
     return validated.map((query) =>
       query.status === "answered" ? query.result : unavailable(),
     );
@@ -513,6 +554,7 @@ export const screenSanctionsSubjects = async ({
           indexCache,
           matcher,
           resultMode,
+          reportFailure,
         }),
       );
     }
