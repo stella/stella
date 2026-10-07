@@ -230,15 +230,6 @@ const workflowStepValue = (job: string, stepName: string) => {
   return workflowStepByName(parsedJob["steps"], stepName);
 };
 
-const workflowStep = (job: string, stepName: string): string =>
-  Object.entries(workflowStepValue(job, stepName))
-    .map(([key, value]) => {
-      const rendered =
-        typeof value === "string" ? value : Bun.YAML.stringify(value).trim();
-      return `${key}: ${rendered}`;
-    })
-    .join("\n");
-
 const actionStep = (action: string, stepName: string): string =>
   stepOf(action, stepName, 4);
 
@@ -266,19 +257,30 @@ describe("detect-e2e-changes", () => {
     steps:
       - parallel:
           - name: Selected check
-            run: bun test scripts/selected.test.ts
+            if: ${githubExpression("steps.setup.outputs.enabled == 'true'")}
+            with:
+              manifest: ${githubExpression("steps.setup.outputs.manifest")}
+              options:
+                mode: strict
+            run: |-
+              bun test scripts/selected.test.ts
           - name: Neighboring check
             run: bun test scripts/neighboring.test.ts
 `;
 
-    expect(workflowStep(job, "Selected check")).toContain(
-      "bun test scripts/selected.test.ts",
+    const selected = workflowStepValue(job, "Selected check");
+    expect(selected["if"]).toBe(
+      githubExpression("steps.setup.outputs.enabled == 'true'"),
     );
-    expect(workflowStep(job, "Selected check")).not.toContain(
-      "scripts/neighboring.test.ts",
-    );
+    expect(selected["with"]).toEqual({
+      manifest: githubExpression("steps.setup.outputs.manifest"),
+      options: { mode: "strict" },
+    });
     expect(workflowStepRun(job, "Selected check")).toBe(
       "bun test scripts/selected.test.ts",
+    );
+    expect(workflowStepRun(job, "Selected check")).not.toContain(
+      "scripts/neighboring.test.ts",
     );
   });
 
@@ -405,12 +407,17 @@ describe("detect-e2e-changes", () => {
       "Setup Bun for dependency scope",
       "Check changed file scope",
     ]) {
-      expect(workflowStep(plan, stepName), stepName).toContain(
-        "steps.check.outputs.trusted == 'true'",
-      );
+      expect(
+        requiredExpression(workflowStepValue(plan, stepName)["if"]),
+        stepName,
+      ).toContain("steps.check.outputs.trusted == 'true'");
     }
-    expect(workflowStep(plan, "Resolve browser image")).toContain(
-      "if: steps.completed-depth.outputs.run_required != 'false' && (steps.check.outputs.trusted == 'true' || github.event_name == 'workflow_dispatch')",
+    expect(
+      requiredExpression(
+        workflowStepValue(plan, "Resolve browser image")["if"],
+      ),
+    ).toBe(
+      "steps.completed-depth.outputs.run_required != 'false' && (steps.check.outputs.trusted == 'true' || github.event_name == 'workflow_dispatch')",
     );
     expect(workflow).not.toContain("needs.trust-check");
     expect(workflow).not.toContain("needs.ci-changes");
@@ -419,7 +426,7 @@ describe("detect-e2e-changes", () => {
   test("runs Redis collaboration checks for every owning boundary", () => {
     const plan = workflowJob("ci-plan");
     const serviceSuites = workflowJob("service-suites");
-    const collabRedis = workflowStep(
+    const collabRedis = workflowStepValue(
       serviceSuites,
       "Run cross-replica collaboration suite",
     );
@@ -439,10 +446,12 @@ describe("detect-e2e-changes", () => {
     expect(serviceSuites).toContain(
       "needs.ci-plan.outputs.service_suites_required == 'true'",
     );
-    expect(collabRedis).toContain(
-      `if: ${githubExpression("!cancelled() && needs.ci-plan.outputs.collaboration_suite_required == 'true'")}`,
+    expect(requiredExpression(collabRedis["if"])).toBe(
+      githubExpression(
+        "!cancelled() && needs.ci-plan.outputs.collaboration_suite_required == 'true'",
+      ),
     );
-    expect(collabRedis).toContain(
+    expect(requiredExpression(collabRedis["run"])).toBe(
       "bun --filter @stll/collab test src/server.test.ts",
     );
     const result = workflowJob("ci-result");
@@ -491,16 +500,19 @@ describe("detect-e2e-changes", () => {
     // The route network baseline has a leg of its own, and the Playwright
     // shards skip it there.
     expect(production).toContain("shard: [1, 2, network-baseline]");
-    expect(workflowStep(production, "Check route network baseline")).toContain(
-      "matrix.shard == 'network-baseline'",
-    );
+    expect(
+      requiredExpression(
+        workflowStepValue(production, "Check route network baseline")["if"],
+      ),
+    ).toContain("matrix.shard == 'network-baseline'");
     for (const stepName of [
       "Run Playwright shard",
       "Run route-smoke Playwright shard",
     ]) {
-      expect(workflowStep(production, stepName), stepName).toContain(
-        "matrix.shard != 'network-baseline'",
-      );
+      expect(
+        requiredExpression(workflowStepValue(production, stepName)["if"]),
+        stepName,
+      ).toContain("matrix.shard != 'network-baseline'");
     }
   });
 
@@ -602,21 +614,21 @@ describe("detect-e2e-changes", () => {
     ).toContain("id: stack");
     const productionJob = workflowJob("e2e-production-shard");
     expect(
-      workflowStep(productionJob, "Setup production browser stack"),
-    ).toContain("id: e2e-stack");
+      workflowStepValue(productionJob, "Setup production browser stack")["id"],
+    ).toBe("e2e-stack");
     for (const stepName of [
       "Run Playwright shard",
       "Upload Playwright blob report",
       "Upload server logs",
     ]) {
-      expect(workflowStep(productionJob, stepName)).toContain(
-        "steps.e2e-stack.outputs.status == 'ready'",
-      );
+      expect(
+        requiredExpression(workflowStepValue(productionJob, stepName)["if"]),
+      ).toContain("steps.e2e-stack.outputs.status == 'ready'");
     }
     const canary = workflowJob("e2e-vite-canary");
-    expect(workflowStep(canary, "Start docker stack and API server")).toContain(
-      "id: e2e-stack",
-    );
+    expect(
+      workflowStepValue(canary, "Start docker stack and API server")["id"],
+    ).toBe("e2e-stack");
     for (const stepName of [
       "Start web dev server",
       "Wait for web dev server",
@@ -627,9 +639,9 @@ describe("detect-e2e-changes", () => {
       "Upload Playwright blob report",
       "Upload server logs",
     ]) {
-      expect(workflowStep(canary, stepName)).toContain(
-        "steps.e2e-stack.outputs.status == 'ready'",
-      );
+      expect(
+        requiredExpression(workflowStepValue(canary, stepName)["if"]),
+      ).toContain("steps.e2e-stack.outputs.status == 'ready'");
     }
   });
 
@@ -745,8 +757,12 @@ describe("detect-e2e-changes", () => {
     expect(plan).toContain(
       `marketing_screenshots_required: ${githubExpression("steps.marketing-release.outputs.required")}`,
     );
-    expect(workflowStep(plan, "Plan release marketing screenshots")).toContain(
-      "if: steps.completed-depth.outputs.run_required != 'false' && (steps.check.outputs.trusted == 'true' || github.event_name == 'workflow_dispatch')",
+    expect(
+      requiredExpression(
+        workflowStepValue(plan, "Plan release marketing screenshots")["if"],
+      ),
+    ).toBe(
+      "steps.completed-depth.outputs.run_required != 'false' && (steps.check.outputs.trusted == 'true' || github.event_name == 'workflow_dispatch')",
     );
 
     const screenshots = workflowJob("marketing-screenshots");
@@ -842,7 +858,7 @@ describe("detect-e2e-changes", () => {
     expect(marketingUpdateWorkflow).not.toContain("--ref");
 
     const update = jobOf(marketingWorkflow, "update");
-    const validate = workflowStep(update, "Validate inputs");
+    const validate = workflowStepRun(update, "Validate inputs");
     expect(validate).toContain('if [[ "$WORKFLOW_REF" != "main" ]]');
     expect(validate).toContain('if [[ "$BRANCH" == "main" ]]');
     expect(validate).toContain('"$BRANCH" =~ ^[A-Za-z0-9._/-]+$');
@@ -1204,20 +1220,29 @@ describe("detect-e2e-changes", () => {
     ];
     for (const scope of scopes) {
       expect(job.indexOf(scope)).toBeGreaterThan(-1);
-      expect(workflowStep(job, scope)).not.toContain("bun ");
+      expect(
+        requiredExpression(workflowStepValue(job, scope)["run"] ?? ""),
+      ).not.toContain("bun ");
       for (const name of setupSteps) {
         expect(job.indexOf(name)).toBeGreaterThan(-1);
         expect(job.indexOf(scope)).toBeLessThan(job.indexOf(name));
-        expect(workflowStep(job, name)).toContain(required);
+        expect(requiredExpression(workflowStepValue(job, name)["if"])).toBe(
+          required.slice("if: ".length),
+        );
       }
     }
   });
 
   test("browser setup verifies image executables without a host cache or installs", () => {
     const ciBrowser = workflowJob("ci-browser");
-    const runtime = workflowStep(ciBrowser, "Install UI browser test runtime");
-    expect(runtime).toContain("dependency-mode: preinstalled");
-    expect(runtime).toContain("browsers: chromium webkit");
+    const runtime = workflowStepValue(
+      ciBrowser,
+      "Install UI browser test runtime",
+    );
+    expect(runtime["with"]).toEqual({
+      browsers: "chromium webkit",
+      "dependency-mode": "preinstalled",
+    });
     expect(marketingCapture).toContain("dependency-mode: container");
     expect(playwrightSetup).not.toContain("actions/cache@");
     expect(playwrightSetup).not.toContain("playwright install");
@@ -1269,17 +1294,23 @@ describe("detect-e2e-changes", () => {
     expect(workflowJob("ci-plan")).toContain(
       "cat .github/actions/setup-playwright/image.txt",
     );
-    const bunSetup = workflowStep(workflowJob("ci-browser"), "Setup Bun");
-    expect(bunSetup).toContain("@oven/bun-linux-x64@$version");
-    expect(bunSetup).toContain("--ignore-scripts");
+    const ciBrowser = workflowJob("ci-browser");
+    const bunSetup = workflowStepValue(ciBrowser, "Setup Bun");
+    const bunSetupRun = requiredExpression(bunSetup["run"]);
+    expect(bunSetupRun).toContain("@oven/bun-linux-x64@$version");
+    expect(bunSetupRun).toContain("--ignore-scripts");
     // The cached owner's pinned setup-bun reuses this standard install path.
-    expect(bunSetup).toContain('bin="$HOME/.bun/bin"');
-    const cachedSetup = workflowStep(
-      workflowJob("ci-browser"),
+    expect(bunSetupRun).toContain('bin="$HOME/.bun/bin"');
+    const cachedSetup = workflowStepValue(
+      ciBrowser,
       "Restore Bun install cache",
     );
-    expect(cachedSetup).toContain("stella/.github/actions/setup-bun-cached@");
-    expect(cachedSetup).toContain("bun-version-file: package.json");
+    expect(cachedSetup["uses"]).toMatch(
+      /^stella\/\.github\/actions\/setup-bun-cached@/u,
+    );
+    expect(contractRecord(cachedSetup["with"])["bun-version-file"]).toBe(
+      "package.json",
+    );
   });
 
   test("isolates cross-engine stack redaction from Chromium E2E", () => {
@@ -1322,11 +1353,13 @@ describe("detect-e2e-changes", () => {
       "needs.ci-plan.outputs.stack_redaction_browsers_required == 'true'",
     );
     expect(
-      workflowStep(
-        stackRedaction,
-        "Verify Firefox and WebKit in the pinned image",
-      ),
-    ).toContain("browsers: firefox webkit");
+      contractRecord(
+        workflowStepValue(
+          stackRedaction,
+          "Verify Firefox and WebKit in the pinned image",
+        )["with"],
+      )["browsers"],
+    ).toBe("firefox webkit");
     expect(stackRedaction).toContain("run-in-image.sh");
     expect(stackRedaction).toContain(
       "bun --filter @stll/web test:e2e:stack-redaction",

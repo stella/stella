@@ -441,12 +441,28 @@ const documentationScope = (step: Step): Step => {
   return { ...step, if: step["if"].replace(` && (${PACKAGE_SCOPE})`, "") };
 };
 
+// Per-test limits change scheduling budgets, not the check command or its inputs.
+const withoutTestTimeout = (step: Step): Step => {
+  const run = step["run"];
+  if (typeof run !== "string") {
+    return step;
+  }
+  return {
+    ...step,
+    run: run.replaceAll(
+      /^(\s*bun (?:test|scripts\/run-unlisted-script-tests\.ts)) --timeout(?:=| )\d+\b/gmu,
+      "$1",
+    ),
+  };
+};
+
 const ownedSteps = (steps: readonly Step[]) =>
   steps
     .filter(({ name }) => !prerequisites.has(name))
     .map(documentationScope)
     .map(withoutContinuation)
     .map(withoutPreparedGeneration)
+    .map(withoutTestTimeout)
     .map(withoutStepId)
     .map((step) => {
       const { background, ...check } = step;
@@ -710,6 +726,7 @@ test("each CI check leg preserves merge-base setup, supply-chain protection and 
       if (partitionIds.at(index) === "ci-checks-rest") {
         reordered.add("Prepare environment");
         reordered.add("Content delivery declarations");
+        reordered.add("Test release image CI gate");
       }
       expect(
         steps
@@ -1166,7 +1183,7 @@ test("repository backgrounds are bounded and joined before failure cancellation"
       expect(pending.has(id), id).toBe(false);
       pending.add(id);
       launched++;
-      expect(pending.size).toBeLessThanOrEqual(3);
+      expect(pending.size).toBeLessThanOrEqual(2);
       expect(step["continue-on-error"]).toBeUndefined();
       continue;
     }
@@ -1189,8 +1206,104 @@ test("repository backgrounds are bounded and joined before failure cancellation"
       expect(pending.size).toBe(0);
     }
   }
-  expect(launched).toBe(7);
+  expect(launched).toBe(6);
   expect(pending.size).toBe(0);
+});
+
+const CONTENDED_TEST_TIMEOUTS = {
+  "Test capability shard merge and package parity": 400_000,
+  "Test remaining repository scripts": 35_000,
+  "Test release image CI gate": 50_000,
+  "Test api scripts": 12_000,
+  "Test CLI runtime package parity": 80_000,
+  "Playwright config scope": 5000,
+} as const;
+
+const backgroundTimeoutSteps = (raw: unknown): Step[] =>
+  v.parse(
+    v.array(v.looseObject({ name: v.string() })),
+    v.parse(v.array(v.record(v.string(), v.unknown())), raw).flatMap((step) =>
+      "parallel" in step
+        ? flattenWorkflowSteps(step["parallel"]).map((child) => ({
+            ...child,
+            background: true,
+          }))
+        : [step],
+    ),
+  );
+
+const assertExplicitBackgroundTestTimeouts = (steps: readonly Step[]) => {
+  for (const step of steps) {
+    const run = step["run"];
+    if (typeof run !== "string") {
+      continue;
+    }
+    const invocations = [...run.matchAll(/\bbun test\b[^\n]*/gu)];
+    if (step["background"] === true) {
+      for (const invocation of invocations) {
+        expect(invocation[0], step.name).toMatch(
+          /\bbun test --timeout(?:=| )[1-9]\d*\b/u,
+        );
+      }
+    }
+  }
+};
+
+const assertBackgroundTestTimeouts = (steps: readonly Step[]) => {
+  assertExplicitBackgroundTestTimeouts(steps);
+  for (const [name, timeout] of Object.entries(CONTENDED_TEST_TIMEOUTS)) {
+    const step = steps.find((entry) => entry.name === name);
+    expect(step, name).toBeDefined();
+    expect(step?.["run"], name).toContain(`--timeout ${timeout}`);
+  }
+};
+
+test("background Bun tests declare measured contention budgets without changing checks", () => {
+  const steps = backgroundTimeoutSteps(
+    v.parse(v.object({ steps: v.unknown() }), jobs["ci-checks-rest"]).steps,
+  );
+  assertBackgroundTestTimeouts(steps);
+  for (const name of Object.keys(CONTENDED_TEST_TIMEOUTS)) {
+    const missing = steps.map((step) =>
+      step.name === name && typeof step["run"] === "string"
+        ? { ...step, run: step["run"].replace(/ --timeout \d+\b/gu, "") }
+        : step,
+    );
+    expect(() => assertBackgroundTestTimeouts(missing)).toThrow(name);
+  }
+  expect(
+    withoutTestTimeout({
+      name: "Check",
+      run: "bun test --timeout 35000 scripts/example.test.ts",
+    }),
+  ).toEqual({ name: "Check", run: "bun test scripts/example.test.ts" });
+  expect(
+    withoutTestTimeout({ name: "Check", run: "echo --timeout 35000" }),
+  ).toEqual({ name: "Check", run: "echo --timeout 35000" });
+});
+
+test("implicit nested parallel tests cannot omit their contention timeout", () => {
+  const command = {
+    name: "Nested test",
+    run: "bun test scripts/example.test.ts",
+  };
+  expect(() =>
+    assertExplicitBackgroundTestTimeouts(
+      backgroundTimeoutSteps([{ parallel: [{ parallel: [command] }] }]),
+    ),
+  ).toThrow(command.name);
+  assertExplicitBackgroundTestTimeouts(
+    backgroundTimeoutSteps([
+      {
+        parallel: [
+          {
+            ...command,
+            run: "bun test --timeout 5000 scripts/example.test.ts",
+          },
+        ],
+      },
+    ]),
+  );
 });
 
 const expectContinuation = (steps: readonly Step[], leg: string) => {

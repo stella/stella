@@ -2249,7 +2249,8 @@ jobs:
         id: capability_parity
         background: true
         if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
-        run: bun test scripts/capability-shard-merge.test.ts scripts/capability-shard-pack.test.ts
+        # Worst pilot test 153.3 s; 400 s allows about 2.5x contention headroom.
+        run: bun test --timeout 400000 scripts/capability-shard-merge.test.ts scripts/capability-shard-pack.test.ts
 
       # Root script tests belong to no workspace package, so no scoped test
       # run reaches them. Other steps call some by path; this runs every
@@ -2258,13 +2259,13 @@ jobs:
         id: remaining_scripts
         background: true
         if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
-        run: bun scripts/run-unlisted-script-tests.ts
+        # Worst pilot test 13.62 s; 35 s allows about 2.5x contention headroom.
+        run: bun scripts/run-unlisted-script-tests.ts --timeout 35000
 
       - name: Test release image CI gate
-        id: release_image_gate
-        background: true
         if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
-        run: bun test scripts/ci-plan.test.ts
+        # Worst pilot test 18.56 s; 50 s allows about 2.5x contention headroom.
+        run: bun test --timeout 50000 scripts/ci-plan.test.ts
 
       - name: Workspace hygiene
         if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
@@ -2672,9 +2673,9 @@ jobs:
           bun run --cwd packages/scripts test ../../scripts/transfer-read-guard.test.ts
           bun scripts/transfer-read-guard.ts
 
-      # Join two long checks before reusing their background slots.
-      - name: Wait for repository and release image checks
-        wait: [remaining_scripts, release_image_gate]
+      # Join both long checks before reusing their background slots.
+      - name: Wait for capability and repository checks
+        wait: [capability_parity, remaining_scripts]
 
       # The api test runner only globs `src/**`, so the tests beside the api
       # scripts (seed guards, AI provider canary, MCP coverage) need an
@@ -2686,15 +2687,17 @@ jobs:
         id: api_scripts
         background: true
         if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
+        # Worst pilot test 4.57 s; 12 s allows about 2.5x contention headroom.
         run: >-
-          bun test --preload ./apps/api/src/tests/setup-env.ts
+          bun test --timeout 12000 --preload ./apps/api/src/tests/setup-env.ts
           apps/api/scripts/*.test.ts
 
       - name: Test CLI runtime package parity
         id: cli_runtime_parity
         background: true
         if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
-        run: bun test scripts/cli-runtime-pack.test.ts scripts/cli-runtime-merge.test.ts
+        # Worst pilot test 31.52 s; 80 s allows about 2.5x contention headroom.
+        run: bun test --timeout 80000 scripts/cli-runtime-pack.test.ts scripts/cli-runtime-merge.test.ts
 
       - name: Model catalog snapshot drift check
         if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true' && needs.ci-plan.outputs.model_catalog_drift_required == 'true') }}
@@ -2887,8 +2890,9 @@ jobs:
         # load, or a project that collects another package's specs, fails here
         # on the pull request instead of failing every e2e shard in the queue.
         # The fixture tests run first so a broken guard cannot pass silently.
+        # Pilot fixture tests stayed below 1 ms; retain the 5 s default explicitly.
         run: |
-          bun test scripts/check-playwright-config-scope.test.ts
+          bun test --timeout 5000 scripts/check-playwright-config-scope.test.ts
           bun run check:playwright-config-scope
 
       - name: Test documentation and landing CI scope
