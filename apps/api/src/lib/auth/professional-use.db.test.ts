@@ -26,6 +26,7 @@ import {
 import { createSafeDb } from "@/api/db/scoped";
 import { getAuth } from "@/api/lib/auth";
 import { logger } from "@/api/lib/observability/logger";
+import { isPgError, PG_ERROR } from "@/api/lib/pg-error";
 import {
   brandPersistedOrganizationId,
   brandPersistedUserId,
@@ -203,8 +204,9 @@ describe("professional-use acceptance", () => {
           ),
         ),
     }));
-    if (Result.isOk(read)) {
-      expect(read.value).toEqual({ users: [], organizations: [] });
+    expect(Result.isError(read)).toBe(true);
+    if (Result.isError(read)) {
+      expect(isPgError(read.error, PG_ERROR.INSUFFICIENT_PRIVILEGE)).toBe(true);
     }
   });
 
