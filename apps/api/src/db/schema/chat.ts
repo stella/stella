@@ -535,6 +535,7 @@ export const chatTurns = p.pgTable(
       sql`${table.settledAt} IS NULL OR ${table.settledAt} >= ${table.createdAt}`,
     ),
     p.index("chat_turns_thread_id_idx").on(table.threadId),
+    p.index("chat_turns_created_at_idx").on(table.createdAt),
     p
       .uniqueIndex("chat_turns_active_thread_uidx")
       .on(table.threadId)

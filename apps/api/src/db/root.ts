@@ -8,6 +8,7 @@ import { sharedPoolConnectionSettings } from "@/api/db/shared-pool-connection-se
 import { envBase } from "@/api/env-base";
 import { queryCountLogger } from "@/api/lib/db-query-counter";
 import { runTransactionsInCallerContext } from "@/api/lib/db/caller-async-context";
+import { readAuditedActivitySummary } from "@/api/lib/db/operator-activity/read";
 import type { RegistrationQuery } from "@/api/lib/db/operator-registrations/input";
 import { readAuditedRegistrationPage } from "@/api/lib/db/operator-registrations/read";
 import type { createReviewAccountOrganizationStore } from "@/api/lib/db/review-account-organization-store";
@@ -120,3 +121,7 @@ export const bindOwnerReviewAccountOrganizationStore = (
 
 type Database = typeof rootDb;
 export type Transaction = TransactionOf<Database>;
+
+/** The deployment operator receives only audited activity aggregates. */
+export const readOperatorActivitySummary = async (now: number) =>
+  await readAuditedActivitySummary(rootDb, now);
