@@ -335,16 +335,22 @@ const concurrencyContext = ({
   };
 };
 
+const cancellationValue = (cancel: boolean | string, value: object) =>
+  typeof cancel === "boolean"
+    ? cancel
+    : v.parse(
+        v.boolean(),
+        new Script(
+          cancel.replace(/^\s*\$\{\{([\s\S]*)\}\}\s*$/u, "$1"),
+        ).runInNewContext(value),
+      );
+
 const assertMainConcurrency = (workflow: typeof main) => {
   const concurrency = workflow.concurrency;
   const runName = workflow["run-name"];
   if (!concurrency || !runName) {
     panic("Main heavy workflow requires concurrency and a run name");
   }
-  expect(
-    concurrency["cancel-in-progress"],
-    "superseded heavy work is cancelled",
-  ).toBe(true);
   const shaA = "a".repeat(40);
   const shaB = "b".repeat(40);
   for (const event of events.filter(({ event: eventName }) =>
@@ -364,11 +370,24 @@ const assertMainConcurrency = (workflow: typeof main) => {
           testedSha,
         });
         const group = templateValue(concurrency.group, value);
-        expect(group, `${event.event}/${event.message}/${variable}/group`).toBe(
+        const cancel = concurrency["cancel-in-progress"];
+        expect(
+          cancellationValue(cancel, value),
+          event.event === "workflow_dispatch"
+            ? "pinned heavy work is preserved"
+            : "superseded heavy work is cancelled",
+        ).toBe(event.event !== "workflow_dispatch");
+        let expectedGroup = `${main.name}-refs/heads/main`;
+        if (event.event === "workflow_dispatch") {
+          expectedGroup = `${main.name}-release-${testedSha}`;
+        } else if (
           event.event === "push" &&
-            !event.message.startsWith("chore: release v")
-            ? `${main.name}-${value.github.run_id}`
-            : `${main.name}-refs/heads/main`,
+          !event.message.startsWith("chore: release v")
+        ) {
+          expectedGroup = `${main.name}-${value.github.run_id}`;
+        }
+        expect(group, `${event.event}/${event.message}/${variable}/group`).toBe(
+          expectedGroup,
         );
         expect(
           templateValue(runName, value),
@@ -377,19 +396,45 @@ const assertMainConcurrency = (workflow: typeof main) => {
         groups.push(group);
       }
       const [first, second] = groups;
-      expect(
-        first,
-        `${event.event}/${event.message}/${variable}/same branch`,
-      ).toBe(
-        event.event === "push" && !event.message.startsWith("chore: release v")
-          ? `${main.name}-1`
-          : second,
-      );
       if (
-        event.event === "push" &&
-        !event.message.startsWith("chore: release v")
+        event.event === "workflow_dispatch" ||
+        (event.event === "push" &&
+          !event.message.startsWith("chore: release v"))
       ) {
         expect(first).not.toBe(second);
+      } else {
+        expect(first).toBe(second);
+      }
+      if (event.event === "workflow_dispatch") {
+        const repeated = [shaA, shaB].map((eventSha) =>
+          concurrencyContext({ event, variable, eventSha, testedSha: shaA }),
+        );
+        expect(
+          templateValue(
+            concurrency.group,
+            repeated.at(0) ?? panic("Missing dispatch context"),
+          ),
+        ).toBe(
+          templateValue(
+            concurrency.group,
+            repeated.at(1) ?? panic("Missing dispatch context"),
+          ),
+        );
+        const unpinned = concurrencyContext({
+          event,
+          variable,
+          eventSha: shaA,
+          testedSha: "",
+        });
+        expect(
+          templateValue(concurrency.group, unpinned),
+          "unpinned dispatch shares the branch group",
+        ).toBe(`${main.name}-refs/heads/main`);
+        const cancel = concurrency["cancel-in-progress"];
+        expect(
+          cancellationValue(cancel, unpinned),
+          "unpinned dispatch retains supersession",
+        ).toBe(true);
       }
     }
   }
@@ -849,22 +894,40 @@ test("ignoring queue depth in the result gate breaks intended thin skips", () =>
   ).toBe(1);
 }, 30_000);
 
-test("heavy runs supersede work on the same branch while retaining the tested SHA in their title", () => {
+test("heavy schedules and pushes supersede while pinned dispatches coalesce by the tested SHA", () => {
   assertMainConcurrency(main);
 }, 30_000);
 
-test("per-SHA groups or preserving superseded heavy work violate the concurrency contract", () => {
+test("unconditional SHA isolation, preserving scheduled work or cancelling pinned work violate concurrency", () => {
   const perSha = structuredClone(main);
   const preserving = structuredClone(main);
   if (!perSha.concurrency || !preserving.concurrency) {
     panic("Missing main heavy concurrency");
   }
-  perSha.concurrency.group = `main-heavy-\${{ inputs.sha || github.sha }}`;
+  perSha.concurrency.group = `\${{ github.workflow }}-\${{ inputs.sha || github.sha }}`;
   expect(perSha.concurrency.group).not.toBe(main.concurrency?.group);
   expect(() => assertMainConcurrency(perSha)).toThrow("push/ordinary//group");
-  preserving.concurrency["cancel-in-progress"] = false;
+  preserving.concurrency["cancel-in-progress"] =
+    `\${{ github.event_name != 'schedule' }}`;
   expect(() => assertMainConcurrency(preserving)).toThrow(
     "superseded heavy work is cancelled",
+  );
+  const cancellingPinned = structuredClone(main);
+  const wrongSha = structuredClone(main);
+  if (!cancellingPinned.concurrency || !wrongSha.concurrency) {
+    panic("Missing main heavy concurrency");
+  }
+  cancellingPinned.concurrency["cancel-in-progress"] = true;
+  expect(() => assertMainConcurrency(cancellingPinned)).toThrow(
+    "pinned heavy work is preserved",
+  );
+  wrongSha.concurrency.group = wrongSha.concurrency.group.replace(
+    "format('release-{0}', inputs.sha)",
+    "format('release-{0}', github.sha)",
+  );
+  expect(wrongSha.concurrency.group).not.toBe(main.concurrency?.group);
+  expect(() => assertMainConcurrency(wrongSha)).toThrow(
+    "workflow_dispatch/ordinary//group",
   );
 }, 30_000);
 
