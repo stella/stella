@@ -719,6 +719,52 @@ describe("corpus generation operator command", () => {
     expect(await statusOf("case_law_v7")).toBe("building");
   });
 
+  test("a settled revision still in the engine, on an index no applied state names, refuses the flip", async () => {
+    await run({ args: caseLaw("register", "case_law_v7", "--apply") });
+    const engine = engineWith(createdIndexes("case_law_v7"));
+    await seedConvergedProjection("case_law_v7", engine);
+    // Settled on an index that holds no applied projection: only the settled
+    // half of the census discovers it.
+    const settled = toSafeId<"corpusIndexProjectionIntent">(
+      "0198e331-e578-7000-8000-000000000797",
+    );
+    await db.insert(corpusIndexProjectionIntents).values({
+      id: settled,
+      family: "case_law",
+      generation: "case_law_v7",
+      entityId: "0198e331-e578-7000-8000-000000000796",
+      epoch: 1n,
+      fingerprint: "d".repeat(64),
+      indexId: "case_law_v7_eu",
+      status: "settled",
+      appendStartedAt: NOW,
+      appendCommittedAt: NOW,
+      appendPublishBarrierAt: NOW,
+      cleanupNotBefore: NOW,
+      cleanupStartedAt: NOW,
+      deleteOpstamp: 42n,
+      deleteTaskCreatedAt: NOW,
+      settledAt: NOW,
+    });
+    engine.revisions.set(settled, 1);
+    const before = await registryRows();
+    for (const flags of [[], ["--apply"]]) {
+      // db-await-in-loop: the report and the write meet the same refusal
+      const refused = await run({
+        args: caseLaw("serve", "case_law_v7", ...flags),
+        engine,
+      });
+      expect(refused.code).toBe(1);
+      expect(refused.err).toContain(
+        "refused (CorpusGenerationCensusDriftError): The census of case_law_v7_eu found 1 revisions not absent",
+      );
+    }
+    expect(await registryRows()).toEqual(before);
+    expect(await auditCounts()).toEqual([
+      { registered: 1, promoted: 0, demoted: 0 },
+    ]);
+  });
+
   test("a projection change between the census and the flip refuses the flip", async () => {
     await run({ args: caseLaw("register", "case_law_v7", "--apply") });
     const engine = engineWith(createdIndexes("case_law_v7"));
