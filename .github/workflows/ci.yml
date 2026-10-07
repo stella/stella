@@ -3135,6 +3135,15 @@ jobs:
           scripts/check-base-image-pulls.test.ts
           scripts/dependabot-changeset.test.ts
 
+      - name: Test autofix decision boundaries
+        if: ${{ !cancelled() && steps.checkout.outcome == 'success' && steps.install.outcome != 'failure' && steps.standalone_lockfiles.outcome != 'failure' && steps.lockfile_ages.outcome != 'failure' }}
+        run: bun test scripts/check-autofix-test-durations.test.ts scripts/autofix-protected-paths.test.ts
+
+      # The fixture executes the installed linter and native compiler.
+      - name: Test type-aware autofix
+        if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
+        run: bun test scripts/autofix-type-aware.test.ts
+
       - name: Test install-free CI commands
         if: ${{ !cancelled() && steps.checkout.outcome == 'success' && steps.install.outcome != 'failure' && steps.standalone_lockfiles.outcome != 'failure' && steps.lockfile_ages.outcome != 'failure' }}
         run: bun test scripts/install-free-ci.test.ts

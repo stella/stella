@@ -214,11 +214,6 @@ export const caseLawCoverageOptions = () =>
     staleTime: ROUTE_QUERY_STALE_TIME_MS,
   });
 
-/** One apex court's slice of the shelf: the court, its rank, its newest few. */
-export type LatestDecisionsCourt = Awaited<
-  ReturnType<NonNullable<ReturnType<typeof latestDecisionsOptions>["queryFn"]>>
->["courts"][number];
-
 export const decisionsInfiniteOptions = (
   filters: DecisionListFilters,
   pageSize: PublicLawPageSize = DEFAULT_PUBLIC_LAW_PAGE_SIZE,
