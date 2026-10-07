@@ -718,27 +718,54 @@ const apiProviderAdapterImports = API_PROVIDER_ADAPTER_MODULES.map((name) => ({
 // owner that can detect a same-element conflict instead of calling the
 // adapter directly. `monitorForElements` (no per-element registry) is not
 // restricted.
+// Shrink-only migration exceptions: remove each file when its surface moves
+// element registration into an explicit owner. Never add new consumers here.
+export const LEGACY_PRAGMATIC_DRAG_REGISTRATION_FILES = [
+  // Owns the picker rows; no other registration owner touches those elements.
+  "apps/web/src/components/matter-target-picker.tsx",
+  // Owns the sidebar rows; no other registration owner touches those elements.
+  "apps/web/src/components/app-sidebar.tsx",
+  // Owns the organizer rows; no other registration owner touches those elements.
+  "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/existing-file-organizer-dialog.tsx",
+  // Owns the calendar day cells; no other registration owner touches those elements.
+  "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/calendar/calendar-day-cell.tsx",
+  // Owns the calendar chips; no other registration owner touches those elements.
+  "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/calendar/calendar-entity-chip.tsx",
+  // Owns the tree rows; no other registration owner touches those elements.
+  "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/filesystem/tree-view.tsx",
+  // Owns the entity row handles; no other registration owner touches those elements.
+  "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/table/entity-row-cells.tsx",
+  // Owns the position rows; no other registration owner touches those elements.
+  "apps/web/src/routes/knowledge/-components/position-editor.tsx",
+  // Owns the document type cards; no other registration owner touches those elements.
+  "apps/web/src/routes/_protected.settings/-components/organization/document-types-card.tsx",
+  // Owns the page tiles; no other registration owner touches those elements.
+  "apps/web/src/components/pdf/page-organizer.tsx",
+  // Owns the header cells; no other registration owner touches those elements.
+  "apps/web/src/components/workspaces/table/workspace-table/header-cells.tsx",
+] as const;
+
 const webPragmaticDragAdapterImport = {
-  name: "@atlaskit/pragmatic-drag-and-drop/element/adapter",
+  name: "@atlaskit/pragmatic-drag-and-drop/adapter/element-adapter",
   importNames: ["draggable", "dropTargetForElements"],
   message:
-    "Register kanban element drag sources and drop targets through use-kanban-drop-targets.ts's attachElementDropTarget/draggable, not directly: pragmatic-drag-and-drop keeps only one live drop target per element, so a second direct registration silently replaces the first.",
+    "Register element drag sources and drop targets through the surface's registration owner (kanban: use-kanban-drop-targets.ts), not directly: pragmatic-drag-and-drop keeps only one live drop target per element, so a second direct registration silently replaces the first.",
 };
 
 const uiPragmaticDragAdapterImport = {
-  name: "@atlaskit/pragmatic-drag-and-drop/element/adapter",
+  name: "@atlaskit/pragmatic-drag-and-drop/adapter/element-adapter",
   importNames: ["draggable", "dropTargetForElements"],
   message:
-    "Register kanban element drag sources and drop targets through kanban/drag-interactions.ts, not directly: pragmatic-drag-and-drop keeps only one live drop target per element, so a second direct registration silently replaces the first.",
+    "Register element drag sources and drop targets through the surface's registration owner (kanban: drag-interactions.ts), not directly: pragmatic-drag-and-drop keeps only one live drop target per element, so a second direct registration silently replaces the first.",
 };
 
 // The adapter is a single published entry point with no public subpaths;
 // nothing should import a level deeper than the module the two bans above
 // already cover.
 const pragmaticDragAdapterDeepImportBan = {
-  group: ["@atlaskit/pragmatic-drag-and-drop/element/adapter/*"],
+  group: ["@atlaskit/pragmatic-drag-and-drop/adapter/element-adapter/*"],
   message:
-    "Import only '@atlaskit/pragmatic-drag-and-drop/element/adapter'; it has no public subpaths.",
+    "Import only '@atlaskit/pragmatic-drag-and-drop/adapter/element-adapter'; it has no public subpaths.",
 };
 
 // Oxlint 1.80 split the monolithic react/react-compiler rule into categories.
@@ -5496,6 +5523,28 @@ const config = defineConfig({
     {
       files: ["apps/web/src/**/*.{ts,tsx}", "apps/api/src/mcp/**/*.{ts,tsx}"],
       rules: { "require-contract-domains/require-contract-domains": "error" },
+    },
+    {
+      // Shrink-only exceptions for existing surface-owned elements; preserve
+      // every other web import restriction while registration owners migrate.
+      files: [...LEGACY_PRAGMATIC_DRAG_REGISTRATION_FILES],
+      rules: {
+        "no-restricted-imports": [
+          "error",
+          {
+            paths: [noZodImport, ...webFolioAllLocalesImports],
+            patterns: [
+              {
+                group: webLocalApiImportGroup,
+                message: "Use '@/lib/api-contract' instead of '@/api/'.",
+              },
+              ...webCrossWorkspaceImports,
+              webDatePickerImport,
+              pragmaticDragAdapterDeepImportBan,
+            ],
+          },
+        ],
+      },
     },
     ...fixtureRuleOverrides,
     // Last: oxlint resolves overrides by replacement, so a scope that enables

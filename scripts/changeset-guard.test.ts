@@ -25,6 +25,11 @@ import {
   parseReleasePathspec,
   readChangesetDiff,
 } from "./changeset-guard";
+import {
+  flattenWorkflowSteps,
+  workflowJobSteps,
+  workflowStepByName,
+} from "./workflow-steps";
 
 const REPO_ROOT = path.resolve(import.meta.dirname, "..");
 const POLICY_FILE = "scripts/changeset-policy.json";
@@ -77,6 +82,8 @@ const SLUG = fc.stringMatching(/^[a-z][a-z0-9-]{0,11}$/u);
 
 const readFile = (relativePath: string): string =>
   readFileSync(path.join(REPO_ROOT, relativePath), "utf-8");
+const workflow = Bun.YAML.parse(readFile(WORKFLOW_FILE));
+const restSteps = workflowJobSteps(workflow, "ci-checks-rest");
 
 const git = (root: string, args: readonly string[]): string => {
   const result = Bun.spawnSync(["git", ...args], {
@@ -152,23 +159,13 @@ const CHANGESET_GATE_LAST_STEP =
   "Changeset present for published package changes";
 
 /** The changeset gate's steps in the ci-checks-rest job, first through last. */
-const changesetJob = (): string => {
-  const lines = readFile(WORKFLOW_FILE).split("\n");
-  const job = lines.indexOf("  ci-checks-rest:");
-  expect(job).toBeGreaterThanOrEqual(0);
-  const jobLines = lines.slice(job + 1);
-  const jobEnd = jobLines.findIndex((line) => /^ {2}\S/u.test(line));
-  const steps = jobLines.slice(0, jobEnd === -1 ? jobLines.length : jobEnd);
-  const start = steps.indexOf(`      - name: ${CHANGESET_GATE_FIRST_STEP}`);
-  const last = steps.indexOf(`      - name: ${CHANGESET_GATE_LAST_STEP}`);
-  expect(start).toBeGreaterThanOrEqual(0);
-  expect(last).toBeGreaterThan(start);
-  const afterLast = steps
-    .slice(last + 1)
-    .findIndex((line) => line.startsWith("      - name: "));
-  return steps
-    .slice(start, afterLast === -1 ? steps.length : last + 1 + afterLast)
-    .join("\n");
+const changesetJob = (): Record<string, unknown>[] => {
+  const first = workflowStepByName(restSteps, CHANGESET_GATE_FIRST_STEP);
+  const last = workflowStepByName(restSteps, CHANGESET_GATE_LAST_STEP);
+  const start = restSteps.indexOf(first);
+  const end = restSteps.indexOf(last);
+  expect(end).toBeGreaterThan(start);
+  return restSteps.slice(start, end + 1);
 };
 
 describe("changeset gate decision", () => {
@@ -841,14 +838,12 @@ const compareVersions = (
   return 0;
 };
 
-const expectChangesetConditions = (gate: string, stepCount: number) => {
-  const { steps } = v.parse(
-    v.object({
-      steps: v.array(v.object({ name: v.string(), if: v.string() })),
-    }),
-    Bun.YAML.parse(`steps:\n${gate}`),
+const expectChangesetConditions = (gate: unknown) => {
+  const steps = v.parse(
+    v.array(v.object({ name: v.string(), if: v.string() })),
+    flattenWorkflowSteps(gate),
   );
-  expect(steps).toHaveLength(stepCount);
+  expect(steps.length).toBeGreaterThan(0);
   for (const step of steps) {
     const suffix =
       step.name === CHANGESET_GATE_LAST_STEP
@@ -862,10 +857,13 @@ const expectChangesetConditions = (gate: string, stepCount: number) => {
 
 describe("workflow and pre-push read the same policy", () => {
   test("the workflow gate feeds every list from the policy file", () => {
-    const job = changesetJob();
-    expect(job).toContain(POLICY_FILE);
+    const policyRun = workflowStepByName(
+      changesetJob(),
+      CHANGESET_GATE_FIRST_STEP,
+    )["run"];
+    expect(policyRun).toContain(POLICY_FILE);
     for (const key of ["releasePaths", "generatedPaths", "packageFiles"]) {
-      expect(job).toContain(`.${key}[]`);
+      expect(policyRun).toContain(`.${key}[]`);
     }
   });
 
@@ -889,39 +887,50 @@ describe("workflow and pre-push read the same policy", () => {
   test("the workflow gate inlines no pathspecs of its own", () => {
     // A second copy of the list in the workflow is exactly the drift this
     // guard exists to prevent: CI would gate paths pre-push does not.
-    expect(changesetJob()).not.toMatch(/^\s+(?:apps|packages)\//mu);
+    expect(Bun.YAML.stringify(changesetJob())).not.toMatch(
+      /^\s+(?:apps|packages)\//mu,
+    );
   });
 
   test("CI runs the same package relevance check without replacing the shared presence gate", () => {
-    expect(changesetJob()).toContain(
-      'bun scripts/changeset-guard.ts --base "$BASE_SHA" --packages-only',
-    );
+    expect(
+      workflowStepByName(restSteps, "Changeset packages match changed files")[
+        "run"
+      ],
+    ).toBe('bun scripts/changeset-guard.ts --base "$BASE_SHA" --packages-only');
   });
 
   test("every changeset gate step runs on pull requests, before any install", () => {
     const gate = changesetJob();
-    const stepCount = gate.match(/^ {6}- name: /gmu)?.length ?? 0;
-    expect(stepCount).toBeGreaterThan(0);
-    expectChangesetConditions(gate, stepCount);
-    const workflow = readFile(WORKFLOW_FILE);
-    const job = workflow.indexOf("\n  ci-checks-rest:\n");
-    const gateStart = workflow.indexOf(gate, job);
-    expect(gateStart).toBeGreaterThan(job);
-    expect(gateStart).toBeLessThan(
-      workflow.indexOf("      - name: Install dependencies\n", job),
+    expectChangesetConditions(gate);
+    const lastGate = workflowStepByName(restSteps, CHANGESET_GATE_LAST_STEP);
+    const install = workflowStepByName(restSteps, "Install dependencies");
+    expect(restSteps.indexOf(lastGate)).toBeLessThan(
+      restSteps.indexOf(install),
     );
   });
 
   test("a wrapped changeset gate cannot drop its pull-request scope", () => {
     const gate = changesetJob();
-    const stepCount = gate.match(/^ {6}- name: /gmu)?.length ?? 0;
-    const changed = gate.replace(
-      " && (github.event_name == 'pull_request')",
-      "",
+    const first = workflowStepByName(gate, CHANGESET_GATE_FIRST_STEP);
+    const firstCondition = first["if"];
+    if (typeof firstCondition !== "string") {
+      throw new TypeError("Changeset gate steps must have conditions");
+    }
+    const changed = gate.map((step) =>
+      step === first
+        ? {
+            ...step,
+            if: firstCondition.replace(
+              " && (github.event_name == 'pull_request')",
+              "",
+            ),
+          }
+        : step,
     );
-    expect(changed).not.toBe(gate);
-    expect(() => expectChangesetConditions(changed, stepCount)).toThrow(
-      "Load release policy",
+    expect(changed).not.toEqual(gate);
+    expect(() => expectChangesetConditions([{ parallel: changed }])).toThrow(
+      CHANGESET_GATE_FIRST_STEP,
     );
   });
 

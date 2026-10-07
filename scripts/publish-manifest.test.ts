@@ -23,7 +23,7 @@ const ATLASKIT_RUNTIME_PACKAGES = [
   ATLASKIT_AUTO_SCROLL_PACKAGE,
 ] as const;
 const ATLASKIT_ELEMENT_ADAPTER =
-  "@atlaskit/pragmatic-drag-and-drop/element/adapter";
+  "@atlaskit/pragmatic-drag-and-drop/adapter/element-adapter";
 const ATLASKIT_AUTO_SCROLL_ELEMENT =
   "@atlaskit/pragmatic-drag-and-drop-auto-scroll/element";
 const REPO_ROOT = path.resolve(import.meta.dir, "..");

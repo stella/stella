@@ -13,12 +13,21 @@ import { testProcessBudgets } from "../apps/api/scripts/test-process-supervisor"
 import { CUSTOM_LINT_TEST_ARGS } from "./check-oxlint-rule-coverage.ts";
 import { CANONICAL_CANCEL_STEP } from "./ci-cancellation-contract";
 import { jobCachePolicy } from "./workflow-cache-policy.ts";
+import { flattenWorkflowSteps, isWorkflowBarrier } from "./workflow-steps";
 
 const cancellationJobSchema = (canonical: object) =>
   v.pipe(
     v.looseObject({
       permissions: v.optional(v.record(v.string(), v.string())),
-      steps: v.array(v.looseObject({ name: v.string() })),
+      steps: v.pipe(
+        v.unknown(),
+        v.transform((steps) =>
+          flattenWorkflowSteps(steps).filter(
+            (step) => !isWorkflowBarrier(step),
+          ),
+        ),
+        v.array(v.looseObject({ name: v.string() })),
+      ),
     }),
     v.transform((job) => {
       if (
@@ -52,7 +61,11 @@ const processBudgetWorkflowSchema = v.looseObject({
       env: processBudgetEnvSchema,
       "timeout-minutes": v.optional(v.unknown()),
       steps: v.optional(
-        v.array(v.looseObject({ env: processBudgetEnvSchema })),
+        v.pipe(
+          v.unknown(),
+          v.transform(flattenWorkflowSteps),
+          v.array(v.looseObject({ env: processBudgetEnvSchema })),
+        ),
       ),
     }),
   ),
@@ -428,13 +441,37 @@ const documentationScope = (step: Step): Step => {
   return { ...step, if: step["if"].replace(` && (${PACKAGE_SCOPE})`, "") };
 };
 
+// Per-test limits change scheduling budgets, not the check command or its inputs.
+const withoutTestTimeout = (step: Step): Step => {
+  const run = step["run"];
+  if (typeof run !== "string") {
+    return step;
+  }
+  return {
+    ...step,
+    run: run.replaceAll(
+      /^(\s*bun (?:test|scripts\/run-unlisted-script-tests\.ts)) --timeout(?:=| )\d+\b/gmu,
+      "$1",
+    ),
+  };
+};
+
 const ownedSteps = (steps: readonly Step[]) =>
   steps
     .filter(({ name }) => !prerequisites.has(name))
     .map(documentationScope)
     .map(withoutContinuation)
     .map(withoutPreparedGeneration)
+    .map(withoutTestTimeout)
     .map(withoutStepId)
+    .map((step) => {
+      const { background, ...check } = step;
+      if (background !== true) {
+        return step;
+      }
+      const { id: _id, ...command } = check;
+      return command;
+    })
     .map(withoutActionRef)
     .toSorted((left, right) => compareCodeUnit(left.name, right.name));
 
@@ -681,10 +718,23 @@ test("each CI check leg preserves merge-base setup, supply-chain protection and 
       });
     if (!baseJobs["ci-checks"]) {
       const baseNames = new Set(originalSteps.map(({ name }) => name));
+      const reordered = new Set(
+        steps
+          .filter((step) => step["background"] === true)
+          .map(({ name }) => name),
+      );
+      if (partitionIds.at(index) === "ci-checks-rest") {
+        reordered.add("Prepare environment");
+        reordered.add("Content delivery declarations");
+        reordered.add("Test release image CI gate");
+      }
       expect(
         steps
           .filter(
-            ({ name }) => baseNames.has(name) && !preparationSteps.has(name),
+            ({ name }) =>
+              baseNames.has(name) &&
+              !preparationSteps.has(name) &&
+              !reordered.has(name),
           )
           .map(({ name }) => name),
       ).toEqual(
@@ -692,6 +742,7 @@ test("each CI check leg preserves merge-base setup, supply-chain protection and 
           .filter(
             ({ name }) =>
               !preparationSteps.has(name) &&
+              !reordered.has(name) &&
               !newRemovals.some((removed) => removed.name === name),
           )
           .map(({ name }) => name),
@@ -1075,6 +1126,186 @@ test("unrelated jobs may use unnamed steps or reusable workflows", () => {
   expect(readBaseline(parsed.jobs)).toEqual(partitions);
 });
 
+test("the check census preserves nested commands and their failure conditions", () => {
+  const step = {
+    name: "Independent guard",
+    if: "!cancelled() && steps.install.outcome == 'success'",
+    run: "bun test scripts/ci-plan.test.ts",
+  };
+  const serial = v.parse(jobSchema, { steps: [step] });
+  const concurrent = v.parse(jobSchema, {
+    steps: [
+      {
+        parallel: [{ parallel: [{ ...step, id: "guard", background: true }] }],
+      },
+      { "wait-all": null },
+    ],
+  });
+  expect(ownedSteps(concurrent.steps)).toEqual(ownedSteps(serial.steps));
+  expect(concurrent.steps.at(0)?.["if"]).toBe(step.if);
+  expect(
+    ownedSteps(
+      v.parse(jobSchema, {
+        steps: [{ parallel: [{ ...step, run: "exit 0" }] }],
+      }).steps,
+    ),
+  ).not.toEqual(ownedSteps(serial.steps));
+});
+
+test("repository backgrounds are bounded and joined before failure cancellation", () => {
+  const raw = v.parse(v.object({ steps: v.unknown() }), jobs["ci-checks-rest"]);
+  const steps = flattenWorkflowSteps(raw.steps);
+  const firstBackground = steps.findIndex(
+    (step) => step["background"] === true,
+  );
+  expect(firstBackground).toBeGreaterThan(0);
+  for (const name of [
+    "Checkout",
+    "Setup Bun",
+    "Install dependencies",
+    "Download generated sources",
+    "Restore generated sources",
+    "Prepare route network manifest",
+    "Restore route network baseline",
+    "Prepare environment",
+    "Content delivery declarations",
+  ]) {
+    const index = steps.findIndex((step) => step["name"] === name);
+    expect(index, name).toBeGreaterThanOrEqual(0);
+    expect(index, name).toBeLessThan(firstBackground);
+    expect(steps.at(index)?.["background"], name).toBeUndefined();
+  }
+  const pending = new Set<string>();
+  let launched = 0;
+  for (const step of steps) {
+    if (step["background"] === true) {
+      const id = v.parse(v.string(), step["id"]);
+      expect(pending.has(id), id).toBe(false);
+      pending.add(id);
+      launched++;
+      expect(pending.size).toBeLessThanOrEqual(2);
+      expect(step["continue-on-error"]).toBeUndefined();
+      continue;
+    }
+    if (isWorkflowBarrier(step)) {
+      expect(pending.size).toBeGreaterThan(0);
+      expect(step["if"]).toBeUndefined();
+      expect(step["continue-on-error"]).toBeUndefined();
+      if ("wait" in step) {
+        const ids = v.parse(v.array(v.string()), step["wait"]);
+        for (const id of ids) {
+          expect(pending.delete(id), id).toBe(true);
+        }
+      } else {
+        expect(Object.keys(step).toSorted()).toEqual(["name", "wait-all"]);
+        pending.clear();
+      }
+      continue;
+    }
+    if (step["name"] === "Cancel failed merge-group run") {
+      expect(pending.size).toBe(0);
+    }
+  }
+  expect(launched).toBe(6);
+  expect(pending.size).toBe(0);
+});
+
+const CONTENDED_TEST_TIMEOUTS = {
+  "Test capability shard merge and package parity": 400_000,
+  "Test remaining repository scripts": 35_000,
+  "Test release image CI gate": 50_000,
+  "Test api scripts": 12_000,
+  "Test CLI runtime package parity": 80_000,
+  "Playwright config scope": 5000,
+} as const;
+
+const backgroundTimeoutSteps = (raw: unknown): Step[] =>
+  v.parse(
+    v.array(v.looseObject({ name: v.string() })),
+    v.parse(v.array(v.record(v.string(), v.unknown())), raw).flatMap((step) =>
+      "parallel" in step
+        ? flattenWorkflowSteps(step["parallel"]).map((child) => ({
+            ...child,
+            background: true,
+          }))
+        : [step],
+    ),
+  );
+
+const assertExplicitBackgroundTestTimeouts = (steps: readonly Step[]) => {
+  for (const step of steps) {
+    const run = step["run"];
+    if (typeof run !== "string") {
+      continue;
+    }
+    const invocations = [...run.matchAll(/\bbun test\b[^\n]*/gu)];
+    if (step["background"] === true) {
+      for (const invocation of invocations) {
+        expect(invocation[0], step.name).toMatch(
+          /\bbun test --timeout(?:=| )[1-9]\d*\b/u,
+        );
+      }
+    }
+  }
+};
+
+const assertBackgroundTestTimeouts = (steps: readonly Step[]) => {
+  assertExplicitBackgroundTestTimeouts(steps);
+  for (const [name, timeout] of Object.entries(CONTENDED_TEST_TIMEOUTS)) {
+    const step = steps.find((entry) => entry.name === name);
+    expect(step, name).toBeDefined();
+    expect(step?.["run"], name).toContain(`--timeout ${timeout}`);
+  }
+};
+
+test("background Bun tests declare measured contention budgets without changing checks", () => {
+  const steps = backgroundTimeoutSteps(
+    v.parse(v.object({ steps: v.unknown() }), jobs["ci-checks-rest"]).steps,
+  );
+  assertBackgroundTestTimeouts(steps);
+  for (const name of Object.keys(CONTENDED_TEST_TIMEOUTS)) {
+    const missing = steps.map((step) =>
+      step.name === name && typeof step["run"] === "string"
+        ? { ...step, run: step["run"].replace(/ --timeout \d+\b/gu, "") }
+        : step,
+    );
+    expect(() => assertBackgroundTestTimeouts(missing)).toThrow(name);
+  }
+  expect(
+    withoutTestTimeout({
+      name: "Check",
+      run: "bun test --timeout 35000 scripts/example.test.ts",
+    }),
+  ).toEqual({ name: "Check", run: "bun test scripts/example.test.ts" });
+  expect(
+    withoutTestTimeout({ name: "Check", run: "echo --timeout 35000" }),
+  ).toEqual({ name: "Check", run: "echo --timeout 35000" });
+});
+
+test("implicit nested parallel tests cannot omit their contention timeout", () => {
+  const command = {
+    name: "Nested test",
+    run: "bun test scripts/example.test.ts",
+  };
+  expect(() =>
+    assertExplicitBackgroundTestTimeouts(
+      backgroundTimeoutSteps([{ parallel: [{ parallel: [command] }] }]),
+    ),
+  ).toThrow(command.name);
+  assertExplicitBackgroundTestTimeouts(
+    backgroundTimeoutSteps([
+      {
+        parallel: [
+          {
+            ...command,
+            run: "bun test --timeout 5000 scripts/example.test.ts",
+          },
+        ],
+      },
+    ]),
+  );
+});
+
 const expectContinuation = (steps: readonly Step[], leg: string) => {
   const installIndex = steps.findIndex(
     ({ name }) => name === "Install dependencies",
@@ -1342,6 +1573,27 @@ test("an unrelated pre-install failure still runs planned safety, installation a
     expect(results["Install dependencies"]).toBe("success");
     expect(results["Check i18n sync"]).toBe("success");
     expect(results["Test remaining repository scripts"]).toBe("success");
+  }
+});
+
+test("a failed background guard leaves every other planned check runnable", () => {
+  const { steps } = v.parse(jobSchema, jobs["ci-checks-rest"]);
+  for (const background of steps.filter(
+    (step) => step["background"] === true,
+  )) {
+    const results = simulateRestLeg({
+      failures: [background.name],
+      lockfileScope: "true",
+    });
+    expect(results[background.name]).toBe("failure");
+    for (const step of steps) {
+      if (step.name === background.name) {
+        continue;
+      }
+      expect(results[step.name], `${background.name} → ${step.name}`).toBe(
+        "success",
+      );
+    }
   }
 });
 
