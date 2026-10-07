@@ -187,7 +187,11 @@ describe("API deployment health receipt", () => {
       {
         file: "deploy-staging.yml",
         environment: "staging",
-        secrets: ["SMOKE_SESSION_SECRET", "STAGING_VIEWER_ACCESS_TOKEN"],
+        secrets: [
+          "SMOKE_SESSION_SECRET",
+          "STAGING_VIEWER_ACCESS_TOKEN",
+          "REVIEW_ACCOUNT_PASSWORD",
+        ],
       },
     ];
     for (const { file, environment, secrets } of cases) {
