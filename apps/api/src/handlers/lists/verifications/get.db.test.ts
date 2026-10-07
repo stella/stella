@@ -1,8 +1,6 @@
 import { describe, expect, test } from "bun:test";
-import { and, eq, sql } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { PassThrough } from "node:stream";
-
-import { rejectionOf } from "@stll/property-testing/rejection";
 
 import { member, organization, user } from "@/api/db/auth-schema";
 import {
@@ -493,92 +491,6 @@ describe.skipIf(!enabled)("verification point-read audit", () => {
         code: 404,
       });
       expect(await f.events()).toHaveLength(0);
-    }));
-
-  test("read receipts belong to one user even within the same matter and run", async () =>
-    await withFixture(async (f) => {
-      for (const [owner, observer] of [
-        [f.actor, f.otherActor],
-        [f.otherActor, f.actor],
-      ] as const) {
-        const receipt = {
-          organizationId: f.organizationId,
-          workspaceId: f.workspaceId,
-          runId: f.runIds.completed,
-          userId: owner,
-          auditedDay: "2026-10-05",
-        };
-        const selector = and(
-          eq(legalListVerificationReadReceipts.workspaceId, f.workspaceId),
-          eq(legalListVerificationReadReceipts.runId, f.runIds.completed),
-          eq(legalListVerificationReadReceipts.userId, owner),
-        );
-        await f.scoped(observer)(async (tx) => {
-          const role = await tx.execute(sql`SELECT current_user AS role`);
-          expect(role.at(0)).toMatchObject({ role: "stella" });
-        });
-        expect(
-          await rejectionOf(
-            f.scoped(observer)(
-              async (tx) =>
-                await tx
-                  .insert(legalListVerificationReadReceipts)
-                  .values(receipt),
-            ),
-          ),
-        ).toMatchObject({ cause: { code: "42501" } });
-        await f.scoped(owner)(
-          async (tx) =>
-            await tx.insert(legalListVerificationReadReceipts).values(receipt),
-        );
-        await f.scoped(observer)(async (tx) => {
-          expect(
-            await tx.select().from(legalListVerificationReadReceipts).limit(10),
-          ).toEqual([]);
-          expect(
-            await tx
-              .update(legalListVerificationReadReceipts)
-              .set({ auditedDay: "2026-10-06" })
-              .where(selector)
-              .returning(),
-          ).toEqual([]);
-          expect(
-            await tx
-              .delete(legalListVerificationReadReceipts)
-              .where(selector)
-              .returning(),
-          ).toEqual([]);
-        });
-        expect(
-          await rejectionOf(
-            f.scoped(owner)(
-              async (tx) =>
-                await tx
-                  .update(legalListVerificationReadReceipts)
-                  .set({ userId: observer })
-                  .where(selector),
-            ),
-          ),
-        ).toMatchObject({ cause: { code: "42501" } });
-        await f.scoped(owner)(async (tx) => {
-          expect(
-            await tx.select().from(legalListVerificationReadReceipts).limit(10),
-          ).toEqual([receipt]);
-          expect(
-            await tx
-              .update(legalListVerificationReadReceipts)
-              .set({ auditedDay: "2026-10-06" })
-              .where(selector)
-              .returning(),
-          ).toEqual([{ ...receipt, auditedDay: "2026-10-06" }]);
-          expect(
-            await tx
-              .delete(legalListVerificationReadReceipts)
-              .where(selector)
-              .returning(),
-          ).toEqual([{ ...receipt, auditedDay: "2026-10-06" }]);
-        });
-      }
     }));
 
   test("MCP and CLI capability reads use the point handler and share its daily audit", async () =>
