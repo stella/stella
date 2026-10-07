@@ -233,12 +233,20 @@ export const runResearchAnswers = async (
 };
 
 type DecisionTextSource =
-  | { kind: "passages"; passages: ResearchPassage[]; retrieved: boolean }
+  | {
+      kind: "passages";
+      passages: ResearchPassage[];
+      retrieved: boolean;
+      // Set when retrieval was attempted and failed; it is already reported,
+      // so later stages fall back instead of retrying it.
+      retrievalFailed: boolean;
+    }
   | { kind: "none" };
 
 type SelectDecisionPassagesOptions = {
   fallback: readonly ResearchPassage[];
   retrieved: readonly ResearchPassage[];
+  retrievalFailed: boolean;
   budgetChars: number;
 };
 
@@ -246,6 +254,7 @@ type SelectDecisionPassagesOptions = {
 export const selectDecisionPassages = ({
   fallback,
   retrieved,
+  retrievalFailed,
   budgetChars,
 }: SelectDecisionPassagesOptions): DecisionTextSource => {
   const selected = selectPassagesWithinBudget(
@@ -257,7 +266,12 @@ export const selectDecisionPassages = ({
   );
   return selected.length === 0
     ? { kind: "none" }
-    : { kind: "passages", passages: selected, retrieved: retrieved.length > 0 };
+    : {
+        kind: "passages",
+        passages: selected,
+        retrieved: retrieved.length > 0,
+        retrievalFailed,
+      };
 };
 
 type ResearchDecisionRow = {
@@ -591,7 +605,12 @@ const resolveDecisionText = async (
     0,
   );
   if (total <= budgetChars) {
-    return { kind: "passages", passages, retrieved: false };
+    return {
+      kind: "passages",
+      passages,
+      retrieved: false,
+      retrievalFailed: false,
+    };
   }
 
   const retrieved = await retrieveResearchPassages({
@@ -602,6 +621,7 @@ const resolveDecisionText = async (
   return selectDecisionPassages({
     fallback: passages,
     retrieved: retrieved.unwrapOr([]),
+    retrievalFailed: retrieved.isErr(),
     budgetChars,
   });
 };
@@ -765,7 +785,11 @@ type SystemOnePassOptions = {
   orgAIConfig: OrgAIConfig | null;
   decision: ResearchDecisionRow;
   questions: readonly ResearchRunColumn[];
-  text: { passages: readonly ResearchPassage[]; retrieved: boolean };
+  text: {
+    passages: readonly ResearchPassage[];
+    retrieved: boolean;
+    retrievalFailed: boolean;
+  };
 };
 
 type SystemOnePass = {
@@ -801,7 +825,7 @@ const answerWithSystemOne = async ({
   // opening. Text already resolved by retrieval is ranked, so it is only cut.
   const overBudget = exceedsSystemOneSourceBudget(text.passages);
   const ranked =
-    overBudget && !text.retrieved
+    overBudget && !text.retrieved && !text.retrievalFailed
       ? (
           await retrieveResearchPassages({
             decision,

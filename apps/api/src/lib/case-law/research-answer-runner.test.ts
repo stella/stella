@@ -187,9 +187,14 @@ describe("research passage retrieval", () => {
         selectDecisionPassages({
           fallback: [{ anchorId: "text", excerpt: "Synthetic fallback" }],
           retrieved: result.unwrapOr([]),
+          retrievalFailed: result.isErr(),
           budgetChars: 100,
         }),
-      ).toMatchObject({ kind: "passages", retrieved: false });
+      ).toMatchObject({
+        kind: "passages",
+        retrieved: false,
+        retrievalFailed: true,
+      });
     },
   );
 
@@ -258,9 +263,33 @@ describe("selectDecisionPassages", () => {
       selectDecisionPassages({
         fallback: passages,
         retrieved: [],
+        retrievalFailed: false,
         budgetChars: 100,
       }),
-    ).toEqual({ kind: "passages", passages, retrieved: false });
+    ).toEqual({
+      kind: "passages",
+      passages,
+      retrieved: false,
+      retrievalFailed: false,
+    });
+  });
+
+  test("carries a failed retrieval forward so later stages do not retry it", () => {
+    const passages = [{ anchorId: "b1", excerpt: "The fallback passage." }];
+
+    expect(
+      selectDecisionPassages({
+        fallback: passages,
+        retrieved: [],
+        retrievalFailed: true,
+        budgetChars: 100,
+      }),
+    ).toEqual({
+      kind: "passages",
+      passages,
+      retrieved: false,
+      retrievalFailed: true,
+    });
   });
 
   test("marks passages as retrieved only when the index supplied them", () => {
@@ -270,8 +299,14 @@ describe("selectDecisionPassages", () => {
       selectDecisionPassages({
         fallback: [{ anchorId: "b1", excerpt: "The full text." }],
         retrieved,
+        retrievalFailed: false,
         budgetChars: 100,
       }),
-    ).toEqual({ kind: "passages", passages: retrieved, retrieved: true });
+    ).toEqual({
+      kind: "passages",
+      passages: retrieved,
+      retrieved: true,
+      retrievalFailed: false,
+    });
   });
 });
