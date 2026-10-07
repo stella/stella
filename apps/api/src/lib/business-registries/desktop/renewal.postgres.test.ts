@@ -764,10 +764,14 @@ describe.skipIf(!enabled || !databaseUrl)(
                   expect(result.error.status).toBe(401);
                 }
               }
-              expect([
-                await defaultKeyHasher(SUCCESSOR_KEY),
-                await defaultKeyHasher(THIRD_KEY),
-              ]).toContain(row.key);
+              const successorWon =
+                row.key === (await defaultKeyHasher(SUCCESSOR_KEY));
+              expect(
+                successorWon || row.key === (await defaultKeyHasher(THIRD_KEY)),
+              ).toBe(true);
+              const [winningKey, losingKey] = successorWon
+                ? [SUCCESSOR_KEY, THIRD_KEY]
+                : [THIRD_KEY, SUCCESSOR_KEY];
               expect(row.enabled).toBe(true);
               expect(row.inactivityExpiresAt).toBe(
                 new Date(NOW.getTime() + DAY_MS + LIFETIME_MS).toISOString(),
@@ -777,11 +781,19 @@ describe.skipIf(!enabled || !databaseUrl)(
                   await probeDesktopCredential({
                     ...fixture,
                     db,
-                    currentKey: SUCCESSOR_KEY,
+                    currentKey: winningKey,
                     now: new Date(NOW.getTime() + DAY_MS),
                   }),
                 ).expiresAt,
-              ).toBe(committed.inactivityExpiresAt);
+              ).toBe(row.inactivityExpiresAt);
+              await expectUnauthorized(
+                probeDesktopCredential({
+                  ...fixture,
+                  db,
+                  currentKey: losingKey,
+                  now: new Date(NOW.getTime() + DAY_MS),
+                }),
+              );
               expect(await readAudit(db, fixture.keyId)).toHaveLength(1);
             } else {
               const revocation = pending.at(1);
