@@ -2988,8 +2988,7 @@ export const RATCHET_METRICS: readonly RatchetMetric[] = [
     perFile: true,
     growth: "shrink-only",
     count: (context) => {
-      const files: Record<string, number> = {};
-      let count = 0;
+      const keys: string[] = [];
       for (const file of scanRepoFiles(context, [
         "apps/api/**/*.{ts,tsx,js,jsx,mjs,cjs,mts,cts}",
       ])) {
@@ -3003,14 +3002,15 @@ export const RATCHET_METRICS: readonly RatchetMetric[] = [
           file,
           text: readSource(context, file),
         })) {
-          if (capability === "permit:grant") {
-            continue;
+          if (capability !== "permit:grant") {
+            keys.push(`${file}#${capability}`);
           }
-          files[`${file}#${capability}`] = 1;
-          count += 1;
         }
       }
-      return { count, files };
+      return {
+        count: keys.length,
+        files: Object.fromEntries(keys.map((key) => [key, 1])),
+      };
     },
   },
   {
