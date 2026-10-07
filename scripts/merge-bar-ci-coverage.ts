@@ -160,20 +160,3 @@ export const parseCiCoverageLog = (
   }
   return coverageEvidence(section.values);
 };
-
-type CiCoverageLogArgumentsOptions = {
-  apiHelp: string;
-  endpoint: string;
-};
-
-// Older installed CLIs lack this flag; raw logs stay inside the parser.
-export const ciCoverageLogArguments = ({
-  apiHelp,
-  endpoint,
-}: CiCoverageLogArgumentsOptions) => [
-  "api",
-  ...(apiHelp.includes("--allow-escape-sequences")
-    ? ["--allow-escape-sequences"]
-    : []),
-  endpoint,
-];

@@ -53,10 +53,7 @@ import {
   type MergeQueueRemoval,
   type RunJob,
 } from "./merge-bar";
-import {
-  ciCoverageLogArguments,
-  parseCiCoverageLog,
-} from "./merge-bar-ci-coverage";
+import { parseCiCoverageLog } from "./merge-bar-ci-coverage";
 import { RATCHET_METRICS } from "./ratchet";
 import ratchetDefinitionPaths from "./ratchet-definition-paths.json" with { type: "json" };
 
@@ -2091,21 +2088,6 @@ describe("green result freshness", () => {
           `${job.id}: ${gate}`,
         ).toThrow(`Unmodeled fast-required predicate: ${job.id}`);
       }
-    }
-  });
-
-  test("coverage log reads work with installed CLIs on either side of the escape flag", () => {
-    const endpoint = "repos/example/project/actions/jobs/123/logs";
-    for (const apiHelp of [
-      "Usage: gh api <endpoint>",
-      "Flags: --allow-escape-sequences Allow printing terminal escape sequences",
-    ]) {
-      const argumentsForCli = ciCoverageLogArguments({ apiHelp, endpoint });
-      expect(argumentsForCli).toEqual(
-        apiHelp.includes("--allow-escape-sequences")
-          ? ["api", "--allow-escape-sequences", endpoint]
-          : ["api", endpoint],
-      );
     }
   });
 

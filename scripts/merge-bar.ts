@@ -69,7 +69,6 @@ import {
 import { pilotFastJobs, pilotQueueJobs } from "./ci-pr-pilot-plan";
 import { evaluate } from "./github-expression";
 import {
-  ciCoverageLogArguments,
   parseCiCoverageLog,
   type CiCoverageEvidence,
   type CiCoverageLogError,
@@ -2704,12 +2703,11 @@ const createGhGateway = ({
       }
       Bun.sleepSync(1100);
       return parseCiCoverageLog(
-        runGh(
-          ciCoverageLogArguments({
-            apiHelp: runGh(["api", "--help"]),
-            endpoint: `repos/${repo}/actions/jobs/${jobId}/logs`,
-          }),
-        ),
+        runGh([
+          "api",
+          "--allow-escape-sequences",
+          `repos/${repo}/actions/jobs/${jobId}/logs`,
+        ]),
       );
     },
 
