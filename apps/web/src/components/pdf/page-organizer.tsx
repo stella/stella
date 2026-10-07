@@ -3,10 +3,6 @@ import type { KeyboardEvent } from "react";
 
 import { attachClosestEdge } from "@atlaskit/pragmatic-drag-and-drop-hitbox/closest-edge/attach-closest-edge";
 import { extractClosestEdge } from "@atlaskit/pragmatic-drag-and-drop-hitbox/closest-edge/extract-closest-edge";
-import {
-  draggable,
-  dropTargetForElements,
-} from "@atlaskit/pragmatic-drag-and-drop/adapter/element-adapter";
 import { combine } from "@atlaskit/pragmatic-drag-and-drop/utils/combine";
 import { preserveOffsetOnSource } from "@atlaskit/pragmatic-drag-and-drop/utils/preserve-offset-on-source";
 import { setCustomNativeDragPreview } from "@atlaskit/pragmatic-drag-and-drop/utils/set-custom-native-drag-preview";
@@ -70,6 +66,10 @@ import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { TOOLBAR_ROW_HEIGHT } from "@/lib/consts";
 import { detached } from "@/lib/detached";
+import {
+  draggable,
+  dropTargetForElements,
+} from "@/lib/drag-and-drop/element-registration";
 import { unwrapEden } from "@/lib/errors/api";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { filesKeys, fileOptions } from "@/lib/files/queries";

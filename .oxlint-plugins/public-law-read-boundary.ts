@@ -19,9 +19,14 @@ import {
   getPropertyName,
   isAstNode,
   isIdentifier,
+  isImportedFrom,
   unwrapExpression,
 } from "./utils.ts";
-import type { AstNode } from "./utils.ts";
+import type { AstNode, resolveImport } from "./utils.ts";
+
+const ALTERNATE_READERS = new Set([
+  "readPublicDecisionLanguageAlternatesByGroup",
+]);
 
 const SEARCH_FUNCTIONS = new Set([
   "searchPostgresDecisions",
@@ -73,10 +78,23 @@ const callsIdentifier = (node: AstNode, name: string): boolean =>
 const firstArgument = (node: AstNode): unknown =>
   Array.isArray(node.arguments) ? node.arguments.at(0) : undefined;
 
-const invokesInOwnBody = (functionNode: AstNode, name: string): boolean => {
+type ImportResolutionContext = Parameters<typeof resolveImport>[0];
+
+const invokesInOwnBody = (
+  functionNode: AstNode,
+  context: ImportResolutionContext,
+): boolean => {
   let found = false;
   walkOwnFunctionBody(functionNode, (node) => {
-    if (callsIdentifier(node, name)) {
+    if (
+      node.type === "CallExpression" &&
+      isImportedFrom({
+        context,
+        node: node.callee,
+        modules: ["apps/api/src/lib/case-law/language-alternates"],
+        names: ALTERNATE_READERS,
+      })
+    ) {
       found = true;
     }
   });
@@ -161,36 +179,37 @@ const directlyReturnsSharedCallback = (statement: unknown): boolean => {
 const transactionCallbackIsConfigured = (functionNode: AstNode): boolean => {
   const callbacks: AstNode[] = [];
   walkOwnFunctionBody(functionNode, (node) => {
-    if (!isMemberCall(node, "transaction") || callbacks.length > 0) {
+    if (!isMemberCall(node, "transaction")) {
       return;
     }
     const candidate = unwrapExpression(firstArgument(node));
-    if (isFunctionLike(candidate)) {
-      callbacks.push(candidate);
-    }
+    callbacks.push(isFunctionLike(candidate) ? candidate : node);
   });
-  const callback = callbacks.at(0);
-  if (callback === undefined) {
-    return false;
-  }
+  return (
+    callbacks.length > 0 &&
+    callbacks.every((callback) => {
+      if (!isFunctionLike(callback)) {
+        return false;
+      }
+      const statements = statementsIn(callback.body);
+      // Unconditional on purpose: which guards a read gets is the guard set's
+      // decision, but that a read is configured at all must not depend on a branch
+      // the reader could take the other way.
+      const configurationIndex = statements.findIndex((statement) =>
+        callsConfiguration(
+          directAwaitedCall(statement),
+          "configureReadTransaction",
+        ),
+      );
+      if (configurationIndex === -1) {
+        return false;
+      }
 
-  const statements = statementsIn(callback.body);
-  // Unconditional on purpose: which guards a read gets is the guard set's
-  // decision, but that a read is configured at all must not depend on a branch
-  // the reader could take the other way.
-  const configurationIndex = statements.findIndex((statement) =>
-    callsConfiguration(
-      directAwaitedCall(statement),
-      "configureReadTransaction",
-    ),
+      return statements
+        .slice(configurationIndex + 1)
+        .some(directlyReturnsSharedCallback);
+    })
   );
-  if (configurationIndex === -1) {
-    return false;
-  }
-
-  return statements
-    .slice(configurationIndex + 1)
-    .some(directlyReturnsSharedCallback);
 };
 
 export default eslintCompatPlugin({
@@ -207,6 +226,9 @@ export default eslintCompatPlugin({
       createOnce(context) {
         const functions = new Map<string, AstNode>();
         return {
+          before() {
+            functions.clear();
+          },
           FunctionDeclaration(node) {
             if (
               isAstNode(node) &&
@@ -230,10 +252,7 @@ export default eslintCompatPlugin({
               const functionNode = functions.get(functionName);
               if (
                 functionNode === undefined ||
-                !invokesInOwnBody(
-                  functionNode,
-                  "readPublicDecisionLanguageAlternatesByGroup",
-                )
+                !invokesInOwnBody(functionNode, context)
               ) {
                 context.report({
                   node: functionNode ?? node,
@@ -257,6 +276,9 @@ export default eslintCompatPlugin({
       createOnce(context) {
         let publicLawReadFunction: AstNode | null = null;
         return {
+          before() {
+            publicLawReadFunction = null;
+          },
           VariableDeclarator(node) {
             const functionEntry = namedFunctionFromDeclarator(node);
             if (functionEntry?.[0] === "publicLawReadDb") {

@@ -24,7 +24,7 @@ export type AuditLogViewer = {
   organizationId: string;
 };
 
-export const auditLogKeys = {
+const auditLogKeys = {
   all: ["audit-logs"] as const,
   filtered: (viewer: AuditLogViewer, key: AuditLogsPageKey) =>
     [

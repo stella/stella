@@ -1,5 +1,6 @@
 {
   "jobs": {
+    "fetch-public-documents.yml/fetch": "main",
     "visual-preview.yml/preview": "pr-fast",
     "railway-smoke.yml/smoke": "main",
     "autofix.yml/dependabot-bun-autofix": "pr-fast",
@@ -69,6 +70,7 @@
     "model-catalog-check.yml/model-catalog-check": "main",
     "ci-pr-pilot-metrics.yml/metrics": "main",
     "network-baseline-record.yml/build": "main",
+    "network-baseline-record.yml/deliver": "main",
     "network-baseline-record.yml/record": "main",
     "network-baseline-request.yml/request": "pr-fast",
     "typecheck-base.yml/record": "main",

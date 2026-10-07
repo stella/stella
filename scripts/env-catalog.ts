@@ -150,6 +150,7 @@ const INTERNAL_SERVER_KEYS = new Set([
   "FEATURE_AGENT_ID_JAG",
   "FEATURE_AI_MEMORY",
   "FEATURE_FILE_USAGE_LIMITS",
+  "FEATURE_FREE_TIER",
   "FEATURE_GOVERNED_WORKFLOW",
   "FEATURE_GENERATED_VIEWS",
   "FEATURE_INBOX_DOCUMENT_SCOUTS",
@@ -449,6 +450,8 @@ const DESCRIPTION_OVERRIDES: Record<string, string> = {
     "Operator-owned JSON object keyed by registered feature id. Member grants specify type, organizationId, and email; organization grants specify type and organizationId. Both require current membership and verified email. Unknown feature ids reject startup; empty grants hide invitation features.",
   FEATURE_ORG_ACCESS_STATE:
     "Enforce the per-organization access state before a model call falls back to the instance provider.",
+  FEATURE_FREE_TIER:
+    "Fall organizations whose evaluation or paid access lapsed back to the seeded free usage policy. Requires FEATURE_ORG_ACCESS_STATE and FEATURE_ORG_SERVICE_BUDGETS with USAGE_ENFORCEMENT_ENABLED off.",
   FEATURE_FILE_USAGE_LIMITS:
     "Enforce organization file byte reservations at storage writes.",
   OPENROUTER_WIF_POLICY_ID:
@@ -770,6 +773,7 @@ export const ENV_CREDENTIAL_CLASSIFICATION = {
   FEATURE_AI_MEMORY: ENV_CREDENTIAL_KIND.notCredential,
   FEATURE_CONFIGURED_ACCESS: ENV_CREDENTIAL_KIND.notCredential,
   FEATURE_FILE_USAGE_LIMITS: ENV_CREDENTIAL_KIND.notCredential,
+  FEATURE_FREE_TIER: ENV_CREDENTIAL_KIND.notCredential,
   FEATURE_GOVERNED_WORKFLOW: ENV_CREDENTIAL_KIND.notCredential,
   FEATURE_GENERATED_VIEWS: ENV_CREDENTIAL_KIND.notCredential,
   FEATURE_INBOX_DOCUMENT_SCOUTS: ENV_CREDENTIAL_KIND.notCredential,
@@ -1250,6 +1254,7 @@ export const MANUAL_SCHEMA_KEYS = new Set([
   "STELLA_WEB_PORT",
   "XDG_CACHE_HOME",
   "XDG_CONFIG_HOME",
+  "XDG_STATE_HOME",
   "SSR",
 ]);
 
@@ -1311,6 +1316,8 @@ export const DEPLOYMENT_ENV_KEYS = new Set([
 ]);
 
 export const TOOLING_ENV_KEYS = new Set([
+  // Manual document-fetch input is scoped to its workflow invocation.
+  "PUBLIC_DOCUMENT_URLS",
   // Session ownership is passed from agent:up to its detached dev runner.
   "STELLA_DEV_SESSION_ID",
   // ci-result evaluates each independently scoped suite in folded jobs.
@@ -1319,6 +1326,8 @@ export const TOOLING_ENV_KEYS = new Set([
   "GH_RETRY_SCRIPT",
   // merge-bar CLI tests skip the origin/main freshness check (local test runs only).
   "STELLA_MERGE_BAR_TEST_SKIP_FRESHNESS",
+  // Durable branch-update receipts and locks can use an operator-selected directory.
+  "STELLA_MERGE_BAR_STATE_DIR",
   // Preserve Bun global-store links inside browser containers.
   "BUN_INSTALL_CACHE_DIR",
   // Browser commands use only executables baked into the pinned image.

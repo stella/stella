@@ -3108,6 +3108,10 @@ jobs:
         if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
         run: bun scripts/check-test-retries.ts
 
+      - name: Keep tests off history walks
+        if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
+        run: bun test scripts/check-test-history-walks.test.ts
+
       - name: Test dependency malware scanners
         if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
         run: bun test scripts/osv-scanner-install.test.ts scripts/scan-dependency-malware.test.ts scripts/report-dependency-malware-failure.test.ts
@@ -3152,6 +3156,10 @@ jobs:
           scripts/check-release-upload-retry.test.ts
           scripts/check-base-image-pulls.test.ts
           scripts/dependabot-changeset.test.ts
+
+      - name: Test main network recording selection
+        if: ${{ !cancelled() && steps.checkout.outcome == 'success' && steps.install.outcome != 'failure' && steps.standalone_lockfiles.outcome != 'failure' && steps.lockfile_ages.outcome != 'failure' }}
+        run: bun test scripts/network-baseline-selection.test.ts
 
       - name: Test autofix decision boundaries
         if: ${{ !cancelled() && steps.checkout.outcome == 'success' && steps.install.outcome != 'failure' && steps.standalone_lockfiles.outcome != 'failure' && steps.lockfile_ages.outcome != 'failure' }}
@@ -3233,6 +3241,10 @@ jobs:
         run: |
           bun scripts/check-ci-event-policy.ts
           bun test scripts/check-ci-event-policy.test.ts
+
+      - name: Test public document fetch
+        if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
+        run: bun test scripts/fetch-public-documents.test.ts
 
       - name: Test migration identity and merge gate logic
         if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}

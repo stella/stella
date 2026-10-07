@@ -47,6 +47,7 @@
 // Usage:
 //   bun scripts/merge-bar.ts <pr-number> [--repo owner/name] [--dry-run]
 //   bun scripts/merge-bar.ts --disarm <pr-number> [--repo owner/name] [--dry-run]
+//   bun scripts/merge-bar.ts --update-branch owner/name#<pr-number> --expected-head-sha <sha> [--dry-run]
 //
 // A non-empty STELLA_MERGE_HOLD repository variable holds ordinary pull requests;
 // recognized release pull requests remain exempt, including --jump.
@@ -55,6 +56,7 @@
 
 import { panic, Result, TaggedError } from "better-result";
 import { mkdirSync, mkdtempSync, rmSync } from "node:fs";
+import { homedir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -71,9 +73,15 @@ import { evaluate } from "./github-expression";
 import {
   parseCiCoverageLog,
   type CiCoverageEvidence,
+  type CiRunEvidence,
   type CiCoverageLogError,
 } from "./merge-bar-ci-coverage";
 import { decideBarFreshness, readBarFreshness } from "./merge-bar-freshness";
+import {
+  branchUpdateResponse,
+  createBranchUpdateStore,
+  updatePullRequestBranch,
+} from "./merge-bar-update-branch";
 
 const DEFAULT_REPO = "stella/stella" satisfies MergeBarRepository;
 const MERGEABLE_POLL_ATTEMPTS = 8;
@@ -1201,9 +1209,7 @@ type CheckGreenResultFreshnessOptions = {
     title: string;
   }) => Result<ReadonlyMap<string, boolean>, PlanSelectorError>;
   readRunJobs: (runId: number) => readonly RunJob[];
-  readRunCoverage: (
-    runId: number,
-  ) => Result<CiCoverageEvidence, CiCoverageLogError>;
+  readRunCoverage: (runId: number) => Result<CiRunEvidence, CiCoverageLogError>;
   ratchet: RatchetFreshness;
   // True where landing hands the PR to a merge queue, whose merge group re-runs
   // the ratchet and full CI on the real merge commit. A direct merge has no such
@@ -1211,20 +1217,23 @@ type CheckGreenResultFreshnessOptions = {
   mergeGroupRetests: boolean;
 };
 
-export const checkGreenResultFreshness = ({
-  pullRequest,
-  jump,
-  checkRuns,
-  readWorkflowRun,
-  readBaseComparison,
-  readPullFiles,
-  readBaseWorkflow,
-  runSelector,
-  readRunJobs,
-  readRunCoverage,
-  ratchet,
-  mergeGroupRetests,
-}: CheckGreenResultFreshnessOptions) => {
+export const checkGreenResultFreshness = (
+  options: CheckGreenResultFreshnessOptions,
+): Result<void, StaleGreenResultError> => {
+  const {
+    pullRequest,
+    jump,
+    checkRuns,
+    readWorkflowRun,
+    readBaseComparison,
+    readPullFiles,
+    readBaseWorkflow,
+    runSelector,
+    readRunJobs,
+    readRunCoverage,
+    ratchet,
+    mergeGroupRetests,
+  } = options;
   if (jump || isReleasePullRequest(pullRequest)) {
     return Result.ok();
   }
@@ -1327,20 +1336,47 @@ export const checkGreenResultFreshness = ({
   if (typeof runId !== "number") {
     return panic("Expected a numeric workflow run id");
   }
-  const coverage = jobs.some((job) => job.pilotGate === "deferred-capable")
-    ? readRunCoverage(runId)
-    : Result.ok({ profile: "normal-v1" } as const);
-  if (coverage.isErr()) {
-    return refuse(`cannot read green CI coverage: ${coverage.error.message}`);
+  const evidence = readRunCoverage(runId);
+  if (evidence.isErr()) {
+    return refuse(`cannot read green CI coverage: ${evidence.error.message}`);
   }
-  if (coverage.value.profile === "pilot-fast-v1" && !mergeGroupRetests) {
-    return refuse("Pilot deferral requires mandatory merge-group validation");
+  const coverage = evidence.value;
+  switch (coverage.profile) {
+    case "queue-validation": {
+      // The pull_request `enqueued` run re-checks earlier coverage and runs
+      // no jobs itself; it outlives the queue entry when the PR is ejected.
+      // Judge the run below it, from its own base: older evidence can only
+      // refuse more, never less.
+      const below = checkRuns.filter(({ id }) => id !== green.id);
+      const previous = latestRunByName(below).get("ci-result");
+      if (
+        previous?.status !== "completed" ||
+        previous.conclusion !== "success"
+      ) {
+        return refuse(
+          "no green ci-result run below the queue validation covers this head",
+        );
+      }
+      return checkGreenResultFreshness({ ...options, checkRuns: below });
+    }
+    case "pilot-fast-v1":
+      if (!mergeGroupRetests) {
+        return refuse(
+          "Pilot deferral requires mandatory merge-group validation",
+        );
+      }
+      break;
+    case "normal-v1":
+      break;
+    default:
+      coverage satisfies never;
+      return panic("Unhandled CI run evidence");
   }
   const unrun = unrunPlannedJobs({
     jobs,
     plan: plan.value,
     runJobs: readRunJobs(runId),
-    coverage: coverage.value,
+    coverage,
   });
   if (unrun.length > 0) {
     return Result.err(
@@ -1625,9 +1661,7 @@ type GitHubGateway = {
   readPullFiles: () => readonly string[];
   readBaseWorkflow: (ref: string) => string | null;
   readRunJobs: (runId: number) => readonly RunJob[];
-  readRunCoverage: (
-    runId: number,
-  ) => Result<CiCoverageEvidence, CiCoverageLogError>;
+  readRunCoverage: (runId: number) => Result<CiRunEvidence, CiCoverageLogError>;
   readRatchetDefinitionPaths: (baseRefName: string) => unknown;
   readReviewThreads: () => readonly ReviewThreadSnapshot[];
   readMigrationDirectories: () => MigrationSnapshot;
@@ -1695,17 +1729,71 @@ export class DisarmError extends TaggedError("DisarmError")<{
   message: string;
 }> {}
 
+class DisarmChangedError extends TaggedError("DisarmChangedError")<{
+  message: string;
+}> {}
+
+const DISARM_CHANGED_MESSAGE =
+  "disarmed, but the PR changed during the disarm; review and re-arm manually";
+
 type DisarmPullRequestOptions = {
   gateway: Pick<GitHubGateway, "readArmState" | "mutateHandoff">;
   dryRun: boolean;
+  expectedHeadSha?: string;
+};
+
+const checkDisarmHead = (raw: unknown, expectedHeadSha: string) => {
+  const pull = readRecord(raw, "disarm pull request");
+  if (pull["state"] !== "OPEN" || pull["headRefOid"] !== expectedHeadSha) {
+    return Result.err(
+      new DisarmError({
+        message:
+          "NOT DISARMED: expected head changed or its rollup is no longer red",
+      }),
+    );
+  }
+  const commits = readRecord(pull["commits"], "disarm commits")["nodes"];
+  if (!Array.isArray(commits) || commits.length !== 1) {
+    return Result.err(
+      new DisarmError({ message: "NOT DISARMED: head rollup unavailable" }),
+    );
+  }
+  const commit = readRecord(
+    readRecord(commits[0], "disarm commit node")["commit"],
+    "disarm commit",
+  );
+  const rawRollup = commit["statusCheckRollup"];
+  if (rawRollup === null || rawRollup === undefined) {
+    return Result.err(
+      new DisarmError({ message: "NOT DISARMED: head rollup unavailable" }),
+    );
+  }
+  const rollup = readRecord(rawRollup, "disarm head rollup");
+  if (commit["oid"] !== expectedHeadSha || rollup["state"] !== "FAILURE") {
+    return Result.err(
+      new DisarmError({
+        message:
+          "NOT DISARMED: expected head changed or its rollup is no longer red",
+      }),
+    );
+  }
+  return Result.ok();
 };
 
 export const disarmPullRequest = ({
   gateway,
   dryRun,
+  expectedHeadSha,
 }: DisarmPullRequestOptions) =>
   Result.try(() => {
-    const before = armState(gateway.readArmState());
+    const beforeRaw = gateway.readArmState();
+    const before = armState(beforeRaw);
+    if (expectedHeadSha !== undefined) {
+      const pinned = checkDisarmHead(beforeRaw, expectedHeadSha);
+      if (pinned.isErr()) {
+        return pinned;
+      }
+    }
     if (dryRun) {
       return Result.ok({ status: "dry-run", id: before.id } as const);
     }
@@ -1718,9 +1806,18 @@ export const disarmPullRequest = ({
     }
     // Disabling can race with auto-merge enqueueing; inspect queue membership
     // again before removing it, then verify both independent fields are clear.
-    const current = armState(gateway.readArmState());
+    const currentRaw = gateway.readArmState();
+    const current = armState(currentRaw);
     if (current.id !== before.id) {
       panic("Disarm read returned a different pull request");
+    }
+    if (
+      expectedHeadSha !== undefined &&
+      checkDisarmHead(currentRaw, expectedHeadSha).isErr()
+    ) {
+      return Result.err(
+        new DisarmChangedError({ message: DISARM_CHANGED_MESSAGE }),
+      );
     }
     if (current.queue !== null) {
       gateway.mutateHandoff(
@@ -1728,9 +1825,18 @@ export const disarmPullRequest = ({
         variables,
       );
     }
-    const after = armState(gateway.readArmState());
+    const afterRaw = gateway.readArmState();
+    const after = armState(afterRaw);
     if (after.id !== before.id) {
       panic("Disarm read returned a different pull request");
+    }
+    if (
+      expectedHeadSha !== undefined &&
+      checkDisarmHead(afterRaw, expectedHeadSha).isErr()
+    ) {
+      return Result.err(
+        new DisarmChangedError({ message: DISARM_CHANGED_MESSAGE }),
+      );
     }
     if (after.autoMerge !== null || after.queue !== null) {
       return Result.err(
@@ -2929,7 +3035,8 @@ const createGhGateway = ({
           "-f",
           `query=query($owner:String!, $name:String!, $number:Int!) {
           repository(owner:$owner,name:$name) { pullRequest(number:$number) {
-            id headRefOid updatedAt autoMergeRequest { enabledAt }
+            id state headRefOid updatedAt autoMergeRequest { enabledAt }
+            commits(last:1) { nodes { commit { oid statusCheckRollup { state } } } }
             mergeQueueEntry { id position jump state }
           } }
         }`,
@@ -3109,27 +3216,73 @@ const createGhGateway = ({
 
 // --- CLI --------------------------------------------------------------------
 
-type MergeBarOptions = {
+type MergeBarCommonOptions = {
   pullNumber: number;
   repo: MergeBarRepository;
   dryRun: boolean;
-  // Enqueue at the front of the queue only when explicitly requested.
-  jump: boolean;
-  mode: "merge" | "disarm";
+};
+
+type MergeBarOptions = MergeBarCommonOptions &
+  (
+    | { mode: "merge"; jump: boolean }
+    | { mode: "disarm"; jump: false; expectedHeadSha?: string }
+    | { mode: "update-branch"; jump: false; expectedHeadSha: string }
+  );
+
+type ReadPullReferenceOptions = {
+  reference: string;
+  explicitRepo: MergeBarRepository | undefined;
+  mode: MergeBarOptions["mode"];
+};
+
+const readPullReference = ({
+  reference,
+  explicitRepo,
+  mode,
+}: ReadPullReferenceOptions) => {
+  let repo = explicitRepo ?? DEFAULT_REPO;
+  let rawNumber = reference;
+  if (rawNumber.includes("#")) {
+    if (mode !== "update-branch") {
+      panic(
+        "Repository#number references are accepted only with --update-branch",
+      );
+    }
+    const [referenceRepo, referenceNumber, extra] = rawNumber.split("#");
+    repo = readMergeBarRepository(referenceRepo ?? panic("Missing repository"));
+    if (
+      extra !== undefined ||
+      (explicitRepo !== undefined && explicitRepo !== repo)
+    ) {
+      panic(
+        "Pull request reference conflicts with --repo or contains multiple separators",
+      );
+    }
+    rawNumber = referenceNumber ?? panic("Missing pull request number");
+  }
+  if (!PULL_NUMBER_PATTERN.test(rawNumber)) {
+    panic(`PR number must be digits only, got: ${rawNumber}`);
+  }
+  const pullNumber = Number(rawNumber);
+  if (!Number.isSafeInteger(pullNumber) || pullNumber <= 0) {
+    panic(`PR number must be a positive integer, got: ${rawNumber}`);
+  }
+  return { pullNumber, repo };
 };
 
 export const parseOptions = (argv: readonly string[]): MergeBarOptions => {
   const positional: string[] = [];
-  let repo: MergeBarRepository = DEFAULT_REPO;
+  let explicitRepo: MergeBarRepository | undefined;
   let dryRun = false;
   let jump = false;
   let mode: MergeBarOptions["mode"] = "merge";
+  let expectedHeadSha: string | undefined;
 
   for (let index = 0; index < argv.length; index += 1) {
     const argument = argv[index];
     if (argument === "--repo") {
       index += 1;
-      repo = readMergeBarRepository(
+      explicitRepo = readMergeBarRepository(
         argv[index] ?? panic("--repo requires a value"),
       );
       continue;
@@ -3142,8 +3295,20 @@ export const parseOptions = (argv: readonly string[]): MergeBarOptions => {
       jump = true;
       continue;
     }
-    if (argument === "--disarm") {
-      mode = "disarm";
+    if (argument === "--disarm" || argument === "--update-branch") {
+      if (mode !== "merge") {
+        panic("Only one of --disarm or --update-branch may be supplied");
+      }
+      mode = argument === "--disarm" ? "disarm" : "update-branch";
+      continue;
+    }
+    if (argument === "--expected-head-sha") {
+      index += 1;
+      expectedHeadSha =
+        argv[index] ?? panic("--expected-head-sha requires a value");
+      if (!/^[a-f0-9]{40}$/u.test(expectedHeadSha)) {
+        panic("--expected-head-sha requires a full lowercase commit SHA");
+      }
       continue;
     }
     if (argument === undefined || argument.startsWith("--")) {
@@ -3151,32 +3316,40 @@ export const parseOptions = (argv: readonly string[]): MergeBarOptions => {
     }
     positional.push(argument);
   }
-
-  // Exactly one, all digits. `Number.parseInt("2137oops", 10)` is 2137, so a
-  // mistyped suffix would silently merge a different real pull request; extra
-  // positionals would silently pick the first.
   if (positional.length !== 1) {
     panic(
-      `Expected exactly one PR number, got ${positional.length}. ` +
-        "Usage: bun scripts/merge-bar.ts <pr-number> [--repo owner/name] " +
-        "[--dry-run] [--jump | --disarm]",
+      `Expected exactly one PR number, got ${positional.length}. Usage: bun scripts/merge-bar.ts <pr-number> [--repo owner/name] [--dry-run] [--jump | --disarm | --update-branch --expected-head-sha <sha>]`,
     );
   }
-  const rawNumber = positional[0] ?? panic("unreachable: length checked above");
-  if (!PULL_NUMBER_PATTERN.test(rawNumber)) {
-    panic(`PR number must be digits only, got: ${rawNumber}`);
+  const { pullNumber, repo } = readPullReference({
+    reference: positional[0] ?? panic("unreachable: length checked above"),
+    explicitRepo,
+    mode,
+  });
+  if (mode !== "merge" && jump) {
+    panic(`--${mode} cannot be combined with --jump`);
   }
-  const pullNumber = Number(rawNumber);
-  if (!Number.isSafeInteger(pullNumber) || pullNumber <= 0) {
-    panic(`PR number must be a positive integer, got: ${rawNumber}`);
+  if (mode === "merge" && expectedHeadSha !== undefined) {
+    panic("--expected-head-sha requires --update-branch or --disarm");
   }
-
-  if (mode === "disarm" && jump) {
-    panic("--disarm cannot be combined with --jump");
+  switch (mode) {
+    case "update-branch":
+      if (expectedHeadSha === undefined) {
+        panic("--update-branch requires --expected-head-sha");
+      }
+      return { mode, pullNumber, repo, dryRun, jump: false, expectedHeadSha };
+    case "disarm":
+      if (expectedHeadSha === undefined) {
+        return { mode, pullNumber, repo, dryRun, jump: false };
+      }
+      return { mode, pullNumber, repo, dryRun, jump: false, expectedHeadSha };
+    case "merge":
+      return { mode, pullNumber, repo, dryRun, jump };
+    default:
+      mode satisfies never;
+      return panic("Unknown merge-bar mode");
   }
-  return { pullNumber, repo, dryRun, jump, mode };
 };
-
 const formatVerdict = (verdict: MergeBarVerdict): string =>
   verdict.gates
     .map((gate) =>
@@ -3256,6 +3429,94 @@ if (import.meta.main) {
   if (barFreshness.type === "branch-bar") {
     console.log(barFreshness.message);
   }
+  if (options.mode === "update-branch") {
+    let lastCall = 0;
+    const paced = (
+      args: readonly string[],
+      access: "read" | "write" = "read",
+    ) => {
+      const wait = 1100 - (Date.now() - lastCall);
+      if (wait > 0) {
+        Bun.sleepSync(wait);
+      }
+      lastCall = Date.now();
+      // The existing transport resolves gh from PATH and never retries writes.
+      return runGhProcess(args, access);
+    };
+    const stateRoot =
+      process.env["STELLA_MERGE_BAR_STATE_DIR"] ??
+      path.join(
+        process.env["XDG_STATE_HOME"] ??
+          path.join(homedir(), ".local", "state"),
+        "stella",
+        "merge-bar",
+        "branch-updates",
+      );
+    const receipt = updatePullRequestBranch({
+      repo: options.repo,
+      pullNumber: options.pullNumber,
+      expectedHeadSha: options.expectedHeadSha,
+      dryRun: options.dryRun,
+      store: createBranchUpdateStore(stateRoot),
+      readPullRequest: () => {
+        const response = paced([
+          "api",
+          `repos/${options.repo}/pulls/${options.pullNumber}`,
+        ]);
+        if (response.exitCode !== 0) {
+          panic(`Cannot read pull request (gh exit ${response.exitCode})`);
+        }
+        const raw = readRecord(
+          JSON.parse(response.stdout.toString()),
+          "pull request",
+        );
+        const head = readRecord(raw["head"], "head");
+        const base = readRecord(raw["base"], "base");
+        return {
+          state: readString(raw, "state"),
+          headSha: readString(head, "sha"),
+          headRepository:
+            head["repo"] === null
+              ? null
+              : readString(
+                  readRecord(head["repo"], "head repository"),
+                  "full_name",
+                ),
+          baseRepository: readString(
+            readRecord(base["repo"], "base repository"),
+            "full_name",
+          ),
+        };
+      },
+      update: (expectedHeadSha) => {
+        const response = paced(
+          [
+            "api",
+            "--include",
+            "--method",
+            "PUT",
+            `repos/${options.repo}/pulls/${options.pullNumber}/update-branch`,
+            "-f",
+            `expected_head_sha=${expectedHeadSha}`,
+          ],
+          "write",
+        );
+        return branchUpdateResponse({
+          stdout: response.stdout.toString(),
+          stderr: response.stderr.toString(),
+          exitCode: response.exitCode,
+        });
+      },
+    });
+    if (receipt.isErr()) {
+      console.error(receipt.error.message);
+      process.exit(1);
+    }
+    console.log(
+      `${options.repo}#${options.pullNumber}: ${JSON.stringify(receipt.value)}`,
+    );
+    process.exit(0);
+  }
   const gateway = createGhGateway({
     repo: options.repo,
     pullNumber: options.pullNumber,
@@ -3263,10 +3524,16 @@ if (import.meta.main) {
   });
 
   if (options.mode === "disarm") {
-    const receipt = disarmPullRequest({ gateway, dryRun: options.dryRun });
+    const receipt = disarmPullRequest({
+      gateway,
+      dryRun: options.dryRun,
+      ...(options.expectedHeadSha === undefined
+        ? {}
+        : { expectedHeadSha: options.expectedHeadSha }),
+    });
     if (receipt.isErr()) {
       console.error(receipt.error.message);
-      process.exit(1);
+      process.exit(receipt.error instanceof DisarmChangedError ? 2 : 1);
     }
     console.log(
       `${receipt.value.status === "dry-run" ? "DRY RUN: would disarm" : "DISARMED"} ${options.repo}#${options.pullNumber}: ${JSON.stringify(receipt.value)}`,

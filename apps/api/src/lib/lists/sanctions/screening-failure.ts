@@ -33,13 +33,13 @@ export type SanctionsScreeningFailureCause =
   | "matcher-unavailable"
   | "truncated-empty";
 
-export type SanctionsScreeningFailureStage =
+type SanctionsScreeningFailureStage =
   | "matcher-pool"
   | "public-matcher"
   | "list-screening"
   | "whole-screening";
 
-export class SanctionsScreeningFailure extends TaggedError(
+class SanctionsScreeningFailure extends TaggedError(
   "SanctionsScreeningFailure",
 )<{
   message: string;
