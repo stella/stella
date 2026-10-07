@@ -45,7 +45,6 @@ export const copyOrganizationFiles = async <T, E>(
       roundStart,
       roundStart + ORGANIZATION_FILE_ACCOUNTING_BATCH_LIMIT,
     );
-    // db-await-in-loop: bounded batch rounds; each round settles before the next, one statement per round
     const authorized = await authorizeOrganizationFileBatch(round, db);
     if (Result.isError(authorized)) {
       return Result.err(authorized.error);
@@ -104,9 +103,7 @@ export const copyOrganizationFiles = async <T, E>(
           uncertainFailure ??= { error: copied.error };
         }
       }
-      // db-await-in-loop: bounded batch rounds; each round settles before the next, one statement per round
       const settled = await commitOrganizationFilesBytes(committed, db);
-      // db-await-in-loop: bounded batch rounds; each round settles before the next, one statement per round
       const unwound = await releaseOrganizationFilesBytes(released, db);
       if (Result.isError(settled)) {
         return Result.err(settled.error);

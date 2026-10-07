@@ -933,7 +933,23 @@ const OWNERSHIP_DECLARATIONS = [
         "streamTanStackChatRun",
         "generateTanStackChatObject",
       ],
-      allowed: [],
+      allowed: [
+        {
+          path: "apps/api/scripts/ai-native-image-canary.ts",
+          reason:
+            "operator canary/probe run with operator credentials outside tenant request admission",
+        },
+        {
+          path: "apps/api/scripts/ai-provider-canary.ts",
+          reason:
+            "operator canary/probe run with operator credentials outside tenant request admission",
+        },
+        {
+          path: "apps/api/scripts/ai-provider-cassette-probe.ts",
+          reason:
+            "operator canary/probe run with operator credentials outside tenant request admission",
+        },
+      ],
     },
   },
   {
