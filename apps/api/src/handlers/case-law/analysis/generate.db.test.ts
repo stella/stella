@@ -12,6 +12,7 @@ import { Result } from "better-result";
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 
 import { parseUsableDocumentAst } from "@stll/legal-ast/document-ast";
+import type { DocumentAst, ParagraphBlock } from "@stll/legal-ast/document-ast";
 
 import { caseLawDecisions, caseLawSources } from "@/api/db/schema";
 import { createScopedDb } from "@/api/db/scoped";
@@ -20,6 +21,7 @@ import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { ADAPTER_KEYS } from "@/api/lib/legal-search/ingestion-constants";
+import { executeRowsScopedDb } from "@/api/tests/helpers/pglite-rows-scoped-db";
 import { getTestDb, releaseTestDb } from "@/api/tests/security/test-utils";
 import type { TestDatabase } from "@/api/tests/security/test-utils";
 import { rootPoolConnectionCount } from "@/api/tests/test-database-environment";
@@ -31,7 +33,7 @@ const ORGANIZATION_ID = toSafeId<"organization">("org_test");
 const USER_ID = toSafeId<"user">("user_test");
 const UNSUPPORTED_LANGUAGE = "fr";
 
-const paragraph = (anchorId: string, plainText: string) => ({
+const paragraph = (anchorId: string, plainText: string): ParagraphBlock => ({
   id: anchorId,
   anchorId,
   type: "paragraph",
@@ -41,11 +43,21 @@ const paragraph = (anchorId: string, plainText: string) => ({
 
 const documentAst = {
   version: 1,
+  source: { system: "test", documentId: "test", webUrl: "", printUrl: "" },
+  metadata: {
+    caseNumber: "21-10.001",
+    ecli: null,
+    court: "Cour de cassation",
+    decisionDate: null,
+    decisionType: null,
+    keywords: [],
+    statutes: [],
+  },
   blocks: [
     paragraph("b1", "Arrêt"),
     paragraph("b2", "La Cour rejette le pourvoi."),
   ],
-};
+} satisfies DocumentAst;
 
 // An organization key for the fast role, so the AI availability check
 // passes: a decision that slipped past the language refusal would go on to
@@ -109,7 +121,7 @@ describe("generating an analysis for a decision in a language with no prompt", (
 
     const response = await generateAnalysis(
       decisionId,
-      createScopedDb(db, [], ORGANIZATION_ID, USER_ID),
+      executeRowsScopedDb(createScopedDb(db, [], ORGANIZATION_ID, USER_ID)),
       ORGANIZATION_ID,
       orgAIConfig,
       ORG_AI_CONFIG_STATUS.ok,
