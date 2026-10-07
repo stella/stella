@@ -235,7 +235,9 @@ type McpToolDestructiveBranch =
     }
   | {
       annotations: McpToolAnnotations & { destructiveHint: true };
-      destructiveBehavior: McpToolDestructiveBehavior;
+      // Updating existing data needs the client hint even when the server
+      // requires no irreversible-action confirmation.
+      destructiveBehavior?: McpToolDestructiveBehavior;
     };
 
 export type McpToolDefinition = McpToolAccessBranch &

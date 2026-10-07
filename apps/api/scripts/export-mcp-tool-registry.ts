@@ -222,7 +222,9 @@ const submissionTools = Object.fromEntries(
         "Sends the approved report to the maintainer channels the deployment configures, which may include a public issue tracker.";
     }
 
-    let destructiveJustification = nonDestructiveJustification;
+    let destructiveJustification = tool.annotations.destructiveHint
+      ? "Can modify or replace existing stored data in the user’s private stella workspace."
+      : nonDestructiveJustification;
     if (behavior?.type === "always") {
       destructiveJustification =
         "Can irreversibly delete or write off the selected private record and requires explicit confirmation.";
