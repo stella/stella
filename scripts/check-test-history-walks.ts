@@ -15,7 +15,6 @@ import ts from "typescript";
 const REPO_ROOT = path.resolve(import.meta.dir, "..");
 // Every test convention a CI runner picks up, script and shell tests included.
 const SCRIPT_TEST_FILE = /\.(?:test|spec)\.(?:[cm]?[jt]s|[jt]sx)$/u;
-const SHELL_TEST_FILE = /\.test\.sh$/u;
 const HISTORY_SUBCOMMANDS = new Set([
   "annotate",
   "blame",
@@ -24,6 +23,7 @@ const HISTORY_SUBCOMMANDS = new Set([
   "shortlog",
   "whatchanged",
 ]);
+const isShellTest = (file: string): boolean => file.endsWith(".test.sh");
 const GIT_CALLEE = /git$/iu;
 // Any history subcommand word in the same shell command as `git`. Matching any
 // argument position, not only the first one after the global options, keeps
@@ -162,7 +162,7 @@ const scanShell = (file: string, source: string): HistoryWalkFinding[] => {
 };
 
 const scanSource = (file: string, source: string): HistoryWalkFinding[] => {
-  if (SHELL_TEST_FILE.test(file)) {
+  if (isShellTest(file)) {
     return scanShell(file, source);
   }
   const parsed = ts.createSourceFile(
@@ -226,9 +226,7 @@ const trackedTests = (): Map<string, string> => {
     encoding: "utf-8",
   })
     .split("\0")
-    .filter(
-      (file) => SCRIPT_TEST_FILE.test(file) || SHELL_TEST_FILE.test(file),
-    );
+    .filter((file) => SCRIPT_TEST_FILE.test(file) || isShellTest(file));
   return new Map(
     files.map((file) => [
       file,
