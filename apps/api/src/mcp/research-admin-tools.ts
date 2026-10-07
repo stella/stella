@@ -14,6 +14,7 @@ import { mapBoeError } from "@/api/handlers/legislation/boe-error";
 import { updateOrganizationSettingsHandler } from "@/api/handlers/organization-settings/update";
 import { addWorkspaceMemberHandler } from "@/api/handlers/workspaces/members/add";
 import { removeWorkspaceMemberHandler } from "@/api/handlers/workspaces/members/remove";
+import { AUDIT_CHANGES_STATUS } from "@/api/lib/audit-log-details";
 import {
   MANAGE_ORGANIZATION_ADD_MEMBER_PROJECTION,
   MANAGE_ORGANIZATION_REMOVE_MEMBER_PROJECTION,
@@ -236,6 +237,7 @@ const LIST_AUDIT_LOG_OUTPUT_SCHEMA = v.strictObject({
       resourceType: v.string(),
       resourceId: v.string(),
       changes: v.unknown(),
+      changesStatus: v.picklist(Object.values(AUDIT_CHANGES_STATUS)),
     }),
   ),
   limit: v.pipe(v.number(), v.integer()),
@@ -666,6 +668,8 @@ const handleListAuditLogTool: McpToolHandler<
     queryAuditLogPage({
       safeDb: context.safeDb,
       organizationId: context.organizationId,
+      userId: context.userId,
+      featureAccessSnapshot: context.featureAccessSnapshot,
       recordAuditEvent: context.recordAuditEvent,
       query: filter,
     }),
@@ -685,6 +689,7 @@ const handleListAuditLogTool: McpToolHandler<
         resourceType: item.resourceType,
         resourceId: item.resourceId,
         changes: item.changes,
+        changesStatus: item.changesStatus,
       })),
     }),
   );
