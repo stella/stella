@@ -8,7 +8,7 @@
  * anchored text and the prompt its language resolves to today?
  */
 
-import { panic } from "better-result";
+import { panic, Result } from "better-result";
 import { readdir } from "node:fs/promises";
 import path from "node:path";
 import { gunzipSync } from "node:zlib";
@@ -99,6 +99,14 @@ export const readCaseLawFixtureAnalyses = async (): Promise<
       if (ast === null) {
         continue;
       }
+      const systemPrompt = getSystemPrompt(decision.language);
+      if (Result.isError(systemPrompt)) {
+        // An analysis stored for a language with no prompt could not have
+        // been produced by the run it claims to describe.
+        return panic(
+          `${fixtureName} ${decision.case_number}: ${systemPrompt.error.message}`,
+        );
+      }
       const currentFingerprint = analysisInputOf({
         blocks: ast.blocks,
         decision: {
@@ -107,7 +115,7 @@ export const readCaseLawFixtureAnalyses = async (): Promise<
           decisionType: decision.decision_type ?? null,
           language: decision.language,
         },
-        systemPrompt: getSystemPrompt(decision.language),
+        systemPrompt: systemPrompt.value,
       }).fingerprint;
       entries.push({
         fixtureName,

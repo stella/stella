@@ -48,6 +48,12 @@ export const ANALYSIS_REJECTION = {
    * run that met it.
    */
   astUnavailable: "ast-unavailable",
+  /**
+   * No analysis prompt is written for the decision's language. Analysing it
+   * under another language's prompt would produce output that does not
+   * match the text.
+   */
+  unsupportedLanguage: "unsupported-language",
   /** The submitted output does not match the schema the input published. */
   invalidOutput: "invalid-output",
   /** The graph-fenced layer is written in-app; it is never submitted. */
@@ -112,13 +118,20 @@ export const resolveRowAnalysisInput = ({
   if (ast === null) {
     return { status: "rejected", reason: ANALYSIS_REJECTION.astUnavailable };
   }
+  const systemPrompt = getSystemPrompt(row.language);
+  if (Result.isError(systemPrompt)) {
+    return {
+      status: "rejected",
+      reason: ANALYSIS_REJECTION.unsupportedLanguage,
+    };
+  }
   return {
     status: "ok",
     ast,
     input: analysisInputOf({
       blocks: ast.blocks,
       decision: row,
-      systemPrompt: getSystemPrompt(row.language),
+      systemPrompt: systemPrompt.value,
     }),
   };
 };

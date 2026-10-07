@@ -210,6 +210,17 @@ describe("resolveRowAnalysisInput", () => {
       reason: ANALYSIS_REJECTION.astUnavailable,
     });
   });
+
+  // A language with no prompt of its own is refused, not analysed under
+  // another language's prompt: the input would describe the wrong analysis.
+  test("refuses a decision in a language with no analysis prompt", () => {
+    for (const language of ["fr", "hu", "", "CS", "constructor"]) {
+      expect(resolveFromColumn({ language })).toEqual({
+        status: "rejected",
+        reason: ANALYSIS_REJECTION.unsupportedLanguage,
+      });
+    }
+  });
 });
 
 describe("parseSubmissionRecord", () => {
