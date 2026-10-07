@@ -506,6 +506,9 @@ describe("reviewed citation labels", () => {
       { ...annotated, producedAt: "yesterday" },
       // ISO-shaped, but the calendar has no 30 February.
       { ...annotated, producedAt: "2026-02-30T08:00:00Z" },
+      // Real instants the database cannot store or no label can carry.
+      { ...annotated, producedAt: "0000-01-01T00:00:00Z" },
+      { ...annotated, producedAt: "9999-12-31T00:00:00Z" },
       // Postgres refuses NUL in a text parameter.
       { ...annotated, model: "\u0000" },
       { ...valid, reviewRef: "review\u0000ref" },
@@ -540,15 +543,15 @@ describe("reviewed citation labels", () => {
         citationKey: keyOf(labelled),
         outcome: REVIEWED_LABEL_OUTCOME.APPLIED,
       },
-      ...[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map(schemaInvalid),
+      ...[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12].map(schemaInvalid),
       {
-        index: 11,
+        index: 13,
         citationId: missingCitation,
         outcome: REVIEWED_LABEL_OUTCOME.INVALID,
         reason: REVIEWED_LABEL_INVALID_REASON.NO_SUCH_CITATION,
       },
       {
-        index: 12,
+        index: 14,
         citingDecisionId: missingDecision,
         citationKey: "no-such-decision",
         outcome: REVIEWED_LABEL_OUTCOME.INVALID,

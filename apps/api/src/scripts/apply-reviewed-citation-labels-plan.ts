@@ -63,6 +63,31 @@ const humanReviewEntries = {
   origin: v.literal(CITATION_REVIEW_ORIGIN.HUMAN_REVIEW),
 };
 
+/**
+ * No label predates this; it also keeps every accepted value inside the
+ * range a timestamptz cast accepts.
+ */
+const EARLIEST_PRODUCED_AT = Temporal.Instant.from("2020-01-01T00:00:00Z");
+/** Tolerates clock skew between the producer and this run. */
+const PRODUCED_AT_FUTURE_TOLERANCE = Temporal.Duration.from({ hours: 24 });
+
+/**
+ * `isoTimestamp` checks the shape only. A day the calendar lacks
+ * (2026-02-30) or a year the database cannot store (0000) would fail the
+ * timestamptz cast and abort the whole batch, so both are invalid here.
+ */
+const isPlausibleProductionInstant = (value: string): boolean => {
+  const instant = Result.try(() => Temporal.Instant.from(value));
+  if (Result.isError(instant)) {
+    return false;
+  }
+  const latest = Temporal.Now.instant().add(PRODUCED_AT_FUTURE_TOLERANCE);
+  return (
+    Temporal.Instant.compare(instant.value, EARLIEST_PRODUCED_AT) >= 0 &&
+    Temporal.Instant.compare(instant.value, latest) <= 0
+  );
+};
+
 const aiReviewEntries = {
   origin: v.picklist(AI_CITATION_REVIEW_ORIGINS),
   model: provenanceTextSchema,
@@ -74,12 +99,7 @@ const aiReviewEntries = {
   producedAt: v.pipe(
     v.string(),
     v.isoTimestamp(),
-    // `isoTimestamp` checks the shape only; a day the calendar lacks
-    // (2026-02-30) would fail the timestamptz cast and abort the batch.
-    v.check(
-      (value) => Result.isOk(Result.try(() => Temporal.Instant.from(value))),
-      "producedAt must be a real instant",
-    ),
+    v.check(isPlausibleProductionInstant, "producedAt must be a real instant"),
   ),
 };
 
