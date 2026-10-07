@@ -40,7 +40,7 @@ const STABLE_VERSION_PATTERN = /^(\d+)\.(\d+)\.(\d+)$/u;
 const BLOCK_MARKUP_LINE =
   /^(?: {4}|\t|[^\S\r\n]*(?:[#>|]|[-*+]\s|\d+[.)]\s|`{3}|~{3}))/u;
 const MAINTENANCE_CHANGELOG =
-  "# Maintenance release\n\nStella includes reliability and maintenance improvements.\n";
+  "# Maintenance release\n\nstella includes reliability and maintenance improvements.\n";
 const CHANGESET_DIRECTORY = ".changeset";
 /** Declares which files a version run generates; the CI gate reads the same. */
 const CHANGESET_POLICY_PATH = "scripts/changeset-policy.json";

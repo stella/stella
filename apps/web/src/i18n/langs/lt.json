@@ -1700,6 +1700,7 @@
     "deletedCount": "{count, plural, one {# elementas ištrintas} few {# elementai ištrinti} other {# elementų ištrinta}}",
     "description": "Aprašymas",
     "details": "Detalės",
+    "detailsHiddenFeatureUnavailable": "Išsami informacija paslėpta: funkcija neįjungta",
     "disconnect": "Atjungti",
     "dismiss": "Atmesti",
     "displayName": "Rodomas vardas",

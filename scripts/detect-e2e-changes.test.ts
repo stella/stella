@@ -640,7 +640,7 @@ describe("detect-e2e-changes", () => {
     );
     expectPullRequestAndMergeGroup(releaseTypecheck);
     expect(releaseTypecheck).toContain(
-      "run: bun run typecheck && bun run typecheck:repo",
+      "run: bun run typecheck --concurrency=1 && bun run typecheck:repo",
     );
     expect(releaseTypecheck).toContain('TURBO_FORCE: "true"');
 

@@ -1703,6 +1703,7 @@ type Messages = {
     "deletedCount": "{count, plural, one {# item} other {# items}} deleted";
     "description": "Description";
     "details": "Details";
+    "detailsHiddenFeatureUnavailable": "Details hidden: feature not enabled";
     "disconnect": "Disconnect";
     "dismiss": "Dismiss";
     "displayName": "Display name";

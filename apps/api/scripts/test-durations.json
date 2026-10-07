@@ -635,6 +635,10 @@
     "seconds": 0.627056,
     "source": "estimated"
   },
+  "src/handlers/audit-logs/feature-details.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
   "src/handlers/audit-logs/query-scope.integration.test.ts": {
     "seconds": 1.960507,
     "source": "estimated"
@@ -4159,6 +4163,10 @@
     "seconds": 12.574555,
     "source": "estimated"
   },
+  "src/lib/audit-log-details.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
   "src/lib/audit-log.test.ts": {
     "seconds": 0.267484,
     "source": "estimated"
@@ -7353,6 +7361,10 @@
   },
   "src/lib/scheduler/tasks/hosted-usage-webhook-retention.test.ts": {
     "seconds": 0.085742,
+    "source": "estimated"
+  },
+  "src/lib/scheduler/tasks/infosoud.test.ts": {
+    "seconds": 1,
     "source": "estimated"
   },
   "src/lib/scheduler/tasks/legislation-expression-id-backfill-plan.db.test.ts": {
