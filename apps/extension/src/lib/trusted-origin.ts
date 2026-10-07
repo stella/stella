@@ -3,7 +3,7 @@ import { panic } from "better-result";
 import { buildMode, rawStellaOrigins } from "./env";
 
 /** Hosted production stella; every build but `staging` trusts it by default. */
-export const PRODUCTION_STELLA_ORIGINS = [
+const PRODUCTION_STELLA_ORIGINS = [
   "https://app.stll.app",
   "https://my.stll.app",
 ] as const;
