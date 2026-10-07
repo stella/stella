@@ -47,7 +47,9 @@ jobs:
         run: bash scripts/prepare-release-tag.sh --repo "$GITHUB_REPOSITORY" --sha "$REQUESTED_SHA" >> "$GITHUB_OUTPUT"
 
       - name: Preserve the trusted release guard
-        run: cp scripts/check-release-main-health.sh "$RUNNER_TEMP/check-release-main-health.sh"
+        run: |
+          cp scripts/check-release-main-health.sh "$RUNNER_TEMP/check-release-main-health.sh"
+          cp scripts/gh-retry.sh "$RUNNER_TEMP/gh-retry.sh"
 
       - name: Checkout the verified commit
         env:

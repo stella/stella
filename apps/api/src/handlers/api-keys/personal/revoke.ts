@@ -9,7 +9,7 @@ import { personalApiKeyIdBodySchema } from "./schema";
 // permissions-exempt: Members revoke only keys scoped to their own user and organization.
 const config = {
   permissions: { workspace: ["read"] },
-  accountAccess: ACCOUNT_ACCESS.standard,
+  accountAccess: ACCOUNT_ACCESS.accountControl,
   mcp: { type: "internal", reason: "provider_secret" },
   body: personalApiKeyIdBodySchema,
 } satisfies HandlerConfig;

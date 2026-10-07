@@ -131,10 +131,9 @@ const DISPATCH_PATH = path.resolve(
 // Generated capability-coverage table: one section per domain plus the
 // permanent internal-waiver summary, drift-guarded alongside the JSON/dispatch
 // artifacts above (see `serializeCoverageDoc`).
-const COVERAGE_DOC_PATH = path.resolve(
-  REPO_ROOT,
-  "docs/capability-coverage.md",
-);
+const COVERAGE_DOC_INPUT = "docs/capability-coverage.md";
+export const CI_MARKDOWN_READER_INPUTS = [COVERAGE_DOC_INPUT];
+const COVERAGE_DOC_PATH = path.resolve(REPO_ROOT, COVERAGE_DOC_INPUT);
 
 const OXFMT_BIN = path.resolve(REPO_ROOT, "node_modules/.bin/oxfmt");
 const OXFMT_CONFIG = path.resolve(REPO_ROOT, ".oxfmtrc.json");

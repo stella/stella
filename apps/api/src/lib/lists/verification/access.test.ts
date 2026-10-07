@@ -66,7 +66,7 @@ test("the verification declaration uses invitation enrollment and the shared ide
 
 test("parsed verification grants resolve against current identity and deny absent membership", async () => {
   const organizationId = toSafeId<"organization">("org-a");
-  const grants = v.parse(
+  const { grants } = v.parse(
     envApiServerSchema.API_FEATURE_ACCESS_GRANTS,
     JSON.stringify({
       [LIST_VERIFICATION_FEATURE_ID]: [

@@ -127,9 +127,9 @@
       "default": {"title": 25, "description": 336, "inputSchema": 608, "outputSchema": 940, "annotations": 102, "payloadUtf8Bytes": 2120}
     },
     "lookup_case_law": {
-      "anonymized": {"title": 30, "description": 792, "inputSchema": 684, "outputSchema": 1146, "annotations": 108, "payloadUtf8Bytes": 2860},
-      "default": {"title": 30, "description": 792, "inputSchema": 684, "outputSchema": 1146, "annotations": 108, "payloadUtf8Bytes": 2860},
-      "law": {"title": 30, "description": 792, "inputSchema": 684, "outputSchema": 1146, "annotations": 108, "payloadUtf8Bytes": 2860}
+      "anonymized": {"title": 30, "description": 792, "inputSchema": 684, "outputSchema": 1193, "annotations": 108, "payloadUtf8Bytes": 2998},
+      "default": {"title": 30, "description": 792, "inputSchema": 684, "outputSchema": 1193, "annotations": 108, "payloadUtf8Bytes": 2998},
+      "law": {"title": 30, "description": 792, "inputSchema": 684, "outputSchema": 1193, "annotations": 108, "payloadUtf8Bytes": 2998}
     },
     "manage_organization": {
       "default": {"title": 19, "description": 187, "inputSchema": 2179, "outputSchema": 639, "annotations": 120, "payloadUtf8Bytes": 3248}
@@ -241,9 +241,9 @@
       "default": {"title": 22, "description": 547, "inputSchema": 1849, "outputSchema": 1143, "annotations": 99, "payloadUtf8Bytes": 3767}
     },
     "search_case_law": {
-      "anonymized": {"title": 15, "description": 794, "inputSchema": 4298, "outputSchema": 2804, "annotations": 93, "payloadUtf8Bytes": 8109},
-      "default": {"title": 15, "description": 794, "inputSchema": 4298, "outputSchema": 2804, "annotations": 93, "payloadUtf8Bytes": 8109},
-      "law": {"title": 15, "description": 794, "inputSchema": 4298, "outputSchema": 2804, "annotations": 93, "payloadUtf8Bytes": 8109}
+      "anonymized": {"title": 15, "description": 794, "inputSchema": 4298, "outputSchema": 2883, "annotations": 93, "payloadUtf8Bytes": 8279},
+      "default": {"title": 15, "description": 794, "inputSchema": 4298, "outputSchema": 2883, "annotations": 93, "payloadUtf8Bytes": 8279},
+      "law": {"title": 15, "description": 794, "inputSchema": 4298, "outputSchema": 2883, "annotations": 93, "payloadUtf8Bytes": 8279}
     },
     "search_legislation": {
       "anonymized": {"title": 18, "description": 638, "inputSchema": 2065, "outputSchema": 1652, "annotations": 96, "payloadUtf8Bytes": 4572},

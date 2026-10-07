@@ -64,6 +64,20 @@ export const mainHeavyJobs = (workflow: unknown) => {
   return gated.filter((job) => !thin.includes(job));
 };
 
+/** Heavy jobs a thin merge group still runs unless the switch turns them off. */
+export const QUEUE_BROWSER_SUITES_SWITCH = "vars.QUEUE_BROWSER_SUITES";
+
+export const queueAdmittedJobs = (workflow: unknown) => {
+  const jobs = record(record(workflow)["jobs"]);
+  return mainHeavyJobs(workflow).filter((name) => {
+    const condition = record(jobs[name])["if"];
+    return (
+      typeof condition === "string" &&
+      condition.includes(QUEUE_BROWSER_SUITES_SWITCH)
+    );
+  });
+};
+
 if (import.meta.main) {
   const source = process.argv.at(2);
   if (!source) {

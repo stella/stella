@@ -191,7 +191,10 @@ const NameCell = ({ workspace }: CellProps) => (
         backgroundColor: getMatterColor(workspace.id),
       }}
     />
-    <BidiText as="span" className="truncate font-medium">
+    <BidiText
+      as="span"
+      className="overflow-hidden font-medium text-ellipsis whitespace-pre"
+    >
       {workspace.name}
     </BidiText>
   </div>
@@ -352,6 +355,7 @@ const MattersTableRow = ({
                 style={{ backgroundColor: getMatterColor(workspace.id) }}
               />
               <InlineEdit
+                className="font-medium"
                 onCancel={ctx.rename.cancel}
                 onChange={ctx.rename.setDraft}
                 onCommit={ctx.rename.commit}

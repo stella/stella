@@ -23,6 +23,17 @@ export const CORS_EXPOSED_HEADERS = [
 
 export const CACHE_CONTROL_HEADER = "Cache-Control";
 export const PRIVATE_CACHE_CONTROL = "private, no-store";
+
+/**
+ * Headers every frame document the web app embeds must send. The web app
+ * is cross-origin isolated (COEP credentialless), so the browser refuses a
+ * cross-origin frame unless it opts into the same embedder policy and
+ * allows cross-origin embedding.
+ */
+export const EMBEDDABLE_FRAME_HEADERS = {
+  "Cross-Origin-Embedder-Policy": "credentialless",
+  "Cross-Origin-Resource-Policy": "cross-origin",
+} as const;
 export const SSE_CACHE_CONTROL = "private, no-cache, no-store, no-transform";
 export const SSE_MEDIA_TYPE = "text/event-stream";
 export const PRAGMA_NO_CACHE = "no-cache";

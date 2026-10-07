@@ -9,11 +9,17 @@ import {
   spyOn,
   test,
 } from "bun:test";
+import { inArray } from "drizzle-orm";
 
 import { RUNTIME_MODE } from "@stll/runtime-mode";
 
 import { member, organization, user } from "@/api/db/auth-schema";
-import { contacts, workspaceMembers, workspaces } from "@/api/db/schema";
+import {
+  contacts,
+  featureEnrolments,
+  workspaceMembers,
+  workspaces,
+} from "@/api/db/schema";
 import { getServerAnalytics } from "@/api/lib/analytics/client";
 import {
   AUTHORITATIVE_SESSION_PATHS,
@@ -184,6 +190,9 @@ describe("resolveMemberAuthorization", () => {
       email: `${ownerInFull}@test.local`,
       role: "owner",
       workspace: null,
+      emailVerified: expect.any(Boolean),
+      userDeleted: false,
+      enrolledFeatureIds: [],
     });
   });
 
@@ -197,7 +206,60 @@ describe("resolveMemberAuthorization", () => {
       email: `${loneMemberInFull}@test.local`,
       role: "member",
       workspace: null,
+      emailVerified: expect.any(Boolean),
+      userDeleted: false,
+      enrolledFeatureIds: [],
     });
+  });
+
+  test("reads the caller's own feature enrolments in the same lookup, never another member's", async () => {
+    await testDb.insert(featureEnrolments).values([
+      {
+        organizationId: orgFull,
+        userId: memberInFull,
+        featureId: "time-billing",
+      },
+      // Same user, another organization: must never surface in orgFull.
+      {
+        organizationId: orgEmpty,
+        userId: loneMemberInFull,
+        featureId: "time-billing",
+      },
+    ]);
+    try {
+      const enrolled = await resolveMemberAuthorization(
+        { organizationId: orgFull, userId: memberInFull },
+        testDb,
+      );
+      const enrolledWithWorkspace = await resolveMemberAuthorization(
+        {
+          organizationId: orgFull,
+          userId: memberInFull,
+          workspaceId: memberPersonalWorkspaceId,
+        },
+        testDb,
+      );
+      const other = await resolveMemberAuthorization(
+        { organizationId: orgFull, userId: ownerInFull },
+        testDb,
+      );
+      expect(enrolled?.enrolledFeatureIds).toEqual(["time-billing"]);
+      expect(enrolledWithWorkspace?.enrolledFeatureIds).toEqual([
+        "time-billing",
+      ]);
+      expect(other?.enrolledFeatureIds).toEqual([]);
+      const otherOrganization = await resolveMemberAuthorization(
+        { organizationId: orgFull, userId: loneMemberInFull },
+        testDb,
+      );
+      expect(otherOrganization?.enrolledFeatureIds).toEqual([]);
+    } finally {
+      await testDb
+        .delete(featureEnrolments)
+        .where(
+          inArray(featureEnrolments.userId, [memberInFull, loneMemberInFull]),
+        );
+    }
   });
 
   test("optionally resolves one target workspace without expanding the access set", async () => {

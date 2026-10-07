@@ -32,7 +32,7 @@ let dictionariesPromise: Promise<
 
 const runWithPipelineContext = createPipelineContextRunner();
 
-// oxlint-disable-next-line @typescript-eslint/promise-function-async -- lazy init returns the cached promise without awaiting
+// oxlint-disable-next-line typescript/promise-function-async -- lazy init returns the cached promise without awaiting
 const getDictionaries = (): Promise<
   NonNullable<PipelineConfig["dictionaries"]>
 > => {

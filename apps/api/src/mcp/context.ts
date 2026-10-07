@@ -55,6 +55,7 @@ import { checkDemoAccountOperation } from "@/api/lib/auth/demo-account";
 import { resolveFeatureAccessSnapshot } from "@/api/lib/auth/feature-access/context";
 import { createFeatureAccessSnapshot } from "@/api/lib/auth/feature-access/policy";
 import type { FeatureAccessSnapshot } from "@/api/lib/auth/feature-access/policy";
+import { checkReviewAccountOrganization } from "@/api/lib/auth/review-account";
 import { grantThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import type { ThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import type { createTimeEntryHandler } from "@/api/lib/billing/time-entry-insert";
@@ -368,11 +369,13 @@ export const resolveMcpSessionContext = async (
     request,
     resolveAuthorization = resolveCredentialMemberAuthorization,
     checkAccountOperation = checkDemoAccountOperation,
+    checkAccountOrganization = checkReviewAccountOrganization,
   }: {
     clientIp?: string | null;
     request: Request;
     resolveAuthorization?: typeof resolveCredentialMemberAuthorization;
     checkAccountOperation?: typeof checkDemoAccountOperation;
+    checkAccountOrganization?: typeof checkReviewAccountOrganization;
   },
 ): Promise<McpRequestContext> => {
   const { organizationId, userId } = brandActorSessionIdentity({
@@ -390,10 +393,19 @@ export const resolveMcpSessionContext = async (
     });
   }
 
+  // A restricted account is refused its operation here, and an account bound
+  // to one organization opens no other, whatever grant or membership the
+  // credential was issued under.
   const accountOperation = checkAccountOperation(authorization.email);
-  if (Result.isError(accountOperation)) {
+  const accountAccess = Result.isError(accountOperation)
+    ? accountOperation
+    : checkAccountOrganization({
+        email: authorization.email,
+        organizationId,
+      });
+  if (Result.isError(accountAccess)) {
     throw new McpOrganizationAccessError({
-      message: accountOperation.error.message,
+      message: accountAccess.error.message,
     });
   }
 

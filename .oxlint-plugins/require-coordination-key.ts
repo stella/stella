@@ -138,14 +138,17 @@ export default eslintCompatPlugin({
             if (SCRIPT_COMMANDS.has(command)) {
               const declared = elements[SCRIPT_NUMKEYS_INDEX];
               // A non-literal numkeys hides how many keys follow; police the
-              // first key position rather than trusting the call site.
-              const numberOfKeys = isStringLiteral(declared)
-                ? Number(declared.value)
-                : 1;
+              // first key position rather than trusting the call site. Only a
+              // canonical nonnegative integer can establish a zero-key call.
+              const numberOfKeys =
+                isStringLiteral(declared) &&
+                /^(?:0|[1-9]\d*)$/u.test(declared.value)
+                  ? Number(declared.value)
+                  : 1;
               reportLiteralKeys(
                 elements,
                 SCRIPT_FIRST_KEY_INDEX,
-                Number.isSafeInteger(numberOfKeys) && numberOfKeys > 0
+                Number.isSafeInteger(numberOfKeys) && numberOfKeys >= 0
                   ? numberOfKeys
                   : 1,
               );

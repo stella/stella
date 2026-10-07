@@ -19,6 +19,7 @@ import type { ActiveChatSkillContext } from "@/api/handlers/chat/active-skill-co
 import { resolveToolWorkspaceIds } from "@/api/handlers/chat/tools/authorized-workspace-ids";
 import { getChatTools } from "@/api/handlers/chat/tools/chat-tools";
 import { PAST_CHAT_SCOPE_TYPE } from "@/api/handlers/chat/tools/past-chat-tools";
+import { createVisualResourceOrigin } from "@/api/handlers/visual-sandbox/resource-origin";
 import type { OrgAIConfig } from "@/api/lib/ai-config";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { toSafeId } from "@/api/lib/branded-types";
@@ -27,6 +28,7 @@ import { chatToolMapToArray } from "@/api/lib/chat/chat-tool-types";
 import { projectChatToolSchemasForProvider } from "@/api/lib/chat/provider-tool-projection";
 import { createChatRefRegistry } from "@/api/lib/chat/ref-registry";
 import { createChatToolDefectMemo } from "@/api/lib/chat/tool-defect-memo";
+import { CHAT_ONLY_FEATURE_TOOL_DEFINITIONS } from "@/api/lib/feature-access/registry";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import type { UrlFetcher, WebSearchProvider } from "@/api/lib/web-search/types";
 import { hiddenMcpDescriptorIds } from "@/api/mcp/feature-access-prose";
@@ -162,6 +164,11 @@ const buildChatToolsForScenario = ({
   return getChatTools({
     activeFile,
     activeSkillContext,
+    visualTools: {
+      origin: createVisualResourceOrigin(),
+      store: () => panic("The provider canary must not publish views."),
+      preview: () => panic("The provider canary must not render previews."),
+    },
     // A live extension registers the client-executed browser tool, so its
     // schema also runs through the provider matrix.
     browserClient: { protocolVersion: BROWSER_CONTROL_PROTOCOL_VERSION },
@@ -234,10 +241,10 @@ export const buildCanaryChatToolsets = (
   const catalogNames = Object.keys(BUILT_IN_CHAT_TOOL_POLICY_KINDS);
   // The canary has no feature admission. Account for those tools through the
   // same registry-derived visibility rule chat uses, without granting access.
-  const gatedNames = hiddenMcpDescriptorIds(
-    undefined,
-    DEFAULT_MCP_TOOL_DEFINITIONS,
-  );
+  const gatedNames = hiddenMcpDescriptorIds(undefined, [
+    ...DEFAULT_MCP_TOOL_DEFINITIONS,
+    ...CHAT_ONLY_FEATURE_TOOL_DEFINITIONS,
+  ]);
   const missing = catalogNames.filter(
     (name) => !registeredNames.has(name) && !gatedNames.has(name),
   );

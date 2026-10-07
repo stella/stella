@@ -167,6 +167,68 @@ const invocationProblems = (
 };
 
 describe("shell lexing", () => {
+  test("keeps ANSI-C escaped quotes, backslashes and newlines in one literal word", () => {
+    expect(
+      lexShell(
+        String.raw`printf '%s' $'src=\'fixture\'; rg literal\\path\n$(rg hidden)'suffix`,
+      ),
+    ).toEqual([
+      {
+        type: "command",
+        words: [
+          "printf",
+          "%s",
+          "src='fixture'; rg literal\\path\n$(rg hidden)suffix",
+        ],
+      },
+    ]);
+    expect(lexShell("printf $'line one\nline two'\ntrue")).toEqual([
+      { type: "command", words: ["printf", "line one\nline two"] },
+      { type: "command", words: ["true"] },
+    ]);
+  });
+
+  test("decodes ANSI-C command names without interpreting literal command content", () => {
+    for (const escaped of [String.raw`\x72g`, String.raw`\162\147`, "rg"]) {
+      expect(lexShell(`$'${escaped}' file`)).toEqual([
+        { type: "command", words: ["rg", "file"] },
+      ]);
+    }
+    expect(lexShell(String.raw`printf $'rg\0; hidden' $'\q'`)).toEqual([
+      { type: "command", words: ["printf", "rg", String.raw`\q`] },
+    ]);
+  });
+
+  test("decodes ANSI-C byte escapes and preserves unknown escapes", () => {
+    expect(
+      lexShell(
+        String.raw`printf $'\a\b\e\E\f\n\r\t\v\"' $'\0123\1234\777\x7\x72g\x\z'`,
+      ),
+    ).toEqual([
+      {
+        type: "command",
+        words: [
+          "printf",
+          '\u0007\b\u001b\u001b\f\n\r\t\v"',
+          "\n3S4\u00ff\u0007rg\\x\\z",
+        ],
+      },
+    ]);
+  });
+
+  test("reports unsupported or unterminated ANSI-C literals instead of guessing", () => {
+    expect(lexShell(String.raw`printf $'escaped\'`).at(-1)).toEqual({
+      type: "unparsed",
+      reason: "unterminated ANSI-C quote",
+    });
+    for (const escape of ["u", "U", "c"]) {
+      expect(lexShell(`printf $'\\${escape}72'`).at(-1)).toEqual({
+        type: "unparsed",
+        reason: `unsupported ANSI-C escape \\${escape}`,
+      });
+    }
+  });
+
   test("reads quoted, substituted and continued commands", () => {
     expect(
       commands(

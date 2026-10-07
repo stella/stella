@@ -4,6 +4,7 @@ import { and, eq } from "drizzle-orm";
 import { member, organization, user } from "@/api/db/auth-schema";
 import {
   auditLogs,
+  entities,
   legalListVerificationBlocks,
   legalListVerificationReadReceipts,
   legalListVerificationRuns,
@@ -84,11 +85,15 @@ const seed = async (db: GatedTestDb) => {
   };
   for (const status of VERIFICATION_RUN_STATUSES) {
     const id = runIds[status];
+    const entityId = createSafeId<"entity">();
+    await db
+      .insert(entities)
+      .values({ id: entityId, workspaceId, name: "Verification document" });
     await db.insert(legalListVerificationRuns).values({
       id,
       organizationId,
       workspaceId,
-      entityId: createSafeId<"entity">(),
+      entityId,
       fileFieldId: createSafeId<"field">(),
       entityVersionId: createSafeId<"entityVersion">(),
       contentSha256: "a".repeat(64),
