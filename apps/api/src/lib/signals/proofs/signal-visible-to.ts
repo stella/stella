@@ -1,5 +1,4 @@
-import { defineProof, name } from "@gdp-ts/core";
-import type { Named, Proof } from "@gdp-ts/core";
+import type { Named } from "@gdp-ts/core";
 import { Result } from "better-result";
 import { and, eq } from "drizzle-orm";
 
@@ -9,15 +8,20 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { hasMemberPermission } from "@/api/lib/permission-authorization";
 import type { AuthorizedMemberRole } from "@/api/lib/permission-authorization";
+import { withCheckedTransaction } from "@/api/lib/proofs/checked-transaction";
+import type { TransactionProof } from "@/api/lib/proofs/checked-transaction";
 import {
   canTriageSignals,
   selectVisibleSignalInTransaction,
 } from "@/api/lib/signals/read";
 
-const SignalVisibleToProver = defineProof("SignalVisibleTo");
-export type SignalVisibleTo<U, S, T, O> = {
-  readonly organizationId: Named<O, SafeId<"organization">>;
-} & Proof<"SignalVisibleTo", [U, S, T, O]>;
+export type SignalVisibleTo<U, S, T, O> = TransactionProof<
+  "SignalVisibleTo",
+  U,
+  S,
+  T,
+  O
+>;
 
 type VisibleSignal = Awaited<
   ReturnType<typeof selectVisibleSignalInTransaction>
@@ -49,60 +53,67 @@ export const withVisibleSignal = async <R, E>(
     existing: VisibleSignal;
   }) => Promise<Result<R, E>>,
 ) =>
-  name(actorUserId, signalId, tx, async (actor, signal, transaction) => {
-    if (!hasMemberPermission(memberRole, { signal: ["resolve"] })) {
-      return Result.err(
-        new HandlerError({
-          status: 403,
-          message: "Signal action is not permitted",
-        }),
-      );
-    }
-    // Lock only the signal table: the display joins include nullable sides.
-    await tx
-      .select({ id: signals.id })
-      .from(signals)
-      .where(
-        and(
-          eq(signals.id, signal.value),
-          eq(signals.organizationId, organizationId),
-        ),
-      )
-      .for("update")
-      .limit(1);
-    const rows = await selectVisibleSignalInTransaction({
+  withCheckedTransaction(
+    {
+      kind: "SignalVisibleTo",
       tx,
       organizationId,
-      canTriage: canTriageSignals(memberRole),
-      signalId: signal.value,
-    });
-    const existing = rows.at(0);
-    if (!existing) {
-      return Result.err(
-        new HandlerError({ status: 404, message: "Signal not found" }),
-      );
-    }
-    if (
-      expectedUpdatedAt &&
-      existing.updatedAt.getTime() !== expectedUpdatedAt.getTime()
-    ) {
-      return Result.err(
-        new HandlerError({
-          status: 409,
-          message: "Signal is no longer in a state that allows this action",
-        }),
-      );
-    }
-    return await name(organizationId, async (organization) => {
-      const proof = {
-        ...SignalVisibleToProver.prove(
-          actor,
-          signal,
-          transaction,
-          organization,
-        ),
-        organizationId: organization,
-      };
-      return await run({ tx: transaction, signal, actor, proof, existing });
-    });
-  });
+      actorUserId,
+      entityId: signalId,
+      check: async () => {
+        if (!hasMemberPermission(memberRole, { signal: ["resolve"] })) {
+          return Result.err(
+            new HandlerError({
+              status: 403,
+              message: "Signal action is not permitted",
+            }),
+          );
+        }
+        // Lock only the signal table: the display joins include nullable sides.
+        await tx
+          .select({ id: signals.id })
+          .from(signals)
+          .where(
+            and(
+              eq(signals.id, signalId),
+              eq(signals.organizationId, organizationId),
+            ),
+          )
+          .for("update")
+          .limit(1);
+        const rows = await selectVisibleSignalInTransaction({
+          tx,
+          organizationId,
+          canTriage: canTriageSignals(memberRole),
+          signalId,
+        });
+        const existing = rows.at(0);
+        if (!existing) {
+          return Result.err(
+            new HandlerError({ status: 404, message: "Signal not found" }),
+          );
+        }
+        if (
+          expectedUpdatedAt &&
+          existing.updatedAt.getTime() !== expectedUpdatedAt.getTime()
+        ) {
+          return Result.err(
+            new HandlerError({
+              status: 409,
+              message: "Signal is no longer in a state that allows this action",
+            }),
+          );
+        }
+
+        return Result.ok(existing);
+      },
+    },
+    async ({ tx: transaction, entity, actor, proof, checked }) =>
+      await run({
+        tx: transaction,
+        signal: entity,
+        actor,
+        proof,
+        existing: checked,
+      }),
+  );
