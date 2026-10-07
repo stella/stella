@@ -8,9 +8,8 @@
 // The sanctioned way to give a group meaning is the package's own fold:
 // `foldCondition`/`foldConditions` own which nodes survive, and hand the
 // surviving children to a `group` callback that may read `combinator` and
-// `negated` to combine them. A module that imports the fold from
-// `@stll/conditions` is therefore exempt: it is consuming the tree through
-// its owner, not walking it by hand.
+// `negated` to combine them. Only callbacks actually passed to an owner
+// fold are exempt; importing a fold does not exempt unrelated reads.
 //
 // The ban is a plain, non-computed property-access check on `.combinator`
 // and `.negated`: an object-literal key (`{ combinator: "and" }`, building a
@@ -24,10 +23,9 @@
 // fields):
 //   - packages/conditions/src/** (the tree's own fold/walk/evaluate)
 //   - packages/workspace-ui/src/** (the interactive condition builder)
-//   - any module *value*-importing `foldCondition` or `foldConditions` from
-//     `@stll/conditions`; a type-only import (`import type { foldCondition }`
-//     or `import { type foldCondition }`) cannot run the fold, so it does
-//     not exempt the module
+//   - callbacks in the handlers of an actual `foldCondition` or
+//     `foldConditions` call from `@stll/conditions`, including stable named
+//     handlers and callback aliases; type-only imports cannot call the fold
 //
 // Enabled only for production modules under apps/web/src/** and
 // apps/api/src/** (test files build and inspect nodes as data); the exemption paths
@@ -36,18 +34,35 @@
 
 import { eslintCompatPlugin } from "@oxlint/plugins";
 
+import type { FoldHandlers } from "../packages/conditions/src/fold.ts";
 import {
+  type AstNode,
+  type ScopeContext,
   filenameForContext,
-  getImportedName,
   getPropertyName,
   isAstNode,
-  isStringLiteral,
+  isIdentifierReference,
+  isImportedFrom,
+  isSingleAssignment,
+  resolveVariable,
+  stableInitializer,
+  staticStringValue,
+  unwrapExpression,
 } from "./utils.ts";
 
 const TARGET_PROPERTY_NAMES = new Set(["combinator", "negated"]);
 
 const CONDITIONS_PACKAGE = "@stll/conditions";
 const FOLD_EXPORT_NAMES = new Set(["foldCondition", "foldConditions"]);
+const FOLD_HANDLER_PROPERTIES = {
+  leaf: true,
+  group: true,
+} as const satisfies Record<keyof FoldHandlers<unknown>, true>;
+const FUNCTION_NODE_TYPES = new Set([
+  "ArrowFunctionExpression",
+  "FunctionExpression",
+  "FunctionDeclaration",
+]);
 
 const SCOPE_PREFIXES = ["apps/web/src/", "apps/api/src/"];
 
@@ -65,6 +80,49 @@ const EXEMPT_PREFIXES = [
 const FIXTURE_FILE_PREFIX =
   ".oxlint-plugins/__fixtures__/no-condition-combinator-outside-conditions.fixture.";
 
+const stableExpression = (
+  context: ScopeContext,
+  value: unknown,
+  seen = new Set<unknown>(),
+): AstNode | null => {
+  const expression = unwrapExpression(value);
+  if (expression === null || seen.has(expression)) {
+    return null;
+  }
+  seen.add(expression);
+  if (!isIdentifierReference(expression)) {
+    return expression;
+  }
+  const variable = resolveVariable(context, expression);
+  if (variable === null) {
+    return null;
+  }
+  const definition = variable.defs.at(0);
+  // A destructured binding holds a selected property, not its whole initializer.
+  if (
+    definition?.type === "Variable" &&
+    isAstNode(definition.node) &&
+    definition.node.type === "VariableDeclarator" &&
+    (!isAstNode(definition.node.id) || definition.node.id.type !== "Identifier")
+  ) {
+    return null;
+  }
+  const initializer = stableInitializer(variable);
+  if (initializer !== null) {
+    return stableExpression(context, initializer, seen);
+  }
+  if (
+    variable.defs.length !== 1 ||
+    definition === undefined ||
+    !isSingleAssignment(variable) ||
+    !isAstNode(definition.node) ||
+    definition.node.type !== "FunctionDeclaration"
+  ) {
+    return null;
+  }
+  return definition.node;
+};
+
 export default eslintCompatPlugin({
   meta: { name: "no-condition-combinator-outside-conditions" },
   rules: {
@@ -79,12 +137,110 @@ export default eslintCompatPlugin({
         },
       },
       createOnce(context) {
-        // Imports precede every member read in source order, so the flag is
-        // settled before the first `MemberExpression` of the file is visited.
-        let consumesFold = false;
+        const callbacks = new Set<AstNode>();
+        const reports: (() => void)[] = [];
+        const folds: (() => void)[] = [];
+        const mutatedHandlers = new Set<AstNode>();
+
+        type HandlerCallbacks = {
+          type: "known" | "partial";
+          callbacks: Map<string, AstNode | null>;
+        };
+        const handlerCallbacks = (
+          value: unknown,
+          seen = new Set<AstNode>(),
+        ): HandlerCallbacks | null => {
+          const object = stableExpression(context, value);
+          if (
+            object?.type !== "ObjectExpression" ||
+            mutatedHandlers.has(object) ||
+            !Array.isArray(object.properties) ||
+            seen.has(object)
+          ) {
+            return null;
+          }
+          seen.add(object);
+          let type: HandlerCallbacks["type"] = "known";
+          const handlers = new Map<string, AstNode | null>();
+          for (const property of object.properties) {
+            if (!isAstNode(property)) {
+              continue;
+            }
+            if (property.type === "SpreadElement") {
+              const spread = handlerCallbacks(property.argument, seen);
+              if (spread?.type !== "known") {
+                type = "partial";
+                handlers.clear();
+              }
+              if (spread !== null) {
+                for (const [name, callback] of spread.callbacks) {
+                  handlers.set(name, callback);
+                }
+              }
+              continue;
+            }
+            if (property.type !== "Property") {
+              continue;
+            }
+            const name = property.computed
+              ? staticStringValue(property.key)
+              : getPropertyName(property.key);
+            if (name === null) {
+              type = "partial";
+              handlers.clear();
+              continue;
+            }
+            if (!Object.hasOwn(FOLD_HANDLER_PROPERTIES, name)) {
+              continue;
+            }
+            const callback = stableExpression(context, property.value);
+            if (
+              property.kind === "init" &&
+              callback !== null &&
+              FUNCTION_NODE_TYPES.has(callback.type)
+            ) {
+              handlers.set(name, callback);
+            } else {
+              handlers.set(name, null);
+            }
+          }
+          seen.delete(object);
+          return { type, callbacks: handlers };
+        };
+
+        const recordHandlerMutation = (value: unknown) => {
+          if (!isAstNode(value) || value.type !== "MemberExpression") {
+            return;
+          }
+          const name = value.computed
+            ? staticStringValue(value.property)
+            : getPropertyName(value.property);
+          if (name !== null && !Object.hasOwn(FOLD_HANDLER_PROPERTIES, name)) {
+            return;
+          }
+          const object = stableExpression(context, value.object);
+          if (object?.type === "ObjectExpression") {
+            mutatedHandlers.add(object);
+          }
+        };
+
+        const insideCallback = (node: unknown): boolean => {
+          let ancestor = isAstNode(node) ? node : null;
+          while (ancestor !== null) {
+            if (callbacks.has(ancestor)) {
+              return true;
+            }
+            ancestor = isAstNode(ancestor.parent) ? ancestor.parent : null;
+          }
+          return false;
+        };
+
         return {
           before() {
-            consumesFold = false;
+            callbacks.clear();
+            reports.length = 0;
+            folds.length = 0;
+            mutatedHandlers.clear();
             const filename = filenameForContext(context);
             if (filename.includes(FIXTURE_FILE_PREFIX)) {
               return true;
@@ -100,28 +256,50 @@ export default eslintCompatPlugin({
               !EXEMPT_PREFIXES.some((prefix) => filename.includes(prefix))
             );
           },
-          ImportDeclaration(node) {
+          CallExpression(node) {
             if (
-              !isStringLiteral(node.source) ||
-              node.source.value !== CONDITIONS_PACKAGE ||
-              node.importKind === "type"
+              !isImportedFrom({
+                context,
+                node: node.callee,
+                modules: [CONDITIONS_PACKAGE],
+                names: FOLD_EXPORT_NAMES,
+              })
             ) {
               return;
             }
-            if (
-              node.specifiers.some((specifier) => {
-                if (isAstNode(specifier) && specifier.importKind === "type") {
-                  return false;
+            folds.push(() => {
+              const handlers = handlerCallbacks(node.arguments.at(1));
+              if (handlers !== null) {
+                for (const callback of handlers.callbacks.values()) {
+                  if (callback !== null) {
+                    callbacks.add(callback);
+                  }
                 }
-                const imported = getImportedName(specifier);
-                return imported !== null && FOLD_EXPORT_NAMES.has(imported);
-              })
-            ) {
-              consumesFold = true;
+              }
+            });
+          },
+          AssignmentExpression(node) {
+            recordHandlerMutation(node.left);
+          },
+          UpdateExpression(node) {
+            recordHandlerMutation(node.argument);
+          },
+          UnaryExpression(node) {
+            if (node.operator === "delete") {
+              recordHandlerMutation(node.argument);
+            }
+          },
+          "Program:exit"() {
+            // Uses and writes may follow named callback definitions.
+            for (const fold of folds) {
+              fold();
+            }
+            for (const report of reports) {
+              report();
             }
           },
           MemberExpression(node) {
-            if (consumesFold || node.computed) {
+            if (node.computed) {
               return;
             }
             const propertyName = getPropertyName(node.property);
@@ -131,16 +309,17 @@ export default eslintCompatPlugin({
             ) {
               return;
             }
-            context.report({ node, messageId: "combinatorRead" });
+            reports.push(() => {
+              if (!insideCallback(node)) {
+                context.report({ node, messageId: "combinatorRead" });
+              }
+            });
           },
           // Destructured reads (`const { combinator } = node` or a function
           // parameter pattern) surface the same fields through an
           // ObjectPattern rather than a MemberExpression, so the ban needs
           // its own visitor to catch them.
           ObjectPattern(node) {
-            if (consumesFold) {
-              return;
-            }
             for (const property of node.properties) {
               if (property.type !== "Property" || property.computed) {
                 continue;
@@ -152,7 +331,14 @@ export default eslintCompatPlugin({
               ) {
                 continue;
               }
-              context.report({ node: property, messageId: "combinatorRead" });
+              reports.push(() => {
+                if (!insideCallback(property)) {
+                  context.report({
+                    node: property,
+                    messageId: "combinatorRead",
+                  });
+                }
+              });
             }
           },
         };
