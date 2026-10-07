@@ -3130,6 +3130,7 @@ jobs:
           bun test
           scripts/detect-e2e-changes.test.ts
           scripts/network-baseline-scope.test.ts
+          scripts/network-baseline-selection.test.ts
           scripts/autofix-workflow.test.ts
           scripts/check-release-upload-retry.test.ts
           scripts/check-base-image-pulls.test.ts
