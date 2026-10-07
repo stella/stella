@@ -16,6 +16,8 @@ import { isTag, isText } from "domhandler";
 import type { AnyNode } from "domhandler";
 
 import { canonicalUsReporterCitation } from "@stll/api-contract/us-reporter-citation";
+import { plainTextOf, projectPlainText } from "@stll/legal-ast/document-ast";
+import type { Block, DocumentAst, Inline } from "@stll/legal-ast/document-ast";
 import type {
   CitationUnresolvedReason,
   InlineCitationTarget,
@@ -24,12 +26,6 @@ import type {
 import { extractDecisionCitations } from "@/api/handlers/case-law/ingestion/citation-extractor";
 import { annotateUsCitations } from "@/api/handlers/case-law/ingestion/us-citation-annotations";
 import type { UsCitationOccurrence } from "@/api/handlers/case-law/ingestion/us-citation-occurrences";
-import { plainTextOf, projectPlainText } from "@/api/lib/case-law/document-ast";
-import type {
-  Block,
-  DocumentAst,
-  Inline,
-} from "@/api/lib/case-law/document-ast";
 import type { CitationOpinionScope } from "@/api/lib/legal-search/ingestion-types";
 
 const unbounded = () => ({ limit: Number.POSITIVE_INFINITY, spent: 0 });

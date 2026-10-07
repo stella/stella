@@ -133,7 +133,7 @@ export const outlineFromHeadings = (
  * Hungarian acts) and the article (Polish, Spanish, French, EU acts). They
  * are separate kinds, not spellings of one: an act can number both.
  */
-export const PROVISION_UNITS = {
+const PROVISION_UNITS = {
   article: "article",
   section: "section",
 } as const satisfies Record<ProvisionUnit, ProvisionUnit>;

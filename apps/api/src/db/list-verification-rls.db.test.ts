@@ -22,6 +22,7 @@ import {
   reconcileQueuedListVerificationRuns,
   reconcileStuckListVerificationRuns,
 } from "@/api/lib/lists/verification/run-queue";
+import { getPgErrorCode, PG_ERROR } from "@/api/lib/pg-error";
 import { createRootRunActor } from "@/api/lib/root-scoped-db";
 import { brandPersistedListVerificationRunId } from "@/api/lib/safe-id-boundaries";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
@@ -432,9 +433,15 @@ describe.skipIf(!enabled)("list evidence row security", () => {
           expect(
             await client.unsafe<{ id: number }[]>(`SELECT id FROM ${table}`),
           ).toEqual([]);
+          // The driver's own `code` is not the SQLSTATE; read it where the
+          // shared failure snapshot finds it, and keep the denial exact.
           expect(
-            await rejectionOf(client.unsafe(`INSERT INTO ${table} VALUES (3)`)),
-          ).toMatchObject({ code: "42501" });
+            getPgErrorCode(
+              await rejectionOf(
+                client.unsafe(`INSERT INTO ${table} VALUES (3)`),
+              ),
+            ),
+          ).toBe(PG_ERROR.INSUFFICIENT_PRIVILEGE);
           await client.unsafe("RESET ROLE");
         }
       } finally {

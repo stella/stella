@@ -35,6 +35,7 @@ import type {
   DecisionIdentifierType,
   DecisionPrimaryReferenceType,
 } from "@stll/legal-ast/decision-identifier";
+import type { DocumentAst } from "@stll/legal-ast/document-ast";
 
 import { detectCitationCourtHint } from "@/api/handlers/case-law/citation-court-hint";
 import { detectCitationDecisionDate } from "@/api/handlers/case-law/citation-decision-date";
@@ -56,7 +57,6 @@ import type {
   UsCitedDecision,
 } from "@/api/handlers/case-law/ingestion/us-citation-occurrences";
 import { boundedCitationKey } from "@/api/lib/case-law/citation-storage-bounds";
-import type { DocumentAst } from "@/api/lib/case-law/document-ast";
 import {
   UNPERSISTABLE_DECISION_FIELDS,
   UnpersistableDecisionFieldError,

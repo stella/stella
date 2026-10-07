@@ -37,7 +37,7 @@ export const VersionList = ({ children }: React.PropsWithChildren) => (
   <div className="flex flex-col gap-px p-1">{children}</div>
 );
 
-export type VersionDiffRun = {
+type VersionDiffRun = {
   kind: "same" | "del" | "ins";
   text: string;
 };
@@ -46,7 +46,7 @@ export type VersionDiffSegment =
   | { kind: "added" | "removed" | "unchanged" | "gap"; text: string }
   | { kind: "changed"; runs: VersionDiffRun[] };
 
-export type VersionRowAuthor = {
+type VersionRowAuthor = {
   name: string;
   image: string | null;
 };

@@ -3,7 +3,11 @@ import * as v from "valibot";
 
 import { DAY_IN_MS } from "@stll/time";
 
-import { envApiInvariantViolation, envApiServerSchema } from "./env-schema";
+import {
+  envApiInvariantViolation,
+  envApiServerSchema,
+  freeTierInvariantViolation,
+} from "./env-schema";
 
 test("generated views require explicit deployment enablement", () => {
   expect(v.parse(envApiServerSchema.FEATURE_GENERATED_VIEWS, undefined)).toBe(
@@ -397,6 +401,33 @@ test("list verification grants use the shared registered-feature configuration",
       '{"list-verification":[{"type":"member","organizationId":"org-a","email":"*@example.test"}]}',
     ).success,
   ).toBe(false);
+});
+
+test("the free tier boots only with access state and service budgets, and never with usage enforcement", () => {
+  expect(v.parse(envApiServerSchema.FEATURE_FREE_TIER, undefined)).toBe(false);
+  for (const FEATURE_FREE_TIER of [false, true]) {
+    for (const FEATURE_ORG_ACCESS_STATE of [false, true]) {
+      for (const FEATURE_ORG_SERVICE_BUDGETS of [false, true]) {
+        for (const USAGE_ENFORCEMENT_ENABLED of [false, true]) {
+          const bootable =
+            !FEATURE_FREE_TIER ||
+            (FEATURE_ORG_ACCESS_STATE &&
+              FEATURE_ORG_SERVICE_BUDGETS &&
+              !USAGE_ENFORCEMENT_ENABLED);
+          const violation = freeTierInvariantViolation({
+            FEATURE_FREE_TIER,
+            FEATURE_ORG_ACCESS_STATE,
+            FEATURE_ORG_SERVICE_BUDGETS,
+            USAGE_ENFORCEMENT_ENABLED,
+          });
+          expect(violation === null).toBe(bootable);
+          if (violation !== null) {
+            expect(violation).toStartWith("FEATURE_FREE_TIER requires");
+          }
+        }
+      }
+    }
+  }
 });
 
 test("visual preview configuration accepts an optional Lambda function identifier", () => {
