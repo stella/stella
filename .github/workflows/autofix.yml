@@ -223,7 +223,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          for path in scripts/autofix-plan.ts scripts/autofix-protected-paths.ts scripts/baseline-paths.ts scripts/generated-files.ts packages/scripts/src/generated-files.ts; do
+          for path in scripts/autofix-plan.ts scripts/autofix-protected-paths.ts scripts/check-autofix-test-durations.ts scripts/baseline-paths.ts scripts/generated-files.ts packages/scripts/src/generated-files.ts; do
             if [[ -f "$path" ]]; then
               continue
             fi
@@ -284,6 +284,7 @@ jobs:
             exit 1
           fi
           git diff --name-only -z --diff-filter=ACMR "$BASE_SHA"..."$HEAD_SHA" -- > "$RUNNER_TEMP/autofix-changed-paths"
+          git diff --name-only -z --no-renames --diff-filter=A "$BASE_SHA"..."$HEAD_SHA" -- apps/api/ > "$RUNNER_TEMP/autofix-added-paths"
 
       - name: Setup Bun
         uses: stella/.github/actions/setup-bun-cached@167fb396c6c0f4e07296ad2cd72e6ef15367c776
@@ -331,17 +332,16 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          changed=()
+          missing=()
           while IFS= read -r -d '' path; do
-            changed+=("$path")
-          done < "$RUNNER_TEMP/autofix-changed-paths"
-          for path in "${changed[@]}"; do
             if [[ "$path" == apps/api/*.test.ts || "$path" == apps/api/*.test.tsx ]]; then
-              bun apps/api/scripts/refresh-test-durations.ts --add-missing
-              echo "allowed=apps/api/scripts/test-durations.json" >> "$GITHUB_OUTPUT"
-              break
+              missing+=("${path#apps/api/}")
             fi
-          done
+          done < "$RUNNER_TEMP/autofix-added-paths"
+          if (( ${#missing[@]} > 0 )); then
+            bun apps/api/scripts/refresh-test-durations.ts --add-missing "${missing[@]}"
+            echo "allowed=apps/api/scripts/test-durations.json" >> "$GITHUB_OUTPUT"
+          fi
 
       - name: Fix changed files
         shell: bash
@@ -381,7 +381,10 @@ jobs:
           done
 
           if (( ${#lint_paths[@]} > 0 )); then
+            # Type-aware fixes need the complete generated type graph. set -e
+            # aborts on preparation or compiler errors before any fixer runs.
             bun scripts/ci-generated-sources.ts prepare
+            bun scripts/typecheck-coverage.ts --autofix "${lint_paths[@]}"
             # --fix applies safe fixes only. CI's lint job reports anything left.
             lint_status=0
             bun --bun oxlint -c oxlint.config.ts --no-error-on-unmatched-pattern --type-aware --fix "${lint_paths[@]}" || lint_status=$?
@@ -438,6 +441,8 @@ jobs:
           done < "$RUNNER_TEMP/autofix-changed-paths"
           IFS='|' read -r -a generated <<< "$GENERATOR_ALLOWED"
           IFS='|' read -r -a tauri_paths <<< "$TAURI_ALLOWED"
+          # Validate independently of every changed-path and output grant.
+          bun scripts/check-autofix-test-durations.ts --base "$BASE_SHA" --head "$HEAD_SHA"
           excludes=()
           if [[ "$WEIGHTS_ALLOWED" == apps/api/scripts/test-durations.json ]]; then
             excludes+=(":(exclude,literal)apps/api/scripts/test-durations.json")

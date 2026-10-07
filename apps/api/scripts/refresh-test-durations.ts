@@ -114,18 +114,27 @@ if (import.meta.main) {
   const [mode, ...inputs] = process.argv.slice(2);
   if (mode !== "--write" && mode !== "--check" && mode !== "--add-missing") {
     panic(
-      "Usage: bun apps/api/scripts/refresh-test-durations.ts --write|--check [timings.json|directory]... | --add-missing",
+      "Usage: bun apps/api/scripts/refresh-test-durations.ts --write|--check [timings.json|directory]... | --add-missing [API-relative test path]...",
     );
   }
   if (mode === "--add-missing") {
-    if (inputs.length > 0) {
-      panic("--add-missing does not accept timing artifacts");
-    }
     const destination = new URL("test-durations.json", import.meta.url);
     const text = readFileSync(destination, "utf-8");
+    const files = listApiTestPaths(path.resolve(import.meta.dirname, ".."));
+    for (const input of inputs) {
+      if (!files.includes(input)) {
+        panic(`Not a live API test path: ${input}`);
+      }
+    }
+    const previous = readDurationWeights(JSON.parse(text));
     const updated = addMissingTestDurations(
       text,
-      listApiTestPaths(path.resolve(import.meta.dirname, "..")),
+      files.filter(
+        (file) =>
+          inputs.length === 0 ||
+          inputs.includes(file) ||
+          previous[file] !== undefined,
+      ),
     );
     if (updated !== text) {
       writeFileSync(destination, updated);
