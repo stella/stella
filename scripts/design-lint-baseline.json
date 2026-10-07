@@ -1243,7 +1243,6 @@
   "react/no-children-prop": {
     "apps/web/src/components/chat/chat-rich-message-part.test.ts": 1,
     "apps/web/src/components/inspector/use-file-tab-rename.dom.test.tsx": 2,
-    "apps/web/src/components/workspaces/edit-field-dialog.tsx": 6,
     "apps/web/src/features/workspaces/team-avatars.test.ts": 1,
     "apps/web/src/hooks/use-time-billing-preview.dom.test.tsx": 1,
     "apps/web/src/routes/-protected-app/-components/payment-retry-banner.dom.test.tsx": 2
