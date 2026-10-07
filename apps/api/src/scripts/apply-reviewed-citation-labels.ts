@@ -11,9 +11,10 @@
  * read from), `runId` and `producedAt`.
  *
  * Each entry is settled on its own. One that does not validate or resolve is
- * invalid; one whose citation already carries a review of higher origin
- * precedence (human, then adjudicated, then annotation) is refused and the
- * stored review stands. `--results` writes one JSON line per entry with its
+ * invalid. Origin precedence runs human, then adjudicated, then annotation;
+ * at equal origin a human review replaces the stored one, and a model label
+ * replaces it only when produced later. An entry that may not replace the
+ * stored review is refused and the stored review stands. `--results` writes one JSON line per entry with its
  * identifiers and outcome, and nothing of its content.
  *
  * A review outlives refreshes of the citing decision: ingestion re-applies it
@@ -39,9 +40,10 @@ import {
 } from "@/api/lib/case-law/maintenance-lane";
 import {
   REVIEWED_LABEL_OUTCOME,
+  applyReviewedCitationLabels,
+  planReviewedCitationLabels,
   reviewedCitationLabelsFileSchema,
   reviewedLabelResultLines,
-  runReviewedCitationLabels,
 } from "@/api/scripts/apply-reviewed-citation-labels-plan";
 import {
   readApplyFlag,
@@ -83,11 +85,15 @@ const { rootDb } = apply
   : await openCaseLawReadOnlySession();
 
 const mode = apply ? "apply" : "plan";
-const outcome = await runReviewedCitationLabels(
-  rootDb.transaction.bind(rootDb),
-  parsed.output,
-  mode,
-);
+const outcome = apply
+  ? await applyReviewedCitationLabels(
+      rootDb.transaction.bind(rootDb),
+      parsed.output,
+    )
+  : await planReviewedCitationLabels(
+      rootDb.transaction.bind(rootDb),
+      parsed.output,
+    );
 
 const written = await Result.tryPromise(
   async () =>

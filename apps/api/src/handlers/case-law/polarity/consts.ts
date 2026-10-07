@@ -1,3 +1,5 @@
+import { Temporal } from "@stll/time";
+
 import type { ConstantMap } from "@/api/lib/constant-map";
 import { includes } from "@/api/lib/type-guards";
 
@@ -112,10 +114,10 @@ export const AI_CITATION_REVIEW_ORIGINS = CITATION_REVIEW_ORIGINS.filter(
 );
 
 /**
- * Which review of one citation stands when another arrives: lower wins, and
- * an equal rank replaces. A human review is never overwritten by a model, and
- * an adjudication (a model asked to settle a flagged label) is never
- * overwritten by a bulk annotation pass.
+ * Rank of each origin when two reviews of one citation compete: lower wins.
+ * A human review is never overwritten by a model, and an adjudication (a
+ * model asked to settle a flagged label) is never overwritten by a bulk
+ * annotation pass.
  */
 export const CITATION_REVIEW_ORIGIN_PRECEDENCE = {
   "human-review": 0,
@@ -123,18 +125,58 @@ export const CITATION_REVIEW_ORIGIN_PRECEDENCE = {
   "ai-annotation": 2,
 } as const satisfies Record<CitationReviewOrigin, number>;
 
-type CitationReviewOriginPair = {
-  stored: CitationReviewOrigin;
-  incoming: CitationReviewOrigin;
+/** What decides whether one review of a citation stands over another. */
+export type CitationReviewStanding =
+  | { origin: typeof CITATION_REVIEW_ORIGIN.HUMAN_REVIEW }
+  | { origin: AiCitationReviewOrigin; producedAt: Temporal.Instant };
+
+type CitationReviewStandingPair = {
+  upper: CitationReviewStanding;
+  lower: CitationReviewStanding;
 };
 
-/** Whether a review of `incoming` origin may replace a stored one. */
+/**
+ * Whether `upper` strictly outranks `lower`: a better origin, or at the same
+ * rank a model label produced later. Two human reviews, or two model labels
+ * produced at the same instant, outrank neither: nothing orders them.
+ */
+export const citationReviewOutranks = ({
+  upper,
+  lower,
+}: CitationReviewStandingPair): boolean => {
+  const upperRank = CITATION_REVIEW_ORIGIN_PRECEDENCE[upper.origin];
+  const lowerRank = CITATION_REVIEW_ORIGIN_PRECEDENCE[lower.origin];
+  if (upperRank !== lowerRank) {
+    return upperRank < lowerRank;
+  }
+  if (
+    upper.origin === CITATION_REVIEW_ORIGIN.HUMAN_REVIEW ||
+    lower.origin === CITATION_REVIEW_ORIGIN.HUMAN_REVIEW
+  ) {
+    return false;
+  }
+  return Temporal.Instant.compare(upper.producedAt, lower.producedAt) > 0;
+};
+
+type CitationReviewReplacement = {
+  stored: CitationReviewStanding;
+  incoming: CitationReviewStanding;
+};
+
+/**
+ * Whether an incoming review may replace a different stored one. A human
+ * review replaces a human review (the reviewer's latest word stands); a model
+ * label must outrank the stored one, so an older run applied late, or another
+ * run at the identical instant, cannot flip a label. The same review replayed
+ * is not a replacement: the caller sees it as unchanged before asking this.
+ */
 export const citationReviewMayReplace = ({
   stored,
   incoming,
-}: CitationReviewOriginPair): boolean =>
-  CITATION_REVIEW_ORIGIN_PRECEDENCE[incoming] <=
-  CITATION_REVIEW_ORIGIN_PRECEDENCE[stored];
+}: CitationReviewReplacement): boolean =>
+  citationReviewOutranks({ upper: incoming, lower: stored }) ||
+  (stored.origin === CITATION_REVIEW_ORIGIN.HUMAN_REVIEW &&
+    incoming.origin === CITATION_REVIEW_ORIGIN.HUMAN_REVIEW);
 
 /**
  * Order in which competing readings are resolved: lower wins. It settles

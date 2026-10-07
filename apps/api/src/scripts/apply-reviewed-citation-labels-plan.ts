@@ -17,11 +17,12 @@ import {
   CITATION_REVIEW_ORIGIN_PRECEDENCE,
   CITATION_REVIEW_ORIGINS,
   REVIEWABLE_POLARITIES,
-  citationReviewMayReplace,
+  citationReviewOutranks,
 } from "@/api/handlers/case-law/polarity/consts";
 import type {
   AiCitationReviewOrigin,
   CitationReviewOrigin,
+  CitationReviewStanding,
   ReviewablePolarity,
 } from "@/api/handlers/case-law/polarity/consts";
 import { createSafeId } from "@/api/lib/branded-types";
@@ -29,6 +30,7 @@ import type { SafeId } from "@/api/lib/branded-types";
 import type { ConstantMap } from "@/api/lib/constant-map";
 import { executedRows } from "@/api/lib/db/executed-rows";
 import { brandPersistedCaseLawDecisionId } from "@/api/lib/safe-id-boundaries";
+import { sqlCaseFragment } from "@/api/lib/sql-case-expression";
 
 /** Labels one run may carry; bounds the statement's parameter count. */
 const MAX_LABELS = 5000;
@@ -473,20 +475,34 @@ type SettledLabels = {
   settled: ReviewedLabelRowResult[];
 };
 
-const precedenceOf = (label: ReviewedCitationLabel): number =>
-  CITATION_REVIEW_ORIGIN_PRECEDENCE[label.provenance.origin];
+const standingOf = (
+  provenance: CitationReviewProvenance,
+): CitationReviewStanding => {
+  switch (provenance.origin) {
+    case CITATION_REVIEW_ORIGIN.HUMAN_REVIEW:
+      return { origin: provenance.origin };
+    case CITATION_REVIEW_ORIGIN.AI_ADJUDICATED:
+    case CITATION_REVIEW_ORIGIN.AI_ANNOTATION:
+      return {
+        origin: provenance.origin,
+        producedAt: Temporal.Instant.from(provenance.producedAt),
+      };
+    default:
+      provenance satisfies never;
+      return panic(`Unhandled review origin: ${String(provenance)}`);
+  }
+};
 
-/**
- * One label per citation. Several entries for one citation resolve by origin
- * precedence; two at the winning origin contradict each other, so neither
- * stands and the citation is left as it is.
- */
-const settleDuplicateLabels = (
+const citationPairOf = (citingDecisionId: string, citationKey: string) =>
+  `${citingDecisionId}\u0000${citationKey}`;
+
+/** Labels grouped by the citation they review, in input order. */
+const groupByCitation = (
   labels: readonly ReviewedCitationLabel[],
-): SettledLabels => {
+): ReviewedCitationLabel[][] => {
   const groups = new Map<string, ReviewedCitationLabel[]>();
   for (const label of labels) {
-    const pair = `${label.citingDecisionId}\u0000${label.citationKey}`;
+    const pair = citationPairOf(label.citingDecisionId, label.citationKey);
     const group = groups.get(pair);
     if (group === undefined) {
       groups.set(pair, [label]);
@@ -494,14 +510,53 @@ const settleDuplicateLabels = (
       group.push(label);
     }
   }
+  return [...groups.values()];
+};
+
+/**
+ * One label per citation, by the order that settles a stored review against
+ * an incoming one: origin precedence, then for model labels the later
+ * `producedAt`. Labels nothing orders (two human reviews, or two model labels
+ * produced at the same instant) contradict each other at the top, so none of
+ * them stands and the citation is left as it is.
+ */
+const settleDuplicateLabels = (
+  labels: readonly ReviewedCitationLabel[],
+): SettledLabels => {
   const winners: ReviewedCitationLabel[] = [];
   const settled: ReviewedLabelRowResult[] = [];
-  for (const group of groups.values()) {
-    const best = Math.min(...group.map(precedenceOf));
-    const contested =
-      group.filter((label) => precedenceOf(label) === best).length > 1;
-    for (const label of group) {
-      if (contested && precedenceOf(label) === best) {
+  for (const group of groupByCitation(labels)) {
+    const ranked = group.map((label) => ({
+      label,
+      standing: standingOf(label.provenance),
+    }));
+    const first = ranked.at(0);
+    if (first === undefined) {
+      return panic("a citation group without labels");
+    }
+    let best = first;
+    for (const candidate of ranked) {
+      if (
+        citationReviewOutranks({
+          upper: candidate.standing,
+          lower: best.standing,
+        })
+      ) {
+        best = candidate;
+      }
+    }
+    const top = ranked.filter(
+      ({ standing }) =>
+        !citationReviewOutranks({ upper: best.standing, lower: standing }),
+    );
+    for (const { label, standing } of ranked) {
+      if (citationReviewOutranks({ upper: best.standing, lower: standing })) {
+        settled.push({
+          ...label.ids,
+          index: label.index,
+          outcome: REVIEWED_LABEL_OUTCOME.REFUSED_PRECEDENCE,
+        });
+      } else if (top.length > 1) {
         settled.push(
           invalidRow(
             label.index,
@@ -509,12 +564,6 @@ const settleDuplicateLabels = (
             label.ids,
           ),
         );
-      } else if (precedenceOf(label) > best) {
-        settled.push({
-          ...label.ids,
-          index: label.index,
-          outcome: REVIEWED_LABEL_OUTCOME.REFUSED_PRECEDENCE,
-        });
       } else {
         winners.push(label);
       }
@@ -539,6 +588,45 @@ const reviewTuple = (alias: string): SQL =>
     `(${alias}.polarity, ${alias}.review_ref, ${alias}.origin, ${alias}.model, ${alias}.prompt_version, ${alias}.prompt_sha256::text, ${alias}.evidence_sha256::text, ${alias}.run_id, ${alias}.produced_at)`,
   );
 
+/**
+ * `CITATION_REVIEW_ORIGIN_PRECEDENCE` of a row's origin; an origin outside it
+ * ranks NULL, which no comparison accepts.
+ */
+const originRankSql = (alias: string): SQL =>
+  sql`(${sqlCaseFragment({
+    operand: sql.raw(`${alias}.origin`),
+    branches: CITATION_REVIEW_ORIGINS.map(
+      (origin) =>
+        sql`WHEN ${origin}::text THEN ${CITATION_REVIEW_ORIGIN_PRECEDENCE[origin]}::int`,
+    ),
+    fallback: sql`NULL::int`,
+  })})`;
+
+type ReviewRowAliases = { stored: string; incoming: string };
+
+/**
+ * `citationReviewMayReplace` over two review rows. The upsert's conflict
+ * clause carries it, so a stored review a concurrent run wrote in the
+ * meantime is judged as it is when the row is locked, not as the plan saw it.
+ */
+export const reviewMayReplaceSql = ({
+  stored,
+  incoming,
+}: ReviewRowAliases): SQL => {
+  const storedRank = originRankSql(stored);
+  const incomingRank = originRankSql(incoming);
+  const storedOrigin = sql.raw(`${stored}.origin`);
+  const incomingOrigin = sql.raw(`${incoming}.origin`);
+  const human = sql`${CITATION_REVIEW_ORIGIN.HUMAN_REVIEW}::text`;
+  return sql`COALESCE(
+    ${incomingRank} < ${storedRank}
+    OR (${incomingRank} = ${storedRank}
+        AND ((${incomingOrigin} = ${human} AND ${storedOrigin} = ${human})
+          OR (${incomingOrigin} <> ${human} AND ${storedOrigin} <> ${human}
+              AND ${sql.raw(`${incoming}.produced_at`)} > ${sql.raw(`${stored}.produced_at`)}))),
+    false)`;
+};
+
 /** Rows a label changes: any other polarity, or a rule attribution. */
 const citationDiffersSql = sql`c.citing_decision_id = v.citing_decision_id
    AND c.citation_key = v.citation_key
@@ -549,9 +637,9 @@ const reviewedLabelStateStatement = (
   labels: readonly ReviewedCitationLabel[],
 ): SQL => sql`
   SELECT v.ord,
-         r.origin AS stored_origin,
          (r.id IS NOT NULL
            AND ${reviewTuple("r")} IS NOT DISTINCT FROM ${reviewTuple("v")}) AS same_review,
+         (r.id IS NULL OR ${reviewMayReplaceSql({ stored: "r", incoming: "v" })}) AS may_replace,
          (SELECT count(*) FROM case_law_citations c
            WHERE c.citing_decision_id = v.citing_decision_id
              AND c.citation_key = v.citation_key)::int AS citation_rows,
@@ -566,74 +654,93 @@ const reviewedLabelStateStatement = (
 
 const labelStateRowSchema = v.object({
   ord: v.number(),
-  stored_origin: v.nullable(v.picklist(CITATION_REVIEW_ORIGINS)),
   same_review: v.boolean(),
+  may_replace: v.boolean(),
   citation_rows: v.number(),
   changed_rows: v.number(),
 });
 
 type LabelState = v.InferOutput<typeof labelStateRowSchema>;
 
+type AcceptedOutcome = Exclude<
+  ReviewedLabelOutcome,
+  | typeof REVIEWED_LABEL_OUTCOME.INVALID
+  | typeof REVIEWED_LABEL_OUTCOME.REFUSED_PRECEDENCE
+>;
+
+/**
+ * The same review replayed is never a replacement, so it is settled before
+ * precedence: replaying a model run is `unchanged`, not refused.
+ */
 const outcomeOf = (
-  label: ReviewedCitationLabel,
   state: LabelState,
-): Exclude<ReviewedLabelOutcome, typeof REVIEWED_LABEL_OUTCOME.INVALID> => {
-  if (
-    state.stored_origin !== null &&
-    !citationReviewMayReplace({
-      stored: state.stored_origin,
-      incoming: label.provenance.origin,
-    })
-  ) {
+): AcceptedOutcome | typeof REVIEWED_LABEL_OUTCOME.REFUSED_PRECEDENCE => {
+  if (state.same_review) {
+    return state.changed_rows > 0
+      ? REVIEWED_LABEL_OUTCOME.APPLIED
+      : REVIEWED_LABEL_OUTCOME.UNCHANGED;
+  }
+  if (!state.may_replace) {
     return REVIEWED_LABEL_OUTCOME.REFUSED_PRECEDENCE;
   }
-  if (!state.same_review) {
-    // Stored either way; a review no current row carries applies on a refresh.
-    return state.citation_rows === 0
-      ? REVIEWED_LABEL_OUTCOME.UNMATCHED
-      : REVIEWED_LABEL_OUTCOME.APPLIED;
-  }
-  return state.changed_rows > 0
-    ? REVIEWED_LABEL_OUTCOME.APPLIED
-    : REVIEWED_LABEL_OUTCOME.UNCHANGED;
+  // Stored either way; a review no current row carries applies on a refresh.
+  return state.citation_rows === 0
+    ? REVIEWED_LABEL_OUTCOME.UNMATCHED
+    : REVIEWED_LABEL_OUTCOME.APPLIED;
+};
+
+/** A label the run stores and applies. */
+type AcceptedLabel = {
+  label: ReviewedCitationLabel;
+  outcome: AcceptedOutcome;
+  /** Current citation rows whose label it changes. */
+  changedRows: number;
+  /** The stored review differs, so the upsert must write this one. */
+  storesReview: boolean;
 };
 
 type PlannedLabels = {
-  /** Labels the run stores and applies. */
-  accepted: ReviewedCitationLabel[];
-  rows: ReviewedLabelRowResult[];
-  /** Current citation rows whose label the run changes. */
-  citationRows: number;
+  accepted: AcceptedLabel[];
+  refused: ReviewedLabelRowResult[];
 };
+
+const refusedRow = (label: ReviewedCitationLabel): ReviewedLabelRowResult => ({
+  ...label.ids,
+  index: label.index,
+  outcome: REVIEWED_LABEL_OUTCOME.REFUSED_PRECEDENCE,
+});
 
 const planReviewedLabels = (
   labels: readonly ReviewedCitationLabel[],
   stateRows: readonly unknown[],
 ): PlannedLabels => {
-  const accepted: ReviewedCitationLabel[] = [];
-  const rows: ReviewedLabelRowResult[] = [];
-  let citationRows = 0;
+  const accepted: AcceptedLabel[] = [];
+  const refused: ReviewedLabelRowResult[] = [];
   for (const row of stateRows) {
     const state = v.parse(labelStateRowSchema, row);
     const label = labels.at(state.ord);
     if (label === undefined) {
       return panic(`label state for an unknown ordinal ${state.ord}`);
     }
-    const outcome = outcomeOf(label, state);
-    rows.push({ ...label.ids, index: label.index, outcome });
-    if (outcome !== REVIEWED_LABEL_OUTCOME.REFUSED_PRECEDENCE) {
-      accepted.push(label);
-      citationRows += state.changed_rows;
+    const outcome = outcomeOf(state);
+    if (outcome === REVIEWED_LABEL_OUTCOME.REFUSED_PRECEDENCE) {
+      refused.push(refusedRow(label));
+      continue;
     }
+    accepted.push({
+      label,
+      outcome,
+      changedRows: state.changed_rows,
+      storesReview: !state.same_review,
+    });
   }
-  return { accepted, rows, citationRows };
+  return { accepted, refused };
 };
 
 /**
- * Store each accepted review; a stored one that already says the same is
- * left alone. Precedence was settled by the plan in this transaction, and an
- * applying run holds the maintenance lane, so no other writer of reviews can
- * interleave.
+ * Store each review, as a compare-and-set: the conflict clause replaces a
+ * stored review only when the incoming one may replace it, and leaves one that
+ * already says the same alone. Returns the citations whose review it wrote.
  */
 const upsertReviewsStatement = (
   labels: readonly ReviewedCitationLabel[],
@@ -661,7 +768,14 @@ const upsertReviewsStatement = (
          reviewed_at = now(),
          updated_at = now()
    WHERE ${reviewTuple("r")} IS DISTINCT FROM ${reviewTuple("excluded")}
+     AND ${reviewMayReplaceSql({ stored: "r", incoming: "excluded" })}
+  RETURNING r.citing_decision_id::text AS citing_decision_id, r.citation_key
 `;
+
+const writtenReviewRowSchema = v.object({
+  citing_decision_id: v.string(),
+  citation_key: v.string(),
+});
 
 /** Give the current citation rows of the accepted labels their stored review. */
 const relabelCitationsStatement = (
@@ -696,18 +810,18 @@ type ReviewedLabelSummary = Record<ReviewedLabelOutcome, number> & {
   citationRows: number;
 };
 
-type ReviewedLabelRunOutcome =
-  | {
-      type: "planned";
-      rows: ReviewedLabelRowResult[];
-      summary: ReviewedLabelSummary;
-    }
-  | {
-      type: "applied";
-      rows: ReviewedLabelRowResult[];
-      summary: ReviewedLabelSummary;
-      relabelled: number;
-    };
+type ReviewedLabelPlan = {
+  type: "planned";
+  rows: ReviewedLabelRowResult[];
+  summary: ReviewedLabelSummary;
+};
+
+type ReviewedLabelApplication = {
+  type: "applied";
+  rows: ReviewedLabelRowResult[];
+  summary: ReviewedLabelSummary;
+  relabelled: number;
+};
 
 const summarize = (
   rows: readonly ReviewedLabelRowResult[],
@@ -729,16 +843,21 @@ type ExecutingTransaction = {
   execute: (query: SQL) => Promise<unknown>;
 };
 
-/**
- * One run, inside the caller's transaction: validate and resolve each entry,
- * decide what becomes of it, and under `apply` store the accepted reviews and
- * relabel their rows.
- */
-const runReviewedCitationLabelsTx = async (
+type Transact = <T>(
+  run: (tx: ExecutingTransaction) => Promise<T>,
+) => Promise<T>;
+
+type DecidedLabels = {
+  /** Entries settled without reaching the database's review state. */
+  settled: ReviewedLabelRowResult[];
+  planned: PlannedLabels;
+};
+
+/** Validate and resolve each entry, and decide what becomes of it. */
+const decideReviewedLabels = async (
   tx: ExecutingTransaction,
   input: readonly unknown[],
-  mode: ReviewedLabelRunMode,
-): Promise<ReviewedLabelRunOutcome> => {
+): Promise<DecidedLabels> => {
   const parsed = parseEntries(input);
   const citationIds = citationIdsOf(parsed.entries);
   const identities = parseCitationIdentities(
@@ -762,45 +881,116 @@ const runReviewedCitationLabelsTx = async (
   const settled = settleDuplicateLabels(resolved.labels);
   const planned =
     settled.labels.length === 0
-      ? { accepted: [], rows: [], citationRows: 0 }
+      ? { accepted: [], refused: [] }
       : planReviewedLabels(
           settled.labels,
           executedRows(
             await tx.execute(reviewedLabelStateStatement(settled.labels)),
           ),
         );
-  const rows = [
-    ...parsed.invalid,
-    ...resolved.invalid,
-    ...settled.settled,
-    ...planned.rows,
-  ].toSorted((left, right) => left.index - right.index);
-  const summary = summarize(rows, planned.citationRows);
-  if (mode === "plan") {
-    return { type: "planned", rows, summary };
+  return {
+    settled: [...parsed.invalid, ...resolved.invalid, ...settled.settled],
+    planned,
+  };
+};
+
+const acceptedRow = ({
+  label,
+  outcome,
+}: AcceptedLabel): ReviewedLabelRowResult => ({
+  ...label.ids,
+  index: label.index,
+  outcome,
+});
+
+const inInputOrder = (
+  rows: readonly ReviewedLabelRowResult[],
+): ReviewedLabelRowResult[] =>
+  rows.toSorted((left, right) => left.index - right.index);
+
+const sumChangedRows = (accepted: readonly AcceptedLabel[]): number =>
+  accepted.reduce((total, { changedRows }) => total + changedRows, 0);
+
+/** What a run would do, writing nothing. */
+export const planReviewedCitationLabels = async (
+  transact: Transact,
+  input: readonly unknown[],
+): Promise<ReviewedLabelPlan> =>
+  await transact(async (tx) => {
+    const { settled, planned } = await decideReviewedLabels(tx, input);
+    const rows = inInputOrder([
+      ...settled,
+      ...planned.refused,
+      ...planned.accepted.map(acceptedRow),
+    ]);
+    return {
+      type: "planned",
+      rows,
+      summary: summarize(rows, sumChangedRows(planned.accepted)),
+    };
+  });
+
+/**
+ * Store the accepted reviews and relabel their rows. A label the plan
+ * accepted but the compare-and-set did not write lost to a review stored in
+ * the meantime, so it is refused rather than reported as applied.
+ */
+const applyReviewedLabelsTx = async (
+  tx: ExecutingTransaction,
+  input: readonly unknown[],
+): Promise<ReviewedLabelApplication> => {
+  const { settled, planned } = await decideReviewedLabels(tx, input);
+  const toStore = planned.accepted
+    .filter(({ storesReview }) => storesReview)
+    .map(({ label }) => label);
+  const written = new Set(
+    toStore.length === 0
+      ? []
+      : executedRows(
+          // audit: skip — operator pass over global case-law labels
+          await tx.execute(upsertReviewsStatement(toStore)),
+        ).map((row) => {
+          const parsed = v.parse(writtenReviewRowSchema, row);
+          return citationPairOf(parsed.citing_decision_id, parsed.citation_key);
+        }),
+  );
+  const accepted: AcceptedLabel[] = [];
+  const refused = [...planned.refused];
+  for (const candidate of planned.accepted) {
+    const { label } = candidate;
+    if (
+      candidate.storesReview &&
+      !written.has(citationPairOf(label.citingDecisionId, label.citationKey))
+    ) {
+      refused.push(refusedRow(label));
+    } else {
+      accepted.push(candidate);
+    }
   }
-  if (planned.accepted.length === 0) {
+  const rows = inInputOrder([
+    ...settled,
+    ...refused,
+    ...accepted.map(acceptedRow),
+  ]);
+  const summary = summarize(rows, sumChangedRows(accepted));
+  if (accepted.length === 0) {
     return { type: "applied", rows, summary, relabelled: 0 };
   }
-  // audit: skip — operator pass over global case-law labels
-  await tx.execute(upsertReviewsStatement(planned.accepted));
-  // audit: skip — operator pass over global case-law labels
   const relabelled = executedRows(
-    await tx.execute(relabelCitationsStatement(planned.accepted)),
+    // audit: skip — operator pass over global case-law labels
+    await tx.execute(
+      relabelCitationsStatement(accepted.map(({ label }) => label)),
+    ),
   ).length;
   return { type: "applied", rows, summary, relabelled };
 };
 
-export const runReviewedCitationLabels = async (
-  transact: <T>(run: (tx: ExecutingTransaction) => Promise<T>) => Promise<T>,
+/** Store the accepted reviews and relabel their rows. */
+export const applyReviewedCitationLabels = async (
+  transact: Transact,
   input: readonly unknown[],
-  mode: ReviewedLabelRunMode,
-): Promise<ReviewedLabelRunOutcome> =>
-  mode === "apply"
-    ? await runCitationGraphTransaction(
-        transact,
-        async (tx) => await runReviewedCitationLabelsTx(tx, input, mode),
-      )
-    : await transact(
-        async (tx) => await runReviewedCitationLabelsTx(tx, input, mode),
-      );
+): Promise<ReviewedLabelApplication> =>
+  await runCitationGraphTransaction(
+    transact,
+    async (tx) => await applyReviewedLabelsTx(tx, input),
+  );
