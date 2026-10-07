@@ -26,6 +26,7 @@ import timeoutAnnotations from "./__fixtures__/ci-cancellation/timeout.json" wit
 import { selectApiTestImpact } from "./api-test-impact";
 import { requiresMalwareScan } from "./check-standalone-lockfiles";
 import { planCiApiTests } from "./ci-api-test-plan";
+import { requiresAvtPostgres } from "./ci-avt-postgres";
 import { CANONICAL_CANCEL_STEP } from "./ci-cancellation-contract";
 import {
   markdownReaders,
@@ -175,6 +176,11 @@ const onlyOutcome = <T>(outcomes: readonly T[]): T => {
 // process, each answer comes from the same function the CLI prints; a bun
 // call the selector adds without an entry here fails the plan.
 const SELECTOR_BUN_CLIS = {
+  "scripts/ci-avt-postgres.ts": {
+    variable: "SERVED_AVT_POSTGRES",
+    flag: "",
+    output: (files: readonly string[]) => String(requiresAvtPostgres(files)),
+  },
   "scripts/ci-package-scope.ts": {
     variable: "SERVED_LANDING_BUILD",
     flag: "--landing-build",
@@ -3770,7 +3776,7 @@ test("verification pull requests pass their scope to the production Postgres run
   expect(step?.run).toBeDefined();
   const outcomes = runBashBatch(["pull_request", "merge_group"], (event) => ({
     flags: ["-eu"],
-    script: `bun() { printf '%s\n' "$@"; }\n${step?.run ?? ""}`,
+    script: `bun() { printf '%s\\n' "$@"; }\n${step?.run ?? ""}`,
     args: [],
     env: { PATH: Bun.env["PATH"] ?? "", EVENT_NAME: event },
   }));
@@ -3779,11 +3785,7 @@ test("verification pull requests pass their scope to the production Postgres run
     const args = stdout.trim().split("\n");
     expect(args.slice(0, 2)).toEqual(["run", "test:postgres"]);
     if (event === "pull_request") {
-      expect(args.slice(2)).toEqual([
-        "src/lib/lists/verification/",
-        "src/handlers/lists/verifications/",
-        "src/db/list-verification",
-      ]);
+      expect(args.slice(2)).toEqual(["--avt"]);
     } else {
       expect(args.slice(2)).toEqual([
         "--test-name-pattern=^(?!.*sanctions monitoring full-volume)",

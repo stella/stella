@@ -17,6 +17,9 @@ type RunGatedTestsOptions = {
   // them instead of skipping every suite.
   requiredEnv: readonly string[];
   script: GatedTestScript;
+  // An explicitly selected slice may also include ungated database suites.
+  testFiles?: readonly string[];
+  runnerArguments?: readonly string[];
 };
 
 const apiRoot = path.resolve(import.meta.dir, "..");
@@ -57,6 +60,8 @@ export const discoverGatedTestFiles = async ({
 export const runGatedTests = async ({
   requiredEnv,
   script,
+  testFiles: scopedTestFiles,
+  runnerArguments = Bun.argv.slice(2),
 }: RunGatedTestsOptions): Promise<number> => {
   const runner = packageJson.ciGateTestRunners[script];
   const missing = requiredEnv.filter((name) => !process.env[name]);
@@ -65,14 +70,16 @@ export const runGatedTests = async ({
     return 1;
   }
 
-  const discoveredGatedFiles = await discoverGatedTestFiles({
-    apiRoot,
-    gate: runner.gate,
-    testFileGlob: runner.testFileGlob,
-  });
+  const discoveredGatedFiles =
+    scopedTestFiles ??
+    (await discoverGatedTestFiles({
+      apiRoot,
+      gate: runner.gate,
+      testFileGlob: runner.testFileGlob,
+    }));
 
   const { bunArguments, patterns } = partitionRunnerArguments(
-    Bun.argv.slice(2),
+    runnerArguments.filter((argument) => argument !== "--list-files"),
   );
   const selectedPaths = selectTestPaths(
     discoveredGatedFiles,
@@ -83,10 +90,14 @@ export const runGatedTests = async ({
   );
 
   if (testFiles.length === 0) {
-    console.error(
-      `No test files declaring ${runner.gate} matched the selection.`,
-    );
+    console.error(`No test files matched the ${script} selection.`);
     return 1;
+  }
+
+  // Inspect the exact selection without generators or service connections.
+  if (runnerArguments.includes("--list-files")) {
+    console.log(testFiles.join("\n"));
+    return 0;
   }
 
   // The same derived sources the package `test` script generates first: the
@@ -112,7 +123,7 @@ export const runGatedTests = async ({
     }
   }
 
-  console.log(`Running ${String(testFiles.length)} ${runner.gate} test files.`);
+  console.log(`Running ${String(testFiles.length)} ${script} test files.`);
   const testProcess = Bun.spawn({
     cmd: buildApiTestCommand({
       bunExecutable: process.execPath,

@@ -993,13 +993,7 @@ jobs:
             corpus_suites_required=false
             valkey_suites_required=false
             collaboration_suite_required=false
-            for file in "${changed_files[@]}"; do
-              case "$file" in
-                apps/api/src/lib/lists/verification/*|apps/api/src/handlers/lists/verifications/*|apps/api/src/handlers/lists/verification-routes*|apps/api/src/handlers/lists/routes.ts|apps/api/src/lib/api-handlers-list-verification*|apps/api/drizzle/*verification*/*|apps/api/src/handlers/lists/items/sources/verification/*|apps/api/src/db/list-verification*|apps/api/src/db/schema/lists-verification.ts|apps/api/src/lib/views/avt-layout*|apps/api/src/lib/scheduler/tasks/list-verification*|apps/web/src/features/avt/*|apps/web/src/routes/*/lists/source-verification-action*|.github/workflows/ci.yml)
-                  postgres_suites_required=true
-                  ;;
-              esac
-            done
+            postgres_suites_required=$(bun scripts/ci-avt-postgres.ts "${changed_files[@]}")
             service_suites_pr_required=$postgres_suites_required
           fi
 
@@ -2449,7 +2443,7 @@ jobs:
       - name: Test release image CI gate
         if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
         # Worst pilot test 18.56 s; 50 s allows about 2.5x contention headroom.
-        run: bun test --timeout 50000 scripts/ci-plan.test.ts
+        run: bun test --timeout 50000 scripts/ci-plan.test.ts scripts/ci-avt-postgres.test.ts
 
       - name: Workspace hygiene
         if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
@@ -4359,7 +4353,7 @@ jobs:
           EVENT_NAME: ${{ github.event_name }}
         run: |
           if [[ "$EVENT_NAME" == pull_request ]]; then
-            bun run test:postgres src/lib/lists/verification/ src/handlers/lists/verifications/ src/db/list-verification
+            bun run test:postgres --avt
           else
             bun run test:postgres --test-name-pattern='^(?!.*sanctions monitoring full-volume)'
           fi
