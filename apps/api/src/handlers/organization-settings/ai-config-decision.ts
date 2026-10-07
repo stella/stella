@@ -119,15 +119,19 @@ const resolveDecisionProbe = ({
     (existing?.provider === "openai"
       ? existingProviders.find(({ provider }) => provider === "openai")?.apiKey
       : undefined);
+  const existingChanged = !existing
+    ? true
+    : existing.provider !== decision.provider ||
+      existing.modelId !== decision.modelId ||
+      (decision.provider === "openai" &&
+        (existing.provider !== "openai" ||
+          existing.region !== decision.region));
   const needsProbe =
     (inputApiKey !== null &&
       inputApiKey !== undefined &&
       !!inputApiKey.trim()) ||
-    existing?.provider !== decision.provider ||
-    existing?.modelId !== decision.modelId ||
-    previousKey !== resolvedKey ||
-    (decision.provider === "openai" &&
-      (existing?.provider !== "openai" || existing.region !== decision.region));
+    existingChanged ||
+    previousKey !== resolvedKey;
   if (!needsProbe) {
     return { valid: true, decision, needsProbe: false };
   }

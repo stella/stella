@@ -542,10 +542,15 @@ export type DecisionModelState =
 
 type SerializedDecisionModel =
   | {
-      provider: DecisionProviderValue;
+      provider: "typesafe";
+      apiKey?: string;
+      modelId: string;
+    }
+  | {
+      provider: "openai";
       apiKey?: string | null;
       modelId: string;
-      region?: "eu" | "global";
+      region: "eu" | "global";
     }
   | null
   | undefined;
@@ -561,16 +566,24 @@ export const serializeDecisionModel = (
     case "set": {
       const apiKey = state.apiKey.trim();
       const replacementKey = apiKey ? { apiKey } : {};
-      const keyInput =
-        state.provider === "openai" && state.keyMode === "reuse"
-          ? { apiKey: null }
-          : replacementKey;
-      return {
-        provider: state.provider,
-        ...keyInput,
-        ...(state.provider === "openai" ? { region: state.region } : {}),
-        modelId: state.modelId.trim(),
-      };
+      switch (state.provider) {
+        case "typesafe":
+          return {
+            provider: state.provider,
+            ...replacementKey,
+            modelId: state.modelId.trim(),
+          };
+        case "openai":
+          return {
+            provider: state.provider,
+            ...(state.keyMode === "reuse" ? { apiKey: null } : replacementKey),
+            region: state.region,
+            modelId: state.modelId.trim(),
+          };
+        default:
+          state satisfies never;
+          return panic("Unhandled decision model provider");
+      }
     }
     default:
       state satisfies never;

@@ -37,7 +37,15 @@ const state = "The package arrived with a broken screen.";
 const wire = (response: unknown = fixture, region?: "eu" | "global") => {
   const calls: { url: string; init: RequestInit | undefined }[] = [];
   const fetcher: Fetcher = async (url, init) => {
-    calls.push({ url: String(url), init });
+    let requestUrl;
+    if (typeof url === "string") {
+      requestUrl = url;
+    } else if (url instanceof URL) {
+      requestUrl = url.href;
+    } else {
+      requestUrl = url.url;
+    }
+    calls.push({ url: requestUrl, init });
     return Response.json(response);
   };
   const client = createOpenAIDecisionsClient({
@@ -86,7 +94,12 @@ describe("OpenAI Decisions boundary", () => {
         "content-type": "application/json",
       },
     });
-    expect(JSON.parse(calls.at(0)?.init?.body?.toString() ?? "null")).toEqual({
+    const body = calls.at(0)?.init?.body;
+    expect(typeof body).toBe("string");
+    if (typeof body !== "string") {
+      throw new TypeError("Expected a serialized decision request body");
+    }
+    expect(JSON.parse(body)).toEqual({
       model: "gpt-6-luna",
       input: state,
       questions: [

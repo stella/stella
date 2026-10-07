@@ -127,7 +127,13 @@ const sleepWithSignal = async (
   const slept = new Promise<void>((resolve, reject) => {
     const abort = () => {
       clearTimeout(timer);
-      reject(signal?.reason);
+      reject(
+        new SystemOneError({
+          kind: "aborted",
+          message: "OpenAI decision retry was cancelled",
+          cause: signal?.reason,
+        }),
+      );
     };
     const timer = setTimeout(() => {
       signal?.removeEventListener("abort", abort);
