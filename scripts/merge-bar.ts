@@ -47,6 +47,7 @@
 // Usage:
 //   bun scripts/merge-bar.ts <pr-number> [--repo owner/name] [--dry-run]
 //   bun scripts/merge-bar.ts --disarm <pr-number> [--repo owner/name] [--dry-run]
+//   bun scripts/merge-bar.ts --update-branch owner/name#<pr-number> --expected-head-sha <sha> [--dry-run]
 //
 // A non-empty STELLA_MERGE_HOLD repository variable holds ordinary pull requests;
 // recognized release pull requests remain exempt, including --jump.
@@ -55,6 +56,7 @@
 
 import { panic, Result, TaggedError } from "better-result";
 import { mkdirSync, mkdtempSync, rmSync } from "node:fs";
+import { homedir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -67,6 +69,11 @@ import {
   runPlanScopes,
 } from "./ci-plan-selector";
 import { decideBarFreshness, readBarFreshness } from "./merge-bar-freshness";
+import {
+  branchUpdateResponse,
+  createBranchUpdateStore,
+  updatePullRequestBranch,
+} from "./merge-bar-update-branch";
 
 const DEFAULT_REPO = "stella/stella" satisfies MergeBarRepository;
 const MERGEABLE_POLL_ATTEMPTS = 8;
@@ -2923,27 +2930,73 @@ const createGhGateway = ({
 
 // --- CLI --------------------------------------------------------------------
 
-type MergeBarOptions = {
+type MergeBarCommonOptions = {
   pullNumber: number;
   repo: MergeBarRepository;
   dryRun: boolean;
-  // Enqueue at the front of the queue only when explicitly requested.
-  jump: boolean;
-  mode: "merge" | "disarm";
+};
+
+type MergeBarOptions = MergeBarCommonOptions &
+  (
+    | { mode: "merge"; jump: boolean }
+    | { mode: "disarm"; jump: false }
+    | { mode: "update-branch"; jump: false; expectedHeadSha: string }
+  );
+
+type ReadPullReferenceOptions = {
+  reference: string;
+  explicitRepo: MergeBarRepository | undefined;
+  mode: MergeBarOptions["mode"];
+};
+
+const readPullReference = ({
+  reference,
+  explicitRepo,
+  mode,
+}: ReadPullReferenceOptions) => {
+  let repo = explicitRepo ?? DEFAULT_REPO;
+  let rawNumber = reference;
+  if (rawNumber.includes("#")) {
+    if (mode !== "update-branch") {
+      panic(
+        "Repository#number references are accepted only with --update-branch",
+      );
+    }
+    const [referenceRepo, referenceNumber, extra] = rawNumber.split("#");
+    repo = readMergeBarRepository(referenceRepo ?? panic("Missing repository"));
+    if (
+      extra !== undefined ||
+      (explicitRepo !== undefined && explicitRepo !== repo)
+    ) {
+      panic(
+        "Pull request reference conflicts with --repo or contains multiple separators",
+      );
+    }
+    rawNumber = referenceNumber ?? panic("Missing pull request number");
+  }
+  if (!PULL_NUMBER_PATTERN.test(rawNumber)) {
+    panic(`PR number must be digits only, got: ${rawNumber}`);
+  }
+  const pullNumber = Number(rawNumber);
+  if (!Number.isSafeInteger(pullNumber) || pullNumber <= 0) {
+    panic(`PR number must be a positive integer, got: ${rawNumber}`);
+  }
+  return { pullNumber, repo };
 };
 
 export const parseOptions = (argv: readonly string[]): MergeBarOptions => {
   const positional: string[] = [];
-  let repo: MergeBarRepository = DEFAULT_REPO;
+  let explicitRepo: MergeBarRepository | undefined;
   let dryRun = false;
   let jump = false;
   let mode: MergeBarOptions["mode"] = "merge";
+  let expectedHeadSha: string | undefined;
 
   for (let index = 0; index < argv.length; index += 1) {
     const argument = argv[index];
     if (argument === "--repo") {
       index += 1;
-      repo = readMergeBarRepository(
+      explicitRepo = readMergeBarRepository(
         argv[index] ?? panic("--repo requires a value"),
       );
       continue;
@@ -2956,8 +3009,20 @@ export const parseOptions = (argv: readonly string[]): MergeBarOptions => {
       jump = true;
       continue;
     }
-    if (argument === "--disarm") {
-      mode = "disarm";
+    if (argument === "--disarm" || argument === "--update-branch") {
+      if (mode !== "merge") {
+        panic("Only one of --disarm or --update-branch may be supplied");
+      }
+      mode = argument === "--disarm" ? "disarm" : "update-branch";
+      continue;
+    }
+    if (argument === "--expected-head-sha") {
+      index += 1;
+      expectedHeadSha =
+        argv[index] ?? panic("--expected-head-sha requires a value");
+      if (!/^[a-f0-9]{40}$/u.test(expectedHeadSha)) {
+        panic("--expected-head-sha requires a full lowercase commit SHA");
+      }
       continue;
     }
     if (argument === undefined || argument.startsWith("--")) {
@@ -2965,32 +3030,37 @@ export const parseOptions = (argv: readonly string[]): MergeBarOptions => {
     }
     positional.push(argument);
   }
-
-  // Exactly one, all digits. `Number.parseInt("2137oops", 10)` is 2137, so a
-  // mistyped suffix would silently merge a different real pull request; extra
-  // positionals would silently pick the first.
   if (positional.length !== 1) {
     panic(
-      `Expected exactly one PR number, got ${positional.length}. ` +
-        "Usage: bun scripts/merge-bar.ts <pr-number> [--repo owner/name] " +
-        "[--dry-run] [--jump | --disarm]",
+      `Expected exactly one PR number, got ${positional.length}. Usage: bun scripts/merge-bar.ts <pr-number> [--repo owner/name] [--dry-run] [--jump | --disarm | --update-branch --expected-head-sha <sha>]`,
     );
   }
-  const rawNumber = positional[0] ?? panic("unreachable: length checked above");
-  if (!PULL_NUMBER_PATTERN.test(rawNumber)) {
-    panic(`PR number must be digits only, got: ${rawNumber}`);
+  const { pullNumber, repo } = readPullReference({
+    reference: positional[0] ?? panic("unreachable: length checked above"),
+    explicitRepo,
+    mode,
+  });
+  if (mode !== "merge" && jump) {
+    panic(`--${mode} cannot be combined with --jump`);
   }
-  const pullNumber = Number(rawNumber);
-  if (!Number.isSafeInteger(pullNumber) || pullNumber <= 0) {
-    panic(`PR number must be a positive integer, got: ${rawNumber}`);
+  if (mode !== "update-branch" && expectedHeadSha !== undefined) {
+    panic("--expected-head-sha requires --update-branch");
   }
-
-  if (mode === "disarm" && jump) {
-    panic("--disarm cannot be combined with --jump");
+  switch (mode) {
+    case "update-branch":
+      if (expectedHeadSha === undefined) {
+        panic("--update-branch requires --expected-head-sha");
+      }
+      return { mode, pullNumber, repo, dryRun, jump: false, expectedHeadSha };
+    case "disarm":
+      return { mode, pullNumber, repo, dryRun, jump: false };
+    case "merge":
+      return { mode, pullNumber, repo, dryRun, jump };
+    default:
+      mode satisfies never;
+      return panic("Unknown merge-bar mode");
   }
-  return { pullNumber, repo, dryRun, jump, mode };
 };
-
 const formatVerdict = (verdict: MergeBarVerdict): string =>
   verdict.gates
     .map((gate) =>
@@ -3069,6 +3139,93 @@ if (import.meta.main) {
   }
   if (barFreshness.type === "branch-bar") {
     console.log(barFreshness.message);
+  }
+  if (options.mode === "update-branch") {
+    let lastCall = 0;
+    const paced = (
+      args: readonly string[],
+      access: "read" | "write" = "read",
+    ) => {
+      const wait = 1100 - (Date.now() - lastCall);
+      if (wait > 0) {
+        Bun.sleepSync(wait);
+      }
+      lastCall = Date.now();
+      // The existing transport resolves gh from PATH and never retries writes.
+      return runGhProcess(args, access);
+    };
+    const stateRoot =
+      process.env["STELLA_MERGE_BAR_STATE_DIR"] ??
+      path.join(
+        process.env["XDG_STATE_HOME"] ??
+          path.join(homedir(), ".local", "state"),
+        "stella",
+        "merge-bar",
+        "branch-updates",
+      );
+    const receipt = updatePullRequestBranch({
+      repo: options.repo,
+      pullNumber: options.pullNumber,
+      expectedHeadSha: options.expectedHeadSha,
+      dryRun: options.dryRun,
+      store: createBranchUpdateStore(stateRoot),
+      readPullRequest: () => {
+        const response = paced([
+          "api",
+          `repos/${options.repo}/pulls/${options.pullNumber}`,
+        ]);
+        if (response.exitCode !== 0) {
+          panic(`Cannot read pull request (gh exit ${response.exitCode})`);
+        }
+        const raw = readRecord(
+          JSON.parse(response.stdout.toString()),
+          "pull request",
+        );
+        const head = readRecord(raw["head"], "head");
+        const base = readRecord(raw["base"], "base");
+        return {
+          state: readString(raw, "state"),
+          headSha: readString(head, "sha"),
+          headRepository:
+            head["repo"] === null
+              ? null
+              : readString(
+                  readRecord(head["repo"], "head repository"),
+                  "full_name",
+                ),
+          baseRepository: readString(
+            readRecord(base["repo"], "base repository"),
+            "full_name",
+          ),
+        };
+      },
+      update: (expectedHeadSha) => {
+        const response = paced(
+          [
+            "api",
+            "--include",
+            "--method",
+            "PUT",
+            `repos/${options.repo}/pulls/${options.pullNumber}/update-branch`,
+            "-f",
+            `expected_head_sha=${expectedHeadSha}`,
+          ],
+          "write",
+        );
+        return branchUpdateResponse(
+          response.stdout.toString(),
+          response.exitCode,
+        );
+      },
+    });
+    if (receipt.isErr()) {
+      console.error(receipt.error.message);
+      process.exit(1);
+    }
+    console.log(
+      `${options.repo}#${options.pullNumber}: ${JSON.stringify(receipt.value)}`,
+    );
+    process.exit(0);
   }
   const gateway = createGhGateway({
     repo: options.repo,
