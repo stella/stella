@@ -248,6 +248,8 @@ const heavyCheckoutCensus = (workflow: CheckoutWorkflow) => {
     trusted: "true",
     suite_depth: "full",
     queue_depth: "full",
+    coverage_profile: "normal-v1",
+    queue_required_jobs: "[]",
     fix_tests_on_base_required: "false",
   };
   const context = {
