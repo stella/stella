@@ -1,6 +1,7 @@
 import { panic, Result } from "better-result";
 
 import type { RequeueableQueue } from "@/api/lib/bullmq-requeue";
+import { errorTag } from "@/api/lib/errors/error-tag";
 import type { ReportExportJobData } from "@/api/lib/report-export-enqueue";
 import {
   getReportExportQueue,
@@ -56,10 +57,21 @@ export const createReconcileReportExportsTask =
       "reportExports.unrecoverable": requeueSummary.unrecoverable,
     });
     if (Result.isError(recovery)) {
+      if (Result.isError(requeue)) {
+        // The runner captures one cause per tick: the inspection failure,
+        // since it ran first. The requeue stage keeps its own diagnosis here
+        // instead of a second capture.
+        logger.warn("report_export.requeue_stage_failed", {
+          "error.type": errorTag(requeue.error.cause),
+          "reportExports.failed": requeue.error.summary.failed,
+        });
+      }
       return Result.err(
         new SchedulerTaskFailure({
           cause: recovery.error,
-          message: recovery.error.message,
+          message: Result.isError(requeue)
+            ? `${recovery.error.message}; ${requeue.error.message}`
+            : recovery.error.message,
         }),
       );
     }

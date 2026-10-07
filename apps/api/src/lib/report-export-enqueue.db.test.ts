@@ -518,6 +518,22 @@ describe("queued report export reconciliation", () => {
           ({ message }) => message === "scheduler.report_exports_reconciled",
         )?.attributes,
       ).toMatchObject({ "reportExports.failed": phase === "both" ? 2 : 1 });
+      const requeueStage = logs.records.filter(
+        ({ message }) => message === "report_export.requeue_stage_failed",
+      );
+      if (phase === "both") {
+        expect(outcome.error.message).toContain(
+          "Requeueing report exports did not complete",
+        );
+        expect(requeueStage).toHaveLength(1);
+        expect(requeueStage.at(0)?.severityText).toBe("WARN");
+        expect(requeueStage.at(0)?.attributes).toMatchObject({
+          "error.type": "Error",
+          "reportExports.failed": 1,
+        });
+      } else {
+        expect(requeueStage).toHaveLength(0);
+      }
       expect(analytics.exceptions()).toHaveLength(0);
     },
   );
