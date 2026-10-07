@@ -40,7 +40,9 @@ const mountStart = (locale = "en", messages = english) => {
       useStartVerification({
         workspaceId,
         listId,
-        onStarted: (id) => opened.push(id),
+        onStarted: (id) => {
+          opened.push(id);
+        },
       }),
     {
       wrapper: ({ children }) => (
