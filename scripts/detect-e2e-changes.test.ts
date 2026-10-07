@@ -653,7 +653,7 @@ describe("detect-e2e-changes", () => {
     for (const stepName of [
       "Release changelog guard",
       "Release CLI coupling guard",
-      "Release marketing staleness warning",
+      "Release marketing provenance warning",
     ]) {
       expectPullRequestAndMergeGroup(workflowStep(ciChecks, stepName));
     }

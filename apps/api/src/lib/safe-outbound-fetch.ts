@@ -88,7 +88,12 @@ const attachRequestGuards = ({
     return null;
   }
   signal?.addEventListener("abort", abort, { once: true });
-  return { clearHeaderTimeout: () => clearTimeout(timeout), cleanup };
+  return {
+    clearHeaderTimeout: () => {
+      clearTimeout(timeout);
+    },
+    cleanup,
+  };
 };
 
 type SafeOutboundRedirectMode = "error" | "manual";
@@ -249,6 +254,7 @@ export const fetchStreamWithResolvedAddress = async ({
   headers,
   maxBytes,
   method = "GET",
+  redirect = "error",
   signal,
   timeoutMs,
   url,
@@ -258,6 +264,7 @@ export const fetchStreamWithResolvedAddress = async ({
   headers?: SafeOutboundHeaders | undefined;
   maxBytes: number;
   method?: string | undefined;
+  redirect?: SafeOutboundRedirectMode | undefined;
   signal?: AbortSignal | undefined;
   timeoutMs: number;
   url: URL;
@@ -309,7 +316,7 @@ export const fetchStreamWithResolvedAddress = async ({
             const status = response.statusCode ?? 0;
             const responseHeaders = headersFromIncoming(response.headers);
 
-            if (status >= 300 && status < 400) {
+            if (status >= 300 && status < 400 && redirect === "error") {
               response.resume();
               reject(
                 new SafeOutboundFetchError({
@@ -609,7 +616,7 @@ export const validateOutboundFetchTarget = async (
   rawUrl: string | URL,
   {
     protocolPolicy = OUTBOUND_PROTOCOL_POLICY.HTTPS_ONLY,
-    resolveAddresses = resolvePublicAddresses,
+    resolveAddresses = resolveOutboundAddresses,
     signal,
     timeoutMs = 0,
   }: {
@@ -652,6 +659,15 @@ export const validateOutboundFetchTarget = async (
   const addresses = resolution.value;
   if (Result.isError(addresses)) {
     return Result.err(addresses.error);
+  }
+
+  if (
+    addresses.value.length === 0 ||
+    addresses.value.some(({ address }) => isPrivateResolvedAddress(address))
+  ) {
+    return Result.err(
+      new SafeOutboundFetchError({ message: "URL host is not allowed" }),
+    );
   }
 
   return Result.ok({ addresses: addresses.value, url: parsed.value });
@@ -707,6 +723,7 @@ export const safeOutboundFetchStream = async ({
   headers,
   maxBytes,
   method,
+  redirect,
   signal,
   timeoutMs,
   url,
@@ -715,6 +732,7 @@ export const safeOutboundFetchStream = async ({
   headers?: SafeOutboundHeaders | undefined;
   maxBytes: number;
   method?: string | undefined;
+  redirect?: SafeOutboundRedirectMode | undefined;
   signal?: AbortSignal | undefined;
   timeoutMs: number;
   url: string | URL;
@@ -740,6 +758,7 @@ export const safeOutboundFetchStream = async ({
     headers,
     maxBytes,
     method,
+    redirect,
     signal,
     timeoutMs: remainingTimeoutMs,
     url: target.value.url,
@@ -1123,7 +1142,7 @@ const isBlockedIPv6 = (host: string): boolean => {
   }
 };
 
-const resolvePublicAddresses = async (
+const resolveOutboundAddresses = async (
   hostname: string,
 ): Promise<Result<SafeOutboundAddress[], SafeOutboundFetchError>> => {
   const normalizedHost =
@@ -1133,16 +1152,12 @@ const resolvePublicAddresses = async (
 
   const literalFamily = isIP(normalizedHost);
   if (literalFamily !== 0) {
-    return isPrivateResolvedAddress(normalizedHost)
-      ? Result.err(
-          new SafeOutboundFetchError({ message: "URL host is not allowed" }),
-        )
-      : Result.ok([
-          {
-            address: normalizedHost,
-            family: literalFamily === 6 ? 6 : 4,
-          },
-        ]);
+    return Result.ok([
+      {
+        address: normalizedHost,
+        family: literalFamily === 6 ? 6 : 4,
+      },
+    ]);
   }
 
   const addresses = await Result.tryPromise({
@@ -1156,15 +1171,6 @@ const resolvePublicAddresses = async (
 
   if (Result.isError(addresses)) {
     return Result.err(addresses.error);
-  }
-
-  if (
-    addresses.value.length === 0 ||
-    addresses.value.some(({ address }) => isPrivateResolvedAddress(address))
-  ) {
-    return Result.err(
-      new SafeOutboundFetchError({ message: "URL host is not allowed" }),
-    );
   }
 
   return Result.ok(

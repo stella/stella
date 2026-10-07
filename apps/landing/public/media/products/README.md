@@ -176,34 +176,38 @@ The recorder additionally stamps every capture into
 the commit it was recorded at, and the app surfaces it films. At release time,
 
 ```sh
-bun run marketing:stale          # report per-capture FRESH/STALE verdicts
+bun run marketing:stale          # compare rendered screenshots and recording provenance
 bun run marketing:stale --strict # same, but exit non-zero when anything is stale
 ```
 
 diffs each capture's watched paths against its recorded-at commit (committed
-history only) and prints the exact re-record command for anything stale, so
+history only), then delegates to `test:e2e:marketing` before reporting FRESH.
+Use the same seeded app, browser setup, and committed screenshot baselines as
+the screenshot suite; its comparison threshold is unchanged. A comparison
+failure cannot be hidden by matching hashes or a manual source attestation.
+The command prints the exact re-record command for anything stale, so
 "the recordings silently drifted from the product" is a check failure, not a
 memory. Record from a committed tree so the stamped commit matches the code
 that produced the frames; when recording from a dirty tree, pass
 `MARKETING_COMMIT=<sha>` to stamp the commit the changes will land in. Watched
 paths cover the feature slices each scene films plus the recorder and seed;
-rendering changes that arrive through dependency upgrades (notably
-`@stll/folio-react` for the editor scene) are not tracked, so judge those
-manually when bumping.
+rendering changes outside those paths are covered by the rendered comparison.
+`bun run marketing:provenance` checks source metadata alone and reports
+PROVENANCE_MATCH/PROVENANCE_CHANGED; it does not certify rendered freshness.
 
 ## Reshooting on release
 
 `bun run marketing:reshoot` re-records only the captures `marketing:stale`
-finds stale — never the whole matrix, so a reshoot never pays to re-record
-scenes that already match the product:
+finds stale. If the shared rendered comparison fails, candidates with matching
+source metadata remain stale too; its screenshot diagnostics identify the drift:
 
 ```sh
 bun run marketing:reshoot          # re-record whatever is stale
-bun run marketing:reshoot --dry-run # print the stale set and the commands, do nothing
+bun run marketing:reshoot --dry-run # report source provenance and commands without rendering
 ```
 
 If everything is already fresh, it prints `all N recordings fresh — nothing
-to reshoot` and exits without touching the app. Otherwise it preflights the
+to reshoot` after the rendered comparison, without recording new media. Otherwise it preflights the
 local stack (`E2E_WEB_URL` / `E2E_API_URL`, defaulting to the URLs above), and
 if either is unreachable it prints the same "Refreshing the images" commands
 from this file and exits without recording anything — it never starts
@@ -220,10 +224,10 @@ stamps the pre-commit HEAD, so it is one commit behind once the first commit
 lands). The reshoot script prints the publish and commit commands, including a
 ready-to-run `jq` snippet for the second commit.
 
-`tag-on-version-bump.yml` runs `bun run marketing:stale --strict` before
-pushing a release tag, so a stale recording fails the tag push instead of
-shipping a landing page that has quietly drifted from the product. Clear it
-with `bun run marketing:reshoot` before bumping `VERSION`.
+`release-tag.yml` and the release PR warning check recording provenance.
+Rendered screenshots are checked by the heavy marketing screenshot job.
+Use `bun run marketing:stale --strict` with the seeded screenshot stack to
+verify both before bumping `VERSION`.
 
 `bun run release:maintenance` does not stop on stale recordings. It carries
 them forward under a standing attestation, `Patch release, UX diff
