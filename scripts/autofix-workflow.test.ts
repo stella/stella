@@ -412,27 +412,43 @@ describe("changed-file autofix boundary", () => {
     expect(job).toContain(
       'git diff --name-only -z --diff-filter=ACMR "$BASE_SHA"..."$HEAD_SHA" -- > "$RUNNER_TEMP/autofix-changed-paths"',
     );
-    expect(fix).toContain(
-      "mapfile -d '' -t changed < \"$RUNNER_TEMP/autofix-changed-paths\"",
-    );
+    expect(fix).toContain("while IFS= read -r -d '' path; do");
     expect(fix).toContain('[[ -f "$path" && ! -L "$path" ]]');
     expect(fix).toContain(
       'if [[ "$path" == .github/workflows/* || "$path" == scripts/ratchet-baseline.json ]]; then',
     );
     expect(fix).toContain(
-      `bun --bun oxlint -c oxlint.config.ts --no-error-on-unmatched-pattern --fix "\${lint_paths[@]}"`,
+      `bun --bun oxlint -c oxlint.config.ts --no-error-on-unmatched-pattern --type-aware --fix "\${lint_paths[@]}"`,
     );
     expect(fix).toContain("lint_status > 1");
+    const prepare = fix.indexOf("bun scripts/ci-generated-sources.ts prepare");
+    const typecheck = fix.indexOf(
+      "bun scripts/typecheck-coverage.ts --autofix",
+    );
+    const autofix = fix.indexOf("--type-aware --fix");
+    expect(prepare).toBeGreaterThan(0);
+    expect(typecheck).toBeGreaterThan(prepare);
+    expect(autofix).toBeGreaterThan(typecheck);
+    expect(fix).toContain("set -euo pipefail");
     expect(fix).toContain(
       `bun --bun oxfmt -c .oxfmtrc.json --no-error-on-unmatched-pattern "\${format_paths[@]}"`,
     );
-    for (const unsafe of [
-      "--fix-suggestions",
-      "--fix-dangerously",
-      "--type-aware",
-    ]) {
+    for (const unsafe of ["--fix-suggestions", "--fix-dangerously"]) {
       expect(fix).not.toContain(unsafe);
     }
+    const restriction = job.slice(restrictionStep, pushStep);
+    const durationGuard = restriction.indexOf(
+      'scripts/check-autofix-test-durations.ts --base "$BASE_SHA" --head "$HEAD_SHA"',
+    );
+    expect(durationGuard).toBeGreaterThanOrEqual(0);
+    expect(durationGuard).toBeLessThan(
+      restriction.indexOf(
+        'if [[ "$WEIGHTS_ALLOWED" == apps/api/scripts/test-durations.json ]]; then',
+      ),
+    );
+    expect(restriction).toContain(
+      `WEIGHTS_ALLOWED: \${{ steps.weights.outputs.allowed }}`,
+    );
     expect(job.slice(restrictionStep, pushStep)).toContain(
       'excludes+=(":(exclude,literal)$path")',
     );
@@ -456,7 +472,7 @@ describe("changed-file autofix boundary", () => {
     expect(plan).toBeGreaterThan(availability);
     expect(job).toContain(`ready: \${{ steps.planner.outputs.ready }}`);
     expect(scope).toContain(
-      "scripts/autofix-plan.ts scripts/generated-files.ts packages/scripts/src/generated-files.ts",
+      "scripts/autofix-plan.ts scripts/autofix-protected-paths.ts scripts/check-autofix-test-durations.ts scripts/baseline-paths.ts scripts/generated-files.ts packages/scripts/src/generated-files.ts",
     );
     expect(scope).toContain('git cat-file -e "HEAD:$path"');
     expect(scope).toContain('echo "ready=false" >> "$GITHUB_OUTPUT"');
@@ -466,4 +482,26 @@ describe("changed-file autofix boundary", () => {
     );
     expect(job).toContain("needs.regenerate-scope.outputs.ready == 'true'");
   });
+});
+
+test("type-aware autofix fixtures require a successful dependency install", async () => {
+  const ci = await Bun.file(
+    new URL("../.github/workflows/ci.yml", import.meta.url),
+  ).text();
+  const start = ci.indexOf("      - name: Test type-aware autofix\n");
+  expect(start).toBeGreaterThanOrEqual(0);
+  const step = ci.slice(start, ci.indexOf("\n      - name:", start + 1));
+  expect(step).toContain("steps.install.outcome == 'success'");
+  expect(step).toContain(
+    "needs.ci-plan.outputs.package_checks_required == 'true'",
+  );
+  expect(step).toContain("bun test scripts/autofix-type-aware.test.ts");
+  const invariants = ci.slice(
+    ci.indexOf("      - name: Test CI workflow invariants\n"),
+    start,
+  );
+  expect(invariants).not.toContain("scripts/autofix-type-aware.test.ts");
+  expect(invariants).not.toContain(
+    "apps/api/scripts/refresh-test-durations.test.ts",
+  );
 });

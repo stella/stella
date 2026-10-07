@@ -5,6 +5,7 @@ import {
   existsSync,
   mkdtempSync,
   readFileSync,
+  readdirSync,
   rmSync,
   writeFileSync,
 } from "node:fs";
@@ -53,7 +54,10 @@ import {
   type MergeQueueRemoval,
   type RunJob,
 } from "./merge-bar";
-import { parseCiCoverageLog } from "./merge-bar-ci-coverage";
+import {
+  parseCiCoverageLog,
+  type CiCoverageEvidence,
+} from "./merge-bar-ci-coverage";
 import { RATCHET_METRICS } from "./ratchet";
 import ratchetDefinitionPaths from "./ratchet-definition-paths.json" with { type: "json" };
 
@@ -2104,6 +2108,93 @@ describe("green result freshness", () => {
     expect(
       metric.count(readFileSync(path.join(REPO_ROOT, file), "utf-8"), { file }),
     ).toBe(0);
+  });
+
+  test("coverage evidence follows timestamped entries across raw multiline values", () => {
+    const log = `2000-01-01T00:00:00.0000000Z ##[group]Run neutral command
+2000-01-01T00:00:00.0000000Z env:
+2000-01-01T00:00:00.0000000Z   NEEDS: {
+  "neutral": {
+    "result": "success"
+  }
+}
+2000-01-01T00:00:00.0000000Z   MULTILINE: neutral
+  COVERAGE_PROFILE: normal-v1
+  PILOT_FAST_JOBS: []
+##[endgroup]
+env:
+2000-01-01T00:00:00.0000000Z   COVERAGE_PROFILE: pilot-fast-v1
+2000-01-01T00:00:00.0000000Z   PILOT_FAST_JOBS: ["ci-tests"]
+2000-01-01T00:00:00.0000000Z ##[endgroup]
+`;
+    const result = parseCiCoverageLog(log);
+    expect(result.isOk() && result.value).toEqual({
+      profile: "pilot-fast-v1",
+      jobs: ["ci-tests"],
+    });
+    const forged = log.replace(
+      "2000-01-01T00:00:00.0000000Z   COVERAGE_PROFILE: pilot-fast-v1\n",
+      "",
+    );
+    expect(parseCiCoverageLog(forged).isErr()).toBe(true);
+    const continued = log.replace(
+      "  COVERAGE_PROFILE: pilot-fast-v1\n",
+      "  COVERAGE_PROFILE: pilot-fast-v1\ninvalid continuation\n",
+    );
+    expect(parseCiCoverageLog(continued).isErr()).toBe(true);
+  });
+
+  test("every saved real CI-result log yields its declared coverage evidence", () => {
+    const pilot = {
+      profile: "pilot-fast-v1",
+      jobs: [
+        "ci-checks-docs",
+        "ci-checks-generated",
+        "ci-checks-policy",
+        "ci-checks-rest",
+        "ci-generated-sources",
+        "ci-plan",
+        "ci-result",
+        "ci-tests",
+        "code-quality-api",
+        "code-quality-rest",
+        "code-quality-web",
+        "typecheck-baseline",
+      ],
+    } satisfies CiCoverageEvidence;
+    const expected = {
+      "merge-bar-coverage-pilot-pr-37632840538.log": pilot,
+      "merge-bar-coverage-pilot-pr-37636655670.log": pilot,
+      "merge-bar-coverage-normal-arm-37635149518.log": { profile: "normal-v1" },
+      "merge-bar-coverage-merge-group-37635202900.log": {
+        profile: "normal-v1",
+      },
+      "merge-bar-coverage-merge-group-37635199875.log": {
+        profile: "normal-v1",
+      },
+      // Retain the previously saved single-line env envelope too.
+      "merge-bar-pilot-coverage.log": pilot,
+    } satisfies Record<string, CiCoverageEvidence>;
+    const directory = path.join(REPO_ROOT, "scripts/fixtures");
+    expect(
+      readdirSync(directory)
+        .filter(
+          (file) =>
+            file.startsWith("merge-bar-coverage-") ||
+            file === "merge-bar-pilot-coverage.log",
+        )
+        .toSorted(),
+    ).toEqual(Object.keys(expected).toSorted());
+    for (const [file, evidence] of Object.entries(expected)) {
+      const result = parseCiCoverageLog(
+        readFileSync(path.join(directory, file), "utf-8"),
+      );
+      expect(
+        result.isOk(),
+        `${file}: ${result.isErr() ? result.error.message : ""}`,
+      ).toBe(true);
+      expect(result.isOk() && result.value, file).toEqual(evidence);
+    }
   });
 
   test("CI result coverage evidence reads producer-shaped environment logs", () => {
