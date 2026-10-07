@@ -1,11 +1,12 @@
 import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
-import { eq, sql, TransactionRollbackError } from "drizzle-orm";
+import { and, eq, sql, TransactionRollbackError } from "drizzle-orm";
 
 import { rejectionOf } from "@stll/property-testing/rejection";
 
 import { organization, user } from "@/api/db/auth-schema";
 import {
+  auditLogs,
   systemAuditRuns,
   chatMessages,
   chatThreads,
@@ -15,6 +16,11 @@ import type { TransactionOf } from "@/api/db/scoped";
 import { clampSharedPoolTimeout } from "@/api/db/shared-pool-timeout-policy";
 import { sharedPoolTimeoutPolicy } from "@/api/db/shared-pool-timeouts";
 import { toPersistedChatMessageContentV3 } from "@/api/handlers/chat/chat-message-parts";
+import {
+  AUDIT_ACTION,
+  AUDIT_RESOURCE_TYPE,
+  createBackgroundAuditRecorder,
+} from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
 import { executedRows } from "@/api/lib/db/executed-rows";
 import {
@@ -64,6 +70,39 @@ const auditIds = async (tx: TestTransaction) =>
     .select({ id: systemAuditRuns.id })
     .from(systemAuditRuns)
     .where(eq(systemAuditRuns.actor, "system:operator-activity"));
+
+type HistoricalAuditOptions = {
+  tx: TestTransaction;
+  bindings: Parameters<typeof createBackgroundAuditRecorder>[0];
+  createdAt: Date;
+  performerId: string | null;
+};
+
+const recordHistoricalAudit = async ({
+  tx,
+  bindings,
+  createdAt,
+  performerId,
+}: HistoricalAuditOptions) => {
+  const resourceId = createSafeId<"chatThread">();
+  await createBackgroundAuditRecorder(bindings)(tx, {
+    action: AUDIT_ACTION.UPDATE,
+    resourceType: AUDIT_RESOURCE_TYPE.CHAT_THREAD,
+    resourceId,
+  });
+  // Owner-only fixture adjustments share the enclosing rollback transaction.
+  const updated = await tx
+    .update(auditLogs)
+    .set({ createdAt, performerId })
+    .where(
+      and(
+        eq(auditLogs.organizationId, bindings.organizationId),
+        eq(auditLogs.resourceId, resourceId),
+      ),
+    )
+    .returning({ id: auditLogs.id });
+  expect(updated).toHaveLength(1);
+};
 
 // Explicit UTC boundaries are independent of the production calendar calculation.
 const daylightSavingDays = [
@@ -143,6 +182,7 @@ describe.skipIf(!enabled)("operator activity database summary", () => {
               userId,
               threadId,
               role: "user",
+              createdAt: new Date(createdAt),
               content: toPersistedChatMessageContentV3({
                 data: [{ type: "text", content: "Activity fixture" }],
               }),
@@ -163,8 +203,8 @@ describe.skipIf(!enabled)("operator activity database summary", () => {
         expect(summary.signups_7d - before.signups_7d).toBe(4);
         expect(summary.chat_turns_1h - before.chat_turns_1h).toBe(4);
         expect(summary.generated_at).toBe(now);
-        expect(summary.sessions_active_5m).toBeNull();
-        expect(summary.users_active_today).toBeNull();
+        expect(summary.users_acting_5m - before.users_acting_5m).toBe(2);
+        expect(summary.users_acting_today - before.users_acting_today).toBe(2);
         expect(summary.tool_calls_1h).toBeNull();
         expect(summary.unavailable_reasons).toEqual(
           ACTIVITY_UNAVAILABLE_REASONS,
@@ -181,6 +221,162 @@ describe.skipIf(!enabled)("operator activity database summary", () => {
     },
   );
 
+  test.each(daylightSavingDays)(
+    "deduplicates human actions across sources and tenants on the Prague day starting $start",
+    async ({ now, start }) => {
+      await withRollback(async (tx) => {
+        const nowMs = Date.parse(now);
+        const startMs = Date.parse(start);
+        const before = await readAuditedActivitySummary(tx, nowMs);
+        const cases = [
+          { at: startMs - 1, actor: "user", source: "both", lifecycle: "live" },
+          { at: startMs, actor: "user", source: "both", lifecycle: "live" },
+          {
+            at: nowMs - 5 * 60_000 - 1,
+            actor: "user",
+            source: "both",
+            lifecycle: "live",
+          },
+          {
+            at: nowMs - 5 * 60_000,
+            actor: "user",
+            source: "both",
+            lifecycle: "live",
+          },
+          { at: nowMs - 1, actor: "user", source: "both", lifecycle: "live" },
+          { at: nowMs, actor: "user", source: "both", lifecycle: "live" },
+          { at: nowMs + 1, actor: "user", source: "both", lifecycle: "live" },
+          { at: nowMs - 1, actor: "agent", source: "both", lifecycle: "live" },
+          {
+            at: nowMs - 1,
+            actor: "user",
+            source: "both",
+            lifecycle: "deleted",
+          },
+          { at: nowMs - 1, actor: "user", source: "chat", lifecycle: "live" },
+          { at: nowMs - 1, actor: "user", source: "audit", lifecycle: "live" },
+        ] as const;
+        const sharedActorId = mintAuthProviderId<"user">();
+        for (const tenant of [0, 1]) {
+          const organizationId = mintAuthProviderId<"organization">();
+          await tx.insert(organization).values({
+            id: organizationId,
+            name: `Action fixture ${tenant}`,
+            slug: organizationId,
+            createdAt: new Date(startMs),
+          });
+          await recordHistoricalAudit({
+            tx,
+            bindings: {
+              organizationId,
+              workspaceId: null,
+              userId: sharedActorId,
+              execution: {
+                performer: { type: "user", id: sharedActorId },
+                trigger: { type: "direct" },
+              },
+            },
+            createdAt: new Date(nowMs - 1),
+            performerId: null,
+          });
+          const recordedUserId = mintAuthProviderIdValue();
+          await tx.insert(user).values({
+            id: recordedUserId,
+            name: "Recorded audit owner",
+            email: `${recordedUserId}@example.test`,
+            createdAt: new Date(startMs - 1),
+          });
+          for (const { at, actor, source, lifecycle } of cases) {
+            const userId = mintAuthProviderId<"user">();
+            await tx.insert(user).values({
+              id: userId,
+              name: "Action fixture",
+              email: `${userId}@example.test`,
+              createdAt: new Date(startMs - 1),
+              deletedAt: lifecycle === "deleted" ? new Date(nowMs) : null,
+            });
+            const threadId = createSafeId<"chatThread">();
+            await tx.insert(chatThreads).values({
+              id: threadId,
+              userId,
+              organizationId,
+              title: "Action fixture",
+            });
+            // Repeated rows and both sources must still count this actor once.
+            for (const repetition of [0, 1]) {
+              if (source !== "audit") {
+                await tx.insert(chatMessages).values({
+                  id: createSafeId<"chatMessage">(),
+                  threadId,
+                  userId,
+                  role: actor === "user" ? "user" : "assistant",
+                  createdAt: new Date(at),
+                  content: toPersistedChatMessageContentV3({
+                    data: [{ type: "text", content: "Action fixture" }],
+                  }),
+                });
+              }
+              if (source !== "chat") {
+                await recordHistoricalAudit({
+                  tx,
+                  bindings: {
+                    organizationId,
+                    workspaceId: null,
+                    userId: repetition === 0 ? recordedUserId : userId,
+                    execution: {
+                      performer:
+                        actor === "user"
+                          ? { type: "user", id: userId }
+                          : { type: "agent", id: userId, name: null },
+                      trigger: { type: "direct" },
+                    },
+                  },
+                  createdAt: new Date(at),
+                  performerId: repetition === 0 ? userId : null,
+                });
+              }
+            }
+          }
+        }
+        const summary = await readAuditedActivitySummary(tx, nowMs);
+        expect(summary.users_acting_5m - before.users_acting_5m).toBe(11);
+        expect(summary.users_acting_today - before.users_acting_today).toBe(15);
+      });
+    },
+  );
+
+  test("the five-minute window can include actions before the Prague day starts", async () => {
+    await withRollback(async (tx) => {
+      const now = Date.parse("2026-03-28T23:02:00Z");
+      const before = await readAuditedActivitySummary(tx, now);
+      const organizationId = mintAuthProviderId<"organization">();
+      await tx.insert(organization).values({
+        id: organizationId,
+        name: "Midnight fixture",
+        slug: organizationId,
+        createdAt: new Date(now),
+      });
+      const userId = mintAuthProviderId<"user">();
+      await recordHistoricalAudit({
+        tx,
+        bindings: {
+          organizationId,
+          workspaceId: null,
+          userId,
+          execution: {
+            performer: { type: "user", id: userId },
+            trigger: { type: "direct" },
+          },
+        },
+        createdAt: new Date("2026-03-28T22:59:59.999Z"),
+        performerId: null,
+      });
+      const summary = await readAuditedActivitySummary(tx, now);
+      expect(summary.users_acting_5m - before.users_acting_5m).toBe(1);
+      expect(summary.users_acting_today - before.users_acting_today).toBe(0);
+    });
+  });
+
   test("an empty future window returns zero counts and records an access audit", async () => {
     await withRollback(async (tx) => {
       const previous = new Set((await auditIds(tx)).map(({ id }) => id));
@@ -191,6 +387,8 @@ describe.skipIf(!enabled)("operator activity database summary", () => {
       expect(summary.signups_today).toBe(0);
       expect(summary.signups_7d).toBe(0);
       expect(summary.chat_turns_1h).toBe(0);
+      expect(summary.users_acting_5m).toBe(0);
+      expect(summary.users_acting_today).toBe(0);
       const audits = await tx
         .select()
         .from(systemAuditRuns)
@@ -303,6 +501,8 @@ describe.skipIf(!enabled)("operator activity database summary", () => {
             expect(rendered).not.toContain("Seq Scan");
             expect(rendered).toContain("Index");
             expect(rendered).toContain("chat_turns");
+            expect(rendered).toContain("chat_messages");
+            expect(rendered).toContain("audit_logs");
             tx.rollback();
           }),
         catch: (cause) => cause,
