@@ -178,17 +178,8 @@ export const resolveEntityActivityDestination = (
 export type WorkspaceActivity =
   WebApiRoutes["workspaces"][":workspaceId"]["activity"]["get"]["response"][200]["items"][number];
 
-export const matterActivityItemVisible = (
-  item: WorkspaceActivity,
-  legalListsEnabled: boolean,
-): boolean =>
+export const matterActivityItemVisible = (item: WorkspaceActivity): boolean =>
   item.type === "thread" ||
   item.entityKind !== "task" ||
   item.listItemType === null ||
-  item.listItemType === "task" ||
-  legalListsEnabled;
-
-/** Only list items other than tasks need the caller's Lists decision. */
-export const matterActivityNeedsLegalListsDecision = (
-  items: readonly WorkspaceActivity[],
-): boolean => items.some((item) => !matterActivityItemVisible(item, false));
+  item.listItemType === "task";

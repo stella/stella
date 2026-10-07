@@ -598,6 +598,7 @@ describe("merge-base preparation integration", () => {
       );
       const prepare = (script: string) =>
         run(["bash", script], {
+          GH_RETRY_SCRIPT: path.join(root, "scripts/gh-retry.sh"),
           PATH: `${path.join(directory, "bin")}:${runnerPath}`,
           BASE_SHA: recordedBase,
           GITHUB_EVENT_NAME: "pull_request",

@@ -352,6 +352,7 @@ type Messages = {
     };
     "view": {
       "chooseList": "Choose a list";
+      "createList": "Create a list";
       "evidenceList": "Facts from";
       "noLists": "This matter has no lists";
       "pickList": "Choose the list whose facts this matter's documents are checked against.";
@@ -1703,6 +1704,7 @@ type Messages = {
     "deletedCount": "{count, plural, one {# item} other {# items}} deleted";
     "description": "Description";
     "details": "Details";
+    "detailsHiddenFeatureUnavailable": "Details hidden: feature not enabled";
     "disconnect": "Disconnect";
     "dismiss": "Dismiss";
     "displayName": "Display name";
