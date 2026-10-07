@@ -428,6 +428,36 @@ test("unknown non-HTTP errors and errors after a non-transient HTTP response fai
   }
 });
 
+test("downloads refuse a named output file before calling gh", async () => {
+  const directory = await mkdtemp(path.join(tmpdir(), "gh-retry-output-"));
+  const marker = path.join(directory, "gh-called");
+  await writeFile(path.join(directory, "gh"), `#!/bin/sh\ntouch "${marker}"\n`);
+  await chmod(path.join(directory, "gh"), 0o700);
+  try {
+    for (const flag of [
+      ["-O", "asset.txt"],
+      ["-Oasset.txt"],
+      ["--output", "asset.txt"],
+      ["--output=asset.txt"],
+    ]) {
+      const result = Bun.spawnSync(
+        ["bash", HELPER, "release", "download", "v1", ...flag],
+        {
+          cwd: directory,
+          env: { ...Bun.env, PATH: `${directory}:${Bun.env["PATH"] ?? ""}` },
+          stdout: "pipe",
+          stderr: "pipe",
+        },
+      );
+      expect(result.exitCode).toBe(2);
+      expect(result.stderr.toString()).toContain("--output is not supported");
+      expect(await Bun.file(marker).exists()).toBe(false);
+    }
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
 test("transport recovery keeps writes single-shot even when HTTP recovery admits them", async () => {
   for (const args of [
     ["api", "graphql", "-f", "query=query { viewer { login } }"],

@@ -116,6 +116,11 @@ if [[ "${args[0]}" == run || "${args[0]}" == release ]] && [[ "${args[1]:-}" == 
   for ((i=2; i<${#args[@]}; i+=1)); do
     case "${args[i]}" in
       --) break ;;
+      # A named output file is written in place and would keep a failed
+      # attempt's partial bytes; downloads go through --dir only.
+      -O|-O*|--output|--output=*)
+        echo "GitHub downloads through the retry helper use --dir; --output is not supported" >&2
+        exit 2 ;;
       -p|--pattern|-n|--name|-R|--repo) i=$((i+1)) ;;
       -D|--dir) destination="${args[i+1]}"; args[i+1]="$scratch/download"; has_directory=true; i=$((i+1)) ;;
       --dir=*) destination="${args[i]#*=}"; args[i]="--dir=$scratch/download"; has_directory=true ;;
