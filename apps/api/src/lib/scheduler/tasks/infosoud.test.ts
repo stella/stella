@@ -176,6 +176,7 @@ const fixture = (count = 3) => {
       },
     }),
   });
+  const locks: string[] = [];
   const lock = () => ({
     from: () => ({
       where: (condition: SQL) => ({
@@ -196,6 +197,7 @@ const fixture = (count = 3) => {
           if (fence === undefined) {
             panic("Expected a sync attempt fence");
           }
+          locks.push("tracked-case");
           const awaiting =
             row.lastSyncAttemptAt === null ||
             row.lastSyncAttemptAt < new Date(fence);
@@ -205,6 +207,13 @@ const fixture = (count = 3) => {
     }),
   });
   const tx = asTestRaw<Transaction>({
+    execute: async (statement: SQL) => {
+      expect(new PgDialect().sqlToQuery(statement).sql).toContain(
+        '"workspaces"',
+      );
+      locks.push("workspace");
+      return [];
+    },
     select: lock,
     update,
     query: {
@@ -238,7 +247,7 @@ const fixture = (count = 3) => {
     logger: { warn, info },
     signal: controller.signal,
   });
-  return { context, controller, rows, pages, writes, warn, info };
+  return { context, controller, rows, pages, writes, warn, info, locks };
 };
 
 const stampCases = {
@@ -291,6 +300,21 @@ test.each(
     });
   },
 );
+
+test("locks the workspace before the tracked case, like the manual re-import", async () => {
+  const { context, locks } = fixture(1);
+  const importAgenda = mock(async () => {
+    // The import's own workspace lock re-enters the one already held.
+    expect(locks).toEqual(["workspace", "tracked-case"]);
+    return successfulImport;
+  });
+  const task = createSyncInfoSoudTrackedCasesTask({
+    searchCaseWithHearings: async () => lookup,
+    importAgendaItems: importAgenda,
+  });
+  expect((await task(context)).isOk()).toBe(true);
+  expect(importAgenda).toHaveBeenCalledTimes(1);
+});
 
 test("superseded rows do not inflate success or failure counts in a mixed page", async () => {
   const { context, rows, warn, info } = fixture();

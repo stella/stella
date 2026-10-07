@@ -5,6 +5,7 @@ import type { InfoSoudClient } from "@stll/infosoud";
 
 import type { Transaction } from "@/api/db/root";
 import { infoSoudTrackedCases } from "@/api/db/schema";
+import { lockWorkspacesForEntityCap } from "@/api/lib/entity-cap-lock";
 import { errorTag } from "@/api/lib/errors/utils";
 import {
   buildInfoSoudAgendaItems,
@@ -114,7 +115,11 @@ export const createSyncInfoSoudTrackedCasesTask =
           const importResult = await db.transaction(async (tx) => {
             // A newer writer may have claimed the case during the court
             // lookup. Re-assert the attempt fence under the row lock before
-            // importing, so a superseded attempt writes nothing at all.
+            // importing, so a superseded attempt writes nothing at all. The
+            // workspace row is locked first: the manual re-import holds it
+            // while upserting the tracked case, so the reverse order would
+            // deadlock against that path.
+            await lockWorkspacesForEntityCap(tx, [trackedCase.workspaceId]);
             const awaiting = await lockAwaitingTrackedCase(
               tx,
               trackedCase.id,
