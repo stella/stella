@@ -33,7 +33,9 @@ jobs:
       - name: Install PDF extractor
         run: |
           sudo apt-get update
-          sudo apt-get install --no-install-recommends -y poppler-utils=24.02.0-1ubuntu9.9
+          # Unpinned: the archive drops superseded versions on every security update.
+          sudo apt-get install --no-install-recommends -y poppler-utils
+          pdftotext -v
       - name: Fetch public source documents for verification
         timeout-minutes: 100
         env:
