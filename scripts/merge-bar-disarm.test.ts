@@ -171,6 +171,8 @@ describe("holding pull requests", () => {
     { queued: true, change: "head", at: "disable" },
     { queued: false, change: "rollup", at: "disable" },
     { queued: true, change: "rollup", at: "disable" },
+    { queued: false, change: "rollup-unavailable", at: "disable" },
+    { queued: true, change: "rollup-unavailable", at: "disable" },
     { queued: true, change: "head", at: "dequeue" },
     { queued: true, change: "rollup", at: "dequeue" },
     { queued: false, change: "head", at: "final-read" },
@@ -181,12 +183,14 @@ describe("holding pull requests", () => {
       let armed = true;
       let queued = scenario.queued;
       let head = "a".repeat(40);
-      let rollup = "FAILURE";
+      let rollup: string | null = "FAILURE";
       let reads = 0;
       const writes: string[] = [];
       const change = () => {
         if (scenario.change === "head") {
           head = "b".repeat(40);
+        } else if (scenario.change === "rollup-unavailable") {
+          rollup = null;
         } else {
           rollup = "SUCCESS";
         }
@@ -207,7 +211,11 @@ describe("holding pull requests", () => {
               commits: {
                 nodes: [
                   {
-                    commit: { oid: head, statusCheckRollup: { state: rollup } },
+                    commit: {
+                      oid: head,
+                      statusCheckRollup:
+                        rollup === null ? null : { state: rollup },
+                    },
                   },
                 ],
               },

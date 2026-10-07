@@ -1551,6 +1551,14 @@ type DisarmPullRequestOptions = {
 
 const checkDisarmHead = (raw: unknown, expectedHeadSha: string) => {
   const pull = readRecord(raw, "disarm pull request");
+  if (pull["state"] !== "OPEN" || pull["headRefOid"] !== expectedHeadSha) {
+    return Result.err(
+      new DisarmError({
+        message:
+          "NOT DISARMED: expected head changed or its rollup is no longer red",
+      }),
+    );
+  }
   const commits = readRecord(pull["commits"], "disarm commits")["nodes"];
   if (!Array.isArray(commits) || commits.length !== 1) {
     return Result.err(
@@ -1561,13 +1569,14 @@ const checkDisarmHead = (raw: unknown, expectedHeadSha: string) => {
     readRecord(commits[0], "disarm commit node")["commit"],
     "disarm commit",
   );
-  const rollup = readRecord(commit["statusCheckRollup"], "disarm head rollup");
-  if (
-    pull["state"] !== "OPEN" ||
-    pull["headRefOid"] !== expectedHeadSha ||
-    commit["oid"] !== expectedHeadSha ||
-    rollup["state"] !== "FAILURE"
-  ) {
+  const rawRollup = commit["statusCheckRollup"];
+  if (rawRollup === null || rawRollup === undefined) {
+    return Result.err(
+      new DisarmError({ message: "NOT DISARMED: head rollup unavailable" }),
+    );
+  }
+  const rollup = readRecord(rawRollup, "disarm head rollup");
+  if (commit["oid"] !== expectedHeadSha || rollup["state"] !== "FAILURE") {
     return Result.err(
       new DisarmError({
         message:
