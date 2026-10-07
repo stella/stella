@@ -74,7 +74,7 @@ type ImportInfoSoudAgendaItemsResult =
       status: 400;
     };
 
-export const INFO_SOUD_EXTERNAL_SOURCE = "infosoud" as const;
+const INFO_SOUD_EXTERNAL_SOURCE = "infosoud" as const;
 export const buildInfoSoudAgendaItems = (
   caseResult: CaseSearchResult,
   hearings: HearingEvent[],

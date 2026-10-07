@@ -27,8 +27,16 @@ import { eslintCompatPlugin } from "@oxlint/plugins";
 // (defaults below). Skipped contexts: test files / fixtures,
 // configured via oxlint.config.ts overrides.
 
-import { factoriesWhere } from "../apps/api/src/lib/safe-handler-factories.ts";
-import { getPropertyName as getIdentifierName } from "./utils.ts";
+import {
+  factoriesWhere,
+  isSafeHandlerFactory,
+  SAFE_HANDLER_FACTORIES,
+} from "../apps/api/src/lib/safe-handler-factories.ts";
+import {
+  getPropertyName as getIdentifierName,
+  resolveImport,
+  canonicalModuleId,
+} from "./utils.ts";
 
 const DEFAULT_NAMES = new Set(["workspaceId", "organizationId", "userId"]);
 
@@ -38,8 +46,6 @@ const DEFAULT_NAMES = new Set(["workspaceId", "organizationId", "userId"]);
 const AUTHENTICATED_HANDLER_FACTORIES = new Set<string>(
   factoriesWhere(({ context }) => context === "authenticated"),
 );
-
-const CONTEXT_TYPED_PROPERTY_NAMES = new Set(["execute"]);
 
 const containsBareString = (typeNode) => {
   if (!typeNode) {
@@ -72,41 +78,27 @@ const isBareStringAnnotation = (typeAnnotation) => {
   return containsBareString(inner);
 };
 
-// The last segment of the callee (`factory` for both `factory()` and
-// `lib.factory()`), unlike the shared dotted-chain getCalleeName.
-const calleeTerminalName = (callee) => {
-  if (!callee) {
-    return null;
-  }
-  if (callee.type === "Identifier") {
-    return callee.name;
-  }
-  if (callee.type === "MemberExpression" && !callee.computed) {
-    return getIdentifierName(callee.property);
-  }
-  return null;
-};
-
-const isKnownValidatedContextParam = (functionNode) => {
+const isKnownValidatedContextParam = (functionNode, context) => {
   const parent = functionNode.parent;
   if (!parent) {
     return false;
   }
 
+  if (parent.type !== "CallExpression") {
+    return false;
+  }
+  const binding = resolveImport(context, parent.callee);
   if (
-    parent.type === "CallExpression" &&
-    AUTHENTICATED_HANDLER_FACTORIES.has(calleeTerminalName(parent.callee))
+    binding === null ||
+    !isSafeHandlerFactory(binding.imported) ||
+    !AUTHENTICATED_HANDLER_FACTORIES.has(binding.imported)
   ) {
-    return true;
+    return false;
   }
-
-  const propertyName =
-    parent.type === "Property" ? getIdentifierName(parent.key) : null;
-  if (propertyName !== null && CONTEXT_TYPED_PROPERTY_NAMES.has(propertyName)) {
-    return true;
-  }
-
-  return false;
+  return (
+    binding.moduleId ===
+    canonicalModuleId(SAFE_HANDLER_FACTORIES[binding.imported].module, "")
+  );
 };
 
 const checkUnannotatedObjectPattern = (
@@ -228,8 +220,10 @@ export default eslintCompatPlugin({
           if (!Array.isArray(node.params)) {
             return;
           }
-          const allowContextualObjectPattern =
-            isKnownValidatedContextParam(node);
+          const allowContextualObjectPattern = isKnownValidatedContextParam(
+            node,
+            context,
+          );
           for (const param of node.params) {
             if (param.type === "ObjectPattern") {
               checkObjectPattern(context, param, triggerNames, {

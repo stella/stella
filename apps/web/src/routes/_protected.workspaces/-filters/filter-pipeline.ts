@@ -175,7 +175,7 @@ const passesLeadFilter = (
   }
 };
 
-export const isMattersFiltersActive = (filters: MattersFilters): boolean =>
+const isMattersFiltersActive = (filters: MattersFilters): boolean =>
   filters.lastActivityAt !== undefined ||
   filters.createdAt !== undefined ||
   filters.client !== undefined ||

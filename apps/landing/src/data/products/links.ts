@@ -13,8 +13,7 @@ export const productHref = (slug: ProductSlug, locale: Locale): string =>
 /**
  * Every product page's URL for one locale. Astro components call
  * `productHref` directly; this exists for the React islands, which have no
- * locale of their own and take the URLs as a prop (see `resolveProductEyebrows`
- * in `data/site-nav.ts`, whose product names ride alongside).
+ * locale of their own and take the URLs as a prop.
  */
 export const resolveProductHrefs = (locale: Locale) =>
   ({

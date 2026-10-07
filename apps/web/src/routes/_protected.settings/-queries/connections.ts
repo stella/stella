@@ -12,7 +12,7 @@ export const connectedAppsKeys = {
 type ListConnectedAppsFn = (typeof api.me)["oauth-connections"]["get"];
 
 /** The session user's authorized OAuth clients ("connected apps"). */
-export type ConnectedAppsResponse = NonNullable<
+type ConnectedAppsResponse = NonNullable<
   Awaited<ReturnType<ListConnectedAppsFn>>["data"]
 >;
 

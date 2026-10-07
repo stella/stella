@@ -35,7 +35,7 @@ export const hasAutomaticApproval = ({
  * (a plain string literal, no shared runtime logic to import across the
  * apps/api - apps/web boundary).
  */
-export const SUGGEST_CHANGES_AUTHOR_NAME_REQUIRED_CODE = "author_name_required";
+const SUGGEST_CHANGES_AUTHOR_NAME_REQUIRED_CODE = "author_name_required";
 
 export type SuggestChangesApplyOutcome =
   | {

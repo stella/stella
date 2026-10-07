@@ -47,7 +47,7 @@ export type FolioCollaborationRoom = {
   seedDocumentBuffer: ArrayBuffer;
 };
 
-export type FolioCollaborationFlush = {
+type FolioCollaborationFlush = {
   documentMutationRevision: number;
   localMutationRevision: number;
   snapshotRevision: number;
