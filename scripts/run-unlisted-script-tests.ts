@@ -24,15 +24,16 @@ export const parseScriptTestArguments = (
   args: readonly string[],
 ): ScriptTestArguments => {
   let timeout: number | undefined;
-  for (let index = 0; index < args.length; index += 1) {
-    if (args[index] !== "--timeout") {
-      return { type: "invalid", message: `unknown argument: ${args[index]}` };
+  const argumentsIterator = args.values();
+  for (const argument of argumentsIterator) {
+    if (argument !== "--timeout") {
+      return { type: "invalid", message: `unknown argument: ${argument}` };
     }
     if (timeout !== undefined) {
       return { type: "invalid", message: "--timeout may be supplied once" };
     }
-    const raw = args[index + 1];
-    if (raw === undefined || !/^\d+$/u.test(raw)) {
+    const raw = argumentsIterator.next().value;
+    if (typeof raw !== "string" || !/^\d+$/u.test(raw)) {
       return {
         type: "invalid",
         message: "--timeout requires a positive integer",
@@ -46,7 +47,6 @@ export const parseScriptTestArguments = (
       };
     }
     timeout = parsed;
-    index += 1;
   }
   return { type: "valid", timeout };
 };
