@@ -3203,6 +3203,10 @@
     "seconds": 1,
     "source": "estimated"
   },
+  "src/handlers/organization-settings/ai-availability/get.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
   "src/handlers/organization-settings/ai-config-decision.test.ts": {
     "seconds": 0.283187,
     "source": "estimated"
@@ -3811,10 +3815,6 @@
     "seconds": 1,
     "source": "estimated"
   },
-  "src/handlers/visual-sandbox/treemap-model.test.ts": {
-    "seconds": 1,
-    "source": "estimated"
-  },
   "src/handlers/visual-sandbox/literal-links.test.ts": {
     "seconds": 1,
     "source": "estimated"
@@ -3836,6 +3836,10 @@
     "source": "estimated"
   },
   "src/handlers/visual-sandbox/srcdoc.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
+  "src/handlers/visual-sandbox/treemap-model.test.ts": {
     "seconds": 1,
     "source": "estimated"
   },
