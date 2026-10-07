@@ -1,78 +1,28 @@
 import { panic } from "better-result";
 import { expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
-import ts from "typescript";
 import * as v from "valibot";
 
-const canary = ts.createSourceFile(
-  "mcp-canary.ts",
-  readFileSync(
-    new URL("../apps/api/src/scripts/mcp-canary.ts", import.meta.url),
-    "utf-8",
-  ),
-  ts.ScriptTarget.Latest,
-  true,
-);
-const journeyCredentials = (source: ts.SourceFile) => {
-  const credentials = new Set<string>();
-  const journeyCalls = new Set<string>();
-  const isEnvironment = (node: ts.Node) =>
-    ts.isPropertyAccessExpression(node) &&
-    ts.isIdentifier(node.expression) &&
-    node.expression.text === "process" &&
-    node.name.text === "env";
-  const environmentRead = (node: ts.Node) => {
-    if (
-      ts.isElementAccessExpression(node) &&
-      isEnvironment(node.expression) &&
-      ts.isStringLiteral(node.argumentExpression)
-    ) {
-      return node.argumentExpression.text;
-    }
-    if (ts.isPropertyAccessExpression(node) && isEnvironment(node.expression)) {
-      return node.name.text;
-    }
-    return undefined;
-  };
-  const collect = (node: ts.Node) => {
-    const name = environmentRead(node);
-    if (name !== undefined) {
-      credentials.add(name);
-    }
-    ts.forEachChild(node, collect);
-  };
-  const isJourney = (name: string) => /^run\w*Journeys?$/u.test(name);
-  const visit = (node: ts.Node) => {
-    if (
-      ts.isCallExpression(node) &&
-      ts.isIdentifier(node.expression) &&
-      isJourney(node.expression.text)
-    ) {
-      journeyCalls.add(node.expression.text);
-      collect(node);
-    }
-    if (
-      ts.isVariableDeclaration(node) &&
-      ts.isIdentifier(node.name) &&
-      isJourney(node.name.text) &&
-      node.initializer !== undefined
-    ) {
-      collect(node.initializer);
-    }
-    if (
-      ts.isFunctionDeclaration(node) &&
-      node.name !== undefined &&
-      isJourney(node.name.text) &&
-      node.body !== undefined
-    ) {
-      collect(node.body);
-    }
-    ts.forEachChild(node, visit);
-  };
-  visit(source);
-  return { credentials, journeyCalls };
-};
-const { credentials, journeyCalls } = journeyCredentials(canary);
+import { MCP_CANARY_JOURNEY_CREDENTIALS } from "../apps/api/src/scripts/mcp-canary-credentials";
+
+type JourneyRequirements = Record<
+  string,
+  {
+    environment: "all" | "staging" | "production";
+    env: Record<string, string>;
+  }
+>;
+const requiredFor = (
+  environment: string,
+  journeys: JourneyRequirements = MCP_CANARY_JOURNEY_CREDENTIALS,
+) =>
+  Object.values(journeys)
+    .filter(
+      (journey) =>
+        journey.environment === "all" || journey.environment === environment,
+    )
+    .flatMap(({ env }) => Object.values(env));
+const credentials = requiredFor("staging");
 
 const parseWorkflow = (file: string) =>
   v.parse(
@@ -104,11 +54,12 @@ const canaryEnv = (file: string) =>
     .find(({ run }) => run === "bun run canary:mcp")?.env ??
   panic(`Missing MCP canary environment: ${file}`);
 const staging = canaryEnv("deploy-staging.yml");
-const assertCredentials = (env: Record<string, string>) => {
-  expect(env["MCP_CANARY_REQUIRE_CREDENTIALS"]).toBe("true");
-  expect(journeyCalls.size).toBeGreaterThan(0);
-  expect(credentials.size).toBeGreaterThan(0);
-  for (const credential of credentials) {
+const assertCredentials = (
+  env: Record<string, string>,
+  required = credentials,
+) => {
+  expect(required.length).toBeGreaterThan(0);
+  for (const credential of required) {
     expect(
       env[credential],
       `Missing required journey credential: ${credential}`,
@@ -128,6 +79,7 @@ test("staging requiring complete MCP journeys supplies every credential read by 
   expect(credentials).toContain("REVIEW_ACCOUNT_PASSWORD");
   expect(credentials).toContain("APP_REVIEW_ACCOUNT_EMAIL");
   expect(credentials).toContain("MCP_CANARY_CONFIGURED_BASE_URL");
+  expect(staging["MCP_CANARY_REQUIRE_CREDENTIALS"]).toBe("true");
   assertCredentials(staging);
   assertTarget(staging);
   expect(staging["APP_REVIEW_ACCOUNT_EMAIL"]).toBe(
@@ -165,49 +117,28 @@ test("an absent or different configured target withholds review credentials and 
   }
 });
 
-test("credential derivation covers call arguments and journey bodies with both environment access forms", () => {
-  const fixture = ts.createSourceFile(
-    "journeys.ts",
-    `const runExampleJourney = () => process.env.BODY_PASSWORD;
-     function runAnotherJourney() { return process.env["BODY_SECRET"]; }
-     runExampleJourney({ email: process.env["CALL_EMAIL"] });
-     runAnotherJourney({ token: process.env.CALL_TOKEN });`,
-    ts.ScriptTarget.Latest,
-    true,
-  );
-  expect([...journeyCredentials(fixture).credentials].toSorted()).toEqual([
-    "BODY_PASSWORD",
-    "BODY_SECRET",
-    "CALL_EMAIL",
-    "CALL_TOKEN",
-  ]);
+test("production also passes every applicable canonical journey input", () => {
+  assertCredentials(canaryEnv("mcp-canary.yml"), requiredFor("production"));
 });
 
-test("moving environment reads to dot access or into a journey body preserves the derived requirements", () => {
-  const original =
-    'runExampleJourney({ password: process.env["REVIEW_ACCOUNT_PASSWORD"] });';
-  const derive = (source: string) =>
-    [
-      ...journeyCredentials(
-        ts.createSourceFile(
-          "journeys.ts",
-          source,
-          ts.ScriptTarget.Latest,
-          true,
-        ),
-      ).credentials,
-    ].toSorted();
-  const expected = derive(original);
-  expect(expected).toEqual(["REVIEW_ACCOUNT_PASSWORD"]);
-  for (const mutant of [
-    original.replace(
-      'process.env["REVIEW_ACCOUNT_PASSWORD"]',
-      "process.env.REVIEW_ACCOUNT_PASSWORD",
-    ),
-    'const runExampleJourney = () => process.env["REVIEW_ACCOUNT_PASSWORD"]; runExampleJourney();',
-    'function runExampleJourney() { return process.env["REVIEW_ACCOUNT_PASSWORD"]; } runExampleJourney();',
+test("adding a journey requirement without workflow wiring violates complete coverage", () => {
+  const added = {
+    ...MCP_CANARY_JOURNEY_CREDENTIALS,
+    addedJourney: {
+      environment: "all",
+      env: { password: "ADDED_JOURNEY_PASSWORD" },
+    },
+  } as const satisfies JourneyRequirements;
+  for (const [environment, file] of [
+    ["staging", "deploy-staging.yml"],
+    ["production", "mcp-canary.yml"],
   ]) {
-    expect(mutant).not.toBe(original);
-    expect(derive(mutant)).toEqual(expected);
+    if (environment === undefined || file === undefined) {
+      panic("Missing workflow fixture");
+    }
+    expect(requiredFor(environment, added)).toContain("ADDED_JOURNEY_PASSWORD");
+    expect(() =>
+      assertCredentials(canaryEnv(file), requiredFor(environment, added)),
+    ).toThrow("Missing required journey credential: ADDED_JOURNEY_PASSWORD");
   }
 });
