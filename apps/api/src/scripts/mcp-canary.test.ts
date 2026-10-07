@@ -58,7 +58,11 @@ type ReviewFailure = {
   kind: "transport" | "http" | "malformed";
 };
 
-type ReviewCallbackMutation = "missing-state" | "wrong-state";
+type ReviewCallbackMutation =
+  | "missing-state"
+  | "wrong-state"
+  | "wrong-origin"
+  | "wrong-path";
 type ReviewAttack = "maliciousDiscovery" | "maliciousConsent";
 
 const REVIEW_ATTACKS: readonly ReviewAttack[] = [
@@ -68,6 +72,8 @@ const REVIEW_ATTACKS: readonly ReviewAttack[] = [
 const REVIEW_CALLBACK_MUTATIONS: readonly ReviewCallbackMutation[] = [
   "missing-state",
   "wrong-state",
+  "wrong-origin",
+  "wrong-path",
 ];
 
 const observedRequest = (
@@ -136,6 +142,48 @@ const readFakeRequestBody = async (
     return body.toString();
   }
   return request ? await request.clone().text() : "";
+};
+
+type ReviewCallbackUrlOptions = {
+  callback: string | null | undefined;
+  state: string | null | undefined;
+  mutation: ReviewCallbackMutation | undefined;
+  maliciousConsent: boolean | undefined;
+};
+const reviewCallbackUrl = ({
+  callback,
+  state,
+  mutation,
+  maliciousConsent,
+}: ReviewCallbackUrlOptions) => {
+  if (!callback || !state) {
+    throw new TypeError("fixture missing callback or state");
+  }
+  const url = new URL(callback);
+  url.searchParams.set("code", "secret-code");
+  url.searchParams.set("state", state);
+  switch (mutation) {
+    case "missing-state":
+      url.searchParams.delete("state");
+      break;
+    case "wrong-state":
+      url.searchParams.set("state", "attacker-state");
+      break;
+    case "wrong-origin":
+      url.hostname = "localhost";
+      break;
+    case "wrong-path":
+      url.pathname = "/unexpected";
+      break;
+    case undefined:
+      break;
+  }
+  if (maliciousConsent) {
+    url.hostname = "foreign.example";
+    url.protocol = "https:";
+    url.port = "";
+  }
+  return url.toString();
 };
 
 const reviewFetcher = (
@@ -254,17 +302,13 @@ const reviewFetcher = (
       const authorizeUrl = authorize ? new URL(authorize.url) : undefined;
       const callback = authorizeUrl?.searchParams.get("redirect_uri");
       const state = authorizeUrl?.searchParams.get("state");
-      let callbackState = state;
-      if (options.callbackMutation === "wrong-state") {
-        callbackState = "attacker-state";
-      }
-      if (options.callbackMutation === "missing-state") {
-        callbackState = null;
-      }
       response = json({
-        url: options.maliciousConsent
-          ? `https://foreign.example/callback?code=secret-code&state=${state}`
-          : `${callback}?code=secret-code${callbackState ? `&state=${callbackState}` : ""}`,
+        url: reviewCallbackUrl({
+          callback,
+          state,
+          mutation: options.callbackMutation,
+          maliciousConsent: options.maliciousConsent,
+        }),
       });
     } else if (url.pathname === "/api/auth/oauth2/token") {
       step = "token";
@@ -275,7 +319,7 @@ const reviewFetcher = (
           method: v.string(),
           params: v.optional(
             v.object({
-              name: v.optional(v.string()),
+              name: v.optional(v.picklist(REVIEW_REQUIRED_TOOLS)),
               arguments: v.optional(
                 v.object({
                   task_id: v.optional(v.string()),
@@ -341,7 +385,7 @@ const reviewFetcher = (
             step = "cleanup";
             structuredContent = { deleted: true };
             break;
-          default:
+          case undefined:
             throw new TypeError("fixture received an unknown tool");
         }
         response = json({
@@ -888,6 +932,12 @@ describe("restricted review-account journey", () => {
         status: "failed",
         name: "restricted account: callback",
       });
+      // A receiver rejection or fetch failure reports a different cause: this
+      // assertion pins rejection at the validation boundary, before delivery.
+      expect(results.at(-1)?.detail).toContain(
+        "expected the owned loopback callback and matching state",
+      );
+      expect(JSON.stringify(results)).not.toContain(REVIEW_PASSWORD);
     },
   );
 });
