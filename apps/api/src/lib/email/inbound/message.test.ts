@@ -2,6 +2,8 @@ import { describe, expect, test } from "bun:test";
 import assert from "node:assert/strict";
 import PostalMime from "postal-mime";
 
+import { sanitizeFilename } from "@/api/lib/sanitize-filename";
+
 import { INBOUND_MAIL_LIMITS } from "./limits";
 import type { InboundMessageError } from "./message";
 import { parseInboundMessage } from "./message";
@@ -99,7 +101,7 @@ describe("inbound MIME normalization", () => {
       expect(parsed.message.html).toContain("Přiložený návrh.");
       expect(parsed.message.attachments).toEqual([
         {
-          fileName: "návrh.pdf",
+          fileName: sanitizeFilename("návrh.pdf"),
           mimeType: "application/pdf",
           bytes: bytes("%PDF-1.7\nfixture\n"),
         },
