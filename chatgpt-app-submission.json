@@ -459,7 +459,7 @@
         "destructiveHint": false
       },
       "justifications": {
-        "read_only_justification": "Validates the target and opens a file picker without modifying the document.",
+        "read_only_justification": "Returns file-comparison panel metadata without uploading files or modifying stored documents.",
         "open_world_justification": "Operates within stella’s private workspace and does not change public internet or third-party state.",
         "destructive_justification": "Does not delete, revoke access, overwrite irreversibly, or perform another destructive action."
       }
