@@ -316,18 +316,35 @@ describe("changed disarm CLI outcome", () => {
         const executable = path.join(directory, "gh");
         const calls = path.join(directory, "calls.jsonl");
         const marker = path.join(directory, "disabled");
+        const fixturePath = path.join(directory, "fixture.json");
+        writeFileSync(
+          fixturePath,
+          JSON.stringify({
+            calls,
+            marker,
+            before: {
+              data: { repository: { pullRequest: snapshot(head, true) } },
+            },
+            after: {
+              data: {
+                repository: { pullRequest: snapshot("b".repeat(40), false) },
+              },
+            },
+          }),
+        );
         writeFileSync(
           executable,
           `#!/usr/bin/env bun
-import { appendFileSync, existsSync, writeFileSync } from "node:fs";
+import { appendFileSync, existsSync, readFileSync, writeFileSync } from "node:fs";
+const fixture = JSON.parse(readFileSync(${JSON.stringify(fixturePath)}, "utf-8"));
 const args = Bun.argv.slice(2);
-appendFileSync(process.env.FIXTURE_CALLS, JSON.stringify(args) + "\\n");
+appendFileSync(fixture.calls, JSON.stringify(args) + "\\n");
 if (args.some(arg => arg.includes("disablePullRequestAutoMerge"))) {
-  writeFileSync(process.env.FIXTURE_MARKER, "disabled");
+  writeFileSync(fixture.marker, "disabled");
   console.log(JSON.stringify({data:{}}));
 } else {
   const query = args.find(arg => arg.startsWith("query=")) || "";
-  const snapshot = JSON.parse(existsSync(process.env.FIXTURE_MARKER) ? process.env.FIXTURE_AFTER : process.env.FIXTURE_BEFORE);
+  const snapshot = existsSync(fixture.marker) ? fixture.after : fixture.before;
   if (!query.includes("id state headRefOid")) delete snapshot.data.repository.pullRequest.state;
   if (!query.includes("commits(last:1)")) delete snapshot.data.repository.pullRequest.commits;
   console.log(JSON.stringify(snapshot));
@@ -351,16 +368,6 @@ if (args.some(arg => arg.includes("disablePullRequestAutoMerge"))) {
               NODE_ENV: "test",
               STELLA_LOCAL_DEV: "1",
               STELLA_MERGE_BAR_TEST_SKIP_FRESHNESS: "1",
-              FIXTURE_CALLS: calls,
-              FIXTURE_MARKER: marker,
-              FIXTURE_BEFORE: JSON.stringify({
-                data: { repository: { pullRequest: snapshot(head, true) } },
-              }),
-              FIXTURE_AFTER: JSON.stringify({
-                data: {
-                  repository: { pullRequest: snapshot("b".repeat(40), false) },
-                },
-              }),
             },
             stdout: "pipe",
             stderr: "pipe",

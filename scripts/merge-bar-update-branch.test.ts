@@ -520,22 +520,40 @@ describe("branch-update CLI against a hermetic gh executable", () => {
         const executable = path.join(directory, "gh");
         const callsPath = path.join(directory, "calls.jsonl");
         const stateRoot = path.join(directory, "state");
+        const fixturePath = path.join(directory, "fixture.json");
+        writeFileSync(
+          fixturePath,
+          JSON.stringify({
+            callsPath,
+            status: scenario.status,
+            exitCode: scenario.exitCode,
+            pr: {
+              state: "open",
+              head: {
+                sha: scenario.headSha,
+                repo: { full_name: scenario.headRepository },
+              },
+              base: { repo: { full_name: REPO } },
+            },
+          }),
+        );
         writeFileSync(
           executable,
           `#!/usr/bin/env bun
-import { appendFileSync } from "node:fs";
+import { appendFileSync, readFileSync } from "node:fs";
+const fixture = JSON.parse(readFileSync(${JSON.stringify(fixturePath)}, "utf-8"));
 const args = Bun.argv.slice(2);
-appendFileSync(process.env.FIXTURE_CALLS, JSON.stringify(args) + "\\n");
+appendFileSync(fixture.callsPath, JSON.stringify(args) + "\\n");
 if (args.includes("PUT")) {
-  console.log("HTTP/2.0 " + process.env.FIXTURE_STATUS + " Status\\n\\n{}");
-  if (Number(process.env.FIXTURE_STATUS) > 0) {
-    console.error("< HTTP/2.0 " + process.env.FIXTURE_STATUS + " Status");
+  console.log("HTTP/2.0 " + fixture.status + " Status\\n\\n{}");
+  if (fixture.status > 0) {
+    console.error("< HTTP/2.0 " + fixture.status + " Status");
   } else {
     console.error('Put "https://github.com/fixture": connection reset by peer');
   }
-  process.exit(Number(process.env.FIXTURE_EXIT));
+  process.exit(fixture.exitCode);
 }
-console.log(process.env.FIXTURE_PR);
+console.log(JSON.stringify(fixture.pr));
 `,
         );
         chmodSync(executable, 0o755);
@@ -554,17 +572,6 @@ console.log(process.env.FIXTURE_PR);
           STELLA_LOCAL_DEV: "1",
           STELLA_MERGE_BAR_TEST_SKIP_FRESHNESS: "1",
           STELLA_MERGE_BAR_STATE_DIR: stateRoot,
-          FIXTURE_CALLS: callsPath,
-          FIXTURE_STATUS: String(scenario.status),
-          FIXTURE_EXIT: String(scenario.exitCode),
-          FIXTURE_PR: JSON.stringify({
-            state: "open",
-            head: {
-              sha: scenario.headSha,
-              repo: { full_name: scenario.headRepository },
-            },
-            base: { repo: { full_name: REPO } },
-          }),
         };
         const first = Bun.spawnSync(command, {
           env,
