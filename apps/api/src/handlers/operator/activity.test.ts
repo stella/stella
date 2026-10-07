@@ -103,15 +103,11 @@ describe("operator activity HTTP boundary", () => {
             ...week,
             email: "private@example.test",
             userId: "private-user",
-            new_paying: 1,
-            mrr: { currency: "EUR", amount_minor: 1200 },
-            trial_to_paid_pct: 50,
           })),
           same_point_last_week: {
             ...summary.same_point_last_week,
             email: "private@example.test",
             userId: "private-user",
-            new_paying: 1,
           },
         };
       },
