@@ -20,6 +20,9 @@ test("flags every spawn shape that walks history", () => {
     `const out = $\`git log -p -- \${file}\`;`,
     `const out = $\`git -C \${repo} log -p\`;`,
     'execSync("git -C repo whatchanged");',
+    'execSync("git --git-dir repo/.git log -p");',
+    `execSync('git -C "my repo" log -p');`,
+    'git("/tmp/repo", "log", "-p");',
     'const hook = `#!/bin/sh\ngit log -p -U0 "$@"\n`;',
   ]) {
     expect(scan(source), source).toHaveLength(1);

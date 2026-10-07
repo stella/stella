@@ -22,11 +22,12 @@ const HISTORY_SUBCOMMANDS = new Set([
   "shortlog",
   "whatchanged",
 ]);
-// Global options that consume the following argument.
-const OPTIONS_WITH_VALUE = new Set(["-C", "-c", "--git-dir", "--work-tree"]);
 const GIT_CALLEE = /git$/iu;
+// Any history subcommand word in the same shell command as `git`. Matching any
+// argument position, not only the first one after the global options, keeps
+// option values, quoting and working directories from hiding the subcommand.
 const SHELL_HISTORY_WALK =
-  /\bgit\s+(?:-[Cc]\s+\S+\s+)*(annotate|blame|log|rev-list|shortlog|whatchanged)\b/u;
+  /\bgit\b[^\n;&|]*?(?<![\w./-])(?:annotate|blame|log|rev-list|shortlog|whatchanged)(?![\w./-])/u;
 
 // Shrink-only. Every entry names why the walk cannot reach the CI checkout.
 export const ALLOWED_HISTORY_WALKS: Readonly<Record<string, string>> = {
@@ -51,29 +52,6 @@ const literalText = (node: ts.Node): string | undefined =>
     ? node.text
     : undefined;
 
-// The first non-option argument after the global options, or undefined when
-// it is not a literal.
-const subcommand = (args: readonly ts.Node[]): string | undefined => {
-  for (let index = 0; index < args.length; index += 1) {
-    const arg = args[index];
-    if (arg === undefined) {
-      return undefined;
-    }
-    const text = literalText(arg);
-    if (text === undefined) {
-      return undefined;
-    }
-    if (OPTIONS_WITH_VALUE.has(text)) {
-      index += 1;
-      continue;
-    }
-    if (!text.startsWith("-")) {
-      return text;
-    }
-  }
-  return undefined;
-};
-
 const calleeName = (expression: ts.Expression): string | undefined => {
   if (ts.isIdentifier(expression)) {
     return expression.text;
@@ -84,51 +62,50 @@ const calleeName = (expression: ts.Expression): string | undefined => {
   return undefined;
 };
 
-// Arguments a wrapper such as `git(cwd, "log")` or `git(["log"])` passes to
-// git, skipping leading non-literal arguments like a working directory.
-const wrapperArgs = (call: ts.CallExpression): readonly ts.Node[] => {
-  const first = call.arguments.find(
-    (arg) => ts.isArrayLiteralExpression(arg) || literalText(arg) !== undefined,
+// Literal arguments, flattening array literals such as `git(["log"])`.
+const literalArgs = (args: readonly ts.Node[]): string[] =>
+  args.flatMap((arg) =>
+    ts.isArrayLiteralExpression(arg)
+      ? literalArgs(arg.elements)
+      : (literalText(arg) ?? []),
   );
-  if (first === undefined) {
-    return [];
-  }
-  if (ts.isArrayLiteralExpression(first)) {
-    return first.elements;
-  }
-  return call.arguments.slice(call.arguments.indexOf(first));
-};
 
-const walkedSubcommands = (node: ts.Node): string[] => {
+// Whether git receives a history subcommand in any argument position, so
+// global options and a working directory (`git(cwd, "log")`, `-C dir`) never
+// hide it.
+const walksHistory = (node: ts.Node): boolean => {
   if (ts.isArrayLiteralExpression(node)) {
-    const elements = node.elements;
-    const git = elements.findIndex((element) => literalText(element) === "git");
-    return git === -1 ? [] : [subcommand(elements.slice(git + 1)) ?? ""];
+    const args = literalArgs(node.elements);
+    const git = args.indexOf("git");
+    return (
+      git !== -1 &&
+      args.slice(git + 1).some((arg) => HISTORY_SUBCOMMANDS.has(arg))
+    );
   }
   if (ts.isCallExpression(node)) {
-    const args = node.arguments;
-    const git = args.findIndex((arg) => literalText(arg) === "git");
-    const next = args[git + 1];
-    if (git !== -1 && next !== undefined && ts.isArrayLiteralExpression(next)) {
-      return [subcommand(next.elements) ?? ""];
-    }
+    const args = literalArgs(node.arguments);
     const name = calleeName(node.expression);
-    if (name !== undefined && GIT_CALLEE.test(name)) {
-      return [subcommand(wrapperArgs(node)) ?? ""];
+    // A git wrapper passes every argument to git; `spawn("git", [...])`
+    // passes what follows the "git" literal.
+    const wrapper = name !== undefined && GIT_CALLEE.test(name);
+    const git = args.indexOf("git");
+    if (!wrapper && git === -1) {
+      return false;
     }
-    return [];
+    return args
+      .slice(wrapper ? 0 : git + 1)
+      .some((arg) => HISTORY_SUBCOMMANDS.has(arg));
   }
   if (ts.isTemplateExpression(node)) {
-    // Each interpolation stays one argument, so `git -C ${repo} log` still
-    // reads as `log` after the option value.
+    // Each interpolation stays one argument.
     const text = [
       node.head.text,
       ...node.templateSpans.map((span) => span.literal.text),
     ].join("ARG");
-    return [SHELL_HISTORY_WALK.exec(text)?.[1] ?? ""];
+    return SHELL_HISTORY_WALK.test(text);
   }
   const text = literalText(node);
-  return text === undefined ? [] : [SHELL_HISTORY_WALK.exec(text)?.[1] ?? ""];
+  return text !== undefined && SHELL_HISTORY_WALK.test(text);
 };
 
 const scanSource = (file: string, source: string): HistoryWalkFinding[] => {
@@ -141,12 +118,10 @@ const scanSource = (file: string, source: string): HistoryWalkFinding[] => {
   );
   const lines = new Set<number>();
   const visit = (node: ts.Node) => {
-    for (const command of walkedSubcommands(node)) {
-      if (HISTORY_SUBCOMMANDS.has(command)) {
-        lines.add(
-          parsed.getLineAndCharacterOfPosition(node.getStart(parsed)).line + 1,
-        );
-      }
+    if (walksHistory(node)) {
+      lines.add(
+        parsed.getLineAndCharacterOfPosition(node.getStart(parsed)).line + 1,
+      );
     }
     ts.forEachChild(node, visit);
   };
