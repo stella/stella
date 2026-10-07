@@ -378,7 +378,7 @@ describe("comparison sweep replay and runner capture", () => {
   );
 
   test("counts only rows still expired at the removal fence", async () => {
-    const renewedId = uploadIds[0];
+    const renewedId = uploadIds.at(0) ?? panic("Expected a renewed upload");
     const outcome = await sweepExpiredFileComparisonUploads({
       safeDb,
       deleteObject: async (key) => {
