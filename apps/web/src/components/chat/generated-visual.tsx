@@ -23,6 +23,8 @@ import {
   DialogTitle,
 } from "@stll/ui/dialog";
 
+import { useTheme } from "@/components/theme-provider";
+
 import { useChatEditorManager } from "@/components/chat-editor-provider";
 import type { ChatPart } from "@/components/chat/chat-ui-tools";
 import { useOpenDecisionTab } from "@/features/case-law/open-decision-tab";
@@ -37,6 +39,7 @@ import { detachedUserAction } from "@/lib/errors/user-toast";
 import { openIsolatedWindow } from "@/lib/open-isolated-window";
 import { toSafeId } from "@/lib/safe-id";
 
+import { readVisualTheme } from "./generated-visual-theme";
 import { parseVisualHostMessage } from "./generated-visual.logic";
 import { createVisualShellSession } from "./visual-shell-session";
 
@@ -56,6 +59,7 @@ const GeneratedVisualFrame = ({
   threadRef,
 }: GeneratedVisualFrameProps) => {
   const t = useTranslations();
+  const { resolvedTheme, palette } = useTheme();
   const frame = useRef<HTMLIFrameElement>(null);
   const [height, setHeight] = useState(320);
   const [confirmUrl, setConfirmUrl] = useState<string | null>(null);
@@ -102,6 +106,21 @@ const GeneratedVisualFrame = ({
       element.src = shell.beginLoad();
     }
   });
+  const readTheme = useLatestCallback(() => readVisualTheme({
+    style: getComputedStyle(document.documentElement),
+    appearance: document.documentElement.classList.contains("dark") ? "dark" : "light",
+  }));
+  const syncTheme = useLatestCallback(() => {
+    if (shell.isReady()) {
+      frame.current?.contentWindow?.postMessage({ kind: "theme", theme: readTheme() }, "*");
+    }
+  });
+  useExternalSyncEffect(() => {
+    syncTheme();
+    const observer = new MutationObserver(syncTheme);
+    observer.observe(document.documentElement, { attributes: true, attributeFilter: ["class", "style"] });
+    return () => observer.disconnect();
+  }, [resolvedTheme, palette, syncTheme]);
   const receive = useLatestCallback((event: MessageEvent<unknown>) => {
     if (!page.data) {
       return;
@@ -113,6 +132,7 @@ const GeneratedVisualFrame = ({
         frameWindow,
         message: {
           type: "render",
+          theme: readTheme(),
           title: page.data.title,
           html: page.data.html,
           data: page.data.data,
@@ -218,7 +238,7 @@ const GeneratedVisualFrame = ({
     queryStart >= 0 && (fragmentStart < 0 || queryStart < fragmentStart);
   const queryEnd = fragmentStart < 0 ? confirmUrl?.length : fragmentStart;
   return (
-    <section aria-label={t("chat.generatedView")} className="space-y-1.5">
+    <section aria-label={t("chat.generatedView")} className="w-full min-w-0 space-y-1.5">
       <header className="text-muted-foreground flex min-w-0 items-baseline gap-1.5 text-xs">
         <span className="shrink-0">{t("chat.generatedView")}</span>
         <span aria-hidden="true">·</span>
@@ -226,9 +246,10 @@ const GeneratedVisualFrame = ({
           {view.title}
         </span>
       </header>
-      <div className="overflow-hidden rounded-md border">
+      <div className="overflow-hidden rounded-md border p-4">
         <iframe
           ref={attachFrame}
+          onLoad={syncTheme}
           title={view.title}
           referrerPolicy="no-referrer"
           sandbox="allow-scripts"

@@ -14,6 +14,7 @@
     "./audit-log": "./src/audit-log.ts",
     "./action-admission": "./src/action-admission.ts",
     "./browser-control": "./src/browser-control.ts",
+    "./visual-theme": "./src/visual-theme.ts",
     "./visual-sandbox": "./src/visual-sandbox.ts",
     "./visual-bridge-policy": "./src/visual-bridge-policy.ts",
     "./generated-visual": "./src/generated-visual.ts",

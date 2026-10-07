@@ -1,5 +1,7 @@
 import * as v from "valibot";
 
+import { visualThemeSchema } from "./visual-theme";
+
 import { safeIdSchema } from "./safe-id";
 import { VISUAL_PREVIEW_TOOL_NAME } from "./visual-preview";
 import { visualLinkSchema, VISUAL_SANDBOX_LIMITS } from "./visual-sandbox";
@@ -127,6 +129,7 @@ export type GeneratedVisualInput = v.InferOutput<
 export const VISUAL_DATA_SCRIPT_ID = "stella-visual-data";
 export const visualRenderMessageSchema = v.strictObject({
   type: v.literal("render"),
+  theme: v.optional(visualThemeSchema),
   ...generatedVisualInputSchema.entries,
 });
 

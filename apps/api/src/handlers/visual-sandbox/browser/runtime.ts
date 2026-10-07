@@ -11,19 +11,40 @@ import {
   visualLinkSchema,
 } from "@stll/api-contract/visual-sandbox";
 
+import {
+  VISUAL_THEME_SCRIPT_ID,
+  visualThemeSchema,
+  type VisualTheme,
+} from "@stll/api-contract/visual-theme";
+
 import { createVisualMessageHandler } from "../bridge";
 import { composeVisualDocument } from "../srcdoc";
 import { parseVisualOuterConfig, whenVisualDocumentReady } from "./boot";
 import { createVisualCharts } from "./charts";
 import { createVisualGuestApi } from "./guest-api";
+import { createVisualThemeHandler } from "./guest-theme";
 import { isolateVisualGuest } from "./isolation";
-import { installVisualPresentation } from "./presentation";
+import { applyVisualTheme, installVisualPresentation } from "./presentation";
 import { visualShellReadyMessage } from "./shell-ready";
 
 const bootGuest = (): void => {
   try {
     isolateVisualGuest();
     installVisualPresentation(document);
+    const themeElement = document.querySelector(`#${VISUAL_THEME_SCRIPT_ID}`);
+    if (themeElement) {
+      applyVisualTheme(
+        document,
+        v.parse(visualThemeSchema, JSON.parse(themeElement.textContent)),
+      );
+    }
+    window.addEventListener(
+      "message",
+      createVisualThemeHandler({
+        parentWindow: window.parent,
+        onTheme: (theme) => applyVisualTheme(document, theme),
+      }),
+    );
     const dataElement = document.querySelector(`#${VISUAL_DATA_SCRIPT_ID}`);
     if (!dataElement) {
       panic("The visual document has no data payload");
@@ -149,15 +170,30 @@ const bootOuter = (runtime: string) => {
   inner.setAttribute("sandbox", "allow-scripts");
   inner.setAttribute("referrerpolicy", "no-referrer");
   document.body.append(inner);
+  let latestTheme: VisualTheme | undefined;
+  const sendTheme = () => {
+    if (latestTheme) {
+      inner.contentWindow?.postMessage(
+        { kind: "theme", theme: latestTheme },
+        "*",
+      );
+    }
+  };
+  inner.addEventListener("load", sendTheme);
   const receive = createVisualMessageHandler({
     parentWindow: window.parent,
     innerWindow: inner.contentWindow,
     outerOrigin: window.location.origin,
     origins,
-    onRender: ({ title, html, data }) => {
+    onRender: ({ title, html, data, theme }) => {
+      latestTheme = theme;
       inner.title = title;
       // safe-html: sanitizeVisualHtml output validated at the message boundary, composed with Stella's bundled runtime and fixed policy.
-      inner.srcdoc = composeVisualDocument({ html, data, runtime, policy });
+      inner.srcdoc = composeVisualDocument({ html, data, runtime, policy, theme });
+    },
+    onTheme: (theme) => {
+      latestTheme = theme;
+      sendTheme();
     },
     onGuestMessage: (message, hostOrigin) =>
       window.parent.postMessage(message, hostOrigin),

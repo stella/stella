@@ -3,6 +3,7 @@ import { load } from "cheerio";
 import { isTag } from "domhandler";
 import * as v from "valibot";
 
+import { VISUAL_THEME_VARIABLES } from "@stll/api-contract/visual-theme";
 import {
   VISUAL_SANDBOX_LIMITS,
   visualLinkSchema,
@@ -135,8 +136,11 @@ const PRESENTATION_PROPERTIES = new Set([
   "list-style-type",
 ]);
 
-// This value language contains no escapes, strings, functions or URL tokens.
-const PRESENTATION_VALUE = /^[a-zA-Z0-9#.%\s+-]+$/u;
+// var() is the only accepted CSS function, and it can reference only tokens
+// whose values the host validates before injecting them into the guest.
+const VISUAL_THEME_VARIABLE_SET = new Set<string>(VISUAL_THEME_VARIABLES);
+const THEME_VARIABLE_REFERENCE = /var\((--[a-z0-9-]+)\)/giu;
+const PRESENTATION_VALUE = /^[a-zA-Z0-9#.%\s+-]*$/u;
 const DATA_IMAGE =
   /^data:image\/(?:png|jpeg|gif|webp);base64,[A-Za-z0-9+/]+={0,2}$/u;
 const TABLE_ATTRIBUTES = new Set(["colspan", "rowspan", "scope"]);
@@ -176,10 +180,15 @@ const sanitizeStyle = (style: string) => {
     }
     const property = declaration.slice(0, colon).trim().toLowerCase();
     const value = declaration.slice(colon + 1).trim();
+    const withoutThemeVariables = value.replace(
+      THEME_VARIABLE_REFERENCE,
+      (reference, variable: string) =>
+        VISUAL_THEME_VARIABLE_SET.has(variable) ? "" : reference,
+    );
     if (
       PRESENTATION_PROPERTIES.has(property) &&
       value.length > 0 &&
-      PRESENTATION_VALUE.test(value)
+      PRESENTATION_VALUE.test(withoutThemeVariables)
     ) {
       declarations.push(`${property}:${value}`);
     }

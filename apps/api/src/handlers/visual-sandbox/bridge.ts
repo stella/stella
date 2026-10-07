@@ -4,6 +4,11 @@ import { visualRenderMessageSchema } from "@stll/api-contract/generated-visual";
 import { createVisualActionGate } from "@stll/api-contract/visual-bridge-policy";
 import { visualGuestMessageSchema } from "@stll/api-contract/visual-sandbox";
 
+import {
+  visualThemeMessageSchema,
+  type VisualTheme,
+} from "@stll/api-contract/visual-theme";
+
 import { prepareGeneratedVisual } from "./prepare";
 import type { SanitizedVisualHtml } from "./sanitize";
 
@@ -20,6 +25,7 @@ type VisualMessageHandlerOptions = {
   outerOrigin: string;
   origins: readonly string[];
   onRender: (message: SanitizedRenderMessage) => void;
+  onTheme: (theme: VisualTheme) => void;
   onGuestMessage: (
     message: v.InferOutput<typeof visualGuestMessageSchema>,
     hostOrigin: string,
@@ -41,6 +47,7 @@ export const createVisualMessageHandler = ({
   outerOrigin,
   origins,
   onRender,
+  onTheme,
   onGuestMessage,
   hasUserActivation,
   now,
@@ -54,6 +61,13 @@ export const createVisualMessageHandler = ({
         return;
       }
       if (hostOrigin && hostOrigin !== event.origin) {
+        return;
+      }
+      const theme = v.safeParse(visualThemeMessageSchema, event.data);
+      if (theme.success) {
+        if (hostOrigin) {
+          onTheme(theme.output.theme);
+        }
         return;
       }
       const parsed = v.safeParse(visualRenderMessageSchema, event.data);
@@ -77,6 +91,7 @@ export const createVisualMessageHandler = ({
         html: sanitized.value.html,
         data: sanitized.value.data,
         links: sanitized.value.links,
+        ...(parsed.output.theme ? { theme: parsed.output.theme } : {}),
       });
       return;
     }
