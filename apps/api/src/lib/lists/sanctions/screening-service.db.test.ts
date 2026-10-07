@@ -53,6 +53,10 @@ import {
   SANCTIONS_MATCHER_CONFIG,
 } from "./matcher-pool";
 import type {
+  MatcherWorkOutcome,
+  SanctionsMatcherSession,
+} from "./matcher-pool";
+import type {
   SanctionsMatcherMessage,
   SanctionsMatcherReply,
 } from "./matcher-protocol";
@@ -1455,21 +1459,28 @@ test.each(Object.values(boundaryFaults))(
     const publicScreen = createPublicSanctionsScreening({
       pool: {
         ...pool,
-        run: async (work, options) => {
-          // Isolate foreground reporting from the separately tested warmup lease.
+        run: async <T>(
+          work: (session: SanctionsMatcherSession) => Promise<T>,
+          options?: { deadlineMs?: number; onSettled?: () => void },
+        ): Promise<MatcherWorkOutcome<T>> => {
+          // Isolate foreground reporting from the separately tested warmup
+          // lease: the warmup settles with a canned screening, which is the
+          // value its caller expects but cannot be typed against `T` here.
           if (
             options?.deadlineMs === SANCTIONS_MATCHER_CONFIG.warmupDeadlineMs
           ) {
-            return await pool.run(
-              async () =>
-                Result.ok(
-                  unavailableSanctionsScreening({
-                    reason: "load-failed",
-                    practiceJurisdictions: [],
-                    now: FRESH_NOW,
-                  }),
-                ),
-              options,
+            return asTestRaw<MatcherWorkOutcome<T>>(
+              await pool.run(
+                async () =>
+                  Result.ok(
+                    unavailableSanctionsScreening({
+                      reason: "load-failed",
+                      practiceJurisdictions: [],
+                      now: FRESH_NOW,
+                    }),
+                  ),
+                options,
+              ),
             );
           }
           return await pool.run(
@@ -1546,14 +1557,14 @@ test.each(Object.values(boundaryFaults))(
       ) {
         expect(
           boundary.some(({ attributes }) =>
-            Object.values(attributes).includes("TypeError"),
+            Object.values(attributes ?? {}).includes("TypeError"),
           ),
         ).toBe(true);
       }
       expect(
         boundary.every(
           ({ attributes }) =>
-            attributes["failure.grade"] ===
+            attributes?.["failure.grade"] ===
             (expectedCaptures === 0 ? "anticipated" : "defect"),
         ),
       ).toBe(true);
