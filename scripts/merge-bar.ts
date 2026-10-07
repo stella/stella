@@ -1536,6 +1536,13 @@ export class DisarmError extends TaggedError("DisarmError")<{
   message: string;
 }> {}
 
+class DisarmChangedError extends TaggedError("DisarmChangedError")<{
+  message: string;
+}> {}
+
+const DISARM_CHANGED_MESSAGE =
+  "disarmed, but the PR changed during the disarm; review and re-arm manually";
+
 type DisarmPullRequestOptions = {
   gateway: Pick<GitHubGateway, "readArmState" | "mutateHandoff">;
   dryRun: boolean;
@@ -1602,21 +1609,32 @@ export const disarmPullRequest = ({
     if (current.id !== before.id) {
       panic("Disarm read returned a different pull request");
     }
+    if (
+      expectedHeadSha !== undefined &&
+      checkDisarmHead(currentRaw, expectedHeadSha).isErr()
+    ) {
+      return Result.err(
+        new DisarmChangedError({ message: DISARM_CHANGED_MESSAGE }),
+      );
+    }
     if (current.queue !== null) {
-      if (expectedHeadSha !== undefined) {
-        const pinned = checkDisarmHead(currentRaw, expectedHeadSha);
-        if (pinned.isErr()) {
-          return pinned;
-        }
-      }
       gateway.mutateHandoff(
         `mutation($id:ID!) { dequeuePullRequest(input:{id:$id}) { clientMutationId } }`,
         variables,
       );
     }
-    const after = armState(gateway.readArmState());
+    const afterRaw = gateway.readArmState();
+    const after = armState(afterRaw);
     if (after.id !== before.id) {
       panic("Disarm read returned a different pull request");
+    }
+    if (
+      expectedHeadSha !== undefined &&
+      checkDisarmHead(afterRaw, expectedHeadSha).isErr()
+    ) {
+      return Result.err(
+        new DisarmChangedError({ message: DISARM_CHANGED_MESSAGE }),
+      );
     }
     if (after.autoMerge !== null || after.queue !== null) {
       return Result.err(
@@ -3287,7 +3305,7 @@ if (import.meta.main) {
     });
     if (receipt.isErr()) {
       console.error(receipt.error.message);
-      process.exit(1);
+      process.exit(receipt.error instanceof DisarmChangedError ? 2 : 1);
     }
     console.log(
       `${receipt.value.status === "dry-run" ? "DRY RUN: would disarm" : "DISARMED"} ${options.repo}#${options.pullNumber}: ${JSON.stringify(receipt.value)}`,

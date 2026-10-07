@@ -1,4 +1,13 @@
 import { describe, expect, test } from "bun:test";
+import {
+  chmodSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
+import { tmpdir } from "node:os";
+import path from "node:path";
 
 import { disarmPullRequest, parseOptions } from "./merge-bar";
 
@@ -157,6 +166,85 @@ describe("holding pull requests", () => {
     },
   );
 
+  test.each([
+    { queued: false, change: "head", at: "disable" },
+    { queued: true, change: "head", at: "disable" },
+    { queued: false, change: "rollup", at: "disable" },
+    { queued: true, change: "rollup", at: "disable" },
+    { queued: true, change: "head", at: "dequeue" },
+    { queued: true, change: "rollup", at: "dequeue" },
+    { queued: false, change: "head", at: "final-read" },
+    { queued: false, change: "rollup", at: "final-read" },
+  ])(
+    "reports a changed disarm for queued and unqueued races: %j",
+    (scenario) => {
+      let armed = true;
+      let queued = scenario.queued;
+      let head = "a".repeat(40);
+      let rollup = "FAILURE";
+      let reads = 0;
+      const writes: string[] = [];
+      const change = () => {
+        if (scenario.change === "head") {
+          head = "b".repeat(40);
+        } else {
+          rollup = "SUCCESS";
+        }
+      };
+      const result = disarmPullRequest({
+        dryRun: false,
+        expectedHeadSha: "a".repeat(40),
+        gateway: {
+          readArmState: () => {
+            reads += 1;
+            if (scenario.at === "final-read" && reads === 3) {
+              change();
+            }
+            return {
+              ...state({ armed, queued }),
+              state: "OPEN",
+              headRefOid: head,
+              commits: {
+                nodes: [
+                  {
+                    commit: { oid: head, statusCheckRollup: { state: rollup } },
+                  },
+                ],
+              },
+            };
+          },
+          mutateHandoff: (query) => {
+            writes.push(query);
+            if (query.includes("disablePullRequestAutoMerge")) {
+              armed = false;
+              if (scenario.at === "disable") {
+                change();
+              }
+            } else {
+              queued = false;
+              if (scenario.at === "dequeue") {
+                change();
+              }
+            }
+            return {};
+          },
+        },
+      });
+      expect(result.isErr()).toBe(true);
+      if (result.isErr()) {
+        expect(result.error.message).toContain(
+          "disarmed, but the PR changed during the disarm",
+        );
+        expect(result.error.message).toContain("review and re-arm manually");
+      }
+      expect(armed).toBe(false);
+      expect(writes).toHaveLength(scenario.at === "dequeue" ? 2 : 1);
+      expect(
+        writes.some((query) => query.includes("enablePullRequestAutoMerge")),
+      ).toBe(false);
+    },
+  );
+
   test("pinned disarm accepts the expected red head", () => {
     let armed = true;
     const head = "a".repeat(40);
@@ -198,4 +286,100 @@ describe("holding pull requests", () => {
       "--disarm cannot be combined with --jump",
     );
   });
+});
+
+describe("changed disarm CLI outcome", () => {
+  test.each([false, true])(
+    "exits non-success after the head moves, queued=%j",
+    (queued) => {
+      const directory = mkdtempSync(path.join(tmpdir(), "merge-bar-disarm-"));
+      try {
+        const head = "a".repeat(40);
+        const snapshot = (sha: string, armed: boolean) => ({
+          ...state({ armed, queued }),
+          state: "OPEN",
+          headRefOid: sha,
+          commits: {
+            nodes: [
+              { commit: { oid: sha, statusCheckRollup: { state: "FAILURE" } } },
+            ],
+          },
+        });
+        const executable = path.join(directory, "gh");
+        const calls = path.join(directory, "calls.jsonl");
+        const marker = path.join(directory, "disabled");
+        writeFileSync(
+          executable,
+          `#!/usr/bin/env bun
+import { appendFileSync, existsSync, writeFileSync } from "node:fs";
+const args = Bun.argv.slice(2);
+appendFileSync(process.env.FIXTURE_CALLS, JSON.stringify(args) + "\\n");
+if (args.some(arg => arg.includes("disablePullRequestAutoMerge"))) {
+  writeFileSync(process.env.FIXTURE_MARKER, "disabled");
+  console.log(JSON.stringify({data:{}}));
+} else {
+  console.log(existsSync(process.env.FIXTURE_MARKER) ? process.env.FIXTURE_AFTER : process.env.FIXTURE_BEFORE);
+}
+`,
+        );
+        chmodSync(executable, 0o755);
+        const result = Bun.spawnSync(
+          [
+            process.execPath,
+            "scripts/merge-bar.ts",
+            "--disarm",
+            "123",
+            "--expected-head-sha",
+            head,
+          ],
+          {
+            env: {
+              ...process.env,
+              PATH: directory + path.delimiter + process.env["PATH"],
+              NODE_ENV: "test",
+              STELLA_LOCAL_DEV: "1",
+              STELLA_MERGE_BAR_TEST_SKIP_FRESHNESS: "1",
+              FIXTURE_CALLS: calls,
+              FIXTURE_MARKER: marker,
+              FIXTURE_BEFORE: JSON.stringify({
+                data: { repository: { pullRequest: snapshot(head, true) } },
+              }),
+              FIXTURE_AFTER: JSON.stringify({
+                data: {
+                  repository: { pullRequest: snapshot("b".repeat(40), false) },
+                },
+              }),
+            },
+            stdout: "pipe",
+            stderr: "pipe",
+          },
+        );
+        expect(result.exitCode, result.stderr.toString()).toBe(2);
+        expect(result.stderr.toString()).toContain(
+          "disarmed, but the PR changed during the disarm",
+        );
+        expect(result.stdout.toString()).not.toContain("DISARMED ");
+        const recorded: string[][] = readFileSync(calls, "utf-8")
+          .trim()
+          .split("\n")
+          .map((line) => JSON.parse(line));
+        expect(
+          recorded.filter((args) =>
+            args.some((arg) => arg.includes("disablePullRequestAutoMerge")),
+          ),
+        ).toHaveLength(1);
+        expect(
+          recorded.some((args) =>
+            args.some(
+              (arg) =>
+                arg.includes("enablePullRequestAutoMerge") ||
+                arg.includes("dequeuePullRequest"),
+            ),
+          ),
+        ).toBe(false);
+      } finally {
+        rmSync(directory, { recursive: true, force: true });
+      }
+    },
+  );
 });
