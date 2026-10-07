@@ -13,6 +13,10 @@ import {
 import { createSafeDb, markRlsDatabase } from "@/api/db/scoped";
 import { createSafeId } from "@/api/lib/branded-types";
 import { LIMITS } from "@/api/lib/limits";
+import {
+  LIST_COLUMN_LIMIT_ERROR_CODE,
+  LIST_COLUMN_OVERFLOW_ERROR_CODE,
+} from "@/api/lib/lists/column-error-codes";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
 import {
   mintAuthProviderId,
@@ -20,8 +24,8 @@ import {
 } from "@/api/tests/helpers/auth-provider-id";
 import { createTestHandlerContext } from "@/api/tests/helpers/handler-context";
 
-import readList, { LIST_COLUMN_OVERFLOW_ERROR_CODE } from "../get";
-import createColumn, { LIST_COLUMN_LIMIT_ERROR_CODE } from "./create";
+import readList from "../get";
+import createColumn from "./create";
 
 const databaseUrl = process.env["DATABASE_URL"];
 const runPostgres = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
@@ -84,7 +88,7 @@ if (!databaseUrl || !runPostgres) {
             id,
             workspaceId,
             name: id,
-            status: "active" as const,
+            status: "fresh" as const,
             content: { version: 1 as const, type: "text" as const },
             tool: { version: 1 as const, type: "manual-input" as const },
           })),

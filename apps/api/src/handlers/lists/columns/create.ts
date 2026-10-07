@@ -11,8 +11,7 @@ import { createSafeId } from "@/api/lib/branded-types";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
-
-export const LIST_COLUMN_LIMIT_ERROR_CODE = "list_column_limit_reached";
+import { LIST_COLUMN_LIMIT_ERROR_CODE } from "@/api/lib/lists/column-error-codes";
 
 const bodySchema = t.Object({
   listId: tSafeId("legalList"),
