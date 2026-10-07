@@ -313,3 +313,61 @@ test("provenance-only reporting and reshoot dry-run never spawn rendered compari
     rmSync(directory, { recursive: true, force: true });
   }
 });
+
+test("maintenance release classification never invokes rendered comparison", () => {
+  const directory = mkdtempSync(path.join(tmpdir(), "maintenance-provenance-"));
+  try {
+    writeFileSync(
+      path.join(directory, "bun"),
+      "#!/usr/bin/env bash\necho RENDERED_COMPARISON_IN_MAINTENANCE >&2\nexit 91\n",
+      { mode: 0o755 },
+    );
+    const modulePath = new URL(
+      "prepare-maintenance-release.ts",
+      import.meta.url,
+    ).pathname;
+    const result = Bun.spawnSync(
+      [
+        process.execPath,
+        "-e",
+        `import { staleCaptureIds } from ${JSON.stringify(modulePath)}; console.log(JSON.stringify(staleCaptureIds()));`,
+      ],
+      {
+        env: {
+          ...process.env,
+          PATH: `${directory}:${process.env["PATH"] ?? ""}`,
+        },
+        timeout: 10_000,
+      },
+    );
+    expect(result.exitCode, result.stderr.toString()).toBe(0);
+    expect(result.stderr.toString()).not.toContain(
+      "RENDERED_COMPARISON_IN_MAINTENANCE",
+    );
+    expect(Array.isArray(JSON.parse(result.stdout.toString()))).toBe(true);
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test("maintenance automation cannot select the rendered CLI boundary", () => {
+  const source = readFileSync(
+    new URL("prepare-maintenance-release.ts", import.meta.url),
+    "utf-8",
+  );
+  const isProvenanceOnly = (candidate: string) =>
+    candidate.includes('"marketing:provenance", "--strict"') &&
+    !candidate.includes('"marketing:stale"') &&
+    !/\b(?:computeVerdicts|compareRenderedScreenshots)\b/u.test(candidate);
+  expect(isProvenanceOnly(source)).toBe(true);
+  expect(
+    isProvenanceOnly(
+      source.replaceAll("computeProvenanceVerdicts", "computeVerdicts"),
+    ),
+  ).toBe(false);
+  expect(
+    isProvenanceOnly(
+      source.replaceAll("marketing:provenance", "marketing:stale"),
+    ),
+  ).toBe(false);
+});
