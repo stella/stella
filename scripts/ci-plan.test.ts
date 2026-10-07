@@ -639,6 +639,25 @@ const releaseJobs = workflowJobs(
     "utf-8",
   ),
 );
+// An undeclared output becomes an empty string, overriding even an environment
+// value established by an earlier step.
+test("CI planner output references name declared outputs", () => {
+  const plan = v.parse(
+    v.object({ outputs: v.record(v.string(), v.string()) }),
+    ciJobs["ci-plan"],
+  );
+  const declared = new Set(Object.keys(plan.outputs));
+  const references = new Set(
+    [
+      ...JSON.stringify(ciJobs).matchAll(/needs\.ci-plan\.outputs\.([\w-]+)/gu),
+    ].flatMap(([, output]) => (output === undefined ? [] : [output])),
+  );
+  expect(references.size).toBeGreaterThan(0);
+  expect(
+    [...references].filter((output) => !declared.has(output)).toSorted(),
+  ).toEqual([]);
+});
+
 const resultJob = v.parse(
   v.object({
     needs: v.array(v.string()),

@@ -1892,8 +1892,6 @@ jobs:
 
       - name: SHA-256 migration ledger
         if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
-        env:
-          RATCHET_BASE_REF: ${{ needs.ci-plan.outputs.base_ref }}
         run: bun scripts/sha256-migration-ledger.ts --base "$RATCHET_BASE_REF"
 
       - name: Custom lint rule coverage
