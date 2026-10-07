@@ -581,16 +581,20 @@ const OPERATION_MATRIX: readonly OperationRow[] = writeTools.flatMap(
 // --- Account access -----------------------------------------------------------
 
 /**
- * The account access a write tool must declare: `standard` when any REST
- * operation it performs refuses the demo account, else `sandbox`. A tool
- * without a REST counterpart dispatches to a target that applies its own.
+ * The account access a write tool must declare: the most restrictive of the
+ * REST operations it performs (`account-control`, then `standard`, else
+ * `sandbox`). A tool without a REST counterpart dispatches to a target that
+ * applies its own.
  */
-const expectedAccountAccess = (tool: string): AccountAccess =>
-  (restOperationsByTool.get(tool) ?? []).some((operation) =>
-    operation.accountAccess.includes("standard"),
-  )
-    ? "standard"
-    : "sandbox";
+const expectedAccountAccess = (tool: string): AccountAccess => {
+  const declared = (restOperationsByTool.get(tool) ?? []).flatMap(
+    (operation) => operation.accountAccess,
+  );
+  if (declared.includes("account-control")) {
+    return "account-control";
+  }
+  return declared.includes("standard") ? "standard" : "sandbox";
+};
 
 const accountAccessMismatches = (definitions: readonly WriteTool[]): string[] =>
   definitions.flatMap((definition) => {

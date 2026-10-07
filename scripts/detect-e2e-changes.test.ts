@@ -381,7 +381,7 @@ describe("detect-e2e-changes", () => {
       );
     }
     expect(workflowStep(plan, "Resolve browser image")).toContain(
-      "if: steps.check.outputs.trusted == 'true' || github.event_name == 'workflow_dispatch'",
+      "if: steps.completed-depth.outputs.run_required != 'false' && (steps.check.outputs.trusted == 'true' || github.event_name == 'workflow_dispatch')",
     );
     expect(workflow).not.toContain("needs.trust-check");
     expect(workflow).not.toContain("needs.ci-changes");
@@ -640,7 +640,7 @@ describe("detect-e2e-changes", () => {
     );
     expectPullRequestAndMergeGroup(releaseTypecheck);
     expect(releaseTypecheck).toContain(
-      "run: bun run typecheck && bun run typecheck:repo",
+      "run: bun run typecheck --concurrency=1 && bun run typecheck:repo",
     );
     expect(releaseTypecheck).toContain('TURBO_FORCE: "true"');
 
@@ -717,7 +717,7 @@ describe("detect-e2e-changes", () => {
       `marketing_screenshots_required: ${githubExpression("steps.marketing-release.outputs.required")}`,
     );
     expect(workflowStep(plan, "Plan release marketing screenshots")).toContain(
-      "if: steps.check.outputs.trusted == 'true' || github.event_name == 'workflow_dispatch'",
+      "if: steps.completed-depth.outputs.run_required != 'false' && (steps.check.outputs.trusted == 'true' || github.event_name == 'workflow_dispatch')",
     );
 
     const screenshots = workflowJob("marketing-screenshots");
@@ -746,6 +746,7 @@ describe("detect-e2e-changes", () => {
                       "ci-plan": {
                         outputs: {
                           queue_depth: "full",
+                          run_required: "true",
                           trusted: String(trusted),
                           marketing_screenshots_required: String(planned),
                           web_build_required: String(buildRequired),
@@ -1070,11 +1071,14 @@ describe("detect-e2e-changes", () => {
                     const context = {
                       github: { event_name: event },
                       inputs: { heavy_only: heavyOnly },
+                      // GitHub reads an unset repository variable as ''.
+                      vars: { QUEUE_BROWSER_SUITES: "" },
                       needs: {
                         "ci-plan": {
                           outputs: {
                             queue_depth: "full",
                             suite_depth: depth,
+                            run_required: "true",
                             trusted: String(trusted),
                             e2e_production_required: String(planned),
                           },
@@ -1085,20 +1089,28 @@ describe("detect-e2e-changes", () => {
                       always: () => true,
                       cancelled: () => cancelled,
                     };
+                    const certified =
+                      event !== "pull_request" &&
+                      planned &&
+                      (trusted || event === "workflow_dispatch") &&
+                      (webResult === "success" || heavyResult === "success") &&
+                      (event !== "merge_group" || !cancelled);
+                    const label = `${event}/${depth}/${planned}/${trusted}/${webResult}/${heavyResult}/${heavyOnly}/${cancelled}`;
                     expect(
                       Boolean(evaluateExpression(predicate, context)),
-                      `${event}/${depth}/${planned}/${trusted}/${webResult}/${heavyResult}/${heavyOnly}/${cancelled}`,
-                    ).toBe(
-                      event !== "pull_request" &&
-                        planned &&
-                        (trusted || event === "workflow_dispatch") &&
-                        (webResult === "success" ||
-                          heavyResult === "success") &&
-                        (event !== "merge_group" || !cancelled),
-                    );
+                      label,
+                    ).toBe(certified);
+                    // A thin merge group keeps planned browser suites unless
+                    // the queue switch is off; no other event runs them thin.
                     context.needs["ci-plan"].outputs.queue_depth = "thin";
                     expect(
                       Boolean(evaluateExpression(predicate, context)),
+                      `${label}/thin`,
+                    ).toBe(event === "merge_group" && certified);
+                    context.vars.QUEUE_BROWSER_SUITES = "off";
+                    expect(
+                      Boolean(evaluateExpression(predicate, context)),
+                      `${label}/thin/off`,
                     ).toBe(false);
                   }
                 }
@@ -1144,22 +1156,30 @@ describe("detect-e2e-changes", () => {
 
   test("scopes browser work before every dependency setup step", () => {
     const job = workflowJob("ci-browser");
-    const scope = "Check UI browser test scope";
+    const scopes = [
+      "Check desktop browser test scope",
+      "Check UI browser test scope",
+      "Check extension browser test scope",
+    ];
+    const required =
+      "if: steps.desktop-browser-tests.outputs.required == 'true' || steps.ui-browser-tests.outputs.required == 'true' || steps.extension-browser-tests.outputs.required == 'true'";
     const setupSteps = [
       "Setup Bun",
+      "Restore Bun install cache",
       "Turbo remote cache",
       "Install dependencies",
       "Prepare environment",
       "Install UI browser test runtime",
     ];
-    expect(job.indexOf(scope)).toBeGreaterThan(-1);
-    for (const name of setupSteps) {
-      expect(job.indexOf(scope)).toBeLessThan(job.indexOf(name));
-      expect(workflowStep(job, name)).toContain(
-        "if: steps.ui-browser-tests.outputs.required == 'true'",
-      );
+    for (const scope of scopes) {
+      expect(job.indexOf(scope)).toBeGreaterThan(-1);
+      expect(workflowStep(job, scope)).not.toContain("bun ");
+      for (const name of setupSteps) {
+        expect(job.indexOf(name)).toBeGreaterThan(-1);
+        expect(job.indexOf(scope)).toBeLessThan(job.indexOf(name));
+        expect(workflowStep(job, name)).toContain(required);
+      }
     }
-    expect(workflowStep(job, scope)).not.toContain("bun ");
   });
 
   test("browser setup verifies image executables without a host cache or installs", () => {

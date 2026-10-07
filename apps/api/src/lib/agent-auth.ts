@@ -222,6 +222,23 @@ export const reshapeTokenResponse = (
 /** The redirect URI every agent client is bound to (never navigated to). */
 export const getAgentRedirectUri = (): string => AGENT_REDIRECT_URI;
 
+export type AgentTokenErrorCode =
+  | "authorization_pending"
+  | "slow_down"
+  | "expired_token"
+  | "access_denied"
+  | "invalid_grant"
+  | "token_mint_failed";
+
+export class AgentTokenError extends Error {
+  readonly code: AgentTokenErrorCode;
+  constructor(code: AgentTokenErrorCode) {
+    super(code);
+    this.code = code;
+    this.name = "AgentTokenError";
+  }
+}
+
 /**
  * Exchange a stored authorization code for an MCP-audience JWT using the
  * agent client's confidential credentials. Shared by the claim-grant poll
@@ -289,23 +306,6 @@ const mintAnonymousToken = async (
   }
   return Result.ok(reshapeTokenResponse(result.value));
 };
-
-export type AgentTokenErrorCode =
-  | "authorization_pending"
-  | "slow_down"
-  | "expired_token"
-  | "access_denied"
-  | "invalid_grant"
-  | "token_mint_failed";
-
-export class AgentTokenError extends Error {
-  readonly code: AgentTokenErrorCode;
-  constructor(code: AgentTokenErrorCode) {
-    super(code);
-    this.code = code;
-    this.name = "AgentTokenError";
-  }
-}
 
 export type ServiceAuthCeremony = {
   registrationId: string;

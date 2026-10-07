@@ -49,6 +49,16 @@ import {
 } from "./ai-provider-canary";
 import { CANARY_PROVIDERS } from "./ai-provider-canary-config";
 
+class ProviderStatusError extends Error {
+  readonly status: number;
+
+  constructor(status: number) {
+    super(`Synthetic provider HTTP ${status}`);
+    this.name = "ProviderStatusError";
+    this.status = status;
+  }
+}
+
 describe("AI provider canary probe deadlines", () => {
   test("gives the budget-edge probe the extended structured-output deadline", () => {
     expect(canaryCapabilityProbeTimeout("structured-output-budget-edge")).toBe(
@@ -523,16 +533,6 @@ describe("AI provider canary error summaries", () => {
     expect(errorSummary(error, signal)).toBe("provider HTTP 429");
   });
 });
-
-class ProviderStatusError extends Error {
-  readonly status: number;
-
-  constructor(status: number) {
-    super(`Synthetic provider HTTP ${status}`);
-    this.name = "ProviderStatusError";
-    this.status = status;
-  }
-}
 
 describe("AI provider canary retry contract", () => {
   test("retries exactly once for every retryable HTTP status class", async () => {

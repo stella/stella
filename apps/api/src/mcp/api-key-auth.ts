@@ -63,21 +63,31 @@ const rejectCredential = (): McpAuthenticationError =>
  */
 type MachineApiKeyCredential = { session: McpSession; expiresAt: Date | null };
 
-export const resolveMachineApiKeyCredential = async (
+/**
+ * Where a key is presented to read its own expiry rather than to reach a
+ * resource. An audience binding limits what a key can reach; it never hides
+ * the key's own lifetime from its holder, so every audience is accepted here.
+ * Only `resolveOwnMachineApiKeyCredential` presents a key this way; no MCP
+ * transport mode can.
+ */
+const KEY_SELF_INSPECTION = "self_inspection";
+
+type MachineApiKeyDependencies = {
+  verifyApiKey?: (
+    ...args: Parameters<ReturnType<typeof getAuth>["api"]["verifyApiKey"]>
+  ) => ReturnType<ReturnType<typeof getAuth>["api"]["verifyApiKey"]>;
+  resolveAuthorization?: typeof resolveCredentialMemberAuthorization;
+  resolvePersonalPolicy?: typeof readPersonalApiKeyPolicy;
+};
+
+const resolvePresentedMachineApiKey = async (
   credential: string,
+  mode: McpMode | typeof KEY_SELF_INSPECTION,
   {
-    mode = "default",
     verifyApiKey = getAuth().api.verifyApiKey,
     resolveAuthorization = resolveCredentialMemberAuthorization,
     resolvePersonalPolicy = readPersonalApiKeyPolicy,
-  }: {
-    mode?: McpMode | undefined;
-    verifyApiKey?: (
-      ...args: Parameters<ReturnType<typeof getAuth>["api"]["verifyApiKey"]>
-    ) => ReturnType<ReturnType<typeof getAuth>["api"]["verifyApiKey"]>;
-    resolveAuthorization?: typeof resolveCredentialMemberAuthorization;
-    resolvePersonalPolicy?: typeof readPersonalApiKeyPolicy;
-  } = {},
+  }: MachineApiKeyDependencies,
 ): Promise<MachineApiKeyCredential> => {
   const verification = await verifyApiKey({
     body: {
@@ -108,10 +118,11 @@ export const resolveMachineApiKeyCredential = async (
   const metadata = v.safeParse(machineApiKeyMetadataSchema, key.metadata);
   if (
     !metadata.success ||
-    !isMachineApiKeyAudienceAllowed({
-      audience: metadata.output.audience,
-      mode,
-    })
+    (mode !== KEY_SELF_INSPECTION &&
+      !isMachineApiKeyAudienceAllowed({
+        audience: metadata.output.audience,
+        mode,
+      }))
   ) {
     throw rejectCredential();
   }
@@ -199,6 +210,26 @@ export const resolveMachineApiKeyCredential = async (
     },
   };
 };
+
+export const resolveMachineApiKeyCredential = async (
+  credential: string,
+  {
+    mode = "default",
+    ...dependencies
+  }: MachineApiKeyDependencies & { mode?: McpMode | undefined } = {},
+): Promise<MachineApiKeyCredential> =>
+  await resolvePresentedMachineApiKey(credential, mode, dependencies);
+
+/** The key's own record, for its holder; any audience binding is accepted. */
+export const resolveOwnMachineApiKeyCredential = async (
+  credential: string,
+  dependencies: MachineApiKeyDependencies = {},
+): Promise<MachineApiKeyCredential> =>
+  await resolvePresentedMachineApiKey(
+    credential,
+    KEY_SELF_INSPECTION,
+    dependencies,
+  );
 
 /** MCP consumers need only the session; lifecycle observers also need expiry. */
 export const resolveMachineApiKeySession = async (

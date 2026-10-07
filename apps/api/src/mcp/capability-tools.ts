@@ -24,6 +24,7 @@ import {
   transportFileInput,
   transportFileResponse,
 } from "@/api/lib/capability-transport";
+import { SEARCH_INDEX_UNAVAILABLE_CODE } from "@/api/lib/legal-search/search-index-unavailable";
 import { getCurrentRequestId } from "@/api/lib/observability/request-context";
 import {
   decodePaginationCursor,
@@ -103,6 +104,7 @@ import {
   nullAsAbsent,
   oauthScopeRecoveryHint,
   quoteToolName,
+  searchIndexUnavailableResult,
   structuredErrorResult,
   structuredEgressPlan,
   untypedStructuredEgressPlan,
@@ -313,6 +315,10 @@ const getCatalog = async () => {
   catalog = parseCatalog(generated.default);
   return catalog;
 };
+/** The parsed capability catalog, for checks over every capability. */
+export const loadCapabilityCatalog = async (): Promise<
+  readonly CatalogEntry[]
+> => await getCatalog();
 const getCatalogById = async () =>
   (catalogById ??= new Map(
     (await getCatalog()).map((entry) => [entry.id, entry]),
@@ -719,6 +725,15 @@ const mapStatusResponse = (
           ? responseBody["contactUrl"]
           : undefined,
     });
+  }
+  // A search capability whose index could not be reached answers a 503 with
+  // the typed body; it reads as the tools' retryable envelope, not a failure
+  // of the capability.
+  if (
+    isRecord(responseBody) &&
+    responseBody["code"] === SEARCH_INDEX_UNAVAILABLE_CODE
+  ) {
+    return searchIndexUnavailableResult(responseBody);
   }
   const code = statusCodeToErrorCode(statusCode);
   const message = statusResponseMessage(responseBody);

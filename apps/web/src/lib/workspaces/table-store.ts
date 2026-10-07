@@ -4,7 +4,7 @@ import type {
   RowSelectionState,
   Updater,
 } from "@tanstack/react-table";
-import { panic, Result } from "better-result";
+import { panic } from "better-result";
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import type { PersistStorage } from "zustand/middleware";
@@ -14,7 +14,11 @@ import type {
   TableFindSelection,
   TableFindState,
 } from "@/components/workspaces/table/table-find.logic";
-import { writeStoredJson } from "@/lib/stored-json";
+import { browserStateStorage } from "@/lib/account/browser-storage";
+import {
+  followStorageOwner,
+  userScopedStateStorage,
+} from "@/lib/account/user-scoped-storage";
 import type { WorkspaceEntity } from "@/lib/types";
 import { viewsQueryWorkspaceId } from "@/lib/workspaces/queries/views.logic";
 import {
@@ -65,28 +69,14 @@ const selectedEntitiesEqual = (
   });
 };
 
-/**
- * `localStorage` is reached inside each guard, never captured: the global is
- * absent on the server and its getter throws where site data is blocked (a
- * sandboxed frame, "block all cookies"), and the methods on a `Storage` that
- * does resolve throw under those same conditions. Persistence is best-effort,
- * so any of them runs the store from memory instead of failing the `set` that
- * reached it.
- */
+const scopedTableStorage = userScopedStateStorage(browserStateStorage("local"));
 const validatingStorage: PersistStorage<PersistedTableState> = {
-  getItem: (name) =>
-    readPersistedTableState(
-      Result.try(() => localStorage.getItem(name)).unwrapOr(null),
-    ),
+  getItem: (name) => readPersistedTableState(scopedTableStorage.getItem(name)),
   setItem: (name, value) => {
-    Result.try(() => {
-      writeStoredJson(localStorage, name, value);
-    }).unwrapOr(undefined);
+    scopedTableStorage.setItem(name, JSON.stringify(value));
   },
   removeItem: (name) => {
-    Result.try(() => {
-      localStorage.removeItem(name);
-    }).unwrapOr(undefined);
+    scopedTableStorage.removeItem(name);
   },
 };
 
@@ -337,6 +327,8 @@ export const useTableStore = create<TableStore>()(
     },
   ),
 );
+
+followStorageOwner(useTableStore);
 
 const reconcileInstalledClients = new WeakSet<QueryClient>();
 

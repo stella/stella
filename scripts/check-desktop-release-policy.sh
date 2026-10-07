@@ -3,12 +3,14 @@
 # the assets required by the web download links and desktop updater.
 set -euo pipefail
 
+gh_retry_script="${GH_RETRY_SCRIPT:-$(dirname "${BASH_SOURCE[0]}")/gh-retry.sh}"
+
 repo="${GH_REPO:?GH_REPO is required}"
 latest_api_path="repos/${repo}/releases/latest"
 api_path="${STELLA_DESKTOP_RELEASE_API_PATH:-$latest_api_path}"
 expected_tag="${STELLA_DESKTOP_RELEASE_EXPECTED_TAG:-}"
 
-release_json="$(gh api "$api_path" 2>/dev/null)" || { echo "::error::Desktop release metadata unavailable" >&2; exit 1; }
+release_json="$(bash "$gh_retry_script" api "$api_path")" || { echo "::error::Desktop release metadata unavailable" >&2; exit 1; }
 tag="$(jq -r '.tag_name // empty' <<< "$release_json")"
 
 if [[ ! "$tag" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
@@ -38,7 +40,7 @@ fi
 
 if [[ "$api_path" == "$latest_api_path" ]]; then
   if [[ -z "$expected_tag" ]]; then
-    stable_tags="$(gh api --paginate "repos/${repo}/git/matching-refs/tags/v" 2>/dev/null)" || { echo "::error::Desktop stable tag metadata unavailable" >&2; exit 1; }
+    stable_tags="$(bash "$gh_retry_script" api --paginate "repos/${repo}/git/matching-refs/tags/v")" || { echo "::error::Desktop stable tag metadata unavailable" >&2; exit 1; }
     newest_tag="$(jq -ser '
       [ .[][] | .ref | sub("^refs/tags/"; "")
         | select(test("^v[0-9]+\\.[0-9]+\\.[0-9]+$")) ]

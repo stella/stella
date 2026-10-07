@@ -54,7 +54,7 @@ type Workflow = v.InferOutput<typeof workflowSchema>;
 const consumerIds = (source: Workflow) =>
   Object.keys(source.jobs).filter(
     (id) =>
-      id.startsWith("ci-checks-") ||
+      (id.startsWith("ci-checks-") && id !== "ci-checks-docs") ||
       id.startsWith("code-quality-") ||
       id === "typecheck-baseline",
   );
@@ -95,7 +95,7 @@ const assertHandoff = (source: Workflow) => {
     JSON.parse(outcome?.env?.["JOB_SCOPES"] ?? ""),
   );
   expect(Object.hasOwn(scopes, "ci-generated-sources")).toBe(true);
-  expect(scopes["ci-generated-sources"]).toBeNull();
+  expect(scopes["ci-generated-sources"]).toBe("package_checks_required");
   const fast = v.parse(
     v.array(v.string()),
     JSON.parse(outcome?.env?.["FAST_REQUIRED"] ?? ""),
@@ -164,9 +164,147 @@ const assertHandoff = (source: Workflow) => {
   }
 };
 
+const assertRegenerationBoundary = (source: Workflow) => {
+  const job = source.jobs["ci-checks-generated"];
+  if (!job) {
+    panic("Missing regeneration guard leg");
+  }
+  const restored = job.steps.findIndex(
+    ({ name }) => name === "Restore generated sources",
+  );
+  const firstCheck = job.steps.findIndex(
+    ({ run }, index) => index > restored && /\bbun\s/u.test(run ?? ""),
+  );
+  const first = job.steps.at(firstCheck);
+  expect(first?.name, "verify before regeneration").toBe(
+    "CLI sharded registry and derived runtime guard",
+  );
+  const run = first?.run ?? "";
+  const verification = "bun scripts/ci-generated-sources.ts prepare";
+  const detach = "unset CI_GENERATED_SOURCES_MANIFEST";
+  const laterSteps = `echo 'CI_GENERATED_SOURCES_MANIFEST=' >> "$GITHUB_ENV"`;
+  const regeneration = "(cd packages/cli && bun run codegen)";
+  expect(run, "verify before regeneration").toStartWith(
+    `set -euo pipefail\n${verification}\n`,
+  );
+  expect(run.indexOf(detach), "detach current guard").toBeGreaterThan(
+    run.indexOf(verification),
+  );
+  expect(run.indexOf(laterSteps), "detach subsequent guards").toBeGreaterThan(
+    run.indexOf(detach),
+  );
+  expect(
+    run.indexOf(regeneration),
+    "verify before regeneration",
+  ).toBeGreaterThan(run.indexOf(laterSteps));
+  for (const step of job.steps.slice(firstCheck + 1)) {
+    expect(
+      step.env?.["CI_GENERATED_SOURCES_MANIFEST"],
+      `no reattached manifest: ${step.name}`,
+    ).toBeUndefined();
+  }
+  for (const id of consumerIds(source).filter(
+    (consumerId) => consumerId !== "ci-checks-generated",
+  )) {
+    for (const step of source.jobs[id]?.steps ?? []) {
+      expect(step.run ?? "", `strict consumer: ${id}`).not.toContain(detach);
+      expect(step.run ?? "", `strict consumer: ${id}`).not.toContain(
+        laterSteps,
+      );
+    }
+  }
+};
+
+test("regeneration validates its artifact before clearing both current and subsequent guard reuse", () => {
+  assertRegenerationBoundary(workflow);
+});
+
+test("missing or late verification and retained manifest reuse break the regeneration boundary", () => {
+  for (const mutation of [
+    "remove verification",
+    "late verification",
+    "current manifest",
+    "subsequent manifest",
+    "early check",
+    "reattach",
+  ] as const) {
+    const mutated = structuredClone(workflow);
+    const job = mutated.jobs["ci-checks-generated"];
+    const first = job?.steps.find(
+      ({ name }) => name === "CLI sharded registry and derived runtime guard",
+    );
+    if (!job || !first?.run) {
+      panic("Missing regeneration mutation fixture");
+    }
+    const verification = "bun scripts/ci-generated-sources.ts prepare\n";
+    switch (mutation) {
+      case "remove verification":
+        first.run = first.run.replace(verification, "");
+        break;
+      case "late verification":
+        first.run = `${first.run.replace(verification, "")}${verification}`;
+        break;
+      case "current manifest":
+        first.run = first.run.replace(
+          "unset CI_GENERATED_SOURCES_MANIFEST\n",
+          "",
+        );
+        break;
+      case "subsequent manifest":
+        first.run = first.run.replace(
+          `echo 'CI_GENERATED_SOURCES_MANIFEST=' >> "$GITHUB_ENV"\n`,
+          "",
+        );
+        break;
+      case "early check": {
+        const restoreIndex = job.steps.findIndex(
+          ({ name }) => name === "Restore generated sources",
+        );
+        job.steps.splice(restoreIndex + 1, 0, {
+          name: "New generator",
+          run: "bun run build:mcp-apps",
+        });
+        break;
+      }
+      case "reattach":
+        job.steps.push({
+          name: "New guard",
+          run: "bun check",
+          env: { CI_GENERATED_SOURCES_MANIFEST: manifest },
+        });
+        break;
+    }
+    expect(job).not.toEqual(workflow.jobs["ci-checks-generated"]);
+    expect(() => assertRegenerationBoundary(mutated), mutation).toThrow(
+      /verify before regeneration|detach current guard|detach subsequent guards|no reattached manifest/u,
+    );
+  }
+});
+
 test("every generated-source consumer restores the same-run artifact before checks", () => {
   expect(consumerIds(workflow).length).toBeGreaterThan(0);
   assertHandoff(workflow);
+});
+
+test("the documentation job consumes Markdown without generated-source hydration", () => {
+  const job = workflow.jobs["ci-checks-docs"];
+  expect(job?.needs).toBe("ci-plan");
+  expect(job?.["if"]).toContain(
+    "needs.ci-plan.outputs.docs_checks_required == 'true'",
+  );
+  expect(
+    job?.steps.filter(({ run }) => run?.includes("--run-markdown-checks")),
+  ).toHaveLength(1);
+  expect(
+    job?.steps.some(({ name }) => name === "Restore generated sources"),
+  ).toBe(false);
+  expect(consumerIds(workflow)).not.toContain("ci-checks-docs");
+  const mutated = structuredClone(workflow);
+  mutated.jobs["ci-checks-new"] = {
+    needs: "ci-plan",
+    steps: [{ name: "Check", run: "bun check" }],
+  };
+  expect(() => assertHandoff(mutated)).toThrow("ci-checks-new");
 });
 
 test("new consumers cannot omit generated-source hydration", () => {

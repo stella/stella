@@ -123,6 +123,10 @@
     "seconds": 1.737437,
     "source": "estimated"
   },
+  "scripts/lib/mcp-app-html-guard.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
   "scripts/mcp-coverage-guard.test.ts": {
     "seconds": 0.262185,
     "source": "estimated"
@@ -205,6 +209,10 @@
   },
   "scripts/test-timings.test.ts": {
     "seconds": 1.21972,
+    "source": "estimated"
+  },
+  "scripts/visual-sandbox-runtime.test.ts": {
+    "seconds": 1,
     "source": "estimated"
   },
   "src/agent-auth/metadata.test.ts": {
@@ -625,6 +633,10 @@
   },
   "src/handlers/audit-logs/export.test.ts": {
     "seconds": 0.627056,
+    "source": "estimated"
+  },
+  "src/handlers/audit-logs/feature-details.test.ts": {
+    "seconds": 1,
     "source": "estimated"
   },
   "src/handlers/audit-logs/query-scope.integration.test.ts": {
@@ -2319,6 +2331,10 @@
     "seconds": 1.21339,
     "source": "estimated"
   },
+  "src/handlers/chat/tools/show-visual-tools.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
   "src/handlers/chat/tools/skill-documented-reads.test.ts": {
     "seconds": 3.344645,
     "source": "estimated"
@@ -3115,6 +3131,10 @@
     "seconds": 3.469935,
     "source": "estimated"
   },
+  "src/handlers/lists/verification-routes.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
   "src/handlers/lists/verifications/create.db.test.ts": {
     "seconds": 1,
     "source": "estimated"
@@ -3184,6 +3204,10 @@
     "source": "estimated"
   },
   "src/handlers/operator/routes.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
+  "src/handlers/organization-settings/ai-availability/get.test.ts": {
     "seconds": 1,
     "source": "estimated"
   },
@@ -3751,6 +3775,10 @@
     "seconds": 1.506288,
     "source": "estimated"
   },
+  "src/handlers/user-files/read-visual.test.ts": {
+    "seconds": 1.163,
+    "source": "measured"
+  },
   "src/handlers/view-templates/properties.test.ts": {
     "seconds": 0.166023,
     "source": "estimated"
@@ -3779,6 +3807,34 @@
     "seconds": 1,
     "source": "estimated"
   },
+  "src/handlers/visual-sandbox/browser/boot.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
+  "src/handlers/visual-sandbox/browser/guest-api.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
+  "src/handlers/visual-sandbox/browser/shell-ready.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
+  "src/handlers/visual-sandbox/fixtures/showcase/showcase.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
+  "src/handlers/visual-sandbox/literal-links.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
+  "src/handlers/visual-sandbox/prepare.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
+  "src/handlers/visual-sandbox/resource-origin.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
   "src/handlers/visual-sandbox/routes.test.ts": {
     "seconds": 1,
     "source": "estimated"
@@ -3788,6 +3844,10 @@
     "source": "estimated"
   },
   "src/handlers/visual-sandbox/srcdoc.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
+  "src/handlers/visual-sandbox/treemap-model.test.ts": {
     "seconds": 1,
     "source": "estimated"
   },
@@ -4099,6 +4159,10 @@
     "seconds": 12.574555,
     "source": "estimated"
   },
+  "src/lib/audit-log-details.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
   "src/lib/audit-log.test.ts": {
     "seconds": 0.267484,
     "source": "estimated"
@@ -4170,6 +4234,18 @@
   "src/lib/auth/registration-budget.test.ts": {
     "seconds": 3.1,
     "source": "measured"
+  },
+  "src/lib/auth/review-account-inert.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
+  "src/lib/auth/review-account-plugin.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
+  "src/lib/auth/review-account-policy.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
   },
   "src/lib/auth/session-bearer.test.ts": {
     "seconds": 0.219057,
@@ -4639,6 +4715,10 @@
     "seconds": 0.192169,
     "source": "estimated"
   },
+  "src/lib/client-ip.guard.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
   "src/lib/client-ip.property.test.ts": {
     "seconds": 0.203069,
     "source": "estimated"
@@ -4797,6 +4877,10 @@
   },
   "src/lib/db/read-bounded.db.test.ts": {
     "seconds": 1.81079,
+    "source": "estimated"
+  },
+  "src/lib/db/review-account-organization-store.db.test.ts": {
+    "seconds": 1,
     "source": "estimated"
   },
   "src/lib/db/rls-role-posture.db.test.ts": {
@@ -5407,6 +5491,10 @@
     "seconds": 0.26084,
     "source": "estimated"
   },
+  "src/lib/embeddable-frame-headers.test.ts": {
+    "seconds": 0.5,
+    "source": "estimated"
+  },
   "src/lib/entities/authorize-document-write.integration.test.ts": {
     "seconds": 1.574307,
     "source": "estimated"
@@ -5585,6 +5673,10 @@
   },
   "src/lib/file-scan/scanner.test.ts": {
     "seconds": 0.05258,
+    "source": "estimated"
+  },
+  "src/lib/file-scan/stored-file.test.ts": {
+    "seconds": 1,
     "source": "estimated"
   },
   "src/lib/file-scan/verdict.test.ts": {
@@ -5963,6 +6055,10 @@
     "seconds": 0.071361,
     "source": "estimated"
   },
+  "src/lib/legal-search/corpus-index-court-year.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
   "src/lib/legal-search/corpus-index-delete-survivor.contract.test.ts": {
     "seconds": 0.063251,
     "source": "estimated"
@@ -6133,6 +6229,10 @@
   },
   "src/lib/legal-search/corpus-index-search-facets.test.ts": {
     "seconds": 0.104776,
+    "source": "estimated"
+  },
+  "src/lib/legal-search/corpus-index-unreachable.test.ts": {
+    "seconds": 1,
     "source": "estimated"
   },
   "src/lib/legal-search/corpus-location.test.ts": {
@@ -6511,6 +6611,10 @@
     "seconds": 0.092071,
     "source": "estimated"
   },
+  "src/lib/lists/verification/document-deletion.db.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
   "src/lib/lists/verification/engine.test.ts": {
     "seconds": 0.228532,
     "source": "estimated"
@@ -6609,6 +6713,10 @@
   },
   "src/lib/mcp-upstream/crypto.test.ts": {
     "seconds": 0.220722,
+    "source": "estimated"
+  },
+  "src/lib/mcp-upstream/namespace.property.test.ts": {
+    "seconds": 1,
     "source": "estimated"
   },
   "src/lib/mcp-upstream/oauth.test.ts": {
@@ -6785,6 +6893,10 @@
   },
   "src/lib/observability/response-status.test.ts": {
     "seconds": 0.106227,
+    "source": "estimated"
+  },
+  "src/lib/observability/route-latency-class.test.ts": {
+    "seconds": 1,
     "source": "estimated"
   },
   "src/lib/ocr-derivative-pages.db.test.ts": {
@@ -7087,6 +7199,18 @@
     "seconds": 0.123218,
     "source": "estimated"
   },
+  "src/lib/review-organization/membership-fence.postgres.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
+  "src/lib/review-organization/reset-scope.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
+  "src/lib/review-organization/review-organization.integration.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
   "src/lib/root-scoped-db.postgres.test.ts": {
     "seconds": 0.6,
     "source": "measured"
@@ -7233,6 +7357,10 @@
   },
   "src/lib/scheduler/tasks/hosted-usage-webhook-retention.test.ts": {
     "seconds": 0.085742,
+    "source": "estimated"
+  },
+  "src/lib/scheduler/tasks/infosoud.test.ts": {
+    "seconds": 1,
     "source": "estimated"
   },
   "src/lib/scheduler/tasks/legislation-expression-id-backfill-plan.db.test.ts": {
@@ -7575,6 +7703,10 @@
     "seconds": 20.14469,
     "source": "estimated"
   },
+  "src/lib/tanstack-ai-schema.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
   "src/lib/tanstack-ai-usage.test.ts": {
     "seconds": 0.53059,
     "source": "estimated"
@@ -7839,6 +7971,14 @@
     "seconds": 0.442742,
     "source": "estimated"
   },
+  "src/lib/visual-preview-stream.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
+  "src/lib/visual-preview.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
   "src/lib/web-search/select-provider.test.ts": {
     "seconds": 0.065347,
     "source": "estimated"
@@ -8009,6 +8149,10 @@
   },
   "src/mcp/anonymization.test.ts": {
     "seconds": 0.145482,
+    "source": "estimated"
+  },
+  "src/mcp/app-contracts.test.ts": {
+    "seconds": 1,
     "source": "estimated"
   },
   "src/mcp/auth.test.ts": {
@@ -8299,6 +8443,14 @@
     "seconds": 0.467175,
     "source": "estimated"
   },
+  "src/mcp/review-account-exposure.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
+  "src/mcp/search-index-unavailable.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
   "src/mcp/server-admission.valkey.test.ts": {
     "seconds": 1.009738,
     "source": "estimated"
@@ -8562,6 +8714,10 @@
   "src/scripts/replay-tick.test.ts": {
     "seconds": 0.4,
     "source": "measured"
+  },
+  "src/scripts/review-account.logic.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
   },
   "src/scripts/seed-migration-rehearsal-plan.db.test.ts": {
     "seconds": 2.451865,

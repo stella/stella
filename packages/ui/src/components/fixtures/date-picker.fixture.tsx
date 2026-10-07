@@ -4,6 +4,7 @@ import { createRoot } from "react-dom/client";
 import { panic } from "better-result";
 
 import { DatePickerPopover } from "../date-picker-popover";
+import { Field, FieldLabel } from "../field";
 
 const noop = () => undefined;
 
@@ -19,6 +20,28 @@ const DatePickerFixture = () => {
 
   return (
     <main className="grid gap-4">
+      <Field>
+        <FieldLabel id="field-label">Date</FieldLabel>
+        <DatePickerPopover
+          id="field"
+          labelledBy="field-label"
+          variant="field"
+          locale="en-US"
+          onChange={noop}
+          value="2026-03-05"
+        />
+      </Field>
+      <Field>
+        <FieldLabel id="empty-field-label">Until</FieldLabel>
+        <DatePickerPopover
+          id="empty-field"
+          labelledBy="empty-field-label"
+          variant="field"
+          locale="en-US"
+          onChange={noop}
+          value={null}
+        />
+      </Field>
       <DatePickerPopover
         clearLabel="Vymazat datum"
         dialogLabel="Výběr data"

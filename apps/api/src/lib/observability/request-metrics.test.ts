@@ -1,3 +1,4 @@
+import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 
 import { AI_PROVIDERS } from "@stll/ai-catalog";
@@ -13,9 +14,11 @@ import {
   emitActionCostDropMetric,
   emitChatRunLogMetric,
   emitPromptCacheMetric,
+  REQUEST_CLASSES,
   resetMetricLineSinkForTesting,
   setMetricLineSinkForTesting,
 } from "@/api/lib/observability/request-metrics";
+import type { RequestClass } from "@/api/lib/observability/request-metrics";
 
 describe("buildRequestDurationRecord", () => {
   const base = {
@@ -26,22 +29,30 @@ describe("buildRequestDurationRecord", () => {
     timestamp: 1_700_000_000_000,
   };
 
+  const extracted = (requestClass: RequestClass) => {
+    const built = buildRequestDurationRecord({ ...base, requestClass });
+    if (built.type !== "extracted") {
+      return panic(`Expected an extracted metric for ${requestClass}`);
+    }
+    return built.record;
+  };
+
   test("emits a valid EMF directive CloudWatch can extract", () => {
-    const record = buildRequestDurationRecord(base);
+    const record = extracted("ai");
     const directive = record._aws.CloudWatchMetrics[0];
 
     // EMF contract: every metric/dimension name referenced in the
     // directive must exist as a root member, or CloudWatch silently
     // drops the metric.
-    expect(directive?.Namespace).toBe("Stella/Api");
-    expect(directive?.Dimensions).toEqual([["class"]]);
-    expect(directive?.Metrics).toEqual([
+    expect(directive.Namespace).toBe("Stella/Api");
+    expect(directive.Dimensions).toEqual([["class"]]);
+    expect(directive.Metrics).toEqual([
       { Name: "RequestDuration", Unit: "Milliseconds" },
     ]);
-    for (const dimension of directive?.Dimensions.flat() ?? []) {
+    for (const dimension of directive.Dimensions.flat()) {
       expect(record).toHaveProperty(dimension);
     }
-    for (const metric of directive?.Metrics ?? []) {
+    for (const metric of directive.Metrics) {
       expect(record).toHaveProperty(metric.Name);
     }
     expect(record._aws.Timestamp).toBe(base.timestamp);
@@ -50,14 +61,23 @@ describe("buildRequestDurationRecord", () => {
   });
 
   test("rounds duration to an integer millisecond value", () => {
-    expect(buildRequestDurationRecord(base).RequestDuration).toBe(1235);
+    expect(buildRequestDurationRecord(base).record.RequestDuration).toBe(1235);
   });
 
-  test("class dimension distinguishes ai from crud", () => {
-    expect(buildRequestDurationRecord(base).class).toBe("ai");
-    expect(
-      buildRequestDurationRecord({ ...base, requestClass: "crud" }).class,
-    ).toBe("crud");
+  test("every request class is logged; only alarmed classes extract a metric", () => {
+    const dispositions = REQUEST_CLASSES.map((requestClass) => {
+      const built = buildRequestDurationRecord({ ...base, requestClass });
+      expect(built.record.class).toBe(requestClass);
+      expect(built.record.RequestDuration).toBe(1235);
+      expect("_aws" in built.record).toBe(built.type === "extracted");
+      return [requestClass, built.type];
+    });
+    expect(Object.fromEntries(dispositions)).toEqual({
+      ai: "extracted",
+      crud: "extracted",
+      search: "extracted",
+      batch: "log_only",
+    });
   });
 });
 

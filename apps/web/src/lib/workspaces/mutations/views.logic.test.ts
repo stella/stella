@@ -160,9 +160,17 @@ describe("view reorder cache path", () => {
     // a second literal, so the test still covers the prefix if the key changes.
     const otherLocaleKey = [...viewsKeys.all(WORKSPACE_ID), "xx-other"];
     queryClient.setQueryData(otherLocaleKey, CACHED_VIEWS);
-    const navigationKey = workspacesKeys.navigation("org_navigation");
+    const { workspacesNavigationOptions } =
+      await import("@/lib/workspaces/queries");
+    const navigationKey = workspacesNavigationOptions({
+      organizationId: "org_navigation",
+      userId: "user_navigation",
+    }).queryKey;
     const unrelatedWorkspaceListKey = workspacesKeys.list("org_navigation");
-    queryClient.setQueryData(navigationKey, { workspaces: [] });
+    queryClient.setQueryData(navigationKey, {
+      workspaces: [],
+      features: { timeBilling: false },
+    });
     queryClient.setQueryData(unrelatedWorkspaceListKey, { workspaces: [] });
 
     await viewOrderCache({ queryClient, workspaceId: WORKSPACE_ID }).settle();
