@@ -20,6 +20,7 @@ import { Tabs, TabsList, TabsPanel, TabsTab } from "@stll/ui/tabs";
 
 import { AnchorFactsPanel } from "@/features/avt/anchor-facts-panel";
 import { DocumentVerifications } from "@/features/avt/document-verifications";
+import { EvidenceListEmptyState } from "@/features/avt/evidence-list-empty-state";
 import { VerificationDetail } from "@/features/avt/verification-detail";
 import { usePermissions } from "@/hooks/use-permissions";
 import { notifyUserError } from "@/lib/errors/user-toast";
@@ -128,13 +129,17 @@ const EvidenceListPicker = ({
     );
   };
 
+  if (items.length === 0) {
+    return <EvidenceListEmptyState workspaceId={workspaceId} />;
+  }
+
   return (
     <div className="flex flex-wrap items-center gap-2">
       <span className="text-muted-foreground text-sm">
         {t("avt.view.evidenceList")}
       </span>
       <Select
-        disabled={!canUpdateView || items.length === 0}
+        disabled={!canUpdateView}
         onValueChange={(next) => {
           if (next !== null && next !== view.layout.listId) {
             pick(next);
@@ -143,13 +148,7 @@ const EvidenceListPicker = ({
         value={view.layout.listId}
       >
         <SelectTrigger aria-label={t("avt.view.evidenceList")} size="sm">
-          <SelectValue
-            placeholder={
-              items.length === 0
-                ? t("avt.view.noLists")
-                : t("avt.view.chooseList")
-            }
-          />
+          <SelectValue placeholder={t("avt.view.chooseList")} />
         </SelectTrigger>
         <SelectPopup>
           {items.map((list) => (
