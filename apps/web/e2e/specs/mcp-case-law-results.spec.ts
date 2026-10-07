@@ -2,6 +2,7 @@ import { expect, test } from "@playwright/test";
 import type { Page } from "@playwright/test";
 import { execFileSync } from "node:child_process";
 import { readFile } from "node:fs/promises";
+import { fileURLToPath } from "node:url";
 
 import { MCP_APP_SANDBOX_CONTENT_DIRECTIVES } from "@stll/api-contract/mcp-app-sandbox-policy";
 import {
@@ -30,6 +31,22 @@ type HostOptions = {
   bundle?: "committed" | "country-fixture";
 };
 
+let countryFixture: string | undefined;
+/** Built once per worker; the build takes seconds. */
+const countryFixtureBundle = (): string =>
+  (countryFixture ??= execFileSync(
+    "bun",
+    [
+      fileURLToPath(
+        new URL(
+          "../../../api/scripts/build-mcp-country-filter-fixture.ts",
+          import.meta.url,
+        ),
+      ),
+    ],
+    { encoding: "utf-8", maxBuffer: 32 * 1024 * 1024 },
+  ));
+
 const mountApp = async ({
   page,
   locale,
@@ -40,16 +57,7 @@ const mountApp = async ({
 }: HostOptions) => {
   const bundle =
     bundleKind === "country-fixture"
-      ? execFileSync(
-          "bun",
-          [
-            new URL(
-              "../../../api/scripts/build-mcp-country-filter-fixture.ts",
-              import.meta.url,
-            ).pathname,
-          ],
-          { encoding: "utf-8", maxBuffer: 32 * 1024 * 1024 },
-        )
+      ? countryFixtureBundle()
       : await readFile(
           new URL(
             "../../../api/src/mcp/apps/case-law-results/generated/app.html.txt",
