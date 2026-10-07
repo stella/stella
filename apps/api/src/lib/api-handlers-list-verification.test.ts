@@ -1,6 +1,8 @@
 import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 
+import { VERIFICATION_RUN_CAP_CODES } from "@stll/api-contract/verification-run-caps";
+
 import { env } from "@/api/env";
 import factDetails from "@/api/handlers/lists/items/fact-details/update";
 import sourceReview from "@/api/handlers/lists/items/sources/verification/update";
@@ -225,7 +227,7 @@ test.each(["active", "daily"] as const)(
           status: "error",
           error: {
             type: "structured",
-            code: "rate_limited",
+            code: VERIFICATION_RUN_CAP_CODES[reason],
             retryable: true,
             hint:
               reason === "active"

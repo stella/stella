@@ -47,7 +47,10 @@ const document = {
     "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
 } satisfies WorkspaceFile;
 const clients: InstanceType<typeof QueryClient>[] = [];
-const mountDocuments = (files: WorkspaceFile[], role = "admin") => {
+const mountDocuments = (
+  files: WorkspaceFile[],
+  role: "admin" | "external" | "intern" | "member" | "owner" = "admin",
+) => {
   const client = new QueryClient({
     defaultOptions: {
       queries: { retry: false, gcTime: 0, staleTime: Infinity },
@@ -103,7 +106,7 @@ test("an empty matter shows its document empty state without requesting statuses
 test("pending statuses disable verification and show no unverified verdict", async () => {
   const { promise: response, resolve: finish } =
     Promise.withResolvers<Response>();
-  answerLatest(() => response);
+  answerLatest(async () => response);
   const view = mountDocuments([document]);
   expect(
     view
