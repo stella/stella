@@ -13,7 +13,7 @@ import type { ChatThreadRef } from "@/lib/chat-thread-ref";
 import { toSafeId, type SafeId } from "@/lib/safe-id";
 
 /** The document a composer has open, as its next send carries it. */
-export type ComposerSkillDocument =
+type ComposerSkillDocument =
   | {
       kind: typeof CHAT_SKILL_DOCUMENT.file;
       entityId: string;
