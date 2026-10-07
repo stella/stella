@@ -6,7 +6,7 @@
  * `decision-analysis.logic.test.ts` rather than through a live corpus.
  *
  * Nothing here reaches for a connection, an environment or an object store:
- * the caller resolves the decision's parse and hands it in, which is what
+ * the caller hands in the reader for the decision's parse, which is what
  * lets every refusal be exercised without a corpus.
  */
 
@@ -94,18 +94,21 @@ export type ResolvedDecisionInput =
  * it: the same language-selected system prompt, the same anchored user
  * message, and therefore the same fingerprint.
  *
- * `ast` is resolved by the caller through the corpus reader, because under
- * canonical corpus storage the parse is an object and the row's column is
- * trimmed. A null `ast` therefore means no parse anywhere, not "not in this
- * column": the run reports that as `ast-unavailable`, which should be rare.
+ * Every refusal the row alone decides runs before `readAst`, so a redacted,
+ * withheld or unsupported-language decision never costs an object-store
+ * read. `readAst` resolves the parse through the corpus reader, because
+ * under canonical corpus storage the parse is an object and the row's
+ * column is trimmed. A null parse therefore means no parse anywhere, not
+ * "not in this column": the run reports that as `ast-unavailable`, which
+ * should be rare.
  */
-export const resolveRowAnalysisInput = ({
-  ast,
+export const resolveRowAnalysisInput = async ({
+  readAst,
   row,
 }: {
   row: DecisionAnalysisRow;
-  ast: DocumentAst | null;
-}): ResolvedDecisionInput => {
+  readAst: () => Promise<DocumentAst | null>;
+}): Promise<ResolvedDecisionInput> => {
   if (row.redactedAt !== null) {
     return { status: "rejected", reason: ANALYSIS_REJECTION.redacted };
   }
@@ -115,15 +118,16 @@ export const resolveRowAnalysisInput = ({
       reason: ANALYSIS_REJECTION.derivedAiNotAllowed,
     };
   }
-  if (ast === null) {
-    return { status: "rejected", reason: ANALYSIS_REJECTION.astUnavailable };
-  }
   const systemPrompt = getSystemPrompt(row.language);
   if (Result.isError(systemPrompt)) {
     return {
       status: "rejected",
       reason: ANALYSIS_REJECTION.unsupportedLanguage,
     };
+  }
+  const ast = await readAst();
+  if (ast === null) {
+    return { status: "rejected", reason: ANALYSIS_REJECTION.astUnavailable };
   }
   return {
     status: "ok",
