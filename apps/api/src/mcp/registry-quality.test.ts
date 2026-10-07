@@ -878,6 +878,7 @@ describe("destructive write-tool behavior", () => {
       .filter((tool) => !tool.annotations.destructiveHint)
       .filter(
         (tool) =>
+          "destructiveBehavior" in tool &&
           tool.destructiveBehavior !== undefined &&
           tool.destructiveBehavior.type !== "outbound",
       )
