@@ -1674,6 +1674,15 @@ const renderTableBlock = ({
   );
 };
 
+export const buildFulltextParagraphBlocks = (text: string): ParagraphBlock[] =>
+  text.split(/\n{2,}/u).map((paragraph, index) => ({
+    id: `fulltext:${index}`,
+    anchorId: `fulltext:${index}`,
+    type: "paragraph",
+    plainText: paragraph,
+    inlines: [{ text: paragraph, type: "text" }],
+  }));
+
 export const FulltextFallback = ({
   activeMatchIndex,
   anchorsByPieceId,
@@ -1685,12 +1694,12 @@ export const FulltextFallback = ({
   rangesByPieceId: Record<string, ReaderMarkRange[]>;
   text: string;
 }) => {
-  const paragraphs = text.split(/\n{2,}/u);
+  const paragraphs = buildFulltextParagraphBlocks(text);
 
   return (
     <>
-      {paragraphs.map((paragraph, index) => {
-        const pieceId = `fulltext:${index}`;
+      {paragraphs.map((paragraph) => {
+        const pieceId = paragraph.id;
 
         return (
           <p
@@ -1702,7 +1711,7 @@ export const FulltextFallback = ({
             <InlineContent
               activeMatchIndex={activeMatchIndex}
               anchors={anchorsForPiece(anchorsByPieceId, pieceId)}
-              inlines={[{ text: paragraph, type: "text" }]}
+              inlines={paragraph.inlines}
               pieceId={pieceId}
               ranges={rangesForPiece(rangesByPieceId, pieceId)}
             />
