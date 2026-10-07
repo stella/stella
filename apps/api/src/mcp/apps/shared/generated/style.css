@@ -5508,9 +5508,6 @@
   .\[\&_svg\:not\(\[data-slot\=button-loader\]_svg\)\]\:hidden svg:not([data-slot=button-loader] svg) {
     display: none;
   }
-  .\[\&_svg\:not\(\[data-slot\=button-loader\]\)\]\:hidden svg:not([data-slot=button-loader]) {
-    display: none;
-  }
   .\[\&_tr\]\:border-b tr {
     border-bottom-style: var(--tw-border-style);
     border-bottom-width: 1px;
