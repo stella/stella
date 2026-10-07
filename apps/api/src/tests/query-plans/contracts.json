@@ -344,6 +344,26 @@
       }
     ]
   },
+  "case-law.citation-summary-state": {
+    "scans": [
+      {
+        "relation": "case_law_decision_citation_stats_state",
+        "nodeType": "Index Scan",
+        "index": "case_law_decision_citation_stats_state_pkey",
+        "occurrence": 0
+      }
+    ]
+  },
+  "case-law.citation-summary-exact": {
+    "scans": [
+      {
+        "relation": "case_law_decision_citation_stats",
+        "nodeType": "Index Scan",
+        "index": "case_law_decision_citation_stats_bucket_key",
+        "occurrence": 0
+      }
+    ]
+  },
   "case-law.top-citing-decisions": {
     "scans": [
       {

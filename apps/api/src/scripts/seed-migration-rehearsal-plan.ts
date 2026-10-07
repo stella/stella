@@ -31,6 +31,8 @@ export const REHEARSAL_DEFAULT_DECISIONS = 200_000;
 /** Per-decision multiples; the totals a run reports are `decisions * ratio`. */
 export const REHEARSAL_ROWS_PER_DECISION = {
   case_law_citations: 5,
+  case_law_decision_citation_stats: 1,
+  case_law_decision_citation_stats_state: 1,
   case_law_decision_identifiers: 1,
   case_law_decisions: 1,
   case_law_index_jobs: 1,
@@ -169,6 +171,14 @@ export const REHEARSAL_SEEDERS = {
            ${ZERO_DIGEST},
            ${PROJECTION_EPOCH}
     FROM generate_series(1, ${String(decisions)}) AS g(k)`,
+  case_law_decision_citation_stats: () => `
+    INSERT INTO case_law_decision_citation_stats
+      (decision_id, direction, related_year, related_country, related_source_id, polarity, count)
+    SELECT d.id, 'incoming', 2024, 'CZE', '${SOURCE_ID}', 'unknown', 1
+    FROM rehearsal_decisions d`,
+  case_law_decision_citation_stats_state: () => `
+    INSERT INTO case_law_decision_citation_stats_state (decision_id, status)
+    SELECT d.id, 'pending' FROM rehearsal_decisions d`,
   case_law_decision_identifiers: () => `
     INSERT INTO case_law_decision_identifiers (decision_id, type, value, normalized_value)
     SELECT d.id, 'case-number', d.case_number, lower(d.case_number)
@@ -315,6 +325,8 @@ export const REHEARSAL_SEED_ORDER = [
   "case_law_decisions",
   "case_law_decision_identifiers",
   "case_law_citations",
+  "case_law_decision_citation_stats",
+  "case_law_decision_citation_stats_state",
   "case_law_provision_citations",
   "case_law_provision_extractions",
   "case_law_statute_citation_memberships",

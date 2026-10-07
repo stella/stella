@@ -3,7 +3,11 @@ import { and, desc, eq, sql } from "drizzle-orm";
 import * as v from "valibot";
 
 import { AGENT_INPUT_NORMALIZATION_KIND } from "@stll/agent-input";
-import { resourceRef, RESOURCE_TYPE } from "@stll/api-contract";
+import {
+  CASE_LAW_CITATION_SUMMARY_SCAN_LIMIT,
+  resourceRef,
+  RESOURCE_TYPE,
+} from "@stll/api-contract";
 import { DECISION_READ_RESOLUTION } from "@stll/api-contract/case-law-decision-resolution";
 import { CASE_LAW_JURISDICTIONS } from "@stll/api-contract/case-law-jurisdictions";
 import {
@@ -1215,8 +1219,10 @@ export const STELLA_TOOL_DEFINITIONS = [
       "`query` returns matching paragraphs with neighbours. Page 1 adds " +
       "details (`url` the reader, `source_url` the publisher), metadata, " +
       "published textFields and a citation summary: citedBy count of citing " +
-      "references, polarity counts, top 5 citers, what it cites (decisionId " +
-      "where held). All citations: read_case_law_citations ({ decision_id: " +
+      "references, polarity counts, top citers and what it cites (decisionId " +
+      "where held). citedBy.top has items and required precision: exact or " +
+      `bounded (candidateWindow: ${CASE_LAW_CITATION_SUMMARY_SCAN_LIMIT} raw incoming edges). ` +
+      "All citations: read_case_law_citations ({ decision_id: " +
       "'<uuid>', direction: 'cited_by' }). One id gets an outline with " +
       "pages; outline and query entries deep-link. `include` picks fields; " +
       "[] returns text and identity only.",

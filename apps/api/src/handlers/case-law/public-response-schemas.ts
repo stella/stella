@@ -268,10 +268,19 @@ export const citationSummaryResponseSchema = t.Object(
   {
     incoming: t.Object(treatmentCounts, { additionalProperties: false }),
     outgoing: t.Object(treatmentCounts, { additionalProperties: false }),
-    capped: t.Object(
-      { incoming: t.Boolean(), outgoing: t.Boolean() },
-      { additionalProperties: false },
-    ),
+    precision: t.Union([
+      t.Object({ status: t.Literal("exact") }, { additionalProperties: false }),
+      t.Object(
+        {
+          status: t.Literal("bounded"),
+          capped: t.Object(
+            { incoming: t.Boolean(), outgoing: t.Boolean() },
+            { additionalProperties: false },
+          ),
+        },
+        { additionalProperties: false },
+      ),
+    ]),
     incomingByYear: t.Array(
       t.Object(
         { ...treatmentCounts, year: t.Number() },

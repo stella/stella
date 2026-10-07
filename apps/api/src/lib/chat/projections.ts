@@ -1,6 +1,7 @@
 import * as v from "valibot";
 
 import {
+  CASE_LAW_CITATION_SUMMARY_SCAN_LIMIT,
   ENTITY_KINDS,
   NUMBER_SERIES_DOCUMENT_TYPES,
   TIME_ENTRY_ACTIVITY_GROUPS,
@@ -1452,28 +1453,36 @@ const citationTreatmentCountsProjection = v.strictObject({
   v.OptionalSchema<v.NumberSchema<undefined>, undefined>
 >);
 
+const topCitingItemsProjection = v.array(
+  v.strictObject({
+    url: v.optional(v.string()),
+    caseNumber: v.string(),
+    court: v.string(),
+    date: v.optional(v.string()),
+    decisionId: passthroughId(),
+  }),
+);
+
 // A citing or cited decision as the summary names it: no row ids, and an id
 // only where another tool can act on it.
 const caseLawCitationSummaryProjection = v.strictObject({
   citedBy: v.strictObject({
     // Citing references: a decision citing this one twice counts twice.
     count: v.number(),
-    // The scan behind the count stopped at its cap: the count is a lower
-    // bound, and `top` ranks only the citations it read.
+    // A lower-bound count. Ranking precision is carried independently by top.
     capped: v.optional(v.literal(true)),
     polarity: v.optional(citationTreatmentCountsProjection),
-    top: v.optional(
-      v.array(
-        v.strictObject({
-          url: v.optional(v.string()),
-          caseNumber: v.string(),
-          court: v.string(),
-          date: v.optional(v.string()),
-          // Always held: read_case_law_decision takes it.
-          decisionId: passthroughId(),
-        }),
-      ),
-    ),
+    top: v.variant("precision", [
+      v.strictObject({
+        precision: v.literal("exact"),
+        items: topCitingItemsProjection,
+      }),
+      v.strictObject({
+        precision: v.literal("bounded"),
+        candidateWindow: v.literal(CASE_LAW_CITATION_SUMMARY_SCAN_LIMIT),
+        items: topCitingItemsProjection,
+      }),
+    ]),
   }),
   cites: v.strictObject({
     count: v.number(),

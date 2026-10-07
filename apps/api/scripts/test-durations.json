@@ -763,6 +763,10 @@
     "seconds": 0.22288,
     "source": "estimated"
   },
+  "src/handlers/case-law/decisions/citation-stats.postgres.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
   "src/handlers/case-law/decisions/citations.db.test.ts": {
     "seconds": 2.130553,
     "source": "estimated"

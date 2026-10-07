@@ -824,6 +824,29 @@ export const installPgliteDecisionAliases = async (
   }
 };
 
+/** Use the committed SQL for the projection that schema push cannot install. */
+export const installPgliteDecisionCitationStats = async (
+  db: PgliteSchemaDb,
+): Promise<void> => {
+  for (const statement of readMigrationStatements(
+    nodePath.join(
+      DRIZZLE_DIR,
+      "20261005120200_decision_citation_stats",
+      "migration.sql",
+    ),
+  ).filter((candidate) => {
+    const text = executableSql(candidate);
+    return (
+      text.startsWith("CREATE FUNCTION") ||
+      text.startsWith("CREATE TRIGGER") ||
+      text.startsWith("REVOKE ALL ON FUNCTION") ||
+      text.startsWith("GRANT EXECUTE ON FUNCTION")
+    );
+  })) {
+    await db.execute(sql.raw(statement));
+  }
+};
+
 /** Install the migration-owned verification counter and Prague day function. */
 export const installPgliteListVerificationBudgets = async (
   db: PgliteSchemaDb,

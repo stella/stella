@@ -54,7 +54,7 @@ const summary = {
     supportive: 0,
     unclassified: 0,
   },
-  capped: { incoming: false, outgoing: false },
+  precision: { status: "exact" },
   incomingByYear: [
     {
       year: 2024,

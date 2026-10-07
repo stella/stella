@@ -53,6 +53,7 @@ import type {
   ReviewablePolarity,
   RuleSource,
 } from "@/api/handlers/case-law/polarity/consts";
+import { CITATION_DIRECTIONS } from "@/api/lib/case-law/citation-vocabulary";
 import {
   CASE_LAW_DECISION_COURT_ID_CONSTRAINT,
   DECISION_COURT_ID_MAX_LENGTH,
@@ -3128,3 +3129,108 @@ export const caseLawIndexJobs = p.pgTable(
 // draft. Shares the object-storage + corpus index substrate via the
 // `legislation` corpus family.
 // ---------------------------------------------------------------------------
+
+export const DECISION_CITATION_STATS_STATUSES = ["pending", "exact"] as const;
+
+/** Aggregates retain the far source and country so read policy changes are immediate. */
+export const caseLawDecisionCitationStats = p.pgTable(
+  "case_law_decision_citation_stats",
+  {
+    decisionId: safeUuid<"caseLawDecision">("decision_id").notNull(),
+    direction: p.text({ enum: CITATION_DIRECTIONS }).notNull(),
+    relatedYear: p.integer("related_year").notNull(),
+    relatedCountry: p.varchar("related_country", { length: 3 }),
+    relatedSourceId: p.uuid("related_source_id"),
+    polarity: p.varchar({ length: 16, enum: POLARITIES }).notNull(),
+    count: p.bigint({ mode: "number" }).notNull(),
+  },
+  (t) => [
+    p
+      .foreignKey({
+        columns: [t.decisionId],
+        foreignColumns: [caseLawDecisions.id],
+        name: "decision_citation_stats_decision_fk",
+      })
+      .onDelete("cascade"),
+    p
+      .unique("case_law_decision_citation_stats_bucket_key")
+      .on(
+        t.decisionId,
+        t.direction,
+        t.relatedYear,
+        t.relatedCountry,
+        t.relatedSourceId,
+        t.polarity,
+      )
+      .nullsNotDistinct(),
+    p.check(
+      "case_law_decision_citation_stats_target_shape",
+      sql`
+      (${t.relatedSourceId} IS NULL AND ${t.relatedCountry} IS NULL AND ${t.direction} = 'outgoing' AND ${t.relatedYear} = 0)
+      OR (${t.relatedSourceId} IS NOT NULL AND ${t.relatedCountry} IS NOT NULL AND (${t.direction} = 'incoming' OR ${t.relatedYear} = 0))
+    `,
+    ),
+    p.check(
+      "case_law_decision_citation_stats_direction",
+      sql`${t.direction} IN (${sql.join(
+        CITATION_DIRECTIONS.map((value) => sql.raw(`'${value}'`)),
+        sql`, `,
+      )})`,
+    ),
+    p.check(
+      "case_law_decision_citation_stats_nonnegative",
+      sql`${t.count} >= 0`,
+    ),
+    p.check(
+      "case_law_decision_citation_stats_polarity",
+      sql`${t.polarity} IN (${sql.join(
+        POLARITIES.map((value) => sql.raw(`'${value}'`)),
+        sql`, `,
+      )})`,
+    ),
+    ...globalCaseLawPolicies(),
+    p.pgPolicy("public_law_reader_access", {
+      for: "select",
+      to: stellaPublicLawReader,
+      using: sql`CASE WHEN ${t.relatedSourceId} IS NULL THEN true ELSE EXISTS (
+        SELECT 1 FROM ${caseLawSources} AS citation_stats_source
+        WHERE citation_stats_source.id = ${t.relatedSourceId}
+          AND ${redistributableCaseLawSourceFor(sql`citation_stats_source.descriptor`)}
+      ) END`,
+    }),
+  ],
+);
+
+/** Missing state means pending; an empty exact projection is a truthful zero. */
+export const caseLawDecisionCitationStatsState = p.pgTable(
+  "case_law_decision_citation_stats_state",
+  {
+    decisionId: safeUuid<"caseLawDecision">("decision_id").primaryKey(),
+    status: p
+      .text({ enum: DECISION_CITATION_STATS_STATUSES })
+      .default("pending")
+      .notNull(),
+  },
+  (t) => [
+    p
+      .foreignKey({
+        columns: [t.decisionId],
+        foreignColumns: [caseLawDecisions.id],
+        name: "decision_citation_stats_state_decision_fk",
+      })
+      .onDelete("cascade"),
+    p.check(
+      "case_law_decision_citation_stats_state_status",
+      sql`${t.status} IN (${sql.join(
+        DECISION_CITATION_STATS_STATUSES.map((value) => sql.raw(`'${value}'`)),
+        sql`, `,
+      )})`,
+    ),
+    ...globalCaseLawPolicies(),
+    p.pgPolicy("public_law_reader_access", {
+      for: "select",
+      to: stellaPublicLawReader,
+      using: sql`true`,
+    }),
+  ],
+);
