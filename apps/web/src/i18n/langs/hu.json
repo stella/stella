@@ -1700,6 +1700,7 @@
     "deletedCount": "{count, plural, one {# elem} other {# elem}} törölve",
     "description": "Leírás",
     "details": "Részletek",
+    "detailsHiddenFeatureUnavailable": "A részletek rejtve vannak: a funkció nincs bekapcsolva",
     "disconnect": "Leválasztás",
     "dismiss": "Elvetés",
     "displayName": "Megjelenítendő név",

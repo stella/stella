@@ -35,6 +35,7 @@ import {
   RESULT_CONVENTION_ENABLED_GLOBS,
   RESULT_CONVENTION_EXCLUDE_GLOBS,
 } from "./scripts/result-boundary-globs.ts";
+import sha256MigrationLedger from "./scripts/sha256-migration-ledger.json" with { type: "json" };
 import sourceFingerprintBaseline from "./scripts/source-fingerprint-baseline.json" with { type: "json" };
 import {
   SQL_PERF_LINT_EXCLUDES,
@@ -167,6 +168,18 @@ const derivedAttributeRuleOptions = {
 };
 
 const fixtureRuleOverrides = [
+  {
+    files: [".oxlint-plugins/__fixtures__/no-raw-sha256.fixture.ts"],
+    rules: {
+      "no-raw-sha256/no-raw-sha256": "error",
+      "no-unused-vars": "off",
+      "no-new": "off",
+      "prefer-const": "off",
+      "typescript/no-floating-promises": "off",
+      "typescript/dot-notation": "off",
+      "typescript/unbound-method": "off",
+    },
+  } as const satisfies OxlintOverride,
   fixtureRuleOverride("require-json-import-attribute.fixture.ts", [
     "require-json-import-attribute/require-json-import-attribute",
   ]),
@@ -705,27 +718,54 @@ const apiProviderAdapterImports = API_PROVIDER_ADAPTER_MODULES.map((name) => ({
 // owner that can detect a same-element conflict instead of calling the
 // adapter directly. `monitorForElements` (no per-element registry) is not
 // restricted.
+// Shrink-only migration exceptions: remove each file when its surface moves
+// element registration into an explicit owner. Never add new consumers here.
+export const LEGACY_PRAGMATIC_DRAG_REGISTRATION_FILES = [
+  // Owns the picker rows; no other registration owner touches those elements.
+  "apps/web/src/components/matter-target-picker.tsx",
+  // Owns the sidebar rows; no other registration owner touches those elements.
+  "apps/web/src/components/app-sidebar.tsx",
+  // Owns the organizer rows; no other registration owner touches those elements.
+  "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/existing-file-organizer-dialog.tsx",
+  // Owns the calendar day cells; no other registration owner touches those elements.
+  "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/calendar/calendar-day-cell.tsx",
+  // Owns the calendar chips; no other registration owner touches those elements.
+  "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/calendar/calendar-entity-chip.tsx",
+  // Owns the tree rows; no other registration owner touches those elements.
+  "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/filesystem/tree-view.tsx",
+  // Owns the entity row handles; no other registration owner touches those elements.
+  "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/table/entity-row-cells.tsx",
+  // Owns the position rows; no other registration owner touches those elements.
+  "apps/web/src/routes/knowledge/-components/position-editor.tsx",
+  // Owns the document type cards; no other registration owner touches those elements.
+  "apps/web/src/routes/_protected.settings/-components/organization/document-types-card.tsx",
+  // Owns the page tiles; no other registration owner touches those elements.
+  "apps/web/src/components/pdf/page-organizer.tsx",
+  // Owns the header cells; no other registration owner touches those elements.
+  "apps/web/src/components/workspaces/table/workspace-table/header-cells.tsx",
+] as const;
+
 const webPragmaticDragAdapterImport = {
-  name: "@atlaskit/pragmatic-drag-and-drop/element/adapter",
+  name: "@atlaskit/pragmatic-drag-and-drop/adapter/element-adapter",
   importNames: ["draggable", "dropTargetForElements"],
   message:
-    "Register kanban element drag sources and drop targets through use-kanban-drop-targets.ts's attachElementDropTarget/draggable, not directly: pragmatic-drag-and-drop keeps only one live drop target per element, so a second direct registration silently replaces the first.",
+    "Register element drag sources and drop targets through the surface's registration owner (kanban: use-kanban-drop-targets.ts), not directly: pragmatic-drag-and-drop keeps only one live drop target per element, so a second direct registration silently replaces the first.",
 };
 
 const uiPragmaticDragAdapterImport = {
-  name: "@atlaskit/pragmatic-drag-and-drop/element/adapter",
+  name: "@atlaskit/pragmatic-drag-and-drop/adapter/element-adapter",
   importNames: ["draggable", "dropTargetForElements"],
   message:
-    "Register kanban element drag sources and drop targets through kanban/drag-interactions.ts, not directly: pragmatic-drag-and-drop keeps only one live drop target per element, so a second direct registration silently replaces the first.",
+    "Register element drag sources and drop targets through the surface's registration owner (kanban: drag-interactions.ts), not directly: pragmatic-drag-and-drop keeps only one live drop target per element, so a second direct registration silently replaces the first.",
 };
 
 // The adapter is a single published entry point with no public subpaths;
 // nothing should import a level deeper than the module the two bans above
 // already cover.
 const pragmaticDragAdapterDeepImportBan = {
-  group: ["@atlaskit/pragmatic-drag-and-drop/element/adapter/*"],
+  group: ["@atlaskit/pragmatic-drag-and-drop/adapter/element-adapter/*"],
   message:
-    "Import only '@atlaskit/pragmatic-drag-and-drop/element/adapter'; it has no public subpaths.",
+    "Import only '@atlaskit/pragmatic-drag-and-drop/adapter/element-adapter'; it has no public subpaths.",
 };
 
 // Oxlint 1.80 split the monolithic react/react-compiler rule into categories.
@@ -897,6 +937,10 @@ const config = defineConfig({
     },
   },
   rules: {
+    "no-raw-sha256/no-raw-sha256": [
+      "error",
+      { allowedFiles: sha256MigrationLedger.map(({ id }) => id) },
+    ],
     // Every base rule is decided here or in the vendored presets, never by a
     // spread: a spread replaces preset severities without naming the rules,
     // and scripts/check-oxlint-effective-config.ts fails on that.
@@ -1378,11 +1422,13 @@ const config = defineConfig({
   ],
 
   jsPlugins: [
+    { name: "gdp-ts", specifier: "./scripts/oxlint-presets/gdp-plugin.mjs" },
     "./.oxlint-plugins/require-contract-domains.ts",
     ...SHADCN_LINT_JS_PLUGINS,
     stellaLowercasePluginSpecifier,
     "./.oxlint-plugins/no-raw-cache-control.ts",
     "./.oxlint-plugins/raw-hash-from-source-fingerprint.ts",
+    "./.oxlint-plugins/no-raw-sha256.ts",
     "@tanstack/eslint-plugin-query",
     "@tanstack/eslint-plugin-router",
     "./.oxlint-plugins/drizzle.ts",
@@ -1602,6 +1648,33 @@ const config = defineConfig({
 
   overrides: [
     {
+      files: ["apps/api/src/**/*.ts"],
+      rules: {
+        "gdp-ts/no-define-proof": "error",
+        "gdp-ts/no-proof-assertion": "error",
+      },
+    },
+    {
+      files: [
+        "apps/api/src/handlers/signals/**/*.ts",
+        "apps/api/src/lib/signals/**/*.ts",
+      ],
+      rules: {
+        "gdp-ts/no-type-assertion": "error",
+        "gdp-ts/no-any": "error",
+      },
+    },
+    {
+      files: [
+        "apps/api/src/lib/signals/proofs/signal-visible-to.ts",
+        "apps/api/src/lib/signals/proofs/may-create-signal-request.ts",
+      ],
+      rules: {
+        "gdp-ts/no-define-proof": "off",
+        "gdp-ts/no-exported-prover": "error",
+      },
+    },
+    {
       files: ["apps/web/e2e/**", "scripts/**"],
       rules: {
         "require-json-import-attribute/require-json-import-attribute": "error",
@@ -1611,7 +1684,10 @@ const config = defineConfig({
       // Plugin fixtures include intentional lexical reads and class references
       // before declaration to exercise rule diagnostics.
       files: [".oxlint-plugins/__fixtures__/**"],
-      rules: { "eslint/no-use-before-define": "off" },
+      rules: {
+        "no-raw-sha256/no-raw-sha256": "off",
+        "eslint/no-use-before-define": "off",
+      },
     },
     {
       files: ["apps/api/src/**/*.ts", "apps/api/scripts/**/*.ts"],
@@ -5449,6 +5525,28 @@ const config = defineConfig({
     {
       files: ["apps/web/src/**/*.{ts,tsx}", "apps/api/src/mcp/**/*.{ts,tsx}"],
       rules: { "require-contract-domains/require-contract-domains": "error" },
+    },
+    {
+      // Shrink-only exceptions for existing surface-owned elements; preserve
+      // every other web import restriction while registration owners migrate.
+      files: [...LEGACY_PRAGMATIC_DRAG_REGISTRATION_FILES],
+      rules: {
+        "no-restricted-imports": [
+          "error",
+          {
+            paths: [noZodImport, ...webFolioAllLocalesImports],
+            patterns: [
+              {
+                group: webLocalApiImportGroup,
+                message: "Use '@/lib/api-contract' instead of '@/api/'.",
+              },
+              ...webCrossWorkspaceImports,
+              webDatePickerImport,
+              pragmaticDragAdapterDeepImportBan,
+            ],
+          },
+        ],
+      },
     },
     ...fixtureRuleOverrides,
     // Last: oxlint resolves overrides by replacement, so a scope that enables

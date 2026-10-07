@@ -90,7 +90,7 @@ jobs:
       - name: Open or update the removal PR
         id: removal-pr
         if: steps.prune.outputs.changed == 'true'
-        uses: stella/.github/.github/actions/signed-commit@aff5017c264acce5a2bcdf15876da08835e6de70
+        uses: stella/.github/.github/actions/signed-commit@167fb396c6c0f4e07296ad2cd72e6ef15367c776
         with:
           token: ${{ steps.app-token.outputs.token }}
           mode: refresh-pr

@@ -69,7 +69,7 @@ jobs:
       pull-requests: read
       checks: read
     # The repository owner publishes this versioned shared contract.
-    uses: stella/.github/.github/workflows/changeset-release-pr.yml@aff5017c264acce5a2bcdf15876da08835e6de70
+    uses: stella/.github/.github/workflows/changeset-release-pr.yml@167fb396c6c0f4e07296ad2cd72e6ef15367c776
     with:
       bun-version-file: package.json
       auto-merge-command: STELLA_MERGE_HOLD_CHECKED_BY_WORKFLOW=1 bun scripts/merge-bar.ts "$RELEASE_PR_NUMBER"

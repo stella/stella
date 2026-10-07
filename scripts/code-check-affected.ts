@@ -65,6 +65,8 @@ export const OXLINT_CONFIGURATION_CACHE_INPUTS = [
   "$TURBO_ROOT$/.oxlint-plugins/**",
   "$TURBO_ROOT$/scripts/oxlint-presets/**",
   "$TURBO_ROOT$/scripts/ownership.ts",
+  "$TURBO_ROOT$/scripts/sha256-owners.ts",
+  "$TURBO_ROOT$/scripts/sha256-migration-ledger.json",
   "$TURBO_ROOT$/scripts/status-write-shapes.ts",
   "$TURBO_ROOT$/scripts/parse-memo.ts",
   "$TURBO_ROOT$/scripts/oxlint-disable-rule-ids.ts",

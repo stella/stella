@@ -1700,6 +1700,7 @@
     "deletedCount": "{count, plural, one {# üksus} other {# üksust}} kustutatud",
     "description": "Kirjeldus",
     "details": "Üksikasjad",
+    "detailsHiddenFeatureUnavailable": "Üksikasjad on peidetud: funktsioon pole lubatud",
     "disconnect": "Katkesta ühendus",
     "dismiss": "Jäta kõrvale",
     "displayName": "Kuvatav nimi",

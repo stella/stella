@@ -1700,6 +1700,7 @@
     "deletedCount": "{count, plural, zero {تم حذف أي عنصر} one {تم حذف عنصر واحد} two {تم حذف عنصرين} few {تم حذف # عناصر} many {تم حذف # عنصرًا} other {تم حذف # عنصر}}",
     "description": "الوصف",
     "details": "التفاصيل",
+    "detailsHiddenFeatureUnavailable": "التفاصيل مخفية: الميزة غير مفعّلة",
     "disconnect": "قطع الاتصال",
     "dismiss": "تجاهل",
     "displayName": "الاسم المعروض",
