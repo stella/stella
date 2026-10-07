@@ -8,7 +8,7 @@
 // The sanctioned way to give a group meaning is the package's own fold:
 // `foldCondition`/`foldConditions` own which nodes survive, and hand the
 // surviving children to a `group` callback that may read `combinator` and
-// `negated` to combine them. Only callbacks actually passed to an owner
+// `negated` to combine them. Only group callbacks actually passed to an owner
 // fold are exempt; importing a fold does not exempt unrelated reads.
 //
 // The ban is a plain, non-computed property-access check on `.combinator`
@@ -23,7 +23,7 @@
 // fields):
 //   - packages/conditions/src/** (the tree's own fold/walk/evaluate)
 //   - packages/workspace-ui/src/** (the interactive condition builder)
-//   - callbacks in the handlers of an actual `foldCondition` or
+//   - group callbacks in the handlers of an actual `foldCondition` or
 //     `foldConditions` call from `@stll/conditions`, including stable named
 //     handlers and callback aliases; type-only imports cannot call the fold
 //
@@ -123,6 +123,102 @@ const stableExpression = (
   return definition.node;
 };
 
+const createHandlerMutationRecorder = (
+  context: ScopeContext,
+  mutatedHandlers: Set<AstNode>,
+) => {
+  const recordHandlerMutation = (value: unknown) => {
+    const target = unwrapExpression(value);
+    if (target === null) {
+      return;
+    }
+    if (target.type === "ObjectPattern" && Array.isArray(target.properties)) {
+      for (const property of target.properties) {
+        if (!isAstNode(property)) {
+          continue;
+        }
+        recordHandlerMutation(
+          property.type === "RestElement" ? property.argument : property.value,
+        );
+      }
+      return;
+    }
+    if (target.type === "ArrayPattern" && Array.isArray(target.elements)) {
+      for (const element of target.elements) {
+        recordHandlerMutation(element);
+      }
+      return;
+    }
+    if (target.type === "RestElement" || target.type === "AssignmentPattern") {
+      recordHandlerMutation(
+        target.type === "RestElement" ? target.argument : target.left,
+      );
+      return;
+    }
+    if (target.type !== "MemberExpression") {
+      return;
+    }
+    const name = target.computed
+      ? staticStringValue(target.property)
+      : getPropertyName(target.property);
+    if (name !== null && !Object.hasOwn(FOLD_HANDLER_PROPERTIES, name)) {
+      return;
+    }
+    const object = stableExpression(context, target.object);
+    if (object?.type === "ObjectExpression") {
+      mutatedHandlers.add(object);
+    }
+  };
+  return recordHandlerMutation;
+};
+
+type PossibleLeafCallbacksOptions = {
+  context: ScopeContext;
+  value: unknown;
+  callbacks: Set<AstNode>;
+};
+
+// Uncertain handlers cannot grant a possible leaf an outer group's exemption.
+const collectPossibleLeafCallbacks = (
+  { context, value, callbacks }: PossibleLeafCallbacksOptions,
+  seen = new Set<AstNode>(),
+): void => {
+  const object = stableExpression(context, value);
+  if (
+    object?.type !== "ObjectExpression" ||
+    !Array.isArray(object.properties) ||
+    seen.has(object)
+  ) {
+    return;
+  }
+  seen.add(object);
+  for (const property of object.properties) {
+    if (!isAstNode(property)) {
+      continue;
+    }
+    if (property.type === "SpreadElement") {
+      collectPossibleLeafCallbacks(
+        { context, value: property.argument, callbacks },
+        seen,
+      );
+      continue;
+    }
+    if (property.type !== "Property") {
+      continue;
+    }
+    const name = property.computed
+      ? staticStringValue(property.key)
+      : getPropertyName(property.key);
+    if (name !== "leaf") {
+      continue;
+    }
+    const callback = stableExpression(context, property.value);
+    if (callback !== null && FUNCTION_NODE_TYPES.has(callback.type)) {
+      callbacks.add(callback);
+    }
+  }
+};
+
 export default eslintCompatPlugin({
   meta: { name: "no-condition-combinator-outside-conditions" },
   rules: {
@@ -138,6 +234,7 @@ export default eslintCompatPlugin({
       },
       createOnce(context) {
         const callbacks = new Set<AstNode>();
+        const leafCallbacks = new Set<AstNode>();
         const reports: (() => void)[] = [];
         const folds: (() => void)[] = [];
         const mutatedHandlers = new Set<AstNode>();
@@ -208,25 +305,17 @@ export default eslintCompatPlugin({
           return { type, callbacks: handlers };
         };
 
-        const recordHandlerMutation = (value: unknown) => {
-          if (!isAstNode(value) || value.type !== "MemberExpression") {
-            return;
-          }
-          const name = value.computed
-            ? staticStringValue(value.property)
-            : getPropertyName(value.property);
-          if (name !== null && !Object.hasOwn(FOLD_HANDLER_PROPERTIES, name)) {
-            return;
-          }
-          const object = stableExpression(context, value.object);
-          if (object?.type === "ObjectExpression") {
-            mutatedHandlers.add(object);
-          }
-        };
+        const recordHandlerMutation = createHandlerMutationRecorder(
+          context,
+          mutatedHandlers,
+        );
 
         const insideCallback = (node: unknown): boolean => {
           let ancestor = isAstNode(node) ? node : null;
           while (ancestor !== null) {
+            if (leafCallbacks.has(ancestor)) {
+              return false;
+            }
             if (callbacks.has(ancestor)) {
               return true;
             }
@@ -238,6 +327,7 @@ export default eslintCompatPlugin({
         return {
           before() {
             callbacks.clear();
+            leafCallbacks.clear();
             reports.length = 0;
             folds.length = 0;
             mutatedHandlers.clear();
@@ -268,12 +358,16 @@ export default eslintCompatPlugin({
               return;
             }
             folds.push(() => {
+              collectPossibleLeafCallbacks({
+                context,
+                value: node.arguments.at(1),
+                callbacks: leafCallbacks,
+              });
               const handlers = handlerCallbacks(node.arguments.at(1));
               if (handlers !== null) {
-                for (const callback of handlers.callbacks.values()) {
-                  if (callback !== null) {
-                    callbacks.add(callback);
-                  }
+                const group = handlers.callbacks.get("group");
+                if (group !== undefined && group !== null) {
+                  callbacks.add(group);
                 }
               }
             });

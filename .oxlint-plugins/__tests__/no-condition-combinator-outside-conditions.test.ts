@@ -256,3 +256,101 @@ foldCondition(node, handlers);`,
     ),
   ).toEqual([2]);
 });
+
+test("leaf callbacks cannot interpret another group's semantics", async () => {
+  expect(
+    await lintSingleRule(
+      "no-condition-combinator-outside-conditions",
+      `import { foldCondition } from "@stll/conditions";
+foldCondition(node, { leaf: () => otherGroup.combinator, group: (node, children) => combine(node.negated, children) });`,
+      { sourcePath: "apps/api/src/lib/read.ts" },
+    ),
+  ).toEqual([2]);
+});
+
+test.each([
+  "({ group: handlers.group } = replacements);",
+  "({ nested: { group: handlers.group } } = replacements);",
+  "([handlers.group] = replacements);",
+  "({ group: handlers.group = fallback } = replacements);",
+  "([...handlers.group] = replacements);",
+  "({ ...handlers.group } = replacements);",
+])(
+  "destructuring writes invalidate the old group callback: %s",
+  async (write) => {
+    expect(
+      await lintSingleRule(
+        "no-condition-combinator-outside-conditions",
+        `import { foldCondition } from "@stll/conditions";
+const group = (node, children) => combine(node.combinator, children);
+const handlers = { leaf: node => node.value, group };
+${write}
+foldCondition(node, handlers);`,
+        { sourcePath: "apps/api/src/lib/read.ts" },
+      ),
+    ).toEqual([2]);
+  },
+);
+
+test("a nested leaf cannot inherit the outer group exemption", async () => {
+  expect(
+    await lintSingleRule(
+      "no-condition-combinator-outside-conditions",
+      `import {foldCondition} from "@stll/conditions";
+foldCondition(node,{leaf:()=>null,group:()=>foldCondition(other,{leaf:()=>foreign.combinator,group:()=>null})});`,
+      { sourcePath: "apps/api/src/lib/read.ts" },
+    ),
+  ).toEqual([2]);
+});
+
+test("nested group callbacks and ordinary group closures remain allowed", async () => {
+  expect(
+    await lintSingleRule(
+      "no-condition-combinator-outside-conditions",
+      `import {foldCondition} from "@stll/conditions";
+foldCondition(node,{leaf:()=>null,group:(group,children)=>{const read=()=>group.combinator;return foldCondition(other,{leaf:()=>null,group:(inner,values)=>combine(inner.negated,values,read())});}});`,
+      { sourcePath: "apps/api/src/lib/read.ts" },
+    ),
+  ).toEqual([]);
+});
+
+test("a callback shared by leaf and group roles cannot interpret group semantics", async () => {
+  expect(
+    await lintSingleRule(
+      "no-condition-combinator-outside-conditions",
+      `import {foldCondition} from "@stll/conditions";
+const shared=node=>node.combinator;
+foldCondition(node,{leaf:shared,group:shared});`,
+      { sourcePath: "apps/api/src/lib/read.ts" },
+    ),
+  ).toEqual([2]);
+});
+
+test.each([
+  "handlers.group = () => null;",
+  "({group: handlers.group} = replacement);",
+])("nested leaf boundaries survive handler mutations: %s", async (write) => {
+  expect(
+    await lintSingleRule(
+      "no-condition-combinator-outside-conditions",
+      `import {foldCondition} from "@stll/conditions";
+foldCondition(node,{leaf:()=>null,group:()=>{
+const handlers={leaf:()=>foreign.combinator,group:()=>null};
+${write}
+return foldCondition(other,handlers);
+}});`,
+      { sourcePath: "apps/api/src/lib/read.ts" },
+    ),
+  ).toEqual([3]);
+});
+
+test("an opaque handler spread cannot remove a possible leaf boundary", async () => {
+  expect(
+    await lintSingleRule(
+      "no-condition-combinator-outside-conditions",
+      `import {foldCondition} from "@stll/conditions";
+foldCondition(node,{leaf:()=>null,group:()=>foldCondition(other,{leaf:()=>foreign.combinator,...opaque,group:()=>null})});`,
+      { sourcePath: "apps/api/src/lib/read.ts" },
+    ),
+  ).toEqual([2]);
+});
