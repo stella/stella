@@ -1,6 +1,6 @@
 ## stella desktop
 
-Tauri 2 companion app for managed Office file editing from stella.
+Tauri 2 companion app that opens Office documents from stella in your local apps and saves edits back, and keeps a clipboard history that stays on your device.
 
 ### Local development
 

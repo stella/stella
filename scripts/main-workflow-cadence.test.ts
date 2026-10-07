@@ -428,7 +428,7 @@ test("landing dispatch ends after acceptance, propagates rejection and never wai
       ?.run,
   );
   expect(script).not.toMatch(
-    /gh run (?:watch|list|view)|\bsleep\b|attempt_deploy/u,
+    /(?:gh|gh-retry\.sh["']?|\$GH_RETRY_SCRIPT"?) run (?:watch|list|view)|\bsleep\b|attempt_deploy/u,
   );
   const directory = mkdtempSync(path.join(tmpdir(), "landing-dispatch-"));
   try {

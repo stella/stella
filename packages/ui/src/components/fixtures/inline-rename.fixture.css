@@ -1,0 +1,48 @@
+@import "tailwindcss";
+@import "../../styles/theme.css";
+
+body {
+  margin: 0;
+  background: var(--background);
+  color: var(--foreground);
+}
+main {
+  margin: 24px;
+}
+header {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+  max-inline-size: 600px;
+}
+[data-title-container] {
+  min-inline-size: 0;
+  flex: 1;
+  font-family: Georgia, serif;
+  font-size: 22px;
+  font-weight: 600;
+  line-height: 30px;
+  letter-spacing: 0.2px;
+}
+[data-title-view] {
+  display: inline-block;
+  padding: 0;
+  border: 0;
+  margin: 0;
+  font: inherit;
+  letter-spacing: inherit;
+  color: inherit;
+  background: transparent;
+  max-inline-size: 100%;
+  white-space: pre;
+  overflow: hidden;
+}
+button {
+  flex: none;
+}
+
+[data-fallback="true"] [data-slot="inline-rename-input"] {
+  position: absolute;
+  field-sizing: fixed;
+  inline-size: 100%;
+}

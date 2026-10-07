@@ -146,6 +146,7 @@
       "useBackupCode": "Kasuta selle asemel varukoodi"
     },
     "useDifferentEmail": "Kasuta teist e-posti aadressi",
+    "usePassword": "Kasuta hoopis parooli",
     "weSentCodeTo": "Saatsime koodi aadressile <email>{emailAddress}</email>"
   },
   "avt": {
@@ -349,6 +350,7 @@
     },
     "view": {
       "chooseList": "Vali loend",
+      "createList": "Loo loend",
       "evidenceList": "Faktid allikast",
       "noLists": "Sellel toimikul pole ühtegi loendit.",
       "pickList": "Valige loend, mille faktide alusel selle toimiku dokumente kontrollitakse."
@@ -961,6 +963,9 @@
     },
     "viewer": {
       "abstract": "Kokkuvõte",
+      "appliedVersionNotStated": "Kohaldatud redaktsiooni pole märgitud",
+      "appliedVersionStatedAmendment": "Redaktsioon muudatuse <reference>{amendment}</reference> järgi",
+      "appliedVersionStatedDate": "{relation, select, on {Kuupäeval {date} kehtinud redaktsioon} until {Kuni {date} kehtinud redaktsioon} from {Alates {date} kehtinud redaktsioon} other {Kuupäeval {date} kehtinud redaktsioon}}",
       "caseFileMayHoldOthers": "Selles toimikus võib olla ka teisi lahendeid.",
       "citedBy": "Viidatud",
       "cites": "Viitab",
@@ -1047,6 +1052,7 @@
       "toastDescription": "Täisleheküljel vestlus koos salvestatud lõimedega on tulekul.",
       "toastTitle": "Täisvaade ei ole veel saadaval"
     },
+    "activateGeneratedView": "Kasuta seda vaadet",
     "aiPrompt": "AI sõnumiväli",
     "aiThread": "AI vestlus",
     "analyzingSources": "Allikate analüüsimine",
@@ -1192,6 +1198,8 @@
     "forkedFromUnavailable": "Loodud vestlusest, mis pole enam saadaval",
     "forkedThread": "Teisest vestlusest",
     "forkingThread": "Uue vestluse loomine…",
+    "generatedView": "Loodud vaade",
+    "generatedViewDrill": "Otsi kohtulahendeid kohtufiltriga {court} ja aastaga {year}.",
     "greeting": "Millega soovite tegeleda?",
     "greetingSubtitle": "Alustage toimikust, dokumendist või lihtsast küsimusest.",
     "hideThread": "Peida vestlus",
@@ -1323,6 +1331,7 @@
     "sendErrorQuotaExhausted": "AI teenusepakkuja kvoot on täis. Proovi minuti pärast uuesti või võta ühendust tööruumi administraatoriga.",
     "sendErrorStreamIncomplete": "AI vastus katkes enne, kui see valmis sai. Proovi uuesti.",
     "sendPrompt": "Saada sõnum",
+    "sendQueuedMessageNow": "Saada kohe",
     "sendWithoutAnonymization": "Saada anonüümimiseta",
     "skills": {
       "scope": {
@@ -1470,6 +1479,14 @@
       "sourceCode": "Lähtekood",
       "toggleDetails": "Üksikasjade lülitamine",
       "unrestoredFields": "Anonüümitud režiimis ei õnnestunud {count, plural, one {# välja} other {# välja}} tegelike väärtustega täita. Kontrollige: {fields}"
+    },
+    "turnNotification": {
+      "failedBody": "stella vestluse vastus jäi lõpetamata.",
+      "failedTitle": "Vastus ebaõnnestus",
+      "needsInputBody": "Vestlus ootab teie kinnitust või vastust.",
+      "needsInputTitle": "stella vajab teie sisendit",
+      "replyReadyBody": "stella lõpetas vestluses vastamise.",
+      "replyReadyTitle": "Vastus on valmis"
     },
     "unsupportedFileType": "Toetamata failitüüp",
     "uploadFailed": "Faili töötlemine ebaõnnestus",
@@ -1685,6 +1702,7 @@
     "deletedCount": "{count, plural, one {# üksus} other {# üksust}} kustutatud",
     "description": "Kirjeldus",
     "details": "Üksikasjad",
+    "detailsHiddenFeatureUnavailable": "Üksikasjad on peidetud: funktsioon pole lubatud",
     "disconnect": "Katkesta ühendus",
     "dismiss": "Jäta kõrvale",
     "displayName": "Kuvatav nimi",
@@ -1820,6 +1838,8 @@
     "notes": "Märkused",
     "open": "Ava",
     "openInNewTab": "Ava uuel vahekaardil",
+    "openInStella": "Ava stellas",
+    "openOriginalSource": "Ava algallikas",
     "options": "Valikud",
     "or": "Või",
     "organization": "Organisatsioon",
@@ -4367,6 +4387,11 @@
       "betaInbox": "Postkast ja teavitused",
       "betaInboxDescription": "Kuva postkast ja teavituste kell",
       "betaTimeBillingDescription": "Kuva ajajälgimine, arved ja kulud",
+      "chatNotifications": "Vestluse teavitused",
+      "chatNotificationsBlocked": "stella teavitused on selles brauseris blokeeritud. Lubage need brauseri saidiseadetes.",
+      "chatNotificationsDescription": "Saate sellest brauserist teavituse, kui vestluse vastus valmib ajal, mil stella on taustal.",
+      "chatNotificationsToggle": "Teavita mind, kui vastus on valmis või vajab minu sisendit",
+      "chatNotificationsUnsupported": "See brauser ei toeta teavitusi.",
       "confirmDelete": "Kinnita konto kustutamine",
       "dangerZone": "Ohutsoon",
       "dangerZoneDescription": "Kustuta konto juurdepääs ja konto privaatsed andmed jäädavalt.",
@@ -4736,6 +4761,7 @@
     },
     "title": "Õigusaktid",
     "validity": "Kehtib {from} kuni {to}",
+    "versionAppliedInDecision": "Kohtulahendis <bdi>{court}</bdi> <bdi>{caseNumber}</bdi> kohaldatud redaktsioon (<bdi>{range}</bdi>) · {status}",
     "wordingValidFrom": "Sõnastus kehtib alates {date}",
     "wordingVersionUnknown": "Sõnastuse versiooni kuupäev pole teada"
   },

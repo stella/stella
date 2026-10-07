@@ -30,6 +30,7 @@ type EditionMarker =
 type SourceMetadata = {
   issuer: SanctionsIssuer;
   download: Download;
+  allowedRedirectHosts: readonly string[];
   licence?: Licence;
   editionMarker: EditionMarker;
   access?: { kind: "query-token"; parameter: "token" };
@@ -57,6 +58,7 @@ const CH_XML =
 export const SANCTIONS_SOURCES = {
   eu: {
     id: "eu",
+    allowedRedirectHosts: [],
     issuer: "EU",
     download: { kind: "direct", urls: [EU_XML] },
     licence: {
@@ -67,6 +69,7 @@ export const SANCTIONS_SOURCES = {
   },
   un: {
     id: "un",
+    allowedRedirectHosts: ["unsolprodfiles.blob.core.windows.net"],
     issuer: "UN",
     download: { kind: "direct", urls: [UN_XML] },
     licence: {
@@ -76,6 +79,7 @@ export const SANCTIONS_SOURCES = {
   },
   cz: {
     id: "cz",
+    allowedRedirectHosts: [],
     issuer: "CZ",
     download: {
       kind: "dated-file",
@@ -90,6 +94,9 @@ export const SANCTIONS_SOURCES = {
   },
   "us-sdn": {
     id: "us-sdn",
+    allowedRedirectHosts: [
+      "wc2h-sls-prod-public-published.s3.us-gov-west-1.amazonaws.com",
+    ],
     issuer: "US",
     download: { kind: "direct", urls: [SDN_XML] },
     licence: {
@@ -99,6 +106,9 @@ export const SANCTIONS_SOURCES = {
   },
   "us-non-sdn": {
     id: "us-non-sdn",
+    allowedRedirectHosts: [
+      "wc2h-sls-prod-public-published.s3.us-gov-west-1.amazonaws.com",
+    ],
     issuer: "US",
     download: { kind: "direct", urls: [NON_SDN_XML] },
     licence: {
@@ -108,6 +118,7 @@ export const SANCTIONS_SOURCES = {
   },
   uk: {
     id: "uk",
+    allowedRedirectHosts: [],
     issuer: "GB",
     download: { kind: "direct", urls: [UK_XML] },
     licence: {
@@ -117,6 +128,7 @@ export const SANCTIONS_SOURCES = {
   },
   ch: {
     id: "ch",
+    allowedRedirectHosts: [],
     issuer: "CH",
     download: { kind: "direct", urls: [CH_XML] },
     licence: {

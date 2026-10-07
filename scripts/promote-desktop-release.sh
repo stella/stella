@@ -3,6 +3,8 @@
 # /releases/latest pointer and its required assets resolve to that release.
 set -euo pipefail
 
+gh_retry_script="${GH_RETRY_SCRIPT:-$(dirname "${BASH_SOURCE[0]}")/gh-retry.sh}"
+
 repo="${GH_REPO:?GH_REPO is required}"
 release_ref="${RELEASE_REF:?RELEASE_REF is required}"
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -21,7 +23,7 @@ STELLA_DESKTOP_RELEASE_EXPECTED_TAG="$release_ref" \
 
 # --repo is deliberate even though GH_REPO is set: this command must work in a
 # fresh GitHub Actions job with no checkout or ambient git repository.
-gh release edit "$release_ref" --repo "$repo" --latest
+bash "$gh_retry_script" release edit "$release_ref" --repo "$repo" --latest
 
 GH_REPO="$repo" \
 STELLA_DESKTOP_RELEASE_EXPECTED_TAG="$release_ref" \

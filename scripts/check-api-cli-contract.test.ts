@@ -175,7 +175,9 @@ describe("API and CLI release contract", () => {
     ]);
 
     expect(releaseWorkflow).toContain("name: release-source-receipt");
-    expect(publishWorkflow).toContain('gh run download "$UPSTREAM_RUN_ID"');
+    expect(publishWorkflow).toContain(
+      'bash "$GH_RETRY_SCRIPT" run download "$UPSTREAM_RUN_ID"',
+    );
     expect(publishWorkflow).toContain(
       `UPSTREAM_RELEASE_REF: \${{ needs.release-trigger.outputs.release_ref }}`,
     );
@@ -255,8 +257,11 @@ describe("API and CLI release contract", () => {
     expect(releaseSmoke).toContain(`grep -F '"message":"scheduler.started"'`);
     expect(migrationSmoke).toContain("curl -fsS http://127.0.0.1:3001/live");
     expect(migrationSmoke).toContain(`grep -q '"message":"scheduler.started"'`);
+    expect(apiPackage.scripts["generate:capability-runtime"]).toBe(
+      "bun scripts/generate-capability-runtime.ts",
+    );
     const prepareRuntime = migrationSmoke.indexOf(
-      "bun apps/api/scripts/generate-capability-runtime.ts",
+      "bun --filter @stll/api generate:capability-runtime",
     );
     const startServer = migrationSmoke.indexOf("bun src/server.ts");
     expect(prepareRuntime).toBeGreaterThan(-1);

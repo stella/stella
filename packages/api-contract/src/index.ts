@@ -867,7 +867,8 @@ export const EMAIL_TEXT_ATTACHMENT_CHARSET_LABELS = {
 export const MCP_APP_SANDBOX_PATH = "/mcp-app-sandbox" as const;
 export const MCP_APP_FRAME_TITLE_HASH_PARAM = "frame-title" as const;
 export const MCP_APP_FRAME_TITLE_MAX_CHARS = 200;
-export const MCP_APP_RESOURCE_MIME_TYPE = "text/html;profile=mcp-app" as const;
+export const MCP_APP_EXTENSION_ID = "io.modelcontextprotocol/ui" as const;
+export { MCP_APP_RESOURCE_MIME_TYPE } from "./chat-ui-resources";
 export const DOCUMENT_REVIEW_LIMITS = {
   referencesMax: 3,
   positionsMax: 200,

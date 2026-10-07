@@ -257,8 +257,8 @@ jobs:
             >/dev/null
           (cd apps/api && bun run src/db/migrate.ts)
 
-      - name: Prepare API runtime
-        run: bun apps/api/scripts/generate-capability-runtime.ts
+      - name: Prepare API runtime sources
+        run: bun --filter @stll/api generate:capability-runtime
 
       - name: Verify API boots with migration check enabled
         working-directory: apps/api

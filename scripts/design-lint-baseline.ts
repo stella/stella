@@ -114,7 +114,6 @@ export const emptyBacklog = (): DesignLintBacklog => ({
   "eslint/max-params": {},
   "react/no-children-prop": {},
   "eslint/no-unexpected-multiline": {},
-  "eslint/no-use-before-define": {},
 });
 
 /** A repository-relative POSIX path, whichever form oxlint printed. */

@@ -17,11 +17,20 @@ export type AuditLogsPageKey = {
   cursor?: string | undefined;
 };
 
+// Change details follow the viewer's feature access, so pages are cached per
+// viewer, not only per filter.
+export type AuditLogViewer = {
+  userId: string;
+  organizationId: string;
+};
+
 export const auditLogKeys = {
   all: ["audit-logs"] as const,
-  filtered: (key: AuditLogsPageKey) =>
+  filtered: (viewer: AuditLogViewer, key: AuditLogsPageKey) =>
     [
       ...auditLogKeys.all,
+      viewer.userId,
+      viewer.organizationId,
       {
         workspaceId: key.workspaceId,
         action: key.action,
@@ -38,6 +47,7 @@ export const auditLogKeys = {
 };
 
 export type AuditLogOptionsInput = {
+  viewer: AuditLogViewer;
   key: AuditLogsPageKey;
 };
 
@@ -86,8 +96,8 @@ export const fetchAuditLogs = async (query: AuditLogsPageKey) => {
   return unwrapEden(response);
 };
 
-export const auditLogOptions = ({ key }: AuditLogOptionsInput) =>
+export const auditLogOptions = ({ viewer, key }: AuditLogOptionsInput) =>
   queryOptions({
-    queryKey: auditLogKeys.filtered(key),
+    queryKey: auditLogKeys.filtered(viewer, key),
     queryFn: async () => await fetchAuditLogs(key),
   });

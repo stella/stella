@@ -7,6 +7,7 @@
  * Driven against a real (PGlite) database with a stubbed queue.
  */
 
+import { panic, Result } from "better-result";
 import {
   afterAll,
   afterEach,
@@ -17,13 +18,42 @@ import {
 } from "bun:test";
 import { eq, inArray } from "drizzle-orm";
 
-import { reportExports } from "@/api/db/schema";
+import {
+  reportExports,
+  schedulerJobRuns,
+  schedulerJobs,
+} from "@/api/db/schema";
 import type { ReportExportFormat, ReportExportStatus } from "@/api/db/schema";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { createBullMqJobId } from "@/api/lib/bullmq-job-id";
-import { reconcileQueuedReportExports } from "@/api/lib/report-export-enqueue";
+import { logger } from "@/api/lib/observability/logger";
+import {
+  reconcileQueuedReportExports,
+  ReportExportRequeueError,
+} from "@/api/lib/report-export-enqueue";
+import {
+  recoverStuckReportExports,
+  ReportExportInspectionError,
+} from "@/api/lib/report-export-recovery";
+import { DueSlot } from "@/api/lib/scheduler/due-slot";
+import { runJob } from "@/api/lib/scheduler/runner";
+import {
+  createReconcileReportExportsTask,
+  RECONCILE_REPORT_EXPORTS_TASK,
+} from "@/api/lib/scheduler/tasks/report-export-reconcile";
+import type { SchedulerDb } from "@/api/lib/scheduler/types";
+import { SchedulerTaskFailure } from "@/api/lib/scheduler/types";
 import type { ViewLayout } from "@/api/lib/views-schema";
+import {
+  installRecordingAnalytics,
+  installRecordingLogger,
+} from "@/api/tests/helpers/recording-telemetry";
+import type {
+  RecordingAnalytics,
+  RecordingLogger,
+} from "@/api/tests/helpers/recording-telemetry";
+import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
   getRlsFixture,
   releaseRlsFixture,
@@ -37,19 +67,36 @@ type AddedJob = { data: unknown; jobId: string; name: string };
 
 const added: AddedJob[] = [];
 const priorJobs = new Map<string, StubJobState>();
+const lookupFailures = new Map<string, Error>();
+const stateFailures = new Map<string, Error>();
+const addFailures = new Map<string, Error>();
 
 const queue = {
   add: async (name: string, data: unknown, options: { jobId: string }) => {
+    const failure = addFailures.get(options.jobId);
+    if (failure !== undefined) {
+      throw failure;
+    }
     added.push({ data, jobId: options.jobId, name });
     priorJobs.set(options.jobId, "waiting");
   },
   getJob: async (jobId: string) => {
+    const failure = lookupFailures.get(jobId);
+    if (failure !== undefined) {
+      throw failure;
+    }
     const state = priorJobs.get(jobId);
     if (state === undefined) {
       return undefined;
     }
     return {
-      getState: async () => state,
+      getState: async () => {
+        const stateFailure = stateFailures.get(jobId);
+        if (stateFailure !== undefined) {
+          throw stateFailure;
+        }
+        return state;
+      },
       remove: async () => {
         priorJobs.delete(jobId);
       },
@@ -115,13 +162,77 @@ const seedExport = async (
 const jobIdFor = (exportId: SafeId<"reportExport">) =>
   createBullMqJobId(ids.wsA1, exportId);
 
+const reconcile = async () => {
+  const outcome = await reconcileQueuedReportExports({ db: testDb, queue });
+  if (Result.isError(outcome)) {
+    throw outcome.error;
+  }
+  return outcome.value;
+};
+
+const SCHEDULER_JOB_ID = "test.reportExports.reconcileQueued";
+const task = createReconcileReportExportsTask({ queue });
+
+const seedSchedulerJob = async () => {
+  const [job] = await testDb
+    .insert(schedulerJobs)
+    .values({
+      id: SCHEDULER_JOB_ID,
+      task: RECONCILE_REPORT_EXPORTS_TASK,
+      schedule: { type: "interval", everyMs: 300_000 },
+      nextRunAt: new Date(),
+      lockedBy: "test-report-export-lease",
+    })
+    .returning();
+  return job ?? panic("Expected scheduler job");
+};
+
+const runTask = async () => {
+  const job = await seedSchedulerJob();
+  return await task({
+    db: asTestRaw<SchedulerDb>(testDb),
+    dueAt: DueSlot.of(job),
+    job,
+    logger,
+    payload: job.payload,
+    runId: createSafeId<"schedulerJobRun">(),
+    scheduleContinuation: () => undefined,
+    signal: new AbortController().signal,
+  });
+};
+
+const seedStaleRunningExport = async () => {
+  const exportId = await seedExport({ status: "running" });
+  await testDb
+    .update(reportExports)
+    .set({ updatedAt: new Date(Date.now() - 60 * 60 * 1000) })
+    .where(eq(reportExports.id, exportId));
+  return exportId;
+};
+
 describe("queued report export reconciliation", () => {
+  let analytics: RecordingAnalytics;
+  let logs: RecordingLogger;
+
   beforeEach(() => {
+    analytics = installRecordingAnalytics();
+    logs = installRecordingLogger();
     added.length = 0;
     priorJobs.clear();
+    lookupFailures.clear();
+    stateFailures.clear();
+    addFailures.clear();
   });
 
   afterEach(async () => {
+    analytics.restore();
+    logs.restore();
+    await testDb
+      .delete(schedulerJobRuns)
+      .where(eq(schedulerJobRuns.jobId, SCHEDULER_JOB_ID));
+    await testDb
+      .delete(schedulerJobs)
+      .where(eq(schedulerJobs.id, SCHEDULER_JOB_ID));
     if (seededExportIds.length > 0) {
       await testDb
         .delete(reportExports)
@@ -137,10 +248,11 @@ describe("queued report export reconciliation", () => {
   test("hands an export no job owns back to the queue exactly once, with the request it was made with", async () => {
     const exportId = await seedExport({ aiNarrative: false, format: "pdf" });
 
-    const first = await reconcileQueuedReportExports({ db: testDb, queue });
-    const second = await reconcileQueuedReportExports({ db: testDb, queue });
+    const first = await reconcile();
+    const second = await reconcile();
 
     expect(first).toEqual({
+      failed: 0,
       handedOff: 1,
       scanned: 1,
       unattributed: 0,
@@ -149,6 +261,7 @@ describe("queued report export reconciliation", () => {
     // The row is still `queued` — only the worker's claim moves it — so the
     // second sweep sees it again and must recognise its own job.
     expect(second).toEqual({
+      failed: 0,
       handedOff: 0,
       scanned: 1,
       unattributed: 0,
@@ -175,9 +288,10 @@ describe("queued report export reconciliation", () => {
     await seedExport({ status: "failed" });
     await seedExport({ status: "running" });
 
-    const result = await reconcileQueuedReportExports({ db: testDb, queue });
+    const result = await reconcile();
 
     expect(result).toEqual({
+      failed: 0,
       handedOff: 0,
       scanned: 0,
       unattributed: 0,
@@ -189,9 +303,10 @@ describe("queued report export reconciliation", () => {
   test("counts an export whose requester is gone instead of dropping it", async () => {
     await seedExport({ requestedBy: null });
 
-    const result = await reconcileQueuedReportExports({ db: testDb, queue });
+    const result = await reconcile();
 
     expect(result).toEqual({
+      failed: 0,
       handedOff: 0,
       scanned: 1,
       unattributed: 1,
@@ -206,9 +321,10 @@ describe("queued report export reconciliation", () => {
     // options and running a different export than the one asked for.
     const exportId = await seedExport({ aiNarrative: null, format: null });
 
-    const result = await reconcileQueuedReportExports({ db: testDb, queue });
+    const result = await reconcile();
 
     expect(result).toEqual({
+      failed: 0,
       handedOff: 0,
       scanned: 1,
       unattributed: 0,
@@ -238,9 +354,10 @@ describe("queued report export reconciliation", () => {
     }
     const orphan = await seedExport({ createdAt: new Date(base + 1000) });
 
-    const result = await reconcileQueuedReportExports({ db: testDb, queue });
+    const result = await reconcile();
 
     expect(result).toEqual({
+      failed: 0,
       handedOff: 1,
       scanned: 151,
       unattributed: 0,
@@ -260,14 +377,232 @@ describe("queued report export reconciliation", () => {
     );
     await testDb.insert(reportExports).values(orphans);
 
-    const result = await reconcileQueuedReportExports({ db: testDb, queue });
+    const result = await reconcile();
 
     expect(result).toEqual({
+      failed: 0,
       handedOff: 50,
       scanned: 50,
       unattributed: 0,
       unrecoverable: 0,
     });
     expect(added).toHaveLength(50);
+  });
+
+  test.each(["lookup", "state", "add"] as const)(
+    "returns partial requeue counts on a queue %s failure",
+    async (operation) => {
+      const first = await seedExport();
+      const second = await seedExport();
+      const healthy = await seedExport();
+      const cause = new Error("Queue operation refused");
+      for (const exportId of [first, second]) {
+        const jobId = jobIdFor(exportId);
+        switch (operation) {
+          case "lookup":
+            lookupFailures.set(jobId, cause);
+            break;
+          case "state":
+            priorJobs.set(jobId, "waiting");
+            stateFailures.set(jobId, cause);
+            break;
+          case "add":
+            addFailures.set(jobId, cause);
+            break;
+          default:
+            operation satisfies never;
+        }
+      }
+
+      const outcome = await reconcileQueuedReportExports({ db: testDb, queue });
+
+      if (!Result.isError(outcome)) {
+        panic("Expected partial requeue failure");
+      }
+      expect(outcome.error).toBeInstanceOf(ReportExportRequeueError);
+      expect(outcome.error.cause).toBe(cause);
+      expect(outcome.error.summary).toEqual({
+        failed: 2,
+        handedOff: 1,
+        scanned: 3,
+        unattributed: 0,
+        unrecoverable: 0,
+      });
+      expect(added.map(({ jobId }) => jobId)).toEqual([jobIdFor(healthy)]);
+      const failures = logs.records.filter(
+        ({ message }) => message === "report_export.requeue_failed",
+      );
+      expect(failures).toHaveLength(2);
+      expect(
+        failures.every(({ severityText }) => severityText === "WARN"),
+      ).toBe(true);
+      expect(analytics.exceptions()).toHaveLength(0);
+    },
+  );
+
+  test.each(["lookup", "state"] as const)(
+    "keeps unknown ownership and partial recovery counts on a queue %s failure",
+    async (operation) => {
+      const first = await seedStaleRunningExport();
+      const second = await seedStaleRunningExport();
+      const abandoned = await seedStaleRunningExport();
+      const cause = new Error("Queue inspection refused");
+      for (const exportId of [first, second]) {
+        const jobId = jobIdFor(exportId);
+        if (operation === "lookup") {
+          lookupFailures.set(jobId, cause);
+        } else {
+          priorJobs.set(jobId, "active");
+          stateFailures.set(jobId, cause);
+        }
+      }
+
+      const outcome = await recoverStuckReportExports({ db: testDb, queue });
+
+      if (!Result.isError(outcome)) {
+        panic("Expected partial inspection failure");
+      }
+      expect(outcome.error).toBeInstanceOf(ReportExportInspectionError);
+      expect(outcome.error.cause).toBe(cause);
+      expect(outcome.error.summary).toEqual({ failed: 2, recovered: 1 });
+      const rows = await testDb
+        .select({ id: reportExports.id, status: reportExports.status })
+        .from(reportExports)
+        .where(inArray(reportExports.id, [first, second, abandoned]));
+      expect(rows.find(({ id }) => id === first)?.status).toBe("running");
+      expect(rows.find(({ id }) => id === second)?.status).toBe("running");
+      expect(rows.find(({ id }) => id === abandoned)?.status).toBe("failed");
+      const failures = logs.records.filter(
+        ({ message }) => message === "report_export.inspection_failed",
+      );
+      expect(failures).toHaveLength(2);
+      expect(
+        failures.every(({ severityText }) => severityText === "WARN"),
+      ).toBe(true);
+      expect(analytics.exceptions()).toHaveLength(0);
+    },
+  );
+
+  const failPhases = async (
+    phase: "inspect" | "requeue" | "both",
+    cause: Error,
+  ) => {
+    if (phase !== "requeue") {
+      const exportId = await seedStaleRunningExport();
+      lookupFailures.set(jobIdFor(exportId), cause);
+    }
+    if (phase !== "inspect") {
+      const exportId = await seedExport();
+      addFailures.set(jobIdFor(exportId), cause);
+    }
+  };
+
+  test.each(["inspect", "requeue", "both"] as const)(
+    "propagates %s failures through the task without capturing",
+    async (phase) => {
+      await failPhases(phase, new Error("Queue refused"));
+
+      const outcome = await runTask();
+
+      if (!outcome || !Result.isError(outcome)) {
+        panic("Expected failed task result");
+      }
+      expect(outcome.error).toBeInstanceOf(SchedulerTaskFailure);
+      expect(outcome.error.cause).toBeInstanceOf(
+        phase === "requeue"
+          ? ReportExportRequeueError
+          : ReportExportInspectionError,
+      );
+      expect(
+        logs.records.find(
+          ({ message }) => message === "scheduler.report_exports_reconciled",
+        )?.attributes,
+      ).toMatchObject({ "reportExports.failed": phase === "both" ? 2 : 1 });
+      const requeueStage = logs.records.filter(
+        ({ message }) => message === "report_export.requeue_stage_failed",
+      );
+      if (phase === "both") {
+        expect(outcome.error.message).toContain(
+          "Requeueing report exports did not complete",
+        );
+        expect(requeueStage).toHaveLength(1);
+        expect(requeueStage.at(0)?.severityText).toBe("WARN");
+        expect(requeueStage.at(0)?.attributes).toMatchObject({
+          "error.type": "Error",
+          "reportExports.failed": 1,
+        });
+      } else {
+        expect(requeueStage).toHaveLength(0);
+      }
+      expect(analytics.exceptions()).toHaveLength(0);
+    },
+  );
+
+  test.each([
+    { phase: "inspect", grade: "defect" },
+    { phase: "requeue", grade: "defect" },
+    { phase: "both", grade: "defect" },
+    { phase: "inspect", grade: "transient" },
+    { phase: "requeue", grade: "transient" },
+    { phase: "both", grade: "transient" },
+  ] as const)(
+    "records one $grade exception and a failed run for $phase",
+    async ({ phase, grade }) => {
+      const cause =
+        grade === "defect"
+          ? new Error("Queue refused")
+          : Object.assign(new Error("Redis connection reset"), {
+              code: "ECONNRESET",
+            });
+      await failPhases(phase, cause);
+      const job = await seedSchedulerJob();
+
+      const status = await runJob({
+        db: asTestRaw<SchedulerDb>(testDb),
+        heartbeatIntervalMs: 60_000,
+        job,
+        leaseMs: 120_000,
+        maxRuntimeMs: 30_000,
+        registry: new Map([[RECONCILE_REPORT_EXPORTS_TASK, task]]),
+        runnerId: "test-report-export-runner",
+        signal: undefined,
+      });
+
+      expect(status).toBe("failed");
+      expect(analytics.exceptions()).toHaveLength(1);
+      expect(analytics.exceptions().at(0)?.properties).toMatchObject({
+        "error.class":
+          phase === "requeue"
+            ? "ReportExportRequeueError"
+            : "ReportExportInspectionError",
+        "failure.grade": grade,
+        "failure.reason": grade === "defect" ? "unclassified" : "network_reset",
+      });
+      expect(
+        logs.records.filter(
+          ({ message }) => message === "scheduler.job_failed",
+        ),
+      ).toHaveLength(1);
+      const runs = await testDb
+        .select({ status: schedulerJobRuns.status })
+        .from(schedulerJobRuns)
+        .where(eq(schedulerJobRuns.jobId, SCHEDULER_JOB_ID));
+      expect(runs).toEqual([{ status: "failed" }]);
+    },
+  );
+
+  test("a healthy task returns success without a capture", async () => {
+    const exportId = await seedExport();
+
+    const outcome = await runTask();
+
+    expect(outcome && !Result.isError(outcome)).toBe(true);
+    expect(added.map(({ jobId }) => jobId)).toEqual([jobIdFor(exportId)]);
+    expect(
+      logs.records.find(
+        ({ message }) => message === "scheduler.report_exports_reconciled",
+      )?.attributes,
+    ).toMatchObject({ "reportExports.failed": 0, "reportExports.requeued": 1 });
+    expect(analytics.exceptions()).toHaveLength(0);
   });
 });

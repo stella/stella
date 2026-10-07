@@ -146,6 +146,7 @@
     "accountLinked": "Paskyra susieta",
     "connectToStella": "Prisijungti prie stella web",
     "connectToStellaDescription": "Susiekite šį kompiuterį su dabartine stella paskyra neatidarydami dokumento.",
+    "desktopBenefit": "Office failai ir vietinė iškarpinės istorija",
     "disconnectAccount": "Atsieti paskyrą",
     "errorDisconnectAccount": "stella desktop nepavyko atsieti jūsų paskyros.",
     "errorReadAccount": "stella desktop nepavyko patikrinti paskyros ryšio.",

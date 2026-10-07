@@ -146,6 +146,7 @@
       "useBackupCode": "Použiť namiesto toho záložný kód"
     },
     "useDifferentEmail": "Použiť iný e-mail",
+    "usePassword": "Prihlásiť sa radšej heslom",
     "weSentCodeTo": "Odoslali sme kód na <email>{emailAddress}</email>"
   },
   "avt": {
@@ -349,6 +350,7 @@
     },
     "view": {
       "chooseList": "Vybrať zoznam",
+      "createList": "Vytvoriť zoznam",
       "evidenceList": "Fakty zo zoznamu",
       "noLists": "Tento spis nemá žiadne zoznamy.",
       "pickList": "Vyberte zoznam, s ktorého faktami sa porovnávajú dokumenty tohto spisu."
@@ -961,6 +963,9 @@
     },
     "viewer": {
       "abstract": "Abstrakt",
+      "appliedVersionNotStated": "Použité znenie neuvedené",
+      "appliedVersionStatedAmendment": "Znenie podľa novely <reference>{amendment}</reference>",
+      "appliedVersionStatedDate": "{relation, select, on {Znenie účinné k {date}} until {Znenie účinné do {date}} from {Znenie účinné od {date}} other {Znenie účinné k {date}}}",
       "caseFileMayHoldOthers": "Tento spis môže obsahovať aj ďalšie rozhodnutia.",
       "citedBy": "Citované v",
       "cites": "Cituje",
@@ -1047,6 +1052,7 @@
       "toastDescription": "Zobrazenie chatu na celú stránku s uloženými vláknami už čoskoro.",
       "toastTitle": "Plné zobrazenie zatiaľ nie je dostupné"
     },
+    "activateGeneratedView": "Pracovať s prehľadom",
     "aiPrompt": "Pole správy pre AI",
     "aiThread": "Konverzácia s AI",
     "analyzingSources": "Analyzujem zdroje",
@@ -1192,6 +1198,8 @@
     "forkedFromUnavailable": "Vytvorené z chatu, ktorý už nie je dostupný",
     "forkedThread": "Z iného chatu",
     "forkingThread": "Vytvára sa nový chat…",
+    "generatedView": "Vygenerovaný prehľad",
+    "generatedViewDrill": "Vyhľadaj rozhodnutia s filtrom súdu {court} a rokom {year}.",
     "greeting": "Na čom chcete pracovať?",
     "greetingSubtitle": "Začnite spisom, dokumentom alebo obyčajnou otázkou.",
     "hideThread": "Skryť konverzáciu",
@@ -1323,6 +1331,7 @@
     "sendErrorQuotaExhausted": "Kvóta poskytovateľa AI je vyčerpaná. Skúste to o minútu znova alebo sa obráťte na správcu pracovného priestoru.",
     "sendErrorStreamIncomplete": "Odpoveď AI sa prerušila skôr, ako bola dokončená. Skúste to znova.",
     "sendPrompt": "Odoslať správu",
+    "sendQueuedMessageNow": "Odoslať hneď",
     "sendWithoutAnonymization": "Odoslať bez anonymizácie",
     "skills": {
       "scope": {
@@ -1470,6 +1479,14 @@
       "sourceCode": "Zdrojový kód",
       "toggleDetails": "Prepnúť podrobnosti",
       "unrestoredFields": "{count, plural, one {# pole sa nepodarilo} few {# polia sa nepodarilo} many {# poľa sa nepodarilo} other {# polí sa nepodarilo}} v anonymizovanom režime vyplniť skutočnými hodnotami. Skontrolujte: {fields}"
+    },
+    "turnNotification": {
+      "failedBody": "Odpoveď v chate stelly sa nedokončila.",
+      "failedTitle": "Odpoveď zlyhala",
+      "needsInputBody": "Chat čaká na vaše schválenie alebo odpoveď.",
+      "needsInputTitle": "stella potrebuje váš vstup",
+      "replyReadyBody": "stella dokončila odpoveď vo vašom chate.",
+      "replyReadyTitle": "Odpoveď je hotová"
     },
     "unsupportedFileType": "Nepodporovaný typ súboru",
     "uploadFailed": "Spracovanie súboru zlyhalo",
@@ -1685,6 +1702,7 @@
     "deletedCount": "{count, plural, one {# položka zmazaná} few {# položky zmazané} other {# položiek zmazaných}}",
     "description": "Popis",
     "details": "Detaily",
+    "detailsHiddenFeatureUnavailable": "Podrobnosti sú skryté: funkcia nie je zapnutá",
     "disconnect": "Odpojiť",
     "dismiss": "Zamietnuť",
     "displayName": "Zobrazované meno",
@@ -1820,6 +1838,8 @@
     "notes": "Poznámky",
     "open": "Otvoriť",
     "openInNewTab": "Otvoriť na novej karte",
+    "openInStella": "Otvoriť v stelle",
+    "openOriginalSource": "Otvoriť originál",
     "options": "Možnosti",
     "or": "Alebo",
     "organization": "Organizácia",
@@ -4367,6 +4387,11 @@
       "betaInbox": "Doručené a oznámenia",
       "betaInboxDescription": "Zobraziť Doručené a zvonček oznámení",
       "betaTimeBillingDescription": "Zobraziť sledovanie času, faktúry a výdavky",
+      "chatNotifications": "Upozornenia z chatu",
+      "chatNotificationsBlocked": "Upozornenia sú pre stellu v tomto prehliadači zablokované. Povoľte ich v nastaveniach stránky v prehliadači.",
+      "chatNotificationsDescription": "Dostanete upozornenie z tohto prehliadača, keď sa odpoveď v chate dokončí, kým je stella na pozadí.",
+      "chatNotificationsToggle": "Upozorniť ma, keď je odpoveď hotová alebo potrebuje môj vstup",
+      "chatNotificationsUnsupported": "Tento prehliadač upozornenia nepodporuje.",
       "confirmDelete": "Potvrdiť vymazanie účtu",
       "dangerZone": "Nebezpečná zóna",
       "dangerZoneDescription": "Natrvalo vymazať prístup k účtu a súkromné údaje účtu.",
@@ -4736,6 +4761,7 @@
     },
     "title": "Právne predpisy",
     "validity": "Platné od {from} do {to}",
+    "versionAppliedInDecision": "Znenie použité v rozhodnutí <bdi>{court}</bdi> <bdi>{caseNumber}</bdi> (<bdi>{range}</bdi>) · {status}",
     "wordingValidFrom": "Znenie účinné od {date}",
     "wordingVersionUnknown": "Dátum verzie znenia nie je k dispozícii"
   },

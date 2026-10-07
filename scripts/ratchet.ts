@@ -70,6 +70,11 @@ import {
   unmanagedTransitionTables,
   statusWriteCalls,
 } from "./status-write-shapes";
+import {
+  countUnsignalledSkips,
+  isExcludedSkipSource,
+  UNSIGNALLED_SKIP_SOURCE_GLOBS,
+} from "./unsignalled-skip";
 
 const SCRIPTS_DIR = import.meta.dir;
 const REPO_ROOT = path.resolve(SCRIPTS_DIR, "..");
@@ -2956,7 +2961,21 @@ const RESULT_BOUNDARY_METRICS = [
   },
 ] as const satisfies readonly RatchetMetric[];
 
+const countUnsignalledSkipMetric: FileCounter = (content, { file }) =>
+  countUnsignalledSkips(content, { file });
+
 export const RATCHET_METRICS: readonly RatchetMetric[] = [
+  {
+    scope: "file",
+    id: "unsignalled-skip",
+    description:
+      "data-boundary catch outcomes and failed parse/lookup item skips without observation or typed disposition; empty literal ??/|| fallbacks on valueAtPath/asString/fieldOf/extractId, parse/find/lookup helpers or Map lookups; per-file shrink-only",
+    include: UNSIGNALLED_SKIP_SOURCE_GLOBS,
+    exclude: isExcludedSkipSource,
+    perFile: true,
+    growth: "shrink-only",
+    count: countUnsignalledSkipMetric,
+  },
   {
     scope: "repo",
     id: "schema-introspection-files",
@@ -4235,6 +4254,27 @@ const parseAllowance = (filename: string, head: string): AllowanceParse => {
   };
 };
 
+const shellArgument = (value: string): string =>
+  `'${value.replaceAll("'", "'\\''")}'`;
+
+export const allowanceRemovalCommand = (paths: readonly string[]): string =>
+  `rm -- ${paths.map(shellArgument).join(" ")}`;
+
+type AllowanceAdjustmentCommandOptions = {
+  target: string;
+  remove: readonly string[];
+  template: RatchetAllowance;
+};
+export const allowanceAdjustmentCommand = ({
+  target,
+  remove,
+  template,
+}: AllowanceAdjustmentCommandOptions): string => {
+  const consolidate =
+    remove.length === 0 ? "" : `${allowanceRemovalCommand(remove)} && `;
+  return `mkdir -p ${shellArgument(ALLOWANCE_DIRECTORY)} && ${consolidate}printf '%s\\n' ${shellArgument(JSON.stringify(template))} > ${shellArgument(target)}`;
+};
+
 // Presence in the measured base makes an allowance inert, even if the head
 // edits its contents. Read committed head files so funding has the same Git
 // boundary.
@@ -4302,7 +4342,7 @@ const checkAllowances = ({
     for (const { file, delta } of increases) {
       if (metric.growth === "shrink-only") {
         errors.push(
-          `${diff.id}${file === undefined ? "" : ` (${file})`}: actual increase ${delta}; shrink-only metric takes no allowances. Use the transition owner and declare a managed transition spec.`,
+          `${diff.id}${file === undefined ? "" : ` (${file})`}: actual increase ${delta}; shrink-only metric takes no allowances.`,
         );
         continue;
       }
@@ -4324,14 +4364,25 @@ const checkAllowances = ({
         delta,
         reason: "Explain why this increase is needed",
       };
+      const command = allowanceAdjustmentCommand({
+        target: filename,
+        remove: funded?.paths.slice(1) ?? [],
+        template,
+      });
+      const adjustment =
+        funded === undefined
+          ? `Add ${filename}`
+          : `Adjust ${funded.paths.join(", ")}, merging their funding into ${filename}`;
       errors.push(
-        `${diff.id}${file === undefined ? "" : ` (${file})`}: actual increase ${delta}, funded ${funded?.delta ?? 0} (${(funded?.delta ?? 0) > delta ? "over-funded" : "unfunded increase"}). ${funded === undefined ? "Add" : "Adjust"} ${filename} so added deltas total exactly ${delta}: ${JSON.stringify(template)}`,
+        `${diff.id}${file === undefined ? "" : ` (${file})`}: actual increase ${delta}, funded ${funded?.delta ?? 0} (${(funded?.delta ?? 0) > delta ? "over-funded" : "unfunded increase"}). ${adjustment} so added deltas total exactly ${delta}: ${JSON.stringify(template)}\n` +
+          `    After deciding the increase is required, run: ${command}\n` +
+          "    Replace the reason with the justification, review all added deltas, then run `bun scripts/ratchet.ts --check`.",
       );
     }
   }
   for (const [key, { paths, delta }] of funding) {
     errors.push(
-      `${paths.join(", ")}: ${key} actual increase 0, funded ${delta}; allowance with no increase, remove the added allowance`,
+      `${paths.join(", ")}: ${key} actual increase 0, funded ${delta}; allowance with no increase, remove it with: ${allowanceRemovalCommand(paths)}`,
     );
   }
   return errors;
@@ -4434,7 +4485,7 @@ const runCheck = (): number => {
     console.error(`\n${remedy}`);
   }
   console.error(
-    "\nIncreases relative to the measured base tree require exact, justified allowances added in this PR.",
+    "\nIncreases relative to the measured base tree require exact, justified allowances added in this PR. Recheck with `bun scripts/ratchet.ts --check`.",
   );
   return 1;
 };
@@ -6147,6 +6198,58 @@ const schemaIntrospectionSelfTestFailures = (snapshot: Baseline): string[] => {
   return failures;
 };
 
+const unsignalledSkipSelfTestFailures = (): string[] => {
+  const failures: string[] = [];
+  const skipFixtures = [
+    {
+      name: "nullable computed value skipped",
+      code: "for (const item of items) { const head = sentenceHeadPattern(item.text); if (head === null) { continue; } }",
+      expected: 1,
+    },
+    {
+      name: "empty text extraction fallback",
+      code: 'return { kind: "windowed-text", text: asString(valueAtPath(payload, textPath)) ?? "", nextCursor: asString(fieldOf(payload, "nextCursor")) };',
+      expected: 1,
+    },
+    {
+      name: "catch without signal",
+      code: "try { read(); } catch {}",
+      expected: 1,
+    },
+    {
+      name: "catch with telemetry",
+      code: "read().catch(cause => captureException(cause));",
+      expected: 0,
+    },
+    {
+      name: "catch with result",
+      code: "try { read(); } catch { return Result.err(cause); }",
+      expected: 0,
+    },
+  ];
+  const skipMetric = RATCHET_METRICS.find(
+    ({ id }) => id === "unsignalled-skip",
+  );
+  if (
+    skipMetric?.scope !== "file" ||
+    skipMetric.measurement === "role-sensitive"
+  ) {
+    failures.push("unsignalled-skip requires a file counter");
+  } else {
+    for (const fixture of skipFixtures) {
+      const actual = skipMetric.count(fixture.code, {
+        file: "apps/api/src/shapes.ts",
+      });
+      if (actual !== fixture.expected) {
+        failures.push(
+          `unsignalled-skip ${fixture.name}: counted ${actual}, expected ${fixture.expected}`,
+        );
+      }
+    }
+  }
+  return failures;
+};
+
 const projectionTieSelfTestFailures = (): string[] => {
   const failures: string[] = [];
   const projectionTieCases = [
@@ -6191,6 +6294,7 @@ const projectionTieSelfTestFailures = (): string[] => {
 
 const runSelfTest = (): number => {
   const failures: string[] = [];
+  failures.push(...unsignalledSkipSelfTestFailures());
   const root = mkdtempSync(path.join(tmpdir(), "ratchet-selftest-"));
 
   failures.push(...dependencyMetricSelfTestFailures(root));

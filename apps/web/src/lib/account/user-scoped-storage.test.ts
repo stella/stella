@@ -3,9 +3,9 @@ import { beforeEach, describe, expect, test } from "bun:test";
 import { create } from "zustand";
 import { createJSONStorage, persist } from "zustand/middleware";
 
+import { installUserScopedStorage } from "@/lib/account/install-user-scoped-storage";
 import {
   followStorageOwner,
-  installUserScopedStorage,
   pruneUserStorage,
   releaseUserStorage,
   storageOwner,
@@ -70,16 +70,16 @@ describe("pruneUserStorage", () => {
   test("a signed-in user keeps only their own entries", () => {
     local.setItem(userStorageKey("law_search_history", USER_A), "[]");
     local.setItem(userStorageKey("law_search_history", USER_B), "[]");
-    local.setItem("stella-search-recent-searches:org-1:user-a", "[]");
-    local.setItem("stella-search-recent-searches:org-1:user-b", "[]");
-    local.setItem("sidebar_pinned_user-b", "[]");
+    local.setItem("stella-search-recent-searches:org-1::u:user-a", "[]");
+    local.setItem("stella-search-recent-searches:org-1::u:user-b", "[]");
+    local.setItem("sidebar_pinned:u:user-b", "[]");
     local.setItem("stella-ui-theme", "dark");
 
     pruneUserStorage(areas(), USER_A, USER_A);
 
     expect(keys(local)).toEqual([
       "law_search_history:u:user-a",
-      "stella-search-recent-searches:org-1:user-a",
+      "stella-search-recent-searches:org-1::u:user-a",
       "stella-ui-theme",
     ]);
   });
@@ -120,11 +120,14 @@ describe("pruneUserStorage", () => {
 
   test("a tab's drafts go on from a visitor into their account, and never past a signed-in user", () => {
     session.setItem("stella.provision-question:doc:anchor", "Why?");
-    session.setItem("stella.chat.browserApprovalMode", "ask");
+    session.setItem(
+      userStorageKey("stella.chat.browserApprovalMode", USER_A),
+      "ask",
+    );
 
     pruneUserStorage(areas(), VISITOR, USER_A);
     expect(keys(session)).toEqual([
-      "stella.chat.browserApprovalMode",
+      "stella.chat.browserApprovalMode:u:user-a",
       "stella.provision-question:doc:anchor",
       "stella.storage-owner",
     ]);
@@ -272,5 +275,25 @@ describe("a persisted store across owners", () => {
     expect(store.getState().count).toBe(7);
     expect(storedCount("stella.report-exports.active:u:user-b")).toBe(7);
     expect(local.getItem("stella.report-exports.active:u:user-a")).toBeNull();
+  });
+});
+
+describe("unavailable browser areas", () => {
+  test("account transitions continue and prune reachable areas when tab reads are blocked", () => {
+    const blocked = new MemoryStorage();
+    blocked.getItem = () => {
+      throw new DOMException("Site data is blocked", "SecurityError");
+    };
+    const queryClient = new QueryClient();
+    const blockedAreas = () => ({ local, session: blocked });
+    const unsubscribe = installUserScopedStorage(queryClient, blockedAreas);
+    queryClient.setQueryData(["session"], { user: { id: "user-a" } });
+    local.setItem(userStorageKey("sidebar_pinned"), '["matter-a"]');
+    releaseUserStorage(blockedAreas());
+    expect(storageOwner()).toEqual(VISITOR);
+    expect(keys(local)).toEqual([]);
+    queryClient.setQueryData(["session"], { user: { id: "user-b" } });
+    expect(storageOwner()).toEqual(USER_B);
+    unsubscribe();
   });
 });

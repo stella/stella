@@ -146,6 +146,7 @@
       "useBackupCode": "Usar un código de copia de seguridad en su lugar"
     },
     "useDifferentEmail": "Usar otro correo",
+    "usePassword": "Usar una contraseña",
     "weSentCodeTo": "Hemos enviado un código a <email>{emailAddress}</email>"
   },
   "avt": {
@@ -349,6 +350,7 @@
     },
     "view": {
       "chooseList": "Elegir una lista",
+      "createList": "Crear una lista",
       "evidenceList": "Hechos de",
       "noLists": "Este asunto no tiene listas.",
       "pickList": "Elija la lista con cuyos hechos se contrastan los documentos de este asunto."
@@ -961,6 +963,9 @@
     },
     "viewer": {
       "abstract": "Resumen",
+      "appliedVersionNotStated": "Versión aplicada no indicada",
+      "appliedVersionStatedAmendment": "Redacción modificada por <reference>{amendment}</reference>",
+      "appliedVersionStatedDate": "{relation, select, on {Redacción vigente el {date}} until {Redacción vigente hasta el {date}} from {Redacción vigente desde el {date}} other {Redacción vigente el {date}}}",
       "caseFileMayHoldOthers": "Este expediente también puede contener otras resoluciones.",
       "citedBy": "Citado por",
       "cites": "Cita",
@@ -1047,6 +1052,7 @@
       "toastDescription": "El chat a pantalla completa llegará con conversaciones guardadas.",
       "toastTitle": "La vista completa aún no está disponible"
     },
+    "activateGeneratedView": "Interactuar con esta vista",
     "aiPrompt": "Campo de mensaje de IA",
     "aiThread": "Conversación de IA",
     "analyzingSources": "Analizando fuentes",
@@ -1192,6 +1198,8 @@
     "forkedFromUnavailable": "Creado a partir de un chat que ya no está disponible",
     "forkedThread": "De otro chat",
     "forkingThread": "Creando un chat nuevo…",
+    "generatedView": "Vista generada",
+    "generatedViewDrill": "Busca resoluciones con el filtro de tribunal {court} y el año {year}.",
     "greeting": "¿En qué le gustaría trabajar?",
     "greetingSubtitle": "Empiece con un asunto, un documento o una pregunta sencilla.",
     "hideThread": "Ocultar conversación",
@@ -1323,6 +1331,7 @@
     "sendErrorQuotaExhausted": "Se agotó la cuota del proveedor de IA. Inténtalo de nuevo en un minuto o contacta con el administrador del espacio de trabajo.",
     "sendErrorStreamIncomplete": "La respuesta de la IA se cortó antes de terminar. Inténtalo de nuevo.",
     "sendPrompt": "Enviar mensaje",
+    "sendQueuedMessageNow": "Enviar ahora",
     "sendWithoutAnonymization": "Enviar sin anonimización",
     "skills": {
       "scope": {
@@ -1470,6 +1479,14 @@
       "sourceCode": "Código fuente",
       "toggleDetails": "Mostrar detalles",
       "unrestoredFields": "{count, plural, one {# campo no se pudo} other {# campos no se pudieron}} rellenar con valores reales en el modo anonimizado. Revise: {fields}"
+    },
+    "turnNotification": {
+      "failedBody": "Una respuesta del chat en stella no terminó.",
+      "failedTitle": "La respuesta falló",
+      "needsInputBody": "Un chat espera tu aprobación o respuesta.",
+      "needsInputTitle": "stella necesita tu respuesta",
+      "replyReadyBody": "stella terminó de responder en tu chat.",
+      "replyReadyTitle": "Respuesta lista"
     },
     "unsupportedFileType": "Tipo de archivo no compatible",
     "uploadFailed": "Error al procesar el archivo",
@@ -1685,6 +1702,7 @@
     "deletedCount": "{count, plural, one {# elemento eliminado} other {# elementos eliminados}}",
     "description": "Descripción",
     "details": "Detalles",
+    "detailsHiddenFeatureUnavailable": "Detalles ocultos: función no activada",
     "disconnect": "Desconectar",
     "dismiss": "Descartar",
     "displayName": "Nombre para mostrar",
@@ -1820,6 +1838,8 @@
     "notes": "Notas",
     "open": "Abrir",
     "openInNewTab": "Abrir en una pestaña nueva",
+    "openInStella": "Abrir en stella",
+    "openOriginalSource": "Abrir fuente original",
     "options": "Opciones",
     "or": "O",
     "organization": "Organización",
@@ -4367,6 +4387,11 @@
       "betaInbox": "Bandeja de entrada y notificaciones",
       "betaInboxDescription": "Mostrar la bandeja de entrada y la campana de notificaciones",
       "betaTimeBillingDescription": "Mostrar el registro de tiempo, las facturas y los gastos",
+      "chatNotifications": "Notificaciones del chat",
+      "chatNotificationsBlocked": "Las notificaciones de stella están bloqueadas en este navegador. Permítelas en la configuración del sitio del navegador.",
+      "chatNotificationsDescription": "Recibe una notificación de este navegador cuando una respuesta del chat termine mientras stella está en segundo plano.",
+      "chatNotificationsToggle": "Avisarme cuando una respuesta esté lista o necesite mi intervención",
+      "chatNotificationsUnsupported": "Este navegador no admite notificaciones.",
       "confirmDelete": "Confirmar eliminación de cuenta",
       "dangerZone": "Zona de peligro",
       "dangerZoneDescription": "Eliminar permanentemente el acceso a su cuenta y los datos privados de la cuenta.",
@@ -4736,6 +4761,7 @@
     },
     "title": "Legislación",
     "validity": "Vigente del {from} al {to}",
+    "versionAppliedInDecision": "Versión aplicada en la resolución <bdi>{court}</bdi> <bdi>{caseNumber}</bdi> (<bdi>{range}</bdi>) · {status}",
     "wordingValidFrom": "Redacción vigente desde {date}",
     "wordingVersionUnknown": "No se conoce la fecha de la versión de la redacción"
   },

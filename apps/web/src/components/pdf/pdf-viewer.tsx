@@ -6,7 +6,7 @@ import { FileViewerWithAI } from "@/components/ai-suggestions/file-viewer-with-a
 import { CreatingBBoxes } from "@/components/pdf/creating-citations";
 import { PageAnonymization } from "@/components/pdf/page-anonymization";
 import { PageCitation } from "@/components/pdf/page-citation";
-import { StellaMark } from "@/components/stella-mark";
+import { DefaultPendingComponent } from "@/components/route-components";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { detached } from "@/lib/detached";
 import { fileOptions } from "@/lib/files/queries";
@@ -165,8 +165,4 @@ const PageOverlays = ({ pageId }: { pageId: string }) => {
   );
 };
 
-export const PDFSuspenseFallback = () => (
-  <div className="flex h-full w-full items-center justify-center">
-    <StellaMark className="text-muted-foreground size-8 animate-pulse" />
-  </div>
-);
+export const PDFSuspenseFallback = DefaultPendingComponent;

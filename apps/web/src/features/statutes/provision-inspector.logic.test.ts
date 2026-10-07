@@ -38,6 +38,34 @@ describe("isProvisionViewPayload", () => {
     );
   });
 
+  test("decision context survives cloning and rejects incomplete attribution", () => {
+    const decisionContext = {
+      court: "Nejvyšší soud",
+      caseNumber: "25 Cdo 627/2022",
+      appliedDocumentId: payload.documentId,
+    } satisfies NonNullable<ProvisionViewPayload["decisionContext"]>;
+    expect(
+      isProvisionViewPayload(structuredClone({ ...payload, decisionContext })),
+    ).toBe(true);
+    for (const field of Object.keys(decisionContext)) {
+      const incomplete = Object.fromEntries(
+        Object.entries(decisionContext).filter(([key]) => key !== field),
+      );
+      expect(
+        isProvisionViewPayload({ ...payload, decisionContext: incomplete }),
+      ).toBe(false);
+      expect(
+        isProvisionViewPayload({
+          ...payload,
+          decisionContext: { ...decisionContext, [field]: "" },
+        }),
+      ).toBe(false);
+    }
+    expect(isProvisionViewPayload({ ...payload, decisionContext: null })).toBe(
+      false,
+    );
+  });
+
   test("rejects a payload missing any field the view addresses a read by", () => {
     for (const field of Object.keys(payload)) {
       const rest = Object.fromEntries(

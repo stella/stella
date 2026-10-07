@@ -174,6 +174,7 @@ import {
   SheetTrigger,
 } from "@stll/ui/sheet";
 import { Skeleton } from "@stll/ui/skeleton";
+import { SplitButton } from "@stll/ui/split-button";
 import {
   Table,
   TableBody,
@@ -355,6 +356,44 @@ export function UiPlayground() {
                 description="Variants, sizes, icon-only buttons, loading, and disabled states."
                 title="Button"
               >
+                <div className="flex flex-wrap items-center gap-2">
+                  <SplitButton
+                    size="sm"
+                    primaryLabel={t("common.download")}
+                    menuLabel={t("workspaces.files.downloadAs")}
+                    onPrimaryClick={() => {
+                      stellaToast.add({
+                        title: t("common.download"),
+                        type: "info",
+                      });
+                    }}
+                    menu={
+                      <MenuPopup>
+                        <MenuItem>{t("workspaces.files.downloadPdf")}</MenuItem>
+                      </MenuPopup>
+                    }
+                  >
+                    <FileTextIcon />
+                  </SplitButton>
+                  <SplitButton
+                    size="md"
+                    primaryLabel={t("common.download")}
+                    menuLabel={t("workspaces.files.downloadAs")}
+                    onPrimaryClick={() => {
+                      stellaToast.add({
+                        title: t("common.download"),
+                        type: "info",
+                      });
+                    }}
+                    menu={
+                      <MenuPopup>
+                        <MenuItem>{t("workspaces.files.downloadPdf")}</MenuItem>
+                      </MenuPopup>
+                    }
+                  >
+                    <FileTextIcon />
+                  </SplitButton>
+                </div>
                 <div className="flex flex-wrap items-center gap-2">
                   {BUTTON_VARIANTS.map((variant) => (
                     <Button key={variant} variant={variant}>
