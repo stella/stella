@@ -344,7 +344,11 @@ if (!databaseUrl || !runPostgresTests) {
       } finally {
         release.resolve(undefined);
         await Promise.allSettled(pending);
-        await Promise.all(pending).finally(fixture.cleanup);
+        try {
+          await Promise.all(pending);
+        } finally {
+          await fixture.cleanup();
+        }
       }
     });
   }, 15_000);
