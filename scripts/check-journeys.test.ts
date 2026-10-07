@@ -525,7 +525,7 @@ describe("scheduled read journeys", () => {
     );
     expect(
       result.cliCalls.some((call) =>
-        /^case-law read --decision-ids [0-9a-f-]{36} --max-chars 1000 --json$/u.test(
+        /^case-law read --decision-ids [0-9a-f-]{36} --json$/u.test(
           call,
         ),
       ),
