@@ -49,6 +49,7 @@ export const FAILURE_REASON_GRADE = {
   credentials_token_unreadable: "anticipated",
   client_disconnected: "anticipated",
   optional_file_absent: "anticipated",
+  // parser-output-unchanged: research retrieval reasons grade observed failures only; no parser reads them.
   research_index_not_ready: "anticipated",
   request_invalid: "client",
   access_denied: "client",
