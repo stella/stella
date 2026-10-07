@@ -1,5 +1,5 @@
-2026-10-07T12:33:42.5350283Z ##[group]Run if [[ "$QUEUE_DEPTH" == thin ]]; then
-2026-10-07T12:33:42.5499074Z env:
-2026-10-07T12:33:42.5552317Z   COVERAGE_PROFILE: pilot-fast-v1
-2026-10-07T12:33:42.5553208Z   PILOT_FAST_JOBS: ["ci-checks-docs","ci-checks-generated","ci-checks-policy","ci-checks-rest","ci-generated-sources","ci-plan","ci-result","ci-tests","code-quality-api","code-quality-rest","code-quality-web","typecheck-baseline"]
-2026-10-07T12:33:42.5554000Z ##[endgroup]
+2000-01-01T00:00:00.0000000Z ##[group]Run if [[ "$QUEUE_DEPTH" == thin ]]; then
+2000-01-01T00:00:00.0000000Z env:
+2000-01-01T00:00:00.0000000Z   COVERAGE_PROFILE: pilot-fast-v1
+2000-01-01T00:00:00.0000000Z   PILOT_FAST_JOBS: ["ci-checks-docs","ci-checks-generated","ci-checks-policy","ci-checks-rest","ci-generated-sources","ci-plan","ci-result","ci-tests","code-quality-api","code-quality-rest","code-quality-web","typecheck-baseline"]
+2000-01-01T00:00:00.0000000Z ##[endgroup]

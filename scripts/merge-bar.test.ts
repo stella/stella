@@ -2094,12 +2094,12 @@ describe("green result freshness", () => {
     const log = (
       profile: string,
       jobs: string,
-    ) => `2026-10-07T00:00:00Z ##[group]Run if [[ "$QUEUE_DEPTH" == thin ]]; then
-2026-10-07T00:00:00Z shell: /usr/bin/bash -e {0}
-2026-10-07T00:00:00Z env:
-2026-10-07T00:00:00Z   COVERAGE_PROFILE: ${profile}
-2026-10-07T00:00:00Z   PILOT_FAST_JOBS: ${jobs}
-2026-10-07T00:00:00Z ##[endgroup]
+    ) => `2000-01-01T00:00:00.0000000Z ##[group]Run if [[ "$QUEUE_DEPTH" == thin ]]; then
+2000-01-01T00:00:00.0000000Z shell: /usr/bin/bash -e {0}
+2000-01-01T00:00:00.0000000Z env:
+2000-01-01T00:00:00.0000000Z   COVERAGE_PROFILE: ${profile}
+2000-01-01T00:00:00.0000000Z   PILOT_FAST_JOBS: ${jobs}
+2000-01-01T00:00:00.0000000Z ##[endgroup]
 `;
     const pilot = parseCiCoverageLog(
       readFileSync(
