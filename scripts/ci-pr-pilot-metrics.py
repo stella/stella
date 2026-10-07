@@ -16,6 +16,7 @@ PROFILE = "pilot-v1"
 WINDOW = dt.timedelta(days=7)
 COMMIT_SAMPLE_LIMIT = 120
 QUEUE_SAMPLE_LIMIT = 25
+QUEUE_RUN_PAGE_LIMIT = 5
 
 def sample(values, limit):
     return values if len(values) <= limit else [values[int(index * (len(values) - 1) / (limit - 1))] for index in range(limit)]
@@ -194,13 +195,18 @@ class Collector:
         complete = True
         runs = {}
         for conclusion in ["failure", "cancelled"]:
-            result = self.rest("actions/workflows/ci.yml/runs", {
-                "event": "merge_group", "status": conclusion, "created": f">={since.isoformat()}",
-                "per_page": 40, "page": 1,
-            })
-            complete = complete and result["total_count"] <= len(result["workflow_runs"])
-            for run in result["workflow_runs"]:
-                runs[run["id"]] = run
+            seen = set()
+            for page in range(1, QUEUE_RUN_PAGE_LIMIT + 1):
+                result = self.rest("actions/workflows/ci.yml/runs", {
+                    "event": "merge_group", "status": conclusion, "created": f">={since.isoformat()}",
+                    "per_page": 100, "page": page,
+                })
+                for run in result["workflow_runs"]:
+                    runs[run["id"]] = run
+                    seen.add(run["id"])
+                if len(seen) >= result["total_count"] or not result["workflow_runs"]:
+                    break
+            complete = complete and len(seen) >= result["total_count"]
         for run in runs.values():
             jobs = self.rest(f"actions/runs/{run['id']}/jobs", {"per_page": 100, "filter": "latest"})
             if jobs["total_count"] > len(jobs["jobs"]):

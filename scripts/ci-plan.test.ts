@@ -1060,6 +1060,7 @@ const resultGateCase = ({
       COVERAGE_PROFILE: "normal-v1",
       PILOT_FAST_JOBS: "[]",
       QUEUE_VALIDATION: "false",
+      QUEUE_REQUIRED_JOBS: "[]",
       PR_ACTION: "synchronize",
       QUEUE_DEPTH: "full",
       THIN_JOBS: "[]",

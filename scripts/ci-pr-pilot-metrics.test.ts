@@ -8,11 +8,12 @@ const execute = (body: string) => {
     "-c",
     `
 import datetime as dt, importlib.util, json
+from pathlib import Path
 spec = importlib.util.spec_from_file_location("metrics", "scripts/ci-pr-pilot-metrics.py")
 if spec is None or spec.loader is None:
     raise RuntimeError("Missing metrics module")
 m = importlib.util.module_from_spec(spec)
-spec.loader.exec_module(m)
+exec(compile(Path("scripts/ci-pr-pilot-metrics.py").read_text(), "scripts/ci-pr-pilot-metrics.py", "exec"), m.__dict__)
 now = dt.datetime(2026, 10, 10, 12, tzinfo=dt.UTC)
 seed = {"profile": "pilot-v1", "baselineArmToMergeP50Minutes": 10, "baselineJobMinutesPerDay": 100}
 ${body}
@@ -465,4 +466,41 @@ test("metrics workflow gets the default branch without schedule or dispatch repo
       }
     }
   }
+});
+
+test("queue failure pagination covers both conclusions, deduplicates overlaps and fails at the cap", () => {
+  const result = execute(`
+class Fixture(m.Collector):
+    def __init__(self, population):
+        super().__init__("stella/stella")
+        self.population = population
+        self.pages = []
+        self.job_reads = []
+    def rest(self, endpoint, parameters):
+        if endpoint.endswith("/runs"):
+            self.pages.append([parameters["status"], parameters["page"], parameters["per_page"]])
+            start = (parameters["page"] - 1) * 100
+            runs = [{"id": i, "pull_requests": [], "head_sha": format(i, "040x"),
+                     "head_branch": "gh-readonly-queue/main/pr-42-" + "b" * 40}
+                    for i in range(start, min(start + 100, self.population))]
+            return {"total_count": self.population, "workflow_runs": runs}
+        self.job_reads.append(endpoint)
+        return {"total_count": 1, "jobs": [{"name": "parser-version-guard", "conclusion": "failure"}]}
+values = []
+for population in [101, 500, 501]:
+    fixture = Fixture(population)
+    report = fixture.queue_failures(now, {"parser-version-guard"})
+    values.append([report["queueFailureEvidenceComplete"], report["postArmDeferredQueueFailureHeads"],
+                   fixture.pages, len(fixture.job_reads)])
+print(json.dumps(values))
+`);
+  const pages = (count: number) =>
+    ["failure", "cancelled"].flatMap((status) =>
+      Array.from({ length: count }, (_, index) => [status, index + 1, 100]),
+    );
+  expect(result).toEqual([
+    [true, 101, pages(2), 101],
+    [true, 500, pages(5), 500],
+    [false, 500, pages(5), 500],
+  ]);
 });

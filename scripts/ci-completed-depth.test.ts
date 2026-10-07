@@ -4,7 +4,9 @@ import { readFileSync } from "node:fs";
 import { Script } from "node:vm";
 import * as v from "valibot";
 
+import { pilotQueueJobs } from "./ci-pr-pilot-plan";
 import { contextWithPlanOutputs, evaluate } from "./github-expression";
+import { thinJobs } from "./main-heavy-plan";
 
 const stepSchema = v.looseObject({
   name: v.string(),
@@ -81,8 +83,13 @@ type LookupOptions = {
   event?: string;
   artifacts?: unknown;
   failure?: boolean;
+  artifactFailure?: boolean;
+  comparisonFailure?: boolean;
   runFailure?: boolean;
   sourceRun?: unknown;
+  queueDepth?: string;
+  comparison?: unknown;
+  groupRef?: string;
   pull?: typeof pr;
 };
 const decide = async ({
@@ -92,9 +99,14 @@ const decide = async ({
   event = "pull_request",
   artifacts = [artifact(depth, profile)],
   failure = false,
+  artifactFailure = false,
+  comparisonFailure = false,
   runFailure = false,
   sourceRun = successfulRun,
   pull = pr,
+  queueDepth = "full",
+  comparison = { status: "ahead", merge_base_commit: { sha: pull.head.sha } },
+  groupRef = `refs/heads/gh-readonly-queue/main/pr-123-${"b".repeat(40)}`,
 }: LookupOptions = {}) => {
   const outputs = new Map<string, string>();
   const requests: unknown[] = [];
@@ -109,12 +121,17 @@ const decide = async ({
       env: {
         SUITE_DEPTH: depth,
         COVERAGE_PROFILE: profile,
+        QUEUE_DEPTH: queueDepth,
         GITHUB_RUN_ATTEMPT: "1",
       },
     },
     context: {
       eventName: event,
-      payload: { action, pull_request: pull },
+      payload: {
+        action,
+        pull_request: pull,
+        merge_group: { head_ref: groupRef, head_sha: "c".repeat(40) },
+      },
       repo: { owner: "stella", repo: "stella" },
       runId: 100,
     },
@@ -124,6 +141,24 @@ const decide = async ({
     },
     github: {
       rest: {
+        pulls: {
+          get: async (request: unknown) => {
+            requests.push(request);
+            if (failure) {
+              throw new Error("Queued PR unavailable");
+            }
+            return { data: pull };
+          },
+        },
+        repos: {
+          compareCommits: async (request: unknown) => {
+            requests.push(request);
+            if (failure || comparisonFailure) {
+              throw new Error("Group comparison unavailable");
+            }
+            return { data: comparison };
+          },
+        },
         actions: {
           getWorkflowRun: async (request: unknown) => {
             requests.push(request);
@@ -137,7 +172,7 @@ const decide = async ({
             per_page: number;
           }) => {
             requests.push(request);
-            if (failure) {
+            if (failure || artifactFailure) {
               throw new Error("Evidence unavailable");
             }
             return {
@@ -549,5 +584,188 @@ test("enqueue aggregation accepts only the queued PR event and successful struct
       },
     });
     expect(child.exitCode, child.stderr.toString()).toBe(expected);
+  }
+});
+
+test("thin groups certify only normal-profile completion on a head included in the group", async () => {
+  const options = {
+    event: "merge_group",
+    queueDepth: "thin",
+    depth: "full",
+    artifacts: [artifact("fast")],
+  };
+  const passed = await decide(options);
+  expect(passed.outputs.get("normal_completion")).toBe("complete");
+  expect(passed.outputs.get("run_required")).toBe("true");
+  expect(passed.outputs.has("marker")).toBe(false);
+  expect(
+    (await decide({ ...options, profile: "pilot-fast-v1" })).outputs.get(
+      "normal_completion",
+    ),
+  ).toBe("complete");
+  for (const changed of [
+    { artifacts: [artifact("fast", "pilot-fast-v1")] },
+    { artifacts: [] },
+    { artifacts: [artifact("full")] },
+    { artifacts: [{ ...artifact("fast"), expired: true }] },
+    { failure: true },
+    { artifactFailure: true },
+    { comparisonFailure: true },
+    { runFailure: true },
+    {
+      sourceRun: { ...successfulRun, status: "in_progress", conclusion: null },
+    },
+    { sourceRun: { ...successfulRun, conclusion: "failure" } },
+    { sourceRun: { ...successfulRun, head_sha: "d".repeat(40) } },
+    {
+      comparison: {
+        status: "diverged",
+        merge_base_commit: { sha: "d".repeat(40) },
+      },
+    },
+    {
+      comparison: {
+        status: "ahead",
+        merge_base_commit: { sha: "d".repeat(40) },
+      },
+    },
+    { groupRef: "refs/heads/unknown" },
+    { pull: { ...pr, number: 999 } },
+  ]) {
+    const fallback = await decide({ ...options, ...changed });
+    expect(
+      fallback.outputs.get("normal_completion"),
+      JSON.stringify(changed),
+    ).toBe("required");
+    expect(fallback.outputs.get("run_required")).toBe("true");
+  }
+});
+
+test("thin groups run and require every deferred normal PR check unless normal completion is certified", async () => {
+  const deferred = pilotQueueJobs(workflow);
+  if (deferred.status !== "valid") {
+    throw new Error(deferred.message);
+  }
+  expect(deferred.jobs).toContain("ci-browser");
+  expect(deferred.jobs).toContain("dependency-malware");
+  const aggregation = result.steps.find(
+    (step) => step.name === "Evaluate CI outcome",
+  );
+  if (!aggregation?.run) {
+    throw new Error("Missing CI aggregation");
+  }
+  const env = v.parse(
+    v.object({ env: v.record(v.string(), v.string()) }),
+    aggregation,
+  ).env;
+  const scopes = v.parse(
+    v.record(v.string(), v.nullable(v.string())),
+    JSON.parse(env["JOB_SCOPES"] ?? ""),
+  );
+  const allScopes = Object.fromEntries(
+    Object.values(scopes)
+      .filter((scopeName) => scopeName !== null)
+      .map((scopeName) => [scopeName, "true"]),
+  );
+  const thin = thinJobs(workflow);
+  for (const options of [
+    { artifacts: [artifact("fast", "pilot-fast-v1")] },
+    { artifacts: [] },
+    { artifacts: [artifact("fast")] },
+    { artifacts: [artifact("fast")], runFailure: true },
+    { artifacts: [artifact("fast")], artifactFailure: true },
+  ]) {
+    const evidence = await decide({
+      ...options,
+      event: "merge_group",
+      queueDepth: "thin",
+      depth: "full",
+    });
+    const completion = v.parse(
+      v.picklist(["required", "complete"]),
+      evidence.outputs.get("normal_completion"),
+    );
+    const context = contextWithPlanOutputs({
+      outputs: planner.outputs,
+      context: {
+        values: {
+          "github.event_name": "merge_group",
+          "inputs.heavy_only": false,
+          "steps.completed-depth.outputs.normal_completion": completion,
+          "steps.pilot-queue-plan.outputs.queue_jobs": JSON.stringify(
+            deferred.jobs,
+          ),
+          "needs.ci-plan.outputs.run_required": "true",
+          "needs.ci-plan.outputs.coverage_profile": "normal-v1",
+          "needs.ci-plan.outputs.trusted": "true",
+          "needs.ci-plan.outputs.suite_depth": "full",
+          "needs.ci-plan.outputs.queue_depth": "thin",
+          ...Object.fromEntries(
+            Object.entries(allScopes).map(([name, value]) => [
+              `needs.ci-plan.outputs.${name}`,
+              value,
+            ]),
+          ),
+        },
+        status: { success: true, failure: false, cancelled: false },
+      },
+    });
+    const queueJobs = v.parse(
+      v.array(v.string()),
+      JSON.parse(
+        v.parse(
+          v.string(),
+          context.fallback?.("needs.ci-plan.outputs.queue_required_jobs"),
+        ),
+      ),
+    );
+    expect(queueJobs).toEqual(completion === "complete" ? [] : deferred.jobs);
+    const dependencies = Object.fromEntries(
+      Object.entries(scopes).map(([name]) => [
+        name,
+        {
+          result:
+            thin.includes(name) || queueJobs.includes(name)
+              ? "success"
+              : "skipped",
+        },
+      ]),
+    );
+    dependencies["ci-plan"] = { result: "success" };
+    const runAggregation = (needs: typeof dependencies) =>
+      Bun.spawnSync(["bash", "-e", "-c", aggregation.run ?? ""], {
+        env: {
+          ...process.env,
+          ...env,
+          EVENT: "merge_group",
+          QUEUE_DEPTH: "thin",
+          SUITE_DEPTH: "full",
+          HEAVY_ONLY: "false",
+          COVERAGE_PROFILE: "normal-v1",
+          QUEUE_VALIDATION: "false",
+          PLAN_RESULT: "success",
+          TRUSTED: "true",
+          THIN_JOBS: JSON.stringify(thin),
+          QUEUE_REQUIRED_JOBS: JSON.stringify(queueJobs),
+          PLAN: JSON.stringify(allScopes),
+          NEEDS: JSON.stringify(needs),
+        },
+      });
+    expect(runAggregation(dependencies).exitCode).toBe(0);
+    for (const job of deferred.jobs) {
+      const scheduled = evaluate(jobs[job]?.if ?? "true", context);
+      if (completion !== "complete") {
+        expect(scheduled, job).toBe(true);
+        for (const outcome of ["skipped", "failure"]) {
+          expect(
+            runAggregation({ ...dependencies, [job]: { result: outcome } })
+              .exitCode,
+            `${job}/${outcome}`,
+          ).toBe(1);
+        }
+      } else if (!thin.includes(job)) {
+        expect(scheduled, job).toBe(false);
+      }
+    }
   }
 });

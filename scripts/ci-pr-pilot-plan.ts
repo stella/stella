@@ -101,10 +101,52 @@ export const pilotFastJobs = (workflow: unknown) => {
   return { status: "valid", jobs: [...selected].toSorted() } as const;
 };
 
+export const pilotQueueJobs = (workflow: unknown) => {
+  const fast = pilotFastJobs(workflow);
+  if (fast.status === "invalid") {
+    return fast;
+  }
+  if (!isRecord(workflow) || !isRecord(workflow["jobs"])) {
+    return invalid("Expected workflow jobs");
+  }
+  const result = workflow["jobs"]["ci-result"];
+  if (!isRecord(result) || !Array.isArray(result["steps"])) {
+    return invalid("Expected CI result steps");
+  }
+  const outcome = result["steps"].find(
+    (step: unknown) => isRecord(step) && step["name"] === "Evaluate CI outcome",
+  );
+  if (
+    !isRecord(outcome) ||
+    !isRecord(outcome["env"]) ||
+    typeof outcome["env"]["FAST_REQUIRED"] !== "string"
+  ) {
+    return invalid("Expected normal PR required jobs");
+  }
+  const required: unknown = JSON.parse(outcome["env"]["FAST_REQUIRED"]);
+  if (
+    !Array.isArray(required) ||
+    !required.every((job) => typeof job === "string")
+  ) {
+    return invalid("Invalid normal PR required jobs");
+  }
+  for (const job of required) {
+    if (!Object.hasOwn(workflow["jobs"], job)) {
+      return invalid(`Stale normal PR required job: ${job}`);
+    }
+  }
+  const deferred = PILOT_DEFERRED.filter(
+    (job) => required.includes(job) && !fast.jobs.includes(job),
+  );
+  return { status: "valid", jobs: deferred.toSorted() } as const;
+};
+
 if (import.meta.main) {
   const filename = process.argv.at(2);
+  const queue = process.argv.at(3) === "queue";
+  const classify = queue ? pilotQueueJobs : pilotFastJobs;
   const result = filename
-    ? pilotFastJobs(Bun.YAML.parse(readFileSync(filename, "utf-8")))
+    ? classify(Bun.YAML.parse(readFileSync(filename, "utf-8")))
     : invalid("Expected workflow filename");
   switch (result.status) {
     case "invalid":
@@ -112,7 +154,9 @@ if (import.meta.main) {
       process.exitCode = 1;
       break;
     case "valid":
-      console.log(`fast_jobs=${JSON.stringify(result.jobs)}`);
+      console.log(
+        `${queue ? "queue_jobs" : "fast_jobs"}=${JSON.stringify(result.jobs)}`,
+      );
       break;
   }
 }
