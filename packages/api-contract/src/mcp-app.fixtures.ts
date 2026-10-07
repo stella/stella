@@ -6,6 +6,7 @@ export const APP_SEARCH_FIXTURE = {
         courts: [{ value: "Ústavní soud", label: null, count: 1 }],
       },
     ],
+    courtYear: null,
     year: [],
     decisionType: [],
     source: [],

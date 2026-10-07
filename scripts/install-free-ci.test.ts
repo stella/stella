@@ -83,6 +83,12 @@ test("the install guard rejects bypasses, unbounded steps and lost logs", () => 
   ).toContain("smoke: install bypasses scripts/ci-install.ts");
   expect(
     boundedInstallProblems(
+      workflow([{ parallel: [{ run: "bun install" }] }, upload]),
+      "windows",
+    ),
+  ).toContain("smoke: install bypasses scripts/ci-install.ts");
+  expect(
+    boundedInstallProblems(
       workflow([{ ...install, "timeout-minutes": 10 }, upload]),
       "windows",
     ),
@@ -167,6 +173,68 @@ const invocationProblems = (
 };
 
 describe("shell lexing", () => {
+  test("keeps ANSI-C escaped quotes, backslashes and newlines in one literal word", () => {
+    expect(
+      lexShell(
+        String.raw`printf '%s' $'src=\'fixture\'; rg literal\\path\n$(rg hidden)'suffix`,
+      ),
+    ).toEqual([
+      {
+        type: "command",
+        words: [
+          "printf",
+          "%s",
+          "src='fixture'; rg literal\\path\n$(rg hidden)suffix",
+        ],
+      },
+    ]);
+    expect(lexShell("printf $'line one\nline two'\ntrue")).toEqual([
+      { type: "command", words: ["printf", "line one\nline two"] },
+      { type: "command", words: ["true"] },
+    ]);
+  });
+
+  test("decodes ANSI-C command names without interpreting literal command content", () => {
+    for (const escaped of [String.raw`\x72g`, String.raw`\162\147`, "rg"]) {
+      expect(lexShell(`$'${escaped}' file`)).toEqual([
+        { type: "command", words: ["rg", "file"] },
+      ]);
+    }
+    expect(lexShell(String.raw`printf $'rg\0; hidden' $'\q'`)).toEqual([
+      { type: "command", words: ["printf", "rg", String.raw`\q`] },
+    ]);
+  });
+
+  test("decodes ANSI-C byte escapes and preserves unknown escapes", () => {
+    expect(
+      lexShell(
+        String.raw`printf $'\a\b\e\E\f\n\r\t\v\"' $'\0123\1234\777\x7\x72g\x\z'`,
+      ),
+    ).toEqual([
+      {
+        type: "command",
+        words: [
+          "printf",
+          '\u0007\b\u001b\u001b\f\n\r\t\v"',
+          "\n3S4\u00ff\u0007rg\\x\\z",
+        ],
+      },
+    ]);
+  });
+
+  test("reports unsupported or unterminated ANSI-C literals instead of guessing", () => {
+    expect(lexShell(String.raw`printf $'escaped\'`).at(-1)).toEqual({
+      type: "unparsed",
+      reason: "unterminated ANSI-C quote",
+    });
+    for (const escape of ["u", "U", "c"]) {
+      expect(lexShell(`printf $'\\${escape}72'`).at(-1)).toEqual({
+        type: "unparsed",
+        reason: `unsupported ANSI-C escape \\${escape}`,
+      });
+    }
+  });
+
   test("reads quoted, substituted and continued commands", () => {
     expect(
       commands(
@@ -597,6 +665,196 @@ describe("install-free invocation classification", () => {
     ).toEqual(["install", "install", "files"]);
   });
 
+  test("parallel siblings share only the installs available before the group", () => {
+    const root = repository(
+      [
+        "jobs:",
+        "  job:",
+        "    steps:",
+        "      - parallel:",
+        "          - run: bun ci",
+        "          - parallel:",
+        "              - name: Nested invocation",
+        "                run: bun scripts/check.ts",
+        "      - name: After group",
+        "        run: bun scripts/check.ts",
+      ].join("\n"),
+    );
+    const invocations = installFreeInvocations({
+      root,
+      workflow: CI_WORKFLOW,
+    });
+    const files = invocations.filter(
+      ({ classification }) => classification.type === "files",
+    );
+    expect(files).toHaveLength(1);
+    expect(files.at(0)?.step).toBe("Nested invocation");
+  });
+
+  test("a parallel group waits for background installs without sharing them with siblings", () => {
+    const root = repository(
+      [
+        "jobs:",
+        "  job:",
+        "    steps:",
+        "      - parallel:",
+        "          - id: installed",
+        "            background: true",
+        "            run: bun ci",
+        "          - name: Concurrent invocation",
+        "            run: bun scripts/check.ts",
+        "      - name: After group",
+        "        run: bun scripts/check.ts",
+      ].join("\n"),
+    );
+    const files = installFreeInvocations({
+      root,
+      workflow: CI_WORKFLOW,
+    }).filter(({ classification }) => classification.type === "files");
+    expect(files).toHaveLength(1);
+    expect(files.at(0)?.step).toBe("Concurrent invocation");
+  });
+
+  test("a background install covers commands only after its wait", () => {
+    const root = repository(
+      [
+        "jobs:",
+        "  job:",
+        "    steps:",
+        "      - id: installed",
+        "        background: true",
+        "        run: bun ci",
+        "      - name: Before wait",
+        "        run: bun scripts/check.ts",
+        "      - wait: installed",
+        "      - name: After wait",
+        "        run: bun scripts/check.ts",
+      ].join("\n"),
+    );
+    const files = installFreeInvocations({
+      root,
+      workflow: CI_WORKFLOW,
+    }).filter(({ classification }) => classification.type === "files");
+    expect(files).toHaveLength(1);
+    expect(files.at(0)?.step).toBe("Before wait");
+  });
+
+  test("cancelled background installs stay unavailable after a wait barrier", () => {
+    for (const barrier of ["- wait: cancelled", "- wait-all: null"]) {
+      const root = repository(
+        [
+          "jobs:",
+          "  job:",
+          "    steps:",
+          "      - id: cancelled",
+          "        background: true",
+          "        run: bun ci",
+          "      - cancel: cancelled",
+          `      ${barrier}`,
+          "      - name: After cancel",
+          "        run: bun scripts/check.ts",
+          "      - id: retained",
+          "        background: true",
+          "        run: bun ci",
+          "      - wait: retained",
+          "      - name: After retained wait",
+          "        run: bun scripts/check.ts",
+        ].join("\n"),
+      );
+      const files = installFreeInvocations({
+        root,
+        workflow: CI_WORKFLOW,
+      }).filter(({ classification }) => classification.type === "files");
+      expect(files, barrier).toHaveLength(1);
+      expect(files.at(0)?.step, barrier).toBe("After cancel");
+    }
+  });
+
+  test("parallel cancellation dominates sibling waits and nested group proofs without losing other scopes", () => {
+    for (const installLocation of ["before-group", "nested-sibling"] as const) {
+      for (const depth of [0, 1, 2]) {
+        for (const siblingWaitPosition of [
+          "absent",
+          "before",
+          "after",
+        ] as const) {
+          for (const barrier of ["wait: tools", "wait-all: null"]) {
+            const cancelBranch = [
+              ...Array.from(
+                { length: depth },
+                (_, index) => `${"  ".repeat(index)}- parallel:`,
+              ),
+              `${"  ".repeat(depth)}- cancel: tools`,
+            ].join("\n");
+            const siblingWait = "- wait: tools";
+            const installerBranch = [
+              "- parallel:",
+              "  - id: tools",
+              "    background: true",
+              "    run: bun ci",
+            ].join("\n");
+            const parallelBranches = [cancelBranch];
+            if (siblingWaitPosition === "before") {
+              parallelBranches.unshift(siblingWait);
+            }
+            if (siblingWaitPosition === "after") {
+              parallelBranches.push(siblingWait);
+            }
+            if (installLocation === "nested-sibling") {
+              parallelBranches.unshift(installerBranch);
+            }
+            const parallelSteps = parallelBranches
+              .flatMap((branch) =>
+                branch.split("\n").map((line) => `          ${line}`),
+              )
+              .join("\n");
+            const root = repository(
+              [
+                "jobs:",
+                "  job:",
+                "    steps:",
+                "      - id: retained",
+                "        background: true",
+                "        run: bun ci",
+                "        working-directory: packages/tool",
+                "      - wait: retained",
+                ...(installLocation === "before-group"
+                  ? [
+                      "      - id: tools",
+                      "        background: true",
+                      "        run: bun ci",
+                    ]
+                  : []),
+                "      - parallel:",
+                parallelSteps,
+                `      - ${barrier}`,
+                "      - name: After cancel",
+                "        run: bun scripts/check.ts",
+                "      - name: Retained install scope",
+                "        run: bun gen.ts",
+                "        working-directory: packages/tool",
+              ].join("\n"),
+            );
+            const files = installFreeInvocations({
+              root,
+              workflow: CI_WORKFLOW,
+            }).filter(({ classification }) => classification.type === "files");
+            const scenario = {
+              installLocation,
+              depth,
+              siblingWaitPosition,
+              barrier,
+            };
+            expect(files, JSON.stringify(scenario)).toHaveLength(1);
+            expect(files.at(0)?.step, JSON.stringify(scenario)).toBe(
+              "After cancel",
+            );
+          }
+        }
+      }
+    }
+  });
+
   const continuationCases: readonly {
     continuation: string;
     kinds: Classification["type"][];
@@ -877,6 +1135,49 @@ describe("install-free invocation classification", () => {
       importProblems({ entries: ["scripts/check.test.ts"], root }),
     ).toEqual([]);
   });
+  test("installed Bun CLIs in subprocesses require the dependency install", () => {
+    for (const launcher of ["process.execPath", '"bun"', "`bun`"]) {
+      for (const method of ["spawn", "spawnSync"]) {
+        const source = `Bun.${method}([${launcher}, "--bun", "oxlint", "changed.ts"]);`;
+        const root = fixture({ "check.ts": source });
+        expect(importProblems({ root, entries: ["check.ts"] })).toEqual([
+          "check.ts launches installed Bun CLI oxlint",
+        ]);
+        expect(
+          importProblems({ root, entries: [], code: { cwd: "", source } }),
+        ).toEqual(["inline code in . launches installed Bun CLI oxlint"]);
+        writeFileSync(
+          path.join(root, "check.ts"),
+          `const fixture = ${JSON.stringify(source)};\n// ${source}\nBun.spawnSync([process.execPath, "scripts/check.ts"]);`,
+        );
+        expect(importProblems({ root, entries: ["check.ts"] })).toEqual([]);
+      }
+    }
+  });
+
+  test("static template CLI arguments are installed dependencies, computed templates stay unclassified", () => {
+    for (const argument of ["`oxlint`", `\`ox\${name}\``, "`ox\\lint`"]) {
+      const source = `Bun.spawnSync([process.execPath, ${argument}, "changed.ts"]);`;
+      const root = fixture({ "check.ts": source });
+      expect(importProblems({ root, entries: ["check.ts"] })).toEqual(
+        argument === "`oxlint`"
+          ? ["check.ts launches installed Bun CLI oxlint"]
+          : [],
+      );
+    }
+  });
+
+  test("the type-aware autofix fixture cannot run from a bare checkout", () => {
+    expect(
+      importProblems({
+        root: REPO_ROOT,
+        entries: ["scripts/autofix-type-aware.test.ts"],
+      }),
+    ).toContain(
+      "scripts/autofix-type-aware.test.ts launches installed Bun CLI oxlint",
+    );
+  });
+
   test("bounded installs and planner calls retain dependency coverage", () => {
     for (const prefix of [
       ...["0", "1.5", ".5", "1.", "2s", "3.5m", "4h", "5d"].map(

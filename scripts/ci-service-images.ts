@@ -1,7 +1,7 @@
 import { existsSync, statSync } from "node:fs";
 import path from "node:path";
 
-import mirrorImages from "./ci-service-images.json";
+import mirrorImages from "./ci-service-images.json" with { type: "json" };
 
 const canonicalImage = (reference: string) => {
   const tagged = reference.split("@").at(0) ?? reference;

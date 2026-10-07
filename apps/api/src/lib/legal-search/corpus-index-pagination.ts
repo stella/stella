@@ -20,7 +20,10 @@ import type {
   CorpusIndexHit,
   CorpusIndexScoredSearchResponse,
 } from "@/api/lib/legal-search/corpus-index-client";
-import { getCorpusIndexClient } from "@/api/lib/legal-search/corpus-index-client";
+import {
+  getCorpusIndexClient,
+  isCorpusIndexUnreachable,
+} from "@/api/lib/legal-search/corpus-index-client";
 import { quoteCorpusValue } from "@/api/lib/legal-search/corpus-query";
 import {
   CORPUS_BM25_PASSAGE_LIMIT,
@@ -33,6 +36,7 @@ import {
   type SearchSort,
 } from "@/api/lib/legal-search/corpus-search-order";
 import type { RankedHit, ScoredCandidate } from "@/api/lib/legal-search/rerank";
+import { searchIndexUnavailableError } from "@/api/lib/legal-search/search-index-unavailable";
 import { LIMITS } from "@/api/lib/limits";
 
 /**
@@ -47,16 +51,23 @@ import { LIMITS } from "@/api/lib/limits";
  * retry, which is what 503 says; a 4xx means this module built a request the
  * engine refused, which no retry fixes and 502 reports. Mapping matches
  * `catalogueUpstreamStatus`, the same translation for the skill catalogue.
+ * An engine that could not be reached at all answers with the typed
+ * `search_index_unavailable` refusal, which every search route and tool maps
+ * to the same actionable answer.
  */
 const corpusIndexSearchFailure = (error: CorpusIndexError): HandlerError =>
-  new HandlerError({
-    status:
-      error.status === undefined || error.status === 429 || error.status >= 500
-        ? 503
-        : 502,
-    message: "Search is temporarily unavailable",
-    cause: error,
-  });
+  isCorpusIndexUnreachable(error)
+    ? searchIndexUnavailableError(error)
+    : new HandlerError({
+        status:
+          error.status === undefined ||
+          error.status === 429 ||
+          error.status >= 500
+            ? 503
+            : 502,
+        message: "Search is temporarily unavailable",
+        cause: error,
+      });
 
 /**
  * A page boundary as the scan means it. `corpus-search-cursor` owns how it

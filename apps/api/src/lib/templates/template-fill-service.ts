@@ -1742,6 +1742,37 @@ const settleRenderedFill = async ({
   };
 };
 
+type FillWithinAiAdmissionOptions<TRejection> = {
+  hasAiFields: boolean;
+  aiFill: AiFillAdmission<TRejection> | undefined;
+  completeFill: (
+    collaborators: AiFillCollaborators,
+  ) => Promise<FilledDocx | FillRejection<TRejection>>;
+};
+
+/** Runs the fill inside its AI admission only when it declares model work. */
+const fillWithinAiAdmission = async <TRejection>({
+  hasAiFields,
+  aiFill,
+  completeFill,
+}: FillWithinAiAdmissionOptions<TRejection>): Promise<
+  FilledDocx | FillRejection<TRejection>
+> => {
+  if (!hasAiFields || aiFill === undefined) {
+    return await completeFill({});
+  }
+  const admitted = await aiFill(completeFill);
+  switch (admitted.type) {
+    case "refused":
+      return { usageRejection: admitted.rejection };
+    case "admitted":
+      return admitted.value;
+    default:
+      admitted satisfies never;
+      return panic("Unhandled AI fill admission");
+  }
+};
+
 /**
  * Shared fill recipe over an already-loaded DOCX: discover linked content,
  * gate required fields, run manifest fill steps (lookups, composites, formulas,
@@ -1956,19 +1987,7 @@ const fillTemplateDocxWithPolicy = async <TRejection = never>({
     };
   };
 
-  if (!hasAiFields || aiFill === undefined) {
-    return await completeFill({});
-  }
-  const admitted = await aiFill(completeFill);
-  switch (admitted.type) {
-    case "refused":
-      return { usageRejection: admitted.rejection };
-    case "admitted":
-      return admitted.value;
-    default:
-      admitted satisfies never;
-      return panic("Unhandled AI fill admission");
-  }
+  return await fillWithinAiAdmission({ hasAiFields, aiFill, completeFill });
 };
 
 export const fillTemplateDocx = async <TRejection = never>(

@@ -9,7 +9,7 @@ import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 
 const config = {
   permissions: { integration: ["delete"] },
-  accountAccess: ACCOUNT_ACCESS.standard,
+  accountAccess: ACCOUNT_ACCESS.accountControl,
   realtime: sharepointRealtimeUpdates,
   mcp: { type: "internal", reason: "provider_secret" },
 } satisfies HandlerConfig;

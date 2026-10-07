@@ -226,7 +226,7 @@ describe("queued action admission", () => {
           }),
         catch: (error: unknown) => error,
       });
-    const modelCall = Promise.withResolvers<void>();
+    const modelCall = Promise.withResolvers<undefined>();
     const started = Promise.withResolvers<AbortSignal>();
 
     const job = runBackgroundJob({
@@ -249,7 +249,7 @@ describe("queued action admission", () => {
     const leaseLost = new Error("lease lost");
     lease.abort(leaseLost);
     expect(dispatchSignal.aborted).toBe(true);
-    modelCall.resolve();
+    modelCall.resolve(undefined);
     expect(await job).toBe(leaseLost);
   });
 

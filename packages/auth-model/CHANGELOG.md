@@ -1,5 +1,11 @@
 # @stll/auth-model
 
+## 0.2.5
+
+### Patch Changes
+
+- [#4835](https://github.com/stella/stella/pull/4835) [`d3c05df`](https://github.com/stella/stella/commit/d3c05df5cbb84b037077c035267ca62a859bd702) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Update the shared auth runtime dependency.
+
 ## 0.2.4
 
 ### Patch Changes

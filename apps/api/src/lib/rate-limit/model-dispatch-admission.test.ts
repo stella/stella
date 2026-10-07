@@ -165,7 +165,7 @@ const scanModelDispatches = (
   const sites: ModelDispatchSite[] = [];
   const violations: string[] = [];
   let configuredAdmissionCalls = 0;
-  let declaresConfiguredAdmission = false;
+  const configured = { declaresAdmission: false };
   const lineOf = (node: ts.Node) =>
     tree.getLineAndCharacterOfPosition(node.getStart(tree)).line + 1;
 
@@ -209,13 +209,13 @@ const scanModelDispatches = (
       ts.isObjectLiteralExpression(node.initializer) &&
       declaresProperty(node.initializer, "actionKind")
     ) {
-      declaresConfiguredAdmission = true;
+      configured.declaresAdmission = true;
     }
     ts.forEachChild(node, visit);
   };
   visit(tree);
 
-  if (configuredAdmissionCalls > 0 && !declaresConfiguredAdmission) {
+  if (configuredAdmissionCalls > 0 && !configured.declaresAdmission) {
     violations.push(
       `${file}: configuredModelAdmission without a configured actionAdmission`,
     );

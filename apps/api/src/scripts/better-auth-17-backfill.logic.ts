@@ -4,6 +4,7 @@ import type { SQL } from "drizzle-orm";
 
 import { executedRows } from "@/api/lib/db/executed-rows";
 import { isRecord } from "@/api/lib/type-guards";
+import { predecessorOAuthResourceScopes } from "@/api/mcp/resource-policy-contract";
 import { readOAuthApplicationType } from "@/api/scripts/better-auth-migration-audit.logic";
 import type {
   BetterAuthExpectedOAuthResource,
@@ -365,6 +366,14 @@ export const seedOAuthResources = async (
       return existing;
     }
     const expectedScopes = [...resource.allowedScopes].toSorted();
+    // The predecessor set (without OAuth protocol scopes) is the expand half
+    // of the protocol-scope rollout; see `predecessorOAuthResourceScopes`.
+    const acceptedScopeSets = new Set([
+      JSON.stringify(expectedScopes),
+      JSON.stringify(
+        predecessorOAuthResourceScopes(resource.allowedScopes).toSorted(),
+      ),
+    ]);
     const row = existing.value.at(0);
     if (row !== undefined) {
       const name = isRecord(row) ? requiredString(row["name"]) : null;
@@ -374,8 +383,7 @@ export const seedOAuthResources = async (
       if (
         name !== resource.name ||
         allowedScopes === null ||
-        JSON.stringify([...allowedScopes].toSorted()) !==
-          JSON.stringify(expectedScopes)
+        !acceptedScopeSets.has(JSON.stringify([...allowedScopes].toSorted()))
       ) {
         return invalidSourceState();
       }

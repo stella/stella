@@ -5,7 +5,13 @@ import { drizzle } from "drizzle-orm/pglite";
 import { createHash } from "node:crypto";
 import { MessageChannel, Worker } from "node:worker_threads";
 
-import { buildScreeningIndex, SANCTIONS_SOURCES } from "@stll/sanctions";
+import {
+  buildScreeningIndex,
+  SANCTIONS_SOURCES,
+  screen,
+  DEFAULT_CUTOFF,
+  MAX_SCREENING_WORK,
+} from "@stll/sanctions";
 import type { SanctionsEntry, SanctionsSource } from "@stll/sanctions";
 
 import type { Transaction } from "@/api/db/root";
@@ -32,11 +38,16 @@ import {
   SANCTIONS_SOURCE_CONFIG,
   sanctionsSourceIds,
 } from "@/api/lib/lists/sanctions/source-config";
+import { readEvidence } from "@/api/lib/observability/failure-evidence";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { createTestPglite } from "@/api/tests/pglite-test-db";
 
-import { createSanctionsMatcherPool } from "./matcher-pool";
+import {
+  createSanctionsMatcherPool,
+  SANCTIONS_MATCHER_CONFIG,
+} from "./matcher-pool";
 import { createPublicSanctionsScreening } from "./public-screening";
+import type { reportSanctionsScreeningFailure } from "./screening-failure";
 import { loadEditionEntries } from "./screening-index";
 import { createMatcherTestClock } from "./test-fixtures/matcher-test-clock";
 
@@ -313,7 +324,7 @@ describe("sanctions screening service", () => {
               ]),
             );
           },
-          refresh: async () => undefined,
+          refresh: async () => {},
         },
       });
       expect(result.unwrap().status).toBe("clear");
@@ -431,8 +442,13 @@ describe("sanctions screening service", () => {
   test(
     "makes a list whose edition cannot be read unavailable, and the rest still answer",
     async () => {
+      const reports: Parameters<typeof reportSanctionsScreeningFailure>[0][] =
+        [];
       const result = await screenSanctionsSubject({
         db: requestDb,
+        reportFailure: (report) => {
+          reports.push(report);
+        },
         subject: {
           type: "organization",
           name: "Blue Meadow Bakery",
@@ -455,6 +471,9 @@ describe("sanctions screening service", () => {
         reason: "load-failed",
       });
       expect(listOf(screening.lists, "eu").status).toBe("clear");
+      expect(reports).toEqual([
+        { stage: "list-screening", reason: "index-load", source: "uk" },
+      ]);
     },
     DB_TEST_TIMEOUT_MS,
   );
@@ -747,7 +766,9 @@ test.each(["hang", "crash"])(
     const entered = Promise.withResolvers<undefined>();
     const crashed = Promise.withResolvers<undefined>();
     const { port1, port2 } = new MessageChannel();
-    port1.once("message", () => entered.resolve(undefined));
+    port1.once("message", () => {
+      entered.resolve(undefined);
+    });
     const clock = createMatcherTestClock();
     let spawned = 0;
     const pool = createSanctionsMatcherPool({
@@ -771,7 +792,9 @@ test.each(["hang", "crash"])(
                 new URL("sanctions-matcher-worker.ts", import.meta.url),
               );
         if (spawned === 1) {
-          worker.once("exit", () => crashed.resolve(undefined));
+          worker.once("exit", () => {
+            crashed.resolve(undefined);
+          });
         }
         return worker;
       },
@@ -781,7 +804,9 @@ test.each(["hang", "crash"])(
         ...pool,
         run: async (work, options) => {
           const outcome = await pool.run(work, options);
-          if (options?.onSettled !== undefined) {
+          if (
+            options?.deadlineMs === SANCTIONS_MATCHER_CONFIG.warmupDeadlineMs
+          ) {
             warmupFinished.resolve(undefined);
           }
           return outcome;
@@ -893,6 +918,428 @@ test("repeated public deadlines bound unfinished cold loads until held reads set
     expect(pagesAfterCancellation).toBe(0);
   } finally {
     held.resolve(undefined);
+    await pool.close();
+  }
+});
+
+test.each(["matcher-unavailable", "operation", "truncated-empty"] as const)(
+  "list fallback reports %s and never reports a clear result",
+  async (reason) => {
+    const reports: Parameters<typeof reportSanctionsScreeningFailure>[0][] = [];
+    const result = await screenSanctionsSubject({
+      db: requestDb,
+      subject: {
+        type: "organization",
+        name: "Private Test Identity",
+        identifiers: [],
+      },
+      practiceJurisdictions: [],
+      now: FRESH_NOW,
+      reportFailure: (report) => {
+        reports.push(report);
+      },
+      matcher: async ({ query }) => {
+        if (reason === "matcher-unavailable") {
+          return Result.err({
+            code: "load-failed",
+            stage: "list-screening",
+            reason,
+          } as const);
+        }
+        if (reason === "operation") {
+          throw new TypeError("Private Test Identity");
+        }
+        return Result.ok({
+          ...screen(buildScreeningIndex([]), query, {
+            cutoff: DEFAULT_CUTOFF,
+          }).unwrap(),
+          truncated: true,
+        });
+      },
+    });
+    expect(
+      result
+        .unwrap()
+        .lists.every(
+          (list) =>
+            list.status === "unavailable" && list.reason === "load-failed",
+        ),
+    ).toBe(true);
+    expect(
+      reports.map(({ stage, reason: cause, source }) => ({
+        stage,
+        reason: cause,
+        source,
+      })),
+    ).toEqual(
+      result.unwrap().lists.map(({ source }) => ({
+        stage: "list-screening",
+        reason,
+        source,
+      })),
+    );
+  },
+);
+
+test("freshness read fallback observes its cause before answering all lists unavailable", async () => {
+  const fault = Object.assign(new TypeError("Private Test Identity"), {
+    code: "42501",
+  });
+  const reports: Parameters<typeof reportSanctionsScreeningFailure>[0][] = [];
+  const result = await screenSanctionsSubject({
+    db: async () => {
+      throw fault;
+    },
+    subject: {
+      type: "organization",
+      name: "Private Test Identity",
+      identifiers: [],
+    },
+    practiceJurisdictions: [],
+    reportFailure: (report) => {
+      reports.push(report);
+    },
+  });
+  expect(
+    result
+      .unwrap()
+      .lists.every(
+        (list) =>
+          list.status === "unavailable" && list.reason === "load-failed",
+      ),
+  ).toBe(true);
+  expect(reports).toHaveLength(1);
+  expect(reports.at(0)).toMatchObject({
+    stage: "whole-screening",
+    reason: "freshness-read",
+  });
+  expect(
+    readEvidence(reports.at(0)?.error).nodes.some(
+      ({ code }) => code === "42501",
+    ),
+  ).toBe(true);
+});
+
+test.each(["entries-read", "short-read"] as const)(
+  "public edition failure reports %s without answering clear",
+  async (reason) => {
+    const pool = createSanctionsMatcherPool({
+      clock: createMatcherTestClock(),
+    });
+    const reports: Parameters<typeof reportSanctionsScreeningFailure>[0][] = [];
+    const publicScreen = createPublicSanctionsScreening({
+      pool,
+      reportFailure: (report) => {
+        reports.push(report);
+      },
+      loadEntries: async () => {
+        if (reason === "entries-read") {
+          throw new TypeError("Private Test Identity");
+        }
+        return [];
+      },
+    });
+    try {
+      const result = await publicScreen({
+        db: requestDb,
+        subject: {
+          type: "organization",
+          name: "Private Test Identity",
+          identifiers: [],
+        },
+        practiceJurisdictions: [],
+        now: FRESH_NOW,
+      });
+      expect(result.unwrap().status).toBe("unavailable");
+      const editionFailures = reports.filter(
+        ({ stage }) => stage === "public-matcher",
+      );
+      expect(
+        editionFailures.map(({ reason: cause, source }) => ({
+          reason: cause,
+          source,
+        })),
+      ).toEqual(
+        result.unwrap().lists.map(({ source }) => ({ reason, source })),
+      );
+    } finally {
+      await pool.close();
+    }
+  },
+);
+
+test("failed public leases observe the whole fallback and bounded warmup can settle and retry", async () => {
+  let creations = 0;
+  const reports: Parameters<typeof reportSanctionsScreeningFailure>[0][] = [];
+  const pool = createSanctionsMatcherPool({
+    reportFailure: (report) => {
+      reports.push(report);
+    },
+    createWorker: () => {
+      creations += 1;
+      throw new TypeError("Worker unavailable");
+    },
+  });
+  const publicScreen = createPublicSanctionsScreening({
+    pool,
+    reportFailure: (report) => {
+      reports.push(report);
+    },
+  });
+  const props = {
+    db: requestDb,
+    subject: {
+      type: "organization",
+      name: "Private Test Identity",
+      identifiers: [],
+    },
+    practiceJurisdictions: [],
+  } as const;
+  try {
+    expect((await publicScreen(props)).unwrap().status).toBe("unavailable");
+    await new Promise<void>((resolve) => {
+      setImmediate(resolve);
+    });
+    expect(creations).toBe(2);
+    expect((await publicScreen(props)).unwrap().status).toBe("unavailable");
+    await new Promise<void>((resolve) => {
+      setImmediate(resolve);
+    });
+    expect(creations).toBe(4);
+    expect(
+      reports
+        .filter(({ stage }) => stage === "whole-screening")
+        .map(({ reason }) => reason),
+    ).toEqual(["worker-create", "worker-create"]);
+  } finally {
+    await pool.close();
+  }
+});
+
+test("work exhaustion reports its actual list cause once rather than counting an index failure", async () => {
+  const reports: Parameters<typeof reportSanctionsScreeningFailure>[0][] = [];
+  const healthy = createSanctionsIndexCache();
+  const result = await screenSanctionsSubject({
+    db: requestDb,
+    subject: {
+      type: "organization",
+      name: "Blue Meadow Bakery",
+      identifiers: ["12345"],
+    },
+    practiceJurisdictions: [],
+    now: FRESH_NOW,
+    reportFailure: (report) => {
+      reports.push(report);
+    },
+    indexCache: {
+      get: async (props) => {
+        const loaded = await healthy.get(props);
+        if (loaded.isErr() || props.source !== "eu") {
+          return loaded;
+        }
+        const index = {
+          ...loaded.value,
+          identifierEntries: new Map([
+            ["12345", Array.from({ length: MAX_SCREENING_WORK + 1 }, () => 0)],
+          ]),
+        };
+        const reached = screen(
+          index,
+          {
+            name: "Blue Meadow Bakery",
+            entityType: "organisation",
+            identifiers: ["12345"],
+          },
+          { cutoff: DEFAULT_CUTOFF },
+        );
+        expect(reached.isErr() && reached.error.code).toBe("work-limit");
+        return Result.ok(index);
+      },
+      refresh: async () => {},
+    },
+  });
+  expect(listOf(result.unwrap().lists, "eu")).toMatchObject({
+    status: "unavailable",
+    reason: "load-failed",
+  });
+  expect(reports).toEqual([
+    { stage: "list-screening", reason: "work-limit", source: "eu" },
+  ]);
+});
+
+test("a stalled cold read retains one warmup after its deadline until underlying work settles", async () => {
+  const clock = createMatcherTestClock();
+  const held = Promise.withResolvers<undefined>();
+  const started = Promise.withResolvers<undefined>();
+  const warmupSettled = Promise.withResolvers<undefined>();
+  const reports: Parameters<typeof reportSanctionsScreeningFailure>[0][] = [];
+  const pool = createSanctionsMatcherPool({
+    size: 2,
+    deadlineMs: 30,
+    clock,
+    reportFailure: (report) => {
+      reports.push(report);
+    },
+  });
+  let warmups = 0;
+  let unfinished = 0;
+  const publicScreen = createPublicSanctionsScreening({
+    reportFailure: (report) => {
+      reports.push(report);
+    },
+    pool: {
+      ...pool,
+      run: async (work, options) => {
+        if (options?.deadlineMs === SANCTIONS_MATCHER_CONFIG.warmupDeadlineMs) {
+          warmups += 1;
+          return await pool.run(work, {
+            ...options,
+            onSettled: () => {
+              options.onSettled?.();
+              warmupSettled.resolve(undefined);
+            },
+          });
+        }
+        return await pool.run(work, options);
+      },
+    },
+    loadEntries: async (options) => {
+      unfinished += 1;
+      started.resolve(undefined);
+      await held.promise;
+      const entries = await loadEditionEntries(options);
+      unfinished -= 1;
+      return entries;
+    },
+  });
+  const props = {
+    db: requestDb,
+    subject: {
+      type: "organization",
+      name: "Synthetic Company",
+      identifiers: [],
+    },
+    practiceJurisdictions: [],
+    now: FRESH_NOW,
+  } as const;
+  try {
+    const first = publicScreen(props);
+    await started.promise;
+    clock.advance(30);
+    expect((await first).unwrap().status).toBe("unavailable");
+    await new Promise<void>((resolve) => {
+      setImmediate(resolve);
+    });
+    expect(warmups).toBe(1);
+    expect(clock.pending()).toEqual([
+      SANCTIONS_MATCHER_CONFIG.warmupDeadlineMs,
+    ]);
+    clock.advance(SANCTIONS_MATCHER_CONFIG.warmupDeadlineMs);
+    await new Promise<void>((resolve) => {
+      setImmediate(resolve);
+    });
+    expect(unfinished).toBe(1);
+    for (const _attempt of Array.from({ length: 3 })) {
+      const pending = publicScreen(props);
+      await new Promise<void>((resolve) => {
+        setImmediate(resolve);
+      });
+      clock.advance(30);
+      expect((await pending).unwrap().status).toBe("unavailable");
+      await new Promise<void>((resolve) => {
+        setImmediate(resolve);
+      });
+      expect(warmups).toBe(1);
+    }
+    clock.advance(SANCTIONS_MATCHER_CONFIG.warmupDeadlineMs);
+    await new Promise<void>((resolve) => {
+      setImmediate(resolve);
+    });
+    expect(
+      reports.filter(
+        ({ stage, reason }) =>
+          stage === "matcher-pool" && reason === "deadline",
+      ),
+    ).toHaveLength(5);
+    held.resolve(undefined);
+    await warmupSettled.promise;
+    await pool.close();
+    await new Promise<void>((resolve) => {
+      setImmediate(resolve);
+    });
+    expect(unfinished).toBe(0);
+    expect((await publicScreen(props)).unwrap().status).toBe("unavailable");
+    expect(warmups).toBe(2);
+  } finally {
+    held.resolve(undefined);
+    await pool.close();
+  }
+});
+
+test("public matcher work exhaustion reports the typed list cause without pool failure or warmup", async () => {
+  const poolReports: Parameters<typeof reportSanctionsScreeningFailure>[0][] =
+    [];
+  const reports: Parameters<typeof reportSanctionsScreeningFailure>[0][] = [];
+  const pool = createSanctionsMatcherPool({
+    clock: createMatcherTestClock(),
+    reportFailure: (report) => {
+      poolReports.push(report);
+    },
+  });
+  let leases = 0;
+  const publicScreen = createPublicSanctionsScreening({
+    reportFailure: (report) => {
+      reports.push(report);
+    },
+    pool: {
+      ...pool,
+      run: async (work, options) => {
+        leases += 1;
+        return await pool.run(
+          async (session) =>
+            await work({
+              ...session,
+              hasEdition: () => true,
+              match: async () => ({ status: "work-limit" }),
+            }),
+          options,
+        );
+      },
+    },
+    loadEntries: async () => {
+      throw new TypeError("A cached edition must not reload");
+    },
+  });
+  try {
+    const result = await publicScreen({
+      db: requestDb,
+      subject: {
+        type: "organization",
+        name: "Synthetic Company",
+        identifiers: [],
+      },
+      practiceJurisdictions: [],
+      now: FRESH_NOW,
+    });
+    expect(
+      result
+        .unwrap()
+        .lists.every(
+          (list) =>
+            list.status === "unavailable" && list.reason === "load-failed",
+        ),
+    ).toBe(true);
+    expect(reports).toEqual(
+      result.unwrap().lists.map(({ source }) => ({
+        stage: "public-matcher",
+        reason: "work-limit",
+        error: undefined,
+        source,
+      })),
+    );
+    expect(poolReports).toEqual([]);
+    expect(leases).toBe(1);
+  } finally {
     await pool.close();
   }
 });

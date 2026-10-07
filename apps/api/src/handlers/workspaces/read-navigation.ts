@@ -1,10 +1,11 @@
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import { and, desc, eq, inArray, sql } from "drizzle-orm";
 import { t } from "elysia";
 
 import { contacts, workspaces, workspaceViews } from "@/api/db/schema";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
+import { isFeatureEnabled } from "@/api/lib/auth/feature-access/policy";
 import {
   AVT_LAYOUT_DISCOVERY_FEATURE_ACCESS,
   avtViewAccessStatus,
@@ -58,6 +59,11 @@ const config = {
 const readWorkspaceNavigation = createSafeRootHandler(
   config,
   async function* ({ query, safeDb, session, user, featureAccessSnapshot }) {
+    if (featureAccessSnapshot === undefined) {
+      return panic(
+        "Authenticated navigation requires a feature access snapshot",
+      );
+    }
     const avtAvailable =
       avtViewAccessStatus({
         snapshot: featureAccessSnapshot,
@@ -157,6 +163,12 @@ const readWorkspaceNavigation = createSafeRootHandler(
     );
 
     return Result.ok({
+      features: {
+        timeBilling: isFeatureEnabled(featureAccessSnapshot, "time-billing", {
+          organizationId: session.activeOrganizationId,
+          userId: user.id,
+        }),
+      },
       items,
       limit: page.limit,
       nextCursor: page.nextCursor,

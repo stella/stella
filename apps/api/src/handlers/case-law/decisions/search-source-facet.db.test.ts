@@ -203,6 +203,7 @@ test.each([undefined, "cs", "en"])(
     );
     const payload = {
       facets: {
+        courtYear: null,
         court: [],
         year: [],
         decisionType: [],

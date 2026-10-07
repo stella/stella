@@ -300,6 +300,16 @@ class ContentDeliveryInspector {
     ) {
       return;
     }
+    if (
+      current.attributes?.elements.some(
+        (attribute) =>
+          propertyName(attribute.name) === "type" &&
+          ts.isStringLiteralLike(attribute.value) &&
+          attribute.value.text === "text",
+      )
+    ) {
+      return;
+    }
     const name =
       member ??
       (ts.isImportSpecifier(definition)

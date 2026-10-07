@@ -4,8 +4,10 @@ export type ParsedUserAgent = {
 };
 
 const BROWSERS = [
-  [/Edg(?:e|A)?\//u, "Edge"],
-  [/OPR\/|Opera\//u, "Opera"],
+  // iOS browsers all run WebKit and also carry `Safari/`; only their own
+  // token (EdgiOS, OPT, CriOS, FxiOS) names them.
+  [/Edg(?:e|A|iOS)?\//u, "Edge"],
+  [/OPR\/|OPT\/|Opera\//u, "Opera"],
   [/Vivaldi\//u, "Vivaldi"],
   [/CriOS\//u, "Chrome"],
   [/FxiOS\//u, "Firefox"],

@@ -1,11 +1,11 @@
 import * as v from "valibot";
 
-import {
-  visualGuestMessageSchema,
-  visualRenderMessageSchema,
-} from "@stll/api-contract/visual-sandbox";
+import { visualRenderMessageSchema } from "@stll/api-contract/generated-visual";
+import { createVisualActionGate } from "@stll/api-contract/visual-bridge-policy";
+import { visualGuestMessageSchema } from "@stll/api-contract/visual-sandbox";
 
-import { sanitizeVisualHtml, type SanitizedVisualHtml } from "./sanitize";
+import { prepareGeneratedVisual } from "./prepare";
+import type { SanitizedVisualHtml } from "./sanitize";
 
 type SanitizedRenderMessage = Omit<
   v.InferOutput<typeof visualRenderMessageSchema>,
@@ -35,6 +35,7 @@ export const createVisualMessageHandler = ({
   onGuestMessage,
 }: VisualMessageHandlerOptions) => {
   let hostOrigin: string | undefined;
+  let actionGate: ReturnType<typeof createVisualActionGate> | undefined;
   return (event: { source: unknown; origin: string; data: unknown }) => {
     if (event.source === parentWindow) {
       if (event.origin === outerOrigin || !origins.includes(event.origin)) {
@@ -47,15 +48,23 @@ export const createVisualMessageHandler = ({
       if (!parsed.success) {
         return;
       }
-      const sanitized = sanitizeVisualHtml(parsed.output.html);
+      const sanitized = prepareGeneratedVisual(parsed.output);
       if (sanitized.isErr()) {
         return;
       }
       hostOrigin = event.origin;
+      actionGate = createVisualActionGate({
+        data: sanitized.value.data,
+        links: sanitized.value.links,
+        literalLinks: sanitized.value.literalLinks,
+        now: () => performance.now(),
+      });
       onRender({
         type: parsed.output.type,
         title: parsed.output.title,
-        html: sanitized.value,
+        html: sanitized.value.html,
+        data: sanitized.value.data,
+        links: sanitized.value.links,
       });
       return;
     }
@@ -67,7 +76,7 @@ export const createVisualMessageHandler = ({
       return;
     }
     const parsed = v.safeParse(visualGuestMessageSchema, event.data);
-    if (!parsed.success || parsed.output.type !== "resize") {
+    if (!parsed.success || !actionGate?.(parsed.output)) {
       return;
     }
     onGuestMessage(parsed.output, hostOrigin);

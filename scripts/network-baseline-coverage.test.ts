@@ -9,6 +9,7 @@ import {
 } from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import * as v from "valibot";
 
 import {
   PUBLIC_VISITOR_ROUTE_DEFS,
@@ -26,25 +27,48 @@ import {
   networkBudgetDeclarationProblem,
   prepareComparisonBaseline,
 } from "./network-baseline-scope";
+import { workflowJobSteps, workflowStepByName } from "./workflow-steps";
+
+const coverageWorkflowSteps = () =>
+  workflowJobSteps(
+    Bun.YAML.parse(
+      readFileSync(
+        path.resolve(import.meta.dirname, "../.github/workflows/ci.yml"),
+        "utf-8",
+      ),
+    ),
+    "ci-checks-rest",
+  );
 
 const directory = mkdtempSync(path.join(os.tmpdir(), "network-coverage-"));
-// A matter route that renders in place, derived from the smoke definitions so
-// a route that later starts redirecting cannot leave these fixtures stale.
-const renderInPlaceRoute = SMOKE_ROUTE_DEFS.find(
-  (def) =>
-    def.expectation === undefined &&
-    def.template.startsWith("/workspaces/$workspaceId/"),
-)?.template;
-if (renderInPlaceRoute === undefined) {
-  throw new Error("Expected a smoke matter route that renders in place.");
-}
-const renderInPlaceRedirectKey = `${renderInPlaceRoute} target`;
 let routeTree: string;
 const entry = { depth: 0, requests: [] };
 const baseline = () =>
   Object.fromEntries(
     SMOKE_ROUTE_DEFS.map((def) => [networkBaselineKey(def), entry]),
   );
+
+const fixtureDefs = [
+  { template: "/fixture-render", expectation: { kind: "rendersInPlace" } },
+  {
+    template: "/fixture-redirect",
+    expectation: { kind: "redirectsTo", to: "/fixture-render" },
+  },
+] as const;
+const fixtureKeys = fixtureDefs.map(networkBaselineKey);
+const fixtureBaseline = () =>
+  Object.fromEntries(fixtureKeys.map((key) => [key, entry]));
+const fixtureRouteTree = `
+import { Route as FixtureRedirectRouteImport } from './routes/_protected.fixture-redirect/index'
+declare module '@tanstack/react-router' {
+  interface FileRoutesByPath {
+    '/fixture-redirect': {
+      fullPath: '/fixture-redirect'
+      preLoaderRoute: typeof FixtureRedirectRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+  }
+}`;
 
 beforeAll(async () => {
   const output = path.join(directory, "tree.ts");
@@ -58,14 +82,6 @@ beforeAll(async () => {
   writeFileSync(output, routeTree);
 });
 afterAll(() => rmSync(directory, { recursive: true, force: true }));
-
-/** `value` with the render-in-place route recorded under its redirect key. */
-const withRedirectKey = (value: ReturnType<typeof baseline>) => ({
-  ...Object.fromEntries(
-    Object.entries(value).filter(([route]) => route !== renderInPlaceRoute),
-  ),
-  [renderInPlaceRedirectKey]: entry,
-});
 
 const validate = (
   value = baseline(),
@@ -96,9 +112,17 @@ test("canonical smoke keys and declarations cover the generated authenticated tr
   );
 });
 
-test("a render-in-place expectation rejects a redirect key for its route", () => {
-  expect(() => validate(withRedirectKey(baseline()))).toThrow(
-    `Network baseline route keys differ: missing=["${renderInPlaceRoute}"] stale=["${renderInPlaceRedirectKey}"]`,
+test("a render-in-place expectation rejects an inactive redirect key", () => {
+  const stale = fixtureBaseline();
+  delete stale["/fixture-render"];
+  stale["/fixture-render target"] = entry;
+  expect(
+    networkBaselineCoverageProblem({
+      actualKeys: Object.keys(stale),
+      expectedKeys: fixtureKeys,
+    }),
+  ).toBe(
+    'Network baseline route keys differ: missing=["/fixture-render"] stale=["/fixture-render target"]',
   );
 });
 
@@ -161,15 +185,20 @@ test("unknown generated route forms and missing structural markers fail closed",
 });
 
 test("reviewed declarations cannot retain inactive redirect keys", () => {
-  expect(() =>
-    validate(baseline(), [
-      {
-        route: renderInPlaceRedirectKey,
-        reason: "Reviewed budget",
-        budget: entry,
-      },
-    ]),
-  ).toThrow("Network budget declaration names an inactive route");
+  expect(
+    networkBudgetDeclarationProblem({
+      expectedKeys: fixtureKeys,
+      declarations: [
+        {
+          route: "/fixture-render target",
+          reason: "Reviewed budget",
+          budget: entry,
+        },
+      ],
+    }),
+  ).toBe(
+    "Network budget declaration names an inactive route: /fixture-render target",
+  );
 });
 
 test("CLI checks the real route inventory and baseline schema", () => {
@@ -252,22 +281,37 @@ test("unknown expectations require an explicit baseline mapping", () => {
   ).toThrow("Unknown smoke route expectation: unknown");
 });
 
-test("real prepared context exempts changed redirects and leaves unrelated stale keys strict", () => {
+test("prepared context exempts changed redirects and leaves unrelated stale keys strict", () => {
   const { changedRoutes } = prepareComparisonBaseline({
-    base: baseline(),
-    changedPaths: ["apps/web/src/routes/_protected.settings/index.tsx"],
-    baseRouteTree: routeTree,
-    routeTree,
+    base: fixtureBaseline(),
+    changedPaths: ["apps/web/src/routes/_protected.fixture-redirect/index.tsx"],
+    baseRouteTree: fixtureRouteTree,
+    routeTree: fixtureRouteTree,
     declarations: [],
   });
-  expect(changedRoutes).toEqual(["/settings", "/settings target"]);
-  const changedRedirect = baseline();
-  delete changedRedirect["/settings target"];
-  validate(changedRedirect, [], changedRoutes);
-  expect(() =>
-    validate(withRedirectKey(changedRedirect), [], changedRoutes),
-  ).toThrow(
-    `missing=["${renderInPlaceRoute}"] stale=["${renderInPlaceRedirectKey}"]`,
+  expect(changedRoutes).toEqual([
+    "/fixture-redirect",
+    "/fixture-redirect target",
+  ]);
+  const changedRedirect = fixtureBaseline();
+  delete changedRedirect["/fixture-redirect target"];
+  expect(
+    networkBaselineCoverageProblem({
+      actualKeys: Object.keys(changedRedirect),
+      expectedKeys: fixtureKeys,
+      changedRoutes,
+    }),
+  ).toBeNull();
+  delete changedRedirect["/fixture-render"];
+  changedRedirect["/fixture-render target"] = entry;
+  expect(
+    networkBaselineCoverageProblem({
+      actualKeys: Object.keys(changedRedirect),
+      expectedKeys: fixtureKeys,
+      changedRoutes,
+    }),
+  ).toBe(
+    'Network baseline route keys differ: missing=["/fixture-render"] stale=["/fixture-render target"]',
   );
 });
 
@@ -282,28 +326,26 @@ test("inherited declarations cannot manufacture a missing prepared baseline key"
 });
 
 test("an expectation change needs a matching prepared recording", () => {
-  const changedDefs = SMOKE_ROUTE_DEFS.map((def) =>
-    def.template === renderInPlaceRoute
+  const changedDefs = fixtureDefs.map((def) =>
+    def.template === "/fixture-render"
       ? {
           ...def,
-          expectation: {
-            kind: "redirectsTo",
-            to: "/workspaces/$workspaceId/$viewId",
-          },
+          expectation: { kind: "redirectsTo", to: "/fixture-redirect" },
         }
       : def,
   );
-  assertSmokeRouteCoverage(routeTree, changedDefs);
   const expectedKeys = changedDefs.map(networkBaselineKey);
   expect(
     networkBaselineCoverageProblem({
-      actualKeys: Object.keys(baseline()),
+      actualKeys: Object.keys(fixtureBaseline()),
       expectedKeys,
     }),
   ).toBe(
-    `Network baseline route keys differ: missing=["${renderInPlaceRedirectKey}"] stale=["${renderInPlaceRoute}"]`,
+    'Network baseline route keys differ: missing=["/fixture-render target"] stale=["/fixture-render"]',
   );
-  const recorded = withRedirectKey(baseline());
+  const recorded = fixtureBaseline();
+  delete recorded["/fixture-render"];
+  recorded["/fixture-render target"] = entry;
   expect(
     networkBaselineCoverageProblem({
       actualKeys: Object.keys(recorded),
@@ -313,55 +355,42 @@ test("an expectation change needs a matching prepared recording", () => {
 });
 
 test("light coverage prepares through the shared action before checking under the time cap", () => {
-  const source = readFileSync(
-    path.resolve(import.meta.dirname, "../.github/workflows/ci.yml"),
-    "utf-8",
-  );
-  const job = source.split("  ci-checks-rest:")[1]?.split("  ci-tests:")[0];
-  expect(job).toBeDefined();
-  const prepare = job?.indexOf("name: Prepare route network manifest") ?? -1;
-  const coverage = job?.indexOf("name: Route network manifest coverage") ?? -1;
-  expect(prepare).toBeGreaterThan(0);
-  expect(coverage).toBeGreaterThan(prepare);
-  const restore = job?.indexOf("name: Restore route network baseline") ?? -1;
-  expect(restore).toBeGreaterThan(coverage);
-  const afterCoverage = job?.slice(coverage).split("      - name: ")[1];
-  expect(afterCoverage).toStartWith("Restore route network baseline");
-  expect(afterCoverage).toContain(
+  const steps = coverageWorkflowSteps();
+  const prepare = workflowStepByName(steps, "Prepare route network manifest");
+  const coverage = workflowStepByName(steps, "Route network manifest coverage");
+  const restore = workflowStepByName(steps, "Restore route network baseline");
+  expect(steps.indexOf(prepare)).toBeGreaterThan(0);
+  expect(steps.indexOf(coverage)).toBeGreaterThan(steps.indexOf(prepare));
+  expect(steps.indexOf(restore)).toBe(steps.indexOf(coverage) + 1);
+  expect(restore["if"]).toContain(
     "!cancelled() && steps.install.outcome == 'success'",
   );
-  expect(afterCoverage).toContain(
+  expect(restore["run"]).toContain(
     "git checkout -- apps/web/e2e/network-baseline.json",
   );
-  expect(afterCoverage).toContain("rm -f apps/web/e2e/.network-baseline-*");
-  expect(job?.slice(0, prepare)).toContain("fetch-depth: 0");
-  const steps = job?.slice(
-    prepare,
-    job.indexOf("name: Workspace hygiene", coverage),
-  );
-  expect(steps).toContain("uses: ./.github/actions/prepare-network-baseline");
-  expect(steps).toContain("timeout-minutes: 1");
-  expect(steps).toContain(
+  expect(restore["run"]).toContain("rm -f apps/web/e2e/.network-baseline-*");
+  const checkout = workflowStepByName(steps, "Checkout");
+  expect(steps.indexOf(checkout)).toBeLessThan(steps.indexOf(prepare));
+  expect(checkout["with"]).toMatchObject({ "fetch-depth": 0 });
+  expect(prepare["uses"]).toBe("./.github/actions/prepare-network-baseline");
+  expect(prepare["timeout-minutes"]).toBe(1);
+  expect(coverage["if"]).toContain(
     "steps.network_manifest_prepare.outcome == 'success'",
   );
-  expect(steps).toContain("timeout 30s bash -c");
-  expect(steps).toContain(
+  expect(coverage["run"]).toContain("timeout 30s bash -c");
+  expect(coverage["run"]).toContain(
     "--context apps/web/e2e/.network-baseline-context.json",
   );
 });
 
 test("cleanup restores the tracked baseline and removes preparation files after partial failure", () => {
-  const source = readFileSync(
-    path.resolve(import.meta.dirname, "../.github/workflows/ci.yml"),
-    "utf-8",
+  const cleanup = v.parse(
+    v.string(),
+    workflowStepByName(
+      coverageWorkflowSteps(),
+      "Restore route network baseline",
+    )["run"],
   );
-  const step = source
-    .split("      - name: Restore route network baseline\n")[1]
-    ?.split("      - name: Workspace hygiene")[0];
-  const cleanup = step?.split("        run: |\n")[1];
-  if (!cleanup) {
-    throw new Error("Missing baseline restore step");
-  }
   const repository = path.join(directory, "cleanup");
   const e2e = path.join(repository, "apps/web/e2e");
   mkdirSync(e2e, { recursive: true });

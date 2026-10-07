@@ -1,6 +1,6 @@
 import type { GuideAnchorId } from "@/features/guides/guide-anchors";
 
-export const GUIDE_ANCHOR_ATTRIBUTE = "data-guide-anchor";
+const GUIDE_ANCHOR_ATTRIBUTE = "data-guide-anchor";
 
 export type GuideAnchorProps = {
   readonly "data-guide-anchor"?: GuideAnchorId;

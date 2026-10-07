@@ -6,6 +6,7 @@ import JSZip from "jszip";
 
 import { compareCodeUnit } from "@stll/collation";
 import { assertProperty } from "@stll/property-testing";
+import { rejectionOf } from "@stll/property-testing/rejection";
 import { filtersFromFieldConfig } from "@stll/template-conditions";
 
 import type { ScopedDb } from "@/api/db/safe-db";
@@ -322,14 +323,16 @@ describe("AI fill admission lifetime", () => {
 
   test("a failure inside the admitted fill propagates as the fill's own", async () => {
     const { admitModelAction } = observedAdmitter();
-    await expect(
-      fillAdmitted({
-        admitModelAction,
-        collaborators: () => {
-          throw new TypeError("collaborators unavailable");
-        },
-      }),
-    ).rejects.toThrow("collaborators unavailable");
+    expect(
+      await rejectionOf(
+        fillAdmitted({
+          admitModelAction,
+          collaborators: () => {
+            throw new TypeError("collaborators unavailable");
+          },
+        }),
+      ),
+    ).toMatchObject({ message: "collaborators unavailable" });
   });
 });
 

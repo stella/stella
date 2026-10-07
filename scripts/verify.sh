@@ -22,7 +22,7 @@ set -uo pipefail
 
 script_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 repo_root="$(cd "$script_dir/.." && pwd)"
-cd "$repo_root"
+cd "$repo_root" || exit 1
 
 affected_flag="--affected"
 base_ref=""
@@ -131,6 +131,11 @@ run_projection_totality_guard() {
   # or an allowlisted reason; the classifier self-test runs first.
   bun test scripts/check-projection-totality.test.ts || return 1
   bun run check:projection-totality
+}
+
+run_split_buttons_guard() {
+  bun run --cwd packages/scripts test ../../scripts/check-split-buttons.test.ts || return 1
+  bun run check:split-buttons
 }
 
 run_typecheck_coverage() {
@@ -439,6 +444,8 @@ run_failure_as_empty_guard() {
 run_step "Failure-as-empty baseline" run_failure_as_empty_guard
 run_step "Oxlint override union guard" bun test \
   scripts/oxlint-override-union.test.ts scripts/oxlint-config-liveness.test.ts
+run_step "GitHub API command ownership" bun scripts/check-gh-retry.ts
+run_step "SHA-256 migration ledger" bun scripts/sha256-migration-ledger.ts --base "$base_ref"
 run_step "Oxlint rule decisions" bun scripts/check-oxlint-rule-decisions.ts
 run_oxlint_effective_config_guard() {
   bun test scripts/oxlint-effective-config.test.ts || return 1
@@ -456,6 +463,7 @@ run_step "Queue authority" run_queue_authority_guard
 run_step "Design token docs" bun run check:design-tokens
 run_step "Dead columns" run_dead_columns_guard
 run_step "Projection totality" run_projection_totality_guard
+run_step "Split-button census" run_split_buttons_guard
 run_step "Module-mock ledger membership" run_module_mock_ledger_guard
 run_step "Suppression waiver ledger" run_suppression_waiver_guard
 run_step "Crawl posture guard" run_crawl_posture_guard

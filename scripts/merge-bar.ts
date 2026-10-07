@@ -66,6 +66,13 @@ import {
   type PlanSelectorError,
   runPlanScopes,
 } from "./ci-plan-selector";
+import { pilotFastJobs, pilotQueueJobs } from "./ci-pr-pilot-plan";
+import { evaluate } from "./github-expression";
+import {
+  parseCiCoverageLog,
+  type CiCoverageEvidence,
+  type CiCoverageLogError,
+} from "./merge-bar-ci-coverage";
 import { decideBarFreshness, readBarFreshness } from "./merge-bar-freshness";
 
 const DEFAULT_REPO = "stella/stella" satisfies MergeBarRepository;
@@ -272,6 +279,13 @@ type CheckRunSnapshot = {
   status: string;
   conclusion: string | null;
   outputTitle?: string;
+  checkSuiteId?: number;
+};
+
+type WorkflowRunSnapshot = {
+  checkSuiteId: number;
+  path: string;
+  event: string;
 };
 
 type ReviewThreadSnapshot = { id: string; isResolved: boolean };
@@ -355,6 +369,40 @@ const evaluateMergeable = (pullRequest: PullRequestSnapshot): GateVerdict => {
 };
 
 const CI_PLAN_CHECK_RUN = "ci-plan";
+
+// The events whose CI runs judge a pull request. A dispatched run on the same
+// head (a manual full-depth validation, for one) reports its own ci-result and
+// ci-checks, which must neither block nor pass the PR.
+const PULL_REQUEST_CI_EVENTS: ReadonlySet<string> = new Set([
+  "pull_request",
+  "merge_group",
+]);
+
+/**
+ * Drops the check runs that a CI workflow run outside the pull request events
+ * produced on the head. Check runs from any other workflow or app are kept.
+ */
+export const pullRequestCheckRuns = ({
+  checkRuns,
+  workflowRuns,
+}: {
+  checkRuns: readonly CheckRunSnapshot[];
+  workflowRuns: readonly WorkflowRunSnapshot[];
+}): readonly CheckRunSnapshot[] => {
+  const offEventSuites = new Set(
+    workflowRuns
+      .filter(
+        (run) =>
+          run.path.split("@")[0] === CI_WORKFLOW &&
+          !PULL_REQUEST_CI_EVENTS.has(run.event),
+      )
+      .map((run) => run.checkSuiteId),
+  );
+  return checkRuns.filter(
+    (run) =>
+      run.checkSuiteId === undefined || !offEventSuites.has(run.checkSuiteId),
+  );
+};
 
 const latestRunByName = (
   checkRuns: readonly CheckRunSnapshot[],
@@ -708,6 +756,7 @@ type JobScope =
 type FastRequiredJob = {
   id: string;
   scope: JobScope;
+  pilotGate?: "deferred-capable";
   // Matches the job's names in a workflow run, matrix legs included.
   runName: RegExp;
 };
@@ -724,6 +773,111 @@ const runNamePattern = (id: string, template: unknown): RegExp => {
   return new RegExp(`^${escaped}(?: \\(.+\\))?$`, "u");
 };
 
+type CheckFastJobPredicateOptions = {
+  id: string;
+  condition: string;
+  output: string | null;
+  workflow: unknown;
+};
+
+const checkFastJobPredicate = ({
+  id,
+  condition,
+  output,
+  workflow,
+}: CheckFastJobPredicateOptions) => {
+  // Every atom the freshness model pins must remain a declared workflow gate.
+  // Unsupported atoms fail even when another false gate would short-circuit them.
+  const atoms = [
+    "needs.ci-plan.outputs.run_required != 'false'",
+    "inputs.heavy_only != true",
+    "needs.ci-plan.outputs.trusted == 'true'",
+    "github.event_name == 'workflow_dispatch'",
+    "github.event_name != 'merge_group'",
+    "needs.ci-plan.outputs.queue_depth != 'thin'",
+    "needs.ci-plan.outputs.coverage_profile != 'pilot-fast-v1'",
+    `contains(fromJSON(needs.ci-plan.outputs.pilot_fast_jobs || '[]'), '${id}')`,
+    `contains(fromJSON(needs.ci-plan.outputs.queue_required_jobs || '[]'), '${id}')`,
+    ...(output === null ? [] : [`needs.ci-plan.outputs.${output} == 'true'`]),
+  ];
+  let remainder = condition.replaceAll(/\s+/gu, " ").trim();
+  for (const atom of atoms) {
+    remainder = remainder.replaceAll(atom, "");
+  }
+  if (!/^[\s()&|]*$/u.test(remainder)) {
+    panic(`Unmodeled fast-required predicate: ${id}`);
+  }
+  const gated = condition.includes("needs.ci-plan.outputs.coverage_profile");
+  const fallback = pilotQueueJobs(workflow);
+  if (fallback.status === "invalid") {
+    panic(fallback.message);
+  }
+  const fast = pilotFastJobs(workflow);
+  if (fast.status === "invalid") {
+    panic(fast.message);
+  }
+  const deferred = gated && !fast.jobs.includes(id);
+  const fallbackJob = fallback.jobs.find((job) => job === id);
+  if (deferred && fallbackJob === undefined) {
+    panic(`No mandatory queue fallback for pilot-deferred ${id}`);
+  }
+  for (const selected of [false, true]) {
+    for (const profile of ["normal-v1", "pilot-fast-v1"]) {
+      for (const included of [false, true]) {
+        const values: Record<string, string | boolean> = {
+          "github.event_name": "pull_request",
+          "inputs.heavy_only": false,
+          "needs.ci-plan.outputs.run_required": "true",
+          "needs.ci-plan.outputs.trusted": "true",
+          "needs.ci-plan.outputs.queue_depth": "full",
+          "needs.ci-plan.outputs.coverage_profile": profile,
+          "needs.ci-plan.outputs.pilot_fast_jobs": JSON.stringify(
+            included ? [id] : [],
+          ),
+          ...Object.fromEntries(
+            output === null
+              ? []
+              : [[`needs.ci-plan.outputs.${output}`, String(selected)]],
+          ),
+        };
+        const planned = output === null || selected;
+        const expected =
+          planned && (!gated || profile === "normal-v1" || included);
+        if (
+          evaluate(condition, {
+            values,
+            status: { success: true, failure: false, cancelled: false },
+          }) !== expected
+        ) {
+          panic(`Unmodeled fast-required predicate: ${id}`);
+        }
+        if (deferred && planned) {
+          const queue = {
+            ...values,
+            "github.event_name": "merge_group",
+            "needs.ci-plan.outputs.suite_depth": "full",
+            "needs.ci-plan.outputs.queue_depth": "thin",
+            "needs.ci-plan.outputs.coverage_profile": "normal-v1",
+            "needs.ci-plan.outputs.normal_completion": "required",
+            "needs.ci-plan.outputs.queue_required_jobs": JSON.stringify(
+              fallback.jobs,
+            ),
+          };
+          if (
+            evaluate(condition, {
+              values: queue,
+              status: { success: true, failure: false, cancelled: false },
+            }) !== true
+          ) {
+            panic(`Pilot queue fallback cannot run ${id}`);
+          }
+        }
+      }
+    }
+  }
+  return deferred ? ({ pilotGate: "deferred-capable" } as const) : {};
+};
+
 /**
  * The jobs ci-result requires at fast depth, each with the ci-plan output
  * that plans it, read from a workflow's own ci-result step so the bar cannot
@@ -732,10 +886,8 @@ const runNamePattern = (id: string, template: unknown): RegExp => {
 export const readFastRequiredJobs = (
   workflowSource: string,
 ): FastRequiredJob[] | null => {
-  const jobs = readRecord(
-    readRecord(Bun.YAML.parse(workflowSource), "CI workflow")["jobs"],
-    "CI workflow jobs",
-  );
+  const workflow = readRecord(Bun.YAML.parse(workflowSource), "CI workflow");
+  const jobs = readRecord(workflow["jobs"], "CI workflow jobs");
   const planJob = jobs[CI_PLAN_JOB];
   const resultJob = jobs[CI_RESULT_JOB];
   if (planJob === undefined || resultJob === undefined) {
@@ -769,6 +921,9 @@ export const readFastRequiredJobs = (
   }
   // ci-result looks fast scopes up in JOB_SCOPES + FAST_JOB_SCOPES, the
   // latter winning; an absent or null scope means always planned.
+  const pilotEnabled =
+    Object.hasOwn(env, "COVERAGE_PROFILE") &&
+    Object.hasOwn(env, "PILOT_FAST_JOBS");
   const scopes = {
     ...readRecord(readJsonEnv(env, "JOB_SCOPES"), "JOB_SCOPES"),
     ...readRecord(readJsonEnv(env, "FAST_JOB_SCOPES"), "FAST_JOB_SCOPES"),
@@ -777,8 +932,16 @@ export const readFastRequiredJobs = (
     const output = scopes[id];
     const body = readRecord(jobs[id], `job ${id}`);
     const runName = runNamePattern(id, body["name"]);
+    const pilot = pilotEnabled
+      ? checkFastJobPredicate({
+          id,
+          condition: readString(body, "if"),
+          output: typeof output === "string" ? output : null,
+          workflow,
+        })
+      : {};
     if (output === null || output === undefined) {
-      return { id, scope: { type: "always" }, runName };
+      return { id, scope: { type: "always" }, runName, ...pilot };
     }
     if (typeof output !== "string") {
       return panic(`Expected a ci-plan output name as the scope of ${id}`);
@@ -792,6 +955,7 @@ export const readFastRequiredJobs = (
           ? { type: "not-file-derived", output }
           : { type: "selector", variable },
       runName,
+      ...pilot,
     };
   });
 };
@@ -802,6 +966,7 @@ type UnrunPlannedJobsOptions = {
   jobs: readonly FastRequiredJob[];
   plan: ReadonlyMap<string, boolean>;
   runJobs: readonly RunJob[];
+  coverage?: CiCoverageEvidence;
 };
 
 /**
@@ -813,8 +978,15 @@ export const unrunPlannedJobs = ({
   jobs,
   plan,
   runJobs,
+  coverage = { profile: "normal-v1" },
 }: UnrunPlannedJobsOptions): string[] =>
   jobs
+    .filter(
+      ({ id, pilotGate }) =>
+        coverage.profile !== "pilot-fast-v1" ||
+        pilotGate !== "deferred-capable" ||
+        coverage.jobs.includes(id),
+    )
     .filter(({ scope }) => {
       switch (scope.type) {
         case "always":
@@ -1011,6 +1183,9 @@ type CheckGreenResultFreshnessOptions = {
     title: string;
   }) => Result<ReadonlyMap<string, boolean>, PlanSelectorError>;
   readRunJobs: (runId: number) => readonly RunJob[];
+  readRunCoverage: (
+    runId: number,
+  ) => Result<CiCoverageEvidence, CiCoverageLogError>;
   ratchet: RatchetFreshness;
   // True where landing hands the PR to a merge queue, whose merge group re-runs
   // the ratchet and full CI on the real merge commit. A direct merge has no such
@@ -1028,6 +1203,7 @@ export const checkGreenResultFreshness = ({
   readBaseWorkflow,
   runSelector,
   readRunJobs,
+  readRunCoverage,
   ratchet,
   mergeGroupRetests,
 }: CheckGreenResultFreshnessOptions) => {
@@ -1133,10 +1309,20 @@ export const checkGreenResultFreshness = ({
   if (typeof runId !== "number") {
     return panic("Expected a numeric workflow run id");
   }
+  const coverage = jobs.some((job) => job.pilotGate === "deferred-capable")
+    ? readRunCoverage(runId)
+    : Result.ok({ profile: "normal-v1" } as const);
+  if (coverage.isErr()) {
+    return refuse(`cannot read green CI coverage: ${coverage.error.message}`);
+  }
+  if (coverage.value.profile === "pilot-fast-v1" && !mergeGroupRetests) {
+    return refuse("Pilot deferral requires mandatory merge-group validation");
+  }
   const unrun = unrunPlannedJobs({
     jobs,
     plan: plan.value,
     runJobs: readRunJobs(runId),
+    coverage: coverage.value,
   });
   if (unrun.length > 0) {
     return Result.err(
@@ -1415,11 +1601,15 @@ type GitHubGateway = {
   // needs the SHA, and a narrow read makes the TOCTOU window smaller.
   readHeadSha: () => string;
   readCheckRuns: (headSha: string) => readonly CheckRunSnapshot[];
+  readHeadWorkflowRuns: (headSha: string) => readonly WorkflowRunSnapshot[];
   readWorkflowRun: (checkRunId: number) => unknown;
   readBaseComparison: (testedBaseSha: string, baseRefName: string) => unknown;
   readPullFiles: () => readonly string[];
   readBaseWorkflow: (ref: string) => string | null;
   readRunJobs: (runId: number) => readonly RunJob[];
+  readRunCoverage: (
+    runId: number,
+  ) => Result<CiCoverageEvidence, CiCoverageLogError>;
   readRatchetDefinitionPaths: (baseRefName: string) => unknown;
   readReviewThreads: () => readonly ReviewThreadSnapshot[];
   readMigrationDirectories: () => MigrationSnapshot;
@@ -1994,11 +2184,14 @@ const runGhProcess = (
   args: readonly string[],
   access: "read" | "write" = "read",
 ) =>
-  Bun.spawnSync(["gh", ...args], {
-    env: githubEnvironment(access),
-    stdout: "pipe",
-    stderr: "pipe",
-  });
+  Bun.spawnSync(
+    ["bash", fileURLToPath(new URL("gh-retry.sh", import.meta.url)), ...args],
+    {
+      env: githubEnvironment(access),
+      stdout: "pipe",
+      stderr: "pipe",
+    },
+  );
 
 const runGh = (
   args: readonly string[],
@@ -2381,20 +2574,25 @@ const createGhGateway = ({
         "--paginate",
         `repos/${repo}/commits/${headSha}/check-runs`,
         "--jq",
-        '.check_runs[] | [.id, .name, .status, (.conclusion // ""), (.output.title // "")] | @tsv',
+        '.check_runs[] | [.id, .name, .status, (.conclusion // ""), (.output.title // ""), (.check_suite.id // "")] | @tsv',
       ])
         .split("\n")
         .filter(Boolean);
 
       const runs: CheckRunSnapshot[] = [];
       for (const line of lines) {
-        const [rawId, runName, status, conclusion, outputTitle] =
+        const [rawId, runName, status, conclusion, outputTitle, rawSuiteId] =
           line.split("\t");
         const id = Number(rawId);
+        const checkSuiteId =
+          rawSuiteId === undefined || rawSuiteId === ""
+            ? undefined
+            : Number(rawSuiteId);
         if (
           !Number.isSafeInteger(id) ||
           runName === undefined ||
-          status === undefined
+          status === undefined ||
+          (checkSuiteId !== undefined && !Number.isSafeInteger(checkSuiteId))
         ) {
           panic(`Malformed check-run row from gh: ${line}`);
         }
@@ -2405,10 +2603,34 @@ const createGhGateway = ({
           conclusion:
             conclusion === undefined || conclusion === "" ? null : conclusion,
           outputTitle: outputTitle ?? "",
+          ...(checkSuiteId === undefined ? {} : { checkSuiteId }),
         });
       }
       return runs;
     },
+
+    readHeadWorkflowRuns: (headSha) =>
+      runGh([
+        "api",
+        "--paginate",
+        `repos/${repo}/actions/runs?head_sha=${headSha}&per_page=100`,
+        "--jq",
+        ".workflow_runs[] | [.check_suite_id, .path, .event] | @tsv",
+      ])
+        .split("\n")
+        .filter(Boolean)
+        .map((line) => {
+          const [rawSuiteId, workflowPath, event] = line.split("\t");
+          const checkSuiteId = Number(rawSuiteId);
+          if (
+            !Number.isSafeInteger(checkSuiteId) ||
+            workflowPath === undefined ||
+            event === undefined
+          ) {
+            return panic(`Malformed workflow-run row from gh: ${line}`);
+          }
+          return { checkSuiteId, path: workflowPath, event };
+        }),
 
     readWorkflowRun: (checkRunId) => {
       const check = readRecord(
@@ -2461,11 +2683,31 @@ const createGhGateway = ({
       if (result.exitCode === 0) {
         return result.stdout.toString();
       }
-      if (result.stderr.toString().includes("(HTTP 404)")) {
+      if (result.stderr.toString().includes("HTTP 404")) {
         return null;
       }
       return panic(
         `gh could not read ${CI_WORKFLOW} at ${ref} (${result.exitCode}): ${result.stderr.toString()}`,
+      );
+    },
+
+    readRunCoverage: (runId) => {
+      const jobId = runGh([
+        "api",
+        `repos/${repo}/actions/runs/${runId}/jobs?filter=latest&per_page=100`,
+        "--jq",
+        '.jobs[] | select(.name == "ci-result") | .id',
+      ]).trim();
+      if (!PULL_NUMBER_PATTERN.test(jobId)) {
+        panic("Missing unique ci-result job for coverage evidence");
+      }
+      Bun.sleepSync(1100);
+      return parseCiCoverageLog(
+        runGh([
+          "api",
+          "--allow-escape-sequences",
+          `repos/${repo}/actions/jobs/${jobId}/logs`,
+        ]),
       );
     },
 
@@ -3086,7 +3328,10 @@ if (import.meta.main) {
   }
   // Read order is load-bearing: each gate's window is the time between its
   // own read and the write, so the head SHA the write pins is read last.
-  const checkRuns = gateway.readCheckRuns(pullRequest.headSha);
+  const checkRuns = pullRequestCheckRuns({
+    checkRuns: gateway.readCheckRuns(pullRequest.headSha),
+    workflowRuns: gateway.readHeadWorkflowRuns(pullRequest.headSha),
+  });
   const freshness = checkGreenResultFreshness({
     pullRequest,
     jump: options.jump,
@@ -3102,6 +3347,7 @@ if (import.meta.main) {
         cwd: fileURLToPath(new URL("..", import.meta.url)),
       }),
     readRunJobs: gateway.readRunJobs,
+    readRunCoverage: gateway.readRunCoverage,
     mergeGroupRetests: policy.landing === "merge-when-ready",
     ratchet: ratchetFreshnessFor({
       repo: options.repo,

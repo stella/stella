@@ -18,7 +18,10 @@ import { expect, test } from "bun:test";
 
 import { compareCodeUnit } from "@stll/collation";
 
-import config, { API_PROVIDER_ADAPTER_MODULES } from "../oxlint.config.ts";
+import config, {
+  API_PROVIDER_ADAPTER_MODULES,
+  LEGACY_PRAGMATIC_DRAG_REGISTRATION_FILES,
+} from "../oxlint.config.ts";
 import {
   isRecord,
   lintedRepoFiles,
@@ -103,7 +106,7 @@ const DELIBERATE_NARROWINGS = [
     scope:
       "apps/web/src/components/workspaces/kanban/use-kanban-drop-targets.ts",
     drops: [
-      "path:@atlaskit/pragmatic-drag-and-drop/element/adapter#draggable,dropTargetForElements",
+      "path:@atlaskit/pragmatic-drag-and-drop/adapter/element-adapter#draggable,dropTargetForElements",
     ],
     reason:
       "This is the web kanban drag-and-drop owner: the one module that may call the adapter's draggable/dropTargetForElements directly, behind its conflict-guarded attachElementDropTarget.",
@@ -112,10 +115,19 @@ const DELIBERATE_NARROWINGS = [
     rule: "no-restricted-imports",
     scope: "packages/ui/src/kanban/drag-interactions.ts",
     drops: [
-      "path:@atlaskit/pragmatic-drag-and-drop/element/adapter#draggable,dropTargetForElements",
+      "path:@atlaskit/pragmatic-drag-and-drop/adapter/element-adapter#draggable,dropTargetForElements",
     ],
     reason:
       "This is the @stll/ui kanban drag-and-drop owner: the one module that may call the adapter's draggable/dropTargetForElements directly.",
+  },
+  {
+    rule: "no-restricted-imports",
+    scope: LEGACY_PRAGMATIC_DRAG_REGISTRATION_FILES.join(", "),
+    drops: [
+      "path:@atlaskit/pragmatic-drag-and-drop/adapter/element-adapter#draggable,dropTargetForElements",
+    ],
+    reason:
+      "Shrink-only migration exceptions: each listed surface registers only its own elements, untouched by another registration owner.",
   },
 ] as const;
 
@@ -474,4 +486,21 @@ test("no override silently drops an inherited restriction", () => {
   // Both directions: an undeclared drop is the bug this guard exists for, and
   // a declared drop that no longer happens means the table is stale.
   expect(sorted(observed)).toEqual(sorted(declared));
+});
+
+test("new web and UI surfaces cannot import element registration outside an owner", () => {
+  const scopes = readScopes(config).filter(
+    (scope) => "no-restricted-imports" in scope.rules,
+  );
+  for (const file of [
+    "apps/web/src/components/new-drag-surface.tsx",
+    "packages/ui/src/new-drag-surface.tsx",
+  ]) {
+    const winner = scopes.findLast((scope) => scopeMatches(scope, file));
+    expect(
+      restrictedImportKeys(winner?.rules["no-restricted-imports"]),
+    ).toContain(
+      "path:@atlaskit/pragmatic-drag-and-drop/adapter/element-adapter#draggable,dropTargetForElements",
+    );
+  }
 });

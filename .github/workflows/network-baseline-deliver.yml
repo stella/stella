@@ -22,6 +22,21 @@ jobs:
       actions: read
       contents: read
     steps:
+      - name: Checkout GitHub API tooling
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: ${{ github.repository }}
+          ref: ${{ github.workflow_sha }}
+          path: .gh-retry
+          persist-credentials: false
+          sparse-checkout: scripts/gh-retry.sh
+          sparse-checkout-cone-mode: false
+
+      - name: Preserve GitHub API tooling across source checkouts
+        run: |
+          cp "$GITHUB_WORKSPACE/.gh-retry/scripts/gh-retry.sh" "$RUNNER_TEMP/gh-retry.sh"
+          echo "GH_RETRY_SCRIPT=$RUNNER_TEMP/gh-retry.sh" >> "$GITHUB_ENV"
+
       - name: Checkout trusted validator
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -44,7 +59,7 @@ jobs:
           set -euo pipefail
           [[ "$RECORDED_SHA" =~ ^[a-f0-9]{40}$ ]]
           mkdir -p "$RUNNER_TEMP/recorded"
-          gh run download "$RUN_ID" -R "$REPOSITORY" \
+          bash "$GH_RETRY_SCRIPT" run download "$RUN_ID" -R "$REPOSITORY" \
             -n "network-baseline-record-$RECORDED_SHA" -D "$RUNNER_TEMP/recorded"
           mapfile -t files < <(find "$RUNNER_TEMP/recorded" -type f)
           if (( ${#files[@]} != 1 )) || [[ "${files[0]}" != "$RUNNER_TEMP/recorded/network-baseline.json" ]] \

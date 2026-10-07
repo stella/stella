@@ -109,7 +109,7 @@ export const createRunPlaybook = (
           userId: user.id,
           organizationStateDb: scopedDb,
           actionKind: "document-reviews.start",
-        })(({ admission }) => Promise.resolve(admission));
+        })(async ({ admission }) => await Promise.resolve(admission));
         if (Result.isError(admitted)) {
           return Result.err(modelActionRefusal(admitted.error));
         }
