@@ -31,7 +31,6 @@ import {
 } from "@/api/lib/legal-search/corpus-index-manifest";
 import { deriveCorpusIndexProjectionDescriptor } from "@/api/lib/legal-search/corpus-index-projection-descriptor";
 import { legislationProjectionInputFromCanonical } from "@/api/lib/legal-search/corpus-index-projection-desired-state";
-import { CORPUS_PROJECTION_APPEND_COMMIT_MODE } from "@/api/lib/legal-search/corpus-index-projection-engine";
 import { executeCorpusProjectionAppendCycle } from "@/api/lib/legal-search/corpus-index-projection-executor";
 import { CORPUS_PROJECTION_GENERATION_SCOPE } from "@/api/lib/legal-search/corpus-index-projection-scope";
 import { CORPUS_PROJECTION_LEASE_MIN_MS } from "@/api/lib/legal-search/corpus-index-projection-store";
@@ -173,40 +172,14 @@ afterAll(async () => {
 });
 
 test("a lease inside the start margin appends once and stops", async () => {
-  const revisionCounts = new Map<string, number>();
   const result = await executeCorpusProjectionAppendCycle({
     runInTransaction,
     client: {
-      ingestCommittedBatch: async (_indexId: string, ndjson: string) => {
-        const lines = ndjson.split("\n");
-        ingested.push(lines.length);
-        for (const line of lines) {
-          const { projection_revision } = JSON.parse(line);
-          if (typeof projection_revision !== "string") {
-            panic("Accepted document has no projection revision");
-          }
-          revisionCounts.set(
-            projection_revision,
-            (revisionCounts.get(projection_revision) ?? 0) + 1,
-          );
-        }
+      ingestQueuedBatch: async (_indexId: string, ndjson: string) => {
+        ingested.push(ndjson.split("\n").length);
         return await Promise.resolve(Result.ok());
       },
-      ingestQueuedBatch: async () =>
-        panic("Projection append must wait for publication"),
-      aggregate: async ({ query }) =>
-        Result.ok({
-          projection_revisions: {
-            buckets: Array.from(revisionCounts, ([key, doc_count]) => ({
-              key,
-              doc_count,
-            })).filter(({ key }) => query.includes(`"${key}"`)),
-            doc_count_error_upper_bound: 0,
-            sum_other_doc_count: 0,
-          },
-        }),
     },
-    commitMode: CORPUS_PROJECTION_APPEND_COMMIT_MODE.queued,
     family: TARGET.family,
     generation: TARGET.generation,
     scope: CORPUS_PROJECTION_GENERATION_SCOPE,
@@ -223,7 +196,7 @@ test("a lease inside the start margin appends once and stops", async () => {
   // One append, not one per revision: the whole point of the stop.
   expect(result.requestCount).toBe(1);
   expect(ingested).toEqual([1]);
-  expect(result.applied).toBe(1);
+  expect(result.accepted).toBe(1);
 
   // The rest keep their reservations rather than paying a cancellation
   // statement each; they are inside the margin, so they come back on their own.

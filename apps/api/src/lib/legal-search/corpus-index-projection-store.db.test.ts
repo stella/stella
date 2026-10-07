@@ -63,8 +63,9 @@ import {
 } from "@/api/lib/legal-search/corpus-index-projection-erasure-store";
 import {
   abandonCorpusProjectionAppendTx,
+  acceptCorpusProjectionAppendTx,
   classifyCorpusProjectionReservationFailureTx,
-  commitCorpusProjectionAppendTx,
+  confirmCorpusProjectionAppendTx,
   prepareCorpusProjectionReplacementsTx,
   reserveCorpusProjectionIntentsTx,
   startCorpusProjectionAppendBatchTx,
@@ -139,6 +140,22 @@ const clearDecisionIntents = async (): Promise<void> => {
       .update(corpusIndexGenerations)
       .set({ status: "building" })
       .where(eq(corpusIndexGenerations.generation, "case_law_v5"));
+  });
+};
+
+/** Accept an append, then confirm it as a census that found it in full would. */
+const acceptAndConfirmAppendTx = async (
+  tx: Transaction,
+  options: Parameters<typeof acceptCorpusProjectionAppendTx>[1],
+) => {
+  const accepted = await acceptCorpusProjectionAppendTx(tx, options);
+  if (accepted.status !== "accepted") {
+    return accepted;
+  }
+  return await confirmCorpusProjectionAppendTx(tx, {
+    intentId: options.intentId,
+    observedDocumentCount: options.documentCount,
+    ...(options.testNow === undefined ? {} : { testNow: options.testNow }),
   });
 };
 
@@ -1973,7 +1990,7 @@ test("applied census rejects an incomplete multi-document revision", async () =>
   expect(
     await db.transaction(
       async (tx) =>
-        await commitCorpusProjectionAppendTx(asTestRaw<Transaction>(tx), {
+        await acceptAndConfirmAppendTx(asTestRaw<Transaction>(tx), {
           intentId: lease.intentId,
           leaseToken: lease.leaseToken,
           documentCount: 1,
@@ -2307,7 +2324,7 @@ test("replacement deletes and settles the old revision before reserving the new 
   expect(
     await db.transaction(
       async (tx) =>
-        await commitCorpusProjectionAppendTx(asTestRaw<Transaction>(tx), {
+        await acceptAndConfirmAppendTx(asTestRaw<Transaction>(tx), {
           intentId: firstLease.intentId,
           leaseToken: firstLease.leaseToken,
           documentCount: 1,
@@ -2670,7 +2687,7 @@ test("cleanup-owned replacement work rotates behind a bounded queue window", asy
     expect(
       await db.transaction(
         async (tx) =>
-          await commitCorpusProjectionAppendTx(asTestRaw<Transaction>(tx), {
+          await acceptAndConfirmAppendTx(asTestRaw<Transaction>(tx), {
             intentId: lease.intentId,
             leaseToken: lease.leaseToken,
             documentCount: 1,
@@ -2766,7 +2783,7 @@ test("production transitions preserve PostgreSQL clock ordering under process sk
   expect(
     await withDatabaseClock(
       async (tx) =>
-        await commitCorpusProjectionAppendTx(tx, {
+        await acceptAndConfirmAppendTx(tx, {
           intentId: lease.intentId,
           leaseToken: lease.leaseToken,
           documentCount: 1,
@@ -3080,7 +3097,7 @@ test("a settled same-epoch attempt reopens after its retry is applied", async ()
   expect(
     await db.transaction(
       async (tx) =>
-        await commitCorpusProjectionAppendTx(asTestRaw<Transaction>(tx), {
+        await acceptAndConfirmAppendTx(asTestRaw<Transaction>(tx), {
           intentId: retryLease.intentId,
           leaseToken: retryLease.leaseToken,
           documentCount: 1,
@@ -4362,7 +4379,7 @@ test("an orphaned erasure applies only after its applied upsert settles", async 
   expect(
     await db.transaction(
       async (tx) =>
-        await commitCorpusProjectionAppendTx(asTestRaw<Transaction>(tx), {
+        await acceptAndConfirmAppendTx(asTestRaw<Transaction>(tx), {
           intentId: lease.intentId,
           leaseToken: lease.leaseToken,
           documentCount: 1,

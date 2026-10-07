@@ -1,0 +1,5 @@
+{
+  "metric": "audit-skip-directives",
+  "delta": 5,
+  "reason": "Corpus projection appends split into acceptance and census confirmation. The intent and state writes that commitCorpusProjectionAppendTx and abandonCorpusProjectionAppendTx held under the audit ledger move into acceptCorpusProjectionAppendTx, confirmCorpusProjectionAppendTx, the shared cleanup redirect and the shared retry scheduler; the ledger drops those six writes. Projection bookkeeping for the shared public corpus index has no tenant actor."
+}

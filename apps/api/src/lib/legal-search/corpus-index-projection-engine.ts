@@ -30,17 +30,13 @@ export const CORPUS_PROJECTION_DELETE_MAX_REVISIONS = 128;
 export const CORPUS_PROJECTION_UNKNOWN_APPEND_MARGIN_MS = 5000;
 
 /**
- * Coordinator requests retained during rollout. The projection executor uses
- * wait_for and confirms presence for both modes before recording applied.
- * Queued WAL acceptance alone cannot prove a revision is searchable.
+ * Commit periods an accepted append may take to become searchable before the
+ * confirmation pass gives it up and cleans it up for a fresh attempt. A
+ * backlogged node publishes late but in order, so the bound is generous:
+ * abandoning an append that would still have published costs a delete and a
+ * re-append, which is the churn this window exists to prevent.
  */
-export const CORPUS_PROJECTION_APPEND_COMMIT_MODE = {
-  published: "published",
-  queued: "queued",
-} as const;
-
-export type CorpusProjectionAppendCommitMode =
-  (typeof CORPUS_PROJECTION_APPEND_COMMIT_MODE)[keyof typeof CORPUS_PROJECTION_APPEND_COMMIT_MODE];
+export const CORPUS_PROJECTION_ACCEPTED_APPEND_PUBLISH_PERIODS = 60;
 
 export type CorpusProjectionAppendEntry = {
   revision: ProjectionRevision;
@@ -499,3 +495,15 @@ export const corpusIndexAppendPublishDelayMs = (
   }
   return commitTimeoutSecs * 1000 + CORPUS_PROJECTION_UNKNOWN_APPEND_MARGIN_MS;
 };
+
+/**
+ * Milliseconds after acceptance within which a census must find an accepted
+ * append searchable. Past it the append is presumed lost and goes through
+ * exact cleanup; before it, absence only means the node has not published
+ * yet, and the append is neither retried nor abandoned.
+ */
+export const corpusIndexAcceptedAppendConfirmationWindowMs = (
+  manifest: CorpusIndexManifest,
+): number =>
+  CORPUS_PROJECTION_ACCEPTED_APPEND_PUBLISH_PERIODS *
+  corpusIndexAppendPublishDelayMs(manifest);

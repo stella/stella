@@ -34,6 +34,8 @@ import {
 } from "@/api/lib/legal-search/corpus-index-projection-desired-state";
 import {
   CORPUS_PROJECTION_APPEND_MAX_REVISIONS,
+  CORPUS_PROJECTION_DELETE_MAX_REVISIONS,
+  corpusIndexAcceptedAppendConfirmationWindowMs,
   corpusIndexUnknownAppendBarrierAt,
 } from "@/api/lib/legal-search/corpus-index-projection-engine";
 import {
@@ -46,6 +48,7 @@ import {
   entityIdsForCorpusProjectionWorkScope,
   indexIdForCorpusProjectionWorkScope,
   type CorpusProjectionAppendScopedWorkOptions,
+  type CorpusProjectionScopedWorkOptions,
 } from "@/api/lib/legal-search/corpus-index-projection-scope";
 import {
   corpusIndexProjectionIntentIsOutstanding,
@@ -1010,6 +1013,91 @@ const isStillDesiredProjection = (
   state.desiredFingerprint === intent.fingerprint &&
   state.desiredIndexId === intent.indexId;
 
+type ScheduleAppendRetryOptions = {
+  state: typeof corpusIndexProjectionStates.$inferSelect;
+  intent: typeof corpusIndexProjectionIntents.$inferSelect;
+  errorMessage: string;
+  rejection: CorpusIndexError["rejection"];
+  fault: "document" | "engine";
+  transitionAt: Date;
+};
+
+/**
+ * Charge (or not) the still-desired state of an append that was given up, and
+ * schedule its retry or park it. Caller holds the state lock.
+ */
+const scheduleAppendRetryTx = async (
+  tx: Transaction,
+  {
+    state,
+    intent,
+    errorMessage,
+    rejection,
+    fault,
+    transitionAt,
+  }: ScheduleAppendRetryOptions,
+): Promise<
+  Exclude<CorpusProjectionAppendAbandonResult, { status: "lease_lost" }>
+> => {
+  let kind: CorpusIndexProjectionFailureKind = "append_unknown";
+  if (rejection === "definite") {
+    kind = "append_rejected";
+  } else if (rejection === "transient") {
+    kind = "append_transient";
+  }
+  const isolated = intent.appendRequestRevisionCount === 1;
+  const documentFault = fault === "document" && rejection !== "transient";
+  const charge = documentFault && isolated;
+  const failureAttempts = state.failureAttempts + (charge ? 1 : 0);
+  let attemptLimit = CORPUS_PROJECTION_APPEND_UNKNOWN_ATTEMPT_LIMIT;
+  if (rejection === "definite") {
+    attemptLimit = CORPUS_PROJECTION_APPEND_REJECTED_ATTEMPT_LIMIT;
+  }
+  const blocked = charge && failureAttempts >= attemptLimit;
+  const retryDelayMs = Math.min(
+    CORPUS_PROJECTION_APPEND_RETRY_CAP_MS,
+    CORPUS_PROJECTION_APPEND_RETRY_BASE_MS *
+      2 ** Math.min(Math.max(failureAttempts - 1, 0), 6),
+  );
+  // audit: skip - projection bookkeeping for the shared public corpus index; no tenant actor
+  const updated = await tx
+    .update(corpusIndexProjectionStates)
+    .set({
+      workStatus: blocked ? "blocked" : "retry_scheduled",
+      retryNotBefore: blocked
+        ? null
+        : new Date(transitionAt.getTime() + retryDelayMs),
+      failureAttempts,
+      appendMode: documentFault && !isolated ? "single" : state.appendMode,
+      lastFailureKind: kind,
+      lastFailureMessage: errorMessage.slice(0, 2048),
+      updatedAt: transitionAt,
+    })
+    .where(
+      and(
+        eq(corpusIndexProjectionStates.family, intent.family),
+        eq(corpusIndexProjectionStates.generation, intent.generation),
+        eq(corpusIndexProjectionStates.entityId, intent.entityId),
+        eq(corpusIndexProjectionStates.desiredAction, "upsert"),
+        eq(corpusIndexProjectionStates.desiredEpoch, intent.epoch),
+        eq(corpusIndexProjectionStates.desiredFingerprint, intent.fingerprint),
+        eq(corpusIndexProjectionStates.desiredIndexId, intent.indexId),
+      ),
+    )
+    .returning({ entityId: corpusIndexProjectionStates.entityId });
+  if (updated.length !== 1) {
+    return panic(`Projection append failure CAS failed: ${intent.id}`);
+  }
+  return blocked
+    ? {
+        status: "blocked",
+        entityId: intent.entityId,
+        kind,
+        attempts: failureAttempts,
+      }
+    : { status: "cleanup_pending" };
+};
+
 /** Failed append outcomes are assumed written and cleaned exactly before retry. */
 export const abandonCorpusProjectionAppendTx = async (
   tx: Transaction,
@@ -1079,62 +1167,14 @@ export const abandonCorpusProjectionAppendTx = async (
   if (!isStillDesiredProjection(state, intent)) {
     return { status: "cleanup_pending" };
   }
-  let kind: CorpusIndexProjectionFailureKind = "append_unknown";
-  if (rejection === "definite") {
-    kind = "append_rejected";
-  } else if (rejection === "transient") {
-    kind = "append_transient";
-  }
-  const isolated = intent.appendRequestRevisionCount === 1;
-  const documentFault = fault === "document" && rejection !== "transient";
-  const charge = documentFault && isolated;
-  const failureAttempts = state.failureAttempts + (charge ? 1 : 0);
-  let attemptLimit = CORPUS_PROJECTION_APPEND_UNKNOWN_ATTEMPT_LIMIT;
-  if (rejection === "definite") {
-    attemptLimit = CORPUS_PROJECTION_APPEND_REJECTED_ATTEMPT_LIMIT;
-  }
-  const blocked = charge && failureAttempts >= attemptLimit;
-  const retryDelayMs = Math.min(
-    CORPUS_PROJECTION_APPEND_RETRY_CAP_MS,
-    CORPUS_PROJECTION_APPEND_RETRY_BASE_MS *
-      2 ** Math.min(Math.max(failureAttempts - 1, 0), 6),
-  );
-  const updated = await tx
-    .update(corpusIndexProjectionStates)
-    .set({
-      workStatus: blocked ? "blocked" : "retry_scheduled",
-      retryNotBefore: blocked
-        ? null
-        : new Date(transitionAt.getTime() + retryDelayMs),
-      failureAttempts,
-      appendMode: documentFault && !isolated ? "single" : state.appendMode,
-      lastFailureKind: kind,
-      lastFailureMessage: errorMessage.slice(0, 2048),
-      updatedAt: transitionAt,
-    })
-    .where(
-      and(
-        eq(corpusIndexProjectionStates.family, intent.family),
-        eq(corpusIndexProjectionStates.generation, intent.generation),
-        eq(corpusIndexProjectionStates.entityId, intent.entityId),
-        eq(corpusIndexProjectionStates.desiredAction, "upsert"),
-        eq(corpusIndexProjectionStates.desiredEpoch, intent.epoch),
-        eq(corpusIndexProjectionStates.desiredFingerprint, intent.fingerprint),
-        eq(corpusIndexProjectionStates.desiredIndexId, intent.indexId),
-      ),
-    )
-    .returning({ entityId: corpusIndexProjectionStates.entityId });
-  if (updated.length !== 1) {
-    return panic(`Projection append failure CAS failed: ${intent.id}`);
-  }
-  return blocked
-    ? {
-        status: "blocked",
-        entityId: intent.entityId,
-        kind,
-        attempts: failureAttempts,
-      }
-    : { status: "cleanup_pending" };
+  return await scheduleAppendRetryTx(tx, {
+    state,
+    intent,
+    errorMessage,
+    rejection,
+    fault,
+    transitionAt,
+  });
 };
 
 export type UnparkCorpusProjectionAppendOptions = {
@@ -1225,36 +1265,17 @@ export const unparkCorpusProjectionAppendTx = async (
   return "unparked";
 };
 
-type CommitCorpusProjectionAppendOptions = {
-  intentId: ProjectionIntentId;
-  leaseToken: string;
-  documentCount: number;
-  testNow?: Date;
+type LockedAppendRows = {
+  manifest: CorpusIndexManifest;
+  state: typeof corpusIndexProjectionStates.$inferSelect | undefined;
+  intent: typeof corpusIndexProjectionIntents.$inferSelect | undefined;
 };
 
-export type CommitCorpusProjectionAppendResult =
-  | { status: "applied"; entityId: string }
-  | { status: "stale_cleanup_pending"; entityId: string }
-  | { status: "lease_lost" };
-
-/**
- * Finalize a published, presence-confirmed append and its authoritative state
- * in one transaction. The executor confirms outside this transaction.
- * A desired-state race cannot publish: the exact new revision is redirected to
- * cleanup instead, behind the barrier that makes that cleanup exact.
- */
-export const commitCorpusProjectionAppendTx = async (
+/** Manifest, then state, then intent: the order every append transition takes. */
+const lockAppendRowsTx = async (
   tx: Transaction,
-  {
-    intentId,
-    leaseToken,
-    documentCount,
-    testNow,
-  }: CommitCorpusProjectionAppendOptions,
-): Promise<CommitCorpusProjectionAppendResult> => {
-  if (!Number.isSafeInteger(documentCount) || documentCount < 1) {
-    return panic("Projection append document count must be a positive integer");
-  }
+  intentId: ProjectionIntentId,
+): Promise<LockedAppendRows | null> => {
   const identities = await tx
     .select({
       family: corpusIndexProjectionIntents.family,
@@ -1266,7 +1287,7 @@ export const commitCorpusProjectionAppendTx = async (
     .limit(1);
   const identity = identities.at(0);
   if (identity === undefined) {
-    return { status: "lease_lost" };
+    return null;
   }
   const manifest = await lockRegisteredCorpusProjectionManifestForMutation(
     tx,
@@ -1285,15 +1306,96 @@ export const commitCorpusProjectionAppendTx = async (
     )
     .limit(1)
     .for("update");
-  const state = states.at(0);
   const intents = await tx
     .select()
     .from(corpusIndexProjectionIntents)
     .where(eq(corpusIndexProjectionIntents.id, intentId))
     .limit(1)
     .for("update");
-  const intent = intents.at(0);
-  if (intent === undefined) {
+  return { manifest, state: states.at(0), intent: intents.at(0) };
+};
+
+type RedirectAppendToCleanupOptions = {
+  intentId: ProjectionIntentId;
+  fence: ReturnType<typeof corpusProjectionAcceptedAppendCleanupFence>;
+  lastError: string;
+  transitionAt: Date | SQL<Date>;
+  expectedDocumentCount?: number;
+};
+
+/** Send an accepted (or possibly accepted) append to exact cleanup. */
+const redirectAppendToCleanupTx = async (
+  tx: Transaction,
+  {
+    intentId,
+    fence,
+    lastError,
+    transitionAt,
+    expectedDocumentCount,
+  }: RedirectAppendToCleanupOptions,
+): Promise<void> => {
+  // audit: skip - projection bookkeeping for the shared public corpus index; no tenant actor
+  await tx
+    .update(corpusIndexProjectionIntents)
+    .set({
+      status: "cleanup_pending",
+      leaseToken: null,
+      leaseExpiresAt: null,
+      ...fence,
+      ...(expectedDocumentCount === undefined ? {} : { expectedDocumentCount }),
+      lastError,
+      updatedAt: transitionAt,
+    })
+    .where(eq(corpusIndexProjectionIntents.id, intentId));
+};
+
+type AcceptCorpusProjectionAppendOptions = {
+  intentId: ProjectionIntentId;
+  leaseToken: string;
+  documentCount: number;
+  testNow?: Date;
+};
+
+export type AcceptCorpusProjectionAppendResult =
+  | { status: "accepted"; entityId: string }
+  | { status: "stale_cleanup_pending"; entityId: string }
+  | { status: "lease_lost" };
+
+/**
+ * Record that the engine accepted (or may have accepted) an append. Acceptance
+ * is not publication: the revision stays `append_committed`, outstanding, so
+ * nothing re-reserves the entity, until a census confirms it searchable or its
+ * confirmation window closes. The row keeps its token because the status shape
+ * requires one, but no worker holds it: `lease_expires_at` becomes the
+ * publication deadline, which expiry recovery does not read for this status.
+ *
+ * A desired-state race cannot advance: the revision goes to cleanup behind a
+ * barrier measured from this transition, which is later than the acceptance
+ * it stands in for.
+ */
+export const acceptCorpusProjectionAppendTx = async (
+  tx: Transaction,
+  {
+    intentId,
+    leaseToken,
+    documentCount,
+    testNow,
+  }: AcceptCorpusProjectionAppendOptions,
+): Promise<AcceptCorpusProjectionAppendResult> => {
+  if (!Number.isSafeInteger(documentCount) || documentCount < 1) {
+    return panic("Projection append document count must be a positive integer");
+  }
+  const locked = await lockAppendRowsTx(tx, intentId);
+  if (locked === null) {
+    return { status: "lease_lost" };
+  }
+  const { manifest, state, intent } = locked;
+  if (
+    intent === undefined ||
+    state === undefined ||
+    intent.leaseToken !== leaseToken ||
+    intent.status !== "append_started"
+  ) {
     return { status: "lease_lost" };
   }
   if (
@@ -1302,58 +1404,96 @@ export const commitCorpusProjectionAppendTx = async (
   ) {
     return panic(`Projection append document count changed: ${intent.id}`);
   }
+  const transitionAt = testNow ?? (await readPostgresClock(tx));
+  if (!isStillDesiredProjection(state, intent)) {
+    await redirectAppendToCleanupTx(tx, {
+      intentId: intent.id,
+      fence: corpusProjectionUnrecordedAppendCleanupFence(
+        manifest,
+        transitionAt,
+      ),
+      lastError: "projection desired state changed before acceptance",
+      transitionAt,
+      expectedDocumentCount: documentCount,
+    });
+    return { status: "stale_cleanup_pending", entityId: intent.entityId };
+  }
+  // audit: skip - projection bookkeeping for the shared public corpus index; no tenant actor
+  await tx
+    .update(corpusIndexProjectionIntents)
+    .set({
+      status: "append_committed",
+      appendCommittedAt: transitionAt,
+      expectedDocumentCount: documentCount,
+      leaseExpiresAt: new Date(
+        transitionAt.getTime() +
+          corpusIndexAcceptedAppendConfirmationWindowMs(manifest),
+      ),
+      updatedAt: transitionAt,
+    })
+    .where(eq(corpusIndexProjectionIntents.id, intent.id));
+  return { status: "accepted", entityId: intent.entityId };
+};
+
+type ConfirmCorpusProjectionAppendOptions = {
+  intentId: ProjectionIntentId;
+  /** Documents an exact revision census found searchable for this intent. */
+  observedDocumentCount: number;
+  testNow?: Date;
+};
+
+export type ConfirmCorpusProjectionAppendResult =
+  | { status: "applied"; entityId: string }
+  | { status: "stale_cleanup_pending"; entityId: string }
+  | { status: "not_confirmed" }
+  | { status: "not_accepted" };
+
+/**
+ * Promote an accepted append to authoritative state once a census observed
+ * every document it carried. The observed count is compared here, at the
+ * write, so no path records `applied` for a revision that is not searchable
+ * in full. Needs no lease: the row lock and the `append_committed` status are
+ * the claim, so a repeat is a no-op.
+ */
+export const confirmCorpusProjectionAppendTx = async (
+  tx: Transaction,
+  {
+    intentId,
+    observedDocumentCount,
+    testNow,
+  }: ConfirmCorpusProjectionAppendOptions,
+): Promise<ConfirmCorpusProjectionAppendResult> => {
+  const locked = await lockAppendRowsTx(tx, intentId);
+  if (locked === null) {
+    return { status: "not_accepted" };
+  }
+  const { manifest, state, intent } = locked;
+  if (intent === undefined) {
+    return { status: "not_accepted" };
+  }
   if (intent.status === "applied" && state?.appliedRevision === intent.id) {
     return { status: "applied", entityId: intent.entityId };
   }
+  if (state === undefined || intent.status !== "append_committed") {
+    return { status: "not_accepted" };
+  }
   if (
-    state === undefined ||
-    intent.leaseToken !== leaseToken ||
-    (intent.status !== "append_started" && intent.status !== "append_committed")
+    intent.expectedDocumentCount === null ||
+    observedDocumentCount !== intent.expectedDocumentCount
   ) {
-    return { status: "lease_lost" };
+    return { status: "not_confirmed" };
   }
-
-  const stillDesired =
-    state.desiredAction === "upsert" &&
-    state.desiredEpoch === intent.epoch &&
-    state.desiredFingerprint === intent.fingerprint &&
-    state.desiredIndexId === intent.indexId;
   const transitionAt = testNow ?? sql<Date>`clock_timestamp()`;
-  if (!stillDesired) {
-    if (intent.appendStartedAt === null) {
-      return panic(`Started projection intent has no start time: ${intent.id}`);
-    }
-    await tx
-      .update(corpusIndexProjectionIntents)
-      .set({
-        status: "cleanup_pending",
-        leaseToken: null,
-        leaseExpiresAt: null,
-        ...(intent.appendCommittedAt === null
-          ? corpusProjectionUnrecordedAppendCleanupFence(manifest, transitionAt)
-          : corpusProjectionAcceptedAppendCleanupFence(manifest, transitionAt)),
-        expectedDocumentCount: documentCount,
-        lastError: "projection desired state changed after append committed",
-        updatedAt: transitionAt,
-      })
-      .where(eq(corpusIndexProjectionIntents.id, intent.id));
-    return {
-      status: "stale_cleanup_pending",
-      entityId: intent.entityId,
-    };
+  if (!isStillDesiredProjection(state, intent)) {
+    await redirectAppendToCleanupTx(tx, {
+      intentId: intent.id,
+      fence: corpusProjectionAcceptedAppendCleanupFence(manifest, transitionAt),
+      lastError: "projection desired state changed after append committed",
+      transitionAt,
+    });
+    return { status: "stale_cleanup_pending", entityId: intent.entityId };
   }
-
-  if (intent.status === "append_started") {
-    await tx
-      .update(corpusIndexProjectionIntents)
-      .set({
-        status: "append_committed",
-        appendCommittedAt: transitionAt,
-        expectedDocumentCount: documentCount,
-        updatedAt: transitionAt,
-      })
-      .where(eq(corpusIndexProjectionIntents.id, intent.id));
-  }
+  // audit: skip - projection bookkeeping for the shared public corpus index; no tenant actor
   await tx
     .update(corpusIndexProjectionIntents)
     .set({
@@ -1364,6 +1504,7 @@ export const commitCorpusProjectionAppendTx = async (
       updatedAt: transitionAt,
     })
     .where(eq(corpusIndexProjectionIntents.id, intent.id));
+  // audit: skip - projection bookkeeping for the shared public corpus index; no tenant actor
   const applied = await tx
     .update(corpusIndexProjectionStates)
     .set({
@@ -1399,6 +1540,181 @@ export const commitCorpusProjectionAppendTx = async (
     );
   }
   return { status: "applied", entityId: intent.entityId };
+};
+
+/**
+ * Why a census gave up on an accepted append. `overdue`: still not searchable
+ * in full when its confirmation window closed. `overcounted`: the census found
+ * more documents than the append carried, which one acceptance cannot
+ * produce, so the revision cannot be applied as it stands.
+ */
+export type CorpusProjectionUnpublishedReason = "overdue" | "overcounted";
+
+type AbandonUnpublishedCorpusProjectionAppendOptions = {
+  intentId: ProjectionIntentId;
+  reason: CorpusProjectionUnpublishedReason;
+  testNow?: Date;
+};
+
+export type AbandonUnpublishedCorpusProjectionAppendResult =
+  | Exclude<CorpusProjectionAppendAbandonResult, { status: "lease_lost" }>
+  | { status: "not_due" }
+  | { status: "not_accepted" };
+
+const unpublishedAppendMessage = (
+  reason: CorpusProjectionUnpublishedReason,
+): string => {
+  switch (reason) {
+    case "overdue":
+      return "projection append was not searchable within its confirmation window";
+    case "overcounted":
+      return "projection append census found more documents than were appended";
+    default:
+      reason satisfies never;
+      return panic(`Unhandled unpublished append reason: ${String(reason)}`);
+  }
+};
+
+/**
+ * Give up an accepted append through exact cleanup. The barrier is measured
+ * from the recorded acceptance, so the delete cannot run ahead of a late
+ * publication. Charged like an expired append: an isolated revision counts
+ * toward parking, a batch mate is split out to append alone.
+ */
+export const abandonUnpublishedCorpusProjectionAppendTx = async (
+  tx: Transaction,
+  {
+    intentId,
+    reason,
+    testNow,
+  }: AbandonUnpublishedCorpusProjectionAppendOptions,
+): Promise<AbandonUnpublishedCorpusProjectionAppendResult> => {
+  const identities = await tx
+    .select({
+      family: corpusIndexProjectionIntents.family,
+      generation: corpusIndexProjectionIntents.generation,
+    })
+    .from(corpusIndexProjectionIntents)
+    .where(eq(corpusIndexProjectionIntents.id, intentId))
+    .limit(1);
+  const identity = identities.at(0);
+  if (identity === undefined) {
+    return { status: "not_accepted" };
+  }
+  await lockCorpusIndexProjectionMutationsTx(tx, [identity]);
+  const locked = await lockAppendRowsTx(tx, intentId);
+  const intent = locked?.intent;
+  if (
+    locked === null ||
+    intent === undefined ||
+    intent.status !== "append_committed"
+  ) {
+    return { status: "not_accepted" };
+  }
+  const transitionAt = testNow ?? (await readPostgresClock(tx));
+  if (
+    reason === "overdue" &&
+    (intent.leaseExpiresAt === null ||
+      intent.leaseExpiresAt.getTime() > transitionAt.getTime())
+  ) {
+    return { status: "not_due" };
+  }
+  const errorMessage = unpublishedAppendMessage(reason);
+  await redirectAppendToCleanupTx(tx, {
+    intentId: intent.id,
+    fence: corpusProjectionAcceptedAppendCleanupFence(
+      locked.manifest,
+      transitionAt,
+    ),
+    lastError: errorMessage,
+    transitionAt,
+  });
+  if (!isStillDesiredProjection(locked.state, intent)) {
+    return { status: "cleanup_pending" };
+  }
+  return await scheduleAppendRetryTx(tx, {
+    state: locked.state,
+    intent,
+    errorMessage,
+    rejection: "unknown",
+    fault: "document",
+    transitionAt,
+  });
+};
+
+type ReadAcceptedCorpusProjectionAppendsOptions<Family extends CorpusFamily> =
+  CorpusProjectionScopedWorkOptions<Family> & {
+    generation: string;
+    limit: number;
+  };
+
+export type AcceptedCorpusProjectionAppend = {
+  intentId: ProjectionIntentId;
+  indexId: string;
+  expectedDocumentCount: number;
+  /** Whether the confirmation window had closed when the row was read. */
+  publication: "awaited" | "overdue";
+};
+
+/**
+ * The oldest accepted appends awaiting confirmation, read without locks: the
+ * census runs between this read and the transitions, and each transition
+ * re-locks and rechecks its row.
+ */
+export const readAcceptedCorpusProjectionAppendsTx = async <
+  Family extends CorpusFamily,
+>(
+  tx: Transaction,
+  {
+    family,
+    generation,
+    limit,
+    scope = CORPUS_PROJECTION_GENERATION_SCOPE,
+  }: ReadAcceptedCorpusProjectionAppendsOptions<Family>,
+): Promise<AcceptedCorpusProjectionAppend[]> => {
+  if (
+    !Number.isSafeInteger(limit) ||
+    limit < 1 ||
+    limit > CORPUS_PROJECTION_DELETE_MAX_REVISIONS
+  ) {
+    return panic(
+      `Corpus projection confirmation batch size must be an integer from 1 to ${CORPUS_PROJECTION_DELETE_MAX_REVISIONS}`,
+    );
+  }
+  const scopedEntityIds = entityIdsForCorpusProjectionWorkScope(scope);
+  const rows = await tx
+    .select({
+      intentId: corpusIndexProjectionIntents.id,
+      indexId: corpusIndexProjectionIntents.indexId,
+      expectedDocumentCount: corpusIndexProjectionIntents.expectedDocumentCount,
+      overdue: sql<boolean>`${corpusIndexProjectionIntents.leaseExpiresAt} <= clock_timestamp()`,
+    })
+    .from(corpusIndexProjectionIntents)
+    .where(
+      and(
+        eq(corpusIndexProjectionIntents.family, family),
+        eq(corpusIndexProjectionIntents.generation, generation),
+        eq(corpusIndexProjectionIntents.status, "append_committed"),
+        scopedEntityIds === null
+          ? undefined
+          : inArray(corpusIndexProjectionIntents.entityId, scopedEntityIds),
+      ),
+    )
+    .orderBy(
+      asc(corpusIndexProjectionIntents.appendCommittedAt),
+      asc(corpusIndexProjectionIntents.id),
+    )
+    .limit(limit);
+  return rows.map((row) => ({
+    intentId: row.intentId,
+    indexId: row.indexId,
+    expectedDocumentCount:
+      row.expectedDocumentCount ??
+      panic(
+        `Accepted projection append has no document count: ${row.intentId}`,
+      ),
+    publication: row.overdue ? "overdue" : "awaited",
+  }));
 };
 
 type CancelCorpusProjectionReservationOptions = {

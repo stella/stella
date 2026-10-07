@@ -1,16 +1,22 @@
-import { Result } from "better-result";
 import { expect, test } from "bun:test";
 
 import { PayloadBudgetError } from "@/api/lib/compression";
 import {
-  CORPUS_PROJECTION_APPEND_COMMIT_MODE,
+  CORPUS_INDEX_INGEST_TIMEOUT_MS,
+  CorpusIndexError,
+  isCorpusIndexRequestTimeout,
+} from "@/api/lib/legal-search/corpus-index-client";
+import { CORPUS_INDEX_MANIFESTS } from "@/api/lib/legal-search/corpus-index-manifest";
+import {
   CORPUS_PROJECTION_APPEND_MAX_REQUEST_BYTES,
+  corpusIndexAcceptedAppendConfirmationWindowMs,
+  corpusIndexAppendPublishDelayMs,
 } from "@/api/lib/legal-search/corpus-index-projection-engine";
 import {
   advanceCorpusProjectionAppendTails,
   classifyCorpusProjectionPayloadReadFailure,
-  ingestCorpusProjectionRequest,
 } from "@/api/lib/legal-search/corpus-index-projection-executor";
+import { CORPUS_PROJECTION_LEASE_MAX_MS } from "@/api/lib/legal-search/corpus-index-projection-store";
 import { S3ObjectBudgetError } from "@/api/lib/s3";
 
 test("payload budget failures block on the first read", () => {
@@ -205,37 +211,28 @@ test("a multipart revision flushes alone between ordinary revisions", () => {
   ).toEqual(["last"]);
 });
 
-test("all coordinator modes wait for publication, including serving catch-up", async () => {
-  const calls: string[] = [];
-  const client = {
-    ingestCommittedBatch: async () => {
-      calls.push(CORPUS_PROJECTION_APPEND_COMMIT_MODE.published);
-      return Result.ok(undefined);
-    },
-    ingestQueuedBatch: async () => {
-      calls.push(CORPUS_PROJECTION_APPEND_COMMIT_MODE.queued);
-      return Result.ok(undefined);
-    },
-  };
-
-  for (const commitMode of Object.values(
-    CORPUS_PROJECTION_APPEND_COMMIT_MODE,
-  )) {
-    expect(
-      (
-        await ingestCorpusProjectionRequest(client, {
-          commitMode,
-          indexId: "case_law_v5_cs_sk",
-          ndjson: '{"document_id":"a"}',
-        })
-      ).isOk(),
-    ).toBe(true);
+test("an accepted append outlives every client budget and append lease before it is given up", () => {
+  for (const manifest of Object.values(CORPUS_INDEX_MANIFESTS)) {
+    const windowMs = corpusIndexAcceptedAppendConfirmationWindowMs(manifest);
+    expect(windowMs).toBeGreaterThan(CORPUS_PROJECTION_LEASE_MAX_MS);
+    expect(windowMs).toBeGreaterThan(CORPUS_INDEX_INGEST_TIMEOUT_MS);
+    expect(windowMs).toBeGreaterThan(corpusIndexAppendPublishDelayMs(manifest));
   }
+});
 
-  expect(calls).toEqual([
-    CORPUS_PROJECTION_APPEND_COMMIT_MODE.published,
-    CORPUS_PROJECTION_APPEND_COMMIT_MODE.published,
-  ]);
+test("only an expired budget reads as a request timeout", () => {
+  const aborted = new Error("The operation timed out.");
+  aborted.name = "TimeoutError";
+  const refused = new Error("connect ECONNREFUSED");
+  expect(
+    [
+      new CorpusIndexError({ message: "aborted", cause: aborted }),
+      new CorpusIndexError({ message: "engine timeout", status: 408 }),
+      new CorpusIndexError({ message: "refused", cause: refused }),
+      new CorpusIndexError({ message: "gateway", status: 503 }),
+      new CorpusIndexError({ message: "rejected", status: 400 }),
+    ].map(isCorpusIndexRequestTimeout),
+  ).toEqual([true, true, false, false, false]);
 });
 
 /**

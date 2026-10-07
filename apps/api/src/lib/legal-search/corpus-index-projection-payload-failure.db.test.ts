@@ -32,7 +32,6 @@ import {
 import { deriveCorpusIndexProjectionDescriptor } from "@/api/lib/legal-search/corpus-index-projection-descriptor";
 import { legislationProjectionInputFromCanonical } from "@/api/lib/legal-search/corpus-index-projection-desired-state";
 import {
-  CORPUS_PROJECTION_APPEND_COMMIT_MODE,
   CORPUS_PROJECTION_APPEND_MAX_SINGLE_REVISION_BYTES,
   planCorpusProjectionAppendRequests,
 } from "@/api/lib/legal-search/corpus-index-projection-engine";
@@ -168,12 +167,7 @@ afterAll(async () => {
 test("unreadable payloads are persisted as they are read, not once the batch drains", async () => {
   const result = await executeCorpusProjectionAppendCycle({
     runInTransaction,
-    client: {
-      ingestCommittedBatch: unusedIngest,
-      ingestQueuedBatch: unusedIngest,
-      aggregate: unusedIngest,
-    },
-    commitMode: CORPUS_PROJECTION_APPEND_COMMIT_MODE.published,
+    client: { ingestQueuedBatch: unusedIngest },
     family: TARGET.family,
     generation: TARGET.generation,
     scope: CORPUS_PROJECTION_GENERATION_SCOPE,

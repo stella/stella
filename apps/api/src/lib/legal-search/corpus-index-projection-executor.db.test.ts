@@ -17,9 +17,9 @@ import {
   CORPUS_INDEX_MANIFESTS,
   corpusIndexManifestDigest,
 } from "@/api/lib/legal-search/corpus-index-manifest";
+import { confirmCorpusProjectionAppends } from "@/api/lib/legal-search/corpus-index-projection-confirmation";
 import { deriveCorpusIndexProjectionDescriptor } from "@/api/lib/legal-search/corpus-index-projection-descriptor";
 import { legislationProjectionInputFromCanonical } from "@/api/lib/legal-search/corpus-index-projection-desired-state";
-import { CORPUS_PROJECTION_APPEND_COMMIT_MODE } from "@/api/lib/legal-search/corpus-index-projection-engine";
 import { executeCorpusProjectionAppendCycle } from "@/api/lib/legal-search/corpus-index-projection-executor";
 import { CORPUS_PROJECTION_GENERATION_SCOPE } from "@/api/lib/legal-search/corpus-index-projection-scope";
 import { CORPUS_PROJECTION_APPEND_UNKNOWN_ATTEMPT_LIMIT } from "@/api/lib/legal-search/corpus-index-projection-store";
@@ -118,12 +118,17 @@ const projectionStates = async (entityIds: readonly string[]) =>
     )
     .orderBy(corpusIndexProjectionStates.entityId);
 
+type Presence = "complete" | "missing" | "partial" | "unavailable";
+
+/**
+ * One append cycle, then one confirmation pass against a census that reports
+ * the accepted documents as `presence` says.
+ */
 const runLegislationCycle = async ({
   entityIds,
   text,
   ingest,
   presence = "complete",
-  commitMode = CORPUS_PROJECTION_APPEND_COMMIT_MODE.published,
 }: {
   entityIds: readonly SafeId<"legislationDocument">[];
   text: string;
@@ -131,32 +136,42 @@ const runLegislationCycle = async ({
     indexId: string,
     ndjson: string,
   ) => Promise<Result<void, CorpusIndexError>>;
-  presence?: "complete" | "missing" | "partial" | "unavailable";
-  commitMode?: (typeof CORPUS_PROJECTION_APPEND_COMMIT_MODE)[keyof typeof CORPUS_PROJECTION_APPEND_COMMIT_MODE];
+  presence?: Presence;
 }) => {
-  const publishedCounts = new Map<string, number>();
-  return await executeCorpusProjectionAppendCycle({
+  const acceptedCounts = new Map<string, number>();
+  const cycle = await executeCorpusProjectionAppendCycle({
     runInTransaction,
     client: {
-      ingestCommittedBatch: async (indexId, ndjson) => {
+      ingestQueuedBatch: async (indexId, ndjson) => {
         const result = await ingest(indexId, ndjson);
-        if (result.isErr() || presence === "missing") {
+        if (result.isErr()) {
           return result;
         }
         for (const line of ndjson.split("\n")) {
           const { projection_revision } = JSON.parse(line);
           if (typeof projection_revision !== "string") {
-            panic("Published document has no revision");
+            panic("Accepted document has no revision");
           }
-          publishedCounts.set(
+          acceptedCounts.set(
             projection_revision,
-            (publishedCounts.get(projection_revision) ?? 0) + 1,
+            (acceptedCounts.get(projection_revision) ?? 0) + 1,
           );
         }
         return result;
       },
-      ingestQueuedBatch: async () =>
-        panic("Projection append must wait for publication"),
+    },
+    ...LEGISLATION_TARGET,
+    scope: { type: "subjects", entityIds },
+    limit: entityIds.length,
+    leaseMs: 600_000,
+    payloadReadConcurrency: 2,
+    retryDelayMs: 5000,
+    payloadRetryLimit: 3,
+    payloadReader: async () => ({ text, ast: null }),
+  });
+  const confirmation = await confirmCorpusProjectionAppends({
+    runInTransaction,
+    client: {
       aggregate: async ({ query }) => {
         if (presence === "unavailable") {
           return Result.err(
@@ -168,9 +183,21 @@ const runLegislationCycle = async ({
         }
         return Result.ok({
           projection_revisions: {
-            buckets: Array.from(publishedCounts, ([key, count]) => ({
+            buckets: Array.from(acceptedCounts, ([key, count]) => ({
               key,
-              doc_count: presence === "partial" ? count - 1 : count,
+              doc_count: (() => {
+                switch (presence) {
+                  case "complete":
+                    return count;
+                  case "partial":
+                    return count - 1;
+                  case "missing":
+                    return 0;
+                  default:
+                    presence satisfies never;
+                    return panic(`Unhandled presence: ${String(presence)}`);
+                }
+              })(),
             })).filter(
               ({ key, doc_count }) =>
                 query.includes(`"${key}"`) && doc_count > 0,
@@ -181,16 +208,11 @@ const runLegislationCycle = async ({
         });
       },
     },
-    commitMode,
     ...LEGISLATION_TARGET,
     scope: { type: "subjects", entityIds },
     limit: entityIds.length,
-    leaseMs: 600_000,
-    payloadReadConcurrency: 2,
-    retryDelayMs: 5000,
-    payloadRetryLimit: 3,
-    payloadReader: async () => ({ text, ast: null }),
   });
+  return { ...cycle, confirmation };
 };
 
 const makeRetryDue = async (entityIds: readonly string[]) => {
@@ -231,17 +253,10 @@ const runInTransaction = async <TResult>(
 const unusedIngest = async () =>
   panic("An idle projection cycle must not reach the engine");
 
-const runCycle = async (
-  commitMode: (typeof CORPUS_PROJECTION_APPEND_COMMIT_MODE)[keyof typeof CORPUS_PROJECTION_APPEND_COMMIT_MODE],
-) =>
+const runCycle = async () =>
   await executeCorpusProjectionAppendCycle({
     runInTransaction,
-    client: {
-      ingestCommittedBatch: unusedIngest,
-      ingestQueuedBatch: unusedIngest,
-      aggregate: unusedIngest,
-    },
-    commitMode,
+    client: { ingestQueuedBatch: unusedIngest },
     family: TARGET.family,
     generation: TARGET.generation,
     scope: CORPUS_PROJECTION_GENERATION_SCOPE,
@@ -281,26 +296,22 @@ afterAll(async () => {
   await client.close();
 });
 
-test("every cycle reports one timing per phase, in both commit modes", async () => {
-  for (const commitMode of Object.values(
-    CORPUS_PROJECTION_APPEND_COMMIT_MODE,
-  )) {
-    const result = await runCycle(commitMode);
+test("every cycle reports one timing per phase", async () => {
+  const result = await runCycle();
 
-    expect(result.status).toBe("idle");
-    expect(result.requestCount).toBe(0);
-    // The caller logs these, so a phase that stops being measured has to
-    // fail here rather than quietly report zero forever.
-    expect(result.timing).toEqual({
-      reservationMs: expect.any(Number),
-      materialReadMs: 0,
-      payloadLoadMs: 0,
-      documentBuildMs: 0,
-      ingestMs: 0,
-      storeCommitMs: 0,
-    });
-    expect(result.timing.reservationMs).toBeGreaterThanOrEqual(0);
-  }
+  expect(result.status).toBe("idle");
+  expect(result.requestCount).toBe(0);
+  // The caller logs these, so a phase that stops being measured has to
+  // fail here rather than quietly report zero forever.
+  expect(result.timing).toEqual({
+    reservationMs: expect.any(Number),
+    materialReadMs: 0,
+    payloadLoadMs: 0,
+    documentBuildMs: 0,
+    ingestMs: 0,
+    storeCommitMs: 0,
+  });
+  expect(result.timing.reservationMs).toBeGreaterThanOrEqual(0);
 });
 
 test("repeated 413 cycles park only the rejected revision after its healthy batch mate succeeds", async () => {
@@ -378,7 +389,8 @@ test("repeated 413 cycles park only the rejected revision after its healthy batc
       ingest,
     });
     expect(third.status).toBe("completed");
-    expect(third.applied).toBe(1);
+    expect(third.accepted).toBe(1);
+    expect(third.confirmation.applied).toBe(1);
     expect(third.requestCount).toBe(1);
     expect(requestSizes).toEqual([2, 1, 1]);
     expect(await projectionStates([healthyEntity])).toEqual([
@@ -593,26 +605,29 @@ test("an act above the absolute ceiling parks with a counted outcome and an even
 test.each([
   ["missing", 80],
   ["partial", 82],
-  ["unavailable", 84],
 ] as const)(
-  "ingest OK with %s publication never records applied progress",
+  "an accepted append with %s publication awaits confirmation without applied progress",
   async (presence, index) => {
     const entityIds = await seedLegislation([index, index + 1]);
-    let accepted = 0;
+    let requests = 0;
     const result = await runLegislationCycle({
       entityIds,
       text: "An act with searchable passages.\n\n".repeat(200),
       ingest: async () => {
-        accepted += 1;
+        requests += 1;
         return Result.ok(undefined);
       },
       presence,
-      commitMode: CORPUS_PROJECTION_APPEND_COMMIT_MODE.queued,
     });
-    expect(accepted).toBeGreaterThan(0);
-    expect(result.status).toBe("engine_unavailable");
-    expect(result.applied).toBe(0);
-    expect(result.unknownCleanupPending).toBe(2);
+    expect(requests).toBeGreaterThan(0);
+    expect(result.status).toBe("completed");
+    expect(result.accepted).toBe(2);
+    expect(result.confirmation).toMatchObject({
+      status: "completed",
+      applied: 0,
+      awaitingPublication: 2,
+      unpublishedCleanupPending: 0,
+    });
     const states = await db
       .select()
       .from(corpusIndexProjectionStates)
@@ -620,24 +635,45 @@ test.each([
     expect(states).toHaveLength(2);
     for (const state of states) {
       expect(state.appliedAction).toBeNull();
-      expect(state.appliedEpoch).toBeNull();
       expect(state.appliedRevision).toBeNull();
-      expect(state.appliedFingerprint).toBeNull();
-      expect(state.appliedIndexId).toBeNull();
       expect(state.appliedAt).toBeNull();
     }
     const intents = await db
       .select()
       .from(corpusIndexProjectionIntents)
       .where(inArray(corpusIndexProjectionIntents.entityId, entityIds));
-    expect(intents).toHaveLength(2);
-    expect(intents.every(({ status }) => status === "cleanup_pending")).toBe(
-      true,
-    );
+    expect(intents.map(({ status }) => status)).toEqual([
+      "append_committed",
+      "append_committed",
+    ]);
   },
 );
 
-test("a serving generation waits for publication and confirms the whole batch even in queued catch-up", async () => {
+test("a census outage confirms nothing and backs off without abandoning", async () => {
+  const entityIds = await seedLegislation([84, 85]);
+  const result = await runLegislationCycle({
+    entityIds,
+    text: "A published act.",
+    ingest: async () => Result.ok(undefined),
+    presence: "unavailable",
+  });
+  expect(result.accepted).toBe(2);
+  expect(result.confirmation).toMatchObject({
+    status: "engine_unavailable",
+    applied: 0,
+    unpublishedCleanupPending: 0,
+  });
+  expect(result.confirmation.cycleRetryDelayMs).toBeGreaterThan(0);
+  const intents = await db
+    .select()
+    .from(corpusIndexProjectionIntents)
+    .where(inArray(corpusIndexProjectionIntents.entityId, entityIds));
+  expect(intents.every(({ status }) => status === "append_committed")).toBe(
+    true,
+  );
+});
+
+test("a serving generation records acceptance, then applies the whole batch once the census finds it", async () => {
   const entityIds = await seedLegislation([90, 91]);
   await db
     .update(corpusIndexGenerations)
@@ -650,10 +686,10 @@ test("a serving generation waits for publication and confirms the whole batch ev
       entityIds,
       text: "A published act.",
       ingest: async () => Result.ok(undefined),
-      commitMode: CORPUS_PROJECTION_APPEND_COMMIT_MODE.queued,
     });
     expect(result.status).toBe("completed");
-    expect(result.applied).toBe(2);
+    expect(result.accepted).toBe(2);
+    expect(result.confirmation.applied).toBe(2);
     const states = await db
       .select()
       .from(corpusIndexProjectionStates)

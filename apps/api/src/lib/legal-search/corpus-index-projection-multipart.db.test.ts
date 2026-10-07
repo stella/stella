@@ -19,13 +19,13 @@ import {
   CORPUS_INDEX_MANIFESTS,
   corpusIndexManifestDigest,
 } from "@/api/lib/legal-search/corpus-index-manifest";
+import { confirmCorpusProjectionAppends } from "@/api/lib/legal-search/corpus-index-projection-confirmation";
 import { deriveCorpusIndexProjectionDescriptor } from "@/api/lib/legal-search/corpus-index-projection-descriptor";
 import { legislationProjectionInputFromCanonical } from "@/api/lib/legal-search/corpus-index-projection-desired-state";
 import {
   censusCorpusProjectionRevisions,
   corpusIndexUnknownAppendBarrierAt,
   corpusProjectionRevisionsQuery,
-  CORPUS_PROJECTION_APPEND_COMMIT_MODE,
   deleteCorpusProjectionRevisions,
 } from "@/api/lib/legal-search/corpus-index-projection-engine";
 import { executeCorpusProjectionAppendCycle } from "@/api/lib/legal-search/corpus-index-projection-executor";
@@ -57,18 +57,34 @@ const runInTransaction = async <TResult>(
     async (tx) => await operation(asTestRaw<Transaction>(tx)),
   );
 
+/** What the fake engine has published, by projection revision. */
+const publishedCounts = new Map<string, number>();
+
+const censusClient = {
+  aggregate: async ({ query }: { query: string }) =>
+    Result.ok({
+      projection_revisions: {
+        buckets: Array.from(publishedCounts, ([key, doc_count]) => ({
+          key,
+          doc_count,
+        })).filter(({ key }) => query.includes(`"${key}"`)),
+        doc_count_error_upper_bound: 0,
+        sum_other_doc_count: 0,
+      },
+    }),
+};
+
 const runCycle = async (
-  ingestCommittedBatch: (
+  ingestQueuedBatch: (
     indexId: string,
     ndjson: string,
   ) => Promise<Result<void, CorpusIndexError>>,
-) => {
-  const revisionCounts = new Map<string, number>();
-  return await executeCorpusProjectionAppendCycle({
+) =>
+  await executeCorpusProjectionAppendCycle({
     runInTransaction,
     client: {
-      ingestCommittedBatch: async (indexId, ndjson) => {
-        const result = await ingestCommittedBatch(indexId, ndjson);
+      ingestQueuedBatch: async (indexId, ndjson) => {
+        const result = await ingestQueuedBatch(indexId, ndjson);
         if (result.isErr()) {
           return result;
         }
@@ -77,28 +93,14 @@ const runCycle = async (
           if (typeof projection_revision !== "string") {
             panic("Accepted document has no projection revision");
           }
-          revisionCounts.set(
+          publishedCounts.set(
             projection_revision,
-            (revisionCounts.get(projection_revision) ?? 0) + 1,
+            (publishedCounts.get(projection_revision) ?? 0) + 1,
           );
         }
         return result;
       },
-      ingestQueuedBatch: async () =>
-        panic("Projection append must wait for publication"),
-      aggregate: async ({ query }) =>
-        Result.ok({
-          projection_revisions: {
-            buckets: Array.from(revisionCounts, ([key, doc_count]) => ({
-              key,
-              doc_count,
-            })).filter(({ key }) => query.includes(`"${key}"`)),
-            doc_count_error_upper_bound: 0,
-            sum_other_doc_count: 0,
-          },
-        }),
     },
-    commitMode: CORPUS_PROJECTION_APPEND_COMMIT_MODE.queued,
     family: TARGET.family,
     generation: TARGET.generation,
     scope: CORPUS_PROJECTION_GENERATION_SCOPE,
@@ -108,7 +110,6 @@ const runCycle = async (
     retryDelayMs: 5000,
     payloadRetryLimit: 3,
   });
-};
 
 beforeAll(
   async () => {
@@ -198,7 +199,7 @@ afterAll(async () => {
   fake.stop();
 });
 
-test("an oversized act without an AST commits all text passages after the last part", async () => {
+test("an oversized act without an AST is accepted after the last part and applied once searchable", async () => {
   const accepted: Record<string, unknown>[][] = [];
   const result = await runCycle(async (_indexId, ndjson) => {
     accepted.push(ndjson.split("\n").map((line) => JSON.parse(line)));
@@ -211,7 +212,7 @@ test("an oversized act without an AST commits all text passages after the last p
 
   const documents = accepted.flat();
   expect(result.requestCount).toBeGreaterThan(1);
-  expect(result.applied).toBe(1);
+  expect(result.accepted).toBe(1);
   expect(documents.length).toBeGreaterThan(1);
   expect(documents.map(({ text }) => text).join("")).toBe(TEXT);
   expect(documents.filter(({ is_opening }) => is_opening)).toHaveLength(1);
@@ -226,8 +227,22 @@ test("an oversized act without an AST commits all text passages after the last p
     })
     .from(corpusIndexProjectionIntents);
   expect(intents).toEqual([
-    { status: "applied", expectedDocumentCount: documents.length },
+    { status: "append_committed", expectedDocumentCount: documents.length },
   ]);
+
+  const confirmed = await confirmCorpusProjectionAppends({
+    runInTransaction,
+    client: censusClient,
+    family: TARGET.family,
+    generation: TARGET.generation,
+    limit: 8,
+  });
+  expect(confirmed).toMatchObject({ status: "completed", applied: 1 });
+  expect(
+    await db
+      .select({ status: corpusIndexProjectionIntents.status })
+      .from(corpusIndexProjectionIntents),
+  ).toEqual([{ status: "applied" }]);
 });
 
 test("a later part failure leaves the whole revision pending cleanup", async () => {

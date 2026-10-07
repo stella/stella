@@ -618,6 +618,15 @@ const isAborted = (error: unknown): boolean =>
   error instanceof Error &&
   (error.name === "TimeoutError" || error.name === "AbortError");
 
+/**
+ * Whether a request ran out of time before its outcome was known: this
+ * client's budget expired, or the engine answered 408. Unlike a refused
+ * connection, the engine may still have acted on the request, so the outcome
+ * has to be read back rather than assumed either way.
+ */
+export const isCorpusIndexRequestTimeout = (error: CorpusIndexError): boolean =>
+  error.status === 408 || isAborted(error.cause);
+
 type RequestFailureOptions = {
   request: CorpusIndexRequest;
   error: unknown;

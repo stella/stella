@@ -1407,8 +1407,7 @@
   {
     "id": "apps/api/src/lib/legal-search/corpus-index-projection-store.ts::abandonCorpusProjectionAppendTx",
     "writes": {
-      "update:corpusIndexProjectionIntents": 1,
-      "update:corpusIndexProjectionStates": 1
+      "update:corpusIndexProjectionIntents": 1
     },
     "reason": "Shared public corpus or index maintenance with no tenant actor."
   },
@@ -1423,14 +1422,6 @@
     "id": "apps/api/src/lib/legal-search/corpus-index-projection-store.ts::classifyCorpusProjectionReservationFailureTx",
     "writes": {
       "update:corpusIndexProjectionIntents": 1,
-      "update:corpusIndexProjectionStates": 1
-    },
-    "reason": "Shared public corpus or index maintenance with no tenant actor."
-  },
-  {
-    "id": "apps/api/src/lib/legal-search/corpus-index-projection-store.ts::commitCorpusProjectionAppendTx",
-    "writes": {
-      "update:corpusIndexProjectionIntents": 3,
       "update:corpusIndexProjectionStates": 1
     },
     "reason": "Shared public corpus or index maintenance with no tenant actor."
