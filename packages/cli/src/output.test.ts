@@ -735,7 +735,6 @@ describe("audit detail status output", () => {
         const envelope = { result: { items: [item], nextCursor: null } };
         const payload = parsePayload({
           content: [{ type: "text", text: JSON.stringify(envelope) }],
-          structuredContent: envelope,
         });
         const plan = buildRenderPlan({
           payload,

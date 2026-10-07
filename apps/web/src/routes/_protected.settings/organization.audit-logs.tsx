@@ -28,6 +28,7 @@ import { DatePickerPopover } from "@/components/date-picker-popover";
 import { useFormatter } from "@/i18n/formatting-context";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
+import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { detached } from "@/lib/detached";
 import { APIError, unwrapEden } from "@/lib/errors/api";
 import { notifyUserError } from "@/lib/errors/user-toast";
@@ -48,7 +49,13 @@ export const Route = createFileRoute(
   loader: async ({ context }) => {
     await prefetchRouteQuery(
       context.queryClient,
-      auditLogOptions({ key: { limit: AUDIT_LOG_PAGE_LIMIT } }),
+      auditLogOptions({
+        viewer: {
+          userId: context.user.id,
+          organizationId: context.user.activeOrganizationId,
+        },
+        key: { limit: AUDIT_LOG_PAGE_LIMIT },
+      }),
       (error: unknown) => {
         getAnalytics().captureError(error);
       },
@@ -61,6 +68,7 @@ const AUDIT_LOG_PAGE_LIMIT = 20;
 
 function AuditLogsPage() {
   const t = useTranslations();
+  const user = useAuthenticatedUser();
   const [cursor, setCursor] = useState<string | undefined>(undefined);
   const [cursorHistory, setCursorHistory] = useState<(string | undefined)[]>(
     [],
@@ -94,7 +102,10 @@ function AuditLogsPage() {
   };
 
   const { data, isLoading, isError, isFetching } = useQuery({
-    ...auditLogOptions({ key: queryParams }),
+    ...auditLogOptions({
+      viewer: { userId: user.id, organizationId: user.activeOrganizationId },
+      key: queryParams,
+    }),
     placeholderData: keepPreviousData,
   });
 

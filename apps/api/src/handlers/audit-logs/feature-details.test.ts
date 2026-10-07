@@ -256,6 +256,9 @@ describe("audit operation details follow verification enrolment", () => {
         const csv = await exportAuditLogs.handler(
           asTestRaw<Parameters<typeof exportAuditLogs.handler>[0]>(fixture()),
         );
+        if (typeof csv !== "string") {
+          throw new TypeError("Expected the export to return CSV text");
+        }
         expect(csv).toContain(",legal_list_item,resource_test,");
         expect(
           csv.endsWith(visible ? ",visible" : ",feature_unavailable"),
