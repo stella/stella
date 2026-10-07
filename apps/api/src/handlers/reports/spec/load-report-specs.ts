@@ -151,7 +151,7 @@ const readPrompts = (dir: string): Map<string, string> => {
 };
 
 /** Every `<dir>/spec.json` directly under `specsDir`. */
-export const readReportSpecSourcesFromDir = (
+const readReportSpecSourcesFromDir = (
   specsDir: string,
 ): Result<Map<string, ReportSpecSource>, ConfigurationError> => {
   if (!(existsSync(specsDir) && statSync(specsDir).isDirectory())) {
