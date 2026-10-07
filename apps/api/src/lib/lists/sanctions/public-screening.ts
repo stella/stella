@@ -1,4 +1,4 @@
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 
 import { DEFAULT_CUTOFF } from "@stll/sanctions";
 
@@ -121,13 +121,26 @@ export const createPublicSanctionsScreening = ({
               cutoff: DEFAULT_CUTOFF,
               limit,
             });
-            return reply.status === "screened"
-              ? Result.ok(reply.result)
-              : Result.err({
+            switch (reply.status) {
+              case "screened":
+                return Result.ok(reply.result);
+              case "work-limit":
+                return Result.err({
+                  code: "load-failed",
+                  stage: "public-matcher",
+                  reason: "work-limit",
+                } as const);
+              case "unavailable":
+              case "entries-loaded":
+                return Result.err({
                   code: "load-failed",
                   stage: "public-matcher",
                   reason: "matcher-unavailable",
                 } as const);
+              default:
+                reply satisfies never;
+                return panic("Unhandled sanctions matcher reply");
+            }
           },
         }),
       options,

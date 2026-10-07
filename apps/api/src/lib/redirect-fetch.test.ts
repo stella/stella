@@ -243,12 +243,14 @@ describe("streamed redirect lifecycle", () => {
       if (result.isErr()) {
         expect(result.error.message).not.toContain("secret");
         expect(result.error.code).toBe(
-          {
-            loop: "too_many_redirects",
-            missing: "missing_location",
-            invalid: "invalid_location",
-            cancel: "body_cancel_failed",
-          }[scenario],
+          (
+            {
+              loop: "too_many_redirects",
+              missing: "missing_location",
+              invalid: "invalid_location",
+              cancel: "body_cancel_failed",
+            } as const
+          )[scenario],
         );
       }
     }

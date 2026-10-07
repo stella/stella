@@ -421,13 +421,15 @@ export const createSanctionsMatcherPoolCore = ({
             });
             if (
               response.status !== "screened" &&
+              response.status !== "work-limit" &&
               !isSanctionsMatcherCancelled(controller.signal)
             ) {
               fail("worker-reply");
             }
             if (
               !isSanctionsMatcherCancelled(controller.signal) &&
-              (response.status === "screened" || request.list !== null)
+              (response.status === "screened" ||
+                response.status === "work-limit")
             ) {
               slot.editions.set(request.source, request.editionId);
             }

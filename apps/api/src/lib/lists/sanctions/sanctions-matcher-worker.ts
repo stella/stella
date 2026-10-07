@@ -79,12 +79,15 @@ port.on("message", (request: SanctionsMatcherMessage) => {
     cutoff: request.cutoff,
     limit: request.limit,
   });
-  port.postMessage(
-    result.isOk()
-      ? ({
-          status: "screened",
-          result: result.value,
-        } satisfies SanctionsMatcherReply)
-      : ({ status: "unavailable" } satisfies SanctionsMatcherReply),
-  );
+  if (result.isErr()) {
+    if (result.error.code !== "work-limit") {
+      panic("A validated sanctions worker query was rejected");
+    }
+    port.postMessage({ status: "work-limit" } satisfies SanctionsMatcherReply);
+    return;
+  }
+  port.postMessage({
+    status: "screened",
+    result: result.value,
+  } satisfies SanctionsMatcherReply);
 });

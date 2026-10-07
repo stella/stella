@@ -735,3 +735,86 @@ test("lease settlement callbacks fire exactly once after work, including acquisi
     await active;
   }
 });
+
+test("real worker work exhaustion retains its edition and screens the next cached query without reload", async () => {
+  const template = list("Acme").entries.at(0);
+  if (template === undefined) {
+    throw new TypeError("Missing work-limit fixture entry");
+  }
+  const corpus = {
+    version: list("Acme").version,
+    entries: Array.from({ length: 20_000 }, (_, index) => ({
+      ...template,
+      sourceId: `work-limit-${index}`,
+      names: [
+        {
+          name: `Registered Entity ${index} Holdings`,
+          quality: "strong" as const,
+        },
+      ],
+    })),
+  } satisfies ParsedList;
+  const query = {
+    name: "Registered a b c d e f g h i j k l m n o p q r s t u v z",
+    entityType: "organisation" as const,
+  };
+  const direct = screen(buildScreeningIndex([corpus]), query, {
+    cutoff: DEFAULT_CUTOFF,
+    limit: 10,
+  });
+  expect(direct.isErr() && direct.error.code).toBe("work-limit");
+  const recorded = recordingMatcherWorker();
+  const reports: Parameters<typeof reportSanctionsScreeningFailure>[0][] = [];
+  let spawned = 0;
+  const pool = createSanctionsMatcherPool({
+    clock: createMatcherTestClock(),
+    reportFailure: (report) => reports.push(report),
+    createWorker: () => {
+      spawned += 1;
+      return recorded.createWorker();
+    },
+  });
+  try {
+    const requestBase = {
+      source: "eu",
+      editionId: "work-limit",
+      cutoff: DEFAULT_CUTOFF,
+      limit: 10,
+    } as const;
+    expect(
+      await pool.run(
+        async (session) =>
+          await session.match({ ...requestBase, list: corpus, query }),
+      ),
+    ).toEqual({ status: "completed", value: { status: "work-limit" } });
+    const transferred = { ...recorded.work };
+    const safeQuery = {
+      name: "Registered Entity 42 Holdings",
+      entityType: "organisation" as const,
+    };
+    const expected = screen(buildScreeningIndex([corpus]), safeQuery, {
+      cutoff: DEFAULT_CUTOFF,
+      limit: 10,
+    }).unwrap();
+    expect(
+      await pool.run(async (session) => {
+        expect(session.hasEdition("eu", "work-limit")).toBe(true);
+        return await session.match({
+          ...requestBase,
+          list: null,
+          query: safeQuery,
+        });
+      }),
+    ).toEqual({
+      status: "completed",
+      value: { status: "screened", result: expected },
+    });
+    expect(recorded.work.entries).toBe(transferred.entries);
+    expect(recorded.work.entryBatches).toBe(transferred.entryBatches);
+    expect(recorded.work.screenings).toBe(transferred.screenings + 1);
+    expect(spawned).toBe(1);
+    expect(reports).toEqual([]);
+  } finally {
+    await pool.close();
+  }
+});

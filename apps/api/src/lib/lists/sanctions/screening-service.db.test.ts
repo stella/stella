@@ -1253,3 +1253,67 @@ test("a stalled cold read retains one warmup after its deadline until underlying
     await pool.close();
   }
 });
+
+test("public matcher work exhaustion reports the typed list cause without pool failure or warmup", async () => {
+  const poolReports: Parameters<typeof reportSanctionsScreeningFailure>[0][] =
+    [];
+  const reports: Parameters<typeof reportSanctionsScreeningFailure>[0][] = [];
+  const pool = createSanctionsMatcherPool({
+    clock: createMatcherTestClock(),
+    reportFailure: (report) => poolReports.push(report),
+  });
+  let leases = 0;
+  const publicScreen = createPublicSanctionsScreening({
+    reportFailure: (report) => reports.push(report),
+    pool: {
+      ...pool,
+      run: async (work, options) => {
+        leases += 1;
+        return await pool.run(
+          async (session) =>
+            await work({
+              ...session,
+              hasEdition: () => true,
+              match: async () => ({ status: "work-limit" }),
+            }),
+          options,
+        );
+      },
+    },
+    loadEntries: async () => {
+      throw new TypeError("A cached edition must not reload");
+    },
+  });
+  try {
+    const result = await publicScreen({
+      db: requestDb,
+      subject: {
+        type: "organization",
+        name: "Synthetic Company",
+        identifiers: [],
+      },
+      practiceJurisdictions: [],
+      now: FRESH_NOW,
+    });
+    expect(
+      result
+        .unwrap()
+        .lists.every(
+          (list) =>
+            list.status === "unavailable" && list.reason === "load-failed",
+        ),
+    ).toBe(true);
+    expect(reports).toEqual(
+      result.unwrap().lists.map(({ source }) => ({
+        stage: "public-matcher",
+        reason: "work-limit",
+        error: undefined,
+        source,
+      })),
+    );
+    expect(poolReports).toEqual([]);
+    expect(leases).toBe(1);
+  } finally {
+    await pool.close();
+  }
+});
