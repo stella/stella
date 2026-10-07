@@ -180,5 +180,6 @@
       "role": "analysis",
       "cancelInProgress": true
     }
-  }
+  },
+  "periodicJobs": ["ci.yml/release-typecheck"]
 }

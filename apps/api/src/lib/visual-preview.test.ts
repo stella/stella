@@ -78,7 +78,7 @@ test("projects unavailable preview as text while preserving publishing success",
     title: "Example",
     preview: {
       status: "unavailable",
-      reason: "unavailable",
+      reason: "not-configured",
       message: result.error.message,
     },
   });
@@ -129,7 +129,7 @@ describe("visual preview invocation", () => {
     });
     expect(Result.isError(result)).toBe(true);
     if (Result.isError(result)) {
-      expect(result.error.code).toBe("unavailable");
+      expect(result.error.code).toBe("not-configured");
     }
   });
   test("aborts on deadline even when the transport does not settle", async () => {

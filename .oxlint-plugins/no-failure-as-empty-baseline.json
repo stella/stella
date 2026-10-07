@@ -30,7 +30,6 @@
     "apps/api/src/lib/buffer-intent-reconciliation.ts::reconcileBufferObjectCleanupIntents::result-error-returns-empty#1": "Existing site pending review: return a ReadOutcome or propagate the failure.",
     "apps/api/src/lib/buffer-intent-reconciliation.ts::reconcileStaleBufferIntentBatch::result-error-returns-empty#1": "Existing site pending review: return a ReadOutcome or propagate the failure.",
     "apps/api/src/lib/case-law/court-presentation.ts::readCourtRegistry::result-error-returns-empty#1": "Existing site pending review: return a ReadOutcome or propagate the failure.",
-    "apps/api/src/lib/case-law/research-answer-runner.ts::retrievePassages::result-error-returns-empty#1": "Existing site pending review: return a ReadOutcome or propagate the failure.",
     "apps/api/src/lib/document-processing-queue.ts::runSearchIndexReplayAttempt::result-error-returns-empty#1": "Existing site pending review: return a ReadOutcome or propagate the failure.",
     "apps/api/src/lib/document-processing-readiness.ts::isDocumentOcrWorkerAvailable::result-error-returns-empty#1": "Existing site pending review: return a ReadOutcome or propagate the failure.",
     "apps/api/src/lib/docx-stamp.ts::extractStamp::catch-returns-empty#1": "Existing site pending review: return a ReadOutcome or propagate the failure.",
