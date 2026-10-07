@@ -20,6 +20,7 @@ import { Tabs, TabsList, TabsPanel, TabsTab } from "@stll/ui/tabs";
 
 import { AnchorFactsPanel } from "@/features/avt/anchor-facts-panel";
 import { DocumentVerifications } from "@/features/avt/document-verifications";
+import { EvidenceListEmptyState } from "@/features/avt/evidence-list-empty-state";
 import { VerificationDetail } from "@/features/avt/verification-detail";
 import { usePermissions } from "@/hooks/use-permissions";
 import { notifyUserError } from "@/lib/errors/user-toast";
@@ -44,6 +45,10 @@ export const AvtView = ({
 }: AvtViewProps) => {
   const t = useTranslations();
   const listId = view.layout.listId;
+  // The view's loader has already read the workspace's lists.
+  const {
+    data: { items: lists },
+  } = useSuspenseQuery(legalListsOptions(workspaceId));
 
   if (runId !== undefined) {
     return (
@@ -56,6 +61,14 @@ export const AvtView = ({
           runId={runId}
           workspaceId={workspaceId}
         />
+      </div>
+    );
+  }
+
+  if (lists.length === 0) {
+    return (
+      <div className="flex flex-col gap-4 p-4">
+        <EvidenceListEmptyState workspaceId={workspaceId} />
       </div>
     );
   }
@@ -134,7 +147,7 @@ const EvidenceListPicker = ({
         {t("avt.view.evidenceList")}
       </span>
       <Select
-        disabled={!canUpdateView || items.length === 0}
+        disabled={!canUpdateView}
         onValueChange={(next) => {
           if (next !== null && next !== view.layout.listId) {
             pick(next);
@@ -143,13 +156,7 @@ const EvidenceListPicker = ({
         value={view.layout.listId}
       >
         <SelectTrigger aria-label={t("avt.view.evidenceList")} size="sm">
-          <SelectValue
-            placeholder={
-              items.length === 0
-                ? t("avt.view.noLists")
-                : t("avt.view.chooseList")
-            }
-          />
+          <SelectValue placeholder={t("avt.view.chooseList")} />
         </SelectTrigger>
         <SelectPopup>
           {items.map((list) => (

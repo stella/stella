@@ -349,6 +349,7 @@
     },
     "view": {
       "chooseList": "Vybrat seznam",
+      "createList": "Vytvořit seznam",
       "evidenceList": "Fakta ze seznamu",
       "noLists": "Tento spis nemá žádné seznamy.",
       "pickList": "Vyberte seznam, s jehož fakty se porovnávají dokumenty tohoto spisu."

@@ -349,6 +349,7 @@
     },
     "view": {
       "chooseList": "Elegir una lista",
+      "createList": "Crear una lista",
       "evidenceList": "Hechos de",
       "noLists": "Este asunto no tiene listas.",
       "pickList": "Elija la lista con cuyos hechos se contrastan los documentos de este asunto."

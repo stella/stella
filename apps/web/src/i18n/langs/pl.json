@@ -349,6 +349,7 @@
     },
     "view": {
       "chooseList": "Wybierz listę",
+      "createList": "Utwórz listę",
       "evidenceList": "Fakty z listy",
       "noLists": "Ta sprawa nie ma żadnych list.",
       "pickList": "Wybierz listę, względem której faktów są weryfikowane dokumenty tej sprawy."

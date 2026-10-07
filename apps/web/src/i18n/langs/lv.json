@@ -349,6 +349,7 @@
     },
     "view": {
       "chooseList": "Izvēlēties sarakstu",
+      "createList": "Izveidot sarakstu",
       "evidenceList": "Fakti no",
       "noLists": "Šai lietai nav sarakstu.",
       "pickList": "Izvēlieties sarakstu, pret kura faktiem tiek pārbaudīti šīs lietas dokumenti."

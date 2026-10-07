@@ -349,6 +349,7 @@
     },
     "view": {
       "chooseList": "Pasirinkti sąrašą",
+      "createList": "Sukurti sąrašą",
       "evidenceList": "Faktai iš",
       "noLists": "Šioje byloje nėra sąrašų.",
       "pickList": "Pasirinkite sąrašą, pagal kurio faktus tikrinami šios bylos dokumentai."
