@@ -16,6 +16,10 @@ import type {
   ConcurrencyOnlyActionKind,
   QUEUED_ACTION_KIND,
 } from "./action-kinds";
+import {
+  admitModelDispatch,
+  type ModelDispatchAdmission,
+} from "./model-dispatch-admission";
 
 // BullMQ delays do not consume the job's failure attempts. A busy pool never hot-loops.
 const MIN_ADMISSION_RETRY_MS = 1000;
@@ -79,6 +83,43 @@ export const runQueuedKickoff = async <T>({
   return result.value;
 };
 
+type ScheduledBackgroundWorkOptions<T> = {
+  actionKind: ConcurrencyOnlyActionKind;
+  organizationId: SafeId<"organization">;
+  userId: SafeId<"user">;
+  run: (
+    signal: AbortSignal,
+    modelAdmission: ModelDispatchAdmission,
+  ) => Promise<T>;
+  admission?: typeof withActionAdmission;
+};
+
+/**
+ * Background work a scheduler drains without a queue job takes a background
+ * slot like a queued job. A refusal is returned: the work stays due and the
+ * next drain retries it.
+ */
+export const runScheduledBackgroundWork = async <T>({
+  actionKind,
+  organizationId,
+  userId,
+  run,
+  admission = withActionAdmission,
+}: ScheduledBackgroundWorkOptions<T>): Promise<Result<T, unknown>> =>
+  await admission({
+    organizationId,
+    userId,
+    execution: "background-job",
+    actionKind,
+    run: async (leaseSignal) =>
+      await admitModelDispatch({
+        organizationId,
+        actionKind,
+        signal: leaseSignal,
+        run: async (modelAdmission) => await run(leaseSignal, modelAdmission),
+      }),
+  });
+
 type BackgroundJobOptions<T> = {
   actionKind: ConcurrencyOnlyActionKind;
   organizationId: SafeId<"organization">;
@@ -89,7 +130,10 @@ type BackgroundJobOptions<T> = {
     moveToDelayed: (timestamp: number, token?: string) => Promise<void>;
   };
   signal: AbortSignal;
-  run: (signal: AbortSignal) => Promise<T>;
+  run: (
+    signal: AbortSignal,
+    modelAdmission: ModelDispatchAdmission,
+  ) => Promise<T>;
   admission?: typeof withActionAdmission;
   now?: () => number;
   random?: () => number;
@@ -116,7 +160,15 @@ export const runBackgroundJob = async <T>({
     actionKind,
     run: async (leaseSignal) => {
       executionState.phase = "started";
-      return await run(AbortSignal.any([signal, leaseSignal]));
+      // Dispatches on the proof abort with the lease even where a job body
+      // discards the run signal.
+      return await admitModelDispatch({
+        organizationId,
+        actionKind,
+        signal: leaseSignal,
+        run: async (modelAdmission) =>
+          await run(AbortSignal.any([signal, leaseSignal]), modelAdmission),
+      });
     },
   });
   if (Result.isOk(result)) {

@@ -19,12 +19,13 @@ import type { ActionCostObservation } from "@/api/lib/usage/action-costs/context
 import { FREE_TIER_OFF } from "@/api/lib/usage/organization-access";
 import type { OrganizationAccessSnapshot } from "@/api/lib/usage/organization-access-snapshot";
 import {
+  FREE_WITHOUT_OWN_KEY,
   ORGANIZATION_MODEL_CREDENTIALS,
   type OrganizationActionState,
 } from "@/api/lib/usage/organization-action-budget";
 import { mcpActionPeriodIdentity } from "@/api/mcp/action-admission-identity";
 
-import { withActionAdmission } from "./action-admission";
+import { ActionAdmissionError, withActionAdmission } from "./action-admission";
 import {
   ACTION_KINDS,
   ACTION_SERVICE_CREDENTIALS,
@@ -86,6 +87,80 @@ const recordingRedis = () => {
 };
 
 describe("organization budgets at action admission", () => {
+  test("a period refusal names the reset of the budget it exhausted", async () => {
+    const hourMs = 3_600_000;
+    const weekMs = 7 * serviceBudgetConfig.periodMs;
+    const exhausted = {
+      send: async (_command: string, args: string[]) =>
+        args.at(1) === "3" ? -1 : 1,
+    };
+    const refusalReset = async ({
+      serviceBudgetsEnabled,
+      servicePeriodMs,
+      periodPolicy,
+    }: {
+      serviceBudgetsEnabled: boolean;
+      servicePeriodMs: number | undefined;
+      periodPolicy: { periodMs: number; limit: number } | undefined;
+    }) => {
+      const result = await withActionAdmission({
+        organizationId,
+        userId,
+        enabled: true,
+        policy,
+        periodIdentity,
+        periodPolicy,
+        serviceBudgetsEnabled,
+        serviceBudgetConfig: {
+          ...serviceBudgetConfig,
+          periodMs: servicePeriodMs,
+        },
+        budgetNow: () => nowMs,
+        readOrganizationState: async () =>
+          actionState({
+            state: ORGANIZATION_ACCESS_STATE.evaluationPeriod,
+            evaluationEndsAt: new Date(nowMs + weekMs),
+          }),
+        redis: exhausted,
+        run: async () => "completed",
+      });
+      expectRefusal(result, ACTION_ADMISSION_CODES.periodExhausted);
+      return Result.isError(result) && ActionAdmissionError.is(result.error)
+        ? result.error.retryAtMs
+        : undefined;
+    };
+    const windowEnd = (periodMs: number) =>
+      (Math.floor(nowMs / periodMs) + 1) * periodMs;
+    // The generic and service windows end apart, so a reset taken from the
+    // wrong one cannot match.
+    expect(windowEnd(weekMs)).not.toBe(windowEnd(hourMs));
+
+    // Only the organization's service period is configured.
+    expect(
+      await refusalReset({
+        serviceBudgetsEnabled: true,
+        servicePeriodMs: weekMs,
+        periodPolicy: undefined,
+      }),
+    ).toBe(windowEnd(weekMs));
+    // The generic and service periods differ: the service budget refused.
+    expect(
+      await refusalReset({
+        serviceBudgetsEnabled: true,
+        servicePeriodMs: weekMs,
+        periodPolicy: { periodMs: hourMs, limit: 3 },
+      }),
+    ).toBe(windowEnd(weekMs));
+    // Without service budgets the generic period refuses.
+    expect(
+      await refusalReset({
+        serviceBudgetsEnabled: false,
+        servicePeriodMs: weekMs,
+        periodPolicy: { periodMs: hourMs, limit: 3 },
+      }),
+    ).toBe(windowEnd(hourMs));
+  });
+
   test("queued reservations resolve organization budgets at acceptance on fresh and inherited leases", async () => {
     for (const ownership of ["fresh", "inherited"] as const) {
       for (const acceptance of ["capped", "accepted", "expired"] as const) {
@@ -771,6 +846,128 @@ describe("the free floor's service budget", () => {
     );
   });
 
+  test("every model action kind draws the free budget on managed models and none on the organization's own key", async () => {
+    const registered = Object.keys(ACTION_KINDS).filter(
+      (kind): kind is keyof typeof ACTION_KINDS =>
+        Object.hasOwn(ACTION_KINDS, kind),
+    );
+    const modelKinds = registered.filter(
+      (kind): kind is PeriodActionKind =>
+        ACTION_KINDS[kind].admission === "period" &&
+        ACTION_KINDS[kind].serviceCredentials ===
+          ACTION_SERVICE_CREDENTIALS.organizationModel,
+    );
+    expect(modelKinds.length).toBeGreaterThan(0);
+    for (const actionKind of modelKinds) {
+      const own = countingRedis();
+      for (let action = 0; action <= FREE_ACTIONS; action += 1) {
+        expect(
+          await admitOnFree({
+            actionKind,
+            modelCredentials: ORGANIZATION_MODEL_CREDENTIALS.organization,
+            redis: own,
+          }),
+        ).toEqual(Result.ok("completed"));
+      }
+      expect(own.periodAcquisitions()).toBe(0);
+
+      if (FREE_WITHOUT_OWN_KEY[actionKind] === "off") {
+        continue;
+      }
+      const managed = countingRedis();
+      for (let action = 0; action < FREE_ACTIONS; action += 1) {
+        expect(
+          await admitOnFree({
+            actionKind,
+            modelCredentials: ORGANIZATION_MODEL_CREDENTIALS.managed,
+            redis: managed,
+          }),
+        ).toEqual(Result.ok("completed"));
+      }
+      expectRefusal(
+        await admitOnFree({
+          actionKind,
+          modelCredentials: ORGANIZATION_MODEL_CREDENTIALS.managed,
+          redis: managed,
+        }),
+        ACTION_ADMISSION_CODES.periodExhausted,
+      );
+    }
+  });
+
+  test("every helper the free floor does not offer refuses without a model key before any coordination or run", async () => {
+    const offKinds = SERVICE_PERIOD_KINDS.filter(
+      (kind) => FREE_WITHOUT_OWN_KEY[kind] === "off",
+    );
+    expect(offKinds.toSorted()).toEqual(
+      (
+        [
+          "chat.suggest-thread-title",
+          "chat.suggested-prompts",
+          "chat.thread-recap",
+          "editor.autocomplete",
+          "entities.suggest-placements",
+          "properties.suggest-prompt",
+          "templates.suggest-fields",
+        ] satisfies typeof offKinds
+      ).toSorted(),
+    );
+    for (const actionKind of offKinds) {
+      const redis = countingRedis();
+      let ran = false;
+      const result = await withActionAdmission({
+        organizationId,
+        userId,
+        enabled: true,
+        policy,
+        serviceBudgetsEnabled: true,
+        serviceBudgetConfig,
+        periodIdentity: { actionKind, logicalPhaseId: Bun.randomUUIDv7() },
+        budgetNow: () => nowMs,
+        readOrganizationState: async () =>
+          freeActionState(ORGANIZATION_MODEL_CREDENTIALS.managed),
+        redis: redis.client,
+        run: async () => {
+          ran = true;
+          return "completed";
+        },
+      });
+      expect(Result.isError(result)).toBe(true);
+      if (Result.isError(result)) {
+        expect(result.error).toBeInstanceOf(ActionAdmissionError);
+        expect(result.error).toMatchObject({
+          reason: "not_on_plan",
+          code: ACTION_ADMISSION_CODES.notEnabled,
+        });
+      }
+      expect(ran).toBe(false);
+      expect(redis.commands).toHaveLength(0);
+
+      // Outside the free floor the helper is offered and counted per kind.
+      const evaluation = countingRedis();
+      expect(
+        await withActionAdmission({
+          organizationId,
+          userId,
+          enabled: true,
+          policy,
+          serviceBudgetsEnabled: true,
+          serviceBudgetConfig,
+          periodIdentity: { actionKind, logicalPhaseId: Bun.randomUUIDv7() },
+          budgetNow: () => nowMs,
+          readOrganizationState: async () =>
+            actionState({
+              state: ORGANIZATION_ACCESS_STATE.evaluationPeriod,
+              evaluationEndsAt: new Date(nowMs + 1),
+            }),
+          redis: evaluation.client,
+          run: async () => "completed",
+        }),
+      ).toEqual(Result.ok("completed"));
+      expect(evaluation.periodAcquisitions()).toBe(1);
+    }
+  });
+
   test("managed services stay counted on the organization's own key", async () => {
     const redis = countingRedis();
     for (let call = 0; call < FREE_ACTIONS; call += 1) {
@@ -907,6 +1104,10 @@ describe("the free floor's service budget", () => {
                 ACTION_SERVICE_CREDENTIALS.organizationModel &&
               modelCredentials === ORGANIZATION_MODEL_CREDENTIALS.organization
             );
+            const offered = !(
+              FREE_WITHOUT_OWN_KEY[actionKind] === "off" &&
+              modelCredentials === ORGANIZATION_MODEL_CREDENTIALS.managed
+            );
             const exhausted = draws && (counted[period] ?? 0) >= FREE_ACTIONS;
             let ran = false;
             const logicalPhaseId = Bun.randomUUIDv7();
@@ -934,6 +1135,13 @@ describe("the free floor's service budget", () => {
                 return "completed";
               },
             });
+            if (!offered) {
+              expect(result).toMatchObject({
+                error: { reason: "not_on_plan" },
+              });
+              expect(ran).toBe(false);
+              continue;
+            }
             if (exhausted) {
               expectRefusal(result, ACTION_ADMISSION_CODES.periodExhausted);
               expect(ran).toBe(false);

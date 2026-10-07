@@ -7,6 +7,7 @@ import { organizationSettings } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
   ACTION_SERVICE_CREDENTIALS,
+  type ActionKind,
   type ActionServiceCredentials,
 } from "@/api/lib/rate-limit/action-kinds";
 import {
@@ -75,6 +76,97 @@ export const actionDrawsServiceBudget = ({
     case "ended":
     case "unavailable":
       return true;
+    default:
+      access satisfies never;
+      return panic("Unhandled organization access");
+  }
+};
+
+/**
+ * What the free floor offers an organization without its own model key, per
+ * kind. `off`: a helper the plan does not offer; admission refuses it before
+ * any model call. `counts`: offered; a service-consuming kind draws the
+ * pooled free budget (background kinds through their counted parent).
+ */
+export const FREE_WITHOUT_OWN_KEY = {
+  "chat.send": "counts",
+  // The automatic title of a counted chat send rides on that send.
+  "chat.generate-thread-title": "counts",
+  "chat.improve-prompt": "counts",
+  "chat.suggest-thread-title": "off",
+  "chat.suggested-prompts": "off",
+  "chat.thread-recap": "off",
+  "chat.background": "counts",
+  "workflow.start": "counts",
+  "flow.start": "counts",
+  "workflow.background": "counts",
+  "flow.background": "counts",
+  "editor.autocomplete": "off",
+  "contacts.extract-power-of-attorney": "counts",
+  "clauses.rewrite": "counts",
+  "templates.prefill": "counts",
+  "templates.suggest-fields": "off",
+  "templates.fill": "counts",
+  "skills.rewrite-resource": "counts",
+  "skills.generate-draft": "counts",
+  "skills.propose-from-comments": "counts",
+  "time-entries.polish-narrative": "counts",
+  "entities.suggest-placements": "off",
+  "versions.summarize": "counts",
+  "properties.suggest-prompt": "off",
+  "properties.preview": "counts",
+  "search.refine": "counts",
+  "search.summarize": "counts",
+  "playbooks.derive-ask": "counts",
+  "case-law.analysis": "counts",
+  "case-law.search-refine": "counts",
+  "case-law.search-expand": "counts",
+  "case-law.research-answers": "counts",
+  "documents.bounding-boxes": "counts",
+  "documents.scan-deadlines": "counts",
+  "document-reviews.parties": "counts",
+  "document-reviews.propose-positions": "counts",
+  "document-reviews.start": "counts",
+  "document-reviews.background": "counts",
+  "document-translation.start": "counts",
+  "document-translation.background": "counts",
+  "bilingual.prepare": "counts",
+  "bilingual.start": "counts",
+  "bilingual.background": "counts",
+  "list-verification.start": "counts",
+  "list-verification.background": "counts",
+  "report-export.start": "counts",
+  "report-export.background": "counts",
+  "mcp.services/call": "counts",
+  "mcp.data/call": "counts",
+} as const satisfies Record<ActionKind, "counts" | "off">;
+
+export type ActionPlanAvailability = "offered" | "not_on_plan";
+
+type ActionPlanAvailabilityOptions = {
+  access: OrganizationAccess;
+  actionKind: ActionKind;
+  modelCredentials: OrganizationModelCredentials;
+};
+
+/** Whether the organization's standing offers this kind at all. */
+export const actionPlanAvailability = ({
+  access,
+  actionKind,
+  modelCredentials,
+}: ActionPlanAvailabilityOptions): ActionPlanAvailability => {
+  switch (access.type) {
+    case "free":
+      return modelCredentials === ORGANIZATION_MODEL_CREDENTIALS.managed &&
+        FREE_WITHOUT_OWN_KEY[actionKind] === "off"
+        ? "not_on_plan"
+        : "offered";
+    case "paid":
+    case "evaluation":
+    case "self_managed_keys":
+    case "ended":
+    case "unavailable":
+      return "offered";
     default:
       access satisfies never;
       return panic("Unhandled organization access");

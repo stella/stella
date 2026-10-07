@@ -17,6 +17,7 @@ import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { ManagedAIResidency } from "@/api/lib/chat/ai-data-policy";
 import { WorkflowIntegrationError } from "@/api/lib/errors/tagged-errors";
+import type { ModelDispatchAdmission } from "@/api/lib/rate-limit/model-dispatch-admission";
 import { generateTanStackObjectForRole } from "@/api/lib/tanstack-ai-generate";
 import type {
   AIJustification,
@@ -342,6 +343,7 @@ export type GradeTierMatchArgs = {
   tiers: ResolvedTiers;
   abortSignal: AbortSignal;
   organizationId: SafeId<"organization">;
+  admission: ModelDispatchAdmission;
   workspaceId: SafeId<"workspace">;
   entityVersionId: SafeId<"entityVersion">;
   propertyId: SafeId<"property">;
@@ -357,6 +359,7 @@ export const gradeTierMatch = async ({
   tiers,
   abortSignal,
   organizationId,
+  admission,
   workspaceId,
   entityVersionId,
   propertyId,
@@ -403,6 +406,7 @@ export const gradeTierMatch = async ({
         orgAIConfig,
         managedAIResidency,
         organizationId,
+        admission,
         tenantWorkspaceIds: [workspaceId],
         analytics: aiAnalytics,
         caching: resolveCaching({
@@ -488,6 +492,7 @@ export const gradeTierMatches = async ({
   items,
   abortSignal,
   organizationId,
+  admission,
   workspaceId,
   entityVersionId,
   orgAIConfig,
@@ -535,6 +540,7 @@ export const gradeTierMatches = async ({
         orgAIConfig,
         managedAIResidency,
         organizationId,
+        admission,
         tenantWorkspaceIds: [workspaceId],
         analytics: aiAnalytics,
         caching: resolveCaching({
@@ -624,6 +630,7 @@ export type VerdictBatchOutput = {
 export type ComputeVerdictBatchArgs = {
   abortSignal: AbortSignal;
   organizationId: SafeId<"organization">;
+  admission: ModelDispatchAdmission;
   workspaceId: SafeId<"workspace">;
   scopedDb: ScopedDb;
   entityVersionId: SafeId<"entityVersion">;
@@ -656,6 +663,7 @@ export const POSITION_MATCH_CONCURRENCY = 4;
 export const computeVerdictBatch = async ({
   abortSignal,
   organizationId,
+  admission,
   workspaceId,
   scopedDb,
   entityVersionId,
@@ -768,6 +776,7 @@ export const computeVerdictBatch = async ({
           tiers: resolveVerdictTiers(property.tool),
           abortSignal,
           organizationId,
+          admission,
           workspaceId,
           entityVersionId,
           propertyId: property.id,

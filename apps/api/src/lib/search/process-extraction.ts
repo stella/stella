@@ -16,6 +16,7 @@ import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
 import { createSafeId, toSafeId } from "@/api/lib/branded-types";
 import { encryptContent } from "@/api/lib/content-encryption";
+import { lockForWrite } from "@/api/lib/db/lock-for-write";
 import { requestAutomaticDocumentOcr } from "@/api/lib/document-processing-automatic-request";
 import { DOCUMENT_NATIVE_EXTRACTION_PROCESSOR_VERSION } from "@/api/lib/document-processing-contract";
 import { enqueueDocumentProcessingRun } from "@/api/lib/document-processing-enqueue";
@@ -180,7 +181,17 @@ export const persistNativeExtractionProjection = async (
   database: Pick<typeof rootDb, "transaction">,
 ): Promise<NativeExtractionProjectionOutcome> =>
   await database.transaction(async (tx) => {
-    // Manual OCR request and projection transactions take this same lock first.
+    const parents = await lockForWrite(tx, {
+      organizationIds: [organizationId],
+      workspaceIds: [workspaceId],
+    });
+    if (
+      !parents.organizationIds.has(organizationId) ||
+      !parents.workspaceIds.has(workspaceId)
+    ) {
+      return "source_cancelled";
+    }
+    // The entity lock also serializes with manual OCR requests and projections.
     // Keeping the conditional write in the next statement gives it a fresh
     // READ COMMITTED snapshot after any lock waiter ahead of us commits.
     const lockedSources =

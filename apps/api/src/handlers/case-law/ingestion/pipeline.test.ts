@@ -127,6 +127,7 @@ const testSourceLease = (
   beforeDatabaseMark: async () => undefined,
   beforeRemoteEffect: async (effect) => await effect(),
   leaseToken: createSafeId<"caseLawSourceIngestionLease">(),
+  purpose: "ingestion",
   release: async () => undefined,
   source,
 });

@@ -56,6 +56,7 @@ import {
 import { resolveOrganizationAccess } from "@/api/lib/usage/organization-access";
 import {
   actionDrawsServiceBudget,
+  actionPlanAvailability,
   readOrganizationActionState,
   resolveOrganizationActionBudget,
   type OrganizationActionBudgetConfig,
@@ -377,7 +378,7 @@ const createAdmissionExecutor = ({
             ? staleActionPeriodTime(reply)
             : null;
         if (budget === null || storeNow === null) {
-          return Result.ok(reply);
+          return Result.ok({ reply, window: budget });
         }
 
         // A stale window has not reserved anything. Retry once using store time,
@@ -401,22 +402,25 @@ const createAdmissionExecutor = ({
             }),
           );
         }
-        if (refreshed.value === null) {
-          return Result.ok(-2);
+        const window = refreshed.value;
+        if (window === null) {
+          return Result.ok({ reply: -2, window });
         }
-        const retried = await send(refreshed.value, [
+        const retried = await send(window, [
           ...args.slice(0, 4),
-          ...actionPeriodArguments(refreshed.value),
+          ...actionPeriodArguments(window),
         ]);
-        return retried.mapError((cause) =>
-          ActionAdmissionError.is(cause)
-            ? cause
-            : new ActionAdmissionError({
-                message: "Action admission is unavailable",
-                reason: "unavailable",
-                cause,
-              }),
-        );
+        return retried
+          .map((retriedReply) => ({ reply: retriedReply, window }))
+          .mapError((cause) =>
+            ActionAdmissionError.is(cause)
+              ? cause
+              : new ActionAdmissionError({
+                  message: "Action admission is unavailable",
+                  reason: "unavailable",
+                  cause,
+                }),
+          );
       },
       catch: (error: unknown) =>
         ActionAdmissionError.is(error)
@@ -599,6 +603,20 @@ const resolveAdmissionBudget = async ({
         now: new Date(nowMs),
         freeTier: state.value.freeTier,
       });
+      if (
+        actionPlanAvailability({
+          access,
+          actionKind: periodIdentity.actionKind,
+          modelCredentials: state.value.modelCredentials,
+        }) === "not_on_plan"
+      ) {
+        return Result.err(
+          new ActionAdmissionError({
+            message: "This action is not offered on the organization's plan",
+            reason: "not_on_plan",
+          }),
+        );
+      }
       consumesServices = actionDrawsServiceBudget({
         access,
         serviceCredentials:
@@ -710,20 +728,35 @@ const configuredServiceBudgets = () => ({
   selfManagedActions: env.SERVICE_ACTIONS_SELF_MANAGED_ACTIONS,
 });
 
-const acquisitionRefusal = (reply: unknown): ActionAdmissionError | null => {
+type AdmissionReply = {
+  reply: unknown;
+  /** The period window the reply answered for, after any stale-window retry. */
+  window: ActionPeriodBudget | null;
+};
+
+const acquisitionRefusal = ({
+  reply,
+  window,
+}: AdmissionReply): ActionAdmissionError | null => {
   if (reply === ACTION_SERVICE_DEADLINE_EXPIRED) {
     return new ActionAdmissionError({
       message: "Organization service actions are not enabled",
       reason: "not_enabled",
     });
   }
-  if (reply === 0 || reply === -1) {
+  if (reply === 0) {
     return new ActionAdmissionError({
-      message:
-        reply === -1
-          ? "Action period limit reached"
-          : "Concurrent action limit reached",
-      reason: reply === -1 ? "period_exhausted" : "busy",
+      message: "Concurrent action limit reached",
+      reason: "busy",
+    });
+  }
+  // Only a counted window refuses for its period; the refusal names the
+  // window's own reset, whichever budget (generic or service) it belongs to.
+  if (reply === -1 && window !== null) {
+    return new ActionAdmissionError({
+      message: "Action period limit reached",
+      reason: "period_exhausted",
+      retryAtMs: window.endMs,
     });
   }
   if (reply !== 1) {
@@ -1194,7 +1227,7 @@ const withEnabledActionAdmission = async <T>({
       String(limits.leaseMs),
     ]);
     if (Result.isOk(result)) {
-      if (result.value !== 1) {
+      if (result.value.reply !== 1) {
         loseLease();
         return;
       }

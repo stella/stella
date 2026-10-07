@@ -36,6 +36,7 @@ import {
   buildGroundedReviewFix,
   type GroundedReviewFix,
 } from "@/api/lib/grounded-review-fix";
+import type { ModelDispatchAdmission } from "@/api/lib/rate-limit/model-dispatch-admission";
 import type { PreparedDocxFile } from "@/api/lib/workflow/generate-batch";
 import type {
   Position,
@@ -109,6 +110,7 @@ export type ReviewFinding = {
 type AiGradingDeps = {
   abortSignal: AbortSignal;
   organizationId: SafeId<"organization">;
+  admission: ModelDispatchAdmission;
   workspaceId: SafeId<"workspace">;
   entityVersionId: SafeId<"entityVersion">;
   orgAIConfig: OrgAIConfig | null;
@@ -307,6 +309,7 @@ const gradeTierMatchPositions = async ({
       })),
       abortSignal: deps.abortSignal,
       organizationId: deps.organizationId,
+      admission: deps.admission,
       workspaceId: deps.workspaceId,
       entityVersionId: deps.entityVersionId,
       orgAIConfig: deps.orgAIConfig,
@@ -450,6 +453,7 @@ const gradeReferenceStandards = async ({
         targetEntityVersionId: deps.entityVersionId,
         referenceEntityVersionIds,
         organizationId: deps.organizationId,
+        admission: deps.admission,
         workspaceId: deps.workspaceId,
         orgAIConfig: deps.orgAIConfig,
         managedAIResidency: deps.managedAIResidency,

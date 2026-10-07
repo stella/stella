@@ -203,6 +203,27 @@ if (!databaseUrl || !runPostgresTests) {
                   slug: `effective-${organizationId}`,
                   createdAt: now,
                 });
+                // Seat assignments reference a membership. Members join before
+                // any access state or entitlement can bound the organization.
+                const memberIds = Array.from({ length: ASSIGNMENTS }, () =>
+                  mintAuthProviderIdValue(),
+                );
+                await tx.insert(user).values(
+                  memberIds.map((id) => ({
+                    id,
+                    name: "Effective policy",
+                    email: `${id}@effective.test`,
+                  })),
+                );
+                await tx.insert(member).values(
+                  memberIds.map((userId, index) => ({
+                    id: mintAuthProviderIdValue(),
+                    organizationId,
+                    userId,
+                    role: index === 0 ? "owner" : "member",
+                    createdAt: now,
+                  })),
+                );
                 switch (access) {
                   case "missing":
                     break;
@@ -262,10 +283,10 @@ if (!databaseUrl || !runPostgresTests) {
                   });
                 }
                 await tx.insert(usageSeatAssignments).values(
-                  Array.from({ length: ASSIGNMENTS }, () => ({
+                  memberIds.map((userId) => ({
                     id: createSafeId<"usageSeatAssignment">(),
                     organizationId,
-                    userId: mintAuthProviderIdValue(),
+                    userId,
                   })),
                 );
               }

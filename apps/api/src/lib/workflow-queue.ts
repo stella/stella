@@ -46,6 +46,7 @@ import {
   BACKGROUND_ACTION_KIND,
   QUEUED_ACTION_KIND,
 } from "@/api/lib/rate-limit/action-kinds";
+import type { ModelDispatchAdmission } from "@/api/lib/rate-limit/model-dispatch-admission";
 import {
   runBackgroundJob,
   runQueuedKickoff,
@@ -1096,9 +1097,10 @@ const processWorkflowJob = async (
       userId: actor.userId,
       job,
       signal: controller.signal,
-      run: async (signal) =>
+      run: async (signal, admission) =>
         await processWorkflowEntityRun({
           actor,
+          admission,
           data: job.data,
           signal,
           extractionRuns,
@@ -1434,6 +1436,8 @@ const failEntity = async ({
 
 type ProcessWorkflowEntityRunOptions = {
   actor: WorkflowRunActor;
+  /** The background job's admission; the run's period action was drawn at kickoff. */
+  admission: ModelDispatchAdmission;
   data: EntityJobData;
   signal: AbortSignal;
   extractionRuns: ExtractionRunStore;
@@ -1446,6 +1450,7 @@ type ProcessWorkflowEntityRunOptions = {
  */
 export const processWorkflowEntityRun = async ({
   actor,
+  admission,
   data,
   signal,
   extractionRuns,
@@ -1517,6 +1522,7 @@ export const processWorkflowEntityRun = async ({
       operation: async (batch, batchSignal) =>
         await processOneBatch({
           actor,
+          admission,
           entityId: brandedEntityId,
           batch,
           level,
@@ -1547,6 +1553,7 @@ export const processWorkflowEntityRun = async ({
 
 type ProcessOneBatchArgs = {
   actor: WorkflowRunActor;
+  admission: ModelDispatchAdmission;
   entityId: SafeId<"entity">;
   batch: PropertyBatch;
   level: number;
@@ -1630,6 +1637,7 @@ const createBatchPreviewPublisher = ({
 
 const processOneBatch = async ({
   actor,
+  admission,
   entityId,
   batch: rawBatch,
   level,
@@ -1787,6 +1795,7 @@ const processOneBatch = async ({
         generate: async () =>
           await generateFn({
             abortSignal: signal,
+            admission,
             batch: aiBatch,
             entityVersionId,
             organizationId,
@@ -1836,6 +1845,7 @@ const processOneBatch = async ({
     if (verdictProperties.length > 0) {
       signal.throwIfAborted();
       const verdictOutput = await computeVerdictBatch({
+        admission,
         abortSignal: AbortSignal.any([
           AbortSignal.timeout(getWorkflowBatchAITimeoutMs(serviceTier)),
           signal,
