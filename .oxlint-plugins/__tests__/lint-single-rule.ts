@@ -39,6 +39,8 @@ type LintSingleRuleOptions = {
   ruleOptionsForRoot?: (root: string) => unknown;
   /** Where the source is written, relative to a scratch root. */
   sourcePath?: string;
+  /** Resolve source paths relative to the scratch checkout. */
+  cwd?: "repository" | "scratch";
 };
 
 /**
@@ -55,6 +57,7 @@ export const lintSingleRule = async (
     ruleOptions,
     ruleOptionsForRoot,
     sourcePath = "source.ts",
+    cwd = "repository",
   }: LintSingleRuleOptions = {},
 ): Promise<number[]> => {
   const directory = await mkdtemp(path.join(tmpdir(), `stella-${ruleName}-`));
@@ -84,14 +87,18 @@ export const lintSingleRule = async (
       [
         process.execPath,
         "--bun",
-        "oxlint",
+        path.join(REPOSITORY_ROOT, "node_modules/.bin/oxlint"),
         "-c",
         configPath,
         "-f",
         "json",
-        sourceFile,
+        cwd === "scratch" ? sourcePath : sourceFile,
       ],
-      { cwd: REPOSITORY_ROOT, stderr: "pipe", stdout: "pipe" },
+      {
+        cwd: cwd === "scratch" ? directory : REPOSITORY_ROOT,
+        stderr: "pipe",
+        stdout: "pipe",
+      },
     );
     const [stdout, stderr, exitCode] = await Promise.all([
       new Response(spawned.stdout).text(),
