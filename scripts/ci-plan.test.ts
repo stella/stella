@@ -28,8 +28,10 @@ import { requiresMalwareScan } from "./check-standalone-lockfiles";
 import { planCiApiTests } from "./ci-api-test-plan";
 import { CANONICAL_CANCEL_STEP } from "./ci-cancellation-contract";
 import {
+  markdownReaders,
   requiresDesktopBrowser,
   requiresLandingBuild,
+  requiresPackageChecks,
 } from "./ci-package-scope";
 import { extractPlanSelector } from "./ci-plan-selector";
 import { routeSmokeAffected } from "./detect-route-smoke-changes";
@@ -43,7 +45,10 @@ const workflow = readFileSync(
   "utf-8",
 );
 const selector = extractPlanSelector(workflow);
-const selectorStart = workflow.indexOf(selector);
+
+// The immutable repository census is shared fixture setup. Property budgets
+// measure selector cases rather than charging its cold scan to the first case.
+markdownReaders();
 
 type BashCase = {
   flags: readonly string[];
@@ -196,6 +201,11 @@ const SELECTOR_BUN_CLIS = {
 const SERVED_BUN_SHIM = `bun() {
   local script=$1 flag served
   shift
+  if [[ "$script" == scripts/ci-package-scope.ts && "\${1-}" == --package-checks ]]; then
+    shift
+    printf '%s\\n' "$SERVED_PACKAGE_CHECKS"
+    return
+  fi
   if [[ "$script" == scripts/ci-package-scope.ts && "\${1-}" == --desktop-browser ]]; then
     flag=--desktop-browser; served=$SERVED_DESKTOP_BROWSER
   else
@@ -264,6 +274,13 @@ ${selector}
 printf "%s\\n" ${outputs.map((output) => `"$${output}"`).join(" ")}`,
     args: files,
     env: {
+      // Image-only cases do not observe package/docs scope; avoid paying the
+      // repository reader census for an unrelated selector projection.
+      SERVED_PACKAGE_CHECKS: outputs.every((name) =>
+        /^(?:api|web)_image_smoke_required$/u.test(name),
+      )
+        ? "true"
+        : String(requiresPackageChecks({ changed: files })),
       E2E_LANDING_REQUIRED: e2eLandingRequired,
       EVENT_NAME: event,
       PATH: Bun.env["PATH"] ?? "",
@@ -1895,7 +1912,14 @@ test("API determinism runs only after installation for its selected scope", () =
 const packageScopeStart = workflow.indexOf(
   "          package_checks_required=true\n          if [[",
 );
-const packageScope = workflow.slice(packageScopeStart, selectorStart);
+const packageScopeEnd = workflow.indexOf(
+  "          docs_checks_required=false",
+  packageScopeStart,
+);
+if (packageScopeStart === -1 || packageScopeEnd <= packageScopeStart) {
+  panic("Package scope must be bounded by the documentation scope");
+}
+const packageScope = workflow.slice(packageScopeStart, packageScopeEnd);
 
 const packageChecksPlan = (files: readonly string[]) => {
   const process = Bun.spawnSync({
@@ -1917,6 +1941,33 @@ printf "%s\\n" "$package_checks_required"`,
   return new TextDecoder().decode(process.stdout).trim();
 };
 
+test("pull requests and merge groups use the same fail-closed package detector", () => {
+  for (const event of [EVENT.pullRequest, EVENT.mergeGroup]) {
+    for (const [fake, expected] of [
+      ["printf false", "false"],
+      ["printf true", "true"],
+      ["printf invalid", "true"],
+      ["return 1", "true"],
+    ] as const) {
+      const result = Bun.spawnSync(
+        [
+          "bash",
+          "-e",
+          "-c",
+          `bun() { ${fake}; }; changed_files=(docs/guide.md);\n${packageScope}\nprintf '%s' "$package_checks_required"`,
+        ],
+        {
+          env: { PATH: Bun.env["PATH"] ?? "", EVENT_NAME: event },
+          stdout: "pipe",
+          stderr: "pipe",
+        },
+      );
+      expect(result.exitCode, result.stderr.toString()).toBe(0);
+      expect(result.stdout.toString()).toBe(expected);
+    }
+  }
+});
+
 test("transfer read guard runs for API-only pull request changes", () => {
   const guard = jobSteps(ciJobs["ci-checks-rest"]).find(
     ({ name }) => name === "Transfer timeout and fixed read guard",
@@ -1930,13 +1981,13 @@ test("transfer read guard runs for API-only pull request changes", () => {
   expect(packageChecksPlan(["apps/api/src/handlers/files/get.ts"])).toBe(
     "true",
   );
-  expect(jobScopes["ci-checks-rest"]).toBeNull();
+  expect(jobScopes["ci-checks-rest"]).toBe("package_checks_required");
   expect(fastRequired).toContain("ci-checks-rest");
 });
 
 test("CLI packaging parity runs whenever CLI sources, codegen or generated outputs change", () => {
   expect(packageScopeStart).toBeGreaterThan(-1);
-  expect(packageScopeStart).toBeLessThan(selectorStart);
+  expect(selector).toContain(packageScope);
   const parity = Object.entries(ciJobs).flatMap(([job, body]) =>
     (v.is(v.object({ steps: v.array(v.unknown()) }), body)
       ? jobSteps(body)
@@ -1951,7 +2002,7 @@ test("CLI packaging parity runs whenever CLI sources, codegen or generated outpu
   expect(parity.at(0)?.condition).toBe(
     `\${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}`,
   );
-  expect(jobScopes["ci-checks-rest"]).toBeNull();
+  expect(jobScopes["ci-checks-rest"]).toBe("package_checks_required");
   expect(fastRequired).toContain("ci-checks-rest");
   expect(
     evaluateResult({
@@ -2685,9 +2736,7 @@ test("every parallel quality and guard leg fails closed at full depth", () => {
     "ci-checks-rest",
   ]) {
     expect(resultJob.needs).toContain(job);
-    expect(jobScopes[job]).toBe(
-      job.startsWith("code-quality-") ? "package_checks_required" : null,
-    );
+    expect(jobScopes[job]).toBe("package_checks_required");
     for (const event of FULL_DEPTH_EVENTS) {
       for (const result of ["failure", "cancelled", "skipped", ""]) {
         expect(
@@ -3686,9 +3735,9 @@ test("each folded service step follows its own dependency scope at PR depth", ()
     "true",
   ]);
   expect(runSelector(["docs/guide.md"], scopes, "full")).toEqual([
-    "true",
-    "true",
-    "true",
+    "false",
+    "false",
+    "false",
     "false",
   ]);
 });
@@ -3750,6 +3799,7 @@ test("the production service-scope capture rejects crashed or malformed detector
             PATH: `${directory}:${process.env["PATH"] ?? ""}`,
             DETECTOR_OUTPUT: output,
             DETECTOR_EXIT: exit,
+            package_checks_required: "true",
           },
           stdout: "pipe",
           stderr: "pipe",
@@ -4001,7 +4051,20 @@ test("every gated merge-group job has a required PR path or an explicit queue-on
       "pull_request",
       "fix: update checks",
     ),
-  ).toEqual(scopes.map(() => "true"));
+  ).toEqual(
+    scopes.map((scope) =>
+      scope === "docs_checks_required" ? "false" : "true",
+    ),
+  );
+  expect(
+    runSelector(
+      ["README.md", "apps/desktop/README.md"],
+      ["docs_checks_required"],
+      "fast",
+      "false",
+      "pull_request",
+    ),
+  ).toEqual(["true"]);
 });
 
 test("parity rejects new queue-only jobs, ungated PR paths and stale exemptions", () => {
@@ -4259,6 +4322,168 @@ test("the advisory base proof runs only for pull requests opting in with prove-f
   }
 });
 
+test("the exact docs-only README change plans only Markdown checks in PRs and merge groups", () => {
+  const outputs = [
+    ...new Set([
+      ...Object.values(jobScopes).filter(
+        (scope): scope is string =>
+          scope !== null && scope !== "ci_browser_required",
+      ),
+      "desktop_browser_required",
+      ...Object.values(fastJobScopes),
+      "docs_changed_files",
+    ]),
+  ];
+  for (const event of [EVENT.pullRequest, EVENT.mergeGroup]) {
+    const depth =
+      event === EVENT.pullRequest ? SUITE_DEPTH.fast : SUITE_DEPTH.full;
+    const selected = runSelector(
+      ["README.md", "apps/desktop/README.md"],
+      outputs,
+      depth,
+      "false",
+      event,
+    );
+    const plan = Object.fromEntries(
+      outputs.map((name, index) => [name, selected.at(index) ?? ""]),
+    );
+    plan["ci_browser_required"] = browserPlanOutput({
+      event,
+      depth,
+      desktopRequired: plan["desktop_browser_required"] ?? "",
+      packageChecksRequired: plan["package_checks_required"] ?? "",
+    });
+    expect(plan["package_checks_required"]).toBe("false");
+    expect(plan["docs_checks_required"]).toBe("true");
+    expect(JSON.parse(plan["docs_changed_files"] ?? "null")).toEqual([
+      "README.md",
+      "apps/desktop/README.md",
+    ]);
+    const values = {
+      "github.event_name": event,
+      "inputs.heavy_only": false,
+      "github.event.pull_request.labels.*.name": [],
+      "needs.ci-plan.outputs.trusted": "true",
+      "needs.ci-plan.outputs.run_required": "true",
+      "needs.ci-plan.outputs.suite_depth": depth,
+      "needs.ci-plan.outputs.queue_depth": "full",
+      ...Object.fromEntries(
+        Object.entries(plan).map(([name, value]) => [
+          `needs.ci-plan.outputs.${name}`,
+          value,
+        ]),
+      ),
+    };
+    const scheduled = gatedJobs.filter(
+      (job) =>
+        evaluate(jobIf(ciJobs[job]), {
+          values,
+          status: {
+            failure: false,
+            cancelled: false,
+            always: true,
+            success: true,
+          },
+        }) !== false,
+    );
+    expect(scheduled).toEqual(["ci-checks-docs"]);
+    expect(resultJob.needs).toContain("ci-checks-docs");
+    expect(fastRequired).toContain("ci-checks-docs");
+    expect(
+      evaluateResult({
+        event,
+        suiteDepth: depth,
+        results: Object.fromEntries(
+          gatedJobs
+            .filter((job) => job !== "ci-checks-docs")
+            .map((job) => [job, "skipped"]),
+        ),
+        unplannedScopes: Object.keys(plan).filter(
+          (scope) => plan[scope] !== "true",
+        ),
+      }),
+    ).toBe(0);
+    expect(
+      evaluateResult({
+        event,
+        suiteDepth: depth,
+        results: { "ci-checks-docs": "failure" },
+      }),
+    ).toBe(1);
+  }
+});
+
+test("mixed documentation and code changes retain the complete code plan", () => {
+  const outputs = [
+    ...new Set([
+      ...Object.values(jobScopes).filter(
+        (scope): scope is string =>
+          scope !== null && scope !== "ci_browser_required",
+      ),
+      "desktop_browser_required",
+      ...Object.values(fastJobScopes),
+      "docs_changed_files",
+    ]),
+  ];
+  for (const event of [EVENT.pullRequest, EVENT.mergeGroup]) {
+    const depth =
+      event === EVENT.pullRequest ? SUITE_DEPTH.fast : SUITE_DEPTH.full;
+    const code = ["apps/api/src/index.ts"];
+    const selected = runSelector(
+      [...code, "README.md", "apps/desktop/README.md"],
+      outputs,
+      depth,
+      "false",
+      event,
+    );
+    expect(selected).toEqual(runSelector(code, outputs, depth, "false", event));
+    const plan = Object.fromEntries(
+      outputs.map((name, index) => [name, selected.at(index) ?? ""]),
+    );
+    plan["ci_browser_required"] = browserPlanOutput({
+      event,
+      depth,
+      desktopRequired: plan["desktop_browser_required"] ?? "",
+      packageChecksRequired: plan["package_checks_required"] ?? "",
+    });
+    expect(plan["package_checks_required"]).toBe("true");
+    expect(plan["docs_checks_required"]).toBe("false");
+    if (event !== EVENT.mergeGroup) {
+      continue;
+    }
+    const values = {
+      "github.event_name": event,
+      "inputs.heavy_only": false,
+      "needs.ci-plan.outputs.trusted": "true",
+      "needs.ci-plan.outputs.run_required": "true",
+      "needs.ci-plan.outputs.suite_depth": depth,
+      "needs.ci-plan.outputs.queue_depth": "full",
+      ...Object.fromEntries(
+        Object.entries(plan).map(([name, value]) => [
+          `needs.ci-plan.outputs.${name}`,
+          value,
+        ]),
+      ),
+    };
+    for (const [job, scope] of Object.entries(jobScopes)) {
+      if (scope === "package_checks_required") {
+        expect(
+          evaluate(jobIf(ciJobs[job]), {
+            values,
+            status: {
+              failure: false,
+              cancelled: false,
+              always: true,
+              success: true,
+            },
+          }),
+          job,
+        ).toBe(true);
+      }
+    }
+  }
+});
+
 test("documentation guards run independently of package checks", () => {
   const steps = jobSteps(ciJobs["ci-checks-policy"]);
   for (const name of [
@@ -4473,6 +4698,7 @@ type BrowserPlanOptions = {
   runRequired?: string;
   trusted?: string;
   queueDepth?: string;
+  packageChecksRequired?: string;
 };
 const browserPlanOutput = ({
   event,
@@ -4481,6 +4707,7 @@ const browserPlanOutput = ({
   runRequired = "true",
   trusted = "true",
   queueDepth = "full",
+  packageChecksRequired = "true",
 }: BrowserPlanOptions) => {
   const { outputs } = v.parse(
     v.object({ outputs: v.record(v.string(), v.string()) }),
@@ -4494,6 +4721,8 @@ const browserPlanOutput = ({
         "steps.completed-depth.outputs.run_required": runRequired,
         "steps.check.outputs.trusted": trusted,
         "steps.changed-files.outputs.desktop_browser_required": desktopRequired,
+        "steps.changed-files.outputs.package_checks_required":
+          packageChecksRequired,
         "steps.depth.outputs.suite_depth": depth,
         "steps.depth.outputs.queue_depth": queueDepth,
       },
@@ -4527,10 +4756,16 @@ test("browser planning, scheduling and result gates agree across events and dept
       ),
     ),
   );
-  for (const options of cases) {
+  for (const options of cases.flatMap((testCase) =>
+    ["true", "false"].map((packageChecksRequired) => ({
+      ...testCase,
+      packageChecksRequired,
+    })),
+  )) {
     const planned = browserPlanOutput(options);
     const expected =
       options.runRequired === "true" &&
+      options.packageChecksRequired === "true" &&
       (options.trusted === "true" ||
         options.event === EVENT.workflowDispatch) &&
       (options.event === EVENT.pullRequest

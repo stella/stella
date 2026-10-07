@@ -109,6 +109,7 @@ jobs:
       ci_browser_required: >-
         ${{ steps.completed-depth.outputs.run_required != 'false'
         && (steps.check.outputs.trusted == 'true' || github.event_name == 'workflow_dispatch')
+        && steps.changed-files.outputs.package_checks_required == 'true'
         && ((github.event_name == 'pull_request' && steps.changed-files.outputs.desktop_browser_required == 'true')
         || (github.event_name != 'pull_request' && steps.depth.outputs.queue_depth != 'thin'
         && steps.depth.outputs.suite_depth == 'full')) && 'true' || 'false' }}
@@ -121,6 +122,8 @@ jobs:
       mobile_build_required: ${{ steps.changed-files.outputs.mobile_build_required }}
       model_catalog_drift_required: ${{ steps.changed-files.outputs.model_catalog_drift_required }}
       package_checks_required: ${{ steps.changed-files.outputs.package_checks_required }}
+      docs_checks_required: ${{ steps.changed-files.outputs.docs_checks_required }}
+      docs_changed_files: ${{ steps.changed-files.outputs.docs_changed_files }}
       postgres_suites_required: ${{ steps.changed-files.outputs.postgres_suites_required }}
       corpus_suites_required: ${{ steps.changed-files.outputs.corpus_suites_required }}
       valkey_suites_required: ${{ steps.changed-files.outputs.valkey_suites_required }}
@@ -498,6 +501,8 @@ jobs:
               echo "mobile_build_required=true"
               echo "model_catalog_drift_required=true"
               echo "package_checks_required=true"
+              echo "docs_checks_required=false"
+              echo 'docs_changed_files=[]'
               echo "published_exports_required=true"
               echo "release_typecheck_required=$release_typecheck_required"
               echo "route_tree_required=true"
@@ -543,6 +548,8 @@ jobs:
               echo "mobile_build_required=false"
               echo "model_catalog_drift_required=false"
               echo "package_checks_required=true"
+              echo "docs_checks_required=false"
+              echo 'docs_changed_files=[]'
               echo "published_exports_required=false"
               echo "release_typecheck_required=false"
               echo "route_smoke_required=false"
@@ -559,17 +566,26 @@ jobs:
           desktop_rust_checks_required=$(bash scripts/detect-tauri-rust-changes.sh "${changed_files[@]}")
           e2e_core_required=$(bash scripts/detect-e2e-changes.sh core "${changed_files[@]}")
           e2e_landing_required=$(bash scripts/detect-e2e-changes.sh landing "${changed_files[@]}")
+          # Path scopes for the build/smoke jobs, computed here so a job whose
+          # scope did not change is skipped entirely instead of scheduling a
+          # runner just to decide it has nothing to do.
           package_checks_required=true
-          if [[ "$EVENT_NAME" == pull_request ]]; then
+          if [[ "$EVENT_NAME" == pull_request || "$EVENT_NAME" == merge_group ]]; then
             package_scope=$(bun scripts/ci-package-scope.ts --package-checks "${changed_files[@]}") || package_scope=true
             if [[ "$package_scope" == false ]]; then
               package_checks_required=false
             fi
           fi
 
-          # Path scopes for the build/smoke jobs, computed here so a job whose
-          # scope did not change is skipped entirely instead of scheduling a
-          # runner just to decide it has nothing to do.
+          docs_checks_required=false
+          docs_changed_files='[]'
+          if [[ "$package_checks_required" == false ]]; then
+            docs_changed_files=$(printf '%s\0' "${changed_files[@]}" | jq -Rsc 'split("\u0000")[:-1] | map(select(test("\\.mdx?$")))')
+            if [[ "$docs_changed_files" != '[]' ]]; then
+              docs_checks_required=true
+            fi
+          fi
+
           # A crashed detector cannot certify a plan. Reject its exit status
           # or malformed output before any empty scope can skip a suite.
           if ! service_suite_scopes=$(bun scripts/detect-service-suite-changes.ts --scopes "${changed_files[@]}"); then
@@ -589,6 +605,9 @@ jobs:
           desktop_browser_required=$(bun scripts/ci-package-scope.ts --desktop-browser "${changed_files[@]}") || desktop_browser_required=true
           if [[ "$desktop_browser_required" != false ]]; then
             desktop_browser_required=true
+          fi
+          if [[ "$package_checks_required" == false ]]; then
+            desktop_browser_required=false
           fi
           dependency_malware_required=$(bun scripts/check-standalone-lockfiles.ts --requires-malware-scan "${changed_files[@]}")
           agent_sandbox_docker_required=false
@@ -856,6 +875,8 @@ jobs:
             echo "mobile_build_required=$mobile_build_required"
             echo "model_catalog_drift_required=$model_catalog_drift_required"
             echo "package_checks_required=$package_checks_required"
+            echo "docs_checks_required=$docs_checks_required"
+            echo "docs_changed_files=$docs_changed_files"
             echo "published_exports_required=$published_exports_required"
             echo "release_typecheck_required=$release_typecheck_required"
             echo "route_smoke_required=$route_smoke_required"
@@ -1252,6 +1273,7 @@ jobs:
         needs.ci-plan.outputs.trusted == 'true'
         || github.event_name == 'workflow_dispatch'
       )
+      && needs.ci-plan.outputs.package_checks_required == 'true'
       )
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -1338,6 +1360,7 @@ jobs:
       && (
       inputs.heavy_only != true
       && (needs.ci-plan.outputs.trusted == 'true' || github.event_name == 'workflow_dispatch')
+      && needs.ci-plan.outputs.package_checks_required == 'true'
       )
     runs-on: ubuntu-latest
     timeout-minutes: 15
@@ -1416,6 +1439,88 @@ jobs:
               run_id: context.runId,
             });
 
+  ci-checks-docs:
+    needs: ci-plan
+    if: >-
+      needs.ci-plan.outputs.run_required != 'false'
+      && (
+      inputs.heavy_only != true
+      && needs.ci-plan.outputs.trusted == 'true'
+      && needs.ci-plan.outputs.docs_checks_required == 'true'
+      )
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      actions: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          filter: blob:none
+          persist-credentials: false
+          submodules: true
+      - name: Setup Bun
+        uses: stella/.github/actions/setup-bun-cached@167fb396c6c0f4e07296ad2cd72e6ef15367c776
+        with:
+          bun-version-file: "package.json"
+          save: ${{ github.ref == 'refs/heads/main' }}
+      - name: Install dependencies
+        id: install
+        run: bash scripts/retry.sh bun ci --ignore-scripts
+        env:
+          NPM_TOKEN: ""
+      - name: Check changed Markdown consumers
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
+        run: bun scripts/ci-package-scope.ts --run-markdown-checks
+        env:
+          CHANGED_MARKDOWN: ${{ needs.ci-plan.outputs.docs_changed_files }}
+      - name: Cancel failed merge-group run
+        if: failure() && github.event_name == 'merge_group'
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
+        with:
+          retries: 0
+          script: |
+            let diagnostic;
+            let evidenceTimer;
+            try {
+              const jobs = await Promise.race([
+                github.paginate(
+                  "GET /repos/{owner}/{repo}/actions/runs/{run_id}/attempts/{attempt_number}/jobs",
+                  {
+                    ...context.repo,
+                    run_id: context.runId,
+                    attempt_number: Number(process.env.GITHUB_RUN_ATTEMPT),
+                    per_page: 100,
+                    request: { timeout: 10000 },
+                  },
+                ),
+                new Promise((_, reject) => {
+                  evidenceTimer = setTimeout(() => reject(new Error("Failed-step lookup timed out")), 10000);
+                }),
+              ]);
+              const failures = jobs.flatMap((job) => (job.steps || [])
+                .filter((step) => step.conclusion === "failure")
+                .map((step) => `${job.name} / ${step.number}: ${step.name} (${job.html_url})`));
+              diagnostic = `${context.job}: cancelling failed merge group; failed steps: ${failures.length ? failures.join("; ") : "not yet available from the jobs API"}`;
+            } catch {
+              diagnostic = `${context.job}: cancelling failed merge group; failed-step lookup unavailable`;
+            } finally {
+              clearTimeout(evidenceTimer);
+            }
+            core.error(diagnostic);
+            try {
+              core.summary.addRaw(`${diagnostic}\n`);
+              await core.summary.write();
+            } catch {
+              core.error(`${context.job}: cancellation step summary could not be written`);
+            }
+            await github.rest.actions.cancelWorkflowRun({
+              ...context.repo,
+              run_id: context.runId,
+            });
+
   ci-checks-generated:
     needs: [ci-plan, ci-generated-sources]
     if: >-
@@ -1426,6 +1531,7 @@ jobs:
         needs.ci-plan.outputs.trusted == 'true'
         || github.event_name == 'workflow_dispatch'
       )
+      && needs.ci-plan.outputs.package_checks_required == 'true'
       )
     runs-on: ubuntu-latest
     # Include uncached API generation and its two-pass determinism check.
@@ -1643,6 +1749,7 @@ jobs:
         needs.ci-plan.outputs.trusted == 'true'
         || github.event_name == 'workflow_dispatch'
       )
+      && needs.ci-plan.outputs.package_checks_required == 'true'
       )
     runs-on: ubuntu-latest
     # 25m, matching code-quality.
@@ -1912,6 +2019,7 @@ jobs:
         needs.ci-plan.outputs.trusted == 'true'
         || github.event_name == 'workflow_dispatch'
       )
+      && needs.ci-plan.outputs.package_checks_required == 'true'
       )
     runs-on: ubuntu-latest
     # 25m, matching code-quality.
@@ -2999,6 +3107,7 @@ jobs:
         needs.ci-plan.outputs.trusted == 'true'
         || github.event_name == 'workflow_dispatch'
       )
+      && needs.ci-plan.outputs.package_checks_required == 'true'
       )
     runs-on: ubuntu-latest
     # 25m per shard, the budget the serial job carried for the whole suite. It
@@ -6820,6 +6929,7 @@ jobs:
         dependency-malware,
         docker-checks,
         parser-version-guard,
+        ci-checks-docs,
         ci-checks-generated,
         ci-checks-policy,
         ci-checks-rest,
@@ -6885,11 +6995,12 @@ jobs:
             "docker-checks": "docker_checks_required",
             "api-image-smoke": "api_image_smoke_required",
             "ci-browser": "ci_browser_required",
-            "ci-generated-sources": null,
-            "ci-checks-generated": null,
-            "ci-checks-policy": null,
-            "ci-checks-rest": null,
-            "ci-tests": null,
+            "ci-generated-sources": "package_checks_required",
+            "ci-checks-docs": "docs_checks_required",
+            "ci-checks-generated": "package_checks_required",
+            "ci-checks-policy": "package_checks_required",
+            "ci-checks-rest": "package_checks_required",
+            "ci-tests": "package_checks_required",
             "code-quality-api": "package_checks_required",
             "code-quality-web": "package_checks_required",
             "code-quality-rest": "package_checks_required",
@@ -6905,7 +7016,7 @@ jobs:
             "marketing-screenshots": "marketing_screenshots_required",
             "migration-upgrade-rehearsal": "migration_rehearsal_required",
             "mobile-build": "mobile_build_required",
-            "parser-version-guard": null,
+            "parser-version-guard": "package_checks_required",
             "release-typecheck": "release_typecheck_required",
             "service-suites": "service_suites_required",
             "stack-redaction-browsers": "stack_redaction_browsers_required",
@@ -6922,7 +7033,7 @@ jobs:
           FAST_JOB_SCOPES: >-
             {"service-suites": "service_suites_pr_required", "docker-checks": "docker_checks_pr_required", "legal-atlas-image": "legal_atlas_image_pr_required"}
           FAST_REQUIRED: >-
-            ["ci-browser", "ci-generated-sources", "ci-checks-generated", "ci-checks-policy", "ci-checks-rest", "code-quality-api", "code-quality-rest", "code-quality-web", "dependency-malware", "parser-version-guard", "typecheck-baseline", "ci-tests"]
+            ["ci-browser", "ci-generated-sources", "ci-checks-docs", "ci-checks-generated", "ci-checks-policy", "ci-checks-rest", "code-quality-api", "code-quality-rest", "code-quality-web", "dependency-malware", "parser-version-guard", "typecheck-baseline", "ci-tests"]
         run: |
           # Read cancellation evidence before any early aggregation exit.
           cancelled_jobs=""
