@@ -303,7 +303,7 @@ const searchResult = async (
   if (Result.isError(target)) {
     return Result.err(
       new LegalSearchUnavailableError({
-        message: "Corpus index legal search reached an unready index group.",
+        message: "Corpus index legal search reached no readable index.",
         cause: target.error,
       }),
     );

@@ -164,9 +164,13 @@ for (const query of queries.value) {
 
 // One statement for the whole run: every page's decisions at once, so the
 // pointer read does not scale with the query set.
-const { generation } = await rootDb.transaction(
+const serving = await rootDb.transaction(
   async (tx) => await readServingCorpusIndexGenerationTx(tx, "case_law"),
 );
+if (Result.isError(serving)) {
+  abort(serving.error.message);
+}
+const { generation } = serving.value;
 const pointers = await rootDb.transaction(
   async (tx) =>
     await readCaseLawPassagePointersTx(

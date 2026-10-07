@@ -640,7 +640,8 @@ const retrievePassages = async (
           jurisdiction: decision.country,
         }),
     );
-    // An unready index group reads as no passages, as a failed search does.
+    // No serving generation or an unready index group reads as no passages,
+    // as a failed search does.
     if (Result.isError(target)) {
       return NO_HITS;
     }

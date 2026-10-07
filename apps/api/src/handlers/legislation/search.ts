@@ -117,6 +117,7 @@ import {
   stableBlendUpperBound,
 } from "@/api/lib/legal-search/rerank";
 import type { ScoredCandidate } from "@/api/lib/legal-search/rerank";
+import { searchIndexUnavailableError } from "@/api/lib/legal-search/search-index-unavailable";
 import {
   legislationPublicReadDb,
   type LegislationReadDb,
@@ -1215,6 +1216,31 @@ const corpusIndexSearch = async ({
   };
 };
 
+/**
+ * The serving legislation generation, or null under the pg-fts provider. No
+ * serving generation answers the retryable search_index_unavailable 503.
+ */
+const readLegislationServingGeneration = async (
+  legislationDb: LegislationReadDb,
+  dependencies: SearchLegislationDependencies,
+): Promise<ServingCorpusIndexGeneration | null> => {
+  if (
+    (dependencies.provider ?? envBase.LEGAL_SEARCH_PROVIDER) !== "corpus-index"
+  ) {
+    return null;
+  }
+  const read = await legislationDb(
+    async (tx) =>
+      await (
+        dependencies.readServingGeneration ?? readServingCorpusIndexGenerationTx
+      )(tx, "legislation"),
+  );
+  if (Result.isError(read)) {
+    throw searchIndexUnavailableError(read.error);
+  }
+  return read.value;
+};
+
 export const searchLegislationHandler = async (
   body: SearchLegislationBody,
   legislationDb: LegislationReadDb,
@@ -1274,16 +1300,10 @@ export const searchLegislationHandler = async (
     return status(400, { message: "Invalid cursor" });
   }
 
-  const serving =
-    (dependencies.provider ?? envBase.LEGAL_SEARCH_PROVIDER) === "corpus-index"
-      ? await legislationDb(
-          async (tx) =>
-            await (
-              dependencies.readServingGeneration ??
-              readServingCorpusIndexGenerationTx
-            )(tx, "legislation"),
-        )
-      : null;
+  const serving = await readLegislationServingGeneration(
+    legislationDb,
+    dependencies,
+  );
   let expectedPhase: CorpusSearchPhase = {
     type: "strict",
     fingerprint: legislationQueryFingerprint(body),

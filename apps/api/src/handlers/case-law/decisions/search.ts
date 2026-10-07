@@ -152,7 +152,10 @@ import {
   courtPartitionsForCourtFilter,
   type CorpusIndexGroupContract,
 } from "@/api/lib/legal-search/corpus-index-group-contract";
-import { readServingCorpusIndexTargetTx } from "@/api/lib/legal-search/corpus-index-group-enrollment-store";
+import {
+  readServingCorpusIndexTargetTx,
+  type ServingCorpusIndexTargetError,
+} from "@/api/lib/legal-search/corpus-index-group-enrollment-store";
 import type {
   CorpusIndexScanReport,
   CorpusIndexScanTransport,
@@ -227,6 +230,7 @@ import type {
   RankedHit,
   ScoredCandidate,
 } from "@/api/lib/legal-search/rerank";
+import { searchIndexUnavailableError } from "@/api/lib/legal-search/search-index-unavailable";
 import { LIMITS } from "@/api/lib/limits";
 import { failureSink } from "@/api/lib/observability/failure";
 import { logger } from "@/api/lib/observability/logger";
@@ -2073,6 +2077,24 @@ const corpusIndexRequestConfiguration = ({
       )),
 });
 
+/**
+ * The answer to a serving-target read that reaches no index. No serving
+ * generation is the search index being unavailable, so it throws the typed
+ * retryable refusal every REST route and MCP tool resolves.
+ */
+const servingTargetRefusal = (failure: ServingCorpusIndexTargetError) => {
+  switch (failure._tag) {
+    case "CorpusServingGenerationAbsentError":
+      throw searchIndexUnavailableError(failure);
+    case "CorpusIndexGroupNotReadyError":
+      observeFailure(failure, { sink: corpusIndexGroupNotReady });
+      return status(503, { message: "Search is temporarily unavailable" });
+    default:
+      failure satisfies never;
+      return panic(`Unhandled serving target failure: ${String(failure)}`);
+  }
+};
+
 const cursorMatchesCorpusReadTarget = (
   cursor: CorpusSearchCursor | null,
   target: string | null,
@@ -2163,8 +2185,7 @@ export const searchCorpusIndexDecisions = async ({
     readServingTarget,
   );
   if (Result.isError(target)) {
-    observeFailure(target.error, { sink: corpusIndexGroupNotReady });
-    return status(503, { message: "Search is temporarily unavailable" });
+    return servingTargetRefusal(target.error);
   }
   const { serving, route, contract } = target.value;
   const rankingMode = corpusQueryRankingMode({

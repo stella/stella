@@ -1,12 +1,16 @@
-import { UnhandledException } from "better-result";
+import { Result, UnhandledException } from "better-result";
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { ElysiaCustomStatusResponse } from "elysia";
 import { readdirSync, readFileSync } from "node:fs";
 
 import { env } from "@/api/env";
+import { searchCorpusIndexDecisions } from "@/api/handlers/case-law/decisions/search";
+import { searchLegislationHandler } from "@/api/handlers/legislation/search";
 import { grantThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import { toSafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import type { CorpusFamily } from "@/api/lib/legal-search/corpus-generation-contract";
+import { CorpusServingGenerationAbsentError } from "@/api/lib/legal-search/corpus-index-generation-store";
 import { readCorpusIndexSearchPage } from "@/api/lib/legal-search/corpus-index-pagination";
 import { corpusSearchGroupToken } from "@/api/lib/legal-search/corpus-search-cursor";
 import { RELEVANCE_ORDER } from "@/api/lib/legal-search/corpus-search-order";
@@ -15,6 +19,7 @@ import {
   SEARCH_INDEX_UNAVAILABLE_MESSAGE,
   searchIndexUnavailableError,
 } from "@/api/lib/legal-search/search-index-unavailable";
+import type { LegislationReadDb } from "@/api/lib/legislation-public-read-db";
 import { mapHandlerResult } from "@/api/mcp/capability-tools";
 import type { McpMode } from "@/api/mcp/constants";
 import type { McpRequestContext } from "@/api/mcp/context";
@@ -234,6 +239,75 @@ describe("search_index_unavailable", () => {
       expect(payloadOf(result)).toEqual(EXPECTED_ENVELOPE);
     });
   }
+
+  describe("with no serving generation", () => {
+    const absent = (family: CorpusFamily) =>
+      Result.err(
+        new CorpusServingGenerationAbsentError({
+          message: `No serving corpus generation: ${family}`,
+          family,
+        }),
+      );
+    /** The generation read refuses before any engine request is made. */
+    const requested: string[] = [];
+    const contextWithoutServingGeneration = (): McpRequestContext => {
+      requested.length = 0;
+      globalThis.fetch = Object.assign(
+        async (input: string | URL | Request) => {
+          requested.push(new Request(input).url);
+          return await Promise.resolve(Response.json({}, { status: 500 }));
+        },
+        { preconnect: originalFetch.preconnect },
+      );
+      const context = createContext();
+      return {
+        ...context,
+        testDependencies: {
+          ...context.testDependencies,
+          searchDecisionsHandler: async ({ body, caseLawDb, observer }) =>
+            await searchCorpusIndexDecisions({
+              body,
+              caseLawDb,
+              observer,
+              dependencies: {
+                readServingTarget: async () =>
+                  await Promise.resolve(absent("case_law")),
+              },
+            }),
+          searchLegislationHandler: async (body, _legislationDb, observer) =>
+            await searchLegislationHandler(
+              body,
+              asTestRaw<LegislationReadDb>(
+                async (run: (tx: unknown) => Promise<unknown>) =>
+                  await run(null),
+              ),
+              observer,
+              {
+                provider: "corpus-index",
+                loadSearchConfigs: async () => await Promise.resolve([]),
+                readServingGeneration: async (_tx, family) =>
+                  await Promise.resolve(absent(family)),
+              },
+            ),
+        },
+      };
+    };
+
+    for (const tool of INDEX_BACKED_TOOLS) {
+      test(`${tool.toolName} (${tool.mode}) returns the typed, retryable envelope`, async () => {
+        const result = await handleMcpToolCall({
+          args: tool.args,
+          context: contextWithoutServingGeneration(),
+          mode: tool.mode,
+          toolName: tool.toolName,
+        });
+
+        expect(requested).toEqual([]);
+        expect(result.isError).toBe(true);
+        expect(payloadOf(result)).toEqual(EXPECTED_ENVELOPE);
+      });
+    }
+  });
 
   test("every MCP source that reaches the search index is in the table", () => {
     const directory = new URL(".", import.meta.url);
