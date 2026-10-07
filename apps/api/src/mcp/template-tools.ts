@@ -2202,10 +2202,24 @@ const downloadHostFileDocx = async ({
   context: McpRequestContext;
   file: v.InferOutput<typeof OPENAI_FILE_REFERENCE_SCHEMA>;
 }): Promise<ResolvedTemplateDocx> => {
+  const permit = context.thirdPartyOutboundPermit;
+  if (permit === undefined) {
+    return {
+      status: "error",
+      result: structuredErrorResult({
+        code: "permission_denied",
+        message:
+          "This tool reaches a third-party service and runs only as a direct tool call",
+        hint: "Call the tool directly instead of from a script.",
+      }),
+    };
+  }
+
   const downloaded = await (
     context.testDependencies?.safeOutboundFetchBytes ?? safeOutboundFetchBytes
   )({
     maxBytes: FILE_SIZE_LIMIT_BYTES.document,
+    permit,
     timeoutMs: HOST_FILE_DOWNLOAD_TIMEOUT_MS,
     url: file.download_url,
   });

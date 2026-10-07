@@ -228,6 +228,7 @@ import type { AccessibleWorkspace } from "@/api/lib/auth";
 import { resolveCredentialMemberAuthorization } from "@/api/lib/auth";
 import { loadFeatureAccessSnapshot } from "@/api/lib/auth/feature-access/context";
 import type { FeatureAccessSnapshot } from "@/api/lib/auth/feature-access/policy";
+import { grantThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import type { SafeId } from "@/api/lib/branded-types";
 import { getOrganizationRegistryDispatch } from "@/api/lib/business-registries/credentials";
 import { resolveEffectiveChatModelSelection } from "@/api/lib/chat-model-selection";
@@ -2371,6 +2372,7 @@ export const createSendMessage = (
           await dependencies.loadExternalMcpTools({
             nullUnionStrategy: externalMcpNullUnionStrategy,
             organizationId: session.activeOrganizationId,
+            permit: grantThirdPartyOutboundPermit(),
             safeDb,
             userId: user.id,
           }),

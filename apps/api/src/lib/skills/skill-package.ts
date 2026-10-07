@@ -16,6 +16,7 @@ import { Temporal } from "@stll/time";
 
 import { hashSkillPackageContent } from "@/api/lib/agent-skills/content-hash";
 import { validateSkillRequiredTools } from "@/api/lib/agent-skills/required-tools-validation";
+import type { ThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import { loadDocx } from "@/api/lib/docx-archive";
 import { HandlerError, unreachable } from "@/api/lib/errors/tagged-errors";
 import type { ScannedFile } from "@/api/lib/file-scan/scanned-file";
@@ -183,6 +184,7 @@ export type GithubTreeItem = {
 
 type SkillSourceRequestBudget = {
   deadlineAt: number;
+  permit: ThirdPartyOutboundPermit;
   fetchBytes?: typeof safeOutboundFetchBytes;
   remainingRequests?: number;
   timeoutMessage?: string;
@@ -192,27 +194,31 @@ type GithubTreeResult = Result<GithubTreeItem[], HandlerError>;
 
 export type SkillPackageFetchContext = {
   githubAccess?: GithubSkillFetchAccess;
-  requestBudget?: SkillSourceRequestBudget;
+  requestBudget: SkillSourceRequestBudget;
   githubTrees: Map<string, Promise<GithubTreeResult>>;
 };
 
-export const createSkillPackageFetchContext = (
+type CreateSkillPackageFetchContextOptions = {
+  permit: ThirdPartyOutboundPermit;
   limits?: {
     deadlineAt: number;
     maxRequests: number;
+  };
+  fetchBytes?: typeof safeOutboundFetchBytes;
+};
+
+export const createSkillPackageFetchContext = ({
+  permit,
+  limits,
+  fetchBytes = safeOutboundFetchBytes,
+}: CreateSkillPackageFetchContextOptions): SkillPackageFetchContext => ({
+  requestBudget: {
+    deadlineAt: limits?.deadlineAt ?? Number.POSITIVE_INFINITY,
+    fetchBytes,
+    permit,
+    ...(limits === undefined ? {} : { remainingRequests: limits.maxRequests }),
+    timeoutMessage: "Skill import timed out",
   },
-  fetchBytes: typeof safeOutboundFetchBytes = safeOutboundFetchBytes,
-): SkillPackageFetchContext => ({
-  ...(limits
-    ? {
-        requestBudget: {
-          deadlineAt: limits.deadlineAt,
-          fetchBytes,
-          remainingRequests: limits.maxRequests,
-          timeoutMessage: "Skill import timed out",
-        },
-      }
-    : {}),
   githubTrees: new Map(),
 });
 
@@ -283,7 +289,7 @@ export const parseUploadedSkillPackage = async (
 
 export const fetchSkillPackageFromUrl = async (
   rawUrl: string,
-  context = createSkillPackageFetchContext(),
+  context: SkillPackageFetchContext,
 ): Promise<Result<FetchedSkillPackage, HandlerError>> =>
   await settleSkillPackage({
     run: async (): Promise<Result<FetchedSkillPackage, HandlerError>> => {
@@ -307,11 +313,11 @@ export const fetchSkillPackageFromUrl = async (
       }
 
       const url = new URL(rawUrl);
-      const response = await fetchSafeBytes(
+      const response = await fetchSafeBytes({
+        budget: context.requestBudget,
+        maxBytes: FILE_SIZE_LIMIT_BYTES.skillPack,
         url,
-        FILE_SIZE_LIMIT_BYTES.skillPack,
-        context.requestBudget,
-      );
+      });
       if (response.isErr()) {
         return Result.err(response.error);
       }
@@ -342,20 +348,21 @@ export const fetchSkillPackageFromUrl = async (
  * catalogue installs include the pinned SKILL.md and all allowed resources.
  */
 export const fetchGithubCatalogueSkillPackage = async ({
+  permit,
   githubToken,
   fetchFiles = async (skillTarget) => {
-    const fetched = await fetchGithubSkillFiles(skillTarget, {
-      githubAccess: {
-        source: "catalogue",
-        ...(githubToken ? { githubToken } : {}),
-      },
-      githubTrees: new Map(),
-    });
+    const context = createSkillPackageFetchContext({ permit });
+    context.githubAccess = {
+      source: "catalogue",
+      ...(githubToken ? { githubToken } : {}),
+    };
+    const fetched = await fetchGithubSkillFiles(skillTarget, context);
     return fetched.map(({ files }) => files);
   },
   sourceUrl,
   target,
 }: {
+  permit: ThirdPartyOutboundPermit;
   fetchFiles?: (
     target: GithubSkillPath,
   ) => Promise<Result<SkillFile[], HandlerError>>;
@@ -381,10 +388,19 @@ export const fetchGithubCatalogueSkillPackage = async ({
     toError: toCatalogueHandlerError,
   });
 
-export const discoverSkillPackagesFromUrl = async (
-  rawUrl: string,
-  fetchBytes: typeof safeOutboundFetchBytes = safeOutboundFetchBytes,
-): Promise<Result<SkillPackageDiscovery, HandlerError>> =>
+type DiscoverSkillPackagesFromUrlOptions = {
+  fetchBytes?: typeof safeOutboundFetchBytes;
+  permit: ThirdPartyOutboundPermit;
+  rawUrl: string;
+};
+
+export const discoverSkillPackagesFromUrl = async ({
+  fetchBytes = safeOutboundFetchBytes,
+  permit,
+  rawUrl,
+}: DiscoverSkillPackagesFromUrlOptions): Promise<
+  Result<SkillPackageDiscovery, HandlerError>
+> =>
   await settleSkillPackage({
     run: async (): Promise<Result<SkillPackageDiscovery, HandlerError>> => {
       const budget = {
@@ -392,6 +408,7 @@ export const discoverSkillPackagesFromUrl = async (
           Temporal.Now.instant().epochMilliseconds +
           GITHUB_DISCOVERY_TIMEOUT_MS,
         fetchBytes,
+        permit,
       };
       const githubTarget = await parseGithubDiscoveryPath(rawUrl, budget);
       if (githubTarget.isErr()) {
@@ -401,7 +418,10 @@ export const discoverSkillPackagesFromUrl = async (
         return await discoverGithubSkillPackages(githubTarget.value, budget);
       }
 
-      const parsed = await fetchSkillPackageFromUrl(rawUrl);
+      const parsed = await fetchSkillPackageFromUrl(rawUrl, {
+        requestBudget: budget,
+        githubTrees: new Map(),
+      });
       if (parsed.isErr()) {
         return Result.err(parsed.error);
       }
@@ -953,17 +973,17 @@ const fetchGithubSkillFiles = async (
       }
     }
 
-    const raw = await fetchSafeBytes(
-      githubRawUrl({
+    const raw = await fetchSafeBytes({
+      access: context.githubAccess,
+      budget: context.requestBudget,
+      maxBytes: GITHUB_SKILL_FILE_MAX_BYTES,
+      url: githubRawUrl({
         owner: target.owner,
         path: item.path,
         ref: commitSha.value,
         repo: target.repo,
       }),
-      GITHUB_SKILL_FILE_MAX_BYTES,
-      context.requestBudget,
-      context.githubAccess,
-    );
+    });
     if (raw.isErr()) {
       return Result.err(raw.error);
     }
@@ -1418,17 +1438,27 @@ const hashSkillEntrypoint = (source: string) => {
   return hasher.digest("hex");
 };
 
-const fetchSafeBytes = async (
-  url: URL,
+type FetchSafeBytesOptions = {
+  access?: GithubSkillFetchAccess;
+  budget: SkillSourceRequestBudget;
+  maxBytes?: number;
+  url: URL;
+};
+
+const fetchSafeBytes = async ({
+  access = USER_GITHUB_FETCH_ACCESS,
+  budget,
   maxBytes = FILE_SIZE_LIMIT_BYTES.skillPack,
-  budget?: SkillSourceRequestBudget,
-  access: GithubSkillFetchAccess = USER_GITHUB_FETCH_ACCESS,
-): Promise<Result<SafeOutboundFetchResponse, HandlerError>> => {
+  url,
+}: FetchSafeBytesOptions): Promise<
+  Result<SafeOutboundFetchResponse, HandlerError>
+> => {
   const timeoutMs = startSkillSourceRequest(budget);
   if (timeoutMs.isErr()) {
     return Result.err(timeoutMs.error);
   }
-  const response = await (budget?.fetchBytes ?? safeOutboundFetchBytes)({
+  const response = await (budget.fetchBytes ?? safeOutboundFetchBytes)({
+    permit: budget.permit,
     headers: githubSkillFetchHeaders({ access, hostname: url.hostname }),
     maxBytes,
     timeoutMs: timeoutMs.value,
@@ -1462,11 +1492,8 @@ const fetchSafeBytes = async (
  * request may take.
  */
 const startSkillSourceRequest = (
-  budget: SkillSourceRequestBudget | undefined,
+  budget: SkillSourceRequestBudget,
 ): Result<number, HandlerError> => {
-  if (budget === undefined) {
-    return Result.ok(GITHUB_API_TIMEOUT_MS);
-  }
   if (budget.remainingRequests !== undefined) {
     if (budget.remainingRequests <= 0) {
       return rejectSkillPackage(
@@ -1487,7 +1514,7 @@ const startSkillSourceRequest = (
 
 const githubRefExists = async (
   { owner, ref, repo }: Parameters<GithubRefExists>[0],
-  budget?: SkillSourceRequestBudget,
+  budget: SkillSourceRequestBudget,
 ): Promise<Result<boolean, HandlerError>> => {
   const heads = await githubRefKindExists({
     budget,
@@ -1509,7 +1536,7 @@ const githubRefKindExists = async ({
   ref,
   repo,
 }: {
-  budget: SkillSourceRequestBudget | undefined;
+  budget: SkillSourceRequestBudget;
   kind: GithubRefKind;
   owner: string;
   ref: string;
@@ -1519,7 +1546,8 @@ const githubRefKindExists = async ({
   if (timeoutMs.isErr()) {
     return Result.err(timeoutMs.error);
   }
-  const response = await (budget?.fetchBytes ?? safeOutboundFetchBytes)({
+  const response = await (budget.fetchBytes ?? safeOutboundFetchBytes)({
+    permit: budget.permit,
     headers: GITHUB_FETCH_HEADERS,
     maxBytes: FILE_SIZE_LIMIT_BYTES.skillPack,
     timeoutMs: timeoutMs.value,
@@ -1649,7 +1677,7 @@ const parseGithubSkillUrl = (
 
 const parseGithubSkillPath = async (
   rawUrl: string,
-  budget?: SkillSourceRequestBudget,
+  budget: SkillSourceRequestBudget,
 ): Promise<Result<GithubSkillPath | null, HandlerError>> => {
   const githubUrl = parseGithubSkillUrl(rawUrl);
   if (githubUrl.isErr() || githubUrl.value === null) {
@@ -2028,15 +2056,15 @@ const resolveGithubDefaultBranch = async ({
   owner,
   repo,
 }: {
-  budget?: SkillSourceRequestBudget;
+  budget: SkillSourceRequestBudget;
   owner: string;
   repo: string;
 }): Promise<Result<string, HandlerError>> => {
-  const response = await fetchSafeBytes(
-    githubRepositoryUrl({ owner, repo }),
-    FILE_SIZE_LIMIT_BYTES.skillPack,
+  const response = await fetchSafeBytes({
     budget,
-  );
+    maxBytes: FILE_SIZE_LIMIT_BYTES.skillPack,
+    url: githubRepositoryUrl({ owner, repo }),
+  });
   if (response.isErr()) {
     return Result.err(response.error);
   }
@@ -2059,20 +2087,20 @@ const resolveGithubDefaultBranch = async ({
 
 const resolveGithubCommitSha = async (
   target: GithubSkillPath,
-  budget?: SkillSourceRequestBudget,
+  budget: SkillSourceRequestBudget,
 ): Promise<Result<string, HandlerError>> => {
   if (GITHUB_COMMIT_SHA_PATTERN.test(target.ref)) {
     return Result.ok(target.ref.toLowerCase());
   }
-  const response = await fetchSafeBytes(
-    githubCommitUrl({
+  const response = await fetchSafeBytes({
+    budget,
+    maxBytes: FILE_SIZE_LIMIT_BYTES.skillPack,
+    url: githubCommitUrl({
       owner: target.owner,
       ref: target.ref,
       repo: target.repo,
     }),
-    FILE_SIZE_LIMIT_BYTES.skillPack,
-    budget,
-  );
+  });
   if (response.isErr()) {
     return Result.err(response.error);
   }
@@ -2097,18 +2125,18 @@ const fetchGithubTree = async ({
   treeish,
 }: {
   access?: GithubSkillFetchAccess;
-  budget?: SkillSourceRequestBudget;
+  budget: SkillSourceRequestBudget;
   owner: string;
   recursive: boolean;
   repo: string;
   treeish: string;
 }): Promise<GithubTreeResult> => {
-  const response = await fetchSafeBytes(
-    githubTreeUrl({ owner, recursive, repo, treeish }),
-    GITHUB_TREE_MAX_BYTES,
-    budget,
+  const response = await fetchSafeBytes({
     access,
-  );
+    budget,
+    maxBytes: GITHUB_TREE_MAX_BYTES,
+    url: githubTreeUrl({ owner, recursive, repo, treeish }),
+  });
   if (response.isErr()) {
     return Result.err(response.error);
   }
@@ -2154,7 +2182,7 @@ const fetchGithubSkillSourceBytes = async ({
   path,
   repo,
 }: {
-  budget?: SkillSourceRequestBudget;
+  budget: SkillSourceRequestBudget;
   commitSha: string;
   owner: string;
   path: string;
@@ -2164,7 +2192,8 @@ const fetchGithubSkillSourceBytes = async ({
   if (timeoutMs.isErr()) {
     return Result.err(timeoutMs.error);
   }
-  const response = await (budget?.fetchBytes ?? safeOutboundFetchBytes)({
+  const response = await (budget.fetchBytes ?? safeOutboundFetchBytes)({
+    permit: budget.permit,
     headers: GITHUB_FETCH_HEADERS,
     maxBytes: GITHUB_SKILL_FILE_MAX_BYTES,
     timeoutMs: timeoutMs.value,

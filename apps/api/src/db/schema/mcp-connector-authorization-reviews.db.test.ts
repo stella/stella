@@ -15,6 +15,7 @@ import {
 import { createSafeDb } from "@/api/db/scoped";
 import { createApproveMcpAuthorizationHandler } from "@/api/handlers/mcp-connectors/approve-authorization";
 import { createConnectMcpConnectorHandler } from "@/api/handlers/mcp-connectors/connect";
+import { grantThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { recordMcpAuthorizationReview } from "@/api/lib/mcp-upstream/authorization-review";
@@ -44,6 +45,7 @@ const connectorId = createSafeId<"mcpConnector">();
 const connectionId = createSafeId<"mcpUserConnection">();
 const otherOrganizationId = mintAuthProviderId<"organization">();
 const catalogueConnectorId = createSafeId<"mcpConnector">();
+const outboundPermit = grantThirdPartyOutboundPermit();
 
 let testDb: TestDatabase;
 
@@ -510,6 +512,7 @@ describe("MCP connector authorization reviews", () => {
     expect(
       await createMcpClientForConnection({
         organizationId,
+        permit: outboundPermit,
         row: previousConnection,
         safeDb,
         userId: memberId,
@@ -700,6 +703,7 @@ describe("MCP connector authorization reviews", () => {
         ? null
         : await createMcpClientForConnection({
             organizationId,
+            permit: outboundPermit,
             row,
             safeDb: ownerDb,
             userId: ownerId,

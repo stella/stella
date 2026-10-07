@@ -47,6 +47,10 @@ import {
   type TrackedRule,
 } from "./lint-suppressions";
 import {
+  isApiProductionModule,
+  outboundTransportReferences,
+} from "./outbound-transport-ownership";
+import {
   ROOT_CONNECTION_DOORS,
   STATUS_TRANSITION_OWNERSHIP,
 } from "./ownership";
@@ -2975,6 +2979,39 @@ export const RATCHET_METRICS: readonly RatchetMetric[] = [
     perFile: true,
     growth: "shrink-only",
     count: countUnsignalledSkipMetric,
+  },
+  {
+    scope: "repo",
+    id: "api-legacy-outbound-transports",
+    description:
+      "Raw transport and client capabilities acquired by each classified API owner; each file's capability set only shrinks",
+    perFile: true,
+    growth: "shrink-only",
+    count: (context) => {
+      const files: Record<string, number> = {};
+      let count = 0;
+      for (const file of scanRepoFiles(context, [
+        "apps/api/**/*.{ts,tsx,js,jsx,mjs,cjs,mts,cts}",
+      ])) {
+        if (
+          !isApiProductionModule(file) ||
+          file === "apps/api/src/lib/safe-outbound-fetch.ts"
+        ) {
+          continue;
+        }
+        for (const capability of outboundTransportReferences({
+          file,
+          text: readSource(context, file),
+        })) {
+          if (capability === "permit:grant") {
+            continue;
+          }
+          files[`${file}#${capability}`] = 1;
+          count += 1;
+        }
+      }
+      return { count, files };
+    },
   },
   {
     scope: "repo",

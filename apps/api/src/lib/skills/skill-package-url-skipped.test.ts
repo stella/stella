@@ -2,6 +2,7 @@ import { Result } from "better-result";
 import { beforeEach, describe, expect, test } from "bun:test";
 import JSZip from "jszip";
 
+import { grantThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import type { SafeOutboundFetchResponse } from "@/api/lib/safe-outbound-fetch";
 import {
   createSkillPackageFetchContext,
@@ -58,7 +59,7 @@ const respond = (
 
 const serveGithub: Parameters<
   typeof createSkillPackageFetchContext
->[1] = async ({ url }) => {
+>[0]["fetchBytes"] = async ({ url }) => {
   const requestUrl = typeof url === "string" ? new URL(url) : url;
   if (requestUrl.hostname === "raw.githubusercontent.com") {
     const path = requestUrl.pathname.split(`/${COMMIT_SHA}/`).at(1) ?? "";
@@ -79,12 +80,15 @@ const serveGithub: Parameters<
 };
 
 const fetchContext = (
-  serve: Parameters<typeof createSkillPackageFetchContext>[1],
+  serve: NonNullable<
+    Parameters<typeof createSkillPackageFetchContext>[0]["fetchBytes"]
+  >,
 ) =>
-  createSkillPackageFetchContext(
-    { deadlineAt: Date.now() + 30_000, maxRequests: 100 },
-    serve,
-  );
+  createSkillPackageFetchContext({
+    fetchBytes: serve,
+    limits: { deadlineAt: Date.now() + 30_000, maxRequests: 100 },
+    permit: grantThirdPartyOutboundPermit(),
+  });
 
 const byPath = <T extends { path: string }>(items: readonly T[]) =>
   items.toSorted((a, b) => (a.path < b.path ? -1 : 1));

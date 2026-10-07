@@ -5,6 +5,7 @@ import path from "node:path";
 import { SANCTIONS_SOURCES, readUnListVersion } from "@stll/sanctions";
 import type { SanctionsSource } from "@stll/sanctions";
 
+import { grantThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import {
   fetchStreamWithResolvedAddress,
   parseSafeOutboundUrl,
@@ -29,6 +30,7 @@ const OFAC_SDN_FIXTURE = path.join(FIXTURES, "ofac-sdn.xml");
 const OFAC_NON_SDN_FIXTURE = path.join(FIXTURES, "ofac-non-sdn.xml");
 const UK_FIXTURE = path.join(FIXTURES, "uk.xml");
 const SECO_FIXTURE = path.join(FIXTURES, "seco.xml");
+const permit = grantThirdPartyOutboundPermit();
 
 /** Serves a fixture file as a successful stream and records requested URLs. */
 const fixtureStream = (
@@ -182,6 +184,7 @@ describe("streaming list downloads", () => {
         };
         try {
           const options = {
+            permit,
             signal: new AbortController().signal,
             fetchStreamRequest,
             euXmlUrlOverride: canonicalUrl,
@@ -225,6 +228,7 @@ describe("streaming list downloads", () => {
       });
       try {
         const result = await fetchSanctionsMarker("un", {
+          permit,
           signal: new AbortController().signal,
           fetchStreamRequest: async (options) => {
             transportTargets.push(String(options.url));
@@ -281,6 +285,7 @@ describe("streaming list downloads", () => {
       });
       try {
         const result = await fetchSanctionsMarker("un", {
+          permit,
           signal: new AbortController().signal,
           fetchStreamRequest: async (options) => {
             const target = await validateOutboundFetchTarget(options.url, {
@@ -376,6 +381,7 @@ describe("streaming list downloads", () => {
         lastModified: null,
       },
       {
+        permit,
         signal: new AbortController().signal,
         fetchStreamRequest: async ({ headers }) => {
           attempts += 1;
@@ -417,6 +423,7 @@ describe("streaming list downloads", () => {
         lastModified: null,
       },
       {
+        permit,
         signal: new AbortController().signal,
         streamTotalTimeoutMs: 20,
         fetchStreamRequest: async ({ signal }) => {
@@ -453,6 +460,7 @@ describe("OFAC list refresh", () => {
   test("reads the SDN edition from the start of the published export", async () => {
     const { fetchStreamRequest, requested } = fixtureStream(OFAC_SDN_FIXTURE);
     const marker = await fetchSanctionsMarker("us-sdn", {
+      permit,
       signal: new AbortController().signal,
       fetchStreamRequest,
     });
@@ -470,6 +478,7 @@ describe("OFAC list refresh", () => {
   test("parses the non-SDN export it identified as that source", async () => {
     const marker = (
       await fetchSanctionsMarker("us-non-sdn", {
+        permit,
         signal: new AbortController().signal,
         fetchStreamRequest:
           fixtureStream(OFAC_NON_SDN_FIXTURE).fetchStreamRequest,
@@ -480,6 +489,7 @@ describe("OFAC list refresh", () => {
     );
 
     const edition = await fetchSanctionsEdition(marker, {
+      permit,
       signal: new AbortController().signal,
       fetchStreamRequest:
         fixtureStream(OFAC_NON_SDN_FIXTURE).fetchStreamRequest,
@@ -503,6 +513,7 @@ describe("OFAC list refresh", () => {
   test("reports an export without a publication stamp as a parse failure", async () => {
     let attempts = 0;
     const marker = await fetchSanctionsMarker("us-sdn", {
+      permit,
       signal: new AbortController().signal,
       fetchStreamRequest: async () => {
         attempts += 1;
@@ -529,6 +540,7 @@ describe("UK list refresh", () => {
   test("reads the edition from the generation date at the start of the export", async () => {
     const { fetchStreamRequest, requested } = fixtureStream(UK_FIXTURE);
     const marker = await fetchSanctionsMarker("uk", {
+      permit,
       signal: new AbortController().signal,
       fetchStreamRequest,
     });
@@ -546,12 +558,14 @@ describe("UK list refresh", () => {
   test("parses the export it identified as the UK source", async () => {
     const marker = (
       await fetchSanctionsMarker("uk", {
+        permit,
         signal: new AbortController().signal,
         fetchStreamRequest: fixtureStream(UK_FIXTURE).fetchStreamRequest,
       })
     ).unwrap();
 
     const edition = await fetchSanctionsEdition(marker, {
+      permit,
       signal: new AbortController().signal,
       fetchStreamRequest: fixtureStream(UK_FIXTURE).fetchStreamRequest,
     });
@@ -574,6 +588,7 @@ describe("UK list refresh", () => {
   test("reports an export without a generation date as a parse failure", async () => {
     let attempts = 0;
     const marker = await fetchSanctionsMarker("uk", {
+      permit,
       signal: new AbortController().signal,
       fetchStreamRequest: async () => {
         attempts += 1;
@@ -601,6 +616,7 @@ describe("HTTP validators for same-day editions", () => {
     fixture: string,
     headers: Record<string, string>,
   ): Parameters<typeof fetchSanctionsMarker>[1] => ({
+    permit,
     signal: new AbortController().signal,
     fetchStreamRequest: fixtureStream(fixture, headers).fetchStreamRequest,
   });
@@ -665,6 +681,7 @@ describe("SECO list refresh", () => {
   test("reads the edition from the root date at the start of the export", async () => {
     const { fetchStreamRequest, requested } = fixtureStream(SECO_FIXTURE);
     const marker = await fetchSanctionsMarker("ch", {
+      permit,
       signal: new AbortController().signal,
       fetchStreamRequest,
     });
@@ -682,12 +699,14 @@ describe("SECO list refresh", () => {
   test("parses the export it identified as the SECO source", async () => {
     const marker = (
       await fetchSanctionsMarker("ch", {
+        permit,
         signal: new AbortController().signal,
         fetchStreamRequest: fixtureStream(SECO_FIXTURE).fetchStreamRequest,
       })
     ).unwrap();
 
     const edition = await fetchSanctionsEdition(marker, {
+      permit,
       signal: new AbortController().signal,
       fetchStreamRequest: fixtureStream(SECO_FIXTURE).fetchStreamRequest,
     });
@@ -710,6 +729,7 @@ describe("SECO list refresh", () => {
   test("reports an export without a root date as a parse failure", async () => {
     let attempts = 0;
     const marker = await fetchSanctionsMarker("ch", {
+      permit,
       signal: new AbortController().signal,
       fetchStreamRequest: async () => {
         attempts += 1;

@@ -1,10 +1,12 @@
 import { Result } from "better-result";
 import { beforeEach, describe, expect, test } from "bun:test";
 
+import { grantThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import { LIMITS } from "@/api/lib/limits";
 import {
   SafeOutboundFetchError,
   type SafeOutboundFetchResponse,
+  type safeOutboundFetchBytes,
 } from "@/api/lib/safe-outbound-fetch";
 import {
   createSkillPackageFetchContext as createSkillPackageFetchContextWithDependencies,
@@ -13,6 +15,7 @@ import {
 } from "@/api/lib/skills/skill-package";
 
 const COMMIT_SHA = "a".repeat(40);
+const permit = grantThirdPartyOutboundPermit();
 const SMALL_TREE_SHA = "b".repeat(40);
 const SCRIPTS_TREE_SHA = "c".repeat(40);
 const MAX_DEPTH_SCRIPTS_TREE_SHA = "d".repeat(40);
@@ -56,9 +59,9 @@ const invalidSkillStatus = (): number => {
   return 404;
 };
 
-const safeOutboundFetchBytesMock: NonNullable<
-  Parameters<typeof createSkillPackageFetchContextWithDependencies>[1]
-> = async ({ url }) => {
+const safeOutboundFetchBytesMock: typeof safeOutboundFetchBytes = async ({
+  url,
+}) => {
   const requestUrl = typeof url === "string" ? new URL(url) : url;
   outboundRequestCount += 1;
   if (requestUrl.hostname === "raw.githubusercontent.com") {
@@ -218,18 +221,24 @@ Instructions.`);
 };
 
 const createSkillPackageFetchContext = (
-  limits: Parameters<typeof createSkillPackageFetchContextWithDependencies>[0],
+  limits: NonNullable<
+    Parameters<
+      typeof createSkillPackageFetchContextWithDependencies
+    >[0]["limits"]
+  >,
 ) =>
-  createSkillPackageFetchContextWithDependencies(
+  createSkillPackageFetchContextWithDependencies({
+    permit,
     limits,
-    safeOutboundFetchBytesMock,
-  );
+    fetchBytes: safeOutboundFetchBytesMock,
+  });
 
 const discoverSkillPackagesFromUrl = async (rawUrl: string) =>
-  await discoverSkillPackagesFromUrlWithDependencies(
+  await discoverSkillPackagesFromUrlWithDependencies({
+    fetchBytes: safeOutboundFetchBytesMock,
+    permit,
     rawUrl,
-    safeOutboundFetchBytesMock,
-  );
+  });
 
 const fetchSkillPackageFromUrl = async (
   rawUrl: string,

@@ -4,9 +4,11 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import type { SafeDb } from "@/api/db/safe-db";
 import { mcpUserConnections } from "@/api/db/schema";
 import type { CachedMcpToolDefinition } from "@/api/db/schema";
+import { grantThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import { toSafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import type { LoadedMcpConnection } from "@/api/lib/mcp-upstream/connections";
+import type { discoverOAuthMetadataForApproval } from "@/api/lib/mcp-upstream/oauth";
 import {
   bindDiscoveredMetadata,
   discoverOAuthMetadata,
@@ -58,7 +60,9 @@ const state = {
 
 const connectionDependenciesTestDouble = {
   now: () => state.now,
-  discoverOAuthMetadataForApproval: async (connectorUrl: string) =>
+  discoverOAuthMetadataForApproval: async ({
+    rawMcpUrl: connectorUrl,
+  }: Parameters<typeof discoverOAuthMetadataForApproval>[0]) =>
     Result.ok({
       protectedResource: {
         resource: connectorUrl,
@@ -71,7 +75,9 @@ const connectionDependenciesTestDouble = {
       },
     }),
   wait: async () => {},
-  discoverOAuthMetadata: async (connectorUrl: string) =>
+  discoverOAuthMetadata: async ({
+    rawMcpUrl: connectorUrl,
+  }: Parameters<typeof discoverOAuthMetadata>[0]) =>
     bindDiscoveredMetadata({
       connectorUrl,
       protectedResource: {
@@ -135,25 +141,31 @@ const outboundFetch = asTestRaw<
 });
 
 const createMcpClientForConnection = async (
-  options: Parameters<typeof createMcpClientForConnectionImpl>[0],
+  options: Omit<
+    Parameters<typeof createMcpClientForConnectionImpl>[0],
+    "permit"
+  >,
 ) =>
   await createMcpClientForConnectionImpl({
     ...options,
+    permit: outboundPermit,
     dependencies: connectionDependencies,
     outboundFetch,
   });
 
 const proxyMcpToolCall = async (
-  options: Parameters<typeof proxyMcpToolCallImpl>[0],
+  options: Omit<Parameters<typeof proxyMcpToolCallImpl>[0], "permit">,
 ) =>
   await proxyMcpToolCallImpl({
     ...options,
+    permit: outboundPermit,
     dependencies: connectionDependencies,
     outboundFetch,
   });
 
 const organizationId = toSafeId<"organization">("org_1");
 const userId = toSafeId<"user">("user_1");
+const outboundPermit = grantThirdPartyOutboundPermit();
 
 const cachedTool = {
   exposedName: "mcp__registry__lookup",
@@ -370,6 +382,7 @@ test("uses credentials for configured resource paths", async () => {
 test("uses a consistent connection snapshot while preparing credentials", async () => {
   const row = oauthRow({ expiresAt: null });
   const client = await createMcpClientForConnectionImpl({
+    permit: outboundPermit,
     organizationId,
     userId,
     safeDb: makeSafeDb(),
@@ -547,6 +560,7 @@ describe("MCP upstream connection lifecycle", () => {
       cachedTool,
       dependencies: connectionDependencies,
       organizationId,
+      permit: outboundPermit,
       outboundFetch: recordingOutboundFetch,
       row: oauthRow({ expiresAt: new Date(Date.now() + 3_600_000) }),
       safeDb: makeSafeDb(),
@@ -608,6 +622,7 @@ describe("MCP upstream connection lifecycle", () => {
     });
 
     const client = await createMcpClientForConnectionImpl({
+      permit: outboundPermit,
       dependencies: initializingDependencies,
       organizationId,
       outboundFetch: recordingOutboundFetch,
@@ -743,6 +758,7 @@ describe("MCP upstream connection lifecycle", () => {
   test("records no review when discovery for an unconfigured issuer fails", async () => {
     const client = await createMcpClientForConnectionImpl({
       organizationId,
+      permit: outboundPermit,
       row: oauthRow({ oauthIssuerBinding: { type: "unconfigured" } }),
       safeDb: makeSafeDb(),
       userId,
@@ -767,6 +783,7 @@ describe("MCP upstream connection lifecycle", () => {
   test("records authorization discovery that requires confirmation", async () => {
     const client = await createMcpClientForConnectionImpl({
       organizationId,
+      permit: outboundPermit,
       row: oauthRow(),
       safeDb: makeSafeDb(),
       userId,
@@ -801,6 +818,7 @@ describe("MCP upstream connection lifecycle", () => {
     expect(
       await createMcpClientForConnectionImpl({
         organizationId,
+        permit: outboundPermit,
         row: oauthRow({
           oauthIssuerBinding: {
             type: "approved",
@@ -813,10 +831,16 @@ describe("MCP upstream connection lifecycle", () => {
         outboundFetch,
         dependencies: {
           ...connectionDependencies,
-          discoverOAuthMetadata: async (url, _dependencies, origins) => {
+          discoverOAuthMetadata: async ({
+            rawMcpUrl: url,
+            confirmedEndpointOrigins: origins,
+          }) => {
             observedOrigins = origins;
             return await connectionDependenciesTestDouble.discoverOAuthMetadata(
-              url,
+              {
+                rawMcpUrl: url,
+                permit: outboundPermit,
+              },
             );
           },
         },
@@ -869,6 +893,7 @@ describe("MCP upstream connection lifecycle", () => {
     let waitedMilliseconds = 0;
     const client = await createMcpClientForConnectionImpl({
       organizationId,
+      permit: outboundPermit,
       row,
       safeDb,
       userId,
@@ -918,19 +943,24 @@ describe("MCP upstream connection lifecycle", () => {
     const row = oauthRow();
     const dependencies = {
       ...connectionDependencies,
-      discoverOAuthMetadata: async (connectorUrl: string) => {
+      discoverOAuthMetadata: async ({ rawMcpUrl: connectorUrl }) => {
         if (!stalled) {
-          return await connectionDependenciesTestDouble.discoverOAuthMetadata(
-            connectorUrl,
-          );
+          return await connectionDependenciesTestDouble.discoverOAuthMetadata({
+            rawMcpUrl: connectorUrl,
+            permit: outboundPermit,
+          });
         }
-        const result = await discoverOAuthMetadata(connectorUrl, {
-          timeoutMs: 5,
-          validateOutboundFetchTarget: async (rawUrl: string | URL) =>
-            Result.ok({ url: new URL(rawUrl), addresses: [] }),
-          safeOutboundFetchBytes: async () => {
-            metadataFetches += 1;
-            return await new Promise<never>(() => {});
+        const result = await discoverOAuthMetadata({
+          rawMcpUrl: connectorUrl,
+          permit: outboundPermit,
+          dependencies: {
+            timeoutMs: 5,
+            validateOutboundFetchTarget: async (rawUrl: string | URL) =>
+              Result.ok({ url: new URL(rawUrl), addresses: [] }),
+            safeOutboundFetchBytes: async () => {
+              metadataFetches += 1;
+              return await new Promise<never>(() => {});
+            },
           },
         });
         if (Result.isError(result)) {
@@ -942,6 +972,7 @@ describe("MCP upstream connection lifecycle", () => {
     const create = async () =>
       await createMcpClientForConnectionImpl({
         organizationId,
+        permit: outboundPermit,
         row,
         safeDb,
         userId,
