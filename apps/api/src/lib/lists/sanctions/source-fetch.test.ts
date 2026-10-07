@@ -3,9 +3,16 @@ import { describe, expect, test } from "bun:test";
 import path from "node:path";
 
 import { SANCTIONS_SOURCES, readUnListVersion } from "@stll/sanctions";
+import type { SanctionsSource } from "@stll/sanctions";
 
-import type { safeOutboundFetchStream } from "@/api/lib/safe-outbound-fetch";
+import {
+  fetchStreamWithResolvedAddress,
+  parseSafeOutboundUrl,
+  validateOutboundFetchTarget,
+  type safeOutboundFetchStream,
+} from "@/api/lib/safe-outbound-fetch";
 
+import { SANCTIONS_SOURCE_CONFIG } from "./source-config";
 import {
   discoverCzCsvUrl,
   discoverEuXmlUrl,
@@ -61,6 +68,21 @@ const euMetadata = (downloadUrl: string) => ({
   ],
 });
 
+test("every source carries its canonical redirect policy into API configuration", () => {
+  for (const source of Object.values(SANCTIONS_SOURCES)) {
+    expect(SANCTIONS_SOURCE_CONFIG[source.id].allowedRedirectHosts).toBe(
+      source.allowedRedirectHosts,
+    );
+    for (const host of source.allowedRedirectHosts) {
+      expect(parseSafeOutboundUrl(`https://${host}/`).isOk()).toBe(true);
+      expect(host).not.toContain("*");
+      if (source.download.kind === "direct") {
+        expect(host).not.toBe(new URL(source.download.urls[0]).hostname);
+      }
+    }
+  }
+});
+
 describe("publisher download discovery", () => {
   test("takes the XML 1.1 distribution from EU metadata with its current query token", () => {
     const url =
@@ -96,6 +118,250 @@ describe("publisher download discovery", () => {
 });
 
 describe("streaming list downloads", () => {
+  test.each(["relative", "declared"] as const)(
+    "loads %s redirects for every streamed publisher over HTTP transport",
+    async (mode) => {
+      const fixtures = {
+        eu: "eu.xml",
+        un: "un.xml",
+        "us-sdn": "ofac-sdn.xml",
+        "us-non-sdn": "ofac-non-sdn.xml",
+        uk: "uk.xml",
+        ch: "seco.xml",
+      } as const satisfies Record<Exclude<SanctionsSource, "cz">, string>;
+      for (const source of Object.values(SANCTIONS_SOURCES)) {
+        if (source.id === "cz") {
+          continue;
+        }
+        const sourceId = source.id;
+        const canonicalUrl = SANCTIONS_SOURCES[sourceId].download.urls[0];
+        const redirectHost =
+          SANCTIONS_SOURCES[sourceId].allowedRedirectHosts.at(0);
+        let redirects = 0;
+        let downloads = 0;
+        const server = Bun.serve({
+          hostname: "127.0.0.1",
+          port: 0,
+          fetch: (request) => {
+            if (
+              (mode === "declared" && redirectHost === undefined) ||
+              new URL(request.url).pathname === "/published.xml"
+            ) {
+              downloads += 1;
+              return new Response(
+                Bun.file(path.join(FIXTURES, fixtures[sourceId])),
+              );
+            }
+            redirects += 1;
+            return new Response(null, {
+              status: 302,
+              headers: {
+                Location:
+                  mode === "relative"
+                    ? "/published.xml"
+                    : `https://${String(redirectHost)}/published.xml`,
+              },
+            });
+          },
+        });
+        const fetchStreamRequest: typeof safeOutboundFetchStream = async (
+          options,
+        ) => {
+          const parsed = parseSafeOutboundUrl(String(options.url));
+          if (parsed.isErr()) {
+            return parsed;
+          }
+          const transportUrl = new URL(parsed.value);
+          transportUrl.protocol = "http:";
+          transportUrl.port = String(server.port);
+          return await fetchStreamWithResolvedAddress({
+            ...options,
+            url: transportUrl,
+            addresses: [{ address: "127.0.0.1", family: 4 }],
+          });
+        };
+        try {
+          const options = {
+            signal: new AbortController().signal,
+            fetchStreamRequest,
+            euXmlUrlOverride: canonicalUrl,
+          };
+          const marker = await fetchSanctionsMarker(source.id, options);
+          expect(marker.isOk()).toBe(true);
+          const fetchedMarker = marker.unwrap();
+          expect(fetchedMarker.downloadUrl).toBe(canonicalUrl);
+          const edition = await fetchSanctionsEdition(fetchedMarker, options);
+          expect(edition.isOk()).toBe(true);
+          expect(edition.unwrap().parsed.entries.length).toBeGreaterThan(0);
+          expect(redirects).toBe(
+            mode === "declared" && redirectHost === undefined ? 0 : 2,
+          );
+          expect(downloads).toBe(2);
+        } finally {
+          await server.stop(true);
+        }
+      }
+    },
+  );
+
+  test("refuses undeclared destinations, credentials and unsafe protocols before transport", async () => {
+    for (const location of [
+      "https://undeclared.test/file?token=secret",
+      "https://127.0.0.1/private",
+      "http://unsolprodfiles.blob.core.windows.net/file",
+      "http://scsanctions.un.org/new-path",
+      "https://scsanctions.un.org:444/new-path",
+      "https://user:secret@unsolprodfiles.blob.core.windows.net/file",
+    ]) {
+      const transportTargets: string[] = [];
+      const server = Bun.serve({
+        hostname: "127.0.0.1",
+        port: 0,
+        fetch: () =>
+          new Response(null, {
+            status: 302,
+            headers: { Location: location },
+          }),
+      });
+      try {
+        const result = await fetchSanctionsMarker("un", {
+          signal: new AbortController().signal,
+          fetchStreamRequest: async (options) => {
+            transportTargets.push(String(options.url));
+            const transportUrl = new URL(options.url);
+            transportUrl.protocol = "http:";
+            transportUrl.port = String(server.port);
+            return await fetchStreamWithResolvedAddress({
+              ...options,
+              url: transportUrl,
+              addresses: [{ address: "127.0.0.1", family: 4 }],
+            });
+          },
+        });
+        expect(result.isErr()).toBe(true);
+        expect(transportTargets.length).toBeGreaterThan(0);
+        expect(
+          transportTargets.every(
+            (target) => target === SANCTIONS_SOURCES.un.download.urls[0],
+          ),
+        ).toBe(true);
+        if (result.isErr()) {
+          expect(result.error.message).not.toContain("secret");
+          expect(result.error.code).toBe(
+            location.includes("undeclared") || location.includes(":444")
+              ? "access-denied"
+              : "fetch-failed",
+          );
+        }
+      } finally {
+        await server.stop(true);
+      }
+    }
+  });
+
+  test("declared redirect hosts cannot resolve to nonpublic addresses", async () => {
+    for (const blockedAddress of [
+      "127.0.0.1",
+      "10.0.0.1",
+      "169.254.169.254",
+      "::1",
+      "fd00::1",
+    ]) {
+      const declaredHost = SANCTIONS_SOURCE_CONFIG.un.allowedRedirectHosts[0];
+      const resolutions: { hostname: string; address: string }[] = [];
+      const transports: string[] = [];
+      const server = Bun.serve({
+        hostname: "127.0.0.1",
+        port: 0,
+        fetch: () =>
+          new Response(null, {
+            status: 302,
+            headers: { Location: `https://${declaredHost}/published.xml` },
+          }),
+      });
+      try {
+        const result = await fetchSanctionsMarker("un", {
+          signal: new AbortController().signal,
+          fetchStreamRequest: async (options) => {
+            const target = await validateOutboundFetchTarget(options.url, {
+              signal: options.signal,
+              timeoutMs: options.timeoutMs,
+              resolveAddresses: async (hostname) => {
+                const address =
+                  hostname === declaredHost ? blockedAddress : "93.184.216.34";
+                resolutions.push({ hostname, address });
+                return Result.ok([
+                  { address, family: address.includes(":") ? 6 : 4 },
+                ]);
+              },
+            });
+            if (target.isErr()) {
+              expect(target.error.message).toBe("URL host is not allowed");
+              return target;
+            }
+            transports.push(target.value.url.hostname);
+            const transportUrl = new URL(target.value.url);
+            transportUrl.protocol = "http:";
+            transportUrl.port = String(server.port);
+            return await fetchStreamWithResolvedAddress({
+              ...options,
+              url: transportUrl,
+              addresses: [{ address: "127.0.0.1", family: 4 }],
+            });
+          },
+        });
+        expect(result.isErr()).toBe(true);
+        expect(
+          resolutions.filter(({ hostname }) => hostname === declaredHost),
+        ).toEqual(
+          Array.from({ length: 3 }, () => ({
+            hostname: declaredHost,
+            address: blockedAddress,
+          })),
+        );
+        expect(transports).toEqual(
+          Array.from({ length: 3 }, () => "scsanctions.un.org"),
+        );
+      } finally {
+        await server.stop(true);
+      }
+    }
+  });
+
+  test("limits declared redirect chains to three hops including loops", async () => {
+    for (const scenario of ["chain", "loop"] as const) {
+      let requests = 0;
+      let cancelled = 0;
+      const signal = new AbortController();
+      const result = await fetchSanctionsMarker("un", {
+        signal: signal.signal,
+        fetchStreamRequest: async ({ headers }) => {
+          expect(new Headers(headers).has("authorization")).toBe(false);
+          expect(new Headers(headers).has("cookie")).toBe(false);
+          requests += 1;
+          if (requests === 4) {
+            signal.abort();
+          }
+          return Result.ok({
+            ok: false,
+            status: 302,
+            headers: new Headers({
+              Location: `https://unsolprodfiles.blob.core.windows.net/${scenario === "loop" ? "loop" : requests}`,
+            }),
+            body: new ReadableStream<Uint8Array>({
+              cancel() {
+                cancelled += 1;
+              },
+            }),
+          });
+        },
+      });
+      expect(result.isErr()).toBe(true);
+      expect(requests).toBe(4);
+      expect(cancelled).toBe(requests);
+    }
+  });
+
   test("retries a connection lost while reading the body as a fetch failure", async () => {
     const fixture = new Uint8Array(await Bun.file(UN_FIXTURE).arrayBuffer());
     const version = (
@@ -160,7 +426,9 @@ describe("streaming list downloads", () => {
               start(controller) {
                 signal?.addEventListener(
                   "abort",
-                  () => controller.error(signal.reason),
+                  () => {
+                    controller.error(signal.reason);
+                  },
                   { once: true },
                 );
               },

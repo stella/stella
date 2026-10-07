@@ -41,6 +41,21 @@ jobs:
           - .github/branch-protection/tags-v.json
 
     steps:
+      - name: Checkout GitHub API tooling
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: ${{ github.repository }}
+          ref: ${{ github.workflow_sha }}
+          path: .gh-retry
+          persist-credentials: false
+          sparse-checkout: scripts/gh-retry.sh
+          sparse-checkout-cone-mode: false
+
+      - name: Preserve GitHub API tooling across source checkouts
+        run: |
+          cp "$GITHUB_WORKSPACE/.gh-retry/scripts/gh-retry.sh" "$RUNNER_TEMP/gh-retry.sh"
+          echo "GH_RETRY_SCRIPT=$RUNNER_TEMP/gh-retry.sh" >> "$GITHUB_ENV"
+
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
@@ -79,7 +94,7 @@ jobs:
           echo "Syncing ruleset: ${EXPECTED_NAME}"
 
           MATCHED_ID=$(
-            gh api "repos/${REPO}/rulesets" \
+            bash "$GH_RETRY_SCRIPT" api "repos/${REPO}/rulesets" \
               --paginate \
               --slurp \
               | jq --arg name "${EXPECTED_NAME}" '[add // [] | .[] | select(.name == $name) | .id] | first'
@@ -103,7 +118,7 @@ jobs:
           jq . ruleset-payload.json
           echo "::endgroup::"
 
-          gh api --method PUT "repos/${REPO}/rulesets/${MATCHED_ID}" \
+          bash "$GH_RETRY_SCRIPT" api --method PUT "repos/${REPO}/rulesets/${MATCHED_ID}" \
             --input ruleset-payload.json \
             > live-updated.json
 

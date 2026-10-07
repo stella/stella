@@ -13,6 +13,7 @@ export const RESULT_CONVENTION_SOURCE_GLOBS = [
   "apps/api/src/handlers/**/*.{ts,tsx}",
   "apps/api/src/mcp/**/*.{ts,tsx}",
   "apps/web/src/**/*.{ts,tsx}",
+  "apps/visual-preview/src/**/*.{ts,tsx}",
   "packages/*/src/**/*.{ts,tsx}",
 ] as const;
 
@@ -26,6 +27,7 @@ export const RESULT_CONVENTION_SOURCE_GLOBS = [
 // oxlint.config.ts spreads this list rather than restating it, so the lint
 // scope and the enrolment guard cannot drift apart.
 export const RESULT_CONVENTION_ENABLED_GLOBS = [
+  "apps/visual-preview/src/**/*.ts",
   "apps/api/src/handlers/realtime-resource-sets.ts",
   "apps/api/src/lib/auth/**/*.ts",
   "apps/api/src/handlers/agent-auth/**/*.ts",
@@ -98,7 +100,9 @@ export const RESULT_CONVENTION_ENABLED_GLOBS = [
   "apps/api/src/lib/mcp-connectors/**/*.ts",
   "apps/api/src/lib/memory/**/*.ts",
   "apps/api/src/lib/observability/**/*.ts",
+  "apps/api/src/lib/proofs/**/*.ts",
   "apps/api/src/lib/properties/**/*.ts",
+  "apps/api/src/lib/review-organization/**/*.ts",
   "apps/api/src/lib/s3/**/*.ts",
   "apps/api/src/lib/skills/**/*.ts",
   "apps/api/src/lib/smoke-session/**/*.ts",
@@ -136,6 +140,7 @@ export const RESULT_CONVENTION_ENABLED_GLOBS = [
   "apps/web/src/features/time-timers/**/*.{ts,tsx}",
   "apps/web/src/features/workspaces/**/*.{ts,tsx}",
   "apps/web/src/lib/deepl/**/*.{ts,tsx}",
+  "apps/web/src/lib/drag-and-drop/**/*.{ts,tsx}",
   "apps/web/src/lib/inbox/**/*.{ts,tsx}",
   "apps/web/src/lib/prompts/**/*.{ts,tsx}",
   "apps/web/src/lib/web-search/**/*.{ts,tsx}",
@@ -169,6 +174,7 @@ export const RESULT_CONVENTION_ENABLED_GLOBS = [
   "packages/redis-config/src/**/*.ts",
   "packages/runtime-mode/src/**/*.ts",
   "packages/sanctions/src/**/*.ts",
+  "packages/sha256/src/**/*.ts",
   "packages/template-packs/src/**/*.ts",
   "packages/text-normalize/src/**/*.ts",
   "packages/time/src/**/*.ts",
@@ -185,6 +191,7 @@ export const RESULT_BOUNDARY_GLOBS = [
   "apps/web/src/lib/errors/query-result.ts",
   // Better Auth invokes these hooks and consumes rejected APIError values.
   "apps/api/src/lib/auth/demo-account-hooks.ts",
+  "apps/api/src/lib/auth/review-account-plugin.ts",
   // Better Auth consumes adapter failures through Promise rejection.
   "apps/api/src/lib/auth/registration-adapter.ts",
 
@@ -224,6 +231,8 @@ export const RESULT_BOUNDARY_GLOBS = [
   "apps/api/src/scripts/**",
   "apps/api/src/handlers/mcp-app-sandbox/**",
   "apps/api/src/handlers/visual-sandbox/**",
+  // Lambda invokes this entry point and reports a failure through rejection.
+  "apps/visual-preview/src/handler.ts",
   // Web worker entry modules. The browser, not our code, invokes the message
   // handler, and a failure has to travel back over `postMessage` instead of
   // returning to a caller that could read a `Result`.

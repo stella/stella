@@ -2,23 +2,23 @@ import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
 
+import {
+  hasInlineChildren,
+  isDocumentAst,
+  plainTextOf,
+} from "@stll/legal-ast/document-ast";
+import type {
+  Block,
+  DocumentAst,
+  Inline,
+  ParagraphBlock,
+} from "@stll/legal-ast/document-ast";
 import { propertyConfig, propertySeed } from "@stll/property-testing";
 
 import { extractDecisionCitations } from "@/api/handlers/case-law/ingestion/citation-extractor";
 import { annotateUsCitations } from "@/api/handlers/case-law/ingestion/us-citation-annotations";
 import type { UsCitationOccurrence } from "@/api/handlers/case-law/ingestion/us-citation-occurrences";
 import type { CitationWorkBudget } from "@/api/handlers/case-law/ingestion/us-citation-scanner";
-import {
-  hasInlineChildren,
-  isDocumentAst,
-  plainTextOf,
-} from "@/api/lib/case-law/document-ast";
-import type {
-  Block,
-  DocumentAst,
-  Inline,
-  ParagraphBlock,
-} from "@/api/lib/case-law/document-ast";
 
 const config = (numRuns: number) =>
   propertyConfig({ numRuns, seed: propertySeed() });

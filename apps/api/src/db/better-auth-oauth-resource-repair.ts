@@ -22,7 +22,10 @@
  * reimplementing their semantics, which is what keeps a resource seeded by a
  * deploy identical to one seeded by the cutover: a missing resource is
  * inserted, a matching one is left alone, and a conflicting definition refuses
- * the whole thing instead of overwriting it. The identity half of the cutover
+ * the whole thing instead of overwriting it. A row holding the predecessor
+ * scope set (`predecessorOAuthResourceScopes`) counts as matching and is not
+ * rewritten in this release, so a previous-release task can still boot. The
+ * identity half of the cutover
  * (`backfillAccounts`) stays private to that command; it needs the manifest and
  * the freeze, and nothing about adding an audience touches identities.
  *

@@ -93,12 +93,9 @@ const abortUpload = createSafeHandler(
     }
 
     const abortedRows = yield* Result.await(
-      // oxlint-disable-next-line arrow-body-style -- block body holds the audit-skip directive
-      safeDb((tx) => {
-        // audit: skip — pending_uploads bookkeeping; the row never
-        // became a durable entity, so there's nothing for the audit
-        // log to attribute it to.
-        return tx
+      safeDb((tx) =>
+        // audit: skip — pending_uploads bookkeeping; the row never became a durable entity, so there's nothing for the audit log to attribute it to.
+        tx
           .update(pendingUploads)
           .set({
             status: "rejected",
@@ -113,8 +110,8 @@ const abortUpload = createSafeHandler(
               inArray(pendingUploads.status, ["pending", "failed"]),
             ),
           )
-          .returning({ id: pendingUploads.id });
-      }),
+          .returning({ id: pendingUploads.id }),
+      ),
     );
     if (!abortedRows.at(0)) {
       const latest = yield* Result.await(

@@ -211,6 +211,7 @@ const renderDecision = async (
   const root = createRootRoute({
     component: () => (
       <DecisionText
+        surface="development"
         decision={decision}
         decisionId={decision.id}
         expandProvisions={expandProvisions}

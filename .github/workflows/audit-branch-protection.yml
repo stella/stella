@@ -22,7 +22,7 @@ jobs:
   audit-branch:
     permissions:
       contents: read
-    uses: stella/.github/.github/workflows/audit-branch-protection.yml@aff5017c264acce5a2bcdf15876da08835e6de70
+    uses: stella/.github/.github/workflows/audit-branch-protection.yml@167fb396c6c0f4e07296ad2cd72e6ef15367c776
     with:
       expected-config-path: .github/branch-protection/ruleset-main.json
     secrets:
@@ -32,7 +32,7 @@ jobs:
   audit-tag:
     permissions:
       contents: read
-    uses: stella/.github/.github/workflows/audit-branch-protection.yml@aff5017c264acce5a2bcdf15876da08835e6de70
+    uses: stella/.github/.github/workflows/audit-branch-protection.yml@167fb396c6c0f4e07296ad2cd72e6ef15367c776
     with:
       expected-config-path: .github/branch-protection/tags-v.json
     secrets:
@@ -49,6 +49,21 @@ jobs:
     timeout-minutes: 5
     permissions: {}
     steps:
+      - name: Checkout GitHub API tooling
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: ${{ github.repository }}
+          ref: ${{ github.workflow_sha }}
+          path: .gh-retry
+          persist-credentials: false
+          sparse-checkout: scripts/gh-retry.sh
+          sparse-checkout-cone-mode: false
+
+      - name: Preserve GitHub API tooling across source checkouts
+        run: |
+          cp "$GITHUB_WORKSPACE/.gh-retry/scripts/gh-retry.sh" "$RUNNER_TEMP/gh-retry.sh"
+          echo "GH_RETRY_SCRIPT=$RUNNER_TEMP/gh-retry.sh" >> "$GITHUB_ENV"
+
       - name: Create GitHub App token
         id: app-token
         uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
@@ -64,7 +79,7 @@ jobs:
         shell: bash --noprofile --norc -eo pipefail {0}
         run: |
           LIVE_POLICY=$(
-            gh api "repos/${REPO}/actions/permissions/fork-pr-contributor-approval" \
+            bash "$GH_RETRY_SCRIPT" api "repos/${REPO}/actions/permissions/fork-pr-contributor-approval" \
               --jq '.approval_policy'
           )
           echo "Fork approval policy: ${LIVE_POLICY}"

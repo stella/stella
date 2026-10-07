@@ -3,7 +3,23 @@ import * as v from "valibot";
 
 import { DAY_IN_MS } from "@stll/time";
 
-import { envApiInvariantViolation, envApiServerSchema } from "./env-schema";
+import {
+  envApiInvariantViolation,
+  envApiServerSchema,
+  freeTierInvariantViolation,
+} from "./env-schema";
+
+test("generated views require explicit deployment enablement", () => {
+  expect(v.parse(envApiServerSchema.FEATURE_GENERATED_VIEWS, undefined)).toBe(
+    false,
+  );
+  expect(v.parse(envApiServerSchema.FEATURE_GENERATED_VIEWS, "false")).toBe(
+    false,
+  );
+  expect(v.parse(envApiServerSchema.FEATURE_GENERATED_VIEWS, "true")).toBe(
+    true,
+  );
+});
 
 test("agent client storage format requires explicit enablement", () => {
   const schema = envApiServerSchema.AGENT_CLIENT_STORAGE_V1_ENABLED;
@@ -59,6 +75,24 @@ const environment = {
   nodeEnv: "production",
   runtimeMode: { mode: "strict" },
 } as const satisfies Parameters<typeof envApiInvariantViolation>[0];
+
+test("the restricted review account is configured with both keys or neither", () => {
+  for (const email of [undefined, "review@example.test"]) {
+    for (const organizationId of [undefined, "org_review"]) {
+      expect(
+        envApiInvariantViolation({
+          ...environment,
+          APP_REVIEW_ACCOUNT_EMAIL: email,
+          APP_REVIEW_ORGANIZATION_ID: organizationId,
+        }),
+      ).toBe(
+        (email === undefined) === (organizationId === undefined)
+          ? null
+          : "APP_REVIEW_ACCOUNT_EMAIL and APP_REVIEW_ORGANIZATION_ID must be set together.",
+      );
+    }
+  }
+});
 
 test("managed checks require an explicit supported provider and bounded configuration", () => {
   for (const provider of [
@@ -265,10 +299,31 @@ test("registration settings supply bounded operator defaults", () => {
 
 test("the client address header cannot reuse a header the API owns", () => {
   const schema = envApiServerSchema.STELLA_CLIENT_ADDRESS_HEADER;
-  for (const name of ["x-stella-client-address", "X-Stella-Origin-Verify"]) {
+  // The frontend address header is trusted only beside the frontend value;
+  // naming it here would trust a browser-set value beside the origin value.
+  for (const name of [
+    "x-stella-client-address",
+    "X-Stella-Origin-Verify",
+    "x-stella-frontend-verify",
+    "X-Stella-Viewer-Address",
+  ]) {
     expect(v.safeParse(schema, name).success).toBe(false);
   }
-  expect(v.safeParse(schema, "x-stella-viewer-address").success).toBe(true);
+  expect(v.safeParse(schema, "cloudfront-viewer-address").success).toBe(true);
+});
+
+test("edge verify values must each be long enough not to be guessed", () => {
+  const long = "a".repeat(32);
+  for (const schema of [
+    envApiServerSchema.STELLA_ORIGIN_VERIFY_SECRET,
+    envApiServerSchema.STELLA_FRONTEND_VERIFY_SECRET,
+  ]) {
+    expect(v.safeParse(schema, undefined).success).toBe(true);
+    expect(v.safeParse(schema, `${long},${"b".repeat(32)}`).success).toBe(true);
+    for (const invalid of ["a".repeat(31), `${long},short`, `${long},`]) {
+      expect(v.safeParse(schema, invalid).success).toBe(false);
+    }
+  }
 });
 
 test("inbound mail receiving is configured all-or-none and requires its domain", () => {
@@ -346,4 +401,46 @@ test("list verification grants use the shared registered-feature configuration",
       '{"list-verification":[{"type":"member","organizationId":"org-a","email":"*@example.test"}]}',
     ).success,
   ).toBe(false);
+});
+
+test("the free tier boots only with access state and service budgets, and never with usage enforcement", () => {
+  expect(v.parse(envApiServerSchema.FEATURE_FREE_TIER, undefined)).toBe(false);
+  for (const FEATURE_FREE_TIER of [false, true]) {
+    for (const FEATURE_ORG_ACCESS_STATE of [false, true]) {
+      for (const FEATURE_ORG_SERVICE_BUDGETS of [false, true]) {
+        for (const USAGE_ENFORCEMENT_ENABLED of [false, true]) {
+          const bootable =
+            !FEATURE_FREE_TIER ||
+            (FEATURE_ORG_ACCESS_STATE &&
+              FEATURE_ORG_SERVICE_BUDGETS &&
+              !USAGE_ENFORCEMENT_ENABLED);
+          const violation = freeTierInvariantViolation({
+            FEATURE_FREE_TIER,
+            FEATURE_ORG_ACCESS_STATE,
+            FEATURE_ORG_SERVICE_BUDGETS,
+            USAGE_ENFORCEMENT_ENABLED,
+          });
+          expect(violation === null).toBe(bootable);
+          if (violation !== null) {
+            expect(violation).toStartWith("FEATURE_FREE_TIER requires");
+          }
+        }
+      }
+    }
+  }
+});
+
+test("visual preview configuration accepts an optional Lambda function identifier", () => {
+  const schema = envApiServerSchema.VISUAL_PREVIEW_FUNCTION_NAME;
+  expect(v.parse(schema, undefined)).toBeUndefined();
+  for (const arn of ["visual-preview-test", "visual-preview-test:live"]) {
+    expect(v.parse(schema, arn)).toBe(arn);
+  }
+  for (const value of [
+    "https://example.test/preview",
+    "arn:aws:s3:::preview",
+    "arn:aws:lambda:eu-central-1:123:function:preview",
+  ]) {
+    expect(v.safeParse(schema, value).success).toBe(false);
+  }
 });

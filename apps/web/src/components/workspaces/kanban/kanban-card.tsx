@@ -166,7 +166,6 @@ export const KanbanCard = ({
   const nameElement =
     rename.state.mode === "edit" ? (
       <InlineEdit
-        inputClassName="w-full font-medium"
         onCancel={rename.cancel}
         onChange={rename.setDraft}
         onCommit={() => {
@@ -175,7 +174,9 @@ export const KanbanCard = ({
         value={rename.state.draft}
       />
     ) : (
-      <span className="truncate">{name}</span>
+      <span className="overflow-hidden text-ellipsis whitespace-pre">
+        {name}
+      </span>
     );
 
   const isTask = entity.kind === "task";

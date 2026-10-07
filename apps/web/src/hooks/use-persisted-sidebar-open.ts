@@ -1,5 +1,7 @@
 import { useState, useSyncExternalStore } from "react";
 
+import { deviceStorage } from "@/lib/account/browser-storage";
+
 const SIDEBAR_STORAGE_KEY = "sidebar_state";
 
 export const parsePersistedSidebarOpen = (
@@ -25,7 +27,7 @@ export const usePersistedSidebarOpen = ({
     () =>
       hydrateFromStorage
         ? (parsePersistedSidebarOpen(
-            localStorage.getItem(SIDEBAR_STORAGE_KEY),
+            deviceStorage("local").getItem(SIDEBAR_STORAGE_KEY),
           ) ?? defaultOpen)
         : defaultOpen,
     () => defaultOpen,
@@ -34,7 +36,7 @@ export const usePersistedSidebarOpen = ({
   const open = openOverride ?? storedOpen;
 
   const persistOpen = (nextOpen: boolean) => {
-    localStorage.setItem(
+    deviceStorage("local").setItem(
       SIDEBAR_STORAGE_KEY,
       nextOpen ? "expanded" : "collapsed",
     );

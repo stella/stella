@@ -19,8 +19,8 @@ const enabled = process.env["STELLA_RUN_VALKEY_TESTS"] === "true";
 const SETTLE_TIMEOUT_MS = 5000;
 const ATTEMPTS = 3;
 
-const failureCases = (marker: string) =>
-  [
+const failureCases = (marker: string) => {
+  const failures = [
     {
       type: "tagged",
       error: new QueueProbeError({
@@ -36,6 +36,13 @@ const failureCases = (marker: string) =>
     { type: "library", error: new Error(marker) },
     { type: "terminal", error: new UnrecoverableError(marker) },
   ] as const;
+  for (const { error } of failures) {
+    // Bun's native stack formatting can omit the message. The probe owns its
+    // sensitive trace so it tests queue sanitization independently of that.
+    error.stack = `${error.name}: ${marker}\n    at queueFailureProbe (${marker}:1:1)`;
+  }
+  return failures;
+};
 
 type ProbeData = { failure: ReturnType<typeof failureCases>[number]["type"] };
 
@@ -84,7 +91,9 @@ describe.skipIf(!enabled)("queue failure records over Valkey", () => {
               worker.waitUntilReady(),
             ]);
             for (const { type: failure, error: original } of failures) {
-              expect(original.stack).toContain(marker);
+              const originalStack = original.stack;
+              const originalMessage = original.message;
+              expect(originalStack).toContain(marker);
               let nextFailure = Promise.withResolvers<Error>();
               const observed: Error[] = [];
               const onFailed: WorkerListener<ProbeData, void>["failed"] = (
@@ -119,6 +128,8 @@ describe.skipIf(!enabled)("queue failure records over Valkey", () => {
                   },
                 );
                 expect(eventError).toBe(original);
+                expect(eventError.message).toBe(originalMessage);
+                expect(eventError.stack).toBe(originalStack);
                 const stored = await queue.getJob(failure);
                 if (stored === undefined) {
                   throw new TypeError("Probe job must be retained");

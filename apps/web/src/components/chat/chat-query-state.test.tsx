@@ -70,7 +70,10 @@ test("matter picker failure does not label selected context as no matter", async
   const { workspacesNavigationOptions } =
     await import("@/lib/workspaces/queries");
   const client = createClient();
-  const options = workspacesNavigationOptions(ORGANIZATION_ID);
+  const options = workspacesNavigationOptions({
+    organizationId: ORGANIZATION_ID,
+    userId: USER.id,
+  });
   client.getQueryCache().build(client, { queryKey: options.queryKey });
   markFailed(client, options.queryKey);
   const markup = render(
@@ -98,7 +101,10 @@ test("mention source failure shows a retry instead of silently removing choices"
   const { workspacesNavigationOptions } =
     await import("@/lib/workspaces/queries");
   const client = createClient();
-  const options = workspacesNavigationOptions(ORGANIZATION_ID);
+  const options = workspacesNavigationOptions({
+    organizationId: ORGANIZATION_ID,
+    userId: USER.id,
+  });
   client.getQueryCache().build(client, { queryKey: options.queryKey });
   markFailed(client, options.queryKey);
   const markup = render(
@@ -117,8 +123,14 @@ test("mention sources keep cached empty data with a failed refresh notice", asyn
   const { workspacesNavigationOptions } =
     await import("@/lib/workspaces/queries");
   const client = createClient();
-  const options = workspacesNavigationOptions(ORGANIZATION_ID);
-  client.setQueryData(options.queryKey, { workspaces: [] });
+  const options = workspacesNavigationOptions({
+    organizationId: ORGANIZATION_ID,
+    userId: USER.id,
+  });
+  client.setQueryData(options.queryKey, {
+    workspaces: [],
+    features: { timeBilling: false },
+  });
   markFailed(client, options.queryKey);
   const markup = render(
     client,

@@ -1,6 +1,21 @@
 import { describe, expect, test } from "bun:test";
 
-import { collisionSuffix, slugify, uniqueSlug } from "./slug";
+import {
+  MCP_TOOL_NAME_MAX_LENGTH,
+  MCP_TOOL_NAME_PATTERN,
+} from "@stll/api-contract/mcp-tool-name";
+
+import {
+  dynamicToolNamespacePrefix,
+  namespaceSkillToolName,
+} from "@/api/lib/mcp-upstream/namespace";
+
+import {
+  collisionSuffix,
+  SKILL_SLUG_MAX_LENGTH,
+  slugify,
+  uniqueSlug,
+} from "./slug";
 
 const SLUG_MAX = 56;
 const UNIQUE_MAX = 64;
@@ -118,4 +133,17 @@ describe("uniqueSlug", () => {
     const out = uniqueSlug(long);
     expect(out.length).toBeLessThanOrEqual(UNIQUE_MAX);
   });
+});
+
+test("authored slug budget reserves its tool namespace", () => {
+  expect(SKILL_SLUG_MAX_LENGTH).toBe(64);
+  expect(
+    SKILL_SLUG_MAX_LENGTH + dynamicToolNamespacePrefix("skill").length,
+  ).toBe(MCP_TOOL_NAME_MAX_LENGTH);
+  const slug = uniqueSlug("a".repeat(MCP_TOOL_NAME_MAX_LENGTH));
+  expect(slug).toHaveLength(SKILL_SLUG_MAX_LENGTH);
+  expect(namespaceSkillToolName(slug)).toMatch(MCP_TOOL_NAME_PATTERN);
+  expect(namespaceSkillToolName(slug).length).toBeLessThanOrEqual(
+    MCP_TOOL_NAME_MAX_LENGTH,
+  );
 });

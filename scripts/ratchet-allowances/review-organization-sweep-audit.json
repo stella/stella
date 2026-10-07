@@ -1,0 +1,5 @@
+{
+  "metric": "audit-skip-directives",
+  "delta": 2,
+  "reason": "The review organization sweep empties many tables in one owner transaction; its per-run totals are recorded in the system audit instead of one audit row per deleted row."
+}

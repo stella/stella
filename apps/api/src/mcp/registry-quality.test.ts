@@ -1,11 +1,19 @@
 import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
 
+import {
+  MCP_TOOL_NAME_MAX_LENGTH,
+  MCP_TOOL_NAME_PATTERN,
+} from "@stll/api-contract/mcp-tool-name";
 import { propertyConfig } from "@stll/property-testing";
 
+import { SKILL_SLUG_MAX_LENGTH } from "@/api/handlers/skills/slug";
 import {
+  collisionSafeToolName,
   DYNAMIC_TOOL_NAMESPACES,
   dynamicToolNamespaceOf,
+  dynamicToolNamespacePrefix,
+  EMITTED_TOOL_NAME_MAX_LENGTH,
   namespaceMcpToolName,
   namespaceSkillToolName,
 } from "@/api/lib/mcp-upstream/namespace";
@@ -76,7 +84,7 @@ const OUTPUT_SCHEMA_CHAR_CEILING = 4000;
 const TOOL_DESCRIPTION_CHAR_CEILING = 810;
 
 // verb_noun style: lowercase words joined by single underscores.
-const TOOL_NAME_PATTERN = /^[a-z]+(?:_[a-z]+)*$/u;
+const STATIC_TOOL_NAME_STYLE = /^[a-z]+(?:_[a-z]+)*$/u;
 
 // Display titles: start with an uppercase letter, end without a period or
 // whitespace, and contain at least one lowercase letter (sentence case, not
@@ -163,7 +171,7 @@ describe.each(SURFACES)(
 
     test("tool names follow verb_noun naming", () => {
       for (const tool of definitions) {
-        expect(tool.name).toMatch(TOOL_NAME_PATTERN);
+        expect(tool.name).toMatch(STATIC_TOOL_NAME_STYLE);
       }
     });
 
@@ -906,4 +914,42 @@ describe("MCP dynamic tool-family coherence", () => {
     ).toBeUndefined();
     expect(getDynamicMcpToolOutputContract("list_matters")).toBeUndefined();
   });
+});
+
+test("every served tool family fits the shared name contract", () => {
+  const longestSlug = `${"a".repeat(SKILL_SLUG_MAX_LENGTH - 2)}-9`;
+  const skillName = namespaceSkillToolName(longestSlug);
+  expect(longestSlug).toHaveLength(SKILL_SLUG_MAX_LENGTH);
+  expect(longestSlug.length + dynamicToolNamespacePrefix("skill").length).toBe(
+    MCP_TOOL_NAME_MAX_LENGTH,
+  );
+  const seen = new Set<string>([skillName]);
+  const dynamicNames = {
+    skill: [
+      namespaceSkillToolName("compare-default"),
+      skillName,
+      collisionSafeToolName({
+        baseName: skillName,
+        rawName: longestSlug,
+        seen,
+      }),
+    ],
+    external_mcp: [
+      namespaceMcpToolName({
+        connectorSlug: "Legal connector",
+        toolName: "a".repeat(128),
+      }),
+    ],
+  } satisfies Record<keyof typeof DYNAMIC_TOOL_NAMESPACES, string[]>;
+  const names = [
+    ...SURFACES.flatMap(({ definitions }) =>
+      definitions.map(({ name }) => name),
+    ),
+    ...Object.values(dynamicNames).flat(),
+  ];
+  for (const name of names) {
+    expect(name).toMatch(MCP_TOOL_NAME_PATTERN);
+    expect(name.length).toBeLessThanOrEqual(MCP_TOOL_NAME_MAX_LENGTH);
+    expect(name.length).toBeLessThanOrEqual(EMITTED_TOOL_NAME_MAX_LENGTH);
+  }
 });

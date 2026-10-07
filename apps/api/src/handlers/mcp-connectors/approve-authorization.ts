@@ -18,7 +18,7 @@ import {
 
 const config = {
   permissions: { organizationSettings: ["update"] },
-  accountAccess: ACCOUNT_ACCESS.standard,
+  accountAccess: ACCOUNT_ACCESS.accountControl,
   realtime: mcpConnectorRealtimeUpdates,
   mcp: { type: "internal", reason: "mcp_transport" },
   params: t.Object({ slug: t.String({ minLength: 1, maxLength: 80 }) }),

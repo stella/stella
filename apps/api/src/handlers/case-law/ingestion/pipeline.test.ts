@@ -15,6 +15,8 @@ import {
 } from "@stll/api-contract/decision-document-role";
 import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
 import type { DecisionIdentifiers } from "@stll/legal-ast/decision-identifier";
+import type { DocumentAst } from "@stll/legal-ast/document-ast";
+import { plainTextOf } from "@stll/legal-ast/document-ast";
 import {
   DOCUMENT_FETCH_EVENT,
   type DocumentStageObserver,
@@ -33,8 +35,6 @@ import {
   caseLawSources,
 } from "@/api/db/schema";
 import { envBase } from "@/api/env-base";
-import type { DocumentAst } from "@/api/handlers/case-law/document-ast";
-import { plainTextOf } from "@/api/handlers/case-law/document-ast";
 import {
   EMPTY_AST,
   SOURCE_DOCUMENT_ID_MAX_LENGTH,
@@ -89,7 +89,7 @@ import type { RecordingLogger } from "@/api/tests/helpers/recording-telemetry";
 
 // An insert whose values can be awaited directly or chained into an upsert,
 // as the refresh path does for identifier rows.
-// oxlint-disable-next-line typescript-eslint/promise-function-async -- the double returns a promise that also carries onConflictDoUpdate; `async` would drop the extra method
+// oxlint-disable-next-line typescript/promise-function-async -- the double returns a promise that also carries onConflictDoUpdate; `async` would drop the extra method
 const insertedValues = () =>
   Object.assign(Promise.resolve(undefined), {
     onConflictDoUpdate: async () => await Promise.resolve(undefined),

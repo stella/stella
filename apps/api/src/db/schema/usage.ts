@@ -46,7 +46,13 @@ export const CLOSED_USAGE_ENTITLEMENT_STATUSES = [
 const CLOSED_USAGE_ENTITLEMENT_STATUS_SQL_VALUES =
   CLOSED_USAGE_ENTITLEMENT_STATUSES.map((status) => sql.raw(`'${status}'`));
 
-export const USAGE_POLICY_KINDS = ["subscription", "addon"] as const;
+/**
+ * `free` is the no-cost floor an organization falls back to once its
+ * evaluation or paid access lapses. At most one active `free` policy exists
+ * (partial unique index); its limits are read through the
+ * `organization_effective_policy` database function.
+ */
+export const USAGE_POLICY_KINDS = ["subscription", "addon", "free"] as const;
 export type UsagePolicyKind = (typeof USAGE_POLICY_KINDS)[number];
 
 export const USAGE_POLICY_BILLING_INTERVALS = [
@@ -207,6 +213,16 @@ export const usagePolicies = p.pgTable(
       .uniqueIndex("usage_policies_hosted_policy_ref_uidx")
       .on(table.hostedPolicyRef)
       .where(sql`hosted_policy_ref IS NOT NULL`),
+    p
+      .uniqueIndex("usage_policies_free_active_uidx")
+      .on(table.kind)
+      .where(sql`kind = 'free' AND active`),
+    // The free floor is never checkout-able, costs nothing, and bounds every
+    // limit it applies: members, organization storage and service actions.
+    p.check(
+      "usage_policies_free_shape",
+      sql`kind <> 'free' OR (hosted_policy_ref IS NULL AND COALESCE(price_amount_cents, 0) = 0 AND max_members IS NOT NULL AND storage_bytes_per_assignment IS NOT NULL AND service_actions_per_period IS NOT NULL)`,
+    ),
     p.check(
       "usage_policies_service_actions_positive",
       sql`service_actions_per_period IS NULL OR service_actions_per_period > 0`,
