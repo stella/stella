@@ -120,8 +120,14 @@ if (import.meta.main) {
       LEDGER,
     ).toSorted();
     if (JSON.stringify(actual) !== JSON.stringify(recorded)) {
+      const missing = actual.filter((id) => !recorded.includes(id));
+      const stale = recorded.filter((id) => !actual.includes(id));
       panic(
-        "SHA-256 migration ledger must enumerate the current rule diagnostics; regenerate it after migrating files.",
+        [
+          "SHA-256 migration ledger must enumerate the current rule diagnostics; regenerate it after migrating files.",
+          `missing from the ledger: ${missing.join(", ") || "none"}`,
+          `no longer reported: ${stale.join(", ") || "none"}`,
+        ].join("\n"),
       );
     }
   }
