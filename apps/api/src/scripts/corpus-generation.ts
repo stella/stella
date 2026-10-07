@@ -992,18 +992,20 @@ const censusGeneration = async (
   });
 
 /**
- * Decide the flip under the promotion fence. The fence comes before any
- * registry row lock, the order projection writers take: their shared side of
- * the fence, then a key-share lock on the generation row through the
- * projection foreign keys.
+ * Decide the flip under the activation and promotion fences, taken before any
+ * registry row lock in the order canonical writers take theirs: source share
+ * lock, the shared side of the projection fence, then a key-share lock on the
+ * generation row through the projection foreign keys. The census ran before
+ * this transaction, so the source fence is held only for the flip itself.
  */
-const applyServeTx = async (
+export const applyServeTx = async (
   tx: Transaction,
   target: DeclaredTarget,
   snapshot: LaunchSnapshot,
 ): Promise<
   Result<ServePlan, RegistryRefusal | CorpusGenerationProjectionMovedError>
 > => {
+  await lockCorpusIndexGenerationActivationTx(tx, target.family);
   const currentRevision = await lockCorpusIndexProjectionPromotionTx(
     tx,
     target,
