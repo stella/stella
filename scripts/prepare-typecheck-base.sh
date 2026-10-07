@@ -59,7 +59,15 @@ git -C "$base_dir" submodule update --init --recursive
   unset CI_GENERATED_SOURCES_MANIFEST
   if [[ "${STELLA_VERIFY_LOCAL:-false}" == true ]]; then
     # The host owns install admission and serialization for local worktrees.
-    "${STELLA_WORKTREE_INSTALLER:-serial-install}" "$base_dir"
+    installer=()
+    while IFS= read -r -d '' arg; do
+      installer+=("$arg")
+    done < "$STELLA_WORKTREE_INSTALLER_ARGS_FILE"
+    if (( ${#installer[@]} == 0 )); then
+      echo "Local typecheck baseline: installer argv is empty." >&2
+      exit 64
+    fi
+    "${installer[@]}" "$base_dir"
   else
     bash scripts/retry.sh bun ci --ignore-scripts
   fi

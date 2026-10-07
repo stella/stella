@@ -56,7 +56,7 @@ export const withCheckAdmission = ({
 export type HostConfig = {
   localGate: string[];
   remote: string[];
-  installer: string;
+  installer: string[];
 };
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
@@ -65,10 +65,13 @@ const commandArguments = (value: unknown, name: string): string[] => {
     !Array.isArray(value) ||
     value.length === 0 ||
     !value.every(
-      (arg): arg is string => typeof arg === "string" && arg.length > 0,
+      (arg): arg is string =>
+        typeof arg === "string" && arg.length > 0 && !arg.includes("\0"),
     )
   ) {
-    throw new VerifyError(`${name} must be a nonempty command array`);
+    throw new VerifyError(
+      `${name} must be a nonempty command array of NUL-free strings`,
+    );
   }
   return value;
 };
@@ -78,26 +81,25 @@ export const hostConfig = (): HostConfig => {
     path.join(homedir(), ".config/stella/verify.json");
   if (!existsSync(file)) {
     return {
-      localGate: ["load-admit"],
+      localGate: ["load-admit", "--"],
       remote: ["remote-check"],
-      installer: "serial-install",
+      installer: ["serial-install"],
     };
   }
   const config: unknown = JSON.parse(readFileSync(file, "utf-8"));
   if (!isRecord(config)) {
     throw new VerifyError(`${file} must contain an object`);
   }
-  const installer = config["installer"] ?? "serial-install";
-  if (typeof installer !== "string" || installer.length === 0) {
-    throw new VerifyError("installer must name an executable");
-  }
   return {
     localGate: commandArguments(
-      config["localGate"] ?? ["load-admit"],
+      config["localGate"] ?? ["load-admit", "--"],
       "localGate",
     ),
     remote: commandArguments(config["remote"] ?? ["remote-check"], "remote"),
-    installer,
+    installer: commandArguments(
+      config["installer"] ?? ["serial-install"],
+      "installer",
+    ),
   };
 };
 
@@ -112,7 +114,7 @@ export const admitLocal = ({
   repo,
   command,
 }: AdmitLocalOptions): number =>
-  Bun.spawnSync([...config.localGate, "--", ...command], {
+  Bun.spawnSync([...config.localGate, ...command], {
     cwd: repo,
     stdout: "inherit",
     stderr: "inherit",

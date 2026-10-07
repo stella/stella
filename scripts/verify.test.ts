@@ -5,6 +5,7 @@ import {
   mkdirSync,
   mkdtempSync,
   readFileSync,
+  realpathSync,
   rmSync,
   writeFileSync,
 } from "node:fs";
@@ -222,9 +223,9 @@ exit 75
     expect(
       admitLocal({
         config: {
-          localGate: ["bash", gate, receipt],
+          localGate: ["bash", gate, receipt, "--"],
           remote: ["remote-check"],
-          installer: "serial-install",
+          installer: ["serial-install"],
         },
         repo: temporary,
         command,
@@ -310,7 +311,9 @@ test("options reject unknown arguments and missing refs", () => {
 
 for (const conflict of [false, true]) {
   test(`remote fixes apply only to the matching local tree (conflict=${conflict})`, () => {
-    const fixture = mkdtempSync(path.join(tmpdir(), "verify-remote-"));
+    const fixture = realpathSync(
+      mkdtempSync(path.join(tmpdir(), "verify-remote-")),
+    );
     try {
       mkdirSync(path.join(fixture, "scripts"));
       mkdirSync(path.join(fixture, ".github/workflows"), { recursive: true });
@@ -480,3 +483,94 @@ printf '%s' "\${CI_GENERATED_SOURCES_MANIFEST-unset}" > "$MANIFEST_RECEIPT"
     }
   },
 );
+
+test("host configuration owns gate separators and validates installer argv", () => {
+  const fixture = mkdtempSync(path.join(tmpdir(), "verify-host-config-"));
+  try {
+    for (const file of ["verify-admission.ts", "verify-error.ts"]) {
+      copyFileSync(path.join(root, "scripts", file), path.join(fixture, file));
+    }
+    writeFileSync(
+      path.join(fixture, "host-config-fixture.ts"),
+      `
+import { admitLocal, hostConfig } from "./verify-admission.ts";
+const config = hostConfig();
+console.log(JSON.stringify(config));
+if (process.argv[2] === "admit") {
+  process.exit(admitLocal({
+    config,
+    repo: process.cwd(),
+    command: ["bash", "-c", "echo fixture"],
+  }));
+}
+`,
+    );
+    const gate = path.join(fixture, "load-admit");
+    const receipt = path.join(fixture, "argv");
+    writeFileSync(
+      gate,
+      `#!/bin/sh
+printf '%s\\0' "$@" > "$ADMISSION_RECEIPT"
+`,
+    );
+    chmodSync(gate, 0o755);
+    const configFile = path.join(fixture, "config.json");
+    const configured = {
+      localGate: [gate, "--"],
+      remote: ["remote-check"],
+      installer: [path.join(fixture, "serial installer.sh")],
+    };
+    const run = (mode: "admit" | "config") =>
+      Bun.spawnSync([process.execPath, "host-config-fixture.ts", mode], {
+        cwd: fixture,
+        env: {
+          ...process.env,
+          STELLA_VERIFY_CONFIG: configFile,
+          ADMISSION_RECEIPT: receipt,
+        },
+        stdout: "pipe",
+        stderr: "pipe",
+      });
+    writeFileSync(configFile, JSON.stringify(configured));
+    const admitted = run("admit");
+    expect(admitted.exitCode, admitted.stderr.toString()).toBe(0);
+    expect(JSON.parse(admitted.stdout.toString())).toEqual(configured);
+    expect(readFileSync(receipt, "utf-8").split("\0").slice(0, -1)).toEqual([
+      "--",
+      "bash",
+      "-c",
+      "echo fixture",
+    ]);
+
+    writeFileSync(configFile, "{}");
+    const defaults = run("config");
+    expect(defaults.exitCode, defaults.stderr.toString()).toBe(0);
+    expect(JSON.parse(defaults.stdout.toString())).toEqual({
+      localGate: ["load-admit", "--"],
+      remote: ["remote-check"],
+      installer: ["serial-install"],
+    });
+
+    for (const field of ["localGate", "remote", "installer"]) {
+      writeFileSync(
+        configFile,
+        JSON.stringify({ ...configured, [field]: ["bad\0argument"] }),
+      );
+      const rejected = run("config");
+      expect(rejected.exitCode).not.toBe(0);
+      expect(rejected.stderr.toString()).toContain(
+        `${field} must be a nonempty command array`,
+      );
+    }
+    for (const installer of [[], "serial-install"]) {
+      writeFileSync(configFile, JSON.stringify({ ...configured, installer }));
+      const rejected = run("config");
+      expect(rejected.exitCode).not.toBe(0);
+      expect(rejected.stderr.toString()).toContain(
+        "installer must be a nonempty command array",
+      );
+    }
+  } finally {
+    rmSync(fixture, { recursive: true, force: true });
+  }
+});

@@ -125,6 +125,8 @@ export const runAutofixSteps = (
 const localChecks = (options: VerifyOptions, config: HostConfig): number => {
   const temporary = mkdtempSync(path.join(tmpdir(), "stella-verify-"));
   const mergeBase = git(["merge-base", options.base, "HEAD"]).trim();
+  const installerArgs = path.join(temporary, "installer-argv");
+  writeFileSync(installerArgs, `${config.installer.join("\0")}\0`);
   const env = {
     ...process.env,
     GENERATOR_IDS: "",
@@ -143,7 +145,7 @@ const localChecks = (options: VerifyOptions, config: HostConfig): number => {
     REPOSITORY: "stella/stella",
     STELLA_VERIFY_LOCAL: "true",
     CI_GENERATED_SOURCES_MANIFEST: undefined,
-    STELLA_WORKTREE_INSTALLER: config.installer,
+    STELLA_WORKTREE_INSTALLER_ARGS_FILE: installerArgs,
   };
   const indexEnv = {
     ...process.env,
