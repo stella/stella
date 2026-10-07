@@ -1473,15 +1473,19 @@ const caseLawCitationSummaryProjection = v.strictObject({
     capped: v.optional(v.literal(true)),
     polarity: v.optional(citationTreatmentCountsProjection),
     top: v.variant("precision", [
-      v.strictObject({
-        precision: v.literal("exact"),
-        items: topCitingItemsProjection,
-      }),
-      v.strictObject({
-        precision: v.literal("bounded"),
-        candidateWindow: v.literal(CASE_LAW_CITATION_SUMMARY_SCAN_LIMIT),
-        items: topCitingItemsProjection,
-      }),
+      projectionBranch(
+        v.strictObject({
+          precision: v.literal("exact"),
+          items: topCitingItemsProjection,
+        }),
+      ),
+      projectionBranch(
+        v.strictObject({
+          precision: v.literal("bounded"),
+          candidateWindow: v.literal(CASE_LAW_CITATION_SUMMARY_SCAN_LIMIT),
+          items: topCitingItemsProjection,
+        }),
+      ),
     ]),
   }),
   cites: v.strictObject({
