@@ -49,11 +49,15 @@ export const copyOrganizationFiles = async <T, E>(
     if (Result.isError(authorized)) {
       return Result.err(authorized.error);
     }
-    const outcome = await authorized.value.execute(async ({ input: named }) => {
+    const outcome = await authorized.value.execute(async ({ proof }) => {
       const roundCopies: Result<T, E | OrganizationFileUsageError>[] = [];
-      for (let start = 0; start < round.length; start += concurrency) {
+      for (
+        let start = 0;
+        start < proof.input.value.operation.length;
+        start += concurrency
+      ) {
         const results = await Promise.all(
-          named.value.operation
+          proof.input.value.operation
             .slice(start, start + concurrency)
             .map(async ({ copy }) =>
               Result.flatten(
@@ -84,8 +88,8 @@ export const copyOrganizationFiles = async <T, E>(
         | { error: E | OrganizationFileUsageError }
         | undefined;
       for (const [index, copied] of roundCopies.entries()) {
-        const reservation = named.value.reservations.at(index);
-        const input = named.value.operation.at(index);
+        const reservation = proof.input.value.reservations.at(index);
+        const input = proof.input.value.operation.at(index);
         if (!reservation || !input) {
           panic("File copy reservations must match their inputs");
         }
@@ -103,8 +107,14 @@ export const copyOrganizationFiles = async <T, E>(
           uncertainFailure ??= { error: copied.error };
         }
       }
-      const settled = await commitOrganizationFilesBytes(committed, db);
-      const unwound = await releaseOrganizationFilesBytes(released, db);
+      const settled = await commitOrganizationFilesBytes(
+        committed,
+        proof.input.value.db,
+      );
+      const unwound = await releaseOrganizationFilesBytes(
+        released,
+        proof.input.value.db,
+      );
       if (Result.isError(settled)) {
         return Result.err(settled.error);
       }
@@ -113,7 +123,7 @@ export const copyOrganizationFiles = async <T, E>(
       }
       const busyKeys = new Set(settled.value.busyObjectKeys);
       for (const [index, copied] of roundCopies.entries()) {
-        const input = named.value.operation.at(index);
+        const input = proof.input.value.operation.at(index);
         if (!input) {
           panic("File copy outcome must have an input");
         }

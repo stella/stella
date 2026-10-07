@@ -100,12 +100,12 @@ type AIConfigurationInput<Settings> = {
 };
 
 export const readCheckedAIConfiguration = <Settings, N>({
-  input,
+  proof,
 }: CheckedOperationContext<
   typeof AI_CONFIGURATION_ALLOWED,
   AIConfigurationInput<Settings>,
   N
->): Settings => input.value.settings;
+>): Settings => proof.input.value.settings;
 
 type ReadAIConfigurationOptions<Settings> = {
   db: OrgSettingsReader;

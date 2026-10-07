@@ -383,13 +383,13 @@ export const authorizeOrganizationFileBatch = async <
   }
   return await authorizeOperation({
     kind: FILE_BATCH_RESERVED,
-    input: { operation, reservations: reservations.value },
+    input: { operation, reservations: reservations.value, db },
     check: async () => await Promise.resolve(reservations.map(() => undefined)),
   });
 };
 
 export const runCheckedOrganizationFileWrite = async <T, N>({
-  input: named,
+  proof,
 }: CheckedOperationContext<
   typeof FILE_WRITE_RESERVED,
   {
@@ -399,7 +399,7 @@ export const runCheckedOrganizationFileWrite = async <T, N>({
   N
 >): Promise<Result<T, OrganizationFileUsageError>> => {
   const written = await Result.tryPromise({
-    try: named.value.operation.write,
+    try: proof.input.value.operation.write,
     catch: storageUnavailable,
   });
   if (Result.isError(written)) {
@@ -408,8 +408,8 @@ export const runCheckedOrganizationFileWrite = async <T, N>({
     return Result.err(written.error);
   }
   const committed = await commitOrganizationFileBytes(
-    named.value.reservation,
-    named.value.operation.db,
+    proof.input.value.reservation,
+    proof.input.value.operation.db,
   );
   return Result.isError(committed)
     ? Result.err(committed.error)
@@ -417,7 +417,7 @@ export const runCheckedOrganizationFileWrite = async <T, N>({
 };
 
 export const runCheckedOrganizationFileCopy = async <T, E, N>({
-  input: named,
+  proof,
 }: CheckedOperationContext<
   typeof FILE_WRITE_RESERVED,
   {
@@ -427,7 +427,7 @@ export const runCheckedOrganizationFileCopy = async <T, E, N>({
   N
 >): Promise<Result<T, E | OrganizationFileUsageError>> => {
   const copied = await Result.tryPromise({
-    try: named.value.operation.copy,
+    try: proof.input.value.operation.copy,
     catch: storageUnavailable,
   });
   if (Result.isError(copied)) {
@@ -437,13 +437,13 @@ export const runCheckedOrganizationFileCopy = async <T, E, N>({
     // Only a copy error that proves the destination was never written may
     // release the reservation; timeouts still need object-state recovery.
     if (
-      named.value.operation.confirmedDestinationAbsentOnCopyError?.(
+      proof.input.value.operation.confirmedDestinationAbsentOnCopyError?.(
         copied.value.error,
       )
     ) {
       const released = await releaseOrganizationFileBytes(
-        named.value.reservation,
-        named.value.operation.db,
+        proof.input.value.reservation,
+        proof.input.value.operation.db,
       );
       if (Result.isError(released)) {
         return Result.err(released.error);
@@ -452,8 +452,8 @@ export const runCheckedOrganizationFileCopy = async <T, E, N>({
     return Result.err(copied.value.error);
   }
   const committed = await commitOrganizationFileBytes(
-    named.value.reservation,
-    named.value.operation.db,
+    proof.input.value.reservation,
+    proof.input.value.operation.db,
   );
   return Result.isError(committed)
     ? Result.err(committed.error)

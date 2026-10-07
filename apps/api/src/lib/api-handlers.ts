@@ -78,7 +78,10 @@ import {
 } from "@/api/lib/permission-authorization";
 import type { AuthorizedMemberRole } from "@/api/lib/permission-authorization";
 import type { AnyPermissiveRouteSchema } from "@/api/lib/permissive-route-schema";
-import { authorizeOperation } from "@/api/lib/proofs/checked-transaction";
+import {
+  authorizeOperation,
+  cloneOperationInput,
+} from "@/api/lib/proofs/checked-transaction";
 import type { CheckedOperationContext } from "@/api/lib/proofs/checked-transaction";
 import { withActionAdmission } from "@/api/lib/rate-limit/action-admission";
 import type { PeriodActionKind } from "@/api/lib/rate-limit/action-kinds";
@@ -1200,7 +1203,8 @@ export const runCheckedScopedHandler = async <
   N,
 >(
   {
-    input,
+    proof,
+    scratch,
   }: CheckedOperationContext<
     typeof HANDLER_USAGE_ALLOWED,
     ScopedOperationInput<TConfig, TContext, TResult>,
@@ -1208,7 +1212,11 @@ export const runCheckedScopedHandler = async <
   >,
   usageLane?: UsageLaneDecision,
 ): Promise<SafeHandlerResult<TResult>> => {
-  const { ctx, config, handler, admit } = input.value;
+  const { ctx, config, handler, admit } = cloneOperationInput(
+    proof.input.value,
+  );
+  // Response state is mutable request output, never an authorization input.
+  ctx.set = scratch.ctx.set;
   const admission = config.actionAdmission;
   return await runSafeHandler({
     ctx: { ...ctx, ...(usageLane === undefined ? {} : { usageLane }) },
@@ -1385,7 +1393,7 @@ const createSafeScopedHandler = <
       }
       const result = await authorization.value.execute(async (operation) => {
         // Response state belongs to the request; handler data belongs to this execution.
-        operation.input.value.ctx.set = ctx.set;
+        operation.scratch.ctx.set = ctx.set;
         return await runCheckedScopedHandler(operation, usageLane);
       });
       // The transaction has settled; realtime delivery cannot change its result.

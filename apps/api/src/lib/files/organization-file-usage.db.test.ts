@@ -219,9 +219,17 @@ describe("organization file usage", () => {
         expect(checked.input.value.operation.sizeBytes).toBe(3);
         expect(checked.input.value.operation.metadata.label).toBe("authorized");
         expect(Object.isFrozen(checked.input.value.operation.metadata)).toBe(
-          false,
+          true,
         );
-        return await runCheckedOrganizationFileWrite(checked);
+        checked.scratch.operation.objectKey = "fixture/execution-changed";
+        checked.scratch.operation.sizeBytes = 99;
+        checked.scratch.operation.metadata.label = "scratch-only";
+        checked.scratch.operation.write = async () =>
+          await Promise.resolve("wrong write");
+        return await runCheckedOrganizationFileWrite({
+          ...checked,
+          input: { ...checked.input, value: checked.scratch },
+        });
       });
       expect(written).toEqual(Result.ok("stored"));
       const rows = await testDb

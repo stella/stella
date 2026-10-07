@@ -348,14 +348,14 @@ type SubagentExecutionInput = {
 };
 
 export const runCheckedSubagentBatch = async <N>({
-  input,
+  proof,
 }: CheckedOperationContext<
   typeof SUBAGENT_BATCH_ALLOWED,
   SubagentExecutionInput,
   N
 >) => {
   const { props, dependencies, subagents, fastModelInfo, abortSignal } =
-    input.value;
+    proof.input.value;
   const runOneSubagent = async (sub: SubagentSpec, index: number) => {
     // Fresh per-run buffer: the toolset's proposal wrappers record into it,
     // so this subagent's result carries only its own proposed writes.

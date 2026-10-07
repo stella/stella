@@ -14,7 +14,7 @@ import {
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 describe("checked operation continuations", () => {
-  test("checks before exposing the exact input for execution", async () => {
+  test("checks before exposing frozen proof input and mutable scratch", async () => {
     const events: string[] = [];
     const input = {
       actor: "actor_a",
@@ -35,11 +35,18 @@ describe("checked operation continuations", () => {
       panic("Successful evidence fixture was refused", authorization.error);
     }
     const value = await authorization.value.execute(
-      async ({ input: named, proof }) => {
+      async ({ input: named, proof, scratch }) => {
         events.push("execute");
         expect(named.value).not.toBe(input);
         expect(named.value).toEqual(input);
+        expect(Object.isFrozen(named.value)).toBe(true);
         expect(proof.kind).toBe("OperationAllowed");
+        expect(proof.input).toBe(named);
+        expect(Object.isFrozen(proof)).toBe(true);
+        expect(Object.isFrozen(proof.input)).toBe(true);
+        expect(Object.isFrozen(scratch)).toBe(false);
+        scratch.operation = "scratch-only";
+        expect(proof.input.value.operation).toBe("read");
         return await Promise.resolve(named.value.operation);
       },
     );
@@ -75,22 +82,29 @@ describe("checked operation continuations", () => {
     }
     input.nested.key = "changed after check";
     firstItem.bytes = 11;
-    await authorization.value.execute(async ({ input: named }) => {
-      expect(named.value.nested.key).toBe("authorized");
-      expect(named.value.items).toEqual([{ bytes: 3 }]);
-      expect(named.value.handle).toBe(handle);
-      expect(named.value).not.toBe(checked.input);
-      expect(Object.isFrozen(named.value)).toBe(false);
-      expect(Object.isFrozen(named.value.nested)).toBe(false);
-      expect(Object.isFrozen(named.value.items)).toBe(false);
-      expect(Object.isFrozen(named.value.items.at(0))).toBe(false);
-      named.value.nested.key = "execution-owned";
-      named.value.items.push({ bytes: 13 });
-      expect(checked.input.nested.key).toBe("authorized");
-      expect(checked.input.items).toEqual([{ bytes: 3 }]);
-      expect(input.nested.key).toBe("changed after check");
-      await Promise.resolve();
-    });
+    await authorization.value.execute(
+      async ({ input: named, proof, scratch }) => {
+        expect(named.value.nested.key).toBe("authorized");
+        expect(named.value.items).toEqual([{ bytes: 3 }]);
+        expect(named.value.handle).toBe(handle);
+        expect(named.value).toBe(checked.input);
+        expect(Object.isFrozen(named.value)).toBe(true);
+        expect(Object.isFrozen(named.value.nested)).toBe(true);
+        expect(Object.isFrozen(named.value.items)).toBe(true);
+        expect(Object.isFrozen(named.value.items.at(0))).toBe(true);
+        expect(proof.input).toBe(named);
+        expect(Object.isFrozen(proof)).toBe(true);
+        expect(Object.isFrozen(proof.input)).toBe(true);
+        scratch.nested.key = "execution-owned";
+        scratch.items.push({ bytes: 13 });
+        expect(proof.input.value.nested.key).toBe("authorized");
+        expect(proof.input.value.items).toEqual([{ bytes: 3 }]);
+        expect(checked.input.nested.key).toBe("authorized");
+        expect(checked.input.items).toEqual([{ bytes: 3 }]);
+        expect(input.nested.key).toBe("changed after check");
+        await Promise.resolve();
+      },
+    );
     expect(Object.isFrozen(input)).toBe(false);
     expect(Object.isFrozen(handle)).toBe(false);
   });
@@ -111,18 +125,28 @@ describe("checked operation continuations", () => {
       panic("Successful evidence fixture was refused", authorization.error);
     }
     child.key = "changed";
-    await authorization.value.execute(async ({ input: named }) => {
-      const first = named.value.at(0) ?? panic("Evidence fixture has no item");
-      expect(Array.isArray(named.value)).toBe(true);
-      expect(first).toBe(
-        named.value.at(1) ?? panic("Evidence fixture has no second item"),
-      );
-      expect(first.key).toBe("authorized");
-      expect(Reflect.get(first, "parent")).toBe(named.value);
-      expect(Object.isFrozen(first)).toBe(false);
-      expect(Object.isFrozen(named.value)).toBe(false);
-      await Promise.resolve();
-    });
+    await authorization.value.execute(
+      async ({ input: named, proof, scratch }) => {
+        const first =
+          named.value.at(0) ?? panic("Evidence fixture has no item");
+        const scratchFirst =
+          scratch.at(0) ?? panic("Scratch fixture has no item");
+        expect(Array.isArray(named.value)).toBe(true);
+        expect(first).toBe(
+          named.value.at(1) ?? panic("Evidence fixture has no second item"),
+        );
+        expect(first.key).toBe("authorized");
+        expect(Reflect.get(first, "parent")).toBe(named.value);
+        expect(Object.isFrozen(first)).toBe(true);
+        expect(Object.isFrozen(named.value)).toBe(true);
+        expect(proof.input).toBe(named);
+        expect(Object.isFrozen(proof)).toBe(true);
+        expect(Object.isFrozen(proof.input)).toBe(true);
+        scratchFirst.key = "scratch-only";
+        expect(proof.input.value.at(0)?.key).toBe("authorized");
+        await Promise.resolve();
+      },
+    );
   });
 
   test("one admission cannot be reused for another execution", async () => {
@@ -226,12 +250,22 @@ describe("scoped admitted operations", () => {
             input: namedInput,
             admission: namedAdmission,
             proof,
+            scratch,
           }) => {
             events.push("execute");
             expect(namedInput.value).not.toBe(input);
             expect(namedInput.value).toEqual(input);
-            expect(namedAdmission.value).toBe(admission);
+            expect(namedAdmission.value).not.toBe(admission);
+            expect(namedAdmission.value).toEqual(admission);
+            expect(Object.isFrozen(namedInput.value)).toBe(true);
+            expect(Object.isFrozen(namedAdmission.value)).toBe(true);
             expect(proof.kind).toBe("OperationAdmitted");
+            expect(proof.input).toBe(namedInput);
+            expect(proof.admission).toBe(namedAdmission);
+            expect(Object.isFrozen(proof)).toBe(true);
+            expect(Object.isFrozen(proof.input)).toBe(true);
+            scratch.actor = "scratch-only";
+            expect(proof.input.value.actor).toBe("actor_a");
             return await Promise.resolve("done");
           },
         });
@@ -269,7 +303,8 @@ describe("scoped admitted operations", () => {
       },
       run: async ({ input: named, admission }) => {
         expect(named.value.organizationId).toBe(admission.value);
-        expect(Object.isFrozen(named.value.nested)).toBe(false);
+        expect(Object.isFrozen(named.value)).toBe(true);
+        expect(Object.isFrozen(named.value.nested)).toBe(true);
         return await named.value.execute(named.value.organizationId);
       },
     });

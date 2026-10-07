@@ -1168,8 +1168,7 @@ type ActionExecution = {
 };
 
 export const runCheckedAction = async <T, N, A>({
-  input,
-  admission,
+  proof,
 }: AdmittedOperationContext<
   typeof ACTION_ADMITTED,
   ActionAdmissionOptions<T>,
@@ -1177,7 +1176,7 @@ export const runCheckedAction = async <T, N, A>({
   N,
   A
 >): Promise<T> => {
-  const options = input.value;
+  const options = proof.input.value;
   const observedRun = createObservedAdmissionRun({
     organizationId: options.organizationId,
     userId: options.userId,
@@ -1185,7 +1184,10 @@ export const runCheckedAction = async <T, N, A>({
     costRecorder: options.costRecorder,
     run: options.run,
   });
-  return await observedRun(admission.value.signal, admission.value.control);
+  return await observedRun(
+    proof.admission.value.signal,
+    proof.admission.value.control,
+  );
 };
 
 export const withActionAdmission = async <T>(

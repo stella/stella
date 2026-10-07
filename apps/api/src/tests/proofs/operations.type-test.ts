@@ -59,6 +59,12 @@ export const scopedOperationProofMistakes = async <N, Other>(
     // @ts-expect-error A boolean cannot stand in for evidence.
     await runCheckedScopedHandler({ ...args, proof: true }),
   );
+  // @ts-expect-error Spreading evidence cannot rebind its private checked snapshot.
+  const rebound: typeof proof = {
+    ...proof, // oxlint-disable-line typescript/no-misused-spread -- planted rebinding attempt the type system must reject
+    input: { ...args.input, value: args.scratch },
+  };
+  rejectedAtCompileTime(rebound);
   // @ts-expect-error An object literal cannot construct evidence.
   const fabricated: typeof proof = { kind: "HandlerUsageAllowed" };
   return fabricated;
@@ -78,6 +84,9 @@ export const actionOperationProofMistakes = async <R, N, A, Other>(
   );
   // @ts-expect-error Evidence must belong to this action's complete input.
   rejectedAtCompileTime(await runCheckedAction({ ...args, input: otherInput }));
+  // @ts-expect-error Admission evidence cannot be rebuilt with another scope.
+  const rebound: typeof proof = { ...proof, admission: args.admission }; // oxlint-disable-line typescript/no-misused-spread -- planted rebinding attempt the type system must reject
+  rejectedAtCompileTime(rebound);
   // @ts-expect-error An object literal cannot construct evidence.
   const fabricated: typeof proof = { kind: "ActionAdmitted" };
   rejectedAtCompileTime(

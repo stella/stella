@@ -81,9 +81,63 @@ export const withCheckedTransaction = async <
     },
   );
 
+// Private fields prevent object spread from rebinding evidence to another snapshot.
+class OperationEvidence<
+  Kind extends string,
+  Input,
+  N,
+  About extends readonly unknown[] = [N],
+> {
+  readonly #input: Named<N, Input>;
+  readonly #proof: Proof<Kind, About>;
+
+  constructor(input: Named<N, Input>, proof: Proof<Kind, About>) {
+    this.#input = Object.freeze(input);
+    this.#proof = proof;
+  }
+
+  get input(): Named<N, Input> {
+    return this.#input;
+  }
+
+  get kind(): Kind {
+    return this.#proof.kind;
+  }
+}
+
+type AdmissionEvidenceOptions<Kind extends string, Input, Admission, N, A> = {
+  input: Named<N, Input>;
+  admission: Named<A, Admission>;
+  proof: Proof<Kind, [N, A]>;
+};
+
+class AdmissionEvidence<
+  Kind extends string,
+  Input,
+  Admission,
+  N,
+  A,
+> extends OperationEvidence<Kind, Input, N, [N, A]> {
+  readonly #admission: Named<A, Admission>;
+
+  constructor({
+    input,
+    admission,
+    proof,
+  }: AdmissionEvidenceOptions<Kind, Input, Admission, N, A>) {
+    super(input, proof);
+    this.#admission = Object.freeze(admission);
+  }
+
+  get admission(): Named<A, Admission> {
+    return this.#admission;
+  }
+}
+
 export type CheckedOperationContext<Kind extends string, Input, N> = {
   input: Named<N, Input>;
-  proof: Proof<Kind, [NoInfer<N>]>;
+  proof: OperationEvidence<Kind, Input, NoInfer<N>>;
+  scratch: Input;
 };
 
 const isPlainOperationData = (value: unknown): value is object => {
@@ -189,10 +243,15 @@ class AuthorizedOperation<Kind extends string, Input> {
       return panic("Checked operation authorization already consumed");
     }
     this.#state = "consumed";
-    return await name(
-      cloneOperationInput(this.#input),
-      async (input) => await run({ input, proof: this.#prover.prove(input) }),
-    );
+    return await name(this.#input, async (input) => {
+      const proof = new OperationEvidence(input, this.#prover.prove(input));
+      Object.freeze(proof);
+      return await run({
+        input,
+        proof,
+        scratch: cloneOperationInput(this.#input),
+      });
+    });
   }
 }
 
@@ -230,7 +289,8 @@ export type AdmittedOperationContext<
 > = {
   input: Named<N, Input>;
   admission: Named<A, Admission>;
-  proof: Proof<Kind, [NoInfer<N>, NoInfer<A>]>;
+  proof: AdmissionEvidence<Kind, Input, Admission, NoInfer<N>, NoInfer<A>>;
+  scratch: Input;
 };
 
 type WithAdmittedOperationOptions<
@@ -275,14 +335,22 @@ export const withAdmittedOperation = async <
     snapshot,
     async (admission) =>
       await name(
-        cloneOperationInput(snapshot),
-        admission,
-        async (namedInput, namedAdmission) =>
-          await run({
+        snapshot,
+        snapshotOperationInput(admission),
+        async (namedInput, namedAdmission) => {
+          const proof = new AdmissionEvidence({
             input: namedInput,
-            proof: defineProof(kind).prove(namedInput, namedAdmission),
             admission: namedAdmission,
-          }),
+            proof: defineProof(kind).prove(namedInput, namedAdmission),
+          });
+          Object.freeze(proof);
+          return await run({
+            input: namedInput,
+            proof,
+            admission: namedAdmission,
+            scratch: cloneOperationInput(snapshot),
+          });
+        },
       ),
   );
 };
