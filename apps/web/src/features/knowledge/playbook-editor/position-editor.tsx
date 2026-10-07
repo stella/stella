@@ -34,6 +34,7 @@ import {
   GripVerticalIcon,
   Link2Icon,
   MessageSquareIcon,
+  MoreHorizontalIcon,
   PlusIcon,
   RepeatIcon,
   SearchIcon,
@@ -360,12 +361,14 @@ export const PositionEditor = ({
       ref={setCardRef}
     >
       <PositionHeader
-        // The severity and the card controls stay one group, which wraps
-        // below the title in a narrow pane rather than squeezing it.
+        // The header is one row at every pane width: the title gives way
+        // (ellipsis) before any control wraps, and the rarer controls sit
+        // behind the actions menu.
         actions={
-          <span className="ms-auto flex shrink-0 items-center gap-2">
+          <span className="ms-auto flex shrink-0 items-center gap-1">
             {position.mode === "graded" ? (
               <SeverityChip
+                labelClassName="hidden @sm:inline"
                 onChange={(severity) => onChange({ ...position, severity })}
                 severity={position.severity}
               />
@@ -390,24 +393,30 @@ export const PositionEditor = ({
               className="shrink-0"
               onCheckedChange={(enabled) => onChange({ ...position, enabled })}
             />
-            <Button
-              aria-label={t("knowledge.playbooks.duplicatePosition")}
-              onClick={onDuplicate}
-              size="icon-xs"
-              type="button"
-              variant="ghost"
-            >
-              <CopyIcon />
-            </Button>
-            <Button
-              aria-label={t("knowledge.playbooks.deletePosition")}
-              onClick={onRemove}
-              size="icon-xs"
-              type="button"
-              variant="ghost"
-            >
-              <Trash2Icon />
-            </Button>
+            <Menu>
+              <MenuTrigger
+                render={
+                  <Button
+                    aria-label={t("common.actions")}
+                    size="icon-xs"
+                    type="button"
+                    variant="ghost"
+                  />
+                }
+              >
+                <MoreHorizontalIcon />
+              </MenuTrigger>
+              <MenuPopup align="end">
+                <MenuItem onClick={onDuplicate}>
+                  <CopyIcon />
+                  {t("knowledge.playbooks.duplicatePosition")}
+                </MenuItem>
+                <MenuItem onClick={onRemove} variant="destructive">
+                  <Trash2Icon />
+                  {t("knowledge.playbooks.deletePosition")}
+                </MenuItem>
+              </MenuPopup>
+            </Menu>
             <Button
               aria-controls={bodyId}
               aria-expanded={open}
@@ -427,7 +436,7 @@ export const PositionEditor = ({
             </Button>
           </span>
         }
-        className="flex-wrap"
+        className="gap-1.5"
         index={index}
         leading={
           <Button
@@ -445,7 +454,7 @@ export const PositionEditor = ({
         title={
           <Input
             aria-invalid={showErrors && errors.issue !== undefined}
-            className="hover:border-input focus-visible:bg-background h-8 w-full border-transparent bg-transparent px-1.5 text-sm font-medium shadow-none"
+            className="hover:border-input focus-visible:bg-background h-8 w-full border-transparent bg-transparent px-1.5 text-sm font-medium shadow-none [&>input]:text-ellipsis"
             onChange={(e) => onChange({ ...position, issue: e.target.value })}
             onFocus={() => {
               if (!open) {
@@ -456,7 +465,7 @@ export const PositionEditor = ({
             value={position.issue}
           />
         }
-        titleClassName="min-w-40 @md:min-w-56"
+        titleClassName="min-w-16"
       />
 
       {open && (
@@ -1061,11 +1070,9 @@ const RuleRow = ({
 }) => {
   const t = useTranslations();
   return (
-    <div className="flex flex-wrap items-start gap-x-2 gap-y-1 @md:flex-nowrap">
-      <span className="text-muted-foreground text-3xs w-full shrink-0 tracking-wide uppercase tabular-nums @md:w-11 @md:pt-2">
-        {label}
-      </span>
+    <div className="flex items-start gap-x-2">
       <Input
+        aria-label={label}
         className="h-8 min-w-0 flex-1 text-sm"
         onChange={(e) => onChange(e.target.value)}
         placeholder={placeholder}
@@ -1106,8 +1113,8 @@ const FallbackEntryRow = ({
 }) => {
   const t = useTranslations();
   return (
-    <div className="flex flex-wrap items-start gap-x-2 gap-y-1 @md:flex-nowrap">
-      <span className="text-muted-foreground text-3xs w-full shrink-0 tracking-wide uppercase tabular-nums @md:w-11 @md:pt-2">
+    <div className="flex items-start gap-x-2">
+      <span className="text-muted-foreground text-3xs min-w-4 shrink-0 pt-2.5 tracking-wide uppercase tabular-nums">
         {t("knowledge.playbooks.entryRank", { index: String(index + 1) })}
       </span>
       <div className="min-w-0 flex-1 space-y-1.5">
@@ -1124,28 +1131,30 @@ const FallbackEntryRow = ({
           value={entry.label ?? ""}
         />
       </div>
-      <div className="flex shrink-0 flex-col">
-        <Button
-          aria-label={t("common.moveUp")}
-          disabled={index === 0}
-          onClick={onMoveUp}
-          size="icon-xs"
-          type="button"
-          variant="ghost"
-        >
-          <ChevronUpIcon />
-        </Button>
-        <Button
-          aria-label={t("common.moveDown")}
-          disabled={index === total - 1}
-          onClick={onMoveDown}
-          size="icon-xs"
-          type="button"
-          variant="ghost"
-        >
-          <ChevronDownIcon />
-        </Button>
-      </div>
+      {total > 1 && (
+        <div className="-me-1 flex shrink-0 flex-col">
+          <Button
+            aria-label={t("common.moveUp")}
+            disabled={index === 0}
+            onClick={onMoveUp}
+            size="icon-xs"
+            type="button"
+            variant="ghost"
+          >
+            <ChevronUpIcon />
+          </Button>
+          <Button
+            aria-label={t("common.moveDown")}
+            disabled={index === total - 1}
+            onClick={onMoveDown}
+            size="icon-xs"
+            type="button"
+            variant="ghost"
+          >
+            <ChevronDownIcon />
+          </Button>
+        </div>
+      )}
       <Button
         aria-label={t("common.remove")}
         className="shrink-0"
@@ -1177,9 +1186,9 @@ const IdealEditor = ({
 }) => {
   const t = useTranslations();
   return (
-    <div className="border-border space-y-2 border-s-2 ps-3 @md:ms-11">
-      <div className="flex flex-wrap items-center gap-2">
-        <span className="text-muted-foreground text-3xs tracking-wide uppercase">
+    <div className="border-border space-y-2 border-s-2 ps-3">
+      <div className="flex items-center gap-2">
+        <span className="text-muted-foreground text-3xs shrink-0 tracking-wide uppercase">
           {t("knowledge.playbooks.idealLanguage")}
         </span>
         <Select
@@ -1193,7 +1202,7 @@ const IdealEditor = ({
           }}
           value={ideal.source}
         >
-          <SelectTrigger className="h-6 w-32 text-xs">
+          <SelectTrigger className="h-6 w-28 min-w-0 text-xs">
             <SelectValue />
           </SelectTrigger>
           <SelectPopup>
