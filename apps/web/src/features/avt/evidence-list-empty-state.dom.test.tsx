@@ -34,14 +34,16 @@ afterAll(async () => {
   await GlobalRegistrator.unregister();
 });
 
-test("an empty matter offers a link to create lists in that matter", async () => {
-  const workspaceId = "matter-with-no-lists";
+const renderEmptyMatter = async (
+  workspaceId: string,
+  role: "owner" | "intern",
+) => {
   const client = new QueryClient({
     defaultOptions: { queries: { enabled: false, retry: false } },
   });
   clients.push(client);
   client.setQueryData(legalListsOptions(workspaceId).queryKey, { items: [] });
-  client.setQueryData(roleOptions.queryKey, "owner");
+  client.setQueryData(roleOptions.queryKey, role);
   const root = createRootRoute({ component: Outlet });
   const home = createRoute({
     getParentRoute: () => root,
@@ -87,7 +89,14 @@ test("an empty matter offers a link to create lists in that matter", async () =>
       </QueryClientProvider>
     </IntlProvider>,
   );
+  return router;
+};
+
+test("an empty matter offers a link to create lists in that matter", async () => {
+  const workspaceId = "matter-with-no-lists";
+  const router = await renderEmptyMatter(workspaceId, "owner");
   expect(screen.getByText(messages.avt.view.noLists)).toBeTruthy();
+  expect(screen.queryByText(messages.avt.view.pickList)).toBeNull();
   const action = screen.getByRole("link", {
     name: messages.avt.view.createList,
   });
@@ -99,4 +108,13 @@ test("an empty matter offers a link to create lists in that matter", async () =>
     );
   });
   expect(await screen.findByText(messages.folio.listsGroup)).toBeTruthy();
+});
+
+test("an empty matter shows no create action to a caller who cannot create lists", async () => {
+  await renderEmptyMatter("matter-with-no-lists", "intern");
+  expect(screen.getByText(messages.avt.view.noLists)).toBeTruthy();
+  expect(
+    screen.queryByRole("link", { name: messages.avt.view.createList }),
+  ).toBeNull();
+  expect(screen.queryByText(messages.avt.view.pickList)).toBeNull();
 });

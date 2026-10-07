@@ -45,6 +45,10 @@ export const AvtView = ({
 }: AvtViewProps) => {
   const t = useTranslations();
   const listId = view.layout.listId;
+  // The view's loader has already read the workspace's lists.
+  const {
+    data: { items: lists },
+  } = useSuspenseQuery(legalListsOptions(workspaceId));
 
   if (runId !== undefined) {
     return (
@@ -57,6 +61,14 @@ export const AvtView = ({
           runId={runId}
           workspaceId={workspaceId}
         />
+      </div>
+    );
+  }
+
+  if (lists.length === 0) {
+    return (
+      <div className="flex flex-col gap-4 p-4">
+        <EvidenceListEmptyState workspaceId={workspaceId} />
       </div>
     );
   }
@@ -128,10 +140,6 @@ const EvidenceListPicker = ({
       },
     );
   };
-
-  if (items.length === 0) {
-    return <EvidenceListEmptyState workspaceId={workspaceId} />;
-  }
 
   return (
     <div className="flex flex-wrap items-center gap-2">
