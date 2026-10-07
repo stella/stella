@@ -131,13 +131,14 @@ test("a successful empty search proves the backend without requiring corpus matc
   );
   expect(result.calls).toContain("--header x-stella-edge-token: fixture-token");
   expect(result.calls).toContain(
-    "https://api-staging.example.test/case/decisions/search",
+    "https://api-staging.example.test/v1/case/decisions/search",
   );
   expect(result.calls.trim().split("\n")).toHaveLength(1);
   expect(result.calls).not.toContain("--location");
 });
 
 test.each([
+  { status: "404", body: '{"message":"Search index not found"}' },
   { status: "503", body: '{"message":"Search is temporarily unavailable"}' },
   { status: "500", body: '{"message":"Internal server error"}' },
   { status: "000", body: "", transportExit: 7 },
@@ -153,6 +154,7 @@ test.each([
     expect(result.exitCode).toBe(1);
     expect(result.stdout).toContain("::error title=corpus index down::");
     expect(result.summary).toContain("corpus index down");
+    expect(result.summary).toContain(`HTTP ${input.status}`);
     expect(result.calls).not.toContain("x-stella-edge-token:");
   },
 );
