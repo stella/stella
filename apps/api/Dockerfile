@@ -249,8 +249,7 @@ RUN bun build \
     apps/api/src/scripts/apply-reviewed-citation-labels.ts
 # Corpus generation registry: status, register, and the serving flip, which
 # checks the target's indexes on the search endpoint first. Needs the API env
-# (database, search endpoint) and runs inside the API task; reports without
-# writing until `--apply`:
+# (database, search endpoint); reports without writing until `--apply`:
 #   ["bun", "/app/corpus-generation.js", "serve", "--family", "case_law", "--generation", "<generation>"]
 RUN bun build \
     --define __STELLA_RELEASE__=true \
