@@ -234,3 +234,16 @@ test("a recording artifact cannot claim a different main commit", () => {
   expect(result.stdout).toContain("recorded=false");
   expect(result.stderr).toContain("verdict=skipped");
 });
+
+test("a retained delivery from an earlier push recorder remains eligible", () => {
+  const result = replay({
+    overrides: {
+      "record-runs": {
+        total_count: 1,
+        workflow_runs: [{ event: "push", head_sha: fixture.expected }],
+      },
+    },
+  });
+  expect(result.code).toBe(0);
+  expect(result.stdout).toContain(`selected=${fixture.expected} recorded=true`);
+});

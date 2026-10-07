@@ -74,7 +74,7 @@ if [[ "$recorded" == false ]]; then
     (.event | type == "string") and (.head_sha | type == "string" and test("^[a-f0-9]{40}$"))))' <<< "$runs" >/dev/null; then
     selection_error "candidate=$base unparsable recording runs response"
   fi
-  candidates=$(jq -r '.workflow_runs[] | select(.event == "schedule" or .event == "workflow_dispatch") | .head_sha' <<< "$runs")
+  candidates=$(jq -r '.workflow_runs[] | select(.event == "push" or .event == "schedule" or .event == "workflow_dispatch") | .head_sha' <<< "$runs")
   # Materialize the walk so git failure cannot disappear in process substitution.
   walk=$(git rev-list --topo-order "$base")
   while read -r source; do

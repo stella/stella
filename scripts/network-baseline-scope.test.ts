@@ -845,7 +845,7 @@ esac
           ],
         }),
         TEST_RUNS: JSON.stringify({
-          workflow_runs: [{ event: "workflow_dispatch", head_sha: firstBase }],
+          workflow_runs: [{ event: "push", head_sha: firstBase }],
         }),
         TEST_RUN: JSON.stringify({
           path: ".github/workflows/network-baseline-deliver.yml",
@@ -952,7 +952,7 @@ esac
           ...shuffledArtifacts,
           TEST_RUNS: JSON.stringify({
             workflow_runs: sources.map((head_sha) => ({
-              event: "workflow_dispatch",
+              event: "push",
               head_sha,
             })),
           }),
@@ -1110,7 +1110,7 @@ esac
               ],
             }),
             TEST_RUNS: JSON.stringify({
-              workflow_runs: [{ event: "workflow_dispatch", head_sha: source }],
+              workflow_runs: [{ event: "push", head_sha: source }],
             }),
             TEST_RUN: JSON.stringify({
               path: ".github/workflows/network-baseline-deliver.yml",
