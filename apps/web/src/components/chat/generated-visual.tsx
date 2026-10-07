@@ -132,6 +132,7 @@ const GeneratedVisualFrame = ({
     if (shell.isReloadedShell({ event, frameWindow })) {
       const element = frame.current;
       if (element !== null) {
+        setInteraction({ status: "loading" });
         element.src = shell.beginLoad();
       }
       return;
@@ -216,9 +217,13 @@ const GeneratedVisualFrame = ({
     setInteraction(next);
     requestAnimationFrame(() => frame.current?.focus());
   };
-  // Every document load, a reload included, returns the view to preview.
+  // A document load after the handshake (a reload, or any other document in
+  // the frame) returns the view to preview. Loads while a handshake is pending
+  // belong to the document it replaces; its own load follows the handshake.
   const loadShell = () => {
-    setInteraction({ status: "preview" });
+    if (shell.isReady()) {
+      setInteraction({ status: "preview" });
+    }
   };
   if (page.isError) {
     return <p role="status">{t("chat.richContentUnavailable")}</p>;

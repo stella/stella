@@ -33,7 +33,7 @@ describe("visual shell document handshake", () => {
     expect(session.deliverRender({ event, frameWindow, message: render })).toBe(
       false,
     );
-    expect(session.beginLoad()).toBe(`${url}#n=${nonceOne}`);
+    expect(session.beginLoad()).toBe(`${url}?load=1#n=${nonceOne}`);
     for (const rejected of [
       { ...event, source: {} },
       { ...event, origin: "https://api.example.test" },
@@ -98,7 +98,7 @@ describe("visual shell document handshake", () => {
       false,
     );
     expect(session.isReloadedShell({ event: first, frameWindow })).toBe(true);
-    expect(session.beginLoad()).toBe(`${url}#n=${nonceTwo}`);
+    expect(session.beginLoad()).toBe(`${url}?load=2#n=${nonceTwo}`);
     expect(session.isReady()).toBe(false);
     expect(session.isReloadedShell({ event: first, frameWindow })).toBe(false);
     expect(

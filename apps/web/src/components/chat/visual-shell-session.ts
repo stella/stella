@@ -34,18 +34,24 @@ const shellReadyNonce = (event: ShellEvent, frameWindow: ShellFrameWindow) => {
 
 // Each nonce releases the payload once. A shell document announces itself
 // with the nonce in its URL, so a reloaded shell repeats the spent nonce:
-// that, not the frame's load event, starts the next handshake. Changing the
-// frame's URL fires a load event for a cross-origin frame even when only the
-// fragment changes, so a handshake started on load would never settle.
+// that, not the frame's load event, starts the next handshake. Every
+// handshake loads a new shell document: a cross-origin frame fires a load
+// event even for a fragment-only change, so the URL also differs before its
+// fragment, and each handshake ends in exactly one document load.
+export const VISUAL_SHELL_LOAD_PARAMETER = "load";
+
 export const createVisualShellSession = ({
   url,
   newNonce,
 }: VisualShellSessionOptions) => {
   let state: VisualShellSessionState = { type: "uninitialized" };
+  let loads = 0;
   return {
     beginLoad: () => {
       const nonce = newNonce();
+      loads += 1;
       const target = new URL(url);
+      target.searchParams.set(VISUAL_SHELL_LOAD_PARAMETER, String(loads));
       target.hash = new URLSearchParams({
         [VISUAL_SHELL_NONCE_PARAMETER]: nonce,
       }).toString();

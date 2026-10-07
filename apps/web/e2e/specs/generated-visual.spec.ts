@@ -8,6 +8,7 @@ import {
 } from "@stll/api-contract/generated-visual";
 import { VISUAL_PREVIEW_TOOL_NAME } from "@stll/api-contract/visual-preview";
 
+import messages from "../../src/i18n/langs/en.json" with { type: "json" };
 import { installDockedChatHistory } from "../helpers/docked-chat-fixtures";
 import { dockedChatMessagePage } from "../helpers/docked-chat-history";
 import {
@@ -119,10 +120,19 @@ test("generated view activates, reloads and offers user-controlled chat actions"
   await expect(outer).not.toHaveAttribute("inert", "");
   await expect(outer).toBeFocused();
   await expect(outer).toHaveAttribute("src", initialSrc ?? "");
-  await outer.evaluate((element) => {
-    if (element instanceof HTMLIFrameElement) {
-      element.setAttribute("src", element.src);
+  // Assigning the same URL only navigates to its fragment, so the shell is
+  // reloaded by loading another document first and then the same URL again.
+  await outer.evaluate(async (element) => {
+    if (!(element instanceof HTMLIFrameElement)) {
+      return;
     }
+    const shellUrl = element.src;
+    const blankLoaded = new Promise((resolve) => {
+      element.addEventListener("load", resolve, { once: true });
+    });
+    element.setAttribute("src", "about:blank");
+    await blankLoaded;
+    element.setAttribute("src", shellUrl);
   });
   await expect(outer).not.toHaveAttribute("src", initialSrc ?? "");
   await expect(guest.locator("body")).toHaveAttribute(
@@ -134,7 +144,18 @@ test("generated view activates, reloads and offers user-controlled chat actions"
   await expect(page.getByRole("dialog")).toHaveCount(0);
   await card.getByRole("button").first().click();
   await expect(outer).not.toHaveAttribute("inert", "");
-  await guest.locator("#drill").click();
+  // The guest's own drill on render starts the sandbox's one-per-second drill
+  // limit, so a click inside that second is dropped by design. Each attempt
+  // waits longer than the limit, so an accepted click shows its prompt before
+  // another click could be accepted.
+  await expect(async () => {
+    await guest.locator("#drill").click();
+    await expect(composer.locator('[data-source="prompt"]')).not.toHaveCount(
+      0,
+      { timeout: 1500 },
+    );
+  }).toPass({ intervals: [100], timeout: 6000 });
+  await expect(composer.locator('[data-source="prompt"]')).toHaveCount(1);
   await expect(composer.locator('[data-source="prompt"]')).toContainText(
     "CZ:ns",
   );
@@ -148,7 +169,9 @@ test("generated view activates, reloads and offers user-controlled chat actions"
   await expect(dialog.locator("strong")).toHaveText("?language=cs&year=2026");
   expect(popups).toEqual([]);
   const popupReady = page.waitForEvent("popup");
-  await dialog.getByRole("button").last().click();
+  await dialog
+    .getByRole("button", { name: messages.inspector.external.openLink })
+    .click();
   const popup = await popupReady;
   await expect(popup).toHaveURL(externalUrl);
   expect(await popup.evaluate(() => window.opener === null)).toBe(true);
