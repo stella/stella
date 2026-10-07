@@ -408,10 +408,10 @@ paths. Every generated command lives at `stella capability <domain> <action>`;
 multi-segment capability actions are flattened with hyphens into `<action>`.
 
 - **Discover**: `stella capability list [--domain <d>] [--access read|write]`
-  enumerates them (paginated); `stella capability describe <id>` prints one
+  enumerates them (paginated); `stella capability describe --capability <id>` prints one
   capability's full input schema, scope, and flags.
-- **Invoke by id**: `stella capability read <id> --input '<json>'` or
-  `stella capability write <id> --input '<json>'` for writes.
+- **Invoke by id**: `stella capability read --capability <id> --input '<json>'` or
+  `stella capability write --capability <id> --input '<json>'` for writes.
   The JSON is `{ body?, params?, query? }`.
 - **Flags**: each capability command derives flags from its input schema;
   matter-scoped capabilities take a required `--matter-id <id>`. Deep or
@@ -434,7 +434,7 @@ generic capability path. Current domains: `audit-logs`, `billing-codes`, `case-l
   keys, snake_case (`matter_id`, `contact_id`). A capability command's
   `--input` JSON uses the handler schema's own keys, camelCase (`fieldId`,
   `matterId`). Run `stella <command> --help` or `stella capability describe
-  <id>` and copy the field paths it prints.
+  --capability <id>` and copy the field paths it prints.
 
 ## Sending feedback
 
