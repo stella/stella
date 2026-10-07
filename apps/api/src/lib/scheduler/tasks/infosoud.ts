@@ -112,6 +112,17 @@ export const createSyncInfoSoudTrackedCasesTask =
 
           // db-await-in-loop: one transaction per tracked case, after its own throttled court lookup; a thrown error rolls back only that case, and a refused import returns before writing anything
           const importResult = await db.transaction(async (tx) => {
+            // A newer writer may have claimed the case during the court
+            // lookup. Re-assert the attempt fence under the row lock before
+            // importing, so a superseded attempt writes nothing at all.
+            const awaiting = await lockAwaitingTrackedCase(
+              tx,
+              trackedCase.id,
+              syncStartedAt,
+            );
+            if (!awaiting) {
+              return "superseded";
+            }
             const workspace = await tx.query.workspaces.findFirst({
               where: { id: { eq: trackedCase.workspaceId } },
               columns: { organizationId: true },
@@ -250,6 +261,24 @@ const loadNextTrackedCaseBatch = async (db: SchedulerDb, syncStartedAt: Date) =>
       asc(infoSoudTrackedCases.id),
     )
     .limit(LIMITS.infoSoudTrackedCasesSyncBatch);
+
+const lockAwaitingTrackedCase = async (
+  tx: Transaction,
+  trackedCaseId: typeof infoSoudTrackedCases.$inferSelect.id,
+  syncStartedAt: Date,
+) => {
+  const locked = await tx
+    .select({ id: infoSoudTrackedCases.id })
+    .from(infoSoudTrackedCases)
+    .where(
+      and(
+        eq(infoSoudTrackedCases.id, trackedCaseId),
+        awaitingSyncAttempt(syncStartedAt),
+      ),
+    )
+    .for("update");
+  return locked.length > 0;
+};
 
 type MarkTrackedCaseSyncedOptions = {
   syncedAt: Date;

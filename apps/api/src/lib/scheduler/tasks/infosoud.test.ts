@@ -176,7 +176,36 @@ const fixture = (count = 3) => {
       },
     }),
   });
+  const lock = () => ({
+    from: () => ({
+      where: (condition: SQL) => ({
+        for: async (strength: string) => {
+          expect(strength).toBe("update");
+          const statement = new PgDialect().sqlToQuery(condition);
+          const row = rows.find(({ id }) => statement.params.includes(id));
+          if (row === undefined) {
+            panic("Expected a tracked case lock");
+          }
+          expect(statement.sql).toMatch(
+            /"last_sync_attempt_at" is null\)+ or \(+"infosoud_tracked_cases"\."last_sync_attempt_at" < \$\d+/u,
+          );
+          const fence = statement.params.find(
+            (param): param is string =>
+              typeof param === "string" && param !== row.id,
+          );
+          if (fence === undefined) {
+            panic("Expected a sync attempt fence");
+          }
+          const awaiting =
+            row.lastSyncAttemptAt === null ||
+            row.lastSyncAttemptAt < new Date(fence);
+          return awaiting ? [{ id: row.id }] : [];
+        },
+      }),
+    }),
+  });
   const tx = asTestRaw<Transaction>({
+    select: lock,
     update,
     query: {
       workspaces: {
@@ -233,6 +262,7 @@ test.each(
       panic("Expected a tracked case fixture");
     }
     const newer = new Date(context.dueAt.claimedAtDate().getTime() + offset);
+    const importAgenda = mock(behavior.importAgenda);
     const task = createSyncInfoSoudTrackedCasesTask({
       searchCaseWithHearings: async () => {
         row.lastSyncAttemptAt = newer;
@@ -240,10 +270,13 @@ test.each(
         row.lastSyncError = "Synthetic newer writer";
         return await behavior.lookup();
       },
-      importAgendaItems: behavior.importAgenda,
+      importAgendaItems: importAgenda,
     });
     expect((await task(context)).isOk()).toBe(true);
     expect(writes).toEqual([]);
+    // The fence is checked under the row lock before importing, so a
+    // superseded attempt never writes agenda items either.
+    expect(importAgenda).not.toHaveBeenCalled();
     expect(row).toMatchObject({
       lastSyncAttemptAt: newer,
       lastSyncedAt: newer,
