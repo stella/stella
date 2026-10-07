@@ -1,5 +1,5 @@
 /**
- * Closed vocabularies of the citation-resolution census, kept apart from
+ * Dormant closed vocabularies of the citation-resolution census, kept apart from
  * the census itself so the schema can declare its CHECKs from them without
  * importing the module that reads the schema.
  */
