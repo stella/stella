@@ -1311,6 +1311,8 @@ export const DEPLOYMENT_ENV_KEYS = new Set([
 ]);
 
 export const TOOLING_ENV_KEYS = new Set([
+  // Manual document-fetch input is scoped to its workflow invocation.
+  "PUBLIC_DOCUMENT_URLS",
   // Session ownership is passed from agent:up to its detached dev runner.
   "STELLA_DEV_SESSION_ID",
   // ci-result evaluates each independently scoped suite in folded jobs.

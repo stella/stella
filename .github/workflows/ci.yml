@@ -3205,7 +3205,11 @@ jobs:
         if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
         run: |
           bun scripts/check-ci-event-policy.ts
-          bun test scripts/check-ci-event-policy.test.ts scripts/fetch-public-documents.test.ts
+          bun test scripts/check-ci-event-policy.test.ts
+
+      - name: Test public document fetch
+        if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
+        run: bun test scripts/fetch-public-documents.test.ts
 
       - name: Test migration identity and merge gate logic
         if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
