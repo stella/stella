@@ -1,8 +1,7 @@
+import type { CourtTierLabel } from "@stll/api-contract/case-law-court-tiers";
 import { BidiText } from "@stll/ui/bidi-text";
 import { CourtBadge, type CourtBadgeWeight } from "@stll/ui/court-badge";
 import { cn } from "@stll/ui/utils";
-
-import type { CourtTier } from "@/features/case-law/decision-filter-facets.logic";
 
 /**
  * How each tier's chip is drawn: a firm edge at the apex, lighter down the
@@ -14,11 +13,11 @@ const TIER_BADGE_WEIGHT = {
   supreme: "tinted",
   regional: "outline",
   other: "dashed",
-} as const satisfies Record<CourtTier, CourtBadgeWeight>;
+} as const satisfies Record<CourtTierLabel, CourtBadgeWeight>;
 
 type CourtTierBadgeProps = {
   abbreviation: string;
-  tier: CourtTier;
+  tier: CourtTierLabel;
   className?: string;
 };
 
@@ -46,7 +45,7 @@ type CourtNameProps = {
   abbreviation?: string | null | undefined;
   court: string;
   /** Absent on a row whose surface does not carry the court's rank. */
-  tier?: CourtTier | undefined;
+  tier?: CourtTierLabel | undefined;
   className?: string;
 };
 

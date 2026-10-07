@@ -1,7 +1,7 @@
 import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
-import { CourtName } from "@/features/case-law/components/court-name";
+import { CourtName } from "@/components/court-name";
 import {
   COURT_TIER_LABEL_KEYS,
   type CourtTier,

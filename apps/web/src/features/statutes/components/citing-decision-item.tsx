@@ -10,11 +10,11 @@ import { TextMark } from "@stll/ui/text-mark";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "@stll/ui/tooltip";
 import { cn } from "@stll/ui/utils";
 
+import { CourtName } from "@/components/court-name";
 import { CitedDecisionLink } from "@/components/legal-reader/cited-decision-link";
 import { ProvisionVersionBasisLabel } from "@/components/provision-version-basis";
-import { CourtName } from "@/features/case-law/components/court-name";
-import { formatValidityDate } from "@/features/statutes/statute-format";
 import { useFormatter } from "@/i18n/formatting-context";
+import { formatValidityDate } from "@/lib/statutes/statute-format";
 
 import type { CitingDecisionRow } from "./provision-citing-decisions";
 

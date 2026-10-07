@@ -1,8 +1,8 @@
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { afterAll, afterEach, expect, test } from "bun:test";
 
-import type { ProvisionPreviewData } from "@/features/statutes/queries/provision-preview";
 import { toSafeId } from "@/lib/safe-id";
+import type { ProvisionPreviewData } from "@/lib/statutes/provision-preview";
 
 import { provision } from "./provisions-cited.fixture";
 

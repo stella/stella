@@ -6,7 +6,7 @@ import { useTranslations } from "use-intl";
 
 import { SparklesIcon } from "@stll/ui/icons";
 
-import { CourtTierBadge } from "@/features/case-law/components/court-name";
+import { CourtTierBadge } from "@/components/court-name";
 import type { CourtTier } from "@/features/case-law/decision-filter-facets.logic";
 
 /** The court's own chip, where the registry abbreviates it. */

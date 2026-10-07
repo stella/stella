@@ -29,9 +29,9 @@ import {
 } from "@stll/ui/text-mark";
 import { cn } from "@stll/ui/utils";
 
+import { CourtName } from "@/components/court-name";
 import { HighlightedText } from "@/components/workspaces/table/find-highlight";
 import { parseDecisionDate } from "@/features/case-law/citation-format";
-import { CourtName } from "@/features/case-law/components/court-name";
 import { languageLabel } from "@/features/case-law/components/decision-language-select";
 import { preferredDecisionTarget } from "@/features/case-law/decision-cell-target.logic";
 import { decisionClampClassName } from "@/features/case-law/decision-columns.logic";

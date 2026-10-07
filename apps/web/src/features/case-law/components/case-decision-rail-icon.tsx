@@ -3,10 +3,10 @@ import { useQuery } from "@tanstack/react-query";
 import { FileTextIcon, InfoIcon } from "@stll/ui/icons";
 import { cn } from "@stll/ui/utils";
 
+import { CourtTierBadge } from "@/components/court-name";
 import type { CaseDecisionViewPayload } from "@/components/inspector/case-decision-view";
 import type { InspectorRailIconProps } from "@/components/inspector/view-registry";
 import { railCourtAbbreviation } from "@/features/case-law/components/case-decision-rail-icon.logic";
-import { CourtTierBadge } from "@/features/case-law/components/court-name";
 import { decisionOptions } from "@/features/case-law/queries/decisions";
 
 /**

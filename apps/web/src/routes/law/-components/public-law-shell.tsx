@@ -14,9 +14,9 @@ import {
 } from "@stll/ui/breadcrumb";
 import { Separator } from "@stll/ui/separator";
 
+import { CourtName } from "@/components/court-name";
 import { PublicWorkspaceShell } from "@/components/public-workspace-shell";
 import { SidebarTrigger, useSidebar } from "@/components/sidebar";
-import { CourtName } from "@/features/case-law/components/court-name";
 import { DecisionLanguageSelect } from "@/features/case-law/components/decision-language-select";
 import { TopBarCitations } from "@/features/case-law/components/top-bar-citations";
 import { TopBarCountry } from "@/features/case-law/components/top-bar-country";
