@@ -168,6 +168,7 @@ export const decisionProvisionsForLinkingOptions = (decisionId: string) =>
       }
       return {
         items,
+        nextCursor: cursor,
         previews,
         status: first.status,
         generation: first.generation,

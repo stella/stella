@@ -5,20 +5,14 @@
  */
 
 import { Result } from "better-result";
-import { and, asc, desc, eq, inArray, or } from "drizzle-orm";
 import { t } from "elysia";
 
-import { legalListClaims, legalListVerificationRuns } from "@/api/db/schema";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { LIST_VERIFICATION_FEATURE_ID } from "@/api/lib/feature-access/registry";
 import { VERIFICATION_LIMITS } from "@/api/lib/lists/verification/contract";
-import {
-  CLAIM_COUNT_COLUMNS,
-  RUN_SUMMARY_COLUMNS,
-  serializeRunSummary,
-} from "@/api/lib/lists/verification/run-summary";
+import { listLatestRunSummaries } from "@/api/lib/lists/verification/run-summary";
 import type {
   RunRow,
   RunSummaryColumnProjection,
@@ -64,76 +58,8 @@ const config = {
 const readLatestVerifications = createSafeHandler(
   config,
   async function* ({ body: { documents }, safeDb, workspaceId }) {
-    // A run belongs to one file of a document, so two files of one document
-    // each have their own latest run.
-    const entityIds = [...new Set(documents.map((doc) => doc.entityId))];
-    const namedFiles = or(
-      ...documents.map((doc) =>
-        and(
-          eq(legalListVerificationRuns.entityId, doc.entityId),
-          eq(legalListVerificationRuns.fileFieldId, doc.fileFieldId),
-        ),
-      ),
-    );
     const runs = yield* Result.await(
-      safeDb(async (tx) => {
-        // Newest run per file: DISTINCT ON walks the document index
-        // `(workspace_id, entity_id, file_field_id, created_at DESC)` once
-        // per named file.
-        const latest = await tx
-          .selectDistinctOn(
-            [
-              legalListVerificationRuns.entityId,
-              legalListVerificationRuns.fileFieldId,
-            ],
-            { ...RUN_SUMMARY_COLUMNS },
-          )
-          .from(legalListVerificationRuns)
-          .where(
-            and(
-              eq(legalListVerificationRuns.workspaceId, workspaceId),
-              inArray(legalListVerificationRuns.entityId, entityIds),
-              namedFiles,
-            ),
-          )
-          .orderBy(
-            asc(legalListVerificationRuns.entityId),
-            asc(legalListVerificationRuns.fileFieldId),
-            desc(legalListVerificationRuns.createdAt),
-            desc(legalListVerificationRuns.id),
-          )
-          .limit(documents.length);
-        if (latest.length === 0) {
-          return [];
-        }
-        const counts = await tx
-          .select({ runId: legalListClaims.runId, ...CLAIM_COUNT_COLUMNS })
-          .from(legalListClaims)
-          .where(
-            and(
-              eq(legalListClaims.workspaceId, workspaceId),
-              inArray(
-                legalListClaims.runId,
-                latest.map((run) => run.id),
-              ),
-            ),
-          )
-          .groupBy(legalListClaims.runId)
-          .limit(latest.length);
-        const countsByRun = new Map(counts.map((row) => [row.runId, row]));
-        return latest.map((run) => {
-          const count = countsByRun.get(run.id);
-          return serializeRunSummary({
-            ...run,
-            supported: count?.supported ?? 0,
-            tension: count?.tension ?? 0,
-            contradicted: count?.contradicted ?? 0,
-            nocover: count?.nocover ?? 0,
-            notverifiable: count?.notverifiable ?? 0,
-            recordconflict: count?.recordconflict ?? 0,
-          });
-        });
-      }),
+      listLatestRunSummaries({ safeDb, workspaceId, documents }),
     );
     return Result.ok({ runs });
   },

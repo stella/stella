@@ -280,7 +280,10 @@ const readAttributes = (tag: string): ReadonlyMap<string, string> =>
   );
 
 /** Bun's JUnit report, reduced to what the verdict needs. */
-export const parseJunit = (xml: string): JunitReport => {
+export const parseJunit = (
+  xml: string,
+  onFailure?: (file: string | undefined) => void,
+): JunitReport => {
   const cases: TestCase[] = [];
   for (const match of xml.matchAll(
     /<testcase\b([^>]*?)(?:\/>|>([\s\S]*?)<\/testcase>)/gu,
@@ -292,6 +295,7 @@ export const parseJunit = (xml: string): JunitReport => {
     let status: TestCaseStatus = "pass";
     if (/<(?:failure|error)\b/u.test(inner)) {
       status = "fail";
+      onFailure?.(attributes.get("file"));
     } else if (/<skipped\b/u.test(inner)) {
       status = "skip";
     }

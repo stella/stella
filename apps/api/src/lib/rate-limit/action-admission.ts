@@ -31,9 +31,12 @@ import {
   ACTION_SERVICE_DEADLINE_SCRIPT,
   actionPeriodArguments,
   staleActionPeriodTime,
+  PER_KIND_PERIOD_SCOPE,
   resolveActionPeriodBudget,
   type ActionPeriodBudget,
+  type ActionPeriodBudgetError,
   type ActionPeriodPolicy,
+  type ActionPeriodScope,
 } from "@/api/lib/rate-limit/action-period-budget";
 import {
   configuredDemoActionBudget,
@@ -50,7 +53,9 @@ import {
   getActionCostRecorder,
   reportMissingActionCostIdentity,
 } from "@/api/lib/usage/action-costs/recorder";
+import { resolveOrganizationAccess } from "@/api/lib/usage/organization-access";
 import {
+  actionDrawsServiceBudget,
   readOrganizationActionState,
   resolveOrganizationActionBudget,
   type OrganizationActionBudgetConfig,
@@ -384,6 +389,7 @@ const createAdmissionExecutor = ({
             periodMs: budget.endMs - budget.startMs,
             limit: budget.limit,
           },
+          scope: budget.scope,
           nowMs: storeNow,
         });
         if (Result.isError(refreshed)) {
@@ -490,6 +496,45 @@ type ResolveAdmissionBudgetOptions = Pick<
   budgetNow: () => number;
 };
 
+/**
+ * The period count an admitted action draws. `uncounted`: the action draws no
+ * count by design (a kind that consumes no services, or free-floor work on the
+ * organization's own key). `unconfigured`: the deployment sets no period limit.
+ */
+type AdmissionPeriod =
+  | {
+      type: "counted";
+      budget: ActionPeriodBudget;
+      serviceDeadlineMs: number | null;
+    }
+  | { type: "uncounted" }
+  | { type: "unconfigured" };
+
+type CountedAdmissionPeriod = Extract<AdmissionPeriod, { type: "counted" }>;
+
+const admittedPeriodBudget = (period: AdmissionPeriod) => {
+  switch (period.type) {
+    case "counted":
+      return {
+        budget: period.budget,
+        serviceDeadlineMs: period.serviceDeadlineMs,
+      };
+    case "uncounted":
+    case "unconfigured":
+      return { budget: null, serviceDeadlineMs: null };
+    default:
+      period satisfies never;
+      return panic("Unhandled admission period");
+  }
+};
+
+const periodBudgetRefusal = (error: ActionPeriodBudgetError) =>
+  new ActionAdmissionError({
+    message: error.message,
+    reason: "unavailable",
+    cause: error,
+  });
+
 const resolveAdmissionBudget = async ({
   organizationId,
   userId,
@@ -500,10 +545,13 @@ const resolveAdmissionBudget = async ({
   readOrganizationState,
   organizationStateDb,
   budgetNow,
-}: ResolveAdmissionBudgetOptions) => {
+}: ResolveAdmissionBudgetOptions): Promise<
+  Result<AdmissionPeriod, ActionAdmissionError>
+> => {
   let serviceDeadlineMs: number | null = null;
   let nowMs = budgetNow();
   let resolvedPeriodPolicy = periodPolicy;
+  let periodScope: ActionPeriodScope = PER_KIND_PERIOD_SCOPE;
   let consumesServices = true;
   if (serviceBudgetsEnabled) {
     if (periodIdentity === undefined) {
@@ -546,12 +594,23 @@ const resolveAdmissionBudget = async ({
         return state;
       }
       nowMs = budgetNow();
-      const organizationBudget = resolveOrganizationActionBudget({
-        state: state.value,
+      const access = resolveOrganizationAccess({
+        snapshot: state.value.snapshot,
         now: new Date(nowMs),
-        ...serviceBudgetConfig,
+        freeTier: state.value.freeTier,
       });
+      consumesServices = actionDrawsServiceBudget({
+        access,
+        serviceCredentials:
+          ACTION_KINDS[periodIdentity.actionKind].serviceCredentials,
+        modelCredentials: state.value.modelCredentials,
+      });
+      const organizationBudget = consumesServices
+        ? resolveOrganizationActionBudget({ access, ...serviceBudgetConfig })
+        : ({ status: "uncounted" } as const);
       switch (organizationBudget.status) {
+        case "uncounted":
+          break;
         case "not_enabled":
           return Result.err(
             new ActionAdmissionError({
@@ -568,6 +627,7 @@ const resolveAdmissionBudget = async ({
           );
         case "resolved":
           resolvedPeriodPolicy = organizationBudget.policy;
+          periodScope = organizationBudget.scope;
           serviceDeadlineMs = organizationBudget.serviceDeadlineMs;
           break;
         default:
@@ -576,25 +636,71 @@ const resolveAdmissionBudget = async ({
       }
     }
   }
-  const resolvedBudget = consumesServices
-    ? resolveActionPeriodBudget({
-        organizationId,
-        identity: periodIdentity,
-        policy: resolvedPeriodPolicy,
-        nowMs,
-      })
-    : Result.ok(null);
-  return Result.map(
-    Result.mapError(
-      resolvedBudget,
-      (error) =>
-        new ActionAdmissionError({
-          message: error.message,
-          reason: "unavailable",
-          cause: error,
-        }),
-    ),
-    (budget) => ({ budget, serviceDeadlineMs }),
+  if (!consumesServices) {
+    return Result.ok({ type: "uncounted" });
+  }
+  const resolvedBudget = resolveActionPeriodBudget({
+    organizationId,
+    identity: periodIdentity,
+    policy: resolvedPeriodPolicy,
+    scope: periodScope,
+    nowMs,
+  });
+  if (Result.isError(resolvedBudget)) {
+    return Result.err(periodBudgetRefusal(resolvedBudget.error));
+  }
+  const budget = resolvedBudget.value;
+  return Result.ok(
+    budget === null
+      ? { type: "unconfigured" }
+      : { type: "counted", budget, serviceDeadlineMs },
+  );
+};
+
+// A queued kickoff relinquishes its slot after enqueue; its period cap bounds
+// backlog. Work that draws no service count still takes the per-kind cap.
+const resolveQueuedBudget = async (
+  options: ResolveAdmissionBudgetOptions,
+): Promise<Result<CountedAdmissionPeriod, ActionAdmissionError>> => {
+  const resolved = await resolveAdmissionBudget(options);
+  if (Result.isError(resolved)) {
+    return Result.err(resolved.error);
+  }
+  const period = resolved.value;
+  switch (period.type) {
+    case "counted":
+      return Result.ok(period);
+    case "uncounted": {
+      const backlog = resolveActionPeriodBudget({
+        organizationId: options.organizationId,
+        identity: options.periodIdentity,
+        policy: options.periodPolicy,
+        scope: PER_KIND_PERIOD_SCOPE,
+        nowMs: options.budgetNow(),
+      });
+      if (Result.isError(backlog)) {
+        return Result.err(periodBudgetRefusal(backlog.error));
+      }
+      if (backlog.value !== null) {
+        return Result.ok({
+          type: "counted",
+          budget: backlog.value,
+          serviceDeadlineMs: null,
+        });
+      }
+      break;
+    }
+    case "unconfigured":
+      break;
+    default:
+      period satisfies never;
+      return panic("Unhandled admission period");
+  }
+  return Result.err(
+    new ActionAdmissionError({
+      message: "Queued action admission requires a configured period budget",
+      reason: "unavailable",
+    }),
   );
 };
 
@@ -668,6 +774,7 @@ const reuseAdmissionScope = async <T>({
       organizationId,
       identity: periodIdentity,
       policy: periodPolicy,
+      scope: PER_KIND_PERIOD_SCOPE,
       nowMs: budgetNow(),
     });
     if (Result.isError(budget)) {
@@ -727,16 +834,23 @@ const createPeriodReservationScope = ({
         }),
       );
     }
-    const resolved = await resolveAdmissionBudget({
+    const reservationOptions = {
       ...organizationBudgetOptions,
       periodIdentity: identity,
       organizationStateDb:
         organizationStateDb ?? organizationBudgetOptions.organizationStateDb,
-    });
+    };
+    // A queued kickoff reserves its backlog cap even when it draws no count.
+    const resolved =
+      queuedIdentity === undefined
+        ? await resolveAdmissionBudget(reservationOptions)
+        : await resolveQueuedBudget(reservationOptions);
     if (Result.isError(resolved)) {
       return resolved;
     }
-    const { budget: reservedBudget, serviceDeadlineMs } = resolved.value;
+    const { budget: reservedBudget, serviceDeadlineMs } = admittedPeriodBudget(
+      resolved.value,
+    );
     if (reservedBudget === null) {
       return Result.ok(undefined);
     }
@@ -820,23 +934,6 @@ export const reserveQueuedKickoffPeriod = async () => {
     );
   }
   return await scope.control.reservePeriod(scope.queuedIdentity);
-};
-
-const resolveQueuedBudget = async (options: ResolveAdmissionBudgetOptions) => {
-  const resolved = await resolveAdmissionBudget(options);
-  if (Result.isError(resolved)) {
-    return resolved;
-  }
-  // A queued kickoff relinquishes its slot after enqueue; its period cap bounds backlog.
-  if (resolved.value.budget === null) {
-    return Result.err(
-      new ActionAdmissionError({
-        message: "Queued action admission requires a configured period budget",
-        reason: "unavailable",
-      }),
-    );
-  }
-  return resolved;
 };
 
 type InheritedQueuedAdmissionOptions<T> = {
@@ -926,10 +1023,14 @@ const resolveExecutionBudget = async ({
   if (mode === "concurrency-only" || execution === "background-job") {
     return Result.ok({ budget: null, serviceDeadlineMs: null });
   }
-  if (execution === "queued-kickoff") {
-    return await resolveQueuedBudget(organizationBudgetOptions);
+  const resolved =
+    execution === "queued-kickoff"
+      ? await resolveQueuedBudget(organizationBudgetOptions)
+      : await resolveAdmissionBudget(organizationBudgetOptions);
+  if (Result.isError(resolved)) {
+    return Result.err(resolved.error);
   }
-  return await resolveAdmissionBudget(organizationBudgetOptions);
+  return Result.ok(admittedPeriodBudget(resolved.value));
 };
 
 const settledAdmissionOutcome = <T>(

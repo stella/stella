@@ -7,6 +7,20 @@ export type CiCoverageEvidence =
   | { profile: "normal-v1" }
   | { profile: "pilot-fast-v1"; jobs: string[] };
 
+/**
+ * What one CI-result run proves. A queue-validation run (the pull_request
+ * `enqueued` event) only re-checks earlier coverage and runs no jobs itself.
+ */
+export type CiRunEvidence =
+  | CiCoverageEvidence
+  | { profile: "queue-validation" };
+
+const EVIDENCE_NAMES: ReadonlySet<string> = new Set([
+  "COVERAGE_PROFILE",
+  "PILOT_FAST_JOBS",
+  "QUEUE_VALIDATION",
+]);
+
 export class CiCoverageLogError extends TaggedError("CiCoverageLogError")<{
   message: string;
 }> {}
@@ -92,7 +106,7 @@ const environmentSections = (
       const separator = entry.indexOf(":");
       const name = entry.slice(0, separator);
       activeName = undefined;
-      if (name !== "COVERAGE_PROFILE" && name !== "PILOT_FAST_JOBS") {
+      if (!EVIDENCE_NAMES.has(name)) {
         continue;
       }
       activeName = name;
@@ -107,7 +121,20 @@ const environmentSections = (
 
 const coverageEvidence = (
   values: ReadonlyMap<string, readonly string[]>,
-): Result<CiCoverageEvidence, CiCoverageLogError> => {
+): Result<CiRunEvidence, CiCoverageLogError> => {
+  const validations = values.get("QUEUE_VALIDATION") ?? [];
+  if (validations.length > 1) {
+    return error("CI coverage env must set QUEUE_VALIDATION at most once");
+  }
+  switch (validations.at(0)) {
+    case undefined:
+    case "":
+      break;
+    case "true":
+      return Result.ok({ profile: "queue-validation" });
+    default:
+      return error("QUEUE_VALIDATION must be empty or true");
+  }
   const profiles = values.get("COVERAGE_PROFILE") ?? [];
   const jobValues = values.get("PILOT_FAST_JOBS") ?? [];
   if (profiles.length !== 1 || jobValues.length !== 1) {
@@ -152,7 +179,7 @@ const coverageEvidence = (
 /** Reads the coverage env embedded in the CI-result job's command group. */
 export const parseCiCoverageLog = (
   raw: string,
-): Result<CiCoverageEvidence, CiCoverageLogError> => {
+): Result<CiRunEvidence, CiCoverageLogError> => {
   const lines = raw.split(/\r?\n/u).map(logLine);
   const groupsResult = logGroups(lines);
   if (groupsResult.isErr()) {

@@ -12,13 +12,29 @@ import {
 import { toSafeId } from "@/api/lib/branded-types";
 import type { AdmittedActionIdentity } from "@/api/lib/rate-limit/action-kinds";
 import { createRedisClient } from "@/api/lib/redis-client";
+import { FREE_TIER_OFF } from "@/api/lib/usage/organization-access";
+import type { OrganizationAccessSnapshot } from "@/api/lib/usage/organization-access-snapshot";
+import {
+  FREE_TIER_PERIOD_SCOPE,
+  ORGANIZATION_MODEL_CREDENTIALS,
+  type OrganizationActionState,
+} from "@/api/lib/usage/organization-action-budget";
 
 import { withActionAdmission } from "./action-admission";
 import {
   ACTION_SERVICE_DEADLINE_EXPIRED,
+  PER_KIND_PERIOD_SCOPE,
   resolveActionPeriodBudget,
   staleActionPeriodTime,
 } from "./action-period-budget";
+
+const actionState = (
+  snapshot: OrganizationAccessSnapshot | undefined,
+): OrganizationActionState => ({
+  snapshot,
+  freeTier: FREE_TIER_OFF,
+  modelCredentials: ORGANIZATION_MODEL_CREDENTIALS.managed,
+});
 
 const runValkeyTests = process.env["STELLA_RUN_VALKEY_TESTS"] === "true";
 const policy = {
@@ -98,10 +114,10 @@ if (!runValkeyTests || !process.env["REDIS_URL"]) {
                 : Math.min(storeNow, deadline - 1),
             readOrganizationState: async () => {
               stateReads += 1;
-              return {
+              return actionState({
                 state: ORGANIZATION_ACCESS_STATE.evaluationPeriod,
                 evaluationEndsAt: new Date(deadline),
-              };
+              });
             },
             redis: {
               send: async (command, args) => {
@@ -203,10 +219,11 @@ if (!runValkeyTests || !process.env["REDIS_URL"]) {
             },
             budgetNow: () =>
               staleRetry ? storeNow - 86_400_000 : deadline - 1,
-            readOrganizationState: async () => ({
-              state: ORGANIZATION_ACCESS_STATE.evaluationPeriod,
-              evaluationEndsAt: new Date(deadline),
-            }),
+            readOrganizationState: async () =>
+              actionState({
+                state: ORGANIZATION_ACCESS_STATE.evaluationPeriod,
+                evaluationEndsAt: new Date(deadline),
+              }),
             periodIdentity: {
               actionKind: "chat.improve-prompt",
               logicalPhaseId: "expired-phase",
@@ -396,6 +413,79 @@ if (!runValkeyTests || !process.env["REDIS_URL"]) {
       });
     });
 
+    test("the free floor caps every kind together in one period count", async () => {
+      await withStore(async ({ client, admissionClient, organizationId }) => {
+        const freeActions = 3;
+        const kinds = [
+          "chat.send",
+          "chat.improve-prompt",
+          "workflow.start",
+        ] as const;
+        let ran = 0;
+        const admit = async (
+          actionKind: (typeof kinds)[number],
+          logicalPhaseId: string,
+        ) =>
+          await withActionAdmission({
+            organizationId,
+            userId,
+            enabled: true,
+            policy,
+            costRecorder: null,
+            serviceBudgetsEnabled: true,
+            serviceBudgetConfig: {
+              periodMs: 86_400_000,
+              evaluationActions: 7,
+              selfManagedActions: 7,
+            },
+            periodIdentity: { actionKind, logicalPhaseId },
+            readOrganizationState: async () => ({
+              snapshot: {
+                state: ORGANIZATION_ACCESS_STATE.evaluationEnded,
+                evaluationEndsAt: new Date(Date.now() - 1),
+              },
+              freeTier: {
+                status: "on",
+                policy: { serviceActionsPerPeriod: freeActions },
+              },
+              modelCredentials: ORGANIZATION_MODEL_CREDENTIALS.managed,
+            }),
+            redis: admissionClient,
+            run: async () => {
+              ran += 1;
+            },
+          });
+        // One phase id under each kind: distinct actions, one shared count.
+        for (const kind of kinds) {
+          expect(Result.isOk(await admit(kind, "shared-phase"))).toBe(true);
+        }
+        expect(Result.isOk(await admit("chat.send", "shared-phase"))).toBe(
+          true,
+        );
+        const refused = await admit("chat.improve-prompt", "next-phase");
+        expect(Result.isError(refused)).toBe(true);
+        if (Result.isError(refused)) {
+          expect(refused.error).toMatchObject({
+            code: ACTION_ADMISSION_CODES.periodExhausted,
+          });
+        }
+        expect(ran).toBe(freeActions + 1);
+        const pooled = resolveActionPeriodBudget({
+          organizationId,
+          identity: { actionKind: "chat.send", logicalPhaseId: "shared-phase" },
+          policy: { periodMs: 86_400_000, limit: freeActions },
+          scope: FREE_TIER_PERIOD_SCOPE,
+          nowMs: Date.now(),
+        });
+        if (Result.isError(pooled) || pooled.value === null) {
+          throw new Error("Missing pooled budget");
+        }
+        expect(await client.send("HGET", [pooled.value.key, "count"])).toBe(
+          String(freeActions),
+        );
+      });
+    });
+
     test("atomically caps concurrent distinct phases and lets replays count once", async () => {
       await withStore(async ({ client, admissionClient, organizationId }) => {
         let ran = 0;
@@ -432,6 +522,7 @@ if (!runValkeyTests || !process.env["REDIS_URL"]) {
             logicalPhaseId: `phase-${accepted}`,
           },
           policy: periodPolicy,
+          scope: PER_KIND_PERIOD_SCOPE,
           nowMs: Date.now(),
         });
         if (Result.isError(resolved) || resolved.value === null) {
@@ -506,6 +597,7 @@ if (!runValkeyTests || !process.env["REDIS_URL"]) {
                     logicalPhaseId: "delayed-phase",
                   },
                   policy: { periodMs: 86_400_000, limit: 1 },
+                  scope: PER_KIND_PERIOD_SCOPE,
                   nowMs: Number(clock.at(0)) * 1000 - 86_400_000,
                 });
                 if (Result.isError(stale) || stale.value === null) {
@@ -686,6 +778,7 @@ if (!runValkeyTests || !process.env["REDIS_URL"]) {
             logicalPhaseId: "cross-boundary-phase",
           },
           policy: { periodMs: 2000, limit: 1 },
+          scope: PER_KIND_PERIOD_SCOPE,
           nowMs: Date.now(),
         });
         if (Result.isError(nextPeriod) || nextPeriod.value === null) {
@@ -747,6 +840,7 @@ if (!runValkeyTests || !process.env["REDIS_URL"]) {
               logicalPhaseId: "refused",
             },
             policy: periodPolicy,
+            scope: PER_KIND_PERIOD_SCOPE,
             nowMs: Date.now(),
           });
           if (Result.isError(resolved) || resolved.value === null) {

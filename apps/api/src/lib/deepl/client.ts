@@ -60,14 +60,14 @@ export const maskDeepLKey = (key: string): string => {
 };
 
 /** Mirrors DeepL's `Formality` API parameter. */
-export type DeepLFormality =
+type DeepLFormality =
   | "default"
   | "more"
   | "less"
   | "prefer_more"
   | "prefer_less";
 
-export type TranslateDocumentInput = {
+type TranslateDocumentInput = {
   apiKey: string;
   /** Source bytes — must be DOCX, PDF, PPTX, XLSX, TXT, HTML, or XLIFF. */
   file: Uint8Array | ArrayBuffer;
@@ -83,12 +83,12 @@ export type TranslateDocumentInput = {
   pollBudgetMs?: number | undefined;
 };
 
-export type TranslateDocumentResult = {
+type TranslateDocumentResult = {
   bytes: Uint8Array;
   billedCharacters: number | null;
 };
 
-export type TranslateTextBatchInput = {
+type TranslateTextBatchInput = {
   apiKey: string;
   texts: readonly string[];
   targetLang: string;

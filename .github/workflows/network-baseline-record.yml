@@ -133,3 +133,11 @@ jobs:
             apps/web/e2e/test-results/
           if-no-files-found: ignore
           retention-days: 7
+
+  deliver:
+    needs: record
+    if: github.ref == 'refs/heads/main' && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch')
+    permissions:
+      actions: read
+      contents: read
+    uses: ./.github/workflows/network-baseline-deliver.yml
