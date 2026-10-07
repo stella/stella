@@ -3,7 +3,7 @@ import { Result } from "better-result";
 import { and, eq } from "drizzle-orm";
 import { t } from "elysia";
 
-import type { ChatTurnResumeProbe } from "@stll/api-contract/chat";
+import type { ChatTurnResumeProbe } from "@stll/chat/resume-contract";
 
 import {
   chatMessages,

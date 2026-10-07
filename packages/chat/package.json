@@ -31,7 +31,8 @@
     "./model-selector": "./src/model-selector.tsx",
     "./runtime": "./src/runtime.ts",
     "./stream": "./src/stream.tsx",
-    "./durable-transport": "./src/durable-transport.ts"
+    "./durable-transport": "./src/durable-transport.ts",
+    "./resume-contract": "./src/resume-contract.ts"
   },
   "publishConfig": {
     "access": "public"
@@ -48,12 +49,13 @@
     "prepack": "bun run build"
   },
   "dependencies": {
+    "@ag-ui/core": "1.0.0",
     "@stll/ai-catalog": "workspace:^",
-    "@stll/api-contract": "workspace:*",
     "@stll/ui": "workspace:^",
     "@tanstack/ai-client": "catalog:",
     "better-result": "catalog:",
-    "valibot": "catalog:"
+    "valibot": "catalog:",
+    "zod": "^4.5.4"
   },
   "devDependencies": {
     "@stll/property-testing": "workspace:*",

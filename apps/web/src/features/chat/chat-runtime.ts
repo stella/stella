@@ -20,13 +20,13 @@ import {
 } from "@stll/api-contract";
 import type { ChatSendRequest } from "@stll/api-contract";
 import {
-  chatResumeSnapshotSchema,
-  chatTurnResumeProbeSchema,
-} from "@stll/api-contract/chat";
-import {
   ChatReconnectError,
   createDurableChatTransport,
 } from "@stll/chat/durable-transport";
+import {
+  chatResumeSnapshotSchema,
+  chatTurnResumeProbeSchema,
+} from "@stll/chat/resume-contract";
 
 import type {
   ChatClientTools,

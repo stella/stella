@@ -7,8 +7,8 @@ import type {
 import { panic, Result, TaggedError } from "better-result";
 import * as v from "valibot";
 
-import { chatTurnResumeProbeSchema } from "@stll/api-contract/chat";
-import type { ChatTurnResumeProbe } from "@stll/api-contract/chat";
+import { chatTurnResumeProbeSchema } from "./resume-contract";
+import type { ChatTurnResumeProbe } from "./resume-contract";
 
 export class ChatReconnectError extends TaggedError("ChatReconnectError")<{
   cause?: unknown;

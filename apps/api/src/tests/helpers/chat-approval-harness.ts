@@ -36,6 +36,7 @@ import type { StreamChatFinishEvent } from "@/api/handlers/chat/stream-chat";
 import { createStellaMcpToolSource } from "@/api/handlers/chat/tools/external-mcp-tools";
 import { toTanStackToolSchema } from "@/api/handlers/chat/tools/tanstack-tool-schema";
 import cancelTurn from "@/api/handlers/chat/turns/cancel";
+import { joinChatTurn, probeChatTurn } from "@/api/handlers/chat/turns/resume";
 import type { ChatPart } from "@/api/handlers/chat/types";
 import type { OrgAIConfig } from "@/api/lib/ai-config";
 import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
@@ -1048,8 +1049,13 @@ export const createApprovalHarness = ({
     turnId: string | null;
   }) =>
     await measure("oracle", async () => {
+      // This parses the captured delivery, not a live connection. A partial
+      // capture has no server to replay from; its SSE offsets must not trigger
+      // the SDK reconnect engine while checking the chunks already received.
+      const captured =
+        ended === "complete" ? text : text.replace(/^id:.*\n/gmu, "");
       const chunks = await readClientStreamChunks({
-        response: new Response(text),
+        response: new Response(captured),
         runId: raw.runId,
         threadId: raw.threadId,
       });
@@ -1252,6 +1258,44 @@ export const createApprovalHarness = ({
     init?: RequestInit,
   ): Promise<Response> => {
     const url = new URL(input instanceof Request ? input.url : input);
+    const resume =
+      /^\/v1\/chat\/threads\/(?<threadId>[^/]+)\/turns\/(?<turnId>[^/]+)\/(?<delivery>resume|join)$/u.exec(
+        url.pathname,
+      )?.groups;
+    if (
+      resume?.["threadId"] !== undefined &&
+      resume["turnId"] !== undefined &&
+      (init?.method ?? "GET") === "GET"
+    ) {
+      const handler =
+        resume["delivery"] === "join" ? joinChatTurn : probeChatTurn;
+      const set = { headers: {}, status: 200 };
+      const answer: unknown = await handler.handler(
+        asTestRaw<Parameters<typeof handler.handler>[0]>({
+          memberRole: sessionMemberRole("owner"),
+          getWorkspaceAccess: async () => await Promise.resolve(null),
+          params: {
+            threadId: toSafeId<"chatThread">(resume["threadId"]),
+            turnId: toSafeId<"chatTurn">(resume["turnId"]),
+          },
+          query: Object.fromEntries(url.searchParams),
+          request: new Request(url, init),
+          route: `/v1/chat/threads/:threadId/turns/:turnId/${resume["delivery"]}`,
+          safeDb,
+          scopedDb,
+          session: { activeOrganizationId: ids.orgA },
+          set,
+          user: { id: userId },
+        }),
+      );
+      if (answer instanceof Response) {
+        return answer;
+      }
+      if (typeof answer === "object" && answer !== null && "type" in answer) {
+        return Response.json(answer, { status: set.status });
+      }
+      return statusResponse(answer);
+    }
     const cancel = CHAT_TURN_CANCEL_PATH.exec(url.pathname)?.groups;
     if (
       cancel?.["threadId"] !== undefined &&
