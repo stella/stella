@@ -15,9 +15,9 @@ import {
 } from "@/api/lib/signals/read";
 
 const SignalVisibleToProver = defineProof("SignalVisibleTo");
-export type SignalVisibleTo<U, S, T> = {
-  readonly organizationId: SafeId<"organization">;
-} & Proof<"SignalVisibleTo", [U, S, T]>;
+export type SignalVisibleTo<U, S, T, O> = {
+  readonly organizationId: Named<O, SafeId<"organization">>;
+} & Proof<"SignalVisibleTo", [U, S, T, O]>;
 
 type VisibleSignal = Awaited<
   ReturnType<typeof selectVisibleSignalInTransaction>
@@ -41,11 +41,11 @@ export const withVisibleSignal = async <R, E>(
     signalId,
     expectedUpdatedAt,
   }: WithVisibleSignalOptions,
-  run: <U, S, T>(context: {
+  run: <U, S, T, O>(context: {
     tx: Named<T, Transaction>;
     signal: Named<S, SafeId<"signal">>;
     actor: Named<U, SafeId<"user">>;
-    proof: SignalVisibleTo<U, S, T>;
+    proof: SignalVisibleTo<U, S, T, O>;
     existing: VisibleSignal;
   }) => Promise<Result<R, E>>,
 ) =>
@@ -93,9 +93,16 @@ export const withVisibleSignal = async <R, E>(
         }),
       );
     }
-    const proof = {
-      ...SignalVisibleToProver.prove(actor, signal, transaction),
-      organizationId,
-    };
-    return await run({ tx: transaction, signal, actor, proof, existing });
+    return await name(organizationId, async (organization) => {
+      const proof = {
+        ...SignalVisibleToProver.prove(
+          actor,
+          signal,
+          transaction,
+          organization,
+        ),
+        organizationId: organization,
+      };
+      return await run({ tx: transaction, signal, actor, proof, existing });
+    });
   });

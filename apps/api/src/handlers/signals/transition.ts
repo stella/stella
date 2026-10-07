@@ -17,9 +17,9 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import type { SignalVisibleTo } from "@/api/lib/signals/proofs/signal-visible-to";
 
-export type SignalTransitionArgs<U, S, T> = {
+export type SignalTransitionArgs<U, S, T, O> = {
   tx: Named<T, Transaction>;
-  visibility: SignalVisibleTo<NoInfer<U>, NoInfer<S>, NoInfer<T>>;
+  visibility: SignalVisibleTo<NoInfer<U>, NoInfer<S>, NoInfer<T>, O>;
   signalId: Named<S, SafeId<"signal">>;
   actorUserId: Named<U, SafeId<"user">>;
   /** Statuses the row must currently be in; the UPDATE's WHERE closes the race. */
@@ -46,7 +46,7 @@ export type SignalTransitionArgs<U, S, T> = {
  * Conditional state transition plus its audit event, in one transaction.
  * Returns a 409 when the row was no longer in an allowed `from` state.
  */
-export const transitionSignal = async <U, S, T>({
+export const transitionSignal = async <U, S, T, O>({
   tx: transaction,
   visibility,
   signalId: signal,
@@ -55,11 +55,11 @@ export const transitionSignal = async <U, S, T>({
   set,
   event,
   audit,
-}: SignalTransitionArgs<U, S, T>) => {
+}: SignalTransitionArgs<U, S, T, O>) => {
   const tx = transaction.value;
   const signalId = signal.value;
   const actorUserId = actor.value;
-  const organizationId = visibility.organizationId;
+  const organizationId = visibility.organizationId.value;
   const updated = await tx
     .update(signals)
     .set({ ...set, updatedAt: new Date() })

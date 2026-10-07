@@ -12,9 +12,9 @@ import type { AuthorizedMemberRole } from "@/api/lib/permission-authorization";
 import { canTriageSignals } from "@/api/lib/signals/read";
 
 const MayCreateSignalRequestProver = defineProof("MayCreateSignalRequest");
-export type MayCreateSignalRequest<U, W, T> = {
-  readonly organizationId: SafeId<"organization">;
-} & Proof<"MayCreateSignalRequest", [U, W, T]>;
+export type MayCreateSignalRequest<U, W, T, O> = {
+  readonly organizationId: Named<O, SafeId<"organization">>;
+} & Proof<"MayCreateSignalRequest", [U, W, T, O]>;
 
 type WithSignalRequestAuthorizationOptions = {
   tx: Transaction;
@@ -32,11 +32,11 @@ export const withSignalRequestAuthorization = async <R>(
     memberRole,
     workspaceId,
   }: WithSignalRequestAuthorizationOptions,
-  run: <U, W, T>(context: {
+  run: <U, W, T, O>(context: {
     tx: Named<T, Transaction>;
     workspace: Named<W, SafeId<"workspace"> | null>;
     actor: Named<U, SafeId<"user">>;
-    proof: MayCreateSignalRequest<U, W, T>;
+    proof: MayCreateSignalRequest<U, W, T, O>;
   }) => Promise<Result<R, HandlerError>>,
 ) =>
   name(actorUserId, workspaceId, tx, async (actor, workspace, transaction) => {
@@ -73,9 +73,16 @@ export const withSignalRequestAuthorization = async <R>(
         }),
       );
     }
-    const proof = {
-      ...MayCreateSignalRequestProver.prove(actor, workspace, transaction),
-      organizationId,
-    };
-    return await run({ tx: transaction, workspace, actor, proof });
+    return await name(organizationId, async (organization) => {
+      const proof = {
+        ...MayCreateSignalRequestProver.prove(
+          actor,
+          workspace,
+          transaction,
+          organization,
+        ),
+        organizationId: organization,
+      };
+      return await run({ tx: transaction, workspace, actor, proof });
+    });
   });

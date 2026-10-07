@@ -10,11 +10,13 @@ const reportSchema = v.object({
 type LintOptions = {
   ruleNames: string[];
   pluginSpecifier?: string;
+  proofOwner?: boolean;
 };
 const lint = async (
   source: string,
   {
     ruleNames,
+    proofOwner = false,
     pluginSpecifier = path.join(
       import.meta.dir,
       "oxlint-presets/gdp-plugin.mjs",
@@ -36,6 +38,14 @@ const lint = async (
             specifier: pluginSpecifier,
           },
         ],
+        overrides: proofOwner
+          ? [
+              {
+                files: ["**/input.ts"],
+                rules: { "gdp-ts/no-define-proof": "off" },
+              },
+            ]
+          : [],
         rules: Object.fromEntries(
           ruleNames.map((rule) => [`gdp-ts/${rule}`, "error"]),
         ),
@@ -98,6 +108,92 @@ describe("GDP proof anti-forgery rules", () => {
         message.includes("Only modules in proofs/"),
       ),
     ).toBe(true);
+  });
+
+  const extractions = [
+    { source: "const mint = gdp.defineProof;", expectedCount: 1 },
+    { source: 'const mint = gdp["defineProof"];', expectedCount: 1 },
+    { source: "const { defineProof: mint } = gdp;", expectedCount: 1 },
+    { source: 'const { "defineProof": mint } = gdp;', expectedCount: 1 },
+    {
+      source: "const { defineProof: mint = fallback } = gdp;",
+      expectedCount: 1,
+    },
+    { source: "const { defineProof } = gdp;", expectedCount: 1 },
+    { source: 'const { ["defineProof"]: mint } = gdp;', expectedCount: 1 },
+    { source: "let mint; mint = gdp.defineProof;", expectedCount: 1 },
+    { source: "let mint; ({ defineProof: mint } = gdp);", expectedCount: 1 },
+    {
+      source: "const namespace = gdp; const mint = namespace.defineProof;",
+      expectedCount: 1,
+    },
+    {
+      source:
+        "const first = gdp.defineProof; const second = first; let third; third = second;",
+      expectedCount: 3,
+    },
+    {
+      source: "let first, second; first = second = gdp.defineProof;",
+      expectedCount: 2,
+    },
+    {
+      source:
+        "let namespace, secondNamespace; namespace = secondNamespace = gdp; const mint = namespace.defineProof;",
+      expectedCount: 1,
+    },
+    {
+      source:
+        "let namespace; namespace = gdp; const { defineProof: first } = namespace; let second; second = first;",
+      expectedCount: 2,
+    },
+  ];
+  for (const { source: extraction, expectedCount } of extractions) {
+    test(`confines constructor extraction: ${extraction}`, async () => {
+      const source = `import * as gdp from "@gdp-ts/core"; ${extraction}`;
+      const violations = await lint(source, { ruleNames: ["no-define-proof"] });
+      expect(violations).toHaveLength(expectedCount);
+      expect(
+        violations.every(
+          ({ message }) =>
+            message === "Only modules in proofs/ may extract defineProof.",
+        ),
+      ).toBe(true);
+      expect(
+        await lint(source, {
+          ruleNames: ["no-define-proof"],
+          proofOwner: true,
+        }),
+      ).toEqual([]);
+    });
+  }
+  test("tracks constructor calls through reassigned extraction chains", async () => {
+    expect(
+      await messages(
+        `import * as gdp from "@gdp-ts/core";
+      const first = gdp.defineProof; let second; second = first; second("Visible");`,
+        ["no-define-proof"],
+      ),
+    ).toEqual([
+      "Only modules in proofs/ may extract defineProof.",
+      "Only modules in proofs/ may extract defineProof.",
+      "Only modules in proofs/ may call defineProof.",
+    ]);
+  });
+  test("accepts unrelated namespace members and type-only namespace imports", async () => {
+    expect(
+      await messages(
+        `import * as gdp from "@gdp-ts/core";
+      const helper = gdp.name; const { name } = gdp; let alias; alias = helper;`,
+        ["no-define-proof"],
+      ),
+    ).toEqual([]);
+    expect(
+      await messages(
+        `import type * as gdp from "@gdp-ts/core";
+      type Constructor = typeof gdp.defineProof;`,
+        ["no-define-proof"],
+      ),
+    ).toEqual([]);
   });
 
   test("rejects exporting a prover, including an aliased constructor result", async () => {

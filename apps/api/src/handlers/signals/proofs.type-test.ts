@@ -5,13 +5,16 @@ import type { Transaction } from "@/api/db/root";
 import { transitionSignal } from "@/api/handlers/signals/transition";
 import type { SignalTransitionArgs } from "@/api/handlers/signals/transition";
 import type { SafeId } from "@/api/lib/branded-types";
+import type { MayCreateSignalRequest } from "@/api/lib/signals/proofs/may-create-signal-request";
 
 // Compile-only: these functions are never invoked.
-export const signalProofMistakes = async <U, S, T, Other>(
-  args: SignalTransitionArgs<U, S, T>,
+export const signalProofMistakes = async <U, S, T, O, Other>(
+  args: SignalTransitionArgs<U, S, T, O>,
   otherSignal: Named<Other, SafeId<"signal">>,
   otherActor: Named<Other, SafeId<"user">>,
   otherTransaction: Named<Other, Transaction>,
+  otherOrganizationId: SafeId<"organization">,
+  otherOrganization: Named<Other, SafeId<"organization">>,
 ) => {
   const { visibility, ...withoutProof } = args;
   // @ts-expect-error The transition requires evidence.
@@ -31,11 +34,46 @@ export const signalProofMistakes = async <U, S, T, Other>(
     kind: "SignalVisibleTo",
     organizationId: visibility.organizationId,
   };
-  return fabricated;
+  const replaced: typeof visibility = {
+    ...visibility,
+    // @ts-expect-error Organization is a named proof input.
+    organizationId: otherOrganizationId,
+  };
+  const renamed: typeof visibility = {
+    ...visibility,
+    // @ts-expect-error The organization name must match the proof.
+    organizationId: otherOrganization,
+  };
+  const differentOrganization: typeof visibility = {
+    kind: "SignalVisibleTo",
+    // @ts-expect-error An object literal cannot construct evidence for another organization.
+    organizationId: otherOrganization,
+  };
+  return { fabricated, replaced, renamed, differentOrganization };
 };
 
 export const signalNameMistakes = (signalId: SafeId<"signal">) => {
   // @ts-expect-error Exact names cannot escape their scope.
   const escaped = name(signalId, signalId, signalId, (signal) => signal);
   return escaped;
+};
+
+export const requestProofOrganizationMistakes = <U, W, T, O, Other>(
+  proof: MayCreateSignalRequest<U, W, T, O>,
+  otherOrganizationId: SafeId<"organization">,
+  otherOrganization: Named<Other, SafeId<"organization">>,
+) => {
+  const replaced: typeof proof = {
+    ...proof,
+    // @ts-expect-error Organization is a named proof input.
+    organizationId: otherOrganizationId,
+  };
+  // @ts-expect-error The organization name must match the proof.
+  const renamed: typeof proof = { ...proof, organizationId: otherOrganization };
+  const differentOrganization: typeof proof = {
+    kind: "MayCreateSignalRequest",
+    // @ts-expect-error An object literal cannot construct evidence for another organization.
+    organizationId: otherOrganization,
+  };
+  return { replaced, renamed, differentOrganization };
 };
