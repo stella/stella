@@ -197,7 +197,7 @@
     "valibot": "catalog:"
   },
   "devDependencies": {
-    "@anthropic-ai/sdk": "0.97.1",
+    "@anthropic-ai/sdk": "0.131.0",
     "@aws-sdk/client-bedrock-runtime": "^3.1145.0",
     "@electric-sql/pglite": "^0.5.8",
     "@mistralai/mistralai": "2.7.0",
