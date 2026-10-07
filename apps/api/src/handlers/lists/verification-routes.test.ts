@@ -21,7 +21,15 @@ import { createTestHandlerContext } from "@/api/tests/helpers/handler-context";
 const FEATURE_ID = "list-verification";
 const principal = { organizationId: "org_test", userId: "user_test" };
 
-const routeFor = (enabled: boolean) => {
+type RouteGrantOptions = {
+  verificationEnabled: boolean;
+  listsEnabled?: boolean;
+};
+
+const routeFor = ({
+  verificationEnabled: enabled,
+  listsEnabled = true,
+}: RouteGrantOptions) => {
   const snapshot = createFeatureAccessSnapshot({
     ...principal,
     decisions: new Map([
@@ -33,16 +41,24 @@ const routeFor = (enabled: boolean) => {
           registry: FEATURE_REGISTRY,
           user: { email: "member@example.test", emailVerified: true },
           membership: true,
-          grants: enabled
-            ? {
-                [FEATURE_ID]: [
+          grants: {
+            "legal-lists": listsEnabled
+              ? [
                   {
                     type: "organization",
                     organizationId: principal.organizationId,
                   },
-                ],
-              }
-            : {},
+                ]
+              : [],
+            [FEATURE_ID]: enabled
+              ? [
+                  {
+                    type: "organization",
+                    organizationId: principal.organizationId,
+                  },
+                ]
+              : [],
+          },
         }),
       ],
     ]),
@@ -95,18 +111,27 @@ describe("list verification route admission", () => {
       const handler = module.default.handler;
       expect(typeof handler).toBe("function");
       expect(
-        routeFor(false).routes.some((route) => route.handler === handler),
+        routeFor({ verificationEnabled: false }).routes.some(
+          (route) => route.handler === handler,
+        ),
       ).toBe(true);
       handlers.push(filename);
     }
-    expect(handlers).toHaveLength(routeFor(false).routes.length);
+    expect(handlers).toHaveLength(
+      routeFor({ verificationEnabled: false }).routes.length,
+    );
     expect(handlers).toHaveLength(8);
   });
 
-  test.each([false, true])(
-    "grant %s determines whether malformed requests reach validation",
-    async (enabled) => {
-      const route = routeFor(enabled);
+  test.each([
+    [false, false],
+    [false, true],
+    [true, false],
+    [true, true],
+  ])(
+    "verification grant %s and list grant %s determine whether malformed requests reach validation",
+    async (enabled, listsEnabled) => {
+      const route = routeFor({ verificationEnabled: enabled, listsEnabled });
       for (const { method, path } of route.routes) {
         const url = `http://localhost${path.replaceAll(/:[A-Za-z]+/gu, () => "invalid-id")}`;
         const request =
@@ -118,7 +143,7 @@ describe("list verification route admission", () => {
                 body: "{}",
               });
         const response = await route.handle(request);
-        expect(response.status).toBe(enabled ? 422 : 404);
+        expect(response.status).toBe(enabled && listsEnabled ? 422 : 404);
       }
     },
   );
@@ -131,7 +156,8 @@ describe("list verification route admission", () => {
     });
     try {
       const app = new Elysia().use(listsRoute);
-      for (const { method, path } of routeFor(false).routes) {
+      for (const { method, path } of routeFor({ verificationEnabled: false })
+        .routes) {
         const url = `http://localhost${path.replaceAll(/:[A-Za-z]+/gu, () => "invalid-id")}`;
         const request =
           method === "GET"
@@ -159,7 +185,7 @@ describe("list verification route admission", () => {
 
   test("admission remains local to verification routes", async () => {
     const app = new Elysia()
-      .use(routeFor(false))
+      .use(routeFor({ verificationEnabled: false }))
       .get("/ordinary", () => "served");
     expect(
       (await app.handle(new Request("http://localhost/ordinary"))).status,

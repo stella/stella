@@ -1329,14 +1329,6 @@ const createSafeScopedHandler = <
         });
       }
 
-      const featureAccessResponse = await admitHandlerFeatureAccess({
-        ctx,
-        config,
-      });
-      if (featureAccessResponse !== undefined) {
-        return featureAccessResponse;
-      }
-
       if (requiresAccountCheck(config.accountAccess)) {
         const accountAccess = checkAccountOperation(
           ctx.user.email,
@@ -1349,6 +1341,14 @@ const createSafeScopedHandler = <
           });
         }
       }
+      const featureAccessResponse = await admitHandlerFeatureAccess({
+        ctx,
+        config,
+      });
+      if (featureAccessResponse !== undefined) {
+        return featureAccessResponse;
+      }
+
       const visible = await Result.tryPromise(
         async () =>
           await resourcesAreVisible({

@@ -485,7 +485,7 @@ export const ${name} = { run: { featureId: "fixture", ${target} } };`;
         await Bun.file(`${apiDirectory}${file}`).text(),
       );
     }
-    const ordinary = "apps/api/src/handlers/seller-profiles/get.ts";
+    const ordinary = "apps/api/src/handlers/contacts/get.ts";
     const featureFile = "apps/api/src/handlers/lists/verifications/create.ts";
     expect(sources.has(ordinary)).toBe(true);
     expect(sources.has(featureFile)).toBe(true);

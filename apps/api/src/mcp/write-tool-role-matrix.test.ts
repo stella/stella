@@ -632,9 +632,12 @@ const mcpContextFor = (role: MemberRole): McpRequestContext =>
             organizationId: "org_1",
             membership: true,
             user: { email: "member@example.test", emailVerified: true },
-            grants: {
-              [featureId]: [{ type: "organization", organizationId: "org_1" }],
-            },
+            grants: Object.fromEntries(
+              Object.keys(FEATURE_REGISTRY).map((id) => [
+                id,
+                [{ type: "organization" as const, organizationId: "org_1" }],
+              ]),
+            ),
             enrolments:
               definition.enrolment === "self-serve"
                 ? [{ featureId, userId: "user_1", organizationId: "org_1" }]
