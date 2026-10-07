@@ -8,6 +8,7 @@ import { createSafeId } from "@/api/lib/branded-types";
 import { cents } from "@/api/lib/money";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
+import { auditRecorderDouble } from "@/api/tests/helpers/audit-recorder-double";
 import {
   mintAuthProviderId,
   mintAuthProviderIdValue,
@@ -68,6 +69,7 @@ if (!databaseUrl || !runPostgresTests) {
             createTestHandlerContext<
               Parameters<typeof updateContact.handler>[0]
             >({
+              recordAuditEvent: auditRecorderDouble(),
               memberRole: sessionMemberRole("owner"),
               session: { activeOrganizationId: organizationId },
               user: { id: userId },

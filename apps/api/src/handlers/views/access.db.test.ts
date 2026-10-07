@@ -26,6 +26,7 @@ import { createSafeId, type SafeId } from "@/api/lib/branded-types";
 import type { FeatureAccessGrants } from "@/api/lib/feature-access/grants-schema";
 import type { ViewLayout } from "@/api/lib/views-schema";
 import { setRuntimeModeForTesting } from "@/api/runtime-mode";
+import { auditRecorderDouble } from "@/api/tests/helpers/audit-recorder-double";
 import { createTestHandlerContext } from "@/api/tests/helpers/handler-context";
 import {
   getRlsFixture,
@@ -81,6 +82,7 @@ const seed = async (type: "avt" | "filesystem") => {
 };
 
 const context = () => ({
+  recordAuditEvent: auditRecorderDouble(),
   workspaceId: ids.wsA1,
   session: { activeOrganizationId: ids.orgA },
   user: { id: ids.userA1 },

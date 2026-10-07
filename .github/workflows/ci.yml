@@ -150,7 +150,7 @@ jobs:
       valkey_suites_required: ${{ steps.changed-files.outputs.valkey_suites_required }}
       collaboration_suite_required: ${{ steps.changed-files.outputs.collaboration_suite_required }}
       service_suites_pr_required: ${{ steps.changed-files.outputs.service_suites_pr_required }}
-      service_suites_required: ${{ steps.changed-files.outputs.package_checks_required == 'true' || steps.changed-files.outputs.collab_redis_required == 'true' }}
+      service_suites_required: ${{ github.event_name == 'pull_request' && steps.changed-files.outputs.service_suites_pr_required == 'true' || github.event_name != 'pull_request' && (steps.changed-files.outputs.package_checks_required == 'true' || steps.changed-files.outputs.collab_redis_required == 'true') }}
       published_exports_required: ${{ steps.changed-files.outputs.published_exports_required }}
       release_typecheck_required: ${{ steps.changed-files.outputs.release_typecheck_required }}
       route_smoke_required: ${{ steps.changed-files.outputs.route_smoke_required }}
@@ -984,6 +984,23 @@ jobs:
             corpus_suites_required=$package_checks_required
             valkey_suites_required=$package_checks_required
             collaboration_suite_required=$collab_redis_required
+          fi
+
+          # PRs exercise verification's Postgres suites through the same
+          # gated runner as full-depth runs; other service suites stay deferred.
+          if [[ "$EVENT_NAME" == pull_request ]]; then
+            postgres_suites_required=false
+            corpus_suites_required=false
+            valkey_suites_required=false
+            collaboration_suite_required=false
+            for file in "${changed_files[@]}"; do
+              case "$file" in
+                apps/api/src/lib/lists/verification/*|apps/api/src/handlers/lists/verifications/*|apps/api/src/handlers/lists/verification-routes*|apps/api/src/handlers/lists/routes.ts|apps/api/src/lib/api-handlers-list-verification*|apps/api/drizzle/*verification*/*|apps/api/src/handlers/lists/items/sources/verification/*|apps/api/src/db/list-verification*|apps/api/src/db/schema/lists-verification.ts|apps/api/src/lib/views/avt-layout*|apps/api/src/lib/scheduler/tasks/list-verification*|apps/web/src/features/avt/*|apps/web/src/routes/*/lists/source-verification-action*|.github/workflows/ci.yml)
+                  postgres_suites_required=true
+                  ;;
+              esac
+            done
+            service_suites_pr_required=$postgres_suites_required
           fi
 
           # The production e2e shards consume web-build's artifact, so any
@@ -4255,7 +4272,10 @@ jobs:
     if: >-
       needs.ci-plan.outputs.run_required != 'false'
       && (
-      github.event_name != 'pull_request' && (
+      (github.event_name == 'pull_request'
+      && needs.ci-plan.outputs.service_suites_pr_required == 'true'
+      && needs.ci-plan.outputs.trusted == 'true')
+      || github.event_name != 'pull_request' && (
       needs.ci-plan.outputs.queue_depth != 'thin'
       && (needs.ci-plan.outputs.service_suites_required == 'true'
       && (needs.ci-plan.outputs.trusted == 'true'
@@ -4332,11 +4352,17 @@ jobs:
       - name: Run Postgres-gated API suites
         if: needs.ci-plan.outputs.postgres_suites_required == 'true'
         working-directory: apps/api
-        env:
-          DATABASE_URL: postgres://stella_owner:stella@127.0.0.1:5432/stella
         # The full volume benchmark runs in nightly postgres-suites; this job
         # retains its bounded correctness slice alongside every other suite.
-        run: bun run test:postgres --test-name-pattern='^(?!.*sanctions monitoring full-volume)'
+        env:
+          DATABASE_URL: postgres://stella_owner:stella@127.0.0.1:5432/stella
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          if [[ "$EVENT_NAME" == pull_request ]]; then
+            bun run test:postgres src/lib/lists/verification/ src/handlers/lists/verifications/ src/db/list-verification
+          else
+            bun run test:postgres --test-name-pattern='^(?!.*sanctions monitoring full-volume)'
+          fi
 
       - name: Start corpus engine
         if: ${{ !cancelled() && needs.ci-plan.outputs.corpus_suites_required == 'true' }}
@@ -7295,7 +7321,7 @@ jobs:
           FAST_JOB_SCOPES: >-
             {"service-suites": "service_suites_pr_required", "docker-checks": "docker_checks_pr_required", "legal-atlas-image": "legal_atlas_image_pr_required"}
           FAST_REQUIRED: >-
-            ["ci-browser", "ci-generated-sources", "ci-checks-docs", "ci-checks-generated", "ci-checks-policy", "ci-checks-rest", "code-quality-api", "code-quality-rest", "code-quality-web", "dependency-malware", "parser-version-guard", "typecheck-baseline", "ci-tests"]
+            ["ci-browser", "ci-generated-sources", "ci-checks-docs", "ci-checks-generated", "ci-checks-policy", "ci-checks-rest", "code-quality-api", "code-quality-rest", "code-quality-web", "dependency-malware", "parser-version-guard", "typecheck-baseline", "ci-tests", "service-suites"]
         run: |
           if [[ "$QUEUE_DEPTH" == thin ]]; then
             THIN_JOBS=$(jq -cn --argjson thin "$THIN_JOBS" --argjson required "$QUEUE_REQUIRED_JOBS" '$thin + $required | unique') || exit 1

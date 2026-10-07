@@ -2801,7 +2801,7 @@ test("folded service suites preserve both scopes and independent verdicts", () =
     ciJobs["ci-plan"],
   );
   expect(plan.outputs["service_suites_required"]).toBe(
-    `\${{ steps.changed-files.outputs.package_checks_required == 'true' || steps.changed-files.outputs.collab_redis_required == 'true' }}`,
+    `\${{ github.event_name == 'pull_request' && steps.changed-files.outputs.service_suites_pr_required == 'true' || github.event_name != 'pull_request' && (steps.changed-files.outputs.package_checks_required == 'true' || steps.changed-files.outputs.collab_redis_required == 'true') }}`,
   );
   expect(jobScopes["service-suites"]).toBe("service_suites_required");
   expect(ciJobs).not.toHaveProperty("collab-redis");
@@ -3445,7 +3445,7 @@ test("an unreadable PR diff requires route smoke while manual and queue runs ret
     rmSync(directory, { recursive: true, force: true });
   }
 });
-test("service-suite scopes remain planned while pull requests skip execution", () => {
+test("verification paths select only scoped Postgres suites on pull requests", () => {
   const scope = "service_suites_pr_required";
   const condition = jobIf(ciJobs["service-suites"]);
   expect(condition).toContain("needs.ci-plan.outputs.suite_depth == 'fast'");
@@ -3459,23 +3459,38 @@ test("service-suite scopes remain planned while pull requests skip execution", (
     `\${{ steps.changed-files.outputs.${scope} }}`,
   );
   const cases = [
-    { file: "apps/api/src/db/schema/new.ts", required: true },
-    { file: "apps/api/drizzle/123_new.sql", required: true },
-    { file: "apps/api/src/lib/scheduler/new.ts", required: true },
+    ...[
+      "apps/api/src/lib/lists/verification/run-queue.ts",
+      "apps/api/src/handlers/lists/verifications/create.ts",
+      "apps/api/src/handlers/lists/verification-routes.ts",
+      "apps/api/src/handlers/lists/routes.ts",
+      "apps/api/src/lib/api-handlers-list-verification.ts",
+      "apps/api/drizzle/20260925220000_legal_list_verifications/migration.sql",
+      "apps/api/src/handlers/lists/items/sources/verification/update.ts",
+      "apps/api/src/db/schema/lists-verification.ts",
+      "apps/api/src/db/list-verification-rls.db.test.ts",
+      "apps/api/src/lib/views/avt-layout.db.test.ts",
+      "apps/api/src/lib/scheduler/tasks/list-verification-run-reconcile.ts",
+      "apps/web/src/features/avt/avt-view.tsx",
+      "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/lists/source-verification-action.tsx",
+    ].map((file) => ({ file, required: true })),
+    { file: "apps/api/src/db/schema/new.ts", required: false },
+    { file: "apps/api/drizzle/123_new.sql", required: false },
+    { file: "apps/api/src/lib/scheduler/new.ts", required: false },
     {
       file: "apps/api/src/handlers/legislation/new-backfill.ts",
-      required: true,
+      required: false,
     },
-    { file: "apps/api/scripts/run-postgres-tests.ts", required: true },
-    { file: "apps/api/src/tests/setup-env.ts", required: true },
+    { file: "apps/api/scripts/run-postgres-tests.ts", required: false },
+    { file: "apps/api/src/tests/setup-env.ts", required: false },
     {
       file: "apps/api/src/lib/scheduler/runner.postgres.test.ts",
-      required: true,
+      required: false,
     },
-    { file: "apps/collab/src/server.test.ts", required: true },
+    { file: "apps/collab/src/server.test.ts", required: false },
     {
       file: "apps/api/src/handlers/case-law/ingestion/citation-extractor.ts",
-      required: true,
+      required: false,
     },
     { file: "docs/guide.md", required: false },
     { file: "apps/web/src/new.tsx", required: false },
@@ -3486,16 +3501,29 @@ test("service-suite scopes remain planned while pull requests skip execution", (
     cases.map(({ file, required }) => ({
       file,
       files: [file],
-      outputs: [scope],
+      outputs: [
+        scope,
+        "postgres_suites_required",
+        "corpus_suites_required",
+        "valkey_suites_required",
+        "collaboration_suite_required",
+      ],
       required,
     })),
   ).map(({ item: { file, required }, plan: values }) => ({
     file,
     required,
     selected: values.at(0) === "true",
+    suiteScopes: values.slice(1),
   }));
-  for (const { file, required, selected } of planned) {
+  for (const { file, required, selected, suiteScopes } of planned) {
     expect(selected, file).toBe(required);
+    expect(suiteScopes, file).toEqual([
+      String(required),
+      "false",
+      "false",
+      "false",
+    ]);
   }
   // Evaluate the actual job condition with planner outputs at both depths.
   const conditions = planned.flatMap(({ file, selected }) =>
@@ -3513,7 +3541,7 @@ test("service-suite scopes remain planned while pull requests skip execution", (
         )
         .replaceAll("needs.ci-plan.outputs.trusted", "'true'")
         .replaceAll("github.event_name", "'pull_request'"),
-      exitCode: 1,
+      exitCode: selected ? 0 : 1,
     })),
   );
   for (const { item, exitCode } of runBashBatch(
@@ -3536,7 +3564,8 @@ test("service-suite scopes remain planned while pull requests skip execution", (
           results: { "service-suites": result },
           unplannedScopes: selected ? [] : [scope],
         },
-        exitCode: result === "success" || result === "skipped" ? 0 : 1,
+        exitCode:
+          result === "success" || (result === "skipped" && !selected) ? 0 : 1,
       })),
     ),
   );
@@ -3734,6 +3763,35 @@ test("image scopes remain planned while pull requests skip execution", () => {
   }
 }, 30_000);
 
+test("verification pull requests pass their scope to the production Postgres runner", () => {
+  const step = jobSteps(ciJobs["service-suites"]).find(
+    ({ name }) => name === "Run Postgres-gated API suites",
+  );
+  expect(step?.run).toBeDefined();
+  const outcomes = runBashBatch(["pull_request", "merge_group"], (event) => ({
+    flags: ["-eu"],
+    script: `bun() { printf '%s\n' "$@"; }\n${step?.run ?? ""}`,
+    args: [],
+    env: { PATH: Bun.env["PATH"] ?? "", EVENT_NAME: event },
+  }));
+  for (const { item: event, exitCode, stdout } of outcomes) {
+    expect(exitCode, event).toBe(0);
+    const args = stdout.trim().split("\n");
+    expect(args.slice(0, 2)).toEqual(["run", "test:postgres"]);
+    if (event === "pull_request") {
+      expect(args.slice(2)).toEqual([
+        "src/lib/lists/verification/",
+        "src/handlers/lists/verifications/",
+        "src/db/list-verification",
+      ]);
+    } else {
+      expect(args.slice(2)).toEqual([
+        "--test-name-pattern=^(?!.*sanctions monitoring full-volume)",
+      ]);
+    }
+  }
+});
+
 test("each folded service step follows its own dependency scope at PR depth", () => {
   const scopes = [
     "postgres_suites_required",
@@ -3745,9 +3803,9 @@ test("each folded service step follows its own dependency scope at PR depth", ()
     ["packages/time/src/index.ts"],
     [...scopes, "collab_redis_required", "service_suites_pr_required"],
   );
-  expect(timePlan.at(3)).toBe("true");
+  expect(timePlan.at(3)).toBe("false");
   expect(timePlan.at(4)).toBe("false");
-  expect(timePlan.at(5)).toBe("true");
+  expect(timePlan.at(5)).toBe("false");
   const collaboration = jobSteps(ciJobs["service-suites"]).find(
     ({ name }) => name === "Run cross-replica collaboration suite",
   );
@@ -3774,7 +3832,7 @@ test("each folded service step follows its own dependency scope at PR depth", ()
           (_, scope: string) => `'${String(values[scope])}'`,
         )} ]]`,
     ]).exitCode;
-  expect(evaluateStep(collaboration?.if ?? "false", planned)).toBe(0);
+  expect(evaluateStep(collaboration?.if ?? "false", planned)).toBe(1);
   for (const [name, scope] of [
     ["Run Postgres-gated API suites", "postgres_suites_required"],
     ["Start corpus engine", "corpus_suites_required"],
@@ -3795,18 +3853,18 @@ test("each folded service step follows its own dependency scope at PR depth", ()
       );
     }
   }
-  expect(runSelector(["apps/collab/src/server.ts"], scopes, "full")).toEqual([
-    "true",
-    "true",
-    "true",
-    "true",
-  ]);
-  expect(runSelector(["docs/guide.md"], scopes, "full")).toEqual([
-    "false",
-    "false",
-    "false",
-    "false",
-  ]);
+  expect(
+    runSelector(
+      ["apps/collab/src/server.ts"],
+      scopes,
+      "full",
+      "false",
+      "merge_group",
+    ),
+  ).toEqual(["true", "true", "true", "true"]);
+  expect(
+    runSelector(["docs/guide.md"], scopes, "full", "false", "merge_group"),
+  ).toEqual(["false", "false", "false", "false"]);
 });
 
 test("an empty full-depth diff preserves the original API service-suite selection", () => {
