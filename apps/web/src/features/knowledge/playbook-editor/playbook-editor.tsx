@@ -934,9 +934,9 @@ const PlaybookEditorForm = ({
    * reload that swaps in the server's copy instead of leaving a toast the
    * user can only re-trigger.
    *
-   * In the pane, refetch only: the form rebases onto the newer version and
-   * the rebased draft saves by itself. An approval is not repeated, so the
-   * pane says that it did not happen.
+   * In the pane, refetch: the form rebases onto the newer version. When the
+   * pane autosaves, the rebased draft saves by itself. An approval or an
+   * explicit Save is not repeated, so the pane says that it did not happen.
    */
   const reportVersionConflict = (
     failure: ToastFailure,
@@ -952,7 +952,7 @@ const PlaybookEditorForm = ({
           "playbook-editor.refetch-for-rebase",
         );
       }
-      if (refused === "approval") {
+      if (refused === "approval" || !autosaves) {
         notifyUserError(undefined, failure.title, {
           description: failure.description,
         });
