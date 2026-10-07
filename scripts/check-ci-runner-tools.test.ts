@@ -83,6 +83,209 @@ test("every tracked executable is rejected on an unknown image and accepted afte
   }
 });
 
+test("nested parallel checks see sibling installs only after the group", () => {
+  withFixture(
+    {
+      jobs: {
+        check: {
+          "runs-on": "unknown",
+          steps: [
+            {
+              parallel: [
+                { run: "sudo apt-get install -y ripgrep" },
+                {
+                  parallel: [
+                    { name: "Nested invocation", run: "rg --version" },
+                  ],
+                },
+              ],
+            },
+            { run: "rg --version" },
+          ],
+        },
+      },
+    },
+    (root) => {
+      const findings = problems(root);
+      expect(findings).toHaveLength(1);
+      expect(findings.at(0)).toContain("Nested invocation");
+      expect(findings.at(0)).toContain("requires rg");
+    },
+  );
+});
+
+test("parallel groups wait for background installs without sharing them with siblings", () => {
+  withFixture(
+    {
+      jobs: {
+        check: {
+          "runs-on": "unknown",
+          steps: [
+            {
+              parallel: [
+                {
+                  id: "tools",
+                  background: true,
+                  run: "sudo apt-get install -y ripgrep",
+                },
+                { name: "Concurrent invocation", run: "rg --version" },
+              ],
+            },
+            { name: "After group", run: "rg --version" },
+          ],
+        },
+      },
+    },
+    (root) => {
+      const findings = problems(root);
+      expect(findings).toHaveLength(1);
+      expect(findings.at(0)).toContain("Concurrent invocation");
+    },
+  );
+});
+
+test("background runner-tool installs take effect only after a wait", () => {
+  withFixture(
+    {
+      jobs: {
+        check: {
+          "runs-on": "unknown",
+          steps: [
+            {
+              id: "tools",
+              background: true,
+              run: "sudo apt-get install -y ripgrep",
+            },
+            { name: "Before wait", run: "rg --version" },
+            { wait: "tools" },
+            { name: "After wait", run: "rg --version" },
+          ],
+        },
+      },
+    },
+    (root) => {
+      const findings = problems(root);
+      expect(findings).toHaveLength(1);
+      expect(findings.at(0)).toContain("Before wait");
+    },
+  );
+});
+
+test("cancelled background tools stay unavailable after a wait barrier", () => {
+  for (const barrier of [{ wait: "cancelled" }, { "wait-all": null }]) {
+    withFixture(
+      {
+        jobs: {
+          check: {
+            "runs-on": "unknown",
+            steps: [
+              {
+                id: "cancelled",
+                background: true,
+                run: "sudo apt-get install -y ripgrep",
+              },
+              { cancel: "cancelled" },
+              barrier,
+              { name: "After cancel", run: "rg --version" },
+              {
+                id: "retained",
+                background: true,
+                run: "sudo apt-get install -y ripgrep",
+              },
+              { wait: "retained" },
+              { name: "After retained wait", run: "rg --version" },
+            ],
+          },
+        },
+      },
+      (root) => {
+        const findings = problems(root);
+        expect(findings, JSON.stringify(barrier)).toHaveLength(1);
+        expect(findings.at(0), JSON.stringify(barrier)).toContain(
+          "After cancel",
+        );
+      },
+    );
+  }
+});
+
+test("parallel cancellation dominates sibling waits and nested group proofs while preserving completed tools", () => {
+  for (const installLocation of ["before-group", "nested-sibling"] as const) {
+    for (const depth of [0, 1, 2]) {
+      for (const siblingWaitPosition of [
+        "absent",
+        "before",
+        "after",
+      ] as const) {
+        for (const barrier of [{ wait: "tools" }, { "wait-all": null }]) {
+          let cancelBranch: unknown = { cancel: "tools" };
+          for (let nested = 0; nested < depth; nested += 1) {
+            cancelBranch = { parallel: [cancelBranch] };
+          }
+          const siblingWait = { wait: "tools" };
+          const parallel = [cancelBranch];
+          if (siblingWaitPosition === "before") {
+            parallel.unshift(siblingWait);
+          }
+          if (siblingWaitPosition === "after") {
+            parallel.push(siblingWait);
+          }
+          const installerBranch = {
+            parallel: [
+              {
+                id: "tools",
+                background: true,
+                run: "sudo apt-get install -y ripgrep",
+              },
+            ],
+          };
+          if (installLocation === "nested-sibling") {
+            parallel.unshift(installerBranch);
+          }
+          const scenario = {
+            installLocation,
+            depth,
+            siblingWaitPosition,
+            barrier,
+          };
+          withFixture(
+            {
+              jobs: {
+                check: {
+                  "runs-on": "unknown",
+                  steps: [
+                    { run: "sudo apt-get install -y jq" },
+                    ...(installLocation === "before-group"
+                      ? [
+                          {
+                            id: "tools",
+                            background: true,
+                            run: "sudo apt-get install -y ripgrep",
+                          },
+                        ]
+                      : []),
+                    { parallel },
+                    barrier,
+                    { name: "After cancel", run: "rg --version" },
+                    { name: "Completed tool proof", run: "jq --version" },
+                  ],
+                },
+              },
+            },
+            (root) => {
+              const findings = problems(root);
+              expect(findings, JSON.stringify(scenario)).toHaveLength(1);
+              expect(findings.at(0), JSON.stringify(scenario)).toContain(
+                "After cancel",
+              );
+            },
+          );
+        }
+      }
+    }
+  }
+});
+
 test("malformed step metadata and execution settings are reported without coercion", () => {
   withFixture(
     {

@@ -14,6 +14,11 @@ import {
   programWords,
 } from "./install-free-ci";
 import { readStringLiterals } from "./test-input-readers";
+import {
+  flattenWorkflowSteps,
+  mergeWorkflowParallelProofs,
+  synchronizeWorkflowBackgroundSteps,
+} from "./workflow-steps";
 
 // This guard must run before dependencies are installed.
 class RunnerToolInvariantError extends Error {
@@ -657,6 +662,277 @@ const stepExecution = ({
   return { label, cwd, shell };
 };
 
+type RunnerStepContext = {
+  readonly root: string;
+  readonly workflow: string;
+  readonly jobName: string;
+  readonly jobDefaults: Record<string, unknown>;
+  readonly workflowDefaults: Record<string, unknown>;
+  readonly guaranteed: ReadonlySet<string>;
+  readonly active: Set<string>;
+  readonly problems: string[];
+  readonly aliases: ReadonlyMap<string, string>;
+};
+
+type WalkRunnerStepsOptions = {
+  readonly cancelled?: ReadonlySet<string>;
+  readonly context: RunnerStepContext;
+  readonly entries: unknown[];
+  readonly prefix: string;
+  readonly parent: readonly string[];
+  readonly owner: string;
+  readonly availableInstalls: Install[];
+  readonly availablePending: Map<string, Install[]>;
+};
+
+type DeferRunnerBackgroundInstallsOptions = {
+  step: Record<string, unknown>;
+  installStart: number;
+  availableInstalls: Install[];
+  availablePending: Map<string, Install[]>;
+};
+const deferRunnerBackgroundInstalls = ({
+  step,
+  installStart,
+  availableInstalls,
+  availablePending,
+}: DeferRunnerBackgroundInstallsOptions) => {
+  if (step["background"] !== true) {
+    return;
+  }
+  const added = availableInstalls.splice(installStart);
+  if (typeof step["id"] !== "string") {
+    return;
+  }
+  const records = availablePending.get(step["id"]);
+  if (records === undefined) {
+    availablePending.set(step["id"], added);
+  } else {
+    records.push(...added);
+  }
+};
+
+const walkRunnerSteps = ({
+  cancelled = new Set<string>(),
+  context: state,
+  entries,
+  prefix,
+  parent,
+  owner,
+  availableInstalls,
+  availablePending,
+}: WalkRunnerStepsOptions) => {
+  const {
+    root,
+    workflow,
+    jobName,
+    jobDefaults,
+    workflowDefaults,
+    guaranteed,
+    active,
+    problems,
+    aliases,
+  } = state;
+  for (const [index, step] of entries.entries()) {
+    if (!isRecord(step)) {
+      continue;
+    }
+    const completed = synchronizeWorkflowBackgroundSteps(
+      step,
+      availablePending,
+    );
+    if (completed !== undefined) {
+      availableInstalls.push(...completed);
+      continue;
+    }
+    if ("parallel" in step) {
+      if (
+        Object.keys(step).some((key) => key !== "parallel") ||
+        !Array.isArray(step["parallel"])
+      ) {
+        problems.push(
+          `${workflow}/${jobName}/${prefix}${index}: malformed parallel workflow step`,
+        );
+        continue;
+      }
+      walkRunnerParallelSteps({
+        cancelled,
+        siblings: step["parallel"],
+        context: state,
+        prefix: `${prefix}parallel-${index}/`,
+        parent,
+        owner,
+        availableInstalls,
+        availablePending,
+      });
+      continue;
+    }
+    const execution = stepExecution({
+      step,
+      jobDefaults,
+      workflowDefaults,
+      labelPrefix: `${workflow}/${jobName}/${prefix}`,
+      index,
+    });
+    if ("problem" in execution) {
+      problems.push(execution.problem);
+      continue;
+    }
+    const { label, cwd, shell } = execution;
+    const installStart = availableInstalls.length;
+    const scanContext = {
+      root,
+      file: owner,
+      cwd,
+      label,
+      guaranteed,
+      installs: availableInstalls,
+      condition: [...parent, ...operands(step["if"])],
+      active,
+      problems,
+      aliases,
+      allowInstalls: true,
+    };
+    if (contradictoryEvents(scanContext.condition)) {
+      continue;
+    }
+    if (
+      typeof step["run"] === "string" &&
+      !/^(?:pwsh|powershell|python)/u.test(shell)
+    ) {
+      const before = availableInstalls.length;
+      inspectShell(step["run"], scanContext);
+      if (
+        step["continue-on-error"] !== undefined &&
+        step["continue-on-error"] !== false
+      ) {
+        availableInstalls.splice(before);
+      }
+    }
+    if (typeof step["run"] === "string") {
+      deferRunnerBackgroundInstalls({
+        step,
+        installStart,
+        availableInstalls,
+        availablePending,
+      });
+    }
+    if (typeof step["uses"] !== "string" || !step["uses"].startsWith("./")) {
+      continue;
+    }
+    const actionDirectory = resolveFile(step["uses"], {
+      ...scanContext,
+      cwd: "",
+    });
+    if (actionDirectory === undefined) {
+      deferRunnerBackgroundInstalls({
+        step,
+        installStart,
+        availableInstalls,
+        availablePending,
+      });
+      continue;
+    }
+    const actionFile = ["action.yml", "action.yaml"]
+      .map((name) => path.join(actionDirectory, name))
+      .find(existsSync);
+    if (actionFile === undefined) {
+      deferRunnerBackgroundInstalls({
+        step,
+        installStart,
+        availableInstalls,
+        availablePending,
+      });
+      continue;
+    }
+    const action = readYaml(actionFile);
+    if (
+      isRecord(action) &&
+      isRecord(action["runs"]) &&
+      action["runs"]["using"] === "composite" &&
+      Array.isArray(action["runs"]["steps"])
+    ) {
+      if (active.has(actionFile)) {
+        problems.push(`${label}: recursive composite action ${step["uses"]}`);
+        deferRunnerBackgroundInstalls({
+          step,
+          installStart,
+          availableInstalls,
+          availablePending,
+        });
+        continue;
+      }
+      const before = availableInstalls.length;
+      active.add(actionFile);
+      walkRunnerSteps({
+        context: state,
+        entries: action["runs"]["steps"],
+        prefix: `${prefix}${step["uses"]}/`,
+        parent: scanContext.condition,
+        owner: actionFile,
+        availableInstalls: scanContext.installs,
+        availablePending,
+      });
+      active.delete(actionFile);
+      if (
+        step["continue-on-error"] !== undefined &&
+        step["continue-on-error"] !== false
+      ) {
+        availableInstalls.splice(before);
+      }
+    }
+    deferRunnerBackgroundInstalls({
+      step,
+      installStart,
+      availableInstalls,
+      availablePending,
+    });
+  }
+};
+
+type WalkRunnerParallelStepsOptions = {
+  readonly cancelled: ReadonlySet<string>;
+  readonly siblings: readonly unknown[];
+  readonly context: RunnerStepContext;
+  readonly prefix: string;
+  readonly parent: readonly string[];
+  readonly owner: string;
+  readonly availableInstalls: Install[];
+  readonly availablePending: Map<string, Install[]>;
+};
+
+const walkRunnerParallelSteps = ({
+  cancelled,
+  siblings,
+  context,
+  prefix,
+  parent,
+  owner,
+  availableInstalls,
+  availablePending,
+}: WalkRunnerParallelStepsOptions) => {
+  const additions = mergeWorkflowParallelProofs({
+    steps: siblings,
+    installs: availableInstalls,
+    pending: availablePending,
+    cancelled,
+    walk: ({ step, installs, pending, cancelled: branchCancelled }) => {
+      walkRunnerSteps({
+        cancelled: branchCancelled,
+        context,
+        entries: [step],
+        prefix,
+        parent,
+        owner,
+        availableInstalls: installs,
+        availablePending: pending,
+      });
+      return installs;
+    },
+  });
+  availableInstalls.push(...additions);
+};
+
 type RunnerToolProblemsOptions = {
   root: string;
   workflow: string;
@@ -678,8 +954,8 @@ export const runnerToolProblems = ({
       continue;
     }
     const aliases = new Map<string, string>();
-    const steps = job["steps"].filter(isRecord);
-    for (const step of steps) {
+    const steps = job["steps"];
+    for (const step of flattenWorkflowSteps(steps)) {
       const inputs = step["with"];
       if (
         typeof step["uses"] !== "string" ||
@@ -700,6 +976,7 @@ export const runnerToolProblems = ({
     for (const runnerCase of runnerCases(job)) {
       const guaranteed = runnerCase.guaranteed;
       const installs: Install[] = [];
+      const pending = new Map<string, Install[]>();
       const active = new Set<string>();
       const workflowDefaults =
         isRecord(source["defaults"]) && isRecord(source["defaults"]["run"])
@@ -709,110 +986,25 @@ export const runnerToolProblems = ({
         isRecord(job["defaults"]) && isRecord(job["defaults"]["run"])
           ? job["defaults"]["run"]
           : {};
-      const walkSteps = (
-        entries: Record<string, unknown>[],
-        prefix: string,
-        parent: readonly string[],
-        owner: string,
-      ) => {
-        for (const [index, step] of entries.entries()) {
-          const execution = stepExecution({
-            step,
-            jobDefaults,
-            workflowDefaults,
-            labelPrefix: `${workflow}/${jobName}/${prefix}`,
-            index,
-          });
-          if ("problem" in execution) {
-            problems.push(execution.problem);
-            continue;
-          }
-          const { label, cwd, shell } = execution;
-          const context = {
-            root,
-            file: owner,
-            cwd,
-            label,
-            guaranteed,
-            installs,
-            condition: [...parent, ...operands(step["if"])],
-            active,
-            problems,
-            aliases,
-            allowInstalls: true,
-          };
-          if (contradictoryEvents(context.condition)) {
-            continue;
-          }
-          if (
-            typeof step["run"] === "string" &&
-            !/^(?:pwsh|powershell|python)/u.test(shell)
-          ) {
-            const before = installs.length;
-            inspectShell(step["run"], context);
-            if (
-              step["continue-on-error"] !== undefined &&
-              step["continue-on-error"] !== false
-            ) {
-              installs.splice(before);
-            }
-          }
-          if (
-            typeof step["uses"] !== "string" ||
-            !step["uses"].startsWith("./")
-          ) {
-            continue;
-          }
-          const actionDirectory = resolveFile(step["uses"], {
-            ...context,
-            cwd: "",
-          });
-          if (actionDirectory === undefined) {
-            continue;
-          }
-          const actionFile = ["action.yml", "action.yaml"]
-            .map((name) => path.join(actionDirectory, name))
-            .find(existsSync);
-          if (actionFile === undefined) {
-            continue;
-          }
-          const action = readYaml(actionFile);
-          if (
-            isRecord(action) &&
-            isRecord(action["runs"]) &&
-            action["runs"]["using"] === "composite" &&
-            Array.isArray(action["runs"]["steps"])
-          ) {
-            if (active.has(actionFile)) {
-              problems.push(
-                `${label}: recursive composite action ${step["uses"]}`,
-              );
-              continue;
-            }
-            const before = installs.length;
-            active.add(actionFile);
-            walkSteps(
-              action["runs"]["steps"].filter(isRecord),
-              `${prefix}${step["uses"]}/`,
-              context.condition,
-              actionFile,
-            );
-            active.delete(actionFile);
-            if (
-              step["continue-on-error"] !== undefined &&
-              step["continue-on-error"] !== false
-            ) {
-              installs.splice(before);
-            }
-          }
-        }
-      };
-      walkSteps(
-        steps,
-        "",
-        [...runnerCase.condition, ...operands(job["if"])],
-        path.join(root, workflow),
-      );
+      walkRunnerSteps({
+        context: {
+          root,
+          workflow,
+          jobName,
+          jobDefaults,
+          workflowDefaults,
+          guaranteed,
+          active,
+          problems,
+          aliases,
+        },
+        entries: steps,
+        prefix: "",
+        parent: [...runnerCase.condition, ...operands(job["if"])],
+        owner: path.join(root, workflow),
+        availableInstalls: installs,
+        availablePending: pending,
+      });
     }
   }
   return [...new Set(problems)];
