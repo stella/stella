@@ -35,7 +35,7 @@ type ChatAnonDecorationsStorage = {
 };
 
 declare module "@tiptap/core" {
-  // oxlint-disable-next-line consistent-type-definitions -- module augmentation requires interface for declaration merging
+  // oxlint-disable-next-line typescript/consistent-type-definitions -- module augmentation requires interface for declaration merging
   interface Storage {
     [CHAT_ANON_DECORATIONS_NAME]: ChatAnonDecorationsStorage;
   }
