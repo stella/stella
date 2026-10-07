@@ -17,7 +17,7 @@ export const MCP_DOCUMENTS_RESOURCE_SCOPES = [
   "stella:documents_write",
   // The canonical presigned-upload lifecycle currently owns one scope across
   // entity-create and entity-version purposes. The documents MCP audience
-  // restricts invoke_capability to the three lifecycle IDs, so this grant does
+  // restricts write_capability to the three lifecycle IDs, so this grant does
   // not expose unrelated matter mutations through that endpoint.
   "stella:matters_write",
 ] as const;

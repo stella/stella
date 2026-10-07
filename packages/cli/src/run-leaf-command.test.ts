@@ -279,7 +279,7 @@ describe("parsePayload", () => {
     content: [{ type: "text" as const, text: JSON.stringify(payload) }],
   });
 
-  test("unwraps an invoke_capability `result` envelope", () => {
+  test("unwraps a capability executor `result` envelope", () => {
     const page = { items: [{ id: "a" }], nextCursor: "c1" };
     expect(parsePayload(textResult({ result: page }))).toEqual(page);
     expect(parsePayload(textResult({ result: [1, 2] }))).toEqual([1, 2]);
@@ -424,8 +424,8 @@ const startConfirmGateServer = () => {
 };
 
 const INVOKE_SPEC: LeafCommandSpec = {
-  commandPath: ["capability", "invoke"],
-  toolName: "invoke_capability",
+  commandPath: ["capability", "write"],
+  toolName: "write_capability",
   flags: [
     {
       flag: "--capability",
@@ -781,7 +781,7 @@ describe("--schema", () => {
   });
 });
 
-describe("confirm passthrough (capability invoke)", () => {
+describe("confirm passthrough (capability write)", () => {
   test("--yes injects confirm: true upfront (single call)", async () => {
     const server = startConfirmGateServer();
     const tty = makeTtyContext({

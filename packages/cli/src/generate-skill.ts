@@ -241,7 +241,7 @@ const renderExitCodeTable = (): string =>
 
 /** The capability-tree facts the skill documents (spec 049 deliverable 4). */
 export type CapabilitySkillSummary = {
-  /** Count of generated `invoke_capability`-backed leaf commands. */
+  /** Count of generated capability-executor-backed leaf commands. */
   commandCount: number;
   /** Domain segments actually present in the merged tree, see `capabilityDomainsOf`. */
   domains: readonly string[];
@@ -363,15 +363,16 @@ const renderCapabilitySection = (summary: CapabilitySkillSummary): string => {
     "",
     `Beyond the curated commands above, the CLI generates ${summary.commandCount}`,
     "capability commands from the server's capability catalog: every safe handler",
-    "that is not a curated tool, reached through the generic `invoke_capability`",
-    `path. Every generated command lives at \`stella ${CAPABILITY_NAMESPACE} <domain> <action>\`;`,
+    "that is not a curated tool, reached through `read_capability` or `write_capability`",
+    `paths. Every generated command lives at \`stella ${CAPABILITY_NAMESPACE} <domain> <action>\`;`,
     "multi-segment capability actions are flattened with hyphens into `<action>`.",
     "",
     "- **Discover**: `stella capability list [--domain <d>] [--access read|write]`",
     "  enumerates them (paginated); `stella capability describe <id>` prints one",
     "  capability's full input schema, scope, and flags.",
-    "- **Invoke by id** (forward-compatible with any server): `stella capability",
-    "  invoke <id> --input '<json>'`, where the JSON is `{ body?, params?, query? }`.",
+    "- **Invoke by id**: `stella capability read <id> --input '<json>'` or",
+    "  `stella capability write <id> --input '<json>'` for writes.",
+    "  The JSON is `{ body?, params?, query? }`.",
     "- **Flags**: each capability command derives flags from its input schema;",
     "  matter-scoped capabilities take a required `--matter-id <id>`. Deep or",
     "  ambiguous payloads use `--input` (the whole `{ body?, params?, query? }`).",

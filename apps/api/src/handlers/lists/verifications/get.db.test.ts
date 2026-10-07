@@ -246,7 +246,7 @@ const seed = async (db: GatedTestDb) => {
     } satisfies McpRequestContext;
     return await handleMcpToolCall({
       context,
-      toolName: "invoke_capability",
+      toolName: "read_capability",
       args: {
         capability: "lists.verifications.get",
         input: { params: { matterId: workspaceId, runId: runIds.completed } },
@@ -376,7 +376,7 @@ describe.skipIf(!enabled)("verification point-read audit", () => {
         await CAPABILITY_DISPATCH["lists.verifications.get"].load();
       expect(dispatch.default).toBe(get);
       const rest = await f.invoke();
-      // Generated CLI capability commands call the same invoke_capability tool.
+      // Generated CLI capability commands call the same write_capability tool.
       for (const surface of ["MCP", "CLI"]) {
         const response = await f.capabilityRead();
         expect(response.isError, surface).not.toBe(true);

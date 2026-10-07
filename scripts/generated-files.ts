@@ -136,6 +136,7 @@ export const GENERATORS = [
       "apps/api/src/lib/chat/case-law-court-projection.ts",
       "packages/api-contract/src/case-law-court-year.ts",
       "packages/api-contract/src/mcp-tool-name.ts",
+      "packages/api-contract/src/mcp-capability-executors.ts",
       ".oxfmtrc.json",
       "packages/cli/src/**",
       "packages/cli/package.json",

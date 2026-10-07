@@ -31,6 +31,7 @@ import { uploadCommand } from "./commands/upload.js";
 import type { Context } from "./context.js";
 import { expandSchemaDefs } from "./expand-schema-defs.js";
 import { flagBrief } from "./flag-help.js";
+import { MCP_CAPABILITY_EXECUTORS } from "./generated/mcp-contract.js";
 import { generatedResourceTree } from "./generated/resource-tree.js";
 import {
   buildInputContractHelp,
@@ -174,7 +175,7 @@ const buildLeafFlags = (spec: LeafCommandSpec): Record<string, unknown> => {
   }
 
   // A destructive leaf gets --yes for its upfront prompt; a confirm-passthrough
-  // leaf (per-target destructiveness, e.g. `capability invoke`) gets it so the
+  // leaf (per-target destructiveness, e.g. `capability write`) gets it so the
   // caller can pre-approve the server's confirmation_required gate.
   if (spec.destructive || spec.confirmPassthrough === true) {
     flags[RESERVED_FLAG_KEYS.yes] = booleanFlag(
@@ -613,7 +614,7 @@ const collectLeafPaths = (
   if (node.kind === "capability-leaf") {
     lines.push(
       withDisabledMarker(
-        `${path.join(" ")}\t(invoke_capability: ${node.spec.capabilityId})`,
+        `${path.join(" ")}\t(${MCP_CAPABILITY_EXECUTORS[node.spec.access]}: ${node.spec.capabilityId})`,
         isDisabled(node, disabled),
       ),
     );

@@ -1,11 +1,17 @@
 import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 
+import { respondToMcpLifecycle } from "../tests/mcp-test-lifecycle.js";
+import { DOCUMENT_VERSION_UPLOAD_TRANSPORT } from "./generated/document-version-upload-transport.js";
 import type {
   UploadDocumentDependencies,
   UploadDocumentInput,
 } from "./upload-document.js";
-import { DOCUMENT_UPLOAD_POLICY, uploadDocument } from "./upload-document.js";
+import {
+  createUploadDocumentDependencies,
+  DOCUMENT_UPLOAD_POLICY,
+  uploadDocument,
+} from "./upload-document.js";
 
 type InvocationCall = {
   capability: string;
@@ -61,6 +67,71 @@ test("upload timeout covers a maximum-size file at the supported slow rate", () 
   expect(DOCUMENT_UPLOAD_POLICY.putTimeoutMs).toBeGreaterThanOrEqual(
     minimumTransferMs,
   );
+});
+
+test("upload transport routes property discovery to reads and every lifecycle step to writes", async () => {
+  const calls: { name: string; capability: string }[] = [];
+  const server = Bun.serve({
+    port: 0,
+    async fetch(request) {
+      if (request.method === "GET") {
+        return new Response(null, { status: 405 });
+      }
+      const body: {
+        id?: number;
+        method?: string;
+        params: { name: string; arguments: { capability: string } };
+      } = await request.json();
+      const lifecycle = respondToMcpLifecycle(body);
+      if (lifecycle !== null) {
+        return lifecycle;
+      }
+      calls.push({
+        name: body.params.name,
+        capability: body.params.arguments.capability,
+      });
+      return Response.json({
+        jsonrpc: "2.0",
+        id: body.id,
+        result: {
+          content: [{ type: "text", text: '{"result":{"ok":true}}' }],
+          structuredContent: { result: { ok: true } },
+        },
+      });
+    },
+  });
+  const dependencies = createUploadDocumentDependencies({
+    serverUrl: server.url.origin,
+    token: "synthetic-test-token",
+  });
+  const capabilities = [
+    "properties.list",
+    DOCUMENT_VERSION_UPLOAD_TRANSPORT.capability.reserve,
+    DOCUMENT_VERSION_UPLOAD_TRANSPORT.capability.finalize,
+    DOCUMENT_VERSION_UPLOAD_TRANSPORT.capability.abort,
+  ] as const;
+  for (const capability of capabilities) {
+    expect(await dependencies.invoke(capability, {})).toEqual({
+      status: "ok",
+      payload: { ok: true },
+    });
+  }
+  await server.stop(true);
+  expect(calls).toEqual([
+    { name: "read_capability", capability: "properties.list" },
+    {
+      name: "write_capability",
+      capability: DOCUMENT_VERSION_UPLOAD_TRANSPORT.capability.reserve,
+    },
+    {
+      name: "write_capability",
+      capability: DOCUMENT_VERSION_UPLOAD_TRANSPORT.capability.finalize,
+    },
+    {
+      name: "write_capability",
+      capability: DOCUMENT_VERSION_UPLOAD_TRANSPORT.capability.abort,
+    },
+  ]);
 });
 
 describe("document upload state machine", () => {

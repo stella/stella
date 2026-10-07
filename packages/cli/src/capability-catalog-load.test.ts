@@ -234,7 +234,7 @@ describe("parseCapabilityCatalog fail-closed parsing", () => {
 });
 
 // The committed snapshot's ids are PUBLIC: they become CLI command paths and are
-// passed verbatim to MCP's `invoke_capability`. The api-side exporter enforces
+// passed verbatim to MCP's the capability executors. The api-side exporter enforces
 // the shape at derivation time; this asserts it on the artifact the CLI actually
 // ships, so a hand-edited or stale snapshot cannot reintroduce an id whose final
 // segment is an internal handler identifier (e.g. `deleteWorkspaceFooEntry`).

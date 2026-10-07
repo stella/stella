@@ -17,17 +17,30 @@ import {
   buildUploadFinalizeInput,
   DOCUMENT_VERSION_UPLOAD_TRANSPORT,
 } from "./generated/document-version-upload-transport.js";
+import { MCP_CAPABILITY_EXECUTORS } from "./generated/mcp-contract.js";
 import type { CallToolResult, McpClientError } from "./mcp-client.js";
 import { callTool } from "./mcp-client.js";
 import { parsePayload } from "./run-leaf-command.js";
 
-const INVOKE_CAPABILITY_TOOL = "invoke_capability";
 const UPLOAD_CAPABILITIES = {
   abort: DOCUMENT_VERSION_UPLOAD_TRANSPORT.capability.abort,
   create: DOCUMENT_VERSION_UPLOAD_TRANSPORT.capability.reserve,
   finalize: DOCUMENT_VERSION_UPLOAD_TRANSPORT.capability.finalize,
   listProperties: "properties.list",
 } as const;
+type UploadCapability =
+  (typeof UPLOAD_CAPABILITIES)[keyof typeof UPLOAD_CAPABILITIES];
+
+const UPLOAD_CAPABILITY_ACCESS = {
+  [UPLOAD_CAPABILITIES.abort]: "write",
+  [UPLOAD_CAPABILITIES.create]: "write",
+  [UPLOAD_CAPABILITIES.finalize]: "write",
+  [UPLOAD_CAPABILITIES.listProperties]: "read",
+} as const satisfies Record<
+  UploadCapability,
+  keyof typeof MCP_CAPABILITY_EXECUTORS
+>;
+
 const UPLOAD_PURPOSE = {
   createEntity: "entity_create",
 } as const;
@@ -95,7 +108,7 @@ type CapabilityInvocation =
 
 export type UploadDocumentDependencies = {
   invoke: (
-    capability: string,
+    capability: UploadCapability,
     input: Record<string, unknown>,
     confirm?: true,
   ) => Promise<CapabilityInvocation>;
@@ -228,7 +241,7 @@ export const createUploadDocumentDependencies = ({
     const called = await callTool({
       serverUrl,
       token,
-      name: INVOKE_CAPABILITY_TOOL,
+      name: MCP_CAPABILITY_EXECUTORS[UPLOAD_CAPABILITY_ACCESS[capability]],
       args: {
         capability,
         input,

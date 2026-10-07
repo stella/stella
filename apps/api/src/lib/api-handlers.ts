@@ -411,7 +411,7 @@ export type HandlerConfig = InputSchema &
     actionAdmission?: { type: "handler"; actionKind: PeriodActionKind };
     /**
      * Resource sets a successful call announces to open tabs. The wrapper
-     * broadcasts them for every transport (REST, `invoke_capability`, CLI);
+     * broadcasts them for every transport (REST, capability executors, CLI);
      * see `lib/resource-set-realtime.ts`.
      */
     realtime?: ResourceSetRealtime;

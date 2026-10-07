@@ -63,7 +63,7 @@ export type ToolAnnotation = {
   localFileBase64Prop?: string;
   /**
    * The tool is not destructive itself but gates SOME calls behind its
-   * `confirm` arg (per-target destructiveness, e.g. `invoke_capability`). The
+   * `confirm` arg (per-target destructiveness, e.g. the capability executors). The
    * leaf accepts `--yes` (injects `confirm: true` upfront) and, on a
    * `confirmation_required` envelope at a TTY, prompts and retries once.
    */
@@ -170,7 +170,7 @@ export type CapabilityPart = (typeof CAPABILITY_PARTS)[number];
  * One generated flag on a capability leaf: a `FlagSpec` tagged with the input
  * part it routes into. `FlagSpec.flag` is the canonical user-facing name;
  * `part` + `partPath` drive where the coerced value lands inside the
- * `invoke_capability` input object. `FlagSpec.prop` remains the unique local
+ * capability executor's input object. `FlagSpec.prop` remains the unique local
  * destination identity used while resolving cross-part collisions.
  */
 export type CapabilityFlagSpec = FlagSpec & {
@@ -180,9 +180,9 @@ export type CapabilityFlagSpec = FlagSpec & {
 };
 
 /**
- * A generated capability leaf (spec 049): reached through the generic
- * `invoke_capability` tool rather than a curated tool. `capabilityId` is the
- * catalog id; the executor calls `invoke_capability` with
+ * A generated capability leaf (spec 049): reached through its read or write
+ * capability executor rather than a curated tool. `capabilityId` is the
+ * catalog id; the executor sends
  * `{ capability: capabilityId, input: { body?, params?, query? } }`.
  */
 export type CapabilityLeafSpec = {

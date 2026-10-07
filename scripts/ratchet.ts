@@ -1704,7 +1704,7 @@ const countTruncatedCapabilitySchemas = (content: string): number => {
 // A capability suppressed from the generic transport by its `transport`
 // disposition: it returns bytes (`file-response`/`file-both`), or it REQUIRES a
 // file input. Suppressed entries are dropped from the CLI tree
-// (`insertCapabilities`) and refused pre-execution by `invoke_capability`, so
+// (`insertCapabilities`) and refused pre-execution by capability executors, so
 // each one is a capability an agent surface simply cannot reach. This metric
 // freezes that count: a newly file-shaped capability cannot silently disappear
 // from both clients, and the burn-down is a reviewed baseline bump rather than a
@@ -1802,7 +1802,7 @@ const countDomainActionVerbs: RoleSensitiveFileCounter = (
 /**
  * Namespaces where a curated, hand-written command still shares a top-level name
  * with generated capability commands, so `stella <namespace> …` mixes the named
- * MCP tool path and the generic `invoke_capability` path. Must reach zero.
+ * MCP tool path and the generic capability executors path. Must reach zero.
  */
 const countShadowedNamespaces = (content: string): number => {
   const block =
@@ -3375,7 +3375,7 @@ export const RATCHET_METRICS: readonly RatchetMetric[] = [
     scope: "file",
     id: "capability-file-transport-suppressed",
     description:
-      "capabilities whose transport disposition suppresses them from the generic transport (a file response, or a REQUIRED file input): dropped from the CLI tree and refused by invoke_capability, so no agent surface can reach them. An OPTIONAL file input is not counted — its JSON modes stay invokable",
+      "capabilities whose transport disposition suppresses them from the generic transport (a file response, or a REQUIRED file input): dropped from the CLI tree and refused by capability executors, so no agent surface can reach them. An OPTIONAL file input is not counted — its JSON modes stay invokable",
     include: ["packages/cli/capabilities/*.json"],
     // Generated artifacts are the subject here, so the shared source
     // exclusions (which skip `.gen.`/generated paths) must not apply.

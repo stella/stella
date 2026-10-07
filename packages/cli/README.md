@@ -133,6 +133,14 @@ production before publishing a new CLI version. Compatibility is negotiated by
 wire protocol, server revision, and required capabilities rather than by the
 CLI package version.
 
+## Capability execution
+
+Generated capability commands select `read_capability` or `write_capability`
+from the catalog's access classification. For an explicit capability id, use
+`stella capability read <id> --input '<json>'` or
+`stella capability write <id> --input '<json>'`. Discover its input schema with
+`stella capability describe <id>`.
+
 ## Links
 
 - Repository: https://github.com/stella/stella/tree/main/packages/cli

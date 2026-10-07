@@ -5426,7 +5426,7 @@
       "itemsKey": "items"
     },
     "name": "list_capabilities",
-    "description": "List the automatable capabilities beyond the curated tools: every safe backend operation (CRUD, exports, processing triggers) reachable through invoke_capability. Paginated; filter by domain (the id prefix, e.g. \"time-entries\") or access (read/write). Each item gives the capability id, description, access/destructive, its transport (whether this path can run it, which field takes a file, and what to use instead), handlerKind (workspace or root), and every OAuth scope it needs. Use describe_capability for the full input schema.",
+    "description": "List the automatable capabilities beyond the curated tools: every safe backend operation (CRUD, exports, processing triggers) reachable through read_capability or write_capability. Paginated; filter by domain (the id prefix, e.g. \"time-entries\") or access (read/write). Each item gives the capability id, description, access/destructive, its transport (whether this path can run it, which field takes a file, and what to use instead), handlerKind (workspace or root), and every OAuth scope it needs. Use describe_capability for the full input schema.",
     "inputSchema": {
       "type": "object",
       "required": [],
@@ -5474,7 +5474,7 @@
       "scope": "read"
     },
     "name": "describe_capability",
-    "description": "Describe one capability in full: its live input JSON Schema (body/params/query), required OAuth scopes, member permissions, whether it is destructive, its handler kind (workspace/root), its disposition, and its transport (whether this path can run it, which field takes a file, and what to use instead). Call this before invoke_capability to learn exactly what input to pass.",
+    "description": "Describe one capability in full: its live input JSON Schema (body/params/query), required OAuth scopes, member permissions, whether it is destructive, its handler kind (workspace/root), its disposition, and its transport (whether this path can run it, which field takes a file, and what to use instead). Call this before read_capability or write_capability to learn exactly what input to pass.",
     "inputSchema": {
       "type": "object",
       "required": ["capability"],
@@ -5496,12 +5496,66 @@
   },
   {
     "cli": {
-      "command": ["capability", "invoke"],
+      "command": ["capability", "read"],
+      "scope": "read"
+    },
+    "name": "read_capability",
+    "description": "Read one capability by id. Take a read id from list_capabilities or describe_capability. Pass input under input: { body, params, query }; matter-scoped capabilities take input.params.matterId. Required scopes and member permissions are checked per capability. Set validate_only: true to check input without running it. Write capabilities must use write_capability.",
+    "inputSchema": {
+      "type": "object",
+      "required": ["capability"],
+      "additionalProperties": false,
+      "properties": {
+        "capability": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Capability id to invoke. Use an id list_capabilities returned."
+        },
+        "input": {
+          "type": "object",
+          "properties": {
+            "body": {
+              "type": "object",
+              "additionalProperties": {},
+              "description": "Request body fields, per the capability's body schema."
+            },
+            "params": {
+              "type": "object",
+              "additionalProperties": {},
+              "description": "Path parameters; matter-scoped capabilities require matterId here."
+            },
+            "query": {
+              "type": "object",
+              "additionalProperties": {},
+              "description": "Query parameters, per the capability's query schema."
+            }
+          },
+          "required": [],
+          "additionalProperties": false,
+          "description": "The capability's input, split into the parts its schema declares."
+        },
+        "validate_only": {
+          "type": "boolean",
+          "description": "When true, validate the input against the capability schema and return without executing."
+        }
+      }
+    },
+    "annotations": {
+      "title": "Read capability",
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": true,
+      "readOnlyHint": true
+    }
+  },
+  {
+    "cli": {
+      "command": ["capability", "write"],
       "scope": "read",
       "confirmPassthrough": true
     },
-    "name": "invoke_capability",
-    "description": "Invoke one capability by id. Take the id from list_capabilities or describe_capability. Pass its input under input: { body, params, query } (no other top-level argument is accepted); matter-scoped capabilities take the target matter as input.params.matterId. Real authority is enforced per capability: the session must hold the capability's scope and your member role its permissions. Set validate_only: true to check input without running it; destructive capabilities require confirm: true after human approval.",
+    "name": "write_capability",
+    "description": "Write one capability by id. Take a write id from list_capabilities or describe_capability. Pass input under input: { body, params, query }; matter-scoped capabilities take input.params.matterId. Required scopes and member permissions are checked per capability. Set validate_only: true to check input without running it; destructive capabilities require confirm: true after human approval. Read capabilities must use read_capability.",
     "inputSchema": {
       "type": "object",
       "required": ["capability"],
@@ -5546,7 +5600,7 @@
       }
     },
     "annotations": {
-      "title": "Invoke capability",
+      "title": "Write capability",
       "destructiveHint": true,
       "idempotentHint": false,
       "openWorldHint": true,

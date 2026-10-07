@@ -295,7 +295,7 @@ describe("stella CLI: server-attested disabled commands", () => {
       .split("\n")
       .filter((line) => line.endsWith("[disabled on this server]"));
     expect(marked).toEqual([
-      "capability usage entitlement-get\t(invoke_capability: usage.entitlement.get) [disabled on this server]",
+      "capability usage entitlement-get\t(read_capability: usage.entitlement.get) [disabled on this server]",
       "usage get\t(get_usage) [disabled on this server]",
     ]);
   });
