@@ -1700,6 +1700,7 @@
     "deletedCount": "{count, plural, one {# item excluído} many {# itens excluídos} other {# itens excluídos}}",
     "description": "Descrição",
     "details": "Detalhes",
+    "detailsHiddenFeatureUnavailable": "Detalhes ocultos: recurso não ativado",
     "disconnect": "Desconectar",
     "dismiss": "Descartar",
     "displayName": "Nome de exibição",

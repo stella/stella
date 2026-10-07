@@ -1700,6 +1700,7 @@
     "deletedCount": "{count, plural, one {# položka zmazaná} few {# položky zmazané} other {# položiek zmazaných}}",
     "description": "Popis",
     "details": "Detaily",
+    "detailsHiddenFeatureUnavailable": "Podrobnosti sú skryté: funkcia nie je zapnutá",
     "disconnect": "Odpojiť",
     "dismiss": "Zamietnuť",
     "displayName": "Zobrazované meno",
