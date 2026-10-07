@@ -1,12 +1,16 @@
 import { name } from "@gdp-ts/core";
 import type { Named } from "@gdp-ts/core";
+import { Result } from "better-result";
 
 import type { Transaction } from "@/api/db/root";
 import { emitSignalRequest } from "@/api/handlers/signals/requests/write";
 import { transitionSignal } from "@/api/handlers/signals/transition";
 import type { SignalTransitionArgs } from "@/api/handlers/signals/transition";
 import type { SafeId } from "@/api/lib/branded-types";
+import type { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { withSignalRequestAuthorization } from "@/api/lib/signals/proofs/may-create-signal-request";
 import type { MayCreateSignalRequest } from "@/api/lib/signals/proofs/may-create-signal-request";
+import { withVisibleSignal } from "@/api/lib/signals/proofs/signal-visible-to";
 
 // Planted wrong calls never run; their outcome is handed here so each call
 // stays a single expression the compiler must reject.
@@ -134,4 +138,41 @@ export const signalRequestProofMistakes = async <U, W, T, O, Other>({
   // @ts-expect-error A boolean is not authorization evidence.
   rejectedAtCompileTime(await emitSignalRequest({ ...args, proof: true }));
   return proof;
+};
+
+export const signalProofOutcomeInference = async (
+  options: Parameters<typeof withVisibleSignal>[0],
+) => {
+  const outcome = await withVisibleSignal(options, async () =>
+    Result.ok({ type: "visible" } as const),
+  );
+  if (Result.isError(outcome)) {
+    return outcome.error.status;
+  }
+  return outcome.value.type satisfies "visible";
+};
+
+export const signalRequestOutcomeInference = async (
+  options: Parameters<typeof withSignalRequestAuthorization>[0],
+) => {
+  const outcome = await withSignalRequestAuthorization(options, async () =>
+    Result.ok({ type: "created" } as const),
+  );
+  if (Result.isError(outcome)) {
+    return outcome.error.status;
+  }
+  return outcome.value.type satisfies "created";
+};
+
+export const signalProofErrorInference = async <E>(
+  options: Parameters<typeof withVisibleSignal>[0],
+  failure: E,
+) => {
+  const outcome = await withVisibleSignal(options, async () =>
+    Result.err(failure),
+  );
+  if (Result.isError(outcome)) {
+    return outcome.error satisfies HandlerError | E;
+  }
+  return undefined;
 };

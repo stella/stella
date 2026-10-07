@@ -1,5 +1,4 @@
-import { defineProof, name } from "@gdp-ts/core";
-import type { Named, Proof } from "@gdp-ts/core";
+import type { Named } from "@gdp-ts/core";
 import { Result } from "better-result";
 import { and, eq } from "drizzle-orm";
 
@@ -9,12 +8,17 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { hasMemberPermission } from "@/api/lib/permission-authorization";
 import type { AuthorizedMemberRole } from "@/api/lib/permission-authorization";
+import { withCheckedTransaction } from "@/api/lib/proofs/checked-transaction";
+import type { TransactionProof } from "@/api/lib/proofs/checked-transaction";
 import { canTriageSignals } from "@/api/lib/signals/read";
 
-const MayCreateSignalRequestProver = defineProof("MayCreateSignalRequest");
-export type MayCreateSignalRequest<U, W, T, O> = {
-  readonly organizationId: Named<O, SafeId<"organization">>;
-} & Proof<"MayCreateSignalRequest", [U, W, T, O]>;
+export type MayCreateSignalRequest<U, S, T, O> = TransactionProof<
+  "MayCreateSignalRequest",
+  U,
+  S,
+  T,
+  O
+>;
 
 type WithSignalRequestAuthorizationOptions = {
   tx: Transaction;
@@ -39,50 +43,51 @@ export const withSignalRequestAuthorization = async <R>(
     proof: MayCreateSignalRequest<U, W, T, O>;
   }) => Promise<Result<R, HandlerError>>,
 ) =>
-  name(actorUserId, workspaceId, tx, async (actor, workspace, transaction) => {
-    if (!hasMemberPermission(memberRole, { signal: ["create"] })) {
-      return Result.err(
-        new HandlerError({
-          status: 403,
-          message: "Signal action is not permitted",
-        }),
-      );
-    }
-    if (workspace.value) {
-      const visible = await tx
-        .select({ id: workspaces.id })
-        .from(workspaces)
-        .where(
-          and(
-            eq(workspaces.id, workspace.value),
-            eq(workspaces.organizationId, organizationId),
-          ),
-        )
-        .for("share")
-        .limit(1);
-      if (!visible.at(0)) {
-        return Result.err(
-          new HandlerError({ status: 404, message: "Matter not found" }),
-        );
-      }
-    } else if (!canTriageSignals(memberRole)) {
-      return Result.err(
-        new HandlerError({
-          status: 403,
-          message: "Unscoped requests require the triage permission",
-        }),
-      );
-    }
-    return await name(organizationId, async (organization) => {
-      const proof = {
-        ...MayCreateSignalRequestProver.prove(
-          actor,
-          workspace,
-          transaction,
-          organization,
-        ),
-        organizationId: organization,
-      };
-      return await run({ tx: transaction, workspace, actor, proof });
-    });
-  });
+  withCheckedTransaction(
+    {
+      kind: "MayCreateSignalRequest",
+      tx,
+      organizationId,
+      actorUserId,
+      entityId: workspaceId,
+      check: async () => {
+        if (!hasMemberPermission(memberRole, { signal: ["create"] })) {
+          return Result.err(
+            new HandlerError({
+              status: 403,
+              message: "Signal action is not permitted",
+            }),
+          );
+        }
+        if (workspaceId) {
+          const visible = await tx
+            .select({ id: workspaces.id })
+            .from(workspaces)
+            .where(
+              and(
+                eq(workspaces.id, workspaceId),
+                eq(workspaces.organizationId, organizationId),
+              ),
+            )
+            .for("share")
+            .limit(1);
+          if (!visible.at(0)) {
+            return Result.err(
+              new HandlerError({ status: 404, message: "Matter not found" }),
+            );
+          }
+        } else if (!canTriageSignals(memberRole)) {
+          return Result.err(
+            new HandlerError({
+              status: 403,
+              message: "Unscoped requests require the triage permission",
+            }),
+          );
+        }
+
+        return Result.ok(undefined);
+      },
+    },
+    async ({ tx: transaction, entity, actor, proof }) =>
+      await run({ tx: transaction, workspace: entity, actor, proof }),
+  );
