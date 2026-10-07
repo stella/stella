@@ -30,6 +30,23 @@ describe("checkListing", () => {
     expect(checkListing(CONFIG, WEB, listing())).toEqual([]);
   });
 
+  test("accepts a child directory whose name starts with two dots", () => {
+    const testDir = `${WEB}/..fixtures`;
+    expect(
+      checkListing(
+        CONFIG,
+        WEB,
+        listing({
+          config: {
+            rootDir: testDir,
+            projects: [{ name: "chromium", testDir }],
+          },
+          suites: [{ file: "home.spec.ts" }],
+        }),
+      ),
+    ).toEqual([]);
+  });
+
   test("flags a project whose testDir is another package", () => {
     const problems = checkListing(
       CONFIG,
