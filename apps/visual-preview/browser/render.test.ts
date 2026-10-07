@@ -4,10 +4,62 @@ import type { Browser } from "playwright-core";
 
 import { VISUAL_PREVIEW_LIMITS } from "@stll/api-contract/visual-preview";
 
-import { renderVisual, VisualRenderTimeoutError } from "../src/render";
+import {
+  renderVisual,
+  VisualRenderError,
+  VisualRenderTimeoutError,
+} from "../src/render";
 import { launchPreviewBrowser as launch } from "./launch";
 
 describe("composed visual preview", () => {
+  test("reports a typed result when the document has no body", async () => {
+    const result = await renderVisual({
+      launch,
+      input: {
+        document: `<script>addEventListener('load', () => {
+          document.body.remove();
+          parent.postMessage({kind:'ready'}, '*');
+        });</script>`,
+        viewport: { width: 1200 },
+      },
+    });
+    expect(Result.isError(result)).toBe(true);
+    if (Result.isError(result)) {
+      expect(VisualRenderError.is(result.error)).toBe(true);
+      expect(result.error.message).toBe("Preview document has no body");
+    }
+  });
+  test("reports that network is unavailable for WebSocket connections", async () => {
+    const result = await renderVisual({
+      launch,
+      input: {
+        document: `<script>
+          const socket = new WebSocket('wss://preview.invalid/example');
+          socket.addEventListener('close', () => parent.postMessage({kind:'ready'}, '*'));
+        </script>`,
+        viewport: { width: 1200 },
+      },
+    });
+    expect(result.unwrap()).toMatchObject({
+      blockedRequests: 1,
+      readyFired: true,
+    });
+  });
+  test("reports content height after the viewport resizes", async () => {
+    const result = await renderVisual({
+      launch,
+      input: {
+        document: `<style>html,body{margin:0}body{height:900px}</style><script>
+          addEventListener('resize', () => {document.body.style.height = '1100px'});
+          parent.postMessage({kind:'ready'}, '*');
+        </script>`,
+        viewport: { width: 1200 },
+      },
+    });
+    const output = result.unwrap();
+    expect(output.size.height).toBe(1100);
+    expect(Buffer.from(output.png, "base64").readUInt32BE(20)).toBe(1100);
+  });
   test("renders a PNG with bounded diagnostics and content size", async () => {
     const result = await renderVisual({
       launch,
@@ -156,7 +208,7 @@ describe("composed visual preview", () => {
         throw new Error("Private example");
       },
       input: {
-        document: "",
+        document: "<body>Example</body>",
         viewport: { width: 1200 },
       },
     });

@@ -1,5 +1,5 @@
 import { Result, TaggedError } from "better-result";
-import type { Browser, LaunchOptions } from "playwright-core";
+import type { Browser, LaunchOptions, Page } from "playwright-core";
 import * as v from "valibot";
 
 import {
@@ -34,6 +34,31 @@ export type VisualPreviewLaunchOptions = Required<Pick<LaunchOptions, "args">>;
 type RenderVisualOptions = {
   input: VisualPreviewInput;
   launch: (options: VisualPreviewLaunchOptions) => Promise<Browser>;
+};
+
+const measureContentHeight = () => {
+  if (!document.body) {
+    return null;
+  }
+  return Math.max(
+    document.body.scrollHeight,
+    document.documentElement.scrollHeight,
+  );
+};
+
+const settleLayout = async () => {
+  await new Promise<void>((resolve) => {
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => resolve());
+    });
+  });
+};
+
+const resizePreview = async (page: Page, height: number) => {
+  await page.setViewportSize({ width: VISUAL_PREVIEW_LIMITS.width, height });
+  await page.locator("iframe").evaluate((iframe, size) => {
+    iframe.style.height = `${size}px`;
+  }, height);
 };
 
 export const renderVisual = async ({ input, launch }: RenderVisualOptions) => {
@@ -173,23 +198,37 @@ export const renderVisual = async ({ input, launch }: RenderVisualOptions) => {
         });
       });
     }
-    const contentHeight = await frame.evaluate(() =>
-      Math.max(
-        document.body.scrollHeight,
-        document.documentElement.scrollHeight,
-      ),
-    );
-    const height = Math.min(
+    const contentHeight = await frame.evaluate(measureContentHeight);
+    if (contentHeight === null) {
+      return Result.err(
+        new VisualRenderError({ message: "Preview document has no body" }),
+      );
+    }
+    const initialHeight = Math.min(
       VISUAL_PREVIEW_LIMITS.height,
       Math.max(1, Math.ceil(contentHeight)),
     );
-    await page.setViewportSize({
-      width: VISUAL_PREVIEW_LIMITS.width,
-      height,
-    });
-    await page.locator("iframe").evaluate((iframe, size) => {
-      iframe.style.height = `${size}px`;
-    }, height);
+    await resizePreview(page, initialHeight);
+    await frame.evaluate(settleLayout);
+    const resizedContentHeight = await frame.evaluate(measureContentHeight);
+    if (resizedContentHeight === null) {
+      return Result.err(
+        new VisualRenderError({ message: "Preview document has no body" }),
+      );
+    }
+    const height = Math.min(
+      VISUAL_PREVIEW_LIMITS.height,
+      Math.max(1, Math.ceil(resizedContentHeight)),
+    );
+    if (height !== initialHeight) {
+      await page.setViewportSize({
+        width: VISUAL_PREVIEW_LIMITS.width,
+        height,
+      });
+      await page.locator("iframe").evaluate((iframe, size) => {
+        iframe.style.height = `${size}px`;
+      }, height);
+    }
     const png = await page.screenshot({
       type: "png",
       animations: "disabled",
