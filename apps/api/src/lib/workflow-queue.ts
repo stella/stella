@@ -6,6 +6,7 @@ import { and, eq, inArray, sql } from "drizzle-orm";
 
 import { RESOURCE_TYPE } from "@stll/api-contract";
 import { drainFanOut } from "@stll/concurrency";
+import { chunk as chunkItems } from "@stll/concurrency/chunk";
 import { Temporal } from "@stll/time";
 
 import { jsonField } from "@/api/db/json-utils";
@@ -25,7 +26,6 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { BullMqWorker } from "@/api/lib/bullmq-queue";
 import type { BullMqWorkerContext } from "@/api/lib/bullmq-queue";
 import { acquireCellLocks } from "@/api/lib/cell-lock";
-import { chunked } from "@/api/lib/chunked";
 import { recordTableRunVerdicts } from "@/api/lib/document-review/table-run-findings";
 import { TimeoutError } from "@/api/lib/errors/tagged-errors";
 import {
@@ -435,7 +435,7 @@ const removeQueuedWorkflowJobs = async (
   q: WorkflowEntityQueue,
   jobIds: readonly string[],
 ): Promise<void> => {
-  for (const chunk of chunked(jobIds, LIMITS.workflowEntityBatchSize)) {
+  for (const chunk of chunkItems(jobIds, LIMITS.workflowEntityBatchSize)) {
     await Promise.all(
       chunk.map(async (jobId) => {
         try {
@@ -655,7 +655,7 @@ const planAndEnqueueWorkflow = async (
       queue ?? getQueueForClass(workflowQueueClassForServiceTier(serviceTier));
     const queuedJobIds: string[] = [];
     try {
-      for (const chunk of chunked(
+      for (const chunk of chunkItems(
         targetEntityIds,
         LIMITS.workflowEntityBatchSize,
       )) {
@@ -847,7 +847,7 @@ const readWorkflowRequestIds = async (
 ): Promise<Map<string, string | null>> => {
   const runStateStore = getRootWorkflowRunStateStore();
   const requestIds = new Map<string, string | null>();
-  for (const workspaceIdBatch of chunked(
+  for (const workspaceIdBatch of chunkItems(
     workspaceIds,
     LIMITS.workflowEntityBatchSize,
   )) {
@@ -868,7 +868,7 @@ const readWorkflowRunningValues = async (
 ): Promise<Map<string, string | null>> => {
   const runStateStore = getRootWorkflowRunStateStore();
   const runningValues = new Map<string, string | null>();
-  for (const workspaceIdBatch of chunked(
+  for (const workspaceIdBatch of chunkItems(
     workspaceIds,
     LIMITS.workflowEntityBatchSize,
   )) {

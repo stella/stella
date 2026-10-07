@@ -1,6 +1,8 @@
 import { Result } from "better-result";
 import { beforeEach, describe, expect, test } from "bun:test";
 
+import { sleep } from "@stll/concurrency/sleep";
+
 import { LIMITS } from "@/api/lib/limits";
 import {
   SafeOutboundFetchError,
@@ -70,9 +72,7 @@ const safeOutboundFetchBytesMock: NonNullable<
         );
       }
       activeRawRequests += 1;
-      await new Promise<void>((resolve) => {
-        setTimeout(resolve, 5);
-      });
+      await sleep(5);
       activeRawRequests -= 1;
     }
     if (requestUrl.pathname.endsWith("/invalid/SKILL.md")) {

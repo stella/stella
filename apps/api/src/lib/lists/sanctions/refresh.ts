@@ -2,6 +2,7 @@ import { panic } from "better-result";
 import { and, eq, isNull, lte, ne, or, sql } from "drizzle-orm";
 import { createHash } from "node:crypto";
 
+import { chunk as chunkItems } from "@stll/concurrency/chunk";
 import {
   checkListReplacement,
   type ListReplacementError,
@@ -572,11 +573,18 @@ const stageAcceptedEdition = async ({
       return 0;
     });
 
-  const persistNextBatch = async (start: number): Promise<void> => {
-    if (start >= expectedEntries.length || signal.aborted) {
+  const itemBatches = chunkItems(expectedEntries, ENTRY_BATCH_SIZE)[
+    Symbol.iterator
+  ]();
+  const persistNextBatch = async (): Promise<void> => {
+    const nextBatch = itemBatches.next();
+    if (nextBatch.done) {
       return;
     }
-    const batch = expectedEntries.slice(start, start + ENTRY_BATCH_SIZE);
+    if (signal.aborted) {
+      return;
+    }
+    const batch = nextBatch.value;
     await db(async (tx) => {
       await tx
         .insert(sanctionsEntryPayloads)
@@ -598,9 +606,9 @@ const stageAcceptedEdition = async ({
         )
         .onConflictDoNothing();
     });
-    await persistNextBatch(start + ENTRY_BATCH_SIZE);
+    await persistNextBatch();
   };
-  await persistNextBatch(0);
+  await persistNextBatch();
   if (signal.aborted) {
     return { status: "aborted", source };
   }

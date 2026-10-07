@@ -1,5 +1,7 @@
 import { TaggedError } from "better-result";
 
+import { backoffDelay } from "@stll/concurrency/backoff-delay";
+
 import type { documentProcessingRuns } from "@/api/db/schema";
 import {
   AUTOMATIC_OCR_MAX_ATTEMPTS,
@@ -107,10 +109,10 @@ export const documentProcessingFailureReport = (error: unknown) => {
 };
 
 export const automaticOcrRetryDelayMs = (attemptCount: number): number =>
-  Math.min(
-    AUTOMATIC_OCR_RETRY_BASE_DELAY_MS * 2 ** Math.max(0, attemptCount - 1),
-    AUTOMATIC_OCR_RETRY_MAX_DELAY_MS,
-  );
+  backoffDelay(Math.max(0, attemptCount - 1), {
+    baseMs: AUTOMATIC_OCR_RETRY_BASE_DELAY_MS,
+    maxMs: AUTOMATIC_OCR_RETRY_MAX_DELAY_MS,
+  });
 
 export const isRetryableAutomaticOcrFailure = ({
   attemptCount,

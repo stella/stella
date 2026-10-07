@@ -13,6 +13,7 @@ import { Result } from "better-result";
  */
 import { and, asc, eq, inArray, lt, or, sql } from "drizzle-orm";
 
+import { chunk as chunkItems } from "@stll/concurrency/chunk";
 import { Temporal, DAY_IN_MS } from "@stll/time";
 
 import type { rootDb } from "@/api/db/root";
@@ -475,10 +476,15 @@ const executeRun = async (
   // Batches run strictly one after another: each carries the previous rows'
   // translations as context, and one request in flight per run keeps the
   // metered spend predictable.
-  const translateFrom = async (
-    index: number,
-  ): Promise<BilingualRunErrorCode | null> => {
-    const batch = pending.slice(index, index + BILINGUAL_LIMITS.batchSize);
+  const itemBatches = chunkItems(pending, BILINGUAL_LIMITS.batchSize)[
+    Symbol.iterator
+  ]();
+  const translateFrom = async (): Promise<BilingualRunErrorCode | null> => {
+    const nextBatch = itemBatches.next();
+    if (nextBatch.done) {
+      return null;
+    }
+    const batch = nextBatch.value;
     const first = batch[0];
     if (!first) {
       return null;
@@ -558,9 +564,9 @@ const executeRun = async (
         })
         .where(eq(bilingualTranslationRuns.id, actor.runId));
     });
-    return await translateFrom(index + BILINGUAL_LIMITS.batchSize);
+    return await translateFrom();
   };
-  const translationOutcome = await translateFrom(0);
+  const translationOutcome = await translateFrom();
   if (translationOutcome !== null) {
     return translationOutcome;
   }

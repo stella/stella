@@ -1,6 +1,8 @@
 import { Result } from "better-result";
 import * as v from "valibot";
 
+import { chunk as chunkItems } from "@stll/concurrency/chunk";
+
 import type { PropertyContent } from "@/api/db/schema-validators";
 import { resolveCaching } from "@/api/lib/ai-config";
 import type { OrgAIConfig } from "@/api/lib/ai-config";
@@ -271,12 +273,7 @@ export const deriveAutoAsks = async (
     return { version: 3, items };
   }
 
-  for (
-    let cursor = 0;
-    cursor < pending.length;
-    cursor += DERIVE_ASK_CONCURRENCY
-  ) {
-    const chunk = pending.slice(cursor, cursor + DERIVE_ASK_CONCURRENCY);
+  for (const chunk of chunkItems(pending, DERIVE_ASK_CONCURRENCY)) {
     const derived = await Promise.all(
       chunk.map(async ({ index, position, hash }) => ({
         index,

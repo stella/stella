@@ -1,5 +1,7 @@
 import { panic, Result } from "better-result";
 
+import { chunk as chunkItems } from "@stll/concurrency/chunk";
+
 import type { VerdictMatchedRef } from "@/api/db/schema";
 import type { FieldContent } from "@/api/db/schema-validators";
 import type { AIRequestServiceTier, OrgAIConfig } from "@/api/lib/ai-config";
@@ -291,15 +293,11 @@ const gradeTierMatchPositions = async ({
   emit: (batch: readonly Position[]) => Promise<void>;
 }): Promise<void> => {
   const gradeTierMatchesForReview = deps.gradeTierMatches ?? gradeTierMatches;
-  for (
-    let cursor = 0;
-    cursor < positions.length;
-    cursor += TIER_MATCH_BATCH_SIZE
-  ) {
+  for (const batch of chunkItems(positions, TIER_MATCH_BATCH_SIZE)) {
     if (deps.abortSignal.aborted) {
       break;
     }
-    const batch = positions.slice(cursor, cursor + TIER_MATCH_BATCH_SIZE);
+
     const graded = await gradeTierMatchesForReview({
       items: batch.map((position) => ({
         key: position.sourceId,
@@ -437,14 +435,7 @@ const gradeReferenceStandards = async ({
 }): Promise<void> => {
   const gradeReferencePositionsForReview =
     deps.gradeReferencePositions ?? gradeReferencePositions;
-  const batches: ReferencePair[][] = [];
-  for (
-    let cursor = 0;
-    cursor < pairs.length;
-    cursor += REFERENCE_GRADE_BATCH_SIZE
-  ) {
-    batches.push(pairs.slice(cursor, cursor + REFERENCE_GRADE_BATCH_SIZE));
-  }
+  const batches = chunkItems(pairs, REFERENCE_GRADE_BATCH_SIZE);
 
   await runBatchesWithConcurrency({
     batches,

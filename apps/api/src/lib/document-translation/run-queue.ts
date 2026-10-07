@@ -1,6 +1,7 @@
 import { Result, panic } from "better-result";
 import { and, asc, eq, inArray, isNull, lt, sql } from "drizzle-orm";
 
+import { chunk as chunkItems } from "@stll/concurrency/chunk";
 import { Temporal } from "@stll/time";
 
 import type { rootDb } from "@/api/db/root";
@@ -494,16 +495,18 @@ const translateCommentsWithAI = async (
     }
   }
   const pending = comments.filter((comment) => comment.text !== "");
-  const translateNextBatch = async (
-    index: number,
-  ): Promise<Result<void, DocumentTranslationRunErrorCode>> => {
-    if (index >= pending.length) {
+  const itemBatches = chunkItems(
+    pending,
+    DOCUMENT_TRANSLATION_LIMITS.batchSize,
+  )[Symbol.iterator]();
+  const translateNextBatch = async (): Promise<
+    Result<void, DocumentTranslationRunErrorCode>
+  > => {
+    const nextBatch = itemBatches.next();
+    if (nextBatch.done) {
       return Result.ok();
     }
-    const batch = pending.slice(
-      index,
-      index + DOCUMENT_TRANSLATION_LIMITS.batchSize,
-    );
+    const batch = nextBatch.value;
     const response = await Result.tryPromise({
       try: async () =>
         await translateTaggedSegments({
@@ -530,11 +533,9 @@ const translateCommentsWithAI = async (
       }
       translated.set(comment.id, text);
     }
-    return await translateNextBatch(
-      index + DOCUMENT_TRANSLATION_LIMITS.batchSize,
-    );
+    return await translateNextBatch();
   };
-  const result = await translateNextBatch(0);
+  const result = await translateNextBatch();
   return Result.isError(result) ? result : Result.ok(translated);
 };
 
@@ -659,16 +660,18 @@ const translateDocxWithAI = async (
   await setTotal(actor, segments.length);
 
   const translated = new Map<string, string>();
+  const itemBatches = chunkItems(
+    segments,
+    DOCUMENT_TRANSLATION_LIMITS.batchSize,
+  )[Symbol.iterator]();
   const translateNextBatch = async (
     index: number,
   ): Promise<Result<void, DocumentTranslationRunErrorCode>> => {
-    if (index >= segments.length) {
+    const nextBatch = itemBatches.next();
+    if (nextBatch.done) {
       return Result.ok();
     }
-    const batch = segments.slice(
-      index,
-      index + DOCUMENT_TRANSLATION_LIMITS.batchSize,
-    );
+    const batch = nextBatch.value;
     const preceding = segments
       .slice(0, index)
       .slice(-DOCUMENT_TRANSLATION_LIMITS.contextUnits);

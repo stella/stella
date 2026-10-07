@@ -1,3 +1,4 @@
+import { panic, Result } from "better-result";
 /**
  * View → report data builder.
  *
@@ -16,11 +17,10 @@
  * (top level) are intentionally left ABSENT so the template's `aiPrompt` fields
  * draft them at fill time; this builder never calls a model.
  */
-
-import { panic, Result } from "better-result";
 import { and, desc, eq, inArray } from "drizzle-orm";
 
 import { compareByLocale } from "@stll/collation";
+import { chunk as chunkItems } from "@stll/concurrency/chunk";
 
 import type { SafeDb } from "@/api/db/safe-db";
 import type { JustificationContent, PropertyRole } from "@/api/db/schema";
@@ -787,15 +787,10 @@ export const buildReportData = async ({
             fieldId: string;
             content: JustificationContent;
           }[] = [];
-          for (
-            let index = 0;
-            index < commentFieldIds.length;
-            index += JUSTIFICATION_FIELD_ID_BATCH
-          ) {
-            const batch = commentFieldIds.slice(
-              index,
-              index + JUSTIFICATION_FIELD_ID_BATCH,
-            );
+          for (const batch of chunkItems(
+            commentFieldIds,
+            JUSTIFICATION_FIELD_ID_BATCH,
+          )) {
             const batchRows = await tx.query.justifications.findMany({
               where: {
                 workspaceId: { eq: workspaceId },

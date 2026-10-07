@@ -1,9 +1,9 @@
-/** Durable native extraction request and worker-side execution. */
-
 import { panic, Result } from "better-result";
+/** Durable native extraction request and worker-side execution. */
 import { and, eq, sql } from "drizzle-orm";
 
 import { isEmailMimeType } from "@stll/api-contract/email-mime-types";
+import { chunk as chunkItems } from "@stll/concurrency/chunk";
 
 import { rootDb } from "@/api/db/root";
 import type { Transaction } from "@/api/db/root";
@@ -717,23 +717,24 @@ export const requestNativeExtractionRuns = async ({
   tx: Transaction;
 }): Promise<SafeId<"documentProcessingRun">[]> => {
   const insertedRunIds: SafeId<"documentProcessingRun">[] = [];
-  const insertFrom = async (start: number): Promise<void> => {
-    if (start >= requests.length) {
+  const itemBatches = chunkItems(
+    requests,
+    NATIVE_EXTRACTION_RUN_INSERT_BATCH_SIZE,
+  )[Symbol.iterator]();
+  const insertFrom = async (): Promise<void> => {
+    const nextBatch = itemBatches.next();
+    if (nextBatch.done) {
       return;
     }
     const inserted = await tx
       .insert(documentProcessingRuns)
-      .values(
-        requests
-          .slice(start, start + NATIVE_EXTRACTION_RUN_INSERT_BATCH_SIZE)
-          .map(nativeExtractionRunValues),
-      )
+      .values(nextBatch.value.map(nativeExtractionRunValues))
       .onConflictDoNothing({ target: NATIVE_EXTRACTION_SOURCE_TARGET })
       .returning({ id: documentProcessingRuns.id });
     insertedRunIds.push(...inserted.map(({ id }) => id));
-    await insertFrom(start + NATIVE_EXTRACTION_RUN_INSERT_BATCH_SIZE);
+    await insertFrom();
   };
-  await insertFrom(0);
+  await insertFrom();
   return insertedRunIds;
 };
 
