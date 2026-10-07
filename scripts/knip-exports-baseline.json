@@ -1,6 +1,6 @@
 {
   "apps/api": {
-    "count": 650,
+    "count": 610,
     "files": {
       "apps/api/scripts/lib/capability-catalog.ts": 8,
       "apps/api/scripts/lib/case-law-fixture-analyses.ts": 1,
@@ -22,7 +22,6 @@
       "apps/api/src/handlers/case-law/decisions/citation-graph.ts": 2,
       "apps/api/src/handlers/case-law/decisions/latest.ts": 2,
       "apps/api/src/handlers/case-law/decisions/search-telemetry.ts": 2,
-      "apps/api/src/handlers/case-law/document-ast.ts": 21,
       "apps/api/src/handlers/case-law/ingestion/adapters/retry.ts": 1,
       "apps/api/src/handlers/case-law/ingestion/adapters/test-utils.ts": 1,
       "apps/api/src/handlers/case-law/ingestion/listing-census.ts": 2,
@@ -102,7 +101,6 @@
       "apps/api/src/lib/business-registries/dispatch.ts": 5,
       "apps/api/src/lib/case-law-public-read-db.ts": 2,
       "apps/api/src/lib/case-law/decision-identifiers.ts": 1,
-      "apps/api/src/lib/case-law/document-ast.ts": 19,
       "apps/api/src/lib/case-law/language-alternates.ts": 1,
       "apps/api/src/lib/case-law/maintenance-lane.ts": 3,
       "apps/api/src/lib/case-law/research-answers.ts": 2,
