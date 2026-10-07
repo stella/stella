@@ -11,6 +11,33 @@ export type VisualInteraction =
   | { status: "preview" }
   | { status: "interactive"; activatedFrame: unknown };
 
+// A shell handshake settles once its document has loaded and its payload has
+// been delivered, in either order. Until then the view stays loading; after
+// it, any further document load returns the view to preview.
+export type VisualFrameHandshake =
+  | { status: "pending"; loaded: boolean; delivered: boolean }
+  | { status: "settled" };
+
+export const pendingVisualHandshake = (): VisualFrameHandshake => ({
+  status: "pending",
+  loaded: false,
+  delivered: false,
+});
+
+export const advanceVisualHandshake = (
+  handshake: VisualFrameHandshake,
+  event: "load" | "delivered",
+): VisualFrameHandshake => {
+  if (handshake.status === "settled") {
+    return handshake;
+  }
+  const loaded = handshake.loaded || event === "load";
+  const delivered = handshake.delivered || event === "delivered";
+  return loaded && delivered
+    ? { status: "settled" }
+    : { status: "pending", loaded, delivered };
+};
+
 export const activateVisual = (
   interaction: VisualInteraction,
   activatedFrame: unknown,

@@ -6,7 +6,9 @@ import type { VisualGuestMessage } from "@stll/api-contract/visual-sandbox";
 
 import {
   activateVisual,
+  advanceVisualHandshake,
   parseVisualHostMessage,
+  pendingVisualHandshake,
 } from "./generated-visual.logic";
 
 const outerOrigin = "null";
@@ -191,5 +193,51 @@ describe("generated view activation", () => {
         actionGate: gate(),
       }),
     ).toBeNull();
+  });
+});
+
+describe("generated view frame handshake", () => {
+  test("settles once the document loaded and the payload was delivered, in either order", () => {
+    for (const order of [
+      ["load", "delivered"],
+      ["delivered", "load"],
+    ] as const) {
+      const [first, second] = order;
+      const afterFirst = advanceVisualHandshake(
+        pendingVisualHandshake(),
+        first,
+      );
+      expect(afterFirst.status).toBe("pending");
+      expect(advanceVisualHandshake(afterFirst, second)).toEqual({
+        status: "settled",
+      });
+    }
+  });
+
+  test("stays pending on repeats of the same event", () => {
+    const loadedTwice = advanceVisualHandshake(
+      advanceVisualHandshake(pendingVisualHandshake(), "load"),
+      "load",
+    );
+    expect(loadedTwice).toEqual({
+      status: "pending",
+      loaded: true,
+      delivered: false,
+    });
+    const deliveredTwice = advanceVisualHandshake(
+      advanceVisualHandshake(pendingVisualHandshake(), "delivered"),
+      "delivered",
+    );
+    expect(deliveredTwice).toEqual({
+      status: "pending",
+      loaded: false,
+      delivered: true,
+    });
+  });
+
+  test("stays settled", () => {
+    const settled = { status: "settled" } as const;
+    expect(advanceVisualHandshake(settled, "load")).toBe(settled);
+    expect(advanceVisualHandshake(settled, "delivered")).toBe(settled);
   });
 });

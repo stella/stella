@@ -37,9 +37,14 @@ import { detachedUserAction } from "@/lib/errors/user-toast";
 import { openIsolatedWindow } from "@/lib/open-isolated-window";
 import { toSafeId } from "@/lib/safe-id";
 
-import type { VisualInteraction } from "./generated-visual.logic";
+import type {
+  VisualFrameHandshake,
+  VisualInteraction,
+} from "./generated-visual.logic";
 import {
   activateVisual,
+  advanceVisualHandshake,
+  pendingVisualHandshake,
   parseVisualHostMessage,
 } from "./generated-visual.logic";
 import { createVisualShellSession } from "./visual-shell-session";
@@ -54,6 +59,32 @@ type GeneratedVisualFrameProps = Omit<GeneratedVisualProps, "part"> & {
   part: v.InferOutput<typeof generatedVisualPartSchema>;
 };
 
+// Tracks the current shell handshake and moves the view to preview when it
+// settles. Any document load after that (a reload, or another document in the
+// frame) also returns the view to preview.
+const useFrameHandshake = (
+  setInteraction: (interaction: VisualInteraction) => void,
+) => {
+  const handshake = useRef<VisualFrameHandshake>(pendingVisualHandshake());
+  return {
+    restart: () => {
+      handshake.current = pendingVisualHandshake();
+    },
+    advance: (event: "load" | "delivered") => {
+      if (handshake.current.status === "settled") {
+        if (event === "load") {
+          setInteraction({ status: "preview" });
+        }
+        return;
+      }
+      handshake.current = advanceVisualHandshake(handshake.current, event);
+      if (handshake.current.status === "settled") {
+        setInteraction({ status: "preview" });
+      }
+    },
+  };
+};
+
 const GeneratedVisualFrame = ({
   part,
   organizationId,
@@ -65,6 +96,7 @@ const GeneratedVisualFrame = ({
   const [interaction, setInteraction] = useState<VisualInteraction>({
     status: "loading",
   });
+  const handshake = useFrameHandshake(setInteraction);
   const [confirmUrl, setConfirmUrl] = useState<string | null>(null);
   const { insertPastedTextIntoThread } = useChatEditorManager();
   const { open: openDecision } = useOpenDecisionTab();
@@ -106,6 +138,7 @@ const GeneratedVisualFrame = ({
   const attachFrame = useLatestCallback((element: HTMLIFrameElement | null) => {
     frame.current = element;
     if (element !== null) {
+      handshake.restart();
       element.src = shell.beginLoad();
     }
   });
@@ -127,11 +160,13 @@ const GeneratedVisualFrame = ({
         },
       })
     ) {
+      handshake.advance("delivered");
       return;
     }
     if (shell.isReloadedShell({ event, frameWindow })) {
       const element = frame.current;
       if (element !== null) {
+        handshake.restart();
         setInteraction({ status: "loading" });
         element.src = shell.beginLoad();
       }
@@ -217,13 +252,8 @@ const GeneratedVisualFrame = ({
     setInteraction(next);
     requestAnimationFrame(() => frame.current?.focus());
   };
-  // A document load after the handshake (a reload, or any other document in
-  // the frame) returns the view to preview. Loads while a handshake is pending
-  // belong to the document it replaces; its own load follows the handshake.
   const loadShell = () => {
-    if (shell.isReady()) {
-      setInteraction({ status: "preview" });
-    }
+    handshake.advance("load");
   };
   if (page.isError) {
     return <p role="status">{t("chat.richContentUnavailable")}</p>;
