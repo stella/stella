@@ -79,6 +79,82 @@ const apiSources = async (): Promise<{ file: string; source: string }[]> =>
       })),
   );
 
+/**
+ * Verify values are compared only as equal-length digests through
+ * `timingSafeEqual`; an ordinary comparison would let the response time leak
+ * how much of a guess matched. Flags `===`, `!==`, `==`, `!=` and
+ * `.includes(...)`/`.indexOf(...)` whose operands name a presented or
+ * configured value.
+ */
+const findDirectSecretComparisons = (
+  file: string,
+  source: string,
+): number[] => {
+  const sourceFile = ts.createSourceFile(
+    file,
+    source,
+    ts.ScriptTarget.Latest,
+    true,
+  );
+  const namesSecret = (node: ts.Node): boolean =>
+    /(?:presented|secrets?)\b/iu.test(node.getText(sourceFile));
+  const lines: number[] = [];
+  const visit = (node: ts.Node): void => {
+    const equality =
+      ts.isBinaryExpression(node) &&
+      [
+        ts.SyntaxKind.EqualsEqualsEqualsToken,
+        ts.SyntaxKind.ExclamationEqualsEqualsToken,
+        ts.SyntaxKind.EqualsEqualsToken,
+        ts.SyntaxKind.ExclamationEqualsToken,
+      ].includes(node.operatorToken.kind) &&
+      [node.left, node.right].every(
+        (side) =>
+          side.kind !== ts.SyntaxKind.NullKeyword &&
+          !ts.isNumericLiteral(side) &&
+          !(ts.isPropertyAccessExpression(side) && side.name.text === "length"),
+      ) &&
+      (namesSecret(node.left) || namesSecret(node.right));
+    const membership =
+      ts.isCallExpression(node) &&
+      ts.isPropertyAccessExpression(node.expression) &&
+      ["includes", "indexOf"].includes(node.expression.name.text) &&
+      ((ts.isIdentifier(node.expression.expression) &&
+        namesSecret(node.expression.expression)) ||
+        node.arguments.some(namesSecret));
+    if (equality || membership) {
+      lines.push(
+        sourceFile.getLineAndCharacterOfPosition(node.getStart()).line + 1,
+      );
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(sourceFile);
+  return [...new Set(lines)];
+};
+
+describe("verify value comparison", () => {
+  test("the reader compares verify values only through timingSafeEqual", async () => {
+    const source = await Bun.file(path.join(API_ROOT, READER)).text();
+    expect(source).toContain(
+      "timingSafeEqual(presentedDigest, digest(secret))",
+    );
+    expect(findDirectSecretComparisons(READER, source)).toEqual([]);
+  });
+
+  test("direct comparisons in a fixture are flagged", () => {
+    const flagged = (code: string) =>
+      findDirectSecretComparisons("src/lib/example.ts", code).length;
+    expect(flagged("const ok = presented === secret;")).toBe(1);
+    expect(flagged("const ok = secrets.includes(presented);")).toBe(1);
+    expect(flagged("const ok = secrets.indexOf(value) !== -1;")).toBe(1);
+    expect(flagged("const ok = value === frontendSecret;")).toBe(1);
+    expect(
+      flagged("const ok = presented === null || secrets.length === 0;"),
+    ).toBe(0);
+  });
+});
+
 describe("client address guard", () => {
   test("only client-ip.ts reads the socket peer or the forwarded chain", async () => {
     const sources = await apiSources();

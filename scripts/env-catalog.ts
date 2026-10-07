@@ -570,6 +570,8 @@ const DESCRIPTION_OVERRIDES: Record<string, string> = {
     "How STELLA_CLIENT_ADDRESS_HEADER spells the address: with-port (default, e.g. cloudfront-viewer-address) or bare.",
   STELLA_ORIGIN_VERIFY_SECRET:
     "Comma-separated values the edge sends in x-stella-origin-verify (current, then next during a rotation). When set, the client address header is read only from requests carrying one of them.",
+  STELLA_FRONTEND_VERIFY_SECRET:
+    "Comma-separated values the frontend edge sends in x-stella-frontend-verify (current, then next during a rotation). From STELLA_TRUSTED_PROXY_CIDRS peers carrying one, the browser's bare address in x-stella-viewer-address is read first; unset, that header is never read.",
   STELLA_TRUSTED_PROXY_CIDRS:
     "Comma-separated CIDRs for proxies directly in front of the API. Never trust public client ranges.",
   STELLA_ANNOUNCEMENT_OPERATOR_USER_IDS:
@@ -913,6 +915,7 @@ export const ENV_CREDENTIAL_CLASSIFICATION = {
   STELLA_COLLAB_SERVICE_TOKEN: ENV_CREDENTIAL_KIND.credential,
   OPERATOR_API_TOKEN: ENV_CREDENTIAL_KIND.credential,
   STELLA_COMMIT_SHA: ENV_CREDENTIAL_KIND.notCredential,
+  STELLA_FRONTEND_VERIFY_SECRET: ENV_CREDENTIAL_KIND.credential,
   STELLA_OCR_PDF_FONT_PATH: ENV_CREDENTIAL_KIND.notCredential,
   STELLA_ORIGIN_VERIFY_SECRET: ENV_CREDENTIAL_KIND.credential,
   STELLA_SIGNUP_RATE_LIMIT_IP_SOURCE: ENV_CREDENTIAL_KIND.notCredential,

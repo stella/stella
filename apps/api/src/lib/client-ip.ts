@@ -20,6 +20,14 @@ import { panic } from "better-result";
  * example CloudFront's `CloudFront-Viewer-Address`) is named with
  * `STELLA_CLIENT_ADDRESS_HEADER`. That header is read only from a trusted
  * peer and takes precedence over the `x-forwarded-for` chain.
+ *
+ * Browser calls pass a second edge first (the frontend distribution), so the
+ * API edge's viewer address names that edge. The frontend edge writes the
+ * browser's address to {@link FRONTEND_ADDRESS_HEADER} and proves it with
+ * {@link FRONTEND_VERIFY_HEADER}. From a trusted peer the
+ * sources are tried in order: that header when the frontend value matches,
+ * the API edge's header when the origin value matches, then the forwarded
+ * chain.
  */
 import { createHash, timingSafeEqual } from "node:crypto";
 import { BlockList, isIP, isIPv4, isIPv6 } from "node:net";
@@ -27,6 +35,8 @@ import { BlockList, isIP, isIPv4, isIPv6 } from "node:net";
 import { env } from "@/api/env";
 import {
   AUTH_CLIENT_ADDRESS_HEADER,
+  FRONTEND_ADDRESS_HEADER,
+  FRONTEND_VERIFY_HEADER,
   ORIGIN_VERIFY_HEADER,
   SIGNUP_RATE_LIMIT_IP_SOURCE,
   type SignupRateLimitIpSource,
@@ -47,6 +57,16 @@ export { AUTH_CLIENT_ADDRESS_HEADER } from "@/api/lib/client-ip-config";
  */
 export { ORIGIN_VERIFY_HEADER } from "@/api/lib/client-ip-config";
 
+/**
+ * The frontend edge's headers. {@link FRONTEND_ADDRESS_HEADER} is read only
+ * from requests whose {@link FRONTEND_VERIFY_HEADER} carries one of the
+ * `STELLA_FRONTEND_VERIFY_SECRET` values; without values it is never read.
+ */
+export {
+  FRONTEND_ADDRESS_HEADER,
+  FRONTEND_VERIFY_HEADER,
+} from "@/api/lib/client-ip-config";
+
 const EDGE_ADDRESS_FORMAT = {
   withPort: "with-port",
   bare: "bare",
@@ -56,6 +76,7 @@ export type EdgeAddressFormat =
   (typeof EDGE_ADDRESS_FORMAT)[keyof typeof EDGE_ADDRESS_FORMAT];
 
 export const CLIENT_ADDRESS_SOURCE = {
+  frontendHeader: "frontend_header",
   edgeHeader: "edge_header",
   forwardedFor: "forwarded_for",
   peer: "peer",
@@ -220,19 +241,24 @@ type ClientAddressOptions = {
   originSecrets?: readonly string[];
   /** How the edge header spells the address; defaults to the configured one. */
   edgeAddressFormat?: EdgeAddressFormat;
+  /**
+   * Accepted {@link FRONTEND_VERIFY_HEADER} values;
+   * {@link FRONTEND_ADDRESS_HEADER} is read only from requests carrying one of
+   * them, so an empty list disables it.
+   */
+  frontendSecrets?: readonly string[];
 };
 
 const digest = (value: string) => createHash("sha256").update(value).digest();
 
-const carriesOriginSecret = (
+/** Whether `header` carries one of `secrets`; never with no secrets. */
+const carriesSecret = (
   request: Request,
+  header: string,
   secrets: readonly string[],
 ): boolean => {
-  if (secrets.length === 0) {
-    return true;
-  }
-  const presented = request.headers.get(ORIGIN_VERIFY_HEADER);
-  if (presented === null) {
+  const presented = request.headers.get(header);
+  if (presented === null || secrets.length === 0) {
     return false;
   }
   const presentedDigest = digest(presented);
@@ -242,14 +268,32 @@ const carriesOriginSecret = (
     .includes(true);
 };
 
+// Without origin values the API edge's header is trusted from any trusted
+// peer, as before origin verification existed.
+const carriesOriginSecret = (
+  request: Request,
+  secrets: readonly string[],
+): boolean =>
+  secrets.length === 0 || carriesSecret(request, ORIGIN_VERIFY_HEADER, secrets);
+
+const parseSecretList = (value: string | undefined): readonly string[] =>
+  (value ?? "")
+    .split(",")
+    .map((part) => part.trim())
+    .filter((part) => part.length > 0);
+
 let cachedOriginSecrets: readonly string[] | null = null;
 
 const getOriginSecrets = (): readonly string[] => {
-  cachedOriginSecrets ??= (env.STELLA_ORIGIN_VERIFY_SECRET ?? "")
-    .split(",")
-    .map((value) => value.trim())
-    .filter((value) => value.length > 0);
+  cachedOriginSecrets ??= parseSecretList(env.STELLA_ORIGIN_VERIFY_SECRET);
   return cachedOriginSecrets;
+};
+
+let cachedFrontendSecrets: readonly string[] | null = null;
+
+const getFrontendSecrets = (): readonly string[] => {
+  cachedFrontendSecrets ??= parseSecretList(env.STELLA_FRONTEND_VERIFY_SECRET);
+  return cachedFrontendSecrets;
 };
 
 type TrustedPeerInput = {
@@ -259,6 +303,7 @@ type TrustedPeerInput = {
   edgeHeader: string | null;
   originSecrets: readonly string[];
   edgeAddressFormat: EdgeAddressFormat;
+  frontendSecrets: readonly string[];
 };
 
 const addressFromTrustedPeer = ({
@@ -268,7 +313,19 @@ const addressFromTrustedPeer = ({
   edgeHeader,
   originSecrets,
   edgeAddressFormat,
+  frontendSecrets,
 }: TrustedPeerInput): ClientAddress | null => {
+  // The frontend edge's function writes the bare address (CloudFront
+  // Functions see no viewer port); any other spelling falls through.
+  if (carriesSecret(request, FRONTEND_VERIFY_HEADER, frontendSecrets)) {
+    const address = parseEdgeClientAddress(
+      request.headers.get(FRONTEND_ADDRESS_HEADER),
+      EDGE_ADDRESS_FORMAT.bare,
+    );
+    if (address !== null) {
+      return { address, source: CLIENT_ADDRESS_SOURCE.frontendHeader };
+    }
+  }
   if (edgeHeader !== null && carriesOriginSecret(request, originSecrets)) {
     const address = parseEdgeClientAddress(
       request.headers.get(edgeHeader),
@@ -322,6 +379,7 @@ export const resolveClientAddress = (
       originSecrets: options?.originSecrets ?? getOriginSecrets(),
       edgeAddressFormat:
         options?.edgeAddressFormat ?? env.STELLA_CLIENT_ADDRESS_FORMAT,
+      frontendSecrets: options?.frontendSecrets ?? getFrontendSecrets(),
     }) ?? {
       address: peer,
       source: CLIENT_ADDRESS_SOURCE.peer,
@@ -343,10 +401,15 @@ export const sealEdgeHeaders = (
   clientAddress: ClientAddress | null,
 ): void => {
   resolvedAddresses.set(request, clientAddress);
-  request.headers.delete(ORIGIN_VERIFY_HEADER);
-  const edgeHeader = env.STELLA_CLIENT_ADDRESS_HEADER;
-  if (edgeHeader !== undefined) {
-    request.headers.delete(edgeHeader);
+  for (const header of [
+    ORIGIN_VERIFY_HEADER,
+    FRONTEND_VERIFY_HEADER,
+    FRONTEND_ADDRESS_HEADER,
+    env.STELLA_CLIENT_ADDRESS_HEADER,
+  ]) {
+    if (header !== undefined) {
+      request.headers.delete(header);
+    }
   }
 };
 
@@ -378,21 +441,15 @@ export const resolveClientIp = (
  *
  * Direct mode trusts only the kernel-provided socket peer and ignores request
  * headers. Trusted-proxy mode requires the peer to be in the configured proxy
- * set and derives the client from the edge address header, when configured,
- * or its `x-forwarded-for` chain. Keeping the
+ * set and derives the client from the edge address headers, when configured
+ * and verified, or its `x-forwarded-for` chain. Keeping the
  * deployment topology explicit prevents both attacker-controlled buckets and
  * one shared bucket for every user behind an unconfigured proxy.
  */
 export const resolveSignupRateLimitClientIp = (
   request: Request,
   server: ServerLike | null,
-  options?: {
-    source?: SignupRateLimitIpSource;
-    trusted?: TrustedProxies;
-    edgeHeader?: string | null;
-    originSecrets?: readonly string[];
-    edgeAddressFormat?: EdgeAddressFormat;
-  },
+  options?: ClientAddressOptions & { source?: SignupRateLimitIpSource },
 ): string | null => {
   const peer = server?.requestIP(request)?.address ?? null;
   if (!peer) {
@@ -428,6 +485,7 @@ export const resolveSignupRateLimitClientIp = (
       originSecrets: options?.originSecrets ?? getOriginSecrets(),
       edgeAddressFormat:
         options?.edgeAddressFormat ?? env.STELLA_CLIENT_ADDRESS_FORMAT,
+      frontendSecrets: options?.frontendSecrets ?? getFrontendSecrets(),
     })?.address ?? null
   );
 };
