@@ -37,6 +37,11 @@
 import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 
+import {
+  mergeWorkflowParallelProofs,
+  synchronizeWorkflowBackgroundSteps,
+} from "./workflow-steps";
+
 export type Classification =
   /** Files Bun loads: a script, test files and preloads. */
   | {
@@ -1459,25 +1464,209 @@ const stepTitle = (step: Record<string, unknown>, position: number): string => {
 };
 
 type WalkStepsOptions = {
+  readonly cancelled?: ReadonlySet<string>;
   readonly context: ClassifyContext;
   readonly defaults: StepDefaults;
   readonly initial: readonly InstallRecord[];
   readonly job: string;
   readonly prefix: string;
+  readonly pending?: Map<string, InstallRecord[]>;
   readonly steps: readonly unknown[];
 };
 
 type WalkStepsResult = {
   readonly installs: readonly InstallRecord[];
   readonly invocations: readonly InstallFreeInvocation[];
+  readonly pending: ReadonlyMap<string, readonly InstallRecord[]>;
 };
 
-const walkSteps = ({
+type WalkParallelStepsOptions = {
+  readonly cancelled: ReadonlySet<string>;
+  readonly context: ClassifyContext;
+  readonly defaults: StepDefaults;
+  readonly initial: readonly InstallRecord[];
+  readonly job: string;
+  readonly prefix: string;
+  readonly pending: Map<string, InstallRecord[]>;
+  readonly siblings: readonly unknown[];
+};
+
+type WalkParallelStepsResult = {
+  readonly installs: readonly InstallRecord[];
+  readonly invocations: readonly InstallFreeInvocation[];
+};
+
+const walkParallelSteps = ({
+  cancelled,
   context,
   defaults,
   initial,
   job,
   prefix,
+  pending,
+  siblings,
+}: WalkParallelStepsOptions): WalkParallelStepsResult => {
+  const invocations: InstallFreeInvocation[] = [];
+  const additions = mergeWorkflowParallelProofs({
+    steps: siblings,
+    installs: initial,
+    pending,
+    cancelled,
+    walk: ({
+      step,
+      installs,
+      pending: branchPending,
+      cancelled: branchCancelled,
+    }) => {
+      const branch = walkSteps({
+        cancelled: branchCancelled,
+        context,
+        defaults,
+        initial: installs,
+        job,
+        pending: branchPending,
+        prefix,
+        steps: [step],
+      });
+      invocations.push(...branch.invocations);
+      return branch.installs;
+    },
+  });
+  return { installs: additions, invocations };
+};
+
+type WalkWorkflowStepOptions = {
+  readonly context: ClassifyContext;
+  readonly defaults: StepDefaults;
+  readonly job: string;
+  readonly prefix: string;
+  readonly position: number;
+  readonly step: Record<string, unknown>;
+  readonly installs: InstallRecord[];
+  readonly pending: Map<string, InstallRecord[]>;
+};
+
+const walkWorkflowStep = ({
+  context,
+  defaults,
+  job,
+  prefix,
+  position,
+  step,
+  installs,
+  pending,
+}: WalkWorkflowStepOptions): InstallFreeInvocation[] => {
+  const invocations: InstallFreeInvocation[] = [];
+  const run = step["run"];
+  const uses = step["uses"];
+  const label = `${prefix}${stepTitle(step, position)}`;
+  const condition = conditionOperands(step["if"]);
+  const stepInstalls: InstallRecord[] = [];
+  const installStart = installs.length;
+  const covered = new Set(
+    installs
+      .filter((install) =>
+        impliesCondition({ install: install.condition, step: condition }),
+      )
+      .map((install) => install.dir),
+  );
+  if (typeof run === "string") {
+    const shell = step["shell"] ?? defaults.shell ?? "bash";
+    if (typeof shell !== "string" || !POSIX_SHELL.test(shell)) {
+      if (!covered.has("") && /\b(?:bunx?|npx)\b/u.test(run)) {
+        invocations.push({
+          classification: unclassified(
+            `runs Bun under ${typeof shell === "string" ? shell : JSON.stringify(shell)}`,
+          ),
+          command: run.trim(),
+          job,
+          step: label,
+        });
+      }
+      return invocations;
+    }
+    const result = walkCommands({
+      context,
+      cwd: stepCwd(step["working-directory"] ?? defaults.workingDirectory),
+      events: lexShell(run),
+      installed: covered,
+      mode: "step",
+    });
+    for (const { classification, command } of result.expansions) {
+      invocations.push({ classification, command, job, step: label });
+    }
+    for (const dir of result.installs) {
+      stepInstalls.push({ condition, dir });
+    }
+  } else if (typeof uses === "string" && uses.startsWith(LOCAL_ACTION)) {
+    const actionFile = ["action.yml", "action.yaml"]
+      .map((name) => path.posix.join(uses, name))
+      .find((file) => existsSync(path.join(context.root, file)));
+    if (actionFile === undefined) {
+      invocations.push({
+        classification: unclassified(`${uses} has no action.yml`),
+        command: "",
+        job,
+        step: label,
+      });
+      return invocations;
+    }
+    const action = readYaml({ file: actionFile, root: context.root });
+    const runs = isRecord(action) ? action["runs"] : undefined;
+    if (!isRecord(runs) || runs["using"] !== "composite") {
+      return invocations;
+    }
+    const inner = walkSteps({
+      context,
+      defaults: { shell: undefined, workingDirectory: undefined },
+      initial: [...covered].map((dir) => ({ condition: [], dir })),
+      job,
+      prefix: `${label} › `,
+      steps: Array.isArray(runs["steps"]) ? runs["steps"] : [],
+    });
+    invocations.push(...inner.invocations);
+    for (const install of inner.installs) {
+      if (install.condition.length === 0 && !covered.has(install.dir)) {
+        stepInstalls.push({ condition, dir: install.dir });
+      }
+    }
+  }
+  if (
+    step["continue-on-error"] === undefined ||
+    step["continue-on-error"] === false
+  ) {
+    installs.push(...stepInstalls);
+  }
+  if (typeof step["id"] === "string") {
+    for (const { dir } of stepInstalls) {
+      installs.push({
+        condition: [`steps.${step["id"]}.outcome == 'success'`],
+        dir,
+      });
+    }
+  }
+  if (step["background"] === true) {
+    const added = installs.splice(installStart);
+    if (typeof step["id"] === "string") {
+      const records = pending.get(step["id"]);
+      if (records === undefined) {
+        pending.set(step["id"], added);
+      } else {
+        records.push(...added);
+      }
+    }
+  }
+  return invocations;
+};
+
+const walkSteps = ({
+  cancelled = new Set<string>(),
+  context,
+  defaults,
+  initial,
+  job,
+  prefix,
+  pending = new Map(),
   steps,
 }: WalkStepsOptions): WalkStepsResult => {
   const invocations: InstallFreeInvocation[] = [];
@@ -1486,100 +1675,52 @@ const walkSteps = ({
     if (!isRecord(step)) {
       continue;
     }
-    const run = step["run"];
-    const uses = step["uses"];
-    const label = `${prefix}${stepTitle(step, position)}`;
-    const condition = conditionOperands(step["if"]);
-    const stepInstalls: InstallRecord[] = [];
-    const covered = new Set(
-      installs
-        .filter((install) =>
-          impliesCondition({ install: install.condition, step: condition }),
-        )
-        .map((install) => install.dir),
-    );
-    if (typeof run === "string") {
-      const shell = step["shell"] ?? defaults.shell ?? "bash";
-      if (typeof shell !== "string" || !POSIX_SHELL.test(shell)) {
-        if (!covered.has("") && /\b(?:bunx?|npx)\b/u.test(run)) {
-          invocations.push({
-            classification: unclassified(
-              `runs Bun under ${typeof shell === "string" ? shell : JSON.stringify(shell)}`,
-            ),
-            command: run.trim(),
-            job,
-            step: label,
-          });
-        }
-        continue;
-      }
-      const result = walkCommands({
-        context,
-        cwd: stepCwd(step["working-directory"] ?? defaults.workingDirectory),
-        events: lexShell(run),
-        installed: covered,
-        mode: "step",
-      });
-      for (const { classification, command } of result.expansions) {
-        invocations.push({ classification, command, job, step: label });
-      }
-      for (const dir of result.installs) {
-        stepInstalls.push({ condition, dir });
-      }
-    } else if (typeof uses === "string" && uses.startsWith(LOCAL_ACTION)) {
-      const actionFile = ["action.yml", "action.yaml"]
-        .map((name) => path.posix.join(uses, name))
-        .find((file) => existsSync(path.join(context.root, file)));
-      if (actionFile === undefined) {
+    const completed = synchronizeWorkflowBackgroundSteps(step, pending);
+    if (completed !== undefined) {
+      installs.push(...completed);
+      continue;
+    }
+    if ("parallel" in step) {
+      if (
+        Object.keys(step).some((key) => key !== "parallel") ||
+        !Array.isArray(step["parallel"])
+      ) {
         invocations.push({
-          classification: unclassified(`${uses} has no action.yml`),
+          classification: unclassified("malformed parallel workflow step"),
           command: "",
           job,
-          step: label,
+          step: `${prefix}step ${position + 1}`,
         });
         continue;
       }
-      const action = readYaml({ file: actionFile, root: context.root });
-      const runs = isRecord(action) ? action["runs"] : undefined;
-      if (!isRecord(runs) || runs["using"] !== "composite") {
-        continue;
-      }
-      const inner = walkSteps({
+      const parallel = walkParallelSteps({
+        cancelled,
         context,
-        defaults: { shell: undefined, workingDirectory: undefined },
-        initial: [...covered].map((dir) => ({ condition: [], dir })),
+        defaults,
+        initial: installs,
         job,
-        prefix: `${label} › `,
-        steps: Array.isArray(runs["steps"]) ? runs["steps"] : [],
+        prefix,
+        pending,
+        siblings: step["parallel"],
       });
-      invocations.push(...inner.invocations);
-      // Only an unconditional install inside the action is sure to run.
-      for (const install of inner.installs) {
-        if (install.condition.length === 0 && !covered.has(install.dir)) {
-          stepInstalls.push({ condition, dir: install.dir });
-        }
-      }
+      invocations.push(...parallel.invocations);
+      installs.push(...parallel.installs);
+      continue;
     }
-    // A failed optional install leaves later workflow steps executable.
-    // Expressions may permit failure too, so only literal false is trusted.
-    if (
-      step["continue-on-error"] === undefined ||
-      step["continue-on-error"] === false
-    ) {
-      installs.push(...stepInstalls);
-    }
-    // Outcome reflects failure before continue-on-error is applied; conclusion
-    // does not. Only commands already proved to install on every path qualify.
-    if (typeof step["id"] === "string") {
-      for (const { dir } of stepInstalls) {
-        installs.push({
-          condition: [`steps.${step["id"]}.outcome == 'success'`],
-          dir,
-        });
-      }
-    }
+    invocations.push(
+      ...walkWorkflowStep({
+        context,
+        defaults,
+        job,
+        prefix,
+        position,
+        step,
+        installs,
+        pending,
+      }),
+    );
   }
-  return { installs, invocations };
+  return { installs, invocations, pending };
 };
 
 const runDefaults = (owner: unknown): Record<string, unknown> => {
