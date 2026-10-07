@@ -18,10 +18,7 @@ export type OperatorActivityWeek = {
   partial: boolean;
   active_orgs: number;
   signups: number;
-  new_paying: number | null;
-  mrr: { currency: string; amount_minor: number } | null;
   activated_24h_pct: number | null;
-  trial_to_paid_pct: number | null;
   weekly_retention_pct: number | null;
 };
 
@@ -32,7 +29,6 @@ export type OperatorActivitySummary = {
   same_point_last_week: {
     active_orgs: number;
     signups: number;
-    new_paying: number | null;
   };
   unavailable_reasons: Record<string, string>;
 };
@@ -146,18 +142,6 @@ export const readAuditedActivitySummary = async (
         }
       }
       const prefix = `weeks.${weekStart}`;
-      unavailable.set(
-        `${prefix}.new_paying`,
-        "First paid subscription start history is unavailable.",
-      );
-      unavailable.set(
-        `${prefix}.mrr`,
-        "Subscription price and lifecycle history is unavailable.",
-      );
-      unavailable.set(
-        `${prefix}.trial_to_paid_pct`,
-        "Trial outcome history is unavailable.",
-      );
       if (row.activated_24h_pct === null) {
         unavailable.set(
           `${prefix}.activated_24h_pct`,
@@ -175,10 +159,7 @@ export const readAuditedActivitySummary = async (
         partial,
         active_orgs: row.active_orgs,
         signups: row.signups,
-        new_paying: null,
-        mrr: null,
         activated_24h_pct: row.activated_24h_pct,
-        trial_to_paid_pct: null,
         weekly_retention_pct: row.weekly_retention_pct,
       };
     });
@@ -195,10 +176,6 @@ export const readAuditedActivitySummary = async (
         "Operator activity comparison counts must be non-negative safe integers",
       );
     }
-    unavailable.set(
-      "same_point_last_week.new_paying",
-      "First paid subscription start history is unavailable.",
-    );
     await recordSystemAudit(tx, "system:operator-activity", {
       subject: createSafeId<"systemScriptRun">(),
       counts: { reads: 1 },
@@ -210,7 +187,6 @@ export const readAuditedActivitySummary = async (
       same_point_last_week: {
         active_orgs: samePoint.active_orgs,
         signups: samePoint.signups,
-        new_paying: null,
       },
       unavailable_reasons: Object.fromEntries(unavailable),
     };
