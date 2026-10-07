@@ -4344,9 +4344,16 @@ const checkAllowances = ({
         reason: "Explain why this increase is needed",
       };
       const quotedTemplate = JSON.stringify(template).replaceAll("'", "'\\''");
+      const otherPaths = funded?.paths.slice(1) ?? [];
+      const consolidate =
+        otherPaths.length === 0 ? "" : `rm -- ${otherPaths.join(" ")} && `;
+      const adjustment =
+        funded === undefined
+          ? `Add ${filename}`
+          : `Adjust ${funded.paths.join(", ")}, merging their funding into ${filename}`;
       errors.push(
-        `${diff.id}${file === undefined ? "" : ` (${file})`}: actual increase ${delta}, funded ${funded?.delta ?? 0} (${(funded?.delta ?? 0) > delta ? "over-funded" : "unfunded increase"}). ${funded === undefined ? "Add" : "Adjust"} ${filename} so added deltas total exactly ${delta}: ${JSON.stringify(template)}\n` +
-          `    After deciding the increase is required, run: mkdir -p ${ALLOWANCE_DIRECTORY} && printf '%s\\n' '${quotedTemplate}' > ${filename}\n` +
+        `${diff.id}${file === undefined ? "" : ` (${file})`}: actual increase ${delta}, funded ${funded?.delta ?? 0} (${(funded?.delta ?? 0) > delta ? "over-funded" : "unfunded increase"}). ${adjustment} so added deltas total exactly ${delta}: ${JSON.stringify(template)}\n` +
+          `    After deciding the increase is required, run: mkdir -p ${ALLOWANCE_DIRECTORY} && ${consolidate}printf '%s\\n' '${quotedTemplate}' > ${filename}\n` +
           "    Replace the reason with the justification, review all added deltas, then run `bun scripts/ratchet.ts --check`.",
       );
     }

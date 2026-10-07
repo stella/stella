@@ -1713,11 +1713,14 @@ const installedBunSubprocesses = (source: string): string[] => {
     }
     let cursor = index + 5;
     const literal = (token: string | undefined) => {
-      if (token === undefined || !["'", '"'].includes(token.charAt(0))) {
+      if (token === undefined || !["'", '"', "`"].includes(token.charAt(0))) {
         return undefined;
       }
       // Command names and flags need no escape sequences; reject computed forms.
-      if (token.includes("\\")) {
+      if (
+        token.includes("\\") ||
+        (token.startsWith("`") && token.includes("${"))
+      ) {
         return undefined;
       }
       return token.slice(1, -1);

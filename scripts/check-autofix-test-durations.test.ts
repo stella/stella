@@ -16,8 +16,10 @@ const existing =
 const addition = '"src/new.test.ts": { "seconds": 1.2, "source": "estimated" }';
 const original = `{ ${existing} }\n`;
 
-const validate = (updated: string, addedFiles = ["apps/api/src/new.test.ts"]) =>
-  validateAutofixTestDurations({ original, updated, addedFiles });
+const validate = (
+  updated: string,
+  addedFiles: readonly string[] = ["apps/api/src/new.test.ts"],
+) => validateAutofixTestDurations({ original, updated, addedFiles });
 
 describe("autofix API duration append-only boundary", () => {
   test("allows exactly the new PR test entries while preserving existing value bytes", () => {

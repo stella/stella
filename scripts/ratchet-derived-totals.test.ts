@@ -451,6 +451,36 @@ test("multiple added allowances must sum to the actual increase", () => {
   });
 }, 30_000);
 
+test("the adjustment command consolidates every added allowance for the metric", () => {
+  withClone((root) => {
+    write({ root, relative: FIRST, contents: casts(3) });
+    const files = [
+      "scripts/ratchet-allowances/one.json",
+      "scripts/ratchet-allowances/two.json",
+    ] as const;
+    for (const file of files) {
+      fund(root, { metric: "as-casts", delta: 1, reason: "Fixture" }, file);
+    }
+    commit(root, "split excess funding");
+    const result = check(root);
+    expect(result.code).toBe(1);
+    expect(result.output).toContain("actual increase 1, funded 2");
+    expect(result.output).toContain(
+      `Adjust ${files.join(", ")}, merging their funding into ${files[0]}`,
+    );
+    const command = result.output
+      .match(/After deciding the increase is required, run: ([^\n]+)/u)
+      ?.at(1);
+    if (command === undefined) {
+      throw new TypeError("Missing allowance adjustment command");
+    }
+    succeed(root, ["bash", "-euo", "pipefail", "-c", command]);
+    commit(root, "consolidate funding");
+    const adjusted = check(root);
+    expect(adjusted.code, adjusted.output).toBe(0);
+  });
+}, 30_000);
+
 test("an unmerged main improvement cannot change the PR funding requirement", () => {
   withClone((root) => {
     const fork = git(root, "rev-parse", "HEAD");

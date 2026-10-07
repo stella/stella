@@ -3085,11 +3085,13 @@ jobs:
           scripts/detect-e2e-changes.test.ts
           scripts/network-baseline-scope.test.ts
           scripts/autofix-workflow.test.ts
-          scripts/check-autofix-test-durations.test.ts
-          scripts/autofix-protected-paths.test.ts
           scripts/check-release-upload-retry.test.ts
           scripts/check-base-image-pulls.test.ts
           scripts/dependabot-changeset.test.ts
+
+      - name: Test autofix decision boundaries
+        if: ${{ !cancelled() && steps.checkout.outcome == 'success' && steps.install.outcome != 'failure' && steps.standalone_lockfiles.outcome != 'failure' && steps.lockfile_ages.outcome != 'failure' }}
+        run: bun test scripts/check-autofix-test-durations.test.ts scripts/autofix-protected-paths.test.ts
 
       # The fixture executes the installed linter and native compiler.
       - name: Test type-aware autofix

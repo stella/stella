@@ -940,7 +940,7 @@ describe("install-free invocation classification", () => {
     ).toEqual([]);
   });
   test("installed Bun CLIs in subprocesses require the dependency install", () => {
-    for (const launcher of ["process.execPath", '"bun"']) {
+    for (const launcher of ["process.execPath", '"bun"', "`bun`"]) {
       for (const method of ["spawn", "spawnSync"]) {
         const source = `Bun.${method}([${launcher}, "--bun", "oxlint", "changed.ts"]);`;
         const root = fixture({ "check.ts": source });
@@ -956,6 +956,18 @@ describe("install-free invocation classification", () => {
         );
         expect(importProblems({ root, entries: ["check.ts"] })).toEqual([]);
       }
+    }
+  });
+
+  test("static template CLI arguments are installed dependencies, computed templates stay unclassified", () => {
+    for (const argument of ["`oxlint`", `\`ox\${name}\``, "`ox\\lint`"]) {
+      const source = `Bun.spawnSync([process.execPath, ${argument}, "changed.ts"]);`;
+      const root = fixture({ "check.ts": source });
+      expect(importProblems({ root, entries: ["check.ts"] })).toEqual(
+        argument === "`oxlint`"
+          ? ["check.ts launches installed Bun CLI oxlint"]
+          : [],
+      );
     }
   });
 
