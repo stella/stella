@@ -15,6 +15,7 @@ const workflow = v.parse(
   v.looseObject({
     jobs: v.looseObject({
       "release-typecheck": v.looseObject({
+        "timeout-minutes": v.number(),
         steps: v.array(
           v.looseObject({
             name: v.optional(v.string()),
@@ -88,8 +89,13 @@ const assertBounded = (candidate = command) => {
   }
 };
 
-test("the release job forwards a serial task limit to Turbo and retains the subsequent repository checks", () =>
-  assertBounded());
+test("the release job forwards a serial task limit to Turbo and retains the subsequent repository checks", () => {
+  expect(
+    workflow.jobs["release-typecheck"]["timeout-minutes"],
+    "serial release typechecks retain their time budget",
+  ).toBeGreaterThanOrEqual(40);
+  assertBounded();
+});
 test("removing or increasing release concurrency, bypassing it with parallel, or dropping repository checks violates the contract", () => {
   for (const mutant of [
     command.replace(" --concurrency=1", ""),
