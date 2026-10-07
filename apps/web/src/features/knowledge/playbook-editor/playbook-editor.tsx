@@ -739,7 +739,10 @@ const PlaybookEditorForm = ({
     return () => clearNav();
   }, [host.type, playbookId, displayName, requestBack, setNavOpen, clearNav]);
 
-  const invalidIds = invalidPositionIds(positions);
+  const invalidIds = invalidPositionIds({
+    positions,
+    persistedIds: baseline.persistedIds,
+  });
   const invalidIdSet = new Set(invalidIds);
   const nameMissing = name.trim() === "";
   const errorsById = new Map(
@@ -993,7 +996,10 @@ const PlaybookEditorForm = ({
   }: SendSaveArgs): Promise<SaveOutcome> => {
     // The one place the save body is built — the same builder the dirty
     // check fingerprints, so a field can never be saved without being tracked.
-    const payload = buildPlaybookSavePayload(savedDraft);
+    const payload = buildPlaybookSavePayload({
+      draft: savedDraft,
+      persistedIds: baseline.persistedIds,
+    });
     // Each branch awaits its own Eden call and inspects `.error` before
     // touching `.data`: Eden resolves rather than throwing, so a failed
     // request reads as success anywhere the response is not checked.

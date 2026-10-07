@@ -59,7 +59,9 @@ export const positionFingerprint = (position: Position): string =>
  * A card added with "Add position" and not typed in. It is not part of the
  * playbook yet: leaving it out of the payload, the dirty check and the
  * validity check (all through `savedPositions`) lets the rest of the form
- * save while the card waits to be filled in.
+ * save while the card waits to be filled in. A position the playbook already
+ * holds is never blank in this sense: emptied, it fails validation instead
+ * of leaving the save unnoticed.
  */
 const isUntouchedBlankPosition = (position: Position): boolean => {
   const blank =
@@ -70,15 +72,33 @@ const isUntouchedBlankPosition = (position: Position): boolean => {
   );
 };
 
+type SavedPositionsArgs = {
+  positions: readonly Position[];
+  /** Ids of the positions the playbook holds, from its baseline. */
+  persistedIds: ReadonlySet<string>;
+};
+
 /** The positions a save would persist. */
-export const savedPositions = (positions: readonly Position[]): Position[] =>
-  positions.filter((position) => !isUntouchedBlankPosition(position));
+export const savedPositions = ({
+  positions,
+  persistedIds,
+}: SavedPositionsArgs): Position[] =>
+  positions.filter(
+    (position) =>
+      persistedIds.has(position.sourceId) ||
+      !isUntouchedBlankPosition(position),
+  );
 
 /** Ids of the saved positions that fail validation, in list order. */
-export const invalidPositionIds = (positions: readonly Position[]): string[] =>
-  savedPositions(positions)
+export const invalidPositionIds = (args: SavedPositionsArgs): string[] =>
+  savedPositions(args)
     .filter((position) => hasErrors(validatePosition(position)))
     .map((position) => position.sourceId);
+
+type BuildPlaybookSavePayloadArgs = {
+  draft: PlaybookDraft;
+  persistedIds: ReadonlySet<string>;
+};
 
 /**
  * The exact body the editor sends to `POST /playbooks` and
@@ -94,13 +114,16 @@ export const invalidPositionIds = (positions: readonly Position[]): string[] =>
  * to server defaults).
  */
 export const buildPlaybookSavePayload = ({
-  name,
-  description,
-  documentTypeKey,
-  perspective,
-  trigger,
-  positions,
-}: PlaybookDraft) => {
+  draft: {
+    name,
+    description,
+    documentTypeKey,
+    perspective,
+    trigger,
+    positions,
+  },
+  persistedIds,
+}: BuildPlaybookSavePayloadArgs) => {
   const trimmedDescription = description.trim();
   const resolvedTrigger = trigger ?? "manual";
   const scope =
@@ -115,7 +138,7 @@ export const buildPlaybookSavePayload = ({
         };
   const positionsPayload: PlaybookPositionsValue = {
     version: 3,
-    items: savedPositions(positions).map(normalizePosition),
+    items: savedPositions({ positions, persistedIds }).map(normalizePosition),
   };
 
   return {
@@ -131,25 +154,39 @@ export const buildPlaybookSavePayload = ({
  * because the payload assembles optional fields through conditional spreads,
  * so an unchanged draft must not look different just because a key moved.
  */
-const playbookDraftFingerprint = (draft: PlaybookDraft): string =>
-  stableStringify(buildPlaybookSavePayload(draft));
+const playbookDraftFingerprint = (args: BuildPlaybookSavePayloadArgs): string =>
+  stableStringify(buildPlaybookSavePayload(args));
 
 /**
  * The clean state a draft is compared against: the draft as last persisted
  * (or as first seeded, for a new playbook) plus its fingerprint, computed
- * once and carried together so the two can never disagree.
+ * once and carried together so the two can never disagree. `persistedIds`
+ * names the positions the playbook holds; a blank card the baseline carries
+ * (a New Playbook form's first card) is not among them.
  */
 export type PlaybookBaseline = {
   draft: PlaybookDraft;
   fingerprint: string;
+  persistedIds: ReadonlySet<string>;
 };
+
+const NO_PERSISTED_IDS: ReadonlySet<string> = new Set();
 
 export const createPlaybookBaseline = (
   draft: PlaybookDraft,
-): PlaybookBaseline => ({
-  draft,
-  fingerprint: playbookDraftFingerprint(draft),
-});
+): PlaybookBaseline => {
+  const persistedIds = new Set(
+    savedPositions({
+      positions: draft.positions,
+      persistedIds: NO_PERSISTED_IDS,
+    }).map((position) => position.sourceId),
+  );
+  return {
+    draft,
+    fingerprint: playbookDraftFingerprint({ draft, persistedIds }),
+    persistedIds,
+  };
+};
 
 /**
  * Field-wise reference equality. Strings compare by value and `positions` by
@@ -177,7 +214,12 @@ export const hasPlaybookDraftChanges = ({
   if (isSameDraftReference(baseline.draft, current)) {
     return false;
   }
-  return playbookDraftFingerprint(current) !== baseline.fingerprint;
+  return (
+    playbookDraftFingerprint({
+      draft: current,
+      persistedIds: baseline.persistedIds,
+    }) !== baseline.fingerprint
+  );
 };
 
 // ── Seeding from the cached detail ────────────────────

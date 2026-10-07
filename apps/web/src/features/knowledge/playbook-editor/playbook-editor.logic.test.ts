@@ -379,9 +379,11 @@ describe("Playbook save payload", () => {
     trigger: null,
     positions: [],
   };
+  const payloadOf = (draft: PlaybookDraft) =>
+    buildPlaybookSavePayload({ draft, persistedIds: new Set() });
 
   test("omits the scope entirely when every facet is at its default", () => {
-    const payload = buildPlaybookSavePayload(base);
+    const payload = payloadOf(base);
     expect(payload).toEqual({
       name: "NDA review",
       positions: { version: 3, items: [] },
@@ -392,7 +394,7 @@ describe("Playbook save payload", () => {
 
   test("carries perspective and trigger whenever a scope is sent", () => {
     expect(
-      buildPlaybookSavePayload({
+      payloadOf({
         ...base,
         documentTypeKey: "nda",
         perspective: "seller",
@@ -406,13 +408,11 @@ describe("Playbook save payload", () => {
   });
 
   test("sends an explicit trigger even when only the perspective is set", () => {
-    expect(buildPlaybookSavePayload({ ...base, perspective: "buyer" })).toEqual(
-      {
-        name: "NDA review",
-        scope: { perspective: "buyer", trigger: "manual" },
-        positions: { version: 3, items: [] },
-      },
-    );
+    expect(payloadOf({ ...base, perspective: "buyer" })).toEqual({
+      name: "NDA review",
+      scope: { perspective: "buyer", trigger: "manual" },
+      positions: { version: 3, items: [] },
+    });
   });
 });
 
@@ -473,12 +473,15 @@ describe("Playbook position sources", () => {
   // a playbook would delete provenance its editor never saw.
   test("a loaded playbook saves every stored source back, resolved or not", () => {
     const payload = buildPlaybookSavePayload({
-      name: "NDA review",
-      description: "",
-      documentTypeKey: null,
-      perspective: null,
-      trigger: null,
-      positions: [extract, graded],
+      draft: {
+        name: "NDA review",
+        description: "",
+        documentTypeKey: null,
+        perspective: null,
+        trigger: null,
+        positions: [extract, graded],
+      },
+      persistedIds: new Set(),
     });
     expect(payload.positions.items.map((item) => item.sources)).toEqual([
       SOURCES,
@@ -570,19 +573,24 @@ describe("An untouched blank position", () => {
     for (const blank of [newGradedPosition(), newExtractPosition()]) {
       const baseline = createPlaybookBaseline(draftWith([filled]));
       const withBlank = draftWith([filled, blank]);
-      expect(buildPlaybookSavePayload(withBlank).positions.items).toHaveLength(
-        1,
-      );
+      const { persistedIds } = baseline;
+      expect(
+        buildPlaybookSavePayload({ draft: withBlank, persistedIds }).positions
+          .items,
+      ).toHaveLength(1);
       expect(hasPlaybookDraftChanges({ baseline, current: withBlank })).toBe(
         false,
       );
-      expect(invalidPositionIds([filled, blank])).toEqual([]);
+      expect(
+        invalidPositionIds({ positions: [filled, blank], persistedIds }),
+      ).toEqual([]);
     }
   });
 
   test("joins the draft once typed in", () => {
     const typed: Position = { ...newExtractPosition(), issue: "T" };
     const baseline = createPlaybookBaseline(draftWith([filled]));
+    const { persistedIds } = baseline;
     expect(
       hasPlaybookDraftChanges({
         baseline,
@@ -591,6 +599,44 @@ describe("An untouched blank position", () => {
     ).toBe(true);
     // A graded position with an issue but no standard still needs content.
     const graded: Position = { ...newGradedPosition(), issue: "Cap" };
-    expect(invalidPositionIds([filled, graded])).toEqual([graded.sourceId]);
+    expect(
+      invalidPositionIds({ positions: [filled, graded], persistedIds }),
+    ).toEqual([graded.sourceId]);
+  });
+
+  test("a baseline's own blank card is not a persisted position", () => {
+    const blank = newGradedPosition();
+    const baseline = createPlaybookBaseline(draftWith([blank]));
+    expect(baseline.persistedIds.size).toBe(0);
+    expect(hasPlaybookDraftChanges({ baseline, current: draftWith([]) })).toBe(
+      false,
+    );
+  });
+});
+
+describe("A persisted position emptied by the user", () => {
+  const cleared: Position = { ...newExtractPosition(), issue: "Audit rights" };
+  const draftWith = (positions: Position[]): PlaybookDraft => ({
+    name: "DPA",
+    description: "",
+    documentTypeKey: null,
+    perspective: null,
+    trigger: null,
+    positions,
+  });
+  const baseline = createPlaybookBaseline(draftWith([cleared]));
+  const emptied = draftWith([{ ...cleared, issue: "" }]);
+
+  test("stays in the save and fails validation instead of being dropped", () => {
+    const { persistedIds } = baseline;
+    expect(persistedIds.has(cleared.sourceId)).toBe(true);
+    expect(
+      buildPlaybookSavePayload({ draft: emptied, persistedIds }).positions
+        .items,
+    ).toHaveLength(1);
+    expect(hasPlaybookDraftChanges({ baseline, current: emptied })).toBe(true);
+    expect(
+      invalidPositionIds({ positions: emptied.positions, persistedIds }),
+    ).toEqual([cleared.sourceId]);
   });
 });
