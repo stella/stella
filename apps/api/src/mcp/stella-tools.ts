@@ -1218,12 +1218,11 @@ export const STELLA_TOOL_DEFINITIONS = [
       `${READ_DECISION_FULL_MAX_TEXT_CHARS} chars) for reasoning or citation work; pages for skimming. ` +
       "`query` returns matching paragraphs with neighbours. Page 1 adds " +
       "details (`url` the reader, `source_url` the publisher), metadata, " +
-      "published textFields and a citation summary: citedBy count of citing " +
-      "references, polarity counts, top citers and what it cites (decisionId " +
-      "where held). citedBy.top has items and required precision: exact or " +
-      `bounded (candidateWindow: ${CASE_LAW_CITATION_SUMMARY_SCAN_LIMIT} raw incoming edges). ` +
-      "All citations: read_case_law_citations ({ decision_id: " +
-      "'<uuid>', direction: 'cited_by' }). One id gets an outline with " +
+      "published textFields and a citation summary: citedBy count, polarity " +
+      "counts, top citers (exact, or bounded: candidateWindow " +
+      `${CASE_LAW_CITATION_SUMMARY_SCAN_LIMIT} edges), what it cites (decisionId ` +
+      "where held). All citations: read_case_law_citations (direction: " +
+      "'cited_by'). One id gets an outline with " +
       "pages; outline and query entries deep-link. `include` picks fields; " +
       "[] returns text and identity only.",
     inputSchema: readCaseLawDecisionArgsSchema,
