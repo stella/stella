@@ -349,6 +349,7 @@
     },
     "view": {
       "chooseList": "Vali loend",
+      "createList": "Loo loend",
       "evidenceList": "Faktid allikast",
       "noLists": "Sellel toimikul pole ühtegi loendit.",
       "pickList": "Valige loend, mille faktide alusel selle toimiku dokumente kontrollitakse."
@@ -1700,6 +1701,7 @@
     "deletedCount": "{count, plural, one {# üksus} other {# üksust}} kustutatud",
     "description": "Kirjeldus",
     "details": "Üksikasjad",
+    "detailsHiddenFeatureUnavailable": "Üksikasjad on peidetud: funktsioon pole lubatud",
     "disconnect": "Katkesta ühendus",
     "dismiss": "Jäta kõrvale",
     "displayName": "Kuvatav nimi",

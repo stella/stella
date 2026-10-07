@@ -8,6 +8,11 @@ on:
     - cron: "17 * * * *"
   workflow_dispatch:
     inputs:
+      release_candidate:
+        description: "Validate the pending release VERSION before running this pinned gate"
+        required: false
+        type: boolean
+        default: false
       sha:
         description: Full lowercase commit SHA already on main
         required: true
@@ -37,6 +42,26 @@ jobs:
       sha: ${{ steps.ancestor.outputs.sha }}
       run: ${{ steps.selection.outputs.run }}
     steps:
+      - name: Check release candidate
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.sha != '' && inputs.release_candidate == true }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+          SERVER_URL: ${{ github.server_url }}
+          REQUESTED_SHA: ${{ inputs.sha }}
+        run: |
+          set -euo pipefail
+          directory="$RUNNER_TEMP/release-candidate-validation"
+          mkdir -p "$directory"
+          git -C "$directory" init
+          git -C "$directory" remote add origin "$SERVER_URL/$REPOSITORY.git"
+          auth=$(printf 'x-access-token:%s' "$GH_TOKEN" | base64 | tr -d '\n')
+          echo "::add-mask::$auth"
+          git -C "$directory" -c "http.extraheader=AUTHORIZATION: basic $auth" fetch --tags origin main:refs/remotes/origin/main
+          git -C "$directory" show origin/main:scripts/check-release-candidate.sh > "$RUNNER_TEMP/check-release-candidate.sh"
+          cd "$directory"
+          bash "$RUNNER_TEMP/check-release-candidate.sh" "$REQUESTED_SHA"
+
       - name: Validate merge queue depth
         env:
           MERGE_QUEUE_DEPTH: ${{ vars.MERGE_QUEUE_DEPTH }}
@@ -76,7 +101,7 @@ jobs:
               ? "Main has an untested heavy SHA; running suites."
               : "Main heavy SHA is unchanged; skipping suites.").write();
 
-      # No repository code executes before the target has been validated.
+      # Suite code only executes after the target has been validated.
       - name: Validate SHA format
         if: steps.selection.outputs.run == 'true'
         env:
@@ -143,6 +168,21 @@ jobs:
     permissions:
       statuses: write
     steps:
+      - name: Checkout GitHub API tooling
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: ${{ github.repository }}
+          ref: ${{ github.workflow_sha }}
+          path: .gh-retry
+          persist-credentials: false
+          sparse-checkout: scripts/gh-retry.sh
+          sparse-checkout-cone-mode: false
+
+      - name: Preserve GitHub API tooling across source checkouts
+        run: |
+          cp "$GITHUB_WORKSPACE/.gh-retry/scripts/gh-retry.sh" "$RUNNER_TEMP/gh-retry.sh"
+          echo "GH_RETRY_SCRIPT=$RUNNER_TEMP/gh-retry.sh" >> "$GITHUB_ENV"
+
       - name: Publish heavy conclusion
         env:
           GH_TOKEN: ${{ github.token }}
@@ -156,7 +196,7 @@ jobs:
             state=success
           fi
           if [[ -n "$SHA" ]]; then
-            gh api --method POST "repos/$REPOSITORY/statuses/$SHA" \
+            bash "$GH_RETRY_SCRIPT" api --method POST "repos/$REPOSITORY/statuses/$SHA" \
               -f context=main/heavy -f state="$state" \
               -f description="Main heavy suites: $state" -f target_url="$RUN_URL"
           fi

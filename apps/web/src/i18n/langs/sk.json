@@ -349,6 +349,7 @@
     },
     "view": {
       "chooseList": "Vybrať zoznam",
+      "createList": "Vytvoriť zoznam",
       "evidenceList": "Fakty zo zoznamu",
       "noLists": "Tento spis nemá žiadne zoznamy.",
       "pickList": "Vyberte zoznam, s ktorého faktami sa porovnávajú dokumenty tohto spisu."
@@ -1700,6 +1701,7 @@
     "deletedCount": "{count, plural, one {# položka zmazaná} few {# položky zmazané} other {# položiek zmazaných}}",
     "description": "Popis",
     "details": "Detaily",
+    "detailsHiddenFeatureUnavailable": "Podrobnosti sú skryté: funkcia nie je zapnutá",
     "disconnect": "Odpojiť",
     "dismiss": "Zamietnuť",
     "displayName": "Zobrazované meno",

@@ -349,6 +349,7 @@
     },
     "view": {
       "chooseList": "Wybierz listę",
+      "createList": "Utwórz listę",
       "evidenceList": "Fakty z listy",
       "noLists": "Ta sprawa nie ma żadnych list.",
       "pickList": "Wybierz listę, względem której faktów są weryfikowane dokumenty tej sprawy."
@@ -1700,6 +1701,7 @@
     "deletedCount": "{count, plural, one {# element usunięto} few {# elementy usunięto} many {# elementów usunięto} other {# elementów usunięto}}",
     "description": "Opis",
     "details": "Szczegóły",
+    "detailsHiddenFeatureUnavailable": "Szczegóły ukryte: funkcja nie jest włączona",
     "disconnect": "Rozłącz",
     "dismiss": "Odrzuć",
     "displayName": "Nazwa wyświetlana",

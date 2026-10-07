@@ -11,6 +11,7 @@
     "./visual-preview": "./src/visual-preview.ts",
     "./limits": "./src/limits.ts",
     "./mcp-tool-name": "./src/mcp-tool-name.ts",
+    "./audit-log": "./src/audit-log.ts",
     "./action-admission": "./src/action-admission.ts",
     "./browser-control": "./src/browser-control.ts",
     "./visual-sandbox": "./src/visual-sandbox.ts",

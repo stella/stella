@@ -745,6 +745,53 @@ const OWNERSHIP_DECLARATIONS = [
     },
   },
   {
+    id: "transaction-proof-minting",
+    capability: "Minting transaction-bound checked proofs",
+    owner: ["apps/api/src/lib/proofs/checked-transaction.ts"],
+    summary:
+      "The shared proof core names the actor, entity and transaction, runs the trusted predicate, and supplies evidence only after success. Predicate modules retain their domain checks.",
+    enforcement: {
+      kind: "import",
+      specifiers: ["@gdp-ts/core"],
+      names: ["defineProof"],
+      allowed: [],
+    },
+  },
+  {
+    id: "transaction-proof-predicates",
+    capability: "Checking facts for transaction-bound proofs",
+    owner: [
+      "apps/api/src/lib/signals/proofs/signal-visible-to.ts",
+      "apps/api/src/lib/signals/proofs/may-create-signal-request.ts",
+    ],
+    summary:
+      "Only trusted predicate modules may invoke the shared proof boundary; operation callers use their domain checking functions.",
+    enforcement: {
+      kind: "import",
+      specifiers: ["@/api/lib/proofs/checked-transaction"],
+      names: ["withCheckedTransaction"],
+      allowed: [],
+    },
+  },
+  {
+    id: "audit-detail-projection",
+    capability: "Projecting audit change details for storage and reads",
+    owner: ["apps/api/src/lib/audit-log-details.ts"],
+    summary:
+      "Audit readers share a total resource policy and principal-bound feature projection. The storage projection is confined to the audit writer; pages, exports and tools use the read projection.",
+    enforcement: {
+      kind: "import",
+      specifiers: ["@/api/lib/audit-log-details"],
+      names: ["auditChangesForResource"],
+      allowed: [
+        {
+          path: "apps/api/src/lib/audit-log.ts",
+          reason: "Applies the storage projection when recording audit events.",
+        },
+      ],
+    },
+  },
+  {
     id: "feature-access",
     capability: "Deciding caller feature admission and discovery",
     owner: [

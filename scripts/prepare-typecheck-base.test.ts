@@ -11,6 +11,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 
 const script = path.resolve(import.meta.dir, "prepare-typecheck-base.sh");
+const ghRetryScript = path.resolve(import.meta.dir, "gh-retry.sh");
 const sha = "a".repeat(40);
 
 test("base recordings require the exact main SHA and authoritative successful workflow", () => {
@@ -73,6 +74,7 @@ test("base recordings require the exact main SHA and authoritative successful wo
       const result = Bun.spawnSync(["bash", script], {
         env: {
           ...process.env,
+          GH_RETRY_SCRIPT: ghRetryScript,
           PATH: `${bin}:${process.env["PATH"] ?? ""}`,
           RUNNER_TEMP: runner,
           GITHUB_STEP_SUMMARY: summary,
@@ -153,10 +155,13 @@ case "$*" in
  *actions/artifacts/1/zip*) stage=download; response=invalid-zip ;;
  *) stage=lookup; response="$TEST_ARTIFACTS" ;;
 esac
-if [[ "$TEST_FAILURE" == "$stage" ]]; then echo 'gh: HTTP 503' >&2; exit 23; fi
+if [[ "$TEST_FAILURE" == "$stage" ]]; then echo 'gh: Service Unavailable (HTTP 503)' >&2; exit 23; fi
 if [[ "$TEST_FAILURE" == invalid-response && "$stage" == lookup ]]; then response=invalid-json; fi
 printf '%s' "$response"
 `,
+      // Retry backoff returns at once; the helper's watchdog timer keeps a real
+      // sleep, which the helper ends when the command finishes.
+      sleep: '#!/bin/bash\nif (( $1 >= 50 )); then exec /bin/sleep "$1"; fi\n',
       bun: `#!/bin/bash\nif [[ "$PWD" == "$RUNNER_TEMP/typecheck-base" ]]; then [[ -z "\${CI_GENERATED_SOURCES_MANIFEST+x}" ]] || exit 61; else [[ "$CI_GENERATED_SOURCES_MANIFEST" == "$TEST_HEAD_MANIFEST" ]] || exit 62; fi\nprintf "%s:%s\\n" "$PWD" "$*" >> "$TEST_COMMANDS"\nif [[ "$1" == scripts/typecheck-baseline.ts ]]; then exit "$TEST_MEASUREMENT_EXIT"; fi\n`,
     })) {
       const file = path.join(bin, name);
@@ -173,6 +178,7 @@ printf '%s' "$response"
     const result = Bun.spawnSync(["bash", target], {
       env: {
         ...process.env,
+        GH_RETRY_SCRIPT: ghRetryScript,
         PATH: `${bin}:${process.env["PATH"] ?? ""}`,
         RUNNER_TEMP: root,
         REPOSITORY: "example/repo",
@@ -250,7 +256,10 @@ for (const failure of [
       expect(result.stderr).toContain("::warning::Typecheck baseline:");
     }
     if (["lookup", "metadata", "download"].includes(failure)) {
-      expect(result.stderr).toContain("gh: HTTP 503");
+      expect(result.stderr).toContain(
+        "GitHub command failed: HTTP 503, attempt 4/4 (exit 23)",
+      );
+      expect(result.stderr).not.toContain("Service Unavailable");
     }
   });
 }
@@ -272,6 +281,9 @@ test("restoring a fatal recording lookup prevents the required exact-base fallba
   expect(fatal).not.toBe(source);
   const result = runFallback({ failure: "lookup", source: fatal });
   expect(result.exitCode).toBe(23);
-  expect(result.stderr).toContain("gh: HTTP 503");
+  expect(result.stderr).toContain(
+    "GitHub command failed: HTTP 503, attempt 4/4 (exit 23)",
+  );
+  expect(result.stderr).not.toContain("Service Unavailable");
   expect(result.commands).toBe("");
 });

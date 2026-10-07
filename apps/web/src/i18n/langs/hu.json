@@ -349,6 +349,7 @@
     },
     "view": {
       "chooseList": "Lista kiválasztása",
+      "createList": "Lista létrehozása",
       "evidenceList": "Tények forrása",
       "noLists": "Ehhez az ügyhöz nem tartozik lista.",
       "pickList": "Válassza ki azt a listát, amelynek tényeihez az ügy iratait viszonyítja a rendszer."
@@ -1700,6 +1701,7 @@
     "deletedCount": "{count, plural, one {# elem} other {# elem}} törölve",
     "description": "Leírás",
     "details": "Részletek",
+    "detailsHiddenFeatureUnavailable": "A részletek rejtve vannak: a funkció nincs bekapcsolva",
     "disconnect": "Leválasztás",
     "dismiss": "Elvetés",
     "displayName": "Megjelenítendő név",

@@ -41,3 +41,32 @@ test("quoted inline CSS data URLs pass and remote CSS URLs fail", () => {
     ),
   ).toContain("Non-inline style URL: div");
 });
+
+test.each([
+  "@import 'https://example.test/style.css';",
+  '@import url("https://example.test/style.css");',
+  "body{background:url(https://example.test/image.png)}",
+  'body{background:URL("/image.png")}',
+  'body{background:image-set("https://example.test/image.png" 1x)}',
+  'body{background:-webkit-image-set("https://example.test/image.png" 1x)}',
+  'body{background:image-set(url("data:image/png;base64,AA") 1x,"/image.png" 2x)}',
+  "@font-face{src:src(https://example.test/font.woff2)}",
+  // References count in any context, so these fail closed.
+  '/* @import "https://example.test/style.css"; */body{color:red}',
+  'body::before{content:"url(https://example.test/image.png)"}',
+  'body{background:image-set("data:image/png;base64,AA" 1x type("image/png"))}',
+])("stylesheets require inline references: %s", (css) => {
+  expect(inspectMcpAppHtml(`<style>${css}</style>`)).toContain(
+    "Non-inline stylesheet URL: style",
+  );
+});
+
+test.each([
+  'body{background:url("data:image/png;base64,AA")}',
+  "@font-face{src:url(data:font/woff2;base64,AA) format('woff2')}",
+  'body{background:image-set("data:image/png;base64,AA" 1x,"data:image/png;base64,BB" 2x)}',
+  "body{background:image-set(linear-gradient(red,blue) 1x)}",
+  'body::before{content:"no references here"}',
+])("inline stylesheets pass: %s", (css) => {
+  expect(inspectMcpAppHtml(`<style>${css}</style>`)).toEqual([]);
+});
