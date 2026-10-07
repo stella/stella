@@ -80,8 +80,8 @@ test("upload transport routes property discovery to reads and every lifecycle st
       }
       const body = v.parse(
         v.object({
-          id: v.optional(v.union([v.number(), v.string()])),
-          method: v.optional(v.string()),
+          id: v.exactOptional(v.union([v.number(), v.string()])),
+          method: v.exactOptional(v.string()),
           params: v.optional(v.unknown()),
         }),
         await request.json(),
