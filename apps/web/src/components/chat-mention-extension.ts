@@ -39,8 +39,6 @@ export type ChatMentionOption =
     });
 
 export type ChatReferenceCategory = ChatMentionOption["category"];
-/** Derived from valid mention branches so category/kind cannot drift. */
-export type ChatMentionKind = ChatMentionOption["kind"];
 
 export type ChatWorkspaceMentionOption = Extract<
   ChatMentionOption,

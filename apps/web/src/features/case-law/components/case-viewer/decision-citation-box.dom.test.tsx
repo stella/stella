@@ -5,7 +5,7 @@ import type { DecisionCitationSummary } from "@/features/case-law/citation-treat
 import { toSafeId } from "@/lib/safe-id";
 
 GlobalRegistrator.register({ url: "http://localhost:3000/law" });
-const { cleanup, fireEvent, render, screen, waitFor } =
+const { act, cleanup, fireEvent, render, screen, waitFor } =
   await import("@testing-library/react");
 const { QueryClient, QueryClientProvider } =
   await import("@tanstack/react-query");
@@ -34,6 +34,13 @@ afterEach(() => {
 });
 
 afterAll(async () => {
+  // The expanded box mounts ProvisionsCited, whose scheduled render work must
+  // run before the DOM globals go away.
+  await act(async () => {
+    await new Promise((resolve) => {
+      setTimeout(resolve, 0);
+    });
+  });
   await GlobalRegistrator.unregister();
 });
 

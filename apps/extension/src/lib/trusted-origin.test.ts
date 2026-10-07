@@ -25,6 +25,9 @@ describe("build-time origin list", () => {
   });
 
   test("the staging build defaults to the staging origin only", () => {
+    expect(parseTrustedOriginList(" ", "staging")).toEqual([
+      "https://staging.stll.app",
+    ]);
     expect(parseTrustedOriginList(undefined, "staging")).toEqual([
       "https://staging.stll.app",
     ]);

@@ -45,7 +45,7 @@ export const extractPdfAnonymizationText = (
 };
 
 /** A located occurrence: its offsets and the glyphs that draw it. */
-export type LocatedAnonymizationMatch = {
+type LocatedAnonymizationMatch = {
   start: number;
   end: number;
   glyphs: readonly AnonymizationGlyph[];
