@@ -295,6 +295,11 @@ test("deleted modules containing only reexports need no parser version bump", ()
     '// facade\nexport { helper as helper } from "./shared-helper";\n',
     '/* types too */\nexport type { Helper } from "./shared-helper";\nexport { helper } from "./shared-helper";\n',
     'export * from "./shared-helper";\n',
+    'export type * from "./shared-helper";\nexport { helper } from "./shared-helper";\n',
+    'export /* const local = 1 */ { helper } /* comment */ from "./shared-helper";\n',
+    'export { type Helper, helper, } from "./shared-helper";\n',
+    'export type { Helper as Renamed } from "./shared-helper";\nexport { helper } from "./shared-helper";\n',
+
     'export {\n helper,\n} from "./shared-helper"\n\n// trailing comment\n',
   ]) {
     const { base, head } = deletedFacade(source);
@@ -307,6 +312,11 @@ test("deleted reexport modules with any local code still need a bump", () => {
     "export const local = 1;",
     "const local = 1;",
     "type Local = string;",
+    "export type Local = string;",
+    "declare const local: string;",
+    "const unused = '/* export */';",
+    "export default 1;",
+
     "interface Local { value: string }",
     'import "./shared-helper";',
     "export { helper };",

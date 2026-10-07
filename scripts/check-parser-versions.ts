@@ -1,5 +1,4 @@
 import path from "node:path";
-import ts from "typescript";
 
 const REGISTRY_PATH =
   "apps/api/src/handlers/case-law/ingestion/adapters/adapter-registry.ts";
@@ -481,18 +480,37 @@ class StaticTree {
 export const sourceOwners = (files: SourceTree): SourceOwnersResult =>
   new StaticTree(files).owners();
 
-// Inspect original source: transpilation erases local type declarations, which
-// must still require a version decision when their module is deleted.
-const isReexportOnlyModule = (file: string, source: string): boolean => {
-  const tree = ts.createSourceFile(file, source, ts.ScriptTarget.Latest);
-  return tree.statements.every(
-    (statement) =>
-      ts.isExportDeclaration(statement) &&
-      statement.moduleSpecifier !== undefined &&
-      ts.isStringLiteral(statement.moduleSpecifier) &&
-      (statement.exportClause === undefined ||
-        ts.isNamedExports(statement.exportClause)),
-  );
+// Match the original source rather than transpiled output: local types and
+// unused imports can be erased, but deleting them still needs a version decision.
+const isReexportOnlyModule = (source: string): boolean => {
+  const tokenPattern =
+    /\s+|\/\/[^\r\n]*|\/\*[\s\S]*?\*\/|"(?:\\[\s\S]|[^"\\\r\n])*"|'(?:\\[\s\S]|[^'\\\r\n])*'|[$_\p{ID_Start}][$_\u200c\u200d\p{ID_Continue}]*|[{}*,;]/uy;
+  const tokens: string[] = [];
+  let offset = 0;
+  while (offset < source.length) {
+    tokenPattern.lastIndex = offset;
+    const token = tokenPattern.exec(source)?.at(0);
+    if (token === undefined) {
+      return false;
+    }
+    offset = tokenPattern.lastIndex;
+    if (
+      /^\s/u.test(token) ||
+      token.startsWith("//") ||
+      token.startsWith("/*")
+    ) {
+      continue;
+    }
+    tokens.push(
+      token.startsWith('"') || token.startsWith("'") ? '"specifier"' : token,
+    );
+  }
+  const identifier = "[$_\\p{ID_Start}][$_\\u200c\\u200d\\p{ID_Continue}]*";
+  const name = `(?:${identifier}|"specifier")`;
+  const binding = `(?:type )?${name}(?: as ${name})?`;
+  const bindings = `\\{(?: ${binding}(?: , ${binding})*(?: ,)?)? \\}`;
+  const reexport = `export (?:type )?(?:\\*|${bindings}) from "specifier"(?: ;)?`;
+  return new RegExp(`^(?:${reexport}(?: |$))*$`, "u").test(tokens.join(" "));
 };
 
 type CheckParserVersionsOptions = { base: SourceTree; head: SourceTree };
@@ -508,7 +526,7 @@ export const checkParserVersions = ({
   const errors = [...before.errors, ...after.errors];
   const deletedReexports = new Set<string>();
   for (const [file, source] of base) {
-    if (!head.has(file) && isReexportOnlyModule(file, source)) {
+    if (!head.has(file) && isReexportOnlyModule(source)) {
       deletedReexports.add(file);
     }
   }
