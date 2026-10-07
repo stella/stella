@@ -30,6 +30,45 @@ export const flattenWorkflowSteps = (
   return leaves;
 };
 
+/** Read a job structurally so adjacent YAML cannot become a step command. */
+export const workflowJobSteps = (
+  workflow: unknown,
+  jobId: string,
+): Record<string, unknown>[] => {
+  if (
+    typeof workflow !== "object" ||
+    workflow === null ||
+    !("jobs" in workflow) ||
+    typeof workflow.jobs !== "object" ||
+    workflow.jobs === null ||
+    !(jobId in workflow.jobs)
+  ) {
+    throw new WorkflowStepsInvariantError(`Missing workflow job: ${jobId}`);
+  }
+  const job: unknown = Reflect.get(workflow.jobs, jobId);
+  if (typeof job !== "object" || job === null || !("steps" in job)) {
+    throw new WorkflowStepsInvariantError(`Missing workflow steps: ${jobId}`);
+  }
+  return flattenWorkflowSteps(job.steps);
+};
+
+/** Named script extraction must fail on absent or ambiguous workflow steps. */
+export const workflowStepByName = (
+  steps: unknown,
+  name: string,
+): Record<string, unknown> => {
+  const matches = flattenWorkflowSteps(steps).filter(
+    (step) => step["name"] === name,
+  );
+  const step = matches.at(0);
+  if (matches.length !== 1 || step === undefined) {
+    throw new WorkflowStepsInvariantError(
+      `Expected one workflow step named ${name}; found ${matches.length}`,
+    );
+  }
+  return step;
+};
+
 /** Scheduling barriers have no check command; callers audit them separately. */
 export const isWorkflowBarrier = (step: Record<string, unknown>): boolean =>
   "wait" in step || "wait-all" in step || "cancel" in step;

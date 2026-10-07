@@ -7,7 +7,56 @@ import {
   flattenWorkflowSteps,
   isWorkflowBarrier,
   synchronizeWorkflowBackgroundSteps,
+  workflowJobSteps,
+  workflowStepByName,
 } from "./workflow-steps";
+
+test("named command selection survives intervening and nested workflow steps", () => {
+  assertProperty(
+    "named command selection survives intervening and nested workflow steps",
+    fc.property(
+      fc.array(fc.record({ name: fc.uuid(), run: fc.string() })),
+      fc.string(),
+      fc.integer({ min: 1, max: 5 }),
+      (neighbors, command, depth) => {
+        const selected = { name: "Selected command", run: command };
+        let grouped: unknown = [selected];
+        for (let level = 0; level < depth; level++) {
+          grouped = [{ parallel: grouped }];
+        }
+        const workflow = Bun.YAML.parse(
+          Bun.YAML.stringify({
+            jobs: {
+              fixture: {
+                steps: [...neighbors, { parallel: grouped }, ...neighbors],
+              },
+            },
+          }),
+        );
+        expect(
+          workflowStepByName(
+            workflowJobSteps(workflow, "fixture"),
+            selected.name,
+          ),
+        ).toEqual(selected);
+      },
+    ),
+  );
+});
+
+test("named command selection rejects missing or ambiguous workflow structure", () => {
+  expect(() => workflowJobSteps({}, "missing")).toThrow("Missing workflow job");
+  expect(() => workflowJobSteps({ jobs: { missing: {} } }, "missing")).toThrow(
+    "Missing workflow steps",
+  );
+  expect(() => workflowStepByName([], "missing")).toThrow("found 0");
+  expect(() =>
+    workflowStepByName(
+      [{ name: "duplicate" }, { parallel: [{ name: "duplicate" }] }],
+      "duplicate",
+    ),
+  ).toThrow("found 2");
+});
 
 test("parallel grouping preserves every leaf in execution order", () => {
   assertProperty(

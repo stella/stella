@@ -14,6 +14,7 @@ import path from "node:path";
 import { Script } from "node:vm";
 
 import { parseBunLockText } from "./bun-lock-text";
+import { workflowJobSteps, workflowStepByName } from "./workflow-steps";
 
 const script = path.join(import.meta.dirname, "detect-e2e-changes.sh");
 const githubExpression = (value: string) => ["$", "{{ ", value, " }}"].join("");
@@ -24,6 +25,10 @@ const workflow = readFileSync(
   path.join(import.meta.dirname, "../.github/workflows/ci.yml"),
   "utf-8",
 );
+const ciWorkflow = Bun.YAML.parse(workflow);
+const ciChecksRestSteps = workflowJobSteps(ciWorkflow, "ci-checks-rest");
+const ciChecksRestStep = (name: string) =>
+  workflowStepByName(ciChecksRestSteps, name);
 const nightlyWorkflow = readFileSync(
   path.join(import.meta.dirname, "../.github/workflows/nightly-test.yml"),
   "utf-8",
@@ -219,8 +224,20 @@ const stepOf = (source: string, stepName: string, indent: number): string => {
     : source.slice(bodyStart, bodyStart + nextStep);
 };
 
+const workflowStepValue = (job: string, stepName: string) => {
+  const parsed = contractRecord(Bun.YAML.parse(`job:\n${job}`));
+  const parsedJob = contractRecord(parsed["job"]);
+  return workflowStepByName(parsedJob["steps"], stepName);
+};
+
 const workflowStep = (job: string, stepName: string): string =>
-  stepOf(job, stepName, 6);
+  Object.entries(workflowStepValue(job, stepName))
+    .map(([key, value]) => {
+      const rendered =
+        typeof value === "string" ? value : Bun.YAML.stringify(value).trim();
+      return `${key}: ${rendered}`;
+    })
+    .join("\n");
 
 const actionStep = (action: string, stepName: string): string =>
   stepOf(action, stepName, 4);
@@ -230,17 +247,8 @@ const expectPullRequestAndMergeGroup = (source: string) => {
   expect(source).toContain("github.event_name == 'merge_group'");
 };
 
-const workflowStepRun = (job: string, stepName: string): string => {
-  const step = workflowStep(job, stepName);
-  const runMarker = "\n        run: ";
-  const runStart = step.indexOf(runMarker);
-  if (runStart === -1) {
-    throw new Error(`CI step ${stepName} is missing its run command`);
-  }
-  const run = step.slice(runStart + runMarker.length);
-  const runEnd = run.search(/\n(?= {0,8}\S)/u);
-  return (runEnd === -1 ? run : run.slice(0, runEnd)).trimEnd();
-};
+const workflowStepRun = (job: string, stepName: string): string =>
+  requiredExpression(workflowStepValue(job, stepName)["run"]);
 
 const detects = (
   scope: "core" | "landing" | "marketing" | "pr-core",
@@ -253,6 +261,27 @@ const detects = (
     .trim();
 
 describe("detect-e2e-changes", () => {
+  test("selects a nested parallel step without absorbing its sibling", () => {
+    const job = `    runs-on: ubuntu-latest
+    steps:
+      - parallel:
+          - name: Selected check
+            run: bun test scripts/selected.test.ts
+          - name: Neighboring check
+            run: bun test scripts/neighboring.test.ts
+`;
+
+    expect(workflowStep(job, "Selected check")).toContain(
+      "bun test scripts/selected.test.ts",
+    );
+    expect(workflowStep(job, "Selected check")).not.toContain(
+      "scripts/neighboring.test.ts",
+    );
+    expect(workflowStepRun(job, "Selected check")).toBe(
+      "bun test scripts/selected.test.ts",
+    );
+  });
+
   test("skips documentation-only changes", () => {
     expect(detects("core", ["README.md"])).toBe("false");
     expect(detects("landing", ["README.md"])).toBe("false");
@@ -436,11 +465,11 @@ describe("detect-e2e-changes", () => {
     const canaryRun = workflowStepRun(canary, "Run Vite dependency canary");
     expect(canaryRun).toBe(
       [
-        ">-",
-        '          bash "$GITHUB_WORKSPACE/.github/actions/setup-playwright/run-in-image.sh" bun --filter @stll/web test:e2e --',
-        "          e2e/specs/vite-dependency-canary.spec.ts",
-        "          --project chromium",
-      ].join("\n"),
+        'bash "$GITHUB_WORKSPACE/.github/actions/setup-playwright/run-in-image.sh"',
+        "bun --filter @stll/web test:e2e --",
+        "e2e/specs/vite-dependency-canary.spec.ts",
+        "--project chromium",
+      ].join(" "),
     );
     expect(canaryRun).not.toMatch(/--grep(?:=|\s)+["']?@dev-canary/u);
 
@@ -649,13 +678,14 @@ describe("detect-e2e-changes", () => {
   });
 
   test("revalidates release invariants on the merge queue tree", () => {
-    const ciChecks = workflowJob("ci-checks-rest");
     for (const stepName of [
       "Release changelog guard",
       "Release CLI coupling guard",
       "Release marketing staleness warning",
     ]) {
-      expectPullRequestAndMergeGroup(workflowStep(ciChecks, stepName));
+      expectPullRequestAndMergeGroup(
+        requiredExpression(ciChecksRestStep(stepName)["if"]),
+      );
     }
   });
 
@@ -689,26 +719,25 @@ describe("detect-e2e-changes", () => {
       ]),
     );
 
-    const driftGuard = workflowStep(
-      workflowJob("ci-checks-rest"),
-      "Model catalog snapshot drift check",
-    );
-    expect(driftGuard).toContain(
+    const driftGuard = ciChecksRestStep("Model catalog snapshot drift check");
+    const driftGuardCondition = requiredExpression(driftGuard["if"]);
+    const driftGuardRun = requiredExpression(driftGuard["run"]);
+    expect(driftGuardCondition).toContain(
       "needs.ci-plan.outputs.model_catalog_drift_required == 'true'",
     );
-    expect(driftGuard).toContain(
+    expect(driftGuardRun).toContain(
       "bun --filter @stll/ai-catalog gen:rates --check",
     );
-    expect(driftGuard).toContain(
+    expect(driftGuardRun).toContain(
       "bun --filter @stll/ai-catalog gen:capabilities --check",
     );
     // Path-scoped: the drift output is a required operand, never one of
     // several alternatives. The package-checks operand only ties the step to
     // the dependency install its generators import from.
-    expect(driftGuard).toMatch(
+    expect(driftGuardCondition).toMatch(
       /needs\.ci-plan\.outputs\.package_checks_required == 'true'\s*&&\s*needs\.ci-plan\.outputs\.model_catalog_drift_required == 'true'/u,
     );
-    expect(driftGuard).not.toContain("||");
+    expect(driftGuardCondition).not.toContain("||");
   });
 
   test("checks shipped product screenshots on planned releases", () => {

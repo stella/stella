@@ -9,6 +9,7 @@ import {
 } from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import * as v from "valibot";
 
 import {
   PUBLIC_VISITOR_ROUTE_DEFS,
@@ -26,6 +27,18 @@ import {
   networkBudgetDeclarationProblem,
   prepareComparisonBaseline,
 } from "./network-baseline-scope";
+import { workflowJobSteps, workflowStepByName } from "./workflow-steps";
+
+const coverageWorkflowSteps = () =>
+  workflowJobSteps(
+    Bun.YAML.parse(
+      readFileSync(
+        path.resolve(import.meta.dirname, "../.github/workflows/ci.yml"),
+        "utf-8",
+      ),
+    ),
+    "ci-checks-rest",
+  );
 
 const directory = mkdtempSync(path.join(os.tmpdir(), "network-coverage-"));
 let routeTree: string;
@@ -342,55 +355,42 @@ test("an expectation change needs a matching prepared recording", () => {
 });
 
 test("light coverage prepares through the shared action before checking under the time cap", () => {
-  const source = readFileSync(
-    path.resolve(import.meta.dirname, "../.github/workflows/ci.yml"),
-    "utf-8",
-  );
-  const job = source.split("  ci-checks-rest:")[1]?.split("  ci-tests:")[0];
-  expect(job).toBeDefined();
-  const prepare = job?.indexOf("name: Prepare route network manifest") ?? -1;
-  const coverage = job?.indexOf("name: Route network manifest coverage") ?? -1;
-  expect(prepare).toBeGreaterThan(0);
-  expect(coverage).toBeGreaterThan(prepare);
-  const restore = job?.indexOf("name: Restore route network baseline") ?? -1;
-  expect(restore).toBeGreaterThan(coverage);
-  const afterCoverage = job?.slice(coverage).split("      - name: ")[1];
-  expect(afterCoverage).toStartWith("Restore route network baseline");
-  expect(afterCoverage).toContain(
+  const steps = coverageWorkflowSteps();
+  const prepare = workflowStepByName(steps, "Prepare route network manifest");
+  const coverage = workflowStepByName(steps, "Route network manifest coverage");
+  const restore = workflowStepByName(steps, "Restore route network baseline");
+  expect(steps.indexOf(prepare)).toBeGreaterThan(0);
+  expect(steps.indexOf(coverage)).toBeGreaterThan(steps.indexOf(prepare));
+  expect(steps.indexOf(restore)).toBe(steps.indexOf(coverage) + 1);
+  expect(restore["if"]).toContain(
     "!cancelled() && steps.install.outcome == 'success'",
   );
-  expect(afterCoverage).toContain(
+  expect(restore["run"]).toContain(
     "git checkout -- apps/web/e2e/network-baseline.json",
   );
-  expect(afterCoverage).toContain("rm -f apps/web/e2e/.network-baseline-*");
-  expect(job?.slice(0, prepare)).toContain("fetch-depth: 0");
-  const steps = job?.slice(
-    prepare,
-    job.indexOf("name: Workspace hygiene", coverage),
-  );
-  expect(steps).toContain("uses: ./.github/actions/prepare-network-baseline");
-  expect(steps).toContain("timeout-minutes: 1");
-  expect(steps).toContain(
+  expect(restore["run"]).toContain("rm -f apps/web/e2e/.network-baseline-*");
+  const checkout = workflowStepByName(steps, "Checkout");
+  expect(steps.indexOf(checkout)).toBeLessThan(steps.indexOf(prepare));
+  expect(checkout["with"]).toMatchObject({ "fetch-depth": 0 });
+  expect(prepare["uses"]).toBe("./.github/actions/prepare-network-baseline");
+  expect(prepare["timeout-minutes"]).toBe(1);
+  expect(coverage["if"]).toContain(
     "steps.network_manifest_prepare.outcome == 'success'",
   );
-  expect(steps).toContain("timeout 30s bash -c");
-  expect(steps).toContain(
+  expect(coverage["run"]).toContain("timeout 30s bash -c");
+  expect(coverage["run"]).toContain(
     "--context apps/web/e2e/.network-baseline-context.json",
   );
 });
 
 test("cleanup restores the tracked baseline and removes preparation files after partial failure", () => {
-  const source = readFileSync(
-    path.resolve(import.meta.dirname, "../.github/workflows/ci.yml"),
-    "utf-8",
+  const cleanup = v.parse(
+    v.string(),
+    workflowStepByName(
+      coverageWorkflowSteps(),
+      "Restore route network baseline",
+    )["run"],
   );
-  const step = source
-    .split("      - name: Restore route network baseline\n")[1]
-    ?.split("      - name: Workspace hygiene")[0];
-  const cleanup = step?.split("        run: |\n")[1];
-  if (!cleanup) {
-    throw new Error("Missing baseline restore step");
-  }
   const repository = path.join(directory, "cleanup");
   const e2e = path.join(repository, "apps/web/e2e");
   mkdirSync(e2e, { recursive: true });
