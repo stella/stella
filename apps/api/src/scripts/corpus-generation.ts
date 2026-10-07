@@ -877,6 +877,10 @@ const CENSUS_PASSES = [
 
 type CensusPass = (typeof CENSUS_PASSES)[number]["pass"];
 
+// Annotated at the loop: `after` feeds the next call and is reassigned from
+// the page, so inference alone would be circular.
+type CensusPassPage = Awaited<ReturnType<CensusPass>>;
+
 type CensusPassOptions = {
   pass: CensusPass;
   runInTransaction: <T>(work: (tx: Transaction) => Promise<T>) => Promise<T>;
@@ -901,7 +905,7 @@ const runCensusPass = async ({
   let inspected = 0;
   for (;;) {
     // db-await-in-loop: a keyset walk; each page's cursor comes from the one before it
-    const page = await pass({
+    const page: CensusPassPage = await pass({
       runInTransaction,
       client,
       family: target.family,
