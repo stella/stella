@@ -1215,7 +1215,6 @@
   "eslint/max-params": {
     ".oxlint-plugins/no-ambient-nondeterminism.ts": 6,
     ".oxlint-plugins/require-cn-for-classname-composition.ts": 2,
-    "apps/api/src/handlers/case-law/analysis/generate.ts": 1,
     "apps/api/src/handlers/case-law/ingestion/adapters/at-courts.ts": 1,
     "apps/api/src/handlers/case-law/ingestion/adapters/cz-nss.ts": 1,
     "apps/api/src/handlers/case-law/ingestion/parsers/pl-courts.ts": 1,
