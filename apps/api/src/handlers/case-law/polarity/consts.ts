@@ -83,6 +83,60 @@ export const REVIEWABLE_POLARITIES = POLARITIES.filter(
 );
 
 /**
+ * Who produced a reviewed citation label. The list is the declaration: the
+ * CHECK constraints on `case_law_citation_reviews` derive from it.
+ */
+export const CITATION_REVIEW_ORIGINS = [
+  "human-review",
+  "ai-adjudicated",
+  "ai-annotation",
+] as const;
+
+export type CitationReviewOrigin = (typeof CITATION_REVIEW_ORIGINS)[number];
+
+export const CITATION_REVIEW_ORIGIN = {
+  HUMAN_REVIEW: "human-review",
+  AI_ADJUDICATED: "ai-adjudicated",
+  AI_ANNOTATION: "ai-annotation",
+} as const satisfies ConstantMap<CitationReviewOrigin>;
+
+/** Origins a model produced; these carry model provenance. */
+export type AiCitationReviewOrigin = Exclude<
+  CitationReviewOrigin,
+  typeof CITATION_REVIEW_ORIGIN.HUMAN_REVIEW
+>;
+
+export const AI_CITATION_REVIEW_ORIGINS = CITATION_REVIEW_ORIGINS.filter(
+  (origin): origin is AiCitationReviewOrigin =>
+    origin !== CITATION_REVIEW_ORIGIN.HUMAN_REVIEW,
+);
+
+/**
+ * Which review of one citation stands when another arrives: lower wins, and
+ * an equal rank replaces. A human review is never overwritten by a model, and
+ * an adjudication (a model asked to settle a flagged label) is never
+ * overwritten by a bulk annotation pass.
+ */
+export const CITATION_REVIEW_ORIGIN_PRECEDENCE = {
+  "human-review": 0,
+  "ai-adjudicated": 1,
+  "ai-annotation": 2,
+} as const satisfies Record<CitationReviewOrigin, number>;
+
+type CitationReviewOriginPair = {
+  stored: CitationReviewOrigin;
+  incoming: CitationReviewOrigin;
+};
+
+/** Whether a review of `incoming` origin may replace a stored one. */
+export const citationReviewMayReplace = ({
+  stored,
+  incoming,
+}: CitationReviewOriginPair): boolean =>
+  CITATION_REVIEW_ORIGIN_PRECEDENCE[incoming] <=
+  CITATION_REVIEW_ORIGIN_PRECEDENCE[stored];
+
+/**
  * Order in which competing readings are resolved: lower wins. It settles
  * which rule match labels a mention, which mention labels a citation, and
  * whether a recheck's verdict is an improvement on the stored one.
