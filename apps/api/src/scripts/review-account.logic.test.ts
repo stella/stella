@@ -1,9 +1,17 @@
 import { betterAuth } from "better-auth";
+import type { AuthContext } from "better-auth";
 import { memoryAdapter } from "better-auth/adapters/memory";
 import { twoFactor } from "better-auth/plugins";
 import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 
+import { rejectionOf } from "@stll/property-testing/rejection";
+
+import {
+  createReviewAccountDatabaseHooks,
+  createReviewAccountUserPlugin,
+} from "@/api/lib/auth/review-account-plugin";
+import { createSocialIdentityValidation } from "@/api/lib/auth/social-identity-policy";
 import {
   resetLogSinkForTesting,
   setLogSinkForTesting,
@@ -270,6 +278,17 @@ describe("reading the password", () => {
 });
 
 const createPasswordAuth = async () => {
+  const validationSources: string[] = [];
+  const reviewHooks = createReviewAccountDatabaseHooks(config, {
+    findUserEmail: async () => await Promise.resolve(undefined),
+  });
+  // The production identity validation, so provisioning meets the same
+  // Better Auth user validation as the deployed API.
+  const validate = createSocialIdentityValidation({
+    tenantId: undefined,
+    requireMicrosoftVerifiedEmailClaim: true,
+    warn: () => undefined,
+  });
   const auth = betterAuth({
     baseURL: "http://localhost:3001",
     secret: "test-secret-that-is-long-enough-for-better-auth",
@@ -281,10 +300,49 @@ const createPasswordAuth = async () => {
       twoFactor: [],
     }),
     emailAndPassword: { enabled: true, disableSignUp: true },
-    plugins: [twoFactor({ allowPasswordless: true })],
+    plugins: [
+      twoFactor({ allowPasswordless: true }),
+      createReviewAccountUserPlugin(config),
+    ],
+    databaseHooks: {
+      user: {
+        create: {
+          // The production rule that keeps requests from creating the account.
+          before: async (user, ctx) => {
+            await reviewHooks.userCreateBefore(user, ctx);
+            return undefined;
+          },
+        },
+      },
+    },
+    user: {
+      validateUserInfo: async (data, ctx) => {
+        validationSources.push(data.source.method);
+        return await validate(data, ctx);
+      },
+    },
   });
-  return { auth, context: await auth.$context };
+  const context = await auth.$context;
+  const accounts = createReviewAccountAuthStore(
+    context,
+    async (email) =>
+      (await auth.api.createReviewAccountUser({ body: { email } })).id,
+  );
+  return { auth, context, accounts, validationSources };
 };
+
+/** An account row that already exists before the command runs. */
+const seedUser = async (
+  adapter: Pick<AuthContext["adapter"], "create">,
+  user: { email: string; name: string; emailVerified: boolean } & Record<
+    string,
+    unknown
+  >,
+) =>
+  await adapter.create({
+    model: "user",
+    data: { ...user, createdAt: new Date(), updatedAt: new Date() },
+  });
 
 const signIn = async (
   auth: Awaited<ReturnType<typeof createPasswordAuth>>["auth"],
@@ -334,8 +392,8 @@ const runCommand = async ({
 
 describe("review account password command", () => {
   test("sets the password through Better Auth and ends existing sessions", async () => {
-    const { auth, context } = await createPasswordAuth();
-    const { store } = createFakeStore(createReviewAccountAuthStore(context));
+    const { auth, context, accounts } = await createPasswordAuth();
+    const { store } = createFakeStore(accounts);
 
     const provisioned = await runCommand({
       argv: ["provision"],
@@ -443,8 +501,8 @@ describe("review account password command", () => {
   });
 
   test("refuses a short password without repeating it", async () => {
-    const { context } = await createPasswordAuth();
-    const { store } = createFakeStore(createReviewAccountAuthStore(context));
+    const { accounts } = await createPasswordAuth();
+    const { store } = createFakeStore(accounts);
     await runCommand({ argv: ["provision"], input: "", store });
     const short = "x".repeat(REVIEW_PASSWORD_MIN_LENGTH - 1);
     const result = await runCommand({
@@ -459,10 +517,8 @@ describe("review account password command", () => {
   });
 
   test("refuses a password given as an argument and before provisioning", async () => {
-    const { context } = await createPasswordAuth();
-    const { store, writes } = createFakeStore(
-      createReviewAccountAuthStore(context),
-    );
+    const { accounts } = await createPasswordAuth();
+    const { store, writes } = createFakeStore(accounts);
     const asArgument = await runCommand({
       argv: ["set-password", password],
       input: "",
@@ -483,20 +539,15 @@ describe("review account password command", () => {
   });
 
   test("refuses an account with two-factor authentication enabled", async () => {
-    const { context } = await createPasswordAuth();
-    const { store, writes } = createFakeStore(
-      createReviewAccountAuthStore(context),
-    );
+    const { context, accounts } = await createPasswordAuth();
+    const { store, writes } = createFakeStore(accounts);
     // An account already enrolled before it was chosen as the review account.
-    await context.internalAdapter.createUser(
-      {
-        email: reviewEmail,
-        name: "Enrolled",
-        emailVerified: true,
-        twoFactorEnabled: true,
-      },
-      { method: "admin" },
-    );
+    await seedUser(context.adapter, {
+      email: reviewEmail,
+      name: "Enrolled",
+      emailVerified: true,
+      twoFactorEnabled: true,
+    });
     for (const argv of [["provision"], ["set-password"]]) {
       const result = await runCommand({
         argv,
@@ -519,10 +570,8 @@ describe("review account password command", () => {
   });
 
   test("refuses to set the password of an account that belongs elsewhere", async () => {
-    const { auth, context } = await createPasswordAuth();
-    const { organizations, store } = createFakeStore(
-      createReviewAccountAuthStore(context),
-    );
+    const { auth, context, accounts } = await createPasswordAuth();
+    const { organizations, store } = createFakeStore(accounts);
     await runCommand({ argv: ["provision"], input: "", store });
     await runCommand({
       argv: ["set-password"],
@@ -558,13 +607,14 @@ describe("review account password command", () => {
   });
 
   test("refuses to set the password before the account is provisioned", async () => {
-    const { context } = await createPasswordAuth();
-    const { store } = createFakeStore(createReviewAccountAuthStore(context));
+    const { context, accounts } = await createPasswordAuth();
+    const { store } = createFakeStore(accounts);
     // The account exists but is not yet the organization's owner.
-    await context.internalAdapter.createUser(
-      { email: reviewEmail, name: "Existing", emailVerified: true },
-      { method: "admin" },
-    );
+    await seedUser(context.adapter, {
+      email: reviewEmail,
+      name: "Existing",
+      emailVerified: true,
+    });
     const result = await runCommand({
       argv: ["set-password"],
       input: `${password}\n`,
@@ -572,5 +622,77 @@ describe("review account password command", () => {
     });
     expect(result.code).toBe(1);
     expect(result.err.join("")).toContain("run provision first");
+  });
+});
+
+describe("review account creation under user validation", () => {
+  test("provisions through the configured validation as an admin source", async () => {
+    const { context, validationSources, accounts } = await createPasswordAuth();
+    const { store } = createFakeStore(accounts);
+
+    const provisioned = await runCommand({
+      argv: ["provision"],
+      input: "",
+      store,
+    });
+
+    expect(provisioned.code).toBe(0);
+    expect(validationSources).toEqual(["admin"]);
+    expect(
+      (await context.internalAdapter.findUserByEmail(reviewEmail))?.user,
+    ).toMatchObject({ email: reviewEmail, emailVerified: true });
+  });
+
+  test("is not reachable over HTTP", async () => {
+    const { auth, context } = await createPasswordAuth();
+
+    const response = await auth.handler(
+      new Request("http://localhost:3001/api/auth/review-account/create-user", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ email: reviewEmail }),
+      }),
+    );
+
+    expect(response.status).toBe(404);
+    expect(
+      await context.internalAdapter.findUserByEmail(reviewEmail),
+    ).toBeNull();
+  });
+
+  test("creates only the configured review account", async () => {
+    const { auth, context } = await createPasswordAuth();
+
+    const refusal = await rejectionOf(
+      auth.api.createReviewAccountUser({
+        body: { email: "other@example.test" },
+      }),
+    );
+
+    expect(refusal).toMatchObject({
+      body: { code: "account_access_unavailable" },
+    });
+    expect(
+      await context.internalAdapter.findUserByEmail("other@example.test"),
+    ).toBeNull();
+  });
+
+  test("still refuses user creation outside an endpoint context", async () => {
+    const { context, validationSources } = await createPasswordAuth();
+
+    const refusal = await rejectionOf(
+      context.internalAdapter.createUser(
+        { email: "other@example.test", name: "Other", emailVerified: true },
+        { method: "admin" },
+      ),
+    );
+
+    expect(refusal).toMatchObject({
+      body: { code: "validation_context_missing" },
+    });
+    expect(validationSources).toEqual([]);
+    expect(
+      await context.internalAdapter.findUserByEmail("other@example.test"),
+    ).toBeNull();
   });
 });

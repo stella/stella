@@ -1,7 +1,8 @@
 import { describe, expect, test } from "bun:test";
 
-import { hasBlockInlines } from "@/api/handlers/case-law/document-ast";
-import type { Block } from "@/api/handlers/case-law/document-ast";
+import { hasBlockInlines } from "@stll/legal-ast/document-ast";
+import type { Block } from "@stll/legal-ast/document-ast";
+
 import { parseUsDecisionHtml } from "@/api/handlers/case-law/ingestion/parsers/cz-us";
 import type { ParseUsDecisionInput } from "@/api/handlers/case-law/ingestion/parsers/cz-us";
 import { markupResidueIn } from "@/api/lib/legal-search/parsers/markup-residue";

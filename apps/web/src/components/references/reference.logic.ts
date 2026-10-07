@@ -62,8 +62,6 @@ export type ChatReference =
   | { type: "skill"; slug: string; label: string }
   | { type: "user"; userId: string; label: string };
 
-export type ChatReferenceType = ChatReference["type"];
-
 /** What a source string resolved to: a reference, a reference the server
  * marked unresolvable (renders as its plain label), or not a reference. */
 export type ParsedReference =
@@ -210,17 +208,6 @@ export const referenceFromDecisionRoute = (
 ): ChatReference => ({
   type: "decision",
   locator: { type: "route", params },
-  anchorId: null,
-  label,
-});
-
-/** A decision stella holds, by its id (a publisher's URL for it, say). */
-export const referenceFromDecisionId = (
-  decisionId: string,
-  label: string,
-): ChatReference => ({
-  type: "decision",
-  locator: { type: "ref", ref: decisionId },
   anchorId: null,
   label,
 });
