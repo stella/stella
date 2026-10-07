@@ -1,5 +1,5 @@
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
-import { afterAll, describe, expect, test } from "bun:test";
+import { afterAll, describe, expect, spyOn, test } from "bun:test";
 
 GlobalRegistrator.register();
 afterAll(async () => await GlobalRegistrator.unregister());
@@ -70,5 +70,45 @@ test("kanban and other surfaces share drop target ownership", () => {
   ).toThrow(/kanban.*other surface/u);
   cleanup();
   const next = dropTargetForElements({ element, name: "other surface" });
+  next();
+});
+
+test("registration failure releases the element for another registration", () => {
+  const element = document.createElement("div");
+  const setAttribute = spyOn(element, "setAttribute").mockImplementationOnce(
+    () => {
+      throw new TypeError("Attribute registration unavailable");
+    },
+  );
+  try {
+    expect(() => dropTargetForElements({ element })).toThrow(
+      "Element registration failed",
+    );
+    expect(setAttribute).toHaveBeenCalledTimes(1);
+  } finally {
+    setAttribute.mockRestore();
+  }
+  const cleanup = dropTargetForElements({ element });
+  cleanup();
+});
+
+test("cleanup failure releases the element for another registration", () => {
+  const element = document.createElement("div");
+  const cleanup = draggable({ element });
+  const removeAttribute = spyOn(
+    element,
+    "removeAttribute",
+  ).mockImplementationOnce(() => {
+    throw new TypeError("Attribute cleanup unavailable");
+  });
+  try {
+    expect(cleanup).toThrow("Element registration cleanup failed");
+    expect(removeAttribute).toHaveBeenCalledTimes(1);
+  } finally {
+    removeAttribute.mockRestore();
+  }
+  const next = draggable({ element });
+  cleanup();
+  expect(() => draggable({ element })).toThrow(/draggable conflict/u);
   next();
 });
