@@ -137,6 +137,10 @@ import {
   reconcileReportExports,
 } from "@/api/lib/scheduler/tasks/report-export-reconcile";
 import {
+  RESET_REVIEW_ORGANIZATION_TASK,
+  resetReviewOrganizationTask,
+} from "@/api/lib/scheduler/tasks/review-organization-reset";
+import {
   DRAIN_SANCTIONS_MONITORING_TASK,
   drainSanctionsMonitoringTask,
 } from "@/api/lib/scheduler/tasks/sanctions-monitoring";
@@ -238,6 +242,8 @@ const SCHEDULER_TASKS = {
     recordMissingOrganizationAccessStatesTask,
   [RECONCILE_ORGANIZATION_FILE_RESERVATIONS_TASK]:
     reconcileOrganizationFileReservations,
+  // Ungated: its time-billing sample data admits itself on the feature.
+  [RESET_REVIEW_ORGANIZATION_TASK]: resetReviewOrganizationTask,
   [CLEAN_TEMPLATE_DELETION_OBJECTS_TASK]: cleanTemplateDeletionObjects,
   [REPAIR_FILE_DERIVATIVES_TASK]: repairFileDerivatives,
   [RECONCILE_FLOW_RUN_ORPHANS_TASK]: reconcileFlowRunOrphans,

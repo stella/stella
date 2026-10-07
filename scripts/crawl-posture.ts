@@ -80,6 +80,11 @@ const MIXED_CRAWL_BUILDER = "createPublicCrawlRules";
 
 // Source files scanned for a stray `noindex` robots meta on a public surface.
 const PUBLIC_SRC_GLOB = "**/*.{astro,html,tsx,ts,mdx,md}";
+// Parameterized scans consume app source inputs; keep their CI declaration
+// derived from the same root and pattern as the crawl-policy scan.
+export const CI_MARKDOWN_READER_INPUTS = [
+  path.join(APPS_ROOT, "*", "src", PUBLIC_SRC_GLOB),
+];
 
 // --- Violations -------------------------------------------------------------
 // A stable `code` discriminator identifies which detector fired (drives the

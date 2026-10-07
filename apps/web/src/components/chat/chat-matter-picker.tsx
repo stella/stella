@@ -216,9 +216,14 @@ export const ChatMatterPicker = ({
   // Cache hit thanks to chat-mention-providers and the app sidebar
   // — the navigation list is already in flight on any workspace
   // page.
-  const activeOrganizationId = useAuthenticatedUser().activeOrganizationId;
+  const { activeOrganizationId, id: userId } = useAuthenticatedUser();
   const workspacesView = useQueryView(
-    useQuery(workspacesNavigationOptions(activeOrganizationId)),
+    useQuery(
+      workspacesNavigationOptions({
+        organizationId: activeOrganizationId,
+        userId,
+      }),
+    ),
   );
   const workspaces =
     workspacesView.type === "items"

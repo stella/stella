@@ -444,7 +444,8 @@ const conditionTokens = (condition: string) =>
     .replaceAll(/'(?:[^']|'')*'|\s+/gu, (token) =>
       token.startsWith("'") ? token : " ",
     )
-    .trim();
+    .trim()
+    .replace(/^\$\{\{\s*([\s\S]*?)\s*\}\}$/u, "$1");
 type ScopeOptions = {
   current: Record<string, unknown>;
   base: Record<string, unknown>;
@@ -478,17 +479,26 @@ const expectScope = ({ current, base }: ScopeOptions) => {
     }
   }
   expect(migrated).toEqual(originalScope);
-  if (condition === originalCondition) {
+  // Ordinary scope comparisons supply fresh-run evidence. Completion reuse
+  // is exercised separately by the depth contract's true/false census. A
+  // merge base may already carry the completion guard, so strip it from both.
+  const freshScope = (value: unknown) => {
+    const tokens = conditionTokens(v.parse(v.string(), value));
+    return (
+      /^needs\.ci-plan\.outputs\.run_required != 'false' && \(\s*(.*?)\s*\)$/u
+        .exec(tokens)
+        ?.at(1) ?? tokens
+    );
+  };
+  const fresh = freshScope(condition);
+  const original = freshScope(originalCondition);
+  if (fresh === original || fresh === `${original} && ${PACKAGE_SCOPE}`) {
     return;
   }
-  // Heavy-only main runs skip the thin ci-checks legs. Only this wrapper
-  // may change their scope; every token of the base condition stays intact.
   const wrapped = /^inputs\.heavy_only != true && \(\s*(.*?)\s*\)$/u.exec(
-    conditionTokens(v.parse(v.string(), condition)),
+    fresh,
   );
-  expect(wrapped?.at(1)).toBe(
-    conditionTokens(v.parse(v.string(), originalCondition)),
-  );
+  expect(wrapped?.at(1)).toBe(original);
 };
 
 type CoverageOptions = {
@@ -760,6 +770,74 @@ test("CI check scope permits only the heavy-only wrapper around the unchanged co
   expect(() => expectScope({ current: missingCondition, base })).toThrow(
     "Invalid type",
   );
+});
+
+test("package scope narrows check legs while retaining baseline trust and completion gates", () => {
+  const trust =
+    "inputs.heavy_only != true && ( needs.ci-plan.outputs.trusted == 'true' || github.event_name == 'workflow_dispatch' )";
+  for (const completion of [false, true]) {
+    const wrap = (scope: string) =>
+      completion
+        ? `needs.ci-plan.outputs.run_required != 'false' && (${scope})`
+        : scope;
+    const base = {
+      if: wrap(trust),
+      needs: ["ci-plan", "ci-generated-sources"],
+    };
+    const narrowed = { ...base, if: wrap(`${trust} && ${PACKAGE_SCOPE}`) };
+    expectScope({ base, current: narrowed });
+    expectScope({ base: narrowed, current: narrowed });
+    for (const suffix of [
+      " || true",
+      " && needs.ci-plan.outputs.other == 'true'",
+      ` && ${PACKAGE_SCOPE} && needs.ci-plan.outputs.unapproved == 'true'`,
+      " && needs.ci-plan.outputs.package_checks_required != 'true'",
+    ]) {
+      expect(() =>
+        expectScope({
+          base,
+          current: { ...base, if: wrap(`${trust}${suffix}`) },
+        }),
+      ).toThrow("Expected:");
+    }
+    if (completion) {
+      for (const invalid of [
+        wrap(
+          `${trust.replace("inputs.heavy_only != true && ", "")} && ${PACKAGE_SCOPE}`,
+        ),
+      ]) {
+        expect(() =>
+          expectScope({ base, current: { ...base, if: invalid } }),
+        ).toThrow("Expected:");
+      }
+    }
+  }
+});
+
+test("fresh scope compares either completion wrapper while retaining the underlying condition", () => {
+  const trusted = "needs.ci-plan.outputs.trusted == 'true'";
+  const heavy = `inputs.heavy_only != true && (${trusted})`;
+  const completion = (scope: string) =>
+    `needs.ci-plan.outputs.run_required != 'false' && (${scope})`;
+  for (const scope of [trusted, heavy]) {
+    for (const baseScope of [scope, completion(scope)]) {
+      for (const currentScope of [scope, completion(scope)]) {
+        expectScope({ base: { if: baseScope }, current: { if: currentScope } });
+      }
+      for (const invalid of [
+        "true",
+        completion("true"),
+        completion(completion(scope)),
+        completion(scope).replace("!= 'false'", "== 'false'"),
+        completion(`${scope} && needs.ci-plan.outputs.unapproved == 'true'`),
+        ...(scope === heavy ? [trusted, completion(trusted)] : []),
+      ]) {
+        expect(() =>
+          expectScope({ base: { if: baseScope }, current: { if: invalid } }),
+        ).toThrow("Expected:");
+      }
+    }
+  }
 });
 
 test("CI check scope migrates only the complete producer handoff and preserves an existing handoff", () => {

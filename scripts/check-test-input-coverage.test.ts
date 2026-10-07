@@ -12,7 +12,16 @@ import {
   readStringLiterals,
   readTestInputs,
 } from "./check-test-input-coverage.ts";
+import { readCallArguments } from "./test-input-readers";
 import { scopeFilters } from "./test-scope.ts";
+
+test("call arguments stop at the first complete call before chained source", () => {
+  expect(
+    readCallArguments(
+      '(join("docs", directory), { mode: "read" }).scanSync({ cwd: root }); next("elsewhere.md")',
+    ),
+  ).toEqual(['join("docs", directory)', '{ mode: "read" }']);
+});
 
 const roots: string[] = [];
 

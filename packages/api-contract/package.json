@@ -14,8 +14,11 @@
     "./action-admission": "./src/action-admission.ts",
     "./browser-control": "./src/browser-control.ts",
     "./visual-sandbox": "./src/visual-sandbox.ts",
+    "./visual-bridge-policy": "./src/visual-bridge-policy.ts",
+    "./generated-visual": "./src/generated-visual.ts",
     "./browser-control-json-schema": "./src/browser-control-json-schema.ts",
     "./chat": "./src/chat.ts",
+    "./spawn-subagents": "./src/spawn-subagents.ts",
     "./correspondence": "./src/correspondence.ts",
     "./json-schema-regex": "./src/json-schema-regex.ts",
     "./chat-docx-suggestions": "./src/chat-docx-suggestions.ts",
@@ -23,7 +26,9 @@
     "./inspector-file-facet": "./src/inspector-file-facet.ts",
     "./sk-court-succession": "./src/sk-court-succession.ts",
     "./sk-court-tiers": "./src/sk-court-tiers.ts",
+    "./case-law-court-year": "./src/case-law-court-year.ts",
     "./case-law-court-tiers": "./src/case-law-court-tiers.ts",
+    "./case-law-court-tier-locales": "./src/case-law-court-tier-locales.ts",
     "./case-law-decision-types": "./src/case-law-decision-types.ts",
     "./case-law-decision-resolution": "./src/case-law-decision-resolution.ts",
     "./case-law-decision-route": "./src/case-law-decision-route.ts",
@@ -82,7 +87,8 @@
     "./desktop-presence": "./src/desktop-presence.ts",
     "./mcp-app-messages": "./src/mcp-app-messages.json",
     "./mcp-app.fixtures": "./src/mcp-app.fixtures.ts",
-    "./mcp-app-sandbox-policy": "./src/mcp-app-sandbox-policy.ts"
+    "./mcp-app-sandbox-policy": "./src/mcp-app-sandbox-policy.ts",
+    "./chat-ui-resources": "./src/chat-ui-resources.ts"
   },
   "scripts": {
     "clean": "git clean -xdf .cache .turbo node_modules",

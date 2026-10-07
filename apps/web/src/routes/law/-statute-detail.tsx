@@ -129,7 +129,11 @@ const StatuteReaderChat = ({
   }
   if (!signedIn) {
     return (
-      <LegalReaderAIChat activeLegal={activeLegal} className="h-full">
+      <LegalReaderAIChat
+        activeLegal={activeLegal}
+        aiMode="gated"
+        className="h-full"
+      >
         {children}
       </LegalReaderAIChat>
     );

@@ -1879,8 +1879,16 @@ describe("green result freshness", () => {
         readFileSync(path.join(REPO_ROOT, ".github/workflows/ci.yml"), "utf-8"),
       ) ?? [];
     const byId = new Map(jobs.map((job) => [job.id, job]));
-    expect(byId.get("ci-checks-generated")?.scope).toEqual({ type: "always" });
-    expect(byId.get("parser-version-guard")?.scope).toEqual({ type: "always" });
+    for (const job of ["ci-checks-generated", "parser-version-guard"]) {
+      expect(byId.get(job)?.scope).toEqual({
+        type: "selector",
+        variable: "package_checks_required",
+      });
+    }
+    expect(byId.get("ci-checks-docs")?.scope).toEqual({
+      type: "selector",
+      variable: "docs_checks_required",
+    });
     for (const job of [
       "e2e-production-shard",
       "marketing-screenshots",
@@ -1905,10 +1913,13 @@ describe("green result freshness", () => {
       selector: extractPlanSelector(
         readFileSync(path.join(REPO_ROOT, ".github/workflows/ci.yml"), "utf-8"),
       ),
-      files: ["docs/example.md"],
+      // This census checks output completeness. Markdown behavior has its
+      // own scope tests and need not load the reader inventory here.
+      files: ["scripts/merge-bar.ts"],
       outputs,
       cwd: REPO_ROOT,
     });
+    expect(plan.isOk(), plan.isErr() ? plan.error.message : "").toBe(true);
     expect(plan.isOk() && [...plan.value.keys()]).toEqual(outputs);
   });
 

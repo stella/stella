@@ -11,6 +11,7 @@ import Tooltip from "@/components/tooltip";
 import { env } from "@/env";
 import { useChromeQuery } from "@/hooks/use-chrome-query";
 import { useLocalStorageFlag } from "@/hooks/use-local-storage-flag";
+import { deviceStorage } from "@/lib/account/browser-storage";
 import { logDevError } from "@/lib/errors/telemetry";
 import { sanitizeHref } from "@/lib/sanitize-href";
 import { compareSemver } from "@/lib/semver-compare";
@@ -86,9 +87,7 @@ export const SelfhostUpdateBanner = () => {
   }
 
   const handleDismiss = () => {
-    if (typeof localStorage !== "undefined") {
-      localStorage.setItem(dismissedKey, "1");
-    }
+    deviceStorage("local").setItem(dismissedKey, "1");
     setDismissedVersion(latestVersion);
   };
 

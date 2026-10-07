@@ -148,6 +148,7 @@ type Messages = {
       "useBackupCode": "Use a backup code instead";
     };
     "useDifferentEmail": "Use a different email";
+    "usePassword": "Use a password instead";
     "weSentCodeTo": "We sent a code to <email>{emailAddress}</email>";
   };
   "avt": {
@@ -1052,6 +1053,7 @@ type Messages = {
       "toastDescription": "Full-page chat lands with persisted threads.";
       "toastTitle": "Full view not yet available";
     };
+    "activateGeneratedView": "Interact with this view";
     "aiPrompt": "AI message composer";
     "aiThread": "AI conversation";
     "analyzingSources": "Analyzing sources";
@@ -1197,6 +1199,8 @@ type Messages = {
     "forkedFromUnavailable": "Created from a chat that is no longer available";
     "forkedThread": "From another chat";
     "forkingThread": "Creating a new chat…";
+    "generatedView": "Generated view";
+    "generatedViewDrill": "Search decisions with court filter {court} and year {year}.";
     "greeting": "What would you like to work on?";
     "greetingSubtitle": "Start with a matter, document, or plain question.";
     "hideThread": "Hide conversation";

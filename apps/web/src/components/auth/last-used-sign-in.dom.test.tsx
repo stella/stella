@@ -56,6 +56,7 @@ const browserCookie = (read: () => string) => {
 const capabilities = {
   emailOtp: true,
   localPassword: true,
+  reviewPasswordSignIn: false,
   bootstrap: false,
   social: { google: false, microsoft: false },
 } satisfies AuthCapabilities;

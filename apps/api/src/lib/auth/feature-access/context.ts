@@ -28,6 +28,61 @@ type ResolveFeatureAccessSnapshotOptions = {
   grants?: FeatureAccessGrants;
 };
 
+type FeatureAccessIdentity = { email: string; emailVerified: boolean };
+
+type BuildFeatureAccessSnapshotOptions = {
+  organizationId: SafeId<"organization">;
+  userId: string | null;
+  /** The caller's membership identity, or null when they are not a live member. */
+  identity: FeatureAccessIdentity | null;
+  enrolments: readonly FeatureAccessEnrolment[];
+  registry?: FeatureRegistry;
+  grants?: FeatureAccessGrants;
+};
+
+type FeatureAccessEnrolment = {
+  featureId: string;
+  organizationId: string;
+  userId: string;
+};
+
+/**
+ * Decide every registered feature for one caller from identity and enrolment
+ * facts already read. The request's member lookup supplies them, so a gated
+ * route resolves feature access without a query of its own.
+ */
+export const buildFeatureAccessSnapshot = ({
+  organizationId,
+  userId,
+  identity,
+  enrolments,
+  registry = FEATURE_REGISTRY,
+  grants = env.API_FEATURE_ACCESS_GRANTS,
+}: BuildFeatureAccessSnapshotOptions): FeatureAccessSnapshot => {
+  const decisions = new Map<string, FeatureAccessDecision>();
+  for (const featureId of Object.keys(registry)) {
+    const deploymentFeature = registry[featureId]?.deploymentFeature;
+    decisions.set(
+      featureId,
+      decideFeatureAccess({
+        registry,
+        grants,
+        featureId,
+        organizationId,
+        userId,
+        user: identity,
+        membership: identity !== null,
+        enrolments,
+        // The snapshot owns the deployment switch AND the per-caller decision.
+        deploymentEnabled:
+          deploymentFeature === undefined ||
+          isDeploymentFeatureEnabled(deploymentFeature),
+      }),
+    );
+  }
+  return createFeatureAccessSnapshot({ organizationId, userId, decisions });
+};
+
 export const resolveFeatureAccessSnapshot = async ({
   tx,
   organizationId,
@@ -78,27 +133,14 @@ export const resolveFeatureAccessSnapshot = async ({
             ),
           )
           .limit(featureIds.length);
-  for (const featureId of featureIds) {
-    const deploymentFeature = registry[featureId]?.deploymentFeature;
-    decisions.set(
-      featureId,
-      decideFeatureAccess({
-        registry,
-        grants,
-        featureId,
-        organizationId,
-        userId,
-        user: identity ?? null,
-        membership: identity !== undefined,
-        enrolments,
-        // The snapshot owns the deployment switch AND the per-caller decision.
-        deploymentEnabled:
-          deploymentFeature === undefined ||
-          isDeploymentFeatureEnabled(deploymentFeature),
-      }),
-    );
-  }
-  return createFeatureAccessSnapshot({ organizationId, userId, decisions });
+  return buildFeatureAccessSnapshot({
+    organizationId,
+    userId,
+    identity: identity ?? null,
+    enrolments,
+    registry,
+    grants,
+  });
 };
 
 type ResolveFeatureAccessOptions = ResolveFeatureAccessSnapshotOptions & {

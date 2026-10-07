@@ -1,6 +1,8 @@
 export type AuthCapabilities = {
   emailOtp: boolean;
   localPassword: boolean;
+  /** Password sign-in for one configured account only: offered quietly. */
+  reviewPasswordSignIn: boolean;
   bootstrap: boolean;
   social: {
     google: boolean;
@@ -31,6 +33,10 @@ export const resolveSignInOptions = ({
     showEmailOtp: authCapabilities.emailOtp,
     showLocalPassword,
     showBootstrap: authCapabilities.bootstrap,
+    showReviewPasswordSignIn:
+      authCapabilities.reviewPasswordSignIn &&
+      !showLocalPassword &&
+      !authCapabilities.bootstrap,
     showGoogle,
     showMicrosoft,
     showSocialProviders,
