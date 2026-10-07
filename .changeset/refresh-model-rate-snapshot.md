@@ -2,4 +2,4 @@
 "@stll/ai-catalog": patch
 ---
 
-Refresh the model rate snapshot.
+Keep the model rate snapshot current, with reviewed price corrections pinned to the upstream values they replace.

@@ -240,11 +240,12 @@ export const MODEL_RATES = {
     cachedInputPerMTok: 17_500,
   },
   // models.dev: anthropic:claude-sonnet-5-5
+  // reviewed rate correction: cost.cache_read 0.1 -> 0.2 (2026-10-07: models.dev lists half the provider cache-read price; https://platform.claude.com/docs/en/models/sonnet-5-5/overview)
   "claude-sonnet-5-5": {
     kind: "flat",
     inputPerMTok: 200_000,
     outputPerMTok: 1_000_000,
-    cachedInputPerMTok: 10_000,
+    cachedInputPerMTok: 20_000,
     cachedWriteInputPerMTok: 250_000,
   },
   // models.dev: anthropic:claude-sonnet-5
