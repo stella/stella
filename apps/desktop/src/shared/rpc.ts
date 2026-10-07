@@ -1,28 +1,15 @@
-import {
-  DESKTOP_EDIT_FILE_TYPE_CONFIG,
-  isDesktopEditFileType,
-} from "@stll/api-contract";
+import { isDesktopEditFileType } from "@stll/api-contract";
 import type { AppSnapshot } from "@stll/api-contract/desktop-rpc";
 
-export const DEFAULT_STELLA_DESKTOP_BRIDGE_PORT = 45_901;
-export const DOCX_MIME_TYPE = DESKTOP_EDIT_FILE_TYPE_CONFIG.docx.mimeType;
-export const XLSX_MIME_TYPE = DESKTOP_EDIT_FILE_TYPE_CONFIG.xlsx.mimeType;
-export const PPTX_MIME_TYPE = DESKTOP_EDIT_FILE_TYPE_CONFIG.pptx.mimeType;
-export { DESKTOP_EDIT_FILE_TYPE_CONFIG as DESKTOP_EDIT_FILE_TYPES };
 export type {
   AppSnapshot,
   DesktopAccountSnapshot,
-  DesktopEditFileType,
   DesktopNotificationPreferences,
   DesktopUpdateSnapshot,
-  DesktopUpdateStatus,
-  LinkAccountRequest,
   LinkedAccountSnapshot,
-  OpenFileRemoteSession,
   OpenFileRequest,
   OpenFileResponse,
   SessionSnapshot,
-  SessionStatus,
   TrustedSelfHostConnection,
 } from "@stll/api-contract/desktop-rpc";
 
