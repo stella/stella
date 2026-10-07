@@ -2543,7 +2543,7 @@ jobs:
           BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha }}
         run: bun scripts/sql-perf-suppressions.ts
 
-      - name: Release marketing staleness warning
+      - name: Release marketing provenance warning
         if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true' && (github.event_name == 'pull_request' || github.event_name == 'merge_group')) }}
         env:
           BASE_REF: ${{ github.base_ref || 'main' }}
@@ -2552,8 +2552,8 @@ jobs:
             echo "VERSION unchanged; fresh release recordings not required."
             exit 0
           fi
-          if ! bun run marketing:stale --strict; then
-            echo "::warning::Stale marketing recordings for this release (see step log). Re-record with \`bun run marketing:reshoot\`."
+          if ! bun run marketing:provenance --strict; then
+            echo "::warning::Changed marketing recording provenance for this release (see step log). Re-record with \`bun run marketing:reshoot\`."
           fi
 
       - name: Rust format

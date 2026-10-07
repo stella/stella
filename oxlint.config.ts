@@ -1658,6 +1658,7 @@ const config = defineConfig({
       files: [
         "apps/api/src/handlers/signals/**/*.ts",
         "apps/api/src/lib/signals/**/*.ts",
+        "apps/api/src/lib/proofs/**/*.ts",
       ],
       rules: {
         "gdp-ts/no-type-assertion": "error",
@@ -1665,10 +1666,7 @@ const config = defineConfig({
       },
     },
     {
-      files: [
-        "apps/api/src/lib/signals/proofs/signal-visible-to.ts",
-        "apps/api/src/lib/signals/proofs/may-create-signal-request.ts",
-      ],
+      files: ["apps/api/src/lib/proofs/checked-transaction.ts"],
       rules: {
         "gdp-ts/no-define-proof": "off",
         "gdp-ts/no-exported-prover": "error",
