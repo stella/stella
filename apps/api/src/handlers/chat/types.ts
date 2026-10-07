@@ -1,12 +1,9 @@
 import type { TokenUsage } from "@tanstack/ai";
-import type {
-  ChatResumeSnapshot,
-  MessagePart,
-  UIMessage,
-} from "@tanstack/ai-client";
+import type { MessagePart, UIMessage } from "@tanstack/ai-client";
 import type { DocumentPart, ImagePart } from "@tanstack/ai/client";
 
 import type { ActionAdmissionRefusal } from "@stll/api-contract/action-admission";
+import type { ChatTurnResumeProbe } from "@stll/chat/resume-contract";
 import type { FolioAgentToolName } from "@stll/folio-agents";
 import type {
   FolioAgentToolInputByName,
@@ -160,7 +157,9 @@ export type ChatMessageMetadata = {
   refContext?: ChatRefContext | undefined;
   /** Server-owned native interrupt identity, retained with the transcript
    * after the delivery log expires. Incoming metadata cannot set this. */
-  resumeSnapshot?: ChatResumeSnapshot | undefined;
+  resumeSnapshot?:
+    | Extract<ChatTurnResumeProbe, { type: "transcript" }>["resumeSnapshot"]
+    | undefined;
   /** Server-owned provenance. Incoming client metadata validation deliberately
    *  does not accept this field. */
   serverProvenance?:

@@ -5,7 +5,7 @@ import * as v from "valibot";
 /** Keep native interrupt validation tied to the protocol's owning schema. */
 export const chatResumeSnapshotSchema = v.object({
   resumeState: v.object({ threadId: v.string(), runId: v.string() }),
-  pendingInterrupts: v.optional(
+  pendingInterrupts: v.exactOptional(
     v.array(
       v.custom<Interrupt>((value) => InterruptSchema.safeParse(value).success),
     ),
@@ -23,7 +23,7 @@ export const chatTurnResumeProbeSchema = v.variant("type", [
   v.object({
     type: v.literal("transcript"),
     turnId: v.string(),
-    resumeSnapshot: v.optional(chatResumeSnapshotSchema),
+    resumeSnapshot: v.exactOptional(chatResumeSnapshotSchema),
   }),
 ]);
 export type ChatTurnResumeProbe = v.InferOutput<

@@ -59,6 +59,7 @@ const setup = (cut?: number) => {
     { preconnect: () => undefined },
   );
   const transport = createDurableChatTransport({
+    initialTurn: "settled",
     threadId: THREAD_ID,
     initialMessages: [],
     sendUrl: "https://chat.test/chat",
@@ -148,6 +149,7 @@ describe("durable chat transport", () => {
     let requests = 0;
     let reloads = 0;
     const transport = createDurableChatTransport({
+      initialTurn: "settled",
       threadId: THREAD_ID,
       initialMessages: [],
       sendUrl: "https://chat.test/chat",
@@ -180,6 +182,7 @@ describe("durable chat transport", () => {
     let probes = 0;
     const delays: number[] = [];
     const transport = createDurableChatTransport({
+      initialTurn: "settled",
       threadId: THREAD_ID,
       initialMessages: [],
       sendUrl: "https://chat.test/chat",
@@ -223,6 +226,7 @@ describe("durable chat transport", () => {
       ],
     };
     const transport = createDurableChatTransport({
+      initialTurn: "settled",
       threadId: THREAD_ID,
       initialMessages: [],
       sendUrl: "https://chat.test/chat",
@@ -281,6 +285,7 @@ describe("durable chat transport", () => {
       ],
     };
     const transport = createDurableChatTransport({
+      initialTurn: "settled",
       threadId: THREAD_ID,
       initialMessages: [
         {
@@ -293,7 +298,6 @@ describe("durable chat transport", () => {
               name: "save-draft",
               arguments: '{"title":"Confidentiality terms"}',
               state: "approval-requested",
-              approval: { id: "approval_call-approval", needsApproval: true },
             },
           ],
         },
@@ -302,7 +306,10 @@ describe("durable chat transport", () => {
       joinUrl: () => "https://chat.test/join",
       fetchClient: Object.assign(
         async (_input: RequestInfo | URL, init?: RequestInit) => {
-          const body: unknown = JSON.parse(String(init?.body));
+          if (typeof init?.body !== "string") {
+            throw new TypeError("Expected a JSON request body");
+          }
+          const body: unknown = JSON.parse(init.body);
           requests.push(body);
           return response(0, undefined);
         },
@@ -394,6 +401,7 @@ describe("durable chat transport", () => {
     const errors: Error[] = [];
     let reloads = 0;
     const transport = createDurableChatTransport({
+      initialTurn: "settled",
       threadId: THREAD_ID,
       initialMessages: [],
       sendUrl: "https://chat.test/chat",
@@ -422,5 +430,37 @@ describe("durable chat transport", () => {
     });
     expect(errors.at(0)?.message).toBe("Invalid chat rejoin response.");
     expect(reloads).toBe(0);
+  });
+  test("a loader turn that settles before its first probe refreshes the transcript once", async () => {
+    for (const initialTurn of ["active", "settled"] as const) {
+      let reloads = 0;
+      const transport = createDurableChatTransport({
+        initialTurn,
+        threadId: THREAD_ID,
+        initialMessages: [
+          {
+            id: "partial",
+            role: "assistant",
+            parts: [{ type: "text", content: "Drafting" }],
+          },
+        ],
+        sendUrl: "https://chat.test/chat",
+        joinUrl: () => "https://chat.test/join",
+        fetchClient: Object.assign(async () => response(0, undefined), {
+          preconnect: () => undefined,
+        }),
+        probe: async () => ({ type: "transcript", turnId: "turn-rejoin" }),
+        onReconnectChange: () => undefined,
+        onTranscript: () => {
+          reloads += 1;
+        },
+        onError: (error) => {
+          throw error;
+        },
+      });
+      await transport.persistence.getItem(THREAD_ID);
+      await transport.persistence.getItem(THREAD_ID);
+      expect(reloads).toBe(initialTurn === "active" ? 1 : 0);
+    }
   });
 });

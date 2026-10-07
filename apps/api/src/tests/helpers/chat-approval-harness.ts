@@ -1279,7 +1279,7 @@ export const createApprovalHarness = ({
             turnId: toSafeId<"chatTurn">(resume["turnId"]),
           },
           query: Object.fromEntries(url.searchParams),
-          request: new Request(url, init),
+          request: new Request(url.toString(), init),
           route: `/v1/chat/threads/:threadId/turns/:turnId/${resume["delivery"]}`,
           safeDb,
           scopedDb,

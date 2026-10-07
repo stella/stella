@@ -15,6 +15,7 @@ import {
 import {
   CHAT_CONTINUATION_REJECTED_ERROR_CODE,
   CHAT_TURN_INTENT,
+  CHAT_TURN_ID_HEADER,
 } from "@stll/api-contract";
 import {
   ACTION_ADMISSION_CODES,
@@ -1129,20 +1130,36 @@ describe("chat runtime", () => {
 
   test("latches an explicitly stopped turn until authoritative hydration", async () => {
     const threadId = toChatThreadId("thread-stopped");
-    globalThis.fetch = createFetchMock(
-      async (_input, init) =>
-        await new Promise<Response>((_resolve, reject) => {
-          init?.signal?.addEventListener(
-            "abort",
-            () => {
-              const error = new Error("aborted");
-              error.name = "AbortError";
-              reject(error);
-            },
-            { once: true },
-          );
+    const accepted = Promise.withResolvers<undefined>();
+    globalThis.fetch = createFetchMock(async (_input, init) => {
+      if (init?.method === "POST" && String(_input).endsWith("/cancel")) {
+        return Response.json({
+          turn: {
+            id: "018f0000-0000-7000-8000-00000000000a",
+            reason: "user-stop",
+            status: "cancelled",
+          },
+        });
+      }
+      await accepted.promise;
+      return new Response(
+        new ReadableStream({
+          start(controller) {
+            init?.signal?.addEventListener(
+              "abort",
+              () => controller.error(new DOMException("Aborted", "AbortError")),
+              { once: true },
+            );
+          },
         }),
-    );
+        {
+          headers: {
+            "Content-Type": "text/event-stream",
+            [CHAT_TURN_ID_HEADER]: "018f0000-0000-7000-8000-00000000000a",
+          },
+        },
+      );
+    });
     const runtime = createChatRuntime({
       activeTurnId: null,
       context: undefined,
@@ -1161,11 +1178,13 @@ describe("chat runtime", () => {
 
     runtime.stop();
 
+    expect(runtime.getSnapshot().turnAbandoned).toBe(true);
+    accepted.resolve(undefined);
+    await stream;
     expect(runtime.getSnapshot()).toMatchObject({
       status: "ready",
       turnAbandoned: true,
     });
-    await stream;
   });
 
   test("exposes progressive create-document source from partial arguments", async () => {
@@ -2627,13 +2646,11 @@ describe("chat runtime", () => {
                 part.state === "input-complete",
             ),
           );
-      const toolCallShown = new Promise<void>((resolve) => {
-        const unsubscribe = runtime.subscribe(() => {
-          if (hasCompleteToolCall()) {
-            unsubscribe();
-            resolve();
-          }
-        });
+      const toolCallShown = Promise.withResolvers<undefined>();
+      const unsubscribe = runtime.subscribe(() => {
+        if (hasCompleteToolCall()) {
+          toolCallShown.resolve(undefined);
+        }
       });
       const sent = sendThreadChatMessage(
         runtime,
@@ -2650,7 +2667,7 @@ describe("chat runtime", () => {
         toolCall: answerCase.toolCall,
       });
       pushFirstStream(chunks.filter((chunk) => chunk.type !== "RUN_FINISHED"));
-      await toolCallShown;
+      await toolCallShown.promise;
       // The answer leaves while the run that asked is still open, and before
       // the page has seen the interrupt it resolves.
       expect(runtime.getSnapshot().isLoading).toBe(true);
@@ -2664,6 +2681,7 @@ describe("chat runtime", () => {
       await sent;
       await answered;
       await continuationRequested;
+      unsubscribe();
 
       expect(requests).toHaveLength(2);
       expect(requests.at(1)).toMatchObject({

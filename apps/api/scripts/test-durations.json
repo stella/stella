@@ -4675,6 +4675,10 @@
     "seconds": 7.8,
     "source": "measured"
   },
+  "src/lib/chat/run-log.postgres.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
   "src/lib/chat/tanstack-chat-runtime.test.ts": {
     "seconds": 0.166689,
     "source": "estimated"

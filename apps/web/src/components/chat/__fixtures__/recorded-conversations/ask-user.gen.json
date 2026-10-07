@@ -417,7 +417,7 @@
           },
           "ended": "complete",
           "response": {
-            "body": "data: {\"type\":\"RUN_STARTED\",\"runId\":\"run-recorded-1\",\"threadId\":\"00000000-0000-7000-8000-000000000002\",\"timestamp\":1767225618000,\"metadata\":{\"tanstack\":{\"model\":\"scripted\"}}}\n\ndata: {\"type\":\"TEXT_MESSAGE_START\",\"messageId\":\"00000000-0000-7000-8000-000000000003\",\"role\":\"assistant\",\"timestamp\":1767225619000}\n\ndata: {\"type\":\"TOOL_CALL_START\",\"toolCallId\":\"call-1\",\"toolCallName\":\"ask-user\",\"parentMessageId\":\"00000000-0000-7000-8000-000000000003\",\"timestamp\":1767225620000,\"metadata\":{\"stellaStepId\":\"call-1\"}}\n\ndata: {\"type\":\"TOOL_CALL_ARGS\",\"toolCallId\":\"call-1\",\"delta\":\"{\\\"analysis\\\":\\\"The draft depends on the side the user represents.\\\",\\\"questions\\\":[{\\\"question\\\":\\\"Which side?\\\",\\\"reason\\\":\\\"It decides the draft.\\\",\\\"default\\\":null,\\\"options\\\":null}]}\",\"timestamp\":1767225621000}\n\ndata: {\"type\":\"TOOL_CALL_END\",\"toolCallId\":\"call-1\",\"timestamp\":1767225622000,\"metadata\":{\"tanstack\":{\"input\":{\"analysis\":\"The draft depends on the side the user represents.\",\"questions\":[{\"question\":\"Which side?\",\"reason\":\"It decides the draft.\"}]},\"toolCallName\":\"ask-user\",\"toolName\":\"ask-user\"}}}\n\ndata: {\"type\":\"MESSAGES_SNAPSHOT\",\"timestamp\":1767225623000,\"messages\":[{\"createdAt\":\"2026-01-01T00:00:04.000Z\",\"id\":\"00000000-0000-7000-8000-000000000001\",\"role\":\"user\",\"parts\":[{\"type\":\"text\",\"content\":\"Draft the NDA\"}],\"content\":\"\"},{\"id\":\"00000000-0000-7000-8000-000000000003\",\"metadata\":{\"tanstack\":{\"createdAt\":\"2026-01-01T00:00:05.000Z\",\"toolCallMetadata\":{\"call-1\":{\"stellaStepId\":\"call-1\"}}}},\"role\":\"assistant\",\"toolCalls\":[{\"id\":\"call-1\",\"type\":\"function\",\"function\":{\"name\":\"ask-user\",\"arguments\":\"{\\\"analysis\\\":\\\"The draft depends on the side the user represents.\\\",\\\"questions\\\":[{\\\"question\\\":\\\"Which side?\\\",\\\"reason\\\":\\\"It decides the draft.\\\"}]}\"}}]}]}\n\ndata: {\"type\":\"RUN_FINISHED\",\"runId\":\"run-recorded-1\",\"threadId\":\"00000000-0000-7000-8000-000000000002\",\"timestamp\":1767225624000,\"usage\":[{\"inputTokens\":1,\"outputTokens\":1,\"totalTokens\":2}],\"outcome\":{\"type\":\"interrupt\",\"interrupts\":[{\"id\":\"client_tool_call-1\",\"reason\":\"tanstack:client_tool_execution\",\"message\":\"Client tool ask-user is ready to run\",\"toolCallId\":\"call-1\",\"responseSchema\":{\"type\":\"object\",\"properties\":{\"answers\":{\"type\":\"array\",\"items\":{\"type\":\"object\",\"properties\":{\"question\":{\"type\":\"string\"},\"answer\":{\"type\":\"string\"}},\"required\":[\"question\",\"answer\"],\"additionalProperties\":false}}},\"required\":[\"answers\"],\"additionalProperties\":false},\"metadata\":{\"kind\":\"client_tool\",\"toolName\":\"ask-user\",\"input\":{\"analysis\":\"The draft depends on the side the user represents.\",\"questions\":[{\"question\":\"Which side?\",\"reason\":\"It decides the draft.\"}]},\"tanstack:interruptBinding\":{\"v\":1,\"kind\":\"client-tool-execution\",\"interruptId\":\"client_tool_call-1\",\"toolName\":\"ask-user\",\"toolCallId\":\"call-1\",\"outputSchemaHash\":\"sha256:c3fb68b4f783f756acb0d81953fe82af1dc624d038fb46620dd033dc445562ed\",\"responseSchemaHash\":\"sha256:c3fb68b4f783f756acb0d81953fe82af1dc624d038fb46620dd033dc445562ed\",\"interruptedRunId\":\"run-recorded-1\",\"generation\":0}}}]},\"metadata\":{\"tanstack\":{\"model\":\"scripted\",\"finishReason\":\"tool_calls\"}}}\n\n",
+            "body": "id: 1\ndata: {\"type\":\"CUSTOM\",\"name\":\"run.accepted\",\"value\":{},\"timestamp\":1767225618000}\n\nid: 2\ndata: {\"type\":\"RUN_STARTED\",\"runId\":\"run-recorded-1\",\"threadId\":\"00000000-0000-7000-8000-000000000002\",\"timestamp\":1767225619000,\"metadata\":{\"tanstack\":{\"model\":\"scripted\"}}}\n\nid: 3\ndata: {\"type\":\"TEXT_MESSAGE_START\",\"messageId\":\"00000000-0000-7000-8000-000000000003\",\"role\":\"assistant\",\"timestamp\":1767225620000}\n\nid: 4\ndata: {\"type\":\"TOOL_CALL_START\",\"toolCallId\":\"call-1\",\"toolCallName\":\"ask-user\",\"parentMessageId\":\"00000000-0000-7000-8000-000000000003\",\"timestamp\":1767225621000,\"metadata\":{\"stellaStepId\":\"call-1\"}}\n\nid: 5\ndata: {\"type\":\"TOOL_CALL_ARGS\",\"toolCallId\":\"call-1\",\"delta\":\"{\\\"analysis\\\":\\\"The draft depends on the side the user represents.\\\",\\\"questions\\\":[{\\\"question\\\":\\\"Which side?\\\",\\\"reason\\\":\\\"It decides the draft.\\\",\\\"default\\\":null,\\\"options\\\":null}]}\",\"timestamp\":1767225622000}\n\nid: 6\ndata: {\"type\":\"TOOL_CALL_END\",\"toolCallId\":\"call-1\",\"timestamp\":1767225623000,\"metadata\":{\"tanstack\":{\"input\":{\"analysis\":\"The draft depends on the side the user represents.\",\"questions\":[{\"question\":\"Which side?\",\"reason\":\"It decides the draft.\"}]},\"toolCallName\":\"ask-user\",\"toolName\":\"ask-user\"}}}\n\nid: 7\ndata: {\"type\":\"MESSAGES_SNAPSHOT\",\"timestamp\":1767225624000,\"messages\":[{\"createdAt\":\"2026-01-01T00:00:04.000Z\",\"id\":\"00000000-0000-7000-8000-000000000001\",\"role\":\"user\",\"parts\":[{\"type\":\"text\",\"content\":\"Draft the NDA\"}],\"content\":\"\"},{\"id\":\"00000000-0000-7000-8000-000000000003\",\"metadata\":{\"tanstack\":{\"createdAt\":\"2026-01-01T00:00:05.000Z\",\"toolCallMetadata\":{\"call-1\":{\"stellaStepId\":\"call-1\"}}}},\"role\":\"assistant\",\"toolCalls\":[{\"id\":\"call-1\",\"type\":\"function\",\"function\":{\"name\":\"ask-user\",\"arguments\":\"{\\\"analysis\\\":\\\"The draft depends on the side the user represents.\\\",\\\"questions\\\":[{\\\"question\\\":\\\"Which side?\\\",\\\"reason\\\":\\\"It decides the draft.\\\"}]}\"}}]}]}\n\nid: 8\ndata: {\"type\":\"RUN_FINISHED\",\"runId\":\"run-recorded-1\",\"threadId\":\"00000000-0000-7000-8000-000000000002\",\"timestamp\":1767225625000,\"usage\":[{\"inputTokens\":1,\"outputTokens\":1,\"totalTokens\":2}],\"outcome\":{\"type\":\"interrupt\",\"interrupts\":[{\"id\":\"client_tool_call-1\",\"reason\":\"tanstack:client_tool_execution\",\"message\":\"Client tool ask-user is ready to run\",\"toolCallId\":\"call-1\",\"responseSchema\":{\"type\":\"object\",\"properties\":{\"answers\":{\"type\":\"array\",\"items\":{\"type\":\"object\",\"properties\":{\"question\":{\"type\":\"string\"},\"answer\":{\"type\":\"string\"}},\"required\":[\"question\",\"answer\"],\"additionalProperties\":false}}},\"required\":[\"answers\"],\"additionalProperties\":false},\"metadata\":{\"kind\":\"client_tool\",\"toolName\":\"ask-user\",\"input\":{\"analysis\":\"The draft depends on the side the user represents.\",\"questions\":[{\"question\":\"Which side?\",\"reason\":\"It decides the draft.\"}]},\"tanstack:interruptBinding\":{\"v\":1,\"kind\":\"client-tool-execution\",\"interruptId\":\"client_tool_call-1\",\"toolName\":\"ask-user\",\"toolCallId\":\"call-1\",\"outputSchemaHash\":\"sha256:c3fb68b4f783f756acb0d81953fe82af1dc624d038fb46620dd033dc445562ed\",\"responseSchemaHash\":\"sha256:c3fb68b4f783f756acb0d81953fe82af1dc624d038fb46620dd033dc445562ed\",\"interruptedRunId\":\"run-recorded-1\",\"generation\":0}}}]},\"metadata\":{\"tanstack\":{\"model\":\"scripted\",\"finishReason\":\"tool_calls\"}}}\n\n",
             "status": 200
           },
           "page": {
@@ -457,6 +457,72 @@
                       "type": "ask-user",
                       "toolCallId": "call-1"
                     }
+                  },
+                  "resumeSnapshot": {
+                    "resumeState": {
+                      "runId": "run-recorded-1",
+                      "threadId": "00000000-0000-7000-8000-000000000002"
+                    },
+                    "pendingInterrupts": [
+                      {
+                        "id": "client_tool_call-1",
+                        "reason": "tanstack:client_tool_execution",
+                        "message": "Client tool ask-user is ready to run",
+                        "metadata": {
+                          "kind": "client_tool",
+                          "input": {
+                            "analysis": "The draft depends on the side the user represents.",
+                            "questions": [
+                              {
+                                "reason": "It decides the draft.",
+                                "question": "Which side?"
+                              }
+                            ]
+                          },
+                          "toolName": "ask-user",
+                          "tanstack:interruptBinding": {
+                            "v": 1,
+                            "kind": "client-tool-execution",
+                            "toolName": "ask-user",
+                            "generation": 0,
+                            "toolCallId": "call-1",
+                            "interruptId": "client_tool_call-1",
+                            "interruptedRunId": "run-recorded-1",
+                            "outputSchemaHash": "sha256:c3fb68b4f783f756acb0d81953fe82af1dc624d038fb46620dd033dc445562ed",
+                            "responseSchemaHash": "sha256:c3fb68b4f783f756acb0d81953fe82af1dc624d038fb46620dd033dc445562ed"
+                          }
+                        },
+                        "toolCallId": "call-1",
+                        "responseSchema": {
+                          "type": "object",
+                          "required": [
+                            "answers"
+                          ],
+                          "properties": {
+                            "answers": {
+                              "type": "array",
+                              "items": {
+                                "type": "object",
+                                "required": [
+                                  "question",
+                                  "answer"
+                                ],
+                                "properties": {
+                                  "answer": {
+                                    "type": "string"
+                                  },
+                                  "question": {
+                                    "type": "string"
+                                  }
+                                },
+                                "additionalProperties": false
+                              }
+                            }
+                          },
+                          "additionalProperties": false
+                        }
+                      }
+                    ]
                   }
                 },
                 "role": "assistant",
@@ -1057,7 +1123,7 @@
           },
           "ended": "complete",
           "response": {
-            "body": "data: {\"type\":\"RUN_STARTED\",\"runId\":\"run-recorded-2\",\"threadId\":\"00000000-0000-7000-8000-000000000002\",\"timestamp\":1767225625000,\"metadata\":{\"tanstack\":{\"model\":\"scripted\"}}}\n\ndata: {\"type\":\"TEXT_MESSAGE_START\",\"messageId\":\"00000000-0000-7000-8000-000000000003\",\"role\":\"assistant\",\"timestamp\":1767225626000,\"metadata\":{\"tanstack\":{\"model\":\"scripted\"}}}\n\ndata: {\"type\":\"TEXT_MESSAGE_CONTENT\",\"messageId\":\"00000000-0000-7000-8000-000000000003\",\"delta\":\"Drafted\",\"timestamp\":1767225627000}\n\ndata: {\"type\":\"TEXT_MESSAGE_END\",\"messageId\":\"00000000-0000-7000-8000-000000000003\",\"timestamp\":1767225628000,\"metadata\":{\"tanstack\":{\"model\":\"scripted\"}}}\n\ndata: {\"type\":\"RUN_FINISHED\",\"runId\":\"run-recorded-2\",\"threadId\":\"00000000-0000-7000-8000-000000000002\",\"timestamp\":1767225629000,\"usage\":[{\"inputTokens\":1,\"outputTokens\":1,\"totalTokens\":2}],\"metadata\":{\"tanstack\":{\"model\":\"scripted\",\"finishReason\":\"stop\"}}}\n\n",
+            "body": "id: 1\ndata: {\"type\":\"CUSTOM\",\"name\":\"run.accepted\",\"value\":{},\"timestamp\":1767225626000}\n\nid: 2\ndata: {\"type\":\"RUN_STARTED\",\"runId\":\"run-recorded-2\",\"threadId\":\"00000000-0000-7000-8000-000000000002\",\"timestamp\":1767225627000,\"metadata\":{\"tanstack\":{\"model\":\"scripted\"}}}\n\nid: 3\ndata: {\"type\":\"TEXT_MESSAGE_START\",\"messageId\":\"00000000-0000-7000-8000-000000000003\",\"role\":\"assistant\",\"timestamp\":1767225628000,\"metadata\":{\"tanstack\":{\"model\":\"scripted\"}}}\n\nid: 4\ndata: {\"type\":\"TEXT_MESSAGE_CONTENT\",\"messageId\":\"00000000-0000-7000-8000-000000000003\",\"delta\":\"Drafted\",\"timestamp\":1767225629000}\n\nid: 5\ndata: {\"type\":\"TEXT_MESSAGE_END\",\"messageId\":\"00000000-0000-7000-8000-000000000003\",\"timestamp\":1767225630000,\"metadata\":{\"tanstack\":{\"model\":\"scripted\"}}}\n\nid: 6\ndata: {\"type\":\"RUN_FINISHED\",\"runId\":\"run-recorded-2\",\"threadId\":\"00000000-0000-7000-8000-000000000002\",\"timestamp\":1767225631000,\"usage\":[{\"inputTokens\":1,\"outputTokens\":1,\"totalTokens\":2}],\"metadata\":{\"tanstack\":{\"model\":\"scripted\",\"finishReason\":\"stop\"}}}\n\n",
             "status": 200
           },
           "page": {

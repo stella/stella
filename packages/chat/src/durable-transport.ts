@@ -1,3 +1,4 @@
+import { EventType } from "@ag-ui/core";
 import { fetchServerSentEvents } from "@tanstack/ai-client";
 import type {
   AnyClientTool,
@@ -33,12 +34,22 @@ const waitForReconnect = async (
 ): Promise<void> =>
   await new Promise((resolve, reject) => {
     if (signal?.aborted) {
-      reject(signal.reason);
+      reject(
+        new ChatReconnectError({
+          message: "Chat reconnect aborted.",
+          cause: signal.reason,
+        }),
+      );
       return;
     }
     const abort = () => {
       clearTimeout(timer);
-      reject(signal?.reason);
+      reject(
+        new ChatReconnectError({
+          message: "Chat reconnect aborted.",
+          cause: signal?.reason,
+        }),
+      );
     };
     const timer = setTimeout(() => {
       signal?.removeEventListener("abort", abort);
@@ -49,6 +60,7 @@ const waitForReconnect = async (
 
 type DurableChatTransportOptions<TTools extends readonly AnyClientTool[]> = {
   initialMessages: ChatPersistedState<TTools>["messages"];
+  initialTurn: "active" | "settled";
   threadId: string;
   /** Server truth is checked on mount and before every read-only retry. */
   probe: (signal?: AbortSignal | null) => Promise<ChatResumeProbe>;
@@ -90,7 +102,12 @@ const terminalChatResponse = ({
 type ChatResumePersistenceOptions<TTools extends readonly AnyClientTool[]> =
   Pick<
     DurableChatTransportOptions<TTools>,
-    "initialMessages" | "probe" | "onReconnectChange" | "onError"
+    | "initialMessages"
+    | "initialTurn"
+    | "probe"
+    | "onReconnectChange"
+    | "onTranscript"
+    | "onError"
   > &
     Required<
       Pick<DurableChatTransportOptions<TTools>, "random" | "now" | "wait">
@@ -98,14 +115,17 @@ type ChatResumePersistenceOptions<TTools extends readonly AnyClientTool[]> =
 
 const createChatResumePersistence = <TTools extends readonly AnyClientTool[]>({
   initialMessages,
+  initialTurn,
   probe,
   onReconnectChange,
+  onTranscript,
   onError,
   random,
   now,
   wait,
-}: ChatResumePersistenceOptions<TTools>) =>
-  ({
+}: ChatResumePersistenceOptions<TTools>) => {
+  let initialTurnState = initialTurn;
+  return {
     getItem: async (resumedThreadId) => {
       const began = now();
       let retries = 0;
@@ -133,6 +153,10 @@ const createChatResumePersistence = <TTools extends readonly AnyClientTool[]>({
                 },
               };
             case "transcript":
+              if (initialTurnState === "active") {
+                initialTurnState = "settled";
+                onTranscript();
+              }
               onReconnectChange(false);
               return {
                 messages: initialMessages,
@@ -160,7 +184,8 @@ const createChatResumePersistence = <TTools extends readonly AnyClientTool[]>({
     // The server owns both the transcript and resumability; no device cache.
     setItem: () => undefined,
     removeItem: () => undefined,
-  }) satisfies ChatClientPersistence<TTools>;
+  } satisfies ChatClientPersistence<TTools>;
+};
 
 /** Shared by hosts: cache no legal text or run pointer on the device. The
  * SDK's persistence contract restores its run from the authenticated server. */
@@ -168,6 +193,7 @@ export const createDurableChatTransport = <
   TTools extends readonly AnyClientTool[],
 >({
   initialMessages,
+  initialTurn,
   threadId,
   probe,
   joinUrl,
@@ -237,7 +263,7 @@ export const createDurableChatTransport = <
           const response = await fetchClient(target, {
             ...init,
             method: "GET",
-            body: undefined,
+            body: null,
           });
           if (
             response.headers.get("Content-Type")?.includes("application/json")
@@ -283,18 +309,20 @@ export const createDurableChatTransport = <
           return new Response(null, { status: 502 });
         }
         if (init?.signal?.aborted) {
-          throw init?.signal.reason;
+          throw init.signal.reason;
         }
       }
-      throw init?.signal?.reason;
+      throw init.signal.reason;
     },
     { preconnect: () => undefined },
   ) satisfies typeof fetch;
 
   const persistence = createChatResumePersistence({
     initialMessages,
+    initialTurn,
     probe,
     onReconnectChange,
+    onTranscript,
     onError,
     random,
     now,
@@ -323,7 +351,7 @@ export const createDurableChatTransport = <
         // The SDK bounds first-event attachment to two seconds. Establish the
         // known running lifecycle before a bounded network retry, without
         // changing the transcript or invoking a provider.
-        yield { type: "RUN_STARTED" as const, runId, threadId };
+        yield { type: EventType.RUN_STARTED, runId, threadId } as const;
         for await (const chunk of upstream.joinRun(runId, signal)) {
           progress();
           yield chunk;

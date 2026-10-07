@@ -6,7 +6,7 @@ import { eq } from "drizzle-orm";
 
 import { member, organization, user } from "@/api/db/auth-schema";
 import { chatMessages, chatThreads, chatTurns } from "@/api/db/schema";
-import { createScopedDb } from "@/api/db/scoped";
+import { createScopedDb, markRlsDatabase } from "@/api/db/scoped";
 import { createSafeId } from "@/api/lib/branded-types";
 import {
   createChatRunLog,
@@ -38,8 +38,18 @@ if (!databaseUrl || !runPostgresTests) {
     const messageId = createSafeId<"chatMessage">();
     const runId = Bun.randomUUIDv7();
     const executionId = Bun.randomUUIDv7();
-    const scopedDb = createScopedDb(db, [], organizationId, userId);
-    const otherOrgDb = createScopedDb(db, [], otherOrganizationId, userId);
+    const scopedDb = createScopedDb(
+      markRlsDatabase(db),
+      [],
+      organizationId,
+      userId,
+    );
+    const otherOrgDb = createScopedDb(
+      markRlsDatabase(db),
+      [],
+      otherOrganizationId,
+      userId,
+    );
 
     beforeAll(async () => {
       await db.insert(user).values({

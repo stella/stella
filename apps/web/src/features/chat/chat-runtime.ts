@@ -27,6 +27,7 @@ import {
   chatResumeSnapshotSchema,
   chatTurnResumeProbeSchema,
 } from "@stll/chat/resume-contract";
+import { fetchWithTimeout } from "@stll/fetch";
 
 import type {
   ChatClientTools,
@@ -233,6 +234,8 @@ const isRejectedChatContinuation = (error: unknown): boolean => {
 
   return false;
 };
+
+const CHAT_RESUME_PROBE_TIMEOUT_MS = 10_000;
 
 /** How often, and how many times, a Stop the server accepted but has not
  *  settled yet (its run lives on another instance) asks again. */
@@ -482,16 +485,21 @@ export const createChatRuntime = ({
   const { connection: upstreamConnection, persistence } =
     createDurableChatTransport({
       initialMessages,
+      initialTurn: activeTurnId === null ? "settled" : "active",
       threadId: key.threadId,
       sendUrl: getChatApiPath(),
       joinUrl: () => turnUrl("join"),
       fetchClient: turnObservingFetchClient,
-      onReconnectChange: (reconnecting) => setSnapshot({ reconnecting }),
+      onReconnectChange: (reconnecting) => {
+        setSnapshot({ reconnecting });
+      },
       onError: captureRuntimeError,
       onTranscript: () => {
         setSnapshot({ turnAbandoned: true });
         reloadThread();
       },
+      // The SDK adapter consumes Promise rejections; shared transport catches
+      // typed probe failures with Result and surfaces them through onError.
       probe: async (signal) => {
         if (turnId === null) {
           const resume: unknown =
@@ -501,10 +509,12 @@ export const createChatRuntime = ({
           }
           const parsed = v.safeParse(chatResumeSnapshotSchema, resume);
           if (!parsed.success) {
-            throw new ChatReconnectError({
-              code: "invalid-response",
-              message: "Invalid chat resume state.",
-            });
+            return await Promise.reject(
+              new ChatReconnectError({
+                code: "invalid-response",
+                message: "Invalid chat resume state.",
+              }),
+            );
           }
           return {
             type: "transcript",
@@ -512,29 +522,33 @@ export const createChatRuntime = ({
             resumeSnapshot: parsed.output,
           };
         }
-        const response = await chatFetchClient(turnUrl("resume"), {
+        const response = await fetchWithTimeout(turnUrl("resume"), {
           credentials: "include",
-          ...(signal === undefined ? {} : { signal }),
+          ...(signal === undefined || signal === null ? {} : { signal }),
+          timeoutMs: CHAT_RESUME_PROBE_TIMEOUT_MS,
         });
         if (!response.ok) {
           if (response.status === 404) {
-            reloadThread();
             return { type: "transcript", turnId };
           }
-          throw new ChatReconnectError({
-            ...(response.status === 401 || response.status === 403
-              ? { code: "refused" as const }
-              : {}),
-            message: `Chat resume probe failed (${response.status}).`,
-          });
+          return await Promise.reject(
+            new ChatReconnectError({
+              ...(response.status === 401 || response.status === 403
+                ? { code: "refused" as const }
+                : {}),
+              message: `Chat resume probe failed (${response.status}).`,
+            }),
+          );
         }
         const data: unknown = await response.json();
         const parsed = v.safeParse(chatTurnResumeProbeSchema, data);
         if (!parsed.success) {
-          throw new ChatReconnectError({
-            code: "invalid-response",
-            message: "Invalid chat resume state.",
-          });
+          return await Promise.reject(
+            new ChatReconnectError({
+              code: "invalid-response",
+              message: "Invalid chat resume state.",
+            }),
+          );
         }
         return parsed.output;
       },
