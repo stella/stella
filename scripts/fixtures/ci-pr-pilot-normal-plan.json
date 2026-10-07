@@ -7,25 +7,28 @@
       "if": "needs.ci-plan.outputs.run_required != 'false' && ( github.event_name != 'pull_request' && ( needs.ci-plan.outputs.queue_depth != 'thin' && ((needs.ci-plan.outputs.trusted == 'true'\n || github.event_name == 'workflow_dispatch')\n&& needs.ci-plan.outputs.docker_checks_required == 'true' && (needs.ci-plan.outputs.suite_depth == 'full'\n    || (needs.ci-plan.outputs.suite_depth == 'fast'\n        && needs.ci-plan.outputs.docker_checks_pr_required == 'true'))\n) ) )"
     },
     "parser-version-guard": {
-      "if": "needs.ci-plan.outputs.run_required != 'false' && ( inputs.heavy_only != true && (\n  needs.ci-plan.outputs.trusted == 'true'\n  || github.event_name == 'workflow_dispatch'\n) )"
+      "if": "needs.ci-plan.outputs.run_required != 'false' && ( inputs.heavy_only != true && (\n  needs.ci-plan.outputs.trusted == 'true'\n  || github.event_name == 'workflow_dispatch'\n) && needs.ci-plan.outputs.package_checks_required == 'true' )"
     },
     "ci-generated-sources": {
-      "if": "needs.ci-plan.outputs.run_required != 'false' && ( inputs.heavy_only != true && (needs.ci-plan.outputs.trusted == 'true' || github.event_name == 'workflow_dispatch') )"
+      "if": "needs.ci-plan.outputs.run_required != 'false' && ( inputs.heavy_only != true && (needs.ci-plan.outputs.trusted == 'true' || github.event_name == 'workflow_dispatch') && needs.ci-plan.outputs.package_checks_required == 'true' )"
+    },
+    "ci-checks-docs": {
+      "if": "needs.ci-plan.outputs.run_required != 'false' && ( inputs.heavy_only != true && needs.ci-plan.outputs.trusted == 'true' && needs.ci-plan.outputs.docs_checks_required == 'true' )"
     },
     "ci-checks-generated": {
-      "if": "needs.ci-plan.outputs.run_required != 'false' && ( inputs.heavy_only != true && (\n  needs.ci-plan.outputs.trusted == 'true'\n  || github.event_name == 'workflow_dispatch'\n) )"
+      "if": "needs.ci-plan.outputs.run_required != 'false' && ( inputs.heavy_only != true && (\n  needs.ci-plan.outputs.trusted == 'true'\n  || github.event_name == 'workflow_dispatch'\n) && needs.ci-plan.outputs.package_checks_required == 'true' )"
     },
     "ci-checks-policy": {
-      "if": "needs.ci-plan.outputs.run_required != 'false' && ( inputs.heavy_only != true && (\n  needs.ci-plan.outputs.trusted == 'true'\n  || github.event_name == 'workflow_dispatch'\n) )"
+      "if": "needs.ci-plan.outputs.run_required != 'false' && ( inputs.heavy_only != true && (\n  needs.ci-plan.outputs.trusted == 'true'\n  || github.event_name == 'workflow_dispatch'\n) && needs.ci-plan.outputs.package_checks_required == 'true' )"
     },
     "ci-checks-rest": {
-      "if": "needs.ci-plan.outputs.run_required != 'false' && ( inputs.heavy_only != true && (\n  needs.ci-plan.outputs.trusted == 'true'\n  || github.event_name == 'workflow_dispatch'\n) )"
+      "if": "needs.ci-plan.outputs.run_required != 'false' && ( inputs.heavy_only != true && (\n  needs.ci-plan.outputs.trusted == 'true'\n  || github.event_name == 'workflow_dispatch'\n) && needs.ci-plan.outputs.package_checks_required == 'true' )"
     },
     "ci-tests": {
-      "if": "needs.ci-plan.outputs.run_required != 'false' && ( (github.event_name != 'merge_group'\n || needs.ci-plan.outputs.queue_depth != 'thin')\n&& (\n  needs.ci-plan.outputs.trusted == 'true'\n  || github.event_name == 'workflow_dispatch'\n) )"
+      "if": "needs.ci-plan.outputs.run_required != 'false' && ( (github.event_name != 'merge_group'\n || needs.ci-plan.outputs.queue_depth != 'thin')\n&& (\n  needs.ci-plan.outputs.trusted == 'true'\n  || github.event_name == 'workflow_dispatch'\n) && needs.ci-plan.outputs.package_checks_required == 'true' )"
     },
     "ci-browser": {
-      "if": "needs.ci-plan.outputs.run_required != 'false' && ( github.event_name != 'pull_request' && ( needs.ci-plan.outputs.queue_depth != 'thin' && ((needs.ci-plan.outputs.trusted == 'true'\n || github.event_name == 'workflow_dispatch')\n&& needs.ci-plan.outputs.suite_depth == 'full' ) ) )"
+      "if": "needs.ci-plan.outputs.ci_browser_required == 'true'"
     },
     "code-quality-api": {
       "if": "needs.ci-plan.outputs.run_required != 'false' && ( inputs.heavy_only != true && (\n  needs.ci-plan.outputs.package_checks_required == 'true'\n  && (needs.ci-plan.outputs.trusted == 'true'\n  || github.event_name == 'workflow_dispatch')\n) )"

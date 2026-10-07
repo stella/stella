@@ -1057,6 +1057,10 @@ const resultGateCase = ({
     args: [],
     env: {
       EVENT: event,
+      COVERAGE_PROFILE: "normal-v1",
+      PILOT_FAST_JOBS: "[]",
+      QUEUE_VALIDATION: "false",
+      PR_ACTION: "synchronize",
       QUEUE_DEPTH: "full",
       THIN_JOBS: "[]",
       GITHUB_RUN_ID: "123",
@@ -3850,98 +3854,42 @@ const runsAtDepth = (
     proveFix = false,
   }: DepthContext,
 ) => {
-  const expression = condition
-    .replaceAll(
-      "contains(github.event.pull_request.labels.*.name, 'prove-fix')",
-      () => String(proveFix),
-    )
-    .replaceAll(/\balways\(\)/gu, "true")
-    .replaceAll(/\bcancelled\(\)/gu, "false")
-    .replaceAll(
-      /\binputs\.heavy_only\s*(==|!=)\s*(true|false)\b/gu,
-      (_, operator: string, expected: string) => {
-        const equal = (heavyOnly === true) === (expected === "true");
-        return String(operator === "==" ? equal : !equal);
+  const selectedQueueDepth = event === EVENT.mergeGroup ? queueDepth : "full";
+  return v.parse(
+    v.boolean(),
+    evaluate(condition, {
+      values: {
+        "github.event_name": event,
+        "github.event.pull_request.labels.*.name": proveFix
+          ? ["prove-fix"]
+          : [],
+        "inputs.heavy_only": heavyOnly === true,
+        "needs.ci-plan.outputs.coverage_profile": "normal-v1",
+        "needs.ci-plan.outputs.pilot_fast_jobs": "[]",
+        "needs.ci-plan.outputs.suite_depth": depth,
+        "needs.ci-plan.outputs.queue_depth": selectedQueueDepth,
+        "needs.ci-plan.outputs.ci_browser_required": browserPlanOutput({
+          event,
+          depth,
+          desktopRequired: "true",
+          queueDepth: selectedQueueDepth,
+        }),
+        "needs.ci-plan.outputs.heavy_web_build_required": String(
+          heavyOnly === true,
+        ),
       },
-    )
-    .replaceAll(
-      /([\w.-]+)\s*(==|!=)\s*'([^']*)'/gu,
-      (_, context: string, operator: string, expected: string) => {
-        let actual: string;
-        if (context === "github.event_name") {
-          actual = event;
-        } else if (context === "needs.ci-plan.outputs.suite_depth") {
-          actual = depth;
-        } else if (context === "needs.ci-plan.outputs.queue_depth") {
-          actual = event === EVENT.mergeGroup ? queueDepth : "full";
-        } else if (context === "needs.ci-plan.outputs.ci_browser_required") {
-          actual = browserPlanOutput({
-            event,
-            depth,
-            desktopRequired: "true",
-            queueDepth: event === EVENT.mergeGroup ? queueDepth : "full",
-          });
-        } else if (
-          context === "needs.ci-plan.outputs.heavy_web_build_required"
-        ) {
-          actual = String(heavyOnly === true);
-        } else if (context.startsWith("needs.ci-plan.outputs.")) {
-          actual = "true";
-        } else if (/^needs\.[\w-]+\.result$/u.test(context)) {
-          actual = "success";
-        } else {
-          throw new TypeError(`Unknown CI predicate context: ${context}`);
+      status: { always: true, success: true, failure: false, cancelled: false },
+      fallback: (path) => {
+        if (path.startsWith("needs.ci-plan.outputs.")) {
+          return "true";
         }
-        return String(
-          operator === "==" ? actual === expected : actual !== expected,
-        );
+        if (/^needs\.[\w-]+\.result$/u.test(path)) {
+          return "success";
+        }
+        throw new TypeError(`Unknown CI predicate context: ${path}`);
       },
-    );
-  if (!/^(?:\s|true|false|&&|\|\||!|\(|\))+$/u.test(expression)) {
-    throw new TypeError(`Unknown CI predicate syntax: ${expression}`);
-  }
-  const tokens = expression.match(/true|false|&&|\|\||!|\(|\)/gu) ?? [];
-  let cursor = 0;
-  const primary = (): boolean => {
-    const token = tokens.at(cursor++);
-    if (token === "!") {
-      return !primary();
-    }
-    if (token === "(") {
-      const value = disjunction();
-      if (tokens.at(cursor++) !== ")") {
-        throw new TypeError("Unclosed CI predicate group");
-      }
-      return value;
-    }
-    if (token === "true" || token === "false") {
-      return token === "true";
-    }
-    throw new TypeError(`Invalid CI predicate token: ${String(token)}`);
-  };
-  const conjunction = (): boolean => {
-    let value = primary();
-    while (tokens.at(cursor) === "&&") {
-      cursor++;
-      const right = primary();
-      value = value && right;
-    }
-    return value;
-  };
-  const disjunction = (): boolean => {
-    let value = conjunction();
-    while (tokens.at(cursor) === "||") {
-      cursor++;
-      const right = conjunction();
-      value = value || right;
-    }
-    return value;
-  };
-  const value = disjunction();
-  if (cursor !== tokens.length) {
-    throw new TypeError("Trailing CI predicate tokens");
-  }
-  return value;
+    }),
+  );
 };
 
 type ParityJob = { name: string; condition: string; required: boolean };
@@ -4113,7 +4061,7 @@ test("parity rejects new queue-only jobs, ungated PR paths and stale exemptions"
       event: EVENT.pullRequest,
       depth: SUITE_DEPTH.fast,
     }),
-  ).toThrow("Unknown CI predicate syntax");
+  ).toThrow("Unknown CI predicate context");
 });
 
 test("thin merge groups intentionally skip heavy jobs while full parity stays enforced", () => {
@@ -4187,7 +4135,7 @@ test("parity treats absent or false heavy-only input as ordinary event execution
       event: EVENT.pullRequest,
       depth: SUITE_DEPTH.fast,
     }),
-  ).toThrow("Unknown CI predicate syntax");
+  ).toThrow("Unknown CI predicate context");
 });
 
 test("parity predicates follow GitHub precedence and reject malformed expressions", () => {
@@ -4207,15 +4155,9 @@ test("parity predicates follow GitHub precedence and reject malformed expression
       }
     }
   }
-  expect(() => runsAtDepth("true &&", context)).toThrow(
-    "Invalid CI predicate token",
-  );
-  expect(() => runsAtDepth("(true", context)).toThrow(
-    "Unclosed CI predicate group",
-  );
-  expect(() => runsAtDepth("true false", context)).toThrow(
-    "Trailing CI predicate tokens",
-  );
+  expect(() => runsAtDepth("true &&", context)).toThrow("expected a token");
+  expect(() => runsAtDepth("(true", context)).toThrow("expected )");
+  expect(() => runsAtDepth("true false", context)).toThrow("trailing tokens");
   expect(() => runsAtDepth("github.unknown == 'true'", context)).toThrow(
     "Unknown CI predicate context",
   );
@@ -4365,6 +4307,7 @@ test("the exact docs-only README change plans only Markdown checks in PRs and me
       "github.event.pull_request.labels.*.name": [],
       "needs.ci-plan.outputs.trusted": "true",
       "needs.ci-plan.outputs.run_required": "true",
+      "needs.ci-plan.outputs.coverage_profile": "normal-v1",
       "needs.ci-plan.outputs.suite_depth": depth,
       "needs.ci-plan.outputs.queue_depth": "full",
       ...Object.fromEntries(
@@ -4456,6 +4399,7 @@ test("mixed documentation and code changes retain the complete code plan", () =>
       "inputs.heavy_only": false,
       "needs.ci-plan.outputs.trusted": "true",
       "needs.ci-plan.outputs.run_required": "true",
+      "needs.ci-plan.outputs.coverage_profile": "normal-v1",
       "needs.ci-plan.outputs.suite_depth": depth,
       "needs.ci-plan.outputs.queue_depth": "full",
       ...Object.fromEntries(
@@ -4774,7 +4718,10 @@ test("browser planning, scheduling and result gates agree across events and dept
     expect(planned, JSON.stringify(options)).toBe(expected ? "true" : "false");
     expect(
       evaluate(jobIf(ciJobs["ci-browser"]), {
-        values: { "needs.ci-plan.outputs.ci_browser_required": planned },
+        values: {
+          "needs.ci-plan.outputs.ci_browser_required": planned,
+          "needs.ci-plan.outputs.coverage_profile": "normal-v1",
+        },
       }),
       JSON.stringify(options),
     ).toBe(expected);
@@ -4828,7 +4775,10 @@ test("untrusted PRs skip browser CI while the result gate preserves its trust fa
     expect(planned).toBe("false");
     expect(
       evaluate(jobIf(ciJobs["ci-browser"]), {
-        values: { "needs.ci-plan.outputs.ci_browser_required": planned },
+        values: {
+          "needs.ci-plan.outputs.ci_browser_required": planned,
+          "needs.ci-plan.outputs.coverage_profile": "normal-v1",
+        },
       }),
     ).toBe(false);
   }
@@ -4880,7 +4830,10 @@ test("a planted desktop path plans the PR desktop browser leg while unrelated pa
         );
         expect(
           evaluate(jobIf(ciJobs["ci-browser"]), {
-            values: { "needs.ci-plan.outputs.ci_browser_required": planned },
+            values: {
+              "needs.ci-plan.outputs.ci_browser_required": planned,
+              "needs.ci-plan.outputs.coverage_profile": "normal-v1",
+            },
           }),
         ).toBe(planned === "true");
       }

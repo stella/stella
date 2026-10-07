@@ -505,20 +505,21 @@ test("enqueue events leave every PR suite to unchanged merge-group validation", 
   expect(outputs.get("run_required")).toBe("false");
   expect(outputs.get("queue_validation")).toBe("true");
   expect(requests).toHaveLength(0);
+  const enqueued = contextWithPlanOutputs({
+    context: {
+      values: {
+        "github.event_name": "pull_request",
+        "needs.ci-plan.outputs.run_required": "false",
+        "needs.ci-plan.outputs.coverage_profile": "normal-v1",
+      },
+    },
+    outputs: planner.outputs,
+  });
   for (const [name, job] of Object.entries(jobs)) {
     if (["ci-plan", "ci-result"].includes(name)) {
       continue;
     }
-    expect(
-      evaluate(job.if ?? "true", {
-        values: {
-          "github.event_name": "pull_request",
-          "needs.ci-plan.outputs.run_required": "false",
-          "needs.ci-plan.outputs.coverage_profile": "normal-v1",
-        },
-      }),
-      name,
-    ).toBe(false);
+    expect(evaluate(job.if ?? "true", enqueued), name).toBe(false);
   }
 });
 

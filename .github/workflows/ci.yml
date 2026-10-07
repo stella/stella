@@ -3446,7 +3446,9 @@ jobs:
   # in a single job rather than one per suite.
   ci-browser:
     needs: ci-plan
-    if: needs.ci-plan.outputs.ci_browser_required == 'true'
+    if: >-
+      (needs.ci-plan.outputs.coverage_profile != 'pilot-fast-v1' || contains(fromJSON(needs.ci-plan.outputs.pilot_fast_jobs || '[]'), 'ci-browser'))
+      && needs.ci-plan.outputs.ci_browser_required == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 35
     strategy:

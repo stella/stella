@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs";
 
 export const PILOT_FAST_ROOTS = [
+  "ci-checks-docs",
   "ci-checks-generated",
   "ci-checks-policy",
   "ci-checks-rest",

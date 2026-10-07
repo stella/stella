@@ -187,6 +187,9 @@ const conditionContext = (profile: string, event: string, depth: string) => {
 };
 
 test("off and unset preserve today's job plan across every event and depth", async () => {
+  expect(Object.keys(original.jobs).toSorted()).toEqual(
+    Object.keys(workflow.jobs).toSorted(),
+  );
   for (const variable of ["", "off"]) {
     for (const event of [
       "pull_request",
@@ -218,6 +221,25 @@ test("off and unset preserve today's job plan across every event and depth", asy
         }
       }
     }
+  }
+});
+
+test("docs-only PRs retain Markdown checks in every pilot coverage profile", () => {
+  for (const profile of ["normal-v1", "pilot-fast-v1"]) {
+    const context = conditionContext(profile, "pull_request", "fast");
+    for (const key of Object.keys(context.values)) {
+      if (key.endsWith("_required")) {
+        context.values[key] = "false";
+      }
+    }
+    context.values["needs.ci-plan.outputs.run_required"] = "true";
+    context.values["needs.ci-plan.outputs.docs_checks_required"] = "true";
+    expect(fastJobs(workflow)).toContain("ci-checks-docs");
+    const scheduled = Object.entries(workflow.jobs)
+      .filter(([name]) => !["ci-plan", "ci-result"].includes(name))
+      .filter(([, job]) => evaluate(job.if ?? "true", context) === true)
+      .map(([name]) => name);
+    expect(scheduled).toEqual(["ci-checks-docs"]);
   }
 });
 
