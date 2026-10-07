@@ -24,6 +24,9 @@ import { SANCTIONS_MONITORING_TRANSITION_IDENTITIES } from "../apps/api/src/lib/
 // With its extension: oxlint.config.ts loads this file under Node's resolver.
 import { formattedLikeRepository } from "./generated-artifacts.ts";
 
+// Computed filesystem reads retain these repository Markdown inputs.
+export const CI_MARKDOWN_READER_INPUTS = ["docs/module-ownership.md"];
+
 const statusTransitionColumns = () => {
   const columns = new Map(
     Object.entries(STATUS_COLUMNS).map(([table, names]) => [
@@ -227,6 +230,50 @@ export const ROOT_CONNECTION_DOORS = [
           path: "apps/api/src/handlers/operator/registrations.ts",
           reason:
             "Authorizes the deployment credential before reading the directory.",
+        },
+      ],
+    },
+  },
+
+  {
+    id: "review-account-provisioning",
+    capability:
+      "Provisioning the restricted review account's organization and owner membership",
+    owner: [
+      "apps/api/src/db/root.ts",
+      "apps/api/src/lib/db/review-account-organization-store.ts",
+    ],
+    summary:
+      "The organization plugin refuses the review account by policy, so its single organization, the creation seeds and the owner membership are written on the owner connection in one transaction. The connection owner binds the store; the operator command receives the operations, never a database handle.",
+    enforcement: {
+      kind: "import",
+      specifiers: ["@/api/db/root"],
+      names: ["bindOwnerReviewAccountOrganizationStore"],
+      allowed: [
+        {
+          path: "apps/api/src/scripts/review-account.ts",
+          reason: "Command that provisions the restricted review account.",
+        },
+      ],
+    },
+  },
+
+  {
+    id: "review-organization-reset-fence",
+    capability:
+      "Locking the restricted review organization before each reset transaction",
+    owner: ["apps/api/src/db/root.ts"],
+    summary:
+      "Runs the caller's organization-row lock and sole-membership check as the owner at the start of each scoped transaction, before the role switch; the caller receives a scoped database, never the pool.",
+    enforcement: {
+      kind: "import",
+      specifiers: ["@/api/db/root"],
+      names: ["createFencedRlsDatabase"],
+      allowed: [
+        {
+          path: "apps/api/src/lib/review-organization/reset.ts",
+          reason:
+            "Fences every reset transaction to the review account's sole membership.",
         },
       ],
     },
@@ -1804,6 +1851,11 @@ const OWNERSHIP_DECLARATIONS = [
           path: "apps/api/scripts/ai-provider-canary-chat-toolsets.ts",
           reason:
             "Builds an owner session to assemble the full chat tool set for provider schema checks; serves no request.",
+        },
+        {
+          path: "apps/api/src/lib/review-organization/reset.ts",
+          reason:
+            "Builds the restricted review account's authority from the sole membership the reset just proved, for the sample-data seed.",
         },
       ],
     },

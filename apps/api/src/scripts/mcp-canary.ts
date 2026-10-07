@@ -9,19 +9,22 @@ import {
   PROTOCOL_VERSION_META_KEY,
 } from "@modelcontextprotocol/server";
 import type { CallToolRequestParams } from "@modelcontextprotocol/server";
-import { TaggedError } from "better-result";
+import { Result, TaggedError } from "better-result";
 import { createHash, randomBytes } from "node:crypto";
 import * as v from "valibot";
 
 import { MCP_DEFAULT_RESOURCE_SCOPES } from "@stll/api-contract";
+import { CLI_CLIENT_METADATA_PATH } from "@stll/cli/client-metadata-document";
 import { fetchWithTimeout } from "@stll/fetch";
 import { DAY_IN_MS, Temporal } from "@stll/time";
 
+import { SAMPLE_MATTERS } from "@/api/lib/review-organization/sample-data";
 import {
   MCP_DISCOVERY_PATH,
   MCP_HTTP_PATH,
   MCP_NOTIFICATION_KEEP_ALIVE_MS,
 } from "@/api/mcp/constants";
+import { MCP_ERROR_CODES } from "@/api/mcp/error-codes";
 
 const PROBE_TIMEOUT_MS = MCP_NOTIFICATION_KEEP_ALIVE_MS * 4;
 const STREAM_OPEN_OBSERVATION_MS = 100;
@@ -1325,6 +1328,734 @@ export const runStagingCredentialJourneys = async (
   return results;
 };
 
+const REVIEW_KNOWN_ERROR_CODES: ReadonlySet<string> = new Set(MCP_ERROR_CODES);
+
+const REVIEW_JOURNEY_SCOPE = [
+  "stella:read",
+  "stella:matters_write",
+  // Request excluded scopes too: their tools must remain unavailable even
+  // when the public client is allowed to request them.
+  "stella:admin_read",
+  "stella:admin_write",
+  "stella:billing_write",
+].join(" ");
+
+const REVIEW_FORBIDDEN_TOOLS = [
+  "list_audit_log",
+  "save_time_entry",
+  "delete_time_entry",
+] as const;
+
+const reviewJourneyName = (step: string) => `restricted account: ${step}`;
+
+class ReviewJourneyError extends TaggedError("ReviewJourneyError")<{
+  message: string;
+}> {}
+
+/** Only known machine codes are printable; an arbitrary server string may
+ * contain a credential. Response messages and tool content never enter logs.
+ */
+const reviewEnvelopeCode = (body: unknown): string => {
+  const envelope = v.safeParse(
+    v.union([
+      v.object({
+        error: v.object({ code: v.union([v.string(), v.number()]) }),
+      }),
+      v.object({ error: v.string() }),
+      v.object({ code: v.string() }),
+    ]),
+    body,
+  );
+  if (!envelope.success) {
+    return "none";
+  }
+  let code: string | number;
+  if ("error" in envelope.output) {
+    const error = envelope.output.error;
+    code = typeof error === "string" ? error : error.code;
+  } else {
+    code = envelope.output.code;
+  }
+  if (typeof code === "number") {
+    return [-32_700, -32_600, -32_601, -32_602, -32_603].includes(code)
+      ? String(code)
+      : "unrecognized";
+  }
+  return REVIEW_KNOWN_ERROR_CODES.has(code) ||
+    [
+      "invalid_request",
+      "invalid_scope",
+      "invalid_grant",
+      "access_denied",
+      "INVALID_EMAIL_OR_PASSWORD",
+      "TOO_MANY_REQUESTS",
+    ].includes(code)
+    ? code
+    : "unrecognized";
+};
+
+const reviewToolPayload = (body: unknown): unknown => {
+  const result = jsonRpcResult(body);
+  if (!result || result["isError"] === true) {
+    return undefined;
+  }
+  return result["structuredContent"];
+};
+
+const reviewRedirectSchema = v.object({ url: v.pipe(v.string(), v.url()) });
+const reviewTaskIdSchema = v.pipe(v.string(), v.uuid());
+const reviewTaskListSchema = v.object({
+  tasks: v.array(
+    v.object({
+      id: reviewTaskIdSchema,
+      name: v.string(),
+      matterId: reviewTaskIdSchema,
+    }),
+  ),
+});
+
+// The canary owns this receiver; only its exact callback URL is fetched, with
+// no cookie, password, edge credential or bearer header.
+const createReviewCallback = (state: string) => {
+  let code: string | undefined;
+  const server = Bun.serve({
+    hostname: "127.0.0.1",
+    port: 0,
+    fetch: (request) => {
+      const url = new URL(request.url);
+      if (url.pathname !== "/callback") {
+        return new Response(null, { status: 404 });
+      }
+      const receivedCode = url.searchParams.get("code");
+      if (!receivedCode || url.searchParams.get("state") !== state || code) {
+        return new Response(null, { status: 400 });
+      }
+      code = receivedCode;
+      return new Response(null, { status: 204 });
+    },
+  });
+  return {
+    redirectUri: `http://127.0.0.1:${String(server.port)}/callback`,
+    code: () => code,
+    close: async () => await server.stop(true),
+  };
+};
+
+type ReviewAccountJourneyOptions = {
+  baseUrl: string;
+  configuredBaseUrl: string;
+  frontendUrl?: string | undefined;
+  password?: string | undefined;
+  email?: string | undefined;
+  mode: "full" | "frequent";
+};
+
+const createReviewJourneyContext = (
+  {
+    baseUrl,
+    configuredBaseUrl,
+    frontendUrl,
+  }: { baseUrl: string; configuredBaseUrl: string; frontendUrl: string },
+  fetcher: CanaryFetcher,
+) => {
+  const results: ProbeResult[] = [];
+  const cookies = new Map<string, Map<string, string>>();
+  // Both origins come from configuration, never discovery or dispatch input.
+  // Cookies remain with the origin that set them; redirects are never followed.
+  const targetFetch = createDeploymentFetcher(
+    {
+      baseUrl: configuredBaseUrl,
+      appUrl: frontendUrl,
+    },
+    fetcher,
+  );
+  const state: {
+    step: string;
+    lastResponse: Pick<ProbeResponse, "body" | "status"> | undefined;
+    callback?: ReturnType<typeof createReviewCallback>;
+    token?: string;
+    createdTaskId?: string;
+  } = { step: "sign-in", lastResponse: undefined };
+
+  const reject: (assertion: string) => never = (assertion) => {
+    throw new ReviewJourneyError({
+      message: `HTTP ${state.lastResponse ? String(state.lastResponse.status) : "unavailable"}; envelope code ${reviewEnvelopeCode(state.lastResponse?.body)}; ${assertion}`,
+    });
+  };
+  const complete = () => {
+    results.push(passed(reviewJourneyName(state.step), "assertions passed"));
+  };
+  const request = async (
+    url: string | URL,
+    init: Pick<RequestInit, "body" | "headers" | "method"> = {},
+  ) => {
+    state.lastResponse = undefined;
+    const origin = new URL(url).origin;
+    const headers = new Headers(init.headers);
+    const requestCookies = cookies.get(origin);
+    if (requestCookies && requestCookies.size > 0) {
+      headers.set(
+        "cookie",
+        [...requestCookies].map(([key, value]) => `${key}=${value}`).join("; "),
+      );
+    }
+    headers.set("origin", new URL(frontendUrl).origin);
+    const response = await targetFetch(url, {
+      ...init,
+      headers,
+      timeout: { type: "idle", ms: PROBE_TIMEOUT_MS },
+    });
+    const responseCookies = cookies.get(origin) ?? new Map<string, string>();
+    for (const cookie of response.headers.getSetCookie()) {
+      const pair = cookie.split(";").at(0);
+      const separator = pair?.indexOf("=") ?? -1;
+      if (pair && separator > 0) {
+        responseCookies.set(
+          pair.slice(0, separator),
+          pair.slice(separator + 1),
+        );
+      }
+    }
+    cookies.set(origin, responseCookies);
+    state.lastResponse = await readProbeResponse(response);
+    if (state.lastResponse.status !== 200) {
+      reject("expected HTTP 200");
+    }
+    return state.lastResponse.body;
+  };
+  const rpc = async (call: JsonRpcCall) => {
+    state.lastResponse = undefined;
+    state.lastResponse = await postJsonRpc(call, targetFetch);
+    const result = jsonRpcResult(state.lastResponse.body);
+    if (
+      state.lastResponse.status !== 200 ||
+      !result ||
+      result["isError"] === true
+    ) {
+      // Tool error envelopes live in text content. Parse only for a known code.
+      if (result?.["isError"] === true) {
+        const text = firstContentText(result);
+        const parsed = Result.try((): unknown => JSON.parse(text ?? ""));
+        if (parsed.isOk()) {
+          state.lastResponse = {
+            status: state.lastResponse.status,
+            body: parsed.value,
+          };
+        }
+      }
+      reject("expected a successful JSON-RPC result");
+    }
+    return state.lastResponse.body;
+  };
+  const callTool = async (name: string, args: Record<string, unknown>) => {
+    if (!state.token) {
+      reject("access token unavailable");
+    }
+    return reviewToolPayload(
+      await rpc({
+        baseUrl,
+        token: state.token,
+        era: "modern",
+        id: 3,
+        method: "tools/call",
+        params: { name, arguments: args },
+      }),
+    );
+  };
+
+  return {
+    baseUrl,
+    frontendUrl,
+    results,
+    cookies,
+    state,
+    reject,
+    complete,
+    request,
+    rpc,
+    callTool,
+  };
+};
+
+type ReviewJourneyContext = ReturnType<typeof createReviewJourneyContext>;
+
+const requireReviewToken = (context: ReviewJourneyContext): string => {
+  const reject: (assertion: string) => never = context.reject;
+  if (!context.state.token) {
+    reject("access token unavailable");
+  }
+  return context.state.token;
+};
+
+type ReviewSignInOptions = {
+  context: ReviewJourneyContext;
+  email: string;
+  password: string;
+};
+const signInReviewAccount = async ({
+  context,
+  email,
+  password,
+}: ReviewSignInOptions) => {
+  const { frontendUrl, cookies, complete, request } = context;
+  const reject: (assertion: string) => never = context.reject;
+  // Exactly one password attempt. A failed sign-in aborts the journey; there
+  // is no retry and no negative-password probe against the lockout budget.
+  const signedIn = await request(
+    new URL("/api/auth/sign-in/email", frontendUrl),
+    {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      // oxlint-disable-next-line no-secret-in-log-sink/no-secret-in-log-sink -- the sign-in request body itself, sent only to the configured frontend origin; never logged, and step errors never include the body
+      body: JSON.stringify({ email, password }),
+    },
+  );
+  if (
+    !v.is(
+      v.object({ user: v.object({ email: v.literal(email) }) }),
+      signedIn,
+    ) ||
+    (cookies.get(new URL(frontendUrl).origin)?.size ?? 0) === 0
+  ) {
+    reject("expected the review identity and a session cookie");
+  }
+  complete();
+};
+
+const checkReviewSession = async (
+  context: ReviewJourneyContext,
+  email: string,
+) => {
+  const { frontendUrl, state, complete, request } = context;
+  const reject: (assertion: string) => never = context.reject;
+  state.step = "session";
+  const session = await request(new URL("/api/auth/get-session", frontendUrl));
+  if (
+    !v.is(
+      v.object({
+        user: v.object({ email: v.literal(email) }),
+        session: v.object({
+          activeOrganizationId: v.pipe(v.string(), v.nonEmpty()),
+        }),
+      }),
+      session,
+    )
+  ) {
+    reject("expected the review identity with an active organization");
+  }
+  complete();
+};
+
+const discoverReviewOAuth = async (context: ReviewJourneyContext) => {
+  const { baseUrl, state, complete, request } = context;
+  const reject: (assertion: string) => never = context.reject;
+  state.step = "discovery";
+  const resource = await request(new URL(MCP_DISCOVERY_PATH, baseUrl));
+  if (!v.is(protectedResourceMetadataSchema, resource)) {
+    reject("expected protected-resource discovery");
+  }
+  const advertisedIssuer = resource.authorization_servers.at(0);
+  if (!advertisedIssuer) {
+    reject("expected an authorization server issuer");
+  }
+  const issuer = new URL(advertisedIssuer);
+  const metadata = await request(
+    new URL(
+      `/.well-known/oauth-authorization-server${issuer.pathname.replace(/\/$/u, "")}`,
+      issuer.origin,
+    ),
+  );
+  if (
+    !v.is(authorizationMetadataSchema, metadata) ||
+    !metadata.code_challenge_methods_supported.includes("S256")
+  ) {
+    reject("expected OAuth endpoints and PKCE S256");
+  }
+  complete();
+  return metadata;
+};
+
+const authorizeReviewOAuth = async (
+  context: ReviewJourneyContext,
+  metadata: v.InferOutput<typeof authorizationMetadataSchema>,
+) => {
+  const { baseUrl, state, complete, request } = context;
+  const reject: (assertion: string) => never = context.reject;
+  state.step = "authorize";
+  const verifier = randomBytes(32).toString("base64url");
+  const stateValue = randomBytes(32).toString("base64url");
+  state.callback = createReviewCallback(stateValue);
+  const clientId = new URL(CLI_CLIENT_METADATA_PATH, baseUrl).toString();
+  const authorize = new URL(metadata.authorization_endpoint);
+  authorize.search = new URLSearchParams({
+    client_id: clientId,
+    redirect_uri: state.callback.redirectUri,
+    response_type: "code",
+    code_challenge_method: "S256",
+    code_challenge: createHash("sha256").update(verifier).digest("base64url"),
+    state: stateValue,
+    scope: REVIEW_JOURNEY_SCOPE,
+    resource: new URL(MCP_HTTP_PATH, baseUrl).toString(),
+  }).toString();
+  const authorized = await request(authorize, {
+    headers: { accept: "application/json" },
+  });
+  if (!v.is(reviewRedirectSchema, authorized)) {
+    reject("expected an OAuth continuation URL");
+  }
+  complete();
+  return {
+    callback: state.callback,
+    verifier,
+    stateValue,
+    clientId,
+    redirect: new URL(authorized.url),
+    tokenEndpoint: metadata.token_endpoint,
+  };
+};
+
+const consentReviewOAuth = async (
+  context: ReviewJourneyContext,
+  redirect: URL,
+) => {
+  const { frontendUrl, state, complete, request } = context;
+  const reject: (assertion: string) => never = context.reject;
+  if (
+    redirect.pathname === "/consent" &&
+    redirect.origin === new URL(frontendUrl).origin
+  ) {
+    state.step = "consent";
+    const signedQuery = new URLSearchParams(redirect.hash.slice(1)).get(
+      "oauth_query",
+    );
+    if (!signedQuery) {
+      reject("expected signed consent query");
+    }
+    const consent = await request(
+      new URL("/api/auth/oauth2/consent", frontendUrl),
+      {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ accept: true, oauth_query: signedQuery }),
+      },
+    );
+    if (!v.is(reviewRedirectSchema, consent)) {
+      reject("expected consent callback URL");
+    }
+    complete();
+    return new URL(consent.url);
+  }
+  return redirect;
+};
+
+type ReviewCallbackOptions = {
+  context: ReviewJourneyContext;
+  redirect: URL;
+  stateValue: string;
+  callback: ReturnType<typeof createReviewCallback>;
+};
+const captureReviewCallback = async ({
+  context,
+  redirect,
+  stateValue,
+  callback,
+}: ReviewCallbackOptions) => {
+  const { state, complete } = context;
+  const reject: (assertion: string) => never = context.reject;
+  state.step = "callback";
+  const expected = new URL(callback.redirectUri);
+  if (
+    redirect.origin !== expected.origin ||
+    redirect.pathname !== expected.pathname ||
+    redirect.searchParams.get("state") !== stateValue ||
+    !redirect.searchParams.get("code") ||
+    redirect.searchParams.has("error") ||
+    redirect.username !== "" ||
+    redirect.password !== ""
+  ) {
+    reject("expected the owned loopback callback and matching state");
+  }
+  state.lastResponse = undefined;
+  // oxlint-disable-next-line require-safe-outbound-target/require-safe-outbound-target -- the canary's own loopback receiver; origin, path and state checked against the issued redirect before this call; no credentials, redirects manual
+  const delivered = await fetchWithTimeout(redirect, {
+    redirect: "manual",
+    timeout: { type: "idle", ms: PROBE_TIMEOUT_MS },
+  });
+  await delivered.body?.cancel();
+  state.lastResponse = { status: delivered.status, body: undefined };
+  const code = callback.code();
+  if (delivered.status !== 204 || !code) {
+    reject("loopback receiver did not capture the authorization code");
+  }
+  complete();
+  return code;
+};
+
+type ReviewTokenOptions = {
+  context: ReviewJourneyContext;
+  authorization: ReviewAuthorization;
+  code: string;
+};
+const exchangeReviewToken = async ({
+  context,
+  authorization,
+  code,
+}: ReviewTokenOptions) => {
+  const { baseUrl, state, complete, request } = context;
+  const reject: (assertion: string) => never = context.reject;
+  state.step = "token";
+  const exchanged = await request(authorization.tokenEndpoint, {
+    method: "POST",
+    headers: { "content-type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams({
+      grant_type: "authorization_code",
+      client_id: authorization.clientId,
+      redirect_uri: authorization.callback.redirectUri,
+      code_verifier: authorization.verifier,
+      code,
+      resource: new URL(MCP_HTTP_PATH, baseUrl).toString(),
+    }).toString(),
+  });
+  if (
+    !v.is(
+      v.object({ access_token: v.pipe(v.string(), v.nonEmpty()) }),
+      exchanged,
+    )
+  ) {
+    reject("expected an OAuth access token");
+  }
+  state.token = exchanged.access_token;
+  complete();
+};
+
+const initializeReviewMcp = async (context: ReviewJourneyContext) => {
+  const { baseUrl, state, complete, rpc } = context;
+  const reject: (assertion: string) => never = context.reject;
+  state.step = "initialize";
+  const initialized = await rpc({
+    baseUrl,
+    token: requireReviewToken(context),
+    era: "legacy",
+    id: 1,
+    method: "initialize",
+    params: {
+      capabilities: {},
+      clientInfo: { name: CANARY_CLIENT_NAME, version: "1.0.0" },
+      protocolVersion: LATEST_PROTOCOL_VERSION,
+    },
+  });
+  if (!v.is(initializeResultSchema, jsonRpcResult(initialized))) {
+    reject("expected a negotiated MCP session");
+  }
+  complete();
+};
+
+const listReviewTools = async (context: ReviewJourneyContext) => {
+  const { baseUrl, state, complete, rpc } = context;
+  const reject: (assertion: string) => never = context.reject;
+  state.step = "tools/list";
+  const listed = jsonRpcResult(
+    await rpc({
+      baseUrl,
+      token: requireReviewToken(context),
+      era: "modern",
+      id: 2,
+      method: "tools/list",
+      params: {},
+    }),
+  );
+  if (!v.is(toolsListResultSchema, listed)) {
+    reject("expected a nonempty tool list");
+  }
+  const tools = new Set(listed.tools.map(({ name }) => name));
+  if (
+    REVIEW_FORBIDDEN_TOOLS.some((name) => tools.has(name)) ||
+    ["list_tasks", "save_task", "delete_task"].some((name) => !tools.has(name))
+  ) {
+    reject("expected read/write tools and no admin or billing tools");
+  }
+  complete();
+};
+
+const readReviewSample = async (context: ReviewJourneyContext) => {
+  const { state, complete, callTool } = context;
+  const reject: (assertion: string) => never = context.reject;
+  state.step = "read";
+  const read = await callTool("list_tasks", { limit: 100 });
+  if (!v.is(reviewTaskListSchema, read)) {
+    reject("expected sample task records");
+  }
+  const sampleNames: ReadonlySet<string> = new Set(
+    SAMPLE_MATTERS.flatMap(({ tasks }) => tasks.map(({ name }) => name)),
+  );
+  const sample = read.tasks.find(({ name }) => sampleNames.has(name));
+  if (!sample) {
+    reject("expected at least one seeded sample task");
+  }
+  complete();
+  return sample;
+};
+
+const writeReviewTask = async (
+  context: ReviewJourneyContext,
+  sample: v.InferOutput<typeof reviewTaskListSchema>["tasks"][number],
+) => {
+  const { state, complete, callTool } = context;
+  const reject: (assertion: string) => never = context.reject;
+  state.step = "write";
+  const taskName = `Restricted account canary ${Bun.randomUUIDv7()}`;
+  const written = await callTool("save_task", {
+    matter_id: sample.matterId,
+    name: taskName,
+  });
+  if (!v.is(v.object({ taskId: reviewTaskIdSchema }), written)) {
+    reject("expected the created task ID");
+  }
+  state.createdTaskId = written.taskId;
+  complete();
+  return taskName;
+};
+
+type ReviewTaskAssertionOptions = {
+  context: ReviewJourneyContext;
+  sample: v.InferOutput<typeof reviewTaskListSchema>["tasks"][number];
+  taskName: string;
+};
+const assertReviewTask = async ({
+  context,
+  sample,
+  taskName,
+}: ReviewTaskAssertionOptions) => {
+  const { state, complete, callTool } = context;
+  const reject: (assertion: string) => never = context.reject;
+  state.step = "assert";
+  const taskId = state.createdTaskId;
+  if (!taskId) {
+    reject("created task ID unavailable");
+  }
+  const reread = await callTool("list_tasks", {
+    matter_id: sample.matterId,
+    task_id: state.createdTaskId,
+  });
+  if (
+    !v.is(
+      v.object({
+        task: v.object({
+          taskId: v.literal(taskId),
+          name: v.literal(taskName),
+        }),
+      }),
+      reread,
+    )
+  ) {
+    reject("created task did not round-trip in the sample matter");
+  }
+  complete();
+};
+
+type ReviewAuthorization = Awaited<ReturnType<typeof authorizeReviewOAuth>>;
+
+const cleanupReviewTask = async (context: ReviewJourneyContext) => {
+  const { state, results } = context;
+  if (state.createdTaskId && state.token) {
+    state.step = "cleanup";
+    const cleanup = await Result.tryPromise({
+      try: async () => {
+        const deleted = await context.callTool("delete_task", {
+          task_id: state.createdTaskId,
+          confirm: true,
+        });
+        if (!v.is(v.object({ deleted: v.literal(true) }), deleted)) {
+          context.reject("expected the per-run task to be deleted");
+        }
+        context.complete();
+      },
+      catch: (error) => error,
+    });
+    if (cleanup.isErr()) {
+      results.push(
+        failed(
+          reviewJourneyName(state.step),
+          cleanup.error instanceof ReviewJourneyError
+            ? cleanup.error.message
+            : `HTTP unavailable; envelope code none; ${describeProbeFailure(cleanup.error)}`,
+        ),
+      );
+    }
+  }
+};
+
+export const runReviewAccountJourney = async (
+  {
+    baseUrl,
+    configuredBaseUrl,
+    frontendUrl = baseUrl,
+    password,
+    email = "review@stll.app",
+    mode,
+  }: ReviewAccountJourneyOptions,
+  fetcher: CanaryFetcher = deploymentFetcher,
+): Promise<ProbeResult[]> => {
+  if (mode !== "full") {
+    return [];
+  }
+  if (!password || baseUrl !== configuredBaseUrl) {
+    return [
+      skipped(
+        reviewJourneyName("sign-in"),
+        !password
+          ? "no REVIEW_ACCOUNT_PASSWORD configured"
+          : "credential withheld: target is not the configured endpoint",
+      ),
+    ];
+  }
+
+  const context = createReviewJourneyContext(
+    { baseUrl, configuredBaseUrl, frontendUrl },
+    fetcher,
+  );
+  const { results, state } = context;
+  const outcome = await Result.tryPromise({
+    try: async () => {
+      await signInReviewAccount({ context, email, password });
+      await checkReviewSession(context, email);
+      const metadata = await discoverReviewOAuth(context);
+      const authorization = await authorizeReviewOAuth(context, metadata);
+      const redirect = await consentReviewOAuth(
+        context,
+        authorization.redirect,
+      );
+      const code = await captureReviewCallback({
+        context,
+        redirect,
+        stateValue: authorization.stateValue,
+        callback: authorization.callback,
+      });
+      await exchangeReviewToken({ context, authorization, code });
+      await initializeReviewMcp(context);
+      await listReviewTools(context);
+      const sample = await readReviewSample(context);
+      const taskName = await writeReviewTask(context, sample);
+      await assertReviewTask({ context, sample, taskName });
+    },
+    catch: (error) => error,
+  });
+  if (outcome.isErr()) {
+    const error = outcome.error;
+    results.push(
+      failed(
+        reviewJourneyName(state.step),
+        error instanceof ReviewJourneyError
+          ? error.message
+          : `HTTP unavailable; envelope code none; ${describeProbeFailure(error)}`,
+      ),
+    );
+  }
+  await state.callback?.close();
+  await cleanupReviewTask(context);
+  return results;
+};
+
 const run = async () => {
   const baseUrl = process.env["MCP_CANARY_BASE_URL"];
   if (!baseUrl) {
@@ -1356,6 +2087,17 @@ const run = async () => {
     })),
     ...(await runPublicProbes(baseUrl)),
   ];
+  results.push(
+    ...(await runReviewAccountJourney({
+      baseUrl,
+      configuredBaseUrl:
+        process.env["MCP_CANARY_CONFIGURED_BASE_URL"] ?? "https://api.stll.app",
+      frontendUrl: process.env["MCP_CANARY_FRONTEND_URL"],
+      email: process.env["APP_REVIEW_ACCOUNT_EMAIL"],
+      password: process.env["REVIEW_ACCOUNT_PASSWORD"],
+      mode,
+    })),
+  );
   if (environment === "staging") {
     results.push(
       ...(await runStagingCredentialJourneys({

@@ -174,12 +174,12 @@ describe("API deployment health receipt", () => {
     }
   });
 
-  test("uses only the existing canary and staging session secrets for MCP journeys", async () => {
+  test("uses only the declared canary and staging session secrets for MCP journeys", async () => {
     const cases = [
       {
         file: "mcp-canary.yml",
         environment: "production",
-        secrets: ["MCP_CANARY_TOKEN"],
+        secrets: ["MCP_CANARY_TOKEN", "REVIEW_ACCOUNT_PASSWORD"],
       },
       {
         file: "deploy-staging.yml",

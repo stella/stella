@@ -142,6 +142,16 @@ RUN bun build \
     --target bun \
     --outfile /app/replay-case-law-source.js \
     apps/api/src/scripts/replay-case-law-source.ts
+# Restricted review account commands: `provision` creates the account, its
+# organization and owner membership; `set-password` reads the password from
+# standard input.
+#   ["bun", "/app/review-account.js", "provision"]
+#   ["bun", "/app/review-account.js", "set-password"]
+RUN bun build \
+    --define __STELLA_RELEASE__=true \
+    --target bun \
+    --outfile /app/review-account.js \
+    apps/api/src/scripts/review-account.ts
 # One bounded, load-aware background replay tick; enrolment is reviewed in code.
 RUN bun build \
     --define __STELLA_RELEASE__=true \
@@ -379,6 +389,7 @@ COPY --chown=stella:stella --from=builder /app/database-census.js /app/database-
 COPY --chown=stella:stella --from=builder /app/better-auth-sign-in-replay.js /app/better-auth-sign-in-replay.js
 COPY --chown=stella:stella --from=builder /app/replay-case-law-source.js /app/replay-case-law-source.js
 COPY --chown=stella:stella --from=builder /app/replay-tick.js /app/replay-tick.js
+COPY --chown=stella:stella --from=builder /app/review-account.js /app/review-account.js
 COPY --chown=stella:stella --from=builder /app/eu-completion-tick.js /app/eu-completion-tick.js
 COPY --chown=stella:stella --from=builder /app/eu-completion-control.js /app/eu-completion-control.js
 COPY --chown=stella:stella --from=builder /app/redact-case-law-decision.js /app/redact-case-law-decision.js

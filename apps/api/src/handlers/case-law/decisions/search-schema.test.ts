@@ -1,8 +1,13 @@
+import { TypeCompiler } from "@sinclair/typebox/compiler";
 import { Value } from "@sinclair/typebox/value";
-import { describe, expect, expectTypeOf, test } from "bun:test";
+import { describe, expect, expectTypeOf, spyOn, test } from "bun:test";
+import { getSchemaValidator } from "elysia";
 import type { Static, UnwrapSchema } from "elysia";
+import fc from "fast-check";
+import * as v from "valibot";
 
 import { COURT_TIER_LABELS } from "@stll/api-contract/case-law-court-tiers";
+import { caseLawCourtYearSchema } from "@stll/api-contract/case-law-court-year";
 import { DECISION_TYPE_KINDS } from "@stll/api-contract/case-law-decision-types";
 import {
   TEXT_ABSENCE_REASON,
@@ -17,6 +22,7 @@ import {
   type SearchExcerpt,
 } from "@stll/api-contract/search";
 import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
+import { assertProperty } from "@stll/property-testing";
 
 import type { searchDecisionsHandler } from "@/api/handlers/case-law/decisions/search";
 import {
@@ -88,6 +94,7 @@ const validResponse = {
 const bucket = (value: string) => ({ value, label: null, count: 3 });
 
 const firstPageFacets = {
+  courtYear: null,
   court: [{ tierLabel: "supreme", courts: [bucket("Nejvyšší soud")] }],
   year: [bucket("2024")],
   decisionType: [bucket("judgment")],
@@ -245,6 +252,122 @@ describe("case-law search response schema", () => {
       ).toBe(false);
     },
   );
+
+  test("HTTP court/year validation matches the canonical aggregate schema", () => {
+    const compiled = TypeCompiler.Compile(searchDecisionsSuccessResponseSchema);
+    const matrixBucket = {
+      court: "Nejvyšší soud",
+      courtName: "Nejvyšší soud",
+      courtAbbreviation: "NS",
+      tier: "supreme",
+      year: 2024,
+      count: 3,
+      citationSum: null,
+      treatment: null,
+    };
+    for (const courtYear of [
+      null,
+      { buckets: [matrixBucket], truncated: false },
+      { buckets: [{ ...matrixBucket, count: -1 }], truncated: false },
+      { buckets: [{ ...matrixBucket, count: 1.5 }], truncated: false },
+      { buckets: [{ ...matrixBucket, citationSum: -1 }], truncated: false },
+      { buckets: [{ ...matrixBucket, tier: "invented" }], truncated: false },
+      { buckets: [{ ...matrixBucket, extra: true }], truncated: false },
+      {
+        buckets: [{ ...matrixBucket, court: "x".repeat(513) }],
+        truncated: false,
+      },
+      {
+        buckets: [{ ...matrixBucket, courtName: "x".repeat(513) }],
+        truncated: false,
+      },
+      {
+        buckets: [{ ...matrixBucket, courtAbbreviation: "x".repeat(257) }],
+        truncated: false,
+      },
+      {
+        buckets: Array.from({ length: 401 }, () => matrixBucket),
+        truncated: true,
+      },
+    ]) {
+      const response = {
+        ...validResponse,
+        facets: { ...firstPageFacets, courtYear },
+      };
+      const valid = v.safeParse(caseLawCourtYearSchema, courtYear).success;
+      expect(Value.Check(searchDecisionsSuccessResponseSchema, response)).toBe(
+        valid,
+      );
+      expect(compiled.Check(response)).toBe(valid);
+    }
+  });
+
+  test("the response schema builds its exact serializer", () => {
+    const warnings = spyOn(console, "warn").mockImplementation(() => {});
+    try {
+      const validator = getSchemaValidator(
+        searchDecisionsSuccessResponseSchema,
+        {
+          normalize: "exactMirror",
+        },
+      );
+      expect(warnings.mock.calls).toEqual([]);
+      const response = { ...validResponse, facets: firstPageFacets };
+      expect(validator.Check(response)).toBe(true);
+      const mirrored = validator.Clean?.(response);
+      expect(Value.Check(searchDecisionsSuccessResponseSchema, mirrored)).toBe(
+        true,
+      );
+      expect(mirrored?.facets?.courtYear).toBeNull();
+    } finally {
+      warnings.mockRestore();
+    }
+  });
+
+  test("HTTP court/year validation agrees with the canonical contract for generated values", () => {
+    const compiled = TypeCompiler.Compile(searchDecisionsSuccessResponseSchema);
+    const count = fc.oneof(
+      fc.integer({ min: 0, max: 10_000 }),
+      fc.constant(-1),
+      fc.constant(1.5),
+      fc.constant(Number.MAX_SAFE_INTEGER + 1),
+    );
+    const matrix = fc.record({
+      buckets: fc.array(
+        fc.record({
+          court: fc.string({ maxLength: 530 }),
+          courtName: fc.string({ maxLength: 530 }),
+          courtAbbreviation: fc.option(fc.string({ maxLength: 270 }), {
+            nil: null,
+          }),
+          tier: fc.oneof(
+            fc.constantFrom(...COURT_TIER_LABELS),
+            fc.constant("invalid"),
+          ),
+          year: fc.integer(),
+          count,
+          citationSum: fc.option(count, { nil: null }),
+          treatment: fc.oneof(fc.constant(null), fc.constant(0)),
+        }),
+        { maxLength: 3 },
+      ),
+      truncated: fc.boolean(),
+    });
+    assertProperty(
+      "HTTP court/year validation agrees with the canonical contract for generated values",
+      fc.property(fc.oneof(matrix, fc.jsonValue()), (courtYear) => {
+        const response = {
+          ...validResponse,
+          facets: { ...firstPageFacets, courtYear },
+        };
+        const valid = v.safeParse(caseLawCourtYearSchema, courtYear).success;
+        expect(
+          Value.Check(searchDecisionsSuccessResponseSchema, response),
+        ).toBe(valid);
+        expect(compiled.Check(response)).toBe(valid);
+      }),
+    );
+  });
 
   // Page one carries the facets; a cursor page carries null, because the
   // counts describe the result set and do not change as a reader pages.

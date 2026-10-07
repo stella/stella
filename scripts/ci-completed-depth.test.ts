@@ -4,7 +4,7 @@ import { readFileSync } from "node:fs";
 import { Script } from "node:vm";
 import * as v from "valibot";
 
-import { evaluate } from "./github-expression";
+import { contextWithPlanOutputs, evaluate } from "./github-expression";
 
 const stepSchema = v.looseObject({
   name: v.string(),
@@ -19,6 +19,7 @@ const workflow = v.parse(
       v.string(),
       v.looseObject({
         if: v.optional(v.string()),
+        outputs: v.optional(v.record(v.string(), v.string()), {}),
         steps: v.optional(v.array(stepSchema), []),
       }),
     ),
@@ -257,19 +258,20 @@ test("push, dispatch and queue events always run without querying evidence", asy
 });
 
 test("reused depth prevents every nonstructural CI job and expensive planner step", () => {
+  const reused = contextWithPlanOutputs({
+    context: {
+      values: {
+        "github.event_name": "pull_request",
+        "needs.ci-plan.outputs.run_required": "false",
+      },
+    },
+    outputs: planner.outputs,
+  });
   for (const [name, job] of Object.entries(jobs)) {
     if (name === "ci-plan" || name === "ci-result") {
       continue;
     }
-    expect(
-      evaluate(job.if ?? "true", {
-        values: {
-          "github.event_name": "pull_request",
-          "needs.ci-plan.outputs.run_required": "false",
-        },
-      }),
-      name,
-    ).toBe(false);
+    expect(evaluate(job.if ?? "true", reused), name).toBe(false);
   }
   const checkout = planner.steps.findIndex((step) => step.name === "Checkout");
   expect(checkout).toBeGreaterThan(-1);
