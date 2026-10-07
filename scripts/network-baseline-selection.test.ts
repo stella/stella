@@ -11,18 +11,17 @@ import path from "node:path";
 
 import fixture from "./fixtures/network-baseline-selection/main-history.json" with { type: "json" };
 
-const selector =
-  process.env["NETWORK_BASELINE_SELECTOR_OVERRIDE"] ??
-  new URL(
-    "../.github/actions/prepare-network-baseline/select-recording.sh",
-    import.meta.url,
-  ).pathname;
+const selector = new URL(
+  "../.github/actions/prepare-network-baseline/select-recording.sh",
+  import.meta.url,
+).pathname;
 
 type ReplayOptions = {
   walk?: string[];
   overrides?: Record<string, unknown>;
   failure?: { endpoint: string; reason: string };
   malformed?: string;
+  selectorSource?: string;
 };
 
 const replay = ({
@@ -30,8 +29,15 @@ const replay = ({
   overrides = {},
   failure,
   malformed,
+  selectorSource = readFileSync(selector, "utf-8"),
 }: ReplayOptions = {}) => {
+  const runnerPath = process.env["PATH"];
+  if (typeof runnerPath !== "string") {
+    expect.unreachable("selection replay requires PATH");
+  }
   const directory = mkdtempSync(path.join(tmpdir(), "network-selection-"));
+  const selectorPath = path.join(directory, "select-recording.sh");
+  writeFileSync(selectorPath, selectorSource);
   const bin = path.join(directory, "bin");
   mkdirSync(bin);
   mkdirSync(path.join(directory, "apps/web/e2e"), { recursive: true });
@@ -84,8 +90,8 @@ jq -e --arg key "$endpoint" '.[$key] // error("unrecorded API request: " + $key)
         cwd: directory,
         env: {
           ...process.env,
-          PATH: `${bin}:${process.env["PATH"]}`,
-          SELECTOR: selector,
+          PATH: `${bin}:${runnerPath}`,
+          SELECTOR: selectorPath,
           REPLAY_DIR: directory,
           REPLAY_FAILURE_ENDPOINT: failure?.endpoint ?? "",
           REPLAY_FAILURE_REASON: failure?.reason ?? "",
@@ -246,6 +252,25 @@ test("a retained delivery from an earlier push recorder remains eligible", () =>
       "record-runs": {
         total_count: 1,
         workflow_runs: [{ event: "push", head_sha: fixture.expected }],
+      },
+    },
+  });
+  expect(result.code).toBe(0);
+  expect(result.stdout).toContain(`selected=${fixture.expected} recorded=true`);
+});
+
+test("removing recorder source identity admits the mismatched recording", () => {
+  const original = readFileSync(selector, "utf-8");
+  const mutant = original.replace(" and .head_sha == $source", "");
+  expect(mutant).not.toBe(original);
+  const result = replay({
+    selectorSource: mutant,
+    overrides: {
+      "run-37564499381": {
+        ...deliveredRun,
+        path: ".github/workflows/network-baseline-record.yml",
+        event: "workflow_dispatch",
+        head_sha: fixture.base,
       },
     },
   });
