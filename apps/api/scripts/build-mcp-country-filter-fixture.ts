@@ -26,6 +26,8 @@ const result = await Bun.build({
       "../src/mcp/apps/case-law-results/app.html",
     ),
   ],
+  // As in build-mcp-apps.ts: an HTML entry with `compile` and a browser
+  // target yields one self-contained document with scripts inlined.
   compile: true,
   target: "browser",
   minify: true,
