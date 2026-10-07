@@ -3,12 +3,8 @@ import { chmod, mkdir, mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
-// The staging gate decides, per dispatch, whether to deploy or skip.
-// Reading that decision out of the workflow text only proves the words are
-// there, so this runs the real script instead: a dispatch while staging is
-// off must stay green without deploying. The same holds for the commit the
-// run deploys: the resolver and the verification record run for real against
-// a fixture repository.
+// Execute workflow scripts against fixture boundaries so an off staging
+// cannot report success and status writes use the selected deploy commit.
 
 const WORKFLOW_URL = new URL(
   "../.github/workflows/deploy-staging.yml",
@@ -23,7 +19,9 @@ const TIP_SHA = "a".repeat(40);
 const OTHER_SHA = "b".repeat(40);
 
 const extractDecideScript = (workflow: string) => {
-  const stepStart = workflow.indexOf("      - name: Decide deploy or skip\n");
+  const stepStart = workflow.indexOf(
+    "      - name: Decide whether staging can deploy\n",
+  );
   const jobEnd = workflow.indexOf("\n  build-api:\n", stepStart);
   const runStart = workflow.indexOf("run: |\n", stepStart);
   if (stepStart === -1 || jobEnd === -1 || runStart === -1) {
@@ -71,9 +69,16 @@ const extractStepScript = (
 type DecisionCase = {
   deployWhenUnreachable?: boolean;
   status: "not_ready" | "ready";
+  script?: string;
+  statusWriteExitCode?: number;
 };
 
-type Decision = { deploy: string; exitCode: number; summary: string };
+type Decision = {
+  deploy: string;
+  exitCode: number;
+  summary: string;
+  calls: string;
+};
 
 let workspace = "";
 let scriptPath = "";
@@ -87,16 +92,33 @@ let sideSha = "";
 const runDecision = async ({
   deployWhenUnreachable = false,
   status,
+  script = scriptPath,
+  statusWriteExitCode = 0,
 }: DecisionCase): Promise<Decision> => {
   const outputPath = path.join(workspace, `output-${Bun.randomUUIDv7()}.txt`);
   const summaryPath = path.join(workspace, `summary-${Bun.randomUUIDv7()}.md`);
-  await Promise.all([Bun.write(outputPath, ""), Bun.write(summaryPath, "")]);
+  const callsPath = path.join(
+    workspace,
+    `decision-calls-${Bun.randomUUIDv7()}.txt`,
+  );
+  await Promise.all([
+    Bun.write(outputPath, ""),
+    Bun.write(summaryPath, ""),
+    Bun.write(callsPath, ""),
+  ]);
 
-  const result = Bun.spawnSync(["bash", scriptPath], {
+  const result = Bun.spawnSync(["bash", script], {
     env: {
       ...process.env,
       DEPLOY_WHEN_UNREACHABLE: String(deployWhenUnreachable),
       GITHUB_EVENT_NAME: "workflow_dispatch",
+      GH_TOKEN: "stub",
+      GITHUB_REPOSITORY: "stella/stella",
+      GITHUB_RUN_ID: "9",
+      GITHUB_SERVER_URL: "https://github.com",
+      PATH: `${workspace}:${process.env["PATH"] ?? ""}`,
+      STUB_CALLS_PATH: callsPath,
+      STUB_GH_EXIT_CODE: String(statusWriteExitCode),
       GITHUB_OUTPUT: outputPath,
       DEPLOY_SHA: TIP_SHA,
       GITHUB_STEP_SUMMARY: summaryPath,
@@ -113,6 +135,7 @@ const runDecision = async ({
     deploy: deploy ?? "",
     exitCode: result.exitCode,
     summary: await Bun.file(summaryPath).text(),
+    calls: await Bun.file(callsPath).text(),
   };
 };
 
@@ -271,6 +294,7 @@ beforeAll(async () => {
     `#!/usr/bin/env bash
 set -euo pipefail
 printf '%s %s\\n' "$*" "$(jq -c .)" >> "$STUB_CALLS_PATH"
+exit "\${STUB_GH_EXIT_CODE:-0}"
 `,
   );
   await chmod(ghStub, 0o755);
@@ -281,7 +305,10 @@ printf '%s %s\\n' "$*" "$(jq -c .)" >> "$STUB_CALLS_PATH"
   git("init", "-q", "-b", "main");
   baseSha = commit("base");
   mainSha = commit("tip");
-  git("update-ref", "refs/remotes/origin/main", mainSha);
+  const origin = path.join(workspace, "origin.git");
+  git("init", "--bare", "-q", "-b", "main", origin);
+  git("remote", "add", "origin", origin);
+  git("push", "-q", "origin", "main");
   git("checkout", "-q", "-b", "side", baseSha);
   sideSha = commit("side");
 
@@ -333,10 +360,13 @@ describe("staging deploy decision", () => {
     });
   });
 
-  test("skips cleanly while staging is off", async () => {
+  test("refuses a green dispatch without deployment and records staging off", async () => {
     const result = await runDecision({ status: "not_ready" });
 
-    expect(result).toMatchObject({ deploy: "deploy=false", exitCode: 0 });
+    expect(result).toMatchObject({ deploy: "deploy=false", exitCode: 1 });
+    expect(result.calls).toBe(
+      `api repos/stella/stella/statuses/${TIP_SHA} --method POST --input - {"state":"error","context":"staging/verified","description":"staging off","target_url":"https://github.com/stella/stella/actions/runs/9"}\n`,
+    );
     expect(result.summary).toContain("Staging is off");
     expect(result.summary).toContain(TIP_SHA);
   });
@@ -345,6 +375,62 @@ describe("staging deploy decision", () => {
     expect(
       await runDecision({ deployWhenUnreachable: true, status: "not_ready" }),
     ).toMatchObject({ deploy: "deploy=true", exitCode: 0 });
+  });
+
+  test("a failed status write cannot turn an off dispatch green", async () => {
+    const result = await runDecision({
+      status: "not_ready",
+      statusWriteExitCode: 7,
+    });
+    expect(result.exitCode).toBe(7);
+    expect(result.deploy).toBe("deploy=false");
+    expect(result.calls).toContain(`statuses/${TIP_SHA}`);
+  });
+
+  test("every successful decision selects deployment", async () => {
+    for (const status of ["ready", "not_ready"] as const) {
+      for (const deployWhenUnreachable of [false, true]) {
+        const result = await runDecision({ status, deployWhenUnreachable });
+        if (result.exitCode === 0) {
+          expect(result.deploy).toBe("deploy=true");
+          expect(result.calls).toBe("");
+        } else {
+          expect(result.deploy).toBe("deploy=false");
+          expect(result.exitCode).toBe(1);
+        }
+      }
+    }
+  });
+
+  test("restoring the former green skip breaks the decision contract", async () => {
+    const script = await Bun.file(scriptPath).text();
+    const mutated = script.replace(/exit 1\s*$/u, "exit 0\n");
+    expect(mutated).not.toBe(script);
+    const mutationPath = path.join(workspace, "green-skip.sh");
+    await Bun.write(mutationPath, mutated);
+    const assertRefusal = (result: Decision) =>
+      expect(result.exitCode, "staging off must fail").toBe(1);
+    assertRefusal(await runDecision({ status: "not_ready" }));
+    const result = await runDecision({
+      status: "not_ready",
+      script: mutationPath,
+    });
+    expect(() => assertRefusal(result)).toThrow("staging off must fail");
+  });
+
+  test("the off status belongs to the selected source with confined write permission", async () => {
+    const workflow = await Bun.file(WORKFLOW_URL).text();
+    const start = workflow.indexOf("  staging-health:\n");
+    const end = workflow.indexOf("\n  build-api:", start);
+    const healthJob = workflow.slice(start, end);
+    expect(healthJob).toContain("if: github.ref == 'refs/heads/main'");
+    expect(healthJob).toContain("      statuses: write");
+    expect(healthJob).toContain(`GH_TOKEN: \${{ github.token }}`);
+    expect(healthJob).toContain(
+      `DEPLOY_SHA: \${{ needs.resolve.outputs.sha }}`,
+    );
+    expect(workflow).toContain("needs.staging-health.outputs.deploy == 'true'");
+    expect(workflow).toContain('"$MCP_SMOKE" == "success"');
   });
 
   test("runs only when dispatched", async () => {
@@ -407,17 +493,21 @@ describe("staging deploy commit", () => {
     expect(resolve("")).toEqual({
       exitCode: 0,
       stderr: "",
-      stdout: `sha=${mainSha}\ntip=true\n`,
+      stdout: `sha=${mainSha}\ntip=true\nmain-sha=${mainSha}\n`,
     });
   });
 
-  test("deploys a pinned commit that main contains, after main moved on", () => {
+  test("deploys a pinned first-parent commit after main moved on", () => {
     expect(resolve(baseSha)).toEqual({
       exitCode: 0,
       stderr: "",
-      stdout: `sha=${baseSha}\ntip=false\n`,
+      stdout: `sha=${baseSha}\ntip=false\nmain-sha=${mainSha}\n`,
     });
-    expect(resolve(mainSha).stdout).toBe(`sha=${mainSha}\ntip=true\n`);
+    expect(resolve(mainSha)).toEqual({
+      exitCode: 0,
+      stderr: "",
+      stdout: `sha=${mainSha}\ntip=true\nmain-sha=${mainSha}\n`,
+    });
   });
 
   test("refuses a pinned commit that main does not contain", () => {
@@ -426,7 +516,9 @@ describe("staging deploy commit", () => {
     expect(result.exitCode).toBe(1);
     expect(result.stdout).toBe("");
     expect(result.stderr).toContain("STAGING_SHA_REFUSED");
-    expect(result.stderr).toContain(`${sideSha} is not an ancestor`);
+    expect(result.stderr).toBe(
+      `::error::STAGING_SHA_REFUSED: ${sideSha} is not on the first-parent history of origin/main (${mainSha})\n`,
+    );
   });
 
   test.each([

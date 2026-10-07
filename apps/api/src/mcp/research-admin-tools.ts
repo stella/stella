@@ -937,7 +937,7 @@ const MANAGE_ORGANIZATION_TOOL_DEFINITION = defineValibotMcpTool({
     readOnlyHint: false,
   },
   access: "write",
-  accountAccess: "standard",
+  accountAccess: "account-control",
   permissions: selectOperationByValue<(typeof MANAGE_ORG_ACTIONS)[number]>(
     "action",
     {

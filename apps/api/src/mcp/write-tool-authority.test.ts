@@ -188,7 +188,9 @@ describe("write tool permissions", () => {
       }
       const { permissions } = definition;
       expect(["all", "input", "any", "delegated"]).toContain(permissions.type);
-      expect(["standard", "sandbox"]).toContain(definition.accountAccess);
+      expect(["standard", "sandbox", "account-control"]).toContain(
+        definition.accountAccess,
+      );
       if (permissions.type === "any" || permissions.type === "delegated") {
         expect(permissions.reason.trim().length).toBeGreaterThan(0);
       }
@@ -613,15 +615,22 @@ describe("write tool account access", () => {
     const definitions = writeDefinitions();
     const standard = definitions.filter(
       (definition) =>
-        definition.access === "write" &&
-        definition.accountAccess === "standard",
+        definition.access === "write" && definition.accountAccess !== "sandbox",
     );
-    expect(standard.map((definition) => definition.name).toSorted()).toEqual([
-      "fill_template",
-      "manage_organization",
-      "save_filled_template",
-      "set_practice_jurisdictions",
-      "submit_feedback",
+    expect(
+      standard
+        .map((definition) =>
+          definition.access === "write"
+            ? `${definition.name}:${definition.accountAccess}`
+            : definition.name,
+        )
+        .toSorted(),
+    ).toEqual([
+      "fill_template:standard",
+      "manage_organization:account-control",
+      "save_filled_template:standard",
+      "set_practice_jurisdictions:standard",
+      "submit_feedback:standard",
     ]);
     for (const definition of definitions) {
       expect({

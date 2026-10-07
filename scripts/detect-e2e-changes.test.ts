@@ -381,7 +381,7 @@ describe("detect-e2e-changes", () => {
       );
     }
     expect(workflowStep(plan, "Resolve browser image")).toContain(
-      "if: steps.check.outputs.trusted == 'true' || github.event_name == 'workflow_dispatch'",
+      "if: steps.completed-depth.outputs.run_required != 'false' && (steps.check.outputs.trusted == 'true' || github.event_name == 'workflow_dispatch')",
     );
     expect(workflow).not.toContain("needs.trust-check");
     expect(workflow).not.toContain("needs.ci-changes");
@@ -717,7 +717,7 @@ describe("detect-e2e-changes", () => {
       `marketing_screenshots_required: ${githubExpression("steps.marketing-release.outputs.required")}`,
     );
     expect(workflowStep(plan, "Plan release marketing screenshots")).toContain(
-      "if: steps.check.outputs.trusted == 'true' || github.event_name == 'workflow_dispatch'",
+      "if: steps.completed-depth.outputs.run_required != 'false' && (steps.check.outputs.trusted == 'true' || github.event_name == 'workflow_dispatch')",
     );
 
     const screenshots = workflowJob("marketing-screenshots");
@@ -746,6 +746,7 @@ describe("detect-e2e-changes", () => {
                       "ci-plan": {
                         outputs: {
                           queue_depth: "full",
+                          run_required: "true",
                           trusted: String(trusted),
                           marketing_screenshots_required: String(planned),
                           web_build_required: String(buildRequired),
@@ -1075,6 +1076,7 @@ describe("detect-e2e-changes", () => {
                           outputs: {
                             queue_depth: "full",
                             suite_depth: depth,
+                            run_required: "true",
                             trusted: String(trusted),
                             e2e_production_required: String(planned),
                           },
@@ -1144,22 +1146,30 @@ describe("detect-e2e-changes", () => {
 
   test("scopes browser work before every dependency setup step", () => {
     const job = workflowJob("ci-browser");
-    const scope = "Check UI browser test scope";
+    const scopes = [
+      "Check desktop browser test scope",
+      "Check UI browser test scope",
+      "Check extension browser test scope",
+    ];
+    const required =
+      "if: steps.desktop-browser-tests.outputs.required == 'true' || steps.ui-browser-tests.outputs.required == 'true' || steps.extension-browser-tests.outputs.required == 'true'";
     const setupSteps = [
       "Setup Bun",
+      "Restore Bun install cache",
       "Turbo remote cache",
       "Install dependencies",
       "Prepare environment",
       "Install UI browser test runtime",
     ];
-    expect(job.indexOf(scope)).toBeGreaterThan(-1);
-    for (const name of setupSteps) {
-      expect(job.indexOf(scope)).toBeLessThan(job.indexOf(name));
-      expect(workflowStep(job, name)).toContain(
-        "if: steps.ui-browser-tests.outputs.required == 'true'",
-      );
+    for (const scope of scopes) {
+      expect(job.indexOf(scope)).toBeGreaterThan(-1);
+      expect(workflowStep(job, scope)).not.toContain("bun ");
+      for (const name of setupSteps) {
+        expect(job.indexOf(name)).toBeGreaterThan(-1);
+        expect(job.indexOf(scope)).toBeLessThan(job.indexOf(name));
+        expect(workflowStep(job, name)).toContain(required);
+      }
     }
-    expect(workflowStep(job, scope)).not.toContain("bun ");
   });
 
   test("browser setup verifies image executables without a host cache or installs", () => {

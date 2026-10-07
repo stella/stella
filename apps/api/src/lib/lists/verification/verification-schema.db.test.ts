@@ -9,6 +9,7 @@ import { and, eq, sql } from "drizzle-orm";
 
 import { organization } from "@/api/db/auth-schema";
 import {
+  entities,
   legalListClaimReviewEvents,
   legalListClaims,
   legalListVerificationBlocks,
@@ -46,11 +47,15 @@ beforeAll(async () => {
     name: "Verification matter",
     reference: Bun.randomUUIDv7().slice(0, 8),
   });
+  const documentId1 = toSafeId<"entity">(Bun.randomUUIDv7());
+  await testDb
+    .insert(entities)
+    .values({ id: documentId1, workspaceId, name: "Verification document" });
   await testDb.insert(legalListVerificationRuns).values({
     id: runId,
     organizationId,
     workspaceId,
-    entityId: toSafeId<"entity">(Bun.randomUUIDv7()),
+    entityId: documentId1,
     fileFieldId: toSafeId<"field">(Bun.randomUUIDv7()),
     entityVersionId: toSafeId<"entityVersion">(Bun.randomUUIDv7()),
     contentSha256: "a".repeat(64),
@@ -160,11 +165,15 @@ describe("verification source text", () => {
 
   test("deleting a run removes its pinned blocks", async () => {
     const cascadeRunId = createSafeId<"legalListVerificationRun">();
+    const documentId2 = toSafeId<"entity">(Bun.randomUUIDv7());
+    await testDb
+      .insert(entities)
+      .values({ id: documentId2, workspaceId, name: "Verification document" });
     await testDb.insert(legalListVerificationRuns).values({
       id: cascadeRunId,
       organizationId,
       workspaceId,
-      entityId: toSafeId<"entity">(Bun.randomUUIDv7()),
+      entityId: documentId2,
       fileFieldId: toSafeId<"field">(Bun.randomUUIDv7()),
       entityVersionId: toSafeId<"entityVersion">(Bun.randomUUIDv7()),
       contentSha256: "b".repeat(64),

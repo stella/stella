@@ -1,5 +1,5 @@
 import { toolDefinition } from "@tanstack/ai";
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 import * as v from "valibot";
 
@@ -7,6 +7,7 @@ import {
   BUILT_IN_CHAT_TOOL_POLICY_KINDS,
   CHAT_TOOL_POLICY_REQUIRES_APPROVAL,
 } from "@stll/api-contract";
+import { SUBAGENT_TITLE_MAX_CHARS } from "@stll/api-contract/spawn-subagents";
 
 import type { Transaction } from "@/api/db/root";
 import type { SafeDb } from "@/api/db/safe-db";
@@ -23,6 +24,7 @@ import {
 import {
   createSpawnSubagentsTool,
   resolveValidatedSubagentModelId,
+  SPAWN_SUBAGENTS_TOOL_DEFINITION,
   SUBAGENT_FAILED_MESSAGE,
 } from "@/api/handlers/chat/tools/spawn-subagents-tool";
 import { SPAWN_SUBAGENTS_TOOL_NAME } from "@/api/handlers/chat/tools/subagent-tool-shared";
@@ -212,21 +214,72 @@ const buildTool = (
   buildSubagentToolset?: (sink: SubagentProposalSink) => ChatToolMap,
 ) => {
   const tools = buildToolDefinition(buildSubagentToolset);
-  // SAFETY: test invokes the server tool's execute directly with a stub
-  // call context, same pattern as template-tools.test.ts.
-  // oxlint-disable-next-line typescript/no-unsafe-type-assertion
-  return tools.spawn_subagents.execute as unknown as (
-    input: { subagents: { task: string }[] },
+  const execute = tools.spawn_subagents.execute;
+  if (execute === undefined) {
+    return panic("The subagent tool is missing its executor");
+  }
+  return async (
+    input: Parameters<typeof execute>[0],
     ctx: { abortSignal?: AbortSignal },
-  ) => Promise<{
-    results: {
-      index: number;
-      status: string;
-      result?: string;
-      error?: string;
-    }[];
-  }>;
+  ) => await execute(input, { ...ctx, emitCustomEvent: () => {} });
 };
+
+describe("subagent titles are required and bounded at the model boundary", () => {
+  test("rejects absent, blank, invalid and overlong titles", async () => {
+    const schema = SPAWN_SUBAGENTS_TOOL_DEFINITION.inputSchema;
+    for (const subagent of [
+      { task: "Find relevant case law" },
+      { title: "", task: "Find relevant case law" },
+      { title: "   ", task: "Find relevant case law" },
+      { title: null, task: "Find relevant case law" },
+      { title: 123, task: "Find relevant case law" },
+      {
+        title: "x".repeat(SUBAGENT_TITLE_MAX_CHARS + 1),
+        task: "Find relevant case law",
+      },
+    ]) {
+      const result = await schema["~standard"].validate({
+        subagents: [subagent],
+      });
+      expect(result.issues).toBeDefined();
+      expect(
+        result.issues?.some(
+          (issue) =>
+            issue.path?.includes("title") ||
+            issue.path?.some(
+              (segment) =>
+                typeof segment === "object" && segment.key === "title",
+            ),
+        ),
+      ).toBe(true);
+    }
+  });
+
+  test("preserves localized human titles separately from the full prompt", async () => {
+    const schema = SPAWN_SUBAGENTS_TOOL_DEFINITION.inputSchema;
+    for (const title of [
+      "Neplatnost právního jednání",
+      "بطلان العقد",
+      "x".repeat(SUBAGENT_TITLE_MAX_CHARS),
+    ]) {
+      const result = await schema["~standard"].validate({
+        subagents: [
+          {
+            title: ` ${title} `,
+            task: "Find relevant case law and return citations.",
+          },
+        ],
+      });
+      if (result.issues !== undefined) {
+        panic("A valid subagent title was rejected");
+      }
+      expect(result.value.subagents.at(0)).toEqual({
+        title,
+        task: "Find relevant case law and return citations.",
+      });
+    }
+  });
+});
 
 describe("createSpawnSubagentsTool — batch usage pre-flight", () => {
   test("dispatches every subagent when the batch fits the org's remaining balance", async () => {
@@ -248,7 +301,13 @@ describe("createSpawnSubagentsTool — batch usage pre-flight", () => {
     try {
       const execute = buildTool();
       const result = await execute(
-        { subagents: [{ task: "a" }, { task: "b" }, { task: "c" }] },
+        {
+          subagents: [
+            { title: "Matter inventory", task: "a" },
+            { title: "Document inventory", task: "b" },
+            { title: "Contact inventory", task: "c" },
+          ],
+        },
         {},
       );
 
@@ -298,7 +357,13 @@ describe("createSpawnSubagentsTool — batch usage pre-flight", () => {
     try {
       const execute = buildTool();
       const result = await execute(
-        { subagents: [{ task: "a" }, { task: "b" }, { task: "c" }] },
+        {
+          subagents: [
+            { title: "Matter inventory", task: "a" },
+            { title: "Document inventory", task: "b" },
+            { title: "Contact inventory", task: "c" },
+          ],
+        },
         {},
       );
 
@@ -338,7 +403,10 @@ describe("createSpawnSubagentsTool — batch usage pre-flight", () => {
 
     try {
       const execute = buildTool();
-      const result = await execute({ subagents: [{ task: "a" }] }, {});
+      const result = await execute(
+        { subagents: [{ title: "Matter inventory", task: "a" }] },
+        {},
+      );
 
       expect(assertUsageAvailableCalls).toHaveLength(0);
       expect(runSubagentCalls).toHaveLength(1);
@@ -354,7 +422,7 @@ describe("createSpawnSubagentsTool — batch usage pre-flight", () => {
 describe("createSpawnSubagentsTool — subagent system prompt", () => {
   const runWithToolset = async (
     toolset: ChatToolMap,
-    subagent?: { task: string; expectedOutput?: string },
+    subagent?: Parameters<ReturnType<typeof buildTool>>[0]["subagents"][number],
   ) => {
     const previousEnforcement = env.USAGE_ENFORCEMENT_ENABLED;
     const previousProvider = env.AI_PROVIDER;
@@ -370,7 +438,7 @@ describe("createSpawnSubagentsTool — subagent system prompt", () => {
     });
     try {
       await buildTool(() => toolset)(
-        { subagents: [subagent ?? { task: "a" }] },
+        { subagents: [subagent ?? { title: "Matter inventory", task: "a" }] },
         {},
       );
       const call = runSubagentCalls.at(0);
@@ -415,7 +483,11 @@ describe("createSpawnSubagentsTool — subagent system prompt", () => {
   test("puts the parent model's expected-output brief on the untrusted half", async () => {
     const { systemSafe, systemUntrusted } = await runWithToolset(
       {},
-      { task: "a", expectedOutput: "a table of matters" },
+      {
+        title: "Matter inventory",
+        task: "a",
+        expectedOutput: "a table of matters",
+      },
     );
     expect(systemUntrusted).toContain("a table of matters");
     expect(systemSafe).not.toContain("a table of matters");
@@ -459,7 +531,12 @@ describe("createSpawnSubagentsTool — abort propagation", () => {
       const outcome = await Result.tryPromise(
         async () =>
           await execute(
-            { subagents: [{ task: "finishes" }, { task: "aborts" }] },
+            {
+              subagents: [
+                { title: "Matter review", task: "finishes" },
+                { title: "Document review", task: "aborts" },
+              ],
+            },
             {},
           ),
       );
@@ -497,7 +574,10 @@ describe("createSpawnSubagentsTool — incomplete subagent runs", () => {
 
     try {
       const execute = buildTool();
-      const result = await execute({ subagents: [{ task: "a" }] }, {});
+      const result = await execute(
+        { subagents: [{ title: "Matter inventory", task: "a" }] },
+        {},
+      );
 
       expect(result.results).toEqual([
         { error: cutOff, index: 0, status: "failed" },
@@ -534,14 +614,19 @@ describe("createSpawnSubagentsTool — incomplete subagent runs", () => {
         sink = proposalSink;
         return {};
       });
-      const result = await execute({ subagents: [{ task: "a" }] }, {});
+      const result = await execute(
+        { subagents: [{ title: "Matter inventory", task: "a" }] },
+        {},
+      );
 
       expect(result.results).toHaveLength(1);
       expect(result.results[0]).toMatchObject({ index: 0, status: "failed" });
-      expect(result.results[0]?.error).toStartWith(cutOff);
-      expect(result.results[0]?.error).toContain(
-        '1. update_field {"value":"x"}',
-      );
+      const entry = result.results.at(0);
+      if (entry?.status !== "failed") {
+        panic("The incomplete subagent did not report a failure");
+      }
+      expect(entry.error).toStartWith(cutOff);
+      expect(entry.error).toContain('1. update_field {"value":"x"}');
     } finally {
       env.USAGE_ENFORCEMENT_ENABLED = previousEnforcement;
       env.AI_PROVIDER = previousProvider;
@@ -595,7 +680,10 @@ describe("createSpawnSubagentsTool — thrown subagent failures", () => {
       throw failure;
     };
     try {
-      return await buildTool()({ subagents: [{ task: "a" }] }, {});
+      return await buildTool()(
+        { subagents: [{ title: "Matter inventory", task: "a" }] },
+        {},
+      );
     } finally {
       env.USAGE_ENFORCEMENT_ENABLED = previousEnforcement;
       env.AI_PROVIDER = previousProvider;
@@ -667,7 +755,7 @@ describe("createSpawnSubagentsTool — delegation without an approval pause", ()
         projectToolMapForSubagent({ save_matter: saveMatter }, sink),
       );
       const result = await execute(
-        { subagents: [{ task: "create Acme" }] },
+        { subagents: [{ title: "Create matter", task: "create Acme" }] },
         {},
       );
 
@@ -675,10 +763,12 @@ describe("createSpawnSubagentsTool — delegation without an approval pause", ()
       expect(sideEffects).toEqual([]);
       expect(result.results).toHaveLength(1);
       expect(result.results[0]?.status).toBe("completed");
-      expect(result.results[0]?.result).toContain("PROPOSED WRITES");
-      expect(result.results[0]?.result).toContain(
-        '1. save_matter {"name":"Acme"}',
-      );
+      const entry = result.results.at(0);
+      if (entry?.status !== "completed") {
+        panic("The subagent did not complete its proposal");
+      }
+      expect(entry.result).toContain("PROPOSED WRITES");
+      expect(entry.result).toContain('1. save_matter {"name":"Acme"}');
     } finally {
       env.USAGE_ENFORCEMENT_ENABLED = previousEnforcement;
       env.AI_PROVIDER = previousProvider;

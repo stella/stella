@@ -29,6 +29,8 @@ const reportedLine = (diagnostic: unknown, code: string): number | null => {
 };
 
 type LintSingleRuleOptions = {
+  /** Use an oxlint built-in plugin instead of a local JavaScript plugin. */
+  builtin?: boolean;
   /** The plugin that carries the rule, when it is not named after it. */
   plugin?: string;
   settings?: Record<string, unknown>;
@@ -42,7 +44,7 @@ type LintSingleRuleOptions = {
 };
 
 /**
- * The lines one local rule reports on `source`, in order, run through the
+ * The lines one rule reports on `source`, in order, run through the
  * real oxlint CLI with only that rule enabled. Read from the JSON report, not
  * the rendered output, which varies with terminal and environment.
  */
@@ -50,6 +52,7 @@ export const runSingleRule = async (
   ruleName: string,
   source: string,
   {
+    builtin = false,
     plugin = ruleName,
     settings,
     fix = false,
@@ -67,9 +70,13 @@ export const runSingleRule = async (
       `export default ${JSON.stringify({
         categories: { correctness: "off" },
         settings,
-        jsPlugins: [
-          path.join(REPOSITORY_ROOT, ".oxlint-plugins", `${plugin}.ts`),
-        ],
+        ...(builtin
+          ? { plugins: [plugin] }
+          : {
+              jsPlugins: [
+                path.join(REPOSITORY_ROOT, ".oxlint-plugins", `${plugin}.ts`),
+              ],
+            }),
         rules: {
           [`${plugin}/${ruleName}`]:
             options === undefined ? "error" : ["error", options],

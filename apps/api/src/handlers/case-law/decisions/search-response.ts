@@ -125,6 +125,7 @@ export const projectCaseLawSearchResponse = (
     response.facets === null
       ? null
       : {
+          courtYear: response.facets.courtYear,
           court: response.facets.court
             .slice(0, COURT_TIER_LABELS.length)
             .map((tier) => ({

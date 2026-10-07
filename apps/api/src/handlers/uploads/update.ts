@@ -156,13 +156,9 @@ const finalizeUpload = createSafeHandler(
     const timeoutSec = Math.floor(FINALIZE_CLAIM_TIMEOUT_MS / 1000);
     const claimRequestId = Bun.randomUUIDv7().slice(0, 64);
     const claimedRows = yield* Result.await(
-      // oxlint-disable-next-line arrow-body-style -- block body holds the audit-skip directive
-      safeDb((tx) => {
-        // audit: skip — claim FSM state transition on
-        // pending_uploads; ephemeral bookkeeping. The audit row for
-        // the resulting entity is emitted by `finalizeEntityCreate`
-        // inside the same domain transaction.
-        return tx
+      safeDb((tx) =>
+        // audit: skip — claim FSM state transition on pending_uploads; ephemeral bookkeeping. The audit row for the resulting entity is emitted by `finalizeEntityCreate` inside the same domain transaction.
+        tx
           .update(pendingUploads)
           .set({
             status: "scanning",
@@ -182,8 +178,8 @@ const finalizeUpload = createSafeHandler(
                 )
               )`,
           )
-          .returning();
-      }),
+          .returning(),
+      ),
     );
     const claimed = claimedRows.at(0);
 
@@ -218,11 +214,9 @@ const finalizeUpload = createSafeHandler(
         );
       }
       const expiredRows = yield* Result.await(
-        // oxlint-disable-next-line arrow-body-style -- block body holds the audit-skip directive
-        safeDb((tx) => {
-          // audit: skip — expiry transition on pending_uploads;
-          // the upload never became a durable entity.
-          return tx
+        safeDb((tx) =>
+          // audit: skip — expiry transition on pending_uploads; the upload never became a durable entity.
+          tx
             .update(pendingUploads)
             .set({
               status: "rejected",
@@ -242,8 +236,8 @@ const finalizeUpload = createSafeHandler(
                   )
                 )`,
             )
-            .returning({ id: pendingUploads.id });
-        }),
+            .returning({ id: pendingUploads.id }),
+        ),
       );
       if (expiredRows.at(0)) {
         return Result.err(
@@ -277,11 +271,9 @@ const finalizeUpload = createSafeHandler(
       const error = finalizeResult.error;
       const terminalStatus = error.status === 500 ? "failed" : "rejected";
       const failedRows = yield* Result.await(
-        // oxlint-disable-next-line arrow-body-style -- block body holds the audit-skip directive
-        safeDb((tx) => {
-          // audit: skip — terminal-state write on pending_uploads,
-          // no domain entity to attribute.
-          return tx
+        safeDb((tx) =>
+          // audit: skip — terminal-state write on pending_uploads, no domain entity to attribute.
+          tx
             .update(pendingUploads)
             .set({
               status: terminalStatus,
@@ -301,8 +293,8 @@ const finalizeUpload = createSafeHandler(
                 eq(pendingUploads.claimedByRequestId, claimRequestId),
               ),
             )
-            .returning({ id: pendingUploads.id });
-        }),
+            .returning({ id: pendingUploads.id }),
+        ),
       );
       if (!failedRows.at(0)) {
         panic("Pending upload failure marker update returned no rows");

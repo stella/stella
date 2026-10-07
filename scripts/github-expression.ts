@@ -410,3 +410,64 @@ export const evaluate = (source: string, context: Context): Result => {
 /** True only when the condition is false whatever the unpinned context holds. */
 export const definitelyFalse = (source: string, context: Context): boolean =>
   isTruthy(evaluate(source, context)) === false;
+
+type ContextWithPlanOutputsOptions = {
+  context: Context;
+  outputs: Record<string, string>;
+};
+
+/** Resolve computed planner outputs from their source expressions, not fixture pins. */
+export const contextWithPlanOutputs = ({
+  context,
+  outputs,
+}: ContextWithPlanOutputsOptions): Context => {
+  const projections = new Map<string, string>();
+  const computed = new Map<string, string>();
+  for (const [name, expression] of Object.entries(outputs)) {
+    const output = `needs.ci-plan.outputs.${name}`;
+    const reference =
+      /^\$\{\{\s*([\w-]+(?:\.[\w-]+)+)(?:\s*\|\|\s*(?:'(?:[^']|'')*'|true|false|null|\d+))?\s*\}\}$/u.exec(
+        expression,
+      )?.[1];
+    if (reference === undefined) {
+      computed.set(output, expression);
+    } else {
+      projections.set(reference, output);
+    }
+  }
+  const lookup = (path: string) =>
+    Object.hasOwn(context.values, path)
+      ? context.values[path]
+      : context.fallback?.(path);
+  const plannerContext = {
+    ...context,
+    fallback: (path: string) => {
+      const direct = lookup(path);
+      if (direct !== undefined) {
+        return direct;
+      }
+      const projection = projections.get(path);
+      return projection === undefined ? undefined : lookup(projection);
+    },
+  };
+  return {
+    ...context,
+    values: Object.fromEntries(
+      Object.entries(context.values).filter(([name]) => !computed.has(name)),
+    ),
+    fallback: (path) => {
+      const expression = computed.get(path);
+      if (expression === undefined) {
+        return lookup(path);
+      }
+      const value = evaluate(expression, plannerContext);
+      if (value === UNKNOWN) {
+        return undefined;
+      }
+      if (value !== null && typeof value === "object") {
+        panic(`Computed planner output is not scalar: ${path}`);
+      }
+      return value === null ? "" : String(value);
+    },
+  };
+};

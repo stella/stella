@@ -27,7 +27,7 @@ const config = {
   // an organization-configuration act, and this is the same statement the other
   // org-scoped secret endpoints (AI provider config, DeepL key) are gated on.
   permissions: { organizationSettings: ["update"] },
-  accountAccess: ACCOUNT_ACCESS.standard,
+  accountAccess: ACCOUNT_ACCESS.accountControl,
   // Secret material must never transit an agent surface: the response carries
   // the plaintext credential, and an agent able to mint credentials could grant
   // itself durable access outside the consent flow that granted it its own.

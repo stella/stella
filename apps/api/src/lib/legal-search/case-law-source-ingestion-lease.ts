@@ -78,24 +78,24 @@ export const acquireCaseLawSourceIngestionLease = async ({
     return null;
   }
 
-  const renewLeaseTx = async (tx: Transaction) =>
+  const renewLeaseTx = async (tx: Transaction) => {
     // audit: skip — renews ephemeral ownership without domain mutation
-    (
-      await tx
-        .update(caseLawSources)
-        .set({
-          ingestionLeaseExpiresAt: nextLeaseExpiry(),
-          updatedAt: sql`${caseLawSources.updatedAt}`,
-        })
-        .where(
-          and(
-            eq(caseLawSources.id, sourceId),
-            eq(caseLawSources.ingestionLeaseToken, leaseToken),
-            sql`${caseLawSources.ingestionLeaseExpiresAt} > now()`,
-          ),
-        )
-        .returning({ id: caseLawSources.id })
-    ).at(0);
+    const renewed = await tx
+      .update(caseLawSources)
+      .set({
+        ingestionLeaseExpiresAt: nextLeaseExpiry(),
+        updatedAt: sql`${caseLawSources.updatedAt}`,
+      })
+      .where(
+        and(
+          eq(caseLawSources.id, sourceId),
+          eq(caseLawSources.ingestionLeaseToken, leaseToken),
+          sql`${caseLawSources.ingestionLeaseExpiresAt} > now()`,
+        ),
+      )
+      .returning({ id: caseLawSources.id });
+    return renewed.at(0);
+  };
 
   const beforeDatabaseMark = async (): Promise<void> => {
     const renewed = await scopedDb(renewLeaseTx);
