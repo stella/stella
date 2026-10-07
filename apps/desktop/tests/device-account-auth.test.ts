@@ -5,7 +5,7 @@ import path from "node:path";
 type NativeSource = { filename: string; source: string };
 
 // Account credentials have one HTTP owner. Edit-session SSE uses a separate
-// token; naming that exception narrowly prevents it from becoming a bypass.
+// token, so it is the one named exception and stays scoped to that stream.
 const assertAccountRequestOwners = (sources: readonly NativeSource[]) => {
   const proofCallers: string[] = [];
   let ownerBearers = 0;
