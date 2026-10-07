@@ -520,17 +520,18 @@ export const ${name} = { run: { featureId: "fixture", ${target} } };`;
 
   test("every endpoint reaching a shared module receives its feature uses", () => {
     const declared = "apps/api/src/routes/declared.ts";
-    const undeclared = "apps/api/src/routes/undeclared.ts";
-    const endpointSource =
-      'import { read } from "../lib/rows"; export default read;';
-    // The declared endpoint is checked first, so the undeclared one reads the
-    // shared module's analysis from the per-run cache.
+    const throughTable = "apps/api/src/routes/through-table.ts";
+    const throughCore = "apps/api/src/routes/through-core.ts";
+    // The declared endpoint is checked first and reaches both shared modules,
+    // so the later endpoints read the table use and the ownership boundary
+    // from the per-run cache.
     expect(
       validateFeatureAccessDeclarations({
         registry,
         endpoints: [
           { file: declared, config: required },
-          { file: undeclared, config: {} },
+          { file: throughTable, config: {} },
+          { file: throughCore, config: {} },
         ],
         sources: new Map([
           ...baseSources,
@@ -538,13 +539,27 @@ export const ${name} = { run: { featureId: "fixture", ${target} } };`;
             "apps/api/src/lib/rows.ts",
             'export const read = (tx) => tx.execute("select * from fixture_rows");',
           ],
-          [declared, endpointSource],
-          [undeclared, endpointSource],
+          [
+            declared,
+            'import { read } from "../lib/rows"; import { run } from "../feature/core"; export default () => run() && read;',
+          ],
+          [
+            throughTable,
+            'import { read } from "../lib/rows"; export default read;',
+          ],
+          [
+            throughCore,
+            'import { run } from "../feature/core"; export default run;',
+          ],
         ]),
       }),
     ).toEqual([
       {
-        file: undeclared,
+        file: throughCore,
+        message: "source ownership requires featureAccess fixture",
+      },
+      {
+        file: throughTable,
         message: "source ownership requires featureAccess fixture",
       },
     ]);
