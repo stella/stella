@@ -84,7 +84,7 @@
     "toolsTitle": "Ferramentas para agentes de IA."
   },
   "meta": {
-    "homeDescription": "Espaço de trabalho jurídico de código aberto para advogados: casos, documentos, revisão de contratos e pesquisa. Auto-hospede ou use nossa nuvem. IA por uso.",
+    "homeDescription": "Espaço de trabalho jurídico de código aberto para advogados: casos, documentos, revisão de contratos e pesquisa. Auto-hospede ou use nossa nuvem. IA incluída.",
     "homeTitle": "stella | espaço de trabalho jurídico de código aberto"
   },
   "nav": {
@@ -102,6 +102,7 @@
       "intelligence": "Inteligência jurídica",
       "workspace": "Espaço de trabalho"
     },
+    "pricing": "Preços",
     "product": "Produto",
     "products": {
       "agent": {
@@ -154,6 +155,97 @@
       }
     },
     "security": "Segurança"
+  },
+  "pricing": {
+    "billedMonthly": "Cobrança mensal",
+    "billedYearly": "{total} com cobrança anual",
+    "billedYearlyPerSeat": "{total} por assento, com cobrança anual",
+    "choosePlan": "Cadastre-se e escolha o plano {plan}",
+    "ctaHeading": "Comece com uma conta gratuita.",
+    "everyPlan": {
+      "caseLaw": {
+        "body": "Pesquise e leia jurisprudência e legislação em todos os planos. Contas Free têm limites de uso razoável.",
+        "title": "Jurisprudência e legislação"
+      },
+      "heading": "Incluído em todos os planos",
+      "keys": {
+        "body": "Conecte a chave do seu próprio provedor de IA em qualquer plano. A IA que roda na sua chave não conta para a cota do plano.",
+        "title": "Suas próprias chaves de provedor"
+      },
+      "selfHost": {
+        "body": "A stella é de código aberto, e auto-hospedá-la na sua própria infraestrutura continua gratuito. <gh>Leia o guia de auto-hospedagem</gh>.",
+        "title": "Auto-hospedagem"
+      }
+    },
+    "faqs": {
+      "0": {
+        "answer": "Um assento é um membro da sua equipe com login próprio. O plano Team é cobrado por assento; Free e Solo incluem um membro.",
+        "question": "O que é um assento?"
+      },
+      "1": {
+        "answer": "A IA fica pausada até a cota ser renovada no mês seguinte, e o aplicativo sugere um plano superior. Todo o resto continua funcionando, e a IA na chave do seu próprio provedor não é afetada.",
+        "question": "O que acontece quando a cota de IA do plano Free acaba?"
+      },
+      "2": {
+        "answer": "Sim. Você mantém o acesso ao plano pago até o fim do período já pago.",
+        "question": "Posso cancelar a qualquer momento?"
+      },
+      "3": {
+        "answer": "Nada é excluído quando um plano termina. Seus casos e documentos continuam na sua conta.",
+        "question": "O que acontece com meus dados quando um plano termina?"
+      },
+      "4": {
+        "answer": "Sim, em todos os planos, inclusive no Free. Com a sua própria chave, o uso de IA é cobrado pelo seu provedor, em vez de limitado pelo plano.",
+        "question": "Posso usar a chave do meu próprio provedor de IA?"
+      },
+      "5": {
+        "answer": "Sim. A stella é de código aberto e a auto-hospedagem continua gratuita. <gh>O guia de auto-hospedagem</gh> explica como auto-hospedá-la na sua própria infraestrutura.",
+        "question": "A auto-hospedagem é gratuita?"
+      }
+    },
+    "interval": {
+      "label": "Período de cobrança",
+      "monthly": "Mensal",
+      "yearly": "Anual"
+    },
+    "members": "{count, plural, one {# membro} many {# membros} other {# membros}}",
+    "membersPerSeat": "Quantos membros você precisar, cobrados por assento",
+    "metaDescription": "Preços da stella: comece grátis sem cartão, Solo com preço mensal fixo e Team por assento. Jurisprudência e suas próprias chaves de IA em todos os planos.",
+    "metaTitle": "Preços: planos Free, Solo e Team | stella",
+    "perMonth": "por mês",
+    "perSeatPerMonth": "por assento por mês",
+    "plans": {
+      "free": {
+        "features": {
+          "0": "Assistente de IA e serviços com uma pequena cota mensal",
+          "1": "Quando a cota acaba, a IA pausa e sugere um plano superior",
+          "2": "IA ilimitada com a chave do seu próprio provedor"
+        },
+        "priceNote": "Sem cartão. Grátis para sempre.",
+        "summary": "Para testar a stella em trabalho real, pelo tempo que você quiser."
+      },
+      "solo": {
+        "features": {
+          "0": "Assistente de IA e serviços completos, com uso razoável",
+          "1": "Sua própria chave de provedor, se preferir"
+        },
+        "summary": "Para quem advoga sozinho."
+      },
+      "team": {
+        "features": {
+          "0": "Assistente de IA e serviços completos, com uso razoável",
+          "1": "Avaliação de 7 dias, sem cartão"
+        },
+        "summary": "Para equipes jurídicas que trabalham juntas nos seus casos."
+      }
+    },
+    "signUpNote": "Cadastre-se primeiro; você escolhe o plano pago no aplicativo.",
+    "startEvaluation": "Começar uma avaliação de 7 dias",
+    "storage": "{storage} de armazenamento",
+    "storagePerSeat": "{storage} de armazenamento por assento",
+    "subtitle": "Comece grátis e mude de plano quando o trabalho crescer. Todos os planos incluem pesquisa de jurisprudência e legislação e funcionam com a chave do seu próprio provedor de IA.",
+    "title": "Planos para escritórios de todos os tamanhos",
+    "vatNote": "Preços sem IVA. Para empresas e profissionais."
   },
   "products": {
     "agent": {

@@ -17,6 +17,7 @@ type NavLabelKey = Extract<
   | "hero.selfHost"
   | "nav.aiFactSheet"
   | "nav.blog"
+  | "nav.pricing"
   | "nav.security"
 >;
 type ProductEyebrowKey = Extract<
@@ -41,6 +42,9 @@ export type NavLabel =
 
 export type NavLink = NavLabel & { href: string };
 
+// The app's entry point; a new visitor signs up there and picks a plan in
+// the app, so every "Start free" and plan call to action links here.
+export const appUrl = "https://my.stll.app";
 export const githubUrl = "https://github.com/stella/stella";
 export const discordUrl = "https://discord.gg/8dZjmVFjTK";
 export const xUrl = "https://x.com/stll_app";
@@ -50,6 +54,7 @@ export const contactHref = "mailto:contact@stll.app";
 export const selfHostingUrl = `${githubUrl}/blob/main/docs/self-hosting.md`;
 
 export const resourceLinks = [
+  { kind: "translated", labelKey: "nav.pricing", href: "/pricing/" },
   { kind: "translated", labelKey: "footer.documentation", href: "/docs/" },
   { kind: "translated", labelKey: "nav.security", href: "/security/" },
   { kind: "translated", labelKey: "nav.blog", href: "/blog/" },

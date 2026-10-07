@@ -84,7 +84,7 @@
     "toolsTitle": "Tööriistad tehisintellekti agentidele."
   },
   "meta": {
-    "homeDescription": "Avatud lähtekoodiga õigustööruum: dokumendid, toimikud, ülevaatus ja otsing. Majuta ise või meie pilves. Kasutuspõhine tehisintellekt, tarnijalõksuta.",
+    "homeDescription": "Avatud lähtekoodiga õigustööruum: dokumendid, toimikud, ülevaatus ja otsing. Majuta ise või meie pilves. Tehisintellekt kaasas või oma võtmega.",
     "homeTitle": "stella | avatud lähtekoodiga õigustööruum"
   },
   "nav": {
@@ -102,6 +102,7 @@
       "intelligence": "Õigusanalüütika",
       "workspace": "Tööruum"
     },
+    "pricing": "Hinnad",
     "product": "Toode",
     "products": {
       "agent": {
@@ -154,6 +155,97 @@
       }
     },
     "security": "Turvalisus"
+  },
+  "pricing": {
+    "billedMonthly": "Arveldus kord kuus",
+    "billedYearly": "{total}, arveldus kord aastas",
+    "billedYearlyPerSeat": "{total} koha kohta, arveldus kord aastas",
+    "choosePlan": "Registreeru ja vali plaan {plan}",
+    "ctaHeading": "Alusta tasuta kontoga.",
+    "everyPlan": {
+      "caseLaw": {
+        "body": "Otsi ja loe kohtupraktikat ning õigusakte igas plaanis. Tasuta kontodel kehtivad mõistliku kasutuse piirangud.",
+        "title": "Kohtupraktika ja õigusaktid"
+      },
+      "heading": "Kõigis plaanides sisaldub",
+      "keys": {
+        "body": "Ühenda igas plaanis oma mudelipakkuja võti. Sinu võtmega töötav tehisintellekt ei kuluta plaani mahtu.",
+        "title": "Sinu enda mudelivõtmed"
+      },
+      "selfHost": {
+        "body": "stella on avatud lähtekoodiga ja selle käitamine oma serveris jääb tasuta. <gh>Loe, kuidas rakendust stella ise majutada</gh>.",
+        "title": "Oma serveris"
+      }
+    },
+    "faqs": {
+      "0": {
+        "answer": "Koht on üks sinu meeskonna liige, kellel on oma sisselogimine. Team-plaani eest arveldatakse koha kohta; Free ja Solo sisaldavad ühte liiget.",
+        "question": "Mis on koht?"
+      },
+      "1": {
+        "answer": "Tehisintellekt peatub, kuni maht järgmisel kuul uueneb, ja rakendus pakub plaani täiendamist. Kõik muu töötab edasi ning sinu enda mudelipakkuja võtmega tehisintellekti see ei mõjuta.",
+        "question": "Mis juhtub, kui Free-plaani tehisintellekti maht saab otsa?"
+      },
+      "2": {
+        "answer": "Jah. Tasuline plaan jääb sulle kasutada makstud perioodi lõpuni.",
+        "question": "Kas saan igal ajal tühistada?"
+      },
+      "3": {
+        "answer": "Plaani lõppedes ei kustutata midagi. Sinu toimikud ja dokumendid jäävad su kontole.",
+        "question": "Mis saab minu andmetest, kui plaan lõpeb?"
+      },
+      "4": {
+        "answer": "Jah, igas plaanis, ka Free-plaanis. Oma võtmega arveldab tehisintellekti kasutuse eest sinu mudelipakkuja ja plaan seda ei piira.",
+        "question": "Kas saan kasutada oma mudelipakkuja võtit?"
+      },
+      "5": {
+        "answer": "Jah. stella on avatud lähtekoodiga ja selle käitamine oma serveris jääb tasuta. <gh>Juhendist</gh> leiad, kuidas rakendust stella oma taristus ise majutada.",
+        "question": "Kas oma serveris käitamine on tasuta?"
+      }
+    },
+    "interval": {
+      "label": "Arveldusperiood",
+      "monthly": "Kuu kaupa",
+      "yearly": "Aasta kaupa"
+    },
+    "members": "{count, plural, one {# liige} other {# liiget}}",
+    "membersPerSeat": "Nii palju liikmeid, kui vajad, arveldus koha kohta",
+    "metaDescription": "stella hinnad: alusta tasuta ilma kaardita, Solo kindla kuuhinnaga, Team koha kohta. Kohtupraktika otsing ja oma tehisintellekti võtmed igas plaanis.",
+    "metaTitle": "Hinnad: plaanid Free, Solo ja Team | stella",
+    "perMonth": "kuus",
+    "perSeatPerMonth": "koha kohta kuus",
+    "plans": {
+      "free": {
+        "features": {
+          "0": "Tehisintellekti assistent ja teenused väikese kuumahuga",
+          "1": "Kui maht on kasutatud, tehisintellekt peatub ja pakub plaani täiendamist",
+          "2": "Piiramatu tehisintellekt sinu enda mudelipakkuja võtmega"
+        },
+        "priceNote": "Kaarti pole vaja. Jäädavalt tasuta.",
+        "summary": "Proovi rakendust stella päris töös nii kaua, kui soovid."
+      },
+      "solo": {
+        "features": {
+          "0": "Täisvõimekusega tehisintellekti assistent ja teenused mõistliku kasutuse piires",
+          "1": "Soovi korral sinu enda mudelipakkuja võti"
+        },
+        "summary": "Iseseisvalt töötavale juristile."
+      },
+      "team": {
+        "features": {
+          "0": "Täisvõimekusega tehisintellekti assistent ja teenused mõistliku kasutuse piires",
+          "1": "7-päevane prooviperiood, kaarti pole vaja"
+        },
+        "summary": "Õigusmeeskondadele, kes töötavad toimikutega koos."
+      }
+    },
+    "signUpNote": "Registreeru esmalt; tasulise plaani valid rakenduses.",
+    "startEvaluation": "Alusta 7-päevast prooviperioodi",
+    "storage": "{storage} salvestusruumi",
+    "storagePerSeat": "{storage} salvestusruumi koha kohta",
+    "subtitle": "Alusta tasuta ja vaheta plaani, kui tööd tuleb juurde. Igas plaanis on kohtupraktika ja õigusaktide otsing ning saad kasutada oma mudelipakkuja võtit.",
+    "title": "Plaanid nii üksikjuristile kui ka suurele meeskonnale",
+    "vatNote": "Hinnad ei sisalda käibemaksu. Ettevõtetele ja spetsialistidele."
   },
   "products": {
     "agent": {

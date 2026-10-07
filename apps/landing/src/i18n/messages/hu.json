@@ -84,7 +84,7 @@
     "toolsTitle": "Eszközök AI-ügynököknek."
   },
   "meta": {
-    "homeDescription": "Nyílt forráskódú jogi munkaterület ügyvédeknek: dokumentumok, ügyek, ellenőrzés és kutatás. Futtassa saját szerverén vagy a felhőnkben. Használatalapú AI.",
+    "homeDescription": "Nyílt forráskódú jogi munkaterület ügyvédeknek: dokumentumok, ügyek, ellenőrzés és kutatás. Futtassa saját szerverén vagy a felhőnkben. AI az árban.",
     "homeTitle": "stella | nyílt forráskódú jogi munkaterület"
   },
   "nav": {
@@ -102,6 +102,7 @@
       "intelligence": "Jogi analitika",
       "workspace": "Munkaterület"
     },
+    "pricing": "Árak",
     "product": "Termék",
     "products": {
       "agent": {
@@ -154,6 +155,97 @@
       }
     },
     "security": "Biztonság"
+  },
+  "pricing": {
+    "billedMonthly": "Havi számlázás",
+    "billedYearly": "{total}, évente számlázva",
+    "billedYearlyPerSeat": "{total} helyenként, évente számlázva",
+    "choosePlan": "Regisztráljon, és válassza a {plan} díjcsomagot",
+    "ctaHeading": "Kezdje egy ingyenes fiókkal.",
+    "everyPlan": {
+      "caseLaw": {
+        "body": "Keressen és olvasson ítélkezési gyakorlatot és jogszabályokat bármely díjcsomagban. Az ingyenes fiókokra méltányos használati korlátok vonatkoznak.",
+        "title": "Ítélkezési gyakorlat és jogszabályok"
+      },
+      "heading": "Minden díjcsomag része",
+      "keys": {
+        "body": "Bármely díjcsomagban csatlakoztathatja saját modellszolgáltatói kulcsát. A saját kulcsán futó AI nem számít bele a díjcsomag keretébe.",
+        "title": "Saját modellkulcsok"
+      },
+      "selfHost": {
+        "body": "A stella alkalmazás nyílt forráskódú, és saját infrastruktúrán továbbra is ingyenesen üzemeltethető. <gh>Olvassa el a saját üzemeltetési útmutatót</gh>.",
+        "title": "Saját üzemeltetés"
+      }
+    },
+    "faqs": {
+      "0": {
+        "answer": "Egy hely a csapata egy tagja, saját bejelentkezéssel. A Team díjcsomagot helyenként számlázzuk; a Free és a Solo egy tagot tartalmaz.",
+        "question": "Mi az a hely?"
+      },
+      "1": {
+        "answer": "Az AI szünetel, amíg a keret a következő hónapban meg nem újul, az alkalmazás pedig magasabb díjcsomagot ajánl. Minden más tovább működik, és ez nem érinti a saját modellszolgáltatói kulcsán futó AI-t.",
+        "question": "Mi történik, ha elfogy a Free díjcsomag AI-kerete?"
+      },
+      "2": {
+        "answer": "Igen. A fizetős díjcsomaghoz a kifizetett időszak végéig megmarad a hozzáférése.",
+        "question": "Bármikor lemondhatom?"
+      },
+      "3": {
+        "answer": "A díjcsomag lejártakor semmi sem törlődik. Ügyei és dokumentumai a fiókjában maradnak.",
+        "question": "Mi lesz az adataimmal, ha lejár a díjcsomag?"
+      },
+      "4": {
+        "answer": "Igen, minden díjcsomagban, a Free-t is beleértve. Saját kulccsal az AI-használatot a modellszolgáltató számlázza, és a díjcsomag nem korlátozza.",
+        "question": "Használhatom a saját modellszolgáltatói kulcsomat?"
+      },
+      "5": {
+        "answer": "Igen. A stella alkalmazás nyílt forráskódú, és a saját üzemeltetés ingyenes marad. <gh>A saját üzemeltetési útmutató</gh> leírja, hogyan futtathatja a stella alkalmazást saját infrastruktúráján.",
+        "question": "Ingyenes a saját üzemeltetés?"
+      }
+    },
+    "interval": {
+      "label": "Számlázási időszak",
+      "monthly": "Havonta",
+      "yearly": "Évente"
+    },
+    "members": "{count, plural, one {# tag} other {# tag}}",
+    "membersPerSeat": "Annyi tag, amennyire szüksége van, helyenkénti számlázással",
+    "metaDescription": "A stella alkalmazás árai: kezdje ingyen, kártya nélkül; Solo fix havidíjjal, Team helyenként. Ítélkezési gyakorlat és saját AI-kulcsok minden díjcsomagban.",
+    "metaTitle": "Árak: Free, Solo és Team díjcsomagok | stella",
+    "perMonth": "havonta",
+    "perSeatPerMonth": "helyenként havonta",
+    "plans": {
+      "free": {
+        "features": {
+          "0": "AI-asszisztens és szolgáltatások kis havi kerettel",
+          "1": "A keret elfogyásakor az AI szünetel, és magasabb díjcsomagot ajánl",
+          "2": "Korlátlan AI saját modellszolgáltatói kulccsal"
+        },
+        "priceNote": "Bankkártya nélkül. Örökre ingyenes.",
+        "summary": "Próbálja ki a stella alkalmazást valódi munkán, ameddig csak szeretné."
+      },
+      "solo": {
+        "features": {
+          "0": "Teljes AI-asszisztens és szolgáltatások méltányos használat mellett",
+          "1": "Igény szerint saját modellszolgáltatói kulccsal"
+        },
+        "summary": "Önállóan dolgozó jogászoknak."
+      },
+      "team": {
+        "features": {
+          "0": "Teljes AI-asszisztens és szolgáltatások méltányos használat mellett",
+          "1": "7 napos próbaidőszak bankkártya nélkül"
+        },
+        "summary": "Ügyeken közösen dolgozó jogi csapatoknak."
+      }
+    },
+    "signUpNote": "Először regisztráljon; a fizetős díjcsomagot az alkalmazásban választja ki.",
+    "startEvaluation": "7 napos próbaidőszak indítása",
+    "storage": "{storage} tárhely",
+    "storagePerSeat": "{storage} tárhely helyenként",
+    "subtitle": "Kezdje ingyen, és váltson nagyobb díjcsomagra, ahogy a munka nő. Minden díjcsomag tartalmazza az ítélkezési gyakorlat és a jogszabályok keresését, és működik saját modellszolgáltatói kulccsal.",
+    "title": "Díjcsomagok bármilyen méretű praxishoz",
+    "vatNote": "Az árak nem tartalmazzák az áfát. Vállalkozásoknak és szakembereknek."
   },
   "products": {
     "agent": {

@@ -84,7 +84,7 @@
     "toolsTitle": "Nástroje pro AI agenty."
   },
   "meta": {
-    "homeDescription": "AI pro právníky v open source aplikaci: správa spisů a dokumentů, revize smluv i právní rešerše. Provozujte sami či v cloudu. AI podle využití.",
+    "homeDescription": "AI pro právníky v open source aplikaci: správa spisů a dokumentů, revize smluv i právní rešerše. Provozujte sami či v cloudu. AI v ceně i s vlastním klíčem.",
     "homeTitle": "stella | AI pro právníky, právní rešerše a revize smluv"
   },
   "nav": {
@@ -102,6 +102,7 @@
       "intelligence": "Právní analytika",
       "workspace": "Pracovní prostor"
     },
+    "pricing": "Ceník",
     "product": "Produkt",
     "products": {
       "agent": {
@@ -154,6 +155,97 @@
       }
     },
     "security": "Zabezpečení"
+  },
+  "pricing": {
+    "billedMonthly": "Fakturováno měsíčně",
+    "billedYearly": "{total} při roční fakturaci",
+    "billedYearlyPerSeat": "{total} za místo při roční fakturaci",
+    "choosePlan": "Zaregistrujte se a zvolte tarif {plan}",
+    "ctaHeading": "Začněte s bezplatným účtem.",
+    "everyPlan": {
+      "caseLaw": {
+        "body": "Vyhledávejte a čtěte judikaturu a právní předpisy v každém tarifu. Bezplatné účty mají limity podle zásad férového využívání.",
+        "title": "Judikatura a právní předpisy"
+      },
+      "heading": "Součást každého tarifu",
+      "keys": {
+        "body": "V každém tarifu můžete připojit vlastní klíč od poskytovatele modelů. AI běžící na vašem klíči se nezapočítává do limitu tarifu.",
+        "title": "Vlastní klíče k AI modelům"
+      },
+      "selfHost": {
+        "body": "stella je open source a provozovat ji na vlastní infrastruktuře můžete i nadále zdarma. <gh>Přečtěte si návod k self-hostingu</gh>.",
+        "title": "Na vlastní infrastruktuře"
+      }
+    },
+    "faqs": {
+      "0": {
+        "answer": "Místo odpovídá jednomu členovi vašeho týmu s vlastním přihlášením. Tarif Team se účtuje za místo, tarify Free a Solo zahrnují jednoho člena.",
+        "question": "Co je místo?"
+      },
+      "1": {
+        "answer": "AI se pozastaví, dokud se limit příští měsíc neobnoví, a aplikace nabídne přechod na vyšší tarif. Vše ostatní funguje dál a AI na vašem vlastním klíči od poskytovatele modelů se to netýká.",
+        "question": "Co se stane, když vyčerpám AI limit v tarifu Free?"
+      },
+      "2": {
+        "answer": "Ano. Přístup k placenému tarifu vám zůstane až do konce zaplaceného období.",
+        "question": "Mohu předplatné kdykoli zrušit?"
+      },
+      "3": {
+        "answer": "Po skončení tarifu se nic nemaže. Vaše spisy a dokumenty zůstávají ve vašem účtu.",
+        "question": "Co se stane s mými daty, když tarif skončí?"
+      },
+      "4": {
+        "answer": "Ano, v každém tarifu včetně Free. S vlastním klíčem vám využití AI účtuje poskytovatel modelů a tarif ho neomezuje.",
+        "question": "Mohu použít vlastní klíč od poskytovatele modelů?"
+      },
+      "5": {
+        "answer": "Ano. stella je open source a self-hosting zůstává zdarma. <gh>Návod k self-hostingu</gh> vysvětluje, jak aplikaci stella provozovat na vlastní infrastruktuře.",
+        "question": "Je self-hosting zdarma?"
+      }
+    },
+    "interval": {
+      "label": "Fakturační období",
+      "monthly": "Měsíčně",
+      "yearly": "Ročně"
+    },
+    "members": "{count, plural, one {# člen} few {# členové} many {# člena} other {# členů}}",
+    "membersPerSeat": "Tolik členů, kolik potřebujete, s platbou za místo",
+    "metaDescription": "Ceník aplikace stella: začněte zdarma bez karty, Solo za pevnou měsíční cenu, Team za místo. Rešerše judikatury a vlastní klíče k AI v každém tarifu.",
+    "metaTitle": "Ceník: tarify Free, Solo a Team | stella",
+    "perMonth": "měsíčně",
+    "perSeatPerMonth": "za místo měsíčně",
+    "plans": {
+      "free": {
+        "features": {
+          "0": "AI asistent a služby s malým měsíčním limitem",
+          "1": "Po vyčerpání limitu se AI pozastaví a nabídne vyšší tarif",
+          "2": "Neomezená AI s vlastním klíčem od poskytovatele modelů"
+        },
+        "priceNote": "Bez platební karty. Zdarma natrvalo.",
+        "summary": "Vyzkoušejte aplikaci stella na skutečné práci, jak dlouho chcete."
+      },
+      "solo": {
+        "features": {
+          "0": "Plný AI asistent a služby podle zásad férového využívání",
+          "1": "Podle potřeby i vlastní klíč od poskytovatele modelů"
+        },
+        "summary": "Pro právníka, který pracuje samostatně."
+      },
+      "team": {
+        "features": {
+          "0": "Plný AI asistent a služby podle zásad férového využívání",
+          "1": "7denní zkušební období bez platební karty"
+        },
+        "summary": "Pro právní týmy, které na spisech pracují společně."
+      }
+    },
+    "signUpNote": "Nejprve se zaregistrujte, placený tarif zvolíte v aplikaci.",
+    "startEvaluation": "Zahájit 7denní zkušební období",
+    "storage": "{storage} úložiště",
+    "storagePerSeat": "{storage} úložiště na místo",
+    "subtitle": "Začněte zdarma a přejděte na vyšší tarif, až práce poroste. Každý tarif zahrnuje vyhledávání v judikatuře a právních předpisech a funguje s vaším vlastním klíčem od poskytovatele modelů.",
+    "title": "Tarify pro praxi jakékoli velikosti",
+    "vatNote": "Ceny jsou uvedeny bez DPH. Pro firmy a podnikatele."
   },
   "products": {
     "agent": {

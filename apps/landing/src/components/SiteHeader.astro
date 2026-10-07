@@ -6,6 +6,7 @@ import { GitHubLogoIcon } from "@stll/ui/brand-icons";
 import MobileNav from "./MobileNav.astro";
 import { getTranslations, localizePath } from "../i18n/utils";
 import { defaultLocale, isLocale } from "../i18n/config";
+import { appUrl, githubUrl } from "../data/site-nav";
 
 // `current` lets a page mark its own nav entry. `overlay` floats the header
 // transparently over the page top (the homepage hero gradient runs to the
@@ -18,8 +19,6 @@ const rawLocale = Astro.currentLocale ?? defaultLocale;
 const locale = isLocale(rawLocale) ? rawLocale : defaultLocale;
 const t = getTranslations(locale);
 
-const appUrl = "https://my.stll.app";
-const githubUrl = "https://github.com/stella/stella";
 ---
 
 <header

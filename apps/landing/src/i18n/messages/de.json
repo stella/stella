@@ -84,7 +84,7 @@
     "toolsTitle": "Werkzeuge für KI-Agenten."
   },
   "meta": {
-    "homeDescription": "KI für Anwälte: Akten, Dokumente, Vertragsanalyse und juristische Recherche in einer Open-Source-Plattform. Selbst hosten oder Cloud. Nutzungsbasierte KI.",
+    "homeDescription": "KI für Anwälte: Akten, Dokumente, Vertragsanalyse und juristische Recherche in einer Open-Source-Plattform. Selbst hosten oder Cloud. KI inklusive.",
     "homeTitle": "stella | KI für Anwälte, Aktenverwaltung, Vertragsanalyse"
   },
   "nav": {
@@ -102,6 +102,7 @@
       "intelligence": "Juristische Analytik",
       "workspace": "Arbeitsbereich"
     },
+    "pricing": "Preise",
     "product": "Produkt",
     "products": {
       "agent": {
@@ -154,6 +155,97 @@
       }
     },
     "security": "Sicherheit"
+  },
+  "pricing": {
+    "billedMonthly": "Monatliche Abrechnung",
+    "billedYearly": "{total} bei jährlicher Abrechnung",
+    "billedYearlyPerSeat": "{total} pro Platz bei jährlicher Abrechnung",
+    "choosePlan": "Registrieren und Tarif {plan} wählen",
+    "ctaHeading": "Starten Sie mit einem kostenlosen Konto.",
+    "everyPlan": {
+      "caseLaw": {
+        "body": "Durchsuchen und lesen Sie Rechtsprechung und Gesetze in jedem Tarif. Für Konten im Tarif Free gelten Nutzungsgrenzen nach der Fair-Use-Richtlinie.",
+        "title": "Rechtsprechung und Gesetze"
+      },
+      "heading": "In jedem Tarif enthalten",
+      "keys": {
+        "body": "Binden Sie in jedem Tarif den Schlüssel Ihres eigenen KI-Anbieters an. KI-Nutzung über Ihren Schlüssel wird nicht auf das Kontingent Ihres Tarifs angerechnet.",
+        "title": "Eigene Anbieter-Schlüssel"
+      },
+      "selfHost": {
+        "body": "stella ist Open Source: Wenn Sie stella auf Ihrer eigenen Infrastruktur selbst hosten, bleibt es kostenlos. <gh>Zur Self-Hosting-Anleitung</gh>.",
+        "title": "Self-Hosting"
+      }
+    },
+    "faqs": {
+      "0": {
+        "answer": "Ein Platz entspricht einem Mitglied Ihres Teams mit eigener Anmeldung. Der Tarif Team wird pro Platz abgerechnet; Free und Solo umfassen ein Mitglied.",
+        "question": "Was ist ein Platz?"
+      },
+      "1": {
+        "answer": "Die KI pausiert, bis sich das Kontingent im nächsten Monat erneuert, und die App bietet Ihnen ein Upgrade an. Alles andere funktioniert weiter, und KI über den Schlüssel Ihres eigenen KI-Anbieters ist nicht betroffen.",
+        "question": "Was passiert, wenn das KI-Kontingent im Tarif Free aufgebraucht ist?"
+      },
+      "2": {
+        "answer": "Ja. Ihr bezahlter Tarif bleibt bis zum Ende des bereits bezahlten Zeitraums nutzbar.",
+        "question": "Kann ich jederzeit kündigen?"
+      },
+      "3": {
+        "answer": "Wenn ein Tarif endet, wird nichts gelöscht. Ihre Akten und Dokumente bleiben in Ihrem Konto.",
+        "question": "Was passiert mit meinen Daten, wenn ein Tarif endet?"
+      },
+      "4": {
+        "answer": "Ja, in jedem Tarif, auch in Free. Mit Ihrem eigenen Schlüssel rechnet Ihr KI-Anbieter die Nutzung ab, statt dass der Tarif sie begrenzt.",
+        "question": "Kann ich den Schlüssel meines eigenen KI-Anbieters verwenden?"
+      },
+      "5": {
+        "answer": "Ja. stella ist Open Source, und Self-Hosting bleibt kostenlos. <gh>Die Self-Hosting-Anleitung</gh> erklärt, wie Sie stella auf Ihrer eigenen Infrastruktur selbst hosten.",
+        "question": "Ist Self-Hosting kostenlos?"
+      }
+    },
+    "interval": {
+      "label": "Abrechnungszeitraum",
+      "monthly": "Monatlich",
+      "yearly": "Jährlich"
+    },
+    "members": "{count, plural, one {# Mitglied} other {# Mitglieder}}",
+    "membersPerSeat": "So viele Mitglieder wie nötig, abgerechnet pro Platz",
+    "metaDescription": "Preise von stella: kostenlos starten ohne Kreditkarte, Solo zum festen Monatspreis, Team pro Platz. Rechtsprechung und eigene KI-Schlüssel in jedem Tarif.",
+    "metaTitle": "Preise: Tarife Free, Solo und Team | stella",
+    "perMonth": "pro Monat",
+    "perSeatPerMonth": "pro Platz und Monat",
+    "plans": {
+      "free": {
+        "features": {
+          "0": "KI-Assistent und KI-Dienste mit kleinem monatlichem Kontingent",
+          "1": "Ist das Kontingent aufgebraucht, pausiert die KI und bietet ein Upgrade an",
+          "2": "Unbegrenzte KI mit dem Schlüssel Ihres eigenen KI-Anbieters"
+        },
+        "priceNote": "Ohne Kreditkarte. Dauerhaft kostenlos.",
+        "summary": "Testen Sie stella an echter Arbeit, so lange Sie möchten."
+      },
+      "solo": {
+        "features": {
+          "0": "Voller KI-Assistent und alle KI-Dienste nach Fair-Use-Richtlinie",
+          "1": "Auf Wunsch mit dem Schlüssel Ihres eigenen KI-Anbieters"
+        },
+        "summary": "Für Anwältinnen und Anwälte, die allein arbeiten."
+      },
+      "team": {
+        "features": {
+          "0": "Voller KI-Assistent und alle KI-Dienste nach Fair-Use-Richtlinie",
+          "1": "7-tägige Testphase, ohne Kreditkarte"
+        },
+        "summary": "Für juristische Teams, die gemeinsam an Akten arbeiten."
+      }
+    },
+    "signUpNote": "Registrieren Sie sich zuerst; den bezahlten Tarif wählen Sie dann in der App.",
+    "startEvaluation": "7-tägige Testphase starten",
+    "storage": "{storage} Speicher",
+    "storagePerSeat": "{storage} Speicher pro Platz",
+    "subtitle": "Starten Sie kostenlos und wechseln Sie den Tarif, wenn die Arbeit wächst. Jeder Tarif enthält die Suche in Rechtsprechung und Gesetzen und funktioniert mit dem Schlüssel Ihres eigenen KI-Anbieters.",
+    "title": "Tarife für Kanzleien jeder Größe",
+    "vatNote": "Alle Preise zzgl. Umsatzsteuer. Für Unternehmen und Freiberufler."
   },
   "products": {
     "agent": {

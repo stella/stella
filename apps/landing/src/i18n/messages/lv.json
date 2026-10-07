@@ -84,7 +84,7 @@
     "toolsTitle": "Rīki AI aģentiem."
   },
   "meta": {
-    "homeDescription": "Atvērtā pirmkoda juridiskā darbvieta: dokumenti, lietas, pārskatīšana un izpēte. Izvietojiet paši vai mūsu mākonī. AI pēc lietojuma, bez piesaistes.",
+    "homeDescription": "Atvērtā pirmkoda juridiskā darbvieta: dokumenti, lietas, pārskatīšana un izpēte. Izvietojiet paši vai mūsu mākonī. AI iekļauts vai ar savu atslēgu.",
     "homeTitle": "stella | atvērtā pirmkoda juridiskā darbvieta"
   },
   "nav": {
@@ -102,6 +102,7 @@
       "intelligence": "Juridiskā analītika",
       "workspace": "Darbvieta"
     },
+    "pricing": "Cenas",
     "product": "Produkts",
     "products": {
       "agent": {
@@ -154,6 +155,97 @@
       }
     },
     "security": "Drošība"
+  },
+  "pricing": {
+    "billedMonthly": "Norēķini reizi mēnesī",
+    "billedYearly": "{total}, norēķini reizi gadā",
+    "billedYearlyPerSeat": "{total} par vietu, norēķini reizi gadā",
+    "choosePlan": "Reģistrējieties un izvēlieties plānu {plan}",
+    "ctaHeading": "Sāciet ar bezmaksas kontu.",
+    "everyPlan": {
+      "caseLaw": {
+        "body": "Meklējiet un lasiet tiesu praksi un tiesību aktus jebkurā plānā. Bezmaksas kontiem ir godīgas lietošanas ierobežojumi.",
+        "title": "Tiesu prakse un tiesību akti"
+      },
+      "heading": "Iekļauts katrā plānā",
+      "keys": {
+        "body": "Jebkurā plānā pievienojiet sava modeļu pakalpojumu sniedzēja atslēgu. AI, kas darbojas ar jūsu atslēgu, netiek ieskaitīts plāna apjomā.",
+        "title": "Jūsu pašu modeļu atslēgas"
+      },
+      "selfHost": {
+        "body": "stella ir atvērtā pirmkoda, un izvietot lietotni stella savā infrastruktūrā joprojām var bez maksas. <gh>Izlasiet, kā to izvietot savā infrastruktūrā</gh>.",
+        "title": "Savā serverī"
+      }
+    },
+    "faqs": {
+      "0": {
+        "answer": "Vieta ir viens jūsu komandas dalībnieks ar saviem pieteikšanās datiem. Plānā Team maksa ir par katru vietu; plāni Free un Solo ietver vienu dalībnieku.",
+        "question": "Kas ir vieta?"
+      },
+      "1": {
+        "answer": "AI darbība tiek apturēta līdz apjoma atjaunošanai nākamajā mēnesī, un lietotne piedāvā pāriet uz augstāku plānu. Viss pārējais turpina darboties, un AI ar jūsu pašu modeļu pakalpojumu sniedzēja atslēgu tas neietekmē.",
+        "question": "Kas notiek, kad plāna Free AI apjoms ir izlietots?"
+      },
+      "2": {
+        "answer": "Jā. Piekļuve maksas plānam saglabājas līdz apmaksātā perioda beigām.",
+        "question": "Vai varu atcelt jebkurā laikā?"
+      },
+      "3": {
+        "answer": "Plānam beidzoties, nekas netiek dzēsts. Jūsu lietas un dokumenti paliek jūsu kontā.",
+        "question": "Kas notiek ar maniem datiem, kad plāns beidzas?"
+      },
+      "4": {
+        "answer": "Jā, jebkurā plānā, arī Free. Ja izmantojat savu atslēgu, par AI lietojumu jums izraksta rēķinu modeļu pakalpojumu sniedzējs, nevis to ierobežo plāns.",
+        "question": "Vai varu izmantot sava modeļu pakalpojumu sniedzēja atslēgu?"
+      },
+      "5": {
+        "answer": "Jā. stella ir atvērtā pirmkoda, un savā serverī to var izmantot bez maksas. <gh>Ceļvedī</gh> aprakstīts, kā lietotni stella izvietot savā infrastruktūrā.",
+        "question": "Vai izvietošana savā serverī ir bez maksas?"
+      }
+    },
+    "interval": {
+      "label": "Norēķinu periods",
+      "monthly": "Reizi mēnesī",
+      "yearly": "Reizi gadā"
+    },
+    "members": "{count, plural, zero {# dalībnieku} one {# dalībnieks} other {# dalībnieki}}",
+    "membersPerSeat": "Tik daudz dalībnieku, cik nepieciešams, maksa par katru vietu",
+    "metaDescription": "stella cenas: sāciet bez maksas un bez kartes, Solo par fiksētu mēneša cenu, Team par katru vietu. Tiesu prakses meklēšana un savas AI atslēgas katrā plānā.",
+    "metaTitle": "Cenas: plāni Free, Solo un Team | stella",
+    "perMonth": "mēnesī",
+    "perSeatPerMonth": "par vietu mēnesī",
+    "plans": {
+      "free": {
+        "features": {
+          "0": "AI asistents un pakalpojumi ar nelielu mēneša apjomu",
+          "1": "Kad apjoms izlietots, AI apstājas un piedāvā augstāku plānu",
+          "2": "Neierobežots AI ar jūsu pašu modeļu pakalpojumu sniedzēja atslēgu"
+        },
+        "priceNote": "Karte nav nepieciešama. Bez maksas uz visiem laikiem.",
+        "summary": "Izmēģiniet lietotni stella īstā darbā tik ilgi, cik vēlaties."
+      },
+      "solo": {
+        "features": {
+          "0": "Pilnas AI asistenta un pakalpojumu iespējas godīgas lietošanas ietvaros",
+          "1": "Ja vēlaties, jūsu pašu modeļu pakalpojumu sniedzēja atslēga"
+        },
+        "summary": "Juristam, kas strādā patstāvīgi."
+      },
+      "team": {
+        "features": {
+          "0": "Pilnas AI asistenta un pakalpojumu iespējas godīgas lietošanas ietvaros",
+          "1": "7 dienu izmēģinājuma periods, karte nav nepieciešama"
+        },
+        "summary": "Juristu komandām, kas pie lietām strādā kopā."
+      }
+    },
+    "signUpNote": "Vispirms reģistrējieties; maksas plānu izvēlēsieties lietotnē.",
+    "startEvaluation": "Sākt 7 dienu izmēģinājumu",
+    "storage": "{storage} krātuve",
+    "storagePerSeat": "{storage} krātuve katrai vietai",
+    "subtitle": "Sāciet bez maksas un pārejiet uz augstāku plānu, kad darba kļūst vairāk. Katrā plānā ir tiesu prakses un tiesību aktu meklēšana, un katrs darbojas ar jūsu modeļu pakalpojumu sniedzēja atslēgu.",
+    "title": "Plāni gan individuālam juristam, gan lielai komandai",
+    "vatNote": "Cenas norādītas bez PVN. Uzņēmumiem un profesionāļiem."
   },
   "products": {
     "agent": {

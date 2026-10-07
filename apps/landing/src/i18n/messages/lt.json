@@ -84,7 +84,7 @@
     "toolsTitle": "Įrankiai DI agentams."
   },
   "meta": {
-    "homeDescription": "Atvirojo kodo teisinė darbo sritis: dokumentai, bylos, peržiūra ir teisinė paieška. Diekite patys arba mūsų debesyje. DI pagal naudojimą, be pririšimo.",
+    "homeDescription": "Atvirojo kodo teisinė darbo sritis: dokumentai, bylos, peržiūra ir teisinė paieška. Diekite patys arba mūsų debesyje. DI įskaičiuotas arba su savo raktu.",
     "homeTitle": "stella | atvirojo kodo teisinė darbo sritis"
   },
   "nav": {
@@ -102,6 +102,7 @@
       "intelligence": "Teisinė analitika",
       "workspace": "Darbo sritis"
     },
+    "pricing": "Kainos",
     "product": "Produktas",
     "products": {
       "agent": {
@@ -154,6 +155,97 @@
       }
     },
     "security": "Saugumas"
+  },
+  "pricing": {
+    "billedMonthly": "Apmokestinama kas mėnesį",
+    "billedYearly": "{total}, apmokestinama kasmet",
+    "billedYearlyPerSeat": "{total} vietai, apmokestinama kasmet",
+    "choosePlan": "Užsiregistruokite ir pasirinkite planą {plan}",
+    "ctaHeading": "Pradėkite nuo nemokamos paskyros.",
+    "everyPlan": {
+      "caseLaw": {
+        "body": "Ieškokite ir skaitykite teismų praktiką bei teisės aktus pagal bet kurį planą. Nemokamoms paskyroms taikomi sąžiningo naudojimo apribojimai.",
+        "title": "Teismų praktika ir teisės aktai"
+      },
+      "heading": "Įtraukta į kiekvieną planą",
+      "keys": {
+        "body": "Prijunkite savo modelių teikėjo raktą pagal bet kurį planą. Su Jūsų raktu veikiantis DI neišnaudoja plano kvotos.",
+        "title": "Jūsų pačių modelių raktai"
+      },
+      "selfHost": {
+        "body": "Programa stella yra atvirojo kodo, todėl ją įdiegti savo serveryje ir toliau galite nemokamai. <gh>Skaitykite, kaip ją įdiegti savo serveryje</gh>.",
+        "title": "Savame serveryje"
+      }
+    },
+    "faqs": {
+      "0": {
+        "answer": "Vieta – tai vienas Jūsų komandos narys su atskiru prisijungimu. Team planas apmokestinamas už kiekvieną vietą; Free ir Solo planai apima vieną narį.",
+        "question": "Kas yra vieta?"
+      },
+      "1": {
+        "answer": "DI sustabdomas, kol kitą mėnesį kvota atsinaujins, o programa pasiūlo pereiti prie aukštesnio plano. Visa kita veikia toliau, o DI su Jūsų pačių modelių teikėjo raktu tai neturi įtakos.",
+        "question": "Kas nutinka, kai baigiasi Free plano DI kvota?"
+      },
+      "2": {
+        "answer": "Taip. Mokamu planu galėsite naudotis iki apmokėto laikotarpio pabaigos.",
+        "question": "Ar galiu atšaukti bet kada?"
+      },
+      "3": {
+        "answer": "Pasibaigus planui niekas neištrinama. Jūsų bylos ir dokumentai lieka Jūsų paskyroje.",
+        "question": "Kas nutinka mano duomenims, kai planas baigiasi?"
+      },
+      "4": {
+        "answer": "Taip, pagal bet kurį planą, įskaitant Free. Naudojant savo raktą, už DI naudojimą sąskaitą išrašo Jūsų modelių teikėjas, o planas jo neriboja.",
+        "question": "Ar galiu naudoti savo modelių teikėjo raktą?"
+      },
+      "5": {
+        "answer": "Taip. Programa stella yra atvirojo kodo, todėl ją įdiegti savo serveryje galima nemokamai. <gh>Diegimo vadove</gh> paaiškinta, kaip ją įdiegti savo infrastruktūroje.",
+        "question": "Ar įdiegti savo serveryje galima nemokamai?"
+      }
+    },
+    "interval": {
+      "label": "Atsiskaitymo laikotarpis",
+      "monthly": "Kas mėnesį",
+      "yearly": "Kasmet"
+    },
+    "members": "{count, plural, one {# narys} few {# nariai} many {# nario} other {# narių}}",
+    "membersPerSeat": "Tiek narių, kiek reikia, apmokestinama už vietą",
+    "metaDescription": "stella kainos: pradėkite nemokamai be kortelės, Solo – fiksuota mėnesio kaina, Team – už vietą. Teismų praktikos paieška ir savi DI raktai kiekviename plane.",
+    "metaTitle": "Kainos: Free, Solo ir Team planai | stella",
+    "perMonth": "per mėnesį",
+    "perSeatPerMonth": "vietai per mėnesį",
+    "plans": {
+      "free": {
+        "features": {
+          "0": "DI asistentas ir paslaugos su nedidele mėnesio kvota",
+          "1": "Išnaudojus kvotą, DI sustoja ir pasiūlo aukštesnį planą",
+          "2": "Neribotas DI su Jūsų pačių modelių teikėjo raktu"
+        },
+        "priceNote": "Kortelės nereikia. Nemokama visam laikui.",
+        "summary": "Išbandykite programą stella su tikrais darbais tiek, kiek norite."
+      },
+      "solo": {
+        "features": {
+          "0": "Visas DI asistentas ir paslaugos pagal sąžiningo naudojimo taisykles",
+          "1": "Jei norite, savas modelių teikėjo raktas"
+        },
+        "summary": "Savarankiškai dirbančiam teisininkui."
+      },
+      "team": {
+        "features": {
+          "0": "Visas DI asistentas ir paslaugos pagal sąžiningo naudojimo taisykles",
+          "1": "7 dienų bandomasis laikotarpis, kortelės nereikia"
+        },
+        "summary": "Teisininkų komandoms, kurios bylas veda kartu."
+      }
+    },
+    "signUpNote": "Pirmiausia užsiregistruokite; mokamą planą pasirinksite programoje.",
+    "startEvaluation": "Pradėkite 7 dienų bandomąjį laikotarpį",
+    "storage": "{storage} saugyklos",
+    "storagePerSeat": "{storage} saugyklos vietai",
+    "subtitle": "Pradėkite nemokamai ir pereikite prie aukštesnio plano, kai darbų padaugės. Kiekvienas planas apima teismų praktikos ir teisės aktų paiešką bei veikia su Jūsų modelių teikėjo raktu.",
+    "title": "Planai tiek pavieniam teisininkui, tiek didelei komandai",
+    "vatNote": "Kainos nurodytos be PVM. Įmonėms ir profesionalams."
   },
   "products": {
     "agent": {

@@ -34,9 +34,14 @@ const DESCRIPTION_MAX = 158;
 type PageMeta = { page: string; title: string; description: string };
 
 const pagesFor = (locale: (typeof localeCodes)[number]): PageMeta[] => {
-  const { meta, products: catalog } = catalogs[locale];
+  const { meta, pricing, products: catalog } = catalogs[locale];
   return [
     { page: "/", title: meta.homeTitle, description: meta.homeDescription },
+    {
+      page: "/pricing",
+      title: pricing.metaTitle,
+      description: pricing.metaDescription,
+    },
     ...products.map(({ slug }) => ({
       page: `/product/${slug}`,
       title: catalog[slug].metaTitle,
@@ -292,7 +297,7 @@ const main = (): void => {
   }
 
   console.log(
-    `meta budgets: ${localeCodes.length} locales x ${products.length + 1} catalog pages + ${englishStaticPages.length} static pages + ${blogPages.pages.length} blog posts ok`,
+    `meta budgets: ${localeCodes.length} locales x ${pagesFor("en").length} catalog pages + ${englishStaticPages.length} static pages + ${blogPages.pages.length} blog posts ok`,
   );
 };
 

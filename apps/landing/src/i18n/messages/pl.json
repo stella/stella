@@ -84,7 +84,7 @@
     "toolsTitle": "Narzędzia dla agentów AI."
   },
   "meta": {
-    "homeDescription": "Prawniczy obszar roboczy open source dla kancelarii prawnych: sprawy, dokumenty, analiza umów i orzecznictwo. Hostuj sam albo w chmurze. AI płatna za użycie.",
+    "homeDescription": "Prawniczy obszar roboczy open source dla kancelarii prawnych: sprawy, dokumenty, analiza umów i orzecznictwo. Hostuj sam albo w chmurze. AI w cenie.",
     "homeTitle": "stella | prawniczy obszar roboczy open source"
   },
   "nav": {
@@ -102,6 +102,7 @@
       "intelligence": "Analityka prawna",
       "workspace": "Obszar roboczy"
     },
+    "pricing": "Cennik",
     "product": "Produkt",
     "products": {
       "agent": {
@@ -154,6 +155,97 @@
       }
     },
     "security": "Bezpieczeństwo"
+  },
+  "pricing": {
+    "billedMonthly": "Płatność miesięczna",
+    "billedYearly": "{total} płatne rocznie",
+    "billedYearlyPerSeat": "{total} za miejsce, płatne rocznie",
+    "choosePlan": "Zarejestruj się i wybierz plan {plan}",
+    "ctaHeading": "Zacznij od darmowego konta.",
+    "everyPlan": {
+      "caseLaw": {
+        "body": "Wyszukuj i czytaj orzecznictwo i przepisy prawa w każdym planie. Darmowe konta mają limity zgodne z zasadami uczciwego korzystania.",
+        "title": "Orzecznictwo i przepisy prawa"
+      },
+      "heading": "W każdym planie",
+      "keys": {
+        "body": "W każdym planie możesz podłączyć własny klucz dostawcy modeli. AI działająca na Twoim kluczu nie zużywa limitu planu.",
+        "title": "Własne klucze do modeli AI"
+      },
+      "selfHost": {
+        "body": "stella jest open source, a uruchomienie aplikacji stella na własnej infrastrukturze pozostaje bezpłatne. <gh>Przeczytaj przewodnik po self-hostingu</gh>.",
+        "title": "Na własnej infrastrukturze"
+      }
+    },
+    "faqs": {
+      "0": {
+        "answer": "Miejsce to jeden członek Twojego zespołu z własnym logowaniem. Plan Team jest rozliczany za miejsce; plany Free i Solo obejmują jednego członka.",
+        "question": "Czym jest miejsce?"
+      },
+      "1": {
+        "answer": "AI wstrzymuje się do odnowienia limitu w kolejnym miesiącu, a aplikacja proponuje wyższy plan. Wszystko inne działa dalej, a AI na Twoim własnym kluczu dostawcy modeli nie podlega temu limitowi.",
+        "question": "Co się stanie, gdy wyczerpię limit AI w planie Free?"
+      },
+      "2": {
+        "answer": "Tak. Zachowujesz dostęp do płatnego planu do końca opłaconego okresu.",
+        "question": "Czy mogę zrezygnować w dowolnym momencie?"
+      },
+      "3": {
+        "answer": "Po zakończeniu planu nic nie jest usuwane. Twoje sprawy i dokumenty pozostają na Twoim koncie.",
+        "question": "Co dzieje się z moimi danymi po zakończeniu planu?"
+      },
+      "4": {
+        "answer": "Tak, w każdym planie, również w Free. Przy własnym kluczu za użycie AI rozlicza Cię dostawca modeli, a plan go nie ogranicza.",
+        "question": "Czy mogę używać własnego klucza dostawcy modeli?"
+      },
+      "5": {
+        "answer": "Tak. stella jest open source, a self-hosting pozostaje bezpłatny. <gh>Przewodnik po self-hostingu</gh> wyjaśnia, jak uruchomić aplikację stella na własnej infrastrukturze.",
+        "question": "Czy self-hosting jest bezpłatny?"
+      }
+    },
+    "interval": {
+      "label": "Okres rozliczeniowy",
+      "monthly": "Miesięcznie",
+      "yearly": "Rocznie"
+    },
+    "members": "{count, plural, one {# członek} few {# członkowie} many {# członków} other {# członka}}",
+    "membersPerSeat": "Tylu członków, ilu potrzebujesz, z rozliczeniem za miejsce",
+    "metaDescription": "Cennik aplikacji stella: zacznij za darmo bez karty, Solo w stałej cenie miesięcznej, Team za miejsce. Orzecznictwo i własne klucze AI w każdym planie.",
+    "metaTitle": "Cennik: plany Free, Solo i Team | stella",
+    "perMonth": "miesięcznie",
+    "perSeatPerMonth": "za miejsce miesięcznie",
+    "plans": {
+      "free": {
+        "features": {
+          "0": "Asystent AI i usługi z niewielkim miesięcznym limitem",
+          "1": "Po wyczerpaniu limitu AI wstrzymuje się i proponuje wyższy plan",
+          "2": "Nielimitowana AI z własnym kluczem dostawcy modeli"
+        },
+        "priceNote": "Bez karty. Za darmo na zawsze.",
+        "summary": "Sprawdź aplikację stella w prawdziwej pracy, tak długo, jak chcesz."
+      },
+      "solo": {
+        "features": {
+          "0": "Pełny asystent AI i usługi w ramach zasad uczciwego korzystania",
+          "1": "Własny klucz dostawcy modeli, jeśli wolisz"
+        },
+        "summary": "Dla prawnika, który pracuje samodzielnie."
+      },
+      "team": {
+        "features": {
+          "0": "Pełny asystent AI i usługi w ramach zasad uczciwego korzystania",
+          "1": "7-dniowy okres próbny bez karty"
+        },
+        "summary": "Dla zespołów prawniczych, które wspólnie prowadzą sprawy."
+      }
+    },
+    "signUpNote": "Najpierw się zarejestruj; płatny plan wybierzesz w aplikacji.",
+    "startEvaluation": "Rozpocznij 7-dniowy okres próbny",
+    "storage": "{storage} przestrzeni dyskowej",
+    "storagePerSeat": "{storage} przestrzeni dyskowej na miejsce",
+    "subtitle": "Zacznij za darmo i przejdź na wyższy plan, gdy pracy przybędzie. Każdy plan obejmuje wyszukiwanie orzecznictwa i przepisów prawa oraz działa z Twoim własnym kluczem dostawcy modeli.",
+    "title": "Plany dla praktyki każdej wielkości",
+    "vatNote": "Ceny nie zawierają VAT. Dla firm i profesjonalistów."
   },
   "products": {
     "agent": {

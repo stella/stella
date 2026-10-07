@@ -102,6 +102,7 @@
       "intelligence": "Intelligence juridique",
       "workspace": "Espace de travail"
     },
+    "pricing": "Tarifs",
     "product": "Produit",
     "products": {
       "agent": {
@@ -154,6 +155,97 @@
       }
     },
     "security": "Sécurité"
+  },
+  "pricing": {
+    "billedMonthly": "Facturation mensuelle",
+    "billedYearly": "{total} en facturation annuelle",
+    "billedYearlyPerSeat": "{total} par siège en facturation annuelle",
+    "choosePlan": "S’inscrire et choisir le forfait {plan}",
+    "ctaHeading": "Commencez avec un compte gratuit.",
+    "everyPlan": {
+      "caseLaw": {
+        "body": "Recherchez et consultez la jurisprudence et la législation avec tous les forfaits. Les comptes Free sont soumis à des limites d’usage raisonnable.",
+        "title": "Jurisprudence et législation"
+      },
+      "heading": "Inclus dans tous les forfaits",
+      "keys": {
+        "body": "Connectez la clé de votre propre fournisseur d’IA, quel que soit votre forfait. L’IA utilisée avec votre clé n’est pas décomptée du quota de votre forfait.",
+        "title": "Vos propres clés de fournisseur"
+      },
+      "selfHost": {
+        "body": "stella est open source, et l’auto-héberger sur votre propre infrastructure reste gratuit. <gh>Lire le guide d’auto-hébergement</gh>.",
+        "title": "Auto-hébergement"
+      }
+    },
+    "faqs": {
+      "0": {
+        "answer": "Un siège correspond à un membre de votre équipe disposant de ses propres identifiants. Le forfait Team est facturé par siège ; Free et Solo incluent un membre.",
+        "question": "Qu’est-ce qu’un siège ?"
+      },
+      "1": {
+        "answer": "L’IA est suspendue jusqu’au renouvellement du quota le mois suivant, et l’application vous propose de passer à un forfait supérieur. Tout le reste continue de fonctionner, et l’IA utilisée avec la clé de votre propre fournisseur n’est pas concernée.",
+        "question": "Que se passe-t-il quand le quota d’IA du forfait Free est épuisé ?"
+      },
+      "2": {
+        "answer": "Oui. Vous gardez l’accès à votre forfait payant jusqu’à la fin de la période déjà réglée.",
+        "question": "Puis-je résilier à tout moment ?"
+      },
+      "3": {
+        "answer": "Rien n’est supprimé à la fin d’un forfait. Vos dossiers et documents restent dans votre compte.",
+        "question": "Que deviennent mes données à la fin d’un forfait ?"
+      },
+      "4": {
+        "answer": "Oui, avec tous les forfaits, Free compris. Avec votre propre clé, l’usage de l’IA est facturé par votre fournisseur au lieu d’être limité par le forfait.",
+        "question": "Puis-je utiliser la clé de mon propre fournisseur d’IA ?"
+      },
+      "5": {
+        "answer": "Oui. stella est open source et l’auto-hébergement reste gratuit. <gh>Le guide d’auto-hébergement</gh> explique comment auto-héberger stella sur votre propre infrastructure.",
+        "question": "L’auto-hébergement est-il gratuit ?"
+      }
+    },
+    "interval": {
+      "label": "Période de facturation",
+      "monthly": "Mensuel",
+      "yearly": "Annuel"
+    },
+    "members": "{count, plural, one {# membre} many {# membres} other {# membres}}",
+    "membersPerSeat": "Autant de membres que nécessaire, facturés par siège",
+    "metaDescription": "Tarifs de stella : démarrez gratuitement sans carte, Solo à prix mensuel fixe, Team par siège. Jurisprudence et vos clés d’IA dans tous les forfaits.",
+    "metaTitle": "Tarifs : forfaits Free, Solo et Team | stella",
+    "perMonth": "par mois",
+    "perSeatPerMonth": "par siège et par mois",
+    "plans": {
+      "free": {
+        "features": {
+          "0": "Assistant IA et services avec un petit quota mensuel",
+          "1": "Une fois le quota épuisé, l’IA se met en pause et propose un forfait supérieur",
+          "2": "IA illimitée avec la clé de votre propre fournisseur"
+        },
+        "priceNote": "Sans carte bancaire. Gratuit, pour toujours.",
+        "summary": "Pour essayer stella en conditions réelles, aussi longtemps que vous le souhaitez."
+      },
+      "solo": {
+        "features": {
+          "0": "Assistant IA et services complets, dans la limite d’un usage raisonnable",
+          "1": "Votre propre clé de fournisseur, si vous préférez"
+        },
+        "summary": "Pour les avocats qui exercent seuls."
+      },
+      "team": {
+        "features": {
+          "0": "Assistant IA et services complets, dans la limite d’un usage raisonnable",
+          "1": "Évaluation de 7 jours, sans carte bancaire"
+        },
+        "summary": "Pour les équipes juridiques qui travaillent ensemble sur leurs dossiers."
+      }
+    },
+    "signUpNote": "Inscrivez-vous d’abord ; vous choisirez un forfait payant dans l’application.",
+    "startEvaluation": "Commencer une évaluation de 7 jours",
+    "storage": "{storage} de stockage",
+    "storagePerSeat": "{storage} de stockage par siège",
+    "subtitle": "Commencez gratuitement et passez à un forfait supérieur quand l’activité grandit. Tous les forfaits incluent la recherche de jurisprudence et de législation et fonctionnent avec la clé de votre propre fournisseur d’IA.",
+    "title": "Des forfaits pour les cabinets de toutes tailles",
+    "vatNote": "Prix hors TVA. Pour les entreprises et les professionnels."
   },
   "products": {
     "agent": {
