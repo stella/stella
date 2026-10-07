@@ -8,7 +8,7 @@ import { memberAIAccessError } from "@/api/lib/ai-config-response";
 import { captureError } from "@/api/lib/analytics/capture";
 import {
   ACCOUNT_ACCESS,
-  assertUsageAvailableForHandler,
+  authorizeHandlerUsage,
   createSafeHandler,
 } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
@@ -176,78 +176,87 @@ const createDocumentTranslationRun = createSafeHandler<
       if (accessError) {
         return Result.err(accessError);
       }
-      const usageError = await assertUsageAvailableForHandler({
-        metering: { actionType: "doc_review", modelRole: "chat" },
-        organizationId,
-        orgAIConfig,
-        workspaceId,
-        userId: user.id,
-        safeDb,
-      });
-      if (usageError !== null) {
-        return Result.err(usageError);
-      }
     }
-
-    const runId = createSafeId<"documentTranslationRun">();
-    const inserted = yield* Result.await(
-      safeDb(async (tx) => {
-        const created = await tx
-          .insert(documentTranslationRuns)
-          .values({
-            id: runId,
-            organizationId,
-            workspaceId,
-            entityId: body.entityId,
-            fileFieldId: body.fieldId,
-            entityVersionId: source.entityVersionId,
-            sourceFileId: source.fileId,
-            sourceFileName: source.fileName,
-            sourceMimeType: source.mimeType,
-            output: body.output,
-            engine: body.engine,
-            commentPolicy: body.commentPolicy,
-            // The worker sends no source hint when this discriminator is set.
-            sourceLang: "auto",
-            targetLang: body.targetLang,
-            requestedBy: user.id,
-          })
-          .onConflictDoNothing()
-          .returning({ id: documentTranslationRuns.id });
-        if (!created.at(0)) {
-          return false;
-        }
-        await recordAuditEvent(tx, {
-          action: AUDIT_ACTION.EXECUTE,
-          resourceType: AUDIT_RESOURCE_TYPE.DOCUMENT_TRANSLATION_RUN,
-          resourceId: runId,
-          metadata: {
-            entityId: body.entityId,
-            output: body.output,
-            engine: body.engine,
-            targetLang: body.targetLang,
-            commentPolicy: body.commentPolicy ?? null,
-          },
-        });
-        return true;
-      }),
-    );
-    if (!inserted) {
-      return Result.err(
-        new HandlerError({
-          status: 409,
-          message: "A translation of this document is already in progress",
-        }),
-      );
-    }
-
-    await handoffCommittedDocumentTranslationRun({
-      runId,
+    const authorization = await authorizeHandlerUsage({
+      metering:
+        body.engine === DOCUMENT_TRANSLATION_ENGINE.AI
+          ? { actionType: "doc_review", modelRole: "chat" }
+          : null,
       organizationId,
+      orgAIConfig,
       workspaceId,
       userId: user.id,
+      safeDb,
+      body,
     });
-    return Result.ok({ type: "started" as const, runId });
+    if (Result.isError(authorization)) {
+      return Result.err(authorization.error);
+    }
+    return await authorization.value.execute(
+      async () =>
+        await Result.gen(async function* () {
+          const runId = createSafeId<"documentTranslationRun">();
+          const inserted = yield* Result.await(
+            safeDb(async (tx) => {
+              const created = await tx
+                .insert(documentTranslationRuns)
+                .values({
+                  id: runId,
+                  organizationId,
+                  workspaceId,
+                  entityId: body.entityId,
+                  fileFieldId: body.fieldId,
+                  entityVersionId: source.entityVersionId,
+                  sourceFileId: source.fileId,
+                  sourceFileName: source.fileName,
+                  sourceMimeType: source.mimeType,
+                  output: body.output,
+                  engine: body.engine,
+                  commentPolicy: body.commentPolicy,
+                  // The worker sends no source hint when this discriminator is set.
+                  sourceLang: "auto",
+                  targetLang: body.targetLang,
+                  requestedBy: user.id,
+                })
+                .onConflictDoNothing()
+                .returning({ id: documentTranslationRuns.id });
+              if (!created.at(0)) {
+                return false;
+              }
+              await recordAuditEvent(tx, {
+                action: AUDIT_ACTION.EXECUTE,
+                resourceType: AUDIT_RESOURCE_TYPE.DOCUMENT_TRANSLATION_RUN,
+                resourceId: runId,
+                metadata: {
+                  entityId: body.entityId,
+                  output: body.output,
+                  engine: body.engine,
+                  targetLang: body.targetLang,
+                  commentPolicy: body.commentPolicy ?? null,
+                },
+              });
+              return true;
+            }),
+          );
+          if (!inserted) {
+            return Result.err(
+              new HandlerError({
+                status: 409,
+                message:
+                  "A translation of this document is already in progress",
+              }),
+            );
+          }
+
+          await handoffCommittedDocumentTranslationRun({
+            runId,
+            organizationId,
+            workspaceId,
+            userId: user.id,
+          });
+          return Result.ok({ type: "started" as const, runId });
+        }),
+    );
   },
 );
 

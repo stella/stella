@@ -5,7 +5,7 @@ import { memberAIAccessError } from "@/api/lib/ai-config-response";
 import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
 import {
   ACCOUNT_ACCESS,
-  assertUsageAvailableForHandler,
+  authorizeHandlerUsage,
   createSafeHandler,
 } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
@@ -36,6 +36,7 @@ import {
   fillDiagnosticsOf,
   templateFillStatus,
 } from "@/api/lib/templates/template-fill-completion";
+import type { AiFillCollaboratorProvider } from "@/api/lib/templates/template-fill-service";
 import {
   fillTemplateDocx,
   loadStoredTemplateSource,
@@ -154,7 +155,7 @@ const fillTemplateToWorkspace = createSafeHandler(
 
     // Built only when the manifest declares an AI field: the fill service
     // defers this, so a deterministic fill opens no metered trace.
-    const aiCollaborators = () => {
+    const buildCollaborators = () => {
       const aiAnalytics = createTanStackAIAnalyticsCallbacks({
         dataClass: "customer",
         usageMetering: {
@@ -195,25 +196,26 @@ const fillTemplateToWorkspace = createSafeHandler(
     // the fast model in either case, so an instance-provider fill must still
     // be quota-checked. A null org config flows through to the metering
     // layer (instance-provider rate).
-    const checkUsage =
-      orgAIConfig || hasTanStackInstanceProvider()
-        ? async () =>
-            await assertUsageAvailableForHandler({
-              metering: { actionType: "chat", modelRole: "fast" },
-              organizationId,
-              orgAIConfig,
-              workspaceId,
-              userId: user.id,
-              safeDb,
-            })
-        : undefined;
-    const accessError = memberAIAccessError(orgAIConfigStatus);
-    const assertUsageAvailable:
-      | (() => Promise<HandlerError<402 | 403 | 500> | null>)
-      | undefined =
-      accessError === null
-        ? checkUsage
-        : async () => await Promise.resolve(accessError);
+    const aiCollaborators: AiFillCollaboratorProvider<
+      HandlerError<402 | 403 | 500>
+    > = async () => {
+      const accessError = memberAIAccessError(orgAIConfigStatus);
+      if (accessError !== null) {
+        return Result.err(accessError);
+      }
+      return await authorizeHandlerUsage({
+        metering:
+          orgAIConfig || hasTanStackInstanceProvider()
+            ? { actionType: "chat", modelRole: "fast" }
+            : null,
+        organizationId,
+        orgAIConfig,
+        workspaceId,
+        userId: user.id,
+        safeDb,
+        buildCollaborators,
+      });
+    };
 
     // A missing template is a 404, and a stored file the scan refuses (or a
     // scanner outage) answers as it would for an upload: 422 or 503.
@@ -233,7 +235,6 @@ const fillTemplateToWorkspace = createSafeHandler(
             workspaceId,
             requiredFields: "enforce",
             clauseOverrides: body.clauseOverrides,
-            assertUsageAvailable,
             aiCollaborators,
           }),
         catch: (cause) =>

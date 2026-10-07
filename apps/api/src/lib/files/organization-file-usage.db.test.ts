@@ -143,6 +143,56 @@ afterAll(async () => {
 });
 
 describe("organization file usage", () => {
+  test("each stored object execution family admits checked input and refuses unavailable input", async () => {
+    const attempted: string[] = [];
+    const key = (family: string, allowed: boolean) =>
+      `fixture/evidence-${family}-${allowed}`;
+    const runWrite = (family: string, allowed: boolean) => ({
+      ...input(key(family, allowed), allowed ? 1 : 1000),
+      write: async () => {
+        attempted.push(key(family, allowed));
+        return await Promise.resolve("stored");
+      },
+      db: db(),
+    });
+    const runCopy = (family: string, allowed: boolean) => ({
+      ...input(key(family, allowed), allowed ? 1 : 1000),
+      copy: async () => {
+        attempted.push(key(family, allowed));
+        return await Promise.resolve(Result.ok("stored"));
+      },
+      db: db(),
+    });
+    const families = {
+      write: async (allowed: boolean) =>
+        await writeOrganizationFile(runWrite("write", allowed)),
+      copy: async (allowed: boolean) =>
+        await copyOrganizationFile(runCopy("copy", allowed)),
+      batchWrite: async (allowed: boolean) =>
+        await writeOrganizationFiles([runWrite("batchWrite", allowed)], db()),
+      batchCopy: async (allowed: boolean) =>
+        await copyOrganizationFiles({
+          inputs: [runCopy("batchCopy", allowed)],
+          concurrency: 1,
+          db: db(),
+        }),
+    };
+    for (const [family, run] of Object.entries(families)) {
+      try {
+        expect((await run(true)).status).toBe("ok");
+        const denied = await run(false);
+        expect(denied.status).toBe("error");
+        if (denied.status === "error") {
+          expect(denied.error.reason).toBe("capacity_exceeded");
+        }
+        expect(attempted).toContain(key(family, true));
+        expect(attempted).not.toContain(key(family, false));
+      } finally {
+        await removeOrganizationFileBytes(key(family, true), db());
+      }
+    }
+  });
+
   test("reservation and failure release restore available bytes", async () => {
     const first = await reserveOrganizationFileBytes(
       input("fixture/release-a", 13),

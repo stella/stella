@@ -8,13 +8,12 @@
  * endpoint-module-to-endpoint-module import.
  */
 
-import { panic, Result } from "better-result";
+import { Result } from "better-result";
 
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
-import type { OrgAIConfig } from "@/api/lib/ai-config";
 import { loadOrgAISettings } from "@/api/lib/ai-config-loader";
 import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
-import { assertUsageAvailableForHandler } from "@/api/lib/api-handlers";
+import { authorizeHandlerUsage } from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
   buildAiConditionDecider,
@@ -24,47 +23,7 @@ import {
 import type { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { hasTanStackInstanceProvider } from "@/api/lib/tanstack-ai-models";
 
-import type { AiFillCollaborators } from "./template-fill-service";
-
-type TemplateFillUsageArgs = {
-  /** Org AI (BYOK) config; null when the org has no usable AI config, in which
-   *  case the generators are no-ops and no model call (or quota) occurs. */
-  orgAIConfig: OrgAIConfig | null;
-  organizationId: SafeId<"organization">;
-  userId: SafeId<"user">;
-  safeDb: SafeDb;
-};
-
-/**
- * Usage preflight for the template-fill routes. The fill service runs it only
- * once the manifest is known to declare an AI field, so the static
- * `requiresUsage` config is omitted and this runs in-handler instead. Returns
- * the framework's 402/500 `HandlerError` (the caller returns it as
- * `Result.err`) or `null` to proceed.
- */
-const assertTemplateFillUsage = async ({
-  orgAIConfig,
-  organizationId,
-  userId,
-  safeDb,
-}: TemplateFillUsageArgs): Promise<HandlerError<402 | 500> | null> => {
-  // Skip only when no provider could run a model at all. With an instance
-  // provider but no org BYOK, the fill still calls the fast model (the
-  // instance provider resolves it), so the quota check must apply — a null
-  // org config is not "no model call". The metering layer prices the
-  // instance-provider call (non-BYOK rate).
-  if (!orgAIConfig && !hasTanStackInstanceProvider()) {
-    return null;
-  }
-  return await assertUsageAvailableForHandler({
-    metering: { actionType: "chat", modelRole: "fast" },
-    organizationId,
-    orgAIConfig,
-    workspaceId: null,
-    userId,
-    safeDb,
-  });
-};
+import type { AiFillCollaboratorProvider } from "./template-fill-service";
 
 type TemplateFillAiWiringArgs = {
   organizationId: SafeId<"organization">;
@@ -80,8 +39,7 @@ type TemplateFillAiWiringArgs = {
 };
 
 type TemplateFillAiWiring = {
-  assertUsageAvailable: () => Promise<HandlerError<402 | 403 | 500> | null>;
-  aiCollaborators: () => Promise<AiFillCollaborators>;
+  aiCollaborators: AiFillCollaboratorProvider<HandlerError<402 | 403 | 500>>;
 };
 
 /**
@@ -111,58 +69,57 @@ export const buildTemplateFillAiWiring = ({
   };
 
   return {
-    assertUsageAvailable: async () => {
-      const config = await orgAISettings();
-      if (Result.isError(config)) {
-        return config.error;
-      }
-      return await assertTemplateFillUsage({
-        orgAIConfig: config.value.orgAIConfig,
-        organizationId,
-        userId,
-        safeDb,
-      });
-    },
     aiCollaborators: async () => {
       const configResult = await orgAISettings();
       if (Result.isError(configResult)) {
-        // The fill service builds collaborators only after this wiring's
-        // preflight passed, and the preflight returns this same refusal.
-        return panic("template fill AI collaborators built past a refusal");
+        return Result.err(configResult.error);
       }
       const config = configResult.value;
-      const shared = {
-        orgAIConfig: config.orgAIConfig,
-        managedAIResidency: config.managedAIResidency,
+      return await authorizeHandlerUsage({
+        metering:
+          config.orgAIConfig || hasTanStackInstanceProvider()
+            ? { actionType: "chat", modelRole: "fast" }
+            : null,
         organizationId,
-        skillContext: { organizationId, safeDb, userId },
-        aiAnalytics: createTanStackAIAnalyticsCallbacks({
-          dataClass: "customer",
-          usageMetering: {
-            actionType: "chat",
+        userId,
+        orgAIConfig: config.orgAIConfig,
+        workspaceId: null,
+        safeDb,
+        buildCollaborators: () => {
+          const shared = {
+            orgAIConfig: config.orgAIConfig,
+            managedAIResidency: config.managedAIResidency,
             organizationId,
-            safeDb,
-            serviceTier: "standard",
-            userId,
-            workspaceId: null,
-          },
-          feature,
-          modelRole: "fast",
-          orgAIConfig: config.orgAIConfig,
-          properties: { organization_id: organizationId },
-          traceId: Bun.randomUUIDv7(),
-        }),
-        tenantWorkspaceIds: [],
-      };
-      return {
-        generateAiValue: buildAiFieldGenerator(shared),
-        decideAiCondition: buildAiConditionDecider(shared),
-        adaptAiValue: buildAiOccurrenceAdapter(
-          documentLanguages === undefined
-            ? shared
-            : { ...shared, documentLanguages },
-        ),
-      };
+            skillContext: { organizationId, safeDb, userId },
+            aiAnalytics: createTanStackAIAnalyticsCallbacks({
+              dataClass: "customer",
+              usageMetering: {
+                actionType: "chat",
+                organizationId,
+                safeDb,
+                serviceTier: "standard",
+                userId,
+                workspaceId: null,
+              },
+              feature,
+              modelRole: "fast",
+              orgAIConfig: config.orgAIConfig,
+              properties: { organization_id: organizationId },
+              traceId: Bun.randomUUIDv7(),
+            }),
+            tenantWorkspaceIds: [],
+          };
+          return {
+            generateAiValue: buildAiFieldGenerator(shared),
+            decideAiCondition: buildAiConditionDecider(shared),
+            adaptAiValue: buildAiOccurrenceAdapter(
+              documentLanguages === undefined
+                ? shared
+                : { ...shared, documentLanguages },
+            ),
+          };
+        },
+      });
     },
   };
 };

@@ -16,7 +16,7 @@ import {
 } from "@/api/lib/ai-config-loader";
 import { captureError } from "@/api/lib/analytics/capture";
 import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
-import { assertUsageAvailableForHandler } from "@/api/lib/api-handlers";
+import { authorizeHandlerUsage } from "@/api/lib/api-handlers";
 import { arrayOrEmpty } from "@/api/lib/array";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
@@ -92,6 +92,8 @@ import {
   templateFillCompletionModeSchema,
 } from "@/api/lib/templates/template-fill-completion";
 import type {
+  AiFillCollaboratorProvider,
+  AiFillCollaborators,
   DescribeTemplateResult,
   MissingRequiredField,
 } from "@/api/lib/templates/template-fill-service";
@@ -1322,30 +1324,33 @@ const readConfigPastPreflight = async (
  * calls the fast model (the metering layer prices it at the non-BYOK rate), so
  * the quota check must still apply.
  */
-const assertTemplateFillUsage = async ({
+const authorizeTemplateFillAi = async ({
   context,
   readOrgAIConfig,
   workspaceId,
+  buildCollaborators,
 }: {
   context: McpRequestContext;
   readOrgAIConfig: () => Promise<OrgAIConfigRead>;
   workspaceId: SafeId<"workspace"> | null;
-}) => {
+  buildCollaborators: () => Promise<AiFillCollaborators>;
+}): ReturnType<AiFillCollaboratorProvider<HandlerError<402 | 403 | 500>>> => {
   const config = await readOrgAIConfig();
   if (Result.isError(config)) {
-    return config.error;
+    return Result.err(config.error);
   }
   const orgAIConfig = config.value;
-  if (!orgAIConfig && !hasTanStackInstanceProvider()) {
-    return null;
-  }
-  return await assertUsageAvailableForHandler({
-    metering: { actionType: "chat", modelRole: "fast" },
+  return await authorizeHandlerUsage({
+    metering:
+      orgAIConfig || hasTanStackInstanceProvider()
+        ? { actionType: "chat", modelRole: "fast" }
+        : null,
     organizationId: context.organizationId,
     orgAIConfig,
     workspaceId,
     userId: context.userId,
     safeDb: context.safeDb,
+    buildCollaborators,
   });
 };
 
@@ -1372,7 +1377,7 @@ const handleFillTemplateTool: McpToolHandler<
   // Built only when the manifest declares an AI field, so a deterministic fill
   // opens no metered trace. fill_template is org-scoped (no matter binding),
   // so there is no workspace id to redact tenant ids against.
-  const aiCollaborators = async () => {
+  const buildCollaborators = async () => {
     const orgAIConfig = await readConfigPastPreflight(readOrgAIConfig);
     const shared = {
       orgAIConfig,
@@ -1410,11 +1415,12 @@ const handleFillTemplateTool: McpToolHandler<
     };
   };
 
-  const assertUsageAvailable = async () =>
-    await assertTemplateFillUsage({
+  const aiCollaborators = async () =>
+    await authorizeTemplateFillAi({
       context,
       readOrgAIConfig,
       workspaceId: null,
+      buildCollaborators,
     });
 
   const fillStoredTemplate =
@@ -1431,7 +1437,6 @@ const handleFillTemplateTool: McpToolHandler<
     thirdPartyOutboundPermit: context.thirdPartyOutboundPermit,
     requiredFields: "enforce",
     useRecording: "caller",
-    assertUsageAvailable,
     aiCollaborators,
   });
   if ("usageRejection" in filled) {
@@ -1826,8 +1831,13 @@ const handleSaveFilledTemplateTool: McpToolHandler<
   }
 
   const readOrgAIConfig = deferOrgAIConfig(context);
-  const assertUsageAvailable = async () =>
-    await assertTemplateFillUsage({ context, readOrgAIConfig, workspaceId });
+  const aiCollaborators = async () =>
+    await authorizeTemplateFillAi({
+      context,
+      readOrgAIConfig,
+      workspaceId,
+      buildCollaborators,
+    });
 
   const renderDeadline = AbortSignal.timeout(
     SAVE_FILLED_TEMPLATE_RENDER_TIMEOUT_MS,
@@ -1838,7 +1848,7 @@ const handleSaveFilledTemplateTool: McpToolHandler<
       : AbortSignal.any([context.request.signal, renderDeadline]);
   // Built only when the manifest declares an AI field: the fill service defers
   // this, so a deterministic fill opens no metered trace.
-  const aiCollaborators = async () => {
+  const buildCollaborators = async () => {
     const orgAIConfig = await readConfigPastPreflight(readOrgAIConfig);
     const shared = {
       orgAIConfig,
@@ -1897,7 +1907,6 @@ const handleSaveFilledTemplateTool: McpToolHandler<
             workspaceId,
             requiredFields: "enforce",
             useRecording: "caller",
-            assertUsageAvailable,
             aiCollaborators,
           }),
         {

@@ -15,6 +15,8 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { executedRows } from "@/api/lib/db/executed-rows";
 import type { MaintenanceDb } from "@/api/lib/db/maintenance-db";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { authorizeOperation } from "@/api/lib/proofs/checked-transaction";
+import type { CheckedOperationContext } from "@/api/lib/proofs/checked-transaction";
 import { isRecord } from "@/api/lib/type-guards";
 import {
   lockAssignmentCapacities,
@@ -344,16 +346,55 @@ export const removeOrganizationFileBytes = async (
   db?: FileUsageDb,
 ) => await removeOrganizationFilesBytes([objectKey], db);
 
-/** Reserve before external I/O and settle only after the provider confirms it. */
-export const writeOrganizationFile = async <T>(
-  input: FileUsageInput & { write: () => Promise<T>; db?: FileUsageDb },
-): Promise<Result<T, OrganizationFileUsageError>> => {
-  const reservation = await reserveOrganizationFileBytes(input, input.db);
+const FILE_WRITE_RESERVED = "FileWriteReserved";
+const FILE_BATCH_RESERVED = "FileBatchReserved";
+
+export const authorizeOrganizationFileWrite = async <
+  Input extends FileUsageInput,
+>(
+  input: Input,
+  db?: FileUsageDb,
+) => {
+  const reservation = await reserveOrganizationFileBytes(input, db);
   if (Result.isError(reservation)) {
     return Result.err(reservation.error);
   }
+  return await authorizeOperation({
+    kind: FILE_WRITE_RESERVED,
+    input: { operation: input, reservation: reservation.value },
+    check: async () => await Promise.resolve(reservation.map(() => undefined)),
+  });
+};
+
+export const authorizeOrganizationFileBatch = async <
+  Input extends readonly FileUsageInput[],
+>(
+  input: Input,
+  db?: FileUsageDb,
+) => {
+  const reservations = await reserveOrganizationFilesBytes(input, db);
+  if (Result.isError(reservations)) {
+    return Result.err(reservations.error);
+  }
+  return await authorizeOperation({
+    kind: FILE_BATCH_RESERVED,
+    input: { operation: input, reservations: reservations.value },
+    check: async () => await Promise.resolve(reservations.map(() => undefined)),
+  });
+};
+
+export const runCheckedOrganizationFileWrite = async <T, N>({
+  input: named,
+}: CheckedOperationContext<
+  typeof FILE_WRITE_RESERVED,
+  {
+    operation: Parameters<typeof writeOrganizationFile<T>>[0];
+    reservation: FileUsageReservation;
+  },
+  N
+>): Promise<Result<T, OrganizationFileUsageError>> => {
   const written = await Result.tryPromise({
-    try: input.write,
+    try: named.value.operation.write,
     catch: storageUnavailable,
   });
   if (Result.isError(written)) {
@@ -362,12 +403,69 @@ export const writeOrganizationFile = async <T>(
     return Result.err(written.error);
   }
   const committed = await commitOrganizationFileBytes(
-    reservation.value,
-    input.db,
+    named.value.reservation,
+    named.value.operation.db,
   );
   return Result.isError(committed)
     ? Result.err(committed.error)
     : Result.ok(written.value);
+};
+
+export const runCheckedOrganizationFileCopy = async <T, E, N>({
+  input: named,
+}: CheckedOperationContext<
+  typeof FILE_WRITE_RESERVED,
+  {
+    operation: Parameters<typeof copyOrganizationFile<T, E>>[0];
+    reservation: FileUsageReservation;
+  },
+  N
+>): Promise<Result<T, E | OrganizationFileUsageError>> => {
+  const copied = await Result.tryPromise({
+    try: named.value.operation.copy,
+    catch: storageUnavailable,
+  });
+  if (Result.isError(copied)) {
+    return Result.err(copied.error);
+  }
+  if (Result.isError(copied.value)) {
+    // Only a copy error that proves the destination was never written may
+    // release the reservation; timeouts still need object-state recovery.
+    if (
+      named.value.operation.confirmedDestinationAbsentOnCopyError?.(
+        copied.value.error,
+      )
+    ) {
+      const released = await releaseOrganizationFileBytes(
+        named.value.reservation,
+        named.value.operation.db,
+      );
+      if (Result.isError(released)) {
+        return Result.err(released.error);
+      }
+    }
+    return Result.err(copied.value.error);
+  }
+  const committed = await commitOrganizationFileBytes(
+    named.value.reservation,
+    named.value.operation.db,
+  );
+  return Result.isError(committed)
+    ? Result.err(committed.error)
+    : Result.ok(copied.value.value);
+};
+
+/** Reserve before external I/O and settle only after the provider confirms it. */
+export const writeOrganizationFile = async <T>(
+  input: FileUsageInput & { write: () => Promise<T>; db?: FileUsageDb },
+): Promise<Result<T, OrganizationFileUsageError>> => {
+  const authorization = await authorizeOrganizationFileWrite(input, input.db);
+  if (Result.isError(authorization)) {
+    return Result.err(authorization.error);
+  }
+  return await authorization.value.execute(
+    async (operation) => await runCheckedOrganizationFileWrite(operation),
+  );
 };
 
 export const copyOrganizationFile = async <T, E>(
@@ -377,38 +475,13 @@ export const copyOrganizationFile = async <T, E>(
     db?: FileUsageDb;
   },
 ): Promise<Result<T, E | OrganizationFileUsageError>> => {
-  const reservation = await reserveOrganizationFileBytes(input, input.db);
-  if (Result.isError(reservation)) {
-    return Result.err(reservation.error);
+  const authorization = await authorizeOrganizationFileWrite(input, input.db);
+  if (Result.isError(authorization)) {
+    return Result.err(authorization.error);
   }
-  const copied = await Result.tryPromise({
-    try: input.copy,
-    catch: storageUnavailable,
-  });
-  if (Result.isError(copied)) {
-    return Result.err(copied.error);
-  }
-  if (Result.isError(copied.value)) {
-    // Only a copy error that proves the destination was never written may
-    // release the reservation; timeouts still need object-state recovery.
-    if (input.confirmedDestinationAbsentOnCopyError?.(copied.value.error)) {
-      const released = await releaseOrganizationFileBytes(
-        reservation.value,
-        input.db,
-      );
-      if (Result.isError(released)) {
-        return Result.err(released.error);
-      }
-    }
-    return Result.err(copied.value.error);
-  }
-  const committed = await commitOrganizationFileBytes(
-    reservation.value,
-    input.db,
+  return await authorization.value.execute(
+    async (operation) => await runCheckedOrganizationFileCopy(operation),
   );
-  return Result.isError(committed)
-    ? Result.err(committed.error)
-    : Result.ok(copied.value.value);
 };
 
 /** Import a confirmed object or repair a byte count. Repeating the same scan is a fixed point. */

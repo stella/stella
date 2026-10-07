@@ -32,7 +32,7 @@ import type { OrgAIConfig } from "@/api/lib/ai-config";
 import { loadOrgAISettings } from "@/api/lib/ai-config-loader";
 import { captureError } from "@/api/lib/analytics/capture";
 import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
-import { assertUsageAvailableForHandler } from "@/api/lib/api-handlers";
+import { authorizeHandlerUsage } from "@/api/lib/api-handlers";
 import { createBackgroundAuditRecorder } from "@/api/lib/audit-log";
 import { grantThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -45,6 +45,7 @@ import {
   buildAiOccurrenceAdapter,
 } from "@/api/lib/docx/ai-field-generator";
 import { createEntityFromBuffer } from "@/api/lib/entities/create-from-buffer";
+import type { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { errorTag } from "@/api/lib/errors/utils";
 import { scanUpload } from "@/api/lib/file-scan/scan-upload";
 import type { ScannedFile } from "@/api/lib/file-scan/scanned-file";
@@ -72,6 +73,7 @@ import {
 } from "@/api/lib/templates/template-fill-completion";
 import type {
   AiFillCollaborators,
+  AiFillCollaboratorProvider,
   MissingRequiredField,
 } from "@/api/lib/templates/template-fill-service";
 import {
@@ -630,26 +632,26 @@ const renderSpecReport = async ({
   aiNarrative: boolean;
   linkBase: ReportLinkBase | undefined;
 }): Promise<FillReportResult> => {
+  let generateAiValue: AiFillCollaborators["generateAiValue"];
   if (
     aiNarrative &&
-    generators.assertUsageAvailable &&
-    hasNarrativeSection(builtin.spec.sections)
+    hasNarrativeSection(builtin.spec.sections) &&
+    generators.aiCollaborators
   ) {
-    const usageRejection = await generators.assertUsageAvailable();
-    if (usageRejection !== null) {
-      return { usageRejection };
+    const authorization = await generators.aiCollaborators();
+    if (Result.isError(authorization)) {
+      return { usageRejection: authorization.error };
     }
+    const collaborators = await authorization.value.execute(
+      async ({ input }) => await input.value.buildCollaborators(),
+    );
+    generateAiValue = collaborators.generateAiValue;
   }
-  // A spec report renders its narrative directly rather than through the fill
-  // service, so it resolves the collaborators itself — and only when the
-  // narrative is actually requested.
   const rendered = await renderReportSpec({
     spec: builtin.spec,
     report,
     prompts: builtin.prompts,
-    generateAiValue: aiNarrative
-      ? (await generators.aiCollaborators?.())?.generateAiValue
-      : undefined,
+    generateAiValue,
     aiNarrative,
     linkBase,
   });
@@ -666,10 +668,7 @@ const renderSpecReport = async ({
 /** The AI hooks passed into the fill pipeline; both are optional so a
  *  deterministic export can pass `{}`. */
 type ReportAiGenerators = {
-  aiCollaborators?:
-    | (() => AiFillCollaborators | Promise<AiFillCollaborators>)
-    | undefined;
-  assertUsageAvailable?: (() => Promise<unknown>) | undefined;
+  aiCollaborators?: AiFillCollaboratorProvider<HandlerError> | undefined;
 };
 
 /** Build the metered AI generators + usage preflight for a narrative export. */
@@ -699,19 +698,6 @@ const buildReportAiGenerators = ({
     traceId: Bun.randomUUIDv7(),
   });
 
-  const assertUsageAvailable =
-    orgAIConfig || hasTanStackInstanceProvider()
-      ? async () =>
-          await assertUsageAvailableForHandler({
-            metering: { actionType: "chat", modelRole: "fast" },
-            organizationId: actor.organizationId,
-            orgAIConfig,
-            workspaceId: actor.workspaceId,
-            userId: actor.userId,
-            safeDb: actor.writeSafeDb,
-          })
-      : undefined;
-
   const shared = {
     orgAIConfig,
     managedAIResidency,
@@ -727,12 +713,23 @@ const buildReportAiGenerators = ({
   return {
     // The fill service builds these only when the manifest declares an AI
     // field, so a deterministic export never reaches the model layer.
-    aiCollaborators: () => ({
-      generateAiValue: buildAiFieldGenerator(shared),
-      decideAiCondition: buildAiConditionDecider(shared),
-      adaptAiValue: buildAiOccurrenceAdapter(shared),
-    }),
-    assertUsageAvailable,
+    aiCollaborators: async () =>
+      await authorizeHandlerUsage({
+        metering:
+          orgAIConfig || hasTanStackInstanceProvider()
+            ? { actionType: "chat", modelRole: "fast" }
+            : null,
+        organizationId: actor.organizationId,
+        orgAIConfig,
+        workspaceId: actor.workspaceId,
+        userId: actor.userId,
+        safeDb: actor.writeSafeDb,
+        buildCollaborators: () => ({
+          generateAiValue: buildAiFieldGenerator(shared),
+          decideAiCondition: buildAiConditionDecider(shared),
+          adaptAiValue: buildAiOccurrenceAdapter(shared),
+        }),
+      }),
   };
 };
 

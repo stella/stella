@@ -10,7 +10,7 @@ import {
 import { deleteOrganizationFileWithSignal } from "@/api/lib/files/delete-organization-file";
 import {
   commitOrganizationFileBytes,
-  reserveOrganizationFileBytes,
+  authorizeOrganizationFileWrite,
 } from "@/api/lib/files/organization-file-usage";
 import { failureSink } from "@/api/lib/observability/failure";
 import { observeFailure } from "@/api/lib/observability/observe-failure";
@@ -98,57 +98,70 @@ export const promoteTmpObjectWithUsage = async ({
   };
   let transferred = false;
   try {
-    const reservation = await reserveOrganizationFileBytes({
+    const authorization = await authorizeOrganizationFileWrite({
       organizationId,
       objectKey: finalKey,
       sizeBytes: storedBytes.byteLength,
     });
-    if (Result.isError(reservation)) {
+    if (Result.isError(authorization)) {
       return Result.err(
         new UploadFinalizeError({
-          status: reservation.error.reason === "capacity_exceeded" ? 409 : 500,
-          message: reservation.error.message,
-          rejectReason: reservation.error.reason,
+          status:
+            authorization.error.reason === "capacity_exceeded" ? 409 : 500,
+          message: authorization.error.message,
+          rejectReason: authorization.error.reason,
         }),
       );
     }
-    writeState = S3_OBJECT_WRITE_CERTAINTY.UNCERTAIN;
-    // The copy SDK may retry internally without exposing earlier transport outcomes.
-    const promoted =
-      promotion === "copy"
-        ? (await copyObject(tmpKey, finalKey)).map(
-            () => S3_OBJECT_WRITE_CERTAINTY.UNCERTAIN,
-          )
-        : await Result.tryPromise({
-            try: async () =>
-              await writeS3ObjectWithRetry(
-                { contentType: declaredMime, data: storedBytes, key: finalKey },
-                { type: "cleanup-intent", intent: intentId },
-              ),
-            catch: (cause) => cause,
-          });
-    if (Result.isError(promoted)) {
-      return Result.err(
-        new UploadFinalizeError({
-          status: 500,
-          message: "Failed to promote tmp object",
-          rejectReason: promotion === "copy" ? "copy-failed" : "write-failed",
-        }),
-      );
-    }
-    writeState = promoted.value;
-    const committed = await commitOrganizationFileBytes(reservation.value);
-    if (Result.isError(committed)) {
-      return Result.err(
-        new UploadFinalizeError({
-          status: 500,
-          message: committed.error.message,
-          rejectReason: "usage-commit-failed",
-        }),
-      );
-    }
-    transferred = true;
-    return Result.ok({ intentId, cleanup });
+    const outcome = await authorization.value.execute(
+      async ({ input: named }) => {
+        writeState = S3_OBJECT_WRITE_CERTAINTY.UNCERTAIN;
+        // The copy SDK may retry internally without exposing earlier transport outcomes.
+        const promoted =
+          promotion === "copy"
+            ? (await copyObject(tmpKey, finalKey)).map(
+                () => S3_OBJECT_WRITE_CERTAINTY.UNCERTAIN,
+              )
+            : await Result.tryPromise({
+                try: async () =>
+                  await writeS3ObjectWithRetry(
+                    {
+                      contentType: declaredMime,
+                      data: storedBytes,
+                      key: finalKey,
+                    },
+                    { type: "cleanup-intent", intent: intentId },
+                  ),
+                catch: (cause) => cause,
+              });
+        if (Result.isError(promoted)) {
+          return Result.err(
+            new UploadFinalizeError({
+              status: 500,
+              message: "Failed to promote tmp object",
+              rejectReason:
+                promotion === "copy" ? "copy-failed" : "write-failed",
+            }),
+          );
+        }
+        writeState = promoted.value;
+        const committed = await commitOrganizationFileBytes(
+          named.value.reservation,
+        );
+        if (Result.isError(committed)) {
+          return Result.err(
+            new UploadFinalizeError({
+              status: 500,
+              message: committed.error.message,
+              rejectReason: "usage-commit-failed",
+            }),
+          );
+        }
+        return Result.ok({ intentId, cleanup });
+      },
+    );
+    transferred = Result.isOk(outcome);
+    return outcome;
   } finally {
     if (!transferred) {
       await cleanup();

@@ -6987,6 +6987,10 @@
     "seconds": 0.091345,
     "source": "estimated"
   },
+  "src/lib/proofs/checked-operation.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
   "src/lib/properties/column-prompt-suggestion.test.ts": {
     "seconds": 0.339309,
     "source": "estimated"
@@ -8821,6 +8825,10 @@
   },
   "src/tests/pglite-role-grants.test.ts": {
     "seconds": 2.20168,
+    "source": "estimated"
+  },
+  "src/tests/proofs/checked-paths.test.ts": {
+    "seconds": 1,
     "source": "estimated"
   },
   "src/tests/query-plans/plan-walker.test.ts": {

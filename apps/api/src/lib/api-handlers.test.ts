@@ -13,7 +13,7 @@ import type { OrgAIConfigStatus } from "@/api/lib/ai-config-loader-core";
 import { AI_MEMBER_ASSIGNMENT_REQUIRED_ERROR_CODE } from "@/api/lib/ai-config-response";
 import {
   ACCOUNT_ACCESS,
-  assertRunSizeConfirmedForHandler,
+  authorizeHandlerRunSize,
   createSafeHandler,
   createSafeRootHandler,
   errorCauseChainAttributes,
@@ -142,7 +142,11 @@ describe("createSafeRootHandler usage preflight", () => {
 
   test("fails closed when enforced usage preflight cannot read the ledger", async () => {
     const previousEnforcement = env.USAGE_ENFORCEMENT_ENABLED;
+    const previousProvider = env.AI_PROVIDER;
+    const previousKey = env.OPENROUTER_API_KEY;
     env.USAGE_ENFORCEMENT_ENABLED = true;
+    env.AI_PROVIDER = "openrouter";
+    env.OPENROUTER_API_KEY = "sk-test";
     try {
       let meteredHandlerCalled = false;
       const endpoint = createSafeRootHandler(
@@ -175,6 +179,8 @@ describe("createSafeRootHandler usage preflight", () => {
       });
     } finally {
       env.USAGE_ENFORCEMENT_ENABLED = previousEnforcement;
+      env.AI_PROVIDER = previousProvider;
+      env.OPENROUTER_API_KEY = previousKey;
     }
   });
 
@@ -773,7 +779,7 @@ describe("errorCauseChainAttributes", () => {
   });
 });
 
-describe("assertRunSizeConfirmedForHandler", () => {
+describe("authorizeHandlerRunSize", () => {
   const organizationId = toSafeId<"organization">(
     "019e7000-0000-7000-8000-000000000002",
   );
@@ -831,13 +837,13 @@ describe("assertRunSizeConfirmedForHandler", () => {
     const previous = env.USAGE_ENFORCEMENT_ENABLED;
     env.USAGE_ENFORCEMENT_ENABLED = false;
     try {
-      const outcome = await assertRunSizeConfirmedForHandler({
+      const outcome = await authorizeHandlerRunSize({
         ...baseInput,
         estimatedUnits: 10_000,
         confirmedUnits: undefined,
         safeDb: untouchableDb,
       });
-      expect(outcome).toBeNull();
+      expect(Result.isOk(outcome)).toBe(true);
     } finally {
       env.USAGE_ENFORCEMENT_ENABLED = previous;
     }
@@ -845,13 +851,13 @@ describe("assertRunSizeConfirmedForHandler", () => {
 
   test("a zero estimate never touches the ledger", async () => {
     await withInstanceEnforcement(async () => {
-      const outcome = await assertRunSizeConfirmedForHandler({
+      const outcome = await authorizeHandlerRunSize({
         ...baseInput,
         estimatedUnits: 0,
         confirmedUnits: undefined,
         safeDb: untouchableDb,
       });
-      expect(outcome).toBeNull();
+      expect(Result.isOk(outcome)).toBe(true);
     });
   });
 
@@ -867,38 +873,38 @@ describe("assertRunSizeConfirmedForHandler", () => {
         },
         decision: null,
       };
-      const outcome = await assertRunSizeConfirmedForHandler({
+      const outcome = await authorizeHandlerRunSize({
         ...baseInput,
         orgAIConfig: byokConfig,
         estimatedUnits: 10_000,
         confirmedUnits: undefined,
         safeDb: untouchableDb,
       });
-      expect(outcome).toBeNull();
+      expect(Result.isOk(outcome)).toBe(true);
     });
   });
 
   test("small runs pass once the whole estimate is affordable", async () => {
     await withInstanceEnforcement(async () => {
-      const outcome = await assertRunSizeConfirmedForHandler({
+      const outcome = await authorizeHandlerRunSize({
         ...baseInput,
         estimatedUnits: 10,
         confirmedUnits: undefined,
         safeDb: availableDb(500),
       });
-      expect(outcome).toBeNull();
+      expect(Result.isOk(outcome)).toBe(true);
     });
   });
 
   test("an unaffordable estimate answers the over-limit shape, not a confirmation", async () => {
     await withInstanceEnforcement(async () => {
-      const outcome = await assertRunSizeConfirmedForHandler({
+      const outcome = await authorizeHandlerRunSize({
         ...baseInput,
         estimatedUnits: 800,
         confirmedUnits: undefined,
         safeDb: overLimitDb(800, 30),
       });
-      expect(outcome).toMatchObject({
+      expect(Result.isError(outcome) ? outcome.error : outcome).toMatchObject({
         status: 402,
         code: "usage_limit_exceeded",
         usage: { required: 800, available: 30 },
@@ -908,13 +914,13 @@ describe("assertRunSizeConfirmedForHandler", () => {
 
   test("a large unconfirmed run answers 428 carrying the estimate", async () => {
     await withInstanceEnforcement(async () => {
-      const outcome = await assertRunSizeConfirmedForHandler({
+      const outcome = await authorizeHandlerRunSize({
         ...baseInput,
         estimatedUnits: 120,
         confirmedUnits: undefined,
         safeDb: availableDb(500),
       });
-      expect(outcome).toMatchObject({
+      expect(Result.isError(outcome) ? outcome.error : outcome).toMatchObject({
         status: 428,
         code: "usage_confirmation_required",
         confirmation: { estimatedUnits: 120, availableUnits: 500 },
@@ -924,25 +930,27 @@ describe("assertRunSizeConfirmedForHandler", () => {
 
   test("a stale lower confirmation does not cover a grown estimate", async () => {
     await withInstanceEnforcement(async () => {
-      const outcome = await assertRunSizeConfirmedForHandler({
+      const outcome = await authorizeHandlerRunSize({
         ...baseInput,
         estimatedUnits: 120,
         confirmedUnits: 60,
         safeDb: availableDb(500),
       });
-      expect(outcome).toMatchObject({ status: 428 });
+      expect(Result.isError(outcome) ? outcome.error : outcome).toMatchObject({
+        status: 428,
+      });
     });
   });
 
   test("restating the estimate lets the run proceed", async () => {
     await withInstanceEnforcement(async () => {
-      const outcome = await assertRunSizeConfirmedForHandler({
+      const outcome = await authorizeHandlerRunSize({
         ...baseInput,
         estimatedUnits: 120,
         confirmedUnits: 120,
         safeDb: availableDb(500),
       });
-      expect(outcome).toBeNull();
+      expect(Result.isOk(outcome)).toBe(true);
     });
   });
 });

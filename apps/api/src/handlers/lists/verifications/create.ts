@@ -12,7 +12,7 @@ import { legalListVerificationRuns } from "@/api/db/schema";
 import { orgAIConfigStatusError } from "@/api/lib/ai-config-response";
 import {
   ACCOUNT_ACCESS,
-  assertRunSizeConfirmedForHandler,
+  authorizeHandlerRunSize,
   createSafeHandler,
 } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
@@ -66,13 +66,25 @@ const config = {
 const PROMPT_BYTES_PER_EXPECTED_CLAIM = 400;
 const PROMPT_BYTES_PER_STORED_BYTE = 4;
 
-const isVerifiableFile = (content: {
+const requireVerifiableFile = (content: {
   mimeType: string;
   pdfFileId: string | null;
-}): boolean =>
-  content.mimeType === DOCX_MIME_TYPE ||
-  content.mimeType === PDF_MIME_TYPE ||
-  content.pdfFileId !== null;
+}): Result<void, HandlerError<422>> => {
+  if (
+    content.mimeType === DOCX_MIME_TYPE ||
+    content.mimeType === PDF_MIME_TYPE ||
+    content.pdfFileId !== null
+  ) {
+    return Result.ok(undefined);
+  }
+  return Result.err(
+    new HandlerError({
+      status: 422,
+      message:
+        "Only DOCX files, PDFs and files with a PDF rendition can be verified.",
+    }),
+  );
+};
 
 const createVerification = createSafeHandler(
   config,
@@ -92,7 +104,6 @@ const createVerification = createSafeHandler(
     }
     const organizationId = session.activeOrganizationId;
     const { listId, entityId, fileFieldId } = body;
-
     const target = yield* Result.await(
       safeDb(async (tx) => {
         const entity = await tx.query.entities.findFirst({
@@ -133,16 +144,7 @@ const createVerification = createSafeHandler(
     if (file.encrypted) {
       return Result.err(encryptedContentError());
     }
-    if (!isVerifiableFile(file)) {
-      return Result.err(
-        new HandlerError({
-          status: 422,
-          message:
-            "Only DOCX files, PDFs and files with a PDF rendition can be verified.",
-        }),
-      );
-    }
-
+    yield* requireVerifiableFile(file);
     const evidence = yield* Result.await(
       safeDb(
         async (tx) =>
@@ -158,129 +160,131 @@ const createVerification = createSafeHandler(
         }),
       );
     }
-
     const model = getTanStackTextModelInfoForRole(
       VERIFICATION_MODEL_ROLE,
       orgAIConfig,
       { dataClass: "customer", organizationId },
     );
-    const sizeError = await assertRunSizeConfirmedForHandler({
-      metering: {
-        actionType: "doc_review",
-        modelRole: VERIFICATION_MODEL_ROLE,
-      },
-      estimatedUnits: estimateDocumentRunUnits({
-        modelId: model.modelId,
-        actionType: "doc_review",
-        storedInputBytes: file.sizeBytes,
-        plannedOutputs: Math.ceil(
-          (file.sizeBytes * PROMPT_BYTES_PER_STORED_BYTE) /
-            PROMPT_BYTES_PER_EXPECTED_CLAIM,
-        ),
-        serviceTier: "standard",
-      }),
-      confirmedUnits: body.confirmedUnits,
-      organizationId,
-      orgAIConfig,
-      workspaceId,
-      userId: user.id,
-      safeDb,
-    });
-    if (sizeError) {
-      return Result.err(sizeError);
-    }
-
-    const runId = createSafeId<"legalListVerificationRun">();
-    const inserted = await startVerificationRun({
-      safeDb,
-      run: {
-        id: runId,
+    const authorization = yield* Result.await(
+      authorizeHandlerRunSize({
+        metering: {
+          actionType: "doc_review",
+          modelRole: VERIFICATION_MODEL_ROLE,
+        },
+        estimatedUnits: estimateDocumentRunUnits({
+          modelId: model.modelId,
+          actionType: "doc_review",
+          storedInputBytes: file.sizeBytes,
+          plannedOutputs: Math.ceil(
+            (file.sizeBytes * PROMPT_BYTES_PER_STORED_BYTE) /
+              PROMPT_BYTES_PER_EXPECTED_CLAIM,
+          ),
+          serviceTier: "standard",
+        }),
+        confirmedUnits: body.confirmedUnits,
         organizationId,
+        orgAIConfig,
         workspaceId,
-        entityId,
-        fileFieldId,
-        entityVersionId: version.id,
-        contentSha256: file.sha256Hex,
-        evidence: evidence.evidence,
-        requestedBy: user.id,
-      },
-      recordAuditEvent: async (tx) =>
-        await recordAuditEvent(tx, {
-          action: AUDIT_ACTION.EXECUTE,
-          resourceType: AUDIT_RESOURCE_TYPE.LEGAL_LIST_VERIFICATION,
-          resourceId: runId,
-          metadata: {
-            listId,
-            entityId,
-            fileFieldId,
-            factCount: evidence.evidence.facts.length,
-          },
-        }),
-    });
-    const created = yield* inserted.mapError((error) =>
-      ListVerificationRunCapError.is(error)
-        ? new HandlerError({
-            status: 429,
-            message: error.message,
-            hint: error.hint,
-            retryable: true,
-          })
-        : error,
+        userId: user.id,
+        safeDb,
+      }),
     );
-    if (!created) {
-      return Result.err(
-        new HandlerError({
-          status: 409,
-          message: "This document is already being verified.",
-        }),
-      );
-    }
-
-    const enqueued = await Result.tryPromise({
-      try: async () =>
-        await enqueueListVerificationRun({
-          runId,
-          workspaceId,
-          organizationId,
-          userId: user.id,
-        }),
-      catch: (cause) => cause,
-    });
-    if (Result.isError(enqueued)) {
-      // A never-enqueued run must not hold the document's active slot.
-      yield* Result.await(
-        safeDb(async (tx) => {
-          await recordAuditEvent(tx, {
-            action: AUDIT_ACTION.UPDATE,
-            resourceType: AUDIT_RESOURCE_TYPE.LEGAL_LIST_VERIFICATION,
-            resourceId: runId,
-            metadata: { status: "failed", errorCode: "enqueue_failed" },
+    return await authorization.execute(
+      async () =>
+        await Result.gen(async function* () {
+          const runId = createSafeId<"legalListVerificationRun">();
+          const inserted = await startVerificationRun({
+            safeDb,
+            run: {
+              id: runId,
+              organizationId,
+              workspaceId,
+              entityId,
+              fileFieldId,
+              entityVersionId: version.id,
+              contentSha256: file.sha256Hex,
+              evidence: evidence.evidence,
+              requestedBy: user.id,
+            },
+            recordAuditEvent: async (tx) =>
+              await recordAuditEvent(tx, {
+                action: AUDIT_ACTION.EXECUTE,
+                resourceType: AUDIT_RESOURCE_TYPE.LEGAL_LIST_VERIFICATION,
+                resourceId: runId,
+                metadata: {
+                  listId,
+                  entityId,
+                  fileFieldId,
+                  factCount: evidence.evidence.facts.length,
+                },
+              }),
           });
-          await tx
-            .update(legalListVerificationRuns)
-            .set({
-              status: "failed",
-              errorCode: "enqueue_failed",
-              finishedAt: new Date(),
-            })
-            .where(
-              and(
-                eq(legalListVerificationRuns.id, runId),
-                eq(legalListVerificationRuns.workspaceId, workspaceId),
-              ),
+          const created = yield* inserted.mapError((error) =>
+            ListVerificationRunCapError.is(error)
+              ? new HandlerError({
+                  status: 429,
+                  message: error.message,
+                  hint: error.hint,
+                  retryable: true,
+                })
+              : error,
+          );
+          if (!created) {
+            return Result.err(
+              new HandlerError({
+                status: 409,
+                message: "This document is already being verified.",
+              }),
             );
-        }),
-      );
-      return Result.err(
-        new HandlerError({
-          status: 500,
-          message: "The verification could not be started.",
-          cause: enqueued.error,
-        }),
-      );
-    }
+          }
 
-    return Result.ok({ runId, status: "queued" as const });
+          const enqueued = await Result.tryPromise({
+            try: async () =>
+              await enqueueListVerificationRun({
+                runId,
+                workspaceId,
+                organizationId,
+                userId: user.id,
+              }),
+            catch: (cause) => cause,
+          });
+          if (Result.isError(enqueued)) {
+            // A never-enqueued run must not hold the document's active slot.
+            yield* Result.await(
+              safeDb(async (tx) => {
+                await recordAuditEvent(tx, {
+                  action: AUDIT_ACTION.UPDATE,
+                  resourceType: AUDIT_RESOURCE_TYPE.LEGAL_LIST_VERIFICATION,
+                  resourceId: runId,
+                  metadata: { status: "failed", errorCode: "enqueue_failed" },
+                });
+                await tx
+                  .update(legalListVerificationRuns)
+                  .set({
+                    status: "failed",
+                    errorCode: "enqueue_failed",
+                    finishedAt: new Date(),
+                  })
+                  .where(
+                    and(
+                      eq(legalListVerificationRuns.id, runId),
+                      eq(legalListVerificationRuns.workspaceId, workspaceId),
+                    ),
+                  );
+              }),
+            );
+            return Result.err(
+              new HandlerError({
+                status: 500,
+                message: "The verification could not be started.",
+                cause: enqueued.error,
+              }),
+            );
+          }
+
+          return Result.ok({ runId, status: "queued" as const });
+        }),
+    );
   },
 );
 

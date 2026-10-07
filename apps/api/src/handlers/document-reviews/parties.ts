@@ -13,6 +13,7 @@ import { panic, Result } from "better-result";
 import { and, eq, isNull, ne, sql } from "drizzle-orm";
 import { t } from "elysia";
 
+import type { SafeDb } from "@/api/db/safe-db";
 import {
   documentReviewParties,
   entityVersions,
@@ -23,10 +24,11 @@ import { documentReviewTargetSchema } from "@/api/handlers/document-reviews/sche
 import { aiHandlerError } from "@/api/lib/ai-error";
 import {
   ACCOUNT_ACCESS,
-  assertUsageAvailableForHandler,
+  authorizeHandlerUsage,
   createSafeHandler,
 } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
+import type { SafeId } from "@/api/lib/branded-types";
 import { createSafeId } from "@/api/lib/branded-types";
 import {
   detectReviewParties,
@@ -52,6 +54,81 @@ const config = {
   body: documentReviewPartiesBodySchema,
 } satisfies WorkspaceHandlerConfig;
 
+type PersistDetectedPartiesOptions = {
+  safeDb: SafeDb;
+  organizationId: SafeId<"organization">;
+  workspaceId: SafeId<"workspace">;
+  entityId: SafeId<"entity">;
+  entityVersionId: SafeId<"entityVersion">;
+  parties: typeof documentReviewParties.$inferInsert.parties;
+};
+
+const persistDetectedParties = async ({
+  safeDb,
+  organizationId,
+  workspaceId,
+  entityId,
+  entityVersionId,
+  parties,
+}: PersistDetectedPartiesOptions) =>
+  await safeDb(async (tx) => {
+    // Model work runs outside the transaction. Fence its final write
+    // against matter deletion and version tombstoning, in that order.
+    const owners = await tx
+      .select({ id: workspaces.id })
+      .from(workspaces)
+      .where(
+        and(
+          eq(workspaces.id, workspaceId),
+          eq(workspaces.organizationId, organizationId),
+          ne(workspaces.status, "deleting"),
+        ),
+      )
+      .for("share");
+    if (owners.length === 0) {
+      return false;
+    }
+    const versions = await tx
+      .select({ id: entityVersions.id })
+      .from(entityVersions)
+      .where(
+        and(
+          eq(entityVersions.id, entityVersionId),
+          eq(entityVersions.entityId, entityId),
+          eq(entityVersions.workspaceId, workspaceId),
+          isNull(entityVersions.deletedAt),
+        ),
+      )
+      .for("share");
+    if (versions.length === 0) {
+      return false;
+    }
+    // audit: skip — derived AI cache keyed by entity version;
+    // recomputable from the document's current content, never surfaces
+    // as an audited mutation on its own.
+    await tx
+      .insert(documentReviewParties)
+      .values({
+        id: createSafeId<"documentReviewParty">(),
+        organizationId,
+        workspaceId,
+        entityId,
+        entityVersionId,
+        promptVersion: REVIEW_PARTIES_PROMPT_VERSION,
+        parties,
+        createdAt: new Date(),
+      })
+      .onConflictDoUpdate({
+        target: documentReviewParties.entityVersionId,
+        set: {
+          promptVersion: sql`excluded.prompt_version`,
+          parties: sql`excluded.parties`,
+          createdAt: sql`excluded.created_at`,
+        },
+      });
+    return true;
+  });
+
 export const createReviewParties = ({
   detectParties = detectReviewParties,
   prepareReviewFiles = fetchAndPrepareReviewFiles,
@@ -76,7 +153,6 @@ export const createReviewParties = ({
     }) {
       const organizationId = session.activeOrganizationId;
       const targetRef = { ...body.target, workspaceId };
-
       const loadedEntities = yield* Result.await(
         safeDb((tx) =>
           tx.query.entities.findMany({
@@ -103,7 +179,6 @@ export const createReviewParties = ({
         return Result.err(selection.error);
       }
       const { entityId, entityVersionId, file } = selection.value.target;
-
       const cached = yield* Result.await(
         safeDb((tx) =>
           tx
@@ -126,7 +201,6 @@ export const createReviewParties = ({
       if (cachedRow !== undefined) {
         return Result.ok({ entityVersionId, parties: cachedRow.parties });
       }
-
       yield* requireTanStackAIAvailableForRole({
         dataClass: "customer",
         configStatus: orgAIConfigStatus,
@@ -134,138 +208,94 @@ export const createReviewParties = ({
         role: "pdf",
       });
 
-      const preflightError = await assertUsageAvailableForHandler({
-        metering: { actionType: "chat", modelRole: "pdf" },
-        organizationId,
-        orgAIConfig,
-        workspaceId,
-        userId: user.id,
-        safeDb,
-      });
-      if (preflightError) {
-        return Result.err(preflightError);
-      }
-
-      const preparedResult = await Result.tryPromise({
-        try: async () => await prepareReviewFiles([file], organizationId),
-        catch: (cause) =>
-          new HandlerError({
-            status: 500,
-            message: "Internal server error",
-            cause,
-          }),
-      });
-      if (Result.isError(preparedResult)) {
-        return Result.err(preparedResult.error);
-      }
-      const target = preparedResult.value.at(0);
-      if (target?.kind !== "docx") {
-        return panic("DOCX review target was not prepared as DOCX blocks");
-      }
-
-      const serviceTier = "standard" as const;
-      const detected = await detectParties({
-        target,
-        targetEntityVersionId: entityVersionId,
-        organizationId,
-        workspaceId,
-        orgAIConfig,
-        managedAIResidency,
-        promptCachingEnabled,
-        serviceTier,
-        usageMetering: {
-          actionType: "chat",
+      const authorization = yield* Result.await(
+        authorizeHandlerUsage({
+          metering: { actionType: "chat", modelRole: "pdf" },
           organizationId,
-          safeDb,
-          serviceTier,
-          userId: user.id,
+          orgAIConfig,
           workspaceId,
-        },
-        abortSignal: AbortSignal.timeout(TIMEOUT_MS),
-      });
-      if (Result.isError(detected)) {
-        // `WorkflowIntegrationError.cause` carries the provider's own failure —
-        // classify against that so an exhausted quota or a rejected key answers
-        // with the status that names it instead of an opaque 500.
-        return Result.err(
-          aiHandlerError(detected.error.cause, {
-            status: 502,
-            message: "Party detection failed",
-          }),
-        );
-      }
-      const parties = detected.value;
-
-      const persisted = yield* Result.await(
-        safeDb(async (tx) => {
-          // Model work runs outside the transaction. Fence its final write
-          // against matter deletion and version tombstoning, in that order.
-          const owners = await tx
-            .select({ id: workspaces.id })
-            .from(workspaces)
-            .where(
-              and(
-                eq(workspaces.id, workspaceId),
-                eq(workspaces.organizationId, organizationId),
-                ne(workspaces.status, "deleting"),
-              ),
-            )
-            .for("share");
-          if (owners.length === 0) {
-            return false;
-          }
-          const versions = await tx
-            .select({ id: entityVersions.id })
-            .from(entityVersions)
-            .where(
-              and(
-                eq(entityVersions.id, entityVersionId),
-                eq(entityVersions.entityId, entityId),
-                eq(entityVersions.workspaceId, workspaceId),
-                isNull(entityVersions.deletedAt),
-              ),
-            )
-            .for("share");
-          if (versions.length === 0) {
-            return false;
-          }
-          // audit: skip — derived AI cache keyed by entity version;
-          // recomputable from the document's current content, never surfaces
-          // as an audited mutation on its own.
-          await tx
-            .insert(documentReviewParties)
-            .values({
-              id: createSafeId<"documentReviewParty">(),
-              organizationId,
-              workspaceId,
-              entityId,
-              entityVersionId,
-              promptVersion: REVIEW_PARTIES_PROMPT_VERSION,
-              parties,
-              createdAt: new Date(),
-            })
-            .onConflictDoUpdate({
-              target: documentReviewParties.entityVersionId,
-              set: {
-                promptVersion: sql`excluded.prompt_version`,
-                parties: sql`excluded.parties`,
-                createdAt: sql`excluded.created_at`,
-              },
-            });
-          return true;
+          userId: user.id,
+          safeDb,
         }),
       );
+      return await authorization.execute(
+        async () =>
+          await Result.gen(async function* () {
+            const prepared = yield* Result.await(
+              Result.tryPromise({
+                try: async () =>
+                  await prepareReviewFiles([file], organizationId),
+                catch: (cause) =>
+                  new HandlerError({
+                    status: 500,
+                    message: "Internal server error",
+                    cause,
+                  }),
+              }),
+            );
+            const target = prepared.at(0);
+            if (target?.kind !== "docx") {
+              return panic(
+                "DOCX review target was not prepared as DOCX blocks",
+              );
+            }
 
-      if (!persisted) {
-        return Result.err(
-          new HandlerError({
-            status: 404,
-            message: "Document review target is no longer available",
+            const serviceTier = "standard" as const;
+            const detected = await detectParties({
+              target,
+              targetEntityVersionId: entityVersionId,
+              organizationId,
+              workspaceId,
+              orgAIConfig,
+              managedAIResidency,
+              promptCachingEnabled,
+              serviceTier,
+              usageMetering: {
+                actionType: "chat",
+                organizationId,
+                safeDb,
+                serviceTier,
+                userId: user.id,
+                workspaceId,
+              },
+              abortSignal: AbortSignal.timeout(TIMEOUT_MS),
+            });
+            if (Result.isError(detected)) {
+              // `WorkflowIntegrationError.cause` carries the provider's own failure —
+              // classify against that so refused admission or a rejected key answers
+              // with the status that names it instead of an opaque 500.
+              return Result.err(
+                aiHandlerError(detected.error.cause, {
+                  status: 502,
+                  message: "Party detection failed",
+                }),
+              );
+            }
+            const parties = detected.value;
+
+            const persisted = yield* Result.await(
+              persistDetectedParties({
+                safeDb,
+                organizationId,
+                workspaceId,
+                entityId,
+                entityVersionId,
+                parties,
+              }),
+            );
+
+            if (!persisted) {
+              return Result.err(
+                new HandlerError({
+                  status: 404,
+                  message: "Document review target is no longer available",
+                }),
+              );
+            }
+
+            return Result.ok({ entityVersionId, parties });
           }),
-        );
-      }
-
-      return Result.ok({ entityVersionId, parties });
+      );
     },
   );
 

@@ -12,8 +12,16 @@ import { eq, inArray } from "drizzle-orm";
 
 import { member, organization } from "@/api/db/auth-schema";
 import type { ScopedDb } from "@/api/db/safe-db";
-import { organizationSettings } from "@/api/db/schema";
+import {
+  organizationSettings,
+  organizationAccessStates,
+  ORGANIZATION_ACCESS_STATE,
+  usagePolicies,
+  usageEntitlements,
+  usageSeatAssignments,
+} from "@/api/db/schema";
 import { createMembershipScopedDb } from "@/api/db/scoped";
+import { env } from "@/api/env";
 import type { OrgAIConfig } from "@/api/lib/ai-config";
 import { encryptAIConfig } from "@/api/lib/ai-config-crypto";
 import {
@@ -23,6 +31,7 @@ import {
   loadOrgSettingsForAuth,
 } from "@/api/lib/ai-config-loader";
 import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
+import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { ManagedAIResidency } from "@/api/lib/chat/ai-data-policy";
 import { encryptContent } from "@/api/lib/content-encryption";
@@ -456,4 +465,91 @@ describe("absent and unreadable settings", () => {
     expect(Result.isError(config)).toBe(true);
     expect(Result.isError(settings)).toBe(true);
   });
+});
+
+test("strict configuration readers expose settings only for admitted actors", async () => {
+  const previousFlag = env.FEATURE_ORG_ACCESS_STATE;
+  const previousState = (
+    await testDb
+      .select()
+      .from(organizationAccessStates)
+      .where(eq(organizationAccessStates.organizationId, ids.orgA))
+  ).at(0);
+  const policyId = createSafeId<"usagePolicy">();
+  const entitlementId = createSafeId<"usageEntitlement">();
+  const assignmentId = createSafeId<"usageSeatAssignment">();
+  const now = Date.now();
+  await testDb.insert(usagePolicies).values({
+    id: policyId,
+    policyKey: `evidence-${policyId}`,
+    displayName: "Evidence fixture",
+    monthlyUsageUnits: 0,
+    maxMembers: 8,
+  });
+  await testDb.insert(usageEntitlements).values({
+    id: entitlementId,
+    organizationId: ids.orgA,
+    usagePolicyId: policyId,
+    status: "active",
+    seats: 2,
+    currentPeriodStart: new Date(now - 60_000),
+    currentPeriodEnd: new Date(now + 60_000),
+    source: "manual",
+  });
+  await testDb
+    .insert(organizationAccessStates)
+    .values({
+      organizationId: ids.orgA,
+      state: ORGANIZATION_ACCESS_STATE.evaluationPeriod,
+      evaluationStartedAt: new Date(now - 60_000),
+      evaluationEndsAt: new Date(now + 60_000),
+    })
+    .onConflictDoUpdate({
+      target: organizationAccessStates.organizationId,
+      set: {
+        state: ORGANIZATION_ACCESS_STATE.evaluationPeriod,
+        evaluationStartedAt: new Date(now - 60_000),
+        evaluationEndsAt: new Date(now + 60_000),
+      },
+    });
+  await testDb
+    .insert(usageSeatAssignments)
+    .values({ id: assignmentId, organizationId: ids.orgA, userId: ids.userA1 });
+  env.FEATURE_ORG_ACCESS_STATE = true;
+  try {
+    for (const load of [loadOrgAIConfig, loadOrgAISettings]) {
+      const allowed = await load(testDb, {
+        organizationId: ids.orgA,
+        userId: ids.userA1,
+      });
+      const denied = await load(testDb, {
+        organizationId: ids.orgA,
+        userId: ids.userA2,
+      });
+      expect(allowed.status).toBe("ok");
+      expect(denied.status).toBe("error");
+      if (denied.status === "error") {
+        expect(denied.error.status).toBe(403);
+      }
+    }
+  } finally {
+    env.FEATURE_ORG_ACCESS_STATE = previousFlag;
+    await testDb
+      .delete(usageSeatAssignments)
+      .where(eq(usageSeatAssignments.id, assignmentId));
+    await testDb
+      .delete(usageEntitlements)
+      .where(eq(usageEntitlements.id, entitlementId));
+    await testDb.delete(usagePolicies).where(eq(usagePolicies.id, policyId));
+    if (previousState) {
+      await testDb
+        .update(organizationAccessStates)
+        .set(previousState)
+        .where(eq(organizationAccessStates.organizationId, ids.orgA));
+    } else {
+      await testDb
+        .delete(organizationAccessStates)
+        .where(eq(organizationAccessStates.organizationId, ids.orgA));
+    }
+  }
 });

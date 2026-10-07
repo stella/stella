@@ -18,7 +18,7 @@ import { resolveReviewSelection } from "@/api/handlers/document-reviews/review-s
 import type { proposeReviewPositionsBodySchema } from "@/api/handlers/document-reviews/schemas";
 import type { OrgAIConfig } from "@/api/lib/ai-config";
 import type { OrgAIConfigStatus } from "@/api/lib/ai-config-loader-core";
-import { assertUsageAvailableForHandler } from "@/api/lib/api-handlers";
+import { authorizeHandlerUsage } from "@/api/lib/api-handlers";
 import type { SafeHandlerGenerator } from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";
 import { fetchAndPrepareReviewFiles } from "@/api/lib/document-review/prepare-review-files";
@@ -107,7 +107,7 @@ export const prepareReferenceProposal = async function* ({
     return Result.err(selection.error);
   }
 
-  const preflightError = await assertUsageAvailableForHandler({
+  const authorization = await authorizeHandlerUsage({
     metering: { actionType: "chat", modelRole: "pdf" },
     organizationId,
     orgAIConfig,
@@ -115,50 +115,51 @@ export const prepareReferenceProposal = async function* ({
     userId,
     safeDb,
   });
-  if (preflightError) {
-    return Result.err(preflightError);
+  if (Result.isError(authorization)) {
+    return Result.err(authorization.error);
   }
-
-  const resolvedFiles = [
-    selection.value.target,
-    ...selection.value.references,
-  ].map((document) => document.file);
-  const preparedResult = await Result.tryPromise({
-    try: async () =>
-      await fetchAndPrepareReviewFiles(resolvedFiles, organizationId),
-    catch: (cause) =>
-      new HandlerError({
-        status: 500,
-        message: "Internal server error",
-        cause,
-      }),
-  });
-  if (Result.isError(preparedResult)) {
-    return Result.err(preparedResult.error);
-  }
-  const target = preparedResult.value.at(0);
-  if (target?.kind !== "docx") {
-    return panic("DOCX review target was not prepared as DOCX blocks");
-  }
-  // Each prepared reference is rejoined with the document it came from, so a
-  // verified block can be pinned as a passage that outlives this request.
-  const references: ReferenceSource[] = [];
-  for (const [index, file] of preparedResult.value.slice(1).entries()) {
-    const document = selection.value.references[index];
-    if (file.kind !== "docx" || document === undefined) {
-      return panic("DOCX review reference was not prepared as DOCX blocks");
-    }
-    references.push({
-      workspaceId: document.workspaceId,
-      entityId: document.entityId,
-      entityVersionId: document.entityVersionId,
-      file,
+  return await authorization.value.execute(async () => {
+    const resolvedFiles = [
+      selection.value.target,
+      ...selection.value.references,
+    ].map((document) => document.file);
+    const preparedResult = await Result.tryPromise({
+      try: async () =>
+        await fetchAndPrepareReviewFiles(resolvedFiles, organizationId),
+      catch: (cause) =>
+        new HandlerError({
+          status: 500,
+          message: "Internal server error",
+          cause,
+        }),
     });
-  }
+    if (Result.isError(preparedResult)) {
+      return Result.err(preparedResult.error);
+    }
+    const target = preparedResult.value.at(0);
+    if (target?.kind !== "docx") {
+      return panic("DOCX review target was not prepared as DOCX blocks");
+    }
+    // Each prepared reference is rejoined with the document it came from, so a
+    // verified block can be pinned as a passage that outlives this request.
+    const references: ReferenceSource[] = [];
+    for (const [index, file] of preparedResult.value.slice(1).entries()) {
+      const document = selection.value.references[index];
+      if (file.kind !== "docx" || document === undefined) {
+        return panic("DOCX review reference was not prepared as DOCX blocks");
+      }
+      references.push({
+        workspaceId: document.workspaceId,
+        entityId: document.entityId,
+        entityVersionId: document.entityVersionId,
+        file,
+      });
+    }
 
-  return Result.ok({
-    target,
-    references,
-    targetEntityVersionId: selection.value.target.entityVersionId,
+    return Result.ok({
+      target,
+      references,
+      targetEntityVersionId: selection.value.target.entityVersionId,
+    });
   });
 };

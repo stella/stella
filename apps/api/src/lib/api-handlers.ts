@@ -78,6 +78,8 @@ import {
 } from "@/api/lib/permission-authorization";
 import type { AuthorizedMemberRole } from "@/api/lib/permission-authorization";
 import type { AnyPermissiveRouteSchema } from "@/api/lib/permissive-route-schema";
+import { authorizeOperation } from "@/api/lib/proofs/checked-transaction";
+import type { CheckedOperationContext } from "@/api/lib/proofs/checked-transaction";
 import { withActionAdmission } from "@/api/lib/rate-limit/action-admission";
 import type { PeriodActionKind } from "@/api/lib/rate-limit/action-kinds";
 import type { ServiceClassification } from "@/api/lib/rate-limit/service-classification";
@@ -1178,6 +1180,49 @@ const REALTIME_ANNOUNCEMENT_FAILURE = failureSink({
   expected: [],
 });
 
+const HANDLER_USAGE_ALLOWED = "HandlerUsageAllowed";
+
+type ScopedOperationInput<
+  TConfig extends HandlerConfig,
+  TContext extends BaseHandlerContext<TConfig>,
+  TResult extends SafeHandlerPayload,
+> = {
+  ctx: TContext;
+  config: TConfig;
+  handler: SafeHandlerFn<TContext, TResult>;
+  admit: typeof withActionAdmission;
+};
+
+export const runCheckedScopedHandler = async <
+  TConfig extends HandlerConfig,
+  TContext extends BaseHandlerContext<TConfig>,
+  TResult extends SafeHandlerPayload,
+  N,
+>({
+  input,
+}: CheckedOperationContext<
+  typeof HANDLER_USAGE_ALLOWED,
+  ScopedOperationInput<TConfig, TContext, TResult>,
+  N
+>): Promise<SafeHandlerResult<TResult>> => {
+  const { ctx, config, handler, admit } = input.value;
+  const admission = config.actionAdmission;
+  return await runSafeHandler({
+    ctx,
+    contentDelivery: config.contentDelivery,
+    handler:
+      admission === undefined
+        ? handler
+        : (context) =>
+            runAdmittedFiniteHandler({
+              ctx: context,
+              handler,
+              admit,
+              actionKind: admission.actionKind,
+            }),
+  });
+};
+
 const createSafeScopedHandler = <
   TConfig extends HandlerConfig,
   TContext extends BaseHandlerContext<TConfig>,
@@ -1293,56 +1338,42 @@ const createSafeScopedHandler = <
         }
       }
 
-      // A handler that declares AI usage must not run when this request could
-      // not read the org's stored config, or the org is barred from the
-      // instance provider: `ctx.orgAIConfig` is null there, and resolving a
-      // model from it would silently run the org on the instance provider and
-      // meter the work against the wrong key source.
-      const configStatusError = config.requiresUsage
-        ? orgAIConfigStatusError(ctx.orgAIConfigStatus)
-        : null;
-      if (configStatusError) {
+      const authorization = await authorizeOperation({
+        kind: HANDLER_USAGE_ALLOWED,
+        input: { ctx, config, handler, admit },
+        check: async (): Promise<Result<void, HandlerError>> => {
+          const configStatusError = config.requiresUsage
+            ? orgAIConfigStatusError(ctx.orgAIConfigStatus)
+            : null;
+          if (configStatusError) {
+            return Result.err(configStatusError);
+          }
+          if (config.requiresUsage && env.USAGE_ENFORCEMENT_ENABLED) {
+            const meteringContext = resolveMeteringContext({
+              metering: config.requiresUsage,
+              organizationId: ctx.session.activeOrganizationId,
+              orgAIConfig: ctx.orgAIConfig,
+              workspaceId: hasWorkspaceId(ctx) ? ctx.workspaceId : null,
+              userId: ctx.user.id,
+            });
+            const preflight = await runUsagePreflight({ ctx, meteringContext });
+            if (Result.isError(preflight)) {
+              return Result.err(preflight.error);
+            }
+            ctx.usageLane = preflight.value;
+          }
+          return Result.ok(undefined);
+        },
+      });
+      if (Result.isError(authorization)) {
         return toSafeStatusResponse(
-          configStatusError.status,
-          safeErrorBody(configStatusError),
+          authorization.error.status,
+          safeErrorBody(authorization.error),
         );
       }
-
-      // Resolve the metering context only when enforcement is on. It reads
-      // the org AI provider config to detect BYOK, which panics when no
-      // provider is configured; doing it unconditionally — before the
-      // handler's own requireAIAvailable check — would turn a missing-AI
-      // 403 into a 500, and would be wasted work while enforcement is off.
-      if (config.requiresUsage && env.USAGE_ENFORCEMENT_ENABLED) {
-        const meteringContext = resolveMeteringContext({
-          metering: config.requiresUsage,
-          organizationId: ctx.session.activeOrganizationId,
-          orgAIConfig: ctx.orgAIConfig,
-          workspaceId: hasWorkspaceId(ctx) ? ctx.workspaceId : null,
-          userId: ctx.user.id,
-        });
-        const preflight = await runUsagePreflight({ ctx, meteringContext });
-        if (preflight.kind === "blocked") {
-          return preflight.response;
-        }
-        ctx.usageLane = preflight.lane;
-      }
-
-      const admission = config.actionAdmission;
-      const result = await runSafeHandler({
-        ctx,
-        contentDelivery: config.contentDelivery,
-        handler:
-          admission === undefined
-            ? handler
-            : (input) =>
-                runAdmittedFiniteHandler({
-                  ctx: input,
-                  handler,
-                  admit,
-                  actionKind: admission.actionKind,
-                }),
-      });
+      const result = await authorization.value.execute(
+        async (operation) => await runCheckedScopedHandler(operation),
+      );
       // The transaction has settled; realtime delivery cannot change its result.
       if (
         config.realtime !== undefined &&
@@ -1425,20 +1456,16 @@ type PreflightCtx = {
   safeDb: SafeDb;
 };
 
-type UsagePreflightOutcome =
-  | { kind: "blocked"; response: SafeStatusResponse<402 | 403 | 500> }
-  | { kind: "allowed"; lane: UsageLaneDecision };
-
 const runUsagePreflight = async ({
   ctx,
   meteringContext,
 }: {
   ctx: PreflightCtx;
   meteringContext: ResolvedMeteringContext;
-}): Promise<UsagePreflightOutcome> => {
+}): Promise<Result<UsageLaneDecision, HandlerError<402 | 403 | 500>>> => {
   if (meteringContext.cost <= 0) {
     // BYOK (and other zero-cost) turns never draw a managed budget.
-    return { kind: "allowed", lane: { lane: "pool" } };
+    return Result.ok({ lane: "pool" });
   }
   const checkResult = await ctx.safeDb(async (tx) => {
     // Only endpoints that opted into lane routing (the interactive
@@ -1497,39 +1524,37 @@ const runUsagePreflight = async ({
       statusCode: 500,
       telemetry: "capture",
     });
-    return {
-      kind: "blocked",
-      response: toSafeStatusResponse(500, {
+    return Result.err(
+      new HandlerError({
+        status: 500,
         code: API_ERROR_CODE.internalServerError,
         message: "Internal server error",
       }),
-    };
+    );
   }
   const check = checkResult.value;
   if (check.ok) {
-    return { kind: "allowed", lane: check.lane };
+    return Result.ok(check.lane);
   }
   if (check.unassigned) {
-    const refusal = memberAssignmentRequiredError();
-    return {
-      kind: "blocked",
-      response: toSafeStatusResponse(refusal.status, safeErrorBody(refusal)),
-    };
+    return Result.err(memberAssignmentRequiredError());
   }
-  return {
-    kind: "blocked",
-    response: toSafeStatusResponse(402, {
+  return Result.err(
+    new HandlerError({
+      status: 402,
       code: API_ERROR_CODE.usageLimitExceeded,
       message: check.error.message,
-      reason: check.error.reason,
-      required: check.error.required,
-      available: check.error.available,
+      usage: {
+        reason: check.error.reason,
+        required: check.error.required,
+        available: check.error.available,
+      },
     }),
-  };
+  );
 };
 
 type UsagePreflightInput = {
-  metering: UsageMeteringConfig;
+  metering: UsageMeteringConfig | null;
   organizationId: SafeId<"organization">;
   orgAIConfig: OrgAIConfig | null;
   workspaceId: SafeId<"workspace"> | null;
@@ -1552,7 +1577,7 @@ type UsagePreflightInput = {
  * and the client sees an unchanged response. `null` means proceed. No-op
  * while `USAGE_ENFORCEMENT_ENABLED` is off, matching the static path.
  */
-export const assertUsageAvailableForHandler = async ({
+const checkUsageAvailableForHandler = async ({
   metering,
   organizationId,
   orgAIConfig,
@@ -1560,7 +1585,7 @@ export const assertUsageAvailableForHandler = async ({
   userId,
   safeDb,
 }: UsagePreflightInput): Promise<HandlerError<402 | 500> | null> => {
-  if (!env.USAGE_ENFORCEMENT_ENABLED) {
+  if (metering === null || !env.USAGE_ENFORCEMENT_ENABLED) {
     return null;
   }
   const meteringContext = resolveMeteringContext({
@@ -1608,6 +1633,20 @@ export const assertUsageAvailableForHandler = async ({
   });
 };
 
+const CONDITIONAL_USAGE_ALLOWED = "ConditionalUsageAllowed";
+
+export const authorizeHandlerUsage = async <Input extends UsagePreflightInput>(
+  input: Input,
+) =>
+  await authorizeOperation({
+    kind: CONDITIONAL_USAGE_ALLOWED,
+    input,
+    check: async () => {
+      const error = await checkUsageAvailableForHandler(input);
+      return error === null ? Result.ok(undefined) : Result.err(error);
+    },
+  });
+
 /**
  * Above this many estimated units, a queued run must carry an explicit
  * `confirmedUnits` restating its size before it may start.
@@ -1631,7 +1670,7 @@ type RunSizePreflightInput = UsagePreflightInput & {
  * client to confirm. No-op for BYOK settlements (the organization's own
  * key pays) and while `USAGE_ENFORCEMENT_ENABLED` is off.
  */
-export const assertRunSizeConfirmedForHandler = async ({
+const checkRunSizeConfirmedForHandler = async ({
   metering,
   estimatedUnits,
   confirmedUnits,
@@ -1641,7 +1680,7 @@ export const assertRunSizeConfirmedForHandler = async ({
   userId,
   safeDb,
 }: RunSizePreflightInput): Promise<HandlerError<402 | 428 | 500> | null> => {
-  if (!env.USAGE_ENFORCEMENT_ENABLED) {
+  if (metering === null || !env.USAGE_ENFORCEMENT_ENABLED) {
     return null;
   }
   // A run that makes no model calls spends nothing; refusing it for AI
@@ -1705,6 +1744,22 @@ export const assertRunSizeConfirmedForHandler = async ({
     },
   });
 };
+
+const RUN_SIZE_CONFIRMED = "RunSizeConfirmed";
+
+export const authorizeHandlerRunSize = async <
+  Input extends RunSizePreflightInput,
+>(
+  input: Input,
+) =>
+  await authorizeOperation({
+    kind: RUN_SIZE_CONFIRMED,
+    input,
+    check: async () => {
+      const error = await checkRunSizeConfirmedForHandler(input);
+      return error === null ? Result.ok(undefined) : Result.err(error);
+    },
+  });
 
 const createSafeDirectHandler = <
   TConfig extends InputSchema &

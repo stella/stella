@@ -4,6 +4,7 @@ import { describe, expect, test } from "bun:test";
 import { safeDbFromScoped } from "@/api/db/safe-db";
 import type { flowDefinitions } from "@/api/db/schema";
 import { env } from "@/api/env";
+import { authorizeHandlerRunSize } from "@/api/lib/api-handlers";
 import { createSafeId } from "@/api/lib/branded-types";
 import { startAutomatedFlowRun } from "@/api/lib/flows/start-automated-flow-run";
 import { startFlowRun } from "@/api/lib/flows/start-flow-run";
@@ -71,6 +72,17 @@ describe("flow kickoff acceptance", () => {
         return result;
       });
       const result = await startFlowRun({
+        admit: async () =>
+          await authorizeHandlerRunSize({
+            metering: null,
+            orgAIConfig: null,
+            organizationId,
+            workspaceId,
+            userId,
+            safeDb,
+            estimatedUnits: 0,
+            confirmedUnits: undefined,
+          }),
         safeDb,
         organizationId,
         workspaceId,
@@ -118,6 +130,17 @@ describe("flow kickoff acceptance", () => {
             ),
         );
         const result = await startFlowRun({
+          admit: async () =>
+            await authorizeHandlerRunSize({
+              metering: null,
+              orgAIConfig: null,
+              organizationId,
+              workspaceId,
+              userId,
+              safeDb,
+              estimatedUnits: 0,
+              confirmedUnits: undefined,
+            }),
           safeDb,
           organizationId,
           workspaceId,
@@ -157,6 +180,17 @@ describe("flow kickoff acceptance", () => {
           ),
       );
       const result = await startFlowRun({
+        admit: async () =>
+          await authorizeHandlerRunSize({
+            metering: null,
+            orgAIConfig: null,
+            organizationId,
+            workspaceId,
+            userId,
+            safeDb,
+            estimatedUnits: 0,
+            confirmedUnits: undefined,
+          }),
         safeDb,
         organizationId,
         workspaceId,

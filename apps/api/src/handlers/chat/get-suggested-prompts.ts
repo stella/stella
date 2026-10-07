@@ -14,7 +14,7 @@ import { captureError } from "@/api/lib/analytics/capture";
 import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
 import {
   ACCOUNT_ACCESS,
-  assertUsageAvailableForHandler,
+  authorizeHandlerUsage,
   createSafeRootHandler,
 } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
@@ -219,7 +219,7 @@ const getSuggestedPrompts = createSafeRootHandler(
       return Result.ok<SuggestedPromptsResult>({ prompts: [] });
     }
 
-    const preflightError = await assertUsageAvailableForHandler({
+    const authorization = await authorizeHandlerUsage({
       metering: { actionType: "chat", modelRole: "fast" },
       organizationId: session.activeOrganizationId,
       orgAIConfig,
@@ -227,63 +227,69 @@ const getSuggestedPrompts = createSafeRootHandler(
       userId: user.id,
       safeDb,
     });
-    if (preflightError) {
-      return Result.err(preflightError);
+    if (Result.isError(authorization)) {
+      return Result.err(authorization.error);
     }
-
-    const aiAnalytics = createTanStackAIAnalyticsCallbacks({
-      dataClass: "customer",
-      usageMetering: {
-        actionType: "chat",
-        organizationId: session.activeOrganizationId,
-        safeDb,
-        serviceTier: "standard",
-        userId: user.id,
-        workspaceId: persistedWorkspaceId,
-      },
-      feature: "chat.suggested_prompts",
-      modelRole: "fast",
-      organizationId: session.activeOrganizationId,
-      orgAIConfig,
-      properties: persistedWorkspaceId
-        ? { workspace_id: persistedWorkspaceId }
-        : {},
-      traceId: Bun.randomUUIDv7(),
-    });
-
-    try {
-      const text = await generateTanStackTextForRole({
+    return await authorization.value.execute(async () => {
+      const aiAnalytics = createTanStackAIAnalyticsCallbacks({
         dataClass: "customer",
-        finishPolicy: "allow-incomplete",
-        role: "fast",
-        orgAIConfig,
-        managedAIResidency,
+        usageMetering: {
+          actionType: "chat",
+          organizationId: session.activeOrganizationId,
+          safeDb,
+          serviceTier: "standard",
+          userId: user.id,
+          workspaceId: persistedWorkspaceId,
+        },
+        feature: "chat.suggested_prompts",
+        modelRole: "fast",
         organizationId: session.activeOrganizationId,
-        analytics: aiAnalytics,
-        caching: resolveCaching({
-          promptCachingEnabled,
-          role: "fast",
-          scopeKey: threadId,
-        }),
-        tenantWorkspaceIds: persistedWorkspaceId ? [persistedWorkspaceId] : [],
-        system: SUGGESTIONS_SYSTEM_PROMPT,
-        systemPromptOrigin: "server-built",
-        prompt: `Conversation transcript:\n\n${transcript}\n\nSuggested follow-up prompts:`,
-        maxOutputTokens: SUGGESTIONS_MAX_OUTPUT_TOKENS,
-        temperature: 0.3,
-        serviceTier: "standard",
-        abortSignal: AbortSignal.timeout(15_000),
+        orgAIConfig,
+        properties: persistedWorkspaceId
+          ? { workspace_id: persistedWorkspaceId }
+          : {},
+        traceId: Bun.randomUUIDv7(),
       });
 
-      const prompts = cleanSuggestionsText(text);
-      return Result.ok<SuggestedPromptsResult>({ prompts });
-    } catch (error) {
-      aiAnalytics.captureError(error);
-      if (isUnanticipatedAIFailure(error)) {
-        captureError(error, { threadId, feature: "chat.suggested_prompts" });
+      try {
+        const text = await generateTanStackTextForRole({
+          dataClass: "customer",
+          finishPolicy: "allow-incomplete",
+          role: "fast",
+          orgAIConfig,
+          managedAIResidency,
+          organizationId: session.activeOrganizationId,
+          analytics: aiAnalytics,
+          caching: resolveCaching({
+            promptCachingEnabled,
+            role: "fast",
+            scopeKey: threadId,
+          }),
+          tenantWorkspaceIds: persistedWorkspaceId
+            ? [persistedWorkspaceId]
+            : [],
+          system: SUGGESTIONS_SYSTEM_PROMPT,
+          systemPromptOrigin: "server-built",
+          prompt: `Conversation transcript:\n\n${transcript}\n\nSuggested follow-up prompts:`,
+          maxOutputTokens: SUGGESTIONS_MAX_OUTPUT_TOKENS,
+          temperature: 0.3,
+          serviceTier: "standard",
+          abortSignal: AbortSignal.timeout(15_000),
+        });
+
+        const prompts = cleanSuggestionsText(text);
+        return Result.ok<SuggestedPromptsResult>({ prompts });
+      } catch (error) {
+        aiAnalytics.captureError(error);
+        if (isUnanticipatedAIFailure(error)) {
+          captureError(error, {
+            threadId,
+            feature: "chat.suggested_prompts",
+          });
+        }
+        return Result.ok<SuggestedPromptsResult>({ prompts: [] });
       }
-      return Result.ok<SuggestedPromptsResult>({ prompts: [] });
-    }
+    });
   },
 );
 

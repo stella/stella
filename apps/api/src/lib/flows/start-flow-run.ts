@@ -2,10 +2,10 @@ import { Result, TaggedError } from "better-result";
 
 import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
 import { flowRuns, flowRunSteps } from "@/api/db/schema";
+import type { authorizeHandlerRunSize } from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";
 import { createSafeId } from "@/api/lib/branded-types";
 import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
-import type { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { enqueueFlowStep } from "@/api/lib/flows/flow-run-queue";
 import type {
   FlowDefinitionSnapshot,
@@ -56,13 +56,13 @@ export type StartFlowRunOptions = {
   enqueueDelayMs?: number;
   /**
    * Runs once the definition is loaded and before any row is written.
-   * Returning an error refuses the start with `admission-refused` and the
-   * returned error as its cause; the manual entry point uses this for the
+   * A checked authorization admits execution; a refusal returns
+   * `admission-refused` with the checking error as its cause; the manual entry point uses this for the
    * whole-run usage pre-flight, which needs the definition's steps.
    */
-  admit?: (definition: {
+  admit: (definition: {
     steps: FlowStep[];
-  }) => Promise<HandlerError<402 | 428 | 500> | null>;
+  }) => ReturnType<typeof authorizeHandlerRunSize>;
   enqueueStep?: typeof enqueueFlowStep;
   kickoff?: typeof runQueuedKickoff;
 };
@@ -185,102 +185,104 @@ export const startFlowRun = async ({
       );
     }
 
-    if (admit) {
-      const refusal = await admit({ steps: definition.steps });
-      if (refusal) {
-        return Result.err(
-          new FlowRunStartError({
-            reason: "admission-refused",
-            message: refusal.message,
-            cause: refusal,
-          }),
-        );
-      }
-    }
-
-    const runId = createSafeId<"flowRun">();
-    const actorId =
-      triggerSource.type === "manual"
-        ? triggerSource.userId
-        : definition.createdByUserId;
-    const createAndEnqueue = async (signal?: AbortSignal) =>
-      await Result.gen(async function* () {
-        const rows = buildFlowRunRows({
-          runId,
-          workspaceId,
-          definitionId,
-          definition,
-          triggerSource,
-          inputEntityIds,
-        });
-
-        signal?.throwIfAborted();
-        yield* Result.await(
-          safeDb(async (tx) => {
-            await tx.insert(flowRuns).values(rows.run);
-            await tx.insert(flowRunSteps).values(rows.steps);
-          }),
-        );
-
-        // Enqueue after the rows commit. A failure here leaves the run `pending`;
-        // the worker's boot reconciler re-enqueues its current step, so the run is
-        // never permanently stranded.
-        yield* Result.await(
-          Result.tryPromise({
-            try: async () =>
-              await enqueueStep({
-                runId,
-                stepIndex: 0,
-                ...(enqueueDelayMs !== undefined && {
-                  delayMs: enqueueDelayMs,
-                }),
-              }),
-            catch: (cause) =>
-              new FlowRunStartError({
-                reason: "enqueue-failed",
-                message: "Could not enqueue the flow run.",
-                cause,
-              }),
-          }),
-        );
-
-        return Result.ok({ runId, status: "pending" as const });
-      });
-    if (!actorId) {
-      // No caller to admit or count: run only while admission is off.
-      if (!isDeploymentFeatureEnabled("FEATURE_ACTION_ADMISSION")) {
-        return await createAndEnqueue();
-      }
+    const authorization = await admit({ steps: definition.steps });
+    if (Result.isError(authorization)) {
       return Result.err(
         new FlowRunStartError({
           reason: "admission-refused",
-          message: "Flow run actor is unavailable",
+          message: authorization.error.message,
+          cause: authorization.error,
         }),
       );
     }
-    const started = yield* Result.await(
-      Result.tryPromise({
-        try: async () =>
-          await kickoff({
-            organizationId,
-            userId: brandPersistedUserId(actorId),
-            organizationStateDb: async (run) =>
-              (await safeDb(run)).unwrap(
-                "Flow run admission state database must be available.",
-              ),
-            actionKind: QUEUED_ACTION_KIND.flow,
-            logicalPhaseId: runId,
-            run: createAndEnqueue,
-          }),
-        catch: (cause) =>
-          ActionAdmissionError.is(cause)
-            ? cause
-            : new FlowRunStartError({
+    return await authorization.value.execute(
+      async () =>
+        await Result.gen(async function* () {
+          const runId = createSafeId<"flowRun">();
+          const actorId =
+            triggerSource.type === "manual"
+              ? triggerSource.userId
+              : definition.createdByUserId;
+          const createAndEnqueue = async (signal?: AbortSignal) =>
+            await Result.gen(async function* () {
+              const rows = buildFlowRunRows({
+                runId,
+                workspaceId,
+                definitionId,
+                definition,
+                triggerSource,
+                inputEntityIds,
+              });
+
+              signal?.throwIfAborted();
+              yield* Result.await(
+                safeDb(async (tx) => {
+                  await tx.insert(flowRuns).values(rows.run);
+                  await tx.insert(flowRunSteps).values(rows.steps);
+                }),
+              );
+
+              // Enqueue after the rows commit. A failure here leaves the run `pending`;
+              // the worker's boot reconciler re-enqueues its current step, so the run is
+              // never permanently stranded.
+              yield* Result.await(
+                Result.tryPromise({
+                  try: async () =>
+                    await enqueueStep({
+                      runId,
+                      stepIndex: 0,
+                      ...(enqueueDelayMs !== undefined && {
+                        delayMs: enqueueDelayMs,
+                      }),
+                    }),
+                  catch: (cause) =>
+                    new FlowRunStartError({
+                      reason: "enqueue-failed",
+                      message: "Could not enqueue the flow run.",
+                      cause,
+                    }),
+                }),
+              );
+
+              return Result.ok({ runId, status: "pending" as const });
+            });
+          if (!actorId) {
+            // No caller to admit or count: run only while admission is off.
+            if (!isDeploymentFeatureEnabled("FEATURE_ACTION_ADMISSION")) {
+              return await createAndEnqueue();
+            }
+            return Result.err(
+              new FlowRunStartError({
                 reason: "admission-refused",
-                message: "Flow action admission refused",
-                cause,
+                message: "Flow run actor is unavailable",
               }),
-      }),
+            );
+          }
+          const started = yield* Result.await(
+            Result.tryPromise({
+              try: async () =>
+                await kickoff({
+                  organizationId,
+                  userId: brandPersistedUserId(actorId),
+                  organizationStateDb: async (run) =>
+                    (await safeDb(run)).unwrap(
+                      "Flow run admission state database must be available.",
+                    ),
+                  actionKind: QUEUED_ACTION_KIND.flow,
+                  logicalPhaseId: runId,
+                  run: createAndEnqueue,
+                }),
+              catch: (cause) =>
+                ActionAdmissionError.is(cause)
+                  ? cause
+                  : new FlowRunStartError({
+                      reason: "admission-refused",
+                      message: "Flow action admission refused",
+                      cause,
+                    }),
+            }),
+          );
+          return started;
+        }),
     );
-    return started;
   });

@@ -20,6 +20,8 @@ import {
 } from "@/api/lib/errors/action-admission-error";
 import { failureSink } from "@/api/lib/observability/failure";
 import { observeFailure } from "@/api/lib/observability/observe-failure";
+import { withAdmittedOperation } from "@/api/lib/proofs/checked-transaction";
+import type { AdmittedOperationContext } from "@/api/lib/proofs/checked-transaction";
 import { ACTION_KINDS } from "@/api/lib/rate-limit/action-kinds";
 import type {
   AdmittedActionIdentity,
@@ -1158,9 +1160,24 @@ const withEnabledActionAdmission = async <T>({
   return settledAdmissionOutcome(outcome, controller.signal);
 };
 
-export const withActionAdmission = async <T>(
-  options: ActionAdmissionOptions<T>,
-): Promise<Result<T, unknown>> => {
+const ACTION_ADMITTED = "ActionAdmitted";
+
+type ActionExecution = {
+  signal: AbortSignal;
+  control: ActionAdmissionControl;
+};
+
+export const runCheckedAction = async <T, N, A>({
+  input,
+  admission,
+}: AdmittedOperationContext<
+  typeof ACTION_ADMITTED,
+  ActionAdmissionOptions<T>,
+  ActionExecution,
+  N,
+  A
+>): Promise<T> => {
+  const options = input.value;
   const observedRun = createObservedAdmissionRun({
     organizationId: options.organizationId,
     userId: options.userId,
@@ -1168,56 +1185,66 @@ export const withActionAdmission = async <T>(
     costRecorder: options.costRecorder,
     run: options.run,
   });
-  // The demo account's daily budget holds whether or not admission is
-  // enabled, so it wraps both branches.
-  return await withDemoActionBudget({
-    budget: options.demoActionBudget ?? configuredDemoActionBudget,
-    organizationId: options.organizationId,
-    userId: options.userId,
-    scope:
-      options.execution === "background-job"
-        ? "independent"
-        : (options.scope ?? "inherit"),
-    run: async (markStarted) => {
-      const startedRun = async (
-        signal: AbortSignal,
-        control: ActionAdmissionControl,
-      ) => {
-        markStarted();
-        return await observedRun(signal, control);
-      };
-      if (
-        !(
-          options.enabled ??
-          isDeploymentFeatureEnabled("FEATURE_ACTION_ADMISSION")
-        )
-      ) {
-        return await Result.tryPromise({
-          try: async () =>
-            await startedRun(new AbortController().signal, disabledControl),
-          catch: (error: unknown) => error,
-        });
-      }
-      return await withEnabledActionAdmission({
-        ...options,
-        run: startedRun,
-        organizationBudgetOptions: {
-          organizationId: options.organizationId,
-          userId: options.userId,
-          periodIdentity: options.periodIdentity,
-          periodPolicy: options.periodPolicy,
-          serviceBudgetsEnabled:
-            options.serviceBudgetsEnabled ??
-            isDeploymentFeatureEnabled("FEATURE_ORG_SERVICE_BUDGETS"),
-          serviceBudgetConfig:
-            options.serviceBudgetConfig ?? configuredServiceBudgets(),
-          organizationStateDb: options.organizationStateDb,
-          readOrganizationState: options.readOrganizationState,
-          budgetNow:
-            options.budgetNow ??
-            (() => Temporal.Now.instant().epochMilliseconds),
-        },
-      });
-    },
-  });
+  return await observedRun(admission.value.signal, admission.value.control);
 };
+
+export const withActionAdmission = async <T>(
+  options: ActionAdmissionOptions<T>,
+): Promise<Result<T, unknown>> =>
+  await withAdmittedOperation({
+    kind: ACTION_ADMITTED,
+    input: options,
+    run: runCheckedAction,
+    // The demo account's daily admission limit also applies when admission is disabled.
+    admit: async (execute: (admission: ActionExecution) => Promise<T>) =>
+      await withDemoActionBudget({
+        budget: options.demoActionBudget ?? configuredDemoActionBudget,
+        organizationId: options.organizationId,
+        userId: options.userId,
+        scope:
+          options.execution === "background-job"
+            ? "independent"
+            : (options.scope ?? "inherit"),
+        run: async (markStarted) => {
+          const startedRun = async (
+            signal: AbortSignal,
+            control: ActionAdmissionControl,
+          ) => {
+            markStarted();
+            return await execute({ signal, control });
+          };
+          if (
+            !(
+              options.enabled ??
+              isDeploymentFeatureEnabled("FEATURE_ACTION_ADMISSION")
+            )
+          ) {
+            return await Result.tryPromise({
+              try: async () =>
+                await startedRun(new AbortController().signal, disabledControl),
+              catch: (error: unknown) => error,
+            });
+          }
+          return await withEnabledActionAdmission({
+            ...options,
+            run: startedRun,
+            organizationBudgetOptions: {
+              organizationId: options.organizationId,
+              userId: options.userId,
+              periodIdentity: options.periodIdentity,
+              periodPolicy: options.periodPolicy,
+              serviceBudgetsEnabled:
+                options.serviceBudgetsEnabled ??
+                isDeploymentFeatureEnabled("FEATURE_ORG_SERVICE_BUDGETS"),
+              serviceBudgetConfig:
+                options.serviceBudgetConfig ?? configuredServiceBudgets(),
+              organizationStateDb: options.organizationStateDb,
+              readOrganizationState: options.readOrganizationState,
+              budgetNow:
+                options.budgetNow ??
+                (() => Temporal.Now.instant().epochMilliseconds),
+            },
+          });
+        },
+      }),
+  });

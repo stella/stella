@@ -31,6 +31,8 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { DEFAULT_MANAGED_AI_RESIDENCY } from "@/api/lib/chat/ai-data-policy";
 import type { ManagedAIResidency } from "@/api/lib/chat/ai-data-policy";
 import type { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { authorizeOperation } from "@/api/lib/proofs/checked-transaction";
+import type { CheckedOperationContext } from "@/api/lib/proofs/checked-transaction";
 import { memberMayUseAI } from "@/api/lib/usage/member-capacity";
 import { mayUseInstanceModels } from "@/api/lib/usage/organization-access-state";
 
@@ -87,6 +89,58 @@ const requireAIAccessAllowed = async (
   return Result.ok(orgAIConfig);
 };
 
+const AI_CONFIGURATION_ALLOWED = "AIConfigurationAllowed";
+
+type AIConfigurationInput<Settings> = {
+  actor: OrgAIConfigReader;
+  settings: Settings;
+};
+
+export const readCheckedAIConfiguration = <Settings, N>({
+  input,
+}: CheckedOperationContext<
+  typeof AI_CONFIGURATION_ALLOWED,
+  AIConfigurationInput<Settings>,
+  N
+>): Settings => input.value.settings;
+
+type ReadAIConfigurationOptions<Settings> = {
+  db: OrgSettingsReader;
+  reader: OrgAIConfigReader;
+  orgAIConfig: OrgAIConfig | null;
+  settings: Settings;
+};
+
+const readAIConfiguration = async <Settings>({
+  db,
+  reader,
+  orgAIConfig,
+  settings,
+}: ReadAIConfigurationOptions<Settings>): Promise<
+  Result<Settings, HandlerError<403>>
+> => {
+  const actor = {
+    organizationId: reader.organizationId,
+    userId: reader.userId,
+  };
+  const authorization = await authorizeOperation({
+    kind: AI_CONFIGURATION_ALLOWED,
+    input: { actor, settings },
+    check: async () =>
+      (await requireAIAccessAllowed(db, actor, orgAIConfig)).map(
+        () => undefined,
+      ),
+  });
+  if (Result.isError(authorization)) {
+    return Result.err(authorization.error);
+  }
+  return Result.ok(
+    await authorization.value.execute((operation) =>
+      readCheckedAIConfiguration(operation),
+    ),
+  );
+};
+
 /**
  * For callers that are about to use the config for an AI call. Throws a
  * typed `ConfigurationError` on a corrupt stored row (see
@@ -114,7 +168,12 @@ export const loadOrgAIConfig = async (
     organizationId,
     row: rows.at(0),
   });
-  return await requireAIAccessAllowed(db, reader, orgAIConfig);
+  return await readAIConfiguration({
+    db,
+    reader,
+    orgAIConfig,
+    settings: orgAIConfig,
+  });
 };
 
 export const loadManagedAIResidency = async (
@@ -152,12 +211,17 @@ export const loadOrgAISettings = async (
     organizationId,
     row,
   });
-  const allowed = await requireAIAccessAllowed(db, reader, orgAIConfig);
-  return allowed.map((config) => ({
-    orgAIConfig: config,
-    promptCachingEnabled: resolvePromptCachingPreference(row),
-    managedAIResidency: row?.managedAIResidency ?? DEFAULT_MANAGED_AI_RESIDENCY,
-  }));
+  return await readAIConfiguration({
+    db,
+    reader,
+    orgAIConfig,
+    settings: {
+      orgAIConfig,
+      promptCachingEnabled: resolvePromptCachingPreference(row),
+      managedAIResidency:
+        row?.managedAIResidency ?? DEFAULT_MANAGED_AI_RESIDENCY,
+    },
+  });
 };
 
 export type OrgSettingsForAuth = {

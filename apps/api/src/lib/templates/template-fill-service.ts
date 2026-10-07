@@ -92,6 +92,7 @@ import type {
 import { isTemplateData } from "@/api/lib/docx/types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import type { ScannedFile } from "@/api/lib/file-scan/scanned-file";
+import type { OperationAuthorization } from "@/api/lib/proofs/checked-transaction";
 import type { BindingContext } from "@/api/lib/template-binding/apply-source-fields";
 import { buildBindingContext } from "@/api/lib/template-binding/build-binding-context";
 import { recordTemplateUse } from "@/api/lib/templates/record-use";
@@ -523,15 +524,6 @@ export const describeStoredTemplate = async ({
   };
 };
 
-/**
- * Usage preflight hook invoked once the manifest is read and the template is
- * known to declare AI fields, before any model call runs. Returns a rejection
- * marker (an over-quota / no-entitlement signal the caller maps to its HTTP
- * response) or `null` to proceed. Lets a caller gate AI quota on a model call
- * actually running without re-reading the template manifest itself.
- */
-type FillUsagePreflight<TRejection> = () => Promise<TRejection | null>;
-
 /** The model-backed collaborators a manifest's AI fields need: a generator for
  *  AI-fillable fields (`aiPrompt`), a decider for AI-decided boolean fields (a
  *  boolean field with an `aiPrompt`), and a per-occurrence adapter for
@@ -549,9 +541,20 @@ export type AiFillCollaborators = {
  * costs the caller an org AI config read and a metered analytics trace: a
  * deterministic fill must pay neither.
  */
-type AiFillCollaboratorProvider = () =>
+type AiFillCollaboratorBuilder = () =>
   | AiFillCollaborators
   | Promise<AiFillCollaborators>;
+
+export type AiFillAuthorization = OperationAuthorization<
+  "ConditionalUsageAllowed",
+  {
+    buildCollaborators: AiFillCollaboratorBuilder;
+  }
+>;
+
+export type AiFillCollaboratorProvider<TRejection> = () => Promise<
+  Result<AiFillAuthorization, TRejection>
+>;
 
 type FillServiceOptions<TRejection = never> = {
   templateId: SafeId<"template">;
@@ -574,13 +577,9 @@ type FillServiceOptions<TRejection = never> = {
   clauseOverrides?: Record<string, ClauseBody> | undefined;
   /** Deferred builder for the AI collaborators; omitted by a caller that never
    *  drafts (the fill then leaves AI fields unresolved). */
-  aiCollaborators?: AiFillCollaboratorProvider | undefined;
+  aiCollaborators?: AiFillCollaboratorProvider<TRejection> | undefined;
   /** Registry transport seam; ordinary callers use the organization's dispatch. */
   lookupResolver?: LookupResolver | undefined;
-  /** Optional usage preflight run only when the manifest declares AI fields,
-   *  before any model call. A non-null return aborts the fill with a
-   *  `{ usageRejection }` result the caller surfaces as its own response. */
-  assertUsageAvailable?: FillUsagePreflight<TRejection> | undefined;
   /** A caller that records the fill itself (document persistence, or an agent
    *  tool returning the text) defers use-count recording into its own atomic
    *  transaction. Other fill callers retain the after-fill default. */
@@ -1584,11 +1583,7 @@ const templateFillInputContract = ({
 
 type PrepareFillAdmissionOptions<TRejection> = Pick<
   FillDocxWithPolicyOptions<TRejection>,
-  | "values"
-  | "requiredFields"
-  | "unusedValuePolicy"
-  | "assertUsageAvailable"
-  | "aiCollaborators"
+  "values" | "requiredFields" | "unusedValuePolicy" | "aiCollaborators"
 > &
   Awaited<ReturnType<typeof discoverTemplateSource>> & { file: ScannedFile };
 
@@ -1602,7 +1597,6 @@ const prepareFillAdmission = async <TRejection>({
   bodies,
   clauses,
   file,
-  assertUsageAvailable,
   aiCollaborators,
 }: PrepareFillAdmissionOptions<TRejection>) => {
   const namedConditions = manifestNamedConditions(manifest);
@@ -1690,14 +1684,20 @@ const prepareFillAdmission = async <TRejection>({
   const hasAiFields = manifest.fields.some(
     (field) => Boolean(field.aiPrompt) || field.aiAdapt === true,
   );
-  if (assertUsageAvailable && hasAiFields) {
-    const usageRejection = await assertUsageAvailable();
-    if (usageRejection !== null) {
-      return { type: "refused" as const, rejection: { usageRejection } };
+  let collaborators: AiFillCollaborators = {};
+  if (aiCollaborators && hasAiFields) {
+    const authorization = await aiCollaborators();
+    if (Result.isError(authorization)) {
+      return {
+        type: "refused" as const,
+        rejection: { usageRejection: authorization.error },
+      };
     }
+    collaborators = await authorization.value.execute(
+      async ({ input }) => await input.value.buildCollaborators(),
+    );
   }
-  const { generateAiValue, decideAiCondition, adaptAiValue } =
-    aiCollaborators && hasAiFields ? await aiCollaborators() : {};
+  const { generateAiValue, decideAiCondition, adaptAiValue } = collaborators;
 
   return {
     type: "prepared" as const,
@@ -1781,7 +1781,6 @@ const fillTemplateDocxWithPolicy = async <TRejection = never>({
   clauseOverrides,
   aiCollaborators,
   lookupResolver,
-  assertUsageAvailable,
   useRecording = "after-fill",
   workspaceId,
   unusedValuePolicy,
@@ -1797,7 +1796,6 @@ const fillTemplateDocxWithPolicy = async <TRejection = never>({
       clauseOverrides,
     });
   const input = await prepareFillAdmission({
-    assertUsageAvailable,
     aiCollaborators,
     values,
     requiredFields,
@@ -2142,14 +2140,12 @@ export const fillStoredTemplateWithTextStrict = async <TRejection = never>({
   return await withExtractedText(filled);
 };
 
-export const fillStoredTemplate = async (
-  options: FillServiceOptions,
-): Promise<FillTemplateResult> => {
+export const fillStoredTemplate = async <TRejection = never>(
+  options: FillServiceOptions<TRejection>,
+): Promise<FillTemplateResult | { usageRejection: TRejection }> => {
   const filled = await fillStoredTemplateDocx(options);
   if ("usageRejection" in filled) {
-    // Unreachable: this caller does not pass `assertUsageAvailable`, so the
-    // service never returns a usage rejection (TRejection is `never`).
-    panic("fillStoredTemplate received an unexpected usage rejection");
+    return filled;
   }
   if ("requiredFieldsRejection" in filled) {
     return filled;

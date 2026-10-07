@@ -14,6 +14,7 @@ import { templateAiCollaboratorsForBoundary } from "@/api/handlers/chat/tools/te
 import { raiseChatToolError } from "@/api/handlers/chat/tools/tool-failure";
 import type { OrgAIConfig } from "@/api/lib/ai-config";
 import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
+import { authorizeHandlerUsage } from "@/api/lib/api-handlers";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { grantThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -28,6 +29,7 @@ import { LIMITS } from "@/api/lib/limits";
 import { failureSink } from "@/api/lib/observability/failure";
 import { observeFailure } from "@/api/lib/observability/observe-failure";
 import { brandPersistedTemplateId } from "@/api/lib/safe-id-boundaries";
+import { hasTanStackInstanceProvider } from "@/api/lib/tanstack-ai-models";
 import { recordTemplateExecution } from "@/api/lib/templates/record-use";
 import { suggestTemplateFields } from "@/api/lib/templates/suggest-template-fields";
 import type { SuggestedTemplateField } from "@/api/lib/templates/suggest-template-fields";
@@ -287,8 +289,24 @@ export const createTemplateTools = ({
         thirdPartyOutboundPermit: grantThirdPartyOutboundPermit(),
         requiredFields: "enforce",
         useRecording: "caller",
-        aiCollaborators: () => aiCollaborators(unrestoredFields),
+        aiCollaborators: async () =>
+          await authorizeHandlerUsage({
+            metering:
+              orgAIConfig || hasTanStackInstanceProvider()
+                ? { actionType: "chat", modelRole: "fast" }
+                : null,
+            organizationId,
+            orgAIConfig,
+            workspaceId: null,
+            userId,
+            safeDb,
+            templateId: branded,
+            buildCollaborators: () => aiCollaborators(unrestoredFields),
+          }),
       });
+      if ("usageRejection" in result) {
+        return { error: result.usageRejection.message };
+      }
       if ("requiredFieldsRejection" in result) {
         // A required, non-AI-fillable field was omitted or empty: reject
         // instead of inventing a value or leaving a raw {{marker}} in the

@@ -24,6 +24,7 @@ import type { TemplateData, FieldMeta } from "@/api/lib/docx/types";
 import { writeFieldFilters } from "@/api/lib/docx/write-field-filters";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import type { ScannedFile } from "@/api/lib/file-scan/scanned-file";
+import { checkedTestAiCollaborators } from "@/api/tests/helpers/checked-ai-collaborators";
 import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
 import { createTestHandlerContext } from "@/api/tests/helpers/handler-context";
 import { testDocxFile } from "@/api/tests/helpers/scanned-file";
@@ -370,9 +371,9 @@ describe("fillTemplateDocx required-field rejection", () => {
       organizationId,
       thirdPartyOutboundPermit: undefined,
       requiredFields: "enforce",
-      aiCollaborators: async () => ({
+      aiCollaborators: checkedTestAiCollaborators(async () => ({
         generateAiValue: async () => ({ type: "drafted", value: "Slovak" }),
-      }),
+      })),
     });
 
     expect("requiredFieldsRejection" in result).toBe(false);
@@ -402,13 +403,13 @@ describe("fillTemplateDocx required-field rejection", () => {
       organizationId,
       thirdPartyOutboundPermit: undefined,
       requiredFields: "enforce",
-      aiCollaborators: async () => ({
+      aiCollaborators: checkedTestAiCollaborators(async () => ({
         generateAiValue: async () => ({
           type: "failed",
           reason: "truncated",
           message: "The model reached its output limit before finishing.",
         }),
-      }),
+      })),
     });
 
     if (!("file" in result)) {
@@ -444,7 +445,9 @@ describe("fillTemplateDocx required-field rejection", () => {
       organizationId,
       thirdPartyOutboundPermit: undefined,
       requiredFields: "enforce",
-      aiCollaborators: async () => ({ adaptAiValue: async () => undefined }),
+      aiCollaborators: checkedTestAiCollaborators(async () => ({
+        adaptAiValue: async () => undefined,
+      })),
     });
 
     if (!("file" in result)) {
@@ -505,8 +508,9 @@ describe("fillTemplateDocx required-field rejection", () => {
       organizationId,
       thirdPartyOutboundPermit: undefined,
       requiredFields: "enforce",
-      aiCollaborators: () =>
+      aiCollaborators: checkedTestAiCollaborators(() =>
         panic("deterministic fill resolved the AI collaborators"),
+      ),
     });
 
     if (!("file" in result)) {
@@ -695,7 +699,9 @@ describe("fillTemplateDocx condition decisions", () => {
       organizationId,
       thirdPartyOutboundPermit: undefined,
       requiredFields: "enforce",
-      aiCollaborators: async () => ({ decideAiCondition: decide }),
+      aiCollaborators: checkedTestAiCollaborators(async () => ({
+        decideAiCondition: decide,
+      })),
     });
     if (!("file" in result)) {
       throw new Error("expected a filled document");
@@ -823,8 +829,9 @@ describe("fillTemplateDocx undecided AI conditions grade the fill", () => {
       organizationId,
       thirdPartyOutboundPermit: undefined,
       requiredFields: "enforce",
-      aiCollaborators: async () =>
+      aiCollaborators: checkedTestAiCollaborators(async () =>
         decideAiCondition === undefined ? {} : { decideAiCondition },
+      ),
     });
     if (!("file" in result)) {
       throw new Error("expected a filled document");
@@ -2018,22 +2025,25 @@ test("clause AI declarations run usage admission and include linked content in g
     scopedDb: stubScopedDb(body),
     requiredFields: "enforce",
     useRecording: "caller",
-    assertUsageAvailable: async () => {
-      admissions++;
-      return null;
-    },
-    aiCollaborators: async () => ({
-      generateAiValue: async ({ documentText, values }) => {
-        expect(documentText).toContain("Payment is due within thirty days.");
-        expect(documentText).not.toContain("Inactive payment");
-        expect(documentText).not.toContain("{% if");
-        expect(documentText).not.toContain("{{ summary");
-        expect(values["@clause:Terms"]).toContain(
-          "Payment is due within thirty days.",
-        );
-        return { type: "drafted", value: "Thirty days" };
+
+    aiCollaborators: checkedTestAiCollaborators(
+      async () => ({
+        generateAiValue: async ({ documentText, values }) => {
+          expect(documentText).toContain("Payment is due within thirty days.");
+          expect(documentText).not.toContain("Inactive payment");
+          expect(documentText).not.toContain("{% if");
+          expect(documentText).not.toContain("{{ summary");
+          expect(values["@clause:Terms"]).toContain(
+            "Payment is due within thirty days.",
+          );
+          return { type: "drafted", value: "Thirty days" };
+        },
+      }),
+      async () => {
+        admissions++;
+        return null;
       },
-    }),
+    ),
   });
   expect(admissions).toBe(1);
   if ("usageRejection" in result) {
@@ -2094,14 +2104,17 @@ describe("clause fill boundaries", () => {
       clauseOverrides: {
         "@clause:Terms": [clauseDirective("{% if enabled %}")],
       },
-      assertUsageAvailable: async () => {
-        usageCalls++;
-        return null;
-      },
-      aiCollaborators: async () => {
-        collaboratorCalls++;
-        return {};
-      },
+
+      aiCollaborators: checkedTestAiCollaborators(
+        async () => {
+          collaboratorCalls++;
+          return {};
+        },
+        async () => {
+          usageCalls++;
+          return null;
+        },
+      ),
     });
     expect(result).toMatchObject({
       storedTemplateError: { status: 422, code: "clause_directives_invalid" },
@@ -2444,7 +2457,7 @@ describe("clause slot requiredness follows rendering", () => {
       requiredFields: "enforce",
       useRecording: "caller",
       values: { persons: [{ name: "Ann" }, { name: "Bob", included: false }] },
-      aiCollaborators: async () => ({
+      aiCollaborators: checkedTestAiCollaborators(async () => ({
         generateAiValue: async ({ values }) => {
           const name = values["name"];
           if (typeof name !== "string") {
@@ -2461,7 +2474,7 @@ describe("clause slot requiredness follows rendering", () => {
           decisions.push(name);
           return { decidedBy: "generative_model", value: true };
         },
-      }),
+      })),
     });
     expect(result).toHaveProperty("file");
     expect(drafts).toEqual(["Ann", "Bob"]);
@@ -2619,7 +2632,7 @@ describe("clause slot requiredness follows rendering", () => {
         thirdPartyOutboundPermit: undefined,
         requiredFields: "enforce",
         useRecording: "caller",
-        aiCollaborators: async () => ({
+        aiCollaborators: checkedTestAiCollaborators(async () => ({
           generateAiValue: async ({ values }) => {
             const name = values["name"];
             if (typeof name !== "string") {
@@ -2628,7 +2641,7 @@ describe("clause slot requiredness follows rendering", () => {
             names.push(name);
             return { type: "drafted", value: `For ${name}` };
           },
-        }),
+        })),
       });
       expect(names).toEqual(["Ann", "Bob"]);
       const text = (await filledTexts(result)).join("");
@@ -2802,12 +2815,12 @@ describe("clause slot requiredness follows rendering", () => {
       thirdPartyOutboundPermit: undefined,
       requiredFields: "enforce",
       useRecording: "caller",
-      aiCollaborators: async () => ({
+      aiCollaborators: checkedTestAiCollaborators(async () => ({
         decideAiCondition: async () => ({
           decidedBy: "generative_model",
           value: decided,
         }),
-      }),
+      })),
     });
   };
 
@@ -2856,10 +2869,10 @@ describe("clause slot requiredness follows rendering", () => {
       thirdPartyOutboundPermit: undefined,
       requiredFields: "enforce",
       useRecording: "caller",
-      aiCollaborators: async () => {
+      aiCollaborators: checkedTestAiCollaborators(async () => {
         collaboratorCalls += 1;
         return {};
-      },
+      }),
     });
     expect(result).toEqual(nameRejection("name"));
     expect(collaboratorCalls).toBe(0);
@@ -3314,7 +3327,7 @@ describe("template fields are required where they render", () => {
       thirdPartyOutboundPermit: undefined,
       requiredFields: "enforce",
       useRecording: "caller",
-      aiCollaborators: async () => {
+      aiCollaborators: checkedTestAiCollaborators(async () => {
         collaboratorCalls += 1;
         return {
           decideAiCondition: async () => ({
@@ -3322,7 +3335,7 @@ describe("template fields are required where they render", () => {
             value: decided,
           }),
         };
-      },
+      }),
     });
     return { result, collaboratorCalls };
   };
@@ -3375,10 +3388,10 @@ describe("template fields are required where they render", () => {
       thirdPartyOutboundPermit: undefined,
       requiredFields: "enforce",
       useRecording: "caller",
-      aiCollaborators: async () => {
+      aiCollaborators: checkedTestAiCollaborators(async () => {
         collaboratorCalls += 1;
         return {};
-      },
+      }),
     });
     expect(result).toEqual(rejection("name"));
     expect(collaboratorCalls).toBe(0);
@@ -3512,12 +3525,12 @@ describe("clause slots the fill prunes", () => {
       requiredFields: "enforce",
       useRecording: "caller",
       clauseOverrides: { "@clause:Terms": malformed },
-      aiCollaborators: async () => ({
+      aiCollaborators: checkedTestAiCollaborators(async () => ({
         decideAiCondition: async () => ({
           decidedBy: "generative_model",
           value: decided,
         }),
-      }),
+      })),
     });
 
   test("an invalid override behind an AI decision is judged by the decision", async () => {
