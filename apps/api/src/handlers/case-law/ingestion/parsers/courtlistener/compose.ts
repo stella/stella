@@ -10,10 +10,11 @@
 
 import { Result } from "better-result";
 
+// parser-output-unchanged: imports the document AST from its package owner
 import { isApparatusRole } from "@stll/legal-ast/document-ast";
+import type { Block } from "@stll/legal-ast/document-ast";
 import { stripDangerousChars } from "@stll/legal-ast/text-sanitize";
 
-import type { Block } from "@/api/handlers/case-law/document-ast";
 import {
   COURTLISTENER_REJECTION_REASON,
   type CourtListenerRejectionReason,

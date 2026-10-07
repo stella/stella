@@ -16,7 +16,7 @@ export const STATUTE_COUNTRIES = {
 
 export type StatuteCountry = keyof typeof STATUTE_COUNTRIES;
 
-export const isStatuteCountry = (value: string): value is StatuteCountry =>
+const isStatuteCountry = (value: string): value is StatuteCountry =>
   Object.hasOwn(STATUTE_COUNTRIES, value);
 
 export const isPublicStatuteCountry = (

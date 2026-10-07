@@ -176,7 +176,7 @@ if [[ "${1:-}" == --cli ]]; then
     report cli_read failed contract_error
   else
     probe cli_search cli_tool "$case_shape" "$case_nonempty" case-law search --queries smlouva --country CZE --limit 1
-    probe cli_read cli_tool "$read_shape" "$read_nonempty" case-law read --decision-ids "$decision_id" --max-chars 1000
+    probe cli_read cli_tool "$read_shape" "$read_nonempty" case-law read --decision-ids "$decision_id"
   fi
 else
   probe web_search web_check "${JOURNEY_WEB_SEARCH_URL:-$web/law/cases?q=smlouva&country=cze}" '<a[[:space:]][^>]*href="/law/cze/cases/[^" ]+"'

@@ -16,7 +16,7 @@ import {
 } from "@stll/template-conditions";
 import { Temporal } from "@stll/time";
 
-export { DATE_FORMAT_EXAMPLE_ISO, DATE_FORMAT_STYLES };
+export { DATE_FORMAT_STYLES };
 
 export type TemplateDateFormat = FieldDateFormat;
 

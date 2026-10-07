@@ -28,7 +28,7 @@ import type { ChatAnonPair } from "@stll/anonymize-chat";
 const REGEX_SPECIALS = /[\\^$.*+?()[\]{}|]/gu;
 const escapeRegex = (value: string) => value.replaceAll(REGEX_SPECIALS, "\\$&");
 
-export const CHAT_ANON_DECORATIONS_NAME = "stllAnonDecorations";
+const CHAT_ANON_DECORATIONS_NAME = "stllAnonDecorations";
 
 type ChatAnonDecorationsStorage = {
   pairs: readonly ChatAnonPair[];

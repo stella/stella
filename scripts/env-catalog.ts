@@ -1254,6 +1254,7 @@ export const MANUAL_SCHEMA_KEYS = new Set([
   "STELLA_WEB_PORT",
   "XDG_CACHE_HOME",
   "XDG_CONFIG_HOME",
+  "XDG_STATE_HOME",
   "SSR",
 ]);
 
@@ -1315,6 +1316,8 @@ export const DEPLOYMENT_ENV_KEYS = new Set([
 ]);
 
 export const TOOLING_ENV_KEYS = new Set([
+  // Manual document-fetch input is scoped to its workflow invocation.
+  "PUBLIC_DOCUMENT_URLS",
   // Session ownership is passed from agent:up to its detached dev runner.
   "STELLA_DEV_SESSION_ID",
   // ci-result evaluates each independently scoped suite in folded jobs.
@@ -1323,6 +1326,8 @@ export const TOOLING_ENV_KEYS = new Set([
   "GH_RETRY_SCRIPT",
   // merge-bar CLI tests skip the origin/main freshness check (local test runs only).
   "STELLA_MERGE_BAR_TEST_SKIP_FRESHNESS",
+  // Durable branch-update receipts and locks can use an operator-selected directory.
+  "STELLA_MERGE_BAR_STATE_DIR",
   // Preserve Bun global-store links inside browser containers.
   "BUN_INSTALL_CACHE_DIR",
   // Browser commands use only executables baked into the pinned image.
@@ -1515,6 +1520,8 @@ export const TOOLING_ENV_KEYS = new Set([
   "TEST_API_ERROR",
   "TEST_LATER",
   "CI_GENERATED_SOURCES_MANIFEST",
+  "CI_POSTGRES_TEST_SELECTION",
+  "POSTGRES_JUNIT_FILE",
   "CHANGED_MARKDOWN",
   "TURBO_HASH",
   "TURBO_SCM_BASE",
