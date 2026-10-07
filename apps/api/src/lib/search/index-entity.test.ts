@@ -41,7 +41,10 @@ const selectMock = mock((_fields: unknown) => ({
   }),
 }));
 const executeMock = mock(async (_query: SQL) => [
-  { entityId: toSafeId<"entity">("entity_1") },
+  {
+    id: new PgDialect().sqlToQuery(_query).params.at(0),
+    entityId: toSafeId<"entity">("entity_1"),
+  },
 ]);
 const syncWorkspaceSearchActivityMock = mock(
   async (_workspaceId: unknown, _db: unknown) => undefined,
@@ -223,7 +226,15 @@ test("rejects an out-of-order projection against the authoritative entity", asyn
 });
 
 test("does not advance matter activity when a stale projection is rejected", async () => {
-  executeMock.mockResolvedValueOnce([{ entityId: entityRow.id }]);
+  executeMock.mockResolvedValueOnce([
+    { id: organizationId, entityId: entityRow.id },
+  ]);
+  executeMock.mockResolvedValueOnce([
+    { id: entityRow.workspaceId, entityId: entityRow.id },
+  ]);
+  executeMock.mockResolvedValueOnce([
+    { id: entityRow.id, entityId: entityRow.id },
+  ]);
   executeMock.mockResolvedValueOnce([]);
   await upsertSearchDocument(toSafeId<"entity">("entity_1"));
 
@@ -242,7 +253,7 @@ test("propagates workspace activity failures from the projection transaction", a
 
   expect(rejection).toBe(activityFailure);
   expect(transactionMock).toHaveBeenCalledTimes(1);
-  expect(executeMock).toHaveBeenCalledTimes(5);
+  expect(executeMock).toHaveBeenCalledTimes(7);
 });
 
 test("keeps the last complete projection when extracted content cannot decrypt", async () => {
