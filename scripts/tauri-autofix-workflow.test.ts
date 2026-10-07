@@ -97,6 +97,13 @@ test("npm Tauri updates form their own group without changing the existing caden
     'tauri:\n        patterns:\n          - "@tauri-apps/*"\n        update-types:\n          - "major"\n          - "minor"\n          - "patch"',
   );
   expect(bun).toContain("default-days: 5");
-  expect(bun).toContain('cronjob: "0 3 * * *"');
-  expect(bun).toContain('timezone: "Europe/Prague"');
+  const schedules = config.match(/^ {4}schedule:\n(?: {6}[^\n]+\n)+/gmu) ?? [];
+  const ecosystems = config.match(/^ {2}- package-ecosystem:/gmu) ?? [];
+  expect(schedules).toHaveLength(ecosystems.length);
+  expect(schedules.length).toBeGreaterThan(0);
+  for (const schedule of schedules) {
+    expect(schedule).toBe(
+      '    schedule:\n      interval: "weekly"\n      day: "monday"\n      time: "03:00"\n      timezone: "Europe/Prague"\n',
+    );
+  }
 });
