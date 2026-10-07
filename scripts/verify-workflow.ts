@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 
 import { VerifyError } from "./verify-error";
+import { flattenWorkflowSteps } from "./workflow-steps";
 
 export type VerifyWorkflowMode = "verify" | "autofix";
 export type VerifyWorkflowPhase = "prepare" | "check";
@@ -116,9 +117,8 @@ export const parseVerifyWorkflow = (
     if (!Array.isArray(steps)) {
       throw new VerifyError(`Job ${job} steps must be an array`);
     }
-    for (const [index, stepValue] of steps.entries()) {
+    for (const [index, step] of flattenWorkflowSteps(steps).entries()) {
       const label = `Job ${job} step ${index + 1}`;
-      const step = record(stepValue, label);
       if (step["env"] === undefined) {
         continue;
       }

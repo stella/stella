@@ -322,6 +322,7 @@ for (const conflict of [false, true]) {
         "verify-admission.ts",
         "verify-workflow.ts",
         "verify-error.ts",
+        "workflow-steps.ts",
       ]) {
         copyFileSync(
           path.join(root, "scripts", file),

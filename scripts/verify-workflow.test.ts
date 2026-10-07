@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 
 import { parseVerifyWorkflow, readVerifyWorkflow } from "./verify-workflow";
+import { flattenWorkflowSteps } from "./workflow-steps";
 
 const root = path.resolve(import.meta.dirname, "..");
 const fixture = (step: Record<string, unknown>) =>
@@ -34,11 +35,10 @@ for (const { mode, file, marker } of [
       asRecord(asRecord(parsed)["jobs"]),
     )) {
       const steps = asRecord(value)["steps"];
-      if (!Array.isArray(steps)) {
+      if (steps === undefined) {
         continue;
       }
-      for (const stepValue of steps) {
-        const step = asRecord(stepValue);
+      for (const step of flattenWorkflowSteps(steps)) {
         if (
           step["env"] !== undefined &&
           Object.hasOwn(asRecord(step["env"]), marker)
@@ -71,6 +71,70 @@ for (const { mode, file, marker } of [
 }
 
 describe("workflow marker selection", () => {
+  test("nested parallel leaves retain marker selection and phase order", () => {
+    const source = Bun.YAML.stringify({
+      jobs: {
+        first: {
+          steps: [
+            checkStep,
+            {
+              parallel: [
+                { name: "Unmarked parallel", run: "echo ignored" },
+                {
+                  name: "Parallel check",
+                  run: "echo parallel",
+                  env: { STELLA_VERIFY: "check" },
+                },
+                {
+                  parallel: [
+                    {
+                      name: "Nested preparation",
+                      run: "echo prepare",
+                      env: { STELLA_VERIFY: "prepare" },
+                    },
+                    { name: "Unmarked nested action", uses: "example/action" },
+                    {
+                      name: "Nested check",
+                      run: "echo nested",
+                      env: { STELLA_VERIFY: "check" },
+                    },
+                    {
+                      name: "Nested fix",
+                      run: "echo fix",
+                      env: { STELLA_LOCAL_AUTOFIX: "true" },
+                    },
+                  ],
+                },
+              ],
+            },
+            { wait: "all" },
+          ],
+        },
+      },
+    });
+    expect(
+      parseVerifyWorkflow(source, "verify").map(({ name, phase }) => ({
+        name,
+        phase,
+      })),
+    ).toEqual([
+      { name: "Nested preparation", phase: "prepare" },
+      { name: "Check contract", phase: "check" },
+      { name: "Parallel check", phase: "check" },
+      { name: "Nested check", phase: "check" },
+    ]);
+    expect(parseVerifyWorkflow(source, "autofix")).toEqual([
+      {
+        job: "first",
+        name: "Nested fix",
+        run: "echo fix",
+        cwd: ".",
+        env: {},
+        phase: "prepare",
+      },
+    ]);
+  });
+
   test("new marked commands enter the plan without a separate registry", () => {
     const source = Bun.YAML.stringify({
       jobs: {
