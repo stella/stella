@@ -6611,6 +6611,10 @@
     "seconds": 3.55749,
     "source": "estimated"
   },
+  "src/lib/lists/sanctions/screening-failure.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
   "src/lib/lists/sanctions/screening-index-cancellation.test.ts": {
     "seconds": 0.086173,
     "source": "estimated"
@@ -8685,6 +8689,10 @@
   },
   "src/scripts/eu-ecj-refetch.test.ts": {
     "seconds": 0.12924,
+    "source": "estimated"
+  },
+  "src/scripts/image-smoke-sanctions.test.ts": {
+    "seconds": 1,
     "source": "estimated"
   },
   "src/scripts/image-smoke-template-packs.test.ts": {

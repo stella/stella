@@ -300,7 +300,7 @@ const withFixture = async (
 };
 
 describe.skipIf(!enabled)("verification point-read audit", () => {
-  test("terminal reads dedupe per actor and Prague day, including concurrent reads", async () =>
+  test("content reads dedupe per actor and Prague day, including concurrent reads", async () =>
     await withFixture(async (f) => {
       await Promise.all(Array.from({ length: 4 }, async () => await f.read()));
       expect(await f.events()).toHaveLength(1);
@@ -313,7 +313,7 @@ describe.skipIf(!enabled)("verification point-read audit", () => {
       expect(await f.events()).toHaveLength(4);
       await f.read({ runId: f.runIds.queued });
       await f.read({ runId: f.runIds.running });
-      expect(await f.events()).toHaveLength(4);
+      expect(await f.events()).toHaveLength(6);
     }));
 
   test.each([
@@ -330,30 +330,33 @@ describe.skipIf(!enabled)("verification point-read audit", () => {
       }),
   );
 
-  test("event identifies the entity and pin without document or fact content", async () =>
-    await withFixture(async (f) => {
-      const run = await f.read();
-      expect(run.blocks.at(0)?.text).toBe(CANARY);
-      expect(run.evidence.facts.at(0)?.text).toBe(CANARY);
-      const event = (await f.events()).at(0);
-      expect(event).toMatchObject({
-        resourceType: AUDIT_RESOURCE_TYPE.ENTITY,
-        resourceId: run.entityId,
-        workspaceId: f.workspaceId,
-        userId: f.actor,
-        metadata: {
-          disposition: "inline",
-          format: "verification-run",
-          runId: run.id,
-          listId: run.evidence.listId,
-          fileFieldId: run.fileFieldId,
-          entityVersionId: run.entityVersionId,
-          status: run.status,
-        },
-      });
-      expect(JSON.stringify(event)).not.toContain(CANARY);
-      expect(JSON.stringify(event)).not.toContain("a".repeat(64));
-    }));
+  test.each(VERIFICATION_RUN_STATUSES)(
+    "%s read identifies the entity and pin without content",
+    async (status) =>
+      await withFixture(async (f) => {
+        const run = await f.read({ runId: f.runIds[status] });
+        expect(run.blocks.at(0)?.text).toBe(CANARY);
+        expect(run.evidence.facts.at(0)?.text).toBe(CANARY);
+        const event = (await f.events()).at(0);
+        expect(event).toMatchObject({
+          resourceType: AUDIT_RESOURCE_TYPE.ENTITY,
+          resourceId: run.entityId,
+          workspaceId: f.workspaceId,
+          userId: f.actor,
+          metadata: {
+            disposition: "inline",
+            format: "verification-run",
+            runId: run.id,
+            listId: run.evidence.listId,
+            fileFieldId: run.fileFieldId,
+            entityVersionId: run.entityVersionId,
+            status: run.status,
+          },
+        });
+        expect(JSON.stringify(event)).not.toContain(CANARY);
+        expect(JSON.stringify(event)).not.toContain("a".repeat(64));
+      }),
+  );
 
   test("denied grants and another matter produce no access event", async () =>
     await withFixture(async (f) => {

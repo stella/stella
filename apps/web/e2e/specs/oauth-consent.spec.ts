@@ -1,5 +1,7 @@
 import type { APIRequestContext, Page } from "@playwright/test";
-import { createHash, randomUUID } from "node:crypto";
+import { randomUUID } from "node:crypto";
+
+import { sha256Base64Url as hashSha256Base64Url } from "@stll/sha256/node";
 
 import { getStorageKey } from "../../src/consts";
 import { expect, test } from "../helpers/test";
@@ -68,7 +70,7 @@ const authorizeUrlFor = ({
   redirectUri,
 }: AuthorizeUrlOptions) => {
   const verifier = `oauth-consent-${id}`;
-  const challenge = createHash("sha256").update(verifier).digest("base64url");
+  const challenge = hashSha256Base64Url(verifier);
   const authorizeUrl = new URL(`${AUTH_BASE_URL}/oauth2/authorize`);
   authorizeUrl.searchParams.set("client_id", clientId);
   authorizeUrl.searchParams.set("code_challenge", challenge);
