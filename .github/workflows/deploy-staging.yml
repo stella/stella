@@ -592,7 +592,7 @@ jobs:
             --header 'Content-Type: application/json' \
             ${curl_edge_args[@]+"${curl_edge_args[@]}"} \
             --data '{"query":"contract","country":"CZ","limit":1,"strict":true}' \
-            "${E2E_API_URL}/case/decisions/search")"; then
+            "${E2E_API_URL}/v1/case/decisions/search")"; then
             http_status="000"
           fi
           if [[ "$http_status" != "200" ]] || ! jq -e \

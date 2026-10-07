@@ -14,6 +14,7 @@ import * as v from "valibot";
 
 import {
   contextFromNested,
+  contextWithPlanOutputs,
   evaluate as evaluateExpression,
   UNKNOWN,
 } from "./github-expression";
@@ -39,6 +40,7 @@ const workflowSchema = v.object({
     v.string(),
     v.looseObject({
       if: v.optional(v.string()),
+      outputs: v.optional(v.record(v.string(), v.string())),
       needs: v.optional(v.union([v.string(), v.array(v.string())])),
       steps: v.optional(v.array(stepSchema)),
     }),
@@ -52,6 +54,10 @@ const readWorkflow = (name: string) =>
     ),
   );
 const ci = readWorkflow("ci.yml");
+const planOutputs = v.parse(
+  v.record(v.string(), v.string()),
+  ci.jobs["ci-plan"]?.outputs,
+);
 const THIN_JOBS = thinJobs(ci);
 const main = readWorkflow("main-heavy.yml");
 const heavy = mainHeavyJobs(ci);
@@ -114,6 +120,7 @@ const plan = {
       ),
     ).map((scope) => [scope, "true"]),
   ),
+  desktop_browser_required: "true",
   agent_sandbox_docker_required: "true",
   api_image_deps_required: "true",
   run_required: "true",
@@ -170,12 +177,71 @@ const context = ({
 });
 const selected = (condition: string | undefined, value: object) => {
   const expression = condition ?? "true";
-  const result = evaluateExpression(expression, contextFromNested(value));
+  const result = evaluateExpression(
+    expression,
+    contextWithPlanOutputs({
+      context: contextFromNested(value),
+      outputs: planOutputs,
+    }),
+  );
   if (result === UNKNOWN) {
     panic(`Unresolved queue workflow expression: ${expression}`);
   }
   return Boolean(result);
 };
+test("computed browser planning retains trust, reuse and thin-depth boundaries", () => {
+  for (const event of events.filter(({ event: eventName }) =>
+    ["pull_request", "merge_group", "push", "workflow_dispatch"].includes(
+      eventName,
+    ),
+  )) {
+    for (const queueDepth of ["full", "thin"]) {
+      for (const suiteDepth of ["fast", "full"]) {
+        for (const trusted of ["true", "false"]) {
+          for (const runRequired of ["true", "false"]) {
+            for (const desktopRequired of ["true", "false"]) {
+              const value = context({
+                event,
+                variable: queueDepth,
+                queueDepth,
+              });
+              const planner = value.needs["ci-plan"];
+              if (!planner) {
+                panic("Missing browser planner context");
+              }
+              Object.assign(planner.outputs, {
+                trusted,
+                run_required: runRequired,
+                suite_depth: suiteDepth,
+                desktop_browser_required: desktopRequired,
+                // An all-planned fixture must not bypass the real expression.
+                ci_browser_required: "true",
+              });
+              const expected =
+                runRequired === "true" &&
+                (trusted === "true" || event.event === "workflow_dispatch") &&
+                (event.event === "pull_request"
+                  ? desktopRequired === "true"
+                  : suiteDepth === "full" && queueDepth !== "thin");
+              expect(
+                selected(ci.jobs["ci-browser"]?.if, value),
+                JSON.stringify({
+                  event,
+                  queueDepth,
+                  suiteDepth,
+                  trusted,
+                  runRequired,
+                  desktopRequired,
+                }),
+              ).toBe(expected);
+            }
+          }
+        }
+      }
+    }
+  }
+});
+
 const expectedRouteSelection = (value: ReturnType<typeof context>) => {
   const planner = value.needs["ci-plan"];
   if (!planner) {
@@ -526,14 +592,17 @@ test("unset and full preserve historical predicates except declared PR and route
   const baseline = original("ci.yml");
   const baselineMain = original("main-heavy.yml");
   expect(Object.keys(main.jobs)).toEqual(Object.keys(baselineMain.jobs));
-  expect(new Set(Object.keys(ci.jobs))).toEqual(
-    new Set([
-      ...Object.keys(baseline.jobs).filter(
-        (id) => id !== "merge-group-fail-fast",
-      ),
-      "marketing-screenshots-cancel",
-      "ci-generated-sources",
-    ]),
+  expect(Object.keys(ci.jobs).toSorted()).toEqual(
+    [
+      ...new Set([
+        ...Object.keys(baseline.jobs).filter(
+          (id) => id !== "merge-group-fail-fast",
+        ),
+        "marketing-screenshots-cancel",
+        "ci-generated-sources",
+        "ci-checks-docs",
+      ]),
+    ].toSorted(),
   );
   for (const event of events) {
     for (const { variable, proveFix } of ["", "full"].flatMap((queueVariable) =>

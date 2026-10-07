@@ -1404,6 +1404,7 @@ export const TOOLING_ENV_KEYS = new Set([
   "MATTER_ACTIVITY_WORKSPACE_ID",
   "MCP_APP_INPUT",
   "MCP_CANARY_BASE_URL",
+  "MCP_CANARY_CONFIGURED_BASE_URL",
   "MCP_CANARY_ENVIRONMENT",
   "MCP_CANARY_FRONTEND_URL",
   "MCP_CANARY_MODE",
@@ -1462,6 +1463,8 @@ export const TOOLING_ENV_KEYS = new Set([
   "REPOSITORY",
   "RETRY_ATTEMPTS",
   "RETRY_DELAYS_SECONDS",
+  // Credential used only by the restricted account canary.
+  "REVIEW_ACCOUNT_PASSWORD",
   // Nightly issue reporter: workflow run linked from the failure issue.
   "RUN_URL",
   "SMOKE_AI_JOURNEY",
@@ -1505,6 +1508,7 @@ export const TOOLING_ENV_KEYS = new Set([
   "TEST_API_ERROR",
   "TEST_LATER",
   "CI_GENERATED_SOURCES_MANIFEST",
+  "CHANGED_MARKDOWN",
   "TURBO_HASH",
   "TURBO_SCM_BASE",
   "TURN_OUTCOME_COMBINATIONS",

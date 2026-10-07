@@ -51,6 +51,10 @@ const EXPORTED_PATHS = [
   // Historical base revisions still import the root metadata.
   "scripts/generated-files.ts",
 ];
+// The exported tree is parameterized; bind its source scope to the same
+// export inventory so unresolved scans retain named package checks.
+export const CI_MARKDOWN_READER_INPUTS = EXPORTED_PATHS;
+
 const RUNTIME_GENERATOR =
   GENERATORS.find(({ id }) => id === "cli-runtime") ??
   panic("the generator manifest has no cli-runtime entry");
