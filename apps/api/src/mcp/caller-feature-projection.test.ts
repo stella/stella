@@ -92,6 +92,7 @@ const contextFor = (granted: boolean, capability: string) => {
       leftJoin: () => builder,
       leftJoinLateral: () => builder,
       orderBy: () => builder,
+      // oxlint-disable-next-line typescript/promise-function-async -- the builder double must return the Promise itself with its subquery .as(); async would wrap it
       limit: () =>
         Object.assign(Promise.resolve(selectedRows), {
           as: () => ({ documentId: null, documentName: null, locator: null }),
@@ -362,11 +363,11 @@ for (const { id } of requiredCapabilities) {
       const block = result.content.at(0);
       expect(block?.type).toBe("text");
       if (block?.type !== "text") {
-        return panic("Expected a text error envelope");
+        panic("Expected a text error envelope");
       }
       const payload: unknown = JSON.parse(block.text);
       if (!isRecord(payload) || !isRecord(payload["error"])) {
-        return panic("Expected an error object");
+        panic("Expected an error object");
       }
       expect(payload["error"]).toEqual({
         code: "not_found",
