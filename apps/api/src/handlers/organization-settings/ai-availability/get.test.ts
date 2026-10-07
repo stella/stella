@@ -9,13 +9,20 @@ import readAIAvailability from "./get";
 
 type ReadContext = Parameters<typeof readAIAvailability.handler>[0];
 
-const readAvailability = async (orgAIConfigStatus: OrgAIConfigStatus) => {
+type InstanceProvider = "provisioned" | "absent";
+
+const readAvailability = async (
+  orgAIConfigStatus: OrgAIConfigStatus,
+  instanceProvider: InstanceProvider,
+) => {
   const previous = {
     AI_PROVIDER: env.AI_PROVIDER,
     OPENROUTER_API_KEY: env.OPENROUTER_API_KEY,
+    REQUIRE_PERSONAL_AI_KEY: env.REQUIRE_PERSONAL_AI_KEY,
   };
   env.AI_PROVIDER = "openrouter";
   env.OPENROUTER_API_KEY = "test-openrouter-instance-key";
+  env.REQUIRE_PERSONAL_AI_KEY = instanceProvider === "absent";
   try {
     const result = await readAIAvailability.handler(
       createTestHandlerContext<ReadContext>({ orgAIConfigStatus }),
@@ -27,12 +34,16 @@ const readAvailability = async (orgAIConfigStatus: OrgAIConfigStatus) => {
   } finally {
     env.AI_PROVIDER = previous.AI_PROVIDER;
     env.OPENROUTER_API_KEY = previous.OPENROUTER_API_KEY;
+    env.REQUIRE_PERSONAL_AI_KEY = previous.REQUIRE_PERSONAL_AI_KEY;
   }
 };
 
 describe("AI availability on an instance with a provider", () => {
   test("reports AI available to an org the instance provider serves", async () => {
-    const availability = await readAvailability(ORG_AI_CONFIG_STATUS.ok);
+    const availability = await readAvailability(
+      ORG_AI_CONFIG_STATUS.ok,
+      "provisioned",
+    );
 
     expect(availability.instanceProvisioned).toBe(true);
     expect(availability.available).toBe(true);
@@ -45,10 +56,23 @@ describe("AI availability on an instance with a provider", () => {
   ])(
     "reports AI unavailable when every AI call would refuse with %s",
     async (status) => {
-      const availability = await readAvailability(status);
+      const availability = await readAvailability(status, "provisioned");
 
       expect(availability.instanceProvisioned).toBe(true);
       expect(availability.available).toBe(false);
     },
   );
+});
+
+describe("AI availability on an instance without a provider", () => {
+  test("reports AI unavailable to an org with no key of its own", async () => {
+    const availability = await readAvailability(
+      ORG_AI_CONFIG_STATUS.ok,
+      "absent",
+    );
+
+    expect(availability.instanceProvisioned).toBe(false);
+    expect(availability.orgConfigured).toBe(false);
+    expect(availability.available).toBe(false);
+  });
 });
