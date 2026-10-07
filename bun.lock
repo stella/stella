@@ -378,8 +378,8 @@
       "name": "@stll/web",
       "version": "0.0.0",
       "dependencies": {
-        "@atlaskit/pragmatic-drag-and-drop": "^3.1.0",
-        "@atlaskit/pragmatic-drag-and-drop-auto-scroll": "^3.2.0",
+        "@atlaskit/pragmatic-drag-and-drop": "^4.0.0",
+        "@atlaskit/pragmatic-drag-and-drop-auto-scroll": "^3.2.1",
         "@atlaskit/pragmatic-drag-and-drop-hitbox": "^2.2.2",
         "@atlaskit/pragmatic-drag-and-drop-live-region": "^2.1.0",
         "@base-ui/react": "catalog:",
@@ -1205,8 +1205,8 @@
         "temporal-polyfill": "catalog:",
       },
       "devDependencies": {
-        "@atlaskit/pragmatic-drag-and-drop": "^3.1.0",
-        "@atlaskit/pragmatic-drag-and-drop-auto-scroll": "^3.2.0",
+        "@atlaskit/pragmatic-drag-and-drop": "^4.0.0",
+        "@atlaskit/pragmatic-drag-and-drop-auto-scroll": "^3.2.1",
         "@base-ui/react": "catalog:",
         "@playwright/test": "^1.63.0",
         "@stll/typescript-config": "workspace:*",
@@ -1222,8 +1222,8 @@
         "vite": "catalog:",
       },
       "peerDependencies": {
-        "@atlaskit/pragmatic-drag-and-drop": "^3.1.0",
-        "@atlaskit/pragmatic-drag-and-drop-auto-scroll": "^3.2.0",
+        "@atlaskit/pragmatic-drag-and-drop": "^4.0.0",
+        "@atlaskit/pragmatic-drag-and-drop-auto-scroll": "^3.2.1",
         "@base-ui/react": "^1.7.0",
         "@tanstack/react-virtual": "^3.14.13",
         "@types/react": ">=19",
@@ -1284,7 +1284,7 @@
         "use-intl": "catalog:",
       },
       "devDependencies": {
-        "@atlaskit/pragmatic-drag-and-drop": "^3.1.0",
+        "@atlaskit/pragmatic-drag-and-drop": "^4.0.0",
         "@atlaskit/pragmatic-drag-and-drop-hitbox": "^2.2.2",
         "@base-ui/react": "catalog:",
         "@stll/property-testing": "workspace:*",
@@ -1300,7 +1300,7 @@
         "tsdown": "catalog:",
       },
       "peerDependencies": {
-        "@atlaskit/pragmatic-drag-and-drop": "^3.1.0",
+        "@atlaskit/pragmatic-drag-and-drop": "^4.0.0",
         "@atlaskit/pragmatic-drag-and-drop-hitbox": "^2.2.2",
         "@base-ui/react": "^1.7.0",
         "@tanstack/react-table": "^9.1.2",
@@ -1337,8 +1337,8 @@
     "@tanstack/ai@0.61.0": "patches/@tanstack%2Fai@0.61.0.patch",
   },
   "overrides": {
-    "@atlaskit/pragmatic-drag-and-drop": "3.1.0",
-    "@atlaskit/pragmatic-drag-and-drop-auto-scroll": "3.2.0",
+    "@atlaskit/pragmatic-drag-and-drop": "4.0.0",
+    "@atlaskit/pragmatic-drag-and-drop-auto-scroll": "3.2.1",
     "@emnapi/core": "1.9.1",
     "@emnapi/runtime": "1.9.1",
     "@expo/cli": "57.0.27",
@@ -1516,9 +1516,9 @@
 
     "@astrojs/yaml2ts": ["@astrojs/yaml2ts@0.2.4", "", { "dependencies": { "yaml": "^2.8.3" } }, "sha512-8oddpOae35pJsXPQXhTkM0ypfKPskVsh2bCxRtbf7e+/Epw2nReakFYpLKjZMEr75CsoF203PMnCocpfz0s69A=="],
 
-    "@atlaskit/pragmatic-drag-and-drop": ["@atlaskit/pragmatic-drag-and-drop@3.1.0", "", { "dependencies": { "@babel/runtime": "^7.0.0", "bind-event-listener": "^3.0.0", "raf-schd": "^4.0.3" } }, "sha512-VU+2Oh6OgvC6D1xiX3lfm1gZJsaSPD+ZKjAHodOQ9IO6RfOvAyReLlK5ut9gIUpPmbD8d09wlCs7y4A6/I8c5Q=="],
+    "@atlaskit/pragmatic-drag-and-drop": ["@atlaskit/pragmatic-drag-and-drop@4.0.0", "", { "dependencies": { "@babel/runtime": "^7.0.0", "bind-event-listener": "^3.0.0", "raf-schd": "^4.0.3" } }, "sha512-pyDo2B5NiaExoKGmgeXKGNUL4aR4UzzSZm8QWWjYTEyBLVqSqKyKUwtVxMw2YEkakagOGFONUdHM32LAH2nPug=="],
 
-    "@atlaskit/pragmatic-drag-and-drop-auto-scroll": ["@atlaskit/pragmatic-drag-and-drop-auto-scroll@3.2.0", "", { "dependencies": { "@atlaskit/pragmatic-drag-and-drop": "^3.1.0", "@babel/runtime": "^7.0.0" } }, "sha512-vuL+AJae6c6lkmFd63v7c/7J7seyi7ZA8uMLNe9GvvApySToun3Zlv8SfyZU0d+wcNG4+Ix6qpRb8jOobZgNNg=="],
+    "@atlaskit/pragmatic-drag-and-drop-auto-scroll": ["@atlaskit/pragmatic-drag-and-drop-auto-scroll@3.2.1", "", { "dependencies": { "@atlaskit/pragmatic-drag-and-drop": "^4.0.0", "@babel/runtime": "^7.0.0" } }, "sha512-2fhWAG48EjPoKhoHLG6RcT3/VaCzYEbRb6BtA/Vcfx4FrL0P1KrEgBJ6OAwB0X8MOV6UH22YgjFFHjv8fQD9rA=="],
 
     "@atlaskit/pragmatic-drag-and-drop-hitbox": ["@atlaskit/pragmatic-drag-and-drop-hitbox@2.2.2", "", { "dependencies": { "@atlaskit/pragmatic-drag-and-drop": "^3.1.0", "@babel/runtime": "^7.0.0" } }, "sha512-2Or4BWVX9ZlgsCCvgbmGEwjv2134vZARL5SezP8Dsrh3ayPYThU55Ug4dBzDAqiIJE2q8aPn+zO8YYoATa4wuA=="],
 

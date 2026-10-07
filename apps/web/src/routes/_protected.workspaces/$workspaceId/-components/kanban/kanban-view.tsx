@@ -3,8 +3,8 @@ import type { ComponentProps, ReactNode } from "react";
 
 import { extractClosestEdge } from "@atlaskit/pragmatic-drag-and-drop-hitbox/closest-edge";
 import type { Edge } from "@atlaskit/pragmatic-drag-and-drop-hitbox/types";
-import { combine } from "@atlaskit/pragmatic-drag-and-drop/combine";
-import { monitorForElements } from "@atlaskit/pragmatic-drag-and-drop/element/adapter";
+import { monitorForElements } from "@atlaskit/pragmatic-drag-and-drop/adapter/element-adapter";
+import { combine } from "@atlaskit/pragmatic-drag-and-drop/utils/combine";
 import {
   useMutation,
   useInfiniteQuery,

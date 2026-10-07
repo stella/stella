@@ -165,8 +165,8 @@
     "valibot": "catalog:"
   },
   "resolutions": {
-    "@atlaskit/pragmatic-drag-and-drop": "3.1.0",
-    "@atlaskit/pragmatic-drag-and-drop-auto-scroll": "3.2.0",
+    "@atlaskit/pragmatic-drag-and-drop": "4.0.0",
+    "@atlaskit/pragmatic-drag-and-drop-auto-scroll": "3.2.1",
     "@emnapi/core": "1.9.1",
     "@emnapi/runtime": "1.9.1",
     "@expo/cli": "57.0.27",
