@@ -153,7 +153,7 @@ describe("resource-bound OAuth refresh", () => {
         const response = await refreshOAuthGrant({
           client,
           refreshToken: grant.refreshToken,
-          scope: scopeMode === "original" ? requestedScope : undefined,
+          ...(scopeMode === "original" ? { scope: requestedScope } : {}),
         });
         expect(response.status, await response.clone().text()).toBe(200);
         const tokens = v.parse(

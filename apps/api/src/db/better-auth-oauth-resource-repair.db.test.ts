@@ -255,7 +255,7 @@ test("the deploy repair adds a new audience to an existing database", async () =
         expect(policies).toContainEqual({
           identifier: resource.identifier,
           allowedScopes: resource.allowedScopes.toSorted(),
-          updatedAt: expect.any(Date),
+          updatedAt: expect.any(String),
         });
       }
       // And the registration that existed before the upgrade can request it.

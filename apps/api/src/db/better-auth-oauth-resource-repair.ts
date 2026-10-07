@@ -165,32 +165,32 @@ const repair = async (connection: OnlineMigrationConnection): Promise<void> => {
 
     // Only the exact predecessor policy may gain protocol scopes. Unknown
     // definitions remain untouched and fail the seeder's strict census.
-    for (const resource of expectedResources) {
-      const predecessorScopes = resource.allowedScopes.filter(
+    const policies = expectedResources.map((resource) => ({
+      ...resource,
+      predecessorScopes: resource.allowedScopes.filter(
         (scope) =>
           !MCP_OAUTH_PROTOCOL_SCOPES.some(
             (protocolScope) => protocolScope === scope,
           ),
-      );
-      await transaction.execute(sql`
-        UPDATE oauth_resource
-           SET allowed_scopes = ARRAY(
-                 SELECT jsonb_array_elements_text(
-                   ${JSON.stringify(resource.allowedScopes)}::text::jsonb
-                 )
-               ),
-               updated_at = now()
-         WHERE identifier = ${resource.identifier}
-           AND name = ${resource.name}
-           AND disabled = false
-           AND ARRAY(SELECT scope FROM unnest(allowed_scopes) AS scope ORDER BY scope)
-               = ARRAY(
-                 SELECT scope FROM jsonb_array_elements_text(
-                   ${JSON.stringify(predecessorScopes)}::text::jsonb
-                 ) AS scope ORDER BY scope
-               )
-      `);
-    }
+      ),
+    }));
+    await transaction.execute(sql`
+      WITH expected AS (
+        SELECT * FROM jsonb_to_recordset(${JSON.stringify(policies)}::text::jsonb)
+          AS policy(identifier text, name text, "allowedScopes" jsonb, "predecessorScopes" jsonb)
+      )
+      UPDATE oauth_resource actual
+         SET allowed_scopes = ARRAY(
+               SELECT jsonb_array_elements_text(expected."allowedScopes")
+             ),
+             updated_at = now()
+        FROM expected
+       WHERE actual.identifier = expected.identifier
+         AND actual.name = expected.name
+         AND actual.disabled = false
+         AND ARRAY(SELECT unnest(actual.allowed_scopes) ORDER BY 1)
+             = ARRAY(SELECT jsonb_array_elements_text(expected."predecessorScopes") ORDER BY 1)
+    `);
 
     const seeded = await seedOAuthResources(transaction, expectedResources);
     if (Result.isError(seeded)) {
