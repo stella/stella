@@ -4,6 +4,8 @@ import { Value } from "@sinclair/typebox/value";
 import { describe, expect, test } from "bun:test";
 import { Elysia } from "elysia";
 
+import { sha256Hex as hashSha256Hex } from "@stll/sha256/bun";
+
 import { multipartFormParser } from "@/api/lib/multipart-form-parser";
 
 import { discoverSafeHandlers } from "../../../scripts/lib/enumerate-safe-handlers";
@@ -106,7 +108,7 @@ const isOptional = (schema: TSchema): boolean => OptionalKind in schema;
 const STRING_FILLERS = [
   PLAIN_VALUE,
   "00000000-0000-4000-8000-000000000000",
-  new Bun.CryptoHasher("sha256").update(PLAIN_VALUE).digest("hex"),
+  hashSha256Hex(PLAIN_VALUE),
 ];
 
 /**

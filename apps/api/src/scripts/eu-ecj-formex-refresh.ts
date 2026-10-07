@@ -3,6 +3,8 @@ import { and, eq, inArray, isNull, or, sql } from "drizzle-orm";
 import { open, rename, unlink } from "node:fs/promises";
 import * as v from "valibot";
 
+import { sha256Hex as hashSha256Hex } from "@stll/sha256/bun";
+
 import { caseLawDecisions } from "@/api/db/schema";
 import type { StoredRawReparseInput } from "@/api/handlers/case-law/ingestion/adapter";
 import {
@@ -356,9 +358,6 @@ const INTENT_SCHEMA = v.object({
 });
 type RefreshIntent = v.InferOutput<typeof INTENT_SCHEMA>;
 
-const rawDigest = (raw: Uint8Array) =>
-  new Bun.CryptoHasher("sha256").update(raw).digest("hex");
-
 const readIntent = async (path: string): Promise<RefreshIntent | null> => {
   if (!(await Bun.file(path).exists())) {
     return null;
@@ -433,7 +432,7 @@ const refreshStoredRow = async ({
     row.corpusMirrorStatus === "settled" &&
     row.sourceObservationOrder !== null &&
     row.sourceObservationOrder >= BigInt(pending.order) &&
-    rawDigest(rawResult.value) === pending.rawDigest
+    hashSha256Hex(rawResult.value) === pending.rawDigest
   ) {
     return {
       type: "terminal",
@@ -512,7 +511,7 @@ const refreshStoredRow = async ({
     sourceDocumentId:
       row.sourceDocumentId ?? panic("resolved identity missing"),
     order: observationOrder.toString(),
-    rawDigest: rawDigest(decisionRaw),
+    rawDigest: hashSha256Hex(decisionRaw),
     ...extra,
   });
   const written = await writeDecision({

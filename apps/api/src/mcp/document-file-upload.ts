@@ -7,6 +7,7 @@ import {
   buildUploadFinalizeInput,
   DOCUMENT_VERSION_UPLOAD_TRANSPORT,
 } from "@stll/api-contract";
+import { sha256Hex as hashSha256Hex } from "@stll/sha256/bun";
 
 import { captureError } from "@/api/lib/analytics/capture";
 import { FILE_SIZE_LIMIT_BYTES } from "@/api/lib/limits";
@@ -305,7 +306,7 @@ export const uploadRemoteDocumentVersion = async ({
   }
 
   const bytes = new Uint8Array(downloaded.value.body);
-  const sha256Hex = new Bun.CryptoHasher("sha256").update(bytes).digest("hex");
+  const sha256Hex = hashSha256Hex(bytes);
   const name = (file.file_name ?? file.file_id).slice(0, 255);
   const created = await dependencies.invoke({
     context,

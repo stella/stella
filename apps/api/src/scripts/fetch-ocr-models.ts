@@ -1,3 +1,4 @@
+import { panic, Result } from "better-result";
 /**
  * Download the ONNX models the local OCR provider runs, verifying each
  * against a pinned SHA-256 before it is written. Idempotent: a file that
@@ -7,9 +8,9 @@
  * Usage:  bun run src/scripts/fetch-ocr-models.ts [targetDir]
  *   targetDir defaults to ./ocr-models (relative to apps/api).
  */
-
-import { panic, Result } from "better-result";
 import path from "node:path";
+
+import { sha256Hex as hashSha256Hex } from "@stll/sha256/bun";
 
 import { OCR_LOCAL_MODEL_FILES } from "@/api/lib/document-processing-contract";
 import { fetchBytesFollowingRedirects } from "@/api/lib/redirect-fetch";
@@ -36,9 +37,6 @@ const DOWNLOAD_MAX_BYTES = 64 * 1024 * 1024;
 const MAX_REDIRECT_HOPS = 4;
 const DOWNLOAD_ATTEMPTS = 3;
 const RETRY_BASE_DELAY_MS = 5000;
-
-const sha256Hex = (bytes: ArrayBuffer): string =>
-  new Bun.CryptoHasher("sha256").update(bytes).digest("hex");
 
 const targetDir = path.resolve(process.argv[2] ?? "ocr-models");
 
@@ -94,7 +92,7 @@ const fetchModel = async (
   const targetPath = path.join(targetDir, fileName);
   const existing = Bun.file(targetPath);
   if (await existing.exists()) {
-    const digest = sha256Hex(await existing.arrayBuffer());
+    const digest = hashSha256Hex(new Uint8Array(await existing.arrayBuffer()));
     if (digest === source.sha256) {
       console.log(`ok (cached): ${fileName}`);
       return;
@@ -105,7 +103,7 @@ const fetchModel = async (
   }
 
   const bytes = await download(fileName, source.url);
-  const digest = sha256Hex(bytes);
+  const digest = hashSha256Hex(new Uint8Array(bytes));
   if (digest !== source.sha256) {
     panic(
       `${fileName} digest ${digest} does not match the pinned ${source.sha256}`,

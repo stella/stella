@@ -1,3 +1,4 @@
+import { panic } from "better-result";
 /**
  * Record the eu-ecj fixtures from Cellar.
  *
@@ -31,10 +32,10 @@
  *   bun apps/api/scripts/record-eu-ecj-fixtures.ts --notice-only
  *   bun apps/api/scripts/record-eu-ecj-fixtures.ts --seed-only
  */
-
-import { panic } from "better-result";
 import JSZip from "jszip";
 import path from "node:path";
+
+import { sha256Hex as sha256Of } from "@stll/sha256/bun";
 
 import type { IngestionResult } from "@/api/handlers/case-law/ingestion/adapter";
 import { fetchDecisionsByCelex } from "@/api/handlers/case-law/ingestion/adapters/eu-ecj";
@@ -51,7 +52,6 @@ import { encodeGzipJson } from "@/api/lib/gzip-json";
 import {
   formatProvenance,
   provenancePathOf,
-  sha256Of,
 } from "../src/tests/fixture-provenance";
 import { seedId } from "./seed-utils";
 

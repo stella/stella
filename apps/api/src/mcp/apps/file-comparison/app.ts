@@ -8,6 +8,7 @@ import { panic, Result, TaggedError } from "better-result";
 
 import { FILE_COMPARISON_TRANSPORT } from "@stll/api-contract";
 import { fetchWithTimeout } from "@stll/fetch";
+import { sha256Hex as hashSha256Hex } from "@stll/sha256/browser";
 
 import "../style.css";
 
@@ -68,7 +69,7 @@ const describeFile = async (
   file: File,
 ): Promise<Result<ComparisonFileInput, ComparisonAppError>> => {
   const digest = await Result.tryPromise(
-    async () => await crypto.subtle.digest("SHA-256", await file.arrayBuffer()),
+    async () => await hashSha256Hex(await file.arrayBuffer()),
   );
   if (Result.isError(digest)) {
     return Result.err(wrapped(digest.error));
@@ -76,9 +77,7 @@ const describeFile = async (
   return Result.ok({
     name: file.name,
     size: file.size,
-    sha256_hex: Array.from(new Uint8Array(digest.value), (byte) =>
-      byte.toString(16).padStart(2, "0"),
-    ).join(""),
+    sha256_hex: digest.value,
   });
 };
 

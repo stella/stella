@@ -1,3 +1,4 @@
+import type { ModelMessage } from "@tanstack/ai";
 // Standalone probe: does a provider/model read a HEIC/HEIF image sent as the
 // original bytes? Excluded from the scheduled provider canary; run it by hand
 // when evaluating a model or an adapter change:
@@ -12,13 +13,12 @@
 // counts as support. Reports carry the fixture hash, adapter version, Git
 // revision and runner hash; changing what the probe means needs a new
 // `probeVersion`.
-
-import type { ModelMessage } from "@tanstack/ai";
 import { Result, TaggedError } from "better-result";
 import { parseArgs } from "node:util";
 import * as v from "valibot";
 
 import { isBYOKModelRoleSupported } from "@stll/ai-catalog";
+import { sha256Hex as hashSha256Hex } from "@stll/sha256/bun";
 
 import {
   generateTanStackObjectForRole,
@@ -252,9 +252,7 @@ export const runNativeImageProbes = async ({
   now = Date.now,
 }: RunNativeImageProbesOptions): Promise<NativeImageProbeRecord[]> => {
   const records: NativeImageProbeRecord[] = [];
-  const fixtureSha256 = new Bun.CryptoHasher("sha256")
-    .update(bytes)
-    .digest("hex");
+  const fixtureSha256 = hashSha256Hex(bytes);
   const deadline = now() + SWEEP_TIMEOUT_MS;
   for (const modelId of modelIds) {
     for (const mimeType of MIME_TYPES) {
@@ -334,9 +332,7 @@ const run = async () => {
   ).json();
   const { version } = v.parse(v.object({ version: v.string() }), packageJson);
   const revision = await Bun.$`git rev-parse HEAD`.text();
-  const sourceHash = new Bun.CryptoHasher("sha256")
-    .update(await Bun.file(import.meta.path).bytes())
-    .digest("hex");
+  const sourceHash = hashSha256Hex(await Bun.file(import.meta.path).bytes());
   const records = await runNativeImageProbes({
     apiKey,
     provider,

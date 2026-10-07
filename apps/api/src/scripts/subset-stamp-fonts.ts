@@ -1,3 +1,4 @@
+import { panic, Result } from "better-result";
 /**
  * Regenerate the signature stamp's fallback fonts in
  * `src/lib/files/pdf-signing/fonts/` from pinned Noto sources.
@@ -21,11 +22,11 @@
  *
  * Usage:  bun run src/scripts/subset-stamp-fonts.ts
  */
-
-import { panic, Result } from "better-result";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
+
+import { sha256Hex as hashSha256Hex } from "@stll/sha256/bun";
 
 import { safeOutboundFetchBytes } from "@/api/lib/safe-outbound-fetch";
 
@@ -84,9 +85,6 @@ const CJK_DROPPED_TABLES = "GSUB,GPOS,GDEF,vhea,vmtx,VORG,BASE,DSIG,STAT";
 
 const PRINTABLE_ASCII = "20-7e";
 
-const sha256Hex = (bytes: ArrayBuffer) =>
-  new Bun.CryptoHasher("sha256").update(bytes).digest("hex");
-
 const download = async (relative: string, sha256: string) => {
   const response = await safeOutboundFetchBytes({
     maxBytes: DOWNLOAD_MAX_BYTES,
@@ -99,7 +97,7 @@ const download = async (relative: string, sha256: string) => {
       `download of ${relative} failed: ${Result.isError(response) ? response.error.message : `HTTP ${response.value.status}`}`,
     );
   }
-  const digest = sha256Hex(response.value.body);
+  const digest = hashSha256Hex(new Uint8Array(response.value.body));
   if (digest !== sha256) {
     return panic(`${relative} has digest ${digest}; pinned ${sha256}`);
   }

@@ -13,6 +13,7 @@ import {
   DOCUMENT_VERSION_UPLOAD_TRANSPORT,
 } from "@stll/api-contract";
 import { fetchWithTimeout } from "@stll/fetch";
+import { sha256Hex as hashSha256Hex } from "@stll/sha256/browser";
 
 import "../style.css";
 import { createUploadTargetController } from "./upload-target";
@@ -64,16 +65,6 @@ const targetController = createUploadTargetController({
 const setStatus = (message: string, state: "idle" | "error" | "success") => {
   statusElement.textContent = message;
   statusElement.className = `status-${state}`;
-};
-
-const sha256Hex = async (file: File): Promise<string> => {
-  const digest = await crypto.subtle.digest(
-    "SHA-256",
-    await file.arrayBuffer(),
-  );
-  return Array.from(new Uint8Array(digest), (byte) =>
-    byte.toString(16).padStart(2, "0"),
-  ).join("");
 };
 
 const callCapability = async (
@@ -184,7 +175,7 @@ const uploadSelectedFile = async (): Promise<void> => {
             name: file.name,
             mimeType: file.type || "application/octet-stream",
             size: file.size,
-            sha256Hex: await sha256Hex(file),
+            sha256Hex: await hashSha256Hex(await file.arrayBuffer()),
           },
           workspaceId: uploadTarget.workspaceId,
         }),

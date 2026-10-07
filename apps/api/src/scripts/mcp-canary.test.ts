@@ -8,6 +8,7 @@ import { describe, expect, test } from "bun:test";
 import * as v from "valibot";
 
 import { rejectionOf } from "@stll/property-testing/rejection";
+import { sha256Bytes as hashSha256Bytes } from "@stll/sha256/browser";
 
 import { bridgeOauthUiRedirect } from "@/api/lib/oauth-ui-fragment";
 import { SAMPLE_MATTERS } from "@/api/lib/review-organization/sample-data";
@@ -507,9 +508,9 @@ describe("restricted review-account journey", () => {
       }
       expect(authorize.searchParams.get("code_challenge_method")).toBe("S256");
       expect(authorize.searchParams.get("code_challenge")).toBe(
-        await crypto.subtle
-          .digest("SHA-256", new TextEncoder().encode(verifier))
-          .then((hash) => Buffer.from(hash).toString("base64url")),
+        await hashSha256Bytes(new TextEncoder().encode(verifier)).then((hash) =>
+          Buffer.from(hash).toString("base64url"),
+        ),
       );
       expect(authorize.searchParams.get("scope")).toContain(
         "stella:admin_write",

@@ -1,4 +1,5 @@
 import { panic, Result } from "better-result";
+import * as v from "valibot";
 /**
  * A reader's highlights and comments on case-law decisions and statutes, for
  * an agent: read them, place new ones, change or remove its user's own.
@@ -10,8 +11,6 @@ import { panic, Result } from "better-result";
  * an agent leaves is the same record the reader would have written and shows
  * up in the reader's margin like any other.
  */
-import { CryptoHasher } from "bun";
-import * as v from "valibot";
 
 import {
   READER_ANNOTATION_BODY_MAX_LENGTH,
@@ -24,6 +23,7 @@ import {
 } from "@stll/api-contract/legal-reader-annotations";
 import type { ReaderAnnotationTargetType } from "@stll/api-contract/legal-reader-annotations";
 import type { Block } from "@stll/legal-ast/document-ast";
+import { sha256Hex as hashSha256Hex } from "@stll/sha256/bun";
 
 import { createReaderAnnotationHandler } from "@/api/handlers/legal-reader/annotations/create";
 import { deleteReaderAnnotationHandler } from "@/api/handlers/legal-reader/annotations/delete";
@@ -401,10 +401,9 @@ const createRequestIdFor = ({
   request: unknown;
   userId: string;
 }) => {
-  const hex = new CryptoHasher("sha256")
-    .update(JSON.stringify([organizationId, userId, request]))
-    .digest("hex")
-    .slice(0, UUID_HEX_LENGTH);
+  const hex = hashSha256Hex(
+    JSON.stringify([organizationId, userId, request]),
+  ).slice(0, UUID_HEX_LENGTH);
   // Version 8 (custom) and the RFC 9562 variant (10xx: 8, 9, a or b).
   const variant =
     UUID_VARIANT_DIGITS[HEX_DIGITS.indexOf(hex.charAt(16)) % 4] ?? "8";

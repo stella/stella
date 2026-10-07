@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 
 import { rejectionOf } from "@stll/property-testing/rejection";
+import { sha256Base64 as hashSha256Base64 } from "@stll/sha256/bun";
 
 import { envBase } from "@/api/env-base";
 import {
@@ -124,9 +125,7 @@ describe("fake S3 carries the real s3 helpers", () => {
         "x-amz-copy-source-if-match": sourceValidator ?? "",
       },
     });
-    const expected = new Bun.CryptoHasher("sha256")
-      .update(bytes)
-      .digest("base64");
+    const expected = hashSha256Base64(bytes);
     expect(await requested.text()).toContain(
       `<ChecksumSHA256>${expected}</ChecksumSHA256>`,
     );

@@ -1,3 +1,4 @@
+import { panic } from "better-result";
 // Names the shared types of the generated web API contract
 // (apps/web/src/generated/api-routes.gen.ts).
 //
@@ -22,8 +23,7 @@
 //   renamed when something inside it changes; the types around it keep their
 //   names.
 
-import { panic } from "better-result";
-import { createHash } from "node:crypto";
+import { sha256Hex as hashSha256Hex } from "@stll/sha256/bun";
 
 export type AliasGraphNode = {
   // Printed body; nested nodes appear as `\uE000<id>\uE000` tokens.
@@ -46,7 +46,7 @@ const ALIAS_HASH_LENGTH = 10;
 export const ALIAS_NAME = /\bT[0-9a-f]{10}\b/gu;
 
 const hashName = (text: string): string =>
-  `T${createHash("sha256").update(text).digest("hex").slice(0, ALIAS_HASH_LENGTH)}`;
+  `T${hashSha256Hex(text).slice(0, ALIAS_HASH_LENGTH)}`;
 
 const joinPath = (base: string, relative: string): string => {
   if (base === "") {
@@ -251,9 +251,7 @@ const structuralHashes = (nodes: readonly AliasGraphNode[]) => {
           }),
         );
       }
-      hashes[entry] = createHash("sha256")
-        .update(bodies.join("\uE001"))
-        .digest("hex");
+      hashes[entry] = hashSha256Hex(bodies.join("\uE001"));
     }
   }
   return (id: number): string =>

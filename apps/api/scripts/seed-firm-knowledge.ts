@@ -1,3 +1,4 @@
+import { TaggedError } from "better-result";
 /**
  * Seed matters from Harvey LAB (https://github.com/harveyai/harvey-labs), a
  * public corpus of synthetic legal documents, MIT licensed,
@@ -18,13 +19,11 @@
  * Usage: bun run db:seed-firm-knowledge --matters 15 [--api <origin>]
  *   [--replace-incomplete]
  */
-
-import { TaggedError } from "better-result";
-import { createHash } from "node:crypto";
 import { readdir, stat } from "node:fs/promises";
 import path from "node:path";
 
 import { STELLA_API_VERSION_PREFIX } from "@stll/api-contract";
+import { sha256Hex as hashSha256Hex } from "@stll/sha256/bun";
 
 import { sessionCookieNameForDevPort } from "@/api/lib/auth/auth-cookie-name";
 
@@ -344,7 +343,7 @@ const readMatter = async (matterRoot: string): Promise<MatterManifest> => {
         mimeType,
         name: entry.name,
         parentKey,
-        sha256Hex: createHash("sha256").update(bytes).digest("hex"),
+        sha256Hex: hashSha256Hex(bytes),
         size: bytes.byteLength,
       });
     }

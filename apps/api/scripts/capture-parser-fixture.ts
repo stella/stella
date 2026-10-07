@@ -1,3 +1,4 @@
+import path from "node:path";
 /**
  * Capture a parser fixture from its source, with provenance.
  *
@@ -34,7 +35,7 @@
  * convention.
  */
 
-import path from "node:path";
+import { sha256Hex as sha256Of } from "@stll/sha256/bun";
 
 import { INGESTION_USER_AGENT } from "@/api/handlers/case-law/ingestion/adapters/utils";
 
@@ -42,7 +43,6 @@ import {
   CAPTURED_FIXTURE_ROOTS,
   formatProvenance,
   provenancePathOf,
-  sha256Of,
 } from "../src/tests/fixture-provenance";
 
 const API_ROOT = path.resolve(import.meta.dir, "..");

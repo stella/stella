@@ -10,12 +10,16 @@ import {
 } from "@modelcontextprotocol/server";
 import type { CallToolRequestParams } from "@modelcontextprotocol/server";
 import { Result, TaggedError } from "better-result";
-import { createHash, randomBytes } from "node:crypto";
+import { randomBytes } from "node:crypto";
 import * as v from "valibot";
 
 import { MCP_DEFAULT_RESOURCE_SCOPES } from "@stll/api-contract";
 import { CLI_CLIENT_METADATA_PATH } from "@stll/cli/client-metadata-document";
 import { fetchWithTimeout } from "@stll/fetch";
+import {
+  sha256Base64Url as hashSha256Base64Url,
+  sha256Hex as hashSha256Hex,
+} from "@stll/sha256/bun";
 import { DAY_IN_MS, Temporal } from "@stll/time";
 
 import { SAMPLE_MATTERS } from "@/api/lib/review-organization/sample-data";
@@ -883,9 +887,9 @@ export const runOAuthJourneys = async (
             );
           }
           const url = new URL(authorizationEndpoint);
-          const challenge = createHash("sha256")
-            .update(randomBytes(32).toString("base64url"))
-            .digest("base64url");
+          const challenge = hashSha256Base64Url(
+            randomBytes(32).toString("base64url"),
+          );
           url.search = new URLSearchParams({
             client_id: clientId,
             redirect_uri: redirectUri,
@@ -1059,9 +1063,7 @@ export const runDesktopProbe = async (
               },
               body: JSON.stringify({
                 correlationId,
-                verifierHash: createHash("sha256")
-                  .update(verifier)
-                  .digest("hex"),
+                verifierHash: hashSha256Hex(verifier),
               }),
               timeout: { type: "idle", ms: PROBE_TIMEOUT_MS },
             },
@@ -1692,7 +1694,7 @@ const authorizeReviewOAuth = async (
     redirect_uri: state.callback.redirectUri,
     response_type: "code",
     code_challenge_method: "S256",
-    code_challenge: createHash("sha256").update(verifier).digest("base64url"),
+    code_challenge: hashSha256Base64Url(verifier),
     state: stateValue,
     scope: REVIEW_JOURNEY_SCOPE,
     resource: new URL(MCP_HTTP_PATH, baseUrl).toString(),

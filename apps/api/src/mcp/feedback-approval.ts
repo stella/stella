@@ -8,9 +8,10 @@
  * organization, within the approval window: content cannot be swapped between
  * the report a human was shown and the one that is sent.
  */
-import { createHash, createHmac, timingSafeEqual } from "node:crypto";
+import { createHmac, timingSafeEqual } from "node:crypto";
 
 import type { FeedbackReportInput } from "@stll/api-contract/feedback";
+import { sha256Base64Url as hashSha256Base64Url } from "@stll/sha256/bun";
 import { stableStringify } from "@stll/stable-stringify";
 
 const APPROVAL_PREFIX = "fb1";
@@ -27,7 +28,7 @@ type ApprovalSubject = {
 };
 
 const reportDigest = (report: FeedbackReportInput): string =>
-  createHash("sha256").update(stableStringify(report)).digest("base64url");
+  hashSha256Base64Url(stableStringify(report));
 
 const signature = ({
   expiresAt,

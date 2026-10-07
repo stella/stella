@@ -35,6 +35,7 @@ import { EML_MIME_TYPE } from "@stll/api-contract/email-mime-types";
 import { mapWithConcurrency } from "@stll/concurrency";
 import { deriveBlockId } from "@stll/folio-core/server";
 import { childExitStatus } from "@stll/scripts/src/child-exit-status";
+import { sha256Hex as hashSha256Hex } from "@stll/sha256/bun";
 
 import {
   billingCodes,
@@ -5933,9 +5934,7 @@ export async function seed(organizationId?: string, userId?: string) {
         docText = parsedEmailToText(parsedResult.value);
       }
 
-      const sha256Hex = new Bun.CryptoHasher("sha256")
-        .update(content)
-        .digest("hex");
+      const sha256Hex = hashSha256Hex(content);
 
       const fileId = seedId(`${wsLabel}-file-${j}`);
       const s3Key = `${ORG_ID}/${wsId}/${fileId}.${format.extension}`;
@@ -6002,9 +6001,7 @@ export async function seed(organizationId?: string, userId?: string) {
           mimeType: DOCX_MIME,
           sizeBytes: baseContent.byteLength,
           encrypted: false,
-          sha256Hex: new Bun.CryptoHasher("sha256")
-            .update(baseContent)
-            .digest("hex"),
+          sha256Hex: hashSha256Hex(baseContent),
           pdfFileId: null,
         } as const satisfies FieldContent;
         await db.transaction(

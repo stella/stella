@@ -24,6 +24,8 @@
  */
 import { sql } from "drizzle-orm";
 
+import { createSha256 } from "@stll/sha256/bun";
+
 import { setSharedStatementTimeout } from "@/api/db/shared-pool-timeouts";
 import { openCaseLawReadOnlySession } from "@/api/lib/case-law/maintenance-lane";
 import { zstdCompress } from "@/api/lib/compression";
@@ -415,7 +417,7 @@ if (outPath !== undefined) {
 
 // Addressed by the dictionary's own bytes, not by the compressed frame, so
 // the same corpus republishes to the same key whatever the encoder does.
-const hasher = new Bun.CryptoHasher("sha256");
+const hasher = createSha256();
 hasher.update(payload);
 const contentHash = hasher.digest("hex");
 const compressed = zstdCompress(payload);

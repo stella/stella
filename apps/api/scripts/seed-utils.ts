@@ -1,3 +1,4 @@
+import { panic } from "better-result";
 /**
  * Shared utilities for seed scripts.
  *
@@ -5,7 +6,7 @@
  * both `seed-dev.ts` and `seed-templates.ts`.
  */
 
-import { panic } from "better-result";
+import { sha256Hex as hashSha256Hex } from "@stll/sha256/bun";
 
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId, SafeIdType } from "@/api/lib/branded-types";
@@ -234,9 +235,7 @@ export const seedId = <T extends SafeIdType = never>(
 ): SafeId<T> => {
   const namespace = getSeedIdNamespace();
   const namespacedLabel = namespace ? `${namespace}:${label}` : label;
-  const hash = new Bun.CryptoHasher("sha256")
-    .update(namespacedLabel)
-    .digest("hex");
+  const hash = hashSha256Hex(namespacedLabel);
   const raw = hash.slice(0, 32);
   if (raw.length !== 32) {
     panic(`Seed data: failed to create UUID for label "${label}"`);

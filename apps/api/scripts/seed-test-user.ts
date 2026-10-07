@@ -1,3 +1,4 @@
+import { panic } from "better-result";
 /**
  * Seed a test user with a valid session for local development.
  *
@@ -17,11 +18,11 @@
  * The script is idempotent: running it again refreshes the
  * session expiry without duplicating data.
  */
-
-import { panic } from "better-result";
 import { and, eq, inArray, or } from "drizzle-orm";
 import { chmodSync, mkdirSync, writeFileSync } from "node:fs";
 import path from "node:path";
+
+import { sha256Hex as hashSha256Hex } from "@stll/sha256/bun";
 
 import { member, organization, session, user } from "@/api/db/auth-schema";
 import { featureEnrolments } from "@/api/db/schema";
@@ -93,9 +94,7 @@ const getSeedOrganizationIdentity = (organizationId: string) => {
 };
 
 const buildMemberId = (organizationId: string, userId: string): string => {
-  const hash = new Bun.CryptoHasher("sha256")
-    .update(`${organizationId}:${userId}`)
-    .digest("hex");
+  const hash = hashSha256Hex(`${organizationId}:${userId}`);
   return `seed-member-${hash.slice(0, 24)}`;
 };
 

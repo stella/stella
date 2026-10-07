@@ -1,3 +1,5 @@
+import { Result, TaggedError } from "better-result";
+import { getColumns, getTableName, sql } from "drizzle-orm";
 /**
  * Read-only, redacted invariants for the Better Auth 1.6 -> 1.7 migration.
  *
@@ -5,13 +7,12 @@
  * Counts live only in a private baseline file passed between rehearsal phases;
  * stdout contains stable check names and statuses only.
  */
-
-import { Result, TaggedError } from "better-result";
-import { getColumns, getTableName, sql } from "drizzle-orm";
 import type { SQL, Table } from "drizzle-orm";
 import * as v from "valibot";
 
 import { compareCodeUnit } from "@stll/collation";
+import { createSha256 } from "@stll/sha256/bun";
+import type { Sha256Hasher } from "@stll/sha256/types";
 
 import { authSchema } from "@/api/db/auth-schema";
 import { executedRows } from "@/api/lib/db/executed-rows";
@@ -801,7 +802,7 @@ type AccountIdentityProjection = {
 const ACCOUNT_IDENTITY_PAGE_SIZE = 1000;
 
 const accountIdentityKeyDigest = (issuer: string, accountId: string) => {
-  const hasher = new Bun.CryptoHasher("sha256");
+  const hasher = createSha256();
   hasher.update(issuer);
   hasher.update("\0");
   hasher.update(accountId);
@@ -809,7 +810,7 @@ const accountIdentityKeyDigest = (issuer: string, accountId: string) => {
 };
 
 const updateAccountIdentityProjection = (
-  hasher: Bun.CryptoHasher,
+  hasher: Sha256Hasher,
   accountRowId: string,
   issuer: string,
   accountId: string,
@@ -836,7 +837,7 @@ const readProjectedAccountIdentities = async (
     microsoftByAccountRowId.size ===
     trustedIdentityMap.microsoftAccounts.length;
   const seenMicrosoftAccountRowIds = new Set<string>();
-  const projectionHasher = new Bun.CryptoHasher("sha256");
+  const projectionHasher = createSha256();
   const microsoftIdentityKeys = new Set(
     trustedIdentityMap.microsoftAccounts.map(({ accountId, issuer }) =>
       accountIdentityKeyDigest(issuer, accountId),
@@ -975,7 +976,7 @@ const readProjectedAccountIdentities = async (
 const readActualAccountIdentities = async (
   database: BetterAuthAuditDatabase,
 ) => {
-  const projectionHasher = new Bun.CryptoHasher("sha256");
+  const projectionHasher = createSha256();
   let after: string | null = null;
   let rowCount = 0n;
 
@@ -1069,7 +1070,7 @@ const OAUTH_PROTOCOL_SCOPES = new Set([
 ]);
 
 const updateOAuthPolicyValue = (
-  hasher: Bun.CryptoHasher,
+  hasher: Sha256Hasher,
   values: readonly string[],
 ) => {
   for (const value of values) {
@@ -1084,7 +1085,7 @@ const sortedUnique = (values: readonly string[]) =>
 const initializeOAuthPolicyProjection = (
   expectedResources: readonly BetterAuthExpectedOAuthResource[],
 ) => {
-  const hasher = new Bun.CryptoHasher("sha256");
+  const hasher = createSha256();
   const sortedResources = [...expectedResources].toSorted((left, right) =>
     compareCodeUnit(left.identifier, right.identifier),
   );
@@ -1581,7 +1582,7 @@ const readAccessPolicyDigest = async (database: BetterAuthAuditDatabase) => {
   if (Result.isError(queried)) {
     return queried;
   }
-  const hasher = new Bun.CryptoHasher("sha256");
+  const hasher = createSha256();
   for (const row of queried.value) {
     const fingerprintPart = isRecord(row)
       ? requiredString(row["fingerprintPart"])
@@ -1977,8 +1978,8 @@ const readTableCensus = async (
   database: BetterAuthAuditDatabase,
   { preservedColumns, tableName }: ReadTableCensusOptions,
 ) => {
-  const primaryKeyHasher = new Bun.CryptoHasher("sha256");
-  const rowContentHasher = new Bun.CryptoHasher("sha256");
+  const primaryKeyHasher = createSha256();
+  const rowContentHasher = createSha256();
   const preservedValues = preservedColumns.map((column) =>
     tableName === AUTH_TABLE_AUDIT_POLICY.account.tableName &&
     column === "account_id"

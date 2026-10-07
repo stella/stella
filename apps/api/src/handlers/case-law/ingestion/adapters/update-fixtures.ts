@@ -1,3 +1,4 @@
+import { sha256Hex as sha256Of } from "@stll/sha256/bun";
 import { Temporal } from "@stll/time";
 /**
  * Update adapter test fixtures from live APIs.
@@ -22,7 +23,6 @@ import { encodeGzipJson } from "@/api/lib/gzip-json";
 import {
   formatProvenance,
   provenancePathOf,
-  sha256Of,
 } from "@/api/tests/fixture-provenance";
 
 const FIXTURES_DIR = new URL("__fixtures__/", import.meta.url);

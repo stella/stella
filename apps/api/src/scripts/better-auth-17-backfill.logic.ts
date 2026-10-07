@@ -2,6 +2,8 @@ import { Result, TaggedError } from "better-result";
 import { sql } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
 
+import { createSha256 } from "@stll/sha256/bun";
+
 import { executedRows } from "@/api/lib/db/executed-rows";
 import { isRecord } from "@/api/lib/type-guards";
 import { readOAuthApplicationType } from "@/api/scripts/better-auth-migration-audit.logic";
@@ -152,7 +154,7 @@ export const lockBetterAuth17BackfillTables = async (
   );
 
 const deterministicId = (type: "link" | "resource", values: string[]) => {
-  const hasher = new Bun.CryptoHasher("sha256");
+  const hasher = createSha256();
   for (const value of values) {
     hasher.update(value);
     hasher.update("\0");

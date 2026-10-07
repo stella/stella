@@ -2,6 +2,7 @@ import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 
 import type { CompareResult } from "@stll/folio-core";
+import { sha256Hex as hashSha256Hex } from "@stll/sha256/bun";
 
 import { toSafeId } from "@/api/lib/branded-types";
 import { fileSecurityRejection } from "@/api/lib/file-scan/rejection";
@@ -30,9 +31,6 @@ const TARGET_UPLOAD_ID = "22222222-2222-4222-8222-222222222222";
 const BASE_BYTES = new Uint8Array([1, 2, 3, 4]);
 const TARGET_BYTES = new Uint8Array([5, 6, 7, 8, 9]);
 
-const sha256Of = (bytes: Uint8Array): string =>
-  new Bun.CryptoHasher("sha256").update(bytes).digest("hex");
-
 const hexToBase64 = (hex: string): string =>
   Buffer.from(hex, "hex").toString("base64");
 
@@ -45,7 +43,7 @@ type Row = {
 
 const inputRow = (id: string, bytes: Uint8Array, name: string): Row => ({
   declaredName: name,
-  declaredSha256: sha256Of(bytes),
+  declaredSha256: hashSha256Hex(bytes),
   declaredSize: bytes.byteLength,
   id,
 });
@@ -176,13 +174,13 @@ const createHarness = ({
           Result.err(asTestRaw<never>({ message: "missing" })),
         );
       }
-      const declared = sha256Of(stored);
+      const declared = hashSha256Hex(stored);
       const checksum =
         headChecksum === "absent"
           ? null
           : hexToBase64(
               headChecksum === "mismatch"
-                ? sha256Of(new Uint8Array([0]))
+                ? hashSha256Hex(new Uint8Array([0]))
                 : declared,
             );
       return await Promise.resolve(

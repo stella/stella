@@ -4,7 +4,8 @@ import {
 } from "@modelcontextprotocol/ext-apps/app-bridge";
 import { panic, Result } from "better-result";
 import { describe, expect, mock, test } from "bun:test";
-import { createHash } from "node:crypto";
+
+import { sha256Hex as hashSha256Hex } from "@stll/sha256/bun";
 
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { toSafeId } from "@/api/lib/branded-types";
@@ -240,7 +241,7 @@ describe("document file upload surface", () => {
       input: {
         body: {
           purpose: "entity_version",
-          sha256Hex: createHash("sha256").update(bytes).digest("hex"),
+          sha256Hex: hashSha256Hex(bytes),
           size: bytes.byteLength,
         },
       },

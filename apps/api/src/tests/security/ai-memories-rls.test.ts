@@ -1,6 +1,8 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { eq, sql } from "drizzle-orm";
 
+import { sha256Hex as hashSha256Hex } from "@stll/sha256/bun";
+
 import { aiMemories, workspaces } from "@/api/db/schema";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -20,8 +22,7 @@ let ids: TestIds;
 let scopedQuery: Awaited<ReturnType<typeof getRlsFixture>>["scopedQuery"];
 
 const memId = () => toSafeId<"aiMemory">(Bun.randomUUIDv7());
-const dedupKey = () =>
-  new Bun.CryptoHasher("sha256").update(Bun.randomUUIDv7()).digest("hex");
+const dedupKey = () => hashSha256Hex(Bun.randomUUIDv7());
 
 // Memory rows seeded once via the privileged (owner) connection, which
 // bypasses RLS — the scoped reads below are what exercise the policies.

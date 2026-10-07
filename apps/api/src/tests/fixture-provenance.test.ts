@@ -1,6 +1,8 @@
 import { describe, expect, test } from "bun:test";
 import path from "node:path";
 
+import { sha256Hex as sha256Of } from "@stll/sha256/bun";
+
 import {
   CAPTURED_FIXTURE_ROOTS,
   type FixtureProvenance,
@@ -9,7 +11,6 @@ import {
   parseProvenance,
   provenancePathOf,
   PROVENANCE_SUFFIX,
-  sha256Of,
 } from "./fixture-provenance";
 
 // `apps/api`, two levels up from `src/tests`.

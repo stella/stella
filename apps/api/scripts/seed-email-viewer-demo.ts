@@ -1,13 +1,13 @@
+import { panic } from "better-result";
 /**
  * Add the representative email fixtures to the existing local email QA matter.
  * Rerunning is idempotent. Set STELLA_SEED_EMAIL_WORKSPACE_ID to target a
  * different matter that already has a file property.
  */
-
-import { panic } from "better-result";
 import { and, asc, desc, eq, gt, isNotNull, ne } from "drizzle-orm";
 
 import { EML_MIME_TYPE } from "@stll/api-contract/email-mime-types";
+import { sha256Hex as hashSha256Hex } from "@stll/sha256/bun";
 
 import {
   member as authMember,
@@ -235,9 +235,7 @@ const seedEmailViewerDemo = async () => {
       `email-viewer-demo-${target.workspaceId}-${fileName}-file`,
     );
     const content = createSeedEmail(fileName);
-    const sha256Hex = new Bun.CryptoHasher("sha256")
-      .update(content)
-      .digest("hex");
+    const sha256Hex = hashSha256Hex(content);
     const createdAt = new Date(Date.UTC(2026, 6, 14 + index, 9, index * 7));
 
     await db.transaction(
