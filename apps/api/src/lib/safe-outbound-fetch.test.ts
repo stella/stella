@@ -3,6 +3,7 @@ import { describe, expect, test } from "bun:test";
 import { createServer } from "node:http";
 import type { RequestListener } from "node:http";
 
+import { fetchStreamFollowingRedirects } from "@/api/lib/redirect-fetch";
 import {
   fetchStreamWithResolvedAddress,
   fetchWithResolvedAddress,
@@ -172,6 +173,122 @@ describe("fetchWithResolvedAddress", () => {
             expect(result.error.cause).toBe(abortReason);
           }
         }
+      },
+    );
+  });
+
+  test("stream redirects remain refused unless manual handling is requested", async () => {
+    await withHttpServer(
+      (_request, response) => {
+        response.writeHead(302, { Location: "/target" });
+        response.end();
+      },
+      async (port) => {
+        const options = {
+          addresses: [{ address: "127.0.0.1", family: 4 }],
+          maxBytes: 1024,
+          timeoutMs: 1000,
+          url: new URL(`http://example.test:${port}/redirect`),
+        } as const;
+        const refused = await fetchStreamWithResolvedAddress(options);
+        expect(refused.isErr()).toBe(true);
+        if (refused.isErr()) {
+          expect(refused.error.message).toBe("Redirects are not allowed");
+        }
+        const manual = await fetchStreamWithResolvedAddress({
+          ...options,
+          redirect: "manual",
+        });
+        const response = manual.unwrap();
+        expect(response.status).toBe(302);
+        expect(response.headers.get("location")).toBe("/target");
+        await response.body.cancel();
+      },
+    );
+  });
+
+  test("revalidates streamed redirect targets before another connection", async () => {
+    for (const location of [
+      "https://127.0.0.1/private?token=secret",
+      "http://publisher.test/plaintext",
+      "https://name:secret@publisher.test/file",
+      "https://publisher.test/file#fragment",
+    ]) {
+      let connections = 0;
+      await withHttpServer(
+        (_request, response) => {
+          connections += 1;
+          response.writeHead(302, { Location: location });
+          response.write("redirect body remains open");
+        },
+        async (port) => {
+          const result = await fetchStreamFollowingRedirects({
+            url: "https://publisher.test/file",
+            maxHops: 4,
+            fetchStream: async (target) => {
+              const validated = await validateOutboundFetchTarget(target, {
+                resolveAddresses: async () =>
+                  Result.ok([{ address: "93.184.216.34", family: 4 }]),
+              });
+              if (validated.isErr()) {
+                return validated;
+              }
+              const transportUrl = new URL(validated.value.url);
+              transportUrl.protocol = "http:";
+              transportUrl.port = String(port);
+              return await fetchStreamWithResolvedAddress({
+                addresses: [{ address: "127.0.0.1", family: 4 }],
+                maxBytes: 1024,
+                redirect: "manual",
+                timeoutMs: 1000,
+                url: transportUrl,
+              });
+            },
+          });
+          expect(result.isErr()).toBe(true);
+          expect(connections).toBe(1);
+          if (result.isErr()) {
+            expect(result.error.message).not.toContain("secret");
+          }
+        },
+      );
+    }
+  });
+
+  test("a shared abort signal bounds the final body after streamed redirects", async () => {
+    await withHttpServer(
+      (request, response) => {
+        if (request.url === "/start") {
+          response.writeHead(302, { Location: "/stalled" });
+          response.write("redirect");
+          return;
+        }
+        response.writeHead(200);
+        response.write("partial");
+      },
+      async (port) => {
+        const controller = new AbortController();
+        const abortReason = new Error("shared deadline reached");
+        const result = await fetchStreamFollowingRedirects({
+          url: `http://publisher.test:${port}/start`,
+          maxHops: 4,
+          fetchStream: async (target) =>
+            await fetchStreamWithResolvedAddress({
+              addresses: [{ address: "127.0.0.1", family: 4 }],
+              maxBytes: 1024,
+              redirect: "manual",
+              signal: controller.signal,
+              timeoutMs: 1000,
+              url: new URL(target),
+            }),
+        });
+        const reader = result.unwrap().body.getReader();
+        expect((await reader.read()).done).toBe(false);
+        const pendingRead = reader.read();
+        controller.abort(abortReason);
+        const read = await Result.tryPromise(async () => await pendingRead);
+        expect(read.isErr()).toBe(true);
+        reader.releaseLock();
       },
     );
   });

@@ -7,6 +7,7 @@ import {
   sharedSanctionsMatcherPool,
   isSanctionsMatcherCancelled,
 } from "./matcher-pool";
+import { reportSanctionsScreeningFailure } from "./screening-failure";
 import { loadEditionEntries } from "./screening-index";
 import {
   screenSanctionsSubject,
@@ -16,11 +17,13 @@ import {
 type PublicScreeningOptions = {
   pool?: typeof sharedSanctionsMatcherPool;
   loadEntries?: typeof loadEditionEntries;
+  reportFailure?: typeof reportSanctionsScreeningFailure;
 };
 
 export const createPublicSanctionsScreening = ({
   pool = sharedSanctionsMatcherPool,
   loadEntries = loadEditionEntries,
+  reportFailure = reportSanctionsScreeningFailure,
 }: PublicScreeningOptions = {}): typeof screenSanctionsSubject => {
   const warming: { pending: Promise<unknown> | null } = { pending: null };
   const coldLoads = new Map<
@@ -29,15 +32,20 @@ export const createPublicSanctionsScreening = ({
   >();
   const execute = async (
     props: Parameters<typeof screenSanctionsSubject>[0],
-    options?: { deadlineMs: number; onSettled: () => void },
+    options?: { deadlineMs: number },
   ) => {
     const result = await pool.run(
       async (session) =>
         await screenSanctionsSubject({
           ...props,
+          reportFailure,
           matcher: async ({ db, source, edition, query, limit }) => {
             if (isSanctionsMatcherCancelled(session.signal)) {
-              return null;
+              return Result.err({
+                code: "load-failed",
+                stage: "list-screening",
+                reason: "matcher-unavailable",
+              } as const);
             }
             let entries = null;
             if (!session.hasEdition(source, edition.id)) {
@@ -46,7 +54,11 @@ export const createPublicSanctionsScreening = ({
                 let pending = coldLoads.get(key);
                 if (pending === undefined) {
                   if (coldLoads.size >= SANCTIONS_MATCHER_CONFIG.poolSizeMax) {
-                    return null;
+                    return Result.err({
+                      code: "load-failed",
+                      stage: "public-matcher",
+                      reason: "admission",
+                    } as const);
                   }
                   pending = {
                     signal: session.signal,
@@ -60,7 +72,19 @@ export const createPublicSanctionsScreening = ({
                   };
                   coldLoads.set(key, pending);
                 }
-                entries = await pending.entries;
+                const pendingEntries = pending.entries;
+                const loaded = await Result.tryPromise(
+                  async () => await pendingEntries,
+                );
+                if (loaded.isErr()) {
+                  return Result.err({
+                    code: "load-failed",
+                    stage: "public-matcher",
+                    reason: "entries-read",
+                    cause: loaded.error,
+                  } as const);
+                }
+                entries = loaded.value;
                 // Join canceled reads before replacing them, preserving the load cap.
                 if (!isSanctionsMatcherCancelled(pending.signal)) {
                   break;
@@ -71,7 +95,13 @@ export const createPublicSanctionsScreening = ({
               isSanctionsMatcherCancelled(session.signal) ||
               (entries !== null && entries.length !== edition.entryCount)
             ) {
-              return null;
+              return Result.err({
+                code: "load-failed",
+                stage: "public-matcher",
+                reason: isSanctionsMatcherCancelled(session.signal)
+                  ? "matcher-unavailable"
+                  : "short-read",
+              } as const);
             }
             const reply = await session.match({
               source,
@@ -91,7 +121,13 @@ export const createPublicSanctionsScreening = ({
               cutoff: DEFAULT_CUTOFF,
               limit,
             });
-            return reply.status === "screened" ? reply.result : null;
+            return reply.status === "screened"
+              ? Result.ok(reply.result)
+              : Result.err({
+                  code: "load-failed",
+                  stage: "public-matcher",
+                  reason: "matcher-unavailable",
+                } as const);
           },
         }),
       options,
@@ -100,7 +136,7 @@ export const createPublicSanctionsScreening = ({
   };
   return async (props) => {
     const result = await execute(props);
-    if (result === null && warming.pending === null) {
+    if (result.status === "unavailable" && warming.pending === null) {
       // A large cold edition can exceed the request deadline. Rebuild without
       // identity input in one bounded background lease so it can become usable.
       warming.pending = execute(
@@ -116,21 +152,21 @@ export const createPublicSanctionsScreening = ({
         },
         {
           deadlineMs: SANCTIONS_MATCHER_CONFIG.warmupDeadlineMs,
-          onSettled: () => {
-            warming.pending = null;
-          },
         },
-      );
+      ).finally(() => {
+        warming.pending = null;
+      });
     }
-    return (
-      result ??
-      Result.ok(
-        unavailableSanctionsScreening({
-          reason: "load-failed",
-          practiceJurisdictions: props.practiceJurisdictions,
-          now: props.now,
-        }),
-      )
+    if (result.status === "completed") {
+      return result.value;
+    }
+    reportFailure({ stage: "whole-screening", reason: result.cause });
+    return Result.ok(
+      unavailableSanctionsScreening({
+        reason: "load-failed",
+        practiceJurisdictions: props.practiceJurisdictions,
+        now: props.now,
+      }),
     );
   };
 };

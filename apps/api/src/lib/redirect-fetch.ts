@@ -5,10 +5,15 @@
  * instead of trusting the chain blindly.
  */
 
-import { Result, TaggedError } from "better-result";
+import { Result, TaggedError, panic } from "better-result";
 
 export class RedirectChainError extends TaggedError("RedirectChainError")<{
-  code: "missing_location" | "too_many_redirects";
+  code:
+    | "missing_location"
+    | "too_many_redirects"
+    | "invalid_location"
+    | "body_cancel_failed"
+    | "destination_not_allowed";
   message: string;
 }> {}
 
@@ -19,25 +24,49 @@ type RedirectFetchResponse = {
   status: number;
 };
 
-type FetchBytesFollowingRedirectsOptions<E> = {
-  url: string;
-  maxHops: number;
-  /** One manual-redirect request; a 3xx must come back, not be followed. */
-  fetchBytes: (url: string) => Promise<Result<RedirectFetchResponse, E>>;
+type RedirectResponse<Body> = Omit<RedirectFetchResponse, "body"> & {
+  body: Body;
 };
 
-export const fetchBytesFollowingRedirects = async <E>({
-  fetchBytes,
+type FetchFollowingRedirectsOptions<Body, E> = {
+  url: string;
+  maxHops: number;
+  /** Each request must validate its target and return redirects manually. */
+  fetchResponse: (
+    url: string,
+    hop: number,
+  ) => Promise<Result<RedirectResponse<Body>, E>>;
+  discardBody: (body: Body) => Promise<Result<void, RedirectChainError>>;
+};
+
+const fetchFollowingRedirects = async <Body, E>({
+  fetchResponse,
+  discardBody,
   maxHops,
   url,
-}: FetchBytesFollowingRedirectsOptions<E>): Promise<
-  Result<RedirectFetchResponse, E | RedirectChainError>
+}: FetchFollowingRedirectsOptions<Body, E>): Promise<
+  Result<RedirectResponse<Body>, E | RedirectChainError>
 > => {
+  if (!Number.isSafeInteger(maxHops) || maxHops < 0) {
+    panic("redirect hop limit must be a nonnegative safe integer");
+  }
   const follow = async (
     target: string,
     hop: number,
-  ): Promise<Result<RedirectFetchResponse, E | RedirectChainError>> => {
-    if (hop > maxHops) {
+  ): Promise<Result<RedirectResponse<Body>, E | RedirectChainError>> => {
+    const response = await fetchResponse(target, hop);
+    if (response.isErr()) {
+      return response;
+    }
+    const { headers, status, body } = response.value;
+    if (status < 300 || status >= 400) {
+      return response;
+    }
+    const discarded = await discardBody(body);
+    if (discarded.isErr()) {
+      return discarded;
+    }
+    if (hop >= maxHops) {
       return Result.err(
         new RedirectChainError({
           code: "too_many_redirects",
@@ -45,25 +74,73 @@ export const fetchBytesFollowingRedirects = async <E>({
         }),
       );
     }
-    const response = await fetchBytes(target);
-    if (Result.isError(response)) {
-      return response;
-    }
-    const { headers, status } = response.value;
-    if (status < 300 || status >= 400) {
-      return response;
-    }
     const location = headers.get("location");
     if (!location) {
       return Result.err(
         new RedirectChainError({
           code: "missing_location",
-          message: `redirect from ${new URL(target).origin} carried no location`,
+          message: "redirect carried no location",
         }),
       );
     }
-    return await follow(new URL(location, target).toString(), hop + 1);
+    const next = Result.try(() => new URL(location, target).toString());
+    if (next.isErr()) {
+      return Result.err(
+        new RedirectChainError({
+          code: "invalid_location",
+          message: "redirect location is invalid",
+        }),
+      );
+    }
+    return await follow(next.value, hop + 1);
   };
 
   return await follow(url, 0);
 };
+
+type FetchBytesFollowingRedirectsOptions<E> = {
+  url: string;
+  maxHops: number;
+  fetchBytes: (url: string) => Promise<Result<RedirectFetchResponse, E>>;
+};
+
+export const fetchBytesFollowingRedirects = async <E>({
+  fetchBytes,
+  maxHops,
+  url,
+}: FetchBytesFollowingRedirectsOptions<E>) =>
+  await fetchFollowingRedirects({
+    fetchResponse: fetchBytes,
+    discardBody: async () => Result.ok(),
+    maxHops,
+    url,
+  });
+
+type FetchStreamFollowingRedirectsOptions<E> = {
+  url: string;
+  maxHops: number;
+  fetchStream: (
+    url: string,
+    hop: number,
+  ) => Promise<Result<RedirectResponse<ReadableStream<Uint8Array>>, E>>;
+};
+
+export const fetchStreamFollowingRedirects = async <E>({
+  fetchStream,
+  maxHops,
+  url,
+}: FetchStreamFollowingRedirectsOptions<E>) =>
+  await fetchFollowingRedirects({
+    fetchResponse: fetchStream,
+    discardBody: async (body) =>
+      await Result.tryPromise({
+        try: async () => await body.cancel(),
+        catch: () =>
+          new RedirectChainError({
+            code: "body_cancel_failed",
+            message: "redirect response body could not be cancelled",
+          }),
+      }),
+    maxHops,
+    url,
+  });
