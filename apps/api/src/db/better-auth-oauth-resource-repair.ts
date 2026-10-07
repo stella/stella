@@ -21,10 +21,11 @@
  * functions (`seedOAuthResources`, `backfillOAuthClients`) rather than
  * reimplementing their semantics, which is what keeps a resource seeded by a
  * deploy identical to one seeded by the cutover: a missing resource is
- * inserted, and a matching one is left alone. The exact policy that excluded
- * OAuth protocol scopes is upgraded before seeding, so refresh grants retain
- * offline_access. Every other conflicting definition refuses the transaction.
- * The identity half of the cutover
+ * inserted, a matching one is left alone, and a conflicting definition refuses
+ * the whole thing instead of overwriting it. A row holding the predecessor
+ * scope set (`predecessorOAuthResourceScopes`) counts as matching and is not
+ * rewritten in this release, so a previous-release task can still boot. The
+ * identity half of the cutover
  * (`backfillAccounts`) stays private to that command; it needs the manifest and
  * the freeze, and nothing about adding an audience touches identities.
  *
@@ -53,10 +54,8 @@
  */
 
 import { panic, Result } from "better-result";
-import { sql, type SQL } from "drizzle-orm";
+import type { SQL } from "drizzle-orm";
 import { PgDialect } from "drizzle-orm/pg-core";
-
-import { MCP_OAUTH_PROTOCOL_SCOPES } from "@stll/api-contract";
 
 import { assertBetterAuthOAuthPolicyCensus } from "../lib/db/better-auth-oauth-policy-census";
 import { isRecord } from "../lib/type-guards";
@@ -162,35 +161,6 @@ const repair = async (connection: OnlineMigrationConnection): Promise<void> => {
       `SET LOCAL statement_timeout = '${STATEMENT_TIMEOUT}'`,
     );
     const transaction = bindTo(connection);
-
-    // Only the exact predecessor policy may gain protocol scopes. Unknown
-    // definitions remain untouched and fail the seeder's strict census.
-    const policies = expectedResources.map((resource) => ({
-      ...resource,
-      predecessorScopes: resource.allowedScopes.filter(
-        (scope) =>
-          !MCP_OAUTH_PROTOCOL_SCOPES.some(
-            (protocolScope) => protocolScope === scope,
-          ),
-      ),
-    }));
-    await transaction.execute(sql`
-      WITH expected AS (
-        SELECT * FROM jsonb_to_recordset(${JSON.stringify(policies)}::text::jsonb)
-          AS policy(identifier text, name text, "allowedScopes" jsonb, "predecessorScopes" jsonb)
-      )
-      UPDATE oauth_resource actual
-         SET allowed_scopes = ARRAY(
-               SELECT jsonb_array_elements_text(expected."allowedScopes")
-             ),
-             updated_at = now()
-        FROM expected
-       WHERE actual.identifier = expected.identifier
-         AND actual.name = expected.name
-         AND actual.disabled = false
-         AND ARRAY(SELECT unnest(actual.allowed_scopes) ORDER BY 1)
-             = ARRAY(SELECT jsonb_array_elements_text(expected."predecessorScopes") ORDER BY 1)
-    `);
 
     const seeded = await seedOAuthResources(transaction, expectedResources);
     if (Result.isError(seeded)) {

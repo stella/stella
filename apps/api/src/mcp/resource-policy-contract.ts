@@ -106,8 +106,7 @@ export const getMcpResourceScopes = (mode: McpMode) =>
  * (`db/better-auth-oauth-resource-repair.ts`, registered in
  * `db/online-migrations.ts`) runs on the migrate entrypoint before the API
  * rolls, inserts any resource this set names and the table lacks, and links
- * every existing client registration to it. It also upgrades the exact
- * predecessor policy that omitted protocol scopes from token issuance.
+ * every existing client registration to it.
  * `better-auth-oauth-policy-census.db.test.ts` pins that, the idempotence, and
  * the refusal to overwrite a conflicting definition.
  */
@@ -126,6 +125,30 @@ export const buildBetterAuthOAuthResources = (baseUrl: string) =>
       name: config.resourceName,
     };
   });
+
+/**
+ * The allowed scopes a stored resource row carried before protocol scopes
+ * joined the issuance policy: the configured set minus
+ * `MCP_OAUTH_PROTOCOL_SCOPES`.
+ *
+ * Expand step of an expand/contract rollout. The previous API release's boot
+ * census compares `oauth_resource.allowed_scopes` exactly against this
+ * predecessor set, so rewriting the rows in the same release as the policy
+ * change would stop any previous-release task (an autoscaled task mid-rollout,
+ * or a rollback) from booting. This release therefore accepts both the
+ * predecessor set and the configured set and rewrites nothing; the next
+ * release upgrades predecessor rows in the deploy repair and drops this
+ * acceptance, once no running task requires the predecessor set.
+ */
+export const predecessorOAuthResourceScopes = (
+  allowedScopes: readonly string[],
+): string[] =>
+  allowedScopes.filter(
+    (scope) =>
+      !MCP_OAUTH_PROTOCOL_SCOPES.some(
+        (protocolScope) => protocolScope === scope,
+      ),
+  );
 
 export const normalizeBetterAuthOAuthBaseUrl = (value: string) => {
   const parsed = URL.parse(value);
