@@ -316,6 +316,38 @@ test("preparation and fixer failures abort before subsequent commands", () => {
     expect(executed).toEqual(steps.slice(0, 1));
   }
 });
+test.each([false, true])(
+  "a check refusal stops the plan and preserves admission fallback (remote=%s)",
+  (alreadyRemote) => {
+    const steps = readVerifyWorkflow({ root, mode: "verify" });
+    const executed: VerifyWorkflowStep[] = [];
+    const messages: string[] = [];
+    let remoteRuns = 0;
+    expect(
+      withCheckAdmission({
+        alreadyRemote,
+        admitLocal: () => 0,
+        probeRemote: () => 0,
+        runLocal: () =>
+          runVerifySteps(steps, (step) => {
+            executed.push(step);
+            return step.phase === "check" ? BOTH_GATES_REFUSED : 0;
+          }),
+        runRemote: () => {
+          remoteRuns += 1;
+          return 0;
+        },
+        report: (message) => messages.push(message),
+      }),
+    ).toBe(alreadyRemote ? BOTH_GATES_REFUSED : 0);
+    const firstCheck = steps.findIndex(({ phase }) => phase === "check");
+    expect(firstCheck).toBeGreaterThanOrEqual(0);
+    expect(executed).toEqual(steps.slice(0, firstCheck + 1));
+    expect(remoteRuns).toBe(alreadyRemote ? 0 : 1);
+    expect(messages).toEqual(alreadyRemote ? [BOTH_GATES_MESSAGE] : []);
+  },
+);
+
 test("options reject unknown arguments and missing refs", () => {
   expect(parseVerifyArgs(["--base", "upstream/main", "--all"])).toEqual({
     base: "upstream/main",

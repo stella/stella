@@ -74,7 +74,7 @@ export const runVerifySteps = (
     if (status === 0) {
       continue;
     }
-    if (step.phase === "prepare") {
+    if (status === BOTH_GATES_REFUSED || step.phase === "prepare") {
       return status;
     }
     failures.push(step.name);
