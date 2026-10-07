@@ -8,12 +8,7 @@ import { ChatPastedTextNode } from "@/components/chat-pasted-text-node";
 
 export const PASTED_TEXT_NODE_NAME = "pastedText";
 
-export const PASTED_TEXT_SOURCES = [
-  "paste",
-  "prompt",
-  "skill",
-  "command",
-] as const;
+const PASTED_TEXT_SOURCES = ["paste", "prompt", "skill", "command"] as const;
 export type PastedTextSource = (typeof PASTED_TEXT_SOURCES)[number];
 
 export type PastedTextAttrs = {
