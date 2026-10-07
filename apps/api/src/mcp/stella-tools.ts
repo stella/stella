@@ -110,6 +110,7 @@ import { decisionDocketGrammarForCountry } from "@/api/lib/legal-search/adapter-
 import { tokenizeCorpusFreeText } from "@/api/lib/legal-search/corpus-query";
 import { CORPUS_SEARCH_CURSOR_WITH_GROUPS_MAX_LENGTH } from "@/api/lib/legal-search/corpus-search-cursor";
 import { corpusTokens } from "@/api/lib/legal-search/corpus-tokens";
+import { isSearchIndexUnavailable } from "@/api/lib/legal-search/search-index-unavailable";
 import { LIMITS } from "@/api/lib/limits";
 import { getAppBaseUrl } from "@/api/lib/mcp-connectors/app-urls";
 import {
@@ -180,6 +181,7 @@ import {
   runTextFieldSpecs,
 } from "@/api/mcp/text-field-spec";
 import type {
+  InternalToolErrorResult,
   McpTextFieldSpec,
   McpToolDefinition,
   McpToolHandler,
@@ -206,6 +208,7 @@ import {
   MCP_CONTENT_MAX_CHARS,
   notFoundResult,
   nullAsAbsent,
+  searchIndexUnavailableResult,
   structuredEgressPlan,
   structuredErrorResult,
   toolDataResult,
@@ -2164,6 +2167,37 @@ type CaseLawQueryOutcome =
   | { exhausted: true }
   | { exhausted: false; page: SearchCaseLawSuccess };
 
+type CaseLawSearchAnswer =
+  | { type: "page"; page: SearchCaseLawSuccess }
+  | { type: "failed"; result: InternalToolErrorResult };
+
+/** One query's handler answer read as its page or the tool's refusal. */
+const readCaseLawSearchAnswer = (
+  answer: Parameters<typeof isSearchCaseLawSuccess>[0],
+  cursor: string | undefined,
+): CaseLawSearchAnswer => {
+  if (isSearchIndexUnavailable(answer)) {
+    return { type: "failed", result: searchIndexUnavailableResult(answer) };
+  }
+  const resultMessage = handlerResultMessage(answer);
+  if (resultMessage === INVALID_CURSOR_MESSAGE) {
+    return {
+      type: "failed",
+      result: invalidCursorResult({
+        cursor: cursor ?? "",
+        tool: SEARCH_CASE_LAW_TOOL,
+      }),
+    };
+  }
+  if (resultMessage) {
+    return { type: "failed", result: errorResult(resultMessage) };
+  }
+  if (!isSearchCaseLawSuccess(answer)) {
+    return { type: "failed", result: errorResult("Case-law search failed") };
+  }
+  return { type: "page", page: answer };
+};
+
 const caseLawSearchRequestFilters = ({
   category,
   has_legal_sentence: hasLegalSentence,
@@ -2452,20 +2486,11 @@ const handleSearchCaseLawTool: TypedMcpToolHandler<
       pages.push({ exhausted: true });
       continue;
     }
-    const resultMessage = handlerResultMessage(outcome.result);
-    if (resultMessage === INVALID_CURSOR_MESSAGE) {
-      return invalidCursorResult({
-        cursor: cursor ?? "",
-        tool: SEARCH_CASE_LAW_TOOL,
-      });
+    const answer = readCaseLawSearchAnswer(outcome.result, cursor);
+    if (answer.type === "failed") {
+      return answer.result;
     }
-    if (resultMessage) {
-      return errorResult(resultMessage);
-    }
-    if (!isSearchCaseLawSuccess(outcome.result)) {
-      return errorResult("Case-law search failed");
-    }
-    pages.push({ exhausted: false, page: outcome.result });
+    pages.push({ exhausted: false, page: answer.page });
   }
 
   const merged = mergeCaseLawSearchHits(

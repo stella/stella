@@ -44,7 +44,10 @@ import {
   type CorpusHitDispositionCounter,
 } from "@/api/lib/legal-search/corpus-hit-telemetry";
 import { readServingCorpusIndexGenerationTx } from "@/api/lib/legal-search/corpus-index-generation-store";
-import type { ServingCorpusIndexGeneration } from "@/api/lib/legal-search/corpus-index-generation-store";
+import type {
+  CorpusServingGenerationAbsentError,
+  ServingCorpusIndexGeneration,
+} from "@/api/lib/legal-search/corpus-index-generation-store";
 import type { SearchCursor } from "@/api/lib/legal-search/corpus-index-pagination";
 import { readCorpusIndexSearchPage } from "@/api/lib/legal-search/corpus-index-pagination";
 import {
@@ -117,7 +120,7 @@ import {
   stableBlendUpperBound,
 } from "@/api/lib/legal-search/rerank";
 import type { ScoredCandidate } from "@/api/lib/legal-search/rerank";
-import { refuseSearchIndexUnavailable } from "@/api/lib/legal-search/search-index-unavailable";
+import { searchIndexUnavailableResponse } from "@/api/lib/legal-search/search-index-unavailable";
 import {
   legislationPublicReadDb,
   type LegislationReadDb,
@@ -1218,27 +1221,29 @@ const corpusIndexSearch = async ({
 
 /**
  * The serving legislation generation, or null under the pg-fts provider. No
- * serving generation answers the retryable search_index_unavailable 503.
+ * serving generation is an error the handler answers with the retryable
+ * search_index_unavailable 503.
  */
 const readLegislationServingGeneration = async (
   legislationDb: LegislationReadDb,
   dependencies: SearchLegislationDependencies,
-): Promise<ServingCorpusIndexGeneration | null> => {
+): Promise<
+  Result<
+    ServingCorpusIndexGeneration | null,
+    CorpusServingGenerationAbsentError
+  >
+> => {
   if (
     (dependencies.provider ?? envBase.LEGAL_SEARCH_PROVIDER) !== "corpus-index"
   ) {
-    return null;
+    return Result.ok(null);
   }
-  const read = await legislationDb(
+  return await legislationDb(
     async (tx) =>
       await (
         dependencies.readServingGeneration ?? readServingCorpusIndexGenerationTx
       )(tx, "legislation"),
   );
-  if (Result.isError(read)) {
-    return refuseSearchIndexUnavailable(read.error);
-  }
-  return read.value;
 };
 
 export const searchLegislationHandler = async (
@@ -1300,10 +1305,14 @@ export const searchLegislationHandler = async (
     return status(400, { message: "Invalid cursor" });
   }
 
-  const serving = await readLegislationServingGeneration(
+  const servingRead = await readLegislationServingGeneration(
     legislationDb,
     dependencies,
   );
+  if (Result.isError(servingRead)) {
+    return searchIndexUnavailableResponse(servingRead.error);
+  }
+  const serving = servingRead.value;
   let expectedPhase: CorpusSearchPhase = {
     type: "strict",
     fingerprint: legislationQueryFingerprint(body),

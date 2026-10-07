@@ -1,4 +1,4 @@
-import { Result, UnhandledException } from "better-result";
+import { panic, Result, UnhandledException } from "better-result";
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { ElysiaCustomStatusResponse } from "elysia";
 import { readdirSync, readFileSync } from "node:fs";
@@ -8,6 +8,7 @@ import { searchCorpusIndexDecisions } from "@/api/handlers/case-law/decisions/se
 import { searchLegislationHandler } from "@/api/handlers/legislation/search";
 import { grantThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import { toSafeId } from "@/api/lib/branded-types";
+import { caseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import type { CorpusFamily } from "@/api/lib/legal-search/corpus-generation-contract";
 import { CorpusServingGenerationAbsentError } from "@/api/lib/legal-search/corpus-index-generation-store";
@@ -17,6 +18,7 @@ import { RELEVANCE_ORDER } from "@/api/lib/legal-search/corpus-search-order";
 import {
   SEARCH_INDEX_UNAVAILABLE_HINT,
   SEARCH_INDEX_UNAVAILABLE_MESSAGE,
+  isSearchIndexUnavailable,
   searchIndexUnavailableError,
 } from "@/api/lib/legal-search/search-index-unavailable";
 import type { LegislationReadDb } from "@/api/lib/legislation-public-read-db";
@@ -292,6 +294,48 @@ describe("search_index_unavailable", () => {
         },
       };
     };
+
+    test("both search handlers return the REST body of the thrown refusal", async () => {
+      const { testDependencies } = contextWithoutServingGeneration();
+      const searchDecisions = testDependencies?.searchDecisionsHandler;
+      const searchLegislation = testDependencies?.searchLegislationHandler;
+      if (searchDecisions === undefined || searchLegislation === undefined) {
+        throw new Error("expected both search seams");
+      }
+      const thrown = searchIndexUnavailableError(new Error("absent"));
+      const outcomes = [
+        await searchDecisions({
+          body: { query: "smlouva", country: "CZE", limit: 1 },
+          caseLawDb: Object.assign(
+            async () => panic("An absent generation must not read decisions"),
+            caseLawPublicReadDb,
+          ),
+          observer: "unobserved",
+        }),
+        await searchLegislation(
+          { query: "smlouva", jurisdiction: "CZE", limit: 1 },
+          asTestRaw<LegislationReadDb>(async () =>
+            panic("The seam supplies its own generation read"),
+          ),
+          "unobserved",
+        ),
+      ];
+
+      expect(requested).toEqual([]);
+      for (const outcome of outcomes) {
+        expect(outcome).toBeInstanceOf(ElysiaCustomStatusResponse);
+        expect(outcome).toMatchObject({
+          code: thrown.status,
+          response: {
+            code: thrown.code,
+            message: thrown.message,
+            hint: thrown.hint,
+            retryable: thrown.retryable,
+          },
+        });
+        expect(isSearchIndexUnavailable(outcome)).toBe(true);
+      }
+    });
 
     for (const tool of INDEX_BACKED_TOOLS) {
       test(`${tool.toolName} (${tool.mode}) returns the typed, retryable envelope`, async () => {

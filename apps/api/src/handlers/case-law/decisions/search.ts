@@ -230,7 +230,7 @@ import type {
   RankedHit,
   ScoredCandidate,
 } from "@/api/lib/legal-search/rerank";
-import { refuseSearchIndexUnavailable } from "@/api/lib/legal-search/search-index-unavailable";
+import { searchIndexUnavailableResponse } from "@/api/lib/legal-search/search-index-unavailable";
 import { LIMITS } from "@/api/lib/limits";
 import { failureSink } from "@/api/lib/observability/failure";
 import { logger } from "@/api/lib/observability/logger";
@@ -2079,18 +2079,16 @@ const corpusIndexRequestConfiguration = ({
 
 /**
  * The answer to a serving-target read that reaches no index. No serving
- * generation is the search index being unavailable, so it throws the typed
- * retryable refusal every REST route and MCP tool resolves.
+ * generation is the search index being unavailable, so it answers the typed
+ * retryable 503 every REST route and MCP tool resolves.
  */
-const servingTargetRefusal = (
-  failure: ServingCorpusIndexTargetError,
-): never => {
+const servingTargetRefusal = (failure: ServingCorpusIndexTargetError) => {
   switch (failure._tag) {
     case "CorpusServingGenerationAbsentError":
-      return refuseSearchIndexUnavailable(failure);
+      return searchIndexUnavailableResponse(failure);
     case "CorpusIndexGroupNotReadyError":
       observeFailure(failure, { sink: corpusIndexGroupNotReady });
-      return refuseSearchIndexUnavailable(failure);
+      return searchIndexUnavailableResponse(failure);
     default:
       failure satisfies never;
       return panic(`Unhandled serving target failure: ${String(failure)}`);

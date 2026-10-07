@@ -29,7 +29,6 @@ import type { McpToolDefinition, McpToolHandler } from "@/api/mcp/tool-types";
 import { defineMcpToolSet } from "@/api/mcp/tool-types";
 import {
   cursorInput,
-  errorResult,
   nullAsAbsent,
   validationErrorResult,
 } from "@/api/mcp/tool-utils";
@@ -153,7 +152,7 @@ const handleLawCompatSearchTool: McpToolHandler<
     query,
   });
   if (corpus.type === "failed") {
-    return errorResult(corpus.message);
+    return corpus.result;
   }
 
   // The corpus results are public law, so the egress pipeline passes them

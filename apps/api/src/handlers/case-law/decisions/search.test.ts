@@ -24,7 +24,10 @@ import {
 import { corpusRankingCursorTarget } from "@/api/lib/legal-search/corpus-ranking-policy";
 import { encodeCorpusSearchCursor } from "@/api/lib/legal-search/corpus-search-cursor";
 import { NO_EXPANSION_DICTIONARY_IDENTITY } from "@/api/lib/legal-search/morphology/dictionary";
-import { SEARCH_INDEX_UNAVAILABLE_CODE } from "@/api/lib/legal-search/search-index-unavailable";
+import {
+  SEARCH_INDEX_UNAVAILABLE_CODE,
+  searchIndexUnavailableError,
+} from "@/api/lib/legal-search/search-index-unavailable";
 
 describe("case-law search body preview SQL", () => {
   test("does not expand non-array sections JSONB values", () => {
@@ -253,23 +256,27 @@ test.each(SERVING_TARGET_REFUSALS)(
         readServingTarget: async () =>
           await Promise.resolve(Result.err(failure)),
       },
-    })
-      .then(
-        () => panic("Expected the search to fail without a serving generation"),
-        (error: unknown) => error,
-      )
-      .finally(() => {
-        globalThis.fetch = originalFetch;
-      });
+    }).finally(() => {
+      globalThis.fetch = originalFetch;
+    });
 
     expect(requested).toEqual([]);
-    expect(
-      resolveHandlerError(new UnhandledException({ cause: outcome })),
-    ).toMatchObject({
-      status: 503,
+    expect(outcome).toBeInstanceOf(ElysiaCustomStatusResponse);
+    if (!(outcome instanceof ElysiaCustomStatusResponse)) {
+      return;
+    }
+    // The returned envelope is the body the route error mapping renders for
+    // the thrown refusal, so a client cannot tell the two paths apart.
+    const thrown = searchIndexUnavailableError(failure);
+    expect(outcome.code).toBe(thrown.status);
+    expect(outcome.response).toEqual({
+      code: thrown.code,
+      message: thrown.message,
+      hint: thrown.hint,
+      retryable: thrown.retryable,
+    });
+    expect(outcome.response).toMatchObject({
       code: SEARCH_INDEX_UNAVAILABLE_CODE,
-      retryable: true,
-      cause: failure,
     });
   },
 );
