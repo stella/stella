@@ -763,13 +763,6 @@
     "reason": "Existing fixed read budget; migrate unbounded decisions and exports to readBounded or document the pagination/table-cap contract."
   },
   {
-    "file": "apps/api/src/handlers/lists/get.ts",
-    "function": "module/readListById/createSafeHandler[1]",
-    "kind": "constant-limit",
-    "count": 1,
-    "reason": "Existing fixed read budget; migrate unbounded decisions and exports to readBounded or document the pagination/table-cap contract."
-  },
-  {
     "file": "apps/api/src/handlers/lists/items/list.ts",
     "function": "module/readListItems/createSafeHandler[1]",
     "kind": "fixed-page-size",
