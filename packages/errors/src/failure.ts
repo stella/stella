@@ -49,6 +49,7 @@ export const FAILURE_REASON_GRADE = {
   credentials_token_unreadable: "anticipated",
   client_disconnected: "anticipated",
   optional_file_absent: "anticipated",
+  // parser-output-unchanged: sanctions matcher reasons grade observed failures only; no parser reads them.
   sanctions_matcher_closed: "anticipated",
   sanctions_matcher_deadline: "transient",
   sanctions_matcher_saturated: "transient",
