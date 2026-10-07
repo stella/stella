@@ -36,7 +36,11 @@ type FetchFollowingRedirectsOptions<Body, E> = {
     url: string,
     hop: number,
   ) => Promise<Result<RedirectResponse<Body>, E | RedirectChainError>>;
-  discardBody: (body: Body) => Promise<Result<void, RedirectChainError>>;
+  discardBody: (
+    body: Body,
+  ) =>
+    | Result<void, RedirectChainError>
+    | Promise<Result<void, RedirectChainError>>;
 };
 
 const fetchFollowingRedirects = async <Body, E>({
@@ -111,7 +115,7 @@ export const fetchBytesFollowingRedirects = async <E>({
 }: FetchBytesFollowingRedirectsOptions<E>) =>
   await fetchFollowingRedirects({
     fetchResponse: fetchBytes,
-    discardBody: async () => Result.ok(),
+    discardBody: () => Result.ok(),
     maxHops,
     url,
   });

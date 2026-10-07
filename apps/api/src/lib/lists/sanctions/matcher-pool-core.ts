@@ -491,7 +491,7 @@ export const createSanctionsMatcherPoolCore = ({
       }
       notify();
       await Promise.all(
-        slots.map((slot) => retireMatcherSlot(slot, reportFailure)),
+        slots.map(async (slot) => await retireMatcherSlot(slot, reportFailure)),
       );
     },
   };

@@ -159,7 +159,7 @@ describe("streaming list downloads", () => {
                 Location:
                   mode === "relative"
                     ? "/published.xml"
-                    : `https://${redirectHost}/published.xml`,
+                    : `https://${String(redirectHost)}/published.xml`,
               },
             });
           },
