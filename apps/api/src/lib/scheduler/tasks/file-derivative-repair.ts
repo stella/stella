@@ -28,8 +28,6 @@ import {
 import type { FileDerivativeKind } from "@/api/lib/file-derivative-queue";
 import { shouldGenerateImageThumbnail } from "@/api/lib/files/image-derivative";
 import { shouldGeneratePdfDerivative } from "@/api/lib/files/pdf-derivative-policy";
-import { failureSink } from "@/api/lib/observability/failure";
-import { observeFailure } from "@/api/lib/observability/observe-failure";
 import {
   brandPersistedFieldId,
   brandPersistedUserId,
@@ -38,11 +36,6 @@ import type { SchedulerDb, SchedulerTask } from "@/api/lib/scheduler/types";
 import { SchedulerTaskFailure } from "@/api/lib/scheduler/types";
 
 export const REPAIR_FILE_DERIVATIVES_TASK = "files.repairDerivatives" as const;
-
-const REPAIR_FAILED = failureSink({
-  event: "file_derivative.repair_failed",
-  expected: [],
-});
 
 /** Fields read per tick. The cursor below carries the scan across ticks. */
 const SCAN_PAGE_SIZE = 200;
@@ -408,6 +401,8 @@ export const createRepairFileDerivativesTask =
       const outcome = await Result.tryPromise(
         async () => await requeueRow(row, requeue),
       );
+      // A canceled tick keeps its cursor. Replays use deterministic
+      // (workspace, field, kind) job IDs and retain a live job's ownership.
       signal.throwIfAborted();
       // The row counts as scanned either way: the cursor must advance past a
       // row whose repair fails deterministically, or the sweep pins itself
@@ -420,14 +415,12 @@ export const createRepairFileDerivativesTask =
           message: "Requeueing one stuck file derivative failed",
           cause: outcome.error,
         });
-        observeFailure(error, {
-          sink: REPAIR_FAILED,
-          ctx: {
-            entityId: row.entityId,
-            jobId: job.id,
-            stage: "requeue",
-            workspaceId: row.workspaceId,
-          },
+        // The runner owns the exception capture and failed-run ERROR.
+        logger.warn("file_derivative.repair_failed", {
+          entityId: row.entityId,
+          jobId: job.id,
+          stage: "requeue",
+          workspaceId: row.workspaceId,
         });
         return Result.err(error);
       }

@@ -23,6 +23,7 @@ import {
   entities,
   entityVersions,
   fields,
+  schedulerJobRuns,
   schedulerJobs,
 } from "@/api/db/schema";
 import type { FieldContent } from "@/api/db/schema-validators";
@@ -39,6 +40,7 @@ import { allocateFileObject } from "@/api/lib/files/file-object-ids";
 import { logger } from "@/api/lib/observability/logger";
 import type { createRootScopedDb } from "@/api/lib/root-scoped-db";
 import { DueSlot } from "@/api/lib/scheduler/due-slot";
+import { runJob } from "@/api/lib/scheduler/runner";
 import type { SchedulerDb } from "@/api/lib/scheduler/types";
 import { SchedulerTaskFailure } from "@/api/lib/scheduler/types";
 import {
@@ -77,6 +79,7 @@ class StubQueue {
       throw new Error("queue write refused");
     }
     queued.push({ data, name, opts });
+    priorJobs.set(opts.jobId, { data, state: "waiting" });
   }
 
   async getJob(jobId: string) {
@@ -230,6 +233,25 @@ const runRepair = async (
 const jobIdsFor = (kind: string) =>
   queued.filter(({ opts }) => opts.jobId.endsWith(`-${kind}`));
 
+const runRepairInRunner = async (task = repairFileDerivatives) => {
+  const job = await testDb.query.schedulerJobs.findFirst({
+    where: { id: { eq: SCHEDULER_JOB_ID } },
+  });
+  if (!job) {
+    panic("expected the repair scheduler job row");
+  }
+  return await runJob({
+    db: asTestRaw<SchedulerDb>(testDb),
+    heartbeatIntervalMs: 60_000,
+    job,
+    leaseMs: 120_000,
+    maxRuntimeMs: 30_000,
+    registry: new Map([[REPAIR_FILE_DERIVATIVES_TASK, task]]),
+    runnerId: "test-derivative-repair-runner",
+    signal: undefined,
+  });
+};
+
 describe("file derivative repair", () => {
   let analytics: RecordingAnalytics;
   let logs: RecordingLogger;
@@ -262,6 +284,9 @@ describe("file derivative repair", () => {
   afterEach(async () => {
     analytics.restore();
     logs.restore();
+    await testDb
+      .delete(schedulerJobRuns)
+      .where(eq(schedulerJobRuns.jobId, SCHEDULER_JOB_ID));
     if (seededFieldIds.length > 0) {
       await testDb.delete(fields).where(inArray(fields.id, seededFieldIds));
       await testDb
@@ -504,9 +529,8 @@ describe("file derivative repair", () => {
         ({ message }) => message === "file_derivative.repair_failed",
       );
       expect(failures).toHaveLength(1);
-      expect(failures.at(0)?.severityText).toBe("ERROR");
+      expect(failures.at(0)?.severityText).toBe("WARN");
       expect(failures.at(0)?.attributes).toMatchObject({
-        "failure.grade": "defect",
         stage: "requeue",
       });
       expect(
@@ -514,14 +538,7 @@ describe("file derivative repair", () => {
           ({ message }) => message === "scheduler.file_derivatives_repaired",
         )?.attributes,
       ).toMatchObject({ "fileDerivatives.failed": 1 });
-      expect(
-        analytics
-          .exceptions()
-          .some(
-            ({ properties }) =>
-              properties["error.class"] === "FileDerivativeRepairError",
-          ),
-      ).toBe(true);
+      expect(analytics.exceptions()).toHaveLength(0);
 
       const job = await testDb.query.schedulerJobs.findFirst({
         columns: { payload: true },
@@ -592,10 +609,98 @@ describe("file derivative repair", () => {
     );
     expect(failures).toHaveLength(1);
     expect(failures.at(0)?.severityText).toBe("WARN");
-    expect(failures.at(0)?.attributes).toMatchObject({
-      "failure.grade": "transient",
-      "failure.reason": "network_reset",
-    });
     expect(analytics.exceptions()).toHaveLength(0);
+  });
+
+  test.each([
+    {
+      cause: new Error("Queue write refused"),
+      grade: "defect",
+      reason: "unclassified",
+    },
+    {
+      cause: Object.assign(new Error("Redis connection reset"), {
+        code: "ECONNRESET",
+      }),
+      grade: "transient",
+      reason: "network_reset",
+    },
+  ])(
+    "the runner captures one $grade exception per failed tick",
+    async ({ cause, grade, reason }) => {
+      await seedFileField();
+      const task = createRepairFileDerivativesTask({
+        requeue: async () => {
+          throw cause;
+        },
+      });
+
+      expect(await runRepairInRunner(task)).toBe("failed");
+      const exceptions = analytics.exceptions();
+      expect(exceptions).toHaveLength(1);
+      expect(exceptions.at(0)?.properties).toMatchObject({
+        "error.class": "FileDerivativeRepairError",
+        "failure.grade": grade,
+        "failure.reason": reason,
+      });
+      expect(
+        logs.records.filter(
+          ({ message }) => message === "scheduler.job_failed",
+        ),
+      ).toHaveLength(1);
+      const runs = await testDb
+        .select({ status: schedulerJobRuns.status })
+        .from(schedulerJobRuns)
+        .where(eq(schedulerJobRuns.jobId, SCHEDULER_JOB_ID));
+      expect(runs).toEqual([{ status: "failed" }]);
+    },
+  );
+
+  test("a canceled tick replays queued rows without adding jobs", async () => {
+    const first = await seedFileField();
+    const second = await seedFileField();
+    const controller = new AbortController();
+    const task = createRepairFileDerivativesTask({
+      requeue: async (args) => {
+        const outcome = await requeueFileDerivative(args, requeueDependencies);
+        if (args.fieldId === second) {
+          controller.abort();
+        }
+        return outcome;
+      },
+    });
+
+    expect(await rejectionOf(runRepair(task, controller.signal))).toMatchObject(
+      {
+        name: "AbortError",
+      },
+    );
+    expect(queued.map(({ opts }) => opts.jobId)).toEqual(
+      [first, second].map((fieldId) =>
+        createBullMqJobId(ids.wsA1, fieldId, FILE_DERIVATIVE_KIND.PDF),
+      ),
+    );
+    const objectIds = queued.map(({ data }) => data.derivativeFileId);
+    const canceledJob = await testDb.query.schedulerJobs.findFirst({
+      columns: { payload: true },
+      where: { id: { eq: SCHEDULER_JOB_ID } },
+    });
+    expect(canceledJob?.payload).toEqual({ cursor: null });
+
+    await runRepair();
+
+    expect(queued).toHaveLength(2);
+    expect(queued.map(({ data }) => data.derivativeFileId)).toEqual(objectIds);
+    const resumedJob = await testDb.query.schedulerJobs.findFirst({
+      columns: { payload: true },
+      where: { id: { eq: SCHEDULER_JOB_ID } },
+    });
+    expect(resumedJob?.payload).toEqual({ cursor: second });
+    expect(analytics.exceptions()).toHaveLength(0);
+    expect(
+      logs.records.filter(
+        ({ message }) => message === "file_derivative.repair_failed",
+      ),
+    ).toHaveLength(0);
   });
 });
