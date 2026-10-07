@@ -37,13 +37,12 @@ type RenderVisualOptions = {
 };
 
 const measureContentHeight = () => {
-  if (!document.body) {
+  // document.body is typed as always present; a bodyless document has none.
+  const body = document.querySelector("body");
+  if (body === null) {
     return null;
   }
-  return Math.max(
-    document.body.scrollHeight,
-    document.documentElement.scrollHeight,
-  );
+  return Math.max(body.scrollHeight, document.documentElement.scrollHeight);
 };
 
 const settleLayout = async () => {
