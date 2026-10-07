@@ -17,7 +17,6 @@
 // and locally, so a re-anchor written locally would not hold in CI.
 
 export const BASELINE_PATHS = {
-  /** scripts/check-oxlint-rule-coverage.ts */
   /** scripts/check-oxlint-effective-config.ts */
   oxlintEffectiveConfig: "scripts/oxlint-effective-config-baseline.json",
   /** scripts/bundle-baseline.ts */
