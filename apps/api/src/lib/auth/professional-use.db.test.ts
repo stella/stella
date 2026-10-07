@@ -27,6 +27,7 @@ import {
 import { createSafeDb } from "@/api/db/scoped";
 import { env } from "@/api/env";
 import { meRoute } from "@/api/handlers/me/routes";
+import { publicKnowledgeRoute } from "@/api/handlers/public-knowledge/routes";
 import {
   acceptAccountProfessionalUse,
   authMacro,
@@ -340,6 +341,79 @@ describe("professional-use acceptance", () => {
     expect(await userAcceptances([userId])).toHaveLength(1);
     expect(await acceptanceAuditEvents(organizationId)).toEqual(audited);
     await openMcp();
+  });
+
+  test.each([
+    ["no statement version", null],
+    ["a stale statement version", "2000-01"],
+  ] as const)(
+    "a registration naming %s records no acceptance and is refused the product until it accepts",
+    async (_name, displayedStatementVersion) => {
+      const person = await signInHuman(
+        `professional-use-unconfirmed-${Bun.randomUUIDv7()}@stella.dev`,
+        { displayedStatementVersion },
+      );
+      const userId = brandPersistedUserId(person.userId);
+      expect(await userAcceptances([userId])).toEqual([]);
+      const organization = await createOrganizationFor(person);
+      const organizationId = brandPersistedOrganizationId(organization.id);
+      expect(await organizationAcceptances([organizationId])).toEqual([]);
+      await person.setActiveOrganization(organizationId);
+      expect(await (await readOwnState(person)).json()).toEqual({
+        status: "required",
+      });
+      expect((await readProduct(person)).status).toBe(403);
+
+      expect(
+        (await accept(person, PROFESSIONAL_USE_STATEMENT_VERSION)).status,
+      ).toBe(200);
+      expect(await userAcceptances([userId])).toMatchObject([CURRENT_VERSIONS]);
+      expect(await organizationAcceptances([organizationId])).toMatchObject([
+        { acceptedByUserId: userId, ...CURRENT_VERSIONS },
+      ]);
+      expect((await readProduct(person)).status).toBe(200);
+    },
+  );
+
+  test("a registration naming the current statement version records that version", async () => {
+    const person = await signInHuman(
+      `professional-use-confirmed-${Bun.randomUUIDv7()}@stella.dev`,
+      { displayedStatementVersion: PROFESSIONAL_USE_STATEMENT_VERSION },
+    );
+    expect(await userAcceptances([person.userId])).toMatchObject([
+      { statementVersion: PROFESSIONAL_USE_STATEMENT_VERSION },
+    ]);
+  });
+
+  test("public knowledge answers an account that has not accepted exactly as an anonymous visitor", async () => {
+    const person = await signInHuman(
+      `professional-use-public-${Bun.randomUUIDv7()}@stella.dev`,
+      { displayedStatementVersion: null },
+    );
+    const organization = await createOrganizationFor(person);
+    await person.setActiveOrganization(organization.id);
+    expect((await readProduct(person)).status).toBe(403);
+
+    const previous = env.FEATURE_PUBLIC_KNOWLEDGE;
+    env.FEATURE_PUBLIC_KNOWLEDGE = true;
+    try {
+      for (const path of [
+        "/public/knowledge/template-packs",
+        "/public/knowledge/playbook-starters",
+      ]) {
+        const anonymous = await publicKnowledgeRoute.handle(
+          new Request(`http://localhost${path}`),
+        );
+        const signedIn = await publicKnowledgeRoute.handle(
+          new Request(`http://localhost${path}`, { headers: person.headers() }),
+        );
+        expect(anonymous.status).toBe(200);
+        expect(signedIn.status).toBe(200);
+        expect(await signedIn.text()).toBe(await anonymous.text());
+      }
+    } finally {
+      env.FEATURE_PUBLIC_KNOWLEDGE = previous;
+    }
   });
 
   test("the operator-created review account records no acceptance", async () => {

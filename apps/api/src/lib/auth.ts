@@ -115,6 +115,7 @@ import {
   acceptProfessionalUse,
   professionalUseColumns,
   professionalUseStateOf,
+  readCreationAcceptance,
   readUserProfessionalUse,
   recordOrganizationProfessionalUse,
   recordUserProfessionalUseAtCreation,
@@ -1730,13 +1731,14 @@ export const createAuth = (roleAssignmentPolicy = assignableRoles) => {
             });
           },
           // Creating the account where the professional-use statement is
-          // shown is the acceptance; elsewhere the account accepts on its
-          // first interactive sign-in. Insert-once on the owner connection
-          // that wrote the user row.
+          // shown, from a request naming the current version, is the
+          // acceptance; otherwise the account accepts on its first
+          // interactive sign-in. Insert-once on the owner connection that
+          // wrote the user row.
           after: async (user, ctx) => {
             await recordUserProfessionalUseAtCreation(rootDb, {
               userId: brandPersistedUserId(user.id),
-              origin: requireUserCreationOrigin(ctx?.path),
+              acceptance: await readCreationAcceptance(ctx),
             });
           },
         },

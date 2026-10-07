@@ -6,6 +6,10 @@ import { useNavigate } from "@tanstack/react-router";
 import { TaggedError } from "better-result";
 import { useTranslations } from "use-intl";
 
+import {
+  PROFESSIONAL_USE_DISPLAYED_VERSION_FIELD,
+  PROFESSIONAL_USE_STATEMENT_VERSION,
+} from "@stll/api-contract/professional-use";
 import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
 import { DialogFormState } from "@stll/ui/dialog";
@@ -163,6 +167,10 @@ export const OTPPanel = ({
         await authClient.signIn.emailOtp({
           email: emailArg,
           otp: otpArg,
+          // The sign-in page showed this statement; a new account is
+          // created accepted only when it is the current one.
+          [PROFESSIONAL_USE_DISPLAYED_VERSION_FIELD]:
+            PROFESSIONAL_USE_STATEMENT_VERSION,
         });
 
       if (signInError) {

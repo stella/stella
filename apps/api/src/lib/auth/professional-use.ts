@@ -1,7 +1,9 @@
+import { getOAuthState } from "better-auth/api";
 import { panic } from "better-result";
 import { and, eq, isNull, sql } from "drizzle-orm";
 
 import {
+  PROFESSIONAL_USE_DISPLAYED_VERSION_FIELD,
   PROFESSIONAL_USE_STATEMENT_VERSION,
   PROFESSIONAL_USE_STATUS,
   PROFESSIONAL_USE_TERMS_VERSION,
@@ -23,6 +25,7 @@ import { REVIEW_ACCOUNT_CREATE_USER_PATH } from "@/api/lib/auth/review-account-p
 import type { SafeId } from "@/api/lib/branded-types";
 import type { MemberRole } from "@/api/lib/member-roles";
 import { brandPersistedOrganizationId } from "@/api/lib/safe-id-boundaries";
+import { isRecord } from "@/api/lib/type-guards";
 
 const PROFESSIONAL_USE_AUDIT_FIELD = "professionalUseAcceptance";
 const PROFESSIONAL_USE_LOCK_DOMAIN = "professional-use";
@@ -30,8 +33,12 @@ const OWNER_ROLE = "owner" satisfies MemberRole;
 
 /** Where an account was created. */
 const USER_CREATION_ORIGIN = {
-  /** The sign-in panel, which shows the statement wherever it offers sign-up. */
-  interactiveRegistration: "interactive_registration",
+  /** Email-OTP sign-in on the sign-in panel, which shows the statement. */
+  emailOtpRegistration: "email_otp_registration",
+  /** A social provider's callback, after the sign-in panel showed it. */
+  socialRegistration: "social_registration",
+  /** The self-host first-account sign-up on the sign-in panel. */
+  bootstrapRegistration: "bootstrap_registration",
   /** A provider ID token posted straight to the API; no Stella page is shown. */
   identityTokenSignIn: "identity_token_sign_in",
   /** An agent's verified identity, provisioned without a browser. */
@@ -44,16 +51,29 @@ type UserCreationOrigin =
   (typeof USER_CREATION_ORIGIN)[keyof typeof USER_CREATION_ORIGIN];
 
 /**
- * Whether each creation origin shows the statement. Total over the origins,
- * so a new origin cannot land without this decision; only `shown` records an
- * acceptance at creation.
+ * Where a registration request names the statement version its page
+ * displayed: the request body, or the OAuth state the social sign-in wrote
+ * (its `additionalData`) and the callback read back.
+ */
+type DisplayedVersionCarrier = "request_body" | "oauth_state";
+
+type StatementAtCreation =
+  | { type: "shown"; displayedVersionIn: DisplayedVersionCarrier }
+  | { type: "not_shown" };
+
+/**
+ * Whether each creation origin shows the statement, and where a showing
+ * origin's request names the version it displayed. Total over the origins,
+ * so a new origin cannot land without this decision.
  */
 const STATEMENT_AT_CREATION = {
-  interactive_registration: "shown",
-  identity_token_sign_in: "not_shown",
-  agent_provisioning: "not_shown",
-  operator_command: "not_shown",
-} as const satisfies Record<UserCreationOrigin, "shown" | "not_shown">;
+  email_otp_registration: { type: "shown", displayedVersionIn: "request_body" },
+  social_registration: { type: "shown", displayedVersionIn: "oauth_state" },
+  bootstrap_registration: { type: "shown", displayedVersionIn: "request_body" },
+  identity_token_sign_in: { type: "not_shown" },
+  agent_provisioning: { type: "not_shown" },
+  operator_command: { type: "not_shown" },
+} as const satisfies Record<UserCreationOrigin, StatementAtCreation>;
 
 /**
  * The Better Auth endpoint paths that create an account, by origin. A path
@@ -61,9 +81,9 @@ const STATEMENT_AT_CREATION = {
  * creation path cannot record, or skip, an acceptance by default.
  */
 const USER_CREATION_PATH_ORIGINS = new Map([
-  ["/sign-in/email-otp", USER_CREATION_ORIGIN.interactiveRegistration],
-  ["/callback/:id", USER_CREATION_ORIGIN.interactiveRegistration],
-  ["/sign-up/email", USER_CREATION_ORIGIN.interactiveRegistration],
+  ["/sign-in/email-otp", USER_CREATION_ORIGIN.emailOtpRegistration],
+  ["/callback/:id", USER_CREATION_ORIGIN.socialRegistration],
+  ["/sign-up/email", USER_CREATION_ORIGIN.bootstrapRegistration],
   ["/sign-in/social", USER_CREATION_ORIGIN.identityTokenSignIn],
   [AGENT_IDENTITY_CREATE_USER_PATH, USER_CREATION_ORIGIN.agentProvisioning],
   [REVIEW_ACCOUNT_CREATE_USER_PATH, USER_CREATION_ORIGIN.operatorCommand],
@@ -96,49 +116,123 @@ export const requireUserCreationOrigin = (
   );
 };
 
+type AcceptingUser = { userId: SafeId<"user">; statementVersion: string };
+
 /**
- * Insert-once acceptance of the current statement. The caller holds the
+ * Insert-once acceptance of a statement version. The caller holds the
  * account's row lock (`lockAccount`) or is creating the account.
  */
 const insertUserAcceptance = async (
   tx: Pick<Transaction, "insert">,
-  userId: SafeId<"user">,
+  { userId, statementVersion }: AcceptingUser,
 ): Promise<void> => {
   // audit: skip - audit rows are organization-scoped; each organization acceptance row is audited
   await tx
     .insert(userProfessionalUseAcceptances)
     .values({
       userId,
-      statementVersion: PROFESSIONAL_USE_STATEMENT_VERSION,
+      statementVersion,
       termsVersion: PROFESSIONAL_USE_TERMS_VERSION,
     })
     .onConflictDoNothing({ target: userProfessionalUseAcceptances.userId });
 };
 
-type UserCreation = {
-  userId: SafeId<"user">;
-  origin: UserCreationOrigin;
+/**
+ * Whether creating an account was its acceptance. Only a showing origin
+ * whose request names the current statement version accepted; a version
+ * that is absent (a page that never sent one) or stale (cached assets, or a
+ * statement updated since) leaves the account `required`, to accept on its
+ * first interactive sign-in.
+ */
+export type CreationAcceptance =
+  | { type: "accepted"; statementVersion: string }
+  | {
+      type: "required";
+      reason:
+        | "statement_not_shown"
+        | "displayed_version_absent"
+        | "displayed_version_stale";
+    };
+
+/** The parts of the user hook's endpoint context the decision reads. */
+type CreationContext = { path: string; body: unknown } | null | undefined;
+
+const readDisplayedVersion = async (
+  carrier: DisplayedVersionCarrier,
+  context: CreationContext,
+): Promise<unknown> => {
+  switch (carrier) {
+    case "request_body":
+      return isRecord(context?.body)
+        ? context.body[PROFESSIONAL_USE_DISPLAYED_VERSION_FIELD]
+        : undefined;
+    case "oauth_state": {
+      const state: unknown = await getOAuthState();
+      return isRecord(state)
+        ? state[PROFESSIONAL_USE_DISPLAYED_VERSION_FIELD]
+        : undefined;
+    }
+    default:
+      carrier satisfies never;
+      return panic("Unhandled displayed-version carrier");
+  }
 };
 
 /**
- * Record a new account's acceptance when the place that created it showed
- * the statement: creating the account there is the acceptance. Anywhere else
- * the account starts `required` and accepts on its first interactive sign-in.
+ * Decide, inside the user hook, whether the account being created accepted
+ * the statement. Panics on a creation path without an origin.
+ */
+export const readCreationAcceptance = async (
+  context: CreationContext,
+): Promise<CreationAcceptance> => {
+  const statement =
+    STATEMENT_AT_CREATION[requireUserCreationOrigin(context?.path)];
+  switch (statement.type) {
+    case "not_shown":
+      return { type: "required", reason: "statement_not_shown" };
+    case "shown": {
+      const displayed = await readDisplayedVersion(
+        statement.displayedVersionIn,
+        context,
+      );
+      if (typeof displayed !== "string") {
+        return { type: "required", reason: "displayed_version_absent" };
+      }
+      return displayed === PROFESSIONAL_USE_STATEMENT_VERSION
+        ? { type: "accepted", statementVersion: displayed }
+        : { type: "required", reason: "displayed_version_stale" };
+    }
+    default:
+      statement satisfies never;
+      return panic("Unhandled professional-use statement disposition");
+  }
+};
+
+type UserCreation = {
+  userId: SafeId<"user">;
+  acceptance: CreationAcceptance;
+};
+
+/**
+ * Record a new account's acceptance when creating it was one. Otherwise the
+ * account starts `required` and accepts on its first interactive sign-in.
  */
 export const recordUserProfessionalUseAtCreation = async (
   db: Pick<Transaction, "insert">,
-  { userId, origin }: UserCreation,
+  { userId, acceptance }: UserCreation,
 ): Promise<void> => {
-  const disposition = STATEMENT_AT_CREATION[origin];
-  switch (disposition) {
-    case "shown":
-      await insertUserAcceptance(db, userId);
+  switch (acceptance.type) {
+    case "accepted":
+      await insertUserAcceptance(db, {
+        userId,
+        statementVersion: acceptance.statementVersion,
+      });
       return;
-    case "not_shown":
+    case "required":
       return;
     default:
-      disposition satisfies never;
-      panic("Unhandled professional-use statement disposition");
+      acceptance satisfies never;
+      panic("Unhandled creation acceptance");
   }
 };
 
@@ -327,7 +421,10 @@ export const acceptProfessionalUse = async ({
   userId,
 }: AcceptProfessionalUseOptions): Promise<void> => {
   await lockAccount(tx, userId);
-  await insertUserAcceptance(tx, userId);
+  await insertUserAcceptance(tx, {
+    userId,
+    statementVersion: PROFESSIONAL_USE_STATEMENT_VERSION,
+  });
   const accepted = await readUserProfessionalUse(tx, userId);
   if (accepted.status !== PROFESSIONAL_USE_STATUS.accepted) {
     return panic("The professional-use acceptance did not persist");

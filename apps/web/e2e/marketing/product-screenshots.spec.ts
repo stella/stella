@@ -2,6 +2,10 @@ import { expect, test } from "@playwright/test";
 import type { APIRequestContext, Page } from "@playwright/test";
 
 import { isPublicCaseLawCountry } from "@stll/api-contract/case-law-launch-readiness";
+import {
+  PROFESSIONAL_USE_DISPLAYED_VERSION_FIELD,
+  PROFESSIONAL_USE_STATEMENT_VERSION,
+} from "@stll/api-contract/professional-use";
 
 import { setFixedBrowserTime } from "../helpers/clock";
 
@@ -539,7 +543,15 @@ const authenticateMarketingSession = async (request: APIRequestContext) => {
 
   const signInResponse = await request.post(
     `${apiBaseURL}/api/auth/sign-in/email-otp`,
-    { data: { email, otp }, headers: { origin: webOrigin } },
+    {
+      data: {
+        email,
+        otp,
+        [PROFESSIONAL_USE_DISPLAYED_VERSION_FIELD]:
+          PROFESSIONAL_USE_STATEMENT_VERSION,
+      },
+      headers: { origin: webOrigin },
+    },
   );
   expect(signInResponse.ok(), await signInResponse.text()).toBe(true);
 

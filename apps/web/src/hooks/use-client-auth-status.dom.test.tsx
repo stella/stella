@@ -13,7 +13,8 @@ const { renderHook, waitFor } = await import("@testing-library/react");
 const { resolveFeedbackChannel } =
   await import("@/components/feedback-dialog.logic");
 const { useClientAuthStatus } = await import("@/hooks/use-client-auth-status");
-const { sessionOptions } = await import("@/lib/auth-queries");
+const { professionalUseOptions, sessionOptions } =
+  await import("@/lib/auth-queries");
 
 afterAll(async () => {
   await GlobalRegistrator.unregister();
@@ -102,6 +103,15 @@ describe("client auth status", () => {
   test("a failed refetch does not turn a cached member into a visitor", async () => {
     const queryClient = new QueryClient();
     queryClient.setQueryData(sessionOptions.queryKey, MEMBER_SESSION);
+    queryClient.setQueryData(
+      professionalUseOptions(MEMBER_SESSION.session.userId).queryKey,
+      {
+        status: "accepted",
+        statementVersion: "2026-10",
+        termsVersion: "2026-10",
+        acceptedAt: SIGNED_AT.toISOString(),
+      },
+    );
     const { result } = renderAuthStatus(queryClient);
     expect(result.current.status).toBe("authenticated");
 
@@ -117,6 +127,21 @@ describe("client auth status", () => {
       queryClient.getQueryData(sessionOptions.queryKey)?.session.userId,
     ).toBe(MEMBER_SESSION.session.userId);
     expect(resolveFeedbackChannel(result.current.status)).toBeNull();
+  });
+
+  // The API refuses its member requests until it accepts, so public pages
+  // serve it exactly as they serve a visitor.
+  test("a member whose account has not accepted the professional-use statement is a visitor", () => {
+    const queryClient = new QueryClient();
+    queryClient.setQueryData(sessionOptions.queryKey, MEMBER_SESSION);
+    queryClient.setQueryData(
+      professionalUseOptions(MEMBER_SESSION.session.userId).queryKey,
+      { status: "required" },
+    );
+    const { result } = renderAuthStatus(queryClient);
+
+    expect(result.current.status).toBe("anonymous");
+    expect(resolveFeedbackChannel(result.current.status)).toBe("public");
   });
 
   test("a read that answers with no session is a visitor", async () => {

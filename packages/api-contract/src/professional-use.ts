@@ -9,6 +9,16 @@ export const PROFESSIONAL_USE_STATEMENT_VERSION = "2026-10";
 export const PROFESSIONAL_USE_STATEMENT_SHA256 =
   "d4ae049f755b017246cccc22405611ecf214ffd84b8c8354d10a16a6d14819d5";
 
+/**
+ * The registration request field naming the statement version the page
+ * displayed: in the body of an email-OTP sign-in or the bootstrap sign-up,
+ * and in `additionalData` of a social sign-in, which the OAuth state carries
+ * to the callback that creates the account. An account is created accepted
+ * only when it names the current version.
+ */
+export const PROFESSIONAL_USE_DISPLAYED_VERSION_FIELD =
+  "professionalUseStatementVersion";
+
 /** The terms of service the statement is accepted under. */
 export const PROFESSIONAL_USE_TERMS_VERSION = "2026-10";
 

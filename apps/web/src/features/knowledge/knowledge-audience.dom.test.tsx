@@ -171,6 +171,17 @@ globalThis.fetch = Object.assign(
       }
       return Response.json(sessionBody());
     }
+    if (
+      path === "/v1/me/professional-use" &&
+      (askedAs === "org-a" || askedAs === "org-b")
+    ) {
+      return Response.json({
+        status: "accepted",
+        statementVersion: "2026-10",
+        termsVersion: "2026-10",
+        acceptedAt: "2026-10-01T00:00:00.000Z",
+      });
+    }
     if (path === "/v1/public/knowledge/template-packs") {
       return Response.json({
         items: templateCatalogue === "missing" ? [] : [CATALOGUE_PACK],
