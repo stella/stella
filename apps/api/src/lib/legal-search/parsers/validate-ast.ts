@@ -9,6 +9,7 @@
  */
 
 import * as cheerio from "cheerio";
+import { type AnyNode, isTag } from "domhandler";
 
 import { visibleHtmlText } from "@/api/handlers/case-law/ingestion/parsers/shared-inlines";
 import type { Block, Inline } from "@/api/lib/case-law/document-ast";
@@ -196,6 +197,33 @@ const holdsOnlyDecoration = (text: string): boolean =>
       return peeled === "" || SKIP_WORDS.has(peeled);
     });
 
+/** Elements whose text the reference extraction reads. */
+const CONTENT_TAGS = ["p", "li", "td", "th", "div"] as const;
+const CONTENT_SELECTOR = CONTENT_TAGS.join(", ");
+const isContentTag = (name: string): boolean =>
+  CONTENT_TAGS.some((tag) => tag === name);
+
+/**
+ * Whether any descendant is a content element. A walk rather than
+ * `:has()`: css-select answers `:has()` by recursing once per nesting
+ * level, which overflows the stack on deeply nested inline markup.
+ */
+const hasContentDescendant = (nodes: readonly AnyNode[]): boolean => {
+  const pending = [...nodes];
+  for (let node = pending.pop(); node !== undefined; node = pending.pop()) {
+    if (!isTag(node)) {
+      continue;
+    }
+    if (isContentTag(node.name)) {
+      return true;
+    }
+    for (const child of node.children) {
+      pending.push(child);
+    }
+  }
+  return false;
+};
+
 /** Flatten inline nodes to text (line-break → space). */
 const inlineText = (inlines: readonly Inline[]): string => {
   let text = "";
@@ -250,7 +278,6 @@ export const validateAst = (
   // Extract text from content elements, but skip nested
   // elements whose text is already included by a parent
   // (e.g., <td> inside <td> in NALUS HTML).
-  const contentSelector = "p, li, td, th, div";
   const seen = new Set<string>();
   const originalParts: string[] = [];
   // Stringifying a node visits its whole subtree, and the ancestor check
@@ -270,15 +297,12 @@ export const validateAst = (
   // Queried from the document root, never as `.find()` on a node: cheerio
   // dedupes a `.find()` context of N children pairwise, which is quadratic on
   // a body or wrapper holding tens of thousands of paragraphs.
-  $(`body :is(${contentSelector})`).each((_, el) => {
+  $(`body :is(${CONTENT_SELECTOR})`).each((_, el) => {
     const $el = $(el);
 
     // Skip <div> wrappers that contain child content
     // elements — those children are matched separately.
-    if (
-      el.tagName.toLowerCase() === "div" &&
-      $el.is(`:has(${contentSelector})`)
-    ) {
+    if (el.name === "div" && hasContentDescendant(el.children)) {
       return;
     }
 
@@ -291,7 +315,7 @@ export const validateAst = (
     // outer cell and again on its own, and the inflated original
     // length reads as content loss in an otherwise complete AST.
     const capturedByAncestor = $el
-      .parents(contentSelector)
+      .parents(CONTENT_SELECTOR)
       .toArray()
       .some((ancestor) => seen.has(normalizedText(ancestor)));
     if (capturedByAncestor) {

@@ -774,6 +774,31 @@ describe("validationSignal", () => {
  * between is machine noise, so a wide bound separates the two behaviours
  * without flaking when the suite runs in parallel.
  */
+describe("validateAst on deeply nested markup", () => {
+  // Deeper than any recursive tree walk reaches. A wrapper <div> is checked
+  // for content descendants; a <p> has its visible text read.
+  const NESTING = 200_000;
+  const nested = (text: string): string =>
+    `${"<span>".repeat(NESTING)}${text}${"</span>".repeat(NESTING)}`;
+  const DEEP_SHAPES = {
+    "inside a paragraph": `<body><p>${nested("Soud rozhodl takto")}</p></body>`,
+    "inside a wrapper": `<body><div>${nested("Soud rozhodl takto")}</div></body>`,
+  } as const satisfies Record<string, string>;
+
+  for (const [shape, html] of Object.entries(DEEP_SHAPES)) {
+    test(`reads the text ${shape}`, () => {
+      const result = validateAst(html, [
+        makeBlock({ plainText: "Soud rozhodl takto" }),
+      ]);
+
+      expect(result.stats.missingWords).toEqual([]);
+      expect(
+        result.issues.filter((issue) => issue.severity === "error"),
+      ).toEqual([]);
+    });
+  }
+});
+
 describe("validateAst scaling", () => {
   test("a flat many-paragraph document validates in linear-ish time", () => {
     const count = 6000;
