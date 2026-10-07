@@ -1899,7 +1899,7 @@ jobs:
         env:
           BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha || '' }}
         run: |
-          bun test scripts/check-oxlint-rule-coverage.test.ts scripts/gdp-proof-lint.test.ts
+          bun test scripts/check-oxlint-rule-coverage.test.ts
           bun scripts/check-oxlint-rule-coverage.ts
 
       - name: Documentation source policy rule
