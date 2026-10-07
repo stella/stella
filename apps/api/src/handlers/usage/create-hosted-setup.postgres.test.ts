@@ -519,7 +519,7 @@ if (!databaseUrl || !runPostgresTests) {
               hostedSessionId: SECOND_SESSION.hostedSessionId,
               hostedCheckoutUrl: SECOND_SESSION.url,
               usagePolicyId: requests.second.usagePolicyId,
-              seats: requests.second.seats ?? null,
+              seats: requests.second.seats,
             });
             expect(claims.at(0)?.claimId).not.toBe(first?.claimId);
           } finally {

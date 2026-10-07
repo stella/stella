@@ -598,8 +598,18 @@ const createHostedSetup = createSafeRootHandler(
             return panic("Unhandled awaited hosted checkout outcome");
         }
       }
-      default:
+      case "policy_not_found":
+      case "policy_not_hosted":
+      case "manual_entitlement_present":
+      case "addon_requires_subscription":
+      case "subscription_live":
+      case "checkout_open":
+      case "member_capacity_exceeded":
+      case "seats_on_non_subscription":
         return Result.err(checkoutRefusalError(dbResult));
+      default:
+        dbResult satisfies never;
+        return panic("Unhandled hosted checkout start");
     }
 
     const baseUrl = env.FRONTEND_URL.endsWith("/")
