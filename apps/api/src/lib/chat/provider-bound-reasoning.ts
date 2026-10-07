@@ -79,9 +79,29 @@ const responsesReasoningIdOf = (
   return typeof id === "string" && id !== "" ? id : undefined;
 };
 
+/**
+ * The message without its reasoning, and its calls without the item ids that
+ * paired them with it: a call that keeps its item id but not its reasoning is
+ * refused as missing that reasoning. Without an id it is sent as a new item.
+ */
 const withoutThinking = (message: ModelMessage): ModelMessage => {
   const { thinking: _unpaired, ...rest } = message;
-  return rest;
+  if (rest.toolCalls === undefined) {
+    return rest;
+  }
+  return {
+    ...rest,
+    toolCalls: rest.toolCalls.map((call) => {
+      if (call.metadata === undefined || !isRecord(call.metadata)) {
+        return call;
+      }
+      const { itemId: _paired, ...metadata } = call.metadata;
+      const { metadata: _withId, ...unpaired } = call;
+      return Object.keys(metadata).length === 0
+        ? unpaired
+        : { ...unpaired, metadata };
+    }),
+  };
 };
 
 /**

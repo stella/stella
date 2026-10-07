@@ -15,10 +15,12 @@ const thinkingFor = (ids: readonly string[]) =>
     signature: responsesSignature(id),
   }));
 
-const callFor = (index: number) => ({
+// A call the model made while reasoning carries the item id that pairs it
+// with that reasoning; a call made without reasoning pairs with nothing.
+const callFor = (index: number, reasoned: boolean) => ({
   function: { arguments: "{}", name: "save_contact" },
   id: `call_${index}`,
-  metadata: { itemId: `fc_${index}` },
+  ...(reasoned ? { metadata: { itemId: `fc_${index}` } } : {}),
   type: "function" as const,
 });
 
@@ -35,7 +37,11 @@ const assistant = ({
   role: "assistant",
   ...(reasoning.length > 0 ? { thinking: thinkingFor(reasoning) } : {}),
   ...(calls > 0
-    ? { toolCalls: Array.from({ length: calls }, (_, i) => callFor(i)) }
+    ? {
+        toolCalls: Array.from({ length: calls }, (_, i) =>
+          callFor(i, reasoning.length > 0),
+        ),
+      }
     : {}),
 });
 
@@ -72,18 +78,26 @@ const responsesInput = (messages: readonly ModelMessage[]): InputItem[] => {
 };
 
 /**
- * The pairing the API enforces: a replayed reasoning item is followed by the
- * item it led to, so a function call right after reasoning carries its id.
+ * The pairing the API enforces, both ways: a replayed reasoning item is
+ * followed by the item it led to, so a function call right after reasoning
+ * carries its id; and a function call carrying an item id follows the
+ * reasoning it was paired with.
  */
 const unpairedReasoning = (input: readonly InputItem[]): string[] =>
   input.flatMap((item, index) => {
-    if (item.type !== "reasoning") {
-      return [];
+    if (item.type === "reasoning") {
+      const next = input.slice(index + 1).find((n) => n.type !== "reasoning");
+      return next?.type === "function_call" && next.id === undefined
+        ? [item.id ?? "reasoning"]
+        : [];
     }
-    const next = input.slice(index + 1).find((n) => n.type !== "reasoning");
-    return next?.type === "function_call" && next.id === undefined
-      ? [item.id ?? "reasoning"]
-      : [];
+    if (item.type === "function_call" && item.id !== undefined) {
+      const before = input
+        .slice(0, index)
+        .findLast((n) => n.type !== "function_call");
+      return before?.type === "reasoning" ? [] : [item.id];
+    }
+    return [];
   });
 
 const sentToOpenAI = (messages: readonly ModelMessage[]) =>
@@ -118,6 +132,9 @@ describe("OpenAI reasoning replay after a declined call", () => {
     ]);
     const input = sentToOpenAI(messages);
     expect(input.some(({ type }) => type === "reasoning")).toBe(false);
+    expect(
+      input.filter(({ type }) => type === "function_call").map(({ id }) => id),
+    ).toEqual([undefined]);
     expect(unpairedReasoning(input)).toEqual([]);
   });
 

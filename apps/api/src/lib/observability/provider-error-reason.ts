@@ -13,7 +13,7 @@ const PROVIDER_ERROR_REASONS = [
   {
     reason: "function_call_without_reasoning",
     pattern:
-      /^Item '[^']*' of type 'function_call' was provided without its required 'reasoning' item[^']*\.?$/u,
+      /^Item '[^']*' of type 'function_call' was provided without its required 'reasoning' item(?:: '[^']*')?\.?$/u,
   },
   {
     reason: "function_call_output_missing",
