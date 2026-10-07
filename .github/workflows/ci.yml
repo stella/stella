@@ -3139,6 +3139,10 @@ jobs:
           scripts/check-base-image-pulls.test.ts
           scripts/dependabot-changeset.test.ts
 
+      - name: Test main network recording selection
+        if: ${{ !cancelled() && steps.checkout.outcome == 'success' && steps.install.outcome != 'failure' && steps.standalone_lockfiles.outcome != 'failure' && steps.lockfile_ages.outcome != 'failure' }}
+        run: bun test scripts/network-baseline-selection.test.ts
+
       - name: Test autofix decision boundaries
         if: ${{ !cancelled() && steps.checkout.outcome == 'success' && steps.install.outcome != 'failure' && steps.standalone_lockfiles.outcome != 'failure' && steps.lockfile_ages.outcome != 'failure' }}
         run: bun test scripts/check-autofix-test-durations.test.ts scripts/autofix-protected-paths.test.ts
