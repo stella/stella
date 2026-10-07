@@ -75,7 +75,7 @@ export const uploadEntityVersion = async ({
   }
 
   signal?.throwIfAborted();
-  const sha256Hex = await hashSha256Hex(await fileToUpload.arrayBuffer());
+  const sha256Hex = await hashSha256Hex(fileToUpload);
   signal?.throwIfAborted();
 
   const wsClient = api.uploads({

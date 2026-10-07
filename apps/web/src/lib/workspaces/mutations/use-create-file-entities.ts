@@ -97,7 +97,7 @@ const prepareFolderTreeUpload = async ({
       name: placement.file.name,
       mimeType: placement.file.type || "application/octet-stream",
       size: placement.file.size,
-      sha256Hex: await hashSha256Hex(await placement.file.arrayBuffer()),
+      sha256Hex: await hashSha256Hex(placement.file),
     });
   }
 
@@ -249,7 +249,7 @@ const prepareSingleFileEntityUpload = async ({
   signal.throwIfAborted();
 
   // 1. SHA-256 of file bytes.
-  const sha256Hex = await hashSha256Hex(await file.arrayBuffer());
+  const sha256Hex = await hashSha256Hex(file);
 
   signal.throwIfAborted();
 
