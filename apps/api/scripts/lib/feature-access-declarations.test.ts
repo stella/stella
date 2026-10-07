@@ -519,12 +519,14 @@ export const ${name} = { run: { featureId: "fixture", ${target} } };`;
   });
 
   // The capability exporter runs this over ~1,400 endpoints sharing most of
-  // one module graph. Re-reading every reachable module per endpoint once
-  // cost ~30 s per export; per-module work must not grow with endpoints.
-  test("per-module work does not grow with the endpoint count", () => {
-    const moduleCount = 60;
+  // one module graph. Re-analysing every reachable module per endpoint once
+  // cost ~30 s per export. Module analysis enumerates the registry, so the
+  // enumerations each extra endpoint adds must stay below the shared module
+  // count (per-endpoint re-analysis added ~11 per module).
+  test("shared modules are analysed once, not once per endpoint", () => {
+    const moduleCount = 20;
     const body = Array.from(
-      { length: 40 },
+      { length: 10 },
       (_, index) =>
         `export const f${index} = (db: Db) => db.query.rows${index}.findMany({ where: "ordinary_rows_${index}" });`,
     ).join("\n");
@@ -536,7 +538,14 @@ export const ${name} = { run: { featureId: "fixture", ${target} } };`;
           : "";
       shared.set(`apps/api/src/lib/m${index}.ts`, `${next}${body}`);
     }
-    const elapsed = (count: number) => {
+    const registryReads = (count: number) => {
+      let reads = 0;
+      const counted = new Proxy(registry, {
+        ownKeys: (target) => {
+          reads += 1;
+          return Reflect.ownKeys(target);
+        },
+      });
       const endpoints = Array.from({ length: count }, (_, index) => ({
         file: `apps/api/src/routes/e${index}.ts`,
         config: {},
@@ -545,17 +554,14 @@ export const ${name} = { run: { featureId: "fixture", ${target} } };`;
       for (const { file } of endpoints) {
         sources.set(file, 'import { f0 } from "../lib/m0"; export default f0;');
       }
-      const started = performance.now();
-      validateFeatureAccessDeclarations({ registry, endpoints, sources });
-      return performance.now() - started;
+      validateFeatureAccessDeclarations({
+        registry: counted,
+        endpoints,
+        sources,
+      });
+      return reads;
     };
-    // Minimum of three samples per size absorbs scheduler noise. Per-endpoint
-    // module walks measured 15x at 16x the endpoints; shared work stays ~1x.
-    const fastest = (count: number) =>
-      Math.min(elapsed(count), elapsed(count), elapsed(count));
-    elapsed(4);
-    const few = fastest(8);
-    const many = fastest(128);
-    expect(many / few).toBeLessThan(4);
+    const perEndpoint = (registryReads(9) - registryReads(1)) / 8;
+    expect(perEndpoint).toBeLessThan(moduleCount);
   });
 });
