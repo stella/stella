@@ -133,7 +133,10 @@ test("verifies a raw multipart fixture with genuine DKIM, ARC, SPF and DMARC res
     Buffer.from(raw.toString().replace("Original body", "Tampered body")),
     { ...options, ip: "192.0.2.99" },
   );
-  expect(tampered.dkim.results.at(0)?.status.result).toBe("fail");
+  expect(tampered.dkim.results.at(0)?.status).toMatchObject({
+    result: "neutral",
+    comment: "body hash did not verify",
+  });
   expect(tampered.spf.status.result).toBe("fail");
   expect(tampered.dmarc && tampered.dmarc.status.result).toBe("fail");
   expect(tampered.arc && tampered.arc.status.result).toBe("fail");

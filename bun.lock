@@ -153,7 +153,7 @@
         "nodemailer": "^10.0.13",
         "onnxruntime-node": "1.30.0",
         "pkijs": "3.4.1",
-        "postal-mime": "^3.0.1",
+        "postal-mime": "4.0.2",
         "posthog-node": "^5.54.1",
         "quickjs-emscripten-core": "^0.32.0",
         "react": "catalog:react19",
@@ -5112,7 +5112,7 @@
 
     "points-on-path": ["points-on-path@0.2.1", "", { "dependencies": { "path-data-parser": "0.1.0", "points-on-curve": "0.2.0" } }, "sha512-25ClnWWuw7JbWZcgqY/gJ4FQWadKxGWk+3kR/7kD0tCaDtPPMj7oHu2ToLaVhfpnHrZzYby2w6tUA0eOIuUg8g=="],
 
-    "postal-mime": ["postal-mime@3.0.1", "", {}, "sha512-N86EnYOxZjW1uHQIgSXnnRdnJz+wxmtDsnk3C4R/9rQ1utj8A2znauXZ3Q3+stCHxG5ckY4/NrO09WiPU6rcdQ=="],
+    "postal-mime": ["postal-mime@4.0.2", "", {}, "sha512-b/FqJGdS+Y+leh30r2ord1gWZNPfYcTiFBR1BIPvZYvQrKJjYYqGeECh9sQ5BpkWtcjSj39ngIAiE2w6XNfMjA=="],
 
     "postcss": ["postcss@8.5.28", "", { "dependencies": { "nanoid": "^3.3.18", "picocolors": "^1.1.1", "source-map-js": "^1.2.1" } }, "sha512-RRuzqDtt5Y9h3quz5hWhK+TPnsmVs6WwSU6LkJMeY4HstUEDuYTG8UJSdawMRzmzAtV+KEoG8N3Qg2qLy5vM/A=="],
 
