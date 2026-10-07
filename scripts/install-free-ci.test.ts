@@ -939,6 +939,37 @@ describe("install-free invocation classification", () => {
       importProblems({ entries: ["scripts/check.test.ts"], root }),
     ).toEqual([]);
   });
+  test("installed Bun CLIs in subprocesses require the dependency install", () => {
+    for (const launcher of ["process.execPath", '"bun"']) {
+      for (const method of ["spawn", "spawnSync"]) {
+        const source = `Bun.${method}([${launcher}, "--bun", "oxlint", "changed.ts"]);`;
+        const root = fixture({ "check.ts": source });
+        expect(importProblems({ root, entries: ["check.ts"] })).toEqual([
+          "check.ts launches installed Bun CLI oxlint",
+        ]);
+        expect(
+          importProblems({ root, entries: [], code: { cwd: "", source } }),
+        ).toEqual(["inline code in . launches installed Bun CLI oxlint"]);
+        writeFileSync(
+          path.join(root, "check.ts"),
+          `const fixture = ${JSON.stringify(source)};\n// ${source}\nBun.spawnSync([process.execPath, "scripts/check.ts"]);`,
+        );
+        expect(importProblems({ root, entries: ["check.ts"] })).toEqual([]);
+      }
+    }
+  });
+
+  test("the type-aware autofix fixture cannot run from a bare checkout", () => {
+    expect(
+      importProblems({
+        root: REPO_ROOT,
+        entries: ["scripts/autofix-type-aware.test.ts"],
+      }),
+    ).toContain(
+      "scripts/autofix-type-aware.test.ts launches installed Bun CLI oxlint",
+    );
+  });
+
   test("bounded installs and planner calls retain dependency coverage", () => {
     for (const prefix of [
       ...["0", "1.5", ".5", "1.", "2s", "3.5m", "4h", "5d"].map(
