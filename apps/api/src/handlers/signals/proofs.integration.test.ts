@@ -11,6 +11,7 @@ import {
 } from "@stll/api-contract/signals";
 import type { PermissionInput } from "@stll/permissions";
 
+import type { Transaction } from "@/api/db/root";
 import { resultTx } from "@/api/db/safe-db";
 import type { SafeDb } from "@/api/db/safe-db";
 import { SIGNAL_EVENT_TYPE, signals } from "@/api/db/schema";
@@ -71,14 +72,17 @@ const requestDraft = () =>
     dedupeKey: `proof-request:${createSafeId<"signal">()}`,
   }) as const;
 
-const seed = async (workspaceId: SafeId<"workspace"> | null) => {
+const seed = async (
+  workspaceId: SafeId<"workspace"> | null,
+  organizationId: SafeId<"organization"> = ids.orgA,
+) => {
   const id = createSafeId<"signal">();
   const draft = requestDraft();
   await testDb.insert(signals).values({
     ...draft,
     suggestions: [],
     id,
-    organizationId: ids.orgA,
+    organizationId,
     workspaceId,
     origin: SIGNAL_KIND_ORIGIN[draft.kind],
     evidence: { ...draft.evidence, attachments: [] },
@@ -175,6 +179,112 @@ describe("signal authorization evidence", () => {
       }
     },
   );
+
+  test("transition evidence requires the signal organization", async () => {
+    const signalId = await seed(ids.wsB1, ids.orgB);
+    const before = await testDb.query.signals.findFirst({
+      where: { id: { eq: signalId } },
+    });
+    expect(before).toMatchObject({
+      organizationId: ids.orgB,
+      workspaceId: ids.wsB1,
+    });
+    let writeCalls = 0;
+    // Owner transactions exercise the proof's organization predicates directly.
+    const outcome = await testDb.transaction(async (transaction) =>
+      withVisibleSignal(
+        {
+          tx: asTestRaw<Transaction>(transaction),
+          organizationId: ids.orgA,
+          actorUserId: ids.userA1,
+          memberRole: owner(),
+          signalId,
+        },
+        async ({ tx, signal, actor, proof, existing }) => {
+          writeCalls += 1;
+          return await transitionSignal({
+            tx,
+            signalId: signal,
+            actorUserId: actor,
+            visibility: proof,
+            from: [SIGNAL_STATUS.NEW],
+            set: { status: SIGNAL_STATUS.DISMISSED, resolvedAt: new Date() },
+            event: { type: SIGNAL_EVENT_TYPE.DISMISSED },
+            audit: {
+              recordAuditEvent: async () => undefined,
+              workspaceId: existing.workspaceId,
+              previousStatus: existing.status,
+              metadata: {},
+            },
+          });
+        },
+      ),
+    );
+    expect(outcome).toMatchObject({
+      error: { status: 404, message: "Signal not found" },
+    });
+    expect(writeCalls).toBe(0);
+    expect(
+      await testDb.query.signals.findFirst({
+        where: { id: { eq: signalId } },
+      }),
+    ).toEqual(before);
+    expect(
+      await testDb.query.signalEvents.findMany({
+        where: { signalId: { eq: signalId } },
+      }),
+    ).toEqual([]);
+  });
+
+  test("request evidence requires the matter organization", async () => {
+    const matter = await testDb.query.workspaces.findFirst({
+      where: { id: { eq: ids.wsB1 } },
+    });
+    expect(matter).toMatchObject({ organizationId: ids.orgB });
+    const draft = requestDraft();
+    expect(
+      await testDb.query.signals.findFirst({
+        where: { dedupeKey: { eq: draft.dedupeKey } },
+      }),
+    ).toBeUndefined();
+    let writeCalls = 0;
+    const outcome = await testDb.transaction(async (transaction) =>
+      withSignalRequestAuthorization(
+        {
+          tx: asTestRaw<Transaction>(transaction),
+          organizationId: ids.orgA,
+          actorUserId: ids.userA1,
+          memberRole: owner(),
+          workspaceId: ids.wsB1,
+        },
+        async ({ tx, workspace, actor, proof }) => {
+          writeCalls += 1;
+          const inserted = await emitSignalRequest({
+            tx,
+            workspace,
+            actor,
+            proof,
+            signal: {
+              ...draft,
+              suggestions: [],
+              evidence: { ...draft.evidence, attachments: [] },
+            },
+          });
+          seeded.push(...inserted.insertedIds);
+          return Result.ok(inserted);
+        },
+      ),
+    );
+    expect(outcome).toMatchObject({
+      error: { status: 404, message: "Matter not found" },
+    });
+    expect(writeCalls).toBe(0);
+    expect(
+      await testDb.query.signals.findFirst({
+        where: { dedupeKey: { eq: draft.dedupeKey } },
+      }),
+    ).toBeUndefined();
+  });
 
   test("a checked transition records its actor and uses the current row", async () => {
     const signalId = await seed(ids.wsA1);

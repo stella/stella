@@ -2112,7 +2112,7 @@ jobs:
       - name: Changeset present for published package changes
         if: ${{ !cancelled() && steps.checkout.outcome == 'success' && (github.event_name == 'pull_request') && steps.policy.outcome == 'success' }}
         # The repository owner publishes this versioned shared contract.
-        uses: stella/.github/.github/actions/changeset-policy@37bfa04a893d1ae2b9d28379cf68e8360781c8bc # v1.8.0
+        uses: stella/.github/.github/actions/changeset-policy@167fb396c6c0f4e07296ad2cd72e6ef15367c776 # v1.8.0
         with:
           release-paths: ${{ steps.policy.outputs.release_paths }}
           generated-paths: ${{ steps.policy.outputs.generated_paths }}
@@ -5250,11 +5250,13 @@ jobs:
 
   route-smoke:
     needs: [ci-plan, web-build, heavy-web-build]
+    # A thin merge group still runs the browser suites when the change needs
+    # them; QUEUE_BROWSER_SUITES=off turns that off without a commit.
     if: >-
       needs.ci-plan.outputs.run_required != 'false'
       && (
       github.event_name != 'pull_request' && (
-      needs.ci-plan.outputs.queue_depth != 'thin'
+      (needs.ci-plan.outputs.queue_depth != 'thin' || (github.event_name == 'merge_group' && vars.QUEUE_BROWSER_SUITES != 'off'))
       && (always()
       && (github.event_name != 'merge_group' || !cancelled())
       && needs.ci-plan.outputs.trusted == 'true'
@@ -5399,11 +5401,12 @@ jobs:
 
   e2e-production-shard:
     needs: [ci-plan, web-build, heavy-web-build]
+    # Admitted to thin merge groups like route-smoke (see there).
     if: >-
       needs.ci-plan.outputs.run_required != 'false'
       && (
       github.event_name != 'pull_request' && (
-      needs.ci-plan.outputs.queue_depth != 'thin'
+      (needs.ci-plan.outputs.queue_depth != 'thin' || (github.event_name == 'merge_group' && vars.QUEUE_BROWSER_SUITES != 'off'))
       && (always()
       && (github.event_name != 'merge_group' || !cancelled())
       && (needs.ci-plan.outputs.trusted == 'true'

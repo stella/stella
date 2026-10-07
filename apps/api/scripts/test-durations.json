@@ -3815,6 +3815,10 @@
     "seconds": 1,
     "source": "estimated"
   },
+  "src/handlers/visual-sandbox/fixtures/showcase/showcase.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
   "src/handlers/visual-sandbox/literal-links.test.ts": {
     "seconds": 1,
     "source": "estimated"
