@@ -5546,7 +5546,7 @@ describe("OpenAI-compatible MCP tools", () => {
       },
     });
     const payload = await readDecisions({ decision_ids: [DECISION_ID] });
-    expect(payload.items.at(0)?.decision?.["citations"]).toMatchObject({
+    expect(payload.items.at(0)?.decision?.citations).toMatchObject({
       citedBy: {
         count: 1,
         top: {
