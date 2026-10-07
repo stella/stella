@@ -532,6 +532,7 @@ describe("file derivative repair", () => {
       expect(failures.at(0)?.severityText).toBe("WARN");
       expect(failures.at(0)?.attributes).toMatchObject({
         stage: "requeue",
+        fieldId: seeded.at(failureIndex),
       });
       expect(
         logs.records.find(

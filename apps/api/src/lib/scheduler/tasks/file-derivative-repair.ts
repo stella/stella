@@ -418,6 +418,7 @@ export const createRepairFileDerivativesTask =
         // The runner owns the exception capture and failed-run ERROR.
         logger.warn("file_derivative.repair_failed", {
           entityId: row.entityId,
+          fieldId: row.fieldId,
           jobId: job.id,
           stage: "requeue",
           workspaceId: row.workspaceId,
