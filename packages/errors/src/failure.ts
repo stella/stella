@@ -43,6 +43,7 @@ export const FAILURE_REASON_GRADE = {
   generation_cancelled: "anticipated",
   chat_loop_detected: "anticipated",
   chat_empty_completion: "anticipated",
+  // parser-output-unchanged: visual preview reasons grade observed failures only; no parser reads them.
   visual_preview_input_invalid: "anticipated",
   visual_preview_not_configured: "anticipated",
   provider_billing: "anticipated",

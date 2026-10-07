@@ -97,7 +97,7 @@ describe("show visual", () => {
   test.each(Object.entries(previewFailures))(
     "reports a %s preview failure while keeping the published resource",
     async (code, { error: failure, grade, reason }) => {
-      expect(failure.code).toBe(code);
+      expect(code).toBe(failure.code);
       const origin = createVisualResourceOrigin();
       const emissions: unknown[] = [];
       const tool = createShowVisualTools({
