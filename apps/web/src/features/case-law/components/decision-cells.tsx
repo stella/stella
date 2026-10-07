@@ -54,8 +54,6 @@ import { useFormatter, useLocale } from "@/i18n/formatting-context";
 import type { TranslationKey } from "@/i18n/types";
 import { detached } from "@/lib/detached";
 
-export { decisionYear } from "@/features/case-law/citation-format";
-
 /** What a cell draws for a value the decision does not carry. */
 const EMPTY_VALUE = "—";
 
