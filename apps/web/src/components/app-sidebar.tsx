@@ -62,7 +62,6 @@ import { cn } from "@stll/ui/utils";
 import {
   matterActivityIsKnownEmpty,
   matterActivityItemVisible,
-  matterActivityNeedsLegalListsDecision,
   resolveEntityActivityDestination,
   resolveAutomaticExpandedMatterId,
   resolveMatterNavigationTarget,
@@ -142,8 +141,6 @@ import { knowledgeSections } from "@/lib/knowledge/navigation";
 import { isPublicKnowledgeEnabled } from "@/lib/knowledge/public-knowledge-launch";
 import { publicToolsBasePath } from "@/lib/knowledge/public-tools-path";
 import { localISODate } from "@/lib/local-iso-date";
-import { useCallerFeatureEnabled } from "@/lib/organization/feature-access/access";
-import { CALLER_FEATURE } from "@/lib/organization/feature-access/surfaces";
 import { usePinnedStore } from "@/lib/pinned-store";
 import { formatFullTimestamp, formatRelativeTime } from "@/lib/relative-time";
 import type { EntityKind } from "@/lib/types";
@@ -1162,18 +1159,11 @@ const MatterItem = ({
     () => queryClient.getQueryState(activityQueryKey)?.isInvalidated ?? false,
     () => false,
   );
-  const legalListsEnabled = useCallerFeatureEnabled(CALLER_FEATURE.legalLists, {
-    enabled: matterActivityNeedsLegalListsDecision(
-      cachedActivity?.pages.flatMap((page) => page.items) ?? [],
-    ),
-  });
   const activityIsKnownEmpty = matterActivityIsKnownEmpty({
     isInvalidated: activityIsInvalidated,
     pages: cachedActivity?.pages.map((page) => ({
       ...page,
-      items: page.items.filter((item) =>
-        matterActivityItemVisible(item, legalListsEnabled),
-      ),
+      items: page.items.filter(matterActivityItemVisible),
     })),
     status: activityStatus,
   });
@@ -1595,12 +1585,7 @@ const MatterActivityList = ({
     enabled: mounted,
   });
   const activityItems = data?.pages.flatMap((page) => page.items) ?? [];
-  const legalListsEnabled = useCallerFeatureEnabled(CALLER_FEATURE.legalLists, {
-    enabled: matterActivityNeedsLegalListsDecision(activityItems),
-  });
-  const items = activityItems.filter((item) =>
-    matterActivityItemVisible(item, legalListsEnabled),
-  );
+  const items = activityItems.filter(matterActivityItemVisible);
 
   const openEntity = async ({
     entityKind,
