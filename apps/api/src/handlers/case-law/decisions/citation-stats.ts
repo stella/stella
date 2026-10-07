@@ -10,7 +10,7 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { boundedAll } from "@/api/lib/db/bounded-all";
 import { logger } from "@/api/lib/observability/logger";
 
-/** Plane paces each transaction; a batch cannot grow with corpus size. */
+/** Each transaction refreshes a bounded batch that cannot grow with corpus size. */
 export const DECISION_CITATION_STATS_BATCH_MAX = 32;
 
 type CitationStatsTransaction = Pick<Transaction, "select"> & {
