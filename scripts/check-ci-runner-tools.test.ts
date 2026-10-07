@@ -83,6 +83,94 @@ test("every tracked executable is rejected on an unknown image and accepted afte
   }
 });
 
+test("nested parallel checks see sibling installs only after the group", () => {
+  withFixture(
+    {
+      jobs: {
+        check: {
+          "runs-on": "unknown",
+          steps: [
+            {
+              parallel: [
+                { run: "sudo apt-get install -y ripgrep" },
+                {
+                  parallel: [
+                    { name: "Nested invocation", run: "rg --version" },
+                  ],
+                },
+              ],
+            },
+            { run: "rg --version" },
+          ],
+        },
+      },
+    },
+    (root) => {
+      const findings = problems(root);
+      expect(findings).toHaveLength(1);
+      expect(findings.at(0)).toContain("Nested invocation");
+      expect(findings.at(0)).toContain("requires rg");
+    },
+  );
+});
+
+test("parallel groups wait for background installs without sharing them with siblings", () => {
+  withFixture(
+    {
+      jobs: {
+        check: {
+          "runs-on": "unknown",
+          steps: [
+            {
+              parallel: [
+                {
+                  id: "tools",
+                  background: true,
+                  run: "sudo apt-get install -y ripgrep",
+                },
+                { name: "Concurrent invocation", run: "rg --version" },
+              ],
+            },
+            { name: "After group", run: "rg --version" },
+          ],
+        },
+      },
+    },
+    (root) => {
+      const findings = problems(root);
+      expect(findings).toHaveLength(1);
+      expect(findings.at(0)).toContain("Concurrent invocation");
+    },
+  );
+});
+
+test("background runner-tool installs take effect only after a wait", () => {
+  withFixture(
+    {
+      jobs: {
+        check: {
+          "runs-on": "unknown",
+          steps: [
+            {
+              id: "tools",
+              background: true,
+              run: "sudo apt-get install -y ripgrep",
+            },
+            { name: "Before wait", run: "rg --version" },
+            { wait: "tools" },
+            { name: "After wait", run: "rg --version" },
+          ],
+        },
+      },
+    },
+    (root) => {
+      const findings = problems(root);
+      expect(findings).toHaveLength(1);
+      expect(findings.at(0)).toContain("Before wait");
+    },
+  );
+});
+
 test("malformed step metadata and execution settings are reported without coercion", () => {
   withFixture(
     {

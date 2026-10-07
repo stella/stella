@@ -3,6 +3,15 @@ import { describe, expect, test } from "bun:test";
 import { unlistedTests } from "./run-unlisted-script-tests";
 
 describe("unlistedTests", () => {
+  test("nested parallel commands remain listed without losing the remainder", () => {
+    expect(
+      unlistedTests(
+        ["scripts/nested.test.ts", "scripts/unlisted.test.ts"],
+        "jobs:\n  checks:\n    steps:\n      - parallel:\n          - parallel:\n              - name: Nested check\n                run: bun test scripts/nested.test.ts\n",
+      ),
+    ).toEqual(["scripts/unlisted.test.ts"]);
+  });
+
   test("keeps only the tests no workflow names", () => {
     const workflowText = [
       "run: bun test scripts/listed.test.ts",

@@ -83,6 +83,12 @@ test("the install guard rejects bypasses, unbounded steps and lost logs", () => 
   ).toContain("smoke: install bypasses scripts/ci-install.ts");
   expect(
     boundedInstallProblems(
+      workflow([{ parallel: [{ run: "bun install" }] }, upload]),
+      "windows",
+    ),
+  ).toContain("smoke: install bypasses scripts/ci-install.ts");
+  expect(
+    boundedInstallProblems(
       workflow([{ ...install, "timeout-minutes": 10 }, upload]),
       "windows",
     ),
@@ -657,6 +663,80 @@ describe("install-free invocation classification", () => {
         ].join("\n"),
       ),
     ).toEqual(["install", "install", "files"]);
+  });
+
+  test("parallel siblings share only the installs available before the group", () => {
+    const root = repository(
+      [
+        "jobs:",
+        "  job:",
+        "    steps:",
+        "      - parallel:",
+        "          - run: bun ci",
+        "          - parallel:",
+        "              - name: Nested invocation",
+        "                run: bun scripts/check.ts",
+        "      - name: After group",
+        "        run: bun scripts/check.ts",
+      ].join("\n"),
+    );
+    const invocations = installFreeInvocations({
+      root,
+      workflow: CI_WORKFLOW,
+    });
+    const files = invocations.filter(
+      ({ classification }) => classification.type === "files",
+    );
+    expect(files).toHaveLength(1);
+    expect(files.at(0)?.step).toBe("Nested invocation");
+  });
+
+  test("a parallel group waits for background installs without sharing them with siblings", () => {
+    const root = repository(
+      [
+        "jobs:",
+        "  job:",
+        "    steps:",
+        "      - parallel:",
+        "          - id: installed",
+        "            background: true",
+        "            run: bun ci",
+        "          - name: Concurrent invocation",
+        "            run: bun scripts/check.ts",
+        "      - name: After group",
+        "        run: bun scripts/check.ts",
+      ].join("\n"),
+    );
+    const files = installFreeInvocations({
+      root,
+      workflow: CI_WORKFLOW,
+    }).filter(({ classification }) => classification.type === "files");
+    expect(files).toHaveLength(1);
+    expect(files.at(0)?.step).toBe("Concurrent invocation");
+  });
+
+  test("a background install covers commands only after its wait", () => {
+    const root = repository(
+      [
+        "jobs:",
+        "  job:",
+        "    steps:",
+        "      - id: installed",
+        "        background: true",
+        "        run: bun ci",
+        "      - name: Before wait",
+        "        run: bun scripts/check.ts",
+        "      - wait: installed",
+        "      - name: After wait",
+        "        run: bun scripts/check.ts",
+      ].join("\n"),
+    );
+    const files = installFreeInvocations({
+      root,
+      workflow: CI_WORKFLOW,
+    }).filter(({ classification }) => classification.type === "files");
+    expect(files).toHaveLength(1);
+    expect(files.at(0)?.step).toBe("Before wait");
   });
 
   const continuationCases: readonly {

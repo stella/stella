@@ -2220,6 +2220,52 @@ jobs:
           git checkout -- apps/web/e2e/network-baseline.json
           rm -f apps/web/e2e/.network-baseline-*
 
+      - name: Prepare environment
+        if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
+        # `cp`, not `mv`: renaming the tracked .env.example dirties the
+        # working tree in apps/api and apps/web, and `turbo --affected`
+        # counts working-tree changes — so every PR (even web-only ones)
+        # ran the api AND web test suites concurrently and could OOM the
+        # runner (exit 137). The copy leaves the tree clean; .env is
+        # gitignored and invisible to affected-detection.
+        run: |
+          cd ./apps/api
+          cp .env.example .env
+          cd ../web
+          cp .env.example .env
+
+      - name: Content delivery declarations
+        if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
+        # The guard follows handler imports into the gitignored capability
+        # runtime modules, so generate them first instead of skipping them.
+        run: |
+          bun scripts/ci-generated-sources.ts prepare
+          bun apps/api/scripts/content-delivery-guard.ts --self-test
+          bun apps/api/scripts/content-delivery-guard.ts
+
+      # Three measured long checks use isolated temporary fixtures. Keep one
+      # of the four runner CPUs available for the foreground checks.
+      - name: Test capability shard merge and package parity
+        id: capability_parity
+        background: true
+        if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
+        run: bun test scripts/capability-shard-merge.test.ts scripts/capability-shard-pack.test.ts
+
+      # Root script tests belong to no workspace package, so no scoped test
+      # run reaches them. Other steps call some by path; this runs every
+      # other one, so a new test cannot miss CI by missing a step.
+      - name: Test remaining repository scripts
+        id: remaining_scripts
+        background: true
+        if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
+        run: bun scripts/run-unlisted-script-tests.ts
+
+      - name: Test release image CI gate
+        id: release_image_gate
+        background: true
+        if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
+        run: bun test scripts/ci-plan.test.ts
+
       - name: Workspace hygiene
         if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
         # Restored from the bun postinstall lifecycle, which is bypassed
@@ -2287,33 +2333,9 @@ jobs:
         if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
         run: bun run check:railway-template
 
-      - name: Prepare environment
-        if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
-        # `cp`, not `mv`: renaming the tracked .env.example dirties the
-        # working tree in apps/api and apps/web, and `turbo --affected`
-        # counts working-tree changes — so every PR (even web-only ones)
-        # ran the api AND web test suites concurrently and could OOM the
-        # runner (exit 137). The copy leaves the tree clean; .env is
-        # gitignored and invisible to affected-detection.
-        run: |
-          cd ./apps/api
-          cp .env.example .env
-          cd ../web
-          cp .env.example .env
-
       - name: Check i18n sync
         if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
         run: bun run i18n:check
-
-      - name: Playwright config scope
-        if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
-        # Lists every Playwright config from its package. A spec that does not
-        # load, or a project that collects another package's specs, fails here
-        # on the pull request instead of failing every e2e shard in the queue.
-        # The fixture tests run first so a broken guard cannot pass silently.
-        run: |
-          bun test scripts/check-playwright-config-scope.test.ts
-          bun run check:playwright-config-scope
 
       - name: Release changelog guard
         if: ${{ !cancelled() && steps.checkout.outcome == 'success' && steps.install.outcome != 'failure' && steps.standalone_lockfiles.outcome != 'failure' && steps.lockfile_ages.outcome != 'failure' && (github.event_name == 'pull_request' || github.event_name == 'merge_group') }}
@@ -2593,14 +2615,6 @@ jobs:
         # doc fails here. Regenerate: `bun scripts/design-tokens-doc.ts --write`.
         run: bun scripts/design-tokens-doc.ts --check
 
-      - name: Generated files manifest guard
-        if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
-        # Guard A registers tracked generated files; Guard B checks the
-        # manifest entries with offline checks against committed outputs.
-        run: |
-          bun scripts/generated-files-guard.ts --guard-a
-          bun scripts/generated-files-guard.ts --guard-b
-
       - name: Suppression waiver ledger
         if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
         # The ratchet budgets cap how many suppressions each lint rule carries.
@@ -2658,6 +2672,30 @@ jobs:
           bun run --cwd packages/scripts test ../../scripts/transfer-read-guard.test.ts
           bun scripts/transfer-read-guard.ts
 
+      # Join two long checks before reusing their background slots.
+      - name: Wait for repository and release image checks
+        wait: [remaining_scripts, release_image_gate]
+
+      # The api test runner only globs `src/**`, so the tests beside the api
+      # scripts (seed guards, AI provider canary, MCP coverage) need an
+      # explicit invocation to run in CI, like the scripts tests above. The
+      # glob keeps a new scripts test from landing unrun. Gated on workspace
+      # checks so it is skipped on workflow-only PRs where dependencies are
+      # not installed.
+      - name: Test api scripts
+        id: api_scripts
+        background: true
+        if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
+        run: >-
+          bun test --preload ./apps/api/src/tests/setup-env.ts
+          apps/api/scripts/*.test.ts
+
+      - name: Test CLI runtime package parity
+        id: cli_runtime_parity
+        background: true
+        if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
+        run: bun test scripts/cli-runtime-pack.test.ts scripts/cli-runtime-merge.test.ts
+
       - name: Model catalog snapshot drift check
         if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true' && needs.ci-plan.outputs.model_catalog_drift_required == 'true') }}
         # These fetch models.dev and OpenRouter and byte-compare the
@@ -2711,15 +2749,6 @@ jobs:
         run: |
           bun apps/api/scripts/mcp-coverage-guard.ts --self-test
           bun apps/api/scripts/mcp-coverage-guard.ts
-
-      - name: Content delivery declarations
-        if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
-        # The guard follows handler imports into the gitignored capability
-        # runtime modules, so generate them first instead of skipping them.
-        run: |
-          bun scripts/ci-generated-sources.ts prepare
-          bun apps/api/scripts/content-delivery-guard.ts --self-test
-          bun apps/api/scripts/content-delivery-guard.ts
 
       - name: MCP surface baseline self-test
         if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
@@ -2836,9 +2865,31 @@ jobs:
           bash scripts/create-release-manifest.test.sh
           bash scripts/promote-desktop-release.test.sh
 
-      - name: Test release image CI gate
+      # Join this pair before starting the remaining background checks.
+      - name: Wait for API scripts and CLI runtime checks
+        wait: [api_scripts, cli_runtime_parity]
+
+      - name: Generated files manifest guard
+        id: generated_manifest
+        background: true
         if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
-        run: bun test scripts/ci-plan.test.ts
+        # Guard A registers tracked generated files; Guard B checks the
+        # manifest entries with offline checks against committed outputs.
+        run: |
+          bun scripts/generated-files-guard.ts --guard-a
+          bun scripts/generated-files-guard.ts --guard-b
+
+      - name: Playwright config scope
+        id: playwright_scope
+        background: true
+        if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
+        # Lists every Playwright config from its package. A spec that does not
+        # load, or a project that collects another package's specs, fails here
+        # on the pull request instead of failing every e2e shard in the queue.
+        # The fixture tests run first so a broken guard cannot pass silently.
+        run: |
+          bun test scripts/check-playwright-config-scope.test.ts
+          bun run check:playwright-config-scope
 
       - name: Test documentation and landing CI scope
         if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
@@ -2875,18 +2926,6 @@ jobs:
       - name: Test maintenance release preparation
         if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
         run: bun test scripts/prepare-maintenance-release.property.test.ts
-
-      # The api test runner only globs `src/**`, so the tests beside the api
-      # scripts (seed guards, AI provider canary, MCP coverage) need an
-      # explicit invocation to run in CI, like the scripts tests above. The
-      # glob keeps a new scripts test from landing unrun. Gated on workspace
-      # checks so it is skipped on workflow-only PRs where dependencies are
-      # not installed.
-      - name: Test api scripts
-        if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
-        run: >-
-          bun test --preload ./apps/api/src/tests/setup-env.ts
-          apps/api/scripts/*.test.ts
 
       - name: Test API and CLI contract invariants
         if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
@@ -2942,14 +2981,6 @@ jobs:
       - name: Test CLI release coupling gate
         if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
         run: bun test scripts/check-cli-release-coupling.test.ts
-
-      - name: Test CLI runtime package parity
-        if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
-        run: bun test scripts/cli-runtime-pack.test.ts scripts/cli-runtime-merge.test.ts
-
-      - name: Test capability shard merge and package parity
-        if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
-        run: bun test scripts/capability-shard-merge.test.ts scripts/capability-shard-pack.test.ts
 
       - name: Test CLI contract changeset guard
         if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
@@ -3048,19 +3079,16 @@ jobs:
           bun run check:office-fixture-metadata
           bun --filter @stll/docx-utils test:office-fixture-metadata
 
-      # Root script tests belong to no workspace package, so no scoped test
-      # run reaches them. The steps above call some by path; this runs every
-      # other one, so a new test cannot miss CI by missing a step.
-      - name: Test remaining repository scripts
-        if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
-        run: bun scripts/run-unlisted-script-tests.ts
-
       # Fail PRs that change the desktop bridge surface without
       # bumping BRIDGE_VERSION in apps/desktop/src-tauri/src/types.rs.
       # See scripts/check-bridge-version.sh for rationale.
       - name: Bridge-version guard
         if: ${{ !cancelled() && steps.checkout.outcome == 'success' && steps.install.outcome != 'failure' && steps.standalone_lockfiles.outcome != 'failure' && steps.lockfile_ages.outcome != 'failure' && (github.event_name == 'pull_request') }}
         run: bash scripts/check-bridge-version.sh
+
+      # Surface background failures before failure-triggered cancellation.
+      - name: Wait for independent repository checks
+        wait-all:
 
       - name: Cancel failed merge-group run
         if: failure() && github.event_name == 'merge_group'
