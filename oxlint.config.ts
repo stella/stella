@@ -1653,6 +1653,7 @@ const config = defineConfig({
       files: [
         "apps/**/*.{ts,tsx,js,mjs}",
         "packages/**/*.{ts,tsx,js,mjs}",
+        "scripts/**/*.{ts,tsx,js,mjs}",
         ".oxlint-plugins/__fixtures__/no-hand-rolled-concurrency.fixture.ts",
       ],
       rules: {
