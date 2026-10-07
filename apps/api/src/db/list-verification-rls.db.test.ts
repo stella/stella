@@ -170,7 +170,9 @@ describe.skipIf(!enabled)("list verification row security", () => {
         } satisfies typeof legalListVerificationRuns.$inferInsert;
         await db.insert(legalListVerificationRuns).values(runFixture);
         const failureLines: string[] = [];
-        setMetricLineSinkForTesting((line) => failureLines.push(line));
+        setMetricLineSinkForTesting((line) => {
+          failureLines.push(line);
+        });
         try {
           for (const errorCode of [
             "extraction_failed",

@@ -3489,7 +3489,8 @@ test("verification paths select only scoped Postgres suites on pull requests", (
       file: "apps/api/src/handlers/legislation/new-backfill.ts",
       required: false,
     },
-    { file: "apps/api/scripts/run-postgres-tests.ts", required: false },
+    { file: "apps/api/scripts/run-postgres-tests.ts", required: true },
+    { file: "apps/api/scripts/avt-postgres-tests.ts", required: true },
     { file: "apps/api/src/tests/setup-env.ts", required: false },
     {
       file: "apps/api/src/lib/scheduler/runner.postgres.test.ts",
@@ -3534,34 +3535,24 @@ test("verification paths select only scoped Postgres suites on pull requests", (
     ]);
   }
   // Evaluate the actual job condition with planner outputs at both depths.
-  const conditions = planned.flatMap(({ file, selected }) =>
-    ["fast", "full"].map((suiteDepth) => ({
-      label: `${file} ${suiteDepth}`,
-      executable: condition
-        .replaceAll("needs.ci-plan.outputs.service_suites_required", "'true'")
-        .replaceAll(
-          `needs.ci-plan.outputs.${scope}`,
-          () => `'${String(selected)}'`,
-        )
-        .replaceAll(
-          "needs.ci-plan.outputs.suite_depth",
-          () => `'${suiteDepth}'`,
-        )
-        .replaceAll("needs.ci-plan.outputs.trusted", "'true'")
-        .replaceAll("github.event_name", "'pull_request'"),
-      exitCode: selected ? 0 : 1,
-    })),
-  );
-  for (const { item, exitCode } of runBashBatch(
-    conditions,
-    ({ executable }) => ({
-      flags: [],
-      script: `[[ ${executable} ]]`,
-      args: [],
-      env: { PATH: Bun.env["PATH"] ?? "" },
-    }),
-  )) {
-    expect(exitCode, item.label).toBe(item.exitCode);
+  for (const { file, selected } of planned) {
+    for (const suiteDepth of ["fast", "full"]) {
+      expect(
+        evaluate(condition, {
+          values: {
+            "github.event_name": EVENT.pullRequest,
+            "needs.ci-plan.outputs.coverage_profile": "normal-v1",
+            "needs.ci-plan.outputs.run_required": "true",
+            "needs.ci-plan.outputs.trusted": "true",
+            "needs.ci-plan.outputs.suite_depth": suiteDepth,
+            "needs.ci-plan.outputs.service_suites_required": "true",
+            "needs.ci-plan.outputs.service_suites_pr_required":
+              String(selected),
+          },
+        }),
+        file,
+      ).toBe(selected);
+    }
   }
   expectResultGates(
     planned.flatMap(({ file, selected }) =>
@@ -3585,12 +3576,15 @@ test("verification service planning and admission preserve the trust verdict", (
     ciJobs["ci-plan"],
   );
   const file = "apps/api/src/lib/lists/verification/run-queue.ts";
-  const [changedScope] = runSelector([file], ["service_suites_pr_required"]);
+  const changedScope = v.parse(
+    v.picklist(["true", "false"]),
+    runSelector([file], ["service_suites_pr_required"]).at(0),
+  );
   expect(changedScope).toBe("true");
   const step = jobSteps(ciJobs["ci-plan"]).find(
     ({ name }) => name === "Check changed file scope",
   );
-  const cases = ["true", "false"].flatMap((trusted) =>
+  const cases = (["true", "false"] as const).flatMap((trusted) =>
     [SUITE_DEPTH.fast, SUITE_DEPTH.full].map((depth) => {
       const values = {
         "github.event_name": EVENT.pullRequest,
@@ -3605,14 +3599,18 @@ test("verification service planning and admission preserve the trust verdict", (
         evaluate(outputs["service_suites_pr_required"] ?? "", { values }),
       );
       expect(planned).toBe(trusted);
-      const fullPlanned = String(
+      const fullPlanned = v.parse(
+        v.boolean(),
         evaluate(outputs["service_suites_required"] ?? "", { values }),
-      );
+      )
+        ? "true"
+        : "false";
       expect(fullPlanned).toBe(trusted);
       expect(
         evaluate(jobIf(ciJobs["service-suites"]), {
           values: {
             "github.event_name": EVENT.pullRequest,
+            "needs.ci-plan.outputs.coverage_profile": "normal-v1",
             "needs.ci-plan.outputs.trusted": trusted,
             "needs.ci-plan.outputs.run_required": "true",
             "needs.ci-plan.outputs.suite_depth": depth,

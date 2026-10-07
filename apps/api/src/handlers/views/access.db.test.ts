@@ -83,6 +83,7 @@ const seed = async (type: "avt" | "filesystem") => {
 
 const context = () => ({
   recordAuditEvent: auditRecorderDouble(),
+  createAuditRecorder: () => auditRecorderDouble(),
   workspaceId: ids.wsA1,
   session: { activeOrganizationId: ids.orgA },
   user: { id: ids.userA1 },

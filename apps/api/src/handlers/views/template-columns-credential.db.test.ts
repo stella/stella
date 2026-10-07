@@ -108,6 +108,7 @@ const createViewAs = async (
   const result = await createView.handler(
     createTestHandlerContext<Parameters<typeof createView.handler>[0]>({
       recordAuditEvent: auditRecorderDouble(),
+      createAuditRecorder: () => auditRecorderDouble(),
       memberRole,
       workspaceId: ids.wsA1,
       session: { activeOrganizationId: ids.orgA },
@@ -189,6 +190,7 @@ describe("template columns on a view", () => {
       await updateView.handler(
         createTestHandlerContext<Parameters<typeof updateView.handler>[0]>({
           recordAuditEvent: auditRecorderDouble(),
+          createAuditRecorder: () => auditRecorderDouble(),
           memberRole,
           workspaceId: ids.wsA1,
           session: { activeOrganizationId: ids.orgA },

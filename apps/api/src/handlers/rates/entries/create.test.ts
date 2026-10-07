@@ -49,6 +49,7 @@ const create = async (body: CreateContext["body"], tableId = rateTableId) =>
     withTimeBillingEnrolment(
       createTestHandlerContext<CreateContext>({
         recordAuditEvent: auditRecorderDouble(),
+        createAuditRecorder: () => auditRecorderDouble(),
         workspaceId: ids.wsA1,
         session: { activeOrganizationId: ids.orgA },
         user: { id: ids.userA1 },
@@ -65,6 +66,7 @@ const update = async (body: UpdateContext["body"]) =>
     withTimeBillingEnrolment(
       createTestHandlerContext<UpdateContext>({
         recordAuditEvent: auditRecorderDouble(),
+        createAuditRecorder: () => auditRecorderDouble(),
         workspaceId: ids.wsA1,
         session: { activeOrganizationId: ids.orgA },
         user: { id: ids.userA1 },
@@ -127,6 +129,7 @@ describe("effective-dated rate selectors", () => {
       withTimeBillingEnrolment(
         createTestHandlerContext<ListContext>({
           recordAuditEvent: auditRecorderDouble(),
+          createAuditRecorder: () => auditRecorderDouble(),
           workspaceId: ids.wsA1,
           session: { activeOrganizationId: ids.orgA },
           safeDb: scopedSafeDb(),

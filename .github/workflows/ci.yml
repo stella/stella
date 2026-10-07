@@ -2446,8 +2446,11 @@ jobs:
 
       - name: Test release image CI gate
         if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
-        # Worst pilot test 18.56 s; 50 s allows about 2.5x contention headroom.
-        run: bun test --timeout 50000 scripts/ci-plan.test.ts scripts/ci-avt-postgres.test.ts
+        run: bun test scripts/ci-plan.test.ts
+
+      - name: Test verification database suite selection
+        if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
+        run: bun test --timeout 30000 scripts/ci-avt-postgres.test.ts
 
       - name: Workspace hygiene
         if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
@@ -4277,13 +4280,14 @@ jobs:
   service-suites:
     needs: ci-plan
     if: >-
-      needs.ci-plan.outputs.run_required != 'false'
+      (needs.ci-plan.outputs.coverage_profile != 'pilot-fast-v1' || contains(fromJSON(needs.ci-plan.outputs.pilot_fast_jobs || '[]'), 'service-suites'))
+      && needs.ci-plan.outputs.run_required != 'false'
       && (
       (github.event_name == 'pull_request'
       && needs.ci-plan.outputs.service_suites_pr_required == 'true'
       && needs.ci-plan.outputs.trusted == 'true')
       || github.event_name != 'pull_request' && (
-      needs.ci-plan.outputs.queue_depth != 'thin'
+      (needs.ci-plan.outputs.queue_depth != 'thin' || contains(fromJSON(needs.ci-plan.outputs.queue_required_jobs || '[]'), 'service-suites'))
       && (needs.ci-plan.outputs.service_suites_required == 'true'
       && (needs.ci-plan.outputs.trusted == 'true'
           || github.event_name == 'workflow_dispatch')

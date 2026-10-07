@@ -2268,6 +2268,11 @@ env:
     ]) {
       expect(byId.has(job), job).toBe(false);
     }
+    expect(byId.get("service-suites")?.scope).toEqual({
+      type: "not-file-derived",
+      output: "service_suites_pr_required",
+    });
+    expect(byId.get("service-suites")?.pilotGate).toBe("deferred-capable");
     const shardName = byId.get("ci-tests")?.runName;
     expect(shardName?.test("ci-tests (api-1)")).toBe(true);
     expect(shardName?.test("ci-tests-extra")).toBe(false);

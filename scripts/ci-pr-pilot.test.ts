@@ -32,7 +32,7 @@ const source = readFileSync(
   "utf-8",
 );
 const workflow = v.parse(schema, Bun.YAML.parse(source));
-// Frozen pre-pilot predicates keep the off contract test independent of Git history.
+// Frozen normal-profile predicates keep the off contract test independent of Git history.
 const original = v.parse(
   schema,
   JSON.parse(

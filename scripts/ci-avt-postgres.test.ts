@@ -10,8 +10,9 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 
 import packageJson from "../apps/api/package.json" with { type: "json" };
+import { avtPostgresTestFiles } from "../apps/api/scripts/avt-postgres-tests";
 import { selectTestPaths } from "../apps/api/scripts/test-path-filters";
-import { avtPostgresTestFiles, requiresAvtPostgres } from "./ci-avt-postgres";
+import { requiresAvtPostgres } from "./ci-avt-postgres";
 
 const apiRoot = path.resolve(import.meta.dir, "../apps/api");
 const runner = packageJson.ciGateTestRunners["test:postgres"];
@@ -107,14 +108,9 @@ test("path planning runs from a checkout without installed workspace dependencie
   const root = mkdtempSync(path.join(tmpdir(), "avt-postgres-plan-"));
   try {
     mkdirSync(path.join(root, "scripts"));
-    mkdirSync(path.join(root, "apps/api"), { recursive: true });
     copyFileSync(
       path.join(import.meta.dir, "ci-avt-postgres.ts"),
       path.join(root, "scripts/ci-avt-postgres.ts"),
-    );
-    copyFileSync(
-      path.join(apiRoot, "package.json"),
-      path.join(root, "apps/api/package.json"),
     );
     for (const changed of [...changedPaths, "docs/guide.md"]) {
       const cli = Bun.spawnSync({

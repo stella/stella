@@ -88,6 +88,7 @@ test("changing a rate table from USD to JPY restates every rate under it", async
     withTimeBillingEnrolment(
       createTestHandlerContext<UpdateRateTableCtx>({
         recordAuditEvent: auditRecorderDouble(),
+        createAuditRecorder: () => auditRecorderDouble(),
         workspaceId: ids.wsA1,
         session: { activeOrganizationId: ids.orgA },
         user: { id: ids.userA1 },
@@ -144,6 +145,7 @@ test("the scale reads each row's current value, not one read earlier", async () 
     withTimeBillingEnrolment(
       createTestHandlerContext<UpdateRateTableCtx>({
         recordAuditEvent: auditRecorderDouble(),
+        createAuditRecorder: () => auditRecorderDouble(),
         workspaceId: ids.wsA1,
         session: { activeOrganizationId: ids.orgA },
         user: { id: ids.userA1 },
@@ -182,6 +184,7 @@ test("refuses a currency change whose scaled rate leaves the safe range", async 
     withTimeBillingEnrolment(
       createTestHandlerContext<UpdateRateTableCtx>({
         recordAuditEvent: auditRecorderDouble(),
+        createAuditRecorder: () => auditRecorderDouble(),
         workspaceId: ids.wsA1,
         session: { activeOrganizationId: ids.orgA },
         user: { id: ids.userA1 },
@@ -244,6 +247,7 @@ test("the default flag can be cleared only while another table in the matter sta
       withTimeBillingEnrolment(
         createTestHandlerContext<UpdateRateTableCtx>({
           recordAuditEvent: auditRecorderDouble(),
+          createAuditRecorder: () => auditRecorderDouble(),
           workspaceId: ids.wsA1,
           session: { activeOrganizationId: ids.orgA },
           user: { id: ids.userA1 },

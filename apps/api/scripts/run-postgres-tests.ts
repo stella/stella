@@ -1,4 +1,4 @@
-import { avtPostgresTestFiles } from "../../../scripts/ci-avt-postgres";
+import { avtPostgresTestFiles } from "./avt-postgres-tests";
 import { runGatedTests } from "./run-gated-tests";
 
 const runnerArguments = Bun.argv.slice(2);

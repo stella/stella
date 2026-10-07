@@ -799,6 +799,15 @@ const checkFastJobPredicate = ({
     `contains(fromJSON(needs.ci-plan.outputs.pilot_fast_jobs || '[]'), '${id}')`,
     `contains(fromJSON(needs.ci-plan.outputs.queue_required_jobs || '[]'), '${id}')`,
     ...(output === null ? [] : [`needs.ci-plan.outputs.${output} == 'true'`]),
+    ...(id === "service-suites"
+      ? [
+          "github.event_name == 'pull_request'",
+          "github.event_name != 'pull_request'",
+          "needs.ci-plan.outputs.service_suites_required == 'true'",
+          "needs.ci-plan.outputs.suite_depth == 'full'",
+          "needs.ci-plan.outputs.suite_depth == 'fast'",
+        ]
+      : []),
   ];
   let remainder = condition.replaceAll(/\s+/gu, " ").trim();
   for (const atom of atoms) {
@@ -830,6 +839,15 @@ const checkFastJobPredicate = ({
           "needs.ci-plan.outputs.run_required": "true",
           "needs.ci-plan.outputs.trusted": "true",
           "needs.ci-plan.outputs.queue_depth": "full",
+          "needs.ci-plan.outputs.suite_depth": "fast",
+          // The PR scope plans this job; the full scope also admits its
+          // mandatory thin-queue fallback after deferred pilot coverage.
+          ...(id === "service-suites"
+            ? {
+                "needs.ci-plan.outputs.service_suites_required":
+                  String(selected),
+              }
+            : {}),
           "needs.ci-plan.outputs.coverage_profile": profile,
           "needs.ci-plan.outputs.pilot_fast_jobs": JSON.stringify(
             included ? [id] : [],

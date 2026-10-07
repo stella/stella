@@ -11,6 +11,8 @@ const infrastructurePaths = new Set([
   "scripts/generated-files.ts",
   "packages/scripts/src/generated-files.ts",
   "scripts/ci-plan.test.ts",
+  "scripts/ci-avt-postgres.ts",
+  "scripts/ci-avt-postgres.test.ts",
   ".npmrc",
   "scripts/retry.sh",
   "package.json",

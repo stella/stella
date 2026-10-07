@@ -1,5 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
+import { rejectionOf } from "@stll/property-testing/rejection";
+
 import {
   AUDIT_ACTION,
   AUDIT_RESOURCE_TYPE,
@@ -23,16 +25,18 @@ const missingRecorderMessage =
 describe("handler contexts require explicit audit collaborators", () => {
   test.each(["direct", "scoped"] as const)(
     "the unconfigured %s recorder refuses an event",
-    (type) => {
+    async (type) => {
       const context = createTestHandlerContext();
       const recorder =
         type === "direct"
           ? context.recordAuditEvent
           : context.createAuditRecorder({ workspaceId: null });
 
-      expect(() => recorder(transaction(), event)).toThrow(
-        missingRecorderMessage,
-      );
+      expect(
+        await rejectionOf((async () => await recorder(transaction(), event))()),
+      ).toMatchObject({
+        message: expect.stringContaining(missingRecorderMessage),
+      });
     },
   );
 
@@ -60,7 +64,7 @@ describe("handler contexts require explicit audit collaborators", () => {
     expect(scopedEvents).toEqual([scopedEvent]);
   });
 
-  test("configuring one recorder leaves the other unconfigured", () => {
+  test("configuring one recorder leaves the other unconfigured", async () => {
     const directOnly = createTestHandlerContext({
       recordAuditEvent: auditRecorderDouble(),
     });
@@ -68,11 +72,20 @@ describe("handler contexts require explicit audit collaborators", () => {
       createAuditRecorder: () => auditRecorderDouble(),
     });
 
-    expect(() =>
-      directOnly.createAuditRecorder()(transaction(), event),
-    ).toThrow(missingRecorderMessage);
-    expect(() => scopedOnly.recordAuditEvent(transaction(), event)).toThrow(
-      missingRecorderMessage,
-    );
+    expect(
+      await rejectionOf(
+        (async () =>
+          await directOnly.createAuditRecorder()(transaction(), event))(),
+      ),
+    ).toMatchObject({
+      message: expect.stringContaining(missingRecorderMessage),
+    });
+    expect(
+      await rejectionOf(
+        (async () => await scopedOnly.recordAuditEvent(transaction(), event))(),
+      ),
+    ).toMatchObject({
+      message: expect.stringContaining(missingRecorderMessage),
+    });
   });
 });
