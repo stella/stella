@@ -153,7 +153,7 @@ const scanSource = (file: string, source: string): HistoryWalkFinding[] => {
     source,
     ts.ScriptTarget.Latest,
     true,
-    /x$/u.test(file) ? ts.ScriptKind.TSX : ts.ScriptKind.TS,
+    file.endsWith("x") ? ts.ScriptKind.TSX : ts.ScriptKind.TS,
   );
   const lines = new Set<number>();
   const visit = (node: ts.Node) => {
