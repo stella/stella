@@ -1,5 +1,6 @@
-Correct DNS MX and DKIM signing declarations to match mailauth 5.0.3 runtime.
-Remove when upstream declarations include both shapes.
+Correct DNS MX and DKIM signing declarations to match mailauth 7.1.0 runtime.
+Also model the absent alignment on DMARC results without a usable policy.
+Remove when upstream declarations include these runtime shapes.
 
 diff --git a/index.d.ts b/index.d.ts
 --- a/index.d.ts
@@ -18,7 +19,16 @@ diff --git a/index.d.ts b/index.d.ts
  
  /**
   * Input types accepted by mailauth functions
-@@ -597,21 +598,17 @@
+@@ -661,7 +662,7 @@
+     /**
+      * Alignment results
+      */
+-    alignment: {
++    alignment?: {
+         spf: {
+             /**
+              * Aligned SPF domain, or undefined if no domain aligned
+@@ -872,22 +873,18 @@
  /**
   * DKIM signing options
   */
@@ -28,6 +38,7 @@ diff --git a/index.d.ts b/index.d.ts
 +    privateKey: string | Buffer;
 +    canonicalization?: string;
 +    algorithm?: string;
++    headerList?: string[] | string;
 +    maxBodyLength?: number;
 +    identity?: string;
 +}
@@ -47,10 +58,11 @@ diff --git a/index.d.ts b/index.d.ts
 -     * Private key for signing (PEM format)
 -     */
 -    privateKey: string | Buffer;
- 
+-
      /**
       * Canonicalization algorithm (default: 'relaxed/relaxed')
-@@ -642,19 +639,9 @@
+      * Format: 'header/body' where each can be 'simple' or 'relaxed'
+@@ -918,19 +915,9 @@
      expires?: Date | string | number;
  
      /**
@@ -59,17 +71,15 @@ diff --git a/index.d.ts b/index.d.ts
 -    maxBodyLength?: number;
 -
 -    /**
--     * Identity (i= tag)
+-     * Identity (i= tag), an address whose domain is the signing domain or its subdomain
 -     */
 -    identity?: string;
 -
 -    /**
--     * Multiple signature configurations
--     */
+      * Multiple signature configurations
+      */
 -    signatureData?: DKIMSignOptions[];
-+     * Signature configurations; signing keys are read from these entries.
-+     */
 +    signatureData?: DKIMSignatureData[];
- }
  
- /**
+     /**
+      * Follow the RFCs exactly (default: false). Strict mode refuses rsa-sha1, RSA keys

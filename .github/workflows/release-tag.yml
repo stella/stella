@@ -130,7 +130,7 @@ jobs:
   # packages, so it runs in its own read-only job, away from the tag token.
   # Clear it with `bun run marketing:reshoot` (re-records only stale captures).
   marketing-freshness:
-    name: Warn on stale marketing recordings
+    name: Warn on changed marketing recording provenance
     needs: tag
     runs-on: ubuntu-latest
     timeout-minutes: 15
@@ -154,8 +154,8 @@ jobs:
         env:
           NPM_TOKEN: ""
 
-      - name: Warn on stale marketing recordings
+      - name: Warn on changed marketing recording provenance
         run: |
-          if ! bun run marketing:stale --strict; then
-            echo "::warning::Stale marketing recordings (see step log). Re-record with \`bun run marketing:reshoot\`."
+          if ! bun run marketing:provenance --strict; then
+            echo "::warning::Changed marketing recording provenance (see step log). Re-record with \`bun run marketing:reshoot\`."
           fi

@@ -14,7 +14,7 @@ import nodePath from "node:path";
 
 import { RECORDINGS_MANIFEST_PATH } from "../apps/web/e2e/marketing/captures";
 import { parseChangesetEntry } from "./changeset-entry";
-import { computeVerdicts } from "./check-marketing-recordings";
+import { computeProvenanceVerdicts } from "./check-marketing-recordings";
 
 // Computed filesystem reads retain these repository Markdown inputs.
 export const CI_MARKDOWN_READER_INPUTS = [
@@ -668,9 +668,9 @@ export const fetchPublishedAt = async (tag: string): Promise<string | null> => {
   return findUnpromotedRelease(tag, 1);
 };
 
-const staleCaptureIds = (): string[] => [
+export const staleCaptureIds = (): string[] => [
   ...new Set(
-    computeVerdicts()
+    computeProvenanceVerdicts()
       .filter(({ status }) => status === "STALE")
       .map(({ captureId }) => captureId),
   ),
@@ -729,7 +729,7 @@ const main = async () => {
         "--version",
         release.version,
       ]);
-      run(["bun", "run", "marketing:stale", "--strict"]);
+      run(["bun", "run", "marketing:provenance", "--strict"]);
       return release;
     },
     paths: [

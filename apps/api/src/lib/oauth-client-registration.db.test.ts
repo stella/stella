@@ -299,7 +299,7 @@ describe("OAuth dynamic client registration", () => {
       codeVerifier,
       consentPage,
     });
-    expect(grant.scope.split(" ").toSorted()).toEqual(expectedResourceScopes);
+    expect(grant.scope.split(" ").toSorted()).toEqual(expectedConsentScopes);
   });
 
   test("authorizes an earlier registration with the open capability subset", async () => {
