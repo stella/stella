@@ -417,7 +417,7 @@ describe("OpenAI Decisions boundary", () => {
 
   test("enforces the local byte, question and option ceilings before fetch", async () => {
     const { client, calls } = wire();
-    for (const request of [
+    const requests: Parameters<typeof client.ask>[0][] = [
       { state: "č".repeat(150_000), questions },
       {
         state,
@@ -442,7 +442,8 @@ describe("OpenAI Decisions boundary", () => {
           ),
         },
       },
-    ]) {
+    ];
+    for (const request of requests) {
       const result = await client.ask(request);
       expect(Result.isError(result)).toBe(true);
       if (Result.isError(result)) {
@@ -616,7 +617,7 @@ test("accepts questions, options and UTF-8 body exactly at each local ceiling", 
   expect(askBytes.calls).toHaveLength(1);
 });
 
-test("applies an absolute attempt deadline even when the transport keeps producing data", async () => {
+test("expires the idle response read when the transport stops producing data", async () => {
   let attemptSignal: AbortSignal | null | undefined;
   const client = createOpenAIDecisionsClient({
     apiKey: "fixture",
@@ -629,7 +630,7 @@ test("applies an absolute attempt deadline even when the transport keeps produci
             stream.enqueue(new TextEncoder().encode('{"model":'));
             const signal = init?.signal;
             if (!signal) {
-              throw new Error("Expected attempt deadline signal");
+              throw new Error("Expected transport timeout signal");
             }
             signal.addEventListener(
               "abort",
@@ -644,4 +645,42 @@ test("applies an absolute attempt deadline even when the transport keeps produci
   const asked = await client.ask({ state, questions });
   expect(attemptSignal?.aborted).toBe(true);
   expect(Result.isError(asked)).toBe(true);
+});
+
+test("accepts the response byte ceiling and cancels overflow before JSON parsing", async () => {
+  const maxBytes = 8 * 1024 * 1024;
+  const json = JSON.stringify(fixture);
+  const atCap = `${json}${" ".repeat(maxBytes - new TextEncoder().encode(json).byteLength)}`;
+  let cancelled = false;
+  const makeClient = (body: string) =>
+    createOpenAIDecisionsClient({
+      apiKey: "fixture",
+      timeoutMs: 1000,
+      fetcher: async () =>
+        new Response(
+          new ReadableStream({
+            start(stream) {
+              stream.enqueue(new TextEncoder().encode(body));
+              if (body === atCap) {
+                stream.close();
+              }
+            },
+            cancel() {
+              cancelled = true;
+            },
+          }),
+        ),
+    });
+  expect(Result.isOk(await makeClient(atCap).ask({ state, questions }))).toBe(
+    true,
+  );
+  const overflow = await makeClient(`${atCap} `).ask({ state, questions });
+  expect(Result.isError(overflow)).toBe(true);
+  if (Result.isError(overflow)) {
+    expect(overflow.error).toMatchObject({
+      kind: "invalid_response",
+      message: "OpenAI decision response exceeds the local body limit",
+    });
+  }
+  expect(cancelled).toBe(true);
 });

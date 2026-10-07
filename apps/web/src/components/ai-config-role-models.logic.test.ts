@@ -1,5 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
+import { DECISION_MODEL_PROVIDERS } from "@stll/api-contract/ai-decision-provider";
+
 import {
   DECISION_PROVIDER_KEYS,
   createDecisionModelState,
@@ -568,9 +570,7 @@ describe("decision model configuration", () => {
 });
 
 describe("OpenAI decision settings", () => {
-  test("offers every decision provider the API accepts", async () => {
-    const { DECISION_MODEL_PROVIDERS } =
-      await import("../../../api/src/lib/ai-config");
+  test("offers every decision provider the API accepts", () => {
     expect(DECISION_PROVIDER_KEYS).toEqual(DECISION_MODEL_PROVIDERS);
   });
   test("provider switch resets to the provider's default model and reused OpenAI key", () => {

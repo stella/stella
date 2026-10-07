@@ -4,6 +4,7 @@ import * as v from "valibot";
 import { DEFAULT_OPENAI_DECISION_MODEL } from "@stll/api-contract/ai-decision-provider";
 import { createFetchWithTimeout } from "@stll/fetch";
 import type { Fetcher } from "@stll/fetch";
+import { readCappedBytes } from "@stll/skills/streaming";
 
 import {
   bindAnswer,
@@ -24,6 +25,7 @@ import type {
 } from "@/api/lib/workflow/decisions/system-one";
 
 const REQUEST_TIMEOUT_MS = 30_000;
+const MAX_RESPONSE_BYTES = 8 * 1024 * 1024;
 const MAX_ATTEMPTS = 3;
 const MAX_RETRY_DELAY_MS = 5000;
 const RETRY_BASE_DELAY_MS = 400;
@@ -245,10 +247,6 @@ export const createOpenAIDecisionsClient = ({
   const fetchWithTimeout = createFetchWithTimeout(fetcher ?? globalThis.fetch);
   const send = async (body: string, abortSignal?: AbortSignal) => {
     for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt += 1) {
-      const timeout = AbortSignal.timeout(timeoutMs);
-      const signal = abortSignal
-        ? AbortSignal.any([abortSignal, timeout])
-        : timeout;
       const sent = await Result.tryPromise({
         try: async () =>
           await fetchWithTimeout(OPENAI_DECISION_ENDPOINTS[region], {
@@ -260,7 +258,7 @@ export const createOpenAIDecisionsClient = ({
             body,
             redirect: "error",
             timeout: { type: "idle", ms: timeoutMs },
-            signal,
+            signal: abortSignal,
           }),
         catch: (cause) =>
           new SystemOneError({
@@ -357,8 +355,32 @@ export const createOpenAIDecisionsClient = ({
       if (Result.isError(sent)) {
         return sent;
       }
-      const json = await Result.tryPromise({
-        try: async (): Promise<unknown> => await sent.value.json(),
+      const bytes = await Result.tryPromise({
+        try: async () =>
+          sent.value.body === null
+            ? new Uint8Array()
+            : await readCappedBytes(sent.value.body, MAX_RESPONSE_BYTES),
+        catch: (cause) =>
+          new SystemOneError({
+            kind: abortSignal?.aborted ? "aborted" : "network",
+            message: "OpenAI decision response body could not be read",
+            cause,
+          }),
+      });
+      if (Result.isError(bytes)) {
+        return Result.err(bytes.error);
+      }
+      const bodyBytes = bytes.value;
+      if (bodyBytes === null) {
+        return Result.err(
+          new SystemOneError({
+            kind: "invalid_response",
+            message: "OpenAI decision response exceeds the local body limit",
+          }),
+        );
+      }
+      const json = Result.try({
+        try: (): unknown => JSON.parse(new TextDecoder().decode(bodyBytes)),
         catch: (cause) => {
           let kind: SystemOneErrorKind = "network";
           if (abortSignal?.aborted) {
