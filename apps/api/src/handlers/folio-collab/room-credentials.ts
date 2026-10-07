@@ -11,7 +11,7 @@ import { validatePostAuth } from "@/api/lib/permissive-route-schema";
 
 const FOLIO_COLLAB_TOKEN_LENGTH = 64;
 
-export const folioCollabRoomCredentialsSchema = t.Object({
+const folioCollabRoomCredentialsSchema = t.Object({
   roomId: tSafeId("folioCollabRoom"),
   token: t.String({
     minLength: FOLIO_COLLAB_TOKEN_LENGTH,
@@ -19,7 +19,7 @@ export const folioCollabRoomCredentialsSchema = t.Object({
   }),
 });
 
-export const folioCollabRoomNotFoundError = () =>
+const folioCollabRoomNotFoundError = () =>
   new HandlerError({
     status: 404,
     message: "Collaborative editing room not found.",
