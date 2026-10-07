@@ -201,8 +201,11 @@ export const locateProvisionAnchors = <T>({
         continue;
       }
       const reference = referencePattern(source.reference);
-      const occurrence = source.occurrence ?? contexts.get(source.id);
-      const competingMatches = (occurrence?.competingPatterns ?? []).flatMap(
+      const occurrence =
+        source.occurrence ??
+        contexts.get(source.id) ??
+        panic("Missing provision occurrence context");
+      const competingMatches = occurrence.competingPatterns.flatMap(
         (competingPattern) =>
           competingPattern === reference.source
             ? []
@@ -224,7 +227,7 @@ export const locateProvisionAnchors = <T>({
         failures.push({ id: source.id, reason: "reference-unlocatable" });
         continue;
       }
-      if (occurrence === undefined || occurrences.length !== occurrence.count) {
+      if (occurrences.length !== occurrence.count) {
         failures.push({ id: source.id, reason: "ambiguous-placement" });
         continue;
       }

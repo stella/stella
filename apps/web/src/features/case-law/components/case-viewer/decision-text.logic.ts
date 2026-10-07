@@ -28,6 +28,7 @@ import {
 import type {
   Block,
   DocumentAst,
+  ParagraphBlock,
   PublisherSummaryRole,
 } from "@stll/legal-ast/document-ast";
 import {

@@ -689,6 +689,7 @@ const renderWrappedDecision = (lines: readonly string[]): string =>
         decision={textDecision({
           documentAst: { ...ast, blocks: lines.map(lineParagraph) },
         })}
+        surface="development"
         decisionId="dec-1"
         landingAnchorId="p-3"
       />
@@ -754,6 +755,7 @@ describe("a letter-spaced heading", () => {
               ],
             },
           })}
+          surface="development"
           decisionId="dec-1"
         />
       </IntlProvider>,
@@ -787,6 +789,7 @@ describe("quotation marks the publisher printed escaped", () => {
           decision={textDecision({
             documentAst: { ...ast, blocks: [lineParagraph(ESCAPED, 1)] },
           })}
+          surface="development"
           decisionId="dec-1"
         />
       </IntlProvider>,
@@ -846,6 +849,7 @@ describe("a caption stored run on", () => {
       <IntlProvider locale="en" messages={messages} timeZone="UTC">
         <DecisionText
           decision={textDecision({ country, documentAst: runOnCaptionAst })}
+          surface="development"
           decisionId="dec-1"
         />
       </IntlProvider>,
