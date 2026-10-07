@@ -12,7 +12,9 @@ import path from "node:path";
 import {
   runnerToolProblems,
   runnerTools,
+  selfHostedProfiles,
   TOOL_PACKAGES,
+  toolchainLockTools,
 } from "./check-ci-runner-tools";
 
 type FixtureOptions = { jobs: unknown; files?: Record<string, string> };
@@ -83,6 +85,209 @@ test("every tracked executable is rejected on an unknown image and accepted afte
   }
 });
 
+test("nested parallel checks see sibling installs only after the group", () => {
+  withFixture(
+    {
+      jobs: {
+        check: {
+          "runs-on": "unknown",
+          steps: [
+            {
+              parallel: [
+                { run: "sudo apt-get install -y ripgrep" },
+                {
+                  parallel: [
+                    { name: "Nested invocation", run: "rg --version" },
+                  ],
+                },
+              ],
+            },
+            { run: "rg --version" },
+          ],
+        },
+      },
+    },
+    (root) => {
+      const findings = problems(root);
+      expect(findings).toHaveLength(1);
+      expect(findings.at(0)).toContain("Nested invocation");
+      expect(findings.at(0)).toContain("requires rg");
+    },
+  );
+});
+
+test("parallel groups wait for background installs without sharing them with siblings", () => {
+  withFixture(
+    {
+      jobs: {
+        check: {
+          "runs-on": "unknown",
+          steps: [
+            {
+              parallel: [
+                {
+                  id: "tools",
+                  background: true,
+                  run: "sudo apt-get install -y ripgrep",
+                },
+                { name: "Concurrent invocation", run: "rg --version" },
+              ],
+            },
+            { name: "After group", run: "rg --version" },
+          ],
+        },
+      },
+    },
+    (root) => {
+      const findings = problems(root);
+      expect(findings).toHaveLength(1);
+      expect(findings.at(0)).toContain("Concurrent invocation");
+    },
+  );
+});
+
+test("background runner-tool installs take effect only after a wait", () => {
+  withFixture(
+    {
+      jobs: {
+        check: {
+          "runs-on": "unknown",
+          steps: [
+            {
+              id: "tools",
+              background: true,
+              run: "sudo apt-get install -y ripgrep",
+            },
+            { name: "Before wait", run: "rg --version" },
+            { wait: "tools" },
+            { name: "After wait", run: "rg --version" },
+          ],
+        },
+      },
+    },
+    (root) => {
+      const findings = problems(root);
+      expect(findings).toHaveLength(1);
+      expect(findings.at(0)).toContain("Before wait");
+    },
+  );
+});
+
+test("cancelled background tools stay unavailable after a wait barrier", () => {
+  for (const barrier of [{ wait: "cancelled" }, { "wait-all": null }]) {
+    withFixture(
+      {
+        jobs: {
+          check: {
+            "runs-on": "unknown",
+            steps: [
+              {
+                id: "cancelled",
+                background: true,
+                run: "sudo apt-get install -y ripgrep",
+              },
+              { cancel: "cancelled" },
+              barrier,
+              { name: "After cancel", run: "rg --version" },
+              {
+                id: "retained",
+                background: true,
+                run: "sudo apt-get install -y ripgrep",
+              },
+              { wait: "retained" },
+              { name: "After retained wait", run: "rg --version" },
+            ],
+          },
+        },
+      },
+      (root) => {
+        const findings = problems(root);
+        expect(findings, JSON.stringify(barrier)).toHaveLength(1);
+        expect(findings.at(0), JSON.stringify(barrier)).toContain(
+          "After cancel",
+        );
+      },
+    );
+  }
+});
+
+test("parallel cancellation dominates sibling waits and nested group proofs while preserving completed tools", () => {
+  for (const installLocation of ["before-group", "nested-sibling"] as const) {
+    for (const depth of [0, 1, 2]) {
+      for (const siblingWaitPosition of [
+        "absent",
+        "before",
+        "after",
+      ] as const) {
+        for (const barrier of [{ wait: "tools" }, { "wait-all": null }]) {
+          let cancelBranch: unknown = { cancel: "tools" };
+          for (let nested = 0; nested < depth; nested += 1) {
+            cancelBranch = { parallel: [cancelBranch] };
+          }
+          const siblingWait = { wait: "tools" };
+          const parallel = [cancelBranch];
+          if (siblingWaitPosition === "before") {
+            parallel.unshift(siblingWait);
+          }
+          if (siblingWaitPosition === "after") {
+            parallel.push(siblingWait);
+          }
+          const installerBranch = {
+            parallel: [
+              {
+                id: "tools",
+                background: true,
+                run: "sudo apt-get install -y ripgrep",
+              },
+            ],
+          };
+          if (installLocation === "nested-sibling") {
+            parallel.unshift(installerBranch);
+          }
+          const scenario = {
+            installLocation,
+            depth,
+            siblingWaitPosition,
+            barrier,
+          };
+          withFixture(
+            {
+              jobs: {
+                check: {
+                  "runs-on": "unknown",
+                  steps: [
+                    { run: "sudo apt-get install -y jq" },
+                    ...(installLocation === "before-group"
+                      ? [
+                          {
+                            id: "tools",
+                            background: true,
+                            run: "sudo apt-get install -y ripgrep",
+                          },
+                        ]
+                      : []),
+                    { parallel },
+                    barrier,
+                    { name: "After cancel", run: "rg --version" },
+                    { name: "Completed tool proof", run: "jq --version" },
+                  ],
+                },
+              },
+            },
+            (root) => {
+              const findings = problems(root);
+              expect(findings, JSON.stringify(scenario)).toHaveLength(1);
+              expect(findings.at(0), JSON.stringify(scenario)).toContain(
+                "After cancel",
+              );
+            },
+          );
+        }
+      }
+    }
+  }
+});
+
 test("malformed step metadata and execution settings are reported without coercion", () => {
   withFixture(
     {
@@ -124,6 +329,21 @@ test("runner defaults are specific to the image and do not leak into containers"
     expect(runnerTools(runner, { image: "ubuntu:24.04" }).size, runner).toBe(0);
   }
   expect(runnerTools(["self-hosted", "custom"], undefined).size).toBe(0);
+  // A self-hosted label provides only what its declared profile lists, and
+  // only for the exact [self-hosted, label] pair outside a container.
+  const declared = new Map([["mini-infra-deploy", new Set(["jq"])]]);
+  const deployRunner = ["self-hosted", "mini-infra-deploy"];
+  expect(runnerTools(deployRunner, undefined).size).toBe(0);
+  expect([...runnerTools(deployRunner, undefined, declared)]).toEqual(["jq"]);
+  expect(
+    runnerTools(deployRunner, { image: "ubuntu:24.04" }, declared).size,
+  ).toBe(0);
+  expect(
+    runnerTools(["self-hosted", "mini-infra"], undefined, declared).size,
+  ).toBe(0);
+  expect(
+    runnerTools([...deployRunner, "extra"], undefined, declared).size,
+  ).toBe(0);
   withFixture(
     {
       jobs: {
@@ -672,5 +892,65 @@ test("Bun run traverses literal script paths", () => {
       },
     },
     (root) => expect(problems(root)).toHaveLength(1),
+  );
+});
+
+test("the deploy runner profile comes from the repository's toolchain lock", () => {
+  expect([
+    ...toolchainLockTools(
+      [
+        "# comment jq",
+        "artifact coreutils 9.12 aaa https://example.invalid/c.tar.xz",
+        "artifact jq 1.8.2 bbb https://example.invalid/jq",
+        "artifact terraform 1.15.9 ccc https://example.invalid/t.zip",
+        "pkg-team-id awscli X",
+      ].join("\n"),
+    ),
+  ]).toEqual(["jq"]);
+  const root = mkdtempSync(path.join(tmpdir(), "runner-tools-lock-"));
+  try {
+    expect(selfHostedProfiles(root).size).toBe(0);
+    mkdirSync(path.join(root, "ci/deploy-runner"), { recursive: true });
+    writeFileSync(
+      path.join(root, "ci/deploy-runner/toolchain.lock"),
+      "artifact jq 1.8.2 bbb https://example.invalid/jq\n",
+    );
+    expect([
+      ...(selfHostedProfiles(root).get("mini-infra-deploy") ?? []),
+    ]).toEqual(["jq"]);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("a deploy runner job gets exactly the tools its repository's toolchain lock pins", () => {
+  const jobs = {
+    deploy: {
+      "runs-on": ["self-hosted", "mini-infra-deploy"],
+      steps: [{ run: "jq --version" }],
+    },
+  };
+  withFixture(
+    {
+      jobs,
+      files: {
+        "ci/deploy-runner/toolchain.lock":
+          "artifact jq 1.8.2 bbb https://example.invalid/jq\n",
+      },
+    },
+    (root) => expect(problems(root)).toEqual([]),
+  );
+  withFixture(
+    {
+      jobs,
+      files: {
+        "ci/deploy-runner/toolchain.lock":
+          "artifact terraform 1.15.9 ccc https://example.invalid/t.zip\n",
+      },
+    },
+    (root) => expect(problems(root).length).toBeGreaterThan(0),
+  );
+  withFixture({ jobs }, (root) =>
+    expect(problems(root).length).toBeGreaterThan(0),
   );
 });
