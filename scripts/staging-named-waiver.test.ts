@@ -6,6 +6,8 @@ import path from "node:path";
 import { Script } from "node:vm";
 import * as v from "valibot";
 
+import { evaluate } from "./github-expression";
+
 const stepSchema = v.looseObject({
   name: v.string(),
   id: v.optional(v.string()),
@@ -33,15 +35,6 @@ const source = readFileSync(
   "utf-8",
 );
 const workflow = parse(source);
-const baselineResult = Bun.spawnSync([
-  "git",
-  "show",
-  "origin/main:.github/workflows/deploy-staging.yml",
-]);
-if (baselineResult.exitCode !== 0) {
-  panic("Canonical staging workflow unavailable");
-}
-const baseline = parse(baselineResult.stdout.toString());
 const findStep = (name: string, candidate = workflow) =>
   Object.values(candidate.jobs)
     .flatMap((job) => job.steps ?? [])
@@ -117,12 +110,15 @@ const expression = (value: boolean | string | undefined, waived: boolean) => {
   return v.parse(v.boolean(), result);
 };
 const assertScope = (candidate = workflow) => {
+  // These existing report-only checks are independent of the named waiver.
+  const reportOnlySteps = new Set([
+    "Run staging response policy checks",
+    "Run staging API model-turn smoke",
+  ]);
   for (const [jobName, job] of Object.entries(candidate.jobs)) {
     for (const step of job.steps ?? []) {
-      const original = baseline.jobs[jobName]?.steps?.find(
-        ({ name }) => name === step.name,
-      );
       if (step.id === "corpus-preflight") {
+        expect(jobName).toBe("promote-staging");
         expect(
           expression(step["continue-on-error"], false),
           "unwaived corpus remains blocking",
@@ -136,7 +132,7 @@ const assertScope = (candidate = workflow) => {
       expect(
         step["continue-on-error"] ?? false,
         `${step.name} cannot inherit the corpus waiver`,
-      ).toEqual(original?.["continue-on-error"] ?? false);
+      ).toBe(jobName === "promote-staging" && reportOnlySteps.has(step.name));
     }
   }
 };
@@ -217,6 +213,19 @@ test("the sole named waiver validates before checkout and derives its downstream
   expect(validatorEnv?.["WAIVE_CHECK"]).toBe(
     `\${{ inputs.waive_check || 'none' }}`,
   );
+  for (const check of ["none", "corpus-search", "", undefined]) {
+    const evaluated = evaluate(
+      validatorEnv?.["WAIVE_CHECK"] ?? panic("Missing waiver input binding"),
+      {
+        values: check === undefined ? {} : { "inputs.waive_check": check },
+        fallback: () => "",
+      },
+    );
+    expect(evaluated).toBe(check || "none");
+    expect(
+      validation({ WAIVE_CHECK: v.parse(v.string(), evaluated) }).code,
+    ).toBe(0);
+  }
   expect(validatorEnv?.["WAIVE_REASON"]).toBe(`\${{ inputs.waive_reason }}`);
   expect(validatorEnv?.["REQUESTED_SHA"]).toBe(`\${{ inputs.sha }}`);
   const recordEnv = findStep("Record staging verification").env;
