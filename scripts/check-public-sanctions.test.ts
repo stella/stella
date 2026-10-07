@@ -7,9 +7,17 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { PassThrough } from "node:stream";
 
+import { parseCzList } from "../packages/sanctions/src/cz";
+import { parseEuList } from "../packages/sanctions/src/eu";
+import {
+  DEFAULT_CUTOFF,
+  buildScreeningIndex,
+  screen,
+} from "../packages/sanctions/src/screening";
 import {
   CanaryFailureError,
   SOURCES,
+  POSITIVE_CONTROL,
   probe,
   runCanary,
   validateScreening,
@@ -25,10 +33,14 @@ type ListFixture = {
 };
 
 const screening = () => ({
-  status: "clear",
+  status: "possible-match",
   lists: SOURCES.map((source): ListFixture => ({
     source,
-    status: "clear",
+    status: POSITIVE_CONTROL.expectedSources.some(
+      (expected) => expected === source,
+    )
+      ? "possible-match"
+      : "clear",
     reason: null,
     editionId: "published",
     publishedAt: "2026-10-01",
@@ -44,7 +56,9 @@ const transport =
       "Content-Type": "application/json",
       "User-Agent": "StellaSanctionsCanary/1.0",
       "Content-Length": Buffer.byteLength(
-        JSON.stringify({ subject: { type: "organization", name: "Rosneft" } }),
+        JSON.stringify({
+          subject: { type: "organization", name: "Voice of Europe" },
+        }),
       ),
     });
     const request = new PassThrough();
@@ -55,7 +69,7 @@ const transport =
       },
       end(payload: string) {
         assert.deepEqual(JSON.parse(payload), {
-          subject: { type: "organization", name: "Rosneft" },
+          subject: { type: "organization", name: "Voice of Europe" },
         });
         queueMicrotask(() => {
           const response = Object.assign(new PassThrough(), { statusCode });
@@ -77,7 +91,7 @@ test("published editions screen and missing editions may remain unavailable", ()
     editionId: null,
     publishedAt: null,
   };
-  body.status = "unavailable";
+  body.status = "possible-match";
   assert.doesNotThrow(() => validateScreening(body));
 });
 
@@ -95,8 +109,16 @@ test("access-denied without edition metadata is allowed alongside published edit
           }
         : list,
     );
-    body.status = "unavailable";
-    assert.doesNotThrow(() => validateScreening(body));
+    body.status = "possible-match";
+    if (
+      POSITIVE_CONTROL.expectedSources.some((expected) => expected === source)
+    ) {
+      assert.throws(() => validateScreening(body), {
+        code: "positive-control-missed",
+      });
+    } else {
+      assert.doesNotThrow(() => validateScreening(body));
+    }
   }
   const body = screening();
   body.status = "unavailable";
@@ -339,7 +361,7 @@ test("hourly workflow failures reach both scheduled alert allowlists", () => {
 });
 
 test("aggregate status follows match, unavailable, then clear precedence", () => {
-  for (const status of ["possible-match", "unavailable"]) {
+  for (const status of ["clear", "unavailable"]) {
     const body = screening();
     body.status = status;
     assert.throws(() => validateScreening(body), {
@@ -438,7 +460,7 @@ test("real HTTPS transport screens a response and rejects invalid bodies and red
       request.on("data", (chunk) => chunks.push(chunk));
       request.on("end", () => {
         assert.deepEqual(JSON.parse(Buffer.concat(chunks).toString()), {
-          subject: { type: "organization", name: "Rosneft" },
+          subject: { type: "organization", name: "Voice of Europe" },
         });
         response.writeHead(status, { "Content-Type": "application/json" });
         response.end(body);
@@ -480,4 +502,55 @@ test("real HTTPS transport screens a response and rejects invalid bodies and red
     });
     rmSync(directory, { recursive: true, force: true });
   }
+});
+
+test("the positive control refuses all clear and any declared source without a hit", () => {
+  const allClear = screening();
+  allClear.status = "clear";
+  allClear.lists = allClear.lists.map((list) => ({ ...list, status: "clear" }));
+  assert.throws(() => validateScreening(allClear), {
+    code: "positive-control-missed",
+  });
+  for (const source of POSITIVE_CONTROL.expectedSources) {
+    const body = screening();
+    body.lists = body.lists.map((list) =>
+      list.source === source ? { ...list, status: "clear" } : list,
+    );
+    assert.throws(() => validateScreening(body), {
+      code: "positive-control-missed",
+    });
+  }
+  assert.doesNotThrow(() => validateScreening(screening()));
+});
+
+test("edition fixtures produce every declared positive-control hit with the real matcher", async () => {
+  const eu = (
+    await parseEuList(
+      Bun.file(
+        new URL("../packages/sanctions/src/fixtures/eu.xml", import.meta.url),
+      ).stream(),
+    )
+  ).unwrap();
+  const czFile = "Vnitrostatni_sankcni_seznam_2026_07_23.csv";
+  const cz = parseCzList({
+    csv: await Bun.file(
+      new URL(`../packages/sanctions/src/fixtures/${czFile}`, import.meta.url),
+    ).text(),
+    fileNameOrUrl: czFile,
+  }).unwrap();
+  const result = screen(
+    buildScreeningIndex([eu, cz]),
+    {
+      name: POSITIVE_CONTROL.subject.name,
+      entityType: "organisation",
+    },
+    { cutoff: DEFAULT_CUTOFF },
+  ).unwrap();
+  const matched = new Set(
+    result.possibleMatches.map(({ entry }) => entry.source),
+  );
+  assert.deepEqual(
+    [...matched].toSorted(),
+    POSITIVE_CONTROL.expectedSources.toSorted(),
+  );
 });

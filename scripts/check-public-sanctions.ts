@@ -14,11 +14,17 @@ const STATUSES = ["clear", "possible-match", "unavailable"] as const;
 const MAX_BYTES = 1024 * 1024;
 const TIMEOUT_MS = 15_000;
 const TARGET_URL = "https://my.stll.app/api/v1/sanctions/search";
-const SUBJECT = JSON.stringify({
-  subject: { type: "organization", name: "Rosneft" },
-});
+export const POSITIVE_CONTROL = {
+  subject: { type: "organization", name: "Voice of Europe" },
+  expectedSources: ["eu", "cz"],
+} as const satisfies {
+  subject: { type: "organization"; name: string };
+  expectedSources: readonly (typeof SOURCES)[number][];
+};
+const SUBJECT = JSON.stringify({ subject: POSITIVE_CONTROL.subject });
 
 type FailureCode =
+  | "positive-control-missed"
   | "invalid-response"
   | "invalid-list"
   | "list-unavailable"
@@ -56,6 +62,7 @@ export const validateScreening = (body: unknown): void => {
     throw new CanaryFailureError("invalid-response");
   }
   const seen = new Set<string>();
+  const matched = new Set<string>();
   let published = 0;
   let aggregate: (typeof STATUSES)[number] = "clear";
   for (const entry of body.lists) {
@@ -97,6 +104,7 @@ export const validateScreening = (body: unknown): void => {
       published += 1;
     }
     if (list.status === "possible-match") {
+      matched.add(list.source);
       aggregate = "possible-match";
     } else if (
       list.status === "unavailable" &&
@@ -110,6 +118,11 @@ export const validateScreening = (body: unknown): void => {
   }
   if (body.status !== aggregate) {
     throw new CanaryFailureError("aggregate-mismatch");
+  }
+  if (
+    !POSITIVE_CONTROL.expectedSources.every((source) => matched.has(source))
+  ) {
+    throw new CanaryFailureError("positive-control-missed");
   }
 };
 
