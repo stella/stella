@@ -626,6 +626,7 @@ describe("OpenAI decision settings", () => {
       provider: "openai",
       modelId: "gpt-6-luna",
       region: "global",
+      apiKeyMasked: undefined,
     } as const satisfies StoredDecisionModel;
     expect(
       decisionModelDraft({ state: { kind: "untouched" }, stored }),

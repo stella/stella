@@ -1,6 +1,10 @@
 import { sql } from "drizzle-orm";
 
 import { CONTACT_TYPES } from "@stll/api-contract";
+import type {
+  DECISION_UNDECIDED_REASON_CODES,
+  DecisionUndecidedReason,
+} from "@stll/api-contract/ai-decision-provider";
 import type { TemplatePackAuthor } from "@stll/template-packs/schema";
 
 import type { ClauseDirectiveWarning } from "@/api/lib/clauses/clause-directives";
@@ -364,7 +368,7 @@ type TemplatePersistenceUndecidedCondition = {
   path: string;
   label: string;
   state: "undecided";
-  reason: "no_decision_model" | "below_floor" | "failed";
+  reason: (typeof DECISION_UNDECIDED_REASON_CODES)[DecisionUndecidedReason];
 };
 
 export const TEMPLATE_PERSISTENCE_REQUEST_STATUS = {

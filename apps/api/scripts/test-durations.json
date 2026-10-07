@@ -4119,6 +4119,10 @@
     "seconds": 0.096398,
     "source": "estimated"
   },
+  "src/lib/ai-config-response.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
   "src/lib/ai-config.test.ts": {
     "seconds": 0.178863,
     "source": "estimated"
@@ -8114,6 +8118,10 @@
   "src/lib/workflow/decisions/decision-usage.test.ts": {
     "seconds": 0.5,
     "source": "measured"
+  },
+  "src/lib/workflow/decisions/openai-decisions.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
   },
   "src/lib/workflow/decisions/system-one.test.ts": {
     "seconds": 0.075977,

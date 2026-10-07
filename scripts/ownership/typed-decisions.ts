@@ -5,6 +5,7 @@ export default {
   capability:
     "Typed decisions: a choice from a closed set, a yes/no or a score, asked of a decision model",
   owner: [
+    "packages/api-contract/src/ai-decision-provider.ts",
     "apps/api/src/lib/workflow/decisions/decide.ts",
     "apps/api/src/lib/workflow/decisions/decision-model.ts",
     "apps/api/src/lib/workflow/decisions/system-one.ts",
@@ -20,7 +21,8 @@ export default {
     "the confidence floor, captures failures and logs every decision, and " +
     "returns a `Decision` the caller must narrow before reading, so a " +
     "deployment without a model takes the same path as an answer under the " +
-    "floor. `decision-model.ts` owns which model answers for an org, " +
+    "floor. `ai-decision-provider.ts` owns the provider domain, default OpenAI " +
+    "model and undecided reason contract. `decision-model.ts` owns which model answers for an org, " +
     "`system-one.ts` and `openai-decisions.ts` the wire contracts and retry, `system-one-runtime.ts` the " +
     "instance credential, and `answer-questions.ts` the translation of a table " +
     "column (select, date, int) into questions and back into the `Answer` the " +

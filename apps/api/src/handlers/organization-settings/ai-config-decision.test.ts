@@ -17,8 +17,8 @@ const resolveDecisionConfig = (
   if (!result.valid || !result.needsProbe) {
     return result;
   }
-  const { probeConfig, ...rest } = result;
-  expect(probeConfig.apiKey).toBe(rest.decision.apiKey);
+  expect(result.probeConfig).toMatchObject({ apiKey: result.decision.apiKey });
+  const { probeConfig: _, ...rest } = result;
   return rest;
 };
 

@@ -6,6 +6,7 @@ import {
   isBYOKModelRoleSupported,
   isBYOKProviderRoleSupported,
 } from "@stll/ai-catalog";
+import { DEFAULT_OPENAI_DECISION_MODEL } from "@stll/api-contract/ai-decision-provider";
 import type { DecisionModelProvider } from "@stll/api-contract/ai-decision-provider";
 
 import type { OrganizationAIConfig } from "@/lib/organization/ai-config-queries";
@@ -521,7 +522,7 @@ export const DEFAULT_DECISION_MODEL_ID = "jev-latest";
 
 export const DEFAULT_DECISION_MODEL_IDS = {
   typesafe: DEFAULT_DECISION_MODEL_ID,
-  openai: "gpt-6-luna",
+  openai: DEFAULT_OPENAI_DECISION_MODEL,
 } as const satisfies Record<DecisionProviderValue, string>;
 
 type DecisionSelection =
@@ -594,9 +595,6 @@ export const decisionModelDraft = ({
     case "untouched":
       if (!stored) {
         return null;
-      }
-      if (stored.provider === "openai" && stored.region === undefined) {
-        return panic("OpenAI decision settings omitted the region");
       }
       return stored.provider === "openai"
         ? {

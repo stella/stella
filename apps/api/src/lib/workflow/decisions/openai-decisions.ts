@@ -1,6 +1,7 @@
 import { panic, Result } from "better-result";
 import * as v from "valibot";
 
+import { DEFAULT_OPENAI_DECISION_MODEL } from "@stll/api-contract/ai-decision-provider";
 import { createFetchWithTimeout } from "@stll/fetch";
 import type { Fetcher } from "@stll/fetch";
 
@@ -22,7 +23,6 @@ import type {
   SystemOneErrorKind,
 } from "@/api/lib/workflow/decisions/system-one";
 
-export const DEFAULT_OPENAI_DECISION_MODEL = "gpt-6-luna";
 const REQUEST_TIMEOUT_MS = 30_000;
 const MAX_ATTEMPTS = 3;
 const MAX_RETRY_DELAY_MS = 5000;
@@ -284,7 +284,7 @@ export const createOpenAIDecisionsClient = ({
           }),
       });
       if (Result.isError(cancelled)) {
-        return cancelled;
+        return Result.err(cancelled.error);
       }
       if (status !== 429 || attempt === MAX_ATTEMPTS - 1) {
         return Result.err(
@@ -313,7 +313,7 @@ export const createOpenAIDecisionsClient = ({
           }),
       });
       if (Result.isError(waited)) {
-        return waited;
+        return Result.err(waited.error);
       }
     }
     return panic("OpenAI decision retry ladder fell through");

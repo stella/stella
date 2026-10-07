@@ -276,7 +276,8 @@ describe("OpenAI decision credentials", () => {
         region: "eu",
         keySource: "byok",
       });
-      expect(runtime.fetch.mock.calls.at(-1)?.at(1)?.headers).toMatchObject({
+      const request = runtime.fetch.mock.calls.at(-1)?.[1];
+      expect(request?.headers).toMatchObject({
         authorization: `Bearer ${override ?? "generative-key"}`,
       });
     },

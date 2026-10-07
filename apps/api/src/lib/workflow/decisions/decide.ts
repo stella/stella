@@ -23,6 +23,8 @@
 
 import { panic, Result } from "better-result";
 
+import type { DecisionUndecidedReason } from "@stll/api-contract/ai-decision-provider";
+
 import type { OrgAIConfig } from "@/api/lib/ai-config";
 import { captureError } from "@/api/lib/analytics/capture";
 import type { AIDataClass } from "@/api/lib/chat/ai-data-policy";
@@ -53,18 +55,6 @@ import { isSystemOneAnswerForQuestion } from "@/api/lib/workflow/decisions/syste
 const DEFAULT_TIMEOUT_MS = 30_000;
 /** Readings carried into the log line; the rest of a large batch is cut. */
 const READINGS_MAX = 20;
-
-const DECISION_UNDECIDED_REASONS = [
-  /** No decision model is configured for the org or the instance. */
-  "no-backend",
-  /** The model answered under the confidence floor. */
-  "below-floor",
-  /** The call failed; the error was captured. */
-  "failed",
-  "refusal",
-] as const;
-export type DecisionUndecidedReason =
-  (typeof DECISION_UNDECIDED_REASONS)[number];
 
 export type Decision<TAnswer> =
   | {

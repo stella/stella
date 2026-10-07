@@ -77,7 +77,7 @@ export const resolveDecisionConfig = ({
       };
       break;
     default:
-      selection.provider satisfies never;
+      selection satisfies never;
       return panic("Unhandled decision provider");
   }
   return resolveDecisionProbe({
