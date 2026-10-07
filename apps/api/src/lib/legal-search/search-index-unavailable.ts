@@ -3,7 +3,8 @@ import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
 /**
  * The refusal every public-law search answers with while the search index
- * cannot be reached (`isCorpusIndexUnreachable`). One code, one message and
+ * cannot be reached or does not exist on the cluster
+ * (`isCorpusIndexUnavailable`). One code, one message and
  * one hint for the REST routes and the MCP tools alike, so an agent and a
  * client branch on the same value and read the same next step: wait and
  * resend, because nothing in the request caused it.

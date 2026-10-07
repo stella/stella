@@ -1900,6 +1900,7 @@ type ReadCaseLawSearchFacetsOptions = {
   indexId: string;
   /** Null when the request has no query the facets could be counted under. */
   queryFor: CorpusFacetQuery | null;
+  readSourceRegistry: typeof readCaseLawSourceRegistry;
   timeDbRead: TimeDbRead;
   totalQuery: string;
 };
@@ -1928,6 +1929,7 @@ const readCaseLawSearchFacets = async ({
   decisionCountField,
   indexId,
   queryFor,
+  readSourceRegistry,
   timeDbRead,
   totalQuery,
 }: ReadCaseLawSearchFacetsOptions): Promise<CaseLawSearchFacetsRead | null> => {
@@ -1945,9 +1947,7 @@ const readCaseLawSearchFacets = async ({
   // no facets rather than facets that might still advertise a revoked source.
   // The same read carries the display names, so labelling the buckets costs no
   // further round trip once the counts are back.
-  const registry = await timeDbRead(
-    async () => await readCaseLawSourceRegistry(),
-  );
+  const registry = await timeDbRead(async () => await readSourceRegistry());
   if (Result.isError(registry)) {
     logger.warn("case_law.search_facets.unavailable", {
       "error.type": errorTag(registry.error),
@@ -2037,6 +2037,8 @@ const caseLawScanTransport = (sort: SearchSort): CorpusIndexScanTransport => {
 type SearchCorpusIndexDependencies = {
   readServingTarget?: () => ReturnType<typeof readServingCorpusIndexTargetTx>;
   configuredVariant?: CorpusIndexQueryVariant;
+  loadCourtWeights?: typeof loadPublicCourtWeights;
+  readSourceRegistry?: typeof readCaseLawSourceRegistry;
 };
 
 type CorpusIndexRequestConfigurationOptions = {
@@ -2056,6 +2058,9 @@ const corpusIndexRequestConfiguration = ({
   sort: body.sort ?? DEFAULT_SEARCH_SORT,
   configuredVariant:
     dependencies.configuredVariant ?? envBase.CORPUS_INDEX_QUERY_VARIANT,
+  loadCourtWeights: dependencies.loadCourtWeights ?? loadPublicCourtWeights,
+  readSourceRegistry:
+    dependencies.readSourceRegistry ?? readCaseLawSourceRegistry,
   readServingTarget:
     dependencies.readServingTarget ??
     (async () =>
@@ -2086,12 +2091,18 @@ export const searchCorpusIndexDecisions = async ({
   observer,
   dependencies = {},
 }: SearchCorpusIndexDecisionsOptions) => {
-  const { readServingTarget, configuredVariant, limit, sort } =
-    corpusIndexRequestConfiguration({
-      body,
-      caseLawDb,
-      dependencies,
-    });
+  const {
+    readServingTarget,
+    configuredVariant,
+    limit,
+    loadCourtWeights,
+    readSourceRegistry,
+    sort,
+  } = corpusIndexRequestConfiguration({
+    body,
+    caseLawDb,
+    dependencies,
+  });
   const startedAt = performance.now();
   let parsedCursor: CorpusSearchCursor | null = null;
   if (body.cursor) {
@@ -2179,7 +2190,7 @@ export const searchCorpusIndexDecisions = async ({
   // loader caches for a minute, but the ranking must see one registry across a
   // whole page. The timer brackets the query rather than the call, so a
   // request served from the cache reports no read instead of a phantom one.
-  const courtWeights = await loadPublicCourtWeights({
+  const courtWeights = await loadCourtWeights({
     onRead: async (run) =>
       await dbTimer.time(CASE_LAW_SEARCH_DB_READ.courtWeights, run),
   });
@@ -2419,6 +2430,7 @@ export const searchCorpusIndexDecisions = async ({
           decisionCountField,
           indexId,
           queryFor: facetQueries(),
+          readSourceRegistry,
           timeDbRead: async (run) =>
             await dbTimer.time(CASE_LAW_SEARCH_DB_READ.sourceRegistry, run),
           totalQuery: scopedQuery,

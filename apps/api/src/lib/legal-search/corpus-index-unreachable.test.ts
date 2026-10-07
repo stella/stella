@@ -6,9 +6,13 @@ import { resolveHandlerError } from "@/api/lib/errors/handler-error-resolution";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import {
   getCorpusIndexClient,
-  isCorpusIndexUnreachable,
+  isCorpusIndexUnavailable,
 } from "@/api/lib/legal-search/corpus-index-client";
-import { readCorpusIndexSearchPage } from "@/api/lib/legal-search/corpus-index-pagination";
+import {
+  type CorpusIndexScanTransport,
+  NATIVE_SCAN_TRANSPORT,
+  readCorpusIndexSearchPage,
+} from "@/api/lib/legal-search/corpus-index-pagination";
 import { corpusSearchGroupToken } from "@/api/lib/legal-search/corpus-search-cursor";
 import { RELEVANCE_ORDER } from "@/api/lib/legal-search/corpus-search-order";
 import {
@@ -22,9 +26,10 @@ import {
  * Where "the search index is unavailable" is decided: at the client, from
  * what the request got back. A request no engine answered (refused or reset
  * connection, failed lookup, expired budget, a body cut off mid-stream) or a
- * gateway answered for (502, 503, 504) is unreachable; an engine that
- * answered with anything else, including bytes this client cannot read, is a
- * failure no retry fixes and stays a generic one.
+ * gateway answered for (502, 503, 504) is unreachable; an engine answering
+ * that it holds no such index (404) is a missing index. Both are unavailable.
+ * An engine that answered with anything else, including bytes this client
+ * cannot read, is a failure no retry fixes and stays a generic one.
  */
 
 const originalFetch = globalThis.fetch;
@@ -93,8 +98,43 @@ const UNREACHABLE: readonly FailureShape[] = [
   })),
 ];
 
+/** The bodies the engine answers a search naming an absent index with. */
+const INDEX_MISSING: readonly FailureShape[] = [
+  {
+    name: "native search of a missing index",
+    answer: async () =>
+      await Promise.resolve(
+        Response.json(
+          {
+            message:
+              'could not find indexes matching the IDs `["legal_corpus_v1_cze"]`',
+          },
+          { status: 404 },
+        ),
+      ),
+  },
+  {
+    name: "Elasticsearch-compatible search of a missing index",
+    answer: async () =>
+      await Promise.resolve(
+        Response.json(
+          {
+            error: {
+              type: "index_not_found_exception",
+              reason: "no such index [legal_corpus_v1_cze]",
+            },
+            status: 404,
+          },
+          { status: 404 },
+        ),
+      ),
+  },
+];
+
+const UNAVAILABLE: readonly FailureShape[] = [...UNREACHABLE, ...INDEX_MISSING];
+
 const ANSWERED: readonly FailureShape[] = [
-  ...[400, 404, 429, 500].map((status) => ({
+  ...[400, 429, 500].map((status) => ({
     name: `engine ${status}`,
     answer: async () =>
       await Promise.resolve(new Response("refused", { status })),
@@ -119,7 +159,7 @@ const searchOnce = async () =>
     maxHits: 10,
   });
 
-const readPage = async () =>
+const readPage = async (scanTransport: CorpusIndexScanTransport) =>
   await readCorpusIndexSearchPage({
     observer: "unobserved",
     cluster: "q09",
@@ -128,6 +168,7 @@ const readPage = async () =>
     limit: 10,
     order: RELEVANCE_ORDER,
     parsedCursor: null,
+    scanTransport,
     snippetFields: ["text"],
     extractId: (hit) =>
       typeof hit["document_id"] === "string" ? hit["document_id"] : null,
@@ -149,8 +190,10 @@ const readPage = async () =>
   });
 
 /** What a scan threw, or a failure of the test when it threw nothing. */
-const scanFailure = async (): Promise<unknown> => {
-  const outcome = await readPage().then(
+const scanFailure = async (
+  scanTransport: CorpusIndexScanTransport = NATIVE_SCAN_TRANSPORT,
+): Promise<unknown> => {
+  const outcome = await readPage(scanTransport).then(
     () => null,
     (error: unknown) => ({ error }),
   );
@@ -160,7 +203,7 @@ const scanFailure = async (): Promise<unknown> => {
   return outcome.error;
 };
 
-describe("the client reads an unreachable index from the request", () => {
+describe("the client reads an unavailable index from the request", () => {
   test("a refused connection to a real closed port", async () => {
     const server = Bun.serve({ port: 0, fetch: () => new Response("ok") });
     // Read before the stop: the address is the one nothing listens on after.
@@ -174,19 +217,19 @@ describe("the client reads an unreachable index from the request", () => {
 
     expect(result.isErr()).toBe(true);
     if (result.isErr()) {
-      expect(isCorpusIndexUnreachable(result.error)).toBe(true);
+      expect(isCorpusIndexUnavailable(result.error)).toBe(true);
     }
   });
 
-  for (const shape of UNREACHABLE) {
-    test(`${shape.name} is unreachable`, async () => {
+  for (const shape of UNAVAILABLE) {
+    test(`${shape.name} is unavailable`, async () => {
       stubFetch(shape.answer);
 
       const result = await searchOnce();
 
       expect(result.isErr()).toBe(true);
       if (result.isErr()) {
-        expect(isCorpusIndexUnreachable(result.error)).toBe(true);
+        expect(isCorpusIndexUnavailable(result.error)).toBe(true);
       }
     });
   }
@@ -199,29 +242,37 @@ describe("the client reads an unreachable index from the request", () => {
 
       expect(result.isErr()).toBe(true);
       if (result.isErr()) {
-        expect(isCorpusIndexUnreachable(result.error)).toBe(false);
+        expect(isCorpusIndexUnavailable(result.error)).toBe(false);
       }
     });
   }
 });
 
-describe("a scan answers an unreachable index with the typed refusal", () => {
-  for (const shape of UNREACHABLE) {
-    test(`${shape.name} throws a retryable 503 search_index_unavailable`, async () => {
-      stubFetch(shape.answer);
+const SCAN_TRANSPORTS: readonly CorpusIndexScanTransport[] = [
+  NATIVE_SCAN_TRANSPORT,
+  { type: "scored", fields: ["document_id"] },
+];
 
-      const error = await scanFailure();
+describe("a scan answers an unavailable index with the typed refusal", () => {
+  for (const shape of UNAVAILABLE) {
+    test.each(SCAN_TRANSPORTS)(
+      `${shape.name} throws a retryable 503 search_index_unavailable over the %p transport`,
+      async (transport) => {
+        stubFetch(shape.answer);
 
-      expect(HandlerError.is(error)).toBe(true);
-      expect(isSearchIndexUnavailable(error)).toBe(true);
-      expect(error).toMatchObject({
-        status: 503,
-        code: SEARCH_INDEX_UNAVAILABLE_CODE,
-        message: SEARCH_INDEX_UNAVAILABLE_MESSAGE,
-        hint: SEARCH_INDEX_UNAVAILABLE_HINT,
-        retryable: true,
-      });
-    });
+        const error = await scanFailure(transport);
+
+        expect(HandlerError.is(error)).toBe(true);
+        expect(isSearchIndexUnavailable(error)).toBe(true);
+        expect(error).toMatchObject({
+          status: 503,
+          code: SEARCH_INDEX_UNAVAILABLE_CODE,
+          message: SEARCH_INDEX_UNAVAILABLE_MESSAGE,
+          hint: SEARCH_INDEX_UNAVAILABLE_HINT,
+          retryable: true,
+        });
+      },
+    );
   }
 
   for (const shape of ANSWERED) {

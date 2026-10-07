@@ -29,10 +29,14 @@ type CorpusIndexErrorRejection = "definite" | "unknown" | "transient";
  * never got an answer (refused or reset connection, failed DNS lookup, an
  * expired budget) or one a gateway in front of the engine answered for it
  * (502, 503, 504): the index is down or scaled away, and the same request can
- * succeed once it is back. `answered` is everything else, including a
- * response this client could not read, which no retry fixes.
+ * succeed once it is back. `index_missing` is the engine answering that the
+ * index the request named does not exist on the cluster: every path this
+ * client sends to is a Stella-built route naming the index, so a 404 from the
+ * engine means the index, not the route, and the same request succeeds once
+ * the index is created. `answered` is everything else, including a response
+ * this client could not read, which no retry fixes.
  */
-type CorpusIndexErrorReach = "answered" | "unreachable";
+type CorpusIndexErrorReach = "answered" | "unreachable" | "index_missing";
 
 export class CorpusIndexError extends TaggedError("CorpusIndexError")<{
   message: string;
@@ -59,12 +63,35 @@ export class CorpusIndexError extends TaggedError("CorpusIndexError")<{
 /** The statuses a gateway answers with while the engine behind it is gone. */
 const UNREACHABLE_HTTP_STATUSES: ReadonlySet<number> = new Set([502, 503, 504]);
 
+/** The status the engine answers a request naming an absent index with. */
+const INDEX_MISSING_HTTP_STATUS = 404;
+
+const reachForHttpStatus = (status: number): CorpusIndexErrorReach => {
+  if (UNREACHABLE_HTTP_STATUSES.has(status)) {
+    return "unreachable";
+  }
+  return status === INDEX_MISSING_HTTP_STATUS ? "index_missing" : "answered";
+};
+
 /**
  * The one reading of "the search index is unavailable" every caller shares,
  * so a search route, a tool and a test cannot each draw the line elsewhere.
+ * An engine that could not be reached and an index the engine does not hold
+ * are both a state of the deployment, not of the request: the same request
+ * succeeds once the index is back.
  */
-export const isCorpusIndexUnreachable = (error: CorpusIndexError): boolean =>
-  error.reach === "unreachable";
+export const isCorpusIndexUnavailable = (error: CorpusIndexError): boolean => {
+  switch (error.reach) {
+    case "unreachable":
+    case "index_missing":
+      return true;
+    case "answered":
+      return false;
+    default:
+      error.reach satisfies never;
+      return panic(`Unhandled corpus index reach: ${String(error.reach)}`);
+  }
+};
 
 /**
  * Mirrors Quickwit's default ingest `content_length_limit`; our node config
@@ -688,9 +715,7 @@ const requestJson = async (request: CorpusIndexRequest): Promise<unknown> => {
       message: `corpus index ${requestLabel(request)} -> ${response.status}: ${body.slice(0, 500)}`,
       status: response.status,
       rejection: rejectionForHttpStatus(response.status),
-      reach: UNREACHABLE_HTTP_STATUSES.has(response.status)
-        ? "unreachable"
-        : "answered",
+      reach: reachForHttpStatus(response.status),
     });
   }
   return await response.json().catch((error: unknown) => {
