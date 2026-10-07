@@ -27,6 +27,7 @@ import {
   uniqueCorrespondenceAddresses,
 } from "@/lib/workspaces/queries/correspondence";
 import { viewsOptions } from "@/lib/workspaces/queries/views";
+import { selectAvailableWorkspaceViews } from "@/lib/workspaces/queries/views.logic";
 import { workspaceMembersOptions } from "@/lib/workspaces/queries/workspace-members";
 import { correspondenceViewId } from "@/lib/workspaces/view-layout";
 import { CorrespondenceProvenance } from "@/routes/_protected.workspaces/$workspaceId/-components/correspondence-provenance";
@@ -330,7 +331,8 @@ const BackToCorrespondenceLink = ({ workspaceId }: { workspaceId: string }) => {
   const t = useTranslations();
   const { data: viewId = null } = useQuery({
     ...viewsOptions(workspaceId),
-    select: correspondenceViewId,
+    select: (views) =>
+      correspondenceViewId(selectAvailableWorkspaceViews(views)),
   });
   const label = (
     <span className="text-muted-foreground hover:text-foreground flex min-h-11 items-center px-2 text-sm">

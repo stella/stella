@@ -214,13 +214,14 @@ const FactRow = ({ workspaceId, listId, fact }: FactRowProps) => {
           <ConfidenceSelect
             disabled={!canEdit}
             onChange={(confidence) => {
-              if (details !== null && details.scoring === undefined) {
+              const scoring =
+                details === null ? UNDESCRIBED_FACT.scoring : details.scoring;
+              if (scoring === undefined) {
                 return;
               }
               saveDetails(fact.id, {
                 ...(details ?? UNDESCRIBED_FACT),
-                scoring:
-                  details === null ? UNDESCRIBED_FACT.scoring : details.scoring,
+                scoring,
                 confidence,
               });
             }}

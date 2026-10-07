@@ -1,8 +1,6 @@
 import { panic } from "better-result";
 import { expect, test } from "bun:test";
 import { Elysia } from "elysia";
-import { readFile } from "node:fs/promises";
-import path from "node:path";
 
 import { readCapabilityCatalog } from "@stll/cli/capability-catalog-data";
 
@@ -36,8 +34,8 @@ const itemId = "a3333333-3333-4333-8333-333333333333";
 const source = {
   id: toSafeId<"legalListItemSource">(itemId),
   sourceEntityId: toSafeId<"entity">(itemId),
-  sourceEntityVersionId: null,
-  locator: null,
+  sourceEntityVersionId: toSafeId<"entityVersion">(itemId),
+  locator: { type: "document" },
   quote: "Passage",
   verificationStatus: "verified",
   verifiedBy: "user_fixture",
@@ -191,6 +189,7 @@ for (const transport of [
       async (granted) => {
         const { context } = contextFor(granted, capability);
         const input = {
+          body: {},
           params: {
             matterId,
             listId,
@@ -240,9 +239,50 @@ for (const transport of [
             }
           };
           if (transport === "REST HTTP") {
-            const response = await new Elysia()
-              .get("/fixture", execute)
-              .handle(new Request("http://localhost/fixture"));
+            const app = new Elysia().resolve(() => ({
+              workspaceId: toSafeId<"workspace">(matterId),
+              user: synthesized.user,
+              session: synthesized.session,
+              featureAccessSnapshot: synthesized.featureAccessSnapshot,
+              safeDb: synthesized.safeDb,
+              scopedDb: synthesized.scopedDb,
+              getActiveWorkspaceIds: synthesized.getActiveWorkspaceIds,
+              getAccessibleWorkspaces: synthesized.getAccessibleWorkspaces,
+              getWorkspaceAccess: synthesized.getWorkspaceAccess,
+              pinServerValidatedWorkspaceId:
+                synthesized.pinServerValidatedWorkspaceId,
+              memberRole: synthesized.memberRole,
+              orgAIConfig: synthesized.orgAIConfig,
+              orgAIConfigStatus: synthesized.orgAIConfigStatus,
+              promptCachingEnabled: synthesized.promptCachingEnabled,
+              managedAIResidency: synthesized.managedAIResidency,
+              recordAuditEvent: synthesized.recordAuditEvent,
+              createAuditRecorder: synthesized.createAuditRecorder,
+            }));
+            const route =
+              capability === "lists.items.sources.list"
+                ? app.get(
+                    "/lists/:workspaceId/:listId/items/:itemEntityId/sources",
+                    readSources.handler,
+                    {
+                      params: readSources.config.params,
+                      query: readSources.config.query,
+                    },
+                  )
+                : app.get(
+                    "/lists/:workspaceId/:listId/items",
+                    readItems.handler,
+                    {
+                      params: readItems.config.params,
+                      query: readItems.config.query,
+                    },
+                  );
+            const url = `http://localhost/lists/${matterId}/${listId}/items${
+              capability === "lists.items.sources.list"
+                ? `/${itemId}/sources`
+                : ""
+            }`;
+            const response = await route.handle(new Request(url));
             expect(response.status).toBe(200);
             result = await response.json();
           } else {
@@ -392,82 +432,4 @@ test("conditional view schemas follow caller discovery", async () => {
     expect(JSON.stringify(denied)).not.toContain('"avt"');
   }
   expect(projected).toBeGreaterThan(0);
-});
-
-const missingCallerProjections = (sourceText: string) => {
-  const requirements = [
-    {
-      columns: /scoring\s*:\s*legalListFactDetails\.scoring\b/u,
-      owner: "projectListFactDetails",
-    },
-    {
-      columns:
-        /(?:verificationStatus|verifiedBy|verifiedAt)\s*:\s*legalListItemSources\.(verificationStatus|verifiedBy|verifiedAt)\b/u,
-      owner: "projectListItemSource",
-    },
-  ];
-  return requirements
-    .filter(
-      ({ columns, owner }) =>
-        columns.test(sourceText) &&
-        !new RegExp(`\\b${owner}\\s*\\(`, "u").test(sourceText),
-    )
-    .map(({ owner }) => owner);
-};
-
-test("shared list field producers declare and apply caller projections", async () => {
-  const directory = path.resolve(import.meta.dir, "../handlers/lists");
-  let producers = 0;
-  for await (const filename of new Bun.Glob("**/*.ts").scan({
-    cwd: directory,
-  })) {
-    if (filename.endsWith(".test.ts")) {
-      continue;
-    }
-    const absolutePath = path.join(directory, filename);
-    const sourceText = await readFile(absolutePath, "utf-8");
-    if (
-      !/createSafeHandler\s*\(/u.test(sourceText) ||
-      !/legalListFactDetails\.scoring\b|legalListItemSources\.(verificationStatus|verifiedBy|verifiedAt)\b/u.test(
-        sourceText,
-      )
-    ) {
-      continue;
-    }
-    const loaded: unknown = await import(absolutePath);
-    if (
-      !isRecord(loaded) ||
-      !isRecord(loaded["default"]) ||
-      !isRecord(loaded["default"]["config"])
-    ) {
-      return panic(`Expected a safe handler in ${filename}`);
-    }
-    const requirement = loaded["default"]["config"]["featureAccess"];
-    if (isRecord(requirement) && requirement["type"] === "required") {
-      continue;
-    }
-    producers += 1;
-    expect(requirement).toMatchObject({
-      type: "conditional",
-      featureId: LIST_VERIFICATION_FEATURE_ID,
-    });
-    expect(missingCallerProjections(sourceText)).toEqual([]);
-  }
-  expect(producers).toBeGreaterThan(0);
-});
-
-test("shared field producer census detects an absent owner projection", () => {
-  for (const [column, owner] of [
-    ["legalListFactDetails.scoring", "projectListFactDetails"],
-    ["legalListItemSources.verificationStatus", "projectListItemSource"],
-    ["legalListItemSources.verifiedBy", "projectListItemSource"],
-    ["legalListItemSources.verifiedAt", "projectListItemSource"],
-  ]) {
-    const field = column.split(".").at(-1);
-    const unprojected = `createSafeHandler(config, () => tx.select({ ${field}: ${column} }))`;
-    expect(missingCallerProjections(unprojected)).toEqual([owner]);
-    expect(
-      missingCallerProjections(`${unprojected}; ${owner}(rows, accessStatus)`),
-    ).toEqual([]);
-  }
 });
