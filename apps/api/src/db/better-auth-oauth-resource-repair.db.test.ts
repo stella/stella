@@ -244,27 +244,19 @@ test("the deploy repair adds a new audience to an existing database", async () =
       expect(await resourceIdentifiers(transaction)).toContainEqual({
         identifier: lawResourceIdentifier(),
       });
-      // Existing rows keep the predecessor scope set byte for byte: the
-      // previous release's boot census compares it exactly, so a task of that
-      // release (autoscaled mid-rollout, or a rollback) must still boot. Only
-      // the inserted audience carries the configured set.
+      // Every row now issues with protocol scopes, so refresh keeps
+      // offline_access. The previous release accepts this set at boot.
       const policies = await resourcePolicies(transaction);
       for (const resource of getBetterAuthOAuthResources()) {
-        const isNewAudience = resource.identifier === lawResourceIdentifier();
+        expect(
+          predecessorOAuthResourceScopes(resource.allowedScopes),
+        ).not.toEqual(resource.allowedScopes);
         expect(policies).toContainEqual({
           identifier: resource.identifier,
-          allowedScopes: (isNewAudience
-            ? [...resource.allowedScopes]
-            : predecessorOAuthResourceScopes(resource.allowedScopes)
-          ).toSorted(),
+          allowedScopes: resource.allowedScopes.toSorted(),
           updatedAt: expect.any(String),
         });
       }
-      expect(
-        predecessorOAuthResourceScopes(
-          getBetterAuthOAuthResources()[0]?.allowedScopes ?? [],
-        ),
-      ).not.toEqual(getBetterAuthOAuthResources()[0]?.allowedScopes);
       // And the registration that existed before the upgrade can request it.
       expect(await linkedResourceIds(transaction)).toContainEqual({
         resourceId: lawResourceIdentifier(),
@@ -308,7 +300,7 @@ test("a second repair run changes nothing", async () => {
   }
 });
 
-test.each(["name", "scopes"] as const)(
+test.each(["name", "scopes", "disabled"] as const)(
   "the repair refuses a conflicting resource %s",
   async (conflict) => {
     try {
@@ -326,6 +318,7 @@ test.each(["name", "scopes"] as const)(
         const conflicts = {
           name: sql`UPDATE oauth_resource SET name = 'conflicting resource name' WHERE identifier = ${existing.identifier}`,
           scopes: sql`UPDATE oauth_resource SET allowed_scopes = ARRAY['unexpected:scope'] WHERE identifier = ${existing.identifier}`,
+          disabled: sql`UPDATE oauth_resource SET disabled = true WHERE identifier = ${existing.identifier}`,
         };
         await transaction.execute(conflicts[conflict]);
         const before = (
@@ -349,8 +342,8 @@ test.each(["name", "scopes"] as const)(
           `)
           ).rows,
         ).toEqual(before);
-        // A rejected repair leaves every row as it was, including any audience
-        // it inserted before reaching the conflict.
+        // Earlier resources were upgraded before this conflict was detected.
+        // A rejected repair must roll back those changes too.
         expect(await resourcePolicies(transaction)).toEqual(policiesBefore);
         // Refusing leaves the deploy to fail on the completion read rather than
         // on a half-written policy.
@@ -367,43 +360,3 @@ test.each(["name", "scopes"] as const)(
     }
   },
 );
-
-test("a disabled resource is never re-enabled and fails the completion read", async () => {
-  try {
-    await database.transaction(async (transaction) => {
-      await givenPreUpgradeDeployment(transaction);
-      const connection = onlineConnection(transaction);
-      const existing = preUpgradeResources().at(-1);
-      if (existing === undefined) {
-        throw new Error("expected a pre-upgrade resource");
-      }
-      await transaction.execute(sql`
-        UPDATE oauth_resource SET disabled = true
-         WHERE identifier = ${existing.identifier}
-      `);
-
-      // Seeding compares names and scopes; a disabled audience is the
-      // census's refusal, which stops the deploy on the completion read.
-      await captureRejection(
-        BETTER_AUTH_OAUTH_RESOURCE_REPAIR.repair(connection),
-      );
-      expect(
-        (
-          await transaction.execute(sql`
-            SELECT disabled FROM oauth_resource
-             WHERE identifier = ${existing.identifier}
-          `)
-        ).rows,
-      ).toEqual([{ disabled: true }]);
-      expect(
-        await BETTER_AUTH_OAUTH_RESOURCE_REPAIR.readCompletion(connection),
-      ).toMatchObject({ type: "incomplete" });
-
-      transaction.rollback();
-    });
-  } catch (error) {
-    if (!(error instanceof TransactionRollbackError)) {
-      throw error;
-    }
-  }
-});
