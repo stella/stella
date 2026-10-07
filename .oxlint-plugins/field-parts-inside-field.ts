@@ -245,11 +245,17 @@ export default eslintCompatPlugin({
           if (owner === null || visited.has(owner)) {
             return true;
           }
-          visited.add(owner);
           const sites = localMountSites.get(owner);
-          return sites === undefined
-            ? false
-            : sites.some((site) => isCoveredByField(site, visited));
+          // An unmounted part owner leaves its mounting context to another
+          // module. Once a local mount is known, an unrooted wrapper chain
+          // is evidence of missing coverage even if its outer owner exports.
+          if (sites === undefined) {
+            return visited.size === 0;
+          }
+          visited.add(owner);
+          return sites.every((site) =>
+            isCoveredByField(site, new Set(visited)),
+          );
         };
 
         return {
