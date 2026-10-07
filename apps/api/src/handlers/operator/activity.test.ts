@@ -22,18 +22,15 @@ const summary = {
     week_start,
     partial: index === 7,
     active_orgs: 2,
-    signups: 5,
-    new_paying: null,
-    mrr: { currency: "EUR", amount_minor: 1200 },
-    activated_24h_pct: 40,
-    trial_to_paid_pct: null,
-    weekly_retention_pct: 50,
+    signups: index === 0 ? 0 : 5,
+    activated_24h_pct: index === 0 ? null : 40,
+    weekly_retention_pct: index === 0 ? null : 50,
   })),
-  same_point_last_week: { active_orgs: 1, signups: 3, new_paying: null },
+  same_point_last_week: { active_orgs: 1, signups: 3 },
   unavailable_reasons: {
-    "weeks.2026-08-17.new_paying": "Paid subscription history unavailable.",
-    "weeks.2026-08-17.trial_to_paid_pct": "Trial outcome history unavailable.",
-    "same_point_last_week.new_paying": "Paid subscription history unavailable.",
+    "weeks.2026-08-17.activated_24h_pct": "No signups in this week.",
+    "weeks.2026-08-17.weekly_retention_pct":
+      "No active organizations in the preceding week.",
   },
 } satisfies OperatorActivitySummary;
 
@@ -106,16 +103,15 @@ describe("operator activity HTTP boundary", () => {
             ...week,
             email: "private@example.test",
             userId: "private-user",
-            mrr: {
-              ...week.mrr,
-              email: "private@example.test",
-              userId: "private-user",
-            },
+            new_paying: 1,
+            mrr: { currency: "EUR", amount_minor: 1200 },
+            trial_to_paid_pct: 50,
           })),
           same_point_last_week: {
             ...summary.same_point_last_week,
             email: "private@example.test",
             userId: "private-user",
+            new_paying: 1,
           },
         };
       },

@@ -78,22 +78,12 @@ export const createOperatorActivity = ({
         partial: week.partial,
         active_orgs: week.active_orgs,
         signups: week.signups,
-        new_paying: week.new_paying,
-        mrr:
-          week.mrr === null
-            ? null
-            : {
-                currency: week.mrr.currency,
-                amount_minor: week.mrr.amount_minor,
-              },
         activated_24h_pct: week.activated_24h_pct,
-        trial_to_paid_pct: week.trial_to_paid_pct,
         weekly_retention_pct: week.weekly_retention_pct,
       })),
       same_point_last_week: {
         active_orgs: summary.same_point_last_week.active_orgs,
         signups: summary.same_point_last_week.signups,
-        new_paying: summary.same_point_last_week.new_paying,
       },
       unavailable_reasons: summary.unavailable_reasons,
     });
