@@ -12,7 +12,7 @@ import path from "node:path";
 import fixture from "./fixtures/network-baseline-selection/main-history.json" with { type: "json" };
 
 const selector =
-  process.env.NETWORK_BASELINE_SELECTOR_OVERRIDE ??
+  process.env["NETWORK_BASELINE_SELECTOR_OVERRIDE"] ??
   new URL(
     "../.github/actions/prepare-network-baseline/select-recording.sh",
     import.meta.url,
@@ -84,7 +84,7 @@ jq -e --arg key "$endpoint" '.[$key] // error("unrecorded API request: " + $key)
         cwd: directory,
         env: {
           ...process.env,
-          PATH: `${bin}:${process.env.PATH}`,
+          PATH: `${bin}:${process.env["PATH"]}`,
           SELECTOR: selector,
           REPLAY_DIR: directory,
           REPLAY_FAILURE_ENDPOINT: failure?.endpoint ?? "",

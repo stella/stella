@@ -3130,11 +3130,14 @@ jobs:
           bun test
           scripts/detect-e2e-changes.test.ts
           scripts/network-baseline-scope.test.ts
-          scripts/network-baseline-selection.test.ts
           scripts/autofix-workflow.test.ts
           scripts/check-release-upload-retry.test.ts
           scripts/check-base-image-pulls.test.ts
           scripts/dependabot-changeset.test.ts
+
+      - name: Test main network recording selection
+        if: ${{ !cancelled() && steps.checkout.outcome == 'success' && steps.install.outcome != 'failure' && steps.standalone_lockfiles.outcome != 'failure' && steps.lockfile_ages.outcome != 'failure' }}
+        run: bun test scripts/network-baseline-selection.test.ts
 
       - name: Test install-free CI commands
         if: ${{ !cancelled() && steps.checkout.outcome == 'success' && steps.install.outcome != 'failure' && steps.standalone_lockfiles.outcome != 'failure' && steps.lockfile_ages.outcome != 'failure' }}
