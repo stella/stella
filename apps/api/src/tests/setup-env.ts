@@ -36,6 +36,23 @@ delete process.env["GOOGLE_AUTH_CLIENT_SECRET"];
 delete process.env["MICROSOFT_AUTH_CLIENT_ID"];
 delete process.env["MICROSOFT_AUTH_CLIENT_SECRET"];
 delete process.env["MICROSOFT_AUTH_TENANT_ID"];
+// Provider tests install explicit fixture credentials after this preload.
+// Never inherit credentials from Bun's developer-local .env loading.
+delete process.env["OPENAI_API_KEY"];
+delete process.env["ANTHROPIC_API_KEY"];
+delete process.env["AZURE_API_KEY"];
+delete process.env["BEDROCK_API_KEY"];
+delete process.env["MISTRAL_API_KEY"];
+delete process.env["HUGGINGFACE_API_KEY"];
+delete process.env["GOOGLE_GENERATIVE_AI_API_KEY"];
+delete process.env["GOOGLE_API_KEY"];
+delete process.env["GOOGLE_AI_API_KEY_EU"];
+delete process.env["GOOGLE_AI_API_KEY_CH"];
+delete process.env["OPENROUTER_API_KEY"];
+delete process.env["TYPESAFE_API_KEY"];
+delete process.env["OPENROUTER_WIF_POLICY_ID"];
+delete process.env["OPENROUTER_WIF_AUDIENCE"];
+delete process.env["OPENROUTER_WIF_STS_REGION"];
 // Same leak, different blast radius: a developer .env that turns corpus
 // object storage on sends ingestion tests down the real S3 write path, where
 // they fail against a bucket the test runner has never created. Tests assert
