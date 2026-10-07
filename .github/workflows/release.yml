@@ -820,8 +820,7 @@ jobs:
           fi
           bash "$GH_RETRY_SCRIPT" release upload "$RELEASE_REF" release-manifest.json --clobber
           if [[ "$EXTENSION_PACKAGED" == "true" ]]; then
-            bash "$GH_RETRY_SCRIPT" release upload "$RELEASE_REF" \
-              "apps/extension/.output/stella-extension-chrome-${RELEASE_REF#v}.zip" --clobber
+            bash "$GH_RETRY_SCRIPT" release upload "$RELEASE_REF" "apps/extension/.output/stella-extension-chrome-${RELEASE_REF#v}.zip" --clobber
           fi
 
   promote:
