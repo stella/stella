@@ -13,7 +13,6 @@ import { loadBakedCapabilityCatalog } from "./capability-catalog-load.js";
 import { generatedToolAnnotations } from "./generated/tool-annotations.js";
 import { EXIT_CODES } from "./mcp-constants.js";
 import { validateFetchedToolsList } from "./registry-trust.js";
-import { sha256Hex as hashSha256Hex } from "./sha256.js";
 
 const CLI_ENTRYPOINT = path.join(import.meta.dirname, "cli.ts");
 const FETCH_PRELOAD = path.join(
@@ -378,7 +377,9 @@ describe("one-command document upload", () => {
         name: "agreement.txt",
         mimeType: "text/plain",
         size: Buffer.byteLength("agreement body"),
-        sha256Hex: hashSha256Hex("agreement body"),
+        // Independent of the CLI helper: SHA-256 of "agreement body".
+        sha256Hex:
+          "e1312950a806cda855e53f603301c78c3c23ea486e1beca337731fdba766720a",
       },
       params: { matterId: "workspace-1" },
     });
