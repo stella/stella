@@ -163,7 +163,7 @@ while (printed < limit) {
         candidate.court,
         candidate.country,
         `citations=${String(candidate.citationCount)}`,
-        `authority=${candidate.citationAuthority?.toFixed(3) ?? "0.000"}`,
+        `authority=${candidate.citationAuthority.toFixed(3)}`,
         `reported=${candidate.reportedInCollection ? "yes" : "no"}`,
       ].join("\t"),
     );
