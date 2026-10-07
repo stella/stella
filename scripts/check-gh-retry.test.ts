@@ -61,100 +61,114 @@ test("literal language data is independent of process commands", () => {
   ).toEqual([]);
 });
 
-test("every CI script and workflow uses the command owner", () => {
-  const root = path.resolve(import.meta.dir, "..");
-  const files = githubCommandFiles(root);
-  expect(files).toContain("scripts/merge-bar.ts");
-  expect(files).toContain("packages/scripts/src/auth-md-spec-drift.ts");
-  expect(files).toContain(".github/workflows/ci.yml");
-  expect(files).toContain(".github/actions/promote-dispatch/action.yml");
-  expect(githubCommandProblems(root)).toEqual([]);
-});
+// These two tests read every CI script and workflow in the repository, which
+// takes seconds on a shared runner: they carry their own budget instead of
+// the 5 s default.
+const REPOSITORY_SCAN_TIMEOUT_MS = 30_000;
 
-test("workflow API tooling is pinned and survives source checkouts", async () => {
-  const root = path.resolve(import.meta.dir, "..");
-  const record = (value: unknown): value is Record<string, unknown> =>
-    typeof value === "object" && value !== null && !Array.isArray(value);
-  let consumers = 0;
-  for (const file of githubCommandFiles(root).filter((candidate) =>
-    candidate.startsWith(".github/workflows/"),
-  )) {
-    const parsed: unknown = Bun.YAML.parse(
-      await Bun.file(path.join(root, file)).text(),
-    );
-    const jobs = record(parsed) ? parsed["jobs"] : undefined;
-    expect(record(jobs), file).toBe(true);
-    if (!record(jobs)) {
-      continue;
-    }
-    for (const [name, definition] of Object.entries(jobs)) {
-      if (!record(definition) || !Array.isArray(definition["steps"])) {
+test(
+  "every CI script and workflow uses the command owner",
+  () => {
+    const root = path.resolve(import.meta.dir, "..");
+    const files = githubCommandFiles(root);
+    expect(files).toContain("scripts/merge-bar.ts");
+    expect(files).toContain("packages/scripts/src/auth-md-spec-drift.ts");
+    expect(files).toContain(".github/workflows/ci.yml");
+    expect(files).toContain(".github/actions/promote-dispatch/action.yml");
+    expect(githubCommandProblems(root)).toEqual([]);
+  },
+  REPOSITORY_SCAN_TIMEOUT_MS,
+);
+
+test(
+  "workflow API tooling is pinned and survives source checkouts",
+  async () => {
+    const root = path.resolve(import.meta.dir, "..");
+    const record = (value: unknown): value is Record<string, unknown> =>
+      typeof value === "object" && value !== null && !Array.isArray(value);
+    let consumers = 0;
+    for (const file of githubCommandFiles(root).filter((candidate) =>
+      candidate.startsWith(".github/workflows/"),
+    )) {
+      const parsed: unknown = Bun.YAML.parse(
+        await Bun.file(path.join(root, file)).text(),
+      );
+      const jobs = record(parsed) ? parsed["jobs"] : undefined;
+      expect(record(jobs), file).toBe(true);
+      if (!record(jobs)) {
         continue;
       }
-      const steps = definition["steps"].filter(record);
-      const calls = steps
-        .map((step, index) =>
-          typeof step["run"] === "string" &&
-          step["run"].includes('bash "$GH_RETRY_SCRIPT"')
-            ? index
-            : -1,
-        )
-        .filter((index) => index >= 0);
-      if (calls.length === 0) {
-        continue;
-      }
-      consumers += 1;
-      const label = `${file}:${name}`;
-      const env = definition["env"];
-      expect(
-        record(env) ? env["GH_RETRY_SCRIPT"] : undefined,
-        label,
-      ).toBeUndefined();
-      const checkoutIndex = steps.findIndex((step) => {
-        const settings = step["with"];
-        return (
-          record(settings) &&
-          typeof settings["sparse-checkout"] === "string" &&
-          settings["sparse-checkout"]
-            .split("\n")
-            .includes("scripts/gh-retry.sh")
+      for (const [name, definition] of Object.entries(jobs)) {
+        if (!record(definition) || !Array.isArray(definition["steps"])) {
+          continue;
+        }
+        const steps = definition["steps"].filter(record);
+        const calls = steps
+          .map((step, index) =>
+            typeof step["run"] === "string" &&
+            step["run"].includes('bash "$GH_RETRY_SCRIPT"')
+              ? index
+              : -1,
+          )
+          .filter((index) => index >= 0);
+        if (calls.length === 0) {
+          continue;
+        }
+        consumers += 1;
+        const label = `${file}:${name}`;
+        const env = definition["env"];
+        expect(
+          record(env) ? env["GH_RETRY_SCRIPT"] : undefined,
+          label,
+        ).toBeUndefined();
+        const checkoutIndex = steps.findIndex((step) => {
+          const settings = step["with"];
+          return (
+            record(settings) &&
+            typeof settings["sparse-checkout"] === "string" &&
+            settings["sparse-checkout"]
+              .split("\n")
+              .includes("scripts/gh-retry.sh")
+          );
+        });
+        const checkout = steps.at(checkoutIndex);
+        const settings = checkout?.["with"];
+        expect(checkoutIndex, label).toBeGreaterThanOrEqual(0);
+        expect(record(settings) ? settings["ref"] : undefined, label).toBe(
+          `\${{ github.workflow_sha }}`,
         );
-      });
-      const checkout = steps.at(checkoutIndex);
-      const settings = checkout?.["with"];
-      expect(checkoutIndex, label).toBeGreaterThanOrEqual(0);
-      expect(record(settings) ? settings["ref"] : undefined, label).toBe(
-        `\${{ github.workflow_sha }}`,
-      );
-      expect(record(settings) ? settings["repository"] : undefined, label).toBe(
-        `\${{ github.repository }}`,
-      );
-      expect(
-        record(settings) ? settings["persist-credentials"] : undefined,
-        label,
-      ).toBe(false);
-      expect(
-        record(settings) ? settings["sparse-checkout"] : undefined,
-        label,
-      ).toContain("scripts/gh-retry.sh");
-      const toolingPath = record(settings) ? settings["path"] : undefined;
-      if (typeof toolingPath !== "string") {
-        throw new TypeError(`${label}: Missing tooling checkout path`);
-      }
-      const preserveIndex = steps.findIndex(
-        (step) =>
-          typeof step["run"] === "string" &&
-          step["run"].trim() ===
-            [
-              `cp "$GITHUB_WORKSPACE/${toolingPath}/scripts/gh-retry.sh" "$RUNNER_TEMP/gh-retry.sh"`,
-              'echo "GH_RETRY_SCRIPT=$RUNNER_TEMP/gh-retry.sh" >> "$GITHUB_ENV"',
-            ].join("\n"),
-      );
-      expect(preserveIndex, label).toBeGreaterThan(checkoutIndex);
-      for (const index of calls) {
-        expect(preserveIndex, label).toBeLessThan(index);
+        expect(
+          record(settings) ? settings["repository"] : undefined,
+          label,
+        ).toBe(`\${{ github.repository }}`);
+        expect(
+          record(settings) ? settings["persist-credentials"] : undefined,
+          label,
+        ).toBe(false);
+        expect(
+          record(settings) ? settings["sparse-checkout"] : undefined,
+          label,
+        ).toContain("scripts/gh-retry.sh");
+        const toolingPath = record(settings) ? settings["path"] : undefined;
+        if (typeof toolingPath !== "string") {
+          throw new TypeError(`${label}: Missing tooling checkout path`);
+        }
+        const preserveIndex = steps.findIndex(
+          (step) =>
+            typeof step["run"] === "string" &&
+            step["run"].trim() ===
+              [
+                `cp "$GITHUB_WORKSPACE/${toolingPath}/scripts/gh-retry.sh" "$RUNNER_TEMP/gh-retry.sh"`,
+                'echo "GH_RETRY_SCRIPT=$RUNNER_TEMP/gh-retry.sh" >> "$GITHUB_ENV"',
+              ].join("\n"),
+        );
+        expect(preserveIndex, label).toBeGreaterThan(checkoutIndex);
+        for (const index of calls) {
+          expect(preserveIndex, label).toBeLessThan(index);
+        }
       }
     }
-  }
-  expect(consumers).toBeGreaterThan(0);
-});
+    expect(consumers).toBeGreaterThan(0);
+  },
+  REPOSITORY_SCAN_TIMEOUT_MS,
+);
