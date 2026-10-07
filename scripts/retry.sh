@@ -3,8 +3,8 @@ set -euo pipefail
 
 # Runs a command until it succeeds or the attempt budget is exhausted.
 # Every wrapped command must be idempotent, because a retry repeats work a
-# failed attempt may already have done: `gh release upload` therefore carries
-# `--clobber` so a partial upload is overwritten instead of rejected.
+# failed attempt may already have done. GitHub API commands use gh-retry.sh
+# to classify HTTP failures before repeating an operation.
 #
 # Keep this bash 3.2 compatible (no mapfile, no associative arrays): macOS and
 # Windows runners invoke it.
