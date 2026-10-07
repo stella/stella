@@ -44,15 +44,15 @@ describe("buildRequestDurationRecord", () => {
     // EMF contract: every metric/dimension name referenced in the
     // directive must exist as a root member, or CloudWatch silently
     // drops the metric.
-    expect(directive?.Namespace).toBe("Stella/Api");
-    expect(directive?.Dimensions).toEqual([["class"]]);
-    expect(directive?.Metrics).toEqual([
+    expect(directive.Namespace).toBe("Stella/Api");
+    expect(directive.Dimensions).toEqual([["class"]]);
+    expect(directive.Metrics).toEqual([
       { Name: "RequestDuration", Unit: "Milliseconds" },
     ]);
-    for (const dimension of directive?.Dimensions.flat() ?? []) {
+    for (const dimension of directive.Dimensions.flat()) {
       expect(record).toHaveProperty(dimension);
     }
-    for (const metric of directive?.Metrics ?? []) {
+    for (const metric of directive.Metrics) {
       expect(record).toHaveProperty(metric.Name);
     }
     expect(record._aws.Timestamp).toBe(base.timestamp);
