@@ -6883,6 +6883,10 @@
     "seconds": 0.106227,
     "source": "estimated"
   },
+  "src/lib/observability/route-latency-class.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
   "src/lib/ocr-derivative-pages.db.test.ts": {
     "seconds": 2.63501,
     "source": "estimated"
