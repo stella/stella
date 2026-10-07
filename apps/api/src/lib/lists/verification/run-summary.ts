@@ -7,7 +7,7 @@ import { Result } from "better-result";
 import { and, asc, desc, eq, inArray, or, sql } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
 
-import type { SafeDb } from "@/api/db/safe-db";
+import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
 import {
   fields,
   legalListClaims,
@@ -19,6 +19,7 @@ import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { CLAIM_STATE } from "@/api/lib/lists/verification/contract";
 import type { ClaimState } from "@/api/lib/lists/verification/contract";
 import { createCursorPage } from "@/api/lib/pagination";
+import type { Page } from "@/api/lib/pagination";
 import { brandPersistedListVerificationRunId } from "@/api/lib/safe-id-boundaries";
 
 const stateFilterCount = (state: ClaimState): SQL<number> =>
@@ -124,7 +125,12 @@ export const listRunSummaries = async ({
   fileFieldId,
   cursor: cursorToken,
   limit,
-}: ListRunSummariesArgs) => {
+}: ListRunSummariesArgs): Promise<
+  Result<
+    Page<ReturnType<typeof serializeRunSummary>>,
+    HandlerError<400> | SafeDbError
+  >
+> => {
   const cursor =
     cursorToken === undefined ? null : runCursor.decode(cursorToken);
   if (cursorToken !== undefined && cursor === null) {
