@@ -10,7 +10,7 @@ the same category color. Court identity is shown in text.
 `court-year-showcase.en.json` provides English labels. Use them as `data.labels`
 with `formattingLocale: "en-GB"` for the same page in English.
 
-The canonical agent instructions are `../../guidance/showcase.ts`.
+The canonical agent instructions are `../../../chat/tools/visual-showcase-guidance.ts`.
 The `show_visual` description imports `VISUAL_SHOWCASE_GUIDANCE` when that tool
 is integrated; this fixture does not register a tool or submit chat turns.
 

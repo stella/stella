@@ -10,7 +10,7 @@ import {
 
 import { toTanStackToolSchema } from "@/api/handlers/chat/tools/tanstack-tool-schema";
 import { raiseChatToolError } from "@/api/handlers/chat/tools/tool-failure";
-import { VISUAL_SHOWCASE_GUIDANCE } from "@/api/handlers/visual-sandbox/guidance/showcase";
+import { VISUAL_SHOWCASE_GUIDANCE } from "@/api/handlers/chat/tools/visual-showcase-guidance";
 import { prepareGeneratedVisual } from "@/api/handlers/visual-sandbox/prepare";
 import type { PreparedGeneratedVisual } from "@/api/handlers/visual-sandbox/prepare";
 import type { VisualResourceOrigin } from "@/api/handlers/visual-sandbox/resource-origin";

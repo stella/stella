@@ -3811,7 +3811,7 @@
     "seconds": 1,
     "source": "estimated"
   },
-  "src/handlers/visual-sandbox/treemap-model.test.ts": {
+  "src/handlers/visual-sandbox/fixtures/showcase/showcase.test.ts": {
     "seconds": 1,
     "source": "estimated"
   },
@@ -3836,6 +3836,10 @@
     "source": "estimated"
   },
   "src/handlers/visual-sandbox/srcdoc.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
+  "src/handlers/visual-sandbox/treemap-model.test.ts": {
     "seconds": 1,
     "source": "estimated"
   },

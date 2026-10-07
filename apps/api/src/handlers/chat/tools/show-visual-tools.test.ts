@@ -6,7 +6,7 @@ import { VISUAL_PREVIEW_TOOL_NAME } from "@stll/api-contract/visual-preview";
 import type { VisualPreviewOutput } from "@stll/api-contract/visual-preview";
 import { rejectionOf } from "@stll/property-testing/rejection";
 
-import { VISUAL_SHOWCASE_GUIDANCE } from "@/api/handlers/visual-sandbox/guidance/showcase";
+import { VISUAL_SHOWCASE_GUIDANCE } from "@/api/handlers/chat/tools/visual-showcase-guidance";
 import { createVisualResourceOrigin } from "@/api/handlers/visual-sandbox/resource-origin";
 import { createSafeId } from "@/api/lib/branded-types";
 import { ChatToolError } from "@/api/lib/errors/tagged-errors";
