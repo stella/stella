@@ -147,6 +147,8 @@ const readPage = async (query: ReadAuditLogsQuery, reader = safeDb) => {
     queryAuditLogPage({
       safeDb: reader,
       organizationId: ids.orgA,
+      userId: ids.userA1,
+      featureAccessSnapshot: undefined,
       recordAuditEvent: noopAuditRecorder,
       query: { limit: 50, ...query },
     }),

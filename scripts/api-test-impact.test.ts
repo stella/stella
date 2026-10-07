@@ -275,6 +275,7 @@ test("computed template imports and require calls retain their test importers", 
   });
 });
 
+// Two repository graph walks take about 3 s serial; allow 3x under parallel CI.
 test("the repository graph reaches real handler tests and workspace consumers", () => {
   const handler = selectApiTestImpact({
     changed: ["apps/api/src/handlers/case-law/provisions/response.ts"],
@@ -288,7 +289,7 @@ test("the repository graph reaches real handler tests and workspace consumers", 
   });
   expect(pkg.mode).toBe("selected");
   expect(pkg.files).toContain("src/handlers/api-keys/list.db.test.ts");
-});
+}, 9000);
 
 test("selection is a deterministic union through cycles, duplicates and reordered changes", () => {
   withRepository((root, write) => {

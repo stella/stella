@@ -380,6 +380,14 @@ export const DOC_SOURCE_EXCLUSIONS = [
   .map(noLlmsTxt)
   .concat(
     {
+      checkedAt: "2026-10-07T00:00:00.000Z",
+      dependency: "@gdp-ts/core",
+      explanation:
+        "https://raw.githubusercontent.com/rauchg/gdp-ts/HEAD/llms.txt returns 404. Use the package README at https://github.com/rauchg/gdp-ts#readme directly.",
+      expiresAt: "2026-11-06T00:00:00.000Z",
+      reason: "no-llms-txt",
+    },
+    {
       checkedAt: "2026-10-06T00:00:00.000Z",
       dependency: "d3-scale",
       explanation:

@@ -764,34 +764,6 @@
     "reason": "migrates in a follow-up"
   },
   {
-    "id": "apps/web/e2e/agent/drive.ts",
-    "reason": "migrates in a follow-up"
-  },
-  {
-    "id": "apps/web/e2e/specs/oauth-consent.spec.ts",
-    "reason": "migrates in a follow-up"
-  },
-  {
-    "id": "apps/web/e2e/specs/oauth-ui-redirect.spec.ts",
-    "reason": "migrates in a follow-up"
-  },
-  {
-    "id": "apps/web/src/lib/files/sha256.ts",
-    "reason": "migrates in a follow-up"
-  },
-  {
-    "id": "apps/web/src/lib/files/upload-entity-version.ts",
-    "reason": "migrates in a follow-up"
-  },
-  {
-    "id": "apps/web/src/lib/workspaces/mutations/use-create-file-entities.ts",
-    "reason": "migrates in a follow-up"
-  },
-  {
-    "id": "apps/web/src/routes/_protected.contacts/-contact-import-request.ts",
-    "reason": "migrates in a follow-up"
-  },
-  {
     "id": "packages/api-contract/src/sk-court-succession.test.ts",
     "reason": "migrates in a follow-up"
   },

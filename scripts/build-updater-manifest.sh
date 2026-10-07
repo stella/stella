@@ -9,6 +9,8 @@
 # Tauri schema: https://v2.tauri.app/plugin/updater/#static-json-file
 set -euo pipefail
 
+gh_retry_script="${GH_RETRY_SCRIPT:-$(dirname "${BASH_SOURCE[0]}")/gh-retry.sh}"
+
 : "${RELEASE_REF:?required}"
 : "${APP_VERSION:?required}"
 : "${REPO:?required}"
@@ -17,7 +19,7 @@ base="https://github.com/${REPO}/releases/download/${RELEASE_REF}"
 
 # Fetch the asset list once. `gh` returns a JSON array; we pluck the
 # names and look for the canonical Tauri filenames per platform.
-assets_json="$(gh release view "$RELEASE_REF" --json assets --jq '.assets')"
+assets_json="$(bash "$gh_retry_script" release view "$RELEASE_REF" --json assets --jq '.assets')"
 
 # Look up the .sig contents for an asset name. Tauri requires the
 # signature to be embedded inline, not a URL.
@@ -35,7 +37,7 @@ read_sig() {
   if [[ -z "$found" || "$found" == "null" ]]; then
     return 1
   fi
-  curl -fsSL -H "Authorization: token $GH_TOKEN" -H "Accept: application/octet-stream" "$found"
+  bash "$gh_retry_script" api "$found" -H "Accept: application/octet-stream"
 }
 
 # Find an asset name matching a glob pattern.

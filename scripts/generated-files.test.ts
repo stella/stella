@@ -25,6 +25,7 @@ import {
   routeGeneratorVersionsMatch,
 } from "./generated-files-guard";
 import { isChangedLintPath } from "./lint-paths";
+import { workflowJobSteps, workflowStepByName } from "./workflow-steps";
 
 const generator = (id: string) => {
   const found = GENERATORS.find((entry) => entry.id === id);
@@ -606,6 +607,17 @@ const ci = readFileSync(
   new URL("../.github/workflows/ci.yml", import.meta.url),
   "utf-8",
 );
+const ciGeneratedSteps = workflowJobSteps(
+  Bun.YAML.parse(ci),
+  "ci-checks-generated",
+);
+const ciGeneratedStepRun = (name: string): string => {
+  const run = workflowStepByName(ciGeneratedSteps, name)["run"];
+  if (typeof run !== "string") {
+    panic(`CI step ${name} has no run command`);
+  }
+  return run;
+};
 
 const casePatternsAfter = (marker: string) => {
   const section = ci.slice(ci.indexOf(marker));
@@ -687,9 +699,8 @@ test("CI determinism selectors cover the cached generators' input contracts", ()
 });
 
 test("CI diff path guards stay pinned to manifest outputs", () => {
-  const cli = ci.slice(
-    ci.indexOf("- name: CLI sharded registry and derived runtime guard"),
-    ci.indexOf("- name: MCP App bundle and shared assets guard"),
+  const cli = ciGeneratedStepRun(
+    "CLI sharded registry and derived runtime guard",
   );
   const diff = cli.split("git diff --exit-code -- \\\n")[1];
   expect(diff).toBeDefined();
@@ -706,9 +717,7 @@ test("CI diff path guards stay pinned to manifest outputs", () => {
       .outputs.map((glob) => glob.replace(/\/\*\*$/u, ""))
       .toSorted(),
   );
-  const bundle = ci.slice(
-    ci.indexOf("- name: MCP App bundle and shared assets guard"),
-  );
+  const bundle = ciGeneratedStepRun("MCP App bundle and shared assets guard");
   const bundleOutputs = generator("mcp-app-bundles")
     .outputs.map((glob) => `"${glob}"`)
     .join(" ");

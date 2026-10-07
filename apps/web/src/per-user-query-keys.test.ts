@@ -44,6 +44,7 @@ import {
   organizationSettingsOptions,
   optionalOrganizationSettingsOptions,
 } from "@/queries/organization-settings";
+import { auditLogOptions } from "@/routes/_protected.settings/-queries/audit-logs";
 import { connectedAppsOptions } from "@/routes/_protected.settings/-queries/connections";
 import { memoriesKeys } from "@/routes/_protected.settings/-queries/memories";
 import { memoryMattersOptions } from "@/routes/_protected.settings/-queries/memory-matters";
@@ -161,6 +162,18 @@ const PER_USER_READS: Record<string, PerUserRead> = {
     ],
   },
   "audit-logs/export.ts": { kind: "not-per-user", reason: DOWNLOAD },
+  "audit-logs/list.ts": {
+    kind: "keyed",
+    calls: ['api["audit-logs"].get'],
+    files: ["routes/_protected.settings/-queries/audit-logs.ts"],
+    keys: () => [
+      auditLogOptions({
+        viewer: { userId: USER, organizationId: ORG },
+        key: {},
+      }).queryKey,
+    ],
+    opaqueKeys: { "auditLogKeys.filtered(viewer, key)": KEY_TYPE_HAS_USER },
+  },
   "lists/verifications/get.ts": {
     kind: "not-per-user",
     reason:

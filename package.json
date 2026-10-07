@@ -55,6 +55,7 @@
     "marketing:media:publish": "bun scripts/product-media.ts publish",
     "marketing:media:sync": "bun scripts/product-media.ts sync",
     "marketing:stale": "bun scripts/check-marketing-recordings.ts",
+    "marketing:provenance": "bun scripts/check-marketing-recordings.ts --provenance-only",
     "marketing:verify-current": "bun scripts/verify-marketing-recordings.ts",
     "marketing:reshoot": "bun scripts/marketing-reshoot.ts",
     "release:maintenance": "bun scripts/prepare-maintenance-release.ts",
@@ -134,6 +135,7 @@
   "devDependencies": {
     "@changesets/changelog-github": "^1.0.1",
     "@changesets/cli": "^3.0.3",
+    "@gdp-ts/core": "0.1.0",
     "@oxlint/plugins": "catalog:",
     "@shadcn/lint": "catalog:",
     "@stll/collation": "workspace:*",
@@ -148,8 +150,8 @@
     "drizzle-orm": "catalog:",
     "eslint": "catalog:",
     "fast-check": "catalog:",
-    "knip": "^6.38.0",
-    "lefthook": "^2.1.15",
+    "knip": "^6.39.0",
+    "lefthook": "^2.1.16",
     "oxc-transform-react": "catalog:",
     "oxfmt": "catalog:",
     "oxlint": "catalog:",
@@ -160,13 +162,13 @@
     "sherif": "catalog:",
     "squawk-cli": "2.66.0",
     "stylelint": "catalog:",
-    "turbo": "2.11.5",
+    "turbo": "2.11.6",
     "typescript": "catalog:",
     "valibot": "catalog:"
   },
   "resolutions": {
-    "@atlaskit/pragmatic-drag-and-drop": "3.1.0",
-    "@atlaskit/pragmatic-drag-and-drop-auto-scroll": "3.2.0",
+    "@atlaskit/pragmatic-drag-and-drop": "4.0.0",
+    "@atlaskit/pragmatic-drag-and-drop-auto-scroll": "3.2.1",
     "@emnapi/core": "1.9.1",
     "@emnapi/runtime": "1.9.1",
     "@expo/cli": "57.0.27",
@@ -195,7 +197,7 @@
     "sharp": "0.35.5",
     "shell-quote": "1.11.0",
     "svgo": "4.1.0",
-    "undici": "8.10.2"
+    "undici": "8.11.2"
   },
   "packageManager": "bun@1.4.2",
   "catalog": {
@@ -281,7 +283,7 @@
     }
   },
   "patchedDependencies": {
-    "mailauth@5.0.3": "patches/mailauth@5.0.3.patch",
+    "mailauth@7.1.0": "patches/mailauth@7.1.0.patch",
     "@astrojs/mdx@7.0.7": "patches/@astrojs__mdx@7.0.7.patch",
     "drizzle-kit@1.0.0-rc.4": "patches/drizzle-kit@1.0.0-rc.4.patch",
     "better-call@1.4.0": "patches/better-call@1.4.0.patch",

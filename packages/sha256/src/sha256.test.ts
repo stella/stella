@@ -57,6 +57,10 @@ test("strings hash UTF-8 and byte views hash only the selected bytes", async () 
   expect(await browser.sha256Hex(text)).toBe(node.sha256Hex(utf8));
   expect(await browser.sha256Hex(view)).toBe(node.sha256Hex(utf8));
   expect(await browser.sha256Hex(utf8.buffer)).toBe(node.sha256Hex(utf8));
+  expect(await browser.sha256Hex(new Blob([view]))).toBe(node.sha256Hex(utf8));
+  expect(
+    new Uint8Array(await browser.sha256Bytes(new File([view], "selected.bin"))),
+  ).toEqual(new Uint8Array(node.sha256Bytes(utf8)));
 });
 
 test("incremental hashing preserves large chunked byte streams and update order", async () => {

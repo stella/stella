@@ -4,6 +4,7 @@ import type { SQL } from "drizzle-orm";
 
 import { executedRows } from "@/api/lib/db/executed-rows";
 import { isRecord } from "@/api/lib/type-guards";
+import { predecessorOAuthResourceScopes } from "@/api/mcp/resource-policy-contract";
 
 type BetterAuthOAuthResourcePolicy = {
   allowedScopes: readonly string[];
@@ -92,7 +93,15 @@ export const assertBetterAuthOAuthPolicyCensus = async (
   database: BetterAuthOAuthPolicyDatabase,
   expectedResources: readonly BetterAuthOAuthResourcePolicy[],
 ): Promise<void> => {
-  const serializedResources = JSON.stringify(expectedResources);
+  // A row may also carry the predecessor scope set (the configured set
+  // without OAuth protocol scopes): the expand half of the protocol-scope
+  // rollout, see `predecessorOAuthResourceScopes`. Any other set fails.
+  const serializedResources = JSON.stringify(
+    expectedResources.map((resource) => ({
+      ...resource,
+      predecessorScopes: predecessorOAuthResourceScopes(resource.allowedScopes),
+    })),
+  );
   const result = await database.execute(sql`
     WITH expected_resource AS (
       SELECT expected.identifier,
@@ -100,12 +109,17 @@ export const assertBetterAuthOAuthPolicyCensus = async (
              ARRAY(
                SELECT jsonb_array_elements_text(expected."allowedScopes")
                ORDER BY 1
-             ) AS allowed_scopes
+             ) AS allowed_scopes,
+             ARRAY(
+               SELECT jsonb_array_elements_text(expected."predecessorScopes")
+               ORDER BY 1
+             ) AS predecessor_scopes
         FROM jsonb_to_recordset(${serializedResources}::text::jsonb)
           AS expected(
             identifier text,
             name text,
-            "allowedScopes" jsonb
+            "allowedScopes" jsonb,
+            "predecessorScopes" jsonb
           )
     )
     SELECT NOT EXISTS (
@@ -116,10 +130,16 @@ export const assertBetterAuthOAuthPolicyCensus = async (
               WHERE expected.identifier IS NULL
                  OR actual.identifier IS NULL
                  OR actual.name IS DISTINCT FROM expected.name
-                 OR ARRAY(
-                      SELECT unnest(actual.allowed_scopes)
-                      ORDER BY 1
-                    ) IS DISTINCT FROM expected.allowed_scopes
+                 OR (
+                      ARRAY(
+                        SELECT unnest(actual.allowed_scopes)
+                        ORDER BY 1
+                      ) IS DISTINCT FROM expected.allowed_scopes
+                      AND ARRAY(
+                        SELECT unnest(actual.allowed_scopes)
+                        ORDER BY 1
+                      ) IS DISTINCT FROM expected.predecessor_scopes
+                    )
                  OR actual.disabled IS DISTINCT FROM false
            ) AS "resourcesMatch",
            NOT EXISTS (

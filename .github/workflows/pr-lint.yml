@@ -31,4 +31,4 @@ jobs:
     # Reusable workflow only consumes the auto-provided GITHUB_TOKEN.
     # Do not switch to `secrets: inherit` — that widens the blast radius
     # if the reusable ever starts touching named secrets.
-    uses: stella/.github/.github/workflows/pr-lint.yml@aff5017c264acce5a2bcdf15876da08835e6de70
+    uses: stella/.github/.github/workflows/pr-lint.yml@167fb396c6c0f4e07296ad2cd72e6ef15367c776

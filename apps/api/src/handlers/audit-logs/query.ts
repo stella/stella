@@ -14,7 +14,8 @@ import {
   ORGANIZATION_AUDIT_LOG_RESOURCE_ID,
 } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
-import { auditChangesForResource } from "@/api/lib/audit-log-details";
+import { projectAuditReadChanges } from "@/api/lib/audit-log-details";
+import type { FeatureAccessSnapshot } from "@/api/lib/auth/feature-access/policy";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
   tPaginationCursor,
@@ -197,11 +198,15 @@ export const validateAuditLogFilter = (
 export const queryAuditLogPage = async function* ({
   safeDb,
   organizationId,
+  userId,
+  featureAccessSnapshot,
   recordAuditEvent,
   query,
 }: {
   safeDb: SafeDb;
   organizationId: SafeId<"organization">;
+  userId: SafeId<"user"> | null;
+  featureAccessSnapshot: FeatureAccessSnapshot | undefined;
   recordAuditEvent: AuditRecorder;
   query: AuditLogFilter;
 }) {
@@ -222,6 +227,7 @@ export const queryAuditLogPage = async function* ({
           resourceType: auditLogs.resourceType,
           resourceId: auditLogs.resourceId,
           changes: auditLogs.changes,
+          metadata: auditLogs.metadata,
           createdAtCursor: auditLogCursor.cursorValue.as("created_at_cursor"),
         })
         .from(auditLogs)
@@ -264,7 +270,13 @@ export const queryAuditLogPage = async function* ({
           action: row.action,
           resourceType: row.resourceType,
           resourceId: row.resourceId,
-          changes: auditChangesForResource(row.resourceType, row.changes),
+          ...projectAuditReadChanges({
+            resourceType: row.resourceType,
+            changes: row.changes,
+            metadata: row.metadata,
+            featureAccessSnapshot,
+            principal: { organizationId, userId },
+          }),
           createdAtCursor: row.createdAtCursor,
           userId: row.userId,
           actor: userMap.get(row.userId) ?? row.userId,

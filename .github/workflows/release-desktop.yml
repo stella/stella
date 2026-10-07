@@ -82,6 +82,21 @@ jobs:
       # build never polls or overwrites the production manifest.
       channel: ${{ steps.ref.outputs.channel }}
     steps:
+      - name: Checkout GitHub API tooling
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: ${{ github.repository }}
+          ref: ${{ github.workflow_sha }}
+          path: .gh-retry
+          persist-credentials: false
+          sparse-checkout: scripts/gh-retry.sh
+          sparse-checkout-cone-mode: false
+
+      - name: Preserve GitHub API tooling across source checkouts
+        run: |
+          cp "$GITHUB_WORKSPACE/.gh-retry/scripts/gh-retry.sh" "$RUNNER_TEMP/gh-retry.sh"
+          echo "GH_RETRY_SCRIPT=$RUNNER_TEMP/gh-retry.sh" >> "$GITHUB_ENV"
+
       # Lightweight first-pass checkout of the workflow's own ref
       # (not the release tag yet — that resolves below) so the
       # Resolve step can shell out to scripts/release-channel.sh.
@@ -111,7 +126,7 @@ jobs:
             REF="$HEAD_BRANCH"
           elif [[ "$UPSTREAM_EVENT" == "workflow_dispatch" ]]; then
             manifest_artifact=$(
-              gh api "repos/${GITHUB_REPOSITORY}/actions/runs/$UPSTREAM_RUN_ID/artifacts" \
+              bash "$GH_RETRY_SCRIPT" api "repos/${GITHUB_REPOSITORY}/actions/runs/$UPSTREAM_RUN_ID/artifacts" \
                 --jq '.artifacts[].name | select(startswith("release-manifest-v"))' \
                 | head -n 1
             )
@@ -137,7 +152,7 @@ jobs:
           # signing secrets — checking out attacker-controlled
           # branch code under a release-tag name would mint
           # officially-signed installers.
-          if gh api "repos/${GITHUB_REPOSITORY}/branches/${REF}" --silent 2>/dev/null; then
+          if bash "$GH_RETRY_SCRIPT" api "repos/${GITHUB_REPOSITORY}/branches/${REF}" --silent; then
             echo "::error::A branch named '$REF' exists alongside the tag; refusing to build to avoid ref ambiguity"
             exit 1
           fi
@@ -146,7 +161,7 @@ jobs:
           # downstream checkout is pinned to this SHA so the build
           # cannot be swapped out by a same-named branch later in
           # the workflow.
-          tag_ref_json=$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/tags/${REF}" 2>/dev/null) || {
+          tag_ref_json=$(bash "$GH_RETRY_SCRIPT" api "repos/${GITHUB_REPOSITORY}/git/ref/tags/${REF}") || {
             echo "::error::Tag $REF does not exist in ${GITHUB_REPOSITORY}"
             exit 1
           }
@@ -154,7 +169,7 @@ jobs:
           tag_object_sha=$(echo "$tag_ref_json" | jq -r '.object.sha')
           if [[ "$tag_object_type" == "tag" ]]; then
             # Annotated tag — dereference to the underlying commit.
-            RELEASE_SHA=$(gh api "repos/${GITHUB_REPOSITORY}/git/tags/${tag_object_sha}" --jq '.object.sha')
+            RELEASE_SHA=$(bash "$GH_RETRY_SCRIPT" api "repos/${GITHUB_REPOSITORY}/git/tags/${tag_object_sha}" --jq '.object.sha')
           else
             RELEASE_SHA="$tag_object_sha"
           fi
@@ -169,7 +184,7 @@ jobs:
             exit 1
           fi
 
-          if ! gh release view "$REF" >/dev/null 2>&1; then
+          if ! bash "$GH_RETRY_SCRIPT" release view "$REF" >/dev/null; then
             echo "::error::GitHub Release $REF does not exist; refusing to run signing jobs"
             exit 1
           fi
@@ -250,6 +265,21 @@ jobs:
             rust_targets: aarch64-apple-darwin,x86_64-apple-darwin
 
     steps:
+      - name: Checkout GitHub API tooling
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: ${{ github.repository }}
+          ref: ${{ github.workflow_sha }}
+          path: .gh-retry
+          persist-credentials: false
+          sparse-checkout: scripts/gh-retry.sh
+          sparse-checkout-cone-mode: false
+
+      - name: Preserve GitHub API tooling across source checkouts
+        run: |
+          cp "$GITHUB_WORKSPACE/.gh-retry/scripts/gh-retry.sh" "$RUNNER_TEMP/gh-retry.sh"
+          echo "GH_RETRY_SCRIPT=$RUNNER_TEMP/gh-retry.sh" >> "$GITHUB_ENV"
+
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -647,7 +677,7 @@ jobs:
             exit 1
           fi
           printf '  uploading %s\n' "${artifacts[@]}"
-          bash scripts/retry.sh gh release upload "$RELEASE_REF" "${artifacts[@]}" --clobber
+          bash "$GH_RETRY_SCRIPT" release upload "$RELEASE_REF" "${artifacts[@]}" --clobber
 
   verify-production:
     # Build the signed desktop artifacts first, then confirm that production
@@ -700,6 +730,21 @@ jobs:
       contents: write # upload latest.json to GitHub Release
       id-token: write # OIDC for AWS S3 + CloudFront
     steps:
+      - name: Checkout GitHub API tooling
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: ${{ github.repository }}
+          ref: ${{ github.workflow_sha }}
+          path: .gh-retry
+          persist-credentials: false
+          sparse-checkout: scripts/gh-retry.sh
+          sparse-checkout-cone-mode: false
+
+      - name: Preserve GitHub API tooling across source checkouts
+        run: |
+          cp "$GITHUB_WORKSPACE/.gh-retry/scripts/gh-retry.sh" "$RUNNER_TEMP/gh-retry.sh"
+          echo "GH_RETRY_SCRIPT=$RUNNER_TEMP/gh-retry.sh" >> "$GITHUB_ENV"
+
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -715,7 +760,7 @@ jobs:
           APP_VERSION: ${{ needs.resolve.outputs.app_version }}
           REPO: ${{ github.repository }}
         shell: bash
-        run: bash scripts/build-updater-manifest.sh > latest.json && bash scripts/retry.sh gh release upload "$RELEASE_REF" latest.json --clobber
+        run: bash scripts/build-updater-manifest.sh > latest.json && bash "$GH_RETRY_SCRIPT" release upload "$RELEASE_REF" latest.json --clobber
 
       # Mirror the manifest to the downloads CDN so the in-app
       # updater (which polls a stable URL on a domain we control)
@@ -821,6 +866,21 @@ jobs:
       RELEASE_REF: ${{ needs.resolve.outputs.release_ref }}
       PREVIOUS_TAG: ${{ needs.resolve.outputs.previous_tag }}
     steps:
+      - name: Checkout GitHub API tooling
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: ${{ github.repository }}
+          ref: ${{ github.workflow_sha }}
+          path: .gh-retry
+          persist-credentials: false
+          sparse-checkout: scripts/gh-retry.sh
+          sparse-checkout-cone-mode: false
+
+      - name: Preserve GitHub API tooling across source checkouts
+        run: |
+          cp "$GITHUB_WORKSPACE/.gh-retry/scripts/gh-retry.sh" "$RUNNER_TEMP/gh-retry.sh"
+          echo "GH_RETRY_SCRIPT=$RUNNER_TEMP/gh-retry.sh" >> "$GITHUB_ENV"
+
       - name: Checkout workflow policy scripts
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -843,7 +903,7 @@ jobs:
           # Fail loudly if the previous release has no matching assets:
           # a stable release with no installers to carry means the
           # invariant above is already violated upstream.
-          bash scripts/retry.sh gh release download "$PREVIOUS_TAG" \
+          bash "$GH_RETRY_SCRIPT" release download "$PREVIOUS_TAG" \
             --pattern 'Stella-*' \
             --pattern 'latest.json' \
             --dir assets \
@@ -852,7 +912,7 @@ jobs:
           # Attach first, THEN verify production and flip --latest: the deep
           # links must resolve and the release must be deployed before
           # /releases/latest points here.
-          bash scripts/retry.sh gh release upload "$RELEASE_REF" assets/* --clobber
+          bash "$GH_RETRY_SCRIPT" release upload "$RELEASE_REF" assets/* --clobber
 
       - name: Setup Bun
         uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2

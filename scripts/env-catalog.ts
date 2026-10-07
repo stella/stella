@@ -570,6 +570,8 @@ const DESCRIPTION_OVERRIDES: Record<string, string> = {
     "How STELLA_CLIENT_ADDRESS_HEADER spells the address: with-port (default, e.g. cloudfront-viewer-address) or bare.",
   STELLA_ORIGIN_VERIFY_SECRET:
     "Comma-separated values the edge sends in x-stella-origin-verify (current, then next during a rotation). When set, the client address header is read only from requests carrying one of them.",
+  STELLA_FRONTEND_VERIFY_SECRET:
+    "Comma-separated values the frontend edge sends in x-stella-frontend-verify (current, then next during a rotation). From STELLA_TRUSTED_PROXY_CIDRS peers carrying one, the browser's bare address in x-stella-viewer-address is read first; unset, that header is never read.",
   STELLA_TRUSTED_PROXY_CIDRS:
     "Comma-separated CIDRs for proxies directly in front of the API. Never trust public client ranges.",
   STELLA_ANNOUNCEMENT_OPERATOR_USER_IDS:
@@ -913,6 +915,7 @@ export const ENV_CREDENTIAL_CLASSIFICATION = {
   STELLA_COLLAB_SERVICE_TOKEN: ENV_CREDENTIAL_KIND.credential,
   OPERATOR_API_TOKEN: ENV_CREDENTIAL_KIND.credential,
   STELLA_COMMIT_SHA: ENV_CREDENTIAL_KIND.notCredential,
+  STELLA_FRONTEND_VERIFY_SECRET: ENV_CREDENTIAL_KIND.credential,
   STELLA_OCR_PDF_FONT_PATH: ENV_CREDENTIAL_KIND.notCredential,
   STELLA_ORIGIN_VERIFY_SECRET: ENV_CREDENTIAL_KIND.credential,
   STELLA_SIGNUP_RATE_LIMIT_IP_SOURCE: ENV_CREDENTIAL_KIND.notCredential,
@@ -1312,6 +1315,8 @@ export const TOOLING_ENV_KEYS = new Set([
   "STELLA_DEV_SESSION_ID",
   // ci-result evaluates each independently scoped suite in folded jobs.
   "FOLDED_SUITES",
+  // CI steps export the GitHub API retry helper's path after installing it.
+  "GH_RETRY_SCRIPT",
   // merge-bar CLI tests skip the origin/main freshness check (local test runs only).
   "STELLA_MERGE_BAR_TEST_SKIP_FRESHNESS",
   // Preserve Bun global-store links inside browser containers.
@@ -1526,6 +1531,8 @@ export const AMBIENT_ENV_KEYS = new Set([
   "CARGO_MANIFEST_DIR",
   "CARGO_PKG_VERSION",
   "CI",
+  // Read by the Docker CLI; fixtures point it at an empty config.
+  "DOCKER_CONFIG",
   "ECS_CONTAINER_METADATA_URI_V4",
   "GITHUB_TOKEN",
   "GH_REPO",
