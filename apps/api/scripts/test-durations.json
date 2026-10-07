@@ -3127,6 +3127,10 @@
     "seconds": 3.630065,
     "source": "estimated"
   },
+  "src/handlers/lists/items/details.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
   "src/handlers/lists/items/list.db.test.ts": {
     "seconds": 3.469935,
     "source": "estimated"
@@ -4157,6 +4161,10 @@
   },
   "src/lib/api-handlers.test.ts": {
     "seconds": 12.574555,
+    "source": "estimated"
+  },
+  "src/lib/audit-log-details.db.test.ts": {
+    "seconds": 1,
     "source": "estimated"
   },
   "src/lib/audit-log-details.test.ts": {

@@ -1,13 +1,17 @@
 import { describe, expect, test } from "bun:test";
+import { SQL } from "drizzle-orm";
+import { getTableConfig, PgDialect } from "drizzle-orm/pg-core";
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import ts from "typescript";
 
 import { RUNTIME_MODE } from "@stll/runtime-mode";
 
+import { auditLogs } from "@/api/db/schema";
 import { env } from "@/api/env";
 import {
   AUDIT_DETAIL_POLICY,
+  auditReadActivityActionSql,
   projectAuditReadChanges,
 } from "@/api/lib/audit-log-details";
 import { AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log.constants";
@@ -19,6 +23,7 @@ import {
   FEATURE_REGISTRY,
   LIST_VERIFICATION_FEATURE_ID,
 } from "@/api/lib/feature-access/registry";
+import { LIST_VERIFICATION_ITEM_OPERATION } from "@/api/lib/lists/item-operations";
 import { setRuntimeModeForTesting } from "@/api/runtime-mode";
 
 const PRINCIPAL = { organizationId: "org_test", userId: "user_test" };
@@ -30,6 +35,21 @@ const missingClassifications = (
 ) => resources.filter((resource) => !Object.hasOwn(policies, resource));
 
 describe("audit detail policy census", () => {
+  test("activity classification matches the declared index expression", () => {
+    const index = getTableConfig(auditLogs).indexes.find(
+      ({ config }) =>
+        config.name ===
+        "audit_logs_org_workspace_activity_action_created_id_idx",
+    );
+    const expression = index?.config.columns.at(2);
+    if (!(expression instanceof SQL)) {
+      throw new TypeError("Activity action index requires an SQL expression");
+    }
+    const dialect = new PgDialect();
+    expect(dialect.sqlToQuery(auditReadActivityActionSql())).toEqual(
+      dialect.sqlToQuery(expression),
+    );
+  });
   test("classifies every audited resource exactly once", () => {
     const resources = Object.values(AUDIT_RESOURCE_TYPE);
     expect(missingClassifications(resources, AUDIT_DETAIL_POLICY)).toEqual([]);
@@ -159,6 +179,51 @@ const auditedWrites = (source: string) => {
     true,
   );
   const writes: { resourceType: string; operation: string | null }[] = [];
+  const operationImports = new Set(
+    file.statements.flatMap((statement) => {
+      if (
+        !ts.isImportDeclaration(statement) ||
+        !ts.isStringLiteral(statement.moduleSpecifier) ||
+        statement.moduleSpecifier.text !== "@/api/lib/lists/item-operations"
+      ) {
+        return [];
+      }
+      const bindings = statement.importClause?.namedBindings;
+      if (!bindings || !ts.isNamedImports(bindings)) {
+        return [];
+      }
+      return bindings.elements
+        .filter(
+          (binding) =>
+            (binding.propertyName ?? binding.name).text ===
+            "LIST_VERIFICATION_ITEM_OPERATION",
+        )
+        .map((binding) => binding.name.text);
+    }),
+  );
+  const operationValue = (operation: ts.Expression | undefined) => {
+    if (!operation) {
+      return null;
+    }
+    if (ts.isStringLiteral(operation)) {
+      return operation.text;
+    }
+    if (
+      ts.isPropertyAccessExpression(operation) &&
+      ts.isIdentifier(operation.expression) &&
+      operationImports.has(operation.expression.text)
+    ) {
+      const value = Object.entries(LIST_VERIFICATION_ITEM_OPERATION).find(
+        ([name]) => name === operation.name.text,
+      )?.[1];
+      if (value !== undefined) {
+        return value;
+      }
+    }
+    throw new TypeError(
+      "Feature audit operation requires a shared constant or literal classification",
+    );
+  };
   const property = (object: ts.ObjectLiteralExpression, name: string) =>
     object.properties.find(
       (entry): entry is ts.PropertyAssignment =>
@@ -197,12 +262,7 @@ const auditedWrites = (source: string) => {
         );
       }
       const operation = metadata ? property(metadata, "operation") : undefined;
-      if (operation && !ts.isStringLiteral(operation)) {
-        throw new TypeError(
-          "Feature audit operation requires a literal classification",
-        );
-      }
-      writes.push({ resourceType, operation: operation?.text ?? null });
+      writes.push({ resourceType, operation: operationValue(operation) });
     }
     ts.forEachChild(node, visit);
   };
@@ -276,7 +336,28 @@ describe("feature-owned audit operations", () => {
       auditedWrites(
         `recordAuditEvent(tx, {resourceType: AUDIT_RESOURCE_TYPE.LEGAL_LIST_ITEM, metadata: {operation: nextOperation}});`,
       ),
-    ).toThrow("Feature audit operation requires a literal classification");
+    ).toThrow(
+      "Feature audit operation requires a shared constant or literal classification",
+    );
+  });
+
+  test("classifies the shared operations through their imported owner", () => {
+    for (const [name, operation] of Object.entries(
+      LIST_VERIFICATION_ITEM_OPERATION,
+    )) {
+      const source = `import { LIST_VERIFICATION_ITEM_OPERATION as operationOwner } from "@/api/lib/lists/item-operations";
+        recordAuditEvent(tx, {resourceType: AUDIT_RESOURCE_TYPE.LEGAL_LIST_ITEM, metadata: {operation: operationOwner.${name}}});`;
+      expect(auditedWrites(source)).toEqual([
+        { resourceType: AUDIT_RESOURCE_TYPE.LEGAL_LIST_ITEM, operation },
+      ]);
+      expect(verificationWritesWithoutPolicy(source)).toEqual([]);
+    }
+    expect(() =>
+      auditedWrites(`recordAuditEvent(tx, {resourceType: AUDIT_RESOURCE_TYPE.LEGAL_LIST_ITEM,
+      metadata: {operation: LIST_VERIFICATION_ITEM_OPERATION.factDetailsSet}});`),
+    ).toThrow(
+      "Feature audit operation requires a shared constant or literal classification",
+    );
   });
 });
 

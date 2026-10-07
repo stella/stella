@@ -82,6 +82,24 @@ describe("renderOwnershipDocument", () => {
     );
   });
 
+  test("renders a table-column row with each owned column and implicit selections", () => {
+    expect(
+      renderOwnershipDocument([
+        entry({
+          enforcement: {
+            kind: "table-column-read",
+            specifiers: ["@/api/db/schema"],
+            table: "auditLogs",
+            columns: ["changes", "metadata"],
+            allowed: [],
+          },
+        }),
+      ]),
+    ).toContain(
+      "read `auditLogs.changes`, `auditLogs.metadata`, including implicit full-row selections",
+    );
+  });
+
   test("renders one row per entry, keyed by id", () => {
     const rendered = renderOwnershipDocument(OWNERSHIP);
     for (const { id } of OWNERSHIP) {

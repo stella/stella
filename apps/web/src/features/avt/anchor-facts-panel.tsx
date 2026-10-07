@@ -12,6 +12,7 @@ import { useSuspenseInfiniteQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { useTranslations } from "use-intl";
 
+import { LIST_DETAILS_STATUS } from "@stll/api-contract/list-details";
 import { Button } from "@stll/ui/button";
 import { PencilIcon, ShieldAlertIcon } from "@stll/ui/icons";
 import {
@@ -44,6 +45,7 @@ import {
 } from "@/features/avt/use-fact-detail-actions";
 import { usePermissions } from "@/hooks/use-permissions";
 import { useFormatter } from "@/i18n/formatting-context";
+import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { detached } from "@/lib/detached";
 import { useCallerFeatureEnabled } from "@/lib/organization/feature-access/access";
 import { CALLER_FEATURE } from "@/lib/organization/feature-access/surfaces";
@@ -58,11 +60,18 @@ export const AnchorFactsPanel = ({
   workspaceId,
   listId,
 }: AnchorFactsPanelProps) => {
+  const user = useAuthenticatedUser();
   const legalListsEnabled = useCallerFeatureEnabled(CALLER_FEATURE.legalLists);
   const format = useFormatter();
   const t = useTranslations();
   const { data, fetchNextPage, hasNextPage, isFetchingNextPage } =
-    useSuspenseInfiniteQuery(legalListItemsOptions(workspaceId, listId));
+    useSuspenseInfiniteQuery(
+      legalListItemsOptions({
+        workspaceId,
+        listId,
+        viewer: { userId: user.id, organizationId: user.activeOrganizationId },
+      }),
+    );
   const facts = orderHeldFirst(
     factItems(data.pages.flatMap((page) => page.items)),
   );
@@ -165,6 +174,18 @@ const FactRow = ({ workspaceId, listId, fact }: FactRowProps) => {
   const canEdit = usePermissions({ entity: ["update"] });
   const { saveDetails } = useFactDetailActions({ workspaceId, listId });
   const saveState = useFactSaveState({ workspaceId, listId }, fact.id);
+  if (fact.factDetailsStatus === LIST_DETAILS_STATUS.featureUnavailable) {
+    return (
+      <li className="space-y-2 p-3">
+        <p className="text-sm" dir="auto">
+          {fact.name}
+        </p>
+        <p className="text-muted-foreground text-xs">
+          {t("common.detailsUnavailable")}
+        </p>
+      </li>
+    );
+  }
   const details = fact.factDetails;
   const held = details?.scoring === "held";
   const evidenceKind = details?.evidenceKind ?? null;

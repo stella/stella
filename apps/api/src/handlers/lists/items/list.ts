@@ -21,6 +21,7 @@ import {
 } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
+import { projectListFactDetails } from "@/api/lib/lists/detail-projection";
 import {
   createCursorPage,
   decodePaginationCursor,
@@ -44,10 +45,11 @@ const config = {
     "carries its name, item type, task status, priority, due date, section, " +
     "position, description, and review status, plus the values it holds for " +
     "the properties the list binds as columns. A fact item also carries its " +
-    "evidential detail (date and precision, evidence kind, medium, " +
-    "confidence, interpretation note, scoring), null until it is set, and " +
-    "its first source (document id, document name, locator), null when it " +
-    "has none.",
+    "factDetailsStatus: visible or feature_unavailable. Visible evidential " +
+    "detail includes date and precision, evidence kind, medium, confidence, " +
+    "interpretation note, scoring (null until set) and its first source " +
+    "(document id, document name, locator; null when absent). Unavailable " +
+    "detail and first source are null.",
   permissions: { workspace: ["read"] },
   accountAccess: ACCOUNT_ACCESS.sandbox,
   access: "read",
@@ -77,7 +79,15 @@ const decodeCursor = (value: string): ItemCursor | null => {
 
 const readListItems = createSafeHandler(
   config,
-  async function* ({ safeDb, workspaceId, params, query }) {
+  async function* ({
+    safeDb,
+    workspaceId,
+    params,
+    query,
+    session: { activeOrganizationId },
+    user: { id: userId },
+    featureAccessSnapshot,
+  }) {
     const limit = normalizeTenantPageLimit(
       query.limit ?? LIMITS.legalListItemsPageSizeDefault,
     );
@@ -270,7 +280,12 @@ const readListItems = createSafeHandler(
 
     return Result.ok(
       createCursorPage({
-        rows: result,
+        rows: result.map((item) =>
+          projectListFactDetails(item, {
+            featureAccessSnapshot,
+            principal: { organizationId: activeOrganizationId, userId },
+          }),
+        ),
         limit,
         cursorForItem: (item) =>
           encodePaginationCursor([item.position, item.id]),

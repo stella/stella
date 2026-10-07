@@ -18,6 +18,8 @@ import {
 } from "@/api/handlers/time-entries/suggestions/cluster";
 import { AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditResourceType } from "@/api/lib/audit-log";
+import { auditReadChangesSql } from "@/api/lib/audit-log-details";
+import type { FeatureAccessSnapshot } from "@/api/lib/auth/feature-access/policy";
 import type { SafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
@@ -102,6 +104,7 @@ const dayRangeInTimeZone = (
   });
 
 export type LoadTimeSuggestionsOptions = {
+  featureAccessSnapshot: FeatureAccessSnapshot | undefined;
   safeDb: SafeDb;
   organizationId: SafeId<"organization">;
   workspaceId: SafeId<"workspace">;
@@ -127,6 +130,7 @@ export const loadTimeSuggestions = async function* ({
   userId,
   date,
   timezoneId,
+  featureAccessSnapshot,
 }: LoadTimeSuggestionsOptions) {
   const range = yield* dayRangeInTimeZone(date, timezoneId);
   const limit = LIMITS.timeSuggestionSignalsPerSourceMax;
@@ -168,7 +172,10 @@ export const loadTimeSuggestions = async function* ({
           resourceId: auditLogs.resourceId,
           action: auditLogs.action,
           metadata: auditLogs.metadata,
-          changes: auditLogs.changes,
+          changes: auditReadChangesSql({
+            featureAccessSnapshot,
+            principal: { organizationId, userId },
+          }),
           createdAt: auditLogs.createdAt,
         })
         .from(auditLogs)

@@ -11,6 +11,7 @@ import { Result } from "better-result";
 import { useFormatter, useTranslations } from "use-intl";
 import * as v from "valibot";
 
+import { LIST_DETAILS_STATUS } from "@stll/api-contract/list-details";
 import { Button } from "@stll/ui/button";
 import {
   CheckIcon,
@@ -48,6 +49,7 @@ import {
 import type { ListItemType } from "@/components/workspaces/tasks/task-detail-constants";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
+import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { detached } from "@/lib/detached";
 import { toAPIError } from "@/lib/errors/api";
 import { notifyUserError } from "@/lib/errors/user-toast";
@@ -241,11 +243,18 @@ type LegalListDetailProps = {
 };
 
 const LegalListDetail = ({ workspaceId, listId }: LegalListDetailProps) => {
+  const user = useAuthenticatedUser();
   const t = useTranslations();
   const formatter = useFormatter();
   const queryClient = useQueryClient();
   const list = useQuery(legalListOptions(workspaceId, listId));
-  const items = useInfiniteQuery(legalListItemsOptions(workspaceId, listId));
+  const items = useInfiniteQuery(
+    legalListItemsOptions({
+      workspaceId,
+      listId,
+      viewer: { userId: user.id, organizationId: user.activeOrganizationId },
+    }),
+  );
   const properties = useQuery(propertiesOptions(workspaceId));
   const generations = useQuery(
     legalListGenerationsOptions(workspaceId, listId),
@@ -822,14 +831,25 @@ const ItemSourcesPanel = ({
   itemEntityId,
   onClose,
 }: ItemSourcesPanelProps) => {
+  const user = useAuthenticatedUser();
   const t = useTranslations();
   const formatter = useFormatter();
   const openSourceDocument = useOpenSourceDocument(workspaceId);
   const { data, isPending } = useQuery(
-    legalListSourcesOptions(workspaceId, listId, itemEntityId),
+    legalListSourcesOptions({
+      workspaceId,
+      listId,
+      itemEntityId,
+      viewer: { userId: user.id, organizationId: user.activeOrganizationId },
+    }),
   );
   const activity = useQuery(
-    legalListActivityOptions(workspaceId, listId, itemEntityId),
+    legalListActivityOptions({
+      workspaceId,
+      listId,
+      itemEntityId,
+      viewer: { userId: user.id, organizationId: user.activeOrganizationId },
+    }),
   );
 
   return (
@@ -867,13 +887,16 @@ const ItemSourcesPanel = ({
                       <SourceLocatorLabel locator={source.locator} />
                     </span>
                   </Button>
-                  <SourceVerificationAction
-                    itemEntityId={itemEntityId}
-                    listId={listId}
-                    sourceId={source.id}
-                    verified={source.verificationStatus === "verified"}
-                    workspaceId={workspaceId}
-                  />
+                  {source.verificationDetailsStatus ===
+                    LIST_DETAILS_STATUS.visible && (
+                    <SourceVerificationAction
+                      itemEntityId={itemEntityId}
+                      listId={listId}
+                      sourceId={source.id}
+                      verified={source.verificationStatus === "verified"}
+                      workspaceId={workspaceId}
+                    />
+                  )}
                 </div>
                 {source.quote && (
                   <blockquote className="text-muted-foreground mt-2 line-clamp-3 text-xs">
@@ -905,6 +928,12 @@ const ItemSourcesPanel = ({
                     {" · "}
                     {formatter.dateTime(new Date(event.createdAt))}
                   </p>
+                  {event.changesStatus ===
+                    LIST_DETAILS_STATUS.featureUnavailable && (
+                    <p className="text-muted-foreground mt-1">
+                      {t("common.detailsUnavailable")}
+                    </p>
+                  )}
                 </li>
               ))}
               {activity.data?.items.length === 0 && (

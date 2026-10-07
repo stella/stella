@@ -26,9 +26,11 @@ import {
   workspaces,
 } from "@/api/db/schema";
 import readListItems from "@/api/handlers/lists/items/list";
+import { buildFeatureAccessSnapshot } from "@/api/lib/auth/feature-access/context";
 import { createSafeId, toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { DatabaseError } from "@/api/lib/errors/tagged-errors";
+import { LIST_VERIFICATION_FEATURE_ID } from "@/api/lib/feature-access/registry";
 import { createTestHandlerContext } from "@/api/tests/helpers/handler-context";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { getTestDb, releaseTestDb } from "@/api/tests/security/test-utils";
@@ -229,12 +231,25 @@ const testSafeDb: SafeDb = async (fn) =>
       new DatabaseError({ message: "test transaction failed", cause }),
   });
 
-const listedItems = async () => {
+const listedItems = async (enrolled = true) => {
   const result = await readListItems.handler(
     createTestHandlerContext<ReadListItemsCtx>({
       workspaceId,
       session: { activeOrganizationId: organizationId },
       user: { id: userId },
+      featureAccessSnapshot: buildFeatureAccessSnapshot({
+        organizationId,
+        userId,
+        identity: { email: "reader@example.test", emailVerified: true },
+        enrolments: [],
+        grants: enrolled
+          ? {
+              [LIST_VERIFICATION_FEATURE_ID]: [
+                { type: "organization", organizationId },
+              ],
+            }
+          : {},
+      }),
       safeDb: testSafeDb,
       params: { workspaceId, listId },
       query: {},
@@ -310,4 +325,17 @@ test("an item without sources lists none, once per item", async () => {
     bareFactId,
   ]);
   expect(await firstSourceOf(bareFactId)).toBeNull();
+});
+
+test("ordinary item rows retain their order with unavailable fact details", async () => {
+  const visible = await listedItems();
+  expect(visible.some((row) => row.factDetails !== null)).toBe(true);
+  expect(visible.some((row) => row.firstSource !== null)).toBe(true);
+  const hidden = await listedItems(false);
+  expect(hidden.map(({ id }) => id)).toEqual(visible.map(({ id }) => id));
+  for (const row of hidden) {
+    expect(row.factDetailsStatus).toBe("feature_unavailable");
+    expect(row.factDetails).toBeNull();
+    expect(row.firstSource).toBeNull();
+  }
 });

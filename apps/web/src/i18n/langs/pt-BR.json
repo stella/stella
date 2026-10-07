@@ -1701,6 +1701,7 @@
     "description": "Descrição",
     "details": "Detalhes",
     "detailsHiddenFeatureUnavailable": "Detalhes ocultos: recurso não ativado",
+    "detailsUnavailable": "Detalhes indisponíveis",
     "disconnect": "Desconectar",
     "dismiss": "Descartar",
     "displayName": "Nome de exibição",

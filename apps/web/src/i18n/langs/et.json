@@ -1701,6 +1701,7 @@
     "description": "Kirjeldus",
     "details": "Üksikasjad",
     "detailsHiddenFeatureUnavailable": "Üksikasjad on peidetud: funktsioon pole lubatud",
+    "detailsUnavailable": "Üksikasjad pole saadaval",
     "disconnect": "Katkesta ühendus",
     "dismiss": "Jäta kõrvale",
     "displayName": "Kuvatav nimi",

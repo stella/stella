@@ -2,11 +2,17 @@ import { Result } from "better-result";
 import { and, desc, eq, inArray } from "drizzle-orm";
 import { t } from "elysia";
 
+import { AUDIT_CHANGES_STATUS } from "@stll/api-contract/audit-log";
+
 import { member, user } from "@/api/db/auth-schema";
 import { auditLogs } from "@/api/db/schema";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
+import {
+  auditReadChangesSql,
+  projectAuditReadChanges,
+} from "@/api/lib/audit-log-details";
 import {
   tPaginationCursor,
   tSafeId,
@@ -34,7 +40,8 @@ const config = {
     "Read one list item's activity trail, newest first with cursor " +
     "pagination: the audit entries recorded against the item and against the " +
     "task behind it, each with its action, the actor's name, the recorded " +
-    "changes, and the operation label.",
+    "changes, and the operation label. changesStatus is visible or " +
+    "feature_unavailable; unavailable changes and operation are null.",
   permissions: { workspace: ["read"] },
   accountAccess: ACCOUNT_ACCESS.sandbox,
   access: "read",
@@ -55,7 +62,15 @@ const activityCursor = createTimestampIdCursorCodec({
 
 const readItemActivity = createSafeHandler(
   config,
-  async function* ({ safeDb, workspaceId, params, query }) {
+  async function* ({
+    safeDb,
+    workspaceId,
+    params,
+    query,
+    session,
+    user: actor,
+    featureAccessSnapshot,
+  }) {
     const limit = normalizeTenantPageLimit(
       query.limit ?? LIMITS.legalListActivityPageSizeDefault,
     );
@@ -91,10 +106,17 @@ const readItemActivity = createSafeHandler(
           .select({
             id: auditLogs.id,
             action: auditLogs.action,
+            resourceType: auditLogs.resourceType,
             performerName: auditLogs.performerName,
             userName: user.name,
             metadata: auditLogs.metadata,
-            changes: auditLogs.changes,
+            changes: auditReadChangesSql({
+              featureAccessSnapshot,
+              principal: {
+                organizationId: session.activeOrganizationId,
+                userId: actor.id,
+              },
+            }),
             createdAt: auditLogs.createdAt,
             createdAtCursor: activityCursor.cursorValue.as("created_at_cursor"),
           })
@@ -139,17 +161,30 @@ const readItemActivity = createSafeHandler(
     });
     return Result.ok({
       ...page,
-      items: page.items.map((event) => ({
-        id: event.id,
-        action: event.action,
-        actorName: event.performerName ?? event.userName,
-        changes: event.changes,
-        createdAt: event.createdAt,
-        operation:
-          typeof event.metadata?.["operation"] === "string"
-            ? event.metadata["operation"]
-            : null,
-      })),
+      items: page.items.map((event) => {
+        const projected = projectAuditReadChanges({
+          resourceType: event.resourceType,
+          changes: event.changes,
+          metadata: event.metadata,
+          featureAccessSnapshot,
+          principal: {
+            organizationId: session.activeOrganizationId,
+            userId: actor.id,
+          },
+        });
+        return {
+          id: event.id,
+          action: event.action,
+          actorName: event.performerName ?? event.userName,
+          createdAt: event.createdAt,
+          ...projected,
+          operation:
+            projected.changesStatus === AUDIT_CHANGES_STATUS.visible &&
+            typeof event.metadata?.["operation"] === "string"
+              ? event.metadata["operation"]
+              : null,
+        };
+      }),
     });
   },
 );

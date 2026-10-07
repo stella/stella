@@ -14,6 +14,7 @@ import { readTargetIds, saveStateOf } from "@/features/avt/save-state.logic";
 import type { FactDetails, ListItem } from "@/features/avt/types";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
+import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { unwrapEden } from "@/lib/errors/api";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { toSafeId } from "@/lib/safe-id";
@@ -43,10 +44,12 @@ export const useFactDetailActions = (scope: ListScope) => {
   const t = useTranslations();
   const analytics = useAnalytics();
   const queryClient = useQueryClient();
-  const itemsKey = legalListItemsOptions(
-    scope.workspaceId,
-    scope.listId,
-  ).queryKey;
+  const user = useAuthenticatedUser();
+  const itemsKey = legalListItemsOptions({
+    workspaceId: scope.workspaceId,
+    listId: scope.listId,
+    viewer: { userId: user.id, organizationId: user.activeOrganizationId },
+  }).queryKey;
   const mutationKey = factDetailsMutationKey(scope);
 
   const writeDetails = (

@@ -100,6 +100,13 @@ export type OwnershipEnforcement =
       readonly name: string;
       readonly within: readonly string[];
       readonly allowed: readonly AllowedFile[];
+    }
+  | {
+      readonly kind: "table-column-read";
+      readonly specifiers: readonly string[];
+      readonly table: string;
+      readonly columns: readonly string[];
+      readonly allowed: readonly AllowedFile[];
     };
 
 export type OwnershipEntry = {
@@ -760,6 +767,20 @@ const OWNERSHIP_DECLARATIONS = [
           reason: "Applies the storage projection when recording audit events.",
         },
       ],
+    },
+  },
+  {
+    id: "audit-detail-read",
+    capability: "Reading persisted audit changes",
+    owner: ["apps/api/src/lib/audit-log-details.ts"],
+    summary:
+      "The audit detail owner supplies caller-aware change selections and projections. Direct column access and implicit full-row reads stay inside this owner; database assertions remain in test files excluded from the production ownership rule.",
+    enforcement: {
+      kind: "table-column-read",
+      specifiers: ["@/api/db/schema", "@/api/db/schema/contacts"],
+      table: "auditLogs",
+      columns: ["changes"],
+      allowed: [],
     },
   },
   {
@@ -2984,6 +3005,12 @@ const enforcementCell = (enforcement: OwnershipEnforcement): string => {
     }
     case "function-call": {
       return `call \`${enforcement.name}()\` in \`${enforcement.within.join("`, `")}\``;
+    }
+    case "table-column-read": {
+      const columns = enforcement.columns.map(
+        (column) => `${enforcement.table}.${column}`,
+      );
+      return `read \`${columns.join("`, `")}\`, including implicit full-row selections`;
     }
     case "status-set": {
       return "lifecycle updates, conflict sets and visible SQL assignments; lint errors plus measured per-file backlog and shrink-only ratchet";

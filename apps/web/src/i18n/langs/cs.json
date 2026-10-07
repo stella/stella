@@ -1701,6 +1701,7 @@
     "description": "Popis",
     "details": "Detaily",
     "detailsHiddenFeatureUnavailable": "Podrobnosti jsou skryté: funkce není zapnutá",
+    "detailsUnavailable": "Podrobnosti nejsou dostupné",
     "disconnect": "Odpojit",
     "dismiss": "Zamítnout",
     "displayName": "Zobrazované jméno",

@@ -12,6 +12,7 @@ import {
 } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
+import { projectListSourceVerification } from "@/api/lib/lists/detail-projection";
 import {
   createCursorPage,
   decodePaginationCursor,
@@ -35,7 +36,8 @@ const config = {
   description:
     "List the sources attached to one list item with cursor pagination, each " +
     "with the document version it points at, its locator, its quote, and its " +
-    "verification status with who verified it and when.",
+    "verificationDetailsStatus: visible or feature_unavailable. Visible " +
+    "verification includes status, reviewer and time; unavailable fields are null.",
   permissions: { workspace: ["read"] },
   accountAccess: ACCOUNT_ACCESS.sandbox,
   access: "read",
@@ -51,7 +53,15 @@ const config = {
 
 const readItemSources = createSafeHandler(
   config,
-  async function* ({ safeDb, workspaceId, params, query }) {
+  async function* ({
+    safeDb,
+    workspaceId,
+    params,
+    query,
+    session,
+    user,
+    featureAccessSnapshot,
+  }) {
     const limit = normalizeTenantPageLimit(
       query.limit ?? LIMITS.legalListSourcesPageSizeDefault,
     );
@@ -114,7 +124,15 @@ const readItemSources = createSafeHandler(
     }
     return Result.ok(
       createCursorPage({
-        rows: result,
+        rows: result.map((source) =>
+          projectListSourceVerification(source, {
+            featureAccessSnapshot,
+            principal: {
+              organizationId: session.activeOrganizationId,
+              userId: user.id,
+            },
+          }),
+        ),
         limit,
         cursorForItem: (item) => encodePaginationCursor([item.id]),
       }),
