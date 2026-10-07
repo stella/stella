@@ -16,13 +16,13 @@ import type {
 } from "react";
 import { flushSync } from "react-dom";
 
-import { combine } from "@atlaskit/pragmatic-drag-and-drop/combine";
 import {
   draggable,
   dropTargetForElements,
-} from "@atlaskit/pragmatic-drag-and-drop/element/adapter";
-import { setCustomNativeDragPreview } from "@atlaskit/pragmatic-drag-and-drop/element/set-custom-native-drag-preview";
+} from "@atlaskit/pragmatic-drag-and-drop/adapter/element-adapter";
+import { combine } from "@atlaskit/pragmatic-drag-and-drop/utils/combine";
 import { preserveOffsetOnSource } from "@atlaskit/pragmatic-drag-and-drop/utils/preserve-offset-on-source";
+import { setCustomNativeDragPreview } from "@atlaskit/pragmatic-drag-and-drop/utils/set-custom-native-drag-preview";
 import { invoke } from "@tauri-apps/api/core";
 import { TauriEvent } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";

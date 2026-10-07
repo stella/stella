@@ -373,8 +373,9 @@ const SearchControls = ({
           <Select
             value={country}
             onValueChange={(value) => {
-              if (value !== null) {
+              if (value !== null && value !== country) {
                 setCountry(value);
+                setCourt({ value: "all", selection: { type: "all" } });
               }
             }}
           >

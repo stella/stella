@@ -8,6 +8,3 @@
 export const PUBLIC_DECISION_MATCH = {
   FILE_INCOMPLETE: "file_incomplete",
 } as const;
-
-export type PublicDecisionMatch =
-  (typeof PUBLIC_DECISION_MATCH)[keyof typeof PUBLIC_DECISION_MATCH];

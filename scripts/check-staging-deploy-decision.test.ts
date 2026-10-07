@@ -113,6 +113,7 @@ const runDecision = async ({
       DEPLOY_WHEN_UNREACHABLE: String(deployWhenUnreachable),
       GITHUB_EVENT_NAME: "workflow_dispatch",
       GH_TOKEN: "stub",
+      GH_RETRY_SCRIPT: path.resolve(import.meta.dirname, "gh-retry.sh"),
       GITHUB_REPOSITORY: "stella/stella",
       GITHUB_RUN_ID: "9",
       GITHUB_SERVER_URL: "https://github.com",
@@ -236,11 +237,15 @@ const runRecord = async (deploySha: string) => {
       DEPLOYMENT_ID: "1",
       DEPLOY_SHA: deploySha,
       GH_TOKEN: "stub",
+      GH_RETRY_SCRIPT: path.resolve(import.meta.dirname, "gh-retry.sh"),
       GITHUB_REPOSITORY: "stella/stella",
       GITHUB_RUN_ID: "9",
       GITHUB_SERVER_URL: "https://github.com",
       JOB_STATUS: "success",
       MCP_SMOKE: "success",
+      CORPUS_PREFLIGHT: "success",
+      CORPUS_SEARCH_WAIVED: "false",
+      WAIVE_REASON: "",
       PATH: `${workspace}:${process.env["PATH"] ?? ""}`,
       STUB_CALLS_PATH: callsPath,
       WEB_SMOKE: "success",
@@ -344,7 +349,10 @@ printf '%s' "$STUB_HEALTH_STATUS"
   await chmod(curlStub, 0o755);
 
   const sleepStub = path.join(workspace, "sleep");
-  await Bun.write(sleepStub, "#!/usr/bin/env bash\nexit 0\n");
+  await Bun.write(
+    sleepStub,
+    '#!/usr/bin/env bash\nif [[ "$1" -gt 10 ]]; then exec /bin/sleep "$@"; fi\nexit 0\n',
+  );
   await chmod(sleepStub, 0o755);
 });
 
@@ -385,6 +393,7 @@ describe("staging deploy decision", () => {
     expect(result.exitCode).toBe(7);
     expect(result.deploy).toBe("deploy=false");
     expect(result.calls).toContain(`statuses/${TIP_SHA}`);
+    expect(result.calls.trim().split("\n")).toHaveLength(1);
   });
 
   test("every successful decision selects deployment", async () => {

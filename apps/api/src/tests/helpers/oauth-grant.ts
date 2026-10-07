@@ -299,12 +299,14 @@ export const isOAuthTokenActive = async ({
 type RefreshOAuthGrantOptions = {
   client: RegisteredOAuthClient;
   refreshToken: string;
+  scope?: string;
 };
 
 /** Present a refresh token at the token endpoint; returns the raw response. */
 export const refreshOAuthGrant = async ({
   client,
   refreshToken,
+  scope,
 }: RefreshOAuthGrantOptions): Promise<Response> =>
   await getAuth().handler(
     formRequest("oauth2/token", {
@@ -313,5 +315,6 @@ export const refreshOAuthGrant = async ({
       grant_type: "refresh_token",
       refresh_token: refreshToken,
       resource: getMcpResourceUrl(),
+      ...(scope === undefined ? {} : { scope }),
     }),
   );

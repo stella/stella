@@ -238,5 +238,7 @@ test.skipIf(!process.env["CI"])(
       rmSync(temporary, { recursive: true, force: true });
     }
   },
-  600_000,
+  // Ten exports took 36-49 s in CI. The budget fails a several-fold slowdown
+  // of the exporter instead of letting it lengthen every queue entry.
+  180_000,
 );

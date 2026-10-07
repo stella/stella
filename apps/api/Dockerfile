@@ -379,8 +379,8 @@ ENV STELLA_COMMIT_SHA=${STELLA_COMMIT_SHA}
 ENV RAILWAY_GIT_COMMIT_SHA=${RAILWAY_GIT_COMMIT_SHA}
 ENV NODE_ENV=production
 ENV REQUIRE_PERSONAL_AI_KEY=true
-ENV STELLA_WORKER_DIR=/\$bunfs/root/workers
-ENV STELLA_OCR_PDF_FONT_PATH=/\$bunfs/root/fonts/CabinetGrotesk-Regular.otf
+ENV STELLA_WORKER_DIR=/app/runtime/workers
+ENV STELLA_OCR_PDF_FONT_PATH=/app/runtime/fonts/CabinetGrotesk-Regular.otf
 ENV STELLA_YARA_RULES_DIR=/app/yara
 ENV DOCUMENT_OCR_MODEL_DIR=/app/ocr-models
 ENV TEMPLATE_PACKS_CONTENT_DIR=/app/template-packs-content
@@ -423,17 +423,16 @@ COPY --chown=stella:stella --from=builder /app/apps/legal-atlas-runner/dist/eu-e
 COPY --chown=stella:stella --from=builder /app/apps/api/src/db/migrate.js /app/apps/api/src/db/migrate.js
 # The bundled entrypoint reads migration SQL from this external folder.
 COPY --chown=stella:stella --from=builder /app/apps/api/drizzle /app/apps/api/drizzle
-RUN mkdir -p '/$bunfs/root'
-COPY --chown=stella:stella --from=builder /app/runtime-workers /\$bunfs/root/workers
+COPY --chown=stella:stella --from=builder /app/runtime-workers /app/runtime/workers
 # ONNX Runtime is the one native exception: its binding dynamically links a
 # sibling shared library, so Bun cannot embed it as one standalone asset. The
 # bundled worker resolves this package-owned directory as `../bin`; the image
 # smoke executes a real model so a broken native closure fails the build.
-COPY --chown=stella:stella --from=builder /app/runtime-onnx/bin /\$bunfs/root/bin
+COPY --chown=stella:stella --from=builder /app/runtime-onnx/bin /app/runtime/bin
 COPY --chown=stella:stella --from=builder /app/ocr-models /app/ocr-models
 COPY --chown=stella:stella --from=install-inputs \
     /app/apps/landing/public/fonts/CabinetGrotesk-Regular.otf \
-    /\$bunfs/root/fonts/CabinetGrotesk-Regular.otf
+    /app/runtime/fonts/CabinetGrotesk-Regular.otf
 COPY --chown=stella:stella --from=builder /app/apps/api/src/lib/file-scan/yara /app/yara
 # Bundled template packs: the manifest is compiled into the binary, the DOCX
 # bytes are read from TEMPLATE_PACKS_CONTENT_DIR when a pack is installed.

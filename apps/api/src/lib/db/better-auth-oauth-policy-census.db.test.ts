@@ -13,7 +13,14 @@ import {
   BetterAuthOAuthPolicyCensusError,
   ensureBetterAuthOAuthPolicy,
 } from "@/api/lib/db/better-auth-oauth-policy-census";
-import type { TestDatabase } from "@/api/tests/security/test-utils";
+import {
+  buildBetterAuthOAuthResources,
+  predecessorOAuthResourceScopes,
+} from "@/api/mcp/resource-policy-contract";
+import type {
+  TestDatabase,
+  TestDatabaseTransaction,
+} from "@/api/tests/security/test-utils";
 import { getTestDb, releaseTestDb } from "@/api/tests/security/test-utils";
 
 let database: TestDatabase;
@@ -174,6 +181,110 @@ test("startup rejects incomplete Better Auth OAuth resource migrations", async (
         failedChecks: ["resources-match", "links-use-configured-resources"],
       });
 
+      transaction.rollback();
+    });
+  } catch (error) {
+    if (!(error instanceof TransactionRollbackError)) {
+      throw error;
+    }
+  }
+});
+
+const CONFIGURED_RESOURCES = buildBetterAuthOAuthResources(
+  "https://startup-census.example.invalid",
+);
+
+/**
+ * Stored scope sets for every configured resource, keyed by what the row holds.
+ * `predecessor` is what the previous release wrote and still requires exactly;
+ * `configured` is what this release issues with. Everything else is foreign.
+ */
+const STORED_SCOPE_SETS = {
+  configured: (allowedScopes: readonly string[]) => [...allowedScopes],
+  predecessor: (allowedScopes: readonly string[]) =>
+    predecessorOAuthResourceScopes(allowedScopes),
+  "configured plus an unknown scope": (allowedScopes: readonly string[]) => [
+    ...allowedScopes,
+    "stella:unexpected",
+  ],
+  "predecessor plus only offline_access": (
+    allowedScopes: readonly string[],
+  ) => [...predecessorOAuthResourceScopes(allowedScopes), "offline_access"],
+  "configured without one resource scope": (allowedScopes: readonly string[]) =>
+    allowedScopes.slice(1),
+  empty: () => [],
+} as const;
+
+const ACCEPTED_SCOPE_SETS = new Set<string>(["configured", "predecessor"]);
+
+const givenStoredResources = async (
+  transaction: TestDatabaseTransaction,
+  storedScopes: (allowedScopes: readonly string[], index: number) => string[],
+) => {
+  await transaction.execute(sql`
+    TRUNCATE oauth_client_resource, oauth_resource, oauth_client CASCADE
+  `);
+  await transaction.insert(oauthResource).values(
+    CONFIGURED_RESOURCES.map((resource, index) => ({
+      allowedScopes: storedScopes(resource.allowedScopes, index),
+      id: `startup-census-configured-${index}`,
+      identifier: resource.identifier,
+      name: resource.name,
+    })),
+  );
+};
+
+test("the configured resources differ from their predecessor scope sets", () => {
+  // Otherwise every case below would compare a set against itself.
+  for (const resource of CONFIGURED_RESOURCES) {
+    expect(
+      predecessorOAuthResourceScopes(resource.allowedScopes).toSorted(),
+    ).not.toEqual([...resource.allowedScopes].toSorted());
+    expect(predecessorOAuthResourceScopes(resource.allowedScopes)).not.toEqual(
+      [],
+    );
+  }
+});
+
+test.each(Object.entries(STORED_SCOPE_SETS))(
+  "the boot census over %s scope rows",
+  async (shape, storedScopes) => {
+    try {
+      await database.transaction(async (transaction) => {
+        await givenStoredResources(transaction, storedScopes);
+        const outcome = await captureCensusRejection(
+          assertBetterAuthOAuthPolicyCensus(transaction, CONFIGURED_RESOURCES),
+        );
+        if (ACCEPTED_SCOPE_SETS.has(shape)) {
+          expect(outcome).toBeNull();
+        } else {
+          expect(outcome).toBeInstanceOf(BetterAuthOAuthPolicyCensusError);
+          expect(outcome).toMatchObject({ failedChecks: ["resources-match"] });
+        }
+        transaction.rollback();
+      });
+    } catch (error) {
+      if (!(error instanceof TransactionRollbackError)) {
+        throw error;
+      }
+    }
+  },
+);
+
+test("the boot census accepts predecessor and configured rows side by side", async () => {
+  // A deploy that adds an audience inserts it with the configured set while
+  // existing audiences keep the predecessor set.
+  try {
+    await database.transaction(async (transaction) => {
+      await givenStoredResources(transaction, (allowedScopes, index) =>
+        index === 0
+          ? [...allowedScopes]
+          : predecessorOAuthResourceScopes(allowedScopes),
+      );
+      await assertBetterAuthOAuthPolicyCensus(
+        transaction,
+        CONFIGURED_RESOURCES,
+      );
       transaction.rollback();
     });
   } catch (error) {

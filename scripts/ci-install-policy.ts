@@ -1,4 +1,5 @@
 import { lexShell } from "./install-free-ci";
+import { flattenWorkflowSteps } from "./workflow-steps";
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
@@ -50,7 +51,7 @@ export const boundedInstallProblems = (
     if (scope === "windows" && !windows) {
       continue;
     }
-    const steps = job["steps"].filter(isRecord);
+    const steps = flattenWorkflowSteps(job["steps"]);
     const uploads = steps.filter(
       (step) =>
         typeof step["uses"] === "string" &&

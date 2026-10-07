@@ -1,6 +1,7 @@
 import { expect, test } from "bun:test";
 
 import {
+  addMissingTestDurations,
   estimateMissingTestDurations,
   refreshedTestDurations,
   serializeTestDurations,
@@ -47,4 +48,26 @@ test("one refresh gives every new live file an explicit estimate without revivin
   expect(estimateMissingTestDurations({ files, previous: refreshed })).toEqual(
     refreshed,
   );
+});
+
+test("missing weights append once and preserve every existing entry byte for byte", () => {
+  const original =
+    '{\n  "old": { "source": "measured", "seconds": 2.123456789 },\n  "deleted": {"seconds": 999, "source": "estimated"}\n}\n';
+  const updated = addMissingTestDurations(original, ["old", "new"]);
+  expect(
+    updated.startsWith(original.slice(0, original.lastIndexOf("}")).trimEnd()),
+  ).toBe(true);
+  expect(JSON.parse(updated)).toEqual({
+    old: { seconds: 2.123456789, source: "measured" },
+    deleted: { seconds: 999, source: "estimated" },
+    new: { seconds: 2.123457, source: "estimated" },
+  });
+  expect(addMissingTestDurations(updated, ["old", "new"])).toBe(updated);
+  expect(addMissingTestDurations(original, ["old"])).toBe(original);
+});
+
+test("missing weights bootstrap an empty document at one second", () => {
+  expect(JSON.parse(addMissingTestDurations("{}\n", ["new"]))).toEqual({
+    new: { seconds: 1, source: "estimated" },
+  });
 });

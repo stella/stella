@@ -371,6 +371,12 @@ export const legalListFactDetails = p.pgTable(
       "legal_list_fact_details_occurred_on_check",
       sql`(${table.occurredOn} is null) = (${table.occurredOnPrecision} is null) and (${table.occurredOnPrecision} is null or ${table.occurredOnPrecision} in (${sql.join(FACT_DATE_PRECISION_SQL_VALUES, sql`, `)}))`,
     ),
+    p.pgPolicy("legal_list_fact_details_owner_access", {
+      for: "all",
+      to: "public",
+      using: sql`current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.legal_list_fact_details'::regclass)`,
+      withCheck: sql`current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.legal_list_fact_details'::regclass)`,
+    }),
     ...wsPolicies(),
   ],
 );
@@ -463,6 +469,12 @@ export const legalListItemSources = p.pgTable(
       to: stella,
       using: workspaceCheck,
       withCheck: workspaceCheck,
+    }),
+    p.pgPolicy("legal_list_item_sources_owner_access", {
+      for: "all",
+      to: "public",
+      using: sql`current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.legal_list_item_sources'::regclass)`,
+      withCheck: sql`current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.legal_list_item_sources'::regclass)`,
     }),
     p.pgPolicy("legal_list_item_sources_no_delete", {
       as: "restrictive",
