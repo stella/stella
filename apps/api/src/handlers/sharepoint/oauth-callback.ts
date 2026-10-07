@@ -34,7 +34,7 @@ const requestQuery = t.Object({
 
 const config = {
   permissions: { integration: ["create"] },
-  accountAccess: ACCOUNT_ACCESS.standard,
+  accountAccess: ACCOUNT_ACCESS.accountControl,
   mcp: { type: "internal", reason: "provider_secret" },
   query: requestQuery,
 } satisfies HandlerConfig;

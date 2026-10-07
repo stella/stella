@@ -152,6 +152,8 @@ describe("feature descriptor discovery and admission", () => {
       const expected = Object.entries(CHAT_READ_SCRIPT_POLICY).flatMap(
         ([name, policy]) =>
           policy === "script" &&
+          // No fixture caller is enrolled in a registered feature.
+          getStaticMcpToolDefinition(name)?.featureId === undefined &&
           (name !== "list_matters" || kind === "ordinary" || kind === "enabled")
             ? [name]
             : [],

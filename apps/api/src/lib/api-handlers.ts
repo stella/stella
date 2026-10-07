@@ -1,7 +1,7 @@
 import type { Static, TSchema } from "@sinclair/typebox";
 import type { Err } from "better-result";
 import { Result, UnhandledException } from "better-result";
-import type { Context, InputSchema, UnwrapRoute } from "elysia";
+import type { AnySchema, Context, InputSchema, UnwrapRoute } from "elysia";
 import { ElysiaCustomStatusResponse, status, t } from "elysia";
 
 import type { ModelRole } from "@stll/ai-catalog";
@@ -19,9 +19,9 @@ import {
 import { captureObservedError } from "@/api/lib/analytics/capture";
 import type { AuditExecutionContext, AuditRecorder } from "@/api/lib/audit-log";
 import type { AccessibleWorkspace } from "@/api/lib/auth";
-import { checkDemoAccountOperation } from "@/api/lib/auth/demo-account";
 import { resolveFeatureAccessSnapshot } from "@/api/lib/auth/feature-access/context";
 import type { FeatureAccessRequirement } from "@/api/lib/auth/feature-access/requirements";
+import { checkRestrictedAccountOperation } from "@/api/lib/auth/review-account";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { CapabilityTransport } from "@/api/lib/capability-transport";
 import type { ManagedAIResidency } from "@/api/lib/chat/ai-data-policy";
@@ -437,19 +437,22 @@ export type WorkspaceHandlerConfig = WorkspaceHandlerConfigOf<HandlerConfig>;
  * their handlers admit the demo account and can only declare `sandbox`.
  */
 /**
- * Whether the configured demo account may call a handler. Every handler config
- * declares one: `standard` refuses the demo account, `sandbox` admits it.
+ * Which restricted accounts may call a handler. Every handler config declares
+ * one: `sandbox` admits every account, `standard` refuses the demo account,
+ * and `account-control` (credentials, keys, billing, external connections,
+ * organization configuration) also refuses the restricted review account.
  */
 export const ACCOUNT_ACCESS = {
   standard: "standard",
   sandbox: "sandbox",
+  accountControl: "account-control",
 } as const;
 
 export type AccountAccess =
   (typeof ACCOUNT_ACCESS)[keyof typeof ACCOUNT_ACCESS];
 
-const requiresStandardAccount = (accountAccess: AccountAccess) =>
-  accountAccess === ACCOUNT_ACCESS.standard;
+const requiresAccountCheck = (accountAccess: AccountAccess) =>
+  accountAccess !== ACCOUNT_ACCESS.sandbox;
 
 type SandboxAccountAccess = {
   accountAccess: typeof ACCOUNT_ACCESS.sandbox;
@@ -696,7 +699,7 @@ const SAFE_HANDLER_ERROR_RESPONSE_SCHEMAS = safeHandlerErrorResponseSchemas(
 );
 
 type SafeHandlerResponseSchemasFor<
-  TSuccessSchema extends TSchema,
+  TSuccessSchema extends AnySchema,
   TErrorSchema extends TSchema,
 > = {
   readonly [TStatus in 200 | HandlerErrorStatusCode]: TStatus extends 200
@@ -704,20 +707,20 @@ type SafeHandlerResponseSchemasFor<
     : TErrorSchema;
 };
 
-export type SafeHandlerResponseSchemas<TSuccessSchema extends TSchema> =
+export type SafeHandlerResponseSchemas<TSuccessSchema extends AnySchema> =
   SafeHandlerResponseSchemasFor<
     TSuccessSchema,
     typeof safeHandlerErrorResponseSchema
   >;
 
-export const safeHandlerResponseSchemas = <TSuccessSchema extends TSchema>(
+export const safeHandlerResponseSchemas = <TSuccessSchema extends AnySchema>(
   successSchema: TSuccessSchema,
 ): SafeHandlerResponseSchemas<TSuccessSchema> => ({
   200: successSchema,
   ...SAFE_HANDLER_ERROR_RESPONSE_SCHEMAS,
 });
 
-type SafeHandlerStatusTextResponseSchemas<TSuccessSchema extends TSchema> =
+type SafeHandlerStatusTextResponseSchemas<TSuccessSchema extends AnySchema> =
   SafeHandlerResponseSchemasFor<
     TSuccessSchema,
     typeof safeHandlerErrorOrStatusTextResponseSchema
@@ -727,7 +730,7 @@ const SAFE_HANDLER_STATUS_TEXT_RESPONSE_SCHEMAS =
   safeHandlerErrorResponseSchemas(safeHandlerErrorOrStatusTextResponseSchema);
 
 export const safeHandlerResponseSchemasWithStatusText = <
-  TSuccessSchema extends TSchema,
+  TSuccessSchema extends AnySchema,
 >(
   successSchema: TSuccessSchema,
 ): SafeHandlerStatusTextResponseSchemas<TSuccessSchema> => ({
@@ -1167,7 +1170,7 @@ export const admitFiniteAction = async function* <
 
 type HandlerAdmissionDependencies = {
   admit?: typeof withActionAdmission;
-  checkAccountOperation?: typeof checkDemoAccountOperation;
+  checkAccountOperation?: typeof checkRestrictedAccountOperation;
   announce?: typeof announceResourceSetUpdates;
 };
 
@@ -1311,7 +1314,7 @@ const createSafeScopedHandler = <
   handler: SafeHandlerFn<TContext, TResult>,
   {
     admit = withActionAdmission,
-    checkAccountOperation = checkDemoAccountOperation,
+    checkAccountOperation = checkRestrictedAccountOperation,
     announce = announceResourceSetUpdates,
   }: HandlerAdmissionDependencies = {},
 ): SafeHandlerDefinition<TConfig, TContext, TResult> =>
@@ -1334,8 +1337,11 @@ const createSafeScopedHandler = <
         return featureAccessResponse;
       }
 
-      if (requiresStandardAccount(config.accountAccess)) {
-        const accountAccess = checkAccountOperation(ctx.user.email);
+      if (requiresAccountCheck(config.accountAccess)) {
+        const accountAccess = checkAccountOperation(
+          ctx.user.email,
+          config.accountAccess,
+        );
         if (Result.isError(accountAccess)) {
           return toSafeStatusResponse(403, {
             code: "account_access_unavailable",
@@ -1885,7 +1891,7 @@ export const createSafeHandler = <
   );
 
 type SessionHandlerDependencies = {
-  checkAccountOperation?: typeof checkDemoAccountOperation;
+  checkAccountOperation?: typeof checkRestrictedAccountOperation;
 };
 
 export const createSafeSessionHandler = <
@@ -1895,14 +1901,17 @@ export const createSafeSessionHandler = <
   config: TConfig,
   handler: SafeHandlerFn<SessionHandlerContext<TConfig>, TResult>,
   {
-    checkAccountOperation = checkDemoAccountOperation,
+    checkAccountOperation = checkRestrictedAccountOperation,
   }: SessionHandlerDependencies = {},
 ): SafeHandlerDefinition<TConfig, SessionHandlerContext<TConfig>, TResult> =>
   recordSafeHandler({
     config,
     handler: async (ctx): Promise<SafeHandlerResult<TResult>> => {
-      if (requiresStandardAccount(config.accountAccess)) {
-        const accountAccess = checkAccountOperation(ctx.user.email);
+      if (requiresAccountCheck(config.accountAccess)) {
+        const accountAccess = checkAccountOperation(
+          ctx.user.email,
+          config.accountAccess,
+        );
         if (Result.isError(accountAccess)) {
           return toSafeStatusResponse(403, {
             code: "account_access_unavailable",

@@ -26,6 +26,13 @@ const emptySnapshot = createFeatureAccessSnapshot({
   decisions: new Map(),
 });
 
+// Identity resolves through the member join; the enrolment read finds no rows.
+const unenrolledSettingsDatabase = (email: string) =>
+  createScopedDbMock(
+    { query: { organizationSettings: { findFirst: async () => undefined } } },
+    { featureAccess: { identity: { email, emailVerified: true } } },
+  );
+
 describe("projectOrganizationSettingsRow", () => {
   test("returns the active org's practiceJurisdictions verbatim", () => {
     const result = projectOrganizationSettingsRow(
@@ -92,18 +99,7 @@ test("organization settings expose registry-derived enabled or hidden statuses w
   } as const satisfies FeatureRegistry;
   const organizationId = toSafeId<"organization">("org_test");
   for (const email of ["standard@example.test", "colleague@example.test"]) {
-    const database = createScopedDbMock({
-      query: { organizationSettings: { findFirst: async () => undefined } },
-      select: () => ({
-        from: () => ({
-          innerJoin: () => ({
-            where: () => ({
-              limit: async () => [{ email, emailVerified: true }],
-            }),
-          }),
-        }),
-      }),
-    });
+    const database = unenrolledSettingsDatabase(email);
     const snapshot = await database.scopedDb(
       async (tx) =>
         await resolveFeatureAccessSnapshot({
@@ -165,19 +161,8 @@ test("organization settings expose registry-derived enabled or hidden statuses w
   }
 });
 
-test("organization settings derive hidden verification capability from unconfigured grants", async () => {
-  let identityQueries = 0;
-  const database = createScopedDbMock({
-    query: { organizationSettings: { findFirst: async () => undefined } },
-    select: () => {
-      identityQueries += 1;
-      return {
-        from: () => ({
-          innerJoin: () => ({ where: () => ({ limit: async () => [] }) }),
-        }),
-      };
-    },
-  });
+test("organization settings derive capabilities from the production registry, hidden without an enrolment", async () => {
+  const database = unenrolledSettingsDatabase("standard@example.test");
   const result = await readOrganizationSettings.handler(
     createTestHandlerContext<
       Parameters<typeof readOrganizationSettings.handler>[0]
@@ -187,30 +172,20 @@ test("organization settings derive hidden verification capability from unconfigu
     }),
   );
   expect(result).toMatchObject({
-    capabilities: { "list-verification": { status: "hidden" } },
+    capabilities: Object.fromEntries(
+      Object.keys(FEATURE_REGISTRY).map((featureId) => [
+        featureId,
+        { status: "hidden" },
+      ]),
+    ),
   });
-  expect(identityQueries).toBe(1);
-  expect(database.getCallCount()).toBe(2);
 });
 
 test("organization settings recompute a supplied snapshot when the user or active organization changes", async () => {
   const registry = {
     "fixture-invitation": { enrolment: "invitation" },
   } as const satisfies FeatureRegistry;
-  const database = createScopedDbMock({
-    query: { organizationSettings: { findFirst: async () => undefined } },
-    select: () => ({
-      from: () => ({
-        innerJoin: () => ({
-          where: () => ({
-            limit: async () => [
-              { email: "standard@example.test", emailVerified: true },
-            ],
-          }),
-        }),
-      }),
-    }),
-  });
+  const database = unenrolledSettingsDatabase("standard@example.test");
   const snapshot = await database.scopedDb(
     async (tx) =>
       await resolveFeatureAccessSnapshot({
@@ -248,28 +223,28 @@ test("organization settings recompute a supplied snapshot when the user or activ
       }),
     );
     expect(result).toMatchObject({
-      capabilities: { "list-verification": { status: "hidden" } },
+      capabilities: Object.fromEntries(
+        Object.keys(FEATURE_REGISTRY).map((featureId) => [
+          featureId,
+          { status: "hidden" },
+        ]),
+      ),
     });
+    expect(result).not.toHaveProperty("capabilities.fixture-invitation");
   }
 });
 
 test("organization settings project the production verification declaration for granted and ungranted current members", async () => {
   const organizationId = toSafeId<"organization">("org_test");
   for (const granted of [false, true]) {
-    const database = createScopedDbMock({
-      query: { organizationSettings: { findFirst: async () => undefined } },
-      select: () => ({
-        from: () => ({
-          innerJoin: () => ({
-            where: () => ({
-              limit: async () => [
-                { email: "member@example.test", emailVerified: true },
-              ],
-            }),
-          }),
-        }),
-      }),
-    });
+    const database = createScopedDbMock(
+      { query: { organizationSettings: { findFirst: async () => undefined } } },
+      {
+        featureAccess: {
+          identity: { email: "member@example.test", emailVerified: true },
+        },
+      },
+    );
     const snapshot = await database.scopedDb(
       async (tx) =>
         await resolveFeatureAccessSnapshot({

@@ -9,6 +9,8 @@ import {
   type BrowserExtensionRequest,
 } from "@stll/api-contract/browser-control";
 
+import { userStorageKey } from "@/lib/account/user-scoped-storage";
+
 import {
   BROWSER_APPROVAL_MODE,
   setBrowserApprovalMode,
@@ -36,7 +38,7 @@ type FakeWindow = {
   sessionStorage: Pick<Storage, "getItem" | "setItem">;
 };
 
-const APPROVAL_MODE_KEY = "stella.chat.browserApprovalMode";
+const APPROVAL_MODE_KEY = userStorageKey("stella.chat.browserApprovalMode");
 const storedValues = new Map<string, string>();
 
 let previousWindow: PropertyDescriptor | undefined;

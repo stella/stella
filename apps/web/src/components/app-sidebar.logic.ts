@@ -1,5 +1,6 @@
 import { panic } from "better-result";
 
+import type { WebApiRoutes } from "@/lib/eden-client";
 import type { EntityKind } from "@/lib/types";
 
 export const resolveSidebarWorkspaceId = ({
@@ -173,3 +174,21 @@ export const resolveEntityActivityDestination = (
       return panic("Unsupported entity kind");
   }
 };
+
+export type WorkspaceActivity =
+  WebApiRoutes["workspaces"][":workspaceId"]["activity"]["get"]["response"][200]["items"][number];
+
+export const matterActivityItemVisible = (
+  item: WorkspaceActivity,
+  legalListsEnabled: boolean,
+): boolean =>
+  item.type === "thread" ||
+  item.entityKind !== "task" ||
+  item.listItemType === null ||
+  item.listItemType === "task" ||
+  legalListsEnabled;
+
+/** Only list items other than tasks need the caller's Lists decision. */
+export const matterActivityNeedsLegalListsDecision = (
+  items: readonly WorkspaceActivity[],
+): boolean => items.some((item) => !matterActivityItemVisible(item, false));

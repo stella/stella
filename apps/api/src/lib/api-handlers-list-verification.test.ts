@@ -15,11 +15,18 @@ import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { toSafeId } from "@/api/lib/branded-types";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
+import { mapHandlerResult } from "@/api/mcp/capability-tools";
+import { CAPABILITY_DISPATCH } from "@/api/mcp/generated/capability-dispatch/lists.verifications.create";
+import { DOCX_MIME_TYPE } from "@/api/mime-types";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
 
 const context = (tx: unknown) => ({
-  ...createScopedDbMock(tx),
+  ...createScopedDbMock(tx, {
+    featureAccess: {
+      identity: { email: "member@example.test", emailVerified: true },
+    },
+  }),
   user: { id: toSafeId<"user">("user_a"), email: "member@example.test" },
   session: { activeOrganizationId: toSafeId<"organization">("org_a") },
   workspaceId: toSafeId<"workspace">("workspace_a"),
@@ -53,22 +60,7 @@ describe("verification handler access admission", () => {
         });
         for (const runId of ["lvr_existing", "lvr_missing"]) {
           let operations = 0;
-          let identityQueries = 0;
           const tx = {
-            select: () => {
-              identityQueries += 1;
-              return {
-                from: () => ({
-                  innerJoin: () => ({
-                    where: () => ({
-                      limit: async () => [
-                        { email: "member@example.test", emailVerified: true },
-                      ],
-                    }),
-                  }),
-                }),
-              };
-            },
             insert: () => {
               operations += 1;
               throw new Error("Resource operation must not run");
@@ -82,7 +74,6 @@ describe("verification handler access admission", () => {
             response: { message: "Not found" },
           });
           expect(operations).toBe(0);
-          expect(identityQueries).toBe(1);
         }
       }
     } finally {
@@ -120,17 +111,7 @@ describe("verification handler access admission", () => {
           return Result.ok({ proof: featureAccessProof });
         },
       );
-      const query = {
-        leftJoin: () => query,
-        where: () => query,
-        limit: async () => [
-          { email: "member@example.test", emailVerified: true },
-        ],
-      };
-      const tx = {
-        select: () => ({ from: () => ({ innerJoin: () => query }) }),
-      };
-      const result = await endpoint.handler(asTestRaw(context(tx)));
+      const result = await endpoint.handler(asTestRaw(context({})));
       expect(result).toMatchObject({
         proof: {
           featureId: "list-verification",
@@ -145,3 +126,120 @@ describe("verification handler access admission", () => {
     }
   });
 });
+
+test.each(["active", "daily"] as const)(
+  "%s cap refusal reaches REST and capability transports",
+  async (reason) => {
+    const previous = {
+      grants: env.API_FEATURE_ACCESS_GRANTS,
+      deployment: env.FEATURE_LEGAL_LISTS,
+      enforcement: env.USAGE_ENFORCEMENT_ENABLED,
+    };
+    env.FEATURE_LEGAL_LISTS = true;
+    env.USAGE_ENFORCEMENT_ENABLED = false;
+    env.API_FEATURE_ACCESS_GRANTS = {
+      "list-verification": [
+        {
+          type: "member",
+          organizationId: "org_a",
+          email: "member@example.test",
+        },
+      ],
+    };
+    try {
+      let insertAttempts = 0;
+      const body = {
+        listId: toSafeId<"legalList">("01900000-0000-7000-8000-000000000001"),
+        entityId: toSafeId<"entity">("01900000-0000-7000-8000-000000000002"),
+        fileFieldId: toSafeId<"field">("01900000-0000-7000-8000-000000000003"),
+      };
+      const tx = {
+        query: {
+          entities: {
+            findFirst: async () => ({
+              currentVersion: {
+                id: toSafeId<"entityVersion">(
+                  "01900000-0000-7000-8000-000000000004",
+                ),
+                fields: [
+                  {
+                    id: body.fileFieldId,
+                    content: {
+                      type: "file",
+                      mimeType: DOCX_MIME_TYPE,
+                      pdfFileId: null,
+                      encrypted: false,
+                      sizeBytes: 100,
+                      sha256Hex: "a".repeat(64),
+                    },
+                  },
+                ],
+              },
+            }),
+          },
+          legalLists: { findFirst: async () => ({ id: body.listId }) },
+        },
+        select: (selection: Record<string, unknown>) => {
+          const query = {
+            innerJoin: () => query,
+            leftJoin: () => query,
+            where: () => query,
+            orderBy: () => query,
+            as: () => ({}),
+            limit: async () =>
+              "email" in selection
+                ? [{ email: "member@example.test", emailVerified: true }]
+                : [],
+          };
+          return { from: () => query };
+        },
+        insert: () => ({
+          values: () => ({
+            onConflictDoNothing: () => ({
+              returning: async () => {
+                insertAttempts += 1;
+                throw Object.assign(new TypeError("Postgres cap fixture"), {
+                  code: "23514",
+                  constraint: `legal_list_verification_${reason}_cap`,
+                });
+              },
+            }),
+          }),
+        }),
+      };
+      const capability =
+        await CAPABILITY_DISPATCH["lists.verifications.create"].load();
+      for (const endpoint of [create, capability.default]) {
+        const result = await endpoint.handler(
+          asTestRaw({ ...context(tx), body }),
+        );
+        expect(result).toMatchObject({
+          code: 429,
+          response: { retryable: true },
+        });
+        const mapped = mapHandlerResult({
+          id: "lists.verifications.create",
+          result,
+          access: "write",
+        });
+        expect(mapped).toMatchObject({
+          status: "error",
+          error: {
+            type: "structured",
+            code: "rate_limited",
+            retryable: true,
+            hint:
+              reason === "active"
+                ? "Wait for an active verification to finish, then retry lists.verifications.create."
+                : "Retry lists.verifications.create after midnight in Europe/Prague.",
+          },
+        });
+      }
+      expect(insertAttempts).toBe(2);
+    } finally {
+      env.API_FEATURE_ACCESS_GRANTS = previous.grants;
+      env.FEATURE_LEGAL_LISTS = previous.deployment;
+      env.USAGE_ENFORCEMENT_ENABLED = previous.enforcement;
+    }
+  },
+);

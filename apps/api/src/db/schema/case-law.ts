@@ -8,6 +8,11 @@ import {
 import type { CaseLawResearchColumnTool } from "@stll/api-contract";
 import { DECISION_JUDGE_ROLES } from "@stll/api-contract/case-law-judges";
 import {
+  APPLIED_VERSION_BASES,
+  STATED_DATE_RELATIONS,
+  VERSION_EVIDENCE_KINDS,
+} from "@stll/api-contract/provision-applied-version";
+import {
   DECISION_IDENTIFIER_MAX_LENGTH,
   DECISION_IDENTIFIER_TYPES,
   DECISION_PRIMARY_REFERENCE_TYPES,
@@ -78,6 +83,7 @@ import { documentFetchParked } from "@/api/lib/legal-search/sk-document-parking-
 import { pendingDeferredDocumentSql } from "@/api/lib/legal-search/sk-document-pending-sql";
 
 import {
+  caseLawAnalysisReaderDecisionPolicies,
   caseLawAnalysisReaderPolicies,
   caseLawAnalysisWriterPolicies,
   caseLawAnalysisWriterReadPolicies,
@@ -957,7 +963,7 @@ export const caseLawDecisions = p.pgTable(
     ...globalCaseLawPolicies(),
     ...publicCaseLawReaderPolicies(),
     ...caseLawAnalysisWriterPolicies(),
-    ...caseLawAnalysisReaderPolicies(),
+    ...caseLawAnalysisReaderDecisionPolicies(),
     ...corpusSampleReaderDecisionPolicies(),
   ],
 );
@@ -1941,7 +1947,25 @@ export const caseLawProvisionCitations = p.pgTable(
     sentence: p.text("sentence"),
     openEnded: p.boolean("open_ended").default(false).notNull(),
     anchor: p.text("anchor").notNull(),
+    /** The decision-date consolidation is an inferred candidate only. */
     versionValidFrom: p.date("version_valid_from"),
+    appliedVersionBasis: p.text("applied_version_basis", {
+      enum: APPLIED_VERSION_BASES,
+    }),
+    appliedVersionDate: p.date("applied_version_date"),
+    appliedVersionDateRelation: p.text("applied_version_date_relation", {
+      enum: STATED_DATE_RELATIONS,
+    }),
+    appliedVersionAmendmentWorkIdentifier: p.text(
+      "applied_version_amendment_work_identifier",
+    ),
+    appliedVersionExpressionDate: p.date("applied_version_expression_date"),
+    appliedVersionExpressionEli: p.text("applied_version_expression_eli"),
+    versionEvidenceStart: p.integer("version_evidence_start"),
+    versionEvidenceEnd: p.integer("version_evidence_end"),
+    versionEvidenceKind: p.text("version_evidence_kind", {
+      enum: VERSION_EVIDENCE_KINDS,
+    }),
     /**
      * The citing decision's date, copied at write time. The provision reads
      * walk newest-first by keyset, so the key lives on the row and in its
@@ -2048,6 +2072,38 @@ export const caseLawProvisionCitations = p.pgTable(
         PROVISION_WORK_SOURCE_SQL_VALUES,
         sql.raw(","),
       )})`,
+    ),
+    p.check(
+      "provision_citations_applied_version_shape",
+      sql`CASE
+        WHEN ${t.appliedVersionBasis} IS NULL OR ${t.appliedVersionBasis} = 'not_stated'
+          THEN num_nonnulls(${t.appliedVersionDate}, ${t.appliedVersionDateRelation}, ${t.appliedVersionAmendmentWorkIdentifier}, ${t.appliedVersionExpressionDate}, ${t.appliedVersionExpressionEli}, ${t.versionEvidenceStart}, ${t.versionEvidenceEnd}, ${t.versionEvidenceKind}) = 0
+        WHEN ${t.appliedVersionBasis} IN (${sql.join(
+          APPLIED_VERSION_BASES.filter((basis) => basis !== "not_stated").map(
+            (basis) => sql.raw(`'${basis}'`),
+          ),
+          sql.raw(","),
+        )}) THEN
+          num_nulls(${t.versionEvidenceStart}, ${t.versionEvidenceEnd}, ${t.versionEvidenceKind}) = 0
+          AND ${t.versionEvidenceStart} >= 0 AND ${t.versionEvidenceEnd} > ${t.versionEvidenceStart}
+          AND (${t.appliedVersionExpressionDate} IS NULL) = (${t.appliedVersionExpressionEli} IS NULL)
+          AND (${t.appliedVersionExpressionEli} IS NULL OR length(${t.appliedVersionExpressionEli}) > 0)
+          AND CASE WHEN ${t.appliedVersionBasis} = 'stated_date' THEN
+            ${t.appliedVersionDate} IS NOT NULL
+            AND ${t.appliedVersionDateRelation} IS NOT NULL
+            AND ${t.appliedVersionDateRelation} IN (${sql.join(
+              STATED_DATE_RELATIONS.map((relation) => sql.raw(`'${relation}'`)),
+              sql.raw(","),
+            )})
+            AND ${t.appliedVersionAmendmentWorkIdentifier} IS NULL
+            AND ${t.versionEvidenceKind} = 'stated_date'
+          ELSE
+            ${t.appliedVersionDate} IS NULL AND ${t.appliedVersionDateRelation} IS NULL
+            AND ${t.appliedVersionAmendmentWorkIdentifier} IS NOT NULL
+            AND length(${t.appliedVersionAmendmentWorkIdentifier}) > 0
+            AND ${t.versionEvidenceKind} = 'stated_version'
+          END
+        ELSE false END`,
     ),
     p.check(
       "provision_citations_span_order",

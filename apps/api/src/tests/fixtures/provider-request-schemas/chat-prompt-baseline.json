@@ -26,8 +26,8 @@
         "tokens": 34134
       },
       {
-        "reason": "legal-list feature access narrows discovery schema",
-        "tokens": 33884
+        "reason": "time-billing tools are enrolment-gated and leave the shared prefix",
+        "tokens": 32647
       }
     ],
     "anthropic/extended": [
@@ -56,8 +56,8 @@
         "tokens": 34624
       },
       {
-        "reason": "legal-list feature access narrows discovery schema",
-        "tokens": 34373
+        "reason": "time-billing tools are enrolment-gated and leave the shared prefix",
+        "tokens": 33138
       }
     ],
     "bedrock/default": [
@@ -86,8 +86,8 @@
         "tokens": 34367
       },
       {
-        "reason": "legal-list feature access narrows discovery schema",
-        "tokens": 34117
+        "reason": "time-billing tools are enrolment-gated and leave the shared prefix",
+        "tokens": 32869
       }
     ],
     "bedrock/extended": [
@@ -116,8 +116,8 @@
         "tokens": 34855
       },
       {
-        "reason": "legal-list feature access narrows discovery schema",
-        "tokens": 34605
+        "reason": "time-billing tools are enrolment-gated and leave the shared prefix",
+        "tokens": 33359
       }
     ],
     "google/default": [
@@ -146,8 +146,8 @@
         "tokens": 33264
       },
       {
-        "reason": "legal-list feature access narrows discovery schema",
-        "tokens": 33038
+        "reason": "time-billing tools are enrolment-gated and leave the shared prefix",
+        "tokens": 31964
       }
     ],
     "google/extended": [
@@ -170,6 +170,10 @@
       {
         "reason": "Organization time-zone setting",
         "tokens": 33575
+      },
+      {
+        "reason": "time-billing tools are enrolment-gated and leave the shared prefix",
+        "tokens": 32443
       }
     ],
     "mistral/default": [
@@ -198,8 +202,8 @@
         "tokens": 35754
       },
       {
-        "reason": "legal-list feature access narrows discovery schema",
-        "tokens": 35477
+        "reason": "time-billing tools are enrolment-gated and leave the shared prefix",
+        "tokens": 34121
       }
     ],
     "mistral/extended": [
@@ -228,8 +232,8 @@
         "tokens": 36280
       },
       {
-        "reason": "legal-list feature access narrows discovery schema",
-        "tokens": 36002
+        "reason": "time-billing tools are enrolment-gated and leave the shared prefix",
+        "tokens": 34648
       }
     ],
     "openai/default": [
@@ -258,8 +262,8 @@
         "tokens": 35357
       },
       {
-        "reason": "legal-list feature access narrows discovery schema",
-        "tokens": 35079
+        "reason": "time-billing tools are enrolment-gated and leave the shared prefix",
+        "tokens": 33734
       }
     ],
     "openai/extended": [
@@ -288,8 +292,8 @@
         "tokens": 35871
       },
       {
-        "reason": "legal-list feature access narrows discovery schema",
-        "tokens": 35594
+        "reason": "time-billing tools are enrolment-gated and leave the shared prefix",
+        "tokens": 34250
       }
     ],
     "openrouter-anthropic/default": [
@@ -318,8 +322,8 @@
         "tokens": 35220
       },
       {
-        "reason": "legal-list feature access narrows discovery schema",
-        "tokens": 34962
+        "reason": "time-billing tools are enrolment-gated and leave the shared prefix",
+        "tokens": 33682
       }
     ],
     "openrouter-anthropic/extended": [
@@ -348,8 +352,8 @@
         "tokens": 35719
       },
       {
-        "reason": "legal-list feature access narrows discovery schema",
-        "tokens": 35461
+        "reason": "time-billing tools are enrolment-gated and leave the shared prefix",
+        "tokens": 34182
       }
     ],
     "openrouter/default": [
@@ -378,8 +382,8 @@
         "tokens": 35220
       },
       {
-        "reason": "legal-list feature access narrows discovery schema",
-        "tokens": 34962
+        "reason": "time-billing tools are enrolment-gated and leave the shared prefix",
+        "tokens": 33682
       }
     ],
     "openrouter/extended": [
@@ -408,8 +412,8 @@
         "tokens": 35719
       },
       {
-        "reason": "legal-list feature access narrows discovery schema",
-        "tokens": 35461
+        "reason": "time-billing tools are enrolment-gated and leave the shared prefix",
+        "tokens": 34182
       }
     ]
   },

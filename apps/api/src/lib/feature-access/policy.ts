@@ -34,6 +34,12 @@ type DecideFeatureAccessOptions = {
   userId: string | null;
   user: { email: string; emailVerified: boolean } | null;
   membership: boolean;
+  enrolments?: readonly {
+    featureId: string;
+    organizationId: string;
+    userId: string;
+  }[];
+  deploymentEnabled?: boolean;
 };
 
 const decideSingleFeatureAccess = ({
@@ -44,6 +50,8 @@ const decideSingleFeatureAccess = ({
   userId,
   user,
   membership,
+  enrolments = [],
+  deploymentEnabled = true,
 }: DecideFeatureAccessOptions): FeatureAccessDecision => {
   const definition = Object.hasOwn(registry, featureId)
     ? registry[featureId]
@@ -51,12 +59,37 @@ const decideSingleFeatureAccess = ({
   if (definition === undefined) {
     return panic("Feature access requires a registered feature");
   }
-  if (!membership || userId === null || user === null || !user.emailVerified) {
+  if (
+    !deploymentEnabled ||
+    !membership ||
+    userId === null ||
+    user === null ||
+    !user.emailVerified
+  ) {
     return { status: "hidden" };
   }
   switch (definition.enrolment) {
-    case "self-serve":
-      return { status: "hidden" };
+    case "self-serve": {
+      if (
+        !enrolments.some(
+          (row) =>
+            row.featureId === featureId &&
+            row.organizationId === organizationId &&
+            row.userId === userId,
+        )
+      ) {
+        return { status: "hidden" };
+      }
+      return {
+        status: "enabled",
+        proof: {
+          [featureAccessProof]: true,
+          featureId,
+          organizationId,
+          userId,
+        },
+      };
+    }
     case "invitation": {
       const email = user.email.trim().toLowerCase();
       const enabled = grants[featureId]?.some((grant) => {

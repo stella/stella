@@ -3,6 +3,7 @@
 // endpoint. `Bun.spawn` (async) is used, not `spawnSync`, so the in-process
 // `Bun.serve` can answer requests concurrently. No real network origin is hit.
 
+import { panic } from "better-result";
 import { afterEach, describe, expect, setDefaultTimeout, test } from "bun:test";
 import { createHash } from "node:crypto";
 import { mkdtemp, mkdir, writeFile, rm } from "node:fs/promises";
@@ -10,10 +11,51 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 
 import { respondToMcpLifecycle } from "../tests/mcp-test-lifecycle.js";
-import registrySnapshot from "./generated/registry-snapshot.json";
+import { loadBakedCapabilityCatalog } from "./capability-catalog-load.js";
+import { generatedToolAnnotations } from "./generated/tool-annotations.js";
 import { EXIT_CODES } from "./mcp-constants.js";
+import { validateFetchedToolsList } from "./registry-trust.js";
 
 const CLI_ENTRYPOINT = path.join(import.meta.dirname, "cli.ts");
+const FETCH_PRELOAD = path.join(
+  import.meta.dirname,
+  "../tests/cli-command-fetch.ts",
+);
+const registry = validateFetchedToolsList(
+  await Bun.file(
+    new URL("generated/registry-snapshot.json", import.meta.url),
+  ).text(),
+);
+if (!registry.ok) {
+  panic(`Invalid committed command-test registry: ${registry.violation}`);
+}
+const catalog = loadBakedCapabilityCatalog();
+if (catalog === null) {
+  panic("Invalid committed command-test capability catalog");
+}
+// Command-behaviour tests exercise an admitted principal. Build its discovery
+// response from the shipped contract so new feature-owned commands cannot drift.
+const registryResult = {
+  tools: registry.listings.map((listing) => {
+    const featureId = generatedToolAnnotations[listing.name]?.featureId;
+    return {
+      ...listing,
+      ...(featureId === undefined ? {} : { _meta: { featureId } }),
+    };
+  }),
+  _meta: {
+    featureAccess: {
+      tools: registry.listings.flatMap((listing) =>
+        generatedToolAnnotations[listing.name]?.featureId === undefined
+          ? []
+          : [listing.name],
+      ),
+      capabilities: catalog.flatMap((entry) =>
+        entry.featureId === undefined ? [] : [entry.id],
+      ),
+    },
+  },
+};
 
 // These tests start a fresh Bun process for each real CLI invocation. Startup
 // can exceed Bun's 5-second default while the repository suite is contended.
@@ -67,11 +109,7 @@ const startMockServer = (handler: MockHandler, putHandler?: PutHandler) => {
         return lifecycle;
       }
       if (body.method === "tools/list") {
-        return Response.json({
-          jsonrpc: "2.0",
-          id: 1,
-          result: { tools: registrySnapshot },
-        });
+        return Response.json({ jsonrpc: "2.0", id: 1, result: registryResult });
       }
       const index = requests.length;
       requests.push(body);
@@ -179,10 +217,12 @@ const runCli = async ({
   }
 
   const proc = Bun.spawn({
-    cmd: ["bun", CLI_ENTRYPOINT, ...args],
+    cmd: ["bun", "--preload", FETCH_PRELOAD, CLI_ENTRYPOINT, ...args],
     env: {
       ...process.env,
       XDG_CONFIG_HOME: configHome,
+      XDG_CACHE_HOME: path.join(configHome, "cache"),
+      STELLA_API_KEY: undefined,
       STELLA_SERVER_URL: serverUrlEnv ?? url,
     },
     stdin: stdin === undefined ? "ignore" : "pipe",

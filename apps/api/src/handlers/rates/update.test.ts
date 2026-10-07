@@ -9,6 +9,7 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { cents } from "@/api/lib/money";
 import { createTestHandlerContext } from "@/api/tests/helpers/handler-context";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
+import { withTimeBillingEnrolment } from "@/api/tests/helpers/time-billing-enrolment";
 import {
   createTestIds,
   setupRlsTestData,
@@ -83,13 +84,15 @@ type UpdateRateTableCtx = Parameters<typeof updateRateTableHandler.handler>[0];
 
 test("changing a rate table from USD to JPY restates every rate under it", async () => {
   const result = await updateRateTableHandler.handler(
-    createTestHandlerContext<UpdateRateTableCtx>({
-      workspaceId: ids.wsA1,
-      session: { activeOrganizationId: ids.orgA },
-      user: { id: ids.userA1 },
-      safeDb: scopedSafeDb(),
-      body: { id: rateTableId, currency: "JPY" },
-    }),
+    withTimeBillingEnrolment(
+      createTestHandlerContext<UpdateRateTableCtx>({
+        workspaceId: ids.wsA1,
+        session: { activeOrganizationId: ids.orgA },
+        user: { id: ids.userA1 },
+        safeDb: scopedSafeDb(),
+        body: { id: rateTableId, currency: "JPY" },
+      }),
+    ),
   );
   expect(result).toEqual({ id: rateTableId });
 
@@ -136,13 +139,15 @@ test("the scale reads each row's current value, not one read earlier", async () 
     .where(eq(rateEntries.id, defaultEntryId));
 
   const result = await updateRateTableHandler.handler(
-    createTestHandlerContext<UpdateRateTableCtx>({
-      workspaceId: ids.wsA1,
-      session: { activeOrganizationId: ids.orgA },
-      user: { id: ids.userA1 },
-      safeDb: scopedSafeDb(),
-      body: { id: rateTableId, currency: "KWD" },
-    }),
+    withTimeBillingEnrolment(
+      createTestHandlerContext<UpdateRateTableCtx>({
+        workspaceId: ids.wsA1,
+        session: { activeOrganizationId: ids.orgA },
+        user: { id: ids.userA1 },
+        safeDb: scopedSafeDb(),
+        body: { id: rateTableId, currency: "KWD" },
+      }),
+    ),
   );
   expect(result).toEqual({ id: rateTableId });
 
@@ -171,13 +176,15 @@ test("refuses a currency change whose scaled rate leaves the safe range", async 
     .where(eq(rateTables.id, rateTableId));
 
   const result = await updateRateTableHandler.handler(
-    createTestHandlerContext<UpdateRateTableCtx>({
-      workspaceId: ids.wsA1,
-      session: { activeOrganizationId: ids.orgA },
-      user: { id: ids.userA1 },
-      safeDb: scopedSafeDb(),
-      body: { id: rateTableId, currency: "KWD" },
-    }),
+    withTimeBillingEnrolment(
+      createTestHandlerContext<UpdateRateTableCtx>({
+        workspaceId: ids.wsA1,
+        session: { activeOrganizationId: ids.orgA },
+        user: { id: ids.userA1 },
+        safeDb: scopedSafeDb(),
+        body: { id: rateTableId, currency: "KWD" },
+      }),
+    ),
   );
   expect(result).toMatchObject({ code: 400 });
 
@@ -230,13 +237,15 @@ test("the default flag can be cleared only while another table in the matter sta
   ]);
   const unset = async (id: SafeId<"rateTable">) =>
     await updateRateTableHandler.handler(
-      createTestHandlerContext<UpdateRateTableCtx>({
-        workspaceId: ids.wsA1,
-        session: { activeOrganizationId: ids.orgA },
-        user: { id: ids.userA1 },
-        safeDb: scopedSafeDb(),
-        body: { id, isDefault: false },
-      }),
+      withTimeBillingEnrolment(
+        createTestHandlerContext<UpdateRateTableCtx>({
+          workspaceId: ids.wsA1,
+          session: { activeOrganizationId: ids.orgA },
+          user: { id: ids.userA1 },
+          safeDb: scopedSafeDb(),
+          body: { id, isDefault: false },
+        }),
+      ),
     );
   const defaults = async () => {
     const rows = await testDb

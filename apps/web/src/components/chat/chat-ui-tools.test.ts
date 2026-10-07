@@ -523,11 +523,6 @@ describe("tool approval grants", () => {
     expect(isApprovalOnceChatToolName("save_clause")).toBe(false);
   });
 
-  test("never auto-approves delegation, by either grant predicate", () => {
-    expect(isApprovalOnceChatToolName("spawn_subagents")).toBe(true);
-    expect(isNonPersistentGrantChatToolName("spawn_subagents")).toBe(true);
-  });
-
   test("rejects persistent grants for destructive deletes and the approve-once writes, without the stronger never-auto bar", () => {
     for (const name of [
       "delete_clause",

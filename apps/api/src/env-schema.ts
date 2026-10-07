@@ -23,6 +23,7 @@ import {
   DEFAULT_POLAR_API_VERSION,
   polarApiVersionSchema,
 } from "@/api/lib/hosted-usage-provider/polar/contract";
+import { verificationRunCapEnvSchema } from "@/api/lib/lists/verification/run-cap-config";
 import { MCP_READ_MAX_ENTRIES } from "@/api/lib/rate-limit/mcp-read-fence-policy";
 import { AUTH_PROVIDER_ID_PATTERN } from "@/api/lib/safe-id-boundaries";
 import {
@@ -69,6 +70,15 @@ export const resolveEmailProvider = ({
  * envBase from env-base.ts instead.
  */
 export const envApiServerSchema = {
+  ...verificationRunCapEnvSchema,
+  VISUAL_PREVIEW_FUNCTION_NAME: v.optional(
+    v.pipe(
+      v.string(),
+      v.regex(
+        /^(?:[A-Za-z0-9_-]{1,64}(?::[A-Za-z0-9_-]+)?|arn:aws(?:-us-gov|-cn)?:lambda:[a-z0-9-]+:\d{12}:function:[A-Za-z0-9_-]+(?::[A-Za-z0-9_-]+)?)$/u,
+      ),
+    ),
+  ),
   PORT: v.optional(v.pipe(v.string(), v.digits())),
   STELLA_API_PORT: v.optional(v.pipe(v.string(), v.digits())),
   AI_PROVIDER: v.optional(
@@ -326,6 +336,18 @@ export const envApiServerSchema = {
   ),
   DEMO_ACCOUNT_OTP: v.optional(v.pipe(v.string(), v.digits(), v.length(6))),
   DEMO_ACCOUNT_ORGANIZATION_ID: v.optional(
+    v.pipe(v.string(), v.regex(AUTH_PROVIDER_ID_PATTERN)),
+  ),
+
+  /**
+   * One restricted review account that signs in with a password and stays
+   * inside its own organization. Set both or neither. Every other address is
+   * refused password sign-in with the ordinary invalid-credentials answer.
+   */
+  APP_REVIEW_ACCOUNT_EMAIL: v.optional(
+    v.pipe(v.string(), v.trim(), v.toLowerCase(), v.email()),
+  ),
+  APP_REVIEW_ORGANIZATION_ID: v.optional(
     v.pipe(v.string(), v.regex(AUTH_PROVIDER_ID_PATTERN)),
   ),
 
@@ -634,6 +656,7 @@ export const envApiServerSchema = {
     ),
   ),
   FEATURE_TIME_BILLING: featureFlagSchema,
+  FEATURE_GENERATED_VIEWS: featureFlagSchema,
   /** Dark-launch tenant-scoped AI memory until product and performance review. */
   FEATURE_AI_MEMORY: featureFlagSchema,
   /** Dark-launch first-class legal lists until the end-to-end workflow is complete. */
@@ -867,6 +890,8 @@ export const envApiServerSchema = {
 };
 
 type EnvApiInvariantInput = InboundMailReceivingInput & {
+  APP_REVIEW_ACCOUNT_EMAIL?: string | undefined;
+  APP_REVIEW_ORGANIZATION_ID?: string | undefined;
   AI_PROVIDER?: v.InferOutput<typeof envApiServerSchema.AI_PROVIDER>;
   FEATURE_MANAGED_PROVIDER_CHECKS?: boolean | undefined;
   MANAGED_PROVIDER_CHECK_INTERVAL_MS?: number | undefined;
@@ -951,10 +976,30 @@ const managedProviderCheckInvariantViolation = ({
   return null;
 };
 
+type ReviewAccountInvariantInput = Pick<
+  EnvApiInvariantInput,
+  "APP_REVIEW_ACCOUNT_EMAIL" | "APP_REVIEW_ORGANIZATION_ID"
+>;
+
+const reviewAccountInvariantViolation = ({
+  APP_REVIEW_ACCOUNT_EMAIL,
+  APP_REVIEW_ORGANIZATION_ID,
+}: ReviewAccountInvariantInput): string | null =>
+  (APP_REVIEW_ACCOUNT_EMAIL === undefined) ===
+  (APP_REVIEW_ORGANIZATION_ID === undefined)
+    ? null
+    : "APP_REVIEW_ACCOUNT_EMAIL and APP_REVIEW_ORGANIZATION_ID must be set together.";
+
 // Feature-owned invariants, kept out of the top-level check's branch budget.
 const delegatedInvariantViolation = (
-  input: ManagedProviderCheckInvariantInput & InboundMailReceivingInput,
+  input: ManagedProviderCheckInvariantInput &
+    InboundMailReceivingInput &
+    ReviewAccountInvariantInput,
 ): string | null => {
+  const reviewAccountViolation = reviewAccountInvariantViolation(input);
+  if (reviewAccountViolation !== null) {
+    return reviewAccountViolation;
+  }
   const managedViolation = managedProviderCheckInvariantViolation(input);
   if (managedViolation !== null) {
     return managedViolation;
@@ -964,6 +1009,8 @@ const delegatedInvariantViolation = (
 };
 
 export const envApiInvariantViolation = ({
+  APP_REVIEW_ACCOUNT_EMAIL,
+  APP_REVIEW_ORGANIZATION_ID,
   AI_PROVIDER,
   FEATURE_MANAGED_PROVIDER_CHECKS,
   MANAGED_PROVIDER_CHECK_INTERVAL_MS,
@@ -1016,6 +1063,8 @@ export const envApiInvariantViolation = ({
     return "FEATURE_CONFIGURED_ACCESS requires FEATURE_ORG_ACCESS_STATE, FEATURE_ORG_SERVICE_BUDGETS, FEATURE_USAGE and PAYMENT_RETRY_WINDOW_MS.";
   }
   const delegatedViolation = delegatedInvariantViolation({
+    APP_REVIEW_ACCOUNT_EMAIL,
+    APP_REVIEW_ORGANIZATION_ID,
     AI_PROVIDER,
     FEATURE_MANAGED_PROVIDER_CHECKS,
     MANAGED_PROVIDER_CHECK_INTERVAL_MS,

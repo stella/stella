@@ -59,6 +59,7 @@ import { CASE_LAW_COVERAGE_FIXTURE } from "@/api/tests/helpers/case-law-coverage
 import { installRecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
 import type { RecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
+import { enrolledTimeBillingSnapshot } from "@/api/tests/helpers/time-billing-enrolment";
 import { toSafeDbMock } from "@/api/tests/scoped-db-mock";
 
 import type { RegistryReadToolName } from "./ref-field-map";
@@ -218,6 +219,12 @@ const buildContext = (tx: unknown): McpRequestContext => {
     userId: toSafeId<"user">("user_1"),
     userEmail: "standard@example.test",
     testDependencies: {
+      // Billing reads are enrolment-gated; this caller is enrolled so every
+      // projectable read runs.
+      featureAccessSnapshot: enrolledTimeBillingSnapshot({
+        organizationId: ORGANIZATION_ID,
+        userId: "user_1",
+      }),
       readWorkspaceHandler: readWorkspaceHandlerMock,
       readOverviewHandler: readOverviewHandlerMock,
       readWorkspaceContactsHandler: readWorkspaceContactsHandlerMock,
@@ -1509,6 +1516,7 @@ const CONTRACT_CORPUS = {
         searchDecisionsHandlerMock.mockResolvedValue({
           paginationOutcome: SEARCH_PAGINATION_COMPLETE,
           facets: {
+            courtYear: null,
             court: [
               {
                 tierLabel: "supreme",
@@ -1588,6 +1596,7 @@ const CONTRACT_CORPUS = {
             caseNumberType: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
             country: "CZ",
             court: "Nejvyšší soud",
+            courtAbbreviation: "NS",
             decisionDate: "2020-05-01",
             ecli: "ECLI:CZ:NS:2020:22.CDO.1000.2020.1",
             id: toSafeId<"caseLawDecision">(uid(53)),
@@ -2399,4 +2408,106 @@ describe("third-party outbound permit", () => {
       });
     }
   }
+});
+
+describe("decision text in chat projection", () => {
+  test("decision read preserves its text through the chat projection", async () => {
+    const text = "Žaloba se zamítá. Náklady řízení nese žalobce.";
+    readGatedDecisionWithDocumentMock.mockResolvedValue({
+      hasDocument: true,
+      documentPending: false,
+      documentReadFailed: false,
+      documentUnavailable: false,
+      id: toSafeId<"caseLawDecision">(uid(54)),
+      resolution: { type: DECISION_READ_RESOLUTION.DIRECT },
+      caseNumber: "22 Cdo 1000/2020",
+      caseNumberType: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
+      citationsFrom: [],
+      citationsTo: [],
+      citationsNextCursor: null,
+      country: "CZ",
+      court: "Nejvyšší soud",
+      courtAbbreviation: "NS",
+      courtTier: "supreme",
+      decisionDate: "2020-05-01",
+      decisionType: "judgment",
+      documentAst: null,
+      documentAstSource: null,
+      projectionDigest: null,
+      documentUrl: "https://example.test/decision/document",
+      ecli: "ECLI:CZ:NS:2020:22.CDO.1000.2020.1",
+      identifiers: [
+        {
+          type: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
+          value: "22 Cdo 1000/2020",
+        },
+        {
+          type: DECISION_IDENTIFIER_TYPES.ECLI,
+          value: "ECLI:CZ:NS:2020:22.CDO.1000.2020.1",
+        },
+      ],
+      fulltext: text,
+      judges: [],
+      headnote: { type: "absent", reason: "not_published" },
+      sections: null,
+      language: "cs",
+      languageGroupKey: null,
+      languageAlternates: [],
+      metadata: {},
+      textFields: {
+        abstract: { type: "absent", reason: "not_published" },
+        headnote: { type: "absent", reason: "not_published" },
+        legalSentence: { type: "absent", reason: "not_published" },
+        summary: { type: "absent", reason: "not_published" },
+      },
+      slug: "ns-22-cdo-1000-2020",
+      source: {
+        id: toSafeId<"caseLawSource">(uid(59)),
+        name: "NS ČR",
+        adapterKey: "cz-ns",
+        allowsDerivedAi: true,
+      },
+      sourceUrl: "https://example.test/decision/source",
+      sourceAttributionUrl: "https://example.test/decision/attribution",
+      createdAt: new Date("2020-05-01T00:00:00.000Z"),
+      updatedAt: new Date("2020-05-01T00:00:00.000Z"),
+    } satisfies Awaited<ReturnType<typeof readGatedDecisionWithDocument>>);
+    const noCitations = {
+      negative: 0,
+      neutral: 0,
+      positive: 0,
+      supportive: 0,
+      mixed: 0,
+      unclassified: 0,
+    };
+    readGatedDecisionCitationDigestMock.mockResolvedValue({
+      summary: {
+        incoming: noCitations,
+        outgoing: noCitations,
+        capped: { incoming: false, outgoing: false },
+        incomingByYear: [],
+      },
+      topCiting: [],
+      cites: [],
+      citesMore: false,
+    } satisfies Awaited<ReturnType<typeof readGatedDecisionCitationDigest>>);
+    const toolName = "read_case_law_decision";
+    const refRegistry = createChatRefRegistry();
+    const { result, fetched } = await recordOutboundFetches(async () =>
+      runRegistryReadTool({
+        args: { decision_ids: [uid(54)] },
+        context: contextFor(toolName, {}),
+        refRegistry,
+        toolName,
+      }),
+    );
+    expect(fetched).toEqual([]);
+    if (Result.isError(result)) {
+      panic("Decision read projection failed", result.error);
+    }
+    expect(readPathValues(result.value, "items[].decision.text")).toEqual([
+      text,
+    ]);
+    expect(recordedExceptions()).toEqual([]);
+  });
 });

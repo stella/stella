@@ -9,6 +9,7 @@ import { listApiTestPaths } from "./api-test-plan";
 import durations from "./test-durations.json";
 import {
   assertTestDurations,
+  MISSING_TEST_DURATION,
   readDurationWeights,
   readTimingArtifact,
   TEST_DURATION_SOURCE,
@@ -80,6 +81,15 @@ export const estimateMissingTestDurations = ({
   );
 };
 
+/**
+ * Without timings, --check is the pull-request gate; with a shard's timings it
+ * runs after merge, where drift and gaps are advisory.
+ */
+export const missingTestDurationMode = (timingInputs: readonly string[]) =>
+  timingInputs.length === 0
+    ? MISSING_TEST_DURATION.fail
+    : MISSING_TEST_DURATION.warn;
+
 if (import.meta.main) {
   const [mode, ...inputs] = process.argv.slice(2);
   if (mode !== "--write" && mode !== "--check") {
@@ -108,6 +118,7 @@ if (import.meta.main) {
     assertTestDurations({
       files,
       durations: readDurationWeights(durations),
+      missing: missingTestDurationMode(inputs),
       measurements: Object.fromEntries(
         Object.entries(measurements).map(([file, entry]) => [
           file,

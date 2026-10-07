@@ -26,6 +26,7 @@ const readTimeEntryById = createSafeHandler(
       "user's entry is reported as not found.",
     permissions: { timeEntry: ["read"] },
     accountAccess: ACCOUNT_ACCESS.sandbox,
+    featureAccess: { featureId: "time-billing", type: "required" },
     mcp: { type: "covered", by: "list_time_entries" },
     access: "read",
     params: readTimeEntryByIdParamsSchema,

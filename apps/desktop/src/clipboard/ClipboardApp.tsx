@@ -72,7 +72,7 @@ import {
   XIcon,
 } from "@stll/ui/icons";
 import type { LucideIcon } from "@stll/ui/icons";
-import { Input } from "@stll/ui/input";
+import { InlineRenameInput } from "@stll/ui/inline-rename";
 import {
   InputGroup,
   InputGroupAddon,
@@ -98,6 +98,7 @@ import { typedCharacter } from "@stll/ui/typed-character";
 import { cn } from "@stll/ui/utils";
 
 import { RegistrySearch } from "../registry/RegistrySearch";
+import type { DesktopConnectionStatus } from "../registry/RegistrySearch";
 import { subscribeDesktopEvent } from "../shared/desktop-events";
 import {
   DESKTOP_TELEMETRY_ERROR_CODES,
@@ -447,7 +448,6 @@ const ClipboardCard = ({
 }: ClipboardCardProps) => {
   const t = useTranslations("clipboard");
   const format = useFormatter();
-  const cancelNameEditRef = useRef(false);
   const [editingName, setEditingName] = useState(false);
   const [imagePreviewStatus, setImagePreviewStatus] =
     useState<ClipboardImagePreviewStatus>("loading");
@@ -596,7 +596,6 @@ const ClipboardCard = ({
   }
 
   const beginNameEdit = () => {
-    cancelNameEditRef.current = false;
     setNameDraft(item.name ?? "");
     setEditingName(true);
     onSelect(index);
@@ -604,11 +603,6 @@ const ClipboardCard = ({
 
   const finishNameEdit = () => {
     setEditingName(false);
-    if (cancelNameEditRef.current) {
-      cancelNameEditRef.current = false;
-      setNameDraft(item.name ?? "");
-      return;
-    }
     const nextName = nameDraft.trim();
     if (nextName !== (item.name ?? "")) {
       onRename(item.id, nextName);
@@ -674,26 +668,19 @@ const ClipboardCard = ({
           </span>
         )}
         {editingName ? (
-          <Input
+          <InlineRenameInput
             aria-label={t("editItem")}
-            autoFocus
             className="h-8 min-w-0 flex-1 rounded-lg px-2 text-sm font-semibold"
             data-clipboard-name-input=""
+            fill
             maxLength={MAX_ITEM_NAME_CHARACTERS}
-            onBlur={finishNameEdit}
-            onChange={(event) => setNameDraft(event.target.value)}
-            onFocus={() => onSelect(index)}
-            onKeyDown={(event) => {
-              event.stopPropagation();
-              if (event.key === "Enter") {
-                event.preventDefault();
-                event.currentTarget.blur();
-              } else if (event.key === "Escape") {
-                event.preventDefault();
-                cancelNameEditRef.current = true;
-                event.currentTarget.blur();
-              }
+            onCancel={() => {
+              setEditingName(false);
+              setNameDraft(item.name ?? "");
             }}
+            onCommit={finishNameEdit}
+            onFocus={() => onSelect(index)}
+            onValueChange={setNameDraft}
             value={nameDraft}
           />
         ) : (
@@ -1232,6 +1219,10 @@ const ClipboardContextMenu = ({
 
 type ClipboardWelcomeDialogProps = {
   onClose: () => void;
+  connectionStatus: DesktopConnectionStatus;
+  connectionError: string | null;
+  connectControl: ReactNode;
+  onRetryConnection: () => void;
 };
 
 const AUTOSTART_ERROR = {
@@ -1255,7 +1246,13 @@ type AutostartChoiceState =
       status: "saving";
     };
 
-const ClipboardWelcomeDialog = ({ onClose }: ClipboardWelcomeDialogProps) => {
+const ClipboardWelcomeDialog = ({
+  onClose,
+  connectionStatus,
+  connectionError,
+  connectControl,
+  onRetryConnection,
+}: ClipboardWelcomeDialogProps) => {
   const t = useTranslations("clipboard");
   const settingsT = useTranslations("settings");
   const [autostartChoice, setAutostartChoice] = useState<AutostartChoiceState>({
@@ -1426,6 +1423,16 @@ const ClipboardWelcomeDialog = ({ onClose }: ClipboardWelcomeDialogProps) => {
           </span>
         </DialogHeader>
         <DialogPanel className="px-5 pt-2 pb-1" scrollFade={false}>
+          {connectionStatus === "disconnected" ? (
+            <p className="text-muted-foreground mb-3 text-sm leading-relaxed">
+              {settingsT("connectToStellaDescription")}
+            </p>
+          ) : null}
+          {connectionError ? (
+            <p className="text-destructive mb-3 text-sm" role="alert">
+              {connectionError}
+            </p>
+          ) : null}
           <div className="bg-muted/48 divide-border/70 divide-y rounded-2xl px-4 shadow-sm">
             {features.map(({ description, icon: Icon, title }) => (
               <div
@@ -1483,11 +1490,24 @@ const ClipboardWelcomeDialog = ({ onClose }: ClipboardWelcomeDialogProps) => {
           </Label>
         </DialogPanel>
         <DialogFooter className="px-5 pb-5" variant="bare">
+          {connectionStatus === "disconnected" ? connectControl : null}
+          {connectionStatus === "unavailable" ? (
+            <Button
+              className="min-h-11 rounded-xl"
+              onClick={onRetryConnection}
+              type="button"
+            >
+              {settingsT("tryAgain")}
+            </Button>
+          ) : null}
           <Button
             className="min-h-11 rounded-xl"
             disabled={autostartChoice.status !== "ready"}
             onClick={completeWelcome}
             type="button"
+            variant={
+              connectionStatus === "disconnected" ? "outline" : "default"
+            }
           >
             {t("welcomeStart")}
           </Button>
@@ -2432,7 +2452,6 @@ const ClipboardApp = () => {
           );
         }}
       />
-      {welcomeOpen ? <ClipboardWelcomeDialog onClose={closeWelcome} /> : null}
       {contextMenu.type === "closed" ? null : (
         <ClipboardContextMenu
           groupLimit={snapshot.groupLimit}
@@ -2476,8 +2495,25 @@ const ClipboardApp = () => {
         }}
         searchInput={searchInputRef}
       >
-        {({ controls, results, feedback: registryFeedback }) => (
+        {({
+          controls,
+          results,
+          feedback: registryFeedback,
+          connectionStatus,
+          connectionError,
+          connectControl,
+          retryConnection,
+        }) => (
           <>
+            {welcomeOpen ? (
+              <ClipboardWelcomeDialog
+                onClose={closeWelcome}
+                connectionStatus={connectionStatus}
+                connectionError={connectionError}
+                connectControl={connectControl}
+                onRetryConnection={retryConnection}
+              />
+            ) : null}
             {searchSource === "clips" ? (
               <main className="relative min-h-0 flex-1">
                 {filteredItems.length === 0 ? (

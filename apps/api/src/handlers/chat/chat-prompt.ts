@@ -39,6 +39,7 @@ import type {
   LegislationWindowDisposition,
 } from "@stll/api-contract/legislation-expression";
 import { PUBLIC_LEGISLATION_COUNTRIES } from "@stll/api-contract/legislation-publication";
+import { SUBAGENT_TITLE_MAX_CHARS } from "@stll/api-contract/spawn-subagents";
 import { describeSuggestChangesCapabilities } from "@stll/folio-agents";
 import { isFolioAIContentBlock } from "@stll/folio-core/server";
 import type { SkillMetadata } from "@stll/skills";
@@ -293,8 +294,7 @@ const CORPUS_ONLY_CASE_LAW_SECTION = buildCorpusOnlyCaseLawSection({
  * Exported for the playbook-authoring eval, whose chat surface offers
  * `spawn_subagents` under the same instruction a chat turn carries.
  */
-export const SUBAGENT_DELEGATION_SECTION =
-  "DELEGATION: When a task splits into independent pieces (no piece depends on another's result), call `spawn_subagents` to run them in parallel instead of doing them one by one yourself. Subagents are cheaper and read/write workspace data under the single approval already granted to `spawn_subagents` — do not ask the user to approve each subagent separately. Prefer this whenever breadth or parallelism would speed up the task.";
+export const SUBAGENT_DELEGATION_SECTION = `DELEGATION: When a task splits into independent pieces (no piece depends on another's result), call \`spawn_subagents\` to run them in parallel instead of doing them one by one yourself. Subagents are cheaper and start without asking the user; their writes come back to you as proposals that the user approves one by one. Titles: user's language, 1–${SUBAGENT_TITLE_MAX_CHARS} characters, subject only; no IDs or instructions. Details go in task. Prefer this whenever breadth or parallelism would speed up the task.`;
 
 const ASK_USER_BOUNDARY =
   "ASK-USER BOUNDARY: Use `ask-user` only for missing task facts (preferences, jurisdiction, parties, scope). Never use it to request tool-call permission or consent — stella handles approvals outside the model. When you decide to call `ask-user`, do not emit any other tool calls (e.g. `execute_typescript`) in the same turn — wait for the user's answer first; otherwise the user sees retrieved data before they have answered the clarifying question and that data may be off-topic.";

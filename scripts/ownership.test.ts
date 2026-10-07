@@ -62,6 +62,26 @@ describe("renderOwnershipDocument", () => {
     ).toContain("call `.getState()` in `apps/api/src/`");
   });
 
+  test("renders a function-call row with its scope", () => {
+    expect(
+      renderOwnershipDocument([
+        entry({
+          enforcement: {
+            kind: "function-call",
+            name: "extractId",
+            within: [
+              "apps/api/src/lib/legal-search/",
+              "apps/api/src/handlers/",
+            ],
+            allowed: [],
+          },
+        }),
+      ]),
+    ).toContain(
+      "call `extractId()` in `apps/api/src/lib/legal-search/`, `apps/api/src/handlers/`",
+    );
+  });
+
   test("renders one row per entry, keyed by id", () => {
     const rendered = renderOwnershipDocument(OWNERSHIP);
     for (const { id } of OWNERSHIP) {
@@ -200,4 +220,82 @@ describe("stored-reader ownership coverage", () => {
       );
     });
   }
+});
+
+// Every export of the chat runtime that starts a `chat()` run, found from the
+// source: a new raw run form joins the confined names or this fails.
+const chatRunExports = (sourceText: string): string[] => {
+  const source = ts.createSourceFile(
+    "tanstack-chat-runtime.ts",
+    sourceText,
+    ts.ScriptTarget.Latest,
+    true,
+    ts.ScriptKind.TS,
+  );
+  const callsChat = (node: ts.Node): boolean =>
+    (ts.isCallExpression(node) &&
+      ts.isIdentifier(node.expression) &&
+      node.expression.text === "chat") ||
+    (ts.forEachChild(node, (child) => (callsChat(child) ? true : undefined)) ??
+      false);
+  const names: string[] = [];
+  for (const statement of source.statements) {
+    if (
+      !ts.isVariableStatement(statement) ||
+      !ts
+        .getModifiers(statement)
+        ?.some(({ kind }) => kind === ts.SyntaxKind.ExportKeyword)
+    ) {
+      continue;
+    }
+    for (const declaration of statement.declarationList.declarations) {
+      if (
+        ts.isIdentifier(declaration.name) &&
+        declaration.initializer !== undefined &&
+        callsChat(declaration.initializer)
+      ) {
+        names.push(declaration.name.text);
+      }
+    }
+  }
+  return names.toSorted();
+};
+
+describe("model-run-failure-projection coverage", () => {
+  const enforcement = OWNERSHIP.find(
+    (candidate) => candidate.id === "model-run-failure-projection",
+  )?.enforcement;
+
+  test("confines every chat runtime export that starts a run", () => {
+    if (enforcement?.kind !== "import") {
+      throw new TypeError("Raw model runs must be confined by import.");
+    }
+    const names: readonly string[] | undefined =
+      "names" in enforcement ? enforcement.names : undefined;
+    expect(names?.toSorted()).toEqual(
+      chatRunExports(
+        readFileSync(
+          new URL(
+            "apps/api/src/lib/chat/tanstack-chat-runtime.ts",
+            new URL("../", import.meta.url),
+          ),
+          "utf-8",
+        ),
+      ),
+    );
+  });
+
+  test("finds a new run form, so an unconfined one fails the check above", () => {
+    expect(
+      chatRunExports(
+        [
+          'import { chat } from "@tanstack/ai";',
+          "export const runA = (options) => chat(options);",
+          "export const runB = async (options) => await chat({ ...options, stream: true });",
+          "export const readerOnly = (chunk) => chunk.type;",
+          "const internalRun = (options) => chat(options);",
+        ].join("\n"),
+      ),
+    ).toEqual(["runA", "runB"]);
+  });
 });

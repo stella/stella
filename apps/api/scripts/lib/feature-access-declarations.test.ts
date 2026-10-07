@@ -62,6 +62,73 @@ const conditional = {
 };
 
 describe("feature source declarations", () => {
+  test.each(["registry", "admitted"] as const)(
+    "%s dispatch boundaries preserve direct-access ownership enforcement",
+    (type) => {
+      const module = "apps/api/src/dispatch/tools.ts";
+      const boundary =
+        type === "registry"
+          ? { type, module, registry: "TOOL_SETS" }
+          : { type, module, admission: "isMcpDescriptorFeatureEnabled" };
+      const declaration =
+        type === "registry"
+          ? "export const TOOL_SETS = [core];"
+          : 'import { isMcpDescriptorFeatureEnabled as admit } from "@/api/mcp/feature-access"; export const run = () => admit({}) && core();';
+      const sources = new Map([
+        ...baseSources,
+        [
+          "apps/api/src/mcp/feature-access.ts",
+          "export const isMcpDescriptorFeatureEnabled = () => true;",
+        ],
+        [
+          module,
+          `import { run as core } from "../feature/core"; ${declaration}`,
+        ],
+        [
+          "apps/api/src/routes/ordinary.ts",
+          'import * as tools from "../dispatch/tools"; export const run = () => tools;',
+        ],
+      ]);
+      const validate = () =>
+        validateFeatureAccessDeclarations({
+          registry: {
+            fixture: {
+              ...registry.fixture,
+              ownership: {
+                ...registry.fixture.ownership,
+                dispatchModules: [boundary],
+              },
+            },
+          },
+          endpoints: [{ file: "apps/api/src/routes/ordinary.ts", config: {} }],
+          sources,
+        });
+      expect(validate()).toEqual([]);
+      sources.set(
+        "apps/api/src/routes/ordinary.ts",
+        'import { run } from "../feature/core"; export const direct = () => run();',
+      );
+      expect(validate()).toContainEqual({
+        file: "apps/api/src/routes/ordinary.ts",
+        message: "source ownership requires featureAccess fixture",
+      });
+      sources.set(
+        module,
+        type === "registry"
+          ? "export const TOOL_SETS = {};"
+          : 'import { isMcpDescriptorFeatureEnabled } from "@/api/mcp/feature-access"; export const run = () => true;',
+      );
+      expect(validate()).toContainEqual({
+        file: module,
+        message: `feature fixture has an invalid ${type} dispatch boundary`,
+      });
+      sources.delete(module);
+      expect(validate()).toContainEqual({
+        file: module,
+        message: "feature fixture owns a missing dispatch module",
+      });
+    },
+  );
   test("shared view storage and feature execution have separate owners", () => {
     const file = "apps/api/src/routes/ordinary.ts";
     const shared = "apps/api/src/db/schema/views.ts";

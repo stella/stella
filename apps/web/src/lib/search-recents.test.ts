@@ -1,5 +1,12 @@
-import { describe, expect, test } from "bun:test";
+import { QueryClient } from "@tanstack/react-query";
+import { beforeEach, describe, expect, test } from "bun:test";
 
+import { installUserScopedStorage } from "@/lib/account/install-user-scoped-storage";
+import {
+  releaseUserStorage,
+  storageOwner,
+  userStorageKey,
+} from "@/lib/account/user-scoped-storage";
 import {
   readRecentFiles,
   readRecentSearches,
@@ -36,10 +43,22 @@ class MemoryStorage implements Storage {
   }
 }
 
-const scope: SearchRecentsScope = {
+let scope: SearchRecentsScope = {
+  owner: storageOwner(),
   organizationId: "org-1",
   userId: "user-1",
 };
+
+beforeEach(() => {
+  const queryClient = new QueryClient();
+  const unsubscribe = installUserScopedStorage(queryClient, () => ({
+    local: null,
+    session: null,
+  }));
+  queryClient.setQueryData(["session"], { user: { id: "user-1" } });
+  unsubscribe();
+  scope = { owner: storageOwner(), organizationId: "org-1", userId: "user-1" };
+});
 
 describe("search recents", () => {
   test("records recent searches newest first and dedupes exact queries", () => {
@@ -123,7 +142,10 @@ describe("search recents", () => {
   test("keeps older recent file records without MIME metadata", () => {
     const storage = new MemoryStorage();
     storage.setItem(
-      "stella-search-recent-files:org-1:user-1",
+      userStorageKey("stella-search-recent-files:org-1:", {
+        kind: "user",
+        userId: "user-1",
+      }),
       JSON.stringify([
         {
           entityId: "entity-1",
@@ -143,7 +165,10 @@ describe("search recents", () => {
   test("drops recent file records with empty identity fields", () => {
     const storage = new MemoryStorage();
     storage.setItem(
-      "stella-search-recent-files:org-1:user-1",
+      userStorageKey("stella-search-recent-files:org-1:", {
+        kind: "user",
+        userId: "user-1",
+      }),
       JSON.stringify([
         {
           entityId: "",
@@ -189,7 +214,10 @@ describe("search recents", () => {
     const storage = new MemoryStorage();
     const illFormedId = "\uD800";
     storage.setItem(
-      "stella-search-recent-files:org-1:user-1",
+      userStorageKey("stella-search-recent-files:org-1:", {
+        kind: "user",
+        userId: "user-1",
+      }),
       JSON.stringify([
         {
           entityId: illFormedId,
@@ -232,6 +260,7 @@ describe("search recents", () => {
   test("scopes recents by organization and user", () => {
     const storage = new MemoryStorage();
     const otherScope: SearchRecentsScope = {
+      owner: scope.owner,
       organizationId: "org-2",
       userId: "user-1",
     };
@@ -246,13 +275,122 @@ describe("search recents", () => {
 
   test("ignores corrupted storage payloads", () => {
     const storage = new MemoryStorage();
-    storage.setItem("stella-search-recent-searches:org-1:user-1", "{bad");
     storage.setItem(
-      "stella-search-recent-files:org-1:user-1",
+      userStorageKey("stella-search-recent-searches:org-1:", {
+        kind: "user",
+        userId: "user-1",
+      }),
+      "{bad",
+    );
+    storage.setItem(
+      userStorageKey("stella-search-recent-files:org-1:", {
+        kind: "user",
+        userId: "user-1",
+      }),
       JSON.stringify([{ bad: true }]),
     );
 
     expect(readRecentSearches(scope, storage)).toEqual([]);
     expect(readRecentFiles(scope, storage)).toEqual([]);
+  });
+  test("captured recents follow the current owner across visitor, another user and return transitions", () => {
+    const storage = new MemoryStorage();
+    const areas = { local: storage, session: null };
+    const queryClient = new QueryClient();
+    const unsubscribe = installUserScopedStorage(queryClient, () => areas);
+    const file = {
+      entityId: "entity-1",
+      title: "Draft.pdf",
+      workspaceId: "workspace-1",
+      workspaceName: "Matter A",
+    };
+    try {
+      recordRecentSearch("account A", scope, storage);
+      recordRecentFile(file, scope, storage);
+      expect(
+        readRecentSearches(scope, storage).map((item) => item.query),
+      ).toEqual(["account A"]);
+      expect(readRecentFiles(scope, storage).map((item) => item.title)).toEqual(
+        ["Draft.pdf"],
+      );
+
+      for (const nextUserId of [null, "user-2", "user-1"]) {
+        if (nextUserId === null) {
+          releaseUserStorage(areas);
+        } else {
+          queryClient.setQueryData(["session"], { user: { id: nextUserId } });
+        }
+        expect(readRecentSearches(scope, storage)).toEqual([]);
+        expect(readRecentFiles(scope, storage)).toEqual([]);
+        expect(recordRecentSearch("delayed account A", scope, storage)).toEqual(
+          [],
+        );
+        expect(recordRecentFile(file, scope, storage)).toEqual([]);
+        expect(storage.length).toBe(0);
+      }
+
+      const refreshedScope = {
+        owner: storageOwner(),
+        organizationId: scope.organizationId,
+        userId: scope.userId,
+      };
+      expect(
+        recordRecentSearch("fresh account A", refreshedScope, storage).map(
+          (item) => item.query,
+        ),
+      ).toEqual(["fresh account A"]);
+      expect(
+        recordRecentFile(file, refreshedScope, storage).map(
+          (item) => item.title,
+        ),
+      ).toEqual(["Draft.pdf"]);
+    } finally {
+      unsubscribe();
+    }
+  });
+
+  test("an outdated owner scope does not read retained entries", () => {
+    const storage = new MemoryStorage();
+    recordRecentSearch("account A", scope, storage);
+    recordRecentFile(
+      {
+        entityId: "entity-1",
+        title: "Draft.pdf",
+        workspaceId: "workspace-1",
+        workspaceName: "Matter A",
+      },
+      scope,
+      storage,
+    );
+    const queryClient = new QueryClient();
+    const unsubscribe = installUserScopedStorage(queryClient, () => ({
+      local: null,
+      session: null,
+    }));
+    queryClient.setQueryData(["session"], { user: { id: "user-2" } });
+    unsubscribe();
+    expect(storage.length).toBe(2);
+    expect(readRecentSearches(scope, storage)).toEqual([]);
+    expect(readRecentFiles(scope, storage)).toEqual([]);
+  });
+
+  test("an auth scope that differs from the current storage owner cannot read or write recents", () => {
+    const storage = new MemoryStorage();
+    const mismatchedScope = {
+      owner: storageOwner(),
+      organizationId: scope.organizationId,
+      userId: "user-2",
+    };
+    const file = {
+      entityId: "entity-1",
+      title: "Draft.pdf",
+      workspaceId: "workspace-1",
+      workspaceName: "Matter A",
+    };
+    expect(recordRecentSearch("query", mismatchedScope, storage)).toEqual([]);
+    expect(recordRecentFile(file, mismatchedScope, storage)).toEqual([]);
+    expect(readRecentSearches(mismatchedScope, storage)).toEqual([]);
+    expect(readRecentFiles(mismatchedScope, storage)).toEqual([]);
+    expect(storage.length).toBe(0);
   });
 });

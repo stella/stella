@@ -15,6 +15,7 @@ import {
   projectFeatureCommands,
 } from "./feature-command-projection.js";
 import { buildCliRouteTree } from "./generate-capability-tree.js";
+import { generatedRouteMap } from "./generated/route-map.js";
 import { generatedToolAnnotations } from "./generated/tool-annotations.js";
 import {
   CACHE_SCHEMA_VERSION,
@@ -33,6 +34,16 @@ import type { RouteNode } from "./route-types.js";
 
 const ORIGIN = "https://feature-projection.example";
 const TEST_FEATURE = "fixture-feature";
+
+test("generated views have no CLI discovery entry", () => {
+  const generatedViewToolName = "show_visual";
+  expect(Object.hasOwn(generatedToolAnnotations, generatedViewToolName)).toBe(
+    false,
+  );
+  expect(JSON.stringify(generatedRouteMap)).not.toContain(
+    generatedViewToolName,
+  );
+});
 const CAPABILITY = "usage.entitlement.get";
 const TOOL = "get_usage";
 const catalog = loadBakedCapabilityCatalog();
@@ -98,6 +109,7 @@ const leafIds = (node: RouteNode): string[] => {
     }
   }
 };
+
 const invokeHelp = async (commandTree: RouteNode, argv: string[]) => {
   const stdout: string[] = [];
   const stderr: string[] = [];

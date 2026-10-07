@@ -212,6 +212,7 @@ export const isSuggestChangesApplyOutput = (
   typeof output.success === "boolean";
 
 const CHAT_TOOL_TITLE_KEYS = {
+  show_visual: "chat.generatedView",
   add_comment: "chat.tool.add_comment",
   "ask-user": "chat.tool.ask-user",
   boe_find_related_laws: "chat.tool.boe_find_related_laws",
@@ -425,7 +426,6 @@ const MANUAL_CHAT_TOOL_GRANT_POLICY = {
   reply_comment: CHAT_TOOL_GRANT_POLICY_KIND.grantable,
   resolve_comment: CHAT_TOOL_GRANT_POLICY_KIND.grantable,
   "search-all-past-chats": CHAT_TOOL_GRANT_POLICY_KIND.grantable,
-  spawn_subagents: CHAT_TOOL_GRANT_POLICY_KIND.neverAuto,
   // Only the server-executed apply variant ever requests approval; it writes
   // a new document version, so each call is approved on its own.
   suggest_changes: CHAT_TOOL_GRANT_POLICY_KIND.approveOnce,
@@ -468,10 +468,9 @@ export const isApprovalOnceChatToolName = (toolName: ApprovalToolName) =>
 /**
  * Chat tools that no stored grant may cover and no shared auto-approve path
  * may run — the public-official and DOCX-batch paths in
- * `hasAutomaticApproval` included. Delegation (`spawn_subagents`) kicks off
- * a whole subagent write-loop per call, so unlike a single mutation it must
- * be reviewed every time. The browser tool's opt-in page-read allowance
- * (`isBrowserCommandAutoApproved`) is the only tool-specific exception.
+ * `hasAutomaticApproval` included. The browser tool's opt-in page-read
+ * allowance (`isBrowserCommandAutoApproved`) is the only tool-specific
+ * exception.
  */
 export const isNonPersistentGrantChatToolName = (toolName: string): boolean =>
   getChatToolGrantPolicy(toolName) === CHAT_TOOL_GRANT_POLICY_KIND.neverAuto;
@@ -517,7 +516,6 @@ const REGISTRY_WRITE_SUMMARY_TOOL_NAMES = {
   "search-all-past-chats": false,
   set_field_value: true,
   set_practice_jurisdictions: true,
-  spawn_subagents: false,
   suggest_changes: false,
   "update-current-skill-body": false,
   "update-current-skill-resource": false,
@@ -1126,10 +1124,11 @@ const isCanonicalChatUIMessage = (
   );
 
 /**
- * Prove the runtime-to-UI contract without parsing tool arguments again.
- * Completed built-in calls must already carry their canonical parsed input;
- * only protocol-partial calls, and calls that ended before their input did,
- * may omit it.
+ * Project known tool names and protocol-shaped payloads into the UI.
+ * This checks object shape, not the current tool schema. Persisted payloads
+ * can predate that schema; specialized cards must validate before reading
+ * schema-dependent fields. Only protocol-partial or interrupted calls may
+ * omit input.
  */
 export const projectCanonicalChatUIMessages = (
   messages: readonly PersistedChatMessage[],

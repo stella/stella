@@ -410,10 +410,9 @@ export const incrementMatchCount = async ({
   ruleId,
   scopedDb,
 }: IncrementMatchCountArgs) => {
-  // oxlint-disable-next-line arrow-body-style -- block body holds the audit-skip directive that the require-audit-on-mutation rule scans for inside this arrow's body range
-  await scopedDb((tx) => {
+  await scopedDb((tx) =>
     // audit: skip — background polarity classification pipeline; no user-facing state change
-    return tx
+    tx
       .update(caseLawPolarityRules)
       .set({
         matchCount: sql`${caseLawPolarityRules.matchCount} + 1`,
@@ -422,6 +421,6 @@ export const incrementMatchCount = async ({
           ${observedAt}
         )`,
       })
-      .where(eq(caseLawPolarityRules.id, ruleId));
-  });
+      .where(eq(caseLawPolarityRules.id, ruleId)),
+  );
 };

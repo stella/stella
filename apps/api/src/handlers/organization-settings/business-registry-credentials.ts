@@ -70,7 +70,7 @@ const CREDENTIAL_PROBE_QUERIES = {
 export const saveBusinessRegistryCredential = createSafeRootHandler(
   {
     permissions: { organizationSettings: ["update"] },
-    accountAccess: ACCOUNT_ACCESS.standard,
+    accountAccess: ACCOUNT_ACCESS.accountControl,
     mcp: { type: "internal", reason: "provider_secret" },
     body: t.Object(
       {
@@ -158,7 +158,7 @@ export const saveBusinessRegistryCredential = createSafeRootHandler(
 export const deleteBusinessRegistryCredential = createSafeRootHandler(
   {
     permissions: { organizationSettings: ["update"] },
-    accountAccess: ACCOUNT_ACCESS.standard,
+    accountAccess: ACCOUNT_ACCESS.accountControl,
     mcp: { type: "internal", reason: "provider_secret" },
     query: t.Object({ registry: credentialRegistrySchema }),
   },

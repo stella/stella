@@ -121,6 +121,8 @@ export const CaseDecisionInspectorView = ({
   const caseNumberType =
     decision?.caseNumberType ?? DECISION_IDENTIFIER_TYPES.CASE_NUMBER;
   const provisionAnchors = useDecisionProvisionAnchors({
+    court: decision?.court ?? null,
+    caseNumber: decision?.caseNumber ?? null,
     blocks: visibleDecisionBlocks(ast, caseNumberType),
     country: decision?.country ?? null,
     decisionId,
@@ -229,6 +231,7 @@ export const CaseDecisionInspectorView = ({
       {/* The composer floats over the text, bound to this decision, the way
           it floats over a PDF bound to that file. */}
       <LegalReaderAIChat
+        aiMode="enabled"
         activeLegal={activeLegalFromReaderTarget(annotationTarget)}
         className="min-h-0 flex-1"
       >

@@ -8,6 +8,7 @@ import { DOCUMENT_VERSION_UPLOAD_CAPABILITY_IDS } from "@stll/api-contract";
 
 import { captureError } from "@/api/lib/analytics/capture";
 import { resourcesAreVisible } from "@/api/lib/entities/resource-access";
+import { isSearchIndexUnavailable } from "@/api/lib/legal-search/search-index-unavailable";
 import {
   isExternalMcpToolName,
   isSkillToolName,
@@ -58,6 +59,7 @@ import {
   MCP_INTERNAL_ERROR_HINT,
   McpOutputContractError,
   notFoundResult,
+  searchIndexUnavailableResult,
   serializeToolResult,
   structuredErrorResult,
 } from "@/api/mcp/tool-utils";
@@ -438,6 +440,19 @@ const dispatchMcpToolCall = async ({
   dependencies,
 }: McpToolCallArgs): Promise<CallToolResult> => {
   const serializeForSurface = createSurfaceSerializer({ context, mode });
+  const staticTool = getStaticMcpToolDefinition(toolName, mode);
+  if (staticTool) {
+    // Role and credential refusals are independent of the caller's enrolment.
+    const toolRefusal = mcpToolAuthorityRefusal({
+      authority: context,
+      definition: staticTool,
+      toolName,
+      userEmail: context.userEmail,
+    });
+    if (toolRefusal !== null) {
+      return serializeForSurface(structuredErrorResult(toolRefusal));
+    }
+  }
   const unavailableResult = featureUnavailableToolResult({
     args,
     context,
@@ -459,7 +474,6 @@ const dispatchMcpToolCall = async ({
     return gatewayResult;
   }
 
-  const staticTool = getStaticMcpToolDefinition(toolName, mode);
   if (!staticTool) {
     return serializeForSurface(unknownToolResult(toolName));
   }
@@ -494,18 +508,6 @@ const dispatchMcpToolCall = async ({
         hint: featureDisabledHint(staticTool.feature),
       }),
     );
-  }
-
-  // Discovery withholds the tool; a call by name resolves it and is refused
-  // here, naming the member role, the credential, or the account.
-  const toolRefusal = mcpToolAuthorityRefusal({
-    authority: context,
-    definition: staticTool,
-    toolName,
-    userEmail: context.userEmail,
-  });
-  if (toolRefusal !== null) {
-    return serializeForSurface(structuredErrorResult(toolRefusal));
   }
 
   const unknownArgs = findUndeclaredArguments({
@@ -656,7 +658,9 @@ const MCP_OUTPUT_CONTRACT_SINK = failureSink({
  * message: never leak internals to the caller. `captureError` keeps the real
  * exception for observability. An output-contract violation goes through the
  * failure owner instead, which grades it a defect and logs it at ERROR: the
- * caller sees an ordinary tool error, so nothing else would surface it.
+ * caller sees an ordinary tool error, so nothing else would surface it. A
+ * search index that could not be reached is not a defect of the call, so it
+ * keeps its own retryable `search_index_unavailable` envelope.
  */
 const internalErrorResult = ({
   mode,
@@ -673,6 +677,14 @@ const internalErrorResult = ({
     Panic.is(error) && McpOutputContractError.is(error.cause)
       ? error.cause
       : undefined;
+  if (isSearchIndexUnavailable(error)) {
+    return serializeToolResult(
+      scopeToolResultToSurface(searchIndexUnavailableResult(error), {
+        mode,
+        context,
+      }),
+    );
+  }
   if (contractViolation !== undefined) {
     observeFailure(contractViolation, {
       sink: MCP_OUTPUT_CONTRACT_SINK,

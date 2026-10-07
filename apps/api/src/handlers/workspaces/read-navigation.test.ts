@@ -1,7 +1,11 @@
 import { describe, expect, mock, test } from "bun:test";
 
 import { toSafeId } from "@/api/lib/branded-types";
-import { createFeatureAccessSnapshot } from "@/api/lib/feature-access/policy";
+import {
+  createFeatureAccessSnapshot,
+  decideFeatureAccess,
+} from "@/api/lib/feature-access/policy";
+import { FEATURE_REGISTRY } from "@/api/lib/feature-access/registry";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
@@ -58,12 +62,49 @@ const workspaceRows = [
   },
 ];
 
+const timeBillingSnapshot = ({
+  organizationId,
+  userId,
+  enrolled,
+  deploymentEnabled = true,
+}: {
+  organizationId: string;
+  userId: string;
+  enrolled: boolean;
+  deploymentEnabled?: boolean;
+}) => {
+  const featureId = "time-billing";
+  const decision = decideFeatureAccess({
+    registry: FEATURE_REGISTRY,
+    grants: {},
+    featureId,
+    organizationId,
+    userId,
+    user: { email: "billing@example.test", emailVerified: true },
+    membership: true,
+    enrolments: enrolled ? [{ featureId, organizationId, userId }] : [],
+    deploymentEnabled,
+  });
+
+  return createFeatureAccessSnapshot({
+    organizationId,
+    userId,
+    decisions: new Map([[featureId, decision]]),
+  });
+};
+
 const createContext = ({
   query,
   rows = workspaceRows,
+  featureAccessSnapshot = createFeatureAccessSnapshot({
+    organizationId: "organization_test123",
+    userId: "user_test123",
+    decisions: new Map(),
+  }),
 }: {
   query: ReadWorkspaceNavigationContext["query"];
   rows?: typeof workspaceRows;
+  featureAccessSnapshot?: ReadWorkspaceNavigationContext["featureAccessSnapshot"];
 }) => {
   const limit = mock(async () => rows);
   const select = mock((_selection?: unknown) => ({
@@ -81,11 +122,7 @@ const createContext = ({
 
   return {
     context: asTestRaw<ReadWorkspaceNavigationContext>({
-      featureAccessSnapshot: createFeatureAccessSnapshot({
-        organizationId: "organization_test123",
-        userId: "user_test123",
-        decisions: new Map(),
-      }),
+      featureAccessSnapshot,
       memberRole: sessionMemberRole("owner"),
       orgAIConfig: null,
       query,
@@ -116,6 +153,7 @@ describe("workspace navigation pagination", () => {
       expect.objectContaining({ defaultViewId: expect.anything() }),
     );
     expect(result).toEqual({
+      features: { timeBilling: false },
       items: [
         expect.objectContaining({
           defaultViewId: "019c0c90-0000-7000-8000-000000000103",
@@ -139,6 +177,53 @@ describe("workspace navigation pagination", () => {
       ],
     });
   });
+
+  test.each([
+    {
+      name: "enrolled principal",
+      snapshot: timeBillingSnapshot({
+        organizationId: "organization_test123",
+        userId: "user_test123",
+        enrolled: true,
+      }),
+      timeBilling: true,
+    },
+    {
+      name: "unenrolled principal",
+      snapshot: timeBillingSnapshot({
+        organizationId: "organization_test123",
+        userId: "user_test123",
+        enrolled: false,
+      }),
+      timeBilling: false,
+    },
+    {
+      name: "deployment-disabled feature",
+      snapshot: timeBillingSnapshot({
+        organizationId: "organization_test123",
+        userId: "user_test123",
+        enrolled: true,
+        deploymentEnabled: false,
+      }),
+      timeBilling: false,
+    },
+  ])(
+    "reports time billing for $name without extra queries",
+    async ({ snapshot, timeBilling }) => {
+      const { context, limit, select } = createContext({
+        query: { statusScope: "active-and-archived" },
+        featureAccessSnapshot: snapshot,
+      });
+
+      const result = await readWorkspaceNavigation.handler(context);
+
+      expect(result).toEqual(
+        expect.objectContaining({ features: { timeBilling } }),
+      );
+      expect(select).toHaveBeenCalledTimes(1);
+      expect(limit).toHaveBeenCalledTimes(1);
+    },
+  );
 
   test("rejects malformed cursors before querying", async () => {
     const { context, limit } = createContext({

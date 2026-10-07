@@ -8,7 +8,7 @@ import {
   setDefaultTimeout,
   test,
 } from "bun:test";
-import { eq } from "drizzle-orm";
+import { eq, inArray } from "drizzle-orm";
 
 import { CHAT_SEND_MODE } from "@stll/anonymize-chat";
 import { CHAT_SKILL_DOCUMENT } from "@stll/api-contract";
@@ -19,7 +19,7 @@ import {
   SIGNAL_SEVERITY,
 } from "@stll/api-contract/signals";
 
-import { member } from "@/api/db/auth-schema";
+import { member, user as authUser } from "@/api/db/auth-schema";
 import type { ScopedDb } from "@/api/db/safe-db";
 import {
   billingArrangements,
@@ -29,6 +29,7 @@ import {
   chatThreads,
   chatTurns,
   documentTranslationRuns,
+  desktopPresence,
   entities,
   entityViews,
   entityVersions,
@@ -47,6 +48,7 @@ import {
   vatRates,
   WORK_OBLIGATION_STATUS,
   workObligations,
+  featureEnrolments,
 } from "@/api/db/schema";
 import { createSafeDb, createScopedDb } from "@/api/db/scoped";
 import readBilingualRun from "@/api/handlers/bilingual-translations/read-run";
@@ -81,6 +83,7 @@ import * as externalMcpToolsModule from "@/api/handlers/chat/tools/external-mcp-
 import cancelChatTurn from "@/api/handlers/chat/turns/cancel";
 import updateChatThreadModel from "@/api/handlers/chat/update-thread-model";
 import readContactById from "@/api/handlers/contacts/get";
+import readDesktopPresence from "@/api/handlers/desktop-presence/read";
 import listDocumentReviewSources from "@/api/handlers/document-reviews/list-sources";
 import readDocumentTranslationRun from "@/api/handlers/document-translations/runs/get";
 import { createDocumentCompareHandler } from "@/api/handlers/documents/compare";
@@ -546,6 +549,7 @@ const savedSearchCriteria = (
 });
 
 const isolationCases: IsolationCase[] = [
+  ...desktopPresenceIsolationCases(),
   {
     name: "user file content",
     runAAgainstB: async ({ ids: testIds, workspaceA }) =>
@@ -1854,6 +1858,54 @@ beforeAll(async () => {
   testDb = await getTestDb();
   ids = createTestIds();
   await setupRlsTestData(testDb, ids);
+  await testDb
+    .update(authUser)
+    .set({ emailVerified: true })
+    .where(
+      inArray(authUser.id, [ids.userA1, ids.userA2, ids.userB1, ids.userAdmin]),
+    );
+  await testDb
+    .insert(featureEnrolments)
+    .values([
+      {
+        organizationId: ids.orgA,
+        userId: ids.userA1,
+        featureId: "time-billing",
+      },
+      {
+        organizationId: ids.orgA,
+        userId: ids.userA2,
+        featureId: "time-billing",
+      },
+      {
+        organizationId: ids.orgA,
+        userId: ids.userAdmin,
+        featureId: "time-billing",
+      },
+      {
+        organizationId: ids.orgB,
+        userId: ids.userA1,
+        featureId: "time-billing",
+      },
+      {
+        organizationId: ids.orgB,
+        userId: ids.userB1,
+        featureId: "time-billing",
+      },
+      {
+        organizationId: ids.orgB,
+        userId: ids.userAdmin,
+        featureId: "time-billing",
+      },
+    ])
+    .onConflictDoNothing();
+  await testDb.insert(desktopPresence).values({
+    userId: ids.userA1,
+    organizationId: ids.orgB,
+    desktopId: "22222222-2222-4222-8222-222222222270",
+    version: "0.9.48",
+    protocol: 1,
+  });
   await testDb.insert(billingArrangements).values({
     workspaceId: ids.wsB1,
     organizationId: ids.orgB,
@@ -2329,6 +2381,35 @@ const runHandler = async <TContext>(
     return error;
   }
 };
+
+function desktopPresenceIsolationCases(): IsolationCase[] {
+  return [
+    {
+      name: "desktop presence across organizations",
+      runAAgainstB: async ({ workspaceA }) =>
+        await runHandler(readDesktopPresence, workspaceA, {}),
+      runBPositive: async ({ sameUserWorkspaceB }) =>
+        await runHandler(readDesktopPresence, sameUserWorkspaceB, {}),
+      expectDenied: (result) => expect(result).toEqual({ type: "none" }),
+      expectPositive: (result) =>
+        expect(result).toMatchObject({
+          desktop: { version: "0.9.48", protocol: 1 },
+        }),
+    },
+    {
+      name: "desktop presence in the same organization with another owner",
+      runAAgainstB: async ({ workspaceB }) =>
+        await runHandler(readDesktopPresence, workspaceB, {}),
+      runBPositive: async ({ sameUserWorkspaceB }) =>
+        await runHandler(readDesktopPresence, sameUserWorkspaceB, {}),
+      expectDenied: (result) => expect(result).toEqual({ type: "none" }),
+      expectPositive: (result) =>
+        expect(result).toMatchObject({
+          desktop: { version: "0.9.48", protocol: 1 },
+        }),
+    },
+  ];
+}
 
 function expectStatus(expectedStatus: number): (result: unknown) => void {
   return (result: unknown): void => {

@@ -33,6 +33,7 @@ import {
 } from "@/api/lib/lists/verification/model-call";
 import type { VerificationModelDeps } from "@/api/lib/lists/verification/model-call";
 import { locateQuote } from "@/api/lib/lists/verification/quote-locate";
+import { ListVerificationRunCapError } from "@/api/lib/lists/verification/run-caps";
 import type { generateTanStackObjectForRole } from "@/api/lib/tanstack-ai-generate";
 import { setRuntimeModeForTesting } from "@/api/runtime-mode";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
@@ -70,6 +71,7 @@ if (access.status !== "enabled") {
 const deps: VerificationModelDeps = {
   accessProof: access.proof,
   refreshAccessProof: async () => access.proof,
+  checkRunBudget: async () => Result.ok(),
   organizationId,
   workspaceId,
   entityVersionId: toSafeId<"entityVersion">("version-fixture"),
@@ -698,4 +700,35 @@ test("model dispatch requires proofs bound to the requester and organization", a
     );
   }
   expect(captured).toHaveLength(0);
+});
+
+test("each model request rechecks its run budget before dispatch", async () => {
+  let checks = 0;
+  const capError = new ListVerificationRunCapError({
+    reason: "active",
+    message: "Verification limit reached",
+    hint: "Wait for an active run.",
+  });
+  const call = createVerificationCall({
+    deps: {
+      ...deps,
+      checkRunBudget: async () => {
+        checks += 1;
+        return checks === 1 ? Result.ok() : Result.err(capError);
+      },
+    },
+    feature: "verification-budget-test",
+    system: "Fixture instruction",
+    shared: null,
+    outputSchema: v.object({ value: v.string() }),
+  });
+  answers.push({ value: "fixture" });
+  expect(await call.generate([])).toEqual(Result.ok({ value: "fixture" }));
+  const refusal = await call.generate([]);
+  expect(Result.isError(refusal)).toBe(true);
+  if (Result.isError(refusal)) {
+    expect(refusal.error).toBe(capError);
+  }
+  expect(checks).toBe(2);
+  expect(captured).toHaveLength(1);
 });

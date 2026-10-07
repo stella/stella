@@ -35,8 +35,16 @@ import {
 } from "@/api/lib/chat/tool-output-degrade";
 import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import {
+  isSearchIndexUnavailable,
+  SEARCH_INDEX_UNAVAILABLE_CODE,
+  SEARCH_INDEX_UNAVAILABLE_HINT,
+  SEARCH_INDEX_UNAVAILABLE_MESSAGE,
+} from "@/api/lib/legal-search/search-index-unavailable";
 import { LIMITS } from "@/api/lib/limits";
 import { getAppBaseUrl } from "@/api/lib/mcp-connectors/app-urls";
+import { failureSink } from "@/api/lib/observability/failure";
+import { observeFailure } from "@/api/lib/observability/observe-failure";
 import { getCurrentRequestId } from "@/api/lib/observability/request-context";
 import {
   decodePaginationCursor,
@@ -791,6 +799,34 @@ export const notFoundResult = (
 ): InternalToolErrorResult =>
   structuredErrorResult({ code: "not_found", hint, message });
 
+const SEARCH_INDEX_UNAVAILABLE_SINK = failureSink({
+  event: "mcp.search_index_unavailable",
+  expected: [],
+});
+
+/**
+ * Envelope for a search whose index could not be reached. Every tool backed
+ * by the public-law search index answers it the same way, whichever path the
+ * refusal took to the boundary (a thrown handler error, a failed `Result`, a
+ * safe handler's 503 body): the stable code to branch on, the cause in the
+ * message, and a retry, because the arguments did not cause it. The cause
+ * is still observed, so an index that stays away is seen.
+ */
+export const searchIndexUnavailableResult = (
+  error: unknown,
+): InternalToolErrorResult => {
+  observeFailure(error, {
+    sink: SEARCH_INDEX_UNAVAILABLE_SINK,
+    ctx: { source: "mcp" },
+  });
+  return structuredErrorResult({
+    code: SEARCH_INDEX_UNAVAILABLE_CODE,
+    message: SEARCH_INDEX_UNAVAILABLE_MESSAGE,
+    hint: SEARCH_INDEX_UNAVAILABLE_HINT,
+    retryable: true,
+  });
+};
+
 /**
  * Envelope for a failed backing-handler `Result`, the single sink for the
  * `errorResult(result.error.message)` class. Every tool site that unwraps a
@@ -816,6 +852,9 @@ export const notFoundResult = (
 export const internalFailureResult = (
   error: unknown,
 ): InternalToolErrorResult => {
+  if (isSearchIndexUnavailable(error)) {
+    return searchIndexUnavailableResult(error);
+  }
   if (HandlerError.is(error)) {
     if (error.code === "upstream_unavailable") {
       captureError(error, { source: "mcp" });

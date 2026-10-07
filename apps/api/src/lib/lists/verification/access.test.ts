@@ -70,7 +70,7 @@ test("the verification declaration uses invitation enrollment and the shared ide
 
 test("parsed verification grants resolve against current identity and deny absent membership", async () => {
   const organizationId = toSafeId<"organization">("org-a");
-  const grants = v.parse(
+  const { grants } = v.parse(
     envBaseServerSchema.API_FEATURE_ACCESS_GRANTS,
     JSON.stringify({
       [LEGAL_LISTS_FEATURE_ID]: [memberGrant],
@@ -85,17 +85,7 @@ test("parsed verification grants resolve against current identity and deny absen
     { email: memberGrant.email, emailVerified: false },
     null,
   ]) {
-    const database = createScopedDbMock({
-      select: () => ({
-        from: () => ({
-          innerJoin: () => ({
-            where: () => ({
-              limit: async () => (identity === null ? [] : [identity]),
-            }),
-          }),
-        }),
-      }),
-    });
+    const database = createScopedDbMock({}, { featureAccess: { identity } });
     const snapshot = await database.scopedDb(
       async (tx) =>
         await resolveFeatureAccessSnapshot({

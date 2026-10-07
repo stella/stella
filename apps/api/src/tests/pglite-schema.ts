@@ -186,28 +186,6 @@ AS $body$
   SELECT ${asciiFoldPgliteExpression()}
 $body$`;
 
-export const installPgliteSchemaPrerequisites = async (
-  db: PgliteSchemaDb,
-): Promise<void> => {
-  await db.execute(sql.raw("CREATE EXTENSION IF NOT EXISTS pg_trgm"));
-  await db.execute(sql.raw(arabicNormalizeFunctionSql()));
-  await db.execute(sql.raw(unaccentPgliteSql()));
-  await db.execute(sql.raw(legislationTitleFoldPgliteSql()));
-  await db.execute(sql.raw(fieldFindTextFunctionSql()));
-  // Drizzle emits policies that reference this view before its backing tables
-  // exist. Install a harmless shape-compatible stub for schema creation; the
-  // security test database replaces it after pushSchema finishes.
-  await db.execute(
-    sql.raw(`
-      CREATE OR REPLACE VIEW public.${WORKSPACE_ACCESS_VIEW_NAME}
-      AS SELECT
-        NULL::uuid AS authorized_workspace_id,
-        NULL::text AS workspace_status
-      WHERE false
-    `),
-  );
-};
-
 const latestMigrationStatementContaining = (fragment: string): string => {
   const statements = readdirSync(DRIZZLE_DIR, { withFileTypes: true })
     .filter((entry) => entry.isDirectory())
@@ -243,6 +221,35 @@ const fieldFindTextFunctionSql = (): string =>
   latestMigrationStatementContaining(
     "CREATE OR REPLACE FUNCTION field_find_text",
   );
+
+export const installPgliteSchemaPrerequisites = async (
+  db: PgliteSchemaDb,
+): Promise<void> => {
+  await db.execute(sql.raw("CREATE EXTENSION IF NOT EXISTS pg_trgm"));
+  await db.execute(sql.raw(arabicNormalizeFunctionSql()));
+  await db.execute(sql.raw(unaccentPgliteSql()));
+  await db.execute(sql.raw(legislationTitleFoldPgliteSql()));
+  await db.execute(sql.raw(fieldFindTextFunctionSql()));
+  await db.execute(
+    sql.raw(
+      latestMigrationStatementContaining(
+        "CREATE FUNCTION stella_list_verification_day",
+      ),
+    ),
+  );
+  // Drizzle emits policies that reference this view before its backing tables
+  // exist. Install a harmless shape-compatible stub for schema creation; the
+  // security test database replaces it after pushSchema finishes.
+  await db.execute(
+    sql.raw(`
+      CREATE OR REPLACE VIEW public.${WORKSPACE_ACCESS_VIEW_NAME}
+      AS SELECT
+        NULL::uuid AS authorized_workspace_id,
+        NULL::text AS workspace_status
+      WHERE false
+    `),
+  );
+};
 
 // Split by leading keyword so each pattern stays below the lint's regex
 // complexity budget; together they cover PostgreSQL's transaction-control
@@ -394,6 +401,27 @@ const PDF_SIGNING_TOKEN_SCOPE_STATEMENT_PREFIXES = [
   "REVOKE ALL ON FUNCTION",
   "GRANT EXECUTE ON FUNCTION",
 ] as const;
+
+/** Apply the presence migration's forced owner boundary, which schema push omits. */
+export const installPgliteDesktopPresenceRls = async (
+  db: PgliteSchemaDb,
+): Promise<void> => {
+  const statement = readMigrationStatements(
+    nodePath.join(
+      DRIZZLE_DIR,
+      "20261004120300_desktop_presence",
+      "migration.sql",
+    ),
+  ).find((candidate) =>
+    executableSql(candidate).startsWith(
+      'ALTER TABLE "desktop_presence" FORCE ROW LEVEL SECURITY',
+    ),
+  );
+  if (!statement) {
+    panic("Desktop presence FORCE RLS migration statement is missing");
+  }
+  await db.execute(sql.raw(statement));
+};
 
 /**
  * Install what schema push cannot say about PDF signing sessions: forced row
@@ -790,6 +818,33 @@ export const installPgliteDecisionAliases = async (
       source.startsWith("CREATE TRIGGER") ||
       source.startsWith('ALTER TABLE "case_law_decision_aliases" FORCE')
     );
+  });
+  for (const statement of statements) {
+    await db.execute(sql.raw(statement));
+  }
+};
+
+/** Install the migration-owned verification counter and Prague day function. */
+export const installPgliteListVerificationBudgets = async (
+  db: PgliteSchemaDb,
+): Promise<void> => {
+  const statements = readMigrationStatements(
+    nodePath.join(
+      DRIZZLE_DIR,
+      "20261005120400_list_verification_run_caps",
+      "migration.sql",
+    ),
+  ).filter((statement) => {
+    const source = executableSql(statement);
+    if (source.startsWith("CREATE FUNCTION stella_list_verification_day")) {
+      return false;
+    }
+    return [
+      "CREATE FUNCTION",
+      "CREATE TRIGGER",
+      "REVOKE ALL ON FUNCTION",
+      "ALTER TABLE",
+    ].some((prefix) => source.startsWith(prefix));
   });
   for (const statement of statements) {
     await db.execute(sql.raw(statement));

@@ -865,6 +865,15 @@ export const caseLawAnalysisReaderPolicies = () => [
   }),
 ];
 
+/** Decisions a redaction marked stay invisible to the analysis reader. */
+export const caseLawAnalysisReaderDecisionPolicies = () => [
+  p.pgPolicy("case_law_analysis_reader_read", {
+    for: "select",
+    to: stellaCaseLawAnalysisReader,
+    using: sql`redacted_at IS NULL`,
+  }),
+];
+
 /**
  * Row visibility for the corpus sample reader. Applied only to the relations in
  * its column map; the SELECT grants narrow the columns, this makes the rows

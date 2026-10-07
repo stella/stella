@@ -286,6 +286,7 @@ describe("flags", () => {
   test("tags, catalog entries and sanctioned env reads are readers", () => {
     for (const source of [
       `export const tool = { feature: "FEATURE_B" };`,
+      `export const feature = { deploymentFeature: "FEATURE_B" };`,
       `import { env } from "@/api/env";\nexport const on = env.FEATURE_B;`,
       `import { env } from "@/api/env";\nconst { FEATURE_B } = env;`,
     ]) {

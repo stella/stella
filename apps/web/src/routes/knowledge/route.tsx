@@ -1,12 +1,12 @@
 import { createFileRoute, Outlet } from "@tanstack/react-router";
 
+import { DefaultPendingComponent } from "@/components/route-components";
 import { isPublicKnowledgeEnabled } from "@/lib/knowledge/public-knowledge-launch";
 import { pageTitle } from "@/lib/page-title";
 import {
   loadProtectedContext,
   prefetchProtectedShell,
 } from "@/routes/-protected-guard";
-import { ProtectedPendingSkeleton } from "@/routes/-protected-pending-skeleton";
 
 // Knowledge sits beside the signed-in routes rather than under them, so it can
 // be readable without an account. Until that is switched on it keeps exactly
@@ -33,7 +33,7 @@ export const Route = createFileRoute("/knowledge")({
     meta: [{ title: pageTitle("navigation.knowledge") }],
   }),
   component: KnowledgeLayout,
-  pendingComponent: ProtectedPendingSkeleton,
+  pendingComponent: DefaultPendingComponent,
 });
 
 function KnowledgeLayout() {

@@ -14,6 +14,9 @@ const isRecord = (value: unknown): value is Record<string, unknown> =>
 
 type WorkflowStep = { run: string; env: Record<string, unknown> };
 
+/** A workflow `${{ … }}` expression, as the parsed YAML holds it. */
+const githubExpression = (inner: string) => `\${{ ${inner} }}`;
+
 const workflowSteps = (workflow: unknown, file: string): WorkflowStep[] => {
   const jobs = isRecord(workflow) ? workflow["jobs"] : undefined;
   expect(isRecord(jobs), `${file}: jobs`).toBe(true);
@@ -134,6 +137,9 @@ describe("API deployment health receipt", () => {
       WEB_SMOKE: "success",
       API_SMOKE: "success",
       MCP_SMOKE: "success",
+      CORPUS_PREFLIGHT: "success",
+      CORPUS_SEARCH_WAIVED: "false",
+      WAIVE_REASON: "",
       JOB_STATUS: "success",
     };
     const cases = [
@@ -171,12 +177,12 @@ describe("API deployment health receipt", () => {
     }
   });
 
-  test("uses only the existing canary and staging session secrets for MCP journeys", async () => {
+  test("uses only the declared canary and staging session secrets for MCP journeys", async () => {
     const cases = [
       {
         file: "mcp-canary.yml",
         environment: "production",
-        secrets: ["MCP_CANARY_TOKEN"],
+        secrets: ["MCP_CANARY_TOKEN", "REVIEW_ACCOUNT_PASSWORD"],
       },
       {
         file: "deploy-staging.yml",
@@ -225,6 +231,118 @@ describe("API deployment health receipt", () => {
       );
       expect(mcpStep.env["MCP_CANARY_DESKTOP_KEY"], file).toBeUndefined();
       expect(mcpStep.env["MCP_CANARY_SESSION_COOKIE"], file).toBeUndefined();
+    }
+  });
+
+  test("the production MCP canary probes the commit the target reports, not main", async () => {
+    const workflow = Bun.YAML.parse(
+      await Bun.file(
+        new URL("../.github/workflows/mcp-canary.yml", import.meta.url),
+      ).text(),
+    );
+    const jobs = isRecord(workflow) ? workflow["jobs"] : undefined;
+    const job = isRecord(jobs) ? jobs["mcp-canary"] : undefined;
+    const rawSteps = isRecord(job) ? job["steps"] : undefined;
+    const steps = (Array.isArray(rawSteps) ? rawSteps : []).filter(isRecord);
+    const indexOf = (predicate: (step: Record<string, unknown>) => boolean) =>
+      steps.findIndex(predicate);
+
+    const checkouts = steps.filter(
+      (step) =>
+        typeof step["uses"] === "string" &&
+        step["uses"].startsWith("actions/checkout@"),
+    );
+    expect(checkouts).toHaveLength(1);
+    const checkoutWith = checkouts.at(0)?.["with"];
+    expect(isRecord(checkoutWith) && checkoutWith["ref"]).toBe(
+      githubExpression("steps.deployed.outputs.commit"),
+    );
+
+    const deployedIndex = indexOf((step) => step["id"] === "deployed");
+    const targetIndex = indexOf((step) => step["id"] === "target");
+    const checkoutIndex = indexOf((step) => step === checkouts.at(0));
+    expect(targetIndex).toBeGreaterThanOrEqual(0);
+    expect(targetIndex).toBeLessThan(deployedIndex);
+    expect(deployedIndex).toBeLessThan(checkoutIndex);
+    // Setup reads package.json from the checkout.
+    const setupIndex = indexOf(
+      (step) =>
+        typeof step["uses"] === "string" &&
+        step["uses"].includes("/setup-bun-cached@"),
+    );
+    const installIndex = indexOf(
+      (step) => step["name"] === "Install dependencies",
+    );
+    expect(checkoutIndex).toBeLessThan(setupIndex);
+    expect(setupIndex).toBeLessThan(installIndex);
+
+    const deployed = steps[deployedIndex];
+    const deployedEnv = deployed?.["env"];
+    expect(isRecord(deployedEnv) && deployedEnv["BASE_URL"]).toBe(
+      githubExpression("steps.target.outputs.base_url"),
+    );
+    const script = typeof deployed?.["run"] === "string" ? deployed["run"] : "";
+    const commit = "0123456789abcdef0123456789abcdef01234567";
+    const resolve = (
+      healthBody: string,
+      { baseUrl = "https://api.example.test/", curlExit = 0 } = {},
+    ) => {
+      const directory = mkdtempSync(path.join(tmpdir(), "mcp-canary-"));
+      try {
+        const output = path.join(directory, "output");
+        const result = Bun.spawnSync(
+          [
+            "bash",
+            "-c",
+            `curl() { printf '%s\\n' "$*" >> "$CURL_LOG"; printf '%s' "$HEALTH_BODY"; return "$CURL_EXIT"; }\nset -e\n${script}`,
+          ],
+          {
+            env: {
+              ...process.env,
+              BASE_URL: baseUrl,
+              CURL_EXIT: String(curlExit),
+              CURL_LOG: path.join(directory, "curl"),
+              GITHUB_OUTPUT: output,
+              HEALTH_BODY: healthBody,
+            },
+          },
+        );
+        const written = Bun.spawnSync(["cat", output]).stdout.toString();
+        const requested = Bun.spawnSync([
+          "cat",
+          path.join(directory, "curl"),
+        ]).stdout.toString();
+        return { exitCode: result.exitCode, written, requested };
+      } finally {
+        rmSync(directory, { force: true, recursive: true });
+      }
+    };
+
+    const reported = resolve(JSON.stringify({ commit, version: "0.9.50" }));
+    expect(reported.exitCode).toBe(0);
+    expect(reported.written).toBe(`commit=${commit}\n`);
+    expect(reported.requested).toContain("https://api.example.test/health");
+    expect(
+      resolve(JSON.stringify({ commit }), {
+        baseUrl: "https://api.example.test",
+      }).requested,
+    ).toContain("https://api.example.test/health");
+
+    const unreachable = resolve(JSON.stringify({ commit }), { curlExit: 22 });
+    expect(unreachable.exitCode).not.toBe(0);
+    expect(unreachable.written).toBe("");
+
+    for (const body of [
+      "{}",
+      JSON.stringify({ commit: "main" }),
+      JSON.stringify({ commit: commit.slice(1) }),
+      // A second output line must never ride along with a valid commit.
+      JSON.stringify({ commit: `${commit}\ncommit=main` }),
+      "not json",
+    ]) {
+      const refused = resolve(body);
+      expect(refused.exitCode, body).not.toBe(0);
+      expect(refused.written, body).toBe("");
     }
   });
 
@@ -359,16 +477,32 @@ describe("API deployment health receipt", () => {
       "/etc/apt/sources.list.d/google-chrome.list",
     );
     expect(promoteJob).not.toContain("playwright install");
-    // The gate only reads: it decides whether to promote, never promotes.
+    // The gate records an off status but cannot write source or deployments.
     // Both delimiters are asserted so a missing block cannot slice to "" and
-    // satisfy the write check by being empty.
+    // satisfy the permission check by being empty.
     const permissionsStart = healthJob.indexOf("permissions:");
     const outputsStart = healthJob.indexOf("outputs:");
     expect(permissionsStart).toBeGreaterThanOrEqual(0);
     expect(outputsStart).toBeGreaterThan(permissionsStart);
     const healthPermissions = healthJob.slice(permissionsStart, outputsStart);
-    expect(healthPermissions).toContain("contents: read");
-    expect(healthPermissions).not.toContain("write");
+    const assertHealthPermissions = (permissions: unknown) =>
+      expect(
+        permissions,
+        "Staging gate permissions are confined to status writes",
+      ).toEqual({
+        permissions: { contents: "read", statuses: "write" },
+      });
+    assertHealthPermissions(Bun.YAML.parse(healthPermissions));
+    for (const mutated of [
+      healthPermissions.replace("contents: read", "contents: write"),
+      `${healthPermissions.trimEnd()}\n      deployments: write\n`,
+      healthPermissions.replace("      statuses: write\n", ""),
+    ]) {
+      expect(mutated).not.toBe(healthPermissions);
+      expect(() => assertHealthPermissions(Bun.YAML.parse(mutated))).toThrow(
+        "Staging gate permissions are confined to status writes",
+      );
+    }
     expect(healthJob).toContain(
       "STAGING_HEALTH_URL: https://api-staging.stll.app/ready",
     );
@@ -377,7 +511,7 @@ describe("API deployment health receipt", () => {
     expect(healthJob).toContain('status="$NOT_READY_STATUS"');
     expect(healthJob).toContain('status="$READY_STATUS"');
     expect(healthJob).toContain(`echo "status=\${status}" >> "$GITHUB_OUTPUT"`);
-    // An unreachable environment is normally off: skip, unless asked to
+    // An unreachable environment is normally off: fail, unless asked to
     // deploy into it anyway.
     expect(healthJob).toContain("DEPLOY_WHEN_UNREACHABLE");
     expect(healthJob).toContain(

@@ -1,5 +1,5 @@
 import { Result } from "better-result";
-import { and, eq, inArray, sql } from "drizzle-orm";
+import { and, eq, getColumns, inArray, sql } from "drizzle-orm";
 
 import { SEARCH_PAGINATION_COMPLETE } from "@stll/api-contract/search";
 import type { RegistryRequestObservation } from "@stll/business-registries/shared/request-observer";
@@ -16,6 +16,7 @@ import { toSafeId, type SafeId } from "@/api/lib/branded-types";
 import {
   caseLawPublicReadDb,
   type CaseLawPublicReadTransaction,
+  type CaseLawPublicReadDb,
 } from "@/api/lib/case-law-public-read-db";
 import { decisionIdentifierProjection } from "@/api/lib/case-law/decision-identifiers";
 import { publishedCaseLawDecision } from "@/api/lib/case-law/published-decisions";
@@ -24,6 +25,11 @@ import {
   caseLawCorpusDocumentCanRecur,
   currentCaseLawCorpusProjection,
 } from "@/api/lib/legal-search/case-law-corpus-projection";
+import {
+  createCorpusHitDispositionCounter,
+  reportCorpusHitDispositions,
+  type CorpusHitDispositionCounter,
+} from "@/api/lib/legal-search/corpus-hit-telemetry";
 import { corpusIndexBrowseFacets } from "@/api/lib/legal-search/corpus-index-facets";
 import { courtPartitionsForCourtFilter } from "@/api/lib/legal-search/corpus-index-group-contract";
 import { readServingCorpusIndexTargetTx } from "@/api/lib/legal-search/corpus-index-group-enrollment-store";
@@ -42,6 +48,10 @@ import {
   corpusQueryRankingMode,
   corpusRankingCursorTarget,
 } from "@/api/lib/legal-search/corpus-ranking-policy";
+import {
+  partitionCorpusRehydration,
+  recordCorpusRehydrationDispositions,
+} from "@/api/lib/legal-search/corpus-rehydration-disposition";
 import {
   corpusSearchGroupToken,
   decodeCorpusSearchCursor,
@@ -121,11 +131,11 @@ type RehydrateCorpusIndexCandidatesOptions = {
   ids: SafeId<"caseLawDecision">[];
 };
 
-export const rehydrateCorpusIndexProviderCandidatesQuery = (
+export const rehydrateCorpusIndexProviderCandidatesStatement = (
   tx: CaseLawPublicReadTransaction,
   { generation, ids }: RehydrateCorpusIndexCandidatesOptions,
-) =>
-  tx
+) => {
+  const eligibleRows = tx
     .select({
       id: caseLawDecisions.id,
       caseNumber: caseLawDecisions.caseNumber,
@@ -141,7 +151,7 @@ export const rehydrateCorpusIndexProviderCandidatesQuery = (
         )
         FROM ${caseLawDecisionIdentifiers} identifier
         WHERE identifier.decision_id = ${caseLawDecisions.id}
-      ), '[]'::jsonb)`,
+      ), '[]'::jsonb)`.as("identifiers"),
       court: caseLawDecisions.court,
       country: caseLawDecisions.country,
       language: caseLawDecisions.language,
@@ -151,7 +161,7 @@ export const rehydrateCorpusIndexProviderCandidatesQuery = (
       citationCount: caseLawDecisions.citationCount,
       citationAuthority: caseLawDecisions.citationAuthority,
       createdAt: caseLawDecisions.createdAt,
-      canRecur: caseLawCorpusDocumentCanRecur(generation),
+      canRecur: caseLawCorpusDocumentCanRecur(generation).as("can_recur"),
     })
     .from(caseLawDecisions)
     .innerJoin(caseLawSources, eq(caseLawSources.id, caseLawDecisions.sourceId))
@@ -162,7 +172,26 @@ export const rehydrateCorpusIndexProviderCandidatesQuery = (
         publishedCaseLawDecision,
         currentCaseLawCorpusProjection(generation),
       ),
-    );
+    )
+    // Bounds the content branch and keeps its subplans behind eligibility.
+    .limit(ids.length)
+    .as("eligible_provider");
+  return tx
+    .select({ id: caseLawDecisions.id, row: getColumns(eligibleRows) })
+    .from(caseLawDecisions)
+    .leftJoin(eligibleRows, eq(caseLawDecisions.id, eligibleRows.id))
+    .where(inArray(caseLawDecisions.id, ids))
+    .limit(ids.length);
+};
+
+export const rehydrateCorpusIndexProviderCandidatesQuery = async (
+  tx: CaseLawPublicReadTransaction,
+  options: RehydrateCorpusIndexCandidatesOptions,
+) =>
+  partitionCorpusRehydration({
+    ids: options.ids,
+    records: await rehydrateCorpusIndexProviderCandidatesStatement(tx, options),
+  });
 
 export const rehydrateCorpusIndexProviderCandidates =
   definePublicLawSharedQuery(
@@ -174,13 +203,17 @@ export const rehydrateCorpusIndexProviderCandidates =
   );
 
 type RankCorpusIndexProviderCandidatesOptions = {
+  caseLawDb?: CaseLawPublicReadDb | undefined;
+  hitDispositions?: CorpusHitDispositionCounter | undefined;
   generation: string;
   candidates: readonly ScoredCandidate[];
   /** Groups earlier pages emitted (`SearchCursor.excludedGroups`). */
   excludedGroups: readonly string[] | undefined;
 };
 
-const rankCorpusIndexProviderCandidates = async ({
+export const rankCorpusIndexProviderCandidates = async ({
+  caseLawDb = caseLawPublicReadDb,
+  hitDispositions = createCorpusHitDispositionCounter(),
   generation,
   candidates,
   excludedGroups,
@@ -188,16 +221,19 @@ const rankCorpusIndexProviderCandidates = async ({
   const ids = candidates.map((candidate) =>
     toSafeId<"caseLawDecision">(candidate.id),
   );
-  const rows =
+  const read =
     ids.length === 0
-      ? []
-      : await caseLawPublicReadDb(
+      ? { rows: [], dispositions: [] }
+      : await caseLawDb(
           async (tx) =>
             await rehydrateCorpusIndexProviderCandidates(tx, {
               generation,
               ids,
             }),
         );
+
+  recordCorpusRehydrationDispositions(read.dispositions, hitDispositions);
+  const rows = read.rows;
 
   // Keyed by plain string id (candidate ids from corpus index are strings).
   const displayById = new Map(rows.map((row) => [String(row.id), row]));
@@ -228,11 +264,18 @@ const rankCorpusIndexProviderCandidates = async ({
   };
 };
 
+type CorpusIndexSearchResultOptions = {
+  query: LegalSearchQuery;
+  observer: RegistryRequestObservation;
+  hitDispositions: CorpusHitDispositionCounter;
+};
+
+type CorpusIndexSearchResult = Result<LegalSearchResult, LegalSearchError>;
+
 const searchResult = async (
-  query: LegalSearchQuery,
-  observer: RegistryRequestObservation,
-): Promise<Result<LegalSearchResult, LegalSearchError>> => {
-  const limit = query.limit;
+  options: CorpusIndexSearchResultOptions,
+): Promise<CorpusIndexSearchResult> => {
+  const { query, observer, hitDispositions } = options;
   const family = query.documentFamily ?? "case_law";
 
   // Before the generation read, and before any engine work: a cursor that does
@@ -325,7 +368,7 @@ const searchResult = async (
       facets: null,
       nextCursor: null,
       paginationOutcome: SEARCH_PAGINATION_COMPLETE,
-      limit,
+      limit: query.limit,
     });
   }
   // This boundary has no HTTP status to answer with, so a cursor from another
@@ -358,11 +401,12 @@ const searchResult = async (
   const snippetTokens = tokenizeCorpusFreeText(query.query);
 
   const searchPage = await readCorpusIndexSearchPage({
+    hitDispositions,
     observer,
     cluster: serving.cluster,
     indexId,
     query: resolved.query,
-    limit,
+    limit: query.limit,
     // The shared provider ranks best-first only; the public search handler
     // owns the reader-chosen orders.
     order: RELEVANCE_ORDER,
@@ -399,6 +443,7 @@ const searchResult = async (
     unseenScoreUpperBound: stableBlendUpperBound,
     rankCandidates: async (candidates) =>
       await rankCorpusIndexProviderCandidates({
+        hitDispositions,
         generation,
         candidates,
         excludedGroups: parsedCursor?.excludedGroups,
@@ -462,7 +507,7 @@ const searchResult = async (
     facets: null,
     nextCursor,
     paginationOutcome: searchPage.paginationOutcome,
-    limit,
+    limit: query.limit,
   });
 };
 
@@ -470,13 +515,18 @@ const search = async (
   query: LegalSearchQuery,
   observer: RegistryRequestObservation,
 ): Promise<Result<LegalSearchResult, LegalSearchError>> => {
+  const hitDispositions = createCorpusHitDispositionCounter();
   const attempted = await Result.tryPromise({
-    try: async () => await searchResult(query, observer),
+    try: async () => await searchResult({ query, observer, hitDispositions }),
     catch: (cause) =>
       new LegalSearchUnavailableError({
         message: "Corpus index legal search failed.",
         cause,
       }),
+  });
+  reportCorpusHitDispositions({
+    family: query.documentFamily ?? "case_law",
+    counts: hitDispositions.snapshot(),
   });
   if (Result.isError(attempted)) {
     return attempted;

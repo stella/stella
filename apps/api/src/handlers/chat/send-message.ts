@@ -20,6 +20,7 @@ import type { SkillMetadata } from "@stll/skills";
 
 import type { SafeDb, SafeDbError, ScopedDb } from "@/api/db/safe-db";
 import { chatMessages, chatThreads } from "@/api/db/schema";
+import { env } from "@/api/env";
 import {
   getActiveFileModelBinding,
   type ActiveFileModelBinding,
@@ -211,6 +212,8 @@ import type {
 import { createRawChatFilePart } from "@/api/handlers/chat/upload-files";
 import type { UploadedChatFile } from "@/api/handlers/chat/upload-files";
 import { attachVerifiedEntityMentionKinds } from "@/api/handlers/chat/verified-mention-kinds";
+import { createVisualResourceOrigin } from "@/api/handlers/visual-sandbox/resource-origin";
+import { createVisualStore } from "@/api/handlers/visual-sandbox/store";
 import type { OrgAIConfig } from "@/api/lib/ai-config";
 import { captureError, detached } from "@/api/lib/analytics/capture";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
@@ -281,6 +284,7 @@ import {
   validateTanStackDevModelOverride,
 } from "@/api/lib/tanstack-ai-models";
 import type { UsageLaneDecision } from "@/api/lib/usage/lane-routing";
+import { previewVisual } from "@/api/lib/visual-preview";
 import { loadWebSearchProvidersForOrg } from "@/api/lib/web-search/load-org-keys";
 import { PDF_MIME_TYPE } from "@/api/mime-types";
 import { isLocalDevOpen } from "@/api/runtime-mode";
@@ -1115,6 +1119,27 @@ const prepareDispatch = async ({
 type ThreadValidationState = InferOk<
   Awaited<ReturnType<typeof readThreadValidationState>>
 >;
+
+type CreateTurnVisualOriginOptions = {
+  incomingMessage: Pick<PersistableChatMessage, "id" | "role">;
+  persistedMessage: ThreadValidationState["persistedMessage"];
+};
+
+const createTurnVisualOrigin = ({
+  incomingMessage,
+  persistedMessage,
+}: CreateTurnVisualOriginOptions) =>
+  createVisualResourceOrigin({
+    persistedParts:
+      incomingMessage.role === "assistant" &&
+      persistedMessage?.role === "assistant"
+        ? chatMessageFromPersisted({
+            content: persistedMessage.content,
+            id: incomingMessage.id,
+            role: persistedMessage.role,
+          }).parts
+        : [],
+  });
 
 type AcceptIncomingTurnOptions = {
   accessibleSet: ReadonlySet<string>;
@@ -2657,7 +2682,27 @@ export const createSendMessage = (
         // catalog and connector tools, which are known only later. Skill
         // availability is decided over the same inputs before the catalog
         // reaches the prompt, so an offered skill always has its tools.
+        const visualOrigin = createTurnVisualOrigin({
+          incomingMessage: body.message,
+          persistedMessage: validationThreadState.persistedMessage,
+        });
+        const visualTools = {
+          origin: visualOrigin,
+          preview: async (document: string) =>
+            previewVisual({
+              document,
+              functionArn: env.VISUAL_PREVIEW_FUNCTION_NAME,
+            }),
+          store: createVisualStore({
+            recordAuditEvent,
+            safeDb,
+            threadId: body.threadId,
+            userId: user.id,
+            workspaceId,
+          }),
+        };
         const chatToolContext = {
+          visualTools,
           featureAccessSnapshot,
           createAIAbortSignal: createMeteredAIAbortSignal,
           organizationId: session.activeOrganizationId,
@@ -3114,6 +3159,7 @@ export const createSendMessage = (
                 };
 
                 const outcome = await dependencies.streamResponse({
+                  visualOrigin,
                   runId: body.runId,
                   ...(parentRunId === undefined ? {} : { parentRunId }),
                   ...(resume === undefined ? {} : { resume }),

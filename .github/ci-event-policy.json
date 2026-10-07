@@ -1,5 +1,6 @@
 {
   "jobs": {
+    "visual-preview.yml/preview": "pr-fast",
     "railway-smoke.yml/smoke": "main",
     "autofix.yml/dependabot-bun-autofix": "pr-fast",
     "autofix.yml/regenerate-scope": "pr-fast",
@@ -96,6 +97,7 @@
     "railway-template-source.yml/drift": "main",
     "disarm-auto-merge.yml/disarm": "pr-fast",
     "desktop-release-canary.yml/check-latest": "main",
+    "journey-canary.yml/journeys": "main",
     "provenance-nightly.yml/provenance-update": "main",
     "deploy-landing.yml/scope": "main",
     "deploy-landing.yml/build": "main",
@@ -106,11 +108,12 @@
     "ci.yml/ci-generated-sources": "pr-fast",
     "ci.yml/docker-checks": "queue",
     "ci.yml/parser-version-guard": "pr-fast",
+    "ci.yml/ci-checks-docs": "pr-fast",
     "ci.yml/ci-checks-generated": "pr-fast",
     "ci.yml/ci-checks-policy": "pr-fast",
     "ci.yml/ci-checks-rest": "pr-fast",
     "ci.yml/ci-tests": "pr-fast",
-    "ci.yml/ci-browser": "queue",
+    "ci.yml/ci-browser": "pr-fast",
     "ci.yml/code-quality-api": "pr-fast",
     "ci.yml/code-quality-web": "pr-fast",
     "ci.yml/code-quality-rest": "pr-fast",

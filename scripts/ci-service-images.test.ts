@@ -15,7 +15,7 @@ import {
   collectImageReferences,
   compareMirrorImages,
 } from "./ci-service-images";
-import mirrorImages from "./ci-service-images.json";
+import mirrorImages from "./ci-service-images.json" with { type: "json" };
 
 const fixtureRoots: string[] = [];
 

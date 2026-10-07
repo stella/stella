@@ -12,6 +12,7 @@ const config = {
   description: "Archive a number series so it cannot allocate another number.",
   permissions: { organizationSettings: ["update"] },
   accountAccess: ACCOUNT_ACCESS.standard,
+  featureAccess: { featureId: "time-billing", type: "required" },
   mcp: { type: "capability", reason: "billing_admin", consumesServices: false },
   params: numberSeriesParams,
 } satisfies HandlerConfig;

@@ -493,12 +493,81 @@ const exportedTableNames = (ast: ts.SourceFile) => {
   }
   return names;
 };
+type DispatchBoundary = NonNullable<
+  NonNullable<FeatureRegistry[string]["ownership"]>["dispatchModules"]
+>[number];
+
+const isValidDispatchBoundary = (
+  ast: ts.SourceFile,
+  boundary: DispatchBoundary,
+) => {
+  switch (boundary.type) {
+    case "registry":
+      return ast.statements.some(
+        (statement) =>
+          declaresSymbol(statement, boundary.registry) &&
+          ts.isVariableStatement(statement) &&
+          statement.declarationList.declarations.some(
+            (declaration) =>
+              ts.isIdentifier(declaration.name) &&
+              declaration.name.text === boundary.registry &&
+              declaration.initializer !== undefined &&
+              ts.isArrayLiteralExpression(
+                unwrapExpression(declaration.initializer),
+              ),
+          ),
+      );
+    case "admitted": {
+      let valid = false;
+      const bindings = new Set<string>();
+      for (const statement of ast.statements) {
+        if (
+          !runtimeImport(statement) ||
+          statement.moduleSpecifier.text !==
+            (boundary.specifier ?? "@/api/mcp/feature-access")
+        ) {
+          continue;
+        }
+        const named = statement.importClause?.namedBindings;
+        if (named === undefined || !ts.isNamedImports(named)) {
+          continue;
+        }
+        for (const binding of named.elements) {
+          if (
+            !binding.isTypeOnly &&
+            (binding.propertyName?.text ?? binding.name.text) ===
+              boundary.admission
+          ) {
+            bindings.add(binding.name.text);
+          }
+        }
+      }
+      const visit = (node: ts.Node) => {
+        if (
+          ts.isCallExpression(node) &&
+          ts.isIdentifier(node.expression) &&
+          bindings.has(node.expression.text)
+        ) {
+          valid = true;
+        }
+        ts.forEachChild(node, visit);
+      };
+      visit(ast);
+      return valid;
+    }
+    default: {
+      boundary satisfies never;
+      return panic("Unknown dispatch ownership boundary");
+    }
+  }
+};
 const validateOwnership = (
   registry: FeatureRegistry,
   graph: DeclarationSourceGraph,
 ) => {
   const violations: FeatureAccessDeclarationViolation[] = [];
   const tableOwners = new Map<string, Map<string, Requirement>>();
+  const dispatchModules = new Set<string>();
   for (const [featureId, { ownership }] of Object.entries(registry)) {
     if (
       ownership === undefined ||
@@ -582,6 +651,24 @@ const validateOwnership = (
         tableOwners.set(name, owners);
       }
     }
+    for (const boundary of ownership.dispatchModules ?? []) {
+      const ast = graph.sourceFile(boundary.module);
+      if (ast === undefined) {
+        violations.push({
+          file: boundary.module,
+          message: `feature ${featureId} owns a missing dispatch module`,
+        });
+        continue;
+      }
+      if (!isValidDispatchBoundary(ast, boundary)) {
+        violations.push({
+          file: boundary.module,
+          message: `feature ${featureId} has an invalid ${boundary.type} dispatch boundary`,
+        });
+        continue;
+      }
+      dispatchModules.add(boundary.module);
+    }
   }
   const tables = [...tableOwners].map(([table, owners]) => ({
     matcher: new RegExp(
@@ -590,7 +677,7 @@ const validateOwnership = (
     ),
     owners,
   }));
-  return { violations, tables };
+  return { violations, tables, dispatchModules };
 };
 const parseDeclaration = (
   config: Record<string, unknown>,
@@ -660,12 +747,14 @@ type EndpointOptions = {
   registry: FeatureRegistry;
   graph: DeclarationSourceGraph;
   tables: ReturnType<typeof validateOwnership>["tables"];
+  dispatchModules: ReturnType<typeof validateOwnership>["dispatchModules"];
 };
 const inspectEndpoint = ({
   endpoint,
   registry,
   graph,
   tables,
+  dispatchModules,
 }: EndpointOptions) => {
   const file = endpoint.file.split("#").at(0) ?? endpoint.file;
   const declaration = parseDeclaration(endpoint.config, file, registry);
@@ -694,6 +783,11 @@ const inspectEndpoint = ({
       return;
     }
     visited.add(module);
+    // Descriptor registries do not invoke their handlers. Dispatch owners
+    // admit the selected descriptor before invocation, not the whole caller.
+    if (dispatchModules.has(module)) {
+      return;
+    }
     const ast = graph.sourceFile(module);
     if (ast === undefined) {
       violations.push({ file, message: `missing source module ${module}` });
@@ -954,6 +1048,7 @@ export const validateFeatureAccessDeclarations = ({
         registry,
         graph,
         tables: ownership.tables,
+        dispatchModules: ownership.dispatchModules,
       }),
     );
   }

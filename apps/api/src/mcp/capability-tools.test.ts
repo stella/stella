@@ -15,6 +15,7 @@ import { PLAYBOOK_RUN_FAILURE_CODE } from "@/api/lib/document-review/playbook-ru
 import {
   createFeatureAccessSnapshot,
   decideFeatureAccess,
+  isFeatureEnabled,
 } from "@/api/lib/feature-access/policy";
 import { featurePrerequisiteClosure } from "@/api/lib/feature-access/prerequisites";
 import {
@@ -211,9 +212,21 @@ const createContext = ({
       organizationId: "org_1",
       userId: "user_1",
       decisions: new Map(
-        Object.keys(FEATURE_REGISTRY).map((featureId) => [
+        Object.entries(FEATURE_REGISTRY).map(([featureId, definition]) => [
           featureId,
-          { status: "hidden" as const },
+          decideFeatureAccess({
+            registry: FEATURE_REGISTRY,
+            grants: {},
+            featureId,
+            organizationId: "org_1",
+            userId: "user_1",
+            membership: true,
+            user: { email: "standard@example.test", emailVerified: true },
+            enrolments:
+              definition.enrolment === "self-serve"
+                ? [{ featureId, organizationId: "org_1", userId: "user_1" }]
+                : [],
+          }),
         ]),
       ),
     }),
@@ -464,7 +477,11 @@ describe("list verification access grants across MCP tools", () => {
         };
       },
     };
-    const database = createScopedDbMock(tx);
+    const database = createScopedDbMock(tx, {
+      featureAccess: {
+        identity: membership === "current" ? { email, emailVerified } : null,
+      },
+    });
     const context = createContext({
       scopedDb: database.scopedDb,
       safeDb: database.safeDb,
@@ -3165,11 +3182,21 @@ describe("invoke_capability deployment feature gate", () => {
       .filter((id) => !listed.has(id))
       .toSorted();
     expect(hidden).toContain("usage.entitlement.get");
+    const context = createContext();
     const disabledIds = await featureOmittedCapabilityIds(
       (feature) => feature === undefined || !disabledFeatures.has(feature),
+      context,
     );
+    const snapshot = context.featureAccessSnapshot;
+    if (snapshot === undefined) {
+      throw new Error("Expected caller feature admission fixture");
+    }
     const ungrantedIds = capabilityCatalog
-      .filter((entry) => entry.featureAccess === "required")
+      .filter(
+        (entry) =>
+          entry.featureAccess === "required" &&
+          !isFeatureEnabled(snapshot, entry.featureId, context),
+      )
       .map(({ id }) => id);
     expect([...new Set([...disabledIds, ...ungrantedIds])].toSorted()).toEqual(
       hidden,
@@ -3375,6 +3402,19 @@ test.each(["default-deny", "granted", "colleague"] as const)(
       organizationId,
       userId,
       decisions: new Map([
+        [
+          "time-billing",
+          decideFeatureAccess({
+            registry: FEATURE_REGISTRY,
+            grants: {},
+            featureId: "time-billing",
+            organizationId,
+            userId,
+            membership: true,
+            user: { email: "standard@example.test", emailVerified: true },
+            enrolments: [{ featureId: "time-billing", organizationId, userId }],
+          }),
+        ],
         [
           featureId,
           decideFeatureAccess({
