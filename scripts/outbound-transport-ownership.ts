@@ -132,7 +132,7 @@ const isScope = (node: ts.Node): boolean =>
 
 const scopeOf = (node: ts.Node): ts.Node => {
   let scope = node.parent;
-  while (scope.parent && !isScope(scope)) {
+  while (!isScope(scope)) {
     scope = scope.parent;
   }
   return scope;
@@ -242,15 +242,17 @@ const lookupBinding = ({
   node,
   name,
 }: LookupBindingOptions): ts.Expression | null | undefined => {
-  let scope: ts.Node | undefined = node;
-  while (scope) {
+  let scope = node;
+  while (true) {
     const bindings = scopes.get(scope);
     if (bindings?.has(name)) {
       return bindings.get(name);
     }
+    if (ts.isSourceFile(scope)) {
+      return undefined;
+    }
     scope = scope.parent;
   }
-  return undefined;
 };
 
 type GlobalObjectNameOptions = {
@@ -347,16 +349,14 @@ const registerModule = ({
   const netUtilityNames = ["BlockList", "isIP", "isIPv4", "isIPv6"];
   if (
     (module === "net" || module === "node:net") &&
-    names !== null &&
-    names.every((name) => netUtilityNames.includes(name))
+    names?.every((name) => netUtilityNames.includes(name))
   ) {
     return;
   }
   const bullmqUtilityNames = ["DelayedError", "UnrecoverableError"];
   if (
     module === "bullmq" &&
-    names !== null &&
-    names.every((name) => bullmqUtilityNames.includes(name))
+    names?.every((name) => bullmqUtilityNames.includes(name))
   ) {
     return;
   }
@@ -380,7 +380,7 @@ const registerModule = ({
 
 const isInsideType = (node: ts.Node): boolean => {
   let ancestor = node.parent;
-  while (ancestor && !ts.isStatement(ancestor)) {
+  while (!ts.isSourceFile(ancestor) && !ts.isStatement(ancestor)) {
     if (ts.isTypeNode(ancestor)) {
       return true;
     }
@@ -428,7 +428,7 @@ const visitModuleLoad = ({
     ts.isStringLiteralLike(node.moduleSpecifier)
   ) {
     const clause = node.importClause;
-    if (clause?.isTypeOnly) {
+    if (clause?.phaseModifier === ts.SyntaxKind.TypeKeyword) {
       return;
     }
     const names = moduleNamesFromImport(clause);
@@ -453,7 +453,6 @@ const visitModuleLoad = ({
     ts.isImportEqualsDeclaration(node) &&
     !node.isTypeOnly &&
     ts.isExternalModuleReference(node.moduleReference) &&
-    node.moduleReference.expression &&
     ts.isStringLiteralLike(node.moduleReference.expression)
   ) {
     register(node.moduleReference.expression.text, null);

@@ -36,13 +36,15 @@ const options = {
 } as const;
 
 // These calls are compiled as contracts and are never executed.
-export const requireOutboundPermit = async () => {
-  for (const request of Object.values(outboundPermitContract)) {
-    // @ts-expect-error An outbound request requires its boundary's permit.
-    await request(options);
-    // @ts-expect-error The permit field requires an issued identity.
-    await request({ ...options, permit: undefined });
-    // @ts-expect-error An ordinary object is not an outbound permit.
-    await request({ ...options, permit: {} });
-  }
-};
+export const requireOutboundPermit = async () =>
+  await Promise.all(
+    Object.values(outboundPermitContract).map(async (request) => {
+      // @ts-expect-error An outbound request requires its boundary's permit.
+      const missingPermit = await request(options);
+      // @ts-expect-error The permit field requires an issued identity.
+      const undefinedPermit = await request({ ...options, permit: undefined });
+      // @ts-expect-error An ordinary object is not an outbound permit.
+      const ordinaryPermit = await request({ ...options, permit: {} });
+      return { missingPermit, undefinedPermit, ordinaryPermit };
+    }),
+  );
