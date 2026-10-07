@@ -1,5 +1,4 @@
 #!/usr/bin/env bun
-
 import { panic } from "better-result";
 import { spawnSync } from "node:child_process";
 import { constants as fsConstants, existsSync, readFileSync } from "node:fs";
@@ -14,6 +13,8 @@ import {
   writeFile,
 } from "node:fs/promises";
 import nodePath from "node:path";
+
+import { sha256Hex as hashSha256Hex, createSha256 } from "@stll/sha256/bun";
 
 const ROOT_DIR = nodePath.resolve(import.meta.dirname, "..");
 export const PRODUCT_MEDIA_MANIFEST_PATH =
@@ -226,14 +227,14 @@ export const recordingArtifactsHashFromManifest = (
   )?.artifactsHash;
 
 const sha256 = async (path: string): Promise<string> =>
-  new Bun.CryptoHasher("sha256").update(await readFile(path)).digest("hex");
+  hashSha256Hex(await readFile(path));
 
 const recordingArtifactsHash = async (
   publicDir: string,
   captureId: string,
   theme: "dark" | "light",
 ): Promise<string> => {
-  const hasher = new Bun.CryptoHasher("sha256");
+  const hasher = createSha256();
   const paths = recordingArtifactPaths(captureId, theme);
   const contents = await Promise.all(
     paths.map(

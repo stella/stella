@@ -1,8 +1,9 @@
 import { expect, test } from "bun:test";
-import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { Script } from "node:vm";
 import * as v from "valibot";
+
+import { createSha256, sha256Hex } from "@stll/sha256/node";
 
 import { contextWithPlanOutputs, evaluate } from "./github-expression";
 
@@ -54,9 +55,7 @@ const pr = {
   base: { sha: "b".repeat(40) },
   labels,
 };
-const scope = createHash("sha256")
-  .update(JSON.stringify([pr.title, pr.body, false]))
-  .digest("hex");
+const scope = sha256Hex(JSON.stringify([pr.title, pr.body, false]));
 const marker = (depth: string) =>
   `ci-completed-v3-123-456-${pr.head.sha}-${pr.base.sha}-${depth}-${scope}`;
 const artifact = (depth: string) => ({
@@ -101,7 +100,12 @@ const decide = async ({
       if (name !== "node:crypto") {
         throw new Error("Unexpected module");
       }
-      return { createHash };
+      return {
+        createHash: (algorithm: string) => {
+          expect(algorithm).toBe("sha256");
+          return createSha256();
+        },
+      };
     },
     process: { env: { SUITE_DEPTH: depth, GITHUB_RUN_ATTEMPT: "1" } },
     context: {

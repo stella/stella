@@ -4,10 +4,6 @@
     "reason": "migrates in a follow-up"
   },
   {
-    "id": ".oxlint-plugins/no-swallowed-item-error.ts",
-    "reason": "migrates in a follow-up"
-  },
-  {
     "id": "apps/api/scripts/ai-native-image-canary.test.ts",
     "reason": "migrates in a follow-up"
   },
@@ -861,62 +857,6 @@
   },
   {
     "id": "packages/template-packs/src/catalogue.ts",
-    "reason": "migrates in a follow-up"
-  },
-  {
-    "id": "scripts/cargo-deny-install.test.ts",
-    "reason": "migrates in a follow-up"
-  },
-  {
-    "id": "scripts/check-duplicate-raster-assets.ts",
-    "reason": "migrates in a follow-up"
-  },
-  {
-    "id": "scripts/check-marketing-recordings.ts",
-    "reason": "migrates in a follow-up"
-  },
-  {
-    "id": "scripts/check-migration-order.test.ts",
-    "reason": "migrates in a follow-up"
-  },
-  {
-    "id": "scripts/check-migration-order.ts",
-    "reason": "migrates in a follow-up"
-  },
-  {
-    "id": "scripts/check-migration-safety.ts",
-    "reason": "migrates in a follow-up"
-  },
-  {
-    "id": "scripts/ci-completed-depth.test.ts",
-    "reason": "migrates in a follow-up"
-  },
-  {
-    "id": "scripts/detect-security-workflow-changes.test.ts",
-    "reason": "migrates in a follow-up"
-  },
-  {
-    "id": "scripts/generate-snowball-stemmers.ts",
-    "reason": "migrates in a follow-up"
-  },
-  {
-    "id": "scripts/generate-us-courts.ts",
-    "reason": "migrates in a follow-up"
-  },
-  {
-    "id": "scripts/osv-scanner-install.test.ts",
-    "reason": "migrates in a follow-up"
-  },
-  {
-    "id": "scripts/product-media.test.ts",
-    "reason": "migrates in a follow-up"
-  },
-  {
-    "id": "scripts/product-media.ts",
-    "reason": "migrates in a follow-up"
-  },
-  {
-    "id": "scripts/safe-chain-install.test.ts",
     "reason": "migrates in a follow-up"
   }
 ]

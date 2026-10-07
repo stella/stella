@@ -1,6 +1,5 @@
 import { describe, expect, test } from "bun:test";
 import { spawnSync } from "node:child_process";
-import { createHash } from "node:crypto";
 import {
   chmodSync,
   existsSync,
@@ -13,13 +12,15 @@ import {
 import { tmpdir } from "node:os";
 import path from "node:path";
 
+import { sha256Hex as hashSha256Hex } from "@stll/sha256/node";
+
 const script = path.join(
   import.meta.dirname,
   "../.github/actions/osv-scanner/install.sh",
 );
 const binary =
   '#!/usr/bin/env bash\n[[ "$1" == "--version" ]]\ntouch "$OSV_TEST_EXECUTED"\n';
-const sha256 = createHash("sha256").update(binary).digest("hex");
+const sha256 = hashSha256Hex(binary);
 const curl = `#!/usr/bin/env bash
 set -euo pipefail
 url=""

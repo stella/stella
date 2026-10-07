@@ -1,6 +1,5 @@
 import { describe, expect, test } from "bun:test";
 import { spawnSync } from "node:child_process";
-import { createHash } from "node:crypto";
 import {
   chmodSync,
   existsSync,
@@ -13,20 +12,20 @@ import {
 import { tmpdir } from "node:os";
 import path from "node:path";
 
+import { sha256Hex as hashSha256Hex } from "@stll/sha256/node";
+
 const script = path.join(
   import.meta.dirname,
   "../.github/actions/safe-chain/install.sh",
 );
 const primary = "https://primary.invalid/release";
 const mirror = "https://mirror.invalid/release";
-const hash = (contents: string) =>
-  createHash("sha256").update(contents).digest("hex");
 const binary = `#!/usr/bin/env bash
 set -euo pipefail
 [[ "$1" == "setup-ci" ]]
 touch "$SAFE_CHAIN_TEST_INSTALLED"
 `;
-const installer = `SHA256_LINUXSTATIC_X64="${hash(binary)}"\n`;
+const installer = `SHA256_LINUXSTATIC_X64="${hashSha256Hex(binary)}"\n`;
 
 // The real transport is replaced, while the production installer still owns
 // hash checks, cache checks, execution, and failure propagation.
@@ -131,7 +130,7 @@ const runInstall = ({
         GITHUB_ENV: githubEnv,
         GITHUB_PATH: path.join(directory, "github-path"),
         SAFE_CHAIN_RELEASE_VERSION: "test-version",
-        SAFE_CHAIN_SHA256: hash(installer),
+        SAFE_CHAIN_SHA256: hashSha256Hex(installer),
         SAFE_CHAIN_PRIMARY_RELEASE_URL: primary,
         SAFE_CHAIN_MIRROR_RELEASE_URL: mirror,
         SAFE_CHAIN_TEST_PRIMARY: primaryStatus,

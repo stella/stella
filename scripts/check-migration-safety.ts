@@ -1,5 +1,5 @@
 #!/usr/bin/env bun
-
+import { panic } from "better-result";
 // Lints migration SQL for operations that need an explicit reviewed
 // acknowledgement (destructive changes, bulk backfills, access-control changes)
 // and for structural invariants that are never allowed. Lock safety
@@ -13,9 +13,6 @@
 //
 // An acknowledgement that clears nothing, names an unknown rule, or carries a
 // reason shorter than MIN_ACKNOWLEDGEMENT_REASON_LENGTH is itself an error.
-
-import { panic } from "better-result";
-import { createHash } from "node:crypto";
 import {
   existsSync,
   readdirSync,
@@ -24,6 +21,8 @@ import {
   statSync,
 } from "node:fs";
 import path from "node:path";
+
+import { sha256Hex as hashSha256Hex } from "@stll/sha256/node";
 
 import { CODE_OWNED_TABLES } from "../apps/api/src/db/code-owned-tables";
 import { HIGH_VOLUME_TABLES } from "../apps/api/src/db/high-volume-tables";
@@ -1878,9 +1877,7 @@ export const checkMigrationIndexBuilds = (
             file,
             line: statement.line,
             ruleId: HIGH_VOLUME_INDEX_BUILD_RULE_ID,
-            statementHash: createHash("sha256")
-              .update(statement.raw)
-              .digest("hex"),
+            statementHash: hashSha256Hex(statement.raw),
             description:
               "builds indexes on a high-volume table or an unresolved REINDEX target during a schema migration",
             guidance:

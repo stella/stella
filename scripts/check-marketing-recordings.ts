@@ -1,5 +1,5 @@
 #!/usr/bin/env bun
-
+import { panic } from "better-result";
 // Reports which recorded product-story scenes are stale. Each recording is
 // stamped into apps/landing/public/media/products/recordings-manifest.json by
 // the recorder (apps/web/e2e/marketing/record-product-story.ts) with the
@@ -7,13 +7,12 @@
 // git (read-only) which watched paths changed since that commit and prints a
 // per-capture verdict with the exact re-record command. Exit code is only
 // non-zero with --strict, so releases can choose to enforce.
-
-import { panic } from "better-result";
 import { execFileSync } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
 import nodePath from "node:path";
 
 import { compareCodeUnit } from "@stll/collation";
+import { sha256Hex as hashSha256Hex, createSha256 } from "@stll/sha256/bun";
 
 import {
   CAPTURE_THEMES,
@@ -125,9 +124,7 @@ export const watchedPathsHashAtHead = (
     "--",
     ...normalizedPaths,
   ]);
-  return new Bun.CryptoHasher("sha256")
-    .update(`${JSON.stringify(normalizedPaths)}\n${tree}\n`)
-    .digest("hex");
+  return hashSha256Hex(`${JSON.stringify(normalizedPaths)}\n${tree}\n`);
 };
 
 export const recordingArtifactsHash = (
@@ -147,7 +144,7 @@ export const recordingArtifactsHash = (
       return manifestHash;
     }
   }
-  const hasher = new Bun.CryptoHasher("sha256");
+  const hasher = createSha256();
   for (const path of paths) {
     hasher.update(`${path}\0`);
     hasher.update(readFileSync(nodePath.join(ROOT_DIR, path)));

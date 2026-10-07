@@ -5,7 +5,8 @@
 import type { ESTree } from "@oxlint/plugins";
 import { eslintCompatPlugin } from "@oxlint/plugins";
 import { panic } from "better-result";
-import { createHash } from "node:crypto";
+
+import { sha256Hex } from "@stll/sha256/node";
 
 import ledger from "../scripts/swallowed-item-error-ledger.json" with { type: "json" };
 import {
@@ -297,9 +298,7 @@ export default eslintCompatPlugin({
           const tokens = context.sourceCode
             .getTokens(owner)
             .map((token) => token.value);
-          const id = createHash("sha256")
-            .update(JSON.stringify(tokens))
-            .digest("hex");
+          const id = sha256Hex(JSON.stringify(tokens));
           const duplicate = seen.has(id);
           seen.add(id);
           if (!budget.has(id) || duplicate) {

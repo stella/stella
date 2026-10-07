@@ -1,4 +1,5 @@
 #!/usr/bin/env bun
+import { panic } from "better-result";
 /**
  * Regenerates the committed Snowball stemmers under
  * `apps/api/src/lib/legal-search/morphology/snowball/`.
@@ -18,13 +19,12 @@
  * algorithm instead by the conformance fixtures this script writes, which
  * `snowball/conformance.test.ts` checks on every run.
  */
-
-import { panic } from "better-result";
 import { $ } from "bun";
-import { createHash } from "node:crypto";
 import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
+
+import { sha256Hex as hashSha256Hex } from "@stll/sha256/node";
 
 import {
   SNOWBALL_BASE_STEMMER_SHA256,
@@ -351,9 +351,6 @@ const buildFixture = (algorithm: string, voc: string, output: string) => {
   return `${fixtureHeader(algorithm, rows.length)}${rows.join("\n")}\n`;
 };
 
-const sha256 = (contents: string) =>
-  createHash("sha256").update(contents).digest("hex");
-
 type Artifact = { readonly path: string; readonly contents: string };
 
 type BuildTargetOptions = {
@@ -421,7 +418,7 @@ const buildArtifacts = async (
     path.join(snowballDir, "javascript/base-stemmer.js"),
     "utf-8",
   );
-  const upstreamDigest = sha256(upstreamBaseStemmer);
+  const upstreamDigest = hashSha256Hex(upstreamBaseStemmer);
   if (upstreamDigest !== SNOWBALL_BASE_STEMMER_SHA256) {
     panic(
       `upstream javascript/base-stemmer.js changed (${upstreamDigest}); re-port ` +
@@ -445,7 +442,7 @@ const check = async (artifact: Artifact): Promise<string | null> => {
   }
   return committed === null
     ? `missing: ${artifact.path}`
-    : `drifted: ${artifact.path} (committed ${sha256(committed)}, regenerated ${sha256(artifact.contents)})`;
+    : `drifted: ${artifact.path} (committed ${hashSha256Hex(committed)}, regenerated ${hashSha256Hex(artifact.contents)})`;
 };
 
 const main = async (): Promise<number> => {

@@ -1,6 +1,5 @@
 import { panic } from "better-result";
 import { expect, test } from "bun:test";
-import { createHash } from "node:crypto";
 import {
   mkdtempSync,
   readFileSync,
@@ -11,6 +10,8 @@ import {
 import { tmpdir } from "node:os";
 import path from "node:path";
 import * as v from "valibot";
+
+import { sha256Hex as hashSha256Hex } from "@stll/sha256/node";
 
 const script = path.join(
   import.meta.dirname,
@@ -108,7 +109,7 @@ const expectLanguageCoverage = (language: string, detector = script) => {
 };
 
 test("the documented extension baseline is the unchanged pinned upstream table", () => {
-  expect(createHash("sha256").update(documentation).digest("hex")).toBe(
+  expect(hashSha256Hex(documentation)).toBe(
     "6d76b52b5f1f1f571ec586326299d606f75a4b42cdc5a9d6ff1edca17e017fdc",
   );
 });

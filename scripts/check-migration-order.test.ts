@@ -13,6 +13,8 @@ import {
 import { tmpdir } from "node:os";
 import path from "node:path";
 
+import { sha256Hex as hashSha256Hex } from "@stll/sha256/bun";
+
 import {
   findMigrationImmutabilityViolation,
   findMigrationIdentityViolation,
@@ -401,8 +403,6 @@ describe("migration immutability", () => {
     const inventoryPath = "apps/api/src/lib/db/migration-alias-inventory.json";
     const originalSql = "SELECT 1;\n";
     const editedSql = "SELECT 2;\n";
-    const hash = (text: string) =>
-      new Bun.CryptoHasher("sha256").update(text).digest("hex");
     const runGit = (...arguments_: string[]) => {
       const result = Bun.spawnSync(["git", ...arguments_], {
         cwd,
@@ -471,9 +471,9 @@ describe("migration immutability", () => {
       expect(edited.mergeBase).toBe(branchPoint);
       expect(edited.changes.modifiedFiles).toEqual([FILE]);
       expect(edited.baseInventory).toEqual([]);
-      expect(edited.baseHashes).toEqual({ [FILE]: hash(originalSql) });
+      expect(edited.baseHashes).toEqual({ [FILE]: hashSha256Hex(originalSql) });
       const headHashes = {
-        [FILE]: hash(readFileSync(path.join(cwd, FILE), "utf-8")),
+        [FILE]: hashSha256Hex(readFileSync(path.join(cwd, FILE), "utf-8")),
       };
       expect(
         findMigrationImmutabilityViolation({
@@ -486,14 +486,14 @@ describe("migration immutability", () => {
       ).toEqual({
         type: "edited-base-migration",
         file: FILE,
-        baseHash: hash(originalSql),
-        headHash: hash(editedSql),
+        baseHash: hashSha256Hex(originalSql),
+        headHash: hashSha256Hex(editedSql),
       });
 
       const branchAlias = {
         ...alias,
-        priorHash: hash(originalSql),
-        newHash: hash(editedSql),
+        priorHash: hashSha256Hex(originalSql),
+        newHash: hashSha256Hex(editedSql),
       };
       writeFileSync(
         path.join(cwd, inventoryPath),
@@ -605,11 +605,9 @@ test("the migration CLI rejects bad new dependencies and accepts an aliased base
     runGit("switch", "-c", "aliased");
     const editedSql = "SELECT 3;\n";
     writeFileSync(path.join(cwd, FILE), editedSql);
-    const hash = (text: string) =>
-      new Bun.CryptoHasher("sha256").update(text).digest("hex");
     writeFileSync(
       inventoryPath,
-      `${JSON.stringify([{ ...alias, priorHash: hash(originalSql), newHash: hash(editedSql) }])}\n`,
+      `${JSON.stringify([{ ...alias, priorHash: hashSha256Hex(originalSql), newHash: hashSha256Hex(editedSql) }])}\n`,
     );
     runGit("add", "apps");
     runGit("commit", "-m", "Alias edited migration");
@@ -622,7 +620,7 @@ test("the migration CLI rejects bad new dependencies and accepts an aliased base
     writeFileSync(path.join(cwd, FILE), malformedAliasedSql);
     writeFileSync(
       inventoryPath,
-      `${JSON.stringify([{ ...alias, priorHash: hash(originalSql), newHash: hash(malformedAliasedSql) }])}\n`,
+      `${JSON.stringify([{ ...alias, priorHash: hashSha256Hex(originalSql), newHash: hashSha256Hex(malformedAliasedSql) }])}\n`,
     );
     runGit("add", "apps");
     runGit("commit", "-m", "Add malformed header to aliased migration");

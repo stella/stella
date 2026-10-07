@@ -1,4 +1,5 @@
 #!/usr/bin/env bun
+import { panic } from "better-result";
 /**
  * Regenerates `packages/api-contract/src/us-courts.generated.ts`, the United
  * States court directory, from the pinned inputs under
@@ -31,12 +32,14 @@
  * A manual tool outside the build; `us-courts-generator.test.ts` holds the
  * committed directory to what the committed inputs generate.
  */
-
-import { panic } from "better-result";
-import { createHash } from "node:crypto";
 import { readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import * as v from "valibot";
+
+import {
+  sha256Bytes as hashSha256Bytes,
+  sha256Hex as hashSha256Hex,
+} from "@stll/sha256/node";
 
 import {
   isUsCourtRegion,
@@ -454,9 +457,7 @@ type DirectoryEntry = UsCourtDirectoryRow;
 
 /** The partition a court id falls in; see `US_COURT_PARTITION_KEY_PREFIX`. */
 const usCourtPartitionOf = (courtId: string): UsCourtPartition => {
-  const digest = createHash("sha256")
-    .update(`${US_COURT_PARTITION_KEY_PREFIX}${courtId}`, "utf-8")
-    .digest();
+  const digest = hashSha256Bytes(`${US_COURT_PARTITION_KEY_PREFIX}${courtId}`);
   return usCourtPartitionLabel((digest[0] ?? 0) % US_COURT_PARTITION_COUNT);
 };
 
@@ -982,11 +983,6 @@ export const buildUsCourtDirectory = ({
   return entries.toSorted((left, right) => compareText(left.id, right.id));
 };
 
-// -- Rendering ---------------------------------------------------------------
-
-const sha256 = (data: string | Uint8Array): string =>
-  createHash("sha256").update(data).digest("hex");
-
 const literal = (value: string | boolean | null): string =>
   typeof value === "string" ? JSON.stringify(value) : String(value);
 
@@ -1029,7 +1025,7 @@ const renderProvenance = (files: InputFiles): string =>
         projection: {
           file: COURTLISTENER_FILE,
           columns: COURTLISTENER_COLUMNS,
-          sha256: sha256(files.courtListener),
+          sha256: hashSha256Hex(files.courtListener),
         },
       },
       courtsDb: {
@@ -1038,10 +1034,13 @@ const renderProvenance = (files: InputFiles): string =>
         projection: {
           file: COURTS_DB_FILE,
           columns: ["id", "location"],
-          sha256: sha256(files.courtsDb),
+          sha256: hashSha256Hex(files.courtsDb),
         },
       },
-      overrides: { file: OVERRIDES_FILE, sha256: sha256(files.overrides) },
+      overrides: {
+        file: OVERRIDES_FILE,
+        sha256: hashSha256Hex(files.overrides),
+      },
     },
     null,
     2,
@@ -1063,9 +1062,12 @@ export const renderDirectory = (
     property("courtListenerSha256", COURTLISTENER_EXPORT.sha256),
     property("courtsDbCommit", COURTS_DB.commit),
     property("courtsDbSha256", COURTS_DB.sha256),
-    property("courtListenerProjectionSha256", sha256(files.courtListener)),
-    property("courtsDbProjectionSha256", sha256(files.courtsDb)),
-    property("overridesSha256", sha256(files.overrides)),
+    property(
+      "courtListenerProjectionSha256",
+      hashSha256Hex(files.courtListener),
+    ),
+    property("courtsDbProjectionSha256", hashSha256Hex(files.courtsDb)),
+    property("overridesSha256", hashSha256Hex(files.overrides)),
     "} as const;",
     "",
     "/**",
@@ -1192,7 +1194,7 @@ const parseExportCsv = (text: string): string[][] => {
 
 const refreshInputs = async (exportPath: string): Promise<void> => {
   const compressed = new Uint8Array(await readFile(exportPath));
-  if (sha256(compressed) !== COURTLISTENER_EXPORT.sha256) {
+  if (hashSha256Hex(compressed) !== COURTLISTENER_EXPORT.sha256) {
     return panic(`${exportPath} is not ${COURTLISTENER_EXPORT.object}`);
   }
   const decompressed = Bun.spawnSync(["bunzip2", "-c", exportPath], {
@@ -1201,7 +1203,10 @@ const refreshInputs = async (exportPath: string): Promise<void> => {
   if (decompressed.exitCode !== 0) {
     return panic("bunzip2 failed on the export");
   }
-  if (sha256(decompressed.stdout) !== COURTLISTENER_EXPORT.decompressedSha256) {
+  if (
+    hashSha256Hex(decompressed.stdout) !==
+    COURTLISTENER_EXPORT.decompressedSha256
+  ) {
     return panic("the decompressed export does not match its pinned digest");
   }
   const [header, ...records] = parseExportCsv(
@@ -1226,7 +1231,7 @@ const refreshInputs = async (exportPath: string): Promise<void> => {
     fetchBytes(`${COURTS_DB_RAW}/${COURTS_DB.file}`),
     fetchBytes(`${COURTS_DB_RAW}/LICENSE`),
   ]);
-  if (sha256(courtsJson) !== COURTS_DB.sha256) {
+  if (hashSha256Hex(courtsJson) !== COURTS_DB.sha256) {
     return panic(
       `${COURTS_DB.file} at ${COURTS_DB.commit} does not match its pinned digest`,
     );

@@ -6,6 +6,8 @@ import { appendFileSync } from "node:fs";
 import path from "node:path";
 import { isDeepStrictEqual } from "node:util";
 
+import { sha256Hex as hashSha256Hex } from "@stll/sha256/bun";
+
 import aliasInventory from "../apps/api/src/lib/db/migration-alias-inventory.json" with { type: "json" };
 import {
   findMalformedRequiresLines,
@@ -311,9 +313,6 @@ const readGitFile = ({
   cwd: string;
 }): Uint8Array => runGit({ arguments_: ["show", `${ref}:${file}`], cwd });
 
-const hashBytes = (bytes: Uint8Array): string =>
-  new Bun.CryptoHasher("sha256").update(bytes).digest("hex");
-
 const readBaseInventory = ({
   baseRef,
   cwd,
@@ -364,7 +363,9 @@ export const readMigrationBaseSnapshot = ({
   for (const file of changes.modifiedFiles.filter((candidate) =>
     MIGRATION_FILE.test(candidate),
   )) {
-    baseHashes[file] = hashBytes(readGitFile({ ref: mergeBase, file, cwd }));
+    baseHashes[file] = hashSha256Hex(
+      readGitFile({ ref: mergeBase, file, cwd }),
+    );
   }
   return { mergeBase, changes, baseInventory, baseHashes };
 };
@@ -431,7 +432,7 @@ if (import.meta.main) {
     ...Object.keys(baseHashes),
     ...inventorySqlFiles,
   ])) {
-    headHashes[file] = hashBytes(
+    headHashes[file] = hashSha256Hex(
       readGitFile({ ref: "HEAD", file, cwd: REPO_ROOT }),
     );
   }

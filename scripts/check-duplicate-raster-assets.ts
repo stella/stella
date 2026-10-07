@@ -1,9 +1,9 @@
 #!/usr/bin/env bun
-
 import { panic } from "better-result";
 import nodePath from "node:path";
 
 import { compareCodeUnit } from "@stll/collation";
+import { sha256Hex as hashSha256Hex } from "@stll/sha256/bun";
 
 const RASTER_EXTENSIONS = new Set([
   ".avif",
@@ -69,7 +69,7 @@ const hashRaster = async (
   }
   const bytes = await file.arrayBuffer();
   return {
-    digest: new Bun.CryptoHasher("sha256").update(bytes).digest("hex"),
+    digest: hashSha256Hex(new Uint8Array(bytes)),
     path: filePath,
     size: bytes.byteLength,
   };
