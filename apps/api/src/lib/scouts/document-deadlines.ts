@@ -574,12 +574,13 @@ export const runDocumentDeadlineScout = async ({
   );
 
   if (Result.isError(observed)) {
-    return await settleFailedObservation({
+    await settleFailedObservation({
       db,
       run,
       admission: scan.admission,
       error: observed.error,
     });
+    return;
   }
 
   await settleRun({

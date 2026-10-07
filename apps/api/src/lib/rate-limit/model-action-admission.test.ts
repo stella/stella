@@ -215,7 +215,7 @@ describe("model actions that continue after their caller answers", () => {
   // Counts the slots an admission holds, as the lease set does.
   const slotAdmission = () => {
     const slots = { held: 0, scopes: [] as (string | undefined)[] };
-    const released = Promise.withResolvers<void>();
+    const released = Promise.withResolvers<undefined>();
     const admit: typeof withActionAdmission = async ({ run, scope }) => {
       slots.scopes.push(scope);
       slots.held += 1;
@@ -229,7 +229,7 @@ describe("model actions that continue after their caller answers", () => {
         return Result.err(error);
       } finally {
         slots.held -= 1;
-        released.resolve();
+        released.resolve(undefined);
       }
     };
     return { slots, released: released.promise, admit };
@@ -237,7 +237,7 @@ describe("model actions that continue after their caller answers", () => {
 
   test("a blocked generation keeps its slot after the caller answers, until it settles", async () => {
     const { slots, released, admit } = slotAdmission();
-    const generation = Promise.withResolvers<void>();
+    const generation = Promise.withResolvers<undefined>();
     const proofs: ModelDispatchAdmission[] = [];
     const answered = await createDetachedModelActionStarter({
       organizationId,
@@ -259,7 +259,7 @@ describe("model actions that continue after their caller answers", () => {
     expect(proofs.at(0)?.signal.aborted).toBe(false);
     // Detached work never joins the caller's admission, which settles first.
     expect(slots.scopes).toEqual(["independent"]);
-    generation.resolve();
+    generation.resolve(undefined);
     await released;
     expect(slots.held).toBe(0);
     expect(proofs.at(0)?.signal.aborted).toBe(true);
