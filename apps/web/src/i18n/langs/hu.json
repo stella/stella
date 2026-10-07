@@ -126,6 +126,10 @@
     "orSignInWithEmail": "vagy jelentkezzen be e-maillel",
     "organizationNamePlaceholder": "Szervezetem",
     "password": "Jelszó",
+    "professionalUse": {
+      "description": "Fiókja létrehozásakor ez a nyilatkozat nem jelent meg Önnek. A folytatáshoz fogadja el.",
+      "title": "Szakmai célú használat megerősítése"
+    },
     "professionalUseStatement": "A fiók létrehozásával megerősíti, hogy a stellát szakmai célokra használja, és tudomásul veszi, hogy a stella jogi szakembereknek szóló eszköz, és nem helyettesíti a jogi tanácsadást.",
     "rateLimitExceeded": "Túl sok próbálkozás. Kérjük, próbálja újra később.",
     "resendCode": "Kód újraküldése erre: <email>{emailAddress}</email>",

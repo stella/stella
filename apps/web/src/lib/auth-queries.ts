@@ -70,3 +70,24 @@ export const refreshAuthQueries = async (queryClient: QueryClient) => {
   const { signalSessionChange } = await import("@/lib/account/session-signal");
   signalSessionChange();
 };
+
+/**
+ * The signed-in account's professional-use state. It only ever moves from
+ * `required` to `accepted`, through this browser's own acceptance, which
+ * writes the answer into the cache; it never goes stale on its own.
+ */
+export const professionalUseOptions = (userId: string) =>
+  queryOptions({
+    retry: BOOT_QUERY_RETRY,
+    queryKey: ["professional-use", userId],
+    queryFn: async ({ signal }) => {
+      const [{ api }, { unwrapEden }] = await Promise.all([
+        import("@/lib/api"),
+        import("@/lib/errors/api"),
+      ]);
+      return unwrapEden(
+        await api.me["professional-use"].get({ fetch: { signal } }),
+      );
+    },
+    staleTime: STALE_TIME.INFINITE,
+  });

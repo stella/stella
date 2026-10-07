@@ -87,7 +87,7 @@ export const createOrganizationLifecycleHooks = ({
       // state, so no later request can grant one implicitly.
       await recordAccessState(organizationId);
       // Every organization is a business: it is created under the creator's
-      // professional-use acceptance.
+      // professional-use acceptance, or recorded once an owner accepts.
       await recordProfessionalUse({
         organizationId,
         userId: brandPersistedUserId(user.id),

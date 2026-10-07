@@ -11,3 +11,18 @@ export const PROFESSIONAL_USE_STATEMENT_SHA256 =
 
 /** The terms of service the statement is accepted under. */
 export const PROFESSIONAL_USE_TERMS_VERSION = "2026-10";
+
+/**
+ * An account's professional-use state: `accepted` once it has accepted the
+ * statement, `required` until then. An account created where the statement
+ * was not shown starts `required` and accepts on its first interactive
+ * sign-in.
+ */
+export const PROFESSIONAL_USE_STATUS = {
+  accepted: "accepted",
+  required: "required",
+} as const;
+
+/** The error code a signed-in request answers with until the account accepts. */
+export const PROFESSIONAL_USE_REQUIRED_CODE =
+  "professional_use_acceptance_required";

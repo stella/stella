@@ -20,6 +20,7 @@ import { rootDb } from "@/api/db/root";
 import { env } from "@/api/env";
 import { seedDefaultSkills } from "@/api/lib/agent-skills/default-skills";
 import { sessionCookieName } from "@/api/lib/auth/auth-cookie-name";
+import { acceptProfessionalUse } from "@/api/lib/auth/professional-use";
 import { logger } from "@/api/lib/observability/logger";
 import {
   brandPersistedOrganizationId,
@@ -158,6 +159,15 @@ export const mintSmokeSession = async (
   const record = SMOKE_PRINCIPALS[principal];
 
   await ensureSmokePrincipal(record, now);
+  // A real new account has accepted the professional-use statement before it
+  // works in the product. The synthetic principal accepts as its operator on
+  // every mint, so a principal created before acceptances existed converges.
+  await rootDb.transaction(async (tx) => {
+    await acceptProfessionalUse({
+      tx,
+      userId: brandPersistedUserId(record.user.id),
+    });
+  });
 
   // No cleanup of prior rows: sessions expire after 15 minutes and
   // better-auth ignores expired rows, so one row per deploy is inert.

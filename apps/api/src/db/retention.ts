@@ -106,11 +106,11 @@ export const TABLE_RETENTION = {
   },
   organization_professional_use_acceptances: {
     boundedBy:
-      "One acceptance per organization, written at creation and deleted with its owner.",
+      "One acceptance per organization, written once and deleted with its owner.",
   },
   user_professional_use_acceptances: {
     boundedBy:
-      "One acceptance per account, written at creation and deleted with the account.",
+      "One acceptance per account, written once and deleted with the account.",
   },
   usage_allocations: {
     boundedBy: "Organization-owned usage accounting and deletion.",

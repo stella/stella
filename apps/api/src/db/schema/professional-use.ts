@@ -12,8 +12,9 @@ import {
 const ownsUserAcceptances = sql`current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.user_professional_use_acceptances'::regclass)`;
 
 /**
- * A person's acceptance, by creating the account, of the professional-use
- * statement shown where accounts are created. Written once at creation on the
+ * A person's acceptance of the professional-use statement: by creating the
+ * account where the statement is shown, or on the prompt at the first
+ * interactive sign-in of an account created elsewhere. Written once on the
  * owner connection; the request role has no access.
  */
 export const userProfessionalUseAcceptances = p.pgTable(
@@ -41,9 +42,10 @@ export const userProfessionalUseAcceptances = p.pgTable(
 const ownsOrganizationAcceptances = sql`current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.organization_professional_use_acceptances'::regclass)`;
 
 /**
- * The professional-use acceptance an organization was created under, with
- * the account that created it. Written once at creation on the owner
- * connection; the request role has no access.
+ * The professional-use acceptance an organization carries, with the account
+ * whose acceptance it is: its creator's at creation, or, for an organization
+ * created before its creator accepted, the first owner to accept. Written
+ * once on the owner connection; the request role has no access.
  */
 export const organizationProfessionalUseAcceptances = p.pgTable(
   "organization_professional_use_acceptances",

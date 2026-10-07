@@ -4239,6 +4239,10 @@
     "seconds": 1,
     "source": "estimated"
   },
+  "src/lib/auth/professional-use.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
   "src/lib/auth/registration-adapter.test.ts": {
     "seconds": 0.49423,
     "source": "estimated"

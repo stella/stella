@@ -1,5 +1,5 @@
 {
   "metric": "audit-skip-directives",
   "delta": 1,
-  "reason": "The sign-up acceptance row in professional-use.ts is written when the account is created, before any organization exists, and audit rows are organization-scoped. The per-organization acceptance row carries the audit trail: professional-use.db.test.ts asserts every organization created through the auth flows has exactly one acceptance audit event."
+  "reason": "The account acceptance row in professional-use.ts is written at registration or on the first interactive sign-in's prompt, not within one organization, and audit rows are organization-scoped. Each organization acceptance row carries the audit trail: professional-use.db.test.ts asserts every organization recorded at creation or on its owner's acceptance has exactly one acceptance audit event."
 }

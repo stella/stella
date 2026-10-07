@@ -113,6 +113,10 @@ export const ROOT_OPERATION_RESULTS = {
     file: "apps/api/src/lib/auth.ts",
     reason: "Records a new organization's access state; returns nothing.",
   },
+  readUserProfessionalUse: {
+    file: "apps/api/src/lib/auth.ts",
+    reason: "Returns the signed-in account's professional-use state.",
+  },
   resolveMemberAuthorization: {
     file: "apps/api/src/lib/auth.ts",
     reason: "Returns a credential's member authorization, or null.",

@@ -126,6 +126,10 @@
     "orSignInWithEmail": "lub zaloguj się e-mailem",
     "organizationNamePlaceholder": "Moja organizacja",
     "password": "Hasło",
+    "professionalUse": {
+      "description": "Podczas zakładania konta nie wyświetliliśmy Ci tego oświadczenia. Zaakceptuj je, aby kontynuować.",
+      "title": "Potwierdź korzystanie w celach zawodowych"
+    },
     "professionalUseStatement": "Tworząc konto, potwierdzasz, że korzystasz ze stelli w celach zawodowych, i przyjmujesz do wiadomości, że stella jest narzędziem dla profesjonalistów z branży prawnej i nie zastępuje porady prawnej.",
     "rateLimitExceeded": "Zbyt wiele prób. Spróbuj ponownie później.",
     "resendCode": "Wyślij kod ponownie na <email>{emailAddress}</email>",

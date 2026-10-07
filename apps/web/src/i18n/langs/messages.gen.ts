@@ -129,6 +129,10 @@ type Messages = {
     "orSignInWithEmail": "or sign in with email";
     "organizationNamePlaceholder": "My organization";
     "password": "Password";
+    "professionalUse": {
+      "description": "Your account was set up without showing you this statement. Accept it to continue.";
+      "title": "Confirm professional use";
+    };
     "professionalUseStatement": "By creating an account, you confirm that you use stella for professional purposes and understand that stella is a tool for legal professionals and not a substitute for legal advice.";
     "rateLimitExceeded": "Too many attempts. Please try again later.";
     "resendCode": "Send code again to <email>{emailAddress}</email>";

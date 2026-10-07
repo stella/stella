@@ -193,6 +193,7 @@ describe("resolveMemberAuthorization", () => {
       emailVerified: expect.any(Boolean),
       userDeleted: false,
       enrolledFeatureIds: [],
+      professionalUse: { status: "required" },
     });
   });
 
@@ -209,6 +210,7 @@ describe("resolveMemberAuthorization", () => {
       emailVerified: expect.any(Boolean),
       userDeleted: false,
       enrolledFeatureIds: [],
+      professionalUse: { status: "required" },
     });
   });
 

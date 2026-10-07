@@ -48,7 +48,7 @@ import {
   mintAuthProviderId,
   mintAuthProviderIdValue,
 } from "@/api/tests/helpers/auth-provider-id";
-import { NO_FEATURE_ACCESS_FACTS } from "@/api/tests/helpers/member-authorization";
+import { PLAIN_MEMBER_FACTS } from "@/api/tests/helpers/member-authorization";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { getTestDb, releaseTestDb } from "@/api/tests/security/test-utils";
 
@@ -390,7 +390,7 @@ describe("personal key persistence and receipts", () => {
             role: membership.role,
             email: membership.email,
             workspace: null,
-            ...NO_FEATURE_ACCESS_FACTS,
+            ...PLAIN_MEMBER_FACTS,
           };
         };
         for (const access of ["own", "organization"] as const) {

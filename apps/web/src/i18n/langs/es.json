@@ -126,6 +126,10 @@
     "orSignInWithEmail": "o inicia sesión con el correo electrónico",
     "organizationNamePlaceholder": "Mi Organización",
     "password": "Contraseña",
+    "professionalUse": {
+      "description": "Su cuenta se configuró sin mostrarle esta declaración. Acéptela para continuar.",
+      "title": "Confirme el uso profesional"
+    },
     "professionalUseStatement": "Al crear una cuenta, confirma que utiliza stella con fines profesionales y reconoce que stella es una herramienta para profesionales del derecho y no sustituye el asesoramiento jurídico.",
     "rateLimitExceeded": "Demasiados intentos. Inténtelo de nuevo más tarde.",
     "resendCode": "Enviar código de nuevo a <email>{emailAddress}</email>",

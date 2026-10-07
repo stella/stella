@@ -3,15 +3,16 @@ import {
   afterAll,
   beforeAll,
   describe,
-  spyOn,
   expect,
   setDefaultTimeout,
   test,
 } from "bun:test";
 import { and, eq, inArray, sql } from "drizzle-orm";
+import Elysia from "elysia";
 import fc from "fast-check";
 
 import {
+  PROFESSIONAL_USE_REQUIRED_CODE,
   PROFESSIONAL_USE_STATEMENT_VERSION,
   PROFESSIONAL_USE_TERMS_VERSION,
 } from "@stll/api-contract/professional-use";
@@ -24,14 +25,22 @@ import {
   userProfessionalUseAcceptances,
 } from "@/api/db/schema";
 import { createSafeDb } from "@/api/db/scoped";
-import { getAuth } from "@/api/lib/auth";
-import { logger } from "@/api/lib/observability/logger";
+import { env } from "@/api/env";
+import { meRoute } from "@/api/handlers/me/routes";
+import {
+  acceptAccountProfessionalUse,
+  authMacro,
+  createAuth,
+  getAuth,
+} from "@/api/lib/auth";
 import { isPgError, PG_ERROR } from "@/api/lib/pg-error";
 import {
   brandPersistedOrganizationId,
   brandPersistedUserId,
 } from "@/api/lib/safe-id-boundaries";
+import { resolveMcpSessionContext } from "@/api/mcp/context";
 import { signInHuman } from "@/api/tests/helpers/human-session";
+import type { HumanBrowser } from "@/api/tests/helpers/human-session";
 import {
   initAgentAuthTestDb,
   releaseAgentAuthTestDb,
@@ -87,9 +96,9 @@ const acceptanceAuditEvents = async (organizationId: string) =>
     );
 
 describe("professional-use acceptance", () => {
-  test("every account and organization created through the auth flows has exactly one acceptance with the current versions", async () => {
+  test("every account and organization created through interactive registration has exactly one acceptance with the current versions", async () => {
     await assertProperty(
-      "every account and organization created through the auth flows has exactly one acceptance with the current versions",
+      "every account and organization created through interactive registration has exactly one acceptance with the current versions",
       fc.asyncProperty(
         fc.array(fc.integer({ min: 0, max: 2 }), {
           minLength: 1,
@@ -221,33 +230,160 @@ describe("professional-use acceptance", () => {
       headers: person.headers(),
     });
 
-  test("an organization created by an account without an acceptance records none and reports it", async () => {
-    const person = await signInHuman(
-      `professional-use-missing-${Bun.randomUUIDv7()}@stella.dev`,
+  const signedInProduct = new Elysia()
+    .use(authMacro)
+    .get("/product", () => ({ served: true }), { validateAuth: true });
+
+  const readProduct = async (person: HumanBrowser) =>
+    await signedInProduct.handle(
+      new Request("http://localhost/product", { headers: person.headers() }),
     );
-    // An account created before acceptances were recorded.
+
+  const readOwnState = async (person: HumanBrowser) =>
+    await meRoute.handle(
+      new Request("http://localhost/me/professional-use", {
+        headers: person.headers(),
+      }),
+    );
+
+  const accept = async (person: HumanBrowser, statementVersion: string) => {
+    const headers = person.headers();
+    headers.set("content-type", "application/json");
+    return await meRoute.handle(
+      new Request("http://localhost/me/professional-use", {
+        method: "POST",
+        headers,
+        body: JSON.stringify({ statementVersion }),
+      }),
+    );
+  };
+
+  test("an agent-provisioned account records no acceptance, is refused the product until it accepts on its first interactive sign-in, and keeps its MCP access throughout", async () => {
+    const email = `professional-use-agent-${Bun.randomUUIDv7()}@stella.dev`;
+    const created = await getAuth().api.createAgentUser({
+      body: { email, name: "Agent", emailVerified: true },
+    });
+    const userId = brandPersistedUserId(created.id);
+    // The default organization agent provisioning bootstraps for the account.
+    const organization = await getAuth().api.createOrganization({
+      body: {
+        name: "Agent workspace",
+        slug: `agent-${Bun.randomUUIDv7()}`,
+        userId: created.id,
+        keepCurrentActiveOrganization: true,
+      },
+    });
+    const organizationId = brandPersistedOrganizationId(organization.id);
+    expect(await userAcceptances([userId])).toEqual([]);
+    expect(await organizationAcceptances([organizationId])).toEqual([]);
+    expect(await acceptanceAuditEvents(organizationId)).toEqual([]);
+
+    // MCP never consults the acceptance: the agent's credentials open the
+    // organization before and after the account accepts.
+    const openMcp = async () =>
+      await resolveMcpSessionContext(
+        { userId, organizationId, scopes: ["stella:read"] },
+        { request: new Request("http://localhost/mcp") },
+      );
+    await openMcp();
+
+    // The first interactive sign-in: the account exists, so nothing is
+    // created, and the session is refused the product.
+    const person = await signInHuman(email);
+    await person.setActiveOrganization(organizationId);
+    expect(await (await readOwnState(person)).json()).toEqual({
+      status: "required",
+    });
+    const refused = await readProduct(person);
+    expect(refused.status).toBe(403);
+    expect(await refused.json()).toEqual({
+      code: PROFESSIONAL_USE_REQUIRED_CODE,
+      message: expect.any(String),
+    });
+
+    // Accepting a statement the page did not show records nothing.
+    const outdated = await accept(person, "1999-01");
+    expect(outdated.status).toBe(409);
+    expect(await userAcceptances([userId])).toEqual([]);
+    expect((await readProduct(person)).status).toBe(403);
+
+    const accepted = await accept(person, PROFESSIONAL_USE_STATEMENT_VERSION);
+    expect(accepted.status).toBe(200);
+    expect(await accepted.json()).toMatchObject({
+      status: "accepted",
+      ...CURRENT_VERSIONS,
+    });
+    expect(await userAcceptances([userId])).toMatchObject([CURRENT_VERSIONS]);
+    // The organization it owns is recorded the way creation records one.
+    expect(await organizationAcceptances([organizationId])).toMatchObject([
+      { acceptedByUserId: userId, ...CURRENT_VERSIONS },
+    ]);
+    const audited = [
+      {
+        userId,
+        metadata: expect.objectContaining({
+          field: "professionalUseAcceptance",
+          ...CURRENT_VERSIONS,
+        }),
+      },
+    ];
+    expect(await acceptanceAuditEvents(organizationId)).toEqual(audited);
+    expect((await readProduct(person)).status).toBe(200);
+    expect(await (await readOwnState(person)).json()).toMatchObject({
+      status: "accepted",
+    });
+
+    // Accepting again keeps the first acceptance and audits nothing new.
+    expect(
+      (await accept(person, PROFESSIONAL_USE_STATEMENT_VERSION)).status,
+    ).toBe(200);
+    expect(await userAcceptances([userId])).toHaveLength(1);
+    expect(await acceptanceAuditEvents(organizationId)).toEqual(audited);
+    await openMcp();
+  });
+
+  test("the operator-created review account records no acceptance", async () => {
+    const email = `professional-use-review-${Bun.randomUUIDv7()}@stella.dev`;
+    const previous = {
+      email: env.APP_REVIEW_ACCOUNT_EMAIL,
+      organizationId: env.APP_REVIEW_ORGANIZATION_ID,
+    };
+    env.APP_REVIEW_ACCOUNT_EMAIL = email;
+    env.APP_REVIEW_ORGANIZATION_ID = `review-${Bun.randomUUIDv7()}`;
+    try {
+      const created = await createAuth().api.createReviewAccountUser({
+        body: { email },
+      });
+      expect(created.email).toBe(email);
+      expect(await userAcceptances([brandPersistedUserId(created.id)])).toEqual(
+        [],
+      );
+    } finally {
+      env.APP_REVIEW_ACCOUNT_EMAIL = previous.email;
+      env.APP_REVIEW_ORGANIZATION_ID = previous.organizationId;
+    }
+  });
+
+  test("an organization created before its creator accepts is recorded when the creator accepts", async () => {
+    const person = await signInHuman(
+      `professional-use-pending-${Bun.randomUUIDv7()}@stella.dev`,
+    );
+    const userId = brandPersistedUserId(person.userId);
+    // As if the account had been created where the statement is not shown.
     await testDb
       .delete(userProfessionalUseAcceptances)
-      .where(eq(userProfessionalUseAcceptances.userId, person.userId));
-    const error = spyOn(logger, "error");
-    const warn = spyOn(logger, "warn");
-    try {
-      const organization = await createOrganizationFor(person);
+      .where(eq(userProfessionalUseAcceptances.userId, userId));
+    const organization = await createOrganizationFor(person);
+    const organizationId = brandPersistedOrganizationId(organization.id);
+    expect(await organizationAcceptances([organizationId])).toEqual([]);
+    expect(await acceptanceAuditEvents(organizationId)).toEqual([]);
 
-      expect(await organizationAcceptances([organization.id])).toEqual([]);
-      expect(await acceptanceAuditEvents(organization.id)).toEqual([]);
-      const reported = [...error.mock.calls, ...warn.mock.calls].filter(
-        ([event]) =>
-          event === "auth.professional_use.creator_acceptance_missing",
-      );
-      expect(reported).toHaveLength(1);
-      expect(reported.at(0)?.[1]).toMatchObject({
-        organizationId: organization.id,
-      });
-    } finally {
-      error.mockRestore();
-      warn.mockRestore();
-    }
+    await acceptAccountProfessionalUse(userId);
+
+    expect(await organizationAcceptances([organizationId])).toMatchObject([
+      { acceptedByUserId: userId, ...CURRENT_VERSIONS },
+    ]);
+    expect(await acceptanceAuditEvents(organizationId)).toHaveLength(1);
   });
 
   test("an organization carries the versions its creator accepted, not the current ones", async () => {
