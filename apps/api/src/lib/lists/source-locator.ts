@@ -19,7 +19,7 @@ const boundingBoxesSchema = v.strictObject({
   ),
 });
 
-export const legalListSourceLocatorSchema = v.variant("type", [
+const legalListSourceLocatorSchema = v.variant("type", [
   v.strictObject({ type: v.literal("document") }),
   v.strictObject({
     type: v.literal("docx-block"),
