@@ -577,7 +577,7 @@ const ClauseLeaveDialog = ({
   );
 };
 
-export const ClauseHeader = ({
+const ClauseHeader = ({
   detail,
   clauseId,
   categories,
@@ -1594,7 +1594,7 @@ const VariantFormDialogBody = ({
 
 // ── History Tab ──────────────────────────────────────
 
-export const HistoryTab = ({
+const HistoryTab = ({
   clauseId,
   currentBody,
   versions,
