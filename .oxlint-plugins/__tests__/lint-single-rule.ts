@@ -41,7 +41,7 @@ type LintSingleRuleOptions = {
   ruleOptionsForRoot?: (root: string) => unknown;
   /** Where the source is written, relative to a scratch root. */
   sourcePath?: string;
-  /** Resolve owner filenames relative to the scratch checkout. */
+  /** Resolve source paths relative to the scratch checkout. */
   cwd?: "repository" | "scratch";
 };
 
