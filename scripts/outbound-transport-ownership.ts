@@ -12,6 +12,12 @@ import {
 import { parseSource } from "./parse-memo.ts";
 
 const GLOBAL_ROOTS = new Set(["globalThis", "self", "window", "Bun"]);
+const GLOBAL_TRANSPORT_NAMES = new Set([
+  "fetch",
+  "WebSocket",
+  "EventSource",
+  "XMLHttpRequest",
+]);
 const NETWORK_MODULES = new Set([
   "@stll/fetch",
   "bun",
@@ -305,7 +311,7 @@ const registerGlobal = ({
     capabilities.add(`global:Bun.${name}`);
     return;
   }
-  if (name === "fetch" || name === "WebSocket" || name === "EventSource") {
+  if (GLOBAL_TRANSPORT_NAMES.has(name)) {
     capabilities.add(`global:${name}`);
   }
 };
@@ -527,9 +533,7 @@ const visitGlobalReference = ({
   }
   if (
     ts.isIdentifier(node) &&
-    (node.text === "fetch" ||
-      node.text === "WebSocket" ||
-      node.text === "EventSource") &&
+    GLOBAL_TRANSPORT_NAMES.has(node.text) &&
     !isInsideType(node) &&
     lookupBinding({ scopes, node, name: node.text }) === undefined &&
     !isGlobalNamePosition(node)

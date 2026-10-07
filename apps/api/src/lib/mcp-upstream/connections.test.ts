@@ -933,6 +933,12 @@ describe("MCP upstream connection lifecycle", () => {
       outboundFetch,
       dependencies: {
         ...connectionDependencies,
+        // Returns the stored ciphertext so the assertion sees which token was read.
+        decryptMcpSecret: asTestRaw<
+          (typeof connectionDependencies)["decryptMcpSecret"]
+        >(async ({ ciphertext }: { ciphertext: Buffer }) =>
+          ciphertext.toString(),
+        ),
         // The lease holder stores a fresh token during the first wait.
         wait: async () => {
           Result.unwrap(
@@ -940,6 +946,7 @@ describe("MCP upstream connection lifecycle", () => {
               await tx
                 .update(mcpUserConnections)
                 .set({
+                  accessTokenEncrypted: Buffer.from("rotated-token"),
                   expiresAt: new Date(state.now.getTime() + 3_600_000),
                   refreshLeaseExpiresAt: null,
                 })
@@ -953,7 +960,7 @@ describe("MCP upstream connection lifecycle", () => {
     expect(state.refreshCalls).toBe(0);
     expect(
       state.transports.map((transport) => transport.headers?.["Authorization"]),
-    ).toContain("Bearer decrypted-mcp_access_token");
+    ).toEqual(["Bearer rotated-token"]);
   });
 
   test("defers retryable refresh outcomes", async () => {

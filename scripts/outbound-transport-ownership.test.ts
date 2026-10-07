@@ -66,6 +66,8 @@ describe("outbound transport ownership", () => {
       "const globalThis = { fetch: (url: string) => url }; void globalThis.fetch(input);",
       "const self = { fetch: (url: string) => url }; void self.fetch(input);",
       "const window = { fetch: (url: string) => url }; void window.fetch(input);",
+      "class XMLHttpRequest {} new XMLHttpRequest();",
+      "const window = { XMLHttpRequest: class {} }; new window.XMLHttpRequest();",
     ] as const;
 
     assertProperty(
@@ -238,6 +240,45 @@ describe("outbound transport ownership", () => {
       ).toEqual([
         `${file}: transport census differs (observed module:node:dns/promises; declared )`,
       ]);
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  test("enumerates XMLHttpRequest sources and requires their transport owners", async () => {
+    const root = await mkdtemp(path.join(tmpdir(), "stella-xml-http-owner-"));
+    const fixtures = [
+      "new XMLHttpRequest();",
+      "new globalThis.XMLHttpRequest();",
+      "new window.XMLHttpRequest();",
+      "new self.XMLHttpRequest();",
+    ].map((source, index) => ({
+      file: `apps/api/src/handlers/xml-http-fixture-${index}.ts`,
+      source,
+    }));
+    try {
+      for (const { file, source } of fixtures) {
+        await mkdir(path.dirname(path.join(root, file)), { recursive: true });
+        await Bun.write(path.join(root, file), source);
+      }
+      const sources = readApiProductionSources(root);
+      expect([...sources.keys()].toSorted()).toEqual(
+        fixtures.map(({ file }) => file).toSorted(),
+      );
+      expect(
+        validateOutboundTransportCensus({
+          sources,
+          census: [],
+          grantOwners: [],
+        }).toSorted(),
+      ).toEqual(
+        fixtures
+          .map(
+            ({ file }) =>
+              `${file}: transport census differs (observed global:XMLHttpRequest; declared )`,
+          )
+          .toSorted(),
+      );
     } finally {
       await rm(root, { recursive: true, force: true });
     }
