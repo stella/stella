@@ -36,7 +36,7 @@ const assertMcpGate = (workflow: string) => {
   expect(
     workflow.slice(start, end),
     "MCP smoke requires the corpus preflight",
-  ).toContain("steps.corpus-preflight.conclusion == 'success'");
+  ).toContain("steps.corpus-preflight.outcome == 'success'");
 };
 
 type PreflightCase = {
@@ -163,7 +163,7 @@ test("the former missing preflight and an ungated MCP smoke violate the contract
   const workflow = await workflowFile.text();
   assertMcpGate(workflow);
   const ungated = workflow.replace(
-    " && steps.corpus-preflight.conclusion == 'success'",
+    " && steps.corpus-preflight.outcome == 'success'",
     "",
   );
   expect(ungated).not.toBe(workflow);

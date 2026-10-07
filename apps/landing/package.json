@@ -21,7 +21,7 @@
   "dependencies": {
     "@astrojs/react": "^7.0.0",
     "@astrojs/sitemap": "^3.7.4",
-    "@astrojs/starlight": "^0.42.4",
+    "@astrojs/starlight": "^0.42.5",
     "@resvg/resvg-js": "^2.6.2",
     "@stll/anonymize-chat": "workspace:*",
     "@stll/anonymize-data": "catalog:",

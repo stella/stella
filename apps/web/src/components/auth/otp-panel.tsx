@@ -252,7 +252,7 @@ export const OTPPanel = ({
   return <Frame className={cn("w-full max-w-md", className)}>{panel}</Frame>;
 };
 
-const OTPPanelContent = ({
+export const OTPPanelContent = ({
   email,
   isOtpComplete,
   isOtpPulsing,
@@ -346,10 +346,14 @@ const OTPPanelContent = ({
           size="sm"
           variant="link"
         >
-          {t.rich("auth.resendCode", {
-            email: renderEmail,
-            emailAddress: email,
-          })}
+          {/* One inline run: as separate flex items, the button's gap would
+              stack on the space before the email. */}
+          <span>
+            {t.rich("auth.resendCode", {
+              email: renderEmail,
+              emailAddress: email,
+            })}
+          </span>
         </Button>
       </div>
     </>

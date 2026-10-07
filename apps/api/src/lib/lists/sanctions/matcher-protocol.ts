@@ -36,5 +36,6 @@ export type SanctionsMatcherMessage =
 // Plain data only: Result and tagged-error prototypes do not cross threads.
 export type SanctionsMatcherReply =
   | { status: "screened"; result: ScreeningResult }
+  | { status: "work-limit" }
   | { status: "unavailable" }
   | { status: "entries-loaded" };
