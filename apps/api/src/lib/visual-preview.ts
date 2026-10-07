@@ -10,6 +10,8 @@ import {
   type VisualPreviewOutput,
   type VisualPreviewToolOutput,
 } from "@stll/api-contract/visual-preview";
+import type { FailureReason } from "@stll/errors";
+import { declareFailureClass } from "@stll/errors";
 
 type VisualPreviewModelContentOptions = {
   title: string;
@@ -38,15 +40,28 @@ export const visualPreviewModelContent = ({
   ] satisfies VisualPreviewToolOutput;
 
 type PreviewFailureCode =
+  | "not-configured"
   | "unavailable"
   | "timeout"
   | "invalid-input"
   | "invalid-response";
 
+const PREVIEW_FAILURE_REASON = {
+  "not-configured": "visual_preview_not_configured",
+  "invalid-input": "visual_preview_input_invalid",
+  unavailable: "visual_preview_unavailable",
+  timeout: "visual_preview_timeout",
+  "invalid-response": "visual_preview_response_invalid",
+} as const satisfies Record<PreviewFailureCode, FailureReason>;
+
 export class VisualPreviewError extends TaggedError("VisualPreviewError")<{
   code: PreviewFailureCode;
   message: string;
-}> {}
+}> {
+  static {
+    declareFailureClass(this, ({ code }) => PREVIEW_FAILURE_REASON[code]);
+  }
+}
 
 type VisualPreviewFailureModelContentOptions = {
   title: string;
@@ -132,7 +147,7 @@ export const previewVisual = async ({
   if (functionArn === undefined) {
     return Result.err(
       new VisualPreviewError({
-        code: "unavailable",
+        code: "not-configured",
         message:
           "Visual preview is unavailable; the visual can still be published",
       }),

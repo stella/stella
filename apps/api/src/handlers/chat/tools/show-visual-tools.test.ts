@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 
 import { VISUAL_PREVIEW_TOOL_NAME } from "@stll/api-contract/visual-preview";
 import type { VisualPreviewOutput } from "@stll/api-contract/visual-preview";
+import type { FailureGrade, FailureReason } from "@stll/errors";
 import { rejectionOf } from "@stll/property-testing/rejection";
 
 import { VISUAL_SHOWCASE_GUIDANCE } from "@/api/handlers/chat/tools/visual-showcase-guidance";
@@ -26,29 +27,56 @@ import { createShowVisualTools } from "./show-visual-tools";
 const unavailablePreview = async () =>
   Result.err(
     new VisualPreviewError({
-      code: "unavailable",
+      code: "not-configured",
       message: "Preview is not configured",
     }),
   );
 
 const previewFailures = {
-  unavailable: new VisualPreviewError({
-    code: "unavailable",
-    message: "Synthetic unavailable preview",
-  }),
-  timeout: new VisualPreviewError({
-    code: "timeout",
-    message: "Synthetic preview timeout",
-  }),
-  "invalid-input": new VisualPreviewError({
-    code: "invalid-input",
-    message: "Synthetic invalid preview input",
-  }),
-  "invalid-response": new VisualPreviewError({
-    code: "invalid-response",
-    message: "Synthetic invalid preview response",
-  }),
-} satisfies Record<VisualPreviewError["code"], VisualPreviewError>;
+  unavailable: {
+    error: new VisualPreviewError({
+      code: "unavailable",
+      message: "Synthetic unavailable preview",
+    }),
+    grade: "defect",
+    reason: "visual_preview_unavailable",
+  },
+  "not-configured": {
+    error: new VisualPreviewError({
+      code: "not-configured",
+      message: "Synthetic preview without configuration",
+    }),
+    grade: "anticipated",
+    reason: "visual_preview_not_configured",
+  },
+  timeout: {
+    error: new VisualPreviewError({
+      code: "timeout",
+      message: "Synthetic preview timeout",
+    }),
+    grade: "defect",
+    reason: "visual_preview_timeout",
+  },
+  "invalid-input": {
+    error: new VisualPreviewError({
+      code: "invalid-input",
+      message: "Synthetic invalid preview input",
+    }),
+    grade: "anticipated",
+    reason: "visual_preview_input_invalid",
+  },
+  "invalid-response": {
+    error: new VisualPreviewError({
+      code: "invalid-response",
+      message: "Synthetic invalid preview response",
+    }),
+    grade: "defect",
+    reason: "visual_preview_response_invalid",
+  },
+} as const satisfies Record<
+  VisualPreviewError["code"],
+  { error: VisualPreviewError; grade: FailureGrade; reason: FailureReason }
+>;
 
 let logs: RecordingLogger;
 let analytics: RecordingAnalytics;
@@ -68,7 +96,7 @@ afterEach(() => {
 describe("show visual", () => {
   test.each(Object.entries(previewFailures))(
     "reports a %s preview failure while keeping the published resource",
-    async (code, failure) => {
+    async (code, { error: failure, grade, reason }) => {
       expect(failure.code).toBe(code);
       const origin = createVisualResourceOrigin();
       const emissions: unknown[] = [];
@@ -106,16 +134,23 @@ describe("show visual", () => {
         },
       ]);
       const failures = logs
-        .at("ERROR")
+        .at(grade === "defect" ? "ERROR" : "WARN")
         .filter(({ message }) => message === "visual.preview_failed");
       expect(failures).toHaveLength(1);
       expect(failures.at(0)?.attributes).toMatchObject({
         "error.type": "VisualPreviewError",
         "error.code": code,
-        "failure.grade": "defect",
+        "failure.grade": grade,
+        "failure.reason": reason,
+        "failure.rule": "brand",
         tool: VISUAL_PREVIEW_TOOL_NAME,
       });
-      expect(analytics.exceptions()).toHaveLength(1);
+      expect(
+        logs.records.filter(
+          ({ message }) => message === "visual.preview_failed",
+        ),
+      ).toHaveLength(1);
+      expect(analytics.exceptions()).toHaveLength(grade === "defect" ? 1 : 0);
     },
   );
 
@@ -171,7 +206,7 @@ describe("show visual", () => {
           title: "Revenue",
           preview: {
             status: "unavailable",
-            reason: "unavailable",
+            reason: "not-configured",
             message: "Preview is not configured",
           },
         }),
