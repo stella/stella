@@ -114,7 +114,9 @@ describe("show visual", () => {
         { title: "Revenue", html: "<p>Revenue</p>", data: {} },
         {
           toolCallId: "visual-call-failed-preview",
-          emitCustomEvent: (_name, value) => emissions.push(value),
+          emitCustomEvent: (_name, value) => {
+            emissions.push(value);
+          },
         },
       );
       expect(emissions).toHaveLength(1);
