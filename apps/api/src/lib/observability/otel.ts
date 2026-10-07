@@ -16,9 +16,6 @@ import { envBase } from "@/api/env-base";
  * `sanitizeLogAttributes`; the stderr JSON mirror in `logger.ts` stays the
  * operational sink regardless of this setting.
  */
-export const isExternalLogExportEnabled =
-  envBase.LOGS_OTLP_URL !== undefined && envBase.LOGS_OTLP_TOKEN !== undefined;
-
 if (
   envBase.LOGS_OTLP_URL !== undefined &&
   envBase.LOGS_OTLP_TOKEN !== undefined
