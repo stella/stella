@@ -1009,14 +1009,6 @@ export const completeOrganizationDeletion = async ({
   pagesMax,
   tx,
 }: OrganizationTeardownOptions): Promise<OrganizationStorageTeardownResult> => {
-  // Parent first (organization -> workspace -> entity): projection writers
-  // take FOR KEY SHARE on this row before their children, so deleting child
-  // rows before locking it could close a lock cycle with them.
-  await tx
-    .select({ id: organization.id })
-    .from(organization)
-    .where(eq(organization.id, organizationId))
-    .for("update");
   const teardown = await recordOrganizationStorageTeardown({
     organizationId,
     ...(pagesMax === undefined ? {} : { pagesMax }),
