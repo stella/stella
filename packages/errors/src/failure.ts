@@ -43,6 +43,9 @@ export const FAILURE_REASON_GRADE = {
   generation_cancelled: "anticipated",
   chat_loop_detected: "anticipated",
   chat_empty_completion: "anticipated",
+  // parser-output-unchanged: visual preview reasons grade observed failures only; no parser reads them.
+  visual_preview_input_invalid: "anticipated",
+  visual_preview_not_configured: "anticipated",
   provider_billing: "anticipated",
   provider_credentials_rejected: "anticipated",
   model_unavailable: "anticipated",
@@ -63,6 +66,9 @@ export const FAILURE_REASON_GRADE = {
   unobserved_5xx: "defect",
   rls_denied: "defect",
   response_invalid: "defect",
+  visual_preview_unavailable: "defect",
+  visual_preview_timeout: "defect",
+  visual_preview_response_invalid: "defect",
   // 40P01 reaches a sink only after the transaction retry gave up, so what is
   // left is a lock-order signal rather than contention.
   pg_deadlock: "defect",
