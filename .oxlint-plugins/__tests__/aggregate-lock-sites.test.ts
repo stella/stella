@@ -250,6 +250,35 @@ describe("aggregate lock confinement", () => {
       ),
     ).toEqual([]);
   });
+  test("static SQL lock lead-ins reject variable remainders", () => {
+    for (const lead of [
+      "FOR",
+      "FOR NO",
+      "FOR NO KEY",
+      "FOR KEY",
+      "pg_advisory",
+      "pg_try_advisory",
+    ]) {
+      for (const source of [
+        `sql.raw("${lead} " + mode)`,
+        `sql.raw(\`${lead} \${mode}\`)`,
+        `tx.execute("${lead} " + mode)`,
+        `sql\`SELECT id FROM items ${lead} \${mode}\``,
+      ]) {
+        const actual = aggregateLockBaseline(aggregateLockSites(file, source));
+        expect(actual).toHaveLength(1);
+        expect(
+          aggregateLockBaselineProblems({ actual, baseline: [] }),
+        ).toContainEqual(expect.stringContaining("Unowned aggregate lock"));
+      }
+    }
+    expect(
+      aggregateLockSites(file, 'const message = "entry for " + mode'),
+    ).toEqual([]);
+    expect(aggregateLockSites(file, `sql.raw("SELECT 'FOR '" + mode)`)).toEqual(
+      [],
+    );
+  });
   test("confines fragmented row locks to SQL contexts and excludes prose", () => {
     for (const source of [
       `const message = \`missing entry for \${id}\``,

@@ -94,7 +94,14 @@ const isSqlFragmentContext = ({
   ast,
   text,
 }: SqlFragmentContextOptions) => {
-  const parent = node.parent;
+  let fragment = node;
+  while (
+    ts.isBinaryExpression(fragment.parent) ||
+    ts.isParenthesizedExpression(fragment.parent)
+  ) {
+    fragment = fragment.parent;
+  }
+  const parent = fragment.parent;
   const taggedSql =
     ts.isTaggedTemplateExpression(parent) && parent.tag.getText(ast) === "sql";
   const rawSql =
@@ -110,7 +117,7 @@ const isSqlFragmentContext = ({
         ["execute", "query", "unsafe"].includes(parent.expression.name.text));
   const statement = text.trimStart();
   const sqlStatement =
-    (/^SELECT\b/iu.test(statement) && /\bFROM\b/iu.test(statement)) ||
+    /^SELECT\b/iu.test(statement) ||
     (/^WITH\b/iu.test(statement) &&
       /\b(?:SELECT|UPDATE|DELETE|INSERT)\b/iu.test(statement)) ||
     (/^UPDATE\s+\S+/iu.test(statement) && /\bSET\b/iu.test(statement)) ||
@@ -142,6 +149,27 @@ export const aggregateLockSites = (
     return sites;
   }
   const ast = ts.createSourceFile(file, source, ts.ScriptTarget.Latest, true);
+  const addFragmentedSites = (node: ts.Node, text: string) => {
+    if (!isSqlFragmentContext({ node, ast, text })) {
+      return;
+    }
+    const complete = sqlLocks(text, "sql");
+    const fragments = maskSqlLiteralsAndComments(text).matchAll(
+      /\bFOR(?:\s+(?:NO(?:\s+KEY)?|KEY))?\s*(?:$|\$\{expression\})|\bpg_(?:try_)?advisory[a-z_]*/giu,
+    );
+    for (const fragment of fragments) {
+      if (complete.some((match) => match.index === fragment.index)) {
+        continue;
+      }
+      add({
+        primitive: fragment[0].toLowerCase().startsWith("for")
+          ? "fragmented-row-lock"
+          : "fragmented-advisory-lock",
+        text: node.getText(ast),
+        offset: node.getStart(ast),
+      });
+    }
+  };
   const visit = (node: ts.Node) => {
     if (ts.isCallExpression(node)) {
       const expression = node.expression;
@@ -183,6 +211,7 @@ export const aggregateLockSites = (
             text: node.getText(ast),
             offset: node.getStart(ast),
           });
+          return;
         }
       }
     }
@@ -199,6 +228,7 @@ export const aggregateLockSites = (
             offset: node.getStart(ast),
           });
         }
+        addFragmentedSites(node, text);
         return;
       }
     }
@@ -219,27 +249,8 @@ export const aggregateLockSites = (
           offset: node.getStart(ast),
         });
       }
+      addFragmentedSites(node, text);
       if (ts.isTemplateExpression(node)) {
-        // An interpolation can finish a lock keyword or supply its mode.
-        // Keep complete-clause fingerprints intact; fragmented clauses get
-        // their own site so dynamic spelling cannot escape confinement.
-        const sqlContext = isSqlFragmentContext({ node, ast, text });
-        const fragments = maskSqlLiteralsAndComments(text).matchAll(
-          /\bFOR\s+(?:(?:NO(?:\s+KEY)?|KEY)\s+)?\$\{expression\}|\bpg_(?:try_)?advisory[a-z_]*\s*\$\{expression\}/giu,
-        );
-        for (const fragment of fragments) {
-          const rowLock = fragment[0].toLowerCase().startsWith("for");
-          if (rowLock && !sqlContext) {
-            continue;
-          }
-          add({
-            primitive: rowLock
-              ? "fragmented-row-lock"
-              : "fragmented-advisory-lock",
-            text: node.getText(ast),
-            offset: node.getStart(ast),
-          });
-        }
         for (const span of node.templateSpans) {
           visit(span.expression);
         }
