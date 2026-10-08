@@ -24,6 +24,7 @@ describe("consent app details", () => {
               redirectHosts: ["connector.example"],
               clientIdHost: "identity.example",
               unverified: true,
+              verifiedBrand: null,
             }}
           />
         </IntlProvider>,
@@ -51,6 +52,7 @@ describe("consent app details", () => {
             redirectHosts: ["stella.example"],
             clientIdHost: "publisher.example",
             unverified: false,
+            verifiedBrand: null,
           }}
         />
       </IntlProvider>,

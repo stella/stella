@@ -4,6 +4,8 @@ import type { BetterAuthPlugin } from "better-auth";
 import { sessionMiddleware } from "better-auth/api";
 import * as v from "valibot";
 
+import type { VerifiedOAuthClientBrand } from "@stll/api-contract";
+
 import {
   CACHE_CONTROL_HEADER,
   PRIVATE_CACHE_CONTROL,
@@ -17,9 +19,14 @@ type HttpsUrl = `https://${string}`;
  * prefix followed by exactly one path segment the vendor assigns, and only
  * where the vendor documents that form.
  */
-type VerifiedClientUrl =
-  | { readonly exact: HttpsUrl; readonly source: HttpsUrl }
-  | { readonly oneSegmentUnder: `${HttpsUrl}/`; readonly source: HttpsUrl };
+type VerifiedClientLocation =
+  | { readonly exact: HttpsUrl }
+  | { readonly oneSegmentUnder: `${HttpsUrl}/` };
+
+type VerifiedClientUrl = VerifiedClientLocation & {
+  readonly source: HttpsUrl;
+  readonly brand: Exclude<VerifiedOAuthClientBrand, "stella">;
+};
 
 const CLAUDE_DOCS =
   "https://claude.com/docs/connectors/building/authentication";
@@ -35,34 +42,44 @@ const GEMINI_ENTERPRISE_DOCS =
 /** Redirect URIs of widely used third-party clients. */
 const VERIFIED_THIRD_PARTY_REDIRECTS: readonly VerifiedClientUrl[] = [
   // Claude on the web, desktop and mobile.
-  { exact: "https://claude.ai/api/mcp/auth_callback", source: CLAUDE_DOCS },
+  {
+    exact: "https://claude.ai/api/mcp/auth_callback",
+    source: CLAUDE_DOCS,
+    brand: "claude",
+  },
   // ChatGPT: the stable redirect, and the per-connector form it uses otherwise.
   {
     exact: "https://chatgpt.com/connector_platform_oauth_redirect",
     source: CHATGPT_DOCS,
+    brand: "chatgpt",
   },
   {
     oneSegmentUnder: "https://chatgpt.com/connector/oauth/",
     source: CHATGPT_DOCS,
+    brand: "chatgpt",
   },
   // Microsoft 365 Copilot agents.
   {
     exact: "https://teams.microsoft.com/api/platform/v1.0/oAuthRedirect",
     source: COPILOT_DOCS,
+    brand: "microsoft_copilot",
   },
   // Copilot Studio and Power Platform connectors (Microsoft-assigned suffix).
   {
     exact: "https://global.consent.azure-apim.net/redirect",
     source: POWER_PLATFORM_DOCS,
+    brand: "copilot_studio",
   },
   {
     oneSegmentUnder: "https://global.consent.azure-apim.net/redirect/",
     source: POWER_PLATFORM_DOCS,
+    brand: "copilot_studio",
   },
   // Gemini Enterprise.
   {
     exact: "https://vertexaisearch.cloud.google.com/oauth-redirect",
     source: GEMINI_ENTERPRISE_DOCS,
+    brand: "gemini_enterprise",
   },
 ];
 
@@ -72,22 +89,35 @@ const VERIFIED_THIRD_PARTY_CLIENT_IDS: readonly VerifiedClientUrl[] = [
   {
     exact: "https://claude.ai/oauth/claude-code-client-metadata",
     source: CLAUDE_DOCS,
+    brand: "claude_code",
   },
-  { exact: "https://chatgpt.com/oauth/client.json", source: CHATGPT_DOCS },
+  {
+    exact: "https://chatgpt.com/oauth/client.json",
+    source: CHATGPT_DOCS,
+    brand: "chatgpt",
+  },
   // Codex CLI (loopback redirects, attested by this document).
-  { exact: "https://chatgpt.com/oauth/codex/client.json", source: CODEX_DOCS },
+  {
+    exact: "https://chatgpt.com/oauth/codex/client.json",
+    source: CODEX_DOCS,
+    brand: "codex",
+  },
 ];
 
-const matchesVerifiedUrl = (
+const findVerifiedUrl = (
   url: URL,
   entries: readonly VerifiedClientUrl[],
-): boolean =>
-  url.protocol === "https:" &&
-  url.username === "" &&
-  url.password === "" &&
-  url.search === "" &&
-  url.hash === "" &&
-  entries.some((entry) => {
+): VerifiedClientUrl | undefined => {
+  if (
+    url.protocol !== "https:" ||
+    url.username !== "" ||
+    url.password !== "" ||
+    url.search !== "" ||
+    url.hash !== ""
+  ) {
+    return undefined;
+  }
+  return entries.find((entry) => {
     if ("exact" in entry) {
       return url.href === entry.exact;
     }
@@ -99,12 +129,7 @@ const matchesVerifiedUrl = (
       /^[A-Za-z0-9._~-]+$/u.test(segment) && segment !== "." && segment !== ".."
     );
   });
-
-const isVerifiedThirdPartyRedirect = (url: URL) =>
-  matchesVerifiedUrl(url, VERIFIED_THIRD_PARTY_REDIRECTS);
-
-const isVerifiedThirdPartyClientId = (url: URL) =>
-  matchesVerifiedUrl(url, VERIFIED_THIRD_PARTY_CLIENT_IDS);
+};
 
 /** Stella's own origins: every redirect under them is first-party. */
 export const getVerifiedOAuthOrigins = (configuredUrls: readonly string[]) =>
@@ -135,8 +160,32 @@ export const isVerifiedClientMetadataDocument = (
   return (
     url?.username === "" &&
     url.password === "" &&
-    (verifiedOrigins.includes(url.origin) || isVerifiedThirdPartyClientId(url))
+    (verifiedOrigins.includes(url.origin) ||
+      findVerifiedUrl(url, VERIFIED_THIRD_PARTY_CLIENT_IDS) !== undefined)
   );
+};
+
+/**
+ * The brand a location verifies, or `null` when it verifies none. Stella's own
+ * origins are first-party; otherwise the location must match a documented
+ * third-party entry exactly.
+ */
+const brandOfLocation = (
+  url: URL | null,
+  entries: readonly VerifiedClientUrl[],
+  verifiedOrigins: readonly string[],
+): VerifiedOAuthClientBrand | null => {
+  if (!url) {
+    return null;
+  }
+  if (
+    url.username === "" &&
+    url.password === "" &&
+    verifiedOrigins.includes(url.origin)
+  ) {
+    return "stella";
+  }
+  return findVerifiedUrl(url, entries)?.brand ?? null;
 };
 
 type OAuthConsentClient = Pick<
@@ -144,6 +193,13 @@ type OAuthConsentClient = Pick<
   "clientId" | "name" | "redirectUris" | "clientDiscoveryId"
 >;
 
+/**
+ * What the consent screen may claim about a client. A client identified by a
+ * metadata document is verified by where that document lives; any other client
+ * by every one of its redirect URIs. `verifiedBrand` names the product only
+ * when that evidence points at a single one; the registered `client_name` is
+ * shown as the client's own claim and never selects a brand.
+ */
 export const getOAuthConsentInfo = (
   client: OAuthConsentClient,
   verifiedOrigins: readonly string[],
@@ -154,23 +210,32 @@ export const getOAuthConsentInfo = (
   const clientUrl = client.clientDiscoveryId
     ? URL.parse(client.clientId)
     : null;
+  const evidence = client.clientDiscoveryId
+    ? [
+        brandOfLocation(
+          clientUrl,
+          VERIFIED_THIRD_PARTY_CLIENT_IDS,
+          verifiedOrigins,
+        ),
+      ]
+    : redirects.map((url) =>
+        brandOfLocation(url, VERIFIED_THIRD_PARTY_REDIRECTS, verifiedOrigins),
+      );
+  const unverified =
+    evidence.length === 0 || evidence.some((brand) => brand === null);
+  const brands = new Set(evidence);
+  const [onlyBrand] = brands;
   return {
     client_name: client.name ?? null,
     redirectHosts: [
       ...new Set(redirects.flatMap((url) => (url?.host ? [url.host] : []))),
     ],
     clientIdHost: clientUrl?.host ?? null,
-    unverified: client.clientDiscoveryId
-      ? !isVerifiedClientMetadataDocument(client.clientId, verifiedOrigins)
-      : redirects.length === 0 ||
-        redirects.some(
-          (url) =>
-            !url ||
-            !(
-              verifiedOrigins.includes(url.origin) ||
-              isVerifiedThirdPartyRedirect(url)
-            ),
-        ),
+    unverified,
+    verifiedBrand:
+      !unverified && brands.size === 1 && onlyBrand !== undefined
+        ? onlyBrand
+        : null,
   };
 };
 
