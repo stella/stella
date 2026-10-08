@@ -5,7 +5,6 @@ type IsAny<TValue> = 0 extends 1 & TValue ? true : false;
 // Identical types carry no excess. Stopping there also keeps recursive
 // declared types (a document AST) from recursing without bound. Mutual
 // assignability is not identity: `{ a; b? }` and `{ a }` accept each other.
-// oxlint-disable-next-line typescript/no-unnecessary-type-parameters -- the generic signature IS the identity probe: TypeScript compares deferred conditional signatures only for identical operands
 type IdentityProbe<TValue> = <TProbe>() => TProbe extends TValue ? 1 : 2;
 
 type IsIdentical<TLeft, TRight> =
