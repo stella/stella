@@ -40,20 +40,95 @@ const setup = () => {
 };
 
 describe("visual frame bridge", () => {
+  test("refuses invalid initial themes without pinning the host", () => {
+    const { parentWindow, onRender, handle } = setup();
+    const render = {
+      type: "render",
+      title: "Theme",
+      html: "<p>Theme</p>",
+      data: {},
+    };
+    for (const variables of [
+      { "--foreground": "red; background:blue" },
+      { "--unknown": "red" },
+    ]) {
+      handle({
+        source: parentWindow,
+        origin: "https://alternate.example.test",
+        data: { ...render, theme: { appearance: "dark", variables } },
+      });
+    }
+    expect(onRender).not.toHaveBeenCalled();
+    handle({
+      source: parentWindow,
+      origin: "https://web.example.test",
+      data: render,
+    });
+    expect(onRender).toHaveBeenCalledExactlyOnceWith({ ...render, links: [] });
+  });
+
   test("forwards validated themes only from the pinned host after a valid render", () => {
-    const { parentWindow, innerWindow, onRender, onTheme, onGuestMessage, handle } = setup();
-    const theme = { appearance: "dark", variables: { "--foreground": "white" } };
+    const {
+      parentWindow,
+      innerWindow,
+      onRender,
+      onTheme,
+      onGuestMessage,
+      handle,
+    } = setup();
+    const theme = {
+      appearance: "dark",
+      variables: { "--foreground": "white" },
+    };
     const data = { kind: "theme", theme };
-    handle({ source: parentWindow, origin: "https://alternate.example.test", data });
+    handle({
+      source: parentWindow,
+      origin: "https://alternate.example.test",
+      data,
+    });
     expect(onTheme).not.toHaveBeenCalled();
-    handle({ source: parentWindow, origin: "https://web.example.test", data: { type: "render", title: "Theme", html: "<p>Theme</p>", data: {}, theme } });
-    expect(onRender).toHaveBeenCalledWith({ type: "render", title: "Theme", html: "<p>Theme</p>", data: {}, links: [], theme });
+    handle({
+      source: parentWindow,
+      origin: "https://web.example.test",
+      data: {
+        type: "render",
+        title: "Theme",
+        html: "<p>Theme</p>",
+        data: {},
+        theme,
+      },
+    });
+    expect(onRender).toHaveBeenCalledWith({
+      type: "render",
+      title: "Theme",
+      html: "<p>Theme</p>",
+      data: {},
+      links: [],
+      theme,
+    });
     for (const event of [
       { source: innerWindow, origin: "null", data },
       { source: {}, origin: "https://web.example.test", data },
       { source: parentWindow, origin: "https://alternate.example.test", data },
-      { source: parentWindow, origin: "https://web.example.test", data: { kind: "theme", theme: { appearance: "dark", variables: { "--foreground": "red; background:blue" } } } },
-      { source: parentWindow, origin: "https://web.example.test", data: { kind: "theme", theme: { appearance: "dark", variables: { "--unknown": "red" } } } },
+      {
+        source: parentWindow,
+        origin: "https://web.example.test",
+        data: {
+          kind: "theme",
+          theme: {
+            appearance: "dark",
+            variables: { "--foreground": "red; background:blue" },
+          },
+        },
+      },
+      {
+        source: parentWindow,
+        origin: "https://web.example.test",
+        data: {
+          kind: "theme",
+          theme: { appearance: "dark", variables: { "--unknown": "red" } },
+        },
+      },
     ]) {
       handle(event);
     }
