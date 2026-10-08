@@ -1,7 +1,20 @@
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
+import { plugin } from "bun";
 import { afterAll, afterEach, expect, test } from "bun:test";
 
 GlobalRegistrator.register({ url: "http://localhost:3000/law/cz/statutes" });
+
+// The build turns a `?worker&url` import into the emitted worker's URL; the
+// chat overlay's chunk only holds on to it.
+plugin({
+  name: "worker-url",
+  setup(build) {
+    build.onLoad({ filter: /\?worker&url$/u }, () => ({
+      contents: 'export default "/worker.js";',
+      loader: "js",
+    }));
+  },
+});
 
 const originalFetch = globalThis.fetch;
 let availabilityReads = 0;
