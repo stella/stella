@@ -81,6 +81,64 @@ describe("document identity ownership guard", () => {
     },
   );
 
+  test.each([
+    `entry.kind === "decision" ? <DocumentIdentityBadge identity={entry.identity} /> : entry.kind === "statute" ? <DocumentIdentityBadge identity={entry.identity} /> : null`,
+    `{ switch (entry.kind) { case "decision": return <DocumentIdentityBadge identity={entry.identity} />; case "statute": return <DocumentIdentityBadge identity={entry.identity} />; default: return null; } }`,
+    `{ if (entry.kind === "decision") return <DocumentIdentityBadge identity={entry.identity} />; return <DocumentIdentityBadge identity={entry.identity} />; }`,
+    `{ if (entry.kind === "decision") { return <DocumentIdentityBadge identity={entry.identity} />; } else { return <DocumentIdentityBadge identity={entry.identity} />; } }`,
+  ])(
+    "mixed-kind adapters require the shared badge in every identity branch",
+    (body) => {
+      const filename = "apps/web/src/routes/law/-law-home/mixed-recents.tsx";
+      const row = `export const LawRecent = ({ entries }) => <ul>{entries.map(entry => <li><LocalIdentity entry={entry} />{entry.title}</li>)}</ul>;`;
+      const shared = `const LocalIdentity = ({ entry }) => ${body};`;
+      const good = checkDocumentIdentitySources(
+        fixture(filename, IMPORT + row + shared),
+      );
+      expect(good.surfaces).toEqual([`${filename}#LawRecent`]);
+      expect(good.violations).toEqual([]);
+      // Keep the decision branch shared; replace only the second (statute) mark.
+      const statuteStart = shared.lastIndexOf("<DocumentIdentityBadge");
+      expect(statuteStart).toBeGreaterThan(
+        shared.indexOf("<DocumentIdentityBadge"),
+      );
+      const mutated =
+        shared.slice(0, statuteStart) +
+        shared
+          .slice(statuteStart)
+          .replace(
+            /<DocumentIdentityBadge[^>]*\/>/u,
+            "<span>{entry.statuteNumber}/{entry.statuteYear}</span>",
+          );
+      expect(mutated).not.toBe(shared);
+      const bad = checkDocumentIdentitySources(
+        fixture(filename, IMPORT + row + mutated),
+      );
+      expect(bad.surfaces).toEqual(good.surfaces);
+      expect(bad.violations).toEqual(good.surfaces);
+    },
+  );
+
+  test("mixed-kind function adapters cannot hide an unshared identity behind a helper", () => {
+    const filename = "apps/web/src/routes/law/-law-home/mixed-functions.tsx";
+    const source = `${IMPORT}
+      export const LawRecent = ({ entries }) => <ul>{entries.map(entry => <li><LocalIdentity entry={entry} />{entry.title}</li>)}</ul>;
+      const LocalIdentity = ({ entry }) => entry.kind === "decision" ? decisionIdentity(entry) : statuteIdentity(entry);
+      const decisionIdentity = entry => <DocumentIdentityBadge identity={entry.identity} />;
+      const statuteIdentity = entry => <DocumentIdentityBadge identity={entry.identity} />;`;
+    const good = checkDocumentIdentitySources(fixture(filename, source));
+    expect(good.surfaces).toEqual([`${filename}#LawRecent`]);
+    expect(good.violations).toEqual([]);
+    const mutated = source.replace(
+      "const statuteIdentity = entry => <DocumentIdentityBadge identity={entry.identity} />",
+      "const statuteIdentity = entry => <span>{entry.statuteNumber}/{entry.statuteYear}</span>",
+    );
+    expect(mutated).not.toBe(source);
+    const bad = checkDocumentIdentitySources(fixture(filename, mutated));
+    expect(bad.surfaces).toEqual(good.surfaces);
+    expect(bad.violations).toEqual(good.surfaces);
+  });
+
   test("unrelated document references beside a generic table do not classify its rows", () => {
     const filename = "apps/web/src/routes/dev/playground.tsx";
     const source = `export const Playground = () => <main><TableRow><TableCell>Matter</TableCell></TableRow><Mention value={value} /></main>;

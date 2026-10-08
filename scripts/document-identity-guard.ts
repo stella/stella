@@ -12,11 +12,18 @@ const DOCUMENT_INPUT =
 const ROW_IDENTITY =
   /\.(?:caseNumber|courtAbbreviation|statuteTitle|decisionId)\b|\bstatute\.title\b/u;
 
+type IdentityBranch = {
+  references: Set<string>;
+  projectsIdentity: boolean;
+};
+
 type Renderer = {
   path: string;
   name: string;
   references: Set<string>;
   rowReferences: Set<string>;
+  identityBranches: IdentityBranch[];
+  hasJsx: boolean;
   hasRows: boolean;
   carriesDocumentKind: boolean;
 };
@@ -224,6 +231,126 @@ const gatherBindings = (
   visit(body);
 };
 
+type VisitReturnedOutputOptions = {
+  body: ts.Node;
+  visit: (node: ts.Expression) => void;
+};
+
+const visitReturnedOutput = ({ body, visit }: VisitReturnedOutputOptions) => {
+  const returned = (child: ts.Node) => {
+    if (child !== body && ts.isFunctionLike(child)) {
+      return;
+    }
+    if (
+      ts.isIfStatement(child) &&
+      child.expression.kind === ts.SyntaxKind.FalseKeyword
+    ) {
+      if (child.elseStatement !== undefined) {
+        returned(child.elseStatement);
+      }
+      return;
+    }
+    if (ts.isBlock(child)) {
+      for (const statement of child.statements) {
+        returned(statement);
+        if (ts.isReturnStatement(statement)) {
+          break;
+        }
+      }
+      return;
+    }
+    if (ts.isReturnStatement(child)) {
+      if (child.expression !== undefined) {
+        visit(child.expression);
+      }
+      return;
+    }
+    ts.forEachChild(child, returned);
+  };
+  returned(body);
+};
+
+const documentKindOutputs = (body: ts.Node, file: ts.SourceFile) => {
+  const outputs: ts.Expression[] = [];
+  const append = (expression: ts.Expression) => {
+    if (ts.isParenthesizedExpression(expression)) {
+      append(expression.expression);
+      return;
+    }
+    if (ts.isConditionalExpression(expression)) {
+      if (expression.condition.kind !== ts.SyntaxKind.FalseKeyword) {
+        append(expression.whenTrue);
+      }
+      append(expression.whenFalse);
+      return;
+    }
+    if (
+      expression.kind === ts.SyntaxKind.NullKeyword ||
+      expression.kind === ts.SyntaxKind.FalseKeyword ||
+      (ts.isIdentifier(expression) && expression.text === "undefined")
+    ) {
+      return;
+    }
+    outputs.push(expression);
+  };
+  const isDocumentCondition = (condition: ts.Expression) =>
+    /\.(?:kind|type|documentKind)\b/u.test(condition.getText(file)) &&
+    /["'](?:statute|decision|case-law)["']/u.test(condition.getText(file));
+  const scan = (child: ts.Node) => {
+    if (
+      ts.isJsxAttribute(child) &&
+      /^on[A-Z]/u.test(child.name.getText(file))
+    ) {
+      return;
+    }
+    if (
+      ts.isConditionalExpression(child) &&
+      isDocumentCondition(child.condition)
+    ) {
+      append(child.whenTrue);
+      append(child.whenFalse);
+    }
+    if (ts.isIfStatement(child) && isDocumentCondition(child.expression)) {
+      visitReturnedOutput({ body: child.thenStatement, visit: append });
+      if (child.elseStatement !== undefined) {
+        visitReturnedOutput({ body: child.elseStatement, visit: append });
+      } else if (ts.isBlock(child.parent)) {
+        const position = child.parent.statements.indexOf(child);
+        for (const statement of child.parent.statements.slice(position + 1)) {
+          visitReturnedOutput({ body: statement, visit: append });
+          if (ts.isReturnStatement(statement)) {
+            break;
+          }
+        }
+      }
+    }
+    if (
+      ts.isSwitchStatement(child) &&
+      /\.(?:kind|type|documentKind)\b/u.test(child.expression.getText(file))
+    ) {
+      for (const [index, clause] of child.caseBlock.clauses.entries()) {
+        if (
+          !ts.isCaseClause(clause) ||
+          !ts.isStringLiteral(clause.expression) ||
+          !/^(?:statute|decision|case-law)$/u.test(clause.expression.text)
+        ) {
+          continue;
+        }
+        // A grouped case inherits the next non-empty clause's returned output.
+        const effective = child.caseBlock.clauses
+          .slice(index)
+          .find((candidate) => candidate.statements.length > 0);
+        for (const statement of effective?.statements ?? []) {
+          visitReturnedOutput({ body: statement, visit: append });
+        }
+      }
+    }
+    ts.forEachChild(child, scan);
+  };
+  scan(body);
+  return outputs;
+};
+
 const documentIdentityResult = (
   renderers: ReadonlyMap<string, Renderer>,
   roots: Set<string>,
@@ -246,15 +373,38 @@ const documentIdentityResult = (
   const surfaces = [...roots].toSorted();
   return {
     surfaces,
-    violations: surfaces.filter(
-      (id) =>
-        !reachesRenderer({
-          id,
+    violations: surfaces.filter((id) => {
+      const usesBadge = (dependencyId: string) =>
+        reachesRenderer({
+          id: dependencyId,
           renderers,
-          matches: (dependencyId) =>
-            dependencyId === `${BADGE_OWNER}#DocumentIdentityBadge`,
-        }),
-    ),
+          matches: (target) =>
+            target === `${BADGE_OWNER}#DocumentIdentityBadge`,
+        });
+      if (!usesBadge(id)) {
+        return true;
+      }
+      // A shared badge in one kind cannot cover a different kind's output.
+      return reachesRenderer({
+        id,
+        renderers,
+        matches: (dependencyId, renderer) =>
+          renderer !== undefined &&
+          reachesRenderer({
+            id: dependencyId,
+            renderers,
+            matches: (_target, dependency) => dependency?.hasJsx === true,
+          }) &&
+          renderer.identityBranches.some(
+            (branch) =>
+              (branch.projectsIdentity ||
+                renderer.identityBranches.some((candidate) =>
+                  [...candidate.references].some(usesBadge),
+                )) &&
+              ![...branch.references].some(usesBadge),
+          ),
+      });
+    }),
   };
 };
 
@@ -309,6 +459,7 @@ export const checkDocumentIdentitySources = (
     const collect = (name: string, node: ts.FunctionLikeDeclaration) => {
       const id = `${filename}#${name}`;
       const references = new Set<string>();
+      let outputReferences = references;
       const rowReferences = new Set<string>();
       const bindings = new Map<string, ts.Expression>();
       let hasRows = false;
@@ -358,7 +509,7 @@ export const checkDocumentIdentitySources = (
         ) {
           hasJsx = true;
           const tag = child.tagName.getText(file);
-          references.add(reference(tag));
+          outputReferences.add(reference(tag));
           if (ROW_TAG.test(tag)) {
             hasRows = true;
             const row = ts.isJsxOpeningElement(child) ? child.parent : child;
@@ -372,7 +523,7 @@ export const checkDocumentIdentitySources = (
         }
         if (ts.isCallExpression(child)) {
           const dependency = reference(child.expression.getText(file));
-          references.add(dependency);
+          outputReferences.add(dependency);
           if (inRow) {
             rowReferences.add(dependency);
           }
@@ -394,46 +545,34 @@ export const checkDocumentIdentitySources = (
         }
         ts.forEachChild(child, (descendant) => visit(descendant, inRow));
       };
-      const returned = (child: ts.Node) => {
-        if (child !== body && ts.isFunctionLike(child)) {
-          return;
-        }
-        if (
-          ts.isIfStatement(child) &&
-          child.expression.kind === ts.SyntaxKind.FalseKeyword
-        ) {
-          if (child.elseStatement !== undefined) {
-            returned(child.elseStatement);
-          }
-          return;
-        }
-        if (ts.isBlock(child)) {
-          for (const statement of child.statements) {
-            returned(statement);
-            if (ts.isReturnStatement(statement)) {
-              break;
-            }
-          }
-          return;
-        }
-        if (ts.isReturnStatement(child)) {
-          if (child.expression !== undefined) {
-            visit(child.expression);
-          }
-          return;
-        }
-        ts.forEachChild(child, returned);
-      };
       if (ts.isBlock(body)) {
-        returned(body);
+        visitReturnedOutput({ body, visit });
       } else {
         visit(body);
+      }
+      const identityBranches: IdentityBranch[] = [];
+      if (filename !== BADGE_OWNER) {
+        for (const output of documentKindOutputs(body, file)) {
+          outputReferences = new Set<string>();
+          visitedBindings.clear();
+          visitedRowBindings.clear();
+          visit(output);
+          identityBranches.push({
+            references: outputReferences,
+            projectsIdentity:
+              /\b(?:identity|documentIdentity|CourtBadge|courtAbbreviation|caseNumber|statuteNumber|statuteYear)\b/u.test(
+                output.getText(file),
+              ),
+          });
+        }
       }
       renderers.set(id, {
         path: filename,
         name,
         references,
         rowReferences,
+        identityBranches,
+        hasJsx,
         hasRows,
         carriesDocumentKind:
           /\.(?:kind|type|documentKind)\b/u.test(node.getText(file)) &&
