@@ -300,6 +300,8 @@
     "registryErrorConnect": "No se pudo conectar la cuenta.",
     "registryRetry": "Intentar de nuevo",
     "registryErrorSearch": "La búsqueda en el registro falló.",
+    "registryErrorKeychain": "stella desktop no pudo eliminar la cuenta desconectada del llavero. Inténtalo de nuevo.",
+    "registryErrorRole": "La búsqueda en el registro no está disponible para tu rol.",
     "registryErrorFormat": "No se pudo cambiar el formato del resultado.",
     "registryErrorSetDefaultFormat": "No se pudo guardar el formato predeterminado.",
     "registryErrorCopy": "No se pudo copiar el resultado.",

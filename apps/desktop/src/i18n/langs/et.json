@@ -300,6 +300,8 @@
     "registryErrorConnect": "Konto ühendamine ebaõnnestus.",
     "registryRetry": "Proovige uuesti",
     "registryErrorSearch": "Registriotsing ebaõnnestus.",
+    "registryErrorKeychain": "stella desktop ei saanud lahtiühendatud kontot võtmehoidjast eemaldada. Proovige uuesti.",
+    "registryErrorRole": "Registriotsing pole teie rollile saadaval.",
     "registryErrorFormat": "Tulemuse vormingut ei saanud muuta.",
     "registryErrorSetDefaultFormat": "Vaikevormingut ei saanud salvestada.",
     "registryErrorCopy": "Tulemust ei saanud kopeerida.",

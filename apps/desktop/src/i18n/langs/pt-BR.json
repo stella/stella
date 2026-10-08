@@ -300,6 +300,8 @@
     "registryErrorConnect": "Não foi possível conectar a conta.",
     "registryRetry": "Tentar novamente",
     "registryErrorSearch": "A pesquisa no registro falhou.",
+    "registryErrorKeychain": "O stella desktop não conseguiu remover a conta desconectada das Chaves. Tente novamente.",
+    "registryErrorRole": "A busca no registro não está disponível para a sua função.",
     "registryErrorFormat": "Não foi possível alterar o formato do resultado.",
     "registryErrorSetDefaultFormat": "Não foi possível salvar o formato padrão.",
     "registryErrorCopy": "Não foi possível copiar o resultado.",

@@ -35,6 +35,15 @@ pub struct LinkedAccount {
 struct AccountPolicy {
   key_prefix: String,
   credential_lifetime_seconds: i64,
+  error_codes: AccountErrorCodes,
+}
+
+/// Errors the desktop UI tells apart; the codes are shared with it.
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct AccountErrorCodes {
+  role_forbidden: String,
+  keychain_clear_failed: String,
 }
 
 fn policy() -> AccountPolicy {
@@ -42,6 +51,44 @@ fn policy() -> AccountPolicy {
     "../../../../packages/api-contract/src/desktop-account-policy.json"
   ))
   .expect("the committed desktop account policy must be valid")
+}
+
+pub(crate) fn role_forbidden_error() -> String {
+  policy().error_codes.role_forbidden
+}
+
+pub(crate) fn keychain_clear_failed() -> String {
+  policy().error_codes.keychain_clear_failed
+}
+
+/// Credentials the API rejected in this process, by SHA-256. A record whose
+/// Keychain removal failed still reads as disconnected, and its key is never
+/// sent again.
+static REJECTED_CREDENTIALS: std::sync::Mutex<Vec<[u8; 32]>> =
+  std::sync::Mutex::new(Vec::new());
+
+fn credential_fingerprint(key: &str) -> [u8; 32] {
+  use sha2::{Digest, Sha256};
+  let mut fingerprint = [0_u8; 32];
+  fingerprint.copy_from_slice(&Sha256::digest(key.as_bytes()));
+  fingerprint
+}
+
+fn mark_rejected(key: &str) {
+  let fingerprint = credential_fingerprint(key);
+  let mut rejected = REJECTED_CREDENTIALS
+    .lock()
+    .unwrap_or_else(std::sync::PoisonError::into_inner);
+  if !rejected.contains(&fingerprint) {
+    rejected.push(fingerprint);
+  }
+}
+
+fn is_rejected(key: &str) -> bool {
+  REJECTED_CREDENTIALS
+    .lock()
+    .unwrap_or_else(std::sync::PoisonError::into_inner)
+    .contains(&credential_fingerprint(key))
 }
 
 /// The API stamps `expiresAt` from its own clock. A desktop clock behind the
@@ -213,6 +260,21 @@ pub async fn current(state: &AccountState) -> Result<Option<LinkedAccount>, Stri
   let saved = store.load().await?;
   if saved
     .as_ref()
+    .is_some_and(|saved| is_rejected(&saved.credential.key))
+  {
+    // Retried on every read until the Keychain lets go; the first failure
+    // already reached the caller of `invalidate`.
+    if store.clear().await.is_err() {
+      tracing::warn!(
+        target: crate::logging::TRAIL_TARGET,
+        event = "account.keychain_clear_failed",
+        code = "retry_on_read"
+      );
+    }
+    return Ok(None);
+  }
+  if saved
+    .as_ref()
     .is_some_and(|saved| !is_live_expiry(&saved.credential.expires_at))
   {
     store.clear().await?;
@@ -228,7 +290,9 @@ async fn prepare_replacement(
   let Some(existing) = store.load().await? else {
     return Ok(LinkOutcome::Linked);
   };
-  if is_live_expiry(&existing.credential.expires_at) {
+  if is_live_expiry(&existing.credential.expires_at)
+    && !is_rejected(&existing.credential.key)
+  {
     if existing.credential.key != pending.credential.key {
       return Err(
         "Disconnect the current desktop account before connecting another".into(),
@@ -276,17 +340,29 @@ pub async fn link(
   Ok(LinkOutcome::Linked)
 }
 
+/// Ends the link after the API rejected `account`'s credential. The account
+/// reads as disconnected from here on even when the Keychain removal fails;
+/// that failure is still returned so the caller can show it.
 pub async fn invalidate(
   state: &AccountState,
   account: &LinkedAccount,
 ) -> Result<(), String> {
+  mark_rejected(&account.credential.key);
+  tracing::info!(target: crate::logging::TRAIL_TARGET, event = "account.invalidated");
   let mut store = state.lock().await;
   if store
     .load()
     .await?
     .is_some_and(|current| current.credential.key == account.credential.key)
   {
-    store.clear().await?;
+    store.clear().await.map_err(|_| {
+      tracing::warn!(
+        target: crate::logging::TRAIL_TARGET,
+        event = "account.keychain_clear_failed",
+        code = "invalidate"
+      );
+      keychain_clear_failed()
+    })?;
   }
   Ok(())
 }
@@ -324,7 +400,11 @@ pub async fn account_disconnect(
 ) -> Result<(), String> {
   require_account_window(&window)?;
   let mut store = state.lock().await;
-  if let Some(saved) = store.load().await? {
+  if let Some(saved) = store
+    .load()
+    .await?
+    .filter(|saved| !is_rejected(&saved.credential.key))
+  {
     match crate::registry::request(
       saved.request_auth(),
       serde_json::json!({"type":"revoke"}),
@@ -342,6 +422,8 @@ pub async fn account_disconnect(
   Ok(())
 }
 
+pub const LINK_ALREADY_PENDING: &str =
+  "A desktop account connection is already pending";
 const LINK_APPROVAL_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(120);
 const BRIDGE_PROOF_WINDOW_SECONDS: i64 = 30;
 
@@ -440,7 +522,7 @@ fn reserve_browser_connection(
         LinkRedemption::Waiting { .. } | LinkRedemption::Redeeming
       )
   }) {
-    return Err("A desktop account connection is already pending".into());
+    return Err(LINK_ALREADY_PENDING.into());
   }
   *pending = Some(connection);
   Ok(())
@@ -1204,8 +1286,8 @@ mod tests {
 
   #[tokio::test]
   async fn invalidation_is_idempotent_and_cannot_disconnect_a_newer_account() {
-    let old = fixture("stella_dr_old", 60);
-    let new = fixture("stella_dr_new", 60);
+    let old = fixture("stella_dr_invalidated_old", 60);
+    let new = fixture("stella_dr_invalidated_new", 60);
     let state = Arc::new(Mutex::new(AccountStore::Memory(Some(new.clone()))));
     invalidate(&state, &old).await.unwrap();
     assert_eq!(
@@ -1214,6 +1296,23 @@ mod tests {
     );
     invalidate(&state, &new).await.unwrap();
     invalidate(&state, &new).await.unwrap();
+    assert!(current(&state).await.unwrap().is_none());
+  }
+
+  #[tokio::test]
+  async fn a_rejected_credential_reads_as_disconnected_when_the_keychain_keeps_it() {
+    let rejected = fixture("stella_dr_rejected_readonly", 60);
+    let state = Arc::new(Mutex::new(AccountStore::ReadOnly(Some(rejected.clone()))));
+    assert_eq!(
+      invalidate(&state, &rejected).await.unwrap_err(),
+      keychain_clear_failed()
+    );
+    // The record is still in the store, but nothing reads its key again.
+    assert!(matches!(
+      &*state.lock().await,
+      AccountStore::ReadOnly(Some(_))
+    ));
+    assert!(current(&state).await.unwrap().is_none());
     assert!(current(&state).await.unwrap().is_none());
   }
 

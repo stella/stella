@@ -300,6 +300,8 @@
     "registryErrorConnect": "Účet se nepodařilo připojit.",
     "registryRetry": "Zkusit znovu",
     "registryErrorSearch": "Vyhledávání v rejstříku se nezdařilo.",
+    "registryErrorKeychain": "stella desktop nemohl odebrat odpojený účet z Klíčenky. Zkuste to znovu.",
+    "registryErrorRole": "Vyhledávání v rejstříku není pro vaši roli dostupné.",
     "registryErrorFormat": "Formát výsledku se nepodařilo změnit.",
     "registryErrorSetDefaultFormat": "Výchozí formát se nepodařilo uložit.",
     "registryErrorCopy": "Výsledek se nepodařilo zkopírovat.",

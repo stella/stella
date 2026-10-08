@@ -43,13 +43,22 @@ import {
   describeError,
   reportDesktopError,
 } from "../telemetry/desktop-telemetry";
+import {
+  registryConnectionFailure,
+  registryOperationFailure,
+} from "./registry-errors";
 import { registryFormatHtml } from "./registry-format";
 
 const SEARCH_DEBOUNCE_MS = 300;
 const CONNECTION_FAILURE_MESSAGES = {
   lookup: "registryErrorState",
   connect: "registryErrorConnect",
-} as const;
+  role: "registryErrorRole",
+  keychain: "registryErrorKeychain",
+} as const satisfies Record<
+  ReturnType<typeof registryConnectionFailure> | "connect",
+  string
+>;
 // Emitted by the native bridge once a browser handoff stored a credential;
 // the non-activating panel gets no focus event to notice it otherwise.
 const CONNECTION_CHANGED_EVENT = "desktop-account-changed";
@@ -139,6 +148,9 @@ export const RegistrySearch = ({
       ? null
       : t(CONNECTION_FAILURE_MESSAGES[connectionFailure]);
   const searchError = t("registryErrorSearch");
+  const roleError = t("registryErrorRole");
+  const operationError = (error: unknown, fallback: string) =>
+    registryOperationFailure(error) === "role" ? roleError : fallback;
   const connected = connection?.status === "connected";
   const formatType =
     connection?.status === "connected"
@@ -186,12 +198,12 @@ export const RegistrySearch = ({
           setAttempt((current) => current + 1);
           return;
         })
-        .catch(() => {
+        .catch((error: unknown) => {
           if (disposed || request !== connectionGeneration.current) {
             return;
           }
           setConnection({ status: "unavailable" });
-          setConnectionFailure("lookup");
+          setConnectionFailure(registryConnectionFailure(error));
         });
     };
     refresh();
@@ -284,12 +296,18 @@ export const RegistrySearch = ({
           });
           return;
         })
-        .catch(() => {
+        .catch((error: unknown) => {
           if (generation.current !== request) {
             return;
           }
           setSearchState({ status: "idle" });
-          setFailure({ scope, message: searchError });
+          setFailure({
+            scope,
+            message:
+              registryOperationFailure(error) === "role"
+                ? roleError
+                : searchError,
+          });
         });
     }, SEARCH_DEBOUNCE_MS);
     return () => {
@@ -304,6 +322,7 @@ export const RegistrySearch = ({
     composing,
     scope,
     searchError,
+    roleError,
   ]);
 
   const currentSearch =
@@ -404,7 +423,7 @@ export const RegistrySearch = ({
         );
         return;
       })
-      .catch(() => {
+      .catch((error: unknown) => {
         if (
           request !== generation.current ||
           formatRequests.current.get(card.id) !== operation
@@ -423,7 +442,7 @@ export const RegistrySearch = ({
               }
             : current,
         );
-        setError(t("registryErrorFormat"));
+        setError(operationError(error, t("registryErrorFormat")));
       });
   };
   // The reply carries the default the member now resolves to: clearing a
@@ -457,12 +476,12 @@ export const RegistrySearch = ({
         );
         return;
       })
-      .catch(() => {
+      .catch((error: unknown) => {
         if (defaultFormatRequests.current !== operation) {
           return;
         }
         setSavingDefaultFormat(false);
-        setError(t("registryErrorSetDefaultFormat"));
+        setError(operationError(error, t("registryErrorSetDefaultFormat")));
       });
   };
   const openCompanyFormat = (card: ResultCard) => {

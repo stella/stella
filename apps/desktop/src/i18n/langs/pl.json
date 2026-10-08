@@ -300,6 +300,8 @@
     "registryErrorConnect": "Nie udało się połączyć konta.",
     "registryRetry": "Spróbuj ponownie",
     "registryErrorSearch": "Wyszukiwanie w rejestrze nie powiodło się.",
+    "registryErrorKeychain": "stella desktop nie mógł usunąć rozłączonego konta z pęku kluczy. Spróbuj ponownie.",
+    "registryErrorRole": "Wyszukiwanie w rejestrze nie jest dostępne dla Twojej roli.",
     "registryErrorFormat": "Nie udało się zmienić formatu wyniku.",
     "registryErrorSetDefaultFormat": "Nie udało się zapisać domyślnego formatu.",
     "registryErrorCopy": "Nie udało się skopiować wyniku.",

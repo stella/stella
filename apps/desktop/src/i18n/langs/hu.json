@@ -300,6 +300,8 @@
     "registryErrorConnect": "A fiókot nem sikerült összekapcsolni.",
     "registryRetry": "Újra",
     "registryErrorSearch": "A nyilvántartásban való keresés nem sikerült.",
+    "registryErrorKeychain": "A stella desktop nem tudta eltávolítani a leválasztott fiókot a kulcskarikából. Próbálja újra.",
+    "registryErrorRole": "A cégjegyzék-keresés nem érhető el az Ön szerepköre számára.",
     "registryErrorFormat": "Az eredmény formátumát nem sikerült módosítani.",
     "registryErrorSetDefaultFormat": "Az alapértelmezett formátumot nem sikerült menteni.",
     "registryErrorCopy": "Az eredményt nem sikerült másolni.",

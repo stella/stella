@@ -300,6 +300,8 @@
     "registryErrorConnect": "Nepavyko susieti paskyros.",
     "registryRetry": "Bandyti dar kartą",
     "registryErrorSearch": "Paieška registre nepavyko.",
+    "registryErrorKeychain": "stella desktop nepavyko pašalinti atjungtos paskyros iš raktinės. Bandykite dar kartą.",
+    "registryErrorRole": "Registro paieška jūsų vaidmeniui nepasiekiama.",
     "registryErrorFormat": "Nepavyko pakeisti rezultato formato.",
     "registryErrorSetDefaultFormat": "Nepavyko išsaugoti numatytojo formato.",
     "registryErrorCopy": "Rezultato nukopijuoti nepavyko.",

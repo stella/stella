@@ -300,6 +300,8 @@
     "registryErrorConnect": "Account could not be connected.",
     "registryRetry": "Try again",
     "registryErrorSearch": "Registry search failed.",
+    "registryErrorKeychain": "stella desktop couldn't remove the disconnected account from the Keychain. Try again.",
+    "registryErrorRole": "Registry search isn't available for your role.",
     "registryErrorFormat": "Result format could not be changed.",
     "registryErrorSetDefaultFormat": "Default format could not be saved.",
     "registryErrorCopy": "Result could not be copied.",

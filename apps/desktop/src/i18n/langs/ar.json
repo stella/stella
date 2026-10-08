@@ -300,6 +300,8 @@
     "registryErrorConnect": "تعذر ربط الحساب.",
     "registryRetry": "إعادة المحاولة",
     "registryErrorSearch": "فشل البحث في السجل.",
+    "registryErrorKeychain": "تعذّر على stella desktop إزالة الحساب المفصول من سلسلة المفاتيح. حاول مرة أخرى.",
+    "registryErrorRole": "البحث في السجل غير متاح لدورك.",
     "registryErrorFormat": "تعذر تغيير تنسيق النتيجة.",
     "registryErrorSetDefaultFormat": "تعذر حفظ التنسيق الافتراضي.",
     "registryErrorCopy": "تعذر نسخ النتيجة.",

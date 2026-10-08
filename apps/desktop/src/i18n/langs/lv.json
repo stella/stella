@@ -300,6 +300,8 @@
     "registryErrorConnect": "Neizdevās savienot kontu.",
     "registryRetry": "Mēģināt vēlreiz",
     "registryErrorSearch": "Meklēšana reģistrā neizdevās.",
+    "registryErrorKeychain": "stella desktop neizdevās noņemt atvienoto kontu no atslēgu saišķa. Mēģiniet vēlreiz.",
+    "registryErrorRole": "Reģistra meklēšana jūsu lomai nav pieejama.",
     "registryErrorFormat": "Rezultāta formātu neizdevās mainīt.",
     "registryErrorSetDefaultFormat": "Noklusējuma formātu neizdevās saglabāt.",
     "registryErrorCopy": "Rezultātu neizdevās nokopēt.",

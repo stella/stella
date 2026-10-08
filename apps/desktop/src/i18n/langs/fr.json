@@ -300,6 +300,8 @@
     "registryErrorConnect": "Impossible de connecter le compte.",
     "registryRetry": "Réessayer",
     "registryErrorSearch": "La recherche dans le registre a échoué.",
+    "registryErrorKeychain": "stella desktop n'a pas pu retirer le compte déconnecté du trousseau. Réessayez.",
+    "registryErrorRole": "La recherche dans le registre n'est pas disponible pour votre rôle.",
     "registryErrorFormat": "Impossible de modifier le format du résultat.",
     "registryErrorSetDefaultFormat": "Impossible d’enregistrer le format par défaut.",
     "registryErrorCopy": "Le résultat n’a pas pu être copié.",

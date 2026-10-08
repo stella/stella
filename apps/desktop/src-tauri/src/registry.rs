@@ -70,6 +70,12 @@ pub fn not_connected() -> String {
   "Desktop account is not connected".into()
 }
 
+/// The credential is live but the member's role lacks the operation's
+/// permission. The account stays linked; the panel names the cause.
+pub fn role_forbidden() -> String {
+  crate::account::role_forbidden_error()
+}
+
 // No caller-supplied URL, method, headers, or generic HTTP command is exposed.
 pub(crate) struct RegistryRequestAuth<'a> {
   pub api_base_url: &'a str,
@@ -88,8 +94,17 @@ pub async fn request(
     .send()
     .await
     .map_err(|_| "Registry search is unavailable")?;
-  if response.status() == reqwest::StatusCode::UNAUTHORIZED {
-    return Err(not_connected());
+  // Only a 401 means the credential is gone; a 403 keeps the account.
+  match response.status() {
+    reqwest::StatusCode::UNAUTHORIZED => {
+      tracing::warn!(target: crate::logging::TRAIL_TARGET, event = "registry.unauthorized", status = 401_u16);
+      return Err(not_connected());
+    }
+    reqwest::StatusCode::FORBIDDEN => {
+      tracing::warn!(target: crate::logging::TRAIL_TARGET, event = "registry.forbidden", status = 403_u16);
+      return Err(role_forbidden());
+    }
+    _ => {}
   }
   if !response.status().is_success() {
     return Err("Registry request failed".into());
@@ -140,11 +155,11 @@ pub async fn registry_get_state(
     return Ok(serde_json::json!({"status":"disconnected"}));
   };
   let config =
-    match request(saved.request_auth(), serde_json::json!({"type":"config"})).await {
+    match request_current(&app, &state, &saved, serde_json::json!({"type":"config"}))
+      .await
+    {
       Ok(config) => config,
       Err(error) if error == not_connected() => {
-        account::invalidate(&state, &saved).await?;
-        account::notify(&app);
         return Ok(serde_json::json!({"status":"disconnected"}));
       }
       Err(error) => return Err(error),
@@ -162,8 +177,9 @@ pub async fn registry_get_state(
   )
 }
 
-async fn request_current(
-  app: &tauri::AppHandle,
+/// Only a 401 ends the account link. A 403 is a role denial for this one
+/// operation and leaves the saved account in place.
+async fn request_linked(
   state: &AccountState,
   saved: &LinkedAccount,
   body: serde_json::Value,
@@ -174,6 +190,20 @@ async fn request_current(
     .is_err_and(|error| *error == not_connected())
   {
     account::invalidate(state, saved).await?;
+  }
+  result
+}
+
+async fn request_current(
+  app: &tauri::AppHandle,
+  state: &AccountState,
+  saved: &LinkedAccount,
+  body: serde_json::Value,
+) -> Result<serde_json::Value, String> {
+  let result = request_linked(state, saved, body).await;
+  if result.as_ref().is_err_and(|error| {
+    *error == not_connected() || *error == account::keychain_clear_failed()
+  }) {
     account::notify(app);
   }
   result
@@ -335,6 +365,58 @@ mod tests {
       );
     }
     server.abort();
+  }
+
+  #[tokio::test]
+  async fn only_a_rejected_credential_ends_the_account_link() {
+    use axum::{Router, http::StatusCode, routing::post};
+
+    for (status, expected, linked) in [
+      (StatusCode::FORBIDDEN, role_forbidden(), true),
+      (StatusCode::UNAUTHORIZED, not_connected(), false),
+    ] {
+      let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+      let address = listener.local_addr().unwrap();
+      let router = Router::new().route(
+        "/v1/desktop-registry/request",
+        post(move || async move { status }),
+      );
+      let server = tokio::spawn(async move {
+        axum::serve(listener, router).await.unwrap();
+      });
+      let saved = LinkedAccount {
+        api_base_url: format!("http://{address}"),
+        web_origin: "http://localhost:3000".into(),
+        identity: crate::types::DesktopAccountIdentity {
+          user_id: "user_fixture".into(),
+          organization_id: "org_fixture".into(),
+        },
+        account: crate::types::LinkedAccountSnapshot {
+          email: "desktop@example.test".into(),
+          name: None,
+          verified_at: chrono::Utc::now().to_rfc3339(),
+        },
+        credential: crate::types::DesktopAccountCredential {
+          key: format!("stella_dr_registry_{}", status.as_u16()),
+          expires_at: (chrono::Utc::now() + chrono::Duration::hours(1)).to_rfc3339(),
+        },
+      };
+      let state: AccountState = std::sync::Arc::new(tokio::sync::Mutex::new(
+        account::AccountStore::Memory(Some(saved.clone())),
+      ));
+      assert_eq!(
+        request_linked(
+          &state,
+          &saved,
+          serde_json::json!({"type":"search", "registry":"ares", "query":"fixture"}),
+        )
+        .await
+        .unwrap_err(),
+        expected
+      );
+      assert_eq!(account::current(&state).await.unwrap().is_some(), linked);
+      server.abort();
+    }
   }
 
   #[test]

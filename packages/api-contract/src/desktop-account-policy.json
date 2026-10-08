@@ -1,4 +1,8 @@
 {
   "keyPrefix": "stella_dr_",
-  "credentialLifetimeSeconds": 604800
+  "credentialLifetimeSeconds": 604800,
+  "errorCodes": {
+    "roleForbidden": "desktop_role_forbidden",
+    "keychainClearFailed": "desktop_keychain_clear_failed"
+  }
 }

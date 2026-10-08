@@ -300,6 +300,8 @@
     "registryErrorConnect": "Das Konto konnte nicht verbunden werden.",
     "registryRetry": "Erneut versuchen",
     "registryErrorSearch": "Die Registersuche ist fehlgeschlagen.",
+    "registryErrorKeychain": "stella desktop konnte das getrennte Konto nicht aus dem Schlüsselbund entfernen. Versuchen Sie es erneut.",
+    "registryErrorRole": "Die Registersuche ist für Ihre Rolle nicht verfügbar.",
     "registryErrorFormat": "Das Ergebnisformat konnte nicht geändert werden.",
     "registryErrorSetDefaultFormat": "Das Standardformat konnte nicht gespeichert werden.",
     "registryErrorCopy": "Das Ergebnis konnte nicht kopiert werden.",
