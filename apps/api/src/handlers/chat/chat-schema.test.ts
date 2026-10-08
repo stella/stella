@@ -2237,9 +2237,12 @@ describe("validateMessage", () => {
                   {
                     type: "tool-call",
                     id: "tool-call-1",
-                    name: "search-documents",
-                    arguments: JSON.stringify({ query: "contract" }),
-                    input: { query: "contract" },
+                    name: "mcp__external__create_document",
+                    arguments: JSON.stringify({
+                      name: "Draft",
+                      source: "Text",
+                    }),
+                    input: { name: "Draft", source: "Text" },
                     output: { error: "Tool execution failed" },
                     state: "error",
                     approval: {
@@ -2252,13 +2255,13 @@ describe("validateMessage", () => {
                     type: "tool-result",
                     toolCallId: "tool-call-1",
                     content: JSON.stringify(payload),
-                    error,
-                    outcome,
+                    ...(error === undefined ? {} : { error }),
+                    ...(outcome === undefined ? {} : { outcome }),
                     state: "error",
                   },
                 ],
               },
-              tools: searchTools,
+              tools: snapshotApprovalTools,
             });
             expect(Result.isOk(result)).toBe(
               outcome === "denied" &&

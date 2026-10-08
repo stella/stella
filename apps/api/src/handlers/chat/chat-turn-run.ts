@@ -85,6 +85,9 @@ const eagerlyDeliverTurn = (response: Response): Response => {
                 if (delivery !== "open") {
                   continue;
                 }
+                if (!(next.value instanceof Uint8Array)) {
+                  panic("A chat response stream emitted a non-byte chunk");
+                }
                 if (next.value.byteLength > (controller.desiredSize ?? 0)) {
                   delivery = "overflowed";
                   controller.error(

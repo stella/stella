@@ -1,3 +1,4 @@
+import type { ToolCallPart } from "@tanstack/ai";
 import { uiMessageToModelMessages } from "@tanstack/ai";
 import { expect, test } from "bun:test";
 
@@ -56,7 +57,7 @@ for (const outcome of ["success", "denied", "cancelled"] as const) {
         arguments: "{}",
         state: "input-complete",
         metadata: { [TOOL_CALL_STEP_METADATA_KEY]: id },
-      }) as const satisfies ChatPart;
+      }) as const satisfies ToolCallPart;
     const first = call("call-1");
     const second = call("call-2");
     const result = {

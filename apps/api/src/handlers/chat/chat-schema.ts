@@ -1770,7 +1770,7 @@ const validateToolErrorResult = (
   if (
     part.outcome === "denied" &&
     "approval" in toolCall.part &&
-    toolCall.part.approval?.approved === false &&
+    toolCall.part.approval.approved === false &&
     typeof content === "object" &&
     content !== null &&
     Object.keys(content).length === 2 &&

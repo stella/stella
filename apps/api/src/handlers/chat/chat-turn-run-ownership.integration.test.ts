@@ -220,7 +220,7 @@ const produceUntilCut = ({
         break;
       default:
         end satisfies never;
-        return panic(`Unknown run end: ${String(end)}`);
+        panic(`Unknown run end: ${String(end)}`);
     }
     await run.settle(
       persist ??
