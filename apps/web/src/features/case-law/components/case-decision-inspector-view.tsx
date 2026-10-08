@@ -21,21 +21,15 @@ import {
 } from "@/components/inspector/inspector-find";
 import { InspectorTabHeader } from "@/components/inspector/inspector-tab-header";
 import type { InspectorViewRenderProps } from "@/components/inspector/view-registry";
-import { ViewerOverlayBar } from "@/components/inspector/viewer-overlay-bar";
-import { ZoomControls } from "@/components/inspector/zoom-controls";
 import { AnnotationToolbar } from "@/components/legal-reader/annotations/annotation-toolbar";
 import { GuestAnnotationPrompt } from "@/components/legal-reader/annotations/guest-annotation-prompt";
 import { LegalReaderAIChat } from "@/components/legal-reader/legal-reader-ai-chat";
+import { LegalReaderControls } from "@/components/legal-reader/legal-reader-controls";
 import { OpenOriginalButton } from "@/components/legal-reader/open-original-button";
 import { useReaderTextScale } from "@/components/legal-reader/use-reader-text-scale";
 import { decisionInspectorAnnotationTarget } from "@/features/case-law/components/case-decision-inspector-view.logic";
-import {
-  DecisionInspectorOutline,
-  scrollDecisionInspectorToAnchor,
-} from "@/features/case-law/components/case-viewer/analysis/decision-inspector-outline";
 import { MarginNotes } from "@/features/case-law/components/case-viewer/analysis/margin-notes";
 import type { MarginItem } from "@/features/case-law/components/case-viewer/analysis/margin-notes";
-import { useLazyDecisionAnalysis } from "@/features/case-law/components/case-viewer/analysis/use-lazy-decision-analysis";
 import { DecisionCitationBox } from "@/features/case-law/components/case-viewer/decision-citation-box";
 import { DecisionFacts } from "@/features/case-law/components/case-viewer/decision-facts";
 import {
@@ -53,7 +47,6 @@ import { useDecisionCitationAnchors } from "@/features/case-law/components/case-
 import { useDecisionProvisionAnchors } from "@/features/case-law/components/case-viewer/use-decision-provision-anchors";
 import { useDecisionStatuteCitationAnchors } from "@/features/case-law/components/case-viewer/use-decision-statute-citation-anchors";
 import { DecisionMainViewAction } from "@/features/case-law/components/decision-main-view-action";
-import type { PublicCaseLawDecision } from "@/features/case-law/public-decision";
 import { decisionOptions } from "@/features/case-law/queries/decisions";
 import { useReaderProvisionMode } from "@/hooks/use-reader-provision-mode";
 import { detached } from "@/lib/detached";
@@ -70,33 +63,6 @@ const HEADER_DECISION_FACTS = [
   "keywords",
   "judges",
 ] as const satisfies readonly DecisionFactKind[];
-
-type DecisionInspectorOutlineControlProps = {
-  decision: PublicCaseLawDecision;
-  documentReady: boolean;
-  onAnchorClick: (anchorId: string) => void;
-};
-
-const DecisionInspectorOutlineControl = ({
-  decision,
-  documentReady,
-  onAnchorClick,
-}: DecisionInspectorOutlineControlProps) => {
-  const analysis = useLazyDecisionAnalysis({
-    decisionId: decision.id,
-    decisionUpdatedAt: decision.updatedAt,
-    documentReady,
-    sourceAllowsDerivedAi: decision.source.allowsDerivedAi,
-    mode: "enabled",
-  });
-  return (
-    <DecisionInspectorOutline
-      available={analysis.available}
-      onAnchorClick={onAnchorClick}
-      state={analysis.state}
-    />
-  );
-};
 
 /** A compact decision reader composed for the inspector's bounded width. */
 export const CaseDecisionInspectorView = ({
@@ -304,29 +270,13 @@ export const CaseDecisionInspectorView = ({
           </main>
         </ScrollArea>
         {/* The same bar the PDF floats over its page, over the text. */}
-        <ViewerOverlayBar>
-          {decision !== undefined && (
-            <DecisionInspectorOutlineControl
-              decision={decision}
-              documentReady={ast !== null}
-              key={decisionId}
-              onAnchorClick={(anchorId) => {
-                scrollDecisionInspectorToAnchor({
-                  anchorId,
-                  content: contentRef.current,
-                  viewport: scrollRef.current,
-                });
-              }}
-            />
-          )}
-          <ZoomControls
-            atMax={textScale.atMax}
-            atMin={textScale.atMin}
-            level={textScale.level}
-            onReset={textScale.reset}
-            onZoom={textScale.zoom}
-          />
-        </ViewerOverlayBar>
+        <LegalReaderControls
+          blocks={ast?.blocks ?? []}
+          contentRef={contentRef}
+          viewportRef={scrollRef}
+          textScale={textScale}
+          key={decisionId}
+        />
       </LegalReaderAIChat>
       <AnnotationToolbar
         activeAnnotation={annotations.activeAnnotation}

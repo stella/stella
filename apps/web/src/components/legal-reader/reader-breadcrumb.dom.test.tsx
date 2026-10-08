@@ -133,3 +133,57 @@ test("reader breadcrumb uses translated Arabic chrome and isolates source titles
       ?.textContent,
   ).toBe("Hlava I");
 });
+
+test("reader breadcrumb allocates narrow width to the current number before outer titles", async () => {
+  const originalObserver = globalThis.ResizeObserver;
+  const callbacks: (() => void)[] = [];
+  globalThis.ResizeObserver = class {
+    constructor(callback: ResizeObserverCallback) {
+      callbacks.push(() => callback([], this));
+    }
+    observe() {}
+    unobserve() {}
+    disconnect() {}
+  };
+  try {
+    mount(() => {});
+    const navigation = screen.getByRole("navigation");
+    Object.defineProperty(navigation, "clientWidth", {
+      value: 218,
+      configurable: true,
+    });
+    for (const label of navigation.querySelectorAll(
+      "[data-breadcrumb-measure]",
+    )) {
+      label.getBoundingClientRect = () => new DOMRect(0, 0, 84, 16);
+    }
+    const number = navigation.querySelector("[data-breadcrumb-number-measure]");
+    if (number === null) {
+      throw new Error("Number measurement not rendered");
+    }
+    number.getBoundingClientRect = () => new DOMRect(0, 0, 28, 16);
+    await act(async () => {
+      for (const resize of callbacks) {
+        resize();
+      }
+    });
+    expect(screen.getByRole("button", { name: "Část druhá" }).style.width).toBe(
+      "16px",
+    );
+    expect(screen.getByRole("button", { name: "Díl 1" }).style.width).toBe(
+      "16px",
+    );
+    const current = screen.getByRole("button", { name: /Contents: § 5/u });
+    expect(current.style.width).toBe("94px");
+    expect(current.querySelector("bdi")?.textContent).toBe("§ 5");
+    expect(current.querySelector("bdi")?.classList.contains("shrink-0")).toBe(
+      true,
+    );
+    expect(navigation.querySelector('[aria-live="polite"]')?.textContent).toBe(
+      path.map(({ title }) => title).join(" › "),
+    );
+  } finally {
+    cleanup();
+    globalThis.ResizeObserver = originalObserver;
+  }
+});

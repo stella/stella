@@ -18,6 +18,8 @@ import { AnnotationToolbar } from "@/components/legal-reader/annotations/annotat
 import { GuestAnnotationPrompt } from "@/components/legal-reader/annotations/guest-annotation-prompt";
 import type { ReaderAnnotationTarget } from "@/components/legal-reader/annotations/reader-annotation-target";
 import { LegalReaderAIChat } from "@/components/legal-reader/legal-reader-ai-chat";
+import { LegalReaderControls } from "@/components/legal-reader/legal-reader-controls";
+import { useReaderTextScale } from "@/components/legal-reader/use-reader-text-scale";
 import { MatterIcon } from "@/components/matter-icon";
 import Tooltip from "@/components/tooltip";
 import {
@@ -161,6 +163,8 @@ export const DecisionWorkspace = (props: DecisionWorkspaceProps) => {
     name: caseName,
   } as const satisfies ReaderAnnotationTarget;
   const mainRef = useRef<HTMLDivElement>(null);
+  const contentRef = useRef<HTMLElement>(null);
+  const textScale = useReaderTextScale();
   const [notesFilter, setNotesFilter] = useState<NotesFilter>("all");
   const showAiNotes = NOTES_FILTER_SHOWS_AI[notesFilter];
   const annotations = useDecisionAnnotationSurface({
@@ -411,6 +415,13 @@ export const DecisionWorkspace = (props: DecisionWorkspaceProps) => {
         <BidiText as="span">{decision.caseNumber}</BidiText>
       </h1>
       <div className="relative min-h-0 flex-1">
+        <LegalReaderControls
+          blocks={ast?.blocks ?? []}
+          contentRef={contentRef}
+          viewportRef={mainRef}
+          textScale={textScale}
+          key={decisionId}
+        />
         <div className="bg-background/80 supports-[backdrop-filter]:bg-background/55 shadow-floating absolute start-3 bottom-3 z-30 flex items-center overflow-hidden rounded-lg border backdrop-blur-xl max-lg:hidden">
           {notesFilterOptions.map((option) => {
             const Icon = option.icon;
@@ -506,7 +517,11 @@ export const DecisionWorkspace = (props: DecisionWorkspaceProps) => {
             aiMode={props.aiMode}
             className="h-full"
           >
-            <div className="reader-scroll h-full overflow-y-auto" ref={mainRef}>
+            <div
+              className="reader-scroll h-full overflow-y-auto"
+              ref={mainRef}
+              {...textScale.rootProps}
+            >
               <div
                 className="grid max-lg:!grid-cols-[1fr]"
                 style={{
@@ -627,6 +642,7 @@ export const DecisionWorkspace = (props: DecisionWorkspaceProps) => {
 
                 <main
                   className="reader-paper min-w-0 py-8"
+                  ref={contentRef}
                   data-slot="reader-document-column"
                 >
                   <DecisionText

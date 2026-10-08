@@ -19,9 +19,8 @@ import {
 } from "@/components/inspector/inspector-find";
 import { InspectorTabHeader } from "@/components/inspector/inspector-tab-header";
 import type { InspectorViewRenderProps } from "@/components/inspector/view-registry";
-import { ViewerOverlayBar } from "@/components/inspector/viewer-overlay-bar";
-import { ZoomControls } from "@/components/inspector/zoom-controls";
 import { LegalReaderAIChat } from "@/components/legal-reader/legal-reader-ai-chat";
+import { LegalReaderControls } from "@/components/legal-reader/legal-reader-controls";
 import { OpenOriginalButton } from "@/components/legal-reader/open-original-button";
 import { useReaderTextScale } from "@/components/legal-reader/use-reader-text-scale";
 import Tooltip from "@/components/tooltip";
@@ -68,6 +67,7 @@ export const StatuteInspectorView = ({
   const versionCount = Math.max(optionalArray(versions).length, 1);
   const panelRef = useRef<HTMLDivElement | null>(null);
   const contentRef = useRef<HTMLDivElement | null>(null);
+  const viewportRef = useRef<HTMLDivElement | null>(null);
   // Cmd/Ctrl+F belongs to the act in front of the reader rather than to the
   // decision behind it, for as long as there is wording to search.
   const find = useInspectorFind({
@@ -129,7 +129,11 @@ export const StatuteInspectorView = ({
         aiMode="enabled"
         className="min-h-0 flex-1"
       >
-        <ScrollArea axis="vertical" className="h-full">
+        <ScrollArea
+          axis="vertical"
+          className="h-full"
+          viewportRef={viewportRef}
+        >
           {/* The gutter and the room the composer needs belong to the column;
               the text root inside it carries the reader's own scale. */}
           <div data-slot="reader-document-column">
@@ -170,15 +174,13 @@ export const StatuteInspectorView = ({
             </div>
           </div>
         </ScrollArea>
-        <ViewerOverlayBar>
-          <ZoomControls
-            atMax={textScale.atMax}
-            atMin={textScale.atMin}
-            level={textScale.level}
-            onReset={textScale.reset}
-            onZoom={textScale.zoom}
-          />
-        </ViewerOverlayBar>
+        <LegalReaderControls
+          blocks={preparedReader.blocks}
+          contentRef={contentRef}
+          viewportRef={viewportRef}
+          textScale={textScale}
+          key={payload.documentId}
+        />
       </LegalReaderAIChat>
     </div>
   );

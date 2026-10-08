@@ -27,6 +27,7 @@ import {
   useInspectorFind,
 } from "@/components/inspector/inspector-find";
 import { LegalReaderAIChat } from "@/components/legal-reader/legal-reader-ai-chat";
+import { LegalReaderControls } from "@/components/legal-reader/legal-reader-controls";
 import { OpenOriginalButton } from "@/components/legal-reader/open-original-button";
 import { OutlineJumpField } from "@/components/legal-reader/outline-jump-field";
 import {
@@ -40,6 +41,7 @@ import {
   STATUTE_OUTLINE_COLLAPSE_LEVEL,
   statuteOutlineFromHeadings,
 } from "@/components/legal-reader/reader-outline";
+import { useReaderTextScale } from "@/components/legal-reader/use-reader-text-scale";
 import {
   StatuteIneligibleVersionNotice,
   StatuteWindowGapNotice,
@@ -289,12 +291,9 @@ export const PublicStatuteViewer = ({
     [navigate],
   );
 
-  const handleCompare = useCallback(
-    (versionValidFrom: string) => {
-      navigateComparison({ ...NO_STATUTE_COMPARE, compare: versionValidFrom });
-    },
-    [navigateComparison],
-  );
+  const handleCompare = (versionValidFrom: string) => {
+    navigateComparison({ ...NO_STATUTE_COMPARE, compare: versionValidFrom });
+  };
 
   const handleAsOfChange = useCallback(
     (value: string | null) => {
@@ -328,6 +327,7 @@ export const PublicStatuteViewer = ({
     statuteTitle: header.title,
   });
   const blocks = preparedReader.blocks;
+  const textScale = useReaderTextScale();
   const outline = statuteOutlineFromHeadings(blocks);
   const outlineMatches = rankOutlineMatches(outline, jump.query);
   // Clamped where it is read, not where it is set: the list changes under the
@@ -394,34 +394,34 @@ export const PublicStatuteViewer = ({
       ? null
       : { type: "statute", documentId: statute.id, title: statute.title };
 
-  const readerBody = (
-    <div className="reader-scroll h-full overflow-y-auto" ref={readerRef}>
-      <div
-        className="flex flex-col gap-4 py-6"
-        data-slot="reader-document-column"
-        ref={contentRef}
-      >
-        {statute === null ? (
-          <NoVersionOnDay windowGap={windowGap} />
-        ) : (
-          <>
-            <StatuteIneligibleVersionNotice version={statute} />
-            <StatuteReaderBody
-              blocks={blocks}
-              masthead={preparedReader.masthead}
-              scrollContainerRef={readerRef}
-              statute={statute}
-              versionCount={versions.length}
-            />
-          </>
-        )}
-      </div>
-    </div>
-  );
-
   const readerWithChat = (
     <StatuteReaderChat activeLegal={activeLegal} signedIn={user !== null}>
-      {readerBody}
+      <div
+        className="reader-scroll h-full overflow-y-auto"
+        ref={readerRef}
+        {...textScale.rootProps}
+      >
+        <div
+          className="flex flex-col gap-4 py-6"
+          data-slot="reader-document-column"
+          ref={contentRef}
+        >
+          {statute === null ? (
+            <NoVersionOnDay windowGap={windowGap} />
+          ) : (
+            <>
+              <StatuteIneligibleVersionNotice version={statute} />
+              <StatuteReaderBody
+                blocks={blocks}
+                masthead={preparedReader.masthead}
+                scrollContainerRef={readerRef}
+                statute={statute}
+                versionCount={versions.length}
+              />
+            </>
+          )}
+        </div>
+      </div>
     </StatuteReaderChat>
   );
 
@@ -540,6 +540,15 @@ export const PublicStatuteViewer = ({
           conversation. A page with no version in force has no document to
           bind, so it keeps its text alone. */}
             {readerWithChat}
+            {statute !== null && (
+              <LegalReaderControls
+                blocks={blocks}
+                contentRef={contentRef}
+                viewportRef={readerRef}
+                textScale={textScale}
+                key={statute.id}
+              />
+            )}
           </div>
         </>
       )}
