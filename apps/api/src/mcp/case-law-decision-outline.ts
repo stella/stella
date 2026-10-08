@@ -9,6 +9,7 @@ const NUMBERED_SECTION = /^(?:[IVXLCDM]+[.)]|\d+[.)]|\[\d+\])(?:\s|$)/u;
 /** One AST block as the decision read holds it. */
 export type DecisionTextBlock = {
   type: string;
+  number?: number | undefined;
   plainText: string;
   /** The reader's fragment for this block; absent on a block without one. */
   anchorId?: string;
@@ -17,6 +18,7 @@ export type DecisionTextBlock = {
 /** A block found in the served plain text, with where it sits there. */
 export type LocatedDecisionBlock = {
   anchorId: string | null;
+  number?: number | undefined;
   end: number;
   start: number;
   text: string;
@@ -43,6 +45,9 @@ export const locateDecisionBlocks = (
     offset = found + block.plainText.length;
     located.push({
       anchorId: block.anchorId ?? null,
+      ...(block.type === "paragraph" && block.number !== undefined
+        ? { number: block.number }
+        : {}),
       end: offset,
       start: found,
       text: block.plainText,
@@ -67,6 +72,7 @@ type DecisionOutlineOptions = {
 export type DecisionOutlineEntry = {
   /** The reader's fragment for the block the entry opens, when it has one. */
   anchorId: string | null;
+  number?: number | undefined;
   /** Where the entry starts in the served plain text. */
   start: number;
   title: string;
@@ -99,16 +105,20 @@ export const decisionOutline = ({
   return [...entries]
     .toSorted(([left], [right]) => left - right)
     .slice(0, OUTLINE_LIMIT)
-    .map(([start, title]) => ({
-      anchorId: blockAt(located, start)?.anchorId ?? null,
-      start,
-      title: title.slice(
-        0,
-        resolveTextWindowBounds({
-          text: title,
-          offset: 0,
-          size: TITLE_LIMIT,
-        }).end,
-      ),
-    }));
+    .map(([start, title]) => {
+      const block = blockAt(located, start);
+      return {
+        anchorId: block?.anchorId ?? null,
+        ...(block?.number === undefined ? {} : { number: block.number }),
+        start,
+        title: title.slice(
+          0,
+          resolveTextWindowBounds({
+            text: title,
+            offset: 0,
+            size: TITLE_LIMIT,
+          }).end,
+        ),
+      };
+    });
 };

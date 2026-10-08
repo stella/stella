@@ -185,22 +185,18 @@ const openTool: TypedMcpToolHandler<
     return conflict();
   }
   const source = read.value;
-  const metadata = metadataOf(source);
-  // The opening is model-visible: the read withholds text the source keeps
-  // from AI. The link still targets the requested paragraphs.
+  const { paragraphs } = parsed.output;
+  const metadata = metadataWithFragment(metadataOf(source), paragraphs);
+  // The model audience read enforces text access; every outcome retains the target range.
   if (source.textAccess === "withheld") {
-    return toolDataResult({
-      status: "withheld",
-      metadata: metadataWithFragment(metadata, parsed.output.paragraphs),
-      withheldReason,
-    });
+    return toolDataResult({ status: "withheld", metadata, withheldReason });
   }
   if (source.ast === null) {
     return toolDataResult({ status: "unavailable", metadata });
   }
   const selected = selectReaderWindow({
     ast: source.ast,
-    paragraphs: parsed.output.paragraphs,
+    paragraphs,
   });
   switch (selected.status) {
     case "not_found":
@@ -213,7 +209,7 @@ const openTool: TypedMcpToolHandler<
     case "selected":
       return toolDataResult({
         status: "available",
-        metadata: metadataWithFragment(metadata, parsed.output.paragraphs),
+        metadata,
         outline: readerOutline(source.ast.blocks),
         window: selected.window,
         truncated: selected.truncated,
