@@ -41,7 +41,7 @@ const createApp = (options: Parameters<typeof createOperatorActivity>[0]) => {
   });
 };
 
-const request = (query: string, headers?: HeadersInit) =>
+const request = (query: string, headers?: Record<string, string>) =>
   new Request(`http://localhost/operator/activity${query}`, { headers });
 
 describe("operator activity HTTP boundary", () => {
