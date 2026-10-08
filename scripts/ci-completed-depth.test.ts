@@ -1,7 +1,10 @@
 import { expect, test } from "bun:test";
 import { createHash } from "node:crypto";
-import { readFileSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import nodePath from "node:path";
 import { Script } from "node:vm";
+import { deflateRawSync, inflateRawSync } from "node:zlib";
 import * as v from "valibot";
 
 import { pilotQueueJobs } from "./ci-pr-pilot-plan";
@@ -59,9 +62,11 @@ const pr = {
 const scope = createHash("sha256")
   .update(JSON.stringify([pr.title, pr.body, false]))
   .digest("hex");
-const marker = (depth: string, profile = "normal-v1") =>
-  `ci-completed-v4-${profile}-123-456-${pr.head.sha}-${pr.base.sha}-${depth}-${scope}`;
+const marker = (depth: string, profile = "normal-v1", version = 5) =>
+  `ci-completed-v${version}-${profile}-123-456-${pr.head.sha}-${pr.base.sha}-${depth}-${scope}`;
 const artifact = (depth: string, profile = "normal-v1") => ({
+  id: 7,
+  size_in_bytes: 400,
   name: marker(depth, profile),
   expired: false,
   expires_at: "2099-01-01T00:00:00Z",
@@ -75,6 +80,64 @@ const successfulRun = {
   run_attempt: 1,
   status: "completed",
   conclusion: "success",
+};
+// The evidence ci-result records for a run whose planned jobs all succeeded.
+const evidenceFor = (depth: string, profile = "normal-v1") => ({
+  version: 5,
+  marker: marker(depth, profile),
+  event: "pull_request",
+  run_id: 99,
+  run_attempt: 1,
+  pr_number: 123,
+  head_repo_id: 456,
+  head_sha: pr.head.sha,
+  base_sha: pr.base.sha,
+  suite_depth: depth,
+  coverage_profile: profile,
+  planned: ["ci-tests", "typecheck-baseline"],
+  jobs: {
+    "ci-plan": "success",
+    "ci-tests": "success",
+    "typecheck-baseline": "success",
+    "web-build": "skipped",
+  },
+});
+// The archive upload-artifact produces for one file: a streamed (data
+// descriptor) entry whose sizes live only in the central directory.
+const zipEvidence = (
+  text: string,
+  { name = "ci-completed-depth.json", method = 8 } = {},
+) => {
+  const raw = Buffer.from(text);
+  const data = method === 8 ? deflateRawSync(raw) : raw;
+  const fileName = Buffer.from(name);
+  const local = Buffer.alloc(30);
+  local.writeUInt32LE(0x04_03_4b_50, 0);
+  local.writeUInt16LE(20, 4);
+  local.writeUInt16LE(0x08, 6);
+  local.writeUInt16LE(method, 8);
+  local.writeUInt16LE(fileName.length, 26);
+  const descriptor = Buffer.alloc(16);
+  descriptor.writeUInt32LE(0x08_07_4b_50, 0);
+  descriptor.writeUInt32LE(data.length, 8);
+  descriptor.writeUInt32LE(raw.length, 12);
+  const entries = Buffer.concat([local, fileName, data, descriptor]);
+  const central = Buffer.alloc(46);
+  central.writeUInt32LE(0x02_01_4b_50, 0);
+  central.writeUInt16LE(20, 4);
+  central.writeUInt16LE(20, 6);
+  central.writeUInt16LE(0x08, 8);
+  central.writeUInt16LE(method, 10);
+  central.writeUInt32LE(data.length, 20);
+  central.writeUInt32LE(raw.length, 24);
+  central.writeUInt16LE(fileName.length, 28);
+  const end = Buffer.alloc(22);
+  end.writeUInt32LE(0x06_05_4b_50, 0);
+  end.writeUInt16LE(1, 8);
+  end.writeUInt16LE(1, 10);
+  end.writeUInt32LE(central.length + fileName.length, 12);
+  end.writeUInt32LE(entries.length, 16);
+  return Buffer.concat([entries, central, fileName, end]);
 };
 type LookupOptions = {
   depth?: string;
@@ -91,6 +154,9 @@ type LookupOptions = {
   comparison?: unknown;
   groupRef?: string;
   pull?: typeof pr;
+  evidence?: unknown;
+  archive?: Buffer;
+  downloadFailure?: boolean;
 };
 const decide = async ({
   depth = "full",
@@ -107,15 +173,24 @@ const decide = async ({
   queueDepth = "full",
   comparison = { status: "ahead", merge_base_commit: { sha: pull.head.sha } },
   groupRef = `refs/heads/gh-readonly-queue/main/pr-123-${"b".repeat(40)}`,
+  evidence = event === "merge_group" && queueDepth === "thin"
+    ? evidenceFor("fast")
+    : evidenceFor(depth, profile),
+  archive = zipEvidence(JSON.stringify(evidence)),
+  downloadFailure = false,
 }: LookupOptions = {}) => {
   const outputs = new Map<string, string>();
   const requests: unknown[] = [];
   await new Script(`(async () => {${lookup}\n})()`).runInNewContext({
+    Buffer,
     require: (name: string) => {
-      if (name !== "node:crypto") {
-        throw new Error("Unexpected module");
+      if (name === "node:crypto") {
+        return { createHash };
       }
-      return { createHash };
+      if (name === "node:zlib") {
+        return { inflateRawSync };
+      }
+      throw new Error("Unexpected module");
     },
     process: {
       env: {
@@ -160,6 +235,18 @@ const decide = async ({
           },
         },
         actions: {
+          downloadArtifact: async (request: unknown) => {
+            requests.push(request);
+            if (downloadFailure) {
+              throw new Error("Evidence archive unavailable");
+            }
+            return {
+              data: archive.buffer.slice(
+                archive.byteOffset,
+                archive.byteOffset + archive.byteLength,
+              ),
+            };
+          },
           getWorkflowRun: async (request: unknown) => {
             requests.push(request);
             if (runFailure) {
@@ -204,7 +291,7 @@ test("unchanged-head events reuse only the exact completed depth", async () => {
       const { outputs, requests } = await decide({ action, depth });
       expect(outputs.get("run_required")).toBe("false");
       expect(outputs.get("completed_run_id")).toBe("99");
-      expect(requests).toHaveLength(2);
+      expect(requests).toHaveLength(3);
       const opposite = depth === "fast" ? "full" : "fast";
       expect(
         (
@@ -348,7 +435,7 @@ test("the duplicate-result gate accepts skips but rejects failed or cancelled de
   }
 });
 
-test("only successful real validation publishes a completion marker", () => {
+test("only a fully successful real validation publishes a completion marker", () => {
   for (const name of [
     "Record completed suite depth",
     "Publish completed suite depth",
@@ -365,26 +452,262 @@ test("only successful real validation publishes a completion marker", () => {
       ]) {
         for (const runRequired of ["true", "false"]) {
           for (const markerName of ["", marker("full")]) {
-            expect(
-              evaluate(condition, {
-                status: { success },
-                values: {
-                  "github.event_name": event,
-                  "needs.ci-plan.outputs.run_required": runRequired,
-                  "needs.ci-plan.outputs.completion_marker": markerName,
-                },
-              }),
-            ).toBe(
-              success &&
-                event === "pull_request" &&
-                runRequired === "true" &&
-                markerName !== "",
-            );
+            for (const sibling of [
+              "success",
+              "skipped",
+              "cancelled",
+              "failure",
+            ]) {
+              for (const evidence of ["", "{}"]) {
+                expect(
+                  evaluate(condition, {
+                    status: { success },
+                    values: {
+                      "github.event_name": event,
+                      "needs.ci-plan.outputs.run_required": runRequired,
+                      "needs.ci-plan.outputs.completion_marker": markerName,
+                      "needs.*.result": ["success", "success", sibling],
+                      "steps.outcome.outputs.evidence": evidence,
+                    },
+                  }),
+                  `${name} ${String(success)} ${event} ${runRequired} ${markerName} ${sibling} ${evidence}`,
+                ).toBe(
+                  success &&
+                    event === "pull_request" &&
+                    runRequired === "true" &&
+                    markerName !== "" &&
+                    ["success", "skipped"].includes(sibling) &&
+                    evidence !== "",
+                );
+              }
+            }
           }
         }
       }
     }
   }
+});
+
+// The evidence block of the result gate, run on its own after the gate passed.
+const evidenceBlock = (() => {
+  const start = aggregate.indexOf("# Completion evidence");
+  if (start === -1) {
+    throw new Error("Missing completion evidence block");
+  }
+  return aggregate.slice(start);
+})();
+const resultEnv = v.parse(
+  v.object({ env: v.record(v.string(), v.string()) }),
+  result.steps.find((step) => step.name === "Evaluate CI outcome"),
+).env;
+const recordEvidence = (
+  results: Record<string, string>,
+  {
+    depth = "fast",
+    head = pr.head.sha,
+    script = evidenceBlock,
+    runRequired = "true",
+  } = {},
+) => {
+  const directory = mkdtempSync(nodePath.join(tmpdir(), "ci-evidence-"));
+  const output = nodePath.join(directory, "output");
+  try {
+    const child = Bun.spawnSync(["bash", "-eu", "-c", script], {
+      env: {
+        PATH: process.env["PATH"] ?? "",
+        GITHUB_OUTPUT: output,
+        GITHUB_RUN_ID: "99",
+        GITHUB_RUN_ATTEMPT: "1",
+        EVENT: "pull_request",
+        RUN_REQUIRED: runRequired,
+        COMPLETION_MARKER: marker(depth),
+        PR_NUMBER: "123",
+        HEAD_REPO_ID: "456",
+        HEAD_SHA: head,
+        BASE_SHA: pr.base.sha,
+        SUITE_DEPTH: depth,
+        COVERAGE_PROFILE: "normal-v1",
+        JOB_SCOPES: resultEnv["JOB_SCOPES"] ?? "",
+        FAST_JOB_SCOPES: resultEnv["FAST_JOB_SCOPES"] ?? "",
+        FAST_REQUIRED: resultEnv["FAST_REQUIRED"] ?? "",
+        PLAN: JSON.stringify({ package_checks_required: "true" }),
+        NEEDS: JSON.stringify(
+          Object.fromEntries(
+            Object.entries(results).map(([job, outcome]) => [
+              job,
+              { result: outcome },
+            ]),
+          ),
+        ),
+      },
+    });
+    expect(child.exitCode, child.stderr.toString()).toBe(0);
+    const text = existsSync(output) ? readFileSync(output, "utf-8") : "";
+    const line = text
+      .split("\n")
+      .find((entry) => entry.startsWith("evidence="));
+    return line === undefined ? undefined : line.slice("evidence=".length);
+  } finally {
+    rmSync(directory, { force: true, recursive: true });
+  }
+};
+const fastRequired = v.parse(
+  v.array(v.string()),
+  JSON.parse(resultEnv["FAST_REQUIRED"] ?? ""),
+);
+const allSucceeded = Object.fromEntries([
+  ["ci-plan", "success"],
+  ...fastRequired.map((job) => [job, "success"]),
+  ["web-build", "skipped"],
+]);
+
+test("a superseded, cancelled or failed run records no completion evidence", () => {
+  expect(recordEvidence(allSucceeded)).toBeDefined();
+  for (const outcome of ["cancelled", "failure", "skipped"]) {
+    for (const job of ["ci-tests", "web-build", "ci-plan"]) {
+      if (outcome === "skipped" && job === "web-build") {
+        continue;
+      }
+      expect(
+        recordEvidence({ ...allSucceeded, [job]: outcome }),
+        `${job} ${outcome}`,
+      ).toBeUndefined();
+    }
+  }
+  expect(
+    recordEvidence(allSucceeded, { runRequired: "false" }),
+  ).toBeUndefined();
+  expect(recordEvidence(allSucceeded, { head: "" })).toBeUndefined();
+});
+
+test("recorded evidence lets an unchanged head skip, and only that head", async () => {
+  const text = recordEvidence(allSucceeded);
+  if (text === undefined) {
+    throw new Error("No evidence recorded for a fully successful run");
+  }
+  const recorded: unknown = JSON.parse(text);
+  expect(recorded).toMatchObject({
+    version: 5,
+    run_id: 99,
+    head_sha: pr.head.sha,
+    marker: marker("fast"),
+  });
+  const passed = await decide({ depth: "fast", evidence: recorded });
+  expect(passed.outputs.get("run_required")).toBe("false");
+  expect(passed.outputs.get("completed_run_id")).toBe("99");
+  // A mutated recorder that ignores cancellation is caught by the reader too.
+  const lenient = evidenceBlock.replace(
+    'all($jobs[]; . == "success" or . == "skipped")',
+    "true",
+  );
+  expect(lenient).not.toBe(evidenceBlock);
+  const leaked = recordEvidence(
+    { ...allSucceeded, "web-build": "cancelled" },
+    { script: lenient },
+  );
+  if (leaked === undefined) {
+    throw new Error("Lenient recorder unexpectedly recorded nothing");
+  }
+  expect(
+    (await decide({ depth: "fast", evidence: JSON.parse(leaked) })).outputs.get(
+      "run_required",
+    ),
+  ).toBe("true");
+});
+
+test("a marker whose contents do not prove a complete run is ignored", async () => {
+  const valid = evidenceFor("full");
+  expect((await decide({ evidence: valid })).outputs.get("run_required")).toBe(
+    "false",
+  );
+  const variants: [string, unknown][] = [
+    ["v4 contents", { ...valid, version: 4 }],
+    ["other head", { ...valid, head_sha: "c".repeat(40) }],
+    ["other base", { ...valid, base_sha: "c".repeat(40) }],
+    ["other run", { ...valid, run_id: 98 }],
+    ["other pr", { ...valid, pr_number: 124 }],
+    ["other repo", { ...valid, head_repo_id: 789 }],
+    ["other depth", { ...valid, suite_depth: "fast" }],
+    ["other profile", { ...valid, coverage_profile: "pilot-fast-v1" }],
+    ["other marker", { ...valid, marker: marker("fast") }],
+    ["other event", { ...valid, event: "workflow_dispatch" }],
+    ["bad attempt", { ...valid, run_attempt: 0 }],
+    [
+      "cancelled job",
+      { ...valid, jobs: { ...valid.jobs, "web-build": "cancelled" } },
+    ],
+    [
+      "failed job",
+      { ...valid, jobs: { ...valid.jobs, "web-build": "failure" } },
+    ],
+    [
+      "skipped planned job",
+      { ...valid, jobs: { ...valid.jobs, "ci-tests": "skipped" } },
+    ],
+    [
+      "planned job missing",
+      { ...valid, planned: [...valid.planned, "ci-browser"] },
+    ],
+    ["no planned jobs", { ...valid, planned: [] }],
+    ["duplicate planned job", { ...valid, planned: ["ci-tests", "ci-tests"] }],
+    [
+      "planner not successful",
+      { ...valid, jobs: { ...valid.jobs, "ci-plan": "skipped" } },
+    ],
+    ["no jobs", { ...valid, jobs: {} }],
+    ["jobs as list", { ...valid, jobs: ["ci-plan"] }],
+    ["legacy text", "validated"],
+    ["null", null],
+  ];
+  for (const [label, evidence] of variants) {
+    expect(
+      (await decide({ evidence })).outputs.get("run_required"),
+      label,
+    ).toBe("true");
+  }
+  for (const [label, archive] of [
+    [
+      "legacy v4 file",
+      zipEvidence("validated\n", { name: "ci-completed-depth.txt" }),
+    ],
+    ["not json", zipEvidence("validated\n")],
+    ["truncated", zipEvidence(JSON.stringify(valid)).subarray(0, 40)],
+    ["empty", Buffer.alloc(0)],
+  ] as const) {
+    expect((await decide({ archive })).outputs.get("run_required"), label).toBe(
+      "true",
+    );
+  }
+  expect(
+    (
+      await decide({
+        archive: zipEvidence(JSON.stringify(valid), { method: 0 }),
+      })
+    ).outputs.get("run_required"),
+  ).toBe("false");
+  expect(
+    (await decide({ downloadFailure: true })).outputs.get("run_required"),
+  ).toBe("true");
+  for (const size of [0, 65_537, Number.NaN]) {
+    expect(
+      (
+        await decide({
+          artifacts: [{ ...artifact("full"), size_in_bytes: size }],
+        })
+      ).outputs.get("run_required"),
+      String(size),
+    ).toBe("true");
+  }
+});
+
+test("old-version markers are never looked up or trusted", async () => {
+  const { outputs, requests } = await decide({
+    artifacts: [{ ...artifact("full"), name: marker("full", "normal-v1", 4) }],
+  });
+  expect(outputs.get("run_required")).toBe("true");
+  expect(outputs.get("marker")).toBe(marker("full"));
+  expect(requests).toHaveLength(1);
+  expect(requests.at(0)).toMatchObject({ name: marker("full") });
 });
 
 test("completion publication replaces an existing marker on a second attempt", () => {
@@ -505,7 +828,7 @@ test("exact-name lookup finds evidence behind more than a page of unrelated arti
   ];
   const { outputs, requests } = await decide({ artifacts });
   expect(outputs.get("run_required")).toBe("false");
-  expect(requests).toHaveLength(2);
+  expect(requests).toHaveLength(3);
   expect(requests.at(0)).toMatchObject({ name: marker("full"), per_page: 100 });
 });
 

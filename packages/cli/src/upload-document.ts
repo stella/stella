@@ -1,5 +1,4 @@
 import { Result } from "better-result";
-import { createHash } from "node:crypto";
 import { open } from "node:fs/promises";
 import path from "node:path";
 
@@ -20,6 +19,7 @@ import {
 import type { CallToolResult, McpClientError } from "./mcp-client.js";
 import { callTool } from "./mcp-client.js";
 import { parsePayload } from "./run-leaf-command.js";
+import { sha256Hex as hashSha256Hex } from "./sha256.js";
 
 const INVOKE_CAPABILITY_TOOL = "invoke_capability";
 const UPLOAD_CAPABILITIES = {
@@ -159,7 +159,7 @@ const readBoundedLocalFile = async (
         bytes,
         mimeType: inferFileMimeType(filePath),
         name: path.basename(filePath),
-        sha256Hex: createHash("sha256").update(bytes).digest("hex"),
+        sha256Hex: hashSha256Hex(bytes),
       });
     },
     catch: (cause) => cause,

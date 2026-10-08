@@ -13,6 +13,7 @@ import {
   DialogPopup,
   DialogTitle,
 } from "@stll/ui/dialog";
+import { stellaToast } from "@stll/ui/toast";
 
 import { DesktopDownloadButtons } from "@/components/desktop-download-buttons";
 import {
@@ -36,6 +37,8 @@ type DesktopRequiredPresence = Extract<
 type DesktopActionGateResult = {
   label: string;
   isConnecting: boolean;
+  /** Links the running app to this account, or offers the install. */
+  connect: () => void;
   /** Runs `perform` when the app can do it; otherwise connects or installs it. */
   run: (perform: () => void) => void;
   requiredDialog: DesktopRequiredDialogProps;
@@ -55,9 +58,27 @@ export const useDesktopActionGate = (
     detached(
       (async () => {
         const outcome = await connect();
-        // Nothing answered on this computer: offer the install instead.
-        if (outcome.status === "error") {
-          setRequired("none");
+        switch (outcome.status) {
+          case "connected": {
+            stellaToast.add({
+              title: t("workspaces.files.desktopGate.connected"),
+              type: "success",
+            });
+            return;
+          }
+          // The app takes over in its own window and returns here.
+          case "started": {
+            return;
+          }
+          // Nothing answered on this computer: offer the install instead.
+          case "error": {
+            setRequired("none");
+            return;
+          }
+          default: {
+            outcome satisfies never;
+            panic("Unhandled desktop connection outcome");
+          }
         }
       })(),
       "desktop-action-gate.connect",
@@ -90,6 +111,7 @@ export const useDesktopActionGate = (
   return {
     label: t(DESKTOP_ACTION_LABELS[action][presence.type]),
     isConnecting: state.status === "connecting",
+    connect: connectApp,
     run,
     requiredDialog: {
       action,
