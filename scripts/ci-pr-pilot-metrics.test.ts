@@ -185,6 +185,27 @@ print(json.dumps([exact["stopped"], over["stopped"]]))
   expect(values).toEqual([false, true]);
 });
 
+test("two deferred-check queue failures stop a generation, attributed or not", () => {
+  const values = execute(`
+def queue(heads, unmapped):
+    return {"postArmDeferredQueueFailureHeads": heads, "unmappedDeferredQueueFailureRuns": unmapped,
+            "queueFailureEvidenceComplete": unmapped == 0}
+initial = m.build_report([], None, now - dt.timedelta(days=1), True, set(), seed)
+results = []
+for heads, unmapped in [(0, 0), (1, 0), (2, 0), (1, 1), (0, 2)]:
+    report = m.apply_queue_failures(m.build_report([], initial, now, True, set()), queue(heads, unmapped))
+    results.append([report["stopped"], report["complete"], report["measured"]["postArmDeferredQueueFailureHeads"]])
+print(json.dumps(results))
+`);
+  expect(values).toEqual([
+    [false, true, 0],
+    [false, true, 1],
+    [true, true, 2],
+    [true, false, 1],
+    [true, false, 0],
+  ]);
+});
+
 test("daily collection retains replaced heads and batches resolved commits five at a time", () => {
   const values = execute(`
 def connection(nodes):

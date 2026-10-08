@@ -23,21 +23,23 @@ const setup = ({
   const saved: unknown[] = [];
   const audits: unknown[] = [];
   let discovered = 0;
-  const handler = createApproveMcpAuthorizationHandler(async (url) => {
-    expect(url).toBe(connectorUrl);
-    discovered += 1;
-    return Result.ok({
-      protectedResource: {
-        resource: connectorUrl,
-        authorization_servers: [issuer],
-      },
-      authorizationServer: {
-        issuer,
-        authorization_endpoint: `${issuer}/authorize`,
-        token_endpoint: `${issuer}/token`,
-      },
-    });
-  });
+  const handler = createApproveMcpAuthorizationHandler(
+    async ({ rawMcpUrl }) => {
+      expect(rawMcpUrl).toBe(connectorUrl);
+      discovered += 1;
+      return Result.ok({
+        protectedResource: {
+          resource: connectorUrl,
+          authorization_servers: [issuer],
+        },
+        authorizationServer: {
+          issuer,
+          authorization_endpoint: `${issuer}/authorize`,
+          token_endpoint: `${issuer}/token`,
+        },
+      });
+    },
+  );
   const connector = {
     id: toSafeId<"mcpConnector">("connector_1"),
     organizationId,

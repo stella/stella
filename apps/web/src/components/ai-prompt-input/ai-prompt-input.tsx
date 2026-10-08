@@ -53,7 +53,7 @@ import { useQueryView } from "@/lib/use-query-view";
  *   `{{path}}` via each node's `renderText`, so the stored string stays
  *   resolvable by a backend prompt consumer without HTML parsing.
  */
-export type AIPromptValueFormat = "html" | "text";
+type AIPromptValueFormat = "html" | "text";
 
 type AIPromptEditAction = {
   disabled: boolean;

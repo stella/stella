@@ -3,6 +3,7 @@ import { describe, expect, test } from "bun:test";
 import JSZip from "jszip";
 
 import { hashSkillPackageContent } from "@/api/lib/agent-skills/content-hash";
+import { grantThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 import { testScannedFile } from "@/api/tests/helpers/scanned-file";
@@ -22,6 +23,8 @@ import {
   verifySkillPackageIntegrity,
 } from "./skill-package";
 import type { SkillFile } from "./skill-package";
+
+const permit = grantThirdPartyOutboundPermit();
 
 const parseUpload = async (file: File) =>
   await parseUploadedSkillPackage(
@@ -523,9 +526,15 @@ Instructions.`,
     ];
 
     for (const url of unsafeUrls) {
-      const result = await fetchSkillPackageFromUrl(url);
+      const result = await fetchSkillPackageFromUrl(
+        url,
+        createSkillPackageFetchContext({ permit }),
+      );
       expect(Result.isError(result)).toBe(true);
-      const discovery = await discoverSkillPackagesFromUrl(url);
+      const discovery = await discoverSkillPackagesFromUrl({
+        permit,
+        rawUrl: url,
+      });
       expect(Result.isError(discovery)).toBe(true);
     }
   });
@@ -537,7 +546,10 @@ Instructions.`,
     ];
 
     for (const url of malformedUrls) {
-      const result = await discoverSkillPackagesFromUrl(url);
+      const result = await discoverSkillPackagesFromUrl({
+        permit,
+        rawUrl: url,
+      });
       expect(Result.isError(result)).toBe(true);
     }
   });
@@ -566,7 +578,9 @@ Instructions.`,
   });
 
   test("shares one GitHub tree request across a repository import batch", async () => {
-    const context = createSkillPackageFetchContext();
+    const context = createSkillPackageFetchContext({
+      permit: grantThirdPartyOutboundPermit(),
+    });
     let loadCount = 0;
     const load = async () => {
       loadCount += 1;
@@ -637,6 +651,7 @@ Instructions.`,
       fetchFiles: () => Promise<Result<SkillFile[], HandlerError>>,
     ) =>
       await fetchGithubCatalogueSkillPackage({
+        permit,
         fetchFiles,
         sourceUrl: "https://github.com/example/skills/tree/main?token=secret",
         target,

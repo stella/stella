@@ -268,13 +268,13 @@ test.each(SERVING_TARGET_REFUSALS)(
     // The returned envelope is the body the route error mapping renders for
     // the thrown refusal, so a client cannot tell the two paths apart.
     const thrown = searchIndexUnavailableError(failure);
-    expect(outcome.code).toBe(thrown.status);
-    expect(outcome.response).toEqual({
+    expect(thrown.status).toBe(outcome.code);
+    expect({
       code: thrown.code,
       message: thrown.message,
       hint: thrown.hint,
       retryable: thrown.retryable,
-    });
+    }).toEqual(outcome.response);
     expect(outcome.response).toMatchObject({
       code: SEARCH_INDEX_UNAVAILABLE_CODE,
     });

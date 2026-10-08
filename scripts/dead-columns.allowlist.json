@@ -108,5 +108,10 @@
     "table": "corpus_index_group_withdrawals",
     "column": "withdrawnAt",
     "reason": "not app-code dead: append-only audit timestamp filled by its column default when a withdrawal is recorded; the trail is read by operators, and no app path reads it."
+  },
+  {
+    "table": "usage_policies",
+    "column": "storageBytesPerAssignment",
+    "reason": "not app-code dead: read by the migration-owned organization_storage_capacity function in apps/api/drizzle/20261005090300_organization_effective_policy/migration.sql, which every storage reservation calls. Migrations are excluded by design."
   }
 ]

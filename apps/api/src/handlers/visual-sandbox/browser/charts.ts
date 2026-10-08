@@ -8,6 +8,7 @@ import { COURT_TIER_LABELS } from "@stll/api-contract/case-law-court-tiers";
 
 import {
   createTreemapModel,
+  createTreemapNumberFormatter,
   localizedTierLabel,
   treemapCategoryValue,
   treemapColorDomain,
@@ -111,7 +112,7 @@ const renderTreemapLegend = ({
     }
     return;
   }
-  const formatter = new Intl.NumberFormat(language);
+  const formatter = createTreemapNumberFormatter(language);
   const low = owner.createElement("span");
   const ramp = owner.createElement("span");
   const high = owner.createElement("span");
