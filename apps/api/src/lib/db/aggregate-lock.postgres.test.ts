@@ -75,6 +75,10 @@ const withPublicRowFixture = async ({
   }
 };
 
+type AggregateAcquireTransaction = Parameters<
+  typeof withAggregateLock
+>[0]["tx"];
+
 const advisoryCases = () => {
   const organizationId = mintAuthProviderId<"organization">();
   const otherOrganizationId = mintAuthProviderId<"organization">();
@@ -83,13 +87,13 @@ const advisoryCases = () => {
   return [
     {
       name: "contact capacity",
-      acquire: async (tx: LockTransaction) =>
+      acquire: async (tx: AggregateAcquireTransaction) =>
         await withAggregateLock({
           aggregate: "contactCapacity",
           id: { organizationId },
           tx,
         }),
-      acquireOther: async (tx: LockTransaction) =>
+      acquireOther: async (tx: AggregateAcquireTransaction) =>
         await withAggregateLock({
           aggregate: "contactCapacity",
           id: { organizationId: otherOrganizationId },
@@ -110,13 +114,13 @@ const advisoryCases = () => {
     },
     {
       name: "personal catalog",
-      acquire: async (tx: LockTransaction) =>
+      acquire: async (tx: AggregateAcquireTransaction) =>
         await withAggregateLock({
           aggregate: "personalCatalog",
           id: { organizationId, userId },
           tx,
         }),
-      acquireOther: async (tx: LockTransaction) =>
+      acquireOther: async (tx: AggregateAcquireTransaction) =>
         await withAggregateLock({
           aggregate: "personalCatalog",
           id: { organizationId, userId: otherUserId },

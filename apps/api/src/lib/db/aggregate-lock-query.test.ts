@@ -790,7 +790,7 @@ describe("nested query lock rejection", () => {
               ...identity,
               tx,
               mode: "update",
-              lockConfig: invalid === "of" ? { of: organization } : undefined,
+              ...(invalid === "of" ? { lockConfig: { of: organization } } : {}),
               select: (queryTx) =>
                 queryTx
                   .select({
