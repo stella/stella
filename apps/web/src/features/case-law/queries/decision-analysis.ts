@@ -143,7 +143,8 @@ export const decisionAnalysisOptions = ({
       };
     },
     refetchInterval: ({ state }) =>
-      isTerminal(state.data) ? false : POLL_INTERVAL_MS,
+      state.error !== null || isTerminal(state.data) ? false : POLL_INTERVAL_MS,
+    retry: false,
     refetchOnWindowFocus: false,
     refetchOnReconnect: false,
     // A finished analysis changes only when regenerated, so it is never asked

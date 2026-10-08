@@ -138,12 +138,12 @@ test("a scoped background failure is delivered once before the next explicit req
   } | null = { status: "error", providerDiagnostic: diagnostic };
   const scopes: unknown[] = [];
   spyOn(failureOwner, "analysisFailureStore").mockReturnValue({
-    write: async () => await Promise.resolve(),
+    write: async () => Result.ok(undefined),
     take: async (scope) => {
       scopes.push(scope);
       const reply = failure;
       failure = null;
-      return reply;
+      return Result.ok(reply);
     },
   });
   const first = await generateAnalysis(options);
@@ -166,12 +166,13 @@ test("a scoped background failure is delivered once before the next explicit req
 test("a failure-delivery read outage is captured and returned explicitly without starting generation", async () => {
   owners();
   spyOn(failureOwner, "analysisFailureStore").mockReturnValue({
-    write: async () => await Promise.resolve(),
-    take: async () => {
-      throw new failureOwner.AnalysisFailureStoreError({
-        message: "Fixture unavailable",
-      });
-    },
+    write: async () => Result.ok(undefined),
+    take: async () =>
+      Result.err(
+        new failureOwner.AnalysisFailureStoreError({
+          message: "Fixture unavailable",
+        }),
+      ),
   });
   const analytics = installRecordingAnalytics();
   const logs = installRecordingLogger();
@@ -225,16 +226,19 @@ for (const delivery of ["available", "outage"] as const) {
     spyOn(generation, "generateTanStackObjectForRole").mockRejectedValue(error);
     const snapshots: unknown[] = [];
     spyOn(failureOwner, "analysisFailureStore").mockReturnValue({
-      take: async () => null,
+      take: async () => Result.ok(null),
       write: async (scope, providerDiagnostic) => {
         operations.push("write");
         snapshots.push({ scope, providerDiagnostic });
         if (delivery === "outage") {
-          throw new failureOwner.AnalysisFailureStoreError({
-            message: "Fixture unavailable",
-            cause: providerDiagnostic,
-          });
+          return Result.err(
+            new failureOwner.AnalysisFailureStoreError({
+              message: "Fixture unavailable",
+              cause: providerDiagnostic,
+            }),
+          );
         }
+        return Result.ok(undefined);
       },
     });
     const analytics = installRecordingAnalytics();

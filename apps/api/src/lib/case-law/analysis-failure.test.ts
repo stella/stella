@@ -1,8 +1,6 @@
 import { panic, Result } from "better-result";
 import { expect, test } from "bun:test";
 
-import { rejectionOf } from "@stll/property-testing/rejection";
-
 import { toSafeId } from "@/api/lib/branded-types";
 
 import {
@@ -61,28 +59,30 @@ const fakeRedis = () => {
 test("failures are isolated by organization, decision, and input fingerprint and delivered once", async () => {
   const redis = fakeRedis();
   const store = createAnalysisFailureStore({ createRedis: () => redis.client });
-  await store.write(scope, diagnostic);
+  expect(Result.isOk(await store.write(scope, diagnostic))).toBe(true);
   for (const other of [
     { ...scope, organizationId: toSafeId<"organization">("other_org") },
     { ...scope, decisionId: toSafeId<"caseLawDecision">("other_decision") },
     { ...scope, fingerprint: "changed-fingerprint" },
   ]) {
-    expect(await store.take(other)).toBeNull();
+    expect((await store.take(other)).unwrap()).toBeNull();
   }
-  const deliveries = await Promise.all([store.take(scope), store.take(scope)]);
+  const deliveries = (
+    await Promise.all([store.take(scope), store.take(scope)])
+  ).map((result) => result.unwrap());
   expect(deliveries.filter((delivery) => delivery !== null)).toEqual([
     { status: "error", providerDiagnostic: diagnostic },
   ]);
-  expect(await store.take(scope)).toBeNull();
+  expect((await store.take(scope)).unwrap()).toBeNull();
   expect(redis.calls.at(0)?.args.at(0)).toContain("{");
 });
 
 test("failure delivery expires after its bounded ten-minute window", async () => {
   const redis = fakeRedis();
   const store = createAnalysisFailureStore({ createRedis: () => redis.client });
-  await store.write(scope, undefined);
+  expect(Result.isOk(await store.write(scope, undefined))).toBe(true);
   redis.advance(600);
-  expect(await store.take(scope)).toBeNull();
+  expect((await store.take(scope)).unwrap()).toBeNull();
 });
 
 for (const malformed of [
@@ -105,10 +105,10 @@ for (const malformed of [
         send: async () => malformed,
       }),
     });
-    const result = await Result.tryPromise(() => store.take(scope));
+    const result = await store.take(scope);
     expect(Result.isError(result)).toBe(true);
     if (Result.isError(result)) {
-      expect(result.error.cause).toBeInstanceOf(AnalysisFailureStoreError);
+      expect(result.error).toBeInstanceOf(AnalysisFailureStoreError);
     }
   });
 }
@@ -125,12 +125,15 @@ test("read and write outages fail explicitly without an in-process delivery fall
         panic("An unavailable connection must not send commands"),
     }),
   });
-  expect(await rejectionOf(store.write(scope, diagnostic))).toBeInstanceOf(
-    AnalysisFailureStoreError,
-  );
-  expect(await rejectionOf(store.take(scope))).toBeInstanceOf(
-    AnalysisFailureStoreError,
-  );
+  for (const result of [
+    await store.write(scope, diagnostic),
+    await store.take(scope),
+  ]) {
+    expect(Result.isError(result)).toBe(true);
+    if (Result.isError(result)) {
+      expect(result.error).toBeInstanceOf(AnalysisFailureStoreError);
+    }
+  }
 });
 
 test("a stalled connection is bounded by the command timeout", async () => {
@@ -141,7 +144,9 @@ test("a stalled connection is bounded by the command timeout", async () => {
       send: async () => panic("A stalled connection must not send commands"),
     }),
   });
-  expect(await rejectionOf(store.take(scope))).toBeInstanceOf(
-    AnalysisFailureStoreError,
-  );
+  const result = await store.take(scope);
+  expect(Result.isError(result)).toBe(true);
+  if (Result.isError(result)) {
+    expect(result.error).toBeInstanceOf(AnalysisFailureStoreError);
+  }
 });

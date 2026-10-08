@@ -1,0 +1,5 @@
+{
+  "metric": "throw-outside-boundary",
+  "delta": 3,
+  "reason": "Explicit provider diagnostic parsing rejects malformed HTTP and stream envelopes with ClientOperationError; the authenticated analysis query propagates its normalized APIError to TanStack Query. These client transport boundaries must preserve typed failures rather than accept malformed provider guidance."
+}

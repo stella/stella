@@ -91,10 +91,7 @@ export const createAnalysisFailureStore = ({
           cause,
         }),
     });
-    if (Result.isError(result)) {
-      throw result.error;
-    }
-    return result.value;
+    return result;
   };
   const keyFor = ({
     organizationId,
@@ -115,35 +112,46 @@ export const createAnalysisFailureStore = ({
         status: "error",
         ...(providerDiagnostic === undefined ? {} : { providerDiagnostic }),
       } as const;
-      await command({
+      const result = await command({
         name: "SET",
         key: keyFor(scope),
         value: JSON.stringify(failure),
       });
+      return result.map(() => undefined);
     },
     take: async (scope: AnalysisFailureScope) => {
-      const reply = await command({ name: "GETDEL", key: keyFor(scope) });
-      if (reply === null) {
-        return null;
+      const result = await command({ name: "GETDEL", key: keyFor(scope) });
+      if (Result.isError(result)) {
+        return Result.err(result.error);
       }
-      if (typeof reply !== "string") {
-        throw new AnalysisFailureStoreError({
-          message: "Invalid analysis failure delivery",
-        });
+      if (result.value === null) {
+        return Result.ok(null);
       }
+      if (typeof result.value !== "string") {
+        return Result.err(
+          new AnalysisFailureStoreError({
+            message: "Invalid analysis failure delivery",
+          }),
+        );
+      }
+      const reply = result.value;
       const decoded = Result.try((): unknown => JSON.parse(reply));
       if (decoded.isErr()) {
-        throw new AnalysisFailureStoreError({
-          message: "Invalid analysis failure delivery",
-        });
+        return Result.err(
+          new AnalysisFailureStoreError({
+            message: "Invalid analysis failure delivery",
+          }),
+        );
       }
       const parsed = v.safeParse(failureSchema, decoded.value);
       if (!parsed.success) {
-        throw new AnalysisFailureStoreError({
-          message: "Invalid analysis failure delivery",
-        });
+        return Result.err(
+          new AnalysisFailureStoreError({
+            message: "Invalid analysis failure delivery",
+          }),
+        );
       }
-      return parsed.output;
+      return Result.ok(parsed.output);
     },
   };
 };

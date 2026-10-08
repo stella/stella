@@ -37,6 +37,8 @@ import { tSafeId } from "@/api/lib/custom-schema";
 import { ActionAdmissionError } from "@/api/lib/errors/action-admission-error";
 import { ProviderCallError } from "@/api/lib/errors/provider-call-error";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { failureSink } from "@/api/lib/observability/failure";
+import { observeFailure } from "@/api/lib/observability/observe-failure";
 import {
   createDetachedModelActionStarter,
   createModelActionAdmitter,
@@ -54,6 +56,15 @@ import { resolveAnalysisInput } from "./analysis-input";
 import { analysisOutputSchema, buildDecisionAnalysis } from "./analysis-output";
 import { allowsDerivedAiAnalysis } from "./analysis-update";
 import { refreshSignificance } from "./significance-run";
+
+const FAILURE_DELIVERY_WRITE = failureSink({
+  event: "case-law-analysis-failure-write",
+  expected: [],
+});
+const FAILURE_DELIVERY_READ = failureSink({
+  event: "case-law-analysis-failure-read",
+  expected: [],
+});
 
 /**
  * Run the AI generation in the background. Updates the DB
@@ -152,20 +163,16 @@ const runGeneration = async ({
       decisionId,
     });
     aiAnalytics.captureError(error);
-    const delivered = await Result.tryPromise(() =>
-      analysisFailureStore().write(
-        { organizationId, decisionId, fingerprint: input.fingerprint },
-        error instanceof ProviderCallError
-          ? error.providerDiagnostic
-          : undefined,
-      ),
+    const delivered = await analysisFailureStore().write(
+      { organizationId, decisionId, fingerprint: input.fingerprint },
+      error instanceof ProviderCallError ? error.providerDiagnostic : undefined,
     );
     if (Result.isError(delivered)) {
-      captureError(
+      observeFailure(
         new AnalysisFailureStoreError({
           message: "Could not record analysis generation failure",
         }),
-        { source: "case-law-analysis-failure-write", decisionId },
+        { sink: FAILURE_DELIVERY_WRITE, ctx: { decisionId } },
       );
     }
     await analysisStore()
@@ -292,27 +299,19 @@ export const generateAnalysis = async ({
     });
   }
 
-  const failure = await Result.tryPromise({
-    try: async () =>
-      await analysisFailureStore().take({
-        organizationId,
-        decisionId,
-        fingerprint: input.fingerprint,
-      }),
-    catch: () => {
-      const error = new HandlerError({
-        status: 503,
-        message: "Analysis failure delivery is unavailable",
-      });
-      captureError(error, {
-        source: "case-law-analysis-failure-read",
-        decisionId,
-      });
-      return error;
-    },
+  const failure = await analysisFailureStore().take({
+    organizationId,
+    decisionId,
+    fingerprint: input.fingerprint,
   });
   if (Result.isError(failure)) {
-    return Result.err(failure.error);
+    const error = new AnalysisFailureStoreError({
+      message: "Analysis failure delivery is unavailable",
+    });
+    observeFailure(error, { sink: FAILURE_DELIVERY_READ, ctx: { decisionId } });
+    return Result.err(
+      new HandlerError({ status: 503, message: error.message }),
+    );
   }
   if (failure.value !== null) {
     return Result.ok({
