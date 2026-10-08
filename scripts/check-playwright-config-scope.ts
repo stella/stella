@@ -224,7 +224,7 @@ const listConfig = (config: string): string[] => {
   const report = parseListingReport(result.stdout);
   if (report.isErr()) {
     return [
-      `${config}: ${report.error.message} (exit ${String(result.status)}): ${(result.stderr ?? "").trim().split("\n").slice(0, 5).join(" | ")}`,
+      `${config}: ${report.error.message} (exit ${String(result.status)}): ${result.stderr.trim().split("\n").slice(0, 5).join(" | ")}`,
     ];
   }
   const problems = checkListing(config, packageRoot, report.value);
