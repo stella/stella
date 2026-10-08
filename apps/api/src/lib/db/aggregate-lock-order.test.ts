@@ -8,12 +8,14 @@ import {
   AggregateLockBusy,
   ROW_LOCK_MODES,
   withAggregateLock,
+  withAggregateTransaction,
 } from "./aggregate-lock";
 import {
   aggregateExecutionRows,
   aggregateFences,
   aggregateRecorder,
   plantedDescendingBlockingAcquisition,
+  plantedBlockingUpgradeAtHighWater,
   plantedWeakerHeldModeReuse,
 } from "./aggregate-lock-order.fixture";
 
@@ -26,18 +28,19 @@ describe("blocking aggregate order regressions", () => {
       message: "Aggregate lock rank inversion",
     });
     expect(statements).toHaveLength(1);
-    expect(statements.at(0)?.sql).toContain('FROM "workspaces"');
+    expect(statements.at(0)?.sql).toContain('FROM "public"."workspaces"');
     expect(statements.at(0)?.sql).not.toContain("advisory_xact_lock");
   });
 
   test("a planted stronger request cannot reuse an earlier weaker fence after a higher rank", async () => {
     const { tx, statements } = aggregateRecorder();
     expect(await rejectionOf(plantedWeakerHeldModeReuse(tx))).toMatchObject({
-      message: "Aggregate lock rank inversion",
+      message:
+        "Take the strongest aggregate row mode first; use NOWAIT for upgrades",
     });
     expect(statements).toHaveLength(2);
     expect(statements.at(0)?.sql).toContain("FOR KEY SHARE");
-    expect(statements.at(1)?.sql).toContain('FROM "entities"');
+    expect(statements.at(1)?.sql).toContain('FROM "public"."entities"');
   });
 
   test("all sixteen held/requested mode pairs preserve SQL strength and reject unfenced upgrades", async () => {
@@ -55,7 +58,8 @@ describe("blocking aggregate order regressions", () => {
         // PostgreSQL row-mode exclusion dominance increases in the declared mode order.
         if (requestedIndex > heldIndex) {
           expect(await rejectionOf(requested)).toMatchObject({
-            message: "Aggregate lock rank inversion",
+            message:
+              "Take the strongest aggregate row mode first; use NOWAIT for upgrades",
           });
           expect(statements).toHaveLength(2);
           continue;
@@ -72,18 +76,50 @@ describe("blocking aggregate order regressions", () => {
     }
   });
 
-  test("an upgrade before higher ranks establishes a fence reusable after them", async () => {
+  test("a planted blocking upgrade at the high-water never issues upgrade SQL", async () => {
+    const { tx, statements } = aggregateRecorder();
+    expect(
+      await rejectionOf(plantedBlockingUpgradeAtHighWater(tx)),
+    ).toMatchObject({
+      message:
+        "Take the strongest aggregate row mode first; use NOWAIT for upgrades",
+    });
+    expect(statements).toHaveLength(1);
+    expect(statements.at(0)?.sql).toContain("FOR KEY SHARE");
+    expect(statements.at(0)?.sql).not.toContain("FOR UPDATE");
+  });
+
+  test("a strongest initial fence permits weaker requests after higher ranks", async () => {
     const fixture = aggregateFences();
     const { tx, statements } = aggregateRecorder();
-    await withAggregateLock({ ...fixture.workspace, mode: "key share", tx });
     await withAggregateLock({ ...fixture.workspace, mode: "update", tx });
     await withAggregateLock({ ...fixture.entity, tx });
     expect(
       await withAggregateLock({ ...fixture.workspace, mode: "share", tx }),
     ).toEqual({ status: "locked" });
-    expect(statements).toHaveLength(4);
-    expect(statements.at(1)?.sql).toContain("FOR UPDATE");
-    expect(statements.at(3)?.sql).toContain("FOR SHARE");
+    expect(statements).toHaveLength(3);
+    expect(statements.at(0)?.sql).toContain("FOR UPDATE");
+    expect(statements.at(2)?.sql).toContain("FOR SHARE");
+  });
+
+  test("an empty tracked root rejects an escaped handle after completion", async () => {
+    const { tx, statements } = aggregateRecorder();
+    const database = {
+      transaction: async <Value>(
+        run: (transaction: typeof tx) => Promise<Value>,
+      ) => await run(tx),
+    };
+    const escaped = await withAggregateTransaction(
+      database,
+      async (transaction) => transaction,
+    );
+    const fixture = aggregateFences();
+    expect(
+      await rejectionOf(
+        withAggregateLock({ ...fixture.workspace, tx: escaped }),
+      ),
+    ).toMatchObject({ message: "Aggregate savepoint transaction is closed" });
+    expect(statements).toHaveLength(0);
   });
 
   test("a busy nonblocking lower-rank advisory preserves the transaction high-water", async () => {
@@ -118,18 +154,8 @@ describe("blocking aggregate order regressions", () => {
     expect(statements).toHaveLength(3);
   });
 
-  test("closed receipt and membership variants lock their physical composite identities", async () => {
+  test("workspace membership locks preserve their physical key and tenant scope", async () => {
     const fixture = aggregateFences();
-    const receipt = {
-      aggregate: "scoutCensus",
-      id: {
-        type: "receipt",
-        organizationId: fixture.organization.id,
-        sourceKind: "document-review",
-        sourceId: "review-source",
-      },
-      mode: "update",
-    } as const;
     const workspaceMember = {
       aggregate: "memberCleanup",
       id: {
@@ -140,23 +166,16 @@ describe("blocking aggregate order regressions", () => {
       mode: "key share",
     } as const;
     const { tx, statements } = aggregateRecorder();
-    expect(await withAggregateLock({ ...receipt, tx })).toEqual({
-      status: "locked",
-    });
     expect(await withAggregateLock({ ...workspaceMember, tx })).toEqual({
       status: "locked",
     });
-    expect(statements.at(0)?.sql).toContain('FROM "pending_scout_emissions"');
+    expect(statements.at(0)?.sql).toContain(
+      'FROM "public"."workspace_members"',
+    );
     expect(statements.at(0)?.params).toEqual([
-      fixture.organization.id,
-      "document-review",
-      "review-source",
-    ]);
-    expect(statements.at(1)?.sql).toContain('FROM "workspace_members"');
-    expect(statements.at(1)?.params).toEqual([
       "matter-member",
       fixture.workspace.id.id,
     ]);
-    expect(statements.at(1)?.sql).toContain("FOR KEY SHARE");
+    expect(statements.at(0)?.sql).toContain("FOR KEY SHARE");
   });
 });

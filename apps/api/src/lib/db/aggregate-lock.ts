@@ -1,6 +1,14 @@
 import { panic, Result, TaggedError } from "better-result";
-import { getTableName, sql } from "drizzle-orm";
-import type { SQL } from "drizzle-orm";
+import {
+  getColumnTable,
+  getColumns,
+  getTableName,
+  is,
+  SQL,
+  sql,
+} from "drizzle-orm";
+import type { Subquery } from "drizzle-orm";
+import { getTableConfig, PgColumn, PgTable } from "drizzle-orm/pg-core";
 import type {
   LockConfig,
   LockStrength,
@@ -20,7 +28,6 @@ export const AGGREGATE_LOCKS = {
   schedulerClaim: { rank: 20, kind: "row" },
   definitionCap: { rank: 30, kind: "advisory" },
   definition: { rank: 40, kind: "row" },
-  uploadReceipt: { rank: 50, kind: "row" },
   scoutCensus: { rank: 60, kind: "row" },
   workspace: { rank: 100, kind: "row" },
   memberCleanup: { rank: 110, kind: "row" },
@@ -50,7 +57,6 @@ export const AGGREGATE_CHAINS = {
     "schedulerClaim",
     "definitionCap",
     "definition",
-    "uploadReceipt",
   ],
   flowEffect: [
     "orgFeatureAdmission",
@@ -68,8 +74,7 @@ export const AGGREGATE_CHAINS = {
     "entity",
     "processingClaim",
   ],
-  scoutReceipt: ["orgFeatureAdmission", "scoutCensus"],
-  uploadReceipt: ["orgFeatureAdmission", "uploadReceipt"],
+  scoutRun: ["orgFeatureAdmission", "scoutCensus"],
   memberPrefix: [
     "workspace",
     "memberCleanup",
@@ -116,24 +121,11 @@ type AggregateIdentities = {
     id: SafeId<"flowDefinition">;
     organizationId: SafeId<"organization">;
   };
-  uploadReceipt: {
+  scoutCensus: {
+    type: "run";
+    id: SafeId<"scoutRun">;
     organizationId: SafeId<"organization">;
-    workspaceId: SafeId<"workspace">;
-    definitionId: SafeId<"flowDefinition">;
-    entityId: SafeId<"entity">;
   };
-  scoutCensus:
-    | {
-        type: "run";
-        id: SafeId<"scoutRun">;
-        organizationId: SafeId<"organization">;
-      }
-    | {
-        type: "receipt";
-        organizationId: SafeId<"organization">;
-        sourceKind: "document-review" | "infosoud-hearing";
-        sourceId: string;
-      };
   workspace: {
     id: SafeId<"workspace">;
     organizationId: SafeId<"organization">;
@@ -165,8 +157,7 @@ type AggregateIdentities = {
 };
 
 type ExecuteTransaction = { execute: (statement: SQL) => PromiseLike<unknown> };
-type SavepointTransaction = ExecuteTransaction &
-  Pick<Transaction, "transaction">;
+type SavepointTransaction = Pick<Transaction, "execute" | "transaction">;
 type AggregateIdentityOptions = {
   [Name in AggregateName]: { aggregate: Name; id: AggregateIdentities[Name] };
 }[AggregateName];
@@ -315,6 +306,11 @@ const assertLockOrder = (
   ) {
     return;
   }
+  if (held.some((previous) => previous.key === lock.key)) {
+    panic(
+      "Take the strongest aggregate row mode first; use NOWAIT for upgrades",
+    );
+  }
   if (
     held.some(
       (previous) =>
@@ -374,7 +370,6 @@ export const withAggregateSavepoint = async <T>(
   run: (savepoint: Transaction) => Promise<T>,
 ): Promise<T> => {
   const parent = lockHistory(tx);
-  assertIdleHistory(parent);
   // Non-locking callers retain the driver's existing savepoint behavior.
   if (transactionHasAggregateLocks(parent)) {
     assertAggregateLevelAvailable(parent);
@@ -417,7 +412,8 @@ type RowResource = {
   table: string;
   columns: readonly string[];
   values: readonly (string | number)[];
-  scope: SQL;
+  scopeColumns: readonly string[];
+  scopeValues: readonly (string | number)[];
 };
 const rowResource = (options: RowIdentityOptions): RowResource => {
   switch (options.aggregate) {
@@ -426,95 +422,81 @@ const rowResource = (options: RowIdentityOptions): RowResource => {
         table: "organization",
         columns: ["id"],
         values: [options.id],
-        scope: sql`TRUE`,
+        scopeColumns: [],
+        scopeValues: [],
       };
     case "workspace":
       return {
         table: "workspaces",
         columns: ["id"],
         values: [options.id.id],
-        scope: sql`organization_id = ${options.id.organizationId}`,
+        scopeColumns: ["organization_id"],
+        scopeValues: [options.id.organizationId],
       };
     case "run":
       return {
         table: "flow_runs",
         columns: ["id"],
         values: [options.id.id],
-        scope: sql`workspace_id = ${options.id.workspaceId}`,
+        scopeColumns: ["workspace_id"],
+        scopeValues: [options.id.workspaceId],
       };
     case "currentStep":
       return {
         table: "flow_run_steps",
         columns: ["id"],
         values: [options.id.id],
-        scope: sql`workspace_id = ${options.id.workspaceId}`,
+        scopeColumns: ["workspace_id"],
+        scopeValues: [options.id.workspaceId],
       };
     case "obligation":
       return {
         table: "work_obligations",
         columns: ["entity_id"],
         values: [options.id.id],
-        scope: sql`workspace_id = ${options.id.workspaceId}`,
+        scopeColumns: ["workspace_id"],
+        scopeValues: [options.id.workspaceId],
       };
     case "entity":
       return {
         table: "entities",
         columns: ["id"],
         values: [options.id.id],
-        scope: sql`workspace_id = ${options.id.workspaceId}`,
+        scopeColumns: ["workspace_id"],
+        scopeValues: [options.id.workspaceId],
       };
     case "schedulerClaim":
       return {
         table: "scheduler_jobs",
         columns: ["id"],
         values: [options.id.id],
-        scope: sql`TRUE`,
+        scopeColumns: [],
+        scopeValues: [],
       };
     case "definition":
       return {
         table: "flow_definitions",
         columns: ["id"],
         values: [options.id.id],
-        scope: sql`organization_id = ${options.id.organizationId}`,
-      };
-    case "uploadReceipt":
-      return {
-        table: "flow_upload_trigger_intents",
-        columns: ["definition_id", "entity_id"],
-        values: [options.id.definitionId, options.id.entityId],
-        scope: sql`organization_id = ${options.id.organizationId} AND workspace_id = ${options.id.workspaceId}`,
+        scopeColumns: ["organization_id"],
+        scopeValues: [options.id.organizationId],
       };
     case "processingClaim":
       return {
         table: "document_processing_runs",
         columns: ["id"],
         values: [options.id.id],
-        scope: sql`workspace_id = ${options.id.workspaceId}`,
+        scopeColumns: ["workspace_id"],
+        scopeValues: [options.id.workspaceId],
       };
     case "scoutCensus":
-      switch (options.id.type) {
-        case "run":
-          return {
-            table: "scout_runs",
-            columns: ["id"],
-            values: [options.id.id],
-            scope: sql`organization_id = ${options.id.organizationId}`,
-          };
-        case "receipt":
-          return {
-            table: "pending_scout_emissions",
-            columns: ["organization_id", "source_kind", "source_id"],
-            values: [
-              options.id.organizationId,
-              options.id.sourceKind,
-              options.id.sourceId,
-            ],
-            scope: sql`TRUE`,
-          };
-        default:
-          options.id satisfies never;
-          return panic("Unknown scout census resource");
-      }
+      return {
+        table: "scout_runs",
+        columns: ["id"],
+        values: [options.id.id],
+        scopeColumns: ["organization_id"],
+        scopeValues: [options.id.organizationId],
+      };
     case "memberCleanup":
       switch (options.id.type) {
         case "organization-member":
@@ -522,14 +504,16 @@ const rowResource = (options: RowIdentityOptions): RowResource => {
             table: "member",
             columns: ["id"],
             values: [options.id.id],
-            scope: sql`organization_id = ${options.id.organizationId}`,
+            scopeColumns: ["organization_id"],
+            scopeValues: [options.id.organizationId],
           };
         case "workspace-member":
           return {
             table: "workspace_members",
             columns: ["id"],
             values: [options.id.id],
-            scope: sql`workspace_id = ${options.id.workspaceId}`,
+            scopeColumns: ["workspace_id"],
+            scopeValues: [options.id.workspaceId],
           };
         default:
           options.id satisfies never;
@@ -556,14 +540,16 @@ const rowStatement = (
   wait: "block" | "nowait",
 ) => {
   const resource = rowResource(options);
-  const keys = resource.columns.map(
+  const columns = [...resource.columns, ...resource.scopeColumns];
+  const values = [...resource.values, ...resource.scopeValues];
+  const keys = columns.map(
     (column, index) =>
-      sql`${sql.identifier(column)} = ${resource.values.at(index) ?? panic("Missing aggregate row key")}`,
+      sql`${sql.identifier(column)} = ${values.at(index) ?? panic("Missing aggregate row key")}`,
   );
   return sql`SELECT ${sql.join(
     resource.columns.map((column) => sql.identifier(column)),
     sql`, `,
-  )} FROM ${sql.identifier(resource.table)} WHERE ${sql.join(keys, sql` AND `)} AND ${resource.scope} ${sql.raw(`FOR ${mode.toUpperCase()}`)} ${wait === "nowait" ? sql`NOWAIT` : sql``}`;
+  )} FROM ${sql.identifier("public", resource.table)} WHERE ${sql.join(keys, sql` AND `)} ${sql.raw(`FOR ${mode.toUpperCase()}`)} ${wait === "nowait" ? sql`NOWAIT` : sql``}`;
 };
 const advisoryResource = (options: AdvisoryIdentityOptions) => {
   switch (options.aggregate) {
@@ -722,15 +708,19 @@ type AggregateRowQueryOptions<Row> = RowIdentityOptions & {
   select: (tx: Transaction) => {
     for: (mode: RowLockMode, config?: LockConfig) => PromiseLike<Row[]>;
     toSQL: () => { sql: string };
+    as: (alias: string) => Subquery;
   };
-  identify: (row: Row) => RowIdentityOptions;
   lockConfig?: Omit<LockConfig, "noWait" | "skipLocked">;
 } & ({ tx: Transaction; wait?: "block" } | { tx: Transaction; wait: "nowait" });
 type AggregateRowsResult<Row> =
   | { status: "locked" | "missing"; rows: Row[] }
   | { status: "busy"; error: AggregateLockBusy };
 
-type SelectToken = { kind: "word" | "identifier" | "symbol"; value: string };
+type SelectToken = {
+  kind: "word" | "identifier" | "symbol";
+  value: string;
+  depth: number;
+};
 const dollarDelimiter = /\$(?:[A-Za-z_][A-Za-z0-9_]*)?\$/uy;
 
 const quotedToken = (source: string, start: number) => {
@@ -782,7 +772,7 @@ const blockCommentEnd = (source: string, start: number) => {
   return panic("Unterminated aggregate query comment");
 };
 
-/** Only outer SELECT tokens decide which rows FOR locks; projection/EXISTS SQL is opaque. */
+/** Nested syntax is retained only to reject untracked row-lock clauses. */
 const outerSelectTokens = (source: string): SelectToken[] => {
   const tokens: SelectToken[] = [];
   let depth = 0;
@@ -805,8 +795,8 @@ const outerSelectTokens = (source: string): SelectToken[] => {
     }
     if (character === "'" || character === '"') {
       const quoted = quotedToken(source, index);
-      if (depth === 0 && character === '"') {
-        tokens.push({ kind: "identifier", value: quoted.value });
+      if (character === '"') {
+        tokens.push({ kind: "identifier", value: quoted.value, depth });
       }
       index = quoted.end;
       continue;
@@ -825,7 +815,7 @@ const outerSelectTokens = (source: string): SelectToken[] => {
     }
     if (character === "(") {
       if (depth === 0) {
-        tokens.push({ kind: "symbol", value: character });
+        tokens.push({ kind: "symbol", value: character, depth });
       }
       depth += 1;
       index += 1;
@@ -837,7 +827,7 @@ const outerSelectTokens = (source: string): SelectToken[] => {
         return panic("Unbalanced aggregate query parentheses");
       }
       if (depth === 0) {
-        tokens.push({ kind: "symbol", value: character });
+        tokens.push({ kind: "symbol", value: character, depth });
       }
       index += 1;
       continue;
@@ -850,17 +840,14 @@ const outerSelectTokens = (source: string): SelectToken[] => {
         index < source.length &&
         /[A-Za-z0-9_$]/u.test(source[index] ?? "")
       );
-      if (depth === 0) {
-        tokens.push({
-          kind: "word",
-          value: source.slice(start, index).toLowerCase(),
-        });
-      }
+      tokens.push({
+        kind: "word",
+        value: source.slice(start, index).toLowerCase(),
+        depth,
+      });
       continue;
     }
-    if (depth === 0) {
-      tokens.push({ kind: "symbol", value: character });
-    }
+    tokens.push({ kind: "symbol", value: character, depth });
     index += 1;
   }
   if (depth !== 0) {
@@ -870,7 +857,21 @@ const outerSelectTokens = (source: string): SelectToken[] => {
 };
 
 const aggregateSelectTarget = (source: string) => {
-  const tokens = outerSelectTokens(source);
+  const allTokens = outerSelectTokens(source);
+  for (const [index, token] of allTokens.entries()) {
+    if (token.kind !== "word" || token.value !== "for" || token.depth === 0) {
+      continue;
+    }
+    const strength = allTokens.at(index + 1);
+    if (
+      strength?.kind === "word" &&
+      strength.depth === token.depth &&
+      ["update", "share", "key", "no"].includes(strength.value)
+    ) {
+      panic("Nested aggregate row locking clauses are not tracked");
+    }
+  }
+  const tokens = allTokens.filter((token) => token.depth === 0);
   const first = tokens.at(0);
   const fromIndexes = tokens.flatMap((token, index) =>
     token.kind === "word" && token.value === "from" ? [index] : [],
@@ -924,6 +925,147 @@ const aggregateSelectTarget = (source: string) => {
   };
 };
 
+type ProjectedColumn = { path: readonly string[]; column: PgColumn };
+type CollectProjectedColumnsOptions = {
+  selection: Record<string, unknown>;
+  path: readonly string[];
+  output: ProjectedColumn[];
+  ancestors: Set<object>;
+};
+
+const collectProjectedColumns = ({
+  selection,
+  path,
+  output,
+  ancestors,
+}: CollectProjectedColumnsOptions): void => {
+  if (ancestors.has(selection)) {
+    panic("Cyclic aggregate query projection");
+  }
+  ancestors.add(selection);
+  // Descriptor values avoid the public selection proxy's throw for unrelated raw SQL extras.
+  for (const [key, descriptor] of Object.entries(
+    Object.getOwnPropertyDescriptors(selection),
+  )) {
+    const field: unknown = descriptor.value;
+    const fieldPath = path.concat(key);
+    if (is(field, PgColumn)) {
+      output.push({ path: fieldPath, column: field });
+      continue;
+    }
+    if (is(field, PgTable)) {
+      collectProjectedColumns({
+        selection: getColumns(field),
+        path: fieldPath,
+        output,
+        ancestors,
+      });
+      continue;
+    }
+    if (is(field, SQL) || is(field, SQL.Aliased)) {
+      continue;
+    }
+    if (isRecord(field)) {
+      collectProjectedColumns({
+        selection: field,
+        path: fieldPath,
+        output,
+        ancestors,
+      });
+    }
+  }
+  ancestors.delete(selection);
+};
+
+type RegisteredProjection = {
+  path: readonly string[];
+  expected: string | number;
+  kind: "physical" | "tenant";
+  position: number;
+};
+const registeredProjection = (
+  selection: Record<string, unknown>,
+  resource: RowResource,
+): RegisteredProjection[] => {
+  const columns: ProjectedColumn[] = [];
+  collectProjectedColumns({
+    selection,
+    path: [],
+    output: columns,
+    ancestors: new Set(),
+  });
+  const names = resource.columns.concat(resource.scopeColumns);
+  const values = resource.values.concat(resource.scopeValues);
+  return names.flatMap((name, index) => {
+    const matching = columns.filter(({ column }) => {
+      if (column.name !== name) {
+        return false;
+      }
+      const table = getColumnTable(column);
+      if (!is(table, PgTable)) {
+        return false;
+      }
+      const config = getTableConfig(table);
+      return (
+        config.name === resource.table &&
+        (config.schema === undefined || config.schema === "public")
+      );
+    });
+    if (matching.length === 0) {
+      panic(
+        "Aggregate query must project its registered physical and tenant columns",
+      );
+    }
+    const expected =
+      values.at(index) ??
+      panic("Missing registered aggregate projection value");
+    const kind = index < resource.columns.length ? "physical" : "tenant";
+    return matching.map(
+      ({ path }) =>
+        ({
+          path,
+          expected,
+          kind,
+          position: index,
+        }) satisfies RegisteredProjection,
+    );
+  });
+};
+
+type ValidatedPhysicalIdentity = readonly (string | number)[] | null;
+const validateProjectedRows = (
+  rows: readonly unknown[],
+  projection: readonly RegisteredProjection[],
+): ValidatedPhysicalIdentity => {
+  if (rows.length > 1) {
+    panic("Aggregate query returned more than one physical row");
+  }
+  const physicalValues: (string | number)[] = [];
+  for (const row of rows) {
+    for (const { path, expected, kind, position } of projection) {
+      let value: unknown = row;
+      for (const key of path) {
+        if (!isRecord(value)) {
+          panic("Aggregate query returned an invalid registered projection");
+        }
+        value = value[key];
+      }
+      if (value !== expected) {
+        panic(
+          "Aggregate query returned an undeclared physical or tenant resource",
+        );
+      }
+      if (kind === "physical") {
+        if (typeof value !== "string" && typeof value !== "number") {
+          panic("Aggregate query returned an invalid physical key");
+        }
+        physicalValues[position] = value;
+      }
+    }
+  }
+  return rows.length === 0 ? null : physicalValues;
+};
+
 /** Lock the caller's exact selected rows; preserve CAS/projection and record only returned physical identities. */
 export const withAggregateRowQuery = async <Row>(
   options: AggregateRowQueryOptions<Row>,
@@ -938,9 +1080,9 @@ export const withAggregateRowQuery = async <Row>(
   ): Promise<AggregateRowsResult<Row>> => {
     const queryHistory = lockHistory(tx);
     assertAggregateLevelAvailable(queryHistory);
-    queryHistory.status = "acquiring";
     const query = options.select(tx);
-    const table = rowResource(options).table;
+    const resource = rowResource(options);
+    const table = resource.table;
     const target = aggregateSelectTarget(query.toSQL().sql);
     if (target.table !== table) {
       panic("Aggregate query target does not match its registered resource");
@@ -959,22 +1101,25 @@ export const withAggregateRowQuery = async <Row>(
     } else if (target.joined) {
       panic("Joined aggregate query requires an explicit registered OF target");
     }
+    const projection = registeredProjection(
+      getColumns(query.as("aggregate_projection")),
+      resource,
+    );
+    assertAggregateLevelAvailable(queryHistory);
+    queryHistory.status = "acquiring";
     const rows = await query.for(
       options.mode,
       wait === "nowait"
         ? { ...options.lockConfig, noWait: true }
         : options.lockConfig,
     );
-    for (const row of rows) {
-      const identified = options.identify(row);
-      const actual = rowLock(identified, options.mode);
-      if (
-        identified.aggregate !== options.aggregate ||
-        actual.key !== requested.key
-      ) {
-        panic("Aggregate query returned an undeclared physical resource");
-      }
-      retainLock(queryHistory, actual);
+    const physicalValues = validateProjectedRows(rows, projection);
+    if (physicalValues !== null) {
+      retainLock(queryHistory, {
+        ...requested,
+        key: JSON.stringify(["row", table, ...physicalValues]),
+        orderKey: JSON.stringify([options.aggregate, table, ...physicalValues]),
+      });
     }
     completeAcquisition(queryHistory);
     return { status: rows.length === 0 ? "missing" : "locked", rows };

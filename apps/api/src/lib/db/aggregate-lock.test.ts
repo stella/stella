@@ -19,8 +19,8 @@ import {
 describe("aggregate acquisition ordering", () => {
   test("every declared chain ascends and the chains cover every registered aggregate", () => {
     const exercised = new Set(Object.values(AGGREGATE_CHAINS).flat());
-    expect([...exercised].toSorted()).toEqual(
-      Object.keys(AGGREGATE_LOCKS).toSorted(),
+    expect(Object.keys(AGGREGATE_LOCKS).toSorted()).toEqual(
+      [...exercised].toSorted(),
     );
     for (const chain of Object.values(AGGREGATE_CHAINS)) {
       for (const [index, aggregate] of chain.entries()) {

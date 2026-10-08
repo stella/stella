@@ -1,12 +1,14 @@
 import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
-import { sql } from "drizzle-orm";
+import { inArray, sql } from "drizzle-orm";
 
 import { MEMBER_REMOVAL_BUSY_CODE } from "@stll/api-contract";
 import { rejectionOf } from "@stll/property-testing/rejection";
 
+import { organization } from "@/api/db/auth-schema";
 import type { Transaction } from "@/api/db/root";
 import { abortTransaction } from "@/api/db/safe-db";
+import { workspaces } from "@/api/db/schema";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -48,7 +50,7 @@ const inFixture = async (
   tx: Pick<Transaction, "execute">,
   schema: string,
 ): Promise<void> => {
-  // No public fallback: every unqualified owner query stays in this fixture.
+  // Owner queries must still lock public rows when public is absent here.
   await tx.execute(sql`SET LOCAL search_path TO ${sql.identifier(schema)}`);
 };
 
@@ -74,20 +76,33 @@ const withLockFixture = async (
     const schema = `aggregate_extension_${workspaceId.replaceAll("-", "")}`;
     await holder.execute(sql`CREATE SCHEMA ${sql.identifier(schema)}`);
     try {
-      await holder.execute(sql`CREATE TABLE ${sql.identifier(schema)}.organization (
-        id text PRIMARY KEY
-      )`);
-      await holder.execute(sql`CREATE TABLE ${sql.identifier(schema)}.workspaces (
+      await holder.execute(sql`CREATE TABLE ${sql.identifier(schema)}.children (
         id uuid PRIMARY KEY,
-        organization_id text NOT NULL REFERENCES ${sql.identifier(schema)}.organization(id)
+        organization_id text NOT NULL REFERENCES public.organization(id)
       )`);
       await holder.execute(sql`CREATE TABLE ${sql.identifier(schema)}.effects (
         id uuid PRIMARY KEY
       )`);
-      await holder.execute(sql`INSERT INTO ${sql.identifier(schema)}.organization (id)
-        VALUES (${organizationId}), (${otherOrganizationId})`);
-      await holder.execute(sql`INSERT INTO ${sql.identifier(schema)}.workspaces (id, organization_id)
-        VALUES (${workspaceId}::uuid, ${organizationId})`);
+      await holder.insert(organization).values([
+        {
+          id: organizationId,
+          name: "Aggregate lock fixture",
+          slug: `lock-${organizationId}`,
+          createdAt: new Date(),
+        },
+        {
+          id: otherOrganizationId,
+          name: "Other aggregate lock fixture",
+          slug: `lock-${otherOrganizationId}`,
+          createdAt: new Date(),
+        },
+      ]);
+      await holder.insert(workspaces).values({
+        id: workspaceId,
+        organizationId,
+        name: "Aggregate lock fixture",
+        reference: workspaceId,
+      });
       await run({
         holder,
         contender,
@@ -99,6 +114,9 @@ const withLockFixture = async (
       });
     } finally {
       await holder.execute(sql`DROP SCHEMA ${sql.identifier(schema)} CASCADE`);
+      await holder
+        .delete(organization)
+        .where(inArray(organization.id, [organizationId, otherOrganizationId]));
     }
   });
 };
@@ -109,6 +127,101 @@ if (!databaseUrl || !enabled) {
   });
 } else {
   describe("aggregate lock extension (postgres)", () => {
+    test("two KEY SHARE holders reject blocking upgrades at their high-water and both receive typed NOWAIT busy", async () => {
+      await withLockFixture(
+        databaseUrl,
+        async ({
+          holder,
+          contender,
+          organizationId,
+          schema,
+          holderStatements,
+        }) => {
+          await holder.transaction(async (firstTx) => {
+            await inFixture(firstTx, schema);
+            expect(
+              await withAggregateLock({
+                aggregate: "organization",
+                id: organizationId,
+                mode: "key share",
+                tx: firstTx,
+              }),
+            ).toEqual({ status: "locked" });
+            await contender.transaction(async (secondTx) => {
+              await inFixture(secondTx, schema);
+              expect(
+                await withAggregateLock({
+                  aggregate: "organization",
+                  id: organizationId,
+                  mode: "key share",
+                  tx: secondTx,
+                }),
+              ).toEqual({ status: "locked" });
+              const beforeUpgrade = holderStatements.length;
+              expect(
+                await rejectionOf(
+                  withAggregateLock({
+                    aggregate: "organization",
+                    id: organizationId,
+                    mode: "update",
+                    tx: firstTx,
+                  }),
+                ),
+              ).toMatchObject({
+                message:
+                  "Take the strongest aggregate row mode first; use NOWAIT for upgrades",
+              });
+              expect(holderStatements.length).toBe(beforeUpgrade);
+              expect(
+                await rejectionOf(
+                  withAggregateLock({
+                    aggregate: "organization",
+                    id: organizationId,
+                    mode: "update",
+                    tx: secondTx,
+                  }),
+                ),
+              ).toMatchObject({
+                message:
+                  "Take the strongest aggregate row mode first; use NOWAIT for upgrades",
+              });
+              const first = await withAggregateLock({
+                aggregate: "organization",
+                id: organizationId,
+                mode: "update",
+                wait: "nowait",
+                tx: firstTx,
+              });
+              const second = await withAggregateLock({
+                aggregate: "organization",
+                id: organizationId,
+                mode: "update",
+                wait: "nowait",
+                tx: secondTx,
+              });
+              expect(first.status).toBe("busy");
+              expect(second.status).toBe("busy");
+              if (first.status !== "busy" || second.status !== "busy") {
+                panic(
+                  "Both sessions still hold their conflicting KEY SHARE row locks",
+                );
+              }
+              expect(AggregateLockBusy.is(first.error)).toBe(true);
+              expect(AggregateLockBusy.is(second.error)).toBe(true);
+              const firstHealthy = await firstTx.execute(
+                sql`SELECT 1 AS healthy`,
+              );
+              const secondHealthy = await secondTx.execute(
+                sql`SELECT 1 AS healthy`,
+              );
+              expect(firstHealthy.at(0)?.["healthy"]).toBe(1);
+              expect(secondHealthy.at(0)?.["healthy"]).toBe(1);
+            });
+          });
+        },
+      );
+    });
+
     test.each(modePairs)(
       "held %s handles requested %s with PostgreSQL row-lock compatibility",
       async (held, requested) => {
@@ -403,7 +516,10 @@ if (!databaseUrl || !enabled) {
                     tx,
                   }),
                 ),
-              ).toMatchObject({ message: "Aggregate lock rank inversion" });
+              ).toMatchObject({
+                message:
+                  "Take the strongest aggregate row mode first; use NOWAIT for upgrades",
+              });
 
               const upgrade = async () => {
                 const acquisition = await withAggregateLock({
@@ -472,12 +588,12 @@ if (!databaseUrl || !enabled) {
             await contender.transaction(async (otherTx) => {
               await inFixture(otherTx, schema);
               const inserted = await otherTx.execute(sql`
-              INSERT INTO workspaces (id, organization_id)
+              INSERT INTO children (id, organization_id)
               VALUES (${insertedId}::uuid, ${organizationId}) RETURNING id`);
               expect(inserted.at(0)?.["id"]).toBe(insertedId);
             });
             const committed = await tx.execute(
-              sql`SELECT id FROM workspaces WHERE id = ${insertedId}::uuid`,
+              sql`SELECT id FROM children WHERE id = ${insertedId}::uuid`,
             );
             expect(committed.at(0)?.["id"]).toBe(insertedId);
           });

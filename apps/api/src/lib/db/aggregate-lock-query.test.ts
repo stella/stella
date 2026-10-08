@@ -1,6 +1,12 @@
-import { panic } from "better-result";
+import { panic, Result } from "better-result";
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
-import { and, eq, sql, TransactionRollbackError } from "drizzle-orm";
+import {
+  and,
+  eq,
+  getTableName,
+  sql,
+  TransactionRollbackError,
+} from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
 
 import { rejectionOf } from "@stll/property-testing/rejection";
@@ -14,11 +20,13 @@ import {
   withAggregateRowQuery,
   withAggregateSavepoint,
   withAggregateTransaction,
+  ROW_LOCK_MODES,
 } from "@/api/lib/db/aggregate-lock";
 import {
   timestampCasToken,
   timestampMatchesCasToken,
 } from "@/api/lib/db/timestamp-cas";
+import { getPgErrorCode } from "@/api/lib/pg-error";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { getTestDb, releaseTestDb } from "@/api/tests/security/test-utils";
@@ -73,7 +81,11 @@ describe("aggregate queries preserve their decisive read", () => {
       const tx = asTestRaw<Transaction>(rawTx);
       const query = () =>
         tx
-          .select({ id: workspaces.id, caption: workspaces.name })
+          .select({
+            id: workspaces.id,
+            organizationId: workspaces.organizationId,
+            caption: workspaces.name,
+          })
           .from(workspaces)
           .where(
             and(
@@ -90,14 +102,12 @@ describe("aggregate queries preserve their decisive read", () => {
         tx,
         mode: "update",
         select: query,
-        identify: (row) => ({
-          aggregate: "workspace",
-          id: { id: row.id, organizationId },
-        }),
       });
       expect(result).toEqual({
         status: "locked",
-        rows: [{ id: workspaceId, caption: "Selected projection" }],
+        rows: [
+          { id: workspaceId, organizationId, caption: "Selected projection" },
+        ],
       });
       await tx
         .update(workspaces)
@@ -110,10 +120,6 @@ describe("aggregate queries preserve their decisive read", () => {
         tx,
         mode: "update",
         select: query,
-        identify: (row) => ({
-          aggregate: "workspace",
-          id: { id: row.id, organizationId },
-        }),
       });
       expect(stale).toEqual({ status: "missing", rows: [] });
     });
@@ -128,7 +134,10 @@ describe("aggregate queries preserve their decisive read", () => {
         mode: "update",
         select: (queryTx) =>
           queryTx
-            .select({ id: workspaces.id })
+            .select({
+              id: workspaces.id,
+              organizationId: workspaces.organizationId,
+            })
             .from(workspaces)
             .where(
               and(
@@ -136,10 +145,6 @@ describe("aggregate queries preserve their decisive read", () => {
                 eq(workspaces.name, "absent projection"),
               ),
             ),
-        identify: (row) => ({
-          aggregate: "workspace",
-          id: { id: row.id, organizationId },
-        }),
       });
       expect(result).toEqual({ status: "missing", rows: [] });
       expect(
@@ -163,18 +168,18 @@ describe("aggregate queries preserve their decisive read", () => {
           mode: "update",
           select: (queryTx) =>
             queryTx
-              .select({ id: workspaces.id })
+              .select({
+                id: workspaces.id,
+                organizationId: workspaces.organizationId,
+              })
               .from(workspaces)
               .where(eq(workspaces.id, otherWorkspaceId)),
-          identify: (row) => ({
-            aggregate: "workspace",
-            id: { id: row.id, organizationId },
-          }),
         });
       }),
     );
     expect(error).toMatchObject({
-      message: "Aggregate query returned an undeclared physical resource",
+      message:
+        "Aggregate query returned an undeclared physical or tenant resource",
     });
   });
 
@@ -191,7 +196,6 @@ describe("aggregate queries preserve their decisive read", () => {
               .select({ id: organization.id })
               .from(organization)
               .where(eq(organization.id, organizationId)),
-          identify: () => workspaceIdentity,
         });
       }),
     );
@@ -219,7 +223,6 @@ describe("outer aggregate query target validation", () => {
               })
               .from(organization)
               .where(eq(organization.id, organizationId)),
-          identify: () => workspaceIdentity,
         });
       }),
     );
@@ -231,6 +234,9 @@ describe("outer aggregate query target validation", () => {
   test("scalar subquery FROM and JOIN clauses do not change the outer locked resource", async () => {
     await withAggregateTransaction(db, async (rawTx) => {
       const tx = asTestRaw<Transaction>(rawTx);
+      // Names preserve nested qualifiers that single-table projection rendering removes from PgColumn chunks.
+      const firmId = sql`${sql.identifier("public")}.${sql.identifier(getTableName(organization))}.${sql.identifier(organization.id.name)}`;
+      const matterFirm = sql`${sql.identifier("public")}.${sql.identifier(getTableName(workspaces))}.${sql.identifier(workspaces.organizationId.name)}`;
       const result = await withAggregateRowQuery({
         ...workspaceIdentity,
         tx,
@@ -239,21 +245,18 @@ describe("outer aggregate query target validation", () => {
           queryTx
             .select({
               id: workspaces.id,
+              organizationId: workspaces.organizationId,
               count:
-                sql`(SELECT count(*) FROM ${organization} INNER JOIN ${workspaces} ON ${workspaces.organizationId} = ${organization.id} WHERE ${organization.id} = ${organizationId})`.mapWith(
+                sql`(SELECT count(*) FROM ${organization} INNER JOIN ${workspaces} ON ${matterFirm} = ${firmId} WHERE ${firmId} = ${organizationId})`.mapWith(
                   Number,
                 ),
             })
             .from(workspaces)
             .where(eq(workspaces.id, workspaceId)),
-        identify: (row) => ({
-          aggregate: "workspace",
-          id: { id: row.id, organizationId },
-        }),
       });
       expect(result).toEqual({
         status: "locked",
-        rows: [{ id: workspaceId, count: 2 }],
+        rows: [{ id: workspaceId, organizationId, count: 2 }],
       });
     });
   });
@@ -269,6 +272,7 @@ describe("outer aggregate query target validation", () => {
           queryTx
             .select({
               id: workspaces.id,
+              organizationId: workspaces.organizationId,
               literal: sql`'FROM organization JOIN member'`.mapWith(String),
               dollar:
                 sql`$aggregate$FROM organization JOIN member$aggregate$`.mapWith(
@@ -281,16 +285,13 @@ describe("outer aggregate query target validation", () => {
             })
             .from(workspaces)
             .where(eq(workspaces.id, workspaceId)),
-        identify: (row) => ({
-          aggregate: "workspace",
-          id: { id: row.id, organizationId },
-        }),
       });
       expect(result).toEqual({
         status: "locked",
         rows: [
           {
             id: workspaceId,
+            organizationId,
             literal: "FROM organization JOIN member",
             dollar: "FROM organization JOIN member",
             caption: "Selected projection",
@@ -301,7 +302,316 @@ describe("outer aggregate query target validation", () => {
   });
 });
 
+describe("aggregate query projection ownership", () => {
+  test("renamed nested genuine columns preserve projection while proving identity and tenant scope", async () => {
+    await withAggregateTransaction(db, async (rawTx) => {
+      const tx = asTestRaw<Transaction>(rawTx);
+      const result = await withAggregateRowQuery({
+        ...workspaceIdentity,
+        tx,
+        mode: "update",
+        select: (queryTx) =>
+          queryTx
+            .select({
+              matter: { key: workspaces.id, tenant: workspaces.organizationId },
+              caption: workspaces.name,
+            })
+            .from(workspaces)
+            .where(eq(workspaces.id, workspaceId)),
+      });
+      expect(result).toEqual({
+        status: "locked",
+        rows: [
+          {
+            matter: { key: workspaceId, tenant: organizationId },
+            caption: "Selected projection",
+          },
+        ],
+      });
+    });
+  });
+
+  test.each(["id", "tenant"] as const)(
+    "a forged %s literal is refused before acquisition and leaves history idle",
+    async (field) => {
+      await withAggregateTransaction(db, async (rawTx) => {
+        const tx = asTestRaw<Transaction>(rawTx);
+        const id =
+          field === "id" ? sql`${workspaceId}`.mapWith(String) : workspaces.id;
+        const tenant =
+          field === "tenant"
+            ? sql`${organizationId}`.mapWith(String)
+            : workspaces.organizationId;
+        expect(
+          await rejectionOf(
+            withAggregateRowQuery({
+              ...workspaceIdentity,
+              tx,
+              mode: "update",
+              select: (queryTx) =>
+                queryTx
+                  .select({ id, organizationId: tenant })
+                  .from(workspaces)
+                  .where(eq(workspaces.id, workspaceId)),
+            }),
+          ),
+        ).toMatchObject({
+          message:
+            "Aggregate query must project its registered physical and tenant columns",
+        });
+        expect(
+          await withAggregateLock({
+            aggregate: "organization",
+            id: organizationId,
+            mode: "update",
+            tx,
+          }),
+        ).toEqual({ status: "locked" });
+      });
+    },
+  );
+
+  test("a same-named ID column from a joined table cannot impersonate the registered key", async () => {
+    await withAggregateTransaction(db, async (rawTx) => {
+      const tx = asTestRaw<Transaction>(rawTx);
+      expect(
+        await rejectionOf(
+          withAggregateRowQuery({
+            ...workspaceIdentity,
+            tx,
+            mode: "update",
+            lockConfig: { of: workspaces },
+            select: (queryTx) =>
+              queryTx
+                .select({
+                  id: organization.id,
+                  organizationId: workspaces.organizationId,
+                })
+                .from(workspaces)
+                .innerJoin(
+                  organization,
+                  eq(organization.id, workspaces.organizationId),
+                )
+                .where(eq(workspaces.id, workspaceId)),
+          }),
+        ),
+      ).toMatchObject({
+        message:
+          "Aggregate query must project its registered physical and tenant columns",
+      });
+      expect(
+        await withAggregateLock({
+          aggregate: "organization",
+          id: organizationId,
+          mode: "update",
+          tx,
+        }),
+      ).toEqual({ status: "locked" });
+    });
+  });
+});
+
+describe("returned aggregate identity validation", () => {
+  test("a returned tenant mismatch rejects the read and retains no parent lock", async () => {
+    await withAggregateTransaction(db, async (rawTx) => {
+      const tx = asTestRaw<Transaction>(rawTx);
+      const incorrectOrganizationId = mintAuthProviderId<"organization">();
+      expect(
+        await rejectionOf(
+          withAggregateRowQuery({
+            aggregate: "workspace",
+            id: { id: workspaceId, organizationId: incorrectOrganizationId },
+            tx,
+            mode: "update",
+            wait: "nowait",
+            select: (queryTx) =>
+              queryTx
+                .select({
+                  id: workspaces.id,
+                  organizationId: workspaces.organizationId,
+                })
+                .from(workspaces)
+                .where(eq(workspaces.id, workspaceId)),
+          }),
+        ),
+      ).toMatchObject({
+        message:
+          "Aggregate query returned an undeclared physical or tenant resource",
+      });
+      expect(
+        await withAggregateLock({
+          aggregate: "organization",
+          id: organizationId,
+          mode: "update",
+          tx,
+        }),
+      ).toEqual({ status: "locked" });
+    });
+  });
+
+  test("extra rows are rejected before any matched row's fence reaches the parent", async () => {
+    await withAggregateTransaction(db, async (rawTx) => {
+      const tx = asTestRaw<Transaction>(rawTx);
+      expect(
+        await rejectionOf(
+          withAggregateRowQuery({
+            ...workspaceIdentity,
+            tx,
+            mode: "update",
+            wait: "nowait",
+            select: (queryTx) =>
+              queryTx
+                .select({
+                  id: workspaces.id,
+                  organizationId: workspaces.organizationId,
+                })
+                .from(workspaces)
+                .where(eq(workspaces.organizationId, organizationId))
+                .orderBy(workspaces.id),
+          }),
+        ),
+      ).toMatchObject({
+        message: "Aggregate query returned more than one physical row",
+      });
+      expect(
+        await withAggregateLock({
+          aggregate: "organization",
+          id: organizationId,
+          mode: "update",
+          tx,
+        }),
+      ).toEqual({ status: "locked" });
+    });
+  });
+});
+
+describe("nested query lock rejection", () => {
+  test.each(ROW_LOCK_MODES)(
+    "nested FOR %s is refused before acquisition",
+    async (mode) => {
+      await withAggregateTransaction(db, async (rawTx) => {
+        const tx = asTestRaw<Transaction>(rawTx);
+        expect(
+          await rejectionOf(
+            withAggregateRowQuery({
+              ...workspaceIdentity,
+              tx,
+              mode: "update",
+              select: (queryTx) =>
+                queryTx
+                  .select({
+                    id: workspaces.id,
+                    organizationId: workspaces.organizationId,
+                    nested: sql`(SELECT ${organization.id} FROM ${organization} WHERE ${organization.id} = ${organizationId} ${sql.raw(`FOR ${mode.toUpperCase()}`)})`,
+                  })
+                  .from(workspaces)
+                  .where(eq(workspaces.id, workspaceId)),
+            }),
+          ),
+        ).toMatchObject({
+          message: "Nested aggregate row locking clauses are not tracked",
+        });
+        expect(
+          await withAggregateLock({
+            aggregate: "organization",
+            id: organizationId,
+            mode: "update",
+            tx,
+          }),
+        ).toEqual({ status: "locked" });
+      });
+    },
+  );
+
+  test.each(["target", "of"] as const)(
+    "invalid %s validation leaves history idle",
+    async (invalid) => {
+      await withAggregateTransaction(db, async (rawTx) => {
+        const tx = asTestRaw<Transaction>(rawTx);
+        const identity =
+          invalid === "target"
+            ? ({ aggregate: "organization", id: organizationId } as const)
+            : workspaceIdentity;
+        expect(
+          await rejectionOf(
+            withAggregateRowQuery({
+              ...identity,
+              tx,
+              mode: "update",
+              lockConfig: invalid === "of" ? { of: organization } : undefined,
+              select: (queryTx) =>
+                queryTx
+                  .select({
+                    id: workspaces.id,
+                    organizationId: workspaces.organizationId,
+                  })
+                  .from(workspaces)
+                  .where(eq(workspaces.id, workspaceId)),
+            }),
+          ),
+        ).toMatchObject({
+          message:
+            invalid === "target"
+              ? "Aggregate query target does not match its registered resource"
+              : "Aggregate query lock target does not match its registered resource",
+        });
+        expect(
+          await withAggregateLock({
+            aggregate: "organization",
+            id: organizationId,
+            mode: "update",
+            tx,
+          }),
+        ).toEqual({ status: "locked" });
+      });
+    },
+  );
+});
+
 describe("aggregate query targets and lock modes", () => {
+  test("a same-row blocking query upgrade is rejected; NOWAIT upgrade remains available", async () => {
+    await withAggregateTransaction(db, async (rawTx) => {
+      const tx = asTestRaw<Transaction>(rawTx);
+      const select = (queryTx: Transaction) =>
+        queryTx
+          .select({
+            id: workspaces.id,
+            organizationId: workspaces.organizationId,
+          })
+          .from(workspaces)
+          .where(eq(workspaces.id, workspaceId));
+      expect(
+        await withAggregateRowQuery({
+          ...workspaceIdentity,
+          tx,
+          mode: "key share",
+          select,
+        }),
+      ).toMatchObject({ status: "locked" });
+      expect(
+        await rejectionOf(
+          withAggregateRowQuery({
+            ...workspaceIdentity,
+            tx,
+            mode: "update",
+            select,
+          }),
+        ),
+      ).toMatchObject({
+        message:
+          "Take the strongest aggregate row mode first; use NOWAIT for upgrades",
+      });
+      expect(
+        await withAggregateRowQuery({
+          ...workspaceIdentity,
+          tx,
+          mode: "update",
+          wait: "nowait",
+          select,
+        }),
+      ).toMatchObject({ status: "locked" });
+    });
+  });
   test("joined projections lock only their explicit registered OF target", async () => {
     await withAggregateTransaction(db, async (rawTx) => {
       const tx = asTestRaw<Transaction>(rawTx);
@@ -312,21 +622,23 @@ describe("aggregate query targets and lock modes", () => {
         lockConfig: { of: workspaces },
         select: (queryTx) =>
           queryTx
-            .select({ id: workspaces.id, firm: organization.name })
+            .select({
+              id: workspaces.id,
+              organizationId: workspaces.organizationId,
+              firm: organization.name,
+            })
             .from(workspaces)
             .innerJoin(
               organization,
               eq(organization.id, workspaces.organizationId),
             )
             .where(eq(workspaces.id, workspaceId)),
-        identify: (row) => ({
-          aggregate: "workspace",
-          id: { id: row.id, organizationId },
-        }),
       });
       expect(result).toEqual({
         status: "locked",
-        rows: [{ id: workspaceId, firm: "Aggregate query fixture" }],
+        rows: [
+          { id: workspaceId, organizationId, firm: "Aggregate query fixture" },
+        ],
       });
     });
     const error = await rejectionOf(
@@ -339,17 +651,16 @@ describe("aggregate query targets and lock modes", () => {
           lockConfig: { of: organization },
           select: (queryTx) =>
             queryTx
-              .select({ id: workspaces.id })
+              .select({
+                id: workspaces.id,
+                organizationId: workspaces.organizationId,
+              })
               .from(workspaces)
               .innerJoin(
                 organization,
                 eq(organization.id, workspaces.organizationId),
               )
               .where(eq(workspaces.id, workspaceId)),
-          identify: (row) => ({
-            aggregate: "workspace",
-            id: { id: row.id, organizationId },
-          }),
         });
       }),
     );
@@ -373,7 +684,6 @@ describe("aggregate query targets and lock modes", () => {
             select: () => {
               throw failure;
             },
-            identify: () => workspaceIdentity,
           }),
         ),
       ).toBe(failure);
@@ -403,13 +713,12 @@ describe("aggregate query targets and lock modes", () => {
         mode: "update",
         select: (queryTx) =>
           queryTx
-            .select({ id: workspaces.id })
+            .select({
+              id: workspaces.id,
+              organizationId: workspaces.organizationId,
+            })
             .from(workspaces)
             .where(eq(workspaces.id, workspaceId)),
-        identify: (row) => ({
-          aggregate: "workspace",
-          id: { id: row.id, organizationId },
-        }),
       });
       expect(
         await rejectionOf(
@@ -420,7 +729,10 @@ describe("aggregate query targets and lock modes", () => {
             tx,
           }),
         ),
-      ).toMatchObject({ message: "Aggregate lock rank inversion" });
+      ).toMatchObject({
+        message:
+          "Take the strongest aggregate row mode first; use NOWAIT for upgrades",
+      });
       expect(
         await withAggregateLock({
           aggregate: "organization",
@@ -448,11 +760,15 @@ describe("NOWAIT acquisition fencing", () => {
         select: (child) => {
           exposedChild = child;
           const query = child
-            .select({ id: workspaces.id })
+            .select({
+              id: workspaces.id,
+              organizationId: workspaces.organizationId,
+            })
             .from(workspaces)
             .where(eq(workspaces.id, workspaceId));
           return {
             toSQL: () => query.toSQL(),
+            as: (alias: string) => query.as(alias),
             for: async (...args: Parameters<typeof query.for>) => {
               const rows = await query.for(...args);
               ready.resolve(undefined);
@@ -461,10 +777,6 @@ describe("NOWAIT acquisition fencing", () => {
             },
           };
         },
-        identify: (row) => ({
-          aggregate: "workspace",
-          id: { id: row.id, organizationId },
-        }),
       });
       try {
         await Promise.race([ready.promise, acquisition]);
@@ -488,7 +800,7 @@ describe("NOWAIT acquisition fencing", () => {
       }
       expect(await acquisition).toEqual({
         status: "locked",
-        rows: [{ id: workspaceId }],
+        rows: [{ id: workspaceId, organizationId }],
       });
       expect(
         await withAggregateLock({ ...workspaceIdentity, mode: "update", tx }),
@@ -594,13 +906,12 @@ describe("aggregate transaction lifetime", () => {
             mode: "update",
             select: (queryTx) =>
               queryTx
-                .select({ id: workspaces.id })
+                .select({
+                  id: workspaces.id,
+                  organizationId: workspaces.organizationId,
+                })
                 .from(workspaces)
                 .where(eq(workspaces.id, workspaceId)),
-            identify: (row) => ({
-              aggregate: "workspace",
-              id: { id: row.id, organizationId },
-            }),
           });
           if (disposition === "rollback") {
             savepoint.rollback();
@@ -653,7 +964,7 @@ describe("aggregate transaction lifetime", () => {
     ).toMatchObject({ message: "Aggregate savepoint transaction is closed" });
   });
 
-  test("escaped empty parent and child transactions stay closed after completion", async () => {
+  test("escaped empty lock handles stay closed; nonlocking savepoints preserve driver behavior", async () => {
     let parent: Transaction | undefined;
     let child: Transaction | undefined;
     await withAggregateTransaction(db, async (rawTx) => {
@@ -669,9 +980,18 @@ describe("aggregate transaction lifetime", () => {
           withAggregateLock({ ...workspaceIdentity, mode: "update", tx }),
         ),
       ).toMatchObject({ message: "Aggregate savepoint transaction is closed" });
-      expect(
-        await rejectionOf(withAggregateSavepoint(tx, async () => undefined)),
-      ).toMatchObject({ message: "Aggregate savepoint transaction is closed" });
+      // db-await-in-loop: compare both escaped levels against the same driver's public savepoint behavior.
+      const direct = await Result.tryPromise(
+        async () => await tx.transaction(async () => undefined),
+      );
+      // db-await-in-loop: this nonlocking operation must retain the driver's result on a closed handle.
+      const owned = await Result.tryPromise(
+        async () => await withAggregateSavepoint(tx, async () => undefined),
+      );
+      expect(owned.isOk()).toBe(direct.isOk());
+      if (owned.isErr() && direct.isErr()) {
+        expect(getPgErrorCode(owned.error)).toBe(getPgErrorCode(direct.error));
+      }
     }
   });
 

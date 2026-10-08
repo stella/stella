@@ -38,16 +38,6 @@ export const aggregateFences = () => {
       id: { id: definitionId, organizationId },
       mode: "update",
     },
-    uploadReceipt: {
-      aggregate: "uploadReceipt",
-      id: {
-        organizationId,
-        workspaceId,
-        definitionId,
-        entityId: createSafeId<"entity">(),
-      },
-      mode: "update",
-    },
     scoutCensus: {
       aggregate: "scoutCensus",
       id: { type: "run", id: createSafeId<"scoutRun">(), organizationId },
@@ -160,5 +150,13 @@ export const plantedWeakerHeldModeReuse = async (
   const fixture = aggregateFences();
   await withAggregateLock({ ...fixture.workspace, mode: "key share", tx });
   await withAggregateLock({ ...fixture.entity, tx });
+  return await withAggregateLock({ ...fixture.workspace, mode: "update", tx });
+};
+
+export const plantedBlockingUpgradeAtHighWater = async (
+  tx: Parameters<typeof withAggregateLock>[0]["tx"],
+) => {
+  const fixture = aggregateFences();
+  await withAggregateLock({ ...fixture.workspace, mode: "key share", tx });
   return await withAggregateLock({ ...fixture.workspace, mode: "update", tx });
 };
