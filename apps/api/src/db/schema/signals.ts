@@ -344,6 +344,7 @@ export const pendingScoutEmissions = p.pgTable(
       .notNull(),
     sourceId: p.uuid("source_id").notNull(),
     nextAttemptAt: timestamptz("next_attempt_at").notNull().defaultNow(),
+    lastError: p.varchar("last_error", { length: 128 }),
     createdAt: timestamptz("created_at").notNull().defaultNow(),
   },
   (table) => [

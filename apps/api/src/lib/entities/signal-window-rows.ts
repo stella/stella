@@ -1,3 +1,4 @@
+import { Result } from "better-result";
 import { getColumns, sql } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
 
@@ -6,8 +7,14 @@ import { ENTITY_VIEW_ROW_KIND } from "@stll/api-contract/entity-views";
 import type { EntityViewRowKind } from "@stll/api-contract/entity-views";
 import { SIGNAL_STATUS, SUGGESTION_KIND } from "@stll/api-contract/signals";
 
+import type { SafeDb } from "@/api/db/safe-db";
 import { entities, signals } from "@/api/db/schema";
+import { loadFeatureAccessSnapshot } from "@/api/lib/auth/feature-access/context";
+import { isFeatureEnabled } from "@/api/lib/auth/feature-access/policy";
+import type { SafeId } from "@/api/lib/branded-types";
+import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import { AGENDA_ITEM_KIND } from "@/api/lib/entity-constants";
+import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
 type EntityColumnKey = keyof typeof entities.$inferSelect;
 
@@ -130,7 +137,7 @@ type EntityWindowUnionOptions = {
  * `entities.*` applies to the union as a whole. Postgres pushes those outer
  * conditions into both branches.
  */
-export const entityWindowUnionSource = ({
+const entityWindowUnionSource = ({
   entityConditions,
   signalConditions,
 }: EntityWindowUnionOptions): SQL => {
@@ -158,6 +165,38 @@ export const entityWindowUnionSource = ({
     SELECT ${signalBranch} FROM ${signals} ${proposalJoin}
     WHERE ${signalConditions}
   ) AS ${sql.identifier("entities")}`;
+};
+
+type AdmittedEntityWindowUnionOptions = EntityWindowUnionOptions & {
+  safeDb: SafeDb;
+  organizationId: SafeId<"organization">;
+  userId: string;
+};
+
+/** Every signal row source admits its caller, including internal shared readers. */
+export const admittedEntityWindowUnionSource = async ({
+  safeDb,
+  organizationId,
+  userId,
+  ...conditions
+}: AdmittedEntityWindowUnionOptions) => {
+  if (!isDeploymentFeatureEnabled("FEATURE_SIGNALS")) {
+    return Result.err(new HandlerError({ status: 404, message: "Not found" }));
+  }
+  const snapshot = await loadFeatureAccessSnapshot({
+    safeDb,
+    organizationId,
+    userId,
+  });
+  if (snapshot.isErr()) {
+    return Result.err(snapshot.error);
+  }
+  if (
+    !isFeatureEnabled(snapshot.value, "signals", { organizationId, userId })
+  ) {
+    return Result.err(new HandlerError({ status: 404, message: "Not found" }));
+  }
+  return Result.ok(entityWindowUnionSource(conditions));
 };
 
 /** The union's discriminator, read in the outer query. */

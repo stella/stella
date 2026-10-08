@@ -1,0 +1,6 @@
+{
+  "metric": "no-db-await-in-loop-suppressions",
+  "file": "apps/api/src/lib/member-assignment-offboarding-owner.ts",
+  "delta": 26,
+  "reason": "Relocates the existing 26 bounded cleanup loops unchanged behind a void operational facade. Ordered workspace/member locks and counted audit batches retain their original bounds and transaction dependencies; the former module contains only the four void calls."
+}

@@ -7,6 +7,7 @@ import {
   workspaces,
 } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
+import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import { fileUploadTriggerMatches } from "@/api/lib/flows/flow-trigger-logic";
 import {
   automatedFlowRunDependencies,
@@ -95,6 +96,9 @@ export const recoverUploadFlowTriggerIntents = async ({
   signal,
   start,
 }: RecoverUploadFlowTriggerOptions) => {
+  if (!isDeploymentFeatureEnabled("FEATURE_FLOWS")) {
+    return { settled: 0, paused: 0, retry: 0 };
+  }
   const candidates = await database.transaction(async (tx) => {
     const selected = await tx
       .select({

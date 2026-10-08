@@ -55,7 +55,7 @@ import {
   type EntityQueryScope,
 } from "@/api/lib/entities/query-scope";
 import {
-  entityWindowUnionSource,
+  admittedEntityWindowUnionSource,
   windowRowKindColumn,
 } from "@/api/lib/entities/signal-window-rows";
 import {
@@ -76,7 +76,7 @@ import {
 } from "@/api/lib/entity-filters";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { escapeLike } from "@/api/lib/escape-like";
-import { flowReviewTaskVisibilityCondition } from "@/api/lib/flows/review-gate-task";
+import { flowReviewTaskVisibilityCondition } from "@/api/lib/flows/visibility";
 import {
   brandPersistedEntityId,
   brandPersistedSignalId,
@@ -721,6 +721,8 @@ const buildCursorCondition = ({
 
 type SelectWindowRowsOptions = {
   safeDb: SafeDb;
+  organizationId: SafeId<"organization">;
+  userId: string;
   source: EntityWindowSource;
   entityAccess: SQL;
   rowConditions: SQL[];
@@ -737,6 +739,8 @@ type SelectWindowRowsOptions = {
  */
 const selectWindowRows = async ({
   safeDb,
+  organizationId,
+  userId,
   source,
   entityAccess,
   rowConditions,
@@ -744,7 +748,7 @@ const selectWindowRows = async ({
   sortExpressions,
   limit,
 }: SelectWindowRowsOptions): Promise<
-  Result<EntityWindowRow[], SafeDbError>
+  Result<EntityWindowRow[], SafeDbError | HandlerError<404>>
 > => {
   switch (source.type) {
     case "entities": {
@@ -767,6 +771,16 @@ const selectWindowRows = async ({
           );
     }
     case "entities-and-signals": {
+      const union = await admittedEntityWindowUnionSource({
+        safeDb,
+        organizationId,
+        userId,
+        entityConditions: entityAccess,
+        signalConditions: source.signalConditions,
+      });
+      if (union.isErr()) {
+        return Result.err(union.error);
+      }
       const rows = await safeDb((tx) =>
         tx
           .select({
@@ -778,12 +792,7 @@ const selectWindowRows = async ({
             agendaKind: sql<string | null>`${entities.agendaKind}`,
             dueDate: sql<string | null>`${entities.dueDate}::text`,
           })
-          .from(
-            entityWindowUnionSource({
-              entityConditions: entityAccess,
-              signalConditions: source.signalConditions,
-            }),
-          )
+          .from(union.value)
           .where(and(...rowConditions))
           .orderBy(...sortExpressions)
           .limit(limit),
@@ -895,6 +904,8 @@ const queryEntitiesGenerator = async function* ({
   const windowRows = yield* Result.await(
     selectWindowRows({
       safeDb,
+      organizationId: currentOrganizationId,
+      userId: currentUserId,
       source,
       entityAccess: entityAccess ?? panic("Entity window access is empty"),
       rowConditions: [...rowConditions, ...cursorConditions],

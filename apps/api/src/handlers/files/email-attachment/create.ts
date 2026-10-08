@@ -28,7 +28,7 @@ import {
 import {
   maybeStartUploadTriggeredFlows,
   recordUploadTriggeredFlowIntents,
-} from "@/api/lib/flows/maybe-start-upload-triggered-flows";
+} from "@/api/lib/flows/upload-trigger-recording";
 import { broadcastOrganizationResourceSetUpdated } from "@/api/lib/resource-realtime";
 
 import {

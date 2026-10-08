@@ -10,7 +10,7 @@ import * as schema from "@/api/db/schema";
 import {
   ORGANIZATION_MEMBER_CLEANUP_COLUMNS,
   WORKSPACE_MEMBER_CLEANUP_COLUMNS,
-} from "./member-assignment-offboarding";
+} from "./member-assignment-offboarding-census";
 
 /**
  * A column names a member when it references the user or member table, when

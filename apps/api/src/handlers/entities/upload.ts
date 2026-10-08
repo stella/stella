@@ -74,7 +74,7 @@ import { createFileKey } from "@/api/lib/files/utils";
 import {
   maybeStartUploadTriggeredFlows,
   recordUploadTriggeredFlowIntents,
-} from "@/api/lib/flows/maybe-start-upload-triggered-flows";
+} from "@/api/lib/flows/upload-trigger-recording";
 import { FILE_SIZE_LIMITS, LIMITS } from "@/api/lib/limits";
 import { failureSink } from "@/api/lib/observability/failure";
 import { observeFailure } from "@/api/lib/observability/observe-failure";

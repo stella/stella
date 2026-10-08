@@ -9,8 +9,8 @@ import {
   workspaces,
 } from "@/api/db/schema";
 import { createSafeId } from "@/api/lib/branded-types";
-import { recordUploadTriggeredFlowIntents } from "@/api/lib/flows/maybe-start-upload-triggered-flows";
 import type { StartAutomatedFlowRunArgs } from "@/api/lib/flows/start-automated-flow-run";
+import { recordUploadTriggeredFlowIntents } from "@/api/lib/flows/upload-trigger-recording";
 import type { SchedulerDb } from "@/api/lib/scheduler/types";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";

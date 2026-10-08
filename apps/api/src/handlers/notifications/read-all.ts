@@ -4,7 +4,7 @@ import { and, eq, isNull } from "drizzle-orm";
 import { notifications } from "@/api/db/schema";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
-import { flowNotificationVisibilityCondition } from "@/api/lib/flows/review-gate-task";
+import { flowNotificationVisibilityCondition } from "@/api/lib/flows/visibility";
 
 import { readUnreadCount } from "./read-model";
 

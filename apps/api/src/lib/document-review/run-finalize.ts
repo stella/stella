@@ -29,7 +29,7 @@ import { carryOverDecisions } from "@/api/lib/document-review/decision-carry-ove
 import { stageReviewFixSuggestions } from "@/api/lib/document-review/review-suggestion-staging";
 import { DOCUMENT_REVIEW_RUN_EXECUTOR } from "@/api/lib/document-review/run-contract";
 import type { DocumentReviewRunExecutor } from "@/api/lib/document-review/run-contract";
-import { maybeEmitDocumentReviewSignal } from "@/api/lib/scouts/document-review";
+import { maybeEmitDocumentReviewSignal } from "@/api/lib/scouts/document-review-recovery";
 
 export type FinalizeReviewRunArgs = {
   tx: Transaction;
