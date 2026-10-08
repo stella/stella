@@ -367,10 +367,9 @@ describe("social identity policy", () => {
   test.each([false, true])(
     "a linked Microsoft sign-in verifies the local email only on proof: %s",
     async (proven) => {
-      const claims = {
+      let claims: Record<string, unknown> = {
         ...profile,
         oid: "provider-account",
-        ...(proven ? { xms_edov: true } : {}),
       };
       const auth = betterAuth({
         baseURL: "http://localhost:3001",
@@ -411,25 +410,26 @@ describe("social identity policy", () => {
           },
         },
       });
+      const signIn = async () =>
+        await auth.api.signInSocial({
+          body: {
+            provider: "microsoft",
+            idToken: { token: "test-credential" },
+          },
+          asResponse: true,
+        });
+
+      // The first sign-in carries no proof, so the account starts unverified.
+      expect((await signIn()).ok).toBe(true);
       const context = await auth.$context;
-      const local = await context.internalAdapter.createUser(
-        { email, name: "Account", emailVerified: false },
-        { method: "admin" },
-      );
-      await context.internalAdapter.linkAccount({
-        userId: local.id,
-        providerId: "microsoft",
-        accountId: "provider-account",
-      });
+      const created = await context.internalAdapter.findUserByEmail(email);
+      expect(created?.user.emailVerified).toBe(false);
 
-      const response = await auth.api.signInSocial({
-        body: { provider: "microsoft", idToken: { token: "test-credential" } },
-        asResponse: true,
-      });
+      claims = { ...claims, ...(proven ? { xms_edov: true } : {}) };
+      expect((await signIn()).ok).toBe(true);
 
-      expect(response.ok).toBe(true);
-      const user = await context.internalAdapter.findUserById(local.id);
-      expect(user?.emailVerified).toBe(proven);
+      const user = await context.internalAdapter.findUserByEmail(email);
+      expect(user?.user.emailVerified).toBe(proven);
     },
   );
 });

@@ -21,7 +21,8 @@ export const classifySocialCallback = (
   if (!isAPIError(returned)) {
     return "failed";
   }
-  const location = new Headers(returned.headers).get("location");
+  const headers: unknown = returned.headers;
+  const location = headers instanceof Headers ? headers.get("location") : null;
   if (returned.statusCode !== 302 || location === null) {
     return "failed";
   }
@@ -35,7 +36,7 @@ export const classifySocialCallback = (
   ) {
     return "completed";
   }
-  switch (target.searchParams.get("error")) {
+  switch (target.searchParams.get("error") ?? "") {
     case "account_not_linked":
       return "account_not_linked";
     case "identity_not_allowed":
