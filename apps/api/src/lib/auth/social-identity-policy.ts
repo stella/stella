@@ -79,11 +79,8 @@ export const isVerifiedMicrosoftIdentity = ({
 };
 
 /**
- * Microsoft profile mapping: the email counts as proven only when the same
- * predicate the identity validation applies accepts it. Better Auth's own
- * mapping ignores `xms_edov`, the claim work accounts usually carry, so
- * without this a proven work account is stored unverified, and an already
- * linked account never upgrades the local flag on later sign-ins.
+ * Microsoft profile mapping: `emailVerified` comes from the same identity-proof
+ * predicate the identity validation applies.
  */
 export const createMicrosoftProfileMapper =
   (tenantId: string | undefined) => (profile: MicrosoftEntraIDProfile) => ({
