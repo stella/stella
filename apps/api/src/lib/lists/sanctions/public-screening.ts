@@ -249,6 +249,11 @@ export const createPublicSanctionsScreening = ({
   reportFailure = reportSanctionsScreeningFailure,
   now = () => performance.now(),
 }: PublicScreeningOptions = {}) => {
+  // Indexes live per worker and the warmup loads into the one it leases, so
+  // only a single worker is guaranteed to hold what was warmed.
+  if (pool.size !== 1) {
+    panic("Public sanctions screening warms a single matcher worker");
+  }
   const warmer = createEditionWarmer({
     pool,
     loadEntries,

@@ -837,6 +837,17 @@ test("a cold start converges when editions load for longer than any request dead
   }
 });
 
+test("public screening refuses a pool whose workers could hold different indexes", async () => {
+  const pool = createSanctionsMatcherPool({ size: 2 });
+  try {
+    expect(() => createPublicSanctionsScreening({ pool })).toThrow(
+      "Public sanctions screening warms a single matcher worker",
+    );
+  } finally {
+    await pool.close();
+  }
+});
+
 test("concurrent cold requests share one warmup and its read never holds the matcher", async () => {
   const clock = createMatcherTestClock();
   const pool = createSanctionsMatcherPool({ clock });

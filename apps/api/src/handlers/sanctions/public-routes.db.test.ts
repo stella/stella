@@ -404,7 +404,7 @@ const clearSubject = {
   companyId: null,
 } as const satisfies NameSubject;
 
-const exerciseColdWarmup = async (size: 1 | 2) => {
+const exerciseColdWarmup = async () => {
   const messages: SanctionsMatcherMessage[] = [];
   class RecordingWorker extends Worker {
     constructor() {
@@ -421,7 +421,6 @@ const exerciseColdWarmup = async (size: 1 | 2) => {
     }
   }
   const pool = createSanctionsMatcherPool({
-    size,
     deadlineMs: 250,
     createWorker: () => new RecordingWorker(),
   });
@@ -1017,18 +1016,18 @@ describe("public sanctions search parity", () => {
     DB_TEST_TIMEOUT_MS,
   );
 
-  test.each([1, 2] as const)(
-    "a cold search answers warming and one background warmup readies every list (size %s)",
-    async (size) => {
-      await exerciseColdWarmup(size);
+  test(
+    "a cold search answers warming and one background warmup readies every list",
+    async () => {
+      await exerciseColdWarmup();
     },
     DB_TEST_TIMEOUT_MS,
   );
 
-  test.each([1, 2] as const)(
-    "the background warmup sends the matcher list entries only, never the query (size %s)",
-    async (size) => {
-      const { messages, matched } = await exerciseColdWarmup(size);
+  test(
+    "the background warmup sends the matcher list entries only, never the query",
+    async () => {
+      const { messages, matched } = await exerciseColdWarmup();
       expect(messages.length).toBeGreaterThan(0);
       expect(
         messages.filter(({ type }) => type !== "entries" && type !== "index"),

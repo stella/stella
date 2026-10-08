@@ -492,6 +492,8 @@ export const createSanctionsMatcherPoolCore = ({
     return await acquire(signal);
   };
   return {
+    /** Workers in the pool; each holds its own indexes. */
+    size,
     run: async <T>(
       operation: (session: SanctionsMatcherSession) => Promise<T>,
       options?: { deadlineMs?: number; onSettled?: () => void },
