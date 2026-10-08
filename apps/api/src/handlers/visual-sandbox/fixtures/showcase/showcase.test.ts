@@ -2,14 +2,19 @@ import { describe, expect, test } from "bun:test";
 import { load } from "cheerio";
 import { readFileSync } from "node:fs";
 import { runInNewContext } from "node:vm";
+import * as v from "valibot";
+
+import { generatedVisualInputSchema } from "@stll/api-contract/generated-visual";
 
 import {
   createTreemapModel,
   type VisualTreemapTree,
 } from "../../browser/treemap-model";
+import { prepareGeneratedVisual } from "../../prepare";
 import { sanitizeVisualHtml } from "../../sanitize";
 import englishLabels from "./court-year-showcase.en.json";
 import fixture from "./court-year-showcase.json";
+import prepared from "./court-year-showcase.prepared.json";
 
 const html = readFileSync(
   new URL("court-year-showcase.html", import.meta.url),
@@ -241,5 +246,16 @@ describe("court/year showcase page", () => {
     });
     expect(element("title").textContent).toBe(malicious);
     expect(ready).toBe(1);
+  });
+});
+
+describe("prepared showcase page", () => {
+  // Browser captures read the prepared page from disk instead of importing
+  // API code; regenerate it from prepareGeneratedVisual when this fails.
+  test("matches what the API prepares from the authored source", () => {
+    const page = prepareGeneratedVisual(
+      v.parse(generatedVisualInputSchema, { ...fixture, html }),
+    ).unwrap();
+    expect(page).toEqual(prepared);
   });
 });
