@@ -140,7 +140,7 @@ export class ModelOutputIncompleteError extends ModelRunError {
   }
 }
 
-export const MODEL_OUTPUT_INVALID_MESSAGE =
+const MODEL_OUTPUT_INVALID_MESSAGE =
   "The AI model's answer did not match the requested structure";
 
 /**
@@ -159,7 +159,7 @@ export class ModelOutputInvalidError extends ModelRunError {
   }
 }
 
-export const MODEL_DEADLINE_EXCEEDED_MESSAGE =
+const MODEL_DEADLINE_EXCEEDED_MESSAGE =
   "The AI model did not answer within the time allowed";
 
 /**

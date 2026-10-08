@@ -41,7 +41,7 @@ import {
  * `execute` is typed by what the store needs of it, a statement run for its
  * effect: its result's shape differs between drivers, and no caller reads it.
  */
-export type AnalysisRowWriter = Pick<Transaction, "select" | "update"> & {
+type AnalysisRowWriter = Pick<Transaction, "select" | "update"> & {
   execute: (statement: SQL) => PromiseLike<unknown>;
 };
 
