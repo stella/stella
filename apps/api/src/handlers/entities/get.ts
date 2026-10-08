@@ -46,6 +46,7 @@ export const readEntityByIdHandler = async function* ({
   const read = yield* Result.await(
     safeDb(async (tx) => {
       const admission = await admitTaskFlowAccess(tx, {
+        access: "read",
         workspaceId,
         taskEntityId: entityId,
         userId,

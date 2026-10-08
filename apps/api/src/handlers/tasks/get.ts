@@ -31,6 +31,7 @@ const readTaskById = createSafeHandler(
       safeDb(
         async (tx) =>
           await admitTaskFlowAccess(tx, {
+            access: "read",
             workspaceId,
             taskEntityId: params.taskId,
             userId: user.id,
@@ -38,13 +39,10 @@ const readTaskById = createSafeHandler(
       ),
     );
     yield* admission;
-    const visibility = yield* Result.await(
-      flowRelatedTaskVisibilityConditions({
-        safeDb,
-        organizationId: session.activeOrganizationId,
-        userId: user.id,
-      }),
-    );
+    const visibility = flowRelatedTaskVisibilityConditions({
+      organizationId: session.activeOrganizationId,
+      userId: user.id,
+    });
     const task = yield* Result.await(
       safeDb((tx) =>
         tx.query.entities.findFirst({
@@ -52,6 +50,7 @@ const readTaskById = createSafeHandler(
             id: { eq: params.taskId },
             workspaceId: { eq: workspaceId },
             kind: { eq: "task" },
+            RAW: visibility.entity,
           },
           with: {
             assignees: {
@@ -103,7 +102,7 @@ const readTaskById = createSafeHandler(
             children: {
               where: {
                 kind: { eq: "task" },
-                ...(visibility === undefined ? {} : { RAW: visibility.entity }),
+                RAW: visibility.entity,
               },
               columns: {
                 id: true,
@@ -151,9 +150,7 @@ const readTaskById = createSafeHandler(
               },
             },
             linksAsSource: {
-              ...(visibility === undefined
-                ? {}
-                : { where: { RAW: visibility.link } }),
+              where: { RAW: visibility.link },
               with: {
                 targetEntity: {
                   columns: {
@@ -165,9 +162,7 @@ const readTaskById = createSafeHandler(
               },
             },
             linksAsTarget: {
-              ...(visibility === undefined
-                ? {}
-                : { where: { RAW: visibility.link } }),
+              where: { RAW: visibility.link },
               with: {
                 sourceEntity: {
                   columns: {

@@ -71,6 +71,7 @@ export const createUpdateKanbanPlacement = ({
         safeDb(
           async (tx) =>
             await admitTaskFlowAccess(tx, {
+              access: "read",
               workspaceId,
               taskEntityId: body.entityId,
               userId: user.id,
@@ -101,6 +102,7 @@ export const createUpdateKanbanPlacement = ({
       yield* Result.await(
         abortableTx(safeDb, async (tx) => {
           const currentAdmission = await admitTaskFlowAccess(tx, {
+            access: "write",
             workspaceId,
             taskEntityId: body.entityId,
             userId: user.id,

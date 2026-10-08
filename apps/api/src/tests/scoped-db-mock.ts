@@ -1,5 +1,7 @@
 import { panic, Result } from "better-result";
 import { getColumns } from "drizzle-orm";
+import type { SQL } from "drizzle-orm";
+import { PgDialect } from "drizzle-orm/pg-core";
 
 import { member, user } from "@/api/db/auth-schema";
 import type { Transaction } from "@/api/db/root";
@@ -161,9 +163,17 @@ export const createScopedDbMock = (
   ) => {
     callCount += 1;
     // Tests provide only the transaction members touched by the handler.
+    const advisoryKeys = new Map<string, number>();
     const transaction = {
-      execute: async () => {
-        await Promise.resolve();
+      execute: (query: SQL) => {
+        const rendered = new PgDialect().sqlToQuery(query);
+        if (!/pg_(?:try_)?advisory_xact_lock\(/u.test(rendered.sql)) {
+          return Promise.resolve([]);
+        }
+        const identity = JSON.stringify(rendered.params);
+        const key = advisoryKeys.get(identity) ?? advisoryKeys.size + 1;
+        advisoryKeys.set(identity, key);
+        return Promise.resolve([{ key1: 1, key2: key, acquired: true }]);
       },
       ...(typeof tx === "object" && tx !== null ? tx : {}),
       select: fixtureSelect(tx, options),

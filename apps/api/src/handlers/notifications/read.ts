@@ -26,13 +26,10 @@ const config = {
 const markNotificationRead = createSafeRootHandler(
   config,
   async function* ({ params, safeDb, session, user }) {
-    const visibility = yield* Result.await(
-      flowNotificationVisibilityCondition({
-        safeDb,
-        organizationId: session.activeOrganizationId,
-        userId: user.id,
-      }),
-    );
+    const visibility = flowNotificationVisibilityCondition({
+      organizationId: session.activeOrganizationId,
+      userId: user.id,
+    });
     const updated = yield* Result.await(
       safeDb(async (tx) => {
         // audit: skip — per-user read-state bookkeeping; no shared resource changes

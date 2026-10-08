@@ -11,7 +11,7 @@ import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { requireFlowEffectAdmission } from "@/api/lib/flows/effect-admission";
-import { syncFlowScheduleTrigger } from "@/api/lib/flows/sync-flow-schedule-trigger";
+import { syncFlowScheduleTriggerInTransaction } from "@/api/lib/flows/sync-flow-schedule-trigger";
 import { LIMITS } from "@/api/lib/limits";
 
 const config = {
@@ -20,7 +20,7 @@ const config = {
     "Create an automation flow definition in the organization: name, " +
     "description, ordered steps, a trigger, and whether it is enabled. The " +
     "definition is validated before it is stored, and a schedule trigger is " +
-    "registered with the scheduler afterwards. Refused once the organization " +
+    "registered with the scheduler atomically. Refused once the organization " +
     "holds its maximum number of flows.",
   permissions: { flow: ["create"] },
   accountAccess: ACCOUNT_ACCESS.sandbox,
@@ -90,6 +90,11 @@ const createFlowDefinition = createSafeRootHandler(
           },
         });
 
+        await syncFlowScheduleTriggerInTransaction({
+          tx,
+          organizationId,
+          definitionId: flowId,
+        });
         return row;
       }),
     );
@@ -97,14 +102,6 @@ const createFlowDefinition = createSafeRootHandler(
     if (!inserted) {
       panic("Failed to create flow definition");
     }
-
-    // Keep the scheduler row in sync with the trigger (post-commit reconcile;
-    // never throws).
-    await syncFlowScheduleTrigger({
-      id: flowId,
-      trigger: input.trigger,
-      enabled: input.enabled,
-    });
 
     return Result.ok({ id: inserted.id });
   },

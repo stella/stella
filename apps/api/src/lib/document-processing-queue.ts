@@ -123,11 +123,11 @@ import {
 import { brandPersistedFieldId } from "@/api/lib/safe-id-boundaries";
 import { documentScoutsEnabled } from "@/api/lib/scouts/document-scout-config";
 import { upsertSearchDocument } from "@/api/lib/search/index-entity";
+import { getSearchMaintenance } from "@/api/lib/search/pg-fts-maintenance";
 import {
   executeNativeExtraction,
   requiresDurableNativeExtraction,
 } from "@/api/lib/search/process-extraction";
-import { getSearchMaintenance } from "@/api/lib/search/provider";
 import { withTimeout } from "@/api/lib/with-timeout";
 import { PDF_MIME_TYPE } from "@/api/mime-types";
 

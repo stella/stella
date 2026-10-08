@@ -17,6 +17,7 @@ import {
 } from "bun:test";
 import { and, eq, inArray } from "drizzle-orm";
 
+import { NOTIFICATION_ENTITY_TYPE } from "@stll/api-contract/notifications";
 import { withTimeout } from "@stll/concurrency/with-timeout";
 import { RUNTIME_MODE } from "@stll/runtime-mode";
 
@@ -26,6 +27,7 @@ import {
   flowDefinitions,
   flowRuns,
   flowRunSteps,
+  notifications,
   workspaces,
 } from "@/api/db/schema";
 import { env } from "@/api/env";
@@ -33,6 +35,10 @@ import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { BullMqWorker } from "@/api/lib/bullmq-queue";
 import { isBackgroundFeatureEnabled } from "@/api/lib/feature-access/background";
+import {
+  fileFlowRunCompletionNotice,
+  resolveActorUserId,
+} from "@/api/lib/flows/flow-run-actor";
 import {
   enqueueFlowStep,
   FLOW_RUN_QUEUE_NAME,
@@ -81,6 +87,7 @@ describe("reconcileOrphanedFlowRuns", () => {
   const organizationId = mintAuthProviderId<"organization">();
   const workspaceId = createSafeId<"workspace">();
   const userId = mintAuthProviderId<"user">();
+  const historicalCompletedRunId = createSafeId<"flowRun">();
   const nonTerminalRunIds: SafeId<"flowRun">[] = [];
   const stalledRunIds: SafeId<"flowRun">[] = [];
   const STALL_WINDOW_MS = 15 * 60 * 1000;
@@ -118,7 +125,7 @@ describe("reconcileOrphanedFlowRuns", () => {
 
     const triggerSource: FlowTriggerSource = { type: "manual", userId };
     // Five non-terminal runs (more than the batchSize below, so recovery must
-    // cross batch boundaries) plus one terminal run that must be skipped.
+    // cross batch boundaries) plus ordinary terminal history with no delivery work.
     const rows = [
       { status: "pending" as const },
       { status: "running" as const },
@@ -154,7 +161,7 @@ describe("reconcileOrphanedFlowRuns", () => {
       startedAt: new Date(),
     });
     await testDb.insert(flowRuns).values({
-      id: createSafeId<"flowRun">(),
+      id: historicalCompletedRunId,
       workspaceId,
       definitionSnapshot: SNAPSHOT,
       triggerSource,
@@ -177,6 +184,410 @@ describe("reconcileOrphanedFlowRuns", () => {
     expect(enqueuedRunIds.toSorted()).toEqual(
       [...nonTerminalRunIds].toSorted(),
     );
+    expect(
+      await testDb.$count(
+        notifications,
+        eq(notifications.entityId, historicalCompletedRunId),
+      ),
+    ).toBe(0);
+    expect(
+      await testDb.query.flowRuns.findFirst({
+        where: { id: { eq: historicalCompletedRunId } },
+        columns: { status: true, recoveryState: true },
+      }),
+    ).toEqual({ status: "completed", recoveryState: null });
+  });
+
+  test("a completion notice waits for a live actor grant and is recovered once", async () => {
+    const definitionId = createSafeId<"flowDefinition">();
+    const runId = createSafeId<"flowRun">();
+    const triggerSource = { type: "schedule" } as const;
+    await testDb.insert(flowDefinitions).values({
+      id: definitionId,
+      organizationId,
+      name: SNAPSHOT.name,
+      steps: SNAPSHOT.steps,
+      trigger: {
+        type: "schedule",
+        workspaceId,
+        schedule: { frequency: "daily", hourUtc: 0 },
+      },
+      createdByUserId: userId,
+    });
+    await testDb.insert(flowRuns).values({
+      id: runId,
+      workspaceId,
+      definitionId,
+      definitionSnapshot: SNAPSHOT,
+      triggerSource,
+      status: "completed",
+      currentStepIndex: 0,
+    });
+    const notice = {
+      run: { definitionId, triggerSource },
+      organizationId,
+      workspaceId,
+      runId,
+      flowName: SNAPSHOT.name,
+    };
+    const noticeWhere = and(
+      eq(notifications.userId, userId),
+      eq(notifications.idempotencyKey, `flow-run-completed:${runId}`),
+    );
+    const previousFlag = env.FEATURE_FLOWS;
+    const restore = setRuntimeModeForTesting({ mode: RUNTIME_MODE.strict });
+    env.FEATURE_FLOWS = true;
+    try {
+      // The earlier actor lookup cannot authorize a later notification write.
+      expect(
+        await resolveActorUserId(
+          notice.run,
+          asTestRaw<Parameters<typeof resolveActorUserId>[1]>(testDb),
+        ),
+      ).toBe(userId);
+      await testDb
+        .delete(featureEnrolments)
+        .where(
+          and(
+            eq(featureEnrolments.organizationId, organizationId),
+            eq(featureEnrolments.userId, userId),
+            eq(featureEnrolments.featureId, "flows"),
+          ),
+        );
+      await fileFlowRunCompletionNotice(notice, reconcileDependencies.database);
+      expect(
+        await testDb.query.flowRuns.findFirst({
+          where: { id: { eq: runId } },
+          columns: { status: true, recoveryState: true },
+        }),
+      ).toEqual({
+        status: "completed",
+        recoveryState: "completion-notice-pending",
+      });
+      await reconcileOrphanedFlowRuns({ batchSize: 2 }, reconcileDependencies);
+      expect(await testDb.$count(notifications, noticeWhere)).toBe(0);
+      expect(enqueuedRunIds).not.toContain(runId);
+
+      await testDb.insert(featureEnrolments).values({
+        featureId: "flows",
+        organizationId,
+        userId,
+      });
+      await reconcileOrphanedFlowRuns(
+        { batchSize: 2, principal: { organizationId, userId } },
+        reconcileDependencies,
+      );
+      await reconcileOrphanedFlowRuns({ batchSize: 2 }, reconcileDependencies);
+      await fileFlowRunCompletionNotice(notice, reconcileDependencies.database);
+      expect(await testDb.$count(notifications, noticeWhere)).toBe(1);
+      expect(
+        await testDb.query.flowRuns.findFirst({
+          where: { id: { eq: runId } },
+          columns: { status: true, recoveryState: true },
+        }),
+      ).toEqual({ status: "completed", recoveryState: null });
+      expect(enqueuedRunIds).not.toContain(runId);
+    } finally {
+      await testDb.delete(notifications).where(noticeWhere);
+      await testDb.delete(flowRuns).where(eq(flowRuns.id, runId));
+      await testDb
+        .delete(flowDefinitions)
+        .where(eq(flowDefinitions.id, definitionId));
+      await testDb
+        .insert(featureEnrolments)
+        .values({ featureId: "flows", organizationId, userId })
+        .onConflictDoNothing();
+      env.FEATURE_FLOWS = previousFlag;
+      restore();
+    }
+  });
+
+  test("ordinary completed history and paused notice heads do not become delivery work ahead of an eligible notice", async () => {
+    const previousFlag = env.FEATURE_FLOWS;
+    const restore = setRuntimeModeForTesting({ mode: RUNTIME_MODE.strict });
+    env.FEATURE_FLOWS = true;
+    const pausedUserId = mintAuthProviderId<"user">();
+    const runIds = Array.from({ length: 20 }, () =>
+      createSafeId<"flowRun">(),
+    ).toSorted();
+    const historicalIds = runIds.slice(0, 12);
+    const pausedIds = runIds.slice(12, -1);
+    const eligibleId =
+      runIds.at(-1) ?? panic("Missing eligible notice fixture");
+    const noticeCondition = and(
+      eq(notifications.entityType, NOTIFICATION_ENTITY_TYPE.FLOW_RUN),
+      inArray(notifications.entityId, runIds),
+    );
+    try {
+      await testDb.insert(user).values({
+        id: pausedUserId,
+        name: "Paused notice actor",
+        email: `${pausedUserId}@example.test`,
+        emailVerified: true,
+      });
+      await testDb.insert(member).values({
+        id: Bun.randomUUIDv7(),
+        organizationId,
+        userId: pausedUserId,
+        role: "member",
+        createdAt: new Date(),
+      });
+      await testDb.insert(flowRuns).values([
+        ...historicalIds.map((id) => ({
+          id,
+          workspaceId,
+          definitionSnapshot: SNAPSHOT,
+          triggerSource: { type: "manual" as const, userId },
+          status: "completed" as const,
+          recoveryState: null,
+          createdAt: STALLED_AT,
+        })),
+        ...pausedIds.map((id) => ({
+          id,
+          workspaceId,
+          definitionSnapshot: SNAPSHOT,
+          triggerSource: { type: "manual" as const, userId: pausedUserId },
+          status: "completed" as const,
+          recoveryState: "completion-notice-pending" as const,
+          createdAt: STALLED_AT,
+        })),
+        {
+          id: eligibleId,
+          workspaceId,
+          definitionSnapshot: SNAPSHOT,
+          triggerSource: { type: "manual" as const, userId },
+          status: "completed" as const,
+          recoveryState: "completion-notice-pending" as const,
+        },
+      ]);
+      await reconcileOrphanedFlowRuns({ batchSize: 2 }, reconcileDependencies);
+      await reconcileOrphanedFlowRuns({ batchSize: 2 }, reconcileDependencies);
+      expect(await testDb.$count(notifications, noticeCondition)).toBe(1);
+      expect(
+        await testDb.query.notifications.findFirst({
+          where: { entityId: { eq: eligibleId } },
+          columns: { userId: true },
+        }),
+      ).toEqual({ userId });
+      const history = await testDb
+        .select({
+          id: flowRuns.id,
+          recoveryState: flowRuns.recoveryState,
+          status: flowRuns.status,
+        })
+        .from(flowRuns)
+        .where(inArray(flowRuns.id, historicalIds))
+        .orderBy(flowRuns.id);
+      expect(history).toEqual(
+        historicalIds.map((id) => ({
+          id,
+          recoveryState: null,
+          status: "completed" as const,
+        })),
+      );
+      const paused = await testDb
+        .select({
+          id: flowRuns.id,
+          recoveryState: flowRuns.recoveryState,
+          status: flowRuns.status,
+        })
+        .from(flowRuns)
+        .where(inArray(flowRuns.id, pausedIds))
+        .orderBy(flowRuns.id);
+      expect(paused).toEqual(
+        pausedIds.map((id) => ({
+          id,
+          recoveryState: "completion-notice-pending" as const,
+          status: "completed" as const,
+        })),
+      );
+      expect(
+        await testDb.query.flowRuns.findFirst({
+          where: { id: { eq: eligibleId } },
+          columns: { recoveryState: true },
+        }),
+      ).toEqual({ recoveryState: null });
+      for (const id of runIds) {
+        expect(enqueuedRunIds).not.toContain(id);
+      }
+    } finally {
+      await testDb.delete(notifications).where(noticeCondition);
+      await testDb.delete(flowRuns).where(inArray(flowRuns.id, runIds));
+      await testDb.delete(user).where(eq(user.id, pausedUserId));
+      env.FEATURE_FLOWS = previousFlag;
+      restore();
+    }
+  });
+
+  test("a pending notice whose actor was removed retains completed output and stops replaying", async () => {
+    const previousFlag = env.FEATURE_FLOWS;
+    const restore = setRuntimeModeForTesting({ mode: RUNTIME_MODE.strict });
+    env.FEATURE_FLOWS = true;
+    const removedUserId = mintAuthProviderId<"user">();
+    const runId = createSafeId<"flowRun">();
+    const stepId = createSafeId<"flowRunStep">();
+    const output = {
+      kind: "ai",
+      markdown: "Retained completed output",
+    } as const;
+    try {
+      await testDb.insert(user).values({
+        id: removedUserId,
+        name: "Removed notice actor",
+        email: `${removedUserId}@example.test`,
+        emailVerified: true,
+      });
+      await testDb.insert(flowRuns).values({
+        id: runId,
+        workspaceId,
+        definitionSnapshot: SNAPSHOT,
+        triggerSource: { type: "manual", userId: removedUserId },
+        status: "completed",
+        recoveryState: "completion-notice-pending",
+      });
+      await testDb.insert(flowRunSteps).values({
+        id: stepId,
+        workspaceId,
+        runId,
+        index: 0,
+        kind: "ai",
+        status: "completed",
+        output,
+      });
+      await testDb.delete(user).where(eq(user.id, removedUserId));
+      await reconcileOrphanedFlowRuns({ batchSize: 2 }, reconcileDependencies);
+      const retained = await testDb.query.flowRuns.findFirst({
+        where: { id: { eq: runId } },
+        columns: { status: true, recoveryState: true },
+      });
+      expect(retained).toEqual({
+        status: "completed",
+        recoveryState: "actor-removed",
+      });
+      expect(
+        await testDb.query.flowRunSteps.findFirst({
+          where: { id: { eq: stepId } },
+          columns: { status: true, output: true },
+        }),
+      ).toEqual({ status: "completed", output });
+      expect(
+        await testDb.$count(notifications, eq(notifications.entityId, runId)),
+      ).toBe(0);
+      expect(enqueuedRunIds).not.toContain(runId);
+      await reconcileOrphanedFlowRuns(
+        { batchSize: 2, principal: { organizationId, userId: removedUserId } },
+        reconcileDependencies,
+      );
+      await reconcileOrphanedFlowRuns({ batchSize: 2 }, reconcileDependencies);
+      expect(
+        await testDb.query.flowRuns.findFirst({
+          where: { id: { eq: runId } },
+          columns: { status: true, recoveryState: true },
+        }),
+      ).toEqual(retained);
+      expect(
+        await testDb.$count(notifications, eq(notifications.entityId, runId)),
+      ).toBe(0);
+      expect(enqueuedRunIds).not.toContain(runId);
+    } finally {
+      await testDb
+        .delete(notifications)
+        .where(eq(notifications.entityId, runId));
+      await testDb.delete(flowRuns).where(eq(flowRuns.id, runId));
+      await testDb.delete(user).where(eq(user.id, removedUserId));
+      env.FEATURE_FLOWS = previousFlag;
+      restore();
+    }
+  });
+
+  test("a notice with a deleted definition waits for global cleanup and preserves its output", async () => {
+    const previousFlag = env.FEATURE_FLOWS;
+    const restore = setRuntimeModeForTesting({ mode: RUNTIME_MODE.strict });
+    env.FEATURE_FLOWS = true;
+    const definitionId = createSafeId<"flowDefinition">();
+    const runId = createSafeId<"flowRun">();
+    const stepId = createSafeId<"flowRunStep">();
+    const output = {
+      kind: "ai",
+      markdown: "Retained automated output",
+    } as const;
+    try {
+      await testDb.insert(flowDefinitions).values({
+        id: definitionId,
+        organizationId,
+        name: SNAPSHOT.name,
+        steps: SNAPSHOT.steps,
+        trigger: {
+          type: "schedule",
+          workspaceId,
+          schedule: { frequency: "daily", hourUtc: 0 },
+        },
+        createdByUserId: userId,
+      });
+      await testDb.insert(flowRuns).values({
+        id: runId,
+        workspaceId,
+        definitionId,
+        definitionSnapshot: SNAPSHOT,
+        triggerSource: { type: "schedule" },
+        status: "completed",
+        recoveryState: "completion-notice-pending",
+      });
+      await testDb.insert(flowRunSteps).values({
+        id: stepId,
+        workspaceId,
+        runId,
+        index: 0,
+        kind: "ai",
+        status: "completed",
+        output,
+      });
+      await testDb
+        .delete(flowDefinitions)
+        .where(eq(flowDefinitions.id, definitionId));
+      await reconcileOrphanedFlowRuns(
+        { batchSize: 2, principal: { organizationId, userId } },
+        reconcileDependencies,
+      );
+      expect(
+        await testDb.query.flowRuns.findFirst({
+          where: { id: { eq: runId } },
+          columns: { status: true, recoveryState: true, definitionId: true },
+        }),
+      ).toEqual({
+        status: "completed",
+        recoveryState: "completion-notice-pending",
+        definitionId: null,
+      });
+      await reconcileOrphanedFlowRuns({ batchSize: 2 }, reconcileDependencies);
+      await reconcileOrphanedFlowRuns({ batchSize: 2 }, reconcileDependencies);
+      expect(
+        await testDb.query.flowRuns.findFirst({
+          where: { id: { eq: runId } },
+          columns: { status: true, recoveryState: true },
+        }),
+      ).toEqual({ status: "completed", recoveryState: "actor-removed" });
+      expect(
+        await testDb.query.flowRunSteps.findFirst({
+          where: { id: { eq: stepId } },
+          columns: { status: true, output: true },
+        }),
+      ).toEqual({ status: "completed", output });
+      expect(
+        await testDb.$count(notifications, eq(notifications.entityId, runId)),
+      ).toBe(0);
+      expect(enqueuedRunIds).not.toContain(runId);
+    } finally {
+      await testDb
+        .delete(notifications)
+        .where(eq(notifications.entityId, runId));
+      await testDb.delete(flowRuns).where(eq(flowRuns.id, runId));
+      await testDb
+        .delete(flowDefinitions)
+        .where(eq(flowDefinitions.id, definitionId));
+      env.FEATURE_FLOWS = previousFlag;
+      restore();
+    }
   });
 
   describe.skipIf(process.env["STELLA_RUN_VALKEY_TESTS"] !== "true")(

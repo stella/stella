@@ -77,6 +77,7 @@ const readVersionsHandler = async function* ({
   const reads = yield* Result.await(
     safeDb(async (tx) => {
       const admission = await admitTaskFlowAccess(tx, {
+        access: "read",
         workspaceId,
         taskEntityId: entityId,
         userId,

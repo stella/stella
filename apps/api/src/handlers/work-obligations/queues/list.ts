@@ -114,16 +114,11 @@ const myWork = createSafeRootHandler(
       query.limit ?? WORK_QUEUE_PAGE_SIZE_DEFAULT,
     );
     const conditions = [eq(workObligations.ownerUserId, user.id)];
-    const flowVisibility = yield* Result.await(
-      flowReviewTaskVisibilityCondition({
-        safeDb,
-        organizationId: session.activeOrganizationId,
-        userId: user.id,
-      }),
-    );
-    if (flowVisibility !== undefined) {
-      conditions.push(flowVisibility);
-    }
+    const flowVisibility = flowReviewTaskVisibilityCondition({
+      organizationId: session.activeOrganizationId,
+      userId: user.id,
+    });
+    conditions.push(flowVisibility);
 
     switch (queue) {
       case MY_WORK_QUEUE.TO_ACKNOWLEDGE:

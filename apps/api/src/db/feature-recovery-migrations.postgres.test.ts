@@ -12,6 +12,11 @@ const MIGRATIONS = [
     table: undefined,
   },
   {
+    name: "20261007154100_validate_signals_flows_enrolments",
+    index: undefined,
+    table: undefined,
+  },
+  {
     name: "20261007154500_flow_upload_replay_index",
     index: "flow_runs_upload_identity_idx",
     table: "flow_runs",
@@ -25,6 +30,21 @@ const MIGRATIONS = [
     name: "20261008070000_feature_recovery_grant_waits",
     index: "pending_scout_emissions_awaiting_grant_idx",
     table: "pending_scout_emissions",
+  },
+  {
+    name: "20261008153000_flow_recovery_outcomes",
+    index: undefined,
+    table: undefined,
+  },
+  {
+    name: "20261008153100_validate_flow_recovery_outcomes",
+    index: undefined,
+    table: undefined,
+  },
+  {
+    name: "20261008153200_flow_completion_notice_recovery_index",
+    index: "flow_runs_completion_notice_pending_idx",
+    table: "flow_runs",
   },
 ] as const;
 const DEPENDENCIES = [
@@ -139,6 +159,9 @@ const migrationScenario = async ({
         `CREATE TABLE ${table} (LIKE public.${table} INCLUDING ALL)`,
       );
     }
+    await session.unsafe(
+      "ALTER TABLE flow_runs DROP COLUMN IF EXISTS recovery_state CASCADE",
+    );
     // The deadline prerequisites derive their pre-grant-wait checks from the
     // migration that introduced them, rather than the already migrated database.
     await session.unsafe(`ALTER TABLE document_processing_runs

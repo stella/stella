@@ -506,6 +506,7 @@ type ReadOverviewActivityPageOptions = {
   filters: MatterActivityFilters;
   limit: number;
   organizationId: SafeId<"organization">;
+  userId: SafeId<"user">;
   safeDb: <T>(
     read: (tx: ActivityReadTransaction) => Promise<T>,
   ) => Promise<Result<T, SafeDbError>>;
@@ -548,6 +549,7 @@ const readOverviewActivity = async ({
   read,
   filters,
   organizationId,
+  userId,
   safeDb,
   workspaceId,
 }: ReadOverviewActivityOptions): Promise<
@@ -586,7 +588,7 @@ const readOverviewActivity = async ({
     const conditions = [
       eq(auditLogs.organizationId, organizationId),
       eq(auditLogs.workspaceId, workspaceId),
-      visibleActivityCondition(),
+      visibleActivityCondition({ organizationId, userId }),
     ];
 
     if (filters.action !== "all") {

@@ -35,6 +35,7 @@ const readVersionByIdHandler = async function* ({
     safeDb(
       async (tx) =>
         await admitTaskFlowAccess(tx, {
+          access: "read",
           workspaceId,
           taskEntityId: entityId,
           userId,
@@ -71,6 +72,7 @@ const readVersionByIdHandler = async function* ({
   const read = yield* Result.await(
     safeDb(async (tx) => {
       const currentAdmission = await admitTaskFlowAccess(tx, {
+        access: "read",
         workspaceId,
         taskEntityId: entityId,
         userId,

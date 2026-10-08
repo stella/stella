@@ -994,6 +994,14 @@
     "reason": "Authentication or credential bookkeeping; the auth lifecycle owns its own security events."
   },
   {
+    "id": "apps/api/src/lib/flows/automated-run-cap.ts::insertAutomatedFlowRunWithinCap",
+    "writes": {
+      "insert:flowRunSteps": 1,
+      "insert:flowRuns": 1
+    },
+    "reason": "Write outside handlers that predates the audit scope; triage whether it needs its own audit event."
+  },
+  {
     "id": "apps/api/src/lib/flows/flow-executor.ts::cancelFlowRun",
     "writes": {
       "update:flowRunSteps": 1,
@@ -1551,13 +1559,6 @@
     "reason": "Scheduled system job bookkeeping with no member actor; audit when the job changes member-visible state."
   },
   {
-    "id": "apps/api/src/lib/scheduler/jobs.ts::upsertSchedulerJob",
-    "writes": {
-      "insert:schedulerJobs": 1
-    },
-    "reason": "Scheduled system job bookkeeping with no member actor; audit when the job changes member-visible state."
-  },
-  {
     "id": "apps/api/src/lib/scheduler/runner.ts::acquireNextDueJob",
     "writes": {
       "update:schedulerJobs": 1
@@ -1699,13 +1700,6 @@
     "reason": "Search projection derived from a write that is audited at its source."
   },
   {
-    "id": "apps/api/src/lib/search/index-global.ts::syncWorkspaceSearchActivity",
-    "writes": {
-      "update:workspace_search_documents": 1
-    },
-    "reason": "Search projection derived from a write that is audited at its source."
-  },
-  {
     "id": "apps/api/src/lib/search/index-global.ts::writeContactProjections",
     "writes": {
       "delete:contact_search_document_preview_passages": 1,
@@ -1722,13 +1716,6 @@
       "insert:workspace_search_document_preview_passages": 1,
       "insert:workspace_search_documents": 1,
       "update:workspace_search_documents": 1
-    },
-    "reason": "Search projection derived from a write that is audited at its source."
-  },
-  {
-    "id": "apps/api/src/lib/search/pg-fts-provider.ts::removeEntity",
-    "writes": {
-      "delete:searchDocuments": 1
     },
     "reason": "Search projection derived from a write that is audited at its source."
   },

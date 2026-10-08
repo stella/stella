@@ -244,29 +244,19 @@ const clearMemberObligationOwners = async ({
       remaining -= LIMITS.memberRemovalCleanupBatchSize
     ) {
       // db-await-in-loop: drain mutable ownership in bounded audited batches.
-      const owned = (
-        await readCursorPage(
-          tx
-            .select({
-              entityId: workObligations.entityId,
-              workspaceId: workObligations.workspaceId,
-              status: workObligations.status,
-            })
-            .from(workObligations)
-            .innerJoin(
-              workspaces,
-              eq(workspaces.id, workObligations.workspaceId),
-            )
-            .where(ownershipScope)
-            .orderBy(workObligations.workspaceId, workObligations.entityId)
-
-            .for("update", { of: workObligations }),
-          {
-            limit: LIMITS.memberRemovalCleanupBatchSize,
-            cursorForItem: (row) => row.entityId,
-          },
-        )
-      ).items;
+      const owned = await tx
+        .select({
+          entityId: workObligations.entityId,
+          workspaceId: workObligations.workspaceId,
+          status: workObligations.status,
+        })
+        .from(workObligations)
+        .innerJoin(workspaces, eq(workspaces.id, workObligations.workspaceId))
+        .where(ownershipScope)
+        .orderBy(workObligations.workspaceId, workObligations.entityId)
+        // Locked drains process exactly this batch; no unprocessed sentinel may acquire a lock.
+        .limit(LIMITS.memberRemovalCleanupBatchSize)
+        .for("update", { of: workObligations });
       if (owned.length === 0) {
         break;
       }
@@ -604,29 +594,19 @@ const closeMemberExchanges = async ({
     remaining -= LIMITS.memberRemovalCleanupBatchSize
   ) {
     // db-await-in-loop: lock a bounded signing session page after the matter prefix.
-    const signing = (
-      await readCursorPage(
-        tx
-          .select({
-            id: pdfSigningSessions.id,
-            workspaceId: pdfSigningSessions.workspaceId,
-            organizationId: workspaces.organizationId,
-          })
-          .from(pdfSigningSessions)
-          .innerJoin(
-            workspaces,
-            eq(workspaces.id, pdfSigningSessions.workspaceId),
-          )
-          .where(signingScope)
-          .orderBy(pdfSigningSessions.id)
-
-          .for("update", { of: pdfSigningSessions }),
-        {
-          limit: LIMITS.memberRemovalCleanupBatchSize,
-          cursorForItem: (row) => row.id,
-        },
-      )
-    ).items;
+    const signing = await tx
+      .select({
+        id: pdfSigningSessions.id,
+        workspaceId: pdfSigningSessions.workspaceId,
+        organizationId: workspaces.organizationId,
+      })
+      .from(pdfSigningSessions)
+      .innerJoin(workspaces, eq(workspaces.id, pdfSigningSessions.workspaceId))
+      .where(signingScope)
+      .orderBy(pdfSigningSessions.id)
+      // Locked drains process exactly this batch; no unprocessed sentinel may acquire a lock.
+      .limit(LIMITS.memberRemovalCleanupBatchSize)
+      .for("update", { of: pdfSigningSessions });
     if (signing.length === 0) {
       break;
     }
@@ -695,26 +675,19 @@ const clearMemberContactAssignments = async ({
     const contactResult = await Result.tryPromise({
       try: async () =>
         // db-await-in-loop: drain attorney references in bounded audited batches.
-        (
-          await readCursorPage(
-            tx
-              .select({
-                id: contacts.id,
-                organizationId: contacts.organizationId,
-                originatingAttorneyId: contacts.originatingAttorneyId,
-                responsibleAttorneyId: contacts.responsibleAttorneyId,
-              })
-              .from(contacts)
-              .where(attorneyScope)
-              .orderBy(contacts.id)
-
-              .for("no key update", { noWait: true }),
-            {
-              limit: LIMITS.memberRemovalCleanupBatchSize,
-              cursorForItem: (row) => row.id,
-            },
-          )
-        ).items,
+        await tx
+          .select({
+            id: contacts.id,
+            organizationId: contacts.organizationId,
+            originatingAttorneyId: contacts.originatingAttorneyId,
+            responsibleAttorneyId: contacts.responsibleAttorneyId,
+          })
+          .from(contacts)
+          .where(attorneyScope)
+          .orderBy(contacts.id)
+          // Locked drains process exactly this batch; no unprocessed sentinel may acquire a lock.
+          .limit(LIMITS.memberRemovalCleanupBatchSize)
+          .for("no key update", { noWait: true }),
       catch: (error) => error,
     });
     if (Result.isError(contactResult)) {
@@ -826,25 +799,18 @@ const clearMemberTimeEntryApprovals = async ({
     const pending = await Result.tryPromise({
       try: async () =>
         // db-await-in-loop: drain pending approvals in bounded audited batches.
-        (
-          await readCursorPage(
-            tx
-              .select({
-                id: timeEntries.id,
-                organizationId: timeEntries.organizationId,
-                workspaceId: timeEntries.workspaceId,
-              })
-              .from(timeEntries)
-              .where(approvalScope)
-              .orderBy(timeEntries.id)
-
-              .for("update", { noWait: true }),
-            {
-              limit: LIMITS.memberRemovalCleanupBatchSize,
-              cursorForItem: (row) => row.id,
-            },
-          )
-        ).items,
+        await tx
+          .select({
+            id: timeEntries.id,
+            organizationId: timeEntries.organizationId,
+            workspaceId: timeEntries.workspaceId,
+          })
+          .from(timeEntries)
+          .where(approvalScope)
+          .orderBy(timeEntries.id)
+          // Locked drains process exactly this batch; no unprocessed sentinel may acquire a lock.
+          .limit(LIMITS.memberRemovalCleanupBatchSize)
+          .for("update", { noWait: true }),
       catch: (error) => error,
     });
     if (Result.isError(pending)) {
@@ -1238,29 +1204,19 @@ const cancelMemberFlowRuns = async ({
     remaining -= LIMITS.memberRemovalCleanupBatchSize
   ) {
     // db-await-in-loop: cancel bounded run batches while holding the workspace prefix.
-    const runs = (
-      await readCursorPage(
-        tx
-          .select({
-            id: flowRuns.id,
-            workspaceId: flowRuns.workspaceId,
-            status: flowRuns.status,
-          })
-          .from(flowRuns)
-          .leftJoin(
-            flowDefinitions,
-            eq(flowDefinitions.id, flowRuns.definitionId),
-          )
-          .where(runScope)
-          .orderBy(flowRuns.id)
-
-          .for("update", { of: flowRuns }),
-        {
-          limit: LIMITS.memberRemovalCleanupBatchSize,
-          cursorForItem: (row) => row.id,
-        },
-      )
-    ).items;
+    const runs = await tx
+      .select({
+        id: flowRuns.id,
+        workspaceId: flowRuns.workspaceId,
+        status: flowRuns.status,
+      })
+      .from(flowRuns)
+      .leftJoin(flowDefinitions, eq(flowDefinitions.id, flowRuns.definitionId))
+      .where(runScope)
+      .orderBy(flowRuns.id)
+      // Locked drains process exactly this batch; no unprocessed sentinel may acquire a lock.
+      .limit(LIMITS.memberRemovalCleanupBatchSize)
+      .for("update", { of: flowRuns });
     if (runs.length === 0) {
       break;
     }
@@ -1464,24 +1420,17 @@ const cancelMemberDesktopSessions = async ({
     remaining -= LIMITS.memberRemovalCleanupBatchSize
   ) {
     // db-await-in-loop: lock a bounded desktop session page after assignment cleanup.
-    const sessions = (
-      await readCursorPage(
-        tx
-          .select({
-            id: desktopEditSessions.id,
-            workspaceId: desktopEditSessions.workspaceId,
-          })
-          .from(desktopEditSessions)
-          .where(desktopScope)
-          .orderBy(desktopEditSessions.id)
-
-          .for("update"),
-        {
-          limit: LIMITS.memberRemovalCleanupBatchSize,
-          cursorForItem: (row) => row.id,
-        },
-      )
-    ).items;
+    const sessions = await tx
+      .select({
+        id: desktopEditSessions.id,
+        workspaceId: desktopEditSessions.workspaceId,
+      })
+      .from(desktopEditSessions)
+      .where(desktopScope)
+      .orderBy(desktopEditSessions.id)
+      // Locked drains process exactly this batch; no unprocessed sentinel may acquire a lock.
+      .limit(LIMITS.memberRemovalCleanupBatchSize)
+      .for("update");
     if (sessions.length === 0) {
       break;
     }

@@ -164,6 +164,37 @@ describe("background feature admission", () => {
       await findSignalsBackgroundActor({ tx, organizationId, workspaceId }),
     ).toBe(userId);
   });
+  test("an enrolled member of another private matter cannot replace this matter's admitted actor", async () => {
+    const otherUserId = mintAuthProviderId<"user">();
+    await db.insert(user).values({
+      id: otherUserId,
+      name: "Other matter member",
+      email: `${otherUserId}@example.test`,
+      emailVerified: true,
+    });
+    await db.insert(member).values({
+      id: `0${Bun.randomUUIDv7()}`,
+      organizationId,
+      userId: otherUserId,
+      role: "member",
+      createdAt: new Date(0),
+    });
+    await db
+      .insert(featureEnrolments)
+      .values([
+        { organizationId, userId: otherUserId, featureId: "signals" },
+        { organizationId, userId, featureId: "signals" },
+      ])
+      .onConflictDoNothing();
+    try {
+      expect(
+        await findSignalsBackgroundActor({ tx, organizationId, workspaceId }),
+      ).toBe(userId);
+    } finally {
+      await db.delete(user).where(eq(user.id, otherUserId));
+    }
+  });
+
   test("client-matter admin access admits an enrolled actor without granting private-matter access", async () => {
     const contactId = createSafeId<"contact">();
     const clientMatterId = createSafeId<"workspace">();

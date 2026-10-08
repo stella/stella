@@ -51,6 +51,11 @@ const DOCUMENT_DEADLINE_SCOUT_CLEAR_CLAIM_STATUSES = [
   "cancelled",
 ] as const satisfies readonly DocumentDeadlineScoutStatus[];
 
+const DOCUMENT_DEADLINE_SCOUT_BACKOFF_STATUSES = [
+  "pending",
+  "awaiting_grant",
+] as const satisfies readonly DocumentDeadlineScoutStatus[];
+
 /** Why a processing request exists; distinct sources can have distinct policy. */
 export const DOCUMENT_PROCESSING_REQUEST_SOURCES = [
   "upload",
@@ -72,6 +77,11 @@ const DOCUMENT_DEADLINE_SCOUT_STATUS_SQL_VALUES =
   DOCUMENT_DEADLINE_SCOUT_STATUSES.map((status) => sql.raw(`'${status}'`));
 const DOCUMENT_DEADLINE_SCOUT_CLEAR_CLAIM_STATUS_SQL_VALUES =
   DOCUMENT_DEADLINE_SCOUT_CLEAR_CLAIM_STATUSES.map((status) =>
+    sql.raw(`'${status}'`),
+  );
+
+const DOCUMENT_DEADLINE_SCOUT_BACKOFF_STATUS_SQL_VALUES =
+  DOCUMENT_DEADLINE_SCOUT_BACKOFF_STATUSES.map((status) =>
     sql.raw(`'${status}'`),
   );
 
@@ -408,7 +418,7 @@ export const documentProcessingRuns = p.pgTable(
     p.check(
       "document_processing_runs_deadline_scout_skip_check",
       sql`${table.deadlineScoutSkippedUntil} IS NULL
-        OR (${table.deadlineScoutStatus} = 'pending'
+        OR (${table.deadlineScoutStatus} IN (${sql.join(DOCUMENT_DEADLINE_SCOUT_BACKOFF_STATUS_SQL_VALUES, sql`, `)})
           AND ${table.deadlineScoutErrorCode} IS NOT NULL)`,
     ),
     p.check(

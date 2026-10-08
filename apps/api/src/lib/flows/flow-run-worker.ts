@@ -1,9 +1,27 @@
 import { panic } from "better-result";
 import type { Job } from "bullmq";
-import { and, asc, eq, gt, inArray, lt, or, sql } from "drizzle-orm";
+import {
+  and,
+  asc,
+  eq,
+  gt,
+  inArray,
+  isNotNull,
+  isNull,
+  lt,
+  or,
+  sql,
+} from "drizzle-orm";
 
+import { member, user } from "@/api/db/auth-schema";
 import type { rootDb } from "@/api/db/root";
-import { flowDefinitions, flowRuns, workspaces } from "@/api/db/schema";
+import {
+  featureEnrolments,
+  flowDefinitions,
+  flowRuns,
+  flowRunSteps,
+  workspaces,
+} from "@/api/db/schema";
 import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
 import { BullMqWorker } from "@/api/lib/bullmq-queue";
@@ -20,12 +38,18 @@ import {
   failFlowRunFromWorker,
 } from "@/api/lib/flows/flow-executor";
 import type { FlowStepExecutionOutcome } from "@/api/lib/flows/flow-executor";
-import { resolveActorUserId } from "@/api/lib/flows/flow-run-actor";
+import {
+  fileFlowRunCompletionNotice,
+  flowRunActorExists,
+  resolveActorUserId,
+} from "@/api/lib/flows/flow-run-actor";
 import {
   enqueueFlowStep,
   FLOW_RUN_QUEUE_NAME,
+  persistFlowStepClaim,
   type FlowStepJobData,
 } from "@/api/lib/flows/flow-run-queue";
+import type { NotificationFanOutDb } from "@/api/lib/notifications";
 import { logger } from "@/api/lib/observability/logger";
 import { createQueueWorkerErrorLogger } from "@/api/lib/queue-worker-error-log";
 import { BACKGROUND_ACTION_KIND } from "@/api/lib/rate-limit/action-kinds";
@@ -63,7 +87,7 @@ type AdmittedFlowStepOptions = {
   job: Job<FlowStepJobData>;
   signal: AbortSignal;
   database: BullMqWorkerContext["db"];
-  onClaim: (claimedStartedAt: TimestampCasToken) => void;
+  onClaim: (claimedStartedAt: TimestampCasToken) => void | Promise<void>;
 };
 
 const executeAdmittedFlowStep = async ({
@@ -80,7 +104,12 @@ const executeAdmittedFlowStep = async ({
   const row = await database.query.flowRuns.findFirst({
     where: { id: { eq: brandPersistedFlowRunId(job.data.runId) } },
   });
-  if (!row || (row.status !== "pending" && row.status !== "running")) {
+  if (
+    !row ||
+    (row.status !== "pending" &&
+      row.status !== "running" &&
+      row.status !== "awaiting_review")
+  ) {
     return { status: "completed" };
   }
   const workspace = await database.query.workspaces.findFirst({
@@ -88,13 +117,16 @@ const executeAdmittedFlowStep = async ({
     columns: { organizationId: true },
   });
   const actor = await resolveActorUserId(row, database);
-  if (!workspace || !actor) {
+  if (!workspace || !actor || !(await flowRunActorExists(actor, database))) {
     // The executor refuses a run without tenant or actor before any step.
     return await executeFlowStep(job.data, signal, {
       admission: null,
       database,
       onClaim,
     });
+  }
+  if (row.status === "awaiting_review") {
+    return { status: "completed" };
   }
   if (
     !(await isBackgroundFeatureEnabled({
@@ -135,7 +167,6 @@ export const initFlowRunWorker = ({ db }: BullMqWorkerContext) => {
     storeClass: "durable-coordination",
   });
 
-  const claims = new WeakMap<Job<FlowStepJobData>, TimestampCasToken>();
   const worker = new BullMqWorker<FlowStepJobData>(
     FLOW_RUN_QUEUE_NAME,
     async (job) => {
@@ -152,7 +183,9 @@ export const initFlowRunWorker = ({ db }: BullMqWorkerContext) => {
           job,
           signal: controller.signal,
           database: db,
-          onClaim: (claimedStartedAt) => claims.set(job, claimedStartedAt),
+          onClaim: async (claimedStartedAt) => {
+            await persistFlowStepClaim(job, claimedStartedAt);
+          },
         });
         // Surface a late abort so BullMQ marks the attempt failed rather than
         // completed if the signal fired after the last awaited call.
@@ -204,7 +237,7 @@ export const initFlowRunWorker = ({ db }: BullMqWorkerContext) => {
 
     failFlowRunFromWorker(job.data, error, {
       database: db,
-      claimedStartedAt: claims.get(job),
+      claimedStartedAt: job.data.claimedStartedAt,
     }).catch((finalizeError: unknown) => {
       captureError(finalizeError, {
         runId: job.data.runId,
@@ -268,12 +301,124 @@ type ReconcileOrphanedFlowRunsOptions = {
 };
 
 type ReconcileOrphanedFlowRunsDependencies = {
-  database: Pick<typeof rootDb, "select" | "query">;
+  database: Pick<typeof rootDb, "select" | "query"> & NotificationFanOutDb;
   enqueueStep?: typeof enqueueFlowStep;
 };
 
-// Keyset-paginate by id through every `pending`/`running` run and re-enqueue its
-// current step. Re-adding the step does not change the row's status, so a plain
+type CompletionNoticeRepairOptions = Pick<
+  ReconcileOrphanedFlowRunsOptions,
+  "principal" | "signal"
+> & { batchSize: number };
+
+/** Only recorded delivery work enters this indexed recovery scan. */
+const reconcilePendingFlowCompletionNotices = async (
+  { principal, signal, batchSize }: CompletionNoticeRepairOptions,
+  { database }: ReconcileOrphanedFlowRunsDependencies,
+): Promise<void> => {
+  let cursor:
+    | { workspaceId: SafeId<"workspace">; id: SafeId<"flowRun"> }
+    | undefined;
+  const actorUserId = sql`CASE
+    WHEN ${flowRuns.triggerSource}->>'type' = 'manual'
+      THEN ${flowRuns.triggerSource}->>'userId'
+    ELSE ${flowDefinitions.createdByUserId}
+  END`;
+  // Completed sources remain durable during opt-out without consuming the
+  // bounded page ahead of recipients whose notices can currently be filed.
+  const missingAdmittedCompletionNotice = and(
+    eq(flowRuns.status, "completed"),
+    isNotNull(featureEnrolments.userId),
+    eq(user.emailVerified, true),
+  );
+
+  for (;;) {
+    if (signal?.aborted === true) {
+      return;
+    }
+    // db-await-in-loop: bounded indexed source pages advance in primary identity order.
+    const batch = await database
+      .select({
+        id: flowRuns.id,
+        workspaceId: flowRuns.workspaceId,
+        organizationId: workspaces.organizationId,
+        definitionId: flowRuns.definitionId,
+        triggerSource: flowRuns.triggerSource,
+        flowName: sql<string>`${flowRuns.definitionSnapshot}->>'name'`,
+      })
+      .from(flowRuns)
+      .innerJoin(workspaces, eq(workspaces.id, flowRuns.workspaceId))
+      .leftJoin(
+        flowDefinitions,
+        and(
+          eq(flowDefinitions.id, flowRuns.definitionId),
+          eq(flowDefinitions.organizationId, workspaces.organizationId),
+        ),
+      )
+      .leftJoin(user, and(eq(user.id, actorUserId), isNull(user.deletedAt)))
+      .leftJoin(
+        member,
+        and(
+          eq(member.userId, user.id),
+          eq(member.organizationId, workspaces.organizationId),
+        ),
+      )
+      .leftJoin(
+        featureEnrolments,
+        and(
+          eq(featureEnrolments.organizationId, member.organizationId),
+          eq(featureEnrolments.userId, member.userId),
+          eq(featureEnrolments.featureId, "flows"),
+        ),
+      )
+      .where(
+        and(
+          eq(flowRuns.recoveryState, "completion-notice-pending"),
+          or(missingAdmittedCompletionNotice, isNull(user.id)),
+          principal === undefined
+            ? undefined
+            : and(
+                eq(workspaces.organizationId, principal.organizationId),
+                eq(actorUserId, principal.userId),
+              ),
+          cursor === undefined
+            ? undefined
+            : or(
+                gt(flowRuns.workspaceId, cursor.workspaceId),
+                and(
+                  eq(flowRuns.workspaceId, cursor.workspaceId),
+                  gt(flowRuns.id, cursor.id),
+                ),
+              ),
+        ),
+      )
+      .orderBy(asc(flowRuns.workspaceId), asc(flowRuns.id))
+      .limit(batchSize);
+    for (const row of batch) {
+      // db-await-in-loop: each notice commits under the recipient admission fence.
+      await fileFlowRunCompletionNotice(
+        {
+          run: {
+            definitionId: row.definitionId,
+            triggerSource: row.triggerSource,
+          },
+          organizationId: row.organizationId,
+          workspaceId: row.workspaceId,
+          runId: row.id,
+          flowName: row.flowName,
+        },
+        database,
+      );
+    }
+    const last = batch.at(-1);
+    if (last === undefined || batch.length < batchSize) {
+      return;
+    }
+    cursor = { workspaceId: last.workspaceId, id: last.id };
+  }
+};
+
+// Keyset-paginate runnable steps without revisiting an already enqueued page.
+// Re-adding the step does not change the row's status, so a plain
 // `LIMIT` scan would re-select the same head of the backlog on every restart and
 // never reach the tail; ordering by id and advancing a cursor visits each run
 // exactly once until the backlog is drained. `batchSize` is injectable so tests
@@ -294,8 +439,21 @@ export const reconcileOrphanedFlowRuns = async (
     logger.info("flow.work_skipped", { reason: "deployment_disabled" });
     return;
   }
+  await reconcilePendingFlowCompletionNotices(
+    {
+      batchSize,
+      ...(principal === undefined ? {} : { principal }),
+      ...(signal === undefined ? {} : { signal }),
+    },
+    { database },
+  );
   let cursor: SafeId<"flowRun"> | null = null;
   let reconciled = 0;
+  const actorUserId = sql`CASE
+    WHEN ${flowRuns.triggerSource}->>'type' = 'manual'
+      THEN ${flowRuns.triggerSource}->>'userId'
+    ELSE ${flowDefinitions.createdByUserId}
+  END`;
 
   for (;;) {
     if (signal?.aborted === true) {
@@ -307,6 +465,7 @@ export const reconcileOrphanedFlowRuns = async (
         id: flowRuns.id,
         currentStepIndex: flowRuns.currentStepIndex,
         createdByUserId: flowDefinitions.createdByUserId,
+        existingActorUserId: user.id,
         triggerSource: flowRuns.triggerSource,
         organizationId: workspaces.organizationId,
       })
@@ -317,6 +476,22 @@ export const reconcileOrphanedFlowRuns = async (
         and(
           eq(flowDefinitions.id, flowRuns.definitionId),
           eq(flowDefinitions.organizationId, workspaces.organizationId),
+        ),
+      )
+      .leftJoin(
+        flowRunSteps,
+        and(
+          eq(flowRunSteps.runId, flowRuns.id),
+          eq(flowRunSteps.workspaceId, flowRuns.workspaceId),
+          eq(flowRunSteps.index, flowRuns.currentStepIndex),
+        ),
+      )
+      .leftJoin(user, and(eq(user.id, actorUserId), isNull(user.deletedAt)))
+      .leftJoin(
+        member,
+        and(
+          eq(member.userId, user.id),
+          eq(member.organizationId, workspaces.organizationId),
         ),
       )
       .where(
@@ -349,7 +524,7 @@ export const reconcileOrphanedFlowRuns = async (
           stalledBefore === undefined
             ? undefined
             : lt(
-                sql`coalesce(${flowRuns.startedAt}, ${flowRuns.createdAt})`,
+                sql`CASE WHEN ${flowRuns.status} = 'running' THEN ${flowRunSteps.startedAt} ELSE coalesce(${flowRuns.startedAt}, ${flowRuns.createdAt}) END`,
                 stalledBefore,
               ),
         ),
@@ -388,10 +563,18 @@ export const reconcileOrphanedFlowRuns = async (
           : [{ organizationId: row.organizationId, userId }];
       }),
     });
+    // A missing organization membership pauses a live actor; only a missing
+    // user enters actor-removal recovery. The tenant-scoped page carries both.
+    const existingActors = new Set(
+      batch.flatMap(({ existingActorUserId }) =>
+        existingActorUserId === null ? [] : [existingActorUserId],
+      ),
+    );
     for (const row of batch) {
       const actor = actors.get(row.id);
       if (
         actor !== undefined &&
+        existingActors.has(actor) &&
         admitted.get(row.organizationId)?.has(actor) !== true
       ) {
         logger.info("flow.work_skipped", {
@@ -400,8 +583,8 @@ export const reconcileOrphanedFlowRuns = async (
         });
         continue;
       }
-      // A deleted definition leaves no actor; the executor must terminalize
-      // that run before any step instead of retaining it as an admission pause.
+      // An unavailable actor records actor-removed without deleting outputs;
+      // a live actor's opt-out remains paused until re-grant.
       await enqueueStep({ runId: row.id, stepIndex: row.currentStepIndex });
       reconciled += 1;
     }

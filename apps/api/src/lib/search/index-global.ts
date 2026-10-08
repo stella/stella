@@ -1968,24 +1968,6 @@ export const upsertWorkspaceSearchDocument = async (
   await writeWorkspaceProjections([workspaceId], database);
 };
 
-type SearchActivityDatabase = {
-  execute: (query: SQL) => Promise<unknown>;
-};
-
-export const syncWorkspaceSearchActivity = async (
-  workspaceId: SafeId<"workspace">,
-  db: SearchActivityDatabase = rootDb,
-): Promise<void> => {
-  await db.execute(sql`
-    UPDATE workspace_search_documents wsd
-    SET updated_at = w.last_activity_at
-    FROM workspaces w
-    WHERE w.id = ${workspaceId}
-      AND wsd.workspace_id = w.id
-      AND wsd.updated_at < w.last_activity_at
-  `);
-};
-
 export const reindexWorkspacesForContact = async (
   contactId: SafeId<"contact">,
   database: SearchDocumentDatabase,

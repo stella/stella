@@ -215,36 +215,39 @@ export const startFlowRun = async ({
       await Result.gen(async function* () {
         signal?.throwIfAborted();
         yield* Result.await(
-          abortableTx(safeDb, async (tx) => {
-            await requireFlowEffectAdmission({
-              tx,
-              organizationId,
-              userId: actorId,
-            });
-            const currentDefinition = await tx.query.flowDefinitions.findFirst({
-              where: {
-                id: { eq: definitionId },
-                organizationId: { eq: organizationId },
-              },
-              columns: { id: true, name: true, steps: true, enabled: true },
-            });
-            if (!currentDefinition?.enabled) {
-              abortTransaction(
-                new HandlerError({ status: 404, message: "Not found" }),
-              );
-            }
-            const admittedRows = buildFlowRunRows({
-              runId,
-              workspaceId,
-              definitionId,
-              definition: currentDefinition,
-              triggerSource,
-              inputEntityIds,
-            });
-            await tx.insert(flowRuns).values(admittedRows.run);
-            await tx.insert(flowRunSteps).values(admittedRows.steps);
-            await reservePeriod?.();
-          }).mapError((error) =>
+          (
+            await abortableTx(safeDb, async (tx) => {
+              await requireFlowEffectAdmission({
+                tx,
+                organizationId,
+                userId: actorId,
+              });
+              const currentDefinition =
+                await tx.query.flowDefinitions.findFirst({
+                  where: {
+                    id: { eq: definitionId },
+                    organizationId: { eq: organizationId },
+                  },
+                  columns: { id: true, name: true, steps: true, enabled: true },
+                });
+              if (!currentDefinition?.enabled) {
+                abortTransaction(
+                  new HandlerError({ status: 404, message: "Not found" }),
+                );
+              }
+              const admittedRows = buildFlowRunRows({
+                runId,
+                workspaceId,
+                definitionId,
+                definition: currentDefinition,
+                triggerSource,
+                inputEntityIds,
+              });
+              await tx.insert(flowRuns).values(admittedRows.run);
+              await tx.insert(flowRunSteps).values(admittedRows.steps);
+              await reservePeriod?.();
+            })
+          ).mapError((error) =>
             HandlerError.is(error)
               ? new FlowRunStartError({
                   reason: "admission-refused",

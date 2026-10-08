@@ -63,16 +63,11 @@ const listNotifications = createSafeRootHandler(
       eq(notifications.userId, user.id),
       eq(notifications.organizationId, session.activeOrganizationId),
     ];
-    const visibility = yield* Result.await(
-      flowNotificationVisibilityCondition({
-        safeDb,
-        organizationId: session.activeOrganizationId,
-        userId: user.id,
-      }),
-    );
-    if (visibility !== undefined) {
-      conditions.push(visibility);
-    }
+    const visibility = flowNotificationVisibilityCondition({
+      organizationId: session.activeOrganizationId,
+      userId: user.id,
+    });
+    conditions.push(visibility);
     if (cursor) {
       const keysetCondition = notificationCursor.keysetAfter({
         cursor,

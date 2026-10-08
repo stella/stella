@@ -1,3 +1,6 @@
+import { sql } from "drizzle-orm";
+import type { SQLWrapper } from "drizzle-orm";
+
 import type { SchedulerDailySchedule } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
@@ -73,6 +76,27 @@ export const fileUploadTriggerMatches = ({
     .map(normalizeConfiguredExtension)
     .includes(extension);
 };
+
+type FileUploadTriggerMatchesSqlOptions = {
+  trigger: SQLWrapper;
+  workspaceId: SQLWrapper | string;
+  extension: SQLWrapper | string | null;
+};
+
+/** SQL counterpart keeps eligible receipts ahead of bounded recovery pages. */
+export const fileUploadTriggerMatchesSql = ({
+  trigger,
+  workspaceId,
+  extension,
+}: FileUploadTriggerMatchesSqlOptions) => sql`(
+  ${trigger}->>'type' = 'file-upload'
+  AND (
+    CASE WHEN ${trigger}->'workspaceIds' = 'null'::jsonb THEN true ELSE EXISTS (SELECT 1 FROM jsonb_array_elements_text(NULLIF(${trigger}->'workspaceIds', 'null'::jsonb)) AS selected_workspace(value) WHERE selected_workspace.value = ${workspaceId}) END
+  )
+  AND (
+    CASE WHEN ${trigger}->'fileExtensions' = 'null'::jsonb THEN true ELSE EXISTS (SELECT 1 FROM jsonb_array_elements_text(NULLIF(${trigger}->'fileExtensions', 'null'::jsonb)) AS selected_extension(value) WHERE lower(ltrim(selected_extension.value, '.')) = ${extension}) END
+  )
+)`;
 
 /**
  * Daily automated-run spend guard. `true` once a definition has already spawned

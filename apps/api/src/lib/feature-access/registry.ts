@@ -299,7 +299,7 @@ export const FEATURE_REGISTRY = {
       dispatchModules: [
         {
           type: "admitted",
-          module: "apps/api/src/auth.ts",
+          module: "apps/api/src/lib/auth.ts",
           admission: "deliverFlowRunWorkspaceEvent",
           specifier: "@/api/lib/flows/flow-run-events",
         },
@@ -387,8 +387,15 @@ export const FEATURE_REGISTRY = {
         {
           type: "admitted",
           module: "apps/api/src/lib/flows/visibility.ts",
-          admission: "isFeatureEnabled",
-          specifier: "@/api/lib/auth/feature-access/policy",
+          admission: "isDeploymentFeatureEnabled",
+          specifier: "@/api/lib/deployment-feature",
+        },
+        {
+          type: "admitted",
+          module:
+            "apps/api/src/lib/scheduler/tasks/flow-run-orphan-reconcile.ts",
+          admission: "repairFlowScheduleTriggers",
+          specifier: "@/api/lib/flows/sync-flow-schedule-trigger",
         },
         {
           type: "operational",

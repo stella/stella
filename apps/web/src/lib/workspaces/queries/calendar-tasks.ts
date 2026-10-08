@@ -2,6 +2,7 @@ import { queryOptions } from "@tanstack/react-query";
 
 import { api } from "@/lib/api";
 import { unwrapEden } from "@/lib/errors/api";
+import { calendarTasksQueryRoot } from "@/lib/resource-query-roots.logic";
 import type { ConditionNode } from "@/lib/types";
 import { normalizeVisibleFieldIds } from "@/lib/workspaces/queries/entities.logic";
 import type { ViewSort } from "@/lib/workspaces/queries/entities.logic";
@@ -17,7 +18,7 @@ type CalendarTasksKey = {
 };
 
 export const calendarTasksKeys = {
-  all: (workspaceId: string) => ["calendar-tasks", workspaceId],
+  all: calendarTasksQueryRoot,
   range: ({
     dateFrom,
     datePropertyIds,

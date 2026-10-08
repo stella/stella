@@ -6,12 +6,16 @@ import {
   RESOURCE_TYPE,
   resourceRef,
   resourceUpdatedRealtimeEvent,
+  resourceSetUpdatedRealtimeEvent,
   type WorkspaceRealtimeEvent,
 } from "@stll/api-contract";
 import { RUNTIME_MODE } from "@stll/runtime-mode";
 
 import { member, organization, user } from "@/api/db/auth-schema";
 import {
+  entities,
+  flowRuns,
+  flowRunSteps,
   featureEnrolments,
   workspaceMembers,
   workspaces,
@@ -162,4 +166,83 @@ describe("flow progress recipient admission", () => {
       restoreMode();
     }
   });
+});
+
+test("review-task identifiers require current grant while ordinary invalidations stay visible", async () => {
+  const previousFlag = env.FEATURE_FLOWS;
+  const restoreMode = setRuntimeModeForTesting({ mode: RUNTIME_MODE.strict });
+  env.FEATURE_FLOWS = true;
+  const taskEntityId = createSafeId<"entity">();
+  const runId = createSafeId<"flowRun">();
+  try {
+    await db.insert(entities).values({
+      id: taskEntityId,
+      workspaceId,
+      kind: "task",
+      name: "Review task",
+    });
+    await db.insert(flowRuns).values({
+      id: runId,
+      workspaceId,
+      status: "awaiting_review",
+      definitionSnapshot: {
+        name: "Review flow",
+        steps: [
+          {
+            kind: "review-gate",
+            name: "Review",
+            instructions: "Review output",
+          },
+        ],
+      },
+      triggerSource: { type: "manual", userId: enrolledUserId },
+    });
+    await db.insert(flowRunSteps).values({
+      id: createSafeId<"flowRunStep">(),
+      runId,
+      workspaceId,
+      index: 0,
+      kind: "review-gate",
+      status: "awaiting_review",
+      reviewTaskEntityId: taskEntityId,
+    });
+    const linkedEvent = resourceUpdatedRealtimeEvent(
+      resourceRef({ type: RESOURCE_TYPE.ENTITY, id: taskEntityId }),
+    );
+    expect(await observeDelivery(linkedEvent)).toEqual(
+      new Set([enrolledUserId]),
+    );
+    await db
+      .delete(featureEnrolments)
+      .where(
+        and(
+          eq(featureEnrolments.organizationId, organizationId),
+          eq(featureEnrolments.userId, enrolledUserId),
+          eq(featureEnrolments.featureId, "flows"),
+        ),
+      );
+    expect(await observeDelivery(linkedEvent)).toEqual(new Set());
+    await db
+      .insert(featureEnrolments)
+      .values({ organizationId, userId: enrolledUserId, featureId: "flows" });
+    expect(await observeDelivery(linkedEvent)).toEqual(
+      new Set([enrolledUserId]),
+    );
+    env.FEATURE_FLOWS = false;
+    expect(await observeDelivery(linkedEvent)).toEqual(new Set());
+    const ordinaryEvent = resourceUpdatedRealtimeEvent(
+      resourceRef({ type: RESOURCE_TYPE.ENTITY, id: createSafeId<"entity">() }),
+    );
+    expect(await observeDelivery(ordinaryEvent)).toEqual(new Set(userIds));
+    expect(
+      await observeDelivery(
+        resourceSetUpdatedRealtimeEvent(RESOURCE_TYPE.ENTITY),
+      ),
+    ).toEqual(new Set(userIds));
+  } finally {
+    await db.delete(flowRuns).where(eq(flowRuns.id, runId));
+    await db.delete(entities).where(eq(entities.id, taskEntityId));
+    env.FEATURE_FLOWS = previousFlag;
+    restoreMode();
+  }
 });

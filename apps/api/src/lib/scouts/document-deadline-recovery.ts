@@ -144,7 +144,6 @@ export const pauseDocumentDeadlineScoutAfterGrantLoss = async ({
     });
     const metadata = {
       deadlineScoutClaimedAt: null,
-      deadlineScoutSkippedUntil: null,
       deadlineScoutAttemptCount: sql`GREATEST(${documentProcessingRuns.deadlineScoutAttemptCount} - ${claim.from === "running" ? 1 : 0}, 0)`,
       deadlineScoutErrorCode: "feature_not_granted",
       updatedAt: new Date(),
@@ -201,7 +200,6 @@ const reconcileDeadlineAdmission = async ({
           to: "awaiting_grant",
           set: {
             deadlineScoutClaimedAt: null,
-            deadlineScoutSkippedUntil: null,
             deadlineScoutErrorCode: "feature_not_granted",
             updatedAt: new Date(),
           },

@@ -15,10 +15,16 @@ const config = {
 
 const readSearchPreview = createSafeHandler(
   config,
-  async function* ({ scopedDb, workspaceId }) {
+  async function* ({ scopedDb, workspaceId, session, user }) {
     const response = yield* Result.await(
       Result.tryPromise(
-        async () => await readSearchPreviewHandler({ scopedDb, workspaceId }),
+        async () =>
+          await readSearchPreviewHandler({
+            scopedDb,
+            workspaceId,
+            session,
+            user,
+          }),
       ),
     );
     return Result.ok(response);

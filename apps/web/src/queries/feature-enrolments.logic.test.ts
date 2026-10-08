@@ -5,7 +5,10 @@ import { describe, expect, test } from "bun:test";
 import { inboxKeys } from "@/lib/inbox/queries";
 import { knowledgeKeys } from "@/lib/knowledge/queries";
 import { notificationsOptions } from "@/lib/notification-queries";
-import { flowRunsQueryRoot } from "@/lib/resource-query-roots.logic";
+import {
+  calendarTasksQueryRoot,
+  flowRunsQueryRoot,
+} from "@/lib/resource-query-roots.logic";
 import { workspacesKeys } from "@/lib/workspaces/queries.logic";
 import { entitiesKeys } from "@/lib/workspaces/queries/entities.logic";
 import {
@@ -26,6 +29,7 @@ describe("feature enrollment cache reconciliation", () => {
   const assertWorkProjectionReset = async (featureId: SelfServeFeatureId) => {
     const queryClient = new QueryClient();
     const derivedKeys = [
+      [...calendarTasksQueryRoot("matter-a"), "range", "2026-10-08"],
       taskKeys.detail("matter-a", "task-a"),
       taskKeys.detail("matter-b", "task-b"),
       entitiesKeys.detail("matter-a", "task-a"),

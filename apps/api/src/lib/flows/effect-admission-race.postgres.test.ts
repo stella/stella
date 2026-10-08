@@ -2,6 +2,7 @@ import { panic, Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 import { and, eq, sql } from "drizzle-orm";
 
+import { member, user } from "@/api/db/auth-schema";
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import {
   featureEnrolments,
@@ -9,6 +10,7 @@ import {
   flowRunSteps,
   flowRuns,
   notifications,
+  workspaceMembers,
 } from "@/api/db/schema";
 import createDefinition from "@/api/handlers/flows/create";
 import deleteDefinition from "@/api/handlers/flows/delete";
@@ -16,14 +18,22 @@ import cancelRun from "@/api/handlers/flows/runs/cancel";
 import reviewRun from "@/api/handlers/flows/runs/review";
 import updateDefinition from "@/api/handlers/flows/update";
 import { createSafeId } from "@/api/lib/branded-types";
-import type { TimestampCasToken } from "@/api/lib/db/timestamp-cas";
+import {
+  timestampCasToken,
+  type TimestampCasToken,
+} from "@/api/lib/db/timestamp-cas";
 import { FlowStepError, HandlerError } from "@/api/lib/errors/tagged-errors";
 import { lockFeatureRecoveryAdmission } from "@/api/lib/feature-access/recovery-admission-lock";
 import {
   executeFlowStep,
   failFlowRunFromWorker,
 } from "@/api/lib/flows/flow-executor";
+import {
+  persistFlowStepClaim,
+  type FlowStepJobData,
+} from "@/api/lib/flows/flow-run-queue";
 import { resumeFlowStepsAfterGrant } from "@/api/lib/flows/flow-run-worker";
+import { FLOW_STEP_LEASE_MS } from "@/api/lib/flows/flow-types";
 import { startFlowRun } from "@/api/lib/flows/start-flow-run";
 import type { GatedTestDb } from "@/api/tests/gated-test-database";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
@@ -207,6 +217,67 @@ const prepareAiPersistenceRun = async (
     .update(flowRunSteps)
     .set({ kind: "ai", reviewTaskEntityId: null })
     .where(eq(flowRunSteps.runId, fixture.runId));
+};
+
+const ACCESS_CHANGES = [
+  "matter-membership",
+  "soft-delete",
+  "hard-delete",
+] as const;
+
+type ChangeFlowActorAccessOptions = {
+  change: (typeof ACCESS_CHANGES)[number];
+  database: GatedTestDb;
+  fixture: Fixture;
+};
+
+const changeFlowActorAccess = async ({
+  change,
+  database,
+  fixture,
+}: ChangeFlowActorAccessOptions) => {
+  switch (change) {
+    case "matter-membership":
+      await database
+        .delete(workspaceMembers)
+        .where(
+          and(
+            eq(workspaceMembers.workspaceId, fixture.workspaceId),
+            eq(workspaceMembers.userId, fixture.userId),
+          ),
+        );
+      expect(
+        await database.$count(
+          member,
+          and(
+            eq(member.organizationId, fixture.organizationId),
+            eq(member.userId, fixture.userId),
+          ),
+        ),
+      ).toBe(1);
+      expect(
+        await database.$count(
+          featureEnrolments,
+          and(
+            eq(featureEnrolments.organizationId, fixture.organizationId),
+            eq(featureEnrolments.userId, fixture.userId),
+            eq(featureEnrolments.featureId, "flows"),
+          ),
+        ),
+      ).toBe(1);
+      break;
+    case "soft-delete":
+      await database
+        .update(user)
+        .set({ deletedAt: new Date() })
+        .where(eq(user.id, fixture.userId));
+      break;
+    case "hard-delete":
+      await database.delete(user).where(eq(user.id, fixture.userId));
+      break;
+    default:
+      change satisfies never;
+  }
 };
 
 if (!databaseUrl || !enabled) {
@@ -540,6 +611,386 @@ if (!databaseUrl || !enabled) {
             if (running !== undefined) {
               await Promise.allSettled([running]);
             }
+            await f.cleanup();
+          }
+        });
+      },
+    );
+  });
+  describe("durable flow claims after access changes (postgres)", () => {
+    test.each(ACCESS_CHANGES)(
+      "%s: a reconstructed retry retains the original claim and settles without another model call",
+      async (change) => {
+        await withGatedTestClients(databaseUrl, async ({ openClient }) => {
+          const observer = openClient();
+          const worker = openClient();
+          const f = await flowReviewGateFixture(observer.db, {
+            intermediate: false,
+            initialRunStatus: "pending",
+          });
+          let savedData: FlowStepJobData = { runId: f.runId, stepIndex: 0 };
+          let claimWrites = 0;
+          let modelCalls = 0;
+          let broadcasts = 0;
+          const firstJob = {
+            data: savedData,
+            updateData: async (data: FlowStepJobData) => {
+              savedData = data;
+              claimWrites += 1;
+            },
+          };
+          const safeDb = f.safeDb(worker.db);
+          const scopedDb: ScopedDb = async (work) => {
+            const result = await safeDb(work);
+            if (result.isErr()) {
+              throw result.error;
+            }
+            return result.value;
+          };
+          const dependencies = {
+            database: worker.db,
+            admission: testModelAdmission(f.organizationId),
+            makeScopedDb: () => scopedDb,
+            makeSafeDb: () => safeDb,
+            loadAIConfig: async () => Result.ok(null),
+            enqueueStep: async () => panic("Unexpected step advancement"),
+            broadcastUpdate: () => {
+              broadcasts += 1;
+            },
+            onClaim: async (token: TimestampCasToken) => {
+              await persistFlowStepClaim(firstJob, token);
+            },
+            generateTextForRole: async () => {
+              modelCalls += 1;
+              expect(savedData.claimedStartedAt).toBeDefined();
+              throw new FlowStepError({ message: "Provider unavailable" });
+            },
+          };
+          const retainedOutput = {
+            kind: "ai",
+            markdown: "Retained output",
+          } as const;
+          try {
+            await prepareAiPersistenceRun(observer.db, f);
+            await observer.db
+              .update(flowRunSteps)
+              .set({ output: retainedOutput })
+              .where(eq(flowRunSteps.runId, f.runId));
+            const firstAttempt = await Result.tryPromise(
+              async () =>
+                await executeFlowStep(
+                  firstJob.data,
+                  new AbortController().signal,
+                  dependencies,
+                ),
+            );
+            if (firstAttempt.isOk()) {
+              panic("Expected the first external call to fail");
+            }
+            const claim =
+              (
+                await observer.db
+                  .select({
+                    token: timestampCasToken(flowRunSteps.startedAt),
+                  })
+                  .from(flowRunSteps)
+                  .where(eq(flowRunSteps.runId, f.runId))
+              ).at(0) ?? panic("Expected running source claim");
+            expect(savedData.claimedStartedAt).toBe(claim.token);
+            expect(claimWrites).toBe(1);
+            const claimedState = await f.read();
+            expect(claimedState.steps.at(0)).toMatchObject({
+              status: "running",
+              output: retainedOutput,
+            });
+            const noticesBefore = await observer.db.$count(
+              notifications,
+              eq(notifications.workspaceId, f.workspaceId),
+            );
+            const broadcastsBefore = broadcasts;
+            await changeFlowActorAccess({
+              change,
+              database: observer.db,
+              fixture: f,
+            });
+            // A new queue object carries only the data saved before the failed external call.
+            const retryJob = { data: { ...savedData } };
+            expect(retryJob).not.toBe(firstJob);
+            const finalAttempt = await Result.tryPromise(
+              async () =>
+                await executeFlowStep(
+                  retryJob.data,
+                  new AbortController().signal,
+                  dependencies,
+                ),
+            );
+            if (change === "matter-membership") {
+              expect(finalAttempt.isErr()).toBe(true);
+              expect(await f.read()).toEqual(claimedState);
+            } else {
+              if (finalAttempt.isErr()) {
+                throw finalAttempt.error;
+              }
+              expect(finalAttempt.value).toEqual({ status: "completed" });
+            }
+            const failure = finalAttempt.isErr()
+              ? finalAttempt.error
+              : firstAttempt.error;
+            expect(
+              await failFlowRunFromWorker(retryJob.data, failure, {
+                database: worker.db,
+                claimedStartedAt: retryJob.data.claimedStartedAt,
+                makeScopedDb: () => scopedDb,
+                broadcastUpdate: dependencies.broadcastUpdate,
+              }),
+            ).toEqual({ status: "completed" });
+            const settled = await f.read();
+            expect(settled.run).toMatchObject({ status: "failed" });
+            expect(settled.steps.at(0)).toMatchObject({
+              status: "failed",
+              output: retainedOutput,
+            });
+            if (change !== "matter-membership") {
+              expect(settled.run).toMatchObject({
+                recoveryState: "actor-removed",
+                error: "actor-removed",
+              });
+              expect(settled.steps.at(0)).toMatchObject({
+                error: "actor-removed",
+              });
+              expect(
+                await observer.db.$count(
+                  notifications,
+                  eq(notifications.workspaceId, f.workspaceId),
+                ),
+              ).toBe(noticesBefore);
+              expect(broadcasts).toBe(broadcastsBefore);
+            }
+            const recoveredJobs: FlowStepJobData[] = [];
+            await resumeFlowStepsAfterGrant(
+              { organizationId: f.organizationId, userId: f.userId },
+              {
+                database: worker.db,
+                enqueueStep: async (job) => {
+                  recoveredJobs.push(job);
+                },
+              },
+            );
+            expect(recoveredJobs).toEqual([]);
+            expect(
+              await failFlowRunFromWorker(retryJob.data, failure, {
+                database: worker.db,
+                claimedStartedAt: retryJob.data.claimedStartedAt,
+                makeScopedDb: () => scopedDb,
+                broadcastUpdate: dependencies.broadcastUpdate,
+              }),
+            ).toEqual({ status: "completed" });
+            expect(await f.read()).toEqual(settled);
+            expect(modelCalls).toBe(1);
+            expect(claimWrites).toBe(1);
+          } finally {
+            await f.cleanup();
+          }
+        });
+      },
+    );
+  });
+  describe("SQL flow claim lease recovery (postgres)", () => {
+    test.each([
+      "queue-write-failure",
+      "worker-loss",
+      "queue-write-failure-with-access-loss",
+    ] as const)(
+      "%s: an empty queue hint cannot replace a fresh claim and converges after expiry",
+      async (interruption) => {
+        await withGatedTestClients(databaseUrl, async ({ openClient }) => {
+          const observer = openClient();
+          const worker = openClient();
+          const f = await flowReviewGateFixture(observer.db, {
+            intermediate: false,
+            initialRunStatus: "pending",
+          });
+          let clock = new Date("2030-01-01T12:00:00.000Z");
+          let modelCalls = 0;
+          let recoveryClaims = 0;
+          let attemptedData: FlowStepJobData | undefined;
+          const queuedData: FlowStepJobData = { runId: f.runId, stepIndex: 0 };
+          const queueJob = {
+            data: queuedData,
+            updateData: async (data: FlowStepJobData) => {
+              attemptedData = data;
+              throw new FlowStepError({ message: "Queue unavailable" });
+            },
+          };
+          const safeDb = f.safeDb(worker.db);
+          const scopedDb: ScopedDb = async (work) => {
+            const result = await safeDb(work);
+            if (result.isErr()) {
+              throw result.error;
+            }
+            return result.value;
+          };
+          const dependencies = {
+            database: worker.db,
+            now: () => clock,
+            admission: testModelAdmission(f.organizationId),
+            makeScopedDb: () => scopedDb,
+            makeSafeDb: () => safeDb,
+            loadAIConfig: async () => Result.ok(null),
+            enqueueStep: async () => panic("Unexpected step advancement"),
+            broadcastUpdate: () => {},
+            generateTextForRole: async () => {
+              modelCalls += 1;
+              return "Recovered output";
+            },
+          };
+          const retainedOutput = {
+            kind: "ai",
+            markdown: "Retained output",
+          } as const;
+          try {
+            await prepareAiPersistenceRun(observer.db, f);
+            await observer.db
+              .update(flowRunSteps)
+              .set({ output: retainedOutput })
+              .where(eq(flowRunSteps.runId, f.runId));
+            const interrupted = await Result.tryPromise(
+              async () =>
+                await executeFlowStep(
+                  queueJob.data,
+                  new AbortController().signal,
+                  {
+                    ...dependencies,
+                    onClaim: async (token: TimestampCasToken) => {
+                      if (interruption === "worker-loss") {
+                        throw new FlowStepError({
+                          message: "Worker unavailable",
+                        });
+                      }
+                      await persistFlowStepClaim(queueJob, token);
+                    },
+                  },
+                ),
+            );
+            expect(interrupted.isErr()).toBe(true);
+            expect(modelCalls).toBe(0);
+            expect(queueJob.data.claimedStartedAt).toBeUndefined();
+            const original =
+              (
+                await observer.db
+                  .select({
+                    startedAt: flowRunSteps.startedAt,
+                    token: timestampCasToken(flowRunSteps.startedAt),
+                  })
+                  .from(flowRunSteps)
+                  .where(eq(flowRunSteps.runId, f.runId))
+              ).at(0) ?? panic("Expected committed SQL claim");
+            if (original.startedAt === null || original.token === null) {
+              panic("Expected a non-null running claim");
+            }
+            if (interruption !== "worker-loss") {
+              expect(attemptedData?.claimedStartedAt).toBe(original.token);
+            }
+            const noticesBefore = await observer.db.$count(
+              notifications,
+              eq(notifications.workspaceId, f.workspaceId),
+            );
+            const originalState = await f.read();
+            expect(originalState.run).toMatchObject({ status: "running" });
+            expect(originalState.steps.at(0)).toMatchObject({
+              status: "running",
+              output: retainedOutput,
+            });
+            const restartJob = { data: { runId: f.runId, stepIndex: 0 } };
+            const retry = () =>
+              executeFlowStep(restartJob.data, new AbortController().signal, {
+                ...dependencies,
+                onClaim: async () => {
+                  recoveryClaims += 1;
+                },
+              });
+            expect(await retry()).toEqual({ status: "paused" });
+            expect(await f.read()).toEqual(originalState);
+            expect(modelCalls).toBe(0);
+            expect(recoveryClaims).toBe(0);
+            clock = new Date(
+              original.startedAt.getTime() + FLOW_STEP_LEASE_MS + 1,
+            );
+            if (interruption === "queue-write-failure-with-access-loss") {
+              await changeFlowActorAccess({
+                change: "matter-membership",
+                database: observer.db,
+                fixture: f,
+              });
+              const refused = await Result.tryPromise(retry);
+              if (refused.isOk()) {
+                panic("Expected lost matter access to refuse execution");
+              }
+              expect(await f.read()).toEqual(originalState);
+              const settle = () =>
+                failFlowRunFromWorker(restartJob.data, refused.error, {
+                  database: worker.db,
+                  now: () => clock,
+                  makeScopedDb: () => scopedDb,
+                  broadcastUpdate: dependencies.broadcastUpdate,
+                });
+              expect(await settle()).toEqual({ status: "completed" });
+              const failed = await f.read();
+              expect(failed.run).toMatchObject({ status: "failed" });
+              expect(failed.steps.at(0)).toMatchObject({
+                status: "failed",
+                output: retainedOutput,
+                startedAt: clock,
+              });
+              const noticeCount = await observer.db.$count(
+                notifications,
+                eq(notifications.workspaceId, f.workspaceId),
+              );
+              expect(await settle()).toEqual({ status: "completed" });
+              expect(await f.read()).toEqual(failed);
+              expect(
+                await observer.db.$count(
+                  notifications,
+                  eq(notifications.workspaceId, f.workspaceId),
+                ),
+              ).toBe(noticeCount);
+              expect(modelCalls).toBe(0);
+              expect(recoveryClaims).toBe(0);
+            } else {
+              expect(await retry()).toEqual({ status: "completed" });
+              const completed = await f.read();
+              expect(completed.run).toMatchObject({ status: "completed" });
+              expect(completed.steps.at(0)).toMatchObject({
+                status: "completed",
+                output: { kind: "ai", markdown: "Recovered output" },
+                startedAt: clock,
+              });
+              expect(
+                await observer.db.$count(
+                  notifications,
+                  eq(notifications.workspaceId, f.workspaceId),
+                ),
+              ).toBe(noticesBefore + 1);
+              expect(await retry()).toEqual({ status: "completed" });
+              expect(await f.read()).toEqual(completed);
+              expect(
+                await observer.db.$count(
+                  notifications,
+                  eq(notifications.workspaceId, f.workspaceId),
+                ),
+              ).toBe(noticesBefore + 1);
+              expect(modelCalls).toBe(1);
+              expect(recoveryClaims).toBe(1);
+            }
+            const replaced =
+              (
+                await observer.db
+                  .select({ token: timestampCasToken(flowRunSteps.startedAt) })
+                  .from(flowRunSteps)
+                  .where(eq(flowRunSteps.runId, f.runId))
+              ).at(0) ?? panic("Expected settled SQL source");
+            expect(replaced.token).not.toBe(original.token);
+          } finally {
             await f.cleanup();
           }
         });

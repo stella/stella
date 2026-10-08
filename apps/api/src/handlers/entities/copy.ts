@@ -50,13 +50,13 @@ import { deleteS3Objects } from "@/api/lib/files/utils";
 import { LIMITS } from "@/api/lib/limits";
 import { DOCUMENT_TYPE_CLASSIFIER_ROLE } from "@/api/lib/properties/create-schema";
 import { broadcastWorkspaceResourceSetUpdated } from "@/api/lib/resource-realtime";
-import { syncWorkspaceSearchActivity } from "@/api/lib/search/index-global";
 import {
   requestNativeExtractionRuns,
   SEARCH_INDEX_OWNER,
 } from "@/api/lib/search/process-extraction";
 import { flushEntitySearchRepairs } from "@/api/lib/search/projection-repair-flush";
 import { enqueueEntitySearchRepairs } from "@/api/lib/search/projection-repair-queue";
+import { syncWorkspaceSearchActivity } from "@/api/lib/search/workspace-search-activity";
 
 const copyToWorkspaceBodySchema = t.Object({
   entityId: tSafeId("entity"),

@@ -51,6 +51,7 @@ const listEntityLinks = createSafeHandler(
       safeDb(
         async (tx) =>
           await admitTaskFlowAccess(tx, {
+            access: "read",
             workspaceId,
             taskEntityId: params.taskId,
             userId: user.id,
@@ -58,14 +59,11 @@ const listEntityLinks = createSafeHandler(
       ),
     );
     yield* admission;
-    const visibility = yield* Result.await(
-      flowRelatedTaskVisibilityConditions({
-        safeDb,
-        organizationId: session.activeOrganizationId,
-        userId: user.id,
-      }),
-    );
-    const linkVisibility = visibility?.link;
+    const visibility = flowRelatedTaskVisibilityConditions({
+      organizationId: session.activeOrganizationId,
+      userId: user.id,
+    });
+    const linkVisibility = visibility.link;
 
     const [asSource, asTarget] = yield* Result.await(
       safeDb(
@@ -75,9 +73,7 @@ const listEntityLinks = createSafeHandler(
               where: {
                 workspaceId: { eq: workspaceId },
                 sourceEntityId: { eq: params.taskId },
-                ...(linkVisibility === undefined
-                  ? {}
-                  : { RAW: linkVisibility }),
+                RAW: linkVisibility,
               },
               with: {
                 sourceEntity: {
@@ -93,9 +89,7 @@ const listEntityLinks = createSafeHandler(
               where: {
                 workspaceId: { eq: workspaceId },
                 targetEntityId: { eq: params.taskId },
-                ...(linkVisibility === undefined
-                  ? {}
-                  : { RAW: linkVisibility }),
+                RAW: linkVisibility,
               },
               with: {
                 sourceEntity: {

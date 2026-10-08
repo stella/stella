@@ -41,7 +41,6 @@ export const resumeSignalsAfterGrant = async ({
       tx,
       organizationId,
       userId,
-      now: new Date(),
     });
   });
 };

@@ -9,7 +9,7 @@ import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { requireFlowEffectAdmission } from "@/api/lib/flows/effect-admission";
-import { syncFlowScheduleTrigger } from "@/api/lib/flows/sync-flow-schedule-trigger";
+import { syncFlowScheduleTriggerInTransaction } from "@/api/lib/flows/sync-flow-schedule-trigger";
 
 const config = {
   featureAccess: { featureId: "flows", type: "required" },
@@ -70,6 +70,11 @@ const deleteFlowDefinition = createSafeRootHandler(
           changes: { deleted: { old: { name: definition.name }, new: null } },
         });
 
+        await syncFlowScheduleTriggerInTransaction({
+          tx,
+          organizationId,
+          definitionId: params.flowId,
+        });
         return definition;
       }),
     );
@@ -79,14 +84,6 @@ const deleteFlowDefinition = createSafeRootHandler(
         new HandlerError({ status: 404, message: "Flow not found" }),
       );
     }
-
-    // Remove the scheduler row for a deleted definition (post-commit; never
-    // throws).
-    await syncFlowScheduleTrigger({
-      id: deleted.id,
-      trigger: deleted.trigger,
-      enabled: false,
-    });
 
     return Result.ok({});
   },

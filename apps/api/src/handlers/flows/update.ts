@@ -13,7 +13,7 @@ import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { requireFlowEffectAdmission } from "@/api/lib/flows/effect-admission";
-import { syncFlowScheduleTrigger } from "@/api/lib/flows/sync-flow-schedule-trigger";
+import { syncFlowScheduleTriggerInTransaction } from "@/api/lib/flows/sync-flow-schedule-trigger";
 
 const config = {
   featureAccess: { featureId: "flows", type: "required" },
@@ -91,6 +91,11 @@ const updateFlowDefinition = createSafeRootHandler(
           },
         });
 
+        await syncFlowScheduleTriggerInTransaction({
+          tx,
+          organizationId,
+          definitionId: params.flowId,
+        });
         return row ?? null;
       }),
     );
@@ -100,14 +105,6 @@ const updateFlowDefinition = createSafeRootHandler(
         new HandlerError({ status: 404, message: "Flow not found" }),
       );
     }
-
-    // A changed / removed schedule trigger (or a disabled flow) must reconcile
-    // the scheduler row (post-commit; never throws).
-    await syncFlowScheduleTrigger({
-      id: params.flowId,
-      trigger: input.trigger,
-      enabled: input.enabled,
-    });
 
     return Result.ok({ id: updated.id });
   },

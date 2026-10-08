@@ -21,7 +21,7 @@ import {
   resolveMemberDevOrganization,
 } from "@/api/lib/dev-seed-session-store";
 import { rebuildSupplementalSearchIndex } from "@/api/lib/search/index-global";
-import { getSearchMaintenance } from "@/api/lib/search/provider";
+import { getSearchMaintenance } from "@/api/lib/search/pg-fts-maintenance";
 import { isLocalDevOpen } from "@/api/runtime-mode";
 
 import {

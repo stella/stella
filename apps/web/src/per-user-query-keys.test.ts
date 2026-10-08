@@ -99,9 +99,56 @@ const DOWNLOAD = "a file download, not cached";
 const OAUTH_REDIRECT = "an OAuth redirect, not cached";
 const OWN_EDIT_SESSION = "marks the caller's own open edit session";
 const KEY_TYPE_HAS_USER = "the key argument's type requires userId";
+const FEATURE_VISIBILITY =
+  "Shared identities have caller-specific feature visibility; session-cache-guard and feature-enrolment reconciliation clear these projections.";
 
 // Keyed by handler path under apps/api/src/handlers.
 const PER_USER_READS: Record<string, PerUserRead> = {
+  "workspaces/read-search-preview.query.ts": {
+    kind: "caller-marker",
+    reason: FEATURE_VISIBILITY,
+  },
+  "workspaces/read-overview-activity.query.ts": {
+    kind: "caller-marker",
+    reason: FEATURE_VISIBILITY,
+  },
+  "tasks/calendar/list.ts": {
+    kind: "caller-marker",
+    reason: FEATURE_VISIBILITY,
+  },
+  "entities/versions/list.ts": {
+    kind: "caller-marker",
+    reason: FEATURE_VISIBILITY,
+  },
+  "entities/versions/get.ts": {
+    kind: "caller-marker",
+    reason: FEATURE_VISIBILITY,
+  },
+  "entities/versions/diff.ts": {
+    kind: "caller-marker",
+    reason: FEATURE_VISIBILITY,
+  },
+  "entities/summaries/list.ts": {
+    kind: "caller-marker",
+    reason: FEATURE_VISIBILITY,
+  },
+  "entities/summaries/count.ts": {
+    kind: "caller-marker",
+    reason: FEATURE_VISIBILITY,
+  },
+  "entities/read-property-facets.ts": {
+    kind: "caller-marker",
+    reason: FEATURE_VISIBILITY,
+  },
+  "entities/read-group-counts.ts": {
+    kind: "caller-marker",
+    reason: FEATURE_VISIBILITY,
+  },
+  "entities/read-field-file.ts": {
+    kind: "caller-marker",
+    reason: FEATURE_VISIBILITY,
+  },
+  "entities/get.ts": { kind: "caller-marker", reason: FEATURE_VISIBILITY },
   "desktop-presence/read.ts": {
     kind: "keyed",
     calls: ["api.desktop.presence.get"],
@@ -568,7 +615,7 @@ const PER_USER_READS: Record<string, PerUserRead> = {
       }).queryKey,
     ],
   },
-  "workspaces/list.ts": { kind: "not-per-user", reason: JOINS_NAMES },
+  "workspaces/list.ts": { kind: "caller-marker", reason: FEATURE_VISIBILITY },
   "workspaces/read-active.ts": {
     kind: "no-web-caller",
     calls: ["api.workspaces.active.get"],
@@ -585,8 +632,8 @@ const PER_USER_READS: Record<string, PerUserRead> = {
     },
   },
   "workspaces/read-overview-activity-actors.query.ts": {
-    kind: "not-per-user",
-    reason: JOINS_NAMES,
+    kind: "caller-marker",
+    reason: FEATURE_VISIBILITY,
   },
 };
 

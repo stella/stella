@@ -55,3 +55,6 @@ export const workspaceContactsQueryRoot = (workspaceId: string) =>
 
 export const workspaceMembersQueryRoot = (workspaceId: string) =>
   ["workspace-members", workspaceId] as const;
+
+export const calendarTasksQueryRoot = (workspaceId: string) =>
+  ["calendar-tasks", workspaceId] as const;

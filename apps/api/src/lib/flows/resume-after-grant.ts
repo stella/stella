@@ -4,6 +4,7 @@ import { withAggregateTransaction } from "@/api/lib/db/aggregate-lock";
 import { isBackgroundFeatureEnabled } from "@/api/lib/feature-access/background";
 import { lockFeatureRecoveryAdmission } from "@/api/lib/feature-access/recovery-admission-lock";
 import { resumeFlowStepsAfterGrant } from "@/api/lib/flows/flow-run-worker";
+import { repairFlowScheduleTriggers } from "@/api/lib/flows/sync-flow-schedule-trigger";
 import { resumeUploadTriggersAfterGrant } from "@/api/lib/scheduler/tasks/upload-flow-trigger-recovery";
 
 type ResumeFlowsAfterGrantOptions = {
@@ -38,6 +39,10 @@ export const resumeFlowsAfterGrant = async ({
       userId,
       now: new Date(),
     });
+  });
+  await repairFlowScheduleTriggers({
+    database: rootDb,
+    principal: { organizationId, userId },
   });
   await resumeFlowStepsAfterGrant(
     { organizationId, userId },

@@ -1,64 +1,265 @@
-import { Result } from "better-result";
-import type { InferSelectModel } from "drizzle-orm";
+import { panic } from "better-result";
+import { and, asc, eq, gt, or, sql } from "drizzle-orm";
+import * as v from "valibot";
 
-import type { flowDefinitions } from "@/api/db/schema";
-import { captureError } from "@/api/lib/analytics/capture";
-import { errorTag } from "@/api/lib/errors/utils";
-import { flowScheduleToSchedulerSchedule } from "@/api/lib/flows/flow-trigger-logic";
-import { logger } from "@/api/lib/observability/logger";
+import type { Transaction } from "@/api/db/root";
+import { flowDefinitions, schedulerJobs } from "@/api/db/schema";
+import type { SafeId } from "@/api/lib/branded-types";
 import {
-  ensureSchedulerJob,
-  removeSchedulerJob,
-} from "@/api/lib/scheduler/jobs";
+  withAggregateRowQuery,
+  withAggregateTransaction,
+} from "@/api/lib/db/aggregate-lock";
+import { readCursorPage } from "@/api/lib/db/read-bounded";
+import { isBackgroundFeatureEnabled } from "@/api/lib/feature-access/background";
+import { lockFeatureRecoveryAdmission } from "@/api/lib/feature-access/recovery-admission-lock";
+import { flowScheduleToSchedulerSchedule } from "@/api/lib/flows/flow-trigger-logic";
+import { LIMITS } from "@/api/lib/limits";
+import { logger } from "@/api/lib/observability/logger";
 import {
   FLOW_RUN_TASK,
   flowScheduleJobId,
 } from "@/api/lib/scheduler/tasks/flow-run";
+import {
+  schedulerSchedulesEqual,
+  upsertSchedulerJob,
+} from "@/api/lib/scheduler/upsert-job";
 
-type FlowDefinitionRow = InferSelectModel<typeof flowDefinitions>;
+type SyncFlowScheduleTriggerOptions = {
+  tx: Transaction;
+  organizationId: SafeId<"organization">;
+  definitionId: SafeId<"flowDefinition">;
+};
 
-/**
- * Reconcile the scheduler row for a definition's `schedule` trigger. Called
- * from the create / update / delete definition handlers after the write
- * commits, so exactly one `scheduler_jobs` row (task `flow.run`, keyed by
- * `flowScheduleJobId`) exists per enabled schedule-triggered definition:
- *
- * - enabled + `schedule` trigger -> upsert the row (idempotent).
- * - disabled, deleted, or trigger changed away from `schedule` -> remove it.
- *
- * A post-commit background reconcile: it never throws (a failure would only
- * mean the schedule row is briefly stale until the next write); errors are
- * captured through the structured logger, not surfaced to the caller.
- */
-export const syncFlowScheduleTrigger = async ({
-  id,
-  trigger,
-  enabled,
-}: Pick<FlowDefinitionRow, "id" | "trigger" | "enabled">): Promise<void> => {
-  const result = await Result.tryPromise({
-    try: async () => {
-      if (enabled && trigger.type === "schedule") {
-        await ensureSchedulerJob({
-          id: flowScheduleJobId(id),
-          task: FLOW_RUN_TASK,
-          description: `Scheduled flow run for definition ${id}`,
-          schedule: flowScheduleToSchedulerSchedule(trigger.schedule),
-          payload: { definitionId: id },
-        });
+/** The definition write and its current admitted schedule commit together. */
+export const syncFlowScheduleTriggerInTransaction = async ({
+  tx,
+  organizationId,
+  definitionId,
+}: SyncFlowScheduleTriggerOptions): Promise<void> => {
+  await lockFeatureRecoveryAdmission({
+    tx,
+    organizationId,
+    featureId: "flows",
+  });
+  const acquired = await withAggregateRowQuery({
+    aggregate: "definition",
+    id: { id: definitionId, organizationId },
+    tx,
+    mode: "no key update",
+    select: (queryTx) =>
+      queryTx
+        .select({
+          id: flowDefinitions.id,
+          organizationId: flowDefinitions.organizationId,
+          enabled: flowDefinitions.enabled,
+          trigger: flowDefinitions.trigger,
+          createdByUserId: flowDefinitions.createdByUserId,
+        })
+        .from(flowDefinitions)
+        .limit(1),
+  });
+  if (acquired.status === "busy") {
+    panic("Blocking aggregate acquisition returned busy");
+  }
+  const definition = acquired.rows.at(0);
+  const jobId = flowScheduleJobId(definitionId);
+  if (definition === undefined || definition.trigger.type !== "schedule") {
+    // audit: skip — removes derived scheduling for deleted or changed definitions.
+    await tx.delete(schedulerJobs).where(eq(schedulerJobs.id, jobId));
+    return;
+  }
+  const existing = (
+    await tx
+      .select({ schedule: schedulerJobs.schedule, task: schedulerJobs.task })
+      .from(schedulerJobs)
+      .where(eq(schedulerJobs.id, jobId))
+      .limit(1)
+  ).at(0);
+  const enabled =
+    definition.enabled &&
+    (await isBackgroundFeatureEnabled({
+      tx,
+      organizationId,
+      userId: definition.createdByUserId,
+      featureId: "flows",
+    }));
+  if (!enabled && existing === undefined) {
+    return;
+  }
+  const schedule = flowScheduleToSchedulerSchedule(definition.trigger.schedule);
+  const unchanged =
+    existing !== undefined &&
+    existing.task === FLOW_RUN_TASK &&
+    schedulerSchedulesEqual(existing.schedule, schedule);
+  await upsertSchedulerJob(
+    {
+      id: jobId,
+      task: FLOW_RUN_TASK,
+      description: `Scheduled flow run for definition ${definitionId}`,
+      schedule,
+      enabled,
+      payload: { definitionId },
+      payloadUpdate: unchanged ? "preserve" : "replace",
+    },
+    tx,
+  );
+};
+
+type RepairFlowScheduleTriggersOptions = {
+  database: Pick<Transaction, "select"> & {
+    transaction: <Value>(
+      run: (tx: Transaction) => Promise<Value>,
+    ) => Promise<Value>;
+  };
+  principal?: {
+    organizationId: SafeId<"organization">;
+    userId: SafeId<"user">;
+  };
+  signal?: AbortSignal;
+  batchSize?: number;
+};
+
+type RepairOrphanedFlowScheduleJobsOptions = Pick<
+  RepairFlowScheduleTriggersOptions,
+  "database" | "signal" | "batchSize"
+>;
+
+/** Missing definitions have no tenant or executable source; cleanup is operational. */
+const repairOrphanedFlowScheduleJobs = async ({
+  database,
+  signal,
+  batchSize = LIMITS.flowDefinitionsCount,
+}: RepairOrphanedFlowScheduleJobsOptions): Promise<void> => {
+  let cursor: string | null = null;
+  const missingDefinition = sql`NOT EXISTS (
+    SELECT 1 FROM ${flowDefinitions}
+    WHERE ${flowDefinitions.id}::text = lower(${schedulerJobs.payload}->>'definitionId')
+  )`;
+  for (;;) {
+    if (signal?.aborted) {
+      break;
+    }
+    // db-await-in-loop: each bounded page advances through orphan scheduling rows.
+    const page = await readCursorPage(
+      database
+        .select({ id: schedulerJobs.id, payload: schedulerJobs.payload })
+        .from(schedulerJobs)
+        .where(
+          and(
+            eq(schedulerJobs.task, FLOW_RUN_TASK),
+            cursor === null ? undefined : gt(schedulerJobs.id, cursor),
+            missingDefinition,
+          ),
+        )
+        .orderBy(asc(schedulerJobs.id)),
+      { limit: batchSize, cursorForItem: (row) => row.id },
+    );
+    const originals = page.items.flatMap((job) => {
+      const parsed = v.safeParse(
+        v.pipe(v.string(), v.uuid()),
+        job.payload?.["definitionId"],
+      );
+      if (
+        job.payload === null ||
+        !parsed.success ||
+        flowScheduleJobId(parsed.output) !== job.id
+      ) {
+        logger.warn("flow.schedule_invalid_payload", { jobId: job.id });
+        return [];
+      }
+      return [
+        and(
+          eq(schedulerJobs.id, job.id),
+          eq(schedulerJobs.payload, job.payload),
+        ),
+      ];
+    });
+    if (originals.length > 0 && !signal?.aborted) {
+      // db-await-in-loop: one exact-source orphan cleanup transaction per page.
+      await withAggregateTransaction(database, async (tx) => {
+        // audit: skip — deletes only unchanged derived jobs whose source remains absent.
+        // sql-perf-allow: bounded by the exact scheduler primary keys selected in this cleanup page.
+        await tx
+          .delete(schedulerJobs)
+          .where(
+            and(
+              eq(schedulerJobs.task, FLOW_RUN_TASK),
+              missingDefinition,
+              or(...originals),
+            ),
+          );
+      });
+    }
+    if (page.nextCursor === null) {
+      return;
+    }
+    cursor = page.nextCursor;
+  }
+};
+
+/** Definitions are durable repair sources; every bounded page is cursor-drained. */
+export const repairFlowScheduleTriggers = async ({
+  database,
+  principal,
+  signal,
+  batchSize = LIMITS.flowDefinitionsCount,
+}: RepairFlowScheduleTriggersOptions): Promise<void> => {
+  let cursor: SafeId<"flowDefinition"> | null = null;
+  for (;;) {
+    if (signal?.aborted) {
+      break;
+    }
+    // db-await-in-loop: each bounded keyset page advances through durable definitions.
+    const page = await readCursorPage(
+      database
+        .select({
+          id: flowDefinitions.id,
+          organizationId: flowDefinitions.organizationId,
+        })
+        .from(flowDefinitions)
+        .where(
+          and(
+            cursor === null ? undefined : gt(flowDefinitions.id, cursor),
+            principal === undefined
+              ? undefined
+              : and(
+                  eq(flowDefinitions.organizationId, principal.organizationId),
+                  eq(flowDefinitions.createdByUserId, principal.userId),
+                ),
+          ),
+        )
+        .orderBy(asc(flowDefinitions.id)),
+      { limit: batchSize, cursorForItem: (row) => row.id },
+    );
+    for (const definition of page.items) {
+      if (signal?.aborted) {
         return;
       }
-      await removeSchedulerJob(flowScheduleJobId(id));
-    },
-    catch: (cause) => cause,
-  });
-
-  if (Result.isError(result)) {
-    captureError(result.error, { definitionId: id });
-    logger.error("flow.schedule_sync_failed", {
-      definitionId: id,
-      triggerType: trigger.type,
-      enabled,
-      "error.type": errorTag(result.error),
+      // db-await-in-loop: each definition gets an independent ordered admission transaction.
+      await withAggregateTransaction(database, async (tx) => {
+        await syncFlowScheduleTriggerInTransaction({
+          tx,
+          organizationId: definition.organizationId,
+          definitionId: definition.id,
+        });
+      });
+    }
+    if (page.nextCursor === null) {
+      break;
+    }
+    const last = page.items.at(-1);
+    if (last === undefined) {
+      panic("Schedule repair cursor requires a source row");
+    }
+    cursor = last.id;
+  }
+  // Scoped regrant cannot attribute a deleted definition to a principal;
+  // the standing system repair owns source-less scheduling cleanup.
+  if (principal === undefined) {
+    await repairOrphanedFlowScheduleJobs({
+      database,
+      batchSize,
+      ...(signal === undefined ? {} : { signal }),
     });
   }
 };

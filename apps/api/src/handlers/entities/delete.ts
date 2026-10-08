@@ -33,6 +33,10 @@ import {
   createFileKey,
   createOcrSearchablePdfKey,
 } from "@/api/lib/files/utils";
+import {
+  admitFlowReviewTaskDeletion,
+  FLOW_TASK_FEATURE_ACCESS,
+} from "@/api/lib/flows/review-gate-task";
 import { collectFolioCollabStoredRoomFiles } from "@/api/lib/folio-collab-rooms";
 import { LIMITS } from "@/api/lib/limits";
 import {
@@ -41,7 +45,7 @@ import {
   ocrDerivativePageOrder,
 } from "@/api/lib/ocr-derivative-pages";
 import { sanitizeFilename } from "@/api/lib/sanitize-filename";
-import { getSearchMaintenance } from "@/api/lib/search/provider";
+import { getSearchMaintenance } from "@/api/lib/search/pg-fts-maintenance";
 
 import { selectCanonicalFileContents } from "./delete-file-snapshot";
 
@@ -55,6 +59,7 @@ const deleteEntitiesBodySchema = t.Object({
 type DeleteEntitiesBodySchema = Static<typeof deleteEntitiesBodySchema>;
 
 export type DeleteEntitiesHandlerProps = {
+  userId: SafeId<"user">;
   enqueueCleanup?: (
     requestId: SafeId<"entityDeletionCleanupRequest">,
   ) => Promise<void>;
@@ -69,12 +74,21 @@ export const deleteEntitiesHandler = async function* ({
   enqueueCleanup = enqueueEntityDeletionCleanup,
   safeDb,
   organizationId,
+  userId,
   workspaceId,
   recordAuditEvent,
   body,
 }: DeleteEntitiesHandlerProps) {
   const txOutcome = yield* Result.await(
     safeDb(async (tx) => {
+      const admission = await admitFlowReviewTaskDeletion(tx, {
+        workspaceId,
+        taskEntityIds: body.entityIds,
+        userId,
+      });
+      if (admission.isErr()) {
+        return { status: "rejected" as const, error: admission.error };
+      }
       await tx.execute(
         sql`SELECT pg_advisory_xact_lock(hashtext(${workspaceId}))`,
       );
@@ -353,6 +367,7 @@ const config = {
     "entities.versions.delete this is a real delete, not a tombstone.",
   permissions: { entity: ["delete"] },
   accountAccess: ACCOUNT_ACCESS.sandbox,
+  featureAccess: FLOW_TASK_FEATURE_ACCESS,
   realtime: entityFileRealtimeUpdates,
   mcp: { type: "tool", name: "delete_document" },
   body: deleteEntitiesBodySchema,
@@ -360,10 +375,18 @@ const config = {
 
 const deleteEntities = createSafeHandler(
   config,
-  async function* ({ safeDb, session, workspaceId, body, recordAuditEvent }) {
+  async function* ({
+    safeDb,
+    session,
+    workspaceId,
+    body,
+    recordAuditEvent,
+    user,
+  }) {
     return yield* deleteEntitiesHandler({
       safeDb,
       organizationId: session.activeOrganizationId,
+      userId: user.id,
       workspaceId,
       recordAuditEvent,
       body,

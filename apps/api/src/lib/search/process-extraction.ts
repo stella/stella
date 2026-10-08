@@ -37,7 +37,7 @@ import {
   resolveExtractionMimeType,
 } from "@/api/lib/search/extract-content";
 import { canExtractMimeType } from "@/api/lib/search/extractable-mime-types";
-import { getSearchMaintenance } from "@/api/lib/search/provider";
+import { getSearchMaintenance } from "@/api/lib/search/pg-fts-maintenance";
 import {
   findExtractionFileField,
   findExtractionFileFieldRow,

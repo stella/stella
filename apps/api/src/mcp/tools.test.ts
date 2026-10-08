@@ -6845,6 +6845,7 @@ describe("OpenAI-compatible MCP tools", () => {
       limit: 10,
       organizationId: toSafeId<"organization">("org_1"),
       query: "share purchase",
+      userId: context.userId,
       workspaceIds: [
         toSafeId<"workspace">(WORKSPACE_ID),
         toSafeId<"workspace">(WORKSPACE_ID_3),
@@ -9703,7 +9704,7 @@ describe("OpenAI-compatible MCP tools", () => {
     );
   });
 
-  test("rejects dispatch of save_time_entry when FEATURE_TIME_BILLING is off outside dev", async () => {
+  test("native billing deployment refusal precedes descriptor admission", async () => {
     await withBillingFlags(
       { featureTimeBilling: false, featureUsage: true, localDevOpen: false },
       async () => {
@@ -9719,7 +9720,7 @@ describe("OpenAI-compatible MCP tools", () => {
             currency: "EUR",
             narrative: "Call with client",
           },
-          context: createBillingContext({ recordAuditEvent }),
+          context: createContext({ recordAuditEvent }),
           toolName: "save_time_entry",
         });
 

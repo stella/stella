@@ -388,6 +388,18 @@ const dispatchMcpToolCall = async ({
       return serializeForSurface(structuredErrorResult(toolRefusal));
     }
   }
+  // Native deployment refusals precede descriptor admission so their existing
+  // feature_disabled contract remains available when the deployment is off.
+  if (staticTool && !isMcpToolFeatureEnabled(staticTool.feature)) {
+    return serializeForSurface(
+      structuredErrorResult({
+        code: "feature_disabled",
+        message: FEATURE_DISABLED_MESSAGE,
+        hint: featureDisabledHint(staticTool.feature),
+      }),
+    );
+  }
+
   const unavailableResult = featureUnavailableToolResult({
     context,
     mode,
@@ -427,19 +439,6 @@ const dispatchMcpToolCall = async ({
         message:
           "This capability is not available on the documents MCP surface",
         hint: "Use one of the upload lifecycle operations exposed by the document upload panel.",
-      }),
-    );
-  }
-
-  // Reject a gated-off tool even when the caller names it directly: the list
-  // surface hides it, and this closes the guess-the-name bypass so the gate
-  // holds on both the advertisement and the dispatch path.
-  if (!isMcpToolFeatureEnabled(staticTool.feature)) {
-    return serializeForSurface(
-      structuredErrorResult({
-        code: "feature_disabled",
-        message: FEATURE_DISABLED_MESSAGE,
-        hint: featureDisabledHint(staticTool.feature),
       }),
     );
   }

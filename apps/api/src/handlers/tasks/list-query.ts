@@ -189,14 +189,10 @@ export const listTasksPage = async ({
       LIMITS.myTasksPageSizeMax,
     ),
   );
-  const reviewVisibility = await flowReviewTaskVisibilityCondition({
-    safeDb,
+  const reviewVisibility = flowReviewTaskVisibilityCondition({
     organizationId,
     userId,
   });
-  if (reviewVisibility.isErr()) {
-    return Result.err(reviewVisibility.error);
-  }
   const rows = await safeDb((tx) =>
     tx
       .select({
@@ -222,7 +218,7 @@ export const listTasksPage = async ({
         and(
           inArray(entities.workspaceId, [...workspaceIds]),
           eq(entities.kind, "task"),
-          reviewVisibility.value,
+          reviewVisibility,
           query.status === undefined
             ? undefined
             : eq(entities.status, query.status),

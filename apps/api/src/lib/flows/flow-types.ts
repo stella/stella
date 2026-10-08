@@ -34,6 +34,14 @@ export type {
 
 // -- Domain constants --
 
+/** Outlasts both step attempts, their timeout and retry backoff. */
+export const FLOW_STEP_LEASE_MS = 15 * 60 * 1000;
+
+export const FLOW_RUN_RECOVERY_STATES = [
+  "actor-removed",
+  "completion-notice-pending",
+] as const;
+
 export const FLOW_UPLOAD_TRIGGER_INTENT_STATUSES = [
   "pending",
   "awaiting_grant",
@@ -41,6 +49,7 @@ export const FLOW_UPLOAD_TRIGGER_INTENT_STATUSES = [
 ] as const;
 export const FLOW_UPLOAD_TRIGGER_SKIP_REASONS = [
   "definition_disabled",
+  "actor_missing",
   "trigger_no_longer_matches",
 ] as const;
 export type FlowUploadTriggerSkipReason =

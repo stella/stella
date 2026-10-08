@@ -593,7 +593,7 @@ export const ${name} = { run: { featureId: "fixture", ${target} } };`;
       const contaminated = new Map(sources);
       contaminated.set(
         file,
-        `${source ?? ""}\nimport { TRANSITIONS } from "@/api/lib/db/transition-specs"; export const planted = TRANSITIONS.flowRuns;`,
+        `${source ?? ""}\nimport { TRANSITIONS } from "@/api/lib/db/transition-specs"; export const candidate = TRANSITIONS.flowRuns;`,
       );
       expect(
         validateFeatureAccessDeclarations({
@@ -768,16 +768,16 @@ describe("operational dispatch ownership", () => {
     'import { record } from "../feature/receipt-owner"; export const upload = async () => { await record(); };',
     'import { record } from "../feature/receipt-owner"; export const upload = async (): Promise<void> => { const call = record; await call(); };',
     'import { record } from "../feature/receipt-owner"; import { featureRows } from "../db/schema/feature"; export const upload = async (): Promise<void> => { await record(); db.select(featureRows); };',
-  ])("rejects bypass or non-void operational facade: %s", (planted) => {
-    expect(validate(planted)).toContainEqual(invalid);
+  ])("rejects an indirect or non-void operational export: %s", (candidate) => {
+    expect(validate(candidate)).toContainEqual(invalid);
   });
   test("an unlisted wrapper cannot hide direct feature access", () => {
-    const planted = `${source} import { bypass } from "./bypass"; bypass();`;
+    const candidate = `${source} import { wrapper } from "./wrapper"; wrapper();`;
     expect(
-      validate(planted, ownerSource, [
+      validate(candidate, ownerSource, [
         [
-          "apps/api/src/dispatch/bypass.ts",
-          'import { run } from "../feature/core"; export const bypass = () => run();',
+          "apps/api/src/dispatch/wrapper.ts",
+          'import { run } from "../feature/core"; export const wrapper = () => run();',
         ],
       ]),
     ).toContainEqual(invalid);
@@ -786,8 +786,8 @@ describe("operational dispatch ownership", () => {
     'import { featureRows } from "../db/schema/feature"; export const record = async (): Promise<void> => { return featureRows; };',
     'import { featureRows } from "../db/schema/feature"; export const record = async () => { await db.insert(featureRows); };',
     'import { featureRows } from "../db/schema/feature"; export const different = async (): Promise<void> => { await db.insert(featureRows); };',
-  ])("rejects missing or escaping owner exports: %s", (planted) => {
-    expect(validate(source, planted)).toContainEqual(invalid);
+  ])("rejects missing or escaping owner exports: %s", (candidate) => {
+    expect(validate(source, candidate)).toContainEqual(invalid);
   });
   test("a generic handler still needs its own direct table declaration", () => {
     expect(
@@ -816,7 +816,7 @@ describe("operational dispatch ownership", () => {
       ...boundary,
       owners: [{ effect: "record-recovery", module: owner, exports: [] }],
     },
-  ] as const)("rejects incomplete effect ownership %j", (planted) => {
+  ] as const)("rejects incomplete effect ownership %j", (candidate) => {
     expect(
       validateFeatureAccessDeclarations({
         registry: {
@@ -824,7 +824,7 @@ describe("operational dispatch ownership", () => {
             ...registry.fixture,
             ownership: {
               ...registry.fixture.ownership,
-              dispatchModules: [planted],
+              dispatchModules: [candidate],
             },
           },
         },

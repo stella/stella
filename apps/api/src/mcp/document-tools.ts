@@ -2132,6 +2132,7 @@ const handleDeleteDocumentTool: TypedMcpToolHandler<
   }
   const deleted = await Result.gen(() =>
     deleteEntitiesHandler({
+      userId: context.userId,
       safeDb: context.safeDb,
       organizationId: context.organizationId,
       workspaceId,

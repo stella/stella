@@ -58,6 +58,7 @@ import {
   requireFlowEffectAdmission,
 } from "@/api/lib/flows/effect-admission";
 import {
+  flowRunActorExists,
   flowRunCompletedNotification,
   resolveActorUserId,
 } from "@/api/lib/flows/flow-run-actor";
@@ -78,11 +79,13 @@ import {
   FLOW_AI_STEP_MAX_OUTPUT_TOKENS,
   FLOW_DOCUMENT_CONTEXT_CHAR_CAP,
   FLOW_STEP_OUTPUT_CONTEXT_CHAR_CAP,
+  FLOW_STEP_LEASE_MS,
   MAX_FLOW_STEPS,
 } from "@/api/lib/flows/flow-types";
 import type {
   FlowReviewDecision,
   FlowRunStatus,
+  FlowRunStepStatus,
   FlowStep,
   FlowStepOutput,
   FlowTriggerSource,
@@ -213,9 +216,10 @@ type ExecuteFlowStepDependencies = {
    * actor for the run, which the scope check below refuses before any step.
    */
   admission: ModelDispatchAdmission | null;
-  onClaim?: (claimedStartedAt: TimestampCasToken) => void;
+  onClaim?: (claimedStartedAt: TimestampCasToken) => void | Promise<void>;
   /** The worker's connection, for the run, step and scope reads. */
-  database: Pick<typeof rootDb, "query">;
+  database: Pick<typeof rootDb, "query" | "transaction">;
+  now?: (() => Date) | undefined;
   /** External model-dispatch boundary; supplied by focused integration tests. */
   generateTextForRole?: typeof generateTanStackTextForRole | undefined;
   makeScopedDb?: typeof createRootScopedDb | undefined;
@@ -230,11 +234,16 @@ type ExecuteFlowStepDependencies = {
 };
 
 export const executeFlowStep = async (
-  { runId: rawRunId, stepIndex }: FlowStepJobData,
+  {
+    runId: rawRunId,
+    stepIndex,
+    claimedStartedAt: retainedClaim,
+  }: FlowStepJobData,
   signal: AbortSignal,
   {
     admission,
     database,
+    now = () => new Date(Temporal.Now.instant().epochMilliseconds),
     generateTextForRole = generateTanStackTextForRole,
     makeScopedDb = createRootScopedDb,
     makeSafeDb = createRootSafeDb,
@@ -248,23 +257,11 @@ export const executeFlowStep = async (
   }: ExecuteFlowStepDependencies,
 ): Promise<FlowStepExecutionOutcome> => {
   const runId = brandPersistedFlowRunId(rawRunId);
-  const run = await loadRun(runId, database);
-  if (!run) {
-    logger.warn("flow.run_missing", { runId, stepIndex: String(stepIndex) });
+  const source = await loadExecutableFlowStep({ runId, stepIndex, database });
+  if (source === null) {
     return { status: "completed" };
   }
-  if (isTerminalFlowRunStatus(run.status)) {
-    // Cancelled/failed/completed run: a queued step must not resurrect it.
-    return { status: "completed" };
-  }
-
-  const step = await loadStep(runId, stepIndex, database);
-  if (!step) {
-    return panic("flow run step row missing for an in-flight run");
-  }
-  if (step.status === "completed" || step.status === "skipped") {
-    return { status: "completed" }; // A retry after this step already finished.
-  }
+  const { run } = source;
 
   const stepDef = run.definitionSnapshot.steps.at(stepIndex);
   if (!stepDef) {
@@ -272,14 +269,23 @@ export const executeFlowStep = async (
   }
 
   const scope = await resolveRunScope(run, database);
-  if (scope.actorUserId === null) {
-    // The trigger guarantees an actor before starting an automated run; a null
-    // here means the definition's author was deleted mid-flight. Fail cleanly
-    // with a TaggedError (never a panic) so the worker finalizes the run.
-    throw new FlowStepError({
-      message:
-        "The user who owns this automated flow was removed; the run cannot continue.",
-    });
+  if (
+    scope.actorUserId === null ||
+    !(await flowRunActorExists(scope.actorUserId, database))
+  ) {
+    return await failFlowRunFromWorker(
+      { runId, stepIndex },
+      new FlowStepError({
+        message: "The flow actor is no longer available.",
+      }),
+      {
+        database,
+        now,
+        claimedStartedAt: retainedClaim,
+        makeScopedDb,
+        broadcastUpdate,
+      },
+    );
   }
   const actorUserId = scope.actorUserId;
   const scopedDb = makeScopedDb({
@@ -299,19 +305,8 @@ export const executeFlowStep = async (
       organizationId: scope.organizationId,
       userId: actorUserId,
     });
-    const current = await lockRunAndCurrentStep(tx, {
-      workspaceId: run.workspaceId,
-      runId,
-    });
-    if (
-      current === undefined ||
-      isTerminalFlowRunStatus(current.run.status) ||
-      current.run.currentStepIndex !== stepIndex ||
-      current.step?.status === "completed" ||
-      current.step?.status === "skipped" ||
-      current.step?.status === "awaiting_review"
-    ) {
-      return null;
+    if (!admitted) {
+      return { type: "paused" } as const;
     }
     const authorization = await resolveMemberAuthorization(
       {
@@ -328,20 +323,49 @@ export const executeFlowStep = async (
         }),
       );
     }
-    if (!admitted) {
+    const current = await lockRunAndCurrentStep(tx, {
+      workspaceId: run.workspaceId,
+      runId,
+    });
+    if (
+      current === undefined ||
+      isTerminalFlowRunStatus(current.run.status) ||
+      current.run.currentStepIndex !== stepIndex ||
+      current.step?.status === "completed" ||
+      current.step?.status === "skipped" ||
+      current.step?.status === "awaiting_review"
+    ) {
+      return null;
+    }
+    if (
+      current.step?.status === "running" &&
+      !(await mayRecoverFlowStepClaim({
+        tx,
+        organizationId: scope.organizationId,
+        actorUserId,
+        startedAt: current.step.startedAt,
+        token: current.step.startedAtToken,
+        retainedClaim,
+        now: now(),
+      }))
+    ) {
       return { type: "paused" } as const;
     }
     const startedAt = new Date(
-      Math.max(
-        Temporal.Now.instant().epochMilliseconds,
-        (current.step?.startedAt?.getTime() ?? 0) + 1,
-      ),
+      Math.max(now().getTime(), (current.step?.startedAt?.getTime() ?? 0) + 1),
     );
     const claimed = await tx
       .update(flowRunSteps)
       .set({ status: "running", startedAt })
       .where(
-        and(eq(flowRunSteps.runId, runId), eq(flowRunSteps.index, stepIndex)),
+        and(
+          eq(flowRunSteps.runId, runId),
+          eq(flowRunSteps.index, stepIndex),
+          timestampMatchesCasToken(
+            flowRunSteps.startedAt,
+            current.step?.startedAtToken ?? null,
+          ),
+        ),
       )
       .returning({ token: timestampCasToken(flowRunSteps.startedAt) });
     const claimedStartedAt =
@@ -366,7 +390,71 @@ export const executeFlowStep = async (
     return startOutcome;
   }
   const { claimedStartedAt } = startOutcome;
-  onClaim?.(claimedStartedAt);
+  await onClaim?.(claimedStartedAt);
+  return await executeClaimedFlowStep({
+    claimedStartedAt,
+    run,
+    runId,
+    stepIndex,
+    stepDef,
+    organizationId: scope.organizationId,
+    actorUserId,
+    scopedDb,
+    admission,
+    signal,
+    broadcastUpdate,
+    taskFeatures,
+    flushSearchRepairs,
+    makeSafeDb,
+    generateTextForRole,
+    loadAIConfig,
+    enqueueStep,
+    createEntity,
+  });
+};
+
+type ExecuteClaimedFlowStepOptions = {
+  claimedStartedAt: TimestampCasToken;
+  run: LoadedRun;
+  runId: SafeId<"flowRun">;
+  stepIndex: number;
+  stepDef: FlowStep;
+  organizationId: SafeId<"organization">;
+  actorUserId: SafeId<"user">;
+  scopedDb: ReturnType<typeof createRootScopedDb>;
+  admission: ModelDispatchAdmission | null;
+  signal: AbortSignal;
+  broadcastUpdate: typeof broadcastFlowRunUpdate;
+  taskFeatures: ReturnType<typeof deployedTaskFeatures>;
+  flushSearchRepairs: typeof flushEntitySearchRepairs;
+  makeSafeDb: typeof createRootSafeDb;
+  generateTextForRole: typeof generateTanStackTextForRole;
+  loadAIConfig: typeof loadOrgAIConfig;
+  enqueueStep: typeof enqueueFlowStep;
+  createEntity: typeof createEntityFromBuffer;
+};
+
+/** Dispatch only a claim that the database accepted under current admission. */
+const executeClaimedFlowStep = async ({
+  claimedStartedAt,
+  run,
+  runId,
+  stepIndex,
+  stepDef,
+  organizationId,
+  actorUserId,
+  scopedDb,
+  admission,
+  signal,
+  broadcastUpdate,
+  taskFeatures,
+  flushSearchRepairs,
+  makeSafeDb,
+  generateTextForRole,
+  loadAIConfig,
+  enqueueStep,
+  createEntity,
+}: ExecuteClaimedFlowStepOptions): Promise<FlowStepExecutionOutcome> => {
   switch (stepDef.kind) {
     case "review-gate":
       return await pauseAtReviewGate({
@@ -374,7 +462,7 @@ export const executeFlowStep = async (
         run,
         stepIndex,
         stepDef,
-        organizationId: scope.organizationId,
+        organizationId,
         actorUserId,
         scopedDb,
         broadcastUpdate,
@@ -389,11 +477,11 @@ export const executeFlowStep = async (
         stepDef,
         stepIndex,
         run,
-        organizationId: scope.organizationId,
+        organizationId,
         actorUserId,
         scopedDb,
         safeDb: makeSafeDb({
-          organizationId: scope.organizationId,
+          organizationId,
           userId: actorUserId,
           workspaceIds: [run.workspaceId],
         }),
@@ -408,7 +496,7 @@ export const executeFlowStep = async (
         stepCount: run.definitionSnapshot.steps.length,
         output,
         workspaceId: run.workspaceId,
-        organizationId: scope.organizationId,
+        organizationId,
         actorUserId,
         flowName: run.definitionSnapshot.name,
         scopedDb,
@@ -422,7 +510,7 @@ export const executeFlowStep = async (
         stepDef,
         stepIndex,
         run,
-        organizationId: scope.organizationId,
+        organizationId,
         actorUserId,
         scopedDb,
         createEntity,
@@ -464,6 +552,77 @@ const loadRun = async (
     },
   });
   return row ?? null;
+};
+
+type RecoverFlowStepClaimOptions = {
+  tx: Transaction;
+  organizationId: SafeId<"organization">;
+  actorUserId: SafeId<"user">;
+  startedAt: Date | null;
+  token: TimestampCasToken;
+  retainedClaim: TimestampCasToken | undefined;
+  now: Date;
+};
+
+const mayRecoverFlowStepClaim = async ({
+  tx,
+  organizationId,
+  actorUserId,
+  startedAt,
+  token,
+  retainedClaim,
+  now,
+}: RecoverFlowStepClaimOptions): Promise<boolean> => {
+  if (startedAt === null) {
+    return panic("Running flow step missing its claim timestamp");
+  }
+  if (
+    retainedClaim === token ||
+    startedAt.getTime() <= now.getTime() - FLOW_STEP_LEASE_MS
+  ) {
+    return true;
+  }
+  const grant = await tx.query.featureEnrolments.findFirst({
+    where: {
+      organizationId: { eq: organizationId },
+      userId: { eq: actorUserId },
+      featureId: { eq: "flows" },
+    },
+    columns: { createdAt: true },
+  });
+  return grant !== undefined && grant.createdAt.getTime() > startedAt.getTime();
+};
+
+type LoadExecutableFlowStepOptions = {
+  runId: SafeId<"flowRun">;
+  stepIndex: number;
+  database: Pick<typeof rootDb, "query">;
+};
+
+const loadExecutableFlowStep = async ({
+  runId,
+  stepIndex,
+  database,
+}: LoadExecutableFlowStepOptions) => {
+  const run = await loadRun(runId, database);
+  if (!run) {
+    logger.warn("flow.run_missing", { runId, stepIndex: String(stepIndex) });
+    return null;
+  }
+  if (isTerminalFlowRunStatus(run.status)) {
+    // Cancelled/failed/completed run: a queued step must not resurrect it.
+    return null;
+  }
+
+  const step = await loadStep(runId, stepIndex, database);
+  if (!step) {
+    return panic("flow run step row missing for an in-flight run");
+  }
+  if (step.status === "completed" || step.status === "skipped") {
+    return null; // A retry after this step already finished.
+  }
+
+  return { run, step };
 };
 
 const loadStep = (
@@ -1404,11 +1563,54 @@ const readRunProgress = async (
 
 const FLOW_STEP_FAILED_MESSAGE = "Flow step failed";
 
+type FlowFailureClaimOptions = {
+  step:
+    | {
+        status: FlowRunStepStatus;
+        startedAt: Date | null;
+        startedAtToken: TimestampCasToken;
+      }
+    | undefined;
+  retainedClaim: TimestampCasToken | undefined;
+  actorRemoved: boolean;
+  now: Date;
+};
+
+const decideFlowFailureClaim = ({
+  step,
+  retainedClaim,
+  actorRemoved,
+  now,
+}: FlowFailureClaimOptions) => {
+  if (step === undefined) {
+    return panic("Flow failure missing current step");
+  }
+  const expired =
+    step.status === "running" &&
+    step.startedAt !== null &&
+    step.startedAt.getTime() <= now.getTime() - FLOW_STEP_LEASE_MS;
+  if (
+    retainedClaim !== step.startedAtToken &&
+    !expired &&
+    !(
+      retainedClaim === undefined &&
+      (actorRemoved || step.status === "pending")
+    )
+  ) {
+    return { type: "stale" } as const;
+  }
+  return {
+    type: "settle",
+    token: step.startedAtToken,
+    reclaimAt: expired ? now : null,
+  } as const;
+};
+
 /**
  * Flip a run (and its current step) to `failed` after the worker exhausts its
  * retries. Reads the run on the worker's connection to recover its
- * workspace/org, then writes through the RLS-scoped handle. A no-op if the run
- * is already terminal.
+ * workspace/org. Live actors retain their scoped writes; unavailable actors
+ * settle with a recorded reason and preserved outputs. Terminal runs are a no-op.
  */
 export const failFlowRunFromWorker = async (
   { runId: rawRunId, stepIndex }: FlowStepJobData,
@@ -1416,12 +1618,14 @@ export const failFlowRunFromWorker = async (
   {
     database,
     claimedStartedAt,
+    now: readNow = () => new Date(),
     makeScopedDb = createRootScopedDb,
     broadcastUpdate = broadcastFlowRunUpdate,
   }: {
     /** The worker's connection: the run and scope reads, and the write when the run has no actor left. */
     database: Pick<typeof rootDb, "query" | "transaction">;
     claimedStartedAt?: TimestampCasToken | undefined;
+    now?: (() => Date) | undefined;
     makeScopedDb?: typeof createRootScopedDb | undefined;
     broadcastUpdate?: typeof broadcastFlowRunUpdate | undefined;
   },
@@ -1433,7 +1637,7 @@ export const failFlowRunFromWorker = async (
   }
   const scope = await resolveRunScope(run, database);
   const message = applicationErrorMessage(error, FLOW_STEP_FAILED_MESSAGE);
-  const now = new Date();
+  const now = readNow();
 
   const writeFailure = async (tx: Transaction) => {
     const admitted = await isFlowEffectAdmitted({
@@ -1441,6 +1645,7 @@ export const failFlowRunFromWorker = async (
       organizationId: scope.organizationId,
       userId: scope.actorUserId,
     });
+    const actorRemoved = !(await flowRunActorExists(scope.actorUserId, tx));
     const current = await lockRunAndCurrentStep(tx, {
       workspaceId: run.workspaceId,
       runId,
@@ -1454,35 +1659,52 @@ export const failFlowRunFromWorker = async (
     ) {
       return null;
     }
-    if (
-      claimedStartedAt === undefined
-        ? current.step?.status !== "pending"
-        : current.step?.startedAtToken !== claimedStartedAt
-    ) {
+    const claim = decideFlowFailureClaim({
+      step: current.step,
+      retainedClaim: claimedStartedAt,
+      actorRemoved,
+      now,
+    });
+    if (claim.type === "stale") {
       return { status: "stale" } as const;
     }
-    if (!admitted) {
+    if (!actorRemoved && !admitted) {
       return { status: "paused" } as const;
     }
+    const failureMessage = actorRemoved ? "actor-removed" : message;
     await tx
       .update(flowRunSteps)
-      .set({ status: "failed", error: message, finishedAt: now })
+      .set({
+        status: "failed",
+        error: failureMessage,
+        finishedAt: now,
+        ...(claim.reclaimAt === null ? {} : { startedAt: claim.reclaimAt }),
+      })
       .where(
         and(
           eq(flowRunSteps.runId, runId),
           eq(flowRunSteps.index, stepIndex),
-          claimedStartedAt === undefined
-            ? eq(flowRunSteps.status, "pending")
-            : timestampMatchesCasToken(
-                flowRunSteps.startedAt,
-                claimedStartedAt,
-              ),
+          timestampMatchesCasToken(flowRunSteps.startedAt, claim.token),
         ),
       );
     await tx
       .update(flowRuns)
-      .set({ status: "failed", error: message, finishedAt: now })
-      .where(eq(flowRuns.id, runId));
+      .set({
+        status: "failed",
+        recoveryState: actorRemoved ? "actor-removed" : null,
+        error: failureMessage,
+        finishedAt: now,
+      })
+      .where(
+        and(
+          eq(flowRuns.id, runId),
+          eq(flowRuns.workspaceId, run.workspaceId),
+          eq(flowRuns.currentStepIndex, stepIndex),
+        ),
+      );
+    if (actorRemoved) {
+      return { status: "actor-removed" } as const;
+    }
     const actorUserId = scope.actorUserId;
     const pings =
       actorUserId === null
@@ -1509,18 +1731,30 @@ export const failFlowRunFromWorker = async (
     } as const;
   };
 
-  // A null actor (automated run whose author was deleted) has no RLS-scoped
-  // handle to write through; the worker connection still checks admission before
-  // any failure settlement. An absent actor retains the run for recovery.
-  const failed =
+  // Actor removal records a terminal reason without deleting outputs or admitting
+  // another feature effect. A live actor's opt-out remains a recoverable pause.
+  const actorAuthorization =
     scope.actorUserId === null
+      ? null
+      : await resolveMemberAuthorization(
+          {
+            organizationId: scope.organizationId,
+            workspaceId: run.workspaceId,
+            userId: scope.actorUserId,
+          },
+          database,
+        );
+  const failed =
+    scope.actorUserId === null ||
+    !actorAuthorization?.workspace ||
+    !(await flowRunActorExists(scope.actorUserId, database))
       ? await withAggregateTransaction(database, writeFailure)
       : await makeScopedDb({
           organizationId: scope.organizationId,
           userId: scope.actorUserId,
           workspaceIds: [run.workspaceId],
         })(writeFailure);
-  if (failed === null) {
+  if (failed === null || failed.status === "actor-removed") {
     return { status: "completed" };
   }
   if (failed.status !== "completed") {
@@ -1728,6 +1962,8 @@ export const resolveFlowReviewGate = async (
           .update(flowRuns)
           .set({
             status: nextStatus,
+            recoveryState:
+              nextStatus === "completed" ? "completion-notice-pending" : null,
             ...(resolution.kind === "advance"
               ? { currentStepIndex: resolution.nextStepIndex }
               : { finishedAt: now }),

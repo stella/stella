@@ -47,6 +47,7 @@ const versionDiff = createSafeHandler(
       safeDb(
         async (tx) =>
           await admitTaskFlowAccess(tx, {
+            access: "read",
             workspaceId,
             taskEntityId: params.entityId,
             userId: user.id,

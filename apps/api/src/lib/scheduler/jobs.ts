@@ -4,7 +4,6 @@ import { and, eq, notInArray } from "drizzle-orm";
 import { DAY_IN_MS } from "@stll/time";
 
 import { rootDb } from "@/api/db/root";
-import type { SchedulerPayload, SchedulerSchedule } from "@/api/db/schema";
 import { schedulerJobs } from "@/api/db/schema";
 import { env } from "@/api/env";
 import { envBase } from "@/api/env-base";
@@ -13,10 +12,7 @@ import { resolveInboundMailReceiving } from "@/api/lib/email/inbound/receiving-c
 import { logger } from "@/api/lib/observability/logger";
 import { readReviewOrganizationConfig } from "@/api/lib/review-organization/config";
 import { SCHEDULER_BACKFILL_IDS } from "@/api/lib/scheduler/backfill-config";
-import {
-  REGISTERED_SCHEDULER_TASK_NAMES,
-  type RegisteredSchedulerTaskName,
-} from "@/api/lib/scheduler/registry";
+import { REGISTERED_SCHEDULER_TASK_NAMES } from "@/api/lib/scheduler/registry";
 import { computeNextRunAt } from "@/api/lib/scheduler/schedule";
 import { SWEEP_ACTION_COSTS_TASK } from "@/api/lib/scheduler/tasks/action-cost-retention";
 import { BACKFILL_AGENT_CLIENT_STORAGE_TASK } from "@/api/lib/scheduler/tasks/agent-client-storage-backfill";
@@ -70,72 +66,13 @@ import { CLEAN_TEMPLATE_DELETION_OBJECTS_TASK } from "@/api/lib/scheduler/tasks/
 import { RECOVER_UPLOAD_FLOW_TRIGGERS_TASK } from "@/api/lib/scheduler/tasks/upload-flow-trigger-recovery";
 import { WORK_ATTENTION_SCOUT_TASK } from "@/api/lib/scheduler/tasks/work-attention-scout";
 import { BACKFILL_WORK_OBLIGATIONS_TASK } from "@/api/lib/scheduler/tasks/work-obligation-backfill";
-import type { SchedulerDb } from "@/api/lib/scheduler/types";
-
-type SchedulerJobDefinition = {
-  id: string;
-  task: RegisteredSchedulerTaskName;
-  description: string;
-  schedule: SchedulerSchedule;
-  payload?: SchedulerPayload | null;
-  payloadUpdate?: "preserve" | "replace";
-  enabled?: boolean;
-};
+import { upsertSchedulerJob } from "@/api/lib/scheduler/upsert-job";
+import type { SchedulerJobDefinition } from "@/api/lib/scheduler/upsert-job";
 
 export const ensureSchedulerJob = async (
   definition: SchedulerJobDefinition,
 ): Promise<void> => {
   await upsertSchedulerJob(definition, rootDb);
-};
-
-export const upsertSchedulerJob = async (
-  {
-    description,
-    enabled = true,
-    id,
-    payload = null,
-    payloadUpdate = "replace",
-    schedule,
-    task,
-  }: SchedulerJobDefinition,
-  db: SchedulerDb,
-): Promise<void> => {
-  const nextRunAt = computeNextRunAt(schedule);
-  const [existingJob] = await db
-    .select({
-      schedule: schedulerJobs.schedule,
-      task: schedulerJobs.task,
-    })
-    .from(schedulerJobs)
-    .where(eq(schedulerJobs.id, id))
-    .limit(1);
-  const shouldRefreshNextRunAt =
-    !existingJob ||
-    existingJob.task !== task ||
-    !sameSchedule(existingJob.schedule, schedule);
-
-  await db
-    .insert(schedulerJobs)
-    .values({
-      description,
-      enabled,
-      id,
-      nextRunAt,
-      payload,
-      schedule,
-      task,
-    })
-    .onConflictDoUpdate({
-      target: schedulerJobs.id,
-      set: {
-        description,
-        enabled,
-        ...(shouldRefreshNextRunAt && { nextRunAt }),
-        ...(payloadUpdate === "replace" && { payload }),
-        schedule,
-        task,
-      },
-    });
 };
 
 /** Drop one job's row, the counterpart of `ensureSchedulerJob`. */
@@ -162,29 +99,6 @@ const ensureOneShotSchedulerJob = async ({
       task,
     })
     .onConflictDoNothing({ target: schedulerJobs.id });
-};
-
-const sameSchedule = (
-  left: SchedulerSchedule,
-  right: SchedulerSchedule,
-): boolean => {
-  if (left.type !== right.type) {
-    return false;
-  }
-
-  if (left.type === "interval" && right.type === "interval") {
-    return left.everyMs === right.everyMs;
-  }
-
-  if (left.type !== "daily" || right.type !== "daily") {
-    return false;
-  }
-
-  return (
-    left.hour === right.hour &&
-    left.minute === right.minute &&
-    left.timeZone === right.timeZone
-  );
 };
 
 /**

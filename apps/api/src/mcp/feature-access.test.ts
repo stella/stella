@@ -127,6 +127,29 @@ const contextFor = (
 };
 
 describe("feature descriptor discovery and admission", () => {
+  test.each(["flows", "signals"])(
+    "%s descriptors remain hidden at native dispatch",
+    async (hiddenFeatureId) => {
+      const { context } = contextFor("hidden");
+      const result = await handleMcpToolCall({
+        context: {
+          ...context,
+          testDependencies: {
+            ...context.testDependencies,
+            featureAccessBindings: {
+              ...bindings,
+              tools: new Map([["list_matters", hiddenFeatureId]]),
+            },
+          },
+        },
+        toolName: "list_matters",
+        args: {},
+      });
+      expect(JSON.stringify(result)).toContain("unknown_tool");
+      expect(JSON.stringify(result)).not.toContain("feature_disabled");
+    },
+  );
+
   test.each([
     "ordinary",
     "enabled",

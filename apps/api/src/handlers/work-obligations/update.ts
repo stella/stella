@@ -178,6 +178,7 @@ const updateWorkObligation = createSafeHandler(
       safeDb(
         async (tx) =>
           await admitTaskFlowAccess(tx, {
+            access: "read",
             workspaceId,
             taskEntityId: params.entityId,
             userId: user.id,
@@ -230,6 +231,7 @@ const updateWorkObligation = createSafeHandler(
     const result = yield* Result.await(
       safeDb(async (tx) => {
         const currentAdmission = await admitTaskFlowAccess(tx, {
+          access: "write",
           workspaceId,
           taskEntityId: params.entityId,
           userId: user.id,

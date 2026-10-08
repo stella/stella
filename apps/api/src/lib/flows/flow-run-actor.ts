@@ -1,9 +1,22 @@
+import { panic } from "better-result";
+import { and, eq } from "drizzle-orm";
+
 import { NOTIFICATION_KIND } from "@stll/api-contract/notifications";
 
 import type { rootDb } from "@/api/db/root";
+import { flowRuns } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
+import {
+  withAggregateRowQuery,
+  withAggregateTransaction,
+} from "@/api/lib/db/aggregate-lock";
+import { isBackgroundFeatureEnabled } from "@/api/lib/feature-access/background";
+import { lockFeatureRecoveryAdmission } from "@/api/lib/feature-access/recovery-admission-lock";
 import type { FlowTriggerSource } from "@/api/lib/flows/flow-types";
-import { fanOutNotifications } from "@/api/lib/notifications";
+import {
+  createNotificationsInTransaction,
+  pingNotificationRecipients,
+} from "@/api/lib/notifications";
 import type {
   NewNotification,
   NotificationFanOutDb,
@@ -20,8 +33,8 @@ type FlowRunActorSource = {
  * manual run carries the launcher's id; an automated run falls back to the
  * definition author. Returns `null` for an automated run whose author was
  * deleted mid-flight — the trigger already refuses to start such a run, so this
- * only happens if the author is removed after the run begins; callers fail the
- * run cleanly rather than panicking.
+ * only happens if the author is removed after the run begins; callers retain
+ * the run without admitting another feature effect.
  */
 export const resolveActorUserId = async (
   run: FlowRunActorSource,
@@ -40,6 +53,21 @@ export const resolveActorUserId = async (
     }
   }
   return null;
+};
+
+/** An unavailable actor is distinct from a live actor without a feature grant. */
+export const flowRunActorExists = async (
+  actorUserId: SafeId<"user"> | null,
+  database: Pick<typeof rootDb, "query">,
+): Promise<boolean> => {
+  if (actorUserId === null) {
+    return false;
+  }
+  const actor = await database.query.user.findFirst({
+    where: { id: { eq: actorUserId }, deletedAt: { isNull: true } },
+    columns: { id: true },
+  });
+  return actor !== undefined;
 };
 
 type FlowRunCompletedNotificationArgs = {
@@ -82,20 +110,96 @@ export type FlowRunCompletionNotice = Omit<
 };
 
 /**
- * Resolve the run's actor and file their completion pointer, both on
- * `database`. Filing for somebody else is a cross-user write, so the caller
- * chooses the connection deliberately (see `flow-run-completion-notice.ts`).
+ * Resolve the live actor and file their pointer under the grant writer's lock.
+ * Refused notices remain recoverable from the completed run. Filing for somebody
+ * else is a cross-user write, so the caller chooses the connection deliberately
+ * (see `flow-run-completion-notice.ts`).
  */
 export const fileFlowRunCompletionNotice = async (
-  { run, ...notice }: FlowRunCompletionNotice,
-  database: Pick<typeof rootDb, "query"> & NotificationFanOutDb,
+  { run: _run, ...notice }: FlowRunCompletionNotice,
+  database: NotificationFanOutDb,
 ): Promise<void> => {
-  const actorUserId = await resolveActorUserId(run, database);
-  if (actorUserId === null) {
-    return;
-  }
-  await fanOutNotifications(
-    [flowRunCompletedNotification({ ...notice, actorUserId })],
-    database,
-  );
+  const pings = await withAggregateTransaction(database, async (tx) => {
+    await lockFeatureRecoveryAdmission({
+      tx,
+      organizationId: notice.organizationId,
+      featureId: "flows",
+    });
+    const locked = await withAggregateRowQuery({
+      aggregate: "run",
+      id: { runId: notice.runId, workspaceId: notice.workspaceId },
+      mode: "update",
+      tx,
+      select: (queryTx) =>
+        queryTx
+          .select({
+            id: flowRuns.id,
+            workspaceId: flowRuns.workspaceId,
+            status: flowRuns.status,
+            definitionId: flowRuns.definitionId,
+            triggerSource: flowRuns.triggerSource,
+          })
+          .from(flowRuns),
+    });
+    if (locked.status === "busy") {
+      return panic("Blocking aggregate acquisition returned busy");
+    }
+    const current = locked.rows.at(0);
+    if (current?.status !== "completed") {
+      return [];
+    }
+    const actorUserId = await resolveActorUserId(current, tx);
+    // audit: skip — notification delivery-state bookkeeping; the run retains its outcome.
+    if (!(await flowRunActorExists(actorUserId, tx))) {
+      await tx
+        .update(flowRuns)
+        .set({ recoveryState: "actor-removed" })
+        .where(
+          and(
+            eq(flowRuns.id, notice.runId),
+            eq(flowRuns.workspaceId, notice.workspaceId),
+            eq(flowRuns.status, "completed"),
+          ),
+        );
+      return [];
+    }
+    if (
+      actorUserId === null ||
+      !(await isBackgroundFeatureEnabled({
+        tx,
+        organizationId: notice.organizationId,
+        userId: actorUserId,
+        featureId: "flows",
+      }))
+    ) {
+      // The completed source records only notices whose filing was deferred.
+      await tx
+        .update(flowRuns)
+        .set({ recoveryState: "completion-notice-pending" })
+        .where(
+          and(
+            eq(flowRuns.id, notice.runId),
+            eq(flowRuns.workspaceId, notice.workspaceId),
+            eq(flowRuns.status, "completed"),
+          ),
+        );
+      return [];
+    }
+    const notificationPings = await createNotificationsInTransaction(
+      [flowRunCompletedNotification({ ...notice, actorUserId })],
+      tx,
+    );
+    await tx
+      .update(flowRuns)
+      .set({ recoveryState: null })
+      .where(
+        and(
+          eq(flowRuns.id, notice.runId),
+          eq(flowRuns.workspaceId, notice.workspaceId),
+          eq(flowRuns.status, "completed"),
+        ),
+      );
+    return notificationPings;
+  });
+  pingNotificationRecipients(pings);
 };

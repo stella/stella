@@ -174,6 +174,9 @@ const revalidateUploadIntent = async ({
     };
   }
   const reason = (() => {
+    if (definition.createdByUserId === null) {
+      return "actor_missing" as const;
+    }
     if (!definition.enabled) {
       return "definition_disabled" as const;
     }
@@ -216,6 +219,43 @@ const revalidateUploadIntent = async ({
       inputEntityIds: rows.run.inputEntityIds,
     }),
   };
+};
+
+type DeferCappedUploadIntentOptions = {
+  tx: Transaction;
+  organizationId: SafeId<"organization">;
+  workspaceId: SafeId<"workspace">;
+  definitionId: SafeId<"flowDefinition">;
+  entityId: SafeId<"entity">;
+  claimToken: TimestampCasToken;
+  now: Date;
+};
+
+const deferCappedUploadIntent = async ({
+  tx,
+  organizationId,
+  workspaceId,
+  definitionId,
+  entityId,
+  claimToken,
+  now,
+}: DeferCappedUploadIntentOptions): Promise<void> => {
+  // audit: skip — durable delivery retry bookkeeping; the source upload is audited.
+  await tx
+    .update(flowUploadTriggerIntents)
+    .set({
+      retryAt: new Date(startOfUtcDay(now).getTime() + DAY_IN_MS),
+    })
+    .where(
+      and(
+        eq(flowUploadTriggerIntents.organizationId, organizationId),
+        eq(flowUploadTriggerIntents.workspaceId, workspaceId),
+        eq(flowUploadTriggerIntents.definitionId, definitionId),
+        eq(flowUploadTriggerIntents.entityId, entityId),
+        eq(flowUploadTriggerIntents.status, "pending"),
+        timestampMatchesCasToken(flowUploadTriggerIntents.retryAt, claimToken),
+      ),
+    );
 };
 
 export const insertAutomatedFlowRunWithinCap = async ({
@@ -385,28 +425,15 @@ export const insertAutomatedFlowRunWithinCap = async ({
         rows.run.triggerSource.type === "file-upload" &&
         uploadTriggerClaimToken !== undefined
       ) {
-        // audit: skip — durable delivery retry bookkeeping; the source upload is audited.
-        await tx
-          .update(flowUploadTriggerIntents)
-          .set({
-            retryAt: new Date(startOfUtcDay(now).getTime() + DAY_IN_MS),
-          })
-          .where(
-            and(
-              eq(flowUploadTriggerIntents.organizationId, organizationId),
-              eq(flowUploadTriggerIntents.workspaceId, rows.run.workspaceId),
-              eq(flowUploadTriggerIntents.definitionId, definitionId),
-              eq(
-                flowUploadTriggerIntents.entityId,
-                brandPersistedEntityId(rows.run.triggerSource.entityId),
-              ),
-              eq(flowUploadTriggerIntents.status, "pending"),
-              timestampMatchesCasToken(
-                flowUploadTriggerIntents.retryAt,
-                uploadTriggerClaimToken,
-              ),
-            ),
-          );
+        await deferCappedUploadIntent({
+          tx,
+          organizationId,
+          workspaceId: rows.run.workspaceId,
+          definitionId,
+          entityId: brandPersistedEntityId(rows.run.triggerSource.entityId),
+          claimToken: uploadTriggerClaimToken,
+          now,
+        });
       }
       return { outcome: "capped", dailyRunCount };
     }

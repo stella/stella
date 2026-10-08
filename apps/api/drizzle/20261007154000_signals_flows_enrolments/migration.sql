@@ -4,7 +4,7 @@ SET statement_timeout = '5s';--> statement-breakpoint
 -- stella-migration-safety: reviewed drop-constraint - Replaced in the same statement with the expanded self-serve feature set.
 ALTER TABLE "feature_enrolments"
   DROP CONSTRAINT "feature_enrolments_feature_id_check",
-  ADD CONSTRAINT "feature_enrolments_feature_id_check" CHECK (feature_id IN ('time-billing', 'signals', 'flows'));
+  ADD CONSTRAINT "feature_enrolments_feature_id_check" CHECK (feature_id IN ('time-billing', 'signals', 'flows')) NOT VALID;
 
 --> statement-breakpoint
 CREATE TABLE "pending_scout_emissions" (

@@ -22,7 +22,7 @@ import {
 } from "@/api/lib/db/tree-parent-guard";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
-import { syncWorkspaceSearchActivity } from "@/api/lib/search/index-global";
+import { syncWorkspaceSearchActivity } from "@/api/lib/search/workspace-search-activity";
 
 const moveEntityBodySchema = t.Object({
   entityId: tSafeId("entity"),

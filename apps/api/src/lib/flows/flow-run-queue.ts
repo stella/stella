@@ -1,6 +1,7 @@
 import type { Queue, JobsOptions } from "bullmq";
 
 import { createLazyBullMqQueue } from "@/api/lib/bullmq-queue";
+import type { TimestampCasToken } from "@/api/lib/db/timestamp-cas";
 
 // ── Queue name + payload ────────────────────────────────
 
@@ -16,6 +17,8 @@ export const FLOW_RUN_QUEUE_NAME = "flow-run";
 export type FlowStepJobData = {
   runId: string;
   stepIndex: number;
+  /** Retained across queue retries; stale claims never settle a replacement. */
+  claimedStartedAt?: TimestampCasToken;
 };
 
 // ── Retry / self-heal levers ────────────────────────────
@@ -49,6 +52,17 @@ const getQueue = createLazyBullMqQueue<FlowStepJobData>({
 // the boot reconciler re-add a step idempotently.
 const flowStepJobId = (runId: string, stepIndex: number): string =>
   `flow-run-${runId}-${stepIndex}`;
+
+/** Save the original SQL claim in queue data before external work can fail. */
+export const persistFlowStepClaim = async (
+  job: {
+    data: FlowStepJobData;
+    updateData: (data: FlowStepJobData) => Promise<void>;
+  },
+  claimedStartedAt: TimestampCasToken,
+): Promise<void> => {
+  await job.updateData({ ...job.data, claimedStartedAt });
+};
 
 /**
  * Enqueue one step of a run. Called by `startFlowRun` (step 0), by the

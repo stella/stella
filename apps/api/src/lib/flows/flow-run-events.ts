@@ -1,16 +1,15 @@
 import { and, eq, inArray } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 
-import { REALTIME_EVENT_TYPE } from "@stll/api-contract";
+import { REALTIME_EVENT_TYPE, RESOURCE_TYPE } from "@stll/api-contract";
 
 import type { Transaction } from "@/api/db/root";
 import type { ScopedDb } from "@/api/db/safe-db";
-import { featureEnrolments } from "@/api/db/schema";
+import { featureEnrolments, flowRunSteps } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 import { withAggregateTransaction } from "@/api/lib/db/aggregate-lock";
 import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import { backgroundFeatureActorExists } from "@/api/lib/feature-access/background";
-import { lockFeatureRecoveryAdmission } from "@/api/lib/feature-access/recovery-admission-lock";
 import type {
   FlowRunStatus,
   FlowRunStepStatus,
@@ -38,7 +37,7 @@ const recipientEnrolments = alias(
   "flow_sse_recipient_enrolments",
 );
 
-/** Keep other workspace events live while flow progress requires current recipient admission. */
+/** Progress and linked task identifiers require current recipient admission. */
 export const deliverFlowRunWorkspaceEvent = async ({
   database,
   organizationId,
@@ -47,19 +46,48 @@ export const deliverFlowRunWorkspaceEvent = async ({
   event,
   deliver,
 }: DeliverFlowRunWorkspaceEventOptions): Promise<void> => {
-  if (event.type !== FLOW_RUN_UPDATE_EVENT_TYPE) {
-    deliver(new Set(userIds));
-    return;
-  }
-  if (!isDeploymentFeatureEnabled("FEATURE_FLOWS") || userIds.length === 0) {
+  if (userIds.length === 0) {
     return;
   }
   await withAggregateTransaction(database, async (tx) => {
-    await lockFeatureRecoveryAdmission({
-      tx,
-      organizationId,
-      featureId: "flows",
-    });
+    if (event.type !== FLOW_RUN_UPDATE_EVENT_TYPE) {
+      const entityIds = [];
+      switch (event.type) {
+        case REALTIME_EVENT_TYPE.RESOURCE_UPDATED:
+        case REALTIME_EVENT_TYPE.RESOURCE_DELETED:
+          if (event.resource.type === RESOURCE_TYPE.ENTITY) {
+            entityIds.push(event.resource.id);
+          }
+          break;
+        case REALTIME_EVENT_TYPE.RESOURCES_CHANGED:
+          for (const { resource } of event.changes) {
+            if (resource.type === RESOURCE_TYPE.ENTITY) {
+              entityIds.push(resource.id);
+            }
+          }
+          break;
+        default:
+          break;
+      }
+      if (entityIds.length === 0) {
+        deliver(new Set(userIds));
+        return;
+      }
+      const linked = await tx
+        .select({ id: flowRunSteps.id })
+        .from(flowRunSteps)
+        .where(
+          and(
+            eq(flowRunSteps.workspaceId, workspaceId),
+            inArray(flowRunSteps.reviewTaskEntityId, entityIds),
+          ),
+        )
+        .limit(1);
+      if (linked.length === 0) {
+        deliver(new Set(userIds));
+        return;
+      }
+    }
     if (!isDeploymentFeatureEnabled("FEATURE_FLOWS")) {
       return;
     }
@@ -79,7 +107,7 @@ export const deliverFlowRunWorkspaceEvent = async ({
           }),
         ),
       );
-    // Enqueue synchronously before releasing the same lock used by grant revocation.
+    // Delivery is a pure read: it uses current admission without blocking grant changes.
     deliver(
       new Set(
         recipients.map((recipient) => brandPersistedUserId(recipient.userId)),

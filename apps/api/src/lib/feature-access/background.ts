@@ -1,5 +1,7 @@
-import { and, asc, eq, inArray, isNotNull, isNull, or, sql } from "drizzle-orm";
+import { panic } from "better-result";
+import { and, asc, eq, isNull, or, sql } from "drizzle-orm";
 import type { SQLWrapper } from "drizzle-orm";
+import { alias } from "drizzle-orm/pg-core";
 
 import { CLIENT_MATTER_ADMIN_ROLES } from "@stll/permissions";
 
@@ -15,6 +17,9 @@ import {
   resolveFeatureAccess,
 } from "@/api/lib/auth/feature-access/context";
 import type { SafeId } from "@/api/lib/branded-types";
+import { readCursorPage } from "@/api/lib/db/read-bounded";
+import { timestampCasToken } from "@/api/lib/db/timestamp-cas";
+import type { TimestampCasToken } from "@/api/lib/db/timestamp-cas";
 import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import { brandPersistedUserId } from "@/api/lib/safe-id-boundaries";
 
@@ -48,6 +53,8 @@ export const isBackgroundFeatureEnabled = async ({
   return decision.status === "enabled";
 };
 
+const SIGNAL_ACTOR_CANDIDATE_BATCH_SIZE = 32;
+
 type FindSignalsBackgroundActorOptions = {
   tx: Pick<Transaction, "select">;
   organizationId: SafeId<"organization">;
@@ -63,75 +70,85 @@ export const findSignalsBackgroundActor = async ({
   if (!isDeploymentFeatureEnabled("FEATURE_SIGNALS")) {
     return null;
   }
-  const candidates = await tx
-    .select({ userId: member.userId })
-    .from(member)
-    .innerJoin(
-      user,
-      and(
-        eq(user.id, member.userId),
-        eq(user.emailVerified, true),
-        isNull(user.deletedAt),
-      ),
-    )
-    .innerJoin(
-      featureEnrolments,
-      and(
-        eq(featureEnrolments.organizationId, member.organizationId),
-        eq(featureEnrolments.userId, member.userId),
-        eq(featureEnrolments.featureId, "signals"),
-      ),
-    )
-    .leftJoin(
-      workspaceMembers,
-      and(
-        eq(workspaceMembers.userId, member.userId),
-        workspaceId === undefined
-          ? undefined
-          : eq(workspaceMembers.workspaceId, workspaceId),
-      ),
-    )
-    .leftJoin(
-      workspaces,
-      and(
-        workspaceId === undefined
-          ? eq(workspaces.id, workspaceMembers.workspaceId)
-          : eq(workspaces.id, workspaceId),
-        eq(workspaces.organizationId, member.organizationId),
-      ),
-    )
-    .where(
-      and(
-        eq(member.organizationId, organizationId),
-        workspaceId === undefined
-          ? undefined
-          : and(
-              eq(workspaces.id, workspaceId),
-              or(
-                eq(workspaceMembers.workspaceId, workspaceId),
-                and(
-                  inArray(member.role, CLIENT_MATTER_ADMIN_ROLES),
-                  isNotNull(workspaces.clientId),
-                ),
-              ),
+  const candidateMembers = alias(member, "signals_actor_candidates");
+  let cursor: { id: string; createdAtToken: TimestampCasToken } | undefined;
+  for (;;) {
+    // db-await-in-loop: keyset-search every admitted candidate; one refused snapshot cannot hide later members.
+    const page = await readCursorPage(
+      tx
+        .select({
+          id: candidateMembers.id,
+          createdAtToken: timestampCasToken(candidateMembers.createdAt),
+          userId: candidateMembers.userId,
+          email: user.email,
+          emailVerified: user.emailVerified,
+        })
+        .from(candidateMembers)
+        .innerJoin(
+          user,
+          and(
+            eq(user.id, candidateMembers.userId),
+            eq(user.emailVerified, true),
+            isNull(user.deletedAt),
+          ),
+        )
+        .innerJoin(
+          featureEnrolments,
+          and(
+            eq(
+              featureEnrolments.organizationId,
+              candidateMembers.organizationId,
             ),
-      ),
-    )
-    .orderBy(asc(member.createdAt), asc(member.id))
-    .limit(1);
-  const candidate = candidates.at(0);
-  if (
-    !candidate ||
-    !(await isBackgroundFeatureEnabled({
-      tx,
-      organizationId,
-      userId: candidate.userId,
-      featureId: "signals",
-    }))
-  ) {
-    return null;
+            eq(featureEnrolments.userId, candidateMembers.userId),
+            eq(featureEnrolments.featureId, "signals"),
+          ),
+        )
+        .where(
+          and(
+            eq(candidateMembers.organizationId, organizationId),
+            cursor === undefined
+              ? undefined
+              : sql`(${candidateMembers.createdAt}, ${candidateMembers.id}) > (${cursor.createdAtToken}::timestamptz, ${cursor.id})`,
+            workspaceId === undefined
+              ? undefined
+              : backgroundFeatureActorExists({
+                  organizationId,
+                  workspaceId,
+                  featureId: "signals",
+                  userId: candidateMembers.userId,
+                }),
+          ),
+        )
+        .orderBy(asc(candidateMembers.createdAt), asc(candidateMembers.id)),
+      {
+        limit: SIGNAL_ACTOR_CANDIDATE_BATCH_SIZE,
+        cursorForItem: (candidate) => candidate.id,
+      },
+    );
+    for (const candidate of page.items) {
+      const snapshot = buildFeatureAccessSnapshot({
+        organizationId,
+        userId: candidate.userId,
+        identity: {
+          email: candidate.email,
+          emailVerified: candidate.emailVerified,
+        },
+        enrolments: [
+          { organizationId, userId: candidate.userId, featureId: "signals" },
+        ],
+      });
+      if (snapshot.decisions.get("signals")?.status === "enabled") {
+        return brandPersistedUserId(candidate.userId);
+      }
+    }
+    if (page.nextCursor === null) {
+      return null;
+    }
+    const last =
+      page.items.at(-1) ??
+      panic("Signal actor continuation requires a candidate");
+    cursor = { id: last.id, createdAtToken: last.createdAtToken };
   }
-  return brandPersistedUserId(candidate.userId);
 };
 
 type BackgroundFeaturePrincipal = {

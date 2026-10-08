@@ -609,8 +609,6 @@ const DESCRIPTION_OVERRIDES: Record<string, string> = {
   VITE_FEATURE_AI_MEMORY: "Show tenant-scoped AI memory settings.",
   VITE_FEATURE_GOVERNED_WORKFLOW:
     "Show governed work-obligation fields on a task (owner, acknowledgement, hard deadline).",
-  VITE_FEATURE_INBOX:
-    "Show the Inbox and the notification bell for everyone, without the per-browser beta toggle.",
   VITE_POSTHOG_KEY:
     'Public PostHog project key. The placeholder "phc_" disables local capture.',
   VITE_POSTHOG_LOCAL_DEBUG:
@@ -952,7 +950,6 @@ export const ENV_CREDENTIAL_CLASSIFICATION = {
   VITE_FEATURE_AI_MEMORY: ENV_CREDENTIAL_KIND.notCredential,
   VITE_FEATURE_FOLIO_COLLAB: ENV_CREDENTIAL_KIND.notCredential,
   VITE_FEATURE_GOVERNED_WORKFLOW: ENV_CREDENTIAL_KIND.notCredential,
-  VITE_FEATURE_INBOX: ENV_CREDENTIAL_KIND.notCredential,
   VITE_FEATURE_USAGE: ENV_CREDENTIAL_KIND.notCredential,
   VITE_POSTHOG_HOST: ENV_CREDENTIAL_KIND.notCredential,
   VITE_POSTHOG_KEY: ENV_CREDENTIAL_KIND.notCredential,
@@ -968,7 +965,6 @@ export const ENV_CREDENTIAL_CLASSIFICATION = {
   VITE_SELFHOST: ENV_CREDENTIAL_KIND.notCredential,
   VITE_SEO_INDEXABLE: ENV_CREDENTIAL_KIND.notCredential,
   VITE_TERMS_URL: ENV_CREDENTIAL_KIND.notCredential,
-  VITE_WORKFLOWS_ENABLED: ENV_CREDENTIAL_KIND.notCredential,
   WEB_FETCH_PROVIDER: ENV_CREDENTIAL_KIND.notCredential,
   WEB_SEARCH_PROVIDER: ENV_CREDENTIAL_KIND.notCredential,
 } as const satisfies Record<

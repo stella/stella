@@ -51,10 +51,8 @@ jobs:
 
       - name: Build production web
         env:
-          VITE_FEATURE_INBOX: "true"
           VITE_PUBLIC_LAW_ENABLED: "true"
           VITE_PUBLIC_TOOLS_ENABLED: "true"
-          VITE_WORKFLOWS_ENABLED: "true"
         run: bun --filter @stll/web build
 
       - name: Start docker stack and API server

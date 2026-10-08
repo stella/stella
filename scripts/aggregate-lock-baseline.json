@@ -3883,18 +3883,6 @@
   },
   {
     "file": "apps/api/src/lib/member-assignment-offboarding-owner.ts",
-    "fingerprint": "0b97673bbacc672a43f5b817e77c54571a0af0bbb768b90f7e7dd04ade6673f3",
-    "count": 1,
-    "reason": "existing acquisition, query changed by #5308; direct batch LIMIT moved to readCursorPage LIMIT batch+1 (one locked sentinel); mode/table/key/predicate identical; migrates with owner extension follow-up"
-  },
-  {
-    "file": "apps/api/src/lib/member-assignment-offboarding-owner.ts",
-    "fingerprint": "1426e2ca8d888507f62366e57349246041082fea39a3226bd410e1762f285982",
-    "count": 1,
-    "reason": "existing acquisition, query changed by #5308; direct batch LIMIT moved to readCursorPage LIMIT batch+1 (one locked sentinel); mode/table/key/predicate identical; migrates with owner extension follow-up"
-  },
-  {
-    "file": "apps/api/src/lib/member-assignment-offboarding-owner.ts",
     "fingerprint": "17f394aff15489ecec81b34616e8e226db1e2b310e63e11db418c0b3bae9b62e",
     "count": 1,
     "reason": "existing acquisition moved by #5308; exact fingerprint transferred from member-assignment-offboarding.ts; mode/table/key/predicate identical; migrates with owner extension follow-up"
@@ -3907,9 +3895,15 @@
   },
   {
     "file": "apps/api/src/lib/member-assignment-offboarding-owner.ts",
-    "fingerprint": "2828ce709dca68f7e3e767ac5c8bc69c008f5d59d84dd48cad3bcb068047ae05",
+    "fingerprint": "2a2fbd3c10d66d6b1b79144579124f3ae81e93ccf4f0b4b2846a80ec0025f1f3",
     "count": 1,
-    "reason": "existing acquisition, query changed by #5308; direct batch LIMIT moved to readCursorPage LIMIT batch+1 (one locked sentinel); mode/table/key/predicate identical; migrates with owner extension follow-up"
+    "reason": "existing acquisition, query changed by #5308; explanatory locked-batch comment changes the source fingerprint only (SQL expression identical after removing comments); mode/table/key/predicate identical; migrates with owner extension follow-up"
+  },
+  {
+    "file": "apps/api/src/lib/member-assignment-offboarding-owner.ts",
+    "fingerprint": "4d1b4a7531619ad87ff02288dc97c075a7c27689365cb5d9beb6d87620cf8fd6",
+    "count": 1,
+    "reason": "existing acquisition, query changed by #5308; explanatory locked-batch comment changes the source fingerprint only (SQL expression identical after removing comments); mode/table/key/predicate identical; migrates with owner extension follow-up"
   },
   {
     "file": "apps/api/src/lib/member-assignment-offboarding-owner.ts",
@@ -3937,21 +3931,27 @@
   },
   {
     "file": "apps/api/src/lib/member-assignment-offboarding-owner.ts",
-    "fingerprint": "89012eaac6159e46125ff0b0d3c30678fa53e3e674a30598aa1170ad4bf67f86",
+    "fingerprint": "7d3df3a290cefc23cfab90c12c1e960346ec993fbbb4144fb635cb62b7dbef7b",
     "count": 1,
-    "reason": "existing acquisition, query changed by #5308; direct batch LIMIT moved to readCursorPage LIMIT batch+1 (one locked sentinel); mode/table/key/predicate identical; migrates with owner extension follow-up"
+    "reason": "existing acquisition, query changed by #5308; explanatory locked-batch comment changes the source fingerprint only (SQL expression identical after removing comments); mode/table/key/predicate identical; migrates with owner extension follow-up"
   },
   {
     "file": "apps/api/src/lib/member-assignment-offboarding-owner.ts",
-    "fingerprint": "bec933f4965a61b15c9f826ae913b3782fcca098f3a8800e212587f5e5db3846",
+    "fingerprint": "9321634004b0f6f0b3fafbeeee63502d3227788fa485891db72ef0c29ba10a67",
     "count": 1,
-    "reason": "existing acquisition, query changed by #5308; direct batch LIMIT moved to readCursorPage LIMIT batch+1 (one locked sentinel); mode/table/key/predicate identical; migrates with owner extension follow-up"
+    "reason": "existing acquisition, query changed by #5308; explanatory locked-batch comment changes the source fingerprint only (SQL expression identical after removing comments); mode/table/key/predicate identical; migrates with owner extension follow-up"
   },
   {
     "file": "apps/api/src/lib/member-assignment-offboarding-owner.ts",
-    "fingerprint": "c49bd83d0e2b6d82d9ed605861299f22aaefd320c0f2b18840fafaedc9f94b5c",
+    "fingerprint": "952b2f2def5c2c898c3f75e371269ef719c11b091bbcca7c9ef49b756f415097",
     "count": 1,
-    "reason": "existing acquisition, query changed by #5308; direct batch LIMIT moved to readCursorPage LIMIT batch+1 (one locked sentinel); mode/table/key/predicate identical; migrates with owner extension follow-up"
+    "reason": "existing acquisition, query changed by #5308; explanatory locked-batch comment changes the source fingerprint only (SQL expression identical after removing comments); mode/table/key/predicate identical; migrates with owner extension follow-up"
+  },
+  {
+    "file": "apps/api/src/lib/member-assignment-offboarding-owner.ts",
+    "fingerprint": "9be0a2e6b91f2e06c6eef11e14cb61ce8af8a3f992ac1446d09e53477c6f0753",
+    "count": 1,
+    "reason": "existing acquisition, query changed by #5308; explanatory locked-batch comment changes the source fingerprint only (SQL expression identical after removing comments); mode/table/key/predicate identical; migrates with owner extension follow-up"
   },
   {
     "file": "apps/api/src/lib/member-assignment-offboarding-owner.ts",

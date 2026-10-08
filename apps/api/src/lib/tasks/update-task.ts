@@ -554,6 +554,7 @@ const applyTaskUpdate = async function* ({
       // here and no task or obligation lock is taken before the run's locks,
       // including when this is part of an outer Kanban transaction.
       const admission = await admitTaskFlowAccess(tx, {
+        access: "write",
         workspaceId,
         taskEntityId: body.taskId,
         userId,

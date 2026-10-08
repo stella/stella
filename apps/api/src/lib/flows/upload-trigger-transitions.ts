@@ -8,8 +8,8 @@ export const UPLOAD_TRIGGER_TRANSITIONS = defineScopedTransitions({
   stateColumn: "status",
   edges: {
     pending: ["awaiting_grant", "skipped"],
-    awaiting_grant: ["pending"],
-    skipped: [],
+    awaiting_grant: ["pending", "skipped"],
+    skipped: ["pending"],
   },
   initial: [],
 });

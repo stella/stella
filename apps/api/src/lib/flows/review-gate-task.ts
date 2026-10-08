@@ -1,9 +1,11 @@
 import { Result } from "better-result";
-import { and, eq, sql } from "drizzle-orm";
+import { and, eq, inArray, notInArray, sql } from "drizzle-orm";
+
+import { FLOW_RUN_TERMINAL_STATUSES } from "@stll/api-contract";
 
 import type { Transaction } from "@/api/db/root";
 import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
-import { flowRunSteps, workspaces } from "@/api/db/schema";
+import { flowRuns, flowRunSteps, workspaces } from "@/api/db/schema";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { resolveFeatureAccessSnapshot } from "@/api/lib/auth/feature-access/context";
 import { isFeatureEnabled } from "@/api/lib/auth/feature-access/policy";
@@ -69,31 +71,113 @@ export const reviewGateForTask = async (
 };
 
 type AdmitTaskFlowAccessOptions = ReviewGateForTaskOptions & {
+  access: "read" | "write";
   userId: SafeId<"user">;
 };
 
 /** Shared task entry points and native tools admit linked flow work here. */
 export const admitTaskFlowAccess = async (
   tx: Transaction,
-  { userId, ...task }: AdmitTaskFlowAccessOptions,
+  { userId, access, ...task }: AdmitTaskFlowAccessOptions,
 ): Promise<Result<void, HandlerError>> => {
   const gate = await reviewGateForTask(tx, task);
   if (gate === undefined) {
     return Result.ok(undefined);
   }
-  await lockFeatureRecoveryAdmission({
-    tx,
+  return await admitLinkedFlowAccess(tx, {
     organizationId: gate.organizationId,
-    featureId: "flows",
+    userId,
+    access,
   });
+};
+
+type AdmitLinkedFlowAccessOptions = {
+  organizationId: SafeId<"organization">;
+  userId: SafeId<"user">;
+  access: "read" | "write";
+};
+
+const admitLinkedFlowAccess = async (
+  tx: Transaction,
+  { organizationId, userId, access }: AdmitLinkedFlowAccessOptions,
+): Promise<Result<void, HandlerError>> => {
+  if (access === "write") {
+    await lockFeatureRecoveryAdmission({
+      tx,
+      organizationId,
+      featureId: "flows",
+    });
+  }
   if (!isDeploymentFeatureEnabled("FEATURE_FLOWS")) {
     return Result.err(new HandlerError({ status: 404, message: "Not found" }));
   }
-  const principal = { organizationId: gate.organizationId, userId };
+  const principal = { organizationId, userId };
   const snapshot = await resolveFeatureAccessSnapshot({ tx, ...principal });
   return isFeatureEnabled(snapshot, "flows", principal)
     ? Result.ok(undefined)
     : Result.err(new HandlerError({ status: 404, message: "Not found" }));
+};
+
+type AdmitFlowReviewTaskDeletionOptions = {
+  workspaceId: SafeId<"workspace">;
+  taskEntityIds: SafeId<"entity">[];
+  userId: SafeId<"user">;
+};
+
+/** Active gates retain their task pointer; terminal history may use the FK's SET NULL. */
+export const admitFlowReviewTaskDeletion = async (
+  tx: Transaction,
+  { workspaceId, taskEntityIds, userId }: AdmitFlowReviewTaskDeletionOptions,
+): Promise<Result<void, HandlerError>> => {
+  const gates = await tx
+    .select({ organizationId: workspaces.organizationId })
+    .from(flowRunSteps)
+    .innerJoin(workspaces, eq(workspaces.id, flowRunSteps.workspaceId))
+    .where(
+      and(
+        eq(flowRunSteps.workspaceId, workspaceId),
+        inArray(flowRunSteps.reviewTaskEntityId, taskEntityIds),
+      ),
+    )
+    .limit(1);
+  const gate = gates.at(0);
+  if (!gate) {
+    return Result.ok(undefined);
+  }
+  const admission = await admitLinkedFlowAccess(tx, {
+    organizationId: gate.organizationId,
+    userId,
+    access: "write",
+  });
+  if (admission.isErr()) {
+    return admission;
+  }
+  const active = await tx
+    .select({ id: flowRunSteps.id })
+    .from(flowRunSteps)
+    .innerJoin(
+      flowRuns,
+      and(
+        eq(flowRuns.id, flowRunSteps.runId),
+        eq(flowRuns.workspaceId, flowRunSteps.workspaceId),
+      ),
+    )
+    .where(
+      and(
+        eq(flowRunSteps.workspaceId, workspaceId),
+        inArray(flowRunSteps.reviewTaskEntityId, taskEntityIds),
+        notInArray(flowRuns.status, FLOW_RUN_TERMINAL_STATUSES),
+      ),
+    )
+    .limit(1);
+  return active.length === 0
+    ? Result.ok(undefined)
+    : Result.err(
+        new HandlerError({
+          status: 409,
+          message: "An active workflow review task cannot be deleted",
+        }),
+      );
 };
 
 export const FLOW_TASK_FEATURE_ACCESS = {
@@ -110,7 +194,15 @@ export const FLOW_TASK_FEATURE_ACCESS = {
     const entityId =
       taskId ??
       (isRecord(body) ? (body["taskId"] ?? body["entityId"]) : undefined);
-    if (typeof entityId !== "string") {
+    const entityIds = typeof entityId === "string" ? [entityId] : [];
+    if (isRecord(body) && Array.isArray(body["entityIds"])) {
+      for (const id of body["entityIds"]) {
+        if (typeof id === "string") {
+          entityIds.push(id);
+        }
+      }
+    }
+    if (entityIds.length === 0) {
       return false;
     }
     const gates = await scopedDb((tx) =>
@@ -120,7 +212,10 @@ export const FLOW_TASK_FEATURE_ACCESS = {
         .where(
           and(
             eq(flowRunSteps.workspaceId, workspaceId),
-            eq(flowRunSteps.reviewTaskEntityId, sql`${entityId}`),
+            sql`${flowRunSteps.reviewTaskEntityId} IN (${sql.join(
+              entityIds.map((id) => sql`${id}`),
+              sql`, `,
+            )})`,
           ),
         )
         .limit(1),
@@ -229,7 +324,12 @@ export const decideGateForTask = async (
     const admission = yield* Result.await(
       safeDb(
         async (tx) =>
-          await admitTaskFlowAccess(tx, { workspaceId, taskEntityId, userId }),
+          await admitTaskFlowAccess(tx, {
+            workspaceId,
+            taskEntityId,
+            userId,
+            access: "read",
+          }),
       ),
     );
     yield* admission;

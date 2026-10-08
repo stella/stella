@@ -6,6 +6,7 @@ import { inboxKeys } from "@/lib/inbox/queries";
 import { knowledgeKeys } from "@/lib/knowledge/queries";
 import { notificationsOptions } from "@/lib/notification-queries";
 import {
+  calendarTasksQueryRoot,
   expensesQueryRoot,
   flowRunsQueryRoot,
   invoicesQueryRoot,
@@ -50,6 +51,7 @@ export const resetFeatureEnrolmentCache = async ({
   // including inactive inspectors, when this visitor's access changes.
   const projections = [
     tasksQueryRoot("").slice(0, 1),
+    calendarTasksQueryRoot("").slice(0, 1),
     entitiesKeys.all("").slice(0, 1),
     viewsRootKey("").slice(0, 1),
     workspacesKeys.all,

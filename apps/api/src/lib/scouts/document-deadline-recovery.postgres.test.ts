@@ -326,6 +326,85 @@ describe.skipIf(!enabled)("deadline admission recovery (postgres)", () => {
     }
   });
 
+  test("grant park and resume preserve an unexpired budget backoff", async () => {
+    const previousFlag = env.FEATURE_SIGNALS;
+    env.FEATURE_SIGNALS = true;
+    try {
+      await withGatedTestClients(
+        databaseUrl ?? panic("Missing PostgreSQL test URL"),
+        async ({ openClient }) => {
+          const client = openClient();
+          const f = await fixture(client.db);
+          const source = f.sources.at(0) ?? panic("Missing source fixture");
+          const skippedUntil = new Date(Date.now() + 60 * 60_000);
+          try {
+            await client.db
+              .update(documentProcessingRuns)
+              .set({ deadlineScoutSkippedUntil: skippedUntil })
+              .where(eq(documentProcessingRuns.id, source.runId));
+            expect(
+              await pauseDocumentDeadlineScoutAfterGrantLoss({
+                database: asTestRaw<typeof rootDb>(client.db),
+                sourceRunId: source.runId,
+                from: "pending",
+              }),
+            ).toEqual({ status: "settled" });
+            const read = async () =>
+              (
+                await client.db
+                  .select({
+                    status: documentProcessingRuns.deadlineScoutStatus,
+                    skippedUntil:
+                      documentProcessingRuns.deadlineScoutSkippedUntil,
+                  })
+                  .from(documentProcessingRuns)
+                  .where(eq(documentProcessingRuns.id, source.runId))
+                  .limit(1)
+              ).at(0);
+            expect(await read()).toEqual({
+              status: "awaiting_grant",
+              skippedUntil,
+            });
+            await client.db.transaction(async (tx) => {
+              await lockFeatureRecoveryAdmission({
+                tx,
+                organizationId: f.organizationId,
+                featureId: "signals",
+              });
+              await tx.insert(featureEnrolments).values({
+                organizationId: f.organizationId,
+                userId: f.pausedUserId,
+                featureId: "signals",
+              });
+              await resumeDocumentDeadlineScoutsAfterGrant({
+                tx: asTestRaw<Transaction>(tx),
+                organizationId: f.organizationId,
+                userId: f.pausedUserId,
+              });
+            });
+            expect(await read()).toEqual({ status: "pending", skippedUntil });
+            const dispatched: string[] = [];
+            await recoverDocumentDeadlineScoutDispatches({
+              database: asTestRaw<typeof rootDb>(client.db),
+              enqueueDocumentDeadlineScout: async ({ sourceRunId }) => {
+                dispatched.push(sourceRunId);
+              },
+            });
+            expect(dispatched).not.toContain(source.runId);
+          } finally {
+            await client.db
+              .delete(organization)
+              .where(eq(organization.id, f.organizationId));
+            await client.db.delete(user).where(eq(user.id, f.admittedUserId));
+            await client.db.delete(user).where(eq(user.id, f.pausedUserId));
+          }
+        },
+      );
+    } finally {
+      env.FEATURE_SIGNALS = previousFlag;
+    }
+  });
+
   for (const grantDelivery of ["immediate", "postcommit-crash"] as const) {
     test(`a hundred paused sources do not block admitted source 101; ${grantDelivery} regrant resumes`, async () => {
       const previousFlag = env.FEATURE_SIGNALS;

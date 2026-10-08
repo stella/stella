@@ -27,6 +27,7 @@ import type {
   TransitionSpec,
 } from "@/api/lib/db/transitions";
 import { PDF_SIGNING_SESSION_TRANSITIONS } from "@/api/lib/files/pdf-signing/transition-spec";
+import { UPLOAD_TRIGGER_TRANSITIONS } from "@/api/lib/flows/upload-trigger-transitions";
 import {
   CONTACT_MONITORING_TRANSITIONS,
   FIRM_MONITORING_TRANSITIONS,
@@ -250,6 +251,7 @@ export const TRANSITIONS = {
   fileComparisonUploads: { unmanaged: UNMANAGED_REASONS.fileLifecycle },
   flowRuns: FLOW_RUN_TRANSITIONS_V1,
   flowRunSteps: FLOW_RUN_STEP_TRANSITIONS_V1,
+  flowUploadTriggerIntents: UPLOAD_TRIGGER_TRANSITIONS,
   folioCollabRooms: { unmanaged: UNMANAGED_REASONS.collaboration },
   invitation: { unmanaged: UNMANAGED_REASONS.delegatedAuth },
   invoices: { unmanaged: UNMANAGED_REASONS.userWorkflow },
@@ -273,6 +275,7 @@ export const TRANSITIONS = {
   organizationFileObjects: { unmanaged: UNMANAGED_REASONS.fileLifecycle },
   organizationSettings: FIRM_MONITORING_TRANSITIONS,
   pdfSigningSessions: PDF_SIGNING_SESSION_TRANSITIONS,
+  pendingScoutEmissions: { unmanaged: UNMANAGED_REASONS.workerRun },
   pendingUploads: { unmanaged: UNMANAGED_REASONS.fileLifecycle },
   playbookDefinitions: { unmanaged: UNMANAGED_REASONS.userDecision },
   properties: { unmanaged: UNMANAGED_REASONS.userWorkflow },

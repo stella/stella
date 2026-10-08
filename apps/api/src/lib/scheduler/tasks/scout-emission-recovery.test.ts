@@ -25,12 +25,15 @@ import {
 import type { RlsDatabase } from "@/api/db/scoped";
 import { env } from "@/api/env";
 import { createSafeId } from "@/api/lib/branded-types";
+import { withAggregateTransaction } from "@/api/lib/db/aggregate-lock";
+import { lockFeatureRecoveryAdmission } from "@/api/lib/feature-access/recovery-admission-lock";
 import { logger } from "@/api/lib/observability/logger";
 import { createRootScopedDb } from "@/api/lib/root-scoped-db";
 import { DueSlot } from "@/api/lib/scheduler/due-slot";
 import {
   RECOVER_SCOUT_EMISSION_TASK,
   recoverScoutEmission,
+  resumeScoutEmissionAfterGrant,
 } from "@/api/lib/scheduler/tasks/scout-emission-recovery";
 import type { SchedulerJob } from "@/api/lib/scheduler/types";
 import { maybeEmitDocumentReviewSignal } from "@/api/lib/scouts/document-review";
@@ -101,6 +104,8 @@ afterAll(async () => {
   env.FEATURE_SIGNALS = previousSignalsFlag;
   env.FEATURE_INBOX_DOCUMENT_SCOUTS = previousScoutFlag;
   restoreMode();
+  await db.delete(organization).where(eq(organization.id, organizationId));
+  await db.delete(user).where(eq(user.id, userId));
   await releaseTestDb();
 });
 
@@ -300,6 +305,58 @@ describe("deferred scout emission recovery", () => {
       await runRecovery(retryTime);
       expect(await emitted()).toHaveLength(1);
     });
+  }
+
+  for (const sourceKind of ["document-review", "infosoud-hearing"] as const) {
+    test.each(["immediate", "periodic"] as const)(
+      `${sourceKind}: %s regrant preserves a future retry deadline`,
+      async (resume) => {
+        const sourceId =
+          sourceKind === "document-review"
+            ? await seedReview()
+            : await seedHearing();
+        const retryAt = new Date(initialTime.getTime() + 10 * 60 * 1000);
+        await db
+          .update(pendingScoutEmissions)
+          .set({ nextAttemptAt: retryAt })
+          .where(eq(pendingScoutEmissions.organizationId, organizationId));
+        await runRecovery(initialTime);
+        expect(await pending()).toMatchObject([
+          { sourceId, status: "awaiting_grant", nextAttemptAt: retryAt },
+        ]);
+        await enrol();
+        if (resume === "immediate") {
+          await withAggregateTransaction(
+            asTestRaw<typeof rootDb>(db),
+            async (tx) => {
+              await lockFeatureRecoveryAdmission({
+                tx,
+                organizationId,
+                featureId: "signals",
+              });
+              await resumeScoutEmissionAfterGrant({
+                tx,
+                organizationId,
+                userId,
+              });
+            },
+          );
+          expect(await pending()).toMatchObject([
+            { sourceId, status: "pending", nextAttemptAt: retryAt },
+          ]);
+        }
+        await runRecovery(new Date(retryAt.getTime() - 1));
+        expect(await pending()).toMatchObject([
+          { sourceId, status: "pending", nextAttemptAt: retryAt },
+        ]);
+        expect(await emitted()).toEqual([]);
+        await runRecovery(retryAt);
+        expect(await pending()).toEqual([]);
+        expect(await emitted()).toHaveLength(1);
+        await runRecovery(retryAt);
+        expect(await emitted()).toHaveLength(1);
+      },
+    );
   }
 
   test("hearing admission revoked during recovery retains its intent until regrant", async () => {

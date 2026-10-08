@@ -1,6 +1,5 @@
-import { Result } from "better-result";
-import { and, notInArray, sql } from "drizzle-orm";
-import type { SQL } from "drizzle-orm";
+import { and, notInArray, or, sql } from "drizzle-orm";
+import type { SQL, SQLWrapper } from "drizzle-orm";
 
 import {
   NOTIFICATION_ENTITY_TYPE,
@@ -9,14 +8,25 @@ import {
 } from "@stll/api-contract/notifications";
 import type { NotificationKind } from "@stll/api-contract/notifications";
 
-import type { SafeDb } from "@/api/db/safe-db";
 import type { entityLinks } from "@/api/db/schema";
 import { entities, flowRunSteps, notifications } from "@/api/db/schema";
-import { loadFeatureAccessSnapshot } from "@/api/lib/auth/feature-access/context";
-import { isFeatureEnabled } from "@/api/lib/auth/feature-access/policy";
 import type { SafeId } from "@/api/lib/branded-types";
 import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import { backgroundFeatureActorExists } from "@/api/lib/feature-access/background";
+
+type FlowFeatureActorVisibilityOptions = {
+  organizationId: SafeId<"organization">;
+  userId: string;
+  workspaceId: SQLWrapper | string;
+};
+
+/** Pure reads evaluate current admission without serializing with grant writes. */
+export const flowFeatureActorVisibilitySql = (
+  options: FlowFeatureActorVisibilityOptions,
+) =>
+  isDeploymentFeatureEnabled("FEATURE_FLOWS")
+    ? backgroundFeatureActorExists({ ...options, featureId: "flows" })
+    : sql`false`;
 
 type FlowOwnedEntityVisibilitySqlOptions = {
   organizationId: SafeId<"organization">;
@@ -25,109 +35,75 @@ type FlowOwnedEntityVisibilitySqlOptions = {
   workspaceId: SQL;
 };
 
-/** Correlated live admission keeps hidden review tasks out of reads and facets. */
-export const flowOwnedEntityVisibilitySql = ({
+type FlowOwnedEntityVisibilityOptions = FlowOwnedEntityVisibilitySqlOptions & {
+  entityMatch: SQL;
+};
+
+const flowOwnedEntityVisibilityCondition = ({
   organizationId,
   userId,
-  entityId,
   workspaceId,
-}: FlowOwnedEntityVisibilitySqlOptions) => sql`NOT EXISTS (
+  entityMatch,
+}: FlowOwnedEntityVisibilityOptions) => sql`NOT EXISTS (
   SELECT 1 FROM ${flowRunSteps}
   WHERE ${flowRunSteps.workspaceId} = ${workspaceId}
-    AND ${flowRunSteps.reviewTaskEntityId} = ${entityId}
-    AND NOT (${
-      isDeploymentFeatureEnabled("FEATURE_FLOWS")
-        ? backgroundFeatureActorExists({
-            organizationId,
-            workspaceId,
-            featureId: "flows",
-            userId,
-          })
-        : sql`false`
-    })
+    AND ${entityMatch}
+    AND NOT (${flowFeatureActorVisibilitySql({ organizationId, workspaceId, userId })})
 )`;
 
+/** Correlated live admission keeps hidden review tasks out of reads and facets. */
+export const flowOwnedEntityVisibilitySql = (
+  options: FlowOwnedEntityVisibilitySqlOptions,
+) =>
+  flowOwnedEntityVisibilityCondition({
+    ...options,
+    entityMatch: sql`${flowRunSteps.reviewTaskEntityId} = ${options.entityId}`,
+  });
+
+/** Audit targets are text and may be legacy identifiers; never cast them to UUID. */
+export const flowOwnedEntityTextVisibilitySql = (
+  options: FlowOwnedEntityVisibilitySqlOptions,
+) =>
+  flowOwnedEntityVisibilityCondition({
+    ...options,
+    entityMatch: sql`${flowRunSteps.reviewTaskEntityId}::text = ${options.entityId}`,
+  });
+
 type FlowReviewTaskVisibilityOptions = {
-  safeDb: SafeDb;
   organizationId: SafeId<"organization">;
   userId: string;
 };
 
-/** A retained flow pointer has the same admission as its owning flow. */
-export const canViewFlowData = async ({
-  safeDb,
-  organizationId,
-  userId,
-}: FlowReviewTaskVisibilityOptions) => {
-  if (isDeploymentFeatureEnabled("FEATURE_FLOWS")) {
-    const snapshot = await loadFeatureAccessSnapshot({
-      safeDb,
-      organizationId,
-      userId,
-    });
-    if (snapshot.isErr()) {
-      return Result.err(snapshot.error);
-    }
-    if (isFeatureEnabled(snapshot.value, "flows", { organizationId, userId })) {
-      return Result.ok(true);
-    }
-  }
-  return Result.ok(false);
-};
-
-/** Apply before pagination so hidden reviews consume neither rows nor cursors. */
-export const flowReviewTaskVisibilityCondition = async (
+/** Apply live admission before pagination, including when initially granted. */
+export const flowReviewTaskVisibilityCondition = (
   options: FlowReviewTaskVisibilityOptions,
-) => {
-  const access = await canViewFlowData(options);
-  if (access.isErr()) {
-    return Result.err(access.error);
-  }
-  if (access.value) {
-    return Result.ok(undefined);
-  }
-  return Result.ok(sql`NOT EXISTS (
-    SELECT 1 FROM ${flowRunSteps}
-    WHERE ${flowRunSteps.workspaceId} = ${entities.workspaceId}
-      AND ${flowRunSteps.reviewTaskEntityId} = ${entities.id}
-  )`);
-};
-
-/** Relational RAW callbacks bind child/link aliases before applying limits. */
-export const flowRelatedTaskVisibilityConditions = async (
-  options: FlowReviewTaskVisibilityOptions,
-) => {
-  const access = await canViewFlowData(options);
-  if (access.isErr()) {
-    return Result.err(access.error);
-  }
-  if (access.value) {
-    return Result.ok(undefined);
-  }
-  return Result.ok({
-    entity: ({
-      workspaceId,
-      id,
-    }: Pick<typeof entities, "workspaceId" | "id">) => sql`NOT EXISTS (
-      SELECT 1 FROM ${flowRunSteps}
-      WHERE ${flowRunSteps.workspaceId} = ${workspaceId}
-        AND ${flowRunSteps.reviewTaskEntityId} = ${id}
-    )`,
-    link: ({
-      workspaceId,
-      sourceEntityId,
-      targetEntityId,
-    }: Pick<
-      typeof entityLinks,
-      "workspaceId" | "sourceEntityId" | "targetEntityId"
-    >) => sql`NOT EXISTS (
-    SELECT 1 FROM ${flowRunSteps}
-    WHERE ${flowRunSteps.workspaceId} = ${workspaceId}
-      AND (${flowRunSteps.reviewTaskEntityId} = ${sourceEntityId}
-        OR ${flowRunSteps.reviewTaskEntityId} = ${targetEntityId})
-  )`,
+) =>
+  flowOwnedEntityVisibilitySql({
+    ...options,
+    entityId: sql`${entities.id}`,
+    workspaceId: sql`${entities.workspaceId}`,
   });
-};
+
+/** Relational callbacks retain live admission for child and both link endpoints. */
+export const flowRelatedTaskVisibilityConditions = (
+  options: FlowReviewTaskVisibilityOptions,
+) => ({
+  entity: ({ workspaceId, id }: Pick<typeof entities, "workspaceId" | "id">) =>
+    flowOwnedEntityVisibilitySql({
+      ...options,
+      entityId: sql`${id}`,
+      workspaceId: sql`${workspaceId}`,
+    }),
+  link: ({
+    workspaceId,
+    sourceEntityId,
+    targetEntityId,
+  }: Pick<
+    typeof entityLinks,
+    "workspaceId" | "sourceEntityId" | "targetEntityId"
+  >) =>
+    sql`${flowOwnedEntityVisibilitySql({ ...options, entityId: sql`${sourceEntityId}`, workspaceId: sql`${workspaceId}` })} AND ${flowOwnedEntityVisibilitySql({ ...options, entityId: sql`${targetEntityId}`, workspaceId: sql`${workspaceId}` })}`,
+});
 
 const NOTIFICATION_FEATURE_OWNER = {
   [NOTIFICATION_KIND.MENTION]: "shared",
@@ -144,26 +120,26 @@ const FLOW_NOTIFICATION_KINDS = NOTIFICATION_KINDS.filter(
 );
 
 /** Hide retained outcomes and mentions of linked review tasks on opt-out. */
-export const flowNotificationVisibilityCondition = async (
-  options: FlowReviewTaskVisibilityOptions,
-) => {
-  const access = await canViewFlowData(options);
-  if (access.isErr()) {
-    return Result.err(access.error);
-  }
-  if (access.value) {
-    return Result.ok(undefined);
-  }
-  return Result.ok(
+export const flowNotificationVisibilityCondition = ({
+  organizationId,
+  userId,
+}: FlowReviewTaskVisibilityOptions) => {
+  const admission = flowFeatureActorVisibilitySql({
+    organizationId,
+    workspaceId: notifications.workspaceId,
+    userId,
+  });
+  return sql`${or(
+    admission,
     and(
       notInArray(notifications.kind, FLOW_NOTIFICATION_KINDS),
       sql`${notifications.entityType} IS DISTINCT FROM ${NOTIFICATION_ENTITY_TYPE.FLOW_RUN}`,
-      sql`NOT EXISTS (
-      SELECT 1 FROM ${flowRunSteps}
-      WHERE ${notifications.entityType} = ${NOTIFICATION_ENTITY_TYPE.ENTITY}
-        AND ${flowRunSteps.workspaceId} = ${notifications.workspaceId}
-        AND ${flowRunSteps.reviewTaskEntityId}::text = ${notifications.entityId}
-    )`,
     ),
-  );
+  )} AND NOT EXISTS (
+    SELECT 1 FROM ${flowRunSteps}
+    WHERE ${notifications.entityType} = ${NOTIFICATION_ENTITY_TYPE.ENTITY}
+      AND ${flowRunSteps.workspaceId} = ${notifications.workspaceId}
+      AND ${flowRunSteps.reviewTaskEntityId}::text = ${notifications.entityId}
+      AND NOT (${admission})
+  )`;
 };

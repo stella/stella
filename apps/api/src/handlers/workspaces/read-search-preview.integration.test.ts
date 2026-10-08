@@ -158,6 +158,8 @@ describe("matter search preview", () => {
     ]);
 
     const result = await readSearchPreviewHandler({
+      organizationId: ids.orgA,
+      userId: ids.userA1,
       scopedDb,
       workspaceId: ids.wsA1,
     });

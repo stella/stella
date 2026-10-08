@@ -2,6 +2,7 @@ import { sql } from "drizzle-orm";
 
 import {
   FLOW_RUN_STATUSES,
+  FLOW_RUN_RECOVERY_STATES,
   FLOW_RUN_STEP_STATUSES,
   FLOW_UPLOAD_TRIGGER_INTENT_STATUSES,
   FLOW_UPLOAD_TRIGGER_SKIP_REASONS,
@@ -31,6 +32,15 @@ import {
 } from "./common";
 import { workspaces } from "./contacts";
 import { entities } from "./entities";
+
+const FLOW_REMOVED_ACTOR_STATUSES = [
+  "failed",
+  "completed",
+  "awaiting_review",
+] as const satisfies readonly (typeof FLOW_RUN_STATUSES)[number][];
+const FLOW_REMOVED_ACTOR_STATUS_SQL_VALUES = FLOW_REMOVED_ACTOR_STATUSES.map(
+  (status) => sql.raw(`'${status}'`),
+);
 
 // -- Flows (Workflows feature) --
 
@@ -166,6 +176,7 @@ export const flowRuns = p.pgTable(
       .$type<FlowDefinitionSnapshot>()
       .notNull(),
     status: p.text({ enum: FLOW_RUN_STATUSES }).notNull().default("pending"),
+    recoveryState: p.text("recovery_state", { enum: FLOW_RUN_RECOVERY_STATES }),
     currentStepIndex: p.integer("current_step_index").notNull().default(0),
     triggerSource: jsonb("trigger_source").$type<FlowTriggerSource>().notNull(),
     inputEntityIds: safeUuid<"entity">("input_entity_ids")
@@ -189,6 +200,16 @@ export const flowRuns = p.pgTable(
       .index("flow_runs_ws_created_idx")
       .on(table.workspaceId, table.createdAt.desc(), table.id),
     p.index("flow_runs_definition_id_idx").on(table.definitionId),
+    p.check(
+      "flow_runs_recovery_state_check",
+      sql`${table.recoveryState} IS NULL
+        OR (${table.status} IN (${sql.join(FLOW_REMOVED_ACTOR_STATUS_SQL_VALUES, sql`, `)}) AND ${table.recoveryState} = 'actor-removed')
+        OR (${table.status} = 'completed' AND ${table.recoveryState} = 'completion-notice-pending')`,
+    ),
+    p
+      .index("flow_runs_completion_notice_pending_idx")
+      .on(table.workspaceId, table.id)
+      .where(sql`${table.recoveryState} = 'completion-notice-pending'`),
     p
       .index("flow_runs_upload_identity_idx")
       .on(

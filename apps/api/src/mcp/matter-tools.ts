@@ -1369,15 +1369,11 @@ const readTaskDetail = async ({
   taskId: SafeId<"entity">;
   workspaceId: SafeId<"workspace">;
 }) => {
-  const visibility = await flowRelatedTaskVisibilityConditions({
-    safeDb: context.safeDb,
+  const visibility = flowRelatedTaskVisibilityConditions({
     organizationId: context.organizationId,
     userId: context.userId,
   });
-  if (visibility.isErr()) {
-    return Result.err(visibility.error);
-  }
-  const linkVisibility = visibility.value?.link;
+  const linkVisibility = visibility.link;
   const linkColumns = {
     id: true,
     linkType: true,
@@ -1395,7 +1391,11 @@ const readTaskDetail = async ({
   const { assigneeRows, linksAsSource, linksAsTarget, taskRow } =
     await context.scopedDb(async (tx) => {
       const task = await tx.query.entities.findFirst({
-        where: { id: { eq: taskId }, workspaceId: { eq: workspaceId } },
+        where: {
+          id: { eq: taskId },
+          workspaceId: { eq: workspaceId },
+          RAW: visibility.entity,
+        },
         columns: {
           id: true,
           name: true,
@@ -1423,7 +1423,7 @@ const readTaskDetail = async ({
         where: {
           workspaceId: { eq: workspaceId },
           sourceEntityId: { eq: taskId },
-          ...(linkVisibility === undefined ? {} : { RAW: linkVisibility }),
+          RAW: linkVisibility,
         },
         columns: linkColumns,
         with: linkWith,
@@ -1434,7 +1434,7 @@ const readTaskDetail = async ({
         where: {
           workspaceId: { eq: workspaceId },
           targetEntityId: { eq: taskId },
-          ...(linkVisibility === undefined ? {} : { RAW: linkVisibility }),
+          RAW: linkVisibility,
         },
         columns: linkColumns,
         with: linkWith,
@@ -1448,11 +1448,11 @@ const readTaskDetail = async ({
       };
     });
 
-  return Result.ok({
+  return {
     taskRow,
     assigneeRows,
     linkRows: [...linksAsSource, ...linksAsTarget],
-  });
+  };
 };
 
 const handleListTasksTool: TypedMcpToolHandler<
@@ -1490,6 +1490,7 @@ const handleListTasksTool: TypedMcpToolHandler<
     const admission = await context.safeDb(
       async (tx) =>
         await admitTaskFlowAccess(tx, {
+          access: "read",
           workspaceId: owner.workspaceId,
           taskEntityId: taskId,
           userId: context.userId,
@@ -1506,10 +1507,7 @@ const handleListTasksTool: TypedMcpToolHandler<
       taskId,
       workspaceId: owner.workspaceId,
     });
-    if (detail.isErr()) {
-      return internalFailureResult(detail.error);
-    }
-    const { taskRow, assigneeRows, linkRows } = detail.value;
+    const { taskRow, assigneeRows, linkRows } = detail;
     if (!taskRow) {
       return notFoundResult("Task not found or not accessible");
     }
@@ -2214,6 +2212,7 @@ const handleDeleteTaskTool: TypedMcpToolHandler<
   }
   const deleted = await Result.gen(() =>
     deleteEntitiesHandler({
+      userId: context.userId,
       safeDb: context.safeDb,
       organizationId: context.organizationId,
       workspaceId,

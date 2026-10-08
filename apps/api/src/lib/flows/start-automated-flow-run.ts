@@ -208,7 +208,7 @@ export const startAutomatedFlowRun = async (
   }
   if (createdByUserId === null) {
     logger.warn("flow.automated_run_skipped_no_actor", logContext);
-    return { status: "settled" };
+    return { status: "skipped", reason: "actor_missing" };
   }
 
   // Snapshot fields (name, steps) come from a root read: the automated triggers
