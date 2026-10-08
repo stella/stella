@@ -3,6 +3,7 @@ import { and, eq, isNull, lte, ne, or, sql } from "drizzle-orm";
 import { createHash } from "node:crypto";
 
 import { chunk as chunkItems } from "@stll/concurrency/chunk";
+import { createEventLoopSlicer } from "@stll/concurrency/event-loop";
 import {
   checkListReplacement,
   type ListReplacementError,
@@ -22,7 +23,6 @@ import {
 } from "@/api/db/schema";
 import type { ThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import type { SafeId } from "@/api/lib/branded-types";
-import { createEventLoopSlicer } from "@/api/lib/lists/sanctions/event-loop-slicer";
 import { SANCTIONS_SOURCE_CONFIG } from "@/api/lib/lists/sanctions/source-config";
 import {
   fetchSanctionsEdition,
@@ -342,28 +342,6 @@ type ActivateStagedArgs = {
   entryCount: number;
 };
 
-const storedEntriesMatch = async (
-  stored: readonly StagedEntry[],
-  expected: readonly StagedEntry[],
-): Promise<boolean> => {
-  if (stored.length !== expected.length) {
-    return false;
-  }
-  const pause = createEventLoopSlicer();
-  const expectedById = new Map<string, string>();
-  for (const entry of expected) {
-    await pause();
-    expectedById.set(entry.sourceEntryId, entry.contentHash);
-  }
-  for (const entry of stored) {
-    await pause();
-    if (expectedById.get(entry.sourceEntryId) !== entry.contentHash) {
-      return false;
-    }
-  }
-  return true;
-};
-
 const activateStagedEdition = async ({
   db,
   source,
@@ -416,7 +394,18 @@ const activateStagedEdition = async ({
       .from(sanctionsEditionEntries)
       .where(eq(sanctionsEditionEntries.editionId, editionId))
       .limit(expectedEntries.length + 1);
-    if (!(await storedEntriesMatch(storedEntries, expectedEntries))) {
+    // A single pass under the edition lock; small next to the list itself,
+    // and not sliced so the lock is never held across a yield.
+    const expectedById = new Map(
+      expectedEntries.map((entry) => [entry.sourceEntryId, entry.contentHash]),
+    );
+    const matches =
+      storedEntries.length === expectedEntries.length &&
+      storedEntries.every(
+        (stored) =>
+          expectedById.get(stored.sourceEntryId) === stored.contentHash,
+      );
+    if (!matches) {
       const now = new Date();
       await tx
         .update(sanctionsEditions)
@@ -582,6 +571,9 @@ const stageAcceptedEdition = async ({
   const hashedEntries: (StagedEntry & { payload: SanctionsEntry })[] = [];
   for (const entry of parsed.entries) {
     await pause();
+    if (signal.aborted) {
+      return { status: "aborted", source };
+    }
     hashedEntries.push({
       sourceEntryId: entry.sourceId,
       contentHash: sha256(stableStringify(entry)),
@@ -670,12 +662,14 @@ type FetchCurrentOptions = {
 const validParsedEntries = async (
   source: SanctionsSource,
   parsed: ParsedList,
+  isAborted: () => boolean,
 ): Promise<boolean> => {
   const pause = createEventLoopSlicer();
   const sourceIds = new Set<string>();
   for (const entry of parsed.entries) {
     await pause();
     if (
+      isAborted() ||
       entry.source !== source ||
       entry.sourceId.length === 0 ||
       entry.sourceId.length > MAX_SOURCE_ENTRY_ID_LENGTH ||
@@ -758,9 +752,11 @@ const fetchCurrentEdition = async ({
 
   if (
     !downloadMatchesMarker(marker, edition.value) ||
-    !(await validParsedEntries(source, edition.value.parsed))
+    !(await validParsedEntries(source, edition.value.parsed, isAborted))
   ) {
-    return { status: "failed", code: "parse-failed" };
+    return isAborted()
+      ? { status: "aborted" }
+      : { status: "failed", code: "parse-failed" };
   }
   return { status: "ready", markerKey, edition: edition.value };
 };

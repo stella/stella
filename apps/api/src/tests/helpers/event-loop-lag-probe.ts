@@ -27,6 +27,7 @@
 import type { PGlite, Transaction } from "@electric-sql/pglite";
 import { expect } from "bun:test";
 
+import { nextMacrotask } from "@stll/concurrency/event-loop";
 import { sleep } from "@stll/concurrency/sleep";
 
 export type BlockedSpan = {
@@ -111,12 +112,6 @@ export const startEventLoopLagProbe = ({
       };
     },
   };
-};
-
-const nextMacrotask = async () => {
-  await new Promise<void>((resolve) => {
-    setImmediate(resolve);
-  });
 };
 
 /** Starts counting time as out-of-process; null while no probe runs. */

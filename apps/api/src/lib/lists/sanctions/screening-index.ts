@@ -2,11 +2,10 @@ import { Result, TaggedError } from "better-result";
 import type { TaggedErrorClass } from "better-result";
 import { and, asc, eq, gt } from "drizzle-orm";
 
-import {
-  buildScreeningIndex,
-  buildScreeningIndexCooperatively,
-} from "@stll/sanctions";
+import { createEventLoopSlicer } from "@stll/concurrency/event-loop";
+import { buildScreeningIndexCooperatively } from "@stll/sanctions";
 import type {
+  ParsedList,
   SanctionsEntry,
   SanctionsSource,
   ScreeningIndex,
@@ -17,7 +16,6 @@ import {
   sanctionsEditionEntries,
   sanctionsEntryPayloads,
 } from "@/api/db/schema";
-import { createEventLoopSlicer } from "@/api/lib/lists/sanctions/event-loop-slicer";
 import type { SanctionsSourceFreshness } from "@/api/lib/lists/sanctions/freshness";
 import type { SanctionsReadDb } from "@/api/lib/lists/sanctions/read-db";
 import { failureSink } from "@/api/lib/observability/failure";
@@ -26,8 +24,8 @@ import { observeFailure } from "@/api/lib/observability/observe-failure";
 // Entries are read in keyset pages so no single statement carries a whole
 // list; the largest list holds tens of thousands of entries. Each page is an
 // await, so a long read yields to other requests between pages. Building the
-// index of a large list takes seconds of CPU, so the scheduled refresh builds
-// it cooperatively, giving way to requests between entries.
+// index of a large list takes seconds of CPU, so it is built cooperatively,
+// giving way to requests between entries, on a cache miss and on a refresh.
 const ENTRY_PAGE_SIZE = 2000;
 
 /**
@@ -119,16 +117,15 @@ export const loadEditionEntries = async ({
   return entries;
 };
 
-type BuildSanctionsIndex = typeof buildScreeningIndex;
-type BuildSanctionsIndexCooperatively = (
-  ...args: Parameters<BuildSanctionsIndex>
-) => Promise<ScreeningIndex>;
+type BuildSanctionsIndex = (
+  lists: readonly ParsedList[],
+) => ScreeningIndex | Promise<ScreeningIndex>;
 
 type LoadIndexProps = {
   db: SanctionsReadDb;
   source: SanctionsSource;
   edition: SanctionsActiveEdition;
-  build: BuildSanctionsIndex | BuildSanctionsIndexCooperatively;
+  build: BuildSanctionsIndex;
 };
 
 const loadIndex = async ({
@@ -204,9 +201,8 @@ export type SanctionsIndexCache = {
 };
 
 type CreateSanctionsIndexCacheOptions = {
+  /** Defaults to a build that gives way to requests; tests may count builds. */
   build?: BuildSanctionsIndex | undefined;
-  /** How {@link SanctionsIndexCache.refresh} builds; it runs beside requests. */
-  buildCooperatively?: BuildSanctionsIndexCooperatively | undefined;
   failureMemoMs?: number | undefined;
   nowMs?: (() => number) | undefined;
   /** Where a failed load is reported. List and edition ids only, never a subject. */
@@ -237,7 +233,7 @@ const observeLoadFailure: NonNullable<
   });
 };
 
-const buildGivingWay: BuildSanctionsIndexCooperatively = async (lists) =>
+const buildGivingWay: BuildSanctionsIndex = async (lists) =>
   await buildScreeningIndexCooperatively(lists, createEventLoopSlicer());
 
 /**
@@ -250,8 +246,7 @@ const buildGivingWay: BuildSanctionsIndexCooperatively = async (lists) =>
  * re-reading the edition, and the first one after it tries again.
  */
 export const createSanctionsIndexCache = ({
-  build = buildScreeningIndex,
-  buildCooperatively = buildGivingWay,
+  build = buildGivingWay,
   failureMemoMs = SANCTIONS_INDEX_FAILURE_MEMO_MS,
   nowMs = () => Temporal.Now.instant().epochMilliseconds,
   reportFailure = observeLoadFailure,
@@ -269,13 +264,14 @@ export const createSanctionsIndexCache = ({
     { editionId: SanctionsActiveEdition["id"]; at: number }
   >();
 
-  const start = async (
-    { db, source, edition }: CacheProps,
-    builder: LoadIndexProps["build"],
-  ): Promise<IndexResult> => {
+  const start = async ({
+    db,
+    source,
+    edition,
+  }: CacheProps): Promise<IndexResult> => {
     const load = Symbol(source);
     const settle = async (): Promise<IndexResult> => {
-      const loaded = await loadIndex({ db, source, edition, build: builder });
+      const loaded = await loadIndex({ db, source, edition, build });
       if (loaded.isOk()) {
         if (failedAt.get(source)?.editionId === edition.id) {
           failedAt.delete(source);
@@ -311,14 +307,14 @@ export const createSanctionsIndexCache = ({
       ) {
         return Result.err({ code: "load-failed" });
       }
-      return await start(props, build);
+      return await start(props);
     },
     refresh: async (props) => {
       const cached = bySource.get(props.source);
       if (cached === undefined || cached.editionId === props.edition.id) {
         return;
       }
-      const rebuilt = await start(props, buildCooperatively);
+      const rebuilt = await start(props);
       if (rebuilt.isErr()) {
         // A failed rebuild is reported and remembered like any other; the
         // next screening answers from the memo or tries again.

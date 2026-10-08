@@ -675,10 +675,6 @@ describe("sanctions screening service", () => {
             builds += 1;
             return buildScreeningIndex(lists);
           },
-          buildCooperatively: async (lists) => {
-            builds += 1;
-            return buildScreeningIndex(lists);
-          },
         });
         const freshness = await readSanctionsFreshness({
           db: requestDb,

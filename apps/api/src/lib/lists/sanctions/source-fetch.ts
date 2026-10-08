@@ -3,6 +3,7 @@ import { load } from "cheerio";
 import { createHash } from "node:crypto";
 
 import { backoffDelay } from "@stll/concurrency/backoff-delay";
+import { createEventLoopSlicer } from "@stll/concurrency/event-loop";
 import {
   SANCTIONS_SOURCES,
   parseCzList,
@@ -28,7 +29,6 @@ import type {
 
 import type { ThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import { INGESTION_USER_AGENT } from "@/api/lib/case-law/ingestion-user-agent";
-import { createEventLoopSlicer } from "@/api/lib/lists/sanctions/event-loop-slicer";
 import { SANCTIONS_SOURCE_CONFIG } from "@/api/lib/lists/sanctions/source-config";
 import {
   fetchStreamFollowingRedirects,
@@ -677,8 +677,10 @@ const loadEditionOnce = async (
   const hash = createHash("sha256");
   // The parse runs on the serving event loop. Chunks that have already
   // arrived are read without ever yielding to timers or I/O, so the parser is
-  // fed small slices and gives way between them.
+  // fed small slices and gives way between them. A cancelled refresh stops
+  // feeding it, even when the rest of the body has already arrived.
   const pause = createEventLoopSlicer();
+  const isAborted = () => options.signal.aborted;
   const hashed = async function* () {
     for await (const chunk of body.chunks) {
       hash.update(chunk);
@@ -688,11 +690,17 @@ const loadEditionOnce = async (
         offset += PARSE_SLICE_BYTES
       ) {
         await pause();
+        if (isAborted()) {
+          return;
+        }
         yield chunk.subarray(offset, offset + PARSE_SLICE_BYTES);
       }
     }
   };
   const parsed = await parseStreamedList(marker.source, hashed());
+  if (isAborted()) {
+    return Result.err(refreshError(marker.source, "fetch-failed"));
+  }
   return parsed.isOk() && !body.failed()
     ? Result.ok({
         parsed: parsed.value,
