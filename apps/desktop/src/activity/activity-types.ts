@@ -47,6 +47,8 @@ export type ActivityAppExclusion = {
 export type ActivityDaySnapshot = {
   /** Local calendar dates as `YYYY-MM-DD`. */
   date: string;
+  draftedEntries: { start: string; end: string; entryId: string }[];
+  timeBillingEnabled: boolean;
   earliestDate: string;
   excludedApps: ActivityAppExclusion[];
   captureDetails: boolean;
@@ -102,21 +104,12 @@ export const isActivityDaySnapshot = (
   typeof value["today"] === "string" &&
   typeof value["earliestDate"] === "string" &&
   typeof value["unreadable"] === "boolean" &&
-  typeof value["captureDetails"] === "boolean" &&
-  isOneOf(ACTIVITY_DETAILS_ACCESS, value["detailsAccess"]) &&
-  Array.isArray(value["appNameOnlyApps"]) &&
-  value["appNameOnlyApps"].every(isExclusion) &&
-  Array.isArray(value["browserApps"]) &&
-  value["browserApps"].every(isExclusion) &&
-  Array.isArray(value["browserTitleApps"]) &&
-  value["browserTitleApps"].every(isExclusion) &&
-  typeof value["otherAccountHistoryDays"] === "number" &&
-  Number.isSafeInteger(value["otherAccountHistoryDays"]) &&
-  value["otherAccountHistoryDays"] >= 0 &&
-  isOneOf(ACTIVITY_PERSISTENCE_STATUSES, value["persistence"]) &&
-  isOneOf(ACTIVITY_RECORDING_STATUSES, value["recordingStatus"]) &&
-  isOneOf(ACTIVITY_RETENTIONS, value["retention"]) &&
-  Array.isArray(value["segments"]) &&
-  value["segments"].every(isSegment) &&
-  Array.isArray(value["excludedApps"]) &&
-  value["excludedApps"].every(isExclusion);
+  typeof value["timeBillingEnabled"] === "boolean" &&
+  Array.isArray(value["draftedEntries"]) &&
+  value["draftedEntries"].every(
+    (entry) =>
+      isRecord(entry) &&
+      typeof entry["start"] === "string" &&
+      typeof entry["end"] === "string" &&
+      typeof entry["entryId"] === "string",
+  ) &&

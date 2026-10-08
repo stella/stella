@@ -51,6 +51,8 @@ describe("activity contract", () => {
   test("a snapshot is validated before use", () => {
     const snapshot = {
       date: "2026-03-10",
+      draftedEntries: [],
+      timeBillingEnabled: false,
       earliestDate: "2026-02-09",
       excludedApps: [{ identifier: "com.example.app", name: "App" }],
       otherAccountHistoryDays: 0,

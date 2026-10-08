@@ -393,6 +393,36 @@
     "deletionOnly": "Nie można otworzyć zapisanej aktywności, ponieważ w pęku kluczy brakuje jej klucza. Usuń ją, aby zacząć od nowa.",
     "errorRead": "Nie udało się wczytać aktywności.",
     "errorUpdate": "Nie udało się zapisać zmiany.",
-    "errorCopy": "Nie udało się skopiować podsumowania."
+    "errorCopy": "Nie udało się skopiować podsumowania.",
+    "createDraftEntry": "Utwórz wersję roboczą wpisu",
+    "entryConfirmationDescription": "Potwierdzenie wyśle tylko wybraną sprawę, datę, strefę czasową, czas, opis i informację o rozliczeniu. Nazwy aplikacji i oś czasu pozostaną na tym urządzeniu.",
+    "entryCreated": "Utworzono wersję roboczą wpisu.",
+    "entryMarkerFailed": "Utworzono wersję roboczą, ale nie zapisano lokalnego oznaczenia. Nie wysyłaj jej ponownie.",
+    "closeEntry": "Zamknij",
+    "clearMatterSearch": "Wyczyść wyszukiwanie spraw",
+    "searchMatters": "Szukaj spraw",
+    "searchingMatters": "Wyszukiwanie spraw…",
+    "noMatters": "Nie znaleziono spraw. Spróbuj innego wyszukiwania.",
+    "entryDate": "Data pracy",
+    "entryDuration": "Czas (minuty)",
+    "entryTimezone": "Strefa czasowa",
+    "errorMatterSearch": "Nie udało się wczytać spraw. Spróbuj innego wyszukiwania.",
+    "errorEntrySubmit": "Nie udało się utworzyć wersji roboczej. Sprawdź uprawnienia i spróbuj ponownie.",
+    "entrySubmitting": "Tworzenie wersji roboczej…",
+    "confirmDraftEntry": "Potwierdź i utwórz wersję roboczą",
+    "draftedEntry": "Wersja robocza utworzona",
+    "entryMatter": "Sprawa",
+    "entryNarrative": "Opis",
+    "entryBillable": "Rozliczalne",
+    "datePicker": {
+      "label": "Wybór daty",
+      "nextDecade": "Następna dekada",
+      "nextMonth": "Następny miesiąc",
+      "nextYear": "Następny rok",
+      "previousDecade": "Poprzednia dekada",
+      "previousMonth": "Poprzedni miesiąc",
+      "previousYear": "Poprzedni rok",
+      "time": "Godzina"
+    }
   }
 }

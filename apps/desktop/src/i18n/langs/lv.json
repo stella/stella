@@ -393,6 +393,36 @@
     "deletionOnly": "Saglabāto darbību nevar atvērt, jo atslēgu saišķī trūkst tās atslēgas. Izdzēsiet to, lai sāktu no jauna.",
     "errorRead": "Neizdevās ielādēt darbību.",
     "errorUpdate": "Neizdevās saglabāt izmaiņas.",
-    "errorCopy": "Neizdevās nokopēt kopsavilkumu."
+    "errorCopy": "Neizdevās nokopēt kopsavilkumu.",
+    "createDraftEntry": "Izveidot laika ieraksta melnrakstu",
+    "entryConfirmationDescription": "Apstiprinot tiks nosūtīta tikai izvēlētā lieta, datums, laika josla, ilgums, apraksts un apmaksājamības statuss. Lietotņu nosaukumi un laika skala paliks šajā ierīcē.",
+    "entryCreated": "Laika ieraksta melnraksts ir izveidots.",
+    "entryMarkerFailed": "Melnraksts ir izveidots, bet vietējo atzīmi neizdevās saglabāt. Nesūtiet to vēlreiz.",
+    "closeEntry": "Aizvērt",
+    "clearMatterSearch": "Notīrīt lietu meklēšanu",
+    "searchMatters": "Meklēt lietas",
+    "searchingMatters": "Lietu meklēšana…",
+    "noMatters": "Lietas nav atrastas. Izmēģiniet citu meklējumu.",
+    "entryDate": "Darba datums",
+    "entryDuration": "Ilgums (minūtes)",
+    "entryTimezone": "Laika josla",
+    "errorMatterSearch": "Lietas neizdevās ielādēt. Izmēģiniet citu meklējumu.",
+    "errorEntrySubmit": "Melnrakstu neizdevās izveidot. Pārbaudiet piekļuves tiesības un mēģiniet vēlreiz.",
+    "entrySubmitting": "Melnraksta izveide…",
+    "confirmDraftEntry": "Apstiprināt un izveidot melnrakstu",
+    "draftedEntry": "Melnraksts izveidots",
+    "entryMatter": "Lieta",
+    "entryNarrative": "Apraksts",
+    "entryBillable": "Apmaksājams",
+    "datePicker": {
+      "label": "Datuma atlasītājs",
+      "nextDecade": "Nākamā desmitgade",
+      "nextMonth": "Nākamais mēnesis",
+      "nextYear": "Nākamais gads",
+      "previousDecade": "Iepriekšējā desmitgade",
+      "previousMonth": "Iepriekšējais mēnesis",
+      "previousYear": "Iepriekšējais gads",
+      "time": "Laiks"
+    }
   }
 }

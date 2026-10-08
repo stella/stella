@@ -393,6 +393,36 @@
     "deletionOnly": "La actividad guardada no se puede abrir porque falta su clave en el llavero. Elimínala para empezar de nuevo.",
     "errorRead": "No se pudo cargar la actividad.",
     "errorUpdate": "No se pudo guardar el cambio.",
-    "errorCopy": "No se pudo copiar el resumen."
+    "errorCopy": "No se pudo copiar el resumen.",
+    "createDraftEntry": "Crear borrador de registro",
+    "entryConfirmationDescription": "Al confirmar, solo se enviarán el asunto seleccionado, la fecha, la zona horaria, la duración, la descripción y el estado facturable. Los nombres de las aplicaciones y la cronología permanecerán en este dispositivo.",
+    "entryCreated": "Borrador de registro creado.",
+    "entryMarkerFailed": "Se creó el borrador, pero no se pudo guardar su marca local. No lo envíe de nuevo.",
+    "closeEntry": "Cerrar",
+    "clearMatterSearch": "Borrar búsqueda de asuntos",
+    "searchMatters": "Buscar asuntos",
+    "searchingMatters": "Buscando asuntos…",
+    "noMatters": "No se encontraron asuntos. Pruebe otra búsqueda.",
+    "entryDate": "Fecha del trabajo",
+    "entryDuration": "Duración (minutos)",
+    "entryTimezone": "Zona horaria",
+    "errorMatterSearch": "No se pudieron cargar los asuntos. Pruebe otra búsqueda.",
+    "errorEntrySubmit": "No se pudo crear el borrador. Compruebe sus permisos e inténtelo de nuevo.",
+    "entrySubmitting": "Creando borrador…",
+    "confirmDraftEntry": "Confirmar y crear borrador",
+    "draftedEntry": "Borrador creado",
+    "entryMatter": "Asunto",
+    "entryNarrative": "Descripción",
+    "entryBillable": "Facturable",
+    "datePicker": {
+      "label": "Selector de fecha",
+      "nextDecade": "Década siguiente",
+      "nextMonth": "Mes siguiente",
+      "nextYear": "Año siguiente",
+      "previousDecade": "Década anterior",
+      "previousMonth": "Mes anterior",
+      "previousYear": "Año anterior",
+      "time": "Hora"
+    }
   }
 }

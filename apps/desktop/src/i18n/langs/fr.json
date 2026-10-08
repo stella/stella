@@ -393,6 +393,36 @@
     "deletionOnly": "L'activité enregistrée ne peut pas être ouverte, car sa clé est absente du trousseau. Supprimez-la pour recommencer.",
     "errorRead": "Impossible de charger l'activité.",
     "errorUpdate": "Impossible d'enregistrer la modification.",
-    "errorCopy": "Impossible de copier le résumé."
+    "errorCopy": "Impossible de copier le résumé.",
+    "createDraftEntry": "Créer un brouillon de saisie de temps",
+    "entryConfirmationDescription": "La confirmation envoie uniquement le dossier choisi, la date, le fuseau horaire, la durée, la description et le caractère facturable. Les noms des applications et la chronologie restent sur cet appareil.",
+    "entryCreated": "Brouillon de saisie de temps créé.",
+    "entryMarkerFailed": "Le brouillon a été créé, mais son repère local n’a pas pu être enregistré. Ne le soumettez pas à nouveau.",
+    "closeEntry": "Fermer",
+    "clearMatterSearch": "Effacer la recherche de dossiers",
+    "searchMatters": "Rechercher des dossiers",
+    "searchingMatters": "Recherche de dossiers…",
+    "noMatters": "Aucun dossier trouvé. Essayez une autre recherche.",
+    "entryDate": "Date du travail",
+    "entryDuration": "Durée (minutes)",
+    "entryTimezone": "Fuseau horaire",
+    "errorMatterSearch": "Les dossiers n’ont pas pu être chargés. Essayez une autre recherche.",
+    "errorEntrySubmit": "Le brouillon n’a pas pu être créé. Vérifiez vos droits d’accès et réessayez.",
+    "entrySubmitting": "Création du brouillon…",
+    "confirmDraftEntry": "Confirmer et créer le brouillon",
+    "draftedEntry": "Brouillon créé",
+    "entryMatter": "Dossier",
+    "entryNarrative": "Description",
+    "entryBillable": "Facturable",
+    "datePicker": {
+      "label": "Sélecteur de date",
+      "nextDecade": "Décennie suivante",
+      "nextMonth": "Mois suivant",
+      "nextYear": "Année suivante",
+      "previousDecade": "Décennie précédente",
+      "previousMonth": "Mois précédent",
+      "previousYear": "Année précédente",
+      "time": "Heure"
+    }
   }
 }

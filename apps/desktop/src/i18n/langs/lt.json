@@ -393,6 +393,36 @@
     "deletionOnly": "Įrašytos veiklos atidaryti negalima, nes raktinėje trūksta jos rakto. Ištrinkite ją ir pradėkite iš naujo.",
     "errorRead": "Nepavyko įkelti veiklos.",
     "errorUpdate": "Nepavyko išsaugoti pakeitimo.",
-    "errorCopy": "Nepavyko nukopijuoti santraukos."
+    "errorCopy": "Nepavyko nukopijuoti santraukos.",
+    "createDraftEntry": "Sukurti laiko įrašo juodraštį",
+    "entryConfirmationDescription": "Patvirtinus bus siunčiama tik pasirinkta byla, data, laiko juosta, trukmė, aprašymas ir apmokestinimo būsena. Programų pavadinimai ir laiko juosta liks šiame įrenginyje.",
+    "entryCreated": "Laiko įrašo juodraštis sukurtas.",
+    "entryMarkerFailed": "Juodraštis sukurtas, bet vietinės žymos išsaugoti nepavyko. Nesiųskite jo dar kartą.",
+    "closeEntry": "Uždaryti",
+    "clearMatterSearch": "Išvalyti bylų paiešką",
+    "searchMatters": "Ieškoti bylų",
+    "searchingMatters": "Ieškoma bylų…",
+    "noMatters": "Bylų nerasta. Pabandykite kitą paiešką.",
+    "entryDate": "Darbo data",
+    "entryDuration": "Trukmė (minutės)",
+    "entryTimezone": "Laiko juosta",
+    "errorMatterSearch": "Nepavyko įkelti bylų. Pabandykite kitą paiešką.",
+    "errorEntrySubmit": "Nepavyko sukurti juodraščio. Patikrinkite prieigos teises ir bandykite dar kartą.",
+    "entrySubmitting": "Kuriamas juodraštis…",
+    "confirmDraftEntry": "Patvirtinti ir sukurti juodraštį",
+    "draftedEntry": "Juodraštis sukurtas",
+    "entryMatter": "Byla",
+    "entryNarrative": "Aprašas",
+    "entryBillable": "Apmokamas",
+    "datePicker": {
+      "label": "Datos parinkiklis",
+      "nextDecade": "Kitas dešimtmetis",
+      "nextMonth": "Kitas mėnuo",
+      "nextYear": "Kiti metai",
+      "previousDecade": "Ankstesnis dešimtmetis",
+      "previousMonth": "Ankstesnis mėnuo",
+      "previousYear": "Ankstesni metai",
+      "time": "Laikas"
+    }
   }
 }

@@ -393,6 +393,36 @@
     "deletionOnly": "Uloženou aktivitu nelze otevřít, protože v klíčence chybí její klíč. Smažte ji a začněte znovu.",
     "errorRead": "Aktivitu se nepodařilo načíst.",
     "errorUpdate": "Změnu se nepodařilo uložit.",
-    "errorCopy": "Souhrn se nepodařilo zkopírovat."
+    "errorCopy": "Souhrn se nepodařilo zkopírovat.",
+    "createDraftEntry": "Vytvořit koncept záznamu",
+    "entryConfirmationDescription": "Potvrzením odešlete pouze vybraný spis, datum, časové pásmo, dobu, popis a údaj o fakturaci. Názvy aplikací a časová osa zůstanou na tomto zařízení.",
+    "entryCreated": "Koncept záznamu byl vytvořen.",
+    "entryMarkerFailed": "Koncept byl vytvořen, ale místní označení se nepodařilo uložit. Neodesílejte jej znovu.",
+    "closeEntry": "Zavřít",
+    "clearMatterSearch": "Vymazat hledání spisu",
+    "searchMatters": "Hledat spisy",
+    "searchingMatters": "Hledání spisů…",
+    "noMatters": "Žádné spisy nenalezeny. Zkuste jiné hledání.",
+    "entryDate": "Datum práce",
+    "entryDuration": "Doba (minuty)",
+    "entryTimezone": "Časové pásmo",
+    "errorMatterSearch": "Spisy se nepodařilo načíst. Zkuste jiné hledání.",
+    "errorEntrySubmit": "Koncept se nepodařilo vytvořit. Zkontrolujte oprávnění a zkuste to znovu.",
+    "entrySubmitting": "Vytváření konceptu…",
+    "confirmDraftEntry": "Potvrdit a vytvořit koncept",
+    "draftedEntry": "Koncept vytvořen",
+    "entryMatter": "Spis",
+    "entryNarrative": "Popis",
+    "entryBillable": "Fakturovatelné",
+    "datePicker": {
+      "label": "Výběr data",
+      "nextDecade": "Další desetiletí",
+      "nextMonth": "Další měsíc",
+      "nextYear": "Další rok",
+      "previousDecade": "Předchozí desetiletí",
+      "previousMonth": "Předchozí měsíc",
+      "previousYear": "Předchozí rok",
+      "time": "Čas"
+    }
   }
 }

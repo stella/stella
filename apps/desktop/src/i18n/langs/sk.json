@@ -393,6 +393,36 @@
     "deletionOnly": "Uloženú aktivitu nemožno otvoriť, pretože v kľúčenke chýba jej kľúč. Odstráňte ju a začnite znova.",
     "errorRead": "Aktivitu sa nepodarilo načítať.",
     "errorUpdate": "Zmenu sa nepodarilo uložiť.",
-    "errorCopy": "Súhrn sa nepodarilo skopírovať."
+    "errorCopy": "Súhrn sa nepodarilo skopírovať.",
+    "createDraftEntry": "Vytvoriť koncept záznamu",
+    "entryConfirmationDescription": "Potvrdením odošlete iba vybraný spis, dátum, časové pásmo, trvanie, popis a údaj o fakturácii. Názvy aplikácií a časová os zostanú na tomto zariadení.",
+    "entryCreated": "Koncept záznamu bol vytvorený.",
+    "entryMarkerFailed": "Koncept bol vytvorený, ale miestne označenie sa nepodarilo uložiť. Neodosielajte ho znova.",
+    "closeEntry": "Zavrieť",
+    "clearMatterSearch": "Vymazať hľadanie spisu",
+    "searchMatters": "Hľadať spisy",
+    "searchingMatters": "Hľadanie spisov…",
+    "noMatters": "Žiadne spisy sa nenašli. Skúste iné hľadanie.",
+    "entryDate": "Dátum práce",
+    "entryDuration": "Trvanie (minúty)",
+    "entryTimezone": "Časové pásmo",
+    "errorMatterSearch": "Spisy sa nepodarilo načítať. Skúste iné hľadanie.",
+    "errorEntrySubmit": "Koncept sa nepodarilo vytvoriť. Skontrolujte oprávnenia a skúste to znova.",
+    "entrySubmitting": "Vytváranie konceptu…",
+    "confirmDraftEntry": "Potvrdiť a vytvoriť koncept",
+    "draftedEntry": "Koncept vytvorený",
+    "entryMatter": "Spis",
+    "entryNarrative": "Popis",
+    "entryBillable": "Fakturovateľné",
+    "datePicker": {
+      "label": "Výber dátumu",
+      "nextDecade": "Nasledujúce desaťročie",
+      "nextMonth": "Nasledujúci mesiac",
+      "nextYear": "Nasledujúci rok",
+      "previousDecade": "Predchádzajúce desaťročie",
+      "previousMonth": "Predchádzajúci mesiac",
+      "previousYear": "Predchádzajúci rok",
+      "time": "Čas"
+    }
   }
 }

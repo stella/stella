@@ -393,6 +393,36 @@
     "deletionOnly": "Saved activity cannot be opened because its key is missing from the keychain. Delete it to start again.",
     "errorRead": "Activity could not be loaded.",
     "errorUpdate": "The change could not be saved.",
-    "errorCopy": "The summary could not be copied."
+    "errorCopy": "The summary could not be copied.",
+    "createDraftEntry": "Create draft entry",
+    "entryConfirmationDescription": "Confirm to send only the selected matter, date, time zone, duration, narrative and billable status. App names and the timeline stay on this device.",
+    "entryCreated": "Draft entry created.",
+    "entryMarkerFailed": "The draft was created, but its local marker could not be saved. Do not submit it again.",
+    "closeEntry": "Close",
+    "clearMatterSearch": "Clear matter search",
+    "searchMatters": "Search matters",
+    "searchingMatters": "Searching matters…",
+    "noMatters": "No matters found. Try another search.",
+    "entryDate": "Date worked",
+    "entryDuration": "Duration (minutes)",
+    "entryTimezone": "Time zone",
+    "errorMatterSearch": "Matters could not be loaded. Try another search.",
+    "errorEntrySubmit": "The draft could not be created. Check your access and try again.",
+    "entrySubmitting": "Creating draft…",
+    "confirmDraftEntry": "Confirm and create draft",
+    "draftedEntry": "Drafted",
+    "entryMatter": "Matter",
+    "entryNarrative": "Narrative",
+    "entryBillable": "Billable",
+    "datePicker": {
+      "label": "Date picker",
+      "nextDecade": "Next decade",
+      "nextMonth": "Next month",
+      "nextYear": "Next year",
+      "previousDecade": "Previous decade",
+      "previousMonth": "Previous month",
+      "previousYear": "Previous year",
+      "time": "Time"
+    }
   }
 }

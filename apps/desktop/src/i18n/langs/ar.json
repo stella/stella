@@ -393,6 +393,36 @@
     "deletionOnly": "يتعذر فتح النشاط المحفوظ لأن مفتاحه مفقود من سلسلة المفاتيح. احذفه للبدء من جديد.",
     "errorRead": "تعذّر تحميل النشاط.",
     "errorUpdate": "تعذّر حفظ التغيير.",
-    "errorCopy": "تعذّر نسخ الملخص."
+    "errorCopy": "تعذّر نسخ الملخص.",
+    "createDraftEntry": "إنشاء مسودة قيد وقت",
+    "entryConfirmationDescription": "عند التأكيد، يُرسل فقط الملف المختار والتاريخ والمنطقة الزمنية والمدة والوصف وحالة قابلية الفوترة. تبقى أسماء التطبيقات والمخطط الزمني على هذا الجهاز.",
+    "entryCreated": "تم إنشاء مسودة قيد الوقت.",
+    "entryMarkerFailed": "تم إنشاء المسودة، لكن تعذّر حفظ علامتها المحلية. لا ترسلها مرة أخرى.",
+    "closeEntry": "إغلاق",
+    "clearMatterSearch": "مسح البحث عن الملفات",
+    "searchMatters": "البحث عن ملفات",
+    "searchingMatters": "جارٍ البحث عن ملفات…",
+    "noMatters": "لم يتم العثور على ملفات. جرّب بحثًا آخر.",
+    "entryDate": "تاريخ العمل",
+    "entryDuration": "المدة (بالدقائق)",
+    "entryTimezone": "المنطقة الزمنية",
+    "errorMatterSearch": "تعذّر تحميل الملفات. جرّب بحثًا آخر.",
+    "errorEntrySubmit": "تعذّر إنشاء المسودة. تحقق من صلاحياتك وحاول مرة أخرى.",
+    "entrySubmitting": "جارٍ إنشاء المسودة…",
+    "confirmDraftEntry": "تأكيد وإنشاء المسودة",
+    "draftedEntry": "تم إنشاء المسودة",
+    "entryMatter": "ملف قانوني",
+    "entryNarrative": "البيان",
+    "entryBillable": "قابل للفوترة",
+    "datePicker": {
+      "label": "منتقي التاريخ",
+      "nextDecade": "العقد التالي",
+      "nextMonth": "الشهر التالي",
+      "nextYear": "السنة التالية",
+      "previousDecade": "العقد السابق",
+      "previousMonth": "الشهر السابق",
+      "previousYear": "السنة السابقة",
+      "time": "الوقت"
+    }
   }
 }

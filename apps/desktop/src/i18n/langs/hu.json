@@ -393,6 +393,36 @@
     "deletionOnly": "A mentett tevékenység nem nyitható meg, mert a kulcsa hiányzik a kulcskarikáról. Törölje, és kezdje újra.",
     "errorRead": "A tevékenységet nem sikerült betölteni.",
     "errorUpdate": "A módosítást nem sikerült menteni.",
-    "errorCopy": "Az összegzést nem sikerült másolni."
+    "errorCopy": "Az összegzést nem sikerült másolni.",
+    "createDraftEntry": "Időbejegyzés piszkozatának létrehozása",
+    "entryConfirmationDescription": "A megerősítés csak a kiválasztott ügyet, dátumot, időzónát, időtartamot, leírást és számlázhatóságot küldi el. Az alkalmazásnevek és az idővonal ezen az eszközön maradnak.",
+    "entryCreated": "A bejegyzés piszkozata létrejött.",
+    "entryMarkerFailed": "A piszkozat létrejött, de a helyi jelölést nem sikerült menteni. Ne küldje el újra.",
+    "closeEntry": "Bezárás",
+    "clearMatterSearch": "Ügykeresés törlése",
+    "searchMatters": "Ügyek keresése",
+    "searchingMatters": "Ügyek keresése…",
+    "noMatters": "Nincs találat. Próbáljon más keresést.",
+    "entryDate": "Munkavégzés dátuma",
+    "entryDuration": "Időtartam (perc)",
+    "entryTimezone": "Időzóna",
+    "errorMatterSearch": "Az ügyeket nem sikerült betölteni. Próbáljon más keresést.",
+    "errorEntrySubmit": "A piszkozatot nem sikerült létrehozni. Ellenőrizze a jogosultságait, majd próbálja újra.",
+    "entrySubmitting": "Piszkozat létrehozása…",
+    "confirmDraftEntry": "Megerősítés és piszkozat létrehozása",
+    "draftedEntry": "Piszkozat létrehozva",
+    "entryMatter": "Ügy",
+    "entryNarrative": "Szöveges leírás",
+    "entryBillable": "Számlázható",
+    "datePicker": {
+      "label": "Dátumválasztó",
+      "nextDecade": "Következő évtized",
+      "nextMonth": "Következő hónap",
+      "nextYear": "Következő év",
+      "previousDecade": "Előző évtized",
+      "previousMonth": "Előző hónap",
+      "previousYear": "Előző év",
+      "time": "Időpont"
+    }
   }
 }

@@ -393,6 +393,36 @@
     "deletionOnly": "A atividade salva não pode ser aberta porque a chave dela não está no chaveiro. Apague-a para começar de novo.",
     "errorRead": "Não foi possível carregar a atividade.",
     "errorUpdate": "Não foi possível salvar a alteração.",
-    "errorCopy": "Não foi possível copiar o resumo."
+    "errorCopy": "Não foi possível copiar o resumo.",
+    "createDraftEntry": "Criar rascunho de registro",
+    "entryConfirmationDescription": "Ao confirmar, serão enviados apenas o caso selecionado, a data, o fuso horário, a duração, a descrição e o status faturável. Os nomes dos aplicativos e a linha do tempo permanecem neste dispositivo.",
+    "entryCreated": "Rascunho de registro criado.",
+    "entryMarkerFailed": "O rascunho foi criado, mas sua marca local não pôde ser salva. Não o envie novamente.",
+    "closeEntry": "Fechar",
+    "clearMatterSearch": "Limpar busca de casos",
+    "searchMatters": "Buscar casos",
+    "searchingMatters": "Buscando casos…",
+    "noMatters": "Nenhum caso encontrado. Tente outra busca.",
+    "entryDate": "Data do trabalho",
+    "entryDuration": "Duração (minutos)",
+    "entryTimezone": "Fuso horário",
+    "errorMatterSearch": "Não foi possível carregar os casos. Tente outra busca.",
+    "errorEntrySubmit": "Não foi possível criar o rascunho. Verifique suas permissões e tente novamente.",
+    "entrySubmitting": "Criando rascunho…",
+    "confirmDraftEntry": "Confirmar e criar rascunho",
+    "draftedEntry": "Rascunho criado",
+    "entryMatter": "Caso",
+    "entryNarrative": "Narrativa",
+    "entryBillable": "Faturável",
+    "datePicker": {
+      "label": "Seletor de data",
+      "nextDecade": "Próxima década",
+      "nextMonth": "Próximo mês",
+      "nextYear": "Próximo ano",
+      "previousDecade": "Década anterior",
+      "previousMonth": "Mês anterior",
+      "previousYear": "Ano anterior",
+      "time": "Horário"
+    }
   }
 }
