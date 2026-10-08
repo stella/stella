@@ -1,4 +1,4 @@
-import { readdirSync, readFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 import ts from "typescript";
 
@@ -21,7 +21,6 @@ const GLOBAL_TRANSPORT_NAMES = new Set([
 const NETWORK_MODULES = new Set([
   "@stll/fetch",
   "bun",
-  "apps/api/src/lib/fetch",
   "undici",
   "http",
   "https",
@@ -630,8 +629,8 @@ export const validateOutboundTransportCensus = ({
     }
   }
   for (const [file, text] of sources) {
-    if (!isApiProductionModule(file)) {
-      problems.push(`${file}: source belongs to an API production module`);
+    if (!isOutboundProductionModule(file)) {
+      problems.push(`${file}: source belongs to a production transport module`);
       continue;
     }
     const references = outboundTransportReferences({ file, text });
@@ -687,8 +686,32 @@ export const isApiProductionModule = (
       (segment) => EXCLUDED_DIRECTORIES.has(segment) || segment.startsWith("."),
     );
 
-/** Walk every API source module, including operator scripts and client bundles. */
-export const readApiProductionSources = (
+const ADDITIONAL_EXCLUDED_DIRECTORIES = new Set([
+  ...EXCLUDED_DIRECTORIES,
+  "test",
+  "__tests__",
+  "fixtures",
+  "scripts",
+]);
+
+export const isOutboundProductionModule = (
+  file: string,
+): file is OutboundTransportCensusEntry["path"] =>
+  isApiProductionModule(file) ||
+  (/^(?:apps\/(?:collab|web)|packages\/[^/]+)\/src\//u.test(file) &&
+    /\.[cm]?[jt]sx?$/u.test(file) &&
+    !/\.(?:test|type-test|spec|d)\.[cm]?[jt]sx?$/u.test(file) &&
+    !file
+      .split("/")
+      .slice(3)
+      .some(
+        (segment) =>
+          ADDITIONAL_EXCLUDED_DIRECTORIES.has(segment) ||
+          segment.startsWith("."),
+      ));
+
+/** Preserve the API inventory and include the other production source roots. */
+export const readOutboundProductionSources = (
   repoRoot: string,
 ): Map<string, string> => {
   const sources = new Map<string, string>();
@@ -699,21 +722,67 @@ export const readApiProductionSources = (
       const file = `${relative}/${entry.name}`;
       if (entry.isDirectory()) {
         if (
-          !EXCLUDED_DIRECTORIES.has(entry.name) &&
+          !(
+            file.startsWith("apps/api/")
+              ? EXCLUDED_DIRECTORIES
+              : ADDITIONAL_EXCLUDED_DIRECTORIES
+          ).has(entry.name) &&
           !entry.name.startsWith(".")
         ) {
           walk(file);
         }
         continue;
       }
-      if (!isApiProductionModule(file)) {
-        continue;
+      if (isOutboundProductionModule(file)) {
+        sources.set(file, readFileSync(path.join(repoRoot, file), "utf-8"));
       }
-      sources.set(file, readFileSync(path.join(repoRoot, file), "utf-8"));
     }
   };
-  walk("apps/api");
+  const roots = ["apps/api", "apps/collab/src", "apps/web/src"];
+  const packagesRoot = path.join(repoRoot, "packages");
+  if (existsSync(packagesRoot)) {
+    for (const entry of readdirSync(packagesRoot, { withFileTypes: true })) {
+      if (entry.isDirectory() && !entry.name.startsWith(".")) {
+        roots.push(`packages/${entry.name}/src`);
+      }
+    }
+  }
+  for (const root of roots) {
+    if (existsSync(path.join(repoRoot, root))) {
+      walk(root);
+    }
+  }
   return sources;
+};
+
+/** The API's own sources: the scope the third-party permit guards read. */
+export const readApiProductionSources = (
+  repoRoot: string,
+): Map<string, string> =>
+  new Map(
+    [...readOutboundProductionSources(repoRoot)].filter(([file]) =>
+      file.startsWith("apps/api/"),
+    ),
+  );
+
+/** Local transport module identities must resolve to an inventoried source. */
+export const validateOutboundTransportModulePaths = (
+  sources: ReadonlyMap<string, string>,
+  modules: Iterable<string> = NETWORK_MODULES,
+): string[] => {
+  const sourceModules = new Set(
+    [...sources.keys()].map((file) => canonicalModuleId(file, file)),
+  );
+  const problems: string[] = [];
+  for (const module of modules) {
+    if (
+      /^(?:apps|packages)\//u.test(module) &&
+      !sourceModules.has(canonicalModuleId(module, module))
+    ) {
+      problems.push(`${module}: transport owner path does not exist in scope`);
+    }
+  }
+  return problems;
 };
 
 if (import.meta.main) {
@@ -722,11 +791,15 @@ if (import.meta.main) {
     process.exit(1);
   }
   const repoRoot = path.resolve(import.meta.dir, "..");
-  const problems = validateOutboundTransportCensus({
-    sources: readApiProductionSources(repoRoot),
-    census: OUTBOUND_TRANSPORT_CENSUS,
-    grantOwners: OUTBOUND_PERMIT_GRANT_OWNERS,
-  });
+  const sources = readOutboundProductionSources(repoRoot);
+  const problems = validateOutboundTransportModulePaths(sources);
+  problems.push(
+    ...validateOutboundTransportCensus({
+      sources,
+      census: OUTBOUND_TRANSPORT_CENSUS,
+      grantOwners: OUTBOUND_PERMIT_GRANT_OWNERS,
+    }),
+  );
   for (const problem of problems) {
     console.error(problem);
   }

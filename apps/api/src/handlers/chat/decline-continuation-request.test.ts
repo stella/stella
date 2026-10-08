@@ -50,27 +50,34 @@ const captureAdapter = (sink: ModelMessage[][]): AnyTextAdapter => ({
     panic("Structured output is not part of this fixture"),
 });
 
-const thinking = (id: string): ChatPart => ({
-  type: "thinking",
-  content: `think ${id}`,
-  provenance: {
-    provider: "openai",
-    model: "gpt-6-sol",
-    format: "openai-encrypted-content",
-  },
-  signature: JSON.stringify({ id, encrypted_content: `enc ${id}` }),
-});
+// A stored part keeps the fields the engine streamed onto it, the signature a
+// thinking part carries and the item id on a call, beyond what the declared
+// part type names; the fixtures carry them the same way.
+const thinking = (id: string) => {
+  const part = {
+    type: "thinking" as const,
+    content: `think ${id}`,
+    provenance: {
+      provider: "openai" as const,
+      model: "gpt-6-sol",
+      format: "openai-encrypted-content" as const,
+    },
+    signature: JSON.stringify({ id, encrypted_content: `enc ${id}` }),
+  };
+  return part;
+};
 
-const declinedCall: ChatPart = {
+const declinedCallPart = {
   metadata: { itemId: "fc_1" },
   approval: { approved: false, id: "approval_call-1", needsApproval: true },
   arguments: '{"name":"X"}',
   id: "call-1",
   input: { name: "X" },
-  name: "save_contact",
-  state: "approval-responded",
-  type: "tool-call",
+  name: "save_contact" as const,
+  state: "approval-responded" as const,
+  type: "tool-call" as const,
 };
+const declinedCall: ChatPart = declinedCallPart;
 
 const SHAPES: Record<string, ChatPart[]> = {
   call: [declinedCall],
@@ -91,6 +98,21 @@ const SHAPES: Record<string, ChatPart[]> = {
     thinking("rs_2"),
     declinedCall,
   ],
+};
+
+/** The Responses API input the real OpenAI adapter builds from `messages`. */
+const openAIResponsesInput = (messages: readonly ModelMessage[]): unknown[] => {
+  const adapter = createOpenaiChat("gpt-6-sol", "test-key");
+  const convert: unknown = Reflect.get(adapter, "convertMessagesToInput");
+  if (typeof convert !== "function") {
+    return panic("The OpenAI adapter no longer converts messages to input");
+  }
+  const input: unknown = Reflect.apply(convert, adapter, [messages]);
+  if (!Array.isArray(input)) {
+    return panic("The OpenAI adapter returned a non-array input");
+  }
+  const items: unknown[] = input;
+  return items;
 };
 
 // A declined approval resumes the run: the request that continues it must
@@ -132,28 +154,19 @@ describe("the request continuing a declined approval", () => {
       })) {
         // drain
       }
-      const adapter = createOpenaiChat("gpt-6-sol", "test-key");
-      const convert: unknown = Reflect.get(adapter, "convertMessagesToInput");
-      if (typeof convert !== "function") {
-        return panic("The OpenAI adapter no longer converts messages to input");
-      }
-      const input: unknown = Reflect.apply(convert, adapter, [
+      const items = openAIResponsesInput(
         buildClosedTranscript({
           messages: sink.at(0) ?? [],
           target: { provider: "openai", modelId: "gpt-6-sol" },
           onReasoningDropped: () => undefined,
         }),
-      ]);
+      );
       const problems = findTranscriptProblems({
         format: "openai-responses",
-        body: { input },
+        body: { input: items },
       });
       expect(sink).toHaveLength(1);
       expect(problems).toEqual([]);
-      if (!Array.isArray(input)) {
-        return panic("The OpenAI adapter returned a non-array input");
-      }
-      const items: unknown[] = input;
       const typeOf = (item: unknown): unknown =>
         typeof item === "object" && item !== null
           ? Reflect.get(item, "type")

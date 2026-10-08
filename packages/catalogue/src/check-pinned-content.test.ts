@@ -1,20 +1,26 @@
 import { describe, expect, test } from "bun:test";
 
+import { sha256Hex } from "@stll/sha256/bun";
 import { SKILL_PACKAGE_LIMITS } from "@stll/skills/package-limits";
 
 import {
   archiveSizeLimitError,
-  assertCompleteGithubContentsListing,
   checkFrontmatterLimits,
-  fetchDirectoryContents,
-  fetchPinnedTextFile,
-  fetchWithBoundedRetry,
-  PinnedContentError,
   pinnedLicenseMismatchError,
   registerResourcePath,
   resourceContentLimitError,
   resourcePathLimitError,
 } from "../scripts/check-pinned-content";
+import {
+  PinnedContentError,
+  assertCompleteGithubContentsListing,
+  projectFrontmatter,
+} from "../scripts/pinned-content-facts";
+import {
+  fetchDirectoryContents,
+  fetchPinnedTextFile,
+  fetchWithBoundedRetry,
+} from "../scripts/pinned-content-upstream";
 
 const GITHUB_TARGET = {
   directory: "skills/example",
@@ -125,6 +131,7 @@ describe("pinned content fetch retry", () => {
     expect(file).toEqual({
       byteLength: 14,
       content: "pinned content",
+      sha256: sha256Hex("pinned content"),
     });
     expect(attempts).toBe(2);
     expect(delays).toEqual([200]);
@@ -155,7 +162,7 @@ describe("pinned content fetch retry", () => {
       target: GITHUB_TARGET,
     });
 
-    expect(result).toEqual(contents);
+    expect(result).toEqual({ items: contents, itemCount: contents.length });
     expect(attempts).toBe(2);
     expect(delays).toEqual([200]);
   });
@@ -177,19 +184,22 @@ describe("pinned skill install-limit preflight", () => {
     ).not.toThrow();
   });
   test("reports frontmatter fields and metadata rejected at install time", () => {
-    const errors = checkFrontmatterLimits("oversized", {
-      compatibility: null,
-      description: "d".repeat(SKILL_PACKAGE_LIMITS.descriptionMaxChars + 1),
-      license: null,
-      metadata: Object.fromEntries(
-        Array.from(
-          { length: SKILL_PACKAGE_LIMITS.metadataEntriesMax + 1 },
-          (_, index) => [`key-${index}`, "value"],
+    const errors = checkFrontmatterLimits(
+      "oversized",
+      projectFrontmatter({
+        compatibility: null,
+        description: "d".repeat(SKILL_PACKAGE_LIMITS.descriptionMaxChars + 1),
+        license: null,
+        metadata: Object.fromEntries(
+          Array.from(
+            { length: SKILL_PACKAGE_LIMITS.metadataEntriesMax + 1 },
+            (_, index) => [`key-${index}`, "value"],
+          ),
         ),
-      ),
-      name: "oversized",
-      version: null,
-    });
+        name: "oversized",
+        version: null,
+      }),
+    );
 
     expect(errors.some((error) => error.includes("description"))).toBe(true);
     expect(errors.some((error) => error.includes("metadata has"))).toBe(true);
@@ -221,7 +231,7 @@ describe("pinned skill install-limit preflight", () => {
 
   test("rejects decoded resource characters below the byte fetch cap", () => {
     const error = resourceContentLimitError({
-      content: "a".repeat(SKILL_PACKAGE_LIMITS.resourceMaxChars + 1),
+      utf16Length: SKILL_PACKAGE_LIMITS.resourceMaxChars + 1,
       path: "references/large.txt",
       slug: "ascii-heavy",
     });

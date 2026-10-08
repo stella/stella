@@ -12,17 +12,17 @@ import { combine } from "@atlaskit/pragmatic-drag-and-drop/utils/combine";
 
 import { Button } from "@stll/ui/button";
 import { EllipsisVerticalIcon } from "@stll/ui/icons";
+import { InlineDropIndicator } from "@stll/ui/inline-drop-indicator";
+import {
+  reorderInlineIds,
+  toInlineDropPosition,
+  type InlineDirection,
+  type InlineDropPosition,
+} from "@stll/ui/inline-reorder";
 import { TOOLBAR_ROW_HEIGHT } from "@stll/ui/inspector";
 import { Menu, MenuPopup, MenuTrigger } from "@stll/ui/menu";
 import { Tabs, TabsList, TabsTab } from "@stll/ui/tabs";
 import { cn } from "@stll/ui/utils";
-
-import {
-  reorderWorkspaceViewIds,
-  toWorkspaceViewDropPosition,
-  type WorkspaceViewDirection,
-  type WorkspaceViewDropPosition,
-} from "./view-switcher.logic";
 
 const VIEW_DRAG_TYPE = "@stll/workspace-ui/view-switcher/drag-type";
 const VIEW_DRAG_ID = "@stll/workspace-ui/view-switcher/view-id";
@@ -61,7 +61,7 @@ export type WorkspaceViewSwitcherProps<View extends WorkspaceViewSwitcherItem> =
   {
     activeViewId: string;
     ariaLabel: string;
-    direction: WorkspaceViewDirection;
+    direction: InlineDirection;
     reorder: WorkspaceViewSwitcherReorder<View> | null;
     views: readonly View[];
     addControl?: React.ReactNode;
@@ -153,9 +153,9 @@ export const WorkspaceViewSwitcher = <View extends WorkspaceViewSwitcherItem>({
   const handleReorder = (
     draggedId: string,
     targetId: string,
-    position: WorkspaceViewDropPosition,
+    position: InlineDropPosition,
   ) => {
-    const reordered = reorderWorkspaceViewIds({
+    const reordered = reorderInlineIds({
       ids: views.map((view) => view.id),
       draggedId,
       targetId,
@@ -248,7 +248,7 @@ export const WorkspaceViewSwitcher = <View extends WorkspaceViewSwitcherItem>({
 type WorkspaceViewTabProps<View extends WorkspaceViewSwitcherItem> = {
   actions: React.ReactNode | undefined;
   canReorder: boolean;
-  direction: WorkspaceViewDirection;
+  direction: InlineDirection;
   getDragData: ((view: View) => Record<string | symbol, unknown>) | undefined;
   getDropData: ((view: View) => Record<string | symbol, unknown>) | undefined;
   isDragBlocked: boolean;
@@ -262,7 +262,7 @@ type WorkspaceViewTabProps<View extends WorkspaceViewSwitcherItem> = {
   onReorder: (
     draggedId: string,
     targetId: string,
-    position: WorkspaceViewDropPosition,
+    position: InlineDropPosition,
   ) => void;
   renderIcon: (view: View) => React.ReactNode;
   reserveActionSpace: boolean;
@@ -285,8 +285,9 @@ const WorkspaceViewTab = <View extends WorkspaceViewSwitcherItem>({
   view,
 }: WorkspaceViewTabProps<View>) => {
   const [tabContainer, setTabContainer] = useState<HTMLDivElement | null>(null);
-  const [dropPosition, setDropPosition] =
-    useState<WorkspaceViewDropPosition | null>(null);
+  const [dropPosition, setDropPosition] = useState<InlineDropPosition | null>(
+    null,
+  );
   const canDrag = useLatestCallback(() => !isDragBlocked);
   const initialData = useLatestCallback(() => ({
     ...getDragData?.(view),
@@ -331,16 +332,13 @@ const WorkspaceViewTab = <View extends WorkspaceViewSwitcherItem>({
         getIsSticky: () => true,
         onDrag: ({ self }) =>
           setDropPosition(
-            toWorkspaceViewDropPosition(
-              extractClosestEdge(self.data),
-              direction,
-            ),
+            toInlineDropPosition(extractClosestEdge(self.data), direction),
           ),
         onDragLeave: () => setDropPosition(null),
         onDrop: ({ source, self }) => {
           setDropPosition(null);
           const draggedId = source.data[VIEW_DRAG_ID];
-          const position = toWorkspaceViewDropPosition(
+          const position = toInlineDropPosition(
             extractClosestEdge(self.data),
             direction,
           );
@@ -364,15 +362,7 @@ const WorkspaceViewTab = <View extends WorkspaceViewSwitcherItem>({
 
   return (
     <div className="relative flex h-full items-center" ref={setTabContainer}>
-      {dropPosition !== null && (
-        <span
-          aria-hidden="true"
-          className={cn(
-            "bg-primary pointer-events-none absolute inset-y-1 z-20 w-0.5 rounded-full",
-            dropPosition === "before" ? "start-0" : "end-0",
-          )}
-        />
-      )}
+      <InlineDropIndicator position={dropPosition} />
       <TabsTab
         className={cn(
           "h-full pt-2 sm:h-full",

@@ -9198,5 +9198,9 @@
   "src/tests/security/aggregate-mutations.test.ts": {
     "seconds": 1,
     "source": "estimated"
+  },
+  "src/tests/setup-env.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
   }
 }

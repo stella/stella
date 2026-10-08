@@ -52,6 +52,23 @@ const sqlLocks = (text: string, context: "sql" | "unknown" = "unknown") => {
         /^\s+\S/u.test(text.slice(match.index + match[0].length))
       );
     }
+    // Outside a known SQL context, decide by what FOLLOWS the clause. In valid
+    // SQL a row-lock clause is followed only by the end of the text, `;`, `)`,
+    // `,`, a placeholder, `OF <table>`, NOWAIT, SKIP LOCKED, LIMIT, OFFSET,
+    // FETCH or another locking clause. Lower-case wording followed by anything
+    // else is prose ("metadata for update notifications"); a real clause
+    // followed by such a word would not parse. Upper-case clauses always count.
+    const after = masked.slice(match.index + match[0].length).trimStart();
+    if (
+      /^FOR\s/iu.test(match[0]) &&
+      context === "unknown" &&
+      match[0] !== match[0].toUpperCase() &&
+      !/^(?:$|[;),$]|\$\{|(?:OF|NOWAIT|SKIP|LIMIT|OFFSET|FETCH|FOR)\b)/iu.test(
+        after,
+      )
+    ) {
+      return false;
+    }
     if (!/^FOR\s+UPDATE$/iu.test(match[0])) {
       return true;
     }
@@ -302,15 +319,30 @@ export const aggregateLockBaseline = (
     `${a.file}:${a.fingerprint}`.localeCompare(`${b.file}:${b.fingerprint}`),
   );
 };
+/**
+ * A reviewed replacement of one existing baseline row by a changed acquisition
+ * (same lock, edited SQL or moved file). It never admits an additional
+ * acquisition: the replaced row must exist in the merge base and be gone now,
+ * and the new count may not exceed the replaced one.
+ */
+export type AggregateLockRekey = {
+  file: string;
+  from: string;
+  to: string;
+  fromFile?: string | undefined;
+  reason: string;
+};
 type AggregateLockBaselineOptions = {
   actual: readonly AggregateLockBaselineRow[];
   baseline: readonly AggregateLockBaselineRow[];
   previous?: readonly AggregateLockBaselineRow[];
+  rekeys?: readonly AggregateLockRekey[];
 };
 export const aggregateLockBaselineProblems = ({
   actual,
   baseline,
   previous,
+  rekeys = [],
 }: AggregateLockBaselineOptions) => {
   const problems: string[] = [];
   const keyed = (rows: readonly AggregateLockBaselineRow[]) =>
@@ -335,8 +367,27 @@ export const aggregateLockBaselineProblems = ({
   }
   if (previous) {
     const old = keyed(previous);
+    const usedSources = new Set<string>();
+    const replaces = (key: string, row: AggregateLockBaselineRow) =>
+      rekeys.some((rekey) => {
+        const source = `${rekey.fromFile ?? rekey.file}:${rekey.from}`;
+        const replaced = old.get(source);
+        if (
+          `${rekey.file}:${rekey.to}` !== key ||
+          !rekey.reason.trim() ||
+          replaced === undefined ||
+          accepted.has(source) ||
+          usedSources.has(source) ||
+          row.count > replaced.count
+        ) {
+          return false;
+        }
+        usedSources.add(source);
+        return true;
+      });
     for (const [key, row] of accepted) {
-      if (!old.has(key) || row.count > (old.get(key)?.count ?? 0)) {
+      const grew = !old.has(key) || row.count > (old.get(key)?.count ?? 0);
+      if (grew && !replaces(key, row)) {
         problems.push(`Aggregate lock baseline may only shrink: ${key}`);
       }
     }
