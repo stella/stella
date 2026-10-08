@@ -211,10 +211,13 @@ export const createReaderBlocksTool =
       !source.decision.source.allowsDerivedAi &&
       withheldTextPolicy === "metadata-only"
     ) {
-      return toolDataResult({ status: "withheld", metadata, withheldReason });
+      return toolDataResult({
+        metadata,
+        content: { status: "withheld", withheldReason },
+      });
     }
     if (source.ast === null) {
-      return toolDataResult({ status: "unavailable", metadata });
+      return toolDataResult({ metadata, content: { status: "unavailable" } });
     }
     const page = packReaderSourcePage({ ast: source.ast, source, position });
     switch (page.status) {
@@ -234,15 +237,17 @@ export const createReaderBlocksTool =
         return panic("Unknown reader page status");
     }
     const payload = {
-      status: "available",
       metadata,
-      phase: page.phase,
-      items: page.items,
-      blockFragments: page.blockFragments,
-      citationAnchors: page.citationAnchors,
-      provisionAnchors: page.provisionAnchors,
-      nextCursor: page.nextCursor,
-      limit: READER_PAGE_MAX_CHARS,
+      content: {
+        status: "available",
+        phase: page.phase,
+        items: page.items,
+        blockFragments: page.blockFragments,
+        citationAnchors: page.citationAnchors,
+        provisionAnchors: page.provisionAnchors,
+        nextCursor: page.nextCursor,
+        limit: READER_PAGE_MAX_CHARS,
+      },
     } as const;
     if (JSON.stringify(payload).length > READER_PAGE_MAX_CHARS) {
       return tooLarge();

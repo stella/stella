@@ -186,7 +186,10 @@ describe("decision reader tool contracts", () => {
         args: { decision_id: id, ...(cursor === undefined ? {} : { cursor }) },
         context,
       });
-      if (result.status !== "success" || result.data.status !== "available") {
+      if (
+        result.status !== "success" ||
+        result.data.content.status !== "available"
+      ) {
         throw new Error("Expected a bounded anchor page");
       }
       expect(JSON.stringify(result.data).length).toBeLessThanOrEqual(
@@ -194,20 +197,22 @@ describe("decision reader tool contracts", () => {
       );
       expect(v.safeParse(blocksDecisionOutput, result.data).success).toBe(true);
       citations.push(
-        ...result.data.citationAnchors.map((anchor) => anchor.citationId),
+        ...result.data.content.citationAnchors.map(
+          (anchor) => anchor.citationId,
+        ),
       );
       provisions.push(
-        ...result.data.provisionAnchors.map(
+        ...result.data.content.provisionAnchors.map(
           (anchor) => anchor.provision.anchor,
         ),
       );
-      if (result.data.nextCursor === null) {
+      if (result.data.content.nextCursor === null) {
         completed = true;
         break;
       }
-      expect(cursors.has(result.data.nextCursor)).toBe(false);
-      cursors.add(result.data.nextCursor);
-      cursor = result.data.nextCursor;
+      expect(cursors.has(result.data.content.nextCursor)).toBe(false);
+      cursors.add(result.data.content.nextCursor);
+      cursor = result.data.content.nextCursor;
     }
     expect(completed).toBe(true);
     expect(citations).toEqual(
@@ -299,28 +304,33 @@ describe("decision reader tool contracts", () => {
         context,
       });
       expect(result.status).toBe("success");
-      if (result.status !== "success" || result.data.status !== "available") {
+      if (
+        result.status !== "success" ||
+        result.data.content.status !== "available"
+      ) {
         throw new Error("Expected an available block page");
       }
       expect(v.safeParse(blocksDecisionOutput, result.data).success).toBe(true);
       expect(JSON.stringify(result.data).length).toBeLessThanOrEqual(
         READER_PAGE_MAX_CHARS,
       );
-      ids.push(...result.data.items.map((block) => block.id));
+      ids.push(...result.data.content.items.map((block) => block.id));
       citationIds.push(
-        ...result.data.citationAnchors.map((anchor) => anchor.citationId),
+        ...result.data.content.citationAnchors.map(
+          (anchor) => anchor.citationId,
+        ),
       );
       provisionIds.push(
-        ...result.data.provisionAnchors.map(
+        ...result.data.content.provisionAnchors.map(
           (anchor) => anchor.provision.document_id,
         ),
       );
-      if (result.data.nextCursor === null) {
+      if (result.data.content.nextCursor === null) {
         break;
       }
-      expect(cursors.has(result.data.nextCursor)).toBe(false);
-      cursors.add(result.data.nextCursor);
-      cursor = result.data.nextCursor;
+      expect(cursors.has(result.data.content.nextCursor)).toBe(false);
+      cursors.add(result.data.content.nextCursor);
+      cursor = result.data.content.nextCursor;
     }
     expect(ids).toEqual(source.ast.blocks.map((block) => block.id));
     expect(new Set(ids).size).toBe(80);
@@ -350,15 +360,18 @@ describe("decision reader tool contracts", () => {
         args: { decision_id: id, ...(cursor === undefined ? {} : { cursor }) },
         context,
       });
-      if (result.status !== "success" || result.data.status !== "available") {
+      if (
+        result.status !== "success" ||
+        result.data.content.status !== "available"
+      ) {
         throw new Error("Expected the fragment page");
       }
       expect(v.safeParse(blocksDecisionOutput, result.data).success).toBe(true);
       expect(JSON.stringify(result.data).length).toBeLessThanOrEqual(
         READER_PAGE_MAX_CHARS,
       );
-      read.push(...result.data.items);
-      for (const fragment of result.data.blockFragments) {
+      read.push(...result.data.content.items);
+      for (const fragment of result.data.content.blockFragments) {
         expect(fragment.blockId).toBe(large.id);
         expect(fragment.offset).toBe(fragmentText.length);
         fragmentText += fragment.json;
@@ -367,10 +380,10 @@ describe("decision reader tool contracts", () => {
           fragmentText = "";
         }
       }
-      if (result.data.nextCursor === null) {
+      if (result.data.content.nextCursor === null) {
         break;
       }
-      cursor = result.data.nextCursor;
+      cursor = result.data.content.nextCursor;
     }
     expect(fragmentText).toBe("");
     expect(read).toEqual(ast.blocks);
@@ -384,13 +397,13 @@ describe("decision reader tool contracts", () => {
     const first = await blocks({ args: { decision_id: id }, context });
     if (
       first.status !== "success" ||
-      first.data.status !== "available" ||
-      first.data.nextCursor === null
+      first.data.content.status !== "available" ||
+      first.data.content.nextCursor === null
     ) {
       throw new Error("Expected a cursor for the multi-page fixture");
     }
     const cross = await blocks({
-      args: { decision_id: otherId, cursor: first.data.nextCursor },
+      args: { decision_id: otherId, cursor: first.data.content.nextCursor },
       context,
     });
     expect(cross.status).toBe("error");
@@ -399,7 +412,7 @@ describe("decision reader tool contracts", () => {
     }
     source = sourceOf(astOf(21));
     const changed = await blocks({
-      args: { decision_id: id, cursor: first.data.nextCursor },
+      args: { decision_id: id, cursor: first.data.content.nextCursor },
       context,
     });
     expect(changed.status).toBe("error");
@@ -428,10 +441,10 @@ describe("decision reader tool contracts", () => {
     if (withheld.status !== "success") {
       throw new Error("Expected withheld metadata");
     }
-    expect(withheld.data.status).toBe("withheld");
+    expect(withheld.data.content.status).toBe("withheld");
     expect(JSON.stringify(withheld.data)).not.toContain("Paragraph 48");
-    expect(withheld.data).not.toHaveProperty("items");
-    expect(withheld.data).not.toHaveProperty("citationAnchors");
+    expect(withheld.data.content).not.toHaveProperty("items");
+    expect(withheld.data.content).not.toHaveProperty("citationAnchors");
     expect(v.safeParse(blocksDecisionOutput, withheld.data).success).toBe(true);
     const shown = await typedCall(
       createReaderBlocksTool("show-to-user"),
@@ -441,10 +454,13 @@ describe("decision reader tool contracts", () => {
       context,
     });
     expect(shown.status).toBe("success");
-    if (shown.status !== "success" || shown.data.status !== "available") {
+    if (
+      shown.status !== "success" ||
+      shown.data.content.status !== "available"
+    ) {
       throw new Error("Expected human-only blocks");
     }
-    expect(shown.data.items.length).toBeGreaterThan(0);
+    expect(shown.data.content.items.length).toBeGreaterThan(0);
     const model = await open({
       args: { decision_id: id, paragraphs: "48" },
       context,

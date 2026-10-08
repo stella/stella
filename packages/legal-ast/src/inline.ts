@@ -160,6 +160,7 @@ const citationTargetSchema: v.GenericSchema<InlineCitationTarget> = v.variant(
       status: v.literal("identified"),
       identifiers: v.pipe(
         v.tupleWithRest([decisionIdentifierSchema], decisionIdentifierSchema),
+        v.minLength(1),
         v.maxLength(DECISION_IDENTIFIER_MAX_COUNT),
       ),
     }),
@@ -190,6 +191,7 @@ const citationPinSchema: v.GenericSchema<InlineCitationPin> = v.strictObject({
   ),
   parts: v.pipe(
     v.tupleWithRest([citationPinPartSchema], citationPinPartSchema),
+    v.minLength(1),
     v.maxLength(CITATION_PIN_MAX_PARTS),
   ),
   reporter: v.optional(reporterCitationIdentifierSchema),

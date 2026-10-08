@@ -131,28 +131,28 @@ const blockFragmentSchema = v.strictObject({
   totalChars: v.number(),
   json: v.string(),
 });
-export const blocksDecisionOutput = v.variant("status", [
-  v.strictObject({
-    status: v.literal("available"),
-    metadata: readerMetadataSchema,
-    phase: v.picklist(["blocks", "citations", "provisions"]),
-    items: v.array(blockSchema),
-    blockFragments: v.array(blockFragmentSchema),
-    citationAnchors: v.array(citationAnchorSchema),
-    provisionAnchors: v.array(provisionAnchorSchema),
-    nextCursor: v.nullable(v.string()),
-    limit: v.literal(READER_PAGE_MAX_CHARS),
-  }),
-  v.strictObject({
-    status: v.literal("withheld"),
-    metadata: readerMetadataSchema,
-    withheldReason: withheldReasonSchema,
-  }),
-  v.strictObject({
-    status: v.literal("unavailable"),
-    metadata: readerMetadataSchema,
-  }),
-]);
+// Metadata is shared by every outcome, so it is published once beside the
+// outcome union rather than inside each branch.
+export const blocksDecisionOutput = v.strictObject({
+  metadata: readerMetadataSchema,
+  content: v.variant("status", [
+    v.strictObject({
+      status: v.literal("available"),
+      phase: v.picklist(["blocks", "citations", "provisions"]),
+      items: v.array(blockSchema),
+      blockFragments: v.array(blockFragmentSchema),
+      citationAnchors: v.array(citationAnchorSchema),
+      provisionAnchors: v.array(provisionAnchorSchema),
+      nextCursor: v.nullable(v.string()),
+      limit: v.literal(READER_PAGE_MAX_CHARS),
+    }),
+    v.strictObject({
+      status: v.literal("withheld"),
+      withheldReason: withheldReasonSchema,
+    }),
+    v.strictObject({ status: v.literal("unavailable") }),
+  ]),
+});
 const previewHeading = v.strictObject({
   anchorId: v.string(),
   level: v.number(),
