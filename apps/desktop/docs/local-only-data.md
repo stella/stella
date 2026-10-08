@@ -1,9 +1,8 @@
 # Local-only data
 
 Some desktop features keep data on the device: clipboard history and the
-activity timeline. Activity recording never exports data automatically; its
-Copy summary action explicitly publishes the selected summary to the system
-clipboard at the user's request. They share one set of guardrails. A new
+activity timeline. Recorded activity never enters the system clipboard.
+They share one set of guardrails. A new
 local-only feature follows every rule below and adds one entry to
 `tests/local-only-features.ts`, which the guard tests iterate.
 
@@ -124,3 +123,22 @@ and detected private windows suppress that label. Pause and Resume update the
 same account-owned recording state. A local icon dot appears only while
 recording; activity events and a thirty-second refresh keep the menu current.
 Tray source is covered by the local-only network and fixed-code guards.
+
+## Confirmed draft time entries
+
+The activity window can create a draft time entry only after the user confirms
+a matter, date worked, time zone, duration, narrative, and billable choice. The
+narrative starts empty. `time_entry_commands` holds the activity caller proof
+and linked-account binding; `time_entry_submit` accepts only that account and
+the independently confirmed fields. The block's timestamps and returned entry
+id stay in the account's encrypted local day file. Neither the network owner
+nor a server response can access recorded segments, app names, or summaries.
+
+Matter search sends only the user's picker query. Both features must be enabled
+and the server independently checks the linked user's live create permission
+and matter access. A successful create with a failed local marker write shows
+a fixed warning and keeps the form completed, preventing an immediate retry.
+
+The data-driven guards include the confirmation command owner in the activity
+window's capability and caller checks, and forbid the submission network owner
+from importing any local-only feature's data, including aliased imports.

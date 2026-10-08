@@ -83,7 +83,7 @@ const commandFunctions = (source: string) =>
   ].map((match) => ({ name: match[1] ?? "", parameters: match[2] ?? "" }));
 
 describe("local-only data stays in the feature's own windows", () => {
-  test("activity clipboard access is confined to the explicit copy command", async () => {
+  test("activity has no system clipboard publication", async () => {
     const files = (await readdir(path.join(NATIVE_ROOT, "src"))).filter(
       (file) =>
         file === "activity.rs" ||
@@ -92,20 +92,7 @@ describe("local-only data stays in the feature's own windows", () => {
     expect(files).toContain("activity_commands.rs");
     for (const file of files) {
       const source = await readNative(`src/${file}`);
-      if (file !== "activity_commands.rs") {
-        expect(source, file).not.toMatch(
-          /\bclipboard::|\bwrite_plain_text\b|\buse[^;]*\bclipboard\b/u,
-        );
-        continue;
-      }
-      const copyCommand =
-        /#\[tauri::command\]\s*pub fn activity_copy_text\([^)]*\)[^{]*\{[\s\S]*?\n\}/gu;
-      const matches = [...source.matchAll(copyCommand)];
-      expect(matches).toHaveLength(1);
-      expect(matches.at(0)?.[0]).toContain(
-        "crate::clipboard::write_plain_text(text)",
-      );
-      expect(source.replaceAll(copyCommand, ""), file).not.toMatch(
+      expect(source, file).not.toMatch(
         /\bclipboard::|\bwrite_plain_text\b|\buse[^;]*\bclipboard\b/u,
       );
     }
@@ -124,13 +111,15 @@ describe("local-only data stays in the feature's own windows", () => {
   test.each(featureCases)(
     "%s commands are granted only to its windows",
     async (_id, feature) => {
-      const prefix = permissionPrefix(feature.commandPrefix);
+      const prefixes = feature.commandOwners.map(({ prefix }) =>
+        permissionPrefix(prefix),
+      );
       const windows = new Set<string>(feature.windows);
       let grants = 0;
       for (const { capability, file } of await capabilities()) {
         const permissions = stringArray(capability["permissions"], file);
         const granted = permissions.filter((permission) =>
-          permission.startsWith(prefix),
+          prefixes.some((prefix) => permission.startsWith(prefix)),
         );
         if (granted.length === 0) {
           continue;
@@ -147,23 +136,23 @@ describe("local-only data stays in the feature's own windows", () => {
   test.each(featureCases)(
     "every %s command requires a verified caller",
     async (_id, feature) => {
-      const module = path.basename(feature.commandModule, ".rs");
       const manifest = await readNative("src/command_manifest.rs");
-      const manifestCommands = [
-        ...manifest.matchAll(new RegExp(`${module}::(\\w+) =>`, "gu")),
-      ].flatMap((match) => (match[1] ? [match[1]] : []));
-      const commands = commandFunctions(
-        await readNative(feature.commandModule),
-      );
-
-      expect(commands.length).toBeGreaterThan(0);
-      expect(commands.map(({ name }) => name).toSorted()).toEqual(
-        manifestCommands.toSorted(),
-      );
       const caller = new RegExp(`\\b_?caller: ${feature.callerType}\\b`, "u");
-      for (const { name, parameters } of commands) {
-        expect(name.startsWith(feature.commandPrefix), name).toBe(true);
-        expect(parameters, name).toMatch(caller);
+      for (const owner of feature.commandOwners) {
+        const module = path.basename(owner.module, ".rs");
+        const manifestCommands = [
+          ...manifest.matchAll(new RegExp(`${module}::(\\w+) =>`, "gu")),
+        ].flatMap((match) => (match[1] ? [match[1]] : []));
+        const commands = commandFunctions(await readNative(owner.module));
+
+        expect(commands.length).toBeGreaterThan(0);
+        expect(commands.map(({ name }) => name).toSorted()).toEqual(
+          manifestCommands.toSorted(),
+        );
+        for (const { name, parameters } of commands) {
+          expect(name.startsWith(owner.prefix), name).toBe(true);
+          expect(parameters, name).toMatch(caller);
+        }
       }
     },
   );

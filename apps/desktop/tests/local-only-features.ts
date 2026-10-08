@@ -8,8 +8,9 @@
 export const LOCAL_ONLY_FEATURES = [
   {
     callerType: "ClipboardCaller",
-    commandModule: "src/clipboard_commands.rs",
-    commandPrefix: "clipboard_",
+    commandOwners: [
+      { module: "src/clipboard_commands.rs", prefix: "clipboard_" },
+    ],
     id: "clipboard",
     /**
      * What the feature may report: `classifications` sends error codes and a
@@ -37,8 +38,10 @@ export const LOCAL_ONLY_FEATURES = [
   },
   {
     callerType: "ActivityCaller",
-    commandModule: "src/activity_commands.rs",
-    commandPrefix: "activity_",
+    commandOwners: [
+      { module: "src/activity_commands.rs", prefix: "activity_" },
+      { module: "src/time_entry_commands.rs", prefix: "time_entry_" },
+    ],
     id: "activity",
     telemetry: "fixedCodes",
     nativeModules: [
@@ -47,7 +50,11 @@ export const LOCAL_ONLY_FEATURES = [
       "../crates/macos-park/src/windows_window.rs",
     ],
     windowModules: {
-      "src-tauri/capabilities/activity.json": ["src/activity/ActivityApp.tsx"],
+      "src-tauri/capabilities/activity.json": [
+        "src/activity/ActivityApp.tsx",
+        "src/activity/TimeEntryDialog.tsx",
+        "src/activity/ProposedBlockAction.tsx",
+      ],
     },
     windows: ["activity"],
   },
@@ -75,3 +82,8 @@ export const isFeatureModule = (
 ) =>
   file === `${feature.id}.rs` ||
   (file.startsWith(`${feature.id}_`) && file.endsWith(".rs"));
+
+/** Network owners accepting explicit confirmation, never recorded activity. */
+export const CONFIRMED_ENTRY_NETWORK_MODULES = [
+  "time_entry_submit.rs",
+] as const;
