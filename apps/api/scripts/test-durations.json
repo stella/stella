@@ -4223,6 +4223,10 @@
     "seconds": 0.641086,
     "source": "estimated"
   },
+  "src/lib/auth/auth-refusal-log.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
   "src/lib/auth/auth-response-cookies.test.ts": {
     "seconds": 0.673137,
     "source": "estimated"
@@ -9232,6 +9236,14 @@
     "source": "estimated"
   },
   "src/lib/db/aggregate-lock-order.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
+  "src/handlers/case-law/analysis/generate.read-budget.db.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
+  "src/lib/observability/event-loop-delay.test.ts": {
     "seconds": 1,
     "source": "estimated"
   }
