@@ -35,6 +35,9 @@ const SAMPLE_INTERVAL: Duration = Duration::from_secs(5);
 /// or the sampler stalled; the open segment ends at the last sample.
 const MAX_SAMPLE_GAP: Duration = Duration::from_secs(15);
 const IDLE_THRESHOLD: Duration = Duration::from_secs(5 * 60);
+// Allow clock-read jitter, but end the mapping before a wall correction can
+// introduce synthetic activity into the current segment.
+const WALL_CLOCK_TOLERANCE: Duration = Duration::from_millis(100);
 const FLUSH_INTERVAL: Duration = Duration::from_secs(60);
 const RETENTION_SWEEP_INTERVAL: Duration = Duration::from_secs(60 * 60);
 const MAX_EXCLUSIONS: usize = 128;
@@ -535,8 +538,9 @@ impl ActivityManager {
       let wall_elapsed = (now - wall).to_std();
       if elapsed > MAX_SAMPLE_GAP
         || wall_elapsed.is_err()
-        || wall_elapsed
-          .is_ok_and(|wall_elapsed| wall_elapsed.abs_diff(elapsed) > MAX_SAMPLE_GAP)
+        || wall_elapsed.is_ok_and(|wall_elapsed| {
+          wall_elapsed.abs_diff(elapsed) > WALL_CLOCK_TOLERANCE
+        })
       {
         closed |= self.close_open_at_last_sample();
       }
@@ -1034,14 +1038,23 @@ fn sample(app: &AppHandle, state: &ActivityAppState) {
   // lock and commands never wait on it.
   let now = Utc::now();
   let monotonic = Instant::now();
-  let idle = crate::idle_time::since_last_input().unwrap_or_default();
-  let observation = observe_now(app, idle);
+  let idle = crate::idle_time::since_last_input();
+  let observation =
+    idle.map_or(Observation::Unattributed, |idle| observe_now(app, idle));
   let Ok(mut manager) = state.lock() else {
     return;
   };
   if !manager.accepts_observation(generation, is_enabled(app)) {
     return;
   }
+  let Some(idle) = idle else {
+    if let Err(error) = manager.stop(now) {
+      tracing::warn!(error = %error, "activity timeline could not be written");
+    }
+    drop(manager);
+    emit_changed(app);
+    return;
+  };
   let closed =
     manager.observe_at(now, monotonic, idle, observation, partition_in(&Local, now));
   let flushed = manager.flush_due(monotonic);
@@ -1548,7 +1561,7 @@ mod tests {
 
   #[test]
   fn clock_corrections_never_overlap_intervals_or_delay_monotonic_flush() {
-    for correction in [-120, -10, 120, 3600] {
+    for correction in [-120, -10, 10, 120, 3600] {
       let mut manager = recording_manager();
       let clock = Instant::now();
       for (tick, wall, app) in [
@@ -1573,6 +1586,13 @@ mod tests {
         assert!(pair[0].end <= pair[1].start);
       }
       assert!(all.iter().all(|segment| segment.start < segment.end));
+      assert!(
+        all
+          .iter()
+          .map(|segment| (segment.end - segment.start).num_seconds())
+          .sum::<i64>()
+          <= 25
+      );
       manager.last_flush = Some(clock);
       assert!(!manager.flush_due(clock + Duration::from_secs(59)));
       assert!(manager.flush_due(clock + Duration::from_secs(60)));
