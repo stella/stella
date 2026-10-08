@@ -33,7 +33,7 @@ const { FormattingProvider } = await import("@/i18n/formatting-context");
 const { default: messages } = await import("@/i18n/langs/en.json");
 const { AuthenticatedUserProvider } =
   await import("@/lib/authenticated-user-context");
-const { AIAvailabilityProvider, AIUnavailableDialogTrigger } =
+const { AIAvailabilityProvider, AIUnavailableDialogTrigger, useAIKeyGate } =
   await import("./require-ai-key");
 
 afterEach(() => {
@@ -118,3 +118,50 @@ test.each([
     queryClient.clear();
   },
 );
+
+test("a provider under another provider reuses the outer gate", async () => {
+  configStatus = 200;
+  const queryClient = new QueryClient({
+    defaultOptions: { queries: { retry: false } },
+  });
+  // The gate's value changes as the availability read resolves, so only the
+  // latest value each surface saw is compared.
+  const gates = new Map<"inner" | "outer", unknown>();
+  const CaptureGate = ({ at }: { at: "inner" | "outer" }) => {
+    gates.set(at, useAIKeyGate());
+    return null;
+  };
+  render(
+    <QueryClientProvider client={queryClient}>
+      <AuthenticatedUserProvider
+        user={{
+          activeOrganizationId: "org-1",
+          email: "member@example.test",
+          id: "user-1",
+          image: null,
+          name: "Member",
+          preferredName: null,
+          timezoneId: "UTC",
+          wordEditShortcut: null,
+        }}
+      >
+        <IntlProvider locale="en" messages={messages} timeZone="UTC">
+          <FormattingProvider locale="en" timeZone="UTC">
+            <AIAvailabilityProvider>
+              <CaptureGate at="outer" />
+              <AIAvailabilityProvider>
+                <CaptureGate at="inner" />
+              </AIAvailabilityProvider>
+            </AIAvailabilityProvider>
+          </FormattingProvider>
+        </IntlProvider>
+      </AuthenticatedUserProvider>
+    </QueryClientProvider>,
+  );
+  await settle();
+  // A second provider would hand the inner surface its own gate, and with it
+  // a second dialog the outer surfaces cannot see or close.
+  expect(gates.get("outer")).toBeDefined();
+  expect(gates.get("inner")).toBe(gates.get("outer"));
+  queryClient.clear();
+});
