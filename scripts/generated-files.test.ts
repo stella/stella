@@ -376,6 +376,11 @@ test("autofix selects only owners of changed inputs and preserves dependencies",
       ({ id }) => id,
     ),
   ).toEqual(["module-ownership", "route-tree"]);
+  expect(
+    generatorsForFiles(["scripts/ownership/new-capability.ts"]).map(
+      ({ id }) => id,
+    ),
+  ).toEqual(["module-ownership"]);
   expect(generatorsForFiles(["docs/unrelated.md"]).map(({ id }) => id)).toEqual(
     [],
   );

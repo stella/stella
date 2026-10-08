@@ -180,7 +180,7 @@ export type ProviderSafeJsonSchemaProjection = {
 };
 
 export type NullUnionStrategy = "json-schema" | "openapi";
-export type EnumValueStrategy = "json-schema" | "string-only";
+type EnumValueStrategy = "json-schema" | "string-only";
 export type ValueConstraintStrategy = "preserve" | "omit";
 export type ProviderJsonSchemaPurpose =
   | "structured-output"

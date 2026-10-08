@@ -12,9 +12,9 @@ import {
   DownloadIcon,
   ExternalLinkIcon,
   FilePlusIcon,
-  LoaderIcon,
   SearchIcon,
 } from "@stll/ui/icons";
+import { Loader } from "@stll/ui/loader";
 import { contentDir } from "@stll/ui/use-content-dir";
 import { cn } from "@stll/ui/utils";
 
@@ -185,7 +185,11 @@ export const NeedsMatterCard = ({
           </Button>
         )}
         {isStreaming && (
-          <LoaderIcon className="text-muted-foreground ms-auto size-3.5 shrink-0 animate-spin" />
+          <Loader
+            className="ms-auto size-3.5 shrink-0"
+            label={t("common.loading")}
+            size="sm"
+          />
         )}
       </div>
 

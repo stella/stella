@@ -129,7 +129,7 @@ export const registeredChatTool = (
 ): ChatTool | undefined =>
   Object.hasOwn(tools, name) ? tools[name] : undefined;
 
-export const assertChatToolMapInvariants = (tools: ChatToolMap): void => {
+const assertChatToolMapInvariants = (tools: ChatToolMap): void => {
   for (const [name, tool] of Object.entries(tools)) {
     if (!tool) {
       continue;

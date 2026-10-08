@@ -27,7 +27,6 @@ import {
   ChevronLeftIcon,
   ChevronRightIcon,
   LandmarkIcon,
-  Loader2Icon,
   PencilIcon,
   PlusIcon,
   PlayIcon,
@@ -44,10 +43,10 @@ import {
 import { InlineRenameInput } from "@stll/ui/inline-rename";
 import { Input } from "@stll/ui/input";
 import { Label } from "@stll/ui/label";
+import { Loader } from "@stll/ui/loader";
 import { Menu, MenuItem, MenuPopup, MenuTrigger } from "@stll/ui/menu";
 import { ScrollArea } from "@stll/ui/scroll-area";
 import { stellaToast } from "@stll/ui/toast";
-import { cn } from "@stll/ui/utils";
 
 import { AIPromptInput } from "@/components/ai-prompt-input/ai-prompt-input";
 import { SKILL_CHIP_CATALOG } from "@/components/chat-editor-slash-items";
@@ -382,7 +381,11 @@ const SlotSyncButton = ({
       size="sm"
       variant="ghost"
     >
-      <RefreshCwIcon className={cn("size-3.5", syncing && "animate-spin")} />
+      {syncing ? (
+        <Loader className="size-3.5" label={t("common.loading")} size="sm" />
+      ) : (
+        <RefreshCwIcon className="size-3.5" />
+      )}
       {t("clauses.syncVersion")}
     </Button>
   );
@@ -1668,7 +1671,7 @@ const SaveRecipeDialog = ({
             onClick={() => detached(save(), "template-studio-fields.save")}
           >
             {saving ? (
-              <Loader2Icon className="animate-spin" />
+              <Loader label={t("common.loading")} size="sm" />
             ) : (
               <BookmarkPlusIcon />
             )}

@@ -67,29 +67,12 @@ export type UserField = (typeof USER_FIELDS)[number];
 export const FIRM_FIELDS = ["name"] as const;
 export type FirmField = (typeof FIRM_FIELDS)[number];
 
-/** The source-kind discriminator. */
-export const BINDING_SOURCE_KINDS = [
-  "contact",
-  "party",
-  "matter",
-  "attorney",
-  "firm",
-] as const;
-export type BindingSourceKind = (typeof BINDING_SOURCE_KINDS)[number];
-
 /**
  * A contact/matter data binding on a template field. Discriminated on `kind`;
  * `field` is the stable key within the resolved record (see module docs).
  */
 const workspaceContactRoleSchema = v.picklist(WORKSPACE_CONTACT_ROLES);
 const attorneyRefSchema = v.picklist(ATTORNEY_REFS);
-
-export const isWorkspaceContactRole = (
-  value: unknown,
-): value is WorkspaceContactRole => v.is(workspaceContactRoleSchema, value);
-
-export const isAttorneyRef = (value: unknown): value is AttorneyRef =>
-  v.is(attorneyRefSchema, value);
 
 export const fieldSourceSchema = v.variant("kind", [
   v.strictObject({
