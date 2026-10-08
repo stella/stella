@@ -6,7 +6,6 @@ import { Temporal } from "@stll/time";
 
 import { apikey, member } from "@/api/db/auth-schema";
 import { rootDb } from "@/api/db/root";
-import type { Transaction } from "@/api/db/root";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -21,7 +20,6 @@ import {
 import { desktopRegistryKeyOrganizationScope } from "@/api/lib/business-registries/desktop/scope";
 import {
   withAggregateLock,
-  withAggregateSavepoint,
   withAggregateTransaction,
 } from "@/api/lib/db/aggregate-lock";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -44,20 +42,6 @@ const tooSoon = () =>
     message: "Desktop credential was renewed moments ago",
   });
 
-type RenewalDatabase =
-  | Pick<typeof rootDb, "transaction">
-  | Pick<Transaction, "execute" | "transaction" | "rollback">;
-
-// Requests own a fresh transaction. An enclosing transaction (rollback
-// fixtures) nests the same lock sequence in a tracked savepoint instead.
-const withRenewalTransaction = async <T>(
-  db: RenewalDatabase,
-  run: (tx: Transaction) => Promise<T>,
-) =>
-  "rollback" in db
-    ? await withAggregateSavepoint(db, run)
-    : await withAggregateTransaction(db, run);
-
 type RenewDesktopCredentialOptions = {
   keyId: string;
   userId: SafeId<"user">;
@@ -65,7 +49,7 @@ type RenewDesktopCredentialOptions = {
   currentKey: string;
   successorKey: string;
   recordAuditEvent: AuditRecorder;
-  db?: RenewalDatabase;
+  db?: Pick<typeof rootDb, "transaction">;
   now?: Date;
 };
 
@@ -88,7 +72,7 @@ export const renewDesktopCredential = async ({
   const successorHash = await defaultKeyHasher(successorKey);
   const outcome = await Result.tryPromise({
     try: async () =>
-      await withRenewalTransaction(db, async (tx) => {
+      await withAggregateTransaction(db, async (tx) => {
         const membershipLock = await withAggregateLock({
           aggregate: "desktopMembership",
           id: { organizationId, userId },
@@ -240,7 +224,7 @@ export const probeDesktopCredential = async ({
   const hash = await defaultKeyHasher(currentKey);
   const queried = await Result.tryPromise({
     try: async () =>
-      await withRenewalTransaction(db, async (tx) => {
+      await withAggregateTransaction(db, async (tx) => {
         const keyLock = await withAggregateLock({
           aggregate: "desktopCredential",
           id: { id: keyId, userId },
