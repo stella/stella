@@ -1,4 +1,4 @@
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 
 import type { rootDb } from "@/api/db/root";
 import { captureError } from "@/api/lib/analytics/capture";
@@ -130,6 +130,47 @@ export type StartAutomatedFlowRunOutcome =
   | { status: "skipped"; reason: FlowUploadTriggerSkipReason }
   | { status: "settled" };
 
+type AutomatedInsertionDisposition =
+  | { status: "started" }
+  | { status: "stopped"; outcome: StartAutomatedFlowRunOutcome };
+
+const classifyAutomatedInsertion = (
+  result: InsertAutomatedFlowRunWithinCapResult,
+  logContext: Record<string, string>,
+): AutomatedInsertionDisposition => {
+  switch (result.outcome) {
+    case "paused":
+      logger.info("flow.automated_run_skipped", {
+        ...logContext,
+        reason: "actor_not_granted",
+      });
+      return { status: "stopped", outcome: { status: "paused" } };
+    case "skipped":
+      logger.info("flow.automated_run_skipped", {
+        ...logContext,
+        reason: result.reason,
+      });
+      return {
+        status: "stopped",
+        outcome: { status: "skipped", reason: result.reason },
+      };
+    case "already-started":
+    case "source-removed":
+      return { status: "stopped", outcome: { status: "settled" } };
+    case "capped":
+      logger.info("flow.automated_run_capped", {
+        ...logContext,
+        dailyRunCount: result.dailyRunCount,
+      });
+      return { status: "stopped", outcome: { status: "retry" } };
+    case "started":
+      return { status: "started" };
+    default:
+      result satisfies never;
+      return panic("Unknown automated run insertion outcome");
+  }
+};
+
 export const startAutomatedFlowRun = async (
   {
     definitionId,
@@ -206,14 +247,9 @@ export const startAutomatedFlowRun = async (
     return { status: "settled" };
   }
 
-  // The run will execute as the author against a root-scoped grant for
-  // `workspaceId` (see flow-executor), so nothing downstream re-checks that the
-  // author may act in that matter. A file-upload trigger saved with
-  // `workspaceIds: null` ("all matters") in particular reaches here for uploads
-  // in matters the author never had access to. Gate the start on the author's
-  // live workspace access, using the same membership / admin-bypass rule as the
-  // request-time workspace guard, so an automated run can only touch matters its
-  // actor is authorized for.
+  // Automated runs use the definition author, including uploads covering all
+  // matters. Resolve live matter access before kickoff; the run transaction
+  // rechecks feature admission under the grant lock before insertion or spend.
   const authorization = await Result.tryPromise({
     try: async () =>
       await resolveAuthorization({
@@ -256,6 +292,8 @@ export const startAutomatedFlowRun = async (
     const insertResult = await Result.tryPromise({
       try: async () =>
         await insertWithinCap({
+          organizationId,
+          userId: brandPersistedUserId(createdByUserId),
           definitionId,
           rows,
           ...(reservePeriod && { reservePeriod }),
@@ -270,35 +308,24 @@ export const startAutomatedFlowRun = async (
       });
       return;
     }
-    if (insertResult.value.outcome === "skipped") {
-      outcome = { status: "skipped", reason: insertResult.value.reason };
-      logger.info("flow.automated_run_skipped", {
-        ...logContext,
-        reason: insertResult.value.reason,
-      });
-      return;
+    const disposition = classifyAutomatedInsertion(
+      insertResult.value,
+      logContext,
+    );
+    switch (disposition.status) {
+      case "stopped":
+        outcome = disposition.outcome;
+        return;
+      case "started":
+        outcome = { status: "settled" };
+        break;
+      default:
+        disposition satisfies never;
+        return panic("Unknown automated run insertion disposition");
     }
-    if (
-      insertResult.value.outcome === "already-started" ||
-      insertResult.value.outcome === "source-removed"
-    ) {
-      outcome = { status: "settled" };
-      return;
-    }
-    if (insertResult.value.outcome === "capped") {
-      outcome = { status: "retry" };
-      logger.info("flow.automated_run_capped", {
-        ...logContext,
-        dailyRunCount: insertResult.value.dailyRunCount,
-      });
-      return;
-    }
-
-    outcome = { status: "settled" };
 
     // Enqueue after the rows commit. A failure here leaves the run `pending`; the
-    // worker's boot reconciler re-enqueues its current step, so the run is never
-    // permanently stranded.
+    // durable reconciler re-enqueues its current step without duplicating runs.
     const enqueued = await Result.tryPromise({
       try: async () =>
         await enqueueStep({

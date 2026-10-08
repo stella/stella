@@ -15,9 +15,10 @@ import {
 } from "bun:test";
 import { eq } from "drizzle-orm";
 
-import { organization, user } from "@/api/db/auth-schema";
+import { member, organization, user } from "@/api/db/auth-schema";
 import {
   entities,
+  featureEnrolments,
   flowDefinitions,
   flowUploadTriggerIntents,
   flowRuns,
@@ -64,6 +65,7 @@ const FILE_UPLOAD_SOURCE = {
 describe("insertAutomatedFlowRunWithinCap", () => {
   let organizationId: SafeId<"organization">;
   let workspaceId: SafeId<"workspace">;
+  let userId: SafeId<"user">;
 
   const seedRun = async (
     definitionId: SafeId<"flowDefinition">,
@@ -106,6 +108,7 @@ describe("insertAutomatedFlowRunWithinCap", () => {
         fileExtensions: null,
       },
       enabled: true,
+      createdByUserId: userId,
     });
     return definitionId;
   };
@@ -147,6 +150,8 @@ describe("insertAutomatedFlowRunWithinCap", () => {
     });
     const result = await insertAutomatedFlowRunWithinCap({
       definitionId,
+      organizationId,
+      userId,
       rows,
       database: capDatabase,
       ...(reservePeriod && { reservePeriod }),
@@ -162,7 +167,7 @@ describe("insertAutomatedFlowRunWithinCap", () => {
   beforeAll(async () => {
     organizationId = mintAuthProviderId<"organization">();
     workspaceId = createSafeId<"workspace">();
-    const userId = mintAuthProviderId<"user">();
+    userId = mintAuthProviderId<"user">();
 
     await testDb.insert(organization).values({
       id: organizationId,
@@ -174,6 +179,19 @@ describe("insertAutomatedFlowRunWithinCap", () => {
       id: userId,
       name: "Automated cap user",
       email: `${userId}@example.com`,
+      emailVerified: true,
+    });
+    await testDb.insert(member).values({
+      id: Bun.randomUUIDv7(),
+      organizationId,
+      userId,
+      role: "member",
+      createdAt: new Date(),
+    });
+    await testDb.insert(featureEnrolments).values({
+      organizationId,
+      userId,
+      featureId: "flows",
     });
     await testDb.insert(workspaces).values({
       id: workspaceId,

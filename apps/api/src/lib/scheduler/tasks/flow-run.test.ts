@@ -33,6 +33,7 @@ import type {
   FlowTrigger,
   FlowTriggerSource,
 } from "@/api/lib/flows/flow-types";
+import type { StartAutomatedFlowRunOutcome } from "@/api/lib/flows/start-automated-flow-run";
 import { logger } from "@/api/lib/observability/logger";
 import { DueSlot } from "@/api/lib/scheduler/due-slot";
 import type { SchedulerDb, SchedulerJob } from "@/api/lib/scheduler/types";
@@ -64,10 +65,11 @@ describe("scheduled flow due day", () => {
   const workspaceId = createSafeId<"workspace">();
   const started: string[] = [];
   const startedSources = new Map<string, FlowTriggerSource>();
+  const startOutcomes = new Map<string, StartAutomatedFlowRunOutcome>();
   const task = createScheduledFlowTask(async (input) => {
     started.push(input.definitionId);
     startedSources.set(input.definitionId, input.triggerSource);
-    return { status: "settled" };
+    return startOutcomes.get(input.definitionId) ?? { status: "settled" };
   });
 
   beforeAll(async () => {
@@ -195,7 +197,7 @@ describe("scheduled flow due day", () => {
     };
   };
 
-  test("deployment disabled skips the no-caller scheduled start before lookup", async () => {
+  test("deployment disabled retains a validated daily slot without starting", async () => {
     const previousFlag = env.FEATURE_FLOWS;
     const restore = setRuntimeModeForTesting({ mode: RUNTIME_MODE.strict });
     env.FEATURE_FLOWS = false;
@@ -207,6 +209,172 @@ describe("scheduled flow due day", () => {
     } finally {
       env.FEATURE_FLOWS = previousFlag;
       restore();
+    }
+  });
+
+  for (const frequency of ["weekly", "monthly"] as const) {
+    for (const status of ["paused", "retry"] as const) {
+      test(`${frequency} starter ${status} preserves the validated slot through a non-due retry`, async () => {
+        const schedule: Schedule =
+          frequency === "weekly"
+            ? { frequency, hourUtc: 23, dayOfWeek: 1 }
+            : { frequency, hourUtc: 23, dayOfMonth: 6 };
+        const definitionId = await createDefinition(schedule);
+        startOutcomes.set(definitionId, { status });
+        const held = await runTick(
+          definitionId,
+          schedule,
+          MONDAY_SLOT,
+          TUESDAY_AFTER_MIDNIGHT,
+        );
+        expect(held.payload).toEqual({
+          definitionId,
+          pendingDueAt: MONDAY_SLOT.toISOString(),
+          pendingClaimedAt: TUESDAY_AFTER_MIDNIGHT.toISOString(),
+        });
+        expect(held.continuationAt).toEqual(
+          new Date(TUESDAY_AFTER_MIDNIGHT.getTime() + 5 * 60 * 1000),
+        );
+        startOutcomes.delete(definitionId);
+        const retry = new Date("2026-07-08T00:10:00.000Z");
+        const settled = await runTick(definitionId, schedule, retry, retry);
+        expect(startedSources.get(definitionId)).toEqual({
+          type: "schedule",
+          dueSlot: MONDAY_SLOT.toISOString(),
+        });
+        expect(settled.payload).toEqual({ definitionId });
+      });
+    }
+    for (const refusal of [
+      "deployment_disabled",
+      "actor_not_granted",
+    ] as const) {
+      test(`${frequency} ${refusal} ignores non-due slots and settles stale retained slots before regrant`, async () => {
+        const previousFlag = env.FEATURE_FLOWS;
+        const restore = setRuntimeModeForTesting({ mode: RUNTIME_MODE.strict });
+        const schedule: Schedule =
+          frequency === "weekly"
+            ? { frequency, hourUtc: 23, dayOfWeek: 1 }
+            : { frequency, hourUtc: 23, dayOfMonth: 6 };
+        const definitionId = await createDefinition(schedule);
+        env.FEATURE_FLOWS = refusal !== "deployment_disabled";
+        if (refusal === "actor_not_granted") {
+          await testDb
+            .delete(featureEnrolments)
+            .where(eq(featureEnrolments.userId, authorId));
+        }
+        try {
+          const nonDue = await runTick(
+            definitionId,
+            schedule,
+            SUNDAY_SLOT,
+            SUNDAY_SLOT,
+          );
+          expect(nonDue.continuationAt).toBeNull();
+          expect(nonDue.payload).toEqual({ definitionId });
+          await testDb
+            .update(schedulerJobs)
+            .set({
+              payload: {
+                definitionId,
+                pendingDueAt: SUNDAY_SLOT.toISOString(),
+              },
+            })
+            .where(eq(schedulerJobs.id, flowScheduleJobId(definitionId)));
+          const staleNonDue = await runTick(
+            definitionId,
+            schedule,
+            SUNDAY_SLOT,
+            SUNDAY_SLOT,
+          );
+          expect(staleNonDue.continuationAt).toBeNull();
+          expect(staleNonDue.payload).toEqual({ definitionId });
+          // Older persisted receipts can also survive until the next due day without a prior cleanup tick.
+          await testDb
+            .update(schedulerJobs)
+            .set({
+              payload: {
+                definitionId,
+                pendingDueAt: SUNDAY_SLOT.toISOString(),
+              },
+            })
+            .where(eq(schedulerJobs.id, flowScheduleJobId(definitionId)));
+          env.FEATURE_FLOWS = true;
+          if (refusal === "actor_not_granted") {
+            await testDb
+              .insert(featureEnrolments)
+              .values({ featureId: "flows", organizationId, userId: authorId });
+          }
+          const resumed = await runTick(
+            definitionId,
+            schedule,
+            MONDAY_SLOT,
+            MONDAY_SLOT,
+          );
+          expect(resumed.continuationAt).toBeNull();
+          expect(resumed.payload).toEqual({ definitionId });
+          expect(started.filter((id) => id === definitionId)).toHaveLength(1);
+          expect(startedSources.get(definitionId)).toEqual({
+            type: "schedule",
+            dueSlot: MONDAY_SLOT.toISOString(),
+          });
+        } finally {
+          env.FEATURE_FLOWS = previousFlag;
+          restore();
+          await testDb
+            .insert(featureEnrolments)
+            .values({ featureId: "flows", organizationId, userId: authorId })
+            .onConflictDoNothing();
+        }
+      });
+    }
+  }
+
+  test("a validated collapsed backlog retains its original coverage across opt-out and regrant", async () => {
+    const schedule: Schedule = {
+      frequency: "weekly",
+      hourUtc: 9,
+      dayOfWeek: 1,
+    };
+    const definitionId = await createDefinition(schedule);
+    const sundayDue = new Date("2026-07-05T09:00:00.000Z");
+    const mondayClaim = new Date("2026-07-06T10:00:00.000Z");
+    await testDb
+      .delete(featureEnrolments)
+      .where(eq(featureEnrolments.userId, authorId));
+    try {
+      const paused = await runTick(
+        definitionId,
+        schedule,
+        sundayDue,
+        mondayClaim,
+      );
+      expect(paused.payload).toEqual({
+        definitionId,
+        pendingDueAt: sundayDue.toISOString(),
+        pendingClaimedAt: mondayClaim.toISOString(),
+      });
+      await testDb
+        .insert(featureEnrolments)
+        .values({ featureId: "flows", organizationId, userId: authorId });
+      const laterClaim = new Date("2026-07-07T10:00:00.000Z");
+      const resumed = await runTick(
+        definitionId,
+        schedule,
+        laterClaim,
+        laterClaim,
+      );
+      expect(started.filter((id) => id === definitionId)).toHaveLength(1);
+      expect(startedSources.get(definitionId)).toEqual({
+        type: "schedule",
+        dueSlot: sundayDue.toISOString(),
+      });
+      expect(resumed.payload).toEqual({ definitionId });
+    } finally {
+      await testDb
+        .insert(featureEnrolments)
+        .values({ featureId: "flows", organizationId, userId: authorId })
+        .onConflictDoNothing();
     }
   });
 

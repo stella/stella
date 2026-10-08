@@ -11,6 +11,8 @@ import {
   flowUploadTriggerIntents,
 } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
+import { isBackgroundFeatureEnabled } from "@/api/lib/feature-access/background";
+import { lockFeatureRecoveryAdmission } from "@/api/lib/feature-access/recovery-admission-lock";
 import {
   fileUploadTriggerMatches,
   isAutomatedRunCapReached,
@@ -78,6 +80,8 @@ const startOfUtcDay = (now: Date): Date =>
   );
 
 export type InsertAutomatedFlowRunWithinCapInput = {
+  organizationId: SafeId<"organization">;
+  userId: SafeId<"user">;
   definitionId: SafeId<"flowDefinition">;
   /** Pre-built run + step rows (see `buildFlowRunRows`). */
   rows: FlowRunRows;
@@ -93,6 +97,7 @@ export type InsertAutomatedFlowRunWithinCapInput = {
  * the rows with, so `started` need not echo it back.
  */
 export type InsertAutomatedFlowRunWithinCapResult =
+  | { outcome: "paused" }
   | { outcome: "started" }
   | { outcome: "already-started" }
   | { outcome: "source-removed" }
@@ -194,6 +199,8 @@ const revalidateUploadIntent = async ({
 };
 
 export const insertAutomatedFlowRunWithinCap = async ({
+  organizationId,
+  userId,
   definitionId,
   rows,
   now = new Date(),
@@ -201,6 +208,22 @@ export const insertAutomatedFlowRunWithinCap = async ({
   database,
 }: InsertAutomatedFlowRunWithinCapInput): Promise<InsertAutomatedFlowRunWithinCapResult> =>
   await database.transaction(async (tx) => {
+    // Admission precedes resource locks; the existing cap -> definition order stays intact.
+    await lockFeatureRecoveryAdmission({
+      tx,
+      organizationId,
+      featureId: "flows",
+    });
+    if (
+      !(await isBackgroundFeatureEnabled({
+        tx,
+        organizationId,
+        userId,
+        featureId: "flows",
+      }))
+    ) {
+      return { outcome: "paused" };
+    }
     // Serialize concurrent automated starts for this definition. The xact lock
     // releases on commit/rollback, after the prior holder's run row is visible,
     // so the count below can never miss a committed sibling.
@@ -208,7 +231,7 @@ export const insertAutomatedFlowRunWithinCap = async ({
       sql`select pg_advisory_xact_lock(${FLOW_RUN_CAP_LOCK_NAMESPACE}, hashtext(${definitionId}))`,
     );
 
-    // Keep the cap's advisory lock first, then the definition lock already
+    // Keep the cap's advisory lock before the definition lock already
     // required by run insertion. NO KEY UPDATE also permits receipt FK checks.
     const uploadDefinition =
       rows.run.triggerSource.type === "file-upload"
@@ -216,7 +239,12 @@ export const insertAutomatedFlowRunWithinCap = async ({
             await tx
               .select()
               .from(flowDefinitions)
-              .where(eq(flowDefinitions.id, definitionId))
+              .where(
+                and(
+                  eq(flowDefinitions.id, definitionId),
+                  eq(flowDefinitions.organizationId, organizationId),
+                ),
+              )
               .limit(1)
               .for("no key update")
           ).at(0)

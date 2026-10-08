@@ -10,6 +10,7 @@ import {
   featureEnrolments,
   flowDefinitions,
   flowRuns,
+  flowRunSteps,
   flowUploadTriggerIntents,
   pendingScoutEmissions,
   workspaceMembers,
@@ -199,6 +200,154 @@ const changeTrigger = async ({
 };
 
 describe.skipIf(!enabled)("upload trigger commit admission (postgres)", () => {
+  test("a grant revoked after preflight pauses insertion without spending and regrant converges", async () => {
+    const previousFlag = env.FEATURE_FLOWS;
+    const restoreMode = setRuntimeModeForTesting({ mode: RUNTIME_MODE.strict });
+    env.FEATURE_FLOWS = true;
+    try {
+      await withGatedTestClients(
+        databaseUrl ?? panic("Missing PostgreSQL test URL"),
+        async ({ openClient }) => {
+          const reader = openClient();
+          const writer = openClient();
+          const fixture = await uploadFixture(reader.db);
+          const production = automatedFlowRunDependencies(
+            asTestRaw<SchedulerDb>(reader.db),
+          );
+          let admittedPreflights = 0;
+          let reservations = 0;
+          let revokeAtInsert = true;
+          const enqueued: string[] = [];
+          const dependencies = {
+            ...production,
+            featureEnabled: async (principal) => {
+              const admitted = await production.featureEnabled(principal);
+              if (admitted) {
+                admittedPreflights += 1;
+              }
+              return admitted;
+            },
+            insertWithinCap: async (input) => {
+              if (revokeAtInsert) {
+                expect(admittedPreflights).toBe(1);
+                await writer.db.transaction(async (tx) => {
+                  await lockFeatureRecoveryAdmission({
+                    tx,
+                    organizationId: fixture.organizationId,
+                    featureId: "flows",
+                  });
+                  await tx
+                    .delete(featureEnrolments)
+                    .where(
+                      and(
+                        eq(
+                          featureEnrolments.organizationId,
+                          fixture.organizationId,
+                        ),
+                        eq(featureEnrolments.userId, fixture.userId),
+                        eq(featureEnrolments.featureId, "flows"),
+                      ),
+                    );
+                });
+                revokeAtInsert = false;
+              }
+              return await production.insertWithinCap(input);
+            },
+            enqueueStep: async ({ runId }) => {
+              enqueued.push(runId);
+            },
+            kickoff: async ({ run }) =>
+              await run(new AbortController().signal, async () => {
+                reservations += 1;
+              }),
+          } satisfies Parameters<typeof startAutomatedFlowRun>[1];
+          const start = async () =>
+            await startAutomatedFlowRun(
+              {
+                definitionId: fixture.definitionId,
+                organizationId: fixture.organizationId,
+                workspaceId: fixture.workspaceId,
+                createdByUserId: fixture.userId,
+                triggerSource: {
+                  type: "file-upload",
+                  entityId: fixture.entityId,
+                },
+                inputEntityIds: [fixture.entityId],
+                logContext: {
+                  definitionId: fixture.definitionId,
+                  workspaceId: fixture.workspaceId,
+                  trigger: "file-upload",
+                },
+              },
+              dependencies,
+            );
+          try {
+            expect(await start()).toEqual({ status: "paused" });
+            expect(admittedPreflights).toBe(1);
+            expect(reservations).toBe(0);
+            expect(enqueued).toEqual([]);
+            expect(
+              await reader.db.$count(
+                flowRuns,
+                eq(flowRuns.definitionId, fixture.definitionId),
+              ),
+            ).toBe(0);
+            expect(
+              await reader.db.$count(
+                flowRunSteps,
+                eq(flowRunSteps.workspaceId, fixture.workspaceId),
+              ),
+            ).toBe(0);
+            expect(
+              await reader.db.$count(
+                flowUploadTriggerIntents,
+                eq(flowUploadTriggerIntents.entityId, fixture.entityId),
+              ),
+            ).toBe(1);
+
+            await writer.db.transaction(async (tx) => {
+              await lockFeatureRecoveryAdmission({
+                tx,
+                organizationId: fixture.organizationId,
+                featureId: "flows",
+              });
+              await tx.insert(featureEnrolments).values({
+                organizationId: fixture.organizationId,
+                userId: fixture.userId,
+                featureId: "flows",
+              });
+            });
+            expect(await start()).toEqual({ status: "settled" });
+            expect(await start()).toEqual({ status: "settled" });
+            expect(admittedPreflights).toBe(3);
+            expect(reservations).toBe(1);
+            expect(enqueued).toHaveLength(1);
+            expect(
+              await reader.db.$count(
+                flowRuns,
+                eq(flowRuns.definitionId, fixture.definitionId),
+              ),
+            ).toBe(1);
+            expect(
+              await reader.db.$count(
+                flowRunSteps,
+                eq(flowRunSteps.workspaceId, fixture.workspaceId),
+              ),
+            ).toBe(1);
+          } finally {
+            await reader.db
+              .delete(organization)
+              .where(eq(organization.id, fixture.organizationId));
+            await reader.db.delete(user).where(eq(user.id, fixture.userId));
+          }
+        },
+      );
+    } finally {
+      env.FEATURE_FLOWS = previousFlag;
+      restoreMode();
+    }
+  });
+
   test("grant repair and eligible dispatch survive an older blocked receipt prefix", async () => {
     const previousFlag = env.FEATURE_FLOWS;
     const restoreMode = setRuntimeModeForTesting({ mode: RUNTIME_MODE.strict });

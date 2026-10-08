@@ -3,6 +3,7 @@ import { and, eq } from "drizzle-orm";
 import * as v from "valibot";
 
 import { schedulerJobs } from "@/api/db/schema";
+import type { SafeId } from "@/api/lib/branded-types";
 import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import { isBackgroundFeatureEnabled } from "@/api/lib/feature-access/background";
 import { isScheduledFlowDue } from "@/api/lib/flows/flow-trigger-logic";
@@ -17,7 +18,11 @@ import {
   brandPersistedWorkspaceId,
 } from "@/api/lib/safe-id-boundaries";
 import { DueSlot } from "@/api/lib/scheduler/due-slot";
-import type { SchedulerDb, SchedulerTask } from "@/api/lib/scheduler/types";
+import type {
+  SchedulerDb,
+  SchedulerTask,
+  SchedulerJob,
+} from "@/api/lib/scheduler/types";
 
 /**
  * Scheduler task backing a definition's `schedule` trigger. One
@@ -36,6 +41,7 @@ export const flowScheduleJobId = (definitionId: string): string =>
 const flowRunPayloadSchema = v.strictObject({
   definitionId: v.pipe(v.string(), v.uuid()),
   pendingDueAt: v.optional(v.pipe(v.string(), v.isoTimestamp())),
+  pendingClaimedAt: v.optional(v.pipe(v.string(), v.isoTimestamp())),
 });
 
 type StartScheduledFlowRun = (
@@ -46,6 +52,42 @@ type StartScheduledFlowRun = (
 const startScheduledFlowRun: StartScheduledFlowRun = async (input, db) =>
   await startAutomatedFlowRun(input, automatedFlowRunDependencies(db));
 
+const SLOT_SETTLEMENT_REASON = { NOT_DUE: "retained_slot_not_due" } as const;
+
+type PersistScheduleSlotOptions = {
+  db: SchedulerDb;
+  job: SchedulerJob;
+  definitionId: SafeId<"flowDefinition">;
+  settlement: { status: "retained"; dueSlot: DueSlot } | { status: "settled" };
+};
+
+const persistScheduleSlot = async ({
+  db,
+  job,
+  definitionId,
+  settlement,
+}: PersistScheduleSlotOptions) => {
+  const leaseToken =
+    job.lockedBy ?? panic("Scheduled flow requires a scheduler lease");
+  const payload =
+    settlement.status === "retained"
+      ? {
+          definitionId,
+          pendingDueAt: settlement.dueSlot.toDate().toISOString(),
+          pendingClaimedAt: settlement.dueSlot.claimedAtDate().toISOString(),
+        }
+      : { definitionId };
+  // audit: skip — checkpoints or settles the validated slot under its lease; scheduler_job_runs records each attempt.
+  const changed = await db
+    .update(schedulerJobs)
+    .set({ payload })
+    .where(
+      and(eq(schedulerJobs.id, job.id), eq(schedulerJobs.lockedBy, leaseToken)),
+    )
+    .returning({ id: schedulerJobs.id });
+  return changed.length !== 0;
+};
+
 /**
  * The task with its run starter supplied, so a test can drive the real
  * definition, workspace and due-day checks without starting steps.
@@ -53,32 +95,6 @@ const startScheduledFlowRun: StartScheduledFlowRun = async (input, db) =>
 export const createScheduledFlowTask =
   (start: StartScheduledFlowRun): SchedulerTask =>
   async ({ db, dueAt, job, payload, logger, scheduleContinuation }) => {
-    const retrySlot = async () => {
-      const leaseToken =
-        job.lockedBy ?? panic("Scheduled flow requires a scheduler lease");
-      const pendingDueAt =
-        typeof payload?.["pendingDueAt"] === "string"
-          ? payload["pendingDueAt"]
-          : dueAt.toDate().toISOString();
-      // audit: skip — retains the original due slot; scheduler_job_runs records each attempt.
-      await db
-        .update(schedulerJobs)
-        .set({ payload: { ...payload, pendingDueAt } })
-        .where(
-          and(
-            eq(schedulerJobs.id, job.id),
-            eq(schedulerJobs.lockedBy, leaseToken),
-          ),
-        );
-      scheduleContinuation(
-        new Date(dueAt.claimedAtDate().getTime() + 5 * 60 * 1000),
-      );
-    };
-    if (!isDeploymentFeatureEnabled("FEATURE_FLOWS")) {
-      logger.info("flow.schedule_skipped", { reason: "deployment_disabled" });
-      await retrySlot();
-      return;
-    }
     const parsed = v.safeParse(flowRunPayloadSchema, payload);
     if (!parsed.success) {
       logger.error("flow.schedule_invalid_payload", {
@@ -113,6 +129,78 @@ export const createScheduledFlowTask =
       return;
     }
 
+    if (!definition.enabled || definition.trigger.type !== "schedule") {
+      // A disabled flow or a trigger changed away from `schedule`; the sync hook
+      // owns row removal, so just skip this tick.
+      logger.info("flow.schedule_inactive", {
+        definitionId,
+        enabled: definition.enabled,
+        triggerType: definition.trigger.type,
+      });
+      return;
+    }
+
+    const trigger = definition.trigger;
+    let originalSlot =
+      parsed.output.pendingDueAt === undefined
+        ? dueAt
+        : DueSlot.of({
+            nextRunAt: new Date(parsed.output.pendingDueAt),
+            // Existing receipts contain only their due timestamp; they cannot certify a later covered window.
+            lockedAt:
+              parsed.output.pendingClaimedAt === undefined
+                ? null
+                : new Date(parsed.output.pendingClaimedAt),
+          });
+    if (
+      parsed.output.pendingDueAt !== undefined &&
+      !isScheduledFlowDue(trigger.schedule, originalSlot)
+    ) {
+      if (
+        !(await persistScheduleSlot({
+          db,
+          job,
+          definitionId,
+          settlement: { status: "settled" },
+        }))
+      ) {
+        return;
+      }
+      logger.info("flow.schedule_slot_settled", {
+        definitionId,
+        pendingDueAt: parsed.output.pendingDueAt,
+        reason: SLOT_SETTLEMENT_REASON.NOT_DUE,
+      });
+      originalSlot = dueAt;
+    }
+    if (!isScheduledFlowDue(trigger.schedule, originalSlot)) {
+      logger.debug("flow.schedule_not_due_today", {
+        definitionId,
+        frequency: trigger.schedule.frequency,
+      });
+      return;
+    }
+
+    const retrySlot = async () => {
+      if (
+        !(await persistScheduleSlot({
+          db,
+          job,
+          definitionId,
+          settlement: { status: "retained", dueSlot: originalSlot },
+        }))
+      ) {
+        return;
+      }
+      scheduleContinuation(
+        new Date(dueAt.claimedAtDate().getTime() + 5 * 60 * 1000),
+      );
+    };
+    if (!isDeploymentFeatureEnabled("FEATURE_FLOWS")) {
+      logger.info("flow.schedule_skipped", { reason: "deployment_disabled" });
+      await retrySlot();
+      return;
+    }
     if (
       !(await isBackgroundFeatureEnabled({
         tx: db,
@@ -126,33 +214,6 @@ export const createScheduledFlowTask =
         definitionId,
       });
       await retrySlot();
-      return;
-    }
-
-    if (!definition.enabled || definition.trigger.type !== "schedule") {
-      // A disabled flow or a trigger changed away from `schedule`; the sync hook
-      // owns row removal, so just skip this tick.
-      logger.info("flow.schedule_inactive", {
-        definitionId,
-        enabled: definition.enabled,
-        triggerType: definition.trigger.type,
-      });
-      return;
-    }
-
-    const trigger = definition.trigger;
-    const originalSlot =
-      parsed.output.pendingDueAt === undefined
-        ? dueAt
-        : DueSlot.of({
-            nextRunAt: new Date(parsed.output.pendingDueAt),
-            lockedAt: dueAt.claimedAtDate(),
-          });
-    if (!isScheduledFlowDue(trigger.schedule, originalSlot)) {
-      logger.debug("flow.schedule_not_due_today", {
-        definitionId,
-        frequency: trigger.schedule.frequency,
-      });
       return;
     }
 
@@ -197,18 +258,12 @@ export const createScheduledFlowTask =
       return;
     }
     if (parsed.output.pendingDueAt !== undefined) {
-      const leaseToken =
-        job.lockedBy ?? panic("Scheduled flow requires a scheduler lease");
-      // audit: skip — retains the original due slot; scheduler_job_runs records each attempt.
-      await db
-        .update(schedulerJobs)
-        .set({ payload: { definitionId } })
-        .where(
-          and(
-            eq(schedulerJobs.id, job.id),
-            eq(schedulerJobs.lockedBy, leaseToken),
-          ),
-        );
+      await persistScheduleSlot({
+        db,
+        job,
+        definitionId,
+        settlement: { status: "settled" },
+      });
     }
   };
 
