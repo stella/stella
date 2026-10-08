@@ -691,6 +691,14 @@
     "seconds": 0.182872,
     "source": "estimated"
   },
+  "src/handlers/case-law/analysis/generate.db.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
+  "src/handlers/case-law/analysis/prompts/prompt-registry.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
   "src/handlers/case-law/analysis/significance.test.ts": {
     "seconds": 0.620126,
     "source": "estimated"
@@ -1937,6 +1945,10 @@
   },
   "src/handlers/chat/data-scope.test.ts": {
     "seconds": 0.479054,
+    "source": "estimated"
+  },
+  "src/handlers/chat/decline-continuation-request.test.ts": {
+    "seconds": 1,
     "source": "estimated"
   },
   "src/handlers/chat/export/citation-footnotes.test.ts": {
@@ -4725,10 +4737,6 @@
   },
   "src/lib/chat/workspace-url-mentions.test.ts": {
     "seconds": 0.164799,
-    "source": "estimated"
-  },
-  "src/lib/chunked.test.ts": {
-    "seconds": 0.044816,
     "source": "estimated"
   },
   "src/lib/clauses/body-schema.test.ts": {
@@ -8231,6 +8239,10 @@
     "seconds": 0.41,
     "source": "estimated"
   },
+  "src/mcp/caller-feature-projection.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
   "src/mcp/capability-feature.test.ts": {
     "seconds": 0.141302,
     "source": "estimated"
@@ -8855,6 +8867,10 @@
     "seconds": 0.899616,
     "source": "estimated"
   },
+  "src/tests/helpers/handler-context.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
   "src/tests/helpers/provider-request-transcript.test.ts": {
     "seconds": 0.057914,
     "source": "estimated"
@@ -9184,6 +9200,30 @@
     "source": "estimated"
   },
   "src/db/account-issuer-leftover-check-migration.db.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
+  "src/lib/db/aggregate-lock.postgres.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
+  "src/lib/db/aggregate-lock.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
+  "src/lib/db/aggregate-mutation-declaration.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
+  "src/tests/security/aggregate-mutations.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
+  "src/tests/setup-env.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
+  "src/lib/db/lock-for-write.test.ts": {
     "seconds": 1,
     "source": "estimated"
   }

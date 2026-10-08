@@ -15,6 +15,7 @@ import { unwrapEden } from "@/lib/errors/api";
 import { aiAvailabilityOptions } from "@/lib/organization/ai-config-queries";
 import { toSafeId } from "@/lib/safe-id";
 import type { WorkspaceJustification } from "@/lib/types";
+import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
 import { workspaceKeys } from "@/lib/workspaces/queries/workspace";
 
 type UseCreateBBoxesProps = {
@@ -34,9 +35,16 @@ export const useCreateBBoxes = ({
     from: "/_protected",
     select: (ctx) => ctx.user.activeOrganizationId,
   });
-  const { data: aiAvailability } = useQuery(
+  const aiAvailabilityQuery = useQuery(
     aiAvailabilityOptions({ organizationId: activeOrganizationId }),
   );
+  const aiAvailabilityView = useQueryView(aiAvailabilityQuery);
+  useQueryViewError(aiAvailabilityView);
+  const aiAvailability =
+    aiAvailabilityView.type === "items" &&
+    aiAvailabilityView.refetchError === undefined
+      ? aiAvailabilityView.items
+      : undefined;
   const pendingMutationsCount = useIsMutating({
     mutationKey: [CREATE_BBOXES_MUTATION_KEY],
   });

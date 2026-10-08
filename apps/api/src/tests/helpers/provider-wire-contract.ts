@@ -10,6 +10,7 @@ import { panic, Result } from "better-result";
 import * as v from "valibot";
 
 import { BYOK_DEFAULT_MODELS, BYOK_MODEL_OPTIONS } from "@stll/ai-catalog";
+import { sleep } from "@stll/concurrency/sleep";
 
 import { chatAttemptRequestOptions } from "@/api/handlers/chat/chat-request";
 import { classifyRunErrorChunk } from "@/api/handlers/chat/stream-chat";
@@ -340,9 +341,7 @@ export const runCancelledWireScenario = async (options: {
     abortController.signal.addEventListener(
       "abort",
       () => {
-        setTimeout(() => {
-          resolve("abandoned");
-        }, CANCEL_ABANDON_MS);
+        void sleep(CANCEL_ABANDON_MS).then(() => resolve("abandoned"));
       },
       { once: true },
     );

@@ -2,6 +2,8 @@ import { panic, Result } from "better-result";
 import { and, count, eq, ilike, inArray, sql } from "drizzle-orm";
 import { t } from "elysia";
 
+import { chunk as chunkItems } from "@stll/concurrency/chunk";
+
 import { member } from "@/api/db/auth-schema";
 import { SETTING_WORKSPACE_IDS } from "@/api/db/rls";
 import { resultTx } from "@/api/db/safe-db";
@@ -390,12 +392,8 @@ const copyWorkspaceFiles = async ({
     });
   };
   const prepared: Awaited<ReturnType<typeof prepareFile>>[] = [];
-  for (let start = 0; start < copies.length; start += FILE_COPY_CONCURRENCY) {
-    prepared.push(
-      ...(await Promise.all(
-        copies.slice(start, start + FILE_COPY_CONCURRENCY).map(prepareFile),
-      )),
-    );
+  for (const itemBatch of chunkItems(copies, FILE_COPY_CONCURRENCY)) {
+    prepared.push(...(await Promise.all(itemBatch.map(prepareFile))));
   }
   const inputs = Result.all(prepared);
   if (Result.isError(inputs)) {

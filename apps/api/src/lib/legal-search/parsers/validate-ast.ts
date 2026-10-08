@@ -1,3 +1,4 @@
+// parser-output-unchanged: Validation work counters are diagnostics only; parsed records are unchanged.
 // parser-output-unchanged: the reference text is read from the same elements in the same order; validation diagnostics and stored parser output are unchanged.
 /**
  * AST sanity checker.
@@ -46,6 +47,18 @@ export type ValidationResult = {
     duplicateBlocks: number;
     /** Blocks whose text still carries the source's own markup. */
     markupResidue: BlockMarkupResidue[];
+    /**
+     * Deterministic work done collecting the source text: subtree text
+     * computations, the characters they produced, and ancestor checks. All
+     * grow linearly with a flat document; a cache or traversal regression
+     * makes them grow faster (characters catch a wrapper's text being
+     * recomputed for every child).
+     */
+    work: {
+      textComputations: number;
+      textCharacters: number;
+      ancestorChecks: number;
+    };
   };
 };
 
@@ -287,12 +300,15 @@ export const validateAst = (
   // on flat many-paragraph documents. Each node's normalized text is
   // computed once and reused.
   const normalizedTextCache = new WeakMap<object, string>();
+  const work = { textComputations: 0, textCharacters: 0, ancestorChecks: 0 };
   const normalizedText = (el: Parameters<typeof $>[0] & object): string => {
     const cached = normalizedTextCache.get(el);
     if (cached !== undefined) {
       return cached;
     }
+    work.textComputations += 1;
     const value = visibleHtmlText($(el)).replace(/\s+/gu, " ").trim();
+    work.textCharacters += value.length;
     normalizedTextCache.set(el, value);
     return value;
   };
@@ -319,7 +335,10 @@ export const validateAst = (
     const capturedByAncestor = $el
       .parents(CONTENT_SELECTOR)
       .toArray()
-      .some((ancestor) => seen.has(normalizedText(ancestor)));
+      .some((ancestor) => {
+        work.ancestorChecks += 1;
+        return seen.has(normalizedText(ancestor));
+      });
     if (capturedByAncestor) {
       return;
     }
@@ -571,6 +590,7 @@ export const validateAst = (
       hugeBlocks,
       duplicateBlocks,
       markupResidue,
+      work,
     },
   };
 };

@@ -2,6 +2,8 @@ import { Result } from "better-result";
 import { describe, expect, it } from "bun:test";
 import * as v from "valibot";
 
+import { sleep as ownerSleep } from "@stll/concurrency/sleep";
+
 import { createToolFunction } from "@/api/handlers/chat/tools/execute/execute-tool-function";
 import type {
   RunSandboxInput,
@@ -81,9 +83,7 @@ const waitForCondition = async ({
     if (Date.now() > deadline) {
       throw new Error("Condition was not met before timeout.");
     }
-    await new Promise<void>((resolve) => {
-      setTimeout(resolve, 5);
-    });
+    await ownerSleep(5);
   }
 };
 
@@ -195,9 +195,7 @@ const slow = createToolFunction(
     schema: v.any(),
   },
   async function* (input) {
-    await new Promise<void>((resolve) => {
-      setTimeout(resolve, input.ms);
-    });
+    await ownerSleep(input.ms);
     return Result.ok({ done: true });
   },
 );

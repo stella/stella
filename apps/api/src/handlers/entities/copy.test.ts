@@ -1147,13 +1147,20 @@ describe("copy-to-workspace", () => {
               return [
                 {
                   id: sourceFilePropertyId,
-                  name: "Source File",
+                  name: "Attachment",
                   content: filePropertyContent,
-                  system: true,
+                  system: false,
                 },
               ];
             }
-            return [];
+            return [
+              {
+                id: targetFilePropertyId,
+                name: "Documents",
+                content: filePropertyContent,
+                system: true,
+              },
+            ];
           },
         },
         workspaces: {
@@ -1201,10 +1208,15 @@ describe("copy-to-workspace", () => {
     };
 
     const { safeDb } = createScopedDbMock(tx);
-    await copyToWorkspace.handler(
+    const result = await copyToWorkspace.handler(
       createContext({ safeDb, entityId: documentId }),
     );
 
+    expect(result).toEqual({
+      entityId: expect.any(String),
+      entityIds: expect.any(Array),
+      field: null,
+    });
     expect(insertedFields).toHaveLength(0);
     expect(requestKeys("GET")).toEqual([]);
     expect(requestKeys("COPY")).toEqual([]);

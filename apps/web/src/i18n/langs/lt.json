@@ -2385,6 +2385,8 @@
       "providerRateLimited": "Pasiektas teikėjo užklausų limitas. Netrukus bandykite dar kartą.",
       "thirdPartyBoundaryRefusal": "Užklausa bandė naudoti turinį už leidžiamo darbo srities konteksto ribų.",
       "usageLimitExceeded": "Pasiektas naudojimo limitas.",
+      "verificationActiveLimitReached": "Jūsų organizacija pasiekė vienu metu vykdomų patikrų limitą. Palaukite, kol viena patikra bus baigta, ir bandykite dar kartą.",
+      "verificationDailyLimitReached": "Jūsų organizacija pasiekė dienos patikrų limitą. Bandykite dar kartą po vidurnakčio (Europe/Prague).",
       "versionConflict": "Kažkas kitas tai pakeitė, kol redagavote. Įkelkite iš naujo, kad gautumėte dabartinę versiją."
     },
     "failedToAcceptInvitation": "Nepavyko priimti kvietimo",

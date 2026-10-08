@@ -767,6 +767,7 @@
         "$TURBO_ROOT$/apps/web/src/components/chat/**",
         "$TURBO_ROOT$/apps/web/src/features/chat/chat-runtime.ts",
         "$TURBO_ROOT$/oxlint.config.ts",
+        "$TURBO_ROOT$/scripts/check-aggregate-mutations.ts",
         "$TURBO_ROOT$/scripts/ownership/**",
         "$TURBO_ROOT$/scripts/source-fingerprint-baseline.json"
       ]
@@ -816,6 +817,15 @@
         "$TURBO_ROOT$/apps/**",
         "$TURBO_ROOT$/packages/**",
         "$TURBO_ROOT$/scripts/**"
+      ]
+    },
+    "@stll/catalogue#test": {
+      "dependsOn": [],
+      "inputs": [
+        "$TURBO_DEFAULT$",
+        "$TURBO_ROOT$/.github/workflows/catalogue-upstream.yml",
+        "$TURBO_ROOT$/.github/workflows/model-catalog-check.yml",
+        "$TURBO_ROOT$/scripts/offline-network-preload.ts"
       ]
     },
     "@stll/scripts#test": {
