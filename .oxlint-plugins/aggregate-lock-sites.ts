@@ -52,6 +52,19 @@ const sqlLocks = (text: string, context: "sql" | "unknown" = "unknown") => {
         /^\s+\S/u.test(text.slice(match.index + match[0].length))
       );
     }
+    // Outside a known SQL context, a row-lock clause counts when it opens the
+    // literal (a clause fragment such as " FOR UPDATE") or follows a
+    // SELECT ... FROM in the same statement; prose such as "metadata for
+    // update notifications" is not a lock.
+    const before = masked.slice(start, match.index);
+    if (
+      /^FOR\s/iu.test(match[0]) &&
+      context === "unknown" &&
+      before.trim().length > 0 &&
+      !/\bSELECT\b[\s\S]*\bFROM\b/iu.test(before)
+    ) {
+      return false;
+    }
     if (!/^FOR\s+UPDATE$/iu.test(match[0])) {
       return true;
     }

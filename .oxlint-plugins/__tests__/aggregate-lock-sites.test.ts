@@ -81,6 +81,26 @@ describe("aggregate lock confinement", () => {
       expect(aggregateLockSites(file, source)).toHaveLength(1);
     }
   });
+  test("ignores row-lock words in prose outside SQL context", () => {
+    for (const message of [
+      "Fetches release metadata for update notifications.",
+      "Waits for share links to expire",
+      "Polls for key share rotation",
+    ]) {
+      expect(
+        aggregateLockSites(file, `const message = ${JSON.stringify(message)}`),
+      ).toEqual([]);
+    }
+    for (const source of [
+      'const query = "SELECT id FROM items WHERE id = $1 FOR UPDATE"',
+      "sql`FOR UPDATE`",
+      'sql.raw("FOR NO KEY UPDATE")',
+      'tx.execute("SELECT id FROM items FOR SHARE")',
+      'const clause = lock ? " FOR UPDATE" : ""',
+    ]) {
+      expect(aggregateLockSites(file, source)).toHaveLength(1);
+    }
+  });
   test("enumerates every mode and computed builder spelling", () => {
     for (const mode of [
       "update",
