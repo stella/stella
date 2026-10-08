@@ -1,14 +1,11 @@
 import { expect, test } from "bun:test";
 
 import {
-  baselineErrors,
+  coverageErrors,
   coverageProblems,
   exportedRuleIds,
-  initialBaselineErrors,
-  parseCoverageBaseline,
   readCoverage,
 } from "./check-oxlint-rule-coverage.ts";
-import { addedEntries } from "./ledger-membership.ts";
 
 const plugin = {
   meta: { name: "fixture-plugin" },
@@ -105,40 +102,23 @@ test("resolves off overrides, exclusions and ignored files", () => {
   ]);
 });
 
-test("baseline fails on new gaps and on resolved entries left behind", () => {
-  const problems = inspect({ rules: {} });
-  const key = `${ruleId}::unwired`;
-  expect(baselineErrors(problems, {})).toEqual([`Missing control: ${key}`]);
+test("every coverage gap fails with its remediation", () => {
+  expect(coverageErrors([])).toEqual([]);
+  expect(coverageErrors(inspect({ rules: {} }))).toEqual([
+    `Custom rule coverage gap: ${ruleId}::unwired (register the plugin and configure the rule)`,
+  ]);
   expect(
-    baselineErrors(problems, { [key]: "Existing rule awaiting registration." }),
-  ).toEqual([]);
-  expect(
-    baselineErrors([], { [key]: "Existing rule awaiting registration." }),
-  ).toEqual([`Remove resolved baseline entry: ${key}`]);
-});
-
-test("initial baseline cannot grandfather a new exported rule", () => {
-  const baseline = { [`${ruleId}::untested`]: "Existing coverage gap." };
-  expect(initialBaselineErrors(baseline, ruleIds)).toEqual([]);
-  expect(initialBaselineErrors(baseline, [])).toEqual([
-    `New rules cannot enter the baseline: ${ruleId}::untested`,
+    coverageErrors([
+      { ruleId, category: "empty-scope" },
+      { ruleId, category: "untested" },
+    ]),
+  ).toEqual([
+    `Custom rule coverage gap: ${ruleId}::empty-scope (give the rule at least one linted file)`,
+    `Custom rule coverage gap: ${ruleId}::untested (add reporting and clean test cases)`,
   ]);
 });
 
-test("baseline membership cannot replace a removed entry with a new gap", () => {
-  const existing = `${ruleId}::untested`;
-  const added = `${ruleId}::unwired`;
-  expect(addedEntries([], [existing])).toEqual([]);
-  expect(addedEntries([added], [existing])).toEqual([added]);
-});
-
-test("baseline and executed evidence reject malformed records", () => {
-  expect(() => parseCoverageBaseline('{"invalid":"reason"}')).toThrow(
-    "Rule coverage baseline must map",
-  );
-  expect(() => parseCoverageBaseline(`{"${ruleId}::untested":""}`)).toThrow(
-    "Rule coverage baseline must map",
-  );
+test("executed evidence rejects malformed records", () => {
   expect(() =>
     readCoverage(JSON.stringify({ ruleId, outcome: "named" })),
   ).toThrow("Invalid executed rule coverage record");

@@ -31,8 +31,8 @@ describe("analysis prompt selection", () => {
     }
   });
 
-  test("analysis-prompt-registry-refuses-every-unwritten-language", async () => {
-    await assertProperty(
+  test("analysis-prompt-registry-refuses-every-unwritten-language", () => {
+    assertProperty(
       "analysis-prompt-registry-refuses-every-unwritten-language",
       fc.property(
         fc.oneof(fc.string(), fc.constantFrom(...NEAR_MISSES)),

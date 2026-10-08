@@ -86,6 +86,7 @@ import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
 import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
 import type { FakeS3 } from "@/api/tests/helpers/fake-s3";
 import { createTestHandlerContext } from "@/api/tests/helpers/handler-context";
+import { testModelAdmission } from "@/api/tests/helpers/model-dispatch-admission";
 import {
   instanceWireErrorModel,
   providerCallErrorCassettes,
@@ -174,12 +175,17 @@ const createEntity: typeof createEntityFromBuffer = async (input) =>
     dependencies: createEntityDependencies,
   });
 
+// The test model ignores which organization admitted it.
+const TEST_FLOW_MODEL_ADMISSION =
+  testModelAdmission(mintAuthProviderId<"organization">());
+
 const executeFlowStepWithTestModel = async (
   job: Parameters<typeof executeFlowStep>[0],
   signal: AbortSignal,
 ) =>
   await executeFlowStep(job, signal, {
     generateTextForRole: generateTextForTest,
+    admission: TEST_FLOW_MODEL_ADMISSION,
     database: flowDatabase,
     makeScopedDb,
     makeSafeDb,
@@ -391,6 +397,7 @@ describe("flow run worker pipeline (ai -> review-gate -> create-document)", () =
         { runId, stepIndex: 0 },
         new AbortController().signal,
         {
+          admission: testModelAdmission(organizationId),
           database: flowDatabase,
           makeScopedDb,
           makeSafeDb,
@@ -1032,6 +1039,7 @@ describe("flow run worker pipeline (ai -> review-gate -> create-document)", () =
               },
             )
           : executeFlowStep(job, new AbortController().signal, {
+              admission: testModelAdmission(organizationId),
               database: flowDatabase,
               makeScopedDb: gatedMakeScopedDb,
               makeSafeDb,
@@ -1122,6 +1130,7 @@ describe("flow run worker pipeline (ai -> review-gate -> create-document)", () =
       { runId, stepIndex: 0 },
       new AbortController().signal,
       {
+        admission: testModelAdmission(organizationId),
         database: flowDatabase,
         makeScopedDb,
         makeSafeDb,
@@ -1902,6 +1911,7 @@ describe("flow run worker pipeline (ai -> review-gate -> create-document)", () =
         const model = instanceWireErrorModel(cassette.model);
         const failure = await Result.tryPromise(async () =>
           executeFlowStep(job, new AbortController().signal, {
+            admission: testModelAdmission(organizationId),
             database: flowDatabase,
             makeScopedDb,
             makeSafeDb,

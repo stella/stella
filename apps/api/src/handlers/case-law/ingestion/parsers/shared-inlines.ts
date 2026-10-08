@@ -1,3 +1,4 @@
+// parser-output-unchanged: visible text walks the same nodes in the same order and skips the same script/style subtrees; inline and visible text output is unchanged.
 // parser-output-unchanged: [cz-regional] The new legacy quarantine projection is unused by this source; existing inline and visible text output is unchanged.
 // parser-output-unchanged: [sk-courts] The new legacy quarantine projection is unused by this source; existing inline and visible text output is unchanged.
 // parser-output-unchanged: [sk-us] The new legacy quarantine projection is unused by this source; existing inline and visible text output is unchanged.
@@ -31,23 +32,47 @@
  */
 
 import type * as cheerio from "cheerio";
-import { type AnyNode, type Element, isTag, isText } from "domhandler";
+import {
+  type AnyNode,
+  type Element,
+  hasChildren,
+  isTag,
+  isText,
+} from "domhandler";
 
-import type { Inline } from "@/api/handlers/case-law/document-ast";
-import { hasInlineChildren } from "@/api/handlers/case-law/document-ast";
+// parser-output-unchanged: imports the document AST from its package owner
+import type { Inline } from "@stll/legal-ast/document-ast";
+import { hasInlineChildren } from "@stll/legal-ast/document-ast";
 
 const EXCLUDED_HTML_TAGS = ["script", "style"];
-const EXCLUDED_HTML_SELECTOR = EXCLUDED_HTML_TAGS.join(", ");
 
 /** Content outside the decision text axis. */
 export const isExcludedHtmlTag = (tag: string): boolean =>
   EXCLUDED_HTML_TAGS.includes(tag);
 
-/** Read text without mutating the source DOM or retaining non-content tags. */
+/**
+ * Read text without mutating the source DOM or retaining non-content tags.
+ *
+ * A walk rather than clone-and-remove: cheerio's `.find()` dedupes its
+ * context of N children pairwise, which is quadratic on a wrapper holding
+ * tens of thousands of paragraphs.
+ */
 export const visibleHtmlText = (el: cheerio.Cheerio<AnyNode>): string => {
-  const copy = el.clone();
-  copy.find(EXCLUDED_HTML_SELECTOR).remove();
-  return copy.not(EXCLUDED_HTML_SELECTOR).text();
+  let text = "";
+  const pending = el.toArray().toReversed();
+  for (let node = pending.pop(); node !== undefined; node = pending.pop()) {
+    if (isText(node)) {
+      text += node.data;
+      continue;
+    }
+    if (!hasChildren(node) || (isTag(node) && isExcludedHtmlTag(node.name))) {
+      continue;
+    }
+    for (const child of node.children.toReversed()) {
+      pending.push(child);
+    }
+  }
+  return text;
 };
 
 /** Repair-only projection for quarantine identities stored before visible text. */

@@ -14,6 +14,7 @@ import { writeFieldFilters } from "@/api/lib/docx/write-field-filters";
 import * as tanstackModels from "@/api/lib/tanstack-ai-models";
 import * as decisionModel from "@/api/lib/workflow/decisions/decision-model";
 import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
+import { testModelAdmission } from "@/api/tests/helpers/model-dispatch-admission";
 import { testDocxFile } from "@/api/tests/helpers/scanned-file";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
@@ -70,6 +71,7 @@ describe("createTemplateTools", () => {
       scopedDb: stubScopedDb([]),
       safeDb: stubSafeDb,
       organizationId: orgId,
+      modelAdmission: testModelAdmission(orgId),
       userId,
       thirdPartyBoundary: { type: "raw" },
     });
@@ -88,6 +90,7 @@ describe("createTemplateTools", () => {
       scopedDb: stubScopedDb([]),
       safeDb: stubSafeDb,
       organizationId: orgId,
+      modelAdmission: testModelAdmission(orgId),
       userId,
       thirdPartyBoundary: { type: "raw" },
     });
@@ -108,6 +111,7 @@ describe("createTemplateTools", () => {
       }),
       safeDb: stubSafeDb,
       organizationId: orgId,
+      modelAdmission: testModelAdmission(orgId),
       userId,
       thirdPartyBoundary: { type: "raw" },
     });
@@ -224,6 +228,7 @@ describe("fill_template grades the fill", () => {
         scopedDb,
         safeDb: stubSafeDb,
         organizationId: orgId,
+        modelAdmission: testModelAdmission(orgId),
         userId,
         thirdPartyBoundary,
       });
@@ -324,6 +329,7 @@ describe("createTemplateAuthoringTools", () => {
       managedAIResidency: "eu" as const,
       safeDb: stubSafeDb,
       organizationId: orgId,
+      modelAdmission: testModelAdmission(orgId),
       userId,
       thirdPartyBoundary: { type: "raw" },
     });
@@ -360,6 +366,7 @@ describe("createTemplateAuthoringTools", () => {
       managedAIResidency: "eu" as const,
       safeDb: stubSafeDb,
       organizationId: orgId,
+      modelAdmission: testModelAdmission(orgId),
       userId,
       thirdPartyBoundary,
       dependencies: {

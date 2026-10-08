@@ -9,8 +9,8 @@ import { entities, fields } from "@/api/db/schema";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
-export const STATUS_GROUP_ID = "_status";
-export const KIND_GROUP_ID = "_kind";
+const STATUS_GROUP_ID = "_status";
+const KIND_GROUP_ID = "_kind";
 
 // Elysia schema for the grouping discriminator, shared by every endpoint that
 // scopes a query to one group (kanban-group, mark-column-flag) so they accept

@@ -29,7 +29,7 @@ export type UseChatModelSelectionOptions = {
   onPersisted: (selection: PersistedChatModelSelection) => void;
 };
 
-export type PersistedChatModelSelection = {
+type PersistedChatModelSelection = {
   model: string | null;
   reasoningEffort: ReasoningEffort | null;
 };

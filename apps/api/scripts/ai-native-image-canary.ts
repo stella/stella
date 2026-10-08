@@ -20,6 +20,7 @@ import * as v from "valibot";
 
 import { isBYOKModelRoleSupported } from "@stll/ai-catalog";
 
+import { NO_ORGANIZATION_MODEL_DISPATCH } from "@/api/lib/rate-limit/model-dispatch-admission";
 import {
   generateTanStackObjectForRole,
   resolveTanStackTextModel,
@@ -202,6 +203,7 @@ export const probeNativeImage = async ({
     role: "chat",
     orgAIConfig,
     organizationId: null,
+    admission: NO_ORGANIZATION_MODEL_DISPATCH,
   });
   if (model.provider !== provider || model.modelId !== modelId) {
     throw new NativeImageCanaryError({
@@ -213,6 +215,7 @@ export const probeNativeImage = async ({
     role: "chat",
     orgAIConfig,
     organizationId: null,
+    admission: NO_ORGANIZATION_MODEL_DISPATCH,
     tenantWorkspaceIds: [],
     serviceTier: "standard",
     caching: { enabled: false, reason: "org-disabled" },

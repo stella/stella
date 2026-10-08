@@ -8,6 +8,7 @@ import { env } from "@/api/env";
 import { catalogueRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
+import { grantThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { installSkill, preflightSkillInstall } from "@/api/lib/skills/install";
@@ -89,6 +90,7 @@ const installBundledSkill = createSafeRootHandler(
     }
 
     const resolvedResult = await resolveCatalogueSkillPackage(body.slug, {
+      permit: grantThirdPartyOutboundPermit(),
       ...(env.GITHUB_TOKEN ? { githubToken: env.GITHUB_TOKEN } : {}),
     });
     if (Result.isError(resolvedResult)) {

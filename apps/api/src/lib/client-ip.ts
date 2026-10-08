@@ -21,13 +21,11 @@ import { panic } from "better-result";
  * `STELLA_CLIENT_ADDRESS_HEADER`. That header is read only from a trusted
  * peer and takes precedence over the `x-forwarded-for` chain.
  *
- * Browser calls pass a second edge first (the frontend edge), so the
- * API edge's viewer address names that edge. The frontend edge writes the
- * browser's address to {@link FRONTEND_ADDRESS_HEADER} and proves it with
- * {@link FRONTEND_VERIFY_HEADER}. From a trusted peer the
- * sources are tried in order: that header when the frontend value matches,
- * the API edge's header when the origin value matches, then the forwarded
- * chain.
+ * A further edge may supply the address in {@link FRONTEND_ADDRESS_HEADER},
+ * accepted only with a matching {@link FRONTEND_VERIFY_HEADER}. From a
+ * trusted peer the sources are tried in order: that header when its verify
+ * value matches, the edge header above when the origin value matches, then
+ * the forwarded chain.
  */
 import { createHash, timingSafeEqual } from "node:crypto";
 import { BlockList, isIP, isIPv4, isIPv6 } from "node:net";

@@ -19,6 +19,7 @@ import { ACCOUNT_ACCESS, createSafeTokenHandler } from "@/api/lib/api-handlers";
 import type { TokenHandlerConfig } from "@/api/lib/api-handlers";
 import { createAuditRecorder } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
+import { grantThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { closePdfSigningSession } from "@/api/lib/files/pdf-signing/close-session";
 import {
@@ -330,6 +331,7 @@ export const createSubmitPdfSigningSignatureHandler = ({
       const finalized = await finalize({
         ...context,
         attempt,
+        permit: grantThirdPartyOutboundPermit(),
         prepared,
         signature,
       });

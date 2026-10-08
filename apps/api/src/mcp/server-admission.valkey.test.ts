@@ -10,7 +10,10 @@ import {
   closeActionAdmissionRedis,
   withActionAdmission,
 } from "@/api/lib/rate-limit/action-admission";
-import { resolveActionPeriodBudget } from "@/api/lib/rate-limit/action-period-budget";
+import {
+  PER_KIND_PERIOD_SCOPE,
+  resolveActionPeriodBudget,
+} from "@/api/lib/rate-limit/action-period-budget";
 import type { ActionSizePolicy } from "@/api/lib/rate-limit/action-size-limits";
 import { createRedisClient } from "@/api/lib/redis-client";
 import { coordinationKey } from "@/api/lib/redis-keys";
@@ -226,6 +229,7 @@ if (!runValkeyTests || !process.env["REDIS_URL"]) {
           organizationId,
           identity: { actionKind: "mcp.data/call", logicalPhaseId: "lookup" },
           policy: { periodMs: 86_400_000, limit: 2 },
+          scope: PER_KIND_PERIOD_SCOPE,
           nowMs: Temporal.Now.instant().epochMilliseconds,
         });
         if (Result.isError(budget) || budget.value === null) {
