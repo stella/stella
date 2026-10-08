@@ -12,6 +12,8 @@ import path from "node:path";
 
 import { backoffDelay } from "@stll/concurrency/backoff-delay";
 
+import { grantThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
+import type { ThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import { OCR_LOCAL_MODEL_FILES } from "@/api/lib/document-processing-contract";
 import { fetchBytesFollowingRedirects } from "@/api/lib/redirect-fetch";
 import { safeOutboundFetchBytes } from "@/api/lib/safe-outbound-fetch";
@@ -48,11 +50,19 @@ const isTransientStatus = (status: number): boolean =>
 
 // A transport error or a transient status is retried with backoff, up to
 // DOWNLOAD_ATTEMPTS; any other status fails at once.
-const download = async (
-  fileName: string,
-  url: string,
+type DownloadOptions = {
+  attempt?: number;
+  fileName: string;
+  permit: ThirdPartyOutboundPermit;
+  url: string;
+};
+
+const download = async ({
   attempt = 1,
-): Promise<ArrayBuffer> => {
+  fileName,
+  permit,
+  url,
+}: DownloadOptions): Promise<ArrayBuffer> => {
   // Hugging Face `resolve` URLs redirect to the object host, so follow a
   // bounded chain manually: every hop re-runs the safe-outbound target
   // validation instead of trusting the redirect blindly.
@@ -61,6 +71,7 @@ const download = async (
     maxHops: MAX_REDIRECT_HOPS,
     fetchBytes: async (target) =>
       await safeOutboundFetchBytes({
+        permit,
         maxBytes: DOWNLOAD_MAX_BYTES,
         redirect: "manual",
         timeoutMs: DOWNLOAD_TIMEOUT_MS,
@@ -88,13 +99,18 @@ const download = async (
     `retrying ${fileName} in ${delayMs} ms (attempt ${attempt}/${DOWNLOAD_ATTEMPTS}): ${failure}`,
   );
   await Bun.sleep(delayMs);
-  return await download(fileName, url, attempt + 1);
+  return await download({ attempt: attempt + 1, fileName, permit, url });
 };
 
-const fetchModel = async (
-  fileName: string,
-  source: { url: string; sha256: string },
-): Promise<void> => {
+const fetchModel = async ({
+  fileName,
+  permit,
+  source,
+}: {
+  fileName: string;
+  permit: ThirdPartyOutboundPermit;
+  source: { url: string; sha256: string };
+}): Promise<void> => {
   const targetPath = path.join(targetDir, fileName);
   const existing = Bun.file(targetPath);
   if (await existing.exists()) {
@@ -108,7 +124,7 @@ const fetchModel = async (
     );
   }
 
-  const bytes = await download(fileName, source.url);
+  const bytes = await download({ fileName, permit, url: source.url });
   const digest = sha256Hex(bytes);
   if (digest !== source.sha256) {
     panic(
@@ -119,8 +135,10 @@ const fetchModel = async (
   console.log(`ok (downloaded): ${fileName} (${bytes.byteLength} bytes)`);
 };
 
+const permit = grantThirdPartyOutboundPermit();
 await Promise.all(
   Object.entries(MODEL_SOURCES).map(
-    async ([fileName, source]) => await fetchModel(fileName, source),
+    async ([fileName, source]) =>
+      await fetchModel({ fileName, permit, source }),
   ),
 );

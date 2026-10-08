@@ -9,6 +9,8 @@
   "scripts/db-await-in-loop.ts",
   "scripts/generated-artifacts.ts",
   "scripts/lint-suppressions.ts",
+  "scripts/outbound-transport-census.ts",
+  "scripts/outbound-transport-ownership.ts",
   "scripts/ownership.ts",
   "scripts/parse-memo.ts",
   "scripts/ratchet.ts",

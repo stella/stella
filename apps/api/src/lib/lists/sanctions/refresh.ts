@@ -19,6 +19,7 @@ import {
   sanctionsEntryPayloads,
   sanctionsSources,
 } from "@/api/db/schema";
+import type { ThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import type { SafeId } from "@/api/lib/branded-types";
 import { SANCTIONS_SOURCE_CONFIG } from "@/api/lib/lists/sanctions/source-config";
 import {
@@ -62,6 +63,7 @@ export type SanctionsRefreshOutcome =
   | { status: "aborted"; source: SanctionsSource };
 
 type RefreshOptions = {
+  permit: ThirdPartyOutboundPermit;
   db: ScopedDb;
   source: SanctionsSource;
   signal: AbortSignal;
@@ -734,6 +736,7 @@ const fetchCurrentEdition = async ({
 
 export const refreshSanctionsSource = async ({
   db,
+  permit,
   source,
   signal,
   euXmlUrlOverride,
@@ -794,7 +797,7 @@ export const refreshSanctionsSource = async ({
     source,
     activeMarkerKey: snapshot.markerKey,
     hasActiveEdition: snapshot.activeEditionId !== null,
-    fetchOptions: { signal, euXmlUrlOverride, userAgent },
+    fetchOptions: { permit, signal, euXmlUrlOverride, userAgent },
     fetchMarker,
     fetchEdition,
   });

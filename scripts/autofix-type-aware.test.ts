@@ -35,7 +35,7 @@ const cases = [
 ] as const;
 
 test.each(cases)(
-  "type-aware fixes require $name and leave unchanged files byte-identical",
+  "type-aware fixes require $name, exclude generated text, and leave unchanged files byte-identical",
   ({ failure, extra }) => {
     const root = mkdtempSync(path.join(tmpdir(), "autofix-type-aware-"));
     const repo = path.resolve(import.meta.dirname, "..");
@@ -95,7 +95,11 @@ test.each(cases)(
         'export default { plugins: ["typescript"], categories: { correctness: "off" }, rules: { "typescript/dot-notation": "error" } };\n',
       );
       writeFileSync(path.join(root, ".oxfmtrc.json"), "{}");
-      writeFileSync(path.join(root, "autofix-changed-paths"), "changed.ts\0");
+      writeFileSync(path.join(root, "generated.html.txt"), "fixture");
+      writeFileSync(
+        path.join(root, "autofix-changed-paths"),
+        "changed.ts\0generated.html.txt\0",
+      );
       const finding = Bun.spawnSync(
         [
           process.execPath,
@@ -120,7 +124,7 @@ test.each(cases)(
 if [[ "$1" == scripts/ci-generated-sources.ts && "$2" == prepare ]]; then touch prepared; exit "$PREPARE_EXIT"; fi
 if [[ "$1" == run && "$2" == format:guard ]]; then exit 0; fi
 if [[ "$2" == oxlint && ! -f prepared ]]; then exit 2; fi
-if [[ "$1" == scripts/typecheck-coverage.ts && "$2" == --autofix ]]; then touch compiler_checked; fi
+if [[ "$1" == scripts/typecheck-coverage.ts && "$2" == --autofix ]]; then touch compiler_checked; printf '%s\\n' "$@" > compiler_args; fi
 if [[ "$*" == *" --fix "* ]]; then touch fixer_ran; fi
 exec '${process.execPath}' "$@"
 `,
@@ -166,7 +170,7 @@ exec '${process.execPath}' "$@"
         expect(existsSync(path.join(root, "fixer_ran"))).toBe(false);
         if (failure === "coverage") {
           expect(fixed.stdout.toString() + fixed.stderr.toString()).toContain(
-            "excluded from the checked project",
+            "covered by no candidate project",
           );
         }
         if (failure === "project") {
@@ -183,6 +187,11 @@ exec '${process.execPath}' "$@"
       expect(existsSync(path.join(root, "compiler_checked"))).toBe(
         failure !== "prepare",
       );
+      if (failure !== "prepare") {
+        expect(
+          readFileSync(path.join(root, "compiler_args"), "utf-8"),
+        ).not.toContain("generated.html.txt");
+      }
       expect(readFileSync(path.join(root, "unchanged.ts"), "utf-8")).toBe(
         source,
       );
@@ -191,3 +200,208 @@ exec '${process.execPath}' "$@"
     }
   },
 );
+
+const projectCases = [
+  { name: "nearest project covers sources", layout: "nearest", invalid: false },
+  {
+    name: "sibling project covers root sources",
+    layout: "sibling",
+    invalid: false,
+  },
+  {
+    name: "sibling project reports type errors",
+    layout: "sibling",
+    invalid: true,
+  },
+  {
+    name: "unrelated errors in a nearer project do not stop the search",
+    layout: "sibling-after-broken-nearest",
+    invalid: false,
+  },
+  {
+    name: "symlinked sibling project covers root sources",
+    layout: "symlinked-sibling",
+    invalid: false,
+  },
+  {
+    name: "nested sibling project below the nearest conventional config",
+    layout: "nested-sibling",
+    invalid: false,
+  },
+  {
+    name: "ancestor project covers nested sources",
+    layout: "ancestor",
+    invalid: false,
+  },
+  {
+    name: "no project covers sources and names candidates",
+    layout: "uncovered",
+    invalid: false,
+  },
+] as const;
+
+test.each(projectCases)("autofix $name", ({ layout, invalid }) => {
+  const root = mkdtempSync(path.join(tmpdir(), "autofix-project-"));
+  const repo = path.resolve(import.meta.dirname, "..");
+  try {
+    symlinkSync(
+      path.join(repo, "node_modules"),
+      path.join(root, "node_modules"),
+    );
+    mkdirSync(path.join(root, "scripts"));
+    writeFileSync(
+      path.join(root, "scripts/typecheck-coverage.ts"),
+      readFileSync(new URL("typecheck-coverage.ts", import.meta.url)),
+    );
+    mkdirSync(path.join(root, "packages/scripts/src"), { recursive: true });
+    for (const file of [
+      "tsc-native.ts",
+      "child-exit-status.ts",
+      "tsgo-compiler-options.ts",
+    ]) {
+      writeFileSync(
+        path.join(root, "packages/scripts/src", file),
+        readFileSync(path.join(repo, "packages/scripts/src", file)),
+      );
+    }
+    const compilerPath = path.join(root, "packages/scripts/src/tsc-native.ts");
+    writeFileSync(
+      path.join(root, "packages/scripts/src/tsc-native-real.ts"),
+      readFileSync(compilerPath),
+    );
+    writeFileSync(
+      compilerPath,
+      `
+import { appendFileSync } from "node:fs";
+appendFileSync("compiler-projects", process.argv.at(-1) + "\\n");
+const result = Bun.spawnSync([
+  process.execPath,
+  new URL("./tsc-native-real.ts", import.meta.url).pathname,
+  ...process.argv.slice(2),
+], { stdout: "inherit", stderr: "inherit" });
+process.exit(result.exitCode);
+`,
+    );
+    writeFileSync(
+      path.join(root, "fixture-base.json"),
+      JSON.stringify({ compilerOptions: { types: [] } }),
+    );
+    const emptyProject = { extends: "./fixture-base.json", files: [] };
+    const directory =
+      layout === "ancestor" || layout === "nested-sibling" ? "nested/" : "";
+    if (directory) {
+      mkdirSync(path.join(root, directory));
+    }
+    if (layout === "ancestor") {
+      writeFileSync(
+        path.join(root, directory, "tsconfig.json"),
+        JSON.stringify({ extends: "../fixture-base.json", files: [] }),
+      );
+    }
+    const file = `${directory}oxlint.config.ts`;
+    const second = `${directory}other.ts`;
+    writeFileSync(
+      path.join(root, file),
+      invalid
+        ? 'export const value: number = "wrong";'
+        : "export const value: number = 1;",
+    );
+    writeFileSync(path.join(root, second), "export const other = 2;");
+    const compilerOptions = { strict: true, types: [], target: "ESNext" };
+    const config = { compilerOptions, files: [file, second] };
+    // The nearest project fails to compile on a file the targets do not need.
+    writeFileSync(
+      path.join(root, "broken.ts"),
+      'export const broken: number = "wrong";',
+    );
+    const nearestProjects: Partial<Record<typeof layout, object>> = {
+      nearest: config,
+      "sibling-after-broken-nearest": { compilerOptions, files: ["broken.ts"] },
+    };
+    const nearestProject = nearestProjects[layout] ?? emptyProject;
+    writeFileSync(
+      path.join(root, "tsconfig.json"),
+      JSON.stringify(nearestProject),
+    );
+    const rootSiblingEmpty =
+      layout === "uncovered" || layout === "nested-sibling";
+    const siblingProject = JSON.stringify(
+      rootSiblingEmpty ? emptyProject : config,
+    );
+    if (layout === "nested-sibling") {
+      // Only a non-conventional config beside the sources covers them; there
+      // is no nested tsconfig.json between them and the empty root config.
+      writeFileSync(
+        path.join(root, directory, "tsconfig.plugins.json"),
+        JSON.stringify({
+          extends: "../fixture-base.json",
+          compilerOptions,
+          files: ["oxlint.config.ts", "other.ts"],
+        }),
+      );
+    }
+    if (layout === "symlinked-sibling") {
+      // The sibling project is a symlink to a config the name filter alone
+      // would not pick up.
+      writeFileSync(path.join(root, "plugins-config.json"), siblingProject);
+      symlinkSync(
+        "plugins-config.json",
+        path.join(root, "tsconfig.oxlint-plugins.json"),
+      );
+    } else {
+      writeFileSync(
+        path.join(root, "tsconfig.oxlint-plugins.json"),
+        siblingProject,
+      );
+    }
+    const result = Bun.spawnSync(
+      [
+        process.execPath,
+        "scripts/typecheck-coverage.ts",
+        "--autofix",
+        file,
+        second,
+      ],
+      { cwd: root, stdout: "pipe", stderr: "pipe" },
+    );
+    const output = result.stdout.toString() + result.stderr.toString();
+    if (layout === "uncovered") {
+      expect(result.exitCode).not.toBe(0);
+      expect(output).toContain("covered by no candidate project");
+      expect(output).toContain("tsconfig.json");
+      expect(output).toContain("tsconfig.oxlint-plugins.json");
+    } else if (invalid) {
+      expect(result.exitCode).not.toBe(0);
+      expect(output).toContain("TS2322");
+    } else {
+      expect(result.exitCode, output).toBe(0);
+      const coveringProjects: Partial<Record<typeof layout, string>> = {
+        nearest: "tsconfig.json",
+        "nested-sibling": "nested/tsconfig.plugins.json",
+      };
+      const project =
+        coveringProjects[layout] ?? "tsconfig.oxlint-plugins.json";
+      expect(output).toContain(`Autofix types checked: ${project} (2 targets)`);
+      const checked = readFileSync(
+        path.join(root, "compiler-projects"),
+        "utf-8",
+      )
+        .trim()
+        .split("\n");
+      expect(checked.length).toBe(new Set(checked).size);
+      const expectedProjects = ["tsconfig.json"];
+      if (layout === "ancestor") {
+        expectedProjects.unshift("nested/tsconfig.json");
+      }
+      if (layout !== "nearest") {
+        expectedProjects.push(project);
+      }
+      // The nested sibling is found before any root config is compiled.
+      expect(checked).toEqual(
+        layout === "nested-sibling" ? [project] : expectedProjects,
+      );
+    }
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});

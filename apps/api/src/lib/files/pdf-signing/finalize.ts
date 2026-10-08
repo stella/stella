@@ -18,6 +18,7 @@ import type {
 } from "@/api/db/schema";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
+import type { ThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { DocumentSource } from "@/api/lib/document-source";
 import { createEntityVersionFromBuffer } from "@/api/lib/entity-versions/create-entity-version-from-buffer";
@@ -149,6 +150,7 @@ const signatureSource = ({
 type FinalizeOptions = {
   /** The claimed attempt; only it may finalize the exchange. */
   attempt: number;
+  permit: ThirdPartyOutboundPermit;
   prepared: PreparedSigningState;
   recordAuditEvent: AuditRecorder;
   session: AuthorizedPdfSigningSession;
@@ -156,7 +158,7 @@ type FinalizeOptions = {
 };
 
 const embed = async (
-  { prepared, session, signature }: FinalizeOptions,
+  { permit, prepared, session, signature }: FinalizeOptions,
   basePdf: Uint8Array,
 ): Promise<Result<AppliedSignature, FinalizeFailure>> => {
   const certificateChain = decodeCertificateChain(
@@ -166,6 +168,7 @@ const embed = async (
     basePdf,
     certificate: new Uint8Array(prepared.signerCertificateDer),
     certificateChain,
+    permit,
     certificateChainComplete: chainReachesRoot(
       prepared.signerCertificateDer,
       certificateChain,
@@ -180,7 +183,7 @@ const embed = async (
       prepared.keyType === "RSA" ? "RSASSA-PKCS1-v1_5" : "ECDSA",
     signingTime: prepared.signingTime,
     stamp: session.stamp,
-    timestampAuthorities: configuredTimestampAuthorities(),
+    timestampAuthorities: configuredTimestampAuthorities(permit),
     timestampTrustAnchors: configuredTimestampTrustAnchors(),
   });
   if (Result.isOk(applied)) {

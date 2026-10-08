@@ -5,6 +5,7 @@ import { sleep } from "@stll/concurrency/sleep";
 
 import type { SafeDb } from "@/api/db/safe-db";
 import { loadExternalMcpToolsForUser } from "@/api/handlers/chat/tools/external-mcp-tools";
+import { grantThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import { toSafeId } from "@/api/lib/branded-types";
 import { TimeoutError } from "@/api/lib/errors/tagged-errors";
 import type { LoadedMcpConnection } from "@/api/lib/mcp-upstream/connections";
@@ -33,9 +34,14 @@ const dependencies = asTestRaw<
 const loadExternalMcpToolsForUserForTest = async (
   input: Omit<
     Parameters<typeof loadExternalMcpToolsForUser>[0],
-    "dependencies"
+    "dependencies" | "permit"
   >,
-) => await loadExternalMcpToolsForUser({ ...input, dependencies });
+) =>
+  await loadExternalMcpToolsForUser({
+    ...input,
+    permit: grantThirdPartyOutboundPermit(),
+    dependencies,
+  });
 
 const orgId = toSafeId<"organization">("org-test");
 const userId = toSafeId<"user">("user-test");
