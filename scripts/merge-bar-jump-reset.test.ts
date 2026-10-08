@@ -120,6 +120,27 @@ describe("classifying merge queue cancellations", () => {
     expect(classify({ jumps: [] })).toEqual({ type: "not-reset" });
   });
 
+  test("a cancelled summary job counts as the cancellation when every other job succeeded", () => {
+    const succeeded = {
+      conclusion: "success",
+      completedAt: new Date(at - 60_000).toISOString(),
+    };
+    const summary = {
+      name: "ci-result",
+      conclusion: "cancelled",
+      completedAt: new Date(at + 1000).toISOString(),
+    };
+    expect(
+      classify({ evidence: { ...evidence, jobs: [succeeded, summary] } }),
+    ).toEqual({ type: "JUMP_RESET", cause: "jump-record", jump });
+    expect(
+      classify({
+        evidence: { ...evidence, jobs: [succeeded, summary] },
+        jumps: [],
+      }),
+    ).toEqual({ type: "not-reset" });
+  });
+
   test("a group without a cancelled job is not a reset", () => {
     expect(
       classify({

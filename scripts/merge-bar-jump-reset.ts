@@ -91,7 +91,11 @@ export const classifyJumpReset = ({
   ) {
     return { type: "not-reset" };
   }
-  const cancelled = jobs.filter((job) => job.conclusion === "cancelled");
+  // A cancelled summary job is still a cancellation (a force-cancel stops
+  // `always()` jobs too), so it counts toward the cancellation checks.
+  const cancelled = evidence.jobs.filter(
+    (job) => job.conclusion === "cancelled",
+  );
   if (!cancelled.length) {
     return { type: "not-reset" };
   }
