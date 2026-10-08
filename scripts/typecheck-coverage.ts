@@ -183,6 +183,20 @@ const supplementalProjects = (typecheckCommand: string): string[] => {
   return projects;
 };
 
+const projectsInDirectory = (directory: string): string[] =>
+  readdirSync(path.join(REPO_ROOT, directory), { withFileTypes: true })
+    .filter((entry) => entry.isFile() && /^tsconfig.*\.json$/u.test(entry.name))
+    .map((entry) => normalizeRepoPath(path.join(directory, entry.name)))
+    .toSorted((left, right) => {
+      if (isConventionalProject(left) !== isConventionalProject(right)) {
+        return isConventionalProject(left) ? -1 : 1;
+      }
+      if (left === right) {
+        return 0;
+      }
+      return left < right ? -1 : 1;
+    });
+
 const typecheckProjects = (): string[] => {
   const projects = new Set<string>();
 
@@ -473,13 +487,16 @@ const hasDiscoverableAncestorConfig = (
 };
 
 // A changed-file Oxc pass filters compiler diagnostics to its targets. Compile
-// the complete discovered projects first, including unchanged dependencies;
-// membership proof rejects excluded targets and the empty root project.
+// complete candidate projects, including unchanged dependencies, and prove
+// membership before running any fixer. Root sources can belong to siblings of
+// the empty conventional config; search outward from the nearest config.
 const typecheckAutofixFiles = (files: readonly string[]): void => {
   if (files.length === 0) {
     panic("Autofix typecheck requires source files");
   }
   const projects = new Map<string, string[]>();
+  const checkedFiles = new Map<string, Set<string>>();
+  const directoryProjects = new Map<string, string[]>();
   for (const rawFile of files) {
     const file = normalizeRepoPath(
       path.relative(REPO_ROOT, path.resolve(REPO_ROOT, rawFile)),
@@ -487,43 +504,66 @@ const typecheckAutofixFiles = (files: readonly string[]): void => {
     if (file === ".." || file.startsWith("../") || path.isAbsolute(file)) {
       panic(`Autofix source is outside the repository: ${rawFile}`);
     }
-    const project = nearestOxcConfig({
+    const nearest = nearestOxcConfig({
       file,
       configExists: (config) => existsSync(path.join(REPO_ROOT, config)),
     });
-    if (project === null) {
+    if (nearest === null) {
       panic(`Autofix source has no TypeScript project: ${file}`);
     }
-    const targets = projects.get(project);
+    let directory = path.posix.dirname(nearest);
+    const tried: string[] = [];
+    let coveringProject: string | undefined;
+    while (coveringProject === undefined) {
+      let candidates = directoryProjects.get(directory);
+      if (candidates === undefined) {
+        candidates = projectsInDirectory(directory);
+        directoryProjects.set(directory, candidates);
+      }
+      for (const project of candidates) {
+        tried.push(project);
+        let covered = checkedFiles.get(project);
+        if (covered === undefined) {
+          const output = run([
+            process.execPath,
+            TSC_NATIVE,
+            "--noEmit",
+            "--pretty",
+            "false",
+            "--listFiles",
+            "-p",
+            project,
+          ]);
+          covered = new Set(
+            lines(output).map((source) =>
+              normalizeRepoPath(path.resolve(REPO_ROOT, source)),
+            ),
+          );
+          checkedFiles.set(project, covered);
+        }
+        if (covered.has(normalizeRepoPath(path.resolve(REPO_ROOT, file)))) {
+          coveringProject = project;
+          break;
+        }
+      }
+      if (coveringProject !== undefined || directory === ".") {
+        break;
+      }
+      directory = path.posix.dirname(directory);
+    }
+    if (coveringProject === undefined) {
+      panic(
+        `Autofix source is covered by no candidate project: ${file}. Candidates tried: ${tried.join(", ")}`,
+      );
+    }
+    const targets = projects.get(coveringProject);
     if (targets === undefined) {
-      projects.set(project, [file]);
+      projects.set(coveringProject, [file]);
     } else {
       targets.push(file);
     }
   }
   for (const [project, targets] of projects) {
-    const output = run([
-      "bun",
-      TSC_NATIVE,
-      "--noEmit",
-      "--pretty",
-      "false",
-      "--listFiles",
-      "-p",
-      project,
-    ]);
-    const covered = new Set(
-      lines(output).map((file) =>
-        normalizeRepoPath(path.resolve(REPO_ROOT, file)),
-      ),
-    );
-    for (const file of targets) {
-      if (!covered.has(normalizeRepoPath(path.resolve(REPO_ROOT, file)))) {
-        panic(
-          `Autofix source is excluded from the checked project ${project}: ${file}`,
-        );
-      }
-    }
     console.log(
       `Autofix types checked: ${project} (${targets.length} targets)`,
     );
