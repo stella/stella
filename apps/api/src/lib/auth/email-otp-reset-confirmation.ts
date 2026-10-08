@@ -9,7 +9,7 @@ import { sha256Bytes } from "@stll/sha256/node";
 import { isRecord } from "@/api/lib/type-guards";
 
 export const EMAIL_OTP_ALLOWED_ATTEMPTS = 3;
-export const EMAIL_OTP_SIGN_IN_PATH = "/sign-in/email-otp";
+const EMAIL_OTP_SIGN_IN_PATH = "/sign-in/email-otp";
 
 type EmailOtpResetConfirmationOptions = {
   path: string;
