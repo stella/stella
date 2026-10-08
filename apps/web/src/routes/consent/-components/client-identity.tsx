@@ -8,7 +8,10 @@ import { cn } from "@stll/ui/utils";
 
 import { StellaMark } from "@/components/stella-mark";
 import type { ConsentClientIdentity } from "@/routes/consent/-components/client-identity.logic";
-import { VerifiedClientMark } from "@/routes/consent/-components/verified-client-mark";
+import {
+  hasVerifiedClientMark,
+  VerifiedClientMark,
+} from "@/routes/consent/-components/verified-client-mark";
 
 const TILE_CLASS =
   "bg-background outline-foreground/8 flex size-11 shrink-0 items-center justify-center rounded-xl shadow-xs outline-1";
@@ -20,7 +23,7 @@ export const ConsentClientTiles = ({
   identity: ConsentClientIdentity;
 }) => {
   const mark =
-    identity.type === "verified" ? (
+    identity.type === "verified" && hasVerifiedClientMark(identity.brand) ? (
       <VerifiedClientMark brand={identity.brand} className="size-6" />
     ) : null;
   return (

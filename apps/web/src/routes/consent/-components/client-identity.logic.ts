@@ -30,8 +30,8 @@ export type ConsentClientIdentity =
 /**
  * Who the consent screen says is asking. Only the server's verified brand
  * selects a product name, mark and publisher; the client's registered name is
- * shown as its own claim, so a client calling itself "Claude" from an unknown
- * location reads as an unverified app with that name and no mark.
+ * shown as its own claim, so a client claiming a known product's name from an
+ * unknown location reads as an unverified app with that name and no mark.
  */
 export const resolveConsentClientIdentity = (
   info: OAuthConsentInfo | null | undefined,

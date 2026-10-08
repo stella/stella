@@ -86,6 +86,18 @@ describe("consent client identity", () => {
     expect(render(consentInfo)).toContain(en.common.verified);
   });
 
+  test("a verified brand without a shipped mark shows its initial", () => {
+    for (const [brand, initial] of [
+      ["microsoft_copilot", "M"],
+      ["copilot_studio", "C"],
+      ["gemini_enterprise", "G"],
+    ] as const) {
+      const markup = render(info({ unverified: false, verifiedBrand: brand }));
+      expect(markup).not.toContain('data-slot="verified-client-mark"');
+      expect(markup).toContain(`>${initial}</div>`);
+    }
+  });
+
   test("every brand the server can name has an identity", () => {
     for (const brand of VERIFIED_OAUTH_CLIENT_BRANDS) {
       const identity = resolveConsentClientIdentity(
