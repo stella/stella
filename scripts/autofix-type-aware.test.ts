@@ -204,6 +204,11 @@ exec '${process.execPath}' "$@"
 const projectCases = [
   { name: "nearest project covers sources", layout: "nearest", invalid: false },
   {
+    name: "exempt rule fixtures are skipped beside checked sources",
+    layout: "nearest",
+    invalid: false,
+  },
+  {
     name: "sibling project covers root sources",
     layout: "sibling",
     invalid: false,
@@ -240,7 +245,12 @@ const projectCases = [
   },
 ] as const;
 
-test.each(projectCases)("autofix $name", ({ layout, invalid }) => {
+test.each(projectCases)("autofix $name", ({ name, layout, invalid }) => {
+  // An invalid lint-rule fixture no project covers rides along with the
+  // sources; autofix must skip it, as the coverage check exempts it.
+  const exemptFixture = name.startsWith("exempt")
+    ? ".oxlint-plugins/__fixtures__/bad.fixture.ts"
+    : undefined;
   const root = mkdtempSync(path.join(tmpdir(), "autofix-project-"));
   const repo = path.resolve(import.meta.dirname, "..");
   try {
@@ -354,6 +364,15 @@ process.exit(result.exitCode);
         siblingProject,
       );
     }
+    if (exemptFixture) {
+      mkdirSync(path.join(root, path.dirname(exemptFixture)), {
+        recursive: true,
+      });
+      writeFileSync(
+        path.join(root, exemptFixture),
+        'export const fixture: number = "wrong";',
+      );
+    }
     const result = Bun.spawnSync(
       [
         process.execPath,
@@ -361,10 +380,16 @@ process.exit(result.exitCode);
         "--autofix",
         file,
         second,
+        ...(exemptFixture ? [exemptFixture] : []),
       ],
       { cwd: root, stdout: "pipe", stderr: "pipe" },
     );
     const output = result.stdout.toString() + result.stderr.toString();
+    if (exemptFixture) {
+      expect(output).toContain(
+        `Autofix types skipped (exempt fixture): ${exemptFixture}`,
+      );
+    }
     if (layout === "uncovered") {
       expect(result.exitCode).not.toBe(0);
       expect(output).toContain("covered by no candidate project");
