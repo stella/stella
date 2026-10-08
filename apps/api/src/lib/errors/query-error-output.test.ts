@@ -171,7 +171,7 @@ test("query error output excludes parameter values from stdout and stderr logger
       severity: "ERROR",
       statusCode: 500,
       durationMs: 1,
-      errorFingerprint: errorFingerprint(error),
+      errorFingerprint: { ...errorFingerprint(error), ...QUERY_FIELDS },
       errorType: error.message,
     });
     expect(output).toHaveLength(4);
