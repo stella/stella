@@ -2,7 +2,7 @@ import type { Block, HeadingBlock } from "@stll/legal-ast/document-ast";
 import type { ProvisionUnit } from "@stll/legal-ast/provision-reference";
 import type { OutlineItem } from "@stll/ui/outline-rail";
 
-import { inlinesToPlainText } from "@/components/legal-reader/document-ast-text";
+import { inlinesToPlainText } from "./document-ast-text";
 
 /**
  * Outline over a document's own headings, for the shared rail.

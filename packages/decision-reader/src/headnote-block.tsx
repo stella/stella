@@ -2,12 +2,12 @@ import { useState } from "react";
 import type { ReactNode } from "react";
 
 import { panic } from "better-result";
-import { useTranslations } from "use-intl";
 
+import type { CourtTierLabel as CourtTier } from "@stll/api-contract/case-law-court-tiers";
 import { SparklesIcon } from "@stll/ui/icons";
 
-import { CourtTierBadge } from "@/features/case-law/components/court-name";
-import type { CourtTier } from "@/features/case-law/decision-filter-facets.logic";
+import { CourtTierBadge } from "./court-tier-badge";
+import { useReaderMessages } from "./reader-adapters";
 
 /** The court's own chip, where the registry abbreviates it. */
 type CourtChip = { abbreviation: string; tier: CourtTier };
@@ -32,19 +32,19 @@ export type HeadnoteOrigin =
  * a chip for it.
  */
 const OriginMark = ({ origin }: { origin: HeadnoteOrigin }) => {
-  const t = useTranslations();
+  const messages = useReaderMessages();
 
   switch (origin.type) {
     case "ai":
       return (
         <span className="inline-flex items-center gap-1 align-middle">
           <SparklesIcon aria-hidden className="size-3" />
-          {t("caseLaw.notesFilter.ai")}
+          {messages["caseLaw.notesFilter.ai"]}
         </span>
       );
     case "court":
       return origin.chip === null ? (
-        <span className="align-middle">{t("common.court")}</span>
+        <span className="align-middle">{messages["common.court"]}</span>
       ) : (
         <CourtTierBadge
           abbreviation={origin.chip.abbreviation}

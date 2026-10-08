@@ -1,7 +1,5 @@
-import { Fragment, useRef } from "react";
-import type { ReactElement, ReactNode } from "react";
-
-import { useTranslations } from "use-intl";
+import { Fragment } from "react";
+import type { ReactElement, ReactNode, Ref } from "react";
 
 import type { ProvisionPlacementFailure } from "@stll/api-contract/provision-placement";
 import { locateCitationSpans } from "@stll/legal-ast/citation-passage";
@@ -18,40 +16,11 @@ import { cn } from "@stll/ui/utils";
 import {
   annotationTextAnchors,
   renderLinkAnnotations,
-} from "@/components/legal-reader/annotations/annotation-anchors";
-import type { AnnotationAnchorSource } from "@/components/legal-reader/annotations/annotation-anchors";
-import { ExternalCitationLink } from "@/components/legal-reader/citation-link";
-import { CitedDecisionLink } from "@/components/legal-reader/cited-decision-link";
-import type { CitedProvisionTarget } from "@/components/legal-reader/cited-provision-link";
-import {
-  CitedProvisionExpansion,
-  CitedProvisionLink,
-} from "@/components/legal-reader/cited-provision-link";
-import { CitedStatuteLink } from "@/components/legal-reader/cited-statute-link";
-import {
-  BlockRenderer,
-  DecisionCaptionHeader,
-  FulltextFallback,
-  HighlightedText,
-  InlineContent,
-  WrappedParagraphRun,
-  inlinesToPlainText,
-  rangesForPiece,
-} from "@/components/legal-reader/document-ast-text";
-import type { TextAnchor } from "@/components/legal-reader/document-ast-text";
-import { ReaderInsetBox } from "@/components/legal-reader/reader-inset-box";
-import {
-  holdLanding,
-  readerBlockByAnchor,
-} from "@/components/legal-reader/reader-landing";
-import type { SearchMatchRange } from "@/components/legal-reader/reader-search";
-import { SourceLinkPolicyProvider } from "@/components/legal-reader/source-link-policy";
-import type { CitationAnchorSource } from "@/features/case-law/citation-anchors";
-import { decisionReferenceTintClassName } from "@/features/case-law/citation-treatment";
-import { DecisionBodyUnavailable } from "@/features/case-law/components/case-viewer/decision-body-state";
-import { missingBodyReason } from "@/features/case-law/components/case-viewer/decision-body-state.logic";
-import type { DecisionDocumentState } from "@/features/case-law/components/case-viewer/decision-body-state.logic";
-import { DissentByline } from "@/features/case-law/components/case-viewer/decision-judges";
+} from "./annotation-anchors";
+import type { AnnotationAnchorSource } from "./annotation-anchors";
+import { ExternalCitationLink } from "./citation-link";
+import { decisionReferenceTintClassName } from "./citation-treatment";
+import { missingBodyReason } from "./decision-body-state.logic";
 import {
   annotationsOverlappingTextSpan,
   apparatusBlockIds,
@@ -65,49 +34,48 @@ import {
   topMatterBlocks,
   visibleDecisionBlocks,
   wrappedParagraphRuns,
-} from "@/features/case-law/components/case-viewer/decision-text.logic";
+} from "./decision-text.logic";
 import type {
   DecisionTopMatter,
   FootnoteParts,
   TopMatterSource,
   WrappedParagraphRuns,
-} from "@/features/case-law/components/case-viewer/decision-text.logic";
-import { HeadnoteBlock } from "@/features/case-law/components/case-viewer/headnote-block";
-import type { HeadnoteOrigin } from "@/features/case-law/components/case-viewer/headnote-block";
-import type { DecisionProvisionAnchor } from "@/features/case-law/components/case-viewer/use-decision-provision-anchors";
-import type { DecisionStatuteCitationAnchor } from "@/features/case-law/components/case-viewer/use-decision-statute-citation-anchors";
-import { dissentingJudges } from "@/features/case-law/decision-judges";
-import type { DecisionReaderSurface } from "@/features/case-law/decision-reader-surfaces";
-import { locateExternalCjeuCitations } from "@/features/case-law/fallback-legal-anchors";
-import type { ProvisionAnchorSpan } from "@/features/case-law/provision-anchors";
-import { locateProvisionAnchors } from "@/features/case-law/provision-anchors";
-import type { PublicCaseLawDecision } from "@/features/case-law/public-decision";
-import { useProvisionPlacementTelemetry } from "@/features/case-law/use-provision-placement-telemetry";
-import { useExternalSyncEffect } from "@/hooks/use-effect";
-import { useHydrated } from "@/hooks/use-hydrated";
-import { optionalArray } from "@/lib/arrays";
-import { sanitizeHref } from "@/lib/sanitize-href";
+} from "./decision-text.logic";
+import {
+  BlockRenderer,
+  DecisionCaptionHeader,
+  FulltextFallback,
+  HighlightedText,
+  InlineContent,
+  WrappedParagraphRun,
+  inlinesToPlainText,
+  rangesForPiece,
+} from "./document-ast-text";
+import type { TextAnchor } from "./document-ast-text";
+import { locateExternalCjeuCitations } from "./fallback-legal-anchors";
+import { HeadnoteBlock } from "./headnote-block";
+import type { HeadnoteOrigin } from "./headnote-block";
+import type { ProvisionAnchorSpan } from "./provision-anchors";
+import { locateProvisionAnchors } from "./provision-anchors";
+import type { DecisionReaderAdapters } from "./reader-adapters";
+import { useReaderAdapters, useReaderMessages } from "./reader-adapters";
+import { ReaderInsetBox } from "./reader-inset-box";
+import type { ReaderSearchMatchRange } from "./reader-search";
+import type {
+  CitationAnchorSource,
+  CitedProvisionTarget,
+  DecisionProvisionAnchor,
+  DecisionStatuteCitationAnchor,
+  ReaderDecision,
+} from "./reader-types";
+import { sanitizeHref } from "./sanitize-href";
+import { SourceLinkPolicyProvider } from "./source-link-policy";
 
-type Decision = Pick<
-  PublicCaseLawDecision,
-  | keyof DecisionDocumentState
-  | "caseNumber"
-  | "caseNumberType"
-  | "country"
-  | "court"
-  | "courtAbbreviation"
-  | "courtTier"
-  | "documentAst"
-  | "fulltext"
-  | "id"
-  | "judges"
-  | "language"
-  | "sourceAttributionUrl"
-  | "textFields"
->;
+type Decision = ReaderDecision;
 
-type DecisionTextProps = {
-  surface: DecisionReaderSurface;
+export type DecisionTextProps = {
+  articleRef?: Ref<HTMLElement> | undefined;
+  placements: DecisionTextAnchorPlacements;
   /**
    * The model's headnote and abstract, drawn in the top matter under the
    * court's own. A node rather than the analysis itself: the order the two
@@ -117,8 +85,6 @@ type DecisionTextProps = {
   aiHeadnotes?: ReactNode | undefined;
   /** The reader's own marks and what colleagues shared. */
   annotationAnchors?: readonly AnnotationAnchorSource[] | undefined;
-  /** Resolved citations whose mentions in the text become links. */
-  citationAnchors?: readonly CitationAnchorSource[] | undefined;
   decision: Decision;
   /**
    * The decision on screen. The top matter's disclosures are mounted under
@@ -140,17 +106,13 @@ type DecisionTextProps = {
    */
   notesByAnchorId?: ReadonlyMap<string, ReactNode> | undefined;
   onAnnotationActivate?: ((annotationId: string) => void) | undefined;
-  /** Applied provisions whose statute is held, for inline links. */
-  provisionAnchors?: readonly DecisionProvisionAnchor[] | undefined;
   expandProvisions?: boolean | undefined;
   sectionMap?: Map<string, { cssVar: string; headingId: string }> | undefined;
-  /** Work citations, including references with no provision locator. */
-  statuteCitationAnchors?: readonly DecisionStatuteCitationAnchor[] | undefined;
 };
 
 /** No match is the find's own: nothing carries the active mark. */
 const NO_ACTIVE_MATCH = -1;
-const NO_SEARCH_RANGES: Record<string, SearchMatchRange[]> = {};
+const NO_SEARCH_RANGES: Record<string, ReaderSearchMatchRange[]> = {};
 
 const DECISION_REFERENCE_ID = "decision-reference";
 
@@ -172,7 +134,7 @@ const attributionLabel = (href: string): string =>
  * paragraph. Find matches come from the search pieces, which it is not in.
  */
 const DecisionSourceAttribution = ({ url }: { url: string | null }) => {
-  const t = useTranslations();
+  const messages = useReaderMessages();
   const href = sanitizeHref(url);
 
   if (href === undefined) {
@@ -184,19 +146,16 @@ const DecisionSourceAttribution = ({ url }: { url: string | null }) => {
       className="reader-chrome text-muted-foreground border-border/50 mt-10 border-t pt-3 text-[calc(0.6875rem*var(--reader-text-scale))] leading-snug"
       data-reader-chrome=""
     >
-      {t.rich("caseLaw.reader.sourceAttribution", {
-        link: (chunks) => (
-          <a
-            className="hover:text-foreground underline underline-offset-2"
-            href={sanitizeHref(href)}
-            rel="noopener noreferrer"
-            target="_blank"
-          >
-            <BidiText>{chunks}</BidiText>
-          </a>
-        ),
-        source: attributionLabel(href),
-      })}
+      {messages.sourceAttribution(attributionLabel(href), (chunks) => (
+        <a
+          className="hover:text-foreground underline underline-offset-2"
+          href={sanitizeHref(href)}
+          rel="noopener noreferrer"
+          target="_blank"
+        >
+          <BidiText>{chunks}</BidiText>
+        </a>
+      ))}
     </footer>
   );
 };
@@ -207,7 +166,7 @@ const DecisionReference = ({
   text,
 }: {
   activeMatchIndex: number;
-  ranges: SearchMatchRange[];
+  ranges: ReaderSearchMatchRange[];
   text: string;
 }) => (
   <p className="reader-chrome text-muted-foreground mb-4 text-end text-xs italic">
@@ -277,7 +236,7 @@ const EditorialSupplementBody = ({
   activeMatchIndex: number;
   annotationAnchors: readonly AnnotationAnchorSource[];
   pieceId: string;
-  ranges: SearchMatchRange[];
+  ranges: ReaderSearchMatchRange[];
   text: string;
   variant: "abstract" | "legal-sentence";
 }) => (
@@ -346,7 +305,7 @@ const TopMatterBody = ({
   annotationAnchors: readonly AnnotationAnchorSource[];
   footnotes: FootnoteParts;
   notesByAnchorId: ReadonlyMap<string, ReactNode> | undefined;
-  rangesByPieceId: Record<string, SearchMatchRange[]>;
+  rangesByPieceId: Record<string, ReaderSearchMatchRange[]>;
   source: TopMatterSource;
   variant: "abstract" | "legal-sentence";
 }) => {
@@ -386,7 +345,7 @@ const TopMatterBody = ({
 /** Whether the reader's find landed inside this section. */
 const sourceHasMatch = (
   source: TopMatterSource | null,
-  rangesByPieceId: Record<string, SearchMatchRange[]>,
+  rangesByPieceId: Record<string, ReaderSearchMatchRange[]>,
 ): boolean => {
   if (source === null) {
     return false;
@@ -430,10 +389,10 @@ const DecisionTopMatterSections = ({
   courtOrigin: HeadnoteOrigin;
   footnotes: FootnoteParts;
   notesByAnchorId: ReadonlyMap<string, ReactNode> | undefined;
-  rangesByPieceId: Record<string, SearchMatchRange[]>;
+  rangesByPieceId: Record<string, ReaderSearchMatchRange[]>;
   topMatter: DecisionTopMatter;
 }) => {
-  const t = useTranslations();
+  const messages = useReaderMessages();
   const { abstract, legalSentence } = topMatter;
   const hasAi = aiHeadnotes !== null && aiHeadnotes !== undefined;
 
@@ -449,7 +408,7 @@ const DecisionTopMatterSections = ({
         <HeadnoteBlock
           defaultOpen
           forceOpen={sourceHasMatch(legalSentence, rangesByPieceId)}
-          label={t("caseLaw.viewer.legalSentence")}
+          label={messages["caseLaw.viewer.legalSentence"]}
           origin={courtOrigin}
         >
           <TopMatterBody
@@ -468,7 +427,7 @@ const DecisionTopMatterSections = ({
         <HeadnoteBlock
           defaultOpen={false}
           forceOpen={sourceHasMatch(abstract, rangesByPieceId)}
-          label={t("caseLaw.viewer.abstract")}
+          label={messages["caseLaw.viewer.abstract"]}
           origin={courtOrigin}
         >
           <TopMatterBody
@@ -525,19 +484,24 @@ const splitAroundLinks = (
  * decision citation and a provision reference cannot share characters in
  * honest text, so whichever starts first simply wins.
  */
-type DecisionTextAnchorPlacements = {
+export type DecisionTextAnchorPlacements = {
   anchorsByPieceId: Record<string, TextAnchor[]>;
   failures: ProvisionPlacementFailure[];
   provisionsByAnchorId: Map<string, ReactNode>;
 };
 
 const buildAnchorsByPieceId = ({
+  adapters,
   annotations,
   blocks,
   citations,
   provisionSpans,
   statutes,
 }: {
+  adapters: Pick<
+    DecisionReaderAdapters,
+    "renderDecisionLink" | "renderStatuteLink"
+  >;
   annotations: readonly AnnotationAnchorSource[];
   blocks: readonly Block[];
   citations: readonly CitationAnchorSource[];
@@ -599,10 +563,10 @@ const buildAnchorsByPieceId = ({
     // Plain inline markup keeps the paragraph's own wrapping and
     // justification, and overlapping marks are split into runs so no word is
     // printed twice. The toolbar handles clicks on the mark by id.
-    anchors.push(...annotationTextAnchors(optionalArray(blockAnnotations)));
-    for (const span of optionalArray(citationSpans[blockId])) {
+    anchors.push(...annotationTextAnchors(blockAnnotations ?? []));
+    for (const span of citationSpans[blockId] ?? []) {
       const linkAnnotations = annotationsOverlappingTextSpan(
-        optionalArray(blockAnnotations),
+        blockAnnotations ?? [],
         span,
       );
       anchors.push({
@@ -613,24 +577,21 @@ const buildAnchorsByPieceId = ({
             annotations: linkAnnotations,
             children,
           });
-          return (
-            <CitedDecisionLink
-              className={cn(
-                decisionReferenceTintClassName(span.source.treatment),
-              )}
-              decision={span.source.decision}
-              treatment={span.source.treatment}
-            >
-              {marked}
-            </CitedDecisionLink>
-          );
+          return adapters.renderDecisionLink({
+            className: cn(
+              decisionReferenceTintClassName(span.source.treatment),
+            ),
+            decision: span.source.decision,
+            treatment: span.source.treatment,
+            children: marked,
+          });
         },
         start: span.start,
       });
     }
-    for (const span of optionalArray(provisionSpans[blockId])) {
+    for (const span of provisionSpans[blockId] ?? []) {
       const linkAnnotations = annotationsOverlappingTextSpan(
-        optionalArray(blockAnnotations),
+        blockAnnotations ?? [],
         span,
       );
       anchors.push({
@@ -641,18 +602,18 @@ const buildAnchorsByPieceId = ({
             annotations: linkAnnotations,
             children,
           });
-          return (
-            <CitedProvisionLink provision={span.source.target}>
-              {marked}
-            </CitedProvisionLink>
-          );
+          return adapters.renderStatuteLink({
+            type: "provision",
+            provision: span.source.target,
+            children: marked,
+          });
         },
         start: span.start,
       });
     }
-    for (const span of optionalArray(statuteSpans.get(blockId))) {
+    for (const span of statuteSpans.get(blockId) ?? []) {
       const linkAnnotations = annotationsOverlappingTextSpan(
-        optionalArray(blockAnnotations),
+        blockAnnotations ?? [],
         span,
       );
       anchors.push({
@@ -663,16 +624,18 @@ const buildAnchorsByPieceId = ({
             annotations: linkAnnotations,
             children,
           });
-          return (
-            <CitedStatuteLink target={span.target}>{marked}</CitedStatuteLink>
-          );
+          return adapters.renderStatuteLink({
+            type: "statute",
+            target: span.target,
+            children: marked,
+          });
         },
         start: span.start,
       });
     }
-    for (const span of optionalArray(externalCjeuSpansByBlock.get(blockId))) {
+    for (const span of externalCjeuSpansByBlock.get(blockId) ?? []) {
       const linkAnnotations = annotationsOverlappingTextSpan(
-        optionalArray(blockAnnotations),
+        blockAnnotations ?? [],
         span,
       );
       anchors.push({
@@ -716,11 +679,11 @@ const buildAnchorsByPieceId = ({
       continue;
     }
     const acceptedKeys = new Set(
-      optionalArray(anchorsByPieceId[block.id]).map(
+      (anchorsByPieceId[block.id] ?? []).map(
         ({ key, start, end }) => `${key}:${String(start)}:${String(end)}`,
       ),
     );
-    const spans = optionalArray(provisionSpans[block.id])
+    const spans = (provisionSpans[block.id] ?? [])
       .filter((span) =>
         acceptedKeys.has(
           `provision:${span.source.id}:${String(span.start)}:${String(span.end)}`,
@@ -733,19 +696,63 @@ const buildAnchorsByPieceId = ({
     provisionsByAnchorId.set(
       block.anchorId,
       spans.map((span) => (
-        <CitedProvisionExpansion
-          key={`${span.source.id}:${String(span.start)}`}
-          label={inlinesToPlainText(block.inlines).slice(span.start, span.end)}
-          provision={span.source.target}
-          version={{
-            type: "consolidation",
-            validFrom: span.source.target.document.versionValidFrom,
-          }}
-        />
+        <Fragment key={`${span.source.id}:${String(span.start)}`}>
+          {adapters.renderStatuteLink({
+            type: "provision-expansion",
+            label: inlinesToPlainText(block.inlines).slice(
+              span.start,
+              span.end,
+            ),
+            provision: span.source.target,
+            version: {
+              type: "consolidation",
+              validFrom: span.source.target.document.versionValidFrom,
+            },
+          })}
+        </Fragment>
       )),
     );
   }
   return { anchorsByPieceId, provisionsByAnchorId, failures };
+};
+
+export type PrepareDecisionTextPlacementsOptions = {
+  adapters: Pick<
+    DecisionReaderAdapters,
+    "renderDecisionLink" | "renderStatuteLink"
+  >;
+  annotationAnchors: readonly AnnotationAnchorSource[];
+  blocks: readonly Block[];
+  citationAnchors: readonly CitationAnchorSource[];
+  provisionAnchors: readonly DecisionProvisionAnchor[];
+  statuteCitationAnchors: readonly DecisionStatuteCitationAnchor[];
+};
+
+export const prepareDecisionTextPlacements = ({
+  adapters,
+  annotationAnchors,
+  blocks,
+  citationAnchors,
+  provisionAnchors,
+  statuteCitationAnchors,
+}: PrepareDecisionTextPlacementsOptions): DecisionTextAnchorPlacements => {
+  const provisionPlacement = locateProvisionAnchors({
+    blocks,
+    provisions: provisionAnchors,
+  });
+  const placements = buildAnchorsByPieceId({
+    adapters,
+    annotations: annotationAnchors,
+    blocks,
+    citations: citationAnchors,
+    provisionSpans: provisionPlacement.anchorsByPieceId,
+    statutes: statuteCitationAnchors,
+  });
+  return {
+    anchorsByPieceId: placements.anchorsByPieceId,
+    provisionsByAnchorId: placements.provisionsByAnchorId,
+    failures: [...provisionPlacement.failures, ...placements.failures],
+  };
 };
 
 /**
@@ -787,7 +794,7 @@ const renderBlocksWithHoldingZone = ({
   footnotes: FootnoteParts;
   landingAnchorId: string | undefined;
   notesByAnchorId: ReadonlyMap<string, ReactNode> | undefined;
-  rangesByPieceId: Record<string, SearchMatchRange[]>;
+  rangesByPieceId: Record<string, ReaderSearchMatchRange[]>;
   sectionMap?: Map<string, { cssVar: string; headingId: string }> | undefined;
   /** Line blocks of a hard-wrapped source, drawn as their paragraphs. */
   wrappedRuns: WrappedParagraphRuns;
@@ -944,16 +951,11 @@ const renderBlocksWithHoldingZone = ({
   return result;
 };
 
-const NO_CITATION_ANCHORS: readonly CitationAnchorSource[] = [];
-const NO_PROVISION_ANCHORS: readonly DecisionProvisionAnchor[] = [];
 const NO_ANNOTATION_ANCHORS: readonly AnnotationAnchorSource[] = [];
-const NO_STATUTE_CITATION_ANCHORS: readonly DecisionStatuteCitationAnchor[] =
-  [];
 
 export const DecisionText = ({
   aiHeadnotes = null,
   annotationAnchors = NO_ANNOTATION_ANCHORS,
-  citationAnchors = NO_CITATION_ANCHORS,
   decision,
   decisionId,
   isHydrated,
@@ -961,12 +963,11 @@ export const DecisionText = ({
   notesByAnchorId,
   expandProvisions = false,
   onAnnotationActivate,
-  provisionAnchors = NO_PROVISION_ANCHORS,
   sectionMap,
-  statuteCitationAnchors = NO_STATUTE_CITATION_ANCHORS,
-  surface,
+  articleRef,
+  placements,
 }: DecisionTextProps) => {
-  const t = useTranslations();
+  const messages = useReaderMessages();
 
   const ast = parseDocumentAst(decision.documentAst);
   const visibleBlocks = visibleDecisionBlocks(ast, decision.caseNumberType);
@@ -992,12 +993,8 @@ export const DecisionText = ({
     blocks: bodyBlocks,
     country: decision.country,
   });
-  const articleRef = useRef<HTMLElement>(null);
-  // Inline links come from prefetches that do not block the route, so the
-  // server pass and the client's hydration pass may not agree on them. The
-  // text hydrates bare and the links are laid over it right after.
-  const environmentHydrated = useHydrated();
-  const hydrated = isHydrated ?? environmentHydrated;
+  const hydrated = isHydrated ?? false;
+  const adapters = useReaderAdapters();
 
   const displayRef = decisionDisplayReference({
     ast,
@@ -1005,38 +1002,12 @@ export const DecisionText = ({
     caseNumberType: decision.caseNumberType,
   });
 
-  useExternalSyncEffect(() => {
-    const article = articleRef.current;
-    if (!article) {
-      return undefined;
-    }
-
-    const target =
-      landingAnchorId === undefined
-        ? null
-        : readerBlockByAnchor(article, landingAnchorId);
-    if (!target) {
-      return undefined;
-    }
-
-    // A landing inside the folded reporter apparatus is invisible while its
-    // <details> stays closed, and scrolling to a hidden descendant reveals
-    // nothing: open every enclosing disclosure first.
-    for (
-      let disclosure = target.closest("details");
-      disclosure !== null;
-      disclosure = disclosure.parentElement?.closest("details") ?? null
-    ) {
-      disclosure.open = true;
-    }
-
-    return holdLanding({ article, target });
-  }, [landingAnchorId]);
-
   // A separate opinion is bylined where the court's own text does not say
   // whose it is: the names come from the read, the place from the AST, and
   // the byline is drawn only where both are there.
-  const dissenters = dissentingJudges(decision.judges);
+  const dissenters = decision.judges.filter(
+    (judge) => judge.role === "dissenting",
+  );
   const dissentBlockId = firstDissentBlockId(bodyBlocks);
   const dissent =
     dissenters.length === 0 || dissentBlockId === null
@@ -1046,30 +1017,7 @@ export const DecisionText = ({
           byline: <DissentByline judges={dissenters} />,
         };
 
-  // Inline links for every visible block, wherever it is drawn: the top
-  // matter and the document below share one map.
-  const placementBlocks = visibleDecisionBlocks(
-    ast,
-    decision.caseNumberType,
-    decision.fulltext,
-  );
-  const provisionPlacement = locateProvisionAnchors({
-    blocks: placementBlocks,
-    provisions: hydrated ? provisionAnchors : NO_PROVISION_ANCHORS,
-  });
-  const textPlacements = buildAnchorsByPieceId({
-    annotations: hydrated ? annotationAnchors : NO_ANNOTATION_ANCHORS,
-    blocks: placementBlocks,
-    citations: hydrated ? citationAnchors : NO_CITATION_ANCHORS,
-    provisionSpans: provisionPlacement.anchorsByPieceId,
-    statutes: hydrated ? statuteCitationAnchors : NO_STATUTE_CITATION_ANCHORS,
-  });
-  const { anchorsByPieceId, provisionsByAnchorId } = textPlacements;
-  useProvisionPlacementTelemetry({
-    decisionId,
-    failures: [...provisionPlacement.failures, ...textPlacements.failures],
-    surface,
-  });
+  const { anchorsByPieceId, provisionsByAnchorId } = placements;
 
   const supplementsByAnchorId = new Map(notesByAnchorId);
   if (expandProvisions) {
@@ -1109,8 +1057,8 @@ export const DecisionText = ({
                   type="button"
                 >
                   {annotation.kind === "comment"
-                    ? t("folio.comment")
-                    : t("legalReader.annotations.highlight")}
+                    ? messages["folio.comment"]
+                    : messages["legalReader.annotations.highlight"]}
                 </button>
               ))}
             </div>
@@ -1136,7 +1084,7 @@ export const DecisionText = ({
           />
           {renderBlocksWithHoldingZone({
             activeMatchIndex: NO_ACTIVE_MATCH,
-            apparatusLabel: t("caseLaw.reader.headMatter"),
+            apparatusLabel: messages["caseLaw.reader.headMatter"],
             anchorsByPieceId,
             blocks: bodyBlocks,
             caption,
@@ -1224,10 +1172,10 @@ export const DecisionText = ({
           rangesByPieceId={NO_SEARCH_RANGES}
           topMatter={topMatter}
         />
-        <DecisionBodyUnavailable
-          decisionId={decision.id}
-          reason={missingBodyReason(decision)}
-        />
+        {adapters.renderBodyUnavailable({
+          decisionId: decision.id,
+          reason: missingBodyReason(decision),
+        })}
       </article>
     );
   })();
@@ -1238,6 +1186,11 @@ export const DecisionText = ({
   // over the blocks the page renders, top matter and fulltext paragraphs
   // included, so a note on a lifted headnote draws under it instead of at the
   // end.
+  const placementBlocks = visibleDecisionBlocks(
+    ast,
+    decision.caseNumberType,
+    decision.fulltext,
+  );
   const drawnBlocks =
     visibleBlocks.length === 0 && decision.fulltext
       ? [...renderedBlocks, ...placementBlocks]
@@ -1275,5 +1228,17 @@ export const DecisionText = ({
         <DecisionSourceAttribution url={decision.sourceAttributionUrl} />
       </div>
     </SourceLinkPolicyProvider>
+  );
+};
+
+const DissentByline = ({ judges }: { judges: ReaderDecision["judges"] }) => {
+  const messages = useReaderMessages();
+  return (
+    <p
+      className="reader-chrome text-muted-foreground mt-6 mb-2 text-xs"
+      data-reader-chrome=""
+    >
+      {messages.dissentByline(judges.map((judge) => judge.name))}
+    </p>
   );
 };

@@ -1,19 +1,18 @@
-import { renderToStaticMarkup } from "react-dom/server";
-
 import { describe, expect, test } from "bun:test";
 
 import type { Block, Inline } from "@stll/legal-ast/document-ast";
 
+import { renderReaderFixture as renderToStaticMarkup } from "./decision-text.test";
 import {
   BlockRenderer,
   InlineContent,
   inlinesToPlainText,
-} from "@/components/legal-reader/document-ast-text";
+} from "./document-ast-text";
 import {
   readerHref,
   SourceLinkPolicyProvider,
   sourceLinkPolicyOf,
-} from "@/components/legal-reader/source-link-policy";
+} from "./source-link-policy";
 
 /**
  * A court's own document is typeset with links into whichever legal database

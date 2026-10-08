@@ -4,7 +4,7 @@ import {
   MIN_HIGHLIGHT_TOKEN_LENGTH,
   queryHighlightTokens,
   wordPrefixMatchEnd,
-} from "@/components/legal-reader/query-marks";
+} from "./query-marks";
 
 describe("the words of a query worth marking", () => {
   test("drops words shorter than the floor, which match too much to mean anything", () => {

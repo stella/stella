@@ -5,7 +5,7 @@ import type { Block } from "@stll/legal-ast/document-ast";
 import {
   locateProvisionAnchors,
   provisionOccurrenceContexts,
-} from "@/features/case-law/provision-anchors";
+} from "./provision-anchors";
 
 const paragraph = (id: string, text: string): Block => ({
   id,

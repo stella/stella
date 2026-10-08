@@ -1,8 +1,8 @@
-import type { PublicCaseLawDecision } from "@/features/case-law/public-decision";
+import type { ReaderDecision } from "./reader-types";
 
 export const decisionHasNoDocument = (
   decision: Pick<
-    PublicCaseLawDecision,
+    ReaderDecision & { hasDocument: boolean },
     "hasDocument" | "documentReadFailed" | "documentPending"
   >,
 ): boolean =>

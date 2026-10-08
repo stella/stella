@@ -415,6 +415,7 @@
         "@stll/concurrency": "workspace:*",
         "@stll/conditions": "workspace:*",
         "@stll/country-codes": "workspace:*",
+        "@stll/decision-reader": "workspace:*",
         "@stll/docx-core": "catalog:",
         "@stll/docx-utils": "workspace:*",
         "@stll/errors": "workspace:*",
@@ -826,6 +827,30 @@
         "@stll/typescript-config": "workspace:*",
         "bun-types": "catalog:",
         "fast-check": "catalog:",
+      },
+    },
+    "packages/decision-reader": {
+      "name": "@stll/decision-reader",
+      "version": "0.0.0",
+      "dependencies": {
+        "@stll/api-contract": "workspace:*",
+        "@stll/legal-ast": "workspace:*",
+        "@stll/legal-atlas": "workspace:*",
+        "@stll/text-normalize": "workspace:*",
+        "@stll/ui": "workspace:*",
+        "better-result": "catalog:",
+      },
+      "devDependencies": {
+        "@stll/typescript-config": "workspace:*",
+        "@types/react": "catalog:react19",
+        "@types/react-dom": "catalog:react19",
+        "bun-types": "catalog:",
+        "react": "catalog:react19",
+        "react-dom": "catalog:react19",
+        "typescript": "catalog:",
+      },
+      "peerDependencies": {
+        "react": ">=19",
       },
     },
     "packages/docx-utils": {
@@ -2939,6 +2964,8 @@
     "@stll/country-codes": ["@stll/country-codes@workspace:packages/country-codes"],
 
     "@stll/db-load-gate": ["@stll/db-load-gate@workspace:packages/db-load-gate"],
+
+    "@stll/decision-reader": ["@stll/decision-reader@workspace:packages/decision-reader"],
 
     "@stll/desktop": ["@stll/desktop@workspace:apps/desktop"],
 

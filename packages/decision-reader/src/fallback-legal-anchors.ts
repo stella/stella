@@ -7,7 +7,7 @@ import type {
   SupportedProvisionCitationGrammar,
 } from "@stll/legal-atlas/provision-citation-grammars";
 
-import { inlinesToPlainText } from "@/components/legal-reader/document-ast-text";
+import { inlinesToPlainText } from "./document-ast-text";
 
 const CJEU_CASE_NUMBER =
   /(?<![\p{L}\p{N}])(?<caseNumber>[CTF]\s{0,3}[-‑–—­]\s{0,3}\d{1,4}\/\d{2})(?!\d)/gu;

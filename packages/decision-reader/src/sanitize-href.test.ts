@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
-import { sanitizeHref } from "@/lib/sanitize-href";
+import { sanitizeHref } from "./sanitize-href";
 
 describe("sanitizeHref", () => {
   test("allows safe app, web, fragment, and mail links", () => {

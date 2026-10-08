@@ -1,0 +1,66 @@
+{
+  "name": "@stll/decision-reader",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Context-free legal decision rendering with host adapters",
+  "license": "Apache-2.0",
+  "type": "module",
+  "sideEffects": [
+    "**/*.css"
+  ],
+  "exports": {
+    "./annotation-anchors": "./src/annotation-anchors.tsx",
+    "./citation-link": "./src/citation-link.tsx",
+    "./citation-treatment": "./src/citation-treatment.ts",
+    "./cited-provision": "./src/cited-provision.tsx",
+    "./court-tier-badge": "./src/court-tier-badge.tsx",
+    "./decision-body-state.logic": "./src/decision-body-state.logic.ts",
+    "./decision-text": "./src/decision-text.tsx",
+    "./decision-text.logic": "./src/decision-text.logic.ts",
+    "./document-ast-text": "./src/document-ast-text.tsx",
+    "./fallback-legal-anchors": "./src/fallback-legal-anchors.ts",
+    "./headnote-block": "./src/headnote-block.tsx",
+    "./provision-anchors": "./src/provision-anchors.ts",
+    "./query-marks": "./src/query-marks.ts",
+    "./reader-adapters": "./src/reader-adapters.tsx",
+    "./reader-inset-box": "./src/reader-inset-box.tsx",
+    "./reader-landing": "./src/reader-landing.ts",
+    "./reader-outline": "./src/reader-outline.ts",
+    "./reader-search": "./src/reader-search.ts",
+    "./reader-text-scale.logic": "./src/reader-text-scale.logic.ts",
+    "./reader-types": "./src/reader-types.ts",
+    "./reader.css": "./src/reader.css",
+    "./sanitize-href": "./src/sanitize-href.ts",
+    "./source-link-policy": "./src/source-link-policy.tsx",
+    "./use-reader-text-scale": "./src/use-reader-text-scale.ts"
+  },
+  "scripts": {
+    "clean": "git clean -xdf .cache .turbo node_modules",
+    "test": "bun test src",
+    "typecheck": "bun ../../packages/scripts/src/tsc-native.ts --noEmit",
+    "lint": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --report-unused-disable-directives-severity=error --type-aware --type-check packages/decision-reader",
+    "lint:fix": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --type-aware --fix packages/decision-reader",
+    "format": "bun ../../scripts/run-oxfmt.ts ."
+  },
+  "dependencies": {
+    "@fontsource-variable/source-serif-4": "^5.3.0",
+    "@stll/api-contract": "workspace:*",
+    "@stll/legal-ast": "workspace:*",
+    "@stll/legal-atlas": "workspace:*",
+    "@stll/text-normalize": "workspace:*",
+    "@stll/ui": "workspace:*",
+    "better-result": "catalog:",
+    "valibot": "catalog:"
+  },
+  "devDependencies": {
+    "@stll/typescript-config": "workspace:*",
+    "@types/react": "catalog:react19",
+    "@types/react-dom": "catalog:react19",
+    "bun-types": "catalog:",
+    "react": "catalog:react19",
+    "react-dom": "catalog:react19"
+  },
+  "peerDependencies": {
+    "react": ">=19"
+  }
+}

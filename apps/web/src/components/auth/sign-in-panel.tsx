@@ -7,6 +7,7 @@ import { useNavigate } from "@tanstack/react-router";
 import { useTranslations } from "use-intl";
 import * as v from "valibot";
 
+import { sanitizeHref } from "@stll/decision-reader/sanitize-href";
 import { fetchWithTimeout } from "@stll/fetch";
 import { Button } from "@stll/ui/button";
 import { Field, FieldError } from "@stll/ui/field";
@@ -26,7 +27,6 @@ import { detached } from "@/lib/detached";
 import { toAuthClientError } from "@/lib/errors/auth";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { isAcceptInvitationRedirect } from "@/lib/redirect";
-import { sanitizeHref } from "@/lib/sanitize-href";
 import { schemaFormOptions, emailSchema, toFormErrors } from "@/lib/schema";
 import { useQueryView } from "@/lib/use-query-view";
 

@@ -1,10 +1,8 @@
 import { Fragment, useState } from "react";
 import type { ReactNode } from "react";
 
-import { panic, Result } from "better-result";
-import { useTranslations } from "use-intl";
+import { panic } from "better-result";
 
-import { copyToClipboard } from "@stll/clipboard";
 import type {
   CaptionLineKind,
   DecisionCaption,
@@ -24,27 +22,14 @@ import {
   ReviewDiffInsertion,
 } from "@stll/ui/review-diff-text";
 import { SEARCH_HIT_MARK, TextMark } from "@stll/ui/text-mark";
-import { stellaToast } from "@stll/ui/toast";
+import { Tooltip, TooltipPopup, TooltipTrigger } from "@stll/ui/tooltip";
 import { cn } from "@stll/ui/utils";
 
-import type {
-  ReaderMark,
-  ReaderMarkRange,
-  SearchPiece,
-} from "@/components/legal-reader/reader-search";
-import {
-  readerHref,
-  useSourceLinkPolicy,
-} from "@/components/legal-reader/source-link-policy";
-import type { SourceLinkPolicy } from "@/components/legal-reader/source-link-policy";
-import Tooltip from "@/components/tooltip";
-import type { TranslationKey } from "@/i18n/types";
-import { getAnalytics } from "@/lib/analytics/provider";
-import { normalizeOptionalArray } from "@/lib/arrays";
-import { detached } from "@/lib/detached";
-import { notifyUserError } from "@/lib/errors/user-toast";
-import { forceReflow } from "@/lib/utils";
-
+import { useReaderPresentation, useReaderMessages } from "./reader-adapters";
+import type { ReaderMessageKey } from "./reader-adapters";
+import type { ReaderMark, ReaderMarkRange, SearchPiece } from "./reader-search";
+import { readerHref, useSourceLinkPolicy } from "./source-link-policy";
+import type { SourceLinkPolicy } from "./source-link-policy";
 import "./reader.css";
 
 /**
@@ -59,7 +44,7 @@ export const rangesForPiece = <Range extends ReaderMarkRange>(
   pieceId: string,
 ): Range[] => {
   const ranges = rangesByPieceId[pieceId];
-  return normalizeOptionalArray(ranges);
+  return ranges ?? [];
 };
 
 /**
@@ -78,9 +63,7 @@ export const anchorsForPiece = (
   anchorsByPieceId: Record<string, TextAnchor[]> | undefined,
   pieceId: string,
 ): TextAnchor[] =>
-  anchorsByPieceId === undefined
-    ? []
-    : normalizeOptionalArray(anchorsByPieceId[pieceId]);
+  anchorsByPieceId === undefined ? [] : (anchorsByPieceId[pieceId] ?? []);
 
 /**
  * Whether blocks are the document itself (they carry its DOM ids and its
@@ -138,16 +121,16 @@ type DiffMarkType = Exclude<ReaderMark["type"], "search">;
 const DIFF_MARK_LABEL_KEYS = {
   deleted: "statutes.diffRemoved",
   inserted: "statutes.diffInserted",
-} as const satisfies Record<DiffMarkType, TranslationKey>;
+} as const satisfies Record<DiffMarkType, ReaderMessageKey>;
 
 const DiffMarkLabel = ({ type }: { type: DiffMarkType }) => {
-  const t = useTranslations();
+  const messages = useReaderMessages();
 
   // Chrome, not wording: a copied passage must not carry the label. The
   // space keeps it from running into the first changed word when read.
   return (
     <span className="sr-only select-none" data-reader-chrome="">
-      {t(DIFF_MARK_LABEL_KEYS[type])}{" "}
+      {messages[DIFF_MARK_LABEL_KEYS[type]]}{" "}
     </span>
   );
 };
@@ -630,7 +613,7 @@ const NoteRefLink = ({
 }) => {
   const [preview, setPreview] = useState<string | null>(null);
   return (
-    <Tooltip
+    <ReaderTooltip
       content={
         <span className="block max-w-xs text-start leading-snug">
           {preview}
@@ -657,7 +640,7 @@ const NoteRefLink = ({
             }
             el.scrollIntoView({ behavior: "instant", block: "center" });
             delete el.dataset["highlight"];
-            forceReflow(el);
+            el.getBoundingClientRect();
             el.dataset["highlight"] = "";
           }}
           onMouseEnter={() => setPreview(notePreviewOf(targetId))}
@@ -665,7 +648,7 @@ const NoteRefLink = ({
       }
     >
       {children}
-    </Tooltip>
+    </ReaderTooltip>
   );
 };
 
@@ -918,23 +901,13 @@ const BlockPermalink = ({
   anchorId: string;
   placement?: PermalinkPlacement;
 }) => {
-  const t = useTranslations();
+  const messages = useReaderMessages();
 
-  const copyPermalink = async () => {
-    const url = new URL(window.location.href);
-    url.hash = anchorId;
-    const copied = await copyToClipboard(url.href);
-    if (Result.isError(copied)) {
-      getAnalytics().captureError(copied.error);
-      notifyUserError(copied.error, t("errors.actionFailed"));
-      return;
-    }
-    stellaToast.add({ title: t("common.copied"), type: "success" });
-  };
+  const { copyPermalink } = useReaderPresentation();
 
   return (
     <a
-      aria-label={t("common.copyLink")}
+      aria-label={messages["common.copyLink"]}
       className={cn(
         "text-foreground-disabled hover:text-foreground focus-visible:ring-ring rounded-sm px-1 leading-[inherit] no-underline focus-visible:ring-2 focus-visible:outline-none print:hidden",
         READER_BLOCK_CHROME_REVEAL_CLASS,
@@ -947,8 +920,7 @@ const BlockPermalink = ({
           return;
         }
         event.preventDefault();
-        window.history.replaceState(null, "", `#${anchorId}`);
-        detached(copyPermalink(), "legal-reader.permalink-copy");
+        copyPermalink(anchorId);
       }}
     >
       ¶
@@ -983,7 +955,7 @@ const jumpToNoteReference = (anchorId: string) => {
     return;
   }
   delete blockEl.dataset["highlight"];
-  forceReflow(blockEl);
+  blockEl.getBoundingClientRect();
   blockEl.dataset["highlight"] = "";
 };
 
@@ -994,14 +966,14 @@ const jumpToNoteReference = (anchorId: string) => {
  * the caller that groups a footnote's parts supplies it.
  */
 const NoteBackJump = ({ headAnchorId }: { headAnchorId: string }) => {
-  const t = useTranslations();
+  const messages = useReaderMessages();
   return (
     <button
-      aria-label={t("common.back")}
+      aria-label={messages["common.back"]}
       className="reader-note-back"
       data-reader-chrome=""
       onClick={() => jumpToNoteReference(headAnchorId)}
-      title={t("common.back")}
+      title={messages["common.back"]}
       type="button"
     >
       {"\u21B5"}
@@ -1774,3 +1746,23 @@ export const buildDocumentAstSearchPieces = (
 
   return pieces;
 };
+
+const ReaderTooltip = ({
+  children,
+  content,
+  render,
+}: {
+  children: ReactNode;
+  content: ReactNode;
+  render: React.ComponentProps<typeof TooltipTrigger>["render"];
+}) => (
+  <Tooltip>
+    <TooltipTrigger render={render}>{children}</TooltipTrigger>
+    <TooltipPopup
+      className="max-w-70 text-nowrap"
+      hidden={content === undefined || content === null || content === ""}
+    >
+      {content}
+    </TooltipPopup>
+  </Tooltip>
+);

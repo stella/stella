@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 
 import type { Block, HeadingBlock } from "@stll/legal-ast/document-ast";
 
-import type { AnchorScrollContainer } from "@/components/legal-reader/reader-outline";
+import type { AnchorScrollContainer } from "./reader-outline";
 import {
   headingCase,
   jumpToAnchor,
@@ -12,7 +12,7 @@ import {
   resolveAnchorPct,
   statuteOutlineFromHeadings,
   withProvisionRanges,
-} from "@/components/legal-reader/reader-outline";
+} from "./reader-outline";
 
 const inlineText = (text: string) => [{ type: "text" as const, text }];
 

@@ -6,8 +6,8 @@ import { propertyConfig } from "@stll/property-testing";
 import {
   annotationSegments,
   buildAnnotationAnchors,
-} from "@/components/legal-reader/annotations/annotation-anchors";
-import type { AnnotationAnchorSource } from "@/components/legal-reader/annotations/annotation-anchors";
+} from "./annotation-anchors";
+import type { AnnotationAnchorSource } from "./annotation-anchors";
 
 /**
  * Both readers lay their marks over the text through this one module, so the
